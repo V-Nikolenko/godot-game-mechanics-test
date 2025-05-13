@@ -1,0 +1,185 @@
+[gd_scene load_steps=20 format=3 uid="uid://ty6a2vpnmrr5"]
+
+[ext_resource type="Script" uid="uid://lb288p2swjp0" path="res://assault/player/player_fighter.gd" id="1_allu4"]
+[ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_prbxf"]
+[ext_resource type="Script" uid="uid://c5678cxr4wb7q" path="res://global/statemachine/state_machine.gd" id="3_2482r"]
+[ext_resource type="Script" uid="uid://2kqhplaxohpf" path="res://assault/player/states/idle_state.gd" id="4_3rdgt"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_prbxf"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(1, 1, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_tgrgh"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(34, 1, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2482r"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(67, 1, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3rdgt"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(100, 1, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_nreql"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(133, 1, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_cy5pj"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(166, 1, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_xku2w"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(199, 1, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_y64is"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(232, 1, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_s7bsb"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(1, 1, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ht8os"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(1, 1, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ctrog"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(34, 1, 32, 32)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_skaet"]
+atlas = ExtResource("2_prbxf")
+region = Rect2(232, 1, 32, 32)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_ht8os"]
+animations = [{
+"frames": [{
+"duration": 1.1,
+"texture": SubResource("AtlasTexture_prbxf")
+}, {
+"duration": 1.1,
+"texture": SubResource("AtlasTexture_tgrgh")
+}, {
+"duration": 1.1,
+"texture": SubResource("AtlasTexture_2482r")
+}, {
+"duration": 1.1,
+"texture": SubResource("AtlasTexture_3rdgt")
+}, {
+"duration": 1.1,
+"texture": SubResource("AtlasTexture_nreql")
+}, {
+"duration": 1.1,
+"texture": SubResource("AtlasTexture_cy5pj")
+}, {
+"duration": 1.1,
+"texture": SubResource("AtlasTexture_xku2w")
+}, {
+"duration": 1.1,
+"texture": SubResource("AtlasTexture_y64is")
+}, {
+"duration": 1.1,
+"texture": SubResource("AtlasTexture_s7bsb")
+}],
+"loop": true,
+"name": &"do_barrel_roll",
+"speed": 11.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ht8os")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ctrog")
+}],
+"loop": true,
+"name": &"tilt_to_the_left",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_skaet")
+}],
+"loop": true,
+"name": &"tilt_to_the_right",
+"speed": 5.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_tgrgh"]
+radius = 5.09902
+
+[sub_resource type="GDScript" id="GDScript_2482r"]
+script/source = "extends State
+
+const TILT_RIGHT_ANIMATION_NAME : String = \"tilt_to_the_right\"
+const TILT_LEFT_ANIMATION_NAME : String = \"tilt_to_the_left\"
+
+@export var actor: CharacterBody2D
+@export var animated_sprite: AnimatedSprite2D
+
+@export_category(\"Move State\")
+@export var move_speed: float = 150.0
+@export var max_move_speed: float = 200.0
+
+@export_category(\"Action Transitions\")
+@export var idle_state: State
+
+func enter():
+	pass
+
+func process_physics(delta: float):
+	var input_direction = Input.get_vector(\"move_left\", \"move_right\", \"move_up\", \"move_down\").normalized()
+	
+	if (input_direction.x == 0):
+		state_transition.emit(self, idle_state)
+		
+	move(input_direction, delta)
+	
+func exit() -> void:
+	pass
+
+func move(direction: Vector2, delta: float) -> void:
+	if direction.x != 0:
+		if (direction.x > 0):
+			animated_sprite.play(TILT_RIGHT_ANIMATION_NAME)
+		else:
+			animated_sprite.play(TILT_LEFT_ANIMATION_NAME)
+	
+	actor.velocity = direction * move_speed
+	actor.move_and_slide()
+	
+"
+
+[node name="PlayerFighter" type="CharacterBody2D"]
+script = ExtResource("1_allu4")
+
+[node name="SpriteAnchor" type="Node2D" parent="."]
+
+[node name="ShipSprite2D" type="AnimatedSprite2D" parent="SpriteAnchor"]
+sprite_frames = SubResource("SpriteFrames_ht8os")
+animation = &"do_barrel_roll"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_tgrgh")
+
+[node name="StateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
+script = ExtResource("3_2482r")
+initial_state = NodePath("IdleState")
+
+[node name="IdleState" type="Node" parent="StateMachine" node_paths=PackedStringArray("animated_sprite", "move_state")]
+script = ExtResource("4_3rdgt")
+animated_sprite = NodePath("../../SpriteAnchor/ShipSprite2D")
+move_state = NodePath("../MoveState")
+
+[node name="MoveState" type="Node" parent="StateMachine" node_paths=PackedStringArray("actor", "animated_sprite", "idle_state")]
+script = SubResource("GDScript_2482r")
+actor = NodePath("../..")
+animated_sprite = NodePath("../../SpriteAnchor/ShipSprite2D")
+idle_state = NodePath("../IdleState")
