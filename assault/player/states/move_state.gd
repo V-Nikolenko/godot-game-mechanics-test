@@ -1,41 +1,60 @@
-class_name MoveState
 extends State
 
+const IDLE_ANIMATION_NAME : String = "idle"
 const TILT_RIGHT_ANIMATION_NAME : String = "tilt_to_the_right"
 const TILT_LEFT_ANIMATION_NAME : String = "tilt_to_the_left"
 
+const STATE_KEY_BINDINGS: Array = [
+	"move_left", 
+	"move_right",
+	"move_up", 
+	"move_down"
+]
+
+@export_category("State Dependencies")
 @export var actor: CharacterBody2D
 @export var animated_sprite: AnimatedSprite2D
+@export var movement_controller: MovementController
 
-@export_category("Move State")
+@export_category("State Configuration")
 @export var move_speed: float = 150.0
 @export var max_move_speed: float = 200.0
 
-@export_category("Action Transitions")
-@export var idle_state: State
+@export_category("Transition State")
+@export var transition_state: State
 
-func enter():
-	pass
 
+# --- State Activation ---
+func _ready() -> void:
+	movement_controller.action_single_press.connect(start_state_transition)
+
+func start_state_transition(key_name: String) -> void:
+	if STATE_KEY_BINDINGS.has(key_name):
+		state_transition.emit(self)
+
+
+# --- Main State Logic ---
 func process_physics(delta: float):
-	pass
-	#var input_direction = Input.get_vector("move_left", "move_right", "move_up", "move_down").normalized()
-	#
-	#if (input_direction.x == 0):
-		#state_transition.emit(self, idle_state)
-		#
-	#move(input_direction, delta)
+	var input_direction:Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down").normalized()
 	
-func exit() -> void:
-	pass
+	if check_transition_state():
+		state_transition.emit(transition_state)
+		
+	move(input_direction)
+	
+func check_transition_state() -> bool:
+	for movement_key in STATE_KEY_BINDINGS:
+		if Input.is_action_pressed(movement_key):
+			return false
+	return true
 
-func move(direction: Vector2, delta: float) -> void:
-	if direction.x != 0:
-		if (direction.x > 0):
-			animated_sprite.play(TILT_RIGHT_ANIMATION_NAME)
-		else:
-			animated_sprite.play(TILT_LEFT_ANIMATION_NAME)
+func move(direction: Vector2) -> void:
+	if direction.x == 0:
+		animated_sprite.play(IDLE_ANIMATION_NAME)
+	elif (direction.x > 0):
+		animated_sprite.play(TILT_RIGHT_ANIMATION_NAME)
+	else:
+		animated_sprite.play(TILT_LEFT_ANIMATION_NAME)
 	
 	actor.velocity = direction * move_speed
 	actor.move_and_slide()
-	
