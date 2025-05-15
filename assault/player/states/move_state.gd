@@ -18,12 +18,13 @@ func enter():
 	pass
 
 func process_physics(delta: float):
-	var input_direction = Input.get_vector("move_left", "move_right", "move_up", "move_down").normalized()
-	
-	if (input_direction.x == 0):
-		state_transition.emit(self, idle_state)
-		
-	move(input_direction, delta)
+	pass
+	#var input_direction = Input.get_vector("move_left", "move_right", "move_up", "move_down").normalized()
+	#
+	#if (input_direction.x == 0):
+		#state_transition.emit(self, idle_state)
+		#
+	#move(input_direction, delta)
 	
 func exit() -> void:
 	pass

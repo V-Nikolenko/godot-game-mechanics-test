@@ -17,13 +17,21 @@ func _process(delta):
 	if current_state:
 		current_state.process_physics(delta)
 
-func change_state(source_state : State, new_state : State):
+func change_state(new_state : State):
 	if !new_state:
 		return
+	
+	if current_state == new_state:
+		print("Same state. Ignoring")
+		return
 		
+	
+	print("Exiting previous state: " + current_state.name)
+	
 	if current_state:
 		current_state.exit()
 		
+	print("Entering new state: " + new_state.name)
 	new_state.enter()
 	
 	current_state = new_state
