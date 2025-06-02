@@ -1,6 +1,6 @@
 [gd_scene load_steps=9 format=3 uid="uid://cj15nas62osy7"]
 
-[ext_resource type="Script" uid="uid://bobkpyu4h4leh" path="res://assault/scenes/homing_missle.gd" id="1_js3q7"]
+[ext_resource type="Script" uid="uid://bobkpyu4h4leh" path="res://assault/scenes/projectiles/missiles/warhead/homing_missile.gd" id="1_js3q7"]
 [ext_resource type="Texture2D" uid="uid://ytq3eb2k4lfq" path="res://assault/assets/sprites/Rocket_blue.png" id="2_cdvk3"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_l6a2x"]
@@ -43,7 +43,7 @@ animations = [{
 radius = 7.0
 height = 18.0
 
-[node name="HomingMissle" type="Area2D"]
+[node name="HomingMissile" type="Area2D"]
 script = ExtResource("1_js3q7")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]

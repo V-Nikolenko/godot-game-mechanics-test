@@ -2,7 +2,7 @@
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_b2sn1"]
 [ext_resource type="Script" uid="uid://cjo40e3hf0hbn" path="res://assault/scenes/enemies/light_assault_ship/light_assault_ship.gd" id="1_cdh2m"]
-[ext_resource type="Texture2D" uid="uid://w7xvkbnwrrut" path="res://assault/scenes/enemies/light_assault_ship/enemyship.png" id="2_an5c4"]
+[ext_resource type="Texture2D" uid="uid://w7xvkbnwrrut" path="res://assault/assets/sprites/light_assault_ship.png" id="2_an5c4"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="3_an5c4"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="4_fm2d5"]
 
@@ -30,6 +30,21 @@ animations = [{
 [sub_resource type="CircleShape2D" id="CircleShape2D_siexo"]
 radius = 13.0
 
+[sub_resource type="Animation" id="Animation_siexo"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("AnimatedSprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
 [sub_resource type="Animation" id="Animation_b2sn1"]
 resource_name = "hit"
 length = 0.2
@@ -44,21 +59,6 @@ tracks/0/keys = {
 "transitions": PackedFloat32Array(1, 1),
 "update": 1,
 "values": [true, false]
-}
-
-[sub_resource type="Animation" id="Animation_siexo"]
-length = 0.001
-tracks/0/type = "value"
-tracks/0/imported = false
-tracks/0/enabled = true
-tracks/0/path = NodePath("AnimatedSprite2D:material:shader_parameter/enabled")
-tracks/0/interp = 1
-tracks/0/loop_wrap = true
-tracks/0/keys = {
-"times": PackedFloat32Array(0),
-"transitions": PackedFloat32Array(1),
-"update": 1,
-"values": [false]
 }
 
 [sub_resource type="AnimationLibrary" id="AnimationLibrary_1dtrx"]

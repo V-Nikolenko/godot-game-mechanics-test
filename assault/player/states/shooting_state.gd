@@ -31,7 +31,7 @@ func shootWithGuns():
 	shoot(start_position, Vector2.ZERO)
 	
 
-@onready var bullet_scene = preload("res://assault/scenes/bullet.tscn")
+@onready var bullet_scene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 
 func shoot(start_position: Vector2, target_position: Vector2) -> void:
 	var bullet:Area2D = bullet_scene.instantiate()

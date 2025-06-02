@@ -1,6 +1,6 @@
 [gd_scene load_steps=5 format=3 uid="uid://bvyhnlpuw5rcv"]
 
-[ext_resource type="Script" uid="uid://b8wmjpbuxn8bp" path="res://assault/scenes/bullet.gd" id="1_8o4be"]
+[ext_resource type="Script" uid="uid://b8wmjpbuxn8bp" path="res://assault/scenes/projectiles/bullets/bullet.gd" id="1_8o4be"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="2_t0ckq"]
 
 [sub_resource type="Environment" id="Environment_8o4be"]
