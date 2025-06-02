@@ -15,7 +15,7 @@ const STATE_KEY_BINDINGS: Array = [
 @export var movement_controller: MovementController
 
 @export_category("State Configuration")
-@export var dash_speed: float = 250.0
+@export var dash_speed: float = 350.0
 @export var dash_cooldown_enabled: bool = true
 @export var dash_cooldown_in_sec: float = 0.6
 
@@ -34,6 +34,7 @@ var dashing_direction: Vector2
 func start_state_transition(key_name: String) -> void:
 	if dash_cooldown_enabled && !cooldown_timer.is_stopped():
 		print("Dash in cooldown. Time to refresh: " + str(cooldown_timer.time_left) + "sec.")
+		state_transition.emit(transition_state)
 		return
 	
 	if STATE_KEY_BINDINGS.has(key_name):

@@ -1,0 +1,55 @@
+[gd_scene load_steps=9 format=3 uid="uid://6h7sf0ai3264"]
+
+[ext_resource type="Script" uid="uid://bwrbqfsrye3kv" path="res://assault/scenes/rocket.gd" id="1_08v5u"]
+[ext_resource type="Texture2D" uid="uid://ckudka33417uj" path="res://assault/assets/sprites/rocket.png" id="1_k058n"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_08v5u"]
+atlas = ExtResource("1_k058n")
+region = Rect2(1, 1, 7, 15)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_7pc5c"]
+atlas = ExtResource("1_k058n")
+region = Rect2(10, 1, 7, 15)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_6ntuu"]
+atlas = ExtResource("1_k058n")
+region = Rect2(19, 1, 7, 15)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_pp6ny"]
+atlas = ExtResource("1_k058n")
+region = Rect2(28, 1, 7, 15)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_2wate"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_08v5u")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_7pc5c")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_6ntuu")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_pp6ny")
+}],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_uavrp"]
+radius = 7.0
+height = 18.0
+
+[node name="Rocket" type="Area2D"]
+script = ExtResource("1_08v5u")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_2wate")
+frame_progress = 0.784106
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CapsuleShape2D_uavrp")

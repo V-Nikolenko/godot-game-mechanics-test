@@ -1,10 +1,12 @@
-[gd_scene load_steps=22 format=3 uid="uid://ty6a2vpnmrr5"]
+[gd_scene load_steps=23 format=3 uid="uid://ty6a2vpnmrr5"]
 
 [ext_resource type="Script" uid="uid://lb288p2swjp0" path="res://assault/player/player_fighter.gd" id="1_allu4"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_prbxf"]
 [ext_resource type="Script" uid="uid://c5678cxr4wb7q" path="res://global/statemachine/state_machine.gd" id="3_2482r"]
 [ext_resource type="Script" uid="uid://2kqhplaxohpf" path="res://assault/player/states/idle_state.gd" id="4_3rdgt"]
 [ext_resource type="Script" uid="uid://crvcl7vtyygxb" path="res://assault/player/states/dash_state.gd" id="4_nreql"]
+[ext_resource type="Script" uid="uid://d2a3nm753glu1" path="res://assault/player/states/move_state.gd" id="5_xku2w"]
+[ext_resource type="Script" uid="uid://c25je20p7qof1" path="res://assault/player/states/shooting_state.gd" id="6_cy5pj"]
 [ext_resource type="Script" uid="uid://cdfmqrq3idtak" path="res://assault/player/movement_controller.gd" id="6_nreql"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ht8os"]
@@ -149,69 +151,6 @@ animations = [{
 [sub_resource type="CircleShape2D" id="CircleShape2D_tgrgh"]
 radius = 5.09902
 
-[sub_resource type="GDScript" id="GDScript_2482r"]
-script/source = "extends State
-
-const IDLE_ANIMATION_NAME : String = \"idle\"
-const TILT_RIGHT_ANIMATION_NAME : String = \"tilt_to_the_right\"
-const TILT_LEFT_ANIMATION_NAME : String = \"tilt_to_the_left\"
-
-const STATE_KEY_BINDINGS: Array = [
-	\"move_left\", 
-	\"move_right\",
-	\"move_up\", 
-	\"move_down\"
-]
-
-@export_category(\"State Dependencies\")
-@export var actor: CharacterBody2D
-@export var animated_sprite: AnimatedSprite2D
-@export var movement_controller: MovementController
-
-@export_category(\"State Configuration\")
-@export var move_speed: float = 150.0
-@export var max_move_speed: float = 200.0
-
-@export_category(\"Transition State\")
-@export var transition_state: State
-
-
-# --- State Activation ---
-func _ready() -> void:
-	movement_controller.action_single_press.connect(start_state_transition)
-
-func start_state_transition(key_name: String) -> void:
-	if STATE_KEY_BINDINGS.has(key_name):
-		state_transition.emit(self)
-
-
-# --- Main State Logic ---
-func process_physics(delta: float):
-	var input_direction:Vector2 = Input.get_vector(\"move_left\", \"move_right\", \"move_up\", \"move_down\").normalized()
-	
-	if check_transition_state():
-		state_transition.emit(transition_state)
-		
-	move(input_direction)
-	
-func check_transition_state() -> bool:
-	for movement_key in STATE_KEY_BINDINGS:
-		if Input.is_action_pressed(movement_key):
-			return false
-	return true
-
-func move(direction: Vector2) -> void:
-	if direction.x == 0:
-		animated_sprite.play(IDLE_ANIMATION_NAME)
-	elif (direction.x > 0):
-		animated_sprite.play(TILT_RIGHT_ANIMATION_NAME)
-	else:
-		animated_sprite.play(TILT_LEFT_ANIMATION_NAME)
-	
-	actor.velocity = direction * move_speed
-	actor.move_and_slide()
-"
-
 [node name="PlayerFighter" type="CharacterBody2D"]
 script = ExtResource("1_allu4")
 
@@ -222,35 +161,52 @@ texture_filter = 1
 sprite_frames = SubResource("SpriteFrames_ht8os")
 animation = &"roll_to_the_right"
 
+[node name="MuzzleLeft" type="Marker2D" parent="SpriteAnchor"]
+position = Vector2(-11, 0)
+
+[node name="MuzzleRight" type="Marker2D" parent="SpriteAnchor"]
+position = Vector2(11, 0)
+
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, 1)
 shape = SubResource("CircleShape2D_tgrgh")
 
-[node name="StateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
+[node name="AttackStateMachine" type="Node" parent="."]
+script = ExtResource("3_2482r")
+metadata/_custom_type_script = "uid://c5678cxr4wb7q"
+
+[node name="MovementStateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
 script = ExtResource("3_2482r")
 initial_state = NodePath("IdleState")
 
-[node name="DashState" type="Node" parent="StateMachine" node_paths=PackedStringArray("actor", "animated_sprite", "movement_controller", "transition_state")]
+[node name="ShootingState" type="Node" parent="MovementStateMachine" node_paths=PackedStringArray("actor", "weapon_muzzles", "movement_controller")]
+script = ExtResource("6_cy5pj")
+actor = NodePath("../..")
+weapon_muzzles = [NodePath("../../SpriteAnchor/MuzzleLeft"), NodePath("../../SpriteAnchor/MuzzleRight")]
+movement_controller = NodePath("../../MovementController")
+
+[node name="DashState" type="Node" parent="MovementStateMachine" node_paths=PackedStringArray("actor", "animated_sprite", "movement_controller", "transition_state")]
 script = ExtResource("4_nreql")
 actor = NodePath("../..")
 animated_sprite = NodePath("../../SpriteAnchor/ShipSprite2D")
 movement_controller = NodePath("../../MovementController")
-dash_cooldown_enabled = false
 transition_state = NodePath("../MoveState")
 
-[node name="DashingTimer" type="Timer" parent="StateMachine/DashState"]
+[node name="DashingTimer" type="Timer" parent="MovementStateMachine/DashState"]
 wait_time = 0.6
 one_shot = true
 
-[node name="CooldownTimer" type="Timer" parent="StateMachine/DashState"]
+[node name="CooldownTimer" type="Timer" parent="MovementStateMachine/DashState"]
 one_shot = true
 
-[node name="MoveState" type="Node" parent="StateMachine" node_paths=PackedStringArray("actor", "animated_sprite", "movement_controller")]
-script = SubResource("GDScript_2482r")
+[node name="MoveState" type="Node" parent="MovementStateMachine" node_paths=PackedStringArray("actor", "animated_sprite", "movement_controller", "transition_state")]
+script = ExtResource("5_xku2w")
 actor = NodePath("../..")
 animated_sprite = NodePath("../../SpriteAnchor/ShipSprite2D")
 movement_controller = NodePath("../../MovementController")
+transition_state = NodePath("../IdleState")
 
-[node name="IdleState" type="Node" parent="StateMachine" node_paths=PackedStringArray("animated_sprite")]
+[node name="IdleState" type="Node" parent="MovementStateMachine" node_paths=PackedStringArray("animated_sprite")]
 script = ExtResource("4_3rdgt")
 animated_sprite = NodePath("../../SpriteAnchor/ShipSprite2D")
 
@@ -264,7 +220,7 @@ one_shot = true
 [node name="MovementLockTimer" type="Timer" parent="MovementController"]
 one_shot = true
 
-[connection signal="timeout" from="StateMachine/DashState/DashingTimer" to="StateMachine/DashState" method="_on_dash_timer_timeout"]
-[connection signal="timeout" from="StateMachine/DashState/CooldownTimer" to="StateMachine/DashState" method="_on_cooldown_timer_timeout"]
+[connection signal="timeout" from="MovementStateMachine/DashState/DashingTimer" to="MovementStateMachine/DashState" method="_on_dash_timer_timeout"]
+[connection signal="timeout" from="MovementStateMachine/DashState/CooldownTimer" to="MovementStateMachine/DashState" method="_on_cooldown_timer_timeout"]
 [connection signal="timeout" from="MovementController/DoubleClickThreshold" to="MovementController" method="_on_double_click_threshold_timeout"]
 [connection signal="timeout" from="MovementController/MovementLockTimer" to="MovementController" method="_on_movement_lock_timer_timeout"]

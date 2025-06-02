@@ -17,7 +17,7 @@ const STATE_KEY_BINDINGS: Array = [
 @export var movement_controller: MovementController
 
 @export_category("State Configuration")
-@export var move_speed: float = 150.0
+@export var move_speed: float = 180.0
 @export var max_move_speed: float = 200.0
 
 @export_category("Transition State")

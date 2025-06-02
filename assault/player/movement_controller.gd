@@ -8,7 +8,8 @@ var SINGLE_PRESS_ACTIONS: Array = [
 	"move_left", 
 	"move_right",
 	"move_up", 
-	"move_down"
+	"move_down",
+	"shoot"
 ]
 
 var DOUBLE_PRESS_ACTIONS: Array = [

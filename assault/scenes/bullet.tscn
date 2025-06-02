@@ -1,0 +1,55 @@
+[gd_scene load_steps=5 format=3 uid="uid://bvyhnlpuw5rcv"]
+
+[ext_resource type="Script" uid="uid://b8wmjpbuxn8bp" path="res://assault/scenes/bullet.gd" id="1_8o4be"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="2_t0ckq"]
+
+[sub_resource type="Environment" id="Environment_8o4be"]
+background_mode = 3
+glow_normalized = true
+glow_intensity = 1.37
+glow_strength = 1.64
+glow_blend_mode = 1
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_odwa0"]
+height = 59.5128
+
+[node name="Bullet" type="Area2D"]
+scale = Vector2(0.236342, 0.168031)
+script = ExtResource("1_8o4be")
+
+[node name="Glow" type="Line2D" parent="."]
+modulate = Color(0, 1, 1, 1)
+self_modulate = Color(0, 0.916667, 1, 1)
+rotation = -3.14159
+scale = Vector2(1.38553, -1.19464)
+points = PackedVector2Array(0, 16, 0, -16)
+width = 7.8
+default_color = Color(0, 1, 1, 1)
+begin_cap_mode = 2
+end_cap_mode = 2
+
+[node name="Beam" type="Line2D" parent="."]
+scale = Vector2(0.760001, 1)
+points = PackedVector2Array(0, 15, 0, -15)
+width = 7.48
+default_color = Color(0.721569, 1, 0.901961, 1)
+
+[node name="VisibleOnScreenNotifier2D" type="VisibleOnScreenNotifier2D" parent="."]
+scale = Vector2(0.639999, 2.4)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_8o4be")
+
+[node name="HitBox" type="Area2D" parent="."]
+collision_layer = 64
+collision_mask = 513
+script = ExtResource("2_t0ckq")
+damage = 10
+metadata/_custom_type_script = "uid://deqgbl6m44nrj"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HitBox"]
+shape = SubResource("CapsuleShape2D_odwa0")
+debug_color = Color(0.0816668, 0.7, 0, 0.419608)
+
+[connection signal="screen_exited" from="VisibleOnScreenNotifier2D" to="." method="_on_visible_on_screen_notifier_2d_screen_exited"]
+[connection signal="area_entered" from="HitBox" to="." method="_on_hit_box_area_entered"]

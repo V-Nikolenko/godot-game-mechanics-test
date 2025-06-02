@@ -1,0 +1,53 @@
+[gd_scene load_steps=9 format=3 uid="uid://cj15nas62osy7"]
+
+[ext_resource type="Script" uid="uid://bobkpyu4h4leh" path="res://assault/scenes/homing_missle.gd" id="1_js3q7"]
+[ext_resource type="Texture2D" uid="uid://ytq3eb2k4lfq" path="res://assault/assets/sprites/Rocket_blue.png" id="2_cdvk3"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_l6a2x"]
+atlas = ExtResource("2_cdvk3")
+region = Rect2(1, 1, 7, 15)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_2rvpr"]
+atlas = ExtResource("2_cdvk3")
+region = Rect2(10, 1, 7, 15)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_dbwnj"]
+atlas = ExtResource("2_cdvk3")
+region = Rect2(19, 1, 7, 15)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_oh5mq"]
+atlas = ExtResource("2_cdvk3")
+region = Rect2(28, 1, 7, 15)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_ssvi6"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_l6a2x")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_2rvpr")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_dbwnj")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_oh5mq")
+}],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_mqk6g"]
+radius = 7.0
+height = 18.0
+
+[node name="HomingMissle" type="Area2D"]
+script = ExtResource("1_js3q7")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_ssvi6")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CapsuleShape2D_mqk6g")
