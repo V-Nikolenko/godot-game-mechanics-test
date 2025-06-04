@@ -16,6 +16,7 @@ const STATE_KEY_BINDINGS: Array = [
 
 @export_category("State Configuration")
 @export var dash_speed: float = 350.0
+@export var move_speed: float = 180.0
 @export var dash_cooldown_enabled: bool = true
 @export var dash_cooldown_in_sec: float = 0.6
 
@@ -28,11 +29,13 @@ const STATE_KEY_BINDINGS: Array = [
 
 # --- State Activation ---
 func _ready() -> void:
-	movement_controller.action_double_press.connect(start_state_transition)
+        movement_controller.action_double_press.connect(start_state_transition)
 
 var dashing_direction: Vector2
 func start_state_transition(key_name: String) -> void:
-	if dash_cooldown_enabled && !cooldown_timer.is_stopped():
+        if !dashing_timer.is_stopped():
+                return
+        if dash_cooldown_enabled && !cooldown_timer.is_stopped():
 		print("Dash in cooldown. Time to refresh: " + str(cooldown_timer.time_left) + "sec.")
 		state_transition.emit(transition_state)
 		return
@@ -47,8 +50,7 @@ func get_dash_direction(key_name: String) -> Vector2:
 
 # --- Main State Logic ---
 func enter() -> void:
-	movement_controller.movement_lock.emit(dashing_timer.wait_time)
-	dashing_timer.start()
+        dashing_timer.start()
 	
 	if dashing_direction == Vector2.LEFT:
 		animated_sprite.play(ROLL_LEFT_ANIMATION_NAME)
@@ -56,9 +58,12 @@ func enter() -> void:
 		animated_sprite.play(ROLL_RIGHT_ANIMATION_NAME)
 
 func process_physics(delta: float):
-	if !dashing_timer.is_stopped():
-		actor.velocity = dashing_direction * dash_speed
-		actor.move_and_slide()
+        if !dashing_timer.is_stopped():
+                var vertical_input := Input.get_axis("move_up", "move_down")
+                var velocity := dashing_direction * dash_speed
+                velocity.y = vertical_input * move_speed
+                actor.velocity = velocity
+                actor.move_and_slide()
 	
 	
 # --- Timers Callback ---
