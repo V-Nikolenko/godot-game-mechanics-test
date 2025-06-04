@@ -1,5 +1,5 @@
 class_name ShootingState
-extends Node
+extends State
 
 const STATE_KEY_BINDINGS: Array = [
 	"shoot"

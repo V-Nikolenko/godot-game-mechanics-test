@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3 uid="uid://ty6a2vpnmrr5"]
+[gd_scene load_steps=26 format=3 uid="uid://ty6a2vpnmrr5"]
 
 [ext_resource type="Script" uid="uid://lb288p2swjp0" path="res://assault/player/player_fighter.gd" id="1_allu4"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_prbxf"]
@@ -8,6 +8,8 @@
 [ext_resource type="Script" uid="uid://d2a3nm753glu1" path="res://assault/player/states/move_state.gd" id="5_xku2w"]
 [ext_resource type="Script" uid="uid://c25je20p7qof1" path="res://assault/player/states/shooting_state.gd" id="6_cy5pj"]
 [ext_resource type="Script" uid="uid://cdfmqrq3idtak" path="res://assault/player/movement_controller.gd" id="6_nreql"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="9_ht8os"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="10_s7bsb"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ht8os"]
 atlas = ExtResource("2_prbxf")
@@ -151,6 +153,9 @@ animations = [{
 [sub_resource type="CircleShape2D" id="CircleShape2D_tgrgh"]
 radius = 5.09902
 
+[sub_resource type="CircleShape2D" id="CircleShape2D_ctrog"]
+radius = 5.0
+
 [node name="PlayerFighter" type="CharacterBody2D"]
 script = ExtResource("1_allu4")
 
@@ -171,19 +176,20 @@ position = Vector2(11, 0)
 position = Vector2(0, 1)
 shape = SubResource("CircleShape2D_tgrgh")
 
-[node name="AttackStateMachine" type="Node" parent="."]
+[node name="AttackStateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
 script = ExtResource("3_2482r")
+initial_state = NodePath("ShootingState")
 metadata/_custom_type_script = "uid://c5678cxr4wb7q"
 
-[node name="MovementStateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
-script = ExtResource("3_2482r")
-initial_state = NodePath("IdleState")
-
-[node name="ShootingState" type="Node" parent="MovementStateMachine" node_paths=PackedStringArray("actor", "weapon_muzzles", "movement_controller")]
+[node name="ShootingState" type="Node" parent="AttackStateMachine" node_paths=PackedStringArray("actor", "weapon_muzzles", "movement_controller")]
 script = ExtResource("6_cy5pj")
 actor = NodePath("../..")
 weapon_muzzles = [NodePath("../../SpriteAnchor/MuzzleLeft"), NodePath("../../SpriteAnchor/MuzzleRight")]
 movement_controller = NodePath("../../MovementController")
+
+[node name="MovementStateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
+script = ExtResource("3_2482r")
+initial_state = NodePath("IdleState")
 
 [node name="DashState" type="Node" parent="MovementStateMachine" node_paths=PackedStringArray("actor", "animated_sprite", "movement_controller", "transition_state")]
 script = ExtResource("4_nreql")
@@ -220,7 +226,21 @@ one_shot = true
 [node name="MovementLockTimer" type="Timer" parent="MovementController"]
 one_shot = true
 
+[node name="HurtBox" type="Area2D" parent="."]
+script = ExtResource("9_ht8os")
+metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+position = Vector2(0, 1)
+shape = SubResource("CircleShape2D_ctrog")
+debug_color = Color(0.7, 0, 0, 0.419608)
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("10_s7bsb")
+metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
+
 [connection signal="timeout" from="MovementStateMachine/DashState/DashingTimer" to="MovementStateMachine/DashState" method="_on_dash_timer_timeout"]
 [connection signal="timeout" from="MovementStateMachine/DashState/CooldownTimer" to="MovementStateMachine/DashState" method="_on_cooldown_timer_timeout"]
 [connection signal="timeout" from="MovementController/DoubleClickThreshold" to="MovementController" method="_on_double_click_threshold_timeout"]
 [connection signal="timeout" from="MovementController/MovementLockTimer" to="MovementController" method="_on_movement_lock_timer_timeout"]
+[connection signal="received_damage" from="HurtBox" to="." method="_on_hurt_box_received_damage"]

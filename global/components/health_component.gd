@@ -11,7 +11,6 @@ signal amount_changed
 @export var invincibility_frames_enabled: bool = false
 @export var invincibility_time_in_sec: float = 0.5
 
-var is_invincible: bool = false
 @onready var invincibility_timer: Timer = Timer.new()
 
 func _ready() -> void:
@@ -29,7 +28,7 @@ func increase(amount: int) -> void:
 	
 	
 func decrease(amount: int) -> void:
-	if is_invincible:
+	if !invincibility_timer.is_stopped():
 		return
 	
 	var changed_health = clamp(current_health - amount, 0, max_health)
@@ -44,9 +43,8 @@ func set_health(changed_health: int) -> void:
 
 
 func _start_invincibility() -> void:
-	is_invincible = true
 	invincibility_timer.start(invincibility_time_in_sec)
 
 
 func _on_invincibility_timeout() -> void:
-	is_invincible = false
+	pass
