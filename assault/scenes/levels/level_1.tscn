@@ -1,7 +1,7 @@
 [gd_scene load_steps=5 format=3 uid="uid://c7oxqmyxw0vxs"]
 
 [ext_resource type="PackedScene" uid="uid://6h7sf0ai3264" path="res://assault/scenes/projectiles/missiles/warhead/warhead_missile.tscn" id="1_jibh1"]
-[ext_resource type="PackedScene" uid="uid://cj15nas62osy7" path="res://assault/scenes/projectiles/missiles/warhead/homing_missile.tscn" id="2_6nh4p"]
+[ext_resource type="PackedScene" uid="uid://cj15nas62osy7" path="res://assault/scenes/projectiles/missiles/homing/homing_missile.tscn" id="2_6nh4p"]
 [ext_resource type="PackedScene" uid="uid://ty6a2vpnmrr5" path="res://assault/player/player_fighter.tscn" id="3_60rwg"]
 [ext_resource type="PackedScene" uid="uid://br4qs4w455h3m" path="res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn" id="4_sn0vu"]
 

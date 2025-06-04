@@ -1,10 +1,11 @@
-[gd_scene load_steps=26 format=3 uid="uid://ty6a2vpnmrr5"]
+[gd_scene load_steps=27 format=3 uid="uid://ty6a2vpnmrr5"]
 
 [ext_resource type="Script" uid="uid://lb288p2swjp0" path="res://assault/player/player_fighter.gd" id="1_allu4"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_prbxf"]
 [ext_resource type="Script" uid="uid://c5678cxr4wb7q" path="res://global/statemachine/state_machine.gd" id="3_2482r"]
 [ext_resource type="Script" uid="uid://2kqhplaxohpf" path="res://assault/player/states/idle_state.gd" id="4_3rdgt"]
 [ext_resource type="Script" uid="uid://crvcl7vtyygxb" path="res://assault/player/states/dash_state.gd" id="4_nreql"]
+[ext_resource type="Script" uid="uid://biyvn45plxdd2" path="res://assault/player/states/warhead_missile_shooting_state.gd" id="5_s7bsb"]
 [ext_resource type="Script" uid="uid://d2a3nm753glu1" path="res://assault/player/states/move_state.gd" id="5_xku2w"]
 [ext_resource type="Script" uid="uid://c25je20p7qof1" path="res://assault/player/states/shooting_state.gd" id="6_cy5pj"]
 [ext_resource type="Script" uid="uid://cdfmqrq3idtak" path="res://assault/player/movement_controller.gd" id="6_nreql"]
@@ -187,6 +188,15 @@ actor = NodePath("../..")
 weapon_muzzles = [NodePath("../../SpriteAnchor/MuzzleLeft"), NodePath("../../SpriteAnchor/MuzzleRight")]
 movement_controller = NodePath("../../MovementController")
 
+[node name="WarheadMissileShootingState" type="Node" parent="AttackStateMachine" node_paths=PackedStringArray("actor", "movement_controller")]
+script = ExtResource("5_s7bsb")
+actor = NodePath("../..")
+movement_controller = NodePath("../../MovementController")
+
+[node name="CooldownTimer" type="Timer" parent="AttackStateMachine/WarheadMissileShootingState"]
+wait_time = 5.0
+one_shot = true
+
 [node name="MovementStateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
 script = ExtResource("3_2482r")
 initial_state = NodePath("IdleState")
@@ -239,6 +249,7 @@ debug_color = Color(0.7, 0, 0, 0.419608)
 script = ExtResource("10_s7bsb")
 metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
+[connection signal="timeout" from="AttackStateMachine/WarheadMissileShootingState/CooldownTimer" to="AttackStateMachine/WarheadMissileShootingState" method="_on_cooldown_timer_timeout"]
 [connection signal="timeout" from="MovementStateMachine/DashState/DashingTimer" to="MovementStateMachine/DashState" method="_on_dash_timer_timeout"]
 [connection signal="timeout" from="MovementStateMachine/DashState/CooldownTimer" to="MovementStateMachine/DashState" method="_on_cooldown_timer_timeout"]
 [connection signal="timeout" from="MovementController/DoubleClickThreshold" to="MovementController" method="_on_double_click_threshold_timeout"]

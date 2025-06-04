@@ -24,7 +24,6 @@ func _ready() -> void:
 func increase(amount: int) -> void:
 	var changed_health = clamp(current_health + amount, 0, max_health)
 	set_health(changed_health)
-	_start_invincibility()
 	
 	
 func decrease(amount: int) -> void:
