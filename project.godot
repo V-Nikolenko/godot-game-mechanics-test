@@ -70,6 +70,7 @@ special_weapon={
 
 2d_physics/layer_1="environment"
 2d_physics/layer_2="environment_interactable"
+2d_physics/layer_3="environemnt_player"
 2d_physics/layer_7="player_hitbox"
 2d_physics/layer_8="player_hurtbox"
 2d_physics/layer_9="enemy_hitbox"

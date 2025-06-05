@@ -22,7 +22,7 @@ func start_state_transition(key_name: String) -> void:
 		
 @onready var rocket_scene = preload("res://assault/scenes/projectiles/missiles/warhead/warhead_missile.tscn")
 func launch_rocket() -> void:
-	var offsets = [Vector2(-10, 16), Vector2(0, 20), Vector2(10, 16)]
+	var offsets = [Vector2(-16, 26), Vector2(0, 36), Vector2(16, 26)]
 	for offset in offsets:
 		var rocket: Area2D = rocket_scene.instantiate()
 		rocket.global_position = actor.global_position + offset.rotated(actor.rotation)

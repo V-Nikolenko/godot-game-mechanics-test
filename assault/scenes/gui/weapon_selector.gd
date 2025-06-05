@@ -11,6 +11,9 @@ extends Node2D
 @onready var center_icon_sprite: Sprite2D = $SelectorCenter/IconCenter
 @onready var right_icon_sprite: Sprite2D = $SelectorRight/IconRight
 
+# Player node that the selector should follow.
+@export var actor: Node2D
+
 func _ready() -> void:
 	_set_icon(left_icon_sprite, left_icon)
 	_set_icon(center_icon_sprite, center_icon)
@@ -18,3 +21,9 @@ func _ready() -> void:
 
 func _set_icon(sprite: Sprite2D, icon: Texture2D) -> void:
 	sprite.texture = icon if icon else default_icon
+
+func _process(_delta: float) -> void:
+	visible = Input.is_key_pressed(KEY_CTRL)
+
+	if visible:
+		global_position = actor.global_position

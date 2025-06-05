@@ -158,6 +158,7 @@ radius = 5.09902
 radius = 5.0
 
 [node name="PlayerFighter" type="CharacterBody2D"]
+collision_layer = 4
 script = ExtResource("1_allu4")
 
 [node name="SpriteAnchor" type="Node2D" parent="."]

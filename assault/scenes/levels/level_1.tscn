@@ -1,7 +1,8 @@
-[gd_scene load_steps=5 format=3 uid="uid://c7oxqmyxw0vxs"]
+[gd_scene load_steps=6 format=3 uid="uid://c7oxqmyxw0vxs"]
 
 [ext_resource type="PackedScene" uid="uid://ty6a2vpnmrr5" path="res://assault/player/player_fighter.tscn" id="3_60rwg"]
 [ext_resource type="Texture2D" uid="uid://d10pf14wc73ha" path="res://assault/assets/gui/weaponselector/icon_warhead_missiles.png" id="3_sn0vu"]
+[ext_resource type="Texture2D" uid="uid://cerrrxn11tlt2" path="res://assault/assets/gui/weaponselector/icon_homing_missiles.png" id="4_mond1"]
 [ext_resource type="PackedScene" uid="uid://br4qs4w455h3m" path="res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn" id="4_sn0vu"]
 [ext_resource type="PackedScene" uid="uid://bt22af6fcustb" path="res://assault/scenes/gui/weapon_selector.tscn" id="9_mond1"]
 
@@ -18,6 +19,8 @@ rotation = 3.14159
 position = Vector2(189, 37)
 rotation = 3.14159
 
-[node name="WeaponSelector" parent="." instance=ExtResource("9_mond1")]
+[node name="WeaponSelector" parent="." node_paths=PackedStringArray("actor") instance=ExtResource("9_mond1")]
 position = Vector2(183, 176)
 left_icon = ExtResource("3_sn0vu")
+center_icon = ExtResource("4_mond1")
+actor = NodePath("../PlayerFighter")
