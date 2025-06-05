@@ -1,18 +1,11 @@
 [gd_scene load_steps=5 format=3 uid="uid://c7oxqmyxw0vxs"]
 
-[ext_resource type="PackedScene" uid="uid://6h7sf0ai3264" path="res://assault/scenes/projectiles/missiles/warhead/warhead_missile.tscn" id="1_jibh1"]
-[ext_resource type="PackedScene" uid="uid://cj15nas62osy7" path="res://assault/scenes/projectiles/missiles/homing/homing_missile.tscn" id="2_6nh4p"]
 [ext_resource type="PackedScene" uid="uid://ty6a2vpnmrr5" path="res://assault/player/player_fighter.tscn" id="3_60rwg"]
+[ext_resource type="Texture2D" uid="uid://d10pf14wc73ha" path="res://assault/assets/gui/weaponselector/icon_warhead_missiles.png" id="3_sn0vu"]
 [ext_resource type="PackedScene" uid="uid://br4qs4w455h3m" path="res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn" id="4_sn0vu"]
+[ext_resource type="PackedScene" uid="uid://bt22af6fcustb" path="res://assault/scenes/gui/weapon_selector.tscn" id="9_mond1"]
 
 [node name="Level1" type="Node2D"]
-
-[node name="Rocket" parent="." instance=ExtResource("1_jibh1")]
-texture_filter = 1
-position = Vector2(18, 117)
-
-[node name="HomingMissle" parent="." instance=ExtResource("2_6nh4p")]
-position = Vector2(18, 90)
 
 [node name="PlayerFighter" parent="." instance=ExtResource("3_60rwg")]
 position = Vector2(183, 175)
@@ -20,3 +13,11 @@ position = Vector2(183, 175)
 [node name="LightAssaultShip" parent="." instance=ExtResource("4_sn0vu")]
 position = Vector2(100, 38)
 rotation = 3.14159
+
+[node name="LightAssaultShip2" parent="." instance=ExtResource("4_sn0vu")]
+position = Vector2(189, 37)
+rotation = 3.14159
+
+[node name="WeaponSelector" parent="." instance=ExtResource("9_mond1")]
+position = Vector2(183, 176)
+left_icon = ExtResource("3_sn0vu")

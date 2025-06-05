@@ -206,6 +206,8 @@ script = ExtResource("4_nreql")
 actor = NodePath("../..")
 animated_sprite = NodePath("../../SpriteAnchor/ShipSprite2D")
 movement_controller = NodePath("../../MovementController")
+dash_cooldown_enabled = false
+dash_cooldown_in_sec = 0.2
 transition_state = NodePath("../MoveState")
 
 [node name="DashingTimer" type="Timer" parent="MovementStateMachine/DashState"]

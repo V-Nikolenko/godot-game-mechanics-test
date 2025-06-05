@@ -16,6 +16,7 @@ const STATE_KEY_BINDINGS: Array = [
 
 @export_category("State Configuration")
 @export var dash_speed: float = 350.0
+@export var move_speed: float = 180.0
 @export var dash_cooldown_enabled: bool = true
 @export var dash_cooldown_in_sec: float = 0.6
 
@@ -32,11 +33,13 @@ func _ready() -> void:
 
 var dashing_direction: Vector2
 func start_state_transition(key_name: String) -> void:
+	if !dashing_timer.is_stopped():
+		return
 	if dash_cooldown_enabled && !cooldown_timer.is_stopped():
 		print("Dash in cooldown. Time to refresh: " + str(cooldown_timer.time_left) + "sec.")
 		state_transition.emit(transition_state)
 		return
-	
+
 	if STATE_KEY_BINDINGS.has(key_name):
 		dashing_direction = get_dash_direction(key_name)
 		state_transition.emit(self)
@@ -57,7 +60,10 @@ func enter() -> void:
 
 func process_physics(delta: float):
 	if !dashing_timer.is_stopped():
-		actor.velocity = dashing_direction * dash_speed
+		var vertical_axis: Vector2 = Vector2(0, Input.get_axis("move_up", "move_down")).normalized()
+		var velocity := dashing_direction * dash_speed
+		velocity.y = vertical_axis.y * move_speed
+		actor.velocity = velocity
 		actor.move_and_slide()
 	
 	
