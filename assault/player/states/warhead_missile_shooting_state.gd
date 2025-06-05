@@ -24,7 +24,7 @@ func start_state_transition(key_name: String) -> void:
 func launch_rocket() -> void:
 	var offsets = [Vector2(-16, 26), Vector2(0, 36), Vector2(16, 26)]
 	for offset in offsets:
-		var rocket: Area2D = rocket_scene.instantiate()
+		var rocket: WarheadMissile = rocket_scene.instantiate()
 		rocket.global_position = actor.global_position + offset.rotated(actor.rotation)
 		rocket.rotation = actor.rotation
 		add_child(rocket)

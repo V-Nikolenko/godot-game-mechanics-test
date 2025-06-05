@@ -1,7 +1,8 @@
-[gd_scene load_steps=9 format=3 uid="uid://cj15nas62osy7"]
+[gd_scene load_steps=10 format=3 uid="uid://cj15nas62osy7"]
 
 [ext_resource type="Script" uid="uid://bobkpyu4h4leh" path="res://assault/scenes/projectiles/missiles/homing/homing_missile.gd" id="1_js3q7"]
 [ext_resource type="Texture2D" uid="uid://ytq3eb2k4lfq" path="res://assault/assets/sprites/Rocket_blue.png" id="2_cdvk3"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="3_5j8lp"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_l6a2x"]
 atlas = ExtResource("2_cdvk3")
@@ -39,7 +40,7 @@ animations = [{
 "speed": 5.0
 }]
 
-[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_mqk6g"]
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_od6r7"]
 radius = 7.0
 height = 18.0
 
@@ -49,5 +50,18 @@ script = ExtResource("1_js3q7")
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 sprite_frames = SubResource("SpriteFrames_ssvi6")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-shape = SubResource("CapsuleShape2D_mqk6g")
+[node name="VisibleOnScreenNotifier2D" type="VisibleOnScreenNotifier2D" parent="."]
+scale = Vector2(0.6, 1)
+
+[node name="HitBox" type="Area2D" parent="."]
+collision_layer = 64
+collision_mask = 513
+script = ExtResource("3_5j8lp")
+damage = 30
+metadata/_custom_type_script = "uid://deqgbl6m44nrj"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HitBox"]
+shape = SubResource("CapsuleShape2D_od6r7")
+
+[connection signal="screen_exited" from="VisibleOnScreenNotifier2D" to="." method="_on_visible_on_screen_notifier_2d_screen_exited"]
+[connection signal="area_entered" from="HitBox" to="." method="_on_hit_box_area_entered"]

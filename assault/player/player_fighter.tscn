@@ -240,6 +240,8 @@ one_shot = true
 one_shot = true
 
 [node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 128
+collision_mask = 257
 script = ExtResource("9_ht8os")
 metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
 

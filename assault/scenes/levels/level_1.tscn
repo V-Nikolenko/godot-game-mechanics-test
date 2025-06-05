@@ -1,5 +1,6 @@
-[gd_scene load_steps=6 format=3 uid="uid://c7oxqmyxw0vxs"]
+[gd_scene load_steps=7 format=3 uid="uid://c7oxqmyxw0vxs"]
 
+[ext_resource type="PackedScene" uid="uid://cj15nas62osy7" path="res://assault/scenes/projectiles/missiles/homing/homing_missile.tscn" id="2_6nh4p"]
 [ext_resource type="PackedScene" uid="uid://ty6a2vpnmrr5" path="res://assault/player/player_fighter.tscn" id="3_60rwg"]
 [ext_resource type="Texture2D" uid="uid://d10pf14wc73ha" path="res://assault/assets/gui/weaponselector/icon_warhead_missiles.png" id="3_sn0vu"]
 [ext_resource type="Texture2D" uid="uid://cerrrxn11tlt2" path="res://assault/assets/gui/weaponselector/icon_homing_missiles.png" id="4_mond1"]
@@ -24,3 +25,9 @@ position = Vector2(183, 176)
 left_icon = ExtResource("3_sn0vu")
 center_icon = ExtResource("4_mond1")
 actor = NodePath("../PlayerFighter")
+
+[node name="HomingMissile" parent="." node_paths=PackedStringArray("locked_target") instance=ExtResource("2_6nh4p")]
+position = Vector2(30, 157)
+rotation = 1.0472
+speed = 300.0
+locked_target = NodePath("../LightAssaultShip2")

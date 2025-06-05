@@ -58,7 +58,7 @@ scale = Vector2(0.3, 0.75)
 
 [node name="HitBox" type="Area2D" parent="."]
 collision_layer = 64
-collision_mask = 512
+collision_mask = 513
 script = ExtResource("3_elmy2")
 damage = 50
 metadata/_custom_type_script = "uid://deqgbl6m44nrj"
