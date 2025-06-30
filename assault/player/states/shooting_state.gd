@@ -13,6 +13,10 @@ const STATE_KEY_BINDINGS: Array = [
 @export_category("State Configuration")
 @export var shooting_speed: float = 150.0
 
+@export_category("Heat Component")
+@export var heat_per_shot: float = 1.0
+@export var heat_component: Overheat
+
 # --- State Activation ---
 func _ready() -> void:
 	movement_controller.action_single_press.connect(start_state_transition)
@@ -23,17 +27,21 @@ func start_state_transition(key_name: String) -> void:
 
 var gun_fired:int = 0
 func shootWithGuns():
+	if !actor.can_attack:
+		return
+				
 	gun_fired = (gun_fired + 1) % weapon_muzzles.size()
 	var muzzle: Marker2D = weapon_muzzles[gun_fired]
 	
 	var start_position = muzzle.global_position + Vector2.UP.rotated(actor.rotation)
-	var target_position = muzzle.global_position + Vector2.UP.rotated(actor.rotation)
-	shoot(start_position, Vector2.ZERO)
+	shoot(start_position)
+	
+	heat_component.increase_heat(heat_per_shot)
 	
 
 @onready var bullet_scene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 
-func shoot(start_position: Vector2, target_position: Vector2) -> void:
+func shoot(start_position: Vector2) -> void:
 	var bullet:Area2D = bullet_scene.instantiate()
 	bullet.global_position = start_position
 	bullet.rotation = actor.rotation

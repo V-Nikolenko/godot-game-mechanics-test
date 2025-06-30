@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3 uid="uid://ty6a2vpnmrr5"]
+[gd_scene load_steps=28 format=3 uid="uid://ty6a2vpnmrr5"]
 
 [ext_resource type="Script" uid="uid://lb288p2swjp0" path="res://assault/player/player_fighter.gd" id="1_allu4"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_prbxf"]
@@ -11,6 +11,7 @@
 [ext_resource type="Script" uid="uid://cdfmqrq3idtak" path="res://assault/player/movement_controller.gd" id="6_nreql"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="9_ht8os"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="10_s7bsb"]
+[ext_resource type="Script" uid="uid://coqfv3aco6d8i" path="res://global/components/overheat_component.gd" id="12_ctrog"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ht8os"]
 atlas = ExtResource("2_prbxf")
@@ -161,6 +162,14 @@ radius = 5.0
 collision_layer = 4
 script = ExtResource("1_allu4")
 
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("10_s7bsb")
+metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
+
+[node name="OverheatComponent" type="Node" parent="."]
+script = ExtResource("12_ctrog")
+metadata/_custom_type_script = "uid://coqfv3aco6d8i"
+
 [node name="SpriteAnchor" type="Node2D" parent="."]
 
 [node name="ShipSprite2D" type="AnimatedSprite2D" parent="SpriteAnchor"]
@@ -174,20 +183,32 @@ position = Vector2(-11, 0)
 [node name="MuzzleRight" type="Marker2D" parent="SpriteAnchor"]
 position = Vector2(11, 0)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+[node name="Collision" type="CollisionShape2D" parent="."]
 position = Vector2(0, 1)
 shape = SubResource("CircleShape2D_tgrgh")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 128
+collision_mask = 257
+script = ExtResource("9_ht8os")
+metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
+
+[node name="HurtBoxCollision" type="CollisionShape2D" parent="HurtBox"]
+position = Vector2(0, 1)
+shape = SubResource("CircleShape2D_ctrog")
+debug_color = Color(0.7, 0, 0, 0.419608)
 
 [node name="AttackStateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
 script = ExtResource("3_2482r")
 initial_state = NodePath("ShootingState")
 metadata/_custom_type_script = "uid://c5678cxr4wb7q"
 
-[node name="ShootingState" type="Node" parent="AttackStateMachine" node_paths=PackedStringArray("actor", "weapon_muzzles", "movement_controller")]
+[node name="ShootingState" type="Node" parent="AttackStateMachine" node_paths=PackedStringArray("actor", "weapon_muzzles", "movement_controller", "heat_component")]
 script = ExtResource("6_cy5pj")
 actor = NodePath("../..")
 weapon_muzzles = [NodePath("../../SpriteAnchor/MuzzleLeft"), NodePath("../../SpriteAnchor/MuzzleRight")]
 movement_controller = NodePath("../../MovementController")
+heat_component = NodePath("../../OverheatComponent")
 
 [node name="WarheadMissileShootingState" type="Node" parent="AttackStateMachine" node_paths=PackedStringArray("actor", "movement_controller")]
 script = ExtResource("5_s7bsb")
@@ -239,24 +260,9 @@ one_shot = true
 [node name="MovementLockTimer" type="Timer" parent="MovementController"]
 one_shot = true
 
-[node name="HurtBox" type="Area2D" parent="."]
-collision_layer = 128
-collision_mask = 257
-script = ExtResource("9_ht8os")
-metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
-position = Vector2(0, 1)
-shape = SubResource("CircleShape2D_ctrog")
-debug_color = Color(0.7, 0, 0, 0.419608)
-
-[node name="Health" type="Node" parent="."]
-script = ExtResource("10_s7bsb")
-metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
-
+[connection signal="received_damage" from="HurtBox" to="." method="_on_hurt_box_received_damage"]
 [connection signal="timeout" from="AttackStateMachine/WarheadMissileShootingState/CooldownTimer" to="AttackStateMachine/WarheadMissileShootingState" method="_on_cooldown_timer_timeout"]
 [connection signal="timeout" from="MovementStateMachine/DashState/DashingTimer" to="MovementStateMachine/DashState" method="_on_dash_timer_timeout"]
 [connection signal="timeout" from="MovementStateMachine/DashState/CooldownTimer" to="MovementStateMachine/DashState" method="_on_cooldown_timer_timeout"]
 [connection signal="timeout" from="MovementController/DoubleClickThreshold" to="MovementController" method="_on_double_click_threshold_timeout"]
 [connection signal="timeout" from="MovementController/MovementLockTimer" to="MovementController" method="_on_movement_lock_timer_timeout"]
-[connection signal="received_damage" from="HurtBox" to="." method="_on_hurt_box_received_damage"]
