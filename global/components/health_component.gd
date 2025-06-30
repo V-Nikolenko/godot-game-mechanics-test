@@ -18,18 +18,18 @@ func _ready() -> void:
 
 	invincibility_timer.one_shot = true
 	invincibility_timer.timeout.connect(_on_invincibility_timeout)
-	add_child(invincibility_timer    )
-	
-	
+       add_child(invincibility_timer)
+
+
 func increase(amount: int) -> void:
 	var changed_health = clamp(current_health + amount, 0, max_health)
 	set_health(changed_health)
-	
-	
+
+
 func decrease(amount: int) -> void:
 	if !invincibility_timer.is_stopped():
 		return
-	
+
 	var changed_health = clamp(current_health - amount, 0, max_health)
 	set_health(changed_health)
 	if invincibility_frames_enabled:
