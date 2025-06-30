@@ -25,11 +25,11 @@ var gun_fired:int = 0
 func shootWithGuns():
 	gun_fired = (gun_fired + 1) % weapon_muzzles.size()
 	var muzzle: Marker2D = weapon_muzzles[gun_fired]
-
+	
 	var start_position = muzzle.global_position + Vector2.UP.rotated(actor.rotation)
 	var target_position = muzzle.global_position + Vector2.UP.rotated(actor.rotation)
 	shoot(start_position, Vector2.ZERO)
-
+	
 
 @onready var bullet_scene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 
