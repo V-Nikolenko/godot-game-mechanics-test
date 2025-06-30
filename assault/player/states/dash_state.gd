@@ -5,7 +5,7 @@ const ROLL_RIGHT_ANIMATION_NAME : String = "roll_to_the_right"
 const ROLL_LEFT_ANIMATION_NAME : String = "roll_to_the_left"
 
 const STATE_KEY_BINDINGS: Array = [
-	"move_left", 
+	"move_left",
 	"move_right"
 ]
 
@@ -52,21 +52,21 @@ func get_dash_direction(key_name: String) -> Vector2:
 func enter() -> void:
 	movement_controller.movement_lock.emit(dashing_timer.wait_time)
 	dashing_timer.start()
-	
+
 	if dashing_direction == Vector2.LEFT:
 		animated_sprite.play(ROLL_LEFT_ANIMATION_NAME)
 	elif dashing_direction == Vector2.RIGHT:
 		animated_sprite.play(ROLL_RIGHT_ANIMATION_NAME)
 
-func process_physics(delta: float):
+func physics_process(delta: float) -> void:
 	if !dashing_timer.is_stopped():
 		var vertical_axis: Vector2 = Vector2(0, Input.get_axis("move_up", "move_down")).normalized()
 		var velocity := dashing_direction * dash_speed
 		velocity.y = vertical_axis.y * move_speed
 		actor.velocity = velocity
 		actor.move_and_slide()
-	
-	
+
+
 # --- Timers Callback ---
 func _on_dash_timer_timeout() -> void:
 	state_transition.emit(transition_state)

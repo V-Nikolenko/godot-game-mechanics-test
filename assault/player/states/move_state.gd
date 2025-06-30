@@ -5,9 +5,9 @@ const TILT_RIGHT_ANIMATION_NAME : String = "tilt_to_the_right"
 const TILT_LEFT_ANIMATION_NAME : String = "tilt_to_the_left"
 
 const STATE_KEY_BINDINGS: Array = [
-	"move_left", 
+	"move_left",
 	"move_right",
-	"move_up", 
+	"move_up",
 	"move_down"
 ]
 
@@ -34,14 +34,14 @@ func start_state_transition(key_name: String) -> void:
 
 
 # --- Main State Logic ---
-func process_physics(delta: float):
+func physics_process(delta: float) -> void:
 	var input_direction:Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down").normalized()
-	
+
 	if check_transition_state():
 		state_transition.emit(transition_state)
-		
+
 	move(input_direction)
-	
+
 func check_transition_state() -> bool:
 	for movement_key in STATE_KEY_BINDINGS:
 		if Input.is_action_pressed(movement_key):
@@ -55,6 +55,6 @@ func move(direction: Vector2) -> void:
 		animated_sprite.play(TILT_RIGHT_ANIMATION_NAME)
 	else:
 		animated_sprite.play(TILT_LEFT_ANIMATION_NAME)
-	
+
 	actor.velocity = direction * move_speed
 	actor.move_and_slide()

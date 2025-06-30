@@ -19,7 +19,7 @@ func start_state_transition(key_name: String) -> void:
 	if STATE_KEY_BINDINGS.has(key_name) and cooldown_timer.is_stopped():
 		launch_rocket()
 		cooldown_timer.start()
-		
+
 @onready var rocket_scene = preload("res://assault/scenes/projectiles/missiles/warhead/warhead_missile.tscn")
 func launch_rocket() -> void:
 	var offsets = [Vector2(-16, 26), Vector2(0, 36), Vector2(16, 26)]

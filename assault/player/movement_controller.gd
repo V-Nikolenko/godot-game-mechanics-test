@@ -5,16 +5,16 @@ signal action_single_press
 signal action_double_press
 
 var SINGLE_PRESS_ACTIONS: Array = [
-	"move_left", 
+	"move_left",
 	"move_right",
-	"move_up", 
+	"move_up",
 	"move_down",
 	"shoot",
 	"special_weapon"
 ]
 
 var DOUBLE_PRESS_ACTIONS: Array = [
-	"move_left", 
+	"move_left",
 	"move_right",
 ]
 
@@ -42,16 +42,16 @@ func _on_movement_lock_timer_timeout() -> void:
 func _process(delta: float) -> void:
 	if !Input.is_anything_pressed():
 		return
-	
+
 	if !movement_lock_timer.is_stopped():
 		return
-	
+
 	var is_double_press: bool = handle_double_press()
 	if is_double_press:
 		return
-	
+
 	handle_single_press()
-	
+
 
 # --- Handle double press tracking logic ---
 # If a key listed in the 'DOUBLE_PRESS_ACTIONS' array is pressed, the corresponding signal will be emitted.
@@ -79,8 +79,8 @@ func handle_double_press() -> bool:
 
 func _on_double_click_threshold_timeout() -> void:
 	last_press_key = ""
-	
-	
+
+
 # --- Handle single press tracking logic ---
 func handle_single_press() -> void:
 	for single_press_key in SINGLE_PRESS_ACTIONS:
