@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="PlayerUpgradeLoadout" load_steps=4 format=3 uid="uid://tk7f3qfpf2l1"]
+
+[ext_resource type="Script" uid="uid://8d3irg0edyxe" path="res://infiltration_mission/scripts/player/upgrades/player_upgrade.gd" id="1_m3swy"]
+[ext_resource type="Script" uid="uid://dgxv3ho5og508" path="res://infiltration_mission/scripts/player/upgrades/player_upgrade_loadout.gd" id="1_qpu01"]
+[ext_resource type="Resource" path="res://infiltration_mission/assets/upgrades/double_jump_upgrade.tres" id="2_33a7f"]
+
+[resource]
+script = ExtResource("1_qpu01")
+applied_upgrades = Array[ExtResource("1_m3swy")]([ExtResource("2_33a7f")])
