@@ -1,0 +1,30 @@
+[gd_scene load_steps=6 format=3 uid="uid://c5uhjngq8bl5n"]
+
+[ext_resource type="Script" uid="uid://dg5l620y40wdj" path="res://infiltration_mission/scenes/entities/player/player.gd" id="1_4d7fr"]
+[ext_resource type="Texture2D" uid="uid://bkoboq6yqy710" path="res://infiltration_mission/scenes/entities/player/player.png" id="2_0ooo6"]
+[ext_resource type="PackedScene" uid="uid://f8bha1mrl0pg" path="res://infiltration_mission/scenes/effects/afterimage/AfterImage.tscn" id="2_xrpcc"]
+[ext_resource type="Texture2D" uid="uid://d32ho40fiqd3d" path="res://infiltration_mission/scenes/entities/player/shadow.png" id="3_0ooo6"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_4d7fr"]
+
+[node name="Player" type="CharacterBody2D"]
+motion_mode = 1
+script = ExtResource("1_4d7fr")
+afterimage_scene = ExtResource("2_xrpcc")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(-1.69407e-21, 14)
+scale = Vector2(1.14839, 0.252933)
+shape = SubResource("RectangleShape2D_4d7fr")
+
+[node name="Player" type="Sprite2D" parent="."]
+z_index = 2
+texture_filter = 1
+texture = ExtResource("2_0ooo6")
+
+[node name="Camera2D" type="Camera2D" parent="."]
+
+[node name="player_shadow" type="Sprite2D" parent="."]
+position = Vector2(0, 13)
+scale = Vector2(1, 0.722222)
+texture = ExtResource("3_0ooo6")
