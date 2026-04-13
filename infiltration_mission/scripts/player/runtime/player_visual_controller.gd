@@ -3,13 +3,13 @@ class_name PlayerVisualController
 
 var player_sprite: Sprite2D
 var shadow_sprite: Sprite2D
-var afterimage_scene: PackedScene
+var dash_particles: GPUParticles2D
 
 
-func _init(sprite: Sprite2D, shadow: Sprite2D, dash_afterimage_scene: PackedScene) -> void:
+func _init(sprite: Sprite2D, shadow: Sprite2D, particles: GPUParticles2D) -> void:
 	player_sprite = sprite
 	shadow_sprite = shadow
-	afterimage_scene = dash_afterimage_scene
+	dash_particles = particles
 
 
 func apply_height(z_position: float) -> void:
@@ -17,20 +17,19 @@ func apply_height(z_position: float) -> void:
 	shadow_sprite.scale = Vector2.ONE * (1.0 - clampf(z_position / 300.0, 0.0, 0.5))
 
 
-func spawn_afterimage(world_parent: Node, global_position: Vector2) -> void:
-	if afterimage_scene == null:
+func update_dash_particles(is_dashing: bool, dash_direction: Vector2, z_position: float) -> void:
+	if dash_particles == null:
 		return
 
-	var ghost := afterimage_scene.instantiate()
-	world_parent.add_child(ghost)
-	ghost.global_position = global_position
-	ghost.z_index = player_sprite.z_index - 1
+	if not is_dashing:
+		dash_particles.emitting = false
+		return
 
-	var ghost_sprite: Sprite2D = ghost.get_node("Sprite2D")
-	ghost_sprite.texture = player_sprite.texture
-	ghost_sprite.hframes = player_sprite.hframes
-	ghost_sprite.vframes = player_sprite.vframes
-	ghost_sprite.frame = player_sprite.frame
-	ghost_sprite.flip_h = player_sprite.flip_h
-	ghost_sprite.position = player_sprite.position
-	ghost_sprite.modulate = Color(0.6, 0.8, 1.0, 0.7)
+	var particle_material := dash_particles.process_material as ParticleProcessMaterial
+	if particle_material != null and dash_direction != Vector2.ZERO:
+		particle_material.direction = Vector3(-dash_direction.x, -dash_direction.y, 0.0)
+
+	dash_particles.position = Vector2(0.0, -z_position + 4.0)
+	if not dash_particles.emitting:
+		dash_particles.restart()
+	dash_particles.emitting = true

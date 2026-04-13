@@ -1,8 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://f8bha1mrl0pg"]
-
-[ext_resource type="Script" uid="uid://7waktly2i47w" path="res://infiltration_mission/scenes/effects/afterimage/after_image.gd" id="1_kk0nd"]
-
-[node name="AfterImage" type="Node2D"]
-script = ExtResource("1_kk0nd")
-
-[node name="Sprite2D" type="Sprite2D" parent="."]

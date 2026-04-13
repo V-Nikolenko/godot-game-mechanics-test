@@ -1,8 +1,10 @@
-[gd_resource type="Resource" script_class="HoverJumpUpgrade" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="HoverJumpUpgrade" load_steps=2 format=3 uid="uid://dml75fswqyx2e"]
 
-[ext_resource type="Script" path="res://infiltration_mission/scripts/player/upgrades/jump/hover_jump_upgrade.gd" id="1_w7q4a"]
+[ext_resource type="Script" uid="uid://cnr0avahak870" path="res://infiltration_mission/scripts/player/upgrades/jump/hover_jump_upgrade.gd" id="1_w7q4a"]
 
 [resource]
 script = ExtResource("1_w7q4a")
 hover_duration = 0.8
+hover_jump_force = 80.0
+hover_max_height_gain = 48.0
 hover_gravity_scale = 0.15

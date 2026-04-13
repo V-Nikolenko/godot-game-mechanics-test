@@ -15,7 +15,6 @@ const PlayerUpgradeLoadout = preload("res://infiltration_mission/scripts/player/
 @export var dash_settings: PlayerDashSettings = PlayerDashSettings.new()
 @export var jump_settings: PlayerJumpSettings = PlayerJumpSettings.new()
 @export var upgrade_loadout: PlayerUpgradeLoadout = PlayerUpgradeLoadout.new()
-@export var afterimage_scene: PackedScene
 
 # --- MOVEMENT MEMORY ---
 var last_move_dir: Vector2 = Vector2.RIGHT
@@ -23,6 +22,7 @@ var last_move_dir: Vector2 = Vector2.RIGHT
 # --- REFERENCES ---
 @onready var player_sprite = $Player
 @onready var shadow = $player_shadow
+@onready var dash_particles: GPUParticles2D = $DashParticles
 
 var locomotion: PlayerLocomotion
 var dash_state: PlayerDashState
@@ -41,7 +41,7 @@ func refresh_modules() -> void:
 	locomotion = PlayerLocomotion.new(movement_settings)
 	dash_state = PlayerDashState.new(dash_settings)
 	jump_state = PlayerJumpState.new(_build_jump_settings())
-	visuals = PlayerVisualController.new(player_sprite, shadow, afterimage_scene)
+	visuals = PlayerVisualController.new(player_sprite, shadow, dash_particles)
 
 
 func _physics_process(delta: float) -> void:
@@ -57,10 +57,14 @@ func _physics_process(delta: float) -> void:
 
 	if dash_state.is_active():
 		velocity = locomotion.get_dash_velocity(dash_state.dash_direction, dash_settings.dash_speed)
-		if dash_state.should_spawn_afterimage():
-			visuals.spawn_afterimage(get_parent(), global_position)
 	else:
 		velocity = locomotion.get_move_velocity(input.move_vector)
+
+	visuals.update_dash_particles(
+		dash_state.is_active(),
+		dash_state.dash_direction,
+		jump_state.z_position
+	)
 
 	move_and_slide()
 	visuals.apply_height(jump_state.z_position)
