@@ -1,10 +1,13 @@
-[gd_scene load_steps=13 format=3 uid="uid://br4qs4w455h3m"]
+[gd_scene load_steps=17 format=3 uid="uid://br4qs4w455h3m"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_b2sn1"]
 [ext_resource type="Script" uid="uid://cjo40e3hf0hbn" path="res://assault/scenes/enemies/light_assault_ship/light_assault_ship.gd" id="1_cdh2m"]
 [ext_resource type="Texture2D" uid="uid://w7xvkbnwrrut" path="res://assault/assets/sprites/light_assault_ship.png" id="2_an5c4"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="3_an5c4"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="4_fm2d5"]
+[ext_resource type="Script" uid="uid://c5678cxr4wb7q" path="res://global/statemachine/state_machine.gd" id="5_smach"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/light_assault_ship/states/approach_state.gd" id="6_appr"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/light_assault_ship/states/strafe_exit_state.gd" id="7_strf"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_b2sn1"]
 resource_local_to_scene = true
@@ -73,6 +76,8 @@ script = ExtResource("1_cdh2m")
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 material = SubResource("ShaderMaterial_b2sn1")
 sprite_frames = SubResource("SpriteFrames_b2sn1")
+animation = &"default"
+autoplay = "default"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_siexo")
@@ -96,5 +101,16 @@ libraries = {
 &"": SubResource("AnimationLibrary_1dtrx")
 }
 
-[connection signal="received_damage" from="HurtBox" to="." method="_on_hurt_box_received_damage"]
-[connection signal="amount_changed" from="Health" to="." method="_on_health_amount_changed"]
+[node name="AIStateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
+script = ExtResource("5_smach")
+initial_state = NodePath("ApproachState")
+metadata/_custom_type_script = "uid://c5678cxr4wb7q"
+
+[node name="ApproachState" type="Node" parent="AIStateMachine" node_paths=PackedStringArray("actor", "strafe_state")]
+script = ExtResource("6_appr")
+actor = NodePath("../..")
+strafe_state = NodePath("../StrafeExitState")
+
+[node name="StrafeExitState" type="Node" parent="AIStateMachine" node_paths=PackedStringArray("actor")]
+script = ExtResource("7_strf")
+actor = NodePath("../..")

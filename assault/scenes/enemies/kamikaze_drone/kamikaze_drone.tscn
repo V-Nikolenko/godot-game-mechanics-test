@@ -1,0 +1,103 @@
+[gd_scene load_steps=13 format=3 uid="uid://kdrone001assault"]
+
+[ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_kd"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.gd" id="2_kd"]
+[ext_resource type="Texture2D" uid="uid://w7xvkbnwrrut" path="res://assault/assets/sprites/light_assault_ship.png" id="3_kd"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_kd"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_kd"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_kd"]
+resource_local_to_scene = true
+shader = ExtResource("1_kd")
+shader_parameter/enabled = false
+shader_parameter/flash_color = Color(1, 1, 1, 1)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_kd"]
+atlas = ExtResource("3_kd")
+region = Rect2(1, 1, 32, 32)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_kd"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_kd")
+}],
+"loop": true,
+"name": &"default",
+"speed": 5.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_kd"]
+radius = 10.0
+
+[sub_resource type="Animation" id="Animation_reset_kd"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("AnimatedSprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
+[sub_resource type="Animation" id="Animation_hit_kd"]
+resource_name = "hit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("AnimatedSprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [true, false]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_kd"]
+_data = {
+&"RESET": SubResource("Animation_reset_kd"),
+&"hit": SubResource("Animation_hit_kd")
+}
+
+[node name="KamikazeDrone" type="CharacterBody2D"]
+script = ExtResource("2_kd")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+modulate = Color(1, 0.3, 0.3, 1)
+material = SubResource("ShaderMaterial_kd")
+scale = Vector2(0.7, 0.7)
+sprite_frames = SubResource("SpriteFrames_kd")
+animation = &"default"
+autoplay = "default"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_kd")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 65
+script = ExtResource("4_kd")
+metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_kd")
+debug_color = Color(0.7, 0, 0, 0.419608)
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("5_kd")
+max_health = 40
+current_health = 40
+metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_kd")
+}
