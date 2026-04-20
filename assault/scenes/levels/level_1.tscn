@@ -27,9 +27,10 @@ script = ExtResource("11_wave")
 scroll_controller = NodePath("../ScrollController")
 enemy_container = NodePath("../EnemyContainer")
 
-[node name="LevelWaves" type="Node" parent="." node_paths=PackedStringArray("wave_manager")]
+[node name="LevelWaves" type="Node" parent="." node_paths=PackedStringArray("wave_manager", "scroll_controller")]
 script = ExtResource("12_waves")
 wave_manager = NodePath("../WaveManager")
+scroll_controller = NodePath("../ScrollController")
 
 [node name="PlayerFighter" parent="." instance=ExtResource("3_60rwg")]
 position = Vector2(183, 175)

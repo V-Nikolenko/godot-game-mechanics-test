@@ -83,12 +83,24 @@ All enemy ships reuse `light_assault_ship.png` with `modulate` / `scale` variati
 - [x] Create `assault/scenes/systems/wave_manager/wave_manager.gd`
 - [x] Commit `feat: add WaveManager`
 
-### Task 5 · Fighter AI
+### Task 5 · Fighter AI + Full Phase 1 Wave Design
 - [x] Create `approach_state.gd` — fly to hold-Y firing bursts
 - [x] Create `strafe_exit_state.gd` — break and exit screen
 - [x] Update `light_assault_ship.tscn` — add StateMachine + states
 - [x] Add Camera2D + ScrollController + WaveManager to `level_1.tscn`
-- [x] Commit `feat: Fighter AI with approach and strafe-exit states`
+- [x] Extend WaveManager — `spawn_edge`, `on_spawned` callback, scroll-speed override
+- [x] Rewrite `level_1_waves.gd` — 10 waves covering all GDD Phase 1 types
+  - Wave 1: V formation (5 fighters)
+  - Wave 2: Kamikaze surprise cluster (4 drones)
+  - Wave 3: Suppression (Gunship + 4 fighters)
+  - Wave 4: Diagonal line (5 fighters)
+  - Wave 5: Sniper pass (2 skimmers opposite sides + 3 fighters)
+  - Wave 6: Bomber pass + covering fire (3 fighters)
+  - Wave 7: Pincer 3+3 + kamikaze center (3 drones)
+  - Wave 8: Dual suppression (2 gunships + 5 fighters)
+  - Wave 9: Asymmetric pincer (2 bombers opposite + 3 fighters + 2 drones)
+  - Wave 10: Elite Encounter — scroll 50%, elite Gunship (500 HP) + 3 escort; scroll resumes on death
+- [x] Commit `feat: full GDD Phase 1 wave design`
 
 ---
 
