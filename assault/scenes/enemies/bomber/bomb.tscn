@@ -1,0 +1,27 @@
+[gd_scene load_steps=4 format=3 uid="uid://bomb001assault"]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/bomber/bomb.gd" id="1_bomb"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="2_bomb"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_bomb"]
+radius = 22.0
+
+[node name="Bomb" type="Area2D"]
+script = ExtResource("1_bomb")
+
+[node name="Visual" type="ColorRect" parent="."]
+offset_left = -8.0
+offset_top = -8.0
+offset_right = 8.0
+offset_bottom = 8.0
+color = Color(0.2, 0.2, 0.2, 1)
+
+[node name="HitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 128
+script = ExtResource("2_bomb")
+damage = 30
+metadata/_custom_type_script = "uid://deqgbl6m44nrj"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HitBox"]
+shape = SubResource("CircleShape2D_bomb")
