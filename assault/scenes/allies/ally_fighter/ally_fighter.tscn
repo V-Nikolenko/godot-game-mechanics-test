@@ -1,0 +1,52 @@
+[gd_scene load_steps=8 format=3 uid="uid://isps2gewyelo"]
+
+[ext_resource type="Script" uid="uid://bjhxxf3gafdm5" path="res://assault/scenes/allies/ally_fighter/ally_fighter.gd" id="1_alf"]
+[ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_alf"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="3_alf"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="4_alf"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_alf"]
+atlas = ExtResource("2_alf")
+region = Rect2(1, 1, 32, 32)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_alf"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_alf")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_alf"]
+radius = 8.0
+
+[node name="AllyFighter" type="CharacterBody2D"]
+collision_layer = 4
+script = ExtResource("1_alf")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_alf")
+animation = &"idle"
+autoplay = "idle"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_alf")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 128
+collision_mask = 257
+script = ExtResource("3_alf")
+metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_alf")
+debug_color = Color(0, 0.7, 0, 0.42)
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("4_alf")
+metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
+
+[connection signal="received_damage" from="HurtBox" to="." method="_on_hurt_box_received_damage"]

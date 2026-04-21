@@ -38,7 +38,7 @@ func _fire() -> void:
 		return
 	var bullet: EnemyBullet = enemy_bullet_scene.instantiate()
 	bullet.global_position = global_position
-	var aim_dir := (players[0].global_position - global_position).normalized()
+	var aim_dir := ((players[0] as Node2D).global_position - global_position).normalized()
 	bullet.set_direction(aim_dir)
 	bullet.speed = 400.0
 	get_parent().add_child(bullet)

@@ -9,6 +9,7 @@ extends Area2D
 
 func _ready() -> void:
 	animated_sprite.play("default")
+	add_child(RocketTrail.new())
 
 
 func _physics_process(delta: float) -> void:

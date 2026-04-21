@@ -29,5 +29,4 @@ func _on_overheat_timer_timeout() -> void:
 
 func _emit_heat() -> void:
 	var overheat_percentage = heat / heat_limit * 100
-	print("Overheating: " + str(overheat_percentage))
 	overheat.emit(overheat_percentage)

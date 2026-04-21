@@ -2934,9 +2934,10 @@ position = Vector2(166, -120)
 
 [node name="StairAssist" parent="." instance=ExtResource("4_7ydpr")]
 position = Vector2(275, -164)
+top_local_point = Vector2(20, -20)
 
 [node name="CollisionPolygon2D" parent="StairAssist" index="0"]
-position = Vector2(4, -4)
-polygon = PackedVector2Array(-6, -34, -37, 11, 8, 33, 42, -9)
+position = Vector2(4, -6)
+polygon = PackedVector2Array(-7, -33, -37, 11, 8, 33, 42, -9)
 
 [editable path="StairAssist"]

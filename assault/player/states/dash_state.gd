@@ -26,6 +26,8 @@ const STATE_KEY_BINDINGS: Array = [
 @onready var cooldown_timer: Timer = $CooldownTimer
 @onready var dashing_timer: Timer = $DashingTimer
 
+var _scale_tween: Tween
+
 
 # --- State Activation ---
 func _ready() -> void:
@@ -52,11 +54,27 @@ func get_dash_direction(key_name: String) -> Vector2:
 func enter() -> void:
 	movement_controller.movement_lock.emit(dashing_timer.wait_time)
 	dashing_timer.start()
-	
+
+	# Invincibility: stop the HurtBox from detecting incoming hits
+	var hb := actor.get_node_or_null("HurtBox") as Area2D
+	if hb:
+		hb.monitoring = false
+
 	if dashing_direction == Vector2.LEFT:
 		animated_sprite.play(ROLL_LEFT_ANIMATION_NAME)
 	elif dashing_direction == Vector2.RIGHT:
 		animated_sprite.play(ROLL_RIGHT_ANIMATION_NAME)
+
+	# Scale pulse — ship "surges toward the screen" at the peak of the roll
+	if _scale_tween:
+		_scale_tween.kill()
+	var base: Vector2 = animated_sprite.scale
+	var half: float   = dashing_timer.wait_time * 0.5
+	_scale_tween = actor.create_tween()
+	_scale_tween.tween_property(animated_sprite, "scale", base * 1.35, half) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+	_scale_tween.tween_property(animated_sprite, "scale", base, half) \
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 
 func process_physics(delta: float):
 	if !dashing_timer.is_stopped():
@@ -69,10 +87,14 @@ func process_physics(delta: float):
 	
 # --- Timers Callback ---
 func _on_dash_timer_timeout() -> void:
+	# Restore HurtBox before transitioning so the new state is never left unprotected
+	var hb := actor.get_node_or_null("HurtBox") as Area2D
+	if hb:
+		hb.monitoring = true
+
 	state_transition.emit(transition_state)
 	if (dash_cooldown_enabled):
 		cooldown_timer.start(dash_cooldown_in_sec)
-		print("Dash ended. Starting cooldown timer for " + str(cooldown_timer.wait_time) + " sec.")
 
 func _on_cooldown_timer_timeout() -> void:
 	print("Dash cooldown ended. Dash can be used again!")

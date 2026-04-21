@@ -23,7 +23,6 @@ const STATE_KEY_BINDINGS: Array = [
 @export_category("Transition State")
 @export var transition_state: State
 
-
 # --- State Activation ---
 func _ready() -> void:
 	movement_controller.action_single_press.connect(start_state_transition)
@@ -35,11 +34,11 @@ func start_state_transition(key_name: String) -> void:
 
 # --- Main State Logic ---
 func process_physics(delta: float):
-	var input_direction:Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down").normalized()
-	
+	var input_direction: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down").normalized()
+
 	if check_transition_state():
 		state_transition.emit(transition_state)
-		
+
 	move(input_direction)
 	
 func check_transition_state() -> bool:
@@ -58,3 +57,11 @@ func move(direction: Vector2) -> void:
 	
 	actor.velocity = direction * move_speed
 	actor.move_and_slide()
+
+	var cam := actor.get_viewport().get_camera_2d()
+	if cam:
+		var viewport_size := actor.get_viewport().get_visible_rect().size
+		var half_w := viewport_size.x * 0.5
+		var half_h := viewport_size.y * 0.5
+		actor.global_position.x = clamp(actor.global_position.x, cam.global_position.x - half_w, cam.global_position.x + half_w)
+		actor.global_position.y = clamp(actor.global_position.y, cam.global_position.y - half_h, cam.global_position.y + half_h)

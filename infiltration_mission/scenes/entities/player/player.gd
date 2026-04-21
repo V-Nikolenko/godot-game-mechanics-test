@@ -18,6 +18,8 @@ const PlayerUpgradeLoadout = preload("res://infiltration_mission/scripts/player/
 
 # --- MOVEMENT MEMORY ---
 var last_move_dir: Vector2 = Vector2.RIGHT
+var environment_height: float = 0.0
+var elevation_sources: Dictionary = {}
 
 # --- REFERENCES ---
 @onready var player_sprite = $Player
@@ -67,7 +69,7 @@ func _physics_process(delta: float) -> void:
 	)
 
 	move_and_slide()
-	visuals.apply_height(jump_state.z_position)
+	visuals.apply_height(environment_height, jump_state.z_position)
 
 
 func _read_input() -> PlayerInputFrame:
@@ -115,3 +117,25 @@ func _build_jump_settings() -> PlayerJumpSettings:
 	if jump_upgrade != null:
 		jump_upgrade.apply_to_jump_settings(resolved_settings)
 	return resolved_settings
+
+
+func set_environment_elevation(source: Node, height: float) -> void:
+	if source == null:
+		return
+
+	elevation_sources[source.get_instance_id()] = maxf(height, 0.0)
+	_recalculate_environment_height()
+
+
+func clear_environment_elevation(source: Node) -> void:
+	if source == null:
+		return
+
+	elevation_sources.erase(source.get_instance_id())
+	_recalculate_environment_height()
+
+
+func _recalculate_environment_height() -> void:
+	environment_height = 0.0
+	for height in elevation_sources.values():
+		environment_height = maxf(environment_height, height)

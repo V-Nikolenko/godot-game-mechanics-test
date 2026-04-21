@@ -49,8 +49,8 @@ func _enter(delta: float) -> void:
 func _hold_and_fire(delta: float) -> void:
 	var players := get_tree().get_nodes_in_group("player")
 	if players.size() > 0:
-		var diff := players[0].global_position.x - global_position.x
-		var move_x := sign(diff) * min(abs(diff) * 2.0, track_speed) * delta
+		var diff := (players[0] as Node2D).global_position.x - global_position.x
+		var move_x: float = sign(diff) * min(abs(diff) * 2.0, track_speed) * delta
 		velocity = Vector2(move_x, 0)
 		move_and_slide()
 
