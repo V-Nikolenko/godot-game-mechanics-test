@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3 uid="uid://dys6ub5xur4iu"]
+
+[ext_resource type="PackedScene" uid="uid://ty6a2vpnmrr5" path="res://assault/player/player_fighter.tscn" id="3_60rwg"]
+[ext_resource type="Script" uid="uid://dutkvjs1np4nd" path="res://assault/scenes/systems/wave_manager/wave_manager.gd" id="11_wave"]
+[ext_resource type="Script" uid="uid://level2wavesscript" path="res://assault/scenes/levels/level_2_waves.gd" id="12_waves"]
+[ext_resource type="PackedScene" path="res://assault/scenes/gui/hud.tscn" id="13_hud"]
+
+[node name="Level2" type="Node2D"]
+
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(320, 180)
+
+[node name="EnemyContainer" type="Node2D" parent="."]
+
+[node name="WaveManager" type="Node" parent="." node_paths=PackedStringArray("enemy_container")]
+script = ExtResource("11_wave")
+enemy_container = NodePath("../EnemyContainer")
+
+[node name="LevelWaves" type="Node" parent="." node_paths=PackedStringArray("wave_manager")]
+script = ExtResource("12_waves")
+wave_manager = NodePath("../WaveManager")
+
+[node name="PlayerFighter" parent="." instance=ExtResource("3_60rwg")]
+position = Vector2(302, 271)
+
+[node name="HUD" parent="." instance=ExtResource("13_hud")]

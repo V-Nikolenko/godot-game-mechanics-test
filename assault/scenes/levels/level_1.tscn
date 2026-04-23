@@ -8,7 +8,7 @@
 [node name="Level1" type="Node2D"]
 
 [node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(183, 175)
+position = Vector2(320, 180)
 
 [node name="EnemyContainer" type="Node2D" parent="."]
 
@@ -21,6 +21,6 @@ script = ExtResource("12_waves")
 wave_manager = NodePath("../WaveManager")
 
 [node name="PlayerFighter" parent="." instance=ExtResource("3_60rwg")]
-position = Vector2(183, 175)
+position = Vector2(302, 271)
 
 [node name="HUD" parent="." instance=ExtResource("13_hud")]

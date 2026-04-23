@@ -2,6 +2,7 @@ class_name WaveManager
 extends Node
 
 signal wave_triggered(wave_index: int)
+signal waves_complete
 
 @export var enemy_container: Node2D
 
@@ -14,23 +15,17 @@ signal wave_triggered(wave_index: int)
 #
 # Each spawn dict:
 # {
-#   "ship":       Dictionary  — ship constant (scene + stats)
-#   "offset":     Vector2     — position offset from screen edge centre
-#   "delay":      float       — seconds after wave trigger before this spawn
-#   "spawn_edge": String      — "top" | "bottom" | "left" | "right"  (default: "top")
-#   "on_spawned": Callable    — optional, receives the instantiated node
-#   "path":       Dictionary  — optional, attaches EnemyPathMover:
-#     {
-#       "type":      EnemyPathMover.PathType  (required)
-#       "speed":     float
-#       "angle":     float
-#       "amplitude": float
-#       "duration":  float
-#       "exit_mode": EnemyPathMover.ExitMode
-#       "shoot":     bool
-#       "rotate":    bool   — false keeps actor's own rotation (use for allies)
-#     }
+#   "ship":                     Dictionary        — must contain "scene": PackedScene
+#   "offset":                   Vector2           — camera-relative position offset
+#   "delay":                    float             — seconds after wave trigger before this spawn
+#   "on_spawned":               Callable          — optional, receives the instantiated node
+#   "movement":                 MovementResource  — optional, attaches EnemyPathMover
+#   "exit_mode":                EnemyPathMover.ExitMode  — optional, defaults to FREE_ON_SCREEN_EXIT
+#   "look_in_moving_direction": bool              — optional, defaults to true
 # }
+#
+# Ships self-configure from their own ShipConfig resource on _ready().
+# WaveManager does not apply stats, health, or shooting settings.
 
 var _waves: Array[Dictionary] = []
 var _next_wave_index: int = 0
@@ -45,169 +40,113 @@ func _process(delta: float) -> void:
 		if _time_elapsed >= wave.trigger:
 			_trigger_wave(wave, _next_wave_index)
 			_next_wave_index += 1
+			if _next_wave_index >= _waves.size():
+				waves_complete.emit()
+				set_process(false)
 		else:
 			break
 
 func register_wave(trigger_time: float, spawns: Array) -> void:
 	_waves.append({"trigger": trigger_time, "spawns": spawns})
 
+## Loads all waves from a LevelResource. Call this from a level node's _ready()
+## as a replacement for manual register_wave() calls.
+func load_level(level: LevelResource) -> void:
+	for wave: WaveResource in level.waves:
+		var spawns: Array = []
+		for entry: SpawnEntryResource in wave.entries:
+			spawns.append(_entry_to_dict(entry))
+		register_wave(wave.trigger_time, spawns)
+	print("[WaveManager] Loaded '%s' — %d waves" % [level.level_name, level.waves.size()])
+
+## Converts a SpawnEntryResource to the Dictionary format _spawn_ship() understands.
+func _entry_to_dict(entry: SpawnEntryResource) -> Dictionary:
+	var d: Dictionary = {
+		"ship": {"scene": entry.ship_scene},
+		"offset": entry.base_offset,
+		"delay": entry.spawn_delay,
+		"movement": entry.movement,
+		"exit_mode": entry.exit_mode,
+		"look_in_moving_direction": entry.look_in_moving_direction,
+	}
+	if entry.formation:
+		d["formation"] = entry.formation
+	if not entry.initial_props.is_empty():
+		# Convert initial_props dict to on_spawned Callable
+		var props: Dictionary = entry.initial_props.duplicate()
+		d["on_spawned"] = func(e: Node) -> void:
+			for key: String in props:
+				e.set(key, props[key])
+	return d
+
 func _trigger_wave(wave: Dictionary, index: int) -> void:
 	print("[Wave %d] TRIGGERED at %.1fs — %d spawns" % [index, _time_elapsed, wave.spawns.size()])
 	wave_triggered.emit(index)
 	for spawn in wave.spawns:
-		_spawn_with_delay(spawn)
+		for entry in _expand_formation(spawn):
+			_spawn_with_delay(entry)
+
+## Expands a spawn dict that has a "formation" key into one dict per slot.
+## Slots add their offset to the entry's base offset and their delay to the base delay.
+## If no formation is present, returns [spawn] unchanged.
+func _expand_formation(spawn: Dictionary) -> Array:
+	if not spawn.has("formation"):
+		return [spawn]
+	var formation: FormationResource = spawn["formation"] as FormationResource
+	if not formation:
+		return [spawn]
+	var slots: Array = formation.compute_slots()
+	# Direct typed assignment — 'as Vector2' is invalid on built-in value types in GDScript 4.
+	var base_offset: Vector2 = spawn.get("offset", Vector2.ZERO)
+	var base_delay: float = spawn.get("delay", 0.0)
+	var expanded: Array = []
+	for slot: FormationResource.FormationSlot in slots:
+		# Shallow duplicate is intentional: MovementResource is pure data with no mutable runtime
+		# state — all expanded slots sharing the same resource reference is safe.
+		var entry: Dictionary = spawn.duplicate()
+		entry["offset"] = base_offset + slot.offset
+		entry["delay"] = base_delay + slot.delay
+		entry.erase("formation")
+		expanded.append(entry)
+	return expanded
 
 func _spawn_with_delay(spawn: Dictionary) -> void:
 	var delay: float = spawn.get("delay", 0.0)
 	if delay > 0.0:
 		await get_tree().create_timer(delay).timeout
-	_spawn_enemy(spawn)
+	_spawn_ship(spawn)
 
 # ── Spawning ──────────────────────────────────────────────────────────────────
 
-func _spawn_enemy(spawn: Dictionary) -> void:
-	var viewport_size := get_viewport().get_visible_rect().size
+func _spawn_ship(spawn: Dictionary) -> void:
 	var cam := get_viewport().get_camera_2d()
 	if not cam:
 		return
 
-	var ship_cfg: Dictionary = spawn.get("ship", {})
-	var scene: PackedScene
-	if not ship_cfg.is_empty() and ship_cfg.has("scene"):
-		scene = ship_cfg["scene"] as PackedScene
-	else:
-		scene = spawn.get("scene") as PackedScene
+	# Resolve scene from ship dict
+	var ship_dict: Dictionary = spawn.get("ship", {})
+	var scene: PackedScene = ship_dict.get("scene") as PackedScene
 	if not scene:
 		return
 
-	var offset: Vector2 = spawn.get("offset", Vector2.ZERO)
-	var edge: String = spawn.get("spawn_edge", "top")
-	var spawn_pos: Vector2
+	# Position: camera-relative offset. Use direct typed assignment — 'as Vector2' is
+	# invalid on built-in value types in GDScript 4 and would silently return null.
+	var spawn_pos: Vector2 = cam.global_position + spawn.get("offset", Vector2.ZERO)
 
-	match edge:
-		"left":
-			spawn_pos = Vector2(
-				cam.global_position.x - viewport_size.x * 0.5,
-				cam.global_position.y + offset.y
-			)
-		"right":
-			spawn_pos = Vector2(
-				cam.global_position.x + viewport_size.x * 0.5,
-				cam.global_position.y + offset.y
-			)
-		"bottom":
-			spawn_pos = Vector2(
-				cam.global_position.x + offset.x,
-				cam.global_position.y + viewport_size.y * 0.5 + offset.y
-			)
-		_: # "top"
-			spawn_pos = Vector2(
-				cam.global_position.x + offset.x,
-				cam.global_position.y - viewport_size.y * 0.5 + offset.y
-			)
-
-	var enemy: Node = scene.instantiate()
-	enemy.global_position = spawn_pos
-	enemy_container.add_child(enemy)
-	print("[Spawn] %s created at (%.0f, %.0f)" % [scene.resource_path.get_file(), spawn_pos.x, spawn_pos.y])
-
-	if not ship_cfg.is_empty():
-		_apply_ship_stats(enemy, ship_cfg)
-
-	# Apply per-spawn overrides (health, collision_damage, shooting, etc.)
-	_apply_spawn_overrides(enemy, spawn)
+	var entity: Node = scene.instantiate()
+	entity.global_position = spawn_pos
+	enemy_container.add_child(entity)
+	print("[Spawn] %s at (%.0f, %.0f)" % [scene.resource_path.get_file(), spawn_pos.x, spawn_pos.y])
 
 	if spawn.has("on_spawned"):
-		spawn.on_spawned.call(enemy)
+		spawn.on_spawned.call(entity)
 
-	if spawn.has("path"):
-		var path_cfg: Dictionary = spawn["path"]
+	# Attach movement controller if a MovementResource is provided.
+	if spawn.has("movement"):
 		var mover := EnemyPathMover.new()
-		mover.path_type = path_cfg.get("type", EnemyPathMover.PathType.STRAIGHT)
-		if path_cfg.has("speed"):
-			mover.speed = path_cfg["speed"]
-		if path_cfg.has("angle"):
-			mover.path_angle = path_cfg["angle"]
-		if path_cfg.has("amplitude"):
-			mover.amplitude = path_cfg["amplitude"]
-		if path_cfg.has("duration"):
-			mover.duration = path_cfg["duration"]
-		if path_cfg.has("exit_mode"):
-			mover.exit_mode = path_cfg["exit_mode"]
-		var ship_shooting: Dictionary = ship_cfg.get("shooting", {})
-		if ship_shooting.is_empty():
-			mover.shoot_while_on_path = false
-		else:
-			if ship_shooting.has("fire_interval"):
-				mover.path_fire_interval = ship_shooting["fire_interval"]
-			if ship_shooting.has("aim_mode"):
-				mover.aim_mode = ship_shooting["aim_mode"]
-			if ship_shooting.has("weapon_damage") and ship_shooting["weapon_damage"] > 0:
-				mover.bullet_damage = ship_shooting["weapon_damage"]
-		if path_cfg.has("fire_interval"):
-			mover.path_fire_interval = path_cfg["fire_interval"]
-		if path_cfg.has("aim_mode"):
-			mover.aim_mode = path_cfg["aim_mode"]
-		if path_cfg.has("shoot"):
-			mover.shoot_while_on_path = path_cfg["shoot"]
-		if path_cfg.has("rotate"):
-			mover.rotate_actor = path_cfg["rotate"]
-		enemy.add_child(mover)
-
-## Applies health, collision damage, and shooting stats from a ship constant dict.
-func _apply_ship_stats(enemy: Node, cfg: Dictionary) -> void:
-	if cfg.has("health") and cfg["health"] > 0:
-		var hp := enemy.get_node_or_null("Health") as Health
-		if hp:
-			hp.max_health = cfg["health"]
-			hp.current_health = cfg["health"]
-	if cfg.has("collision_damage"):
-		for child in enemy.get_children():
-			if child is HitBox:
-				(child as HitBox).damage = cfg["collision_damage"]
-				break
-	var shooting: Dictionary = cfg.get("shooting", {})
-	if not shooting.is_empty():
-		if shooting.has("fire_interval") and enemy.get("fire_interval") != null:
-			enemy.set("fire_interval", shooting["fire_interval"])
-		if shooting.has("weapon_damage") and enemy.get("bullet_damage") != null:
-			enemy.set("bullet_damage", shooting["weapon_damage"])
-		if shooting.has("aim_mode") and enemy.get("aim_mode") != null:
-			enemy.set("aim_mode", shooting["aim_mode"])
-
-## Applies per-spawn stat overrides, taking precedence over ship constants.
-## Supports: health, collision_damage, shooting (with nested aim_mode, fire_interval, weapon_damage).
-func _apply_spawn_overrides(enemy: Node, spawn: Dictionary) -> void:
-	var had_overrides: bool = false
-
-	# Health override
-	if spawn.has("health") and spawn["health"] > 0:
-		var hp := enemy.get_node_or_null("Health") as Health
-		if hp:
-			hp.max_health = spawn["health"]
-			hp.current_health = spawn["health"]
-			had_overrides = true
-
-	# Collision damage override
-	if spawn.has("collision_damage"):
-		for child in enemy.get_children():
-			if child is HitBox:
-				(child as HitBox).damage = spawn["collision_damage"]
-				had_overrides = true
-				break
-
-	# Shooting overrides (aim_mode, fire_interval, weapon_damage)
-	var shooting: Dictionary = spawn.get("shooting", {})
-	if not shooting.is_empty():
-		if shooting.has("fire_interval") and enemy.get("fire_interval") != null:
-			enemy.set("fire_interval", shooting["fire_interval"])
-			had_overrides = true
-		if shooting.has("weapon_damage") and enemy.get("bullet_damage") != null:
-			enemy.set("bullet_damage", shooting["weapon_damage"])
-			had_overrides = true
-		if shooting.has("aim_mode") and enemy.get("aim_mode") != null:
-			enemy.set("aim_mode", shooting["aim_mode"])
-			had_overrides = true
-
-	if had_overrides:
-		print("[Override] %s — spawn-level stats applied" % [enemy.name])
+		mover.movement = spawn["movement"] as MovementResource
+		if spawn.has("exit_mode"):
+			mover.exit_mode = spawn["exit_mode"]  # enum (int) — direct assignment, no cast needed
+		if spawn.has("look_in_moving_direction"):
+			mover.look_in_moving_direction = spawn["look_in_moving_direction"]  # bool — direct assignment
+		entity.add_child(mover)

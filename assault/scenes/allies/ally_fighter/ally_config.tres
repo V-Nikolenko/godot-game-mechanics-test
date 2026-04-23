@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="AllyFighterConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/allies/ally_fighter/ally_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 15
+collision_damage = 25
+fire_interval = 0.75
+bullet_damage = 20
+aim_mode = "FORWARD"

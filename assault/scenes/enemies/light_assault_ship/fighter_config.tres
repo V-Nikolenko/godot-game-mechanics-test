@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="FighterConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/light_assault_ship/fighter_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 60
+collision_damage = 20
+movement_speed = 100.0
+fire_interval = 0.8
+bullet_damage = 8
+aim_mode = "PLAYER"

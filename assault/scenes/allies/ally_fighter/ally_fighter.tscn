@@ -28,11 +28,13 @@ collision_layer = 4
 script = ExtResource("1_alf")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+rotation = 3.14159
 sprite_frames = SubResource("SpriteFrames_alf")
 animation = &"idle"
 autoplay = "idle"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+scale = Vector2(1.83783, 1.83783)
 shape = SubResource("CircleShape2D_alf")
 
 [node name="HurtBox" type="Area2D" parent="."]
@@ -42,6 +44,7 @@ script = ExtResource("3_alf")
 metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+scale = Vector2(1.871, 1.871)
 shape = SubResource("CircleShape2D_alf")
 debug_color = Color(0, 0.7, 0, 0.42)
 

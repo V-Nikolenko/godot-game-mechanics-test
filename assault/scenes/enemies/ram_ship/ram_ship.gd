@@ -1,7 +1,9 @@
 class_name RamShip
 extends BaseEnemy
 
-@export var speed: float = 110.0
+@export var config: RamShipConfig = load("res://assault/scenes/enemies/ram_ship/ram_config.tres")
+
+@export var speed: float = 100.0
 
 var _damaged: bool = false
 
@@ -9,10 +11,15 @@ var _damaged: bool = false
 
 func _ready() -> void:
 	super._ready()
+
+	if config:
+		speed = config.movement_speed
+
 	hurt_box.collision_mask = 33  # missiles only (32 + 1); bullets ignored
 	for child in get_children():
 		if child is HitBox:
-			(child as HitBox).damage = 50
+			# Ram uses config collision_damage if available, otherwise hardcoded 50
+			(child as HitBox).damage = config.collision_damage if config else 50
 
 # Override: first missile hit triggers damaged state instead of dealing damage.
 # Subsequent hits (bullets and missiles) deal damage normally.

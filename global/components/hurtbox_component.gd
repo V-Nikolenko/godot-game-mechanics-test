@@ -8,4 +8,5 @@ func _ready() -> void:
 
 func _on_area_entered(area: Area2D) -> void:
 	if area is HitBox:
-		received_damage.emit((area as HitBox).damage)
+		var damage := (area as HitBox).damage
+		received_damage.emit(damage)

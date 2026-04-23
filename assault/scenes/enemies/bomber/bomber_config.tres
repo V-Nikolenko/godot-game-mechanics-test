@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="BomberConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/bomber/bomber_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 150
+collision_damage = 35
+movement_speed = 80.0
+bomb_interval = 1.2

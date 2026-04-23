@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="SniperConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/sniper_skimmer/sniper_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 80
+collision_damage = 25
+movement_speed = 130.0

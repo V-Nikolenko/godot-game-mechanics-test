@@ -29,8 +29,9 @@ func increase(amount: int) -> void:
 func decrease(amount: int) -> void:
 	if !invincibility_timer.is_stopped():
 		return
-	
+
 	var changed_health = clamp(current_health - amount, 0, max_health)
+	print("[Health] %s took %d damage: %d → %d HP" % [get_parent().name, amount, current_health, changed_health])
 	set_health(changed_health)
 	if invincibility_frames_enabled:
 		_start_invincibility()

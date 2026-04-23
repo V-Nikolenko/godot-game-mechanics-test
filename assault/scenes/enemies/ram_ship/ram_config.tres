@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="RamShipConfig" load_steps=2 format=3 uid="uid://dvrneif71d0rc"]
+
+[ext_resource type="Script" uid="uid://dnag07jm0f7xa" path="res://assault/scenes/enemies/ram_ship/ram_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+movement_speed = 100.0
+max_health = 999
+collision_damage = 50

@@ -1,13 +1,21 @@
 class_name KamikazeDrone
 extends BaseEnemy
 
-@export var speed: float = 200.0
+@export var config: DroneConfig = load("res://assault/scenes/enemies/kamikaze_drone/drone_config.tres")
+
+@export var speed: float = 140.0
 
 var _direction: Vector2
 
 func _ready() -> void:
 	super._ready()
 	add_to_group("enemies")
+
+	if config:
+		health.max_health = config.max_health
+		health.current_health = config.max_health
+		speed = config.movement_speed
+
 	var players := get_tree().get_nodes_in_group("player")
 	if players.size() > 0:
 		_direction = ((players[0] as Node2D).global_position - global_position).normalized()
