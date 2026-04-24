@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://bigasteroid001"]
+[gd_scene load_steps=11 format=3 uid="uid://bigasteroid001"]
 
 [ext_resource type="Script" path="res://assault/scenes/hazards/big_asteroid/big_asteroid.gd" id="1_bigast"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="2_health"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="4_hit"]
 [ext_resource type="Texture2D" path="res://assault/assets/sprites/big_asteroid_tileset.png" id="5_tex"]
 [ext_resource type="PackedScene" path="res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn" id="6_small"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/enemy_path_mover.gd" id="7_mover"]
 
 [sub_resource type="CircleShape2D" id="Shape_body"]
 radius = 28.0
@@ -56,3 +57,6 @@ damage_type = 2
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
 shape = SubResource("Shape_contact")
+
+[node name="EnemyPathMover" type="Node" parent="."]
+script = ExtResource("7_mover")

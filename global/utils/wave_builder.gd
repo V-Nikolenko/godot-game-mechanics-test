@@ -118,6 +118,8 @@ const SNIPER  := "res://assault/scenes/enemies/sniper_skimmer/sniper_skimmer.tsc
 const GUNSHIP := "res://assault/scenes/enemies/gunship/gunship.tscn"
 const BOMBER  := "res://assault/scenes/enemies/bomber/bomber.tscn"
 const ALLY    := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
+const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn"
+const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"
 
 # ── Arc direction constants ───────────────────────────────────────────────────
 
