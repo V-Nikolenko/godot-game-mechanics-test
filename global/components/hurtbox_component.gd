@@ -7,11 +7,12 @@ signal received_damage(damage: int)
 @export var accepted_damage_types: Array[HitBox.DamageType] = []
 
 func _ready() -> void:
-	connect("area_entered", _on_area_entered)
+	area_entered.connect(_on_area_entered)
 
 func _on_area_entered(area: Area2D) -> void:
-	if area is HitBox:
-		var hb := area as HitBox
-		if not accepted_damage_types.is_empty() and hb.damage_type not in accepted_damage_types:
-			return
-		received_damage.emit(hb.damage)
+	var hb := area as HitBox
+	if not hb:
+		return
+	if not accepted_damage_types.is_empty() and hb.damage_type not in accepted_damage_types:
+		return
+	received_damage.emit(hb.damage)
