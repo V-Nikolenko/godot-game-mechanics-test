@@ -47,15 +47,20 @@ func _on_received_damage(amount: int) -> void:
 	health.decrease(amount)
 
 func _on_health_changed(current: int) -> void:
-	if current == 0:
+	if current <= 0:
 		_explosion.explode()
 		died.emit(global_position)
 		_on_destroyed()
 		queue_free()
 
+## Override in subclasses to react to death (e.g. spawn fragments).
+## MUST be synchronous — do NOT use await. Called immediately before queue_free().
 func _on_destroyed() -> void:
-	## Override in subclasses.
 	pass
+
+func _physics_process(_delta: float) -> void:
+	if one_shot_speed_threshold > 0.0:
+		contact_hit_box.damage = current_contact_damage()
 
 func current_contact_damage() -> int:
 	if one_shot_speed_threshold > 0.0 and velocity.length() >= one_shot_speed_threshold:
