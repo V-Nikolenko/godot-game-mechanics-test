@@ -1,34 +1,29 @@
-[gd_scene load_steps=10 format=3 uid="uid://bigasteroid001"]
+[gd_scene load_steps=9 format=3 uid="uid://smallast001"]
 
-[ext_resource type="Script" path="res://assault/scenes/hazards/big_asteroid/big_asteroid.gd" id="1_bigast"]
+[ext_resource type="Script" path="res://assault/scenes/hazards/small_asteroid/small_asteroid.gd" id="1_sast"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="2_health"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="3_hurt"]
 [ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="4_hit"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/big_asteroid_tileset.png" id="5_tex"]
-[ext_resource type="PackedScene" path="res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn" id="6_small"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/small_asteroid_tileset.png" id="5_tex"]
 
 [sub_resource type="CircleShape2D" id="Shape_body"]
-radius = 28.0
+radius = 14.0
 
 [sub_resource type="CircleShape2D" id="Shape_hurt"]
-radius = 28.0
+radius = 14.0
 
 [sub_resource type="CircleShape2D" id="Shape_contact"]
-radius = 28.0
+radius = 14.0
 
-[node name="BigAsteroid" type="CharacterBody2D"]
-script = ExtResource("1_bigast")
-health_amount = 100
-contact_damage = 40
-one_shot_speed_threshold = 150.0
+[node name="SmallAsteroid" type="CharacterBody2D"]
+script = ExtResource("1_sast")
+health_amount = 40
+contact_damage = 30
+one_shot_speed_threshold = 0.0
 tileset_texture = ExtResource("5_tex")
-tile_size = Vector2i(64, 64)
-tile_columns = 3
-tile_rows = 2
-split_scene = ExtResource("6_small")
-split_min = 2
-split_max = 4
-split_speed = 70.0
+tile_size = Vector2i(33, 33)
+tile_columns = 4
+tile_rows = 3
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 
@@ -40,9 +35,8 @@ script = ExtResource("2_health")
 
 [node name="HurtBox" type="Area2D" parent="."]
 collision_layer = 512
-collision_mask = 32
+collision_mask = 96
 script = ExtResource("3_hurt")
-accepted_damage_types = [1]
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
 shape = SubResource("Shape_hurt")
@@ -51,7 +45,7 @@ shape = SubResource("Shape_hurt")
 collision_layer = 256
 collision_mask = 0
 script = ExtResource("4_hit")
-damage = 40
+damage = 30
 damage_type = 2
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
