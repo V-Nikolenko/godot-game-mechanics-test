@@ -41,6 +41,12 @@ func _ready() -> void:
 			builder.spawn_entry(builder.DRONE, Vector2(-40, -165), builder.sine(150, 50), 0.25),
 			builder.spawn_entry(builder.DRONE, Vector2( 40, -165), builder.sine(150, 50), 0.25),
 		]),
+		# Wave 4b — t=45.0: Asteroid hazard wave
+		builder.wave(45.0, [
+			builder.spawn_entry(builder.BIG_ASTEROID, Vector2(-60, -180), builder.straight(90),  0.0),
+			builder.spawn_entry(builder.BIG_ASTEROID, Vector2(  0, -180), builder.straight(110), 0.3),
+			builder.spawn_entry(builder.BIG_ASTEROID, Vector2( 60, -180), builder.straight(90),  0.6),
+		]),
 		# Wave 5 — t=55.0: Ram rush + diagonal fighter escort
 		builder.wave(55.0, [
 			builder.spawn_entry(builder.RAM,     Vector2(-30,   0), builder.straight(130),          0.0),
