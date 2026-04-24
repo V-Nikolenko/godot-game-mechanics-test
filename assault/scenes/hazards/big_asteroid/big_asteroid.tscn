@@ -48,7 +48,7 @@ accepted_damage_types = [1]
 shape = SubResource("Shape_hurt")
 
 [node name="ContactHitBox" type="Area2D" parent="."]
-collision_layer = 256
+collision_layer = 1024
 collision_mask = 0
 script = ExtResource("4_hit")
 damage = 40

@@ -13,7 +13,7 @@ var _explosion_effect: ExplosionEffect
 func _ready() -> void:
 	hurt_box.received_damage.connect(_on_received_damage)
 	health.amount_changed.connect(_on_health_changed)
-	hurt_box.collision_mask = 97  # bullets (64) + rockets (32) + layer 1
+	hurt_box.collision_mask = 97 | 1024  # bullets (64) + rockets (32) + layer 1 + asteroid contact (1024)
 	_rotate_sprite()
 	_add_contact_hitbox()
 

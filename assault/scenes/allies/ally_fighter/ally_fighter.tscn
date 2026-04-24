@@ -39,7 +39,7 @@ shape = SubResource("CircleShape2D_alf")
 
 [node name="HurtBox" type="Area2D" parent="."]
 collision_layer = 128
-collision_mask = 257
+collision_mask = 1281
 script = ExtResource("3_alf")
 metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
 
