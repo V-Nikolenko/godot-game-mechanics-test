@@ -1,0 +1,63 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://open_space/scenes/entities/player/player_ship.gd" id="1_ship"]
+[ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_atlas"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="3_health"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="4_hurt"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle"]
+atlas = ExtResource("2_atlas")
+region = Rect2(1, 1, 32, 32)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_ship"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_body"]
+radius = 5.5
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
+radius = 5.0
+
+[node name="PlayerShip" type="CharacterBody2D"]
+collision_layer = 4
+collision_mask = 1
+script = ExtResource("1_ship")
+
+[node name="HealthComponent" type="Node" parent="."]
+script = ExtResource("3_health")
+max_health = 100
+current_health = 100
+
+[node name="SpriteAnchor" type="Node2D" parent="."]
+
+[node name="ShipSprite2D" type="AnimatedSprite2D" parent="SpriteAnchor"]
+texture_filter = 1
+sprite_frames = SubResource("SpriteFrames_ship")
+animation = &"idle"
+
+[node name="MuzzleLeft" type="Marker2D" parent="SpriteAnchor"]
+position = Vector2(-11, 0)
+
+[node name="MuzzleRight" type="Marker2D" parent="SpriteAnchor"]
+position = Vector2(11, 0)
+
+[node name="Collision" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_body")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 128
+collision_mask = 1281
+script = ExtResource("4_hurt")
+
+[node name="HurtBoxCollision" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_hurt")
+
+[connection signal="received_damage" from="HurtBox" to="." method="_on_received_damage"]
