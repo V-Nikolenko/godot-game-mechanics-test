@@ -33,7 +33,6 @@ var _explosion_effect: ExplosionEffect
 
 func _ready() -> void:
 	add_to_group("player")
-	hurt_box.received_damage.connect(_on_received_damage)
 	health_component.amount_changed.connect(_on_health_changed)
 	_setup_effects()
 	# Sprite is drawn pointing UP at rotation 0 — that matches our convention:
