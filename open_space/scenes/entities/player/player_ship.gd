@@ -101,7 +101,10 @@ func _handle_shoot(delta: float) -> void:
 	var bullet: Area2D = bullet_scene.instantiate()
 	bullet.global_position = muzzle.global_position + Vector2.UP.rotated(global_rotation) * 4.0
 	bullet.rotation = global_rotation
-	get_tree().root.add_child(bullet)
+	var scene := get_tree().current_scene
+	if scene:
+		scene.add_child(bullet)
+		bullet.expired.connect(bullet.queue_free)
 
 	_shoot_cooldown = shoot_cooldown_sec
 

@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://open_space/scenes/entities/enemies/patrol_drone.gd" id="1_drone"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="2_health"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="3_hurt"]
+[ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="4_hit"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_drone"]
 radius = 8.0
@@ -33,6 +34,16 @@ collision_mask = 64
 script = ExtResource("3_hurt")
 
 [node name="HurtBoxCollision" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_drone")
+
+[node name="HitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 128
+script = ExtResource("4_hit")
+damage = 10
+damage_type = 2
+
+[node name="HitBoxCollision" type="CollisionShape2D" parent="HitBox"]
 shape = SubResource("CircleShape2D_drone")
 
 [connection signal="received_damage" from="HurtBox" to="." method="_on_received_damage"]
