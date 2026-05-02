@@ -37,7 +37,9 @@ func _save() -> void:
 		var entry: Dictionary = _data[mission_id]
 		cfg.set_value(mission_id, "completed", entry.get("completed", false))
 		cfg.set_value(mission_id, "stars", entry.get("stars", 0))
-	cfg.save(SAVE_PATH)
+	var err := cfg.save(SAVE_PATH)
+	if err != OK:
+		push_error("MissionState: failed to save '%s' (error %d)" % [SAVE_PATH, err])
 
 func _load() -> void:
 	var cfg := ConfigFile.new()
