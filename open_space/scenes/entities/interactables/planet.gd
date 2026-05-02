@@ -56,6 +56,8 @@ func _on_body_exited(body: Node2D) -> void:
 	if body.is_in_group("player"):
 		_player_in_range = false
 		prompt_label.visible = false
+		if _hold_time > 0.0:
+			launch_canceled.emit()
 		_hold_time = 0.0
 		progress_bar.value = 0.0
 		progress_bar.visible = false
