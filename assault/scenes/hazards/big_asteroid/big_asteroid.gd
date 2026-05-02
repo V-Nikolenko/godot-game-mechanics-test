@@ -20,4 +20,4 @@ func _on_destroyed() -> void:
 		small.global_position = global_position
 		var angle := randf() * TAU
 		small.velocity = Vector2.RIGHT.rotated(angle) * split_speed
-		parent.add_child(small)
+		parent.call_deferred("add_child", small)
