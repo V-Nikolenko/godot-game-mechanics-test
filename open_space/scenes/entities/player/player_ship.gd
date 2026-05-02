@@ -99,17 +99,17 @@ func _handle_shoot(delta: float) -> void:
 	var muzzle: Marker2D = muzzles[_gun_index]
 
 	var bullet: Area2D = bullet_scene.instantiate()
-	bullet.global_position = muzzle.global_position + Vector2.UP.rotated(rotation) * 4.0
-	bullet.rotation = rotation
-	get_tree().current_scene.add_child(bullet)
+	bullet.global_position = muzzle.global_position + Vector2.UP.rotated(global_rotation) * 4.0
+	bullet.rotation = global_rotation
+	get_tree().root.add_child(bullet)
 
 	_shoot_cooldown = shoot_cooldown_sec
 
 func _on_received_damage(damage: int) -> void:
 	health_component.decrease(damage)
+	_hit_effect.burst()
 
 func _on_health_changed(current: int) -> void:
-	_hit_effect.burst()
 	if current == 0:
 		_explosion_effect.explode()
 		# MVP: just reload the hub scene on death
