@@ -1,10 +1,10 @@
-# open_space/scenes/entities/interactables/mission_config_resource.gd
+## open_space/scenes/entities/interactables/mission_config_resource.gd
 class_name MissionConfigResource
 extends Resource
 
 ## Per-mission configuration injected into Planet at runtime.
 
-@export var display_name: String = "Mission"
+@export var display_name: String = ""
 ## Full res:// path to the target scene, e.g. "res://assault/scenes/levels/level_1.tscn"
 @export var scene_path: String = ""
 ## Unique string key used to read/write progress in MissionState.
