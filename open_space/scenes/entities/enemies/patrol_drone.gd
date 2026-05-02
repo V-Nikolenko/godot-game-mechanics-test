@@ -16,7 +16,6 @@ func _ready() -> void:
 	_direction = initial_direction.normalized()
 	if _direction == Vector2.ZERO:
 		_direction = Vector2.RIGHT
-	hurt_box.received_damage.connect(_on_received_damage)
 	health_component.amount_changed.connect(_on_health_changed)
 
 func _physics_process(_delta: float) -> void:
