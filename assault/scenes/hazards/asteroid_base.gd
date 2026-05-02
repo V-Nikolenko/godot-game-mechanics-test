@@ -11,8 +11,8 @@ signal died(world_position: Vector2)
 @export var one_shot_speed_threshold: float = 0.0
 @export var tileset_texture: Texture2D
 @export var tile_size: Vector2i = Vector2i(64, 64)
-@export var tile_columns: int = 6
-@export var tile_rows: int = 1
+@export var tile_columns: int = 3
+@export var tile_rows: int = 2
 
 @onready var health: Health = $Health
 @onready var hurt_box: HurtBox = $HurtBox

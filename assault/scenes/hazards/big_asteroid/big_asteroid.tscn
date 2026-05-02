@@ -1,12 +1,12 @@
-[gd_scene load_steps=11 format=3 uid="uid://bigasteroid001"]
+[gd_scene load_steps=11 format=3 uid="uid://dr63wtk5udage"]
 
-[ext_resource type="Script" path="res://assault/scenes/hazards/big_asteroid/big_asteroid.gd" id="1_bigast"]
-[ext_resource type="Script" path="res://global/components/health_component.gd" id="2_health"]
-[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="3_hurt"]
-[ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="4_hit"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/big_asteroid_tileset.png" id="5_tex"]
-[ext_resource type="PackedScene" path="res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn" id="6_small"]
-[ext_resource type="Script" path="res://assault/scenes/enemies/enemy_path_mover.gd" id="7_mover"]
+[ext_resource type="Script" uid="uid://bglxtitxw0bl5" path="res://assault/scenes/hazards/big_asteroid/big_asteroid.gd" id="1_bigast"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="2_health"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="3_hurt"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="4_hit"]
+[ext_resource type="Texture2D" uid="uid://db5q2m1bp0jlv" path="res://assault/assets/sprites/big_asteroid_tileset.png" id="5_tex"]
+[ext_resource type="PackedScene" uid="uid://smallast001" path="res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn" id="6_small"]
+[ext_resource type="Script" uid="uid://b1uxcda2ieqg0" path="res://assault/scenes/enemies/enemy_path_mover.gd" id="7_mover"]
 
 [sub_resource type="CircleShape2D" id="Shape_body"]
 radius = 28.0
@@ -19,17 +19,9 @@ radius = 28.0
 
 [node name="BigAsteroid" type="CharacterBody2D"]
 script = ExtResource("1_bigast")
-health_amount = 100
-contact_damage = 40
+split_scene = ExtResource("6_small")
 one_shot_speed_threshold = 150.0
 tileset_texture = ExtResource("5_tex")
-tile_size = Vector2i(64, 64)
-tile_columns = 3
-tile_rows = 2
-split_scene = ExtResource("6_small")
-split_min = 2
-split_max = 4
-split_speed = 70.0
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 
@@ -43,7 +35,7 @@ script = ExtResource("2_health")
 collision_layer = 512
 collision_mask = 32
 script = ExtResource("3_hurt")
-accepted_damage_types = [1]
+accepted_damage_types = Array[int]([1])
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
 shape = SubResource("Shape_hurt")
