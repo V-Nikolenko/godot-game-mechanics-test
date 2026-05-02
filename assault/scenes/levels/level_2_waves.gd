@@ -139,5 +139,6 @@ func _on_waves_complete() -> void:
 	while container and is_instance_valid(container) and container.get_child_count() > 0:
 		await get_tree().create_timer(1.0).timeout
 	await get_tree().create_timer(2.0).timeout
-	print("[LEVEL] Level 2 complete!")
-	# Could add level 3 transition here, or show victory screen
+	print("[LEVEL] Level 2 complete! Transitioning to infiltration mission...")
+	if is_instance_valid(self):
+		get_tree().change_scene_to_file("res://infiltration_mission/scenes/levels/TestIsometricScene.tscn")
