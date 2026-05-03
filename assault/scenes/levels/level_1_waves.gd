@@ -139,6 +139,10 @@ func _on_waves_complete() -> void:
 
 	await get_tree().create_timer(3.0).timeout
 
+	var hud := get_tree().root.get_node_or_null("HUD")
+	if hud:
+		hud.queue_free()
+
 	if first_time:
 		print("[LEVEL] First clear — proceeding to Infiltration mission")
 		get_tree().change_scene_to_file(
