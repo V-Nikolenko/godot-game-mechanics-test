@@ -44,7 +44,7 @@ func _run_cutscene() -> void:
 	# ── Beat 0: setup (instant) ─────────────────────────────────────────
 	camera.zoom = start_zoom
 	camera.position = (ship_start_pos + ship_mid_pos) * 0.5
-	camera.rotation = 45.0
+	camera.rotation = deg_to_rad(45.0)
 	ship.position = ship_start_pos
 	ship.rotation = deg_to_rad(ship_heading_deg)
 	thruster.set_state(ThrusterEffect.State.BOOST)
@@ -71,7 +71,7 @@ func _run_cutscene() -> void:
 	thruster.set_state(ThrusterEffect.State.POWER)
 	var t3 := parallel_tween()
 	t3.tween_property(camera, "rotation", 0.0, camera_rotation_duration)
-	#t3.tween_property(ship, "rotation", 0.0, camera_rotation_duration)
+	t3.tween_property(ship, "rotation", 0.0, camera_rotation_duration)
 	await t3.finished
 	if is_skipped(): return
 
