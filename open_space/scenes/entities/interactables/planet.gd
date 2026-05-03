@@ -8,14 +8,14 @@ extends Area2D
 ## scene transitions to that mission's scene_path.
 
 @export_category("Arc")
-@export var arc_radius: float = 100.0
-@export var arc_bg_width: float = 4.0
-@export var arc_fill_width: float = 6.0
+@export var arc_radius: float = 80.0
+@export var arc_bg_width: float = 10.0
+@export var arc_fill_width: float = 10.0
 @export var arc_bg_color: Color = Color(1.0, 1.0, 1.0, 0.18)
 @export var arc_fill_color: Color = Color(0.2, 0.85, 1.0, 0.95)
 
 @export_category("Interaction")
-@export var hold_duration_sec: float = 1.2
+@export var hold_duration_sec: float = 2.2
 
 ## Injected by sector_hub.gd after the scene tree is ready.
 var missions: Array[MissionConfigResource] = []

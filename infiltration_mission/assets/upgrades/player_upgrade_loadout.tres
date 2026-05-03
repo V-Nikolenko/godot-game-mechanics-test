@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="PlayerUpgradeLoadout" load_steps=5 format=3 uid="uid://tk7f3qfpf2l1"]
+[gd_resource type="Resource" script_class="PlayerUpgradeLoadout" format=3 uid="uid://tk7f3qfpf2l1"]
 
 [ext_resource type="Script" uid="uid://8d3irg0edyxe" path="res://infiltration_mission/scripts/player/upgrades/player_upgrade.gd" id="1_m3swy"]
 [ext_resource type="Script" uid="uid://dgxv3ho5og508" path="res://infiltration_mission/scripts/player/upgrades/player_upgrade_loadout.gd" id="1_qpu01"]
@@ -8,7 +8,6 @@
 script = ExtResource("2_m3swy")
 hover_duration = 12.0
 hover_jump_force = 20.0
-hover_max_height_gain = 48.0
 hover_gravity_scale = 0.05
 metadata/_custom_type_script = "uid://cnr0avahak870"
 

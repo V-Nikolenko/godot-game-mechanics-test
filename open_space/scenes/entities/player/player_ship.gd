@@ -20,11 +20,11 @@ extends CharacterBody2D
 @export_category("Boost")
 ## Speed (px/s) the ship moves in the new direction after a flip-boost redirect.
 ## All previous inertia is cleared — this is the only velocity that remains.
-@export var boost_redirect_speed: float = 280.0
+@export var boost_redirect_speed: float = 200.0
 ## How long (seconds) the BOOST thruster visual plays after the redirect.
-@export var boost_duration_sec: float = 0.4
+@export var boost_duration_sec: float = 0.3
 ## Min backward speed (px/s) needed to trigger the flip boost.
-@export var boost_speed_threshold: float = 60.0
+@export var boost_speed_threshold: float = 180.0
 
 @export_category("Combat")
 @export var shoot_cooldown_sec: float = 0.18

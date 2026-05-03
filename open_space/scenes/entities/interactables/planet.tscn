@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3 uid="uid://cu7qlu0h6p1fd"]
+[gd_scene format=3 uid="uid://cu7qlu0h6p1fd"]
 
 [ext_resource type="Script" uid="uid://ca007hf3gsvgc" path="res://open_space/scenes/entities/interactables/planet.gd" id="1_planet"]
 [ext_resource type="Texture2D" uid="uid://4hr4a6ex43e7" path="res://open_space/assets/sprites/planet_stub.png" id="2_planet_tex"]
@@ -6,22 +6,22 @@
 [sub_resource type="CircleShape2D" id="CircleShape2D_planet"]
 radius = 80.0
 
-[node name="Planet" type="Area2D"]
+[node name="Planet" type="Area2D" unique_id=2134340449]
 collision_layer = 2
 collision_mask = 4
 script = ExtResource("1_planet")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=2132790395]
 texture_filter = 1
 position = Vector2(0, 4.76837e-07)
 scale = Vector2(0.177734, 0.177734)
 texture = ExtResource("2_planet_tex")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(0, -1)
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=730051803]
+position = Vector2(1, -4)
 shape = SubResource("CircleShape2D_planet")
 
-[node name="MissionLabel" type="Label" parent="."]
+[node name="MissionLabel" type="Label" parent="." unique_id=1920023884]
 offset_left = 110.0
 offset_top = -60.0
 offset_right = 310.0

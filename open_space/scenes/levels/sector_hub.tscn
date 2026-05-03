@@ -1,26 +1,26 @@
-[gd_scene load_steps=4 format=3 uid="uid://bj5rbqgudkfsg"]
+[gd_scene format=3 uid="uid://bj5rbqgudkfsg"]
 
 [ext_resource type="Script" uid="uid://bj4bw8lmn5g61" path="res://open_space/scenes/levels/sector_hub.gd" id="1_hub"]
 [ext_resource type="PackedScene" path="res://open_space/scenes/entities/player/player_ship.tscn" id="2_player"]
 [ext_resource type="PackedScene" uid="uid://cu7qlu0h6p1fd" path="res://open_space/scenes/entities/interactables/planet.tscn" id="3_planet"]
 
-[node name="SectorHub" type="Node2D"]
+[node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=973267846]
 offset_left = -2280.0
 offset_top = -1791.0
 offset_right = 1720.0
 offset_bottom = 2209.0
 color = Color(0.04, 0.04, 0.08, 1)
 
-[node name="EnemyContainer" type="Node2D" parent="."]
+[node name="EnemyContainer" type="Node2D" parent="." unique_id=1782392043]
 
-[node name="PlayerShip" parent="." instance=ExtResource("2_player")]
+[node name="PlayerShip" parent="." unique_id=574725177 instance=ExtResource("2_player")]
 
-[node name="Camera2D" type="Camera2D" parent="PlayerShip"]
+[node name="Camera2D" type="Camera2D" parent="PlayerShip" unique_id=300624665]
 position_smoothing_enabled = true
 position_smoothing_speed = 6.0
 
-[node name="Planet" parent="." instance=ExtResource("3_planet")]
+[node name="Planet" parent="." unique_id=662454378 instance=ExtResource("3_planet")]
 position = Vector2(208, -1)
