@@ -18,19 +18,11 @@ scale = Vector2(0.177734, 0.177734)
 texture = ExtResource("2_planet_tex")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -1)
 shape = SubResource("CircleShape2D_planet")
 
-[node name="PromptLabel" type="Label" parent="."]
-offset_left = -60.0
-offset_top = -110.0
-offset_right = 60.0
-offset_bottom = -90.0
-text = "Hold [E] to launch"
-horizontal_alignment = 1
-
-[node name="ProgressBar" type="ProgressBar" parent="."]
-offset_left = -60.0
-offset_top = -85.0
-offset_right = 60.0
-offset_bottom = -75.0
-show_percentage = false
+[node name="MissionLabel" type="Label" parent="."]
+offset_left = 110.0
+offset_top = -60.0
+offset_right = 310.0
+offset_bottom = 80.0
