@@ -16,6 +16,8 @@ class_name IntroCutscene
 extends CutsceneBase
 
 @onready var ship: Node2D = $Ship
+@onready var sprite: Sprite2D = $Ship/Sprite2D
+@onready var comet_trail: CPUParticles2D = $Ship/CometTrail
 @onready var thruster: ThrusterEffect = $Ship/Thruster
 @onready var camera: Camera2D = $Camera2D
 @onready var dialog: DialogPresenter = $DialogLayer
@@ -47,14 +49,24 @@ func _run_cutscene() -> void:
 	camera.rotation = deg_to_rad(45.0)
 	ship.position = ship_start_pos
 	ship.rotation = deg_to_rad(ship_heading_deg)
+	# Ship is invisible — only the comet trail is visible at this zoom.
+	# The sprite fades in as the camera zooms close enough to reveal the ship.
+	sprite.modulate.a = 0.0
+	comet_trail.emitting = true
 	thruster.set_state(ThrusterEffect.State.BOOST)
 
-	# ── Beat 1: ship flies in + camera zooms to gameplay zoom ───────────
+	# ── Beat 1: ship flies in + camera zooms + ship reveals ─────────────
+	# Comet trail fades out in the first half; ship sprite fades in over
+	# the full duration — at zoom distance it transitions from "shooting
+	# star" to "that's a ship with engines".
 	var t1 := parallel_tween()
 	t1.tween_property(ship, "position", ship_mid_pos, beat1_duration)
 	t1.tween_property(camera, "position", ship_mid_pos, beat1_duration)
 	t1.tween_property(camera, "zoom", end_zoom, beat1_duration)
+	t1.tween_property(sprite, "modulate:a", 1.0, beat1_duration)
+	t1.tween_property(comet_trail, "modulate:a", 0.0, beat1_duration * 0.55)
 	await t1.finished
+	comet_trail.emitting = false
 	if is_skipped(): return
 
 	# ── Beat 2: narrative pause + future dialog hook ────────────────────
