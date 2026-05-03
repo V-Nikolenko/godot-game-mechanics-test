@@ -39,7 +39,6 @@ var _shoot_cooldown: float = 0.0
 var _gun_index: int = 0
 
 var _boost_timer: float = 0.0
-var _was_rotating: bool = false
 
 # ── Particle effect components ────────────────────────────────────────────────
 var _hit_effect: HitEffect
@@ -96,21 +95,20 @@ func _handle_thrust(delta: float) -> void:
 	if Input.is_action_pressed("move_down"):
 		thrust_input -= 1.0
 
-	# ── Flip-boost detection ───────────────────────────────────────────────
-	# Mirrors open_zone_move_controller.gd's soft-brake-boost:
-	# rotate ~180°, release rotation keys, press thrust → large forward impulse.
-	var currently_rotating := (Input.is_action_pressed("move_left")
-			or Input.is_action_pressed("move_right"))
-	var just_stopped_rotating := _was_rotating and not currently_rotating
-	_was_rotating = currently_rotating
 	_boost_timer = max(_boost_timer - delta, 0.0)
 
+	# ── Flip-boost detection ───────────────────────────────────────────────
+	# Trigger: move_up *just pressed* (was released before) while the ship is
+	# moving backward relative to its current facing.
+	# This captures: thrust → release → coast → rotate 180° → press thrust again.
+	# Holding forward through a rotation never triggers it because the key
+	# was never released, so is_action_just_pressed never fires again.
+	if Input.is_action_just_pressed("move_up") and _boost_timer <= 0.0:
+		var backward_speed := -velocity.dot(forward)  # positive = moving backward
+		if backward_speed >= boost_speed_threshold:
+			_trigger_flip_boost(forward)
+
 	if thrust_input > 0.0:
-		# Trigger boost if we just finished rotating while moving backward.
-		if _boost_timer <= 0.0 and just_stopped_rotating:
-			var backward_speed := -velocity.dot(forward)  # positive = moving backward
-			if backward_speed >= boost_speed_threshold:
-				_trigger_flip_boost(forward)
 
 		velocity += forward * thrust_acceleration * delta
 		_thruster.set_state(
