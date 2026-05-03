@@ -18,14 +18,13 @@ extends CharacterBody2D
 @export var damping: float = 0.6                ## velocity multiplier per second when idle
 
 @export_category("Boost")
-## Velocity multiplier applied as a single impulse on flip-boost trigger.
-@export var boost_force_multiplier: float = 5.0
-## How long (seconds) the BOOST thruster visual plays after the impulse.
-@export var boost_duration_sec: float = 0.5
+## Speed (px/s) the ship moves in the new direction after a flip-boost redirect.
+## All previous inertia is cleared — this is the only velocity that remains.
+@export var boost_redirect_speed: float = 280.0
+## How long (seconds) the BOOST thruster visual plays after the redirect.
+@export var boost_duration_sec: float = 0.4
 ## Min backward speed (px/s) needed to trigger the flip boost.
-@export var boost_speed_threshold: float = 80.0
-## Max speed cap while the boost visual is active — higher than normal max_speed.
-@export var boost_max_speed: float = 900.0
+@export var boost_speed_threshold: float = 60.0
 
 @export_category("Combat")
 @export var shoot_cooldown_sec: float = 0.18
@@ -129,18 +128,14 @@ func _handle_thrust(delta: float) -> void:
 				ThrusterEffect.State.BOOST if _boost_timer > 0.0
 				else ThrusterEffect.State.IDLE)
 
-	# Use a higher speed cap during boost so the impulse is visibly powerful.
-	var speed_cap := boost_max_speed if _boost_timer > 0.0 else max_speed
-	if velocity.length() > speed_cap:
-		velocity = velocity.normalized() * speed_cap
+	if velocity.length() > max_speed:
+		velocity = velocity.normalized() * max_speed
 
 func _trigger_flip_boost(forward: Vector2) -> void:
-	## Cancel the backward velocity component, then apply a large forward impulse.
-	## Identical in spirit to apply_soft_brake_boost() from the old open-zone template.
-	var backward_component := velocity.dot(forward)
-	if backward_component < 0.0:
-		velocity -= forward * backward_component
-	velocity += forward * thrust_acceleration * boost_force_multiplier
+	## Clear all inertia and set velocity cleanly in the new facing direction.
+	## This gives instant redirection without a speed spike — the player arrives
+	## at boost_redirect_speed regardless of how fast they were moving before.
+	velocity = forward * boost_redirect_speed
 	_boost_timer = boost_duration_sec
 
 func _handle_shoot(delta: float) -> void:
