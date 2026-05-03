@@ -13,7 +13,7 @@ extends Node2D
 enum State { IDLE, THRUST, BOOST }
 
 var _particles: CPUParticles2D
-var _current_state: State = State.IDLE
+var _current_state: int = State.IDLE
 
 func _ready() -> void:
 	_particles = CPUParticles2D.new()
