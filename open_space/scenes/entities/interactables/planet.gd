@@ -7,7 +7,14 @@ extends Area2D
 ## overlap and holds [E] on an unlocked mission, the arc fills and the
 ## scene transitions to that mission's scene_path.
 
+@export_category("Arc")
 @export var arc_radius: float = 100.0
+@export var arc_bg_width: float = 4.0
+@export var arc_fill_width: float = 6.0
+@export var arc_bg_color: Color = Color(1.0, 1.0, 1.0, 0.18)
+@export var arc_fill_color: Color = Color(0.2, 0.85, 1.0, 0.95)
+
+@export_category("Interaction")
 @export var hold_duration_sec: float = 1.2
 
 ## Injected by sector_hub.gd after the scene tree is ready.
@@ -78,14 +85,14 @@ func _draw() -> void:
 
 	# Background ring (full circle)
 	draw_arc(Vector2.ZERO, arc_radius, -PI / 2.0, -PI / 2.0 + TAU,
-			64, Color(1.0, 1.0, 1.0, 0.18), 4.0, true)
+			64, arc_bg_color, arc_bg_width, true)
 
 	# Fill arc clockwise from top
 	if _hold_time > 0.0 and not locked:
 		var progress := _hold_time / hold_duration_sec
 		var end_angle := -PI / 2.0 + TAU * progress
 		draw_arc(Vector2.ZERO, arc_radius, -PI / 2.0, end_angle,
-				64, Color(0.2, 0.85, 1.0, 0.95), 6.0, true)
+				64, arc_fill_color, arc_fill_width, true)
 
 func _is_locked(mission: MissionConfigResource) -> bool:
 	if mission.required_mission.is_empty():
