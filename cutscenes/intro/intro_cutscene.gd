@@ -49,9 +49,10 @@ func _run_cutscene() -> void:
 	camera.rotation = deg_to_rad(45.0)
 	ship.position = ship_start_pos
 	ship.rotation = deg_to_rad(ship_heading_deg)
-	# Ship is invisible — only the comet trail is visible at this zoom.
-	# The sprite fades in as the camera zooms close enough to reveal the ship.
+	# Ship starts as a tiny invisible point — only the comet trail is visible.
+	# Scale and alpha both grow as the camera zooms close enough to reveal it.
 	sprite.modulate.a = 0.0
+	ship.scale = Vector2(0.1, 0.1)
 	comet_trail.emitting = true
 	thruster.set_state(ThrusterEffect.State.BOOST)
 
@@ -64,6 +65,7 @@ func _run_cutscene() -> void:
 	t1.tween_property(camera, "position", ship_mid_pos, beat1_duration)
 	t1.tween_property(camera, "zoom", end_zoom, beat1_duration)
 	t1.tween_property(sprite, "modulate:a", 1.0, beat1_duration)
+	t1.tween_property(ship, "scale", Vector2(1.0, 1.0), beat1_duration)
 	t1.tween_property(comet_trail, "modulate:a", 0.0, beat1_duration * 0.55)
 	await t1.finished
 	comet_trail.emitting = false
