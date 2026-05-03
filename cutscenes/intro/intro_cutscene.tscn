@@ -1,36 +1,33 @@
-[gd_scene load_steps=8 format=3 uid="uid://c4r7x9k3n8m2p"]
+[gd_scene format=3 uid="uid://c4r7yak3n8m2p"]
 
-[ext_resource type="Script" path="res://cutscenes/intro/intro_cutscene.gd" id="1_intro"]
+[ext_resource type="Script" uid="uid://b65i3erd23o01" path="res://cutscenes/intro/intro_cutscene.gd" id="1_intro"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_atlas"]
-[ext_resource type="Script" path="res://global/components/thruster_effect.gd" id="3_thruster"]
-[ext_resource type="PackedScene" uid="uid://b8h6n2q5m4y9j" path="res://cutscenes/base/dialog_presenter.tscn" id="4_dialog"]
+[ext_resource type="Script" uid="uid://cjh0dnh22ia2h" path="res://global/components/thruster_effect.gd" id="3_thruster"]
+[ext_resource type="PackedScene" uid="uid://b8h6n2q5m40aj" path="res://cutscenes/base/dialog_presenter.tscn" id="4_dialog"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ship"]
 atlas = ExtResource("2_atlas")
 region = Rect2(1, 1, 32, 32)
 
-[sub_resource type="Gradient" id="Gradient_star"]
-colors = PackedColorArray(1, 1, 1, 1, 1, 1, 1, 0)
-
-[sub_resource type="GradientTexture1D" id="GradientTexture1D_star"]
-gradient = SubResource("Gradient_star")
-
-[node name="IntroCutscene" type="Node2D"]
+[node name="IntroCutscene" type="Node2D" unique_id=1341060933]
 script = ExtResource("1_intro")
-persistence_id = "intro_to_assault"
 next_scene_path = "res://assault/scenes/levels/level_1.tscn"
+persistence_id = "intro_to_assault"
 
-[node name="Background" type="ColorRect" parent="."]
+[node name="Background" type="ColorRect" parent="." unique_id=237749283]
 offset_left = -2000.0
 offset_top = -2000.0
 offset_right = 2000.0
 offset_bottom = 2000.0
 color = Color(0.02, 0.02, 0.05, 1)
 
-[node name="Camera2D" type="Camera2D" parent="."]
+[node name="Camera2D" type="Camera2D" parent="." unique_id=159236553]
+rotation = 1.0821104
 zoom = Vector2(0.6, 0.6)
 
-[node name="StarField" type="CPUParticles2D" parent="Camera2D"]
+[node name="StarField" type="CPUParticles2D" parent="Camera2D" unique_id=1534251235]
+position = Vector2(0, -400)
+scale = Vector2(1, 14.248618)
 amount = 80
 lifetime = 6.0
 preprocess = 6.0
@@ -41,20 +38,17 @@ spread = 0.0
 gravity = Vector2(0, 0)
 initial_velocity_min = 30.0
 initial_velocity_max = 80.0
-scale_amount_min = 1.0
 scale_amount_max = 3.0
-color_ramp = SubResource("GradientTexture1D_star")
-position = Vector2(0, -400)
 
-[node name="Ship" type="Node2D" parent="."]
+[node name="Ship" type="Node2D" parent="." unique_id=949668098]
 position = Vector2(-500, 400)
 
-[node name="Sprite2D" type="Sprite2D" parent="Ship"]
+[node name="Sprite2D" type="Sprite2D" parent="Ship" unique_id=320131901]
 texture_filter = 1
 texture = SubResource("AtlasTexture_ship")
 
-[node name="Thruster" type="Node2D" parent="Ship"]
+[node name="Thruster" type="Node2D" parent="Ship" unique_id=1858580345]
 position = Vector2(0, 14)
 script = ExtResource("3_thruster")
 
-[node name="DialogLayer" parent="." instance=ExtResource("4_dialog")]
+[node name="DialogLayer" parent="." unique_id=1165102223 instance=ExtResource("4_dialog")]
