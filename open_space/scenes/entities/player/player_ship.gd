@@ -6,14 +6,26 @@ extends CharacterBody2D
 ## - Thrusts forward via move_up (W or up arrow)
 ## - Reverse thrust via move_down (S or down arrow)
 ## - Inertia: velocity persists when no input is given (with light damping)
+## - Flip boost: rotate 180°, release rotation, press thrust → powerful impulse
+##   that cancels backward velocity and launches the ship forward.
 ## - Shoots via the "shoot" action (J or LMB) — bullet flies in ship's facing direction
 
 @export_category("Movement")
 @export var rotation_speed_deg: float = 220.0   ## degrees per second
-@export var thrust_acceleration: float = 380.0  ## pixels/sec^2
+@export var thrust_acceleration: float = 380.0  ## pixels/sec²
 @export var reverse_acceleration: float = 220.0
 @export var max_speed: float = 420.0
-@export var damping: float = 0.6                ## velocity multiplier per second when idle (lower = more drag)
+@export var damping: float = 0.6                ## velocity multiplier per second when idle
+
+@export_category("Boost")
+## Velocity multiplier applied as a single impulse on flip-boost trigger.
+@export var boost_force_multiplier: float = 5.0
+## How long (seconds) the BOOST thruster visual plays after the impulse.
+@export var boost_duration_sec: float = 0.5
+## Min backward speed (px/s) needed to trigger the flip boost.
+@export var boost_speed_threshold: float = 80.0
+## Max speed cap while the boost visual is active — higher than normal max_speed.
+@export var boost_max_speed: float = 900.0
 
 @export_category("Combat")
 @export var shoot_cooldown_sec: float = 0.18
@@ -27,16 +39,19 @@ extends CharacterBody2D
 var _shoot_cooldown: float = 0.0
 var _gun_index: int = 0
 
-# ── Particle effect components (reused from PlayerFighter pattern) ────────────
+var _boost_timer: float = 0.0
+var _was_rotating: bool = false
+
+# ── Particle effect components ────────────────────────────────────────────────
 var _hit_effect: HitEffect
 var _explosion_effect: ExplosionEffect
+var _thruster: ThrusterEffect
 
 func _ready() -> void:
 	add_to_group("player")
 	health_component.amount_changed.connect(_on_health_changed)
 	_setup_effects()
-	# Sprite is drawn pointing UP at rotation 0 — that matches our convention:
-	# "forward" is Vector2.UP rotated by self.rotation.
+	# Sprite is drawn pointing UP at rotation 0 — "forward" is Vector2.UP.rotated(self.rotation).
 	rotation = 0.0
 
 func _setup_effects() -> void:
@@ -52,6 +67,13 @@ func _setup_effects() -> void:
 	_explosion_effect.color = Color(1.0, 0.4, 0.05)
 	_explosion_effect.always_process = true
 	add_child(_explosion_effect)
+
+	# Thruster sits at local (0, +14) — the engine exhaust point at the ship's rear.
+	# local +Y = backward when the ship faces UP, so the flame trails correctly
+	# in world space regardless of ship orientation (local_coords=false inside ThrusterEffect).
+	_thruster = ThrusterEffect.new()
+	_thruster.position = Vector2(0.0, 14.0)
+	add_child(_thruster)
 
 func _physics_process(delta: float) -> void:
 	_handle_rotation(delta)
@@ -75,16 +97,51 @@ func _handle_thrust(delta: float) -> void:
 	if Input.is_action_pressed("move_down"):
 		thrust_input -= 1.0
 
+	# ── Flip-boost detection ───────────────────────────────────────────────
+	# Mirrors open_zone_move_controller.gd's soft-brake-boost:
+	# rotate ~180°, release rotation keys, press thrust → large forward impulse.
+	var currently_rotating := (Input.is_action_pressed("move_left")
+			or Input.is_action_pressed("move_right"))
+	var just_stopped_rotating := _was_rotating and not currently_rotating
+	_was_rotating = currently_rotating
+	_boost_timer = max(_boost_timer - delta, 0.0)
+
 	if thrust_input > 0.0:
+		# Trigger boost if we just finished rotating while moving backward.
+		if _boost_timer <= 0.0 and just_stopped_rotating:
+			var backward_speed := -velocity.dot(forward)  # positive = moving backward
+			if backward_speed >= boost_speed_threshold:
+				_trigger_flip_boost(forward)
+
 		velocity += forward * thrust_acceleration * delta
+		_thruster.set_state(
+				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				else ThrusterEffect.State.THRUST)
+
 	elif thrust_input < 0.0:
 		velocity -= forward * reverse_acceleration * delta
-	else:
-		# Inertia damping when no input — exponential decay
-		velocity = velocity.lerp(Vector2.ZERO, clamp(damping * delta, 0.0, 1.0))
+		_thruster.set_state(ThrusterEffect.State.THRUST)
 
-	if velocity.length() > max_speed:
-		velocity = velocity.normalized() * max_speed
+	else:
+		# Inertia damping — exponential decay toward rest.
+		velocity = velocity.lerp(Vector2.ZERO, clamp(damping * delta, 0.0, 1.0))
+		_thruster.set_state(
+				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				else ThrusterEffect.State.IDLE)
+
+	# Use a higher speed cap during boost so the impulse is visibly powerful.
+	var speed_cap := boost_max_speed if _boost_timer > 0.0 else max_speed
+	if velocity.length() > speed_cap:
+		velocity = velocity.normalized() * speed_cap
+
+func _trigger_flip_boost(forward: Vector2) -> void:
+	## Cancel the backward velocity component, then apply a large forward impulse.
+	## Identical in spirit to apply_soft_brake_boost() from the old open-zone template.
+	var backward_component := velocity.dot(forward)
+	if backward_component < 0.0:
+		velocity -= forward * backward_component
+	velocity += forward * thrust_acceleration * boost_force_multiplier
+	_boost_timer = boost_duration_sec
 
 func _handle_shoot(delta: float) -> void:
 	_shoot_cooldown = max(_shoot_cooldown - delta, 0.0)
@@ -114,7 +171,7 @@ func _on_received_damage(damage: int) -> void:
 func _on_health_changed(current: int) -> void:
 	if current == 0:
 		_explosion_effect.explode()
-		# MVP: just reload the hub scene on death
+		# MVP: reload the hub scene on death.
 		await get_tree().create_timer(1.2).timeout
 		if is_instance_valid(self):
 			get_tree().reload_current_scene()
