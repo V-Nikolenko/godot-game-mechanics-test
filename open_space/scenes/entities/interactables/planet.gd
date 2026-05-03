@@ -43,7 +43,7 @@ func _handle_navigation() -> void:
 	if Input.is_action_just_pressed("move_up"):
 		_selected_index = wrapi(_selected_index - 1, 0, missions.size())
 		changed = true
-	if Input.is_action_just_pressed("move_down"):
+	elif Input.is_action_just_pressed("move_down"):
 		_selected_index = wrapi(_selected_index + 1, 0, missions.size())
 		changed = true
 	if changed:
@@ -111,7 +111,7 @@ func _refresh_display() -> void:
 
 	var selected: MissionConfigResource = missions[_selected_index]
 	if _is_locked(selected):
-		lines.append("   (Complete Assault first)")
+		lines.append("   (Complete '%s' first)" % selected.required_mission)
 	else:
 		lines.append("   Hold [E] to launch")
 
