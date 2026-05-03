@@ -68,7 +68,7 @@ func _run_cutscene() -> void:
 	# Rotating ship.rotation → 0 while rotating camera.rotation → 0 means
 	# the ship visually "straightens up" and will fly toward the top of the
 	# screen in Beat 4. Camera ends at 0 = normal top-down orientation.
-	thruster.set_state(ThrusterEffect.State.THRUST)
+	thruster.set_state(ThrusterEffect.State.BOOST)
 	var t3 := parallel_tween()
 	t3.tween_property(camera, "rotation", 0.0, camera_rotation_duration)
 	#t3.tween_property(ship, "rotation", 0.0, camera_rotation_duration)
@@ -76,6 +76,7 @@ func _run_cutscene() -> void:
 	if is_skipped(): return
 
 	# ── Beat 4: ship drifts forward into the next mission ───────────────
+	thruster.set_state(ThrusterEffect.State.THRUST)
 	var forward := Vector2.UP.rotated(ship.rotation)
 	var ship_end := ship.position + forward * final_drift_distance
 	var t4 := parallel_tween()
