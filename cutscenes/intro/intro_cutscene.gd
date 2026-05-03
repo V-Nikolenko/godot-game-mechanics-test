@@ -80,7 +80,7 @@ func _run_cutscene() -> void:
 	var forward := Vector2.UP.rotated(ship.rotation)
 	var ship_end := ship.position + forward * final_drift_distance
 	var t4 := parallel_tween()
-	t4.set_ease(Tween.EASE_OUT)   ## starts fast, brakes to a stop
+	t4.set_ease(Tween.EASE_IN)    ## starts from near-zero — gentle slow drift away
 	t4.tween_property(ship, "position", ship_end, final_drift_duration)
 	t4.tween_property(camera, "position", ship_end, final_drift_duration)
 	await t4.finished
