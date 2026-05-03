@@ -132,7 +132,17 @@ func _ready() -> void:
 	wave_manager.waves_complete.connect(_on_waves_complete)
 
 func _on_waves_complete() -> void:
-	print("[LEVEL] All waves triggered — transitioning in 3 seconds")
+	print("[LEVEL] All waves triggered — checking mission state")
+	var first_time := not MissionState.is_complete("assault")
+	MissionState.complete("assault", 1)
+
 	await get_tree().create_timer(3.0).timeout
-	print("[LEVEL] Level 1 complete! Transitioning to infiltration mission...")
-	get_tree().change_scene_to_file("res://infiltration_mission/scenes/levels/TestIsometricScene.tscn")
+
+	if first_time:
+		print("[LEVEL] First clear — proceeding to Infiltration mission")
+		get_tree().change_scene_to_file(
+				"res://infiltration_mission/scenes/levels/TestIsometricScene.tscn")
+	else:
+		print("[LEVEL] Replay complete — returning to hub")
+		get_tree().change_scene_to_file(
+				"res://open_space/scenes/levels/sector_hub.tscn")
