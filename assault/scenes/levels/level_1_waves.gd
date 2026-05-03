@@ -132,6 +132,7 @@ func _ready() -> void:
 	wave_manager.waves_complete.connect(_on_waves_complete)
 
 func _on_waves_complete() -> void:
+	wave_manager.waves_complete.disconnect(_on_waves_complete)
 	print("[LEVEL] All waves triggered — checking mission state")
 	var first_time := not MissionState.is_complete("assault")
 	MissionState.complete("assault", 1)
