@@ -5,8 +5,9 @@ const ROLL_RIGHT_ANIMATION_NAME : String = "roll_to_the_right"
 const ROLL_LEFT_ANIMATION_NAME : String = "roll_to_the_left"
 
 const STATE_KEY_BINDINGS: Array = [
-	"move_left", 
-	"move_right"
+	"move_left",
+	"move_right",
+	"move_up",
 ]
 
 @export_category("State Dependencies")
@@ -47,7 +48,10 @@ func start_state_transition(key_name: String) -> void:
 		state_transition.emit(self)
 
 func get_dash_direction(key_name: String) -> Vector2:
-	return Vector2.LEFT if key_name == "move_left" else Vector2.RIGHT
+	match key_name:
+		"move_left": return Vector2.LEFT
+		"move_up":   return Vector2.UP
+		_:           return Vector2.RIGHT
 
 
 # --- Main State Logic ---
@@ -55,15 +59,17 @@ func enter() -> void:
 	movement_controller.movement_lock.emit(dashing_timer.wait_time)
 	dashing_timer.start()
 
-	# Invincibility: stop the HurtBox from detecting incoming hits
-	var hb := actor.get_node_or_null("HurtBox") as Area2D
-	if hb:
-		hb.monitoring = false
+	# Invincibility only for side barrel-rolls, not forward dash
+	if dashing_direction.x != 0:
+		var hb := actor.get_node_or_null("HurtBox") as Area2D
+		if hb:
+			hb.monitoring = false
 
 	if dashing_direction == Vector2.LEFT:
 		animated_sprite.play(ROLL_LEFT_ANIMATION_NAME)
 	elif dashing_direction == Vector2.RIGHT:
 		animated_sprite.play(ROLL_RIGHT_ANIMATION_NAME)
+	# Forward dash: no roll animation — keep current sprite (idle or tilt)
 
 	# Scale pulse — ship "surges toward the screen" at the peak of the roll
 	if _scale_tween:
@@ -78,9 +84,13 @@ func enter() -> void:
 
 func process_physics(delta: float):
 	if !dashing_timer.is_stopped():
-		var vertical_axis: Vector2 = Vector2(0, Input.get_axis("move_up", "move_down")).normalized()
 		var velocity := dashing_direction * dash_speed
-		velocity.y = vertical_axis.y * move_speed
+		if dashing_direction.x != 0:
+			# Side dash: allow vertical steering while rolling
+			velocity.y = Input.get_axis("move_up", "move_down") * move_speed
+		else:
+			# Forward dash: allow horizontal steering during the surge
+			velocity.x = Input.get_axis("move_left", "move_right") * move_speed
 		actor.velocity = velocity
 		actor.move_and_slide()
 	
