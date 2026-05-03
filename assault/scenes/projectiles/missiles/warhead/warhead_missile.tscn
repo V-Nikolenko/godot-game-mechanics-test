@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=10 format=3 uid="uid://6h7sf0ai3264"]
+[gd_scene load_steps=10 format=3 uid="uid://6h7sf0ai3264"]
 
 [ext_resource type="Script" uid="uid://bwrbqfsrye3kv" path="res://assault/scenes/projectiles/missiles/warhead/warhead_missile.gd" id="1_08v5u"]
 [ext_resource type="Texture2D" uid="uid://ckudka33417uj" path="res://assault/assets/sprites/projectiles/rocket.png" id="1_k058n"]

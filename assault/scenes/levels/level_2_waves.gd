@@ -1,4 +1,4 @@
-﻿## Level 2 — defines all 13 waves inline and builds LevelResource on the fly.
+## Level 2 — defines all 13 waves inline and builds LevelResource on the fly.
 extends Node
 
 @export var wave_manager: WaveManager

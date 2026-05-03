@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=16 format=3 uid="uid://br4qs4w455h3m"]
+[gd_scene load_steps=16 format=3 uid="uid://br4qs4w455h3m"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_b2sn1"]
 [ext_resource type="Script" uid="uid://cjo40e3hf0hbn" path="res://assault/scenes/enemies/light_assault_ship/light_assault_ship.gd" id="1_cdh2m"]

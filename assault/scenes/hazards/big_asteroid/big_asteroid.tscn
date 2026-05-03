@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=11 format=3 uid="uid://dr63wtk5udage"]
+[gd_scene load_steps=11 format=3 uid="uid://dr63wtk5udage"]
 
 [ext_resource type="Script" uid="uid://bglxtitxw0bl5" path="res://assault/scenes/hazards/big_asteroid/big_asteroid.gd" id="1_bigast"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="2_health"]

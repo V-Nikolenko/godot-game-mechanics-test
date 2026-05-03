@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=8 format=3 uid="uid://isps2gewyelo"]
+[gd_scene load_steps=8 format=3 uid="uid://isps2gewyelo"]
 
 [ext_resource type="Script" uid="uid://bjhxxf3gafdm5" path="res://assault/scenes/allies/ally_fighter/ally_fighter.gd" id="1_alf"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_alf"]

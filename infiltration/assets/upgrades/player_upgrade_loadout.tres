@@ -1,4 +1,4 @@
-﻿[gd_resource type="Resource" script_class="PlayerUpgradeLoadout" format=3 uid="uid://tk7f3qfpf2l1"]
+[gd_resource type="Resource" script_class="PlayerUpgradeLoadout" format=3 uid="uid://tk7f3qfpf2l1"]
 
 [ext_resource type="Script" uid="uid://8d3irg0edyxe" path="res://infiltration/scripts/player/upgrades/player_upgrade.gd" id="1_m3swy"]
 [ext_resource type="Script" uid="uid://dgxv3ho5og508" path="res://infiltration/scripts/player/upgrades/player_upgrade_loadout.gd" id="1_qpu01"]

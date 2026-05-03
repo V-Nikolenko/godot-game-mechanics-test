@@ -1,4 +1,4 @@
-﻿[gd_resource type="Resource" script_class="DoubleJumpUpgrade" load_steps=2 format=3 uid="uid://dmghnb20lb6n7"]
+[gd_resource type="Resource" script_class="DoubleJumpUpgrade" load_steps=2 format=3 uid="uid://dmghnb20lb6n7"]
 
 [ext_resource type="Script" uid="uid://beqc624v7dqiq" path="res://infiltration/scripts/player/upgrades/jump/double_jump_upgrade.gd" id="1_8j2t1"]
 

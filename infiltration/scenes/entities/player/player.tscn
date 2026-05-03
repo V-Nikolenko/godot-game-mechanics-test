@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=11 format=3 uid="uid://c5uhjngq8bl5n"]
+[gd_scene load_steps=11 format=3 uid="uid://c5uhjngq8bl5n"]
 
 [ext_resource type="Script" uid="uid://dg5l620y40wdj" path="res://infiltration/scenes/entities/player/player.gd" id="1_4d7fr"]
 [ext_resource type="Texture2D" uid="uid://bkoboq6yqy710" path="res://infiltration/scenes/entities/player/player.png" id="2_0ooo6"]

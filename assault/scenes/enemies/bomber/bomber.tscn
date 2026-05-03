@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=13 format=3 uid="uid://bomber001assault"]
+[gd_scene load_steps=13 format=3 uid="uid://bomber001assault"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_bm"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/bomber/bomber.gd" id="2_bm"]

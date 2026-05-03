@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=5 format=3 uid="uid://dys6ub5xur4iu"]
+[gd_scene load_steps=5 format=3 uid="uid://dys6ub5xur4iu"]
 
 [ext_resource type="PackedScene" uid="uid://ty6a2vpnmrr5" path="res://assault/scenes/player/player_fighter.tscn" id="3_60rwg"]
 [ext_resource type="Script" uid="uid://dutkvjs1np4nd" path="res://assault/scenes/systems/wave_manager/wave_manager.gd" id="11_wave"]

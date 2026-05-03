@@ -1,4 +1,4 @@
-﻿## LevelExitCutscene — plays after Assault Level 1 waves complete.
+## LevelExitCutscene — plays after Assault Level 1 waves complete.
 ## The ship boosts upward and the screen fades to black before the next scene.
 ##
 ## Routing: set `LevelExitCutscene.go_to_hub = true` BEFORE calling

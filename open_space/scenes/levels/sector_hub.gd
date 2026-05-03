@@ -1,4 +1,4 @@
-﻿# open_space/scenes/levels/sector_hub.gd
+# open_space/scenes/levels/sector_hub.gd
 extends Node2D
 
 ## Open Space hub. Spawns patrol drones and wires mission configs into

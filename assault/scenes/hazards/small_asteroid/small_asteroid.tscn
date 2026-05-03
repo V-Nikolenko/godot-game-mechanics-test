@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=9 format=3 uid="uid://smallast001"]
+[gd_scene load_steps=9 format=3 uid="uid://smallast001"]
 
 [ext_resource type="Script" path="res://assault/scenes/hazards/small_asteroid/small_asteroid.gd" id="1_sast"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="2_health"]

@@ -1,4 +1,4 @@
-﻿[gd_resource type="Resource" script_class="HoverJumpUpgrade" load_steps=2 format=3 uid="uid://dml75fswqyx2e"]
+[gd_resource type="Resource" script_class="HoverJumpUpgrade" load_steps=2 format=3 uid="uid://dml75fswqyx2e"]
 
 [ext_resource type="Script" uid="uid://cnr0avahak870" path="res://infiltration/scripts/player/upgrades/jump/hover_jump_upgrade.gd" id="1_w7q4a"]
 

@@ -1,4 +1,4 @@
-﻿[gd_scene format=3 uid="uid://c4r7yak3n8m2p"]
+[gd_scene format=3 uid="uid://c4r7yak3n8m2p"]
 
 [ext_resource type="Script" uid="uid://b65i3erd23o01" path="res://cutscenes/intro/intro_cutscene.gd" id="1_intro"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_atlas"]

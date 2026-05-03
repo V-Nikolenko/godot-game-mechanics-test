@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=3 format=3 uid="uid://df1ccrldggefu"]
+[gd_scene load_steps=3 format=3 uid="uid://df1ccrldggefu"]
 
 [ext_resource type="PackedScene" uid="uid://c5uhjngq8bl5n" path="res://infiltration/scenes/entities/player/player.tscn" id="2_w6leu"]
 

@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=10 format=3 uid="uid://cj15nas62osy7"]
+[gd_scene load_steps=10 format=3 uid="uid://cj15nas62osy7"]
 
 [ext_resource type="Script" uid="uid://bobkpyu4h4leh" path="res://assault/scenes/projectiles/missiles/homing/homing_missile.gd" id="1_js3q7"]
 [ext_resource type="Texture2D" uid="uid://ytq3eb2k4lfq" path="res://assault/assets/sprites/projectiles/Rocket_blue.png" id="2_cdvk3"]

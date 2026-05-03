@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=5 format=3 uid="uid://bq7e3m9k1x5n8"]
+[gd_scene load_steps=5 format=3 uid="uid://bq7e3m9k1x5n8"]
 
 [ext_resource type="Script" path="res://cutscenes/level_exit/level_exit_cutscene.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_atlas"]

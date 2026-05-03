@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=2 format=3 uid="uid://dk1ro5v14wxaj"]
+[gd_scene load_steps=2 format=3 uid="uid://dk1ro5v14wxaj"]
 
 [ext_resource type="Script" uid="uid://bktdtsixny5vb" path="res://infiltration/scenes/systems/stairs/stairs.gd" id="1_6d8b4"]
 

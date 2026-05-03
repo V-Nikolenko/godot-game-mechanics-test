@@ -1,4 +1,4 @@
-﻿[gd_scene load_steps=12 format=3 uid="uid://b127jmx4xegam"]
+[gd_scene load_steps=12 format=3 uid="uid://b127jmx4xegam"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_rs"]
 [ext_resource type="Script" uid="uid://c5x5l0t1boeq2" path="res://assault/scenes/enemies/ram_ship/ram_ship.gd" id="2_rs"]

@@ -1,4 +1,4 @@
-﻿extends CharacterBody2D
+extends CharacterBody2D
 
 const PlayerInputFrame = preload("res://infiltration/scripts/player/runtime/player_input_frame.gd")
 const PlayerLocomotion = preload("res://infiltration/scripts/player/runtime/player_locomotion.gd")

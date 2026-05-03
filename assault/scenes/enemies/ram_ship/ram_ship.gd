@@ -1,4 +1,4 @@
-﻿class_name RamShip
+class_name RamShip
 extends BaseEnemy
 
 @export var config: RamShipConfig = load("res://assault/scenes/enemies/ram_ship/ram_config.tres")
