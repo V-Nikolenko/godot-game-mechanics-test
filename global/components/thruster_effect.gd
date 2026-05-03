@@ -36,7 +36,7 @@ func _ready() -> void:
 
 ## Call every physics frame from the ship script.
 ## Transitions are instant; duplicate calls for the same state are no-ops.
-func set_state(state: State) -> void:
+func set_state(state: int) -> void:
 	if state == _current_state:
 		return
 	_current_state = state
