@@ -29,8 +29,8 @@ extends CutsceneBase
 @export var ship_start_pos: Vector2 = Vector2(-500.0, 400.0)
 ## Ship's world position at the end of beat 1 (mid-screen).
 @export var ship_mid_pos: Vector2 = Vector2(0.0, 0.0)
-## Ship's heading. -45° = pointing toward the top-right (UP rotated -45°).
-@export var ship_heading_deg: float = -45.0
+## Ship's heading in degrees. +45° = pointing toward the top-right (UP rotated +45° CW).
+@export var ship_heading_deg: float = 45.0
 ## Distance the ship drifts forward during beat 4.
 @export var final_drift_distance: float = 350.0
 
