@@ -5,6 +5,8 @@ extends Node2D
 ## the Planet node so it knows which scenes to launch.
 
 const PATROL_DRONE := preload("res://open_space/scenes/entities/enemies/patrol_drone.tscn")
+const MISSION_ASSAULT := "assault"
+const MISSION_INFILTRATION := "infiltration"
 
 @export var drone_count: int = 3
 @export var spawn_radius: float = 600.0
@@ -29,13 +31,18 @@ func _configure_planet() -> void:
 	var assault := MissionConfigResource.new()
 	assault.display_name = "Assault"
 	assault.scene_path = "res://assault/scenes/levels/level_1.tscn"
-	assault.mission_id = "assault"
+	assault.mission_id = MISSION_ASSAULT
 	assault.required_mission = ""  # always available
 
 	var infiltration := MissionConfigResource.new()
 	infiltration.display_name = "Infiltration"
 	infiltration.scene_path = "res://infiltration_mission/scenes/levels/TestIsometricScene.tscn"
-	infiltration.mission_id = "infiltration"
-	infiltration.required_mission = "assault"  # locked until assault is done
+	infiltration.mission_id = MISSION_INFILTRATION
+	infiltration.required_mission = MISSION_ASSAULT  # locked until assault is done
+
+	assert(ResourceLoader.exists(assault.scene_path),
+			"Assault scene not found: " + assault.scene_path)
+	assert(ResourceLoader.exists(infiltration.scene_path),
+			"Infiltration scene not found: " + infiltration.scene_path)
 
 	planet.missions = [assault, infiltration]
