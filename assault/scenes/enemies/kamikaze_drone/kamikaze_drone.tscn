@@ -1,6 +1,6 @@
-[gd_scene load_steps=9 format=3 uid="uid://ba0tsio2x5cov"]
+﻿[gd_scene load_steps=9 format=3 uid="uid://ba0tsio2x5cov"]
 
-[ext_resource type="Texture2D" uid="uid://b26xhr1bfvoqf" path="res://assault/assets/sprites/drone.png" id="2_ct3td"]
+[ext_resource type="Texture2D" uid="uid://b26xhr1bfvoqf" path="res://assault/assets/sprites/enemies/drone.png" id="2_ct3td"]
 [ext_resource type="Script" uid="uid://blusanydkxeam" path="res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.gd" id="2_kd"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_kd"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_kd"]

@@ -1,0 +1,8 @@
+﻿[gd_resource type="Resource" script_class="DoubleJumpUpgrade" load_steps=2 format=3 uid="uid://dmghnb20lb6n7"]
+
+[ext_resource type="Script" uid="uid://beqc624v7dqiq" path="res://infiltration/scripts/player/upgrades/jump/double_jump_upgrade.gd" id="1_8j2t1"]
+
+[resource]
+script = ExtResource("1_8j2t1")
+jump_count = 2
+extra_jump_force = 150.0

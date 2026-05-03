@@ -1,7 +1,7 @@
-[gd_scene load_steps=10 format=3 uid="uid://cj15nas62osy7"]
+﻿[gd_scene load_steps=10 format=3 uid="uid://cj15nas62osy7"]
 
 [ext_resource type="Script" uid="uid://bobkpyu4h4leh" path="res://assault/scenes/projectiles/missiles/homing/homing_missile.gd" id="1_js3q7"]
-[ext_resource type="Texture2D" uid="uid://ytq3eb2k4lfq" path="res://assault/assets/sprites/Rocket_blue.png" id="2_cdvk3"]
+[ext_resource type="Texture2D" uid="uid://ytq3eb2k4lfq" path="res://assault/assets/sprites/projectiles/Rocket_blue.png" id="2_cdvk3"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="3_5j8lp"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_l6a2x"]

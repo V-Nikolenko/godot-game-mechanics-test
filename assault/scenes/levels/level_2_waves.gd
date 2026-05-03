@@ -1,4 +1,4 @@
-## Level 2 — defines all 13 waves inline and builds LevelResource on the fly.
+﻿## Level 2 — defines all 13 waves inline and builds LevelResource on the fly.
 extends Node
 
 @export var wave_manager: WaveManager
@@ -148,4 +148,4 @@ func _on_waves_complete() -> void:
 		await _node_timer(1.0)
 	await _node_timer(2.0)
 	print("[LEVEL] Level 2 complete! Transitioning to infiltration mission...")
-	get_tree().change_scene_to_file("res://infiltration_mission/scenes/levels/TestIsometricScene.tscn")
+	get_tree().change_scene_to_file("res://infiltration/scenes/levels/TestIsometricScene.tscn")

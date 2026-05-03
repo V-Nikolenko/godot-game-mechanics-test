@@ -1,0 +1,16 @@
+﻿[gd_scene load_steps=3 format=3 uid="uid://df1ccrldggefu"]
+
+[ext_resource type="PackedScene" uid="uid://c5uhjngq8bl5n" path="res://infiltration/scenes/entities/player/player.tscn" id="2_w6leu"]
+
+[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_w6leu"]
+load_path = "res://.godot/imported/enemy_base_entrance__template.png-a2f1c527784e8b89b292611b318c4b60.ctex"
+
+[node name="TestIsometricScene" type="Node2D"]
+
+[node name="EnemyBaseEntranceTemplate" type="Sprite2D" parent="."]
+texture_filter = 1
+position = Vector2(821, -359)
+texture = SubResource("CompressedTexture2D_w6leu")
+
+[node name="Player" parent="." instance=ExtResource("2_w6leu")]
+position = Vector2(166, -120)

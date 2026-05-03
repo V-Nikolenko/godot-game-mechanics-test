@@ -1,7 +1,7 @@
-[gd_scene load_steps=8 format=3 uid="uid://isps2gewyelo"]
+﻿[gd_scene load_steps=8 format=3 uid="uid://isps2gewyelo"]
 
 [ext_resource type="Script" uid="uid://bjhxxf3gafdm5" path="res://assault/scenes/allies/ally_fighter/ally_fighter.gd" id="1_alf"]
-[ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_alf"]
+[ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_alf"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="3_alf"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="4_alf"]
 

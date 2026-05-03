@@ -34,7 +34,7 @@ extends CutsceneBase
 ## Ship's heading in degrees. +45° = pointing toward the top-right (UP rotated +45° CW).
 @export var ship_heading_deg: float = 45.0
 ## Distance the ship drifts forward during beat 4.
-@export var final_drift_distance: float = 350.0
+@export var final_drift_distance: float = 50.0
 
 @export_category("Cutscene Timing")
 @export var beat1_duration: float = 4.0          ## fly-in + zoom-in

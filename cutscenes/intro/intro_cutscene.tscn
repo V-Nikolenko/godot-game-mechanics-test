@@ -1,20 +1,13 @@
-[gd_scene format=3 uid="uid://c4r7yak3n8m2p"]
+﻿[gd_scene format=3 uid="uid://c4r7yak3n8m2p"]
 
 [ext_resource type="Script" uid="uid://b65i3erd23o01" path="res://cutscenes/intro/intro_cutscene.gd" id="1_intro"]
-[ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_atlas"]
+[ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_atlas"]
 [ext_resource type="Script" uid="uid://cjh0dnh22ia2h" path="res://global/components/thruster_effect.gd" id="3_thruster"]
 [ext_resource type="PackedScene" uid="uid://b8h6n2q5m40aj" path="res://cutscenes/base/dialog_presenter.tscn" id="4_dialog"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ship"]
 atlas = ExtResource("2_atlas")
 region = Rect2(1, 1, 32, 32)
-
-[sub_resource type="Gradient" id="Gradient_comet"]
-offsets = PackedFloat32Array(0, 0.25, 1)
-colors = PackedColorArray(1, 1, 1, 1, 1, 0.75, 0.2, 0.85, 0.9, 0.35, 0, 0)
-
-[sub_resource type="GradientTexture1D" id="GradientTexture1D_comet"]
-gradient = SubResource("Gradient_comet")
 
 [node name="IntroCutscene" type="Node2D" unique_id=1341060933]
 script = ExtResource("1_intro")
@@ -58,10 +51,9 @@ texture = SubResource("AtlasTexture_ship")
 position = Vector2(0, 14)
 script = ExtResource("3_thruster")
 
-[node name="CometTrail" type="CPUParticles2D" parent="Ship"]
+[node name="CometTrail" type="CPUParticles2D" parent="Ship" unique_id=179796694]
 amount = 35
 lifetime = 3.5
-local_coords = false
 direction = Vector2(0, 1)
 spread = 2.0
 gravity = Vector2(0, 0)
@@ -69,6 +61,5 @@ initial_velocity_min = 160.0
 initial_velocity_max = 280.0
 scale_amount_min = 0.8
 scale_amount_max = 1.8
-color_ramp = SubResource("GradientTexture1D_comet")
 
 [node name="DialogLayer" parent="." unique_id=1165102223 instance=ExtResource("4_dialog")]

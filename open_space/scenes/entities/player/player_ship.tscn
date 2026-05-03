@@ -1,7 +1,7 @@
-[gd_scene load_steps=9 format=3]
+﻿[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://open_space/scenes/entities/player/player_ship.gd" id="1_ship"]
-[ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_atlas"]
+[ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_atlas"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="3_health"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="4_hurt"]
 

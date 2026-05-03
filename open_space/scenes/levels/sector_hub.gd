@@ -1,4 +1,4 @@
-# open_space/scenes/levels/sector_hub.gd
+﻿# open_space/scenes/levels/sector_hub.gd
 extends Node2D
 
 ## Open Space hub. Spawns patrol drones and wires mission configs into
@@ -36,7 +36,7 @@ func _configure_planet() -> void:
 
 	var infiltration := MissionConfigResource.new()
 	infiltration.display_name = "Infiltration"
-	infiltration.scene_path = "res://infiltration_mission/scenes/levels/TestIsometricScene.tscn"
+	infiltration.scene_path = "res://infiltration/scenes/levels/TestIsometricScene.tscn"
 	infiltration.mission_id = MISSION_INFILTRATION
 	infiltration.required_mission = MISSION_ASSAULT  # locked until assault is done
 

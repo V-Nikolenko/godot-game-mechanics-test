@@ -1,8 +1,8 @@
-[gd_scene load_steps=12 format=3 uid="uid://b127jmx4xegam"]
+﻿[gd_scene load_steps=12 format=3 uid="uid://b127jmx4xegam"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_rs"]
 [ext_resource type="Script" uid="uid://c5x5l0t1boeq2" path="res://assault/scenes/enemies/ram_ship/ram_ship.gd" id="2_rs"]
-[ext_resource type="Texture2D" uid="uid://duruaa6hcqqxd" path="res://assault/assets/sprites/ram_ship.png" id="3_rs"]
+[ext_resource type="Texture2D" uid="uid://duruaa6hcqqxd" path="res://assault/assets/sprites/enemies/ram_ship.png" id="3_rs"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_rs"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_rs"]
 

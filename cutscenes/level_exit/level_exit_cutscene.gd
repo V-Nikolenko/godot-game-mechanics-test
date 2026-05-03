@@ -1,4 +1,4 @@
-## LevelExitCutscene — plays after Assault Level 1 waves complete.
+﻿## LevelExitCutscene — plays after Assault Level 1 waves complete.
 ## The ship boosts upward and the screen fades to black before the next scene.
 ##
 ## Routing: set `LevelExitCutscene.go_to_hub = true` BEFORE calling
@@ -12,7 +12,7 @@ extends CutsceneBase
 ## (first clear → infiltration). Resets to false after the cutscene reads it.
 static var go_to_hub: bool = false
 
-const INFILTRATION_PATH := "res://infiltration_mission/scenes/levels/TestIsometricScene.tscn"
+const INFILTRATION_PATH := "res://infiltration/scenes/levels/TestIsometricScene.tscn"
 const HUB_PATH := "res://open_space/scenes/levels/sector_hub.tscn"
 
 @onready var ship: Node2D = $Ship

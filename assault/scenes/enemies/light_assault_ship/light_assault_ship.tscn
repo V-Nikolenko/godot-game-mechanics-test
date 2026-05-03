@@ -1,8 +1,8 @@
-[gd_scene load_steps=16 format=3 uid="uid://br4qs4w455h3m"]
+﻿[gd_scene load_steps=16 format=3 uid="uid://br4qs4w455h3m"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_b2sn1"]
 [ext_resource type="Script" uid="uid://cjo40e3hf0hbn" path="res://assault/scenes/enemies/light_assault_ship/light_assault_ship.gd" id="1_cdh2m"]
-[ext_resource type="Texture2D" uid="uid://w7xvkbnwrrut" path="res://assault/assets/sprites/light_assault_ship.png" id="2_an5c4"]
+[ext_resource type="Texture2D" uid="uid://w7xvkbnwrrut" path="res://assault/assets/sprites/enemies/light_assault_ship.png" id="2_an5c4"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="3_an5c4"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="4_fm2d5"]
 [ext_resource type="Script" uid="uid://c5678cxr4wb7q" path="res://global/statemachine/state_machine.gd" id="5_smach"]
