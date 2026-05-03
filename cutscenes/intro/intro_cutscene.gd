@@ -20,7 +20,9 @@ extends CutsceneBase
 @onready var comet_trail: CPUParticles2D = $Ship/CometTrail
 @onready var thruster: ThrusterEffect = $Ship/Thruster
 @onready var camera: Camera2D = $Camera2D
-@onready var dialog: DialogPresenter = $DialogLayer
+@onready var dialog: DialogBox = $DialogLayer
+
+const _EDITH_PORTRAIT := preload("res://cutscenes/assets/portraits/edith.png")
 
 @export_category("Cutscene Beats")
 ## Camera zoom while the ship is "small in the distance" at beat 0.
@@ -71,11 +73,12 @@ func _run_cutscene() -> void:
 	comet_trail.emitting = false
 	if is_skipped(): return
 
-	# ── Beat 2: narrative pause + future dialog hook ────────────────────
-	# Replace this stub call with actual lines once the dialog system
-	# has portraits/voice. The await contract is already in place.
-	# await dialog.present("Captain", "We've reached the target sector.", pause_duration)
-	await wait_secs(pause_duration)
+	# ── Beat 2: mission briefing exchange ───────────────────────────────
+	await dialog.present_top("Control",
+			"Edith — Sector 7 is hot. Hostile formation on approach.", null, 3.0)
+	if is_skipped(): return
+	await dialog.present_bottom("Edith",
+			"Already at the perimeter. I'll handle it.", _EDITH_PORTRAIT, 2.5)
 	if is_skipped(): return
 
 	# ── Beat 3: camera and ship both rotate back to 0 (standard top-down) ──
