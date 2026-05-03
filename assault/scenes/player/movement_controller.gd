@@ -18,6 +18,7 @@ var DOUBLE_PRESS_ACTIONS: Array = [
 	"move_left",
 	"move_right",
 	"move_up",
+	"move_down",
 ]
 
 func _ready() -> void:

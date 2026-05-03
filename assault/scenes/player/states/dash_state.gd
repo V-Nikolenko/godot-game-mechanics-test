@@ -8,6 +8,7 @@ const STATE_KEY_BINDINGS: Array = [
 	"move_left",
 	"move_right",
 	"move_up",
+	"move_down",
 ]
 
 @export_category("State Dependencies")
@@ -49,9 +50,10 @@ func start_state_transition(key_name: String) -> void:
 
 func get_dash_direction(key_name: String) -> Vector2:
 	match key_name:
-		"move_left": return Vector2.LEFT
-		"move_up":   return Vector2.UP
-		_:           return Vector2.RIGHT
+		"move_left":  return Vector2.LEFT
+		"move_up":    return Vector2.UP
+		"move_down":  return Vector2.DOWN
+		_:            return Vector2.RIGHT
 
 
 # --- Main State Logic ---
@@ -69,18 +71,19 @@ func enter() -> void:
 		animated_sprite.play(ROLL_LEFT_ANIMATION_NAME)
 	elif dashing_direction == Vector2.RIGHT:
 		animated_sprite.play(ROLL_RIGHT_ANIMATION_NAME)
-	# Forward dash: no roll animation — keep current sprite (idle or tilt)
+	# Forward / backward dash: no roll animation, keep current sprite
 
-	# Scale pulse — ship "surges toward the screen" at the peak of the roll
+	# Scale pulse only for side barrel-rolls (forward/backward are subtle repositions)
 	if _scale_tween:
 		_scale_tween.kill()
-	var base: Vector2 = animated_sprite.scale
-	var half: float   = dashing_timer.wait_time * 0.5
-	_scale_tween = actor.create_tween()
-	_scale_tween.tween_property(animated_sprite, "scale", base * 1.35, half) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	_scale_tween.tween_property(animated_sprite, "scale", base, half) \
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
+	if dashing_direction.x != 0:
+		var base: Vector2 = animated_sprite.scale
+		var half: float   = dashing_timer.wait_time * 0.5
+		_scale_tween = actor.create_tween()
+		_scale_tween.tween_property(animated_sprite, "scale", base * 1.35, half) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
+		_scale_tween.tween_property(animated_sprite, "scale", base, half) \
+			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 
 func process_physics(delta: float):
 	if !dashing_timer.is_stopped():
@@ -89,7 +92,7 @@ func process_physics(delta: float):
 			# Side dash: allow vertical steering while rolling
 			velocity.y = Input.get_axis("move_up", "move_down") * move_speed
 		else:
-			# Forward dash: allow horizontal steering during the surge
+			# Forward / backward dash: allow horizontal steering during the surge
 			velocity.x = Input.get_axis("move_left", "move_right") * move_speed
 		actor.velocity = velocity
 		actor.move_and_slide()
