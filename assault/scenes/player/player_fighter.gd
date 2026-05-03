@@ -16,6 +16,8 @@ var _thruster: ThrusterEffect
 
 ## Speed thresholds for thruster visual state.
 ## Dash speed is 350 px/s; normal move speed is ~180-200 px/s.
+## Only the FORWARD component (−Y, ship faces up) drives BOOST so that
+## a side barrel-roll does not turn the trail blue.
 const _DASH_SPEED_THRESHOLD: float = 280.0
 const _MOVE_SPEED_THRESHOLD: float = 10.0
 
@@ -65,7 +67,10 @@ func _setup_effect_components() -> void:
 
 func _physics_process(_delta: float) -> void:
 	var speed := velocity.length()
-	if speed >= _DASH_SPEED_THRESHOLD:
+	# Use only the forward (−Y) component for BOOST so a side barrel-roll
+	# stays orange rather than going blue.
+	var forward_speed := -velocity.y
+	if forward_speed >= _DASH_SPEED_THRESHOLD:
 		_thruster.set_state(ThrusterEffect.State.BOOST)
 	elif speed >= _MOVE_SPEED_THRESHOLD:
 		_thruster.set_state(ThrusterEffect.State.THRUST)
