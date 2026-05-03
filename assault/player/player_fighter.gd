@@ -12,6 +12,12 @@ var can_attack: bool = true
 var _hit_effect: HitEffect
 var _explosion_effect: ExplosionEffect
 var _low_health_smoke: LowHealthSmoke
+var _thruster: ThrusterEffect
+
+## Speed thresholds for thruster visual state.
+## Dash speed is 350 px/s; normal move speed is ~180-200 px/s.
+const _DASH_SPEED_THRESHOLD: float = 280.0
+const _MOVE_SPEED_THRESHOLD: float = 10.0
 
 func _ready() -> void:
 	add_to_group("player")
@@ -49,6 +55,22 @@ func _setup_effect_components() -> void:
 	_low_health_smoke.threshold = 0.3
 	add_child(_low_health_smoke)
 	_low_health_smoke.setup(heatlh_component)
+
+	# Thruster sits at the rear exhaust point. Local +Y = behind the ship
+	# when the sprite faces UP; particles emit in world space so the trail
+	# stays behind as the ship moves sideways during dashes.
+	_thruster = ThrusterEffect.new()
+	_thruster.position = Vector2(0.0, 14.0)
+	add_child(_thruster)
+
+func _physics_process(_delta: float) -> void:
+	var speed := velocity.length()
+	if speed >= _DASH_SPEED_THRESHOLD:
+		_thruster.set_state(ThrusterEffect.State.BOOST)
+	elif speed >= _MOVE_SPEED_THRESHOLD:
+		_thruster.set_state(ThrusterEffect.State.THRUST)
+	else:
+		_thruster.set_state(ThrusterEffect.State.IDLE)
 
 func _on_health_changed(current: int) -> void:
 	_hit_effect.burst()
