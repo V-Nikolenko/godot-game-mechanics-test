@@ -10,7 +10,7 @@
 class_name ThrusterEffect
 extends Node2D
 
-enum State { IDLE, THRUST, BOOST }
+enum State { IDLE, THRUST, BOOST, POWER }
 
 var _particles: CPUParticles2D
 var _current_state: int = State.IDLE
@@ -44,6 +44,7 @@ func set_state(state: int) -> void:
 		State.IDLE:   _apply_idle()
 		State.THRUST: _apply_thrust()
 		State.BOOST:  _apply_boost()
+		State.POWER:  _apply_power()
 
 # ── Per-state configuration ────────────────────────────────────────────────
 
@@ -73,6 +74,18 @@ func _apply_boost() -> void:
 	_particles.scale_amount_min = 3.5
 	_particles.scale_amount_max = 7.0
 	_set_gradient(Color(0.35, 0.9, 1.0, 1.0), Color(0.0, 0.4, 1.0, 0.0))
+
+## POWER: same large size as BOOST but with THRUST's yellow-orange palette.
+## Used in cutscenes where the ship is still moving fast but no longer in
+## the cyan afterburner phase — large warm flame, not cyan.
+func _apply_power() -> void:
+	_particles.amount = 24
+	_particles.lifetime = 0.42
+	_particles.initial_velocity_min = 100.0
+	_particles.initial_velocity_max = 190.0
+	_particles.scale_amount_min = 3.5
+	_particles.scale_amount_max = 7.0
+	_set_gradient(Color(1.0, 0.75, 0.1, 1.0), Color(1.0, 0.2, 0.0, 0.0))
 
 func _set_gradient(birth: Color, death: Color) -> void:
 	var grad := Gradient.new()
