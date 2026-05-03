@@ -64,12 +64,15 @@ func _run_cutscene() -> void:
 	await wait_secs(pause_duration)
 	if is_skipped(): return
 
-	# ── Beat 3: camera rotates so ship heading aligns with screen-up ────
-	# Camera rotation == ship rotation makes the ship's local +Up appear
-	# as screen +Up — i.e. the gameplay top-down orientation.
+	# ── Beat 3: camera and ship both rotate back to 0 (standard top-down) ──
+	# Rotating ship.rotation → 0 while rotating camera.rotation → 0 means
+	# the ship visually "straightens up" and will fly toward the top of the
+	# screen in Beat 4. Camera ends at 0 = normal top-down orientation.
 	thruster.set_state(ThrusterEffect.State.BOOST)
-	await tween_property(camera, "rotation", ship.rotation,
-			camera_rotation_duration, Tween.TRANS_QUAD, Tween.EASE_IN_OUT)
+	var t3 := parallel_tween()
+	t3.tween_property(camera, "rotation", 0.0, camera_rotation_duration)
+	t3.tween_property(ship, "rotation", 0.0, camera_rotation_duration)
+	await t3.finished
 	if is_skipped(): return
 
 	# ── Beat 4: ship drifts forward into the next mission ───────────────
