@@ -79,5 +79,6 @@ func _run_cutscene() -> void:
 	t4.tween_property(ship, "position", ship_end, final_drift_duration)
 	t4.tween_property(camera, "position", ship_end, final_drift_duration)
 	await t4.finished
+	if is_skipped(): return
 
 	_on_finish()
