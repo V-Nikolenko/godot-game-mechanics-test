@@ -29,11 +29,13 @@ func _run_cutscene() -> void:
 	next_scene_path = HUB_PATH if go_to_hub else INFILTRATION_PATH
 	go_to_hub = false
 
-	thruster.set_state(ThrusterEffect.State.BOOST)
+	# Orange flame first — engines warming up
+	thruster.set_state(ThrusterEffect.State.THRUST)
 
-	# Brief beat before blast-off
+	# Brief beat before blast-off, then kick to full afterburner
 	await wait_secs(0.4)
 	if is_skipped(): return
+	thruster.set_state(ThrusterEffect.State.BOOST)
 
 	# Ship rockets upward + screen fades to black simultaneously
 	var t := parallel_tween()
