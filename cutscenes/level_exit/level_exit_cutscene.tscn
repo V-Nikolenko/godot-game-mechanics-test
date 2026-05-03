@@ -1,0 +1,41 @@
+[gd_scene load_steps=5 format=3 uid="uid://bq7e3m9k1x5n8"]
+
+[ext_resource type="Script" path="res://cutscenes/level_exit/level_exit_cutscene.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/h_assault_fighter.png" id="2_atlas"]
+[ext_resource type="Script" path="res://global/components/thruster_effect.gd" id="3_thruster"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ship"]
+atlas = ExtResource("2_atlas")
+region = Rect2(1, 1, 32, 32)
+
+[node name="LevelExitCutscene" type="Node2D"]
+script = ExtResource("1_script")
+
+[node name="Background" type="ColorRect" parent="."]
+offset_left = -2000.0
+offset_top = -2000.0
+offset_right = 2000.0
+offset_bottom = 2000.0
+color = Color(0, 0, 0, 1)
+
+[node name="Camera2D" type="Camera2D" parent="."]
+zoom = Vector2(2, 2)
+
+[node name="Ship" type="Node2D" parent="."]
+
+[node name="Sprite2D" type="Sprite2D" parent="Ship"]
+texture_filter = 1
+texture = SubResource("AtlasTexture_ship")
+
+[node name="Thruster" type="Node2D" parent="Ship"]
+position = Vector2(0, 14)
+script = ExtResource("3_thruster")
+
+[node name="OverlayLayer" type="CanvasLayer" parent="."]
+layer = 50
+
+[node name="Overlay" type="ColorRect" parent="OverlayLayer"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0)

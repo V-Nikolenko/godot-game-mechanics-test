@@ -133,21 +133,16 @@ func _ready() -> void:
 
 func _on_waves_complete() -> void:
 	wave_manager.waves_complete.disconnect(_on_waves_complete)
-	print("[LEVEL] All waves triggered — checking mission state")
-	var first_time := not MissionState.is_complete("assault")
-	MissionState.complete("assault", 1)
+	print("[LEVEL] All waves triggered — transitioning to level exit cutscene")
 
-	await get_tree().create_timer(3.0).timeout
+	# Set routing flag BEFORE calling complete() so the cutscene can read
+	# whether assault was already beaten (replay path) or this is the first clear.
+	LevelExitCutscene.go_to_hub = MissionState.is_complete("assault")
+	MissionState.complete("assault", 1)
 
 	var hud := get_tree().root.get_node_or_null("HUD")
 	if hud:
 		hud.queue_free()
 
-	if first_time:
-		print("[LEVEL] First clear — proceeding to Infiltration mission")
-		get_tree().change_scene_to_file(
-				"res://infiltration_mission/scenes/levels/TestIsometricScene.tscn")
-	else:
-		print("[LEVEL] Replay complete — returning to hub")
-		get_tree().change_scene_to_file(
-				"res://open_space/scenes/levels/sector_hub.tscn")
+	get_tree().change_scene_to_file(
+			"res://cutscenes/level_exit/level_exit_cutscene.tscn")
