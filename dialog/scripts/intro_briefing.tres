@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="DialogScriptResource" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://dialog/resources/dialog_script.gd" id="1_script"]
+[ext_resource type="Script" path="res://dialog/resources/dialog_line.gd" id="2_line"]
+[ext_resource type="Resource" path="res://dialog/scripts/speakers/control.tres" id="3_control"]
+[ext_resource type="Resource" path="res://dialog/scripts/speakers/edith.tres" id="4_edith"]
+
+[sub_resource type="Resource" id="line_1"]
+script = ExtResource("2_line")
+speaker = ExtResource("3_control")
+text = "Edith — Sector 7 is hot. Hostile formation on approach."
+side = 0
+reveal = 0
+typing_speed = 35.0
+post_delay = 0.2
+
+[sub_resource type="Resource" id="line_2"]
+script = ExtResource("2_line")
+speaker = ExtResource("4_edith")
+text = "Already at the perimeter. I'll handle it."
+side = 1
+reveal = 0
+typing_speed = 35.0
+post_delay = 0.0
+
+[resource]
+script = ExtResource("1_script")
+script_id = &"intro_briefing"
+lines = [SubResource("line_1"), SubResource("line_2")]
+pause_gameplay = false

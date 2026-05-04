@@ -20,9 +20,6 @@ extends CutsceneBase
 @onready var comet_trail: CPUParticles2D = $Ship/CometTrail
 @onready var thruster: ThrusterEffect = $Ship/Thruster
 @onready var camera: Camera2D = $Camera2D
-@onready var dialog: DialogBox = $DialogLayer
-
-const _EDITH_PORTRAIT := preload("res://cutscenes/assets/portraits/edith.png")
 
 @export_category("Cutscene Beats")
 ## Camera zoom while the ship is "small in the distance" at beat 0.
@@ -74,11 +71,7 @@ func _run_cutscene() -> void:
 	if is_skipped(): return
 
 	# ── Beat 2: mission briefing exchange ───────────────────────────────
-	await dialog.present_top("Control",
-			"Edith — Sector 7 is hot. Hostile formation on approach.", null, 3.0)
-	if is_skipped(): return
-	await dialog.present_bottom("Edith",
-			"Already at the perimeter. I'll handle it.", _EDITH_PORTRAIT, 2.5)
+	await DialogPlayer.play(preload("res://dialog/scripts/intro_briefing.tres"))
 	if is_skipped(): return
 
 	# ── Beat 3: camera and ship both rotate back to 0 (standard top-down) ──
