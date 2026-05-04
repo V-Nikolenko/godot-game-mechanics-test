@@ -1,6 +1,7 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://dialog/ui/dialog_box.gd" id="1_db"]
+[ext_resource type="Script" path="res://dialog/ui/hold_progress_arc.gd" id="2_arc"]
 
 [sub_resource type="StyleBoxFlat" id="SBF_top"]
 bg_color = Color(0.04, 0.07, 0.16, 0.88)
@@ -121,3 +122,9 @@ size_flags_vertical = 4
 expand_mode = 1
 stretch_mode = 6
 flip_h = true
+
+[node name="HoldArc" type="Control" parent="BottomBar/Margin/HBox"]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+size_flags_vertical = 4
+script = ExtResource("2_arc")

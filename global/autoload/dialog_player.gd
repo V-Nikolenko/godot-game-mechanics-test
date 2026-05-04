@@ -80,6 +80,17 @@ func _finish() -> void:
 	dialog_finished.emit(_was_skipped)
 
 
+func _process(_delta: float) -> void:
+	if not is_active or _accept_held_since < 0.0:
+		return
+	var held := Time.get_ticks_msec() / 1000.0 - _accept_held_since
+	_box.set_hold_progress(held / _HOLD_SKIP_SEC)
+	if held >= _HOLD_SKIP_SEC:
+		_accept_held_since = -1.0
+		_box.set_hold_progress(0.0)
+		skip_dialog()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_active:
 		return
