@@ -34,7 +34,7 @@ enum State { IDLE, FADE_IN, TYPING, READY, FADE_OUT }
 
 const _FADE_SEC := 0.22
 
-var _state: State = State.IDLE
+var _state: int = State.IDLE
 var _active_bar: PanelContainer
 var _active_text: RichTextLabel
 var _typing_tween: Tween

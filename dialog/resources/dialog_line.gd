@@ -19,9 +19,9 @@ enum Reveal { TYPEWRITER, FADE_IN, INSTANT }
 
 @export_multiline var text: String = ""
 
-@export var side: Side = Side.PLAYER_BOTTOM
+@export var side: DialogLineResource.Side = DialogLineResource.Side.PLAYER_BOTTOM
 
-@export var reveal: Reveal = Reveal.TYPEWRITER
+@export var reveal: DialogLineResource.Reveal = DialogLineResource.Reveal.TYPEWRITER
 
 ## Characters per second for TYPEWRITER. Ignored for other reveals.
 @export_range(5.0, 200.0, 1.0) var typing_speed: float = 35.0
