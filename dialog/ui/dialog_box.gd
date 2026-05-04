@@ -29,7 +29,8 @@ enum State { IDLE, FADE_IN, TYPING, READY, FADE_OUT }
 @onready var _bot_portrait: TextureRect  = $BottomBar/Margin/HBox/Portrait
 @onready var _bot_speaker: Label         = $BottomBar/Margin/HBox/TextCol/SpeakerLabel
 @onready var _bot_text: RichTextLabel    = $BottomBar/Margin/HBox/TextCol/TextLabel
-@onready var _hold_arc: HoldProgressArc  = $BottomBar/Margin/HBox/HoldArc
+@onready var _hold_arc: HoldProgressArc      = $BottomBar/Margin/HBox/HoldArc
+@onready var _auto_indicator: AutoModeIndicator = $BottomBar/Margin/HBox/AutoIndicator
 
 const _FADE_SEC := 0.22
 
@@ -158,6 +159,11 @@ func is_ready_to_advance() -> bool:
 func set_hold_progress(ratio: float) -> void:
 	if _hold_arc:
 		_hold_arc.set_progress(ratio)
+
+
+func set_auto_indicator(on: bool) -> void:
+	if _auto_indicator:
+		_auto_indicator.set_active(on)
 
 
 func _after_fade_out() -> void:
