@@ -38,6 +38,7 @@ var _state: State = State.IDLE
 var _active_bar: PanelContainer
 var _active_text: RichTextLabel
 var _typing_tween: Tween
+var _fade_in_tween: Tween
 
 
 func _ready() -> void:
@@ -92,9 +93,12 @@ func present_line(line: DialogLineResource) -> void:
 	_state = State.FADE_IN
 	_active_bar.modulate.a = 0.0
 	_active_bar.visible = true
-	var t_in := create_tween()
-	t_in.tween_property(_active_bar, "modulate:a", 1.0, _FADE_SEC)
-	await t_in.finished
+	_fade_in_tween = create_tween()
+	_fade_in_tween.tween_property(_active_bar, "modulate:a", 1.0, _FADE_SEC)
+	await _fade_in_tween.finished
+	# Guard: if force-closed during fade-in, abort
+	if _state == State.IDLE:
+		return
 
 	# Reveal the text.
 	_state = State.TYPING
@@ -174,6 +178,8 @@ func _after_fade_out() -> void:
 
 
 func _force_close() -> void:
+	if _fade_in_tween:
+		_fade_in_tween.kill()
 	if _typing_tween:
 		_typing_tween.kill()
 	_top_bar.modulate.a = 0.0

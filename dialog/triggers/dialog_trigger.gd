@@ -35,8 +35,10 @@ func fire() -> void:
 		return
 	_consumed = true
 	triggered.emit()
+	var _skipped := false
+	DialogPlayer.dialog_finished.connect(func(s: bool) -> void: _skipped = s, CONNECT_ONE_SHOT)
 	await DialogPlayer.play(script_resource)
-	completed.emit(false)
+	completed.emit(_skipped)
 
 
 ## Connectable to any zero-arg signal.

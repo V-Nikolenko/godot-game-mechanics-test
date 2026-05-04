@@ -44,6 +44,8 @@ func play(script: DialogScriptResource) -> void:
 	_current_script = script
 	_current_index = 0
 	_was_skipped = false
+	_accept_held_since = -1.0
+	_auto_held_since = -1.0
 	is_active = true
 
 	if script.pause_gameplay:
@@ -73,8 +75,6 @@ func play(script: DialogScriptResource) -> void:
 		if _was_skipped:
 			break
 
-	if _was_skipped:
-		_box.close_now()
 	_finish()
 
 
@@ -90,6 +90,8 @@ func _finish() -> void:
 	var script := _current_script
 	_current_script = null
 	is_active = false
+	auto_mode = false
+	_box.set_auto_indicator(false)
 	if script != null and script.pause_gameplay:
 		get_tree().paused = false
 	dialog_finished.emit(_was_skipped)
@@ -142,6 +144,7 @@ func _handle_advance_press() -> void:
 
 
 ## Returns 0 if sig_a fires first, 1 if sig_b fires first.
+## Disconnects the losing connection after the race resolves.
 func _race_line_or_timer(sig_a: Signal, sig_b: Signal) -> int:
 	var done := false
 	var winner: int = -1
@@ -150,8 +153,13 @@ func _race_line_or_timer(sig_a: Signal, sig_b: Signal) -> int:
 		if done: return
 		done = true
 		winner = idx
-	sig_a.connect(func() -> void: resume.call(0), CONNECT_ONE_SHOT)
-	sig_b.connect(func() -> void: resume.call(1), CONNECT_ONE_SHOT)
+	var cb_a: Callable = func() -> void: resume.call(0)
+	var cb_b: Callable = func() -> void: resume.call(1)
+	sig_a.connect(cb_a, CONNECT_ONE_SHOT)
+	sig_b.connect(cb_b, CONNECT_ONE_SHOT)
 	while winner == -1:
 		await get_tree().process_frame
+	# Disconnect the loser's pending one-shot (if it hasn't fired yet).
+	if sig_a.is_connected(cb_a): sig_a.disconnect(cb_a)
+	if sig_b.is_connected(cb_b): sig_b.disconnect(cb_b)
 	return winner
