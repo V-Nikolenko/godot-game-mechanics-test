@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SpeakerResource" load_steps=3 format=3 uid="uid://edith_speaker"]
+
+[ext_resource type="Script" path="res://dialog/resources/speaker.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://b14jp5gaxh35" path="res://cutscenes/assets/portraits/edith.png" id="2"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Edith"
+portrait = ExtResource("2")
+name_color = Color(0.55, 0.82, 1, 1)

@@ -1,0 +1,8 @@
+[gd_resource type="Resource" script_class="SpeakerResource" load_steps=2 format=3 uid="uid://control_speaker"]
+
+[ext_resource type="Script" path="res://dialog/resources/speaker.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+display_name = "Control"
+name_color = Color(0.92, 0.78, 0.42, 1)
