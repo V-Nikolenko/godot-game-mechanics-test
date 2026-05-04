@@ -150,7 +150,7 @@ func _on_waves_complete() -> void:
 	print("[LEVEL] Enemy container cleared (%.1fs) — %d remaining" % [_waited, container.get_child_count()])
 
 	# Brief beat so the last explosion settles before dialog appears.
-	await get_tree().create_timer(0.8).timeout
+	await get_tree().create_timer(0.2).timeout
 
 	print("[LEVEL] All enemies cleared — showing post-battle dialog")
 
