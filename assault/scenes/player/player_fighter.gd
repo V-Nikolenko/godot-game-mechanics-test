@@ -65,6 +65,9 @@ func _setup_effect_components() -> void:
 	add_child(_thruster)
 
 func _physics_process(_delta: float) -> void:
+	if DialogPlayer.is_active:
+		velocity = Vector2.ZERO
+		return
 	var speed := velocity.length()
 	var forward_speed  := -velocity.y   # −Y = ship moving upward = forward
 	var backward_speed :=  velocity.y   # +Y = ship moving downward = backward
