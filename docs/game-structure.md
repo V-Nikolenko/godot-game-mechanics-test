@@ -176,15 +176,15 @@ game-test-mechanics/
 │           └── upgrades/
 │
 └── open_space/                     ⚠️  sparse — only 2 scripts, no assets subfolder pattern
-    ├── assets/
-    │   └── sprites/
-    │       └── planet_stub.png
-    └── scenes/
-        ├── entities/
-        │   ├── enemies/
-        │   ├── interactables/      ⚠️  MissionConfigResource here, not in global/resources
-        │   └── player/
-        └── levels/
+	├── assets/
+	│   └── sprites/
+	│       └── planet_stub.png
+	└── scenes/
+		├── entities/
+		│   ├── enemies/
+		│   ├── interactables/      ⚠️  MissionConfigResource here, not in global/resources
+		│   └── player/
+		└── levels/
 ```
 
 ---
@@ -267,14 +267,14 @@ game-test-mechanics/
 │       └── upgrades/               ← move .tres files here from assets/upgrades/
 │
 └── open_space/
-    ├── assets/
-    │   └── sprites/
-    ├── scenes/
-    │   ├── levels/
-    │   └── entities/
-    │       ├── player/
-    │       ├── enemies/
-    │       └── interactables/      ← keep planet here; MissionConfigResource → global
+	├── assets/
+	│   └── sprites/
+	├── scenes/
+	│   ├── levels/
+	│   └── entities/
+	│       ├── player/
+	│       ├── enemies/
+	│       └── interactables/      ← keep planet here; MissionConfigResource → global
 ```
 
 ---
