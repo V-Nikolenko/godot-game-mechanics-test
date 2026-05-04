@@ -154,6 +154,10 @@ func is_ready_to_advance() -> bool:
 	return _state == State.READY
 
 
+func set_hold_progress(_ratio: float) -> void:
+	pass
+
+
 func _after_fade_out() -> void:
 	if is_instance_valid(_active_bar):
 		_active_bar.visible = false
