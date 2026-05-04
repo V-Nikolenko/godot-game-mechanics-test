@@ -21,22 +21,22 @@ func _ready() -> void:
 
 	var waves: Array = [
 				builder.wave(1.0, [
-			builder.spawn_entry(builder.BIG_ASTEROID, Vector2(-40, -180), builder.straight(70), 0.0),
-			builder.spawn_entry(builder.BIG_ASTEROID, Vector2( 40, -180), builder.straight(70), 0.8),
+			builder.spawn_entry(builder.BIG_ASTEROID, Vector2(-40, -180), builder.straight(70), 0.0, builder.EXIT_SCREEN),
+			builder.spawn_entry(builder.BIG_ASTEROID, Vector2( 40, -180), builder.straight(70), 0.8, builder.EXIT_SCREEN),
 		]),
-		
+
 		builder.wave(2.0, [
 			builder.spawn_entry(builder.FIGHTER, Vector2(0, -180), builder.straight(100), 0.0, builder.EXIT_SCREEN, builder.v_formation(5)),
 		]),
 		builder.wave(3.0, [
-			builder.spawn_entry(builder.ALLY, Vector2( 45, 180), builder.straight(130, PI), 0.0),
-			builder.spawn_entry(builder.ALLY, Vector2(-35, 180), builder.straight(170, PI), 0.3),
+			builder.spawn_entry(builder.ALLY, Vector2( 45, 180), builder.straight(130, PI), 0.0, builder.EXIT_SCREEN),
+			builder.spawn_entry(builder.ALLY, Vector2(-35, 180), builder.straight(170, PI), 0.3, builder.EXIT_SCREEN),
 		]),
 		builder.wave(6.0, [
 			builder.spawn_entry(builder.FIGHTER, Vector2(180, -28), builder.straight(160, -PI/3.6), 0.0, builder.EXIT_SCREEN, builder.diagonal_formation(5, 40, 14)),
 		]),
 		builder.wave(7.0, [
-			builder.spawn_entry(builder.ALLY, Vector2(-180, 180), builder.straight(130, PI), 0.0),
+			builder.spawn_entry(builder.ALLY, Vector2(-180, 180), builder.straight(130, PI), 0.0, builder.EXIT_SCREEN),
 		]),
 		builder.wave(12.0, [
 			builder.spawn_entry(builder.FIGHTER, Vector2(-40, -180), builder.sequence([builder.straight(60, 0.0, 2.0), builder.hold(1.5), builder.straight(150, -PI/2)]), 0.0),
@@ -144,7 +144,7 @@ func _on_waves_complete() -> void:
 	# Safety cap: give up after 60 s regardless — should never be needed in practice.
 	var container: Node = wave_manager.enemy_container
 	var _waited := 0.0
-	while container.get_child_count() > 0 and _waited < 60.0:
+	while container.get_child_count() > 0 and _waited < 5.0:
 		await get_tree().create_timer(0.15).timeout
 		_waited += 0.15
 	print("[LEVEL] Enemy container cleared (%.1fs) — %d remaining" % [_waited, container.get_child_count()])
