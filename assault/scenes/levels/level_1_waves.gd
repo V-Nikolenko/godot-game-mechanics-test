@@ -3,10 +3,11 @@ extends Node
 
 @export var wave_manager: WaveManager
 
-const _DIALOG_BOX    := preload("res://cutscenes/base/dialog_box.tscn")
-const _EDITH_PORTRAIT := preload("res://cutscenes/assets/portraits/edith.png")
-
 func _ready() -> void:
+	# Keep this node alive so the _on_waves_complete coroutine can resume
+	# even after get_tree().paused = true is called inside it.
+	process_mode = PROCESS_MODE_ALWAYS
+
 	print("[LEVEL] Level 1 started — building wave data")
 	var existing := get_tree().root.get_node_or_null("HUD")
 	if existing:
@@ -136,16 +137,25 @@ func _ready() -> void:
 
 func _on_waves_complete() -> void:
 	wave_manager.waves_complete.disconnect(_on_waves_complete)
-	print("[LEVEL] All waves triggered — showing post-battle dialog")
+	print("[LEVEL] All waves triggered — waiting for enemies to clear")
 
-	# Post-battle debrief before the exit cutscene
-	var dialog: DialogBox = _DIALOG_BOX.instantiate()
-	get_tree().root.add_child(dialog)
-	await dialog.present_top("Control",
-			"All hostiles neutralised. Sector 7 is clear.", null, 3.0)
-	await dialog.present_bottom("Edith",
-			"Copy that. Setting course for extraction.", _EDITH_PORTRAIT, 3.0)
-	dialog.queue_free()
+	# Wait until every enemy has been destroyed or left the screen.
+	# Poll via a short timer (more reliable than process_frame across pause changes).
+	# Safety cap: give up after 60 s regardless — should never be needed in practice.
+	var container: Node = wave_manager.enemy_container
+	var _waited := 0.0
+	while container.get_child_count() > 0 and _waited < 60.0:
+		await get_tree().create_timer(0.15).timeout
+		_waited += 0.15
+	print("[LEVEL] Enemy container cleared (%.1fs) — %d remaining" % [_waited, container.get_child_count()])
+
+	# Brief beat so the last explosion settles before dialog appears.
+	await get_tree().create_timer(0.8).timeout
+
+	print("[LEVEL] All enemies cleared — showing post-battle dialog")
+
+	# Post-battle debrief — DialogPlayer handles pause + UI lifecycle.
+	await DialogPlayer.play(preload("res://dialog/scripts/level1_debrief.tres"))
 
 	# Set routing flag BEFORE calling complete() so the cutscene can read
 	# whether assault was already beaten (replay path) or this is the first clear.
