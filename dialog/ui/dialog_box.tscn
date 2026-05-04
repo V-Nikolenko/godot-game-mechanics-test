@@ -1,0 +1,123 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://dialog/ui/dialog_box.gd" id="1_db"]
+
+[sub_resource type="StyleBoxFlat" id="SBF_top"]
+bg_color = Color(0.04, 0.07, 0.16, 0.88)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.45, 0.8, 0.6)
+
+[sub_resource type="StyleBoxFlat" id="SBF_bot"]
+bg_color = Color(0.04, 0.07, 0.16, 0.88)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.25, 0.45, 0.8, 0.6)
+
+[node name="DialogBox" type="CanvasLayer"]
+process_mode = 3
+layer = 100
+script = ExtResource("1_db")
+
+[node name="TopBar" type="PanelContainer" parent="."]
+anchor_right = 1.0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 104.0
+theme_override_styles/panel = SubResource("SBF_top")
+
+[node name="Margin" type="MarginContainer" parent="TopBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="HBox" type="HBoxContainer" parent="TopBar/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Portrait" type="TextureRect" parent="TopBar/Margin/HBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(80, 80)
+size_flags_vertical = 4
+expand_mode = 1
+stretch_mode = 6
+
+[node name="TextCol" type="VBoxContainer" parent="TopBar/Margin/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="SpeakerLabel" type="Label" parent="TopBar/Margin/HBox/TextCol"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.82, 1, 1)
+theme_override_font_sizes/font_size = 11
+text = "Speaker"
+
+[node name="TextLabel" type="RichTextLabel" parent="TopBar/Margin/HBox/TextCol"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+fit_content = true
+text = "Dialog text"
+
+[node name="BottomBar" type="PanelContainer" parent="."]
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -104.0
+offset_right = -10.0
+offset_bottom = -10.0
+theme_override_styles/panel = SubResource("SBF_bot")
+
+[node name="Margin" type="MarginContainer" parent="BottomBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="HBox" type="HBoxContainer" parent="BottomBar/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TextCol" type="VBoxContainer" parent="BottomBar/Margin/HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 4
+
+[node name="SpeakerLabel" type="Label" parent="BottomBar/Margin/HBox/TextCol"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.55, 0.82, 1, 1)
+theme_override_font_sizes/font_size = 11
+text = "Speaker"
+
+[node name="TextLabel" type="RichTextLabel" parent="BottomBar/Margin/HBox/TextCol"]
+layout_mode = 2
+size_flags_vertical = 3
+bbcode_enabled = true
+fit_content = true
+text = "Dialog text"
+
+[node name="Portrait" type="TextureRect" parent="BottomBar/Margin/HBox"]
+layout_mode = 2
+custom_minimum_size = Vector2(80, 80)
+size_flags_vertical = 4
+expand_mode = 1
+stretch_mode = 6
+flip_h = true
