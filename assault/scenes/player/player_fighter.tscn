@@ -271,8 +271,8 @@ one_shot = true
 
 [node name="ReflectState" type="Node" parent="." node_paths=PackedStringArray("actor", "movement_controller")]
 script = ExtResource("13_rflst")
-actor = NodePath(".")
-movement_controller = NodePath("MovementController")
+actor = NodePath("..")
+movement_controller = NodePath("../MovementController")
 
 [node name="DebugUnlockAll" type="Node" parent="."]
 script = ExtResource("14_dbgul")
