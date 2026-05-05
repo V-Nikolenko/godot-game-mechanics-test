@@ -10,7 +10,7 @@ const SAVE_PATH := "user://upgrades.cfg"
 const SECTION := "upgrades"
 
 const ALL_IDS: Array[StringName] = [
-	&"default", &"long_range", &"piercing", &"spread", &"auto_aim", &"reflect"
+	&"default", &"long_range", &"piercing", &"spread", &"reflect"
 ]
 
 signal unlocked_changed(id: StringName)

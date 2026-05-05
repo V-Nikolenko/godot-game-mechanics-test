@@ -41,7 +41,6 @@ func _build_behaviors() -> void:
 	_behaviors[WeaponModeResource.Behavior.STRAIGHT] = StraightBehavior.new()
 	_behaviors[WeaponModeResource.Behavior.LONG]     = LongRangeBehavior.new()
 	_behaviors[WeaponModeResource.Behavior.SPREAD]   = SpreadBehavior.new()
-	_behaviors[WeaponModeResource.Behavior.HOMING]   = HomingBehavior.new()
 	_behaviors[WeaponModeResource.Behavior.BEAM]     = BeamBehavior.new()
 
 func _first_unlocked_id() -> StringName:
