@@ -47,6 +47,11 @@ func _enter_damaged_state() -> void:
 	health.max_health = 100
 	health.current_health = 100
 
+## Returns true while this ram ship blocks the piercing laser.
+## Becomes false after _enter_damaged_state() is called (first missile hit).
+func is_laser_blocking() -> bool:
+	return not _damaged
+
 func _physics_process(delta: float) -> void:
 	velocity = Vector2(0, speed)
 	move_and_slide()
