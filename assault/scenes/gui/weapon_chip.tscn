@@ -1,0 +1,20 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/gui/weapon_chip.gd" id="1_wpchip"]
+
+[node name="WeaponChip" type="Control"]
+custom_minimum_size = Vector2(120, 24)
+script = ExtResource("1_wpchip")
+
+[node name="HBox" type="HBoxContainer" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+
+[node name="Icon" type="TextureRect" parent="HBox"]
+custom_minimum_size = Vector2(24, 24)
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="HBox"]
+theme_override_font_sizes/font_size = 12
+text = "Standard"
