@@ -110,6 +110,10 @@ func _cycle() -> void:
 		_cooldown = 0.0
 		_emit_changed()
 
+## Public: call this to (re-)emit the current mode — used by HUD chips connecting late.
+func emit_current_mode() -> void:
+	_emit_changed()
+
 func _emit_changed() -> void:
 	var mode: WeaponModeResource = _modes.get(_active_id)
 	if mode:

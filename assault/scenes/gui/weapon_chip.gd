@@ -8,6 +8,8 @@ extends Control
 func _ready() -> void:
 	# Wait one frame so the player has been added to the tree.
 	await get_tree().process_frame
+	if not is_inside_tree():
+		return
 	var players := get_tree().get_nodes_in_group("player")
 	if players.is_empty():
 		return
@@ -16,9 +18,9 @@ func _ready() -> void:
 	if ws == null:
 		return
 	ws.weapon_changed.connect(_on_weapon_changed)
-	# The state emitted on its own _ready() before we connected, so ask it
-	# to re-emit so the chip renders the initial mode.
-	ws._emit_changed()
+	# WeaponState already emitted on its own _ready() before we connected;
+	# call the public re-emit so the chip renders the current mode immediately.
+	ws.emit_current_mode()
 
 func _on_weapon_changed(mode: WeaponModeResource) -> void:
 	_icon.texture = mode.icon

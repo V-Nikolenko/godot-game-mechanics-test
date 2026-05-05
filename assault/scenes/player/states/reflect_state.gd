@@ -19,8 +19,8 @@ func _physics_process(delta: float) -> void:
 	if _cooldown_left > 0.0:
 		_cooldown_left = max(0.0, _cooldown_left - delta)
 	if _window_left > 0.0:
-		_window_left -= delta
-		if _window_left <= 0.0:
+		_window_left = max(0.0, _window_left - delta)
+		if _window_left == 0.0:
 			_close_window()
 
 func _on_action(key_name: String) -> void:
@@ -56,6 +56,8 @@ func _open_window() -> void:
 
 func _close_window() -> void:
 	if _area and is_instance_valid(_area):
+		if _area.area_entered.is_connected(_on_area_entered):
+			_area.area_entered.disconnect(_on_area_entered)
 		_area.queue_free()
 	_area = null
 
@@ -66,4 +68,5 @@ func _on_area_entered(area: Area2D) -> void:
 	while node and not (node is EnemyBullet):
 		node = node.get_parent()
 	if node is EnemyBullet:
+		_close_window()  # remove the reflect area before flipping the bullet
 		(node as EnemyBullet).become_friendly()
