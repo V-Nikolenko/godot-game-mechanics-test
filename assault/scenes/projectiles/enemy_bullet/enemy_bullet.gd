@@ -24,3 +24,13 @@ func _on_visible_on_screen_notifier_2d_screen_exited() -> void:
 
 func _on_hit_box_area_entered(_area: Area2D) -> void:
 	expired.emit()
+
+## Reflect-mode flip: reverses this enemy bullet so it becomes a friendly projectile.
+## Layers/mask are swapped to player-projectile (64) hitting enemy hurt (513).
+func become_friendly() -> void:
+	_direction = -_direction
+	rotation += PI
+	var hb := get_node_or_null("HitBox") as HitBox
+	if hb:
+		hb.collision_layer = 64
+		hb.collision_mask = 513
