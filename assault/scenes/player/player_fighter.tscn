@@ -7,7 +7,7 @@
 [ext_resource type="Script" uid="uid://crvcl7vtyygxb" path="res://assault/scenes/player/states/dash_state.gd" id="4_nreql"]
 [ext_resource type="Script" uid="uid://biyvn45plxdd2" path="res://assault/scenes/player/states/warhead_missile_shooting_state.gd" id="5_s7bsb"]
 [ext_resource type="Script" uid="uid://d2a3nm753glu1" path="res://assault/scenes/player/states/move_state.gd" id="5_xku2w"]
-[ext_resource type="Script" uid="uid://c25je20p7qof1" path="res://assault/scenes/player/states/shooting_state.gd" id="6_cy5pj"]
+[ext_resource type="Script" path="res://assault/scenes/player/states/weapon_state.gd" id="6_cy5pj"]
 [ext_resource type="Script" uid="uid://cdfmqrq3idtak" path="res://assault/scenes/player/movement_controller.gd" id="6_nreql"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="9_ht8os"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="10_s7bsb"]
@@ -200,10 +200,10 @@ debug_color = Color(0.7, 0, 0, 0.419608)
 
 [node name="AttackStateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
 script = ExtResource("3_2482r")
-initial_state = NodePath("ShootingState")
+initial_state = NodePath("WeaponState")
 metadata/_custom_type_script = "uid://c5678cxr4wb7q"
 
-[node name="ShootingState" type="Node" parent="AttackStateMachine" node_paths=PackedStringArray("actor", "weapon_muzzles", "movement_controller", "heat_component")]
+[node name="WeaponState" type="Node" parent="AttackStateMachine" node_paths=PackedStringArray("actor", "weapon_muzzles", "movement_controller", "heat_component")]
 script = ExtResource("6_cy5pj")
 actor = NodePath("../..")
 weapon_muzzles = [NodePath("../../SpriteAnchor/MuzzleLeft"), NodePath("../../SpriteAnchor/MuzzleRight")]
