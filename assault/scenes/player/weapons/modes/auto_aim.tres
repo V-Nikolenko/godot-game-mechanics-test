@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WeaponModeResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/player/weapons/weapon_mode.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"auto_aim"
+display_name = "Auto-Aim"
+behavior = 4
+range_px = 0.0
+fire_interval = 0.26
+damage = 50
+heat_per_shot = 1.5
+pellet_count = 1
+pellet_spread_deg = 60.0
+homing_turn_rate_deg_per_sec = 90.0
+homing_lifetime_sec = 1.6
+beam_dps = 30.0

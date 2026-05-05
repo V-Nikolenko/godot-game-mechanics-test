@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponModeResource" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/player/weapons/weapon_mode.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://bvyhnlpuw5rcv" path="res://assault/scenes/projectiles/bullets/bullet.tscn" id="2_bullet"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"long_range"
+display_name = "Long Range"
+behavior = 1
+projectile_scene = ExtResource("2_bullet")
+range_px = 0.0
+fire_interval = 0.45
+damage = 75
+heat_per_shot = 2.0
+pellet_count = 1
+pellet_spread_deg = 60.0
+homing_turn_rate_deg_per_sec = 90.0
+homing_lifetime_sec = 1.6
+beam_dps = 30.0
