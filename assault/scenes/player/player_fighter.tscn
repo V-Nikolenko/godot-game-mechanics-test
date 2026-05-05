@@ -1,4 +1,4 @@
-[gd_scene load_steps=28 format=3 uid="uid://ty6a2vpnmrr5"]
+[gd_scene load_steps=30 format=3 uid="uid://ty6a2vpnmrr5"]
 
 [ext_resource type="Script" uid="uid://lb288p2swjp0" path="res://assault/scenes/player/player_fighter.gd" id="1_allu4"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_prbxf"]
@@ -12,6 +12,8 @@
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="9_ht8os"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="10_s7bsb"]
 [ext_resource type="Script" uid="uid://coqfv3aco6d8i" path="res://global/components/overheat_component.gd" id="12_ctrog"]
+[ext_resource type="Script" path="res://assault/scenes/player/states/reflect_state.gd" id="13_rflst"]
+[ext_resource type="Script" path="res://assault/scenes/player/debug_unlock_all.gd" id="14_dbgul"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ht8os"]
 atlas = ExtResource("2_prbxf")
@@ -266,3 +268,11 @@ one_shot = true
 [connection signal="timeout" from="MovementStateMachine/DashState/CooldownTimer" to="MovementStateMachine/DashState" method="_on_cooldown_timer_timeout"]
 [connection signal="timeout" from="MovementController/DoubleClickThreshold" to="MovementController" method="_on_double_click_threshold_timeout"]
 [connection signal="timeout" from="MovementController/MovementLockTimer" to="MovementController" method="_on_movement_lock_timer_timeout"]
+
+[node name="ReflectState" type="Node" parent="." node_paths=PackedStringArray("actor", "movement_controller")]
+script = ExtResource("13_rflst")
+actor = NodePath(".")
+movement_controller = NodePath("MovementController")
+
+[node name="DebugUnlockAll" type="Node" parent="."]
+script = ExtResource("14_dbgul")

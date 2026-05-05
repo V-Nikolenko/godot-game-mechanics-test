@@ -12,7 +12,8 @@ var SINGLE_PRESS_ACTIONS: Array = [
 	"shoot",
 	"special_weapon",
 	"switch_weapon",
-	"cycle_weapon"
+	"cycle_weapon",
+	"reflect",
 ]
 
 var DOUBLE_PRESS_ACTIONS: Array = [
