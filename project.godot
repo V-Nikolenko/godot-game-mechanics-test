@@ -23,6 +23,7 @@ config/icon="res://icon.svg"
 
 MissionState="*res://global/autoloads/mission_state.gd"
 DialogPlayer="*res://global/autoload/dialog_player.gd"
+UpgradeState="*res://global/autoloads/upgrade_state.gd"
 
 [debug_draw_3d]
 
