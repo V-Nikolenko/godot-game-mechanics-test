@@ -45,7 +45,7 @@ func tick(state: Node, mode: WeaponModeResource, muzzle: Marker2D, delta: float)
 		if coll != null and coll.has_method("is_laser_blocking"):
 			is_block = coll.is_laser_blocking()
 		if is_block:
-			blocker_point = hit.get("position", to) as Vector2
+			blocker_point = hit.get("position", to)
 			blocker_collider = coll
 
 	# Damage every enemy whose center is within ~12 px of the beam segment
