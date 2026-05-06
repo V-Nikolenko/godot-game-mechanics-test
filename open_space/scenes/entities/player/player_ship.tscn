@@ -1,10 +1,11 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://open_space/scenes/entities/player/player_ship.gd" id="1_ship"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_atlas"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="3_health"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="4_hurt"]
 [ext_resource type="Script" path="res://global/components/shield_component.gd" id="5_shld"]
+[ext_resource type="Script" path="res://global/abilities/ability_controller.gd" id="6_abctl"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle"]
 atlas = ExtResource("2_atlas")
@@ -65,5 +66,11 @@ script = ExtResource("4_hurt")
 
 [node name="HurtBoxCollision" type="CollisionShape2D" parent="HurtBox"]
 shape = SubResource("CircleShape2D_hurt")
+
+[node name="AbilityController" type="Node" parent="." node_paths=PackedStringArray("actor", "health", "shield")]
+script = ExtResource("6_abctl")
+actor = NodePath("..")
+health = NodePath("../HealthComponent")
+shield = NodePath("../ShieldComponent")
 
 [connection signal="received_damage" from="HurtBox" to="." method="_on_received_damage"]
