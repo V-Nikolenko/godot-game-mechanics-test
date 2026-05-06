@@ -1,2 +1,2 @@
-class_name PlasmanovaAbility
+class_name PlasmaNovaAbility
 extends AbilityBase
