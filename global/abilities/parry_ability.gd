@@ -1,0 +1,2 @@
+class_name ParryAbility
+extends AbilityBase

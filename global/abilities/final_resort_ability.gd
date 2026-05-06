@@ -1,0 +1,2 @@
+class_name FinalResortAbility
+extends AbilityBase
