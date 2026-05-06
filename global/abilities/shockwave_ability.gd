@@ -54,7 +54,7 @@ func _spawn_ring(actor: Node2D) -> void:
 	line.points = pts
 	ring.add_child(line)
 
-	var t := actor.create_tween()
+	var t := ring.create_tween()
 	t.tween_property(ring, "scale", Vector2(_RADIUS / 4.0, _RADIUS / 4.0), 0.25) \
 		.set_trans(Tween.TRANS_EXPO).set_ease(Tween.EASE_OUT)
 	t.parallel().tween_property(line, "modulate:a", 0.0, 0.25)
