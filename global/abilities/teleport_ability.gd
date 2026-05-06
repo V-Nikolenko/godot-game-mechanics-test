@@ -52,12 +52,13 @@ func _spawn_ghost(actor: Node2D) -> void:
 	## Brief translucent copy of the sprite at the origin.
 	var ghost := Sprite2D.new()
 	var sprite := actor.get_node_or_null("SpriteAnchor/ShipSprite2D") as AnimatedSprite2D
-	if sprite:
+	if sprite and sprite.sprite_frames:
 		ghost.texture = sprite.sprite_frames.get_frame_texture(sprite.animation, sprite.frame)
-	ghost.global_position = actor.global_position
 	ghost.modulate = Color(0.5, 0.8, 1.0, 0.6)
-	ghost.scale = actor.scale
 	actor.get_parent().add_child(ghost)
+	## Set global transform after add_child so world-space scale is correct.
+	ghost.global_position = actor.global_position
+	ghost.global_scale = actor.global_scale
 	## Tween owned by ghost so it survives actor death.
 	var t := ghost.create_tween()
 	t.tween_property(ghost, "modulate:a", 0.0, 0.3)
