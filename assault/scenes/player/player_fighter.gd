@@ -11,6 +11,8 @@ var can_attack: bool = true
 ## WeaponState reads these when computing damage and cooldowns.
 var damage_multiplier: float = 1.0
 var fire_rate_multiplier: float = 1.0
+## 0.0 = no reduction; 0.5 = take 50% damage. Written by ArmorPlatingAbility.
+var damage_reduction: float = 0.0
 
 ## When true, overheat can exceed heat_limit without capping.
 var overdrive_active: bool = false
@@ -93,8 +95,8 @@ func _on_health_changed(current: int) -> void:
 		get_tree().paused = false
 
 func _on_hurt_box_received_damage(damage: int) -> void:
-	## Route through shield first; overflow goes to health.
-	var overflow := shield_component.absorb(damage)
+	var effective: int = roundi(damage * (1.0 - damage_reduction))
+	var overflow := shield_component.absorb(effective)
 	if overflow > 0:
 		health_component.decrease(overflow)
 

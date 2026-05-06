@@ -27,6 +27,8 @@ extends CharacterBody2D
 var damage_multiplier: float = 1.0
 var fire_rate_multiplier: float = 1.0
 var overdrive_active: bool = false
+## 0.0 = no reduction; 0.5 = take 50% damage. Written by ArmorPlatingAbility.
+var damage_reduction: float = 0.0
 
 var _shoot_cooldown: float = 0.0
 var _gun_index: int = 0
@@ -132,8 +134,8 @@ func _handle_shoot(delta: float) -> void:
 	_shoot_cooldown = shoot_cooldown_sec * (1.0 / maxf(fire_rate_multiplier, 0.01))
 
 func _on_received_damage(damage: int) -> void:
-	## Route through shield first; overflow goes to health.
-	var overflow := shield_component.absorb(damage)
+	var effective: int = roundi(damage * (1.0 - damage_reduction))
+	var overflow := shield_component.absorb(effective)
 	if overflow > 0:
 		health_component.decrease(overflow)
 	_hit_effect.burst()
