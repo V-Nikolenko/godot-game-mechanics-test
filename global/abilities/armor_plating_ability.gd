@@ -31,8 +31,10 @@ func deactivate(ctx: AbilityController) -> void:
 
 func _end(ctx: AbilityController) -> void:
 	_time_left = 0.0
-	ctx.actor.set("damage_reduction", 0.0)
-	var sprite := ctx.actor.get_node_or_null("SpriteAnchor/ShipSprite2D") as CanvasItem
+	var actor := ctx.actor
+	if not actor:
+		return
+	actor.set("damage_reduction", 0.0)
+	var sprite := actor.get_node_or_null("SpriteAnchor/ShipSprite2D") as CanvasItem
 	if sprite:
-		var t := ctx.actor.create_tween()
-		t.tween_property(sprite, "modulate", Color(1, 1, 1, 1), 0.3)
+		actor.create_tween().tween_property(sprite, "modulate", Color(1, 1, 1, 1), 0.3)
