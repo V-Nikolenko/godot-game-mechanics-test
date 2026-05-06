@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://open_space/scenes/gui/hud.gd" id="1_oshud"]
+[ext_resource type="PackedScene" path="res://assault/scenes/gui/health_shield_bar.tscn" id="2_hsbar"]
+
+[node name="OpenSpaceHUD" type="CanvasLayer"]
+script = ExtResource("1_oshud")
+
+[node name="HealthShieldBar" parent="." instance=ExtResource("2_hsbar")]
+offset_left = 8.0
+offset_top = 8.0

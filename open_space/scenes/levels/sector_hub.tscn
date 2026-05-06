@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://bj4bw8lmn5g61" path="res://open_space/scenes/levels/sector_hub.gd" id="1_hub"]
 [ext_resource type="PackedScene" path="res://open_space/scenes/entities/player/player_ship.tscn" id="2_player"]
 [ext_resource type="PackedScene" uid="uid://cu7qlu0h6p1fd" path="res://open_space/scenes/entities/interactables/planet.tscn" id="3_planet"]
+[ext_resource type="PackedScene" path="res://open_space/scenes/gui/hud.tscn" id="4_oshud"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
@@ -24,3 +25,5 @@ position_smoothing_speed = 6.0
 
 [node name="Planet" parent="." unique_id=662454378 instance=ExtResource("3_planet")]
 position = Vector2(208, -1)
+
+[node name="OpenSpaceHUD" parent="." instance=ExtResource("4_oshud")]
