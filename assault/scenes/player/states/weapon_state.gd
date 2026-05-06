@@ -65,7 +65,8 @@ func _try_fire_once() -> void:
 		return
 	_fire(mode)
 	## Shorter cooldown with fire_rate_multiplier > 1.0 (e.g. Overdrive sets 2.0).
-	var multiplier: float = actor.get("fire_rate_multiplier", 1.0)
+	var _frm = actor.get("fire_rate_multiplier")
+	var multiplier: float = _frm if _frm != null else 1.0
 	_cooldown = mode.fire_interval / maxf(multiplier, 0.01)
 
 func _fire(mode: WeaponModeResource) -> void:

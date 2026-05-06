@@ -54,7 +54,8 @@ func tick(state: Node, mode: WeaponModeResource, muzzle: Marker2D, delta: float)
 	var seg_len: float = seg_dir.length()
 	if seg_len > 0.0:
 		var seg_unit: Vector2 = seg_dir / seg_len
-		var actor_multiplier: float = actor.get("damage_multiplier", 1.0)
+		var _dm = actor.get("damage_multiplier")
+		var actor_multiplier: float = _dm if _dm != null else 1.0
 		var dmg_this_frame: float = mode.beam_dps * delta * actor_multiplier
 		for e in enemies:
 			var n := e as Node2D
