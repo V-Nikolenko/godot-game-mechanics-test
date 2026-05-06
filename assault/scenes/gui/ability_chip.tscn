@@ -1,0 +1,25 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/gui/ability_chip.gd" id="1_achip"]
+
+[node name="AbilityChip" type="Control"]
+custom_minimum_size = Vector2(40, 56)
+script = ExtResource("1_achip")
+
+[node name="Icon" type="TextureRect" parent="."]
+anchor_right = 1.0
+custom_minimum_size = Vector2(40, 40)
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CooldownFill" type="ColorRect" parent="."]
+color = Color(0.1, 0.1, 0.1, 0.7)
+visible = false
+
+[node name="Label" type="Label" parent="."]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_top = -14.0
+offset_right = 40.0
+theme_override_font_sizes/font_size = 9
+horizontal_alignment = 1
