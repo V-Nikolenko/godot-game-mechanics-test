@@ -22,6 +22,9 @@ func deactivate(ctx: AbilityController) -> void:
 		_disengage(ctx)
 
 func _engage(ctx: AbilityController) -> void:
+	if not ctx.health:
+		push_warning("FinalResortAbility: ctx.health is null, cannot engage")
+		return
 	_active = true
 	_saved_hp = ctx.health.current_health
 
@@ -41,6 +44,8 @@ func _engage(ctx: AbilityController) -> void:
 
 func _disengage(ctx: AbilityController) -> void:
 	_active = false
+	if not ctx.health:
+		return
 
 	## Restore HP to what it was when we engaged (can't gain HP from the mode).
 	ctx.health.set_health(mini(_saved_hp, ctx.health.current_health))
@@ -52,6 +57,4 @@ func _disengage(ctx: AbilityController) -> void:
 	## Remove tint.
 	var sprite := ctx.actor.get_node_or_null("SpriteAnchor/ShipSprite2D") as CanvasItem
 	if sprite:
-		var actor := ctx.actor
-		if actor:
-			actor.create_tween().tween_property(sprite, "modulate", Color(1, 1, 1, 1), 0.3)
+		ctx.actor.create_tween().tween_property(sprite, "modulate", Color(1, 1, 1, 1), 0.3)
