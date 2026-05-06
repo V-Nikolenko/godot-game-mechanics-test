@@ -35,13 +35,20 @@ func set_selected(id: StringName) -> void:
 func _save() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value(SECTION, KEY, String(selected_id))
-	cfg.save(SAVE_PATH)
+	var err := cfg.save(SAVE_PATH)
+	if err != OK:
+		push_warning("AbilityState: failed to save (%s)" % error_string(err))
 
 func _load() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load(SAVE_PATH) != OK:
+	var err := cfg.load(SAVE_PATH)
+	if err == ERR_FILE_NOT_FOUND:
+		return
+	if err != OK:
+		push_warning("AbilityState: failed to load (%s)" % error_string(err))
 		return
 	var raw: String = cfg.get_value(SECTION, KEY, "parry")
 	var id := StringName(raw)
 	if id in ALL_IDS:
 		selected_id = id
+		ability_changed.emit(selected_id)
