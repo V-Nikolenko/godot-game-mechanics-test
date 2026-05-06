@@ -29,12 +29,13 @@ func _spawn_flash(actor: Node2D) -> void:
 	## Purple ColorRect covering the viewport, fades out quickly.
 	var overlay := ColorRect.new()
 	overlay.color = Color(0.85, 0.5, 1.0, 0.75)
-	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	var canvas := CanvasLayer.new()
 	canvas.layer = 128  ## Above everything.
 	canvas.add_child(overlay)
 	actor.get_tree().root.add_child(canvas)
+	## Set preset AFTER entering the tree so anchor offsets resolve to viewport size.
+	overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 	## Tween owned by canvas so it survives actor death.
 	var t := canvas.create_tween()
