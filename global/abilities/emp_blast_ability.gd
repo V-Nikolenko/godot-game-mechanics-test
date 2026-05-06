@@ -37,6 +37,9 @@ func _is_immune(node: Node) -> bool:
 	return false
 
 func _stun_enemy(enemy: Node, actor: Node2D) -> void:
+	## Skip if already stunned — prevents double-timer race condition.
+	if enemy.process_mode == Node.PROCESS_MODE_DISABLED:
+		return
 	## Disable processing for _STUN_DURATION seconds.
 	enemy.set_process_mode(Node.PROCESS_MODE_DISABLED)
 
