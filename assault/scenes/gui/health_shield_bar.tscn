@@ -1,0 +1,23 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/gui/health_shield_bar.gd" id="1_hsbar"]
+
+[node name="HealthShieldBar" type="Control"]
+custom_minimum_size = Vector2(150, 28)
+script = ExtResource("1_hsbar")
+
+[node name="ShieldBar" type="ProgressBar" parent="."]
+anchor_right = 1.0
+offset_top = 0.0
+offset_bottom = 12.0
+min_value = 0.0
+max_value = 100.0
+value = 100.0
+
+[node name="HealthBar" type="ProgressBar" parent="."]
+anchor_right = 1.0
+offset_top = 14.0
+offset_bottom = 28.0
+min_value = 0.0
+max_value = 50.0
+value = 50.0
