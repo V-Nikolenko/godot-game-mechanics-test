@@ -21,6 +21,8 @@ func _ready() -> void:
 
 ## Absorb `damage` points. Returns leftover damage that bypasses shield.
 func absorb(damage: int) -> int:
+	if damage <= 0:
+		return 0
 	if current_shield <= 0:
 		return damage
 	var absorbed: int = mini(damage, current_shield)
@@ -33,6 +35,8 @@ func absorb(damage: int) -> int:
 
 ## Restore `amount` shield points, clamped to max_shield.
 func increase(amount: int) -> void:
+	if amount <= 0:
+		return
 	var was_empty := current_shield == 0
 	current_shield = clampi(current_shield + amount, 0, max_shield)
 	shield_changed.emit(current_shield, max_shield)
