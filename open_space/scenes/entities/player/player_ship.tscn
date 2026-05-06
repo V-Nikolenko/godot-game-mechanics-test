@@ -1,9 +1,10 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://open_space/scenes/entities/player/player_ship.gd" id="1_ship"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_atlas"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="3_health"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="4_hurt"]
+[ext_resource type="Script" path="res://global/components/shield_component.gd" id="5_shld"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle"]
 atlas = ExtResource("2_atlas")
@@ -33,8 +34,13 @@ script = ExtResource("1_ship")
 
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("3_health")
-max_health = 100
-current_health = 100
+max_health = 50
+current_health = 50
+
+[node name="ShieldComponent" type="Node" parent="."]
+script = ExtResource("5_shld")
+max_shield = 100
+current_shield = 100
 
 [node name="SpriteAnchor" type="Node2D" parent="."]
 
