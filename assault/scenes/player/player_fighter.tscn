@@ -11,8 +11,8 @@
 [ext_resource type="Script" uid="uid://cdfmqrq3idtak" path="res://assault/scenes/player/movement_controller.gd" id="6_nreql"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="9_ht8os"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="10_s7bsb"]
+[ext_resource type="Script" path="res://global/components/shield_component.gd" id="15_shld"]
 [ext_resource type="Script" uid="uid://coqfv3aco6d8i" path="res://global/components/overheat_component.gd" id="12_ctrog"]
-[ext_resource type="Script" path="res://assault/scenes/player/states/reflect_state.gd" id="13_rflst"]
 [ext_resource type="Script" path="res://assault/scenes/player/debug_unlock_all.gd" id="14_dbgul"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ht8os"]
@@ -167,6 +167,13 @@ script = ExtResource("1_allu4")
 [node name="HealthComponent" type="Node" parent="."]
 script = ExtResource("10_s7bsb")
 metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
+max_health = 50
+current_health = 50
+
+[node name="ShieldComponent" type="Node" parent="."]
+script = ExtResource("15_shld")
+max_shield = 100
+current_shield = 100
 
 [node name="OverheatComponent" type="Node" parent="."]
 script = ExtResource("12_ctrog")
@@ -268,11 +275,6 @@ one_shot = true
 [connection signal="timeout" from="MovementStateMachine/DashState/CooldownTimer" to="MovementStateMachine/DashState" method="_on_cooldown_timer_timeout"]
 [connection signal="timeout" from="MovementController/DoubleClickThreshold" to="MovementController" method="_on_double_click_threshold_timeout"]
 [connection signal="timeout" from="MovementController/MovementLockTimer" to="MovementController" method="_on_movement_lock_timer_timeout"]
-
-[node name="ReflectState" type="Node" parent="." node_paths=PackedStringArray("actor", "movement_controller")]
-script = ExtResource("13_rflst")
-actor = NodePath("..")
-movement_controller = NodePath("../MovementController")
 
 [node name="DebugUnlockAll" type="Node" parent="."]
 script = ExtResource("14_dbgul")
