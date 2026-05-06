@@ -7,6 +7,7 @@ const _RADIUS: float = 24.0
 
 var _area: Area2D = null
 var _window_left: float = 0.0
+var _tween: Tween = null
 
 func get_display_name() -> String: return "Parry"
 func get_icon() -> Texture2D: return null
@@ -22,7 +23,7 @@ func tick(_ctx: AbilityController, delta: float) -> void:
 	if _window_left <= 0.0:
 		return
 	_window_left = max(0.0, _window_left - delta)
-	if _window_left == 0.0:
+	if _window_left <= 0.0:
 		_close_window()
 
 func deactivate(_ctx: AbilityController) -> void:
@@ -43,10 +44,15 @@ func _open_window(ctx: AbilityController) -> void:
 	var sprite := ctx.actor.get_node_or_null("SpriteAnchor/ShipSprite2D") as CanvasItem
 	if sprite:
 		sprite.modulate = Color(0.4, 1.0, 1.0, 1.0)
-		var t := ctx.actor.create_tween()
-		t.tween_property(sprite, "modulate", Color(1, 1, 1, 1), _WINDOW_SEC)
+		if _tween:
+			_tween.kill()
+		_tween = ctx.actor.create_tween()
+		_tween.tween_property(sprite, "modulate", Color(1, 1, 1, 1), _WINDOW_SEC)
 
 func _close_window() -> void:
+	if _tween:
+		_tween.kill()
+		_tween = null
 	if _area and is_instance_valid(_area):
 		if _area.area_entered.is_connected(_on_area_entered):
 			_area.area_entered.disconnect(_on_area_entered)
@@ -54,10 +60,12 @@ func _close_window() -> void:
 	_area = null
 
 func _on_area_entered(area: Area2D) -> void:
+	if _window_left <= 0.0:
+		return
 	var node: Node = area
 	while node and not (node is EnemyBullet):
 		node = node.get_parent()
-	if node is EnemyBullet:
+	if node is EnemyBullet and is_instance_valid(node):
 		_close_window()
 		_window_left = 0.0
 		(node as EnemyBullet).become_friendly()
