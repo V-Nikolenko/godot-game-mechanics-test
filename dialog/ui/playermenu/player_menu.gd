@@ -30,6 +30,7 @@ var _weapon_state: WeaponState = null
 var _rocket_state: RocketState = null
 var _weapon_options: Array[WeaponOption] = []
 var _sub_options: Array[WeaponOption] = []
+var _was_paused_by_us: bool = false
 
 func _ready() -> void:
 	visible = false
@@ -50,8 +51,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 
 func _toggle() -> void:
-	visible = not visible
-	get_tree().paused = visible
+	if not visible:
+		## Do not open over an already-paused scene (e.g. DialogPlayer active).
+		if get_tree().paused:
+			return
+		visible = true
+		get_tree().paused = true
+		_was_paused_by_us = true
+	else:
+		visible = false
+		if _was_paused_by_us:
+			get_tree().paused = false
+			_was_paused_by_us = false
 
 func _populate_lists() -> void:
 	## Clear previously created options (safe to call more than once).
