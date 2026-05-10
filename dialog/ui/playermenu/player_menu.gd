@@ -1,4 +1,6 @@
 # dialog/ui/playermenu/player_menu.gd
+## Weapon selection menu overlay. Tab opens/closes; WASD navigates; Space/F selects.
+## Delegates list UI to [WeaponFrame] components. Updates [WeaponState] and [RocketState].
 class_name PlayerMenu
 extends CanvasLayer
 
@@ -53,12 +55,11 @@ func _input(event: InputEvent) -> void:
 		return
 
 	if event.is_action_pressed("menu_up"):
-		_cursor_row = maxi(_cursor_row - 1, 0)
+		_cursor_row = clampi(_cursor_row - 1, 0, maxi(_current_frame().get_count() - 1, 0))
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("menu_down"):
-		var col_size: int = _current_frame().get_count()
-		_cursor_row = mini(_cursor_row + 1, col_size - 1)
+		_cursor_row = clampi(_cursor_row + 1, 0, maxi(_current_frame().get_count() - 1, 0))
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("menu_left"):
@@ -94,6 +95,10 @@ func _toggle() -> void:
 ## Place the cursor on the currently active weapon/sub-weapon when the menu opens.
 func _init_cursor() -> void:
 	var ids := UpgradeState.unlocked_ids()
+	if ids.is_empty():
+		_cursor_col = 0
+		_cursor_row = 0
+		return
 	var active_id: StringName = &""
 	if _weapon_state != null:
 		active_id = _weapon_state.get_active_id()
@@ -137,10 +142,7 @@ func _populate_lists() -> void:
 	_main_frame.populate(main_names, main_icons)
 
 	## Sub weapons — always both options, regardless of unlock state.
-	var sub_icons: Array[Texture2D] = []
-	for tex: Texture2D in _SUB_WEAPON_ICONS:
-		sub_icons.append(tex)
-	_sub_frame.populate(_SUB_WEAPON_NAMES, sub_icons)
+	_sub_frame.populate(_SUB_WEAPON_NAMES, _SUB_WEAPON_ICONS)
 
 func _load_mode(id: StringName) -> WeaponModeResource:
 	var path := _MODES_DIR + String(id) + ".tres"
