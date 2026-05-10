@@ -3,12 +3,14 @@ extends CanvasLayer
 @onready var health_shield_bar: HealthShieldBar = $HealthShieldBar
 @onready var weapon_icon: TextureRect  = $WeaponContainer/WeaponIcon
 @onready var cooldown_overlay: ColorRect = $WeaponContainer/CooldownOverlay
+@onready var player_menu: PlayerMenu = $PlayerMenu
 
 var _cooldown_timer: Timer = null
 
 func _ready() -> void:
 	var players := get_tree().get_nodes_in_group("player")
 	if players.is_empty():
+		player_menu.connect_states(null, null)
 		return
 	var p := players[0]
 
@@ -22,6 +24,9 @@ func _ready() -> void:
 		weapon_icon.texture = rocket_state.get_current_icon()
 		rocket_state.weapon_changed.connect(_on_weapon_changed)
 		_cooldown_timer = rocket_state.get_node("CooldownTimer") as Timer
+
+	var weapon_state := p.get_node_or_null("AttackStateMachine/WeaponState") as WeaponState
+	player_menu.connect_states(weapon_state, rocket_state)
 
 func _process(_delta: float) -> void:
 	if _cooldown_timer == null or _cooldown_timer.is_stopped():
