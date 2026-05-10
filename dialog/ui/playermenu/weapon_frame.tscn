@@ -1,10 +1,10 @@
-[gd_scene format=3 uid="uid://cwfrm4kax2a1b"]
+[gd_scene format=3 uid="uid://bwrjwtgss7y8g"]
 
-[ext_resource type="Script" path="res://dialog/ui/playermenu/weapon_frame.gd" id="1_wfscr"]
+[ext_resource type="Script" uid="uid://d23abvofav3fw" path="res://dialog/ui/playermenu/weapon_frame.gd" id="1_wfscr"]
 [ext_resource type="Texture2D" uid="uid://dvxe4wg23n83j" path="res://assault/assets/sprites/ui/weapong_list_frame.png" id="2_wftex"]
 
-[node name="WeaponFrame" type="Node2D"]
+[node name="WeaponFrame" type="Node2D" unique_id=2007755256]
 script = ExtResource("1_wfscr")
 
-[node name="FrameBackground" type="Sprite2D" parent="."]
+[node name="FrameBackground" type="Sprite2D" parent="." unique_id=1373289242]
 texture = ExtResource("2_wftex")

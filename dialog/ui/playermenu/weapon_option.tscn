@@ -6,11 +6,12 @@
 [node name="WeaponOption" type="Control" unique_id=318341931]
 layout_mode = 3
 anchors_preset = 0
-scale = Vector2(0.7167573, 0.7167573)
 size_flags_horizontal = 0
 script = ExtResource("1_wopt")
 
 [node name="WeaponIcon" type="Sprite2D" parent="." unique_id=2044088980]
+position = Vector2(-59, 0)
+scale = Vector2(0.4, 0.4)
 
 [node name="SelectionBG" type="Sprite2D" parent="." unique_id=1804324106]
 texture = ExtResource("2_ogq2x")

@@ -9,7 +9,7 @@ const MAX_ITEMS: int = 8
 
 ## Local-space origin for the first list item relative to this node's position.
 ## Tune in the Inspector if items don't align with the frame background.
-@export var item_origin: Vector2 = Vector2(0.0, -45.0)
+@export var item_origin: Vector2 = Vector2(0.0, -100.0)
 
 var _options: Array[WeaponOption] = []
 
