@@ -127,13 +127,11 @@ func select_weapon(id: StringName) -> void:
 		return
 	if id == _active_id:
 		return
-	var prev_id := _active_id
 	_active_id = id
-	if prev_id != _active_id:
-		var beam: BeamBehavior = _behaviors[WeaponModeResource.Behavior.BEAM]
-		beam.release(self)
-		_cooldown = 0.0
-		_emit_changed()
+	var beam: BeamBehavior = _behaviors[WeaponModeResource.Behavior.BEAM]
+	beam.release(self)
+	_cooldown = 0.0
+	_emit_changed()
 
 func _emit_changed() -> void:
 	var mode: WeaponModeResource = _modes.get(_active_id)
