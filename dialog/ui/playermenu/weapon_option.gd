@@ -1,4 +1,6 @@
 # dialog/ui/playermenu/weapon_option.gd
+## Single item in a weapon selection list. Shows a background sprite (tinted pink when
+## selected) and a row highlight (yellow) when the keyboard cursor is positioned here.
 class_name WeaponOption
 extends Control
 
@@ -37,4 +39,5 @@ func set_cursor(value: bool) -> void:
 
 func _update_modulate() -> void:
 	modulate = _CURSOR_MODULATE if _is_cursor else _NORMAL_MODULATE
-	_bg_sprite.modulate = _SELECTED_MODULATE if _is_selected else _NORMAL_MODULATE
+	if _bg_sprite != null:
+		_bg_sprite.modulate = _SELECTED_MODULATE if _is_selected else _NORMAL_MODULATE
