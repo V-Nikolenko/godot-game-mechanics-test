@@ -6,6 +6,7 @@ extends Control
 const _SELECTED_MODULATE := Color(2.0, 0.5, 1.2)
 ## Yellow tint applied to the whole control when the keyboard cursor is here.
 const _CURSOR_MODULATE := Color(1.4, 1.4, 1.0)
+## Restores the node to its unmodified appearance.
 const _NORMAL_MODULATE := Color.WHITE
 
 @onready var _icon_sprite: Sprite2D = $WeaponIcon
@@ -14,6 +15,9 @@ const _NORMAL_MODULATE := Color.WHITE
 
 var _is_selected: bool = false
 var _is_cursor: bool = false
+
+func _ready() -> void:
+	_update_modulate()
 
 ## Set the display name and icon texture. Call this after instantiating the scene.
 func configure(display_name: String, icon: Texture2D) -> void:
@@ -32,9 +36,5 @@ func set_cursor(value: bool) -> void:
 	_update_modulate()
 
 func _update_modulate() -> void:
-	if _is_cursor:
-		modulate = _CURSOR_MODULATE
-		_bg_sprite.modulate = _SELECTED_MODULATE if _is_selected else _NORMAL_MODULATE
-	else:
-		modulate = _NORMAL_MODULATE
-		_bg_sprite.modulate = _SELECTED_MODULATE if _is_selected else _NORMAL_MODULATE
+	modulate = _CURSOR_MODULATE if _is_cursor else _NORMAL_MODULATE
+	_bg_sprite.modulate = _SELECTED_MODULATE if _is_selected else _NORMAL_MODULATE
