@@ -116,6 +116,25 @@ func _cycle() -> void:
 func emit_current_mode() -> void:
 	_emit_changed()
 
+## Public: return the currently active weapon ID.
+func get_active_id() -> StringName:
+	return _active_id
+
+## Public: switch to a specific weapon by ID. No-op if ID is not unlocked.
+## Mirrors _cycle() behaviour: releases beam, resets cooldown, emits changed signal.
+func select_weapon(id: StringName) -> void:
+	if not UpgradeState.is_unlocked(id):
+		return
+	if id == _active_id:
+		return
+	var prev_id := _active_id
+	_active_id = id
+	if prev_id != _active_id:
+		var beam: BeamBehavior = _behaviors[WeaponModeResource.Behavior.BEAM]
+		beam.release(self)
+		_cooldown = 0.0
+		_emit_changed()
+
 func _emit_changed() -> void:
 	var mode: WeaponModeResource = _modes.get(_active_id)
 	if mode:

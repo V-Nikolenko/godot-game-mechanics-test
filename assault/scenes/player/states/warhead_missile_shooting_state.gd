@@ -22,6 +22,18 @@ func _ready() -> void:
 func get_current_icon() -> Texture2D:
 	return warhead_icon if _type == 0 else homing_icon
 
+## Public: return the current sub-weapon type (0=warhead, 1=homing).
+func get_type() -> int:
+	return _type
+
+## Public: switch to sub-weapon type (0=warhead, 1=homing). Emits weapon_changed.
+func select_sub_weapon(type: int) -> void:
+	var clamped: int = clampi(type, 0, 1)
+	if clamped == _type:
+		return
+	_type = clamped
+	weapon_changed.emit(get_current_icon())
+
 func _on_action(key_name: String) -> void:
 	if key_name == "switch_weapon":
 		_type = (_type + 1) % 2
