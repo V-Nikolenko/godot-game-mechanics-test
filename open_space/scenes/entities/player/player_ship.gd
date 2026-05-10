@@ -13,15 +13,9 @@ extends CharacterBody2D
 @export var boost_duration_sec: float = 0.3
 @export var boost_speed_threshold: float = 180.0
 
-@export_category("Combat")
-@export var shoot_cooldown_sec: float = 0.18
-@export var bullet_scene: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
-
-@onready var muzzle_left: Marker2D = $SpriteAnchor/MuzzleLeft
-@onready var muzzle_right: Marker2D = $SpriteAnchor/MuzzleRight
 @onready var health_component: Health = $HealthComponent
 @onready var shield_component: Shield = $ShieldComponent
-@onready var hurt_box: HurtBox = $HurtBox
+@onready var overheat_component: Overheat = $OverheatComponent
 
 ## Multipliers written by AbilityController / abilities.
 var damage_multiplier: float = 1.0
@@ -30,8 +24,9 @@ var overdrive_active: bool = false
 ## 0.0 = no reduction; 0.5 = take 50% damage. Written by ArmorPlatingAbility.
 var damage_reduction: float = 0.0
 
-var _shoot_cooldown: float = 0.0
-var _gun_index: int = 0
+## Gated by OverheatComponent — false when heat reaches 100%, restored below 80%.
+var can_attack: bool = true
+
 var _boost_timer: float = 0.0
 
 var _hit_effect: HitEffect
@@ -41,6 +36,7 @@ var _thruster: ThrusterEffect
 func _ready() -> void:
 	add_to_group("player")
 	health_component.amount_changed.connect(_on_health_changed)
+	overheat_component.overheat.connect(_on_overheat_updated)
 	_setup_effects()
 	rotation = 0.0
 
@@ -65,7 +61,6 @@ func _setup_effects() -> void:
 func _physics_process(delta: float) -> void:
 	_handle_rotation(delta)
 	_handle_thrust(delta)
-	_handle_shoot(delta)
 	move_and_slide()
 
 func _handle_rotation(delta: float) -> void:
@@ -112,26 +107,9 @@ func _trigger_flip_boost(forward: Vector2) -> void:
 	velocity = forward * boost_redirect_speed
 	_boost_timer = boost_duration_sec
 
-func _handle_shoot(delta: float) -> void:
-	_shoot_cooldown = max(_shoot_cooldown - delta, 0.0)
-	if _shoot_cooldown > 0.0:
-		return
-	if not Input.is_action_pressed("shoot"):
-		return
-
-	var muzzles: Array[Marker2D] = [muzzle_left, muzzle_right]
-	_gun_index = (_gun_index + 1) % muzzles.size()
-	var muzzle: Marker2D = muzzles[_gun_index]
-
-	var bullet: Area2D = bullet_scene.instantiate()
-	bullet.global_position = muzzle.global_position + Vector2.UP.rotated(global_rotation) * 4.0
-	bullet.rotation = global_rotation
-	var scene := get_tree().current_scene
-	if scene:
-		scene.add_child(bullet)
-		bullet.expired.connect(bullet.queue_free)
-
-	_shoot_cooldown = shoot_cooldown_sec * (1.0 / maxf(fire_rate_multiplier, 0.01))
+## Called by OverheatComponent every 0.1 s with the current heat percentage (0–100).
+func _on_overheat_updated(pct: float) -> void:
+	can_attack = pct < 100.0
 
 func _on_received_damage(damage: int) -> void:
 	var effective: int = roundi(damage * (1.0 - damage_reduction))
