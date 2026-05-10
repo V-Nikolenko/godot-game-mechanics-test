@@ -1,0 +1,39 @@
+[gd_scene format=3 uid="uid://d3w5o2bii2h1"]
+
+[ext_resource type="Script" path="res://dialog/ui/playermenu/player_menu.gd" id="1_pmscr"]
+[ext_resource type="Texture2D" uid="uid://bkeo4jt6bn8id" path="res://assault/assets/sprites/ui/menu_background.png" id="2_prlwd"]
+[ext_resource type="Texture2D" uid="uid://ce6ve5oijfnwa" path="res://assault/assets/sprites/ui/ship_menu_footer.png" id="3_1vlef"]
+[ext_resource type="Texture2D" uid="uid://c2k6frhqlydy8" path="res://assault/assets/sprites/ui/ship_weapon_selection_block.png" id="4_3owwf"]
+[ext_resource type="Texture2D" uid="uid://vrfm0gs8j3je" path="res://assault/assets/sprites/ui/ship_sub_weapon_selection_block.png" id="5_pmgbo"]
+[ext_resource type="Texture2D" uid="uid://cy3cjqj11td6u" path="res://assault/assets/sprites/ui/menu_ship_module_upgrade_sectopm.png" id="6_tbghm"]
+
+[node name="PlayerMenu" type="Node2D" unique_id=1746219549]
+script = ExtResource("1_pmscr")
+
+[node name="MenuBackground" type="Sprite2D" parent="." unique_id=1166869381]
+position = Vector2(319, 181.00002)
+scale = Vector2(0.34003058, 0.34003064)
+texture = ExtResource("2_prlwd")
+metadata/_edit_lock_ = true
+
+[node name="ShipMenuFooter" type="Sprite2D" parent="MenuBackground" unique_id=164608310]
+position = Vector2(2.940918, 485.25043)
+scale = Vector2(1.0006719, 1.0006717)
+texture = ExtResource("3_1vlef")
+
+[node name="ShipLayout" type="Node2D" parent="." unique_id=1492636392]
+
+[node name="ShipWeaponSelectionBlock" type="Sprite2D" parent="ShipLayout" unique_id=614383501]
+position = Vector2(85, 141)
+scale = Vector2(0.31798244, 0.31798244)
+texture = ExtResource("4_3owwf")
+
+[node name="ShipSubWeaponSelectionBlock" type="Sprite2D" parent="ShipLayout" unique_id=1961283414]
+position = Vector2(251.00002, 141)
+scale = Vector2(0.31798244, 0.31798247)
+texture = ExtResource("5_pmgbo")
+
+[node name="MenuShipModuleUpgradeSectopm" type="Sprite2D" parent="ShipLayout" unique_id=467040080]
+position = Vector2(482, 142)
+scale = Vector2(0.32213315, 0.32213315)
+texture = ExtResource("6_tbghm")
