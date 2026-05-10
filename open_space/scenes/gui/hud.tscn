@@ -1,14 +1,45 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://open_space/scenes/gui/hud.gd" id="1_oshud"]
 [ext_resource type="PackedScene" path="res://assault/scenes/gui/health_shield_bar.tscn" id="2_hsbar"]
 [ext_resource type="PackedScene" uid="uid://d3w5o2bii2h1" path="res://dialog/ui/playermenu/player_menu.tscn" id="3_pmenu"]
+[ext_resource type="Texture2D" uid="uid://cnap6cceg8u6t" path="res://assault/assets/gui/weaponselector/frame_center.png" id="4_frame"]
+[ext_resource type="PackedScene" path="res://assault/scenes/gui/weapon_chip.tscn" id="5_wchip"]
 
 [node name="OpenSpaceHUD" type="CanvasLayer"]
 script = ExtResource("1_oshud")
 
+[node name="WeaponContainer" type="Control" parent="."]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -76.0
+offset_right = 50.0
+offset_bottom = -36.0
+clip_contents = true
+
+[node name="WeaponIcon" type="TextureRect" parent="WeaponContainer"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+stretch_mode = 5
+
+[node name="CooldownOverlay" type="ColorRect" parent="WeaponContainer"]
+color = Color(0.15, 0.15, 0.15, 0.65)
+size = Vector2(40, 40)
+visible = false
+
+[node name="WeaponFrame" type="TextureRect" parent="WeaponContainer"]
+anchor_right = 1.0
+anchor_bottom = 1.0
+texture = ExtResource("4_frame")
+stretch_mode = 5
+
 [node name="HealthShieldBar" parent="." instance=ExtResource("2_hsbar")]
 offset_left = 8.0
 offset_top = 8.0
+
+[node name="WeaponChip" parent="." instance=ExtResource("5_wchip")]
+offset_left = 8.0
+offset_top = 48.0
 
 [node name="PlayerMenu" parent="." instance=ExtResource("3_pmenu")]
