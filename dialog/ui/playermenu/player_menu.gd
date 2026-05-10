@@ -156,7 +156,7 @@ func _populate_lists() -> void:
 		_weapon_options.append(opt)
 
 	## Sub weapons — always both options, regardless of unlock state.
-	for j: int in 2:
+	for j: int in _SUB_WEAPON_NAMES.size():
 		var sopt := _WEAPON_OPTION_SCENE.instantiate() as WeaponOption
 		add_child(sopt)
 		sopt.position = _SUB_LIST_ORIGIN + Vector2(0.0, j * _ROW_HEIGHT)
