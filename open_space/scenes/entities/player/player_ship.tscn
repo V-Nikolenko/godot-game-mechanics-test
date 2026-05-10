@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://open_space/scenes/entities/player/player_ship.gd" id="1_ship"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_atlas"]
@@ -6,6 +6,11 @@
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="4_hurt"]
 [ext_resource type="Script" path="res://global/components/shield_component.gd" id="5_shld"]
 [ext_resource type="Script" path="res://global/abilities/ability_controller.gd" id="6_abctl"]
+[ext_resource type="Script" uid="uid://coqfv3aco6d8i" path="res://global/components/overheat_component.gd" id="7_oheat"]
+[ext_resource type="Script" uid="uid://c5678cxr4wb7q" path="res://global/statemachine/state_machine.gd" id="8_sm"]
+[ext_resource type="Script" path="res://assault/scenes/player/states/weapon_state.gd" id="9_ws"]
+[ext_resource type="Script" uid="uid://biyvn45plxdd2" path="res://assault/scenes/player/states/warhead_missile_shooting_state.gd" id="10_rs"]
+[ext_resource type="Script" uid="uid://cdfmqrq3idtak" path="res://assault/scenes/player/movement_controller.gd" id="11_mc"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle"]
 atlas = ExtResource("2_atlas")
@@ -43,6 +48,9 @@ script = ExtResource("5_shld")
 max_shield = 100
 current_shield = 100
 
+[node name="OverheatComponent" type="Node" parent="."]
+script = ExtResource("7_oheat")
+
 [node name="SpriteAnchor" type="Node2D" parent="."]
 
 [node name="ShipSprite2D" type="AnimatedSprite2D" parent="SpriteAnchor"]
@@ -67,10 +75,44 @@ script = ExtResource("4_hurt")
 [node name="HurtBoxCollision" type="CollisionShape2D" parent="HurtBox"]
 shape = SubResource("CircleShape2D_hurt")
 
-[node name="AbilityController" type="Node" parent="." node_paths=PackedStringArray("actor", "health", "shield")]
+[node name="AttackStateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
+script = ExtResource("8_sm")
+initial_state = NodePath("WeaponState")
+
+[node name="WeaponState" type="Node" parent="AttackStateMachine" node_paths=PackedStringArray("actor", "weapon_muzzles", "movement_controller", "heat_component")]
+script = ExtResource("9_ws")
+actor = NodePath("../..")
+weapon_muzzles = [NodePath("../../SpriteAnchor/MuzzleLeft"), NodePath("../../SpriteAnchor/MuzzleRight")]
+movement_controller = NodePath("../../MovementController")
+heat_component = NodePath("../../OverheatComponent")
+
+[node name="WarheadMissileShootingState" type="Node" parent="AttackStateMachine" node_paths=PackedStringArray("actor", "movement_controller")]
+script = ExtResource("10_rs")
+actor = NodePath("../..")
+movement_controller = NodePath("../../MovementController")
+
+[node name="CooldownTimer" type="Timer" parent="AttackStateMachine/WarheadMissileShootingState"]
+wait_time = 5.0
+one_shot = true
+
+[node name="MovementController" type="Node" parent="."]
+script = ExtResource("11_mc")
+
+[node name="DoubleClickThreshold" type="Timer" parent="MovementController"]
+wait_time = 0.3
+one_shot = true
+
+[node name="MovementLockTimer" type="Timer" parent="MovementController"]
+one_shot = true
+
+[node name="AbilityController" type="Node" parent="." node_paths=PackedStringArray("actor", "health", "shield", "overheat")]
 script = ExtResource("6_abctl")
 actor = NodePath("..")
 health = NodePath("../HealthComponent")
 shield = NodePath("../ShieldComponent")
+overheat = NodePath("../OverheatComponent")
 
 [connection signal="received_damage" from="HurtBox" to="." method="_on_received_damage"]
+[connection signal="timeout" from="AttackStateMachine/WarheadMissileShootingState/CooldownTimer" to="AttackStateMachine/WarheadMissileShootingState" method="_on_cooldown_timer_timeout"]
+[connection signal="timeout" from="MovementController/DoubleClickThreshold" to="MovementController" method="_on_double_click_threshold_timeout"]
+[connection signal="timeout" from="MovementController/MovementLockTimer" to="MovementController" method="_on_movement_lock_timer_timeout"]
