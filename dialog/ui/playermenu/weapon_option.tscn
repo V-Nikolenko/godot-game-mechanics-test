@@ -23,9 +23,3 @@ offset_top = 5.0
 offset_right = 210.0
 offset_bottom = 25.0
 text = "Weapon"
-
-[node name="ClickArea" type="Button" parent="." unique_id=345678901]
-anchor_right = 1.0
-anchor_bottom = 1.0
-flat = true
-focus_mode = 0
