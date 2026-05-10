@@ -32,6 +32,10 @@ var _weapon_options: Array[WeaponOption] = []
 var _sub_options: Array[WeaponOption] = []
 var _was_paused_by_us: bool = false
 
+## Cursor position: col 0 = main weapons, col 1 = sub weapons.
+var _cursor_col: int = 0
+var _cursor_row: int = 0
+
 func _ready() -> void:
 	visible = false
 	## ALWAYS so _unhandled_input fires even when SceneTree.paused = true.
@@ -49,6 +53,33 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_player_menu"):
 		_toggle()
 		get_viewport().set_input_as_handled()
+		return
+
+	if not visible:
+		return
+
+	if event.is_action_pressed("menu_up"):
+		_cursor_row = maxi(_cursor_row - 1, 0)
+		_refresh_cursor()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("menu_down"):
+		var col_size: int = _current_col_options().size()
+		_cursor_row = mini(_cursor_row + 1, col_size - 1)
+		_refresh_cursor()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("menu_left"):
+		_cursor_col = 0
+		_cursor_row = clampi(_cursor_row, 0, maxi(_weapon_options.size() - 1, 0))
+		_refresh_cursor()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("menu_right"):
+		_cursor_col = 1
+		_cursor_row = clampi(_cursor_row, 0, maxi(_sub_options.size() - 1, 0))
+		_refresh_cursor()
+		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("menu_confirm"):
+		_confirm_selection()
+		get_viewport().set_input_as_handled()
 
 func _toggle() -> void:
 	if not visible:
@@ -58,11 +89,49 @@ func _toggle() -> void:
 		visible = true
 		get_tree().paused = true
 		_was_paused_by_us = true
+		_init_cursor()
+		_refresh_cursor()
 	else:
 		visible = false
 		if _was_paused_by_us:
 			get_tree().paused = false
 			_was_paused_by_us = false
+
+## Place the cursor on the currently active weapon/sub-weapon when the menu opens.
+func _init_cursor() -> void:
+	var ids := UpgradeState.unlocked_ids()
+	var active_id: StringName = &""
+	if _weapon_state != null:
+		active_id = _weapon_state.get_active_id()
+	var found_row: int = 0
+	for i: int in ids.size():
+		if ids[i] == active_id:
+			found_row = i
+			break
+	_cursor_col = 0
+	_cursor_row = found_row
+
+## Apply cursor highlight to the option at (_cursor_col, _cursor_row),
+## clear highlight from all others.
+func _refresh_cursor() -> void:
+	for i: int in _weapon_options.size():
+		_weapon_options[i].set_cursor(_cursor_col == 0 and i == _cursor_row)
+	for j: int in _sub_options.size():
+		_sub_options[j].set_cursor(_cursor_col == 1 and j == _cursor_row)
+
+## Commit the highlighted option and close the menu.
+func _confirm_selection() -> void:
+	if _cursor_col == 0:
+		var ids := UpgradeState.unlocked_ids()
+		if _cursor_row < ids.size():
+			_on_main_weapon_pressed(ids[_cursor_row])
+	else:
+		_on_sub_weapon_pressed(_cursor_row)
+	_toggle()
+
+## Returns the option array for the currently focused column.
+func _current_col_options() -> Array[WeaponOption]:
+	return _weapon_options if _cursor_col == 0 else _sub_options
 
 func _populate_lists() -> void:
 	## Clear previously created options (safe to call more than once).
@@ -84,7 +153,6 @@ func _populate_lists() -> void:
 		var mode := _load_mode(id)
 		var dname: String = mode.display_name if mode != null else String(id)
 		opt.configure(dname, icon)
-		opt.option_pressed.connect(_on_main_weapon_pressed.bind(id))
 		_weapon_options.append(opt)
 
 	## Sub weapons — always both options, regardless of unlock state.
@@ -93,7 +161,6 @@ func _populate_lists() -> void:
 		add_child(sopt)
 		sopt.position = _SUB_LIST_ORIGIN + Vector2(0.0, j * _ROW_HEIGHT)
 		sopt.configure(_SUB_WEAPON_NAMES[j], _SUB_WEAPON_ICONS[j])
-		sopt.option_pressed.connect(_on_sub_weapon_pressed.bind(j))
 		_sub_options.append(sopt)
 
 func _load_mode(id: StringName) -> WeaponModeResource:
