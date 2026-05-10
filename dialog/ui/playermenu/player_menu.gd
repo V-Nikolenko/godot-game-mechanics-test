@@ -2,19 +2,12 @@
 class_name PlayerMenu
 extends CanvasLayer
 
-const _WEAPON_OPTION_SCENE: PackedScene = preload("res://dialog/ui/playermenu/weapon_option.tscn")
 const _MODES_DIR := "res://assault/scenes/player/weapons/modes/"
-
-## Starting position of the main weapon list (within the weapon selection block).
-## Tune these if the items appear in the wrong place.
-const _WEAPON_LIST_ORIGIN := Vector2(48.0, 115.0)
-const _SUB_LIST_ORIGIN := Vector2(215.0, 115.0)
-const _ROW_HEIGHT: float = 30.0
 
 const _WEAPON_ICONS: Dictionary = {
 	&"default":      preload("res://assault/assets/sprites/ui/icon_ship_weapon_laser.png"),
-	&"long_range":   preload("res://assault/assets/sprites/ui/icon_ship_weapon_pierce.png"),
-	&"piercing":     preload("res://assault/assets/sprites/ui/icon_ship_weapon_laser.png"),
+	&"long_range":   preload("res://assault/assets/sprites/ui/icon_ship_weapon_laser.png"),
+	&"piercing":     preload("res://assault/assets/sprites/ui/icon_ship_weapon_pierce.png"),
 	&"spread":       preload("res://assault/assets/sprites/ui/icon_ship_weapon_spread.png"),
 	&"gatling":      preload("res://assault/assets/sprites/ui/icon_ship_weapon_gatling.png"),
 	&"mining_laser": preload("res://assault/assets/sprites/ui/icon_ship_weapon_mining_laser.png"),
@@ -26,10 +19,11 @@ const _SUB_WEAPON_ICONS: Array[Texture2D] = [
 ]
 const _SUB_WEAPON_NAMES: Array[String] = ["Missiles Barrage", "Homing Missile"]
 
+@onready var _main_frame: WeaponFrame = $ShipLayout/MainWeaponFrame
+@onready var _sub_frame: WeaponFrame = $ShipLayout/SubWeaponFrame
+
 var _weapon_state: WeaponState = null
 var _rocket_state: RocketState = null
-var _weapon_options: Array[WeaponOption] = []
-var _sub_options: Array[WeaponOption] = []
 var _was_paused_by_us: bool = false
 
 ## Cursor position: col 0 = main weapons, col 1 = sub weapons.
@@ -63,18 +57,18 @@ func _input(event: InputEvent) -> void:
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("menu_down"):
-		var col_size: int = _current_col_options().size()
+		var col_size: int = _current_frame().get_count()
 		_cursor_row = mini(_cursor_row + 1, col_size - 1)
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("menu_left"):
 		_cursor_col = 0
-		_cursor_row = clampi(_cursor_row, 0, maxi(_weapon_options.size() - 1, 0))
+		_cursor_row = clampi(_cursor_row, 0, maxi(_main_frame.get_count() - 1, 0))
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("menu_right"):
 		_cursor_col = 1
-		_cursor_row = clampi(_cursor_row, 0, maxi(_sub_options.size() - 1, 0))
+		_cursor_row = clampi(_cursor_row, 0, maxi(_sub_frame.get_count() - 1, 0))
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("menu_confirm"):
@@ -114,12 +108,11 @@ func _init_cursor() -> void:
 ## Apply cursor highlight to the option at (_cursor_col, _cursor_row),
 ## clear highlight from all others.
 func _refresh_cursor() -> void:
-	for i: int in _weapon_options.size():
-		_weapon_options[i].set_cursor(_cursor_col == 0 and i == _cursor_row)
-	for j: int in _sub_options.size():
-		_sub_options[j].set_cursor(_cursor_col == 1 and j == _cursor_row)
+	_main_frame.set_cursor(_cursor_row if _cursor_col == 0 else -1)
+	_sub_frame.set_cursor(_cursor_row if _cursor_col == 1 else -1)
 
-## Commit the highlighted option and close the menu.
+## Commit the highlighted option WITHOUT closing the menu.
+## The menu is closed only by toggle_player_menu (Tab).
 func _confirm_selection() -> void:
 	if _cursor_col == 0:
 		var ids := UpgradeState.unlocked_ids()
@@ -127,41 +120,27 @@ func _confirm_selection() -> void:
 			_on_main_weapon_pressed(ids[_cursor_row])
 	else:
 		_on_sub_weapon_pressed(_cursor_row)
-	_toggle()
 
-## Returns the option array for the currently focused column.
-func _current_col_options() -> Array[WeaponOption]:
-	return _weapon_options if _cursor_col == 0 else _sub_options
+## Returns the WeaponFrame for the currently focused column.
+func _current_frame() -> WeaponFrame:
+	return _main_frame if _cursor_col == 0 else _sub_frame
 
 func _populate_lists() -> void:
-	## Clear previously created options (safe to call more than once).
-	for opt: WeaponOption in _weapon_options:
-		opt.queue_free()
-	_weapon_options.clear()
-	for sopt: WeaponOption in _sub_options:
-		sopt.queue_free()
-	_sub_options.clear()
-
 	## Main weapons — only the ones currently unlocked in UpgradeState.
 	var ids := UpgradeState.unlocked_ids()
-	for i: int in ids.size():
-		var id := ids[i]
-		var opt := _WEAPON_OPTION_SCENE.instantiate() as WeaponOption
-		add_child(opt)
-		opt.position = _WEAPON_LIST_ORIGIN + Vector2(0.0, i * _ROW_HEIGHT)
-		var icon: Texture2D = _WEAPON_ICONS.get(id, null) as Texture2D
+	var main_names: Array[String] = []
+	var main_icons: Array[Texture2D] = []
+	for id: StringName in ids:
 		var mode := _load_mode(id)
-		var dname: String = mode.display_name if mode != null else String(id)
-		opt.configure(dname, icon)
-		_weapon_options.append(opt)
+		main_names.append(mode.display_name if mode != null else String(id))
+		main_icons.append(_WEAPON_ICONS.get(id, null) as Texture2D)
+	_main_frame.populate(main_names, main_icons)
 
 	## Sub weapons — always both options, regardless of unlock state.
-	for j: int in _SUB_WEAPON_NAMES.size():
-		var sopt := _WEAPON_OPTION_SCENE.instantiate() as WeaponOption
-		add_child(sopt)
-		sopt.position = _SUB_LIST_ORIGIN + Vector2(0.0, j * _ROW_HEIGHT)
-		sopt.configure(_SUB_WEAPON_NAMES[j], _SUB_WEAPON_ICONS[j])
-		_sub_options.append(sopt)
+	var sub_icons: Array[Texture2D] = []
+	for tex: Texture2D in _SUB_WEAPON_ICONS:
+		sub_icons.append(tex)
+	_sub_frame.populate(_SUB_WEAPON_NAMES, sub_icons)
 
 func _load_mode(id: StringName) -> WeaponModeResource:
 	var path := _MODES_DIR + String(id) + ".tres"
@@ -174,14 +153,17 @@ func _refresh_selection() -> void:
 	if _weapon_state != null:
 		active_id = _weapon_state.get_active_id()
 	var ids := UpgradeState.unlocked_ids()
-	for i: int in _weapon_options.size():
-		_weapon_options[i].set_selected(i < ids.size() and ids[i] == active_id)
+	var selected_main: int = -1
+	for i: int in ids.size():
+		if ids[i] == active_id:
+			selected_main = i
+			break
+	_main_frame.set_selected(selected_main)
 
-	var active_type: int = 0
+	var active_type: int = -1
 	if _rocket_state != null:
 		active_type = _rocket_state.get_type()
-	for j: int in _sub_options.size():
-		_sub_options[j].set_selected(j == active_type)
+	_sub_frame.set_selected(active_type)
 
 func _on_main_weapon_pressed(id: StringName) -> void:
 	if _weapon_state != null:
