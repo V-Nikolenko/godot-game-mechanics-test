@@ -22,6 +22,11 @@ func _ready() -> void:
 	if _unlocked.is_empty():
 		_unlocked[&"default"] = true
 		_save()
+	# ============================================================
+	# TODO(dev): UNLOCK ALL — remove before shipping!
+	# Gives every weapon immediately so the menu can be tested.
+	# ============================================================
+	unlock_all()
 
 func is_unlocked(id: StringName) -> bool:
 	return _unlocked.get(id, false)

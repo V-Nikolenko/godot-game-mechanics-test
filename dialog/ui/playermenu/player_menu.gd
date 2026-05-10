@@ -1,6 +1,6 @@
 # dialog/ui/playermenu/player_menu.gd
 class_name PlayerMenu
-extends Node2D
+extends CanvasLayer
 
 const _WEAPON_OPTION_SCENE: PackedScene = preload("res://dialog/ui/playermenu/weapon_option.tscn")
 const _MODES_DIR := "res://assault/scenes/player/weapons/modes/"
@@ -38,7 +38,7 @@ var _cursor_row: int = 0
 
 func _ready() -> void:
 	visible = false
-	## ALWAYS so _unhandled_input fires even when SceneTree.paused = true.
+	## ALWAYS so _input fires even when SceneTree.paused = true.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 ## Called by hud.gd once the player state nodes are known.
@@ -49,7 +49,7 @@ func connect_states(weapon: WeaponState, rocket: RocketState) -> void:
 	_populate_lists()
 	_refresh_selection()
 
-func _unhandled_input(event: InputEvent) -> void:
+func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_player_menu"):
 		_toggle()
 		get_viewport().set_input_as_handled()

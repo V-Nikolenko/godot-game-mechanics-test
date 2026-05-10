@@ -7,7 +7,8 @@
 [ext_resource type="Texture2D" uid="uid://vrfm0gs8j3je" path="res://assault/assets/sprites/ui/ship_sub_weapon_selection_block.png" id="5_pmgbo"]
 [ext_resource type="Texture2D" uid="uid://cy3cjqj11td6u" path="res://assault/assets/sprites/ui/menu_ship_module_upgrade_sectopm.png" id="6_tbghm"]
 
-[node name="PlayerMenu" type="Node2D" unique_id=1746219549]
+[node name="PlayerMenu" type="CanvasLayer" unique_id=1746219549]
+layer = 10
 script = ExtResource("1_pmscr")
 
 [node name="MenuBackground" type="Sprite2D" parent="." unique_id=1166869381]
