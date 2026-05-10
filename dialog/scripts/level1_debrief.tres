@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="DialogScriptResource" load_steps=6 format=3]
+[gd_resource type="Resource" script_class="DialogScriptResource" format=3 uid="uid://bnkrjb6t3scsx"]
 
-[ext_resource type="Script" path="res://dialog/resources/dialog_script.gd" id="1_script"]
-[ext_resource type="Script" path="res://dialog/resources/dialog_line.gd" id="2_line"]
+[ext_resource type="Script" uid="uid://sjn8lvxdin8f" path="res://dialog/resources/dialog_script.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://c6v8s4ygmuxr5" path="res://dialog/resources/dialog_line.gd" id="2_line"]
 [ext_resource type="Resource" path="res://dialog/scripts/speakers/control.tres" id="3_control"]
 [ext_resource type="Resource" path="res://dialog/scripts/speakers/edith.tres" id="4_edith"]
 
@@ -10,21 +10,14 @@ script = ExtResource("2_line")
 speaker = ExtResource("3_control")
 text = "All hostiles neutralised. Sector 7 is clear."
 side = 0
-reveal = 0
-typing_speed = 35.0
 post_delay = 0.2
 
 [sub_resource type="Resource" id="line_2"]
 script = ExtResource("2_line")
 speaker = ExtResource("4_edith")
 text = "Copy that. Setting course for extraction."
-side = 1
-reveal = 0
-typing_speed = 35.0
-post_delay = 0.0
 
 [resource]
 script = ExtResource("1_script")
 script_id = &"level1_debrief"
-lines = [SubResource("line_1"), SubResource("line_2")]
-pause_gameplay = true
+lines = Array[ExtResource("2_line")]([SubResource("line_1"), SubResource("line_2")])

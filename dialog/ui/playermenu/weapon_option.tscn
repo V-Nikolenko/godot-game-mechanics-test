@@ -1,25 +1,24 @@
 [gd_scene format=3 uid="uid://b8e2nn88icol6"]
 
-[ext_resource type="Script" path="res://dialog/ui/playermenu/weapon_option.gd" id="1_wopt"]
-[ext_resource type="Texture2D" uid="uid://cx5sucmpr1gju" path="res://assault/assets/sprites/ui/weapon_list_item_select_option.png" id="2_62mbo"]
+[ext_resource type="Script" uid="uid://b5m3hq0jnurqb" path="res://dialog/ui/playermenu/weapon_option.gd" id="1_wopt"]
+[ext_resource type="Texture2D" uid="uid://d0qigger7kk4u" path="res://assault/assets/sprites/ui/weapon_list_item.png" id="2_ogq2x"]
 
 [node name="WeaponOption" type="Control" unique_id=318341931]
-custom_minimum_size = Vector2(210, 30)
-size = Vector2(210, 30)
+layout_mode = 3
+anchors_preset = 0
+scale = Vector2(0.7167573, 0.7167573)
+size_flags_horizontal = 0
 script = ExtResource("1_wopt")
 
 [node name="WeaponIcon" type="Sprite2D" parent="." unique_id=2044088980]
-position = Vector2(15, 15)
-scale = Vector2(0.32666668, 0.32666665)
 
 [node name="SelectionBG" type="Sprite2D" parent="." unique_id=1804324106]
-position = Vector2(70, 15)
-scale = Vector2(0.3266667, 0.32666668)
-texture = ExtResource("2_62mbo")
+texture = ExtResource("2_ogq2x")
 
-[node name="WeaponName" type="Label" parent="." unique_id=234567890]
-offset_left = 100.0
-offset_top = 5.0
-offset_right = 210.0
-offset_bottom = 25.0
+[node name="WeaponName" type="Label" parent="SelectionBG" unique_id=234567890]
+offset_left = -43.82741
+offset_top = -11.533531
+offset_right = 71.50787
+offset_bottom = 11.466469
 text = "Weapon"
+vertical_alignment = 1
