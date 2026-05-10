@@ -1,0 +1,10 @@
+[gd_scene format=3 uid="uid://c5weapon1frame"]
+
+[ext_resource type="Script" path="res://dialog/ui/playermenu/weapon_frame.gd" id="1_wfscr"]
+[ext_resource type="Texture2D" uid="uid://dvxe4wg23n83j" path="res://assault/assets/sprites/ui/weapong_list_frame.png" id="2_wftex"]
+
+[node name="WeaponFrame" type="Node2D"]
+script = ExtResource("1_wfscr")
+
+[node name="FrameBackground" type="Sprite2D" parent="."]
+texture = ExtResource("2_wftex")
