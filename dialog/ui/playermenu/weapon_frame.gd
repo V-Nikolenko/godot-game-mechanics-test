@@ -1,4 +1,5 @@
-# dialog/ui/playermenu/weapon_frame.gd
+## Reusable weapon list column. Call [method populate] before querying
+## [method get_count] or setting cursor/selection state.
 class_name WeaponFrame
 extends Node2D
 
@@ -14,15 +15,18 @@ var _options: Array[WeaponOption] = []
 
 ## Populate the list from parallel arrays of names and icons.
 ## Excess items beyond MAX_ITEMS are silently ignored.
-## Clears any previously created options first.
+## If [param icons] is shorter than [param display_names], missing icons
+## default to null (no texture). Clears any previously created options first.
 func populate(display_names: Array[String], icons: Array[Texture2D]) -> void:
 	for opt: WeaponOption in _options:
+		remove_child(opt)
 		opt.queue_free()
 	_options.clear()
 
 	var count: int = mini(display_names.size(), MAX_ITEMS)
 	for i: int in count:
 		var opt := _WEAPON_OPTION_SCENE.instantiate() as WeaponOption
+		assert(opt != null, "weapon_option.tscn root must be a WeaponOption")
 		add_child(opt)
 		opt.position = item_origin + Vector2(0.0, i * _ROW_HEIGHT)
 		var icon: Texture2D = icons[i] if i < icons.size() else null
