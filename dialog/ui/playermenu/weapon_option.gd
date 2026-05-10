@@ -13,7 +13,7 @@ const _TEX_SELECTED: Texture2D = preload("res://assault/assets/sprites/ui/weapon
 @onready var _button: Button = $ClickArea
 
 func _ready() -> void:
-	_button.pressed.connect(func() -> void: option_pressed.emit())
+	_button.pressed.connect(option_pressed.emit)
 
 ## Set the display name and icon texture. Call this after instantiating the scene.
 func configure(display_name: String, icon: Texture2D) -> void:
@@ -23,4 +23,7 @@ func configure(display_name: String, icon: Texture2D) -> void:
 
 ## Swap the background sprite between unselected and selected state.
 func set_selected(value: bool) -> void:
-	_bg_sprite.texture = _TEX_SELECTED if value else _TEX_UNSELECTED
+	var tex := _TEX_SELECTED if value else _TEX_UNSELECTED
+	if _bg_sprite.texture == tex:
+		return
+	_bg_sprite.texture = tex
