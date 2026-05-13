@@ -4,6 +4,10 @@ extends State
 const ROLL_RIGHT_ANIMATION_NAME : String = "roll_to_the_right"
 const ROLL_LEFT_ANIMATION_NAME : String = "roll_to_the_left"
 
+const _WARP_DISTANCE:       float = 120.0
+const _WARP_CONTACT_DAMAGE: int   = 25
+const _WARP_CONTACT_RADIUS: float = 16.0
+
 const STATE_KEY_BINDINGS: Array = [
 	"move_left",
 	"move_right",
@@ -39,14 +43,46 @@ var dashing_direction: Vector2
 func start_state_transition(key_name: String) -> void:
 	if !dashing_timer.is_stopped():
 		return
+	if not STATE_KEY_BINDINGS.has(key_name):
+		return
+	## Warp module: teleport instead of barrel-roll.
+	if actor.get("warp_module_active"):
+		_execute_warp(get_dash_direction(key_name))
+		return
+	## Normal dash path.
 	if dash_cooldown_enabled && !cooldown_timer.is_stopped():
 		print("Dash in cooldown. Time to refresh: " + str(cooldown_timer.time_left) + "sec.")
 		state_transition.emit(transition_state)
 		return
+	dashing_direction = get_dash_direction(key_name)
+	state_transition.emit(self)
 
-	if STATE_KEY_BINDINGS.has(key_name):
-		dashing_direction = get_dash_direction(key_name)
-		state_transition.emit(self)
+func _execute_warp(dir: Vector2) -> void:
+	var dest: Vector2 = actor.global_position + dir * _WARP_DISTANCE
+	_spawn_warp_ghost()
+	actor.global_position = dest
+	## Contact damage at landing point.
+	for e in actor.get_tree().get_nodes_in_group("enemies"):
+		var n := e as Node2D
+		if n == null or n.global_position.distance_to(dest) > _WARP_CONTACT_RADIUS:
+			continue
+		var hb := n.get_node_or_null("HurtBox") as HurtBox
+		if hb:
+			hb.received_damage.emit(_WARP_CONTACT_DAMAGE)
+
+func _spawn_warp_ghost() -> void:
+	var ghost := Sprite2D.new()
+	var sprite := animated_sprite
+	if sprite and sprite.sprite_frames:
+		ghost.texture = sprite.sprite_frames.get_frame_texture(
+			sprite.animation, sprite.frame)
+	ghost.modulate = Color(0.5, 0.8, 1.0, 0.6)
+	actor.get_parent().add_child(ghost)
+	ghost.global_position = actor.global_position
+	ghost.global_scale = actor.global_scale
+	var t := ghost.create_tween()
+	t.tween_property(ghost, "modulate:a", 0.0, 0.3)
+	t.tween_callback(ghost.queue_free)
 
 func get_dash_direction(key_name: String) -> Vector2:
 	match key_name:
