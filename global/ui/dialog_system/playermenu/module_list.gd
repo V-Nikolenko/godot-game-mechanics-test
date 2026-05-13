@@ -26,7 +26,8 @@ func _ready() -> void:
 ## `current_id` is the currently equipped module id (or &"" if none).
 func open(slot: StringName, current_id: StringName) -> void:
 	_clear()
-	_ids = ShipModuleState.SLOT_MODULES.get(slot, [&""])
+	var _raw: Array = ShipModuleState.SLOT_MODULES.get(slot, [&""])
+	_ids.assign(_raw)
 	var count: int = mini(_ids.size(), MAX_ITEMS)
 	for i: int in count:
 		var item := _ITEM_SCENE.instantiate() as ModuleListItem
