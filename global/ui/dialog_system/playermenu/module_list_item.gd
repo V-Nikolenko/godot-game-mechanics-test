@@ -16,19 +16,23 @@ const _GREY_MODULATE     := Color(0.45, 0.45, 0.45) ## None/empty-slot appearanc
 
 var _is_selected: bool = false
 var _is_cursor:   bool = false
+var _is_none:     bool = false
 
 func _ready() -> void:
 	_update_modulate()
 
 ## Populate this row. Pass null icon and empty strings for the "None" row.
 func configure(display_name: String, description: String, icon: Texture2D) -> void:
+	_is_none = display_name == ""
 	_name_lbl.text = display_name if display_name != "" else "None"
 	_desc_lbl.text = description
-	if icon != null:
-		_icon.texture = icon
-		_icon.visible = true
-	else:
-		_icon.visible = false
+	if _icon != null:
+		if icon != null:
+			_icon.texture = icon
+			_icon.visible = true
+		else:
+			_icon.visible = false
+	_update_modulate()
 
 func set_cursor(value: bool) -> void:
 	_is_cursor = value
@@ -39,6 +43,11 @@ func set_selected(value: bool) -> void:
 	_update_modulate()
 
 func _update_modulate() -> void:
-	modulate = _CURSOR_MODULATE if _is_cursor else _NORMAL_MODULATE
+	if _is_cursor:
+		modulate = _CURSOR_MODULATE
+	elif _is_none:
+		modulate = _GREY_MODULATE
+	else:
+		modulate = _NORMAL_MODULATE
 	if _bg_sprite != null:
 		_bg_sprite.modulate = _SELECTED_MODULATE if _is_selected else _NORMAL_MODULATE

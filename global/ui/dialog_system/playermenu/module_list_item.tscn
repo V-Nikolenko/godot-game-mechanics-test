@@ -19,7 +19,7 @@ offset_left = -40.0
 offset_top = -14.0
 offset_right = 80.0
 offset_bottom = -2.0
-text = "Module Name"
+text = ""
 vertical_alignment = 1
 
 [node name="ModuleDesc" type="Label" parent="SelectionBG"]
@@ -27,6 +27,6 @@ offset_left = -40.0
 offset_top = 1.0
 offset_right = 80.0
 offset_bottom = 14.0
-text = "Description text."
+text = ""
 vertical_alignment = 1
 theme_override_font_sizes/font_size = 9
