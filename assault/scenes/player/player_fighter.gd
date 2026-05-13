@@ -1,46 +1,23 @@
-extends CharacterBody2D
-
-@onready var hurt_box: HurtBox = $HurtBox
-@onready var health_component: Health = $HealthComponent
-@onready var shield_component: Shield = $ShieldComponent
-@onready var overheat_component: Overheat = $OverheatComponent
-
-var can_attack: bool = true
-
-## Multipliers written by AbilityController / abilities.
-## WeaponState reads these when computing damage and cooldowns.
-var damage_multiplier: float = 1.0
-var fire_rate_multiplier: float = 1.0
-## 0.0 = no reduction; 0.5 = take 50% damage. Written by ArmorPlatingAbility.
-var damage_reduction: float = 0.0
-
-## When true, overheat can exceed heat_limit without capping.
-var overdrive_active: bool = false
+# assault/scenes/player/player_fighter.gd
+## Assault-mission player. Extends PlayerBase for shared health/shield/overheat,
+## multiplier variables, and EventBus emission.
+class_name AssaultPlayer
+extends PlayerBase
 
 @onready var game_over_scene: PackedScene = preload("res://assault/scenes/gui/game_over.tscn")
-
-# ── Particle effect components ────────────────────────────────────────────────
-var _hit_effect: HitEffect
-var _explosion_effect: ExplosionEffect
-var _low_health_smoke: LowHealthSmoke
-var _thruster: ThrusterEffect
 
 const _DASH_SPEED_THRESHOLD: float = 280.0
 const _MOVE_SPEED_THRESHOLD: float = 10.0
 
 func _ready() -> void:
-	add_to_group("player")
-	overheat_component.overheat.connect(handle_overheat)
-	health_component.amount_changed.connect(_on_health_changed)
+	super()  # add_to_group, _setup_components, _setup_effects
 
 	var bar := OverheatBar.new()
 	bar.position = Vector2(0, 22)
 	add_child(bar)
 	bar.setup(overheat_component)
 
-	_setup_effect_components()
-
-func _setup_effect_components() -> void:
+func _setup_effects() -> void:
 	_hit_effect = HitEffect.new()
 	_hit_effect.amount = 10
 	_hit_effect.lifetime = 0.25
@@ -60,10 +37,10 @@ func _setup_effect_components() -> void:
 	_explosion_effect.always_process = true
 	add_child(_explosion_effect)
 
-	_low_health_smoke = LowHealthSmoke.new()
-	_low_health_smoke.threshold = 0.3
-	add_child(_low_health_smoke)
-	_low_health_smoke.setup(health_component)
+	var low_health_smoke := LowHealthSmoke.new()
+	low_health_smoke.threshold = 0.3
+	add_child(low_health_smoke)
+	low_health_smoke.setup(health_component)
 
 	_thruster = ThrusterEffect.new()
 	_thruster.position = Vector2(0.0, 14.0)
@@ -85,7 +62,13 @@ func _physics_process(_delta: float) -> void:
 	else:
 		_thruster.set_state(ThrusterEffect.State.IDLE)
 
+## Scene-connected: HurtBox.received_damage → _on_hurt_box_received_damage.
+func _on_hurt_box_received_damage(damage: int) -> void:
+	_apply_damage(damage)
+
+## Override: emit EventBus, play hit effect, handle death.
 func _on_health_changed(current: int) -> void:
+	super(current)  # emits EventBus.player_health_changed
 	_hit_effect.burst()
 	if current == 0:
 		_explosion_effect.explode()
@@ -94,21 +77,16 @@ func _on_health_changed(current: int) -> void:
 		get_tree().root.add_child(go)
 		get_tree().paused = false
 
-func _on_hurt_box_received_damage(damage: int) -> void:
-	var effective: int = roundi(damage * (1.0 - damage_reduction))
-	var overflow := shield_component.absorb(effective)
-	if overflow > 0:
-		health_component.decrease(overflow)
-
-func handle_overheat(overheat_percentage: float) -> void:
+## Override: complex overheat gating with overdrive and 80% hysteresis.
+func _on_overheat_updated(pct: float) -> void:
+	super(pct)  # emits EventBus.player_overheat_changed
 	if overdrive_active:
-		## Overdrive: allow heat beyond limit, never lock weapons.
 		can_attack = true
 		return
-	if overheat_percentage >= 100:
+	if pct >= 100:
 		can_attack = false
 		return
-	if overheat_percentage >= 80 and not can_attack:
+	if pct >= 80 and not can_attack:
 		return
-	if overheat_percentage < 80 and not can_attack:
+	if pct < 80 and not can_attack:
 		can_attack = true

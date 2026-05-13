@@ -1,7 +1,7 @@
 ## DialogPlayer — global runner for DialogScriptResources.
 extends Node
 
-const _DIALOG_BOX_SCENE: PackedScene = preload("res://dialog/ui/dialog_box.tscn")
+const _DIALOG_BOX_SCENE: PackedScene = preload("res://global/ui/dialog_system/ui/dialog_box.tscn")
 
 signal dialog_started(script: DialogScriptResource)
 signal line_changed(line: DialogLineResource, index: int)
@@ -37,6 +37,8 @@ func play(script: DialogScriptResource) -> void:
 	if is_active:
 		push_warning("[DialogPlayer] play() called while already active; ignoring.")
 		return
+	print("[DP] play — script=%s  lines=%d  box=%s" % [
+		script, script.lines.size() if script != null else -1, _box])
 	if script == null or script.lines.is_empty():
 		push_warning("[DialogPlayer] play() called with empty/null script; ignoring.")
 		return
@@ -48,8 +50,10 @@ func play(script: DialogScriptResource) -> void:
 	_auto_held_since = -1.0
 	is_active = true
 
+	print("[DP] pause_gameplay=%s  pausing=%s" % [script.pause_gameplay, get_tree().paused])
 	if script.pause_gameplay:
 		get_tree().paused = true
+	print("[DP] tree.paused=%s" % get_tree().paused)
 
 	dialog_started.emit(script)
 
@@ -58,8 +62,10 @@ func play(script: DialogScriptResource) -> void:
 			break
 		_current_index = i
 		var line: DialogLineResource = script.lines[i]
+		print("[DP] >>> await present_line(%d)  side=%d" % [i, line.side])
 		line_changed.emit(line, i)
 		await _box.present_line(line)
+		print("[DP] <<< present_line(%d) returned  box_state=%d" % [i, _box._state])
 
 		# Race: line_finished (player advance/skip) vs. auto-dwell timer (if auto_mode).
 		if auto_mode:
@@ -70,11 +76,14 @@ func play(script: DialogScriptResource) -> void:
 				_box.advance()
 				await _box.line_finished
 		else:
+			print("[DP] awaiting line_finished(%d)..." % i)
 			await _box.line_finished
+			print("[DP] line_finished(%d) received" % i)
 
 		if _was_skipped:
 			break
 
+	print("[DP] loop done, calling _finish()")
 	_finish()
 
 
@@ -111,6 +120,7 @@ func _process(_delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if not is_active:
 		return
+	print("[DP] _unhandled_input  event=%s" % event.as_text())
 	if event.is_action_pressed("ui_accept"):
 		_accept_held_since = Time.get_ticks_msec() / 1000.0
 		get_viewport().set_input_as_handled()

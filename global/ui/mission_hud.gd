@@ -1,19 +1,23 @@
-# open_space/scenes/gui/hud.gd
+# global/ui/mission_hud.gd
+## Unified HUD for all missions that use health/shield, a weapon icon,
+## and the player weapon-selection menu.
+## Used by assault/scenes/gui/hud.tscn and open_space/scenes/gui/hud.tscn.
 extends CanvasLayer
 
 @onready var health_shield_bar: HealthShieldBar = $HealthShieldBar
-@onready var weapon_icon: TextureRect = $WeaponContainer/WeaponIcon
+@onready var weapon_icon: TextureRect  = $WeaponContainer/WeaponIcon
 @onready var cooldown_overlay: ColorRect = $WeaponContainer/CooldownOverlay
 @onready var player_menu: PlayerMenu = $PlayerMenu
 
 var _cooldown_timer: Timer = null
 
 func _ready() -> void:
-	## Wait one frame for the player to be ready.
+	## Wait one frame so the player node is fully initialised before querying it.
 	await get_tree().process_frame
 	if not is_inside_tree():
 		player_menu.connect_states(null, null)
 		return
+
 	var players := get_tree().get_nodes_in_group("player")
 	if players.is_empty():
 		player_menu.connect_states(null, null)

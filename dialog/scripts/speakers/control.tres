@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="SpeakerResource" load_steps=2 format=3 uid="uid://control_speaker"]
+[gd_resource type="Resource" script_class="SpeakerResource" format=3 uid="uid://f16nj35nnrao"]
 
-[ext_resource type="Script" path="res://dialog/resources/speaker.gd" id="1"]
+[ext_resource type="Script" uid="uid://cj0gnclnbklaw" path="res://global/ui/dialog_system/resources/speaker.gd" id="1"]
 
 [resource]
 script = ExtResource("1")

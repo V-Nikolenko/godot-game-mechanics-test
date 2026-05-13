@@ -1,11 +1,11 @@
 [gd_scene load_steps=8 format=3]
 
-[ext_resource type="Script" path="res://assault/scenes/gui/hud.gd" id="1_hud"]
+[ext_resource type="Script" path="res://global/ui/mission_hud.gd" id="1_hud"]
 [ext_resource type="Texture2D" uid="uid://cnap6cceg8u6t" path="res://assault/assets/gui/weaponselector/frame_center.png" id="2_hud"]
 [ext_resource type="PackedScene" path="res://assault/scenes/gui/weapon_chip.tscn" id="3_hud"]
 [ext_resource type="PackedScene" path="res://assault/scenes/gui/health_shield_bar.tscn" id="4_hsbar"]
 [ext_resource type="PackedScene" path="res://assault/scenes/gui/ability_chip.tscn" id="5_achip"]
-[ext_resource type="PackedScene" uid="uid://d3w5o2bii2h1" path="res://dialog/ui/playermenu/player_menu.tscn" id="6_pmenu"]
+[ext_resource type="PackedScene" uid="uid://d3w5o2bii2h1" path="res://global/ui/dialog_system/playermenu/player_menu.tscn" id="6_pmenu"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")

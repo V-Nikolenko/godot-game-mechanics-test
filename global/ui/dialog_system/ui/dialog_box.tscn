@@ -1,8 +1,8 @@
 [gd_scene load_steps=6 format=3]
 
-[ext_resource type="Script" path="res://dialog/ui/dialog_box.gd" id="1_db"]
-[ext_resource type="Script" path="res://dialog/ui/hold_progress_arc.gd" id="2_arc"]
-[ext_resource type="Script" path="res://dialog/ui/auto_mode_indicator.gd" id="3_auto"]
+[ext_resource type="Script" path="res://global/ui/dialog_system/ui/dialog_box.gd" id="1_db"]
+[ext_resource type="Script" path="res://global/ui/dialog_system/ui/hold_progress_arc.gd" id="2_arc"]
+[ext_resource type="Script" path="res://global/ui/dialog_system/ui/auto_mode_indicator.gd" id="3_auto"]
 
 [sub_resource type="StyleBoxFlat" id="SBF_top"]
 bg_color = Color(0.04, 0.07, 0.16, 0.88)

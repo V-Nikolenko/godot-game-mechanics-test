@@ -33,11 +33,13 @@ func select_sub_weapon(type: int) -> void:
 		return
 	_type = clamped
 	weapon_changed.emit(get_current_icon())
+	EventBus.player_rocket_changed.emit(get_current_icon())
 
 func _on_action(key_name: String) -> void:
 	if key_name == "switch_weapon":
 		_type = (_type + 1) % 2
 		weapon_changed.emit(get_current_icon())
+		EventBus.player_rocket_changed.emit(get_current_icon())
 	elif key_name == "special_weapon" and cooldown_timer.is_stopped():
 		_launch()
 		cooldown_timer.start()

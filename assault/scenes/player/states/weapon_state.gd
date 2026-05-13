@@ -137,3 +137,4 @@ func _emit_changed() -> void:
 	var mode: WeaponModeResource = _modes.get(_active_id)
 	if mode:
 		weapon_changed.emit(mode)
+		EventBus.player_weapon_changed.emit(mode)

@@ -1,5 +1,8 @@
+# open_space/scenes/entities/player/player_ship.gd
+## Open-space-mission player. Extends PlayerBase for shared health/shield/overheat,
+## multiplier variables, and EventBus emission.
 class_name OpenSpacePlayerShip
-extends CharacterBody2D
+extends PlayerBase
 
 @export_category("Movement")
 @export var rotation_speed_deg: float = 220.0
@@ -13,31 +16,10 @@ extends CharacterBody2D
 @export var boost_duration_sec: float = 0.3
 @export var boost_speed_threshold: float = 180.0
 
-@onready var health_component: Health = $HealthComponent
-@onready var shield_component: Shield = $ShieldComponent
-@onready var overheat_component: Overheat = $OverheatComponent
-
-## Multipliers written by AbilityController / abilities.
-var damage_multiplier: float = 1.0
-var fire_rate_multiplier: float = 1.0
-var overdrive_active: bool = false
-## 0.0 = no reduction; 0.5 = take 50% damage. Written by ArmorPlatingAbility.
-var damage_reduction: float = 0.0
-
-## Gated by OverheatComponent — false when heat reaches 100%, restored below 80%.
-var can_attack: bool = true
-
 var _boost_timer: float = 0.0
 
-var _hit_effect: HitEffect
-var _explosion_effect: ExplosionEffect
-var _thruster: ThrusterEffect
-
 func _ready() -> void:
-	add_to_group("player")
-	health_component.amount_changed.connect(_on_health_changed)
-	overheat_component.overheat.connect(_on_overheat_updated)
-	_setup_effects()
+	super()  # add_to_group, _setup_components, _setup_effects
 	rotation = 0.0
 
 func _setup_effects() -> void:
@@ -107,20 +89,21 @@ func _trigger_flip_boost(forward: Vector2) -> void:
 	velocity = forward * boost_redirect_speed
 	_boost_timer = boost_duration_sec
 
-## Called by OverheatComponent every 0.1 s with the current heat percentage (0–100).
-func _on_overheat_updated(pct: float) -> void:
-	can_attack = pct < 100.0
-
+## Scene-connected: HurtBox.received_damage → _on_received_damage.
 func _on_received_damage(damage: int) -> void:
-	var effective: int = roundi(damage * (1.0 - damage_reduction))
-	var overflow := shield_component.absorb(effective)
-	if overflow > 0:
-		health_component.decrease(overflow)
+	_apply_damage(damage)
 	_hit_effect.burst()
 
+## Override: emit EventBus, handle death with delayed scene reload.
 func _on_health_changed(current: int) -> void:
+	super(current)  # emits EventBus.player_health_changed
 	if current == 0:
 		_explosion_effect.explode()
 		await get_tree().create_timer(1.2).timeout
 		if is_instance_valid(self):
 			get_tree().reload_current_scene()
+
+## Override: simple overheat gating (no overdrive in open space).
+func _on_overheat_updated(pct: float) -> void:
+	super(pct)  # emits EventBus.player_overheat_changed
+	can_attack = pct < 100.0

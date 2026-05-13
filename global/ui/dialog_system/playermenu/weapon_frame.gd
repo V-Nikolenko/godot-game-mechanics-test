@@ -3,7 +3,7 @@
 class_name WeaponFrame
 extends Node2D
 
-const _WEAPON_OPTION_SCENE: PackedScene = preload("res://dialog/ui/playermenu/weapon_option.tscn")
+const _WEAPON_OPTION_SCENE: PackedScene = preload("res://global/ui/dialog_system/playermenu/weapon_option.tscn")
 const _ROW_HEIGHT: float = 30.0
 const MAX_ITEMS: int = 8
 

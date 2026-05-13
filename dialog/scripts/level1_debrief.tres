@@ -1,9 +1,9 @@
 [gd_resource type="Resource" script_class="DialogScriptResource" format=3 uid="uid://bnkrjb6t3scsx"]
 
-[ext_resource type="Script" uid="uid://sjn8lvxdin8f" path="res://dialog/resources/dialog_script.gd" id="1_script"]
-[ext_resource type="Script" uid="uid://c6v8s4ygmuxr5" path="res://dialog/resources/dialog_line.gd" id="2_line"]
-[ext_resource type="Resource" path="res://dialog/scripts/speakers/control.tres" id="3_control"]
-[ext_resource type="Resource" path="res://dialog/scripts/speakers/edith.tres" id="4_edith"]
+[ext_resource type="Script" uid="uid://sjn8lvxdin8f" path="res://global/ui/dialog_system/resources/dialog_script.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://c6v8s4ygmuxr5" path="res://global/ui/dialog_system/resources/dialog_line.gd" id="2_line"]
+[ext_resource type="Resource" uid="uid://f16nj35nnrao" path="res://dialog/scripts/speakers/control.tres" id="3_control"]
+[ext_resource type="Resource" uid="uid://cqyueuqqsm3vu" path="res://dialog/scripts/speakers/edith.tres" id="4_edith"]
 
 [sub_resource type="Resource" id="line_1"]
 script = ExtResource("2_line")

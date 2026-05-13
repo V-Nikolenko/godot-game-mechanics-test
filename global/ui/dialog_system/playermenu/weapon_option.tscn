@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://b8e2nn88icol6"]
 
-[ext_resource type="Script" uid="uid://b5m3hq0jnurqb" path="res://dialog/ui/playermenu/weapon_option.gd" id="1_wopt"]
+[ext_resource type="Script" uid="uid://b5m3hq0jnurqb" path="res://global/ui/dialog_system/playermenu/weapon_option.gd" id="1_wopt"]
 [ext_resource type="Texture2D" uid="uid://d0qigger7kk4u" path="res://assault/assets/sprites/ui/weapon_list_item.png" id="2_ogq2x"]
 
 [node name="WeaponOption" type="Control" unique_id=318341931]

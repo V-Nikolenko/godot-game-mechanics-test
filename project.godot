@@ -25,6 +25,7 @@ MissionState="*res://global/autoloads/mission_state.gd"
 DialogPlayer="*res://global/autoload/dialog_player.gd"
 UpgradeState="*res://global/autoloads/upgrade_state.gd"
 AbilityState="*res://global/autoloads/ability_state.gd"
+EventBus="*res://global/systems/event_bus.gd"
 
 [debug_draw_3d]
 

@@ -1,4 +1,4 @@
-# dialog/ui/playermenu/player_menu.gd
+# global/ui/dialog_system/playermenu/player_menu.gd
 ## Weapon selection menu overlay. Tab opens/closes; WASD navigates; Space/F selects.
 ## Delegates list UI to [WeaponFrame] components. Updates [WeaponState] and [RocketState].
 class_name PlayerMenu

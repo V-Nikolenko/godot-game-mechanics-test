@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://d3w5o2bii2h1"]
 
-[ext_resource type="Script" uid="uid://lthfqw7ta0fk" path="res://dialog/ui/playermenu/player_menu.gd" id="1_pmscr"]
+[ext_resource type="Script" uid="uid://lthfqw7ta0fk" path="res://global/ui/dialog_system/playermenu/player_menu.gd" id="1_pmscr"]
 [ext_resource type="Texture2D" uid="uid://bkeo4jt6bn8id" path="res://assault/assets/sprites/ui/menu_background.png" id="2_prlwd"]
 [ext_resource type="Texture2D" uid="uid://d4frnoy54445x" path="res://assault/assets/sprites/ui/menu_overlay.png" id="3_kttvs"]
-[ext_resource type="PackedScene" uid="uid://cwfrm4kax2a1b" path="res://dialog/ui/playermenu/weapon_frame.tscn" id="4_wframe"]
+[ext_resource type="PackedScene" uid="uid://cwfrm4kax2a1b" path="res://global/ui/dialog_system/playermenu/weapon_frame.tscn" id="4_wframe"]
 
 [node name="PlayerMenu" type="CanvasLayer" unique_id=1746219549]
 layer = 10
