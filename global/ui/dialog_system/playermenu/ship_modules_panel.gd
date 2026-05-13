@@ -64,13 +64,18 @@ func _update_visuals() -> void:
 		var has_module: bool = equipped_id != &""
 		var is_hovered: bool = i == _cursor_row
 
-		## Scheme sprite colour.
+		## Scheme sprite colour + z_index.
+		## All 4 sprites stack at the same position; the hovered one must be
+		## drawn on top so its tint isn't painted over by siblings.
 		if is_hovered:
 			scheme_sprites[i].modulate = _HOVER_COLOR
+			scheme_sprites[i].z_index = 1
 		elif has_module:
 			scheme_sprites[i].modulate = _NORMAL_COLOR
+			scheme_sprites[i].z_index = 0
 		else:
 			scheme_sprites[i].modulate = _EMPTY_COLOR
+			scheme_sprites[i].z_index = 0
 
 		## Item frame colour — yellow on hover, white if equipped, grey if empty.
 		if is_hovered:
