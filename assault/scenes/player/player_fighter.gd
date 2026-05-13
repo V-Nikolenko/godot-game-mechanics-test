@@ -118,6 +118,7 @@ func _remove_module(id: StringName) -> void:
 	var mod := _module_pool.get(id, null)
 	if mod:
 		mod.remove(self)
+		_module_pool.erase(id)
 
 func _on_module_equipped(_slot: StringName, module_id: StringName) -> void:
 	if module_id != &"":

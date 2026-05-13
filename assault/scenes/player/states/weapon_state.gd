@@ -82,8 +82,8 @@ func _fire(mode: WeaponModeResource) -> void:
 	## Overclock module: deal self-damage when firing past overheat limit.
 	var is_overclocked = actor.get("overclock_module_active")
 	if is_overclocked:
-		var heat_pct := heat_component.heat / heat_component.heat_limit
-		if heat_pct >= 1.0:
+		var heat_pct := heat_component.heat / maxf(heat_component.heat_limit, 0.001)
+		if heat_pct >= 1.0 and actor.has_method("_apply_damage"):
 			actor._apply_damage(3)
 
 func _physics_process(delta: float) -> void:
