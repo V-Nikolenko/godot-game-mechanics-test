@@ -1,6 +1,8 @@
 # global/ui/dialog_system/playermenu/player_menu.gd
-## Weapon selection menu overlay. Tab opens/closes; WASD navigates; Space/F selects.
-## Delegates list UI to [WeaponFrame] components. Updates [WeaponState] and [RocketState].
+## Weapon + ship-module selection menu overlay.
+## Tab opens/closes; WASD navigates; Space/F selects.
+## Col 0 = main weapons, Col 1 = sub-weapons, Col 2 = ship modules.
+## In col 2, Space opens the ModuleList overlay for the hovered slot.
 class_name PlayerMenu
 extends CanvasLayer
 
@@ -8,7 +10,6 @@ const _MODES_DIR := "res://assault/scenes/player/weapons/modes/"
 
 const _WEAPON_ICONS: Dictionary = {
 	&"default":      preload("res://assault/assets/sprites/ui/icon_ship_weapon_laser.png"),
-	&"long_range":   preload("res://assault/assets/sprites/ui/icon_ship_weapon_laser.png"),
 	&"piercing":     preload("res://assault/assets/sprites/ui/icon_ship_weapon_pierce.png"),
 	&"spread":       preload("res://assault/assets/sprites/ui/icon_ship_weapon_spread.png"),
 	&"gatling":      preload("res://assault/assets/sprites/ui/icon_ship_weapon_gatling.png"),
@@ -21,24 +22,28 @@ const _SUB_WEAPON_ICONS: Array[Texture2D] = [
 ]
 const _SUB_WEAPON_NAMES: Array[String] = ["Missiles Barrage", "Homing Missile"]
 
-@onready var _main_frame: WeaponFrame = $ShipLayout/MainWeaponFrame
-@onready var _sub_frame: WeaponFrame = $ShipLayout/SubWeaponFrame
+@onready var _main_frame:    WeaponFrame      = $ShipLayout/MainWeaponFrame
+@onready var _sub_frame:     WeaponFrame      = $ShipLayout/SubWeaponFrame
+@onready var _modules_panel: ShipModulesPanel = $ShipLayout/ShipModulesPanel
+@onready var _module_list:   ModuleList       = $ModuleList
 
-var _weapon_state: WeaponState = null
-var _rocket_state: RocketState = null
-var _was_paused_by_us: bool = false
+var _weapon_state: WeaponState  = null
+var _rocket_state: RocketState  = null
+var _was_paused_by_us: bool     = false
 
-## Cursor position: col 0 = main weapons, col 1 = sub weapons.
+## Col 0 = main weapons, 1 = sub weapons, 2 = ship modules.
 var _cursor_col: int = 0
 var _cursor_row: int = 0
 
+## True while the module detail list is open.
+var _module_list_open: bool = false
+
 func _ready() -> void:
 	visible = false
-	## ALWAYS so _input fires even when SceneTree.paused = true.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_module_list.confirmed.connect(_on_module_confirmed)
+	_module_list.cancelled.connect(_on_module_cancelled)
 
-## Called by hud.gd once the player state nodes are known.
-## Pass null for either argument if the state does not exist in this scene.
 func connect_states(weapon: WeaponState, rocket: RocketState) -> void:
 	_weapon_state = weapon
 	_rocket_state = rocket
@@ -47,29 +52,48 @@ func connect_states(weapon: WeaponState, rocket: RocketState) -> void:
 
 func _input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_player_menu"):
-		_toggle()
+		if _module_list_open:
+			_close_module_list()
+		else:
+			_toggle()
 		get_viewport().set_input_as_handled()
 		return
 
 	if not visible:
 		return
 
+	## Esc while module list is open → close list, return to modules panel.
+	if _module_list_open:
+		if event.is_action_pressed("ui_cancel"):
+			_close_module_list()
+			get_viewport().set_input_as_handled()
+		elif event.is_action_pressed("menu_up"):
+			_module_list.navigate(-1)
+			get_viewport().set_input_as_handled()
+		elif event.is_action_pressed("menu_down"):
+			_module_list.navigate(1)
+			get_viewport().set_input_as_handled()
+		elif event.is_action_pressed("menu_confirm"):
+			_module_list.confirm()
+			get_viewport().set_input_as_handled()
+		return  ## All other input blocked while list open.
+
 	if event.is_action_pressed("menu_up"):
-		_cursor_row = clampi(_cursor_row - 1, 0, maxi(_current_frame().get_count() - 1, 0))
+		_cursor_row = clampi(_cursor_row - 1, 0, maxi(_current_max_row(), 0))
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("menu_down"):
-		_cursor_row = clampi(_cursor_row + 1, 0, maxi(_current_frame().get_count() - 1, 0))
+		_cursor_row = clampi(_cursor_row + 1, 0, maxi(_current_max_row(), 0))
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("menu_left"):
-		_cursor_col = 0
-		_cursor_row = clampi(_cursor_row, 0, maxi(_main_frame.get_count() - 1, 0))
+		_cursor_col = maxi(0, _cursor_col - 1)
+		_cursor_row = clampi(_cursor_row, 0, maxi(_current_max_row(), 0))
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("menu_right"):
-		_cursor_col = 1
-		_cursor_row = clampi(_cursor_row, 0, maxi(_sub_frame.get_count() - 1, 0))
+		_cursor_col = mini(2, _cursor_col + 1)
+		_cursor_row = clampi(_cursor_row, 0, maxi(_current_max_row(), 0))
 		_refresh_cursor()
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("menu_confirm"):
@@ -78,12 +102,12 @@ func _input(event: InputEvent) -> void:
 
 func _toggle() -> void:
 	if not visible:
-		## Do not open over an already-paused scene (e.g. DialogPlayer active).
 		if get_tree().paused:
 			return
 		visible = true
 		get_tree().paused = true
 		_was_paused_by_us = true
+		_modules_panel.refresh_equipped()
 		_init_cursor()
 		_refresh_cursor()
 	else:
@@ -92,7 +116,6 @@ func _toggle() -> void:
 			get_tree().paused = false
 			_was_paused_by_us = false
 
-## Place the cursor on the currently active weapon/sub-weapon when the menu opens.
 func _init_cursor() -> void:
 	var ids := UpgradeState.unlocked_ids()
 	if ids.is_empty():
@@ -110,28 +133,55 @@ func _init_cursor() -> void:
 	_cursor_col = 0
 	_cursor_row = found_row
 
-## Apply cursor highlight to the option at (_cursor_col, _cursor_row),
-## clear highlight from all others.
+## Max selectable row index for the current column.
+func _current_max_row() -> int:
+	match _cursor_col:
+		0: return maxi(_main_frame.get_count() - 1, 0)
+		1: return maxi(_sub_frame.get_count() - 1, 0)
+		2: return maxi(_modules_panel.get_slot_count() - 1, 0)
+		_: return 0
+
 func _refresh_cursor() -> void:
 	_main_frame.set_cursor(_cursor_row if _cursor_col == 0 else -1)
 	_sub_frame.set_cursor(_cursor_row if _cursor_col == 1 else -1)
+	_modules_panel.set_cursor(_cursor_row if _cursor_col == 2 else -1)
 
-## Commit the highlighted option WITHOUT closing the menu.
-## The menu is closed only by toggle_player_menu (Tab).
 func _confirm_selection() -> void:
-	if _cursor_col == 0:
-		var ids := UpgradeState.unlocked_ids()
-		if _cursor_row < ids.size():
-			_on_main_weapon_pressed(ids[_cursor_row])
-	else:
-		_on_sub_weapon_pressed(_cursor_row)
+	match _cursor_col:
+		0:
+			var ids := UpgradeState.unlocked_ids()
+			if _cursor_row < ids.size():
+				_on_main_weapon_pressed(ids[_cursor_row])
+		1:
+			_on_sub_weapon_pressed(_cursor_row)
+		2:
+			_open_module_list()
 
-## Returns the WeaponFrame for the currently focused column.
-func _current_frame() -> WeaponFrame:
-	return _main_frame if _cursor_col == 0 else _sub_frame
+func _open_module_list() -> void:
+	var slot: StringName = ShipModuleState.SLOTS[_cursor_row]
+	var current_id: StringName = ShipModuleState.get_equipped(slot)
+	## Hide weapon frames while module list is showing.
+	_main_frame.visible = false
+	_sub_frame.visible = false
+	_module_list.open(slot, current_id)
+	_module_list_open = true
+
+func _close_module_list() -> void:
+	_module_list.close()
+	_main_frame.visible = true
+	_sub_frame.visible = true
+	_module_list_open = false
+
+func _on_module_confirmed(module_id: StringName) -> void:
+	var slot: StringName = ShipModuleState.SLOTS[_cursor_row]
+	ShipModuleState.equip(slot, module_id)
+	_modules_panel.refresh_equipped()
+	_close_module_list()
+
+func _on_module_cancelled() -> void:
+	_close_module_list()
 
 func _populate_lists() -> void:
-	## Main weapons — only the ones currently unlocked in UpgradeState.
 	var ids := UpgradeState.unlocked_ids()
 	var main_names: Array[String] = []
 	var main_icons: Array[Texture2D] = []
@@ -140,8 +190,6 @@ func _populate_lists() -> void:
 		main_names.append(mode.display_name if mode != null else String(id))
 		main_icons.append(_WEAPON_ICONS.get(id, null) as Texture2D)
 	_main_frame.populate(main_names, main_icons)
-
-	## Sub weapons — always both options, regardless of unlock state.
 	_sub_frame.populate(_SUB_WEAPON_NAMES, _SUB_WEAPON_ICONS)
 
 func _load_mode(id: StringName) -> WeaponModeResource:
