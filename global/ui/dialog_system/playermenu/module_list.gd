@@ -82,6 +82,7 @@ func _refresh_selected(current_id: StringName) -> void:
 func _make_module(id: StringName) -> ShipModuleBase:
 	match id:
 		&"armor_plating":   return ArmorPlatingModule.new()
+		&"parry":           return ParryModule.new()
 		&"trajectory_calc": return TrajectoryCalcModule.new()
 		&"warp":            return WarpModule.new()
 		&"overclock":       return OverclockModule.new()

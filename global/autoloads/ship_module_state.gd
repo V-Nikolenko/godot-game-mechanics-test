@@ -5,7 +5,7 @@ extends Node
 ## Slot IDs:  &"cockpit"  |  &"armor"  |  &"weapons"  |  &"engines"
 ## Module IDs per slot:
 ##   cockpit  → &"trajectory_calc"
-##   armor    → &"armor_plating"
+##   armor    → &"armor_plating"  |  &"parry"
 ##   weapons  → &"overclock"
 ##   engines  → &"warp"
 ## Empty string means nothing equipped.
@@ -19,7 +19,7 @@ const SLOTS: Array[StringName] = [&"cockpit", &"armor", &"weapons", &"engines"]
 ## First entry is always &"" (None / unequip).
 const SLOT_MODULES: Dictionary = {
 	&"cockpit":  [&"", &"trajectory_calc"],
-	&"armor":    [&"", &"armor_plating"],
+	&"armor":    [&"", &"armor_plating", &"parry"],
 	&"weapons":  [&"", &"overclock"],
 	&"engines":  [&"", &"warp"],
 }

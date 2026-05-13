@@ -102,6 +102,7 @@ func _get_or_create_module(id: StringName) -> ShipModuleBase:
 func _create_module(id: StringName) -> ShipModuleBase:
 	match id:
 		&"armor_plating":   return ArmorPlatingModule.new()
+		&"parry":           return ParryModule.new()
 		&"trajectory_calc": return TrajectoryCalcModule.new()
 		&"warp":            return WarpModule.new()
 		&"overclock":       return OverclockModule.new()
