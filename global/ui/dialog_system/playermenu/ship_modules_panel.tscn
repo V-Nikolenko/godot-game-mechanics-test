@@ -1,55 +1,55 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene format=3 uid="uid://ilywdn6yayg3"]
 
-[ext_resource type="Script" path="res://global/ui/dialog_system/playermenu/ship_modules_panel.gd" id="1_smp"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_frame.png" id="2_frame"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_cockpit.png" id="3_ck"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_armor.png" id="4_ar"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_weapons.png" id="5_wp"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_engine.png" id="6_en"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_item_frame.png" id="7_if"]
+[ext_resource type="Script" uid="uid://doag5nu24vhvr" path="res://global/ui/dialog_system/playermenu/ship_modules_panel.gd" id="1_smp"]
+[ext_resource type="Texture2D" uid="uid://c0qx18ckuyr0o" path="res://assault/assets/sprites/ui/menu_ship_modules_frame.png" id="2_frame"]
+[ext_resource type="Texture2D" uid="uid://db88ajn7nbuee" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_cockpit.png" id="3_ck"]
+[ext_resource type="Texture2D" uid="uid://bho8rs0qi24tw" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_armor.png" id="4_ar"]
+[ext_resource type="Texture2D" uid="uid://bgieu5875rr74" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_weapons.png" id="5_wp"]
+[ext_resource type="Texture2D" uid="uid://5lk3wg4gatyy" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_engine.png" id="6_en"]
+[ext_resource type="Texture2D" uid="uid://bxngaj6ir4hrp" path="res://assault/assets/sprites/ui/menu_ship_modules_item_frame.png" id="7_if"]
 
-[node name="ShipModulesPanel" type="Node2D"]
+[node name="ShipModulesPanel" type="Node2D" unique_id=1399457581]
 script = ExtResource("1_smp")
 
-[node name="OuterFrame" type="Sprite2D" parent="."]
+[node name="OuterFrame" type="Sprite2D" parent="." unique_id=599841338]
 texture = ExtResource("2_frame")
 
-[node name="SchemeCockpit" type="Sprite2D" parent="."]
+[node name="ItemFrameCockpit" type="Sprite2D" parent="." unique_id=1990961194]
+position = Vector2(51, -73)
+texture = ExtResource("7_if")
+
+[node name="Icon" type="Sprite2D" parent="ItemFrameCockpit" unique_id=1928218846]
+scale = Vector2(0.5, 0.5)
+
+[node name="ItemFrameArmor" type="Sprite2D" parent="." unique_id=470169065]
+position = Vector2(-51, -48)
+texture = ExtResource("7_if")
+
+[node name="Icon" type="Sprite2D" parent="ItemFrameArmor" unique_id=335368845]
+scale = Vector2(0.5, 0.5)
+
+[node name="ItemFrameWeapons" type="Sprite2D" parent="." unique_id=1722769291]
+position = Vector2(90, -19)
+texture = ExtResource("7_if")
+
+[node name="Icon" type="Sprite2D" parent="ItemFrameWeapons" unique_id=201201765]
+scale = Vector2(0.5, 0.5)
+
+[node name="ItemFrameEngine" type="Sprite2D" parent="." unique_id=2080214526]
+position = Vector2(-61, 105)
+texture = ExtResource("7_if")
+
+[node name="Icon" type="Sprite2D" parent="ItemFrameEngine" unique_id=2008014334]
+scale = Vector2(0.5, 0.5)
+
+[node name="SchemeCockpit" type="Sprite2D" parent="." unique_id=978142028]
 texture = ExtResource("3_ck")
 
-[node name="SchemeArmor" type="Sprite2D" parent="."]
+[node name="SchemeArmor" type="Sprite2D" parent="." unique_id=4486860]
 texture = ExtResource("4_ar")
 
-[node name="SchemeWeapons" type="Sprite2D" parent="."]
+[node name="SchemeWeapons" type="Sprite2D" parent="." unique_id=1284252409]
 texture = ExtResource("5_wp")
 
-[node name="SchemeEngine" type="Sprite2D" parent="."]
+[node name="SchemeEngine" type="Sprite2D" parent="." unique_id=609875553]
 texture = ExtResource("6_en")
-
-[node name="ItemFrameCockpit" type="Sprite2D" parent="."]
-position = Vector2(62, -45)
-texture = ExtResource("7_if")
-
-[node name="Icon" type="Sprite2D" parent="ItemFrameCockpit"]
-scale = Vector2(0.5, 0.5)
-
-[node name="ItemFrameArmor" type="Sprite2D" parent="."]
-position = Vector2(62, -15)
-texture = ExtResource("7_if")
-
-[node name="Icon" type="Sprite2D" parent="ItemFrameArmor"]
-scale = Vector2(0.5, 0.5)
-
-[node name="ItemFrameWeapons" type="Sprite2D" parent="."]
-position = Vector2(62, 15)
-texture = ExtResource("7_if")
-
-[node name="Icon" type="Sprite2D" parent="ItemFrameWeapons"]
-scale = Vector2(0.5, 0.5)
-
-[node name="ItemFrameEngine" type="Sprite2D" parent="."]
-position = Vector2(62, 45)
-texture = ExtResource("7_if")
-
-[node name="Icon" type="Sprite2D" parent="ItemFrameEngine"]
-scale = Vector2(0.5, 0.5)
