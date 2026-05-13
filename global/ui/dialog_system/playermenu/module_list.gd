@@ -15,8 +15,11 @@ const MAX_ITEMS: int = 8
 ## Local-space origin for the first list item. Tune to align with frame sprite.
 @export var item_origin: Vector2 = Vector2(0.0, -100.0)
 
+@onready var _description_lbl: RichTextLabel = $FrameBackground/ModuleDescription
+
 var _items: Array[ModuleListItem] = []
 var _ids:   Array[StringName] = []
+var _descs: Array[String] = []
 var _cursor_row: int = 0
 
 func _ready() -> void:
@@ -36,14 +39,15 @@ func open(slot: StringName, current_id: StringName) -> void:
 		item.position = item_origin + Vector2(0.0, i * _ROW_HEIGHT)
 		var id: StringName = _ids[i]
 		if id == &"":
-			item.configure("", "Remove installed module.", null)
+			item.configure("", null)
+			_descs.append("Remove installed module.")
 		else:
 			var mod := _make_module(id)
 			item.configure(
 				mod.get_display_name() if mod else String(id),
-				mod.get_description() if mod else "",
 				mod.get_icon() if mod else null
 			)
+			_descs.append(mod.get_description() if mod else "")
 		_items.append(item)
 
 	## Initialise cursor on currently equipped item.
@@ -70,10 +74,13 @@ func _clear() -> void:
 		item.queue_free()
 	_items.clear()
 	_ids.clear()
+	_descs.clear()
 
 func _refresh_cursor() -> void:
 	for i: int in _items.size():
 		_items[i].set_cursor(i == _cursor_row)
+	if _description_lbl != null and _cursor_row < _descs.size():
+		_description_lbl.text = _descs[_cursor_row]
 
 func _refresh_selected(current_id: StringName) -> void:
 	for i: int in _items.size():

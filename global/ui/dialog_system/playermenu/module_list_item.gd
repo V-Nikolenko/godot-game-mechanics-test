@@ -12,7 +12,6 @@ const _GREY_MODULATE     := Color(0.45, 0.45, 0.45) ## None/empty-slot appearanc
 @onready var _bg_sprite: Sprite2D  = $SelectionBG
 @onready var _icon:      Sprite2D  = $ModuleIcon
 @onready var _name_lbl:  Label     = $SelectionBG/ModuleName
-@onready var _desc_lbl:  Label     = $SelectionBG/ModuleDesc
 
 var _is_selected: bool = false
 var _is_cursor:   bool = false
@@ -21,11 +20,10 @@ var _is_none:     bool = false
 func _ready() -> void:
 	_update_modulate()
 
-## Populate this row. Pass null icon and empty strings for the "None" row.
-func configure(display_name: String, description: String, icon: Texture2D) -> void:
+## Populate this row. Pass null icon and empty name for the "None" row.
+func configure(display_name: String, icon: Texture2D) -> void:
 	_is_none = display_name == ""
 	_name_lbl.text = display_name if display_name != "" else "None"
-	_desc_lbl.text = description
 	if _icon != null:
 		if icon != null:
 			_icon.texture = icon
