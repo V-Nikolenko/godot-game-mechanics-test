@@ -42,6 +42,10 @@ func play(script: DialogScriptResource) -> void:
 	if script == null or script.lines.is_empty():
 		push_warning("[DialogPlayer] play() called with empty/null script; ignoring.")
 		return
+	## Block if something else (e.g. PlayerMenu) has paused the game first.
+	if get_tree().paused:
+		push_warning("[DialogPlayer] play() called while game is already paused; ignoring.")
+		return
 
 	_current_script = script
 	_current_index = 0

@@ -9,7 +9,7 @@ extends Node2D
 ## Modulate colours.
 const _NORMAL_COLOR  := Color.WHITE            ## Equipped = full colour.
 const _EMPTY_COLOR   := Color(0.4, 0.4, 0.4)  ## Nothing equipped = grey.
-const _HOVER_COLOR   := Color(2.0, 0.5, 1.2)  ## Cursor on this slot = pink highlight.
+const _HOVER_COLOR   := Color(1.4, 1.4, 1.0)  ## Cursor on this slot = yellow (same as WeaponOption).
 
 ## Slot order: 0=cockpit, 1=armor, 2=weapons, 3=engines.
 ## Must match ShipModuleState.SLOTS order.
@@ -72,8 +72,13 @@ func _update_visuals() -> void:
 		else:
 			scheme_sprites[i].modulate = _EMPTY_COLOR
 
-		## Item frame colour.
-		item_frames[i].modulate = _NORMAL_COLOR if has_module else _EMPTY_COLOR
+		## Item frame colour — yellow on hover, white if equipped, grey if empty.
+		if is_hovered:
+			item_frames[i].modulate = _HOVER_COLOR
+		elif has_module:
+			item_frames[i].modulate = _NORMAL_COLOR
+		else:
+			item_frames[i].modulate = _EMPTY_COLOR
 
 		## Item icon.
 		var icon: Texture2D = _MODULE_ICONS.get(equipped_id, null)

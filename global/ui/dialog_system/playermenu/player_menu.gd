@@ -102,7 +102,11 @@ func _input(event: InputEvent) -> void:
 
 func _toggle() -> void:
 	if not visible:
+		## Block while another system (dialog or other) has already paused the game.
 		if get_tree().paused:
+			return
+		## Block if a dialog sequence is running (even non-pausing ones).
+		if DialogPlayer.is_active:
 			return
 		visible = true
 		get_tree().paused = true
