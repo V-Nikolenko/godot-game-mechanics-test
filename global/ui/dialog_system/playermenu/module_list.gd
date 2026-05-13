@@ -12,9 +12,6 @@ const _ITEM_SCENE: PackedScene = preload("res://global/ui/dialog_system/playerme
 const _ROW_HEIGHT: float = 36.0
 const MAX_ITEMS: int = 8
 
-const _DESC_MAX_FONT_SIZE: int = 12
-const _DESC_MIN_FONT_SIZE: int = 6
-
 ## Local-space origin for the first list item. Tune to align with frame sprite.
 @export var item_origin: Vector2 = Vector2(0.0, -100.0)
 
@@ -83,23 +80,7 @@ func _refresh_cursor() -> void:
 	for i: int in _items.size():
 		_items[i].set_cursor(i == _cursor_row)
 	if _description_lbl != null and _cursor_row < _descs.size():
-		_description_lbl.add_theme_font_size_override("normal_font_size", _DESC_MAX_FONT_SIZE)
 		_description_lbl.text = _descs[_cursor_row]
-		_fit_description_font()
-
-## Wait one frame for RichTextLabel layout, then scale font down proportionally
-## so the content fits within 75% of the label height.
-func _fit_description_font() -> void:
-	await get_tree().process_frame
-	var limit: float = _description_lbl.size.y * 0.75
-	var content_h: float = _description_lbl.get_content_height()
-	if content_h > limit and content_h > 0.0:
-		var new_size: int = clampi(
-			int(_DESC_MAX_FONT_SIZE * limit / content_h),
-			_DESC_MIN_FONT_SIZE,
-			_DESC_MAX_FONT_SIZE
-		)
-		_description_lbl.add_theme_font_size_override("normal_font_size", new_size)
 
 func _refresh_selected(current_id: StringName) -> void:
 	for i: int in _items.size():
