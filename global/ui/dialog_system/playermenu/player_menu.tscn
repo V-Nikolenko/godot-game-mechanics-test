@@ -32,5 +32,5 @@ position = Vector2(261, 148)
 position = Vector2(448, 148)
 
 [node name="ModuleList" parent="." instance=ExtResource("6_ml")]
-position = Vector2(92, 180)
+position = Vector2(200, 180)
 item_origin = Vector2(0.0, -90.0)
