@@ -45,6 +45,10 @@ func equip(slot: StringName, module_id: StringName) -> void:
 	if slot not in SLOTS:
 		push_warning("ShipModuleState: unknown slot '%s'" % slot)
 		return
+	var valid_ids: Array = SLOT_MODULES.get(slot, [])
+	if module_id != &"" and module_id not in valid_ids:
+		push_warning("ShipModuleState: module_id '%s' is not valid for slot '%s'" % [module_id, slot])
+		return
 	var prev: StringName = _equipped.get(slot, &"")
 	if prev == module_id:
 		return
@@ -52,7 +56,8 @@ func equip(slot: StringName, module_id: StringName) -> void:
 		module_unequipped.emit(slot, prev)
 	_equipped[slot] = module_id
 	_save()
-	module_equipped.emit(slot, module_id)
+	if module_id != &"":
+		module_equipped.emit(slot, module_id)
 
 func _save() -> void:
 	var cfg := ConfigFile.new()
@@ -60,7 +65,7 @@ func _save() -> void:
 		cfg.set_value(SECTION, String(slot), String(_equipped[slot]))
 	var err := cfg.save(SAVE_PATH)
 	if err != OK:
-		push_warning("ShipModuleState: failed to save (%s)" % error_string(err))
+		push_error("ShipModuleState: failed to save (%s)" % error_string(err))
 
 func _load() -> void:
 	var cfg := ConfigFile.new()
@@ -68,4 +73,9 @@ func _load() -> void:
 		return
 	for slot: StringName in SLOTS:
 		var raw: String = cfg.get_value(SECTION, String(slot), "")
-		_equipped[slot] = StringName(raw)
+		var id := StringName(raw)
+		var valid: Array = SLOT_MODULES.get(slot, [])
+		if id in valid:
+			_equipped[slot] = id
+		else if id != &"":
+			push_warning("ShipModuleState: unknown module_id '%s' for slot '%s', ignoring" % [raw, slot])
