@@ -9,7 +9,7 @@ extends Node2D
 ## Modulate colours.
 const _NORMAL_COLOR  := Color.WHITE            ## Equipped = full colour.
 const _EMPTY_COLOR   := Color(0.4, 0.4, 0.4)  ## Nothing equipped = grey.
-const _HOVER_COLOR   := Color(1.4, 1.4, 1.0)  ## Cursor on this slot = yellow (same as WeaponOption).
+const _HOVER_COLOR   := Color(0.5, 1.5, 0.5)  ## Cursor on this slot = green (dim R+B, boost G).
 
 ## Slot order: 0=cockpit, 1=armor, 2=weapons, 3=engines.
 ## Must match ShipModuleState.SLOTS order.
