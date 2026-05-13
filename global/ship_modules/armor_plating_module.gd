@@ -13,7 +13,7 @@ func get_icon() -> Texture2D:
 func get_slot() -> StringName: return &"armor"
 
 func apply(player: Node) -> void:
-	var health := player.get("health_component")
+	var health: Variant = player.get("health_component")
 	if health:
 		health.max_health += _HEALTH_BONUS
 		## Also restore the bonus HP so the player doesn't gain a phantom bonus bar.
@@ -21,7 +21,7 @@ func apply(player: Node) -> void:
 	player.set("damage_reduction", player.get("damage_reduction") + _REDUCTION)
 
 func remove(player: Node) -> void:
-	var health := player.get("health_component")
+	var health: Variant = player.get("health_component")
 	if health:
 		health.max_health -= _HEALTH_BONUS
 		## Clamp current health so it doesn't exceed new max.

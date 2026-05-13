@@ -115,7 +115,7 @@ func _apply_module(id: StringName) -> void:
 		mod.apply(self)
 
 func _remove_module(id: StringName) -> void:
-	var mod := _module_pool.get(id, null)
+	var mod: ShipModuleBase = _module_pool.get(id, null) as ShipModuleBase
 	if mod:
 		mod.remove(self)
 		_module_pool.erase(id)
