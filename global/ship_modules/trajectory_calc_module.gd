@@ -35,14 +35,14 @@ func try_activate(player: Node) -> bool:
 	return true
 
 func tick(player: Node, delta: float) -> void:
-	if _cooldown_left > 0.0:
-		## Cooldown ticks in real time, so divide out the current time_scale.
-		_cooldown_left -= delta / Engine.time_scale
 	if _active:
-		## _TIME_SCALE is what WE set; dividing recovers real elapsed seconds.
+		## delta / _TIME_SCALE recovers real elapsed seconds while time is slowed.
 		_time_left -= delta / _TIME_SCALE
 		if _time_left <= 0.0:
 			_restore(player)
+	elif _cooldown_left > 0.0:
+		## Module is inactive; time_scale == 1.0, so plain delta is correct.
+		_cooldown_left -= delta
 
 func _restore(player: Node) -> void:
 	if not _active:

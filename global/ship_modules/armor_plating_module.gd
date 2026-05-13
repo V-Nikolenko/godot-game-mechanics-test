@@ -25,6 +25,6 @@ func remove(player: Node) -> void:
 	if health:
 		health.max_health -= _HEALTH_BONUS
 		## Clamp current health so it doesn't exceed new max.
-		if health.health > health.max_health:
+		if health.current_health > health.max_health:
 			health.set_health(health.max_health)
 	player.set("damage_reduction", maxf(0.0, player.get("damage_reduction") - _REDUCTION))
