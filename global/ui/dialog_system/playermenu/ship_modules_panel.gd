@@ -13,24 +13,20 @@ const _HOVER_COLOR   := Color(2.0, 0.5, 1.2)  ## Cursor on this slot = pink high
 
 ## Slot order: 0=cockpit, 1=armor, 2=weapons, 3=engines.
 ## Must match ShipModuleState.SLOTS order.
-@onready var _scheme_sprites: Array[Sprite2D] = [
-	$SchemeCockpit,
-	$SchemeArmor,
-	$SchemeWeapons,
-	$SchemeEngine,
-]
-@onready var _item_frames: Array[Sprite2D] = [
-	$ItemFrameCockpit,
-	$ItemFrameArmor,
-	$ItemFrameWeapons,
-	$ItemFrameEngine,
-]
-@onready var _item_icons: Array[Sprite2D] = [
-	$ItemFrameCockpit/Icon,
-	$ItemFrameArmor/Icon,
-	$ItemFrameWeapons/Icon,
-	$ItemFrameEngine/Icon,
-]
+@onready var _scheme_cockpit:  Sprite2D = $SchemeCockpit
+@onready var _scheme_armor:    Sprite2D = $SchemeArmor
+@onready var _scheme_weapons:  Sprite2D = $SchemeWeapons
+@onready var _scheme_engine:   Sprite2D = $SchemeEngine
+
+@onready var _item_frame_cockpit:  Sprite2D = $ItemFrameCockpit
+@onready var _item_frame_armor:    Sprite2D = $ItemFrameArmor
+@onready var _item_frame_weapons:  Sprite2D = $ItemFrameWeapons
+@onready var _item_frame_engine:   Sprite2D = $ItemFrameEngine
+
+@onready var _item_icon_cockpit:   Sprite2D = $ItemFrameCockpit/Icon
+@onready var _item_icon_armor:     Sprite2D = $ItemFrameArmor/Icon
+@onready var _item_icon_weapons:   Sprite2D = $ItemFrameWeapons/Icon
+@onready var _item_icon_engine:    Sprite2D = $ItemFrameEngine/Icon
 
 ## Module icon textures by module id.
 const _MODULE_ICONS: Dictionary = {
@@ -58,6 +54,10 @@ func get_slot_count() -> int:
 	return 4
 
 func _update_visuals() -> void:
+	var scheme_sprites: Array[Sprite2D] = [_scheme_cockpit, _scheme_armor, _scheme_weapons, _scheme_engine]
+	var item_frames: Array[Sprite2D] = [_item_frame_cockpit, _item_frame_armor, _item_frame_weapons, _item_frame_engine]
+	var item_icons: Array[Sprite2D] = [_item_icon_cockpit, _item_icon_armor, _item_icon_weapons, _item_icon_engine]
+
 	for i: int in 4:
 		var slot: StringName = ShipModuleState.SLOTS[i]
 		var equipped_id: StringName = ShipModuleState.get_equipped(slot)
@@ -66,16 +66,16 @@ func _update_visuals() -> void:
 
 		## Scheme sprite colour.
 		if is_hovered:
-			_scheme_sprites[i].modulate = _HOVER_COLOR
+			scheme_sprites[i].modulate = _HOVER_COLOR
 		elif has_module:
-			_scheme_sprites[i].modulate = _NORMAL_COLOR
+			scheme_sprites[i].modulate = _NORMAL_COLOR
 		else:
-			_scheme_sprites[i].modulate = _EMPTY_COLOR
+			scheme_sprites[i].modulate = _EMPTY_COLOR
 
 		## Item frame colour.
-		_item_frames[i].modulate = _NORMAL_COLOR if has_module else _EMPTY_COLOR
+		item_frames[i].modulate = _NORMAL_COLOR if has_module else _EMPTY_COLOR
 
 		## Item icon.
 		var icon: Texture2D = _MODULE_ICONS.get(equipped_id, null)
-		_item_icons[i].texture = icon
-		_item_icons[i].visible = icon != null
+		item_icons[i].texture = icon
+		item_icons[i].visible = icon != null

@@ -77,5 +77,5 @@ func _load() -> void:
 		var valid: Array = SLOT_MODULES.get(slot, [])
 		if id in valid:
 			_equipped[slot] = id
-		else if id != &"":
+		elif id != &"":
 			push_warning("ShipModuleState: unknown module_id '%s' for slot '%s', ignoring" % [raw, slot])
