@@ -1,0 +1,10 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://global/ui/dialog_system/playermenu/module_list.gd" id="1_ml"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_modules_list_frame.png" id="2_mlf"]
+
+[node name="ModuleList" type="Node2D"]
+script = ExtResource("1_ml")
+
+[node name="FrameBackground" type="Sprite2D" parent="."]
+texture = ExtResource("2_mlf")
