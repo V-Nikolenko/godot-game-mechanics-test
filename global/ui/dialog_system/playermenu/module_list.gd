@@ -17,10 +17,15 @@ const MAX_ITEMS: int = 8
 
 @onready var _description_lbl: RichTextLabel = $FrameBackground/ModuleDescription
 
+const _DESC_MAX_FONT_SIZE: int = 4
+const _DESC_MIN_FONT_SIZE: int = 1
+
 var _items: Array[ModuleListItem] = []
 var _ids:   Array[StringName] = []
 var _descs: Array[String] = []
 var _cursor_row: int = 0
+## Incremented on each cursor move; stale coroutines bail early.
+var _desc_generation: int = 0
 
 func _ready() -> void:
 	visible = false
@@ -80,7 +85,26 @@ func _refresh_cursor() -> void:
 	for i: int in _items.size():
 		_items[i].set_cursor(i == _cursor_row)
 	if _description_lbl != null and _cursor_row < _descs.size():
+		_desc_generation += 1
+		_description_lbl.add_theme_font_size_override("normal_font_size", _DESC_MAX_FONT_SIZE)
 		_description_lbl.text = _descs[_cursor_row]
+		_fit_description_font(_desc_generation)
+
+## Waits one frame for layout, then scales font down so content fits the box.
+## The generation parameter cancels stale calls from rapid navigation.
+func _fit_description_font(generation: int) -> void:
+	await get_tree().process_frame
+	if generation != _desc_generation:
+		return  ## Cursor moved again while waiting; skip.
+	var limit: float = _description_lbl.size.y
+	var content_h: float = _description_lbl.get_content_height()
+	if content_h > limit and content_h > 0.0:
+		var new_size: int = clampi(
+			int(_DESC_MAX_FONT_SIZE * limit / content_h),
+			_DESC_MIN_FONT_SIZE,
+			_DESC_MAX_FONT_SIZE
+		)
+		_description_lbl.add_theme_font_size_override("normal_font_size", new_size)
 
 func _refresh_selected(current_id: StringName) -> void:
 	for i: int in _items.size():

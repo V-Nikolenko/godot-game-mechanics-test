@@ -1,10 +1,21 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://b0jrhlkvg1h7g"]
 
-[ext_resource type="Script" path="res://global/ui/dialog_system/playermenu/module_list.gd" id="1_ml"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_modules_list_frame.png" id="2_mlf"]
+[ext_resource type="Script" uid="uid://dx6y4mx335ywm" path="res://global/ui/dialog_system/playermenu/module_list.gd" id="1_ml"]
+[ext_resource type="Texture2D" uid="uid://c2n60btm327vb" path="res://assault/assets/sprites/ui/menu_modules_list_frame.png" id="2_mlf"]
 
-[node name="ModuleList" type="Node2D"]
+[node name="ModuleList" type="Node2D" unique_id=1654389634]
 script = ExtResource("1_ml")
 
-[node name="FrameBackground" type="Sprite2D" parent="."]
+[node name="FrameBackground" type="Sprite2D" parent="." unique_id=38301301]
 texture = ExtResource("2_mlf")
+
+[node name="ModuleDescription" type="RichTextLabel" parent="FrameBackground" unique_id=1111361976]
+offset_left = 39.0
+offset_top = -111.0
+offset_right = 79.0
+offset_bottom = -71.0
+scale = Vector2(2.8799994, 5.84)
+text = "Text"
+fit_content = true
+scroll_active = false
+tab_size = 3
