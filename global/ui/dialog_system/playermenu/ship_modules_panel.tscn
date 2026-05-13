@@ -1,0 +1,55 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://global/ui/dialog_system/playermenu/ship_modules_panel.gd" id="1_smp"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_frame.png" id="2_frame"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_cockpit.png" id="3_ck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_armor.png" id="4_ar"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_weapons.png" id="5_wp"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_scheme_engine.png" id="6_en"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_ship_modules_item_frame.png" id="7_if"]
+
+[node name="ShipModulesPanel" type="Node2D"]
+script = ExtResource("1_smp")
+
+[node name="OuterFrame" type="Sprite2D" parent="."]
+texture = ExtResource("2_frame")
+
+[node name="SchemeCockpit" type="Sprite2D" parent="."]
+texture = ExtResource("3_ck")
+
+[node name="SchemeArmor" type="Sprite2D" parent="."]
+texture = ExtResource("4_ar")
+
+[node name="SchemeWeapons" type="Sprite2D" parent="."]
+texture = ExtResource("5_wp")
+
+[node name="SchemeEngine" type="Sprite2D" parent="."]
+texture = ExtResource("6_en")
+
+[node name="ItemFrameCockpit" type="Sprite2D" parent="."]
+position = Vector2(62, -45)
+texture = ExtResource("7_if")
+
+[node name="Icon" type="Sprite2D" parent="ItemFrameCockpit"]
+scale = Vector2(0.5, 0.5)
+
+[node name="ItemFrameArmor" type="Sprite2D" parent="."]
+position = Vector2(62, -15)
+texture = ExtResource("7_if")
+
+[node name="Icon" type="Sprite2D" parent="ItemFrameArmor"]
+scale = Vector2(0.5, 0.5)
+
+[node name="ItemFrameWeapons" type="Sprite2D" parent="."]
+position = Vector2(62, 15)
+texture = ExtResource("7_if")
+
+[node name="Icon" type="Sprite2D" parent="ItemFrameWeapons"]
+scale = Vector2(0.5, 0.5)
+
+[node name="ItemFrameEngine" type="Sprite2D" parent="."]
+position = Vector2(62, 45)
+texture = ExtResource("7_if")
+
+[node name="Icon" type="Sprite2D" parent="ItemFrameEngine"]
+scale = Vector2(0.5, 0.5)
