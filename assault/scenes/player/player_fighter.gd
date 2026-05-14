@@ -82,15 +82,18 @@ func _physics_process(_delta: float) -> void:
 	for id: StringName in _module_pool.keys():
 		_module_pool[id].tick(self, _delta)
 
-func _unhandled_input(event: InputEvent) -> void:
-	## Route use_ability (H) to active modules first.
-	## If no module consumes it, the event falls through to AbilityController.
-	if event.is_action_pressed("use_ability"):
-		for id: StringName in _module_pool.keys():
-			var mod: ShipModuleBase = _module_pool[id]
-			if mod.try_activate(self):
-				get_viewport().set_input_as_handled()
-				return  ## Consumed by module; AbilityController won't see it.
+func _input(event: InputEvent) -> void:
+	## _input fires before AbilityController's _unhandled_input (leaf→root order),
+	## so modules always get priority over the ability system.
+	if not event.is_action_pressed("use_ability"):
+		return
+	if DialogPlayer.is_active:
+		return
+	for id: StringName in _module_pool.keys():
+		var mod: ShipModuleBase = _module_pool[id]
+		if mod.try_activate(self):
+			get_viewport().set_input_as_handled()
+			return  ## Consumed by module; AbilityController won't see it.
 
 func _get_or_create_module(id: StringName) -> ShipModuleBase:
 	if not _module_pool.has(id):
