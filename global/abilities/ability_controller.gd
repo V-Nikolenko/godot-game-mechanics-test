@@ -73,7 +73,6 @@ func _swap_ability(id: StringName) -> void:
 
 func _create_ability(id: StringName) -> AbilityBase:
 	match id:
-		&"parry":           return preload("res://global/abilities/parry_ability.gd").new()
 		&"shockwave":       return preload("res://global/abilities/shockwave_ability.gd").new()
 		&"overdrive":       return preload("res://global/abilities/overdrive_ability.gd").new()
 		&"teleport":        return preload("res://global/abilities/teleport_ability.gd").new()

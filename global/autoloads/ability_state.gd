@@ -10,8 +10,9 @@ const SECTION := "ability"
 const KEY := "selected"
 
 ## All valid ability IDs in display order.
+## Note: "parry" is intentionally absent — it exists only as a ship module.
 const ALL_IDS: Array[StringName] = [
-	&"parry", &"shockwave", &"overdrive", &"teleport",
+	&"shockwave", &"overdrive", &"teleport",
 	&"armor_plating", &"overheat_nullifier", &"final_resort",
 	&"emp_blast", &"plasma_nova", &"shield_overload",
 	&"shield_recharge", &"trajectory_calc",
@@ -19,7 +20,7 @@ const ALL_IDS: Array[StringName] = [
 
 signal ability_changed(id: StringName)
 
-var selected_id: StringName = &"parry"
+var selected_id: StringName = &"shockwave"
 
 func _ready() -> void:
 	_load()
@@ -47,7 +48,7 @@ func _load() -> void:
 	if err != OK:
 		push_warning("AbilityState: failed to load (%s)" % error_string(err))
 		return
-	var raw: String = cfg.get_value(SECTION, KEY, "parry")
+	var raw: String = cfg.get_value(SECTION, KEY, "shockwave")
 	var id := StringName(raw)
 	if id in ALL_IDS:
 		selected_id = id
