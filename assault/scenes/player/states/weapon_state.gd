@@ -103,6 +103,10 @@ func _physics_process(delta: float) -> void:
 			heat_component.increase_heat(mode.heat_per_shot * delta)
 		else:
 			beam.release(self)
+	else:
+		## Hold-to-fire: fires every frame the button is held, rate-limited by _cooldown.
+		if Input.is_action_pressed("shoot"):
+			_try_fire_once()
 
 func _cycle() -> void:
 	var unlocked := UpgradeState.unlocked_ids()

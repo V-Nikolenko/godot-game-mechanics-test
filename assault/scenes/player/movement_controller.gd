@@ -9,7 +9,6 @@ var SINGLE_PRESS_ACTIONS: Array = [
 	"move_right",
 	"move_up",
 	"move_down",
-	"shoot",
 	"special_weapon",
 	"switch_weapon",
 	"cycle_weapon",
