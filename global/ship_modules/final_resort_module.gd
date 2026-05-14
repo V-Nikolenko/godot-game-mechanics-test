@@ -3,6 +3,7 @@ class_name FinalResortModule
 extends ShipModuleBase
 
 const _DAMAGE_MULTIPLIER: float = 3.0
+const _SPRITE_PATH: String = "SpriteAnchor/ShipSprite2D"
 
 var _active: bool = false
 var _saved_hp: int = 0
@@ -45,14 +46,16 @@ func _engage(player: Node) -> void:
 
 	## Drain shield.
 	var shield: Shield = player.get("shield_component") as Shield
-	if shield:
+	if shield == null:
+		push_warning("FinalResortModule: shield_component not found on player")
+	else:
 		shield.set_shield(0)
 
 	## Triple damage.
 	player.set("damage_multiplier", _DAMAGE_MULTIPLIER)
 
 	## Blood-red ship tint.
-	var sprite := player.get_node_or_null("SpriteAnchor/ShipSprite2D") as CanvasItem
+	var sprite := player.get_node_or_null(_SPRITE_PATH) as CanvasItem
 	if sprite:
 		sprite.modulate = Color(1.0, 0.1, 0.1, 1.0)
 
@@ -67,6 +70,6 @@ func _disengage(player: Node) -> void:
 	player.set("damage_multiplier", 1.0)
 
 	## Remove tint.
-	var sprite := player.get_node_or_null("SpriteAnchor/ShipSprite2D") as CanvasItem
+	var sprite := player.get_node_or_null(_SPRITE_PATH) as CanvasItem
 	if sprite:
 		player.create_tween().tween_property(sprite, "modulate", Color(1, 1, 1, 1), 0.3)
