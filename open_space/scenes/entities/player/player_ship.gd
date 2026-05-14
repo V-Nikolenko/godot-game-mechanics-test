@@ -16,11 +16,29 @@ extends PlayerBase
 @export var boost_duration_sec: float = 0.3
 @export var boost_speed_threshold: float = 180.0
 
+## Set true by WarpModule.apply(). Not used in open space (no DashState), but
+## the property must exist so WarpModule can set/clear it without error.
+var warp_module_active: bool = false
+## Set true by OverclockModule.apply(). Allows firing past overheat.
+var overclock_module_active: bool = false
+
 var _boost_timer: float = 0.0
+
+## Active module instances — created lazily in _apply_module().
+var _module_pool: Dictionary = {}  # { StringName: ShipModuleBase }
 
 func _ready() -> void:
 	super()  # add_to_group, _setup_components, _setup_effects
 	rotation = 0.0
+
+	## Connect module state signals for live equip/unequip during gameplay.
+	ShipModuleState.module_equipped.connect(_on_module_equipped)
+	ShipModuleState.module_unequipped.connect(_on_module_unequipped)
+	## Apply modules already equipped from a previous session.
+	for slot: StringName in ShipModuleState.SLOTS:
+		var id: StringName = ShipModuleState.get_equipped(slot)
+		if id != &"":
+			_apply_module(id)
 
 func _setup_effects() -> void:
 	_hit_effect = HitEffect.new()
@@ -44,6 +62,19 @@ func _physics_process(delta: float) -> void:
 	_handle_rotation(delta)
 	_handle_thrust(delta)
 	move_and_slide()
+	## Tick all equipped modules every frame (handles cooldowns, timed effects).
+	for id: StringName in _module_pool.keys():
+		_module_pool[id].tick(self, delta)
+
+func _input(event: InputEvent) -> void:
+	## _input fires before _unhandled_input — modules get first pick of H-key.
+	if not event.is_action_pressed("use_ability"):
+		return
+	for id: StringName in _module_pool.keys():
+		var mod: ShipModuleBase = _module_pool[id]
+		if mod.try_activate(self):
+			get_viewport().set_input_as_handled()
+			return  ## Consumed by module.
 
 func _handle_rotation(delta: float) -> void:
 	var turn: float = 0.0
@@ -89,6 +120,49 @@ func _trigger_flip_boost(forward: Vector2) -> void:
 	velocity = forward * boost_redirect_speed
 	_boost_timer = boost_duration_sec
 
+func _get_or_create_module(id: StringName) -> ShipModuleBase:
+	if not _module_pool.has(id):
+		var inst: ShipModuleBase = _create_module(id)
+		if inst != null:
+			_module_pool[id] = inst
+	return _module_pool.get(id, null)
+
+func _create_module(id: StringName) -> ShipModuleBase:
+	match id:
+		&"armor_plating":      return ArmorPlatingModule.new()
+		&"parry":              return ParryModule.new()
+		&"trajectory_calc":    return TrajectoryCalcModule.new()
+		&"warp":               return WarpModule.new()
+		&"overclock":          return OverclockModule.new()
+		&"emp_blast":          return EMPBlastModule.new()
+		&"shield_overload":    return ShieldOverloadModule.new()
+		&"final_resort":       return FinalResortModule.new()
+		&"plasma_nova":        return PlasmaNovaModule.new()
+		&"overdrive":          return OverdriveModule.new()
+		&"overheat_nullifier": return OverheatNullifierModule.new()
+		_:
+			push_warning("OpenSpacePlayerShip: unknown module id '%s'" % id)
+			return null
+
+func _apply_module(id: StringName) -> void:
+	var mod := _get_or_create_module(id)
+	if mod:
+		mod.apply(self)
+
+func _remove_module(id: StringName) -> void:
+	var mod: ShipModuleBase = _module_pool.get(id, null) as ShipModuleBase
+	if mod:
+		mod.remove(self)
+		_module_pool.erase(id)
+
+func _on_module_equipped(_slot: StringName, module_id: StringName) -> void:
+	if module_id != &"":
+		_apply_module(module_id)
+
+func _on_module_unequipped(_slot: StringName, prev_id: StringName) -> void:
+	if prev_id != &"":
+		_remove_module(prev_id)
+
 ## Scene-connected: HurtBox.received_damage → _on_received_damage.
 func _on_received_damage(damage: int) -> void:
 	_apply_damage(damage)
@@ -103,7 +177,15 @@ func _on_health_changed(current: int) -> void:
 		if is_instance_valid(self):
 			get_tree().reload_current_scene()
 
-## Override: simple overheat gating (no overdrive in open space).
+## Override: overheat gating with overclock and overdrive module support.
 func _on_overheat_updated(pct: float) -> void:
 	super(pct)  # emits EventBus.player_overheat_changed
+	## Overclock module: never lock weapons, even at 100% heat.
+	if overclock_module_active:
+		can_attack = true
+		return
+	## Overdrive module: suppresses overheat lock while active.
+	if overdrive_active:
+		can_attack = true
+		return
 	can_attack = pct < 100.0
