@@ -23,6 +23,7 @@ var warp_module_active: bool = false
 var overclock_module_active: bool = false
 
 var _boost_timer: float = 0.0
+var _overheat_bar: OverheatBar = null
 
 ## Active module instances — created lazily in _apply_module().
 var _module_pool: Dictionary = {}  # { StringName: ShipModuleBase }
@@ -30,6 +31,13 @@ var _module_pool: Dictionary = {}  # { StringName: ShipModuleBase }
 func _ready() -> void:
 	super()  # add_to_group, _setup_components, _setup_effects
 	rotation = 0.0
+
+	## Overheat bar — top_level keeps it upright as the ship rotates;
+	## _physics_process updates its global_position to track the player.
+	_overheat_bar = OverheatBar.new()
+	_overheat_bar.top_level = true
+	add_child(_overheat_bar)
+	_overheat_bar.setup(overheat_component)
 
 	## Connect module state signals for live equip/unequip during gameplay.
 	ShipModuleState.module_equipped.connect(_on_module_equipped)
@@ -62,6 +70,9 @@ func _physics_process(delta: float) -> void:
 	_handle_rotation(delta)
 	_handle_thrust(delta)
 	move_and_slide()
+	## Keep overheat bar centred on the ship in world space.
+	if _overheat_bar != null:
+		_overheat_bar.global_position = global_position + Vector2(0.0, 20.0)
 	## Tick all equipped modules every frame (handles cooldowns, timed effects).
 	for id: StringName in _module_pool.keys():
 		_module_pool[id].tick(self, delta)
