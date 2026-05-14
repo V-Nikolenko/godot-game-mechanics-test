@@ -36,7 +36,7 @@ func open(slot: StringName, current_id: StringName) -> void:
 		var item := _ITEM_SCENE.instantiate() as ModuleListItem
 		assert(item != null)
 		add_child(item)
-		item.position = item_origin + Vector2(-70.0, i * _ROW_HEIGHT)
+		item.position = item_origin + Vector2(-63.0, i * _ROW_HEIGHT)
 		var id: StringName = _ids[i]
 		if id == &"":
 			item.configure("", null)

@@ -19,28 +19,24 @@ position = Vector2(51, -73)
 texture = ExtResource("7_if")
 
 [node name="Icon" type="Sprite2D" parent="ItemFrameCockpit" unique_id=1928218846]
-scale = Vector2(0.5, 0.5)
 
 [node name="ItemFrameArmor" type="Sprite2D" parent="." unique_id=470169065]
 position = Vector2(-51, -48)
 texture = ExtResource("7_if")
 
 [node name="Icon" type="Sprite2D" parent="ItemFrameArmor" unique_id=335368845]
-scale = Vector2(0.5, 0.5)
 
 [node name="ItemFrameWeapons" type="Sprite2D" parent="." unique_id=1722769291]
 position = Vector2(90, -19)
 texture = ExtResource("7_if")
 
 [node name="Icon" type="Sprite2D" parent="ItemFrameWeapons" unique_id=201201765]
-scale = Vector2(0.5, 0.5)
 
 [node name="ItemFrameEngine" type="Sprite2D" parent="." unique_id=2080214526]
 position = Vector2(-61, 105)
 texture = ExtResource("7_if")
 
 [node name="Icon" type="Sprite2D" parent="ItemFrameEngine" unique_id=2008014334]
-scale = Vector2(0.5, 0.5)
 
 [node name="SchemeCockpit" type="Sprite2D" parent="." unique_id=978142028]
 texture = ExtResource("3_ck")

@@ -10,13 +10,11 @@ script = ExtResource("1_ml")
 texture = ExtResource("2_mlf")
 
 [node name="ModuleDescription" type="RichTextLabel" parent="FrameBackground" unique_id=1111361976]
-offset_left = 39.0
-offset_top = -111.0
-offset_right = 79.0
-offset_bottom = -71.0
-scale = Vector2(2.8799994, 5.84)
-theme_override_font_sizes/normal_font_size = 2
+offset_left = 38.0
+offset_top = -110.0
+offset_right = 154.0
+offset_bottom = 124.28999
+theme_override_font_sizes/normal_font_size = 10
 text = "Text"
 fit_content = true
 scroll_active = false
-tab_size = 3

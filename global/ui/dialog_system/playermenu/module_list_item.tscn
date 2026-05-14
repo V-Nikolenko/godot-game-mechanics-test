@@ -1,24 +1,25 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene format=3 uid="uid://dmkftuwei4hfm"]
 
-[ext_resource type="Script" path="res://global/ui/dialog_system/playermenu/module_list_item.gd" id="1_mli"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_modules_list_item.png" id="2_bg"]
+[ext_resource type="Script" uid="uid://dyxs3jmfh51lg" path="res://global/ui/dialog_system/playermenu/module_list_item.gd" id="1_mli"]
+[ext_resource type="Texture2D" uid="uid://da16jwsshxjh4" path="res://assault/assets/sprites/ui/menu_modules_list_item.png" id="2_bg"]
 
-[node name="ModuleListItem" type="Control"]
-script = ExtResource("1_mli")
+[node name="ModuleListItem" type="Control" unique_id=1853561469]
 custom_minimum_size = Vector2(160, 32)
+layout_mode = 3
+anchors_preset = 0
+script = ExtResource("1_mli")
 
-[node name="ModuleIcon" type="Sprite2D" parent="."]
-position = Vector2(-65, 0)
-scale = Vector2(0.45, 0.45)
+[node name="ModuleIcon" type="Sprite2D" parent="." unique_id=1609834359]
+position = Vector2(-74, 0)
+scale = Vector2(1.0023508, 1.0068781)
 
-[node name="SelectionBG" type="Sprite2D" parent="."]
+[node name="SelectionBG" type="Sprite2D" parent="." unique_id=716080001]
 texture = ExtResource("2_bg")
 
-[node name="ModuleName" type="Label" parent="SelectionBG"]
-offset_left = -40.0
-offset_top = -14.0
-offset_right = 80.0
-offset_bottom = -2.0
-text = ""
+[node name="ModuleName" type="Label" parent="SelectionBG" unique_id=303402039]
+offset_left = -51.0
+offset_top = -11.0
+offset_right = 89.56
+offset_bottom = 12.0
+theme_override_font_sizes/font_size = 12
 vertical_alignment = 1
-

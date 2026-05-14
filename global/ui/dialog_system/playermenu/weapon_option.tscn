@@ -21,5 +21,6 @@ offset_left = -43.82741
 offset_top = -11.533531
 offset_right = 71.50787
 offset_bottom = 11.466469
+theme_override_font_sizes/font_size = 12
 text = "Weapon"
 vertical_alignment = 1
