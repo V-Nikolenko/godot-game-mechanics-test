@@ -16,7 +16,7 @@ var _hit_effect: HitEffect = null
 var _explosion_effect: ExplosionEffect = null
 var _thruster: ThrusterEffect = null
 
-## Multipliers written by AbilityController / abilities.
+## Multipliers written by ship modules (OverdriveModule, FinalResortModule, etc.).
 ## WeaponState reads these when computing damage and cooldowns.
 var damage_multiplier: float = 1.0
 var fire_rate_multiplier: float = 1.0

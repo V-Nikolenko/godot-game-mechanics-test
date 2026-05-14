@@ -1,4 +1,4 @@
-[gd_scene load_steps=30 format=3 uid="uid://ty6a2vpnmrr5"]
+[gd_scene load_steps=29 format=3 uid="uid://ty6a2vpnmrr5"]
 
 [ext_resource type="Script" uid="uid://lb288p2swjp0" path="res://assault/scenes/player/player_fighter.gd" id="1_allu4"]
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_prbxf"]
@@ -14,7 +14,6 @@
 [ext_resource type="Script" path="res://global/components/shield_component.gd" id="15_shld"]
 [ext_resource type="Script" uid="uid://coqfv3aco6d8i" path="res://global/components/overheat_component.gd" id="12_ctrog"]
 [ext_resource type="Script" path="res://assault/scenes/player/debug_unlock_all.gd" id="14_dbgul"]
-[ext_resource type="Script" path="res://global/abilities/ability_controller.gd" id="16_abctl"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ht8os"]
 atlas = ExtResource("2_prbxf")
@@ -269,13 +268,6 @@ one_shot = true
 
 [node name="MovementLockTimer" type="Timer" parent="MovementController"]
 one_shot = true
-
-[node name="AbilityController" type="Node" parent="." node_paths=PackedStringArray("actor", "health", "shield", "overheat")]
-script = ExtResource("16_abctl")
-actor = NodePath("..")
-health = NodePath("../HealthComponent")
-shield = NodePath("../ShieldComponent")
-overheat = NodePath("../OverheatComponent")
 
 [connection signal="received_damage" from="HurtBox" to="." method="_on_hurt_box_received_damage"]
 [connection signal="timeout" from="AttackStateMachine/WarheadMissileShootingState/CooldownTimer" to="AttackStateMachine/WarheadMissileShootingState" method="_on_cooldown_timer_timeout"]
