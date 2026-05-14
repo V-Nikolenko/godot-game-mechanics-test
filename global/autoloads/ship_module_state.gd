@@ -4,9 +4,9 @@ extends Node
 ## Persists which module is equipped in each ship slot.
 ## Slot IDs:  &"cockpit"  |  &"armor"  |  &"weapons"  |  &"engines"
 ## Module IDs per slot:
-##   cockpit  → &"trajectory_calc"
-##   armor    → &"armor_plating"  |  &"parry"
-##   weapons  → &"overclock"
+##   cockpit  → &"trajectory_calc"  |  &"emp_blast"
+##   armor    → &"armor_plating"  |  &"parry"  |  &"shield_overload"  |  &"final_resort"
+##   weapons  → &"overclock"  |  &"plasma_nova"  |  &"overdrive"  |  &"overheat_nullifier"
 ##   engines  → &"warp"
 ## Empty string means nothing equipped.
 
@@ -18,9 +18,9 @@ const SLOTS: Array[StringName] = [&"cockpit", &"armor", &"weapons", &"engines"]
 ## Maps slot → list of available module IDs (in display order).
 ## First entry is always &"" (None / unequip).
 const SLOT_MODULES: Dictionary = {
-	&"cockpit":  [&"", &"trajectory_calc"],
-	&"armor":    [&"", &"armor_plating", &"parry"],
-	&"weapons":  [&"", &"overclock"],
+	&"cockpit":  [&"", &"trajectory_calc", &"emp_blast"],
+	&"armor":    [&"", &"armor_plating", &"parry", &"shield_overload", &"final_resort"],
+	&"weapons":  [&"", &"overclock", &"plasma_nova", &"overdrive", &"overheat_nullifier"],
 	&"engines":  [&"", &"warp"],
 }
 
