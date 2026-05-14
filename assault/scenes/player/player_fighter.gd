@@ -83,8 +83,7 @@ func _physics_process(_delta: float) -> void:
 		_module_pool[id].tick(self, _delta)
 
 func _input(event: InputEvent) -> void:
-	## _input fires before AbilityController's _unhandled_input (leaf→root order),
-	## so modules always get priority over the ability system.
+	## _input fires before _unhandled_input — modules get first pick of H-key.
 	if not event.is_action_pressed("use_ability"):
 		return
 	if DialogPlayer.is_active:
@@ -93,7 +92,7 @@ func _input(event: InputEvent) -> void:
 		var mod: ShipModuleBase = _module_pool[id]
 		if mod.try_activate(self):
 			get_viewport().set_input_as_handled()
-			return  ## Consumed by module; AbilityController won't see it.
+			return  ## Consumed by module.
 
 func _get_or_create_module(id: StringName) -> ShipModuleBase:
 	if not _module_pool.has(id):

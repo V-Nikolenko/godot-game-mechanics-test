@@ -32,7 +32,7 @@ func remove(_player: Node) -> void:
 
 ## Override in active modules: called when player presses H (use_ability).
 ## Return true if the module consumed the input (starts cooldown or effect).
-## Passive modules leave this as false — H falls through to AbilityController.
+## Passive modules leave this as false — H input is consumed with no effect.
 func try_activate(_player: Node) -> bool:
 	return false
 
