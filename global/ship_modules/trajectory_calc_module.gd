@@ -6,9 +6,12 @@ const _DURATION:   float = 5.0
 const _TIME_SCALE: float = 0.3
 const _COOLDOWN:   float = 20.0
 
+const _OVERLAY_COLOR: Color  = Color(0.1, 0.35, 1.0, 0.18)
+
 var _active:        bool  = false
 var _time_left:     float = 0.0
 var _cooldown_left: float = 0.0
+var _overlay:       CanvasLayer = null
 
 func get_display_name() -> String: return "Trajectory Calculation"
 func get_description() -> String:
@@ -32,6 +35,7 @@ func try_activate(player: Node) -> bool:
 	var sprite := player.get_node_or_null("SpriteAnchor/ShipSprite2D") as CanvasItem
 	if sprite:
 		sprite.modulate = Color(0.5, 0.7, 1.0, 1.0)
+	_spawn_overlay(player)
 	return true
 
 func tick(player: Node, delta: float) -> void:
@@ -51,11 +55,29 @@ func _restore(player: Node) -> void:
 	_time_left     = 0.0
 	_cooldown_left = _COOLDOWN
 	Engine.time_scale = 1.0
+	_remove_overlay()
 	var sprite := player.get_node_or_null("SpriteAnchor/ShipSprite2D") as CanvasItem
 	if sprite:
 		player.create_tween().tween_property(sprite, "modulate", Color.WHITE, 0.3)
 
-## Safety net: restore time_scale if node is freed mid-effect.
+func _spawn_overlay(player: Node) -> void:
+	_remove_overlay()
+	var layer := CanvasLayer.new()
+	layer.layer = 10
+	var rect := ColorRect.new()
+	rect.color = _OVERLAY_COLOR
+	rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	layer.add_child(rect)
+	player.add_child(layer)
+	_overlay = layer
+
+func _remove_overlay() -> void:
+	if is_instance_valid(_overlay):
+		_overlay.queue_free()
+	_overlay = null
+
+## Safety net: restore time_scale and overlay if module is freed mid-effect.
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_PREDELETE and _active:
 		Engine.time_scale = 1.0
+		_remove_overlay()

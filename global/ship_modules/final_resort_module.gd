@@ -12,7 +12,7 @@ func get_display_name() -> String: return "Final Resort"
 func get_description() -> String:
 	return "Press H to sacrifice hull and shields for overwhelming firepower. HP drops to 1, shields drain, damage is tripled. Press H again to disengage and restore HP."
 func get_icon() -> Texture2D:
-	return null
+	return preload("res://assault/assets/sprites/ui/icon_ship_module_damage_up.png")
 func get_slot() -> StringName: return &"armor"
 
 func apply(_player: Node) -> void:

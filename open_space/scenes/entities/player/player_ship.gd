@@ -96,6 +96,10 @@ func _handle_rotation(delta: float) -> void:
 	rotation += deg_to_rad(rotation_speed_deg) * turn * delta
 
 func _handle_thrust(delta: float) -> void:
+	## EngineBoostModule controls velocity directly while active;
+	## skip all thrust/damping/cap to preserve straight-line direction.
+	if engine_boost_active:
+		return
 	var forward: Vector2 = Vector2.UP.rotated(rotation)
 	var thrust_input: float = 0.0
 	if Input.is_action_pressed("move_up"):
@@ -139,21 +143,7 @@ func _get_or_create_module(id: StringName) -> ShipModuleBase:
 	return _module_pool.get(id, null)
 
 func _create_module(id: StringName) -> ShipModuleBase:
-	match id:
-		&"armor_plating":      return ArmorPlatingModule.new()
-		&"parry":              return ParryModule.new()
-		&"trajectory_calc":    return TrajectoryCalcModule.new()
-		&"warp":               return WarpModule.new()
-		&"overclock":          return OverclockModule.new()
-		&"emp_blast":          return EMPBlastModule.new()
-		&"shield_overload":    return ShieldOverloadModule.new()
-		&"final_resort":       return FinalResortModule.new()
-		&"plasma_nova":        return PlasmaNovaModule.new()
-		&"overdrive":          return OverdriveModule.new()
-		&"overheat_nullifier": return OverheatNullifierModule.new()
-		_:
-			push_warning("OpenSpacePlayerShip: unknown module id '%s'" % id)
-			return null
+	return ShipModuleBase.create(id)
 
 func _apply_module(id: StringName) -> void:
 	var mod := _get_or_create_module(id)

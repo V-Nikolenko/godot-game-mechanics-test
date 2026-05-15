@@ -87,16 +87,4 @@ func _refresh_selected(current_id: StringName) -> void:
 		_items[i].set_selected(_ids[i] == current_id)
 
 func _make_module(id: StringName) -> ShipModuleBase:
-	match id:
-		&"armor_plating":      return ArmorPlatingModule.new()
-		&"parry":              return ParryModule.new()
-		&"trajectory_calc":    return TrajectoryCalcModule.new()
-		&"warp":               return WarpModule.new()
-		&"overclock":          return OverclockModule.new()
-		&"emp_blast":          return EMPBlastModule.new()
-		&"shield_overload":    return ShieldOverloadModule.new()
-		&"final_resort":       return FinalResortModule.new()
-		&"plasma_nova":        return PlasmaNovaModule.new()
-		&"overdrive":          return OverdriveModule.new()
-		&"overheat_nullifier": return OverheatNullifierModule.new()
-		_:                     return null
+	return ShipModuleBase.create(id)

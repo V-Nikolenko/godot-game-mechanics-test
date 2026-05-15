@@ -11,4 +11,7 @@ func fire(state: Node, mode: WeaponModeResource, muzzle: Marker2D) -> void:
 	bullet.rotation = actor.rotation
 	bullet.range_px = mode.range_px
 	bullet.damage = mode.damage
+	bullet.shooter_velocity = actor.velocity
+	if actor.get("pierce_module_active"):
+		bullet.pierces_remaining = Bullet.MAX_PIERCE
 	state.add_child(bullet)

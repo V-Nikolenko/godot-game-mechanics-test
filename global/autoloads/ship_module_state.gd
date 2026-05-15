@@ -4,10 +4,10 @@ extends Node
 ## Persists which module is equipped in each ship slot.
 ## Slot IDs:  &"cockpit"  |  &"armor"  |  &"weapons"  |  &"engines"
 ## Module IDs per slot:
-##   cockpit  → &"trajectory_calc"  |  &"emp_blast"
+##   cockpit  → &"trajectory_calc"  |  &"emp_blast"  |  &"ai_targeting"  |  &"cockpit_heal"
 ##   armor    → &"armor_plating"  |  &"parry"  |  &"shield_overload"  |  &"final_resort"
-##   weapons  → &"overclock"  |  &"plasma_nova"  |  &"overdrive"  |  &"overheat_nullifier"
-##   engines  → &"warp"
+##   weapons  → &"overclock"  |  &"plasma_nova"  |  &"overheat_nullifier"  |  &"pierce"  |  &"shooting"
+##   engines  → &"warp"  |  &"engine_boost"
 ## Empty string means nothing equipped.
 
 const SAVE_PATH := "user://ship_modules.cfg"
@@ -18,10 +18,10 @@ const SLOTS: Array[StringName] = [&"cockpit", &"armor", &"weapons", &"engines"]
 ## Maps slot → list of available module IDs (in display order).
 ## First entry is always &"" (None / unequip).
 const SLOT_MODULES: Dictionary = {
-	&"cockpit":  [&"", &"trajectory_calc", &"emp_blast"],
+	&"cockpit":  [&"", &"trajectory_calc", &"emp_blast", &"ai_targeting", &"cockpit_heal"],
 	&"armor":    [&"", &"armor_plating", &"parry", &"shield_overload", &"final_resort"],
-	&"weapons":  [&"", &"overclock", &"plasma_nova", &"overdrive", &"overheat_nullifier"],
-	&"engines":  [&"", &"warp"],
+	&"weapons":  [&"", &"overclock", &"plasma_nova", &"overheat_nullifier", &"pierce", &"shooting"],
+	&"engines":  [&"", &"warp", &"engine_boost"],
 }
 
 signal module_equipped(slot: StringName, module_id: StringName)

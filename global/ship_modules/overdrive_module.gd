@@ -19,7 +19,7 @@ func get_display_name() -> String: return "Overdrive"
 func get_description() -> String:
 	return "Press H to push weapons beyond safe limits. Fire rate is doubled for 10 seconds and overheating is suppressed. When the effect expires naturally, the hull takes 15 damage. 30-second cooldown."
 func get_icon() -> Texture2D:
-	return null
+	return preload("res://assault/assets/sprites/ui/icon_ship_module_overclock.png")
 func get_slot() -> StringName: return &"weapons"
 
 func apply(_player: Node) -> void:

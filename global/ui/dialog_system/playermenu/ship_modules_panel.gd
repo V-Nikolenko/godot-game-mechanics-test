@@ -28,13 +28,6 @@ const _HOVER_COLOR   := Color(0.5, 1.5, 0.5)  ## Cursor on this slot = green (di
 @onready var _item_icon_weapons:   Sprite2D = $ItemFrameWeapons/Icon
 @onready var _item_icon_engine:    Sprite2D = $ItemFrameEngine/Icon
 
-## Module icon textures by module id.
-const _MODULE_ICONS: Dictionary = {
-	&"armor_plating":   preload("res://assault/assets/sprites/ui/icon_ship_module_armor_increased_plating.png"),
-	&"trajectory_calc": preload("res://assault/assets/sprites/ui/icon_ship_module_cockpit_time_slow_down.png"),
-	&"warp":            preload("res://assault/assets/sprites/ui/icon_ship_module_engine_warp.png"),
-	&"overclock":       preload("res://assault/assets/sprites/ui/icon_ship_module_weapon_oveclock.png"),
-}
 
 var _cursor_row: int = -1
 
@@ -80,7 +73,11 @@ func _update_visuals() -> void:
 		else:
 			item_frames[i].modulate = _EMPTY_COLOR
 
-		## Item icon.
-		var icon: Texture2D = _MODULE_ICONS.get(equipped_id, null)
+		## Item icon — ask the module itself for its icon texture.
+		var icon: Texture2D = null
+		if has_module:
+			var mod: ShipModuleBase = ShipModuleBase.create(equipped_id)
+			if mod:
+				icon = mod.get_icon()
 		item_icons[i].texture = icon
 		item_icons[i].visible = icon != null

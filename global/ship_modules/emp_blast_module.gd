@@ -22,7 +22,7 @@ func get_display_name() -> String: return "EMP Blast"
 func get_description() -> String:
 	return "Press H to emit a ship-wide electromagnetic pulse. Stuns all nearby enemies for 5 seconds. 15-second cooldown. Asteroids and ram ships are immune."
 func get_icon() -> Texture2D:
-	return null
+	return preload("res://assault/assets/sprites/ui/icon_ship_module_distrupt.png")
 func get_slot() -> StringName: return &"cockpit"
 
 func apply(_player: Node) -> void:

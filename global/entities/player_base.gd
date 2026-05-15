@@ -25,6 +25,11 @@ var damage_reduction: float = 0.0
 ## When true, overheat can exceed heat_limit without locking weapons.
 var overdrive_active: bool = false
 var can_attack: bool = true
+## Set by PierceModule. Behaviors read this to enable bullet pierce.
+var pierce_module_active: bool = false
+## Set by EngineBoostModule while the boost is active.
+## player_ship._handle_thrust() skips damping/cap when this is true.
+var engine_boost_active: bool = false
 
 func _ready() -> void:
 	add_to_group("player")

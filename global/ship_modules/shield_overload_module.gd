@@ -19,7 +19,7 @@ func get_display_name() -> String: return "Shield Overload"
 func get_description() -> String:
 	return "Press H to detonate your shield. Converts every point of shield into 0.5 damage against enemies within 100px and sends them flying. Also destroys nearby projectiles. Requires shield to activate."
 func get_icon() -> Texture2D:
-	return null
+	return preload("res://assault/assets/sprites/ui/icon_ship_module_shield_explode.png")
 func get_slot() -> StringName: return &"armor"
 
 func apply(_player: Node) -> void:

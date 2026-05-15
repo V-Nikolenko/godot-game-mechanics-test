@@ -5,6 +5,28 @@ extends RefCounted
 ## Abstract base for ship modules. Modules can be purely passive (Armor, Overclock)
 ## or have an H-key activation (Trajectory Calc). Warp uses double-press movement
 ## via DashState — it only needs apply/remove to set a flag.
+##
+## ADD NEW MODULES HERE when created — this is the single source of truth for
+## instantiation. Player scripts and UI both call ShipModuleBase.create().
+static func create(id: StringName) -> ShipModuleBase:
+	match id:
+		&"armor_plating":      return ArmorPlatingModule.new()
+		&"parry":              return ParryModule.new()
+		&"trajectory_calc":    return TrajectoryCalcModule.new()
+		&"warp":               return WarpModule.new()
+		&"overclock":          return OverclockModule.new()
+		&"emp_blast":          return EMPBlastModule.new()
+		&"shield_overload":    return ShieldOverloadModule.new()
+		&"final_resort":       return FinalResortModule.new()
+		&"plasma_nova":        return PlasmaNovaModule.new()
+		&"overheat_nullifier": return OverheatNullifierModule.new()
+		&"ai_targeting":       return AITargetingModule.new()
+		&"cockpit_heal":       return CockpitHealModule.new()
+		&"engine_boost":       return EngineBoostModule.new()
+		&"pierce":             return PierceModule.new()
+		&"shooting":           return ShootingModule.new()
+	push_warning("ShipModuleBase.create: unknown module id '%s'" % id)
+	return null
 
 ## Override: human-readable name shown in module detail list.
 func get_display_name() -> String:
