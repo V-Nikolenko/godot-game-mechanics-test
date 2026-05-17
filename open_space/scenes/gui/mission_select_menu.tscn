@@ -1,0 +1,61 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://open_space/scenes/gui/mission_select_menu.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_mission_select_overlay.png" id="2_overlay"]
+
+[node name="MissionSelectMenu" type="CanvasLayer"]
+layer = 10
+process_mode = 3
+script = ExtResource("1_script")
+visible = false
+
+[node name="Background" type="Sprite2D" parent="."]
+position = Vector2(576, 324)
+
+[node name="Overlay" type="Sprite2D" parent="."]
+position = Vector2(576, 324)
+texture = ExtResource("2_overlay")
+
+[node name="Header" type="Node2D" parent="."]
+position = Vector2(120, 100)
+
+[node name="NameLabel" type="Label" parent="Header"]
+offset_right = 250.0
+offset_bottom = 24.0
+text = "PLANET"
+
+[node name="ClassLabel" type="Label" parent="Header"]
+offset_top = 28.0
+offset_right = 250.0
+offset_bottom = 42.0
+text = "PLANET CLASS: TERRESTRIAL"
+
+[node name="ThreatLabel" type="Label" parent="Header"]
+offset_top = 46.0
+offset_right = 250.0
+offset_bottom = 60.0
+text = "THREAT LEVEL: MEDIUM"
+
+[node name="ListContainer" type="Node2D" parent="."]
+position = Vector2(120, 180)
+
+[node name="PlanetMap" type="Sprite2D" parent="."]
+position = Vector2(780, 324)
+
+[node name="PointsContainer" type="Node2D" parent="PlanetMap"]
+
+[node name="MissionImageFrame" type="Sprite2D" parent="."]
+position = Vector2(200, 480)
+
+[node name="MissionImagePreview" type="Sprite2D" parent="."]
+position = Vector2(200, 480)
+z_index = -1
+
+[node name="InfoPanel" type="Node2D" parent="."]
+position = Vector2(100, 520)
+
+[node name="DescLabel" type="Label" parent="InfoPanel"]
+offset_right = 300.0
+offset_bottom = 60.0
+autowrap_mode = 3
+text = ""
