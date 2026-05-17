@@ -2,17 +2,17 @@
 extends Node
 
 ## Persistent mission progress singleton.
-## Access anywhere: MissionState.complete("assault", 1)
-##                  MissionState.is_complete("assault")
-##                  MissionState.get_stars("assault")
+## Access anywhere: MissionState.complete(1, 3)
+##                  MissionState.is_complete(1)
+##                  MissionState.get_stars(1)
 
 const SAVE_PATH := "user://mission_state.cfg"
 
 ## Reserved ConfigFile section name for cutscene flags. The double-underscore
-## prefix is namespaced to never collide with a mission id.
+## prefix is namespaced to never collide with a mission number.
 const _CUTSCENE_SECTION := "__cutscenes__"
 
-## Internal cache: { mission_id: { "completed": bool, "stars": int } }
+## Internal cache: { mission_number: { "completed": bool, "stars": int } }
 var _data: Dictionary = {}
 
 ## Internal cache of cutscene flags: { cutscene_id: bool }
@@ -23,20 +23,20 @@ func _ready() -> void:
 
 ## Mark a mission as complete and record its star count (1–3).
 ## If the mission was already complete with MORE stars, keeps the higher count.
-func complete(mission_id: String, stars: int = 1) -> void:
-	var entry: Dictionary = _data.get(mission_id, {})
+func complete(mission_number: int, stars: int = 1) -> void:
+	var entry: Dictionary = _data.get(mission_number, {})
 	entry["completed"] = true
 	entry["stars"] = max(entry.get("stars", 0), clampi(stars, 1, 3))
-	_data[mission_id] = entry
+	_data[mission_number] = entry
 	_save()
 
 ## Returns true if the mission has been beaten at least once.
-func is_complete(mission_id: String) -> bool:
-	return _data.get(mission_id, {}).get("completed", false)
+func is_complete(mission_number: int) -> bool:
+	return _data.get(mission_number, {}).get("completed", false)
 
 ## Returns 0 if the mission has never been completed.
-func get_stars(mission_id: String) -> int:
-	return _data.get(mission_id, {}).get("stars", 0)
+func get_stars(mission_number: int) -> int:
+	return _data.get(mission_number, {}).get("stars", 0)
 
 ## Mark a cutscene as having been viewed at least once. Persists to disk.
 func mark_cutscene_seen(cutscene_id: String) -> void:
@@ -50,10 +50,10 @@ func has_cutscene_been_seen(cutscene_id: String) -> bool:
 
 func _save() -> void:
 	var cfg := ConfigFile.new()
-	for mission_id: String in _data:
-		var entry: Dictionary = _data[mission_id]
-		cfg.set_value(mission_id, "completed", entry.get("completed", false))
-		cfg.set_value(mission_id, "stars", entry.get("stars", 0))
+	for mission_number: int in _data:
+		var entry: Dictionary = _data[mission_number]
+		cfg.set_value(str(mission_number), "completed", entry.get("completed", false))
+		cfg.set_value(str(mission_number), "stars", entry.get("stars", 0))
 	for cutscene_id: String in _cutscenes:
 		cfg.set_value(_CUTSCENE_SECTION, cutscene_id, _cutscenes[cutscene_id])
 	var err := cfg.save(SAVE_PATH)
@@ -69,7 +69,8 @@ func _load() -> void:
 			for key: String in cfg.get_section_keys(section):
 				_cutscenes[key] = cfg.get_value(section, key, false)
 		else:
-			_data[section] = {
+			var num := section.to_int()
+			_data[num] = {
 				"completed": cfg.get_value(section, "completed", false),
 				"stars": cfg.get_value(section, "stars", 0),
 			}

@@ -159,8 +159,8 @@ func _on_waves_complete() -> void:
 
 	# Set routing flag BEFORE calling complete() so the cutscene can read
 	# whether assault was already beaten (replay path) or this is the first clear.
-	LevelExitCutscene.go_to_hub = MissionState.is_complete("assault")
-	MissionState.complete("assault", 1)
+	LevelExitCutscene.go_to_hub = MissionState.is_complete(1)
+	MissionState.complete(1, 1)
 
 	var hud := get_tree().root.get_node_or_null("HUD")
 	if hud:

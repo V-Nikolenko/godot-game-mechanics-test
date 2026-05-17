@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="MissionConfigResource" format=3 uid="uid://cfd76fylod470"]
+[gd_resource type="Resource" script_class="MissionConfigResource" format=3 uid="uid://vc5yhn7tlgks"]
 
 [ext_resource type="Script" uid="uid://bma3l3qnye8cn" path="res://global/resources/mission_config_resource.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://bmo1tyr2vbsg3" path="res://assault/assets/sprites/ui/menu_mission_select_mission_image.png" id="1_v00e3"]
@@ -7,8 +7,7 @@
 script = ExtResource("1_script")
 display_name = "Infiltration"
 scene_path = "res://infiltration/scenes/levels/TestIsometricScene.tscn"
-mission_id = "infiltration"
-required_mission = "assault"
+required_mission = 1
 mission_type = "infiltration"
 mission_image = ExtResource("1_v00e3")
 description = "Infiltrate the enemy base undetected and extract the data core."

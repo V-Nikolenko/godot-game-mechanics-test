@@ -25,6 +25,7 @@ const _ROW_STRIDE: float = 34.0
 
 const _POINT_NORMAL   := Color.WHITE
 const _POINT_SELECTED := Color(1.4, 1.4, 1.0)
+const _POINT_LOCKED   := Color(0.45, 0.45, 0.45)
 
 @onready var _background:       Sprite2D = $Background
 @onready var _overlay:          Sprite2D = $Overlay
@@ -95,6 +96,9 @@ func open(config: PlanetConfigResource) -> void:
 
 	## Lines first so they render beneath the point sprites.
 	for i: int in config.missions.size() - 1:
+		## Skip if the destination mission has connect_line disabled.
+		if not config.missions[i + 1].connect_line:
+			continue
 		var a: Vector2 = config.point_positions[i] \
 				if i     < config.point_positions.size() else Vector2.ZERO
 		var b: Vector2 = config.point_positions[i + 1] \
@@ -187,10 +191,16 @@ func _refresh() -> void:
 	for i: int in _items.size():
 		_items[i].set_hovered(i == _cursor)
 	for i: int in _points.size():
-		var selected: bool    = i == _cursor
-		_points[i].texture    = _POINT_TEXTURE_ACTIVE if selected else _POINT_TEXTURE_INACTIVE
-		_points[i].modulate   = _POINT_SELECTED if selected else _POINT_NORMAL
-		_point_labels[i].modulate = _POINT_SELECTED if selected else _POINT_NORMAL
+		var selected: bool = i == _cursor
+		var locked: bool   = _is_locked(_config.missions[i])
+		_points[i].visible        = not locked
+		_point_labels[i].visible  = not locked
+		if locked:
+			continue
+		var color: Color = _POINT_SELECTED if selected else _POINT_NORMAL
+		_points[i].texture        = _POINT_TEXTURE_ACTIVE if selected else _POINT_TEXTURE_INACTIVE
+		_points[i].modulate       = color
+		_point_labels[i].modulate = color
 	var m: MissionConfigResource = _config.missions[_cursor]
 	_mission_preview.texture = m.mission_image
 	_desc_label.text = m.description if not _is_locked(m) \
@@ -241,5 +251,5 @@ func _animate_open() -> void:
 	shake_tween.tween_property(self, "offset", Vector2.ZERO,       0.05)
 
 func _is_locked(m: MissionConfigResource) -> bool:
-	return not m.required_mission.is_empty() \
+	return m.required_mission != 0 \
 			and not MissionState.is_complete(m.required_mission)
