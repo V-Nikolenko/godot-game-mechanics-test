@@ -8,8 +8,8 @@ const _ICON_ASSAULT      := preload("res://assault/assets/sprites/ui/menu_missio
 const _ICON_INFILTRATION := preload("res://assault/assets/sprites/ui/menu_mission_select_list_item_icon_land.png")
 const _ICON_UNKNOWN      := preload("res://assault/assets/sprites/ui/menu_mission_select_list_item_icon_unknown.png")
 
-const _COLOR_NORMAL  := Color(1.0, 1.0, 1.0, 0.65)
-const _COLOR_HOVERED := Color(1.0, 1.0, 1.0, 1.0)
+const _COLOR_NORMAL  := Color.WHITE
+const _COLOR_HOVERED := Color(1.4, 1.4, 1.0)
 
 @onready var _bg:    Sprite2D = $Background
 @onready var _icon:  Sprite2D = $Icon
@@ -17,11 +17,12 @@ const _COLOR_HOVERED := Color(1.0, 1.0, 1.0, 1.0)
 @onready var _stars: Label    = $StarsLabel
 
 func configure(mission: MissionConfigResource, locked: bool) -> void:
+	var num: String = "%02d. " % mission.mission_number
 	if locked:
 		_icon.texture = _ICON_UNKNOWN
-		_label.text = "??"
+		_label.text   = num + "??"
 	else:
-		_label.text = mission.display_name
+		_label.text = num + mission.display_name
 		if mission.mission_type == "infiltration":
 			_icon.texture = _ICON_INFILTRATION
 		else:

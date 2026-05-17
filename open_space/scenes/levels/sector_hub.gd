@@ -1,20 +1,25 @@
 # open_space/scenes/levels/sector_hub.gd
 extends Node2D
 
-## Open Space hub. Spawns patrol drones.
-## Planet mission data is fully configured in the PlanetConfigResource .tres file
-## assigned to the Planet node in the Inspector — no code changes needed per planet.
+## Open Space hub. Spawns patrol drones and assigns the planet config.
+## To change this planet's missions, background, or sprite — edit edelia.tres.
+## To use a different config, change the path in _configure_planet().
 
-const PATROL_DRONE := preload("res://open_space/scenes/entities/enemies/patrol_drone.tscn")
+const PATROL_DRONE    := preload("res://open_space/scenes/entities/enemies/patrol_drone.tscn")
+const _EDELIA_CONFIG  := preload("res://global/resources/planet_configs/edelia.tres")
 
 @export var drone_count: int    = 3
 @export var spawn_radius: float = 600.0
 
-@onready var enemy_container: Node2D        = $EnemyContainer
+@onready var enemy_container: Node2D         = $EnemyContainer
 @onready var planet:          MissionTrigger = $Planet
 
 func _ready() -> void:
+	_configure_planet()
 	_spawn_initial_drones()
+
+func _configure_planet() -> void:
+	planet.config = _EDELIA_CONFIG
 
 func _spawn_initial_drones() -> void:
 	for i: int in drone_count:

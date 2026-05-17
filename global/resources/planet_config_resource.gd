@@ -7,10 +7,8 @@ extends Resource
 
 ## ── Identity (shown in the menu header) ───────────────────────────────────
 @export var display_name: String = "UNKNOWN"
-## Subtitle line, e.g. "TERRESTRIAL", "ORBITAL STATION", "DREADNOUGHT"
-@export var planet_class: String = "TERRESTRIAL"
-## e.g. "LOW", "MEDIUM", "HIGH", "EXTREME"
-@export var threat_level: String = "MEDIUM"
+## Subtitle shown beneath the name in the menu header.
+@export_multiline var description: String = ""
 
 ## ── Visuals ───────────────────────────────────────────────────────────────
 ## Background rendered behind the overlay in the mission select menu.

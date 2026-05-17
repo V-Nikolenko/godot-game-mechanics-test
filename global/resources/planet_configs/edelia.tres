@@ -1,16 +1,14 @@
-[gd_resource type="Resource" script_class="PlanetConfigResource" format=3]
+[gd_resource type="Resource" script_class="PlanetConfigResource" format=3 uid="uid://b1pyvrb4ekue0"]
 
-[ext_resource type="Script" path="res://global/resources/planet_config_resource.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_mission_select_background_1.png" id="2_bg"]
-[ext_resource type="Resource" path="res://global/resources/planet_configs/mission_assault.tres" id="3_assault"]
-[ext_resource type="Resource" path="res://global/resources/planet_configs/mission_infiltration.tres" id="4_infiltration"]
+[ext_resource type="Script" uid="uid://duj8qglwa1saq" path="res://global/resources/planet_config_resource.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://dmy783gbic0al" path="res://assault/assets/sprites/ui/menu_mission_select_background_1.png" id="2_bg"]
+[ext_resource type="Script" uid="uid://bma3l3qnye8cn" path="res://global/resources/mission_config_resource.gd" id="2_fil8c"]
+[ext_resource type="Resource" uid="uid://bt6pdidec1as1" path="res://global/resources/planet_configs/mission_assault.tres" id="3_assault"]
+[ext_resource type="Resource" uid="uid://cfd76fylod470" path="res://global/resources/planet_configs/mission_infiltration.tres" id="4_infiltration"]
 
 [resource]
 script = ExtResource("1_script")
 display_name = "EDELIA"
-planet_class = "TERRESTRIAL"
-threat_level = "MEDIUM"
+description = "A mid-tier terrestrial world under imperial blockade. Two active operation zones."
 background_texture = ExtResource("2_bg")
-sprite_texture = null
-missions = [ExtResource("3_assault"), ExtResource("4_infiltration")]
-point_positions = [Vector2(-60, -30), Vector2(40, 50)]
+missions = Array[ExtResource("2_fil8c")]([ExtResource("3_assault"), ExtResource("4_infiltration")])

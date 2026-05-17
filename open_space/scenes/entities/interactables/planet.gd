@@ -64,8 +64,7 @@ func _process(delta: float) -> void:
 		_open_menu()
 
 func _draw() -> void:
-	if Engine.is_editor_hint() or not _player_in_range \
-			or config == null or config.missions.is_empty() or _menu_open:
+	if Engine.is_editor_hint() or not _player_in_range or _menu_open:
 		return
 	draw_arc(Vector2.ZERO, arc_radius, -PI / 2.0, -PI / 2.0 + TAU,
 			64, arc_bg_color, arc_bg_width, true)
@@ -86,6 +85,7 @@ func _open_menu() -> void:
 	_menu.mission_confirmed.connect(_on_mission_confirmed)
 	_menu.cancelled.connect(_on_menu_cancelled)
 	_menu.open(config)
+	get_tree().paused = true
 
 func _close_menu() -> void:
 	if _menu != null and is_instance_valid(_menu):
@@ -95,8 +95,10 @@ func _close_menu() -> void:
 	_menu_open = false
 	_dwell_time = 0.0
 	queue_redraw()
+	get_tree().paused = false
 
 func _on_mission_confirmed(scene_path: String) -> void:
+	get_tree().paused = false
 	_menu = null
 	_menu_open = false
 	get_tree().change_scene_to_file(scene_path)

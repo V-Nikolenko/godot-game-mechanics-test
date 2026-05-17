@@ -18,3 +18,6 @@ extends Resource
 @export var mission_image: Texture2D = null
 ## One- or two-sentence description shown in the info panel when this mission is selected.
 @export_multiline var description: String = ""
+## Global mission number shown in the list and on the planet map point (01, 02, 03...).
+## Set this manually across all planets so numbers form one continuous sequence.
+@export var mission_number: int = 0

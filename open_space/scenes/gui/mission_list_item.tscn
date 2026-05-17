@@ -1,27 +1,28 @@
-[gd_scene format=3]
+[gd_scene format=3 uid="uid://dy0ia1lk4tky"]
 
-[ext_resource type="Script" path="res://open_space/scenes/gui/mission_list_item.gd" id="1_script"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_mission_select_list_item.png" id="2_bg"]
+[ext_resource type="Script" uid="uid://lnv4wywajgta" path="res://open_space/scenes/gui/mission_list_item.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://cuuhfj3es67qk" path="res://assault/assets/sprites/ui/menu_mission_select_list_item.png" id="2_bg"]
 
-[node name="MissionListItem" type="Node2D"]
+[node name="MissionListItem" type="Node2D" unique_id=423982304]
 script = ExtResource("1_script")
 
-[node name="Background" type="Sprite2D" parent="."]
+[node name="Background" type="Sprite2D" parent="." unique_id=1710123887]
 texture = ExtResource("2_bg")
 
-[node name="Icon" type="Sprite2D" parent="."]
-position = Vector2(-85, 0)
+[node name="Icon" type="Sprite2D" parent="." unique_id=342265051]
+position = Vector2(-75, 0)
 
-[node name="NameLabel" type="Label" parent="."]
+[node name="NameLabel" type="Label" parent="." unique_id=214580245]
 offset_left = -55.0
-offset_top = -18.0
+offset_top = -12.0
 offset_right = 45.0
-offset_bottom = 0.0
+offset_bottom = 11.0
+theme_override_font_sizes/font_size = 12
 text = "Mission"
 
-[node name="StarsLabel" type="Label" parent="."]
-offset_left = 45.0
-offset_top = -18.0
-offset_right = 105.0
-offset_bottom = 0.0
+[node name="StarsLabel" type="Label" parent="." unique_id=1019185339]
+offset_left = 44.0
+offset_top = -13.0
+offset_right = 84.0
+offset_bottom = 10.0
 text = "☆☆☆"
