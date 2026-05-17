@@ -27,8 +27,11 @@ const _POINT_NORMAL   := Color.WHITE
 const _POINT_SELECTED := Color(1.4, 1.4, 1.0)
 
 @onready var _background:       Sprite2D = $Background
+@onready var _overlay:          Sprite2D = $Overlay
 @onready var _planet_map:       Sprite2D = $PlanetMap
 @onready var _points_container: Node2D   = $PlanetMap/PointsContainer
+@onready var _header:           Node2D   = $Header
+@onready var _info_panel:       Node2D   = $InfoPanel
 @onready var _mission_preview:  Sprite2D = $InfoPanel/MissionImagePreview
 @onready var _list_container:   Node2D   = $ListContainer
 @onready var _name_label:       Label    = $Header/NameLabel
@@ -45,6 +48,19 @@ var _points:        Array[Sprite2D]        = []
 var _point_labels:  Array[Label]           = []
 var _lines:         Array[Line2D]          = []
 var _cursor:        int = 0
+
+## Animation state — originals captured in _ready(), restored on close().
+var _open_tween:         Tween   = null
+var _orig_map_pos:       Vector2
+var _orig_list_pos:      Vector2
+var _orig_header_pos:    Vector2
+var _orig_info_pos:      Vector2
+
+func _ready() -> void:
+	_orig_map_pos    = _planet_map.position
+	_orig_list_pos   = _list_container.position
+	_orig_header_pos = _header.position
+	_orig_info_pos   = _info_panel.position
 
 ## Entry point called by MissionTrigger after adding this node to the tree.
 func open(config: PlanetConfigResource) -> void:
@@ -120,8 +136,18 @@ func open(config: PlanetConfigResource) -> void:
 	_cursor = 0
 	_refresh()
 	visible = true
+	_animate_open()
 
 func close() -> void:
+	if _open_tween and _open_tween.is_valid():
+		_open_tween.kill()
+	## Restore originals so next open() starts clean.
+	_planet_map.position    = _orig_map_pos
+	_planet_map.scale       = Vector2.ONE
+	_list_container.position = _orig_list_pos
+	_header.position        = _orig_header_pos
+	_info_panel.position    = _orig_info_pos
+	offset                  = Vector2.ZERO
 	visible = false
 	for item: MissionListItem in _items:
 		item.queue_free()
@@ -176,6 +202,43 @@ func _try_confirm() -> void:
 		return
 	close()
 	mission_confirmed.emit(m.scene_path)
+
+func _animate_open() -> void:
+	if _open_tween and _open_tween.is_valid():
+		_open_tween.kill()
+
+	## ── Set displaced start states ──────────────────────────────────────────
+	_planet_map.scale        = Vector2(0.25, 0.25)
+	_planet_map.position     = _orig_map_pos
+	_list_container.position = _orig_list_pos   + Vector2(-70.0, 0.0)
+	_header.position         = _orig_header_pos + Vector2(0.0, -18.0)
+	_info_panel.position     = _orig_info_pos   + Vector2(0.0, 14.0)
+	offset                   = Vector2.ZERO
+
+	_open_tween = create_tween().set_parallel(true)
+
+	## Planet zooms in with springy overshoot — the hero element.
+	_open_tween.tween_property(_planet_map, "scale", Vector2.ONE, 0.55) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+
+	## Header slides down.
+	_open_tween.tween_property(_header, "position", _orig_header_pos, 0.28) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+
+	## List slides in from the left, slightly delayed.
+	_open_tween.tween_property(_list_container, "position", _orig_list_pos, 0.32) \
+			.set_delay(0.07).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+
+	## Info panel rises from below, delayed a bit more.
+	_open_tween.tween_property(_info_panel, "position", _orig_info_pos, 0.30) \
+			.set_delay(0.10).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+
+	## Quick screen punch: knock right then settle — runs on the CanvasLayer offset.
+	var shake_tween := create_tween()
+	shake_tween.tween_property(self, "offset", Vector2(7.0, 0.0),  0.04)
+	shake_tween.tween_property(self, "offset", Vector2(-4.0, 0.0), 0.06)
+	shake_tween.tween_property(self, "offset", Vector2(2.0, 0.0),  0.05)
+	shake_tween.tween_property(self, "offset", Vector2.ZERO,       0.05)
 
 func _is_locked(m: MissionConfigResource) -> bool:
 	return not m.required_mission.is_empty() \

@@ -17,13 +17,14 @@ color = Color(0.04, 0.04, 0.08, 1)
 
 [node name="EnemyContainer" type="Node2D" parent="." unique_id=1782392043]
 
+[node name="Planet" parent="." unique_id=662454378 instance=ExtResource("3_planet")]
+position = Vector2(208, -1)
+
 [node name="PlayerShip" parent="." unique_id=574725177 instance=ExtResource("2_player")]
 
 [node name="Camera2D" type="Camera2D" parent="PlayerShip" unique_id=300624665]
 position_smoothing_enabled = true
 position_smoothing_speed = 6.0
 
-[node name="Planet" parent="." unique_id=662454378 instance=ExtResource("3_planet")]
-position = Vector2(208, -1)
-
-[node name="OpenSpaceHUD" parent="." instance=ExtResource("4_oshud")]
+[node name="OpenSpaceHUD" parent="." unique_id=1653560321 instance=ExtResource("4_oshud")]
+visible = false

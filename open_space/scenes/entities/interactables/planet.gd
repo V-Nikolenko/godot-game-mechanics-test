@@ -36,6 +36,8 @@ var _player_in_range: bool   = false
 var _dwell_time: float        = 0.0
 var _menu_open: bool          = false
 var _menu: MissionSelectMenu  = null
+var _zoom_tween: Tween        = null
+var _camera: Camera2D         = null  ## Cached when player enters; used for zoom.
 
 func _ready() -> void:
 	_apply_sprite()
@@ -60,6 +62,7 @@ func _process(delta: float) -> void:
 		return
 	_dwell_time = min(_dwell_time + delta, dwell_duration_sec)
 	queue_redraw()
+	_update_zoom(_dwell_time / dwell_duration_sec)
 	if _dwell_time >= dwell_duration_sec:
 		_open_menu()
 
@@ -74,12 +77,22 @@ func _draw() -> void:
 				-PI / 2.0 + TAU * progress,
 				64, arc_fill_color, arc_fill_width, true)
 
+## Sets camera zoom and offset proportional to dwell progress (0.0–1.0).
+## Called every frame while the player is dwelling; stopped when player leaves.
+func _update_zoom(progress: float) -> void:
+	if _camera == null:
+		return
+	var dir: Vector2 = (global_position - _camera.get_parent().global_position).normalized()
+	_camera.zoom   = Vector2.ONE.lerp(Vector2(1.2, 1.2), progress)
+	_camera.offset = dir * 40.0 * progress
+
 func _open_menu() -> void:
 	if _menu_open or config == null or config.missions.is_empty():
 		return
 	_menu_open = true
 	_dwell_time = 0.0
 	queue_redraw()
+	## Zoom is already at 1.2 — open the menu directly.
 	_menu = _MENU_SCENE.instantiate() as MissionSelectMenu
 	get_tree().root.add_child(_menu)
 	_menu.mission_confirmed.connect(_on_mission_confirmed)
@@ -87,7 +100,21 @@ func _open_menu() -> void:
 	_menu.open(config)
 	get_tree().paused = true
 
+## Smoothly returns the camera to its default zoom/offset.
+func _zoom_out() -> void:
+	if _camera == null:
+		return
+	if _zoom_tween and _zoom_tween.is_valid():
+		_zoom_tween.kill()
+	_zoom_tween = create_tween().set_parallel(true)
+	_zoom_tween.tween_property(_camera, "zoom",   Vector2.ONE,  0.4) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	_zoom_tween.tween_property(_camera, "offset", Vector2.ZERO, 0.4) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+
 func _close_menu() -> void:
+	if _zoom_tween and _zoom_tween.is_valid():
+		_zoom_tween.kill()
 	if _menu != null and is_instance_valid(_menu):
 		_menu.close()
 		_menu.queue_free()
@@ -96,6 +123,7 @@ func _close_menu() -> void:
 	_dwell_time = 0.0
 	queue_redraw()
 	get_tree().paused = false
+	_zoom_out()
 
 func _on_mission_confirmed(scene_path: String) -> void:
 	get_tree().paused = false
@@ -109,6 +137,7 @@ func _on_menu_cancelled() -> void:
 func _on_body_entered(body: Node2D) -> void:
 	if not body.is_in_group("player"):
 		return
+	_camera = body.get_node_or_null("Camera2D") as Camera2D
 	_player_in_range = true
 	_dwell_time = 0.0
 	queue_redraw()
