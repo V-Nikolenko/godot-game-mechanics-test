@@ -18,11 +18,32 @@ extends Area2D
 		_apply_sprite()
 
 @export_category("Arc")
-@export var arc_radius: float       = 75.0
-@export var arc_bg_width: float     = 10.0
-@export var arc_fill_width: float   = 10.0
-@export var arc_bg_color: Color     = Color(1.0, 1.0, 1.0, 0.18)
-@export var arc_fill_color: Color   = Color(0.2, 0.85, 1.0, 0.95)
+## Offset from the node origin to the arc centre. Use this to align the arc
+## with the visible planet in the sprite (each sprite may be positioned differently).
+@export var arc_offset: Vector2     = Vector2.ZERO:
+	set(value):
+		arc_offset = value
+		queue_redraw()
+@export var arc_radius: float       = 75.0:
+	set(value):
+		arc_radius = value
+		queue_redraw()
+@export var arc_bg_width: float     = 10.0:
+	set(value):
+		arc_bg_width = value
+		queue_redraw()
+@export var arc_fill_width: float   = 10.0:
+	set(value):
+		arc_fill_width = value
+		queue_redraw()
+@export var arc_bg_color: Color     = Color(1.0, 1.0, 1.0, 0.18):
+	set(value):
+		arc_bg_color = value
+		queue_redraw()
+@export var arc_fill_color: Color   = Color(0.2, 0.85, 1.0, 0.95):
+	set(value):
+		arc_fill_color = value
+		queue_redraw()
 
 @export_category("Interaction")
 @export var dwell_duration_sec: float = 2.0
@@ -69,11 +90,11 @@ func _process(delta: float) -> void:
 func _draw() -> void:
 	if Engine.is_editor_hint() or not _player_in_range or _menu_open:
 		return
-	draw_arc(Vector2.ZERO, arc_radius, -PI / 2.0, -PI / 2.0 + TAU,
+	draw_arc(arc_offset, arc_radius, -PI / 2.0, -PI / 2.0 + TAU,
 			64, arc_bg_color, arc_bg_width, true)
 	if _dwell_time > 0.0:
 		var progress := _dwell_time / dwell_duration_sec
-		draw_arc(Vector2.ZERO, arc_radius, -PI / 2.0,
+		draw_arc(arc_offset, arc_radius, -PI / 2.0,
 				-PI / 2.0 + TAU * progress,
 				64, arc_fill_color, arc_fill_width, true)
 
@@ -82,7 +103,8 @@ func _draw() -> void:
 func _update_zoom(progress: float) -> void:
 	if _camera == null:
 		return
-	var dir: Vector2 = (global_position - _camera.get_parent().global_position).normalized()
+	var target: Vector2 = global_position + arc_offset
+	var dir: Vector2    = (target - _camera.get_parent().global_position).normalized()
 	_camera.zoom   = Vector2.ONE.lerp(Vector2(1.2, 1.2), progress)
 	_camera.offset = dir * 40.0 * progress
 

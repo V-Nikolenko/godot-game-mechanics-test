@@ -6,11 +6,13 @@
 [ext_resource type="Resource" uid="uid://bb8os314vaak6" path="res://global/resources/missions/01_assault_mission_resource.tres" id="3_assault"]
 [ext_resource type="Resource" uid="uid://vc5yhn7tlgks" path="res://global/resources/missions/02_infiltration_mission_resource.tres" id="4_infiltration"]
 [ext_resource type="Resource" uid="uid://di3vjd6tywqum" path="res://global/resources/missions/03_infiltration_mission_resource.tres" id="5_c6p2i"]
+[ext_resource type="Texture2D" uid="uid://beck3l2ntmwyx" path="res://assault/assets/sprites/ui/planet.png" id="7_k285t"]
 
 [resource]
 script = ExtResource("1_script")
 display_name = "EDELIA"
 description = "A mid-tier terrestrial world under imperial blockade. Two active operation zones."
 background_texture = ExtResource("2_bg")
+sprite_texture = ExtResource("7_k285t")
 missions = Array[ExtResource("2_fil8c")]([ExtResource("3_assault"), ExtResource("4_infiltration"), ExtResource("5_c6p2i")])
 point_positions = Array[Vector2]([Vector2(-140, 70), Vector2(-80, 0), Vector2(170, -105)])

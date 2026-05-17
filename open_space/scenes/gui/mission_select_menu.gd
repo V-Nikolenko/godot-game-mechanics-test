@@ -68,7 +68,6 @@ func open(config: PlanetConfigResource) -> void:
 	_config = config
 
 	_background.texture  = config.background_texture
-	_planet_map.texture  = config.sprite_texture
 	_name_label.text     = config.display_name
 	_class_label.text    = config.description
 

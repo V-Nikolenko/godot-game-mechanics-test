@@ -6,20 +6,14 @@ extends Node2D
 ## To use a different config, change the path in _configure_planet().
 
 const PATROL_DRONE    := preload("res://open_space/scenes/entities/enemies/patrol_drone.tscn")
-const _EDELIA_CONFIG  := preload("res://global/resources/mission_select_hubs/edelia.tres")
 
 @export var drone_count: int    = 3
 @export var spawn_radius: float = 600.0
 
-@onready var enemy_container: Node2D         = $EnemyContainer
-@onready var planet:          MissionTrigger = $Planet
+@onready var enemy_container: Node2D = $EnemyContainer
 
 func _ready() -> void:
-	_configure_planet()
 	_spawn_initial_drones()
-
-func _configure_planet() -> void:
-	planet.config = _EDELIA_CONFIG
 
 func _spawn_initial_drones() -> void:
 	for i: int in drone_count:
