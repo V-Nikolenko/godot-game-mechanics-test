@@ -101,6 +101,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_accept"):
 		_try_confirm()
 		get_viewport().set_input_as_handled()
+	elif event.is_action_pressed("ui_cancel"):
+		close()
+		cancelled.emit()
+		get_viewport().set_input_as_handled()
 
 func _refresh() -> void:
 	cursor_changed.emit(_cursor)
