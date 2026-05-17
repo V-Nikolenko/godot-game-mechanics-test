@@ -20,9 +20,3 @@ texture = ExtResource("2_planet_tex")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=730051803]
 position = Vector2(1, -4)
 shape = SubResource("CircleShape2D_planet")
-
-[node name="MissionLabel" type="Label" parent="." unique_id=1920023884]
-offset_left = 110.0
-offset_top = -60.0
-offset_right = 310.0
-offset_bottom = 80.0
