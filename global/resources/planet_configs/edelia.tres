@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="PlanetConfigResource" format=3]
+
+[ext_resource type="Script" path="res://global/resources/planet_config_resource.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_mission_select_background_1.png" id="2_bg"]
+[ext_resource type="Resource" path="res://global/resources/planet_configs/mission_assault.tres" id="3_assault"]
+[ext_resource type="Resource" path="res://global/resources/planet_configs/mission_infiltration.tres" id="4_infiltration"]
+
+[resource]
+script = ExtResource("1_script")
+display_name = "EDELIA"
+planet_class = "TERRESTRIAL"
+threat_level = "MEDIUM"
+background_texture = ExtResource("2_bg")
+sprite_texture = null
+missions = [ExtResource("3_assault"), ExtResource("4_infiltration")]
+point_positions = [Vector2(-60, -30), Vector2(40, 50)]
