@@ -1,0 +1,27 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://open_space/scenes/gui/mission_list_item.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/menu_mission_select_list_item.png" id="2_bg"]
+
+[node name="MissionListItem" type="Node2D"]
+script = ExtResource("1_script")
+
+[node name="Background" type="Sprite2D" parent="."]
+texture = ExtResource("2_bg")
+
+[node name="Icon" type="Sprite2D" parent="."]
+position = Vector2(-85, 0)
+
+[node name="NameLabel" type="Label" parent="."]
+offset_left = -55.0
+offset_top = -18.0
+offset_right = 45.0
+offset_bottom = 0.0
+text = "Mission"
+
+[node name="StarsLabel" type="Label" parent="."]
+offset_left = 45.0
+offset_top = -18.0
+offset_right = 105.0
+offset_bottom = 0.0
+text = "☆☆☆"
