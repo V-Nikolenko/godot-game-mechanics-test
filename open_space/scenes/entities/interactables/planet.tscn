@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://cu7qlu0h6p1fd"]
 
 [ext_resource type="Script" uid="uid://ca007hf3gsvgc" path="res://open_space/scenes/entities/interactables/planet.gd" id="1_planet"]
-[ext_resource type="Texture2D" uid="uid://4hr4a6ex43e7" path="res://open_space/assets/sprites/planet_stub.png" id="2_planet_tex"]
+[ext_resource type="Texture2D" uid="uid://beck3l2ntmwyx" path="res://assault/assets/sprites/ui/planet.png" id="2_x1x2l"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_planet"]
 radius = 80.0
@@ -10,12 +10,13 @@ radius = 80.0
 collision_layer = 2
 collision_mask = 4
 script = ExtResource("1_planet")
+arc_radius = 80.0
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=2132790395]
 texture_filter = 1
-position = Vector2(0, 4.76837e-07)
-scale = Vector2(0.177734, 0.177734)
-texture = ExtResource("2_planet_tex")
+position = Vector2(15, -5)
+scale = Vector2(1.0881891, 1.088189)
+texture = ExtResource("2_x1x2l")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=730051803]
 position = Vector2(1, -4)

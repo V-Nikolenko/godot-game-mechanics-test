@@ -18,7 +18,7 @@ extends Area2D
 		_apply_sprite()
 
 @export_category("Arc")
-@export var arc_radius: float       = 80.0
+@export var arc_radius: float       = 75.0
 @export var arc_bg_width: float     = 10.0
 @export var arc_fill_width: float   = 10.0
 @export var arc_bg_color: Color     = Color(1.0, 1.0, 1.0, 0.18)
