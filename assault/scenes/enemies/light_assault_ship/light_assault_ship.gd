@@ -5,6 +5,10 @@ extends BaseEnemy
 
 const _BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn")
 
+## Overrides config.aim_mode when set via SpawnConfig.shoot_forward() / shoot_at_player()
+## before the node enters the tree. "FORWARD" or "PLAYER". Empty = use config default.
+var aim_mode: String = ""
+
 var bullet_pool: BulletPool
 
 func _ready() -> void:
@@ -25,12 +29,20 @@ func _ready() -> void:
 	bullet_pool.pool_size = 10
 	add_child(bullet_pool)
 
-	# Attack pattern built from config values
+	# aim_mode set via spawn props takes priority over the config default.
+	var effective_aim: String = aim_mode if not aim_mode.is_empty() \
+			else (config.aim_mode if config else "PLAYER")
+	var forward: bool = (effective_aim == "FORWARD")
+
+	# Attack pattern built from config values.
+	# Forward shooters fire faster with faster bullets — they can't lead their target,
+	# so higher volume compensates.
 	var pattern := AimedAttackPattern.new()
-	pattern.fire_interval = config.fire_interval if config else 0.8
+	pattern.fire_interval = 0.3 if forward else (config.fire_interval if config else 0.8)
 	pattern.bullet_damage = config.bullet_damage if config else 8
-	pattern.aim_at_player = (config.aim_mode == "PLAYER") if config else true
-	pattern.spawn_offset = Vector2(0.0, 10.0)
+	pattern.bullet_speed  = 420.0 if forward else 250.0
+	pattern.aim_at_player = not forward
+	pattern.spawn_offset  = Vector2(0.0, 10.0)
 
 	var controller := AttackController.new()
 	controller.pattern = pattern

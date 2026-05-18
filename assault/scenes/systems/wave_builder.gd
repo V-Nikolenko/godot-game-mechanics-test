@@ -1,9 +1,77 @@
 ## Wave builder utilities — shared helpers for defining enemy waves.
-## Usage: var builder = WaveBuilder.new()
-##        var fighter = builder.straight(speed, angle)
+## Usage: var b = WaveBuilder.new()
+##        b.wave(3.0, [ b.fighter().at(0, -150).move(b.straight(120)).delay(0.5) ])
 class_name WaveBuilder
 
-# ── Movement helpers ───────────────────────────────────────────────────────────
+# ── SpawnConfig — fluent spawn entry builder ──────────────────────────────────
+
+class SpawnConfig:
+	var _scene: String
+	var _offset: Vector2                                             = Vector2.ZERO
+	var _movement: MovementResource                                  = null
+	var _delay: float                                                = 0.0
+	var _exit_mode: EnemyPathMover.ExitMode = EnemyPathMover.ExitMode.FREE_ON_SCREEN_EXIT
+	var _exit_time: float                                            = 0.0
+	var _formation: FormationResource                                = null
+	var _props: Dictionary                                           = {}
+
+	func _init(scene: String) -> void:
+		_scene = scene
+
+	## Spawn position relative to camera centre (px).
+	func at(x: float, y: float) -> SpawnConfig:
+		_offset = Vector2(x, y)
+		return self
+
+	## Movement path to follow.
+	func move(m: MovementResource) -> SpawnConfig:
+		_movement = m
+		return self
+
+	## Seconds after the wave trigger before this ship spawns.
+	func delay(d: float) -> SpawnConfig:
+		_delay = d
+		return self
+
+	## Free the entity after a fixed number of seconds (FREE_ON_DURATION).
+	func free_after(seconds: float) -> SpawnConfig:
+		_exit_mode = EnemyPathMover.ExitMode.FREE_ON_DURATION
+		_exit_time = seconds
+		return self
+
+	## Expand this entry into a formation of ships.
+	func formation(f: FormationResource) -> SpawnConfig:
+		_formation = f
+		return self
+
+	## Shoot straight in the direction of travel (ignores player position).
+	func shoot_forward() -> SpawnConfig:
+		_props["aim_mode"] = "FORWARD"
+		return self
+
+	## Aim each shot at the nearest player.
+	func shoot_at_player() -> SpawnConfig:
+		_props["aim_mode"] = "PLAYER"
+		return self
+
+	## Set an arbitrary initial property on the spawned node: entity.set(key, value).
+	func prop(key: String, value: Variant) -> SpawnConfig:
+		_props[key] = value
+		return self
+
+# ── Ship constructors ─────────────────────────────────────────────────────────
+
+func fighter()        -> SpawnConfig: return SpawnConfig.new(FIGHTER)
+func drone()          -> SpawnConfig: return SpawnConfig.new(DRONE)
+func ram()            -> SpawnConfig: return SpawnConfig.new(RAM)
+func sniper()         -> SpawnConfig: return SpawnConfig.new(SNIPER)
+func gunship()        -> SpawnConfig: return SpawnConfig.new(GUNSHIP)
+func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
+func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
+func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
+func small_asteroid() -> SpawnConfig: return SpawnConfig.new(SMALL_ASTEROID)
+
+# ── Movement helpers ──────────────────────────────────────────────────────────
 
 func straight(speed: float, angle: float = 0.0, duration: float = 0.0) -> StraightMovement:
 	var m := StraightMovement.new()
@@ -12,7 +80,7 @@ func straight(speed: float, angle: float = 0.0, duration: float = 0.0) -> Straig
 	m.duration = duration
 	return m
 
-func arc(direction: ArcMovement.ArcDirection, amplitude: float, duration: float) -> ArcMovement:
+func arc(direction: ArcMovement.ArcDirection = ArcMovement.ArcDirection.LEFT, amplitude: float = 130.0, duration: float = 3.5) -> ArcMovement:
 	var m := ArcMovement.new()
 	m.direction = direction
 	m.amplitude = amplitude
@@ -36,6 +104,15 @@ func sequence(steps: Array) -> SequenceMovement:
 	m.steps.assign(steps)
 	return m
 
+## U-shaped sweep: dips down and left, then exits straight up.
+## Exit speed is derived from the arc tangent — no separate parameter needed.
+func u_sweep(sweep_width: float = 400.0, sweep_depth: float = 500.0, curve_duration: float = 3.0) -> USweepMovement:
+	var m := USweepMovement.new()
+	m.sweep_width    = sweep_width
+	m.sweep_depth    = sweep_depth
+	m.curve_duration = curve_duration
+	return m
+
 func curve(path: Curve2D, duration: float, loop: bool = false) -> CurveMovement:
 	var m := CurveMovement.new()
 	m.path = path
@@ -43,10 +120,20 @@ func curve(path: Curve2D, duration: float, loop: bool = false) -> CurveMovement:
 	m.loop = loop
 	return m
 
-# ── Formation helpers ──────────────────────────────────────────────────────────
+# ── Formation helpers ─────────────────────────────────────────────────────────
 
+## V shape: lead at front, wings trail behind (open toward the player).
 func v_formation(count: int, spread: float = 40.0, row_gap: float = 12.0, stagger: float = 0.1) -> VFormation:
 	var f := VFormation.new()
+	f.count = count
+	f.spread = spread
+	f.row_gap = row_gap
+	f.stagger_delay = stagger
+	return f
+
+## Wedge / ^ shape: wings fan forward past the lead.
+func wedge_formation(count: int, spread: float = 40.0, row_gap: float = 12.0, stagger: float = 0.1) -> WedgeFormation:
+	var f := WedgeFormation.new()
 	f.count = count
 	f.spread = spread
 	f.row_gap = row_gap
@@ -76,31 +163,31 @@ func cluster_formation(count: int, spread: float = 50.0, seed_override: int = 0)
 		f.random_seed = seed_override
 	return f
 
-# ── Spawn entry & wave builders ───────────────────────────────────────────────
+# ── Wave & level builders ─────────────────────────────────────────────────────
 
-func spawn_entry(
-		scene_path: String,
-		offset: Vector2,
-		movement: MovementResource,
-		delay: float = 0.0,
-		exit_mode: EnemyPathMover.ExitMode = EnemyPathMover.ExitMode.FREE_ON_SCREEN_EXIT,
-		formation: FormationResource = null,
-		initial_props: Dictionary = {}) -> SpawnEntryResource:
+func _config_to_entry(c: SpawnConfig) -> SpawnEntryResource:
 	var e := SpawnEntryResource.new()
-	e.ship_scene = load(scene_path) as PackedScene
-	e.base_offset = offset
-	e.movement = movement
-	e.spawn_delay = delay
-	e.exit_mode = exit_mode
-	if formation:
-		e.formation = formation
-	e.initial_props = initial_props
+	e.ship_scene    = load(c._scene) as PackedScene
+	e.base_offset   = c._offset
+	e.movement      = c._movement
+	e.spawn_delay   = c._delay
+	e.exit_mode     = c._exit_mode
+	e.exit_time     = c._exit_time
+	if c._formation:
+		e.formation = c._formation
+	e.initial_props = c._props
 	return e
 
 func wave(trigger_time: float, entries: Array) -> WaveResource:
 	var w := WaveResource.new()
 	w.trigger_time = trigger_time
-	w.entries.assign(entries)
+	var resolved: Array[SpawnEntryResource] = []
+	for entry in entries:
+		if entry is SpawnConfig:
+			resolved.append(_config_to_entry(entry))
+		else:
+			resolved.append(entry as SpawnEntryResource)
+	w.entries.assign(resolved)
 	return w
 
 func level(name: String, waves: Array) -> LevelResource:
@@ -109,21 +196,25 @@ func level(name: String, waves: Array) -> LevelResource:
 	l.waves.assign(waves)
 	return l
 
-# ── Scene path constants ───────────────────────────────────────────────────────
+# ── Scene path constants ──────────────────────────────────────────────────────
 
-const FIGHTER := "res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn"
-const DRONE   := "res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.tscn"
-const RAM     := "res://assault/scenes/enemies/ram_ship/ram_ship.tscn"
-const SNIPER  := "res://assault/scenes/enemies/sniper_skimmer/sniper_skimmer.tscn"
-const GUNSHIP := "res://assault/scenes/enemies/gunship/gunship.tscn"
-const BOMBER  := "res://assault/scenes/enemies/bomber/bomber.tscn"
-const ALLY    := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
+const FIGHTER        := "res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn"
+const DRONE          := "res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.tscn"
+const RAM            := "res://assault/scenes/enemies/ram_ship/ram_ship.tscn"
+const SNIPER         := "res://assault/scenes/enemies/sniper_skimmer/sniper_skimmer.tscn"
+const GUNSHIP        := "res://assault/scenes/enemies/gunship/gunship.tscn"
+const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"
+const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
 const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn"
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"
 
-# ── Arc direction constants ───────────────────────────────────────────────────
+# ── Direction constants ───────────────────────────────────────────────────────
 
-const ARC_LEFT := ArcMovement.ArcDirection.LEFT
+const LEFT  := ArcMovement.ArcDirection.LEFT
+const RIGHT := ArcMovement.ArcDirection.RIGHT
+
+## Kept for compatibility with any code referencing ARC_LEFT / ARC_RIGHT.
+const ARC_LEFT  := ArcMovement.ArcDirection.LEFT
 const ARC_RIGHT := ArcMovement.ArcDirection.RIGHT
+
 const EXIT_SCREEN := EnemyPathMover.ExitMode.FREE_ON_SCREEN_EXIT
-const EXIT_DURATION := EnemyPathMover.ExitMode.FREE_ON_DURATION

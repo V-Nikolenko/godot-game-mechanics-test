@@ -8,6 +8,8 @@ extends Resource
 @export var spawn_delay: float = 0.0
 @export var movement: MovementResource
 @export var exit_mode: EnemyPathMover.ExitMode = EnemyPathMover.ExitMode.FREE_ON_SCREEN_EXIT
+## Explicit lifetime for FREE_ON_DURATION exit. 0 = use movement.total_duration().
+@export var exit_time: float = 0.0
 @export var look_in_moving_direction: bool = true
 @export var formation: FormationResource        ## Optional — expands into N ships.
 ## Properties to set on the spawned entity via entity.set(key, value) at spawn time.

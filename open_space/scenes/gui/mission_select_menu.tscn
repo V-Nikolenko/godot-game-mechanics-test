@@ -1,9 +1,7 @@
 [gd_scene format=3 uid="uid://crwj4msudkrqy"]
 
 [ext_resource type="Script" uid="uid://ym3t2ymsvlqy" path="res://open_space/scenes/gui/mission_select_menu.gd" id="1_script"]
-[ext_resource type="Texture2D" uid="uid://dmy783gbic0al" path="res://assault/assets/sprites/ui/menu_mission_select_background_1.png" id="2_8dylt"]
 [ext_resource type="Texture2D" uid="uid://cnx0qba50asly" path="res://assault/assets/sprites/ui/menu_mission_select_overlay.png" id="2_overlay"]
-[ext_resource type="Texture2D" uid="uid://bmo1tyr2vbsg3" path="res://assault/assets/sprites/ui/menu_mission_select_mission_image.png" id="3_x74x8"]
 [ext_resource type="Texture2D" uid="uid://sbuh1rwmyd1v" path="res://assault/assets/sprites/ui/menu_mission_select_mission_image_frame.png" id="5_2iyxa"]
 
 [node name="MissionSelectMenu" type="CanvasLayer" unique_id=1597812842]
@@ -13,7 +11,6 @@ script = ExtResource("1_script")
 
 [node name="Background" type="Sprite2D" parent="." unique_id=20008749]
 position = Vector2(320, 179)
-texture = ExtResource("2_8dylt")
 
 [node name="Overlay" type="Sprite2D" parent="." unique_id=1565405424]
 position = Vector2(320, 179)
@@ -49,7 +46,6 @@ position = Vector2(403, 157.18)
 
 [node name="MissionImagePreview" type="Sprite2D" parent="InfoPanel" unique_id=1228889156]
 position = Vector2(48, 293)
-texture = ExtResource("3_x74x8")
 
 [node name="MissionImagePreviewFrame" type="Sprite2D" parent="InfoPanel" unique_id=1386997744]
 position = Vector2(48, 293)

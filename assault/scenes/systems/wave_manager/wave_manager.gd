@@ -67,6 +67,7 @@ func _entry_to_dict(entry: SpawnEntryResource) -> Dictionary:
 		"delay": entry.spawn_delay,
 		"movement": entry.movement,
 		"exit_mode": entry.exit_mode,
+		"exit_time": entry.exit_time,
 		"look_in_moving_direction": entry.look_in_moving_direction,
 	}
 	if entry.formation:
@@ -135,18 +136,22 @@ func _spawn_ship(spawn: Dictionary) -> void:
 
 	var entity: Node = scene.instantiate()
 	entity.global_position = spawn_pos
-	enemy_container.add_child(entity)
-	print("[Spawn] %s at (%.0f, %.0f)" % [scene.resource_path.get_file(), spawn_pos.x, spawn_pos.y])
 
+	# Apply initial props BEFORE add_child so values are readable during _ready().
 	if spawn.has("on_spawned"):
 		spawn.on_spawned.call(entity)
+
+	enemy_container.add_child(entity)
+	print("[Spawn] %s at (%.0f, %.0f)" % [scene.resource_path.get_file(), spawn_pos.x, spawn_pos.y])
 
 	# Attach movement controller if a MovementResource is provided.
 	if spawn.has("movement"):
 		var mover := EnemyPathMover.new()
 		mover.movement = spawn["movement"] as MovementResource
 		if spawn.has("exit_mode"):
-			mover.exit_mode = spawn["exit_mode"]  # enum (int) — direct assignment, no cast needed
+			mover.exit_mode = spawn["exit_mode"]
+		if spawn.has("exit_time"):
+			mover.exit_time = spawn["exit_time"]
 		if spawn.has("look_in_moving_direction"):
 			mover.look_in_moving_direction = spawn["look_in_moving_direction"]  # bool — direct assignment
 		entity.add_child(mover)

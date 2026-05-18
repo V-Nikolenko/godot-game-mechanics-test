@@ -15,6 +15,8 @@ enum ExitMode {
 
 @export var movement: MovementResource
 @export var exit_mode: ExitMode = ExitMode.FREE_ON_SCREEN_EXIT
+## Explicit lifetime in seconds for FREE_ON_DURATION. 0 = use movement.total_duration().
+@export var exit_time: float = 0.0
 @export var look_in_moving_direction: bool = true  ## Rotate actor to face direction of travel.
 
 var _elapsed: float = 0.0
@@ -22,6 +24,9 @@ var _actor: CharacterBody2D
 var _initial_world_pos: Vector2
 var _initial_cam_y: float
 var _cam: Camera2D
+## Becomes true the first frame the enemy is inside the viewport.
+## FREE_ON_SCREEN_EXIT only frees the actor AFTER this is set.
+var _has_been_on_screen: bool = false
 
 func _ready() -> void:
 	_actor = get_parent() as CharacterBody2D
@@ -63,7 +68,8 @@ func _physics_process(delta: float) -> void:
 			_actor.rotation = atan2(-vel.x, vel.y)
 
 	if exit_mode == ExitMode.FREE_ON_DURATION:
-		if _elapsed >= movement.total_duration():
+		var cutoff: float = exit_time if exit_time > 0.0 else movement.total_duration()
+		if _elapsed >= cutoff:
 			_actor.queue_free()
 			set_physics_process(false)
 		return  # duration-mode actors never use the off-screen check
@@ -75,9 +81,16 @@ func _check_off_screen(cam: Camera2D) -> void:
 		return
 	var vp: Vector2 = _actor.get_viewport().get_visible_rect().size
 	var margin: float = 80.0
-	if _actor.global_position.y > cam.global_position.y + vp.y * 0.5 + margin \
+	var off_screen: bool = \
+			_actor.global_position.y > cam.global_position.y + vp.y * 0.5 + margin \
 			or _actor.global_position.y < cam.global_position.y - vp.y * 0.5 - margin \
 			or _actor.global_position.x > cam.global_position.x + vp.x * 0.5 + margin \
-			or _actor.global_position.x < cam.global_position.x - vp.x * 0.5 - margin:
+			or _actor.global_position.x < cam.global_position.x - vp.x * 0.5 - margin
+	if not _has_been_on_screen:
+		## Still approaching the screen — don't cull yet, just track entry.
+		if not off_screen:
+			_has_been_on_screen = true
+		return
+	if off_screen:
 		_actor.queue_free()
 		set_physics_process(false)
