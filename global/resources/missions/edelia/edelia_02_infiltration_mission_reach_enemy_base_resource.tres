@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="MissionConfigResource" format=3 uid="uid://vc5yhn7tlgks"]
+
+[ext_resource type="Texture2D" uid="uid://bmo1tyr2vbsg3" path="res://assault/assets/sprites/ui/menu_mission_select_mission_image.png" id="1_7laul"]
+[ext_resource type="Script" uid="uid://bma3l3qnye8cn" path="res://global/resources/mission_config_resource.gd" id="2_odk6a"]
+
+[resource]
+script = ExtResource("2_odk6a")
+display_name = "Edelia"
+scene_path = "res://infiltration/scenes/levels/TestIsometricScene.tscn"
+required_mission = 1
+mission_type = "infiltration"
+mission_image = ExtResource("1_7laul")
+description = "Locate and destroy the enemy long-range transmission antenna."
+mission_number = 2

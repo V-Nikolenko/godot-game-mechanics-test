@@ -5,7 +5,7 @@
 [ext_resource type="PackedScene" uid="uid://cu7qlu0h6p1fd" path="res://open_space/scenes/entities/interactables/planet.tscn" id="3_planet"]
 [ext_resource type="PackedScene" path="res://open_space/scenes/gui/hud.tscn" id="4_oshud"]
 [ext_resource type="Resource" uid="uid://b1pyvrb4ekue0" path="res://global/resources/mission_select_hubs/edelia.tres" id="5_edelia"]
-[ext_resource type="Resource" uid="uid://btsillpo773wl" path="res://global/resources/mission_select_hubs/planet_2.tres" id="6_planet2"]
+[ext_resource type="Resource" uid="uid://btsillpo773wl" path="res://global/resources/mission_select_hubs/voeter_k05m.tres" id="6_planet2"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
@@ -21,13 +21,13 @@ color = Color(0.04, 0.04, 0.08, 1)
 [node name="EnemyContainer" type="Node2D" parent="." unique_id=1782392043]
 visible = false
 
-[node name="Planet" parent="." unique_id=662454378 instance=ExtResource("3_planet")]
+[node name="edelia" parent="." unique_id=662454378 instance=ExtResource("3_planet")]
 position = Vector2(208, -1)
 config = ExtResource("5_edelia")
 arc_offset = Vector2(-13, 4)
 arc_radius = 72.0
 
-[node name="Planet2" parent="." unique_id=887654321 instance=ExtResource("3_planet")]
+[node name="voeter_k05m" parent="." unique_id=887654321 instance=ExtResource("3_planet")]
 position = Vector2(-186, 169)
 config = ExtResource("6_planet2")
 arc_offset = Vector2(-5, 4)

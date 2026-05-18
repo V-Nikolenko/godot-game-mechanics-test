@@ -70,6 +70,7 @@ func open(config: PlanetConfigResource) -> void:
 	_background.texture  = config.background_texture
 	_name_label.text     = config.display_name
 	_class_label.text    = config.description
+	_class_label.add_theme_font_size_override("font_size", config.description_font_size)
 
 	## Build list items.
 	for item: MissionListItem in _items:
@@ -98,6 +99,9 @@ func open(config: PlanetConfigResource) -> void:
 		## Skip if the destination mission has connect_line disabled.
 		if not config.missions[i + 1].connect_line:
 			continue
+		## Hide line if either endpoint is locked (its point is hidden).
+		if _is_locked(config.missions[i]) or _is_locked(config.missions[i + 1]):
+			continue
 		var a: Vector2 = config.point_positions[i] \
 				if i     < config.point_positions.size() else Vector2.ZERO
 		var b: Vector2 = config.point_positions[i + 1] \
@@ -105,8 +109,7 @@ func open(config: PlanetConfigResource) -> void:
 		var line := Line2D.new()
 		line.width         = _LINE_WIDTH
 		line.antialiased   = true
-		line.default_color = _LINE_COLOR_UNLOCKED \
-				if not _is_locked(config.missions[i + 1]) else _LINE_COLOR_LOCKED
+		line.default_color = _LINE_COLOR_UNLOCKED
 		## Anchor to diamond (left part of icon) instead of sprite center.
 		line.add_point(a + _POINT_LINE_ANCHOR)
 		line.add_point(b + _POINT_LINE_ANCHOR)

@@ -9,6 +9,8 @@ extends Resource
 @export var display_name: String = "UNKNOWN"
 ## Subtitle shown beneath the name in the menu header.
 @export_multiline var description: String = ""
+## Font size for the description label. Reduce if the description is long.
+@export_range(4, 32, 1) var description_font_size: int = 8
 
 ## ── Visuals ───────────────────────────────────────────────────────────────
 ## Background rendered behind the overlay in the mission select menu.

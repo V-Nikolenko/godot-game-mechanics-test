@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="MissionConfigResource" format=3 uid="uid://bb8os314vaak6"]
+
+[ext_resource type="Texture2D" uid="uid://drenso3mqgmgb" path="res://assault/assets/sprites/ui/menu_mission_select_mission_image_1_1.png" id="1_flw6s"]
+[ext_resource type="Script" uid="uid://bma3l3qnye8cn" path="res://global/resources/mission_config_resource.gd" id="2_gxdd5"]
+
+[resource]
+script = ExtResource("2_gxdd5")
+display_name = "Edelia's Orbit"
+scene_path = "res://assault/scenes/levels/level_1.tscn"
+mission_image = ExtResource("1_flw6s")
+description = "Break blockade around Edelia and deploy soldiers on the surface."
+mission_number = 1
