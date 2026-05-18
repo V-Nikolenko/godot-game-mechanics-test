@@ -4,32 +4,14 @@
 [ext_resource type="Script" uid="uid://dutkvjs1np4nd" path="res://assault/scenes/systems/wave_manager/wave_manager.gd" id="11_wave"]
 [ext_resource type="Script" uid="uid://c4mola01a2ewr" path="res://assault/scenes/levels/level_1_waves.gd" id="12_waves"]
 [ext_resource type="PackedScene" path="res://assault/scenes/gui/hud.tscn" id="13_hud"]
+[ext_resource type="PackedScene" uid="uid://bsrr6ov5ery1u" path="res://assault/scenes/levels/level_1_background.tscn" id="14_bg"]
 
 [node name="Level1" type="Node2D" unique_id=432592397]
 
-[node name="Background" type="ColorRect" parent="." unique_id=872775802]
-offset_left = -100.0
-offset_top = -100.0
-offset_right = 740.0
-offset_bottom = 460.0
-color = Color(0.02, 0.02, 0.05, 1)
+[node name="Level1Background" parent="." unique_id=398992070 instance=ExtResource("14_bg")]
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=671845157]
 position = Vector2(320, 180)
-
-[node name="StarField" type="CPUParticles2D" parent="Camera2D" unique_id=1385697513]
-position = Vector2(0, -220)
-amount = 60
-lifetime = 5.0
-preprocess = 5.0
-emission_shape = 3
-emission_rect_extents = Vector2(420, 40)
-direction = Vector2(0, 1)
-spread = 0.0
-gravity = Vector2(0, 0)
-initial_velocity_min = 35.0
-initial_velocity_max = 75.0
-scale_amount_max = 2.5
 
 [node name="EnemyContainer" type="Node2D" parent="." unique_id=1889017634]
 
@@ -41,7 +23,7 @@ enemy_container = NodePath("../EnemyContainer")
 script = ExtResource("12_waves")
 wave_manager = NodePath("../WaveManager")
 
-[node name="PlayerFighter" parent="." unique_id=895370700 instance=ExtResource("3_60rwg")]
+[node name="PlayerFighter" parent="." unique_id=1634176334 instance=ExtResource("3_60rwg")]
 position = Vector2(302, 271)
 
-[node name="HUD" parent="." unique_id=504997588 instance=ExtResource("13_hud")]
+[node name="HUD" parent="." unique_id=1327237556 instance=ExtResource("13_hud")]

@@ -1,0 +1,73 @@
+[gd_scene format=3 uid="uid://bsrr6ov5ery1u"]
+
+[ext_resource type="Script" path="res://assault/scenes/levels/level_1_background.gd" id="1_script"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/space_bg.png" id="2_space"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/planet_bg.png" id="3_planet"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/clouds_bg_layer_1.png" id="4_cloud1"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/clouds_bg_layer_2.png" id="5_cloud2"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/clouds_bg_layer_3.png" id="6_cloud3"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/clouds_bg_layer_4.png" id="7_cloud4"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/ui/surface_bg.png" id="8_surface"]
+
+[node name="Level1Background" type="Node"]
+script = ExtResource("1_script")
+space_texture = ExtResource("2_space")
+planet_texture = ExtResource("3_planet")
+cloud_1_texture = ExtResource("4_cloud1")
+cloud_2_texture = ExtResource("5_cloud2")
+cloud_3_texture = ExtResource("6_cloud3")
+cloud_4_texture = ExtResource("7_cloud4")
+surface_texture = ExtResource("8_surface")
+
+[node name="SpaceLayer" type="CanvasLayer" parent="."]
+layer = -10
+
+[node name="FarStars_A" type="TextureRect" parent="SpaceLayer"]
+
+[node name="FarStars_B" type="TextureRect" parent="SpaceLayer"]
+
+[node name="NearStars_A" type="TextureRect" parent="SpaceLayer"]
+
+[node name="NearStars_B" type="TextureRect" parent="SpaceLayer"]
+
+[node name="PlanetLayer" type="CanvasLayer" parent="."]
+layer = -8
+
+[node name="Planet" type="Sprite2D" parent="PlanetLayer"]
+texture_filter = 1
+
+[node name="SurfaceLayer" type="CanvasLayer" parent="."]
+layer = -7
+
+[node name="Surface_A" type="TextureRect" parent="SurfaceLayer"]
+modulate = Color(1, 1, 1, 0)
+
+[node name="Surface_B" type="TextureRect" parent="SurfaceLayer"]
+modulate = Color(1, 1, 1, 0)
+
+[node name="CloudsLayer" type="CanvasLayer" parent="."]
+layer = -6
+
+[node name="Layer1_A" type="TextureRect" parent="CloudsLayer"]
+modulate = Color(1, 1, 1, 0)
+
+[node name="Layer1_B" type="TextureRect" parent="CloudsLayer"]
+modulate = Color(1, 1, 1, 0)
+
+[node name="Layer2_A" type="TextureRect" parent="CloudsLayer"]
+modulate = Color(1, 1, 1, 0)
+
+[node name="Layer2_B" type="TextureRect" parent="CloudsLayer"]
+modulate = Color(1, 1, 1, 0)
+
+[node name="Layer3_A" type="TextureRect" parent="CloudsLayer"]
+modulate = Color(1, 1, 1, 0)
+
+[node name="Layer3_B" type="TextureRect" parent="CloudsLayer"]
+modulate = Color(1, 1, 1, 0)
+
+[node name="Layer4_A" type="TextureRect" parent="CloudsLayer"]
+modulate = Color(1, 1, 1, 0)
+
+[node name="Layer4_B" type="TextureRect" parent="CloudsLayer"]
+modulate = Color(1, 1, 1, 0)
