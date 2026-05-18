@@ -145,7 +145,7 @@ func _ready() -> void:
 			#b.drone()  .at( 20, -180).move(b.sine(150, 55)).delay(0.9),
 		#]),
 
-		b.wave(75.0, [
+		b.wave(140.0, [
 			b.ally().at(  0, 180).move(b.straight(160, PI)),
 			b.ally().at(-40,   0).move(b.straight(140, PI - 0.18)).delay(0.2),
 			b.ally().at( 40,   0).move(b.straight(140, PI + 0.18)).delay(0.2),
@@ -153,7 +153,7 @@ func _ready() -> void:
 			b.ally().at( 80, 180).move(b.straight(125, PI + 0.32)).delay(0.4),
 		]),
 
-		b.wave(80.0, [
+		b.wave(190.0, [
 			b.gunship().at(  0, -150).move(b.straight(35)),
 			b.fighter().at(-50, -150).move(b.arc(L, 120, 4.0)).delay(0.8).free_after(4.0),
 			b.fighter().at(  0, -150).move(b.straight(80))    .delay(0.8),
