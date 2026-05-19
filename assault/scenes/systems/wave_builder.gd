@@ -14,6 +14,8 @@ class SpawnConfig:
 	var _exit_time: float                                            = 0.0
 	var _formation: FormationResource                                = null
 	var _props: Dictionary                                           = {}
+	var _look_in_moving_direction: bool                              = true
+	var _look_angle: float                                           = 0.0
 
 	func _init(scene: String) -> void:
 		_scene = scene
@@ -52,6 +54,18 @@ class SpawnConfig:
 	## Aim each shot at the nearest player.
 	func shoot_at_player() -> SpawnConfig:
 		_props["aim_mode"] = "PLAYER"
+		return self
+
+	## Face the direction of travel (default — provided for symmetry/clarity).
+	func look_in_travel_direction() -> SpawnConfig:
+		_look_in_moving_direction = true
+		return self
+
+	## Lock the ship to a fixed rotation (radians).
+	## Sprite convention: 0 = down, PI = up, PI/2 = left, -PI/2 = right.
+	func look_at_angle(angle: float) -> SpawnConfig:
+		_look_in_moving_direction = false
+		_look_angle = angle
 		return self
 
 	## Set an arbitrary initial property on the spawned node: entity.set(key, value).
@@ -173,6 +187,8 @@ func _config_to_entry(c: SpawnConfig) -> SpawnEntryResource:
 	e.spawn_delay   = c._delay
 	e.exit_mode     = c._exit_mode
 	e.exit_time     = c._exit_time
+	e.look_in_moving_direction = c._look_in_moving_direction
+	e.look_angle    = c._look_angle
 	if c._formation:
 		e.formation = c._formation
 	e.initial_props = c._props

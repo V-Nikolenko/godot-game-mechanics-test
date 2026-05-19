@@ -4,17 +4,31 @@
 
 [node name="Level1Background" type="Node" unique_id=1700236008]
 script = ExtResource("1_script")
+speed_stars_base = 10.0
+speed_stars_overlay = 30.0
+speed_nebula = 5.0
+nebula_alpha = 0.03
+asteroids_back_start = 23.0
+asteroids_front_start = 23.0
 
 [node name="SpaceLayer" type="CanvasLayer" parent="." unique_id=806930922]
 layer = -10
 
-[node name="FarStars_A" type="TextureRect" parent="SpaceLayer" unique_id=1520972378]
+[node name="StarsBase_A" type="TextureRect" parent="SpaceLayer" unique_id=1102358052]
 
-[node name="FarStars_B" type="TextureRect" parent="SpaceLayer" unique_id=220843880]
+[node name="StarsBase_B" type="TextureRect" parent="SpaceLayer" unique_id=1481109748]
 
-[node name="NearStars_A" type="TextureRect" parent="SpaceLayer" unique_id=638775210]
+[node name="StarsOverlay_A" type="TextureRect" parent="SpaceLayer" unique_id=1238347219]
 
-[node name="NearStars_B" type="TextureRect" parent="SpaceLayer" unique_id=867714596]
+[node name="StarsOverlay_B" type="TextureRect" parent="SpaceLayer" unique_id=811054663]
+
+[node name="Nebula_A" type="TextureRect" parent="SpaceLayer" unique_id=1163110422]
+
+[node name="Nebula_B" type="TextureRect" parent="SpaceLayer" unique_id=1912664487]
+
+[node name="AsteroidsBack" type="TextureRect" parent="SpaceLayer" unique_id=2042814648]
+
+[node name="AsteroidsFront" type="TextureRect" parent="SpaceLayer" unique_id=865858423]
 
 [node name="PlanetLayer" type="CanvasLayer" parent="." unique_id=1543889973]
 layer = -8

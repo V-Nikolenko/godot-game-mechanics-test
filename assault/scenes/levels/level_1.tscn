@@ -2,9 +2,10 @@
 
 [ext_resource type="PackedScene" uid="uid://ty6a2vpnmrr5" path="res://assault/scenes/player/player_fighter.tscn" id="3_60rwg"]
 [ext_resource type="Script" uid="uid://dutkvjs1np4nd" path="res://assault/scenes/systems/wave_manager/wave_manager.gd" id="11_wave"]
-[ext_resource type="Script" uid="uid://c4mola01a2ewr" path="res://assault/scenes/levels/level_1_waves.gd" id="12_waves"]
 [ext_resource type="PackedScene" path="res://assault/scenes/gui/hud.tscn" id="13_hud"]
 [ext_resource type="PackedScene" uid="uid://bsrr6ov5ery1u" path="res://assault/scenes/levels/level_1_background.tscn" id="14_bg"]
+[ext_resource type="Script" path="res://assault/scenes/systems/level_director/level_director.gd" id="15_ldir"]
+[ext_resource type="Script" path="res://assault/scenes/levels/level_1_director.gd" id="16_dir1"]
 
 [node name="Level1" type="Node2D" unique_id=432592397]
 
@@ -19,8 +20,14 @@ position = Vector2(320, 180)
 script = ExtResource("11_wave")
 enemy_container = NodePath("../EnemyContainer")
 
-[node name="LevelWaves" type="Node" parent="." unique_id=1598507531 node_paths=PackedStringArray("wave_manager")]
-script = ExtResource("12_waves")
+[node name="LevelDirector" type="Node" parent="." unique_id=1701234567 node_paths=PackedStringArray("background", "wave_manager")]
+script = ExtResource("15_ldir")
+background = NodePath("../Level1Background")
+wave_manager = NodePath("../WaveManager")
+
+[node name="LevelDirectorConfig" type="Node" parent="." unique_id=1598507531 node_paths=PackedStringArray("director", "wave_manager")]
+script = ExtResource("16_dir1")
+director = NodePath("../LevelDirector")
 wave_manager = NodePath("../WaveManager")
 
 [node name="PlayerFighter" parent="." unique_id=1634176334 instance=ExtResource("3_60rwg")]

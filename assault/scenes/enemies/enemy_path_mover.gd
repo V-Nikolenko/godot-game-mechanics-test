@@ -18,6 +18,9 @@ enum ExitMode {
 ## Explicit lifetime in seconds for FREE_ON_DURATION. 0 = use movement.total_duration().
 @export var exit_time: float = 0.0
 @export var look_in_moving_direction: bool = true  ## Rotate actor to face direction of travel.
+## Fixed rotation (radians) used when look_in_moving_direction is false.
+## Sprite convention: 0 = down, PI = up, PI/2 = left, -PI/2 = right.
+@export var look_angle: float = 0.0
 
 var _elapsed: float = 0.0
 var _actor: CharacterBody2D
@@ -66,6 +69,8 @@ func _physics_process(delta: float) -> void:
 			# Sprite's natural facing is +Y (down). atan2(-vel.x, vel.y) maps travel
 			# direction to that convention.
 			_actor.rotation = atan2(-vel.x, vel.y)
+	else:
+		_actor.rotation = look_angle
 
 	if exit_mode == ExitMode.FREE_ON_DURATION:
 		var cutoff: float = exit_time if exit_time > 0.0 else movement.total_duration()

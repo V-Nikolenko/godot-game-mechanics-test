@@ -11,6 +11,9 @@ extends Resource
 ## Explicit lifetime for FREE_ON_DURATION exit. 0 = use movement.total_duration().
 @export var exit_time: float = 0.0
 @export var look_in_moving_direction: bool = true
+## Fixed rotation (radians) used when look_in_moving_direction is false.
+## Sprite convention: 0 = down, PI = up, PI/2 = left, -PI/2 = right.
+@export var look_angle: float = 0.0
 @export var formation: FormationResource        ## Optional — expands into N ships.
 ## Properties to set on the spawned entity via entity.set(key, value) at spawn time.
 ## Replaces the on_spawned Callable pattern. Example: {"direction": 1.0}

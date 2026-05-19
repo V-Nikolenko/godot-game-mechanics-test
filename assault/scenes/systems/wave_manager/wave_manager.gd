@@ -59,6 +59,21 @@ func load_level(level: LevelResource) -> void:
 		register_wave(wave.trigger_time, spawns)
 	print("[WaveManager] Loaded '%s' — %d waves" % [level.level_name, level.waves.size()])
 
+## Clears current waves and loads a new batch with a reset clock.
+## Call this when LevelDirector advances to a new section.
+## trigger_time on each WaveResource is SECTION-RELATIVE.
+func load_section(waves: Array[WaveResource]) -> void:
+	_waves.clear()
+	_next_wave_index = 0
+	_time_elapsed    = 0.0
+	for wave: WaveResource in waves:
+		var spawns: Array = []
+		for entry: SpawnEntryResource in wave.entries:
+			spawns.append(_entry_to_dict(entry))
+		_waves.append({"trigger": wave.trigger_time, "spawns": spawns})
+	print("[WaveManager] Loaded section — %d waves" % _waves.size())
+	set_process(not _waves.is_empty())
+
 ## Converts a SpawnEntryResource to the Dictionary format _spawn_ship() understands.
 func _entry_to_dict(entry: SpawnEntryResource) -> Dictionary:
 	var d: Dictionary = {
@@ -69,6 +84,7 @@ func _entry_to_dict(entry: SpawnEntryResource) -> Dictionary:
 		"exit_mode": entry.exit_mode,
 		"exit_time": entry.exit_time,
 		"look_in_moving_direction": entry.look_in_moving_direction,
+		"look_angle": entry.look_angle,
 	}
 	if entry.formation:
 		d["formation"] = entry.formation
@@ -154,4 +170,6 @@ func _spawn_ship(spawn: Dictionary) -> void:
 			mover.exit_time = spawn["exit_time"]
 		if spawn.has("look_in_moving_direction"):
 			mover.look_in_moving_direction = spawn["look_in_moving_direction"]  # bool — direct assignment
+		if spawn.has("look_angle"):
+			mover.look_angle = spawn["look_angle"]
 		entity.add_child(mover)

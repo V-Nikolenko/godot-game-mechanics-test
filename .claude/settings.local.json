@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "mcp__d2dbb682-9e00-4743-8842-e48794e057ca__notion-fetch"
+      "mcp__d2dbb682-9e00-4743-8842-e48794e057ca__notion-fetch",
+      "Skill(superpowers:executing-plans)",
+      "Skill(superpowers:executing-plans:*)"
     ]
   }
 }
