@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="BackgroundPhase" format=3 uid="uid://c5d6e7f8hah0i"]
+
+[ext_resource type="Script" uid="uid://2qel4vcbcp4e" path="res://global/resources/levels/background_phase.gd" id="1_c5d6e7"]
+
+[resource]
+script = ExtResource("1_c5d6e7")
+phase_name = &"asteroid_belt"
+asteroids_back_enter = true
+asteroids_front_enter = true

@@ -80,16 +80,44 @@ func _advance() -> void:
 			push_error("[LevelDirector] Unhandled EndCondition: %d" % s.end_condition)
 
 
-func _wait_enemies_cleared() -> void:
-	var container: Node = wave_manager.enemy_container
-	var waited := 0.0
-	while container.get_child_count() > 0 and waited < 10.0:
-		await get_tree().create_timer(0.15).timeout
+## Awaits either [container]'s next child_exiting_tree signal OR a fallback
+## timeout of [poll_seconds] — whichever happens first.
+func _wait_for_child_exit_or_timeout(container: Node, poll_seconds: float) -> void:
+	var timer := get_tree().create_timer(poll_seconds)
+	var done := [false]
+	var on_exit := func(_n: Node) -> void:
+		done[0] = true
+	var on_timeout := func() -> void:
+		done[0] = true
+
+	container.child_exiting_tree.connect(on_exit, CONNECT_ONE_SHOT)
+	timer.timeout.connect(on_timeout, CONNECT_ONE_SHOT)
+
+	while not done[0]:
+		await get_tree().process_frame
 		if not is_instance_valid(self):
 			return
-		waited += 0.15
-	print("[LevelDirector] Enemies cleared (%.1f s) — %d remaining" % [
-		waited, container.get_child_count()
+
+	if container.child_exiting_tree.is_connected(on_exit):
+		container.child_exiting_tree.disconnect(on_exit)
+
+
+func _wait_enemies_cleared() -> void:
+	var container: Node = wave_manager.enemy_container
+	var start_ms: int = Time.get_ticks_msec()
+	var deadline_ms: int = start_ms + 10_000
+
+	while container.get_child_count() > 0:
+		if Time.get_ticks_msec() >= deadline_ms:
+			push_warning("[LevelDirector] enemy cleanup timed out with %d remaining" % container.get_child_count())
+			break
+		await _wait_for_child_exit_or_timeout(container, 1.0)
+		if not is_instance_valid(self):
+			return
+
+	var elapsed_ms: int = Time.get_ticks_msec() - start_ms
+	print("[LevelDirector] Enemies cleared (%.2f s) — %d remaining" % [
+		elapsed_ms / 1000.0, container.get_child_count()
 	])
 	await get_tree().create_timer(0.2).timeout
 	if not is_instance_valid(self):

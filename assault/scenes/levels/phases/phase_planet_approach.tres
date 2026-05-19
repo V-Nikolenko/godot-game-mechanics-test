@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="BackgroundPhase" load_steps=2 format=3 uid="uid://b7c8d9e0f1g2h"]
+[gd_resource type="Resource" script_class="BackgroundPhase" format=3 uid="uid://b7c8eae0f1g2h"]
 
-[ext_resource type="Script" path="res://global/resources/levels/background_phase.gd" id="1_b7c8d9"]
+[ext_resource type="Script" uid="uid://2qel4vcbcp4e" path="res://global/resources/levels/background_phase.gd" id="1_b7c8d9"]
 
 [resource]
 script = ExtResource("1_b7c8d9")
@@ -8,25 +8,12 @@ phase_name = &"planet_approach"
 stars_base_alpha = 0.0
 stars_overlay_alpha = 0.0
 nebula_alpha = 0.0
+space_fade_start_fraction = 0.7
 cloud_1_alpha = 1.0
 cloud_2_alpha = 0.85
 cloud_3_alpha = 0.7
 cloud_4_alpha = 0.5
 clouds_appear_fraction = 0.6
-surface_alpha = 0.0
 planet_alpha = 1.0
 planet_scale = 8.0
-planet_fade_in = 2.0
-asteroids_back_enter = true
-asteroids_front_enter = true
-cloud_4_peel_start = -1.0
-cloud_4_peel_duration = 3.0
-cloud_3_peel_start = -1.0
-cloud_3_peel_duration = 5.0
-cloud_2_peel_start = -1.0
-cloud_2_peel_duration = 5.0
-cloud_1_peel_start = -1.0
-cloud_1_peel_duration = 5.0
-cloud_peel_scale = 4.0
-surface_appear_start = -1.0
-surface_appear_duration = 10.0
+planet_fade_out_start = 66.0

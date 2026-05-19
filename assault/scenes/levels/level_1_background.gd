@@ -75,7 +75,7 @@ extends BackgroundController
 ## Seconds of pure space before the planet first appears at the top edge.
 @export var deep_space_duration: float = 30.0
 ## Seconds the planet takes to grow from a corner-at-top into atmosphere.
-@export var approach_duration:   float = 110.0
+@export var approach_duration:   float = 60.0
 ## Seconds the planet takes to fade in once it first appears.
 @export var planet_fade_in:      float = 2.0
 ## Fraction of [approach_duration] over which the planet fades out once the
@@ -301,22 +301,29 @@ func transition_to(phase: BackgroundPhase, duration: float) -> void:
 		_alpha_cloud_3       = phase.cloud_3_alpha
 		_alpha_cloud_4       = phase.cloud_4_alpha
 		_alpha_surface       = phase.surface_alpha
-		_schedule_peel_timers(phase)
 		return
 
 	# ── Parallel Tween ────────────────────────────────────────────────────────
 	_transition_tween = create_tween().set_parallel(true)
 
-	# Space layers
-	_transition_tween.tween_property(self, "_alpha_stars_base",    phase.stars_base_alpha,    duration)
-	_transition_tween.tween_property(self, "_alpha_stars_overlay", phase.stars_overlay_alpha, duration)
-	_transition_tween.tween_property(self, "_alpha_nebula",        phase.nebula_alpha,        duration)
+	# Space layers — delayed when space_fade_start_fraction > 0 so stars hold
+	# until the planet is large before the sky brightens.
+	var space_delay := duration * phase.space_fade_start_fraction
+	var space_dur   := maxf(duration - space_delay, 0.01)
+	_transition_tween.tween_property(self, "_alpha_stars_base",    phase.stars_base_alpha,    space_dur).set_delay(space_delay)
+	_transition_tween.tween_property(self, "_alpha_stars_overlay", phase.stars_overlay_alpha, space_dur).set_delay(space_delay)
+	_transition_tween.tween_property(self, "_alpha_nebula",        phase.nebula_alpha,        space_dur).set_delay(space_delay)
 
 	# Planet — scale tweens EASE_IN CUBIC; alpha fade-in is short
 	_transition_tween.tween_property(self, "_planet_scale", phase.planet_scale, duration)\
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
 	var planet_fade_dur := minf(phase.planet_fade_in, duration)
 	_transition_tween.tween_property(self, "_alpha_planet", phase.planet_alpha, planet_fade_dur)
+	# Delayed fade-out — makes the planet disappear behind clouds during approach
+	# rather than lingering at full opacity until the next section starts.
+	if phase.planet_fade_out_start >= 0.0:
+		_transition_tween.tween_property(self, "_alpha_planet", 0.0, phase.planet_fade_out_duration)\
+			.set_delay(phase.planet_fade_out_start)
 
 	# Cloud alphas — optionally delayed so clouds appear only in a later fraction
 	var clouds_delay := duration * phase.clouds_appear_fraction
@@ -338,57 +345,24 @@ func transition_to(phase: BackgroundPhase, duration: float) -> void:
 	if 4 not in peeled:
 		_transition_tween.tween_property(self, "_alpha_cloud_4", phase.cloud_4_alpha, clouds_dur).set_delay(clouds_delay)
 
-	# Surface
+	# Cloud peels — scheduled on the main tween so kill() cancels them when
+	# transition_to() is called again.
+	if phase.cloud_4_peel_start >= 0.0:
+		_add_peel_to_tween(4, phase.cloud_4_peel_start, phase.cloud_4_peel_duration, phase.cloud_peel_scale)
+	if phase.cloud_3_peel_start >= 0.0:
+		_add_peel_to_tween(3, phase.cloud_3_peel_start, phase.cloud_3_peel_duration, phase.cloud_peel_scale)
+	if phase.cloud_2_peel_start >= 0.0:
+		_add_peel_to_tween(2, phase.cloud_2_peel_start, phase.cloud_2_peel_duration, phase.cloud_peel_scale)
+	if phase.cloud_1_peel_start >= 0.0:
+		_add_peel_to_tween(1, phase.cloud_1_peel_start, phase.cloud_1_peel_duration, phase.cloud_peel_scale)
+
+	# Surface — use a straight alpha tween when no delayed appear is needed,
+	# otherwise schedule the delayed appear on the main tween.
 	if phase.surface_appear_start < 0.0:
 		_transition_tween.tween_property(self, "_alpha_surface", phase.surface_alpha, duration)
-
-	_schedule_peel_timers(phase)
-
-
-func _schedule_peel_timers(phase: BackgroundPhase) -> void:
-	var peel_pairs: Array = [
-		[4, phase.cloud_4_peel_start, phase.cloud_4_peel_duration],
-		[3, phase.cloud_3_peel_start, phase.cloud_3_peel_duration],
-		[2, phase.cloud_2_peel_start, phase.cloud_2_peel_duration],
-		[1, phase.cloud_1_peel_start, phase.cloud_1_peel_duration],
-	]
-	for pair in peel_pairs:
-		var layer: int   = pair[0]
-		var delay: float = pair[1]
-		var dur:   float = pair[2]
-		if delay < 0.0:
-			continue
-		var t := get_tree().create_timer(delay)
-		t.timeout.connect(_run_peel.bind(layer, dur, phase.cloud_peel_scale))
-
-	if phase.surface_appear_start >= 0.0:
-		var t := get_tree().create_timer(phase.surface_appear_start)
-		t.timeout.connect(_run_surface_appear.bind(phase.surface_appear_duration))
-
-
-func _run_peel(layer: int, duration: float, target_scale: float) -> void:
-	var tw := create_tween().set_parallel(true)
-	match layer:
-		1:
-			tw.tween_property(self, "_alpha_cloud_1", 0.0, duration)
-			tw.tween_property(self, "_scale_cloud_1", target_scale, duration)\
-				.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		2:
-			tw.tween_property(self, "_alpha_cloud_2", 0.0, duration)
-			tw.tween_property(self, "_scale_cloud_2", target_scale, duration)\
-				.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		3:
-			tw.tween_property(self, "_alpha_cloud_3", 0.0, duration)
-			tw.tween_property(self, "_scale_cloud_3", target_scale, duration)\
-				.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-		4:
-			tw.tween_property(self, "_alpha_cloud_4", 0.0, duration)
-			tw.tween_property(self, "_scale_cloud_4", target_scale, duration)\
-				.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
-
-
-func _run_surface_appear(duration: float) -> void:
-	create_tween().tween_property(self, "_alpha_surface", 1.0, duration)
+	else:
+		_transition_tween.tween_property(self, "_alpha_surface", 1.0, phase.surface_appear_duration)\
+			.set_delay(phase.surface_appear_start)
 
 
 func _apply(screen: Vector2) -> void:
@@ -436,6 +410,17 @@ func _apply(screen: Vector2) -> void:
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
+func _add_peel_to_tween(layer: int, delay: float, duration: float, target_scale: float) -> void:
+	if not _transition_tween or not _transition_tween.is_valid():
+		return
+	var alpha_prop := "_alpha_cloud_%d" % layer
+	var scale_prop := "_scale_cloud_%d" % layer
+	_transition_tween.tween_property(self, alpha_prop, 0.0, duration).set_delay(delay)
+	_transition_tween.tween_property(self, scale_prop, target_scale, duration)\
+		.set_delay(delay)\
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+
 ## Scroll + scale animation — scale_factor driven by Tween state variables.
 func _apply_cloud_layer(a: TextureRect, b: TextureRect, screen: Vector2,
 		scroll: float, base_alpha: float, scale_factor: float) -> void:
@@ -474,6 +459,6 @@ func _scroll_pair(a: TextureRect, b: TextureRect, scroll: float) -> void:
 	var tile_h: float = a.size.y
 	if tile_h <= 0.0:
 		return
-	var offset: float = fmod(scroll, tile_h)
+	var offset: float = roundf(fmod(scroll, tile_h))
 	a.position = Vector2(0.0, offset)
 	b.position = Vector2(0.0, offset - tile_h)

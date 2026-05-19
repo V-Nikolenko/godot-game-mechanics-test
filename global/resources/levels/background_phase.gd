@@ -17,6 +17,10 @@ extends Resource
 @export_range(0.0, 1.0, 0.01) var stars_base_alpha:    float = 1.0
 @export_range(0.0, 1.0, 0.01) var stars_overlay_alpha: float = 1.0
 @export_range(0.0, 1.0, 0.01) var nebula_alpha:         float = 0.08
+## Fraction [0-1] of transition_in_duration before stars/nebula begin fading.
+## 0 = fade immediately (default). Use 0.7 for planet_approach so stars hold
+## until the planet is large and close before the sky brightens.
+@export_range(0.0, 1.0, 0.01) var space_fade_start_fraction: float = 0.0
 
 ## Cloud layers tween from current alpha to these values during transition_in.
 ## During planet approach they tween FROM 0 but start delayed by clouds_appear_fraction.
@@ -41,6 +45,12 @@ extends Resource
 ## Seconds after section start for the planet to reach planet_alpha.
 ## Independent from the main transition duration (usually 2 s).
 @export var planet_fade_in: float = 2.0
+## Seconds into the transition before the planet begins fading out to 0.
+## -1.0 = no delayed fade-out (planet alpha is driven by planet_alpha instead).
+## Use during planet_approach so the planet disappears behind clouds rather than
+## lingering at full opacity until the next section starts.
+@export var planet_fade_out_start:    float = -1.0
+@export var planet_fade_out_duration: float = 20.0
 
 # ── Asteroid entry ────────────────────────────────────────────────────────────
 ## If true the asteroid layer resets to the top of screen when this phase starts.
