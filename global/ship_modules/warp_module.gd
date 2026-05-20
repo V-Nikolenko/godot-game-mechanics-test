@@ -6,7 +6,7 @@ func get_display_name() -> String: return "Warp Drive"
 func get_description() -> String:
 	return "Replaces the barrel-roll dash with a micro-warp teleport. Double-tap a movement key to instantly blink 120 px in that direction."
 func get_icon() -> Texture2D:
-	return preload("res://assault/assets/sprites/ui/icon_ship_module_engine_warp.png")
+	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_engine_warp.png")
 func get_slot() -> StringName: return &"engines"
 
 func apply(player: Node) -> void:

@@ -16,7 +16,7 @@ func get_display_name() -> String: return "Plasma Nova"
 func get_description() -> String:
 	return "Press H to release a burst of superheated plasma. Deals 50 damage to every enemy on screen simultaneously. 30-second cooldown."
 func get_icon() -> Texture2D:
-	return preload("res://assault/assets/sprites/ui/icon_ship_module_shooting.png")
+	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_shooting.png")
 func get_slot() -> StringName: return &"weapons"
 
 func apply(_player: Node) -> void:

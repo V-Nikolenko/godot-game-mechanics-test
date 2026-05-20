@@ -1,0 +1,60 @@
+[gd_scene format=3 uid="uid://crwj4msudkrqy"]
+
+[ext_resource type="Script" uid="uid://ym3t2ymsvlqy" path="res://open_space/scenes/mission_select_ui/mission_select_menu.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://cnx0qba50asly" path="res://open_space/assets/sprites/mission_select_ui/menu/menu_mission_select_overlay.png" id="2_overlay"]
+[ext_resource type="Texture2D" uid="uid://sbuh1rwmyd1v" path="res://open_space/assets/sprites/mission_select_ui/menu/menu_mission_select_mission_image_frame.png" id="5_2iyxa"]
+
+[node name="MissionSelectMenu" type="CanvasLayer" unique_id=1597812842]
+process_mode = 3
+layer = 10
+script = ExtResource("1_script")
+
+[node name="Background" type="Sprite2D" parent="." unique_id=20008749]
+position = Vector2(320, 179)
+
+[node name="Overlay" type="Sprite2D" parent="." unique_id=1565405424]
+position = Vector2(320, 179)
+texture = ExtResource("2_overlay")
+
+[node name="Header" type="Node2D" parent="." unique_id=205699987]
+position = Vector2(320, 178)
+
+[node name="NameLabel" type="Label" parent="Header" unique_id=533211482]
+offset_left = -309.0
+offset_top = -167.0
+offset_right = -130.0
+offset_bottom = -144.0
+text = "PLANET"
+
+[node name="DescriptionLabel" type="Label" parent="Header" unique_id=510468998]
+offset_left = -310.0
+offset_top = -141.0
+offset_right = -129.0
+offset_bottom = -74.0
+theme_override_font_sizes/font_size = 10
+autowrap_mode = 2
+
+[node name="ListContainer" type="Node2D" parent="." unique_id=1590539986]
+position = Vector2(8, 108)
+
+[node name="PlanetMap" type="Sprite2D" parent="." unique_id=244759407]
+position = Vector2(403, 157.18)
+
+[node name="PointsContainer" type="Node2D" parent="PlanetMap" unique_id=954039978]
+
+[node name="InfoPanel" type="Node2D" parent="." unique_id=1312614233]
+
+[node name="MissionImagePreview" type="Sprite2D" parent="InfoPanel" unique_id=1228889156]
+position = Vector2(48, 293)
+
+[node name="MissionImagePreviewFrame" type="Sprite2D" parent="InfoPanel" unique_id=1386997744]
+position = Vector2(48, 293)
+texture = ExtResource("5_2iyxa")
+
+[node name="DescLabel" type="Label" parent="InfoPanel" unique_id=1107792895]
+offset_left = 89.0
+offset_top = 264.0
+offset_right = 189.0
+offset_bottom = 322.0
+theme_override_font_sizes/font_size = 8
+autowrap_mode = 3

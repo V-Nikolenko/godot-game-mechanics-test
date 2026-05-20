@@ -10,7 +10,7 @@ func get_display_name() -> String: return "Targeting Matrix"
 func get_description() -> String:
 	return "Passive: precision targeting algorithms increase weapon fire rate by 65%%."
 func get_icon() -> Texture2D:
-	return preload("res://assault/assets/sprites/ui/icon_ship_module_overclock.png")
+	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_overclock.png")
 func get_slot() -> StringName: return &"weapons"
 
 func apply(player: Node) -> void:

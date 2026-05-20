@@ -9,7 +9,7 @@ func get_display_name() -> String: return "Increased Armor"
 func get_description() -> String:
 	return "Reinforced hull plating increases maximum hull integrity by 40 and reduces all incoming damage by 25%%."
 func get_icon() -> Texture2D:
-	return preload("res://assault/assets/sprites/ui/icon_ship_module_armor_increased_plating2.png")
+	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_armor_increased_plating2.png")
 func get_slot() -> StringName: return &"armor"
 
 func apply(player: Node) -> void:

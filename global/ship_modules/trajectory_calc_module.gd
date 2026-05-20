@@ -17,7 +17,7 @@ func get_display_name() -> String: return "Trajectory Calculation"
 func get_description() -> String:
 	return "Press H to engage targeting computers. Slows time to 30%% for 5 seconds. 20-second cooldown."
 func get_icon() -> Texture2D:
-	return preload("res://assault/assets/sprites/ui/icon_ship_module_cockpit_time_slow_down.png")
+	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_cockpit_time_slow_down.png")
 func get_slot() -> StringName: return &"cockpit"
 
 func apply(_player: Node) -> void:

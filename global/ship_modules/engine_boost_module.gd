@@ -27,7 +27,7 @@ func get_display_name() -> String: return "Boost Drive"
 func get_description() -> String:
 	return "Press H to supercharge engines. Blasts the ship forward with a speed burst that rapidly decelerates over 0.4 seconds. Invincible during boost. Deals 45 damage to anything in the path — asteroids and ram ships are immune to damage. 2-second cooldown."
 func get_icon() -> Texture2D:
-	return preload("res://assault/assets/sprites/ui/icon_ship_module_engine_boost.png")
+	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_engine_boost.png")
 func get_slot() -> StringName: return &"engines"
 
 func apply(_player: Node) -> void:

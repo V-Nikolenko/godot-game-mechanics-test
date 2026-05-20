@@ -1,0 +1,42 @@
+[gd_scene format=3 uid="uid://c7oxqmyxw0vxs"]
+
+[ext_resource type="PackedScene" uid="uid://ty6a2vpnmrr5" path="res://assault/scenes/player/player_fighter.tscn" id="3_60rwg"]
+[ext_resource type="Script" uid="uid://dutkvjs1np4nd" path="res://assault/scenes/systems/wave_manager/wave_manager.gd" id="11_wave"]
+[ext_resource type="PackedScene" path="res://assault/scenes/gui/hud.tscn" id="13_hud"]
+[ext_resource type="PackedScene" uid="uid://bsrr6ov5ery1u" path="res://assault/scenes/levels/edelia/1/level_1_background.tscn" id="14_bg"]
+[ext_resource type="Script" uid="uid://dnrlrei5uaasv" path="res://assault/scenes/systems/level_director/level_director.gd" id="15_ldir"]
+[ext_resource type="Script" uid="uid://capmx7rfwb78x" path="res://assault/scenes/levels/edelia/1/level_1_director.gd" id="16_dir1"]
+[ext_resource type="Script" uid="uid://dc5h1m5dnyb1l" path="res://assault/scenes/systems/score_tracker/score_tracker.gd" id="17_strk"]
+
+[node name="Level1" type="Node2D" unique_id=432592397]
+
+[node name="Level1Background" parent="." unique_id=398992070 instance=ExtResource("14_bg")]
+
+[node name="Camera2D" type="Camera2D" parent="." unique_id=671845157]
+position = Vector2(320, 180)
+
+[node name="EnemyContainer" type="Node2D" parent="." unique_id=1889017634]
+
+[node name="WaveManager" type="Node" parent="." unique_id=1045891202 node_paths=PackedStringArray("enemy_container")]
+script = ExtResource("11_wave")
+enemy_container = NodePath("../EnemyContainer")
+
+[node name="LevelDirector" type="Node" parent="." unique_id=1701234567 node_paths=PackedStringArray("background", "wave_manager")]
+script = ExtResource("15_ldir")
+background = NodePath("../Level1Background")
+wave_manager = NodePath("../WaveManager")
+
+[node name="ScoreTracker" type="Node" parent="." unique_id=1923847562 node_paths=PackedStringArray("wave_manager")]
+script = ExtResource("17_strk")
+wave_manager = NodePath("../WaveManager")
+
+[node name="LevelDirectorConfig" type="Node" parent="." unique_id=1598507531 node_paths=PackedStringArray("director", "wave_manager", "score_tracker")]
+script = ExtResource("16_dir1")
+director = NodePath("../LevelDirector")
+wave_manager = NodePath("../WaveManager")
+score_tracker = NodePath("../ScoreTracker")
+
+[node name="PlayerFighter" parent="." unique_id=1634176334 instance=ExtResource("3_60rwg")]
+position = Vector2(302, 271)
+
+[node name="HUD" parent="." unique_id=1327237556 instance=ExtResource("13_hud")]

@@ -18,7 +18,7 @@ func get_display_name() -> String: return "Heat Flush"
 func get_description() -> String:
 	return "Passive: doubles heat dissipation speed. Active (H): instantly vents all accumulated heat. 15-second cooldown."
 func get_icon() -> Texture2D:
-	return preload("res://assault/assets/sprites/ui/icon_ship_module_emergyl.png")
+	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_emergyl.png")
 func get_slot() -> StringName: return &"weapons"
 
 func apply(player: Node) -> void:

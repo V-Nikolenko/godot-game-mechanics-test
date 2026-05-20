@@ -2,10 +2,10 @@
 
 [ext_resource type="Script" uid="uid://bj4bw8lmn5g61" path="res://open_space/scenes/levels/sector_hub.gd" id="1_hub"]
 [ext_resource type="PackedScene" path="res://open_space/scenes/entities/player/player_ship.tscn" id="2_player"]
-[ext_resource type="PackedScene" uid="uid://cu7qlu0h6p1fd" path="res://open_space/scenes/entities/interactables/planet.tscn" id="3_planet"]
+[ext_resource type="PackedScene" uid="uid://cu7qlu0h6p1fd" path="res://open_space/scenes/mission_select_hubs/mission_select_hub.tscn" id="3_planet"]
 [ext_resource type="PackedScene" path="res://open_space/scenes/gui/hud.tscn" id="4_oshud"]
-[ext_resource type="Resource" uid="uid://b1pyvrb4ekue0" path="res://global/resources/mission_select_hubs/edelia.tres" id="5_edelia"]
-[ext_resource type="Resource" uid="uid://btsillpo773wl" path="res://global/resources/mission_select_hubs/voeter_k05m.tres" id="6_planet2"]
+[ext_resource type="Resource" uid="uid://b1pyvrb4ekue0" path="res://open_space/scenes/mission_select_hubs/planets/edelia.tres" id="5_edelia"]
+[ext_resource type="Resource" uid="uid://btsillpo773wl" path="res://open_space/scenes/mission_select_hubs/planets/voeter_k05m.tres" id="6_planet2"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")

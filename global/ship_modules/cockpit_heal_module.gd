@@ -21,7 +21,7 @@ func get_display_name() -> String: return "Repair System"
 func get_description() -> String:
 	return "Passive: while stationary for 1.5 seconds, hull regenerates 5 HP/sec. Active (H): instantly restores 25 HP, but disables passive regen for 40 seconds."
 func get_icon() -> Texture2D:
-	return preload("res://assault/assets/sprites/ui/icon_ship_module_cockpit_heal.png")
+	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_cockpit_heal.png")
 func get_slot() -> StringName: return &"cockpit"
 
 func apply(_player: Node) -> void:

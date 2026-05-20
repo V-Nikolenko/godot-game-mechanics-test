@@ -16,7 +16,7 @@ func get_display_name() -> String: return "AI Targeting"
 func get_description() -> String:
 	return "Passive: draws a targeting line toward the nearest enemy. Active (H): instantly snaps weapon aim to face the nearest enemy. 15-second cooldown."
 func get_icon() -> Texture2D:
-	return preload("res://assault/assets/sprites/ui/icon_ship_module_ai.png")
+	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_ai.png")
 func get_slot() -> StringName: return &"cockpit"
 
 func apply(player: Node) -> void:

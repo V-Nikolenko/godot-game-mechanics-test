@@ -6,7 +6,7 @@ func get_display_name() -> String: return "Weapon Overclock"
 func get_description() -> String:
 	return "Bypasses thermal safeties. Weapons continue firing past heat limit, but each shot while overheated deals 3 damage to the hull."
 func get_icon() -> Texture2D:
-	return preload("res://assault/assets/sprites/ui/icon_ship_module_weapon_oveclock.png")
+	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_weapon_oveclock.png")
 func get_slot() -> StringName: return &"weapons"
 
 func apply(player: Node) -> void:

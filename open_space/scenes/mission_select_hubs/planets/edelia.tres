@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="PlanetConfigResource" format=3 uid="uid://b1pyvrb4ekue0"]
+
+[ext_resource type="Script" uid="uid://duj8qglwa1saq" path="res://open_space/scenes/mission_select_hubs/mission_select_hub_config_resource.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://dmy783gbic0al" path="res://open_space/assets/sprites/mission_select_ui/planets/edelia/menu_mission_select_background_1.png" id="1_ug8sp"]
+[ext_resource type="Script" uid="uid://bma3l3qnye8cn" path="res://open_space/scenes/mission_data/mission_config_resource.gd" id="2_gnss3"]
+[ext_resource type="Resource" uid="uid://bb8os314vaak6" path="res://open_space/scenes/mission_data/planets/edelia/edelia_01_assault_mission_break_enemy_blockade_resource.tres" id="3_suhtq"]
+[ext_resource type="Resource" uid="uid://vc5yhn7tlgks" path="res://open_space/scenes/mission_data/planets/edelia/edelia_02_infiltration_mission_reach_enemy_base_resource.tres" id="4_mh3a6"]
+[ext_resource type="Resource" uid="uid://di3vjd6tywqum" path="res://open_space/scenes/mission_data/planets/edelia/edelia_03_infiltration_mission_investigate_moon_base_resource.tres" id="5_lobfe"]
+[ext_resource type="Texture2D" uid="uid://beck3l2ntmwyx" path="res://open_space/assets/sprites/mission_select_hubs/edelia.png" id="7_t8msj"]
+
+[resource]
+script = ExtResource("1_script")
+display_name = "EDELIA"
+description = "A mid-tier terrestrial world under imperial blockade. Two active operation zones."
+background_texture = ExtResource("1_ug8sp")
+sprite_texture = ExtResource("7_t8msj")
+missions = Array[ExtResource("2_gnss3")]([ExtResource("3_suhtq"), ExtResource("4_mh3a6"), ExtResource("5_lobfe")])
+point_positions = Array[Vector2]([Vector2(-140, 70), Vector2(-80, 0), Vector2(170, -105)])

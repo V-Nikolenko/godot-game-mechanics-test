@@ -1,0 +1,18 @@
+[gd_scene format=3 uid="uid://cu7qlu0h6p1fd"]
+
+[ext_resource type="Script" uid="uid://ca007hf3gsvgc" path="res://open_space/scenes/mission_select_hubs/mission_select_hub.gd" id="1_planet"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_planet"]
+radius = 80.0
+
+[node name="Planet" type="Area2D" unique_id=2134340449]
+collision_layer = 2
+collision_mask = 4
+script = ExtResource("1_planet")
+arc_radius = 80.0
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=2132790395]
+texture_filter = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=730051803]
+shape = SubResource("CircleShape2D_planet")

@@ -18,7 +18,7 @@ func get_display_name() -> String: return "Parry"
 func get_description() -> String:
 	return "Press H to brace for impact. Negates all incoming damage for 0.5 seconds. 10-second cooldown."
 func get_icon() -> Texture2D:
-	return preload("res://assault/assets/sprites/ui/icon_ship_module_armor_parry.png")
+	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_armor_parry.png")
 func get_slot() -> StringName: return &"armor"
 
 func apply(_player: Node) -> void:
