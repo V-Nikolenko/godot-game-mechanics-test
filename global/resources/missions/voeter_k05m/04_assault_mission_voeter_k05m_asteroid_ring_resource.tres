@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="MissionConfigResource" format=3 uid="uid://c7rtyicdiolwt"]
+[gd_resource type="Resource" script_class="AssaultMissionResource" format=3 uid="uid://c7rtyicdiolwt"]
 
 [ext_resource type="Texture2D" uid="uid://dad8ssxwft6xp" path="res://assault/assets/sprites/ui/menu_mission_select_mission_image_2_1.png" id="1_p63ua"]
-[ext_resource type="Script" uid="uid://bma3l3qnye8cn" path="res://global/resources/mission_config_resource.gd" id="2_nj42c"]
+[ext_resource type="Script" uid="uid://c4bxqmn7dp1kf" path="res://global/resources/assault_mission_resource.gd" id="2_nj42c"]
 
 [resource]
 script = ExtResource("2_nj42c")

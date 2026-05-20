@@ -28,7 +28,7 @@ func configure(mission: MissionConfigResource, locked: bool) -> void:
 		_label.text   = num + "??"
 	else:
 		_label.text = num + mission.display_name
-		if mission.mission_type == "infiltration":
+		if mission is InfiltrationMissionResource:
 			_icon.texture = _ICON_INFILTRATION
 		else:
 			_icon.texture = _ICON_ASSAULT

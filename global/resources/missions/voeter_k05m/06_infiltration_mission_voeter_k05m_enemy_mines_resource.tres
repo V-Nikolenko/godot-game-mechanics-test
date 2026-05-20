@@ -1,14 +1,13 @@
-[gd_resource type="Resource" script_class="MissionConfigResource" format=3 uid="uid://cws3775wj127q"]
+[gd_resource type="Resource" script_class="InfiltrationMissionResource" format=3 uid="uid://cws3775wj127q"]
 
 [ext_resource type="Texture2D" uid="uid://3okxnk210cg6" path="res://assault/assets/sprites/ui/menu_mission_select_mission_image_2_4_v2.png" id="1_76hot"]
-[ext_resource type="Script" uid="uid://bma3l3qnye8cn" path="res://global/resources/mission_config_resource.gd" id="2_au757"]
+[ext_resource type="Script" uid="uid://d5wyr8hce0t2q" path="res://global/resources/infiltration_mission_resource.gd" id="2_au757"]
 
 [resource]
 script = ExtResource("2_au757")
 display_name = "Voeter K05M Mines"
 scene_path = "res://infiltration/scenes/levels/TestIsometricScene.tscn"
 required_mission = 5
-mission_type = "infiltration"
 mission_image = ExtResource("1_76hot")
 description = "Stub Mission"
 mission_number = 6
