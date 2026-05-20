@@ -10,7 +10,7 @@
 extends Node
 
 const _MISSION_NUMBER: int = 1
-const _MISSION_CONFIG_PATH := "res://global/resources/missions/edelia/edelia_01_assault_mission_break_enemy_blockade_resource.tres"
+const _MISSION_CONFIG_PATH := "res://open_space/scenes/mission_data/planets/edelia/edelia_01_assault_mission_break_enemy_blockade_resource.tres"
 const _DEBRIEF_SCENE: PackedScene = preload("res://assault/scenes/gui/level_debrief.tscn")
 @export var director: LevelDirector
 @export var wave_manager: WaveManager
