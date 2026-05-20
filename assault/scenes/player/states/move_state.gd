@@ -58,10 +58,7 @@ func move(direction: Vector2) -> void:
 	actor.velocity = direction * move_speed
 	actor.move_and_slide()
 
-	var cam := actor.get_viewport().get_camera_2d()
-	if cam:
-		var viewport_size := actor.get_viewport().get_visible_rect().size
-		var half_w := viewport_size.x * 0.5
-		var half_h := viewport_size.y * 0.5
-		actor.global_position.x = clamp(actor.global_position.x, cam.global_position.x - half_w, cam.global_position.x + half_w)
-		actor.global_position.y = clamp(actor.global_position.y, cam.global_position.y - half_h, cam.global_position.y + half_h)
+	## Hard world bounds: 740 x 740 play area centred on the normal 640 x 360 screen.
+	## x [-50, 690]  /  y [-190, 550]
+	actor.global_position.x = clamp(actor.global_position.x, -50.0, 690.0)
+	actor.global_position.y = clamp(actor.global_position.y, -190.0, 550.0)

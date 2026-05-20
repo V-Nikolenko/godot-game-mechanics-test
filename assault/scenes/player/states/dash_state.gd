@@ -132,7 +132,10 @@ func process_physics(delta: float):
 			velocity.x = Input.get_axis("move_left", "move_right") * move_speed
 		actor.velocity = velocity
 		actor.move_and_slide()
-	
+		## Clamp to world bounds so a fast dash cannot breach the hard limit.
+		actor.global_position.x = clamp(actor.global_position.x, -50.0, 690.0)
+		actor.global_position.y = clamp(actor.global_position.y, -190.0, 550.0)
+
 	
 # --- Timers Callback ---
 func _on_dash_timer_timeout() -> void:

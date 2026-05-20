@@ -5,7 +5,11 @@
       "Skill(superpowers:executing-plans)",
       "Skill(superpowers:executing-plans:*)",
       "Skill(superpowers:brainstorming)",
-      "Skill(superpowers:brainstorming:*)"
+      "Skill(superpowers:brainstorming:*)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'Fix background parallax: shift CanvasLayer offsets with camera delta *)",
+      "Bash(git commit -m 'Fix camera follow: use Camera2D.offset instead of global_position *)",
+      "Bash(git commit -m 'Pin background CanvasLayers against camera offset shift *)"
     ]
   }
 }
