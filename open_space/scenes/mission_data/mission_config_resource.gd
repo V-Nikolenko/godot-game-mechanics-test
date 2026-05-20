@@ -28,9 +28,9 @@ extends Resource
 @export var required_score_mission: int = 0
 @export var required_score: int = 0
 
-## Optional flavor text shown in the info panel when this mission is locked.
-## Overrides the auto-generated description. Leave empty to use the default.
-@export_multiline var locked_description: String = ""
+## Text shown in the info panel when this mission is locked.
+## Defaults to a generic message; override per-mission for narrative flavor.
+@export_multiline var locked_description: String = "Complete the previous mission to unlock."
 
 ## Returns the star count earned for a given final score.
 ## Base implementation always returns 1 (completed = 1 star, no higher thresholds).

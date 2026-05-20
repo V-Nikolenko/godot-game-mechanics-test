@@ -205,8 +205,7 @@ func _refresh() -> void:
 		_point_labels[i].modulate = color
 	var m: MissionConfigResource = _config.missions[_cursor]
 	_mission_preview.texture = m.mission_image
-	_desc_label.text = m.description if not _is_locked(m) \
-			else _resolve_locked_description(m)
+	_desc_label.text = m.description if not _is_locked(m) else m.locked_description
 
 func _try_confirm() -> void:
 	var m: MissionConfigResource = _config.missions[_cursor]
@@ -262,46 +261,3 @@ func _is_locked(m: MissionConfigResource) -> bool:
 			and MissionState.get_high_score(m.required_score_mission) < m.required_score:
 		return true
 	return false
-
-
-## Returns the info-panel description shown for a locked mission.
-##
-## Priority:
-##   1. Custom `locked_description` on the mission (designer-authored).
-##   2. Auto-generated message based on which gate is failing.
-##
-## The auto path describes ALL failing gates, joined together, so a mission
-## locked behind both completion AND score states both requirements.
-func _resolve_locked_description(m: MissionConfigResource) -> String:
-	if not m.locked_description.is_empty():
-		return m.locked_description
-
-	var reasons: PackedStringArray = []
-	if m.required_mission != 0 \
-			and not MissionState.is_complete(m.required_mission):
-		var prereq_name: String = _mission_name_for_number(m.required_mission)
-		if prereq_name.is_empty():
-			reasons.append("Complete the previous mission to unlock.")
-		else:
-			reasons.append("Complete %s to unlock." % prereq_name)
-	if m.required_score_mission != 0 \
-			and MissionState.get_high_score(m.required_score_mission) < m.required_score:
-		var score_mission_name: String = _mission_name_for_number(m.required_score_mission)
-		if score_mission_name.is_empty():
-			reasons.append("Reach %d points to unlock." % m.required_score)
-		else:
-			reasons.append("Reach %d on %s to unlock." % [m.required_score, score_mission_name])
-	if reasons.is_empty():
-		return "Locked."
-	return "\n".join(reasons)
-
-
-## Looks up a mission's display_name by its mission_number within the current
-## hub config. Returns empty string if not found (e.g. cross-planet reference).
-func _mission_name_for_number(num: int) -> String:
-	if not _config:
-		return ""
-	for entry: MissionConfigResource in _config.missions:
-		if entry.mission_number == num:
-			return entry.display_name
-	return ""
