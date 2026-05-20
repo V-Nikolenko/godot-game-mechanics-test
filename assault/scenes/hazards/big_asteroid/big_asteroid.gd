@@ -41,20 +41,25 @@ func _on_destroyed() -> void:
 	if parent == null:
 		return
 
-	# Shards inherit the parent's direction at a reduced speed.
+	# Shards inherit the parent's direction at a reduced speed. If we never
+	# saw measurable motion (e.g. spawned and killed within a frame), fall
+	# back to "downward" which matches every Level 1 asteroid trajectory.
 	var inherited_speed: float = _last_velocity.length() * split_speed_factor
 	var shard_speed: float = maxf(inherited_speed, split_fallback_speed * split_speed_factor)
 	var base_dir: Vector2 = (
-		_last_velocity.normalized() if _last_velocity.length_squared() > 0.01
+		_last_velocity.normalized() if _last_velocity.length_squared() > 1.0
 		else Vector2.DOWN
 	)
 
 	var count: int = randi_range(split_min, split_max)
 	for i in count:
-		var small: AsteroidBase = split_scene.instantiate() as AsteroidBase
+		var small: SmallAsteroid = split_scene.instantiate() as SmallAsteroid
 		small.global_position = global_position
 		var spread: float = randf_range(-split_cone_spread, split_cone_spread)
-		small.velocity = base_dir.rotated(spread) * shard_speed
+		# drift_velocity is consumed by SmallAsteroid._physics_process for
+		# direct global_position movement — bypassing move_and_slide which
+		# could be inert depending on physics layer setup.
+		small.drift_velocity = base_dir.rotated(spread) * shard_speed
 		parent.call_deferred("add_child", small)
 		# ScoreTracker needs to know about this shard so killing it awards
 		# points. Wave membership is -1 (no wave clear bonus contribution).

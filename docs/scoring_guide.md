@@ -172,7 +172,7 @@ Some missions are locked behind **score requirements** on previous missions.
 For example:
 
 > **Edelia's Moon Base (Level 3)** requires
-> - completing Level 2 (mission progression), **AND**
+> - completing Level 1 (mission progression), **AND**
 > - earning **11,000+** (3★) on Level 1
 
 Both conditions must be met. So a high-score run on Level 1 is the only way

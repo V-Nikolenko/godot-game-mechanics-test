@@ -7,11 +7,12 @@
 script = ExtResource("2_10r68")
 display_name = "Edelia's Moon Base"
 scene_path = "res://infiltration/scenes/levels/TestIsometricScene.tscn"
-required_mission = 2
-required_score_mission = 1
-required_score = 11000
+required_mission = 1
 mission_type = "infiltration"
 mission_image = ExtResource("1_ox5pi")
 description = "Explore the abandoned space station."
 mission_number = 3
 connect_line = false
+required_score_mission = 1
+required_score = 11000
+locked_description = "Clear Edelia's orbit with distinction (★★★) before approaching the moon."

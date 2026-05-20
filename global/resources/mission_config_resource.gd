@@ -34,6 +34,12 @@ extends Resource
 @export var required_score_mission: int = 0
 @export var required_score: int = 0
 
+## Optional flavor text shown in the info panel when this mission is locked.
+## Overrides the auto-generated description ("Complete X to unlock" / "Reach
+## Y on X to unlock"). Use for in-world / narrative messaging like
+## "Clear Edelia's orbit before proceeding." Leave empty to use the default.
+@export_multiline var locked_description: String = ""
+
 ## Returns the star count earned for a given final score.
 ## 1 = completed at all; 2 / 3 require crossing the configured thresholds.
 func stars_for_score(score: int) -> int:

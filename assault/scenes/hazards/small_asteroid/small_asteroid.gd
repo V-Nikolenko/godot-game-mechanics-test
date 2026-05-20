@@ -3,9 +3,21 @@ extends AsteroidBase
 
 const _OFF_SCREEN_MARGIN: float = 80.0
 
+## Direction & speed assigned by BigAsteroid when this shard was spawned from
+## a split. When non-zero, this drives movement directly (no move_and_slide).
+## Wave-spawned small asteroids leave this at zero and let EnemyPathMover
+## drive their position.
+var drift_velocity: Vector2 = Vector2.ZERO
+
 func _physics_process(delta: float) -> void:
 	super(delta)
-	move_and_slide()
+	if drift_velocity.length_squared() > 0.01:
+		# Direct position update bypasses move_and_slide entirely so split
+		# shards reliably keep moving regardless of physics layer quirks.
+		global_position += drift_velocity * delta
+	else:
+		# Legacy / fallback — still useful if something sets velocity instead.
+		move_and_slide()
 	_check_off_screen()
 
 func _check_off_screen() -> void:
