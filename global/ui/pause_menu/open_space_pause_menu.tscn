@@ -1,0 +1,83 @@
+[gd_scene format=3 uid="uid://b10bam3tnq6vw"]
+
+[ext_resource type="Script" uid="uid://c3p4usem3nu01" path="res://global/ui/pause_menu/pause_menu.gd" id="1_pm"]
+[ext_resource type="Texture2D" uid="uid://de8pfk24j7tmn" path="res://global/assets/sprites/pause_menu_ui/esc_menu_header.png" id="2_hdr"]
+[ext_resource type="Texture2D" uid="uid://cyi2todaqi3aw" path="res://global/assets/sprites/pause_menu_ui/esc_menu_button.png" id="3_btn"]
+[ext_resource type="Texture2D" uid="uid://beenus811sqbl" path="res://global/assets/sprites/pause_menu_ui/esc_resume_icon.png" id="4_ic0"]
+[ext_resource type="Texture2D" uid="uid://cyu2jy4t6xfmy" path="res://global/assets/sprites/pause_menu_ui/esc_exit_icon.png" id="7_ic3"]
+
+[node name="PauseMenu" type="CanvasLayer" unique_id=173352987]
+process_mode = 3
+layer = 20
+script = ExtResource("1_pm")
+mission_mode = false
+
+[node name="Dim" type="ColorRect" parent="." unique_id=352031597]
+offset_right = 640.0
+offset_bottom = 360.0
+color = Color(0, 0, 0, 0.35)
+
+[node name="MenuContainer" type="Node2D" parent="." unique_id=1882664527]
+position = Vector2(0, 113)
+
+[node name="Header" type="Node2D" parent="MenuContainer" unique_id=1506917257]
+position = Vector2(105, 22)
+
+[node name="Sprite" type="Sprite2D" parent="MenuContainer/Header" unique_id=1986869847]
+position = Vector2(-32.5, -1.5)
+texture = ExtResource("2_hdr")
+
+[node name="PauseLabel" type="Label" parent="MenuContainer/Header" unique_id=1520337342]
+offset_left = -87.5
+offset_top = -8.5
+offset_right = -20.5
+offset_bottom = 5.5
+theme_override_font_sizes/font_size = 8
+text = "Pause Menu"
+metadata/_edit_use_anchors_ = true
+
+[node name="Option0" type="Node2D" parent="MenuContainer" unique_id=88372837]
+position = Vector2(0, 55)
+
+[node name="Bg" type="Sprite2D" parent="MenuContainer/Option0" unique_id=92264783]
+position = Vector2(104.5, -1)
+texture = ExtResource("3_btn")
+
+[node name="Icon" type="Sprite2D" parent="MenuContainer/Option0" unique_id=518696537]
+position = Vector2(29.5, -1)
+texture = ExtResource("4_ic0")
+
+[node name="Label" type="Label" parent="MenuContainer/Option0" unique_id=1993783254]
+offset_left = 47.935
+offset_top = -9.0
+offset_right = 172.93
+offset_bottom = 7.0
+theme_override_font_sizes/font_size = 10
+text = "Resume"
+metadata/_edit_use_anchors_ = true
+
+[node name="Option1" type="Node2D" parent="MenuContainer" unique_id=477027143]
+visible = false
+
+[node name="Option2" type="Node2D" parent="MenuContainer" unique_id=1462284809]
+visible = false
+
+[node name="Option3" type="Node2D" parent="MenuContainer" unique_id=814843902]
+position = Vector2(0, 89)
+
+[node name="Bg" type="Sprite2D" parent="MenuContainer/Option3" unique_id=472545538]
+position = Vector2(104.5, 7)
+texture = ExtResource("3_btn")
+
+[node name="Icon" type="Sprite2D" parent="MenuContainer/Option3" unique_id=795907913]
+position = Vector2(29.5, 7)
+texture = ExtResource("7_ic3")
+
+[node name="Label" type="Label" parent="MenuContainer/Option3" unique_id=794298608]
+offset_left = 47.935
+offset_top = -1.0
+offset_right = 172.93
+offset_bottom = 15.0
+theme_override_font_sizes/font_size = 10
+text = "Exit Game"
+metadata/_edit_use_anchors_ = true
