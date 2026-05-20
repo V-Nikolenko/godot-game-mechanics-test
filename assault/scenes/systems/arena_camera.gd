@@ -32,6 +32,10 @@ const V_LIMIT  : float = 190.0   ## Max vertical offset   (= vertical buffer dep
 
 ## Lerp weight per second.  Higher = snappier follow; 1.0 per frame is the cap.
 @export var follow_speed : float = 12.0
+## Upward shift applied to the vertical target so the ship rests below the
+## screen centre — gives more "look-ahead" space above the player.
+## 0 = perfectly centred.  60 = ship sits ~⅔ down the screen (shmup default).
+@export var v_bias : float = 60.0
 
 ## Background CanvasLayer children of Level1Background, cached for pinning.
 var _canvas_layers : Array[CanvasLayer] = []
@@ -58,8 +62,8 @@ func _physics_process(delta: float) -> void:
 	## Target offset = player displacement from the fixed screen centre.
 	## Clamped so the viewport never reveals world outside the 740 × 740 area.
 	var target : Vector2 = Vector2(
-		clamp(p.x - SCREEN_W * 0.5, -H_LIMIT, H_LIMIT),
-		clamp(p.y - SCREEN_H * 0.5, -V_LIMIT, V_LIMIT)
+		clamp(p.x - SCREEN_W * 0.5,         -H_LIMIT, H_LIMIT),
+		clamp(p.y - SCREEN_H * 0.5 - v_bias, -V_LIMIT, V_LIMIT)
 	)
 
 	offset = offset.lerp(target, minf(follow_speed * delta, 1.0))
