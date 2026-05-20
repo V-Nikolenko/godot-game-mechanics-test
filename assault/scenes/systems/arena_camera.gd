@@ -1,24 +1,25 @@
 ## assault/scenes/systems/arena_camera.gd
 ## Camera2D follow script for the 740 × 740 assault-mission play area.
 ##
-## Design: Camera2D.global_position NEVER changes (stays at the level origin,
-## (320, 180)).  Player following is done entirely through Camera2D.offset.
-## This keeps cam.global_position stable so that:
-##   • EnemyPathMover's cam-scroll compensation (cam.global_position.y -
-##     _initial_cam_y) always evaluates to 0 — enemies are never displaced.
-##   • WaveManager spawn positions (cam.global_position + entry_offset) always
-##     resolve from the fixed screen centre — no positional drift on delayed
-##     spawns.
-##   • Background CanvasLayers remain screen-fixed by default — no extra code
-##     needed and camera movement does not disturb them.
+## Follow strategy — Camera2D.offset, NOT global_position:
+##   global_position stays permanently at the level origin (320, 180).
+##   All player-follow panning is done through Camera2D.offset.
+##   This keeps cam.global_position stable so:
+##     • EnemyPathMover's cam-scroll delta (cam.global_position.y - initial)
+##       is always 0 — enemies are never displaced by player panning.
+##     • WaveManager spawn positions (cam.global_position + entry_offset)
+##       always resolve from the fixed screen centre — no drift on delayed spawns.
+##
+## Background pinning:
+##   In Godot 4.3, Camera2D.offset is incorporated into the viewport canvas
+##   transform in a way that visually shifts CanvasLayer content even when
+##   follow_viewport_enabled = false.  To keep all background layers
+##   screen-fixed, each CanvasLayer's own offset is set to -camera.offset
+##   every frame, exactly cancelling any induced shift.
 ##
 ## Offset limits (equal to the buffer distances from screen centre):
 ##   Horizontal ± 50 px  →  world x reachable: [-50, 690]
 ##   Vertical  ±190 px  →  world y reachable: [-190, 550]
-##
-## The offset is lerped toward the player position every physics frame,
-## giving an immediate, smooth follow that starts as soon as the player
-## moves away from the screen centre.
 ##
 ## Suspends offset tracking while camera zoom ≠ (1, 1) so the pause-menu zoom
 ## animation has exclusive control and the two systems never conflict.
@@ -31,6 +32,17 @@ const V_LIMIT  : float = 190.0   ## Max vertical offset   (= vertical buffer dep
 
 ## Lerp weight per second.  Higher = snappier follow; 1.0 per frame is the cap.
 @export var follow_speed : float = 12.0
+
+## Background CanvasLayer children of Level1Background, cached for pinning.
+var _canvas_layers : Array[CanvasLayer] = []
+
+
+func _ready() -> void:
+	var bg := get_parent().get_node_or_null("Level1Background")
+	if bg:
+		for child in bg.get_children():
+			if child is CanvasLayer:
+				_canvas_layers.append(child as CanvasLayer)
 
 
 func _physics_process(delta: float) -> void:
@@ -51,3 +63,8 @@ func _physics_process(delta: float) -> void:
 	)
 
 	offset = offset.lerp(target, minf(follow_speed * delta, 1.0))
+
+	## Pin every background CanvasLayer so it stays screen-fixed regardless of
+	## any shift that Camera2D.offset induces on the canvas transform.
+	for cl in _canvas_layers:
+		cl.offset = -offset
