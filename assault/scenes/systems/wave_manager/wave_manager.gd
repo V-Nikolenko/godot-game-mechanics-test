@@ -4,7 +4,15 @@ extends Node
 signal wave_triggered(wave_index: int)
 signal waves_complete
 
+## Emitted at the end of _spawn_ship() after add_child. Lets ScoreTracker
+## attach per-wave bookkeeping to each spawned enemy.
+signal enemy_spawned(enemy: Node, wave_index: int)
+
 @export var enemy_container: Node2D
+
+## Tracks the wave currently being processed in _trigger_wave so spawn
+## callbacks can stamp the wave index on each enemy.
+var _current_wave_index: int = -1
 
 # ── Wave registry ─────────────────────────────────────────────────────────────
 # Each wave dict:
@@ -99,8 +107,13 @@ func _entry_to_dict(entry: SpawnEntryResource) -> Dictionary:
 func _trigger_wave(wave: Dictionary, index: int) -> void:
 	print("[Wave %d] TRIGGERED at %.1fs — %d spawns" % [index, _time_elapsed, wave.spawns.size()])
 	wave_triggered.emit(index)
+	_current_wave_index = index
 	for spawn in wave.spawns:
+		# Stamp the wave index on each expanded entry so the deferred
+		# spawn callable (delayed by .delay()) knows which wave it belongs
+		# to even after _current_wave_index advances to a later wave.
 		for entry in _expand_formation(spawn):
+			entry["wave_index"] = index
 			_spawn_with_delay(entry)
 
 ## Expands a spawn dict that has a "formation" key into one dict per slot.
@@ -159,6 +172,11 @@ func _spawn_ship(spawn: Dictionary) -> void:
 
 	enemy_container.add_child(entity)
 	print("[Spawn] %s at (%.0f, %.0f)" % [scene.resource_path.get_file(), spawn_pos.x, spawn_pos.y])
+
+	# Announce the spawn for ScoreTracker / other systems that need to
+	# associate this enemy with the wave that produced it.
+	var wave_idx: int = spawn.get("wave_index", _current_wave_index)
+	enemy_spawned.emit(entity, wave_idx)
 
 	# Attach movement controller if a MovementResource is provided.
 	if spawn.has("movement"):

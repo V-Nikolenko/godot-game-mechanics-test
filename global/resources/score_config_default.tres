@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="ScoreConfig" load_steps=2 format=3 uid="uid://d3e4f5g6h7i8j"]
+
+[ext_resource type="Script" path="res://global/resources/score_config.gd" id="1_score_cfg"]
+
+[resource]
+script = ExtResource("1_score_cfg")
+combo_step = 0.1
+combo_cap = 8.0
+combo_decay_seconds = 4.0
+damage_combo_multiplier = 0.5
+escape_combo_multiplier = 0.75
+survival_interval = 15.0
+survival_bonus = 50
+wave_clear_base_multiplier = 1.0
+wave_clear_per_enemy_bonus = 0.5

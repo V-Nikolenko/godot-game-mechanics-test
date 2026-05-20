@@ -6,4 +6,5 @@
 script = ExtResource("1")
 max_health = 80
 collision_damage = 25
+score_value = 60
 movement_speed = 130.0

@@ -10,3 +10,5 @@ scene_path = "res://assault/scenes/levels/level_1.tscn"
 mission_image = ExtResource("1_flw6s")
 description = "Break blockade around Edelia and deploy soldiers on the surface."
 mission_number = 1
+star_2_score = 6000
+star_3_score = 11000

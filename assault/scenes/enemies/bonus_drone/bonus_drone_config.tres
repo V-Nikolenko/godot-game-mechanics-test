@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="BonusDroneConfig" load_steps=2 format=3 uid="uid://bonusdrone001"]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/bonus_drone/bonus_drone_config.gd" id="1_bonus_cfg"]
+
+[resource]
+script = ExtResource("1_bonus_cfg")
+max_health = 1
+collision_damage = 0
+score_value = 500
+counts_toward_wave_clear = false
+movement_speed = 280.0

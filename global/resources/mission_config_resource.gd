@@ -22,3 +22,23 @@ extends Resource
 ## If true, a line is drawn from the previous mission's point to this one on the planet map.
 ## Disable for standalone missions that should not be visually connected to the one above.
 @export var connect_line: bool = true
+
+## Score required to earn 2 stars on this mission. 0 disables the 2★ threshold.
+@export var star_2_score: int = 0
+## Score required to earn 3 stars on this mission. 0 disables the 3★ threshold.
+@export var star_3_score: int = 0
+
+## If non-zero, this mission also requires the player to have at least
+## [required_score] on mission [required_score_mission] to unlock.
+## Composes with required_mission via AND — both conditions must pass.
+@export var required_score_mission: int = 0
+@export var required_score: int = 0
+
+## Returns the star count earned for a given final score.
+## 1 = completed at all; 2 / 3 require crossing the configured thresholds.
+func stars_for_score(score: int) -> int:
+	if star_3_score > 0 and score >= star_3_score:
+		return 3
+	if star_2_score > 0 and score >= star_2_score:
+		return 2
+	return 1

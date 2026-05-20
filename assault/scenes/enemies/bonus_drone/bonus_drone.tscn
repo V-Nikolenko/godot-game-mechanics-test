@@ -1,0 +1,51 @@
+[gd_scene load_steps=8 format=3 uid="uid://bonusdrone002"]
+
+[ext_resource type="Texture2D" uid="uid://b26xhr1bfvoqf" path="res://assault/assets/sprites/enemies/drone.png" id="1_bd_tex"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/bonus_drone/bonus_drone.gd" id="2_bd"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="3_bd"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="4_bd"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_bd"]
+radius = 12.0
+
+[sub_resource type="Animation" id="Animation_reset_bd"]
+length = 0.001
+
+[sub_resource type="Animation" id="Animation_hit_bd"]
+resource_name = "hit"
+length = 0.2
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_bd"]
+_data = {
+&"RESET": SubResource("Animation_reset_bd"),
+&"hit": SubResource("Animation_hit_bd")
+}
+
+[node name="BonusDrone" type="CharacterBody2D"]
+script = ExtResource("2_bd")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+position = Vector2(0, -1)
+rotation = 3.14159
+texture = ExtResource("1_bd_tex")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_bd")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 65
+script = ExtResource("3_bd")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_bd")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("4_bd")
+max_health = 1
+current_health = 1
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_bd")
+}

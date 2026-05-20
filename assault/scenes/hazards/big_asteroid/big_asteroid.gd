@@ -6,18 +6,56 @@ extends AsteroidBase
 
 @export var split_min: int = 2
 @export var split_max: int = 4
-@export var split_speed: float = 70.0
+## Fallback absolute speed used when this big asteroid has no inherited motion
+## (e.g. it was spawned at rest before any movement could update its position).
+@export var split_fallback_speed: float = 70.0
+## Fraction of the parent's last known speed applied to each shard.
+## 0.5 → shards continue in roughly the same direction at half speed.
+@export_range(0.1, 1.0, 0.05) var split_speed_factor: float = 0.5
+## Max angular spread (radians) applied randomly to each shard around the
+## inherited direction. Small value keeps shards in a tight cone.
+@export var split_cone_spread: float = 0.35  # ~±20°
+
+# Sampled in _process so we know how the big asteroid was moving at the
+# moment it died. EnemyPathMover sets global_position directly (without
+# touching velocity), so we can't read `velocity` here.
+var _prev_pos: Vector2
+var _last_velocity: Vector2 = Vector2.DOWN * 70.0
+
+func _ready() -> void:
+	super._ready()
+	_prev_pos = global_position
+
+func _process(delta: float) -> void:
+	if delta <= 0.0:
+		return
+	var v: Vector2 = (global_position - _prev_pos) / delta
+	if v.length_squared() > 1.0:
+		_last_velocity = v
+	_prev_pos = global_position
 
 func _on_destroyed() -> void:
 	if split_scene == null:
 		return
-	var parent := get_parent()
+	var parent: Node = get_parent()
 	if parent == null:
 		return
-	var count := randi_range(split_min, split_max)
+
+	# Shards inherit the parent's direction at a reduced speed.
+	var inherited_speed: float = _last_velocity.length() * split_speed_factor
+	var shard_speed: float = maxf(inherited_speed, split_fallback_speed * split_speed_factor)
+	var base_dir: Vector2 = (
+		_last_velocity.normalized() if _last_velocity.length_squared() > 0.01
+		else Vector2.DOWN
+	)
+
+	var count: int = randi_range(split_min, split_max)
 	for i in count:
-		var small := split_scene.instantiate() as AsteroidBase
+		var small: AsteroidBase = split_scene.instantiate() as AsteroidBase
 		small.global_position = global_position
-		var angle := randf() * TAU
-		small.velocity = Vector2.RIGHT.rotated(angle) * split_speed
+		var spread: float = randf_range(-split_cone_spread, split_cone_spread)
+		small.velocity = base_dir.rotated(spread) * shard_speed
 		parent.call_deferred("add_child", small)
+		# ScoreTracker needs to know about this shard so killing it awards
+		# points. Wave membership is -1 (no wave clear bonus contribution).
+		EventBus.enemy_spawned_orphan.emit(small)

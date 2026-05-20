@@ -7,6 +7,15 @@ signal died
 @onready var hurt_box: HurtBox = $HurtBox
 @onready var hit_flash_player: AnimationPlayer = $HitFlashAnimationPlayer
 
+## Read by ScoreTracker via the enemy's ShipConfig — overridable per-enemy if needed.
+var score_value: int = 0
+## True ONLY when this enemy died from damage (so ScoreTracker can tell
+## kill apart from off-screen escape on tree_exited).
+var was_killed: bool = false
+## True for bonus medal targets — they award points but do NOT count toward
+## the wave-clear bonus.
+var counts_toward_wave_clear: bool = true
+
 var _hit_effect: HitEffect
 var _explosion_effect: ExplosionEffect
 
@@ -22,6 +31,15 @@ func _ready() -> void:
 
 	_explosion_effect = ExplosionEffect.new()
 	add_child(_explosion_effect)
+
+	# Propagate scoring fields from the subclass `config` property if it exists.
+	# Subclasses (LightAssaultShip, RamShip, etc.) declare `@export var config:
+	# SomeConfig` — Godot exposes that via get(), so we don't need to know the
+	# concrete type here.
+	var cfg: Variant = get("config")
+	if cfg is ShipConfig:
+		score_value = cfg.score_value
+		counts_toward_wave_clear = cfg.counts_toward_wave_clear
 
 func _rotate_sprite() -> void:
 	var sprite := get_node_or_null("AnimatedSprite2D") as Node2D
@@ -49,6 +67,7 @@ func _on_health_changed(current: int) -> void:
 	_hit_effect.burst()
 	if current == 0:
 		print("[Enemy] %s DESPAWNED (died) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
+		was_killed = true
 		died.emit()
 		_explosion_effect.explode()
 		queue_free()

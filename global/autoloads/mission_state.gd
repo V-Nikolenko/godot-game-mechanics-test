@@ -38,6 +38,17 @@ func is_complete(mission_number: int) -> bool:
 func get_stars(mission_number: int) -> int:
 	return _data.get(mission_number, {}).get("stars", 0)
 
+## Persist a new high score for the mission. Only keeps the higher value.
+func record_score(mission_number: int, score: int) -> void:
+	var entry: Dictionary = _data.get(mission_number, {})
+	entry["high_score"] = maxi(entry.get("high_score", 0), score)
+	_data[mission_number] = entry
+	_save()
+
+## Returns the highest recorded score for the mission, or 0 if none.
+func get_high_score(mission_number: int) -> int:
+	return _data.get(mission_number, {}).get("high_score", 0)
+
 ## Mark a cutscene as having been viewed at least once. Persists to disk.
 func mark_cutscene_seen(cutscene_id: String) -> void:
 	_cutscenes[cutscene_id] = true
@@ -54,6 +65,7 @@ func _save() -> void:
 		var entry: Dictionary = _data[mission_number]
 		cfg.set_value(str(mission_number), "completed", entry.get("completed", false))
 		cfg.set_value(str(mission_number), "stars", entry.get("stars", 0))
+		cfg.set_value(str(mission_number), "high_score", entry.get("high_score", 0))
 	for cutscene_id: String in _cutscenes:
 		cfg.set_value(_CUTSCENE_SECTION, cutscene_id, _cutscenes[cutscene_id])
 	var err := cfg.save(SAVE_PATH)
@@ -73,4 +85,5 @@ func _load() -> void:
 			_data[num] = {
 				"completed": cfg.get_value(section, "completed", false),
 				"stars": cfg.get_value(section, "stars", 0),
+				"high_score": cfg.get_value(section, "high_score", 0),
 			}

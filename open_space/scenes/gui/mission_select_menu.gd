@@ -253,5 +253,12 @@ func _animate_open() -> void:
 	shake_tween.tween_property(self, "offset", Vector2.ZERO,       0.05)
 
 func _is_locked(m: MissionConfigResource) -> bool:
-	return m.required_mission != 0 \
-			and not MissionState.is_complete(m.required_mission)
+	# Gate 1: previous-mission completion (existing behaviour).
+	if m.required_mission != 0 \
+			and not MissionState.is_complete(m.required_mission):
+		return true
+	# Gate 2: high-score threshold on another mission (composes via AND).
+	if m.required_score_mission != 0 \
+			and MissionState.get_high_score(m.required_score_mission) < m.required_score:
+		return true
+	return false

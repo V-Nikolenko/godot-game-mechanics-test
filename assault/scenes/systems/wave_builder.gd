@@ -84,6 +84,7 @@ func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
 func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
 func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
 func small_asteroid() -> SpawnConfig: return SpawnConfig.new(SMALL_ASTEROID)
+func bonus_drone()    -> SpawnConfig: return SpawnConfig.new(BONUS_DRONE)
 
 # ── Movement helpers ──────────────────────────────────────────────────────────
 
@@ -169,10 +170,10 @@ func diagonal_formation(count: int, step_x: float, step_y: float, stagger: float
 	f.stagger_delay = stagger
 	return f
 
-func cluster_formation(count: int, spread: float = 50.0, seed_override: int = 0) -> ClusterFormation:
+func cluster_formation(count: int, radius: float = 30.0, seed_override: int = 0) -> ClusterFormation:
 	var f := ClusterFormation.new()
 	f.count = count
-	f.spread = spread
+	f.radius = radius
 	if seed_override > 0:
 		f.random_seed = seed_override
 	return f
@@ -223,6 +224,7 @@ const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"
 const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
 const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn"
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"
+const BONUS_DRONE    := "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn"
 
 # ── Direction constants ───────────────────────────────────────────────────────
 

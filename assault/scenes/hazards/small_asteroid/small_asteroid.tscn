@@ -17,6 +17,7 @@ radius = 14.0
 
 [node name="SmallAsteroid" type="CharacterBody2D"]
 script = ExtResource("1_sast")
+score_value = 5
 health_amount = 40
 contact_damage = 30
 one_shot_speed_threshold = 0.0

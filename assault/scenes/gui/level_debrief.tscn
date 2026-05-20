@@ -1,0 +1,102 @@
+[gd_scene load_steps=2 format=3 uid="uid://debrief001"]
+
+[ext_resource type="Script" path="res://assault/scenes/gui/level_debrief.gd" id="1_debrief"]
+
+[node name="LevelDebriefScreen" type="CanvasLayer"]
+layer = 100
+script = ExtResource("1_debrief")
+
+[node name="Background" type="ColorRect" parent="."]
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0, 0, 0, 0.75)
+
+[node name="Panel" type="Control" parent="."]
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -200.0
+offset_top = -160.0
+offset_right = 200.0
+offset_bottom = 160.0
+
+[node name="Title" type="Label" parent="Panel"]
+anchor_right = 1.0
+offset_bottom = 36.0
+text = "MISSION COMPLETE"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 28
+theme_override_colors/font_color = Color(1, 0.95, 0.7, 1)
+
+[node name="ScoreLabel" type="Label" parent="Panel"]
+anchor_right = 1.0
+offset_top = 40.0
+offset_bottom = 86.0
+text = "0"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 40
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+
+[node name="Breakdown" type="VBoxContainer" parent="Panel"]
+anchor_right = 1.0
+offset_top = 96.0
+offset_bottom = 220.0
+
+[node name="KillsLabel" type="Label" parent="Panel/Breakdown"]
+text = "Kills: 0"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 16
+
+[node name="WaveLabel" type="Label" parent="Panel/Breakdown"]
+text = "Wave bonuses: 0"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 16
+
+[node name="BonusLabel" type="Label" parent="Panel/Breakdown"]
+text = "Bonus targets: 0"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 16
+
+[node name="SkillLabel" type="Label" parent="Panel/Breakdown"]
+text = "Skill bonuses: 0"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 16
+
+[node name="SurvivalLabel" type="Label" parent="Panel/Breakdown"]
+text = "Survival: 0"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 16
+
+[node name="Stars" type="HBoxContainer" parent="Panel"]
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -80.0
+offset_top = 230.0
+offset_right = 80.0
+offset_bottom = 280.0
+alignment = 1
+
+[node name="Star1" type="Label" parent="Panel/Stars"]
+text = "☆"
+theme_override_font_sizes/font_size = 40
+pivot_offset = Vector2(20, 20)
+
+[node name="Star2" type="Label" parent="Panel/Stars"]
+text = "☆"
+theme_override_font_sizes/font_size = 40
+pivot_offset = Vector2(20, 20)
+
+[node name="Star3" type="Label" parent="Panel/Stars"]
+text = "☆"
+theme_override_font_sizes/font_size = 40
+pivot_offset = Vector2(20, 20)
+
+[node name="ContinueLabel" type="Label" parent="Panel"]
+anchor_right = 1.0
+offset_top = 290.0
+offset_bottom = 314.0
+text = "Press any key to continue"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 14
+theme_override_colors/font_color = Color(0.7, 0.7, 0.7, 1)

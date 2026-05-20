@@ -54,3 +54,25 @@ signal mission_complete
 
 ## Emitted when the current mission is failed.
 signal mission_failed
+
+# ── Scoring ───────────────────────────────────────────────────────────────────
+
+## Emitted whenever the running mission total score changes.
+signal score_changed(total: int)
+
+## Emitted whenever the combo multiplier or its decay timer changes.
+## decay_remaining is seconds left before combo resets to x1; 0 when combo == 1.
+signal combo_changed(multiplier: float, decay_remaining: float)
+
+## Emitted for every individual scoring event so popups / SFX can react.
+## reason is one of "kill", "wave_clear", "survival", "skill_clean",
+## "skill_partial", "bonus_target".
+signal score_event(world_position: Vector2, points: int, reason: String)
+
+## Emitted by SkillChallengeRunner at the end of a challenge window.
+signal skill_challenge_completed(clean: bool, bonus: int)
+
+## Emitted when an enemy is spawned OUTSIDE the WaveManager flow — e.g. a big
+## asteroid splitting into smaller ones, or a script-spawned medal. ScoreTracker
+## subscribes here so the resulting kill still awards points.
+signal enemy_spawned_orphan(enemy: Node)

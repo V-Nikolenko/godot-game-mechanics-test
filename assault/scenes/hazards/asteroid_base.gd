@@ -5,6 +5,15 @@ extends CharacterBody2D
 
 signal died(world_position: Vector2)
 
+## Read by ScoreTracker. Overridden per-tier in the concrete asteroid configs.
+@export var score_value: int = 0
+
+## True ONLY when this asteroid died from damage (so ScoreTracker can tell
+## kill apart from off-screen escape on tree_exited).
+var was_killed: bool = false
+## Always true for asteroids — included for ScoreTracker symmetry with enemies.
+var counts_toward_wave_clear: bool = true
+
 @export var health_amount: int = 100
 @export var contact_damage: int = 40
 ## When > 0, enables speed-scaled damage: returns 9999 (one-shot) at or above threshold.
@@ -49,6 +58,7 @@ func _on_received_damage(amount: int) -> void:
 func _on_health_changed(current: int) -> void:
 	if current <= 0:
 		_explosion.explode()
+		was_killed = true
 		died.emit(global_position)
 		_on_destroyed()
 		queue_free()
