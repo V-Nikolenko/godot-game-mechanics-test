@@ -25,11 +25,13 @@ const _HIGHLIGHT_RIGHT_OFFSET: float = 70.0
 
 func show_for(world_pos: Vector2, points: int, reason: String) -> void:
 	# Convert from world-space (kill location) into HUD CanvasLayer space.
+	# This camera uses Camera2D.offset (not global_position) for player follow,
+	# so the actual screen centre in world space is global_position + offset.
 	var cam := get_viewport().get_camera_2d()
 	var screen_pos: Vector2 = world_pos
 	if cam:
 		var size: Vector2 = get_viewport().get_visible_rect().size
-		screen_pos = world_pos - cam.global_position + size * 0.5
+		screen_pos = world_pos - (cam.global_position + cam.offset) + size * 0.5
 	var is_highlight: bool = reason in _HIGHLIGHT_REASONS
 	# Shift highlight popups to the right of their anchor so they sit beside
 	# the player rather than directly on top of the ship sprite.
