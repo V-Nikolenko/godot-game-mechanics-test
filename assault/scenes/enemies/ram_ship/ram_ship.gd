@@ -35,7 +35,6 @@ func _enter_damaged_state() -> void:
 
 	var damaged_tex: Texture2D = load("res://assault/assets/sprites/enemies/ram_ship_damaged.png")
 	var frames := SpriteFrames.new()
-	frames.add_animation("default")
 	frames.add_frame("default", damaged_tex, 1.0)
 	_sprite.sprite_frames = frames
 	_sprite.play("default")
