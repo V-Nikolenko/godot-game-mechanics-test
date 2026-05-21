@@ -3,11 +3,21 @@
 ## A pool of these lives under the HUD root. ScorePopupSpawner instantiates
 ## a fresh popup for each EventBus.score_event and frees it when its tween
 ## finishes.
+##
+## "Highlight" reasons (survival, wave_clear, skill_clean) get a larger font,
+## a longer float, and an extended lifetime so they're unmissable.
 class_name ScorePopup
 extends Node2D
 
 const _LIFETIME: float = 1.0
 const _FLOAT_DISTANCE: float = 30.0
+
+## Reasons that deserve extra visual emphasis.
+const _HIGHLIGHT_REASONS: Array[String] = ["survival", "wave_clear", "skill_clean"]
+const _HIGHLIGHT_FONT_SIZE: int = 22
+const _HIGHLIGHT_LIFETIME: float = 1.8
+const _HIGHLIGHT_FLOAT: float = 60.0
+const _DEFAULT_FONT_SIZE: int = 14
 
 @onready var _label: Label = $Label
 
@@ -23,11 +33,17 @@ func show_for(world_pos: Vector2, points: int, reason: String) -> void:
 	_label.text = _format_text(points, reason)
 	_label.modulate = _color_for(reason)
 
+	var is_highlight: bool = reason in _HIGHLIGHT_REASONS
+	var lifetime: float = _HIGHLIGHT_LIFETIME if is_highlight else _LIFETIME
+	var float_dist: float = _HIGHLIGHT_FLOAT if is_highlight else _FLOAT_DISTANCE
+	_label.add_theme_font_size_override("font_size",
+			_HIGHLIGHT_FONT_SIZE if is_highlight else _DEFAULT_FONT_SIZE)
+
 	var t := create_tween()
 	t.set_parallel(true)
-	t.tween_property(self, "position:y", position.y - _FLOAT_DISTANCE, _LIFETIME)\
+	t.tween_property(self, "position:y", position.y - float_dist, lifetime)\
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	t.tween_property(_label, "modulate:a", 0.0, _LIFETIME)\
+	t.tween_property(_label, "modulate:a", 0.0, lifetime)\
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	t.chain().tween_callback(queue_free)
 
