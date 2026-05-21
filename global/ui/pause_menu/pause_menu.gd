@@ -157,6 +157,12 @@ func _hide_hud() -> void:
 	for child: Node in parent.get_children():
 		if child == self:
 			continue
+		## Skip world-space nodes (Sprite2D, CharacterBody2D, etc.) — only hide
+		## canvas UI overlays (Control, CanvasLayer).  This keeps game objects
+		## visible in scenes where PauseMenu is a direct scene child (infiltration),
+		## while still hiding HUD panels in the assault CanvasLayer HUD.
+		if child is Node2D:
+			continue
 		_sibling_vis[child] = child.visible
 		child.visible = false
 
