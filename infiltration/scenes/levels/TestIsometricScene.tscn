@@ -1,6 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://df1ccrldggefu"]
+[gd_scene load_steps=4 format=3 uid="uid://df1ccrldggefu"]
 
 [ext_resource type="PackedScene" uid="uid://c5uhjngq8bl5n" path="res://infiltration/scenes/entities/player/player.tscn" id="2_w6leu"]
+[ext_resource type="PackedScene" uid="uid://b7mp4u8g6nf85" path="res://global/ui/pause_menu/pause_menu.tscn" id="3_pm"]
 
 [sub_resource type="CompressedTexture2D" id="CompressedTexture2D_w6leu"]
 load_path = "res://.godot/imported/enemy_base_entrance__template.png-a2f1c527784e8b89b292611b318c4b60.ctex"
@@ -14,3 +15,7 @@ texture = SubResource("CompressedTexture2D_w6leu")
 
 [node name="Player" parent="." instance=ExtResource("2_w6leu")]
 position = Vector2(166, -120)
+
+[node name="HUD" type="CanvasLayer" parent="."]
+
+[node name="PauseMenu" parent="HUD" instance=ExtResource("3_pm")]
