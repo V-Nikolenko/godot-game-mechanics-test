@@ -114,11 +114,13 @@ func _confirm() -> void:
 			visible = false
 			_reset_camera_instant()
 			get_tree().paused = false
-			## If the HUD is a direct root child (director-managed), free it now so
-			## it doesn't persist into the next scene. Scene-embedded HUDs (open space)
-			## have a scene node as parent, not root, so this condition is never true there.
+			## If the HUD was dynamically injected at root level (assault director
+			## pattern), free it now — change_scene_to_file won't touch it because
+			## it isn't the current scene.  Scene-embedded menus (infiltration, open
+			## space) are part of the current scene and get freed automatically, so
+			## we must not queue_free them here.
 			var hud := get_parent()
-			if is_instance_valid(hud) and hud.get_parent() == get_tree().root:
+			if is_instance_valid(hud) and hud != get_tree().current_scene:
 				hud.queue_free()
 			get_tree().change_scene_to_file(_HUB_PATH)
 		3:

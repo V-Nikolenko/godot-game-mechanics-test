@@ -16,6 +16,4 @@ texture = SubResource("CompressedTexture2D_w6leu")
 [node name="Player" parent="." instance=ExtResource("2_w6leu")]
 position = Vector2(166, -120)
 
-[node name="HUD" type="CanvasLayer" parent="."]
-
-[node name="PauseMenu" parent="HUD" instance=ExtResource("3_pm")]
+[node name="PauseMenu" parent="." instance=ExtResource("3_pm")]
