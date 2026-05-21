@@ -3,6 +3,10 @@ extends Node
 
 signal wave_triggered(wave_index: int)
 signal waves_complete
+## Emitted at the start of load_section() before any new waves are processed.
+## ScoreTracker listens to this to clear the per-wave tally table so that
+## wave indices from different sections don't collide.
+signal section_loaded
 
 ## Emitted at the end of _spawn_ship() after add_child. Lets ScoreTracker
 ## attach per-wave bookkeeping to each spawned enemy.
@@ -80,6 +84,10 @@ func load_section(waves: Array[WaveResource]) -> void:
 			spawns.append(_entry_to_dict(entry))
 		_waves.append({"trigger": wave.trigger_time, "spawns": spawns})
 	print("[WaveManager] Loaded section — %d waves" % _waves.size())
+	## Notify listeners (e.g. ScoreTracker) that a new section is starting so
+	## they can clear state that is keyed by wave_index.  Emit BEFORE the new
+	## waves are processed so listeners reset before any enemy_spawned fires.
+	section_loaded.emit()
 	set_process(not _waves.is_empty())
 
 ## Converts a SpawnEntryResource to the Dictionary format _spawn_ship() understands.

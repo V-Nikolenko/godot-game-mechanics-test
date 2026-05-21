@@ -55,8 +55,16 @@ func _ready() -> void:
 func start_tracking() -> void:
 	_running = true
 	set_process(true)
-	if wave_manager and not wave_manager.enemy_spawned.is_connected(_on_enemy_spawned):
-		wave_manager.enemy_spawned.connect(_on_enemy_spawned)
+	if wave_manager:
+		if not wave_manager.enemy_spawned.is_connected(_on_enemy_spawned):
+			wave_manager.enemy_spawned.connect(_on_enemy_spawned)
+		## Clear stale wave tallies every time a new section starts so that wave
+		## indices 0, 1, 2 … from section N don't collide with those from section
+		## N-1.  Without this, a wave-0 tally that was resolved in section 1 would
+		## block wave-clear bonuses for section 2's wave 0, and an unresolved
+		## section-1 tally could cause an unexpected wave-clear bonus mid-section-2.
+		if not wave_manager.section_loaded.is_connected(_on_section_loaded):
+			wave_manager.section_loaded.connect(_on_section_loaded)
 	if not EventBus.player_health_changed.is_connected(_on_player_health_changed):
 		EventBus.player_health_changed.connect(_on_player_health_changed)
 	if not EventBus.skill_challenge_completed.is_connected(_on_skill_completed):
@@ -67,6 +75,15 @@ func start_tracking() -> void:
 		EventBus.enemy_spawned_orphan.connect(_on_orphan_spawned)
 	EventBus.score_changed.emit(_total_score)
 	EventBus.combo_changed.emit(_combo, 0.0)
+
+
+## Called when WaveManager starts a new section.  Clears wave-tally state so
+## that wave indices from the new section are tracked independently.
+## Enemies from the old section that are still alive keep their signal
+## connections — their kills still award individual score, they just no longer
+## count toward any wave-clear bonus (the tally they belonged to is gone).
+func _on_section_loaded() -> void:
+	_wave_state.clear()
 
 
 func _on_orphan_spawned(enemy: Node) -> void:
@@ -179,7 +196,9 @@ func _on_enemy_died(enemy: Node, wave_index: int, base_value: int, counts_in_wav
 
 func _on_enemy_freed(enemy: Node, wave_index: int, counts_in_wave: bool) -> void:
 	# If the enemy was killed, the died handler already ran and updated state.
-	if enemy.get("was_killed"):
+	# Guard with is_instance_valid: in rare edge cases (e.g. immediate free before
+	# the deferred add_child of a shard runs) the node may already be freed.
+	if not is_instance_valid(enemy) or enemy.get("was_killed"):
 		return
 	if not _running:
 		return

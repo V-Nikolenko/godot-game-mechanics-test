@@ -63,4 +63,15 @@ func _on_destroyed() -> void:
 		parent.call_deferred("add_child", small)
 		# ScoreTracker needs to know about this shard so killing it awards
 		# points. Wave membership is -1 (no wave clear bonus contribution).
-		EventBus.enemy_spawned_orphan.emit(small)
+		# _announce_shard is deferred on SELF so it runs AFTER add_child
+		# (both deferred calls land in the same message queue in FIFO order,
+		# and add_child was queued first).  This ensures _ready() has run and
+		# the shard is properly in the tree when ScoreTracker connects to it.
+		call_deferred("_announce_shard", small)
+
+
+## Deferred companion to _on_destroyed — fires after add_child so the shard
+## is fully initialised in the scene tree before ScoreTracker registers it.
+func _announce_shard(shard: Node) -> void:
+	if is_instance_valid(shard):
+		EventBus.enemy_spawned_orphan.emit(shard)
