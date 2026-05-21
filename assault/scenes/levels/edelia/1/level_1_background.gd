@@ -23,6 +23,11 @@
 class_name Level1Background
 extends BackgroundController
 
+## Vertical offset range of arena_camera.gd — tiles must cover this many pixels
+## above the top of the screen so the background has no gap when the camera
+## pans to its topmost position (CanvasLayer.offset.y = +V_LIMIT).
+const _V_LIMIT : float = 190.0
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. STARS BASE LAYER
 # ─────────────────────────────────────────────────────────────────────────────
@@ -446,7 +451,12 @@ func _setup_single_rect(rect: TextureRect, screen: Vector2, tex: Texture2D) -> v
 
 func _setup_tile_pair(a: TextureRect, b: TextureRect, screen: Vector2, tex: Texture2D) -> void:
 	var tex_h: float = tex.get_height()
-	var n_tiles: int = maxi(1, int(ceil(screen.y / tex_h)))
+	## Tiles must cover the screen height PLUS the full vertical pan range
+	## (±_V_LIMIT). When the camera pans up, arena_camera shifts every
+	## CanvasLayer down by up to _V_LIMIT px — tiles need to extend that far
+	## above the screen top so no grey gap is ever visible.
+	var needed_h : float = screen.y + 2.0 * _V_LIMIT
+	var n_tiles: int = maxi(1, int(ceil(needed_h / tex_h)))
 	var tile_h: float = tex_h * n_tiles
 	for tile: TextureRect in [a, b]:
 		tile.texture        = tex
@@ -470,5 +480,11 @@ func _scroll_pair(a: TextureRect, b: TextureRect, scroll: float) -> void:
 	var screen_w: float = get_viewport().get_visible_rect().size.x
 	var x_pos: float    = (screen_w - a.size.x) * 0.5
 	var offset: float   = roundf(fmod(scroll, tile_h))
-	a.position = Vector2(x_pos, offset)
-	b.position = Vector2(x_pos, offset - tile_h)
+	## Anchor the whole tile pair _V_LIMIT pixels above screen top.
+	## Without this, when 'offset' is near tile_h the upper tile (b) only
+	## reaches y ≈ -1, leaving a gap at the top when the camera is panned up
+	## (CanvasLayer.offset.y up to +_V_LIMIT shifts content downward by that
+	## amount, so content at y = -_V_LIMIT is needed to fill screen y = 0).
+	var y_base : float  = -_V_LIMIT
+	a.position = Vector2(x_pos, y_base + offset)
+	b.position = Vector2(x_pos, y_base + offset - tile_h)
