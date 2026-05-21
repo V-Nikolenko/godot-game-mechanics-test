@@ -385,14 +385,14 @@ func _apply(screen: Vector2) -> void:
 	# ── Asteroids (alpha tracks space layers so they fade with the stars) ─────
 	if _asteroids_back_active:
 		_asteroids_back.visible    = true
-		_asteroids_back.position   = Vector2(0.0, _asteroids_back_y)
+		_asteroids_back.position   = Vector2((screen.x - _asteroids_back.size.x) * 0.5, _asteroids_back_y)
 		_asteroids_back.modulate.a = _alpha_stars_base
 	else:
 		_asteroids_back.visible = false
 
 	if _asteroids_front_active:
 		_asteroids_front.visible    = true
-		_asteroids_front.position   = Vector2(0.0, _asteroids_front_y)
+		_asteroids_front.position   = Vector2((screen.x - _asteroids_front.size.x) * 0.5, _asteroids_front_y)
 		_asteroids_front.modulate.a = _alpha_stars_base
 	else:
 		_asteroids_front.visible = false
@@ -435,13 +435,14 @@ func _apply_cloud_layer(a: TextureRect, b: TextureRect, screen: Vector2,
 ## One-shot rect (no vertical wrap) — used for the asteroid sweep.
 func _setup_single_rect(rect: TextureRect, screen: Vector2, tex: Texture2D) -> void:
 	rect.texture        = tex
-	rect.size           = Vector2(screen.x, tex.get_height())
+	## Use the full texture width so wider-than-screen textures can be centred.
+	rect.size           = Vector2(tex.get_width(), tex.get_height())
 	rect.stretch_mode   = TextureRect.STRETCH_TILE
 	rect.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	rect.pivot_offset   = Vector2.ZERO
 	rect.scale          = Vector2.ONE
 	# Start fully above the screen so it isn't visible until its start time.
-	rect.position       = Vector2(0.0, -rect.size.y)
+	rect.position       = Vector2((screen.x - rect.size.x) * 0.5, -rect.size.y)
 
 func _setup_tile_pair(a: TextureRect, b: TextureRect, screen: Vector2, tex: Texture2D) -> void:
 	var tex_h: float = tex.get_height()
@@ -449,7 +450,9 @@ func _setup_tile_pair(a: TextureRect, b: TextureRect, screen: Vector2, tex: Text
 	var tile_h: float = tex_h * n_tiles
 	for tile: TextureRect in [a, b]:
 		tile.texture        = tex
-		tile.size           = Vector2(screen.x, tile_h)
+		## Use the full texture width so wider-than-screen textures are centred
+		## by _scroll_pair rather than clipped to the left edge.
+		tile.size           = Vector2(tex.get_width(), tile_h)
 		tile.stretch_mode   = TextureRect.STRETCH_TILE
 		tile.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 		tile.pivot_offset   = Vector2.ZERO
@@ -459,6 +462,13 @@ func _scroll_pair(a: TextureRect, b: TextureRect, scroll: float) -> void:
 	var tile_h: float = a.size.y
 	if tile_h <= 0.0:
 		return
-	var offset: float = roundf(fmod(scroll, tile_h))
-	a.position = Vector2(0.0, offset)
-	b.position = Vector2(0.0, offset - tile_h)
+	## Centre the rect horizontally so textures wider than the screen
+	## (e.g. 740 px on a 640 px canvas) extend equally on both sides.
+	## x_pos = 0 for same-width textures; x_pos = -50 for 740 px textures.
+	## arena_camera.gd shifts CanvasLayers by ±50 px to pin the background;
+	## the 50 px overhang on each side absorbs that shift with no gaps.
+	var screen_w: float = get_viewport().get_visible_rect().size.x
+	var x_pos: float    = (screen_w - a.size.x) * 0.5
+	var offset: float   = roundf(fmod(scroll, tile_h))
+	a.position = Vector2(x_pos, offset)
+	b.position = Vector2(x_pos, offset - tile_h)
