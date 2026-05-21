@@ -21,7 +21,7 @@ color = Color(0, 0, 0, 0.35)
 position = Vector2(0, 113)
 
 [node name="Header" type="Node2D" parent="MenuContainer" unique_id=1506917257]
-position = Vector2(105, 22)
+position = Vector2(105, 23)
 
 [node name="Sprite" type="Sprite2D" parent="MenuContainer/Header" unique_id=1986869847]
 position = Vector2(-32.5, -1.5)
@@ -37,7 +37,7 @@ text = "Pause Menu"
 metadata/_edit_use_anchors_ = true
 
 [node name="Option0" type="Node2D" parent="MenuContainer" unique_id=88372837]
-position = Vector2(0, 55)
+position = Vector2(0, 56)
 
 [node name="Bg" type="Sprite2D" parent="MenuContainer/Option0" unique_id=92264783]
 position = Vector2(104.5, -1)
@@ -63,7 +63,7 @@ visible = false
 visible = false
 
 [node name="Option3" type="Node2D" parent="MenuContainer" unique_id=814843902]
-position = Vector2(0, 89)
+position = Vector2(0, 83)
 
 [node name="Bg" type="Sprite2D" parent="MenuContainer/Option3" unique_id=472545538]
 position = Vector2(104.5, 7)

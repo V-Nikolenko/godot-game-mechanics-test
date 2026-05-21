@@ -2,15 +2,17 @@
 
 [ext_resource type="PackedScene" uid="uid://ty6a2vpnmrr5" path="res://assault/scenes/player/player_fighter.tscn" id="3_60rwg"]
 [ext_resource type="Script" uid="uid://dutkvjs1np4nd" path="res://assault/scenes/systems/wave_manager/wave_manager.gd" id="11_wave"]
-[ext_resource type="Script" uid="uid://darena5cam001" path="res://assault/scenes/systems/arena_camera.gd" id="18_arcam"]
 [ext_resource type="PackedScene" uid="uid://bsrr6ov5ery1u" path="res://assault/scenes/levels/edelia/1/level_1_background.tscn" id="14_bg"]
 [ext_resource type="Script" uid="uid://dnrlrei5uaasv" path="res://assault/scenes/systems/level_director/level_director.gd" id="15_ldir"]
 [ext_resource type="Script" uid="uid://capmx7rfwb78x" path="res://assault/scenes/levels/edelia/1/level_1_director.gd" id="16_dir1"]
 [ext_resource type="Script" uid="uid://dc5h1m5dnyb1l" path="res://assault/scenes/systems/score_tracker/score_tracker.gd" id="17_strk"]
+[ext_resource type="Script" uid="uid://darena5cam001" path="res://assault/scenes/systems/arena_camera.gd" id="18_arcam"]
 
 [node name="Level1" type="Node2D" unique_id=432592397]
 
 [node name="Level1Background" parent="." unique_id=398992070 instance=ExtResource("14_bg")]
+planet_y_anchor = -200.0
+planet_scale_atmosphere = 14.0
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=671845157]
 position = Vector2(320, 180)
@@ -39,4 +41,3 @@ score_tracker = NodePath("../ScoreTracker")
 
 [node name="PlayerFighter" parent="." unique_id=1634176334 instance=ExtResource("3_60rwg")]
 position = Vector2(302, 271)
-
