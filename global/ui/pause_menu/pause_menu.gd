@@ -109,6 +109,12 @@ func _confirm() -> void:
 			_show_hud()
 			_reset_camera_instant()
 			get_tree().paused = false
+			## Safety: if a GameOver overlay survived at root (e.g. player somehow
+			## opened the pause menu while the death screen was up), remove it now
+			## so it doesn't bleed into the reloaded scene.
+			var go := get_tree().root.get_node_or_null("GameOver")
+			if is_instance_valid(go):
+				go.queue_free()
 			get_tree().reload_current_scene()
 		2:
 			visible = false

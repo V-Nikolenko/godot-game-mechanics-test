@@ -133,10 +133,15 @@ func _on_health_changed(current: int) -> void:
 	_hit_effect.burst()
 	if current == 0:
 		_explosion_effect.explode()
-		get_tree().paused = true
 		var go := game_over_scene.instantiate()
 		get_tree().root.add_child(go)
-		get_tree().paused = false
+		## Pause AFTER adding the GameOver overlay so its _ready() runs normally.
+		## We deliberately do NOT unpause here — the tree stays paused until the
+		## player presses Continue on the GameOver screen.  This prevents the ship
+		## from still moving/shooting, stops level-director timers/dialogs from
+		## continuing, and blocks the ESC pause-menu from opening (its _try_open
+		## returns early when get_tree().paused is true).
+		get_tree().paused = true
 
 ## Override: complex overheat gating with overdrive and 80% hysteresis.
 func _on_overheat_updated(pct: float) -> void:
