@@ -18,7 +18,14 @@
       "Bash(git commit -m 'Fix background vertical gap at top of screen *)",
       "Bash(git commit -m 'Fix 4 death-screen bugs: movement, dialog, pause menu, restart *)",
       "Bash(git commit -m 'Fix unexpected score events from cross-section wave-state bleed *)",
-      "Bash(git commit -m 'Offset highlight score popups 70px right of player *)"
+      "Bash(git commit -m 'Offset highlight score popups 70px right of player *)",
+      "Bash(git commit -m 'Fix BulletPool: auto-grow on exhaustion, clean up in-flight bullets on exit *)",
+      "Bash(git commit -m 'Fix bullet lifetime: arena bounds check + correct pool sizes *)",
+      "Bash(git commit -m 'feat: subtle zoom-out when player moves fast *)",
+      "Bash(git reset *)",
+      "Bash(git commit -m 'feat: camera improvements for assault and open space *)",
+      "Bash(file assault/assets/sprites/missions/edelia/1/space_bg_stars_layer_*.png)",
+      "Bash(awk -F[:,] '{ *)"
     ]
   }
 }

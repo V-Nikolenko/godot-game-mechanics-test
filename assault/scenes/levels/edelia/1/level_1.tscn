@@ -17,6 +17,12 @@ planet_scale_atmosphere = 14.0
 [node name="Camera2D" type="Camera2D" parent="." unique_id=671845157]
 position = Vector2(320, 180)
 script = ExtResource("18_arcam")
+background_parallax = {
+"CloudsLayer": 0.8,
+"PlanetLayer": 0.0,
+"SpaceLayer": 0.8,
+"SurfaceLayer": 1.0
+}
 
 [node name="EnemyContainer" type="Node2D" parent="." unique_id=1889017634]
 

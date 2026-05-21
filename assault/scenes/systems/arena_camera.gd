@@ -10,12 +10,16 @@
 ##     • WaveManager spawn positions (cam.global_position + entry_offset)
 ##       always resolve from the fixed screen centre — no drift on delayed spawns.
 ##
-## Background pinning:
-##   In Godot 4.3, Camera2D.offset is incorporated into the viewport canvas
-##   transform in a way that visually shifts CanvasLayer content even when
-##   follow_viewport_enabled = false.  To keep all background layers
-##   screen-fixed, each CanvasLayer's own offset is set to -camera.offset
-##   every frame, exactly cancelling any induced shift.
+## Background anchoring:
+##   Each background CanvasLayer is screen-fixed by default — its content
+##   doesn't move when the camera pans.  That makes the 740×740 background
+##   look "cropped" because you only ever see the same 640×360 portion of
+##   the texture, no matter where the player flies.
+##
+##   To anchor every layer to world-space (so panning the camera reveals
+##   new parts of its texture), we set cl.offset = -camera.offset.  This
+##   shifts the canvas opposite to the camera pan, exactly cancelling the
+##   apparent motion so the texture appears stuck to the world.
 ##
 ## Offset limits (equal to the buffer distances from screen centre):
 ##   Horizontal ± 50 px  →  world x reachable: [-50, 690]
@@ -32,21 +36,27 @@ const V_LIMIT  : float = 190.0   ## Max vertical offset   (= vertical buffer dep
 
 ## Lerp weight per second.  Higher = snappier follow; 1.0 per frame is the cap.
 @export var follow_speed : float = 12.0
-## Upward shift applied to the vertical target so the ship rests below the
-## screen centre — gives more "look-ahead" space above the player.
-## 0 = perfectly centred.  60 = ship sits ~⅔ down the screen (shmup default).
-@export var v_bias : float = 60.0
+## Deadzone — half-extents of a rectangle around the framing point where small
+## player movements do NOT move the camera.  Reduces wobble from minor
+## adjustments.  Hollow Knight / Mario-style camera box.
+@export var deadzone_half_size : Vector2 = Vector2(20.0, 15.0)
 
-## Background CanvasLayer children of Level1Background, cached for pinning.
-var _canvas_layers : Array[CanvasLayer] = []
+## The follow state, tracked separately from the final camera offset so that
+## per-frame shake noise never pollutes the lerp baseline.  Final offset =
+## _follow_offset + CameraShake.get_offset().
+var _follow_offset : Vector2 = Vector2.ZERO
+## Cached CanvasLayer children of Level1Background — all anchored to world
+## space (factor 1.0) so the background reveals new texture as the camera pans.
+var _bg_layers : Array[CanvasLayer] = []
 
 
 func _ready() -> void:
 	var bg := get_parent().get_node_or_null("Level1Background")
-	if bg:
-		for child in bg.get_children():
-			if child is CanvasLayer:
-				_canvas_layers.append(child as CanvasLayer)
+	if bg == null:
+		return
+	for child in bg.get_children():
+		if child is CanvasLayer:
+			_bg_layers.append(child as CanvasLayer)
 
 
 func _physics_process(delta: float) -> void:
@@ -59,16 +69,31 @@ func _physics_process(delta: float) -> void:
 		return
 	var p : Vector2 = (players[0] as Node2D).global_position
 
-	## Target offset = player displacement from the fixed screen centre.
-	## Clamped so the viewport never reveals world outside the 740 × 740 area.
+	## Player displacement from the fixed screen centre, with deadzone subtracted.
+	## Inside the deadzone box, target stays at current offset → camera holds.
+	var dx := p.x - SCREEN_W * 0.5
+	var dy := p.y - SCREEN_H * 0.5
+	dx = _apply_deadzone(dx, deadzone_half_size.x)
+	dy = _apply_deadzone(dy, deadzone_half_size.y)
+
+	## Clamp so the viewport never reveals world outside the 740 × 740 area.
 	var target : Vector2 = Vector2(
-		clamp(p.x - SCREEN_W * 0.5,         -H_LIMIT, H_LIMIT),
-		clamp(p.y - SCREEN_H * 0.5 - v_bias, -V_LIMIT, V_LIMIT)
+		clamp(dx, -H_LIMIT, H_LIMIT),
+		clamp(dy, -V_LIMIT, V_LIMIT)
 	)
 
-	offset = offset.lerp(target, minf(follow_speed * delta, 1.0)).round()
+	_follow_offset = _follow_offset.lerp(target, minf(follow_speed * delta, 1.0))
+	offset = _follow_offset + CameraShake.get_offset()
 
-	## Pin every background CanvasLayer so it stays screen-fixed regardless of
-	## any shift that Camera2D.offset induces on the canvas transform.
-	for cl in _canvas_layers:
-		cl.offset = -offset
+	## Anchor every background CanvasLayer to world space.  Shake is excluded
+	## so the background doesn't jitter when the screen shakes.
+	for cl in _bg_layers:
+		cl.offset = -_follow_offset
+
+
+## Deadzone helper: returns 0 if |value| < half_size, otherwise the value
+## reduced by the deadzone half-size (so target = 0 exactly at the edge).
+static func _apply_deadzone(value: float, half_size: float) -> float:
+	if absf(value) <= half_size:
+		return 0.0
+	return value - signf(value) * half_size

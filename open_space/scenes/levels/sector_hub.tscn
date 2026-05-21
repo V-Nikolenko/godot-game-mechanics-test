@@ -6,6 +6,9 @@
 [ext_resource type="PackedScene" path="res://open_space/scenes/gui/hud.tscn" id="4_oshud"]
 [ext_resource type="Resource" uid="uid://b1pyvrb4ekue0" path="res://open_space/scenes/mission_select_hubs/planets/edelia.tres" id="5_edelia"]
 [ext_resource type="Resource" uid="uid://btsillpo773wl" path="res://open_space/scenes/mission_select_hubs/planets/voeter_k05m.tres" id="6_planet2"]
+[ext_resource type="Script" path="res://global/systems/camera_director.gd" id="7_camdir"]
+[ext_resource type="Texture2D" uid="uid://d0jv68sx83888" path="res://assault/assets/sprites/missions/edelia/1/space_bg_stars_layer_1.png" id="8_stars1"]
+[ext_resource type="Texture2D" uid="uid://i8wuqtwma31l" path="res://assault/assets/sprites/missions/edelia/1/space_bg_stars_layer_2.png" id="9_stars2"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
@@ -16,6 +19,26 @@ offset_top = -1791.0
 offset_right = 1720.0
 offset_bottom = 2209.0
 color = Color(0.04, 0.04, 0.08, 1)
+
+[node name="Parallax" type="ParallaxBackground" parent="."]
+layer = -5
+
+[node name="StarsDistant" type="ParallaxLayer" parent="Parallax"]
+motion_scale = Vector2(0.15, 0.15)
+motion_mirroring = Vector2(740, 740)
+
+[node name="Sprite2D" type="Sprite2D" parent="Parallax/StarsDistant"]
+texture = ExtResource("8_stars1")
+centered = false
+modulate = Color(1, 1, 1, 0.7)
+
+[node name="StarsNear" type="ParallaxLayer" parent="Parallax"]
+motion_scale = Vector2(0.5, 0.5)
+motion_mirroring = Vector2(740, 740)
+
+[node name="Sprite2D" type="Sprite2D" parent="Parallax/StarsNear"]
+texture = ExtResource("9_stars2")
+centered = false
 
 [node name="edelia" parent="." unique_id=662454378 instance=ExtResource("3_planet")]
 position = Vector2(208, -1)
@@ -34,5 +57,8 @@ arc_radius = 72.0
 [node name="PlayerShip" parent="." unique_id=574725177 instance=ExtResource("2_player")]
 
 [node name="Camera2D" type="Camera2D" parent="PlayerShip" unique_id=300624665]
+
+[node name="CameraDirector" type="Node" parent="PlayerShip/Camera2D"]
+script = ExtResource("7_camdir")
 
 [node name="OpenSpaceHUD" parent="." unique_id=1653560321 instance=ExtResource("4_oshud")]

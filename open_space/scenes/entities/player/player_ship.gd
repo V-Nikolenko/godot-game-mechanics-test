@@ -23,20 +23,15 @@ var warp_module_active: bool = false
 ## Camera feel ────────────────────────────────────────────────────────────────
 ## Zoom-out + camera lead applied together as the ship accelerates.
 ##   Zoom:  pulls back to _ZOOM_MIN at full threshold speed.
-##   Lead:  shifts the viewport ahead in the direction of travel.
+##   Lead:  shifts the viewport ahead in the direction of travel (facing).
 ## Both scale from 0 → full effect over 0 → _SPEED_THRESHOLD px/s.
-## Mission-hub planet dwell also writes cam.zoom + cam.offset.
-## _cam_base_zoom tracks the last zoom this code wrote; if it diverges
-## the hub has taken control — we step aside and resync when zoom returns
-## to Vector2.ONE (hub always restores there).
+##
+## Hand-off to other systems (planet dwell, pause, shake) is managed by the
+## CameraDirector child of Camera2D. We just push our target each frame; the
+## director picks the highest-priority effect and smoothly blends to it.
 const _ZOOM_MIN        : float = 0.85   ## Zoom level at full speed.
 const _SPEED_THRESHOLD : float = 400.0  ## Speed (px/s) for full effect (zoom + lead).
-const _ZOOM_LERP       : float = 3.0    ## Zoom lerp weight per second.
 const _LEAD_MAX        : float = 140.0  ## Max camera lead distance (px).
-const _LEAD_LERP       : float = 2.0    ## Lead lerp weight per second (gentle drift).
-
-var _cam_base_zoom : Vector2 = Vector2.ONE
-var _cam_lead      : Vector2 = Vector2.ZERO
 ## Set true by OverclockModule.apply(). Allows firing past overheat.
 var overclock_module_active: bool = false
 
@@ -187,47 +182,39 @@ func _on_module_unequipped(_slot: StringName, prev_id: StringName) -> void:
 func _on_received_damage(damage: int) -> void:
 	_apply_damage(damage)
 	_hit_effect.burst()
+	CameraShake.add(0.35)
 
 ## Override: emit EventBus, handle death with delayed scene reload.
 func _on_health_changed(current: int) -> void:
 	super(current)  # emits EventBus.player_health_changed
 	if current == 0:
 		_explosion_effect.explode()
+		CameraShake.add(1.0)
 		await get_tree().create_timer(1.2).timeout
 		if is_instance_valid(self):
 			get_tree().reload_current_scene()
 
-## Drives zoom-out and camera lead simultaneously as the ship accelerates.
-## Steps aside while the mission-hub dwell/tween controls cam.zoom + cam.offset,
-## resyncing both once the hub's close tween restores zoom to Vector2.ONE.
-func _update_camera_feel(delta: float) -> void:
+## Pushes the speed-zoom + camera-lead targets into the CameraDirector.
+## The director blends smoothly between active effects, so no internal lerp
+## is needed here — we just compute instantaneous targets each frame and let
+## the director arbitrate against other effects (planet dwell, shake, etc).
+func _update_camera_feel(_delta: float) -> void:
 	var cam := get_node_or_null("Camera2D") as Camera2D
 	if cam == null:
 		return
-	## Guard: hub dwell/tween moves zoom away from _cam_base_zoom.
-	## Resync both zoom and lead once hub restores zoom to Vector2.ONE.
-	if not cam.zoom.is_equal_approx(_cam_base_zoom):
-		if cam.zoom.is_equal_approx(Vector2.ONE):
-			_cam_base_zoom = Vector2.ONE
-			_cam_lead      = Vector2.ZERO
-		else:
-			return
+	var director := cam.get_node_or_null("CameraDirector") as CameraDirector
+	if director == null:
+		return
 
 	var spd := velocity.length()
 	var t   := clampf(spd / _SPEED_THRESHOLD, 0.0, 1.0)
 
-	## Zoom out
-	var target_zoom := Vector2.ONE * lerpf(1.0, _ZOOM_MIN, t)
-	_cam_base_zoom = _cam_base_zoom.lerp(target_zoom, minf(_ZOOM_LERP * delta, 1.0))
-	cam.zoom = _cam_base_zoom
-
-	## Camera lead — push viewport ahead in the ship's facing direction.
-	## Using facing (not velocity) means the lead reacts to rotation immediately
-	## rather than waiting for momentum to change direction.
-	var facing := Vector2.UP.rotated(rotation)
-	var target_lead := facing * _LEAD_MAX * t if spd > 1.0 else Vector2.ZERO
-	_cam_lead = _cam_lead.lerp(target_lead, minf(_LEAD_LERP * delta, 1.0))
-	cam.offset = _cam_lead.round()
+	## Zoom out + camera lead — combined under one effect slot.
+	## Lead direction tracks ship facing (not velocity) so rotation feels snappy.
+	var target_zoom   := Vector2.ONE * lerpf(1.0, _ZOOM_MIN, t)
+	var facing        := Vector2.UP.rotated(rotation)
+	var target_offset := facing * _LEAD_MAX * t if spd > 1.0 else Vector2.ZERO
+	director.set_effect(&"speed_feel", target_zoom, target_offset, 0)
 
 
 ## Override: overheat gating with overclock and overdrive module support.

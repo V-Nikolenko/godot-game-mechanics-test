@@ -121,20 +121,23 @@ func _draw() -> void:
 				-PI / 2.0 + TAU * progress,
 				64, arc_fill_color, arc_fill_width, true)
 
-## Sets camera zoom and offset proportional to dwell progress (0.0–1.0).
-## Called every frame while the player is dwelling; stopped when player leaves.
-func _update_zoom(progress: float, delta: float) -> void:
+## Pushes the dwell zoom/offset target into the CameraDirector at priority 10.
+## The director blends smoothly from whatever lower-priority effect was active
+## (speed-zoom + lead, priority 0), so there is no pop on entry. clear_effect()
+## is called when the player leaves range / opens the menu / closes the menu —
+## the director then blends back to the speed-feel effect (or to defaults).
+func _update_zoom(progress: float, _delta: float) -> void:
 	if _camera == null:
 		return
 	_zoom_was_applied = true
+	var director := _camera.get_node_or_null("CameraDirector") as CameraDirector
+	if director == null:
+		return
 	var target: Vector2 = global_position + arc_offset
 	var dir: Vector2    = (target - _camera.get_parent().global_position).normalized()
-	## Lerp toward the dwell target each frame so the camera glides smoothly
-	## from whatever state the speed-zoom / lead left it in, rather than jumping.
 	var target_zoom   := Vector2.ONE.lerp(Vector2(1.2, 1.2), progress)
 	var target_offset := dir * 40.0 * progress
-	_camera.zoom   = _camera.zoom.lerp(target_zoom,   minf(5.0 * delta, 1.0))
-	_camera.offset = _camera.offset.lerp(target_offset, minf(5.0 * delta, 1.0))
+	director.set_effect(&"planet_dwell", target_zoom, target_offset, 10)
 
 func _open_menu() -> void:
 	if _menu_open or config == null or config.missions.is_empty():
@@ -150,17 +153,17 @@ func _open_menu() -> void:
 	_menu.open(config)
 	get_tree().paused = true
 
-## Smoothly returns the camera to its default zoom/offset.
+## Removes the dwell effect from the director.  The director's per-frame blend
+## then glides the camera back to the next-priority effect (speed-feel or
+## default), so we no longer need an explicit zoom-out tween here.
 func _zoom_out() -> void:
 	if _camera == null:
 		return
 	if _zoom_tween and _zoom_tween.is_valid():
 		_zoom_tween.kill()
-	_zoom_tween = create_tween().set_parallel(true)
-	_zoom_tween.tween_property(_camera, "zoom",   Vector2.ONE,  0.4) \
-			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
-	_zoom_tween.tween_property(_camera, "offset", Vector2.ZERO, 0.4) \
-			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	var director := _camera.get_node_or_null("CameraDirector") as CameraDirector
+	if director != null:
+		director.clear_effect(&"planet_dwell")
 
 func _close_menu() -> void:
 	if _zoom_tween and _zoom_tween.is_valid():

@@ -126,6 +126,7 @@ func _on_module_unequipped(_slot: StringName, prev_id: StringName) -> void:
 ## Scene-connected: HurtBox.received_damage → _on_hurt_box_received_damage.
 func _on_hurt_box_received_damage(damage: int) -> void:
 	_apply_damage(damage)
+	CameraShake.add(0.35)
 
 ## Override: emit EventBus, play hit effect, handle death.
 func _on_health_changed(current: int) -> void:
@@ -133,6 +134,7 @@ func _on_health_changed(current: int) -> void:
 	_hit_effect.burst()
 	if current == 0:
 		_explosion_effect.explode()
+		CameraShake.add(1.0)
 		var go := game_over_scene.instantiate()
 		get_tree().root.add_child(go)
 		## Pause AFTER adding the GameOver overlay so its _ready() runs normally.
