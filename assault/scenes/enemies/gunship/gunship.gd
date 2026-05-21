@@ -38,7 +38,8 @@ func _ready() -> void:
 
 	bullet_pool = BulletPool.new()
 	bullet_pool.bullet_scene = _BULLET_SCENE
-	bullet_pool.pool_size = 12
+	# Arena diagonal 1047px / 250px/s / 0.6s interval ≈ 7 → 15 is comfortable.
+	bullet_pool.pool_size = 15
 	add_child(bullet_pool)
 
 	_fire_timer_node = Timer.new()

@@ -8,10 +8,11 @@
 ##     independently of the ship. Idle bullets stay here (disabled + invisible).
 ##   - When expired fires, the pool resets and reclaims the bullet automatically.
 ##
-## Auto-growth:
-##   If all bullets are in flight when acquire() is called, the pool creates one
-##   extra bullet on the fly instead of dropping the shot. The pool never shrinks,
-##   so it converges to the natural high-water mark for the fire pattern.
+## Sizing guidance:
+##   pool_size >= ceil(max_bullet_lifetime / fire_interval) + a small margin.
+##   EnemyBullet expires at the 740×740 arena edge (not the viewport edge), so
+##   max_lifetime ≈ arena_diagonal / bullet_speed ≈ 1047 / 250 ≈ 4.2 s.
+##   E.g. forward fighters: 1047/420 / 0.3s ≈ 9 → pool_size 20 is comfortable.
 ##
 ## Cleanup on exit:
 ##   _exit_tree() calls queue_free() on every in-flight bullet still owned by
@@ -48,26 +49,21 @@ func _ready() -> void:
 
 func _prewarm() -> void:
 	for i: int in pool_size:
-		_idle.append(_create_bullet())
-
-## Creates one bullet, wires its expired signal, and returns it idle.
-## Used by both _prewarm and the auto-grow path in acquire().
-func _create_bullet() -> Node:
-	var bullet: Node = bullet_scene.instantiate()
-	bullet.process_mode = Node.PROCESS_MODE_DISABLED
-	bullet.visible = false
-	add_child(bullet)
-	bullet.expired.connect(func(): call_deferred("_recycle", bullet))
-	return bullet
+		var bullet: Node = bullet_scene.instantiate()
+		bullet.process_mode = Node.PROCESS_MODE_DISABLED
+		bullet.visible = false
+		add_child(bullet)
+		bullet.expired.connect(func(): call_deferred("_recycle", bullet))
+		_idle.append(bullet)
 
 ## Returns an idle bullet placed at spawn_pos, already reset and enabled.
-## If all bullets are currently in flight the pool grows by one rather than
-## dropping the shot (no more "Pool exhausted" warnings in normal play).
+## Returns null and logs a warning if all bullets are currently in flight —
+## increase pool_size on the owning ship if this fires regularly.
 func acquire(spawn_pos: Vector2) -> Node:
 	if _idle.is_empty():
-		# Auto-grow: create one extra bullet so no shot is ever dropped.
-		# This converges to the natural high-water mark for the fire pattern.
-		_idle.append(_create_bullet())
+		push_warning("[BulletPool] Pool exhausted (%s) — increase pool_size" \
+				% bullet_scene.resource_path.get_file())
+		return null
 	var bullet: Node = _idle.pop_back()
 	bullet.reparent(_container, false)
 	bullet.global_position = spawn_pos

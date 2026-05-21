@@ -26,7 +26,8 @@ func _ready() -> void:
 	# Bullet pool
 	bullet_pool = BulletPool.new()
 	bullet_pool.bullet_scene = _BULLET_SCENE
-	bullet_pool.pool_size = 10
+	# Arena diagonal 1047px / 420px/s / 0.3s interval ≈ 8.3 → 20 is comfortable.
+	bullet_pool.pool_size = 20
 	add_child(bullet_pool)
 
 	# aim_mode set via spawn props takes priority over the config default.
