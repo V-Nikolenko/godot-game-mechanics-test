@@ -34,7 +34,5 @@ arc_radius = 72.0
 [node name="PlayerShip" parent="." unique_id=574725177 instance=ExtResource("2_player")]
 
 [node name="Camera2D" type="Camera2D" parent="PlayerShip" unique_id=300624665]
-position_smoothing_enabled = true
-position_smoothing_speed = 6.0
 
 [node name="OpenSpaceHUD" parent="." unique_id=1653560321 instance=ExtResource("4_oshud")]

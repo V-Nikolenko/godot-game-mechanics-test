@@ -66,7 +66,7 @@ func _physics_process(delta: float) -> void:
 		clamp(p.y - SCREEN_H * 0.5 - v_bias, -V_LIMIT, V_LIMIT)
 	)
 
-	offset = offset.lerp(target, minf(follow_speed * delta, 1.0))
+	offset = offset.lerp(target, minf(follow_speed * delta, 1.0)).round()
 
 	## Pin every background CanvasLayer so it stays screen-fixed regardless of
 	## any shift that Camera2D.offset induces on the canvas transform.

@@ -51,9 +51,15 @@ extends Area2D
 ## ── Internal ──────────────────────────────────────────────────────────────
 const _MENU_SCENE := preload("res://open_space/scenes/mission_select_ui/mission_select_menu.tscn")
 
+## Player must be slower than this (px/s) for the dwell timer to accumulate.
+## Flying through at high speed skips the approach entirely.
+const _MAX_APPROACH_SPEED : float = 150.0
+
 @onready var _sprite: Sprite2D = $Sprite2D
 
 var _player_in_range: bool   = false
+var _player_is_fast: bool    = false  ## True while player speed > _MAX_APPROACH_SPEED.
+var _zoom_was_applied: bool  = false  ## True once _update_zoom has touched the camera.
 var _dwell_time: float        = 0.0
 var _menu_open: bool          = false
 var _menu: MissionSelectMenu  = null
@@ -77,18 +83,35 @@ func _process(delta: float) -> void:
 	if Engine.is_editor_hint() or config == null or config.missions.is_empty() or _menu_open:
 		return
 	if not _player_in_range:
-		if _dwell_time > 0.0:
-			_dwell_time = 0.0
+		if _dwell_time > 0.0 or _player_is_fast:
+			_dwell_time    = 0.0
+			_player_is_fast = false
 			queue_redraw()
 		return
+
+	## Update fast-flag; redraw only on transitions so the arc appears/disappears.
+	var players := get_tree().get_nodes_in_group("player")
+	var spd: float = 0.0
+	if not players.is_empty():
+		spd = (players[0] as CharacterBody2D).velocity.length()
+	var now_fast := spd > _MAX_APPROACH_SPEED
+	if now_fast != _player_is_fast:
+		_player_is_fast = now_fast
+		if _dwell_time > 0.0:
+			_dwell_time = 0.0
+		queue_redraw()
+
+	if _player_is_fast:
+		return
+
 	_dwell_time = min(_dwell_time + delta, dwell_duration_sec)
 	queue_redraw()
-	_update_zoom(_dwell_time / dwell_duration_sec)
+	_update_zoom(_dwell_time / dwell_duration_sec, delta)
 	if _dwell_time >= dwell_duration_sec:
 		_open_menu()
 
 func _draw() -> void:
-	if Engine.is_editor_hint() or not _player_in_range or _menu_open:
+	if Engine.is_editor_hint() or not _player_in_range or _menu_open or _player_is_fast:
 		return
 	draw_arc(arc_offset, arc_radius, -PI / 2.0, -PI / 2.0 + TAU,
 			64, arc_bg_color, arc_bg_width, true)
@@ -100,13 +123,18 @@ func _draw() -> void:
 
 ## Sets camera zoom and offset proportional to dwell progress (0.0–1.0).
 ## Called every frame while the player is dwelling; stopped when player leaves.
-func _update_zoom(progress: float) -> void:
+func _update_zoom(progress: float, delta: float) -> void:
 	if _camera == null:
 		return
+	_zoom_was_applied = true
 	var target: Vector2 = global_position + arc_offset
 	var dir: Vector2    = (target - _camera.get_parent().global_position).normalized()
-	_camera.zoom   = Vector2.ONE.lerp(Vector2(1.2, 1.2), progress)
-	_camera.offset = dir * 40.0 * progress
+	## Lerp toward the dwell target each frame so the camera glides smoothly
+	## from whatever state the speed-zoom / lead left it in, rather than jumping.
+	var target_zoom   := Vector2.ONE.lerp(Vector2(1.2, 1.2), progress)
+	var target_offset := dir * 40.0 * progress
+	_camera.zoom   = _camera.zoom.lerp(target_zoom,   minf(5.0 * delta, 1.0))
+	_camera.offset = _camera.offset.lerp(target_offset, minf(5.0 * delta, 1.0))
 
 func _open_menu() -> void:
 	if _menu_open or config == null or config.missions.is_empty():
@@ -145,7 +173,10 @@ func _close_menu() -> void:
 	_dwell_time = 0.0
 	queue_redraw()
 	get_tree().paused = false
-	_zoom_out()
+	## Only restore camera if we actually touched it — skip on fast flyby.
+	if _zoom_was_applied:
+		_zoom_was_applied = false
+		_zoom_out()
 
 func _on_mission_confirmed(scene_path: String) -> void:
 	get_tree().paused = false
