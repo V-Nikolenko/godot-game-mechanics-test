@@ -58,7 +58,7 @@ func load_section(waves: Array[WaveResource]) -> void:
 ```
 
 **Important:** wave indices are section-local. Section 1's wave 0 and section
-2's wave 0 are completely separate waves. See §5 for why this matters.
+2's wave 0 are completely separate waves. See §6 for why this matters.
 
 ### 2.2 Wave timing
 
@@ -293,10 +293,99 @@ func _maybe_award_wave_clear(wave_index, tally, kill_pos) -> void:
 | Skill challenge (partial) | `EventBus.skill_challenge_completed(false, bonus)` | Configurable (default 150) |
 
 Survival ticks emit `score_event(pos, 50, "survival")` → green "SAFE +50" popup in the HUD.
+See §4 for the full skill challenge system.
 
 ---
 
-## 4. Score events and HUD
+## 4. Skill challenges
+
+A **skill challenge** is a timed bonus window that fires at a fixed point within a
+section. It watches whether the player takes damage and awards a larger bonus for
+surviving cleanly.
+
+### 4.1 Components
+
+| Class | File | Role |
+|-------|------|------|
+| `SkillChallengeResource` | `global/resources/skill_challenge_resource.gd` | Designer data: name, duration, hazard scene, bonus amounts |
+| `SkillChallengeRunner` | `assault/scenes/systems/skill_challenge/skill_challenge_runner.gd` | Runtime: runs one challenge, watches health, emits result |
+
+### 4.2 SkillChallengeResource fields
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `trigger_time` | float | Section-relative seconds before the challenge starts |
+| `challenge_name` | String | Display name (used in the future HUD prompt) |
+| `duration` | float | How long the window lasts (seconds) |
+| `hazard_pattern` | PackedScene? | Optional scene instantiated for the duration. `null` = challenge uses the existing wave enemies as the hazard |
+| `clean_bonus` | int | Score awarded if the player took zero damage |
+| `partial_bonus` | int | Score awarded if the player survived but was hit at least once |
+
+### 4.3 Runtime flow
+
+`Level1Director` fires the challenge at `trigger_time` by calling
+`_launch_skill_challenge(res)`, which creates a `SkillChallengeRunner` node and
+adds it to the level:
+
+```
+LevelDirector fires at trigger_time
+  → SkillChallengeRunner add_child'd to level
+      → connects to EventBus.player_health_changed
+      → instantiates hazard_pattern (if set) as child of level
+      → awaits duration seconds
+      → clean = (no damage was taken during window)
+      → EventBus.skill_challenge_completed.emit(clean, bonus)
+      → hazard freed; runner queue_free'd; finished.emit()
+```
+
+`ScoreTracker._on_skill_completed(clean, bonus)` receives the result:
+
+```gdscript
+func _on_skill_completed(clean: bool, bonus: int) -> void:
+    _total_score += bonus
+    _breakdown["skill"] += bonus
+    if clean:
+        # Equivalent to 3 kills of combo growth; keeps multiplier alive
+        # into the next wave after a clean dodge.
+        _combo = minf(_combo + combo_step * 3.0, combo_cap)
+        _combo_decay_remaining = combo_decay_seconds
+        EventBus.combo_changed.emit(_combo, _combo_decay_remaining)
+    EventBus.score_event.emit(pos, bonus, "skill_clean" if clean else "skill_partial")
+```
+
+Only a **clean** result grants the combo nudge. A partial result adds score but
+does not touch the multiplier.
+
+### 4.4 Level 1 challenges
+
+Two challenges are defined in `level_1_director.gd`:
+
+| Name | Trigger | Duration | Clean | Partial | Hazard |
+|------|---------|----------|-------|---------|--------|
+| ASTEROID CORRIDOR | 10 s into section 1 | 4 s | +500 | +150 | None — window overlaps wave asteroids |
+| BULLET WEAVE | 70 s into section 1 | 5 s | +700 | +200 | None — window overlaps wave enemies |
+
+Both currently have `hazard_pattern = null`. The field exists for future
+challenges that want to spawn a dedicated obstacle scene (e.g. a mine corridor,
+a bullet-curtain emitter) independently of the wave schedule.
+
+### 4.5 HUD feedback
+
+A `TODO` in `skill_challenge_runner.gd` marks where an on-screen "DANGER ZONE"
+prompt should appear when the window opens — that component does not exist yet.
+The only current player feedback is the result popup:
+
+| Outcome | Popup text | Colour |
+|---------|-----------|--------|
+| Clean (no damage taken) | `PERFECT! +N` | Cyan |
+| Partial (survived, took damage) | `SURVIVED +N` | Orange |
+
+Both popups use the highlight size (22 px font, 60 px float, 1.8 s lifetime) so
+they are as visible as the survival "SAFE +N" popup.
+
+---
+
+## 5. Score events and HUD
 
 `EventBus.score_event(world_position, points, reason)` is the single channel
 between scoring logic and UI. `ScorePopupSpawner` listens to it and instantiates
@@ -318,7 +407,7 @@ satisfying rather than snapping instantly.
 
 ---
 
-## 5. The wave-index collision bug (and fix)
+## 6. The wave-index collision bug (and fix)
 
 ### What went wrong
 
@@ -412,7 +501,7 @@ announce). Without it, `get("was_killed")` on a freed node would return `null`
 
 ---
 
-## 6. Common confusion: why does score appear without obvious kills?
+## 7. Common confusion: why does score appear without obvious kills?
 
 Two legitimate sources of score that can look "unexpected":
 
@@ -436,7 +525,7 @@ most likely cause of the reported "score added without killing enemies" bug.
 
 ---
 
-## 7. File reference
+## 8. File reference
 
 | File | Role |
 |------|------|
@@ -451,3 +540,5 @@ most likely cause of the reported "score added without killing enemies" bug.
 | `assault/scenes/gui/score_popup.gd` | One floating "+N" label; tweens and frees itself |
 | `assault/scenes/gui/hud_score_widget.gd` | Score total + combo bar in HUD corner |
 | `global/systems/event_bus.gd` | Autoload; carries `score_changed`, `combo_changed`, `score_event`, `enemy_spawned_orphan` |
+| `global/resources/skill_challenge_resource.gd` | Designer data resource for one skill challenge window |
+| `assault/scenes/systems/skill_challenge/skill_challenge_runner.gd` | Runs one challenge: spawns hazard, watches health, emits result |

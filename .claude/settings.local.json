@@ -9,7 +9,16 @@
       "Bash(git add *)",
       "Bash(git commit -m 'Fix background parallax: shift CanvasLayer offsets with camera delta *)",
       "Bash(git commit -m 'Fix camera follow: use Camera2D.offset instead of global_position *)",
-      "Bash(git commit -m 'Pin background CanvasLayers against camera offset shift *)"
+      "Bash(git commit -m 'Pin background CanvasLayers against camera offset shift *)",
+      "Bash(git commit -m 'Fix ram_ship crash: SpriteFrames.new\\(\\) already has '\\\\''default'\\\\'' animation *)",
+      "Bash(git commit -m 'Add pause menu \\(all 4 options\\) to infiltration mission *)",
+      "Bash(git commit -m 'Fix pause menu null viewport in infiltration + safer Exit Mission guard *)",
+      "Bash(git commit -m 'Fix _hide_hud hiding world objects in infiltration scene *)",
+      "Bash(git commit -m 'Centre background rects to cover ±50 px camera offset shifts *)",
+      "Bash(git commit -m 'Fix background vertical gap at top of screen *)",
+      "Bash(git commit -m 'Fix 4 death-screen bugs: movement, dialog, pause menu, restart *)",
+      "Bash(git commit -m 'Fix unexpected score events from cross-section wave-state bleed *)",
+      "Bash(git commit -m 'Offset highlight score popups 70px right of player *)"
     ]
   }
 }
