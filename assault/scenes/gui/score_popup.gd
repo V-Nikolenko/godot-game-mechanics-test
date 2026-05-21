@@ -18,6 +18,8 @@ const _HIGHLIGHT_FONT_SIZE: int = 22
 const _HIGHLIGHT_LIFETIME: float = 1.8
 const _HIGHLIGHT_FLOAT: float = 60.0
 const _DEFAULT_FONT_SIZE: int = 14
+## Pixels to the right of the anchor point for highlight popups.
+const _HIGHLIGHT_RIGHT_OFFSET: float = 70.0
 
 @onready var _label: Label = $Label
 
@@ -28,12 +30,15 @@ func show_for(world_pos: Vector2, points: int, reason: String) -> void:
 	if cam:
 		var size: Vector2 = get_viewport().get_visible_rect().size
 		screen_pos = world_pos - cam.global_position + size * 0.5
+	var is_highlight: bool = reason in _HIGHLIGHT_REASONS
+	# Shift highlight popups to the right of their anchor so they sit beside
+	# the player rather than directly on top of the ship sprite.
+	if is_highlight:
+		screen_pos.x += _HIGHLIGHT_RIGHT_OFFSET
 	position = screen_pos
 
 	_label.text = _format_text(points, reason)
 	_label.modulate = _color_for(reason)
-
-	var is_highlight: bool = reason in _HIGHLIGHT_REASONS
 	var lifetime: float = _HIGHLIGHT_LIFETIME if is_highlight else _LIFETIME
 	var float_dist: float = _HIGHLIGHT_FLOAT if is_highlight else _FLOAT_DISTANCE
 	_label.add_theme_font_size_override("font_size",
