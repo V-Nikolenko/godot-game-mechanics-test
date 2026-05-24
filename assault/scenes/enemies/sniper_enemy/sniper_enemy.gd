@@ -2,71 +2,53 @@
 class_name SniperEnemy
 extends BaseEnemy
 
-## A stationary sniper that:
-##   1. Flies into the viewport from above (FLY_IN)
-##   2. Hovers near the top of the screen (AIM)
-##      - Rotates to track the player
-##      - Shows a SniperAimVisualizer cone that converges over 2 s
-##   3. Locks on for 0.5 s — rotation freezes, lines fully converged (LOCK)
-##   4. Fires one enemy_sniper_bullet in the aimed direction (FIRE)
-##   5. Retreats upward off-screen (FLY_OUT)
+## A sniper that is carried in/out by EnemyPathMover (sequence movement) and
+## fires a fixed number of shots while stationary:
+##
+##   sequence step 1 — straight(FLY_IN_SPEED, 0, FLY_IN_TIME) : descend into hover position
+##   sequence step 2 — hold(HOLD_TIME)                         : stay put while shooting
+##   sequence step 3 — straight(FLY_OUT_SPEED, PI)             : retreat off-screen top
+##
+## Internal state machine handles only the shoot cycle:
+##   AIM  — rotates to track player; SniperAimVisualizer converges over AIM_DURATION
+##   LOCK — rotation frozen; lines fully converged for LOCK_DURATION
+##   FIRE — spawns one enemy_sniper_bullet; repeats up to MAX_SHOTS times
+##   IDLE — all shots fired; EnemyPathMover's exit step takes over movement
 
-enum Phase { FLY_IN, AIM, LOCK, FIRE, FLY_OUT }
+enum Phase { AIM, LOCK, FIRE, IDLE }
 
-const FLY_IN_SPEED  : float = 150.0
 const AIM_DURATION  : float = 2.0
 const LOCK_DURATION : float = 0.5
-const FLY_OUT_SPEED : float = 220.0
 ## How quickly (lerp factor) the enemy rotates to track the player.
 const ROTATION_LERP : float = 2.5
-## Fraction of viewport height from the top at which the enemy hovers.
-const HOVER_Y_FRAC  : float = 0.28
+## Number of shots before the enemy goes idle and retreats.
+const MAX_SHOTS     : int   = 2
 
 const _BULLET_SCENE: PackedScene = preload(
 		"res://assault/scenes/projectiles/enemy_bullets/enemy_sniper_bullet.tscn")
 
 @onready var _muzzle: Marker2D = $Muzzle
 
-var _phase      : Phase               = Phase.FLY_IN
-var _timer      : float               = 0.0
-var _hover_y    : float               = 0.0
-var _visualizer : SniperAimVisualizer = null
+var _phase       : Phase               = Phase.AIM
+var _timer       : float               = 0.0
+var _shots_fired : int                 = 0
+var _visualizer  : SniperAimVisualizer = null
 
 func _ready() -> void:
 	super._ready()
 	add_to_group("enemies")
 	score_value = 50
-	rotation = PI  ## face downward toward the player from entry
-	_compute_hover_y()
-
-func _compute_hover_y() -> void:
-	var cam := get_viewport().get_camera_2d()
-	var vs  := get_viewport().get_visible_rect().size
-	if cam:
-		_hover_y = cam.global_position.y - vs.y * 0.5 + vs.y * HOVER_Y_FRAC
-	else:
-		_hover_y = global_position.y + 120.0
+	rotation = PI  ## face downward toward the player on entry
+	_begin_aim()
 
 # ─────────────────────────────────────────────────────────────────────────────
 
 func _physics_process(delta: float) -> void:
 	match _phase:
-		Phase.FLY_IN : _phase_fly_in(delta)
-		Phase.AIM    : _phase_aim(delta)
-		Phase.LOCK   : _phase_lock(delta)
-		Phase.FIRE   : _phase_fire()
-		Phase.FLY_OUT: _phase_fly_out(delta)
-
-# ─── FLY_IN ──────────────────────────────────────────────────────────────────
-
-func _phase_fly_in(_delta: float) -> void:
-	if global_position.y < _hover_y:
-		velocity = Vector2(0.0, FLY_IN_SPEED)
-		move_and_slide()
-	if global_position.y >= _hover_y:
-		global_position.y = _hover_y
-		velocity = Vector2.ZERO
-		_begin_aim()
+		Phase.AIM  : _phase_aim(delta)
+		Phase.LOCK : _phase_lock(delta)
+		Phase.FIRE : _phase_fire()
+		Phase.IDLE : pass  ## EnemyPathMover's fly-out step drives movement
 
 # ─── AIM ─────────────────────────────────────────────────────────────────────
 
@@ -109,9 +91,6 @@ func _phase_lock(delta: float) -> void:
 
 func _phase_fire() -> void:
 	var bullet: EnemyBullet = _BULLET_SCENE.instantiate()
-	## Connect expired → queue_free so the bullet self-destructs when it
-	## hits the player or leaves the arena (no BulletPool needed for a
-	## one-shot-per-cycle weapon).
 	bullet.expired.connect(bullet.queue_free)
 	bullet.set_direction(Vector2.UP.rotated(rotation))
 	get_parent().add_child(bullet)
@@ -121,23 +100,11 @@ func _phase_fire() -> void:
 		_visualizer.queue_free()
 	_visualizer = null
 
-	_phase = Phase.FLY_OUT
-	_timer = 0.0
-
-# ─── FLY_OUT ──────────────────────────────────────────────────────────────────
-
-func _phase_fly_out(_delta: float) -> void:
-	velocity = Vector2(0.0, -FLY_OUT_SPEED)
-	move_and_slide()
-	_check_off_screen_top()
-
-func _check_off_screen_top() -> void:
-	var cam := get_viewport().get_camera_2d()
-	if cam == null:
-		return
-	var vs := get_viewport().get_visible_rect().size
-	if global_position.y < cam.global_position.y - vs.y * 0.5 - 80.0:
-		queue_free()
+	_shots_fired += 1
+	if _shots_fired < MAX_SHOTS:
+		_begin_aim()   ## shoot again
+	else:
+		_phase = Phase.IDLE   ## done shooting — EnemyPathMover flies us out
 
 # ─── HELPERS ──────────────────────────────────────────────────────────────────
 

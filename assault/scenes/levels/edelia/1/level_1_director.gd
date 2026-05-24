@@ -175,12 +175,20 @@ func _build_section_1() -> LevelSection:
 	var R: ArcMovement.ArcDirection = WaveBuilder.RIGHT
 
 	var raw_waves: Array = [
-		# 0.5 s — sniper pair drops in from above: the first real threat of the level
-		# SniperEnemy drives its own movement (FLY_IN → AIM → LOCK → FIRE → FLY_OUT)
-		# so no .move() is needed — just an above-viewport spawn position.
+		# 0.5 s — sniper pair drops in from above, fires twice, then retreats
+		# Sequence: fly in (2.5 s at 150 px/s) → hold while shooting (4 s) → fly out upward
+		# AIM begins immediately so the enemy is already tracking during descent.
 		b.wave(0.5, [
-			b.sniper_enemy().at(-120, -500),
-			b.sniper_enemy().at( 120, -500).delay(0.5),
+			b.sniper_enemy().at(-120, -500).move(b.sequence([
+				b.straight(150, 0.0, 2.5),
+				b.hold(4.0),
+				b.straight(220, PI),
+			])),
+			b.sniper_enemy().at( 120, -500).move(b.sequence([
+				b.straight(150, 0.0, 2.5),
+				b.hold(4.0),
+				b.straight(220, PI),
+			])).delay(0.5),
 		]),
 
 		# 1.0 s — opening drone pair, fast straight angles into the field
