@@ -90,11 +90,11 @@ func _phase_enter(_delta: float, player: Node2D) -> void:
 
 func _phase_orbit(delta: float, player: Node2D) -> void:
 	_dash_timer -= delta
-	if _dash_timer <= 0.0:
-		_begin_dash(player)
-		return
 	if not player:
 		velocity = Vector2.ZERO
+		return
+	if _dash_timer <= 0.0:
+		_begin_dash(player)
 		return
 	_orbit_angle += _orbit_speed * delta
 	var orbit_target := player.global_position \
