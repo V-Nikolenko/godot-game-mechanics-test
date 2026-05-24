@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="DroneInterceptorConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/drone_interceptor/drone_interceptor_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 25
+collision_damage = 30
+score_value = 40
+counts_toward_wave_clear = true
+orbit_radius = 130.0
+orbit_speed = 1.8
+approach_speed = 200.0
+orbit_correct_speed = 160.0
+dash_speed = 480.0
+dash_prediction_time = 0.2
