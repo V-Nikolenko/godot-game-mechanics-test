@@ -80,6 +80,7 @@ func drone()          -> SpawnConfig: return SpawnConfig.new(DRONE)
 func ram()            -> SpawnConfig: return SpawnConfig.new(RAM)
 func sniper()         -> SpawnConfig: return SpawnConfig.new(SNIPER)
 func sniper_enemy()   -> SpawnConfig: return SpawnConfig.new(SNIPER_ENEMY)
+func interceptor()    -> SpawnConfig: return SpawnConfig.new(INTERCEPTOR)
 func gunship()        -> SpawnConfig: return SpawnConfig.new(GUNSHIP)
 func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
 func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
@@ -221,6 +222,7 @@ const DRONE          := "res://assault/scenes/enemies/kamikaze_drone/kamikaze_dr
 const RAM            := "res://assault/scenes/enemies/ram_ship/ram_ship.tscn"
 const SNIPER         := "res://assault/scenes/enemies/sniper_skimmer/sniper_skimmer.tscn"
 const SNIPER_ENEMY   := "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn"
+const INTERCEPTOR    := "res://assault/scenes/enemies/interceptor/interceptor.tscn"
 const GUNSHIP        := "res://assault/scenes/enemies/gunship/gunship.tscn"
 const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"
 const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"

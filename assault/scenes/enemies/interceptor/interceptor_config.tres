@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="InterceptorConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/interceptor/interceptor_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 70
+collision_damage = 20
+score_value = 75
+counts_toward_wave_clear = true
+orbit_radius = 200.0
+orbit_speed = 1.4
+approach_speed = 220.0
+orbit_correct_speed = 170.0
+dash_speed = 440.0
+dash_duration = 0.35
+dash_interval = 3.5
+dash_prediction_time = 0.28
+fire_interval = 0.55
+bullet_speed = 290.0
+bullet_damage = 10
