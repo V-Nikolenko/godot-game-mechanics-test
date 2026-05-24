@@ -45,6 +45,18 @@ func _ready() -> void:
 		push_warning("[EnemyPathMover] No active Camera2D found. Screen-exit culling will be skipped.")
 	_initial_cam_y = _cam.global_position.y if _cam else 0.0
 
+	# PlayerFocusMovement needs a per-ship direction computed from this ship's spawn
+	# position. Duplicate the resource so ships in the same formation each get their
+	# own instance (formations share the same resource reference via shallow dict copy).
+	if movement is PlayerFocusMovement:
+		movement = movement.duplicate() as PlayerFocusMovement
+		var players := _actor.get_tree().get_nodes_in_group("player")
+		if players.size() > 0:
+			(movement as PlayerFocusMovement).direction = \
+					((players[0] as Node2D).global_position - _actor.global_position).normalized()
+		else:
+			(movement as PlayerFocusMovement).direction = Vector2.DOWN
+
 	# Suspend the ship's own movement AI — we own position each frame.
 	# Timer-based shooting in the ship continues unaffected.
 	_actor.set_physics_process(false)
