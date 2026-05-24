@@ -175,10 +175,10 @@ func _build_section_1() -> LevelSection:
 	var R: ArcMovement.ArcDirection = WaveBuilder.RIGHT
 
 	var raw_waves: Array = [
-		# 0.0 s — interceptor pair for early testing; self-managed movement, no .move() needed
+		# 0.0 s — interceptor pair: lock onto player and fly through with Gatling
 		b.wave(0.0, [
-			b.interceptor().at(-200, -420),
-			b.interceptor().at( 200, -420).delay(0.4),
+			b.interceptor().at(-200, -420).move(b.player_focus(240)),
+			b.interceptor().at( 200, -420).move(b.player_focus(240)).delay(0.4),
 		]),
 
 		# 0.5 s — sniper pair drops in, fires 5 times, then retreats
