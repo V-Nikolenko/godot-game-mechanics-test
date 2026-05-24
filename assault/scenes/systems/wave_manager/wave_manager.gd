@@ -186,8 +186,12 @@ func _spawn_ship(spawn: Dictionary) -> void:
 	var wave_idx: int = spawn.get("wave_index", _current_wave_index)
 	enemy_spawned.emit(entity, wave_idx)
 
-	# Attach movement controller if a MovementResource is provided.
-	if spawn.has("movement"):
+	# Attach movement controller only when a real MovementResource was supplied.
+	# _entry_to_dict always writes "movement" into the dict (even as null), so
+	# checking spawn.has("movement") alone is not enough — we must also verify
+	# the value is a valid resource, otherwise EnemyPathMover._ready() would
+	# call set_physics_process(false) on the actor and kill its AI.
+	if spawn.get("movement") is MovementResource:
 		var mover := EnemyPathMover.new()
 		mover.movement = spawn["movement"] as MovementResource
 		if spawn.has("exit_mode"):
