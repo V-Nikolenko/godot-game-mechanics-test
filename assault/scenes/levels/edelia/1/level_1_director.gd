@@ -175,6 +175,12 @@ func _build_section_1() -> LevelSection:
 	var R: ArcMovement.ArcDirection = WaveBuilder.RIGHT
 
 	var raw_waves: Array = [
+		# 0.0 s — interceptor pair for early testing; self-managed movement, no .move() needed
+		b.wave(0.0, [
+			b.interceptor().at(-200, -420),
+			b.interceptor().at( 200, -420).delay(0.4),
+		]),
+
 		# 0.5 s — sniper pair drops in, fires 5 times, then retreats
 		# Sequence: fly in (2.5 s) → hold 13 s (covers 5 × 2.5 s shoot cycle) → fly out
 		# Sprite faces down during approach; red line appears only once AIM begins.
