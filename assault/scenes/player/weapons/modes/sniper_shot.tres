@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponModeResource" load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/player/weapons/weapon_mode.gd" id="1_script"]
-[ext_resource type="PackedScene" uid="uid://bvyhnlpuw5rcv" path="res://assault/scenes/projectiles/bullets/bullet.tscn" id="2_bullet"]
+[ext_resource type="PackedScene" uid="uid://csnipbullet01" path="res://assault/scenes/projectiles/bullets/sniper_bullet.tscn" id="2_bullet"]
 
 [resource]
 script = ExtResource("1_script")

@@ -13,9 +13,10 @@ extends WeaponBehavior
 ##   if just_released and sniper.is_charging():
 ##       sniper.fire_from_charge(self, mode)
 
-const BULLET_SPEED   : float = 800.0
-const CHARGE_TIME    : float = 2.0
-const CONE_HALF_DEG  : float = 25.0
+## Speed is defined on the sniper_bullet.tscn scene (1400 px/s) so we don't
+## override it here — the scene's exported default is used directly.
+const CHARGE_TIME   : float = 1.3
+const CONE_HALF_DEG : float = 25.0
 
 var _charging   : bool                = false
 var _charge_time: float               = 0.0
@@ -78,7 +79,6 @@ func fire_from_charge(state: Node, mode: WeaponModeResource) -> void:
 	var bullet: Bullet = mode.projectile_scene.instantiate()
 	bullet.global_position  = _muzzle.global_position + Vector2.UP.rotated(actor.rotation)
 	bullet.rotation         = actor.rotation + fire_angle
-	bullet.speed            = BULLET_SPEED
 	bullet.range_px         = mode.range_px
 	bullet.damage           = mode.damage
 	bullet.shooter_velocity = actor.velocity
