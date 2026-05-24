@@ -175,18 +175,18 @@ func _build_section_1() -> LevelSection:
 	var R: ArcMovement.ArcDirection = WaveBuilder.RIGHT
 
 	var raw_waves: Array = [
-		# 0.5 s — sniper pair drops in from above, fires twice, then retreats
-		# Sequence: fly in (2.5 s at 150 px/s) → hold while shooting (4 s) → fly out upward
-		# AIM begins immediately so the enemy is already tracking during descent.
+		# 0.5 s — sniper pair drops in, fires 5 times, then retreats
+		# Sequence: fly in (2.5 s) → hold 13 s (covers 5 × 2.5 s shoot cycle) → fly out
+		# Sprite faces down during approach; red line appears only once AIM begins.
 		b.wave(0.5, [
 			b.sniper_enemy().at(-120, -500).move(b.sequence([
 				b.straight(150, 0.0, 2.5),
-				b.hold(4.0),
+				b.hold(13.0),
 				b.straight(220, PI),
 			])),
 			b.sniper_enemy().at( 120, -500).move(b.sequence([
 				b.straight(150, 0.0, 2.5),
-				b.hold(4.0),
+				b.hold(13.0),
 				b.straight(220, PI),
 			])).delay(0.5),
 		]),
