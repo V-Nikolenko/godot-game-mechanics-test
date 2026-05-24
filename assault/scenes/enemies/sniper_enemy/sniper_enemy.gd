@@ -10,10 +10,15 @@ extends BaseEnemy
 ##   sequence step 3 — straight(FLY_OUT_SPEED, PI)             : retreat off-screen top
 ##
 ## Internal state machine handles only the shoot cycle:
-##   AIM  — rotates to track player; SniperAimVisualizer converges over AIM_DURATION
-##   LOCK — rotation frozen; lines fully converged for LOCK_DURATION
+##   AIM  — rotates to track player; single red line tracks aim direction
+##   LOCK — rotation frozen; line turns bright orange-red for LOCK_DURATION
 ##   FIRE — spawns one enemy_sniper_bullet; repeats up to MAX_SHOTS times
 ##   IDLE — all shots fired; EnemyPathMover's exit step takes over movement
+##
+## IMPORTANT: EnemyPathMover calls set_physics_process(false) on us to own
+## position each frame. We therefore run our state machine in _process() instead,
+## which EnemyPathMover never touches and which executes AFTER _physics_process,
+## so our rotation tracking always wins the last-write battle.
 
 enum Phase { AIM, LOCK, FIRE, IDLE }
 
@@ -43,7 +48,8 @@ func _ready() -> void:
 
 # ─────────────────────────────────────────────────────────────────────────────
 
-func _physics_process(delta: float) -> void:
+## _physics_process is disabled by EnemyPathMover — use _process instead.
+func _process(delta: float) -> void:
 	match _phase:
 		Phase.AIM  : _phase_aim(delta)
 		Phase.LOCK : _phase_lock(delta)
@@ -55,17 +61,8 @@ func _physics_process(delta: float) -> void:
 func _begin_aim() -> void:
 	_phase = Phase.AIM
 	_timer = 0.0
-
-	var half_rad := deg_to_rad(25.0)
-	var angles: Array[float] = [
-		-half_rad,
-		 half_rad,
-		randf_range(-half_rad, half_rad),
-		randf_range(-half_rad, half_rad),
-		randf_range(-half_rad, half_rad),
-	]
+	## Leave initial_angles empty → single-line tracking mode in the visualizer.
 	_visualizer = SniperAimVisualizer.new()
-	_visualizer.initial_angles = angles
 	_muzzle.add_child(_visualizer)
 
 func _phase_aim(delta: float) -> void:
