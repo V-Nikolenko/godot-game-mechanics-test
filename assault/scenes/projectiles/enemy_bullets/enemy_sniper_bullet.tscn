@@ -1,0 +1,52 @@
+[gd_scene load_steps=5 format=3 uid="uid://cenemysnipblt"]
+
+[ext_resource type="Script" uid="uid://mwpc142w8h70" path="res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.gd" id="1_esnip"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="2_esnip"]
+
+[sub_resource type="Environment" id="Environment_esnip"]
+background_mode = 3
+glow_normalized = true
+glow_intensity = 1.8
+glow_strength = 2.0
+glow_blend_mode = 1
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_esnip"]
+radius = 2.0
+height = 18.0
+
+[node name="EnemySniperBullet" type="Area2D"]
+script = ExtResource("1_esnip")
+speed = 1400.0
+
+[node name="Glow" type="Line2D" parent="."]
+modulate = Color(1, 0.3, 0.1, 1)
+self_modulate = Color(1, 0.2, 0.05, 1)
+rotation = -3.14159
+scale = Vector2(1.4, -1.4)
+points = PackedVector2Array(0, 22, 0, -22)
+width = 9.5
+default_color = Color(1, 0.25, 0.05, 1)
+begin_cap_mode = 2
+end_cap_mode = 2
+
+[node name="Beam" type="Line2D" parent="."]
+scale = Vector2(0.76, 1)
+points = PackedVector2Array(0, 20, 0, -20)
+width = 5.5
+default_color = Color(1, 0.05, 0.05, 1)
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_esnip")
+
+[node name="HitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 128
+script = ExtResource("2_esnip")
+damage = 25
+metadata/_custom_type_script = "uid://deqgbl6m44nrj"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HitBox"]
+shape = SubResource("CapsuleShape2D_esnip")
+debug_color = Color(0.7, 0.0, 0.0, 0.42)
+
+[connection signal="area_entered" from="HitBox" to="." method="_on_hit_box_area_entered"]
