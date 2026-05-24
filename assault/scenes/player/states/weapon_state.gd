@@ -42,6 +42,7 @@ func _build_behaviors() -> void:
 	_behaviors[WeaponModeResource.Behavior.LONG]     = LongRangeBehavior.new()
 	_behaviors[WeaponModeResource.Behavior.SPREAD]   = SpreadBehavior.new()
 	_behaviors[WeaponModeResource.Behavior.BEAM]     = BeamBehavior.new()
+	_behaviors[WeaponModeResource.Behavior.SNIPER]   = SniperBehavior.new()
 
 func _first_unlocked_id() -> StringName:
 	var unlocked := UpgradeState.unlocked_ids()
@@ -61,6 +62,8 @@ func _try_fire_once() -> void:
 		return
 	if mode.behavior == WeaponModeResource.Behavior.BEAM:
 		return
+	if mode.behavior == WeaponModeResource.Behavior.SNIPER:
+		return  ## SNIPER is driven by _physics_process, not action_single_press
 	if _cooldown > 0.0:
 		return
 	_fire(mode)
@@ -103,6 +106,29 @@ func _physics_process(delta: float) -> void:
 			heat_component.increase_heat(mode.heat_per_shot * delta)
 		else:
 			beam.release(self)
+	elif mode.behavior == WeaponModeResource.Behavior.SNIPER:
+		var sniper: SniperBehavior = _behaviors[WeaponModeResource.Behavior.SNIPER]
+		if Input.is_action_just_pressed("shoot") and actor.can_attack and _cooldown <= 0.0:
+			if not weapon_muzzles.is_empty():
+				_gun_index = (_gun_index + 1) % weapon_muzzles.size()
+				sniper.start_charge(self, mode, weapon_muzzles[_gun_index])
+		if sniper.is_charging():
+			sniper.tick(delta)
+			## Overheat mid-charge → cancel with no shot fired.
+			if not actor.can_attack:
+				sniper.cancel()
+		if Input.is_action_just_released("shoot") and sniper.is_charging():
+			sniper.fire_from_charge(self, mode)
+			heat_component.increase_heat(mode.heat_per_shot)
+			var _frm = actor.get("fire_rate_multiplier")
+			var multiplier: float = _frm if _frm != null else 1.0
+			_cooldown = mode.fire_interval / maxf(multiplier, 0.01)
+			## Overclock module: deal self-damage when firing past overheat limit.
+			var is_overclocked = actor.get("overclock_module_active")
+			if is_overclocked:
+				var heat_pct := heat_component.heat / maxf(heat_component.heat_limit, 0.001)
+				if heat_pct >= 1.0 and actor.has_method("_apply_damage"):
+					actor._apply_damage(3)
 	else:
 		## Hold-to-fire: fires every frame the button is held, rate-limited by _cooldown.
 		if Input.is_action_pressed("shoot"):
@@ -119,6 +145,8 @@ func _cycle() -> void:
 	if prev_id != _active_id:
 		var beam: BeamBehavior = _behaviors[WeaponModeResource.Behavior.BEAM]
 		beam.release(self)
+		var sniper: SniperBehavior = _behaviors[WeaponModeResource.Behavior.SNIPER]
+		sniper.cancel()
 		_cooldown = 0.0
 		_emit_changed()
 
@@ -140,6 +168,8 @@ func select_weapon(id: StringName) -> void:
 	_active_id = id
 	var beam: BeamBehavior = _behaviors[WeaponModeResource.Behavior.BEAM]
 	beam.release(self)
+	var sniper: SniperBehavior = _behaviors[WeaponModeResource.Behavior.SNIPER]
+	sniper.cancel()
 	_cooldown = 0.0
 	_emit_changed()
 

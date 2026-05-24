@@ -11,6 +11,7 @@ var _damaged: bool = false
 
 func _ready() -> void:
 	super._ready()
+	add_to_group("ram_ships")
 
 	if config:
 		speed = config.movement_speed

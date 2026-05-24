@@ -31,6 +31,7 @@ var counts_toward_wave_clear: bool = true
 var _explosion: ExplosionEffect
 
 func _ready() -> void:
+	add_to_group("asteroids")
 	_explosion = ExplosionEffect.new()
 	add_child(_explosion)
 	_pick_random_sprite()

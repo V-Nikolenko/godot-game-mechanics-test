@@ -2,7 +2,7 @@
 class_name WeaponModeResource
 extends Resource
 
-enum Behavior { STRAIGHT, LONG, BEAM, SPREAD }
+enum Behavior { STRAIGHT, LONG, BEAM, SPREAD, SNIPER }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
