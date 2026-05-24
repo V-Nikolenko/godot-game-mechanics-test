@@ -81,6 +81,7 @@ func ram()            -> SpawnConfig: return SpawnConfig.new(RAM)
 func sniper()         -> SpawnConfig: return SpawnConfig.new(SNIPER)
 func sniper_enemy()   -> SpawnConfig: return SpawnConfig.new(SNIPER_ENEMY)
 func interceptor()    -> SpawnConfig: return SpawnConfig.new(INTERCEPTOR)
+func drone_interceptor() -> SpawnConfig: return SpawnConfig.new(DRONE_INTERCEPTOR)
 func gunship()        -> SpawnConfig: return SpawnConfig.new(GUNSHIP)
 func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
 func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
@@ -135,6 +136,13 @@ func curve(path: Curve2D, duration: float, loop: bool = false) -> CurveMovement:
 	m.path = path
 	m.duration = duration
 	m.loop = loop
+	return m
+
+## Fly straight toward the player's position at spawn time, then continue
+## in that direction until the ship exits the screen.
+func player_focus(speed: float = 220.0) -> PlayerFocusMovement:
+	var m := PlayerFocusMovement.new()
+	m.speed = speed
 	return m
 
 # ── Formation helpers ─────────────────────────────────────────────────────────
@@ -223,6 +231,7 @@ const RAM            := "res://assault/scenes/enemies/ram_ship/ram_ship.tscn"
 const SNIPER         := "res://assault/scenes/enemies/sniper_skimmer/sniper_skimmer.tscn"
 const SNIPER_ENEMY   := "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn"
 const INTERCEPTOR    := "res://assault/scenes/enemies/interceptor/interceptor.tscn"
+const DRONE_INTERCEPTOR := "res://assault/scenes/enemies/drone_interceptor/drone_interceptor.tscn"
 const GUNSHIP        := "res://assault/scenes/enemies/gunship/gunship.tscn"
 const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"
 const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
