@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://bospm3nuos001" path="res://global/ui/pause_menu/open_space_pause_menu.tscn" id="6_pause"]
 [ext_resource type="Texture2D" uid="uid://cnap6cceg8u6t" path="res://assault/assets/gui/weaponselector/frame_center.png" id="4_frame"]
 [ext_resource type="PackedScene" path="res://assault/scenes/gui/weapon_chip.tscn" id="5_wchip"]
+[ext_resource type="PackedScene" path="res://global/components/shield_icon_strip.tscn" id="7_strip"]
 
 [node name="OpenSpaceHUD" type="CanvasLayer"]
 script = ExtResource("1_oshud")
@@ -37,7 +38,13 @@ stretch_mode = 5
 
 [node name="HealthShieldBar" parent="." instance=ExtResource("2_hsbar")]
 offset_left = 8.0
+offset_top = 44.0
+
+[node name="ShieldIconStrip" parent="." instance=ExtResource("7_strip")]
+offset_left = 8.0
 offset_top = 8.0
+offset_right = 348.0
+offset_bottom = 40.0
 
 [node name="WeaponChip" parent="." instance=ExtResource("5_wchip")]
 offset_left = 8.0

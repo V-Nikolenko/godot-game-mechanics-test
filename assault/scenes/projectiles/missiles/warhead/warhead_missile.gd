@@ -1,7 +1,7 @@
 class_name WarheadMissile
 extends Area2D
 
-@export var speed: float = 320.0
+@export var speed: float = 640.0
 
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D
 

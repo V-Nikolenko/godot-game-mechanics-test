@@ -96,10 +96,10 @@ func _on_section_started(_index: int, section_name: StringName) -> void:
 # ── Bonus drone spawners (section-side, independent of waves) ─────────────────
 
 func _spawn_bonus_drone_left_to_right() -> void:
-	_spawn_bonus_drone(Vector2(-340, 30), PI / 2)
+	_spawn_bonus_drone(Vector2(-680, 60), PI / 2)
 
 func _spawn_bonus_drone_right_to_left() -> void:
-	_spawn_bonus_drone(Vector2(340, 30), -PI / 2)
+	_spawn_bonus_drone(Vector2(680, 60), -PI / 2)
 
 func _spawn_bonus_drone(camera_offset: Vector2, angle: float) -> void:
 	if not wave_manager:
@@ -122,11 +122,14 @@ func _spawn_bonus_drone(camera_offset: Vector2, angle: float) -> void:
 	# Attach the same EnemyPathMover the wave manager would, so the drone
 	# follows a fast horizontal straight line and despawns on screen exit.
 	var movement := StraightMovement.new()
-	movement.speed = 280.0
+	movement.speed = 560.0
 	movement.angle = angle
 	var mover := EnemyPathMover.new()
 	mover.movement = movement
 	mover.exit_mode = EnemyPathMover.ExitMode.FREE_ON_DURATION
+	# Not doubled for HD upgrade: EnemyPathMover applies WORLD_SCALE to speed, so
+	# the drone's visual screen-crossing time is the same as the old 640×360 design.
+	# 4 s is already generous — the drone clears the screen in ~1.1 s at both resolutions.
 	mover.exit_time = 4.0
 	entity.add_child(mover)
 
@@ -201,6 +204,17 @@ func _build_section_1() -> LevelSection:
 		b.wave(1.0, [
 			b.drone().at(-260, -400).move(b.straight(180, PI / 4)),
 			b.drone().at( 260, -400).move(b.straight(180, -PI / 4)).delay(0.2),
+		]),
+
+		# 1.5 s — drone interceptor pair for testing; self-managed AI, no .move() needed
+		b.wave(1.5, [
+			b.drone_interceptor().at(-160, -420),
+			b.drone_interceptor().at( 160, -420).delay(0.35),
+		]),
+
+		# 3.5 s — gunship test; self-managed AI, no .move() needed
+		b.wave(3.5, [
+			b.gunship().at(0, -500),
 		]),
 
 		# 2.0 s — V of 5 fighters, straight down (+ side drone screen from above)

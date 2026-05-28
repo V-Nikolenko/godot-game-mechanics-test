@@ -15,4 +15,4 @@ description = "A mid-tier terrestrial world under imperial blockade. Two active 
 background_texture = ExtResource("1_ug8sp")
 sprite_texture = ExtResource("7_t8msj")
 missions = Array[ExtResource("2_gnss3")]([ExtResource("3_suhtq"), ExtResource("4_mh3a6"), ExtResource("5_lobfe")])
-point_positions = Array[Vector2]([Vector2(-140, 70), Vector2(-80, 0), Vector2(170, -105)])
+point_positions = Array[Vector2]([Vector2(-210, 170), Vector2(-80, 0), Vector2(170, -105)])

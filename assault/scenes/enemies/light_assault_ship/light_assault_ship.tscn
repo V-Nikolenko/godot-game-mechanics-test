@@ -1,9 +1,9 @@
-[gd_scene load_steps=16 format=3 uid="uid://br4qs4w455h3m"]
+[gd_scene format=3 uid="uid://br4qs4w455h3m"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_b2sn1"]
 [ext_resource type="Script" uid="uid://cjo40e3hf0hbn" path="res://assault/scenes/enemies/light_assault_ship/light_assault_ship.gd" id="1_cdh2m"]
-[ext_resource type="Texture2D" uid="uid://w7xvkbnwrrut" path="res://assault/assets/sprites/enemies/light_assault_ship.png" id="2_an5c4"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="3_an5c4"]
+[ext_resource type="Texture2D" uid="uid://bgnt48hrf68to" path="res://assault/assets/sprites/enemies/assault.png" id="3_gngrp"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="4_fm2d5"]
 [ext_resource type="Script" uid="uid://c5678cxr4wb7q" path="res://global/statemachine/state_machine.gd" id="5_smach"]
 [ext_resource type="Script" uid="uid://b7apobhemit5l" path="res://assault/scenes/enemies/light_assault_ship/states/approach_state.gd" id="6_appr"]
@@ -15,15 +15,11 @@ shader = ExtResource("1_b2sn1")
 shader_parameter/enabled = false
 shader_parameter/flash_color = Color(1, 1, 1, 1)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_fm2d5"]
-atlas = ExtResource("2_an5c4")
-region = Rect2(1, 1, 32, 32)
-
 [sub_resource type="SpriteFrames" id="SpriteFrames_b2sn1"]
 animations = [{
 "frames": [{
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_fm2d5")
+"texture": ExtResource("3_gngrp")
 }],
 "loop": true,
 "name": &"default",
@@ -70,46 +66,46 @@ _data = {
 &"hit": SubResource("Animation_b2sn1")
 }
 
-[node name="LightAssaultShip" type="CharacterBody2D"]
+[node name="LightAssaultShip" type="CharacterBody2D" unique_id=1234175119]
 script = ExtResource("1_cdh2m")
 
-[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="." unique_id=989133185]
 material = SubResource("ShaderMaterial_b2sn1")
 sprite_frames = SubResource("SpriteFrames_b2sn1")
 autoplay = "default"
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=205814563]
+scale = Vector2(2.199998, 2.199998)
 shape = SubResource("CircleShape2D_siexo")
 
-[node name="HurtBox" type="Area2D" parent="."]
+[node name="HurtBox" type="Area2D" parent="." unique_id=482135330]
 collision_layer = 512
 collision_mask = 65
 script = ExtResource("3_an5c4")
 metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox" unique_id=323752530]
+scale = Vector2(2.199998, 2.199998)
 shape = SubResource("CircleShape2D_siexo")
 debug_color = Color(0.7, 0, 0, 0.419608)
 
-[node name="Health" type="Node" parent="."]
+[node name="Health" type="Node" parent="." unique_id=1482135629]
 script = ExtResource("4_fm2d5")
 metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
-[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
-libraries = {
-&"": SubResource("AnimationLibrary_1dtrx")
-}
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="." unique_id=1933004266]
+libraries/ = SubResource("AnimationLibrary_1dtrx")
 
-[node name="AIStateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
+[node name="AIStateMachine" type="Node" parent="." unique_id=731265478 node_paths=PackedStringArray("initial_state")]
 script = ExtResource("5_smach")
 initial_state = NodePath("ApproachState")
 metadata/_custom_type_script = "uid://c5678cxr4wb7q"
 
-[node name="ApproachState" type="Node" parent="AIStateMachine" node_paths=PackedStringArray("actor", "strafe_state")]
+[node name="ApproachState" type="Node" parent="AIStateMachine" unique_id=1224925159 node_paths=PackedStringArray("actor", "strafe_state")]
 script = ExtResource("6_appr")
 actor = NodePath("../..")
 strafe_state = NodePath("../StrafeExitState")
 
-[node name="StrafeExitState" type="Node" parent="AIStateMachine" node_paths=PackedStringArray("actor")]
+[node name="StrafeExitState" type="Node" parent="AIStateMachine" unique_id=568186785 node_paths=PackedStringArray("actor")]
 script = ExtResource("7_strf")
 actor = NodePath("../..")

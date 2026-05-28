@@ -2,9 +2,9 @@
 class_name EngineBoostModule
 extends ShipModuleBase
 
-const _BOOST_SPEED: float = 900.0    ## px/s at the very start of the dash.
-const _BOOST_END_SPEED: float = 300.0 ## px/s at the tail end (ease-out target).
-const _BOOST_DURATION: float = 0.4   ## Seconds of the boost window.
+const _BOOST_SPEED: float = 1500.0   ## px/s at the very start of the dash.
+const _BOOST_END_SPEED: float = 500.0 ## px/s at the tail end (ease-out target).
+const _BOOST_DURATION: float = 0.55  ## Seconds of the boost window.
 const _DAMAGE: int = 45              ## Damage per enemy hit during boost.
 const _HIT_RADIUS: float = 32.0      ## px around ship center to detect enemies.
 const _COOLDOWN: float = 2.0
@@ -22,6 +22,8 @@ var _prev_damage_reduction: float = 0.0
 var _hit_this_boost: Array[Node] = []
 ## Locked at activation so velocity stays perfectly straight every frame.
 var _boost_dir: Vector2 = Vector2.ZERO
+## Animation playing before boost started — restored when boost ends.
+var _prev_animation: StringName = &""
 
 func get_display_name() -> String: return "Boost Drive"
 func get_description() -> String:
@@ -57,10 +59,12 @@ func try_activate(player: Node) -> bool:
 	## Tell _handle_thrust() to skip so damping / max_speed-cap don't fight us.
 	player.set("engine_boost_active", true)
 
-	## Visual: bright cyan tint.
-	var sprite := player.get_node_or_null(_SPRITE_PATH) as CanvasItem
+	## Visual: bright cyan tint + flame_boost animation.
+	var sprite := player.get_node_or_null(_SPRITE_PATH) as AnimatedSprite2D
 	if sprite:
-		sprite.modulate = _BOOST_COLOR
+		_prev_animation = sprite.animation
+		#sprite.modulate = _BOOST_COLOR
+		sprite.play(&"flame_boost")
 
 	return true
 
@@ -73,10 +77,16 @@ func tick(player: Node, delta: float) -> void:
 			var eased: float = progress * progress
 			var speed: float = lerpf(_BOOST_END_SPEED, _BOOST_SPEED, eased)
 			player.set("velocity", _boost_dir * speed)
-		## Force thruster to cyan BOOST visual (overrides player's normal state).
+		## Force both thrusters to BOOST visuals (overrides movement state machines).
 		var thruster: ThrusterEffect = player.get("_thruster") as ThrusterEffect
 		if thruster:
 			thruster.set_state(ThrusterEffect.State.BOOST)
+		var thruster_right: ThrusterEffect = player.get("_thruster_right") as ThrusterEffect
+		if thruster_right:
+			thruster_right.set_state(ThrusterEffect.State.BOOST)
+		var sprite := player.get_node_or_null(_SPRITE_PATH) as AnimatedSprite2D
+		if sprite and sprite.animation != &"flame_boost":
+			sprite.play(&"flame_boost")
 		_time_left -= delta
 		_damage_nearby_enemies(player)
 		if _time_left <= 0.0:
@@ -94,9 +104,12 @@ func _end_boost(player: Node) -> void:
 	_boost_dir = Vector2.ZERO
 	player.set("damage_reduction", _prev_damage_reduction)
 	player.set("engine_boost_active", false)
-	var sprite := player.get_node_or_null(_SPRITE_PATH) as CanvasItem
+	var sprite := player.get_node_or_null(_SPRITE_PATH) as AnimatedSprite2D
 	if sprite:
 		player.create_tween().tween_property(sprite, "modulate", Color.WHITE, 0.2)
+		var anim: StringName = _prev_animation if _prev_animation != &"" else &"idle"
+		sprite.play(anim)
+	_prev_animation = &""
 
 func _damage_nearby_enemies(player: Node) -> void:
 	var actor := player as Node2D

@@ -26,6 +26,7 @@ const SLOT_MODULES: Dictionary = {
 
 signal module_equipped(slot: StringName, module_id: StringName)
 signal module_unequipped(slot: StringName, prev_id: StringName)
+signal module_unlocked(slot: StringName, module_id: StringName)
 
 ## slot → module_id (&"" = nothing equipped)
 var _equipped: Dictionary = {
@@ -35,11 +36,40 @@ var _equipped: Dictionary = {
 	&"engines":  &"",
 }
 
+## slot → Array[StringName] of unlocked module IDs (equipping doesn't require unlocking).
+var _unlocked: Dictionary = {
+	&"cockpit":  [] as Array[StringName],
+	&"armor":    [] as Array[StringName],
+	&"weapons":  [] as Array[StringName],
+	&"engines":  [] as Array[StringName],
+}
+
 func _ready() -> void:
 	_load()
 
 func get_equipped(slot: StringName) -> StringName:
 	return _equipped.get(slot, &"")
+
+## Unlock a module so it appears in the ship menu without equipping it.
+## Safe to call multiple times — duplicate unlocks are ignored.
+func unlock(slot: StringName, module_id: StringName) -> void:
+	if slot not in SLOTS:
+		push_warning("ShipModuleState: unknown slot '%s'" % slot)
+		return
+	var valid_ids: Array = SLOT_MODULES.get(slot, [])
+	if module_id not in valid_ids:
+		push_warning("ShipModuleState: module_id '%s' is not valid for slot '%s'" % [module_id, slot])
+		return
+	var list: Array = _unlocked.get(slot, [])
+	if module_id in list:
+		return  ## already unlocked
+	list.append(module_id)
+	_save()
+	module_unlocked.emit(slot, module_id)
+
+func is_unlocked(slot: StringName, module_id: StringName) -> bool:
+	var list: Array = _unlocked.get(slot, [])
+	return module_id in list
 
 func equip(slot: StringName, module_id: StringName) -> void:
 	if slot not in SLOTS:
@@ -63,6 +93,10 @@ func _save() -> void:
 	var cfg := ConfigFile.new()
 	for slot: StringName in SLOTS:
 		cfg.set_value(SECTION, String(slot), String(_equipped[slot]))
+		var names: Array[String] = []
+		for id: StringName in _unlocked.get(slot, []):
+			names.append(String(id))
+		cfg.set_value(SECTION, String(slot) + "_unlocked", names)
 	var err := cfg.save(SAVE_PATH)
 	if err != OK:
 		push_error("ShipModuleState: failed to save (%s)" % error_string(err))
@@ -79,3 +113,10 @@ func _load() -> void:
 			_equipped[slot] = id
 		elif id != &"":
 			push_warning("ShipModuleState: unknown module_id '%s' for slot '%s', ignoring" % [raw, slot])
+		var raw_list: Array = cfg.get_value(SECTION, String(slot) + "_unlocked", [])
+		var list: Array[StringName] = []
+		for entry in raw_list:
+			var entry_id := StringName(String(entry))
+			if entry_id in valid:
+				list.append(entry_id)
+		_unlocked[slot] = list

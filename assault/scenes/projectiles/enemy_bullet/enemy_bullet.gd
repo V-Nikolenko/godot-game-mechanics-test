@@ -3,17 +3,17 @@ extends Area2D
 
 signal expired
 
-## Arena bounds matching arena_camera.gd (cam.global_position=(320,180),
-## H_LIMIT=50, V_LIMIT=190, viewport 640×360):
-##   x ∈ [-50, 690]   (640 + 2×50)
-##   y ∈ [-190, 550]  (360 + 2×190)
-## A small margin (32 px) lets bullets travel just past the edge before
+## Arena bounds matching arena_camera.gd (cam.global_position=(640,360),
+## H_LIMIT=100, V_LIMIT=380, viewport 1280×720):
+##   x ∈ [-100, 1380]  (1280 + 2×100)
+##   y ∈ [-380, 1100]  (720 + 2×380)
+## A small margin (64 px) lets bullets travel just past the edge before
 ## expiring, matching the visual boundary cleanly.
-const _ARENA_MARGIN : float = 32.0
-const _ARENA_LEFT   : float = -50.0  - _ARENA_MARGIN
-const _ARENA_RIGHT  : float =  690.0 + _ARENA_MARGIN
-const _ARENA_TOP    : float = -190.0 - _ARENA_MARGIN
-const _ARENA_BOTTOM : float =  550.0 + _ARENA_MARGIN
+const _ARENA_MARGIN : float = 64.0
+const _ARENA_LEFT   : float = -100.0  - _ARENA_MARGIN
+const _ARENA_RIGHT  : float = 1380.0  + _ARENA_MARGIN
+const _ARENA_TOP    : float = -380.0  - _ARENA_MARGIN
+const _ARENA_BOTTOM : float = 1100.0  + _ARENA_MARGIN
 
 @export var speed: float = 250.0
 

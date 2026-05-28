@@ -70,13 +70,17 @@ func _physics_process(delta: float) -> void:
 
 	_elapsed += delta
 
+	# ArenaCamera scrolls via .offset, not .global_position, so this delta is always 0.
+	# Retained as a hook if the camera strategy ever changes to position-based scrolling.
 	var cam_scroll_y: float = (_cam.global_position.y - _initial_cam_y) if _cam else 0.0
 
-	var pos_offset: Vector2 = movement.sample(_elapsed)
+	var pos_offset: Vector2 = movement.sample(_elapsed) * ArenaCamera.WORLD_SCALE
 	_actor.global_position = _initial_world_pos + pos_offset + Vector2(0.0, cam_scroll_y)
 
 	if look_in_moving_direction:
-		var vel: Vector2 = pos_offset - movement.sample(_elapsed - delta)
+		# vel uses _elapsed which was already incremented above — _elapsed - delta gives the
+		# previous frame's time. Keep the increment BEFORE this line or direction will invert.
+		var vel: Vector2 = pos_offset - movement.sample(_elapsed - delta) * ArenaCamera.WORLD_SCALE
 		if vel.length_squared() > 0.0001:
 			# Sprite's natural facing is +Y (down). atan2(-vel.x, vel.y) maps travel
 			# direction to that convention.

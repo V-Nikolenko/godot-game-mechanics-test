@@ -8,7 +8,7 @@ extends Node2D
 
 @export_group("Particles")
 @export var amount: int = 18
-@export var lifetime: float = 0.28
+@export var lifetime: float = 0.14
 ## Offset along local +Y (behind the rocket nose).
 @export var offset_behind: float = 8.0
 

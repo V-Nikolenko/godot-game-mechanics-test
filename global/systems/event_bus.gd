@@ -9,15 +9,6 @@ extends Node
 ## Emitted whenever the player's health value changes (including on death).
 signal player_health_changed(current: int, maximum: int)
 
-## Emitted whenever the player's shield value changes.
-signal player_shield_changed(current: int, maximum: int)
-
-## Emitted when the player's shield reaches zero.
-signal player_shield_depleted
-
-## Emitted when the player's shield recovers from zero to any positive value.
-signal player_shield_restored
-
 # ── Overheat ──────────────────────────────────────────────────────────────────
 
 ## Emitted every 0.1 s with the current heat percentage (0.0 – 100.0).

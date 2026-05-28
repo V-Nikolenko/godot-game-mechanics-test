@@ -13,8 +13,6 @@ extends Resource
 @export_range(4, 32, 1) var description_font_size: int = 8
 
 ## ── Visuals ───────────────────────────────────────────────────────────────
-## Background rendered behind the overlay in the mission select menu.
-@export var background_texture: Texture2D = null
 ## Texture used for two things:
 ##   1. The Sprite2D shown on the MissionTrigger node in the open-space world.
 ##   2. The "planet map" image rendered in the right panel of the menu.

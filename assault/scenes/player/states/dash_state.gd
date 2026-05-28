@@ -122,6 +122,9 @@ func enter() -> void:
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN)
 
 func process_physics(delta: float):
+	## Boost module owns velocity during a boost; yield to _physics_process.
+	if actor.get("engine_boost_active"):
+		return
 	if !dashing_timer.is_stopped():
 		var velocity := dashing_direction * dash_speed
 		if dashing_direction.x != 0:

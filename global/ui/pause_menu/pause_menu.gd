@@ -69,8 +69,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_navigate(1)
 		get_viewport().set_input_as_handled()
 	elif event.is_action_pressed("menu_confirm"):
-		_confirm()
 		get_viewport().set_input_as_handled()
+		_confirm()
 
 
 ## ── Open / Close ────────────────────────────────────────────────────────────

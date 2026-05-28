@@ -1,0 +1,11 @@
+[gd_scene format=3 uid="uid://c0uv74tcfuiyy"]
+
+[ext_resource type="Script" path="res://global/components/shield_icon.gd" id="1_icon"]
+[ext_resource type="SpriteFrames" path="res://global/components/shield_animations.tres" id="2_anim"]
+
+[node name="ShieldIcon" type="AnimatedSprite2D"]
+texture_filter = 1
+sprite_frames = ExtResource("2_anim")
+animation = &"shield_idle"
+autoplay = "shield_idle"
+script = ExtResource("1_icon")

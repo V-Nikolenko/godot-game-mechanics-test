@@ -1,0 +1,7 @@
+[gd_scene format=3 uid="uid://34cyrrg5dyro"]
+
+[ext_resource type="Script" path="res://global/components/shield_icon_strip.gd" id="1_strip"]
+
+[node name="ShieldIconStrip" type="Control"]
+custom_minimum_size = Vector2(0, 32)
+script = ExtResource("1_strip")

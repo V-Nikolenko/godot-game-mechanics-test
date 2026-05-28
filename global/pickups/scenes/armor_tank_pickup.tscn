@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://p3qt8ooc553b"]
+
+[ext_resource type="Script" uid="uid://rl2rv8f1aqh3" path="res://global/pickups/armor_tank_pickup.gd" id="1_atp"]
+[ext_resource type="Texture2D" uid="uid://dfiveysslgb5l" path="res://global/assets/sprites/armor_tank.png" id="2_atp"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_atp"]
+radius = 8.0
+
+[node name="ArmorTankPickup" type="Area2D" unique_id=1214216769]
+collision_layer = 16
+collision_mask = 4
+script = ExtResource("1_atp")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=2144046157]
+texture_filter = 1
+texture = ExtResource("2_atp")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=447889326]
+scale = Vector2(3.111, 3.111)
+shape = SubResource("CircleShape2D_atp")

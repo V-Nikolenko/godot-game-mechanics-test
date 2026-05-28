@@ -15,14 +15,8 @@ planet_y_anchor = -200.0
 planet_scale_atmosphere = 14.0
 
 [node name="Camera2D" type="Camera2D" parent="." unique_id=671845157]
-position = Vector2(320, 180)
+position = Vector2(640, 360)
 script = ExtResource("18_arcam")
-background_parallax = {
-"CloudsLayer": 0.8,
-"PlanetLayer": 0.0,
-"SpaceLayer": 0.8,
-"SurfaceLayer": 1.0
-}
 
 [node name="EnemyContainer" type="Node2D" parent="." unique_id=1889017634]
 
@@ -46,4 +40,4 @@ wave_manager = NodePath("../WaveManager")
 score_tracker = NodePath("../ScoreTracker")
 
 [node name="PlayerFighter" parent="." unique_id=1634176334 instance=ExtResource("3_60rwg")]
-position = Vector2(302, 271)
+position = Vector2(604, 542)

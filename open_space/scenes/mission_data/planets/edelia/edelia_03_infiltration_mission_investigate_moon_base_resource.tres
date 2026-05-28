@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="InfiltrationMissionResource" format=3 uid="uid://di3vjd6tywqum"]
 
-[ext_resource type="Texture2D" uid="uid://w21fnqlj5wdj" path="res://open_space/assets/sprites/mission_select_ui/planets/edelia/menu_mission_select_mission_image_1_6.png" id="1_0lerx"]
+[ext_resource type="Texture2D" uid="uid://eakca6xukf6k" path="res://open_space/assets/sprites/mission_select_ui/planets/edelia/menu_mission_select_mission_image_3.png" id="1_0lerx"]
 [ext_resource type="Script" uid="uid://bi366j2tsyby" path="res://open_space/scenes/mission_data/infiltration_mission_resource.gd" id="2_xdxyq"]
 
 [resource]

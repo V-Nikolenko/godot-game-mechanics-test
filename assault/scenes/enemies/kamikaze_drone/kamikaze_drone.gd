@@ -5,7 +5,14 @@ extends BaseEnemy
 
 @export var speed: float = 140.0
 
+## drones.png layout: 3 columns × 2 rows = 6 variants.
+const _SHEET_COLS    : int = 3
+const _SHEET_ROWS    : int = 2
+const _VARIANT_COUNT : int = _SHEET_COLS * _SHEET_ROWS
+
 var _direction: Vector2
+
+@onready var _sprite: Sprite2D = $Sprite2D
 
 func _ready() -> void:
 	super._ready()
@@ -16,12 +23,25 @@ func _ready() -> void:
 		health.current_health = config.max_health
 		speed = config.movement_speed
 
+	# Derive cell size from the actual texture so we never hardcode wrong dimensions.
+	var sheet_size : Vector2 = _sprite.texture.get_size()
+	var cell_w     : float   = sheet_size.x / _SHEET_COLS
+	var cell_h     : float   = sheet_size.y / _SHEET_ROWS
+	var variant    : int     = randi() % _VARIANT_COUNT
+	_sprite.region_enabled = true
+	_sprite.region_rect = Rect2(
+		(variant % _SHEET_COLS) * cell_w,
+		(variant / _SHEET_COLS) * cell_h,
+		cell_w,
+		cell_h
+	)
+
 	var players := get_tree().get_nodes_in_group("player")
 	if players.size() > 0:
 		_direction = ((players[0] as Node2D).global_position - global_position).normalized()
 	else:
 		_direction = Vector2(0, 1)
-	# drone.png naturally faces UP, so offset by +PI/2 to align with _direction.
+	# drones.png naturally faces UP, so offset by +PI/2 to align with _direction.
 	rotation = _direction.angle() + PI / 2
 
 func _physics_process(delta: float) -> void:

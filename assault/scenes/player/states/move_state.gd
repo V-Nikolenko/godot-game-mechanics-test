@@ -17,8 +17,8 @@ const STATE_KEY_BINDINGS: Array = [
 @export var movement_controller: MovementController
 
 @export_category("State Configuration")
-@export var move_speed: float = 180.0
-@export var max_move_speed: float = 200.0
+@export var move_speed: float = 360.0
+@export var max_move_speed: float = 400.0
 
 @export_category("Transition State")
 @export var transition_state: State
@@ -34,6 +34,11 @@ func start_state_transition(key_name: String) -> void:
 
 # --- Main State Logic ---
 func process_physics(delta: float):
+	## Boost module owns velocity during a boost; movement is applied in
+	## player_fighter._physics_process so we must not override it here.
+	if actor.get("engine_boost_active"):
+		return
+
 	var input_direction: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down").normalized()
 
 	if check_transition_state():
@@ -58,7 +63,7 @@ func move(direction: Vector2) -> void:
 	actor.velocity = direction * move_speed
 	actor.move_and_slide()
 
-	## Hard world bounds: 740 x 740 play area centred on the normal 640 x 360 screen.
-	## x [-50, 690]  /  y [-190, 550]
-	actor.global_position.x = clamp(actor.global_position.x, -50.0, 690.0)
-	actor.global_position.y = clamp(actor.global_position.y, -190.0, 550.0)
+	## Hard world bounds: 1480 x 1480 play area centred on the 1280 x 720 screen.
+	## x [-100, 1380]  /  y [-380, 1100]
+	actor.global_position.x = clamp(actor.global_position.x, -100.0, 1380.0)
+	actor.global_position.y = clamp(actor.global_position.y, -380.0, 1100.0)

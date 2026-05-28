@@ -15,7 +15,7 @@ extends WeaponBehavior
 
 ## Speed is defined on the sniper_bullet.tscn scene (1400 px/s) so we don't
 ## override it here — the scene's exported default is used directly.
-const CHARGE_TIME   : float = 1.3
+const CHARGE_TIME   : float = 0.6
 const CONE_HALF_DEG : float = 25.0
 
 var _charging   : bool                = false

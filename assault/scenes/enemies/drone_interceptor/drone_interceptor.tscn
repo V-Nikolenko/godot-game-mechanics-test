@@ -1,8 +1,8 @@
-[gd_scene format=3 uid="uid://droneintrcptr1"]
+[gd_scene format=3 uid="uid://dqfasx87enk13"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_dri"]
-[ext_resource type="Script" path="res://assault/scenes/enemies/drone_interceptor/drone_interceptor.gd" id="2_dri"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/drone_2.png" id="3_dri"]
+[ext_resource type="Script" uid="uid://cm4fqvxyeoy7o" path="res://assault/scenes/enemies/drone_interceptor/drone_interceptor.gd" id="2_dri"]
+[ext_resource type="Texture2D" uid="uid://cxyclr7xctgct" path="res://assault/assets/sprites/enemies/drone_2.png" id="3_dri"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_dri"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_dri"]
 
@@ -13,7 +13,6 @@ shader_parameter/enabled = false
 shader_parameter/flash_color = Color(1, 1, 1, 1)
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_dri"]
-radius = 10.0
 
 [sub_resource type="Animation" id="Animation_reset_dri"]
 length = 0.001
@@ -52,34 +51,33 @@ _data = {
 &"hit": SubResource("Animation_hit_dri")
 }
 
-[node name="DroneInterceptor" type="CharacterBody2D"]
+[node name="DroneInterceptor" type="CharacterBody2D" unique_id=493255760]
 script = ExtResource("2_dri")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=917862899]
 material = SubResource("ShaderMaterial_dri")
 texture = ExtResource("3_dri")
-scale = Vector2(2, 2)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1329619613]
+scale = Vector2(3.0799994, 3.0799994)
 shape = SubResource("CircleShape2D_dri")
 
-[node name="HurtBox" type="Area2D" parent="."]
+[node name="HurtBox" type="Area2D" parent="." unique_id=1114700853]
 collision_layer = 512
 collision_mask = 97
 script = ExtResource("4_dri")
 metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox" unique_id=1193191105]
+scale = Vector2(3.079999, 3.079999)
 shape = SubResource("CircleShape2D_dri")
 debug_color = Color(0.7, 0, 0, 0.42)
 
-[node name="Health" type="Node" parent="."]
+[node name="Health" type="Node" parent="." unique_id=353034288]
 script = ExtResource("5_dri")
 max_health = 25
 current_health = 25
 metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
-[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
-libraries = {
-&"": SubResource("AnimationLibrary_dri")
-}
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="." unique_id=1969697854]
+libraries/ = SubResource("AnimationLibrary_dri")

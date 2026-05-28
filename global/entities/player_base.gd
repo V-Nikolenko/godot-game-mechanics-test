@@ -14,7 +14,20 @@ var overheat_component: Overheat = null
 ## Effect emitters — instantiated in _setup_effects() by subclass.
 var _hit_effect: HitEffect = null
 var _explosion_effect: ExplosionEffect = null
-var _thruster: ThrusterEffect = null
+var _thruster: ThrusterEffect = null        ## Left engine (also used by EngineBoostModule).
+var _thruster_right: ThrusterEffect = null  ## Right engine.
+var temp_health_component: TempHealth = null
+
+## Invincibility after any hit — prevents burst-kill from simultaneous projectiles.
+## Covers shield absorbs, temp-HP drains, and health damage equally.
+@export var invincibility_sec: float = 0.5
+var _is_invincible: bool = false
+var _invincibility_timer: Timer = null
+
+## Temporary damage boost (applied by temporary_damage_up pickup).
+var _temp_damage_bonus: float = 0.0
+var _base_damage_multiplier: float = 1.0
+var _temp_damage_timer: Timer = null
 
 ## Multipliers written by ship modules (OverdriveModule, FinalResortModule, etc.).
 ## WeaponState reads these when computing damage and cooldowns.
@@ -45,39 +58,98 @@ func _setup_components() -> void:
 
 	if health_component:
 		health_component.amount_changed.connect(_on_health_changed)
-	if shield_component:
-		shield_component.shield_changed.connect(_on_shield_changed)
-		shield_component.shield_depleted.connect(_on_shield_depleted)
 	if overheat_component:
 		overheat_component.overheat.connect(_on_overheat_updated)
+	temp_health_component = get_node_or_null("TempHealthComponent") as TempHealth
+	_invincibility_timer = Timer.new()
+	_invincibility_timer.one_shot = true
+	_invincibility_timer.timeout.connect(_on_invincibility_expired)
+	add_child(_invincibility_timer)
+	_temp_damage_timer = Timer.new()
+	_temp_damage_timer.one_shot = true
+	_temp_damage_timer.timeout.connect(_on_temp_damage_expired)
+	add_child(_temp_damage_timer)
+	## Restore temporary buffs saved before the last level transition or quit.
+	SessionState.apply_to(self)
+	_setup_bubble_shield()
+
+## Instantiates the bubble-shield visual and wires it to the shield component.
+## Looks for SpriteAnchor so it works in both assault and open-space scenes.
+func _setup_bubble_shield() -> void:
+	if shield_component == null:
+		return
+	var anchor := get_node_or_null("SpriteAnchor") as Node2D
+	if anchor == null:
+		return
+	var shield_visual: BubbleShield = (
+		preload("res://global/components/bubble_shield.tscn").instantiate() as BubbleShield
+	)
+	anchor.add_child(shield_visual)
+	shield_visual.setup(shield_component)
 
 ## Override in subclass to instantiate and configure particle effect nodes.
 func _setup_effects() -> void:
 	pass
 
-## Shared damage handler. Call this from your scene-connected hurt-box method.
-## Applies damage_reduction, routes damage through shield, then health.
+## damage_reduction intentionally applies ONLY when health takes the hit.
+## Shields are binary (1 hit = 1 charge, regardless of damage), so reducing
+## "damage" against a shield has no meaningful effect in the new model.
 func _apply_damage(damage: int) -> void:
+	if _is_invincible:
+		return
 	var effective: int = roundi(damage * (1.0 - damage_reduction))
-	var overflow := shield_component.absorb(effective)
-	if overflow > 0:
-		health_component.decrease(overflow)
+	if shield_component and shield_component.consume_one():
+		_start_invincibility()
+		return                            ## one charge absorbed
+	if temp_health_component and temp_health_component.current_temp > 0:
+		effective = temp_health_component.take_damage(effective)
+		if effective <= 0:
+			_start_invincibility()
+			return                        ## fully absorbed by temp HP
+	if health_component:
+		health_component.decrease(effective)
+	_start_invincibility()
+
+
+func _start_invincibility() -> void:
+	_is_invincible = true
+	_invincibility_timer.start(invincibility_sec)
+
+
+func _on_invincibility_expired() -> void:
+	_is_invincible = false
 
 ## Called when health changes. Override in subclass (call super() first)
 ## to preserve EventBus emission and add mission-specific death handling.
 func _on_health_changed(current: int) -> void:
 	EventBus.player_health_changed.emit(current, health_component.max_health)
 
-## Called when shield absorbs or restores. Emits EventBus signal.
-func _on_shield_changed(current: int, maximum: int) -> void:
-	EventBus.player_shield_changed.emit(current, maximum)
-
-## Called when shield reaches zero. Emits EventBus signal.
-func _on_shield_depleted() -> void:
-	EventBus.player_shield_depleted.emit()
-
 ## Called every 0.1 s with current overheat percentage (0–100).
 ## Override in subclass (call super() first) to preserve EventBus emission
 ## and add mission-specific can_attack gating.
 func _on_overheat_updated(pct: float) -> void:
 	EventBus.player_overheat_changed.emit(pct)
+
+
+## Called by temporary_damage_up pickup.
+## bonus is the fractional increase (0.5 = +50%). duration is seconds.
+## Restores to the exact baseline on expiry — avoids float drift from repeated re-application.
+func apply_temp_damage_buff(bonus: float, duration: float) -> void:
+	if _temp_damage_timer and not _temp_damage_timer.is_stopped():
+		## Re-application while active: restore cleanly before re-buffing.
+		damage_multiplier = _base_damage_multiplier
+	else:
+		## No buff active: snapshot the current baseline.
+		_base_damage_multiplier = damage_multiplier
+	_temp_damage_bonus = bonus
+	damage_multiplier = _base_damage_multiplier + bonus
+	_temp_damage_timer.start(duration)
+	## Persist so the buff survives level transitions and game restarts.
+	var expiry: float = Time.get_unix_time_from_system() + duration
+	SessionState.save_temp_damage_buff(bonus, expiry)
+
+
+func _on_temp_damage_expired() -> void:
+	damage_multiplier = _base_damage_multiplier
+	_temp_damage_bonus = 0.0
+	SessionState.clear_temp_damage_buff()

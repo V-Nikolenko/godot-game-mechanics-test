@@ -2,14 +2,14 @@ class_name homing_missile
 extends Area2D
 
 ## Arena bounds matching arena_camera.gd — same constants as EnemyBullet.
-## x ∈ [-50, 690], y ∈ [-190, 550] plus a 32 px margin.
-const _ARENA_MARGIN : float = 32.0
-const _ARENA_LEFT   : float = -50.0  - _ARENA_MARGIN
-const _ARENA_RIGHT  : float =  690.0 + _ARENA_MARGIN
-const _ARENA_TOP    : float = -190.0 - _ARENA_MARGIN
-const _ARENA_BOTTOM : float =  550.0 + _ARENA_MARGIN
+## x ∈ [-100, 1380], y ∈ [-380, 1100] plus a 64 px margin.
+const _ARENA_MARGIN : float = 64.0
+const _ARENA_LEFT   : float = -100.0  - _ARENA_MARGIN
+const _ARENA_RIGHT  : float = 1380.0  + _ARENA_MARGIN
+const _ARENA_TOP    : float = -380.0  - _ARENA_MARGIN
+const _ARENA_BOTTOM : float = 1100.0  + _ARENA_MARGIN
 
-@export var speed: float = 250.0
+@export var speed: float = 500.0
 @export var locked_target: Node
 
 @onready var animated_sprite: AnimatedSprite2D = $AnimatedSprite2D

@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://csnipbullet01"]
+[gd_scene format=3 uid="uid://csnipbullet01"]
 
 [ext_resource type="Script" uid="uid://b8wmjpbuxn8bp" path="res://assault/scenes/projectiles/bullets/bullet.gd" id="1_snip"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="2_snip"]

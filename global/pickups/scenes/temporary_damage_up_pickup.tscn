@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://owiuu78hvr5b"]
+
+[ext_resource type="Script" uid="uid://tjpihtrstgbn" path="res://global/pickups/temporary_damage_up_pickup.gd" id="1_tdu"]
+[ext_resource type="Texture2D" uid="uid://dshlw3qjblf67" path="res://global/assets/sprites/temporary_damage_up.png" id="2_tdu"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_tdu"]
+radius = 8.0
+
+[node name="TemporaryDamageUpPickup" type="Area2D" unique_id=1529678038]
+collision_layer = 16
+collision_mask = 4
+script = ExtResource("1_tdu")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1175864385]
+texture_filter = 1
+texture = ExtResource("2_tdu")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1082562888]
+scale = Vector2(3.111, 3.111)
+shape = SubResource("CircleShape2D_tdu")

@@ -9,6 +9,7 @@
 [ext_resource type="PackedScene" uid="uid://hudscore001" path="res://assault/scenes/gui/hud_score_widget.tscn" id="7_score"]
 [ext_resource type="Script" uid="uid://dcv2wxqsxckh3" path="res://assault/scenes/gui/score_popup_spawner.gd" id="8_popup"]
 [ext_resource type="PackedScene" uid="uid://b7p4usem3nu02" path="res://global/ui/pause_menu/pause_menu.tscn" id="9_pause"]
+[ext_resource type="PackedScene" path="res://global/components/shield_icon_strip.tscn" id="10_strip"]
 
 [node name="HUD" type="CanvasLayer"]
 script = ExtResource("1_hud")
@@ -42,9 +43,17 @@ stretch_mode = 5
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 8.0
-offset_top = -36.0
+offset_top = -22.0
 offset_right = 158.0
 offset_bottom = -8.0
+
+[node name="ShieldIconStrip" parent="." instance=ExtResource("10_strip")]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = -56.0
+offset_right = 348.0
+offset_bottom = -24.0
 
 [node name="AbilityChip" parent="." instance=ExtResource("5_achip")]
 offset_left = 8.0

@@ -169,7 +169,7 @@ func _spawn_ship(spawn: Dictionary) -> void:
 
 	# Position: camera-relative offset. Use direct typed assignment — 'as Vector2' is
 	# invalid on built-in value types in GDScript 4 and would silently return null.
-	var spawn_pos: Vector2 = cam.global_position + spawn.get("offset", Vector2.ZERO)
+	var spawn_pos: Vector2 = cam.global_position + spawn.get("offset", Vector2.ZERO) * ArenaCamera.WORLD_SCALE
 
 	var entity: Node = scene.instantiate()
 	entity.global_position = spawn_pos

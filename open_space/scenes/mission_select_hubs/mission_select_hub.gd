@@ -145,7 +145,23 @@ func _open_menu() -> void:
 	_menu_open = true
 	_dwell_time = 0.0
 	queue_redraw()
-	## Zoom is already at 1.2 — open the menu directly.
+
+	## Play the planet_dive animation on the player ship before showing the menu.
+	## Freeze the ship so it does not drift while the animation runs.
+	## The tree is NOT paused yet so the animation processes normally.
+	var players := get_tree().get_nodes_in_group("player")
+	if not players.is_empty():
+		var player: Node = players[0]
+		player.set_physics_process(false)
+		player.set_process_input(false)
+		if player is CharacterBody2D:
+			(player as CharacterBody2D).velocity = Vector2.ZERO
+		var sprite := player.get_node_or_null("SpriteAnchor/ShipSprite2D") as AnimatedSprite2D
+		if sprite != null and sprite.sprite_frames != null \
+				and sprite.sprite_frames.has_animation(&"planet_dive"):
+			sprite.play(&"planet_dive")
+			await sprite.animation_finished
+
 	_menu = _MENU_SCENE.instantiate() as MissionSelectMenu
 	get_tree().root.add_child(_menu)
 	_menu.mission_confirmed.connect(_on_mission_confirmed)
@@ -176,6 +192,13 @@ func _close_menu() -> void:
 	_dwell_time = 0.0
 	queue_redraw()
 	get_tree().paused = false
+	## Restore player movement that was suspended for the planet_dive animation.
+	for p: Node in get_tree().get_nodes_in_group("player"):
+		p.set_physics_process(true)
+		p.set_process_input(true)
+		var sprite := p.get_node_or_null("SpriteAnchor/ShipSprite2D") as AnimatedSprite2D
+		if sprite != null:
+			sprite.play(&"idle")
 	## Only restore camera if we actually touched it — skip on fast flyby.
 	if _zoom_was_applied:
 		_zoom_was_applied = false

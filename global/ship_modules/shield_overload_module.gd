@@ -3,7 +3,7 @@ class_name ShieldOverloadModule
 extends ShipModuleBase
 
 const _RADIUS: float = 100.0
-const _DAMAGE_PER_SHIELD: float = 0.5
+const _DAMAGE_PER_SHIELD: int = 25
 const _KNOCKBACK: float = 280.0
 
 ## Groups of projectiles cleared by the blast.
@@ -17,7 +17,7 @@ const _RING_BASE_RADIUS: float = 6.0
 
 func get_display_name() -> String: return "Shield Overload"
 func get_description() -> String:
-	return "Press H to detonate your shield. Converts every point of shield into 0.5 damage against enemies within 100px and sends them flying. Also destroys nearby projectiles. Requires shield to activate."
+	return "Press H to detonate your shield. Spends every active shield (permanent + temporary) and deals damage in a radius scaling with the number consumed. Also destroys nearby projectiles. Requires at least one shield."
 func get_icon() -> Texture2D:
 	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_shield_explode.png")
 func get_slot() -> StringName: return &"armor"
@@ -30,16 +30,18 @@ func remove(_player: Node) -> void:
 
 func try_activate(player: Node) -> bool:
 	var shield: Shield = player.get("shield_component") as Shield
-	if shield == null or shield.current_shield <= 0:
-		return false  ## Nothing to spend.
+	if shield == null:
+		return false
+	var spent: int = shield.permanent_active + shield.temporary_count
+	if spent <= 0:
+		return false  ## Nothing to detonate.
 
 	var actor := player as Node2D
-	var shield_spent: int = shield.current_shield
 
-	## Drain shield.
-	shield.set_shield(0)
+	## Drain everything.
+	shield.set_all_zero()
 
-	var damage: int = roundi(shield_spent * _DAMAGE_PER_SHIELD)
+	var damage: int = spent * _DAMAGE_PER_SHIELD
 
 	## Damage + knockback enemies in radius.
 	var enemies := player.get_tree().get_nodes_in_group("enemies")

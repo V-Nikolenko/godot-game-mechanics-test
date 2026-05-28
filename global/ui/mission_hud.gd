@@ -5,6 +5,7 @@
 extends CanvasLayer
 
 @onready var health_shield_bar: HealthShieldBar = $HealthShieldBar
+@onready var shield_icon_strip: ShieldIconStrip = $ShieldIconStrip
 @onready var weapon_icon: TextureRect  = $WeaponContainer/WeaponIcon
 @onready var cooldown_overlay: ColorRect = $WeaponContainer/CooldownOverlay
 @onready var player_menu: PlayerMenu = $PlayerMenu
@@ -26,8 +27,11 @@ func _ready() -> void:
 
 	var health := p.get_node_or_null("HealthComponent") as Health
 	var shield := p.get_node_or_null("ShieldComponent") as Shield
-	if health and shield:
-		health_shield_bar.setup(health, shield)
+	if health:
+		var temp_health: TempHealth = p.get_node_or_null("TempHealthComponent") as TempHealth
+		health_shield_bar.setup(health, temp_health)
+	if shield:
+		shield_icon_strip.setup(shield)
 
 	var rocket_state := p.get_node_or_null("AttackStateMachine/WarheadMissileShootingState") as RocketState
 	if rocket_state:

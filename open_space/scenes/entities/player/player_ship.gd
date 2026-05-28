@@ -75,9 +75,12 @@ func _setup_effects() -> void:
 	_explosion_effect.always_process = true
 	add_child(_explosion_effect)
 
+	var engine_left  := $SpriteAnchor/EngineLeft  as Node2D
+	var engine_right := $SpriteAnchor/EngineRight as Node2D
 	_thruster = ThrusterEffect.new()
-	_thruster.position = Vector2(0.0, 14.0)
-	add_child(_thruster)
+	engine_left.add_child(_thruster)
+	_thruster_right = ThrusterEffect.new()
+	engine_right.add_child(_thruster_right)
 
 func _physics_process(delta: float) -> void:
 	_handle_rotation(delta)
@@ -133,12 +136,19 @@ func _handle_thrust(delta: float) -> void:
 		_thruster.set_state(
 				ThrusterEffect.State.BOOST if _boost_timer > 0.0
 				else ThrusterEffect.State.THRUST)
+		_thruster_right.set_state(
+				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				else ThrusterEffect.State.THRUST)
 	elif thrust_input < 0.0:
 		velocity -= forward * reverse_acceleration * delta
 		_thruster.set_state(ThrusterEffect.State.THRUST)
+		_thruster_right.set_state(ThrusterEffect.State.THRUST)
 	else:
 		velocity = velocity.lerp(Vector2.ZERO, clamp(damping * delta, 0.0, 1.0))
 		_thruster.set_state(
+				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				else ThrusterEffect.State.IDLE)
+		_thruster_right.set_state(
 				ThrusterEffect.State.BOOST if _boost_timer > 0.0
 				else ThrusterEffect.State.IDLE)
 

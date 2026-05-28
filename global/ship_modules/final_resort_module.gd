@@ -49,7 +49,7 @@ func _engage(player: Node) -> void:
 	if shield == null:
 		push_warning("FinalResortModule: shield_component not found on player")
 	else:
-		shield.set_shield(0)
+		shield.set_all_zero()
 
 	## Triple damage.
 	player.set("damage_multiplier", _DAMAGE_MULTIPLIER)

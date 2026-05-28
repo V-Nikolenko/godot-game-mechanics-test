@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://d14l1uwo1wyw8"]
+
+[ext_resource type="Script" uid="uid://daj74sq4n8cx0" path="res://global/pickups/health_tank_pickup.gd" id="1_htp"]
+[ext_resource type="Texture2D" uid="uid://c4juaxx0wt7c4" path="res://global/assets/sprites/health_tank.png" id="2_htp"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_htp"]
+radius = 8.0
+
+[node name="HealthTankPickup" type="Area2D" unique_id=549398300]
+collision_layer = 16
+collision_mask = 4
+script = ExtResource("1_htp")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1151854294]
+texture_filter = 1
+texture = ExtResource("2_htp")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=796033800]
+scale = Vector2(3.111, 3.111)
+shape = SubResource("CircleShape2D_htp")

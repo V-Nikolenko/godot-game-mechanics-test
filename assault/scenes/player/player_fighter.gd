@@ -6,7 +6,7 @@ extends PlayerBase
 
 @onready var game_over_scene: PackedScene = preload("res://assault/scenes/gui/game_over.tscn")
 
-const _DASH_SPEED_THRESHOLD: float = 280.0
+const _DASH_SPEED_THRESHOLD: float = 600.0
 const _MOVE_SPEED_THRESHOLD: float = 10.0
 
 ## Set true by WarpModule.apply(). DashState reads this to teleport instead of roll.
@@ -59,9 +59,12 @@ func _setup_effects() -> void:
 	add_child(low_health_smoke)
 	low_health_smoke.setup(health_component)
 
+	var engine_left  := $SpriteAnchor/EngineLeft  as Node2D
+	var engine_right := $SpriteAnchor/EngineRight as Node2D
 	_thruster = ThrusterEffect.new()
-	_thruster.position = Vector2(0.0, 14.0)
-	add_child(_thruster)
+	engine_left.add_child(_thruster)
+	_thruster_right = ThrusterEffect.new()
+	engine_right.add_child(_thruster_right)
 
 func _physics_process(_delta: float) -> void:
 	if DialogPlayer.is_active:
@@ -70,17 +73,30 @@ func _physics_process(_delta: float) -> void:
 	var speed := velocity.length()
 	var forward_speed  := -velocity.y
 	var backward_speed :=  velocity.y
+	var tstate: int
 	if forward_speed >= _DASH_SPEED_THRESHOLD:
-		_thruster.set_state(ThrusterEffect.State.BOOST)
+		tstate = ThrusterEffect.State.POWER  ## large flame, orange — BOOST (cyan) reserved for engine boost module
 	elif backward_speed >= _DASH_SPEED_THRESHOLD:
-		_thruster.set_state(ThrusterEffect.State.IDLE)
+		tstate = ThrusterEffect.State.IDLE
 	elif speed >= _MOVE_SPEED_THRESHOLD:
-		_thruster.set_state(ThrusterEffect.State.THRUST)
+		tstate = ThrusterEffect.State.THRUST
 	else:
-		_thruster.set_state(ThrusterEffect.State.IDLE)
+		tstate = ThrusterEffect.State.IDLE
 	## Tick all equipped modules every frame (handles cooldowns, timed effects).
+	## Modules run BEFORE thruster state so boost can override both thrusters.
 	for id: StringName in _module_pool.keys():
 		_module_pool[id].tick(self, _delta)
+
+	## During boost the module owns velocity; apply movement here at physics rate
+	## so the state-machine's _process tick cannot cancel the boost speed.
+	if engine_boost_active:
+		move_and_slide()
+		global_position.x = clamp(global_position.x, -100.0, 1380.0)
+		global_position.y = clamp(global_position.y, -380.0, 1100.0)
+		return
+
+	_thruster.set_state(tstate)
+	_thruster_right.set_state(tstate)
 
 func _input(event: InputEvent) -> void:
 	## _input fires before _unhandled_input — modules get first pick of H-key.

@@ -1,8 +1,8 @@
-[gd_scene load_steps=11 format=3 uid="uid://cintercept01"]
+[gd_scene format=3 uid="uid://dbujiqyagxiuw"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_int"]
-[ext_resource type="Script" path="res://assault/scenes/enemies/interceptor/interceptor.gd" id="2_int"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/interceptor.png" id="3_int"]
+[ext_resource type="Script" uid="uid://bq02jbw0c7flw" path="res://assault/scenes/enemies/interceptor/interceptor.gd" id="2_int"]
+[ext_resource type="Texture2D" uid="uid://cl153k3of8cpq" path="res://assault/assets/sprites/enemies/interceptor.png" id="3_int"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_int"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_int"]
 
@@ -52,34 +52,33 @@ _data = {
 &"hit": SubResource("Animation_hit_int")
 }
 
-[node name="Interceptor" type="CharacterBody2D"]
+[node name="Interceptor" type="CharacterBody2D" unique_id=1667082111]
 script = ExtResource("2_int")
 
-[node name="Sprite2D" type="Sprite2D" parent="."]
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=339261469]
 material = SubResource("ShaderMaterial_int")
 texture = ExtResource("3_int")
-scale = Vector2(2, 2)
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=267320844]
+scale = Vector2(1.8000002, 1.8000002)
 shape = SubResource("CircleShape2D_int")
 
-[node name="HurtBox" type="Area2D" parent="."]
+[node name="HurtBox" type="Area2D" parent="." unique_id=127264634]
 collision_layer = 512
 collision_mask = 97
 script = ExtResource("4_int")
 metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox" unique_id=1721490498]
+scale = Vector2(1.8, 1.8)
 shape = SubResource("CircleShape2D_int")
 debug_color = Color(0.7, 0, 0, 0.42)
 
-[node name="Health" type="Node" parent="."]
+[node name="Health" type="Node" parent="." unique_id=567570751]
 script = ExtResource("5_int")
 max_health = 70
 current_health = 70
 metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
-[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
-libraries = {
-&"": SubResource("AnimationLibrary_int")
-}
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="." unique_id=1341256136]
+libraries/ = SubResource("AnimationLibrary_int")

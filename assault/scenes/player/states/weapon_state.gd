@@ -102,10 +102,11 @@ func _physics_process(delta: float) -> void:
 		if Input.is_action_pressed("shoot") and actor.can_attack:
 			if weapon_muzzles.is_empty():
 				return
-			beam.tick(self, mode, weapon_muzzles[0], delta)
+			beam.tick(self, mode, weapon_muzzles, delta)
 			heat_component.increase_heat(mode.heat_per_shot * delta)
 		else:
 			beam.release(self)
+			beam.cool_targets(delta)
 	elif mode.behavior == WeaponModeResource.Behavior.SNIPER:
 		var sniper: SniperBehavior = _behaviors[WeaponModeResource.Behavior.SNIPER]
 		if Input.is_action_just_pressed("shoot") and actor.can_attack and _cooldown <= 0.0:

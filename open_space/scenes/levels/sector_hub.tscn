@@ -1,14 +1,23 @@
 [gd_scene format=3 uid="uid://bj5rbqgudkfsg"]
 
 [ext_resource type="Script" uid="uid://bj4bw8lmn5g61" path="res://open_space/scenes/levels/sector_hub.gd" id="1_hub"]
-[ext_resource type="PackedScene" path="res://open_space/scenes/entities/player/player_ship.tscn" id="2_player"]
+[ext_resource type="PackedScene" uid="uid://qf4mu6gg75ca" path="res://open_space/scenes/entities/player/player_ship.tscn" id="2_player"]
 [ext_resource type="PackedScene" uid="uid://cu7qlu0h6p1fd" path="res://open_space/scenes/mission_select_hubs/mission_select_hub.tscn" id="3_planet"]
 [ext_resource type="PackedScene" path="res://open_space/scenes/gui/hud.tscn" id="4_oshud"]
 [ext_resource type="Resource" uid="uid://b1pyvrb4ekue0" path="res://open_space/scenes/mission_select_hubs/planets/edelia.tres" id="5_edelia"]
 [ext_resource type="Resource" uid="uid://btsillpo773wl" path="res://open_space/scenes/mission_select_hubs/planets/voeter_k05m.tres" id="6_planet2"]
-[ext_resource type="Script" path="res://global/systems/camera_director.gd" id="7_camdir"]
+[ext_resource type="Script" uid="uid://dykqr1nc4ioby" path="res://global/systems/camera_director.gd" id="7_camdir"]
 [ext_resource type="Texture2D" uid="uid://d0jv68sx83888" path="res://assault/assets/sprites/missions/edelia/1/space_bg_stars_layer_1.png" id="8_stars1"]
 [ext_resource type="Texture2D" uid="uid://i8wuqtwma31l" path="res://assault/assets/sprites/missions/edelia/1/space_bg_stars_layer_2.png" id="9_stars2"]
+[ext_resource type="PackedScene" uid="uid://dsaaduknthmkp" path="res://global/pickups/scenes/armor_and_health_pickup.tscn" id="10_6wdkh"]
+[ext_resource type="PackedScene" uid="uid://p3qt8ooc553b" path="res://global/pickups/scenes/armor_tank_pickup.tscn" id="11_j0n3w"]
+[ext_resource type="PackedScene" uid="uid://d14l1uwo1wyw8" path="res://global/pickups/scenes/health_tank_pickup.tscn" id="12_eimt1"]
+[ext_resource type="PackedScene" uid="uid://dcvtd2blcfplw" path="res://global/pickups/scenes/ship_module_unlocker_pickup.tscn" id="13_b4ymh"]
+[ext_resource type="PackedScene" uid="uid://ddmw6ylslsciw" path="res://global/pickups/scenes/ship_shield_up_pickup.tscn" id="14_2jdhr"]
+[ext_resource type="PackedScene" uid="uid://owiuu78hvr5b" path="res://global/pickups/scenes/temporary_damage_up_pickup.tscn" id="15_i5skt"]
+[ext_resource type="PackedScene" uid="uid://brkwck4n8qa4f" path="res://global/pickups/scenes/temporary_health_shield_up_pickup.tscn" id="16_v8yrt"]
+[ext_resource type="PackedScene" uid="uid://csti8adftwjr8" path="res://global/pickups/scenes/temporary_health_up_pickup.tscn" id="17_rj32l"]
+[ext_resource type="PackedScene" uid="uid://db8j0pi368giu" path="res://global/pickups/scenes/temporary_shield_up_pickup.tscn" id="18_f6k3w"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
@@ -20,31 +29,33 @@ offset_right = 1720.0
 offset_bottom = 2209.0
 color = Color(0.04, 0.04, 0.08, 1)
 
-[node name="Parallax" type="ParallaxBackground" parent="."]
+[node name="Parallax" type="ParallaxBackground" parent="." unique_id=1695425699]
 layer = -5
 
-[node name="StarsDistant" type="ParallaxLayer" parent="Parallax"]
+[node name="StarsDistant" type="ParallaxLayer" parent="Parallax" unique_id=2048698181]
 motion_scale = Vector2(0.15, 0.15)
 motion_mirroring = Vector2(740, 740)
 
-[node name="Sprite2D" type="Sprite2D" parent="Parallax/StarsDistant"]
+[node name="Sprite2D" type="Sprite2D" parent="Parallax/StarsDistant" unique_id=2025427588]
+modulate = Color(1, 1, 1, 0.7)
 texture = ExtResource("8_stars1")
 centered = false
-modulate = Color(1, 1, 1, 0.7)
 
-[node name="StarsNear" type="ParallaxLayer" parent="Parallax"]
+[node name="StarsNear" type="ParallaxLayer" parent="Parallax" unique_id=90461616]
 motion_scale = Vector2(0.5, 0.5)
 motion_mirroring = Vector2(740, 740)
 
-[node name="Sprite2D" type="Sprite2D" parent="Parallax/StarsNear"]
+[node name="Sprite2D" type="Sprite2D" parent="Parallax/StarsNear" unique_id=1435841108]
 texture = ExtResource("9_stars2")
 centered = false
 
 [node name="edelia" parent="." unique_id=662454378 instance=ExtResource("3_planet")]
-position = Vector2(208, -1)
+position = Vector2(861, 524)
 config = ExtResource("5_edelia")
-arc_offset = Vector2(-13, 4)
-arc_radius = 72.0
+arc_offset = Vector2(-25, 13)
+arc_radius = 230.0
+arc_bg_width = 28.0
+arc_fill_width = 28.0
 
 [node name="voeter_k05m" parent="." unique_id=887654321 instance=ExtResource("3_planet")]
 position = Vector2(-186, 169)
@@ -58,7 +69,34 @@ arc_radius = 72.0
 
 [node name="Camera2D" type="Camera2D" parent="PlayerShip" unique_id=300624665]
 
-[node name="CameraDirector" type="Node" parent="PlayerShip/Camera2D"]
+[node name="CameraDirector" type="Node" parent="PlayerShip/Camera2D" unique_id=1634278328]
 script = ExtResource("7_camdir")
 
 [node name="OpenSpaceHUD" parent="." unique_id=1653560321 instance=ExtResource("4_oshud")]
+
+[node name="ArmorAndHealthPickup" parent="." unique_id=10372771 instance=ExtResource("10_6wdkh")]
+position = Vector2(27, -217)
+
+[node name="ArmorTankPickup" parent="." unique_id=1425652958 instance=ExtResource("11_j0n3w")]
+position = Vector2(104, -212)
+
+[node name="HealthTankPickup" parent="." unique_id=1618524362 instance=ExtResource("12_eimt1")]
+position = Vector2(205, -213)
+
+[node name="ShipModuleUnlockerPickup" parent="." unique_id=1222942980 instance=ExtResource("13_b4ymh")]
+position = Vector2(304, -212)
+
+[node name="ShipShieldUpPickup" parent="." unique_id=1792069909 instance=ExtResource("14_2jdhr")]
+position = Vector2(413, -212)
+
+[node name="TemporaryDamageUpPickup" parent="." unique_id=1714602967 instance=ExtResource("15_i5skt")]
+position = Vector2(519, -210)
+
+[node name="TemporaryHealthShieldUpPickup" parent="." unique_id=1412861584 instance=ExtResource("16_v8yrt")]
+position = Vector2(-130, -216)
+
+[node name="TemporaryHealthUpPickup" parent="." unique_id=1160711389 instance=ExtResource("17_rj32l")]
+position = Vector2(-280, -223)
+
+[node name="TemporaryShieldUpPickup" parent="." unique_id=2051867966 instance=ExtResource("18_f6k3w")]
+position = Vector2(-214, -215)

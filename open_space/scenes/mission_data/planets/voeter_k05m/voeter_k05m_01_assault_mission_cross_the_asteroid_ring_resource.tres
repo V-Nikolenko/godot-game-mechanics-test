@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="AssaultMissionResource" format=3 uid="uid://c7rtyicdiolwt"]
 
-[ext_resource type="Texture2D" uid="uid://dad8ssxwft6xp" path="res://open_space/assets/sprites/mission_select_ui/planets/voeter_k05m/menu_mission_select_mission_image_2_1.png" id="1_p63ua"]
+[ext_resource type="Texture2D" uid="uid://b6gx8il6dtxum" path="res://open_space/assets/sprites/mission_select_ui/planets/voeter_k05m/menu_mission_select_mission_image_1.png" id="1_owwfw"]
 [ext_resource type="Script" uid="uid://c4bxqmn7dp1kf" path="res://open_space/scenes/mission_data/assault_mission_resource.gd" id="2_p63ua"]
 
 [resource]
@@ -8,6 +8,6 @@ script = ExtResource("2_p63ua")
 display_name = "Assault"
 scene_path = "res://assault/scenes/levels/level_1.tscn"
 required_mission = 2
-mission_image = ExtResource("1_p63ua")
+mission_image = ExtResource("1_owwfw")
 description = "Stub Mission"
 mission_number = 4

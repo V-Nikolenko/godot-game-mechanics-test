@@ -1,107 +1,293 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene format=3 uid="uid://qf4mu6gg75ca"]
 
-[ext_resource type="Script" path="res://open_space/scenes/entities/player/player_ship.gd" id="1_ship"]
-[ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_atlas"]
-[ext_resource type="Script" path="res://global/components/health_component.gd" id="3_health"]
-[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="4_hurt"]
-[ext_resource type="Script" path="res://global/components/shield_component.gd" id="5_shld"]
+[ext_resource type="Script" uid="uid://bf1iu0h1p3oeq" path="res://open_space/scenes/entities/player/player_ship.gd" id="1_ship"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="3_health"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_hurt"]
+[ext_resource type="Texture2D" uid="uid://d06epkwxt7khw" path="res://assault/assets/sprites/player/ply2.png" id="5_k37g2"]
+[ext_resource type="Script" uid="uid://cw3my8k56vtk0" path="res://global/components/shield_component.gd" id="5_shld"]
 [ext_resource type="Script" uid="uid://coqfv3aco6d8i" path="res://global/components/overheat_component.gd" id="7_oheat"]
 [ext_resource type="Script" uid="uid://c5678cxr4wb7q" path="res://global/statemachine/state_machine.gd" id="8_sm"]
-[ext_resource type="Script" path="res://assault/scenes/player/states/weapon_state.gd" id="9_ws"]
+[ext_resource type="Script" uid="uid://281pkax5qffl" path="res://assault/scenes/player/states/weapon_state.gd" id="9_ws"]
 [ext_resource type="Script" uid="uid://biyvn45plxdd2" path="res://assault/scenes/player/states/warhead_missile_shooting_state.gd" id="10_rs"]
 [ext_resource type="Script" uid="uid://cdfmqrq3idtak" path="res://assault/scenes/player/movement_controller.gd" id="11_mc"]
+[ext_resource type="Script" uid="uid://bua2ltv8ifbl7" path="res://global/components/temp_health_component.gd" id="13_tmphp"]
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_idle"]
-atlas = ExtResource("2_atlas")
-region = Rect2(1, 1, 32, 32)
+[sub_resource type="AtlasTexture" id="AtlasTexture_ttx1s"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(0, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_m8qi1"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(64, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_r1rk3"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(128, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_bjief"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(192, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ajm1l"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(256, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_akl5k"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(320, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_kx3iw"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(384, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fjhkb"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(448, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_futoy"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(512, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_lecsa"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(576, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_8jtt7"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(640, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3it80"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(704, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hjdah"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(768, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_tjsge"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(832, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ic4ju"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(896, 64, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_tex61"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(0, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_w38wk"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(0, 128, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_d58av"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(64, 128, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_xqcqg"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(128, 128, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_68chm"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(192, 128, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_sv1mo"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(256, 128, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_jd2ts"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(320, 128, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fnxbb"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(384, 128, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_fxeg6"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(448, 128, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_gr0xw"]
+atlas = ExtResource("5_k37g2")
+region = Rect2(512, 128, 64, 64)
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_ship"]
 animations = [{
 "frames": [{
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_ttx1s")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_m8qi1")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_r1rk3")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_bjief")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_ajm1l")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_akl5k")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_kx3iw")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_fjhkb")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_futoy")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_lecsa")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_8jtt7")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_3it80")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_hjdah")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_tjsge")
+}, {
+"duration": 0.2,
+"texture": SubResource("AtlasTexture_ic4ju")
+}],
+"loop": false,
+"name": &"flame_boost",
+"speed": 5.0
+}, {
+"frames": [{
 "duration": 1.0,
-"texture": SubResource("AtlasTexture_idle")
+"texture": SubResource("AtlasTexture_tex61")
 }],
 "loop": true,
 "name": &"idle",
 "speed": 5.0
+}, {
+"frames": [{
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_w38wk")
+}, {
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_d58av")
+}, {
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_xqcqg")
+}, {
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_68chm")
+}, {
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_sv1mo")
+}, {
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_jd2ts")
+}, {
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_fnxbb")
+}, {
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_fxeg6")
+}, {
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_gr0xw")
+}],
+"loop": false,
+"name": &"planet_dive",
+"speed": 5.0
 }]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_body"]
-radius = 5.5
+radius = 11.045361
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
 radius = 5.0
 
-[node name="PlayerShip" type="CharacterBody2D"]
+[node name="PlayerShip" type="CharacterBody2D" unique_id=1771052060]
 collision_layer = 4
-collision_mask = 1
 script = ExtResource("1_ship")
 
-[node name="HealthComponent" type="Node" parent="."]
+[node name="HealthComponent" type="Node" parent="." unique_id=293637074]
 script = ExtResource("3_health")
 max_health = 50
 current_health = 50
 
-[node name="ShieldComponent" type="Node" parent="."]
+[node name="ShieldComponent" type="Node" parent="." unique_id=1957955819]
 script = ExtResource("5_shld")
-max_shield = 100
-current_shield = 100
 
-[node name="OverheatComponent" type="Node" parent="."]
+[node name="OverheatComponent" type="Node" parent="." unique_id=1754973202]
 script = ExtResource("7_oheat")
 
-[node name="SpriteAnchor" type="Node2D" parent="."]
+[node name="TempHealthComponent" type="Node" parent="." unique_id=-2072745074]
+script = ExtResource("13_tmphp")
 
-[node name="ShipSprite2D" type="AnimatedSprite2D" parent="SpriteAnchor"]
+[node name="SpriteAnchor" type="Node2D" parent="." unique_id=825757030]
+
+[node name="ShipSprite2D" type="AnimatedSprite2D" parent="SpriteAnchor" unique_id=1139590729]
 texture_filter = 1
 sprite_frames = SubResource("SpriteFrames_ship")
 animation = &"idle"
 
-[node name="MuzzleLeft" type="Marker2D" parent="SpriteAnchor"]
-position = Vector2(-11, 0)
+[node name="MuzzleLeft" type="Marker2D" parent="SpriteAnchor" unique_id=2073980397]
+position = Vector2(-18, -1)
 
-[node name="MuzzleRight" type="Marker2D" parent="SpriteAnchor"]
-position = Vector2(11, 0)
+[node name="MuzzleRight" type="Marker2D" parent="SpriteAnchor" unique_id=650639455]
+position = Vector2(18, -1)
 
-[node name="Collision" type="CollisionShape2D" parent="."]
+[node name="EngineLeft" type="Marker2D" parent="SpriteAnchor" unique_id=806604648]
+position = Vector2(-8, 30)
+
+[node name="EngineRight" type="Marker2D" parent="SpriteAnchor" unique_id=1222340168]
+position = Vector2(9, 30)
+
+[node name="Collision" type="CollisionShape2D" parent="." unique_id=686141377]
 shape = SubResource("CircleShape2D_body")
 
-[node name="HurtBox" type="Area2D" parent="."]
+[node name="HurtBox" type="Area2D" parent="." unique_id=17100562]
+scale = Vector2(2.2000003, 2.2000003)
 collision_layer = 128
 collision_mask = 1281
 script = ExtResource("4_hurt")
 
-[node name="HurtBoxCollision" type="CollisionShape2D" parent="HurtBox"]
+[node name="HurtBoxCollision" type="CollisionShape2D" parent="HurtBox" unique_id=1887877915]
 shape = SubResource("CircleShape2D_hurt")
 
-[node name="AttackStateMachine" type="Node" parent="." node_paths=PackedStringArray("initial_state")]
+[node name="AttackStateMachine" type="Node" parent="." unique_id=517290019 node_paths=PackedStringArray("initial_state")]
 script = ExtResource("8_sm")
 initial_state = NodePath("WeaponState")
 
-[node name="WeaponState" type="Node" parent="AttackStateMachine" node_paths=PackedStringArray("actor", "weapon_muzzles", "movement_controller", "heat_component")]
+[node name="WeaponState" type="Node" parent="AttackStateMachine" unique_id=161959884 node_paths=PackedStringArray("actor", "weapon_muzzles", "movement_controller", "heat_component")]
 script = ExtResource("9_ws")
 actor = NodePath("../..")
 weapon_muzzles = [NodePath("../../SpriteAnchor/MuzzleLeft"), NodePath("../../SpriteAnchor/MuzzleRight")]
 movement_controller = NodePath("../../MovementController")
 heat_component = NodePath("../../OverheatComponent")
 
-[node name="WarheadMissileShootingState" type="Node" parent="AttackStateMachine" node_paths=PackedStringArray("actor", "movement_controller")]
+[node name="WarheadMissileShootingState" type="Node" parent="AttackStateMachine" unique_id=410367226 node_paths=PackedStringArray("actor", "movement_controller")]
 script = ExtResource("10_rs")
 actor = NodePath("../..")
 movement_controller = NodePath("../../MovementController")
 
-[node name="CooldownTimer" type="Timer" parent="AttackStateMachine/WarheadMissileShootingState"]
+[node name="CooldownTimer" type="Timer" parent="AttackStateMachine/WarheadMissileShootingState" unique_id=1022747725]
 wait_time = 5.0
 one_shot = true
 
-[node name="MovementController" type="Node" parent="."]
+[node name="MovementController" type="Node" parent="." unique_id=1619942092]
 script = ExtResource("11_mc")
 
-[node name="DoubleClickThreshold" type="Timer" parent="MovementController"]
+[node name="DoubleClickThreshold" type="Timer" parent="MovementController" unique_id=861180487]
 wait_time = 0.3
 one_shot = true
 
-[node name="MovementLockTimer" type="Timer" parent="MovementController"]
+[node name="MovementLockTimer" type="Timer" parent="MovementController" unique_id=935096160]
 one_shot = true
 
 [connection signal="received_damage" from="HurtBox" to="." method="_on_received_damage"]

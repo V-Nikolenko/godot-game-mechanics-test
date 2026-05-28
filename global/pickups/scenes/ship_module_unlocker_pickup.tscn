@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://dcvtd2blcfplw"]
+
+[ext_resource type="Script" uid="uid://bxwrhvj56rc42" path="res://global/pickups/ship_module_unlocker_pickup.gd" id="1_smu"]
+[ext_resource type="Texture2D" uid="uid://bwvb1c2g3qp3a" path="res://global/assets/sprites/ship_module_unlocker.png" id="2_smu"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_smu"]
+radius = 8.0
+
+[node name="ShipModuleUnlockerPickup" type="Area2D" unique_id=544896989]
+collision_layer = 16
+collision_mask = 4
+script = ExtResource("1_smu")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1693897237]
+texture_filter = 1
+texture = ExtResource("2_smu")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=105298158]
+scale = Vector2(3.531701, 3.531701)
+shape = SubResource("CircleShape2D_smu")

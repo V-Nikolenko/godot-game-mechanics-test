@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="AssaultMissionResource" format=3 uid="uid://bb8os314vaak6"]
 
-[ext_resource type="Texture2D" uid="uid://drenso3mqgmgb" path="res://open_space/assets/sprites/mission_select_ui/planets/edelia/menu_mission_select_mission_image_1_1.png" id="1_r8pu0"]
+[ext_resource type="Texture2D" uid="uid://cyhsqhubpdtvg" path="res://open_space/assets/sprites/mission_select_ui/planets/edelia/menu_mission_select_mission_image_1.png" id="1_r8pu0"]
 [ext_resource type="Script" uid="uid://c4bxqmn7dp1kf" path="res://open_space/scenes/mission_data/assault_mission_resource.gd" id="2_qlodp"]
 
 [resource]

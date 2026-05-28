@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://brkwck4n8qa4f"]
+
+[ext_resource type="Script" uid="uid://dv1iu65sagg8g" path="res://global/pickups/temporary_health_shield_up_pickup.gd" id="1_ths"]
+[ext_resource type="Texture2D" uid="uid://bhb40a0lwx8tp" path="res://global/assets/sprites/temporary_health_shield_up.png" id="2_ths"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_ths"]
+radius = 8.0
+
+[node name="TemporaryHealthShieldUpPickup" type="Area2D" unique_id=217570767]
+collision_layer = 16
+collision_mask = 4
+script = ExtResource("1_ths")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=956292080]
+texture_filter = 1
+texture = ExtResource("2_ths")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=718590886]
+scale = Vector2(3.111, 3.111)
+shape = SubResource("CircleShape2D_ths")

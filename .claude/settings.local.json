@@ -25,7 +25,23 @@
       "Bash(git reset *)",
       "Bash(git commit -m 'feat: camera improvements for assault and open space *)",
       "Bash(file assault/assets/sprites/missions/edelia/1/space_bg_stars_layer_*.png)",
-      "Bash(awk -F[:,] '{ *)"
+      "Bash(awk -F[:,] '{ *)",
+      "Bash(git commit -m 'Add SniperEnemy to WaveBuilder and spawn pair at start of level 1 *)",
+      "Bash(git commit -m 'Fix SniperEnemy tracking and aim line *)",
+      "Bash(git commit -m 'SniperEnemy: fix backwards sprite, hide line during fly-in, 5 shots default *)",
+      "Bash(git commit -m 'Add docs/sniper-enemy.md *)",
+      "Bash(git commit -m 'Add implementation plan: Interceptor enemy *)",
+      "Bash(git commit -m 'Implement Interceptor enemy *)",
+      "Bash(git commit -m 'Spawn interceptor pair at t=0.0s in level 1 section 1 for testing *)",
+      "Bash(git commit -m 'Fix: don'\\\\''t attach EnemyPathMover when movement resource is null *)",
+      "Bash(git commit -m 'Add design spec: DroneInterceptor + Interceptor Gatling rework *)",
+      "Bash(git commit -m 'Add implementation plan: DroneInterceptor + Interceptor Gatling rework *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\global\\\\resources\\\\attack\" -Force)",
+      "Bash(git commit *)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\global\\\\autoloads\" -ErrorAction SilentlyContinue)",
+      "Bash(Select-Object Name)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\global\\\\assets\\\\sprites\\\\\" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"shield|health|armor|damage\" } | Select-Object Name)",
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\global\\\\pickups\\\\scenes\")"
     ]
   }
 }

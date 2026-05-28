@@ -1,8 +1,8 @@
-[gd_scene load_steps=13 format=3 uid="uid://gunship001assault"]
+[gd_scene format=3 uid="uid://bdp57cvsspo0x"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_gs"]
-[ext_resource type="Script" path="res://assault/scenes/enemies/gunship/gunship.gd" id="2_gs"]
-[ext_resource type="Texture2D" uid="uid://w7xvkbnwrrut" path="res://assault/assets/sprites/enemies/light_assault_ship.png" id="3_gs"]
+[ext_resource type="Script" uid="uid://cjwjurj1t5rne" path="res://assault/scenes/enemies/gunship/gunship.gd" id="2_gs"]
+[ext_resource type="Texture2D" uid="uid://jrm80jg6n40" path="res://assault/assets/sprites/enemies/heave_gunship.png" id="3_gs"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_gs"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_gs"]
 
@@ -12,21 +12,6 @@ shader = ExtResource("1_gs")
 shader_parameter/enabled = false
 shader_parameter/flash_color = Color(1, 1, 1, 1)
 
-[sub_resource type="AtlasTexture" id="AtlasTexture_gs"]
-atlas = ExtResource("3_gs")
-region = Rect2(1, 1, 32, 32)
-
-[sub_resource type="SpriteFrames" id="SpriteFrames_gs"]
-animations = [{
-"frames": [{
-"duration": 1.0,
-"texture": SubResource("AtlasTexture_gs")
-}],
-"loop": true,
-"name": &"default",
-"speed": 5.0
-}]
-
 [sub_resource type="CircleShape2D" id="CircleShape2D_gs"]
 radius = 18.0
 
@@ -35,7 +20,7 @@ length = 0.001
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath("AnimatedSprite2D:material:shader_parameter/enabled")
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -51,7 +36,7 @@ length = 0.2
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath("AnimatedSprite2D:material:shader_parameter/enabled")
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -67,37 +52,34 @@ _data = {
 &"hit": SubResource("Animation_hit_gs")
 }
 
-[node name="Gunship" type="CharacterBody2D"]
+[node name="Gunship" type="CharacterBody2D" unique_id=1816143460]
 script = ExtResource("2_gs")
 
-[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
-modulate = Color(1, 0.8, 0.2, 1)
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=117616968]
 material = SubResource("ShaderMaterial_gs")
-scale = Vector2(1.5, 1.5)
-sprite_frames = SubResource("SpriteFrames_gs")
-animation = &"default"
-autoplay = "default"
+rotation = 3.1415927
+texture = ExtResource("3_gs")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1156476053]
+scale = Vector2(2.3077412, 2.3077412)
 shape = SubResource("CircleShape2D_gs")
 
-[node name="HurtBox" type="Area2D" parent="."]
+[node name="HurtBox" type="Area2D" parent="." unique_id=1728955766]
 collision_layer = 512
 collision_mask = 65
 script = ExtResource("4_gs")
 metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox" unique_id=1128625499]
+scale = Vector2(2.289032, 2.289032)
 shape = SubResource("CircleShape2D_gs")
 debug_color = Color(0.7, 0, 0, 0.419608)
 
-[node name="Health" type="Node" parent="."]
+[node name="Health" type="Node" parent="." unique_id=879124447]
 script = ExtResource("5_gs")
 max_health = 200
 current_health = 200
 metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
-[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
-libraries = {
-&"": SubResource("AnimationLibrary_gs")
-}
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="." unique_id=1204124885]
+libraries/ = SubResource("AnimationLibrary_gs")

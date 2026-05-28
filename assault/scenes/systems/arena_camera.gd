@@ -1,8 +1,8 @@
 ## assault/scenes/systems/arena_camera.gd
-## Camera2D follow script for the 740 × 740 assault-mission play area.
+## Camera2D follow script for the 1480 × 1480 assault-mission play area.
 ##
 ## Follow strategy — Camera2D.offset, NOT global_position:
-##   global_position stays permanently at the level origin (320, 180).
+##   global_position stays permanently at the level origin (640, 360).
 ##   All player-follow panning is done through Camera2D.offset.
 ##   This keeps cam.global_position stable so:
 ##     • EnemyPathMover's cam-scroll delta (cam.global_position.y - initial)
@@ -22,24 +22,28 @@
 ##   apparent motion so the texture appears stuck to the world.
 ##
 ## Offset limits (equal to the buffer distances from screen centre):
-##   Horizontal ± 50 px  →  world x reachable: [-50, 690]
-##   Vertical  ±190 px  →  world y reachable: [-190, 550]
+##   Horizontal ± 100 px  →  world x reachable: [-100, 1380]
+##   Vertical  ± 380 px  →  world y reachable: [-380, 1100]
 ##
 ## Suspends offset tracking while camera zoom ≠ (1, 1) so the pause-menu zoom
 ## animation has exclusive control and the two systems never conflict.
+class_name ArenaCamera
 extends Camera2D
 
-const SCREEN_W : float = 640.0
-const SCREEN_H : float = 360.0
-const H_LIMIT  : float = 50.0    ## Max horizontal offset (= horizontal buffer width).
-const V_LIMIT  : float = 190.0   ## Max vertical offset   (= vertical buffer depth).
+## Scale factor applied to all spawn offsets and EnemyPathMover movements.
+## Keeps level_director spawn numbers in 640×360 "design units" that auto-scale.
+const WORLD_SCALE : float = 2.0
+const SCREEN_W : float = 1280.0
+const SCREEN_H : float = 720.0
+const H_LIMIT  : float = 100.0   ## Max horizontal offset (= horizontal buffer width).
+const V_LIMIT  : float = 380.0   ## Max vertical offset   (= vertical buffer depth).
 
 ## Lerp weight per second.  Higher = snappier follow; 1.0 per frame is the cap.
 @export var follow_speed : float = 12.0
 ## Deadzone — half-extents of a rectangle around the framing point where small
 ## player movements do NOT move the camera.  Reduces wobble from minor
 ## adjustments.  Hollow Knight / Mario-style camera box.
-@export var deadzone_half_size : Vector2 = Vector2(20.0, 15.0)
+@export var deadzone_half_size : Vector2 = Vector2(40.0, 30.0)
 
 ## The follow state, tracked separately from the final camera offset so that
 ## per-frame shake noise never pollutes the lerp baseline.  Final offset =

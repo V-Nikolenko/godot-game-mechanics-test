@@ -16,12 +16,19 @@ func _ready() -> void:
 		builder.wave(2.0, [
 			builder.spawn_entry(builder.FIGHTER, Vector2(0, -180), builder.straight(120), 0.0, builder.EXIT_SCREEN, builder.v_formation(7, 45.0, 14.0, 0.08)),
 		]),
-		# Wave 2 — t=12.0: Sniper crossfire from both sides
+		# Wave 2 — t=12.0: Sniper pair drops in, fires 5 shots, retreats
+		# Sequence: fly in (2.5 s) → hold 13 s (5× aim/lock/fire cycle) → fly out
 		builder.wave(12.0, [
-			builder.spawn_entry(builder.SNIPER, Vector2(-320, -10), builder.straight(140, PI/2),  0.0, builder.EXIT_SCREEN, null, {"direction":  1.0}),
-			builder.spawn_entry(builder.SNIPER, Vector2( 320,  10), builder.straight(140, -PI/2), 0.0, builder.EXIT_SCREEN, null, {"direction": -1.0}),
-			builder.spawn_entry(builder.SNIPER, Vector2(-320,  30), builder.straight(140, PI/2),  0.4, builder.EXIT_SCREEN, null, {"direction":  1.0}),
-			builder.spawn_entry(builder.SNIPER, Vector2( 320, -30), builder.straight(140, -PI/2), 0.4, builder.EXIT_SCREEN, null, {"direction": -1.0}),
+			builder.sniper().at(-120, -500).move(builder.sequence([
+				builder.straight(150, 0.0, 2.5),
+				builder.hold(13.0),
+				builder.straight(220, PI),
+			])),
+			builder.sniper().at( 120, -500).move(builder.sequence([
+				builder.straight(150, 0.0, 2.5),
+				builder.hold(13.0),
+				builder.straight(220, PI),
+			])).delay(0.5),
 		]),
 		# Wave 3 — t=25.0: Gunship + arc fighter escort
 		builder.wave(15.0, [
@@ -75,8 +82,8 @@ func _ready() -> void:
 		#builder.wave(105.0, [
 			#builder.spawn_entry(builder.FIGHTER, Vector2(-80,  12), builder.arc(L, 150, 3.5), 0.0, DURATION, builder.diagonal_formation(3,  40, 12, 0.0)),
 			#builder.spawn_entry(builder.FIGHTER, Vector2( 80,  12), builder.arc(R, 150, 3.5), 0.0, DURATION, builder.diagonal_formation(3, -40, 12, 0.0)),
-			#builder.spawn_entry(builder.SNIPER,  Vector2(-320, -20), builder.straight(140,  PI/2), 0.6, builder.EXIT_SCREEN, null, {"direction":  1.0}),
-			#builder.spawn_entry(builder.SNIPER,  Vector2( 320,  20), builder.straight(140, -PI/2), 0.6, builder.EXIT_SCREEN, null, {"direction": -1.0}),
+			#builder.spawn_entry(builder.SNIPER_ENEMY,  Vector2(-320, -20), builder.straight(140,  PI/2), 0.6, builder.EXIT_SCREEN, null, {"direction":  1.0}),
+			#builder.spawn_entry(builder.SNIPER_ENEMY,  Vector2( 320,  20), builder.straight(140, -PI/2), 0.6, builder.EXIT_SCREEN, null, {"direction": -1.0}),
 		#]),
 		## Wave 9 — t=120.0: Heavy bomber pair + fighter screen
 		#builder.wave(120.0, [
@@ -98,10 +105,10 @@ func _ready() -> void:
 		#]),
 		## Wave 11 — t=155.0: Quad sniper + dense drone swarm
 		#builder.wave(155.0, [
-			#builder.spawn_entry(builder.SNIPER, Vector2(-320, -30), builder.straight(145, PI/2),  0.0, builder.EXIT_SCREEN, null, {"direction":  1.0}),
-			#builder.spawn_entry(builder.SNIPER, Vector2( 320,  30), builder.straight(145, -PI/2), 0.0, builder.EXIT_SCREEN, null, {"direction": -1.0}),
-			#builder.spawn_entry(builder.SNIPER, Vector2(-320,  10), builder.straight(145, PI/2),  0.5, builder.EXIT_SCREEN, null, {"direction":  1.0}),
-			#builder.spawn_entry(builder.SNIPER, Vector2( 320, -10), builder.straight(145, -PI/2), 0.5, builder.EXIT_SCREEN, null, {"direction": -1.0}),
+			#builder.spawn_entry(builder.SNIPER_ENEMY, Vector2(-320, -30), builder.straight(145, PI/2),  0.0, builder.EXIT_SCREEN, null, {"direction":  1.0}),
+			#builder.spawn_entry(builder.SNIPER_ENEMY, Vector2( 320,  30), builder.straight(145, -PI/2), 0.0, builder.EXIT_SCREEN, null, {"direction": -1.0}),
+			#builder.spawn_entry(builder.SNIPER_ENEMY, Vector2(-320,  10), builder.straight(145, PI/2),  0.5, builder.EXIT_SCREEN, null, {"direction":  1.0}),
+			#builder.spawn_entry(builder.SNIPER_ENEMY, Vector2( 320, -10), builder.straight(145, -PI/2), 0.5, builder.EXIT_SCREEN, null, {"direction": -1.0}),
 			#builder.spawn_entry(builder.DRONE,  Vector2(-50, -180), builder.sine(160, 55), 0.8),
 			#builder.spawn_entry(builder.DRONE,  Vector2(-20, -180), builder.sine(160, 55), 0.8),
 			#builder.spawn_entry(builder.DRONE,  Vector2( 20, -180), builder.sine(160, 55), 0.8),

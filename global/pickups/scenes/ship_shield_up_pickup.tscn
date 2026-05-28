@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://ddmw6ylslsciw"]
+
+[ext_resource type="Script" uid="uid://clblv55smav0e" path="res://global/pickups/ship_shield_up_pickup.gd" id="1_ssu"]
+[ext_resource type="Texture2D" uid="uid://blxpav8rhk1g0" path="res://global/assets/sprites/ship_shield_up.png" id="2_ssu"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_ssu"]
+radius = 8.0
+
+[node name="ShipShieldUpPickup" type="Area2D" unique_id=769476270]
+collision_layer = 16
+collision_mask = 4
+script = ExtResource("1_ssu")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=181069292]
+texture_filter = 1
+texture = ExtResource("2_ssu")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=734047065]
+scale = Vector2(3.111, 3.111)
+shape = SubResource("CircleShape2D_ssu")

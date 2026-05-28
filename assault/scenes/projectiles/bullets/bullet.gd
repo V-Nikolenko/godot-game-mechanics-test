@@ -3,7 +3,7 @@ extends Area2D
 
 signal expired
 
-@export var speed: float = 500.0
+@export var speed: float = 900.0
 ## 0 = no cap (despawn only when off-screen).
 @export var range_px: float = 0.0
 ## Damage applied via the child HitBox. Pushed in _ready().
@@ -37,9 +37,11 @@ func reset() -> void:
 func _physics_process(delta: float) -> void:
 	var step := speed * delta
 	var forward := Vector2.UP.rotated(rotation)
-	## Own speed in the firing direction, plus actor velocity so the bullet
-	## doesn't appear to hang when the ship moves faster than bullet speed.
-	global_position += forward * step + shooter_velocity * delta
+	## Only the forward component of shooter velocity boosts the bullet.
+	## Backward / lateral movement is ignored — clamped to 0 so the ship
+	## moving backwards or sideways never slows or deflects the bullet.
+	var forward_bonus: float = maxf(0.0, shooter_velocity.dot(forward))
+	global_position += forward * (step + forward_bonus * delta)
 	if range_px > 0.0:
 		_traveled += step
 		if _traveled >= range_px:

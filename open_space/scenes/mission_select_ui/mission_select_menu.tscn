@@ -1,60 +1,175 @@
 [gd_scene format=3 uid="uid://crwj4msudkrqy"]
 
 [ext_resource type="Script" uid="uid://ym3t2ymsvlqy" path="res://open_space/scenes/mission_select_ui/mission_select_menu.gd" id="1_script"]
-[ext_resource type="Texture2D" uid="uid://cnx0qba50asly" path="res://open_space/assets/sprites/mission_select_ui/menu/menu_mission_select_overlay.png" id="2_overlay"]
+[ext_resource type="Texture2D" uid="uid://d0jv68sx83888" path="res://assault/assets/sprites/missions/edelia/1/space_bg_stars_layer_1.png" id="2_njeap"]
+[ext_resource type="Texture2D" uid="uid://b84j3olnw4q6j" path="res://open_space/assets/sprites/mission_select_ui/menu/menu_mission_select_cockpi_glasst.png" id="2_ybmhw"]
+[ext_resource type="Texture2D" uid="uid://beck3l2ntmwyx" path="res://open_space/assets/sprites/mission_select_hubs/edelia.png" id="3_1ekc7"]
+[ext_resource type="Texture2D" uid="uid://bdmeyvgtarssh" path="res://open_space/assets/sprites/mission_select_ui/menu/menu_mission_select_cockpit.png" id="3_adg6q"]
+[ext_resource type="Texture2D" uid="uid://lid68j7g12c7" path="res://open_space/assets/sprites/mission_select_ui/menu/menu_mission_select_cockpi_screen.png" id="3_pi1h3"]
 [ext_resource type="Texture2D" uid="uid://sbuh1rwmyd1v" path="res://open_space/assets/sprites/mission_select_ui/menu/menu_mission_select_mission_image_frame.png" id="5_2iyxa"]
+[ext_resource type="Texture2D" uid="uid://cdoe8nponkoo3" path="res://open_space/assets/sprites/mission_select_ui/planets/edelia/menu_mission_select_mission_image_2.png" id="5_adg6q"]
+[ext_resource type="Texture2D" uid="uid://dkbwsccso7wbf" path="res://open_space/assets/sprites/mission_select_ui/menu/pilot_hand.png" id="9_iymsn"]
+[ext_resource type="Texture2D" uid="uid://blhr3ciwsmkbc" path="res://open_space/assets/sprites/mission_select_ui/menu/ship_dive_in.png" id="10_afhpm"]
+[ext_resource type="Texture2D" uid="uid://dp7mvas70gjxk" path="res://open_space/assets/sprites/mission_select_ui/menu/hands_corrector.png" id="10_g2jf4"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_4gm8x"]
+atlas = ExtResource("9_iymsn")
+region = Rect2(320, 0, 320, 320)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_505k1"]
+atlas = ExtResource("9_iymsn")
+region = Rect2(0, 0, 320, 320)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_4xdfu"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_4gm8x")
+}],
+"loop": true,
+"name": &"forward",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_505k1")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}]
 
 [node name="MissionSelectMenu" type="CanvasLayer" unique_id=1597812842]
 process_mode = 3
 layer = 10
 script = ExtResource("1_script")
 
-[node name="Background" type="Sprite2D" parent="." unique_id=20008749]
-position = Vector2(320, 179)
+[node name="Background" type="Control" parent="." unique_id=1544494710]
+layout_mode = 3
+anchors_preset = 0
 
-[node name="Overlay" type="Sprite2D" parent="." unique_id=1565405424]
-position = Vector2(320, 179)
-texture = ExtResource("2_overlay")
+[node name="Space" type="Sprite2D" parent="Background" unique_id=20008749]
+position = Vector2(372, 369)
+texture = ExtResource("2_njeap")
 
-[node name="Header" type="Node2D" parent="." unique_id=205699987]
-position = Vector2(320, 178)
+[node name="Space2" type="Sprite2D" parent="Background" unique_id=1197069464]
+position = Vector2(1020, 370)
+texture = ExtResource("2_njeap")
 
-[node name="NameLabel" type="Label" parent="Header" unique_id=533211482]
-offset_left = -309.0
-offset_top = -167.0
-offset_right = -130.0
-offset_bottom = -144.0
+[node name="Planet" type="Control" parent="." unique_id=1718103204]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="Planet" type="Sprite2D" parent="Planet" unique_id=244759407]
+position = Vector2(691, 187)
+scale = Vector2(1.8, 1.8)
+texture = ExtResource("3_1ekc7")
+
+[node name="PointsContainer" type="Node2D" parent="Planet" unique_id=954039978]
+position = Vector2(691, 187)
+scale = Vector2(1.8, 1.8)
+
+[node name="Cockpit" type="Control" parent="." unique_id=437892363]
+layout_mode = 3
+anchors_preset = 0
+offset_top = -2.0
+offset_bottom = -2.0
+
+[node name="MenuMissionSelectCockpiGlasst" type="Sprite2D" parent="Cockpit" unique_id=576557232]
+position = Vector2(640, 362)
+texture = ExtResource("2_ybmhw")
+metadata/_edit_lock_ = true
+
+[node name="MenuMissionSelectCockpit" type="Sprite2D" parent="Cockpit" unique_id=862192611]
+position = Vector2(640, 518)
+texture = ExtResource("3_adg6q")
+metadata/_edit_lock_ = true
+
+[node name="MenuMissionSelectCockpiScreen" type="Sprite2D" parent="Cockpit" unique_id=1775834588]
+position = Vector2(640, 518)
+texture = ExtResource("3_pi1h3")
+
+[node name="ListContainer" type="Node2D" parent="." unique_id=1590539986]
+position = Vector2(6, 546)
+
+[node name="CentralScreen" type="Control" parent="." unique_id=915758201]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 694.0
+offset_top = 479.0
+offset_right = 694.0
+offset_bottom = 479.0
+
+[node name="NameLabel" type="Label" parent="CentralScreen" unique_id=533211482]
+layout_mode = 0
+offset_left = -306.0
+offset_top = -81.0
+offset_right = -127.0
+offset_bottom = -58.0
 text = "PLANET"
 
-[node name="DescriptionLabel" type="Label" parent="Header" unique_id=510468998]
-offset_left = -310.0
-offset_top = -141.0
-offset_right = -129.0
-offset_bottom = -74.0
+[node name="DescriptionLabel" type="Label" parent="CentralScreen" unique_id=510468998]
+layout_mode = 0
+offset_left = -304.0
+offset_top = -49.0
+offset_right = -212.225
+offset_bottom = 183.035
 theme_override_font_sizes/font_size = 10
 autowrap_mode = 2
 
-[node name="ListContainer" type="Node2D" parent="." unique_id=1590539986]
-position = Vector2(8, 108)
+[node name="MissionImagePreview" type="Sprite2D" parent="CentralScreen" unique_id=1228889156]
+texture = ExtResource("5_adg6q")
 
-[node name="PlanetMap" type="Sprite2D" parent="." unique_id=244759407]
-position = Vector2(403, 157.18)
-
-[node name="PointsContainer" type="Node2D" parent="PlanetMap" unique_id=954039978]
-
-[node name="InfoPanel" type="Node2D" parent="." unique_id=1312614233]
-
-[node name="MissionImagePreview" type="Sprite2D" parent="InfoPanel" unique_id=1228889156]
-position = Vector2(48, 293)
-
-[node name="MissionImagePreviewFrame" type="Sprite2D" parent="InfoPanel" unique_id=1386997744]
-position = Vector2(48, 293)
+[node name="MissionImagePreviewFrame" type="Sprite2D" parent="CentralScreen" unique_id=1386997744]
 texture = ExtResource("5_2iyxa")
 
-[node name="DescLabel" type="Label" parent="InfoPanel" unique_id=1107792895]
-offset_left = 89.0
-offset_top = 264.0
-offset_right = 189.0
-offset_bottom = 322.0
+[node name="DescLabel" type="Label" parent="CentralScreen" unique_id=1107792895]
+layout_mode = 0
+offset_left = -204.0
+offset_top = 55.0
+offset_right = 204.0
+offset_bottom = 113.0
 theme_override_font_sizes/font_size = 8
 autowrap_mode = 3
+
+[node name="Hands" type="Control" parent="." unique_id=2109084416]
+layout_mode = 3
+anchors_preset = 0
+offset_left = 639.0
+offset_top = 718.0
+offset_right = 639.0
+offset_bottom = 718.0
+
+[node name="HandLeft" type="AnimatedSprite2D" parent="Hands" unique_id=1996473160]
+position = Vector2(-482, 0)
+sprite_frames = SubResource("SpriteFrames_4xdfu")
+animation = &"idle"
+
+[node name="HandRight" type="AnimatedSprite2D" parent="Hands" unique_id=486238772]
+position = Vector2(482, -4)
+scale = Vector2(-1, 1)
+sprite_frames = SubResource("SpriteFrames_4xdfu")
+animation = &"idle"
+
+[node name="HandsCorrector" type="Sprite2D" parent="Hands" unique_id=988741505]
+position = Vector2(2, 107)
+texture = ExtResource("10_g2jf4")
+
+[node name="SpaceShip" type="Control" parent="." unique_id=1651456403]
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="ShipDiveIn" type="Sprite2D" parent="SpaceShip" unique_id=217660367]
+visible = false
+position = Vector2(647, 308)
+texture = ExtResource("10_afhpm")
+
+[node name="LeftEngine" type="Marker2D" parent="SpaceShip/ShipDiveIn" unique_id=114892078]
+position = Vector2(-51, 13)
+
+[node name="RightEngine" type="Marker2D" parent="SpaceShip/ShipDiveIn" unique_id=20454172]
+position = Vector2(51, 13)
