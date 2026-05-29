@@ -12,15 +12,17 @@ layer = 10
 script = ExtResource("1_pmscr")
 
 [node name="MenuBackground" type="Sprite2D" parent="." unique_id=1166869381]
-position = Vector2(320.37283, 179.89725)
-scale = Vector2(1.0005707, 1.0005709)
+position = Vector2(640.74566, 359.7945)
+scale = Vector2(2, 2)
 texture = ExtResource("2_prlwd")
 
 [node name="MenuOverlay" type="Sprite2D" parent="." unique_id=1026570547]
-position = Vector2(320, 180)
+position = Vector2(640, 360)
+scale = Vector2(2, 2)
 texture = ExtResource("3_kttvs")
 
 [node name="ShipLayout" type="Node2D" parent="." unique_id=1492636392]
+scale = Vector2(2, 2)
 
 [node name="MainWeaponFrame" parent="ShipLayout" unique_id=614383502 instance=ExtResource("4_wframe")]
 position = Vector2(93, 148)
@@ -32,5 +34,6 @@ position = Vector2(261, 148)
 position = Vector2(488, 148)
 
 [node name="ModuleList" parent="." unique_id=379974278 instance=ExtResource("6_ml")]
-position = Vector2(177, 148)
+position = Vector2(354, 296)
+scale = Vector2(2, 2)
 item_origin = Vector2(0, -90)

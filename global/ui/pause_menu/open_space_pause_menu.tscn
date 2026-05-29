@@ -13,46 +13,49 @@ script = ExtResource("1_pm")
 mission_mode = false
 
 [node name="Dim" type="ColorRect" parent="." unique_id=352031597]
-offset_right = 640.0
-offset_bottom = 360.0
+offset_right = 1280.0
+offset_bottom = 720.0
 color = Color(0, 0, 0, 0.35)
 
 [node name="MenuContainer" type="Node2D" parent="." unique_id=1882664527]
-position = Vector2(0, 113)
+position = Vector2(0, 226)
 
 [node name="Header" type="Node2D" parent="MenuContainer" unique_id=1506917257]
-position = Vector2(105, 23)
+position = Vector2(210, 46)
 
 [node name="Sprite" type="Sprite2D" parent="MenuContainer/Header" unique_id=1986869847]
-position = Vector2(-32.5, -1.5)
+position = Vector2(-65.0, -3.0)
+scale = Vector2(2, 2)
 texture = ExtResource("2_hdr")
 
 [node name="PauseLabel" type="Label" parent="MenuContainer/Header" unique_id=1520337342]
-offset_left = -87.5
-offset_top = -8.5
-offset_right = -20.5
-offset_bottom = 5.5
-theme_override_font_sizes/font_size = 8
+offset_left = -175.0
+offset_top = -17.0
+offset_right = -41.0
+offset_bottom = 11.0
+theme_override_font_sizes/font_size = 16
 text = "Pause Menu"
 metadata/_edit_use_anchors_ = true
 
 [node name="Option0" type="Node2D" parent="MenuContainer" unique_id=88372837]
-position = Vector2(0, 56)
+position = Vector2(0, 112)
 
 [node name="Bg" type="Sprite2D" parent="MenuContainer/Option0" unique_id=92264783]
-position = Vector2(104.5, -1)
+position = Vector2(209.0, -2.0)
+scale = Vector2(2, 2)
 texture = ExtResource("3_btn")
 
 [node name="Icon" type="Sprite2D" parent="MenuContainer/Option0" unique_id=518696537]
-position = Vector2(29.5, -1)
+position = Vector2(59.0, -2.0)
+scale = Vector2(2, 2)
 texture = ExtResource("4_ic0")
 
 [node name="Label" type="Label" parent="MenuContainer/Option0" unique_id=1993783254]
-offset_left = 47.935
-offset_top = -9.0
-offset_right = 172.93
-offset_bottom = 7.0
-theme_override_font_sizes/font_size = 10
+offset_left = 95.87
+offset_top = -18.0
+offset_right = 345.86
+offset_bottom = 14.0
+theme_override_font_sizes/font_size = 20
 text = "Resume"
 metadata/_edit_use_anchors_ = true
 
@@ -63,21 +66,23 @@ visible = false
 visible = false
 
 [node name="Option3" type="Node2D" parent="MenuContainer" unique_id=814843902]
-position = Vector2(0, 83)
+position = Vector2(0, 166)
 
 [node name="Bg" type="Sprite2D" parent="MenuContainer/Option3" unique_id=472545538]
-position = Vector2(104.5, 7)
+position = Vector2(209.0, 14.0)
+scale = Vector2(2, 2)
 texture = ExtResource("3_btn")
 
 [node name="Icon" type="Sprite2D" parent="MenuContainer/Option3" unique_id=795907913]
-position = Vector2(29.5, 7)
+position = Vector2(59.0, 14.0)
+scale = Vector2(2, 2)
 texture = ExtResource("7_ic3")
 
 [node name="Label" type="Label" parent="MenuContainer/Option3" unique_id=794298608]
-offset_left = 47.935
-offset_top = -1.0
-offset_right = 172.93
-offset_bottom = 15.0
-theme_override_font_sizes/font_size = 10
+offset_left = 95.87
+offset_top = -2.0
+offset_right = 345.86
+offset_bottom = 30.0
+theme_override_font_sizes/font_size = 20
 text = "Exit Game"
 metadata/_edit_use_anchors_ = true

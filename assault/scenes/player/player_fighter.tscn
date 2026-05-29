@@ -188,37 +188,37 @@ animations = [{
 "speed": 5.0
 }, {
 "frames": [{
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_kp3xl")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_ibqhd")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_p6imc")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_rx51h")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_xrroc")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_3lsxu")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_um5nm")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_ofy1v")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_s7012")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_sn221")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_7ica0")
 }],
 "loop": true,
@@ -226,37 +226,37 @@ animations = [{
 "speed": 5.0
 }, {
 "frames": [{
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_kp3xl")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_sn221")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_s7012")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_ofy1v")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_um5nm")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_3lsxu")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_xrroc")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_rx51h")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_yrfg3")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_u2yft")
 }, {
-"duration": 0.1,
+"duration": 0.2,
 "texture": SubResource("AtlasTexture_kp3xl")
 }],
 "loop": true,
@@ -311,7 +311,7 @@ script = ExtResource("17_tmphp")
 [node name="ShipSprite2D" type="AnimatedSprite2D" parent="SpriteAnchor" unique_id=1013546849]
 texture_filter = 1
 sprite_frames = SubResource("SpriteFrames_ht8os")
-animation = &"flame_boost"
+animation = &"roll_to_the_right"
 
 [node name="MuzzleLeft" type="Marker2D" parent="SpriteAnchor" unique_id=231035035]
 position = Vector2(-18, 0)

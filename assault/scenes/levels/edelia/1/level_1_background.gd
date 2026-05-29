@@ -26,7 +26,10 @@ extends BackgroundController
 ## Vertical offset range of arena_camera.gd — tiles must cover this many pixels
 ## above the top of the screen so the background has no gap when the camera
 ## pans to its topmost position (CanvasLayer.offset.y = +V_LIMIT).
-const _V_LIMIT : float = 190.0
+const _V_LIMIT : float = 380.0
+## Horizontal pan range of arena_camera.gd — tiles must extend this many pixels
+## beyond each screen edge so horizontal panning reveals no gap.
+const _H_LIMIT : float = 100.0
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. STARS BASE LAYER
@@ -458,11 +461,12 @@ func _setup_tile_pair(a: TextureRect, b: TextureRect, screen: Vector2, tex: Text
 	var needed_h : float = screen.y + 2.0 * _V_LIMIT
 	var n_tiles: int = maxi(1, int(ceil(needed_h / tex_h)))
 	var tile_h: float = tex_h * n_tiles
+	## Width must cover the screen + H_LIMIT overhang on each side so horizontal
+	## camera panning never reveals a gap. Texture repeats to fill the rect.
+	var tile_w: float = screen.x + 2.0 * _H_LIMIT
 	for tile: TextureRect in [a, b]:
 		tile.texture        = tex
-		## Use the full texture width so wider-than-screen textures are centred
-		## by _scroll_pair rather than clipped to the left edge.
-		tile.size           = Vector2(tex.get_width(), tile_h)
+		tile.size           = Vector2(tile_w, tile_h)
 		tile.stretch_mode   = TextureRect.STRETCH_TILE
 		tile.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 		tile.pivot_offset   = Vector2.ZERO

@@ -21,8 +21,8 @@ const _COLOR_HOVERED := Color(1.4, 1.4, 1.0)
 ## Camera zoom applied when the menu opens.
 const _ZOOM_TARGET := Vector2(3.0, 3.0)
 ## World-space offset so the ship centres in the right half of the screen.
-## Derived: offset.x = -(screen_half_width / zoom) = -(160 / 3.0) ~ -53
-const _CAMERA_OFFSET := Vector2(-53.0, 0.0)
+## Derived: offset.x = -(screen_half_width / zoom) = -(320 / 3.0) ~ -107
+const _CAMERA_OFFSET := Vector2(-107.0, 0.0)
 
 ## false = open-space mode: only Resume and Exit Game are shown.
 @export var mission_mode: bool = true

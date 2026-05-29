@@ -136,8 +136,8 @@ func process_physics(delta: float):
 		actor.velocity = velocity
 		actor.move_and_slide()
 		## Clamp to world bounds so a fast dash cannot breach the hard limit.
-		actor.global_position.x = clamp(actor.global_position.x, -50.0, 690.0)
-		actor.global_position.y = clamp(actor.global_position.y, -190.0, 550.0)
+		actor.global_position.x = clamp(actor.global_position.x, -100.0, 1380.0)
+		actor.global_position.y = clamp(actor.global_position.y, -380.0, 1100.0)
 
 	
 # --- Timers Callback ---
