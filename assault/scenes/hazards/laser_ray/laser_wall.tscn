@@ -1,0 +1,53 @@
+[gd_scene format=3 uid="uid://claserwall0a1"]
+
+[ext_resource type="PackedScene" uid="uid://b4k7vwxqrjlna" path="res://assault/scenes/hazards/laser_ray/laser_ray.tscn" id="1_laser"]
+
+[node name="LaserWall" type="Node2D"]
+
+[node name="Laser0" parent="." instance=ExtResource("1_laser")]
+position = Vector2(28, 0)
+warn_duration = 3.0
+
+[node name="Laser1" parent="." instance=ExtResource("1_laser")]
+position = Vector2(84, 0)
+warn_duration = 3.0
+
+[node name="Laser2" parent="." instance=ExtResource("1_laser")]
+position = Vector2(140, 0)
+warn_duration = 3.0
+
+[node name="Laser3" parent="." instance=ExtResource("1_laser")]
+position = Vector2(196, 0)
+warn_duration = 3.0
+
+[node name="Laser4" parent="." instance=ExtResource("1_laser")]
+position = Vector2(252, 0)
+warn_duration = 3.0
+
+[node name="Laser5" parent="." instance=ExtResource("1_laser")]
+position = Vector2(308, 0)
+warn_duration = 3.0
+
+[node name="Laser6" parent="." instance=ExtResource("1_laser")]
+position = Vector2(364, 0)
+warn_duration = 3.0
+
+[node name="Laser7" parent="." instance=ExtResource("1_laser")]
+position = Vector2(420, 0)
+warn_duration = 3.0
+
+[node name="Laser8" parent="." instance=ExtResource("1_laser")]
+position = Vector2(476, 0)
+warn_duration = 3.0
+
+[node name="Laser9" parent="." instance=ExtResource("1_laser")]
+position = Vector2(532, 0)
+warn_duration = 3.0
+
+[node name="Laser10" parent="." instance=ExtResource("1_laser")]
+position = Vector2(588, 0)
+warn_duration = 3.0
+
+[node name="Laser11" parent="." instance=ExtResource("1_laser")]
+position = Vector2(644, 0)
+warn_duration = 3.0

@@ -1,6 +1,7 @@
 [gd_scene format=3 uid="uid://c7oxqmyxw0vxs"]
 
 [ext_resource type="PackedScene" uid="uid://ty6a2vpnmrr5" path="res://assault/scenes/player/player_fighter.tscn" id="3_60rwg"]
+[ext_resource type="PackedScene" uid="uid://claserwall0a1" path="res://assault/scenes/hazards/laser_ray/laser_wall.tscn" id="20_laser"]
 [ext_resource type="Script" uid="uid://dutkvjs1np4nd" path="res://assault/scenes/systems/wave_manager/wave_manager.gd" id="11_wave"]
 [ext_resource type="PackedScene" uid="uid://bsrr6ov5ery1u" path="res://assault/scenes/levels/edelia/1/level_1_background.tscn" id="14_bg"]
 [ext_resource type="Script" uid="uid://dnrlrei5uaasv" path="res://assault/scenes/systems/level_director/level_director.gd" id="15_ldir"]
@@ -38,6 +39,9 @@ script = ExtResource("16_dir1")
 director = NodePath("../LevelDirector")
 wave_manager = NodePath("../WaveManager")
 score_tracker = NodePath("../ScoreTracker")
+
+[node name="LaserWallWave" parent="." unique_id=1847302951 instance=ExtResource("20_laser")]
+position = Vector2(0, -380)
 
 [node name="PlayerFighter" parent="." unique_id=1634176334 instance=ExtResource("3_60rwg")]
 position = Vector2(604, 542)

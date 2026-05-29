@@ -114,6 +114,7 @@ func _toggle() -> void:
 		_modules_panel.refresh_equipped()
 		_init_cursor()
 		_refresh_cursor()
+		_refresh_selection()
 	else:
 		visible = false
 		if _was_paused_by_us:

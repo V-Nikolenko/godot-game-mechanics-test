@@ -449,7 +449,11 @@ func _animate_open() -> void:
 	var planet_snap: Vector2 = _planet_container.position
 	_planet_sprite.scale      = _orig_planet_scale
 	_points_container.scale   = _orig_planet_scale
-	_planet_container.position = planet_snap + Vector2(0.0, 900.0)
+	## Start below the screen: position the container so the planet sprite centre
+	## is 300 px below the viewport bottom edge.  Works at any resolution.
+	var vp_h: float = get_viewport().get_visible_rect().size.y
+	_planet_container.position = Vector2(planet_snap.x,
+			vp_h - _planet_sprite.position.y + 300.0)
 	## UI panels start slightly below their resting positions.
 	_list_container.position  = _orig_list_pos    + Vector2(0.0, 14.0)
 	_central_screen.position  = _orig_central_pos + Vector2(0.0, 14.0)
@@ -458,7 +462,7 @@ func _animate_open() -> void:
 	_open_tween = create_tween().set_parallel(true)
 
 	## Planet rises from below — the hero motion that sells the dive approach.
-	_open_tween.tween_property(_planet_container, "position", planet_snap, 0.70) \
+	_open_tween.tween_property(_planet_container, "position", planet_snap, 1.10) \
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
 	## UI elements slide up staggered slightly behind the planet.

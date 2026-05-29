@@ -12,6 +12,7 @@ extends Node
 const _MISSION_NUMBER: int = 1
 const _MISSION_CONFIG_PATH := "res://open_space/scenes/mission_data/planets/edelia/edelia_01_assault_mission_break_enemy_blockade_resource.tres"
 const _DEBRIEF_SCENE: PackedScene = preload("res://assault/scenes/gui/level_debrief.tscn")
+const _LASER_SCENE: PackedScene = preload("res://assault/scenes/hazards/laser_ray/laser_ray.tscn")
 @export var director: LevelDirector
 @export var wave_manager: WaveManager
 @export var score_tracker: ScoreTracker
@@ -51,14 +52,26 @@ func _ready() -> void:
 		&"deep_space": [
 			{"time": 10.0, "callable": _trigger_skill_challenge_asteroid_corridor},
 			{"time": 15.0, "callable": _spawn_bonus_drone_left_to_right},
+			{"time":  6.0, "callable": _spawn_laser_columns.bind([128, 640, 1152])},
+			{"time": 14.0, "callable": _spawn_laser_columns.bind([384, 896])},
+			{"time": 22.0, "callable": _spawn_laser_columns.bind([256, 640, 1024])},
 		],
 		&"planet_approach": [
 			{"time": 40.0, "callable": _spawn_bonus_drone_right_to_left},
 			{"time": 70.0, "callable": _trigger_skill_challenge_bullet_weave},
 			{"time": 90.0, "callable": _spawn_bonus_drone_left_to_right},
+			{"time": 10.0, "callable": _spawn_laser_columns.bind([200, 600, 1000])},
+			{"time": 25.0, "callable": _spawn_laser_columns.bind([400, 800])},
+			{"time": 38.0, "callable": _spawn_laser_columns.bind([128, 384, 640, 896, 1152])},
+			{"time": 55.0, "callable": _spawn_laser_columns.bind([300, 700, 1100])},
+			{"time": 78.0, "callable": _spawn_laser_columns.bind([150, 550, 950])},
+			{"time": 98.0, "callable": _spawn_laser_columns.bind([450, 850])},
 		],
 		&"cloud_descent": [
 			{"time": 25.0, "callable": _spawn_bonus_drone_right_to_left},
+			{"time":  8.0, "callable": _spawn_laser_columns.bind([256, 768])},
+			{"time": 18.0, "callable": _spawn_laser_columns.bind([128, 512, 896])},
+			{"time": 34.0, "callable": _spawn_laser_columns.bind([384, 768, 1152])},
 		],
 	}
 
@@ -136,6 +149,28 @@ func _spawn_bonus_drone(camera_offset: Vector2, angle: float) -> void:
 	# Wave index -1 = not part of any wave clear bonus.
 	wave_manager.enemy_spawned.emit(entity, -1)
 	print("[Level1Director] Spawned BonusDrone at offset (%.0f, %.0f)" % [camera_offset.x, camera_offset.y])
+
+
+# ── Laser hazard columns (section-side, telegraphed) ─────────────────────────
+
+## Lights a vertical laser at each given screen-x column. The ArenaCamera keeps
+## global_position pinned at (640, 360), so fixed world coordinates map straight
+## to screen columns. Origin y = -380 (top of the play area) makes each beam
+## extend down through the full screen height. Each beam telegraphs for `warn`
+## seconds (small red line) before charging up, then auto-dissolves after `active`.
+func _spawn_laser_columns(columns: Array, warn: float = 3.0, active: float = 4.0) -> void:
+	var level: Node = get_parent()
+	if level == null:
+		return
+	for col in columns:
+		var laser := _LASER_SCENE.instantiate() as LaserRay
+		laser.auto_start      = false
+		laser.warn_duration   = warn
+		laser.active_duration = active
+		level.add_child(laser)
+		laser.global_position = Vector2(float(col), -380.0)
+		laser.start()
+	print("[Level1Director] Laser columns lit: %s" % str(columns))
 
 
 # ── Skill challenges ──────────────────────────────────────────────────────────
