@@ -216,6 +216,12 @@ var _scroll_cloud_3:       float = 0.0
 var _scroll_cloud_4:       float = 0.0
 var _scroll_surface:       float = 0.0
 
+## Dash-panel boost multiplier on every scroll layer (1.0 = normal).
+var _scroll_multiplier: float = 1.0
+## Player-throttle multiplier on every scroll layer (1.0 = normal). Stacks with the
+## dash boost so flying higher streams the world by faster.
+var _throttle_multiplier: float = 1.0
+
 # ── Setup ─────────────────────────────────────────────────────────────────────
 
 func _ready() -> void:
@@ -248,15 +254,23 @@ func _ready() -> void:
 
 # ── Per-frame ─────────────────────────────────────────────────────────────────
 
+func set_scroll_multiplier(m: float) -> void:
+	_scroll_multiplier = maxf(0.0, m)
+
+func set_throttle_scroll(m: float) -> void:
+	_throttle_multiplier = maxf(0.0, m)
+
+
 func _process(delta: float) -> void:
-	_scroll_stars_base    += delta * speed_stars_base
-	_scroll_stars_overlay += delta * speed_stars_overlay
-	_scroll_nebula        += delta * speed_nebula
-	_scroll_cloud_1       += delta * speed_cloud_1
-	_scroll_cloud_2       += delta * speed_cloud_2
-	_scroll_cloud_3       += delta * speed_cloud_3
-	_scroll_cloud_4       += delta * speed_cloud_4
-	_scroll_surface       += delta * speed_surface
+	var m: float = _scroll_multiplier * _throttle_multiplier
+	_scroll_stars_base    += delta * speed_stars_base    * m
+	_scroll_stars_overlay += delta * speed_stars_overlay * m
+	_scroll_nebula        += delta * speed_nebula        * m
+	_scroll_cloud_1       += delta * speed_cloud_1       * m
+	_scroll_cloud_2       += delta * speed_cloud_2       * m
+	_scroll_cloud_3       += delta * speed_cloud_3       * m
+	_scroll_cloud_4       += delta * speed_cloud_4       * m
+	_scroll_surface       += delta * speed_surface       * m
 
 	var screen := get_viewport().get_visible_rect().size
 

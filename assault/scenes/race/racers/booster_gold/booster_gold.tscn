@@ -1,0 +1,232 @@
+[gd_scene format=3 uid="uid://duo0a1fy8ifqx"]
+
+[ext_resource type="Script" uid="uid://bxau1nypw0nne" path="res://assault/scenes/race/racers/booster_gold/booster_gold_animator.gd" id="animator"]
+[ext_resource type="Script" uid="uid://dlrabe3t5mbkw" path="res://assault/scenes/race/core/racer_state_machine.gd" id="brain"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="health"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="hurt"]
+[ext_resource type="Script" uid="uid://bat3y3kdq2gkw" path="res://assault/scenes/race/core/lateral_mover.gd" id="mover"]
+[ext_resource type="Script" uid="uid://c0btguhdqg2vr" path="res://assault/scenes/race/core/race_participant.gd" id="part"]
+[ext_resource type="Script" uid="uid://qvvlilj04ur4" path="res://global/components/damage_reaction.gd" id="react"]
+[ext_resource type="Script" uid="uid://dcxks8plvsxxs" path="res://assault/scenes/race/core/sensors.gd" id="sensors"]
+[ext_resource type="Script" uid="uid://cw3my8k56vtk0" path="res://global/components/shield_component.gd" id="shield"]
+[ext_resource type="Script" uid="uid://f1omqdyk3rec" path="res://assault/scenes/race/core/race_ship.gd" id="ship"]
+[ext_resource type="Script" uid="uid://cu0tfdr1rbml8" path="res://assault/scenes/race/racers/booster_gold/states/bg_dash_state.gd" id="s_dash"]
+[ext_resource type="Script" uid="uid://eds2gqbnipuu" path="res://assault/scenes/race/racers/booster_gold/states/bg_evade_state.gd" id="s_evade"]
+[ext_resource type="Script" uid="uid://de0626lxk3fq5" path="res://assault/scenes/race/racers/booster_gold/states/bg_frontrun_state.gd" id="s_frontrun"]
+[ext_resource type="Script" uid="uid://ddohqavfwm5r8" path="res://assault/scenes/race/racers/booster_gold/states/bg_grab_panel_state.gd" id="s_grab"]
+[ext_resource type="Script" uid="uid://c5uhbrgqu8lto" path="res://assault/scenes/race/racers/booster_gold/states/bg_juke_state.gd" id="s_juke"]
+[ext_resource type="Script" uid="uid://d2auxs0p0vgon" path="res://assault/scenes/race/racers/booster_gold/states/bg_reclaim_state.gd" id="s_reclaim"]
+[ext_resource type="Texture2D" uid="uid://mcurbuml8vx2" path="res://assault/assets/sprites/racers/gold_exprerience.png" id="tex"]
+[ext_resource type="Script" uid="uid://bwc1gfmwb8s2e" path="res://assault/scenes/race/core/racer_weapon.gd" id="weapon"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hyg0r"]
+atlas = ExtResource("tex")
+region = Rect2(0, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ql4o0"]
+atlas = ExtResource("tex")
+region = Rect2(576, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ybyej"]
+atlas = ExtResource("tex")
+region = Rect2(512, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_v1xhd"]
+atlas = ExtResource("tex")
+region = Rect2(448, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_iy6i1"]
+atlas = ExtResource("tex")
+region = Rect2(384, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ipnu2"]
+atlas = ExtResource("tex")
+region = Rect2(320, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_l4rl1"]
+atlas = ExtResource("tex")
+region = Rect2(256, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_c6a32"]
+atlas = ExtResource("tex")
+region = Rect2(192, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_31lo0"]
+atlas = ExtResource("tex")
+region = Rect2(128, 0, 64, 64)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_u7tpw"]
+atlas = ExtResource("tex")
+region = Rect2(64, 0, 64, 64)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_dw681"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hyg0r")
+}],
+"loop": false,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hyg0r")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ql4o0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ybyej")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_v1xhd")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_iy6i1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ipnu2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_l4rl1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_c6a32")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_31lo0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_u7tpw")
+}],
+"loop": false,
+"name": &"roll_to_the_left",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hyg0r")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_u7tpw")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_31lo0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_c6a32")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_l4rl1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ipnu2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_iy6i1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_v1xhd")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ybyej")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ql4o0")
+}],
+"loop": false,
+"name": &"roll_to_the_right",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ql4o0")
+}],
+"loop": false,
+"name": &"tilt_to_the_left",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_u7tpw")
+}],
+"loop": false,
+"name": &"tilt_to_the_right",
+"speed": 5.0
+}]
+
+[sub_resource type="CircleShape2D" id="body"]
+radius = 18.0
+
+[sub_resource type="CircleShape2D" id="hurtshape"]
+radius = 18.0
+
+[node name="BoosterGold" type="CharacterBody2D" unique_id=1099687171]
+script = ExtResource("ship")
+
+[node name="Sprite2D" type="AnimatedSprite2D" parent="." unique_id=1417169153]
+sprite_frames = SubResource("SpriteFrames_dw681")
+animation = &"idle"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1201135405]
+shape = SubResource("body")
+
+[node name="HurtBox" type="Area2D" parent="." unique_id=1843384510]
+collision_layer = 512
+collision_mask = 1088
+script = ExtResource("hurt")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox" unique_id=462429295]
+shape = SubResource("hurtshape")
+
+[node name="Health" type="Node" parent="." unique_id=720130938]
+script = ExtResource("health")
+max_health = 60
+current_health = 60
+
+[node name="Shield" type="Node" parent="." unique_id=1833881841]
+script = ExtResource("shield")
+bind_progression = false
+permanent_charges = 10
+
+[node name="DamageReaction" type="Node" parent="." unique_id=827931476]
+script = ExtResource("react")
+
+[node name="RaceParticipant" type="Node" parent="." unique_id=1802027029]
+script = ExtResource("part")
+decay_per_sec = 16.0
+
+[node name="Sensors" type="Node" parent="." unique_id=713530581]
+script = ExtResource("sensors")
+
+[node name="RacerWeapon" type="Node" parent="." unique_id=1024610672]
+script = ExtResource("weapon")
+
+[node name="LateralMover" type="Node" parent="." unique_id=721857734]
+script = ExtResource("mover")
+
+[node name="BoosterGoldAnimator" type="Node" parent="." unique_id=279066866]
+script = ExtResource("animator")
+
+[node name="Brain" type="Node" parent="." unique_id=1947785885]
+script = ExtResource("brain")
+initial_state_name = &"BgFrontrun"
+
+[node name="BgFrontrun" type="Node" parent="Brain" unique_id=849760402]
+script = ExtResource("s_frontrun")
+
+[node name="BgGrabPanel" type="Node" parent="Brain" unique_id=1541579575]
+script = ExtResource("s_grab")
+
+[node name="BgReclaim" type="Node" parent="Brain" unique_id=1707884629]
+script = ExtResource("s_reclaim")
+
+[node name="BgDash" type="Node" parent="Brain" unique_id=273351332]
+script = ExtResource("s_dash")
+
+[node name="BgJuke" type="Node" parent="Brain" unique_id=1444912656]
+script = ExtResource("s_juke")
+
+[node name="BgEvade" type="Node" parent="Brain" unique_id=1998646150]
+script = ExtResource("s_evade")

@@ -298,6 +298,7 @@ metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
 [node name="ShieldComponent" type="Node" parent="." unique_id=777327595]
 script = ExtResource("15_shld")
+bind_progression = true
 
 [node name="OverheatComponent" type="Node" parent="." unique_id=1351832515]
 script = ExtResource("12_ctrog")

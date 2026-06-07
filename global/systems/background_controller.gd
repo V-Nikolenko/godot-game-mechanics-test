@@ -18,3 +18,16 @@ func transition_to(phase: BackgroundPhase, duration: float) -> void:
 		"[BackgroundController] transition_to() not overridden on %s" %
 		[get_script().resource_path if get_script() else "unknown"]
 	)
+
+## Multiply all scrolling-layer speeds by [m] (1.0 = normal). Default is a
+## deliberate silent no-op for controllers that have no scrolling layers;
+## subclasses that scroll layers should override this.
+## Used by dash panels to speed up the world while the player is boosting.
+func set_scroll_multiplier(m: float) -> void:
+	pass
+
+## Multiply all scrolling-layer speeds by [m] based on the player's race throttle
+## (player screen position). Combined multiplicatively with set_scroll_multiplier so
+## a dash boost stacks on top of the current throttle-driven base speed. Default no-op.
+func set_throttle_scroll(m: float) -> void:
+	pass

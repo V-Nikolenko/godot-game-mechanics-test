@@ -70,6 +70,11 @@ func _physics_process(_delta: float) -> void:
 	if DialogPlayer.is_active:
 		velocity = Vector2.ZERO
 		return
+	## Wall-hit knockback owns movement for its brief duration so held input can't
+	## cancel the shove. move_state also yields while this is active (single mover).
+	if is_knockback_active():
+		apply_knockback_motion(_delta)
+		return
 	var speed := velocity.length()
 	var forward_speed  := -velocity.y
 	var backward_speed :=  velocity.y
@@ -95,8 +100,10 @@ func _physics_process(_delta: float) -> void:
 		global_position.y = clamp(global_position.y, -380.0, 1100.0)
 		return
 
-	_thruster.set_state(tstate)
-	_thruster_right.set_state(tstate)
+	# Only drive the state automatically when no external system has locked it.
+	if _thruster_state_override < 0:
+		_thruster.set_state(tstate)
+		_thruster_right.set_state(tstate)
 
 func _input(event: InputEvent) -> void:
 	## _input fires before _unhandled_input — modules get first pick of H-key.
@@ -109,6 +116,23 @@ func _input(event: InputEvent) -> void:
 		if mod.try_activate(self):
 			get_viewport().set_input_as_handled()
 			return  ## Consumed by module.
+
+## -1 means "no override — let _physics_process drive the thruster state normally."
+## Any other value holds that state and blocks the auto-state calculation.
+var _thruster_state_override: int = -1
+
+## Lock both engine thrusters to a specific state (e.g. BOOST_PANEL for a dash panel).
+## The lock persists until clear_thruster_override() is called.
+func set_thruster_state(state: int) -> void:
+	_thruster_state_override = state
+	if _thruster:
+		_thruster.set_state(state)
+	if _thruster_right:
+		_thruster_right.set_state(state)
+
+## Release the thruster-state lock — _physics_process resumes controlling the state.
+func clear_thruster_override() -> void:
+	_thruster_state_override = -1
 
 func _get_or_create_module(id: StringName) -> ShipModuleBase:
 	if not _module_pool.has(id):

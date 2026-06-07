@@ -44,6 +44,14 @@ var pierce_module_active: bool = false
 ## player_ship._handle_thrust() skips damping/cap when this is true.
 var engine_boost_active: bool = false
 
+## Knockback impulse (px/s) applied e.g. when ramming a dash-panel wall. Decays to
+## zero over a fraction of a second. While active it OVERRIDES input-driven movement
+## (move_state yields to it) so the player is actually shoved off the wall instead of
+## the held movement key instantly cancelling the push. Driven via move_and_slide so
+## it still respects solid walls. World bounds clamped in apply_knockback_motion().
+var _knockback: Vector2 = Vector2.ZERO
+const _KNOCKBACK_DECAY: float = 1200.0  ## px/s² — how fast the impulse bleeds off
+
 func _ready() -> void:
 	add_to_group("player")
 	_setup_components()
@@ -118,6 +126,26 @@ func _start_invincibility() -> void:
 
 func _on_invincibility_expired() -> void:
 	_is_invincible = false
+
+## Begin a knockback shove. impulse is an instantaneous velocity (px/s); it decays
+## to zero over the next few frames. Overrides input movement while it lasts.
+func apply_knockback(impulse: Vector2) -> void:
+	_knockback = impulse
+
+## True while a knockback is still being applied. move_state checks this and yields
+## so input cannot cancel the shove mid-flight.
+func is_knockback_active() -> bool:
+	return _knockback.length_squared() > 1.0
+
+## Advance one physics step of knockback motion through move_and_slide (so it respects
+## walls), then bleed the impulse toward zero. Call once per physics frame while active.
+func apply_knockback_motion(delta: float) -> void:
+	velocity = _knockback
+	move_and_slide()
+	## Same world bounds move_state enforces, so a shove can't fling the ship off-screen.
+	global_position.x = clampf(global_position.x, -100.0, 1380.0)
+	global_position.y = clampf(global_position.y, -380.0, 1100.0)
+	_knockback = _knockback.move_toward(Vector2.ZERO, _KNOCKBACK_DECAY * delta)
 
 ## Called when health changes. Override in subclass (call super() first)
 ## to preserve EventBus emission and add mission-specific death handling.

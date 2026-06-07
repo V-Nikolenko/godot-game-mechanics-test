@@ -13,7 +13,13 @@
 class_name Shield
 extends Node
 
-@export var max_temporary: int = 5            ## hard cap on temp stack — expected to be retuned later
+@export var max_temporary: int = 5            ## hard cap on temp stack
+
+## When true (player), initial permanent charges come from ShipProgressionState and track it.
+## When false (racers / generic ships), use `permanent_charges` below — no autoload dependency.
+@export var bind_progression: bool = false
+## Initial & max permanent charges when bind_progression == false.
+@export_range(0, 10) var permanent_charges: int = 1
 
 const REGEN_INTERVAL_SEC: float = 5.0
 
@@ -30,16 +36,21 @@ var is_hacked: bool = false
 var _regen_timer: Timer = null
 
 func _ready() -> void:
-	permanent_max = ShipProgressionState.permanent_shield_count
+	if bind_progression:
+		permanent_max = ShipProgressionState.permanent_shield_count
+		ShipProgressionState.permanent_shield_count_changed.connect(_on_progression_changed)
+	else:
+		permanent_max = permanent_charges
 	permanent_active = permanent_max
-	ShipProgressionState.permanent_shield_count_changed.connect(_on_progression_changed)
+	_setup_regen_timer()
+	_emit_snapshot()
 
+func _setup_regen_timer() -> void:
 	_regen_timer = Timer.new()
 	_regen_timer.one_shot = true
 	_regen_timer.wait_time = REGEN_INTERVAL_SEC
 	_regen_timer.timeout.connect(_on_regen_tick)
 	add_child(_regen_timer)
-	_emit_snapshot()
 
 ## Pop one charge. Returns true if the hit was absorbed.
 ## Normal path: temporary stack first, then permanent.
@@ -131,5 +142,4 @@ func _emit_snapshot() -> void:
 		"temp_count": temporary_count,
 		"hacked": is_hacked,
 	}
-	print("[Shield] %s" % str(snap))
 	shield_state_changed.emit(snap)

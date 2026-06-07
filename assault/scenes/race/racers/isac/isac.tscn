@@ -1,0 +1,78 @@
+[gd_scene load_steps=17 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/race/core/race_ship.gd" id="ship"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/racers/Isac.png" id="tex"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="health"]
+[ext_resource type="Script" path="res://global/components/shield_component.gd" id="shield"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="hurt"]
+[ext_resource type="Script" path="res://global/components/damage_reaction.gd" id="react"]
+[ext_resource type="Script" path="res://assault/scenes/race/core/race_participant.gd" id="part"]
+[ext_resource type="Script" path="res://assault/scenes/race/core/sensors.gd" id="sensors"]
+[ext_resource type="Script" path="res://assault/scenes/race/core/racer_weapon.gd" id="weapon"]
+[ext_resource type="Script" path="res://assault/scenes/race/core/lateral_mover.gd" id="mover"]
+[ext_resource type="Script" path="res://assault/scenes/race/core/racer_state_machine.gd" id="brain"]
+[ext_resource type="Script" path="res://assault/scenes/race/racers/isac/states/isac_prowl_state.gd" id="s_prowl"]
+[ext_resource type="Script" path="res://assault/scenes/race/racers/isac/states/isac_spray_state.gd" id="s_spray"]
+[ext_resource type="Script" path="res://assault/scenes/race/racers/isac/states/isac_reposition_state.gd" id="s_reposition"]
+
+[sub_resource type="CircleShape2D" id="body"]
+radius = 18.0
+[sub_resource type="CircleShape2D" id="hurtshape"]
+radius = 18.0
+
+[node name="Isac" type="CharacterBody2D"]
+script = ExtResource("ship")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("tex")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("body")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 1088
+script = ExtResource("hurt")
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("hurtshape")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("health")
+max_health = 90
+current_health = 90
+
+[node name="Shield" type="Node" parent="."]
+script = ExtResource("shield")
+bind_progression = false
+permanent_charges = 10
+
+[node name="DamageReaction" type="Node" parent="."]
+script = ExtResource("react")
+
+[node name="RaceParticipant" type="Node" parent="."]
+script = ExtResource("part")
+max_top_speed = 480.0
+decay_per_sec = 14.0
+
+[node name="Sensors" type="Node" parent="."]
+script = ExtResource("sensors")
+
+[node name="RacerWeapon" type="Node" parent="."]
+script = ExtResource("weapon")
+pool_size = 24
+
+[node name="LateralMover" type="Node" parent="."]
+script = ExtResource("mover")
+
+[node name="Brain" type="Node" parent="." node_paths=PackedStringArray()]
+script = ExtResource("brain")
+initial_state_name = &"IsacProwl"
+
+[node name="IsacProwl" type="Node" parent="Brain"]
+script = ExtResource("s_prowl")
+
+[node name="IsacSpray" type="Node" parent="Brain"]
+script = ExtResource("s_spray")
+
+[node name="IsacReposition" type="Node" parent="Brain"]
+script = ExtResource("s_reposition")

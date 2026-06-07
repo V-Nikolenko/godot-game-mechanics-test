@@ -39,6 +39,11 @@ func process_physics(delta: float):
 	if actor.get("engine_boost_active"):
 		return
 
+	## Wall-hit knockback owns movement while active (applied in player _physics_process).
+	## Yield here so held input can't overwrite the shove velocity each frame.
+	if actor.has_method("is_knockback_active") and actor.is_knockback_active():
+		return
+
 	var input_direction: Vector2 = Input.get_vector("move_left", "move_right", "move_up", "move_down").normalized()
 
 	if check_transition_state():

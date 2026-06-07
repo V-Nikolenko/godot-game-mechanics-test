@@ -88,6 +88,7 @@ func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
 func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
 func small_asteroid() -> SpawnConfig: return SpawnConfig.new(SMALL_ASTEROID)
 func bonus_drone()    -> SpawnConfig: return SpawnConfig.new(BONUS_DRONE)
+func laser()      -> SpawnConfig: return SpawnConfig.new(LASER_RAY)
 
 # ── Movement helpers ──────────────────────────────────────────────────────────
 
@@ -238,6 +239,7 @@ const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.t
 const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn"
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"
 const BONUS_DRONE    := "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn"
+const LASER_RAY   := "res://assault/scenes/hazards/laser_ray/laser_ray.tscn"
 
 # ── Direction constants ───────────────────────────────────────────────────────
 

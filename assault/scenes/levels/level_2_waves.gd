@@ -9,12 +9,11 @@ func _ready() -> void:
 	var builder := WaveBuilder.new()
 	var L := builder.ARC_LEFT
 	var R := builder.ARC_RIGHT
-	var DURATION := builder.EXIT_DURATION
 
 	var waves: Array = [
 		# Wave 1 — t=2.0: Large V formation to open
 		builder.wave(2.0, [
-			builder.spawn_entry(builder.FIGHTER, Vector2(0, -180), builder.straight(120), 0.0, builder.EXIT_SCREEN, builder.v_formation(7, 45.0, 14.0, 0.08)),
+			builder.fighter().at(0, -180).move(builder.straight(120)).formation(builder.v_formation(7, 45.0, 14.0, 0.08)),
 		]),
 		# Wave 2 — t=12.0: Sniper pair drops in, fires 5 shots, retreats
 		# Sequence: fly in (2.5 s) → hold 13 s (5× aim/lock/fire cycle) → fly out
@@ -30,13 +29,13 @@ func _ready() -> void:
 				builder.straight(220, PI),
 			])).delay(0.5),
 		]),
-		# Wave 3 — t=25.0: Gunship + arc fighter escort
+		# Wave 3 — t=15.0: Gunship + arc fighter escort (fighters freed after arc completes)
 		builder.wave(15.0, [
-			builder.spawn_entry(builder.GUNSHIP,  Vector2(  0, -180), builder.straight(55),            0.0),
-			builder.spawn_entry(builder.FIGHTER,  Vector2(-70,   15), builder.arc(L, 140, 3.5), 0.4, DURATION),
-			builder.spawn_entry(builder.FIGHTER,  Vector2(-30,   15), builder.arc(R, 140, 3.5), 0.4, DURATION),
-			builder.spawn_entry(builder.FIGHTER,  Vector2( 30,   15), builder.arc(L, 140, 3.5), 0.4, DURATION),
-			builder.spawn_entry(builder.FIGHTER,  Vector2( 70,   15), builder.arc(R, 140, 3.5), 0.4, DURATION),
+			builder.gunship().at(  0, -180).move(builder.straight(55)),
+			builder.fighter().at(-70,   15).move(builder.arc(L, 140, 3.5)).delay(0.4).free_after(0.0),
+			builder.fighter().at(-30,   15).move(builder.arc(R, 140, 3.5)).delay(0.4).free_after(0.0),
+			builder.fighter().at( 30,   15).move(builder.arc(L, 140, 3.5)).delay(0.4).free_after(0.0),
+			builder.fighter().at( 70,   15).move(builder.arc(R, 140, 3.5)).delay(0.4).free_after(0.0),
 		]),
 		## Wave 4 — t=40.0: Dense sine drone swarm
 		#builder.wave(40.0, [

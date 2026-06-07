@@ -41,7 +41,26 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\global\\\\autoloads\" -ErrorAction SilentlyContinue)",
       "Bash(Select-Object Name)",
       "PowerShell(Get-ChildItem \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\global\\\\assets\\\\sprites\\\\\" -ErrorAction SilentlyContinue | Where-Object { $_.Name -match \"shield|health|armor|damage\" } | Select-Object Name)",
-      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\global\\\\pickups\\\\scenes\")"
+      "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\global\\\\pickups\\\\scenes\")",
+      "Bash(grep -iA2 \"gut\\\\|test\")",
+      "PowerShell($assaultRaceDir = \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\assault\\\\scenes\\\\race\"; if \\(-not \\(Test-Path $assaultRaceDir\\)\\) { New-Item -ItemType Directory -Path $assaultRaceDir -Force | Out-Null }; Get-ChildItem $assaultRaceDir -ErrorAction SilentlyContinue | Select-Object Name)",
+      "Bash(xargs head -5)",
+      "Bash(command -v godot godot4 Godot)",
+      "Bash(echo \"exit:$?\")",
+      "Read(//c/Users/Lonli/**)",
+      "Read(//c/Users/Lonli/Downloads/**)",
+      "Bash(/c/Users/Lonli/Downloads/Godot_v4.6.2-stable_win64.exe/Godot_v4.6.2-stable_win64_console.exe --headless --path C:/Users/Lonli/Desktop/game-test-mechanics --editor --quit-after 120)",
+      "Read(//tmp/**)",
+      "Bash(GODOT=\"/c/Users/Lonli/Downloads/Godot_v4.6.2-stable_win64.exe/Godot_v4.6.2-stable_win64_console.exe\" *)",
+      "Bash(/c/Users/Lonli/Desktop/Godot_v4.6.2-stable_win64.exe --headless --path C:/Users/Lonli/Desktop/game-test-mechanics res://assault/scenes/levels/race/race_level_1.tscn --quit-after 120)",
+      "Bash(GUI=\"/c/Users/Lonli/Desktop/Godot_v4.6.2-stable_win64.exe\" *)",
+      "Bash(/c/Users/Lonli/Desktop/Godot_v4.6.2-stable_win64.exe --headless --path C:/Users/Lonli/Desktop/game-test-mechanics res://assault/scenes/levels/race/race_level_1.tscn --quit-after 200)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\assault\\\\scenes\\\\race\\\\racer_base.tscn\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\assault\\\\scenes\\\\race\\\\dash_panel.tscn\" -Force)",
+      "Bash(Write-Output \"Deleted.\")",
+      "Bash(Get-Content \"C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\assault\\\\scenes\\\\race\\\\track\\\\dash_panel.tscn\")",
+      "Bash(python3 -c ' *)",
+      "Bash(powershell -command '\\(Get-Item '\\\\''C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\assault\\\\assets\\\\sprites\\\\racers\\\\race_track\\\\walls\\\\wall_vertical.png'\\\\''\\).Length; Add-Type -AssemblyName System.Drawing; $img = [System.Drawing.Image]::FromFile\\('\\\\''C:\\\\Users\\\\Lonli\\\\Desktop\\\\game-test-mechanics\\\\assault\\\\assets\\\\sprites\\\\racers\\\\race_track\\\\walls\\\\wall_vertical.png'\\\\''\\); Write-Output \"Width: $\\($img.Width\\) Height: $\\($img.Height\\)\"; $img.Dispose\\(\\)')"
     ]
   }
 }

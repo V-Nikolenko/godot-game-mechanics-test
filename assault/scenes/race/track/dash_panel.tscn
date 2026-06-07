@@ -1,0 +1,81 @@
+[gd_scene format=3 uid="uid://d4lveig0oenea"]
+
+[ext_resource type="Script" uid="uid://vx0ujutvkya0" path="res://assault/scenes/race/track/dash_panel.gd" id="1"]
+[ext_resource type="Texture2D" uid="uid://d25vgvdlw32qn" path="res://assault/assets/sprites/racers/boost_panel.png" id="2"]
+[ext_resource type="Texture2D" uid="uid://7uf7dhdk6elk" path="res://assault/assets/sprites/racers/boost_panel_arrows.png" id="2_wltuv"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_ygtn6"]
+atlas = ExtResource("2_wltuv")
+region = Rect2(0, 0, 160, 160)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_h5qjl"]
+atlas = ExtResource("2_wltuv")
+region = Rect2(160, 0, 160, 160)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_674jm"]
+atlas = ExtResource("2_wltuv")
+region = Rect2(320, 0, 160, 160)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_m4m4b"]
+atlas = ExtResource("2_wltuv")
+region = Rect2(480, 0, 160, 160)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_n2phy"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_ygtn6")
+}],
+"loop": false,
+"name": &"idle_active",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_ygtn6")
+}, {
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_h5qjl")
+}, {
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_674jm")
+}, {
+"duration": 0.5,
+"texture": SubResource("AtlasTexture_m4m4b")
+}],
+"loop": false,
+"name": &"use",
+"speed": 5.0
+}]
+
+[sub_resource type="RectangleShape2D" id="rect"]
+size = Vector2(38, 151)
+
+[node name="DashPanel" type="Area2D" unique_id=891538547]
+script = ExtResource("1")
+
+[node name="PadArrows" type="AnimatedSprite2D" parent="." unique_id=1071029190]
+sprite_frames = SubResource("SpriteFrames_n2phy")
+animation = &"idle_active"
+
+[node name="PadFrame" type="Sprite2D" parent="." unique_id=1665529592]
+texture = ExtResource("2")
+
+[node name="PadBoostCollision" type="CollisionShape2D" parent="." unique_id=1584780201]
+position = Vector2(0, -6)
+scale = Vector2(1.615, 0.76)
+shape = SubResource("rect")
+debug_color = Color(0.7539959, 0.19418785, 0.99999994, 0.41960785)
+
+[node name="WallL" type="StaticBody2D" parent="." unique_id=100000001]
+position = Vector2(-61, 0)
+
+[node name="FrameCollisionL" type="CollisionShape2D" parent="WallL" unique_id=1314157819]
+position = Vector2(1, 0)
+shape = SubResource("rect")
+
+[node name="WallR" type="StaticBody2D" parent="." unique_id=100000002]
+position = Vector2(61, 0)
+
+[node name="FrameCollisionR" type="CollisionShape2D" parent="WallR" unique_id=649997169]
+shape = SubResource("rect")

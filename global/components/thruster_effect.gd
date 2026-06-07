@@ -10,7 +10,7 @@
 class_name ThrusterEffect
 extends Node2D
 
-enum State { IDLE, THRUST, BOOST, POWER }
+enum State { IDLE, THRUST, BOOST, POWER, BOOST_PANEL }
 
 var _particles: CPUParticles2D
 var _current_state: int = State.IDLE
@@ -41,10 +41,11 @@ func set_state(state: int) -> void:
 		return
 	_current_state = state
 	match state:
-		State.IDLE:   _apply_idle()
-		State.THRUST: _apply_thrust()
-		State.BOOST:  _apply_boost()
-		State.POWER:  _apply_power()
+		State.IDLE:        _apply_idle()
+		State.THRUST:      _apply_thrust()
+		State.BOOST:       _apply_boost()
+		State.POWER:       _apply_power()
+		State.BOOST_PANEL: _apply_boost_panel()
 
 # ── Per-state configuration ────────────────────────────────────────────────
 
@@ -86,6 +87,17 @@ func _apply_power() -> void:
 	_particles.scale_amount_min = 3.5
 	_particles.scale_amount_max = 7.0
 	_set_gradient(Color(1.0, 0.75, 0.1, 1.0), Color(1.0, 0.2, 0.0, 0.0))
+
+## BOOST_PANEL: same large flame as BOOST but hot-pink — triggered by a dash panel for both
+## the player and any racer with a ThrusterEffect (e.g. Booster Gold).
+func _apply_boost_panel() -> void:
+	_particles.amount = 28
+	_particles.lifetime = 0.46
+	_particles.initial_velocity_min = 110.0
+	_particles.initial_velocity_max = 200.0
+	_particles.scale_amount_min = 4.0
+	_particles.scale_amount_max = 8.0
+	_set_gradient(Color(1.0, 0.25, 0.75, 1.0), Color(0.7, 0.0, 0.5, 0.0))
 
 func _set_gradient(birth: Color, death: Color) -> void:
 	var grad := Gradient.new()
