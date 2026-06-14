@@ -39,9 +39,9 @@ func _ready() -> void:
 		_arrows.play(&"idle_active")
 
 func _physics_process(delta: float) -> void:
-	if global_position.y > get_viewport_rect().size.y + cull_margin:
-		queue_free()
-		return
+	## Panels that have not yet scrolled into view can skip processing — no ship
+	## is near them. Panels that have scrolled PAST the viewport are NOT culled:
+	## trailing racers still need to cross them, so they stay alive for the whole race.
 	if global_position.y < -cull_margin:
 		return
 

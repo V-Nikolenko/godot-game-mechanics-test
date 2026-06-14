@@ -18,11 +18,6 @@ const BUMP_COOLDOWN  : float = 0.8     ## s between re-hits for the same pair
 const BUMP_PUSH_AI   : float = 50.0    ## desired_x nudge for AI ships
 const BUMP_PUSH_PLAYER: float = 140.0  ## velocity.x impulse for the player
 
-## Dash-panel wall hit — lateral knockback SPEED (px/s) the player is shoved off the
-## wall. Applied via PlayerBase.apply_knockback() so it decays naturally and input
-## can't instantly cancel it. AI ships use the panel's own positional `pushback` instead.
-const WALL_KNOCKBACK_PLAYER: float = 420.0
-
 var _bump_cds: Dictionary = {}         ## String key -> float seconds remaining
 
 func _ready() -> void:
@@ -61,21 +56,7 @@ func _on_panel_boosted(_ship: Node2D, participant: RaceParticipant) -> void:
 
 func _on_panel_wall_hit(ship: Node2D, _participant: RaceParticipant,
 		push_dir: float, damage: int, pushback: float) -> void:
-	## Route through HurtBox so DamageReaction (AI) and PlayerBase._apply_damage (player)
-	## both check the shield first — identical path as bullets, mines, and bump collisions.
-	var hb := ship.get_node_or_null("HurtBox") as HurtBox
-	if hb:
-		hb.received_damage.emit(damage)
-	if ship.has_method("steer_toward"):
-		# AI racer: positional nudge (its X is driven by direct assignment, not physics),
-		# then retarget desired_x so LateralMover glides from the pushed position.
-		ship.global_position.x += push_dir * pushback
-		ship.steer_toward(ship.global_position.x)
-	elif ship.has_method("apply_knockback"):
-		# Player: a velocity impulse decays naturally and survives held input (move_state
-		# yields while it's active), so the shove off the wall is actually felt. Pure
-		# lateral — Y is owned by PlayerRaceController's band clamp.
-		ship.apply_knockback(Vector2(push_dir * WALL_KNOCKBACK_PLAYER, 0.0))
+	WallImpact.resolve(ship, push_dir, damage, pushback)
 
 # ── Racer body collision ──────────────────────────────────────────────────────
 

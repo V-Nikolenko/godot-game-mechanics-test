@@ -1,5 +1,7 @@
 # Enemy Roster & Wave Builder Reference
 
+> Part of the project knowledge base — see [`architecture/PROJECT.md`](architecture/PROJECT.md). Per-enemy behaviour docs live beside each enemy as `ENEMY.md`.
+
 Reference for all enemy types in the assault mission and how to spawn them via `WaveBuilder`.
 
 **Coordinate system:** All `.at(x, y)` offsets are camera-relative in design units (640×360 space). `WaveManager` scales them by `ArenaCamera.WORLD_SCALE` (2.0) automatically — never pre-multiply.

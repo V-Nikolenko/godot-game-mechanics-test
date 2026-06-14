@@ -16,6 +16,7 @@
 [ext_resource type="PackedScene" uid="uid://d4lveig0oenea" path="res://assault/scenes/race/track/dash_panel.tscn" id="panel"]
 [ext_resource type="PackedScene" uid="uid://ty6a2vpnmrr5" path="res://assault/scenes/player/player_fighter.tscn" id="player"]
 [ext_resource type="PackedScene" path="res://assault/scenes/race/racers/reacher/reacher.tscn" id="reacher"]
+[ext_resource type="Script" uid="uid://bh1utqdmfonfg" path="res://assault/scenes/race/core/wall_barrier.gd" id="wallbarrier"]
 [ext_resource type="Script" uid="uid://cj7w20gfaf2s4" path="res://assault/scenes/race/core/race_world.gd" id="world"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_5lp58"]
@@ -254,6 +255,12 @@ texture_region_size = Vector2i(64, 64)
 tile_size = Vector2i(64, 64)
 sources/0 = SubResource("TileSetAtlasSource_5lp58")
 
+[sub_resource type="RectangleShape2D" id="RectShape_WallL"]
+size = Vector2(227, 14948)
+
+[sub_resource type="RectangleShape2D" id="RectShape_WallR"]
+size = Vector2(208, 14947)
+
 [node name="RaceLevel1" type="Node2D" unique_id=578125055]
 
 [node name="Level1Background" parent="." unique_id=679198105 groups=["background"] instance=ExtResource("bg")]
@@ -474,6 +481,23 @@ scale = Vector2(1, 1.0068363)
 
 [node name="RaceHUD" parent="." unique_id=246954594 node_paths=PackedStringArray("director") instance=ExtResource("hud")]
 director = NodePath("../RaceDirector")
+
+[node name="WallBarrier" type="Node2D" parent="." unique_id=100000001]
+script = ExtResource("wallbarrier")
+
+[node name="LeftWall" type="StaticBody2D" parent="WallBarrier" unique_id=100000002]
+collision_mask = 0
+
+[node name="LeftShape" type="CollisionShape2D" parent="WallBarrier/LeftWall" unique_id=100000003]
+position = Vector2(-8.5, -9773)
+shape = SubResource("RectShape_WallL")
+
+[node name="RightWall" type="StaticBody2D" parent="WallBarrier" unique_id=100000004]
+collision_mask = 0
+
+[node name="RightShape" type="CollisionShape2D" parent="WallBarrier/RightWall" unique_id=100000005]
+position = Vector2(1280, -9772.5)
+shape = SubResource("RectShape_WallR")
 
 [node name="RaceLevelConfig" type="Node" parent="." unique_id=2082098965 node_paths=PackedStringArray("director")]
 script = ExtResource("cfg")

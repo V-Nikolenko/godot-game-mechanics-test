@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="PlanetConfigResource" format=3 uid="uid://btsillpo773wl"]
+
+[ext_resource type="Script" uid="uid://duj8qglwa1saq" path="res://open_space/scenes/mission_select_hubs/mission_select_hub_config_resource.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://bma3l3qnye8cn" path="res://open_space/scenes/mission_data/mission_config_resource.gd" id="2_ahdfa"]
+[ext_resource type="Resource" uid="uid://b5sljkjmojg8c" path="res://open_space/scenes/mission_data/space_stations/fortuna_station/fortuna_station_01_race_mission_first_cup.tres" id="2_g2ndf"]
+[ext_resource type="Texture2D" uid="uid://c3o3mehr4sk1h" path="res://open_space/assets/sprites/mission_select_hubs/fortuna_station.png" id="4_dhd1j"]
+
+[resource]
+script = ExtResource("1_script")
+display_name = "Fortuna Space Station"
+description = "A remote mining world filled with vast underground cave networks rich in rare crystals, titanium, and reactor-grade minerals. Massive industrial colonies and excavation sites operate deep beneath the surface, hidden from constant asteroid storms and harsh radiation."
+description_font_size = 6
+sprite_texture = ExtResource("4_dhd1j")
+missions = Array[ExtResource("2_ahdfa")]([ExtResource("2_g2ndf")])
+point_positions = Array[Vector2]([Vector2(-140, 70), Vector2(-70, 0), Vector2(10, 30), Vector2(40, 0)])

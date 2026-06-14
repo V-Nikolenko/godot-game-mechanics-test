@@ -1,5 +1,7 @@
 # Game Structure
 
+> Part of the project knowledge base — see [`architecture/PROJECT.md`](architecture/PROJECT.md).
+
 ## Overview
 
 A space action game with three distinct gameplay zones connected through a persistent hub.

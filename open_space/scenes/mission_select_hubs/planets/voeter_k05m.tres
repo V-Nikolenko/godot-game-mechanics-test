@@ -1,20 +1,18 @@
-[gd_resource type="Resource" script_class="PlanetConfigResource" format=3 uid="uid://btsillpo773wl"]
+[gd_resource type="Resource" script_class="PlanetConfigResource" format=3 uid="uid://fgl844y8pt7a"]
 
-[ext_resource type="Texture2D" uid="uid://djsqwk3jdfirj" path="res://open_space/assets/sprites/mission_select_ui/planets/voeter_k05m/menu_mission_select_background_2.png" id="1_0ti1s"]
-[ext_resource type="Script" uid="uid://duj8qglwa1saq" path="res://open_space/scenes/mission_select_hubs/mission_select_hub_config_resource.gd" id="1_script"]
-[ext_resource type="Script" uid="uid://bma3l3qnye8cn" path="res://open_space/scenes/mission_data/mission_config_resource.gd" id="2_ahdfa"]
-[ext_resource type="Resource" uid="uid://c7rtyicdiolwt" path="res://open_space/scenes/mission_data/planets/voeter_k05m/voeter_k05m_01_assault_mission_cross_the_asteroid_ring_resource.tres" id="3_63h3v"]
-[ext_resource type="Resource" uid="uid://1nm70gto6tji" path="res://open_space/scenes/mission_data/planets/voeter_k05m/voeter_k05m_02_infiltration_mission_reach_enemy_base_resource.tres" id="4_ygqy7"]
-[ext_resource type="Resource" uid="uid://cws3775wj127q" path="res://open_space/scenes/mission_data/planets/voeter_k05m/voeter_k05m_03_infiltration_mission_cross_enemy_mines_resource.tres" id="5_l10in"]
-[ext_resource type="Resource" uid="uid://ckc8a8m7mbwfn" path="res://open_space/scenes/mission_data/planets/voeter_k05m/voeter_k05m_04_infiltration_mission_destroy_ore_processing_facility_resource.tres" id="6_8iau1"]
-[ext_resource type="Texture2D" uid="uid://dpfp7lippmihc" path="res://open_space/assets/sprites/mission_select_hubs/voeter_k05m.png" id="8_h8jan"]
+[ext_resource type="Script" uid="uid://bma3l3qnye8cn" path="res://open_space/scenes/mission_data/mission_config_resource.gd" id="1_yayyg"]
+[ext_resource type="Resource" uid="uid://c7rtyicdiolwt" path="res://open_space/scenes/mission_data/planets/voeter_k05m/voeter_k05m_01_assault_mission_cross_the_asteroid_ring_resource.tres" id="2_86hum"]
+[ext_resource type="Resource" uid="uid://1nm70gto6tji" path="res://open_space/scenes/mission_data/planets/voeter_k05m/voeter_k05m_02_infiltration_mission_reach_enemy_base_resource.tres" id="3_p6lhh"]
+[ext_resource type="Resource" uid="uid://cws3775wj127q" path="res://open_space/scenes/mission_data/planets/voeter_k05m/voeter_k05m_03_infiltration_mission_cross_enemy_mines_resource.tres" id="4_id2l6"]
+[ext_resource type="Resource" uid="uid://ckc8a8m7mbwfn" path="res://open_space/scenes/mission_data/planets/voeter_k05m/voeter_k05m_04_infiltration_mission_destroy_ore_processing_facility_resource.tres" id="5_cc0g4"]
+[ext_resource type="Script" uid="uid://duj8qglwa1saq" path="res://open_space/scenes/mission_select_hubs/mission_select_hub_config_resource.gd" id="6_mgmyj"]
+[ext_resource type="Texture2D" uid="uid://dpfp7lippmihc" path="res://open_space/assets/sprites/mission_select_hubs/voeter_k05m.png" id="7_y2fii"]
 
 [resource]
-script = ExtResource("1_script")
+script = ExtResource("6_mgmyj")
 display_name = "Voeter K05M"
 description = "A remote mining world filled with vast underground cave networks rich in rare crystals, titanium, and reactor-grade minerals. Massive industrial colonies and excavation sites operate deep beneath the surface, hidden from constant asteroid storms and harsh radiation."
 description_font_size = 6
-background_texture = ExtResource("1_0ti1s")
-sprite_texture = ExtResource("8_h8jan")
-missions = Array[ExtResource("2_ahdfa")]([ExtResource("3_63h3v"), ExtResource("4_ygqy7"), ExtResource("5_l10in"), ExtResource("6_8iau1")])
+sprite_texture = ExtResource("7_y2fii")
+missions = Array[ExtResource("1_yayyg")]([ExtResource("2_86hum"), ExtResource("3_p6lhh"), ExtResource("4_id2l6"), ExtResource("5_cc0g4")])
 point_positions = Array[Vector2]([Vector2(-140, 70), Vector2(-70, 0), Vector2(10, 30), Vector2(40, 0)])

@@ -120,7 +120,7 @@ cycle:
 
 ```
 hold_time >= shot_count × (AIM_DURATION + LOCK_DURATION)
-           = shot_count × 2.5 s
+		   = shot_count × 2.5 s
 ```
 
 Add a small buffer (≥ 0.5 s). For the default `shot_count = 5`:
@@ -135,13 +135,13 @@ hold_time >= 5 × 2.5 + 0.5 = 13.0 s
 var b := WaveBuilder.new()
 
 b.wave(0.5, [
-    b.sniper_enemy()
-        .at(0, -500)
-        .move(b.sequence([
-            b.straight(150, 0.0, 2.5),   # fly in  (must equal FLY_IN_TIME)
-            b.hold(13.0),                 # hold while shooting (5 × 2.5 s + buffer)
-            b.straight(220, PI),          # fly out upward (no duration = until off-screen)
-        ])),
+	b.sniper_enemy()
+		.at(0, -500)
+		.move(b.sequence([
+			b.straight(150, 0.0, 2.5),   # fly in  (must equal FLY_IN_TIME)
+			b.hold(13.0),                 # hold while shooting (5 × 2.5 s + buffer)
+			b.straight(220, PI),          # fly out upward (no duration = until off-screen)
+		])),
 ])
 ```
 
@@ -149,29 +149,29 @@ b.wave(0.5, [
 
 ```gdscript
 b.sniper_enemy()
-    .at(0, -500)
-    .prop("shot_count", 2)           # fires twice then retreats
-    .move(b.sequence([
-        b.straight(150, 0.0, 2.5),
-        b.hold(5.5),                 # 2 × 2.5 s + 0.5 s buffer
-        b.straight(220, PI),
-    ]))
+	.at(0, -500)
+	.prop("shot_count", 2)           # fires twice then retreats
+	.move(b.sequence([
+		b.straight(150, 0.0, 2.5),
+		b.hold(5.5),                 # 2 × 2.5 s + 0.5 s buffer
+		b.straight(220, PI),
+	]))
 ```
 
 ### Staggered pair (used in Level 1)
 
 ```gdscript
 b.wave(0.5, [
-    b.sniper_enemy().at(-120, -500).move(b.sequence([
-        b.straight(150, 0.0, 2.5),
-        b.hold(13.0),
-        b.straight(220, PI),
-    ])),
-    b.sniper_enemy().at( 120, -500).move(b.sequence([
-        b.straight(150, 0.0, 2.5),
-        b.hold(13.0),
-        b.straight(220, PI),
-    ])).delay(0.5),   # 0.5 s stagger so shots don't land simultaneously
+	b.sniper_enemy().at(-120, -500).move(b.sequence([
+		b.straight(150, 0.0, 2.5),
+		b.hold(13.0),
+		b.straight(220, PI),
+	])),
+	b.sniper_enemy().at( 120, -500).move(b.sequence([
+		b.straight(150, 0.0, 2.5),
+		b.hold(13.0),
+		b.straight(220, PI),
+	])).delay(0.5),   # 0.5 s stagger so shots don't land simultaneously
 ])
 ```
 

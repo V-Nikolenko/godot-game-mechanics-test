@@ -1,0 +1,51 @@
+# CLAUDE.md
+
+A space action game in **Godot 4.6 (Forward+)**. The player cycles between three gameplay
+modes — **Assault** (autoscroller shmup), **Open Space** (free-flight hub + mission
+select), and **Infiltration** (isometric ground combat) — connected by a boot/cutscene
+shell. Mode-specific code is isolated per module; shared logic lives in `global/`.
+
+**Full knowledge base:** [`docs/architecture/PROJECT.md`](docs/architecture/PROJECT.md)
+
+## Modules
+
+| Module | Path | Role | Doc |
+|---|---|---|---|
+| Assault Mission | `assault/` | Autoscroller shmup; hosts the race sub-mode | [assault.md](docs/architecture/modules/assault.md) |
+| Open Space | `open_space/` | Persistent hub world + mission select | [open_space.md](docs/architecture/modules/open_space.md) |
+| Infiltration | `infiltration/` | Isometric ground combat | [infiltration.md](docs/architecture/modules/infiltration.md) |
+| Global (shared) | `global/` | Components, entities, ship modules, state machine, pickups, resources, UI, autoloads | [global.md](docs/architecture/modules/global.md) |
+| Shell | `boot/`, `cutscenes/`, `dialog/` | Boot entry, cutscenes, dialog data | [shell.md](docs/architecture/modules/shell.md) |
+
+## Key conventions
+
+- **Engine:** Godot 4.6, Forward+. Viewport 1280×720.
+- **Composition over inheritance** — entities are built from `global/components/`
+  (Health, Hurtbox/Hitbox, Shield, Overheat, DamageReaction, effects).
+- **Config-driven enemies** — assault enemies load stats from a `*_config.tres` applied in
+  `_ready()` (the `.tres` value wins over the scene's Health node where they differ).
+- **State machines** — `global/statemachine/`; one `State` node per file in a `states/`
+  folder for complex entities; simpler enemies use in-script `enum` phases.
+- **Design-unit coordinates** — waves/spawns authored in 640×360 space, scaled by
+  `ArenaCamera.WORLD_SCALE` (2.0) at runtime; never pre-multiply.
+- **NEVER commit — the user handles all git.** Work directly on `main` unless asked
+  otherwise; no worktrees/branches unless requested.
+
+## Where things live
+
+- Shared components / autoloads / ship modules → `global/` (map: [global.md](docs/architecture/modules/global.md)).
+- **How to wire a component (Health/Hurtbox/Shield/state machine/ship module) into an
+  entity** → the integration recipes in [global.md](docs/architecture/modules/global.md).
+- Per-entity behaviour → `RACER.md` / `ENEMY.md` / `HAZARD.md` **beside each entity**
+  (`assault/scenes/race/racers/*/`, `assault/scenes/enemies/*/`, `assault/scenes/hazards/*/`).
+- Spawning enemies via `WaveBuilder` → [`docs/enemy-roster.md`](docs/enemy-roster.md).
+- Game loop / mode transitions → [`docs/game-structure.md`](docs/game-structure.md).
+
+## MANDATORY — keep the docs current
+
+After **any structural change** to scenes or scripts — adding, renaming, moving, or
+deleting an **entity, component, module, or mechanic** — you **MUST** invoke the
+**`updating-project-docs`** skill before finishing the task. It walks you through updating
+the affected module doc, `docs/architecture/PROJECT.md`, the relevant per-entity doc, and
+this file. Do not skip it; the knowledge base only stays useful if it is updated alongside
+the code.

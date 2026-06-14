@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="AssaultMissionResource" format=3 uid="uid://b5sljkjmojg8c"]
+
+[ext_resource type="Texture2D" uid="uid://cdo1cclnkjuh8" path="res://open_space/assets/sprites/mission_select_ui/space_stations/fortuna_station/menu_mission_select_mission_image_1.png" id="1_cxu6a"]
+[ext_resource type="Script" uid="uid://c4bxqmn7dp1kf" path="res://open_space/scenes/mission_data/assault_mission_resource.gd" id="2_eg1ny"]
+
+[resource]
+script = ExtResource("2_eg1ny")
+star_2_score = 8000
+star_3_score = 11000
+display_name = "Race: First Cup"
+scene_path = "C:/Users/Lonli/Desktop/game-test-mechanics/assault/scenes/levels/race/race_level_1.tscn"
+mission_image = ExtResource("1_cxu6a")
+description = "Win race against other racers"
+mission_number = 1
+connect_line = false
+locked_description = ""

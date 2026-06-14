@@ -29,7 +29,7 @@ var _temp_damage_bonus: float = 0.0
 var _base_damage_multiplier: float = 1.0
 var _temp_damage_timer: Timer = null
 
-## Multipliers written by ship modules (OverdriveModule, FinalResortModule, etc.).
+## Multipliers written by ship modules (FinalResortModule, OverclockModule, etc.).
 ## WeaponState reads these when computing damage and cooldowns.
 var damage_multiplier: float = 1.0
 var fire_rate_multiplier: float = 1.0

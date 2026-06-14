@@ -5,8 +5,9 @@
 [ext_resource type="PackedScene" uid="uid://cu7qlu0h6p1fd" path="res://open_space/scenes/mission_select_hubs/mission_select_hub.tscn" id="3_planet"]
 [ext_resource type="PackedScene" path="res://open_space/scenes/gui/hud.tscn" id="4_oshud"]
 [ext_resource type="Resource" uid="uid://b1pyvrb4ekue0" path="res://open_space/scenes/mission_select_hubs/planets/edelia.tres" id="5_edelia"]
-[ext_resource type="Resource" uid="uid://btsillpo773wl" path="res://open_space/scenes/mission_select_hubs/planets/voeter_k05m.tres" id="6_planet2"]
+[ext_resource type="Resource" uid="uid://fgl844y8pt7a" path="res://open_space/scenes/mission_select_hubs/planets/voeter_k05m.tres" id="6_planet2"]
 [ext_resource type="Script" uid="uid://dykqr1nc4ioby" path="res://global/systems/camera_director.gd" id="7_camdir"]
+[ext_resource type="Resource" uid="uid://btsillpo773wl" path="res://open_space/scenes/mission_select_hubs/space_stations/fortuna_station.tres" id="7_j0n3w"]
 [ext_resource type="Texture2D" uid="uid://d0jv68sx83888" path="res://assault/assets/sprites/missions/edelia/1/space_bg_stars_layer_1.png" id="8_stars1"]
 [ext_resource type="Texture2D" uid="uid://i8wuqtwma31l" path="res://assault/assets/sprites/missions/edelia/1/space_bg_stars_layer_2.png" id="9_stars2"]
 [ext_resource type="PackedScene" uid="uid://dsaaduknthmkp" path="res://global/pickups/scenes/armor_and_health_pickup.tscn" id="10_6wdkh"]
@@ -50,18 +51,26 @@ texture = ExtResource("9_stars2")
 centered = false
 
 [node name="edelia" parent="." unique_id=662454378 instance=ExtResource("3_planet")]
-position = Vector2(861, 524)
+position = Vector2(595, 342)
 config = ExtResource("5_edelia")
 arc_offset = Vector2(-25, 13)
 arc_radius = 230.0
 arc_bg_width = 28.0
 arc_fill_width = 28.0
 
-[node name="voeter_k05m" parent="." unique_id=887654321 instance=ExtResource("3_planet")]
-position = Vector2(-186, 169)
+[node name="voeter_k05m" parent="." unique_id=2134340449 instance=ExtResource("3_planet")]
+position = Vector2(-530, -384)
 config = ExtResource("6_planet2")
+arc_offset = Vector2(-25, 13)
+arc_radius = 230.0
+arc_bg_width = 28.0
+arc_fill_width = 28.0
+
+[node name="fortuna_station" parent="." unique_id=887654321 instance=ExtResource("3_planet")]
+position = Vector2(-635, 385)
+config = ExtResource("7_j0n3w")
 arc_offset = Vector2(-5, 4)
-arc_radius = 72.0
+arc_radius = 130.0
 
 [node name="EnemyContainer" type="Node2D" parent="." unique_id=1782392043]
 
