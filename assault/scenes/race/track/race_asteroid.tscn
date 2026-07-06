@@ -1,0 +1,43 @@
+[gd_scene load_steps=8 format=3 uid="uid://braceasteroid01"]
+
+[ext_resource type="Script" path="res://assault/scenes/race/track/race_asteroid.gd" id="1_rast"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="2_health"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="3_hurt"]
+[ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="4_hit"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/environment/big_asteroid_tileset.png" id="5_tex"]
+
+[sub_resource type="CircleShape2D" id="Shape_hurt"]
+radius = 28.0
+
+[sub_resource type="CircleShape2D" id="Shape_contact"]
+radius = 28.0
+
+[node name="RaceAsteroid" type="CharacterBody2D"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("1_rast")
+tileset_texture = ExtResource("5_tex")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_health")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 32
+script = ExtResource("3_hurt")
+accepted_damage_types = Array[int]([1])
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("Shape_hurt")
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 1024
+collision_mask = 0
+script = ExtResource("4_hit")
+damage = 40
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+shape = SubResource("Shape_contact")

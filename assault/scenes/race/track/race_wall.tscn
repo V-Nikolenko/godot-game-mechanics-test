@@ -1,0 +1,29 @@
+[gd_scene format=3 uid="uid://00246ccaem53"]
+
+[ext_resource type="Script" path="res://assault/scenes/race/track/race_wall.gd" id="1_wall"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/racers/race_track/walls/wall_1.png" id="2_tex"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="3_health"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="4_hurt"]
+
+[sub_resource type="RectangleShape2D" id="RectShape_wall"]
+size = Vector2(256, 65)
+
+[node name="RaceWall" type="Node2D"]
+script = ExtResource("1_wall")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_tex")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("3_health")
+max_health = 60
+current_health = 60
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 32
+script = ExtResource("4_hurt")
+accepted_damage_types = Array[int]([1])
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("RectShape_wall")

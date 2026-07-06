@@ -18,6 +18,11 @@
 [ext_resource type="PackedScene" path="res://assault/scenes/race/racers/reacher/reacher.tscn" id="reacher"]
 [ext_resource type="Script" uid="uid://bh1utqdmfonfg" path="res://assault/scenes/race/core/wall_barrier.gd" id="wallbarrier"]
 [ext_resource type="Script" uid="uid://cj7w20gfaf2s4" path="res://assault/scenes/race/core/race_world.gd" id="world"]
+[ext_resource type="Script" path="res://assault/scenes/race/core/hazard_system.gd" id="hazardsys"]
+[ext_resource type="PackedScene" path="res://assault/scenes/race/track/race_wall.tscn" id="racewall"]
+[ext_resource type="PackedScene" path="res://assault/scenes/race/track/race_asteroid.tscn" id="raceast"]
+[ext_resource type="PackedScene" path="res://assault/scenes/race/track/race_laser.tscn" id="racelaser"]
+[ext_resource type="PackedScene" path="res://assault/scenes/race/ui/speed_streaks.tscn" id="streaks"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_5lp58"]
 texture = ExtResource("7_i7veh")
@@ -255,11 +260,11 @@ texture_region_size = Vector2i(64, 64)
 tile_size = Vector2i(64, 64)
 sources/0 = SubResource("TileSetAtlasSource_5lp58")
 
-[sub_resource type="RectangleShape2D" id="RectShape_WallL"]
-size = Vector2(227, 14948)
+[sub_resource type="RectangleShape2D" id="RectShape_MainWall"]
+size = Vector2(256, 14976)
 
-[sub_resource type="RectangleShape2D" id="RectShape_WallR"]
-size = Vector2(208, 14947)
+[sub_resource type="RectangleShape2D" id="RectShape_Stand"]
+size = Vector2(512, 3100)
 
 [node name="RaceLevel1" type="Node2D" unique_id=578125055]
 
@@ -323,6 +328,29 @@ position = Vector2(652, -17088)
 
 [node name="Panel13" parent="Track/RaceTrack" unique_id=1774488267 instance=ExtResource("panel")]
 position = Vector2(921, -17562)
+
+[node name="WallTest1" parent="Track/RaceTrack" instance=ExtResource("racewall")]
+position = Vector2(320, -4200)
+
+[node name="WallTest2" parent="Track/RaceTrack" instance=ExtResource("racewall")]
+position = Vector2(960, -6000)
+
+[node name="AsteroidTest1" parent="Track/RaceTrack" instance=ExtResource("raceast")]
+position = Vector2(640, -8200)
+
+[node name="LaserH1" parent="Track/RaceTrack" instance=ExtResource("racelaser")]
+position = Vector2(128, -10000)
+rotation = -1.5707964
+
+[node name="LaserV1" parent="Track/RaceTrack" instance=ExtResource("racelaser")]
+position = Vector2(420, -12500)
+segment_count = 5
+
+[node name="TrapPanel" parent="Track/RaceTrack" instance=ExtResource("panel")]
+position = Vector2(760, -11200)
+
+[node name="TrapWall" parent="Track/RaceTrack" instance=ExtResource("racewall")]
+position = Vector2(760, -11650)
 
 [node name="Layer0" type="TileMapLayer" parent="Track/RaceTrack" unique_id=1595426525]
 use_parent_material = true
@@ -482,22 +510,62 @@ scale = Vector2(1, 1.0068363)
 [node name="RaceHUD" parent="." unique_id=246954594 node_paths=PackedStringArray("director") instance=ExtResource("hud")]
 director = NodePath("../RaceDirector")
 
-[node name="WallBarrier" type="Node2D" parent="." unique_id=100000001]
+[node name="WallBarrier" type="Node2D" parent="Track" unique_id=100000001]
+position = Vector2(0, 0)
 script = ExtResource("wallbarrier")
 
-[node name="LeftWall" type="StaticBody2D" parent="WallBarrier" unique_id=100000002]
+[node name="LeftWall" type="StaticBody2D" parent="Track/WallBarrier" unique_id=100000002]
+collision_layer = 1
 collision_mask = 0
 
-[node name="LeftShape" type="CollisionShape2D" parent="WallBarrier/LeftWall" unique_id=100000003]
-position = Vector2(-8.5, -9773)
-shape = SubResource("RectShape_WallL")
+[node name="LeftWallShape" type="CollisionShape2D" parent="Track/WallBarrier/LeftWall" unique_id=100000003]
+position = Vector2(0, -9072)
+shape = SubResource("RectShape_MainWall")
 
-[node name="RightWall" type="StaticBody2D" parent="WallBarrier" unique_id=100000004]
+[node name="RightWall" type="StaticBody2D" parent="Track/WallBarrier" unique_id=100000004]
+collision_layer = 1
 collision_mask = 0
 
-[node name="RightShape" type="CollisionShape2D" parent="WallBarrier/RightWall" unique_id=100000005]
-position = Vector2(1280, -9772.5)
-shape = SubResource("RectShape_WallR")
+[node name="RightWallShape" type="CollisionShape2D" parent="Track/WallBarrier/RightWall" unique_id=100000005]
+position = Vector2(1280, -9072)
+shape = SubResource("RectShape_MainWall")
+
+[node name="StartStandLeft" type="StaticBody2D" parent="Track/WallBarrier" unique_id=100000006]
+collision_layer = 1
+collision_mask = 0
+
+[node name="StartStandLeftShape" type="CollisionShape2D" parent="Track/WallBarrier/StartStandLeft" unique_id=100000007]
+position = Vector2(0, -10)
+shape = SubResource("RectShape_Stand")
+
+[node name="StartStandRight" type="StaticBody2D" parent="Track/WallBarrier" unique_id=100000008]
+collision_layer = 1
+collision_mask = 0
+
+[node name="StartStandRightShape" type="CollisionShape2D" parent="Track/WallBarrier/StartStandRight" unique_id=100000009]
+position = Vector2(1276, -10)
+shape = SubResource("RectShape_Stand")
+
+[node name="FinishStandLeft" type="StaticBody2D" parent="Track/WallBarrier" unique_id=100000010]
+collision_layer = 1
+collision_mask = 0
+
+[node name="FinishStandLeftShape" type="CollisionShape2D" parent="Track/WallBarrier/FinishStandLeft" unique_id=100000011]
+position = Vector2(0, -17997)
+shape = SubResource("RectShape_Stand")
+
+[node name="FinishStandRight" type="StaticBody2D" parent="Track/WallBarrier" unique_id=100000012]
+collision_layer = 1
+collision_mask = 0
+
+[node name="FinishStandRightShape" type="CollisionShape2D" parent="Track/WallBarrier/FinishStandRight" unique_id=100000013]
+position = Vector2(1276, -17997)
+shape = SubResource("RectShape_Stand")
+
+[node name="HazardSystem" type="Node" parent="." unique_id=110000001]
+script = ExtResource("hazardsys")
+
+[node name="SpeedStreaks" parent="." instance=ExtResource("streaks")]
 
 [node name="RaceLevelConfig" type="Node" parent="." unique_id=2082098965 node_paths=PackedStringArray("director")]
 script = ExtResource("cfg")

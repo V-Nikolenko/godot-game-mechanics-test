@@ -37,6 +37,19 @@ extends Node2D
 ## If true, the laser fires automatically when added to the scene.
 @export var auto_start: bool = true
 
+## When true, the laser PULSES forever instead of dissolving once: after each active phase
+## it goes dark for off_duration, then re-fires. Used by the race hazard gauntlet.
+@export var loop: bool = false
+
+## Seconds the beam stays dark between pulses when loop is true.
+@export var off_duration: float = 1.8
+
+## When true, register as a race track hazard: join group "race_hazards" and expose the
+## hazard contract (danger_rect / is_lethal_now / is_safe_to_cross / is_full_width) so the
+## central race HazardSystem applies the (shield-bypassing) kill. The built-in HitZone is
+## then left disabled to avoid the assault HurtBox/game-over damage path.
+@export var race_hazard: bool = false
+
 ## ── Constants ────────────────────────────────────────────────────────────────
 
 ## Size of one tile in pixels (square sprite-sheet cell).
@@ -61,7 +74,7 @@ const _ONESHOT_ANIMS: Array[StringName] = [
 
 ## ── State ────────────────────────────────────────────────────────────────────
 
-enum _Phase { INIT, INCREASE, IDLE, DISSOLVE, DONE }
+enum _Phase { INIT, INCREASE, IDLE, DISSOLVE, DONE, OFF }
 
 @onready var _template: AnimatedSprite2D = $BeamSprite
 @onready var _hit_zone: Area2D           = $HitZone
@@ -83,6 +96,9 @@ var _continuous_timer: Timer = null
 func _ready() -> void:
 	_build_segments()
 	_build_collision()
+
+	if race_hazard:
+		add_to_group("race_hazards")
 
 	_hit_zone.collision_mask = _HIT_MASK
 	_hit_zone.monitoring  = false
@@ -169,8 +185,10 @@ func _on_animation_finished() -> void:
 			## laser_idle is looping — animation_finished will NOT fire again until
 			## we interrupt it ourselves with laser_damage or laser_dissolve.
 			_play_all(&"laser_idle")
-			_hit_zone.monitoring  = true
-			_hit_zone.monitorable = true
+			## Race hazards are killed centrally by HazardSystem (shield-bypassing); leave the
+			## built-in HurtBox HitZone off so it doesn't also fire the assault damage path.
+			_hit_zone.monitoring  = not race_hazard
+			_hit_zone.monitorable = not race_hazard
 			## When monitoring turns on, Godot immediately emits area_entered for any
 			## HurtBox already overlapping the zone — no separate startup check needed.
 			## The continuous timer handles re-hits for shielded / invincible targets.
@@ -185,8 +203,13 @@ func _on_animation_finished() -> void:
 				_play_all(&"laser_idle")
 
 		&"laser_dissolve":
-			_phase = _Phase.DONE
-			queue_free()
+			if loop:
+				## Pulse: go dark, then re-fire after off_duration (do NOT free).
+				_phase = _Phase.OFF
+				get_tree().create_timer(off_duration).timeout.connect(start)
+			else:
+				_phase = _Phase.DONE
+				queue_free()
 
 func _begin_increase() -> void:
 	if _phase != _Phase.INIT:
@@ -236,3 +259,37 @@ func _flash_damage() -> void:
 		return
 	_damage_flashing = true
 	_play_all(&"laser_damage")
+
+## ── Race hazard contract (only meaningful when race_hazard = true) ─────────────
+## Consumed by HazardSystem (lethal contact) and Sensors (AI avoidance/timing).
+
+## Lethal only while the beam is fully active (IDLE phase).
+func is_lethal_now() -> bool:
+	return _phase == _Phase.IDLE
+
+## Only safe to cross while the beam is fully dark between pulses.
+func is_safe_to_cross() -> bool:
+	return _phase == _Phase.OFF
+
+## True when the beam runs across the lane (≈±90° = horizontal): a full-width TIMING gate
+## the AI must wait out. A vertical beam (rotation ≈0) is a lateral band, dodged via safe_x.
+func is_full_width() -> bool:
+	return absf(cos(rotation)) < 0.5
+
+## World-space AABB of the lethal beam, derived from the HitZone shape (handles rotation).
+func danger_rect() -> Rect2:
+	var rect := _hit_shape.shape as RectangleShape2D
+	if rect == null:
+		return Rect2(global_position, Vector2.ZERO)
+	var xform := _hit_shape.get_global_transform()
+	var hs := rect.size * 0.5
+	var corners := [
+		xform * Vector2(-hs.x, -hs.y), xform * Vector2(hs.x, -hs.y),
+		xform * Vector2(hs.x, hs.y), xform * Vector2(-hs.x, hs.y),
+	]
+	var mn: Vector2 = corners[0]
+	var mx: Vector2 = corners[0]
+	for c in corners:
+		mn = mn.min(c)
+		mx = mx.max(c)
+	return Rect2(mn, mx - mn)

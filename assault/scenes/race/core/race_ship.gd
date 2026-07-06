@@ -30,6 +30,14 @@ var _world: RaceWorld = null
 var _hit_tween: Tween = null
 ## Tracks HP so we only flash when real HP decreases (shield-absorbed hits don't flash).
 var _prev_hp: int = 0
+## Set true once a lethal hazard eliminates this racer, so it can't be killed twice.
+var _eliminated: bool = false
+
+## How far ahead (px, screen space) the survival reflex scans for lethal lateral hazards.
+const _HAZARD_LOOKAHEAD: float = 260.0
+## Larger lookahead for full-width lasers — the racer needs more room to brake and hold
+## behind a beam (and to react during the WARN telegraph before it becomes lethal).
+const _HAZARD_LASER_LOOKAHEAD: float = 420.0
 
 func _ready() -> void:
 	add_to_group("racers")
@@ -78,8 +86,37 @@ func _play_hit_flash() -> void:
 	_hit_tween.tween_interval(0.2)
 	_hit_tween.tween_callback(func(): mat.set_shader_parameter("enabled", false))
 
+## Called by HazardSystem when this AI racer touches a lethal hazard. A hazard one-shot
+## bypasses shields/HP entirely — the racer is removed from the race (attrition). The
+## RaceParticipant unregisters from the director in its _exit_tree, so standings update.
+func apply_lethal_hazard() -> void:
+	if _eliminated:
+		return
+	_eliminated = true
+	participant.finished = true        ## stop track_y advancing this frame
+	var boom := ExplosionEffect.new()
+	get_parent().add_child(boom)
+	boom.global_position = global_position
+	boom.explode()
+	queue_free()
+
 func _physics_process(delta: float) -> void:
 	brain.tick(delta)
+	## Survival reflex (runs after the brain each frame, overriding its intent):
+	##  • a lethal lateral hazard with a gap (walls, asteroids, vertical lasers) → steer to safe_x;
+	##  • a full-width horizontal laser ahead → time it (brake to hold behind, cross when clear).
+	##    The laser branch is checked regardless of the beam's current on/off state so the
+	##    racer brakes during the WARN telegraph, before the beam becomes lethal.
+	var dodged := false
+	if sensors.race_hazard_ahead(_HAZARD_LOOKAHEAD) != null:
+		var sx := sensors.safe_x(global_position.x, _HAZARD_LOOKAHEAD)
+		if not is_equal_approx(sx, global_position.x):
+			desired_x = sx
+			dodged = true
+	if not dodged:
+		var laser := sensors.blocking_laser_ahead(_HAZARD_LASER_LOOKAHEAD) as LaserRay
+		if laser != null:
+			participant.set_cruise_factor(0.0 if sensors.laser_should_brake(laser) else 1.0)
 	var x := mover.step(global_position.x, desired_x, delta)
 	var y := _world.get_screen_y(participant) if _world else global_position.y
 	global_position = Vector2(x, y)

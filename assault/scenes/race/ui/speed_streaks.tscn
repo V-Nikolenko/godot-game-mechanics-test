@@ -1,0 +1,9 @@
+[gd_scene format=3 uid="uid://00243s3wxf53"]
+
+[ext_resource type="Script" path="res://assault/scenes/race/ui/speed_streaks.gd" id="1_streaks"]
+
+[node name="SpeedStreaks" type="CanvasLayer"]
+layer = 1
+
+[node name="Draw" type="Node2D" parent="."]
+script = ExtResource("1_streaks")

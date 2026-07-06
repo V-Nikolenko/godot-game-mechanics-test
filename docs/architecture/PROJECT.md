@@ -94,6 +94,7 @@ Each combat entity carries a behaviour doc **beside its scene**, mirroring a com
 - **Racers:** `assault/scenes/race/racers/<name>/RACER.md` (6 racers)
 - **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (9 enemies)
 - **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (3 hazards)
+- **Race track hazards:** `assault/scenes/race/track/RACE_HAZARDS.md` (walls, asteroids, lasers + the lethal-hazard / AI-avoidance system)
 
 There is **no discrete boss entity** — the boss/finale phase is the `ENEMIES_CLEARED`
 section in `assault/scenes/levels/edelia/1/level_1_director.gd`, documented in

@@ -89,7 +89,7 @@ func _physics_process(delta: float) -> void:
 			top_speed = decayed
 			top_speed_changed.emit(top_speed, max_top_speed)
 
-	current_speed = top_speed * (cruise_factor if not is_player else 1.0)
+	current_speed = top_speed * cruise_factor
 
 	# All ships (player and AI) self-advance track_y.
 	# The Track node scrolls in RaceWorld at the same speed so the world looks right.

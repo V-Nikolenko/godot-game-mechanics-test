@@ -67,6 +67,14 @@ func notify_finished(p: RaceParticipant) -> void:
 		_race_over = true
 		race_finished.emit(_results.duplicate())
 
+## Force the race to fail immediately (e.g. a one-shot hazard killed the player).
+## Bypasses the health path so it doesn't trigger the assault game-over overlay —
+## just emits race_failed, which RaceLevelConfig reloads the scene on.
+func fail_race() -> void:
+	if not _race_over:
+		_race_over = true
+		race_failed.emit()
+
 func _physics_process(_delta: float) -> void:
 	if _race_over:
 		return

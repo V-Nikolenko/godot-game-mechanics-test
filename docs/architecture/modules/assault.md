@@ -241,7 +241,28 @@ director for a **racing** one:
 - **`race/core/`** also holds the shared racer chassis (`race_ship.gd`,
   `race_participant.gd`, `racer_state_machine.gd`, `racer_weapon.gd`, `sensors.gd`,
   `lateral_mover.gd`) and the side-wall/barrier collision pieces.
-- **`race/track/`** holds furniture (dash panels, mines, obstacles, finish line),
+- **Lethal track-hazard system** (`race/core/hazard_system.gd`): hazards in group
+  `race_hazards` expose a duck-typed contract (`danger_rect()`, `is_lethal_now()`).
+  `HazardSystem` polls every ship vs every lethal hazard each frame and applies a
+  **shield-bypassing one-shot** — player → `RaceDirector.fail_race()` (restart); AI →
+  `RaceShip.apply_lethal_hazard()` (explode + eliminate = attrition). The same hazard data
+  feeds AI avoidance: `sensors.gd` (`race_hazard_ahead()`, `safe_x()`) drives a pre-FSM
+  **dodge reflex** in `race_ship.gd`. Hazard entities live in `race/track/`: breakable
+  `RaceWall`, static `RaceAsteroid`, and pulsing `RaceLaser` (an inherited scene of the
+  assault `laser_ray.gd` in `race_hazard`/`loop` mode — horizontal timing gate or vertical
+  lateral band). See [RACE_HAZARDS.md](../../../assault/scenes/race/track/RACE_HAZARDS.md).
+- **Laser timing & player throttle:** horizontal lasers can't be dodged — the AI brakes and
+  crosses during the dark gap (`sensors.blocking_laser_ahead()` / `laser_should_brake()`),
+  and the player has a **brake** (`race_brake`, Left Shift) that lowers their
+  `RaceParticipant.cruise_factor` to slow and time the beam (`player_race_controller.gd`).
+- **Trapped panels:** a wall authored within `panel_lunge` (650) ahead of a dash panel in
+  its lane is rocket-or-die (the boost lunges you into it). `sensors.panel_is_trapped()`
+  makes every AI panel-seeker refuse such panels (filtered in `nearest_panel_ahead()`).
+- **Speed feel:** `race/ui/speed_streaks.gd` (a CanvasLayer overlay) draws vertical streaks
+  whose speed/opacity scale with the player's `top_speed_fraction()`, and
+  `player_race_controller.gd` adds a quick `Camera2D` zoom-out punch on each panel boost.
+- **`race/track/`** holds furniture (dash panels, mines, obstacles, finish line) and the
+  **lethal hazards** (`race_wall`, `race_asteroid` — [RACE_HAZARDS.md](../../../assault/scenes/race/track/RACE_HAZARDS.md));
   **`race/ui/`** the race HUD, and **`race/player_race_controller.gd`** /
   `race_level_config.gd` the player input + level wiring.
 
