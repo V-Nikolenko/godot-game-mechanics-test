@@ -92,6 +92,15 @@ Abstract base for level background renderers. Subclasses must override `transiti
 
 > Entities compose behaviour by adding child nodes and wiring signals. The canonical wiring of all of this for the player is `PlayerBase` (`global/entities/player_base.gd`); generic ships use `DamageReaction` instead. Verify the API of each component (linked file) before copying a snippet.
 
+> **Every component in this section has a characterization test.** Before changing one, read its
+> test — it is the fastest correct description of what the component actually does, including the
+> edge cases the source does not spell out. Mapping: `Health` → `tests/unit/test_health_component.gd`,
+> `TempHealth` → `test_temp_health_component.gd`, `HitBox`/`HurtBox` → `test_hitbox_hurtbox.gd`,
+> `Shield` → `test_shield_component.gd`, `DamageReaction` → `test_damage_reaction.gd`,
+> `Overheat` → `test_overheat_component.gd`, the state machine → `test_state_machine.gd`, and the
+> whole `PlayerBase` damage chain → `tests/integration/test_player_damage_chain.gd`. The autoloads
+> in §3–4 are covered by `tests/unit/test_<autoload>.gd`. See [`tests/README.md`](../../../tests/README.md).
+
 ### Health — `health_component.gd` (+ `temp_health_component.gd`)
 
 Add a `Health` node (`class_name Health extends Node`) as a child named `HealthComponent`. Exports: `max_health: int = 100`, `current_health: int = 100`, `invincibility_frames_enabled: bool = false`, `invincibility_time_in_sec: float = 0.5`. API: `increase(amount)`, `decrease(amount)`, `set_health(v)`; signal `amount_changed(current)`. `decrease()` is ignored while its internal invincibility timer is running (only when `invincibility_frames_enabled`).

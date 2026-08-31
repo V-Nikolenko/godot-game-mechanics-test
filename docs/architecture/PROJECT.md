@@ -34,9 +34,11 @@ otherwise it loads the Open Space hub. Full detail: [`docs/game-structure.md`](.
 | Infiltration | `infiltration/` | Isometric ground combat | [infiltration.md](modules/infiltration.md) |
 | Global (shared) | `global/` | Components, entities, ship modules, state machine, pickups, resources, UI, autoloads | [global.md](modules/global.md) |
 | Shell | `boot/`, `cutscenes/`, `dialog/` | Boot entry, cutscenes, dialog data | [shell.md](modules/shell.md) |
+| Tests | `tests/` (+ `addons/gut/`) | GUT suite over the autoloads and `global/` | [tests/README.md](../../tests/README.md) |
 
 The codebase is organised **by game mode**: each module holds only its mode-specific
 scripts, scenes, and assets. Anything reused across modes belongs in `global/`.
+`tests/` is not a gameplay module — it mirrors `global/` and is never imported by game code.
 
 ---
 
@@ -83,6 +85,14 @@ Detail and APIs: [global.md](modules/global.md).
   light_assault_ship). Simpler enemies use in-script `enum` phases.
 - **Coordinates:** waves and spawn offsets are authored in **design units** (640×360
   space) and scaled by `ArenaCamera.WORLD_SCALE` (2.0) at runtime — never pre-multiply.
+- **Testing:** **GUT 9.7.1**, vendored in `addons/gut/`, enabled from the
+  `[editor_plugins]` section of `project.godot`. Tests live in `tests/` and run headless:
+  `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`.
+  The existing suite is **characterization**: it pins behaviour as it is today, bugs
+  included, so any behaviour change shows up as a failing test rather than as silence.
+  Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the
+  save-file sandbox, and the signal-arity trap that will otherwise fail tests for reasons
+  unrelated to the code under test.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---
@@ -110,6 +120,9 @@ For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-ro
 - [`docs/enemy-roster.md`](../enemy-roster.md) — WaveBuilder spawn reference
 - [`docs/scoring_guide.md`](../scoring_guide.md) & [`docs/assault-spawning-scoring-internals.md`](../assault-spawning-scoring-internals.md) — scoring
 - [`docs/BULLET_POOL.md`](../BULLET_POOL.md) — bullet pooling
+- [`tests/README.md`](../../tests/README.md) — how to run and write tests
+- [`addons/gut/LOCAL_PATCHES.md`](../../addons/gut/LOCAL_PATCHES.md) — the two changes GUT
+  needs to load under Godot 4.6.3; re-apply on any GUT upgrade
 
 ---
 

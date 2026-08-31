@@ -16,6 +16,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
 | Infiltration | `infiltration/` | Isometric ground combat | [infiltration.md](docs/architecture/modules/infiltration.md) |
 | Global (shared) | `global/` | Components, entities, ship modules, state machine, pickups, resources, UI, autoloads | [global.md](docs/architecture/modules/global.md) |
 | Shell | `boot/`, `cutscenes/`, `dialog/` | Boot entry, cutscenes, dialog data | [shell.md](docs/architecture/modules/shell.md) |
+| Tests | `tests/` (+ `addons/gut/`) | GUT suite over the autoloads and `global/` | [tests/README.md](tests/README.md) |
 
 ## Key conventions
 
@@ -28,6 +29,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   folder for complex entities; simpler enemies use in-script `enum` phases.
 - **Design-unit coordinates** — waves/spawns authored in 640×360 space, scaled by
   `ArenaCamera.WORLD_SCALE` (2.0) at runtime; never pre-multiply.
+- **Tests are GUT, in `tests/`** — run them headless with
+  `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
+  (this is step 3 of `/agent/verify.sh`). The current suite is **characterization**: it pins
+  today's behaviour, bugs included. **Read [`tests/README.md`](tests/README.md) before writing a
+  test** — it covers the `user://` save-file sandbox and the zero-parameter-signal trap, both of
+  which cause failures unrelated to the code under test.
 - **NEVER commit — the user handles all git.** Work directly on `main` unless asked
   otherwise; no worktrees/branches unless requested.
   - *Exception — autonomous NAS loop only* (`SRCW_AUTOMATION=1` in the environment): you are
@@ -48,6 +55,8 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   (`assault/scenes/race/racers/*/`, `assault/scenes/enemies/*/`, `assault/scenes/hazards/*/`).
 - Spawning enemies via `WaveBuilder` → [`docs/enemy-roster.md`](docs/enemy-roster.md).
 - Game loop / mode transitions → [`docs/game-structure.md`](docs/game-structure.md).
+- **What a shared component actually does, edge cases included** → its test in `tests/unit/`
+  (one file per component and per autoload). Faster and more precise than re-reading the source.
 
 ## MANDATORY — plan before building
 

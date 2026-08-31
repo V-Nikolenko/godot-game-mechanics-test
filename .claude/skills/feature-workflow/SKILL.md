@@ -1,168 +1,240 @@
 ---
 name: feature-workflow
-description: Use when implementing any non-trivial feature or mechanic - gathers context, researches how shipped games solve the same problem, writes a plan, gets it reviewed by an independent subagent, and only implements after approval. Skip for one-line fixes.
+description: Use when implementing any non-trivial feature or mechanic - resumable pipeline that gathers context, researches how shipped games solve the problem, writes a plan, gets it reviewed by an independent subagent, and only implements after approval. Every stage checkpoints to disk so an interrupted cycle resumes instead of restarting.
 ---
 
 # Feature Workflow
 
 The pipeline for adding a mechanic or feature to this game. It exists because an unattended
 agent's most expensive failure is not bad code — it is confidently building the *wrong thing*
-for five hours. Every stage below produces a **file on disk**, so a human reading the morning
-report can see what was decided and why, and so a cycle that runs out of budget mid-feature can
-be resumed by the next one.
+for five hours.
 
-## Proportionality — pick a track first
-
-Do not run the full pipeline on small work. Decide honestly:
-
-| Track | When | Stages |
-|---|---|---|
-| **A — Full** | New mechanic, new system, anything touching more than ~3 files, anything with design choices a reasonable person could disagree about | 1 → 7 |
-| **B — Direct** | Bug fix, stale reference, rename, tuning an existing value, adding a test | Stages 5 → 7 only |
-
-If you are unsure which track applies, it is Track A. Record the choice and the reason in the
-plan file (Track B: state it in your report instead).
+**Every stage writes a file, and every stage is resumable.** Runs happen in 5-hour windows that
+can end mid-feature. Nothing already done may be redone: re-reading the codebase and re-running
+the same web searches costs a large part of a window and produces the same answer.
 
 ---
 
-## Stage 1 — Gather context
+## Stage 0 — ALWAYS START HERE: resume or begin
 
-Read before searching the web. You cannot judge whether an industry pattern fits until you know
-what is already here.
+Before anything else, check for work already in progress:
 
-- Read `CLAUDE.md`, `docs/architecture/PROJECT.md`, and the module doc(s) for the modules involved.
-- Find the code that already does something adjacent. This project favours **composition** —
-  there is a real chance the feature is mostly assembling existing `global/components/`.
-- List what already exists that you should reuse, with file paths. Explicitly note anything you
-  are tempted to write that already exists.
+```bash
+ls docs/plans/*/STATUS.md 2>/dev/null
+```
 
-## Stage 2 — Research how shipped games solve it
+**If a `STATUS.md` exists with unchecked boxes, you are resuming.** Read it, read the artifacts
+of the completed stages, and continue from the **first unchecked stage**. Do not re-gather
+context, do not re-run research, do not rewrite an approved plan. The `Next action` line at the
+bottom of `STATUS.md` tells you exactly where to pick up.
 
-Use WebSearch. The goal is *not* to copy an implementation — it is to learn the failure modes
-other developers hit, so the plan avoids them.
+Only if there is no in-progress plan do you start a new item from `BACKLOG.md`.
 
-- Search for the mechanic by its real name (e.g. "coyote time", "input buffering", "hitstop",
-  "bullet hell spawn patterns", "isometric depth sorting").
-- Prefer postmortems, GDC talks, engine docs, and developer writeups over listicles.
-- Capture **3–5 concrete findings**, each with a source URL and, critically, the *tradeoff* it
-  implies. A finding without a tradeoff is trivia.
-- Note typical parameter values where they exist (e.g. coyote time is usually 80–150ms). These
-  become your starting defaults instead of guesses.
+### Choosing a track (new work only)
 
-If WebSearch is unavailable or returns nothing useful, say so plainly in the plan and proceed —
-do not fabricate sources or invent "industry standard" numbers.
+| Track | When | Stages |
+|---|---|---|
+| **A — Full** | New mechanic or system, more than ~3 files, or any design choice a reasonable person could disagree about | 1 to 7 |
+| **B — Direct** | Bug fix, stale reference, rename, tuning an existing value, adding a test | 5 to 7 |
 
-## Stage 3 — Write the plan
+If unsure, it is Track A. Track B needs no plan directory — but if a Track B change fails the
+gate twice, promote it to Track A and create one.
 
-Write to `docs/plans/<slug>.md` (create the directory if needed). `<slug>` is kebab-case, derived
-from the backlog item. Use this structure:
+### Creating the checkpoint directory
+
+For Track A, your first action is to create `docs/plans/<slug>/STATUS.md` (`<slug>` kebab-case
+from the backlog item):
+
+```markdown
+# STATUS — <feature name>
+
+**Track:** A
+**Backlog item:** <verbatim from BACKLOG.md>
+**Started:** <YYYY-MM-DD>
+
+- [ ] 1. Context gathered → `1-context.md`
+- [ ] 2. Research done → `2-research.md`
+- [ ] 3. Plan written → `3-plan.md`
+- [ ] 4. Reviewed and APPROVED → `4-review.md`
+- [ ] 5. Implemented → `5-progress.md`
+- [ ] 6. Gate green
+- [ ] 7. Docs updated, backlog ticked
+
+**Next action:** Gather context (stage 1).
+```
+
+**Tick a box the moment its artifact is written, and rewrite `Next action` every time.** If your
+window ends, that line is the only thing standing between the next cycle and starting over.
+
+---
+
+## Stage 1 — Gather context → `1-context.md`
+
+Read the code before searching the web. You cannot judge whether an industry pattern fits until
+you know what is already here.
+
+- Read `CLAUDE.md`, `docs/architecture/PROJECT.md`, and the module doc(s) involved.
+- Find code that already does something adjacent. This project favours **composition** — the
+  feature may be mostly assembling existing `global/components/`.
+
+Write `1-context.md`:
+
+```markdown
+# Context
+
+## Modules and files involved
+| Path | What it does | Why it matters here |
+
+## Existing code to reuse
+| Path | What it gives us |
+<be specific - this table is what stops the next cycle reinventing things>
+
+## Conventions that constrain this
+<coordinate space, config-driven .tres, state machine style, etc.>
+
+## Open questions for research
+```
+
+Tick box 1. Update `Next action`.
+
+## Stage 2 — Research how shipped games solve it → `2-research.md`
+
+Use WebSearch. The goal is not to copy an implementation — it is to learn the failure modes other
+developers hit, so the plan avoids them.
+
+- Search the mechanic by its real name ("coyote time", "input buffering", "hitstop",
+  "bullet hell spawn patterns", "boss telegraph timing").
+- Prefer postmortems, GDC talks, engine docs and developer writeups over listicles.
+- Capture **3 to 5 findings**, each with a source URL and the **tradeoff** it implies. A finding
+  without a tradeoff is trivia.
+- Record typical parameter values where they exist — these become starting defaults instead of
+  guesses.
+
+Write `2-research.md` as a table: `| Finding | Tradeoff | Typical values | Source |`.
+
+If WebSearch is unavailable or returns nothing useful, write that plainly and proceed. **Never
+fabricate sources or invent "industry standard" numbers.**
+
+Tick box 2. Update `Next action`.
+
+## Stage 3 — Write the plan → `3-plan.md`
+
+Build on `1-context.md` and `2-research.md` — do not re-derive them.
 
 ```markdown
 # <Feature>
 
-**Track:** A
-**Backlog item:** <verbatim from BACKLOG.md>
-
 ## Problem
-What the player experiences today, and what should change. Player-facing, not code-facing.
-
-## Existing code to reuse
-| Path | What it gives us |
-
-## Research findings
-| Finding | Tradeoff | Source |
+What the player experiences today and what should change. Player-facing, not code-facing.
 
 ## Design
-The chosen approach, and the alternatives rejected with reasons.
+The chosen approach, and alternatives rejected with reasons.
 Name real files, real nodes, real signals.
 
 ## Build sequence
-Ordered steps, each independently testable.
+Ordered steps, each independently testable and each small enough to finish and verify.
 
 ## Test plan
-The GUT tests that will prove this works, named, with the specific cases —
-including at least one boundary/edge case.
+The GUT tests that will prove this works, named, with specific cases -
+including at least one boundary case.
 
 ## Risks
-What could break, and what you will check.
+What could break and what you will check.
 
 ## Out of scope
-What you are deliberately not doing.
 ```
 
-## Stage 4 — Independent review (blocking)
+Tick box 3. Update `Next action`.
 
-Dispatch a **subagent** (Task tool, `subagent_type: general-purpose`) to review the plan. Give it
-the plan file path and this instruction — it must be able to genuinely say no:
+## Stage 4 — Independent review → `4-review.md` (blocking)
 
-> You are reviewing an implementation plan for a Godot 4.6 game. Read `docs/plans/<slug>.md`,
-> then read the actual code it references — do not take the plan's claims about the codebase on
-> trust. You are the last check before hours of unattended implementation.
+Dispatch a **subagent** (Task tool, `subagent_type: general-purpose`). Give it the plan path and
+this instruction — it must be able to genuinely say no:
+
+> You are reviewing an implementation plan for a Godot 4.6 game. Read
+> `docs/plans/<slug>/3-plan.md` and its sibling `1-context.md` and `2-research.md`, then read the
+> actual code they reference — do not take the plan's claims about the codebase on trust. You are
+> the last check before hours of unattended implementation.
 >
 > Reject or request changes if any of these hold:
 > - The plan reinvents something that already exists in `global/components/` or elsewhere.
 > - It contradicts a convention in `CLAUDE.md` (composition over inheritance, config-driven
 >   `.tres` stats, 640x360 design-space coordinates scaled by `ArenaCamera.WORLD_SCALE`).
 > - The test plan cannot actually fail — it asserts nothing meaningful, or has no edge case.
-> - The design has an unexamined alternative that is plainly simpler.
-> - The research section has no tradeoffs, or cites sources that do not support the claims.
+> - There is an unexamined alternative that is plainly simpler.
+> - The research has no tradeoffs, or cites sources that do not support the claims.
 > - The scope is too large to finish and verify in one session.
 >
-> Write your verdict to `docs/plans/<slug>.review.md`, beginning with exactly one of:
+> Write your verdict to `docs/plans/<slug>/4-review.md`, beginning with exactly one of:
 > `VERDICT: APPROVED`, `VERDICT: CHANGES_REQUESTED`, or `VERDICT: REJECTED`.
-> Then list findings, each with the file and line you checked. Approving a plan with real
-> problems is a worse outcome than rejecting a good one — do not rubber-stamp.
+> Then list findings, each naming the file and line you checked. Approving a plan with real
+> problems is worse than rejecting a good one — do not rubber-stamp.
 
 **The gate:**
 
-- `APPROVED` → proceed to Stage 5.
-- `CHANGES_REQUESTED` → revise the plan, re-review. **Maximum two rounds.**
-- `REJECTED`, or still not approved after two rounds → **stop. Do not implement.** Commit the
-  plan and reviews, write the disagreement in your report, and move to the next backlog item.
-  A cycle that produces a well-researched rejected plan is a *successful* cycle.
+- `APPROVED` → tick box 4, proceed to stage 5.
+- `CHANGES_REQUESTED` → revise `3-plan.md`, re-review. **Maximum two rounds.** Append each round
+  to `4-review.md` rather than overwriting — the history matters.
+- `REJECTED`, or not approved after two rounds → **stop. Do not implement.** Commit every
+  artifact, mark `STATUS.md` as blocked with the reason, and report it. A cycle producing a
+  well-researched rejected plan is a **successful** cycle.
 
-Never review your own plan and call it approved. The review file must exist and must come from
-the subagent.
+Never review your own plan and call it approved. The review file must come from the subagent.
 
-## Stage 5 — Implement
+## Stage 5 — Implement → `5-progress.md`
 
-- Tests first, from the plan's test plan. Watch them fail before you make them pass.
-- Follow the build sequence. If reality contradicts the plan, update the plan file to match what
-  you actually did — a stale plan is worse than none.
-- Keep to Out of scope. Discovered work goes to `BACKLOG.md` under *Discovered*, not into this change.
+Keep a running log so an interrupted implementation resumes cleanly:
+
+```markdown
+# Progress
+- [x] Step 1 of build sequence — <what was done, which files>
+- [ ] Step 2 — <not started>
+
+**Resume at:** step 2.
+**Deviations from plan:** <or "none">
+```
+
+- Tests first, from the plan's test plan. Watch them fail before making them pass.
+- Update `5-progress.md` after **each build step**, not at the end. A window can end at any moment.
+- If reality contradicts the plan, update `3-plan.md` — a stale plan is worse than none.
+- Discovered work goes to `BACKLOG.md` under *Discovered*, never silently into this change.
+
+Tick box 5 when the build sequence is complete.
 
 ## Stage 6 — Verify
-
-Run the real gate. Do not claim success without it:
 
 ```bash
 bash /agent/verify.sh
 ```
 
-This imports the project, boots it headless (autoloads + main scene), and runs the GUT suite. If
-it fails, fix it now — a red gate means the next cycle is spent repairing instead of building.
+Imports the project, boots it headless (autoloads + main scene), and runs the GUT suite. Fix
+failures now — a red gate means the next cycle is spent repairing instead of building.
 
-For anything with visible behaviour, also run the scene headless and check the output:
+**Do not delete work to make the gate pass.** If something is genuinely unsalvageable, remove
+only that part and say so explicitly in your report.
 
-```bash
-godot --headless --path /work/repo <scene or test script>
-```
+Tick box 6.
 
 ## Stage 7 — Document and report
 
-- Invoke the **`updating-project-docs`** skill if the change was structural. This is required by
-  `CLAUDE.md`, not optional.
+- Invoke **`updating-project-docs`** if the change was structural — required by `CLAUDE.md`.
 - Tick the item in `BACKLOG.md`; add anything discovered.
-- In your report, link the plan and review files and state the verdict verbatim.
+- In your report, link the plan directory and quote the review verdict verbatim.
+- Mark `STATUS.md` complete.
+
+Tick box 7.
 
 ---
 
 ## Anti-patterns
 
+- **Restarting a stage that already has an artifact.** The single most expensive mistake here.
+  Read the file, trust it, move on.
 - **Skipping review because the plan "is obviously fine."** The review exists precisely for plans
   that feel obviously fine.
 - **Treating the reviewer as a formality.** If every plan is approved first time, the reviewer
   prompt is not being followed.
-- **Researching after designing.** Then the research is just justification for a decision already made.
-- **Planning a feature so large it cannot be verified in one session.** Split it in `BACKLOG.md`
-  and build the first piece.
+- **Researching after designing** — then the research is just justification for a decision
+  already made.
+- **Letting `STATUS.md` go stale.** An unticked box that is actually done, or a wrong
+  `Next action`, sends the next cycle to redo hours of work.

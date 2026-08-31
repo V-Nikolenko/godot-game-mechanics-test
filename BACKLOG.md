@@ -52,12 +52,15 @@ sub-items back here.
 
 ## Now
 
-- [ ] **Bootstrap the test harness.** Install GUT into `addons/gut/`, create `tests/`, and write
+- [x] **Bootstrap the test harness.** Install GUT into `addons/gut/`, create `tests/`, and write
       characterization tests for the eight autoloads and the `global/components/` set (Health,
       Hurtbox/Hitbox, Shield, Overheat, DamageReaction). Tests must pin down current behaviour,
       bugs included — no fixes this run. Done when `bash /agent/verify.sh` passes with a green
       suite. *(The agent does this automatically while `addons/gut/` is missing, ignoring
       everything below.)*
+      **Done 2026-08-31** — GUT 9.7.1 vendored into `addons/gut/` (two files patched for Godot
+      4.6.3, see `addons/gut/LOCAL_PATCHES.md`), 153 tests / 490 asserts across 16 scripts in
+      `tests/`, gate green. Conventions and the gotchas that cost time are in `tests/README.md`.
 
 ## Next
 
@@ -141,3 +144,57 @@ than tedious; standard telegraph durations for sweeping-laser boss attacks in sh
 ## Discovered
 
 <!-- The agent appends suspected bugs and follow-ups it found but did not act on. Triage these. -->
+
+Found on 2026-08-31 while writing the characterization suite. Each one is **pinned by a passing
+test that asserts the current behaviour**, so changing any of them will fail that test — which is
+the signal that the change was deliberate. Test names are given so the fix has an obvious anchor.
+
+- [ ] **`Health.amount_changed` is declared with zero parameters but emitted with one.**
+      `global/components/health_component.gd:4` declares `signal amount_changed`, and line 42
+      emits `amount_changed.emit(current_health)`. One-argument handlers (`DamageReaction`,
+      `PlayerBase._on_health_changed`) work, but any zero-argument handler raises
+      `Error calling from signal 'amount_changed' ... Method expected 0 argument(s), but called
+      with 1` at runtime. Fix is one line: `signal amount_changed(current: int)`.
+      Same defect in `global/statemachine/state.gd:4` — `signal state_transition` is emitted with
+      the target `State`. Pinned by `tests/unit/test_health_component.gd` (see the file header)
+      and `tests/unit/test_state_machine.gd::test_states_request_transitions_through_their_own_signal`.
+
+- [ ] **`StateMachine.change_state()` crashes if the machine has no current state.**
+      `global/statemachine/state_machine.gd:29` does `print("Exiting previous state: " +
+      current_state.name)` **before** the `if current_state:` guard on line 31. Any machine built
+      without an `initial_state` (or whose state was cleared) dies on its first transition. Not
+      reachable today because every shipped machine sets `initial_state`, so it is latent rather
+      than live. Deliberately *not* covered by a test — the test would have to trigger the crash.
+
+- [ ] **`Health.decrease()` prints to stdout on every single hit.**
+      `global/components/health_component.gd:34`. In a bullet-hell section that is one line per
+      projectile per frame; `print` is not free and it buries real errors in the log. Should be a
+      debug-gated helper or removed. `StateMachine.change_state` and `DialogPlayer` print
+      unconditionally too (`[DP] ...` on every line of every conversation).
+
+- [ ] **`UpgradeState.unlock()` accepts ids that are not in `ALL_IDS`.**
+      A typo'd id is stored and reported `true` by `is_unlocked()`, but `unlocked_ids()` iterates
+      `ALL_IDS`, so it never appears in any menu — a silent, invisible failure. Compare
+      `ShipModuleState.unlock()`, which validates and `push_warning`s. Pinned by
+      `tests/unit/test_upgrade_state.gd::test_unknown_ids_are_stored_but_never_listed`.
+
+- [ ] **`SessionState` recovers the temp-HP stack size with integer division.**
+      `global/autoloads/session_state.gd:85` computes `_temp_hp_stack = maximum /
+      TempHealth.MAX_STACKS`. When `maximum` is not a multiple of 5 the stack size rounds down and
+      the pool the player gets back after a level transition is smaller than the one they earned.
+      Reachable whenever a ship's `base_health / 2` is not a multiple of 5. Pinned by
+      `tests/unit/test_session_state.gd::test_temp_health_stack_size_uses_integer_division`.
+
+- [ ] **`ShipModuleState.equip()` never consults `_unlocked`.** Any module in the catalogue can be
+      equipped whether or not it was earned. Fine if unlock state is purely cosmetic for the menu;
+      a progression hole if it is not. Worth a decision either way. Pinned by
+      `tests/unit/test_ship_module_state.gd::test_equipping_does_not_require_unlocking`.
+
+- [ ] **`MissionState.complete()` cannot record a zero-star clear.** `clampi(stars, 1, 3)` turns a
+      0-star completion into 1 star. Intentional? Pinned by
+      `tests/unit/test_mission_state.gd::test_stars_are_clamped_into_one_to_three`.
+
+- [ ] **GUT 9.7.1 needs two local patches to load under Godot 4.6.3**, documented in
+      `addons/gut/LOCAL_PATCHES.md`. `AccessibilityServer` does not exist in this Godot build, and
+      a property getter in `stub_params.gd` fails type inference. Re-apply both on any GUT upgrade
+      — without them the whole addon fails to parse and the doubler is unusable.

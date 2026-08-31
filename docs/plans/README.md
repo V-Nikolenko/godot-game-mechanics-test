@@ -1,15 +1,28 @@
 # Plans
 
-One file per feature, written by the `feature-workflow` skill before any code is written:
+One **directory** per feature, written by the `feature-workflow` skill. Every stage checkpoints
+to its own file so a cycle that runs out of budget mid-feature resumes instead of restarting:
 
-- `<slug>.md` — the plan: problem, existing code to reuse, research findings with sources and
-  tradeoffs, design, build sequence, test plan, risks, out of scope.
-- `<slug>.review.md` — an independent subagent's verdict on that plan. Starts with
-  `VERDICT: APPROVED`, `VERDICT: CHANGES_REQUESTED`, or `VERDICT: REJECTED`.
+```
+docs/plans/<slug>/
+├── STATUS.md       ← the resume pointer: which stages are done, what to do next
+├── 1-context.md    ← modules involved, existing code to reuse, constraints
+├── 2-research.md   ← how shipped games solve this: findings, tradeoffs, sources
+├── 3-plan.md       ← problem, design, build sequence, test plan, risks, out of scope
+├── 4-review.md     ← independent subagent verdict (APPROVED / CHANGES_REQUESTED / REJECTED)
+└── 5-progress.md   ← per-build-step implementation log
+```
 
-Implementation only proceeds on `APPROVED`. These files are committed deliberately: they are the
-audit trail for work done unattended, and they let a cycle that ran out of budget mid-feature be
-picked up by the next one.
+`STATUS.md` is the important one. Every cycle checks `docs/plans/*/STATUS.md` for unchecked
+boxes before touching the backlog, and resumes from the first incomplete stage. Its
+`Next action:` line is what stops the next run re-reading the codebase and re-running the same
+web searches — which costs a large part of a 5-hour window and produces the same answer.
 
-A rejected plan is a legitimate outcome — it means several hours of wrong implementation were
-avoided for the cost of a few minutes of planning.
+Implementation only proceeds on `VERDICT: APPROVED`.
+
+These files are committed deliberately: they are the audit trail for work done unattended. If a
+morning report claims a plan was approved and there is no `4-review.md`, the review did not
+happen.
+
+A rejected plan is a legitimate outcome — it means hours of wrong implementation were avoided for
+the cost of a few minutes of planning.
