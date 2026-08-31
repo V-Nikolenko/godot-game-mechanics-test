@@ -30,6 +30,14 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `ArenaCamera.WORLD_SCALE` (2.0) at runtime; never pre-multiply.
 - **NEVER commit — the user handles all git.** Work directly on `main` unless asked
   otherwise; no worktrees/branches unless requested.
+  - *Exception — autonomous NAS loop only* (`SRCW_AUTOMATION=1` in the environment): you are
+    already checked out on `agent/auto-dev`, and you **may** commit and push to that branch.
+    Run `bash /agent/verify.sh` and get a green gate **before** pushing — never push work you
+    have not verified. The harness also commits and pushes anything you leave uncommitted, but
+    only after the same gate passes.
+  - **`main` stays off-limits.** Never commit to it, never push to it, never merge into it,
+    never force-push or rewrite history on any branch. The user merges `agent/auto-dev` to
+    `main` by hand.
 
 ## Where things live
 
@@ -40,6 +48,17 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   (`assault/scenes/race/racers/*/`, `assault/scenes/enemies/*/`, `assault/scenes/hazards/*/`).
 - Spawning enemies via `WaveBuilder` → [`docs/enemy-roster.md`](docs/enemy-roster.md).
 - Game loop / mode transitions → [`docs/game-structure.md`](docs/game-structure.md).
+
+## MANDATORY — plan before building
+
+Before implementing any **non-trivial** feature or mechanic, invoke the **`feature-workflow`**
+skill. It gathers context, researches how shipped games solve the same problem, writes a plan to
+`docs/plans/`, has an **independent subagent review it**, and only then implements. It has a
+short Track B path for bug fixes, renames and tuning — use the skill to pick the track rather
+than skipping it.
+
+Implementation starts only on `VERDICT: APPROVED`. A rejected plan is a legitimate outcome: it
+means wrong work was avoided cheaply.
 
 ## MANDATORY — keep the docs current
 
