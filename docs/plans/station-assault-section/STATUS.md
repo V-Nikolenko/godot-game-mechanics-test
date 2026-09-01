@@ -9,11 +9,11 @@ and advances to `planet_approach` when it dies.
 **Started:** 2026-09-01
 
 - [x] 1. Context gathered → `1-context.md`
-- [ ] 2. Research done → `2-research.md`
-- [ ] 3. Plan written → `3-plan.md`
+- [x] 2. Research done → `2-research.md`
+- [x] 3. Plan written → `3-plan.md`
 - [ ] 4. Reviewed and APPROVED → `4-review.md`
 - [ ] 5. Implemented → `5-progress.md`
 - [ ] 6. Gate green
 - [ ] 7. Docs updated, backlog ticked
 
-**Next action:** Research (stage 2) — boss-gated progression in autoscrolling shmups.
+**Next action:** Independent subagent review (stage 4).

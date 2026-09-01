@@ -112,8 +112,37 @@ developers hit, so the plan avoids them.
 
 Write `2-research.md` as a table: `| Finding | Tradeoff | Typical values | Source |`.
 
-If WebSearch is unavailable or returns nothing useful, write that plainly and proceed. **Never
-fabricate sources or invent "industry standard" numbers.**
+### When WebFetch is blocked — do NOT give up on the source
+
+Many of the best sources are game-dev forums and blogs that return **403 to automated clients**
+while being perfectly public in a browser. A 403 says nothing about whether the page is worth
+reading, and abandoning it throws away exactly the hard-won practitioner detail this stage exists
+to find.
+
+**Never treat a WebFetch 403/401/429/empty result as the end of that source.** Retry it through:
+
+```bash
+./scripts/fetch-page.sh "<url>" /tmp/source.md
+```
+
+It tries a real browser User-Agent first, then a reader proxy that renders the page and returns
+markdown. Read the resulting file. This recovers most "blocked" pages — it was added precisely
+because `shmups.system11.org`'s bullet-hell boss guide 403'd, and it turned out to contain
+concrete, directly usable numbers.
+
+Notes:
+- Do not re-issue the identical `WebFetch` call after it fails; go straight to the script.
+- The reader proxy sends the URL to a third party. Fine for public docs, blogs and forums.
+  **Never use it for private, internal, authenticated, or credential-bearing URLs.**
+- If the script also fails, *then* the source is genuinely unreachable — record that in
+  `2-research.md` and move on.
+
+Only after genuinely exhausting a source should you note it as unavailable. If a whole topic
+yields nothing, say so plainly, base the plan on the codebase plus your own knowledge of the
+genre, and **label that as a judgement call**.
+
+**Never fabricate sources, invent quotes, or attach plausible-looking numbers to a URL you could
+not actually read.**
 
 Tick box 2. Update `Next action`.
 
