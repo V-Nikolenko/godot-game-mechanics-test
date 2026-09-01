@@ -17,7 +17,7 @@ project boot.
 | `integration/` | Several systems wired together (the player damage chain), plus project-wide integrity checks over the resource files themselves. |
 | `helpers/` | Shared fixtures. **Never** named `test_*`, or GUT tries to collect them as tests. |
 
-## One exception: the resource-UID integrity test
+## Two exceptions: the UID integrity test and the space-station tests
 
 `integration/test_resource_uid_integrity.gd` is **not** characterization. It asserts an invariant
 that must hold — every `[ext_resource]` UID in a `.tscn`/`.tres` matches the UID its target
@@ -29,6 +29,12 @@ sibling `.import`) and never asks `ResourceUID` / `ResourceLoader`. Those consul
 once a warm project has loaded them — so the engine will happily report a broken reference as fine
 on your machine and break on a fresh clone. Five of the eight mismatches this test first caught
 behaved exactly that way. If you extend it, keep it reading files.
+
+`integration/test_space_station.gd` is the other exception, for a different reason: the
+`space_station` entity is **new code**, so its tests assert intended behaviour rather than pinning
+existing quirks. It carries a documented coverage gap — it drives damage by emitting
+`HurtBox.received_damage` directly, so it proves nothing about collision layers. See the file
+header and `assault/scenes/enemies/space_station/ENEMY.md`.
 
 ## These are characterization tests
 
@@ -76,3 +82,5 @@ Autoloads: `MissionState`, `UpgradeState`, `ShipModuleState`, `ShipProgressionSt
 Components: `Health`, `HitBox`/`HurtBox`, `Shield`, `TempHealth`, `Overheat`, `DamageReaction`.
 Plus `global/statemachine/` and the `PlayerBase` damage chain.
 Project-wide: `[ext_resource]` UID integrity across every `.tscn`/`.tres`.
+Entities: the `space_station` mini-boss (`integration/test_space_station.gd`) — armour rule, turret
+lifecycle, and the config-driven stats.

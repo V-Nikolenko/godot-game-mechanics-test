@@ -114,11 +114,19 @@ and only when the station is destroyed does the level continue to the planet.
 
 ### Sub-items — do these in order, one per session
 
-- [ ] **1. Station and turrets exist as a destructible entity.** Generate the station and turret
+- [x] **1. Station and turrets exist as a destructible entity.** Generate the station and turret
       sprites via PixelLab. Assemble the station scene with N turrets as child entities, each
       individually damageable. The station core takes no damage while any turret is alive.
       *Done when:* a GUT test destroys turrets one at a time and proves the core is invulnerable
       until the last turret dies, then becomes damageable.
+      **Done 2026-09-01** — `assault/scenes/enemies/space_station/` (`SpaceStation extends BaseEnemy`
+      + 4 `StationTurret` children + `SpaceStationConfig`), three PixelLab sprites, and
+      `tests/integration/test_space_station.gd` (9 tests). Gate green: 165 tests / 527 asserts.
+      Core refuses damage via a `_on_received_damage` override while keeping the HurtBox **live**,
+      because `plasma_nova_module.gd:39-41` and `beam_behavior.gd:99-102` both emit
+      `received_damage` directly and a disabled hurtbox would leak both. Plan + two review rounds:
+      `docs/plans/station-mini-boss-destructible/`. **Known gap:** the tests emit `received_damage`
+      directly, so they do not prove the collision layers — that needs sub-item 2.
 
 - [ ] **2. The encounter blocks level progress.** Add a new `LevelSection` (suggested name
       `station_assault`) to `level_1_director.gd`, between `asteroid_belt` and `planet_approach`,
@@ -242,3 +250,33 @@ Found on 2026-09-01 while fixing the stale `ext_resource` UIDs.
       fingerprint as the eight references that *were* broken: a UID typed by a human or an agent
       rather than minted by the editor. If one is ever duplicated onto a second resource the
       collision will be silent.
+
+Found on 2026-09-01 while building the space-station mini-boss entity (EPIC sub-item 1).
+
+- [ ] **GUT silently drops a test script it cannot load, and still exits 0.** When
+      `tests/integration/test_space_station.gd` referenced classes that did not exist yet, GUT
+      printed `---- All tests passed! ----`, reported `Scripts 2` instead of 3, and **returned exit
+      code 0**. The parse errors appeared only on stderr. `/agent/verify.sh` step 3 checks the exit
+      code and greps for `^N failing`, so **neither signal fires** — a test file broken by a rename
+      or a deleted symbol would vanish from the suite and the gate would stay green. Cheap fix:
+      have step 3 also assert the script count, or grep its GUT output for `Parse Error` /
+      `SCRIPT ERROR` the way steps 1 and 2 already do. This is the only reason the "watch it fail"
+      step of the feature workflow worked here — the red was read off stderr, not off GUT's verdict.
+
+- [ ] **`Gunship` never applies its config's `collision_damage`.** `gunship_config.tres:8` sets
+      `collision_damage = 30`, but `BaseEnemy._add_contact_hitbox()` hardcodes `hb.damage = 20`
+      (`base_enemy.gd:56`) and the gunship — unlike `bomber.gd:25`, `light_assault_ship.gd:23`,
+      `ram_ship.gd:20-23` and `drone_interceptor.gd:148` — never re-applies it after
+      `super._ready()`. So the heaviest enemy in the roster rams for 20 instead of 30 and the
+      `.tres` value is dead. One loop in `gunship.gd::_ready()` fixes it; it is a balance change,
+      so it should be a deliberate one rather than folded into unrelated work. `space_station.gd`
+      does apply it, so the two enemies currently disagree about whether the field means anything.
+
+- [ ] **`base_enemy.gd:56-59` builds the contact HitBox from `col.shape` but drops the
+      `CollisionShape2D`'s `scale` and `position`.** Every enemy that scales its collision shape in
+      the scene therefore gets a contact hitbox of the wrong size — `gunship.tscn:63-65` scales by
+      2.31, so its contact hitbox is ~2.3× too small. Harmless-ish at 40 px, badly wrong at boss
+      scale. `space_station.tscn` sidesteps it by authoring its shape at true size with `scale = 1`,
+      but the underlying helper is still lossy for everyone else. Copying the node's transform
+      onto the new `CollisionShape2D` would fix it — though it would silently enlarge several
+      existing enemies' contact hitboxes, so it needs a balance pass, not a blind fix.

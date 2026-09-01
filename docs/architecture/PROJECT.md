@@ -104,13 +104,20 @@ Detail and APIs: [global.md](modules/global.md).
 Each combat entity carries a behaviour doc **beside its scene**, mirroring a common format:
 
 - **Racers:** `assault/scenes/race/racers/<name>/RACER.md` (6 racers)
-- **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (9 enemies)
+- **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (9 wave enemies + the `space_station` mini-boss)
 - **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (3 hazards)
 - **Race track hazards:** `assault/scenes/race/track/RACE_HAZARDS.md` (walls, asteroids, lasers + the lethal-hazard / AI-avoidance system)
 
-There is **no discrete boss entity** — the boss/finale phase is the `ENEMIES_CLEARED`
-section in `assault/scenes/levels/edelia/1/level_1_director.gd`, documented in
-[assault.md](modules/assault.md).
+Level 1's **finale** phase is still the `ENEMIES_CLEARED` section in
+`assault/scenes/levels/edelia/1/level_1_director.gd`, documented in
+[assault.md](modules/assault.md) — it is a wave, not an entity.
+
+There is now one **discrete multi-part boss entity**:
+`assault/scenes/enemies/space_station/` — a four-turret mini-boss whose core is invulnerable
+until every turret is destroyed. It exists and is fully testable but is **not yet placed in any
+level**; wiring it into a `station_assault` section between `asteroid_belt` and `planet_approach`
+is sub-item 2 of the Level 1 mini-boss epic in `BACKLOG.md`. See
+[`space_station/ENEMY.md`](../../assault/scenes/enemies/space_station/ENEMY.md).
 
 For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-roster.md).
 

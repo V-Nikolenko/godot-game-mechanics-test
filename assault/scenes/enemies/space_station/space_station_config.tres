@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="SpaceStationConfig" format=3]
+
+[ext_resource type="Script" uid="uid://c5tsrjkhu3oyj" path="res://assault/scenes/enemies/space_station/space_station_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 600
+collision_damage = 40
+score_value = 1000
+counts_toward_wave_clear = true
+turret_health = 120

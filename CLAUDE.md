@@ -32,9 +32,10 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
-  pins today's behaviour, bugs included. The exception is
+  pins today's behaviour, bugs included. Two exceptions:
   `tests/integration/test_resource_uid_integrity.gd`, an invariant check over `[ext_resource]`
-  UIDs. **Read [`tests/README.md`](tests/README.md) before writing a
+  UIDs, and `tests/integration/test_space_station.gd`, which covers new code and so asserts
+  intent. **Read [`tests/README.md`](tests/README.md) before writing a
   test** — it covers the `user://` save-file sandbox and the zero-parameter-signal trap, both of
   which cause failures unrelated to the code under test.
 - **NEVER commit — the user handles all git.** Work directly on `main` unless asked

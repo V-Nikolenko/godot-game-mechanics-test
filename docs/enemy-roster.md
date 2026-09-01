@@ -481,3 +481,12 @@ b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180)
 | **`sniper_enemy` needs a `sequence()`** | The approach step must be `straight(speed, 0.0, 2.5)` (exactly 2.5 s). Hold step must cover `shot_count × 2.5 s`. |
 | **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |
 | **Offsets are design-unit (640×360 space)** | Do NOT multiply by 2. `WaveManager` handles the `WORLD_SCALE` conversion. |
+
+---
+
+## Not in this roster: the space-station mini-boss
+
+`assault/scenes/enemies/space_station/` is a multi-part mini-boss, **not** a `WaveBuilder`-spawnable
+wave enemy. It has no builder method and appears in no level yet. Placing it is sub-item 2 of the
+Level 1 mini-boss epic in `BACKLOG.md`; behaviour and constraints are in
+[`space_station/ENEMY.md`](../assault/scenes/enemies/space_station/ENEMY.md).

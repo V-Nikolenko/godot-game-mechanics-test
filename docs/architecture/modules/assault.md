@@ -226,6 +226,15 @@ catalogued stats and how to spawn each one, see the per-enemy detail in the sour
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).
 
+**`space_station/`** is the odd one out: a multi-part **mini-boss** rather than a wave enemy.
+`SpaceStation` (`extends BaseEnemy`) carries four `StationTurret` children, each individually
+damageable on its own `Health`, and its core refuses all damage while any turret lives —
+`is_armored()` is `live_turret_count() > 0`, and the `_on_received_damage` override emits
+`armor_deflected(damage)` and returns without touching `Health`. Destroyed turrets stay in the
+tree as wreckage. It is **not yet spawned by anything**: sub-item 2 of the Level 1 mini-boss epic
+adds the `station_assault` `LevelSection`. Behaviour, the collision-layer rules and the known
+test-coverage gap: [`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md).
+
 ### Race sub-mode
 
 Source: `assault/scenes/race/` (high-level only).
