@@ -31,6 +31,30 @@ multiplied by `ArenaCamera.WORLD_SCALE` — that constant applies only to author
 sprite-local screen pixels, not design units. The station's *spawn* position — `at(0, -90)` in
 `_build_station_assault()` — **is** an authored offset and *is* scaled.
 
+### Sprite provenance — reproduce these exact parameters
+
+Both turret sprites shipped first as **3/4 views** (visible barrel side faces, base in
+perspective) and were regenerated on **2026-09-01**. The root cause was the *tool*, not the
+prompt. They were made with `create_image_pixflux`, whose `view` parameter **defaults to `null`
+and is documented as "weakly guiding"** — so an unset camera is unconstrained, and even setting it
+is only a soft hint. `create_map_object` defaults `view` to `"high top-down"` and treats it as a
+real control. Regenerate only with the parameters below — the `pixel-art-generation` skill
+mandates them.
+
+| Sprite | Tool | Parameters |
+|---|---|---|
+| `station_turret.png` | `create_map_object` | `view: "high top-down"`, `outline: "lineless"`, `detail: "medium detail"`, `shading: "medium shading"`, 64×64 |
+| `station_turret_destroyed.png` | `create_object_state` off the intact turret | inherits the source's view; keeps the footprint and palette aligned |
+| `station_core.png` | `create_image_pixflux` (original) | **has an opaque background** — see *Discovered* in `BACKLOG.md` |
+
+The prompt that worked names the 2D shapes seen from above — "the base reads as a flat **circle**,
+the barrels as two short flat **rectangles** lying across it" — plus the skill's negative list.
+Describing the object rather than saying "top-down" is the part that actually constrains the model.
+
+**Turret orientation is not wired up.** All four turrets are placed at `rotation = 0`, so the
+barrels point toward −Y (screen top, i.e. *away* from the player). Harmless today because turrets
+do not fire; EPIC sub-item 4 should set per-turret `rotation` when it adds firing.
+
 ---
 
 ## Behaviour

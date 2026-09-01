@@ -81,7 +81,7 @@ sub-items back here.
 
 ---
 
-- [ ] **Regenerate the turret sprites — `station_turret.png` is 3/4 view, not top-down.**
+- [x] **Regenerate the turret sprites — `station_turret.png` is 3/4 view, not top-down.**
       The barrel is drawn from the side with visible cylinder faces and the base sits in
       perspective; `station_core.png` in the same set is correctly overhead, so the set is
       visually inconsistent. Root cause: PixelLab was almost certainly called with
@@ -94,6 +94,24 @@ sub-items back here.
       PNG data. Re-import so the `.import` sidecars update.
       *Done when:* both turret sprites have been opened with the Read tool and confirmed
       to show no side faces, and they sit consistently beside `station_core.png`.
+      **Done 2026-09-01** — the guessed root cause was wrong in an instructive way. It was not
+      `view: "low top-down"`; it was the **tool**. The originals came from `create_image_pixflux`
+      (`docs/plans/station-mini-boss-destructible/5-progress.md:19`), whose `view` **defaults to
+      `null` and is documented as "weakly guiding"** — so it was never set, and setting it would
+      only have been a soft hint anyway. `create_map_object` defaults it to `"high top-down"` and
+      honours it. The skill has been corrected: it previously named `low top-down` as "the most
+      likely cause of a wrong-angle sprite in this project", which would have sent the next run
+      hunting for a wrong value rather than a wrong tool.
+      Regenerated with **`create_map_object`** (`view: "high top-down"`, `outline: "lineless"`,
+      `detail`/`shading` medium, 64×64) and the destroyed variant with **`create_object_state`** off
+      the intact one, which keeps the footprint and palette aligned for free. `isometric` is not a
+      parameter on either tool — the negatives went in the description instead. **2 generations
+      used**, no aesthetic iteration. Both opened at 6× and composited with `station_core.png` at
+      true in-game layout (256×256 hull, turrets at ±76): no side faces, no tilt, transparent
+      backgrounds (corner alpha `0.00`, was opaque before), and the dead turrets read as burnt
+      craters against the light hull. Provenance and the exact prompt shape are now in `ENEMY.md`
+      so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
+      `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
 
 ## EPIC — Level 1 space-station mini-boss
 
@@ -355,3 +373,37 @@ Found on 2026-09-01 while adding the `station_assault` section (EPIC sub-item 2)
       `assault/scenes/projectiles/bullets/bullet.tscn`, positions it in a turret lane and steps
       physics — the suite has no precedent for physics-overlap tests, so budget for the technique.
       `ENEMY.md` and `tests/README.md` now say this plainly instead of promising it is coming.
+
+Found on 2026-09-01 while regenerating the turret sprites.
+
+- [ ] **`station_core.png` has a fully opaque background — the station will render as a grey
+      square in space.** Measured: **65536/65536 pixels at alpha 1.0**, corner alpha `1.00`
+      (`station_turret.png`, regenerated this run, is 54.7% opaque with corner alpha `0.00`, which
+      is what a sprite should look like). The cause is the same one behind the 3/4 turrets: the
+      core was made with `create_image_pixflux`, whose `no_background` defaults to unset and is
+      treated as `False` when there is no init image — it paints a background unless you pass
+      `no_background=True`. `create_map_object` is transparent by construction, which is why the
+      two regenerated turrets came back correct without anyone asking. Nobody has seen it yet
+      because the station is
+      never drawn against the starfield in any test — it only became visible when I composited the
+      core and four turrets together for the mandatory visual check. **Not fixed this run**: the
+      backlog item was scoped to the turrets, and replacing the core is a separate generation plus
+      a fresh visual check. Fix by regenerating with `create_map_object` (max canvas is 400×400, so
+      256×256 fits), or by alpha-keying the existing grey if the art is worth keeping.
+
+- [ ] **The turret sprite's barrels point at −Y and no turret sets `rotation`.** All four
+      `space_station.tscn` turret instances are placed at `rotation = 0`, so every barrel points
+      toward the top of the screen — *away* from the player, who is always below the station.
+      Completely harmless today (turrets do not fire; sub-item 3 is the laser phase), but EPIC
+      sub-item 4 adds turret fire and will look wrong unless it sets per-turret `rotation` at the
+      same time. Recorded in `ENEMY.md` next to the sprite table so it is found at the right moment.
+
+- [ ] **This container has no `file`, no `python3` and no `xxd` — only `od`.** `scripts/pixellab.sh`
+      called `file -b` unconditionally under `set -euo pipefail`, so **every `save-b64` and
+      `download` aborted with exit 127 after having already written the file** — a confusing
+      half-success. Fixed this run by adding a `sniff_magic()` fallback that reads PNG/JPEG/WEBP
+      magic bytes with `od` when `file` is absent; the `file` path is unchanged where it exists,
+      and both the success and the rejection path were tested. Flagging the wider point: any future
+      tooling here should assume a **minimal** userland. Note also that the previous cycle's
+      sprites were saved without the script ever succeeding, which is probably why nothing caught
+      this until now.

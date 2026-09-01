@@ -36,8 +36,27 @@ control. **Always set it.**
 | `detail` | `"medium detail"` | — |
 | `shading` | `"medium shading"` | — |
 
-`"low top-down"` is what produces a visible barrel side and a tilted base. **It is the most likely
-cause of a wrong-angle sprite in this project.** Use `"high top-down"` every time.
+`"low top-down"` is what produces a visible barrel side and a tilted base. Use `"high top-down"`
+every time.
+
+### The bigger risk is the TOOL, not the value you pass
+
+Measured on 2026-09-01 while regenerating the turrets: **not every tool treats `view` as a
+control.**
+
+| Tool | `view` default | Strength |
+|---|---|---|
+| `create_map_object` | `"high top-down"` | a real control — **prefer this** |
+| `create_image_pixflux` | `null` (unset) | its own docs say **"weakly guiding"**, as do `isometric`, `outline`, `detail` and `shading` |
+
+The 3/4 turrets were generated with `create_image_pixflux` and no `view` at all. So "I set
+`view: "high top-down"`" is **not** on its own evidence that the sprite will be overhead — on
+pixflux it is a hint the model may ignore. Pick the tool from §3 first; only fall back to pixflux
+when nothing else fits, and then treat the visual check in §5 as the real gate.
+
+Note `isometric` exists **only** on pixflux and its relatives — `create_map_object` has no such
+parameter. Where it is absent, put the negatives in the description instead. Do not report having
+set a parameter that the tool you called does not accept.
 
 ## 2. Prompt template (on top of the parameters)
 
@@ -116,6 +135,26 @@ the second attempt also fails, keep the better one, flag it in the report and ad
 This step exists because `station_turret.png` shipped as a 3/4 view with a visible barrel side
 while `station_core.png`, generated in the same session, was correctly overhead. Nothing in the
 pipeline caught it.
+
+### How to actually see a 64×64 sprite
+
+A 64×64 PNG renders far too small in the Read tool to judge — the first turret regeneration looked
+fine as a thumbnail and only resolved into a clear overhead view at 6×. Two cheap steps, both done
+with a throwaway Godot project in `/tmp` (this container has **no `python3`, no ImageMagick and no
+`file`** — only `od` and Godot):
+
+1. **Upscale nearest-neighbour** — `Image.load_from_file()`, `resize(w*6, h*6,
+   Image.INTERPOLATE_NEAREST)`, `save_png()`, then Read it. Judge the angle here.
+2. **Composite the set at true in-game layout** and Read that too — for the station, the 256×256
+   core with turrets blended at ±76. This is the only step that answers question 3, and it is what
+   revealed both that the destroyed turret reads correctly at 1× *and* that `station_core.png` has
+   an opaque background. `Image.blend_rect` silently no-ops unless you `convert(Image.FORMAT_RGBA8)`
+   both images first.
+
+**Also assert transparency, do not eyeball it.** Count pixels with `alpha > 0.99`: a sprite should
+be well under 100% and its corner pixel should be `0.00`. `station_core.png` measured
+65536/65536 opaque and nobody noticed for two cycles, because a lone sprite on the Read tool's
+backdrop looks the same either way.
 
 ## 6. Sizing and import
 
