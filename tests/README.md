@@ -30,11 +30,24 @@ once a warm project has loaded them — so the engine will happily report a brok
 on your machine and break on a fresh clone. Five of the eight mismatches this test first caught
 behaved exactly that way. If you extend it, keep it reading files.
 
-`integration/test_space_station.gd` is the other exception, for a different reason: the
-`space_station` entity is **new code**, so its tests assert intended behaviour rather than pinning
-existing quirks. It carries a documented coverage gap — it drives damage by emitting
-`HurtBox.received_damage` directly, so it proves nothing about collision layers. See the file
-header and `assault/scenes/enemies/space_station/ENEMY.md`.
+`integration/test_space_station.gd` and `integration/test_station_assault_section.gd` are the other
+exceptions, for a different reason: the `space_station` entity and the `station_assault` section
+are **new code**, so their tests assert intended behaviour rather than pinning existing quirks.
+`test_space_station.gd` carries a documented coverage gap — it drives damage by emitting
+`HurtBox.received_damage` directly, so it proves nothing about collision layers, and the section
+tests do not close that. See the file headers and
+`assault/scenes/enemies/space_station/ENEMY.md`.
+
+Two traps `test_station_assault_section.gd` had to work around, both worth knowing before you add
+a `LevelDirector` test:
+
+- **`_wait_enemies_cleared()` polls once per second.** Its deadline is only re-checked *after*
+  `_wait_for_child_exit_or_timeout(container, 1.0)` returns, so a 0.3 s timeout really fires at
+  ~1.0 s, plus a 0.2 s settle. Budget off the poll, not the nominal timeout.
+- **A test that ends while that coroutine is suspended leaks its `SceneTreeTimer`**, which Godot
+  reports at process exit as `ObjectDB instances leaked` / `resources still in use`. Neither line
+  matches the gate's fatal-error regex, so **the gate stays green while leaking.** Empty the
+  container and wait for the director to advance before the test returns.
 
 ## These are characterization tests
 
@@ -84,3 +97,6 @@ Plus `global/statemachine/` and the `PlayerBase` damage chain.
 Project-wide: `[ext_resource]` UID integrity across every `.tscn`/`.tres`.
 Entities: the `space_station` mini-boss (`integration/test_space_station.gd`) — armour rule, turret
 lifecycle, and the config-driven stats.
+Levels: the `station_assault` section (`integration/test_station_assault_section.gd`) — the
+`ENEMIES_CLEARED` gate, the per-section timeout and its free-on-expiry path, and Level 1's
+section order and station wave.

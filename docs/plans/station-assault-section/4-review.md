@@ -266,3 +266,174 @@ knows the container is not enemies-only.
 
 Re-submit with these addressed and the plan is approvable — the architecture, the reuse story and
 the arithmetic are all sound.
+
+---
+
+# Review round 2
+
+VERDICT: APPROVED
+
+Approved **with three mandatory adjustments**, the first of which changes what gets built. The
+core feature — per-section `ENEMIES_CLEARED` timeout, the free-on-expiry loop, the `WaveBuilder`
+entry, the phase, the section, the `_build_sections()` refactor, tests 4–10 and the doc updates —
+was re-verified line by line against the code and is correct and implementable. Round 1's S1–S4
+are all genuinely resolved (see *Round-1 findings re-checked* below).
+
+But §0, the headline change of Revision 1, rests on a premise that is **false**, and I have to
+say so plainly: **round 1's B1 was wrong**, and the plan author accepted it after a re-verification
+that stopped one call short of the player's actual fire path.
+
+---
+
+## M1 (mandatory) — §0's premise is false: a player bullet is never consumed by a hurtbox
+
+§0 (`3-plan.md:36-100`) and round-1 B1 both argue that an upward player bullet "enters the core
+box at local y = +120 and dies there", citing `bullet_pool.gd:56` as the thing that recycles it.
+**`BulletPool` is never used by the player.** The player's fire path is:
+
+- `assault/scenes/player/player_fighter.tscn:351` — the live attack state is `WeaponState`
+  (`ShootingState` is dead code, referenced by no scene).
+- `assault/scenes/player/states/weapon_state.gd:83` — `beh.fire(self, mode, muzzle)`.
+- `assault/scenes/player/weapons/behaviors/straight_behavior.gd:22` — `state.add_child(bullet)`.
+  The bullet is parented to the `WeaponState` node. No pool, no `expired` connection.
+  `spread_behavior.gd:21` and `long_range_behavior.gd:38` do the same.
+- `grep -rn "expired" --include=*.gd --include=*.tscn .` (minus `addons/`) finds exactly **two**
+  connections to `Bullet.expired` in the whole repo: `global/components/bullet_pool.gd:56` and
+  `assault/scenes/enemies/sniper_enemy/sniper_enemy.gd:102`. `BulletPool` is constructed only in
+  `light_assault_ship.gd:27`, `gunship.gd:52`, `interceptor.gd:30` and `ally_fighter.gd:22`.
+- `bullet.gd:84` emits `expired` **without** `queue_free()`. The only `queue_free()` in the script
+  is `:49`, gated on `range_px > 0.0`, and `assault/scenes/player/weapons/modes/default.tres:12`
+  sets `range_px = 0.0`.
+
+So on the default loadout `expired` has **no listener**. The bullet keeps flying with a live
+HitBox. Layer arithmetic confirms it reaches everything in its lane: the station core HurtBox and
+every turret HurtBox are `collision_layer = 512` and the bullet HitBox masks `513`
+(`bullet.tscn:44-45`); the 240×240 contact HitBox is `layer 256 / mask 0`
+(`base_enemy.gd:54-55`) and is invisible to both, so it blocks nothing.
+
+**Therefore, today, unmodified:** a bullet fired up the x = −76 lane crosses the armoured core
+box (deflected, `space_station.gd:82-86`), continues, deals 50 to `Turret2`, continues, deals 50
+to `Turret0`. Turrets are 120 HP (`space_station_config.tres`), bullets are 50 damage
+(`default.tres:13`) — **three bullets down one lane kill both turrets in that lane.** The gate is
+satisfiable by a default-loadout player right now. Nothing about `ENEMIES_CLEARED` is unreachable.
+
+Consequences for the plan:
+
+1. **§0 is not a bug fix.** Narrowing the core HurtBox to 88 × 240 is a *design change* (it makes
+   the core hittable only within |x| ≤ 44 and makes the hull shoulders inert). It may still be
+   worth doing, but not for the reason given, and not as build step 1.
+2. **Tests 2 and 3 as specified assert a fiction.** `3-plan.md:319` says to wire `expired` to free
+   the bullet "exactly as `bullet_pool.gd:56` does" — that wiring is precisely what the player
+   path does *not* have. Remove that wiring and both tests pass today, i.e. they are not
+   red-before-green; keep it and they pin a projectile lifecycle no player weapon uses.
+3. The precision framing is moot in play anyway: `default.tres:14` sets
+   `pellet_spread_deg = 60.0` and `straight_behavior.gd:13-16` applies a ±30° per-shot jitter to
+   every default shot, so "6 px of margin either side" (`3-plan.md:86`) is not a quantity the
+   player ever experiences.
+
+**Required action — do this, in this order:**
+
+- **Drop build step 1 and tests 1–3 from the critical path.** Implement steps 2–7 (the actual
+  sub-item) and tests 4–10 first, verify green, and only then, if time remains, revisit the core
+  hurtbox as an explicitly-labelled design change.
+- If the narrowed hurtbox is kept, `5-progress.md` must record it as a design choice ("shooting
+  the shoulders should not deflect off the core") and **must not** repeat the reachability claim.
+  Test 1 (the geometric x-disjointness check) is fine to keep in that case — it is cheap and
+  shape-independent of physics. Tests 2 and 3 should be dropped or rewritten without the
+  fabricated `expired` → free wiring.
+- Either way, correct §0's text and the *Revision log* row for B1 before implementing, so the next
+  reader is not misled a third time.
+
+This also fixes the scope question the brief asks about: 8 build steps / 10 tests with a novel
+headless-physics technique **as step 1** does not safely fit a 4 h unattended window. Steps 2–7
+with 7 conventional tests fits comfortably.
+
+## M2 (mandatory) — test 7's combo assertion cannot pass as written
+
+`3-plan.md:324` asserts "`ScoreTracker._combo` has been multiplied by 0.75 once". Two blockers:
+
+- `score_tracker.gd:31` — `var _combo: float = 1.0`. `score_tracker.gd:211-214` does
+  `_combo *= escape_combo_multiplier` and then `if _combo < 1.0: _combo = 1.0`. From the default
+  1.0 the result is 0.75 → **clamped straight back to 1.0**. The test must pre-set `_combo` above
+  1/0.75 ≈ 1.334 (e.g. 2.0 → 1.5) for the multiplication to be observable at all.
+- `_on_enemy_freed` is only ever connected inside `_on_enemy_spawned`
+  (`score_tracker.gd:161-164`), which is driven by `wave_manager.enemy_spawned`
+  (`score_tracker.gd:59-60`). The plan's harness builds "a `LevelDirector` + `WaveManager` + a
+  `Node2D` container by hand — no camera" (`3-plan.md:313-315`), and `wave_manager._spawn_ship`
+  returns at `:160-162` when there is no camera. So the leftover child must be added by hand
+  **and** `wave_manager.enemy_spawned.emit(child, 0)` emitted by hand, after
+  `score_tracker.start_tracking()`, or the escape path never runs and the assertion is vacuous.
+
+The corrected B3 *claim* in `3-plan.md:144-156` is accurate; only the test setup is under-specified.
+
+## M3 (mandatory) — do not write `transition_in_duration` into the phase `.tres`
+
+`3-plan.md:187-188` lists `transition_in_duration = 2.0` immediately after the
+`phase_station_assault.tres` snippet. `BackgroundPhase` has no such property
+(`global/resources/levels/background_phase.gd:12-81`) — it is a `LevelSection` field
+(`level_section.gd:19`), which §5 sets correctly at `3-plan.md:222`. Writing it into the `.tres`
+would produce an unknown-property resource. Keep the `.tres` to the three lines at
+`3-plan.md:182-185`.
+
+---
+
+## Adjust during implementation (non-blocking)
+
+- **`bullet.tscn` path.** Both this review's round 1 and the plan refer to
+  `global/entities/projectiles/bullet.tscn`. The real path is
+  `assault/scenes/projectiles/bullets/bullet.tscn` (script
+  `assault/scenes/projectiles/bullets/bullet.gd`). The quoted line numbers are correct.
+- **Where `section` comes from in `_wait_enemies_cleared`.** `3-plan.md:125-126` says
+  `deadline_ms` becomes `start_ms + int(section.enemies_cleared_timeout * 1000.0)` but the method
+  takes no arguments — it is connected as a zero-arg one-shot at `level_director.gd:78`. Read
+  `_sections[_current_index]`, with an index bounds guard.
+- **Turret death is deferred.** `station_turret.gd:73-77` disables the hurtbox via
+  `set_deferred`, so any test that kills a turret and then expects a projectile to pass through it
+  must `await get_tree().physics_frame` at least once in between.
+- **`VisibleOnScreenNotifier2D` in a headless test.** `bullet.tscn:37` + `:55` route
+  `screen_exited` into `expired`. A bullet spawned outside the viewport rect never becomes visible
+  and so never emits, but a bullet spawned inside and then leaving will. If tests 1–3 survive M1,
+  place the station near world (640, 360) so the geometry stays inside the 1280×720 rect.
+- `phase_name` has exactly one consumer, a `print` at `level_1_background.gd:294` — no registry to
+  update for the new phase.
+
+## Round-1 findings re-checked
+
+| Round 1 | Status |
+|---|---|
+| **B1** gate unsatisfiable | **Withdrawn — round 1 was wrong.** See M1. The plan's acceptance of it is the one thing this review changes. |
+| **B2** test reproduced the coverage gap | Resolved in intent; the replacement tests need M1's correction. `test_space_station.gd:35, :43` confirms sub-item 1 drives damage via `received_damage.emit()`, so those 9 tests are shape-independent and cannot be broken by a hurtbox resize — the plan's risk row at `3-plan.md:356` is correct. |
+| **B3** "no score impact" | Resolved. `score_tracker.gd:197-215` and `score_config_default.tres` (`escape_combo_multiplier = 0.75`) verified; the plan's corrected text is accurate. Test setup needs M2. |
+| **S1** timing budget | Resolved and correct. `level_director.gd:114` polls at 1.0 s, `:122` adds 0.2 s → ≈1.2 s for a 0.3 s timeout; ≥1.8 s is right. |
+| **S2** script count | Resolved. `find tests -name 'test_*.gd'` counts **18** scripts today → 19 after. The `Parse Error` / `SCRIPT ERROR` grep is the right belt-and-braces. |
+| **S3** doc contradictions | Resolved; §6 names all four plus `ENEMY.md` and `BACKLOG.md`. If §0 is dropped per M1, drop the `ENEMY.md` hurtbox-rewrite item with it. |
+| **S4** line citations | Resolved. Spot-checked and correct: `level_director.gd:105/108/112/114/122`, `wave_manager.gd:52-56/115-125/151-155/172/194`, `space_station.gd:82-86`, `level_1_director.gd:38-46`, `score_tracker.gd:197-215`. |
+
+## Independently re-verified this round (no action)
+
+- **Turret geometry.** `space_station.tscn:16-17` (240×240 shared shape), `:89-99` (turrets at
+  ±76), `station_turret.tscn:8-9` (r = 26). Turret hurtbox x-extents are [50, 102] / [−102, −50];
+  an 88-wide core box is [−44, 44]. The disjointness arithmetic in `3-plan.md:81-84` is right.
+- **`_build_sections()` on a bare instance.** `grep -n` for `get_tree|get_viewport|get_node|
+  get_parent|add_child|@onready|@export` over `level_1_director.gd` matches only at
+  `:16-18, :31, :34, :126, :133, :147, :162, :170, :198, :976, :988, :991` — all outside the
+  builders at `:203, :437, :520, :758`. `WaveBuilder` is `RefCounted` (`wave_builder.gd:4`, no
+  `extends`). The claim holds; `load(...).new()` + `autofree()` is the right idiom.
+- **Section names / order.** `:205 deep_space`, `:439 asteroid_belt`, `:522 planet_approach`,
+  `:760 cloud_descent`; `cloud_descent` is the only `ENEMIES_CLEARED` section (`:763`). Test 8's
+  expected list and test 9's "`cloud_descent` is still exactly 10.0" are both correct, and the
+  `10.0` default keeps it bit-identical.
+- **The two `1-context.md` traps.** `wave_manager.gd:151-155` — with `delay == 0.0`
+  `_spawn_with_delay` never awaits, so it runs synchronously inside `_trigger_wave` (`:115-125`)
+  before `waves_complete.emit()` at `:56`. `:194` gates `EnemyPathMover` on a real
+  `MovementResource`. Both "no `.delay()`" and "no `.move()`" justifications are correct.
+- **Test 10's fields are real.** `wave_builder.gd:191-205` (`_config_to_entry`) writes
+  `ship_scene`, `spawn_delay` and `movement`; `wave()` at `:207-217` sets `trigger_time`.
+- **Placement arithmetic.** `arena_camera.gd:34` `WORLD_SCALE = 2.0`, camera pinned at
+  `level_1.tscn:19` `position = Vector2(640, 360)`, `wave_manager.gd:172`. `at(0, -90)` →
+  `(640, 180)`. Player x clamp `[-100, 1380]` (`player_fighter.gd:99`) means both turret lanes
+  (world x 564 / 716) are reachable.
+- **No reinvention, no convention breach.** The gate is the existing `EndCondition`, the spawn is
+  the existing `WaveManager` path, the entity composes from `global/components/`; offsets stay in
+  640×360 design units; stats stay in `space_station_config.tres`. Nothing here duplicates
+  anything in `global/components/`.

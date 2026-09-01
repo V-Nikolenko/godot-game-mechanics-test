@@ -89,6 +89,8 @@ func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
 func small_asteroid() -> SpawnConfig: return SpawnConfig.new(SMALL_ASTEROID)
 func bonus_drone()    -> SpawnConfig: return SpawnConfig.new(BONUS_DRONE)
 func laser()      -> SpawnConfig: return SpawnConfig.new(LASER_RAY)
+## The Level 1 mini-boss. Spawn it with no .delay() and no .move() — see level_1_director.gd.
+func space_station() -> SpawnConfig: return SpawnConfig.new(SPACE_STATION)
 
 # ── Movement helpers ──────────────────────────────────────────────────────────
 
@@ -240,6 +242,7 @@ const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"
 const BONUS_DRONE    := "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn"
 const LASER_RAY   := "res://assault/scenes/hazards/laser_ray/laser_ray.tscn"
+const SPACE_STATION  := "res://assault/scenes/enemies/space_station/space_station.tscn"
 
 # ── Direction constants ───────────────────────────────────────────────────────
 

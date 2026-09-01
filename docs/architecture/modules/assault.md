@@ -48,7 +48,7 @@ assault/scenes/
 │   ├── score_tracker/           ScoreTracker — all scoring/combo math
 │   └── skill_challenge/         SkillChallengeRunner — timed dodge bonuses
 ├── levels/
-│   ├── edelia/1/                Level 1: background + level_1_director.gd (4 sections, "boss" phase)
+│   ├── edelia/1/                Level 1: background + level_1_director.gd (5 sections, mini-boss + "boss" phase)
 │   ├── level_2_waves.gd         Level 2 wave list
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
@@ -181,15 +181,18 @@ calls `wave_manager.load_section()`, and advances on the section's `EndCondition
 (`DURATION`, `WAVES_COMPLETE`, or `ENEMIES_CLEARED`). It emits `section_started` /
 `level_complete`.
 
-**`level_1_director.gd`** is the level-specific orchestrator. In `_ready()` it builds and
-adds four sections, boots `ScoreTracker`, spawns the HUD, and wires per-section schedules
-for bonus drones, laser-column hazards, and skill challenges (kept decoupled from the wave
-lists). The four sections are:
+**`level_1_director.gd`** is the level-specific orchestrator. In `_ready()` it loops over
+`_build_sections()` and adds each one, boots `ScoreTracker`, spawns the HUD, and wires per-section
+schedules for bonus drones, laser-column hazards, and skill challenges (kept decoupled from the
+wave lists). `_build_sections()` is split out of `_ready()` so the sequence can be asserted without
+booting the level — every `_build_*` body touches only `LevelSection.new()`, `preload` and
+`WaveBuilder`, so it is safe on a bare instance. The five sections are:
 
 1. `deep_space` — 30 s timed, fighters/drones.
 2. `asteroid_belt` — 30 s timed asteroid gauntlet (no enemies).
-3. `planet_approach` — 110 s cinematic with light harassment.
-4. `cloud_descent` — the **boss-phase / climax** section.
+3. `station_assault` — the **space-station mini-boss**, `ENEMIES_CLEARED` (see below).
+4. `planet_approach` — 110 s cinematic with light harassment.
+5. `cloud_descent` — the **boss-phase / climax** section.
 
 **Boss-phase logic (there is no discrete boss entity).** The climax is encoded entirely in
 `level_1_director.gd`'s `_build_section_3()` ("cloud_descent") plus its section schedule.
@@ -231,9 +234,21 @@ under `assault/scenes/enemies/<type>/` and the consolidated
 damageable on its own `Health`, and its core refuses all damage while any turret lives —
 `is_armored()` is `live_turret_count() > 0`, and the `_on_received_damage` override emits
 `armor_deflected(damage)` and returns without touching `Health`. Destroyed turrets stay in the
-tree as wreckage. It is **not yet spawned by anything**: sub-item 2 of the Level 1 mini-boss epic
-adds the `station_assault` `LevelSection`. Behaviour, the collision-layer rules and the known
-test-coverage gap: [`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md).
+tree as wreckage. It is spawned by the **`station_assault`** section (`_build_station_assault()`),
+as a single zero-delay wave with no `MovementResource` — a spawn delay would let `waves_complete`
+fire before the station existed, and a movement resource would attach an `EnemyPathMover` that
+frees it on screen exit. Behaviour, the collision-layer rules and the known test-coverage gap:
+[`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md).
+
+**`LevelSection.enemies_cleared_timeout`** is the safety net for `ENEMIES_CLEARED`: seconds to
+wait for `enemy_container` to empty before giving up. It defaults to `10.0` — the constant it
+replaced, sized for "wait for the last stragglers to leave", which is what `cloud_descent` wants —
+and `station_assault` sets `180.0`, because there the fight *is* the section. On expiry
+`LevelDirector` now **frees whatever is left** in the container before advancing, rather than
+carrying it into the next section: a mini-boss has no `EnemyPathMover`, so nothing else would ever
+remove it, and `_wait_enemies_cleared()` polls that same container, so a leftover would block the
+next `ENEMIES_CLEARED` section forever. Each freed child takes `ScoreTracker`'s escape path, so
+timing out costs one combo penalty (x0.75) per leftover.
 
 ### Race sub-mode
 

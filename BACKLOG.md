@@ -142,11 +142,22 @@ and only when the station is destroyed does the level continue to the planet.
       `docs/plans/station-mini-boss-destructible/`. **Known gap:** the tests emit `received_damage`
       directly, so they do not prove the collision layers — that needs sub-item 2.
 
-- [ ] **2. The encounter blocks level progress.** Add a new `LevelSection` (suggested name
+- [x] **2. The encounter blocks level progress.** Add a new `LevelSection` (suggested name
       `station_assault`) to `level_1_director.gd`, between `asteroid_belt` and `planet_approach`,
       using `ENEMIES_CLEARED`. Add the matching `phases/phase_station_assault.tres`.
       *Done when:* a headless test proves the section does not advance while the station lives,
       and advances to `planet_approach` when it dies.
+      **Done 2026-09-01** — `station_assault` is Level 1's third section. New
+      `LevelSection.enemies_cleared_timeout` (default `10.0`, so `cloud_descent` is bit-identical;
+      the station sets `180.0`), `LevelDirector` now **frees leftover container children on
+      expiry** instead of dragging the boss into the next section, `WaveBuilder.space_station()`,
+      `phases/phase_station_assault.tres`, and a `_build_sections()` refactor that makes the
+      section order assertable without booting the level.
+      `tests/integration/test_station_assault_section.gd` (7 tests). Gate green: 19 scripts /
+      172 tests / 551 asserts.
+      Plan + **two** review rounds: `docs/plans/station-assault-section/`. Round 2 **withdrew**
+      round 1's blocking finding — see *Discovered*; that reversal is the most useful thing this
+      cycle produced.
 
 - [ ] **3. Laser phase.** Once all turrets are destroyed, the station rotates and fires
       `LaserRay` beams at varying positions, forcing the player to keep moving. Beams must
@@ -294,3 +305,53 @@ Found on 2026-09-01 while building the space-station mini-boss entity (EPIC sub-
       but the underlying helper is still lossy for everyone else. Copying the node's transform
       onto the new `CollisionShape2D` would fix it — though it would silently enlarge several
       existing enemies' contact hitboxes, so it needs a balance pass, not a blind fix.
+
+Found on 2026-09-01 while adding the `station_assault` section (EPIC sub-item 2).
+
+- [ ] **A test that ends while a `LevelDirector` coroutine is suspended leaks — and the gate stays
+      green.** `_wait_enemies_cleared()` awaits `_wait_for_child_exit_or_timeout(container, 1.0)`,
+      which holds a `SceneTreeTimer`. If the test returns while that is pending, freeing the
+      director strands the timer and its `GDScriptFunctionState`, and Godot prints at process exit:
+      `WARNING: ObjectDB instances leaked at exit` and
+      `ERROR: 1 resources still in use at exit` / `Resource still in use: …/level_director.gd`.
+      **Neither line matches `/agent/verify.sh`'s `FATAL` regex**, so the gate passed while leaking
+      — I only noticed by diffing a run with and without the new file. Two follow-ups worth
+      considering: add `ObjectDB instances leaked|resources still in use` to the gate's fatal
+      patterns (check the existing suite is clean first — it is, verified this run), and consider
+      whether `_wait_for_child_exit_or_timeout` should hold the timer in a variable it can cancel.
+      Worked around in `tests/integration/test_station_assault_section.gd` and written up in
+      `tests/README.md`.
+
+- [ ] **Should the station's core hurtbox be narrowed to 88 x 240? — a design question, not a bug.**
+      `space_station.tscn:16-17` uses ONE 240 x 240 `RectangleShape2D` for both the body collider
+      and the core `HurtBox`, so the core's hurtbox spans the whole hull and the four turret
+      hurtboxes sit strictly inside it. This is **not** a reachability bug — see the next item —
+      but it does mean shooting the hull shoulders registers as a deflected core hit rather than
+      missing, and a bullet fired up a turret lane triggers a core deflection *before* it reaches
+      the turret. Giving the `HurtBox` its own 88-wide shape would make the x-extents disjoint
+      ([-44, 44] vs [50, 102]) and the "shoot the guns, then the core" read cleaner. It was
+      planned, then dropped when its stated justification collapsed; it needs a deliberate
+      design call, not a bug fix. Cost: one `sub_resource` and one node property.
+
+- [ ] **Two consecutive reviews asserted that a player bullet dies on its first hurtbox overlap.
+      It does not — worth knowing before anyone reasons about projectile lifetime again.**
+      `BulletPool` is constructed only by `light_assault_ship.gd:27`, `gunship.gd:52`,
+      `interceptor.gd:30`, `ally_fighter.gd:22` and `racer_weapon.gd:11` — **never by the player**.
+      `straight_behavior.gd:22` does a plain `state.add_child(bullet)`. Repo-wide there are exactly
+      two connections to `Bullet.expired` (`bullet_pool.gd:56`, `sniper_enemy.gd:102`), and
+      `bullet.gd:84` emits `expired` **without** `queue_free()`; the only `queue_free()` is `:49`,
+      gated on `range_px > 0.0`, which `weapons/modes/default.tres` sets to `0.0`. So a default
+      player bullet has no listener on `expired` and flies on with a live HitBox, damaging every
+      hurtbox in its lane until it leaves the screen. Consequence worth a separate decision: the
+      player's default shot is effectively **infinitely piercing against stacked hurtboxes**, which
+      makes `PierceModule` (`pierces_remaining`, `MAX_PIERCE = 3`, `PIERCE_DAMAGE_FACTOR = 0.55`)
+      look like it exists to *limit* damage rather than add it. That is probably not intended and
+      is a real balance question for multi-part targets.
+
+- [ ] **`test_space_station.gd`'s collision-layer coverage gap is still open.** Sub-item 1 recorded
+      it as provable "once the station is in a live level (sub-item 2)". Sub-item 2 has landed and
+      does **not** close it: `test_station_assault_section.gd` asserts section gating and wave data,
+      never a projectile overlap. Closing it needs a test that instances
+      `assault/scenes/projectiles/bullets/bullet.tscn`, positions it in a turret lane and steps
+      physics — the suite has no precedent for physics-overlap tests, so budget for the technique.
+      `ENEMY.md` and `tests/README.md` now say this plainly instead of promising it is coming.

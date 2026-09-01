@@ -3,6 +3,7 @@
 Authoritative map of the project's structure and game mechanics. This is the source of
 truth that `CLAUDE.md` and the per-module docs derive from.
 
+
 > A space action game built in **Godot 4.6 (Forward+)**. The player cycles between three
 > distinct gameplay modes — a fast autoscroller shmup (**Assault**), a free-flight hub
 > with mission select (**Open Space**), and isometric ground combat (**Infiltration**) —
@@ -114,9 +115,9 @@ Level 1's **finale** phase is still the `ENEMIES_CLEARED` section in
 
 There is now one **discrete multi-part boss entity**:
 `assault/scenes/enemies/space_station/` — a four-turret mini-boss whose core is invulnerable
-until every turret is destroyed. It exists and is fully testable but is **not yet placed in any
-level**; wiring it into a `station_assault` section between `asteroid_belt` and `planet_approach`
-is sub-item 2 of the Level 1 mini-boss epic in `BACKLOG.md`. See
+until every turret is destroyed. It is placed in Level 1 by the `station_assault` section, between
+`asteroid_belt` and `planet_approach`, which uses `EndCondition.ENEMIES_CLEARED` so the level
+cannot continue until the station is destroyed. See
 [`space_station/ENEMY.md`](../../assault/scenes/enemies/space_station/ENEMY.md).
 
 For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-roster.md).

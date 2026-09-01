@@ -32,12 +32,14 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
-  pins today's behaviour, bugs included. Two exceptions:
+  pins today's behaviour, bugs included. The exceptions are
   `tests/integration/test_resource_uid_integrity.gd`, an invariant check over `[ext_resource]`
-  UIDs, and `tests/integration/test_space_station.gd`, which covers new code and so asserts
+  UIDs, and `tests/integration/test_space_station.gd` +
+  `tests/integration/test_station_assault_section.gd`, which cover new code and so assert
   intent. **Read [`tests/README.md`](tests/README.md) before writing a
-  test** — it covers the `user://` save-file sandbox and the zero-parameter-signal trap, both of
-  which cause failures unrelated to the code under test.
+  test** — it covers the `user://` save-file sandbox, the zero-parameter-signal trap, and the
+  `LevelDirector` coroutine-leak trap, all of which cause failures (or silent leaks) unrelated to
+  the code under test.
 - **NEVER commit — the user handles all git.** Work directly on `main` unless asked
   otherwise; no worktrees/branches unless requested.
   - *Exception — autonomous NAS loop only* (`SRCW_AUTOMATION=1` in the environment): you are

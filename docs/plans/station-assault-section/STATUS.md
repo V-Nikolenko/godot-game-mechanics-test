@@ -11,9 +11,9 @@ and advances to `planet_approach` when it dies.
 - [x] 1. Context gathered → `1-context.md`
 - [x] 2. Research done → `2-research.md`
 - [x] 3. Plan written → `3-plan.md`
-- [ ] 4. Reviewed and APPROVED → `4-review.md`
-- [ ] 5. Implemented → `5-progress.md`
-- [ ] 6. Gate green
-- [ ] 7. Docs updated, backlog ticked
+- [x] 4. Reviewed and APPROVED → `4-review.md` (round 2: APPROVED with 3 mandatory adjustments, all folded into revision 2 of `3-plan.md`)
+- [x] 5. Implemented → `5-progress.md`
+- [x] 6. Gate green — 19 scripts / 172 tests / 551 asserts, GATE PASS
+- [x] 7. Docs updated, backlog ticked
 
-**Next action:** Independent subagent review (stage 4).
+**Next action:** COMPLETE. Next cycle picks up EPIC sub-item 3 (the laser phase).

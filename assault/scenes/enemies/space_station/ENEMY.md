@@ -28,8 +28,8 @@ Sprites are authored at **final on-screen pixel size** and placed at `scale = 1`
 multiplied by `ArenaCamera.WORLD_SCALE` — that constant applies only to authored spawn offsets
 (`wave_manager.gd:172`) and `EnemyPathMover` paths (`enemy_path_mover.gd:77`). 256×256 is 4× the
 64×64 player fighter; turrets are player-sized. Turret positions inside the scene (`±76, ±76`) are
-sprite-local screen pixels, not design units. The station's *spawn* position, when sub-item 2
-places it, **is** an authored offset and will be scaled.
+sprite-local screen pixels, not design units. The station's *spawn* position — `at(0, -90)` in
+`_build_station_assault()` — **is** an authored offset and *is* scaled.
 
 ---
 
@@ -85,10 +85,19 @@ the player colliding with a 256×256 body. Contact damage is unaffected: it come
 on layer 256 built by `base_enemy.gd:53-55`. If the hull should later be a solid obstacle, the
 opt-out is an `is_laser_blocking()` returning `false` (`beam_behavior.gd:67-68`).
 
-⚠️ **Known coverage gap.** `tests/integration/test_space_station.gd` drives damage by emitting
-`received_damage` directly, so it does **not** prove any of these layer values. A core no bullet
-could ever hit passes all nine tests. They are verified by reading this scene; they are only
-*proven* once the station is in a live level (sub-item 2).
+⚠️ **Known coverage gap — still open.** `tests/integration/test_space_station.gd` drives damage by
+emitting `received_damage` directly, so it does **not** prove any of these layer values. A core no
+bullet could ever hit passes all nine tests. Sub-item 2 placed the station in a live level but did
+**not** close this: `tests/integration/test_station_assault_section.gd` asserts the section's
+gating and wave data, not a projectile overlap. Closing it needs a test that instances
+`assault/scenes/projectiles/bullets/bullet.tscn` and steps physics.
+
+For the record, because it was got wrong twice during sub-item 2's review: a player bullet is
+**not** consumed by the first HurtBox it overlaps. `BulletPool` is used only by four enemies and
+the ally fighter — `straight_behavior.gd:22` just does `state.add_child(bullet)` — so
+`Bullet.expired` has no listener on the player path, and `default.tres` sets `range_px = 0.0` so
+`bullet.gd:49` never frees it either. A bullet crosses the armoured core (deflected) and goes on
+to hit the turrets behind it.
 
 ---
 
@@ -138,16 +147,27 @@ needs no matching code change.
 
 ## Spawn notes
 
-**Not spawnable yet.** There is no `WaveBuilder` method for it and it appears in no level; it is
-not in [`docs/enemy-roster.md`](../../../../docs/enemy-roster.md) for that reason. Sub-item 2 of the
-Level 1 mini-boss epic adds a `station_assault` `LevelSection` between `asteroid_belt` and
-`planet_approach` using `EndCondition.ENEMIES_CLEARED`.
+**WaveBuilder method:** `b.space_station()` (`SPACE_STATION` in `wave_builder.gd`). It is spawned
+by the `station_assault` section of Level 1 (`level_1_director.gd::_build_station_assault()`) as a
+single wave, `b.wave(0.0, [ b.space_station().at(0, -90) ])`, and by nothing else. See
+[`docs/enemy-roster.md`](../../../../docs/enemy-roster.md).
 
-Two requirements for whoever does that: `ENEMIES_CLEARED` polls
-`wave_manager.enemy_container.get_child_count()` (`level_director.gd:106`) and **not** the
-`"enemies"` group — so the station must be a **child of `enemy_container`** and must actually leave
-the tree on death. Its spawn offset is authored in 640×360 design units and scaled by
-`ArenaCamera.WORLD_SCALE`, unlike everything inside this scene.
+Four things that section gets right and any future placement must too:
+
+- **No `.delay()`.** `waves_complete` fires when the last wave *triggers*, not when its spawns
+  land (`wave_manager.gd:52-56` vs `:151-155`), so a delayed station lets `_wait_enemies_cleared()`
+  see an empty container and advance immediately.
+- **No `.move()`.** `WaveManager` attaches an `EnemyPathMover` only for a real `MovementResource`
+  (`wave_manager.gd:194`); with one, the boss would be freed on screen exit mid-fight.
+- **`ENEMIES_CLEARED` polls the container, not the group.** `level_director.gd` counts
+  `wave_manager.enemy_container.get_child_count()` and **not** `get_nodes_in_group("enemies")`, so
+  the station must be a child of `enemy_container` and must actually leave the tree on death.
+- **The offset is in 640x360 design units**, scaled by `ArenaCamera.WORLD_SCALE`, unlike every
+  measurement inside this scene. `at(0, -90)` puts the hull at world y 52-308.
+
+The section sets `enemies_cleared_timeout = 180.0`. If the station is somehow still alive then, the
+director frees it and advances rather than stalling the level — at the cost of one escape-combo
+penalty. That is a safety net, not a balance number.
 
 ---
 

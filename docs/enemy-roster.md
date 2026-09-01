@@ -486,7 +486,18 @@ b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180)
 
 ## Not in this roster: the space-station mini-boss
 
-`assault/scenes/enemies/space_station/` is a multi-part mini-boss, **not** a `WaveBuilder`-spawnable
-wave enemy. It has no builder method and appears in no level yet. Placing it is sub-item 2 of the
-Level 1 mini-boss epic in `BACKLOG.md`; behaviour and constraints are in
-[`space_station/ENEMY.md`](../assault/scenes/enemies/space_station/ENEMY.md).
+`assault/scenes/enemies/space_station/` is a multi-part mini-boss, not a regular wave enemy — it
+has no movement, no exit mode and four independently destructible turrets, so the roster's
+per-enemy stat columns do not describe it.
+
+It **is** `WaveBuilder`-spawnable: `b.space_station()` (`SPACE_STATION` const). It is spawned
+exactly once, by the `station_assault` section of Level 1, as
+`b.wave(0.0, [ b.space_station().at(0, -90) ])`. Two rules, both load-bearing:
+
+- **No `.delay()`.** `waves_complete` fires when the last wave *triggers*, not when its spawns
+  land, so a delayed boss lets an `ENEMIES_CLEARED` section see an empty container and advance
+  instantly.
+- **No `.move()`.** A `MovementResource` attaches an `EnemyPathMover`, which would free the boss
+  on screen exit mid-fight.
+
+Behaviour and constraints: [`space_station/ENEMY.md`](../assault/scenes/enemies/space_station/ENEMY.md).

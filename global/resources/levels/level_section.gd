@@ -25,3 +25,11 @@ enum EndCondition {
 
 ## Seconds before advancing (only when end_condition == DURATION).
 @export var duration: float = 30.0
+
+## Safety net for ENEMIES_CLEARED: seconds to wait for [enemy_container] to empty before
+## giving up, freeing whatever is left and advancing anyway.
+##
+## The default is the hardcoded constant this replaced, sized for "wait for the last stragglers
+## to fly off screen". Boss sections need far longer — the fight itself is the section, and a
+## player who is losing must still be allowed to keep trying. Ignored by the other end conditions.
+@export var enemies_cleared_timeout: float = 10.0

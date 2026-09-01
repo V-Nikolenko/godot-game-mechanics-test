@@ -3,12 +3,14 @@
 Builds on `1-context.md` (files, the 10 s discovery, the delayed-spawn trap) and `2-research.md`
 (boss gating, boss timers, the arrival beat). Neither is re-derived here.
 
-> **Revision 1 (2026-09-01)** — rewritten after review round 1
-> (`4-review.md`, `VERDICT: CHANGES_REQUESTED`). All seven findings were independently
-> re-verified against the code before being accepted; none was disputed. Changes are listed in
-> *Revision log* at the foot of this file. The headline change is new **§0**: the gate as
-> originally planned was **unsatisfiable** — a default-loadout bullet cannot reach a single
-> turret.
+> **Revision 1 (2026-09-01)** — rewritten after review round 1 (`VERDICT: CHANGES_REQUESTED`).
+> Its headline change was a new **§0** claiming the gate was unsatisfiable.
+>
+> **Revision 2 (2026-09-01)** — after review round 2 (`VERDICT: APPROVED`, with three mandatory
+> adjustments). Round 2 **withdrew** round 1's B1: the premise was false, `BulletPool` is not on
+> the player's fire path, and the turrets were reachable all along. §0 is withdrawn with it and
+> the core hurtbox is **not** touched by this sub-item. The scope is now the six changes in
+> *Design* and tests 4-10. See *Revision log*.
 
 ## Problem
 
@@ -17,7 +19,7 @@ station mini-boss entity, but nothing in the level ever spawns it — a player f
 asteroid belt drifts straight into the planet approach. It should instead meet the station, and
 the level should refuse to continue until the station is destroyed.
 
-Three things stop that working today. The third was found in review and is the important one.
+Two things stop that working today. Both are in `LevelDirector`, not in the entity.
 
 - `LevelDirector._wait_enemies_cleared()` (`level_director.gd:105`, deadline at `:108`) abandons
   the wait after a hardcoded **10 s**. Research finding 3: the shortest boss timer found in a
@@ -30,75 +32,56 @@ Three things stop that working today. The third was found in review and is the i
   (since `_wait_enemies_cleared` polls that same container) it would then block `cloud_descent`
   forever. Research finding 2: no shipped shmup does this. A timed-out boss **escapes or
   self-destructs** — the fight always actually ends.
-- **The station's core hurtbox shadows all four turrets, so the player cannot damage them.**
-  See §0.
 
-## §0 (new, blocking) — make the turrets reachable
+A third problem was believed to exist and does not; §0 records why, because it was asserted twice
+and must not be asserted a third time.
 
-`space_station.tscn:16-17` declares one `RectangleShape2D` of **240 × 240** and uses it for
-*both* the body collider (`:65-66`) and the core `HurtBox` (`:74-75`). The core hurtbox therefore
-spans local x, y ∈ **[−120, +120]** — the entire hull. The four turret hurtboxes are
-`CircleShape2D` radius **26** at (±76, ±76) (`space_station.tscn:89-99`, `station_turret.tscn:8-9`),
-so each one lies **strictly inside** the core box.
+## §0 (WITHDRAWN in revision 2) — the turrets were always reachable
 
-Both are on `collision_layer = 512`; the player bullet's HitBox is `collision_layer = 64,
-collision_mask = 513` (`bullet.tscn:44-45`), so it detects the core box first. With
-`pierces_remaining == 0` and `unlimited_pierce == false` — the default: `player_base.gd:42`
-leaves `pierce_module_active` false, `straight_behavior.gd:20-21` only sets pierces when it is on,
-and `modes/default.tres` is straight/no-pierce — `bullet.gd:83-84` emits `expired` on the first
-`area_entered`, and `bullet_pool.gd:56` recycles the bullet on the deferred flush that step.
+**Revision 1 was wrong here, and so was review round 1's B1.** Both argued that a default-loadout
+bullet is consumed by the first HurtBox it overlaps, so the 240 x 240 core hurtbox
+(`space_station.tscn:16-17`, shared by the body collider `:65-66` and the core HurtBox `:74-75`)
+shadowed all four turrets and made `ENEMIES_CLEARED` unsatisfiable. The chain cited
+`bullet_pool.gd:56` as the thing that recycles the bullet on `expired`.
 
-An upward bullet therefore enters the core box at local y = +120 and dies there. The **top** pair
-of turrets is 222 px further along and is unreachable; the bottom pair is 18 px further along at
-15 px/frame (900 px/s ÷ 60), so it is at best intermittent and frame-rate dependent. The two
-direct-emit damage paths do not help: `plasma_nova_module.gd` / `beam_behavior.gd` emit over group
-`"enemies"`, which only `SpaceStation` joins (`space_station.gd:35`) — `StationTurret` is a plain
-`Node2D` in no group — so they hit the armoured core and are deflected (`space_station.gd:82-86`).
+**`BulletPool` is never used by the player.** Re-verified independently against the code before
+accepting the reversal:
 
-`live_turret_count() > 0` would stay true forever, the core would stay armoured, the station would
-never free itself, and `ENEMIES_CLEARED` would degrade to "wait 180 s, then the new free-loop
-deletes the boss" **on every playthrough**. That is precisely the outcome research finding 1 warns
-against ("hard gating is only safe if the player can always eventually win"), shipped as the
-default rather than as an edge case.
+- The player's fire path is `player_fighter.tscn:351` -> `weapon_state.gd:83` ->
+  `straight_behavior.gd:22`, which is a plain `state.add_child(bullet)`. No pool, no `expired`
+  connection. `spread_behavior.gd:21` and `long_range_behavior.gd:38` are the same.
+- `grep -rn "expired" --include=*.gd --include=*.tscn .` finds exactly **two** connections to
+  `Bullet.expired` in the repo: `bullet_pool.gd:56` and `sniper_enemy.gd:102`. `BulletPool` is
+  constructed only in `light_assault_ship.gd:27`, `gunship.gd:52`, `interceptor.gd:30` and
+  `ally_fighter.gd:22` - four enemies and the ally, never the player.
+- `bullet.gd:84` emits `expired` **without** `queue_free()`. The script's only `queue_free()` is
+  `:49`, gated on `range_px > 0.0`, and `assault/scenes/player/weapons/modes/default.tres` sets
+  `range_px = 0.0`.
 
-### The fix: give the core hurtbox its own, narrower shape
+So on the default loadout `expired` has no listener and the bullet keeps flying with a live
+HitBox. The layers let it reach everything in its lane: core and turret HurtBoxes are all
+`collision_layer = 512`, the bullet HitBox masks `513` (`bullet.tscn:44-45`), and the 240 x 240
+contact HitBox is `layer 256 / mask 0` (`base_enemy.gd:54-55`), invisible to both.
 
-Only the `HurtBox`'s shape changes. The body `CollisionShape2D` stays **240 × 240** — it is what
-`BaseEnemy._add_contact_hitbox()` (`base_enemy.gd:50-59`) copies into the 40-damage contact HitBox,
-and the hull really is that big.
+**Today, unmodified:** a bullet fired up the x = -76 lane crosses the armoured core box (deflected,
+`space_station.gd:82-86`), continues, deals 50 to `Turret2`, continues, deals 50 to `Turret0`.
+Turrets are 120 HP and bullets 50 damage, so **three bullets down one lane kill both turrets in
+it.** The gate is satisfiable by a default-loadout player right now, and this sub-item does not
+need to change the entity at all.
 
-```
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_core_hurt"]
-size = Vector2(88, 240)
-```
+### Consequence: the core hurtbox is not touched this cycle
 
-used by `HurtBox/CollisionShape2D` only.
+Narrowing the core HurtBox to 88 x 240 would be a **design change** ("shooting the hull shoulders
+should not deflect off the core"), not a bug fix, and revision 1's justification for it does not
+survive. It is deferred out of this sub-item and filed under *Discovered* in `BACKLOG.md` for the
+user to triage. The precision argument was moot in play anyway: `default.tres` sets
+`pellet_spread_deg = 60.0` and `straight_behavior.gd:13-16` applies a +/-30 degree per-shot jitter,
+so "6 px of margin either side" is not a quantity the player ever experiences.
 
-**Why these numbers.** All player fire in this mode travels along ±y, so the condition for "no
-turret is shadowed" is that the core hurtbox's **x-extent is disjoint from every turret's
-x-extent**:
-
-| Shape | Local x-extent |
-|---|---|
-| Turret hurtboxes (x = ±76, r = 26) | [50, 102] and [−102, −50] |
-| Core hurtbox, 88 wide | **[−44, +44]** |
-
-Disjoint, with 6 px of margin either side. Full hull height (240) keeps the core easy to hit down
-the centre line once it is exposed, so shrinking the width costs the player nothing on the phase
-that matters. Two narrow dead lanes appear at |x| ∈ (44, 50) and the hull shoulders at
-|x| ∈ (102, 120) stop hitting anything — normal for a multi-part boss, and it is what makes
-"shoot the guns, then the core" legible.
-
-*Rejected:* (b) putting `StationTurret` in the `"enemies"` group so the AoE modules reach it —
-that changes what every `get_nodes_in_group("enemies")` consumer sees (`ai_targeting_module.gd:49`,
-`emp_blast_module.gd:39`, `warhead_missile_shooting_state.gd:61`, `beam_behavior.gd:75`) for a
-`Node2D` that is not an enemy ship, and it still leaves the *default* weapon unable to hit a
-turret. (c) Verifying by hand in-engine only — this container has no GUI, and the flaw survived
-sub-item 1 precisely because nothing tested the collision path.
-
-**This is arguably sub-item 1's bug**, but the gate is meaningless without it, so it lands here.
-It is one sub-resource and one node property.
-
+Tests 1-3 go with it. Tests 2 and 3 asserted a fiction - they wired `expired` -> free "exactly as
+`bullet_pool.gd:56` does", which is precisely the lifecycle the player path does **not** have.
+`space_station.tscn` is therefore **not modified by this sub-item**, so `test_space_station.gd`'s
+nine tests and `ENEMY.md`'s hurtbox description both stand unchanged.
 ## Design
 
 Six changes. Nothing new is invented: the gate is the existing `EndCondition.ENEMIES_CLEARED`, the
@@ -123,8 +106,11 @@ correctly sized for its actual job.
 ### 2. `LevelDirector._wait_enemies_cleared()` reads it, and clears leftovers on expiry
 
 `deadline_ms` (`level_director.gd:108`) becomes
-`start_ms + int(section.enemies_cleared_timeout * 1000.0)`. On expiry, after the existing
-`push_warning` (`:112`), **free every remaining child of `enemy_container`** before advancing:
+`start_ms + int(section.enemies_cleared_timeout * 1000.0)`. The method takes **no arguments** — it
+is connected as a zero-arg one-shot at `level_director.gd:78` — so `section` must be read from
+`_sections[_current_index]` behind an index bounds guard (review, non-blocking note). On expiry,
+after the existing `push_warning` (`:112`), **free every remaining child of `enemy_container`**
+before advancing:
 
 ```gdscript
 push_warning(...)
@@ -283,45 +269,47 @@ entity spawn path, a `LevelSection` and a `BackgroundPhase`. These four must be 
 | `docs/architecture/modules/assault.md:229-236` | the station "is **not yet spawned by anything**" |
 | `assault/scenes/enemies/space_station/ENEMY.md:139-141` | "**Not spawnable yet.**" |
 
-`ENEMY.md` also documents the 240×240 shared hurtbox shape and the collision-layer coverage gap;
-both change under §0 and must be rewritten, along with the *Known gap* note in `BACKLOG.md`'s
-sub-item 1 entry.
+`ENEMY.md`'s *Known gap* and hurtbox description are **unchanged** (review M1): this sub-item
+does not modify `space_station.tscn`. `BACKLOG.md`'s sub-item 1 *Known gap* note likewise stands —
+the collision-layer coverage gap it records is real and is not closed here.
 
 ## Build sequence
 
-1. **§0** — new `RectangleShape2D` (88 × 240) for the core `HurtBox` in `space_station.tscn`.
-   → tests 1, 2, 3 pass.
-2. `LevelSection.enemies_cleared_timeout` export. → test 4 passes.
-3. `LevelDirector` reads it + frees leftovers on expiry. → tests 5, 6, 7 pass.
-4. `WaveBuilder.SPACE_STATION` + `space_station()`.
-5. `phase_station_assault.tres`.
-6. `Level1Director._build_sections()` refactor + `_build_station_assault()`. → tests 8, 9, 10 pass.
-7. Docs per §6, then `bash /agent/verify.sh`.
-8. **Gate check (review S2):** the suite has **18** `test_*.gd` scripts today (15 `unit/`,
-   3 `integration/`), so GUT must report **19** after this. Also grep the step-3 output for
-   `Parse Error` and `SCRIPT ERROR` — `BACKLOG.md:270-278` records that GUT silently drops an
-   unloadable script and still exits 0, and that channel matters here because tests 4 and 8–10
-   "fail before implementation" by making the file **unparseable**
-   (`LevelSection.new().enemies_cleared_timeout` on a statically-typed `LevelSection` is a parse
-   error, not an assertion failure). Red-before-green for four of ten tests is read off stderr.
+Six steps plus the gate check. §0 and tests 1-3 are **withdrawn** (see §0); test numbering below
+keeps its original 4-10 so the round-2 review's references stay resolvable.
 
-Each step is independently runnable; steps 1–3 are the only ones that touch shipped behaviour.
+1. `LevelSection.enemies_cleared_timeout` export. → test 4 passes.
+2. `LevelDirector` reads it + frees leftovers on expiry. → tests 5, 6, 7 pass.
+3. `WaveBuilder.SPACE_STATION` + `space_station()`.
+4. `phase_station_assault.tres` — **three lines only** (review M3): `BackgroundPhase` has no
+   `transition_in_duration` property (`background_phase.gd:12-81`); that is a `LevelSection` field
+   (`level_section.gd:19`) and is set in `_build_station_assault()`. Writing it into the `.tres`
+   would produce an unknown-property resource.
+5. `Level1Director._build_sections()` refactor + `_build_station_assault()`. → tests 8, 9, 10 pass.
+6. Docs per §6, then `bash /agent/verify.sh`.
+7. **Gate check (review S2):** the suite has **18** `test_*.gd` scripts today (15 `unit/`,
+   3 `integration/`), so GUT must report **19** after this. Also grep the step-3 output for
+   `Parse Error` and `SCRIPT ERROR` — `BACKLOG.md` records that GUT silently drops an unloadable
+   script and still exits 0, and that channel matters here because tests 4 and 8-10 "fail before
+   implementation" by making the file **unparseable**
+   (`LevelSection.new().enemies_cleared_timeout` on a statically-typed `LevelSection` is a parse
+   error, not an assertion failure). Red-before-green for four of seven tests is read off stderr.
+
+Steps 1-2 are the only ones that touch shipped behaviour. `space_station.tscn` is not touched at
+all.
 
 ## Test plan
 
-One new file, `tests/integration/test_station_assault_section.gd`. Director tests build a
-`LevelDirector` + `WaveManager` + a `Node2D` container by hand — no camera, no level scene — and
-drive it by emitting `wave_manager.waves_complete` and freeing container children.
+One new file, `tests/integration/test_station_assault_section.gd`, seven tests. Director tests
+build a `LevelDirector` + `WaveManager` + a `Node2D` container by hand — no camera, no level
+scene — and drive it by emitting `wave_manager.waves_complete` and freeing container children.
 
 | # | Test | Asserts | Fails before implementation because |
 |---|---|---|---|
-| 1 | **§0 invariant —** `test_the_core_hurtbox_never_shadows_a_turret_hurtbox` | for the real `space_station.tscn`: the core HurtBox's local **x-extent** is disjoint from every turret HurtBox's x-extent | today core x ∈ [−120,120] overlaps turret x ∈ [50,102] — **fails** |
-| 2 | **§0 real projectile —** `test_a_player_bullet_damages_the_near_turret_not_the_core` | instance `bullet.tscn` at local (−76, +200) with `rotation = 0` (travels `Vector2.UP`), `expired` wired to free it exactly as `bullet_pool.gd:56` does; step physics; `Turret2.health.current_health < 120` **and** `station.health.current_health == 600` | the bullet is consumed by the core box first — **fails** |
-| 3 | **§0 far turret —** `test_a_bullet_reaches_the_far_turret_once_the_near_one_is_dead` | kill `Turret2`, fire the same bullet up the x = −76 lane → `Turret0.health.current_health < 120` | core box still shadows it — **fails** |
 | 4 | `test_enemies_cleared_timeout_defaults_to_ten_seconds` | `LevelSection.new().enemies_cleared_timeout == 10.0` | property does not exist → parse error |
 | 5 | `test_section_does_not_advance_while_an_enemy_lives` | 2 sections, timeout 30 s, one live child; emit `waves_complete`; after ~0.5 s of frames `section_started` has fired **only** for index 0 | — (guards the gate) |
-| 6 | `test_section_advances_when_the_last_enemy_is_freed` | continue from 5: `queue_free()` the child → `section_started` fires with index 1 | — (guards the gate) |
-| 7 | **Boundary —** `test_timeout_frees_leftover_enemies_then_advances` | timeout `0.3`, a child that never dies → director advances, `enemy_container.get_child_count() == 0`, **and** `ScoreTracker._combo` has been multiplied by 0.75 once (B3) | today it advances with the child still parented — this is the bug |
+| 6 | `test_section_advances_when_the_last_enemy_is_freed` | as 5, then `queue_free()` the child → `section_started` fires with index 1 | — (guards the gate) |
+| 7 | **Boundary —** `test_timeout_frees_leftover_enemies_then_advances` | timeout `0.3`, a child that never dies → director advances, `enemy_container.get_child_count() == 0`, **and** the escape-combo penalty fired | today it advances with the child still parented — this is the bug |
 | 8 | `test_level_1_sections_are_in_order_with_station_assault_third` | `_build_sections()` on a bare `Level1Director` instance → `[deep_space, asteroid_belt, station_assault, planet_approach, cloud_descent]` | section does not exist |
 | 9 | `test_station_assault_is_enemies_cleared_with_a_long_timeout` | `end_condition == ENEMIES_CLEARED`, `enemies_cleared_timeout >= 60.0`, and `cloud_descent`'s is still exactly `10.0` | section does not exist |
 | 10 | `test_station_assault_spawns_one_station_at_zero_delay_with_no_movement` | 1 wave, `trigger_time == 0.0`, 1 entry; `ship_scene.resource_path` ends `space_station.tscn`; `spawn_delay == 0.0`; `movement == null` | section does not exist; also pins the two traps from `1-context.md` |
@@ -334,32 +322,32 @@ observe for **≥1.8 s** and its comment must state the poll granularity. Test 6
 freed child fires `child_exiting_tree`, the helper returns early, and the director advances at
 ≈0.3 s.
 
-**Note on tests 2 and 3 (review B2).** These exist specifically because
-`tests/integration/test_space_station.gd:15-19` records that driving damage through
-`HurtBox.received_damage.emit()` does **not** prove the collision layers — the gap that hid §0.
-They must therefore go through a real `Area2D` overlap. The suite has no precedent for
-physics-overlap tests, so this is the one genuinely new technique here. *Fallback, to be recorded
-in `5-progress.md` if headless physics proves unreliable:* drive the same geometry through
-`Area2D.get_overlapping_areas()` after `await get_tree().physics_frame`, which uses the same
-broadphase. **Test 1 does not depend on physics at all** and is the load-bearing §0 assertion;
-tests 2 and 3 are the evidence that the invariant is the right one.
+**Test 7's score assertion (review M2).** Two traps, both verified:
+
+- `score_tracker.gd:31` starts `_combo` at `1.0`, and `:211-214` multiplies by `0.75` then clamps
+  back up with `if _combo < 1.0: _combo = 1.0`. From the default the penalty is **invisible**. The
+  test must pre-set `_combo` above `1 / 0.75 ≈ 1.334` (use `2.0` → expect `1.5`).
+- `_on_enemy_freed` is connected **only** inside `_on_enemy_spawned` (`score_tracker.gd:161-164`),
+  which is driven by `wave_manager.enemy_spawned` (`:59-60`). The camera-less harness never
+  reaches `_spawn_ship` (`wave_manager.gd:160-162`), so the leftover child must be added by hand
+  **and** `wave_manager.enemy_spawned.emit(child, 0)` emitted by hand after `start_tracking()`.
+
+Use a locally constructed `ScoreTracker`, not the shipped one, so nothing leaks between tests.
 
 Other gotchas (`tests/README.md`): no zero-parameter handlers on `Health.amount_changed`;
 `push_warning` is not a GUT failure (`tests/README.md:72`) so the timeout tests will not trip on
-the existing warning; nothing here touches `user://`, so no `SaveSandbox`. Test 7 must save and
-restore `ScoreTracker`'s combo state, or use a locally constructed tracker.
+the existing warning; nothing here touches `user://`, so no `SaveSandbox`.
 
 ## Risks
 
 | Risk | Check |
 |---|---|
-| §0 changes a shipped entity's hitbox | Only the `HurtBox` shape; the body collider and therefore the 40-damage contact HitBox (`base_enemy.gd:50-59`) are untouched. Sub-item 1's 9 tests emit `received_damage` directly and are shape-independent, so they must still pass unchanged — checked in step 1. |
-| Headless Area2D overlap may not fire in GUT | Test 1 carries the invariant without physics; documented fallback for 2 and 3. |
+| The `space_station.tscn` entity is modified | It is not. §0 is withdrawn; sub-item 1's 9 tests must still pass unchanged, which the gate checks. |
 | Freeing leftovers on timeout changes `cloud_descent` | Runs only after `push_warning`. Tests 6 and 7 separate the paths; the ×0.75 combo penalty is now asserted rather than denied. |
 | `_wait_enemies_cleared` is `await`-heavy; tests may be timing-flaky | Budgets sized off the real 1.0 s poll granularity (see above); assertions are on the `section_started` signal, not wall-clock. |
 | The `_build_sections()` refactor breaks Level 1 boot | `verify.sh` step 2 boots the main scene headless; test 8 pins the order. Nothing hardcodes a section count — `LevelDirector` reads `_sections.size()`, and `section_started`'s only consumer ignores the index (`level_1_director.gd:78, :104`). |
 | Station sits somewhere unplayable | Arithmetic tabled above and verified in review; the pan caveat is stated. Static placement in a section with no other spawns, so worst case is a cosmetic follow-up. |
-| GUT silently drops the new test file if it fails to parse | Build step 8: assert 19 scripts **and** grep for `Parse Error` / `SCRIPT ERROR`. |
+| GUT silently drops the new test file if it fails to parse | Build step 7: assert 19 scripts **and** grep for `Parse Error` / `SCRIPT ERROR`. |
 
 ## Out of scope
 
@@ -385,3 +373,16 @@ sidesteps.
 | **S4** six drifted line citations | Accepted; all six corrected throughout. |
 | Note: `1-context.md` wrongly implies turrets `queue_free()` | Noted — `StationTurret._destroy()` (`station_turret.gd:62-83`) deliberately leaves wreckage in the tree. Only the core frees itself (`base_enemy.gd:65-73`); the gate depends on the **core**, and tests 1–3 and 7 are written to that truth. |
 | Note: the timeout free-loop can hit pooled bullets | Accepted; the loop carries a comment explaining `bullet_pool.gd:45-47` reparenting. |
+
+**Round 2 → Revision 2**, addressing `4-review.md`'s `VERDICT: APPROVED` with three mandatory
+adjustments:
+
+| Finding | Resolution |
+|---|---|
+| **M1** §0's premise is false; round 1's B1 was wrong | Accepted after re-verifying the fire path directly: `BulletPool` is constructed only by four enemies and the ally fighter, `Bullet.expired` has exactly two listeners repo-wide (neither on the player path), and `default.tres` sets `range_px = 0.0` so `bullet.gd:49` never frees. §0 is **withdrawn** and rewritten as a record of the error; build step 1 and tests 1-3 are deleted; `space_station.tscn` is untouched. The 88 x 240 hurtbox is filed under *Discovered* in `BACKLOG.md` as a design question for the user. |
+| **M2** test 7's combo assertion cannot pass as written | Accepted. Test 7 now pre-sets `_combo = 2.0` (above the `1/0.75` clamp floor) and emits `wave_manager.enemy_spawned` by hand after `start_tracking()`, because `_on_enemy_freed` is only ever connected from `_on_enemy_spawned` and the camera-less harness never reaches `_spawn_ship`. Uses a locally constructed `ScoreTracker`. |
+| **M3** `transition_in_duration` is not a `BackgroundPhase` field | Accepted. The `.tres` is three lines; the duration is set on the `LevelSection` in `_build_station_assault()`. |
+| Non-blocking: `bullet.tscn` path | Real path is `assault/scenes/projectiles/bullets/bullet.tscn`; corrected in §0. |
+| Non-blocking: `_wait_enemies_cleared` is zero-arg | Noted in §2 — read `_sections[_current_index]` with a bounds guard. |
+| Non-blocking: turret hurtbox teardown is `set_deferred` | Moot; no test in the revised plan kills a turret and then fires through it. |
+| Non-blocking: `phase_name` has one consumer (a `print`) | No registry to update for the new phase. |
