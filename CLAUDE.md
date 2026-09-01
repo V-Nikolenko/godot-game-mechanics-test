@@ -61,6 +61,19 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
 - **What a shared component actually does, edge cases included** → its test in `tests/unit/`
   (one file per component and per autoload). Faster and more precise than re-reading the source.
 
+## MANDATORY — generating game art
+
+Before generating **any** sprite, tile, or other asset with PixelLab, invoke the
+**`pixel-art-generation`** skill. `assault/` and `open_space/` are **strict top-down
+orthographic and NEVER isometric** — the skill enforces this with explicit PixelLab
+parameters (`view: "high top-down"`, `isometric: false`), not just prompt wording. It also
+covers tool choice per asset type, safe binary saving via `scripts/pixellab.sh` (the Write
+tool corrupts PNGs), and the mandatory visual check on every generated image.
+
+`infiltration/` is the one genuinely isometric mode and is out of scope for that skill.
+A wrong-angle sprite cannot be fixed in code; it has to be regenerated from a capped
+monthly allowance. Do not skip the check.
+
 ## MANDATORY — plan before building
 
 Before implementing any **non-trivial** feature or mechanic, invoke the **`feature-workflow`**

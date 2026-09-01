@@ -81,6 +81,20 @@ sub-items back here.
 
 ---
 
+- [ ] **Regenerate the turret sprites — `station_turret.png` is 3/4 view, not top-down.**
+      The barrel is drawn from the side with visible cylinder faces and the base sits in
+      perspective; `station_core.png` in the same set is correctly overhead, so the set is
+      visually inconsistent. Root cause: PixelLab was almost certainly called with
+      `view: "low top-down"`, which is the 3/4 look.
+      **Invoke the `pixel-art-generation` skill first.** Regenerate with
+      `view: "high top-down"` and `isometric: false`, describing the shape as seen from
+      above (base reads as a circle, barrel as a short flat rectangle lying across it),
+      plus the negative constraints. Regenerate `station_turret_destroyed.png` to match.
+      Save with `./scripts/pixellab.sh save-b64` — **never** the Write tool, it corrupts
+      PNG data. Re-import so the `.import` sidecars update.
+      *Done when:* both turret sprites have been opened with the Read tool and confirmed
+      to show no side faces, and they sit consistently beside `station_core.png`.
+
 ## EPIC — Level 1 space-station mini-boss
 
 **Outcome:** Level 1 currently runs Deep Space → Asteroid Belt → Planet Approach → Cloud Descent.
@@ -101,9 +115,9 @@ and only when the station is destroyed does the level continue to the planet.
 
 **Constraints (apply to every sub-item):**
 
-- **Top-down, no perspective.** The station is viewed flat from directly above — no vanishing
-  point, no angled faces. Turrets read as mounted on its surface.
-- **Sprites come from PixelLab**, saved under `assault/assets/sprites/`. Station and turrets are
+- **Strict top-down orthographic — see the `pixel-art-generation` skill.** Camera directly
+  overhead, zero tilt, no isometric, no 3/4, no perspective, no foreshortening. Every
+  generated image must be opened and visually checked before commit.
   separate sprites so turrets can be destroyed and swapped independently.
 - **Scale:** the player fighter is 64×64. Target the station at roughly 4× that and turrets at
   about player size. **Do not hardcode a pre-multiplied pixel size** — this project authors in
