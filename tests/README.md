@@ -14,8 +14,21 @@ project boot.
 | Path | Contents |
 |---|---|
 | `unit/` | One file per autoload or `global/components/` component. No scene loading. |
-| `integration/` | Several systems wired together — currently the player damage chain. |
+| `integration/` | Several systems wired together (the player damage chain), plus project-wide integrity checks over the resource files themselves. |
 | `helpers/` | Shared fixtures. **Never** named `test_*`, or GUT tries to collect them as tests. |
+
+## One exception: the resource-UID integrity test
+
+`integration/test_resource_uid_integrity.gd` is **not** characterization. It asserts an invariant
+that must hold — every `[ext_resource]` UID in a `.tscn`/`.tres` matches the UID its target
+declares — so a failure there is a regression to fix, not a quirk to document.
+
+It reads declared UIDs **from disk** (the `.tscn`/`.tres` header line, the sibling `.gd.uid`, the
+sibling `.import`) and never asks `ResourceUID` / `ResourceLoader`. Those consult
+`.godot/uid_cache.bin`, which is gitignored *and* keeps stale UIDs registered as working aliases
+once a warm project has loaded them — so the engine will happily report a broken reference as fine
+on your machine and break on a fresh clone. Five of the eight mismatches this test first caught
+behaved exactly that way. If you extend it, keep it reading files.
 
 ## These are characterization tests
 
@@ -62,3 +75,4 @@ Autoloads: `MissionState`, `UpgradeState`, `ShipModuleState`, `ShipProgressionSt
 `SessionState`, `EventBus`, `DialogPlayer`, `CameraShake`.
 Components: `Health`, `HitBox`/`HurtBox`, `Shield`, `TempHealth`, `Overheat`, `DamageReaction`.
 Plus `global/statemachine/` and the `PlayerBase` damage chain.
+Project-wide: `[ext_resource]` UID integrity across every `.tscn`/`.tres`.

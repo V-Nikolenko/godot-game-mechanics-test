@@ -64,13 +64,20 @@ sub-items back here.
 
 ## Next
 
-- [ ] **Fix the stale UID in `open_space/scenes/gui/hud.tscn:6`.** Its `ext_resource` for
+- [x] **Fix the stale UID in `open_space/scenes/gui/hud.tscn:6`.** Its `ext_resource` for
       the pause menu declares `uid://bospm3nuos001`, but
       `global/ui/pause_menu/open_space_pause_menu.tscn` actually declares
       `uid://b10bam3tnq6vw`. Godot currently falls back to the text path and only warns, so
       nothing is broken — but the fallback disappears if that scene is ever moved. Fix the
       reference, then run the Godot MCP `update_project_uids` tool and check whether any
       other file has the same problem. Done when `godot --headless --import` is warning-free.
+      **Done 2026-09-01** — it was **8** stale references, not 1, in 8 files: `assault/scenes/gui/hud.tscn`,
+      `assault/scenes/levels/level_2.tscn`, `open_space/scenes/gui/hud.tscn`, and the five
+      `open_space/scenes/mission_data/planets/**/…_infiltration_mission_*.tres`. All 8 named a UID
+      no resource declares. Added `tests/integration/test_resource_uid_integrity.gd` (3 tests) so
+      the class of defect cannot come back. Verified on a **cold** `.godot/` cache by loading all
+      126 `.tscn`/`.tres`: 3 `invalid UID` warnings before, 0 after, 0 load failures.
+      The suggested `update_project_uids` MCP step is a no-op — see *Discovered*.
 
 ---
 
@@ -198,3 +205,40 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `addons/gut/LOCAL_PATCHES.md`. `AccessibilityServer` does not exist in this Godot build, and
       a property getter in `stub_params.gd` fails type inference. Re-apply both on any GUT upgrade
       — without them the whole addon fails to parse and the doubler is unusable.
+
+Found on 2026-09-01 while fixing the stale `ext_resource` UIDs.
+
+- [ ] **The Godot MCP `update_project_uids` tool is a no-op on this project — do not rely on it.**
+      It concatenates `"res://"` onto the absolute project path it is given, so it searches
+      `res:///tmp/coldclone/` (or `res:///work/repo/`), reports *"Found 0 scenes, Found 0
+      scripts/shaders"*, and exits claiming success. Verified by md5summing all 151 `.tscn`/`.tres`
+      before and after a run on a scratch copy: **zero files changed.** The bug is in the MCP
+      server's own `godot_operations.gd`, not in this repo, so it cannot be fixed here. Use
+      `tests/integration/test_resource_uid_integrity.gd` instead — it covers strictly more
+      (`.tres` resources and `.gd.uid` sidecars as well as scenes).
+
+- [ ] **`.godot/uid_cache.bin` masks broken UID references, so a warm machine disagrees with a
+      fresh clone.** Once a project has been loaded, Godot keeps a *stale* UID registered as a
+      working alias for its target: `ResourceLoader.get_resource_uid()` and `ResourceUID.has_id()`
+      both reported the dead `uid://bi366j2tsyby` as valid, and `--import` emitted no warning for
+      the five `.tres` files using it. Deleting `.godot/` and loading one of those files directly
+      produced `ext_resource, invalid UID` immediately. `.godot/` is gitignored, so **CI and new
+      contributors see the failures a developer's machine hides.** Two consequences worth keeping
+      in mind: `bash /agent/verify.sh` runs against a warm cache and will not catch this class of
+      defect on its own, and any future UID tooling must read declarations from disk rather than
+      ask the engine.
+
+- [ ] **`godot --headless --import` only loads a fraction of the project, so "import is clean" is
+      a weak gate.** It surfaced 1 of the 3 live `invalid UID` warnings; the other 2 only appeared
+      once every scene was actually loaded. A cheap "load all 126 `.tscn`/`.tres` and assert no
+      load returns null" smoke test would close the gap — worth considering as step 4 of
+      `/agent/verify.sh`. All 126 do currently load clean, so it would start green.
+
+- [ ] **Several resources declare hand-written UIDs in their own headers** — `uid://hudscore001`
+      (`assault/scenes/gui/hud_score_widget.tscn`), `uid://braceasteroid01`, `uid://00246ccaem53`,
+      `uid://0024uci15m53`, `uid://00243s3wxf53` (the `assault/scenes/race/` scenes). Godot 4.6.3
+      parses and registers all of them, and every reference to them resolves, so **nothing is
+      broken and they were deliberately left alone.** Flagging them only because they are the same
+      fingerprint as the eight references that *were* broken: a UID typed by a human or an agent
+      rather than minted by the editor. If one is ever duplicated onto a second resource the
+      collision will be silent.

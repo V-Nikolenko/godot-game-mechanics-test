@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="InfiltrationMissionResource" format=3 uid="uid://1nm70gto6tji"]
 
 [ext_resource type="Texture2D" uid="uid://cbdfef0my47gd" path="res://open_space/assets/sprites/mission_select_ui/planets/voeter_k05m/menu_mission_select_mission_image_4.png" id="1_2ee76"]
-[ext_resource type="Script" uid="uid://bi366j2tsyby" path="res://open_space/scenes/mission_data/infiltration_mission_resource.gd" id="2_tp2nx"]
+[ext_resource type="Script" uid="uid://d5wyr8hce0t2q" path="res://open_space/scenes/mission_data/infiltration_mission_resource.gd" id="2_tp2nx"]
 
 [resource]
 script = ExtResource("2_tp2nx")

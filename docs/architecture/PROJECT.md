@@ -88,8 +88,10 @@ Detail and APIs: [global.md](modules/global.md).
 - **Testing:** **GUT 9.7.1**, vendored in `addons/gut/`, enabled from the
   `[editor_plugins]` section of `project.godot`. Tests live in `tests/` and run headless:
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`.
-  The existing suite is **characterization**: it pins behaviour as it is today, bugs
-  included, so any behaviour change shows up as a failing test rather than as silence.
+  The suite is almost entirely **characterization**: it pins behaviour as it is today, bugs
+  included, so any behaviour change shows up as a failing test rather than as silence. The one
+  exception is `tests/integration/test_resource_uid_integrity.gd`, which asserts an invariant
+  (every `[ext_resource]` UID matches the UID its target declares).
   Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the
   save-file sandbox, and the signal-arity trap that will otherwise fail tests for reasons
   unrelated to the code under test.

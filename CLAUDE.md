@@ -31,8 +31,10 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `ArenaCamera.WORLD_SCALE` (2.0) at runtime; never pre-multiply.
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
-  (this is step 3 of `/agent/verify.sh`). The current suite is **characterization**: it pins
-  today's behaviour, bugs included. **Read [`tests/README.md`](tests/README.md) before writing a
+  (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
+  pins today's behaviour, bugs included. The exception is
+  `tests/integration/test_resource_uid_integrity.gd`, an invariant check over `[ext_resource]`
+  UIDs. **Read [`tests/README.md`](tests/README.md) before writing a
   test** — it covers the `user://` save-file sandbox and the zero-parameter-signal trap, both of
   which cause failures unrelated to the code under test.
 - **NEVER commit — the user handles all git.** Work directly on `main` unless asked
