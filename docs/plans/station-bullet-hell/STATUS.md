@@ -15,4 +15,6 @@ through `bullet_pool`, and a headless run of the section produces no errors.
 - [ ] 6. Gate green
 - [ ] 7. Docs updated, backlog ticked
 
-**Next action:** Independent subagent review (stage 4).
+**Next action:** Review round 2 in flight (stage 4). Round 1 = CHANGES_REQUESTED (2 blockers,
+4 must-fix); `3-plan.md` revised, `1-context.md` + `2-research.md` corrected. If round 2 approves,
+implement per the revised build sequence; if not, STOP — two rounds is the skill maximum.

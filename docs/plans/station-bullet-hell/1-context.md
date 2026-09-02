@@ -37,7 +37,7 @@ station's own parent), not from the wave list.
 | `assault/scenes/enemies/space_station/space_station_config.gd` / `.tres` | `SpaceStationConfig extends ShipConfig` | Gains the gunnery stats; **shared process-wide instance, see below** |
 | `global/components/bullet_pool.gd` | Pre-allocates + recycles bullets; reparents actives to `get_parent().get_parent()` | Mandated by the backlog item ("projectiles route through `bullet_pool`") |
 | `global/resources/attack/*.gd` | `AttackPatternResource` (data) + `AimedAttackPattern` / `GatlingAttackPattern` / `ForwardAttackPattern` | `fire(ship, pool)` is exactly the seam a multi-emitter boss needs |
-| `assault/scenes/systems/attack_controller.gd` (`AttackController`) | Node that ticks one pattern for one ship | Reference cadence code; see "not reused" below |
+| `global/components/attack_controller.gd` (`AttackController`) | Node that ticks one pattern for one ship | Reference cadence code; see "not reused" below |
 | `assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn` | `EnemyBullet`, HitBox layer 256 / mask **128** | Player-only mask, so station bullets cannot self-damage |
 
 ## Existing code to reuse
@@ -57,8 +57,12 @@ station's own parent), not from the wave list.
 `get_parent() as Node2D`, and its timer is private. A boss needs the opposite shape — one cadence
 driving N emitters, with dead emitters skipped and a per-volley angular offset shared across the
 whole ring. Using it would mean a controller node parented onto each *turret* by a node that does
-not own it, four independently drifting timers instead of one legible volley, and no way to skip a
-dead emitter without freeing someone else's child. The gunnery node keeps one `Timer` and calls
+not own it, no way to make four guns fire as one legible volley, and no way to skip a
+dead emitter without freeing someone else's child. (**Corrected in review round 1:** an earlier
+draft also claimed four controllers would "independently drift". They would not —
+`attack_controller.gd:24-30` is a float accumulator that does `_timer -= pattern.fire_interval`
+precisely to preserve overshoot. That claim is withdrawn; the rejection stands on the ownership
+and volley-legibility arguments alone.) The gunnery node keeps one `Timer` and calls
 `pattern.fire(turret, pool)` directly — the same public seam `AttackController` calls.
 
 ## Conventions that constrain this
