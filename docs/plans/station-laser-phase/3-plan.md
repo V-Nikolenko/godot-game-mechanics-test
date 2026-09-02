@@ -24,8 +24,10 @@ labelled.
 > invariant test 2 exists to check; it is now 2.5. Nits D3–D5 and two restatements
 > (1.96 → measured 1891 ms; the unreachable "fifth turret" example) are folded in.
 >
-> **This revision has NOT been reviewed.** The `feature-workflow` gate allows a maximum of two
-> review rounds, and both are spent. See `STATUS.md` — the item is parked at stage 4.
+> **Round 3 (2026-09-02) — `VERDICT: APPROVED`.** A verification round: the reviewer re-measured
+> D1 and D2 on Godot 4.6.3 and confirmed both fixed, and raised four non-blocking implementation
+> notes (N1–N4). **Implemented the same day** — see `5-progress.md` for how each note was handled
+> and for the three deviations the running code forced.
 
 ## Problem
 

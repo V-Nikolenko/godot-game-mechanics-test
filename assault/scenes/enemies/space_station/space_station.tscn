@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://82pgd5bowmxe"]
+[gd_scene load_steps=13 format=3 uid="uid://82pgd5bowmxe"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_ss"]
 [ext_resource type="Script" uid="uid://btfpfe0ipovkd" path="res://assault/scenes/enemies/space_station/space_station.gd" id="2_ss"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_ss"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_ss"]
 [ext_resource type="PackedScene" uid="uid://brvigjc05beif" path="res://assault/scenes/enemies/space_station/station_turret.tscn" id="6_ss"]
+[ext_resource type="Script" uid="uid://d3skhwjukmkhd" path="res://assault/scenes/enemies/space_station/station_laser_phase.gd" id="7_ss"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ss"]
 resource_local_to_scene = true
@@ -97,3 +98,6 @@ position = Vector2(-76, 76)
 
 [node name="Turret3" parent="Turrets" instance=ExtResource("6_ss")]
 position = Vector2(76, 76)
+
+[node name="LaserPhase" type="Node2D" parent="."]
+script = ExtResource("7_ss")

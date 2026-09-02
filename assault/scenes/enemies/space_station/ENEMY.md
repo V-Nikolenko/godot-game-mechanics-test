@@ -1,14 +1,19 @@
-# Space Station — Level 1 mini-boss (turret phase)
+# Space Station — Level 1 mini-boss (turret + laser phases)
 
-**Role:** Stationary cores-and-turrets mini-boss. Four turrets on a 256×256 hull, each on its own
-HP bar. The core refuses **all** damage until the last turret dies.
+**Role:** Two-phase cores-and-turrets mini-boss. Four turrets on a 256×256 hull, each on its own
+HP bar; the core refuses **all** damage until the last turret dies. Killing the last turret flips
+the fight: the hull starts rotating and firing telegraphed sweeping beams.
 **Fantasy / threat:** A fortress, not a ship. Shooting the hull sparks and does nothing, which
-teaches the rule without any UI: kill the guns first, then the core.
+teaches the rule without any UI: kill the guns first, then the core. Stripping the armour is not a
+reward — it wakes the superweapon up, and the second half is fought on the move.
 
-> **Status: EPIC sub-item 1 only — the entity exists and is destructible.** It does **not** shoot,
-> has no laser phase, and is not yet placed in a level. Sub-items 2–5 add level integration, the
-> rotating laser phase, bullet-hell + reinforcements, and the death handoff. Plan and review:
-> [`docs/plans/station-mini-boss-destructible/`](../../../../docs/plans/station-mini-boss-destructible/).
+> **Status: EPIC sub-items 1–3 done.** The entity exists and is destructible (1), gates Level 1
+> as the `station_assault` section (2), and has the rotating laser phase (3). It still has **no
+> turret fire, no bullet-hell patterns and no reinforcements** (sub-item 4), and no bespoke death
+> sequence or handoff into `planet_approach` (sub-item 5). Plans and reviews:
+> [`docs/plans/station-mini-boss-destructible/`](../../../../docs/plans/station-mini-boss-destructible/),
+> [`docs/plans/station-assault-section/`](../../../../docs/plans/station-assault-section/),
+> [`docs/plans/station-laser-phase/`](../../../../docs/plans/station-laser-phase/).
 
 ---
 
@@ -53,7 +58,9 @@ Describing the object rather than saying "top-down" is the part that actually co
 
 **Turret orientation is not wired up.** All four turrets are placed at `rotation = 0`, so the
 barrels point toward −Y (screen top, i.e. *away* from the player). Harmless today because turrets
-do not fire; EPIC sub-item 4 should set per-turret `rotation` when it adds firing.
+do not fire; EPIC sub-item 4 should set per-turret `rotation` when it adds firing. Note that during
+the laser phase the whole station rotates, so the turret **wrecks** spin with it — the authored
+`rotation = 0` is a *spawn* orientation, not a permanent one.
 
 ---
 
@@ -68,8 +75,76 @@ do not fire; EPIC sub-item 4 should set per-turret `rotation` when it adds firin
   destroyed sprite, closes its hurtbox, explodes, emits `destroyed`, and **stays in the tree as
   wreckage** — so the station reads as damaged, and the live count stays a deterministic read
   rather than a `queue_free()` frame-timing race.
+- **Phase transition.** When `live_turret_count()` reaches 0, `SpaceStation` emits the zero-argument
+  **`armor_broken`** signal, latched by `_armor_broken` so it fires exactly once. That is the only
+  laser-related thing on `space_station.gd` — all the behaviour lives on the `LaserPhase` child.
+  Sub-item 4's escalating fire should hang off the same signal rather than a second fan-out over
+  the turrets.
 - **Death.** Core death is station death: `BaseEnemy._on_health_changed` explodes and
   `queue_free()`s.
+
+---
+
+## Laser phase (`LaserPhase` → `station_laser_phase.gd`)
+
+`StationLaserPhase` is a `Node2D` child of `space_station.tscn` that owns the entire second phase:
+the trigger, the rotation, the volley cycle and the beams. Composition, per `CLAUDE.md` — the
+station is already assembled from components, and this is one more child.
+
+- **Trigger.** Connects to `SpaceStation.armor_broken`; does nothing at all before it. `is_active()`
+  is the observable.
+- **Rotation.** `_physics_process` does `_station.rotation += rotation_speed * delta` while active.
+  Constant angular velocity, no easing — a predictable sweep is what makes it dodgeable. Beams are
+  children of this node, which is a child of the station, so rotating the station sweeps every live
+  beam for free; there is no per-beam rotation code.
+- **Volleys.** The first fires immediately on `armor_broken` (waiting a full interval reads as the
+  boss having *stopped*), then every `laser_volley_interval`. Volley `k` spawns
+  `laser_beam_count` beams at local angles `_VOLLEY_ANGLES[k % 4] + i * TAU / beam_count`, where
+  `_VOLLEY_ANGLES` is `[0, PI/2, PI/4, 3PI/4]`.
+- **Deliberately no `randf()`.** Random attack ordering is the documented boss-design mistake: it
+  cannot be balanced and it cannot be tested. The station is rotating underneath anyway, so every
+  volley's *world* angle differs; the fixed list adds a second, controlled axis of variation with a
+  known value range. `test_volley_angles_are_deterministic` fails the moment someone reaches for
+  RNG.
+- **Beams** are plain `laser_ray.tscn` instances — `LaserRay` already has the telegraph, charge-up,
+  active window, auto-dissolve, the 0.1 s re-hit tick, `is_lethal_now()` and `dissolve()`. Spawned
+  with `auto_start = false`, then positioned and `start()`ed, because `auto_start` defaults to
+  **true** and an early `add_child()` telegraphs a frame at the origin with rotation 0.
+- **Teardown.** Connected to `BaseEnemy.died`: cancels the volley timer, clears `_active`, and
+  `dissolve()`s or `queue_free()`s every live beam. `BaseEnemy` frees the station in the same call,
+  so the beams would go with the subtree anyway — but a beam lethal on *that* frame would still get
+  one kill out of a corpse, and `LevelSection.ENEMIES_CLEARED` polls the container's child count,
+  so nothing this node creates may outlive the station.
+
+### ⚠️ The station's beams must not use the default hit mask
+
+`LaserRay._HIT_MASK` is `128 | 256 | 512`, and the station's own core `HurtBox` is on **layer 512**
+— deliberately kept live (see below). A beam fired from inside the hull on the default mask takes
+the station **600 → 0 HP in one frame**, i.e. the boss kills itself the instant its laser phase
+starts. Reproduced, not theorised.
+
+`_spawn_beam()` therefore sets `laser.hit_mask_override = 128` (player hurtbox only) **before**
+`add_child()`, because that is when `LaserRay._ready()` reads it. `hit_mask_override` was added to
+`laser_ray.gd` for this; `0` means "use the default", so every other caller is unchanged.
+
+The overlap is **angle-dependent**, which matters for the test: at `emitter_radius = 140` an
+axis-aligned beam starts 20 px clear of the 240×240 core hurtbox and never touches it, but the
+half-diagonal is ~170 px, so a diagonal emitter sits ~30 px *inside* the hull. Only volleys 2 and 3
+self-kill. `test_beam_does_not_damage_the_station_that_fires_it` forces volley index 2 for exactly
+that reason — on volley 0 it would pass with the fix reverted. **If the emitter is ever moved
+outside the hull on all angles, that test's health assertion goes vacuous and only its
+collision-mask assertion still bites.**
+
+### Rotation side-effects — all intended
+
+- The hull spins, and so do the four turret **wrecks**.
+- The 240×240 core `HurtBox` and the contact `HitBox` spin with it, so at 45° the corners reach
+  ~34 px beyond the axis-aligned footprint. The collision table below reads as if static; it is
+  static only during the turret phase.
+- Nothing else writes `_station.rotation`: the station's wave entry has no `.move()`, so
+  `WaveManager` attaches no `EnemyPathMover` and never sets rotation itself.
+
+If the sweep reads badly in play, `laser_rotation_speed` is the single knob.
 
 ---
 
@@ -162,6 +237,25 @@ ShipConfig`, so the first four are inherited.
 | `score_value` | `1000` | Awarded on core death via `BaseEnemy.died`. |
 | `counts_toward_wave_clear` | `true` | Inherited; no effect until the station is spawned through `WaveManager`. |
 | `turret_health` | `120` | HP of **each** turret. `SpaceStation._ready()` writes it into every turret's `Health` (children ready before parents). |
+| `laser_warn_duration` | `1.4` | Seconds the beam holds its warning line. Time-to-lethal is `warn + ~0.56 s` (the `laser_increase` charge-up), so ~**1.9–2.0 s** of tell, measured across runs at process-frame granularity. ~6× the 0.3 s human reaction floor. Deliberately shorter than the 3.0 s Level 1's static laser columns use, which would not fit twice inside a volley cycle. |
+| `laser_active_duration` | `2.0` | Seconds the beam stays lethal once armed. |
+| `laser_volley_interval` | `6.5` | Volley start to volley start. Must exceed the full beam lifetime (`warn + 0.56 + active + 0.84` dissolve ≈ **4.8 s**), leaving ~1.7 s of clear screen. |
+| `laser_rotation_speed` | `0.5` | Radians/second the whole station rotates while the phase is active (~29°/s). At the ~400 px the player sits from the station the beam edge moves ~200 px/s — half the player's 400 px/s top speed (`move_state.gd:21`). One 2.0 s active window sweeps ~57°. |
+| `laser_beam_count` | `2` | Beams per volley, spread evenly. Two opposed beams sweep the plane while always leaving two large clear quadrants. |
+
+**The laser timings are read exactly once**, by `StationLaserPhase._ready()`, which copies them
+into its own fields; nothing reads `config` afterwards. That is not a micro-optimisation —
+`space_station.gd` `load()`s the `.tres` and `ResourceLoader` caches, so **every `SpaceStation` in
+the process shares one `SpaceStationConfig`**, and it is the same object `preload()` hands a test.
+Reading through it at runtime is reading mutable global state; a test writing to it to shorten the
+timings would permanently rewrite the shipped values for the rest of the process. Tests override
+the **phase node's** fields instead. The phase's own field defaults are a conservative fallback for
+a null config (longer telegraph, shorter lethal window, no rotation, one beam) and are
+intentionally different from the `.tres`, which is what stops the config test passing vacuously.
+
+`laser_emitter_radius` is deliberately **not** in the config — it is scene geometry, not a stat, so
+it is `@export var emitter_radius: float = 140.0` on `StationLaserPhase`, in final on-screen pixels
+like everything else inside this scene.
 
 There is no export for the turret count — turrets are authored as scene children under `Turrets`,
 so adding or removing one is a scene edit. `live_turret_count()` reads the container live, so it
@@ -200,14 +294,19 @@ penalty. That is a safety net, not a balance number.
 ```
 space_station/
 ├── ENEMY.md                    ← this file
-├── space_station.tscn          SpaceStation + 4 instanced turrets
+├── space_station.tscn          SpaceStation + 4 instanced turrets + LaserPhase
 ├── space_station.gd            SpaceStation (extends BaseEnemy)
 ├── space_station_config.gd     SpaceStationConfig (extends ShipConfig)
 ├── space_station_config.tres
 ├── station_turret.tscn
-└── station_turret.gd           StationTurret (Node2D)
+├── station_turret.gd           StationTurret (Node2D)
+└── station_laser_phase.gd      StationLaserPhase (Node2D) — the second phase
 ```
 
 Sprites: `assault/assets/sprites/enemies/station_core.png`, `station_turret.png`,
-`station_turret_destroyed.png`.
-Tests: `tests/integration/test_space_station.gd`.
+`station_turret_destroyed.png`. The laser phase adds **no new art** — it reuses
+`assault/scenes/hazards/laser_ray/laser_ray.tscn`'s existing frames.
+Tests: `tests/integration/test_space_station.gd` (armour rule, turret lifecycle, config),
+`tests/integration/test_station_laser_phase.gd` (trigger, telegraph window, self-damage
+regression, rotation rate, volley determinism, teardown, config),
+`tests/integration/test_laser_ray_hit_mask.gd` (the shared `LaserRay` export).

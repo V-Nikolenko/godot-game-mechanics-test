@@ -21,9 +21,29 @@ extends BaseEnemy
 ## that proves the core is armoured rather than merely unhittable.
 signal armor_deflected(damage: int)
 
+## Emitted exactly once, the moment the last turret dies and the core stops being armoured.
+## The phase-transition hook: `StationLaserPhase` starts the laser phase on it, and sub-item 4's
+## escalating fire will hang off the same signal rather than a second fan-out over the turrets.
+##
+## Station-level rather than per-turret because the station owns the armour rule
+## (`is_armored()` / `live_turret_count()`), so the *transition* is station-level knowledge.
+##
+## Zero arguments, deliberately — see the `Health.amount_changed` trap in `tests/README.md`,
+## where a signal declared with zero parameters is emitted with one and every zero-arg handler
+## raises an engine error.
+signal armor_broken
+
 @export var config: SpaceStationConfig = load("res://assault/scenes/enemies/space_station/space_station_config.tres")
 
 @onready var turret_root: Node2D = $Turrets
+
+## Latches true when `armor_broken` fires, so it fires exactly once.
+##
+## Its job is idempotence against re-entry through `destroyed` itself — a re-emit from a future
+## caller, or a repairable/respawning turret driving the live count 0 -> 1 -> 0. It is NOT about
+## the `Health` 0 -> 0 re-emit trap: `StationTurret._on_received_damage` already returns early
+## when `not _alive`, so damage aimed at a dead turret never reaches `Health` at all.
+var _armor_broken: bool = false
 
 
 func _ready() -> void:
@@ -33,6 +53,11 @@ func _ready() -> void:
 	## NOT what drives LevelSection.ENEMIES_CLEARED — level_director.gd:106 polls
 	## wave_manager.enemy_container's child count instead.
 	add_to_group("enemies")
+
+	## Same child-before-parent ordering the config block below relies on: every turret has
+	## already run its own _ready(), so `destroyed` is safe to connect here.
+	for t in _turrets():
+		t.destroyed.connect(_on_turret_destroyed)
 
 	if config:
 		health.max_health = config.max_health
@@ -76,6 +101,17 @@ func live_turret_count() -> int:
 
 func is_armored() -> bool:
 	return live_turret_count() > 0
+
+
+## Takes the turret argument `StationTurret.destroyed` is declared AND emitted with — unlike
+## `Health.amount_changed`, the two agree here, so a one-arg handler is the correct shape.
+func _on_turret_destroyed(_turret: StationTurret) -> void:
+	if _armor_broken:
+		return
+	if live_turret_count() > 0:
+		return
+	_armor_broken = true
+	armor_broken.emit()
 
 
 ## Override: refuse damage to the core while any turret lives, but still register the hit.

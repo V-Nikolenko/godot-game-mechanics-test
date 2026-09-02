@@ -217,6 +217,11 @@ the same `WaveManager`/`WaveBuilder` path as enemies (`b.big_asteroid()`, `b.las
 etc.). For per-hazard detail, see the source folders under `assault/scenes/hazards/<type>/`
 (each has its `.gd` + `.tscn`).
 
+`LaserRay` is also used **outside** the wave path, as a component: the race gauntlet instances it
+with `race_hazard`/`loop`, and the space station's `StationLaserPhase` spawns it per volley. Its
+`hit_mask_override` export exists for that second case — see
+[`laser_ray/HAZARD.md`](../../../assault/scenes/hazards/laser_ray/HAZARD.md).
+
 ### Enemies
 
 Source: `assault/scenes/enemies/`.
@@ -239,6 +244,24 @@ as a single zero-delay wave with no `MovementResource` — a spawn delay would l
 fire before the station existed, and a movement resource would attach an `EnemyPathMover` that
 frees it on screen exit. Behaviour, the collision-layer rules and the known test-coverage gap:
 [`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md).
+
+It has **two phases**. Killing the last turret makes `SpaceStation` emit `armor_broken` (a
+zero-argument signal, latched so it fires exactly once), which starts **`StationLaserPhase`** — a
+`Node2D` child of the scene, `station_laser_phase.gd`, that owns the whole second phase and keeps
+`space_station.gd` free of laser logic. It rotates the station at a constant
+`laser_rotation_speed` and fires volleys of `laser_ray.tscn` beams from a fixed, **deterministic**
+angle list (never `randf()` — random attack ordering cannot be balanced or tested; the rotating
+hull already varies the world angle). Beams are children of the phase node, so rotating the
+station sweeps them for free. All five timings live in `space_station_config.tres` and are
+**copied into the phase's own fields in `_ready()`** — that `.tres` is a single process-wide
+instance, so reading through it at runtime would be reading mutable global state.
+
+⚠️ **A station beam must not use `LaserRay`'s default hit mask.** `_HIT_MASK` is
+`128 | 256 | 512`, and the station's own core `HurtBox` is on layer 512, so a beam fired from
+inside the hull takes the boss 600 → 0 HP in one frame. `StationLaserPhase` sets
+`LaserRay.hit_mask_override = 128` before `add_child()`. See
+[`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md) for why the
+regression test has to force a *diagonal* volley to catch it.
 
 **`LevelSection.enemies_cleared_timeout`** is the safety net for `ENEMIES_CLEARED`: seconds to
 wait for `enemy_container` to empty before giving up. It defaults to `10.0` — the constant it

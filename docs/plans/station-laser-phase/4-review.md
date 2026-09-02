@@ -376,3 +376,116 @@ Nothing that was right in revision 0 was broken by revision 1.
 
 Only D1 and D2, plus the four nits (D3–D5, the 1.96→1.89 restatement, the unreachable
 fifth-turret example). No new research, no design change. Fix those and this is approved.
+
+---
+
+VERDICT: APPROVED
+
+# Review round 3 — revision 2 of `3-plan.md`
+
+Verification round only, as scoped. **D1 and D2 are both genuinely fixed**, the four nits are
+folded in, and revision 2 broke nothing that rounds 1 and 2 signed off. I re-measured D1 and D2 on
+this machine (Godot v4.6.3.stable) with throwaway scripts, deleted afterwards; the working tree is
+clean. Implementation can start.
+
+## D1 — shared `SpaceStationConfig` — **fixed**, and §3a's ordering claim holds
+
+- `assault/scenes/enemies/space_station/space_station.gd:24` is exactly what §3a quotes
+  (`@export var config: SpaceStationConfig = load("res://…space_station_config.tres")`), and
+  `space_station.tscn` stores **no** `config` override (grep for `config` in the scene returns only
+  the four `Turret*` instance lines). The sharing hazard is real and reproduced:
+
+  ```
+  shared instance a==b: true   a==preload: true
+  after mutating a.config -> b.config.turret_health=7   preload.turret_health=7
+  ```
+
+- **Node-ordering claim verified, both halves.** (i) Child-before-parent: a bare parent/child pair
+  prints `CHILD _ready` then `PARENT _ready`. (ii) `config` is initialised before any `_ready()`:
+  I instantiated `space_station.tscn`, attached a probe `Node2D` as a child (mimicking `LaserPhase`
+  authored in the scene), added the station to the tree, and the probe's `_ready()` read
+  `station.config != null` with `turret_health=120`, `max_health=600`, and
+  `station.config == probe.seen_config` afterwards. So §3a's copy-in-`_ready()` gets the real
+  resource. `space_station.gd:41-42`'s own comment already relies on the same ordering.
+- **Nothing else reads `config` at volley time.** `grep -n 'cfg\.\|station\.config\|config\.'` over
+  `3-plan.md` returns `cfg.*` only inside the §3a `_ready()` snippet (`:210-216`); the spawn snippet
+  (`:280-286`) reads the phase's own fields with an explicit "never `cfg.*`" comment, §5 (`:291`)
+  the same, the test plan (`:373`) forbids writing `station.config`, and the risk row (`:411`)
+  restates it. Test 7 (`:397`) and test 10 (`:400`) *read* config values but never write.
+- **No spawn-path hazard from the copy timing:** `wave_manager.gd:177-181` applies all `on_spawned`
+  props **before** `add_child`, so nothing can swap `config` after the phase has copied it.
+
+## D2 — test `interval 2.5` vs beam lifetime — **fixed**
+
+Durations confirmed in the scene: `laser_dissolve` is 7 frames × `duration 0.6` at `speed 5.0`
+(`laser_ray.tscn:131-152`, speed at `:155`) = **0.84 s**; `laser_increase` 7 × 0.4 / 5.0 = **0.56 s**
+(`:195-219`); `laser_init` 1 × 1.0 / 5.0 = **0.2 s** (`:221-227`). Beams `queue_free()` themselves
+at the end of dissolve when `loop == false` (`laser_ray.gd:205-212`), so child-count assertions are
+meaningful. Measured at the plan's **test** timings, four runs:
+
+```
+warn=0.20 active=0.30 -> lethal_ms=753  full_lifetime_ms=1891
+warn=0.20 active=0.30 -> lethal_ms=765  full_lifetime_ms=1903
+warn=0.20 active=0.30 -> lethal_ms=765  full_lifetime_ms=1904
+warn=0.20 active=0.30 -> lethal_ms=765  full_lifetime_ms=1903
+```
+
+`interval 2.5 > 1.904` with ~0.6 s of margin, so the shipped `interval > lifetime` invariant that
+tests 2 and 8 depend on is preserved in the test configuration. Confirmed fixed.
+
+## Nits D3, D4, D5 and the two restatements — all folded in
+
+- **D3** — `3-plan.md:353-357`: step 2 now gets test 3 plus an `armor_broken`-only version of test
+  1's negative case, and step 4 (`:360-361`) carries "Tests 1, 2 and 4–9". ✓
+- **D4** — `3-plan.md:318` now cites `base_enemy.gd:4, :71`. Verified: `:4` is `signal died`, `:71`
+  is `died.emit()` (`assault/scenes/enemies/base_enemy.gd`). ✓
+- **D5** — `3-plan.md:170` now cites `laser_ray.tscn:131-152` for the seven `duration` entries and
+  `:155` for `speed = 5.0`. Both exact. ✓
+- **Restatement 1** (1.96 → measured) — present at `:168` as "≈1.9–2.0 s … measured 1891 ms". ✓
+  (see non-blocking note N1 on the number itself).
+- **Restatement 2** (unreachable fifth turret) — `:82-85` now names the example as the reviewer's
+  rejection and replaces it with the reachable repairable/respawning 0 → 1 → 0 case. ✓
+
+## Not broken by revision 2
+
+Spot-checked every citation revision 2 touches or re-states, all correct: `laser_ray.gd:38`
+(`auto_start` default true), `:68` (`_HIT_MASK = 128|256|512`), `:103` (`_ready()` mask assignment),
+`:147-152` (`_build_collision`, rect at `(0, length*0.5)`), `:155-161` (`start()` plays `laser_init`
+and creates the warn timer in the same call), `:246-254` (`_on_area_entered`);
+`space_station.tscn:68-71` core HurtBox `collision_layer = 512` with the shared 240×240
+`RectangleShape2D_ss` (`:16-17`), so `Vector2(0,140).rotated(PI/4) = (-99,99)` is inside ±120 and
+test 6's forced diagonal still bites; `station_turret.gd:45-47` `_alive` early return and `:13`
+`signal destroyed(turret)`; `space_station.gd:37-45`, `:69`, `:77-78`;
+`level_1_director.gd:159-165` (the exact `auto_start=false` → exports → `add_child` → transform →
+`start()` sequence the plan copies) and `:239` (station wave with no `.move()`);
+`wave_manager.gd:172`, `:194-196`; `tests/README.md:16` and `:81-84`. The design items rounds 1–2
+settled are untouched.
+
+## Non-blocking — for the implementation session, not a gate
+
+- **N1. The "1891 ms" figure does not reproduce here; the linear 1966 ms does.** Three runs at the
+  shipped `warn 1.4 / active 2.0` gave `lethal_ms = 1958 / 1966 / 1972` and
+  `full_lifetime_ms = 4794 / 4802 / 4816`. So `3-plan.md:168`'s "measured 1891 ms, **not** the 1966
+  ms a linear extrapolation gives" is the reverse of what I see, and `:170`'s 4727 ms lifetime
+  (⇒ "1.77 s of clear screen") is really ~4.80 s (⇒ ~1.70 s clear). Both still land inside the
+  bands the design rests on — `warn 1.4` gives 1.9–2.0 s to lethal, and `interval 6.5` still clears
+  the beam with ~1.7 s to spare — so nothing changes. When step 5's docs are written, state it as a
+  range ("1.89–1.97 s across runs, process-frame granularity") rather than a fourth precise number.
+- **N2. Test 10 is identity-vacuous if written against `station.config`.** `station.config` **is**
+  the object `preload("…space_station_config.tres")` returns (measured above), so
+  `station.config.laser_warn_duration == preload(tres).laser_warn_duration` is trivially true. After
+  §3a the assertion that actually bites is on the **phase node's copied fields** vs the `.tres`
+  values — that is what pins the copy. Keep the "must differ from the script defaults" clause either
+  way; it is what stops the second half going vacuous too.
+- **N3. §3a's `if cfg != null:` leaves the five fields at 0.** With a null config the phase would
+  have `volley_interval = 0.0` and `beam_count = 0` — a zero wait-time timer is an error path, not a
+  graceful degrade. Unreachable in practice (the `@export` has a hard default and the scene stores
+  no override), but the cheap fix is to give the phase fields the same defaults as the config
+  script, or to `set_physics_process(false)` and skip the connect when `cfg == null`, exactly as the
+  not-a-`SpaceStation` guard does.
+- **N4. Test 8 now costs ~20 s of wall clock** (2 stations × 4 volleys × 2.5 s) — a direct
+  consequence of the correct D2 fix. If that drags the gate, the volley angle sequence can be
+  sampled by setting `_volley_index` and driving one volley per index instead of waiting out four
+  intervals; the determinism assertion is unchanged. Implementer's choice, not a required edit.
+
+Nothing above blocks. **Approved — implement.**

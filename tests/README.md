@@ -100,3 +100,28 @@ lifecycle, and the config-driven stats.
 Levels: the `station_assault` section (`integration/test_station_assault_section.gd`) — the
 `ENEMIES_CLEARED` gate, the per-section timeout and its free-on-expiry path, and Level 1's
 section order and station wave.
+Hazards: `LaserRay.hit_mask_override` (`integration/test_laser_ray_hit_mask.gd`) — pins the shared
+default mask `128 | 256 | 512` so the race hazards and Level 1's laser columns cannot be silently
+narrowed, and pins that `0` means "use the default" rather than "collide with nothing".
+Entities, phase 2: the station laser phase (`integration/test_station_laser_phase.gd`) — the
+`armor_broken` trigger and its once-only guard, the telegraph window (a beam damages a real
+layer-128 probe HurtBox only after it arms, never during the warning), the self-damage regression,
+the rotation rate, volley determinism, teardown on boss death, and the config copy.
+
+### Three traps `test_station_laser_phase.gd` had to work around
+
+- **`SpaceStation.config` is a single process-wide object.** `space_station.gd` `load()`s the
+  `.tres` and `ResourceLoader` caches, so every station in the process shares it — and it is the
+  same object `preload()` hands the test. Writing to it to shorten the laser timings permanently
+  rewrites the shipped values for every later test in the run. Override the **`LaserPhase` node's**
+  own fields instead; it copies the config in `_ready()` and never reads it again.
+- **`ExplosionEffect.explode()` parents its `CPUParticles2D` to `actor.get_parent()`** and lets it
+  self-free on `finished` ~1 s later. A station added straight to the test script therefore leaves
+  particles behind as unfreed children when the test that kills the core returns
+  (`GUT WARNING: Test script has 2 unfreed children`). Parent entities that will die to a
+  container `Node2D` that `add_child_autofree` owns — which is also how they are really parented,
+  under `WaveManager.enemy_container`.
+- **A beam's full lifetime is longer than it looks.** At `warn 0.2 / active 0.3` it is ~1.9 s, not
+  0.5: `warn` + a ~0.56 s `laser_increase` charge-up + `active` + a 0.84 s dissolve. Any test
+  volley interval must exceed it, or a second volley spawns while the first is still dissolving and
+  the child-count assertions become false rather than merely flaky.

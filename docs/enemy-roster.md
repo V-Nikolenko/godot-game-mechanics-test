@@ -498,6 +498,12 @@ exactly once, by the `station_assault` section of Level 1, as
   land, so a delayed boss lets an `ENEMIES_CLEARED` section see an empty container and advance
   instantly.
 - **No `.move()`.** A `MovementResource` attaches an `EnemyPathMover`, which would free the boss
-  on screen exit mid-fight.
+  on screen exit mid-fight. This is now doubly load-bearing: the laser phase writes
+  `station.rotation` directly, so an `EnemyPathMover` would also be fighting it for control.
+
+It has a **second phase**: once the last turret dies the station rotates and fires telegraphed
+`LaserRay` volleys (`StationLaserPhase`). Nothing about spawning changes, but the boss stops being
+a stationary target, and its rotating 240×240 core hurtbox sweeps ~34 px past its axis-aligned
+footprint at 45°.
 
 Behaviour and constraints: [`space_station/ENEMY.md`](../assault/scenes/enemies/space_station/ENEMY.md).

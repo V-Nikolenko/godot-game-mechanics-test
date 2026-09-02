@@ -177,20 +177,28 @@ and only when the station is destroyed does the level continue to the planet.
       round 1's blocking finding — see *Discovered*; that reversal is the most useful thing this
       cycle produced.
 
-- [ ] **3. Laser phase.** Once all turrets are destroyed, the station rotates and fires
+- [x] **3. Laser phase.** Once all turrets are destroyed, the station rotates and fires
       `LaserRay` beams at varying positions, forcing the player to keep moving. Beams must
       telegraph before they damage (`warn_duration`) — an instant-kill beam with no tell is
       unfair, and research should set the actual timing.
       *Done when:* a test proves the phase only starts after the last turret dies, and that a
       beam damages the player only during its active window, not its warning window.
-      **In progress 2026-09-02 — BLOCKED at plan review, no code written.** Context, research and
-      a twice-revised plan are in `docs/plans/station-laser-phase/`. The independent reviewer
-      returned CHANGES_REQUESTED in both rounds (the `feature-workflow` maximum), so
-      implementation did not start. Round 1 caught that the headline "the boss must not kill
-      itself with its own beam" test **could not fail** as specified; round 2 caught that the test
-      plan would have clobbered the shared config `.tres`. Both are fixed in revision 2, and
-      round 2 closed with "the design is settled... round 3 needs only D1, D2 and the nits — no new
-      research, no design change". **Next cycle: one short round-3 review, then implement.**
+      **Done 2026-09-02.** New `StationLaserPhase` (`station_laser_phase.gd`, wired into
+      `space_station.tscn` as `LaserPhase`), a zero-arg `SpaceStation.armor_broken` signal with a
+      once-only latch, five laser fields on `SpaceStationConfig` + the `.tres`, and an additive
+      `LaserRay.hit_mask_override` export. `tests/integration/test_station_laser_phase.gd`
+      (12 tests) + `test_laser_ray_hit_mask.gd` (4 tests). Gate green: 21 scripts / 188 tests /
+      605 asserts.
+      Plan + **three** review rounds: `docs/plans/station-laser-phase/`. Rounds 1 and 2 were
+      CHANGES_REQUESTED and were worth every minute — round 1 caught that the headline "the boss
+      must not kill itself with its own beam" test **could not fail** as specified (only the
+      *diagonal* volley angles overlap the core hurtbox), and round 2 caught that the test plan
+      would have clobbered the process-wide shared config `.tres`. Round 3 verified both fixes at
+      runtime and approved.
+      Two things a future cycle should not have to rediscover: the station's beams **must** set
+      `hit_mask_override = 128` before `add_child()` or the boss kills itself in one frame
+      (`600 → 0 HP`, reproduced), and the volley angles are a fixed list, never `randf()` — random
+      attack ordering cannot be balanced or tested.
 
 - [ ] **4. Bullet hell + reinforcements.** During the fight, existing enemy ships fly in from the
       sides, top and bottom. Turrets and station fire bullet-hell patterns.
@@ -442,3 +450,26 @@ at runtime by the plan reviewer on Godot 4.6.3, not inferred.
       `docs/plans/station-laser-phase/3-plan.md`), or move them under `tests/` so the gate keeps
       them honest. They are genuinely useful as fixtures: they demonstrate the layer-128 stub
       `HurtBox`, `wait_seconds` beam stepping, and the self-kill reproduction.
+
+Found on 2026-09-02 while implementing the station laser phase (EPIC sub-item 3).
+
+- [ ] **`ExplosionEffect` orphans its particles onto whatever the dying entity's parent is.**
+      `global/components/explosion_effect.gd:28-52` adds the `CPUParticles2D` to
+      `actor.get_parent()` and relies on `p.finished.connect(p.queue_free)` to clean up ~1 s later.
+      In-game that parent is `WaveManager.enemy_container`, so it is harmless. In a test it is
+      whatever node the test used, and any test that kills an entity added straight to the test
+      script ends with `GUT WARNING: Test script has 2 unfreed children`. Worked around in
+      `tests/integration/test_station_laser_phase.gd` by parenting through a container `Node2D`
+      (documented in `tests/README.md`), but the component itself would be tidier if the particles
+      were parented to the entity's *owner-scene* root, or if `explode()` took an explicit
+      container. Worth deciding before sub-item 4 adds many more deaths per fight.
+
+- [ ] **The station's collision-layer coverage gap is now only half open.**
+      `assault/scenes/enemies/space_station/ENEMY.md` records that
+      `tests/integration/test_space_station.gd` drives damage by emitting `received_damage`
+      directly and so proves nothing about collision layers.
+      `tests/integration/test_station_laser_phase.gd` does now exercise a **real** physics overlap
+      — a layer-128 stub `HurtBox` placed in a beam's path, found by the beam's own `Area2D` — but
+      only for the *player* layer and only against a `LaserRay`. Nothing yet proves a player
+      **bullet** can hit the core's layer-512 hurtbox or a turret's. Closing it still needs a test
+      that instances `assault/scenes/projectiles/bullets/bullet.tscn` and steps physics.

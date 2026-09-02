@@ -34,9 +34,9 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
   pins today's behaviour, bugs included. The exceptions are
   `tests/integration/test_resource_uid_integrity.gd`, an invariant check over `[ext_resource]`
-  UIDs, and `tests/integration/test_space_station.gd` +
-  `tests/integration/test_station_assault_section.gd`, which cover new code and so assert
-  intent. **Read [`tests/README.md`](tests/README.md) before writing a
+  UIDs, and the space-station family — `tests/integration/test_space_station.gd`,
+  `test_station_assault_section.gd`, `test_station_laser_phase.gd` and
+  `test_laser_ray_hit_mask.gd` — which cover new code and so assert intent. **Read [`tests/README.md`](tests/README.md) before writing a
   test** — it covers the `user://` save-file sandbox, the zero-parameter-signal trap, and the
   `LevelDirector` coroutine-leak trap, all of which cause failures (or silent leaks) unrelated to
   the code under test.

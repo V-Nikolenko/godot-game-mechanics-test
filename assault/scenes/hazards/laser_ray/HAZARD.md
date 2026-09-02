@@ -18,6 +18,7 @@
 | `auto_start` | true |
 | Re-hit tick | every 0.1 s while idle/active |
 | Hit mask | 128 \| 256 \| 512 (player + code-set enemy + .tscn enemy/asteroid hurtboxes) |
+| `hit_mask_override` | 0 = use the mask above. Non-zero **replaces** it — see below. |
 | Sprite | `giant_lasser.png` (128×128 atlas frames) |
 | Scene | `laser_ray.tscn` (+ `laser_wall.tscn` variant) |
 
@@ -38,6 +39,20 @@
 **How it is destroyed.** The laser is never killed by damage — it self-terminates: either `active_duration` elapses, or an external `LevelDirector` calls `dissolve()` while IDLE. Both route through `_begin_dissolve` → dissolve animation → `queue_free()`.
 
 **`laser_wall.tscn` variant.** Composes 12 `laser_ray` instances spaced 56 px apart (positions 28 → 644 px), each with `warn_duration = 3.0`, forming a solid wall of beams across the play-field that telegraphs for 3 seconds before going live — a dodge-the-gap set-piece rather than a single ray.
+
+---
+
+## `hit_mask_override` — for emitters mounted on an entity
+
+The default `_HIT_MASK` (`128 | 256 | 512`) covers **every** known HurtBox layer, which is right for a hazard sitting in the play-field and wrong for a beam fired *by* something. Layer 512 is where most enemies' scene-authored hurtboxes live, including the space station's core — so a `LaserRay` spawned inside its own emitter's hull kills the emitter. Measured on the station: `[Health] SpaceStation took 9999 damage: 600 → 0 HP`, one frame after the laser phase starts.
+
+`@export_flags_2d_physics var hit_mask_override: int = 0` replaces the whole mask when non-zero. `StationLaserPhase` sets `128` (player hurtbox only). Three rules:
+
+- **It must be assigned BEFORE `add_child()`** — `_ready()` is what reads it. The export makes the requirement a declarative, directly assertable property of the beam rather than a silent ordering dependency on writing `$HitZone.collision_mask` after the fact.
+- **`0` means "use the default", not "collide with nothing".** A beam that collides with nothing is inert, and that is not a configuration anyone wants.
+- **It replaces the mask; it does not OR into it.**
+
+Pinned by `tests/integration/test_laser_ray_hit_mask.gd`, which exists mainly to stop the *default* being silently narrowed — the race hazards and Level 1's laser columns all need the full `128 | 256 | 512`.
 
 ---
 

@@ -120,6 +120,13 @@ until every turret is destroyed. It is placed in Level 1 by the `station_assault
 cannot continue until the station is destroyed. See
 [`space_station/ENEMY.md`](../../assault/scenes/enemies/space_station/ENEMY.md).
 
+It is also the project's first **two-phase** entity. Killing the last turret emits `armor_broken`,
+which starts `StationLaserPhase` — a child node that rotates the station and fires telegraphed
+`LaserRay` volleys. The phase is a separate node rather than states on `space_station.gd`
+(composition) and rather than a `global/statemachine/` `State` per phase: the transition is
+one-way and there are only two phases, and this project reserves the node-per-file state machine
+for genuinely complex entities. Revisit if a third phase appears.
+
 For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-roster.md).
 
 ---
