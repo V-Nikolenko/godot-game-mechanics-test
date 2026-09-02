@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://82pgd5bowmxe"]
+[gd_scene load_steps=16 format=3 uid="uid://82pgd5bowmxe"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_ss"]
 [ext_resource type="Script" uid="uid://btfpfe0ipovkd" path="res://assault/scenes/enemies/space_station/space_station.gd" id="2_ss"]
@@ -7,6 +7,9 @@
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_ss"]
 [ext_resource type="PackedScene" uid="uid://brvigjc05beif" path="res://assault/scenes/enemies/space_station/station_turret.tscn" id="6_ss"]
 [ext_resource type="Script" uid="uid://d3skhwjukmkhd" path="res://assault/scenes/enemies/space_station/station_laser_phase.gd" id="7_ss"]
+[ext_resource type="Script" uid="uid://kvgsxhn0cac7" path="res://global/components/bullet_pool.gd" id="8_ss"]
+[ext_resource type="PackedScene" uid="uid://wi7ci5dkn7k7" path="res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn" id="9_ss"]
+[ext_resource type="Script" uid="uid://0dk0toyoxowg" path="res://assault/scenes/enemies/space_station/station_gunnery.gd" id="10_ss"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ss"]
 resource_local_to_scene = true
@@ -101,3 +104,26 @@ position = Vector2(76, 76)
 
 [node name="LaserPhase" type="Node2D" parent="."]
 script = ExtResource("7_ss")
+
+; A DIRECT child of SpaceStation, deliberately. bullet_pool.gd:47 hardcodes its container as
+; get_parent().get_parent(), so only this placement resolves to enemy_container and puts
+; in-flight bullets in world space. Under Gunnery or Turrets it would resolve to the station
+; itself, and LaserPhase rotates the hull, so the whole bullet field would swing with it.
+;
+; pool_size 48: phase 1 peaks at 4 turrets x 3 bullets / 1.8 s = 6.7/s, and a bullet needs ~4.1 s
+; to reach the arena bound (~984 px at 240 px/s from the station at world (640, 180)), so ~27 in
+; flight. Phase 2 adds 10 per 2.0 s at 210 px/s, ~23 in flight. The phases OVERLAP at the
+; handover — turret bullets live ~4.1 s and the first ring lands 2.0 s after armor_broken — so
+; the real peak is ~27 leftovers + 10 = ~37, not max(27, 23). 48 leaves ~11 of headroom.
+[node name="BulletPool" type="Node" parent="."]
+script = ExtResource("8_ss")
+bullet_scene = ExtResource("9_ss")
+pool_size = 48
+metadata/_custom_type_script = "uid://kvgsxhn0cac7"
+
+; node_paths= is REQUIRED. Without it the text scene format leaves the exported node reference
+; null, prints no error, and the gate stays green — only the script's get_node_or_null fallback
+; would save it.
+[node name="Gunnery" type="Node2D" parent="." node_paths=PackedStringArray("bullet_pool")]
+script = ExtResource("10_ss")
+bullet_pool = NodePath("../BulletPool")

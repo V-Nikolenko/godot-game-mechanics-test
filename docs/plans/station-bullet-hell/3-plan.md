@@ -289,7 +289,11 @@ Sparen A4 explicitly refuses to give a threshold. Labelled a judgement call, per
 
 ## Test plan
 
-Two files, 23 tests. Every assertion below is one that can actually go red.
+Two files, 25 tests (9 + 16 as enumerated below — the "23" this line carried was a stale count,
+review non-blocking item 1). As built it is 26: `test_radial_attack_pattern.gd` gained an 11th
+case, `test_a_zero_bullet_count_fires_nothing`, recorded in `5-progress.md`.
+
+Every assertion below is one that can actually go red.
 
 **Scope discipline (review):** two tests from the previous draft are cut rather than carried. The
 station-bullets-cannot-hit-the-station layer assertion is gone (it re-reads two scene files and has

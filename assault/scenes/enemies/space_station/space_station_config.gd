@@ -48,3 +48,63 @@ extends ShipConfig
 ## Beams fired per volley, spread evenly around the station. Two opposed beams sweep the plane
 ## while always leaving two large clear quadrants.
 @export var laser_beam_count: int = 2
+
+## ── Gunnery (EPIC sub-item 4a) ────────────────────────────────────────────────
+##
+## Read ONCE by `StationGunnery._ready()`, which copies them into its own fields and never reads
+## this resource again — same discipline as the laser block above, and for the same reason: this
+## `.tres` is a single process-wide instance, so anything reading through it at runtime is
+## reading mutable global state.
+##
+## The two `spawn_radius` values are NOT here — they are scene geometry, not stats, so they live
+## as exports on the gunnery node, exactly as `laser_emitter_radius` does on the phase node.
+
+## Seconds between turret volleys. All live turrets fire on the same tick: a legible chunk beats
+## four independently drifting cadences, and it makes "one fewer gun" instantly readable. At full
+## strength this is 4 turrets x 3 bullets / 1.8 s = 6.7 bullets/s, decaying to 1.7 with one gun.
+@export var turret_fire_interval: float = 1.8
+
+## Bullets in each turret's fan. Three is the smallest chunk that reads as a line rather than a
+## stray shot.
+@export var turret_burst_count: int = 3
+
+## Angular width of each turret's fan, in radians (~20 deg). Wide enough that strafing does not
+## dodge all three, narrow enough to still read as one fan.
+@export var turret_burst_arc: float = 0.35
+
+## Damage per turret bullet. Between the interceptor's 4 and the gunship's 15 — four turrets
+## firing at once must not out-damage the station's own 40-damage contact hit.
+@export var turret_bullet_damage: int = 12
+
+## Turret bullet speed (px/s). 60 % of the player's 400 px/s top speed (`move_state.gd:21`),
+## inside the shipped 220-260 band.
+@export var turret_bullet_speed: float = 240.0
+
+## Seconds between core rings, once the armour is broken. Ten bullets per ring = 5 bullets/s,
+## running alongside the 6.5 s laser cycle, so the combined phase-2 attack changes every ~2 s.
+@export var core_ring_interval: float = 2.0
+
+## Bullets per core ring. Spacing is TAU/10 = 36 deg; at 300 px from the hull that is a ~188 px
+## gap, dodgeable at the player's 400 px/s.
+@export var core_ring_count: int = 10
+
+## Radians the ring's base angle advances between rings, so successive rings do not re-tread the
+## same radial lanes and leave a permanent safe lane.
+##
+## Derived from the golden angle: `spacing * 0.381966` = `(TAU/10) * 0.381966` = 0.24, i.e. a
+## spacing-to-step ratio of 2.618. The golden ratio is the irrational least well approximated by
+## small rationals, which is exactly the "maximal lane coverage per ring" property wanted here.
+##
+## This value was 0.21 during planning and that was WRONG: 3 x 0.21 = 0.63 against a 0.6283
+## spacing, so the ring collapsed onto three lanes and stayed there. Measured over 20 rings, 0.21
+## leaves a largest lane gap of 31.8 % of the spacing; 0.24 leaves 9.0 %.
+## `test_station_gunnery.gd` pins this — do not "tidy" it to a round fraction of TAU.
+@export var core_ring_step: float = 0.24
+
+## Damage per core ring bullet. Lower than the turret fan: ring bullets cannot be avoided by
+## position alone, so they hit softer.
+@export var core_bullet_damage: int = 10
+
+## Core bullet speed (px/s). 52 % of player speed — the slowest of the three, because phase 2
+## already has sweeping beams to dodge.
+@export var core_bullet_speed: float = 210.0

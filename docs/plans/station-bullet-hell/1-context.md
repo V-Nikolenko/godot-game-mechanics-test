@@ -104,9 +104,18 @@ Consequences for this feature, all load-bearing:
   hold the section open. `BulletPool._exit_tree()` frees every active bullet when the pool leaves
   the tree, and the pool leaves the tree with the station, so a dead boss cleans up after itself.
 
-The gunnery node therefore creates the pool and adds it to its *parent*. The alternative — a new
-`container_override` export on `BulletPool` — was considered and rejected as a wider blast radius
-(a shared component used by five other ships) for no gain here.
+The pool is therefore **authored in `space_station.tscn` as a direct child of `SpaceStation`**, so
+that `get_parent().get_parent()` resolves to `enemy_container`.
+
+> **Superseded.** This paragraph previously read "the gunnery node therefore creates the pool and
+> adds it to its *parent*". Review finding **B1** (`4-review.md`) killed that: a child node cannot
+> `add_child()` onto its own parent from `_ready()`, because `Node::_propagate_ready()` sets
+> `data.blocked` on the parent before readying its children, so the call fails hard. Authoring the
+> pool in the scene also makes the placement a structural property of the scene file rather than a
+> comment someone can violate later. See `3-plan.md` and `station_gunnery.gd`'s header.
+
+The alternative — a new `container_override` export on `BulletPool` — was considered and rejected
+as a wider blast radius (a shared component used by five other ships) for no gain here.
 
 ## No self-damage risk from bullets (unlike the lasers)
 

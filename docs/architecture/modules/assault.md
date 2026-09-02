@@ -263,6 +263,33 @@ inside the hull takes the boss 600 → 0 HP in one frame. `StationLaserPhase` se
 [`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md) for why the
 regression test has to force a *diagonal* volley to catch it.
 
+**The station shoots back**, via a second sibling node, **`StationGunnery`**
+(`station_gunnery.gd`) — same composition split as the laser phase, so `space_station.gd` holds
+no gun logic either and gained only a `turrets()` data accessor. It drives one
+`RadialAttackPattern` per phase, on its own `Timer`s:
+
+- **Phase 1** — every **live** turret fires an aimed 3-bullet fan on one shared cadence
+  (`turret_fire_interval`). The turret list is re-read per volley, so killing a gun visibly
+  removes it from the volley for free, and the armour is also the threat. Each firing turret's
+  `global_rotation` is set to its aim direction first — the sprite's barrels point along local
+  -Y and nothing else sets `rotation`, so without that the barrels point at the top of the screen
+  while firing elsewhere.
+- **Phase 2** — `armor_broken` stops the turret cadence and starts full core rings that precess by
+  `core_ring_step` each time, interleaving with the laser volleys.
+
+⚠️ **The `BulletPool` must stay a *direct* child of `SpaceStation`.** `bullet_pool.gd` hardcodes
+its container as `get_parent().get_parent()` with no override, so only that placement resolves to
+`enemy_container` and puts bullets in unrotated world space. Placed under `Gunnery` or a turret it
+would resolve to the station itself and the whole bullet field would swing with the rotating hull.
+It is therefore **authored in `space_station.tscn`**, not created in code — and it has to be:
+a child cannot `add_child()` onto its own parent from `_ready()`, because `_propagate_ready()`
+blocks the parent while readying its children. The pool leaving the tree with the station is also
+what frees in-flight bullets, which otherwise hold `ENEMIES_CLEARED` open. Pinned by
+`tests/integration/test_station_gunnery.gd`.
+
+The ten gunnery timings live in `space_station_config.tres` and are **copied into the gunnery's
+own fields in `_ready()`**, for the same process-wide-instance reason as the laser block.
+
 **`LevelSection.enemies_cleared_timeout`** is the safety net for `ENEMIES_CLEARED`: seconds to
 wait for `enemy_container` to empty before giving up. It defaults to `10.0` — the constant it
 replaced, sized for "wait for the last stragglers to leave", which is what `cloud_descent` wants —

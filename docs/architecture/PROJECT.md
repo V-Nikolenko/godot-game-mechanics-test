@@ -122,7 +122,9 @@ cannot continue until the station is destroyed. See
 
 It is also the project's first **two-phase** entity. Killing the last turret emits `armor_broken`,
 which starts `StationLaserPhase` — a child node that rotates the station and fires telegraphed
-`LaserRay` volleys. The phase is a separate node rather than states on `space_station.gd`
+`LaserRay` volleys — and simultaneously switches `StationGunnery`, a second child node, from aimed
+per-turret fans to precessing full rings from the core. Both phases are separate nodes rather than
+states on `space_station.gd`
 (composition) and rather than a `global/statemachine/` `State` per phase: the transition is
 one-way and there are only two phases, and this project reserves the node-per-file state machine
 for genuinely complex entities. Revisit if a third phase appears.

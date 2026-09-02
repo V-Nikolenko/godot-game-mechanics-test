@@ -1,19 +1,23 @@
 # Space Station — Level 1 mini-boss (turret + laser phases)
 
 **Role:** Two-phase cores-and-turrets mini-boss. Four turrets on a 256×256 hull, each on its own
-HP bar; the core refuses **all** damage until the last turret dies. Killing the last turret flips
-the fight: the hull starts rotating and firing telegraphed sweeping beams.
+HP bar; the core refuses **all** damage until the last turret dies. Every live turret fires an
+aimed 3-bullet fan, so the armour is also the threat and each gun you kill visibly quietens the
+station. Killing the last one flips the fight: the hull starts rotating, firing telegraphed
+sweeping beams and precessing bullet rings from the exposed core.
 **Fantasy / threat:** A fortress, not a ship. Shooting the hull sparks and does nothing, which
 teaches the rule without any UI: kill the guns first, then the core. Stripping the armour is not a
 reward — it wakes the superweapon up, and the second half is fought on the move.
 
-> **Status: EPIC sub-items 1–3 done.** The entity exists and is destructible (1), gates Level 1
-> as the `station_assault` section (2), and has the rotating laser phase (3). It still has **no
-> turret fire, no bullet-hell patterns and no reinforcements** (sub-item 4), and no bespoke death
-> sequence or handoff into `planet_approach` (sub-item 5). Plans and reviews:
+> **Status: EPIC sub-items 1–3 and 4a done.** The entity exists and is destructible (1), gates
+> Level 1 as the `station_assault` section (2), has the rotating laser phase (3), and now **shoots
+> back** — aimed turret fans, then precessing core rings (4a). Still outstanding: **reinforcement
+> waves flying in from the screen edges** (sub-item 4b), and no bespoke death sequence or handoff
+> into `planet_approach` (sub-item 5). Plans and reviews:
 > [`docs/plans/station-mini-boss-destructible/`](../../../../docs/plans/station-mini-boss-destructible/),
 > [`docs/plans/station-assault-section/`](../../../../docs/plans/station-assault-section/),
-> [`docs/plans/station-laser-phase/`](../../../../docs/plans/station-laser-phase/).
+> [`docs/plans/station-laser-phase/`](../../../../docs/plans/station-laser-phase/),
+> [`docs/plans/station-bullet-hell/`](../../../../docs/plans/station-bullet-hell/).
 
 ---
 
@@ -23,7 +27,7 @@ reward — it wakes the superweapon up, and the second half is fought on the mov
 |---|---|
 | Core HP | 600 (`max_health`) |
 | Turret HP | 120 each × 4 (`turret_health`) |
-| Damage | 40 contact (`collision_damage`) |
+| Damage | 40 contact (`collision_damage`), 12/turret bullet, 10/core-ring bullet |
 | Score | 1000 (core only — turrets award nothing, see below) |
 | Sprites | `station_core.png` (256×256), `station_turret.png` / `station_turret_destroyed.png` (64×64) |
 | Scene | `space_station.tscn` (turret: `station_turret.tscn`) |
@@ -56,11 +60,13 @@ The prompt that worked names the 2D shapes seen from above — "the base reads a
 the barrels as two short flat **rectangles** lying across it" — plus the skill's negative list.
 Describing the object rather than saying "top-down" is the part that actually constrains the model.
 
-**Turret orientation is not wired up.** All four turrets are placed at `rotation = 0`, so the
-barrels point toward −Y (screen top, i.e. *away* from the player). Harmless today because turrets
-do not fire; EPIC sub-item 4 should set per-turret `rotation` when it adds firing. Note that during
-the laser phase the whole station rotates, so the turret **wrecks** spin with it — the authored
-`rotation = 0` is a *spawn* orientation, not a permanent one.
+**Turret orientation is a *spawn* orientation only.** All four turrets are authored at
+`rotation = 0`, and the sprite's barrels point along local **−Y** (screen top, i.e. *away* from the
+player). Since sub-item 4a, `StationGunnery.fire_turret_volley()` writes each firing turret's
+`global_rotation` to `aim.angle() + PI/2` immediately before it fires, so the barrel points at the
+player — `global_rotation`, not `rotation`, so it stays correct while the hull spins. Nothing sets
+the rotation *between* volleys, and during the laser phase the whole station rotates, so the turret
+**wrecks** spin with it.
 
 ---
 
@@ -78,10 +84,66 @@ the laser phase the whole station rotates, so the turret **wrecks** spin with it
 - **Phase transition.** When `live_turret_count()` reaches 0, `SpaceStation` emits the zero-argument
   **`armor_broken`** signal, latched by `_armor_broken` so it fires exactly once. That is the only
   laser-related thing on `space_station.gd` — all the behaviour lives on the `LaserPhase` child.
-  Sub-item 4's escalating fire should hang off the same signal rather than a second fan-out over
-  the turrets.
+  `StationGunnery` hangs off the same signal, as intended, rather than fanning out over the turrets
+  a second time.
 - **Death.** Core death is station death: `BaseEnemy._on_health_changed` explodes and
   `queue_free()`s.
+
+---
+
+## Gunnery (`Gunnery` → `station_gunnery.gd`)
+
+`StationGunnery` is a second `Node2D` child of `space_station.tscn`, modelled on its sibling
+`StationLaserPhase` and for the same reason: `space_station.gd` holds **no gun logic at all** and
+gained only the `turrets()` data accessor. It drives one `RadialAttackPattern` per phase on its own
+`Timer`s, rather than through `AttackController` (which assumes one pattern on one ship).
+
+- **Phase 1 — aimed turret fans.** Every **live** turret fires a `turret_burst_count`-bullet fan of
+  angular width `turret_burst_arc`, centred on the player, all on one shared `turret_fire_interval`
+  cadence. One legible chunk beats four independently drifting cadences, and it makes "one fewer
+  gun" instantly readable: `_live_turrets()` re-reads `SpaceStation.turrets()` per volley, so a
+  destroyed gun drops out for free with no bookkeeping. **The armour is therefore also the threat.**
+- **The first volley lands one full interval after spawn**, never on spawn — the player's grace
+  period to register the boss. No config field needed; it falls out of `Timer.start()`.
+- **Phase 2 — precessing core rings.** `armor_broken` stops the turret cadence and starts
+  `core_ring_interval` full rings of `core_ring_count` bullets from the hull rim, each advanced by
+  `core_ring_step` radians from the last. The first ring lands one interval *after* the handover,
+  because `StationLaserPhase` already fires a beam volley on that same frame.
+- **A forced volley in the wrong phase fires nothing** — `fire_turret_volley()` early-returns once
+  `is_core_firing()`, `fire_core_ring()` before it. Both are public so tests can drive a volley
+  without awaiting a real interval.
+- **Deliberately no `randf()`**, same rule as the laser phase: `test_volleys_are_deterministic`
+  fails the moment someone reaches for RNG.
+- **Teardown.** Connected to `BaseEnemy.died`: stops both timers. In-flight bullets are freed by
+  `BulletPool._exit_tree()` when the pool leaves the tree with the station — which matters because
+  `LevelSection.ENEMIES_CLEARED` polls the container's child count, so a bullet outliving the boss
+  would hold the section open.
+- **No self-damage, in either direction.** `enemy_bullet.tscn`'s `HitBox` is layer 256 / **mask 128**
+  (the player hurtbox only), and the core `HurtBox` mask `97 | 1024` excludes 256. So the
+  `hit_mask_override` dance the beams need has **no analogue here**.
+
+### ⚠️ The `BulletPool` must stay a *direct* child of `SpaceStation`
+
+`bullet_pool.gd:47` hardcodes its container as `get_parent().get_parent()`, with no override. Only
+`pool → station → enemy_container` puts in-flight bullets in unrotated world space like every other
+enemy's. Placed under `Gunnery` or a turret, the grandparent is the **station itself** — and
+`StationLaserPhase` rotates the hull, so the entire bullet field would swing around with it.
+
+It is therefore **authored in the scene**, and the gunnery node only *drives* it. That is not a
+style preference: a child cannot `add_child()` onto its own parent from `_ready()`, because
+`Node::_propagate_ready()` sets `data.blocked` on the parent before readying its children and the
+call fails hard. Authoring it in `space_station.tscn` makes the placement a structural property of
+the scene file rather than a comment someone can violate later.
+`test_station_gunnery.gd::test_the_pool_is_a_direct_child_of_the_station` is the regression test.
+
+`pool_size` is **48**. Phase 1 peaks at 4 × 3 / 1.8 s = 6.7 bullets/s and a bullet needs ~4.1 s to
+clear the arena, so ~27 in flight; phase 2 adds ~23. The phases **overlap** at the handover, so the
+real peak is ~27 leftovers + 10 ≈ 37, not `max(27, 23)`.
+
+⚠️ **The `Gunnery` node tag needs `node_paths=PackedStringArray("bullet_pool")`.** The text scene
+format only resolves an exported `Node` reference when the node tag declares it; without it the
+export is left `null`, **no error is printed and the gate stays green** — only the script's
+`get_node_or_null` fallback would save it.
 
 ---
 
@@ -242,6 +304,33 @@ ShipConfig`, so the first four are inherited.
 | `laser_volley_interval` | `6.5` | Volley start to volley start. Must exceed the full beam lifetime (`warn + 0.56 + active + 0.84` dissolve ≈ **4.8 s**), leaving ~1.7 s of clear screen. |
 | `laser_rotation_speed` | `0.5` | Radians/second the whole station rotates while the phase is active (~29°/s). At the ~400 px the player sits from the station the beam edge moves ~200 px/s — half the player's 400 px/s top speed (`move_state.gd:21`). One 2.0 s active window sweeps ~57°. |
 | `laser_beam_count` | `2` | Beams per volley, spread evenly. Two opposed beams sweep the plane while always leaving two large clear quadrants. |
+| `turret_fire_interval` | `1.8` | Seconds between turret volleys. All live turrets fire on the same tick: 4 × 3 / 1.8 s = **6.7 bullets/s** at full strength, decaying to 1.7 with one gun left. |
+| `turret_burst_count` | `3` | Bullets in each turret's fan. Three is the smallest chunk that reads as a line rather than a stray shot. |
+| `turret_burst_arc` | `0.35` | Fan width in radians (~20°). Wide enough that strafing does not dodge all three, narrow enough to still read as one fan. |
+| `turret_bullet_damage` | `12` | Between the interceptor's 4 and the gunship's 15 — four turrets firing at once must not out-damage the station's own 40-damage contact hit. |
+| `turret_bullet_speed` | `240.0` | 60 % of the player's 400 px/s top speed (`move_state.gd:21`), inside the shipped 220–260 band. |
+| `core_ring_interval` | `2.0` | Seconds between core rings once the armour is broken. 5 bullets/s alongside the 6.5 s laser cycle, so phase 2 changes every ~2 s. |
+| `core_ring_count` | `10` | Bullets per ring. Spacing `TAU/10` = 36°; at 300 px from the hull that is a ~188 px gap, dodgeable at 400 px/s. |
+| `core_ring_step` | `0.24` | Radians the ring's base angle advances between rings. **Do not "tidy" this to a round fraction of `TAU`** — see below. |
+| `core_bullet_damage` | `10` | Lower than the turret fan: ring bullets cannot be avoided by position alone, so they hit softer. |
+| `core_bullet_speed` | `210.0` | 52 % of player speed — the slowest of the three, because phase 2 already has sweeping beams to dodge. |
+
+⚠️ **`core_ring_step = 0.24` is load-bearing and is pinned by a test.** It comes from the golden
+angle: `spacing * 0.381966` = `(TAU/10) * 0.381966`, i.e. a spacing-to-step ratio of 2.618. The
+golden ratio is the irrational least well approximated by small rationals, which is exactly the
+"maximal lane coverage per ring" property wanted here. The value **0.21** that the plan originally
+carried is wrong: `3 × 0.21 = 0.63` against a `0.6283` spacing, so the ring collapses onto three
+radial lanes and stays there — a permanent safe lane the player can park in. Measured over 20
+rings, 0.21 leaves a largest lane gap of **31.8 %** of the spacing; 0.24 leaves **9.0 %**.
+`test_the_ring_step_leaves_no_permanent_safe_lane` reads the step and count off the *gunnery node*
+(so it locks the shipped `.tres`, not a literal) and rejects anything above 25 % — a bound that
+deliberately catches re-tread periods 2, 3 and 4 but not 5+.
+
+The gunnery timings are read exactly once, by `StationGunnery._ready()`, for the same process-wide
+`.tres` reason spelled out below. The two `spawn_radius` values are **not** in the config —
+`turret_spawn_radius = 26.0` (the turret hurtbox rim) and `core_spawn_radius = 130.0` (outside the
+240×240 hull) are scene geometry, so they are exports on the gunnery node, exactly as
+`emitter_radius` is on the phase node.
 
 **The laser timings are read exactly once**, by `StationLaserPhase._ready()`, which copies them
 into its own fields; nothing reads `config` afterwards. That is not a micro-optimisation —
@@ -294,14 +383,18 @@ penalty. That is a safety net, not a balance number.
 ```
 space_station/
 ├── ENEMY.md                    ← this file
-├── space_station.tscn          SpaceStation + 4 instanced turrets + LaserPhase
+├── space_station.tscn          SpaceStation + 4 turrets + LaserPhase + BulletPool + Gunnery
 ├── space_station.gd            SpaceStation (extends BaseEnemy)
 ├── space_station_config.gd     SpaceStationConfig (extends ShipConfig)
 ├── space_station_config.tres
 ├── station_turret.tscn
 ├── station_turret.gd           StationTurret (Node2D)
-└── station_laser_phase.gd      StationLaserPhase (Node2D) — the second phase
+├── station_laser_phase.gd      StationLaserPhase (Node2D) — the second phase
+└── station_gunnery.gd          StationGunnery (Node2D) — the guns, both phases
 ```
+
+Shared code it depends on: `global/resources/attack/radial_attack_pattern.gd`
+(`RadialAttackPattern`, added for this boss but generic) and `global/components/bullet_pool.gd`.
 
 Sprites: `assault/assets/sprites/enemies/station_core.png`, `station_turret.png`,
 `station_turret_destroyed.png`. The laser phase adds **no new art** — it reuses
@@ -309,4 +402,7 @@ Sprites: `assault/assets/sprites/enemies/station_core.png`, `station_turret.png`
 Tests: `tests/integration/test_space_station.gd` (armour rule, turret lifecycle, config),
 `tests/integration/test_station_laser_phase.gd` (trigger, telegraph window, self-damage
 regression, rotation rate, volley determinism, teardown, config),
-`tests/integration/test_laser_ray_hit_mask.gd` (the shared `LaserRay` export).
+`tests/integration/test_laser_ray_hit_mask.gd` (the shared `LaserRay` export),
+`tests/integration/test_station_gunnery.gd` (pool placement, both phases, aim, barrel rotation,
+ring precession, the `core_ring_step` design lock, teardown, config),
+`tests/integration/test_radial_attack_pattern.gd` (the shared pattern resource).

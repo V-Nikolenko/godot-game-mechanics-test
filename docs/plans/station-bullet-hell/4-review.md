@@ -274,3 +274,205 @@ with a ratio far from a small rational, and a test 12 that goes red on `0.21`), 
 test to `integration/`), C2 (state and test the `ship.rotation` question), C3 (container-parent
 `test_space_station.gd`), C4 (read the red off stderr). The smaller notes are corrections to text
 and can ride along.
+
+---
+
+## Round 2
+
+VERDICT: APPROVED
+
+All six round-1 findings are resolved in substance, not just acknowledged. I re-derived the two
+blockers from the code and the arithmetic rather than reading the plan's account of them, and B1's
+replacement design is now verified end-to-end on this engine build. Findings below name what I
+checked.
+
+### B1 — resolved, and I verified the replacement design actually runs
+
+`3-plan.md:99-134` replaces `_station.add_child(_pool)` with a `BulletPool` authored in
+`space_station.tscn` as a direct child of `SpaceStation`, found from `StationGunnery` via
+`@export var bullet_pool: BulletPool` with a `get_parent().get_node_or_null("BulletPool")` fallback.
+
+Checked, in this order:
+
+- `global/components/bullet_pool.gd:47` really is `_container = get_parent().get_parent()` with no
+  export, so `pool → SpaceStation → enemy_container` is the only placement that resolves to world
+  space. (Both this plan and round 1 cite this as `bullet_pool.gd:40`; the line is **47**.)
+- `space_station.tscn:57-103`: `SpaceStation` is a `CharacterBody2D` whose direct children are
+  `Sprite2D`, `CollisionShape2D`, `HurtBox`, `Health`, `HitFlashAnimationPlayer`, `Turrets` (`:88`)
+  and `LaserPhase` (`:102`). Two more siblings fit cleanly.
+- `@export var bullet_pool: BulletPool` is not a new idea in this repo — `attack_controller.gd:10`
+  declares exactly that field, and `level_1.tscn:24-26` / `light_assault_ship.tscn:99-101` show the
+  working text-format wiring.
+- **Ran it.** I built a throwaway scene with the plan's exact shape (`CharacterBody2D` root, a
+  `BulletPool` node with `bullet_scene`/`pool_size` set in the scene, and a sibling node carrying
+  `node_paths=PackedStringArray("bullet_pool")` + `bullet_pool = NodePath("../BulletPool")`),
+  instanced it into a container inside a live frame on Godot v4.6.3.stable.official.7d41c59c4:
+
+  ```
+  [Gunnery] _ready: bullet_pool = BulletPool:<Node#…>   is BulletPool? true
+  pool._container == container? true   idle=6
+  ```
+
+  The export is resolved **before** the consumer's `_ready()` (Godot applies deferred node-path
+  properties at the end of `SceneState::instantiate()`), and the pool resolves the container
+  correctly. Scratch files removed; the working tree is clean.
+- I also re-ran the station with a code-added-but-pre-tree pool from a real frame: `_container ==
+  container`, prewarm ran, `acquire()` reparented into `EnemyContainer`, and the station's children
+  came out as `… Turrets, LaserPhase, BulletPool, @Area2D@28 (the contact HitBox)` — so
+  `space_station.gd:76-79`'s `for child in get_children(): if child is HitBox … break` still finds
+  the HitBox that `BaseEnemy._add_contact_hitbox()` appends during `super._ready()`
+  (`space_station.gd:50`). No interference.
+- Blast radius on existing consumers: only `test_space_station.gd:22` and
+  `test_station_laser_phase.gd:29` instance the scene live; `test_station_assault_section.gd:210`
+  only reads the wave resource, so it needs no fix. `test_station_laser_phase.gd:42-51` already
+  routes through a container, so it resolves correctly with the pool added.
+- Test 2 (`3-plan.md:346-349`) now asserts the pool **exists** among `station.get_children()`, that
+  the gunnery's reference points at that node, and that it is not under `Gunnery`/`LaserPhase`/
+  `Turrets` — it fails if the pool is missing entirely, which is what round 1 asked for.
+
+### B2 — resolved; I recomputed the numbers independently and they are exactly right
+
+Computed `fmod(k * step, TAU/10)` for `k = 1..20`, sorted, largest gap **including the wrap gap**:
+
+| step | largest gap | as % of spacing | vs `0.25 × spacing` = 0.15708 |
+|---|---|---|---|
+| `0.24` | 0.05664 rad | 9.01 % | passes, 2.77× margin |
+| `0.21` | 0.19991 rad | 31.8 % | **fails** |
+
+That matches `3-plan.md:214-217` and `3-plan.md:370-376` to three decimals, including the "~2.8×
+margin" claim. The golden-angle derivation also checks: `TAU/10 × 0.381966 = 0.239996`, and
+`spacing/step = 2.6180`. Rewritten test 11 therefore goes red on the rejected value and green on the
+shipped one, which is the evidence round 1 demanded. The vacuous `fmod`-tolerance assertion is gone.
+
+Non-blocking sharpening in the notes below (the 0.25 threshold, and where the test must read the
+step from).
+
+### C1 — resolved
+
+`3-plan.md:300-308` moves the pattern file to `tests/integration/test_radial_attack_pattern.gd` and
+quotes the rule correctly: `tests/README.md:16` reserves `unit/` for "One file per autoload or
+`global/components/` component. No scene loading." Consistent with `test_space_station.gd:12-13` and
+`test_station_laser_phase.gd:25-26`.
+
+### C2 — resolved, and the reason is real
+
+`3-plan.md:76-91` makes "ignores `ship.rotation`" a stated contract with a one-line reason in the
+resource header. Verified the divergence exists (`aimed_attack_pattern.gd:31`,
+`gatling_attack_pattern.gd:35`, both `Vector2.DOWN.rotated(ship.rotation)` — the plan cites the
+aimed one as `:29`, actual `:31`) and that it would matter: `station_laser_phase.gd:123` does
+`_station.rotation += rotation_speed * delta` with `rotation_speed` = 0.5 from
+`space_station_config.gd:46`, so one 2.0 s `core_ring_interval` is 1.0 rad of hull rotation against
+a 0.628 rad spacing. Pattern test 6 (`3-plan.md:322-325`) pins the contract, and the gunnery ring
+tests set `LaserPhase.rotation_speed = 0.0` first — a technique that really is in the suite already
+(`test_station_laser_phase.gd:286`; the plan cites `:283-284`). Test 10 is also re-specified as an
+**absolute**-angle assertion, closing the vacuous-pass hole round 1 identified.
+
+### C3 — resolved
+
+Build step 7 (`3-plan.md:279-286`) routes `test_space_station.gd` through a container `Node2D`.
+Confirmed `test_space_station.gd:28-30` is the bare `add_child_autofree(_station)`, and that
+`get_parent` / `get_child_count` appear nowhere else in that file (only line 30 uses `add_child`),
+so the fixture change cannot break its existing assertions.
+
+### C4 — resolved
+
+`3-plan.md:394-410`. `BACKLOG.md:317` confirms the failure mode verbatim (GUT printed
+`---- All tests passed! ----`, reported `Scripts 2` instead of 3, exit 0), and `/agent/verify.sh:14`'s
+FATAL regex matches none of it. The plan now requires the red to be read off stderr or off GUT's
+script count, and — better — names two reds that need no such trick: test 6 (barrels, fails today by
+~180°, and `BACKLOG.md:410-411` confirms all four turret instances are at `rotation = 0` with
+barrels at −Y) and test 2 (seen red by temporarily misparenting the pool).
+
+### Smaller notes from round 1 — all carried
+
+- `AttackController` path corrected (`1-context.md:40`, `3-plan.md:237`) and the false "independently
+  drift" claim explicitly withdrawn in both (`1-context.md:61-65`, `3-plan.md:241-245`). Verified
+  `attack_controller.gd:24-30` is the `_timer -= pattern.fire_interval` accumulator.
+- Pool sizing corrected to the ~37 handover peak (`3-plan.md:140-143`). Reproduced: 12 bullets /
+  1.8 s = 6.7/s; `enemy_bullet.gd:12-16` gives y_bottom 1164, so ~984 px at 240 px/s = 4.1 s → ~27;
+  ring 10 / 2.0 s at 210 px/s over ~4.7 s → ~23; 27 + 10 = 37 < 48.
+- `players[0]` matched to the shipped behaviour (`3-plan.md:72-74`); actual lines are
+  `aimed_attack_pattern.gd:22-24` and `gatling_attack_pattern.gd:29-31`.
+- Two `process_frame` awaits in the teardown test (`3-plan.md:380-384`).
+- Backlog done-condition restated and the director-level check explicitly moved to 4b, with the
+  `tests/README.md:41-50` coroutine-leak rule flagged for then (`3-plan.md:427-434`).
+- UID guidance (`3-plan.md:273-276`): `global/components/bullet_pool.gd.uid` really is
+  `uid://kvgsxhn0cac7` and `enemy_bullet.tscn:1` really declares `uid://wi7ci5dkn7k7`.
+- The meaningless "bit 8" clause is gone with the cut layer test.
+- `2-research.md:138` re-attributes findings 1/2 to Boghog; `2-research.md:140` drops the
+  unsupported Boghog co-citation on bullet speed and labels ResetEra as a single source.
+
+### Fresh pass against the standard rejection criteria
+
+- **No reinvention.** `global/resources/attack/` holds only `forward`, `aimed` and `gatling`; none
+  emits more than one bullet and none has an arc. `RadialAttackPattern` subclasses the existing
+  `fire(ship, pool)` seam (`attack_pattern_resource.gd:15`) and keeps runtime state on the node, as
+  `attack_pattern_resource.gd:1-5` requires.
+- **Conventions.** Composition ✓ (a sibling node of `LaserPhase`; `space_station.gd` gains only a
+  `turrets()` data accessor). Config-driven ✓ (10 exports on `SpaceStationConfig`, copied into node
+  fields in `_ready()` exactly as `station_laser_phase.gd:93-99` does, with deliberately different
+  node defaults so test 15 is not vacuous). Scene geometry as node exports, mirroring
+  `emitter_radius` (`station_laser_phase.gd:48`) ✓. No `WORLD_SCALE` multiplication inside the scene
+  (`3-plan.md:219-221`) ✓. No `randf()` ✓.
+- **The tests can fail.** Test 6 fails against shipped code today. Test 11 fails on `0.21`
+  (recomputed above). Pattern test 3 is a real `arc / (count - 1)` division-by-zero boundary; test 1's
+  wrap-gap assertion is the one that catches a seam duplicate; test 9 is the exhaustion path
+  (`bullet_pool.gd:63-66` returns null after a `push_warning`, and `tests/README.md:85` confirms
+  `push_warning` is not a GUT failure). Test 4 asserts bullet *origins*, not just a count.
+- **Alternatives.** `call_deferred`, `container_override`, two resources, a downward arc, per-turret
+  pools, survivor escalation and `AttackController` are all weighed with reasons. The one omission I
+  can think of — create the pool inside `space_station.gd._ready()`, which is legal (a node may add
+  children to itself, as `interceptor.gd:30-34` does) — loses to the scene version on the plan's own
+  composition rule and is no simpler, so its absence is not a defect.
+- **Research.** Tradeoffs are present per finding, including one recorded against the plan's own
+  choice (`2-research.md:146-151`), and the two mis-citations round 1 found are fixed.
+- **Scope.** Still the borderline. Round 1 measured 25 tests; the revised list is
+  9 + 16 = **25** (see nit 1), so the two cuts were offset by the C2-mandated additions. I am not
+  blocking on it, because the plan is unusually prescriptive (every test has its assertion spelled
+  out) and steps 1-5 are small files. If the session runs long, cut in this order and say so in
+  `5-progress.md`: gunnery test 16 (`the timers actually run`), gunnery test 14 (determinism — no
+  `randf()` is a code-review property here), pattern test 8 (damage/speed, subsumed by the fan and
+  ring tests). Do **not** cut tests 2, 6, 11 or 13 — those are the four that pin the design.
+
+## Non-blocking (do these while implementing; none of them justified another round)
+
+1. **The test count is wrong.** `3-plan.md:292` says "Two files, 23 tests"; the lists enumerate 9 +
+   16 = 25. Fix the number, or actually make the cuts.
+2. **The scene edit needs `node_paths=`, and omitting it fails silently.** The text scene format
+   only resolves an exported Node reference when the node tag declares it. I verified both sides on
+   4.6.3: with `node_paths` the export is live before `_ready()`; **without** it, the property is
+   left `null`, *no error is printed and the gate stays green* — only the plan's fallback saves it.
+   Write it exactly as `level_1.tscn:24-26` does:
+
+   ```
+   [node name="Gunnery" type="Node2D" parent="." node_paths=PackedStringArray("bullet_pool")]
+   script = ExtResource("8_ss")
+   bullet_pool = NodePath("../BulletPool")
+   ```
+3. **Test 11 must read `core_ring_step` and `core_ring_count` off the gunnery node** (i.e. the values
+   copied from the shipped `.tres`), never from literals. With literals it locks nothing and the
+   round-1 finding comes straight back.
+4. **Test 11's `0.25 × spacing` threshold catches re-tread periods 2, 3 and 4 but not 5+**
+   (`step = spacing/5 = 0.1257` re-treads five lanes forever yet leaves a 20 % gap and would pass).
+   That is a defensible line — five lanes at 7.2° is not the blind spot three lanes at 31° is — but
+   say so in the test comment so the next reader knows the bound is deliberate, not incidental.
+5. **Build step 4 runs before step 5, so the `Gunnery` node's script does not exist yet.** New
+   scripts have no `.gd.uid` until an import pass generates one. Either write step 5 before step 4,
+   or run `godot --headless --path . --import` in between and copy the minted UID. Omitting the
+   `uid=` attribute entirely is also legal — `test_resource_uid_integrity.gd:56-57` only checks the
+   *pairing* — and I confirmed a `uid`-less `[ext_resource type="Script" path="…"]` loads fine.
+6. **`1-context.md:107-109` still carries the refuted design**: "The gunnery node therefore creates
+   the pool and adds it to its *parent*." That is the exact sentence B1 killed, and it now
+   contradicts `3-plan.md:99-134`. Rewrite that paragraph when you touch the docs.
+7. **`b1check.gd` is committed at the repo root** (from cycle `c364899`) — a scratch `SceneTree`
+   script. Delete it. Worth knowing *why* its output is misleading: it does its `add_child` calls
+   inside `_initialize()`, where `root.is_node_ready()` is **false**, so `_propagate_ready()` never
+   reaches the subtree and the pool reports `_container = <null>, idle = 0` no matter how it is
+   parented. Re-run from the first `_process()` frame and the same code prints
+   `_container == container? true, idle = 8`. It is a harness artifact, not evidence against the
+   design — do not let it re-open B1.
+8. **Line-citation drift**, inherited from round 1 and worth fixing in the code comments the plan
+   says will quote them: `bullet_pool.gd:40` → **:47**; `aimed_attack_pattern.gd:24-26` → **:22-24**;
+   `aimed_attack_pattern.gd:29` → **:31**; `test_station_laser_phase.gd:283-284` → **:286**.
+   (`gatling_attack_pattern.gd:29-31,35`, `station_laser_phase.gd:104,123`, `attack_controller.gd:24-30`
+   and `interceptor.gd:36` are all correct as cited.)

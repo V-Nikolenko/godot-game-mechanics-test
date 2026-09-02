@@ -30,9 +30,12 @@ once a warm project has loaded them — so the engine will happily report a brok
 on your machine and break on a fresh clone. Five of the eight mismatches this test first caught
 behaved exactly that way. If you extend it, keep it reading files.
 
-`integration/test_space_station.gd` and `integration/test_station_assault_section.gd` are the other
-exceptions, for a different reason: the `space_station` entity and the `station_assault` section
-are **new code**, so their tests assert intended behaviour rather than pinning existing quirks.
+The whole **space-station family** — `integration/test_space_station.gd`,
+`test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
+`test_station_gunnery.gd` and `test_radial_attack_pattern.gd` — are the other exceptions, for a
+different reason: the `space_station` entity, the `station_assault` section, the laser phase, the
+gunnery and `RadialAttackPattern` are all **new code**, so their tests assert intended behaviour
+rather than pinning existing quirks.
 `test_space_station.gd` carries a documented coverage gap — it drives damage by emitting
 `HurtBox.received_damage` directly, so it proves nothing about collision layers, and the section
 tests do not close that. See the file headers and
@@ -107,6 +110,12 @@ Entities, phase 2: the station laser phase (`integration/test_station_laser_phas
 `armor_broken` trigger and its once-only guard, the telegraph window (a beam damages a real
 layer-128 probe HurtBox only after it arms, never during the warning), the self-damage regression,
 the rotation rate, volley determinism, teardown on boss death, and the config copy.
+Entities, the guns: `StationGunnery` (`integration/test_station_gunnery.gd`) — that the `BulletPool`
+is a direct child of the station, both phases and the handover between them, per-turret aim and
+barrel rotation, dead turrets dropping out of the volley, ring precession, the `core_ring_step`
+design lock, teardown, and the config copy. Plus the shared pattern resource it drives
+(`integration/test_radial_attack_pattern.gd`) — ring vs fan spacing, aiming, `spawn_radius`, that
+it ignores `ship.rotation`, and that `bullet_count <= 0` fires nothing.
 
 ### Three traps `test_station_laser_phase.gd` had to work around
 
@@ -121,6 +130,15 @@ the rotation rate, volley determinism, teardown on boss death, and the config co
   (`GUT WARNING: Test script has 2 unfreed children`). Parent entities that will die to a
   container `Node2D` that `add_child_autofree` owns — which is also how they are really parented,
   under `WaveManager.enemy_container`.
+
+  **The same rule bites one level down, and cost a whole gate cycle.** For a `StationTurret` the
+  "parent" `ExplosionEffect` writes into is the station's `$Turrets` node, so from the first turret
+  kill onward `$Turrets.get_children()` also contains `CPUParticles2D`. A test helper doing a raw
+  `get_children()` then hands back a particle node, `child as StationTurret` yields `null`, and the
+  next method call fails with `Invalid call. Nonexistent function 'is_alive' in base 'Nil'` — an
+  *Unexpected Error*, so GUT reds the test with no failed assertion to point at.
+  **Always filter a container's children by type before casting.** `SpaceStation._turrets()` does,
+  which is why production code never hit this.
 - **A beam's full lifetime is longer than it looks.** At `warn 0.2 / active 0.3` it is ~1.9 s, not
   0.5: `warn` + a ~0.56 s `laser_increase` charge-up + `active` + a 0.84 s dissolve. Any test
   volley interval must exceed it, or a second volley spawns while the first is still dissolving and

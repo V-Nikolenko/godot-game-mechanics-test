@@ -200,10 +200,41 @@ and only when the station is destroyed does the level continue to the planet.
       (`600 → 0 HP`, reproduced), and the volley angles are a fixed list, never `randf()` — random
       attack ordering cannot be balanced or tested.
 
-- [ ] **4. Bullet hell + reinforcements.** During the fight, existing enemy ships fly in from the
-      sides, top and bottom. Turrets and station fire bullet-hell patterns.
-      *Done when:* reinforcement waves spawn from at least three screen edges, projectiles route
-      through `bullet_pool`, and a headless run of the section produces no errors.
+      **Split on 2026-09-02** into 4a (the station's own fire) and 4b (reinforcements). One
+      session each; 4a is the half that changes the first phase from passive to a fight.
+
+- [x] **4a. The station shoots back.** Turrets and core fire bullet-hell patterns through
+      `bullet_pool`.
+      *Done when:* every live turret fires an aimed pattern, killing a turret removes its gun from
+      the volley, the core fires its own pattern once the armour breaks, projectiles route through
+      `bullet_pool`, and a headless run produces no errors.
+      **Done 2026-09-02.** `StationGunnery` (`assault/scenes/enemies/space_station/station_gunnery.gd`)
+      as a sibling node of `StationLaserPhase`, driving a new shared
+      `global/resources/attack/radial_attack_pattern.gd` (`RadialAttackPattern` — one resource
+      covering both the ring and the fan). Ten new `SpaceStationConfig` fields; `BulletPool` +
+      `Gunnery` authored into `space_station.tscn`. Tests: `test_station_gunnery.gd` (16) +
+      `test_radial_attack_pattern.gd` (10). Gate green: 23 scripts / 214 tests / 767 asserts.
+      Plan + **two** review rounds: `docs/plans/station-bullet-hell/`. Round 1 was
+      CHANGES_REQUESTED and earned its keep twice over — it caught that the planned
+      `_station.add_child(_pool)` from the gunnery's `_ready()` **cannot work** (`_propagate_ready()`
+      blocks the parent while readying its children), and that the planned `core_ring_step = 0.21`
+      had exactly the defect the research said to avoid: `3 × 0.21 ≈ 0.6283` = the ring spacing, so
+      rings collapse onto three radial lanes and leave a permanent safe lane. Shipped value is the
+      golden-angle `0.24`, and a test now locks it.
+      Two things a future cycle should not have to rediscover: the `BulletPool` **must** stay a
+      direct child of `SpaceStation` (`bullet_pool.gd:47` hardcodes `get_parent().get_parent()`, so
+      anywhere else the whole bullet field rotates with the hull), and a `node_paths=` tag on the
+      `Gunnery` node is required or the exported reference is silently left null **with the gate
+      still green**.
+
+- [ ] **4b. Reinforcements.** During the fight, existing enemy ships fly in from the sides, top
+      and bottom.
+      *Done when:* reinforcement waves spawn from at least three screen edges and a headless run of
+      the section produces no errors.
+      Starting points: the station is spawned as a single zero-delay wave with no `.delay()` and no
+      `.move()` (both load-bearing — see `enemy-roster.md`), so reinforcements need to come from
+      somewhere other than that wave; and `LevelSection.ENEMIES_CLEARED` polls the container's
+      child count, so a reinforcement still alive holds the section open after the boss dies.
 
 - [ ] **5. Destruction hands off to the planet approach.** Station death plays out and the level
       continues into `planet_approach` and the planet entry.
@@ -407,12 +438,15 @@ Found on 2026-09-01 while regenerating the turret sprites.
       a fresh visual check. Fix by regenerating with `create_map_object` (max canvas is 400×400, so
       256×256 fits), or by alpha-keying the existing grey if the art is worth keeping.
 
-- [ ] **The turret sprite's barrels point at −Y and no turret sets `rotation`.** All four
+- [x] **The turret sprite's barrels point at −Y and no turret sets `rotation`.** All four
       `space_station.tscn` turret instances are placed at `rotation = 0`, so every barrel points
       toward the top of the screen — *away* from the player, who is always below the station.
-      Completely harmless today (turrets do not fire; sub-item 3 is the laser phase), but EPIC
-      sub-item 4 adds turret fire and will look wrong unless it sets per-turret `rotation` at the
-      same time. Recorded in `ENEMY.md` next to the sprite table so it is found at the right moment.
+      **Closed 2026-09-02 by sub-item 4a**, at exactly the moment it predicted.
+      `StationGunnery.fire_turret_volley()` sets each firing turret's `global_rotation` to
+      `aim.angle() + PI/2` immediately before firing — `global_rotation`, not `rotation`, so it
+      survives the laser phase spinning the hull. Pinned by
+      `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
+      scene. The authored `rotation = 0` remains, as a spawn orientation.
 
 - [ ] **This container has no `file`, no `python3` and no `xxd` — only `od`.** `scripts/pixellab.sh`
       called `file -b` unconditionally under `set -euo pipefail`, so **every `save-b64` and
@@ -463,6 +497,16 @@ Found on 2026-09-02 while implementing the station laser phase (EPIC sub-item 3)
       (documented in `tests/README.md`), but the component itself would be tidier if the particles
       were parented to the entity's *owner-scene* root, or if `explode()` took an explicit
       container. Worth deciding before sub-item 4 adds many more deaths per fight.
+      **Update 2026-09-02 — it bit again, one level down, and cost a full gate cycle.** For a
+      `StationTurret` the parent `explode()` writes into is the station's `$Turrets` node, so from
+      the first turret kill onward `$Turrets.get_children()` contains `CPUParticles2D` mixed in
+      with the turrets. `test_station_gunnery.gd`'s `_turrets()` helper did a raw `get_children()`,
+      so `child as StationTurret` returned `null` and the next call died with
+      `Invalid call. Nonexistent function 'is_alive' in base 'Nil'` — an *Unexpected Error*, which
+      GUT reds with no failing assertion to point at, so it reads as unrelated. Fixed in the test
+      by filtering to `StationTurret` (what `SpaceStation._turrets()` already does), and the trap
+      is now written up in `tests/README.md`. This is the second workaround for the same component;
+      an explicit container argument on `explode()` would have prevented both.
 
 - [ ] **The station's collision-layer coverage gap is now only half open.**
       `assault/scenes/enemies/space_station/ENEMY.md` records that

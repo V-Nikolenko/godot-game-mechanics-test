@@ -79,6 +79,13 @@ func _ready() -> void:
 				break
 
 
+## Public read-only view of the turret list, for nodes that need the emitters themselves rather
+## than just the count (`StationGunnery`). Data access, not behaviour: `live_turret_count()` is
+## deliberately left untouched because `test_space_station.gd` pins it.
+func turrets() -> Array[StationTurret]:
+	return _turrets()
+
+
 func _turrets() -> Array[StationTurret]:
 	var out: Array[StationTurret] = []
 	for child in turret_root.get_children():

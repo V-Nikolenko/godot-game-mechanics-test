@@ -24,10 +24,19 @@ const STATION_CONFIG := preload("res://assault/scenes/enemies/space_station/spac
 
 var _station: SpaceStation
 
+## Stands in for `WaveManager.enemy_container`. Not cosmetic since sub-item 4a: the station now
+## carries a `BulletPool`, and `bullet_pool.gd:47` resolves its container as
+## `get_parent().get_parent()`. Parenting the station straight to this script would resolve that
+## to GUT's own parent of the test script. It also keeps `ExplosionEffect`'s particles, which
+## parent to `actor.get_parent()`, inside something `add_child_autofree` owns.
+var _container: Node2D
+
 
 func before_each() -> void:
+	_container = Node2D.new()
+	add_child_autofree(_container)
 	_station = STATION_SCENE.instantiate() as SpaceStation
-	add_child_autofree(_station)
+	_container.add_child(_station)
 
 
 ## Emit on the core's own HurtBox — the same entry point the AoE module and the mining laser use.
