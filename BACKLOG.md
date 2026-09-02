@@ -183,6 +183,14 @@ and only when the station is destroyed does the level continue to the planet.
       unfair, and research should set the actual timing.
       *Done when:* a test proves the phase only starts after the last turret dies, and that a
       beam damages the player only during its active window, not its warning window.
+      **In progress 2026-09-02 — BLOCKED at plan review, no code written.** Context, research and
+      a twice-revised plan are in `docs/plans/station-laser-phase/`. The independent reviewer
+      returned CHANGES_REQUESTED in both rounds (the `feature-workflow` maximum), so
+      implementation did not start. Round 1 caught that the headline "the boss must not kill
+      itself with its own beam" test **could not fail** as specified; round 2 caught that the test
+      plan would have clobbered the shared config `.tres`. Both are fixed in revision 2, and
+      round 2 closed with "the design is settled... round 3 needs only D1, D2 and the nits — no new
+      research, no design change". **Next cycle: one short round-3 review, then implement.**
 
 - [ ] **4. Bullet hell + reinforcements.** During the fight, existing enemy ships fly in from the
       sides, top and bottom. Turrets and station fire bullet-hell patterns.
@@ -407,3 +415,30 @@ Found on 2026-09-01 while regenerating the turret sprites.
       tooling here should assume a **minimal** userland. Note also that the previous cycle's
       sprites were saved without the script ever succeeding, which is probably why nothing caught
       this until now.
+
+Found on 2026-09-02 while planning the station laser phase (EPIC sub-item 3). Both were measured
+at runtime by the plan reviewer on Godot 4.6.3, not inferred.
+
+- [ ] **Every enemy that does `@export var config = load(...)` shares ONE config resource
+      process-wide, and it is the same object `preload` hands a test.** `ResourceLoader` caches, and
+      the scenes store no override, so `station_a.config == station_b.config == preload(".../space_station_config.tres")`
+      is `true` — verified. Writing to one enemy's `config` at runtime therefore rewrites the
+      shipped `.tres` values in memory for **every** instance and for **every later test in the
+      same process**. This is not hypothetical: it is exactly the trap that got the laser-phase
+      test plan rejected in review round 2, because a test that tuned timings through `config`
+      would have silently clobbered the values a later test asserts. The pattern is used by
+      `space_station.gd:24` and, by inspection, the other `*_config.tres` enemies
+      (`bomber.gd`, `ram_ship.gd`, `light_assault_ship.gd`, `gunship.gd`). Worth either a
+      `duplicate()` on assignment, or a line in `tests/README.md` warning that config resources are
+      shared and must never be mutated from a test. No test pins this today.
+
+- [ ] **`spike/test_spike_laser.gd` and `spike/test_spike_selfkill.gd` are tracked dead code.**
+      `git ls-files spike/` lists both plus their `.uid`s.
+      `docs/plans/station-laser-phase/1-context.md` claimed they had been "deleted afterwards";
+      they had not, and the claim has now been corrected in place. They sit outside
+      `-gdir=res://tests` so the gate never runs them, which means they can rot against
+      `laser_ray.gd` / `space_station.gd` without anything noticing — and they are written against
+      exactly the scripts the laser phase changes. Delete them (they are step 1 of
+      `docs/plans/station-laser-phase/3-plan.md`), or move them under `tests/` so the gate keeps
+      them honest. They are genuinely useful as fixtures: they demonstrate the layer-128 stub
+      `HurtBox`, `wait_seconds` beam stepping, and the self-kill reproduction.

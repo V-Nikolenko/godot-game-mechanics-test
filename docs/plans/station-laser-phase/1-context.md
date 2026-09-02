@@ -26,7 +26,12 @@
 | `level_1_director.gd::_spawn_laser_columns()` | Shipped call sequence: `auto_start = false` → set durations → `add_child` → set `global_position` → `start()`. Its shipped telegraph is `warn = 3.0`, `active = 4.0`. |
 | `BaseEnemy` hit flash / `ExplosionEffect` / `HitEffect` | Already wired into the station; the laser phase needs no new feedback components. |
 
-## Spike results (run this session, `spike/test_spike_*.gd`, deleted afterwards)
+## Spike results (run this session, `spike/test_spike_*.gd`)
+
+> **Correction, review round 1:** this section originally said the spike scripts were "deleted
+> afterwards". They were not — `git ls-files spike/` still lists them. They are deleted in step 1
+> of the build sequence.
+
 
 These are measured, not assumed. Three of them change the design.
 
@@ -34,8 +39,10 @@ These are measured, not assumed. Three of them change the design.
    added to a GUT test tree reports `is_lethal_now() == false` at t=0.4 s with **0** damage
    emitted, and `true` with 6 hits by t=1.6 s, against a real `Area2D` `HurtBox` on layer 128
    stepped by real physics frames. So the "damages only in the active window" test can be a
-   genuine physics test, not a poke at a private method. Time to live ≈ 0.2 s (`laser_init`
-   frame) + `warn_duration` + 0.56 s (`laser_increase`).
+   genuine physics test, not a poke at a private method. Time to live ≈ `warn_duration` + 0.56 s
+   (`laser_increase`). **Corrected in review round 1:** the 0.2 s `laser_init` frame runs
+   *concurrently* with the warn timer (`laser_ray.gd:155-161` starts both in `start()`), so it is
+   inside the warn window, not added to it. Measured: warn 1.2 -> 1766 ms to lethal.
 2. **A beam mounted on the station with the default hit mask instantly kills the station.**
    `LaserRay._HIT_MASK` is `128 | 256 | 512`, and the station's core `HurtBox` is **layer 512**.
    With all turrets dead (core unarmoured) a beam at local `(0, 100)` pointing down produced
