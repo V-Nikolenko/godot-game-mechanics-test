@@ -17,6 +17,14 @@ var _stack_hp: int = 0        ## value of one stack; set on first add_stack call
 var max_temp: int:
 	get: return MAX_STACKS * _stack_hp if _stack_hp > 0 else 0
 
+## The HP one stack is worth — 0 until the first add_stack/restore fixes it.
+## Exposed so anything that persists the pool (SessionState) can save the stack size
+## directly instead of recovering it as `max_temp / MAX_STACKS`; that division
+## inverts an invariant this component is free to change and truncates toward zero
+## if it ever stops holding, silently shrinking the pool the player gets back.
+var stack_hp: int:
+	get: return _stack_hp
+
 
 ## Add one temp stack of +base_health/2 HP. Returns false if already at cap.
 ## _stack_hp is locked to the value set on first call; subsequent calls with
@@ -34,11 +42,11 @@ func add_stack(base_health: int) -> bool:
 
 ## Restore from saved state (called by SessionState on level/game load).
 ## Safe to call before add_stack — sets _stack_hp if not yet initialised.
-func restore(current: int, stack_hp: int) -> void:
-	if stack_hp <= 0 or current <= 0:
+func restore(current: int, saved_stack_hp: int) -> void:
+	if saved_stack_hp <= 0 or current <= 0:
 		return
 	if _stack_hp == 0:
-		_stack_hp = stack_hp
+		_stack_hp = saved_stack_hp
 	current_temp = clampi(current, 0, MAX_STACKS * _stack_hp)
 	amount_changed.emit(current_temp, max_temp)
 

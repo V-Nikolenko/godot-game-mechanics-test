@@ -100,7 +100,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `ShipModuleState.unlock()`, which validates and `push_warning`s. Pinned by
       `tests/unit/test_upgrade_state.gd::test_unknown_ids_are_stored_but_never_listed`.
 
-- [ ] **`SessionState` recovers the temp-HP stack size with integer division.** _(todo)_
+- [ ] **`SessionState` recovers the temp-HP stack size with integer division.** _(in progress)_
       `global/autoloads/session_state.gd:85` computes `_temp_hp_stack = maximum /
       TempHealth.MAX_STACKS`. When `maximum` is not a multiple of 5 the stack size rounds down and
       the pool the player gets back after a level transition is smaller than the one they earned.

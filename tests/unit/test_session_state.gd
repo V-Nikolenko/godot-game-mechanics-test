@@ -58,39 +58,70 @@ func test_shield_snapshot_missing_key_falls_back_to_zero() -> void:
 	s.free()
 
 
-func test_temp_health_stack_size_is_recovered_from_the_maximum() -> void:
+## The four tests below are INTENT, not characterization: the saved stack size is
+## read straight off the TempHealth component instead of being re-derived from the
+## emitted `maximum`. The old `maximum / TempHealth.MAX_STACKS` inverted an invariant
+## (`max_temp == MAX_STACKS * stack_hp`) that TempHealth is under no obligation to
+## keep, and truncated toward zero when it did not hold.
+func test_temp_health_stack_size_is_read_from_the_component() -> void:
 	var s := _fresh()
-	## maximum = TempHealth.MAX_STACKS * stack_hp, so stack_hp = maximum / 5.
-	s._on_temp_health_changed(30, 50)
-	assert_eq(s._temp_hp_current, 30)
+	var th := TempHealth.new()
+	th.add_stack(21)                       ## stack_hp = 21 / 2 = 10
+	s._on_temp_health_changed(th.current_temp, th.max_temp, th)
+	assert_eq(s._temp_hp_current, 10)
 	assert_eq(s._temp_hp_stack, 10)
+	th.free()
 	s.free()
 
 
-func test_temp_health_stack_size_uses_integer_division() -> void:
+func test_temp_health_stack_size_ignores_the_emitted_maximum() -> void:
 	var s := _fresh()
-	## CHARACTERIZED: `maximum / TempHealth.MAX_STACKS` is integer division, so a
-	## maximum that is not a multiple of 5 rounds the stack size DOWN and the
-	## reloaded pool is smaller than the one that was saved.
-	s._on_temp_health_changed(9, 12)
-	assert_eq(s._temp_hp_stack, 2, "12 / 5 truncates to 2, not 2.4")
+	var th := TempHealth.new()
+	th.add_stack(20)                       ## stack_hp = 10, max_temp = 50
+	## A maximum that does not divide cleanly by MAX_STACKS used to truncate the
+	## recovered stack size (12 / 5 -> 2), shrinking the pool the player gets back.
+	## The component is now the source of truth, so a bogus maximum cannot do that.
+	s._on_temp_health_changed(9, 12, th)
+	assert_eq(s._temp_hp_current, 9)
+	assert_eq(s._temp_hp_stack, 10, "stack_hp comes from the component, not 12 / 5")
+	th.free()
 	s.free()
 
 
-func test_temp_health_zero_maximum_clears_the_stack_size() -> void:
+func test_temp_health_stack_size_is_zero_before_any_stack() -> void:
 	var s := _fresh()
-	s._on_temp_health_changed(30, 50)
-	s._on_temp_health_changed(0, 0)
+	var th := TempHealth.new()
+	s._on_temp_health_changed(0, 0, th)
 	assert_eq(s._temp_hp_current, 0)
 	assert_eq(s._temp_hp_stack, 0)
+	th.free()
 	s.free()
+
+
+func test_temp_health_stack_size_survives_odd_base_health() -> void:
+	## Through the real signal, for base healths whose half is not a round number:
+	## the cap the player gets back must equal the cap they earned.
+	for base_health: int in [1, 3, 7, 21, 33, 99, 101]:
+		var s := _fresh()
+		var th := TempHealth.new()
+		th.amount_changed.connect(s._on_temp_health_changed.bind(th))
+		th.add_stack(base_health)
+		assert_eq(s._temp_hp_stack, th.stack_hp,
+			"base_health %d: saved stack size must match the component" % base_health)
+		assert_eq(TempHealth.MAX_STACKS * s._temp_hp_stack, th.max_temp,
+			"base_health %d: the restored cap must match the earned cap" % base_health)
+		th.free()
+		s.free()
 
 
 func test_buffs_survive_a_save_load_round_trip() -> void:
 	_sandbox.clear_all()
 	var writer := _fresh()
 	writer._on_shield_state_changed({"temp_count": 3})
-	writer._on_temp_health_changed(20, 50)
+	var th := TempHealth.new()
+	th.add_stack(20)                       ## stack_hp = 10
+	writer._on_temp_health_changed(20, th.max_temp, th)
+	th.free()
 	writer.save_temp_damage_buff(0.25, 1_900_000_000.0)
 	writer.free()
 
