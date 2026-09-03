@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 30 open)
+## Code health backlog  (`code-health-backlog`, 29 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -83,7 +83,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       *Done when:* the three files exist and every claim in `REPORT.md` names a commit, a test,
       or a plan file.
 
-- [ ] **GUT silently drops a test script it cannot load, and still exits 0.** _(todo)_
+- [x] **GUT silently drops a test script it cannot load, and still exits 0.** _(done)_
       When
       `tests/integration/test_space_station.gd` referenced classes that did not exist yet, GUT
       printed `---- All tests passed! ----`, reported `Scripts 2` instead of 3, and **returned exit

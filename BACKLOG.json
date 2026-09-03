@@ -17,7 +17,7 @@
           "id": "gut-silently-drops-a-test-script-it-cannot-load-and-still-ex",
           "head": "GUT silently drops a test script it cannot load, and still exits 0.",
           "body": "When\n`tests/integration/test_space_station.gd` referenced classes that did not exist yet, GUT\nprinted `---- All tests passed! ----`, reported `Scripts 2` instead of 3, and **returned exit\ncode 0**. The parse errors appeared only on stderr. `/agent/verify.sh` step 3 checks the exit\ncode and greps for `^N failing`, so **neither signal fires** — a test file broken by a rename\nor a deleted symbol would vanish from the suite and the gate would stay green. Cheap fix:\nhave step 3 also assert the script count, or grep its GUT output for `Parse Error` /\n`SCRIPT ERROR` the way steps 1 and 2 already do. This is the only reason the \"watch it fail\"\nstep of the feature workflow worked here — the red was read off stderr, not off GUT's verdict.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null
         },

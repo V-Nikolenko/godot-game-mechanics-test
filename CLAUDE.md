@@ -38,7 +38,10 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
   pins today's behaviour, bugs included. The exceptions are
   `tests/integration/test_resource_uid_integrity.gd`, an invariant check over `[ext_resource]`
-  UIDs, and the space-station family — `tests/integration/test_space_station.gd`,
+  UIDs, `tests/integration/test_suite_integrity.gd`, which asserts every `tests/**/test_*.gd`
+  compiles and extends `GutTest` (GUT otherwise drops an unloadable test script with only a
+  warning and still exits 0, so the gate stays green while a test file silently vanishes),
+  and the space-station family — `tests/integration/test_space_station.gd`,
   `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
   `test_station_gunnery.gd`, `test_station_reinforcements.gd` and `test_radial_attack_pattern.gd` —
   which cover new code and so

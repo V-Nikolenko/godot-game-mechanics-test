@@ -17,7 +17,7 @@ project boot.
 | `integration/` | Several systems wired together (the player damage chain), plus project-wide integrity checks over the resource files themselves. |
 | `helpers/` | Shared fixtures. **Never** named `test_*`, or GUT tries to collect them as tests. |
 
-## Two exceptions: the UID integrity test and the space-station tests
+## The exceptions: the two integrity tests and the space-station tests
 
 `integration/test_resource_uid_integrity.gd` is **not** characterization. It asserts an invariant
 that must hold — every `[ext_resource]` UID in a `.tscn`/`.tres` matches the UID its target
@@ -29,6 +29,28 @@ sibling `.import`) and never asks `ResourceUID` / `ResourceLoader`. Those consul
 once a warm project has loaded them — so the engine will happily report a broken reference as fine
 on your machine and break on a fresh clone. Five of the eight mismatches this test first caught
 behaved exactly that way. If you extend it, keep it reading files.
+
+`integration/test_suite_integrity.gd` is the other invariant test, and it polices this directory
+rather than the game. **GUT fails open on a test script it cannot use:** `test_collector.gd:131`
+drops it with nothing but a `[GUT WARNING]: Ignoring script … because it does not extend GutTest`
+line, the summary reports a smaller `Scripts` count, and GUT still prints
+`---- All tests passed! ----` and **exits 0**. The gate only reads the exit code and greps for a
+failing-test count, so neither signal fires: a test file broken by a rename or a deleted symbol
+used to vanish from the suite while the gate stayed green. That is what happened to
+`test_space_station.gd` while it was being written — the red was read off stderr, not off GUT's
+verdict.
+
+The check therefore lives inside the suite, where every runner sees it rather than only the gate
+script. It walks `res://tests` for `test_*.gd` and asserts each one compiles and reaches
+`res://addons/gut/test.gd` through its base-script chain, so a script GUT would drop now fails a
+real test and the exit code goes red. Two things to know before touching it:
+
+- **A script with a parse error still `load()`s to a non-null `GDScript`.** The giveaways are
+  `can_instantiate() == false`, an empty `get_base_script()` chain and an empty
+  `get_instance_base_type()`. A null check would catch nothing.
+- **Its walk mirrors GUT's own collection rules** — `test_` prefix, `.gd` suffix, per
+  `gut_config.gd:45`, since the gate passes no `-gprefix`. If that ever changes, change both or
+  the check quietly stops covering files.
 
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,

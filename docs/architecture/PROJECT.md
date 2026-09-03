@@ -101,8 +101,11 @@ Detail and APIs: [global.md](modules/global.md).
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`.
   The suite is almost entirely **characterization**: it pins behaviour as it is today, bugs
   included, so any behaviour change shows up as a failing test rather than as silence. The one
-  exception is `tests/integration/test_resource_uid_integrity.gd`, which asserts an invariant
-  (every `[ext_resource]` UID matches the UID its target declares) and the space-station family.
+  exceptions are the two integrity tests — `tests/integration/test_resource_uid_integrity.gd`
+  (every `[ext_resource]` UID matches the UID its target declares) and
+  `tests/integration/test_suite_integrity.gd` (every `tests/**/test_*.gd` compiles and extends
+  `GutTest`, because GUT otherwise drops an unloadable test script with only a warning and still
+  exits 0) — plus the space-station family.
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).
   Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the
