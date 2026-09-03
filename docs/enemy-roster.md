@@ -506,4 +506,19 @@ It has a **second phase**: once the last turret dies the station rotates and fir
 a stationary target, and its rotating 240×240 core hurtbox sweeps ~34 px past its axis-aligned
 footprint at 45°.
 
+**It also spawns other enemies from this roster.** During phase 1 only, `StationReinforcements`
+sends squads across the arena on a fixed `LEFT → RIGHT → BOTTOM → TOP` cycle: two `interceptor`
+from either side, two `kamikaze_drone` from below, two `fighter` with `.shoot_forward()` from
+above. Things to know if you edit that table (`station_reinforcements.gd::_build_squads()`):
+
+- It uses this file's own vocabulary — `b.interceptor().at(…).move(b.straight(…)).free_after(…)` —
+  so the rules below apply unchanged. In particular **`gunship` and `drone_interceptor` must never
+  go in it**: both are self-managed AI, and `EnemyPathMover` silently disables the AI they need.
+  A test enforces that.
+- **Every entry needs `.free_after(…)`.** The default `FREE_ON_SCREEN_EXIT` only culls a ship that
+  has already been on screen once, so one that never arrives would hold `ENEMIES_CLEARED` open.
+- **A squad ship must be killable by the player's primary weapon.** `ram_ship` is not:
+  `ram_ship.gd` narrows its HurtBox mask to 33, which excludes the bullet's layer 64. A test
+  checks every ship in the table for this.
+
 Behaviour and constraints: [`space_station/ENEMY.md`](../assault/scenes/enemies/space_station/ENEMY.md).

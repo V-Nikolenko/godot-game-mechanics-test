@@ -36,7 +36,8 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `tests/integration/test_resource_uid_integrity.gd`, an invariant check over `[ext_resource]`
   UIDs, and the space-station family — `tests/integration/test_space_station.gd`,
   `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
-  `test_station_gunnery.gd` and `test_radial_attack_pattern.gd` — which cover new code and so
+  `test_station_gunnery.gd`, `test_station_reinforcements.gd` and `test_radial_attack_pattern.gd` —
+  which cover new code and so
   assert intent. **Read [`tests/README.md`](tests/README.md) before writing a
   test** — it covers the `user://` save-file sandbox, the zero-parameter-signal trap, and the
   `LevelDirector` coroutine-leak trap, all of which cause failures (or silent leaks) unrelated to

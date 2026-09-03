@@ -290,6 +290,41 @@ what frees in-flight bullets, which otherwise hold `ENEMIES_CLEARED` open. Pinne
 The ten gunnery timings live in `space_station_config.tres` and are **copied into the gunnery's
 own fields in `_ready()`**, for the same process-wide-instance reason as the laser block.
 
+**The station calls for help**, via a third sibling node, **`StationReinforcements`**
+(`station_reinforcements.gd`) — the same composition split again, so `space_station.gd` gained
+nothing at all this time. On a one-shot `Timer` it spawns small squads of **existing** enemy
+scenes that cross the arena, so the player can no longer camp one spot while streaming into a
+turret. The squad table is fixed and cycles `LEFT → RIGHT → BOTTOM → TOP` (never `randf()`, for
+the same reason the beam angles are a list): two `interceptor` sweeping in from either side
+through the vertical middle, two `kamikaze_drone` rising from below, two `fighter` with
+`.shoot_forward()` angling down-and-inward from above. Squads are authored with `WaveBuilder`'s
+own fluent API (`b.interceptor().at(…).move(b.straight(…)).free_after(…)`), in **640×360 design
+units** scaled by `ArenaCamera.WORLD_SCALE` once at spawn — speeds are left unscaled because
+`EnemyPathMover` applies the scale itself.
+
+- **Phase 1 only.** Everything stops on `armor_broken`, and again on `died` as a backstop. Adds
+  running through phase 2 is the documented way a boss ends up overshadowed by its own minions,
+  and phase 2 is already beams every 6.5 s over rings every 2.0 s against a 48-bullet pool.
+- **Reinforcements are spawned as *siblings* of the station**, into `_station.get_parent()` —
+  i.e. `WaveManager.enemy_container`, the same place waves land. Never as children: the laser
+  phase rotates the hull, and a ship parented under it would be dragged around the arena along
+  with its own `BulletPool`'s bullets.
+- **Every entry uses `ExitMode.FREE_ON_DURATION`**, not `FREE_ON_SCREEN_EXIT`. The latter only
+  culls a ship that has been on screen at least once, so one that never quite arrives would live
+  forever and hold `ENEMIES_CLEARED` open.
+- **Each ship is announced on `EventBus.enemy_spawned_orphan`**, which `ScoreTracker` routes to
+  `_on_enemy_spawned(enemy, -1)`. That buys kill score without disturbing any wave-clear tally —
+  and it opts these ships into the game's universal 0.75× escape-combo penalty, which is a
+  deliberate balance decision pinned by a test, not an oversight.
+- **`reinforcement_max_alive` skips a *whole* squad** rather than spawning part of one, so the
+  ceiling is exactly that number. The live list is pruned with `is_instance_valid` each time or
+  the cap would jam permanently once ships start being culled.
+
+The three cadence/cap fields live in `space_station_config.tres` and are copied in `_ready()` like
+the other two blocks; the squad table itself stays in the script, because it is scene geometry
+rather than a stat — the same split that keeps `laser_emitter_radius` on the phase node. Pinned by
+`tests/integration/test_station_reinforcements.gd`.
+
 **`LevelSection.enemies_cleared_timeout`** is the safety net for `ENEMIES_CLEARED`: seconds to
 wait for `enemy_container` to empty before giving up. It defaults to `10.0` — the constant it
 replaced, sized for "wait for the last stragglers to leave", which is what `cloud_descent` wants —

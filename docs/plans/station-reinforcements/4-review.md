@@ -265,3 +265,206 @@ Checked and confirmed, so the implementer does not spend the session second-gues
 4. S1-S4: cap semantics, timer-restart split, test 15's mechanism, citation line numbers.
 
 Re-submit with those and this is an approve — the skeleton does not need to change.
+
+---
+
+# Review round 2
+
+VERDICT: APPROVED
+
+Reviewed Revision 2 against the code, not against the plan's description of it. Every `file:line`
+the plan cites that is load-bearing for a decision was opened, plus the three squad ship scenes,
+`base_enemy.gd`, `aimed_attack_pattern.gd` and the PNG headers. All three blocking findings from
+round 1 are genuinely resolved — not merely acknowledged — and S1-S4 are resolved as well. The
+findings below are non-blocking: four test/citation corrections to make while implementing, none of
+which changes the design. Implementation may start.
+
+## Round-1 findings: verification
+
+### B1 — RESOLVED. `fighter` is real, bullet-killable, mover-driven, and 60 HP.
+
+- `assault/scenes/enemies/light_assault_ship/` exists with `light_assault_ship.tscn`,
+  `light_assault_ship.gd`, `fighter_config.tres`. `WaveBuilder.FIGHTER`
+  (`assault/scenes/systems/wave_builder.gd:231`) points at it; `b.fighter()` is `wave_builder.gd:78`;
+  `.shoot_forward()` is `wave_builder.gd:50-52` and sets `_props["aim_mode"] = "FORWARD"`, which
+  `light_assault_ship.gd:10` declares as a plain var readable in `_ready()`. All real.
+- **60 HP confirmed**: `assault/scenes/enemies/light_assault_ship/fighter_config.tres:7`
+  `max_health = 60`, applied at `light_assault_ship.gd:19-20`.
+- **Bullet-killable confirmed, but the plan cites the wrong line for it** (see N1 below). Runtime
+  mask is `1121` from `assault/scenes/enemies/base_enemy.gd:25`, and `1121 & 64 == 64`.
+- **Fires along travel, confirmed at the mechanism**: `EnemyPathMover` sets
+  `_actor.rotation = atan2(-vel.x, vel.y)` every frame
+  (`assault/scenes/enemies/enemy_path_mover.gd:80-87`), and
+  `global/resources/attack/aimed_attack_pattern.gd:28-31` with `aim_at_player = false` fires
+  `Vector2.DOWN.rotated(ship.rotation)`. For `straight(170, 0.5)` I get bullet direction
+  `(0.479, 0.878)` — exactly the travel vector. The plan's claim holds.
+- **`EnemyPathMover` does not fight the fighter's AI.** `light_assault_ship.tscn:99-111` has an
+  `AIStateMachine` with `ApproachState`/`StrafeExitState` that call `move_and_slide()`;
+  `enemy_path_mover.gd:62-65` disables `_physics_process` *and* sets
+  `get_node_or_null("AIStateMachine").process_mode = PROCESS_MODE_DISABLED`. Both are suppressed.
+  `docs/enemy-roster.md:58` ("Fully delegated to `EnemyPathMover`") is accurate.
+- The `ram_ship` evidence the swap rests on all re-checked and correct: `ram_ship.gd:19`
+  (`collision_mask = 33`), `ram_ship.gd:16-17` (only `movement_speed` applied),
+  `ram_config.tres:8` (`max_health = 999`, dead), `bullet.tscn:44` (`collision_layer = 64`).
+  Rejected-alternative 5 is a fair statement of the counter-case.
+
+### B2 — RESOLVED. The "Scoring and combo" section is accurate and test 17's arithmetic is right.
+
+Every step of the chain re-read in `assault/scenes/systems/score_tracker/score_tracker.gd`:
+`:74-75` connects `EventBus.enemy_spawned_orphan`, `:89-90` routes to `_on_enemy_spawned(enemy, -1)`,
+`:161-164` connects `tree_exited -> _on_enemy_freed` unconditionally, `:211` applies
+`_combo *= score_config.escape_combo_multiplier` **outside** the `if counts_in_wave:` block at
+`:205-209`, and `:212-213` floors at 1.0. **`combo_changed` is emitted on the escape path** —
+`:215`, so test 17's premise is sound.
+`global/resources/score_config_default.tres:11` is `escape_combo_multiplier = 0.75`; `4.0 * 0.75 *
+0.75 = 2.25`, above the 1.0 floor, so the assertion is exact and not clamped. The decision to
+register anyway is argued with both sides and routed to the backlog — that satisfies what round 1
+asked for.
+
+### B3 — RESOLVED. Half-extent 37 and the 777/397 margins re-derive correctly.
+
+`assault/scenes/enemies/interceptor/interceptor.tscn:58-60` — `Sprite2D`, no `scale`;
+`:62-64` — the `1.8` is the sibling `CollisionShape2D` over a radius-14 circle. PNG header of
+`assault/assets/sprites/enemies/interceptor.png` reads **64x74**, so half-extent 37. ✓
+`arena_camera.gd:35-39` gives `WORLD_SCALE 2.0`, `SCREEN_W 1280`, `SCREEN_H 720`, `H_LIMIT 100`,
+`V_LIMIT 380`. `640 + 100 + 37 = 777`; `360 + 37 = 397`. ✓ The false "±420 was insufficient" claim
+is gone and replaced with an honest "round number, 103 px of headroom".
+
+**Test 4 is now non-vacuous** in the sense that matters: it is a constraint on future edits
+(`abs(x)*2 > 777` fails at design ±380), and its constants are no longer fabricated. Its vertical
+clause (`abs(y)*2 > 397`, i.e. `abs(y) > 198.5`) is only marginally stronger than test 3's
+`abs(y) > 180` — that is a nit, not a defect.
+
+### S1-S4 — all RESOLVED.
+
+- **S1**: cap is now `skip the squad if _alive.size() + squad.size() > max`. With `max = 4` and
+  2-ship squads the sequence is 2 → 4 → skip. Ceiling is exactly 4. Test 12 probes that boundary at
+  the shipped value. ✓
+- **S2**: `_on_timer_timeout()` is named, `one_shot = true`, and "`spawn_next_squad()` touches no
+  timer at all" is stated explicitly with the reason (cases 10/11/12). ✓
+- **S3**: test 15 is now reads of `Timer.one_shot` / `wait_time` / `is_stopped()`, no wall clock.
+  `Timer.start(x)` does assign `wait_time`, so the assertion is well-formed. ✓
+- **S4**: spot-checked six corrected citations, all now correct —
+  `level_1_director.gd:110-144` (`_spawn_bonus_drone`, and `:125` really is a raw world-px
+  `Vector2(-680, 60)`), `level_director.gd:116` (the `while container.get_child_count() > 0` poll),
+  `station_gunnery.gd:64-73` (the conservative fallback block, comment at `:61-63`),
+  `score_tracker.gd:74-75` + `:89-90`, `test_station_gunnery.gd:81-86` (`_bullets()`),
+  `wave_manager.gd:159-205` (the model, incl. the `* ArenaCamera.WORLD_SCALE` at `:172` that
+  `_spawn_bonus_drone` lacks). Also verified `wave_builder.gd:211-221`, `enemy_path_mover.gd:77`,
+  `straight_movement.gd:2,13`, `arena_camera.gd:5-12`, `event_bus.gd:69`, `bullet_pool.gd:47`,
+  `station_laser_phase.gd:123`, `level_1.tscn:22-26`, `space_station.gd:36`.
+
+## New in Revision 2: sanity checks
+
+- **Fighter squad geometry — clear, re-derived for the bigger sprite.** Round 1 verified hull
+  clearance against `ram_ship`'s 32x32 sprite; the fighter uses
+  `assault/assets/sprites/enemies/assault.png`, which is **64x64** (half-extent 16 design units), so
+  the check needed redoing. `straight(170, 0.5)` gives `tan = 0.5463`; from design (-250, -290) the
+  ship is at x = -175.7 when it reaches the hull's y = -154 and x = -105.8 at y = -26 (hull spans
+  design x -64..64, y -154..-26, confirmed from `level_1_director.gd:225-227` and the 256x256
+  `station_core.png`). Closest approach 41.8 design units against a 16-unit half-extent — **26 design
+  units (52 world px) of gap.** Against the rotated hull (half-diagonal 90.5 design units) the
+  perpendicular distance from the path line to the hull centre is 123.5 units, clear by 17. Mirrored
+  on the right. Still clear.
+- **`.shoot_forward()` × `EnemyPathMover` — no bad interaction.** Verified above at
+  `aimed_attack_pattern.gd:28-31` and `enemy_path_mover.gd:80-87`. Also checked friendly fire:
+  `enemy_bullet.tscn:22-23` is `collision_layer 256 / mask 128` (player HurtBox only) and the
+  station's HurtBox is layer 512 (`space_station.tscn:72-74`), so fighter bullets cannot damage the
+  boss. And bullets travel along the same ray as the ship, so they inherit the hull clearance.
+- **Test 16 is implementable as written.** `hurt_box` is `@onready var hurt_box: HurtBox = $HurtBox`
+  on `base_enemy.gd:7`, and all three squad scenes have a `HurtBox` child at that exact path
+  (`light_assault_ship.tscn:81`, `interceptor.tscn:66`, `kamikaze_drone.tscn:34`). It **must** be in
+  the tree for two independent reasons — the `@onready` resolution, and because the governing mask
+  is written in `_ready()` (`base_enemy.gd:25`, and `ram_ship.gd:19` overriding it after
+  `super._ready()`). The plan says exactly that. `1121 & 64 == 64` passes for the three chosen ships
+  and `33 & 64 == 0` fails for `ram_ship`, so the assertion discriminates.
+
+## Non-blocking findings (fix while implementing)
+
+### N1. The plan's evidence for "the fighter is bullet-killable" is a line that does not govern runtime.
+
+`3-plan.md:102-103` cites `light_assault_ship.tscn:83` (`collision_mask = 65`). That authored value
+is **overwritten** on the first frame: `assault/scenes/enemies/base_enemy.gd:25` sets
+`hurt_box.collision_mask = 97 | 1024` (= 1121) for every `BaseEnemy` before any subclass runs. The
+conclusion is right — 1121 includes 64 — but the correct citation is `base_enemy.gd:25`, with
+`ram_ship.gd:19` as the one subclass that narrows it afterwards. This is the same class of
+scene-line misreading round 1 caught, and it is exactly the sentence that carries the B1 fix. Cite
+`base_enemy.gd:25`.
+
+### N2. Test 10's `_timer.is_stopped()` clause is vacuous under the stated harness.
+
+`3-plan.md:258-259` says the reinforcement `Timer` is "stopped in `before_each` so every spawn is
+forced". Test 10 (`3-plan.md:273`) then asserts `_timer.is_stopped()` after `armor_broken` — but it
+is already stopped before the test does anything. The second clause ("a subsequent
+`spawn_next_squad()` adds nothing") is the real assertion and carries the case. Fix: have test 10
+call `_reinf._timer.start(...)` immediately before emitting `armor_broken`, so the stop is observed
+rather than pre-supposed. `test_station_gunnery.gd:42-44` stops both timers in `before_each` and
+notes "One test exercises the timers" — same shape.
+
+### N3. Test 17 will fail intermittently unless it also disables `ScoreTracker._process`.
+
+`score_tracker.gd:112-124`: while `_combo > 1.0`, `_process` decrements `_combo_decay_remaining`
+every frame and, the moment it reaches 0, sets `_combo = 1.0` and emits `combo_changed(1.0, 0.0)`.
+Forcing `_combo = 4.0` without also setting `_combo_decay_remaining` leaves it at its default 0.0,
+so the very next processed frame resets the combo to 1.0 — and `start_tracking()`
+(`score_tracker.gd:55-57`) turns `_process` on. This repo already documents the trap and its remedy:
+`tests/integration/test_station_assault_section.gd:142-147` calls `tracker.set_process(false)` with
+a comment, and then asserts on `tracker.get("_combo")` (`:162-163`) rather than on the last
+`combo_changed` payload. Test 17 should say it does both. As written the case is meaningful and can
+fail for the right reason; it just also fails for the wrong one.
+
+### N4. The Risks section understates the top squad's fire rate after the B1 swap.
+
+`3-plan.md:284-287` notes the top squad "now shoot" but gives no numbers, and a reader will assume
+`fighter_config.tres:11`'s `fire_interval = 0.8` / the 250 px/s default. `light_assault_ship.gd:42`
+and `:44` special-case FORWARD mode: `fire_interval = 0.3` and `bullet_speed = 420.0`. Two fighters
+therefore add ~6.7 bullets/s at 420 px/s — comparable to the entire four-turret fan (6.7 bullets/s
+at 240 px/s, `space_station_config.gd:62-65`) — for the ~3.3 s of their transit. That may well be
+fine, and the cap plus the phase gate bound it, but the density risk should carry the real figure
+since the B1 swap is what introduced it. `3-plan.md:104-106`'s "does not pile a *third* source of
+*aimed* fire" is true and is not the point.
+
+### Nits
+
+- `3-plan.md:107` cites `docs/enemy-roster.md:76` for "the roster's own example"; line 76 is blank,
+  the example is `docs/enemy-roster.md:78`.
+- `3-plan.md:104` cites `light_assault_ship.gd:33-42` for firing along travel. Those lines resolve
+  `aim_mode` and build the pattern; the actual "fire along `ship.rotation`" is
+  `global/resources/attack/aimed_attack_pattern.gd:28-31`. Worth citing both.
+- `3-plan.md:136` lists `_spawn_entry` step 6 as attaching a mover with `movement` / `exit_mode` /
+  `exit_time` only. `wave_manager.gd:201-204` also copies `look_in_moving_direction` and
+  `look_angle`. The defaults (`true` / `0.0`) are what `.shoot_forward()` needs, so nothing breaks —
+  but carry them anyway so the entry stays the single source of truth.
+- Test 4's vertical clause (`abs(y)*2 > 397`) barely exceeds test 3's (`abs(y) > 180`). Harmless.
+- Test 16 iterates only the squad table, so "it fails today for `ram_ship`" is a counterfactual, not
+  an executed assertion. It is still a real guard against a future swap; just do not describe it as
+  currently exercising the ram case.
+
+## Standard gate
+
+- **Reinvention:** none. `global/components/` has no spawner (listed and checked); nothing else in
+  the repo spawns ad-hoc except `big_asteroid.gd:77` and `level_1_director.gd:110-144`, both of which
+  the plan cites as precedent rather than duplicating. Rejected alternative 3 correctly declines to
+  build a generic component for one caller.
+- **Conventions:** composition (a fourth sibling behaviour node, `space_station.gd` gains nothing) ✓;
+  config-driven `.tres` with read-once-and-copy and deliberately different node defaults, matching
+  `station_gunnery.gd:55-73` ✓; 640x360 design units scaled by `ArenaCamera.WORLD_SCALE` at spawn,
+  never pre-multiplied, with speeds left unscaled because `enemy_path_mover.gd:77` applies the scale ✓;
+  zero-arg `died` / `armor_broken` handlers ✓ (`base_enemy.gd:4`, `space_station.gd:34`).
+- **Test plan:** read `tests/README.md` first. The file lands in the space-station family, so
+  intent-asserting is correct (`tests/README.md:33-38`). No case waits on a wall clock; the
+  `LevelDirector` coroutine-leak trap (`:47-53`) does not apply; the `ExplosionEffect`-parents-to-
+  container trap (`:127-141`) is acknowledged in Risks and the container-child filter is cited at
+  `test_station_gunnery.gd:81-86`; the `station.config` shared-instance trap (`:122-126`) is
+  explicitly forbidden in the harness. Cases 4, 12, 15, 16 and 17 all discriminate; see N2 and N3
+  for the two that need a mechanical tweak.
+- **Simpler unexamined alternative:** I looked for one and did not find a better option. The nearest
+  is "make `WaveManager._spawn_ship` public and call it", which would couple the boss node to a
+  `WaveManager` reference it has no other reason to hold and would inherit the
+  `wave_manager.gd:160-162` no-camera return that the plan deliberately diverges from. ~15 lines of
+  duplication against the cited model is the right trade.
+- **Research:** five findings, each with a tradeoff column; F1's unreachable source is honestly
+  flagged and used only for direction. Round 1 verified the sources; B3 was the only measurement
+  error and it is fixed. `2-research.md:34` still needs the same 67 -> 37 correction the plan already
+  made — the build sequence should include it, since round 1 asked for both documents.
+- **Scope:** 2 code files + 1 scene + 1 test file + docs. One session, comparable to 4a.

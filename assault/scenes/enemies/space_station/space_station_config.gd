@@ -108,3 +108,37 @@ extends ShipConfig
 ## Core bullet speed (px/s). 52 % of player speed — the slowest of the three, because phase 2
 ## already has sweeping beams to dodge.
 @export var core_bullet_speed: float = 210.0
+
+## ── Reinforcements (EPIC sub-item 4b) ─────────────────────────────────────────
+##
+## Read ONCE by `StationReinforcements._ready()`, which copies them into its own fields and never
+## reads this resource again — the same discipline as the laser and gunnery blocks above, and for
+## the same reason: this `.tres` is a single process-wide instance, so anything reading through it
+## at runtime is reading mutable global state.
+##
+## The squad TABLE is not here — which ships come from which edge, at what offsets, on what
+## movement — because that is scene/level geometry rather than a stat, the same split that keeps
+## `laser_emitter_radius` and the two gunnery `spawn_radius` values on their nodes.
+
+## Seconds from the station spawning to the FIRST reinforcement squad.
+##
+## The opening belongs to the boss alone. Research finding 1 (the Flunky-Boss critique) is that
+## adds arriving during a boss's introduction are the main way a boss ends up overshadowed by its
+## own minions, and 8 s is roughly two turret volleys plus the time to read the hull.
+@export var reinforcement_first_delay: float = 8.0
+
+## Seconds between squads after the first.
+##
+## The top of research finding 4's 5-10 s attack-switch band, so a squad lands as an *event* that
+## punctuates the 1.8 s turret cadence instead of blurring into it. Over a phase 1 of ~25-35 s that
+## is 2-3 squads, 4-6 ships.
+@export var reinforcement_interval: float = 10.0
+
+## Hard ceiling on live reinforcements, i.e. two squads' worth.
+##
+## `spawn_next_squad()` skips the WHOLE squad when `alive + squad_size` would exceed this, never
+## spawning half of one — so the real ceiling is exactly this number, not this number plus a squad.
+## At a 10 s interval against a ~4 s transit it should never bind in normal play; it is the valve
+## for a stalled fight where the player is killing nothing, and it is what stops the screen becoming
+## unreadable next to a four-turret fan volley (research finding 2's tradeoff).
+@export var reinforcement_max_alive: int = 4

@@ -227,14 +227,35 @@ and only when the station is destroyed does the level continue to the planet.
       `Gunnery` node is required or the exported reference is silently left null **with the gate
       still green**.
 
-- [ ] **4b. Reinforcements.** During the fight, existing enemy ships fly in from the sides, top
+- [x] **4b. Reinforcements.** During the fight, existing enemy ships fly in from the sides, top
       and bottom.
       *Done when:* reinforcement waves spawn from at least three screen edges and a headless run of
       the section produces no errors.
-      Starting points: the station is spawned as a single zero-delay wave with no `.delay()` and no
-      `.move()` (both load-bearing — see `enemy-roster.md`), so reinforcements need to come from
-      somewhere other than that wave; and `LevelSection.ENEMIES_CLEARED` polls the container's
-      child count, so a reinforcement still alive holds the section open after the boss dies.
+      **Done 2026-09-03.** `StationReinforcements`
+      (`assault/scenes/enemies/space_station/station_reinforcements.gd`) as a third sibling node
+      alongside `StationLaserPhase` and `StationGunnery` — `space_station.gd` gained **nothing**,
+      not even an accessor. Squads cycle `LEFT → RIGHT → BOTTOM → TOP` (**four** edges, not the
+      three the done-condition asked for): 2 × `interceptor` from either side, 2 × `kamikaze_drone`
+      from below, 2 × `fighter` + `.shoot_forward()` from above, all authored with `WaveBuilder`'s
+      own fluent API in 640×360 design units. Three new `SpaceStationConfig` fields (8 s first
+      delay / 10 s interval / cap 4). Tests: `test_station_reinforcements.gd` (18). Gate green:
+      24 scripts / 232 tests / 868 asserts.
+      Plan + **two** review rounds: `docs/plans/station-reinforcements/`. Round 1 was
+      CHANGES_REQUESTED and paid for itself: it caught that the planned top squad (`ram_ship`) is
+      **immune to the player's primary weapon** — `ram_ship.gd:19` narrows its HurtBox mask to 33,
+      which excludes the bullet's layer 64 — so the squad would have been two indestructible
+      obstacles by accident; and that registering adds with `ScoreTracker` also opts them into the
+      0.75× escape-combo penalty, which nobody had examined. Round 2 approved.
+      Both backlog warnings were handled: reinforcements come from a station-owned node rather than
+      the station's own wave, and stopping at `armor_broken` plus `FREE_ON_DURATION` means nothing
+      can be left alive to hold `ENEMIES_CLEARED` open.
+      Four things a future cycle should not have to rediscover: reinforcements must be **siblings**
+      of the station and never children (the laser phase rotates the hull, and `bullet_pool.gd:47`
+      hardcodes `get_parent().get_parent()`); `FREE_ON_SCREEN_EXIT` cannot be used for an
+      off-screen spawn because it only culls a ship that has already been on screen once; the
+      station's `died` signal cannot be tested without unhooking `armor_broken` first, because the
+      armour rule makes `armor_broken` the only route to it; and a ship's **runtime** HurtBox mask
+      comes from `base_enemy.gd:25`, never from the value authored in its `.tscn`.
 
 - [ ] **5. Destruction hands off to the planet approach.** Station death plays out and the level
       continues into `planet_approach` and the planet entry.
@@ -517,3 +538,44 @@ Found on 2026-09-02 while implementing the station laser phase (EPIC sub-item 3)
       only for the *player* layer and only against a `LaserRay`. Nothing yet proves a player
       **bullet** can hit the core's layer-512 hurtbox or a turret's. Closing it still needs a test
       that instances `assault/scenes/projectiles/bullets/bullet.tscn` and steps physics.
+
+Found on 2026-09-03 while implementing station reinforcements (EPIC sub-item 4b).
+
+- [ ] **`ram_ship` cannot be hit by the player's primary weapon, and its config HP is dead code.**
+      `assault/scenes/enemies/ram_ship/ram_ship.gd:19` narrows the HurtBox mask to
+      `33` (`# missiles only (32 + 1); bullets ignored`) after `BaseEnemy._ready()` has set the
+      normal `97 | 1024`. The player's bullet is `collision_layer = 64`
+      (`assault/scenes/projectiles/bullets/bullet.tscn:44`), so **no bullet ever reaches it**;
+      `bullet.gd:71` additionally has a `ram_ships`-group node *consume* a piercing sniper shot and
+      zero its damage. On top of that `ram_config.tres:8` sets `max_health = 999` and
+      `ram_ship.gd:16-17` never applies it (only `movement_speed`), so the scene's bare `Health`
+      default is what actually runs — the number a reader would look up is fiction.
+      Whether the immunity is intended is a **design call**, so it is filed rather than fixed:
+      either it is a deliberate dodge-only obstacle, in which case
+      `docs/enemy-roster.md:127`'s "**HP:** Medium" is misleading and should say so, or it is a bug
+      and the mask should be the inherited one. Either way `ram_config.tres`'s `max_health` should
+      be applied or deleted. 4b swapped its top squad to `fighter` to avoid the question, and
+      `tests/integration/test_station_reinforcements.gd` now asserts every squad ship is
+      bullet-killable so the class of mistake cannot recur silently.
+
+- [ ] **The 0.75× escape-combo penalty applies to ad-hoc spawns nobody expects to kill.**
+      `assault/scenes/systems/score_tracker/score_tracker.gd:211` multiplies the combo by
+      `escape_combo_multiplier` **outside** the `if counts_in_wave:` block, so a `wave_index` of
+      `-1` (every `EventBus.enemy_spawned_orphan` spawn) is not exempt, and neither is
+      `counts_toward_wave_clear = false`. Station reinforcements are designed to fly through, so a
+      player who correctly ignores a squad to focus the boss pays 0.75 twice per squad (0.5625) and
+      floors their multiplier after about three. `Level1Director._spawn_bonus_drone` has the same
+      shape but a bonus drone is a rare optional pickup, not six scheduled ships.
+      4b **accepted this deliberately** — the alternative is that killing a reinforcement awards
+      nothing at all, which reads as a bug — and pinned the exact number in
+      `test_station_reinforcements.gd`. Recording it so the user can overrule: the fix, if wanted,
+      is a `counts_as_escape` flag on the spawn rather than a special case for one enemy source.
+
+- [ ] **A spawn's off-screen margin cannot account for camera pan, project-wide.**
+      Every spawn in the game resolves its offset against `cam.global_position`, which
+      `arena_camera.gd:5-12` pins at (640, 360) and never moves — panning happens through `offset`.
+      So a player panned fully down (`V_LIMIT` is 380) can in principle watch a bottom-edge spawn
+      appear. 4b matched the existing convention rather than diverging for one node, and excluded
+      `V_LIMIT` from its vertical margin budget on purpose. Fixing it properly means spawns
+      resolving against the *visible* rect rather than the camera centre, which touches
+      `wave_manager.gd:172` and every spawn offset in the game — not a 4b-sized change.

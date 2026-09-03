@@ -1,4 +1,4 @@
-[gd_scene load_steps=16 format=3 uid="uid://82pgd5bowmxe"]
+[gd_scene load_steps=17 format=3 uid="uid://82pgd5bowmxe"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_ss"]
 [ext_resource type="Script" uid="uid://btfpfe0ipovkd" path="res://assault/scenes/enemies/space_station/space_station.gd" id="2_ss"]
@@ -10,6 +10,7 @@
 [ext_resource type="Script" uid="uid://kvgsxhn0cac7" path="res://global/components/bullet_pool.gd" id="8_ss"]
 [ext_resource type="PackedScene" uid="uid://wi7ci5dkn7k7" path="res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn" id="9_ss"]
 [ext_resource type="Script" uid="uid://0dk0toyoxowg" path="res://assault/scenes/enemies/space_station/station_gunnery.gd" id="10_ss"]
+[ext_resource type="Script" uid="uid://jfdcv6l6phrr" path="res://assault/scenes/enemies/space_station/station_reinforcements.gd" id="11_ss"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ss"]
 resource_local_to_scene = true
@@ -127,3 +128,11 @@ metadata/_custom_type_script = "uid://kvgsxhn0cac7"
 [node name="Gunnery" type="Node2D" parent="." node_paths=PackedStringArray("bullet_pool")]
 script = ExtResource("10_ss")
 bullet_pool = NodePath("../BulletPool")
+
+; The fourth sibling behaviour node, after LaserPhase, BulletPool and Gunnery. It spawns
+; reinforcement squads as SIBLINGS OF THE STATION (into get_parent(), i.e. the enemy container),
+; never as children of it — station_laser_phase.gd:123 rotates the hull, and anything parented
+; under the station would be dragged around the arena with it. No node_paths= tag is needed here
+; because this node exports no node references; it resolves its parent in _ready().
+[node name="Reinforcements" type="Node2D" parent="."]
+script = ExtResource("11_ss")

@@ -18,8 +18,11 @@ Five findings, each fetched and read (two needed `scripts/fetch-page.sh` — `sh
   core rings every 2.0 s. Adding a third source there is precisely the "constant spawns overshadow
   the boss" failure, and it would also fight the 48-bullet pool for screen space.
 - **F2 → the squads are popcorn**: `interceptor` (low-medium HP), `kamikaze_drone` (very low),
-  `ram_ship` (medium, no shooting). No new enemy types, per the EPIC constraint. No gunship —
-  it is a 200 HP self-managed-AI enemy that would become a second boss.
+  `fighter` / `light_assault_ship` (60 HP). No new enemy types, per the EPIC constraint. No gunship —
+  it is a 200 HP self-managed-AI enemy that would become a second boss. **Not `ram_ship` either**:
+  review round 1 found `ram_ship.gd:19` narrows its HurtBox mask to 33, which excludes the player
+  bullet's layer 64 (`bullet.tscn:44`), so it is not popcorn at all — it is unkillable by the
+  primary weapon. See `3-plan.md`'s rejected alternative 5.
 - **F3 → a fixed, cycling squad order that alternates sides**: left → right → bottom → top. Fixed,
   never `randf()` — the laser phase already established that random attack ordering cannot be
   balanced or tested. Side lanes at design y = 20 / 80 (i.e. the vertical middle), not hugging the
@@ -31,13 +34,19 @@ Five findings, each fetched and read (two needed `scripts/fetch-page.sh` — `sh
   ~25-35 s inside a 40-50 s stage-1 fight that is 2-3 squads, 4-6 ships.
 - **F5 → concrete margins.** `ArenaCamera`: `SCREEN_W 1280`, `SCREEN_H 720`, `H_LIMIT 100`,
   `V_LIMIT 380`, `WORLD_SCALE 2.0`, and `global_position` pinned at (640, 360) with all panning
-  done through `offset`. Largest reinforcement sprite is the **interceptor**: a 64x74 texture on a `Sprite2D` scaled 1.8 (`interceptor.tscn:63`) = 115x133 world px, half-extent ~67 (not 32 — the `ram_ship` and `kamikaze_drone` textures are only 32x32).
-  Horizontal: need > 640 + 100 + 67 = 807 world px from centre → **design x = ±440** (880 world,
-  73 px of clearance in the worst pan). Vertical: a strict F5 margin would need
-  360 + 380 + 67 = 807 world px too, but every spawn in the shipped game resolves against
-  `cam.global_position` (the *fixed* centre) and not the panned view — deliberately, per
-  `arena_camera.gd:8-12`. Matching that convention is worth more than the last 200 px of margin, so
-  **design y = ±290** (580 world, 220 px past the nominal edge) and the residual is recorded as a
+  done through `offset`. Largest reinforcement sprite is the **interceptor**: its `Sprite2D`
+  (`interceptor.tscn:58-60`) carries **no `scale`**, so it renders at its texture size, 64x74 —
+  half-extent **37**. (The `1.8` on `interceptor.tscn:63` belongs to the sibling `CollisionShape2D`
+  over a radius-14 circle, i.e. the collider, not the sprite; review round 1 caught the misreading
+  that put this figure at 67. The `light_assault_ship` sprite is 64x64 and the `kamikaze_drone`
+  32x32, both smaller.)
+  Horizontal: need > 640 + 100 + 37 = 777 world px from centre → **design x = ±440** (880 world,
+  103 px of headroom; ±420 would also have cleared it — ±440 is the round number, not a minimum).
+  Vertical: a strict F5 margin would need 360 + 380 + 37 = 777 world px too, but every spawn in the
+  shipped game resolves against `cam.global_position` (the *fixed* centre) and not the panned view —
+  deliberately, per `arena_camera.gd:8-12`. Matching that convention is worth more than the last
+  380 px of margin, so the budget is 360 + 37 = **397** and
+  **design y = ±290** (580 world, 183 px of headroom) and the residual is recorded as a
   project-wide pre-existing property, not something 4b fixes.
 
 ## Unreachable sources

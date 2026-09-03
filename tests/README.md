@@ -32,9 +32,9 @@ behaved exactly that way. If you extend it, keep it reading files.
 
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
-`test_station_gunnery.gd` and `test_radial_attack_pattern.gd` — are the other exceptions, for a
+`test_station_gunnery.gd`, `test_station_reinforcements.gd` and `test_radial_attack_pattern.gd` — are the other exceptions, for a
 different reason: the `space_station` entity, the `station_assault` section, the laser phase, the
-gunnery and `RadialAttackPattern` are all **new code**, so their tests assert intended behaviour
+gunnery, the reinforcement spawner and `RadialAttackPattern` are all **new code**, so their tests assert intended behaviour
 rather than pinning existing quirks.
 `test_space_station.gd` carries a documented coverage gap — it drives damage by emitting
 `HurtBox.received_damage` directly, so it proves nothing about collision layers, and the section
@@ -116,6 +116,24 @@ barrel rotation, dead turrets dropping out of the volley, ring precession, the `
 design lock, teardown, and the config copy. Plus the shared pattern resource it drives
 (`integration/test_radial_attack_pattern.gd`) — ring vs fan spacing, aiming, `spawn_radius`, that
 it ignores `ship.rotation`, and that `bullet_count <= 0` fires nothing.
+Entities, the adds: `StationReinforcements` (`integration/test_station_reinforcements.gd`) — the
+config copy, four-edge coverage, that every squad entry starts off screen and clears the measured
+spawn margin, deterministic `LEFT→RIGHT→BOTTOM→TOP` cycling, that ships are spawned as *siblings*
+of the station with an `EnemyPathMover`, that every movement points into the screen, the
+`FREE_ON_DURATION` guarantee, `enemy_spawned_orphan` registration, both stop signals, the
+whole-squad population cap, the one-shot-timer split, that every ship the table can spawn is
+killable by the player's primary weapon, and the two-ship escape-combo cost.
+
+Two things that file had to work around, both worth knowing:
+
+- **`died` cannot be tested without unhooking `armor_broken` first.** The station refuses all core
+  damage while a turret lives, so the only route to `died` runs through `armor_broken` — which
+  already stops the spawner. Without the disconnect, the case passes even if the `died` connection
+  is deleted.
+- **`ScoreTracker._process` resets any forced combo to 1.0 on the first frame** when
+  `_combo_decay_remaining` is 0, and `start_tracking()` turns `_process` on. Call
+  `tracker.set_process(false)` and assert on `tracker.get("_combo")`, as
+  `integration/test_station_assault_section.gd` already does.
 
 ### Three traps `test_station_laser_phase.gd` had to work around
 

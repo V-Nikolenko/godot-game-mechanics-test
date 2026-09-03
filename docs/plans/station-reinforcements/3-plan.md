@@ -1,8 +1,9 @@
 # Station reinforcements (EPIC sub-item 4b)
 
-> **Revision 2** — revised after `4-review.md` round 1 (`VERDICT: CHANGES_REQUESTED`). Changes are
-> marked **[R2]** and summarised at the bottom under *Revision log*. The round-1 review also
-> verified a long list of mechanics as correct; those are not re-argued here.
+> **Revision 3** — Revision 2 answered `4-review.md` round 1 (`VERDICT: CHANGES_REQUESTED`); round 2
+> returned `VERDICT: APPROVED` with four non-blocking findings, folded in as **[R3]**. Changes are
+> marked **[R2]** / **[R3]** and summarised at the bottom under *Revision log*. Both review rounds
+> also verified a long list of mechanics as correct; those are not re-argued here.
 
 ## Problem
 
@@ -91,20 +92,34 @@ Why these numbers:
 - **Top squad enters at design x = +/-250 and angles inward** so it neither hugs the border nor
   clips the hull. Hull spans design x -64..64, y -154..-26; a ship entering at (-250, -290) on angle
   0.5 is at x ~= -176 when it reaches y = -154 and x ~= -106 when it leaves at y = -26 — clear
-  throughout, and mirrored on the right. (Verified independently in round 1: closest approach 42
-  design units, still clear against the rotated hull's half-diagonal.)
+  throughout, and mirrored on the right. **[R3]** Review round 2 re-derived this for the *fighter's*
+  sprite rather than the ram's — `assault.png` is 64x64, half-extent 16 design units, twice the
+  ram's — and it still clears: closest approach 41.8 units, so **26 design units (52 world px) of
+  gap**, and 17 units of clearance against the rotated hull's 90.5-unit half-diagonal. The fighter's
+  bullets travel the same ray as the ship, so they inherit that clearance; they also cannot damage
+  the boss at all, since `enemy_bullet.tscn:22-23` masks only the player HurtBox layer 128 while the
+  station's HurtBox is layer 512 (`space_station.tscn:72-74`).
 - **[R2] The top squad is `fighter` (`light_assault_ship`), not `ram_ship`.** Round 1 found that
   `ram_ship.gd:19` sets `hurt_box.collision_mask = 33` ("missiles only; bullets ignored") while the
   player's bullet is `collision_layer = 64` (`bullet.tscn:44`) — a ram ship **cannot be hit by the
   player's primary weapon at all**, and `bullet.gd:71` even has it swallow piercing sniper shots.
   Two indestructible obstacles arriving every fourth cycle is not the popcorn role finding 2
   describes, and `docs/enemy-roster.md:127` ("HP: Medium") does not document the mask. `fighter` is
-  60 HP (`fighter_config.tres:7`), `collision_mask = 65` on its HurtBox
-  (`light_assault_ship.tscn:83`, which includes the bullet's layer 64), and is `EnemyPathMover`-
-  driven (`docs/enemy-roster.md:58`). `.shoot_forward()` makes it fire along its diagonal travel
-  (`light_assault_ship.gd:33-42`), which reads as a strafing run and does not pile a *third* source
-  of aimed fire on top of the turret fans. The roster's own example
-  (`docs/enemy-roster.md:76`) is this exact construction.
+  60 HP (`fighter_config.tres:7`, applied at `light_assault_ship.gd:19-20`), and its HurtBox mask at
+  **runtime** is `97 | 1024` = 1121, which includes the bullet's layer 64. **[R3, review N1]** That
+  mask comes from `base_enemy.gd:25`, not from the `collision_mask = 65` authored on
+  `light_assault_ship.tscn:83` — `BaseEnemy._ready()` overwrites the scene value for every enemy on
+  the first frame, and `ram_ship.gd:19` is the one subclass that narrows it again afterwards. So the
+  governing citation for "is this ship killable by the primary weapon?" is always `base_enemy.gd:25`
+  plus any subclass override, never the scene file. It is `EnemyPathMover`-driven
+  (`docs/enemy-roster.md:58`), and the mover also disables its `AIStateMachine`
+  (`enemy_path_mover.gd:62-65`) so its approach/strafe states do not fight the path.
+  `.shoot_forward()` makes it fire along its diagonal travel: the mover writes
+  `rotation = atan2(-vel.x, vel.y)` each frame (`enemy_path_mover.gd:80-87`) and
+  `aimed_attack_pattern.gd:28-31` fires `Vector2.DOWN.rotated(ship.rotation)` when
+  `aim_at_player` is false (selected at `light_assault_ship.gd:33-45`). That reads as a strafing run
+  and does not pile a *third* source of **aimed** fire on top of the turret fans — but it is not
+  free, see *Risks*. The roster's own example (`docs/enemy-roster.md:78`) is this exact construction.
 - **`interceptor` / `kamikaze_drone` / `fighter`** are the popcorn tiers (finding 2), all existing
   scenes per the EPIC's "reuse existing enemy scenes, do not create new enemy types". Deliberately
   **not** `gunship` or `drone_interceptor`: `docs/enemy-roster.md:260,294` marks both as
@@ -133,7 +148,7 @@ wave registry* — not as a line-for-line model, because it adds a raw world-px 
 3. apply `e.initial_props` before `add_child` (so they are readable in `_ready()`)
 4. `_container().add_child(entity)`
 5. `EventBus.enemy_spawned_orphan.emit(entity)`
-6. attach an `EnemyPathMover` with `e.movement`, `e.exit_mode`, `e.exit_time`
+6. attach an `EnemyPathMover` with `e.movement`, `e.exit_mode`, `e.exit_time`, **and [R3, review nit] `e.look_in_moving_direction` / `e.look_angle`** — `wave_manager.gd:201-204` copies those too, and carrying them keeps the `SpawnEntryResource` the single source of truth even though the defaults (`true` / `0.0`) are already what `.shoot_forward()` needs
 
 - `_container()` is `_station.get_parent()`. In the level that is `wave_manager.enemy_container`
   (`level_1.tscn:22-26`, a bare `Node2D` with an identity transform); in tests it is the harness
@@ -270,22 +285,29 @@ No case awaits more than a frame; nothing is driven by a wall clock.
 | 7 | Each entry's movement vector points **into** the screen: `movement.sample(1.0).dot(centre - spawn_pos) > 0` | A sign flip in the 0-is-down angle convention — the exact bug class that shipped once already in the turret barrels |
 | 8 | Every spawned mover has `exit_mode == FREE_ON_DURATION` and `exit_time > 0` | A reinforcement that can never be culled, stranding `ENEMIES_CLEARED` |
 | 9 | `EventBus.enemy_spawned_orphan` is emitted once per spawned ship | Reinforcement kills silently awarding no score |
-| 10 | Killing all four turrets (`armor_broken`) stops it: `_timer.is_stopped()` **and** a subsequent `spawn_next_squad()` adds nothing | The phase gate, i.e. the whole design-1 finding |
+| 10 | Killing all four turrets (`armor_broken`) stops it. **[R3, review N2]** The case must `_timer.start(...)` immediately before emitting `armor_broken`, then assert `_timer.is_stopped()` — `before_each` already stops the timer, so without the restart that clause is vacuous. Then a subsequent `spawn_next_squad()` adds nothing | The phase gate, i.e. the whole design-1 finding |
 | 11 | `died` stops it: kill the core, then `spawn_next_squad()` adds nothing | Reinforcements outliving the boss and holding the section open |
 | 12 | **[R2] Boundary, at the shipped value:** with `reinforcement_max_alive = 4` and 2-ship squads — spawn (2 alive), spawn (4 alive), spawn -> **nothing added**; then free all four and spawn -> 2 appear | The off-by-a-squad the review caught (an "already met" check would let the third squad through at 4), and an `is_instance_valid` prune that never runs, permanently jamming the spawner |
 | 13 | No squad entry uses the `gunship` or `drone_interceptor` scene | `docs/enemy-roster.md:260,294`'s self-managed-AI rule, which `EnemyPathMover` silently breaks |
 | 14 | `space_station.tscn` contains a `Reinforcements` child whose script is `StationReinforcements` | The scene wiring — 4a lost time to an unwired export that left the gate green |
 | 15 | **[R2]** After `_ready()`, `_timer.one_shot` is true and `_timer.wait_time == reinforcement_first_delay`; after one `_on_timer_timeout()` call, `_timer.wait_time == reinforcement_interval` and `not _timer.is_stopped()` | First squad never arriving, arriving on the boss's first frame, or the cadence collapsing to the first delay forever. Read from the timer, never awaited |
-| 16 | **[R2]** Every ship the squad table can spawn is **killable by the player's primary weapon**: instantiate it, add it to the tree so its `_ready()` runs, and assert `hurt_box.collision_mask & 64 != 0` (`bullet.tscn:44`, `collision_layer = 64`) | Exactly the `ram_ship` defect (mask 33) the review caught, caught automatically next time. Non-vacuous: it fails today for `ram_ship` and passes for the three chosen ships |
-| 17 | **[R2]** The combo cost is what the design says it is: with a `ScoreTracker` started, force `_combo` to 4.0, spawn a squad, free both ships, and assert the last `EventBus.combo_changed` payload is `4.0 * 0.75 * 0.75 = 2.25` | Pins the balance decision above with a number rather than a comment. Would fail if the escape path were quietly exempted, or if the emit were dropped (no `combo_changed` at all) |
+| 16 | **[R2]** Every ship the squad table can spawn is **killable by the player's primary weapon**: instantiate it, add it to the tree so its `_ready()` runs (both because `hurt_box` is `@onready` on `base_enemy.gd:7` and because the governing mask is written in `_ready()` at `base_enemy.gd:25`), and assert `hurt_box.collision_mask & 64 != 0` (`bullet.tscn:44`, `collision_layer = 64`) | Exactly the `ram_ship` defect (mask 33) the review caught, caught automatically the next time someone swaps a squad ship. **[R3, review nit]** It iterates the squad table only, so it does not *execute* the ram case — the discrimination (`1121 & 64 == 64` passes, `33 & 64 == 0` fails) is real but counterfactual today |
+| 17 | **[R2]** The combo cost is what the design says it is: with a `ScoreTracker` started, force `_combo` to 4.0, spawn a squad, free both ships, and assert `4.0 * 0.75 * 0.75 = 2.25` (above the 1.0 floor, so it is exact). **[R3, review N3]** The case must also `tracker.set_process(false)` first and assert on `tracker.get("_combo")` rather than on the last `combo_changed` payload: `score_tracker.gd:112-124` decays the combo to 1.0 on the first processed frame when `_combo_decay_remaining` is 0, and `start_tracking()` turns `_process` on. `test_station_assault_section.gd:142-147` already documents this exact remedy | Pins the balance decision above with a number rather than a comment. Would fail if the escape path were quietly exempted, or if the emit were dropped |
 
 ## Risks
 
-- **Screen density in phase 1.** Four turret fans (3 bullets each, every 1.8 s) plus up to 4
-  reinforcements, two of which (the top squad) now shoot. Mitigated by the
-  `reinforcement_max_alive` cap, by `.shoot_forward()` rather than aimed fire, and by stopping at
-  `armor_broken`. This cannot be checked headless, so the cap is the structural guard and test 12
-  pins it at the shipped value.
+- **Screen density in phase 1, with the real numbers. [R3, review N4]** Four turret fans are
+  4 x 3 / 1.8 s = **6.7 bullets/s at 240 px/s** (`space_station_config.gd:62-65`). The top squad
+  adds more than the R2 text implied: `light_assault_ship.gd:42,44` **special-cases FORWARD mode**
+  to `fire_interval = 0.3` and `bullet_speed = 420.0`, not the config's 0.8 / 250. Two fighters are
+  therefore ~**6.7 bullets/s at 420 px/s** — comparable to the entire turret volley — for the ~3.3 s
+  of their transit. That roughly doubles phase-1 bullet volume while the top squad is on screen.
+  It is bounded three ways: the squad is 1 of 4 in the cycle so it arrives at most every ~40 s, the
+  `reinforcement_max_alive` cap holds the population at 4, and everything stops at `armor_broken`.
+  It is also `.shoot_forward()`, so the bullets travel the squad's own diagonal and never track the
+  player. Accepted, but it is the single most likely thing to want re-tuning after a playtest — and
+  it cannot be checked headless, so the cap is the structural guard and test 12 pins it at the
+  shipped value.
 - **The bottom-edge spawn is behind the player.** Finding 5's "spawn furthest from the player"
   cannot be honoured literally for a fixed table. Mitigated by using the *slowest* ships there
   (`kamikaze_drone`, 170 vs 200) and by the 580 world px of run-up, ~1.7 s of visible approach.
@@ -335,3 +357,20 @@ No case awaits more than a frame; nothing is driven by a wall clock.
   `station_gunnery.gd:64-73`, `score_tracker.gd:74-75` + `:89-90`,
   `test_station_gunnery.gd:81-86`); `_spawn_bonus_drone` demoted from "line-for-line model" to
   "precedent for spawning outside the wave registry", with `wave_manager.gd:159-205` as the model.
+
+**R3, after review round 2 (`VERDICT: APPROVED`, non-blocking findings only):**
+
+- **N1** — the "fighter is bullet-killable" evidence now cites `base_enemy.gd:25` (runtime mask
+  1121), not the authored `light_assault_ship.tscn:83` that `BaseEnemy._ready()` overwrites.
+- **N2** — test 10 must `_timer.start(...)` before emitting `armor_broken`; `before_each` already
+  stops the timer, so the `is_stopped()` clause was vacuous as written.
+- **N3** — test 17 must `tracker.set_process(false)` and read `tracker.get("_combo")`, or the
+  combo-decay `_process` resets it to 1.0 on the first frame.
+- **N4** — the density risk carries the real figures: FORWARD mode forces `fire_interval = 0.3` and
+  `bullet_speed = 420.0` (`light_assault_ship.gd:42,44`), so the top squad roughly doubles phase-1
+  bullet volume during its transit.
+- Nits — `docs/enemy-roster.md:78` (not `:76`); `aimed_attack_pattern.gd:28-31` cited alongside
+  `light_assault_ship.gd:33-45`; `_spawn_entry` step 6 also carries `look_in_moving_direction` /
+  `look_angle`; test 16's ram case described honestly as counterfactual.
+- `2-research.md` F5 corrected to half-extent 37 / margins 777-397, and its F2 popcorn list swapped
+  `ram_ship` for `fighter` — round 1 asked for both documents and only the plan had been updated.

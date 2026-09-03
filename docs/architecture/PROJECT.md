@@ -129,6 +129,12 @@ states on `space_station.gd`
 one-way and there are only two phases, and this project reserves the node-per-file state machine
 for genuinely complex entities. Revisit if a third phase appears.
 
+A **third** child node, `StationReinforcements`, runs only during phase 1: it spawns squads of
+existing enemy scenes from all four screen edges on a fixed cycle, and stops on `armor_broken`.
+It is the project's first spawner that is not `WaveManager` — reinforcements go straight into
+`enemy_container` as siblings of the station and register on `EventBus.enemy_spawned_orphan`,
+the same channel `big_asteroid.gd` uses for its shards.
+
 For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-roster.md).
 
 ---

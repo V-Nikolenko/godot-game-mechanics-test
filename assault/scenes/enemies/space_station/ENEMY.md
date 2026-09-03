@@ -9,15 +9,17 @@ sweeping beams and precessing bullet rings from the exposed core.
 teaches the rule without any UI: kill the guns first, then the core. Stripping the armour is not a
 reward — it wakes the superweapon up, and the second half is fought on the move.
 
-> **Status: EPIC sub-items 1–3 and 4a done.** The entity exists and is destructible (1), gates
-> Level 1 as the `station_assault` section (2), has the rotating laser phase (3), and now **shoots
-> back** — aimed turret fans, then precessing core rings (4a). Still outstanding: **reinforcement
-> waves flying in from the screen edges** (sub-item 4b), and no bespoke death sequence or handoff
-> into `planet_approach` (sub-item 5). Plans and reviews:
+> **Status: EPIC sub-items 1–3, 4a and 4b done.** The entity exists and is destructible (1), gates
+> Level 1 as the `station_assault` section (2), has the rotating laser phase (3), **shoots back**
+> with aimed turret fans and precessing core rings (4a), and now **calls for reinforcements** —
+> squads of existing enemy ships crossing in from all four screen edges during phase 1 (4b). Still
+> outstanding: no bespoke death sequence or handoff into `planet_approach` (sub-item 5). Plans and
+> reviews:
 > [`docs/plans/station-mini-boss-destructible/`](../../../../docs/plans/station-mini-boss-destructible/),
 > [`docs/plans/station-assault-section/`](../../../../docs/plans/station-assault-section/),
 > [`docs/plans/station-laser-phase/`](../../../../docs/plans/station-laser-phase/),
-> [`docs/plans/station-bullet-hell/`](../../../../docs/plans/station-bullet-hell/).
+> [`docs/plans/station-bullet-hell/`](../../../../docs/plans/station-bullet-hell/),
+> [`docs/plans/station-reinforcements/`](../../../../docs/plans/station-reinforcements/).
 
 ---
 
@@ -208,6 +210,106 @@ collision-mask assertion still bites.**
 
 If the sweep reads badly in play, `laser_rotation_speed` is the single knob.
 
+
+---
+
+## Reinforcements (`Reinforcements` → `station_reinforcements.gd`)
+
+Sub-item 4b. **Phase 1 only.** While the turrets are still up, the station calls in squads of
+existing enemy ships that cross the arena. Before this the fight was a duel in a vacuum: the
+player picked a comfortable spot below the hull and streamed into one turret at a time. Now the
+safe spot for dodging turret fans is not the safe spot when an interceptor is strafing through it.
+
+The third sibling behaviour node, on the same pattern as `LaserPhase` and `Gunnery`. This one is
+the purest version of the split — **`space_station.gd` gained nothing at all**, not even an
+accessor.
+
+### The squad table
+
+Fixed, cycling, **never `randf()`** — the same rule the beam angle list follows, and for the same
+reason. Order is `LEFT → RIGHT → BOTTOM → TOP`, so consecutive squads arrive from opposite sides
+and pull the player across the screen rather than nudging them.
+
+| # | Edge | Ships | Offsets (design units) | Movement |
+|---|---|---|---|---|
+| 0 | Left | 2 × `interceptor` | (-440, 20), (-440, 80) | `straight(200, PI/2)` — rightward |
+| 1 | Right | 2 × `interceptor` | (440, 20), (440, 80) | `straight(200, -PI/2)` — leftward |
+| 2 | Bottom | 2 × `kamikaze_drone` | (-100, 290), (100, 290) | `straight(170, PI)` — upward |
+| 3 | Top | 2 × `fighter` + `.shoot_forward()` | (-250, -290), (250, -290) | `straight(170, ±0.5)` — down-and-inward |
+
+Every entry also gets `.free_after(reinforcement_lifetime)` (7.0 s).
+
+Squads are authored with **`WaveBuilder`'s own fluent API** and stored as
+`Array[SpawnEntryResource]` via `b.wave(0.0, […]).entries`, so they read in exactly the vocabulary
+of [`docs/enemy-roster.md`](../../../../docs/enemy-roster.md) instead of a second one invented
+here. Offsets are **640×360 design units** multiplied by `ArenaCamera.WORLD_SCALE` once at spawn;
+speeds are left **unscaled**, because `EnemyPathMover` applies the scale itself — pre-multiplying
+either would double it.
+
+Why these numbers:
+
+- **±440 / ±290 design.** The margin has to exceed half the largest sprite plus the camera's pan.
+  The largest reinforcement is the interceptor at **64×74** (its `Sprite2D` carries no `scale` —
+  the `1.8` in `interceptor.tscn` is on the sibling `CollisionShape2D`), so half-extent **37**.
+  Horizontal budget `640 + H_LIMIT 100 + 37 = 777` world px; vertical `360 + 37 = 397`, with
+  `V_LIMIT` deliberately excluded because every spawn in the game resolves against the camera's
+  *fixed* centre and not the panned view. ±440 gives 880 and ±290 gives 580.
+- **Side lanes at design y = 20 / 80**, the vertical middle — not hugging a border, which creates
+  traps the player cannot escape.
+- **Top squad enters at x = ±250 angled inward**, clearing the hull by 41.8 design units against a
+  16-unit sprite half-extent.
+
+### ⚠️ Reinforcements are *siblings* of the station, never children
+
+`_container()` is `_station.get_parent()` — `WaveManager.enemy_container` in the level, the same
+place waves land. Parenting one under the station would drag it around the arena, because
+`StationLaserPhase` writes `_station.rotation`; and an `interceptor` or `fighter` builds its **own**
+`BulletPool`, whose container is the hardcoded `get_parent().get_parent()`, so its bullet field
+would swing with the hull too. Same trap as the station's own pool, one level out.
+
+### ⚠️ `FREE_ON_DURATION`, never `FREE_ON_SCREEN_EXIT`
+
+`FREE_ON_SCREEN_EXIT` only culls a ship **after** it has been on screen at least once. A ship
+spawned off screen that never quite arrives would live forever — and `LevelSection.ENEMIES_CLEARED`
+polls the container's child count, so it would hold the section open behind a 180 s timeout. Every
+entry therefore carries an explicit `exit_time`.
+
+### Scoring, and the combo cost
+
+Each ship is announced on **`EventBus.enemy_spawned_orphan`**, the channel `big_asteroid.gd`
+already uses for its shards. `ScoreTracker` routes it to `_on_enemy_spawned(enemy, -1)`, so a
+reinforcement kill pays out and the `-1` keeps it out of every wave-clear tally.
+
+That also opts these ships into the game's **universal escape penalty**: `_on_enemy_freed`
+multiplies the combo by `escape_combo_multiplier` (0.75) *outside* its `if counts_in_wave:` block,
+so `wave_index == -1` does not exempt it. A squad the player ignores costs 0.75 **twice**, i.e.
+0.5625. This is a **deliberate balance decision**, pinned by a test with real numbers — the
+alternative (not announcing) means killing a reinforcement awards nothing at all, which reads as a
+bug. Raised in `BACKLOG.md` under *Discovered* for the user to overrule.
+
+### The cap
+
+`reinforcement_max_alive` (4) **skips a whole squad** rather than spawning part of one, so the
+ceiling is exactly 4 — an "already at the cap?" check would let a 2-ship squad through at 3 alive
+and peak at 5. The live list is pruned with `is_instance_valid` on every squad; without the prune
+the cap jams permanently once four ships have been culled. When a squad is skipped the **cycle
+still advances**, so a capped fight does not freeze the rotation on one edge.
+
+### Lifecycle
+
+| Event | Effect |
+|---|---|
+| `_ready()` | Copy config, build the squad table, `_timer.start(reinforcement_first_delay)` |
+| `_timer.timeout` → `_on_timer_timeout()` | `spawn_next_squad()`, **then** `_timer.start(reinforcement_interval)` |
+| `armor_broken` | `_stop()` — phase 2 is the station's own show |
+| `died` | `_stop()` — the backstop |
+
+The `Timer` is `one_shot` and is restarted **only** from `_on_timer_timeout()`. `spawn_next_squad()`
+touches no timer at all, which is what lets a test force squads without re-arming the timer it just
+asserted stopped.
+
+Ships already in flight when `_stop()` runs are left alone: they are on a `FREE_ON_DURATION` mover
+and cull themselves within 7 s, well before the boss can die.
 ---
 
 ## Why the core is *armoured*, not *unhittable*
@@ -314,6 +416,9 @@ ShipConfig`, so the first four are inherited.
 | `core_ring_step` | `0.24` | Radians the ring's base angle advances between rings. **Do not "tidy" this to a round fraction of `TAU`** — see below. |
 | `core_bullet_damage` | `10` | Lower than the turret fan: ring bullets cannot be avoided by position alone, so they hit softer. |
 | `core_bullet_speed` | `210.0` | 52 % of player speed — the slowest of the three, because phase 2 already has sweeping beams to dodge. |
+| `reinforcement_first_delay` | `8.0` | Seconds to the first squad. The opening belongs to the boss alone — adds arriving during a boss's introduction are the main way a boss ends up overshadowed by its own minions. Roughly two turret volleys plus the time to read the hull. |
+| `reinforcement_interval` | `10.0` | Seconds between squads after the first. The top of the 5–10 s attack-switch band, so a squad lands as an *event* punctuating the 1.8 s turret cadence rather than blurring into it. Over a ~25–35 s phase 1 that is 2–3 squads. |
+| `reinforcement_max_alive` | `4` | Hard ceiling on live reinforcements, i.e. two squads. A squad is skipped **whole** when it would breach this, so the ceiling is exactly 4. Readability valve for a stalled fight; at a 10 s interval against a ~4 s transit it should not bind in normal play. |
 
 ⚠️ **`core_ring_step = 0.24` is load-bearing and is pinned by a test.** It comes from the golden
 angle: `spacing * 0.381966` = `(TAU/10) * 0.381966`, i.e. a spacing-to-step ratio of 2.618. The
@@ -344,7 +449,10 @@ intentionally different from the `.tres`, which is what stops the config test pa
 
 `laser_emitter_radius` is deliberately **not** in the config — it is scene geometry, not a stat, so
 it is `@export var emitter_radius: float = 140.0` on `StationLaserPhase`, in final on-screen pixels
-like everything else inside this scene.
+like everything else inside this scene. The two gunnery `spawn_radius` values and
+`StationReinforcements.reinforcement_lifetime` (7.0 s) follow the same rule, as does the whole
+**squad table** — offsets, ships and movements are geometry that lives next to each other in
+`station_reinforcements.gd`, not a set of tunable stats.
 
 There is no export for the turret count — turrets are authored as scene children under `Turrets`,
 so adding or removing one is a scene edit. `live_turret_count()` reads the container live, so it
@@ -384,13 +492,15 @@ penalty. That is a safety net, not a balance number.
 space_station/
 ├── ENEMY.md                    ← this file
 ├── space_station.tscn          SpaceStation + 4 turrets + LaserPhase + BulletPool + Gunnery
+│                            + Reinforcements
 ├── space_station.gd            SpaceStation (extends BaseEnemy)
 ├── space_station_config.gd     SpaceStationConfig (extends ShipConfig)
 ├── space_station_config.tres
 ├── station_turret.tscn
 ├── station_turret.gd           StationTurret (Node2D)
 ├── station_laser_phase.gd      StationLaserPhase (Node2D) — the second phase
-└── station_gunnery.gd          StationGunnery (Node2D) — the guns, both phases
+├── station_gunnery.gd          StationGunnery (Node2D) — the guns, both phases
+└── station_reinforcements.gd   StationReinforcements (Node2D) — phase-1 add squads
 ```
 
 Shared code it depends on: `global/resources/attack/radial_attack_pattern.gd`
@@ -406,3 +516,7 @@ regression, rotation rate, volley determinism, teardown, config),
 `tests/integration/test_station_gunnery.gd` (pool placement, both phases, aim, barrel rotation,
 ring precession, the `core_ring_step` design lock, teardown, config),
 `tests/integration/test_radial_attack_pattern.gd` (the shared pattern resource).
+`tests/integration/test_station_reinforcements.gd` (config copy, four-edge coverage, the
+off-screen spawn margin, deterministic cycling, sibling parenting, movement direction, the
+`FREE_ON_DURATION` guarantee, orphan-spawn registration, both stop signals, the whole-squad cap,
+the timer split, that every squad ship is killable by the primary weapon, and the combo cost).
