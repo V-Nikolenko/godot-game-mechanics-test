@@ -25,7 +25,7 @@
           "id": "upgradestate-unlock-accepts-ids-that-are-not-in-allids",
           "head": "`UpgradeState.unlock()` accepts ids that are not in `ALL_IDS`.",
           "body": "A typo'd id is stored and reported `true` by `is_unlocked()`, but `unlocked_ids()` iterates\n`ALL_IDS`, so it never appears in any menu — a silent, invisible failure. Compare\n`ShipModuleState.unlock()`, which validates and `push_warning`s. Pinned by\n`tests/unit/test_upgrade_state.gd::test_unknown_ids_are_stored_but_never_listed`.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null
         },
@@ -249,6 +249,22 @@
           "id": "declaring-a-signal-s-parameters-does-not-stop-the-mismatch-i",
           "head": "Declaring a signal's parameters does not stop the mismatch it looks like it stops.",
           "body": "Worth knowing before someone \"fixes\" the next one and assumes the problem is gone. **Measured\non Godot 4.6.3 with a throwaway `SceneTree` probe**, not inferred: a signal's declared arity\nis **documentation only**. `signal foo` and\n`signal foo(x: int)` behave identically at `emit()` time, and connecting a zero-argument\ncallable to either is accepted at connect time (`connect()` returns `OK` in both cases) and\nerrors identically at emit time with `Method expected 0 argument(s), but called with 1`.\nThe one thing that does differ is `Object.get_signal_list()`, which reports the declared\narity — 0 vs 1 — which is exactly why the new tests assert against it. So the 2026-09-03 fix made\n`Health.amount_changed` and `State.state_transition` honest to a reader and to editor\ncompletion, and nothing more. Anything that wants a *real* guarantee has to assert the\narity from a test the way `test_amount_changed_declares_the_int_it_emits` does, by reading\n`Object.get_signal_list()`.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "the-reflect-abilitystate-migration-was-abandoned-half-done",
+          "head": "The reflect -> AbilityState migration was abandoned half-done.",
+          "body": "`docs/superpowers/plans/2026-05-06-abilities-health-shield.md` planned to replace the\n`reflect` upgrade with an `AbilityState` autoload. Only part of it landed:\n\n- `&\"reflect\"` WAS removed from `UpgradeState.ALL_IDS` (Step 5, done).\n- The `reflect` input action WAS replaced by `use_ability` in `project.godot:101` (Step 3, done).\n- `AbilityState` was NEVER created (Step 1/2 — `global/autoloads/` has no `ability_state.gd`,\n  and `project.godot` has no such autoload).\n\nThe leftover is `assault/scenes/player/states/reflect_state.gd`: 80 lines of working\nparry/reflect logic that is dead three times over — no `.tscn` instances it, its\n`_on_action(\"reflect\")` waits on an input action that no longer exists, and its\n`UpgradeState.is_unlocked(&\"reflect\")` gate is on an id nothing unlocks.\n\nDecide one way or the other: either finish the migration (build `AbilityState`, wire\n`reflect_state.gd` to `use_ability`) or delete the script and drop `&\"reflect\"` from\n`UpgradeState.ABILITY_IDS`. Right now it is a trap — it reads as a live feature.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "longrange-tres-is-an-orphaned-weapon-mode-with-no-id-in-alli",
+          "head": "`long_range.tres` is an orphaned weapon mode with no id in ALL_IDS.",
+          "body": "`assault/scenes/player/weapons/modes/` contains six `.tres` files but\n`UpgradeState.ALL_IDS` names only five: `default`, `sniper_shot`, `spread`, `gatling`,\n`mining_laser`. `long_range.tres` matches no id.\n\n`WeaponState._load_modes()` (`assault/scenes/player/states/weapon_state.gd:31-37`) iterates\nALL_IDS and skips paths that do not exist, so the resource is simply never loaded — the\nweapon cannot be selected, cycled to, or shown in the player menu. The behaviour is a\n`LONG` entry in `_build_behaviors()` (`weapon_state.gd:41`) that nothing can ever reach.\n\nEither add `&\"long_range\"` to `ALL_IDS` (it needs a `_WEAPON_ICONS` entry in\n`global/ui/player_menu/player_menu.gd` too) or delete the `.tres` and the `LongRangeBehavior`\nwiring. Same abandoned-migration origin as the reflect item — the plan at\n`docs/superpowers/plans/2026-05-06-abilities-health-shield.md` renamed the mode list.",
           "state": "todo",
           "badge": null,
           "planDir": null

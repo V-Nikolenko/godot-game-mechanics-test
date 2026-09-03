@@ -17,7 +17,7 @@ global/
 │   ├── session_state.gd       # SessionState: temp buffs surviving level transitions / restarts
 │   ├── ship_module_state.gd   # ShipModuleState: equipped/unlocked module per slot
 │   ├── ship_progression_state.gd # ShipProgressionState: permanent shield slot count
-│   └── upgrade_state.gd       # UpgradeState: unlocked weapon upgrade ids
+│   └── upgrade_state.gd       # UpgradeState: unlocked weapon upgrade + ability ids (validated)
 ├── components/                # composable child-node behaviours
 │   ├── health_component.gd        # Health (Node)
 │   ├── temp_health_component.gd   # TempHealth (Node) — drains before Health
@@ -67,7 +67,7 @@ All eight are registered in `project.godot` under `[autoload]`. The `*` prefix m
 |---|---|---|---|
 | `MissionState` | `global/autoloads/mission_state.gd` | Per-mission `completed` / `stars` / `high_score`, plus cutscene-seen flags. Persists to `user://mission_state.cfg`. | Written on mission win (`complete`, `record_score`) and when a cutscene plays (`mark_cutscene_seen`); read by the mission-select hub and HUD. |
 | `DialogPlayer` | `global/autoload/dialog_player.gd` | Active dialog run state (`is_active`, `auto_mode`, current script/line). Owns a `DialogBox` instance. | Written by callers via `play(script)` / `skip_dialog()`; read by player controllers to gate input while `is_active`. |
-| `UpgradeState` | `global/autoloads/upgrade_state.gd` | Set of unlocked weapon-upgrade ids (`default`, `sniper_shot`, `spread`, `gatling`, `mining_laser`). Persists to `user://upgrades.cfg`. | Written by `unlock(id)`; read by weapon-selection UI via `is_unlocked` / `unlocked_ids`. Emits `unlocked_changed`. |
+| `UpgradeState` | `global/autoloads/upgrade_state.gd` | Set of unlocked ids, split in two: `ALL_IDS` weapon modes (`default`, `sniper_shot`, `spread`, `gatling`, `mining_laser`) and `ABILITY_IDS` non-weapon abilities (`reflect`). Persists to `user://upgrades.cfg`. | Written by `unlock(id)`; read by weapon-selection UI via `is_unlocked` / `unlocked_ids`. Emits `unlocked_changed`. Both `unlock()` and `_load()` reject any id failing `is_known_id()` with a `push_warning`, so a typo or a stale save entry can no longer sit in the store invisibly. |
 | `EventBus` | `global/systems/event_bus.gd` | No state — pure signal hub (health, overheat, weapon, mission, scoring signals). | Emitted by gameplay (e.g. `PlayerBase` emits `player_health_changed`); subscribed by HUD/UI instead of polling nodes. |
 | `ShipModuleState` | `global/autoloads/ship_module_state.gd` | Equipped + unlocked module id per slot (`cockpit`/`armor`/`weapons`/`engines`). Persists to `user://ship_modules.cfg`. | Written by `equip` / `unlock`; read by the ship menu and player ship on spawn. Emits `module_equipped` / `module_unequipped` / `module_unlocked`. |
 | `ShipProgressionState` | `global/autoloads/ship_progression_state.gd` | Permanent shield slot count (clamped 1..5). Persists to `user://ship_progression.cfg`. | Written by `add_permanent_shield` / `set_permanent_shield_count`; read by `Shield._ready()` when `bind_progression == true`. Emits `permanent_shield_count_changed`. |

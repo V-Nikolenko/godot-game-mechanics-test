@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 29 open)
+## Code health backlog  (`code-health-backlog`, 30 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -94,7 +94,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `SCRIPT ERROR` the way steps 1 and 2 already do. This is the only reason the "watch it fail"
       step of the feature workflow worked here — the red was read off stderr, not off GUT's verdict.
 
-- [ ] **`UpgradeState.unlock()` accepts ids that are not in `ALL_IDS`.** _(todo)_
+- [x] **`UpgradeState.unlock()` accepts ids that are not in `ALL_IDS`.** _(done)_
       A typo'd id is stored and reported `true` by `is_unlocked()`, but `unlocked_ids()` iterates
       `ALL_IDS`, so it never appears in any menu — a silent, invisible failure. Compare
       `ShipModuleState.unlock()`, which validates and `push_warning`s. Pinned by
@@ -423,6 +423,39 @@ the signal that the change was deliberate. Test names are given so the fix has a
       completion, and nothing more. Anything that wants a *real* guarantee has to assert the
       arity from a test the way `test_amount_changed_declares_the_int_it_emits` does, by reading
       `Object.get_signal_list()`.
+
+- [ ] **The reflect -> AbilityState migration was abandoned half-done.** _(todo)_
+      `docs/superpowers/plans/2026-05-06-abilities-health-shield.md` planned to replace the
+      `reflect` upgrade with an `AbilityState` autoload. Only part of it landed:
+      
+      - `&"reflect"` WAS removed from `UpgradeState.ALL_IDS` (Step 5, done).
+      - The `reflect` input action WAS replaced by `use_ability` in `project.godot:101` (Step 3, done).
+      - `AbilityState` was NEVER created (Step 1/2 — `global/autoloads/` has no `ability_state.gd`,
+        and `project.godot` has no such autoload).
+      
+      The leftover is `assault/scenes/player/states/reflect_state.gd`: 80 lines of working
+      parry/reflect logic that is dead three times over — no `.tscn` instances it, its
+      `_on_action("reflect")` waits on an input action that no longer exists, and its
+      `UpgradeState.is_unlocked(&"reflect")` gate is on an id nothing unlocks.
+      
+      Decide one way or the other: either finish the migration (build `AbilityState`, wire
+      `reflect_state.gd` to `use_ability`) or delete the script and drop `&"reflect"` from
+      `UpgradeState.ABILITY_IDS`. Right now it is a trap — it reads as a live feature.
+
+- [ ] **`long_range.tres` is an orphaned weapon mode with no id in ALL_IDS.** _(todo)_
+      `assault/scenes/player/weapons/modes/` contains six `.tres` files but
+      `UpgradeState.ALL_IDS` names only five: `default`, `sniper_shot`, `spread`, `gatling`,
+      `mining_laser`. `long_range.tres` matches no id.
+      
+      `WeaponState._load_modes()` (`assault/scenes/player/states/weapon_state.gd:31-37`) iterates
+      ALL_IDS and skips paths that do not exist, so the resource is simply never loaded — the
+      weapon cannot be selected, cycled to, or shown in the player menu. The behaviour is a
+      `LONG` entry in `_build_behaviors()` (`weapon_state.gd:41`) that nothing can ever reach.
+      
+      Either add `&"long_range"` to `ALL_IDS` (it needs a `_WEAPON_ICONS` entry in
+      `global/ui/player_menu/player_menu.gd` too) or delete the `.tres` and the `LongRangeBehavior`
+      wiring. Same abandoned-migration origin as the reflect item — the plan at
+      `docs/superpowers/plans/2026-05-06-abilities-health-shield.md` renamed the mode list.
 
 ## Foundations: test harness, UID integrity, art pipeline  [DONE]  (`foundations-test-harness-uid-integrity-art-pipeline`, 0 open)
 

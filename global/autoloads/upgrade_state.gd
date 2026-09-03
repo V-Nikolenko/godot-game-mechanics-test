@@ -2,16 +2,29 @@
 extends Node
 
 ## Persistent unlock store for ship upgrades.
-## Access anywhere: UpgradeState.unlock(&"piercing")
+## Access anywhere: UpgradeState.unlock(&"gatling")
 ##                  UpgradeState.is_unlocked(&"reflect")
 ##                  UpgradeState.unlocked_ids()
+##
+## Ids are validated on the way in and on load — see ALL_IDS / ABILITY_IDS below.
 
 const SAVE_PATH := "user://upgrades.cfg"
 const SECTION := "upgrades"
 
+## Weapon modes. Each id must have a matching `assault/scenes/player/weapons/modes/<id>.tres`;
+## `unlocked_ids()` walks this list in order, and that is what drives the weapon cycle and the
+## player menu's main-weapon column.
 const ALL_IDS: Array[StringName] = [
 	&"default", &"sniper_shot", &"spread", &"gatling", &"mining_laser"
 ]
+
+## Non-weapon abilities that share this unlock store. They are deliberately absent from
+## ALL_IDS — an ability listed by `unlocked_ids()` would appear in the weapon cycle as an
+## unusable entry with no `modes/<id>.tres` behind it.
+## &"reflect" is read by `assault/scenes/player/states/reflect_state.gd`. That script is
+## currently orphaned — the `reflect` input action was replaced by `use_ability` and no scene
+## instances it — but the id stays accepted here so reviving it needs no change to this file.
+const ABILITY_IDS: Array[StringName] = [&"reflect"]
 
 signal unlocked_changed(id: StringName)
 
@@ -26,7 +39,14 @@ func _ready() -> void:
 func is_unlocked(id: StringName) -> bool:
 	return _unlocked.get(id, false)
 
+## Every id `unlock()` accepts: a weapon mode or a standalone ability.
+static func is_known_id(id: StringName) -> bool:
+	return id in ALL_IDS or id in ABILITY_IDS
+
 func unlock(id: StringName) -> void:
+	if not is_known_id(id):
+		push_warning("UpgradeState: unknown upgrade id '%s', ignoring" % id)
+		return
 	if _unlocked.get(id, false):
 		return
 	_unlocked[id] = true
@@ -59,4 +79,10 @@ func _load() -> void:
 	if not cfg.has_section(SECTION):
 		return
 	for key: String in cfg.get_section_keys(SECTION):
-		_unlocked[StringName(key)] = cfg.get_value(SECTION, key, false)
+		var id := StringName(key)
+		if not is_known_id(id):
+			## A renamed or removed upgrade left behind in an older profile. Dropping it here
+			## keeps the store to ids the rest of the game can actually act on.
+			push_warning("UpgradeState: unknown upgrade id '%s' in save file, ignoring" % key)
+			continue
+		_unlocked[id] = cfg.get_value(SECTION, key, false)
