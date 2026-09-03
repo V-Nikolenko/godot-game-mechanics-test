@@ -14,3 +14,8 @@ export_credentials.cfg
 .mono/
 data_*/
 mono_crash.*.json
+
+# Transient lock directory for BACKLOG.json's writer coordination
+# (backlog-store.js withLock, used by scripts/backlog-cli.js and backlog-ui.js).
+# Should never exist outside an in-flight write; never commit it if it does.
+BACKLOG.json.lock/
