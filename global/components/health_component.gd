@@ -1,7 +1,13 @@
 class_name Health
 extends Node
 
-signal amount_changed
+## Emitted by `set_health()` on EVERY call, including no-op ones (a heal at full health,
+## damage landing on an already-dead entity). Listeners must tolerate repeats.
+##
+## Declared with the argument it is actually emitted with. A ZERO-argument handler is still
+## an engine error here — `Method expected 0 argument(s), but called with 1` — so connect
+## one-argument callables. See `tests/README.md`.
+signal amount_changed(current_health: int)
 
 @export_category("Health")
 @export var max_health: int = 100
@@ -31,7 +37,12 @@ func decrease(amount: int) -> void:
 		return
 
 	var changed_health = clamp(current_health - amount, 0, max_health)
-	print("[Health] %s took %d damage: %d → %d HP" % [get_parent().name, amount, current_health, changed_health])
+	## Verbose-gated: this is one line per projectile per frame in a bullet-hell section,
+	## where it costs real time and buries genuine errors. Run Godot with `--verbose` to
+	## get it back. The parent fallback keeps a not-yet-parented Health from dying here.
+	if OS.is_stdout_verbose():
+		var owner_name := get_parent().name if get_parent() != null else name
+		print("[Health] %s took %d damage: %d → %d HP" % [owner_name, amount, current_health, changed_health])
 	set_health(changed_health)
 	if invincibility_frames_enabled:
 		_start_invincibility()

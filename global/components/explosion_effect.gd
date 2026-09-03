@@ -23,8 +23,20 @@ extends Node2D
 ## Enable for the player death explosion so it shows on the game-over screen.
 @export var always_process: bool = false
 
-## Spawn the explosion at the parent entity's current world position.
-func explode() -> void:
+## Spawn the explosion at the parent entity's current world position, or at [param at]
+## when one is given.
+##
+## [param at] (a Vector2, or null/omitted) exists for entities whose death is a CHAIN of
+## blasts across a large hull rather than one burst at the centre — StationDeathSequence.
+## Omitting it preserves the historic behaviour exactly, so every existing caller is
+## unaffected.
+##
+## NOTE the particles are still parented to `actor.get_parent()` regardless of [param at]:
+## `at` moves the blast, it does not re-home it. An ExplosionEffect must therefore be a
+## child of the ENTITY (as base_enemy.gd:32-33 does), not of one of the entity's own
+## behaviour nodes — one hop too deep and the particles land inside the entity, where they
+## are freed with it and inherit its rotation.
+func explode(at: Variant = null) -> void:
 	var actor := get_parent() as Node2D
 	if not actor:
 		return
@@ -33,7 +45,14 @@ func explode() -> void:
 		return
 
 	var p := CPUParticles2D.new()
-	p.global_position = actor.global_position
+	## Direct typed assignment — `at as Vector2` is invalid on built-in value types in
+	## GDScript 4 and would silently return null, i.e. a blast at the origin with no error.
+	## Same trap wave_manager.gd:137 and :170-171 document.
+	if at is Vector2:
+		var pos: Vector2 = at
+		p.global_position = pos
+	else:
+		p.global_position = actor.global_position
 	if always_process:
 		p.process_mode = Node.PROCESS_MODE_ALWAYS
 	p.emitting = true

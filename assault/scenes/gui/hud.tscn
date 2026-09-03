@@ -8,7 +8,7 @@
 [ext_resource type="PackedScene" uid="uid://d3w5o2bii2h1" path="res://global/ui/player_menu/player_menu.tscn" id="6_pmenu"]
 [ext_resource type="PackedScene" uid="uid://hudscore001" path="res://assault/scenes/gui/hud_score_widget.tscn" id="7_score"]
 [ext_resource type="Script" uid="uid://dcv2wxqsxckh3" path="res://assault/scenes/gui/score_popup_spawner.gd" id="8_popup"]
-[ext_resource type="PackedScene" uid="uid://b7p4usem3nu02" path="res://global/ui/pause_menu/pause_menu.tscn" id="9_pause"]
+[ext_resource type="PackedScene" uid="uid://b7mp4u8g6nf85" path="res://global/ui/pause_menu/pause_menu.tscn" id="9_pause"]
 [ext_resource type="PackedScene" path="res://global/components/shield_icon_strip.tscn" id="10_strip"]
 
 [node name="HUD" type="CanvasLayer"]

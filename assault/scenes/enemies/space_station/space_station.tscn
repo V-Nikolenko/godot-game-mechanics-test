@@ -1,0 +1,151 @@
+[gd_scene load_steps=18 format=3 uid="uid://82pgd5bowmxe"]
+
+[ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_ss"]
+[ext_resource type="Script" uid="uid://btfpfe0ipovkd" path="res://assault/scenes/enemies/space_station/space_station.gd" id="2_ss"]
+[ext_resource type="Texture2D" uid="uid://dkimdnfmfcosy" path="res://assault/assets/sprites/enemies/station_core.png" id="3_ss"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_ss"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_ss"]
+[ext_resource type="PackedScene" uid="uid://brvigjc05beif" path="res://assault/scenes/enemies/space_station/station_turret.tscn" id="6_ss"]
+[ext_resource type="Script" uid="uid://d3skhwjukmkhd" path="res://assault/scenes/enemies/space_station/station_laser_phase.gd" id="7_ss"]
+[ext_resource type="Script" uid="uid://kvgsxhn0cac7" path="res://global/components/bullet_pool.gd" id="8_ss"]
+[ext_resource type="PackedScene" uid="uid://wi7ci5dkn7k7" path="res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn" id="9_ss"]
+[ext_resource type="Script" uid="uid://0dk0toyoxowg" path="res://assault/scenes/enemies/space_station/station_gunnery.gd" id="10_ss"]
+[ext_resource type="Script" uid="uid://jfdcv6l6phrr" path="res://assault/scenes/enemies/space_station/station_reinforcements.gd" id="11_ss"]
+[ext_resource type="Script" uid="uid://b4hwhdn0scrwi" path="res://assault/scenes/enemies/space_station/station_death_sequence.gd" id="12_ss"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ss"]
+resource_local_to_scene = true
+shader = ExtResource("1_ss")
+shader_parameter/enabled = false
+shader_parameter/flash_color = Color(1, 1, 1, 1)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_ss"]
+size = Vector2(240, 240)
+
+[sub_resource type="Animation" id="Animation_reset_ss"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
+[sub_resource type="Animation" id="Animation_hit_ss"]
+resource_name = "hit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [true, false]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_ss"]
+_data = {
+&"RESET": SubResource("Animation_reset_ss"),
+&"hit": SubResource("Animation_hit_ss")
+}
+
+[node name="SpaceStation" type="CharacterBody2D"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("2_ss")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+material = SubResource("ShaderMaterial_ss")
+texture = ExtResource("3_ss")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_ss")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 1121
+script = ExtResource("4_ss")
+metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("RectangleShape2D_ss")
+debug_color = Color(0.7, 0, 0, 0.419608)
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("5_ss")
+max_health = 600
+current_health = 600
+metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries/ = SubResource("AnimationLibrary_ss")
+
+[node name="Turrets" type="Node2D" parent="."]
+
+[node name="Turret0" parent="Turrets" instance=ExtResource("6_ss")]
+position = Vector2(-76, -76)
+
+[node name="Turret1" parent="Turrets" instance=ExtResource("6_ss")]
+position = Vector2(76, -76)
+
+[node name="Turret2" parent="Turrets" instance=ExtResource("6_ss")]
+position = Vector2(-76, 76)
+
+[node name="Turret3" parent="Turrets" instance=ExtResource("6_ss")]
+position = Vector2(76, 76)
+
+[node name="LaserPhase" type="Node2D" parent="."]
+script = ExtResource("7_ss")
+
+; A DIRECT child of SpaceStation, deliberately. bullet_pool.gd:47 hardcodes its container as
+; get_parent().get_parent(), so only this placement resolves to enemy_container and puts
+; in-flight bullets in world space. Under Gunnery or Turrets it would resolve to the station
+; itself, and LaserPhase rotates the hull, so the whole bullet field would swing with it.
+;
+; pool_size 48: phase 1 peaks at 4 turrets x 3 bullets / 1.8 s = 6.7/s, and a bullet needs ~4.1 s
+; to reach the arena bound (~984 px at 240 px/s from the station at world (640, 180)), so ~27 in
+; flight. Phase 2 adds 10 per 2.0 s at 210 px/s, ~23 in flight. The phases OVERLAP at the
+; handover — turret bullets live ~4.1 s and the first ring lands 2.0 s after armor_broken — so
+; the real peak is ~27 leftovers + 10 = ~37, not max(27, 23). 48 leaves ~11 of headroom.
+[node name="BulletPool" type="Node" parent="."]
+script = ExtResource("8_ss")
+bullet_scene = ExtResource("9_ss")
+pool_size = 48
+metadata/_custom_type_script = "uid://kvgsxhn0cac7"
+
+; node_paths= is REQUIRED. Without it the text scene format leaves the exported node reference
+; null, prints no error, and the gate stays green — only the script's get_node_or_null fallback
+; would save it.
+[node name="Gunnery" type="Node2D" parent="." node_paths=PackedStringArray("bullet_pool")]
+script = ExtResource("10_ss")
+bullet_pool = NodePath("../BulletPool")
+
+; The fourth sibling behaviour node, after LaserPhase, BulletPool and Gunnery. It spawns
+; reinforcement squads as SIBLINGS OF THE STATION (into get_parent(), i.e. the enemy container),
+; never as children of it — station_laser_phase.gd:123 rotates the hull, and anything parented
+; under the station would be dragged around the arena with it. No node_paths= tag is needed here
+; because this node exports no node references; it resolves its parent in _ready().
+[node name="Reinforcements" type="Node2D" parent="."]
+script = ExtResource("11_ss")
+
+; The fifth sibling behaviour node. Spectacle only: the STATION owns the death timer and calls
+; queue_free() on itself (space_station.gd::_finish_death), so deleting or renaming this node
+; costs the explosions and nothing else. If it owned the free, a renamed node would hang
+; station_assault for its full 180 s timeout with no error.
+;
+; It exports no node references, so no node_paths= tag is needed — it resolves its parent in
+; _ready(). Note it does NOT hold its own ExplosionEffect: that is created at death time and
+; parented to the STATION, because explosion_effect.gd resolves its container as
+; get_parent().get_parent() and one hop too deep would put every blast inside the rotating hull.
+[node name="DeathSequence" type="Node2D" parent="."]
+script = ExtResource("12_ss")

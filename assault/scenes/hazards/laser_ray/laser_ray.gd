@@ -44,6 +44,17 @@ extends Node2D
 ## Seconds the beam stays dark between pulses when loop is true.
 @export var off_duration: float = 1.8
 
+## Overrides the default multi-layer hit mask (_HIT_MASK) when non-zero. Must be assigned
+## BEFORE add_child(), because _ready() is what reads it.
+##
+## For emitters mounted ON an entity that would otherwise sit inside their own beam:
+## SpaceStation's laser phase sets 128 (player hurtbox only) so the boss does not kill
+## itself with its own beam — its core HurtBox is on layer 512, which _HIT_MASK covers.
+##
+## 0 means "use the default", NOT "collide with nothing": a beam that collides with
+## nothing is inert, and that is not a configuration anyone wants.
+@export_flags_2d_physics var hit_mask_override: int = 0
+
 ## When true, register as a race track hazard: join group "race_hazards" and expose the
 ## hazard contract (danger_rect / is_lethal_now / is_safe_to_cross / is_full_width) so the
 ## central race HazardSystem applies the (shield-bypassing) kill. The built-in HitZone is
@@ -100,7 +111,7 @@ func _ready() -> void:
 	if race_hazard:
 		add_to_group("race_hazards")
 
-	_hit_zone.collision_mask = _HIT_MASK
+	_hit_zone.collision_mask = hit_mask_override if hit_mask_override != 0 else _HIT_MASK
 	_hit_zone.monitoring  = false
 	_hit_zone.monitorable = false
 

@@ -35,15 +35,8 @@ func _ready() -> void:
 		(preload("res://assault/scenes/gui/hud.tscn") as PackedScene).instantiate())
 
 	# ── Build sections ────────────────────────────────────────────────────────
-	var s1:   LevelSection = _build_section_1()
-	var s_ast: LevelSection = _build_section_asteroid()
-	var s2:   LevelSection = _build_section_2()
-	var s3:   LevelSection = _build_section_3()
-
-	director.add_section(s1)
-	director.add_section(s_ast)
-	director.add_section(s2)
-	director.add_section(s3)
+	for section: LevelSection in _build_sections():
+		director.add_section(section)
 
 	# Per-section bonus drone + skill challenge schedules (section-relative time).
 	# Wave manager handles enemy spawns from wave lists; everything else
@@ -199,6 +192,55 @@ func _launch_skill_challenge(res: SkillChallengeResource) -> void:
 
 
 # ── Section builders ──────────────────────────────────────────────────────────
+
+## The section sequence, in order. Split out of _ready() so it can be asserted without booting
+## the level: every _build_* body touches only LevelSection.new(), preload and WaveBuilder (a
+## RefCounted), so this is safe to call on a bare instance that never entered the tree.
+func _build_sections() -> Array[LevelSection]:
+	var out: Array[LevelSection] = []
+	out.assign([
+		_build_section_1(),
+		_build_section_asteroid(),
+		_build_station_assault(),
+		_build_section_2(),
+		_build_section_3(),
+	])
+	return out
+
+
+## Section 3 (Station Assault) — the space-station mini-boss. ENEMIES_CLEARED, so the level
+## cannot continue to the planet approach until the station is destroyed.
+##
+## Three details are load-bearing and must not be "tidied":
+##
+##  - No .delay(). _trigger_wave does not await _spawn_with_delay (wave_manager.gd:115-125 vs
+##    :151-155), and waves_complete fires as soon as the last wave TRIGGERS (:52-56). With a
+##    non-zero delay the director would see an empty container and advance instantly.
+##  - No .move(). WaveManager attaches an EnemyPathMover only for a real MovementResource
+##    (wave_manager.gd:194); without one the station is stationary and nothing but death removes
+##    it. An exit mode would free the boss mid-fight.
+##  - 180 s timeout. Genre floor for a boss timer (G-Darius); the fight itself is sized at
+##    30-60 s, so this is a safety net a competent player never touches, not a balance knob.
+##
+## Placement: at() is in 640x360 design units, scaled by ArenaCamera.WORLD_SCALE (2.0) against a
+## camera pinned at the level origin. at(0, -90) -> world (640, 180); the 256 px hull then spans
+## world y 52-308, leaving ~412 px of play space below it.
+func _build_station_assault() -> LevelSection:
+	var s := LevelSection.new()
+	s.section_name            = &"station_assault"
+	s.background_phase        = preload("res://assault/scenes/levels/edelia/1/phases/phase_station_assault.tres")
+	s.transition_in_duration  = 2.0
+	s.end_condition           = LevelSection.EndCondition.ENEMIES_CLEARED
+	s.duration                = 0.0
+	s.enemies_cleared_timeout = 180.0
+
+	var b := WaveBuilder.new()
+	var raw_waves: Array = [
+		b.wave(0.0, [ b.space_station().at(0, -90) ]),
+	]
+	s.waves.assign(raw_waves)
+	return s
+
 
 func _build_section_1() -> LevelSection:
 	var s := LevelSection.new()

@@ -481,3 +481,44 @@ b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180)
 | **`sniper_enemy` needs a `sequence()`** | The approach step must be `straight(speed, 0.0, 2.5)` (exactly 2.5 s). Hold step must cover `shot_count × 2.5 s`. |
 | **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |
 | **Offsets are design-unit (640×360 space)** | Do NOT multiply by 2. `WaveManager` handles the `WORLD_SCALE` conversion. |
+
+---
+
+## Not in this roster: the space-station mini-boss
+
+`assault/scenes/enemies/space_station/` is a multi-part mini-boss, not a regular wave enemy — it
+has no movement, no exit mode and four independently destructible turrets, so the roster's
+per-enemy stat columns do not describe it.
+
+It **is** `WaveBuilder`-spawnable: `b.space_station()` (`SPACE_STATION` const). It is spawned
+exactly once, by the `station_assault` section of Level 1, as
+`b.wave(0.0, [ b.space_station().at(0, -90) ])`. Two rules, both load-bearing:
+
+- **No `.delay()`.** `waves_complete` fires when the last wave *triggers*, not when its spawns
+  land, so a delayed boss lets an `ENEMIES_CLEARED` section see an empty container and advance
+  instantly.
+- **No `.move()`.** A `MovementResource` attaches an `EnemyPathMover`, which would free the boss
+  on screen exit mid-fight. This is now doubly load-bearing: the laser phase writes
+  `station.rotation` directly, so an `EnemyPathMover` would also be fighting it for control.
+
+It has a **second phase**: once the last turret dies the station rotates and fires telegraphed
+`LaserRay` volleys (`StationLaserPhase`). Nothing about spawning changes, but the boss stops being
+a stationary target, and its rotating 240×240 core hurtbox sweeps ~34 px past its axis-aligned
+footprint at 45°.
+
+**It also spawns other enemies from this roster.** During phase 1 only, `StationReinforcements`
+sends squads across the arena on a fixed `LEFT → RIGHT → BOTTOM → TOP` cycle: two `interceptor`
+from either side, two `kamikaze_drone` from below, two `fighter` with `.shoot_forward()` from
+above. Things to know if you edit that table (`station_reinforcements.gd::_build_squads()`):
+
+- It uses this file's own vocabulary — `b.interceptor().at(…).move(b.straight(…)).free_after(…)` —
+  so the rules below apply unchanged. In particular **`gunship` and `drone_interceptor` must never
+  go in it**: both are self-managed AI, and `EnemyPathMover` silently disables the AI they need.
+  A test enforces that.
+- **Every entry needs `.free_after(…)`.** The default `FREE_ON_SCREEN_EXIT` only culls a ship that
+  has already been on screen once, so one that never arrives would hold `ENEMIES_CLEARED` open.
+- **A squad ship must be killable by the player's primary weapon.** `ram_ship` is not:
+  `ram_ship.gd` narrows its HurtBox mask to 33, which excludes the bullet's layer 64. A test
+  checks every ship in the table for this.
+
+Behaviour and constraints: [`space_station/ENEMY.md`](../assault/scenes/enemies/space_station/ENEMY.md).

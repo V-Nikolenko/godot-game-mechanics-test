@@ -92,9 +92,18 @@ Abstract base for level background renderers. Subclasses must override `transiti
 
 > Entities compose behaviour by adding child nodes and wiring signals. The canonical wiring of all of this for the player is `PlayerBase` (`global/entities/player_base.gd`); generic ships use `DamageReaction` instead. Verify the API of each component (linked file) before copying a snippet.
 
+> **Every component in this section has a characterization test.** Before changing one, read its
+> test — it is the fastest correct description of what the component actually does, including the
+> edge cases the source does not spell out. Mapping: `Health` → `tests/unit/test_health_component.gd`,
+> `TempHealth` → `test_temp_health_component.gd`, `HitBox`/`HurtBox` → `test_hitbox_hurtbox.gd`,
+> `Shield` → `test_shield_component.gd`, `DamageReaction` → `test_damage_reaction.gd`,
+> `Overheat` → `test_overheat_component.gd`, the state machine → `test_state_machine.gd`, and the
+> whole `PlayerBase` damage chain → `tests/integration/test_player_damage_chain.gd`. The autoloads
+> in §3–4 are covered by `tests/unit/test_<autoload>.gd`. See [`tests/README.md`](../../../tests/README.md).
+
 ### Health — `health_component.gd` (+ `temp_health_component.gd`)
 
-Add a `Health` node (`class_name Health extends Node`) as a child named `HealthComponent`. Exports: `max_health: int = 100`, `current_health: int = 100`, `invincibility_frames_enabled: bool = false`, `invincibility_time_in_sec: float = 0.5`. API: `increase(amount)`, `decrease(amount)`, `set_health(v)`; signal `amount_changed(current)`. `decrease()` is ignored while its internal invincibility timer is running (only when `invincibility_frames_enabled`).
+Add a `Health` node (`class_name Health extends Node`) as a child named `HealthComponent`. Exports: `max_health: int = 100`, `current_health: int = 100`, `invincibility_frames_enabled: bool = false`, `invincibility_time_in_sec: float = 0.5`. API: `increase(amount)`, `decrease(amount)`, `set_health(v)`; signal `amount_changed(current_health: int)`, emitted by `set_health()` on **every** call including no-op ones, so handlers must tolerate repeats and must take one argument. `decrease()` is ignored while its internal invincibility timer is running (only when `invincibility_frames_enabled`); it also traces the hit to stdout, but only under `--verbose` (see the logging convention in [PROJECT.md](../PROJECT.md)), and it does not require the component to have a parent.
 
 `TempHealth` (`class_name TempHealth extends Node`, child named `TempHealthComponent`) is an optional buffer that drains *before* `Health`. `add_stack(base_health)` adds one stack of `base_health/2` HP (cap `MAX_STACKS = 5`); `take_damage(amount)` drains and returns the overflow that should hit `Health`. Signal `amount_changed(current, maximum)`.
 
@@ -162,7 +171,7 @@ func _on_shot_fired() -> void:
 
 ### State machine — `state_machine.gd` + `state.gd`
 
-`State` (`class_name State extends Node`) is the base contract: override `enter()`, `process_physics(delta)`, `exit()`, and emit `state_transition(next_state)` to request a change. `StateMachine` (`class_name StateMachine extends Node`) holds an exported `initial_state: State`. In `_ready()` it connects every child `State`'s `state_transition` signal to `change_state`, then enters `initial_state`. Each `_process(delta)` it calls `current_state.process_physics(delta)`. `change_state` ignores a transition to the same/null state, else calls `exit()` on the old and `enter()` on the new.
+`State` (`class_name State extends Node`) is the base contract: override `enter()`, `process_physics(delta)`, `exit()`, and emit `state_transition(next_state)` to request a change. `StateMachine` (`class_name StateMachine extends Node`) holds an exported `initial_state: State`. In `_ready()` it connects every child `State`'s `state_transition` signal to `change_state`, then enters `initial_state`. Each `_process(delta)` it calls `current_state.process_physics(delta)`. `change_state` ignores a transition to the same/null state, else calls `exit()` on the old (skipped when the machine is still idle, i.e. built with no `initial_state`) and `enter()` on the new. Its transition tracing is behind `OS.is_stdout_verbose()`.
 
 Convention: states are child nodes of the `StateMachine` node; the **initial state is whatever the `initial_state` export points at**; per-entity state classes live in that entity's own folder (e.g. an `idle_state.gd` / `move_state.gd` / `dash_state.gd` set next to the player scene), each `extends State`.
 
@@ -202,7 +211,7 @@ func remove(player: Node) -> void:
 All are `Node2D` wrappers around `CPUParticles2D`. Set their `@export`s *before* `add_child()` so `_ready()` reads them.
 
 - **`HitEffect`** — one-shot burst on damage. Call `burst()` from the hit handler. Exports include `amount: int = 10`, `lifetime: float = 0.25`, `color`, velocity/scale ranges.
-- **`ExplosionEffect`** — bigger one-shot burst on death; call `explode()` just before `queue_free()`. Spawns particles into the *parent* container so they outlive the entity. `always_process: bool = false` lets the player death burst render while paused.
+- **`ExplosionEffect`** — bigger one-shot burst on death; call `explode()` just before `queue_free()`. Spawns particles into the *parent* container so they outlive the entity. `always_process: bool = false` lets the player death burst render while paused. `explode(at)` takes an **optional** `Vector2` overriding the spawn position, for entities whose death is a chain of blasts across a large hull rather than one central burst (`StationDeathSequence`); omitting it keeps the historic behaviour exactly. ⚠️ `at` moves the blast but does **not** re-home it — particles are still parented to `get_parent().get_parent()`, so an `ExplosionEffect` must be a child of the **entity**, never of one of the entity's own behaviour nodes.
 - **`ThrusterEffect`** — continuous engine flame. Call `set_state(state)` each physics frame with `State.{IDLE,THRUST,BOOST,POWER,BOOST_PANEL}`; transitions are instant and de-duplicated.
 - **`LowHealthSmoke`** — call `setup(health)` after `add_child()`; it connects `health.amount_changed` and emits smoke automatically when HP ≤ `threshold` (default `0.3`) and `current > 0`. `deactivate()` stops it.
 - **`RocketTrail`** — continuous world-space trail; add under a rocket scene. `offset_behind: float = 8.0` places it behind the nose.
@@ -247,7 +256,9 @@ Each has a matching scene under `global/pickups/scenes/`.
 ### Resources (`global/resources/`)
 Pure-data `Resource` types (shareable `.tres` assets; runtime state is kept out of them so multiple ships can share one asset).
 
-- **attack/** — `AttackPatternResource` (base; `fire_interval = 0.8`, `start_delay = 0.0`, abstract `fire(ship, pool)`). Subtypes: `forward_attack_pattern` (straight up, exports `bullet_damage`, `spawn_offset`), `aimed_attack_pattern`, `gatling_attack_pattern`. Driven at runtime by `AttackController` (holds the per-ship timer).
+- **attack/** — `AttackPatternResource` (base; `fire_interval = 0.8`, `start_delay = 0.0`, abstract `fire(ship, pool)`). Subtypes: `forward_attack_pattern` (straight up, exports `bullet_damage`, `spawn_offset`), `aimed_attack_pattern`, `gatling_attack_pattern`, `radial_attack_pattern`. Usually driven at runtime by `AttackController` (holds the per-ship timer), but a pattern is just a `fire(ship, pool)` call — `StationGunnery` owns its own `Timer`s and calls `fire()` directly.
+  - `radial_attack_pattern.gd` (`RadialAttackPattern`) fires `bullet_count` bullets spread around `base_angle` in one shot, and covers both boss shapes in one resource: **`arc >= TAU` is a full ring** (spacing `TAU / count`, no duplicate at the seam) and **`arc < TAU` is a fan** of that width *centred* on the base direction (spacing `arc / (count - 1)`). `aim_at_player` adds the angle to the player (`Vector2.DOWN` fallback); `spawn_radius` offsets each bullet **along its own angle**, so a ring emerges from the hull rim and a fan from the barrel mouth. `bullet_count <= 0` fires nothing.
+    ⚠️ Unlike its two siblings it **deliberately ignores `ship.rotation`** — `base_angle` is absolute world space and the caller owns any precession. `StationLaserPhase` spins the station at 0.5 rad/s during exactly the phase the core ring fires in, so folding in the hull rotation would add ~1.6 ring spacings of uncontrolled drift per ring. Pinned by `tests/integration/test_radial_attack_pattern.gd`.
 - **movement/** — `MovementResource` (base; `sample(t) -> Vector2` displacement from spawn, `total_duration()`). Subtypes: `straight`, `sine`, `arc`, `curve`, `hold`, `u_sweep`, `player_focus`, `sequence`. Consumed by `EnemyPathMover`.
 - **formation/** — `FormationResource` (base; `compute_slots() -> Array[FormationSlot]`, each slot an `offset` + `delay`). Subtypes: `line`, `v`, `wedge`, `diagonal`, `cluster`. `WaveManager` spawns one ship per slot.
 - **waves/** — `LevelResource` (`level_name` + ordered `waves`), `WaveResource` (`trigger_time` + `entries`), `SpawnEntryResource` (one ship/formation: `ship_scene`, `base_offset`, `spawn_delay`, `movement`, `exit_mode`, `look_*`, optional `formation`, `initial_props`).

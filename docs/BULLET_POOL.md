@@ -174,6 +174,26 @@ If a bullet goes off-screen AND hits something in the same frame, `expired` fire
 
 ---
 
+### **6. Cancelling In-Flight Bullets** (`cancel_active()`)
+
+`_exit_tree()` is a one-line call to the public **`cancel_active()`**, which frees every in-flight
+bullet and clears `_active`. A ship can call it directly when it must stop being dangerous
+*before* it leaves the tree.
+
+That case is real, not hypothetical: the space-station mini-boss now lingers ~1.8 s after its HP
+hits 0 to play a death sequence, so `_exit_tree()` no longer fires at the moment of death.
+`StationGunnery._stop()` calls `cancel_active()` on the station's `died` signal — without it the
+corpse would keep a full ring of live bullets in the air, which both kills the player after the
+boss is dead and holds `LevelSection.ENEMIES_CLEARED` open, since in-flight bullets are reparented
+into the same enemy container the director polls.
+
+⚠️ **`cancel_active()` permanently shrinks the pool.** `_recycle()` is the only path back into
+`_idle`, and this frees the bullets instead of recycling them, so capacity is *not* recovered —
+`acquire()` keeps working only while `_idle` is non-empty. That is correct for a dying ship (the
+pool is about to be freed anyway) but do not reach for it as a general "clear the screen" tool
+without re-reading this note. Pinned by
+`tests/integration/test_station_gunnery.gd::test_bullet_pool_cancel_active_frees_in_flight_bullets`.
+
 ## Container Hierarchy
 
 ```

@@ -3,6 +3,7 @@
 Authoritative map of the project's structure and game mechanics. This is the source of
 truth that `CLAUDE.md` and the per-module docs derive from.
 
+
 > A space action game built in **Godot 4.6 (Forward+)**. The player cycles between three
 > distinct gameplay modes — a fast autoscroller shmup (**Assault**), a free-flight hub
 > with mission select (**Open Space**), and isometric ground combat (**Infiltration**) —
@@ -34,9 +35,11 @@ otherwise it loads the Open Space hub. Full detail: [`docs/game-structure.md`](.
 | Infiltration | `infiltration/` | Isometric ground combat | [infiltration.md](modules/infiltration.md) |
 | Global (shared) | `global/` | Components, entities, ship modules, state machine, pickups, resources, UI, autoloads | [global.md](modules/global.md) |
 | Shell | `boot/`, `cutscenes/`, `dialog/` | Boot entry, cutscenes, dialog data | [shell.md](modules/shell.md) |
+| Tests | `tests/` (+ `addons/gut/`) | GUT suite over the autoloads and `global/` | [tests/README.md](../../tests/README.md) |
 
 The codebase is organised **by game mode**: each module holds only its mode-specific
 scripts, scenes, and assets. Anything reused across modes belongs in `global/`.
+`tests/` is not a gameplay module — it mirrors `global/` and is never imported by game code.
 
 ---
 
@@ -81,8 +84,30 @@ Detail and APIs: [global.md](modules/global.md).
 - **State machines:** `global/statemachine/state_machine.gd` + `state.gd`; entities with
   complex behaviour keep one `State` node per file in a `states/` folder (player, racers,
   light_assault_ship). Simpler enemies use in-script `enum` phases.
+- **Signal arity:** a signal is declared with exactly the arguments it is emitted with.
+  Godot does not enforce this — `Health.amount_changed` and `State.state_transition` were
+  declared with zero parameters and emitted with one until 2026-09-03 — but a mismatch makes
+  every handler's shape a guess, and a zero-argument handler on a one-argument emit is a
+  hard runtime error. Pinned by `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`
+  and `test_state_machine.gd::test_state_transition_declares_the_state_it_emits`.
+- **Logging:** anything that can print more than once per frame or once per hit goes behind
+  `if OS.is_stdout_verbose():` — `Health.decrease()`, `StateMachine.change_state()` and
+  `DialogPlayer` all do. Run Godot with `--verbose` to get the traces back. `push_warning` /
+  `push_error` stay unconditional: they are for things that should not happen.
 - **Coordinates:** waves and spawn offsets are authored in **design units** (640×360
   space) and scaled by `ArenaCamera.WORLD_SCALE` (2.0) at runtime — never pre-multiply.
+- **Testing:** **GUT 9.7.1**, vendored in `addons/gut/`, enabled from the
+  `[editor_plugins]` section of `project.godot`. Tests live in `tests/` and run headless:
+  `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`.
+  The suite is almost entirely **characterization**: it pins behaviour as it is today, bugs
+  included, so any behaviour change shows up as a failing test rather than as silence. The one
+  exception is `tests/integration/test_resource_uid_integrity.gd`, which asserts an invariant
+  (every `[ext_resource]` UID matches the UID its target declares) and the space-station family.
+  A few characterization files also carry a handful of clearly-marked **intent** tests, which say
+  so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).
+  Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the
+  save-file sandbox, and the signal-arity trap that will otherwise fail tests for reasons
+  unrelated to the code under test.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---
@@ -92,13 +117,43 @@ Detail and APIs: [global.md](modules/global.md).
 Each combat entity carries a behaviour doc **beside its scene**, mirroring a common format:
 
 - **Racers:** `assault/scenes/race/racers/<name>/RACER.md` (6 racers)
-- **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (9 enemies)
+- **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (9 wave enemies + the `space_station` mini-boss)
 - **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (3 hazards)
 - **Race track hazards:** `assault/scenes/race/track/RACE_HAZARDS.md` (walls, asteroids, lasers + the lethal-hazard / AI-avoidance system)
 
-There is **no discrete boss entity** — the boss/finale phase is the `ENEMIES_CLEARED`
-section in `assault/scenes/levels/edelia/1/level_1_director.gd`, documented in
-[assault.md](modules/assault.md).
+Level 1's **finale** phase is still the `ENEMIES_CLEARED` section in
+`assault/scenes/levels/edelia/1/level_1_director.gd`, documented in
+[assault.md](modules/assault.md) — it is a wave, not an entity.
+
+There is now one **discrete multi-part boss entity**:
+`assault/scenes/enemies/space_station/` — a four-turret mini-boss whose core is invulnerable
+until every turret is destroyed. It is placed in Level 1 by the `station_assault` section, between
+`asteroid_belt` and `planet_approach`, which uses `EndCondition.ENEMIES_CLEARED` so the level
+cannot continue until the station is destroyed. See
+[`space_station/ENEMY.md`](../../assault/scenes/enemies/space_station/ENEMY.md).
+
+It is also the project's first **two-phase** entity. Killing the last turret emits `armor_broken`,
+which starts `StationLaserPhase` — a child node that rotates the station and fires telegraphed
+`LaserRay` volleys — and simultaneously switches `StationGunnery`, a second child node, from aimed
+per-turret fans to precessing full rings from the core. Both phases are separate nodes rather than
+states on `space_station.gd`
+(composition) and rather than a `global/statemachine/` `State` per phase: the transition is
+one-way and there are only two phases, and this project reserves the node-per-file state machine
+for genuinely complex entities. Revisit if a third phase appears.
+
+A **third** child node, `StationReinforcements`, runs only during phase 1: it spawns squads of
+existing enemy scenes from all four screen edges on a fixed cycle, and stops on `armor_broken`.
+It is the project's first spawner that is not `WaveManager` — reinforcements go straight into
+`enemy_container` as siblings of the station and register on `EventBus.enemy_spawned_orphan`,
+the same channel `big_asteroid.gd` uses for its shards.
+
+A **fourth** child node, `StationDeathSequence`, owns the boss's death spectacle. `SpaceStation`
+overrides `BaseEnemy._on_health_changed` so that only `queue_free()` is delayed — `was_killed` and
+`died` still fire the instant HP hits 0, because `ScoreTracker` discriminates kill from escape on
+exactly those. The wreck then lingers for `death_duration` (1.8 s) while seven blasts roll across
+the hull at deterministic offsets and it drifts and darkens. The handoff into `planet_approach`
+needed **no** `LevelDirector` change: `_wait_enemies_cleared()` already polls the enemy container's
+child count, so a wreck that stays parented holds its section open for free.
 
 For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-roster.md).
 
@@ -110,6 +165,9 @@ For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-ro
 - [`docs/enemy-roster.md`](../enemy-roster.md) — WaveBuilder spawn reference
 - [`docs/scoring_guide.md`](../scoring_guide.md) & [`docs/assault-spawning-scoring-internals.md`](../assault-spawning-scoring-internals.md) — scoring
 - [`docs/BULLET_POOL.md`](../BULLET_POOL.md) — bullet pooling
+- [`tests/README.md`](../../tests/README.md) — how to run and write tests
+- [`addons/gut/LOCAL_PATCHES.md`](../../addons/gut/LOCAL_PATCHES.md) — the two changes GUT
+  needs to load under Godot 4.6.3; re-apply on any GUT upgrade
 
 ---
 

@@ -1,0 +1,31 @@
+[gd_resource type="Resource" script_class="SpaceStationConfig" format=3]
+
+[ext_resource type="Script" uid="uid://c5tsrjkhu3oyj" path="res://assault/scenes/enemies/space_station/space_station_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 600
+collision_damage = 40
+score_value = 1000
+counts_toward_wave_clear = true
+turret_health = 120
+laser_warn_duration = 1.4
+laser_active_duration = 2.0
+laser_volley_interval = 6.5
+laser_rotation_speed = 0.5
+laser_beam_count = 2
+turret_fire_interval = 1.8
+turret_burst_count = 3
+turret_burst_arc = 0.35
+turret_bullet_damage = 12
+turret_bullet_speed = 240.0
+core_ring_interval = 2.0
+core_ring_count = 10
+core_ring_step = 0.24
+core_bullet_damage = 10
+core_bullet_speed = 210.0
+reinforcement_first_delay = 8.0
+reinforcement_interval = 10.0
+reinforcement_max_alive = 4
+death_sequence_duration = 1.8
+death_blast_count = 7

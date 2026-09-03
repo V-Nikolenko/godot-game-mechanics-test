@@ -105,11 +105,33 @@ func _wait_for_child_exit_or_timeout(container: Node, poll_seconds: float) -> vo
 func _wait_enemies_cleared() -> void:
 	var container: Node = wave_manager.enemy_container
 	var start_ms: int = Time.get_ticks_msec()
-	var deadline_ms: int = start_ms + 10_000
+
+	## Connected as a zero-arg one-shot (see _advance), so the section has to be looked up rather
+	## than passed in. The bounds guard covers a section list emptied mid-wait.
+	var timeout: float = 10.0
+	if _current_index >= 0 and _current_index < _sections.size():
+		timeout = _sections[_current_index].enemies_cleared_timeout
+	var deadline_ms: int = start_ms + int(timeout * 1000.0)
 
 	while container.get_child_count() > 0:
 		if Time.get_ticks_msec() >= deadline_ms:
 			push_warning("[LevelDirector] enemy cleanup timed out with %d remaining" % container.get_child_count())
+			## Free whatever is left rather than carrying it into the next section. A boss has no
+			## EnemyPathMover, so nothing else would ever remove it — it would hang on screen for
+			## the rest of the level and, since this method polls the same container, block the
+			## next ENEMIES_CLEARED section forever.
+			##
+			## The container is not enemies-only: bullet_pool.gd:45-47 reparents in-flight bullets
+			## to get_parent().get_parent(), which for an enemy ship is this container. Freeing
+			## them here is safe — bullet_pool.gd:98-100 already frees in-flight bullets when the
+			## owning ship exits, and _recycle guards against re-entry.
+			##
+			## Each freed child emits tree_exited without `died`, so ScoreTracker takes its escape
+			## path (score_tracker.gd:197-215): the wave tally is marked escaped and the combo is
+			## multiplied by escape_combo_multiplier (0.75). That cost is intended — timing out is
+			## a failure to finish the fight.
+			for child in container.get_children():
+				child.queue_free()
 			break
 		await _wait_for_child_exit_or_timeout(container, 1.0)
 		if not is_instance_valid(self):

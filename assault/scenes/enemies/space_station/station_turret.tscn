@@ -1,0 +1,31 @@
+[gd_scene load_steps=5 format=3 uid="uid://brvigjc05beif"]
+
+[ext_resource type="Script" uid="uid://51isco7ulgbu" path="res://assault/scenes/enemies/space_station/station_turret.gd" id="1_st"]
+[ext_resource type="Texture2D" uid="uid://dkxmbkyht3vj2" path="res://assault/assets/sprites/enemies/station_turret.png" id="2_st"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="3_st"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="4_st"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_st"]
+radius = 26.0
+
+[node name="StationTurret" type="Node2D"]
+script = ExtResource("1_st")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("2_st")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 1121
+script = ExtResource("3_st")
+metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_st")
+debug_color = Color(0.7, 0, 0, 0.419608)
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("4_st")
+max_health = 120
+current_health = 120
+metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
