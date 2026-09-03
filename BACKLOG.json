@@ -33,7 +33,7 @@
           "id": "sessionstate-recovers-the-temp-hp-stack-size-with-integer-di",
           "head": "`SessionState` recovers the temp-HP stack size with integer division.",
           "body": "`global/autoloads/session_state.gd:85` computes `_temp_hp_stack = maximum /\nTempHealth.MAX_STACKS`. When `maximum` is not a multiple of 5 the stack size rounds down and\nthe pool the player gets back after a level transition is smaller than the one they earned.\nReachable whenever a ship's `base_health / 2` is not a multiple of 5. Pinned by\n`tests/unit/test_session_state.gd::test_temp_health_stack_size_uses_integer_division`.",
-          "state": "in_progress",
+          "state": "done",
           "badge": null,
           "planDir": null
         },

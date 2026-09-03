@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 30 open)
+## Code health backlog  (`code-health-backlog`, 29 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -100,7 +100,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `ShipModuleState.unlock()`, which validates and `push_warning`s. Pinned by
       `tests/unit/test_upgrade_state.gd::test_unknown_ids_are_stored_but_never_listed`.
 
-- [ ] **`SessionState` recovers the temp-HP stack size with integer division.** _(in progress)_
+- [x] **`SessionState` recovers the temp-HP stack size with integer division.** _(done)_
       `global/autoloads/session_state.gd:85` computes `_temp_hp_stack = maximum /
       TempHealth.MAX_STACKS`. When `maximum` is not a multiple of 5 the stack size rounds down and
       the pool the player gets back after a level transition is smaller than the one they earned.
