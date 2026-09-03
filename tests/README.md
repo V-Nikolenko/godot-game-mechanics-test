@@ -56,10 +56,10 @@ a `LevelDirector` test:
 ## These are characterization tests
 
 They pin down what the code does **today**, bugs included. A test that documents surprising
-behaviour is marked `CHARACTERIZED` in a comment, and the suspicion is filed under *Discovered*
-in `BACKLOG.md`. Do not "fix" the code to make one of these read better without first deciding
-that the behaviour itself is wrong — the point of the suite is that a behaviour change is a
-*visible* change.
+behaviour is marked `CHARACTERIZED` in a comment, and the suspicion is filed as a task via
+`./scripts/backlog-cli.js add-task code-health-backlog "<short head>"`. Do not "fix" the code to
+make one of these read better without first deciding that the behaviour itself is wrong — the
+point of the suite is that a behaviour change is a *visible* change.
 
 ## House rules learned the hard way
 

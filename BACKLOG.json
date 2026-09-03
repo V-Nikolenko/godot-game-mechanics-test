@@ -1,0 +1,347 @@
+{
+  "epics": [
+    {
+      "id": "code-health-backlog",
+      "title": "Code health backlog",
+      "status": "active",
+      "tasks": [
+        {
+          "id": "write-the-dossier-for-the-completed-station-mini-boss-epic",
+          "head": "Write the dossier for the completed station mini-boss epic",
+          "body": "into\n`docs/epics-done/station-mini-boss/` — `PRD.md`, `SOURCES.md`, `REPORT.md` per Stage 8\nof the `feature-workflow` skill. Everything needed is already in the six\n`docs/plans/station-*/` directories: merge their `2-research.md` source tables into\n`SOURCES.md`, and cover all five sub-items plus the rejected laser-phase plan\n(`479a66d`) in `REPORT.md`. Be specific in *Known gaps* — nothing in this epic has been\nplayed by a human, and the report should say so.\n*Done when:* the three files exist and every claim in `REPORT.md` names a commit, a test,\nor a plan file.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "gut-silently-drops-a-test-script-it-cannot-load-and-still-ex",
+          "head": "GUT silently drops a test script it cannot load, and still exits 0.",
+          "body": "When\n`tests/integration/test_space_station.gd` referenced classes that did not exist yet, GUT\nprinted `---- All tests passed! ----`, reported `Scripts 2` instead of 3, and **returned exit\ncode 0**. The parse errors appeared only on stderr. `/agent/verify.sh` step 3 checks the exit\ncode and greps for `^N failing`, so **neither signal fires** — a test file broken by a rename\nor a deleted symbol would vanish from the suite and the gate would stay green. Cheap fix:\nhave step 3 also assert the script count, or grep its GUT output for `Parse Error` /\n`SCRIPT ERROR` the way steps 1 and 2 already do. This is the only reason the \"watch it fail\"\nstep of the feature workflow worked here — the red was read off stderr, not off GUT's verdict.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "upgradestate-unlock-accepts-ids-that-are-not-in-allids",
+          "head": "`UpgradeState.unlock()` accepts ids that are not in `ALL_IDS`.",
+          "body": "A typo'd id is stored and reported `true` by `is_unlocked()`, but `unlocked_ids()` iterates\n`ALL_IDS`, so it never appears in any menu — a silent, invisible failure. Compare\n`ShipModuleState.unlock()`, which validates and `push_warning`s. Pinned by\n`tests/unit/test_upgrade_state.gd::test_unknown_ids_are_stored_but_never_listed`.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "sessionstate-recovers-the-temp-hp-stack-size-with-integer-di",
+          "head": "`SessionState` recovers the temp-HP stack size with integer division.",
+          "body": "`global/autoloads/session_state.gd:85` computes `_temp_hp_stack = maximum /\nTempHealth.MAX_STACKS`. When `maximum` is not a multiple of 5 the stack size rounds down and\nthe pool the player gets back after a level transition is smaller than the one they earned.\nReachable whenever a ship's `base_health / 2` is not a multiple of 5. Pinned by\n`tests/unit/test_session_state.gd::test_temp_health_stack_size_uses_integer_division`.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "shipmodulestate-equip-never-consults-unlocked",
+          "head": "`ShipModuleState.equip()` never consults `_unlocked`.",
+          "body": "Any module in the catalogue can be\nequipped whether or not it was earned. Fine if unlock state is purely cosmetic for the menu;\na progression hole if it is not. Worth a decision either way. Pinned by\n`tests/unit/test_ship_module_state.gd::test_equipping_does_not_require_unlocking`.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "missionstate-complete-cannot-record-a-zero-star-clear",
+          "head": "`MissionState.complete()` cannot record a zero-star clear.",
+          "body": "`clampi(stars, 1, 3)` turns a\n0-star completion into 1 star. Intentional? Pinned by\n`tests/unit/test_mission_state.gd::test_stars_are_clamped_into_one_to_three`.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "gut-9-7-1-needs-two-local-patches-to-load-under-godot-4-6-3",
+          "head": "GUT 9.7.1 needs two local patches to load under Godot 4.6.3",
+          "body": ", documented in\n`addons/gut/LOCAL_PATCHES.md`. `AccessibilityServer` does not exist in this Godot build, and\na property getter in `stub_params.gd` fails type inference. Re-apply both on any GUT upgrade\n— without them the whole addon fails to parse and the doubler is unusable.\n\nFound on 2026-09-01 while fixing the stale `ext_resource` UIDs.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "the-godot-mcp-updateprojectuids-tool-is-a-no-op-on-this-proj",
+          "head": "The Godot MCP `update_project_uids` tool is a no-op on this project — do not rely on it.",
+          "body": "It concatenates `\"res://\"` onto the absolute project path it is given, so it searches\n`res:///tmp/coldclone/` (or `res:///work/repo/`), reports *\"Found 0 scenes, Found 0\nscripts/shaders\"*, and exits claiming success. Verified by md5summing all 151 `.tscn`/`.tres`\nbefore and after a run on a scratch copy: **zero files changed.** The bug is in the MCP\nserver's own `godot_operations.gd`, not in this repo, so it cannot be fixed here. Use\n`tests/integration/test_resource_uid_integrity.gd` instead — it covers strictly more\n(`.tres` resources and `.gd.uid` sidecars as well as scenes).",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "godot-uidcache-bin-masks-broken-uid-references-so-a-warm-mac",
+          "head": "**`.godot/uid_cache.bin` masks broken UID references, so a warm machine disagrees with a",
+          "body": "fresh clone.** Once a project has been loaded, Godot keeps a *stale* UID registered as a\nworking alias for its target: `ResourceLoader.get_resource_uid()` and `ResourceUID.has_id()`\nboth reported the dead `uid://bi366j2tsyby` as valid, and `--import` emitted no warning for\nthe five `.tres` files using it. Deleting `.godot/` and loading one of those files directly\nproduced `ext_resource, invalid UID` immediately. `.godot/` is gitignored, so **CI and new\ncontributors see the failures a developer's machine hides.** Two consequences worth keeping\nin mind: `bash /agent/verify.sh` runs against a warm cache and will not catch this class of\ndefect on its own, and any future UID tooling must read declarations from disk rather than\nask the engine.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "godot-headless-import-only-loads-a-fraction-of-the-project-s",
+          "head": "**`godot --headless --import` only loads a fraction of the project, so \"import is clean\" is",
+          "body": "a weak gate.** It surfaced 1 of the 3 live `invalid UID` warnings; the other 2 only appeared\nonce every scene was actually loaded. A cheap \"load all 126 `.tscn`/`.tres` and assert no\nload returns null\" smoke test would close the gap — worth considering as step 4 of\n`/agent/verify.sh`. All 126 do currently load clean, so it would start green.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "several-resources-declare-hand-written-uids-in-their-own-hea",
+          "head": "Several resources declare hand-written UIDs in their own headers",
+          "body": "— `uid://hudscore001`\n(`assault/scenes/gui/hud_score_widget.tscn`), `uid://braceasteroid01`, `uid://00246ccaem53`,\n`uid://0024uci15m53`, `uid://00243s3wxf53` (the `assault/scenes/race/` scenes). Godot 4.6.3\nparses and registers all of them, and every reference to them resolves, so **nothing is\nbroken and they were deliberately left alone.** Flagging them only because they are the same\nfingerprint as the eight references that *were* broken: a UID typed by a human or an agent\nrather than minted by the editor. If one is ever duplicated onto a second resource the\ncollision will be silent.\n\nFound on 2026-09-01 while building the space-station mini-boss entity (EPIC sub-item 1).",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "gunship-never-applies-its-config-s-collisiondamage",
+          "head": "`Gunship` never applies its config's `collision_damage`.",
+          "body": "`gunship_config.tres:8` sets\n`collision_damage = 30`, but `BaseEnemy._add_contact_hitbox()` hardcodes `hb.damage = 20`\n(`base_enemy.gd:56`) and the gunship — unlike `bomber.gd:25`, `light_assault_ship.gd:23`,\n`ram_ship.gd:20-23` and `drone_interceptor.gd:148` — never re-applies it after\n`super._ready()`. So the heaviest enemy in the roster rams for 20 instead of 30 and the\n`.tres` value is dead. One loop in `gunship.gd::_ready()` fixes it; it is a balance change,\nso it should be a deliberate one rather than folded into unrelated work. `space_station.gd`\ndoes apply it, so the two enemies currently disagree about whether the field means anything.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-",
+          "head": "**`base_enemy.gd:56-59` builds the contact HitBox from `col.shape` but drops the",
+          "body": "`CollisionShape2D`'s `scale` and `position`.** Every enemy that scales its collision shape in\nthe scene therefore gets a contact hitbox of the wrong size — `gunship.tscn:63-65` scales by\n2.31, so its contact hitbox is ~2.3× too small. Harmless-ish at 40 px, badly wrong at boss\nscale. `space_station.tscn` sidesteps it by authoring its shape at true size with `scale = 1`,\nbut the underlying helper is still lossy for everyone else. Copying the node's transform\nonto the new `CollisionShape2D` would fix it — though it would silently enlarge several\nexisting enemies' contact hitboxes, so it needs a balance pass, not a blind fix.\n\nFound on 2026-09-01 while adding the `station_assault` section (EPIC sub-item 2).",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "a-test-that-ends-while-a-leveldirector-coroutine-is-suspende",
+          "head": "**A test that ends while a `LevelDirector` coroutine is suspended leaks — and the gate stays",
+          "body": "green.** `_wait_enemies_cleared()` awaits `_wait_for_child_exit_or_timeout(container, 1.0)`,\nwhich holds a `SceneTreeTimer`. If the test returns while that is pending, freeing the\ndirector strands the timer and its `GDScriptFunctionState`, and Godot prints at process exit:\n`WARNING: ObjectDB instances leaked at exit` and\n`ERROR: 1 resources still in use at exit` / `Resource still in use: …/level_director.gd`.\n**Neither line matches `/agent/verify.sh`'s `FATAL` regex**, so the gate passed while leaking\n— I only noticed by diffing a run with and without the new file. Two follow-ups worth\nconsidering: add `ObjectDB instances leaked|resources still in use` to the gate's fatal\npatterns (check the existing suite is clean first — it is, verified this run), and consider\nwhether `_wait_for_child_exit_or_timeout` should hold the timer in a variable it can cancel.\nWorked around in `tests/integration/test_station_assault_section.gd` and written up in\n`tests/README.md`.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-",
+          "head": "Should the station's core hurtbox be narrowed to 88 x 240? — a design question, not a bug.",
+          "body": "`space_station.tscn:16-17` uses ONE 240 x 240 `RectangleShape2D` for both the body collider\nand the core `HurtBox`, so the core's hurtbox spans the whole hull and the four turret\nhurtboxes sit strictly inside it. This is **not** a reachability bug — see the next item —\nbut it does mean shooting the hull shoulders registers as a deflected core hit rather than\nmissing, and a bullet fired up a turret lane triggers a core deflection *before* it reaches\nthe turret. Giving the `HurtBox` its own 88-wide shape would make the x-extents disjoint\n([-44, 44] vs [50, 102]) and the \"shoot the guns, then the core\" read cleaner. It was\nplanned, then dropped when its stated justification collapsed; it needs a deliberate\ndesign call, not a bug fix. Cost: one `sub_resource` and one node property.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "two-consecutive-reviews-asserted-that-a-player-bullet-dies-o",
+          "head": "**Two consecutive reviews asserted that a player bullet dies on its first hurtbox overlap.",
+          "body": "It does not — worth knowing before anyone reasons about projectile lifetime again.**\n`BulletPool` is constructed only by `light_assault_ship.gd:27`, `gunship.gd:52`,\n`interceptor.gd:30`, `ally_fighter.gd:22` and `racer_weapon.gd:11` — **never by the player**.\n`straight_behavior.gd:22` does a plain `state.add_child(bullet)`. Repo-wide there are exactly\ntwo connections to `Bullet.expired` (`bullet_pool.gd:56`, `sniper_enemy.gd:102`), and\n`bullet.gd:84` emits `expired` **without** `queue_free()`; the only `queue_free()` is `:49`,\ngated on `range_px > 0.0`, which `weapons/modes/default.tres` sets to `0.0`. So a default\nplayer bullet has no listener on `expired` and flies on with a live HitBox, damaging every\nhurtbox in its lane until it leaves the screen. Consequence worth a separate decision: the\nplayer's default shot is effectively **infinitely piercing against stacked hurtboxes**, which\nmakes `PierceModule` (`pierces_remaining`, `MAX_PIERCE = 3`, `PIERCE_DAMAGE_FACTOR = 0.55`)\nlook like it exists to *limit* damage rather than add it. That is probably not intended and\nis a real balance question for multi-part targets.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "testspacestation-gd-s-collision-layer-coverage-gap-is-still-",
+          "head": "`test_space_station.gd`'s collision-layer coverage gap is still open.",
+          "body": "Sub-item 1 recorded\nit as provable \"once the station is in a live level (sub-item 2)\". Sub-item 2 has landed and\ndoes **not** close it: `test_station_assault_section.gd` asserts section gating and wave data,\nnever a projectile overlap. Closing it needs a test that instances\n`assault/scenes/projectiles/bullets/bullet.tscn`, positions it in a turret lane and steps\nphysics — the suite has no precedent for physics-overlap tests, so budget for the technique.\n`ENEMY.md` and `tests/README.md` now say this plainly instead of promising it is coming.\n\nFound on 2026-09-01 while regenerating the turret sprites.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "stationcore-png-has-a-fully-opaque-background-the-station-wi",
+          "head": "**`station_core.png` has a fully opaque background — the station will render as a grey",
+          "body": "square in space.** Measured: **65536/65536 pixels at alpha 1.0**, corner alpha `1.00`\n(`station_turret.png`, regenerated this run, is 54.7% opaque with corner alpha `0.00`, which\nis what a sprite should look like). The cause is the same one behind the 3/4 turrets: the\ncore was made with `create_image_pixflux`, whose `no_background` defaults to unset and is\ntreated as `False` when there is no init image — it paints a background unless you pass\n`no_background=True`. `create_map_object` is transparent by construction, which is why the\ntwo regenerated turrets came back correct without anyone asking. Nobody has seen it yet\nbecause the station is\nnever drawn against the starfield in any test — it only became visible when I composited the\ncore and four turrets together for the mandatory visual check. **Not fixed this run**: the\nbacklog item was scoped to the turrets, and replacing the core is a separate generation plus\na fresh visual check. Fix by regenerating with `create_map_object` (max canvas is 400×400, so\n256×256 fits), or by alpha-keying the existing grey if the art is worth keeping.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "this-container-has-no-file-no-python3-and-no-xxd-only-od",
+          "head": "This container has no `file`, no `python3` and no `xxd` — only `od`.",
+          "body": "`scripts/pixellab.sh`\ncalled `file -b` unconditionally under `set -euo pipefail`, so **every `save-b64` and\n`download` aborted with exit 127 after having already written the file** — a confusing\nhalf-success. Fixed this run by adding a `sniff_magic()` fallback that reads PNG/JPEG/WEBP\nmagic bytes with `od` when `file` is absent; the `file` path is unchanged where it exists,\nand both the success and the rejection path were tested. Flagging the wider point: any future\ntooling here should assume a **minimal** userland. Note also that the previous cycle's\nsprites were saved without the script ever succeeding, which is probably why nothing caught\nthis until now.\n\nFound on 2026-09-02 while planning the station laser phase (EPIC sub-item 3). Both were measured\nat runtime by the plan reviewer on Godot 4.6.3, not inferred.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "every-enemy-that-does-export-var-config-load-shares-one-conf",
+          "head": "**Every enemy that does `@export var config = load(...)` shares ONE config resource",
+          "body": "process-wide, and it is the same object `preload` hands a test.** `ResourceLoader` caches, and\nthe scenes store no override, so `station_a.config == station_b.config == preload(\".../space_station_config.tres\")`\nis `true` — verified. Writing to one enemy's `config` at runtime therefore rewrites the\nshipped `.tres` values in memory for **every** instance and for **every later test in the\nsame process**. This is not hypothetical: it is exactly the trap that got the laser-phase\ntest plan rejected in review round 2, because a test that tuned timings through `config`\nwould have silently clobbered the values a later test asserts. The pattern is used by\n`space_station.gd:24` and, by inspection, the other `*_config.tres` enemies\n(`bomber.gd`, `ram_ship.gd`, `light_assault_ship.gd`, `gunship.gd`). Worth either a\n`duplicate()` on assignment, or a line in `tests/README.md` warning that config resources are\nshared and must never be mutated from a test. No test pins this today.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "spike-testspikelaser-gd-and-spike-testspikeselfkill-gd-are-t",
+          "head": "`spike/test_spike_laser.gd` and `spike/test_spike_selfkill.gd` are tracked dead code.",
+          "body": "`git ls-files spike/` lists both plus their `.uid`s.\n`docs/plans/station-laser-phase/1-context.md` claimed they had been \"deleted afterwards\";\nthey had not, and the claim has now been corrected in place. They sit outside\n`-gdir=res://tests` so the gate never runs them, which means they can rot against\n`laser_ray.gd` / `space_station.gd` without anything noticing — and they are written against\nexactly the scripts the laser phase changes. Delete them (they are step 1 of\n`docs/plans/station-laser-phase/3-plan.md`), or move them under `tests/` so the gate keeps\nthem honest. They are genuinely useful as fixtures: they demonstrate the layer-128 stub\n`HurtBox`, `wait_seconds` beam stepping, and the self-kill reproduction.\n\nFound on 2026-09-02 while implementing the station laser phase (EPIC sub-item 3).",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "explosioneffect-orphans-its-particles-onto-whatever-the-dyin",
+          "head": "`ExplosionEffect` orphans its particles onto whatever the dying entity's parent is.",
+          "body": "`global/components/explosion_effect.gd:28-52` adds the `CPUParticles2D` to\n`actor.get_parent()` and relies on `p.finished.connect(p.queue_free)` to clean up ~1 s later.\nIn-game that parent is `WaveManager.enemy_container`, so it is harmless. In a test it is\nwhatever node the test used, and any test that kills an entity added straight to the test\nscript ends with `GUT WARNING: Test script has 2 unfreed children`. Worked around in\n`tests/integration/test_station_laser_phase.gd` by parenting through a container `Node2D`\n(documented in `tests/README.md`), but the component itself would be tidier if the particles\nwere parented to the entity's *owner-scene* root, or if `explode()` took an explicit\ncontainer. Worth deciding before sub-item 4 adds many more deaths per fight.\n**Update 2026-09-02 — it bit again, one level down, and cost a full gate cycle.** For a\n`StationTurret` the parent `explode()` writes into is the station's `$Turrets` node, so from\nthe first turret kill onward `$Turrets.get_children()` contains `CPUParticles2D` mixed in\nwith the turrets. `test_station_gunnery.gd`'s `_turrets()` helper did a raw `get_children()`,\nso `child as StationTurret` returned `null` and the next call died with\n`Invalid call. Nonexistent function 'is_alive' in base 'Nil'` — an *Unexpected Error*, which\nGUT reds with no failing assertion to point at, so it reads as unrelated. Fixed in the test\nby filtering to `StationTurret` (what `SpaceStation._turrets()` already does), and the trap\nis now written up in `tests/README.md`. This is the second workaround for the same component;\nan explicit container argument on `explode()` would have prevented both.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "the-station-s-collision-layer-coverage-gap-is-now-only-half-",
+          "head": "The station's collision-layer coverage gap is now only half open.",
+          "body": "`assault/scenes/enemies/space_station/ENEMY.md` records that\n`tests/integration/test_space_station.gd` drives damage by emitting `received_damage`\ndirectly and so proves nothing about collision layers.\n`tests/integration/test_station_laser_phase.gd` does now exercise a **real** physics overlap\n— a layer-128 stub `HurtBox` placed in a beam's path, found by the beam's own `Area2D` — but\nonly for the *player* layer and only against a `LaserRay`. Nothing yet proves a player\n**bullet** can hit the core's layer-512 hurtbox or a turret's. Closing it still needs a test\nthat instances `assault/scenes/projectiles/bullets/bullet.tscn` and steps physics.\n\nFound on 2026-09-03 while implementing station reinforcements (EPIC sub-item 4b).",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "ramship-cannot-be-hit-by-the-player-s-primary-weapon-and-its",
+          "head": "`ram_ship` cannot be hit by the player's primary weapon, and its config HP is dead code.",
+          "body": "`assault/scenes/enemies/ram_ship/ram_ship.gd:19` narrows the HurtBox mask to\n`33` (`# missiles only (32 + 1); bullets ignored`) after `BaseEnemy._ready()` has set the\nnormal `97 | 1024`. The player's bullet is `collision_layer = 64`\n(`assault/scenes/projectiles/bullets/bullet.tscn:44`), so **no bullet ever reaches it**;\n`bullet.gd:71` additionally has a `ram_ships`-group node *consume* a piercing sniper shot and\nzero its damage. On top of that `ram_config.tres:8` sets `max_health = 999` and\n`ram_ship.gd:16-17` never applies it (only `movement_speed`), so the scene's bare `Health`\ndefault is what actually runs — the number a reader would look up is fiction.\nWhether the immunity is intended is a **design call**, so it is filed rather than fixed:\neither it is a deliberate dodge-only obstacle, in which case\n`docs/enemy-roster.md:127`'s \"**HP:** Medium\" is misleading and should say so, or it is a bug\nand the mask should be the inherited one. Either way `ram_config.tres`'s `max_health` should\nbe applied or deleted. 4b swapped its top squad to `fighter` to avoid the question, and\n`tests/integration/test_station_reinforcements.gd` now asserts every squad ship is\nbullet-killable so the class of mistake cannot recur silently.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "the-0-75-escape-combo-penalty-applies-to-ad-hoc-spawns-nobod",
+          "head": "The 0.75× escape-combo penalty applies to ad-hoc spawns nobody expects to kill.",
+          "body": "`assault/scenes/systems/score_tracker/score_tracker.gd:211` multiplies the combo by\n`escape_combo_multiplier` **outside** the `if counts_in_wave:` block, so a `wave_index` of\n`-1` (every `EventBus.enemy_spawned_orphan` spawn) is not exempt, and neither is\n`counts_toward_wave_clear = false`. Station reinforcements are designed to fly through, so a\nplayer who correctly ignores a squad to focus the boss pays 0.75 twice per squad (0.5625) and\nfloors their multiplier after about three. `Level1Director._spawn_bonus_drone` has the same\nshape but a bonus drone is a rare optional pickup, not six scheduled ships.\n4b **accepted this deliberately** — the alternative is that killing a reinforcement awards\nnothing at all, which reads as a bug — and pinned the exact number in\n`test_station_reinforcements.gd`. Recording it so the user can overrule: the fix, if wanted,\nis a `counts_as_escape` flag on the spawn rather than a special case for one enemy source.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr",
+          "head": "A spawn's off-screen margin cannot account for camera pan, project-wide.",
+          "body": "Every spawn in the game resolves its offset against `cam.global_position`, which\n`arena_camera.gd:5-12` pins at (640, 360) and never moves — panning happens through `offset`.\nSo a player panned fully down (`V_LIMIT` is 380) can in principle watch a bottom-edge spawn\nappear. 4b matched the existing convention rather than diverging for one node, and excluded\n`V_LIMIT` from its vertical margin budget on purpose. Fixing it properly means spawns\nresolving against the *visible* rect rather than the camera centre, which touches\n`wave_manager.gd:172` and every spawn offset in the game — not a 4b-sized change.\n\nFound on 2026-09-03 while building the station death sequence (EPIC sub-item 5).",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "raceship-gd-97-100-renders-its-death-explosion-at-the-contai",
+          "head": "**`race_ship.gd:97-100` renders its death explosion at the container origin, not at the",
+          "body": "ship.** It does `get_parent().add_child(boom)` then `boom.global_position = global_position`\n— but `ExplosionEffect.explode()` reads `actor.global_position` where `actor` is the effect's\n*parent*, so the position written on line 99 is silently discarded and every race-ship\nexplosion appears at the container's origin. Confirmed by reading the code and by the\nindependent reviewer of `docs/plans/station-death-handoff/`. **Deliberately not fixed in that\ncycle:** it is unrelated to the mini-boss and fixing it visibly moves race-mode explosions,\nwhich deserves its own before/after check. `explode()` now takes an optional position\nargument, so the fix is one line: `boom.explode(global_position)`. No test pins the current\nbehaviour, so nothing will fight the change.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "the-gate-s-step-1-godot-headless-import-leaks-objectdb-insta",
+          "head": "The gate's step 1 (`godot --headless --import`) leaks ObjectDB instances.",
+          "body": "It prints\n`WARNING: ObjectDB instances leaked at exit` plus a few RID-allocation errors on every run.\nPre-existing and **not** caused by the test suite — verified by running the import against a\nstashed working tree: baseline and current both emit exactly one occurrence, while the GUT\nstep emits none. Harmless today (the gate does not match on it), but it is noise that will\nmask a real leak if one ever appears in step 1, and it costs time to re-diagnose. Worth one\ncycle to find what the importer is holding.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "explosioneffect-s-container-resolution-is-a-footgun-worth-a-",
+          "head": "`ExplosionEffect`'s container resolution is a footgun worth a guard.",
+          "body": "`explode()` resolves\nits target as `get_parent().get_parent()` with no check on what that is, so attaching the\neffect one level too deep silently parents the particles inside the entity instead of the\ncontainer — they are then freed with the entity and inherit its rotation, with no error. This\nis the same shape of trap as `bullet_pool.gd:47`, which the space-station scene warns about\ntwice in comments. A `push_warning` when the resolved container is itself an ancestor-owned\nnode, or an explicit `container` export, would turn a silent visual bug into a loud one.\n\nFound on 2026-09-03 while fixing the shared-component signal/logging defects.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "three-more-files-print-unconditionally-on-hot-paths-same-def",
+          "head": "**Three more files print unconditionally on hot paths — same defect as the one just fixed,",
+          "body": "out of the item's stated scope.** `global/ui/dialog_system/ui/dialog_box.gd` has **11**\nprints (`[DB] ...`), several per dialog *line*, including inside tween callbacks;\n`assault/scenes/player/movement_controller.gd:74,79` print `\"first/second time pressed …\"`\non **every double-press-eligible key press**, i.e. constantly during normal play; and\n`assault/scenes/player/states/dash_state.gd:54` prints on every dash attempt made during\ncooldown, so mashing dash spams it. The fix is mechanical and already has a precedent in\nthree files: wrap in `if OS.is_stdout_verbose():` or route through a `_trace()` helper.\nThe convention is now written down in `docs/architecture/PROJECT.md` → Conventions, so this\nis a tidy-up, not a decision. Lower-traffic leftovers, for completeness:\n`wave_manager.gd` (4), `level_1_director.gd` (4), `level_2_waves.gd` (3),\n`level_director.gd` (3), `ally_fighter.gd` (2), `boot.gd` (2),\n`skill_challenge_runner.gd` (2), `score_tracker.gd` (1), `level_1_background.gd` (1).",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "declaring-a-signal-s-parameters-does-not-stop-the-mismatch-i",
+          "head": "Declaring a signal's parameters does not stop the mismatch it looks like it stops.",
+          "body": "Worth knowing before someone \"fixes\" the next one and assumes the problem is gone. **Measured\non Godot 4.6.3 with a throwaway `SceneTree` probe**, not inferred: a signal's declared arity\nis **documentation only**. `signal foo` and\n`signal foo(x: int)` behave identically at `emit()` time, and connecting a zero-argument\ncallable to either is accepted at connect time (`connect()` returns `OK` in both cases) and\nerrors identically at emit time with `Method expected 0 argument(s), but called with 1`.\nThe one thing that does differ is `Object.get_signal_list()`, which reports the declared\narity — 0 vs 1 — which is exactly why the new tests assert against it. So the 2026-09-03 fix made\n`Health.amount_changed` and `State.state_transition` honest to a reader and to editor\ncompletion, and nothing more. Anything that wants a *real* guarantee has to assert the\narity from a test the way `test_amount_changed_declares_the_int_it_emits` does, by reading\n`Object.get_signal_list()`.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        }
+      ]
+    },
+    {
+      "id": "foundations-test-harness-uid-integrity-art-pipeline",
+      "title": "Foundations: test harness, UID integrity, art pipeline",
+      "status": "done",
+      "tasks": [
+        {
+          "id": "bootstrap-the-test-harness",
+          "head": "Bootstrap the test harness.",
+          "body": "Install GUT into `addons/gut/`, create `tests/`, and write\ncharacterization tests for the eight autoloads and the `global/components/` set (Health,\nHurtbox/Hitbox, Shield, Overheat, DamageReaction). Tests must pin down current behaviour,\nbugs included — no fixes this run. Done when `bash /agent/verify.sh` passes with a green\nsuite. *(The agent does this automatically while `addons/gut/` is missing, ignoring\neverything below.)*\n**Done 2026-08-31** — GUT 9.7.1 vendored into `addons/gut/` (two files patched for Godot\n4.6.3, see `addons/gut/LOCAL_PATCHES.md`), 153 tests / 490 asserts across 16 scripts in\n`tests/`, gate green. Conventions and the gotchas that cost time are in `tests/README.md`.",
+          "state": "done",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "fix-the-stale-uid-in-openspace-scenes-gui-hud-tscn-6",
+          "head": "Fix the stale UID in `open_space/scenes/gui/hud.tscn:6`.",
+          "body": "Its `ext_resource` for\nthe pause menu declares `uid://bospm3nuos001`, but\n`global/ui/pause_menu/open_space_pause_menu.tscn` actually declares\n`uid://b10bam3tnq6vw`. Godot currently falls back to the text path and only warns, so\nnothing is broken — but the fallback disappears if that scene is ever moved. Fix the\nreference, then run the Godot MCP `update_project_uids` tool and check whether any\nother file has the same problem. Done when `godot --headless --import` is warning-free.\n**Done 2026-09-01** — it was **8** stale references, not 1, in 8 files: `assault/scenes/gui/hud.tscn`,\n`assault/scenes/levels/level_2.tscn`, `open_space/scenes/gui/hud.tscn`, and the five\n`open_space/scenes/mission_data/planets/**/…_infiltration_mission_*.tres`. All 8 named a UID\nno resource declares. Added `tests/integration/test_resource_uid_integrity.gd` (3 tests) so\nthe class of defect cannot come back. Verified on a **cold** `.godot/` cache by loading all\n126 `.tscn`/`.tres`: 3 `invalid UID` warnings before, 0 after, 0 load failures.\nThe suggested `update_project_uids` MCP step is a no-op — see *Discovered*.\n\n---",
+          "state": "done",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "regenerate-the-turret-sprites-stationturret-png-is-3-4-view-",
+          "head": "Regenerate the turret sprites — `station_turret.png` is 3/4 view, not top-down.",
+          "body": "The barrel is drawn from the side with visible cylinder faces and the base sits in\nperspective; `station_core.png` in the same set is correctly overhead, so the set is\nvisually inconsistent. Root cause: PixelLab was almost certainly called with\n`view: \"low top-down\"`, which is the 3/4 look.\n**Invoke the `pixel-art-generation` skill first.** Regenerate with\n`view: \"high top-down\"` and `isometric: false`, describing the shape as seen from\nabove (base reads as a circle, barrel as a short flat rectangle lying across it),\nplus the negative constraints. Regenerate `station_turret_destroyed.png` to match.\nSave with `./scripts/pixellab.sh save-b64` — **never** the Write tool, it corrupts\nPNG data. Re-import so the `.import` sidecars update.\n*Done when:* both turret sprites have been opened with the Read tool and confirmed\nto show no side faces, and they sit consistently beside `station_core.png`.\n**Done 2026-09-01** — the guessed root cause was wrong in an instructive way. It was not\n`view: \"low top-down\"`; it was the **tool**. The originals came from `create_image_pixflux`\n(`docs/plans/station-mini-boss-destructible/5-progress.md:19`), whose `view` **defaults to\n`null` and is documented as \"weakly guiding\"** — so it was never set, and setting it would\nonly have been a soft hint anyway. `create_map_object` defaults it to `\"high top-down\"` and\nhonours it. The skill has been corrected: it previously named `low top-down` as \"the most\nlikely cause of a wrong-angle sprite in this project\", which would have sent the next run\nhunting for a wrong value rather than a wrong tool.\nRegenerated with **`create_map_object`** (`view: \"high top-down\"`, `outline: \"lineless\"`,\n`detail`/`shading` medium, 64×64) and the destroyed variant with **`create_object_state`** off\nthe intact one, which keeps the footprint and palette aligned for free. `isometric` is not a\nparameter on either tool — the negatives went in the description instead. **2 generations\nused**, no aesthetic iteration. Both opened at 6× and composited with `station_core.png` at\ntrue in-game layout (256×256 hull, turrets at ±76): no side faces, no tilt, transparent\nbackgrounds (corner alpha `0.00`, was opaque before), and the dead turrets read as burnt\ncraters against the light hull. Provenance and the exact prompt shape are now in `ENEMY.md`\nso a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque\n`station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.",
+          "state": "done",
+          "badge": null,
+          "planDir": null
+        }
+      ]
+    },
+    {
+      "id": "station-mini-boss",
+      "title": "Level 1 space-station mini-boss",
+      "status": "done",
+      "tasks": [
+        {
+          "id": "station-mini-boss-destructible",
+          "head": "1. Station and turrets exist as a destructible entity.",
+          "body": "Generate the station and turret\nsprites via PixelLab. Assemble the station scene with N turrets as child entities, each\nindividually damageable. The station core takes no damage while any turret is alive.\n*Done when:* a GUT test destroys turrets one at a time and proves the core is invulnerable\nuntil the last turret dies, then becomes damageable.\n**Done 2026-09-01** — `assault/scenes/enemies/space_station/` (`SpaceStation extends BaseEnemy`\n+ 4 `StationTurret` children + `SpaceStationConfig`), three PixelLab sprites, and\n`tests/integration/test_space_station.gd` (9 tests). Gate green: 165 tests / 527 asserts.\nCore refuses damage via a `_on_received_damage` override while keeping the HurtBox **live**,\nbecause `plasma_nova_module.gd:39-41` and `beam_behavior.gd:99-102` both emit\n`received_damage` directly and a disabled hurtbox would leak both. Plan + two review rounds:\n`docs/plans/station-mini-boss-destructible/`. **Known gap:** the tests emit `received_damage`\ndirectly, so they do not prove the collision layers — that needs sub-item 2.",
+          "state": "done",
+          "badge": null,
+          "planDir": "docs/plans/station-mini-boss-destructible"
+        },
+        {
+          "id": "station-assault-section",
+          "head": "2. The encounter blocks level progress.",
+          "body": "Add a new `LevelSection` (suggested name\n`station_assault`) to `level_1_director.gd`, between `asteroid_belt` and `planet_approach`,\nusing `ENEMIES_CLEARED`. Add the matching `phases/phase_station_assault.tres`.\n*Done when:* a headless test proves the section does not advance while the station lives,\nand advances to `planet_approach` when it dies.\n**Done 2026-09-01** — `station_assault` is Level 1's third section. New\n`LevelSection.enemies_cleared_timeout` (default `10.0`, so `cloud_descent` is bit-identical;\nthe station sets `180.0`), `LevelDirector` now **frees leftover container children on\nexpiry** instead of dragging the boss into the next section, `WaveBuilder.space_station()`,\n`phases/phase_station_assault.tres`, and a `_build_sections()` refactor that makes the\nsection order assertable without booting the level.\n`tests/integration/test_station_assault_section.gd` (7 tests). Gate green: 19 scripts /\n172 tests / 551 asserts.\nPlan + **two** review rounds: `docs/plans/station-assault-section/`. Round 2 **withdrew**\nround 1's blocking finding — see *Discovered*; that reversal is the most useful thing this\ncycle produced.",
+          "state": "done",
+          "badge": null,
+          "planDir": "docs/plans/station-assault-section"
+        },
+        {
+          "id": "station-laser-phase",
+          "head": "3. Laser phase.",
+          "body": "Once all turrets are destroyed, the station rotates and fires\n`LaserRay` beams at varying positions, forcing the player to keep moving. Beams must\ntelegraph before they damage (`warn_duration`) — an instant-kill beam with no tell is\nunfair, and research should set the actual timing.\n*Done when:* a test proves the phase only starts after the last turret dies, and that a\nbeam damages the player only during its active window, not its warning window.\n**Done 2026-09-02.** New `StationLaserPhase` (`station_laser_phase.gd`, wired into\n`space_station.tscn` as `LaserPhase`), a zero-arg `SpaceStation.armor_broken` signal with a\nonce-only latch, five laser fields on `SpaceStationConfig` + the `.tres`, and an additive\n`LaserRay.hit_mask_override` export. `tests/integration/test_station_laser_phase.gd`\n(12 tests) + `test_laser_ray_hit_mask.gd` (4 tests). Gate green: 21 scripts / 188 tests /\n605 asserts.\nPlan + **three** review rounds: `docs/plans/station-laser-phase/`. Rounds 1 and 2 were\nCHANGES_REQUESTED and were worth every minute — round 1 caught that the headline \"the boss\nmust not kill itself with its own beam\" test **could not fail** as specified (only the\n*diagonal* volley angles overlap the core hurtbox), and round 2 caught that the test plan\nwould have clobbered the process-wide shared config `.tres`. Round 3 verified both fixes at\nruntime and approved.\nTwo things a future cycle should not have to rediscover: the station's beams **must** set\n`hit_mask_override = 128` before `add_child()` or the boss kills itself in one frame\n(`600 → 0 HP`, reproduced), and the volley angles are a fixed list, never `randf()` — random\nattack ordering cannot be balanced or tested.\n\n**Split on 2026-09-02** into 4a (the station's own fire) and 4b (reinforcements). One\nsession each; 4a is the half that changes the first phase from passive to a fight.",
+          "state": "done",
+          "badge": null,
+          "planDir": "docs/plans/station-laser-phase"
+        },
+        {
+          "id": "station-bullet-hell",
+          "head": "4a. The station shoots back.",
+          "body": "Turrets and core fire bullet-hell patterns through\n`bullet_pool`.\n*Done when:* every live turret fires an aimed pattern, killing a turret removes its gun from\nthe volley, the core fires its own pattern once the armour breaks, projectiles route through\n`bullet_pool`, and a headless run produces no errors.\n**Done 2026-09-02.** `StationGunnery` (`assault/scenes/enemies/space_station/station_gunnery.gd`)\nas a sibling node of `StationLaserPhase`, driving a new shared\n`global/resources/attack/radial_attack_pattern.gd` (`RadialAttackPattern` — one resource\ncovering both the ring and the fan). Ten new `SpaceStationConfig` fields; `BulletPool` +\n`Gunnery` authored into `space_station.tscn`. Tests: `test_station_gunnery.gd` (16) +\n`test_radial_attack_pattern.gd` (10). Gate green: 23 scripts / 214 tests / 767 asserts.\nPlan + **two** review rounds: `docs/plans/station-bullet-hell/`. Round 1 was\nCHANGES_REQUESTED and earned its keep twice over — it caught that the planned\n`_station.add_child(_pool)` from the gunnery's `_ready()` **cannot work** (`_propagate_ready()`\nblocks the parent while readying its children), and that the planned `core_ring_step = 0.21`\nhad exactly the defect the research said to avoid: `3 × 0.21 ≈ 0.6283` = the ring spacing, so\nrings collapse onto three radial lanes and leave a permanent safe lane. Shipped value is the\ngolden-angle `0.24`, and a test now locks it.\nTwo things a future cycle should not have to rediscover: the `BulletPool` **must** stay a\ndirect child of `SpaceStation` (`bullet_pool.gd:47` hardcodes `get_parent().get_parent()`, so\nanywhere else the whole bullet field rotates with the hull), and a `node_paths=` tag on the\n`Gunnery` node is required or the exported reference is silently left null **with the gate\nstill green**.",
+          "state": "done",
+          "badge": null,
+          "planDir": "docs/plans/station-bullet-hell"
+        },
+        {
+          "id": "station-reinforcements",
+          "head": "4b. Reinforcements.",
+          "body": "During the fight, existing enemy ships fly in from the sides, top\nand bottom.\n*Done when:* reinforcement waves spawn from at least three screen edges and a headless run of\nthe section produces no errors.\n**Done 2026-09-03.** `StationReinforcements`\n(`assault/scenes/enemies/space_station/station_reinforcements.gd`) as a third sibling node\nalongside `StationLaserPhase` and `StationGunnery` — `space_station.gd` gained **nothing**,\nnot even an accessor. Squads cycle `LEFT → RIGHT → BOTTOM → TOP` (**four** edges, not the\nthree the done-condition asked for): 2 × `interceptor` from either side, 2 × `kamikaze_drone`\nfrom below, 2 × `fighter` + `.shoot_forward()` from above, all authored with `WaveBuilder`'s\nown fluent API in 640×360 design units. Three new `SpaceStationConfig` fields (8 s first\ndelay / 10 s interval / cap 4). Tests: `test_station_reinforcements.gd` (18). Gate green:\n24 scripts / 232 tests / 868 asserts.\nPlan + **two** review rounds: `docs/plans/station-reinforcements/`. Round 1 was\nCHANGES_REQUESTED and paid for itself: it caught that the planned top squad (`ram_ship`) is\n**immune to the player's primary weapon** — `ram_ship.gd:19` narrows its HurtBox mask to 33,\nwhich excludes the bullet's layer 64 — so the squad would have been two indestructible\nobstacles by accident; and that registering adds with `ScoreTracker` also opts them into the\n0.75× escape-combo penalty, which nobody had examined. Round 2 approved.\nBoth backlog warnings were handled: reinforcements come from a station-owned node rather than\nthe station's own wave, and stopping at `armor_broken` plus `FREE_ON_DURATION` means nothing\ncan be left alive to hold `ENEMIES_CLEARED` open.\nFour things a future cycle should not have to rediscover: reinforcements must be **siblings**\nof the station and never children (the laser phase rotates the hull, and `bullet_pool.gd:47`\nhardcodes `get_parent().get_parent()`); `FREE_ON_SCREEN_EXIT` cannot be used for an\noff-screen spawn because it only culls a ship that has already been on screen once; the\nstation's `died` signal cannot be tested without unhooking `armor_broken` first, because the\narmour rule makes `armor_broken` the only route to it; and a ship's **runtime** HurtBox mask\ncomes from `base_enemy.gd:25`, never from the value authored in its `.tscn`.",
+          "state": "done",
+          "badge": null,
+          "planDir": "docs/plans/station-reinforcements"
+        },
+        {
+          "id": "station-death-handoff",
+          "head": "5. Destruction hands off to the planet approach.",
+          "body": "Station death plays out and the level\ncontinues into `planet_approach` and the planet entry.\n*Done when:* a headless run of the full Level 1 section sequence completes end to end.\n**Done 2026-09-03.** `StationDeathSequence`\n(`assault/scenes/enemies/space_station/station_death_sequence.gd`) as a **fifth** sibling\nnode; `space_station.gd` gained a `death_started` signal, a public `death_duration`, a\n`_dying` latch and an `_on_health_changed` override that moves **only** `queue_free()`.\nAdditive support: `BulletPool.cancel_active()` (extracted from `_exit_tree()`) and\n`ExplosionEffect.explode(at)` (optional position, default preserves today's behaviour).\nTwo new `SpaceStationConfig` fields. Tests: `test_station_death_sequence.gd` (15) +\n`test_level_1_sequence.gd` (1 end-to-end) + 2 in `test_station_gunnery.gd`.\nGate green: 26 scripts / 249 tests / 941 asserts.\nPlan + **two** review rounds: `docs/plans/station-death-handoff/`. Round 1 was\nCHANGES_REQUESTED on the **test plan**, not the design, and earned its keep three times:\nthe headline \"blasts land in the container\" test **could not fail for the right reason**\n(`hit_effect.gd:21,34` keeps a permanent `CPUParticles2D` under every `BaseEnemy`, so a\nrecursive search always fails and a direct one is vacuously true); the determinism test\ncompared *world* offsets while the same plan rotates the hull, making it a frame-timing\nrace; and the end-to-end test would have **leaked `SceneTreeTimer`s with the gate green**.\nRound 2 APPROVED with one blocking pre-condition (finding K) that was also correct — see\nbelow.\nFour things a future cycle should not have to rediscover:\n**(1)** the `ExplosionEffect` must be a child of the **station**, never of the sequence node\n— `explosion_effect.gd` resolves its container as `get_parent().get_parent()`, so one hop too\ndeep puts every blast inside the rotating hull, where it is freed with the wreck and invisible\nto the container the director polls; and it must be added in the `death_started` handler, not\n`_ready()`, because `_propagate_ready()` blocks the parent.\n**(2)** `was_killed`/`died` must fire at HP 0, not at the free, or `ScoreTracker` scores the\nboss as an *escape* and applies the 0.75× combo penalty — silent, and no visual test catches it.\n**(3)** the handoff needed **no** `LevelDirector` change at all: `_wait_enemies_cleared()`\nalready polls the container's child count, so a lingering wreck holds its section open for free.\n**(4)** compressing Level 1 for a test needs `stagger_delay` zeroed as well as `spawn_delay`\n— every formation type staggers its own slots, and missing it leaks while the gate stays green.\n\n**Open questions for the plan stage** (research these, do not guess):\nPixelLab maximum sprite dimensions; how many turrets makes the first phase interesting rather\nthan tedious; standard telegraph durations for sweeping-laser boss attacks in shmups.\n\n---",
+          "state": "done",
+          "badge": null,
+          "planDir": "docs/plans/station-death-handoff"
+        }
+      ]
+    }
+  ],
+  "ideas": [],
+  "notes": "## Migration note\n\nThis file was migrated from a flat checklist on 2026-09-03. The historical *Discovered* bugfix log (found-and-fixed defects, not tasks) is preserved below verbatim rather than modeled as board items.\n\n---\n\n<!-- The agent appends suspected bugs and follow-ups it found but did not act on. Triage these. -->\n\nFound on 2026-08-31 while writing the characterization suite. Each one is **pinned by a passing\ntest that asserts the current behaviour**, so changing any of them will fail that test — which is\nthe signal that the change was deliberate. Test names are given so the fix has an obvious anchor.\n\n- [x] **`Health.amount_changed` is declared with zero parameters but emitted with one.**\n      `global/components/health_component.gd:4` declares `signal amount_changed`, and line 42\n      emits `amount_changed.emit(current_health)`. One-argument handlers (`DamageReaction`,\n      `PlayerBase._on_health_changed`) work, but any zero-argument handler raises\n      `Error calling from signal 'amount_changed' ... Method expected 0 argument(s), but called\n      with 1` at runtime. Fix is one line: `signal amount_changed(current: int)`.\n      Same defect in `global/statemachine/state.gd:4` — `signal state_transition` is emitted with\n      the target `State`. Pinned by `tests/unit/test_health_component.gd` (see the file header)\n      and `tests/unit/test_state_machine.gd::test_states_request_transitions_through_their_own_signal`.\n      **Fixed 2026-09-03.** Both declarations now name the argument they emit\n      (`amount_changed(current_health: int)`, `state_transition(new_state: State)`). This is a\n      readability/tooling fix only — it does **not** make a zero-argument handler legal, and\n      `tests/README.md` now says so explicitly instead of describing the old shape. Two new intent\n      tests read the declared arity back off `get_signal_list()`\n      (`test_amount_changed_declares_the_int_it_emits`,\n      `test_state_transition_declares_the_state_it_emits`), so the declarations cannot silently\n      drift from the emits again. The rule is now a convention in `docs/architecture/PROJECT.md`.\n\n- [x] **`StateMachine.change_state()` crashes if the machine has no current state.**\n      `global/statemachine/state_machine.gd:29` does `print(\"Exiting previous state: \" +\n      current_state.name)` **before** the `if current_state:` guard on line 31. Any machine built\n      without an `initial_state` (or whose state was cleared) dies on its first transition. Not\n      reachable today because every shipped machine sets `initial_state`, so it is latent rather\n      than live. Deliberately *not* covered by a test — the test would have to trigger the crash.\n      **Fixed 2026-09-03.** The log line moved inside the `if current_state:` guard, together with\n      the `exit()` call it sits next to. It **is** covered by a test now —\n      `test_state_machine.gd::test_change_state_from_an_idle_machine_enters_without_crashing`\n      builds a machine with no `initial_state` and transitions it; before the fix that test failed\n      with `Invalid access to property or key 'name' on a base object of type 'Nil'`, which is\n      exactly the crash, provoked deliberately in a place where it is harmless.\n\n- [x] **`Health.decrease()` prints to stdout on every single hit.**\n      `global/components/health_component.gd:34`. In a bullet-hell section that is one line per\n      projectile per frame; `print` is not free and it buries real errors in the log. Should be a\n      debug-gated helper or removed. `StateMachine.change_state` and `DialogPlayer` print\n      unconditionally too (`[DP] ...` on every line of every conversation).\n      **Fixed 2026-09-03.** All three now trace behind `if OS.is_stdout_verbose():`, so the\n      messages survive for debugging (`godot --verbose ...`) but cost nothing in a normal run.\n      Measured on the GUT suite: **181 lines** suppressed (173 `[Health]`, 6 `[StateMachine]`,\n      2 `[DP]`), and a normal suite run now greps 0 for all three prefixes. `DialogPlayer`'s nine\n      prints went through a `_trace()` helper; its `_unhandled_input` one is additionally\n      guarded at the call site because `event.as_text()` allocates per input event.\n      `Health.decrease()` no longer needs a parent, since the fallback replaced the bare\n      `get_parent().name`. `dialog_box.gd`, `movement_controller.gd` and `dash_state.gd` have the\n      same problem and were **not** in scope — refiled below.\n\n- [x] **The turret sprite's barrels point at −Y and no turret sets `rotation`.** All four\n      `space_station.tscn` turret instances are placed at `rotation = 0`, so every barrel points\n      toward the top of the screen — *away* from the player, who is always below the station.\n      **Closed 2026-09-02 by sub-item 4a**, at exactly the moment it predicted.\n      `StationGunnery.fire_turret_volley()` sets each firing turret's `global_rotation` to\n      `aim.angle() + PI/2` immediately before firing — `global_rotation`, not `rotation`, so it\n      survives the laser phase spinning the hull. Pinned by\n      `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a\n      scene. The authored `rotation = 0` remains, as a spawn orientation."
+}

@@ -129,8 +129,9 @@ Then answer in your report:
 3. Does it read correctly at in-game size?
 
 If it fails, regenerate **once** with `view: "high top-down"` and a sharper shape description. If
-the second attempt also fails, keep the better one, flag it in the report and add it to
-`BACKLOG.md` under *Discovered*, and move on — do not burn the budget iterating.
+the second attempt also fails, keep the better one, flag it in the report, add a task
+(`./scripts/backlog-cli.js add-task code-health-backlog "<short head>"`), and move on — do not
+burn the budget iterating.
 
 This step exists because `station_turret.png` shipped as a 3/4 view with a visible barrel side
 while `station_core.png`, generated in the same session, was correctly overhead. Nothing in the

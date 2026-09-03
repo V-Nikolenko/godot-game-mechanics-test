@@ -28,7 +28,11 @@ of the completed stages, and continue from the **first unchecked stage**. Do not
 context, do not re-run research, do not rewrite an approved plan. The `Next action` line at the
 bottom of `STATUS.md` tells you exactly where to pick up.
 
-Only if there is no in-progress plan do you start a new item from `BACKLOG.md`.
+Only if there is no in-progress plan do you start a new task: `./scripts/backlog-cli.js next`
+returns the highest-priority workable task as JSON (`taskId`, `head`, `body`, `epicId`, `planDir`).
+**Never read `BACKLOG.md` for this** — it is a generated rendering, not the data source, and may
+be stale relative to `BACKLOG.json` at the exact moment you read it. Mark it `in_progress` before
+you start: `./scripts/backlog-cli.js set-state <taskId> in_progress`.
 
 ### Choosing a track (new work only)
 
@@ -42,14 +46,17 @@ gate twice, promote it to Track A and create one.
 
 ### Creating the checkpoint directory
 
-For Track A, your first action is to create `docs/plans/<slug>/STATUS.md` (`<slug>` kebab-case
-from the backlog item):
+For Track A, your first action is to create `docs/plans/<taskId>/STATUS.md`, using the **exact**
+`taskId` from `next` as the directory name — never re-derive or reword it. This is the join key
+the web UI uses to show a task's plan artifacts, so a mismatch here makes them invisible in the
+UI even though the files exist:
 
 ```markdown
 # STATUS — <feature name>
 
 **Track:** A
-**Backlog item:** <verbatim from BACKLOG.md>
+**Task:** <taskId> (epic: <epicId>)
+**Backlog item:** <head, verbatim from `next`>
 **Started:** <YYYY-MM-DD>
 
 - [ ] 1. Context gathered → `1-context.md`
@@ -65,6 +72,48 @@ from the backlog item):
 
 **Tick a box the moment its artifact is written, and rewrite `Next action` every time.** If your
 window ends, that line is the only thing standing between the next cycle and starting over.
+
+**Immediately after creating the directory**, before Stage 1:
+`./scripts/backlog-cli.js set-plandir <taskId> docs/plans/<taskId>`. This is what lets a later
+`next` call find this task's `STATUS.md` and resume it if the current iteration is interrupted —
+skip it and a crashed run's `in_progress` task becomes invisible to resume detection and is
+silently abandoned rather than picked back up.
+
+---
+
+## Stage 0a — Drafting an epic from a user idea
+
+`PROMPT.md` sends you here when `./scripts/backlog-cli.js ideas list` returns a pending idea and
+no epic is currently `draft`. The user's idea is raw — a sentence or two, not a spec. Your job is
+to turn it into the same shape as a well-formed epic, the way the station mini-boss epic was
+built: read the actual code before proposing anything, and write player-facing, outcome-first
+tasks rather than a to-do list of implementation steps.
+
+1. **Read the idea.** `./scripts/backlog-cli.js ideas list` — take the oldest pending one.
+2. **Do Stage 1's reuse pass** against the idea: what already exists that this would build on?
+   Don't skip this because it's "just a draft" — a draft that reinvents an existing system wastes
+   the user's review time as much as a plan would.
+3. **A quick pass of Stage 2's research** is warranted for anything genre-specific (a mechanic,
+   a balance question) — enough to ground the task breakdown, not a full research file. This is
+   one iteration's work; do not let drafting alone consume the whole budget.
+4. **Break it into tasks** the same way the station epic was: each task states the player-facing
+   outcome, names files or modules where you already know them, and says what "done" looks like.
+   Avoid over-specifying — a draft task should leave room for its own Stage 1–3 when it is
+   eventually worked, not lock in implementation details from a first pass.
+5. **Write the draft:**
+   ```bash
+   echo '{"title": "<epic title>", "tasks": [{"head": "<outcome>", "body": "<detail>"}, ...]}' \
+     | ./scripts/backlog-cli.js draft-epic
+   ./scripts/backlog-cli.js ideas consume <ideaId>
+   ```
+   `draft-epic` creates the epic with `status: "draft"` — **`next` will never return a task from
+   it**, so nothing in the draft can be worked until the user approves it in the web UI. Consuming
+   the idea marks it handled so it doesn't get drafted again next iteration.
+6. **Stop here.** Do not implement any task from the draft you just wrote in this same iteration,
+   even if it looks small and obviously right. The approval gate exists specifically so the user
+   sees the breakdown before any of it runs unattended — implementing anyway defeats the point of
+   asking.
+7. Report what you drafted and why, so the user has context when they open the UI to review it.
 
 ---
 
@@ -226,7 +275,9 @@ Keep a running log so an interrupted implementation resumes cleanly:
 - Tests first, from the plan's test plan. Watch them fail before making them pass.
 - Update `5-progress.md` after **each build step**, not at the end. A window can end at any moment.
 - If reality contradicts the plan, update `3-plan.md` — a stale plan is worse than none.
-- Discovered work goes to `BACKLOG.md` under *Discovered*, never silently into this change.
+- Discovered work goes into a new task via `./scripts/backlog-cli.js add-task <epicId> "<head>"`
+  (body on stdin) — usually the `code-health-backlog` epic unless it clearly belongs elsewhere —
+  never silently folded into this change.
 
 Tick box 5 when the build sequence is complete.
 
@@ -247,13 +298,77 @@ Tick box 6.
 ## Stage 7 — Document and report
 
 - Invoke **`updating-project-docs`** if the change was structural — required by `CLAUDE.md`.
-- Tick the item in `BACKLOG.md`; add anything discovered.
+- `./scripts/backlog-cli.js set-state <taskId> done`; add anything discovered as its own task.
 - In your report, link the plan directory and quote the review verdict verbatim.
 - Mark `STATUS.md` complete.
 
 Tick box 7.
 
 ---
+
+## Stage 8 — When an EPIC completes: write the dossier
+
+An epic is done when every one of its tasks is `done` — after marking the last one, check the
+others in the same epic (`./scripts/backlog-cli.js next` will simply return the next epic's task
+if none remain, but confirm by eye rather than relying on that as the signal). Before moving on,
+write `docs/epics-done/<epicId>/` — using the **exact** `epicId`, since that is the join key the
+web UI reads from — three files, drawn from the plan directories you already have. Do this in the
+same cycle that closes the last task, while the detail is still fresh; it is far more expensive
+and less accurate to reconstruct later from diffs.
+
+**`PRD.md`** — what was asked for and why:
+
+```markdown
+# <Epic> — PRD
+## The ask
+The epic's tasks (heads + bodies, from `BACKLOG.json`) verbatim, plus anything the user clarified
+afterwards. If this epic came from a drafted idea, quote the original idea text too.
+## Player-facing goal
+What the player should experience. Not implementation.
+## Scope
+In scope / explicitly out of scope, and where the epic was split and why.
+## Constraints
+Project constraints that shaped it (view rule, coordinate space, reuse requirements).
+## Open questions at the time
+What was unknown when planning started, and how each was resolved.
+```
+
+**`SOURCES.md`** — where the knowledge came from. Pull this out of every `2-research.md` in the
+epic's plan directories, merged and de-duplicated:
+
+```markdown
+# <Epic> — sources
+| Source (URL) | What it contributed | Where it shows up in the build |
+Include sources that were tried and unreachable, marked as such.
+Note any finding that was a judgement call with no citable source - label it plainly.
+```
+
+**`REPORT.md`** — the epic in full:
+
+```markdown
+# <Epic> — completion report
+## What was built
+Per sub-item: what shipped, the scenes/scripts involved, the commit.
+## How it was verified
+The actual tests, by name. What the gate covers and what it cannot.
+## Decisions and course changes
+Where the plan changed mid-build and why. Include plans the reviewer REJECTED and what
+changed as a result - a rejected plan is part of the story, not a failure to hide.
+## Numbers
+Tuning values chosen (timings, HP, speeds), and where each came from -
+research, existing code, or judgement.
+## Known gaps
+What is unfinished, fragile, or untested. Anything a human still has to eyeball.
+## Links
+The plan directories, the epic id, key commits.
+```
+
+Then `./scripts/backlog-cli.js set-epic-status <epicId> done` — **never** edit `BACKLOG.json` or
+`BACKLOG.md` directly for this. Note the dossier path in your report so it reaches the digest.
+
+**Be honest in `Known gaps`.** A dossier claiming everything is finished and verified is worth
+less than one that names the two things nobody has looked at — headless tests cannot tell you
+whether a boss fight *feels* right, and the report should say so.
 
 ## Anti-patterns
 
