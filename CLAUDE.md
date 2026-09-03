@@ -27,6 +27,10 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `_ready()` (the `.tres` value wins over the scene's Health node where they differ).
 - **State machines** — `global/statemachine/`; one `State` node per file in a `states/`
   folder for complex entities; simpler enemies use in-script `enum` phases.
+- **Signal arity & logging** — a signal is declared with exactly what it emits
+  (`amount_changed(current_health: int)`, not a bare `signal amount_changed`), and anything
+  that can print per-frame or per-hit sits behind `if OS.is_stdout_verbose()`. Both are
+  spelled out in `docs/architecture/PROJECT.md` → Conventions.
 - **Design-unit coordinates** — waves/spawns authored in 640×360 space, scaled by
   `ArenaCamera.WORLD_SCALE` (2.0) at runtime; never pre-multiply.
 - **Tests are GUT, in `tests/`** — run them headless with
@@ -38,8 +42,10 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
   `test_station_gunnery.gd`, `test_station_reinforcements.gd` and `test_radial_attack_pattern.gd` —
   which cover new code and so
-  assert intent. **Read [`tests/README.md`](tests/README.md) before writing a
-  test** — it covers the `user://` save-file sandbox, the zero-parameter-signal trap, and the
+  assert intent. A few characterization files also carry individually-marked intent tests
+  (`test_health_component.gd`, `test_state_machine.gd`); each says so in a comment.
+  **Read [`tests/README.md`](tests/README.md) before writing a
+  test** — it covers the `user://` save-file sandbox, the signal-arity trap, and the
   `LevelDirector` coroutine-leak trap, all of which cause failures (or silent leaks) unrelated to
   the code under test.
 - **NEVER commit — the user handles all git.** Work directly on `main` unless asked

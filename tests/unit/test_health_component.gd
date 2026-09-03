@@ -1,10 +1,9 @@
 ## Characterization tests for the Health component (global/components/health_component.gd).
 ##
-## NOTE on the signal: `Health` declares `signal amount_changed` with NO parameters
-## but emits it with one (`amount_changed.emit(current_health)`). A one-argument
-## handler receives the value fine — which is why the shipped code works — but a
-## zero-argument handler raises an engine error. These tests therefore always
-## connect one-argument callables. Logged in BACKLOG.md → Discovered.
+## NOTE on the signal: `amount_changed` is declared AND emitted with one `int`. A
+## zero-argument handler still raises an engine error, so these tests always connect
+## one-argument callables. Until 2026-09-03 the declaration said zero parameters while
+## the emit passed one; `test_amount_changed_declares_the_int_it_emits` pins the fix.
 extends GutTest
 
 var _host: Node2D
@@ -13,8 +12,9 @@ var _seen: Array[int]
 
 
 func before_each() -> void:
-	## Health.decrease() prints get_parent().name, so it needs a parent, and
-	## _ready() must have run or `invincibility_timer` is still null.
+	## _ready() must have run or `invincibility_timer` is still null. The host parent is
+	## no longer required by decrease() (see test_decrease_on_a_parentless_health_does_not_crash)
+	## but is kept so these tests exercise the normal, in-tree shape.
 	_host = Node2D.new()
 	add_child_autofree(_host)
 	_health = Health.new()
@@ -118,3 +118,35 @@ func test_healing_ignores_invincibility() -> void:
 	assert_eq(_health.current_health, 50)
 	_health.increase(20)
 	assert_eq(_health.current_health, 70, "increase() is not gated by i-frames")
+
+
+func test_amount_changed_declares_the_int_it_emits() -> void:
+	## Not characterization — this asserts intent. The signal is emitted with one
+	## argument (`amount_changed.emit(current_health)`), so it must be DECLARED with
+	## one, or every reader and every editor completion lies about its shape.
+	##
+	## This does NOT make a zero-argument handler legal: emitting one argument to a
+	## zero-argument callable is still an engine error. Connect one-arg callables.
+	var args := _signal_args(_health, "amount_changed")
+	assert_eq(args.size(), 1, "amount_changed is emitted with one argument")
+	assert_eq(args[0]["type"], TYPE_INT, "and that argument is the new health value")
+
+
+func test_decrease_on_a_parentless_health_does_not_crash() -> void:
+	## Health.decrease() used to build a log line from `get_parent().name`
+	## unconditionally, so a component not yet in the tree died on its first hit.
+	var orphan := Health.new()
+	orphan.max_health = 50
+	orphan.current_health = 50
+	orphan._ready()
+	orphan.decrease(10)
+	assert_eq(orphan.current_health, 40, "damage lands with no parent attached")
+	orphan.free()
+
+
+## PropertyInfo dictionaries for one of `obj`'s signals, or [] if it has no such signal.
+func _signal_args(obj: Object, signal_name: String) -> Array:
+	for s in obj.get_signal_list():
+		if s["name"] == signal_name:
+			return s["args"]
+	return []

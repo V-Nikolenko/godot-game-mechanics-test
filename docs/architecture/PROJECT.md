@@ -84,6 +84,16 @@ Detail and APIs: [global.md](modules/global.md).
 - **State machines:** `global/statemachine/state_machine.gd` + `state.gd`; entities with
   complex behaviour keep one `State` node per file in a `states/` folder (player, racers,
   light_assault_ship). Simpler enemies use in-script `enum` phases.
+- **Signal arity:** a signal is declared with exactly the arguments it is emitted with.
+  Godot does not enforce this — `Health.amount_changed` and `State.state_transition` were
+  declared with zero parameters and emitted with one until 2026-09-03 — but a mismatch makes
+  every handler's shape a guess, and a zero-argument handler on a one-argument emit is a
+  hard runtime error. Pinned by `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`
+  and `test_state_machine.gd::test_state_transition_declares_the_state_it_emits`.
+- **Logging:** anything that can print more than once per frame or once per hit goes behind
+  `if OS.is_stdout_verbose():` — `Health.decrease()`, `StateMachine.change_state()` and
+  `DialogPlayer` all do. Run Godot with `--verbose` to get the traces back. `push_warning` /
+  `push_error` stay unconditional: they are for things that should not happen.
 - **Coordinates:** waves and spawn offsets are authored in **design units** (640×360
   space) and scaled by `ArenaCamera.WORLD_SCALE` (2.0) at runtime — never pre-multiply.
 - **Testing:** **GUT 9.7.1**, vendored in `addons/gut/`, enabled from the
@@ -92,7 +102,9 @@ Detail and APIs: [global.md](modules/global.md).
   The suite is almost entirely **characterization**: it pins behaviour as it is today, bugs
   included, so any behaviour change shows up as a failing test rather than as silence. The one
   exception is `tests/integration/test_resource_uid_integrity.gd`, which asserts an invariant
-  (every `[ext_resource]` UID matches the UID its target declares).
+  (every `[ext_resource]` UID matches the UID its target declares) and the space-station family.
+  A few characterization files also carry a handful of clearly-marked **intent** tests, which say
+  so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).
   Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the
   save-file sandbox, and the signal-arity trap that will otherwise fail tests for reasons
   unrelated to the code under test.

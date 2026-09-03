@@ -305,7 +305,7 @@ Found on 2026-08-31 while writing the characterization suite. Each one is **pinn
 test that asserts the current behaviour**, so changing any of them will fail that test — which is
 the signal that the change was deliberate. Test names are given so the fix has an obvious anchor.
 
-- [ ] **`Health.amount_changed` is declared with zero parameters but emitted with one.**
+- [x] **`Health.amount_changed` is declared with zero parameters but emitted with one.**
       `global/components/health_component.gd:4` declares `signal amount_changed`, and line 42
       emits `amount_changed.emit(current_health)`. One-argument handlers (`DamageReaction`,
       `PlayerBase._on_health_changed`) work, but any zero-argument handler raises
@@ -314,19 +314,42 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Same defect in `global/statemachine/state.gd:4` — `signal state_transition` is emitted with
       the target `State`. Pinned by `tests/unit/test_health_component.gd` (see the file header)
       and `tests/unit/test_state_machine.gd::test_states_request_transitions_through_their_own_signal`.
+      **Fixed 2026-09-03.** Both declarations now name the argument they emit
+      (`amount_changed(current_health: int)`, `state_transition(new_state: State)`). This is a
+      readability/tooling fix only — it does **not** make a zero-argument handler legal, and
+      `tests/README.md` now says so explicitly instead of describing the old shape. Two new intent
+      tests read the declared arity back off `get_signal_list()`
+      (`test_amount_changed_declares_the_int_it_emits`,
+      `test_state_transition_declares_the_state_it_emits`), so the declarations cannot silently
+      drift from the emits again. The rule is now a convention in `docs/architecture/PROJECT.md`.
 
-- [ ] **`StateMachine.change_state()` crashes if the machine has no current state.**
+- [x] **`StateMachine.change_state()` crashes if the machine has no current state.**
       `global/statemachine/state_machine.gd:29` does `print("Exiting previous state: " +
       current_state.name)` **before** the `if current_state:` guard on line 31. Any machine built
       without an `initial_state` (or whose state was cleared) dies on its first transition. Not
       reachable today because every shipped machine sets `initial_state`, so it is latent rather
       than live. Deliberately *not* covered by a test — the test would have to trigger the crash.
+      **Fixed 2026-09-03.** The log line moved inside the `if current_state:` guard, together with
+      the `exit()` call it sits next to. It **is** covered by a test now —
+      `test_state_machine.gd::test_change_state_from_an_idle_machine_enters_without_crashing`
+      builds a machine with no `initial_state` and transitions it; before the fix that test failed
+      with `Invalid access to property or key 'name' on a base object of type 'Nil'`, which is
+      exactly the crash, provoked deliberately in a place where it is harmless.
 
-- [ ] **`Health.decrease()` prints to stdout on every single hit.**
+- [x] **`Health.decrease()` prints to stdout on every single hit.**
       `global/components/health_component.gd:34`. In a bullet-hell section that is one line per
       projectile per frame; `print` is not free and it buries real errors in the log. Should be a
       debug-gated helper or removed. `StateMachine.change_state` and `DialogPlayer` print
       unconditionally too (`[DP] ...` on every line of every conversation).
+      **Fixed 2026-09-03.** All three now trace behind `if OS.is_stdout_verbose():`, so the
+      messages survive for debugging (`godot --verbose ...`) but cost nothing in a normal run.
+      Measured on the GUT suite: **181 lines** suppressed (173 `[Health]`, 6 `[StateMachine]`,
+      2 `[DP]`), and a normal suite run now greps 0 for all three prefixes. `DialogPlayer`'s nine
+      prints went through a `_trace()` helper; its `_unhandled_input` one is additionally
+      guarded at the call site because `event.as_text()` allocates per input event.
+      `Health.decrease()` no longer needs a parent, since the fallback replaced the bare
+      `get_parent().name`. `dialog_box.gd`, `movement_controller.gd` and `dash_state.gd` have the
+      same problem and were **not** in scope — refiled below.
 
 - [ ] **`UpgradeState.unlock()` accepts ids that are not in `ALL_IDS`.**
       A typo'd id is stored and reported `true` by `is_unlocked()`, but `unlocked_ids()` iterates
@@ -638,3 +661,33 @@ Found on 2026-09-03 while building the station death sequence (EPIC sub-item 5).
       is the same shape of trap as `bullet_pool.gd:47`, which the space-station scene warns about
       twice in comments. A `push_warning` when the resolved container is itself an ancestor-owned
       node, or an explicit `container` export, would turn a silent visual bug into a loud one.
+
+Found on 2026-09-03 while fixing the shared-component signal/logging defects.
+
+- [ ] **Three more files print unconditionally on hot paths — same defect as the one just fixed,
+      out of the item's stated scope.** `global/ui/dialog_system/ui/dialog_box.gd` has **11**
+      prints (`[DB] ...`), several per dialog *line*, including inside tween callbacks;
+      `assault/scenes/player/movement_controller.gd:74,79` print `"first/second time pressed …"`
+      on **every double-press-eligible key press**, i.e. constantly during normal play; and
+      `assault/scenes/player/states/dash_state.gd:54` prints on every dash attempt made during
+      cooldown, so mashing dash spams it. The fix is mechanical and already has a precedent in
+      three files: wrap in `if OS.is_stdout_verbose():` or route through a `_trace()` helper.
+      The convention is now written down in `docs/architecture/PROJECT.md` → Conventions, so this
+      is a tidy-up, not a decision. Lower-traffic leftovers, for completeness:
+      `wave_manager.gd` (4), `level_1_director.gd` (4), `level_2_waves.gd` (3),
+      `level_director.gd` (3), `ally_fighter.gd` (2), `boot.gd` (2),
+      `skill_challenge_runner.gd` (2), `score_tracker.gd` (1), `level_1_background.gd` (1).
+
+- [ ] **Declaring a signal's parameters does not stop the mismatch it looks like it stops.**
+      Worth knowing before someone "fixes" the next one and assumes the problem is gone. **Measured
+      on Godot 4.6.3 with a throwaway `SceneTree` probe**, not inferred: a signal's declared arity
+      is **documentation only**. `signal foo` and
+      `signal foo(x: int)` behave identically at `emit()` time, and connecting a zero-argument
+      callable to either is accepted at connect time (`connect()` returns `OK` in both cases) and
+      errors identically at emit time with `Method expected 0 argument(s), but called with 1`.
+      The one thing that does differ is `Object.get_signal_list()`, which reports the declared
+      arity — 0 vs 1 — which is exactly why the new tests assert against it. So the 2026-09-03 fix made
+      `Health.amount_changed` and `State.state_transition` honest to a reader and to editor
+      completion, and nothing more. Anything that wants a *real* guarantee has to assert the
+      arity from a test the way `test_amount_changed_declares_the_int_it_emits` does, by reading
+      `Object.get_signal_list()`.

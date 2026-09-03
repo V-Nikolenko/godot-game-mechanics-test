@@ -130,3 +130,34 @@ func test_base_state_methods_are_inert_hooks() -> void:
 	assert_null(s.process_physics(0.016), "the base implementations do nothing")
 	assert_true(s.has_signal("state_transition"))
 	s.free()
+
+
+func test_change_state_from_an_idle_machine_enters_without_crashing() -> void:
+	## Not characterization — this asserts intent. `change_state()` used to read
+	## `current_state.name` for a log line BEFORE its own `if current_state:` guard,
+	## so the first transition of a machine built without an `initial_state` died on
+	## a null dereference. Latent rather than live only because every shipped machine
+	## happens to set one.
+	var parts := _machine(false)
+	var sm: StateMachine = parts[0]
+	var a: RecordingState = parts[1]
+	var b: RecordingState = parts[2]
+	assert_null(sm.current_state, "precondition: the machine starts idle")
+	sm.change_state(b)
+	assert_eq(sm.current_state, b, "the machine adopts the new state")
+	assert_eq(b.calls, ["enter"] as Array[String], "and enters it")
+	assert_eq(a.calls, [] as Array[String], "nothing is exited, there was nothing to exit")
+
+
+func test_state_transition_declares_the_state_it_emits() -> void:
+	## Not characterization — asserts intent. `state_transition` is emitted with the
+	## target State (`dash_state.gd:55`, `move_state.gd:50`), so it must be declared
+	## with one, or `StateMachine.change_state` looks like an arity mismatch to a reader.
+	var s := State.new()
+	var args: Array = []
+	for sig in s.get_signal_list():
+		if sig["name"] == "state_transition":
+			args = sig["args"]
+	assert_eq(args.size(), 1, "state_transition is emitted with the target state")
+	assert_eq(args[0]["type"], TYPE_OBJECT, "and that argument is an object")
+	s.free()

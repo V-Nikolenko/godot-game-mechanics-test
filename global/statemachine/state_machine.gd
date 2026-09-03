@@ -22,16 +22,24 @@ func change_state(new_state : State):
 		return
 	
 	if current_state == new_state:
-		print("Same state. Ignoring")
+		_log("Same state. Ignoring")
 		return
-		
 	
-	print("Exiting previous state: " + current_state.name)
-	
+	## Both the log line and exit() live behind the guard: a machine built without an
+	## `initial_state` has no current_state to name, and reading `.name` off null here
+	## used to kill the first transition outright.
 	if current_state:
+		_log("Exiting previous state: " + current_state.name)
 		current_state.exit()
 		
-	print("Entering new state: " + new_state.name)
+	_log("Entering new state: " + new_state.name)
 	new_state.enter()
 	
 	current_state = new_state
+
+
+## Transition tracing. Off unless Godot was started with `--verbose` — every player dash,
+## shot and move cycles states, so unconditionally this is several lines per second.
+func _log(message: String) -> void:
+	if OS.is_stdout_verbose():
+		print("[StateMachine] %s: %s" % [name, message])

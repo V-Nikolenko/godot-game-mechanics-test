@@ -485,8 +485,8 @@ exists. Adding one is a deliberate future change, not an oversight.
 
 ## Gotchas
 
-- `Health.amount_changed` is declared with **zero** parameters but emitted with one
-  (`health_component.gd:4` vs `:42`) — handlers here take one argument, or the engine errors.
+- `Health.amount_changed` is declared and emitted with one argument (`health_component.gd:10`
+  and `:53`) — handlers here take one argument, or the engine errors.
 - `Health.set_health()` emits on **every** call including 0 → 0, so a dead turret hit again would
   re-enter its death handler. Both `_on_received_damage` and `_on_health_changed` carry an `_alive`
   guard; each alone is sufficient, and removing **both** makes `destroyed` fire 4× instead of 1×

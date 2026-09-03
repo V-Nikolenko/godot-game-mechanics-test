@@ -103,7 +103,7 @@ Abstract base for level background renderers. Subclasses must override `transiti
 
 ### Health — `health_component.gd` (+ `temp_health_component.gd`)
 
-Add a `Health` node (`class_name Health extends Node`) as a child named `HealthComponent`. Exports: `max_health: int = 100`, `current_health: int = 100`, `invincibility_frames_enabled: bool = false`, `invincibility_time_in_sec: float = 0.5`. API: `increase(amount)`, `decrease(amount)`, `set_health(v)`; signal `amount_changed(current)`. `decrease()` is ignored while its internal invincibility timer is running (only when `invincibility_frames_enabled`).
+Add a `Health` node (`class_name Health extends Node`) as a child named `HealthComponent`. Exports: `max_health: int = 100`, `current_health: int = 100`, `invincibility_frames_enabled: bool = false`, `invincibility_time_in_sec: float = 0.5`. API: `increase(amount)`, `decrease(amount)`, `set_health(v)`; signal `amount_changed(current_health: int)`, emitted by `set_health()` on **every** call including no-op ones, so handlers must tolerate repeats and must take one argument. `decrease()` is ignored while its internal invincibility timer is running (only when `invincibility_frames_enabled`); it also traces the hit to stdout, but only under `--verbose` (see the logging convention in [PROJECT.md](../PROJECT.md)), and it does not require the component to have a parent.
 
 `TempHealth` (`class_name TempHealth extends Node`, child named `TempHealthComponent`) is an optional buffer that drains *before* `Health`. `add_stack(base_health)` adds one stack of `base_health/2` HP (cap `MAX_STACKS = 5`); `take_damage(amount)` drains and returns the overflow that should hit `Health`. Signal `amount_changed(current, maximum)`.
 
@@ -171,7 +171,7 @@ func _on_shot_fired() -> void:
 
 ### State machine — `state_machine.gd` + `state.gd`
 
-`State` (`class_name State extends Node`) is the base contract: override `enter()`, `process_physics(delta)`, `exit()`, and emit `state_transition(next_state)` to request a change. `StateMachine` (`class_name StateMachine extends Node`) holds an exported `initial_state: State`. In `_ready()` it connects every child `State`'s `state_transition` signal to `change_state`, then enters `initial_state`. Each `_process(delta)` it calls `current_state.process_physics(delta)`. `change_state` ignores a transition to the same/null state, else calls `exit()` on the old and `enter()` on the new.
+`State` (`class_name State extends Node`) is the base contract: override `enter()`, `process_physics(delta)`, `exit()`, and emit `state_transition(next_state)` to request a change. `StateMachine` (`class_name StateMachine extends Node`) holds an exported `initial_state: State`. In `_ready()` it connects every child `State`'s `state_transition` signal to `change_state`, then enters `initial_state`. Each `_process(delta)` it calls `current_state.process_physics(delta)`. `change_state` ignores a transition to the same/null state, else calls `exit()` on the old (skipped when the machine is still idle, i.e. built with no `initial_state`) and `enter()` on the new. Its transition tracing is behind `OS.is_stdout_verbose()`.
 
 Convention: states are child nodes of the `StateMachine` node; the **initial state is whatever the `initial_state` export points at**; per-entity state classes live in that entity's own folder (e.g. an `idle_state.gd` / `move_state.gd` / `dash_state.gd` set next to the player scene), each `extends State`.
 

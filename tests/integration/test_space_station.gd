@@ -105,7 +105,7 @@ func test_turret_damage_does_not_leak_into_core_health() -> void:
 # ── Boundaries ────────────────────────────────────────────────────────────────
 
 ## `Health.set_health()` emits `amount_changed` on EVERY call including 0 -> 0
-## (`health_component.gd:40-42`), so a dead turret hit again re-enters its death handler.
+## (`health_component.gd:51-53`), so a dead turret hit again re-enters its death handler.
 ## Without the `_alive` guard this would re-emit `destroyed` and, under the old counter design,
 ## un-armour the core early.
 func test_destroyed_turret_ignores_further_damage() -> void:

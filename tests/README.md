@@ -83,14 +83,17 @@ that the behaviour itself is wrong — the point of the suite is that a behaviou
   timing makes assertions approximate for no benefit.
 
 - **GUT fails a test on any unexpected engine error**, including one raised inside a signal
-  callback. `Health.amount_changed` and `State.state_transition` are declared with zero
-  parameters but emitted with one, so connect **one-argument** callables to them — a
-  zero-argument handler raises `Method expected 0 argument(s), but called with 1`.
+  callback. Connect a callable whose arity matches the signal exactly: `Health.amount_changed`
+  and `State.state_transition` each carry one argument, so a **zero-argument** handler raises
+  `Method expected 0 argument(s), but called with 1` and reds the test. Both were declared with
+  zero parameters until 2026-09-03 while being emitted with one; the declarations are now honest,
+  which makes the mismatch visible in the source, but it does not make a zero-arg handler legal.
   `push_warning` is *not* treated as a failure.
 
-- Components that need a parent or a `_ready()` pass (`Health` prints `get_parent().name`;
-  `Shield` builds its regen `Timer` in `_ready()`) must actually be in the tree. Add the host to
-  the tree *first*, then add the component to the host.
+- Components that need a `_ready()` pass (`Health` builds its i-frame `Timer` there; `Shield`
+  builds its regen `Timer` there) must actually be in the tree. Add the host to the tree *first*,
+  then add the component to the host. `Health` no longer needs a parent to take damage — its
+  `get_parent().name` log line is now behind `OS.is_stdout_verbose()` and has a fallback.
 
 ## Coverage today
 

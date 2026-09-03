@@ -104,8 +104,8 @@ func _ready() -> void:
 	add_child(_volley_timer)
 
 	_station.armor_broken.connect(_on_armor_broken)
-	## Zero-argument signal, declared and emitted that way (unlike `Health.amount_changed`), so a
-	## zero-arg handler is correct and raises no engine error.
+	## Zero-argument signal, declared and emitted that way, so a zero-arg handler is correct
+	## here and raises no engine error.
 	_station.died.connect(_stop)
 
 

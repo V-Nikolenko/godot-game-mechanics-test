@@ -48,8 +48,8 @@ func _on_received_damage(damage: int) -> void:
 	health.decrease(damage)
 
 
-## Takes one argument: `Health.amount_changed` is DECLARED with zero parameters but EMITTED with
-## one (health_component.gd:4 vs :42). A zero-arg handler raises an engine error at runtime and
+## Takes one argument, because `Health.amount_changed` is declared and emitted with one
+## (health_component.gd:10 and :53). A zero-arg handler raises an engine error at runtime and
 ## fails the GUT test that provoked it.
 func _on_health_changed(current: int) -> void:
 	if not _alive:
@@ -61,7 +61,7 @@ func _on_health_changed(current: int) -> void:
 
 func _destroy() -> void:
 	## Guarded by the `_alive` checks above because Health.set_health() emits amount_changed on
-	## EVERY call including 0 -> 0 (health_component.gd:40-42), so a dead turret hit again would
+	## EVERY call including 0 -> 0 (health_component.gd:51-53), so a dead turret hit again would
 	## otherwise re-enter here and re-emit `destroyed`.
 	_alive = false
 	sprite.texture = _TEXTURE_DESTROYED

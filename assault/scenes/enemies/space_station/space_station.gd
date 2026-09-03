@@ -28,9 +28,9 @@ signal armor_deflected(damage: int)
 ## Station-level rather than per-turret because the station owns the armour rule
 ## (`is_armored()` / `live_turret_count()`), so the *transition* is station-level knowledge.
 ##
-## Zero arguments, deliberately — see the `Health.amount_changed` trap in `tests/README.md`,
-## where a signal declared with zero parameters is emitted with one and every zero-arg handler
-## raises an engine error.
+## Zero arguments, deliberately — and declared that way, so a zero-arg handler is correct.
+## Every signal in this project must be declared with exactly what it emits; see the arity
+## rule in `tests/README.md`.
 signal armor_broken
 
 ## Emitted the instant HP reaches 0, together with `died` and before the wreck is freed. What
@@ -59,7 +59,7 @@ var death_duration: float = 0.0
 
 ## Latches on the frame HP first reaches 0, so the death path runs exactly once.
 ##
-## Required, not defensive: `health_component.gd:40-42` emits `amount_changed` UNCONDITIONALLY,
+## Required, not defensive: `health_component.gd:51-53` emits `amount_changed` UNCONDITIONALLY,
 ## so any damage landing on an already-dead station re-enters `_on_health_changed` with
 ## `current == 0`. Without this latch a stray bullet mid-sequence would re-emit `died` (scoring
 ## the boss twice) and restart the death timer. `station_turret.gd:63-66` documents the same trap.
@@ -153,8 +153,8 @@ func is_armored() -> bool:
 	return live_turret_count() > 0
 
 
-## Takes the turret argument `StationTurret.destroyed` is declared AND emitted with — unlike
-## `Health.amount_changed`, the two agree here, so a one-arg handler is the correct shape.
+## Takes the turret argument `StationTurret.destroyed` is declared and emitted with, so a
+## one-arg handler is the correct shape.
 func _on_turret_destroyed(_turret: StationTurret) -> void:
 	if _armor_broken:
 		return
