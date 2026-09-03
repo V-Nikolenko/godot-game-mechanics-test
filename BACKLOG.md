@@ -652,3 +652,187 @@ the signal that the change was deliberate. Test names are given so the fix has a
       ---
       → [docs/plans/station-death-handoff](docs/plans/station-death-handoff)
 
+## Boss fight escalation: shared hull, flying laser projectors, desperation  [DRAFT - awaiting approval]  (`boss-fight-escalation-shared-hull-flying-laser-projectors-de`, 7 open)
+
+- [ ] **1. Every shot that lands on the station hurts the station.** _(todo)_
+      Today the core refuses **all** damage until the last of the four turrets dies
+      (`space_station.gd::_on_received_damage` + `is_armored()`), and each turret carries its own
+      120 HP pool that is simply thrown away when it dies. The player's shots therefore land in five
+      unrelated buckets, and only the last one ever moves the boss's actual health.
+      
+      Replace that with **one pool**: hits on a turret, on a laser projector, or on the core all draw
+      down the same station health. Destroying a part must still remove its gun from the fight and
+      leave visible wreckage — a part dying becomes a *consequence* of the shared pool crossing a
+      threshold, not a separate bar the player has to empty first.
+      
+      Already there to build on: `Health` (`global/components/health_component.gd`) on the station
+      and one per turret; `StationTurret._on_received_damage` already funnels hits through its own
+      `Health`; `SpaceStation.armor_deflected` / `armor_broken` / `is_armored()` /
+      `live_turret_count()` are the existing seams.
+      
+      Three things the plan must handle rather than discover:
+      - `armor_broken` is the phase-2 trigger for **four** sibling nodes (`StationLaserPhase`,
+        `StationGunnery`, `StationReinforcements`, and indirectly `StationDeathSequence`).
+        Retiring the armour rule without a replacement trigger silently disables the whole second
+        half of the fight. Task 2 supplies the new trigger, so plan these two together even though
+        they ship in order.
+      - `tests/integration/test_space_station.gd` pins the armour rule **on purpose** — those are
+        intent tests, not characterization. They get rewritten as part of this, never quietly deleted.
+      - Effective HP today is 600 + 4x120 = 1080 spread over five bars. One pool means one number, and
+        the ~30-60 s fight-length target from `docs/epics-done/station-mini-boss/` has to be
+        re-derived rather than 600 being carried over by default.
+      
+      *Done when:* a test proves damage dealt to a turret, to a projector and to the core all reduce
+      the same number by the same amount; that destroying a part neither refunds nor double-counts the
+      hit that killed it; and that the station can be killed while the player only ever shoots its
+      parts.
+
+- [ ] **2. The fight visibly turns at half health.** _(todo)_
+      Phase 2 begins today when the last turret dies. Under one shared pool (task 1) that moment
+      stops existing, so the transition moves to **50 % of the shared pool** — the halfway point
+      becomes the beat the player feels, which is the shipped convention for a desperation phase.
+      
+      Already there: `SpaceStation.armor_broken` is a zero-argument, once-only-latched signal that
+      every sibling behaviour node already listens to, so the *shape* of the hook is right even if the
+      name and the trigger are not. `_on_health_changed(current)` already sees every HP change and
+      already carries a once-only `_dying` latch to copy.
+      
+      The trap: `Health` emits `amount_changed` on **every** call including 0 -> 0
+      (`health_component.gd:51-53`), so a naive `current <= max / 2` test fires on every subsequent
+      hit. Whatever replaces `armor_broken` must keep the once-only guarantee, and the entry into
+      phase 2 has to be legible on screen — a phase change nobody notices is a phase change that did
+      not happen.
+      
+      *Done when:* a test drives the pool from full to just above half and proves nothing fires;
+      crosses the threshold and proves the phase starts exactly once; then keeps damaging past it (and
+      back at 0 HP) and proves it never fires again.
+
+- [ ] **3. The station is properly defended, by more than one kind of ship.** _(todo)_
+      `StationReinforcements` runs a fixed four-squad cycle — 2 interceptors from the left,
+      2 from the right, 2 drones from below, 2 fighters from above — first squad at 8 s, one every
+      10 s, cap 4 alive, and it **stops entirely** at the phase change. The fight reads as a duel with
+      occasional visitors rather than as an assault on a defended installation.
+      
+      Make the surrounding space feel contested: more ships, more variety, and defenders that keep
+      arriving through both phases.
+      
+      This is mostly table work, not new machinery: `_build_squads()` already authors every squad
+      through `WaveBuilder`'s fluent API in 640x360 design units, and `docs/enemy-roster.md` lists
+      the roster. `bomber`, `sniper_enemy`, `gunship` and `drone_interceptor` do not appear in
+      this fight at all yet.
+      
+      Two things the plan must argue rather than assume:
+      - The phase-1-only rule is a **researched decision**, not an oversight — the Flunky-Boss critique
+        that constant spawns are how a boss ends up overshadowed by its own minions. The user has asked
+        for defenders "throughout the fight", so this is a deliberate reversal, and the plan owes an
+        answer for how phase 2 stays readable with adds in it. The live cap, the 48-slot bullet pool and
+        raw screen space are the levers.
+      - `ram_ship` is the obvious "tanky obstacle" pick and is **immune to the player's primary
+        weapon**: `ram_ship.gd:19` narrows its HurtBox mask to 33, which excludes the bullet's layer
+        64. It was already rejected once for this exact reason.
+      
+      *Done when:* at least two enemy types that do not appear in this fight today are in the rotation,
+      defenders arrive in both phases, and a headless run of `station_assault` still ends — nothing
+      a squad leaves behind may hold `ENEMIES_CLEARED` open.
+
+- [ ] **4. Laser projectors fly around the station and shoot at the player.** _(todo)_
+      A new part type. In phase 1 the station's laser projectors are **mobile**: they move
+      around the station's airspace and fire telegraphed beams at the player, instead of every beam
+      coming from the hull on a fixed schedule. The point is that the arena is dangerous while the
+      player is chewing through turrets, and that the threat now has a position the player can
+      pressure.
+      
+      Reusable, and it is most of the work: `LaserRay`
+      (`assault/scenes/hazards/laser_ray/laser_ray.tscn`) already does the whole telegraph -> charge
+      -> lethal -> dissolve cycle with `warn_duration` / `active_duration`, and
+      `hit_mask_override` exists specifically so a mounted emitter does not kill its own owner.
+      `StationTurret` is the model for a destructible, non-scoring part that stays in the tree as
+      wreckage. Movement resources are in `global/resources/movement/` (`arc_movement`,
+      `sine_movement`, `player_focus_movement`, `sequence_movement`).
+      
+      Needs art: a projector sprite plus a destroyed variant, matching how turrets read as wreckage.
+      **Invoke the `pixel-art-generation` skill before generating anything** — `assault/` is strict
+      top-down orthographic and never isometric, and a 3/4-view turret already shipped once in this
+      very boss because nobody opened the image.
+      
+      Traps this project has already paid for once:
+      - A beam fired from inside the hull on the default hit mask took the station 600 -> 0 HP in a
+        single frame. `hit_mask_override` must be set **before** `add_child()`, because
+        `LaserRay._ready()` is what reads it.
+      - Anything that moves independently of the station must **not** be parented under it: the hull
+        rotates (`station_laser_phase.gd`), and `bullet_pool.gd:47` hardcodes its container as
+        `get_parent().get_parent()`.
+      
+      *Done when:* projectors are destructible parts drawing on the shared pool (task 1); they change
+      position over time rather than sitting at fixed offsets; they fire beams aimed at the player that
+      telegraph before they can hurt anything; and a test proves a beam is harmless throughout its
+      warning window and lethal only after it.
+
+- [ ] **5. In phase 2 the projectors close ranks, and only open to fire.** _(todo)_
+      Second-phase behaviour for whichever projectors survived. They take station around the
+      boss, rotate around it, and fire toward the player — and they are **armoured while closed**, so
+      the player can only hurt them in the window where they open to fire. That turns the second half
+      from "keep shooting the same thing" into "watch, and time it", and it gives the rotation a reason
+      to matter beyond looking busy.
+      
+      Already there: `SpaceStation._on_received_damage` is the shipped pattern for refusing damage
+      while keeping the HurtBox **live** — which is required, not stylistic, because
+      `plasma_nova_module.gd` and `beam_behavior.gd` both drive `received_damage` directly with
+      no physics involved, so a disabled hurtbox leaks both. `armor_deflected` is the existing
+      precedent for making "that hit did nothing" legible instead of silent.
+      
+      The design question the plan has to answer with a number **and** a reason: how long the open
+      window is. Too short and it reads as the boss being invulnerable; too long and the armour is
+      decoration. The reference points already measured in this project are the 1.4 s beam telegraph
+      (~1.9-2.0 s to lethal) and the ~0.3 s human reaction floor.
+      
+      *Done when:* a test proves damage during the closed window is refused and damage during the open
+      window lands on the shared pool; the open state is visually distinct from the closed one; and the
+      projectors orbit the hull rather than sitting at fixed offsets.
+
+- [ ] **6. Tearing off the station's defences makes it fight harder, not just quieter.** _(todo)_
+      Killing turrets is currently pure relief — fewer guns, less fire, and the fight gets
+      easier the longer it runs. The user wants the opposite curve: every destroyed turret or projector
+      should make the station more **desperate**, with faster laser charge-up, faster beam movement,
+      longer turret reach, higher fire rate and wider spread.
+      
+      This is an explicit reversal of a decision the previous epic took deliberately — the dossier
+      records escalation being rejected because "it would cancel out the 4->3->2->1 quietening that is
+      the player's reward". The reversal is the user's call. What the plan owes is a curve that still
+      reads as *progress*: more intense, never "destroying that was a mistake".
+      
+      Every knob named already exists as a node field copied out of `SpaceStationConfig` in
+      `_ready()` — `StationGunnery.turret_fire_interval` / `turret_burst_arc` /
+      `turret_bullet_speed`, `StationLaserPhase.warn_duration` / `rotation_speed`. They are
+      copied and never read back on purpose: the `.tres` is a single process-wide cached instance, so
+      scaling them at runtime means writing node fields, never writing through `config`. Do not
+      "tidy" that into a live read.
+      
+      *Done when:* one readable desperation level, derived from how many parts are gone, drives the
+      affected values; a test asserts the level and at least three derived values at zero, half and all
+      parts destroyed; and every derived value is bounded, so the last projector's death cannot produce
+      a rate nobody can dodge.
+
+- [ ] **7. The sweeping laser can turn on you mid-sweep.** _(todo)_
+      The rotating beam attack sweeps at one constant rate (`laser_rotation_speed = 0.5`
+      rad/s) in one direction for its entire life, so "pick a side and keep running" solves it. Make it
+      able to **reverse direction mid-attack**, and make its starting rate depend on how many
+      projectors are left and how desperate the station is (task 6).
+      
+      Why a reversal rather than simply "faster": the constant rate was chosen so the beam edge travels
+      ~200 px/s at the distance the player actually sits, against the player's 400 px/s top speed
+      (`move_state.gd:21`) — outrunning it is a decision, not a reflex. A reversal removes the
+      run-one-way-forever answer while keeping that readability, as long as the turn itself is
+      telegraphed or slow enough to read.
+      
+      Hard constraint from the shipped code: attack ordering in this boss is **never** `randf()`.
+      That is the most-cited research finding in the previous epic — random attack order cannot be
+      balanced and cannot be tested — and four existing tests pin determinism
+      (`test_volley_angles_are_deterministic` and friends). A reversal schedule must be
+      deterministic, and the plan should say what makes the turn readable to a player who is already
+      dodging bullets.
+      
+      *Done when:* a test proves the sweep reverses at a deterministic point rather than a random one
+      and does so identically on every run; and that the starting rate differs measurably between a
+      full-strength station and one that has lost most of its parts.
+
