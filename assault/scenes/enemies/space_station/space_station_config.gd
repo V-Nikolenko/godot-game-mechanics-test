@@ -142,3 +142,32 @@ extends ShipConfig
 ## for a stalled fight where the player is killing nothing, and it is what stops the screen becoming
 ## unreadable next to a four-turret fan volley (research finding 2's tradeoff).
 @export var reinforcement_max_alive: int = 4
+
+## ── Death sequence (EPIC sub-item 5) ──────────────────────────────────────────
+##
+## Read ONCE at _ready(): `death_sequence_duration` by `SpaceStation` (into its public
+## `death_duration` field) and `death_blast_count` by `StationDeathSequence`. Neither is read
+## through this resource again, for the same reason as every block above — this `.tres` is a
+## single process-wide instance, so a runtime read is a read of mutable global state.
+##
+## The blast GEOMETRY and FEEL (spread radius, particle count, shake amounts, spin, tint) are NOT
+## here: they are scene geometry rather than stats, the same split that keeps
+## `laser_emitter_radius` on the phase node and the two `spawn_radius` values on the gunnery.
+
+## Seconds the wreck stays in the tree after HP reaches 0, before it is freed.
+##
+## The script default is 0.0 and that is deliberate, not an oversight: at 0.0 the station is freed
+## in the same frame, exactly as every other enemy, so a station with NO config behaves precisely
+## as BaseEnemy always has. The shipped `.tres` carries the real value, which also means the
+## config test cannot pass vacuously.
+##
+## 1.8 s is a judgement call (research finding 1 vs 6): long enough to read as a chain rather than
+## a stutter, short enough not to be resented on the fifth retry. It is far inside the section's
+## 180 s `enemies_cleared_timeout`, so it can never race the safety net.
+@export var death_sequence_duration: float = 0.0
+
+## Explosions in the chain that rolls across the hull, before the final central blast.
+##
+## Seven reads as a chain; three reads as a hiccup (research finding 1). Script default 3 vs the
+## shipped 7, same honest-fallback split as the duration above.
+@export var death_blast_count: int = 3

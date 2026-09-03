@@ -334,6 +334,14 @@ func test_beams_stop_and_do_not_outlive_the_station() -> void:
 	p.rotation_speed = 0.0
 	p.beam_count = 2
 
+	## Sub-item 5 gave the station a death sequence: the wreck now lingers for
+	## `death_duration` seconds before it is freed, so the "freed two physics frames later"
+	## assertion below is no longer true at the shipped 1.8 s. Zeroing the duration selects
+	## BaseEnemy's original same-frame free, which is the behaviour this test is about — the
+	## point here is that no BEAM outlives the station, not how long the hull takes to go.
+	## The lingering path has its own coverage in test_station_death_sequence.gd.
+	_station.death_duration = 0.0
+
 	_kill_all_turrets()
 	await wait_seconds(1.0)
 	var beams := p.live_beams()

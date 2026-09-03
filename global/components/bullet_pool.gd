@@ -91,12 +91,26 @@ func _recycle(bullet: Node) -> void:
 		# This pool's owner ship is being freed — discard the bullet too.
 		bullet.queue_free()
 
+## Frees every bullet currently in flight and clears the active list.
+##
+## NOTE this permanently SHRINKS the pool. _recycle() is the only path back into
+## _idle, and this frees the bullets instead, so capacity is not recovered —
+## acquire() keeps working only while _idle is non-empty.
+##
+## Called by _exit_tree(), and directly by a ship that must stop being dangerous
+## before it leaves the tree. StationGunnery._stop() uses it on the boss's death:
+## the wreck lingers for its death sequence, so _exit_tree() no longer fires at
+## the moment of death and a dead station would otherwise keep a full ring of
+## live bullets in the air.
+func cancel_active() -> void:
+	for bullet: Node in _active:
+		if is_instance_valid(bullet):
+			bullet.queue_free()
+	_active.clear()
+
 ## When the enemy ship is destroyed, free every bullet still in flight.
 ## Without this, bullets orphaned in the container have no live pool to
 ## return to (the expired callback targets a freed object and is silently
 ## dropped), so they accumulate until the scene reloads.
 func _exit_tree() -> void:
-	for bullet: Node in _active:
-		if is_instance_valid(bullet):
-			bullet.queue_free()
-	_active.clear()
+	cancel_active()

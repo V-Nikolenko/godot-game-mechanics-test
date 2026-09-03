@@ -325,6 +325,39 @@ the other two blocks; the squad table itself stays in the script, because it is 
 rather than a stat — the same split that keeps `laser_emitter_radius` on the phase node. Pinned by
 `tests/integration/test_station_reinforcements.gd`.
 
+**The station's death plays out**, via a fifth sibling node, **`StationDeathSequence`**
+(`station_death_sequence.gd`) — the same composition split a fifth time. `BaseEnemy` emits `died`
+and calls `queue_free()` in the same call (`base_enemy.gd:65-73`), which gave the 256×256 mini-boss
+the identical one-frame death a 40 px interceptor gets. `SpaceStation` now overrides
+`_on_health_changed`: everything that happened *at* the moment of death still happens there —
+`was_killed`, `died`, and disarming the corpse — and only `queue_free()` moves, behind a
+`death_duration` (1.8 s) `Timer` **node**. Seven blasts then roll across the hull at deterministic
+hull-local offsets while it drifts and darkens, ending on one central blast and a
+`CameraShake.add(1.0)`.
+
+The handoff to `planet_approach` needed **no director change at all**:
+`LevelDirector._wait_enemies_cleared()` already polls the enemy container's child count, so a
+station that stays parented while it dies holds `station_assault` open for free.
+`tests/integration/test_level_1_sequence.gd` walks Level 1's real five-section sequence with a real
+station killed in the middle and asserts it reaches `level_complete`.
+
+Three things here are load-bearing:
+
+- **The station owns `queue_free()`, not the sequence node.** If the visual node owned it, a
+  renamed or missing `DeathSequence` would hang `station_assault` for its full 180 s timeout with
+  no error, then take the escape-combo penalty.
+- **The `ExplosionEffect` is parented to the *station*, never to the sequence node.**
+  `explosion_effect.gd` resolves its container as `get_parent().get_parent()`, so one hop too deep
+  puts every blast inside the rotating hull — where it is freed with the wreck and invisible to the
+  container the director polls. It is added lazily in the `death_started` handler, because
+  `_propagate_ready()` blocks the parent during `_ready()`.
+- **`StationGunnery._stop()` now calls `bullet_pool.cancel_active()`.** `BulletPool._exit_tree()`
+  used to free in-flight bullets at the moment of death; with the wreck lingering ~1.8 s, a corpse
+  would otherwise keep a live ring of bullets in the air — which both endangers the player after
+  the boss is dead and holds `ENEMIES_CLEARED` open, since bullets live in that same container.
+
+Pinned by `tests/integration/test_station_death_sequence.gd` and `test_level_1_sequence.gd`.
+
 **`LevelSection.enemies_cleared_timeout`** is the safety net for `ENEMIES_CLEARED`: seconds to
 wait for `enemy_container` to empty before giving up. It defaults to `10.0` — the constant it
 replaced, sized for "wait for the last stragglers to leave", which is what `cloud_descent` wants —

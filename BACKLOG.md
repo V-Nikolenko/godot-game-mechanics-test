@@ -257,9 +257,39 @@ and only when the station is destroyed does the level continue to the planet.
       armour rule makes `armor_broken` the only route to it; and a ship's **runtime** HurtBox mask
       comes from `base_enemy.gd:25`, never from the value authored in its `.tscn`.
 
-- [ ] **5. Destruction hands off to the planet approach.** Station death plays out and the level
+- [x] **5. Destruction hands off to the planet approach.** Station death plays out and the level
       continues into `planet_approach` and the planet entry.
       *Done when:* a headless run of the full Level 1 section sequence completes end to end.
+      **Done 2026-09-03.** `StationDeathSequence`
+      (`assault/scenes/enemies/space_station/station_death_sequence.gd`) as a **fifth** sibling
+      node; `space_station.gd` gained a `death_started` signal, a public `death_duration`, a
+      `_dying` latch and an `_on_health_changed` override that moves **only** `queue_free()`.
+      Additive support: `BulletPool.cancel_active()` (extracted from `_exit_tree()`) and
+      `ExplosionEffect.explode(at)` (optional position, default preserves today's behaviour).
+      Two new `SpaceStationConfig` fields. Tests: `test_station_death_sequence.gd` (15) +
+      `test_level_1_sequence.gd` (1 end-to-end) + 2 in `test_station_gunnery.gd`.
+      Gate green: 26 scripts / 249 tests / 941 asserts.
+      Plan + **two** review rounds: `docs/plans/station-death-handoff/`. Round 1 was
+      CHANGES_REQUESTED on the **test plan**, not the design, and earned its keep three times:
+      the headline "blasts land in the container" test **could not fail for the right reason**
+      (`hit_effect.gd:21,34` keeps a permanent `CPUParticles2D` under every `BaseEnemy`, so a
+      recursive search always fails and a direct one is vacuously true); the determinism test
+      compared *world* offsets while the same plan rotates the hull, making it a frame-timing
+      race; and the end-to-end test would have **leaked `SceneTreeTimer`s with the gate green**.
+      Round 2 APPROVED with one blocking pre-condition (finding K) that was also correct — see
+      below.
+      Four things a future cycle should not have to rediscover:
+      **(1)** the `ExplosionEffect` must be a child of the **station**, never of the sequence node
+      — `explosion_effect.gd` resolves its container as `get_parent().get_parent()`, so one hop too
+      deep puts every blast inside the rotating hull, where it is freed with the wreck and invisible
+      to the container the director polls; and it must be added in the `death_started` handler, not
+      `_ready()`, because `_propagate_ready()` blocks the parent.
+      **(2)** `was_killed`/`died` must fire at HP 0, not at the free, or `ScoreTracker` scores the
+      boss as an *escape* and applies the 0.75× combo penalty — silent, and no visual test catches it.
+      **(3)** the handoff needed **no** `LevelDirector` change at all: `_wait_enemies_cleared()`
+      already polls the container's child count, so a lingering wreck holds its section open for free.
+      **(4)** compressing Level 1 for a test needs `stagger_delay` zeroed as well as `spawn_delay`
+      — every formation type staggers its own slots, and missing it leaks while the gate stays green.
 
 **Open questions for the plan stage** (research these, do not guess):
 PixelLab maximum sprite dimensions; how many turrets makes the first phase interesting rather
@@ -579,3 +609,32 @@ Found on 2026-09-03 while implementing station reinforcements (EPIC sub-item 4b)
       `V_LIMIT` from its vertical margin budget on purpose. Fixing it properly means spawns
       resolving against the *visible* rect rather than the camera centre, which touches
       `wave_manager.gd:172` and every spawn offset in the game — not a 4b-sized change.
+
+Found on 2026-09-03 while building the station death sequence (EPIC sub-item 5).
+
+- [ ] **`race_ship.gd:97-100` renders its death explosion at the container origin, not at the
+      ship.** It does `get_parent().add_child(boom)` then `boom.global_position = global_position`
+      — but `ExplosionEffect.explode()` reads `actor.global_position` where `actor` is the effect's
+      *parent*, so the position written on line 99 is silently discarded and every race-ship
+      explosion appears at the container's origin. Confirmed by reading the code and by the
+      independent reviewer of `docs/plans/station-death-handoff/`. **Deliberately not fixed in that
+      cycle:** it is unrelated to the mini-boss and fixing it visibly moves race-mode explosions,
+      which deserves its own before/after check. `explode()` now takes an optional position
+      argument, so the fix is one line: `boom.explode(global_position)`. No test pins the current
+      behaviour, so nothing will fight the change.
+
+- [ ] **The gate's step 1 (`godot --headless --import`) leaks ObjectDB instances.** It prints
+      `WARNING: ObjectDB instances leaked at exit` plus a few RID-allocation errors on every run.
+      Pre-existing and **not** caused by the test suite — verified by running the import against a
+      stashed working tree: baseline and current both emit exactly one occurrence, while the GUT
+      step emits none. Harmless today (the gate does not match on it), but it is noise that will
+      mask a real leak if one ever appears in step 1, and it costs time to re-diagnose. Worth one
+      cycle to find what the importer is holding.
+
+- [ ] **`ExplosionEffect`'s container resolution is a footgun worth a guard.** `explode()` resolves
+      its target as `get_parent().get_parent()` with no check on what that is, so attaching the
+      effect one level too deep silently parents the particles inside the entity instead of the
+      container — they are then freed with the entity and inherit its rotation, with no error. This
+      is the same shape of trap as `bullet_pool.gd:47`, which the space-station scene warns about
+      twice in comments. A `push_warning` when the resolved container is itself an ancestor-owned
+      node, or an explicit `container` export, would turn a silent visual bug into a loud one.

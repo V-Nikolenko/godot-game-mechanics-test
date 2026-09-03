@@ -27,3 +27,5 @@ core_bullet_speed = 210.0
 reinforcement_first_delay = 8.0
 reinforcement_interval = 10.0
 reinforcement_max_alive = 4
+death_sequence_duration = 1.8
+death_blast_count = 7

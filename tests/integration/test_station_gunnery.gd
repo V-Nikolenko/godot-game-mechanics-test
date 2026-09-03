@@ -352,3 +352,54 @@ func test_the_timers_actually_run() -> void:
 	_gunnery._turret_timer.start(0.2)
 	await wait_seconds(0.5)
 	assert_gt(_bullets().size(), 0, "the turret timer must fire volleys on its own")
+
+
+# ── BulletPool.cancel_active() (EPIC sub-item 5) ──────────────────────────────
+
+## The station's death sequence made this necessary. Before it, `BulletPool._exit_tree()` freed
+## in-flight bullets at the moment of death because the station was freed in the same frame; the
+## wreck now lingers, so the gunnery has to cancel them explicitly or a dead boss keeps a live
+## ring of bullets in the air.
+##
+## The assertions are RELATIVE, not against a literal pool size: the station's pool is
+## `pool_size = 48` (`space_station.tscn`), and this harness instantiates the real scene.
+func test_bullet_pool_cancel_active_frees_in_flight_bullets() -> void:
+	var pool := _station.get_node("BulletPool") as BulletPool
+	var a := pool.acquire(Vector2(100.0, 100.0))
+	var b := pool.acquire(Vector2(120.0, 100.0))
+	assert_not_null(a, "the pool should hand out a bullet")
+	assert_not_null(b, "the pool should hand out a second bullet")
+
+	var idle_after_acquire: int = pool._idle.size()
+	assert_eq(pool._active.size(), 2, "two bullets are in flight")
+
+	pool.cancel_active()
+	await get_tree().process_frame
+
+	assert_eq(pool._active.size(), 0, "cancel_active must clear the active list")
+	assert_false(is_instance_valid(a), "the first in-flight bullet must be freed")
+	assert_false(is_instance_valid(b), "the second in-flight bullet must be freed")
+
+	## The pool does NOT recover capacity: _recycle() is the only path back into _idle, and
+	## cancel_active() frees the bullets instead. Pinned so nobody later assumes otherwise.
+	assert_eq(pool._idle.size(), idle_after_acquire,
+		"cancelled bullets must NOT return to the idle list — cancel_active shrinks the pool")
+	assert_not_null(pool.acquire(Vector2(140.0, 100.0)),
+		"the pool still works afterwards, drawing from the remaining idle set")
+
+
+func test_the_gunnery_cancels_its_bullets_when_the_station_dies() -> void:
+	var pool := _station.get_node("BulletPool") as BulletPool
+	var bullet := pool.acquire(Vector2(100.0, 100.0))
+	assert_not_null(bullet, "a bullet is in flight before the boss dies")
+
+	## died is only reachable through armor_broken — the core refuses damage while a turret lives.
+	for t in _turrets():
+		t.hurt_box.received_damage.emit(9999)
+	await get_tree().process_frame
+	_station.hurt_box.received_damage.emit(_station.health.max_health)
+	await get_tree().process_frame
+
+	assert_eq(pool._active.size(), 0,
+		"a corpse must not keep a live ring of bullets in the air while it explodes")
+	assert_false(is_instance_valid(bullet), "the in-flight bullet must be gone")

@@ -223,13 +223,23 @@ func _on_armor_broken() -> void:
 		_ring_timer.start(core_ring_interval)
 
 
-## Nothing this node drives may outlive the station. In-flight bullets are freed by
-## `BulletPool._exit_tree()`; this stops anything further being fired in the same frame.
-## It matters for `LevelSection.ENEMIES_CLEARED`, which polls the enemy container's child count —
-## a bullet left in the container after the boss dies holds the section open.
+## Nothing this node drives may outlive the station. Stops both cadences and clears the bullets
+## already in the air.
+##
+## The explicit `cancel_active()` became REQUIRED with the death sequence (sub-item 5). Before it,
+## `BulletPool._exit_tree()` freed in-flight bullets at the moment of death, because the station
+## was freed in the same frame its HP hit 0. The wreck now lingers for `death_duration`, so
+## `_exit_tree()` fires ~1.8 s later — and without this call the corpse would keep a full ring of
+## live bullets in the air and could kill the player while visibly exploding.
+##
+## It matters for `LevelSection.ENEMIES_CLEARED` too, which polls the enemy container's child
+## count (`level_director.gd:116`): in-flight bullets are reparented INTO that container
+## (`bullet_pool.gd:68`), so a bullet left over after the boss dies holds the section open.
 func _stop() -> void:
 	_core_firing = false
 	if _turret_timer != null:
 		_turret_timer.stop()
 	if _ring_timer != null:
 		_ring_timer.stop()
+	if bullet_pool != null:
+		bullet_pool.cancel_active()

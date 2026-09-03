@@ -1,4 +1,4 @@
-# Space Station — Level 1 mini-boss (turret + laser phases)
+# Space Station — Level 1 mini-boss (turret + laser phases, with a staged death)
 
 **Role:** Two-phase cores-and-turrets mini-boss. Four turrets on a 256×256 hull, each on its own
 HP bar; the core refuses **all** damage until the last turret dies. Every live turret fires an
@@ -312,6 +312,115 @@ Ships already in flight when `_stop()` runs are left alone: they are on a `FREE_
 and cull themselves within 7 s, well before the boss can die.
 ---
 
+## Death sequence (`DeathSequence` → `station_death_sequence.gd`)
+
+Before EPIC sub-item 5 the 256×256 mini-boss vanished **between one frame and the next** behind a
+single 22-particle burst — the identical death a 40 px interceptor gets — because
+`base_enemy.gd:65-73` emits `died` and calls `queue_free()` in the same call. Four sessions of
+build-up ended with a poof.
+
+The split is deliberate and is the fifth instance of the same composition pattern:
+
+| Owner | Responsibility |
+|---|---|
+| `space_station.gd` | **Lifetime only.** Latch the death, emit `died` + set `was_killed` at the true moment HP hits 0, disarm the corpse, hold the wreck for `death_duration`, then free it. |
+| `station_death_sequence.gd` | **Spectacle only.** The blast chain, the shake, the drift and the darkening. |
+| `station_gunnery.gd` | Additionally calls `bullet_pool.cancel_active()` on `died`. |
+
+### ⚠️ The station owns `queue_free()`, not the sequence node
+
+If the *visual* node called `queue_free()`, a station whose `DeathSequence` was renamed or removed
+would never leave the enemy container, and `station_assault` would hang for its full **180 s**
+timeout with no error at all — then take the 0.75× escape-combo penalty. The station owns the
+timer and the free; the sequence node only draws. Deleting it costs the explosions and nothing
+else.
+
+### ⚠️ The `ExplosionEffect` is a child of the *station*, never of the sequence node
+
+`explosion_effect.gd:28` reads `actor = get_parent()` and `:31` reads
+`container = actor.get_parent()`. Parented to `DeathSequence` — itself a child of the station —
+that chain is **one hop short**: the particles become children of the *hull*, where they are
+freed with the wreck, never enter the container `LevelDirector._wait_enemies_cleared()` polls, and
+rotate with the dying hull's spin. Same hazard the `BulletPool` and `Reinforcements` notes above
+describe, for the same reason.
+
+It is therefore added to `_station` lazily, in the `death_started` handler — **not** in
+`_ready()`, because `_propagate_ready()` blocks the parent while it readies its children, exactly
+as the `BulletPool` note explains.
+
+`tests/integration/test_station_death_sequence.gd::test_the_blast_chain_rolls_across_the_hull_rather_than_detonating_at_its_centre`
+is the regression test. **If it fails, the node placement is wrong — do not weaken the test.**
+
+### The chain
+
+Seven blasts roll across the hull over 1.8 s at **deterministic** hull-local offsets — a fixed
+table of eight unit vectors cycled by blast index, never `randf()`, for the same reason the beam
+angles and the squad order are fixed lists: random ordering cannot be balanced or asserted. The
+offsets are exposed as `blast_offset(i)`, a pure function of the index with no transform, time or
+RNG in it, which is what makes determinism testable. Consecutive blasts land on *opposite* sides
+of the hull, so the chain reads as a disintegration rather than a spinner.
+
+Then one final central blast at `_finish()`, and the station frees itself on its own timer.
+
+- **Cadence is derived from `_station.death_duration`, not from a second copy of the config.**
+  The station owns the timer that frees the wreck, so two independent copies could desync and
+  leave the chain firing into a freed station. Reading a sibling's per-instance var is not a
+  shared-`.tres` read; `station_gunnery.gd:153` reads live station state the same way.
+- **The hull drifts and darkens** — `death_spin` (1.2 rad/s) decaying linearly to 0, and
+  `modulate` lerped toward `burnt_tint`. The hull is *already* rotating in phase 2, so a hard stop
+  at death would be the more jarring option. The darkening works only because `hit_flash_vs.tres`
+  passes the incoming vertex colour through when `enabled` is false.
+- **Shake:** `blast_shake` (0.25) per blast and `final_shake` (1.0) on the finale. Note the chain
+  shake is **deliberately near-invisible**: `CameraShake` decays at 1.5/s and the blasts are
+  ~0.26 s apart, so it never accumulates past ~0.25 trauma ≈ a 0.5 px offset. Do not "fix" that by
+  raising the value — nothing an enemy does shakes this game's screen at all, and the finale is
+  where the budget is meant to be spent.
+
+### The corpse is harmless
+
+From the instant HP hits 0:
+
+- `hurt_box.monitoring` → `false` (deferred).
+- The contact `HitBox`'s `collision_layer` → `0` (deferred). The player's HurtBox is the side that
+  *monitors* (mask 1281), so zeroing the layer is what stops a dead hull ramming the player.
+- `bullet_pool.cancel_active()` — **new, and required by this change.** Previously
+  `BulletPool._exit_tree()` freed in-flight bullets at the moment of death because the station was
+  freed in the same frame. The wreck now lingers ~1.8 s, so without the explicit call the corpse
+  would keep a full ring of live bullets in the air and could kill the player while visibly
+  exploding. Those bullets also live in the enemy container, so they would hold `ENEMIES_CLEARED`
+  open.
+
+Note `cancel_active()` permanently **shrinks** the pool — `_recycle()` is the only path back into
+`_idle` and this frees the bullets instead. That is fine for a dying boss and is pinned by a test.
+
+### ⚠️ `died` and `was_killed` fire at HP 0, not when the wreck is freed
+
+`ScoreTracker` connects its kill path to `died` (`score_tracker.gd:151-164`) and its escape path
+to `tree_exited`, discriminating on `was_killed` (`:201`). Deferring either to `_finish_death()`
+would score the boss as an **escape** and multiply the combo by 0.75 (`:211`) — a silent scoring
+regression no test of the *visuals* would catch. Only `queue_free()` moved.
+
+The `_dying` latch is what stops a stray bullet re-running the whole path: `Health.set_health()`
+emits `amount_changed` unconditionally, so a hit on a 0-HP station re-enters `_on_health_changed`.
+
+### The handoff needs no director change
+
+`LevelDirector._wait_enemies_cleared()` polls the enemy container's child count
+(`level_director.gd:116`), so a station that stays parented while it dies holds `station_assault`
+open **for free**, and the section advances the moment the wreck and its last particles leave.
+The blast particles live in the container deliberately: the level does not transition
+mid-explosion. `tests/integration/test_level_1_sequence.gd` walks the real five-section sequence
+with a real station killed in the middle and asserts it reaches `level_complete`.
+
+### Boundary: `death_duration = 0.0`
+
+The script default is `0.0` and that is the honest fallback, not an oversight — at zero the
+station is freed in the same frame, exactly as every other enemy, so a station with **no** config
+behaves precisely as `BaseEnemy` always has. The shipped `.tres` carries 1.8. Pinned by
+`test_death_sequence_duration_zero_keeps_the_base_enemy_behaviour`.
+
+---
+
 ## Why the core is *armoured*, not *unhittable*
 
 The HurtBox stays fully live and damage is refused inside `_on_received_damage`. Disabling the
@@ -419,6 +528,8 @@ ShipConfig`, so the first four are inherited.
 | `reinforcement_first_delay` | `8.0` | Seconds to the first squad. The opening belongs to the boss alone — adds arriving during a boss's introduction are the main way a boss ends up overshadowed by its own minions. Roughly two turret volleys plus the time to read the hull. |
 | `reinforcement_interval` | `10.0` | Seconds between squads after the first. The top of the 5–10 s attack-switch band, so a squad lands as an *event* punctuating the 1.8 s turret cadence rather than blurring into it. Over a ~25–35 s phase 1 that is 2–3 squads. |
 | `reinforcement_max_alive` | `4` | Hard ceiling on live reinforcements, i.e. two squads. A squad is skipped **whole** when it would breach this, so the ceiling is exactly 4. Readability valve for a stalled fight; at a 10 s interval against a ~4 s transit it should not bind in normal play. |
+| `death_sequence_duration` | `1.8` (script `0.0`) | Seconds the wreck stays in the tree after HP hits 0, before it is freed. The script default `0.0` is the honest fallback — a station with no config is freed in the same frame, exactly as `BaseEnemy` always did. Copied into `SpaceStation.death_duration` in `_ready()`; tests override **that**, never the shared `.tres`. |
+| `death_blast_count` | `7` (script `3`) | Explosions in the chain that rolls across the hull before the final central blast. Seven reads as a chain; three reads as a hiccup. |
 
 ⚠️ **`core_ring_step = 0.24` is load-bearing and is pinned by a test.** It comes from the golden
 angle: `spacing * 0.381966` = `(TAU/10) * 0.381966`, i.e. a spacing-to-step ratio of 2.618. The
@@ -492,7 +603,7 @@ penalty. That is a safety net, not a balance number.
 space_station/
 ├── ENEMY.md                    ← this file
 ├── space_station.tscn          SpaceStation + 4 turrets + LaserPhase + BulletPool + Gunnery
-│                            + Reinforcements
+│                            + Reinforcements + DeathSequence
 ├── space_station.gd            SpaceStation (extends BaseEnemy)
 ├── space_station_config.gd     SpaceStationConfig (extends ShipConfig)
 ├── space_station_config.tres
@@ -500,7 +611,8 @@ space_station/
 ├── station_turret.gd           StationTurret (Node2D)
 ├── station_laser_phase.gd      StationLaserPhase (Node2D) — the second phase
 ├── station_gunnery.gd          StationGunnery (Node2D) — the guns, both phases
-└── station_reinforcements.gd   StationReinforcements (Node2D) — phase-1 add squads
+├── station_reinforcements.gd   StationReinforcements (Node2D) — phase-1 add squads
+└── station_death_sequence.gd   StationDeathSequence (Node2D) — the death spectacle
 ```
 
 Shared code it depends on: `global/resources/attack/radial_attack_pattern.gd`

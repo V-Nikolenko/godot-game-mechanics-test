@@ -135,6 +135,14 @@ It is the project's first spawner that is not `WaveManager` — reinforcements g
 `enemy_container` as siblings of the station and register on `EventBus.enemy_spawned_orphan`,
 the same channel `big_asteroid.gd` uses for its shards.
 
+A **fourth** child node, `StationDeathSequence`, owns the boss's death spectacle. `SpaceStation`
+overrides `BaseEnemy._on_health_changed` so that only `queue_free()` is delayed — `was_killed` and
+`died` still fire the instant HP hits 0, because `ScoreTracker` discriminates kill from escape on
+exactly those. The wreck then lingers for `death_duration` (1.8 s) while seven blasts roll across
+the hull at deterministic offsets and it drifts and darkens. The handoff into `planet_approach`
+needed **no** `LevelDirector` change: `_wait_enemies_cleared()` already polls the enemy container's
+child count, so a wreck that stays parented holds its section open for free.
+
 For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-roster.md).
 
 ---

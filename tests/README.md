@@ -32,9 +32,10 @@ behaved exactly that way. If you extend it, keep it reading files.
 
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
-`test_station_gunnery.gd`, `test_station_reinforcements.gd` and `test_radial_attack_pattern.gd` — are the other exceptions, for a
+`test_station_gunnery.gd`, `test_station_reinforcements.gd`, `test_station_death_sequence.gd`,
+`test_level_1_sequence.gd` and `test_radial_attack_pattern.gd` — are the other exceptions, for a
 different reason: the `space_station` entity, the `station_assault` section, the laser phase, the
-gunnery, the reinforcement spawner and `RadialAttackPattern` are all **new code**, so their tests assert intended behaviour
+gunnery, the reinforcement spawner, the death sequence and `RadialAttackPattern` are all **new code**, so their tests assert intended behaviour
 rather than pinning existing quirks.
 `test_space_station.gd` carries a documented coverage gap — it drives damage by emitting
 `HurtBox.received_damage` directly, so it proves nothing about collision layers, and the section
@@ -161,3 +162,34 @@ Two things that file had to work around, both worth knowing:
   0.5: `warn` + a ~0.56 s `laser_increase` charge-up + `active` + a 0.84 s dissolve. Any test
   volley interval must exceed it, or a second volley spawns while the first is still dissolving and
   the child-count assertions become false rather than merely flaky.
+
+Entities, the death: `StationDeathSequence` (`integration/test_station_death_sequence.gd`) — that
+the wreck stays in the tree after HP hits 0, that `died`/`was_killed` still fire at that instant
+(the `ScoreTracker` kill-vs-escape contract), the `_dying` latch against `Health`'s 0 → 0 re-emit,
+the disarmed corpse, the free-after-duration path and the `death_duration = 0.0` boundary that
+proves the new path is additive, the blast chain rolling across the hull, deterministic
+`blast_offset(i)`, the decaying spin and darkening, and the config copy. Plus
+`BulletPool.cancel_active()` in `test_station_gunnery.gd`.
+Levels, end to end: `integration/test_level_1_sequence.gd` — Level 1's real five-section sequence
+(`deep_space → asteroid_belt → station_assault → planet_approach → cloud_descent`) with a real
+`SpaceStation` killed in the middle, asserting it reaches `level_complete`, that the boss section
+does not advance while the wreck is present, and that the run finishes well inside the timeouts.
+
+### The leak trap has a second half — zero `stagger_delay`, not just `spawn_delay`
+
+`test_level_1_sequence.gd` compresses the real Level 1 sections to run in seconds. Zeroing every
+`WaveResource.trigger_time` and `SpawnEntryResource.spawn_delay` is **not enough**:
+`wave_manager.gd:143` expands a formation as `base_delay + slot.delay`, and every formation type
+(v, wedge, line, diagonal, cluster) staggers its own slots. Level 1 uses formations heavily, so
+~30 `_spawn_with_delay()` coroutines were left suspended holding `SceneTreeTimer`s after
+`level_complete`.
+
+That prints `ObjectDB instances leaked` at exit, which **does not match the gate's fatal-error
+regex** — so the suite stayed green while leaking, exactly as the trap above describes. The fix is
+`entry.formation.set(&"stagger_delay", 0.0)` alongside the other two. Safe for the same reason:
+`wave_builder.gd:154-192` builds every formation with `.new()` per call, so nothing shipped is
+shared.
+
+⚠️ Separately, the `ObjectDB instances leaked` line the **gate** prints comes from step 1, the
+headless `--import`, and predates this suite. Verified against a stashed working tree: baseline
+and current both emit exactly one. Do not go hunting for it in the tests.
