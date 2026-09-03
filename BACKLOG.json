@@ -9,7 +9,7 @@
           "id": "write-the-dossier-for-the-completed-station-mini-boss-epic",
           "head": "Write the dossier for the completed station mini-boss epic",
           "body": "into\n`docs/epics-done/station-mini-boss/` — `PRD.md`, `SOURCES.md`, `REPORT.md` per Stage 8\nof the `feature-workflow` skill. Everything needed is already in the six\n`docs/plans/station-*/` directories: merge their `2-research.md` source tables into\n`SOURCES.md`, and cover all five sub-items plus the rejected laser-phase plan\n(`479a66d`) in `REPORT.md`. Be specific in *Known gaps* — nothing in this epic has been\nplayed by a human, and the report should say so.\n*Done when:* the three files exist and every claim in `REPORT.md` names a commit, a test,\nor a plan file.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null
         },

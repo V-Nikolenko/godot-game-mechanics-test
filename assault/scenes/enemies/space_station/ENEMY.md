@@ -9,17 +9,24 @@ sweeping beams and precessing bullet rings from the exposed core.
 teaches the rule without any UI: kill the guns first, then the core. Stripping the armour is not a
 reward — it wakes the superweapon up, and the second half is fought on the move.
 
-> **Status: EPIC sub-items 1–3, 4a and 4b done.** The entity exists and is destructible (1), gates
-> Level 1 as the `station_assault` section (2), has the rotating laser phase (3), **shoots back**
-> with aimed turret fans and precessing core rings (4a), and now **calls for reinforcements** —
-> squads of existing enemy ships crossing in from all four screen edges during phase 1 (4b). Still
-> outstanding: no bespoke death sequence or handoff into `planet_approach` (sub-item 5). Plans and
-> reviews:
+> **Status: the EPIC is complete — all six sub-items done (2026-09-03).** The entity exists and is
+> destructible (1), gates Level 1 as the `station_assault` section (2), has the rotating laser
+> phase (3), **shoots back** with aimed turret fans and precessing core rings (4a), **calls for
+> reinforcements** — squads of existing enemy ships crossing in from all four screen edges during
+> phase 1 (4b) — and **dies on screen**, holding its section open for a staged blast chain before
+> handing off to `planet_approach` (5).
+>
+> **What is still open is not code:** nobody has played this fight, and `station_core.png` has an
+> opaque background so the hull currently renders as a grey square. Both, plus every other known
+> gap, are in the epic dossier —
+> [`docs/epics-done/station-mini-boss/`](../../../../docs/epics-done/station-mini-boss/)
+> (`REPORT.md` → *Known gaps*). Plans and reviews:
 > [`docs/plans/station-mini-boss-destructible/`](../../../../docs/plans/station-mini-boss-destructible/),
 > [`docs/plans/station-assault-section/`](../../../../docs/plans/station-assault-section/),
 > [`docs/plans/station-laser-phase/`](../../../../docs/plans/station-laser-phase/),
 > [`docs/plans/station-bullet-hell/`](../../../../docs/plans/station-bullet-hell/),
-> [`docs/plans/station-reinforcements/`](../../../../docs/plans/station-reinforcements/).
+> [`docs/plans/station-reinforcements/`](../../../../docs/plans/station-reinforcements/),
+> [`docs/plans/station-death-handoff/`](../../../../docs/plans/station-death-handoff/).
 
 ---
 

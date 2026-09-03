@@ -168,6 +168,11 @@ For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-ro
 - [`tests/README.md`](../../tests/README.md) — how to run and write tests
 - [`addons/gut/LOCAL_PATCHES.md`](../../addons/gut/LOCAL_PATCHES.md) — the two changes GUT
   needs to load under Godot 4.6.3; re-apply on any GUT upgrade
+- [`docs/plans/`](../plans/) — one directory per feature: context, research, plan, the
+  independent review verdict, and the implementation log. The audit trail for unattended work
+- [`docs/epics-done/`](../epics-done/) — one dossier per finished epic (`PRD.md` / `SOURCES.md` /
+  `REPORT.md`). **Start here** for why a shipped system is built the way it is, where its tuning
+  numbers came from, and what is known to be unfinished about it
 
 ---
 

@@ -70,9 +70,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 31 open)
+## Code health backlog  (`code-health-backlog`, 30 open)
 
-- [ ] **Write the dossier for the completed station mini-boss epic** _(todo)_
+- [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
       `docs/epics-done/station-mini-boss/` — `PRD.md`, `SOURCES.md`, `REPORT.md` per Stage 8
       of the `feature-workflow` skill. Everything needed is already in the six
