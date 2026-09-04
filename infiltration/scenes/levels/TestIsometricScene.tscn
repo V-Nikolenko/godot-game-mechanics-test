@@ -1,17 +1,20 @@
 [gd_scene load_steps=4 format=3 uid="uid://df1ccrldggefu"]
 
+; The backdrop is referenced as an ext_resource, NOT as an inline CompressedTexture2D with a
+; `load_path` into res://.godot/imported/. It used to be the latter, and the hash baked into that
+; path (…-a2f1c527…) no longer matched what the importer produces (…-8c23e349…), so the sprite
+; silently rendered nothing on every machine: .godot/ is gitignored, so the path is a per-clone
+; build artifact and nothing on disk keeps the two in step.
+[ext_resource type="Texture2D" uid="uid://bh10rxoott4yj" path="res://infiltration/scenes/levels/enemy_base_entrance__template.png" id="1_bg"]
 [ext_resource type="PackedScene" uid="uid://c5uhjngq8bl5n" path="res://infiltration/scenes/entities/player/player.tscn" id="2_w6leu"]
 [ext_resource type="PackedScene" uid="uid://b7mp4u8g6nf85" path="res://global/ui/pause_menu/pause_menu.tscn" id="3_pm"]
-
-[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_w6leu"]
-load_path = "res://.godot/imported/enemy_base_entrance__template.png-a2f1c527784e8b89b292611b318c4b60.ctex"
 
 [node name="TestIsometricScene" type="Node2D"]
 
 [node name="EnemyBaseEntranceTemplate" type="Sprite2D" parent="."]
 texture_filter = 1
 position = Vector2(821, -359)
-texture = SubResource("CompressedTexture2D_w6leu")
+texture = ExtResource("1_bg")
 
 [node name="Player" parent="." instance=ExtResource("2_w6leu")]
 position = Vector2(166, -120)

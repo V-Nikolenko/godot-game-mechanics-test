@@ -119,6 +119,12 @@ The only implemented entity is the **player** (above). `scenes/entities/props/ex
 ### 3.3 Levels & systems
 
 **Level** — `scenes/levels/TestIsometricScene.tscn` is the playable test mission: a `Node2D` root with the `enemy_base_entrance__template.png` backdrop, an instanced `Player`, and an instanced **`global/ui/pause_menu/pause_menu.tscn`** (cross-mode reuse from `global/`, documented in the [`global/` module doc](./global.md)).
+The backdrop is an `[ext_resource]` pointing at the `.png`, and must stay one: it used to be an
+inline `CompressedTexture2D` whose `load_path` named a file under `res://.godot/imported/` by
+content hash, and once the importer's hash changed the sprite rendered nothing on every clone —
+`.godot/` is gitignored, so that path is a per-machine build artifact with nothing on disk keeping
+it in step. `tests/integration/test_project_load_integrity.gd` is what found it and what fails if
+it comes back.
 
 **Stair-assist system** — `scenes/systems/stairs/stairs.gd` defines `StairAssist`, an `@tool` `Area2D`. It maps a body's position along a `bottom_local_point → top_local_point` axis to a 0–1 progress value and `lerp`s between `bottom_height` and `top_height`. Each `_physics_process` it pushes that height to any overlapping body via duck-typed calls to `set_environment_elevation(source, height)` / `clear_environment_elevation(source)`. The player implements those methods, storing each source's height in `elevation_sources` and taking the **max** as `environment_height` — so multiple overlapping ramps compose and the sprite floats up the stairs while the shadow stays grounded. Being `@tool`, it also draws debug UP/DOWN markers in the editor and can auto-guess its endpoints from the collision polygon.
 
