@@ -12,6 +12,15 @@ const SAVE_PATH := "user://mission_state.cfg"
 ## prefix is namespaced to never collide with a mission number.
 const _CUTSCENE_SECTION := "__cutscenes__"
 
+## Bounds of the star scale a *completed* mission can hold.
+## 0 is deliberately outside it: it is the reserved "never completed" sentinel
+## that `get_stars()` returns for an unknown mission and that
+## `MissionListItem.configure()` renders as three empty stars. Storing a genuine
+## 0-star clear would therefore be indistinguishable from never having played,
+## so completing a mission is always worth at least MIN_STARS.
+const MIN_STARS := 1
+const MAX_STARS := 3
+
 ## Internal cache: { mission_number: { "completed": bool, "stars": int } }
 var _data: Dictionary = {}
 
@@ -21,12 +30,19 @@ var _cutscenes: Dictionary = {}
 func _ready() -> void:
 	_load()
 
-## Mark a mission as complete and record its star count (1–3).
+## Mark a mission as complete and record its star count (MIN_STARS–MAX_STARS).
 ## If the mission was already complete with MORE stars, keeps the higher count.
+## A `stars` value outside the scale is clamped into it *and warned about*: every
+## caller reaches this through `MissionConfigResource.stars_for_score()`, which
+## already floors at 1 and caps at 3, so an out-of-range value means the caller
+## computed it wrong and the clamp would otherwise hide the bug in the save file.
 func complete(mission_number: int, stars: int = 1) -> void:
+	if stars < MIN_STARS or stars > MAX_STARS:
+		push_warning("MissionState: mission %d completed with %d stars, outside the %d–%d scale; clamped." \
+			% [mission_number, stars, MIN_STARS, MAX_STARS])
 	var entry: Dictionary = _data.get(mission_number, {})
 	entry["completed"] = true
-	entry["stars"] = max(entry.get("stars", 0), clampi(stars, 1, 3))
+	entry["stars"] = maxi(entry.get("stars", 0), clampi(stars, MIN_STARS, MAX_STARS))
 	_data[mission_number] = entry
 	_save()
 

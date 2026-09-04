@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 28 open)
+## Code health backlog  (`code-health-backlog`, 27 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -114,7 +114,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `tests/unit/test_ship_module_state.gd::test_equipping_does_not_require_unlocking`.
       → [docs/plans/shipmodulestate-equip-never-consults-unlocked](docs/plans/shipmodulestate-equip-never-consults-unlocked)
 
-- [ ] **`MissionState.complete()` cannot record a zero-star clear.** _(todo)_
+- [x] **`MissionState.complete()` cannot record a zero-star clear.** _(done)_
       `clampi(stars, 1, 3)` turns a
       0-star completion into 1 star. Intentional? Pinned by
       `tests/unit/test_mission_state.gd::test_stars_are_clamped_into_one_to_three`.
