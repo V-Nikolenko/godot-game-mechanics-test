@@ -175,7 +175,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so it should be a deliberate one rather than folded into unrelated work. `space_station.gd`
       does apply it, so the two enemies currently disagree about whether the field means anything.
 
-- [ ] ****`base_enemy.gd:56-59` builds the contact HitBox from `col.shape` but drops the** _(todo)_
+- [ ] ****`base_enemy.gd:56-59` builds the contact HitBox from `col.shape` but drops the** _(in progress)_
       `CollisionShape2D`'s `scale` and `position`.** Every enemy that scales its collision shape in
       the scene therefore gets a contact hitbox of the wrong size — `gunship.tscn:63-65` scales by
       2.31, so its contact hitbox is ~2.3× too small. Harmless-ish at 40 px, badly wrong at boss
@@ -185,6 +185,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       existing enemies' contact hitboxes, so it needs a balance pass, not a blind fix.
       
       Found on 2026-09-01 while adding the `station_assault` section (EPIC sub-item 2).
+      → [docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-](docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-)
 
 - [ ] ****A test that ends while a `LevelDirector` coroutine is suspended leaks — and the gate stays** _(todo)_
       green.** `_wait_enemies_cleared()` awaits `_wait_for_child_exit_or_timeout(container, 1.0)`,

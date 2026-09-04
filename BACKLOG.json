@@ -105,9 +105,9 @@
           "id": "baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-",
           "head": "**`base_enemy.gd:56-59` builds the contact HitBox from `col.shape` but drops the",
           "body": "`CollisionShape2D`'s `scale` and `position`.** Every enemy that scales its collision shape in\nthe scene therefore gets a contact hitbox of the wrong size — `gunship.tscn:63-65` scales by\n2.31, so its contact hitbox is ~2.3× too small. Harmless-ish at 40 px, badly wrong at boss\nscale. `space_station.tscn` sidesteps it by authoring its shape at true size with `scale = 1`,\nbut the underlying helper is still lossy for everyone else. Copying the node's transform\nonto the new `CollisionShape2D` would fix it — though it would silently enlarge several\nexisting enemies' contact hitboxes, so it needs a balance pass, not a blind fix.\n\nFound on 2026-09-01 while adding the `station_assault` section (EPIC sub-item 2).",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
-          "planDir": null
+          "planDir": "docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-"
         },
         {
           "id": "a-test-that-ends-while-a-leveldirector-coroutine-is-suspende",
