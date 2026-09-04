@@ -24,7 +24,7 @@ This is not one site. The same five lines are copy-pasted into **four** places:
 | `assault/scenes/enemies/base_enemy.gd:49-60` | 256 (enemy contact) | hardcoded 20, re-applied per subclass | no |
 | `assault/scenes/enemies/drone_interceptor/drone_interceptor.gd:141-153` | 256, mask 128 | `config.collision_damage` | no |
 | `assault/scenes/enemies/kamikaze_drone/kamikaze_drone.gd:53-65` | 256, mask 128 | hardcoded 30 | no |
-| `assault/scenes/allies/ally_fighter/ally_fighter.gd:72-84` | 64 (player contact) | hardcoded 25 | no |
+| `assault/scenes/allies/ally_fighter/ally_fighter.gd:72-84` | 64 (player contact) | hardcoded 25 at `:79`, then overwritten from `config.collision_damage` at `:40-46` | no |
 
 `bonus_drone.gd:29-30` overrides the helper to add nothing — deliberate, `collision_damage = 0`.
 

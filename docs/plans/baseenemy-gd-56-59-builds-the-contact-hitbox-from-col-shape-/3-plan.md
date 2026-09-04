@@ -76,12 +76,44 @@ Three reasons:
    box — 13.5 px (`player_fighter.tscn:340-343`). Shrinking the enemy side too, as the bug does,
    makes the pairing small-vs-small.
 2. `HurtBox._on_area_entered` fires on `area_entered` only
-   (`global/components/hurtbox_component.gd:17`) — one-shot per entry, no per-frame tick. A larger
-   box changes **where** a ram registers, not damage per second.
-3. Player-into-enemy is unaffected either way: the player's body (mask 1) collides with enemy
-   bodies (layer 1) and is physically stopped at hull contact, while enemies (mask 1) do not see
-   the player's layer 4 and pass through freely. So this change only affects **enemy-into-player**,
-   which is where contact damage is supposed to come from.
+   (`global/components/hurtbox_component.gd:10` connects it; `:12-18` is the handler) — one-shot
+   per entry, no per-frame tick. A larger box changes **where** a ram registers, not damage per
+   second.
+3. Contact damage stays a *body-to-body* affair; no new category of collision is created. What
+   changes is only the radius at which the existing ones fire. Player-into-enemy in particular is
+   unaffected either way: the player's body (mask 1) collides with enemy bodies (layer 1) and is
+   physically stopped at hull contact, while enemies (mask 1) do not see the player's layer 4 and
+   pass through freely.
+
+#### Exactly who is affected — corrected after review
+
+The first draft of this section claimed the change "only affects enemy-into-player", on the
+grounds that layer 256 is reachable only by the player's `HurtBox` (mask 1281). **That is wrong.**
+`assault/scenes/allies/ally_fighter/ally_fighter.tscn:41-42` is `collision_layer = 128` /
+`collision_mask = 1281` — the *same* mask as the player's — so bit 256 is set there too, and ally
+fighters are live content spawned via `wave_builder.gd:240`. The full set of affected interactions:
+
+| Interaction | Why it changes | Direction |
+|---|---|---|
+| enemy contact → **player** `HurtBox` (layer 128, mask 1281) | six enemy boxes grow | rams register from further out |
+| enemy contact → **ally fighter** `HurtBox` (layer 128, mask 1281) | same six boxes | allies die to rams from further out |
+| `drone_interceptor` / `kamikaze_drone` self-destruct (`mask = 128`) | 128 is the player's *and* the ally's `HurtBox` layer | both now trigger on an ally from further out too — 3.08× for the interceptor |
+| **ally** contact (layer 64) → enemy `HurtBox` | site 4 grows the ally's own box 1.84× | ally→enemy ram damage lands more often. Enemy masks 97 (`interceptor`, `sniper_enemy`, `drone_interceptor`) and 65 (`bomber`, `gunship`, `light_assault_ship`, `kamikaze_drone`, `bonus_drone`) both contain bit 64. `ram_ship.tscn:80` is mask 33 and stays immune — pre-existing, not changed here |
+
+Enemy-into-enemy remains impossible: enemy `HurtBox` masks are 97, 65, 33 (`ram_ship.tscn:80`),
+and 1121 (`space_station.tscn:76`, `station_turret.tscn:19`) — **none contains bit 256.**
+
+The three reasons above still hold for every row of that table: the ally is a small-box
+combatant facing the same generous enemy bounds, and the ally's own hull is what its contact box
+is supposed to describe. Accepting the change uncompensated is still the call — but it is a
+four-way balance change, not a one-way one, and the report must say so.
+
+One further correction while in this area: "the player's body is stopped at hull contact" holds
+for every enemy (root nodes carry no `collision_layer` line, so they default to layer 1, and
+`player_fighter.gd:98` calls `move_and_slide()` with the default mask 1) but **not** for the
+space station, whose root is `collision_layer = 0` / `collision_mask = 0`
+(`space_station.tscn:63-64`). The station is unaffected by this change regardless — it authors at
+`scale = 1`.
 
 `.tres` `collision_damage` values are untouched — this is a geometry fix, and the damage numbers
 were settled by `test_enemy_contact_damage.gd`.
@@ -104,13 +136,32 @@ were settled by `test_enemy_contact_damage.gd`.
    `hb.area_entered.connect(_on_contact_hit)` after construction.
 5. Convert `ally_fighter.gd:72-84`.
 6. Run the full suite; confirm `test_enemy_contact_damage.gd` is still green (damage untouched).
+7. Run `updating-project-docs`. `docs/architecture/modules/global.md:121` documents `HitBox`'s
+   surface (`damage`, `damage_type`) and `:125` the collision-wiring recipe; both are incomplete
+   once `HitBox` gains a public static factory. Adding shared API to a shared component is a
+   structural change, so `CLAUDE.md` makes this mandatory — the build is not done at green tests.
+
+### A harness constraint that must not be discovered mid-build
+
+Step 1 copies the roster harness out of `test_enemy_contact_damage.gd`. That harness is **typed to
+enemies**: `_spawn()` is declared `-> BaseEnemy` (`:113`), it does
+`scene.instantiate() as BaseEnemy` and asserts the cast (`:118-119`), and `_contact_hitbox()`
+takes a `BaseEnemy` (`:125`). `AllyFighter` is `class_name AllyFighter extends CharacterBody2D`
+(`ally_fighter.gd:1-2`) and is **not** a `BaseEnemy`.
+
+So in the new file, `_spawn()` and `_contact_hitbox()` must be typed **`Node2D`**, not `BaseEnemy`.
+Copied verbatim, the `ally_fighter` row fails with "root is not a BaseEnemy" — a failure that
+looks exactly like the bug under test but is not one. **`ally_fighter` stays in the roster**;
+dropping it to clear that error would silently delete one of the six rows this change exists to
+fix, and it is the only site-4 coverage in the suite.
 
 ## Test plan
 
 New file `tests/integration/test_contact_hitbox_geometry.gd` — an **invariant** test, not
 characterization: the contact box describing a different hull than the body is a defect, not a
 quirk to pin. It reuses `test_enemy_contact_damage.gd`'s harness (throwaway container `Node2D`
-parent, add to tree so `_ready()` runs, direct-children-only `HitBox` search).
+parent, add to tree so `_ready()` runs, direct-children-only `HitBox` search) — **retyped to
+`Node2D`**, for the reason spelled out under "A harness constraint" in the build sequence.
 
 | Test | Asserts | Fails today on |
 |---|---|---|
@@ -139,10 +190,12 @@ hand-built node would restate the implementation rather than test it.
 
 | Risk | Check |
 |---|---|
-| Scaled `CollisionShape2D` under an `Area2D` behaves differently from under a `CharacterBody2D`. | The project already does exactly this for every `HurtBox` in these scenes (`gunship.tscn:74`, `player_fighter.tscn:342`) and they demonstrably register hits. Plus the non-uniform guard. |
-| Enlarged boxes overlap something they should not. | Layers unchanged: enemy contact `HitBox` stays layer 256, reachable only by the player `HurtBox` (mask 1281). Enemy `HurtBox` masks (97/65) do not include 256, so enemies still cannot ram each other. |
+| Scaled `CollisionShape2D` under an `Area2D` is ignored by the physics server, making the whole fix a silent no-op — which is what the Godot docs' "scaling of collision shapes is not supported" would mean taken literally. | **Settled empirically, not by analogy** — see `2-research.md` → "Open question 2, answered by measurement". On this machine's Godot 4.6.3, the same binary `/agent/verify.sh` runs, a `CircleShape2D(radius 10)` under a `scale = (3,3)` `CollisionShape2D` on an `Area2D` overlaps a probe at 20 px and not at 40 px: effective radius 30, no engine warning. Plus the non-uniform guard for the case that genuinely cannot be represented. |
+| Enlarged boxes overlap something they should not. | Layers unchanged: enemy contact `HitBox` stays layer 256. Reachable by the player `HurtBox` **and the ally fighter's** — both mask 1281, see "Exactly who is affected". Enemy `HurtBox` masks 97/65/33/1121 contain no bit 256, so enemies still cannot ram each other. |
 | `test_project_load_integrity.gd` trips on a new engine warning from setting scale in code. | It runs in the gate; the existing scenes already carry scaled collision shapes and pass. |
 | `drone_interceptor` now self-destructs on contact from ~3× further out, which is a real feel change. | Intended — it is a kamikaze. Flagged in the report for a human to eyeball; headless tests cannot judge feel. |
+| **Ally fighters get noticeably more fragile.** The same six enlarged enemy boxes reach them too (`ally_fighter.tscn:41-42`, mask 1281), and `drone_interceptor`/`kamikaze_drone` (`mask = 128`) now suicide into an ally from further out. | No test can judge whether allies now die too fast — survival time is a feel question. Named explicitly in the report as the second thing a human must eyeball. |
+| **Ally rams land more often.** Site 4 grows the ally's own contact box 1.84×, and enemy `HurtBox` masks 97/65 both contain bit 64. | Correct in the same sense the enemy half is — the box now describes the ally's real hull — but it is an unrequested buff to allied damage output. Third item on the eyeball list. |
 
 ## Out of scope
 

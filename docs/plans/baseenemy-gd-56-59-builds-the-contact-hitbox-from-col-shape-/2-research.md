@@ -42,3 +42,47 @@ cannot represent, and it is cheap to guard.
 No source was found on whether a *ramming* enemy specifically should have tighter bounds than its
 hurtbox. Treated as out of scope: this change restores the size the scene declares, and any
 deliberate "ram box is smaller than the hull" tuning would be new design, not a bug fix.
+
+## Open question 2, answered by measurement (added in review round 1)
+
+`1-context.md`'s open question 2 — *does Godot 4 actually honour a scaled `CollisionShape2D` under
+an `Area2D`* — was answered above **by analogy**: the sibling `HurtBox` nodes are scaled and
+demonstrably register hits. The plan reviewer correctly flagged that as weaker than it reads. A
+hit registering proves a hit registers *somewhere*, not that the scale reached the physics server.
+And since the Godot docs sentence quoted above says scaling collision shapes is *not supported*,
+if that were literally true the entire fix would be a silent no-op — and nothing in the plan's
+test list would have caught it, because those tests assert **node transforms**, not physics
+behaviour.
+
+The reviewer settled it empirically against this machine's engine (Godot v4.6.3.stable — the same
+binary `/agent/verify.sh` runs), in a throwaway project outside this repo: an `Area2D` holding a
+`CircleShape2D(radius = 10)` on a `CollisionShape2D` with `scale = Vector2(3, 3)`, probed by point
+areas at x = 20 and x = 40.
+
+```
+RESULT overlapping_count=1
+RESULT b_overlaps=true c_overlaps=false     # 20 px overlaps, 40 px does not -> effective radius 30
+RESULT shape_owner_xform=[X: (3.0, 0.0), Y: (0.0, 3.0), O: (0.0, 0.0)]
+```
+
+**The scale reaches the physics server; the effective radius is 30, not 10, and no engine warning
+is emitted.** So:
+
+- The transform-copy design does what it claims, on the exact engine build the gate uses.
+- The docs' "not supported" is a maintenance/authoring recommendation, not a statement that the
+  transform is discarded. The tradeoff recorded in the table above stands as written — we are
+  relying on behaviour the docs discourage — but it is now *measured* behaviour rather than
+  assumed behaviour.
+- `test_project_load_integrity.gd`, which fails on any logged engine warning, is not at risk from
+  setting scale in code.
+
+The non-uniform-scale guard in the test plan remains warranted: this measurement covers the
+uniform case only, which is the only case any current scene uses.
+
+## Source verification note (added in review round 1)
+
+The reviewer independently re-fetched the Godot docs page and confirmed the quoted sentence is
+present **verbatim**. `shmup.fandom.com` returned HTTP 402 to the reviewer's fetcher, so the
+Shmup Wiki quote in row 2 could not be re-verified on that pass. It is not load-bearing on its
+own — the SLYNYRD row makes the same point about the player/enemy asymmetry, and the design
+decision rests on the codebase measurements rather than on either quote.
