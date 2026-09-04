@@ -65,7 +65,7 @@
           "id": "the-godot-mcp-updateprojectuids-tool-is-a-no-op-on-this-proj",
           "head": "The Godot MCP `update_project_uids` tool is a no-op on this project — do not rely on it.",
           "body": "It concatenates `\"res://\"` onto the absolute project path it is given, so it searches\n`res:///tmp/coldclone/` (or `res:///work/repo/`), reports *\"Found 0 scenes, Found 0\nscripts/shaders\"*, and exits claiming success. Verified by md5summing all 151 `.tscn`/`.tres`\nbefore and after a run on a scratch copy: **zero files changed.** The bug is in the MCP\nserver's own `godot_operations.gd`, not in this repo, so it cannot be fixed here. Use\n`tests/integration/test_resource_uid_integrity.gd` instead — it covers strictly more\n(`.tres` resources and `.gd.uid` sidecars as well as scenes).",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null
         },

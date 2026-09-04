@@ -25,10 +25,16 @@ extends GutTest
 
 const SKIPPED_DIRS: Array[String] = ["addons", ".godot", ".git", ".import"]
 
+## Floors for the two mass-strip canaries at the bottom of this file; see the comment there.
+const MIN_REFERENCES_WITH_A_UID := 250
+const MIN_FILES_DECLARING_A_UID := 75
+
 ## Every ext_resource reference found, as {file, line, path, ref_uid}.
 var _references: Array[Dictionary] = []
 ## Files actually scanned — guards against a silently empty walk making every test vacuous.
 var _scanned_files: int = 0
+## Of those, how many declare a `uid://…` of their own in their header line.
+var _files_declaring_a_uid: int = 0
 
 var _uid_re: RegEx
 var _path_re: RegEx
@@ -40,6 +46,8 @@ func before_all() -> void:
 
 	for file_path: String in _collect_resource_files("res://"):
 		_scanned_files += 1
+		if not _declared_uid_for(file_path).is_empty():
+			_files_declaring_a_uid += 1
 		var line_number := 0
 		for line: String in FileAccess.get_file_as_string(file_path).split("\n"):
 			line_number += 1
@@ -137,3 +145,40 @@ func test_every_ext_resource_uid_matches_the_uid_its_target_declares() -> void:
 	assert_eq(mismatched, [] as Array[String],
 		"ext_resource UIDs disagreeing with their target's declared UID:\n    "
 		+ "\n    ".join(mismatched))
+
+
+## A canary against a *mass strip* of UIDs, which none of the tests above can see.
+##
+## The two checks above are both pairwise, and both `continue` when a UID is absent: a reference
+## with no `uid=` falls through to its path, and a target that declares none has nothing to
+## disagree with. So a change that deletes every UID in the project passes them **perfectly**,
+## having destroyed the exact thing they exist to protect.
+##
+## That is not hypothetical. The Godot MCP `update_project_uids` tool resaves scenes through
+## `load()` + `ResourceSaver.save()`, and a scene resaved that way headlessly comes back with no
+## `uid=` on its header and none on any `[ext_resource]` line. Pointed at `res://` by hand on a
+## scratch clone it rewrote 111 of the 155 `.tscn`/`.tres` files in the tree that way (it also
+## deletes every comment in them). As the MCP actually calls it the tool is a harmless no-op —
+## see `tests/README.md` → *"Never run the Godot MCP `update_project_uids` tool"*.
+##
+## These floors are canaries, not budgets. They sit well under today's counts (332 of 485
+## references, 98 of 130 files, on 2026-09-04), so ordinary hand-authoring drift — this project has
+## plenty of legitimately UID-less references — never trips them, while a wholesale strip takes
+## both to zero. Raise them if they ever start to look tight; never lower one to make a red run
+## green.
+func test_the_project_has_not_had_its_reference_uids_stripped() -> void:
+	var with_uid := 0
+	for ref: Dictionary in _references:
+		if not (ref["ref_uid"] as String).is_empty():
+			with_uid += 1
+	assert_gte(with_uid, MIN_REFERENCES_WITH_A_UID,
+		("only %d of %d ext_resource references still carry a uid:// — a mass UID strip looks "
+		+ "exactly like this, and every other test in this file stays green through it. "
+		+ "See tests/README.md on update_project_uids.") % [with_uid, _references.size()])
+
+
+func test_the_project_has_not_had_its_declared_uids_stripped() -> void:
+	assert_gte(_files_declaring_a_uid, MIN_FILES_DECLARING_A_UID,
+		("only %d of %d .tscn/.tres files still declare a uid:// in their header — a mass UID "
+		+ "strip looks exactly like this. See tests/README.md on update_project_uids.")
+		% [_files_declaring_a_uid, _scanned_files])

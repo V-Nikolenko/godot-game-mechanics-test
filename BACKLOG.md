@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 26 open)
+## Code health backlog  (`code-health-backlog`, 25 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -127,7 +127,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-01 while fixing the stale `ext_resource` UIDs.
 
-- [ ] **The Godot MCP `update_project_uids` tool is a no-op on this project — do not rely on it.** _(todo)_
+- [x] **The Godot MCP `update_project_uids` tool is a no-op on this project — do not rely on it.** _(done)_
       It concatenates `"res://"` onto the absolute project path it is given, so it searches
       `res:///tmp/coldclone/` (or `res:///work/repo/`), reports *"Found 0 scenes, Found 0
       scripts/shaders"*, and exits claiming success. Verified by md5summing all 151 `.tscn`/`.tres`

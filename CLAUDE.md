@@ -59,6 +59,11 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   test** — it covers the `user://` save-file sandbox, the signal-arity trap, and the
   `LevelDirector` coroutine-leak trap, all of which cause failures (or silent leaks) unrelated to
   the code under test.
+- **Resource UIDs — never run the Godot MCP `update_project_uids` tool.** As the MCP calls it it
+  is a silent no-op (it searches `res:///work/repo/` and reports success); pointed at `res://` by
+  hand it resaves every scene and strips all UIDs and all comments. Use
+  `tests/integration/test_resource_uid_integrity.gd`, which reports instead of rewriting; the
+  reasoning is in [tests/README.md](tests/README.md).
 - **NEVER commit — the user handles all git.** Work directly on `main` unless asked
   otherwise; no worktrees/branches unless requested.
   - *Exception — autonomous NAS loop only* (`SRCW_AUTOMATION=1` in the environment): you are

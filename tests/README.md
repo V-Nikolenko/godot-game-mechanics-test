@@ -30,6 +30,57 @@ once a warm project has loaded them — so the engine will happily report a brok
 on your machine and break on a fresh clone. Five of the eight mismatches this test first caught
 behaved exactly that way. If you extend it, keep it reading files.
 
+Its last two tests are a different shape from the rest: **canaries against a mass strip**, not
+pairwise checks. Every other test in the file `continue`s past a missing UID — a reference without
+one falls back to its path, a target that declares none has nothing to disagree with — so deleting
+*every* UID in the project passes all of them while destroying exactly what they protect. The
+canaries assert that at least 250 of the 485 `[ext_resource]` references, and at least 75 of the
+130 `.tscn`/`.tres` files, still carry a `uid://`. Today's real numbers are 332 and 98; the floors
+are slack because plenty of hand-authored references legitimately have no UID. Raise them if they
+ever look tight, and never lower one to make a red run green.
+
+### Never run the Godot MCP `update_project_uids` tool
+
+It does not do what its name says, in either of its two failure modes.
+
+**As the MCP calls it, it is a silent no-op.** `handleUpdateProjectUids` passes the *absolute*
+project path, `executeOperation` snake-cases it to `project_path`, and `godot_operations.gd`'s
+`resave_resources` then does `project_path = "res://" + project_path` on anything not already
+starting with `res://`. So it searches `res:///work/repo/`, finds nothing, and reports success:
+
+```
+Using project path: res:///work/repo/
+Found 0 scenes
+Found 0 scripts/shaders
+Resave operation complete
+```
+
+Verified by md5summing every `.tscn`/`.tres` in a scratch clone before and after a run: **zero
+files changed.** The bug is in the MCP server's own `godot_operations.gd`, not in this repo, so it
+cannot be fixed here.
+
+**Invoked "correctly" — with `project_path` set to `res://` — it is actively destructive.** It
+resaves every scene through `load()` + `ResourceSaver.save()`, and a headless resave writes back a
+scene that has lost:
+
+- **every UID.** `[gd_scene load_steps=18 format=3 uid="uid://82pgd5bowmxe"]` comes back as
+  `[gd_scene format=3]`, and every `[ext_resource … uid="uid://…" path="res://…"]` loses its
+  `uid=`. A tool named *update project UIDs* deletes them.
+- **every comment.** The `.tscn` files in this project carry load-bearing prose — why `BulletPool`
+  must be a direct child of `SpaceStation`, why `node_paths=` is required — and a resave drops all
+  of it with no diff to review beforehand.
+
+On a scratch clone it rewrote 111 of 155 files that way, and it also could not compile scripts that
+reference autoloads (`--script` mode registers no autoloads), so some scenes were mangled and
+others skipped.
+
+**Use `test_resource_uid_integrity.gd` instead.** It covers strictly more than the tool ever
+claimed to — `.tres` resources and `.gd.uid` sidecars as well as scenes — it reports rather than
+rewrites, and since the mass-strip canaries above it now fails on precisely the damage the `res://`
+form would do. To *mint* a UID for a genuinely new file there is no headless shortcut: the editor
+is what mints them, so copy the pattern from a sibling file or leave the reference UID-less, which
+is legal and falls back to the path.
+
 `integration/test_suite_integrity.gd` is the other invariant test, and it polices this directory
 rather than the game. **GUT fails open on a test script it cannot use:** `test_collector.gd:131`
 drops it with nothing but a `[GUT WARNING]: Ignoring script … because it does not extend GutTest`
@@ -153,7 +204,8 @@ Autoloads: `MissionState`, `UpgradeState`, `ShipModuleState`, `ShipProgressionSt
 `SessionState`, `EventBus`, `DialogPlayer`, `CameraShake`.
 Components: `Health`, `HitBox`/`HurtBox`, `Shield`, `TempHealth`, `Overheat`, `DamageReaction`.
 Plus `global/statemachine/` and the `PlayerBase` damage chain.
-Project-wide: `[ext_resource]` UID integrity across every `.tscn`/`.tres`.
+Project-wide: `[ext_resource]` UID integrity across every `.tscn`/`.tres`, plus two canaries
+against a wholesale UID strip.
 Tooling: the two local patches the vendored GUT addon needs under Godot 4.6.3
 (`integration/test_gut_local_patches.gd`).
 Entities: the `space_station` mini-boss (`integration/test_space_station.gd`) — armour rule, turret

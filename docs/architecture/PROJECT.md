@@ -113,6 +113,14 @@ Detail and APIs: [global.md](modules/global.md).
   Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the
   save-file sandbox, and the signal-arity trap that will otherwise fail tests for reasons
   unrelated to the code under test.
+- **Resource UIDs:** a UID is minted by the editor and cannot be written by hand, so a reference
+  with no `uid=` is legal (Godot falls back to the `res://` path) but an *invented* one is a
+  dangling reference that still loads. `tests/integration/test_resource_uid_integrity.gd` is the
+  only tool for this: it reads UIDs from disk, checks every `[ext_resource]` pairing, and carries
+  two canaries against a mass strip. **Do not run the Godot MCP `update_project_uids` tool** — as
+  the MCP calls it it is a silent no-op (it searches `res:///work/repo/`), and pointed at `res://`
+  by hand it resaves every scene, deleting all UIDs and all comments. Written up in
+  [`tests/README.md`](../../tests/README.md).
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---
