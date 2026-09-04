@@ -20,7 +20,7 @@ project boot.
 ## The exceptions: the integrity tests, the space-station tests, and the module unlock gate
 
 `integration/test_resource_uid_integrity.gd` is **not** characterization. It asserts invariants
-that must hold, so a failure there is a regression to fix, not a quirk to document. It checks four:
+that must hold, so a failure there is a regression to fix, not a quirk to document. It checks six:
 
 | Check | What it catches |
 |---|---|
@@ -28,16 +28,23 @@ that must hold, so a failure there is a regression to fix, not a quirk to docume
 | a reference's UID is declared by **some** file in the tree | a wholly invented UID whose target declares none of its own, which the pairwise check above skips |
 | no two files declare the same UID | a `.tscn` or `.gd.uid` copied by hand; nothing on disk breaks the tie, so the reference loads whichever file was scanned last |
 | the UID-only references in `project.godot` / `export_presets.cfg` resolve | `run/main_scene="uid://…"` has **no** `res://` beside it to fall back to — stale, the game does not boot |
+| every UID we write is **canonical** — it survives `id_to_text(text_to_id(u))` | a hand-typed UID that is an *alias*: `uid://` is base-34 text for a 64-bit int, so `z`/`9` are outside the digit alphabet and text past ~13 chars wraps. `uid://braceasteroid01` really meant `uid://ctmejjlwnwajg` |
+| no two files **decode** to the same UID | the collision the row above it cannot see, because that one compares text and this one compares the integer the engine actually matches on |
+
+The last two exist because the first four all compare UID *strings*, and the string is not the
+UID — the 64-bit integer it decodes to is. Two different spellings can be one UID, at which point
+one resource loads in place of another and every text-level check stays green. `text_to_id()` and
+`id_to_text()` are pure encoding functions and touch no cache, so using them does not violate the
+read-from-disk rule below.
 
 It reads declared UIDs **from disk** (the `.tscn`/`.tres` header line, the sibling `.gd.uid`, the
 sibling `.import`) and never asks `ResourceUID` / `ResourceLoader`. Those consult
 `.godot/uid_cache.bin`, which is gitignored *and* keeps stale UIDs registered as working aliases
 once a warm project has loaded them — so the engine will happily report a broken reference as fine
 on your machine and break on a fresh clone. Five of the eight mismatches this test first caught
-behaved exactly that way: `ResourceLoader.get_resource_uid()` and `ResourceUID.has_id()` both
-called the dead `uid://bi366j2tsyby` valid, `--import` warned about nothing, and deleting
-`.godot/` produced `ext_resource, invalid UID` immediately. If you extend it, keep it reading
-files.
+behaved exactly that way: `ResourceLoader.get_resource_uid()` and `ResourceUID.has_id()` called
+them valid, `--import` warned about nothing, and deleting `.godot/` produced
+`ext_resource, invalid UID` immediately. If you extend it, keep it reading files.
 
 **`bash /agent/verify.sh` always runs against a warm `.godot/`**, so its import and boot steps
 cannot be trusted to surface any of this on their own — that is what these disk-only checks are
@@ -92,9 +99,23 @@ others skipped.
 **Use `test_resource_uid_integrity.gd` instead.** It covers strictly more than the tool ever
 claimed to — `.tres` resources and `.gd.uid` sidecars as well as scenes — it reports rather than
 rewrites, and since the mass-strip canaries above it now fails on precisely the damage the `res://`
-form would do. To *mint* a UID for a genuinely new file there is no headless shortcut: the editor
-is what mints them, so copy the pattern from a sibling file or leave the reference UID-less, which
-is legal and falls back to the path.
+form would do.
+
+**To mint a UID for a genuinely new file, never hand-type one and never copy a sibling's.** A
+copied UID is a duplicate declaration, and a typed one is usually an alias for a UID some other
+resource owns — both are silent, and both are why the last two checks in the table exist. Either
+leave the reference UID-less (legal; Godot falls back to the path), or mint a real one headlessly:
+
+```bash
+cat > /tmp/mint_uid.gd <<'EOF'
+extends SceneTree
+func _init(): print(ResourceUID.id_to_text(ResourceUID.create_id())); quit()
+EOF
+godot --headless --path . -s /tmp/mint_uid.gd    # -> uid://bpc4ejmad3jcs
+```
+
+`-s` needs a real file — `/dev/stdin` fails with `Resource file not found`. `create_id()` is the
+same call the editor makes, so the result is canonical and unique by construction.
 
 `integration/test_suite_integrity.gd` is the other invariant test, and it polices this directory
 rather than the game. **GUT fails open on a test script it cannot use:** `test_collector.gd:131`
@@ -264,7 +285,8 @@ Autoloads: `MissionState`, `UpgradeState`, `ShipModuleState`, `ShipProgressionSt
 Components: `Health`, `HitBox`/`HurtBox`, `Shield`, `TempHealth`, `Overheat`, `DamageReaction`.
 Plus `global/statemachine/` and the `PlayerBase` damage chain.
 Project-wide: `[ext_resource]` UID integrity across every `.tscn`/`.tres` — pairwise agreement,
-dangling UIDs, duplicate declarations, and the UID-only references in `project.godot` /
+dangling UIDs, duplicate declarations, non-canonical (aliasing) UID text, collisions found by
+decoding rather than by string match, and the UID-only references in `project.godot` /
 `export_presets.cfg` — plus two canaries against a wholesale UID strip; and
 (`integration/test_project_load_integrity.gd`) an engine-side load of every `.tscn`/`.tres`/`.gd`
 outside `addons/`, asserting nothing loads to `null`, every scene instantiates, every script

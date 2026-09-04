@@ -89,7 +89,7 @@
           "id": "several-resources-declare-hand-written-uids-in-their-own-hea",
           "head": "Several resources declare hand-written UIDs in their own headers",
           "body": "— `uid://hudscore001`\n(`assault/scenes/gui/hud_score_widget.tscn`), `uid://braceasteroid01`, `uid://00246ccaem53`,\n`uid://0024uci15m53`, `uid://00243s3wxf53` (the `assault/scenes/race/` scenes). Godot 4.6.3\nparses and registers all of them, and every reference to them resolves, so **nothing is\nbroken and they were deliberately left alone.** Flagging them only because they are the same\nfingerprint as the eight references that *were* broken: a UID typed by a human or an agent\nrather than minted by the editor. If one is ever duplicated onto a second resource the\ncollision will be silent.\n\nFound on 2026-09-01 while building the space-station mini-boss entity (EPIC sub-item 1).",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null
         },

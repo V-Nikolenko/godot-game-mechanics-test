@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 23 open)
+## Code health backlog  (`code-health-backlog`, 22 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -153,7 +153,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       load returns null" smoke test would close the gap — worth considering as step 4 of
       `/agent/verify.sh`. All 126 do currently load clean, so it would start green.
 
-- [ ] **Several resources declare hand-written UIDs in their own headers** _(todo)_
+- [x] **Several resources declare hand-written UIDs in their own headers** _(done)_
       — `uid://hudscore001`
       (`assault/scenes/gui/hud_score_widget.tscn`), `uid://braceasteroid01`, `uid://00246ccaem53`,
       `uid://0024uci15m53`, `uid://00243s3wxf53` (the `assault/scenes/race/` scenes). Godot 4.6.3

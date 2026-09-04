@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3 uid="uid://bomb001assault"]
+[gd_scene load_steps=5 format=3 uid="uid://b8fkxc8r0udin"]
 
 [ext_resource type="Script" path="res://assault/scenes/enemies/bomber/bomb.gd" id="1_bomb"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="2_bomb"]

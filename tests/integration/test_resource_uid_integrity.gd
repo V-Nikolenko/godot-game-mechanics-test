@@ -228,11 +228,17 @@ func test_the_declaration_index_actually_found_the_projects_uids() -> void:
 ## `ext_resource, invalid UID` and falls back to the path.
 ##
 ## A warm `.godot/uid_cache.bin` hides that, which is the whole reason this check reads the tree
-## instead of asking `ResourceUID.has_id()`. Five `.tres` files once carried the dead
-## `uid://bi366j2tsyby`; `ResourceLoader.get_resource_uid()` and `ResourceUID.has_id()` both
-## called it valid, `--import` warned about nothing, and deleting `.godot/` made it fail
-## instantly. `.godot/` is gitignored, so CI and fresh clones saw a breakage the developer's
-## machine did not.
+## instead of asking `ResourceUID.has_id()`: the cache keeps a UID resolving long after the file
+## that justified it stopped saying so, `--import` warns about nothing, and `.godot/` is gitignored
+## — so CI and fresh clones see a breakage the developer's machine does not.
+##
+## Note the limit of *this* check, which the two tests at the bottom of the file exist to cover:
+## "declared by no file" is decided on UID **text**. A reference can spell a UID differently from
+## the file declaring it and still mean the identical 64-bit id, and this test calls that dangling
+## when it is not. Five `.tres` files under `open_space/scenes/mission_data/planets/` were exactly
+## that case — they referenced `uid://bi366j2tsyby` while the sidecar declared
+## `uid://d5wyr8hce0t2q`, two spellings of id 88460944458999674 — and the two were reconciled by
+## canonicalising both to `uid://bi366j2tsyby`, not by treating either as dead.
 func test_every_ext_resource_uid_resolves_to_a_resource_on_disk() -> void:
 	var dangling: Array[String] = []
 	for ref: Dictionary in _references:
@@ -332,3 +338,110 @@ func test_the_project_has_not_had_its_declared_uids_stripped() -> void:
 		("only %d of %d .tscn/.tres files still declare a uid:// in their header — a mass UID "
 		+ "strip looks exactly like this. See tests/README.md on update_project_uids.")
 		% [_files_declaring_a_uid, _scanned_files])
+
+
+## Every UID we write must be one the editor could have *minted*.
+##
+## `uid://…` is not an opaque label — it is base-34 text for a 64-bit integer, and the integer is
+## the only thing Godot stores or matches on. `ResourceUID.text_to_id()` decodes it with a digit
+## alphabet of `a`–`y` then `0`–`8`, which is 25 + 9 = 34 symbols. Two consequences follow, and
+## both are invisible to every text-comparing check above:
+##
+##   * **`z` and `9` are not in the alphabet.** `z` decodes to the same digit as `0` and `9` to the
+##     same digit as `8` *with a carry*, so `uid://az` and `uid://a0` are the same UID spelled two
+##     ways. `cutscenes/base/dialog_presenter.tscn` carried `uid://b8h6n2q5m4y9j`, which is really
+##     `uid://b8h6n2q5m40aj`.
+##   * **Long text silently wraps.** Anything past ~13 characters overflows 64 bits and is masked,
+##     so `uid://braceasteroid01` is really `uid://ctmejjlwnwajg`. `uid://a1b2c3d4e5f6g` loses its
+##     leading `a` (digit zero) and is really `uid://1b2c3d4e5f6g`.
+##
+## So a hand-typed UID can be an *alias* for a UID some other resource legitimately owns, and
+## nothing on disk shows it: the two strings differ, `test_no_two_resources_declare_the_same_uid`
+## compares strings, and the collision only appears once the engine has decoded both to the same
+## integer — at which point one of the two resources loads in place of the other. Round-tripping
+## the text through the integer is the only way to see it coming.
+##
+## `text_to_id()` / `id_to_text()` are pure encoding functions — unlike `ResourceUID.has_id()` and
+## `ResourceLoader.get_resource_uid()` they never consult `.godot/uid_cache.bin`, so using them
+## here does not break this file's read-from-disk rule.
+##
+## Malformed text falls out of the same check for free: `text_to_id()` returns `-1` for a
+## character outside the alphabet, and `id_to_text(-1)` is `uid://<invalid>`.
+func test_every_uid_the_project_writes_is_canonical() -> void:
+	var aliases: Array[String] = []
+	for uid: String in _uids_we_author():
+		var canonical := ResourceUID.id_to_text(ResourceUID.text_to_id(uid))
+		if canonical == uid:
+			continue
+		aliases.append("%s\n      really  = %s\n      written in %s" % [
+			uid, canonical, ", ".join(_uids_we_author()[uid]),
+		])
+	assert_eq(aliases, [] as Array[String],
+		("uid:// text the editor would never mint — each is an alias that decodes to a different "
+		+ "UID than it spells:\n    ") + "\n    ".join(aliases))
+
+
+## The collision check `test_no_two_resources_declare_the_same_uid` cannot make.
+##
+## That test compares UID *text*. This one decodes first, so two resources spelling the same
+## 64-bit id differently — the exact wreckage the canonicality test above is designed to prevent
+## reaching this point — still shows up as what it is: two files claiming one UID, with load order
+## deciding which one a reference actually gets.
+##
+## Kept separate from the canonicality test on purpose. A non-canonical UID that collides with
+## nothing is untidy; one that collides silently swaps a resource at load time. They are different
+## severities and deserve different failure messages.
+func test_no_two_resources_decode_to_the_same_uid() -> void:
+	var owners_by_id: Dictionary = {}
+	for uid: String in _declared_by_uid:
+		var id := ResourceUID.text_to_id(uid)
+		if not owners_by_id.has(id):
+			owners_by_id[id] = {} as Dictionary
+		for owner: String in _declared_by_uid[uid] as Array[String]:
+			(owners_by_id[id] as Dictionary)[owner] = uid
+
+	var collisions: Array[String] = []
+	for id: int in owners_by_id:
+		var owners: Dictionary = owners_by_id[id]
+		if owners.size() < 2:
+			continue
+		if owners.keys().all(func(p: String) -> bool: return p.begins_with("res://addons/")):
+			continue  # Vendored code is not ours to police; see this file's header.
+		var lines: Array[String] = []
+		for owner: String in owners:
+			lines.append("%s (as %s)" % [owner, owners[owner]])
+		collisions.append("%s decoded from %d spellings by:\n      %s" % [
+			ResourceUID.id_to_text(id), owners.size(), "\n      ".join(lines),
+		])
+	assert_eq(collisions, [] as Array[String],
+		("UIDs that decode to one id despite being written differently — whichever file the engine "
+		+ "scans last wins:\n    ") + "\n    ".join(collisions))
+
+
+## Every `uid://` string this project authors, mapped to where it is written.
+##
+## Declarations *and* references, because the two drift independently: a reference can carry an
+## alias while its target's header is canonical, and `test_every_ext_resource_uid_matches_the_uid_
+## its_target_declares` compares them as text and sees nothing wrong.
+##
+## `addons/` declarations are excluded — vendored code is not ours to fix — but our references
+## *into* `addons/` are included, because we are the ones who wrote them.
+func _uids_we_author() -> Dictionary:
+	var written_in: Dictionary = {}
+	for uid: String in _declared_by_uid:
+		for owner: String in _declared_by_uid[uid] as Array[String]:
+			if owner.begins_with("res://addons/"):
+				continue
+			if not written_in.has(uid):
+				written_in[uid] = [] as Array[String]
+			(written_in[uid] as Array[String]).append(owner)
+	for ref: Dictionary in _references:
+		var ref_uid: String = ref["ref_uid"]
+		if ref_uid.is_empty():
+			continue
+		if not written_in.has(ref_uid):
+			written_in[ref_uid] = [] as Array[String]
+		var origin := "%s:%d" % [ref["file"], ref["line"]]
+		if not (written_in[ref_uid] as Array[String]).has(origin):
+			(written_in[ref_uid] as Array[String]).append(origin)
+	return written_in

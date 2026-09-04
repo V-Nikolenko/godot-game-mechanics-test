@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://b8h6n2q5m4y9j"]
+[gd_scene load_steps=2 format=3 uid="uid://b8h6n2q5m40aj"]
 
 [ext_resource type="Script" path="res://cutscenes/base/dialog_presenter.gd" id="1_dialog"]
 

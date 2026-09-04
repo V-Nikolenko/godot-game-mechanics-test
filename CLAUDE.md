@@ -39,7 +39,10 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   pins today's behaviour, bugs included. The exceptions are
   `tests/integration/test_resource_uid_integrity.gd`, an invariant check over `[ext_resource]`
   UIDs and the UID-only references in `project.godot` / `export_presets.cfg` (read from disk, so
-  it is immune to the stale aliases a warm `.godot/uid_cache.bin` keeps alive),
+  it is immune to the stale aliases a warm `.godot/uid_cache.bin` keeps alive) that also asserts
+  every UID we write is one the editor could have minted and detects collisions by decoding
+  rather than by string match — `uid://` is base-34 text for a 64-bit int, so a hand-typed UID is
+  usually an alias for one owned elsewhere, which no text comparison can see,
   `tests/integration/test_suite_integrity.gd`, which asserts every `tests/**/test_*.gd`
   compiles and extends `GutTest` (GUT otherwise drops an unloadable test script with only a
   warning and still exits 0, so the gate stays green while a test file silently vanishes),
@@ -70,6 +73,10 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   hand it resaves every scene and strips all UIDs and all comments. Use
   `tests/integration/test_resource_uid_integrity.gd`, which reports instead of rewriting; the
   reasoning is in [tests/README.md](tests/README.md).
+- **Never hand-type a `uid://` and never copy one from a sibling file.** A copy is a duplicate
+  declaration; a typed one is usually an *alias* decoding to a UID another resource owns, and both
+  fail silently. Leave the reference UID-less (legal — Godot falls back to the path) or mint one
+  with the headless `ResourceUID.create_id()` snippet in [tests/README.md](tests/README.md).
 - **NEVER commit — the user handles all git.** Work directly on `main` unless asked
   otherwise; no worktrees/branches unless requested.
   - *Exception — autonomous NAS loop only* (`SRCW_AUTOMATION=1` in the environment): you are
