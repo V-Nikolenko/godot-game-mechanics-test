@@ -57,7 +57,7 @@
           "id": "gut-9-7-1-needs-two-local-patches-to-load-under-godot-4-6-3",
           "head": "GUT 9.7.1 needs two local patches to load under Godot 4.6.3",
           "body": ", documented in\n`addons/gut/LOCAL_PATCHES.md`. `AccessibilityServer` does not exist in this Godot build, and\na property getter in `stub_params.gd` fails type inference. Re-apply both on any GUT upgrade\n— without them the whole addon fails to parse and the doubler is unusable.\n\nFound on 2026-09-01 while fixing the stale `ext_resource` UIDs.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null
         },

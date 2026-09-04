@@ -64,6 +64,24 @@ otherwise only `push_warning` at collect time. The hub is instantiated but never
 tree — `_ready()` is what spawns drones and builds the HUD, and walking the node list needs none
 of it.
 
+`integration/test_gut_local_patches.gd` is the fourth invariant test, and it polices the test
+runner itself. GUT 9.7.1 does not load under Godot 4.6.3 without two hand-applied changes —
+`godot_singletons.gd` drops the `AccessibilityServer` entry (the class does not exist in this
+build, so the identifier fails to resolve) and `stub_params.gd` types `return_val` as an explicit
+`Variant` (otherwise Godot infers `StringName` from `GutConstants.NOT_SET` and the getter's
+`return null` branch will not parse). Both are written up in `addons/gut/LOCAL_PATCHES.md`, and
+**re-vendoring GUT deletes them along with the doc.**
+
+That failure is silent in exactly the way `test_suite_integrity.gd` describes: the parse errors go
+to stderr, `gut_cmdln.gd` still runs the suite and exits 0, and the doubler is simply gone until
+some later test reaches for it and fails for a reason that looks unrelated. So the test asserts
+both patched files still parse — `can_instantiate()`, since a parse error still `load()`s to a
+non-null `GDScript` — *and* that each patched path still behaves: `GutUtils.GodotSingletons.names`
+is populated (proving `_static_init()` resolved every `class_ref` entry), an unset
+`StubParams.return_val` reads back as `null` rather than leaking the `NOT_SET` sentinel, and a
+stubbed one reads back unchanged. Every failure message names `LOCAL_PATCHES.md`, because the fix
+is to re-apply the patches, not to relax the test. It also asserts the doc itself still exists.
+
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
 `test_station_gunnery.gd`, `test_station_reinforcements.gd`, `test_station_death_sequence.gd`,
@@ -136,6 +154,8 @@ Autoloads: `MissionState`, `UpgradeState`, `ShipModuleState`, `ShipProgressionSt
 Components: `Health`, `HitBox`/`HurtBox`, `Shield`, `TempHealth`, `Overheat`, `DamageReaction`.
 Plus `global/statemachine/` and the `PlayerBase` damage chain.
 Project-wide: `[ext_resource]` UID integrity across every `.tscn`/`.tres`.
+Tooling: the two local patches the vendored GUT addon needs under Godot 4.6.3
+(`integration/test_gut_local_patches.gd`).
 Entities: the `space_station` mini-boss (`integration/test_space_station.gd`) — armour rule, turret
 lifecycle, and the config-driven stats.
 Levels: the `station_assault` section (`integration/test_station_assault_section.gd`) — the

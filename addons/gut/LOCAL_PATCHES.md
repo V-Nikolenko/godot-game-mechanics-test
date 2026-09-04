@@ -10,3 +10,10 @@ Two files needed a change to load under **Godot 4.6.3**. Re-apply both if GUT is
 
 Both were parse errors printed on every `gut_cmdln.gd` run before the patch. Neither changes GUT
 behaviour on the paths this project uses.
+
+`tests/integration/test_gut_local_patches.gd` guards both patches. It asserts each file still
+parses (`can_instantiate()`, since a parse error still `load()`s to a non-null `GDScript`) and that
+each patched code path still behaves — `GodotSingletons.names` is populated, and an unset
+`StubParams.return_val` reads back as `null` instead of leaking the `NOT_SET` sentinel. Without it
+a re-vendor fails *quietly*: the parse errors go to stderr, the suite still exits 0, and the
+doubler is simply gone.

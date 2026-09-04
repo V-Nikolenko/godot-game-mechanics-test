@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 27 open)
+## Code health backlog  (`code-health-backlog`, 26 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -119,7 +119,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       0-star completion into 1 star. Intentional? Pinned by
       `tests/unit/test_mission_state.gd::test_stars_are_clamped_into_one_to_three`.
 
-- [ ] **GUT 9.7.1 needs two local patches to load under Godot 4.6.3** _(todo)_
+- [x] **GUT 9.7.1 needs two local patches to load under Godot 4.6.3** _(done)_
       , documented in
       `addons/gut/LOCAL_PATCHES.md`. `AccessibilityServer` does not exist in this Godot build, and
       a property getter in `stub_params.gd` fails type inference. Re-apply both on any GUT upgrade

@@ -100,12 +100,14 @@ Detail and APIs: [global.md](modules/global.md).
   `[editor_plugins]` section of `project.godot`. Tests live in `tests/` and run headless:
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`.
   The suite is almost entirely **characterization**: it pins behaviour as it is today, bugs
-  included, so any behaviour change shows up as a failing test rather than as silence. The one
-  exceptions are the two integrity tests — `tests/integration/test_resource_uid_integrity.gd`
-  (every `[ext_resource]` UID matches the UID its target declares) and
+  included, so any behaviour change shows up as a failing test rather than as silence. The
+  exceptions are the integrity tests — `tests/integration/test_resource_uid_integrity.gd`
+  (every `[ext_resource]` UID matches the UID its target declares),
   `tests/integration/test_suite_integrity.gd` (every `tests/**/test_*.gd` compiles and extends
   `GutTest`, because GUT otherwise drops an unloadable test script with only a warning and still
-  exits 0) — plus the space-station family.
+  exits 0) and `tests/integration/test_gut_local_patches.gd` (the two local patches
+  `addons/gut/LOCAL_PATCHES.md` documents are still applied, since re-vendoring GUT drops them
+  and the resulting breakage is silent) — plus the space-station family.
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).
   Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the
@@ -170,7 +172,8 @@ For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-ro
 - [`docs/BULLET_POOL.md`](../BULLET_POOL.md) — bullet pooling
 - [`tests/README.md`](../../tests/README.md) — how to run and write tests
 - [`addons/gut/LOCAL_PATCHES.md`](../../addons/gut/LOCAL_PATCHES.md) — the two changes GUT
-  needs to load under Godot 4.6.3; re-apply on any GUT upgrade
+  needs to load under Godot 4.6.3; re-apply on any GUT upgrade, and
+  `tests/integration/test_gut_local_patches.gd` fails if you forget
 - [`docs/plans/`](../plans/) — one directory per feature: context, research, plan, the
   independent review verdict, and the implementation log. The audit trail for unattended work
 - [`docs/epics-done/`](../epics-done/) — one dossier per finished epic (`PRD.md` / `SOURCES.md` /
