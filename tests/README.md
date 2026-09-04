@@ -19,16 +19,31 @@ project boot.
 
 ## The exceptions: the integrity tests, the space-station tests, and the module unlock gate
 
-`integration/test_resource_uid_integrity.gd` is **not** characterization. It asserts an invariant
-that must hold — every `[ext_resource]` UID in a `.tscn`/`.tres` matches the UID its target
-declares — so a failure there is a regression to fix, not a quirk to document.
+`integration/test_resource_uid_integrity.gd` is **not** characterization. It asserts invariants
+that must hold, so a failure there is a regression to fix, not a quirk to document. It checks four:
+
+| Check | What it catches |
+|---|---|
+| a reference's UID equals the UID its target declares | a UID left behind after its target was reassigned one |
+| a reference's UID is declared by **some** file in the tree | a wholly invented UID whose target declares none of its own, which the pairwise check above skips |
+| no two files declare the same UID | a `.tscn` or `.gd.uid` copied by hand; nothing on disk breaks the tie, so the reference loads whichever file was scanned last |
+| the UID-only references in `project.godot` / `export_presets.cfg` resolve | `run/main_scene="uid://…"` has **no** `res://` beside it to fall back to — stale, the game does not boot |
 
 It reads declared UIDs **from disk** (the `.tscn`/`.tres` header line, the sibling `.gd.uid`, the
 sibling `.import`) and never asks `ResourceUID` / `ResourceLoader`. Those consult
 `.godot/uid_cache.bin`, which is gitignored *and* keeps stale UIDs registered as working aliases
 once a warm project has loaded them — so the engine will happily report a broken reference as fine
 on your machine and break on a fresh clone. Five of the eight mismatches this test first caught
-behaved exactly that way. If you extend it, keep it reading files.
+behaved exactly that way: `ResourceLoader.get_resource_uid()` and `ResourceUID.has_id()` both
+called the dead `uid://bi366j2tsyby` valid, `--import` warned about nothing, and deleting
+`.godot/` produced `ext_resource, invalid UID` immediately. If you extend it, keep it reading
+files.
+
+**`bash /agent/verify.sh` always runs against a warm `.godot/`**, so its import and boot steps
+cannot be trusted to surface any of this on their own — that is what these disk-only checks are
+for. The declaration index they are built on walks the whole tree, `addons/` included, because our
+scenes legitimately reference vendored resources by UID; only *reference scanning* skips
+`addons/`.
 
 Its last two tests are a different shape from the rest: **canaries against a mass strip**, not
 pairwise checks. Every other test in the file `continue`s past a missing UID — a reference without
@@ -204,8 +219,9 @@ Autoloads: `MissionState`, `UpgradeState`, `ShipModuleState`, `ShipProgressionSt
 `SessionState`, `EventBus`, `DialogPlayer`, `CameraShake`.
 Components: `Health`, `HitBox`/`HurtBox`, `Shield`, `TempHealth`, `Overheat`, `DamageReaction`.
 Plus `global/statemachine/` and the `PlayerBase` damage chain.
-Project-wide: `[ext_resource]` UID integrity across every `.tscn`/`.tres`, plus two canaries
-against a wholesale UID strip.
+Project-wide: `[ext_resource]` UID integrity across every `.tscn`/`.tres` — pairwise agreement,
+dangling UIDs, duplicate declarations, and the UID-only references in `project.godot` /
+`export_presets.cfg` — plus two canaries against a wholesale UID strip.
 Tooling: the two local patches the vendored GUT addon needs under Godot 4.6.3
 (`integration/test_gut_local_patches.gd`).
 Entities: the `space_station` mini-boss (`integration/test_space_station.gd`) — armour rule, turret

@@ -102,7 +102,9 @@ Detail and APIs: [global.md](modules/global.md).
   The suite is almost entirely **characterization**: it pins behaviour as it is today, bugs
   included, so any behaviour change shows up as a failing test rather than as silence. The
   exceptions are the integrity tests — `tests/integration/test_resource_uid_integrity.gd`
-  (every `[ext_resource]` UID matches the UID its target declares),
+  (every `[ext_resource]` UID matches the UID its target declares, resolves to a file that
+  actually declares it, is not claimed by two files at once, and the same for the UID-only
+  references in `project.godot` / `export_presets.cfg`),
   `tests/integration/test_suite_integrity.gd` (every `tests/**/test_*.gd` compiles and extends
   `GutTest`, because GUT otherwise drops an unloadable test script with only a warning and still
   exits 0) and `tests/integration/test_gut_local_patches.gd` (the two local patches
@@ -116,8 +118,11 @@ Detail and APIs: [global.md](modules/global.md).
 - **Resource UIDs:** a UID is minted by the editor and cannot be written by hand, so a reference
   with no `uid=` is legal (Godot falls back to the `res://` path) but an *invented* one is a
   dangling reference that still loads. `tests/integration/test_resource_uid_integrity.gd` is the
-  only tool for this: it reads UIDs from disk, checks every `[ext_resource]` pairing, and carries
-  two canaries against a mass strip. **Do not run the Godot MCP `update_project_uids` tool** — as
+  only tool for this: it reads UIDs from disk — never `ResourceUID`, whose answers depend on how
+  warm the gitignored `.godot/uid_cache.bin` is, and which keeps dead UIDs alive as aliases —
+  checks every `[ext_resource]` pairing, catches dangling and duplicated UIDs plus the UID-only
+  references in `project.godot` / `export_presets.cfg`, and carries two canaries against a mass
+  strip. **Do not run the Godot MCP `update_project_uids` tool** — as
   the MCP calls it it is a silent no-op (it searches `res:///work/repo/`), and pointed at `res://`
   by hand it resaves every scene, deleting all UIDs and all comments. Written up in
   [`tests/README.md`](../../tests/README.md).

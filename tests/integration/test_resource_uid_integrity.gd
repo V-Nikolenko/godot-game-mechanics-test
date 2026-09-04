@@ -13,21 +13,38 @@
 ## Unlike the rest of `tests/`, this is NOT a characterization test. It asserts a property that
 ## must hold, so a new mismatch is a regression rather than a documented quirk.
 ##
+## Four properties are checked, all from files alone: a reference's UID agrees with its target's,
+## a reference's UID exists *somewhere* in the tree, no two files claim the same UID, and the
+## UID-only references in `project.godot` / `export_presets.cfg` — which have no path to fall back
+## to — resolve.
+##
 ## **Declared UIDs are read from disk, never from `ResourceUID` / `ResourceLoader`.** Those consult
 ## `.godot/uid_cache.bin`, which is gitignored and which also keeps *stale* UIDs registered as
 ## working aliases once a warm project has loaded them. Asking the engine therefore gives an
 ## answer that depends on cache warmth: five of the mismatches below report as perfectly fine on a
 ## warm cache and fail on a fresh clone. The files on disk are the only source of truth that
-## travels with the repository.
+## travels with the repository — and note that `/agent/verify.sh` itself always runs warm, so its
+## import and boot steps cannot be relied on to surface any of this.
 ##
-## `addons/` is excluded deliberately: vendored third-party code is not ours to police.
+## `addons/` is excluded deliberately when *scanning references*: vendored third-party code is not
+## ours to police. It is still indexed for *declarations*, because our scenes legitimately point at
+## resources vendored under `addons/` and a UID there is a perfectly valid target.
 extends GutTest
 
 const SKIPPED_DIRS: Array[String] = ["addons", ".godot", ".git", ".import"]
+## The declaration index walks everything our own scenes may point at, `addons/` included.
+const SKIPPED_DIRS_FOR_DECLARATIONS: Array[String] = [".godot", ".git", ".import"]
+
+## Config files that name a resource by UID **and nothing else** — there is no `res://` fallback
+## line beside them, so a stale UID here is not a degraded reference, it is a hard failure on a
+## cold cache. `run/main_scene` is the one that stops the game booting at all.
+const UID_ONLY_CONFIG_FILES: Array[String] = ["res://project.godot", "res://export_presets.cfg"]
 
 ## Floors for the two mass-strip canaries at the bottom of this file; see the comment there.
 const MIN_REFERENCES_WITH_A_UID := 250
 const MIN_FILES_DECLARING_A_UID := 75
+## Vacuity floor for the declaration index; the whole tree declares ~750 UIDs today.
+const MIN_UIDS_IN_DECLARATION_INDEX := 300
 
 ## Every ext_resource reference found, as {file, line, path, ref_uid}.
 var _references: Array[Dictionary] = []
@@ -35,14 +52,23 @@ var _references: Array[Dictionary] = []
 var _scanned_files: int = 0
 ## Of those, how many declare a `uid://…` of their own in their header line.
 var _files_declaring_a_uid: int = 0
+## `uid://…` → every file on disk declaring it. Built over the whole tree, `addons/` included.
+## More than one owner for a UID is a collision, and which one wins depends on scan order.
+var _declared_by_uid: Dictionary = {}
 
 var _uid_re: RegEx
 var _path_re: RegEx
+## A bare quoted UID, with no `uid=` key in front of it — how `project.godot` and
+## `export_presets.cfg` write theirs (`run/main_scene="uid://bj5rbqgudkfsg"`).
+var _quoted_uid_re: RegEx
 
 
 func before_all() -> void:
 	_uid_re = RegEx.create_from_string('uid="(uid://[^"]+)"')
 	_path_re = RegEx.create_from_string('path="(res://[^"]+)"')
+	_quoted_uid_re = RegEx.create_from_string('"(uid://[^"]+)"')
+
+	_build_declaration_index()
 
 	for file_path: String in _collect_resource_files("res://"):
 		_scanned_files += 1
@@ -64,6 +90,45 @@ func before_all() -> void:
 				# A reference may legitimately carry no UID at all; only the pairing is checked.
 				"ref_uid": "" if uid_match == null else uid_match.get_string(1),
 			})
+
+
+## Index every UID the tree declares, mapped back to the file(s) declaring it.
+##
+## This is the piece that lets a UID be checked for existing *at all*, rather than only against
+## the one file a reference happens to name. `.godot/uid_cache.bin` answers that question too —
+## and answers it wrongly, keeping a dead UID alive as an alias for as long as the cache stays
+## warm — so the index is built from files, exactly like everything else in here.
+func _build_declaration_index() -> void:
+	for asset_path: String in _collect_all_files("res://", SKIPPED_DIRS_FOR_DECLARATIONS):
+		# Sidecars declare on behalf of the asset beside them, and that asset is visited too.
+		if asset_path.ends_with(".uid") or asset_path.ends_with(".import"):
+			continue
+		var uid := _declared_uid_for(asset_path)
+		if uid.is_empty():
+			continue
+		if not _declared_by_uid.has(uid):
+			_declared_by_uid[uid] = [] as Array[String]
+		(_declared_by_uid[uid] as Array[String]).append(asset_path)
+
+
+## Recursive walk returning every file under `dir_path`, whatever its extension.
+func _collect_all_files(dir_path: String, skipped_dirs: Array[String]) -> Array[String]:
+	var found: Array[String] = []
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return found
+	dir.list_dir_begin()
+	var entry := dir.get_next()
+	while entry != "":
+		var full := dir_path.path_join(entry)
+		if dir.current_is_dir():
+			if not (entry.begins_with(".") or skipped_dirs.has(entry)):
+				found.append_array(_collect_all_files(full, skipped_dirs))
+		else:
+			found.append(full)
+		entry = dir.get_next()
+	dir.list_dir_end()
+	return found
 
 
 ## Recursive walk of the project tree returning every `.tscn` / `.tres`.
@@ -145,6 +210,91 @@ func test_every_ext_resource_uid_matches_the_uid_its_target_declares() -> void:
 	assert_eq(mismatched, [] as Array[String],
 		"ext_resource UIDs disagreeing with their target's declared UID:\n    "
 		+ "\n    ".join(mismatched))
+
+
+func test_the_declaration_index_actually_found_the_projects_uids() -> void:
+	# Without this the three tests below pass trivially if the whole-tree walk ever breaks.
+	assert_gte(_declared_by_uid.size(), MIN_UIDS_IN_DECLARATION_INDEX,
+		("the UID declaration index holds only %d entries — the whole-tree walk has broken, and "
+		+ "every check built on it is now vacuous") % _declared_by_uid.size())
+
+
+## The dangling-UID check the pairwise test above cannot make.
+##
+## `test_every_ext_resource_uid_matches_the_uid_its_target_declares` compares a reference against
+## *one* file: the one its `path=` names. When that file declares no UID of its own it `continue`s,
+## because there is nothing to disagree with — so a reference carrying a UID that exists nowhere in
+## the project slips through it untouched. Godot on a cold cache does not slip: it prints
+## `ext_resource, invalid UID` and falls back to the path.
+##
+## A warm `.godot/uid_cache.bin` hides that, which is the whole reason this check reads the tree
+## instead of asking `ResourceUID.has_id()`. Five `.tres` files once carried the dead
+## `uid://bi366j2tsyby`; `ResourceLoader.get_resource_uid()` and `ResourceUID.has_id()` both
+## called it valid, `--import` warned about nothing, and deleting `.godot/` made it fail
+## instantly. `.godot/` is gitignored, so CI and fresh clones saw a breakage the developer's
+## machine did not.
+func test_every_ext_resource_uid_resolves_to_a_resource_on_disk() -> void:
+	var dangling: Array[String] = []
+	for ref: Dictionary in _references:
+		var ref_uid: String = ref["ref_uid"]
+		if ref_uid.is_empty():
+			continue  # No UID written; Godot falls back to the path, which is checked above.
+		if not _declared_by_uid.has(ref_uid):
+			dangling.append("%s:%d\n      path = %s\n      ref  = %s (declared by no file)" % [
+				ref["file"], ref["line"], ref["path"], ref_uid,
+			])
+	assert_eq(dangling, [] as Array[String],
+		("ext_resource UIDs that no file in the project declares — these load only while a warm "
+		+ ".godot/uid_cache.bin keeps them aliased:\n    ") + "\n    ".join(dangling))
+
+
+## Two files must never claim the same UID.
+##
+## Nothing on disk resolves the tie; whichever the engine scanned last wins, so a reference to the
+## shared UID silently loads the wrong resource, and *which* wrong resource can differ between a
+## fresh clone and a warm one. Copying a `.tscn` or a `.gd.uid` sidecar by hand is the usual way in.
+##
+## Collisions entirely inside `addons/` are left alone, per this file's rule about vendored code.
+func test_no_two_resources_declare_the_same_uid() -> void:
+	var collisions: Array[String] = []
+	for uid: String in _declared_by_uid:
+		var owners: Array[String] = _declared_by_uid[uid]
+		if owners.size() < 2:
+			continue
+		if owners.all(func(p: String) -> bool: return p.begins_with("res://addons/")):
+			continue
+		collisions.append("%s declared by:\n      %s" % [uid, "\n      ".join(owners)])
+	assert_eq(collisions, [] as Array[String],
+		"UIDs claimed by more than one file:\n    " + "\n    ".join(collisions))
+
+
+## `project.godot` and `export_presets.cfg` reference resources by UID with **no path fallback**.
+##
+## `run/main_scene="uid://bj5rbqgudkfsg"` is the sharpest case: there is no `res://` beside it to
+## degrade to, so a stale UID there is not a warning, it is a project that does not boot. Step 2 of
+## `/agent/verify.sh` boots the game headless and would catch it — but only on a cold cache, and
+## the gate always runs warm. This check does not care either way.
+func test_uid_only_config_references_resolve() -> void:
+	var checked := 0
+	var dangling: Array[String] = []
+	for config_path: String in UID_ONLY_CONFIG_FILES:
+		if not FileAccess.file_exists(config_path):
+			continue  # export_presets.cfg is optional; project.godot is covered by the floor below.
+		var line_number := 0
+		for line: String in FileAccess.get_file_as_string(config_path).split("\n"):
+			line_number += 1
+			for match_result: RegExMatch in _quoted_uid_re.search_all(line):
+				var uid := match_result.get_string(1)
+				checked += 1
+				if not _declared_by_uid.has(uid):
+					dangling.append("%s:%d -> %s (declared by no file)" % [
+						config_path, line_number, uid,
+					])
+	assert_gt(checked, 0,
+		("found no uid:// reference in %s — project.godot has always carried run/main_scene as a "
+		+ "UID, so this check has gone blind") % ", ".join(UID_ONLY_CONFIG_FILES))
+	assert_eq(dangling, [] as Array[String],
+		"UID-only config references that resolve to nothing:\n    " + "\n    ".join(dangling))
 
 
 ## A canary against a *mass strip* of UIDs, which none of the tests above can see.

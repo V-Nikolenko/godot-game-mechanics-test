@@ -73,7 +73,7 @@
           "id": "godot-uidcache-bin-masks-broken-uid-references-so-a-warm-mac",
           "head": "**`.godot/uid_cache.bin` masks broken UID references, so a warm machine disagrees with a",
           "body": "fresh clone.** Once a project has been loaded, Godot keeps a *stale* UID registered as a\nworking alias for its target: `ResourceLoader.get_resource_uid()` and `ResourceUID.has_id()`\nboth reported the dead `uid://bi366j2tsyby` as valid, and `--import` emitted no warning for\nthe five `.tres` files using it. Deleting `.godot/` and loading one of those files directly\nproduced `ext_resource, invalid UID` immediately. `.godot/` is gitignored, so **CI and new\ncontributors see the failures a developer's machine hides.** Two consequences worth keeping\nin mind: `bash /agent/verify.sh` runs against a warm cache and will not catch this class of\ndefect on its own, and any future UID tooling must read declarations from disk rather than\nask the engine.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null
         },

@@ -38,7 +38,9 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
   pins today's behaviour, bugs included. The exceptions are
   `tests/integration/test_resource_uid_integrity.gd`, an invariant check over `[ext_resource]`
-  UIDs, `tests/integration/test_suite_integrity.gd`, which asserts every `tests/**/test_*.gd`
+  UIDs and the UID-only references in `project.godot` / `export_presets.cfg` (read from disk, so
+  it is immune to the stale aliases a warm `.godot/uid_cache.bin` keeps alive),
+  `tests/integration/test_suite_integrity.gd`, which asserts every `tests/**/test_*.gd`
   compiles and extends `GutTest` (GUT otherwise drops an unloadable test script with only a
   warning and still exits 0, so the gate stays green while a test file silently vanishes),
   `tests/integration/test_gut_local_patches.gd`, which asserts the two hand-applied patches

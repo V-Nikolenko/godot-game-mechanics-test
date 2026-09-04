@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 25 open)
+## Code health backlog  (`code-health-backlog`, 24 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -136,7 +136,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `tests/integration/test_resource_uid_integrity.gd` instead — it covers strictly more
       (`.tres` resources and `.gd.uid` sidecars as well as scenes).
 
-- [ ] ****`.godot/uid_cache.bin` masks broken UID references, so a warm machine disagrees with a** _(todo)_
+- [x] ****`.godot/uid_cache.bin` masks broken UID references, so a warm machine disagrees with a** _(done)_
       fresh clone.** Once a project has been loaded, Godot keeps a *stale* UID registered as a
       working alias for its target: `ResourceLoader.get_resource_uid()` and `ResourceUID.has_id()`
       both reported the dead `uid://bi366j2tsyby` as valid, and `--import` emitted no warning for
