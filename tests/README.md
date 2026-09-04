@@ -17,7 +17,7 @@ project boot.
 | `integration/` | Several systems wired together (the player damage chain), plus project-wide integrity checks over the resource files themselves. |
 | `helpers/` | Shared fixtures. **Never** named `test_*`, or GUT tries to collect them as tests. |
 
-## The exceptions: the two integrity tests and the space-station tests
+## The exceptions: the integrity tests, the space-station tests, and the module unlock gate
 
 `integration/test_resource_uid_integrity.gd` is **not** characterization. It asserts an invariant
 that must hold — every `[ext_resource]` UID in a `.tscn`/`.tres` matches the UID its target
@@ -51,6 +51,18 @@ real test and the exit code goes red. Two things to know before touching it:
 - **Its walk mirrors GUT's own collection rules** — `test_` prefix, `.gd` suffix, per
   `gut_config.gd:45`, since the gate passes no `-gprefix`. If that ever changes, change both or
   the check quietly stops covering files.
+
+`integration/test_module_unlock_sources.gd` is the third invariant test, and it polices game
+content rather than the suite. It loads `sector_hub.tscn`, walks it for
+`ShipModuleUnlockerPickup` nodes, and asserts every non-`&""` id in
+`ShipModuleState.SLOT_MODULES` is granted by one of them. Since `equip()` gained its unlock gate,
+a module with no unlocker is a row the player can see and can never install — so adding a module
+to the catalogue without a source is a regression, and this is what says so. It also pins that no
+unlocker grants a module belonging to a different slot: `ShipModuleUnlockerPickup.Module` is one
+flat enum across all four slots, so a mismatched pair is expressible in the inspector and would
+otherwise only `push_warning` at collect time. The hub is instantiated but never added to the
+tree — `_ready()` is what spawns drones and builds the HUD, and walking the node list needs none
+of it.
 
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
@@ -218,3 +230,35 @@ shared.
 ⚠️ Separately, the `ObjectDB instances leaked` line the **gate** prints comes from step 1, the
 headless `--import`, and predates this suite. Verified against a stashed working tree: baseline
 and current both emit exactly one. Do not go hunting for it in the tests.
+
+### The ship module unlock gate
+
+`unit/test_ship_module_state.gd` is still mostly characterization, but five of its tests assert
+**intent** and say so in a comment: `equip()` now refuses a module that is not unlocked,
+unlocking makes it installable, `&""` (unequip) is exempt so a slot can always be cleared, and
+`_load()` grandfathers a module that is equipped but not unlocked rather than confiscating it.
+One of those, `test_load_grandfathers_a_module_equipped_before_the_gate`, asserts the *exact*
+unlocked array and loads twice on purpose. Both matter: `&""` passes the `if id in valid` check
+in `_load()` because `SLOT_MODULES` lists it first for every slot, so an unguarded grandfather
+append would pollute all four slots with the sentinel; and without the `not in list` guard the
+list grows by one duplicate entry per boot, forever. `is_unlocked()` stays `true` under both
+bugs, so a weaker assertion catches neither.
+
+`integration/test_module_list_lock.gd` covers the menu side — that locked rows are shown greyed
+rather than filtered out, that confirming one is a defined no-op, and (the boundary that matters)
+that row 0, the "None"/unequip row, is **never** locked. `is_unlocked(slot, &"")` is always
+`false`, so a naive per-row lock check greys out the unequip row and traps the player's module in
+its slot; `player_menu.gd:180-184` is the game's only `equip()` caller, so there would be no
+workaround. `test_confirming_an_unlocked_row_still_emits` is the deliberate control, so the
+locked-confirm test cannot pass by `confirm()` being broken outright.
+
+It reads and restores the **live `ShipModuleState` singleton** (`_unlocked` / `_equipped`) in
+`before_all`/`after_all`, on top of `SaveSandbox` — `ModuleList` talks to the autoload, not to a
+fresh instance, and the whole suite shares it. Setup mutates those arrays directly rather than
+calling `unlock()`, so the fixture does not depend on the very gate under test.
+
+⚠️ `test_reopening_rebuilds_the_lock_flags` reports **24 orphans**. They are the first `open()`'s
+rows: `ModuleList._clear()` `remove_child()`s and `queue_free()`s them, and the delete queue does
+not flush before the test ends. Pre-existing `ModuleList` behaviour, harmless in play (menu opens
+are frames apart), and awaiting `process_frame` does not change the count. Not worth contorting
+the test over — but do not read it as a leak you introduced.

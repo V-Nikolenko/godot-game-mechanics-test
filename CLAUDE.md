@@ -45,8 +45,13 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
   `test_station_gunnery.gd`, `test_station_reinforcements.gd` and `test_radial_attack_pattern.gd` —
   which cover new code and so
-  assert intent. A few characterization files also carry individually-marked intent tests
-  (`test_health_component.gd`, `test_state_machine.gd`); each says so in a comment.
+  assert intent. `tests/integration/test_module_unlock_sources.gd` is a second invariant check
+  (every module in `ShipModuleState.SLOT_MODULES` has an unlocker pickup in the sector hub, so
+  the unlock gate cannot strand content), and `tests/integration/test_module_list_lock.gd`
+  asserts intent for the ship menu's locked rows.
+  A few characterization files also carry individually-marked intent tests
+  (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
+  so in a comment.
   **Read [`tests/README.md`](tests/README.md) before writing a
   test** — it covers the `user://` save-file sandbox, the signal-arity trap, and the
   `LevelDirector` coroutine-leak trap, all of which cause failures (or silent leaks) unrelated to

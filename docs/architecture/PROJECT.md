@@ -54,7 +54,7 @@ Registered in `project.godot` `[autoload]` (load order matters). Full detail in
 | `DialogPlayer` | `global/autoload/dialog_player.gd` | Plays `DialogScriptResource` dialogue; `is_active` gates gameplay input |
 | `UpgradeState` | `global/autoloads/upgrade_state.gd` | Player upgrade selections |
 | `EventBus` | `global/systems/event_bus.gd` | Global typed signals (decoupled cross-system events) |
-| `ShipModuleState` | `global/autoloads/ship_module_state.gd` | Which ship modules are equipped per slot |
+| `ShipModuleState` | `global/autoloads/ship_module_state.gd` | Which ship modules are equipped per slot, and which are unlocked — `equip()` refuses a locked module |
 | `ShipProgressionState` | `global/autoloads/ship_progression_state.gd` | Ship progression / unlocks |
 | `SessionState` | `global/autoloads/session_state.gd` | Per-run session data |
 | `CameraShake` | `global/systems/camera_shake.gd` | Global camera-shake requests |

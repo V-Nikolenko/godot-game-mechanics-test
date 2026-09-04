@@ -61,6 +61,7 @@ open_space/scenes/
 - The `PlayerShip` instance, with a child `Camera2D` that itself carries a `CameraDirector` node (the shared camera arbitrator from [`./global.md`](./global.md)).
 - The `OpenSpaceHUD` (`gui/hud.tscn`).
 - An `EnemyContainer` (drones are added here at runtime) and a row of every shared pickup from `global/pickups/scenes/` (armor/health, module unlocker, temp buffs) so the hub doubles as a test/equip bench.
+- Above that row, **two further rows of `ShipModuleUnlockerPickup` instances (y = -315 and y = -415)** — one per ship module, 15 in total counting the `trajectory_calc` unlocker on the original bench row. Since `ShipModuleState.equip()` gained its unlock gate these are the game's only way to make a module installable, so the bench is currently the unlock *source*, not just a test convenience. `tests/integration/test_module_unlock_sources.gd` asserts the coverage stays complete. Distributing unlockers through missions instead is not done yet.
 
 The script's only logic is `_spawn_initial_drones()`: in `_ready()` it instantiates `drone_count` (`3`) `PatrolDrone`s at random angles/distances within `spawn_radius` (`600`) and gives each a random `initial_direction`.
 
@@ -144,7 +145,7 @@ Autoloads (defined and documented in [`./global.md`](./global.md)) used by this 
 | Autoload | Read by open_space | Written by open_space |
 |---|---|---|
 | `MissionState` | `MissionSelectMenu._is_locked` (`is_complete`, `get_high_score`) for lock gates; `MissionListItem.configure` (`get_stars`) for the star display. | Not written here — completion/score/stars are recorded **inside missions on win**; the hub only reads them. |
-| `ShipModuleState` | `OpenSpacePlayerShip._ready` re-applies equipped modules (`SLOTS`, `get_equipped`) and listens to `module_equipped` / `module_unequipped`. | Indirectly via the `ShipModuleUnlockerPickup` placed in the hub (calls `ShipModuleState.unlock`). |
+| `ShipModuleState` | `OpenSpacePlayerShip._ready` re-applies equipped modules (`SLOTS`, `get_equipped`) and listens to `module_equipped` / `module_unequipped`. | Via the `ShipModuleUnlockerPickup` instances in the hub (call `ShipModuleState.unlock`) — one per module, and the only unlock source in the game. |
 | `SessionState` | Restored on spawn through `PlayerBase._setup_components()` → `SessionState.apply_to(player)` (cross-level temp buffs). | Indirectly via the hub's temp-buff pickups (which persist through `SessionState`). |
 | `EventBus` | — | `OpenSpacePlayerShip` (via `PlayerBase`) emits `player_health_changed` / `player_overheat_changed`, consumed by `OpenSpaceHUD`. |
 | `CameraShake` | `CameraDirector` composes its offset for speed/dwell/death shake. | `OpenSpacePlayerShip` adds trauma on hit/death. |

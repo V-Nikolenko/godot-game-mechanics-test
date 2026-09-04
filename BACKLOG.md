@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 29 open)
+## Code health backlog  (`code-health-backlog`, 28 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -107,7 +107,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Reachable whenever a ship's `base_health / 2` is not a multiple of 5. Pinned by
       `tests/unit/test_session_state.gd::test_temp_health_stack_size_uses_integer_division`.
 
-- [ ] **`ShipModuleState.equip()` never consults `_unlocked`.** _(in progress)_
+- [x] **`ShipModuleState.equip()` never consults `_unlocked`.** _(done)_
       Any module in the catalogue can be
       equipped whether or not it was earned. Fine if unlock state is purely cosmetic for the menu;
       a progression hole if it is not. Worth a decision either way. Pinned by

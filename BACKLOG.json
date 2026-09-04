@@ -41,7 +41,7 @@
           "id": "shipmodulestate-equip-never-consults-unlocked",
           "head": "`ShipModuleState.equip()` never consults `_unlocked`.",
           "body": "Any module in the catalogue can be\nequipped whether or not it was earned. Fine if unlock state is purely cosmetic for the menu;\na progression hole if it is not. Worth a decision either way. Pinned by\n`tests/unit/test_ship_module_state.gd::test_equipping_does_not_require_unlocking`.",
-          "state": "in_progress",
+          "state": "done",
           "badge": null,
           "planDir": "docs/plans/shipmodulestate-equip-never-consults-unlocked"
         },

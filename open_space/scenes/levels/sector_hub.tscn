@@ -109,3 +109,70 @@ position = Vector2(-280, -223)
 
 [node name="TemporaryShieldUpPickup" parent="." unique_id=2051867966 instance=ExtResource("18_f6k3w")]
 position = Vector2(-214, -215)
+
+[node name="ModuleUnlockerEmpBlast" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-280, -315)
+module_id = 1
+
+[node name="ModuleUnlockerAiTargeting" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-180, -315)
+module_id = 2
+
+[node name="ModuleUnlockerCockpitHeal" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-80, -315)
+module_id = 3
+
+[node name="ModuleUnlockerArmorPlating" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(20, -315)
+module_slot = 1
+module_id = 4
+
+[node name="ModuleUnlockerParry" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(120, -315)
+module_slot = 1
+module_id = 5
+
+[node name="ModuleUnlockerShieldOverload" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(220, -315)
+module_slot = 1
+module_id = 6
+
+[node name="ModuleUnlockerFinalResort" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(320, -315)
+module_slot = 1
+module_id = 7
+
+[node name="ModuleUnlockerOverclock" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-280, -415)
+module_slot = 2
+module_id = 8
+
+[node name="ModuleUnlockerPlasmaNova" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-180, -415)
+module_slot = 2
+module_id = 9
+
+[node name="ModuleUnlockerOverheatNullifier" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-80, -415)
+module_slot = 2
+module_id = 10
+
+[node name="ModuleUnlockerPierce" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(20, -415)
+module_slot = 2
+module_id = 11
+
+[node name="ModuleUnlockerShooting" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(120, -415)
+module_slot = 2
+module_id = 12
+
+[node name="ModuleUnlockerWarp" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(220, -415)
+module_slot = 3
+module_id = 13
+
+[node name="ModuleUnlockerEngineBoost" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(320, -415)
+module_slot = 3
+module_id = 14

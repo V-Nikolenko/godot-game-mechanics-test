@@ -56,7 +56,15 @@ load, and ship the unlock sources in the same change.**
    - `_locked` is built alongside `_descs`, one entry per **created item** (`open()` creates
      `mini(_ids.size(), MAX_ITEMS)` of them, `module_list.gd:34`), and every read is index-guarded
      the same way `confirm()` already guards `_cursor_row` (`module_list.gd:68`).
-5. **Reuse the existing locked-row presentation.** `MissionListItem`
+5. **Reuse the existing locked-row presentation.** *(Corrected during implementation: review
+   round-2 note 2 is right that `MissionListItem._COLOR_LOCKED` and
+   `ModuleListItem._GREY_MODULATE` are the **same** `Color(0.45,0.45,0.45)`, so borrowing the
+   constants verbatim would leave the selectable "None" row and the locked rows identical at
+   rest. Taking the option the reviewer allowed: the structure and the precedence rule come
+   from `MissionListItem`, but locked rows get their own darker values —
+   `_LOCKED_MODULATE` `(0.30,0.30,0.32)` and `_LOCKED_CURSOR_MODULATE` `(0.50,0.50,0.52)` — so
+   "nothing installed" and "cannot install this" are distinguishable without the cursor.)*
+   `MissionListItem`
    (`open_space/scenes/mission_select_ui/mission_list_item.gd:13-14,21,37,39-43`) already solved
    this: a `_locked` flag set in `configure()`, `_COLOR_LOCKED` `(0.45,0.45,0.45)` and a distinct
    `_COLOR_LOCKED_HOVERED` `(0.65,0.65,0.65)` so the cursor stays findable on a row it cannot

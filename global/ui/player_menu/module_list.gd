@@ -11,6 +11,9 @@ signal cancelled
 const _ITEM_SCENE: PackedScene = preload("res://global/ui/player_menu/module_list_item.tscn")
 const _ROW_HEIGHT: float = 36.0
 const MAX_ITEMS: int = 8
+## Prepended to a locked row's description so the greyed row carries its own call to
+## action rather than being a dead end.
+const _LOCKED_PREFIX: String = "LOCKED — recover this module's unlocker to install it.\n"
 
 ## Local-space origin for the first list item. Tune to align with frame sprite.
 @export var item_origin: Vector2 = Vector2(0.0, -100.0)
@@ -20,6 +23,9 @@ const MAX_ITEMS: int = 8
 var _items: Array[ModuleListItem] = []
 var _ids:   Array[StringName] = []
 var _descs: Array[String] = []
+## One entry per created item (not per catalogue id) — open() creates
+## mini(_ids.size(), MAX_ITEMS) of them, so every read bounds-checks against _locked.size().
+var _locked: Array[bool] = []
 var _cursor_row: int = 0
 
 func _ready() -> void:
@@ -39,15 +45,22 @@ func open(slot: StringName, current_id: StringName) -> void:
 		item.position = item_origin + Vector2(-63.0, i * _ROW_HEIGHT)
 		var id: StringName = _ids[i]
 		if id == &"":
+			## The "None" row is never locked: ShipModuleState.equip(slot, &"") is always
+			## allowed, and this menu is the only way to take a module back out.
 			item.configure("", null)
+			_locked.append(false)
 			_descs.append("Remove installed module.")
 		else:
+			var locked: bool = not ShipModuleState.is_unlocked(slot, id)
 			var mod := _make_module(id)
 			item.configure(
 				mod.get_display_name() if mod else String(id),
-				mod.get_icon() if mod else null
+				mod.get_icon() if mod else null,
+				locked
 			)
-			_descs.append(mod.get_description() if mod else "")
+			_locked.append(locked)
+			var desc: String = mod.get_description() if mod else ""
+			_descs.append((_LOCKED_PREFIX + desc) if locked else desc)
 		_items.append(item)
 
 	## Initialise cursor on currently equipped item.
@@ -65,8 +78,13 @@ func navigate(delta: int) -> void:
 	_refresh_cursor()
 
 func confirm() -> void:
-	if _cursor_row < _ids.size():
-		confirmed.emit(_ids[_cursor_row])
+	if _cursor_row >= _ids.size():
+		return
+	## A locked row is a defined no-op: nothing is emitted and the list stays open, the
+	## same as MissionSelectMenu._try_confirm() on a locked mission.
+	if _cursor_row < _locked.size() and _locked[_cursor_row]:
+		return
+	confirmed.emit(_ids[_cursor_row])
 
 func _clear() -> void:
 	for item: ModuleListItem in _items:
@@ -75,6 +93,7 @@ func _clear() -> void:
 	_items.clear()
 	_ids.clear()
 	_descs.clear()
+	_locked.clear()
 
 func _refresh_cursor() -> void:
 	for i: int in _items.size():
