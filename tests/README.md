@@ -148,6 +148,50 @@ is populated (proving `_static_init()` resolved every `class_ref` entry), an uns
 stubbed one reads back unchanged. Every failure message names `LOCAL_PATCHES.md`, because the fix
 is to re-apply the patches, not to relax the test. It also asserts the doc itself still exists.
 
+`integration/test_project_load_integrity.gd` is the fifth invariant test, and it is the only one
+that asks the **engine** to load the game rather than reading the files. It walks every `.tscn` /
+`.tres` / `.gd` outside `addons/` (~130 resources, ~280 scripts), loads each one exactly once, and
+asserts four things: nothing loads to `null`, every `PackedScene` can be instantiated, every
+script compiles (`can_instantiate()`, since a parse error still `load()`s non-null), and **the
+engine logged no errors at all during the pass**.
+
+It exists because the gate's first two steps cover far less of the project than they look like
+they do. `godot --headless --import` resolves *importable* assets — textures, fonts, audio — and
+never loads a `.tscn`/`.tres`; `--quit` boots the autoloads and `res://boot/…` and nothing else.
+Everything reachable only from an assault level, the race sub-mode, the open-space hub or
+infiltration was therefore never loaded by any gate step. Three `ext_resource, invalid UID`
+warnings were once live in the tree and `--import` surfaced exactly **one**; the other two only
+appeared once every scene had actually been loaded. On its first run this test found two more
+defects nothing else could see: `race_level_1.tscn` declared 212 atlas tiles beyond what its
+256×256 texture can hold (636 engine errors per load), and `TestIsometricScene.tscn` pointed its
+backdrop at a stale `res://.godot/imported/…ctex` hash, so the documented backdrop silently
+rendered nothing on every clone.
+
+It complements `test_resource_uid_integrity.gd` rather than overlapping it. That test reads files
+and never asks the engine, because a warm `.godot/uid_cache.bin` reports stale UIDs as fine; this
+one asks the engine, because a reference that resolves by neither UID nor path, a resource the
+engine rejects, and a script that does not compile are all invisible to a text scan. Four things
+to know before touching it:
+
+- **The load pass is lazy, runs once, and keeps every result.** Godot's resource cache holds no
+  strong reference, so dropping them would make each test re-read from disk and re-emit the same
+  errors. `_load_everything()` is idempotent, so it does not matter which test runs first or
+  whether only one is run.
+- **It claims the engine errors itself** (`GutTrackedError.handled = true`). GUT 9.7 fails any
+  test during which the engine logged an error, with a bare `Unexpected Errors:` that names none
+  of the 130 resources; taking ownership is what lets the failure message name the file.
+- **Engine *warnings* reach the same tracker**, which is precisely why `ext_resource, invalid UID`
+  — a warning, not an error — fails this suite instead of scrolling past in the gate log.
+- **A scene whose attached script fails to compile still loads non-null and still reports
+  `can_instantiate() == true`.** That is why the scripts are walked separately rather than being
+  taken on trust from the scenes that reference them.
+
+Its failure modes were checked by breaking things on purpose and reverting: an invented
+`uid://` in `laser_ray.tscn` fails the no-errors test naming the file and line, appending a call
+to a nonexistent function fails the compile test, and pointing an `ext_resource` at a missing
+`.png` fails the load test. Keep that habit if you extend it — an integrity test that cannot be
+made to fail is worse than none.
+
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
 `test_station_gunnery.gd`, `test_station_reinforcements.gd`, `test_station_death_sequence.gd`,
@@ -221,7 +265,10 @@ Components: `Health`, `HitBox`/`HurtBox`, `Shield`, `TempHealth`, `Overheat`, `D
 Plus `global/statemachine/` and the `PlayerBase` damage chain.
 Project-wide: `[ext_resource]` UID integrity across every `.tscn`/`.tres` — pairwise agreement,
 dangling UIDs, duplicate declarations, and the UID-only references in `project.godot` /
-`export_presets.cfg` — plus two canaries against a wholesale UID strip.
+`export_presets.cfg` — plus two canaries against a wholesale UID strip; and
+(`integration/test_project_load_integrity.gd`) an engine-side load of every `.tscn`/`.tres`/`.gd`
+outside `addons/`, asserting nothing loads to `null`, every scene instantiates, every script
+compiles, and the engine logs no error or warning along the way.
 Tooling: the two local patches the vendored GUT addon needs under Godot 4.6.3
 (`integration/test_gut_local_patches.gd`).
 Entities: the `space_station` mini-boss (`integration/test_space_station.gd`) — armour rule, turret

@@ -81,7 +81,7 @@
           "id": "godot-headless-import-only-loads-a-fraction-of-the-project-s",
           "head": "**`godot --headless --import` only loads a fraction of the project, so \"import is clean\" is",
           "body": "a weak gate.** It surfaced 1 of the 3 live `invalid UID` warnings; the other 2 only appeared\nonce every scene was actually loaded. A cheap \"load all 126 `.tscn`/`.tres` and assert no\nload returns null\" smoke test would close the gap — worth considering as step 4 of\n`/agent/verify.sh`. All 126 do currently load clean, so it would start green.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null
         },

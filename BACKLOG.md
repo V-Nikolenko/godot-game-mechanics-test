@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 24 open)
+## Code health backlog  (`code-health-backlog`, 23 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -147,7 +147,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       defect on its own, and any future UID tooling must read declarations from disk rather than
       ask the engine.
 
-- [ ] ****`godot --headless --import` only loads a fraction of the project, so "import is clean" is** _(todo)_
+- [x] ****`godot --headless --import` only loads a fraction of the project, so "import is clean" is** _(done)_
       a weak gate.** It surfaced 1 of the 3 live `invalid UID` warnings; the other 2 only appeared
       once every scene was actually loaded. A cheap "load all 126 `.tscn`/`.tres` and assert no
       load returns null" smoke test would close the gap — worth considering as step 4 of

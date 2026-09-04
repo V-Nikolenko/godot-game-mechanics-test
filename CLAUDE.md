@@ -46,6 +46,10 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `tests/integration/test_gut_local_patches.gd`, which asserts the two hand-applied patches
   `addons/gut/LOCAL_PATCHES.md` documents are still in place (re-vendoring GUT drops them, and
   the resulting breakage is silent — parse errors on stderr, suite still exit 0, doubler gone),
+  `tests/integration/test_project_load_integrity.gd`, which loads every `.tscn`/`.tres`/`.gd`
+  outside `addons/` and asserts each one loads, instantiates and compiles with no engine error or
+  warning logged (the gate's `--import` step never loads a scene and its `--quit` step boots only
+  `res://boot/…`, so most of the project was previously unloaded by every gate step),
   and the space-station family — `tests/integration/test_space_station.gd`,
   `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
   `test_station_gunnery.gd`, `test_station_reinforcements.gd` and `test_radial_attack_pattern.gd` —

@@ -107,9 +107,14 @@ Detail and APIs: [global.md](modules/global.md).
   references in `project.godot` / `export_presets.cfg`),
   `tests/integration/test_suite_integrity.gd` (every `tests/**/test_*.gd` compiles and extends
   `GutTest`, because GUT otherwise drops an unloadable test script with only a warning and still
-  exits 0) and `tests/integration/test_gut_local_patches.gd` (the two local patches
+  exits 0), `tests/integration/test_gut_local_patches.gd` (the two local patches
   `addons/gut/LOCAL_PATCHES.md` documents are still applied, since re-vendoring GUT drops them
-  and the resulting breakage is silent) — plus the space-station family.
+  and the resulting breakage is silent) and `tests/integration/test_project_load_integrity.gd`
+  (every `.tscn`/`.tres`/`.gd` outside `addons/` loads, instantiates and compiles, and the engine
+  logs nothing while it happens — the gate's `--import` step never loads a scene at all and its
+  `--quit` step boots only `res://boot/…`, so everything reachable only from an assault level,
+  the race sub-mode, the hub or infiltration was previously unloaded by any gate step)
+  — plus the space-station family.
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).
   Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the
