@@ -80,7 +80,10 @@ Detail and APIs: [global.md](modules/global.md).
   **integration recipes** in [global.md](modules/global.md) for how to wire them.
 - **Config-driven enemies:** assault enemies read stats from a `*_config.tres`
   (`Resource`) applied in `_ready()`; the `.tres` value wins over the scene's Health node
-  where they differ.
+  where they differ. The exception is `collision_damage`:
+  `BaseEnemy._add_contact_hitbox()` hardcodes `damage = 20` and runs before the subclass has
+  read its config, so each enemy must re-apply it after `super._ready()` or override the
+  helper. `tests/integration/test_enemy_contact_damage.gd` asserts the whole roster does.
 - **State machines:** `global/statemachine/state_machine.gd` + `state.gd`; entities with
   complex behaviour keep one `State` node per file in a `states/` folder (player, racers,
   light_assault_ship). Simpler enemies use in-script `enum` phases.
@@ -114,6 +117,9 @@ Detail and APIs: [global.md](modules/global.md).
   logs nothing while it happens — the gate's `--import` step never loads a scene at all and its
   `--quit` step boots only `res://boot/…`, so everything reachable only from an assault level,
   the race sub-mode, the hub or infiltration was previously unloaded by any gate step)
+  and `tests/integration/test_enemy_contact_damage.gd` (the only one over **balance data**:
+  every assault enemy's contact `HitBox` deals the damage its `*_config.tres` declares, which
+  is otherwise dead the moment a subclass forgets the re-apply above)
   — plus the space-station family.
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).

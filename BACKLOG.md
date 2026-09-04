@@ -165,7 +165,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-01 while building the space-station mini-boss entity (EPIC sub-item 1).
 
-- [ ] **`Gunship` never applies its config's `collision_damage`.** _(todo)_
+- [x] **`Gunship` never applies its config's `collision_damage`.** _(done)_
       `gunship_config.tres:8` sets
       `collision_damage = 30`, but `BaseEnemy._add_contact_hitbox()` hardcodes `hb.damage = 20`
       (`base_enemy.gd:56`) and the gunship — unlike `bomber.gd:25`, `light_assault_ship.gd:23`,
@@ -457,6 +457,33 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `global/ui/player_menu/player_menu.gd` too) or delete the `.tres` and the `LongRangeBehavior`
       wiring. Same abandoned-migration origin as the reflect item — the plan at
       `docs/superpowers/plans/2026-05-06-abilities-health-shield.md` renamed the mode list.
+
+- [ ] **Two committed `.tscn*.tmp` files duplicate light_assault_ship's UID and dodge every integrity check** _(todo)_
+      `assault/scenes/enemies/light_assault_ship/` has two Godot editor scratch files tracked in git —
+      `light_assault_ship.tscn777863979.tmp` and `light_assault_ship.tscn785603970.tmp` (both added in
+      `613ad48`). They are stale copies of `light_assault_ship.tscn`, and each one declares
+      `uid="uid://br4qs4w455h3m"` — the **same UID the live scene declares**. Three files, one UID.
+      
+      They also point an `ext_resource` at
+      `res://assault/scenes/enemies/light_assault_ship/enemyship.png`, which does not exist anywhere in
+      the repo, and they predate the state machine: neither has the `StateMachine` / `ApproachState` /
+      `StrafeExitState` scripts the real scene carries, so anything that loaded one would get a
+      light assault ship with no AI.
+      
+      Nothing in the gate can see any of this. `test_resource_uid_integrity.gd` walks `.tscn`, `.tres`
+      and `.gd.uid`, so its "no two files declare the same UID" and "every UID resolves" checks skip
+      `.tmp` entirely; `test_project_load_integrity.gd` walks the same three extensions, so the dangling
+      `enemyship.png` reference is never loaded either. The duplicate-UID hazard is exactly the failure
+      mode that test was written to catch, arriving through a file extension it does not look at.
+      
+      Two parts, and the second is the one that matters:
+      
+      1. Delete both `.tmp` files and add a `*.tscn*.tmp` / editor-scratch pattern to `.gitignore` so
+         the next editor crash does not re-commit them.
+      2. Decide whether `test_resource_uid_integrity.gd` should widen its walk — e.g. flag ANY tracked
+         file that declares a `uid://` in a `gd_scene` / `gd_resource` header regardless of extension,
+         or simply fail on tracked editor-scratch files by name. Widening the walk is the version that
+         catches the next variant rather than this instance.
 
 ## Boss fight escalation: shared hull, flying laser projectors, desperation  (`boss-fight-escalation-shared-hull-flying-laser-projectors-de`, 7 open)
 

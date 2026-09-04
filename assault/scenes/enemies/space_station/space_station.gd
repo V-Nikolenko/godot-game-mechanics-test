@@ -114,8 +114,9 @@ func _ready() -> void:
 
 		## BaseEnemy._add_contact_hitbox() hardcodes damage = 20 and never reads the config
 		## (base_enemy.gd:56), so it has to be re-applied here. bomber.gd:18-26,
-		## light_assault_ship.gd:23 and ram_ship.gd:20-23 all do this; the gunship forgot to,
-		## which is why gunship_config.tres's collision_damage = 30 is silently ignored.
+		## light_assault_ship.gd:23, ram_ship.gd:20-23 and gunship.gd:44-51 all do this.
+		## tests/integration/test_enemy_contact_damage.gd asserts it for the whole roster, so an
+		## enemy that forgets the re-apply now fails the gate instead of silently ramming for 20.
 		for child in get_children():
 			if child is HitBox:
 				(child as HitBox).damage = config.collision_damage

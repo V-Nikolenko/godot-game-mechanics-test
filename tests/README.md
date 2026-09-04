@@ -17,7 +17,7 @@ project boot.
 | `integration/` | Several systems wired together (the player damage chain), plus project-wide integrity checks over the resource files themselves. |
 | `helpers/` | Shared fixtures. **Never** named `test_*`, or GUT tries to collect them as tests. |
 
-## The exceptions: the integrity tests, the space-station tests, and the module unlock gate
+## The exceptions: the integrity tests, the space-station tests, the module unlock gate, and the enemy contact-damage invariant
 
 `integration/test_resource_uid_integrity.gd` is **not** characterization. It asserts invariants
 that must hold, so a failure there is a regression to fix, not a quirk to document. It checks six:
@@ -212,6 +212,34 @@ Its failure modes were checked by breaking things on purpose and reverting: an i
 to a nonexistent function fails the compile test, and pointing an `ext_resource` at a missing
 `.png` fails the load test. Keep that habit if you extend it — an integrity test that cannot be
 made to fail is worse than none.
+
+`integration/test_enemy_contact_damage.gd` is the sixth invariant test, and the only one that
+polices **balance data** rather than the files or the engine. It asserts that every assault
+enemy's contact `HitBox` deals the damage its `*_config.tres` declares — the `CLAUDE.md`
+convention that enemy stats live in the `.tres` and are applied in `_ready()`.
+
+It exists because `BaseEnemy._add_contact_hitbox()` (`base_enemy.gd:49-60`) builds that HitBox
+with a hardcoded `damage = 20` and never reads `config`. It runs from `BaseEnemy._ready()`, i.e.
+*before* the subclass has read its own `.tres`, so every enemy that wants its configured
+`collision_damage` has to re-apply it afterwards — `bomber.gd`, `light_assault_ship.gd`,
+`ram_ship.gd`, `gunship.gd` and `space_station.gd` all carry the same four-line loop, and
+`drone_interceptor.gd`, `kamikaze_drone.gd` and `bonus_drone.gd` override the helper outright.
+Miss it and the `.tres` field is simply dead: it parses, the enemy works, and the only symptom is
+a number nobody can see. The `Gunship` shipped that way — `collision_damage = 30` ignored, so the
+heaviest ship in the roster rammed for 20 — and nothing else in the suite could reach it, because
+no other test reads a HitBox.
+
+Three things to know before extending it:
+
+- **The two config-less entries are still assertable.** `interceptor_config.tres` has no
+  `collision_damage` line and `sniper_enemy` has no config at all, so both inherit `ShipConfig`'s
+  default of 20 (`ship_config.gd:8`) — which happens to equal the base helper's hardcoded 20. They
+  are listed so that if either value ever moves independently, the mismatch surfaces here.
+- **`bonus_drone` is the one deliberate exception**, asserted from both sides: it adds no contact
+  HitBox at all, *and* its config asks for 0. Flipping the `.tres` to a non-zero value without
+  touching the script fails the test rather than silently doing nothing.
+- **Only DIRECT children are searched for the HitBox.** Bullets carry their own, but they live
+  under the enemy's `BulletPool`, and the station's turrets live under `Turrets`.
 
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,

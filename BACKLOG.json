@@ -97,7 +97,7 @@
           "id": "gunship-never-applies-its-config-s-collisiondamage",
           "head": "`Gunship` never applies its config's `collision_damage`.",
           "body": "`gunship_config.tres:8` sets\n`collision_damage = 30`, but `BaseEnemy._add_contact_hitbox()` hardcodes `hb.damage = 20`\n(`base_enemy.gd:56`) and the gunship — unlike `bomber.gd:25`, `light_assault_ship.gd:23`,\n`ram_ship.gd:20-23` and `drone_interceptor.gd:148` — never re-applies it after\n`super._ready()`. So the heaviest enemy in the roster rams for 20 instead of 30 and the\n`.tres` value is dead. One loop in `gunship.gd::_ready()` fixes it; it is a balance change,\nso it should be a deliberate one rather than folded into unrelated work. `space_station.gd`\ndoes apply it, so the two enemies currently disagree about whether the field means anything.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null
         },
@@ -265,6 +265,14 @@
           "id": "longrange-tres-is-an-orphaned-weapon-mode-with-no-id-in-alli",
           "head": "`long_range.tres` is an orphaned weapon mode with no id in ALL_IDS.",
           "body": "`assault/scenes/player/weapons/modes/` contains six `.tres` files but\n`UpgradeState.ALL_IDS` names only five: `default`, `sniper_shot`, `spread`, `gatling`,\n`mining_laser`. `long_range.tres` matches no id.\n\n`WeaponState._load_modes()` (`assault/scenes/player/states/weapon_state.gd:31-37`) iterates\nALL_IDS and skips paths that do not exist, so the resource is simply never loaded — the\nweapon cannot be selected, cycled to, or shown in the player menu. The behaviour is a\n`LONG` entry in `_build_behaviors()` (`weapon_state.gd:41`) that nothing can ever reach.\n\nEither add `&\"long_range\"` to `ALL_IDS` (it needs a `_WEAPON_ICONS` entry in\n`global/ui/player_menu/player_menu.gd` too) or delete the `.tres` and the `LongRangeBehavior`\nwiring. Same abandoned-migration origin as the reflect item — the plan at\n`docs/superpowers/plans/2026-05-06-abilities-health-shield.md` renamed the mode list.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "two-committed-tscn-tmp-files-duplicate-lightassaultship-s-ui",
+          "head": "Two committed `.tscn*.tmp` files duplicate light_assault_ship's UID and dodge every integrity check",
+          "body": "`assault/scenes/enemies/light_assault_ship/` has two Godot editor scratch files tracked in git —\n`light_assault_ship.tscn777863979.tmp` and `light_assault_ship.tscn785603970.tmp` (both added in\n`613ad48`). They are stale copies of `light_assault_ship.tscn`, and each one declares\n`uid=\"uid://br4qs4w455h3m\"` — the **same UID the live scene declares**. Three files, one UID.\n\nThey also point an `ext_resource` at\n`res://assault/scenes/enemies/light_assault_ship/enemyship.png`, which does not exist anywhere in\nthe repo, and they predate the state machine: neither has the `StateMachine` / `ApproachState` /\n`StrafeExitState` scripts the real scene carries, so anything that loaded one would get a\nlight assault ship with no AI.\n\nNothing in the gate can see any of this. `test_resource_uid_integrity.gd` walks `.tscn`, `.tres`\nand `.gd.uid`, so its \"no two files declare the same UID\" and \"every UID resolves\" checks skip\n`.tmp` entirely; `test_project_load_integrity.gd` walks the same three extensions, so the dangling\n`enemyship.png` reference is never loaded either. The duplicate-UID hazard is exactly the failure\nmode that test was written to catch, arriving through a file extension it does not look at.\n\nTwo parts, and the second is the one that matters:\n\n1. Delete both `.tmp` files and add a `*.tscn*.tmp` / editor-scratch pattern to `.gitignore` so\n   the next editor crash does not re-commit them.\n2. Decide whether `test_resource_uid_integrity.gd` should widen its walk — e.g. flag ANY tracked\n   file that declares a `uid://` in a `gd_scene` / `gd_resource` header regardless of extension,\n   or simply fail on tracked editor-scratch files by name. Widening the walk is the version that\n   catches the next variant rather than this instance.",
           "state": "todo",
           "badge": null,
           "planDir": null

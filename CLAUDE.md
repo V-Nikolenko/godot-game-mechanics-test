@@ -61,6 +61,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   (every module in `ShipModuleState.SLOT_MODULES` has an unlocker pickup in the sector hub, so
   the unlock gate cannot strand content), and `tests/integration/test_module_list_lock.gd`
   asserts intent for the ship menu's locked rows.
+  `tests/integration/test_enemy_contact_damage.gd` is a third invariant check, over the balance
+  data rather than the files: every assault enemy's contact `HitBox` must deal the damage its
+  `*_config.tres` declares. `BaseEnemy._add_contact_hitbox()` hardcodes `damage = 20` and runs
+  before the subclass reads its own `.tres`, so an enemy that forgets to re-apply
+  `collision_damage` leaves the field dead with no visible symptom — which is exactly how the
+  gunship rammed for 20 while its config said 30.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.

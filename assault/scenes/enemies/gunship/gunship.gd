@@ -43,6 +43,14 @@ func _ready() -> void:
 		_track_speed           = config.track_speed
 		_track_player          = config.track_player
 		_retreat_hp_ratio      = config.retreat_hp_ratio
+		## BaseEnemy._add_contact_hitbox() hardcodes damage = 20 and never reads the config
+		## (base_enemy.gd:56), so it has to be re-applied here — same as bomber.gd:23-26,
+		## light_assault_ship.gd:20-23, ram_ship.gd:20-23 and space_station.gd:119-122.
+		## Pinned for the whole roster by tests/integration/test_enemy_contact_damage.gd.
+		for child in get_children():
+			if child is HitBox:
+				(child as HitBox).damage = config.collision_damage
+				break
 
 	var viewport_size := get_viewport().get_visible_rect().size
 	var cam := get_viewport().get_camera_2d()

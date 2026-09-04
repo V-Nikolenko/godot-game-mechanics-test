@@ -128,6 +128,13 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   fields (`score_value`, `counts_toward_wave_clear`) are pulled from the subclass's
   `ShipConfig` resource. Each concrete enemy lives in its own folder under
   `assault/scenes/enemies/<type>/` with a `*_config.tres` and (often) bespoke AI states.
+  **Contact damage is the one stat the base class does not wire up for you:**
+  `_add_contact_hitbox()` hardcodes `damage = 20` and runs from `BaseEnemy._ready()`, before the
+  subclass has read its own `.tres`, so a subclass wanting its configured `collision_damage`
+  must re-apply it after `super._ready()` (`gunship.gd`, `bomber.gd`, `light_assault_ship.gd`,
+  `ram_ship.gd`, `space_station.gd`) or override the helper entirely (`drone_interceptor.gd`,
+  `kamikaze_drone.gd`, `bonus_drone.gd`). Forgetting leaves the `.tres` value dead with no
+  symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
 
 ### Projectiles & bullet pool
 
