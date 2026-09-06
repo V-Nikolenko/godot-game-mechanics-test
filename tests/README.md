@@ -280,16 +280,32 @@ rather than pinning existing quirks.
 tests do not close that. See the file headers and
 `assault/scenes/enemies/space_station/ENEMY.md`.
 
+`integration/test_level_director_polling.gd` is intent too, and of a different kind again: it pins
+that `LevelDirector`'s ENEMIES_CLEARED poll ends on `child_exiting_tree`, honours its fallback
+window, and — the reason it exists — leaves nothing alive behind an early return. See the leak
+trap below.
+
 Two traps `test_station_assault_section.gd` had to work around, both worth knowing before you add
 a `LevelDirector` test:
 
 - **`_wait_enemies_cleared()` polls once per second.** Its deadline is only re-checked *after*
   `_wait_for_child_exit_or_timeout(container, 1.0)` returns, so a 0.3 s timeout really fires at
   ~1.0 s, plus a 0.2 s settle. Budget off the poll, not the nominal timeout.
-- **A test that ends while that coroutine is suspended leaks its `SceneTreeTimer`**, which Godot
-  reports at process exit as `ObjectDB instances leaked` / `resources still in use`. Neither line
-  matches the gate's fatal-error regex, so **the gate stays green while leaking.** Empty the
+- **A test that ends while that coroutine is suspended leaks**, and Godot only says so at process
+  exit, as `ObjectDB instances leaked` / `resources still in use`. Neither line matches the gate's
+  fatal-error regex, so **the gate stays green while leaking** — run
+  [`scripts/check-test-leaks.sh`](../scripts/check-test-leaks.sh) to see it (below). Empty the
   container and wait for the director to advance before the test returns.
+
+  What leaks is the suspended `GDScriptFunctionState`, which holds `level_director.gd` open. That
+  part is inherent: freeing an object out from under its own coroutine strands the state, and no
+  amount of care inside `LevelDirector` can resume it afterwards. What is *no longer* part of it is
+  the abandoned `SceneTreeTimer`: `_wait_for_child_exit_or_timeout()` used to race a
+  `SceneTree.create_timer(poll_seconds)` against `child_exiting_tree`, so **every** early return —
+  the normal case, and not only an abandoned one — left a timer ticking for the rest of the poll
+  window. It now measures its deadline with `Time.get_ticks_msec()` and creates no timer at all.
+  `integration/test_level_director_polling.gd` is the regression test; it amplifies to 100 polls
+  because a single stranded timer is one object against the engine's own drift.
 
 ## These are characterization tests
 
@@ -442,6 +458,26 @@ shared.
 ⚠️ Separately, the `ObjectDB instances leaked` line the **gate** prints comes from step 1, the
 headless `--import`, and predates this suite. Verified against a stashed working tree: baseline
 and current both emit exactly one. Do not go hunting for it in the tests.
+
+### Checking for leaks: `scripts/check-test-leaks.sh`
+
+The gate cannot catch any of the above. Godot prints the leak lines *after* the main loop is gone,
+so they arrive after GUT has already set the process exit code, and they match none of
+`/agent/verify.sh`'s `FATAL` patterns. `scripts/check-test-leaks.sh` runs the suite with the gate's
+exact arguments and additionally greps the output for
+`ObjectDB instances leaked|resources still in use|Resource still in use`, exiting 1 on a hit. Run
+it after touching anything that awaits.
+
+It is a separate script rather than an edit to the gate because **`/agent` is mounted read-only**
+inside the dev container — the agent cannot change `verify.sh`. Folding it in is a one-line
+addition to step 3 and is worth doing; until then the script is the check.
+
+To find out *what* leaked, re-run with `--verbose`:
+
+```bash
+godot --headless --verbose --path . -s addons/gut/gut_cmdln.gd \
+  -gdir=res://tests -ginclude_subdirs -gexit 2>&1 | grep -E "Leaked instance|still in use"
+```
 
 ### The ship module unlock gate
 

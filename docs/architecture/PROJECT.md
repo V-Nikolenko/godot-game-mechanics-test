@@ -130,6 +130,17 @@ Detail and APIs: [global.md](modules/global.md).
   Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the
   save-file sandbox, and the signal-arity trap that will otherwise fail tests for reasons
   unrelated to the code under test.
+- **Timers inside coroutines that can be abandoned:** prefer a `Time.get_ticks_msec()` deadline
+  over `get_tree().create_timer()` when the wait can end early or the owner can be freed mid-wait.
+  A `SceneTreeTimer` outlives an early `return` by its whole remaining duration, and a
+  `GDScriptFunctionState` suspended when its object is freed is stranded outright; Godot only
+  reports either at *process exit*, as `ObjectDB instances leaked` / `resources still in use`.
+  **The gate cannot see those lines** — they arrive after GUT has set the exit code and they match
+  none of `/agent/verify.sh`'s `FATAL` patterns, so a leaking suite still prints `GATE PASS`. Run
+  `scripts/check-test-leaks.sh` (same arguments as gate step 3, plus a grep for the leak lines)
+  after touching anything that awaits. `LevelDirector._wait_for_child_exit_or_timeout()` and
+  `_wait_seconds()` are the worked example; `tests/integration/test_level_director_polling.gd` is
+  the regression test.
 - **Resource UIDs:** a UID is minted by the editor and cannot be written by hand, so a reference
   with no `uid=` is legal (Godot falls back to the `res://` path) but an *invented* one is a
   dangling reference that still loads. `tests/integration/test_resource_uid_integrity.gd` is the

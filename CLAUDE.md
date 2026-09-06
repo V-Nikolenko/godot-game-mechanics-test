@@ -72,6 +72,14 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   just its `Shape2D`. A `Shape2D` holds the radius but not the node scale that multiplies it, so
   copying `col.shape` alone built the gunship's ram box at 18 px against a 41.5 px hull. All four
   build sites now go through `HitBox.matching_shape()`.
+  `tests/integration/test_level_director_polling.gd` is a fifth, over the ENEMIES_CLEARED poll: it
+  asserts the poll ends on `child_exiting_tree`, honours its fallback window, and leaves nothing
+  alive behind an early return. That last one is the reason it exists — the poll used to abandon a
+  `SceneTreeTimer` on every early return, and a leak is reported only at *process exit*, after GUT
+  has set the exit code and in words the gate's `FATAL` regex does not match, so **the gate prints
+  `GATE PASS` on a leaking suite**. `scripts/check-test-leaks.sh` runs gate step 3 and additionally
+  greps for the leak lines; run it after touching anything that awaits. It is a separate script
+  because `/agent` is mounted read-only, so the gate itself cannot be changed from in here.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.

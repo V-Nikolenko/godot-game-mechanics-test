@@ -172,21 +172,15 @@ func test_level_1_runs_all_five_sections_end_to_end_with_a_real_station() -> voi
 	assert_eq(_container.get_child_count(), 0,
 		"the enemy container must be empty once the level completes")
 
-	## Drain the director's last poll timer before returning.
+	## No drain needed at the end of this test any more.
 	##
-	## `_wait_for_child_exit_or_timeout()` (level_director.gd:85-101) races a 1.0 s SceneTreeTimer
-	## against the container's `child_exiting_tree`. When the wreck leaves first — which is the
-	## whole point of this test — the helper returns immediately and that timer keeps ticking with
-	## nobody awaiting it. If the process exits before it fires, Godot reports
-	## `ObjectDB instances leaked`, and the gate's fatal-error regex does NOT match that line, so
-	## the gate would stay green while leaking.
-	##
-	## Measured status, so nobody deletes this on a wrong assumption: with the suite as it stands
-	## today the leak does NOT reproduce without this await — the ~10 s of tests that happen to run
-	## afterwards outlive the timer and it fires in time. That is ordering luck, not a guarantee:
-	## it depends on this file not being the last one GUT runs. 1.1 s against a ~14 s suite is a
-	## cheap way to stop depending on it.
+	## This used to `await get_tree().create_timer(1.1).timeout` before returning, because
+	## `_wait_for_child_exit_or_timeout()` raced a 1.0 s SceneTreeTimer against the container's
+	## `child_exiting_tree` — and when the wreck left first, which is the whole point of this test,
+	## the helper returned immediately and left that timer ticking with nobody awaiting it. The
+	## helper now measures its own deadline with `Time.get_ticks_msec()` and creates no timer at
+	## all, so there is nothing left to drain. `test_level_director_polling.gd` is the regression
+	## test for that; do not reintroduce the sleep here.
 	##
 	## (The `ObjectDB instances leaked` line the gate DOES print comes from step 1, the headless
-	## import, and predates this work — see BACKLOG.md under Discovered. It is not this test.)
-	await get_tree().create_timer(1.1).timeout
+	## import, and predates this work. It is not this test.)

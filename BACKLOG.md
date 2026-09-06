@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 23 open)
+## Code health backlog  (`code-health-backlog`, 24 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -187,7 +187,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Found on 2026-09-01 while adding the `station_assault` section (EPIC sub-item 2).
       → [docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-](docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-)
 
-- [ ] ****A test that ends while a `LevelDirector` coroutine is suspended leaks — and the gate stays** _(todo)_
+- [x] ****A test that ends while a `LevelDirector` coroutine is suspended leaks — and the gate stays** _(done)_
       green.** `_wait_enemies_cleared()` awaits `_wait_for_child_exit_or_timeout(container, 1.0)`,
       which holds a `SceneTreeTimer`. If the test returns while that is pending, freeing the
       director strands the timer and its `GDScriptFunctionState`, and Godot prints at process exit:
@@ -527,6 +527,54 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-06; recorded as an explicit out-of-scope follow-up (rejected alternative 3) in
       the approved plan for the contact-hitbox transform fix.
+
+- [ ] **Wire the leak grep into /agent/verify.sh — the agent cannot, /agent is read-only** _(todo)_
+      `/agent` is mounted **read-only** inside the dev container (`/dev/bcache0 on /agent type btrfs
+      (ro,...)`), so the agent cannot add leak patterns to the gate itself — verified by an append,
+      which failed with "Read-only file system".
+      
+      Everything else is in place. `scripts/check-test-leaks.sh` (new this cycle) runs gate step 3 with
+      the *exact* same arguments and additionally greps the output for
+      `ObjectDB instances leaked|resources still in use|Resource still in use`, exiting 1 on a hit. It
+      was verified both ways: green on the current 305-test suite, and red (exit 1) with a deliberate
+      stranding test dropped in.
+      
+      The gate change is one line in step 3 of `/agent/verify.sh`, after the existing `failing` grep:
+      
+      ```bash
+      LEAK='ObjectDB instances leaked|resources still in use|Resource still in use'
+      grep -Eq "$LEAK" "$LOG" && fail "the GUT run leaked objects at exit"
+      ```
+      
+      ⚠️ Apply it to **step 3 only**. Step 1, the headless `--import`, emits one benign
+      `ObjectDB instances leaked` of its own that predates the test suite — adding the pattern to the
+      shared `FATAL` regex would fail the gate on every run forever.
+
+- [ ] **Freeing LevelDirector mid-wait still strands its GDScriptFunctionState** _(todo)_
+      Follow-up to the SceneTreeTimer fix. `_wait_for_child_exit_or_timeout()` and `_wait_seconds()` no
+      longer create timers, so an *early return* leaves nothing behind — but a test (or a scene change)
+      that frees the director while `_wait_enemies_cleared()` is suspended still strands the coroutine
+      itself. Measured with `--verbose` after the fix:
+      
+      ```
+      Leaked instance: GDScriptNativeClass / GDScript / GDScriptFunctionState
+      Resource still in use: res://assault/scenes/systems/level_director/level_director.gd (GDScript)
+      ```
+      
+      Three objects per abandonment. It is inherent to Godot: once the object is freed the function
+      state can never be resumed, so nothing inside the loop's `if not is_instance_valid(self): return`
+      guard can help — that guard only runs if the coroutine gets one more frame first.
+      
+      A real fix means giving the director a cancel seam: suspend on a director-owned signal
+      (`await _wait_tick`) fed from `get_tree().process_frame`, and have `_exit_tree()` set a
+      `_cancelled` flag and emit `_wait_tick` once, which resumes every suspended wait *synchronously*
+      while the object is still alive so each can return and release its state. That is a change to live
+      gameplay code with re-entry cases to get right (`_enter_tree` must reset the flag and reconnect),
+      so it wants its own plan and review rather than being folded into the timer fix.
+      
+      Cost of not doing it: three leaked objects per level teardown, plus every test that ends mid-wait
+      needs the documented drain (`test_station_assault_section.gd` test 5). Bounded and small — this is
+      tidiness, not a bug the player can feel.
 
 ## Boss fight escalation: shared hull, flying laser projectors, desperation  (`boss-fight-escalation-shared-hull-flying-laser-projectors-de`, 7 open)
 

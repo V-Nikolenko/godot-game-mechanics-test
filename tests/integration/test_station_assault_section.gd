@@ -99,10 +99,12 @@ func test_section_does_not_advance_while_an_enemy_lives() -> void:
 		"must not advance while an enemy is still parented to the container")
 	assert_eq(_container.get_child_count(), 1, "the enemy should still be alive")
 
-	## Drain the director's still-suspended _wait_enemies_cleared() before teardown. It holds a
-	## 1 s SceneTreeTimer, and freeing the director out from under the coroutine strands both —
-	## which Godot reports at exit as "resources still in use". Tests 6 and 7 run the wait to
-	## completion themselves, so only this one needs it.
+	## Drain the director's still-suspended _wait_enemies_cleared() before teardown. Freeing the
+	## director out from under a suspended coroutine strands its GDScriptFunctionState, which
+	## Godot reports at exit as "ObjectDB instances leaked" / "resources still in use". (The
+	## helper no longer also strands a SceneTreeTimer — see test_level_director_polling.gd — but
+	## the function state alone is still enough to leak.) Tests 6 and 7 run the wait to completion
+	## themselves, so only this one needs it.
 	enemy.queue_free()
 	await wait_seconds(0.5)
 

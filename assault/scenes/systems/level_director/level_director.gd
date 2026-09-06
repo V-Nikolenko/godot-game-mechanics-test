@@ -82,24 +82,39 @@ func _advance() -> void:
 
 ## Awaits either [container]'s next child_exiting_tree signal OR a fallback
 ## timeout of [poll_seconds] — whichever happens first.
+##
+## The deadline is a Time.get_ticks_msec() comparison rather than a SceneTreeTimer, deliberately.
+## The loop already resumes once per frame, so a timer bought no precision — but it outlived an
+## early return by the whole remaining [poll_seconds], and anything that tore the tree down inside
+## that window (a test returning, the level ending) stranded it. Godot reports that at process exit
+## as `ObjectDB instances leaked` / `resources still in use`, neither of which matches the gate's
+## fatal-error regex, so it leaked in silence. Wall-clock also agrees with `_wait_enemies_cleared()`
+## below, whose own deadline has always been ticks-based — the two no longer disagree while
+## `Engine.time_scale` is off 1.0 (trajectory_calc_module.gd:34).
 func _wait_for_child_exit_or_timeout(container: Node, poll_seconds: float) -> void:
-	var timer := get_tree().create_timer(poll_seconds)
-	var done := [false]
+	var exited := [false]
 	var on_exit := func(_n: Node) -> void:
-		done[0] = true
-	var on_timeout := func() -> void:
-		done[0] = true
-
+		exited[0] = true
 	container.child_exiting_tree.connect(on_exit, CONNECT_ONE_SHOT)
-	timer.timeout.connect(on_timeout, CONNECT_ONE_SHOT)
 
-	while not done[0]:
+	var deadline_ms: int = Time.get_ticks_msec() + int(poll_seconds * 1000.0)
+	while not exited[0] and Time.get_ticks_msec() < deadline_ms:
 		await get_tree().process_frame
 		if not is_instance_valid(self):
 			return
 
-	if container.child_exiting_tree.is_connected(on_exit):
+	if is_instance_valid(container) and container.child_exiting_tree.is_connected(on_exit):
 		container.child_exiting_tree.disconnect(on_exit)
+
+
+## Frame-polled sleep, for the same reason as the helper above: a SceneTreeTimer is stranded by
+## anything that ends the tree inside the wait, and this one is only a settle before _advance().
+func _wait_seconds(seconds: float) -> void:
+	var deadline_ms: int = Time.get_ticks_msec() + int(seconds * 1000.0)
+	while Time.get_ticks_msec() < deadline_ms:
+		await get_tree().process_frame
+		if not is_instance_valid(self):
+			return
 
 
 func _wait_enemies_cleared() -> void:
@@ -141,7 +156,7 @@ func _wait_enemies_cleared() -> void:
 	print("[LevelDirector] Enemies cleared (%.2f s) — %d remaining" % [
 		elapsed_ms / 1000.0, container.get_child_count()
 	])
-	await get_tree().create_timer(0.2).timeout
+	await _wait_seconds(0.2)
 	if not is_instance_valid(self):
 		return
 	_advance()

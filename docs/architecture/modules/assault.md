@@ -380,6 +380,19 @@ remove it, and `_wait_enemies_cleared()` polls that same container, so a leftove
 next `ENEMIES_CLEARED` section forever. Each freed child takes `ScoreTracker`'s escape path, so
 timing out costs one combo penalty (x0.75) per leftover.
 
+**How the wait actually polls.** `_wait_enemies_cleared()` loops on the container's child count and
+re-checks its deadline only *between* polls, so the effective granularity is
+`_wait_for_child_exit_or_timeout(container, 1.0)` — a 0.3 s timeout really expires at ~1.0 s, plus
+a 0.2 s settle in `_wait_seconds()` before `_advance()`. Budget any test off the poll, not the
+nominal timeout. Both helpers measure their deadline with `Time.get_ticks_msec()` and create **no**
+`SceneTreeTimer`: the old implementation raced a `create_timer(poll_seconds)` against
+`child_exiting_tree`, so every early return — which is the normal case, since a dying enemy ends
+the poll on the next frame — abandoned a timer that kept ticking for the rest of the window and
+leaked if anything tore the tree down first. Wall-clock also matches the outer
+`enemies_cleared_timeout` deadline, which was always ticks-based, so the two no longer disagree
+while `Engine.time_scale` is off 1.0 (`trajectory_calc_module.gd:34`). Pinned by
+`tests/integration/test_level_director_polling.gd`.
+
 ### Race sub-mode
 
 Source: `assault/scenes/race/` (high-level only).

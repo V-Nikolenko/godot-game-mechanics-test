@@ -113,7 +113,7 @@
           "id": "a-test-that-ends-while-a-leveldirector-coroutine-is-suspende",
           "head": "**A test that ends while a `LevelDirector` coroutine is suspended leaks — and the gate stays",
           "body": "green.** `_wait_enemies_cleared()` awaits `_wait_for_child_exit_or_timeout(container, 1.0)`,\nwhich holds a `SceneTreeTimer`. If the test returns while that is pending, freeing the\ndirector strands the timer and its `GDScriptFunctionState`, and Godot prints at process exit:\n`WARNING: ObjectDB instances leaked at exit` and\n`ERROR: 1 resources still in use at exit` / `Resource still in use: …/level_director.gd`.\n**Neither line matches `/agent/verify.sh`'s `FATAL` regex**, so the gate passed while leaking\n— I only noticed by diffing a run with and without the new file. Two follow-ups worth\nconsidering: add `ObjectDB instances leaked|resources still in use` to the gate's fatal\npatterns (check the existing suite is clean first — it is, verified this run), and consider\nwhether `_wait_for_child_exit_or_timeout` should hold the timer in a variable it can cancel.\nWorked around in `tests/integration/test_station_assault_section.gd` and written up in\n`tests/README.md`.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null
         },
@@ -289,6 +289,22 @@
           "id": "move-code-built-contact-hitboxes-into-the-scenes-as-the-aste",
           "head": "Move code-built contact hitboxes into the scenes, as the asteroids already do",
           "body": "Four scripts build a contact `HitBox` at runtime (`base_enemy.gd:49-53`,\n`drone_interceptor.gd:141-148`, `kamikaze_drone.gd:53-60`, `ally_fighter.gd:72-77`), all now via\n`HitBox.matching_shape()`. The asteroid family already does it the other way:\n`big_asteroid.tscn`/`small_asteroid.tscn` author a `ContactHitBox` node in the scene and\n`asteroid_base.gd:41-42` only sets `damage`/`damage_type` on it.\n\nThe scene-authored version is the cleaner end state — the hull geometry lives next to the body\nshape where an author can see both, instead of being reconstructed in code from it — and it is\nthe pattern already proven in this repo. It is also what removes the whole class of bug the\ntransform fix just closed.\n\nNot free: nine scene edits with UID risk, and the per-subclass layer/mask logic that\n`drone_interceptor.gd:147` and `kamikaze_drone.gd:59` depend on (mask 128 rather than 0) has to\nmove into the scenes too. `tests/integration/test_contact_hitbox_geometry.gd` covers the result\neither way, so the migration is verifiable.\n\nFound on 2026-09-06; recorded as an explicit out-of-scope follow-up (rejected alternative 3) in\nthe approved plan for the contact-hitbox transform fix.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "wire-the-leak-grep-into-agent-verify-sh-the-agent-cannot-age",
+          "head": "Wire the leak grep into /agent/verify.sh — the agent cannot, /agent is read-only",
+          "body": "`/agent` is mounted **read-only** inside the dev container (`/dev/bcache0 on /agent type btrfs\n(ro,...)`), so the agent cannot add leak patterns to the gate itself — verified by an append,\nwhich failed with \"Read-only file system\".\n\nEverything else is in place. `scripts/check-test-leaks.sh` (new this cycle) runs gate step 3 with\nthe *exact* same arguments and additionally greps the output for\n`ObjectDB instances leaked|resources still in use|Resource still in use`, exiting 1 on a hit. It\nwas verified both ways: green on the current 305-test suite, and red (exit 1) with a deliberate\nstranding test dropped in.\n\nThe gate change is one line in step 3 of `/agent/verify.sh`, after the existing `failing` grep:\n\n```bash\nLEAK='ObjectDB instances leaked|resources still in use|Resource still in use'\ngrep -Eq \"$LEAK\" \"$LOG\" && fail \"the GUT run leaked objects at exit\"\n```\n\n⚠️ Apply it to **step 3 only**. Step 1, the headless `--import`, emits one benign\n`ObjectDB instances leaked` of its own that predates the test suite — adding the pattern to the\nshared `FATAL` regex would fail the gate on every run forever.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "freeing-leveldirector-mid-wait-still-strands-its-gdscriptfun",
+          "head": "Freeing LevelDirector mid-wait still strands its GDScriptFunctionState",
+          "body": "Follow-up to the SceneTreeTimer fix. `_wait_for_child_exit_or_timeout()` and `_wait_seconds()` no\nlonger create timers, so an *early return* leaves nothing behind — but a test (or a scene change)\nthat frees the director while `_wait_enemies_cleared()` is suspended still strands the coroutine\nitself. Measured with `--verbose` after the fix:\n\n```\nLeaked instance: GDScriptNativeClass / GDScript / GDScriptFunctionState\nResource still in use: res://assault/scenes/systems/level_director/level_director.gd (GDScript)\n```\n\nThree objects per abandonment. It is inherent to Godot: once the object is freed the function\nstate can never be resumed, so nothing inside the loop's `if not is_instance_valid(self): return`\nguard can help — that guard only runs if the coroutine gets one more frame first.\n\nA real fix means giving the director a cancel seam: suspend on a director-owned signal\n(`await _wait_tick`) fed from `get_tree().process_frame`, and have `_exit_tree()` set a\n`_cancelled` flag and emit `_wait_tick` once, which resumes every suspended wait *synchronously*\nwhile the object is still alive so each can return and release its state. That is a change to live\ngameplay code with re-entry cases to get right (`_enter_tree` must reset the flag and reconnect),\nso it wants its own plan and review rather than being folded into the timer fix.\n\nCost of not doing it: three leaked objects per level teardown, plus every test that ends mid-wait\nneeds the documented drain (`test_station_assault_section.gd` test 5). Bounded and small — this is\ntidiness, not a bug the player can feel.",
           "state": "todo",
           "badge": null,
           "planDir": null
