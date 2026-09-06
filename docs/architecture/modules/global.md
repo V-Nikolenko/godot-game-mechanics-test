@@ -120,6 +120,8 @@ if overflow > 0:
 
 `HitBox` (`extends Area2D`) is the *attacker* side: exports `damage: int = 1` and `damage_type: DamageType` (`enum DamageType { LASER, ROCKET, CONTACT }`). Put it on bullets, rockets, and ramming bodies.
 
+Static factory `HitBox.matching_shape(source: CollisionShape2D, layer, mask, dmg) -> HitBox` builds a `HitBox` whose geometry mirrors an existing body `CollisionShape2D` — the same `Shape2D` resource **and** the node `transform` that sizes and places it. Use it for any contact hitbox built in code; it returns the `HitBox` unparented, so a caller that needs `area_entered` can connect before `add_child()`. Copying `col.shape` by hand silently drops the scale (a `Shape2D` carries the radius, not the `CollisionShape2D.scale` that multiplies it), which is how every code-built contact box in the game ended up smaller than its visible hull — the gunship rammed with an 18 px box against a 41.5 px ship. `tests/integration/test_contact_hitbox_geometry.gd` sweeps every entity that has one and fails the gate if a hitbox stops matching its body.
+
 `HurtBox` (`extends Area2D`) is the *target* side. In `_ready()` it connects `area_entered`; when an overlapping area is a `HitBox` (and passes the optional `accepted_damage_types` filter), it re-emits `received_damage(damage)`. Filtering by type is via the exported `accepted_damage_types: Array[HitBox.DamageType]` (empty = accept all).
 
 Collision wiring: set the `HitBox`'s `collision_layer` to a "damage" layer and leave its mask empty; set the `HurtBox`'s `collision_mask` to scan that same layer. Only `Area2D`↔`Area2D` overlap is detected — `HurtBox` ignores non-`HitBox` areas. The damage path is **HitBox overlaps HurtBox → `HurtBox.received_damage` → your handler (or `DamageReaction`) → Shield/Health**.
@@ -131,6 +133,12 @@ func _ready() -> void:
     hurtbox.received_damage.connect(_on_hit)
 func _on_hit(damage: int) -> void:
     health.decrease(damage)   # or route through DamageReaction (below)
+```
+
+```gdscript
+# Building a contact hitbox in code, mirroring the body the scene author drew:
+var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
+add_child(HitBox.matching_shape(col, 256, 0, 20))   # layer, mask, damage
 ```
 
 ### Shield — `shield_component.gd`, `bubble_shield.tscn`, ordering in `damage_reaction.gd`

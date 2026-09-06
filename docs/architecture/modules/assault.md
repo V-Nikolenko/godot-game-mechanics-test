@@ -135,6 +135,11 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   `ram_ship.gd`, `space_station.gd`) or override the helper entirely (`drone_interceptor.gd`,
   `kamikaze_drone.gd`, `bonus_drone.gd`). Forgetting leaves the `.tres` value dead with no
   symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
+  The hitbox's *geometry* is handled for you: all four code-built contact hitboxes
+  (`base_enemy.gd`, `drone_interceptor.gd`, `kamikaze_drone.gd`, `ally_fighter.gd`) go through
+  `HitBox.matching_shape()`, which copies the body `CollisionShape2D`'s transform as well as its
+  shape, so a scaled body gets a correctly sized ram box.
+  `tests/integration/test_contact_hitbox_geometry.gd` asserts that for every entity that has one.
 
 ### Projectiles & bullet pool
 

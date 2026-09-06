@@ -6,13 +6,13 @@
 ##
 ## ── Why this file exists ─────────────────────────────────────────────────────────────────────
 ##
-## `BaseEnemy._add_contact_hitbox()` (`base_enemy.gd:49-60`) builds the contact HitBox with a
+## `BaseEnemy._add_contact_hitbox()` (`base_enemy.gd:49-53`) builds the contact HitBox with a
 ## hardcoded `damage = 20` and never looks at `config`. It runs from `BaseEnemy._ready()`, i.e.
 ## BEFORE the subclass has had a chance to read its own `.tres`, so every enemy that wants its
 ## configured `collision_damage` has to re-apply it afterwards. Most do
 ## (`bomber.gd:23-26`, `light_assault_ship.gd:20-23`, `ram_ship.gd:20-23`,
-## `space_station.gd:119-122`) or override the helper outright (`drone_interceptor.gd:141-153`,
-## `kamikaze_drone.gd:51-63`, `bonus_drone.gd:29-30`).
+## `space_station.gd:119-122`) or override the helper outright (`drone_interceptor.gd:141-148`,
+## `kamikaze_drone.gd:53-60`, `bonus_drone.gd:29-30`).
 ##
 ## The `Gunship` did not, so `gunship_config.tres`'s `collision_damage = 30` was dead and the
 ## heaviest ship in the roster rammed for 20. Nothing could see it: the field parses, the enemy
@@ -42,9 +42,10 @@
 ##    application happens there — so every enemy is added to the tree, never just instantiated.
 ## 3. **Only DIRECT children are searched for the HitBox.** Bullets carry their own HitBox, but
 ##    they live under the enemy's `BulletPool`, and the station's turrets live under `Turrets`.
-##    `HitBox.new()` is called in exactly four places in non-addon code
-##    (`base_enemy.gd`, `drone_interceptor.gd`, `kamikaze_drone.gd`, `ally_fighter.gd`), and the
-##    first three all `add_child()` straight onto the enemy — so "direct child" is unambiguous.
+##    Contact hitboxes are built in exactly four places in non-addon code (`base_enemy.gd`,
+##    `drone_interceptor.gd`, `kamikaze_drone.gd`, `ally_fighter.gd`, all via
+##    `HitBox.matching_shape()`), and the first three all `add_child()` straight onto the enemy —
+##    so "direct child" is unambiguous.
 extends GutTest
 
 ## `scene`: the enemy to instantiate. `config_path`: its `.tres`, or "" when it has none.

@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 22 open)
+## Code health backlog  (`code-health-backlog`, 23 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -175,7 +175,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so it should be a deliberate one rather than folded into unrelated work. `space_station.gd`
       does apply it, so the two enemies currently disagree about whether the field means anything.
 
-- [ ] ****`base_enemy.gd:56-59` builds the contact HitBox from `col.shape` but drops the** _(in progress)_
+- [x] ****`base_enemy.gd:56-59` builds the contact HitBox from `col.shape` but drops the** _(done)_
       `CollisionShape2D`'s `scale` and `position`.** Every enemy that scales its collision shape in
       the scene therefore gets a contact hitbox of the wrong size — `gunship.tscn:63-65` scales by
       2.31, so its contact hitbox is ~2.3× too small. Harmless-ish at 40 px, badly wrong at boss
@@ -485,6 +485,48 @@ the signal that the change was deliberate. Test names are given so the fix has a
          file that declares a `uid://` in a `gd_scene` / `gd_resource` header regardless of extension,
          or simply fail on tracked editor-scratch files by name. Widening the walk is the version that
          catches the next variant rather than this instance.
+
+- [ ] **Code-built contact hitboxes are typed as LASER damage, not CONTACT** _(todo)_
+      Every code-built contact `HitBox` leaves `damage_type` at the `HitBox.DamageType.LASER` default.
+      `HitBox.matching_shape()` (`global/components/hitbox_component.gd`) does not set it, and none of
+      the four callers (`base_enemy.gd:49-53`, `drone_interceptor.gd:141-148`,
+      `kamikaze_drone.gd:53-60`, `ally_fighter.gd:72-77`) set it afterwards. So every ram in the game
+      is typed as laser damage.
+      
+      `asteroid_base.gd:42` is the only place that sets `CONTACT`, and it does so on a hitbox authored
+      in the scene rather than built in code.
+      
+      Harmless today: the player's `HurtBox` has an empty `accepted_damage_types`, so the filter in
+      `hurtbox_component.gd:12-18` accepts everything. It becomes a live bug the moment anything wants
+      to resist or react to contact damage specifically — a laser-immune enemy would also become
+      ram-immune, with no visible cause.
+      
+      Fix is probably a `damage_type` parameter on `matching_shape()` defaulting to `CONTACT`, plus a
+      row in `tests/integration/test_contact_hitbox_geometry.gd`. Needs a check that nothing currently
+      filters on LASER first.
+      
+      Found on 2026-09-06 while fixing the contact-hitbox transform bug (recorded as an explicit
+      out-of-scope follow-up in that task's approved plan).
+
+- [ ] **Move code-built contact hitboxes into the scenes, as the asteroids already do** _(todo)_
+      Four scripts build a contact `HitBox` at runtime (`base_enemy.gd:49-53`,
+      `drone_interceptor.gd:141-148`, `kamikaze_drone.gd:53-60`, `ally_fighter.gd:72-77`), all now via
+      `HitBox.matching_shape()`. The asteroid family already does it the other way:
+      `big_asteroid.tscn`/`small_asteroid.tscn` author a `ContactHitBox` node in the scene and
+      `asteroid_base.gd:41-42` only sets `damage`/`damage_type` on it.
+      
+      The scene-authored version is the cleaner end state — the hull geometry lives next to the body
+      shape where an author can see both, instead of being reconstructed in code from it — and it is
+      the pattern already proven in this repo. It is also what removes the whole class of bug the
+      transform fix just closed.
+      
+      Not free: nine scene edits with UID risk, and the per-subclass layer/mask logic that
+      `drone_interceptor.gd:147` and `kamikaze_drone.gd:59` depend on (mask 128 rather than 0) has to
+      move into the scenes too. `tests/integration/test_contact_hitbox_geometry.gd` covers the result
+      either way, so the migration is verifiable.
+      
+      Found on 2026-09-06; recorded as an explicit out-of-scope follow-up (rejected alternative 3) in
+      the approved plan for the contact-hitbox transform fix.
 
 ## Boss fight escalation: shared hull, flying laser projectors, desperation  (`boss-fight-escalation-shared-hull-flying-laser-projectors-de`, 7 open)
 

@@ -105,7 +105,7 @@
           "id": "baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-",
           "head": "**`base_enemy.gd:56-59` builds the contact HitBox from `col.shape` but drops the",
           "body": "`CollisionShape2D`'s `scale` and `position`.** Every enemy that scales its collision shape in\nthe scene therefore gets a contact hitbox of the wrong size — `gunship.tscn:63-65` scales by\n2.31, so its contact hitbox is ~2.3× too small. Harmless-ish at 40 px, badly wrong at boss\nscale. `space_station.tscn` sidesteps it by authoring its shape at true size with `scale = 1`,\nbut the underlying helper is still lossy for everyone else. Copying the node's transform\nonto the new `CollisionShape2D` would fix it — though it would silently enlarge several\nexisting enemies' contact hitboxes, so it needs a balance pass, not a blind fix.\n\nFound on 2026-09-01 while adding the `station_assault` section (EPIC sub-item 2).",
-          "state": "in_progress",
+          "state": "done",
           "badge": null,
           "planDir": "docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-"
         },
@@ -273,6 +273,22 @@
           "id": "two-committed-tscn-tmp-files-duplicate-lightassaultship-s-ui",
           "head": "Two committed `.tscn*.tmp` files duplicate light_assault_ship's UID and dodge every integrity check",
           "body": "`assault/scenes/enemies/light_assault_ship/` has two Godot editor scratch files tracked in git —\n`light_assault_ship.tscn777863979.tmp` and `light_assault_ship.tscn785603970.tmp` (both added in\n`613ad48`). They are stale copies of `light_assault_ship.tscn`, and each one declares\n`uid=\"uid://br4qs4w455h3m\"` — the **same UID the live scene declares**. Three files, one UID.\n\nThey also point an `ext_resource` at\n`res://assault/scenes/enemies/light_assault_ship/enemyship.png`, which does not exist anywhere in\nthe repo, and they predate the state machine: neither has the `StateMachine` / `ApproachState` /\n`StrafeExitState` scripts the real scene carries, so anything that loaded one would get a\nlight assault ship with no AI.\n\nNothing in the gate can see any of this. `test_resource_uid_integrity.gd` walks `.tscn`, `.tres`\nand `.gd.uid`, so its \"no two files declare the same UID\" and \"every UID resolves\" checks skip\n`.tmp` entirely; `test_project_load_integrity.gd` walks the same three extensions, so the dangling\n`enemyship.png` reference is never loaded either. The duplicate-UID hazard is exactly the failure\nmode that test was written to catch, arriving through a file extension it does not look at.\n\nTwo parts, and the second is the one that matters:\n\n1. Delete both `.tmp` files and add a `*.tscn*.tmp` / editor-scratch pattern to `.gitignore` so\n   the next editor crash does not re-commit them.\n2. Decide whether `test_resource_uid_integrity.gd` should widen its walk — e.g. flag ANY tracked\n   file that declares a `uid://` in a `gd_scene` / `gd_resource` header regardless of extension,\n   or simply fail on tracked editor-scratch files by name. Widening the walk is the version that\n   catches the next variant rather than this instance.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "code-built-contact-hitboxes-are-typed-as-laser-damage-not-co",
+          "head": "Code-built contact hitboxes are typed as LASER damage, not CONTACT",
+          "body": "Every code-built contact `HitBox` leaves `damage_type` at the `HitBox.DamageType.LASER` default.\n`HitBox.matching_shape()` (`global/components/hitbox_component.gd`) does not set it, and none of\nthe four callers (`base_enemy.gd:49-53`, `drone_interceptor.gd:141-148`,\n`kamikaze_drone.gd:53-60`, `ally_fighter.gd:72-77`) set it afterwards. So every ram in the game\nis typed as laser damage.\n\n`asteroid_base.gd:42` is the only place that sets `CONTACT`, and it does so on a hitbox authored\nin the scene rather than built in code.\n\nHarmless today: the player's `HurtBox` has an empty `accepted_damage_types`, so the filter in\n`hurtbox_component.gd:12-18` accepts everything. It becomes a live bug the moment anything wants\nto resist or react to contact damage specifically — a laser-immune enemy would also become\nram-immune, with no visible cause.\n\nFix is probably a `damage_type` parameter on `matching_shape()` defaulting to `CONTACT`, plus a\nrow in `tests/integration/test_contact_hitbox_geometry.gd`. Needs a check that nothing currently\nfilters on LASER first.\n\nFound on 2026-09-06 while fixing the contact-hitbox transform bug (recorded as an explicit\nout-of-scope follow-up in that task's approved plan).",
+          "state": "todo",
+          "badge": null,
+          "planDir": null
+        },
+        {
+          "id": "move-code-built-contact-hitboxes-into-the-scenes-as-the-aste",
+          "head": "Move code-built contact hitboxes into the scenes, as the asteroids already do",
+          "body": "Four scripts build a contact `HitBox` at runtime (`base_enemy.gd:49-53`,\n`drone_interceptor.gd:141-148`, `kamikaze_drone.gd:53-60`, `ally_fighter.gd:72-77`), all now via\n`HitBox.matching_shape()`. The asteroid family already does it the other way:\n`big_asteroid.tscn`/`small_asteroid.tscn` author a `ContactHitBox` node in the scene and\n`asteroid_base.gd:41-42` only sets `damage`/`damage_type` on it.\n\nThe scene-authored version is the cleaner end state — the hull geometry lives next to the body\nshape where an author can see both, instead of being reconstructed in code from it — and it is\nthe pattern already proven in this repo. It is also what removes the whole class of bug the\ntransform fix just closed.\n\nNot free: nine scene edits with UID risk, and the per-subclass layer/mask logic that\n`drone_interceptor.gd:147` and `kamikaze_drone.gd:59` depend on (mask 128 rather than 0) has to\nmove into the scenes too. `tests/integration/test_contact_hitbox_geometry.gd` covers the result\neither way, so the migration is verifiable.\n\nFound on 2026-09-06; recorded as an explicit out-of-scope follow-up (rejected alternative 3) in\nthe approved plan for the contact-hitbox transform fix.",
           "state": "todo",
           "badge": null,
           "planDir": null

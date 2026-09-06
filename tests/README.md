@@ -218,7 +218,7 @@ polices **balance data** rather than the files or the engine. It asserts that ev
 enemy's contact `HitBox` deals the damage its `*_config.tres` declares — the `CLAUDE.md`
 convention that enemy stats live in the `.tres` and are applied in `_ready()`.
 
-It exists because `BaseEnemy._add_contact_hitbox()` (`base_enemy.gd:49-60`) builds that HitBox
+It exists because `BaseEnemy._add_contact_hitbox()` (`base_enemy.gd:49-53`) builds that HitBox
 with a hardcoded `damage = 20` and never reads `config`. It runs from `BaseEnemy._ready()`, i.e.
 *before* the subclass has read its own `.tres`, so every enemy that wants its configured
 `collision_damage` has to re-apply it afterwards — `bomber.gd`, `light_assault_ship.gd`,
@@ -240,6 +240,33 @@ Three things to know before extending it:
   touching the script fails the test rather than silently doing nothing.
 - **Only DIRECT children are searched for the HitBox.** Bullets carry their own, but they live
   under the enemy's `BulletPool`, and the station's turrets live under `Turrets`.
+
+`integration/test_contact_hitbox_geometry.gd` is the seventh invariant test, and the companion to
+the one above: that file polices what a contact `HitBox` *deals*, this one polices what it
+*covers*. For every entity that has one, the generated `CollisionShape2D` must carry both the body
+`CollisionShape2D`'s `shape` **and** its `transform`.
+
+A `Shape2D` is a resource: it holds the radius, not the `CollisionShape2D.scale` that multiplies
+it at runtime. All four build sites used to copy `col.shape` alone, so every entity that sizes its
+hull by scaling its collision shape — six of them — got a contact box at the *unscaled* radius.
+The gunship scales an 18 px circle by 2.31 to match its 92x84 sprite, so it rammed with a box 38 %
+of the hull the player can see; the drone interceptor was 3.08x off. `HitBox.matching_shape()`
+(`global/components/hitbox_component.gd`) is the fix and now the only way these are built.
+
+Two things to know before extending it:
+
+- **`_spawn()` and `_contact_hitbox()` are typed `Node2D`, not `BaseEnemy`.** `AllyFighter` is
+  `class_name AllyFighter extends CharacterBody2D` (`ally_fighter.gd:1-2`), so the enemy-typed
+  harness next door fails its row with "root is not a BaseEnemy" — a failure that reads exactly
+  like the bug under test but is not one. Do not "fix" that by dropping `ally_fighter`: it is the
+  only coverage of the fourth build site.
+- **Both guards are load-bearing.** Four of the eleven roster entities author their body at
+  `scale = 1`, where the main assertion passes even unfixed — so a vacuity guard asserts at least
+  one entity still has a non-identity transform. The other guard rejects a *non-uniform* scale,
+  the one case a copied transform genuinely cannot reproduce on every `Shape2D` type (the Godot
+  docs' "scaling of collision shapes is not supported" bites here and nowhere else). A uniform
+  scale does reach the physics server on 4.6.3 — measured, not assumed; see
+  `docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-/2-research.md`.
 
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,

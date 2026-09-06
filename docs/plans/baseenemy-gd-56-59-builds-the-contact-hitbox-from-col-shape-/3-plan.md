@@ -95,9 +95,9 @@ fighters are live content spawned via `wave_builder.gd:240`. The full set of aff
 
 | Interaction | Why it changes | Direction |
 |---|---|---|
-| enemy contact → **player** `HurtBox` (layer 128, mask 1281) | six enemy boxes grow | rams register from further out |
-| enemy contact → **ally fighter** `HurtBox` (layer 128, mask 1281) | same six boxes | allies die to rams from further out |
-| `drone_interceptor` / `kamikaze_drone` self-destruct (`mask = 128`) | 128 is the player's *and* the ally's `HurtBox` layer | both now trigger on an ally from further out too — 3.08× for the interceptor |
+| enemy contact → **player** `HurtBox` (layer 128, mask 1281) | five enemy boxes grow (the sixth affected entity is `ally_fighter` itself) | rams register from further out |
+| enemy contact → **ally fighter** `HurtBox` (layer 128, mask 1281) | same five boxes | allies die to rams from further out |
+| `drone_interceptor` self-destruct (`mask = 128`) | 128 is the player's *and* the ally's `HurtBox` layer | now triggers on the player and on an ally from 3.08× further out. `kamikaze_drone` overrides the helper the same way but authors its body at `scale = 1` (`kamikaze_drone.tscn:31-32`), so **its** box does not change |
 | **ally** contact (layer 64) → enemy `HurtBox` | site 4 grows the ally's own box 1.84× | ally→enemy ram damage lands more often. Enemy masks 97 (`interceptor`, `sniper_enemy`, `drone_interceptor`) and 65 (`bomber`, `gunship`, `light_assault_ship`, `kamikaze_drone`, `bonus_drone`) both contain bit 64. `ram_ship.tscn:80` is mask 33 and stays immune — pre-existing, not changed here |
 
 Enemy-into-enemy remains impossible: enemy `HurtBox` masks are 97, 65, 33 (`ram_ship.tscn:80`),
@@ -194,7 +194,7 @@ hand-built node would restate the implementation rather than test it.
 | Enlarged boxes overlap something they should not. | Layers unchanged: enemy contact `HitBox` stays layer 256. Reachable by the player `HurtBox` **and the ally fighter's** — both mask 1281, see "Exactly who is affected". Enemy `HurtBox` masks 97/65/33/1121 contain no bit 256, so enemies still cannot ram each other. |
 | `test_project_load_integrity.gd` trips on a new engine warning from setting scale in code. | It runs in the gate; the existing scenes already carry scaled collision shapes and pass. |
 | `drone_interceptor` now self-destructs on contact from ~3× further out, which is a real feel change. | Intended — it is a kamikaze. Flagged in the report for a human to eyeball; headless tests cannot judge feel. |
-| **Ally fighters get noticeably more fragile.** The same six enlarged enemy boxes reach them too (`ally_fighter.tscn:41-42`, mask 1281), and `drone_interceptor`/`kamikaze_drone` (`mask = 128`) now suicide into an ally from further out. | No test can judge whether allies now die too fast — survival time is a feel question. Named explicitly in the report as the second thing a human must eyeball. |
+| **Ally fighters get noticeably more fragile.** The same five enlarged enemy boxes reach them too (`ally_fighter.tscn:41-42`, mask 1281), and `drone_interceptor` (`mask = 128`) now suicides into an ally from further out. | No test can judge whether allies now die too fast — survival time is a feel question. Named explicitly in the report as the second thing a human must eyeball. |
 | **Ally rams land more often.** Site 4 grows the ally's own contact box 1.84×, and enemy `HurtBox` masks 97/65 both contain bit 64. | Correct in the same sense the enemy half is — the box now describes the ally's real hull — but it is an unrequested buff to allied damage output. Third item on the eyeball list. |
 
 ## Out of scope

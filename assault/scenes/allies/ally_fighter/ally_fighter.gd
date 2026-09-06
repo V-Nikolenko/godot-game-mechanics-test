@@ -74,11 +74,4 @@ func _add_contact_hitbox() -> void:
 	if not col:
 		return
 	# Layer 64 = player_hitbox — enemy HurtBoxes (mask 97) detect this and take damage.
-	var hb := HitBox.new()
-	hb.collision_layer = 64
-	hb.collision_mask = 0
-	hb.damage = 25
-	var shape_node := CollisionShape2D.new()
-	shape_node.shape = col.shape
-	hb.add_child(shape_node)
-	add_child(hb)
+	add_child(HitBox.matching_shape(col, 64, 0, 25))

@@ -120,6 +120,10 @@ Detail and APIs: [global.md](modules/global.md).
   and `tests/integration/test_enemy_contact_damage.gd` (the only one over **balance data**:
   every assault enemy's contact `HitBox` deals the damage its `*_config.tres` declares, which
   is otherwise dead the moment a subclass forgets the re-apply above)
+  and `tests/integration/test_contact_hitbox_geometry.gd` (its geometry companion: a contact
+  `HitBox` must carry the body `CollisionShape2D`'s transform, not just its `Shape2D` — copying
+  the shape alone drops the scale that sizes it, so the gunship rammed with an 18 px box against
+  a 41.5 px hull)
   — plus the space-station family.
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).

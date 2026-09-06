@@ -67,6 +67,11 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   before the subclass reads its own `.tres`, so an enemy that forgets to re-apply
   `collision_damage` leaves the field dead with no visible symptom — which is exactly how the
   gunship rammed for 20 while its config said 30.
+  `tests/integration/test_contact_hitbox_geometry.gd` is a fourth invariant check, over the same
+  hitboxes' *geometry*: a contact `HitBox` must carry the body `CollisionShape2D`'s transform, not
+  just its `Shape2D`. A `Shape2D` holds the radius but not the node scale that multiplies it, so
+  copying `col.shape` alone built the gunship's ram box at 18 px against a 41.5 px hull. All four
+  build sites now go through `HitBox.matching_shape()`.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.

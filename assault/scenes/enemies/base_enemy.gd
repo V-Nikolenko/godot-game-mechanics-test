@@ -50,14 +50,7 @@ func _add_contact_hitbox() -> void:
 	var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
 	if not col:
 		return
-	var hb := HitBox.new()
-	hb.collision_layer = 256
-	hb.collision_mask = 0
-	hb.damage = 20
-	var shape_node := CollisionShape2D.new()
-	shape_node.shape = col.shape
-	hb.add_child(shape_node)
-	add_child(hb)
+	add_child(HitBox.matching_shape(col, 256, 0, 20))
 
 func _on_received_damage(damage: int) -> void:
 	health.decrease(damage)
