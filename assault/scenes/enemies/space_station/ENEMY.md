@@ -464,19 +464,76 @@ the player colliding with a 256×256 body. Contact damage is unaffected: it come
 on layer 256 built by `base_enemy.gd:53-55`. If the hull should later be a solid obstacle, the
 opt-out is an `is_laser_blocking()` returning `false` (`beam_behavior.gd:67-68`).
 
-⚠️ **Known coverage gap — still open.** `tests/integration/test_space_station.gd` drives damage by
-emitting `received_damage` directly, so it does **not** prove any of these layer values. A core no
-bullet could ever hit passes all nine tests. Sub-item 2 placed the station in a live level but did
-**not** close this: `tests/integration/test_station_assault_section.gd` asserts the section's
-gating and wave data, not a projectile overlap. Closing it needs a test that instances
-`assault/scenes/projectiles/bullets/bullet.tscn` and steps physics.
+✅ **Coverage gap — now closed for the bullet path.** For most of this entity's life
+`tests/integration/test_space_station.gd` drove damage by emitting `received_damage` directly, so
+it proved nothing about any of these layer values: a core no bullet could ever hit passed all nine
+tests. Sub-item 2 did not close it either —
+`tests/integration/test_station_assault_section.gd` asserts the section's gating and wave data, not
+a projectile overlap.
+
+The two tests at the bottom of `test_space_station.gd` close it. They instance a real
+`assault/scenes/projectiles/bullets/bullet.tscn` and step physics, so the layer/mask chain has to
+work for them to pass:
+
+- `test_a_real_bullet_in_a_turret_lane_damages_the_turret_through_the_armored_core` — a bullet
+  fired up the `x = 76` lane crosses the core rect (bottom edge `y = +120`, ~6 frames at
+  900 px/s), fires `armor_deflected` for 0, keeps flying, and takes exactly 50 off the turret at
+  `y = +102`.
+- `test_a_real_bullet_damages_the_core_once_the_armor_is_broken` — with the turrets dead, a bullet
+  on the centre lane takes 50 off the core itself.
+
+Still **not** covered by physics: the rocket (32) and asteroid (1024) mask bits, and the mining
+laser's ray path (`test_laser_ray_hit_mask.gd` covers the station's *outgoing* beams, not incoming
+ones). Those values are still verified only by reading the scene.
 
 For the record, because it was got wrong twice during sub-item 2's review: a player bullet is
 **not** consumed by the first HurtBox it overlaps. `BulletPool` is used only by four enemies and
 the ally fighter — `straight_behavior.gd:22` just does `state.add_child(bullet)` — so
 `Bullet.expired` has no listener on the player path, and `default.tres` sets `range_px = 0.0` so
 `bullet.gd:49` never frees it either. A bullet crosses the armoured core (deflected) and goes on
-to hit the turrets behind it.
+to hit the turrets behind it. **This is now pinned by the first test above, not just written
+down** — see the load-bearing dependency note in the next section.
+
+### Core hurtbox: why it spans the whole hull, and why 88 x 240 was rejected
+
+The core `HurtBox` shares the body's 240 x 240 `RectangleShape2D_ss`
+(`space_station.tscn:22-23`, `:71-72`, `:80-81`). It was proposed that it shrink to an 88-wide
+central strip so its x-extents (`[-44, 44]`) stop overlapping the turrets' (`[50, 102]`) — the
+argument being that a shot fired up a turret lane triggers a redundant core deflection before it
+reaches the turret.
+
+**Rejected. Do not narrow it.** Full reasoning in
+`docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-/`. The short version:
+
+- The stated benefit does not exist. The bullet *does* still hit the turret, in the same pass, for
+  full damage (previous section). All narrowing buys is the removal of one extra hull flash.
+- The cost is `2 x (6 + 26) = 64` px of the boss's 256 px visible width — **25 %** — that swallows
+  shots and reports nothing. Not "deflected": *absent*.
+- In phase 2 it is far worse. `station_turret.gd:73-77` closes each turret's hurtbox on death, so
+  once the armour is gone the strip is the only damageable thing left: 88/256 = **34 % of the
+  visible width live, 66 % dead** — at the exact moment the fight has told the player the core is
+  open.
+- And the hull is *rotating* through phase 2 at `laser_rotation_speed = 0.5` rad/s, so which lanes
+  connect would depend on the hull's current angle — unreadable, and not a skill this fight
+  teaches.
+
+The rule this states, and the one the whole roster already follows: **an enemy's `HurtBox` covers
+the body collider the player collides with. Armour is a damage rule on a full-size hurtbox, never
+an absent hurtbox.** It is enforced by `tests/integration/test_enemy_hurtbox_geometry.gd`, whose
+`test_the_88x240_proposal_fails_this_sweep` applies this exact proposal to a live station instance
+and asserts it fails by 76 px per side. The Gradius idiom of a *separate armour-plate `HurtBox`*
+over the shoulders is the better long-term design and was deferred, not dismissed — it is a third
+HP bucket and new art on a boss whose approved epic is about to collapse five HP pools into one.
+
+⚠️ **Load-bearing dependency.** This decision assumes a player bullet is not consumed by the first
+hurtbox it overlaps. The backlog has an open task
+(`code-health-backlog` → `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`) proposing
+that the infinite piercing is a bug. **If that is ever "fixed" without also changing the station,
+every shot aimed at a turret is absorbed by the core one to two physics frames early, deflects for
+0 and dies — the turrets become unkillable and so does the boss.**
+`test_a_real_bullet_in_a_turret_lane_damages_the_turret_through_the_armored_core` is what turns
+that into a red gate at the point of the change instead of an unshootable boss discovered later.
+A geometry test cannot see it: it measures rectangles.
 
 ---
 
@@ -628,7 +685,10 @@ Shared code it depends on: `global/resources/attack/radial_attack_pattern.gd`
 Sprites: `assault/assets/sprites/enemies/station_core.png`, `station_turret.png`,
 `station_turret_destroyed.png`. The laser phase adds **no new art** — it reuses
 `assault/scenes/hazards/laser_ray/laser_ray.tscn`'s existing frames.
-Tests: `tests/integration/test_space_station.gd` (armour rule, turret lifecycle, config),
+Tests: `tests/integration/test_space_station.gd` (armour rule, turret lifecycle, config, and two
+real-bullet physics tests that pin the collision layers and the not-consumed-bullet premise),
+`tests/integration/test_enemy_hurtbox_geometry.gd` (the project-wide invariant that a `HurtBox`
+covers its body collider — carries the permanent 88x240 rejection),
 `tests/integration/test_station_laser_phase.gd` (trigger, telegraph window, self-damage
 regression, rotation rate, volley determinism, teardown, config),
 `tests/integration/test_laser_ray_hit_mask.gd` (the shared `LaserRay` export),

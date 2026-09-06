@@ -141,6 +141,15 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   shape, so a scaled body gets a correctly sized ram box.
   `tests/integration/test_contact_hitbox_geometry.gd` asserts that for every entity that has one.
 
+  The *incoming* side has its own invariant: an enemy's `HurtBox` must **cover** the body
+  `CollisionShape2D` the player collides with, swept over the whole roster by
+  `tests/integration/test_enemy_hurtbox_geometry.gd`. Armour is a damage *rule* on a full-size
+  hurtbox (deflect, flash, report 0), never a missing hurtbox — a shrunken one leaves visible hull
+  that swallows shots and reports nothing, which reads as a broken gun rather than as armour. The
+  space station is the worked example and the reason the file exists: see its
+  [ENEMY.md](../../../assault/scenes/enemies/space_station/ENEMY.md) -> "Core hurtbox: why it
+  spans the whole hull".
+
 ### Projectiles & bullet pool
 
 Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.gd`

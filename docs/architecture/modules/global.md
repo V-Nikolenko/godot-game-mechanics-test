@@ -126,6 +126,8 @@ Static factory `HitBox.matching_shape(source: CollisionShape2D, layer, mask, dmg
 
 Collision wiring: set the `HitBox`'s `collision_layer` to a "damage" layer and leave its mask empty; set the `HurtBox`'s `collision_mask` to scan that same layer. Only `Area2D`↔`Area2D` overlap is detected — `HurtBox` ignores non-`HitBox` areas. The damage path is **HitBox overlaps HurtBox → `HurtBox.received_damage` → your handler (or `DamageReaction`) → Shield/Health**.
 
+Geometry: a `HurtBox` should **cover** the body `CollisionShape2D` the entity collides with. Armour and invulnerability are damage *rules* applied in the `received_damage` handler — deflect, flash, report 0 — never a shrunken or absent hurtbox, which leaves visible hull that swallows shots and reports nothing (it reads to the player as a broken gun, not as armour, and it silently disables the two systems that drive `received_damage` with no physics at all). `tests/integration/test_enemy_hurtbox_geometry.gd` sweeps every assault entity and fails the gate on a hurtbox that stops covering its body.
+
 ```gdscript
 # On the target entity:
 @onready var hurtbox: HurtBox = $HurtBox

@@ -121,7 +121,7 @@
           "id": "should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-",
           "head": "Should the station's core hurtbox be narrowed to 88 x 240? — a design question, not a bug.",
           "body": "`space_station.tscn:16-17` uses ONE 240 x 240 `RectangleShape2D` for both the body collider\nand the core `HurtBox`, so the core's hurtbox spans the whole hull and the four turret\nhurtboxes sit strictly inside it. This is **not** a reachability bug — see the next item —\nbut it does mean shooting the hull shoulders registers as a deflected core hit rather than\nmissing, and a bullet fired up a turret lane triggers a core deflection *before* it reaches\nthe turret. Giving the `HurtBox` its own 88-wide shape would make the x-extents disjoint\n([-44, 44] vs [50, 102]) and the \"shoot the guns, then the core\" read cleaner. It was\nplanned, then dropped when its stated justification collapsed; it needs a deliberate\ndesign call, not a bug fix. Cost: one `sub_resource` and one node property.",
-          "state": "in_progress",
+          "state": "done",
           "badge": null,
           "planDir": "docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-"
         },

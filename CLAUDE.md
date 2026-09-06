@@ -72,7 +72,14 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   just its `Shape2D`. A `Shape2D` holds the radius but not the node scale that multiplies it, so
   copying `col.shape` alone built the gunship's ram box at 18 px against a 41.5 px hull. All four
   build sites now go through `HitBox.matching_shape()`.
-  `tests/integration/test_level_director_polling.gd` is a fifth, over the ENEMIES_CLEARED poll: it
+  `tests/integration/test_enemy_hurtbox_geometry.gd` is a fifth, over the *other* side of that
+  collision pair: every assault entity's `HurtBox` must **cover** the body `CollisionShape2D`,
+  within 1 px per edge. Armour is a damage rule on a full-size hurtbox — deflect, flash, report 0 —
+  never an absent hurtbox, because a shrunken one leaves visible hull that swallows shots and
+  reports nothing. It carries a permanent boundary test that applies the rejected "narrow the
+  station core to 88 x 240" proposal to a live instance and asserts it fails, so that decision is a
+  gate rather than prose someone re-litigates.
+  `tests/integration/test_level_director_polling.gd` is a sixth, over the ENEMIES_CLEARED poll: it
   asserts the poll ends on `child_exiting_tree`, honours its fallback window, and leaves nothing
   alive behind an early return. That last one is the reason it exists — the poll used to abandon a
   `SceneTreeTimer` on every early return, and a leak is reported only at *process exit*, after GUT

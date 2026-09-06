@@ -12,11 +12,13 @@
 ## Lives in integration/ rather than unit/ because it instances a real scene
 ## (`tests/README.md`: unit/ is "no scene loading").
 ##
-## KNOWN COVERAGE GAP: damage is driven by emitting `HurtBox.received_damage` directly, so these
-## tests do NOT prove the collision layers are right. A core whose HurtBox has the wrong
-## `collision_layer` — one no bullet could ever hit — passes every test in this file. Those
-## values are verified by reading the scene, and provably only once the station is in a live
-## level (sub-item 2).
+## COVERAGE GAP, now partly closed: most of the tests below drive damage by emitting
+## `HurtBox.received_damage` directly, so on their own they do NOT prove the collision layers are
+## right — a core whose HurtBox has a `collision_layer` no bullet could ever hit passes all nine of
+## them. The two tests at the bottom of this file close that for the bullet path: they instance a
+## real `bullet.tscn` and step physics, so the layer/mask chain has to work for them to pass. The
+## rocket (32) and asteroid (1024) mask bits and the incoming mining-laser ray are still verified
+## only by reading the scene. See `ENEMY.md` -> "Collision layers".
 extends GutTest
 
 const STATION_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_station/space_station.tscn")
@@ -142,3 +144,107 @@ func test_config_turret_health_is_applied_to_every_turret() -> void:
 			"turret max_health must come from the station's .tres")
 		assert_eq(turret.health.current_health, STATION_CONFIG.turret_health,
 			"turret starts at full config health")
+
+
+# ── Premise: real bullets, real physics ───────────────────────────────────────
+#
+# Everything above drives damage by emitting `HurtBox.received_damage` directly, which is the
+# documented coverage gap in this file's header: it proves nothing about collision layers, and
+# nothing about what happens when a shot has to cross the armoured core to reach a turret.
+#
+# These two instance a real `bullet.tscn` and let the physics server find the hurtboxes. They
+# exist because the whole "keep the core hurtbox hull-sized" decision
+# (`docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-/3-plan.md`,
+# `ENEMY.md` → "Core hurtbox: why it spans the whole hull") rests on one load-bearing fact:
+#
+#   **a player bullet is not consumed by the first hurtbox it overlaps.**
+#
+# That is true today only by accident of three unrelated settings — `bullet.gd:84` emits
+# `expired` without freeing, the `queue_free()` at `:49` is gated on `range_px > 0.0`, and
+# `assault/scenes/player/weapons/modes/default.tres` sets `range_px = 0.0`. The backlog has an
+# open task (`two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`) proposing that the
+# infinite piercing is a bug. If it is ever "fixed" without also changing the station, every shot
+# aimed at a turret is absorbed by the core one to two physics frames early, deflects for 0 and
+# dies — **the turrets become unkillable and so does the boss.** A geometry test cannot see that;
+# this one goes red at the point of the change.
+
+const BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
+
+## Lower-right turret, at station-local (76, 76) with a 26 px radius, so its rim spans
+## y ∈ [50, 102] on the x = 76 lane.
+const _LANE_TURRET_INDEX: int = 3
+
+## `Bullet` needs nothing set up: `speed` is exported at 900, `rotation` defaults to 0 (straight
+## up), and `_ready()` pushes its own `damage` into the child HitBox. It is parented to the
+## container rather than to the station so no hull transform — including the phase-2 rotation —
+## moves it, and so `add_child_autofree(_container)` still owns it at teardown. That matters:
+## this bullet never frees itself, which is the very premise under test.
+func _fire_bullet_at(spawn: Vector2) -> Bullet:
+	var bullet := BULLET_SCENE.instantiate() as Bullet
+	_container.add_child(bullet)
+	bullet.global_position = spawn
+	return bullet
+
+
+## THE premise test. A bullet fired up the x = 76 lane crosses the core's rect (bottom edge at
+## y = +120, ~6 frames at 900 px/s = 15 px/frame), is deflected by the armour for 0, keeps
+## flying, and hits the turret at y = +102 (~7 frames) for its full 50.
+##
+## The 12-frame budget is deliberate and bounded on both sides: fewer than 8 and the bullet has
+## not reached the turret; 17 or more and it reaches the *upper* turret at y = -50 and takes a
+## second 50 off a different one, so "exactly one hit of 50" stops being what is asserted.
+func test_a_real_bullet_in_a_turret_lane_damages_the_turret_through_the_armored_core() -> void:
+	watch_signals(_station)
+	var turret := _turrets()[_LANE_TURRET_INDEX] as StationTurret
+	var full_core: int = _station.health.max_health
+	var full_turret: int = turret.health.max_health
+
+	var bullet := _fire_bullet_at(Vector2(76.0, 200.0))
+	await wait_physics_frames(12)
+
+	assert_true(
+		is_instance_valid(bullet),
+		"the bullet must survive the core overlap — if it does not, the station's turrets are "
+		+ "unreachable behind their own armour and the boss cannot be killed"
+	)
+	assert_eq(
+		turret.health.current_health,
+		full_turret - 50,
+		"the turret behind the armoured core must take the bullet's full 50"
+	)
+	assert_eq(
+		_station.health.current_health,
+		full_core,
+		"the armoured core must not lose health to a bullet that physically hit it"
+	)
+	assert_signal_emitted(
+		_station,
+		"armor_deflected",
+		"the core is hittable while armoured — the bullet must reach its HurtBox through the "
+		+ "collision layers, not only through a direct received_damage emit"
+	)
+
+
+## The other half, and the one that closes the layer-mask half of the coverage gap: once the
+## armour is gone a real bullet on the centre lane damages the core itself. Every direct-emit
+## test above passes happily on a core whose `collision_layer` no bullet could ever see.
+##
+## Killing the turrets starts the laser phase, which rotates the hull ~6.7° over these 12 frames
+## and fires its first volley. Both are harmless here — a 240x240 box tilted by 6.7° still spans
+## the x = 0 lane — but it is why this test asserts on health and not on the hull's transform.
+func test_a_real_bullet_damages_the_core_once_the_armor_is_broken() -> void:
+	var full_core: int = _station.health.max_health
+	for i in 4:
+		_kill_turret(i)
+	assert_false(_station.is_armored(), "precondition: the armour is gone")
+
+	var bullet := _fire_bullet_at(Vector2(0.0, 200.0))
+	await wait_physics_frames(12)
+
+	assert_true(is_instance_valid(bullet), "the bullet is not consumed by the core hurtbox")
+	assert_eq(
+		_station.health.current_health,
+		full_core - 50,
+		"an unarmoured core must take damage from a real bullet found through the collision "
+		+ "layers, not just from a direct received_damage emit"
+	)

@@ -268,6 +268,40 @@ Two things to know before extending it:
   scale does reach the physics server on 4.6.3 — measured, not assumed; see
   `docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-/2-research.md`.
 
+`integration/test_enemy_hurtbox_geometry.gd` is the eighth invariant test, and the other side of
+that same collision pair. The two files above police the box an enemy hits the player *with*; this
+one polices the box the player hits the enemy *on*. For all eleven roster entities the `HurtBox`'s
+entity-local rect must **cover** the body `CollisionShape2D`'s, within 1.0 px per edge.
+
+The rule it states: **armour is a damage rule on a full-size hurtbox, never an absent hurtbox.** A
+shrunken hurtbox leaves visible hull that swallows shots and reports nothing — which the player
+reads as a broken gun, not as armour. It came out of the question of whether the space station's
+core hurtbox should narrow from 240 to 88 px wide; that was rejected (25 % of the boss's visible
+width dead in phase 1, 66 % in phase 2, on a rotating hull), and
+`test_the_88x240_proposal_fails_this_sweep` applies the exact proposal to a live station instance
+and asserts it fails, so the decision is a gate rather than a paragraph someone re-litigates.
+
+Four things to know before extending it:
+
+- **Enforced relation is `HurtBox ⊇ body CollisionShape2D`, not `HurtBox ⊇ sprite`.** The station's
+  body collider is 240x240 under a 256x256 sprite, so 8 px per edge of visible hull is outside
+  *both*. Do not mistake this for an art check.
+- **The 1.0 px tolerance is load-bearing from the first line**, not a patch applied after a red
+  run: three of the eleven fail a bare `Rect2.encloses()`, two by ~1e-5 px of float noise. It is
+  bounded by the smallest projectile *half-width* in the game (2.0 px), so a tolerated gap can
+  never be one a projectile fits through.
+- **The vacuity guard here is not the same shape as the sibling file's, deliberately.** This sweep
+  compares two rects that are *both* built by `_local_rect()`, so dropping the transform
+  composition cancels out and the sweep silently degrades to comparing raw `Shape2D` sizes while
+  staying green — measured. So the guard asserts the composition **changes at least one rect**,
+  not merely that some transform is non-identity. Copying `test_contact_hitbox_geometry.gd`'s
+  guard verbatim would not catch it.
+- **The roster has a completeness guard**, which the two older files still lack: a `DirAccess`
+  pass over the top level of `assault/scenes/enemies/` and `assault/scenes/allies/` fails if a
+  `<dir>/<dir>.tscn` exists that the roster does not list. Top level only — the enemies directory
+  also holds loose scripts, and subdirectories hold non-entity scenes (`bomber/bomb.tscn`,
+  `light_assault_ship/states/`).
+
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
 `test_station_gunnery.gd`, `test_station_reinforcements.gd`, `test_station_death_sequence.gd`,
@@ -275,9 +309,15 @@ The whole **space-station family** — `integration/test_space_station.gd`,
 different reason: the `space_station` entity, the `station_assault` section, the laser phase, the
 gunnery, the reinforcement spawner, the death sequence and `RadialAttackPattern` are all **new code**, so their tests assert intended behaviour
 rather than pinning existing quirks.
-`test_space_station.gd` carries a documented coverage gap — it drives damage by emitting
-`HurtBox.received_damage` directly, so it proves nothing about collision layers, and the section
-tests do not close that. See the file headers and
+`test_space_station.gd` carried a documented coverage gap — most of it drives damage by emitting
+`HurtBox.received_damage` directly, so it proved nothing about collision layers, and the section
+tests did not close that. Its last two tests now do, for the bullet path: they instance a real
+`bullet.tscn` and step physics, so the layer/mask chain has to work for them to pass. The first of
+the two is also the load-bearing guard on the station's core-hurtbox decision — it pins that a
+player bullet crosses the armoured core and still kills the turret behind it, so if the open
+backlog item about the infinitely-piercing player bullet is ever actioned, the gate says "the
+station's turrets just became unkillable" at the point of the change. The rocket (32) and asteroid
+(1024) mask bits and the incoming mining-laser ray are still uncovered. See the file headers and
 `assault/scenes/enemies/space_station/ENEMY.md`.
 
 `integration/test_level_director_polling.gd` is intent too, and of a different kind again: it pins

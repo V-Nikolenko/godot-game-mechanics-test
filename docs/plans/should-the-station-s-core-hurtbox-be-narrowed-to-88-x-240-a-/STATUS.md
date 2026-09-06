@@ -8,9 +8,13 @@
 - [x] 1. Context gathered → `1-context.md`
 - [x] 2. Research done → `2-research.md`
 - [x] 3. Plan written → `3-plan.md`
-- [ ] 4. Reviewed and APPROVED → `4-review.md`
-- [ ] 5. Implemented → `5-progress.md`
-- [ ] 6. Gate green
-- [ ] 7. Docs updated, backlog ticked
+- [x] 4. Reviewed and APPROVED → `4-review.md`
+- [x] 5. Implemented → `5-progress.md`
+- [x] 6. Gate green
+- [x] 7. Docs updated, backlog ticked
 
-**Next action:** Re-review revised plan (stage 4, round 2).
+**Next action:** None — complete. Round 2 review returned `VERDICT: APPROVED`. Answer to the
+backlog question: **no, do not narrow the station core hurtbox**, and the decision is now pinned by
+`tests/integration/test_enemy_hurtbox_geometry.gd` (6 tests) and two real-bullet physics tests in
+`tests/integration/test_space_station.gd`. `bash /agent/verify.sh` -> GATE PASS (313/313);
+`bash scripts/check-test-leaks.sh` -> LEAK CHECK PASS. No production code or scene changed.

@@ -124,6 +124,11 @@ Detail and APIs: [global.md](modules/global.md).
   `HitBox` must carry the body `CollisionShape2D`'s transform, not just its `Shape2D` — copying
   the shape alone drops the scale that sizes it, so the gunship rammed with an 18 px box against
   a 41.5 px hull)
+  and `tests/integration/test_enemy_hurtbox_geometry.gd` (the other side of the same collision
+  pair: every assault entity's `HurtBox` must **cover** its body `CollisionShape2D`, so armour is
+  a damage *rule* on a full-size hurtbox and never an absent one — it carries a permanent
+  boundary test that applies the rejected "narrow the station core to 88 x 240" proposal to a live
+  instance and asserts it fails)
   — plus the space-station family.
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).
