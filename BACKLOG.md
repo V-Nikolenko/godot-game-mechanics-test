@@ -201,7 +201,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Worked around in `tests/integration/test_station_assault_section.gd` and written up in
       `tests/README.md`.
 
-- [ ] **Should the station's core hurtbox be narrowed to 88 x 240? — a design question, not a bug.** _(todo)_
+- [ ] **Should the station's core hurtbox be narrowed to 88 x 240? — a design question, not a bug.** _(in progress)_
       `space_station.tscn:16-17` uses ONE 240 x 240 `RectangleShape2D` for both the body collider
       and the core `HurtBox`, so the core's hurtbox spans the whole hull and the four turret
       hurtboxes sit strictly inside it. This is **not** a reachability bug — see the next item —
@@ -211,6 +211,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       ([-44, 44] vs [50, 102]) and the "shoot the guns, then the core" read cleaner. It was
       planned, then dropped when its stated justification collapsed; it needs a deliberate
       design call, not a bug fix. Cost: one `sub_resource` and one node property.
+      → [docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-](docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-)
 
 - [ ] ****Two consecutive reviews asserted that a player bullet dies on its first hurtbox overlap.** _(todo)_
       It does not — worth knowing before anyone reasons about projectile lifetime again.**
