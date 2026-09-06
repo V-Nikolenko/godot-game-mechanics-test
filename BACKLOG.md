@@ -213,7 +213,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       design call, not a bug fix. Cost: one `sub_resource` and one node property.
       → [docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-](docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-)
 
-- [ ] ****Two consecutive reviews asserted that a player bullet dies on its first hurtbox overlap.** _(todo)_
+- [ ] ****Two consecutive reviews asserted that a player bullet dies on its first hurtbox overlap.** _(in progress)_
       It does not — worth knowing before anyone reasons about projectile lifetime again.**
       `BulletPool` is constructed only by `light_assault_ship.gd:27`, `gunship.gd:52`,
       `interceptor.gd:30`, `ally_fighter.gd:22` and `racer_weapon.gd:11` — **never by the player**.
@@ -227,6 +227,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       makes `PierceModule` (`pierces_remaining`, `MAX_PIERCE = 3`, `PIERCE_DAMAGE_FACTOR = 0.55`)
       look like it exists to *limit* damage rather than add it. That is probably not intended and
       is a real balance question for multi-part targets.
+      → [docs/plans/two-consecutive-reviews-asserted-that-a-player-bullet-dies-o](docs/plans/two-consecutive-reviews-asserted-that-a-player-bullet-dies-o)
 
 - [ ] **`test_space_station.gd`'s collision-layer coverage gap is still open.** _(todo)_
       Sub-item 1 recorded

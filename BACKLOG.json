@@ -129,9 +129,9 @@
           "id": "two-consecutive-reviews-asserted-that-a-player-bullet-dies-o",
           "head": "**Two consecutive reviews asserted that a player bullet dies on its first hurtbox overlap.",
           "body": "It does not — worth knowing before anyone reasons about projectile lifetime again.**\n`BulletPool` is constructed only by `light_assault_ship.gd:27`, `gunship.gd:52`,\n`interceptor.gd:30`, `ally_fighter.gd:22` and `racer_weapon.gd:11` — **never by the player**.\n`straight_behavior.gd:22` does a plain `state.add_child(bullet)`. Repo-wide there are exactly\ntwo connections to `Bullet.expired` (`bullet_pool.gd:56`, `sniper_enemy.gd:102`), and\n`bullet.gd:84` emits `expired` **without** `queue_free()`; the only `queue_free()` is `:49`,\ngated on `range_px > 0.0`, which `weapons/modes/default.tres` sets to `0.0`. So a default\nplayer bullet has no listener on `expired` and flies on with a live HitBox, damaging every\nhurtbox in its lane until it leaves the screen. Consequence worth a separate decision: the\nplayer's default shot is effectively **infinitely piercing against stacked hurtboxes**, which\nmakes `PierceModule` (`pierces_remaining`, `MAX_PIERCE = 3`, `PIERCE_DAMAGE_FACTOR = 0.55`)\nlook like it exists to *limit* damage rather than add it. That is probably not intended and\nis a real balance question for multi-part targets.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
-          "planDir": null
+          "planDir": "docs/plans/two-consecutive-reviews-asserted-that-a-player-bullet-dies-o"
         },
         {
           "id": "testspacestation-gd-s-collision-layer-coverage-gap-is-still-",
