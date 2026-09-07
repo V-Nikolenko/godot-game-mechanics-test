@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 25 open)
+## Code health backlog  (`code-health-backlog`, 24 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -240,7 +240,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-01 while regenerating the turret sprites.
 
-- [ ] ****`station_core.png` has a fully opaque background — the station will render as a grey** _(in progress)_
+- [x] ****`station_core.png` has a fully opaque background — the station will render as a grey** _(done)_
       square in space.** Measured: **65536/65536 pixels at alpha 1.0**, corner alpha `1.00`
       (`station_turret.png`, regenerated this run, is 54.7% opaque with corner alpha `0.00`, which
       is what a sprite should look like). The cause is the same one behind the 3/4 turrets: the
@@ -254,8 +254,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       backlog item was scoped to the turrets, and replacing the core is a separate generation plus
       a fresh visual check. Fix by regenerating with `create_map_object` (max canvas is 400×400, so
       256×256 fits), or by alpha-keying the existing grey if the art is worth keeping.
+      → [docs/plans/stationcore-png-has-a-fully-opaque-background-the-station-wi](docs/plans/stationcore-png-has-a-fully-opaque-background-the-station-wi)
 
-- [ ] **This container has no `file`, no `python3` and no `xxd` — only `od`.** _(todo)_
+- [x] **This container has no `file`, no `python3` and no `xxd` — only `od`.** _(done)_
       `scripts/pixellab.sh`
       called `file -b` unconditionally under `set -euo pipefail`, so **every `save-b64` and
       `download` aborted with exit 127 after having already written the file** — a confusing
@@ -687,6 +688,29 @@ the signal that the change was deliberate. Test names are given so the fix has a
         does not file this again.
       
       Found on 2026-09-07 while closing the collision-layer coverage gap.
+
+- [ ] **There are five tracked .tscn*.tmp files, not two — the existing task under-scopes it** _(todo)_
+      While verifying the sprite-transparency sweep I found the tmp-file count in that task is wrong: `git ls-files | grep "\.tmp$"` returns **five** tracked editor-scratch files, not two.
+      
+          assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn777863979.tmp
+          assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn785603970.tmp
+          assault/scenes/player/player_fighter.tscn6026545143.tmp
+          infiltration/scenes/entities/player/player.tscn1097983848.tmp
+          infiltration/scenes/entities/player/player.tscn1101780008.tmp
+      
+      The existing task `two-committed-tscn-tmp-files-duplicate-lightassaultship-s-ui` describes only the
+      two under `light_assault_ship/` and its duplicate-UID analysis covers only those. The other three
+      are the same class of file and dodge the same integrity checks (`test_resource_uid_integrity.gd`
+      and `test_project_load_integrity.gd` both walk `.tscn`/`.tres`/`.gd` only, so no `.tmp` is ever
+      read), and nobody has checked whether the player_fighter and infiltration ones also duplicate a
+      live UID.
+      
+      Fold this into that task rather than doing it separately - the fix is the same one it already
+      proposes (delete + `.gitignore` + widen the UID walk to any file declaring a `uid://` in a
+      `gd_scene`/`gd_resource` header regardless of extension). Recording it so the scope is right when
+      someone picks it up.
+      
+      Found 2026-09-07 while fixing the station core sprite background.
 
 ## Boss fight escalation: shared hull, flying laser projectors, desperation  (`boss-fight-escalation-shared-hull-flying-laser-projectors-de`, 7 open)
 

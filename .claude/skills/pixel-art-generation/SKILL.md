@@ -101,6 +101,14 @@ Naming the 2D shapes ("base is a circle, barrel is a flat rectangle") is the par
 | **`create_sidescroller_tileset`** | **NEVER** | There is no side-scrolling mode in this game. `assault/` is a *top-down* shooter. |
 | **`create_isometric_tile`** | **NEVER** for these two modules | `infiltration/` only. |
 
+**If you use `create_image_pixflux` / `create_image_pixen` / `create_image_pro` for anything drawn over
+the game world, you MUST pass `no_background: true`.** It is optional and it is not the default:
+without it the API treats it as unset and *paints a background*, and the sprite renders in-game as
+an opaque card that cuts a hard rectangle out of the starfield. This is not hypothetical —
+`station_core.png` shipped that way at **65536/65536 pixels at alpha 1.0** and survived two cycles.
+The tools in the table above (`create_map_object`, `create_character`, the tilesets) are transparent
+by construction and need no flag, which is why the turrets came back correct without anyone asking.
+
 Prefer the cheapest tool that meets the need. `create_character` on something that never rotates
 wastes the generation budget.
 
@@ -156,6 +164,21 @@ with a throwaway Godot project in `/tmp` (this container has **no `python3`, no 
 be well under 100% and its corner pixel should be `0.00`. `station_core.png` measured
 65536/65536 opaque and nobody noticed for two cycles, because a lone sprite on the Read tool's
 backdrop looks the same either way.
+
+**When that assertion fires, you do not have to regenerate.** Run:
+
+```bash
+./scripts/strip-sprite-bg.sh assault/assets/sprites/enemies/foo.png     # add --dry-run first
+godot --headless --path /work/repo --import                            # or the engine reads the stale .ctex
+```
+
+It flood-fills inward from the image border, so it removes the sky without punching holes through
+background-coloured detail the artwork encloses. It refuses to run unless all four corners are one
+opaque colour, and refuses to write if the fill would swallow the sprite. Prefer it to
+regeneration for art that is already correct in angle and palette: a regeneration spends the
+capped monthly allowance, cannot be undone, and here would have discarded a core the four turrets
+were designed to match. `tests/integration/test_entity_sprite_transparency.gd` is the gate that
+fails the build when a world sprite is near-solid.
 
 ## 6. Sizing and import
 

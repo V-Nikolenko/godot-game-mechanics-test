@@ -106,6 +106,17 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `GATE PASS` on a leaking suite**. `scripts/check-test-leaks.sh` runs gate step 3 and additionally
   greps for the leak lines; run it after touching anything that awaits. It is a separate script
   because `/agent` is mounted read-only, so the gate itself cannot be changed from in here.
+  `tests/integration/test_entity_sprite_transparency.gd` is an eighth, and the only one over the
+  **art**: no texture an entity under `assault/scenes/{enemies,player,projectiles,hazards,allies}`
+  draws over the game world may be 90%+ fully opaque, because a painted-in background renders as a
+  card that cuts a hard rectangle out of the starfield. `station_core.png` shipped at
+  65536/65536 px opaque and survived two cycles, because **no gate step renders a scene** —
+  `--import` loads no `.tscn` and `--quit` boots only `res://boot/…`. It reads scenes through
+  `PackedScene.get_state()` instead of instantiating them, and resolves `Sprite2D.texture`,
+  `AnimatedSprite2D.sprite_frames` and `AtlasTexture.atlas` — a `Sprite2D`-only walk finds 9
+  textures and four of its five roots contribute nothing. Fix a sprite that trips it with
+  `./scripts/strip-sprite-bg.sh <png>` (border flood fill, then `--import`) rather than a
+  regeneration, which spends the capped monthly PixelLab allowance and cannot be undone.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.

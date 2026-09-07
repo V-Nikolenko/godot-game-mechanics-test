@@ -149,6 +149,14 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   [ENEMY.md](../../../assault/scenes/enemies/space_station/ENEMY.md) -> "Core hurtbox: why it
   spans the whole hull".
 
+  A third sweep polices the **art** rather than the collision shapes:
+  `tests/integration/test_entity_sprite_transparency.gd` fails any texture an entity draws over
+  the game world that is 90%+ fully opaque, because a painted-in background renders as a card that
+  cuts a hard rectangle out of the starfield. `station_core.png` shipped that way at 100% and
+  survived two cycles, since nothing in the gate renders a scene. Recovery for art that is already
+  correct in angle and palette is `./scripts/strip-sprite-bg.sh` (border flood fill) rather than a
+  regeneration.
+
 ### Projectiles & bullet pool
 
 Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.gd`

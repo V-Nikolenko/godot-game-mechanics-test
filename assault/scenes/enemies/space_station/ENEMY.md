@@ -16,9 +16,10 @@ reward — it wakes the superweapon up, and the second half is fought on the mov
 > phase 1 (4b) — and **dies on screen**, holding its section open for a staged blast chain before
 > handing off to `planet_approach` (5).
 >
-> **What is still open is not code:** nobody has played this fight, and `station_core.png` has an
-> opaque background so the hull currently renders as a grey square. Both, plus every other known
-> gap, are in the epic dossier —
+> **What is still open is not code:** nobody has played this fight. (`station_core.png`'s opaque
+> background — the hull rendering as a grey square — was fixed on 2026-09-07; see *Sprite
+> provenance* below.) That and every other known
+> gap are in the epic dossier —
 > [`docs/epics-done/station-mini-boss/`](../../../../docs/epics-done/station-mini-boss/)
 > (`REPORT.md` → *Known gaps*). Plans and reviews:
 > [`docs/plans/station-mini-boss-destructible/`](../../../../docs/plans/station-mini-boss-destructible/),
@@ -63,7 +64,22 @@ mandates them.
 |---|---|---|
 | `station_turret.png` | `create_map_object` | `view: "high top-down"`, `outline: "lineless"`, `detail: "medium detail"`, `shading: "medium shading"`, 64×64 |
 | `station_turret_destroyed.png` | `create_object_state` off the intact turret | inherits the source's view; keeps the footprint and palette aligned |
-| `station_core.png` | `create_image_pixflux` (original) | **has an opaque background** — see *Discovered* in `BACKLOG.md` |
+| `station_core.png` | `create_image_pixflux` (original), then `./scripts/strip-sprite-bg.sh` | **`create_image_pixflux` painted a background** because `no_background` is optional and defaults to unset. Not regenerated — the artwork is correct in angle and palette and the two turrets were designed to match it; the background was keyed out instead |
+
+**The core's background was keyed out, not regenerated (2026-09-07).** It shipped at
+**65536/65536 px at alpha 1.0** and rendered as a 256×256 grey card cutting a hard rectangle out
+of the starfield — invisible to every gate step, because none of them renders a scene. The fix
+was a 4-connected flood fill seeded from the image border
+(`./scripts/strip-sprite-bg.sh assault/assets/sprites/enemies/station_core.png`, then
+`--import`), which removed **34324 px** of `#565657` sky and changed **no RGB byte at all**;
+the **41 px** of that colour the artwork encloses were kept, because a global colour key would
+have punched 41 holes through the hull. Opacity went **100.00% → 47.63%**, against
+`station_turret.png`'s 54.71%. Verified three ways: the composite at 1×, a 4× zoom of the hull
+edge over a checkerboard (no halo — the importer's `process/fix_alpha_border=true`, no mipmaps,
+and `project.godot:175`'s Nearest filtering each rule the fringe out independently), and the
+alpha silhouette as a black/white mask (solid, hole-free). Regenerating was rejected: it spends a
+capped monthly allowance, cannot be undone, and would have discarded the core the turrets match.
+`tests/integration/test_entity_sprite_transparency.gd` now fails the gate if it regresses.
 
 The prompt that worked names the 2D shapes seen from above — "the base reads as a flat **circle**,
 the barrels as two short flat **rectangles** lying across it" — plus the skill's negative list.

@@ -423,6 +423,21 @@ point of the suite is that a behaviour change is a *visible* change.
   func after_all() -> void:  _sandbox.restore()
   ```
 
+- **`Texture2D.get_image()` returns the same `Image` instance on every call**, so mutating it
+  poisons every later reader in the same GUT process — including later assertions in the test that
+  mutated it. Verified on `CompressedTexture2D`: `second get_image() is same instance: true`.
+  `duplicate()` it, and duplicate **inside the helper** so no caller can forget
+  (`integration/test_entity_sprite_transparency.gd` does this, and its boundary case re-reads the
+  original afterwards to prove the duplication worked). Same class of trap as a shared `Shape2D`
+  sub-resource — see `integration/test_enemy_hurtbox_geometry.gd`'s note on `RectangleShape2D_ss`.
+  Note also that `Image.duplicate()` is typed `Resource`, so `var copy := img.duplicate()` is a
+  **parse error** under GUT's warning load; write `img.duplicate() as Image`.
+
+- **An edited image file is invisible until you re-import.** A non-editor run resolves a texture
+  through the `[remap] path` in its `.import` file to `.godot/imported/*.ctex` and never checks
+  the source; the staleness check lives in a `.md5` sidecar it does not consult. Change a `.png`
+  and the suite keeps reading the old pixels until `godot --headless --path . --import` runs.
+
 - **Prefer a tree-less `Script.new()` instance to the live autoload.** Outside the tree
   `_ready()` never fires, so `_load()` never runs and the object starts from a known-empty
   state. Use the real singleton only when the code under test needs `get_tree()`.
@@ -459,6 +474,12 @@ outside `addons/`, asserting nothing loads to `null`, every scene instantiates, 
 compiles, and the engine logs no error or warning along the way.
 Tooling: the two local patches the vendored GUT addon needs under Godot 4.6.3
 (`integration/test_gut_local_patches.gd`).
+Art: entity sprite transparency (`integration/test_entity_sprite_transparency.gd`) — no texture an
+entity under `assault/scenes/{enemies,player,projectiles,hazards,allies}` draws over the game world
+may be 90%+ fully opaque. Reads scenes via `PackedScene.get_state()` (never instantiated) and
+resolves `Sprite2D.texture`, `AnimatedSprite2D.sprite_frames` and `AtlasTexture.atlas`; walks 25
+scenes to 16 distinct textures. Two knowingly uncovered: both asteroid hazards assign their sheet
+at runtime from a `tileset_texture` export, so no node property holds it.
 Entities: the `space_station` mini-boss (`integration/test_space_station.gd`) — armour rule, turret
 lifecycle, and the config-driven stats.
 Entities, the layers: every way damage reaches that boss

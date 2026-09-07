@@ -135,6 +135,14 @@ Detail and APIs: [global.md](modules/global.md).
   `HitBox` must carry the body `CollisionShape2D`'s transform, not just its `Shape2D` — copying
   the shape alone drops the scale that sizes it, so the gunship rammed with an 18 px box against
   a 41.5 px hull)
+  and `tests/integration/test_entity_sprite_transparency.gd` (the only invariant over **art**:
+  no texture an entity under `assault/scenes/{enemies,player,projectiles,hazards,allies}` draws
+  over the game world may be 90%+ fully opaque, because a painted-in background renders as a card
+  that cuts a hard rectangle out of the starfield — `station_core.png` shipped at 100% and no
+  gate step could see it, since `--import` loads no scene and `--quit` boots only `res://boot/…`.
+  It reads scenes through `PackedScene.get_state()` rather than instantiating them, and resolves
+  `Sprite2D.texture`, `AnimatedSprite2D.sprite_frames` and `AtlasTexture.atlas` — a
+  `Sprite2D`-only walk finds 9 textures and four of the five roots contribute nothing)
   and `tests/integration/test_enemy_hurtbox_geometry.gd` (the other side of the same collision
   pair: every assault entity's `HurtBox` must **cover** its body `CollisionShape2D`, so armour is
   a damage *rule* on a full-size hurtbox and never an absent one — it carries a permanent
