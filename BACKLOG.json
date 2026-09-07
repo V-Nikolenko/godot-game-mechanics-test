@@ -169,7 +169,7 @@
           "id": "spike-testspikelaser-gd-and-spike-testspikeselfkill-gd-are-t",
           "head": "`spike/test_spike_laser.gd` and `spike/test_spike_selfkill.gd` are tracked dead code.",
           "body": "`git ls-files spike/` lists both plus their `.uid`s.\n`docs/plans/station-laser-phase/1-context.md` claimed they had been \"deleted afterwards\";\nthey had not, and the claim has now been corrected in place. They sit outside\n`-gdir=res://tests` so the gate never runs them, which means they can rot against\n`laser_ray.gd` / `space_station.gd` without anything noticing — and they are written against\nexactly the scripts the laser phase changes. Delete them (they are step 1 of\n`docs/plans/station-laser-phase/3-plan.md`), or move them under `tests/` so the gate keeps\nthem honest. They are genuinely useful as fixtures: they demonstrate the layer-128 stub\n`HurtBox`, `wait_seconds` beam stepping, and the self-kill reproduction.\n\nFound on 2026-09-02 while implementing the station laser phase (EPIC sub-item 3).",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null
         },
@@ -177,9 +177,9 @@
           "id": "explosioneffect-orphans-its-particles-onto-whatever-the-dyin",
           "head": "`ExplosionEffect` orphans its particles onto whatever the dying entity's parent is.",
           "body": "`global/components/explosion_effect.gd:28-52` adds the `CPUParticles2D` to\n`actor.get_parent()` and relies on `p.finished.connect(p.queue_free)` to clean up ~1 s later.\nIn-game that parent is `WaveManager.enemy_container`, so it is harmless. In a test it is\nwhatever node the test used, and any test that kills an entity added straight to the test\nscript ends with `GUT WARNING: Test script has 2 unfreed children`. Worked around in\n`tests/integration/test_station_laser_phase.gd` by parenting through a container `Node2D`\n(documented in `tests/README.md`), but the component itself would be tidier if the particles\nwere parented to the entity's *owner-scene* root, or if `explode()` took an explicit\ncontainer. Worth deciding before sub-item 4 adds many more deaths per fight.\n**Update 2026-09-02 — it bit again, one level down, and cost a full gate cycle.** For a\n`StationTurret` the parent `explode()` writes into is the station's `$Turrets` node, so from\nthe first turret kill onward `$Turrets.get_children()` contains `CPUParticles2D` mixed in\nwith the turrets. `test_station_gunnery.gd`'s `_turrets()` helper did a raw `get_children()`,\nso `child as StationTurret` returned `null` and the next call died with\n`Invalid call. Nonexistent function 'is_alive' in base 'Nil'` — an *Unexpected Error*, which\nGUT reds with no failing assertion to point at, so it reads as unrelated. Fixed in the test\nby filtering to `StationTurret` (what `SpaceStation._turrets()` already does), and the trap\nis now written up in `tests/README.md`. This is the second workaround for the same component;\nan explicit container argument on `explode()` would have prevented both.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
-          "planDir": null
+          "planDir": "docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin"
         },
         {
           "id": "the-station-s-collision-layer-coverage-gap-is-now-only-half-",

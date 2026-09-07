@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 24 open)
+## Code health backlog  (`code-health-backlog`, 23 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -284,7 +284,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       shared and must never be mutated from a test. No test pins this today.
       → [docs/plans/every-enemy-that-does-export-var-config-load-shares-one-conf](docs/plans/every-enemy-that-does-export-var-config-load-shares-one-conf)
 
-- [ ] **`spike/test_spike_laser.gd` and `spike/test_spike_selfkill.gd` are tracked dead code.** _(todo)_
+- [x] **`spike/test_spike_laser.gd` and `spike/test_spike_selfkill.gd` are tracked dead code.** _(done)_
       `git ls-files spike/` lists both plus their `.uid`s.
       `docs/plans/station-laser-phase/1-context.md` claimed they had been "deleted afterwards";
       they had not, and the claim has now been corrected in place. They sit outside
@@ -297,7 +297,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-02 while implementing the station laser phase (EPIC sub-item 3).
 
-- [ ] **`ExplosionEffect` orphans its particles onto whatever the dying entity's parent is.** _(todo)_
+- [ ] **`ExplosionEffect` orphans its particles onto whatever the dying entity's parent is.** _(in progress)_
       `global/components/explosion_effect.gd:28-52` adds the `CPUParticles2D` to
       `actor.get_parent()` and relies on `p.finished.connect(p.queue_free)` to clean up ~1 s later.
       In-game that parent is `WaveManager.enemy_container`, so it is harmless. In a test it is
@@ -317,6 +317,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       by filtering to `StationTurret` (what `SpaceStation._turrets()` already does), and the trap
       is now written up in `tests/README.md`. This is the second workaround for the same component;
       an explicit container argument on `explode()` would have prevented both.
+      → [docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin](docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin)
 
 - [ ] **The station's collision-layer coverage gap is now only half open.** _(todo)_
       `assault/scenes/enemies/space_station/ENEMY.md` records that
