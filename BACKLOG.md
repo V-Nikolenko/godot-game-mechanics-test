@@ -72,7 +72,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
 
 ## Code health backlog  (`code-health-backlog`, 23 open)
 
-- [x] **Write the dossier for the completed station mini-boss epic** _(done)_
+- [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
       `docs/epics-done/station-mini-boss/` — `PRD.md`, `SOURCES.md`, `REPORT.md` per Stage 8
       of the `feature-workflow` skill. Everything needed is already in the six
@@ -83,7 +83,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       *Done when:* the three files exist and every claim in `REPORT.md` names a commit, a test,
       or a plan file.
 
-- [x] **GUT silently drops a test script it cannot load, and still exits 0.** _(done)_
+- [x] **GUT silently drops a test script it cannot load, and still exits 0.** _(done - feature, medium, sonnet)_
       When
       `tests/integration/test_space_station.gd` referenced classes that did not exist yet, GUT
       printed `---- All tests passed! ----`, reported `Scripts 2` instead of 3, and **returned exit
@@ -94,32 +94,32 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `SCRIPT ERROR` the way steps 1 and 2 already do. This is the only reason the "watch it fail"
       step of the feature workflow worked here — the red was read off stderr, not off GUT's verdict.
 
-- [x] **`UpgradeState.unlock()` accepts ids that are not in `ALL_IDS`.** _(done)_
+- [x] **`UpgradeState.unlock()` accepts ids that are not in `ALL_IDS`.** _(done - feature, medium, sonnet)_
       A typo'd id is stored and reported `true` by `is_unlocked()`, but `unlocked_ids()` iterates
       `ALL_IDS`, so it never appears in any menu — a silent, invisible failure. Compare
       `ShipModuleState.unlock()`, which validates and `push_warning`s. Pinned by
       `tests/unit/test_upgrade_state.gd::test_unknown_ids_are_stored_but_never_listed`.
 
-- [x] **`SessionState` recovers the temp-HP stack size with integer division.** _(done)_
+- [x] **`SessionState` recovers the temp-HP stack size with integer division.** _(done - feature, medium, sonnet)_
       `global/autoloads/session_state.gd:85` computes `_temp_hp_stack = maximum /
       TempHealth.MAX_STACKS`. When `maximum` is not a multiple of 5 the stack size rounds down and
       the pool the player gets back after a level transition is smaller than the one they earned.
       Reachable whenever a ship's `base_health / 2` is not a multiple of 5. Pinned by
       `tests/unit/test_session_state.gd::test_temp_health_stack_size_uses_integer_division`.
 
-- [x] **`ShipModuleState.equip()` never consults `_unlocked`.** _(done)_
+- [x] **`ShipModuleState.equip()` never consults `_unlocked`.** _(done - feature, medium, sonnet)_
       Any module in the catalogue can be
       equipped whether or not it was earned. Fine if unlock state is purely cosmetic for the menu;
       a progression hole if it is not. Worth a decision either way. Pinned by
       `tests/unit/test_ship_module_state.gd::test_equipping_does_not_require_unlocking`.
-      → [docs/plans/shipmodulestate-equip-never-consults-unlocked](docs/plans/shipmodulestate-equip-never-consults-unlocked)
+      -> [docs/plans/shipmodulestate-equip-never-consults-unlocked](docs/plans/shipmodulestate-equip-never-consults-unlocked)
 
-- [x] **`MissionState.complete()` cannot record a zero-star clear.** _(done)_
+- [x] **`MissionState.complete()` cannot record a zero-star clear.** _(done - feature, medium, sonnet)_
       `clampi(stars, 1, 3)` turns a
       0-star completion into 1 star. Intentional? Pinned by
       `tests/unit/test_mission_state.gd::test_stars_are_clamped_into_one_to_three`.
 
-- [x] **GUT 9.7.1 needs two local patches to load under Godot 4.6.3** _(done)_
+- [x] **GUT 9.7.1 needs two local patches to load under Godot 4.6.3** _(done - feature, medium, sonnet)_
       , documented in
       `addons/gut/LOCAL_PATCHES.md`. `AccessibilityServer` does not exist in this Godot build, and
       a property getter in `stub_params.gd` fails type inference. Re-apply both on any GUT upgrade
@@ -127,7 +127,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-01 while fixing the stale `ext_resource` UIDs.
 
-- [x] **The Godot MCP `update_project_uids` tool is a no-op on this project — do not rely on it.** _(done)_
+- [x] **The Godot MCP `update_project_uids` tool is a no-op on this project — do not rely on it.** _(done - feature, medium, sonnet)_
       It concatenates `"res://"` onto the absolute project path it is given, so it searches
       `res:///tmp/coldclone/` (or `res:///work/repo/`), reports *"Found 0 scenes, Found 0
       scripts/shaders"*, and exits claiming success. Verified by md5summing all 151 `.tscn`/`.tres`
@@ -136,7 +136,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `tests/integration/test_resource_uid_integrity.gd` instead — it covers strictly more
       (`.tres` resources and `.gd.uid` sidecars as well as scenes).
 
-- [x] ****`.godot/uid_cache.bin` masks broken UID references, so a warm machine disagrees with a** _(done)_
+- [x] ****`.godot/uid_cache.bin` masks broken UID references, so a warm machine disagrees with a** _(done - feature, medium, sonnet)_
       fresh clone.** Once a project has been loaded, Godot keeps a *stale* UID registered as a
       working alias for its target: `ResourceLoader.get_resource_uid()` and `ResourceUID.has_id()`
       both reported the dead `uid://bi366j2tsyby` as valid, and `--import` emitted no warning for
@@ -147,13 +147,13 @@ the signal that the change was deliberate. Test names are given so the fix has a
       defect on its own, and any future UID tooling must read declarations from disk rather than
       ask the engine.
 
-- [x] ****`godot --headless --import` only loads a fraction of the project, so "import is clean" is** _(done)_
+- [x] ****`godot --headless --import` only loads a fraction of the project, so "import is clean" is** _(done - feature, medium, sonnet)_
       a weak gate.** It surfaced 1 of the 3 live `invalid UID` warnings; the other 2 only appeared
       once every scene was actually loaded. A cheap "load all 126 `.tscn`/`.tres` and assert no
       load returns null" smoke test would close the gap — worth considering as step 4 of
       `/agent/verify.sh`. All 126 do currently load clean, so it would start green.
 
-- [x] **Several resources declare hand-written UIDs in their own headers** _(done)_
+- [x] **Several resources declare hand-written UIDs in their own headers** _(done - feature, medium, sonnet)_
       — `uid://hudscore001`
       (`assault/scenes/gui/hud_score_widget.tscn`), `uid://braceasteroid01`, `uid://00246ccaem53`,
       `uid://0024uci15m53`, `uid://00243s3wxf53` (the `assault/scenes/race/` scenes). Godot 4.6.3
@@ -165,7 +165,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-01 while building the space-station mini-boss entity (EPIC sub-item 1).
 
-- [x] **`Gunship` never applies its config's `collision_damage`.** _(done)_
+- [x] **`Gunship` never applies its config's `collision_damage`.** _(done - feature, medium, sonnet)_
       `gunship_config.tres:8` sets
       `collision_damage = 30`, but `BaseEnemy._add_contact_hitbox()` hardcodes `hb.damage = 20`
       (`base_enemy.gd:56`) and the gunship — unlike `bomber.gd:25`, `light_assault_ship.gd:23`,
@@ -175,7 +175,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so it should be a deliberate one rather than folded into unrelated work. `space_station.gd`
       does apply it, so the two enemies currently disagree about whether the field means anything.
 
-- [x] ****`base_enemy.gd:56-59` builds the contact HitBox from `col.shape` but drops the** _(done)_
+- [x] ****`base_enemy.gd:56-59` builds the contact HitBox from `col.shape` but drops the** _(done - feature, medium, sonnet)_
       `CollisionShape2D`'s `scale` and `position`.** Every enemy that scales its collision shape in
       the scene therefore gets a contact hitbox of the wrong size — `gunship.tscn:63-65` scales by
       2.31, so its contact hitbox is ~2.3× too small. Harmless-ish at 40 px, badly wrong at boss
@@ -185,9 +185,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       existing enemies' contact hitboxes, so it needs a balance pass, not a blind fix.
       
       Found on 2026-09-01 while adding the `station_assault` section (EPIC sub-item 2).
-      → [docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-](docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-)
+      -> [docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-](docs/plans/baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-)
 
-- [x] ****A test that ends while a `LevelDirector` coroutine is suspended leaks — and the gate stays** _(done)_
+- [x] ****A test that ends while a `LevelDirector` coroutine is suspended leaks — and the gate stays** _(done - feature, medium, sonnet)_
       green.** `_wait_enemies_cleared()` awaits `_wait_for_child_exit_or_timeout(container, 1.0)`,
       which holds a `SceneTreeTimer`. If the test returns while that is pending, freeing the
       director strands the timer and its `GDScriptFunctionState`, and Godot prints at process exit:
@@ -201,7 +201,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Worked around in `tests/integration/test_station_assault_section.gd` and written up in
       `tests/README.md`.
 
-- [x] **Should the station's core hurtbox be narrowed to 88 x 240? — a design question, not a bug.** _(done)_
+- [x] **Should the station's core hurtbox be narrowed to 88 x 240? — a design question, not a bug.** _(done - feature, medium, sonnet)_
       `space_station.tscn:16-17` uses ONE 240 x 240 `RectangleShape2D` for both the body collider
       and the core `HurtBox`, so the core's hurtbox spans the whole hull and the four turret
       hurtboxes sit strictly inside it. This is **not** a reachability bug — see the next item —
@@ -211,9 +211,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       ([-44, 44] vs [50, 102]) and the "shoot the guns, then the core" read cleaner. It was
       planned, then dropped when its stated justification collapsed; it needs a deliberate
       design call, not a bug fix. Cost: one `sub_resource` and one node property.
-      → [docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-](docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-)
+      -> [docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-](docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-)
 
-- [x] ****Two consecutive reviews asserted that a player bullet dies on its first hurtbox overlap.** _(done)_
+- [x] ****Two consecutive reviews asserted that a player bullet dies on its first hurtbox overlap.** _(done - feature, medium, sonnet)_
       It does not — worth knowing before anyone reasons about projectile lifetime again.**
       `BulletPool` is constructed only by `light_assault_ship.gd:27`, `gunship.gd:52`,
       `interceptor.gd:30`, `ally_fighter.gd:22` and `racer_weapon.gd:11` — **never by the player**.
@@ -227,9 +227,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       makes `PierceModule` (`pierces_remaining`, `MAX_PIERCE = 3`, `PIERCE_DAMAGE_FACTOR = 0.55`)
       look like it exists to *limit* damage rather than add it. That is probably not intended and
       is a real balance question for multi-part targets.
-      → [docs/plans/two-consecutive-reviews-asserted-that-a-player-bullet-dies-o](docs/plans/two-consecutive-reviews-asserted-that-a-player-bullet-dies-o)
+      -> [docs/plans/two-consecutive-reviews-asserted-that-a-player-bullet-dies-o](docs/plans/two-consecutive-reviews-asserted-that-a-player-bullet-dies-o)
 
-- [x] **`test_space_station.gd`'s collision-layer coverage gap is still open.** _(done)_
+- [x] **`test_space_station.gd`'s collision-layer coverage gap is still open.** _(done - feature, medium, sonnet)_
       Sub-item 1 recorded
       it as provable "once the station is in a live level (sub-item 2)". Sub-item 2 has landed and
       does **not** close it: `test_station_assault_section.gd` asserts section gating and wave data,
@@ -240,7 +240,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-01 while regenerating the turret sprites.
 
-- [x] ****`station_core.png` has a fully opaque background — the station will render as a grey** _(done)_
+- [x] ****`station_core.png` has a fully opaque background — the station will render as a grey** _(done - feature, medium, sonnet)_
       square in space.** Measured: **65536/65536 pixels at alpha 1.0**, corner alpha `1.00`
       (`station_turret.png`, regenerated this run, is 54.7% opaque with corner alpha `0.00`, which
       is what a sprite should look like). The cause is the same one behind the 3/4 turrets: the
@@ -254,9 +254,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       backlog item was scoped to the turrets, and replacing the core is a separate generation plus
       a fresh visual check. Fix by regenerating with `create_map_object` (max canvas is 400×400, so
       256×256 fits), or by alpha-keying the existing grey if the art is worth keeping.
-      → [docs/plans/stationcore-png-has-a-fully-opaque-background-the-station-wi](docs/plans/stationcore-png-has-a-fully-opaque-background-the-station-wi)
+      -> [docs/plans/stationcore-png-has-a-fully-opaque-background-the-station-wi](docs/plans/stationcore-png-has-a-fully-opaque-background-the-station-wi)
 
-- [x] **This container has no `file`, no `python3` and no `xxd` — only `od`.** _(done)_
+- [x] **This container has no `file`, no `python3` and no `xxd` — only `od`.** _(done - feature, medium, sonnet)_
       `scripts/pixellab.sh`
       called `file -b` unconditionally under `set -euo pipefail`, so **every `save-b64` and
       `download` aborted with exit 127 after having already written the file** — a confusing
@@ -270,7 +270,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Found on 2026-09-02 while planning the station laser phase (EPIC sub-item 3). Both were measured
       at runtime by the plan reviewer on Godot 4.6.3, not inferred.
 
-- [x] ****Every enemy that does `@export var config = load(...)` shares ONE config resource** _(done)_
+- [x] ****Every enemy that does `@export var config = load(...)` shares ONE config resource** _(done - feature, medium, sonnet)_
       process-wide, and it is the same object `preload` hands a test.** `ResourceLoader` caches, and
       the scenes store no override, so `station_a.config == station_b.config == preload(".../space_station_config.tres")`
       is `true` — verified. Writing to one enemy's `config` at runtime therefore rewrites the
@@ -282,9 +282,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       (`bomber.gd`, `ram_ship.gd`, `light_assault_ship.gd`, `gunship.gd`). Worth either a
       `duplicate()` on assignment, or a line in `tests/README.md` warning that config resources are
       shared and must never be mutated from a test. No test pins this today.
-      → [docs/plans/every-enemy-that-does-export-var-config-load-shares-one-conf](docs/plans/every-enemy-that-does-export-var-config-load-shares-one-conf)
+      -> [docs/plans/every-enemy-that-does-export-var-config-load-shares-one-conf](docs/plans/every-enemy-that-does-export-var-config-load-shares-one-conf)
 
-- [x] **`spike/test_spike_laser.gd` and `spike/test_spike_selfkill.gd` are tracked dead code.** _(done)_
+- [x] **`spike/test_spike_laser.gd` and `spike/test_spike_selfkill.gd` are tracked dead code.** _(done - feature, medium, sonnet)_
       `git ls-files spike/` lists both plus their `.uid`s.
       `docs/plans/station-laser-phase/1-context.md` claimed they had been "deleted afterwards";
       they had not, and the claim has now been corrected in place. They sit outside
@@ -297,7 +297,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-02 while implementing the station laser phase (EPIC sub-item 3).
 
-- [ ] **`ExplosionEffect` orphans its particles onto whatever the dying entity's parent is.** _(in progress)_
+- [ ] **`ExplosionEffect` orphans its particles onto whatever the dying entity's parent is.** _(in progress - feature, medium, sonnet)_
       `global/components/explosion_effect.gd:28-52` adds the `CPUParticles2D` to
       `actor.get_parent()` and relies on `p.finished.connect(p.queue_free)` to clean up ~1 s later.
       In-game that parent is `WaveManager.enemy_container`, so it is harmless. In a test it is
@@ -317,9 +317,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       by filtering to `StationTurret` (what `SpaceStation._turrets()` already does), and the trap
       is now written up in `tests/README.md`. This is the second workaround for the same component;
       an explicit container argument on `explode()` would have prevented both.
-      → [docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin](docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin)
+      -> [docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin](docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin)
 
-- [ ] **The station's collision-layer coverage gap is now only half open.** _(todo)_
+- [ ] **The station's collision-layer coverage gap is now only half open.** _(todo - feature, medium, sonnet)_
       `assault/scenes/enemies/space_station/ENEMY.md` records that
       `tests/integration/test_space_station.gd` drives damage by emitting `received_damage`
       directly and so proves nothing about collision layers.
@@ -331,7 +331,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-03 while implementing station reinforcements (EPIC sub-item 4b).
 
-- [ ] **`ram_ship` cannot be hit by the player's primary weapon, and its config HP is dead code.** _(todo)_
+- [ ] **`ram_ship` cannot be hit by the player's primary weapon, and its config HP is dead code.** _(todo - feature, medium, sonnet)_
       `assault/scenes/enemies/ram_ship/ram_ship.gd:19` narrows the HurtBox mask to
       `33` (`# missiles only (32 + 1); bullets ignored`) after `BaseEnemy._ready()` has set the
       normal `97 | 1024`. The player's bullet is `collision_layer = 64`
@@ -348,7 +348,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `tests/integration/test_station_reinforcements.gd` now asserts every squad ship is
       bullet-killable so the class of mistake cannot recur silently.
 
-- [ ] **The 0.75× escape-combo penalty applies to ad-hoc spawns nobody expects to kill.** _(todo)_
+- [ ] **The 0.75× escape-combo penalty applies to ad-hoc spawns nobody expects to kill.** _(todo - feature, medium, sonnet)_
       `assault/scenes/systems/score_tracker/score_tracker.gd:211` multiplies the combo by
       `escape_combo_multiplier` **outside** the `if counts_in_wave:` block, so a `wave_index` of
       `-1` (every `EventBus.enemy_spawned_orphan` spawn) is not exempt, and neither is
@@ -361,7 +361,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_station_reinforcements.gd`. Recording it so the user can overrule: the fix, if wanted,
       is a `counts_as_escape` flag on the spawn rather than a special case for one enemy source.
 
-- [ ] **A spawn's off-screen margin cannot account for camera pan, project-wide.** _(todo)_
+- [ ] **A spawn's off-screen margin cannot account for camera pan, project-wide.** _(todo - feature, medium, sonnet)_
       Every spawn in the game resolves its offset against `cam.global_position`, which
       `arena_camera.gd:5-12` pins at (640, 360) and never moves — panning happens through `offset`.
       So a player panned fully down (`V_LIMIT` is 380) can in principle watch a bottom-edge spawn
@@ -372,7 +372,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-03 while building the station death sequence (EPIC sub-item 5).
 
-- [ ] ****`race_ship.gd:97-100` renders its death explosion at the container origin, not at the** _(todo)_
+- [ ] ****`race_ship.gd:97-100` renders its death explosion at the container origin, not at the** _(todo - feature, medium, sonnet)_
       ship.** It does `get_parent().add_child(boom)` then `boom.global_position = global_position`
       — but `ExplosionEffect.explode()` reads `actor.global_position` where `actor` is the effect's
       *parent*, so the position written on line 99 is silently discarded and every race-ship
@@ -383,7 +383,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       argument, so the fix is one line: `boom.explode(global_position)`. No test pins the current
       behaviour, so nothing will fight the change.
 
-- [ ] **The gate's step 1 (`godot --headless --import`) leaks ObjectDB instances.** _(todo)_
+- [ ] **The gate's step 1 (`godot --headless --import`) leaks ObjectDB instances.** _(todo - feature, medium, sonnet)_
       It prints
       `WARNING: ObjectDB instances leaked at exit` plus a few RID-allocation errors on every run.
       Pre-existing and **not** caused by the test suite — verified by running the import against a
@@ -392,7 +392,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       mask a real leak if one ever appears in step 1, and it costs time to re-diagnose. Worth one
       cycle to find what the importer is holding.
 
-- [ ] **`ExplosionEffect`'s container resolution is a footgun worth a guard.** _(todo)_
+- [ ] **`ExplosionEffect`'s container resolution is a footgun worth a guard.** _(todo - feature, medium, sonnet)_
       `explode()` resolves
       its target as `get_parent().get_parent()` with no check on what that is, so attaching the
       effect one level too deep silently parents the particles inside the entity instead of the
@@ -403,7 +403,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-03 while fixing the shared-component signal/logging defects.
 
-- [ ] ****Three more files print unconditionally on hot paths — same defect as the one just fixed,** _(todo)_
+- [ ] ****Three more files print unconditionally on hot paths — same defect as the one just fixed,** _(todo - feature, medium, sonnet)_
       out of the item's stated scope.** `global/ui/dialog_system/ui/dialog_box.gd` has **11**
       prints (`[DB] ...`), several per dialog *line*, including inside tween callbacks;
       `assault/scenes/player/movement_controller.gd:74,79` print `"first/second time pressed …"`
@@ -417,7 +417,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `level_director.gd` (3), `ally_fighter.gd` (2), `boot.gd` (2),
       `skill_challenge_runner.gd` (2), `score_tracker.gd` (1), `level_1_background.gd` (1).
 
-- [ ] **Declaring a signal's parameters does not stop the mismatch it looks like it stops.** _(todo)_
+- [ ] **Declaring a signal's parameters does not stop the mismatch it looks like it stops.** _(todo - feature, medium, sonnet)_
       Worth knowing before someone "fixes" the next one and assumes the problem is gone. **Measured
       on Godot 4.6.3 with a throwaway `SceneTree` probe**, not inferred: a signal's declared arity
       is **documentation only**. `signal foo` and
@@ -431,7 +431,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       arity from a test the way `test_amount_changed_declares_the_int_it_emits` does, by reading
       `Object.get_signal_list()`.
 
-- [ ] **The reflect -> AbilityState migration was abandoned half-done.** _(todo)_
+- [ ] **The reflect -> AbilityState migration was abandoned half-done.** _(todo - feature, medium, sonnet)_
       `docs/superpowers/plans/2026-05-06-abilities-health-shield.md` planned to replace the
       `reflect` upgrade with an `AbilityState` autoload. Only part of it landed:
       
@@ -449,7 +449,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `reflect_state.gd` to `use_ability`) or delete the script and drop `&"reflect"` from
       `UpgradeState.ABILITY_IDS`. Right now it is a trap — it reads as a live feature.
 
-- [ ] **`long_range.tres` is an orphaned weapon mode with no id in ALL_IDS.** _(todo)_
+- [ ] **`long_range.tres` is an orphaned weapon mode with no id in ALL_IDS.** _(todo - feature, medium, sonnet)_
       `assault/scenes/player/weapons/modes/` contains six `.tres` files but
       `UpgradeState.ALL_IDS` names only five: `default`, `sniper_shot`, `spread`, `gatling`,
       `mining_laser`. `long_range.tres` matches no id.
@@ -464,7 +464,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       wiring. Same abandoned-migration origin as the reflect item — the plan at
       `docs/superpowers/plans/2026-05-06-abilities-health-shield.md` renamed the mode list.
 
-- [ ] **Two committed `.tscn*.tmp` files duplicate light_assault_ship's UID and dodge every integrity check** _(todo)_
+- [ ] **Two committed `.tscn*.tmp` files duplicate light_assault_ship's UID and dodge every integrity check** _(todo - feature, medium, sonnet)_
       `assault/scenes/enemies/light_assault_ship/` has two Godot editor scratch files tracked in git —
       `light_assault_ship.tscn777863979.tmp` and `light_assault_ship.tscn785603970.tmp` (both added in
       `613ad48`). They are stale copies of `light_assault_ship.tscn`, and each one declares
@@ -491,7 +491,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
          or simply fail on tracked editor-scratch files by name. Widening the walk is the version that
          catches the next variant rather than this instance.
 
-- [ ] **Code-built contact hitboxes are typed as LASER damage, not CONTACT** _(todo)_
+- [ ] **Code-built contact hitboxes are typed as LASER damage, not CONTACT** _(todo - feature, medium, sonnet)_
       Every code-built contact `HitBox` leaves `damage_type` at the `HitBox.DamageType.LASER` default.
       `HitBox.matching_shape()` (`global/components/hitbox_component.gd`) does not set it, and none of
       the four callers (`base_enemy.gd:49-53`, `drone_interceptor.gd:141-148`,
@@ -513,7 +513,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Found on 2026-09-06 while fixing the contact-hitbox transform bug (recorded as an explicit
       out-of-scope follow-up in that task's approved plan).
 
-- [ ] **Move code-built contact hitboxes into the scenes, as the asteroids already do** _(todo)_
+- [ ] **Move code-built contact hitboxes into the scenes, as the asteroids already do** _(todo - feature, medium, sonnet)_
       Four scripts build a contact `HitBox` at runtime (`base_enemy.gd:49-53`,
       `drone_interceptor.gd:141-148`, `kamikaze_drone.gd:53-60`, `ally_fighter.gd:72-77`), all now via
       `HitBox.matching_shape()`. The asteroid family already does it the other way:
@@ -533,7 +533,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Found on 2026-09-06; recorded as an explicit out-of-scope follow-up (rejected alternative 3) in
       the approved plan for the contact-hitbox transform fix.
 
-- [ ] **Wire the leak grep into /agent/verify.sh — the agent cannot, /agent is read-only** _(todo)_
+- [ ] **Wire the leak grep into /agent/verify.sh — the agent cannot, /agent is read-only** _(todo - feature, medium, sonnet)_
       `/agent` is mounted **read-only** inside the dev container (`/dev/bcache0 on /agent type btrfs
       (ro,...)`), so the agent cannot add leak patterns to the gate itself — verified by an append,
       which failed with "Read-only file system".
@@ -555,7 +555,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `ObjectDB instances leaked` of its own that predates the test suite — adding the pattern to the
       shared `FATAL` regex would fail the gate on every run forever.
 
-- [ ] **Freeing LevelDirector mid-wait still strands its GDScriptFunctionState** _(todo)_
+- [ ] **Freeing LevelDirector mid-wait still strands its GDScriptFunctionState** _(todo - feature, medium, sonnet)_
       Follow-up to the SceneTreeTimer fix. `_wait_for_child_exit_or_timeout()` and `_wait_seconds()` no
       longer create timers, so an *early return* leaves nothing behind — but a test (or a scene change)
       that frees the director while `_wait_enemies_cleared()` is suspended still strands the coroutine
@@ -581,7 +581,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       needs the documented drain (`test_station_assault_section.gd` test 5). Bounded and small — this is
       tidiness, not a bug the player can feel.
 
-- [ ] **Decide whether the player's default gun should stop on its first damaging hit (PierceModule is currently a downgrade)** _(todo)_
+- [ ] **Decide whether the player's default gun should stop on its first damaging hit (PierceModule is currently a downgrade)** _(todo - feature, medium, sonnet)_
       **Split out of `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`, which fixed the
       projectile *leak* and deliberately left this balance question alone.**
       
@@ -618,7 +618,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       **Not in scope here:** the leak itself, which is fixed —
       `WeaponBehavior._launch()` now calls `Bullet.free_when_offscreen()` at all four spawn sites.
 
-- [ ] **Five weapon-mode .tres files still set homing_* keys that WeaponModeResource no longer declares** _(todo)_
+- [ ] **Five weapon-mode .tres files still set homing_* keys that WeaponModeResource no longer declares** _(todo - feature, medium, sonnet)_
       Found while working `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`.
       
       All five bullet-firing weapon modes — `default.tres`, `gatling.tres`, `long_range.tres`,
@@ -641,7 +641,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Small; verify with `bash /agent/verify.sh` (`test_project_load_integrity.gd` already loads every
       `.tres` and asserts the engine logs nothing).
 
-- [ ] **assault/scenes/player/states/shooting_state.gd is dead code referenced by no scene** _(todo)_
+- [ ] **assault/scenes/player/states/shooting_state.gd is dead code referenced by no scene** _(todo - feature, medium, sonnet)_
       Found while working `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`, which had to
       decide whether it counted as a spawn site.
       
@@ -661,7 +661,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Confirm nothing references it (including by UID) before deleting, and check whether it has a
       sibling `.gd.uid`.
 
-- [ ] **Rockets cannot damage the space station's turrets — they detonate on the armoured core** _(todo)_
+- [ ] **Rockets cannot damage the space station's turrets — they detonate on the armoured core** _(todo - feature, medium, sonnet)_
       `homing_missile.gd:47-48` and `warhead_missile.gd:22-23` both `queue_free()` on ANY
       `area_entered`, so a rocket is consumed by the first hurtbox it overlaps. A player bullet is
       not (`tests/integration/test_player_bullet_lifetime.gd`), and the space station's whole armour
@@ -691,7 +691,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-07 while closing the collision-layer coverage gap.
 
-- [ ] **There are five tracked .tscn*.tmp files, not two — the existing task under-scopes it** _(todo)_
+- [ ] **There are five tracked .tscn*.tmp files, not two — the existing task under-scopes it** _(todo - feature, medium, sonnet)_
       While verifying the sprite-transparency sweep I found the tmp-file count in that task is wrong: `git ls-files | grep "\.tmp$"` returns **five** tracked editor-scratch files, not two.
       
           assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn777863979.tmp
@@ -714,7 +714,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found 2026-09-07 while fixing the station core sprite background.
 
-- [ ] **`ScoreTracker.score_config` is still a shared process-wide resource** _(todo)_
+- [ ] **`ScoreTracker.score_config` is still a shared process-wide resource** _(todo - feature, medium, sonnet)_
       `score_tracker.gd:26` declares `@export var score_config: ScoreConfig = preload("res://global/resources/score_config_default.tres")`
       and `:52` re-`preload()`s the same path as a fallback. This is the same
       `ResourceLoader`-caches-by-path sharing that
@@ -737,7 +737,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
 
 ## Boss fight escalation: shared hull, flying laser projectors, desperation  (`boss-fight-escalation-shared-hull-flying-laser-projectors-de`, 7 open)
 
-- [ ] **1. Every shot that lands on the station hurts the station.** _(todo)_
+- [ ] **1. Every shot that lands on the station hurts the station.** _(todo - feature, medium, sonnet)_
       Today the core refuses **all** damage until the last of the four turrets dies
       (`space_station.gd::_on_received_damage` + `is_armored()`), and each turret carries its own
       120 HP pool that is simply thrown away when it dies. The player's shots therefore land in five
@@ -770,7 +770,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       hit that killed it; and that the station can be killed while the player only ever shoots its
       parts.
 
-- [ ] **2. The fight visibly turns at half health.** _(todo)_
+- [ ] **2. The fight visibly turns at half health.** _(todo - feature, medium, sonnet)_
       Phase 2 begins today when the last turret dies. Under one shared pool (task 1) that moment
       stops existing, so the transition moves to **50 % of the shared pool** — the halfway point
       becomes the beat the player feels, which is the shipped convention for a desperation phase.
@@ -790,7 +790,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       crosses the threshold and proves the phase starts exactly once; then keeps damaging past it (and
       back at 0 HP) and proves it never fires again.
 
-- [ ] **3. The station is properly defended, by more than one kind of ship.** _(todo)_
+- [ ] **3. The station is properly defended, by more than one kind of ship.** _(todo - feature, medium, sonnet)_
       `StationReinforcements` runs a fixed four-squad cycle — 2 interceptors from the left,
       2 from the right, 2 drones from below, 2 fighters from above — first squad at 8 s, one every
       10 s, cap 4 alive, and it **stops entirely** at the phase change. The fight reads as a duel with
@@ -818,7 +818,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       defenders arrive in both phases, and a headless run of `station_assault` still ends — nothing
       a squad leaves behind may hold `ENEMIES_CLEARED` open.
 
-- [ ] **4. Laser projectors fly around the station and shoot at the player.** _(todo)_
+- [ ] **4. Laser projectors fly around the station and shoot at the player.** _(todo - feature, medium, sonnet)_
       A new part type. In phase 1 the station's laser projectors are **mobile**: they move
       around the station's airspace and fire telegraphed beams at the player, instead of every beam
       coming from the hull on a fixed schedule. The point is that the arena is dangerous while the
@@ -851,7 +851,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       telegraph before they can hurt anything; and a test proves a beam is harmless throughout its
       warning window and lethal only after it.
 
-- [ ] **5. In phase 2 the projectors close ranks, and only open to fire.** _(todo)_
+- [ ] **5. In phase 2 the projectors close ranks, and only open to fire.** _(todo - feature, medium, sonnet)_
       Second-phase behaviour for whichever projectors survived. They take station around the
       boss, rotate around it, and fire toward the player — and they are **armoured while closed**, so
       the player can only hurt them in the window where they open to fire. That turns the second half
@@ -873,7 +873,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       window lands on the shared pool; the open state is visually distinct from the closed one; and the
       projectors orbit the hull rather than sitting at fixed offsets.
 
-- [ ] **6. Tearing off the station's defences makes it fight harder, not just quieter.** _(todo)_
+- [ ] **6. Tearing off the station's defences makes it fight harder, not just quieter.** _(todo - feature, medium, sonnet)_
       Killing turrets is currently pure relief — fewer guns, less fire, and the fight gets
       easier the longer it runs. The user wants the opposite curve: every destroyed turret or projector
       should make the station more **desperate**, with faster laser charge-up, faster beam movement,
@@ -896,7 +896,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       parts destroyed; and every derived value is bounded, so the last projector's death cannot produce
       a rate nobody can dodge.
 
-- [ ] **7. The sweeping laser can turn on you mid-sweep.** _(todo)_
+- [ ] **7. The sweeping laser can turn on you mid-sweep.** _(todo - feature, medium, sonnet)_
       The rotating beam attack sweeps at one constant rate (`laser_rotation_speed = 0.5`
       rad/s) in one direction for its entire life, so "pick a side and keep running" solves it. Make it
       able to **reverse direction mid-attack**, and make its starting rate depend on how many
@@ -921,7 +921,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
 
 ## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 6 open)
 
-- [ ] **Every log record I find stays found, and the game knows how many are left** _(todo)_
+- [ ] **Every log record I find stays found, and the game knows how many are left** _(todo - feature, medium, sonnet)_
       **Player outcome:** Logs I picked up three missions ago are still mine after quitting and
       relaunching, and the game can always answer "how many logs are there, and how many do I have?"
       without anyone hand-maintaining that number.
@@ -953,7 +953,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       / unknown-id-in-save / the derived total, and the gate is green. Follow `tests/README.md` for the
       `user://` save-file sandbox — `LogState` writes to `user://` and will otherwise leak between tests.
 
-- [ ] **Flying into a log record in open space picks it up and tells me what I found** _(todo)_
+- [ ] **Flying into a log record in open space picks it up and tells me what I found** _(todo - feature, medium, sonnet)_
       **Player outcome:** a log record floating in the sector hub is visually readable as
       "something to collect", flying into it picks it up, and a one-line notification tells me what I
       just recovered without stopping the ship.
@@ -973,7 +973,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       nine, collecting it advances `LogState`, collecting it twice in one run cannot double-count, and
       the notification text names the entry. Test in `tests/unit/`.
 
-- [ ] **Reading a data tablet by a body doesn't interrupt the mission, and I can read it again** _(todo)_
+- [ ] **Reading a data tablet by a body doesn't interrupt the mission, and I can read it again** _(todo - feature, medium, sonnet)_
       **Player outcome:** I walk or fly up to a tablet, a terminal, or a scrap of hull, a prompt
       tells me I can read it, and pressing the key shows the message *without* yanking control away. If
       I come back later it is still readable — it is scenery with something to say, not a consumable.
@@ -1001,7 +1001,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       interaction, is unaffected by `LogState`, and refuses to fire while `DialogPlayer.is_active` (the
       guard `PickupBase._show_notification()` already uses). Test the enter/exit/re-read cycle.
 
-- [ ] **The ESC menu has a Lore Logs section where I can re-read everything I've found** _(todo)_
+- [ ] **The ESC menu has a Lore Logs section where I can re-read everything I've found** _(todo - feature, medium, sonnet)_
       **Player outcome:** ESC → Lore Logs shows the whole catalogue. Entries I have found are
       readable in full; ones I have not are visibly there but withheld, so I can see there is more to
       find and roughly how much. The header tells me where I stand: "7 / 14".
@@ -1024,7 +1024,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       withheld but counted, the ratio is correct, and the gate is green. Note `ModuleList.MAX_ITEMS = 8`
       — a log catalogue will outgrow one screen, so scrolling or paging is in scope for this task.
 
-- [ ] **Log records can be placed in assault and infiltration missions, not just the hub** _(todo)_
+- [ ] **Log records can be placed in assault and infiltration missions, not just the hub** _(todo - feature, medium, sonnet)_
       **Player outcome:** the same log record I recognise from open space can be tucked into a
       wave gap in an assault run or behind a crate on a ground mission, and it counts the same way.
       
@@ -1050,7 +1050,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       both collectable, and a test pins the replay/restart behaviour. This task may well need splitting
       once its plan is written — if so, split it rather than half-finishing both modes.
 
-- [ ] **Test logs on the open-space map prove both log types work end to end** _(todo)_
+- [ ] **Test logs on the open-space map prove both log types work end to end** _(todo - feature, medium, sonnet)_
       **Player outcome (and the user's explicit ask):** boot the game, fly around the sector hub,
       and actually find several lore logs and a couple of information logs — enough to see the counter
       move, the ESC section fill up, and an in-world tablet re-read cleanly.
@@ -1071,7 +1071,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
 
 ## Foundations: test harness, UID integrity, art pipeline  [DONE]  (`foundations-test-harness-uid-integrity-art-pipeline`, 0 open)
 
-- [x] **Bootstrap the test harness.** _(done)_
+- [x] **Bootstrap the test harness.** _(done - feature, medium, sonnet)_
       Install GUT into `addons/gut/`, create `tests/`, and write
       characterization tests for the eight autoloads and the `global/components/` set (Health,
       Hurtbox/Hitbox, Shield, Overheat, DamageReaction). Tests must pin down current behaviour,
@@ -1082,7 +1082,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       4.6.3, see `addons/gut/LOCAL_PATCHES.md`), 153 tests / 490 asserts across 16 scripts in
       `tests/`, gate green. Conventions and the gotchas that cost time are in `tests/README.md`.
 
-- [x] **Fix the stale UID in `open_space/scenes/gui/hud.tscn:6`.** _(done)_
+- [x] **Fix the stale UID in `open_space/scenes/gui/hud.tscn:6`.** _(done - feature, medium, sonnet)_
       Its `ext_resource` for
       the pause menu declares `uid://bospm3nuos001`, but
       `global/ui/pause_menu/open_space_pause_menu.tscn` actually declares
@@ -1100,7 +1100,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       ---
 
-- [x] **Regenerate the turret sprites — `station_turret.png` is 3/4 view, not top-down.** _(done)_
+- [x] **Regenerate the turret sprites — `station_turret.png` is 3/4 view, not top-down.** _(done - feature, medium, sonnet)_
       The barrel is drawn from the side with visible cylinder faces and the base sits in
       perspective; `station_core.png` in the same set is correctly overhead, so the set is
       visually inconsistent. Root cause: PixelLab was almost certainly called with
@@ -1134,7 +1134,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
 
 ## Level 1 space-station mini-boss  [DONE]  (`station-mini-boss`, 0 open)
 
-- [x] **1. Station and turrets exist as a destructible entity.** _(done)_
+- [x] **1. Station and turrets exist as a destructible entity.** _(done - feature, medium, sonnet)_
       Generate the station and turret
       sprites via PixelLab. Assemble the station scene with N turrets as child entities, each
       individually damageable. The station core takes no damage while any turret is alive.
@@ -1148,9 +1148,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `received_damage` directly and a disabled hurtbox would leak both. Plan + two review rounds:
       `docs/plans/station-mini-boss-destructible/`. **Known gap:** the tests emit `received_damage`
       directly, so they do not prove the collision layers — that needs sub-item 2.
-      → [docs/plans/station-mini-boss-destructible](docs/plans/station-mini-boss-destructible)
+      -> [docs/plans/station-mini-boss-destructible](docs/plans/station-mini-boss-destructible)
 
-- [x] **2. The encounter blocks level progress.** _(done)_
+- [x] **2. The encounter blocks level progress.** _(done - feature, medium, sonnet)_
       Add a new `LevelSection` (suggested name
       `station_assault`) to `level_1_director.gd`, between `asteroid_belt` and `planet_approach`,
       using `ENEMIES_CLEARED`. Add the matching `phases/phase_station_assault.tres`.
@@ -1167,9 +1167,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Plan + **two** review rounds: `docs/plans/station-assault-section/`. Round 2 **withdrew**
       round 1's blocking finding — see *Discovered*; that reversal is the most useful thing this
       cycle produced.
-      → [docs/plans/station-assault-section](docs/plans/station-assault-section)
+      -> [docs/plans/station-assault-section](docs/plans/station-assault-section)
 
-- [x] **3. Laser phase.** _(done)_
+- [x] **3. Laser phase.** _(done - feature, medium, sonnet)_
       Once all turrets are destroyed, the station rotates and fires
       `LaserRay` beams at varying positions, forcing the player to keep moving. Beams must
       telegraph before they damage (`warn_duration`) — an instant-kill beam with no tell is
@@ -1195,9 +1195,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       **Split on 2026-09-02** into 4a (the station's own fire) and 4b (reinforcements). One
       session each; 4a is the half that changes the first phase from passive to a fight.
-      → [docs/plans/station-laser-phase](docs/plans/station-laser-phase)
+      -> [docs/plans/station-laser-phase](docs/plans/station-laser-phase)
 
-- [x] **4a. The station shoots back.** _(done)_
+- [x] **4a. The station shoots back.** _(done - feature, medium, sonnet)_
       Turrets and core fire bullet-hell patterns through
       `bullet_pool`.
       *Done when:* every live turret fires an aimed pattern, killing a turret removes its gun from
@@ -1221,9 +1221,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       anywhere else the whole bullet field rotates with the hull), and a `node_paths=` tag on the
       `Gunnery` node is required or the exported reference is silently left null **with the gate
       still green**.
-      → [docs/plans/station-bullet-hell](docs/plans/station-bullet-hell)
+      -> [docs/plans/station-bullet-hell](docs/plans/station-bullet-hell)
 
-- [x] **4b. Reinforcements.** _(done)_
+- [x] **4b. Reinforcements.** _(done - feature, medium, sonnet)_
       During the fight, existing enemy ships fly in from the sides, top
       and bottom.
       *Done when:* reinforcement waves spawn from at least three screen edges and a headless run of
@@ -1253,9 +1253,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       station's `died` signal cannot be tested without unhooking `armor_broken` first, because the
       armour rule makes `armor_broken` the only route to it; and a ship's **runtime** HurtBox mask
       comes from `base_enemy.gd:25`, never from the value authored in its `.tscn`.
-      → [docs/plans/station-reinforcements](docs/plans/station-reinforcements)
+      -> [docs/plans/station-reinforcements](docs/plans/station-reinforcements)
 
-- [x] **5. Destruction hands off to the planet approach.** _(done)_
+- [x] **5. Destruction hands off to the planet approach.** _(done - feature, medium, sonnet)_
       Station death plays out and the level
       continues into `planet_approach` and the planet entry.
       *Done when:* a headless run of the full Level 1 section sequence completes end to end.
@@ -1295,5 +1295,10 @@ the signal that the change was deliberate. Test names are given so the fix has a
       than tedious; standard telegraph durations for sweeping-laser boss attacks in shmups.
       
       ---
-      → [docs/plans/station-death-handoff](docs/plans/station-death-handoff)
+      -> [docs/plans/station-death-handoff](docs/plans/station-death-handoff)
+
+## Ideas turned into epics
+
+- The first boss looks great, but I want to make the fight much harder and more dynamic.  -> `boss-fight-escalation-shared-hull-flying-laser-projectors-de`
+- Let's fill the world with more collectibles, such as log records, that players can discover in open-space, assault, and land missions.  -> `log-records-discoverable-lore-and-info-logs-across-all-three`
 

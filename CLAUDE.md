@@ -146,16 +146,22 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   declaration; a typed one is usually an *alias* decoding to a UID another resource owns, and both
   fail silently. Leave the reference UID-less (legal — Godot falls back to the path) or mint one
   with the headless `ResourceUID.create_id()` snippet in [tests/README.md](tests/README.md).
-- **NEVER commit — the user handles all git.** Work directly on `main` unless asked
-  otherwise; no worktrees/branches unless requested.
-  - *Exception — autonomous NAS loop only* (`SRCW_AUTOMATION=1` in the environment): you are
-    already checked out on `agent/auto-dev`, and you **may** commit and push to that branch.
-    Run `bash /agent/verify.sh` and get a green gate **before** pushing — never push work you
-    have not verified. The harness also commits and pushes anything you leave uncommitted, but
+- **Commit and push to `agent/auto-dev` — that is the working branch for all Claude work**,
+  whether that is the unattended NAS loop or an interactive session. You do not need to ask.
+  Don't leave finished work sitting uncommitted for the user to stage by hand.
+  - Check you are on it first (`git branch --show-current`). If you are not, switch — do not
+    start committing wherever you happen to be.
+  - **Get a green gate before you push**: `bash /agent/verify.sh` in the container, or
+    `godot --headless --path . --import` plus the GUT suite locally. Never push work you have not
+    verified. In the NAS loop the harness also commits and pushes anything left uncommitted, but
     only after the same gate passes.
+  - Write a real commit subject that names what changed. `agent: cycle <stamp>` is the harness's
+    own bookkeeping prefix — don't use it for actual work, or the change vanishes from the
+    "shipped features" list, which filters that prefix out.
+  - No other branches and no worktrees unless asked.
   - **`main` stays off-limits.** Never commit to it, never push to it, never merge into it,
-    never force-push or rewrite history on any branch. The user merges `agent/auto-dev` to
-    `main` by hand.
+    never force-push or rewrite history on any branch. **The user merges `agent/auto-dev` to
+    `main` by hand — that is the only human-only git operation here.**
 
 ## Where things live
 
@@ -182,16 +188,27 @@ tool corrupts PNGs), and the mandatory visual check on every generated image.
 A wrong-angle sprite cannot be fixed in code; it has to be regenerated from a capped
 monthly allowance. Do not skip the check.
 
-## MANDATORY — plan before building
+## MANDATORY — match the process to the work
 
-Before implementing any **non-trivial** feature or mechanic, invoke the **`feature-workflow`**
-skill. It gathers context, researches how shipped games solve the same problem, writes a plan to
-`docs/plans/`, has an **independent subagent review it**, and only then implements. It has a
-short Track B path for bug fixes, renames and tuning — use the skill to pick the track rather
-than skipping it.
+Invoke the **`feature-workflow`** skill at the start of every work item. It is a router, not one
+fixed pipeline: it reads the item's `kind`, `type` and `complexity` and picks how much process the
+work actually warrants.
 
-Implementation starts only on `VERDICT: APPROVED`. A rejected plan is a legitimate outcome: it
-means wrong work was avoided cheaply.
+- **Preparation** (an epic's research / plan / plan-review tasks) — the full pipeline: read the
+  code, research how shipped games solve the same problem, write a plan to `docs/plans/<epicId>/`,
+  have an **independent subagent review it**, then hand the epic to the user for approval.
+- **Direct** (small and medium implementation) — the epic's plan is already written, reviewed and
+  approved, so: failing test → implement → verify. No new plan, no second review.
+- **Escalated** (large or architectural implementation) — its own plan directory and its own
+  independent review before any code.
+
+Implementation of a large item starts only on `VERDICT: APPROVED`. A rejected plan is a legitimate
+outcome: it means wrong work was avoided cheaply.
+
+**Running the heavyweight pipeline on a one-line fix is as much a failure as skipping it on a
+system change.** If a small item turns out to need architectural work, record the escalation with
+`./scripts/backlog-cli.js set-meta <taskId> --complexity large --model opus` rather than quietly
+switching tracks — the board should show what is actually happening.
 
 ## MANDATORY — keep the docs current
 
