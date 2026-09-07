@@ -530,11 +530,24 @@ Two things that file had to work around, both worth knowing:
 
 ### Three traps `test_station_laser_phase.gd` had to work around
 
-- **`SpaceStation.config` is a single process-wide object.** `space_station.gd` `load()`s the
-  `.tres` and `ResourceLoader` caches, so every station in the process shares it — and it is the
-  same object `preload()` hands the test. Writing to it to shorten the laser timings permanently
-  rewrites the shipped values for every later test in the run. Override the **`LaserPhase` node's**
-  own fields instead; it copies the config in `_ready()` and never reads it again.
+- **`entity.config` is private per instance; the object `load()`/`preload()` returns is not.**
+  This trap used to read "`SpaceStation.config` is a single process-wide object", and it was true:
+  `ResourceLoader` caches by path, so every station shared one config and writing to it rewrote the
+  shipped values for every later test in the run. `ShipConfig.privatise()` — called from
+  `BaseEnemy._init()` / `_enter_tree()` and from `AllyFighter` — now gives every entity its own
+  `duplicate()`, and `integration/test_config_instance_isolation.gd` holds that shut for all ten
+  entities.
+
+  What still bites: **the resource a test `preload()`s or `load()`s is the shared, cached one.**
+  `const STATION_CONFIG := preload(".../space_station_config.tres")` is process-wide balance data —
+  read it, never write to it. Two windows also remain open, both unreachable from non-addon code
+  today and both written up in `test_config_instance_isolation.gd`'s header: `Node.duplicate()`
+  hands two nodes one private copy, and assigning `entity.config = load(...)` after the entity is
+  already in the tree fires neither hook.
+
+  Overriding the **`LaserPhase` node's** own fields is still the recommended way to shorten the
+  laser timings — not for safety now, but because those fields are the node's tunable surface and
+  its no-config fallback.
 - **`ExplosionEffect.explode()` parents its `CPUParticles2D` to `actor.get_parent()`** and lets it
   self-free on `finished` ~1 s later. A station added straight to the test script therefore leaves
   particles behind as unfreed children when the test that kills the core returns

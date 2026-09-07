@@ -105,8 +105,10 @@ func _ready() -> void:
 		return
 
 	## Godot readies children before parents, so this runs BEFORE SpaceStation._ready(). Safe for
-	## `config`, an @export initialised at property-init time; NOT safe for anything the station
-	## derives in its own _ready() — which is the other reason the duration is read later.
+	## `config`: an @export initialised at property-init time, whose PRIVATE per-station copy is
+	## installed by `BaseEnemy._init()` / `_enter_tree()` before any child is ready. NOT safe for
+	## anything the station derives in its own _ready() — which is the other reason the duration is
+	## read later.
 	var cfg := _station.config
 	if cfg != null:
 		_blast_count = cfg.death_blast_count

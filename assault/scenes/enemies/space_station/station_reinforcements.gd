@@ -70,9 +70,11 @@ enum Edge { LEFT, RIGHT, BOTTOM, TOP }
 
 ## ── Tuning, copied from SpaceStationConfig in _ready() ────────────────────────
 ##
-## Copied rather than read through `_station.config` per squad, because that resource is a SINGLE
-## PROCESS-WIDE INSTANCE (`space_station.gd:36` `load()`s it and ResourceLoader caches), shared by
-## every station in the process and by every test that preloads the `.tres`.
+## Copied rather than read through `_station.config` per squad. The original reason — that the
+## resource was a single process-wide instance shared by every station — no longer holds:
+## `ShipConfig.privatise()` gives each station its own copy (`base_enemy.gd`). The decision stands
+## on the two reasons that survive: these fields are this node's own tunable surface, which is what
+## the tests override, and they carry the fallback below.
 ##
 ## The defaults below are the CONSERVATIVE FALLBACK for a station with no config at all: a long
 ## opening, a slow cadence and a tight cap. They are intentionally different from the shipped
@@ -104,8 +106,9 @@ func _ready() -> void:
 		return
 
 	## Godot readies children before parents, so this runs BEFORE SpaceStation._ready(). Safe for
-	## `config`, which is an @export initialised at property-init time (the same reasoning
-	## `station_gunnery.gd:101-104` documents). NOT safe for anything the station derives in its
+	## `config`: it is an @export initialised at property-init time and the station's PRIVATE copy
+	## is installed by `BaseEnemy._init()` / `_enter_tree()` before any child is ready (the same
+	## reasoning `station_gunnery.gd` documents). NOT safe for anything the station derives in its
 	## own _ready() — nothing here touches `turret_root`.
 	var cfg := _station.config
 	if cfg != null:

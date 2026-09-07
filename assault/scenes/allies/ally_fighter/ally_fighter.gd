@@ -13,6 +13,18 @@ const _BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bul
 var bullet_pool: BulletPool
 var _explosion_effect: ExplosionEffect
 
+## Same two hooks, and the same reasoning, as `BaseEnemy._init()`/`_enter_tree()` — see the doc
+## comment there. `AllyFighter` extends `CharacterBody2D` directly rather than `BaseEnemy`, so it
+## is the one entity that would otherwise keep sharing its `ally_config.tres` with every other ally
+## in the process.
+func _init() -> void:
+	ShipConfig.privatise(self)
+
+
+func _enter_tree() -> void:
+	ShipConfig.privatise(self)
+
+
 func _ready() -> void:
 	add_to_group("allies")
 	_health.amount_changed.connect(_on_health_changed)

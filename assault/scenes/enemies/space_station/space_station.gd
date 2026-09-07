@@ -45,13 +45,17 @@ signal death_started
 @export var config: SpaceStationConfig = load("res://assault/scenes/enemies/space_station/space_station_config.tres")
 
 ## Seconds the wreck stays in the tree after HP reaches 0. Copied from
-## `config.death_sequence_duration` in `_ready()` and never read back through the resource — the
-## `.tres` is a single process-wide cached instance, so a runtime read would be a read of mutable
-## global state shared with every other station and every test in the process.
+## `config.death_sequence_duration` in `_ready()` and never read back through the resource.
 ##
 ## PUBLIC, and that is the supported override point: a test shortens the sequence by writing
 ## `station.death_duration = 0.05` AFTER `_ready()`, exactly as `test_station_laser_phase.gd` and
-## `test_station_gunnery.gd` override their nodes' copied timings. Never write to `station.config`.
+## `test_station_gunnery.gd` override their nodes' copied timings.
+##
+## `station.config` is a per-instance copy (`ShipConfig.privatise()`, called from
+## `BaseEnemy._init()` / `_enter_tree()`), so writing to it no longer reaches other stations — but
+## the node's own fields remain the documented override point, because they are also what a station
+## with no config at all falls back to. The object `load()`/`preload()` returns is still
+## process-wide and must never be written.
 ##
 ## 0.0 means "free in the same frame", i.e. precisely what BaseEnemy has always done — so a
 ## station with no config keeps the old behaviour rather than hanging in the container.

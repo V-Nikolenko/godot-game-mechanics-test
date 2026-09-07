@@ -283,6 +283,22 @@ catalogued stats and how to spawn each one, see the per-enemy detail in the sour
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).
 
+#### Per-instance config resources
+
+Every entity declares `@export var config: XConfig = load("res://.../x_config.tres")` and
+`ResourceLoader` caches by path, so all instances of a type would otherwise share **one** config
+object — the same one a test's `preload()` returns. `ShipConfig.privatise()` gives each entity a
+`duplicate()` instead, called from `BaseEnemy._init()` **and** `_enter_tree()` (and the same pair on
+`AllyFighter`, which is not a `BaseEnemy`). `_init()` covers writes made before `add_child`, which is
+where `WaveManager` applies `initial_props`; `_enter_tree()` covers an override substituted in
+afterwards and still lands before any child's `_ready()`, which the space station's four child nodes
+depend on. Full reasoning: the `ShipConfig` section of [global.md](global.md). Pinned by
+`tests/integration/test_config_instance_isolation.gd`.
+
+⚠️ **The object `load()`/`preload()` returns is still shared and must never be written** — that is
+process-wide balance data. The per-instance copy is what `entity.config` holds, not what the loader
+hands you.
+
 **`space_station/`** is the odd one out: a multi-part **mini-boss** rather than a wave enemy.
 `SpaceStation` (`extends BaseEnemy`) carries four `StationTurret` children, each individually
 damageable on its own `Health`, and its core refuses all damage while any turret lives —
@@ -304,8 +320,9 @@ zero-argument signal, latched so it fires exactly once), which starts **`Station
 angle list (never `randf()` — random attack ordering cannot be balanced or tested; the rotating
 hull already varies the world angle). Beams are children of the phase node, so rotating the
 station sweeps them for free. All five timings live in `space_station_config.tres` and are
-**copied into the phase's own fields in `_ready()`** — that `.tres` is a single process-wide
-instance, so reading through it at runtime would be reading mutable global state.
+**copied into the phase's own fields in `_ready()`** — those fields are the phase's tunable surface
+(what tests override) and its fallback when a station has no config at all. Each station's
+`config` is a private copy: see **Per-instance config resources** below.
 
 ⚠️ **A station beam must not use `LaserRay`'s default hit mask.** `_HIT_MASK` is
 `128 | 256 | 512`, and the station's own core `HurtBox` is on layer 512, so a beam fired from
@@ -339,7 +356,7 @@ what frees in-flight bullets, which otherwise hold `ENEMIES_CLEARED` open. Pinne
 `tests/integration/test_station_gunnery.gd`.
 
 The ten gunnery timings live in `space_station_config.tres` and are **copied into the gunnery's
-own fields in `_ready()`**, for the same process-wide-instance reason as the laser block.
+own fields in `_ready()`**, for the same reason as the laser block.
 
 **The station calls for help**, via a third sibling node, **`StationReinforcements`**
 (`station_reinforcements.gd`) — the same composition split again, so `space_station.gd` gained

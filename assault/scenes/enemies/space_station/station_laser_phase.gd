@@ -49,11 +49,11 @@ const _VOLLEY_ANGLES: Array[float] = [0.0, PI * 0.5, PI * 0.25, PI * 0.75]
 
 ## ── Timings, copied from SpaceStationConfig in _ready() ───────────────────────
 ##
-## Copied rather than read through `_station.config` on every volley, because that resource is a
-## SINGLE PROCESS-WIDE INSTANCE: `space_station.gd` `load()`s it and ResourceLoader caches, so
-## every station in the process — and every test that `preload()`s the `.tres` — shares one
-## object. Reading through it at runtime is reading mutable global state; writing to it (as a
-## test shortening the timings would have to) permanently rewrites the shipped values.
+## Copied rather than read through `_station.config` on every volley. The original reason — that
+## the resource was a single process-wide instance, so a test shortening the timings through it
+## would permanently rewrite the shipped values — no longer holds: `ShipConfig.privatise()` gives
+## each station its own copy (`base_enemy.gd`). What survives is that these fields are this node's
+## own tunable surface, which is what the tests override, and that they carry the fallback below.
 ##
 ## Copying is also the exact "`.tres` applied in `_ready()`" pattern `space_station.gd` already
 ## uses for `health.max_health` and the turret HP.
@@ -87,9 +87,10 @@ func _ready() -> void:
 		return
 
 	## Godot readies children before parents, so this runs BEFORE SpaceStation._ready(). Safe
-	## here because `config` is an @export initialised at property-init time, before any _ready()
-	## — and we read nothing that SpaceStation._ready() derives from it. Do not add a read that
-	## depends on station-derived state.
+	## here because `config` is an @export initialised at property-init time, and `BaseEnemy._init()`
+	## / `_enter_tree()` install the station's PRIVATE copy of it before any child is ready — pinned
+	## by `tests/integration/test_config_instance_isolation.gd`. We read nothing that
+	## SpaceStation._ready() derives from it; do not add a read that depends on station-derived state.
 	var cfg := _station.config
 	if cfg != null:
 		warn_duration = cfg.laser_warn_duration

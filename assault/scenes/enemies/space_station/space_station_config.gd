@@ -17,9 +17,10 @@ extends ShipConfig
 ## ── Laser phase (EPIC sub-item 3) ─────────────────────────────────────────────
 ##
 ## Read ONCE by `StationLaserPhase._ready()`, which copies them into its own fields and never
-## reads this resource again. That is deliberate: this `.tres` is a single process-wide instance
-## (`space_station.gd` `load()`s it and ResourceLoader caches), so anything reading through it at
-## runtime is reading mutable global state. See `space_station_laser_phase.gd`.
+## reads this resource again. That is deliberate: the phase node's own fields are the tunable
+## surface the tests override, and they double as the fallback for a station with no config at all.
+## (The original reason — that this `.tres` was a single process-wide instance — no longer applies;
+## `ShipConfig.privatise()` gives each station a private copy.) See `station_laser_phase.gd`.
 ##
 ## `laser_emitter_radius` is NOT here — it is scene geometry, not a stat, so it lives as an
 ## export on the phase node.
@@ -52,9 +53,8 @@ extends ShipConfig
 ## ── Gunnery (EPIC sub-item 4a) ────────────────────────────────────────────────
 ##
 ## Read ONCE by `StationGunnery._ready()`, which copies them into its own fields and never reads
-## this resource again — same discipline as the laser block above, and for the same reason: this
-## `.tres` is a single process-wide instance, so anything reading through it at runtime is
-## reading mutable global state.
+## this resource again — same discipline as the laser block above, and for the same reason: the
+## node's own fields are the tunable surface the tests override and the no-config fallback.
 ##
 ## The two `spawn_radius` values are NOT here — they are scene geometry, not stats, so they live
 ## as exports on the gunnery node, exactly as `laser_emitter_radius` does on the phase node.
@@ -113,8 +113,7 @@ extends ShipConfig
 ##
 ## Read ONCE by `StationReinforcements._ready()`, which copies them into its own fields and never
 ## reads this resource again — the same discipline as the laser and gunnery blocks above, and for
-## the same reason: this `.tres` is a single process-wide instance, so anything reading through it
-## at runtime is reading mutable global state.
+## the same reason: the node's own fields are the tunable surface and the no-config fallback.
 ##
 ## The squad TABLE is not here — which ships come from which edge, at what offsets, on what
 ## movement — because that is scene/level geometry rather than a stat, the same split that keeps
@@ -147,8 +146,8 @@ extends ShipConfig
 ##
 ## Read ONCE at _ready(): `death_sequence_duration` by `SpaceStation` (into its public
 ## `death_duration` field) and `death_blast_count` by `StationDeathSequence`. Neither is read
-## through this resource again, for the same reason as every block above — this `.tres` is a
-## single process-wide instance, so a runtime read is a read of mutable global state.
+## through this resource again, for the same reason as every block above — the node's own field is
+## the tunable surface and the no-config fallback.
 ##
 ## The blast GEOMETRY and FEEL (spread radius, particle count, shake amounts, spin, tint) are NOT
 ## here: they are scene geometry rather than stats, the same split that keeps

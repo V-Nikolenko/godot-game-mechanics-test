@@ -10,9 +10,11 @@
 ##    station's PARENT and lets them self-free ~0.5 s later, so a station added straight to the
 ##    script leaves `GUT WARNING: Test script has N unfreed children`. A container is also how the
 ##    station is really parented in play (under `WaveManager.enemy_container`).
-##  - Timings are shortened by writing the NODE's copied field (`station.death_duration`), never
-##    `station.config`. `space_station.gd` load()s the .tres and ResourceLoader caches it, so the
-##    config is one process-wide object shared with every later test in the run.
+##  - Timings are shortened by writing the NODE's copied field (`station.death_duration`) — its
+##    tunable surface and its no-config fallback. `station.config` is a private per-instance copy
+##    (`ShipConfig.privatise()`, from `BaseEnemy._init()` / `_enter_tree()`), but the object a test
+##    `preload()`s or `load()`s is still one process-wide resource shared with every later test in
+##    the run, and must never be written.
 ##  - `died` cannot be reached without going through `armor_broken`: the core refuses all damage
 ##    while a turret lives, so every test here kills the four turrets first.
 extends GutTest
@@ -280,4 +282,4 @@ func test_shortening_the_station_duration_does_not_write_back_to_the_shared_conf
 	var before: float = _station.config.death_sequence_duration
 	_station.death_duration = 0.05
 	assert_eq(_station.config.death_sequence_duration, before,
-		"writing the node's copied field must not touch the process-wide shared .tres")
+		"writing the node's copied field must not touch the station's config resource at all")

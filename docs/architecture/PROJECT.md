@@ -84,6 +84,12 @@ Detail and APIs: [global.md](modules/global.md).
   `BaseEnemy._add_contact_hitbox()` hardcodes `damage = 20` and runs before the subclass has
   read its config, so each enemy must re-apply it after `super._ready()` or override the
   helper. `tests/integration/test_enemy_contact_damage.gd` asserts the whole roster does.
+  Each entity holds a **private copy** of its config: `ShipConfig.privatise()` duplicates it from
+  `BaseEnemy._init()`/`_enter_tree()` (and `AllyFighter`'s), because `ResourceLoader` caches by path
+  and every entity of a type would otherwise share one object with each other and with every
+  `preload()` in the test suite. Details and the two remaining windows: the `ShipConfig` section of
+  [global.md](modules/global.md); pinned by `tests/integration/test_config_instance_isolation.gd`.
+  **The object `load()`/`preload()` returns is still shared — never write to it.**
 - **State machines:** `global/statemachine/state_machine.gd` + `state.gd`; entities with
   complex behaviour keep one `State` node per file in a `states/` folder (player, racers,
   light_assault_ship). Simpler enemies use in-script `enum` phases.
@@ -152,6 +158,10 @@ Detail and APIs: [global.md](modules/global.md).
   every `WeaponBehavior` subclass — enumerated from the project class list, so a *future* one is
   covered too — hands off its bullet's lifetime, a pooled bullet is **not** freed by the same
   change, and a bullet is not consumed by a hurtbox it overlaps)
+  and `tests/integration/test_config_instance_isolation.gd` (the config-copy rule above: no two
+  entity instances share a config object, the copy is value-identical to the shipped `.tres`, and
+  every config class stays flat enough for a shallow `duplicate()` to be a complete copy — the
+  roster is a directory sweep, so a new enemy is covered the day it lands)
   — plus the space-station family.
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).

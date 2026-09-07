@@ -19,6 +19,28 @@ var counts_toward_wave_clear: bool = true
 var _hit_effect: HitEffect
 var _explosion_effect: ExplosionEffect
 
+## Give this enemy a config resource of its own, at construction and again on tree entry.
+##
+## Both hooks are needed, and they close different windows:
+##
+## - `_init()` runs before `instantiate()` returns, so `config` is private for every write made
+##   BEFORE the enemy enters the tree. `wave_manager.gd:177-181` applies spawn overrides in exactly
+##   that gap, deliberately and with a comment saying so, so an `_enter_tree()`-only copy would
+##   leave this project's own spawn-customisation idiom writing to the shared resource.
+## - `_enter_tree()` catches a `config` that a `.tscn` override or `initial_props` substituted in
+##   AFTER the constructor, and still runs before any CHILD's `_ready()` — which the space station
+##   depends on, since its four child nodes read `_station.config` in their own `_ready()`.
+##
+## `ShipConfig.privatise()` is idempotent, so calling it twice costs one `duplicate()`.
+## Pinned by `tests/integration/test_config_instance_isolation.gd`.
+func _init() -> void:
+	ShipConfig.privatise(self)
+
+
+func _enter_tree() -> void:
+	ShipConfig.privatise(self)
+
+
 func _ready() -> void:
 	hurt_box.received_damage.connect(_on_received_damage)
 	health.amount_changed.connect(_on_health_changed)

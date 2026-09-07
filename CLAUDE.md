@@ -24,7 +24,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
 - **Composition over inheritance** — entities are built from `global/components/`
   (Health, Hurtbox/Hitbox, Shield, Overheat, DamageReaction, effects).
 - **Config-driven enemies** — assault enemies load stats from a `*_config.tres` applied in
-  `_ready()` (the `.tres` value wins over the scene's Health node where they differ).
+  `_ready()` (the `.tres` value wins over the scene's Health node where they differ). Each entity
+  holds a **private copy**: `ShipConfig.privatise()` duplicates it from `BaseEnemy._init()` *and*
+  `_enter_tree()` (and `AllyFighter`'s), because `ResourceLoader` caches by path and every entity of
+  a type would otherwise share one object with each other and with every `preload()` in the suite.
+  **The object `load()`/`preload()` returns is still shared — never write to it.** Gated by
+  `tests/integration/test_config_instance_isolation.gd`.
 - **State machines** — `global/statemachine/`; one `State` node per file in a `states/`
   folder for complex entities; simpler enemies use in-script `enum` phases.
 - **Signal arity & logging** — a signal is declared with exactly what it emits
@@ -117,6 +122,14 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   textures and four of its five roots contribute nothing. Fix a sprite that trips it with
   `./scripts/strip-sprite-bg.sh <png>` (border flood fill, then `--import`) rather than a
   regeneration, which spends the capped monthly PixelLab allowance and cannot be undone.
+  `tests/integration/test_config_instance_isolation.gd` is a ninth, over resource **ownership**:
+  no two entity instances may share a `*_config.tres` object, the private copy must be
+  value-identical to the shipped `.tres`, and every config class must stay flat enough for the
+  shallow `duplicate()` to be a complete copy. Its roster is a directory sweep rather than a hand
+  list, so a new enemy is covered the day it lands, and its boundary cases pin the two things the
+  fix rests on: the copy survives a re-parent (idempotence), and it exists before any **child's**
+  `_ready()` — checked by identity from inside a probe child, because comparing values is green
+  even on the `_ready()`-time design the test exists to reject.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.

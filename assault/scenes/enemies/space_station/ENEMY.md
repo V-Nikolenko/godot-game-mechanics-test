@@ -653,19 +653,25 @@ rings, 0.21 leaves a largest lane gap of **31.8 %** of the spacing; 0.24 leaves 
 (so it locks the shipped `.tres`, not a literal) and rejects anything above 25 % — a bound that
 deliberately catches re-tread periods 2, 3 and 4 but not 5+.
 
-The gunnery timings are read exactly once, by `StationGunnery._ready()`, for the same process-wide
-`.tres` reason spelled out below. The two `spawn_radius` values are **not** in the config —
+The gunnery timings are read exactly once, by `StationGunnery._ready()`, for the same reason
+spelled out below. The two `spawn_radius` values are **not** in the config —
 `turret_spawn_radius = 26.0` (the turret hurtbox rim) and `core_spawn_radius = 130.0` (outside the
 240×240 hull) are scene geometry, so they are exports on the gunnery node, exactly as
 `emitter_radius` is on the phase node.
 
 **The laser timings are read exactly once**, by `StationLaserPhase._ready()`, which copies them
-into its own fields; nothing reads `config` afterwards. That is not a micro-optimisation —
-`space_station.gd` `load()`s the `.tres` and `ResourceLoader` caches, so **every `SpaceStation` in
-the process shares one `SpaceStationConfig`**, and it is the same object `preload()` hands a test.
-Reading through it at runtime is reading mutable global state; a test writing to it to shorten the
-timings would permanently rewrite the shipped values for the rest of the process. Tests override
-the **phase node's** fields instead. The phase's own field defaults are a conservative fallback for
+into its own fields; nothing reads `config` afterwards.
+
+That used to be a safety measure: `space_station.gd` `load()`s the `.tres` and `ResourceLoader`
+caches, so every `SpaceStation` in the process shared one `SpaceStationConfig` — the same object
+`preload()` hands a test — and a test writing to it to shorten the timings would permanently
+rewrite the shipped values for the rest of the process. **That is no longer true of
+`station.config`:** `ShipConfig.privatise()`, called from `BaseEnemy._init()` / `_enter_tree()`,
+gives every station its own `duplicate()`, and `tests/integration/test_config_instance_isolation.gd`
+holds it shut for all ten entities. The object a test `preload()`s is still shared and must still
+never be written.
+
+Tests override the **phase node's** fields regardless. The phase's own field defaults are a conservative fallback for
 a null config (longer telegraph, shorter lethal window, no rotation, one beam) and are
 intentionally different from the `.tres`, which is what stops the config test passing vacuously.
 

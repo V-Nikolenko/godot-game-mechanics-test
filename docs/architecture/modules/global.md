@@ -281,3 +281,37 @@ Pure-data `Resource` types (shareable `.tres` assets; runtime state is kept out 
 - **waves/** — `LevelResource` (`level_name` + ordered `waves`), `WaveResource` (`trigger_time` + `entries`), `SpawnEntryResource` (one ship/formation: `ship_scene`, `base_offset`, `spawn_delay`, `movement`, `exit_mode`, `look_*`, optional `formation`, `initial_props`).
 - **levels/** — `LevelSection` (one timed segment: `background_phase`, `transition_in_duration`, section-relative `waves`, `end_condition` ∈ {DURATION, WAVES_COMPLETE, ENEMIES_CLEARED}, `duration`) and `BackgroundPhase` (target alphas/scales/timings for the background renderer to tween toward).
 - Top-level: `ship_config.gd`, `score_config.gd`, `skill_challenge_resource.gd` configure ship stats, scoring tuning, and skill-challenge windows respectively.
+
+#### `ShipConfig` and per-instance config resources
+
+`ShipConfig` (`global/resources/ship_config.gd`) is the base of all ten entity configs
+(`max_health`, `collision_damage`, `score_value`, `counts_toward_wave_clear`). Every entity declares
+`@export var config: XConfig = load("res://.../x_config.tres")`, and `ResourceLoader` caches by
+path — so without help, **every entity of a type in the process would hold the same object**, and it
+would be the same object a test's `preload()` returns. Writing one enemy's `config.max_health` then
+rewrote the shipped balance data for every other live enemy of that type and for the rest of the
+process.
+
+`ShipConfig.privatise(node)` swaps a node's `config` for a `duplicate()` of it, and is called from
+**both** `_init()` and `_enter_tree()` on `BaseEnemy` (`assault/scenes/enemies/base_enemy.gd`) and
+`AllyFighter` (`assault/scenes/allies/ally_fighter/ally_fighter.gd`). Both hooks are needed:
+
+- `_init()` runs before `instantiate()` returns, so `config` is private for writes made **before**
+  the entity enters the tree — which is where `wave_manager.gd:177-181` applies `initial_props`,
+  deliberately. An `_enter_tree()`-only copy would leave the project's own spawn-override idiom
+  writing to the shared resource.
+- `_enter_tree()` catches a `config` that a `.tscn` override or `initial_props` substituted in after
+  the constructor, and still runs before any **child's** `_ready()` — which the space station depends
+  on, since its four child nodes read `_station.config` in their own `_ready()`.
+
+They compose because `duplicate()` blanks `resource_path`, so a blank path *is* the marker of an
+already-private copy and the second call is a no-op.
+
+**The copy is shallow**, which is complete only while every config class stays flat — a `Resource`
+inside an `Array`/`Dictionary` is never duplicated, not even by `duplicate(true)`.
+`tests/integration/test_config_instance_isolation.gd` asserts the isolation, the value-identity
+against each shipped `.tres`, and that flatness, and it finds entities by directory sweep so a new
+enemy cannot escape it. **The object `load()`/`preload()` returns is still process-wide** — read it,
+never write to it. Two windows stay open and are written up in that test's header:
+`Node.duplicate()` hands two nodes one private copy, and `entity.config = load(...)` on an entity
+already in the tree fires neither hook. Neither is reachable from non-addon code today.
