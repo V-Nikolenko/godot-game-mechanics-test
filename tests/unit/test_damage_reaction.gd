@@ -3,17 +3,25 @@
 ## and destroys the host entity on death.
 extends GutTest
 
+var _container: Node2D
 var _host: Node2D
 var _health: Health
 var _hurt: HurtBox
 var _dr: DamageReaction
 
 
-## Builds host → {Health, HurtBox, DamageReaction} with the host already in the
-## tree, so every component's _ready() has run before setup() is called.
+## Builds container → host → {Health, HurtBox, DamageReaction} with the host already in the
+## tree, so every component's _ready() has run before setup() is called. The container
+## Node2D stands in for the entity's real parent (WaveManager.enemy_container in-game): with
+## the ancestor-walk fix, DamageReaction's ExplosionEffect resolves its actor to the host and
+## its container to the host's parent, so without this the particle it spawns on death would
+## land on the test script itself and outlive the test as an unfreed child
+## (tests/README.md "ExplosionEffect.explode() parents its CPUParticles2D...").
 func _build(shield: Shield = null, hp: int = 100) -> void:
+	_container = Node2D.new()
+	add_child_autofree(_container)
 	_host = Node2D.new()
-	add_child_autofree(_host)
+	_container.add_child(_host)
 	_health = Health.new()
 	_health.max_health = hp
 	_health.current_health = hp

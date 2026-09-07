@@ -19,7 +19,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "gut-silently-drops-a-test-script-it-cannot-load-and-still-ex",
@@ -32,7 +33,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "upgradestate-unlock-accepts-ids-that-are-not-in-allids",
@@ -45,7 +47,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "sessionstate-recovers-the-temp-hp-stack-size-with-integer-di",
@@ -58,7 +61,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "shipmodulestate-equip-never-consults-unlocked",
@@ -71,7 +75,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "missionstate-complete-cannot-record-a-zero-star-clear",
@@ -84,7 +89,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "gut-9-7-1-needs-two-local-patches-to-load-under-godot-4-6-3",
@@ -97,7 +103,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "the-godot-mcp-updateprojectuids-tool-is-a-no-op-on-this-proj",
@@ -110,7 +117,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "godot-uidcache-bin-masks-broken-uid-references-so-a-warm-mac",
@@ -123,7 +131,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "godot-headless-import-only-loads-a-fraction-of-the-project-s",
@@ -136,7 +145,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "several-resources-declare-hand-written-uids-in-their-own-hea",
@@ -149,7 +159,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "gunship-never-applies-its-config-s-collisiondamage",
@@ -162,7 +173,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "baseenemy-gd-56-59-builds-the-contact-hitbox-from-col-shape-",
@@ -175,7 +187,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "a-test-that-ends-while-a-leveldirector-coroutine-is-suspende",
@@ -188,7 +201,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-",
@@ -201,7 +215,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "two-consecutive-reviews-asserted-that-a-player-bullet-dies-o",
@@ -214,7 +229,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "testspacestation-gd-s-collision-layer-coverage-gap-is-still-",
@@ -227,7 +243,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "stationcore-png-has-a-fully-opaque-background-the-station-wi",
@@ -240,7 +257,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "this-container-has-no-file-no-python3-and-no-xxd-only-od",
@@ -253,7 +271,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "every-enemy-that-does-export-var-config-load-shares-one-conf",
@@ -266,7 +285,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "spike-testspikelaser-gd-and-spike-testspikeselfkill-gd-are-t",
@@ -279,7 +299,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "explosioneffect-orphans-its-particles-onto-whatever-the-dyin",
@@ -292,7 +313,25 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": [
+            {
+              "at": "2026-09-07T21:50:58.988Z",
+              "run": "2026-09-08-0038-i1",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004488000000000001,
+                "claude-sonnet-5": 3.1783849999999996
+              },
+              "costUSD": 3.182872999999999,
+              "turns": 105,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "the-station-s-collision-layer-coverage-gap-is-now-only-half-",
@@ -305,7 +344,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "ramship-cannot-be-hit-by-the-player-s-primary-weapon-and-its",
@@ -318,7 +358,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "the-0-75-escape-combo-penalty-applies-to-ad-hoc-spawns-nobod",
@@ -331,7 +372,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr",
@@ -344,7 +386,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "raceship-gd-97-100-renders-its-death-explosion-at-the-contai",
@@ -357,7 +400,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "the-gate-s-step-1-godot-headless-import-leaks-objectdb-insta",
@@ -370,7 +414,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "explosioneffect-s-container-resolution-is-a-footgun-worth-a-",
@@ -383,7 +428,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "three-more-files-print-unconditionally-on-hot-paths-same-def",
@@ -396,7 +442,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "declaring-a-signal-s-parameters-does-not-stop-the-mismatch-i",
@@ -409,7 +456,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "the-reflect-abilitystate-migration-was-abandoned-half-done",
@@ -422,7 +470,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "longrange-tres-is-an-orphaned-weapon-mode-with-no-id-in-alli",
@@ -435,7 +484,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "two-committed-tscn-tmp-files-duplicate-lightassaultship-s-ui",
@@ -448,7 +498,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "code-built-contact-hitboxes-are-typed-as-laser-damage-not-co",
@@ -461,7 +512,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "move-code-built-contact-hitboxes-into-the-scenes-as-the-aste",
@@ -474,7 +526,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "wire-the-leak-grep-into-agent-verify-sh-the-agent-cannot-age",
@@ -487,7 +540,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "freeing-leveldirector-mid-wait-still-strands-its-gdscriptfun",
@@ -500,7 +554,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "decide-whether-the-player-s-default-gun-should-stop-on-its-f",
@@ -513,7 +568,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "five-weapon-mode-tres-files-still-set-homing-keys-that-weapo",
@@ -526,7 +582,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "assault-scenes-player-states-shootingstate-gd-is-dead-code-r",
@@ -539,7 +596,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "rockets-cannot-damage-the-space-station-s-turrets-they-deton",
@@ -552,7 +610,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "there-are-five-tracked-tscn-tmp-files-not-two-the-existing-t",
@@ -565,7 +624,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "scoretracker-scoreconfig-is-still-a-shared-process-wide-reso",
@@ -578,7 +638,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         }
       ]
     },
@@ -601,7 +662,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "2-the-fight-visibly-turns-at-half-health",
@@ -614,7 +676,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "3-the-station-is-properly-defended-by-more-than-one-kind-of-",
@@ -627,7 +690,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "4-laser-projectors-fly-around-the-station-and-shoot-at-the-p",
@@ -640,7 +704,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "5-in-phase-2-the-projectors-close-ranks-and-only-open-to-fir",
@@ -653,7 +718,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "6-tearing-off-the-station-s-defences-makes-it-fight-harder-n",
@@ -666,7 +732,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "7-the-sweeping-laser-can-turn-on-you-mid-sweep",
@@ -679,7 +746,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         }
       ]
     },
@@ -702,7 +770,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "flying-into-a-log-record-in-open-space-picks-it-up-and-tells",
@@ -715,7 +784,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "reading-a-data-tablet-by-a-body-doesn-t-interrupt-the-missio",
@@ -728,7 +798,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve",
@@ -741,7 +812,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "log-records-can-be-placed-in-assault-and-infiltration-missio",
@@ -754,7 +826,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "test-logs-on-the-open-space-map-prove-both-log-types-work-en",
@@ -767,7 +840,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         }
       ]
     },
@@ -790,7 +864,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "fix-the-stale-uid-in-openspace-scenes-gui-hud-tscn-6",
@@ -803,7 +878,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "regenerate-the-turret-sprites-stationturret-png-is-3-4-view-",
@@ -816,7 +892,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         }
       ]
     },
@@ -839,7 +916,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "station-assault-section",
@@ -852,7 +930,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "station-laser-phase",
@@ -865,7 +944,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "station-bullet-hell",
@@ -878,7 +958,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "station-reinforcements",
@@ -891,7 +972,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         },
         {
           "id": "station-death-handoff",
@@ -904,7 +986,8 @@
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
-          "dependsOn": []
+          "dependsOn": [],
+          "runs": []
         }
       ]
     }

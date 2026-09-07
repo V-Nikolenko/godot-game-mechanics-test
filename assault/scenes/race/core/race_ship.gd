@@ -95,8 +95,7 @@ func apply_lethal_hazard() -> void:
 	_eliminated = true
 	participant.finished = true        ## stop track_y advancing this frame
 	var boom := ExplosionEffect.new()
-	get_parent().add_child(boom)
-	boom.global_position = global_position
+	add_child(boom)
 	boom.explode()
 	queue_free()
 

@@ -318,6 +318,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       is now written up in `tests/README.md`. This is the second workaround for the same component;
       an explicit container argument on `explode()` would have prevented both.
       -> [docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin](docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin)
+      1 run(s), $3.18; last on claude-sonnet-5
 
 - [ ] **The station's collision-layer coverage gap is now only half open.** _(todo - feature, medium, sonnet)_
       `assault/scenes/enemies/space_station/ENEMY.md` records that
