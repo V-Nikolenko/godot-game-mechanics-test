@@ -240,7 +240,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-01 while regenerating the turret sprites.
 
-- [ ] ****`station_core.png` has a fully opaque background — the station will render as a grey** _(todo)_
+- [ ] ****`station_core.png` has a fully opaque background — the station will render as a grey** _(in progress)_
       square in space.** Measured: **65536/65536 pixels at alpha 1.0**, corner alpha `1.00`
       (`station_turret.png`, regenerated this run, is 54.7% opaque with corner alpha `0.00`, which
       is what a sprite should look like). The cause is the same one behind the 3/4 turrets: the
