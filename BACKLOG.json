@@ -161,9 +161,9 @@
           "id": "every-enemy-that-does-export-var-config-load-shares-one-conf",
           "head": "**Every enemy that does `@export var config = load(...)` shares ONE config resource",
           "body": "process-wide, and it is the same object `preload` hands a test.** `ResourceLoader` caches, and\nthe scenes store no override, so `station_a.config == station_b.config == preload(\".../space_station_config.tres\")`\nis `true` — verified. Writing to one enemy's `config` at runtime therefore rewrites the\nshipped `.tres` values in memory for **every** instance and for **every later test in the\nsame process**. This is not hypothetical: it is exactly the trap that got the laser-phase\ntest plan rejected in review round 2, because a test that tuned timings through `config`\nwould have silently clobbered the values a later test asserts. The pattern is used by\n`space_station.gd:24` and, by inspection, the other `*_config.tres` enemies\n(`bomber.gd`, `ram_ship.gd`, `light_assault_ship.gd`, `gunship.gd`). Worth either a\n`duplicate()` on assignment, or a line in `tests/README.md` warning that config resources are\nshared and must never be mutated from a test. No test pins this today.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
-          "planDir": null
+          "planDir": "docs/plans/every-enemy-that-does-export-var-config-load-shares-one-conf"
         },
         {
           "id": "spike-testspikelaser-gd-and-spike-testspikeselfkill-gd-are-t",

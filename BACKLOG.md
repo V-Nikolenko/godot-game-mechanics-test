@@ -270,7 +270,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Found on 2026-09-02 while planning the station laser phase (EPIC sub-item 3). Both were measured
       at runtime by the plan reviewer on Godot 4.6.3, not inferred.
 
-- [ ] ****Every enemy that does `@export var config = load(...)` shares ONE config resource** _(todo)_
+- [ ] ****Every enemy that does `@export var config = load(...)` shares ONE config resource** _(in progress)_
       process-wide, and it is the same object `preload` hands a test.** `ResourceLoader` caches, and
       the scenes store no override, so `station_a.config == station_b.config == preload(".../space_station_config.tres")`
       is `true` — verified. Writing to one enemy's `config` at runtime therefore rewrites the
@@ -282,6 +282,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       (`bomber.gd`, `ram_ship.gd`, `light_assault_ship.gd`, `gunship.gd`). Worth either a
       `duplicate()` on assignment, or a line in `tests/README.md` warning that config resources are
       shared and must never be mutated from a test. No test pins this today.
+      → [docs/plans/every-enemy-that-does-export-var-config-load-shares-one-conf](docs/plans/every-enemy-that-does-export-var-config-load-shares-one-conf)
 
 - [ ] **`spike/test_spike_laser.gd` and `spike/test_spike_selfkill.gd` are tracked dead code.** _(todo)_
       `git ls-files spike/` lists both plus their `.uid`s.
