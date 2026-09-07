@@ -464,16 +464,16 @@ the player colliding with a 256×256 body. Contact damage is unaffected: it come
 on layer 256 built by `base_enemy.gd:53-55`. If the hull should later be a solid obstacle, the
 opt-out is an `is_laser_blocking()` returning `false` (`beam_behavior.gd:67-68`).
 
-✅ **Coverage gap — now closed for the bullet path.** For most of this entity's life
+✅ **Coverage gap — closed.** For most of this entity's life
 `tests/integration/test_space_station.gd` drove damage by emitting `received_damage` directly, so
 it proved nothing about any of these layer values: a core no bullet could ever hit passed all nine
 tests. Sub-item 2 did not close it either —
 `tests/integration/test_station_assault_section.gd` asserts the section's gating and wave data, not
 a projectile overlap.
 
-The two tests at the bottom of `test_space_station.gd` close it. They instance a real
-`assault/scenes/projectiles/bullets/bullet.tscn` and step physics, so the layer/mask chain has to
-work for them to pass:
+The two tests at the bottom of `test_space_station.gd` closed the **bullet (64)** path. They
+instance a real `assault/scenes/projectiles/bullets/bullet.tscn` and step physics, so the
+layer/mask chain has to work for them to pass:
 
 - `test_a_real_bullet_in_a_turret_lane_damages_the_turret_through_the_armored_core` — a bullet
   fired up the `x = 76` lane crosses the core rect (bottom edge `y = +120`, ~6 frames at
@@ -482,9 +482,37 @@ work for them to pass:
 - `test_a_real_bullet_damages_the_core_once_the_armor_is_broken` — with the turrets dead, a bullet
   on the centre lane takes 50 off the core itself.
 
-Still **not** covered by physics: the rocket (32) and asteroid (1024) mask bits, and the mining
-laser's ray path (`test_laser_ray_hit_mask.gd` covers the station's *outgoing* beams, not incoming
-ones). Those values are still verified only by reading the scene.
+`tests/integration/test_station_incoming_damage_paths.gd` closes the other three, the same way —
+real scenes, real physics, no `received_damage` emit anywhere in the damage path:
+
+| Row of the table above | Tests | Proof it is not vacuous |
+|---|---|---|
+| `HurtBox.collision_mask & 32` (rockets) | a real `homing_missile.tscn` takes 100 off the unarmoured core, a real `warhead_missile.tscn` takes 50, and each fires `armor_deflected` for 0 while the armour holds | setting the mask to the gunship's raw `65` reds all four |
+| `HurtBox.collision_mask & 1024` (asteroid contact) | a real `big_asteroid.tscn` parked inside the hull takes 40 off the unarmoured core and deflects while armoured | the same `65` mutation reds both |
+| `SpaceStation` root on **layer 0** | `BeamBehavior.tick()` is driven from a real `_physics_process` (the only place `direct_space_state` may be queried); the beam runs its full 1200 px through the hull and burns the core | `test_a_station_on_the_default_body_layer_would_block_its_own_fight` sets the root to layer 1 on a live instance and asserts the beam stops dead at `y = +120` and damages nothing |
+
+That last one is the boundary test, in the same shape as
+`test_enemy_hurtbox_geometry.gd::test_the_88x240_proposal_fails_this_sweep`: the rejected
+configuration is applied to a live station and asserted to fail, so "root is layer 0 on purpose"
+is a gate rather than a paragraph.
+
+Two things that file had to work around, worth knowing before extending it:
+
+- **`beam_dps = 12` is 0.2 damage per physics frame**, and `beam_behavior.gd`'s
+  `_accumulate_and_apply` only forwards whole numbers — so the first `armor_deflected` from the
+  mining laser lands around frame **30**. A 4-frame budget passes the beam-endpoint assertion and
+  silently drops the one that proves the beam found the core; that is how the test first ran.
+- **A rocket is consumed by the first hurtbox it overlaps** — see the next paragraph but one.
+
+⚠️ **A rocket cannot reach a turret behind the armoured core.** `homing_missile.gd:47-48` and
+`warhead_missile.gd:22-23` `queue_free()` on *any* `area_entered`, so unlike a bullet a rocket dies
+on the first hurtbox it touches. On this boss the core rect (`y = +120`) is reached about two
+frames before a turret rim (`y = +102`), so a missile fired up a turret lane deflects for 0 and is
+gone — the player's missiles destroy no turret, and therefore contribute nothing until the fight
+is already won with another weapon. Pinned as CHARACTERIZED by
+`test_a_rocket_up_a_turret_lane_dies_on_the_armored_core_and_never_reaches_the_turret`, filed as
+`rockets-cannot-damage-the-space-station-s-turrets-they-deton` in `code-health-backlog`, and
+**not** fixed here: which of the three fixes is right is a fight-design decision, not a one-liner.
 
 For the record, because it was got wrong twice during sub-item 2's review: a player bullet is
 **not** consumed by the first HurtBox it overlaps. `BulletPool` is used only by four enemies and

@@ -229,7 +229,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       is a real balance question for multi-part targets.
       → [docs/plans/two-consecutive-reviews-asserted-that-a-player-bullet-dies-o](docs/plans/two-consecutive-reviews-asserted-that-a-player-bullet-dies-o)
 
-- [ ] **`test_space_station.gd`'s collision-layer coverage gap is still open.** _(todo)_
+- [x] **`test_space_station.gd`'s collision-layer coverage gap is still open.** _(done)_
       Sub-item 1 recorded
       it as provable "once the station is in a live level (sub-item 2)". Sub-item 2 has landed and
       does **not** close it: `test_station_assault_section.gd` asserts section gating and wave data,
@@ -657,6 +657,36 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Confirm nothing references it (including by UID) before deleting, and check whether it has a
       sibling `.gd.uid`.
+
+- [ ] **Rockets cannot damage the space station's turrets — they detonate on the armoured core** _(todo)_
+      `homing_missile.gd:47-48` and `warhead_missile.gd:22-23` both `queue_free()` on ANY
+      `area_entered`, so a rocket is consumed by the first hurtbox it overlaps. A player bullet is
+      not (`tests/integration/test_player_bullet_lifetime.gd`), and the space station's whole armour
+      design rests on that difference.
+      
+      On this boss it means: the core's HurtBox spans the full 240x240 hull and the four turrets sit
+      *inside* it at (+-76, +-76), so a rocket fired up a turret lane reaches the core rect (y = +120)
+      about two frames before the turret rim (y = +102), deflects for 0 and dies there. The player's
+      homing and warhead missiles therefore cannot destroy a single station turret — and since the core
+      is armoured until all four are dead, rockets contribute nothing to the fight until it is already
+      won with another weapon. A player who has invested in missiles reads that as "my rockets are
+      broken", which is exactly the failure mode `ENEMY.md` -> "Core hurtbox" argues against for the
+      88x240 proposal.
+      
+      Pinned today, not fixed:
+      `tests/integration/test_station_incoming_damage_paths.gd`
+      -> `test_a_rocket_up_a_turret_lane_dies_on_the_armored_core_and_never_reaches_the_turret`,
+      marked CHARACTERIZED. That test should go red when this is addressed.
+      
+      Options worth weighing before touching it (this is a fight-design decision, not a one-line fix):
+      - have the rocket ignore a hurtbox that refused the damage (needs a "was this absorbed" answer
+        back from HurtBox, which does not exist today);
+      - give the station a separate armour-plate HurtBox over the core only, the Gradius idiom already
+        deferred in `ENEMY.md`;
+      - accept it as intended weapon-vs-boss counterplay and say so in `ENEMY.md`, so the next reader
+        does not file this again.
+      
+      Found on 2026-09-07 while closing the collision-layer coverage gap.
 
 ## Boss fight escalation: shared hull, flying laser projectors, desperation  (`boss-fight-escalation-shared-hull-flying-laser-projectors-de`, 7 open)
 

@@ -62,9 +62,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `res://boot/…`, so most of the project was previously unloaded by every gate step),
   and the space-station family — `tests/integration/test_space_station.gd`,
   `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
-  `test_station_gunnery.gd`, `test_station_reinforcements.gd` and `test_radial_attack_pattern.gd` —
+  `test_station_gunnery.gd`, `test_station_reinforcements.gd`,
+  `test_station_incoming_damage_paths.gd` and `test_radial_attack_pattern.gd` —
   which cover new code and so
-  assert intent. `tests/integration/test_module_unlock_sources.gd` is a second invariant check
+  assert intent. The last of those closes the boss's collision-layer coverage gap: real missiles,
+  a real asteroid and a real `BeamBehavior` prove the `HurtBox` mask bits 32 and 1024 and the
+  layer-0 root that keeps the hull from blocking the player's mining laser. `tests/integration/test_module_unlock_sources.gd` is a second invariant check
   (every module in `ShipModuleState.SLOT_MODULES` has an unlocker pickup in the sector hub, so
   the unlock gate cannot strand content), and `tests/integration/test_module_list_lock.gd`
   asserts intent for the ship menu's locked rows.

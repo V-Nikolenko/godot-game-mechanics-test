@@ -305,6 +305,7 @@ Four things to know before extending it:
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
 `test_station_gunnery.gd`, `test_station_reinforcements.gd`, `test_station_death_sequence.gd`,
+`test_station_incoming_damage_paths.gd`,
 `test_level_1_sequence.gd` and `test_radial_attack_pattern.gd` — are the other exceptions, for a
 different reason: the `space_station` entity, the `station_assault` section, the laser phase, the
 gunnery, the reinforcement spawner, the death sequence and `RadialAttackPattern` are all **new code**, so their tests assert intended behaviour
@@ -317,9 +318,41 @@ the two is also the load-bearing guard on the station's core-hurtbox decision �
 player bullet crosses the armoured core and still kills the turret behind it, so if the still-open
 backlog item about whether the default gun should stop on its first damaging hit
 (`decide-whether-the-player-s-default-gun-should-stop-on-its-f`) is ever actioned, the gate says
-"the station's turrets just became unkillable" at the point of the change. The rocket (32) and asteroid
-(1024) mask bits and the incoming mining-laser ray are still uncovered. See the file headers and
-`assault/scenes/enemies/space_station/ENEMY.md`.
+"the station's turrets just became unkillable" at the point of the change.
+
+`integration/test_station_incoming_damage_paths.gd` closes the rest of that gap — the rocket (32)
+and asteroid (1024) mask bits and the incoming mining-laser ray — with the same technique: real
+scenes, stepped physics, and no `received_damage` emit anywhere in the damage path. A real
+`homing_missile.tscn` and `warhead_missile.tscn` take 100 and 50 off the unarmoured core; a real
+`big_asteroid.tscn` parked inside the hull takes 40; the mining laser runs its full 1200 px
+*through* the station and burns it. All four were checked by mutation — setting
+`base_enemy.gd:25`'s `97 | 1024` to the gunship's raw `65` reds five of the nine tests with
+messages that name the missing bit — and the mask values live in code, not in the scene, so
+mutating the `.tscn` proves nothing.
+
+Four things to know before extending it:
+
+- **`beam_dps = 12` is 0.2 damage per physics frame** and `beam_behavior.gd`'s
+  `_accumulate_and_apply` only forwards whole numbers, so the first `armor_deflected` from the
+  mining laser lands around frame **30**. A 4-frame budget passes the beam-endpoint assertion and
+  silently drops the one that proves the beam found the core; that is how the test first ran.
+- **`direct_space_state` may only be queried from a physics frame**, so the beam tests drive
+  `BeamBehavior.tick()` from a small `BeamDriver extends Node2D` that ticks it in its own
+  `_physics_process`. The driver doubles as the behaviour's `state` and as its `actor`; the inner
+  class is deliberately not named `Test*`, or GUT would collect it as an inner test suite.
+- **The laser row's boundary test is the load-bearing one.** `SpaceStation`'s root is layer 0 *on
+  purpose*, and the mask bits are irrelevant to the beam, so
+  `test_a_station_on_the_default_body_layer_would_block_its_own_fight` puts a live station on
+  layer 1 and asserts the beam stops dead at `y = +120` and damages nothing — the rejected
+  configuration applied to a real instance, in the same shape as
+  `test_enemy_hurtbox_geometry.gd::test_the_88x240_proposal_fails_this_sweep`.
+- **A rocket IS consumed by the first hurtbox it overlaps**, unlike a bullet:
+  `homing_missile.gd:47-48` and `warhead_missile.gd:22-23` `queue_free()` on any `area_entered`.
+  On this boss that means a missile fired up a turret lane dies on the armoured core two frames
+  early and no turret ever takes rocket damage. That one test is marked CHARACTERIZED and filed as
+  `rockets-cannot-damage-the-space-station-s-turrets-they-deton`; it also asserts
+  `armor_deflected` fired, because otherwise it would pass just as happily on a station no rocket
+  can reach at all.
 
 `integration/test_player_bullet_lifetime.gd` is intent as well, and it is the *other* end of that
 station dependency. It states the two projectile-lifetime rules directly rather than leaving them
@@ -428,6 +461,12 @@ Tooling: the two local patches the vendored GUT addon needs under Godot 4.6.3
 (`integration/test_gut_local_patches.gd`).
 Entities: the `space_station` mini-boss (`integration/test_space_station.gd`) — armour rule, turret
 lifecycle, and the config-driven stats.
+Entities, the layers: every way damage reaches that boss
+(`integration/test_station_incoming_damage_paths.gd`) — real missiles for `HurtBox.collision_mask`
+bit 32, a real asteroid for bit 1024, and a `BeamBehavior` driven from a real `_physics_process`
+for the incoming mining laser, whose boundary test puts the station on the default body layer 1
+and asserts it then blocks its own fight. Plus the CHARACTERIZED pin that a rocket, unlike a
+bullet, is consumed by the first hurtbox it overlaps and so can never reach a turret.
 Levels: the `station_assault` section (`integration/test_station_assault_section.gd`) — the
 `ENEMIES_CLEARED` gate, the per-section timeout and its free-on-expiry path, and Level 1's
 section order and station wave.
