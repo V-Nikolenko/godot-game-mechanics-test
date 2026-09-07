@@ -34,11 +34,10 @@ assault/scenes/
 │       ├── behaviors/           STRAIGHT / LONG / SPREAD / BEAM / SNIPER fire behaviors
 │       └── visualizers/         e.g. sniper aim line
 ├── projectiles/                 Player + enemy ordnance
-│   ├── bullets/bullet.gd        Pooled player bullet (pierce, sniper unlimited-pierce)
+│   ├── bullets/bullet.gd        Player bullet — UNPOOLED, frees itself off-screen (pierce, sniper)
 │   ├── enemy_bullet/            EnemyBullet (can be reflected → become_friendly)
 │   ├── missiles/                homing/ + warhead/ missiles
-│   ├── piercing_beam/           Sustained BEAM weapon projectile
-│   └── primary_homing/          Homing primary-weapon variant
+│   └── piercing_beam/           Sustained BEAM weapon projectile
 ├── systems/                     Mission orchestration (non-visual)
 │   ├── scroll_controller/       Drives the autoscroll: moves the camera + emits distance
 │   ├── arena_camera.gd          Pinned camera; WORLD_SCALE for design-unit → world conversion
@@ -155,18 +154,39 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
 Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.gd`
 (see [BULLET_POOL.md](../../BULLET_POOL.md)).
 
-- `bullets/bullet.gd` — the pooled player bullet (`Area2D`). Moves forward, optionally
+- `bullets/bullet.gd` — the player bullet (`Area2D`). Moves forward, optionally
   inherits the shooter's forward velocity, supports **pierce** (limited, with per-hit
   damage decay) and **sniper unlimited-pierce** (passes through regular enemies, stops on
-  asteroids/ram-ships). Uses `HitBox`/`HurtBox` from `global/`. `expired` signals the pool
-  to reclaim it.
+  asteroids/ram-ships). Uses `HitBox`/`HurtBox` from `global/`.
+
+  **The player's bullets are not pooled.** `WeaponBehavior._launch()` spawns them and calls
+  `Bullet.free_when_offscreen()`, so each one owns its own lifetime and frees itself at the
+  viewport edge. The same scene *is* pooled by `AllyFighter`, which is why that free is opt-in
+  rather than built into `bullet.gd` — see `free_when_offscreen()`'s comment and
+  [BULLET_POOL.md](../../BULLET_POOL.md) ("the pool is smart, bullets are dumb").
+
+  **`expired` means "something happened", not "I am done".** It fires on an ordinary hurtbox hit
+  as well as at the range cap and the screen edge, and only the range cap frees. A pool can
+  legitimately listen to it (recycling is reversible); the player path must not wire it to
+  `queue_free`, because that consumes the shot on first contact and makes the space-station boss
+  unkillable — see the ENEMY.md link above.
+
+  **Player and enemy projectiles despawn on different boundaries, deliberately.** Player bullets
+  use `VisibleOnScreenNotifier2D` (the *viewport* edge); `EnemyBullet` uses an explicit
+  arena-bounds check ("the full 740×740 arena, not just the viewport edge"). The player's weapons
+  are also mounted in Open Space (`player_ship.tscn`), which has a different camera and world
+  extent, so hardcoding the assault arena's bounds into them would be wrong in one of the two
+  modes. The cost is that a shot fired at an enemy that is in the arena but above the visible top
+  now despawns; that band is off-screen and unaimable, so it is accepted.
+
+  All of the above is pinned by `tests/integration/test_player_bullet_lifetime.gd`.
 - `enemy_bullet/enemy_bullet.gd` — `EnemyBullet`; can be reflected by the player's parry
   (`become_friendly()`), which flips its collision so it damages enemies.
 - `missiles/` — `homing/` and `warhead/` secondary munitions fired by `RocketState`.
 - `piercing_beam/` — the sustained beam projectile for the BEAM weapon behavior.
-- `primary_homing/` — homing variant of the primary weapon.
 
-`BulletPool` (in `global/`) is instantiated by shooters (player, allies, many enemies) to
+`BulletPool` (in `global/`) is instantiated by shooters (allies and many enemies — **not** the
+player, whose bullets are unpooled) to
 recycle bullet instances rather than allocate per shot — see the linked doc for the
 pool/`AttackController`/`AttackPattern` flow.
 

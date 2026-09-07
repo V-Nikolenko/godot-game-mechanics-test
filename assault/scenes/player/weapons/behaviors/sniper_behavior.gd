@@ -84,7 +84,7 @@ func fire_from_charge(state: Node, mode: WeaponModeResource) -> void:
 	bullet.shooter_velocity = actor.velocity
 	bullet.unlimited_pierce = true
 	bullet.no_damage_decay  = true
-	state.add_child(bullet)
+	_launch(state, bullet)
 
 	_destroy_visualizer()
 	_charging = false

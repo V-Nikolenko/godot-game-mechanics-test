@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 23 open)
+## Code health backlog  (`code-health-backlog`, 25 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done)_
       into
@@ -213,7 +213,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       design call, not a bug fix. Cost: one `sub_resource` and one node property.
       → [docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-](docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-)
 
-- [ ] ****Two consecutive reviews asserted that a player bullet dies on its first hurtbox overlap.** _(in progress)_
+- [x] ****Two consecutive reviews asserted that a player bullet dies on its first hurtbox overlap.** _(done)_
       It does not — worth knowing before anyone reasons about projectile lifetime again.**
       `BulletPool` is constructed only by `light_assault_ship.gd:27`, `gunship.gd:52`,
       `interceptor.gd:30`, `ally_fighter.gd:22` and `racer_weapon.gd:11` — **never by the player**.
@@ -577,6 +577,86 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Cost of not doing it: three leaked objects per level teardown, plus every test that ends mid-wait
       needs the documented drain (`test_station_assault_section.gd` test 5). Bounded and small — this is
       tidiness, not a bug the player can feel.
+
+- [ ] **Decide whether the player's default gun should stop on its first damaging hit (PierceModule is currently a downgrade)** _(todo)_
+      **Split out of `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`, which fixed the
+      projectile *leak* and deliberately left this balance question alone.**
+      
+      `PierceModule` ("Penetrating Rounds": `MAX_PIERCE = 3`, `PIERCE_DAMAGE_FACTOR = 0.55`) is
+      **strictly a downgrade today**, because the base gun already pierces without limit. A default
+      bullet is not consumed by a hurtbox it overlaps — `bullet.gd`'s ordinary-hit path emits `expired`
+      and keeps flying — so against stacked hurtboxes the unmodded gun hits every one of them for full
+      damage. Equipping the module only *shrinks* hits 2-4 from 50 to 28/15/8 (verified on Godot 4.6.3:
+      `50 -> 28 -> 15 -> 8 -> 4`), and once `pierces_remaining` reaches 0 the bullet flies on at 8
+      anyway. Genre convention is the reverse: piercing is what an upgrade buys, not a baseline.
+      
+      Pinned as characterization by
+      `tests/integration/test_player_bullet_lifetime.gd::test_pierce_module_today_only_reduces_damage`,
+      so any change to pierce behaviour fails that test — which is the signal the change was deliberate.
+      
+      **THE COUPLING, carried over verbatim so it is never orphaned.** Fixing this means deciding that
+      the default gun stops on its first damaging hit, and that decision cannot be made in isolation:
+      the space-station mini-boss depends on pass-through. Its armoured core spans the whole hull and
+      sits between the player and the turrets, deflecting for 0. If the gun starts stopping on first
+      contact **without** the station also changing, every shot aimed at a turret is absorbed by the
+      core one to two physics frames early, deflects for 0 and dies — **the turrets become unkillable
+      and so does the boss.** That is asserted, at two levels:
+        - `tests/integration/test_space_station.gd` — two real-physics tests firing a real `bullet.tscn`
+          up a turret lane through the core.
+        - `tests/integration/test_player_bullet_lifetime.gd::test_a_bullet_is_not_consumed_by_a_hurtbox_it_overlaps`
+          — the same premise at the bullet level.
+      Background: `assault/scenes/enemies/space_station/ENEMY.md` -> "Core hurtbox: why it spans the
+      whole hull".
+      
+      So this is a coupled, whole-game balance change (player weapon feel + the first boss fight), not a
+      one-line fix. Any plan for it has to say what the station does instead — e.g. a damage rule that
+      lets shots pass the core while any turret lives, rather than the current deflect-and-continue.
+      
+      **Not in scope here:** the leak itself, which is fixed —
+      `WeaponBehavior._launch()` now calls `Bullet.free_when_offscreen()` at all four spawn sites.
+
+- [ ] **Five weapon-mode .tres files still set homing_* keys that WeaponModeResource no longer declares** _(todo)_
+      Found while working `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`.
+      
+      All five bullet-firing weapon modes — `default.tres`, `gatling.tres`, `long_range.tres`,
+      `spread.tres`, `sniper_shot.tres` in `assault/scenes/player/weapons/modes/` — end with:
+      
+      ```
+      homing_turn_rate_deg_per_sec = 90.0
+      homing_lifetime_sec = 1.6
+      ```
+      
+      `assault/scenes/player/weapons/weapon_mode.gd` declares neither property. They are leftovers from
+      the `primary_homing/` projectile directory, which no longer exists (`ls
+      assault/scenes/projectiles/` → `bullets enemy_bullet enemy_bullets missiles piercing_beam`); the
+      docs reference to it was removed in that same task.
+      
+      Godot silently ignores unknown keys when loading a `.tres`, so nothing is broken today — but they
+      read as live tuning knobs to anyone opening the file, and someone will eventually "fix" a homing
+      bug by editing a number that does nothing. Delete the two lines from each of the five files.
+      
+      Small; verify with `bash /agent/verify.sh` (`test_project_load_integrity.gd` already loads every
+      `.tres` and asserts the engine logs nothing).
+
+- [ ] **assault/scenes/player/states/shooting_state.gd is dead code referenced by no scene** _(todo)_
+      Found while working `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`, which had to
+      decide whether it counted as a spawn site.
+      
+      `assault/scenes/player/states/shooting_state.gd` instantiates `bullets/bullet.tscn` directly
+      (around line 42) and is a legacy shooter — the real player scenes mount only
+      `warhead_missile_shooting_state.gd`. A repo-wide grep found it referenced by **no** `.tscn`:
+      `player_fighter.tscn` and `open_space/.../player_ship.tscn` both list the warhead state and not
+      this one.
+      
+      Two reasons it is worth removing rather than leaving:
+      - It is the one remaining place that spawns a player bullet **outside** `WeaponBehavior._launch()`,
+        so it does not get `Bullet.free_when_offscreen()` and would leak if ever wired up. That is the
+        known, accepted residual gap in the lifetime fix; deleting the file closes it outright.
+      - `tests/integration/test_project_load_integrity.gd` compiles it on every gate run, so it costs
+        maintenance without earning anything.
+      
+      Confirm nothing references it (including by UID) before deleting, and check whether it has a
+      sibling `.gd.uid`.
 
 ## Boss fight escalation: shared hull, flying laser projectors, desperation  (`boss-fight-escalation-shared-hull-flying-laser-projectors-de`, 7 open)
 
@@ -989,4 +1069,8 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       ---
       → [docs/plans/station-death-handoff](docs/plans/station-death-handoff)
+
+## Pending ideas (awaiting draft)
+
+- Let's fill the world with more collectibles, such as log records, that players can discover in open-space, assault, and land missions.  _(submitted 2026-09-06T21:42:25.678Z)_
 

@@ -159,14 +159,16 @@ func test_config_turret_health_is_applied_to_every_turret() -> void:
 #
 #   **a player bullet is not consumed by the first hurtbox it overlaps.**
 #
-# That is true today only by accident of three unrelated settings — `bullet.gd:84` emits
-# `expired` without freeing, the `queue_free()` at `:49` is gated on `range_px > 0.0`, and
-# `assault/scenes/player/weapons/modes/default.tres` sets `range_px = 0.0`. The backlog has an
-# open task (`two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`) proposing that the
-# infinite piercing is a bug. If it is ever "fixed" without also changing the station, every shot
-# aimed at a turret is absorbed by the core one to two physics frames early, deflects for 0 and
-# dies — **the turrets become unkillable and so does the boss.** A geometry test cannot see that;
-# this one goes red at the point of the change.
+# That used to be true only by accident of three unrelated settings. It is now a stated rule with
+# its own gate — `tests/integration/test_player_bullet_lifetime.gd` and `bullet.gd`'s header —
+# which is what closed `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`.
+#
+# Whether the default gun *should* keep piercing is still open, as
+# `code-health-backlog` → `decide-whether-the-player-s-default-gun-should-stop-on-its-f`. If it is
+# ever changed without also changing the station, every shot aimed at a turret is absorbed by the
+# core one to two physics frames early, deflects for 0 and dies — **the turrets become unkillable
+# and so does the boss.** A geometry test cannot see that; this one goes red at the point of the
+# change, and `test_a_bullet_is_not_consumed_by_a_hurtbox_it_overlaps` does the same one level down.
 
 const BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 

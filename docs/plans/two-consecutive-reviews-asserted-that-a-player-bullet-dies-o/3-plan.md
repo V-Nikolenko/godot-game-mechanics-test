@@ -18,8 +18,11 @@ HitBox, an `Area2D` body, two `Line2D`s and a `WorldEnvironment` — until the m
 
 **Why.** Player shots are the only projectiles in the game with no owner. Enemy and ally bullets
 are recycled by `BulletPool` on `expired`; the warhead missile frees itself on `screen_exited`
-(`warhead_missile.gd:19-20`); the homing missile and every enemy bullet free themselves on an
-arena-bounds check (`homing_missile.gd:29-32`, `enemy_bullet.gd:31-37`). Player *bullets* do none
+(`warhead_missile.gd:19-20`); the homing missile frees itself on an arena-bounds
+check (`homing_missile.gd:29-32`). **[R2, N3]** Enemy bullets are *recycled*, not freed:
+`enemy_bullet.gd:31-37` reaches the same arena bound but only `expired.emit()`s, and the pool
+reclaims it (`bullet_pool.gd:56,80-89`); the one enemy bullet that actually frees is the unpooled
+sniper one, via `sniper_enemy.gd:102`'s `expired.connect(queue_free)`. Player *bullets* do none
 of these: all four behaviours do a plain `state.add_child(bullet)` (`straight_behavior.gd:22`,
 `spread_behavior.gd:21`, `long_range_behavior.gd:17`, `sniper_behavior.gd:87`), and the whole repo
 has exactly two connections to `Bullet.expired` — `bullet_pool.gd:56` and `sniper_enemy.gd:102`
@@ -34,7 +37,7 @@ path.
 | 2 | `:51-52` screen exit | yes | no | Always — and nothing listens |
 | 3 | `:71-76` unlimited-pierce hits an asteroid/ram-ship | yes | **yes** | Sniper only, and only against those two groups |
 | 4 | `:79-83` pierce hit with `pierces_remaining > 0` | no | no | Only with `PierceModule` equipped |
-| 5 | `:84` ordinary hurtbox hit | yes | no | Always |
+| 5 | `:84` ordinary hurtbox hit | yes | no | **[R2, N4]** Non-sniper only — `:78`'s bare `return` means an `unlimited_pierce` bullet never reaches it |
 
 So Standard and Long Range have **no** free path at all, and Sniper has one that requires hitting
 an asteroid or a ram-ship. That is the leak.
@@ -174,7 +177,7 @@ deliberate.**
 4. Document the rule in `bullet.gd`'s header. **[R1, F6]** Required doc edits, by line:
    - `docs/architecture/modules/assault.md:37` — "`bullets/bullet.gd` Pooled player bullet" → it
      is not pooled on the player path.
-   - `docs/architecture/modules/assault.md:158-161` — "the **pooled** player bullet … `expired`
+   - `docs/architecture/modules/assault.md:158-162` **[R2, N5]** — "the **pooled** player bullet … `expired`
      signals the pool to reclaim it". Replace with the real ownership rule and the viewport-vs-
      arena asymmetry from F2 above.
    - `docs/architecture/modules/assault.md:169` — "`BulletPool` … is instantiated by shooters
@@ -198,7 +201,7 @@ Step 3 is the only one that changes player-visible behaviour.
 |---|---|---|---|
 | 1 | `test_a_bullet_is_not_consumed_by_a_hurtbox_it_overlaps` | Real `bullet.tscn` overlapped with a real `HurtBox` for two physics frames: `received_damage(50)` fires, and the bullet is **still in the tree** with `HitBox.damage` still 50. **[R1]** The `HurtBox` needs `collision_mask = 64` (the HitBox's layer, `bullet.tscn:44`), a layer inside the HitBox's mask 513 (use 1), and a real `CollisionShape2D` child — `hurtbox_component.gd:12` fires off the HurtBox's *own* `area_entered`, so a default `HurtBox.new()` never sees the bullet. | Yes — red the moment anyone consumes a bullet on hit. The station boss's premise, restated at the bullet level. |
 | 2 | `test_a_launched_bullet_frees_itself_when_it_leaves_the_screen` | Fire through `StraightBehavior.fire()` against a stub state, emit the bullet's `VisibleOnScreenNotifier2D.screen_exited`, `await` a frame: the bullet is freed. | Yes — red today. |
-| 3 | `test_every_weapon_behavior_hands_off_its_projectile_s_lifetime` | **[R1, F5]** Enumerate behaviours from `ProjectSettings.get_global_class_list()` filtered on `base == "WeaponBehavior"` (today: Beam, LongRange, Sniper, Spread, Straight) rather than a hand-written list, so a *sixth* behaviour is covered on the day it is added. Two explicit branches, each covering a distinct failure mode: **(a)** `SniperBehavior` — `fire()` is a deliberate no-op (`sniper_behavior.gd:29-30`), so drive `start_charge()` + `fire_from_charge()`; **(b)** `BeamBehavior` — spawns a `PiercingBeam`, not a `Bullet`, and owns its own frees (`beam_behavior.gd:46,141`), so assert *that* rather than skipping silently. Everything else goes through `fire()`. Every spawned `Bullet` must have `screen_exited` connected to its own `queue_free`; the test **fails on an unrecognised behaviour class** rather than passing over it. | Yes — red today for three of the five, and red again the day a sixth behaviour is added, which is the point of the class-list form. |
+| 3 | `test_every_weapon_behavior_hands_off_its_projectile_s_lifetime` | **[R1, F5]** Enumerate behaviours from `ProjectSettings.get_global_class_list()` filtered on `base == "WeaponBehavior"` (today: Beam, LongRange, Sniper, Spread, Straight) rather than a hand-written list, so a *sixth* behaviour is covered on the day it is added. Two explicit branches, each covering a distinct failure mode: **(a)** `SniperBehavior` — `fire()` is a deliberate no-op (`sniper_behavior.gd:29-30`), so drive `start_charge()` + `fire_from_charge()`; **(b)** `BeamBehavior` — spawns a `PiercingBeam`, not a `Bullet`, and owns its own frees (`beam_behavior.gd:46,141`), so assert *that* rather than skipping silently. Everything else goes through `fire()`. Every spawned `Bullet` must have `screen_exited` connected to its own `queue_free`; the test **fails on an unrecognised behaviour class** rather than passing over it. **[R2, N1]** Each non-Beam branch must first `assert_gt(bullets.size(), 0)`, or the connection loop is vacuous and green — which is the *default* outcome of the obvious harness, not a hypothetical. | Yes — red today for three of the five, and red again the day a sixth behaviour is added, which is the point of the class-list form. |
 | 4 | **Boundary:** `test_a_pooled_bullet_survives_leaving_the_screen` | `BulletPool` of `bullet.tscn`, `pool_size = 2`, parented pool → ship → container (mandatory: `bullet_pool.gd:47` does `get_parent().get_parent()`; copy the harness at `test_radial_attack_pattern.gd:20-35`). Acquire both, emit `screen_exited` on both, `await` two frames, emit `expired` on both, `await`: **`acquire()` returns non-null and `is_instance_valid()` on it**. **[R1, F4] Do not assert `_idle.size()` — it reads 2 even on the broken build.** | Yes — red if someone "simplifies" the fix into `bullet.gd` and silently drains `AllyFighter`'s pool. Green today, and that is the point: it guards the constraint, not the change. |
 | 5 | **Characterization:** `test_pierce_module_today_only_reduces_damage` | Drive `_on_hit_box_area_entered` four times with `pierces_remaining = Bullet.MAX_PIERCE`, flushing deferred calls between: damage decays **[R1, F3]** 50 → 28 → 15 → 8, `pierces_remaining` reaches 0, and the bullet is **still alive** on the fourth hit. Comment names the new backlog task. **[R1, F7]** A sibling assertion pins free path 3: a bullet with `unlimited_pierce = true` **is** freed by an area whose parent is in group `asteroids` (`bullet.gd:71-76`). | Yes — red if anyone changes pierce behaviour without updating the pin. |
 
@@ -209,6 +212,7 @@ Determinism notes:
   test is *our wiring*, not Godot's culling. The reviewer confirmed on 4.6.3 that
   `notifier.screen_exited.emit()`, `screen_exited.connect(queue_free)` / `is_connected(queue_free)`
   and `is_queued_for_deletion()` all behave headless.
+- **[R2, N1/N2]** The stub `state` needs a **script** declaring `var actor`; a scriptless `Node.new()` makes `state.get("actor")` return `null`, every `fire()` early-returns and test 3 passes with zero bullets. The stub actor is a scripted `Node2D` declaring `var velocity: Vector2` and `var pierce_module_active: bool` — four behaviours read `actor.velocity` **directly** (`straight_behavior.gd:19`, `long_range_behavior.gd:14`, `spread_behavior.gd:18`, `sniper_behavior.gd:84`), so a bare `Node2D` reds tests 2-3 on setup rather than on behaviour.
 - Test 1 uses the real physics server, following the harness at `test_space_station.gd:171-186`
   (two `await get_tree().physics_frame`s for `area_entered`).
 - Everything parents under `add_child_autofree` containers; nothing awaits a `SceneTreeTimer`

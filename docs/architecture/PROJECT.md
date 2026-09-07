@@ -99,6 +99,17 @@ Detail and APIs: [global.md](modules/global.md).
   `push_error` stay unconditional: they are for things that should not happen.
 - **Coordinates:** waves and spawn offsets are authored in **design units** (640×360
   space) and scaled by `ArenaCamera.WORLD_SCALE` (2.0) at runtime — never pre-multiply.
+- **Projectile lifetime — every projectile has exactly one owner.** Either a `BulletPool`
+  recycles it (`docs/BULLET_POOL.md`: *the pool is smart, bullets are dumb*), or it frees itself
+  when it leaves the world. There is no third option, and "nothing frees it" is the bug this rule
+  exists to prevent: the player's bullets had no owner at all, so every shot ever fired stayed in
+  the level for the whole mission. Player bullets go through `WeaponBehavior._launch()`, which
+  calls `Bullet.free_when_offscreen()`; **never wire `Bullet.expired` to `queue_free` on the
+  player path** — `expired` fires on an ordinary hurtbox hit too, and consuming a shot on first
+  contact makes the space-station boss unkillable. Player bullets despawn at the *viewport* edge
+  and `EnemyBullet` at the *arena* bound; that asymmetry is deliberate, because the player's
+  weapons are also mounted in Open Space, which has no `ArenaCamera`. Gated by
+  `tests/integration/test_player_bullet_lifetime.gd`.
 - **Testing:** **GUT 9.7.1**, vendored in `addons/gut/`, enabled from the
   `[editor_plugins]` section of `project.godot`. Tests live in `tests/` and run headless:
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`.
@@ -129,6 +140,10 @@ Detail and APIs: [global.md](modules/global.md).
   a damage *rule* on a full-size hurtbox and never an absent one — it carries a permanent
   boundary test that applies the rejected "narrow the station core to 88 x 240" proposal to a live
   instance and asserts it fails)
+  and `tests/integration/test_player_bullet_lifetime.gd` (the projectile-lifetime rule above:
+  every `WeaponBehavior` subclass — enumerated from the project class list, so a *future* one is
+  covered too — hands off its bullet's lifetime, a pooled bullet is **not** freed by the same
+  change, and a bullet is not consumed by a hurtbox it overlaps)
   — plus the space-station family.
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).

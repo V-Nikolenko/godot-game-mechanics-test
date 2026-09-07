@@ -526,13 +526,16 @@ over the shoulders is the better long-term design and was deferred, not dismisse
 HP bucket and new art on a boss whose approved epic is about to collapse five HP pools into one.
 
 ⚠️ **Load-bearing dependency.** This decision assumes a player bullet is not consumed by the first
-hurtbox it overlaps. The backlog has an open task
-(`code-health-backlog` → `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`) proposing
-that the infinite piercing is a bug. **If that is ever "fixed" without also changing the station,
-every shot aimed at a turret is absorbed by the core one to two physics frames early, deflects for
-0 and dies — the turrets become unkillable and so does the boss.**
-`test_a_real_bullet_in_a_turret_lane_damages_the_turret_through_the_armored_core` is what turns
-that into a red gate at the point of the change instead of an unshootable boss discovered later.
+hurtbox it overlaps. That is now a *stated rule with a gate* rather than an accident — see
+`tests/integration/test_player_bullet_lifetime.gd` and `bullet.gd`'s header — but whether the
+default gun *should* keep piercing is still open, as
+`code-health-backlog` → `decide-whether-the-player-s-default-gun-should-stop-on-its-f`.
+**If that is ever changed without also changing the station, every shot aimed at a turret is
+absorbed by the core one to two physics frames early, deflects for 0 and dies — the turrets become
+unkillable and so does the boss.** Two tests turn that into a red gate at the point of the change
+instead of an unshootable boss discovered later:
+`test_a_real_bullet_in_a_turret_lane_damages_the_turret_through_the_armored_core` here, and
+`test_a_bullet_is_not_consumed_by_a_hurtbox_it_overlaps` at the bullet level.
 A geometry test cannot see it: it measures rectangles.
 
 ---

@@ -314,11 +314,33 @@ rather than pinning existing quirks.
 tests did not close that. Its last two tests now do, for the bullet path: they instance a real
 `bullet.tscn` and step physics, so the layer/mask chain has to work for them to pass. The first of
 the two is also the load-bearing guard on the station's core-hurtbox decision — it pins that a
-player bullet crosses the armoured core and still kills the turret behind it, so if the open
-backlog item about the infinitely-piercing player bullet is ever actioned, the gate says "the
-station's turrets just became unkillable" at the point of the change. The rocket (32) and asteroid
+player bullet crosses the armoured core and still kills the turret behind it, so if the still-open
+backlog item about whether the default gun should stop on its first damaging hit
+(`decide-whether-the-player-s-default-gun-should-stop-on-its-f`) is ever actioned, the gate says
+"the station's turrets just became unkillable" at the point of the change. The rocket (32) and asteroid
 (1024) mask bits and the incoming mining-laser ray are still uncovered. See the file headers and
 `assault/scenes/enemies/space_station/ENEMY.md`.
+
+`integration/test_player_bullet_lifetime.gd` is intent as well, and it is the *other* end of that
+station dependency. It states the two projectile-lifetime rules directly rather than leaving them
+implied by the boss fight: **(1)** a player bullet is not consumed by a hurtbox it overlaps — the
+premise the station's armoured core rests on — and **(2)** an unpooled player bullet frees itself
+when it leaves the screen, which nothing did before. Its invariant test enumerates
+`WeaponBehavior` subclasses from `ProjectSettings.get_global_class_list()` rather than a
+hand-written list, so a *sixth* behaviour added later is covered on the day it lands.
+
+Three traps it hit, all worth knowing:
+
+- `assert_signal_emitted_with_parameters(obj, signal, params, index)` takes an emission **index**
+  as its fourth argument, **not a message**. Passing a string there makes GUT compare a `String`
+  to an `int`, and the test fails with `Invalid operands 'String' and 'int'` — which looks
+  nothing like the real cause.
+- **A stub `state` must carry a script.** Behaviours resolve their actor with
+  `state.get("actor")`, and `set("actor", x)` on a *scriptless* `Node` is a silent no-op, so
+  `fire()` early-returns and a "spawn a bullet and check it" test passes having spawned nothing.
+  Assert a lower bound on the spawn count, not just a property of whatever was spawned.
+- **The stub actor needs a real `velocity` property.** Four behaviours read `actor.velocity`
+  directly rather than through `get()`, so a bare `Node2D` reds the test on setup.
 
 `integration/test_level_director_polling.gd` is intent too, and of a different kind again: it pins
 that `LevelDirector`'s ENEMIES_CLEARED poll ends on `child_exiting_tree`, honours its fallback
@@ -409,6 +431,11 @@ lifecycle, and the config-driven stats.
 Levels: the `station_assault` section (`integration/test_station_assault_section.gd`) — the
 `ENEMIES_CLEARED` gate, the per-section timeout and its free-on-expiry path, and Level 1's
 section order and station wave.
+Projectiles: player-bullet lifetime (`integration/test_player_bullet_lifetime.gd`) — the
+pass-through rule the station boss depends on, the off-screen self-free every `WeaponBehavior`
+must hand its bullets, the boundary case that the same free must **not** reach a pooled bullet
+(asserted on `BulletPool.acquire()`, never on `_idle.size()`, which reads healthy even on the
+broken build), and a characterization pin on what `PierceModule` does today.
 Hazards: `LaserRay.hit_mask_override` (`integration/test_laser_ray_hit_mask.gd`) — pins the shared
 default mask `128 | 256 | 512` so the race hazards and Level 1's laser columns cannot be silently
 narrowed, and pins that `0` means "use the default" rather than "collide with nothing".

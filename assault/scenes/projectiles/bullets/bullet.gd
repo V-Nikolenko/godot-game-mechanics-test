@@ -1,3 +1,17 @@
+## Bullet — the player's primary projectile (also pooled by AllyFighter).
+##
+## LIFETIME. Two rules, and they pull in opposite directions:
+##
+##   1. **A bullet is NOT consumed by a hurtbox it overlaps.** `_on_hit_box_area_entered()` emits
+##      `expired` and keeps flying. This is deliberate and load-bearing: the space-station boss
+##      needs shots aimed at its turrets to survive crossing the armoured core, or the turrets —
+##      and so the boss — are unkillable. See `space_station/ENEMY.md` -> "Core hurtbox".
+##   2. **An unpooled bullet frees itself when it leaves the screen**, via `free_when_offscreen()`.
+##
+## Because of rule 1, `expired` means "something happened", NOT "I am done" — it fires on an
+## ordinary hit as well as at the range cap and the screen edge. **Never wire `expired` to
+## `queue_free` on the player path**: that consumes the shot on first contact and breaks rule 1.
+## `BulletPool` connects to it legitimately because recycling is reversible; freeing is not.
 class_name Bullet
 extends Area2D
 
@@ -33,6 +47,25 @@ func _ready() -> void:
 func reset() -> void:
 	rotation = 0.0
 	_traveled = 0.0
+
+## Hands this bullet's lifetime to itself: it frees when it leaves the viewport.
+##
+## OPT-IN, AND IT MUST STAY OPT-IN. `AllyFighter` recycles this same scene through a `BulletPool`
+## (`ally_fighter.gd:11,22`), and `docs/BULLET_POOL.md` states the rule: *the pool is smart,
+## bullets are dumb*. Moving this free into `_on_visible_on_screen_notifier_2d_screen_exited()`
+## would make every pooled bullet destroy itself on its first trip off-screen — `_recycle()` still
+## returns it to `_idle` (the deferred call runs before the delete queue flushes), so the pool's
+## size looks healthy while filling with freed instances, and `acquire()` then errors and returns
+## null. Pinned by `test_player_bullet_lifetime.gd::test_a_pooled_bullet_survives_leaving_the_screen`.
+##
+## Called by `WeaponBehavior._launch()`, which is how every player spawn site gets it.
+func free_when_offscreen() -> void:
+	var notifier := get_node_or_null("VisibleOnScreenNotifier2D") as VisibleOnScreenNotifier2D
+	if notifier == null:
+		push_warning("[Bullet] %s has no VisibleOnScreenNotifier2D — it will never despawn" % name)
+		return
+	if not notifier.screen_exited.is_connected(queue_free):
+		notifier.screen_exited.connect(queue_free)
 
 func _physics_process(delta: float) -> void:
 	var step := speed * delta

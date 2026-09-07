@@ -33,6 +33,13 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   spelled out in `docs/architecture/PROJECT.md` → Conventions.
 - **Design-unit coordinates** — waves/spawns authored in 640×360 space, scaled by
   `ArenaCamera.WORLD_SCALE` (2.0) at runtime; never pre-multiply.
+- **Every projectile has exactly one owner** — either a `BulletPool` recycles it, or it frees
+  itself when it leaves the world. Player bullets are unpooled: spawn them through
+  `WeaponBehavior._launch()`, which calls `Bullet.free_when_offscreen()`. **Never wire
+  `Bullet.expired` to `queue_free` on the player path** — `expired` also fires on an ordinary
+  hurtbox hit, and consuming a shot on first contact makes the space-station boss unkillable.
+  Spelled out in `docs/architecture/PROJECT.md` → Conventions; gated by
+  `tests/integration/test_player_bullet_lifetime.gd`.
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
@@ -79,7 +86,16 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   reports nothing. It carries a permanent boundary test that applies the rejected "narrow the
   station core to 88 x 240" proposal to a live instance and asserts it fails, so that decision is a
   gate rather than prose someone re-litigates.
-  `tests/integration/test_level_director_polling.gd` is a sixth, over the ENEMIES_CLEARED poll: it
+  `tests/integration/test_player_bullet_lifetime.gd` is a sixth, over projectile *ownership*. It
+  states the two rules that used to be implied by the space-station fight: a player bullet is not
+  consumed by a hurtbox it overlaps (the premise the boss's armoured core rests on), and an
+  unpooled player bullet frees itself off-screen — which nothing did, so every shot ever fired
+  stayed in the level for the whole mission. Its invariant enumerates `WeaponBehavior` subclasses
+  from the project class list rather than a hand-written list, so a *sixth* behaviour is covered
+  the day it lands, and its boundary case asserts the same free must **not** reach a pooled bullet
+  (checked on `BulletPool.acquire()`, never on `_idle.size()`, which reads healthy even on the
+  broken build).
+  `tests/integration/test_level_director_polling.gd` is a seventh, over the ENEMIES_CLEARED poll: it
   asserts the poll ends on `child_exiting_tree`, honours its fallback window, and leaves nothing
   alive behind an early return. That last one is the reason it exists — the poll used to abandon a
   `SceneTreeTimer` on every early return, and a leak is reported only at *process exit*, after GUT

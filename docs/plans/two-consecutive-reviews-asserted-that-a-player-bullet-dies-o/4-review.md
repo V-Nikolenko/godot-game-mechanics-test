@@ -199,3 +199,177 @@ table and is worth one line in test 5's neighbourhood so nobody "discovers" it l
   strategy base; no balance value moves out of a `.tres`; no design-unit coordinates are involved.
 - Scope is right: one new test file, ~5 small edits, docs, one backlog entry. Do not let F5's
   class-list test grow into a general behaviour harness.
+
+---
+
+# Review round 2
+
+VERDICT: APPROVED
+
+All seven round-1 findings are addressed, and addressed *correctly* — I re-derived each against
+the files rather than reading the plan's word for it, and re-ran the two empirical claims (the
+pierce sequence and the pool failure mode) on this repo's Godot 4.6.3. Revision 2 also picks up
+the three non-blocking round-1 notes (test-1 layers, the pool harness precedent, the
+`BULLET_POOL.md:15` argument) without letting the scope grow.
+
+The one substantive thing round 1 did not catch — that test 3 can pass **vacuously** — is real but
+recoverable at build time, so it is a note, not a block. See N1/N2; apply them while writing the
+test.
+
+---
+
+## F1-F7 re-verified
+
+### F1 — corrected. ✅
+`3-plan.md:127` now says "only the warhead does (`homing_missile.tscn` has no
+`VisibleOnScreenNotifier2D`; only `bullet.tscn`, `sniper_bullet.tscn` and
+`warhead_missile.tscn` do)", and calls arena bounds "the *majority* precedent".
+Checked: `grep VisibleOnScreenNotifier2D --include=*.tscn` over the repo returns exactly
+`bullet.tscn:37`, `warhead_missile.tscn:55`, `sniper_bullet.tscn:38`.
+`homing_missile.gd:4-10` are the arena constants, `:29-32` the bounds check, `:46-47` the hit
+handler. `warhead_missile.gd:19-20` is the only notifier→`queue_free` on a missile. The Risks row
+at `3-plan.md:224` now reads "the warhead missile already ships exactly this" (singular). The
+rejection now stands on its own reason and I confirmed that reason: `open_space/.../player_ship.tscn:267`
+mounts `weapon_state.gd` (ext_resource `9_ws`, line 10 of that file), and Open Space's camera is a
+plain `Camera2D` parented to the ship (`open_space/scenes/levels/sector_hub.tscn:79`), not
+`ArenaCamera` — so `x ∈ [-100, 1380] / y ∈ [-380, 1100]` would indeed be wrong there.
+
+### F2 — corrected. ✅
+New section `3-plan.md:131-152`. Numbers check out: `arena_camera.gd:2` "1480 × 1480", `:24-26`
+the offset-limit comment, `:35-39` `SCREEN_W 1280 / SCREEN_H 720 / H_LIMIT 100 / V_LIMIT 380`.
+`enemy_bullet.gd:33` is verbatim "Expire when the bullet leaves the full 740×740 arena, not just
+the viewport." `gatling.tres:12` = 450, `spread.tres:12` = 360. The consequence is stated, the
+acceptance is argued, and the player/enemy boundary asymmetry is queued for `assault.md`.
+
+### F3 — corrected. ✅
+`3-plan.md:158` and `:203` both now say 50 → **28** → 15 → 8. Re-derived on
+`godot 4.6.3.stable` against `bullet.gd:64` / `:18`: `50 -> 28 -> 15 -> 8 -> 4 -> 2`, with
+`50 * 0.55 == 27.5` and `roundi` rounding half away from zero. Test 5's four-hit walk is also
+arithmetically right: `MAX_PIERCE = 3` (`bullet.gd:17`), so hits 1-3 take the
+`pierces_remaining > 0` branch (`:79-83`) and hit 4 falls through to `:84`, which emits `expired`
+and does **not** free — "still alive on the fourth hit" is correct.
+
+### F4 — corrected, and I reproduced it. ✅
+`3-plan.md:102-118` now carries the right mechanism, and `:202` forbids the `_idle.size()`
+assertion. I built the broken build on a real pool (`pool_size = 2`, pool → ship → container,
+`screen_exited.connect(bullet.queue_free)` on both acquired bullets, emit, two frames):
+
+```
+idle size after: 2 active: 0
+  idle entry valid=false
+  idle entry valid=false
+SCRIPT ERROR: Trying to assign invalid previously freed instance.
+   at: BulletPool.acquire (res://global/components/bullet_pool.gd:67)
+acquire after: <null>
+```
+
+Exactly as Revision 2 describes: `_recycle` (`bullet_pool.gd:80-89`) runs before the delete queue
+flushes, so `_idle` refills to 2 with two *freed* entries. A size assertion would be green on the
+broken build; `acquire()` + `is_instance_valid()` is the assertion that goes red. Test 4 as
+written does go red on that build.
+
+### F5 — corrected, and the class list is what the plan says. ✅
+`3-plan.md:201`. Ran it on this repo:
+`ProjectSettings.get_global_class_list()` filtered on `base == "WeaponBehavior"` returns exactly
+`[BeamBehavior, LongRangeBehavior, SniperBehavior, SpreadBehavior, StraightBehavior]` — the five
+named, no more. The two branches are correctly justified: `beam_behavior.gd:28-29` and
+`sniper_behavior.gd:29-30` are both `pass`-body `fire()` overrides, `BeamBehavior` spawns a
+`PiercingBeam` at `:40-42` and frees it at `:46` / `:141`, and `SniperBehavior` spawns at `:87` via
+`fire_from_charge`. "Fails on an unrecognised behaviour class" is the right default.
+
+### F6 — corrected; every named line says what the plan claims. ✅
+- `docs/architecture/modules/assault.md:37` — "`bullets/bullet.gd`  Pooled player bullet (pierce, sniper unlimited-pierce)" ✅
+- `assault.md:158-161` — "the pooled player bullet … `expired` signals the pool" ✅ (see N5: the sentence ends on **162**)
+- `assault.md:169` — "`BulletPool` (in `global/`) is instantiated by shooters (player, allies, many enemies)" ✅
+- `assault.md:167` — "`primary_homing/` — homing variant of the primary weapon"; `ls assault/scenes/projectiles/` = `bullets enemy_bullet enemy_bullets missiles piercing_beam` ✅
+- `ENEMY.md:528-536` — "The backlog has an open task (`code-health-backlog` → `two-consecutive-reviews-…`)" ✅
+- `test_space_station.gd:150-171` — same claim at `:164-166` ✅
+`scripts/backlog-cli.js` does expose `add-task` (`--help` lists it), so step 5 is executable.
+
+### F7 — corrected. ✅
+The five-path table at `3-plan.md:29-40` matches `bullet.gd` line for line: `:45-49` range cap
+(frees), `:51-52` screen exit (no free), `:71-76` unlimited-pierce vs asteroid/ram-ship (frees),
+`:79-83` pierce decrement (no free), `:84` ordinary hit (no free). Test 5's sibling assertion pins
+path 3. (One word off — see N4.)
+
+---
+
+## Round-2 findings
+
+### N1 — non-blocking, but do not skip: test 3 can pass with **zero** bullets.
+`3-plan.md:201` asserts "every spawned `Bullet` must have `screen_exited` connected to its own
+`queue_free`". If nothing is spawned, that loop is vacuous and green. This is not hypothetical — it
+is the *default* outcome of the obvious harness. `straight_behavior.gd:6` does
+`state.get("actor")`, and `Node.new()` + `set("actor", a)` on a **scriptless** node is a no-op, so
+`get("actor")` returns `null` and `fire()` early-returns at `:7-8`. I ran exactly that harness and
+got `bullets=0` for all five behaviours, test green. With a scripted stub
+(`extends Node` + `var actor: Node2D`) I got LongRange/Sniper/Spread/Straight = 1 each,
+Beam = 0 — the intended shape.
+**Do:** assert a per-behaviour lower bound (`assert_gt(bullets.size(), 0, ...)`) before the
+connection check, for every branch except the explicit `BeamBehavior` one. The plan's step-1
+"watch test 3 fail" is a partial guard; make it an assertion instead of a procedure.
+
+### N2 — non-blocking: the stub actor must expose `velocity`, not just `rotation`.
+`straight_behavior.gd:19`, `long_range_behavior.gd:14`, `spread_behavior.gd:18` and
+`sniper_behavior.gd:84` read `actor.velocity` **directly** (not through `get()`), so a plain
+`Node2D` actor raises "Invalid access to property" and reds tests 2 and 3 on setup rather than on
+behaviour. Use a `CharacterBody2D`, or a `Node2D` with a script declaring
+`var velocity: Vector2` and `var pierce_module_active: bool`. (`pierce_module_active` *is* read via
+`actor.get(...)`, so that one is safe either way.) `pellet_count` defaults to 1 on
+`weapon_mode.gd:27`, so a bare `WeaponModeResource.new()` is enough for `SpreadBehavior`.
+
+### N3 — non-blocking factual slip, same family as F1: `3-plan.md:21-22`.
+"the homing missile and every enemy bullet free themselves on an arena-bounds check
+(`homing_missile.gd:29-32`, `enemy_bullet.gd:31-37`)". `enemy_bullet.gd:37` emits `expired` and
+**nothing else** — it never calls `queue_free()`. Pooled enemy bullets are *recycled*
+(`bullet_pool.gd:56`, `:80-89`); the only enemy bullet that frees is the unpooled sniper one, and
+it does so through `sniper_enemy.gd:102`'s `expired.connect(queue_free)`. The claim changes no
+decision — the rejected-alternatives row at `:127` describes the precedent accurately — but fix
+the sentence, since this plan's whole round-2 value is that its evidence is checkable.
+
+### N4 — non-blocking, one word: `3-plan.md:37`.
+Path 5 (`bullet.gd:84`) is listed as reachable "Always". `bullet.gd:78`'s bare `return` means an
+`unlimited_pierce` (sniper) bullet never reaches it. "Always, except sniper" or "non-sniper only".
+
+### N5 — non-blocking: `assault.md:158-161` is really **158-162**.
+The sentence "`expired` signals the pool to reclaim it" ends on line 162. Edit through 162.
+
+### N6 — non-blocking, offered not required.
+`@export var free_on_screen_exit := false` checked inside the existing
+`_on_visible_on_screen_notifier_2d_screen_exited()` is the same safety with one fewer moving part
+(no node-name lookup, no `is_connected` guard) and is equally pool-safe, since the pool never sets
+it. It is a wash, not an improvement, and `free_when_offscreen()` matches the warhead precedent
+more literally. Named here only so it is on the record as considered; **do not** restructure the
+plan for it.
+
+### N7 — trivia for the doc pass.
+`assault/scenes/player/weapons/modes/` holds **six** `.tres`, not five — `mining_laser.tres` is the
+BEAM mode and spawns no `Bullet`. The plan's "five modes" is consistently the five bullet-firing
+ones, which is the right frame here; just don't let the doc edit say "five weapon modes".
+Separately, all five bullet `.tres` set `homing_turn_rate_deg_per_sec` / `homing_lifetime_sec`,
+which `weapon_mode.gd` no longer declares — stale keys from the vanished `primary_homing/`.
+Out of scope; worth a backlog line, not a fix here.
+
+---
+
+## Re-checked against the reject criteria
+
+| Criterion | Finding |
+|---|---|
+| Reinvents something in `global/components/` | No. I listed the directory: there is no offscreen-cull or lifetime component. `BulletPool` is the only lifetime owner and the plan deliberately stays out of it. |
+| Contradicts `CLAUDE.md` | No. No inheritance added — one method on the existing `WeaponBehavior` `RefCounted` strategy base (`weapon_behavior.gd:2-3`). No balance value leaves a `.tres`. No design-unit coordinates involved. Signal arity untouched (`expired` stays 0-arg; `queue_free` is 0-arg). |
+| Test plan cannot fail | It can. Test 2 and test 3 are red today. Test 4 is the boundary case and I proved it goes red on the plausible wrong fix. Test 1 I ran as specified — `HurtBox` with `collision_layer = 1`, `collision_mask = 64`, a real `CollisionShape2D`, real `bullet.tscn`, two physics frames — and got `received_damage: [50]`, bullet still valid and in-tree, `HitBox.damage` still 50. Only N1 threatens a vacuous pass. |
+| Plainly simpler unexamined alternative | No. Six alternatives are named and rejected on stated reasons, including the two a reviewer would raise (`_ready()` self-detection, arena bounds). N6 is a wash, not a simplification. |
+| Research without tradeoffs / unsupported citations | `2-research.md` carries a tradeoff column on every row, and the two claims the plan leans on hardest — pass-through on invulnerable enemies, and `VisibleOnScreenNotifier2D` being a render-culled signal that needs a draw pass — are the ones the plan actually acts on (the notifier caveat is why tests 2-4 emit the signal by hand). |
+| Scope too large for one session | No. One new test file (5 cases), six small source edits (`bullet.gd`, `weapon_behavior.gd`, four behaviours), ~6 doc lines, one backlog entry, then `verify.sh` + `check-test-leaks.sh`. |
+| A round-1 finding still factually wrong | None. F1-F7 all check out against the files. |
+
+## Build-time checklist for the implementer
+
+1. Apply **N1** and **N2** before writing anything else — they are the two ways this test file
+   goes green while proving nothing, or red for reasons unrelated to the change.
+2. Fix **N3**, **N4**, **N5** as you pass through those lines.
+3. Keep test 3 as an invariant over `get_global_class_list()`. Do not let it grow into a general
+   behaviour harness (round-1 note, still applies).
+4. `bash /agent/verify.sh` **then** `bash scripts/check-test-leaks.sh` — test 4 frees nodes across
+   frames, which is exactly the shape the leak grep exists for.
