@@ -412,7 +412,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       node, or an explicit `container` export, would turn a silent visual bug into a loud one.
       
       Found on 2026-09-03 while fixing the shared-component signal/logging defects.
-      2 run(s), $0.49; last on ?
+      3 run(s), $0.49; last on ?
 
 - [ ] ****Three more files print unconditionally on hot paths — same defect as the one just fixed,** _(todo - feature, medium, sonnet)_
       out of the item's stated scope.** `global/ui/dialog_system/ui/dialog_box.gd` has **11**
