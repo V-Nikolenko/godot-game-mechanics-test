@@ -824,15 +824,32 @@
           "id": "move-code-built-contact-hitboxes-into-the-scenes-as-the-aste",
           "head": "Move code-built contact hitboxes into the scenes, as the asteroids already do",
           "body": "Four scripts build a contact `HitBox` at runtime (`base_enemy.gd:49-53`,\n`drone_interceptor.gd:141-148`, `kamikaze_drone.gd:53-60`, `ally_fighter.gd:72-77`), all now via\n`HitBox.matching_shape()`. The asteroid family already does it the other way:\n`big_asteroid.tscn`/`small_asteroid.tscn` author a `ContactHitBox` node in the scene and\n`asteroid_base.gd:41-42` only sets `damage`/`damage_type` on it.\n\nThe scene-authored version is the cleaner end state — the hull geometry lives next to the body\nshape where an author can see both, instead of being reconstructed in code from it — and it is\nthe pattern already proven in this repo. It is also what removes the whole class of bug the\ntransform fix just closed.\n\nNot free: nine scene edits with UID risk, and the per-subclass layer/mask logic that\n`drone_interceptor.gd:147` and `kamikaze_drone.gd:59` depend on (mask 128 rather than 0) has to\nmove into the scenes too. `tests/integration/test_contact_hitbox_geometry.gd` covers the result\neither way, so the migration is verifiable.\n\nFound on 2026-09-06; recorded as an explicit out-of-scope follow-up (rejected alternative 3) in\nthe approved plan for the contact-hitbox transform fix.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
-          "planDir": null,
+          "planDir": "docs/plans/move-code-built-contact-hitboxes-into-the-scenes-as-the-aste",
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T08:40:26.265Z",
+              "run": "2026-09-08-1038-i8",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004093,
+                "claude-sonnet-5": 2.704781000000001
+              },
+              "costUSD": 2.7088740000000002,
+              "turns": 37,
+              "subagents": 1,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "wire-the-leak-grep-into-agent-verify-sh-the-agent-cannot-age",
