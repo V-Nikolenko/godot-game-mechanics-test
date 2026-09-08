@@ -503,7 +503,7 @@
           "id": "raceship-gd-97-100-renders-its-death-explosion-at-the-contai",
           "head": "**`race_ship.gd:97-100` renders its death explosion at the container origin, not at the",
           "body": "ship.** It does `get_parent().add_child(boom)` then `boom.global_position = global_position`\n— but `ExplosionEffect.explode()` reads `actor.global_position` where `actor` is the effect's\n*parent*, so the position written on line 99 is silently discarded and every race-ship\nexplosion appears at the container's origin. Confirmed by reading the code and by the\nindependent reviewer of `docs/plans/station-death-handoff/`. **Deliberately not fixed in that\ncycle:** it is unrelated to the mini-boss and fixing it visibly moves race-mode explosions,\nwhich deserves its own before/after check. `explode()` now takes an optional position\nargument, so the fix is one line: `boom.explode(global_position)`. No test pins the current\nbehaviour, so nothing will fight the change.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

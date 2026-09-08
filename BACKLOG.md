@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 18 open)
+## Code health backlog  (`code-health-backlog`, 17 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -380,7 +380,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr](docs/plans/a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr)
       1 run(s), $4.65; last on claude-sonnet-5
 
-- [ ] ****`race_ship.gd:97-100` renders its death explosion at the container origin, not at the** _(todo - feature, medium, sonnet)_
+- [x] ****`race_ship.gd:97-100` renders its death explosion at the container origin, not at the** _(done - feature, medium, sonnet)_
       ship.** It does `get_parent().add_child(boom)` then `boom.global_position = global_position`
       — but `ExplosionEffect.explode()` reads `actor.global_position` where `actor` is the effect's
       *parent*, so the position written on line 99 is silently discarded and every race-ship
