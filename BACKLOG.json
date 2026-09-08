@@ -418,7 +418,24 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T02:59:38.684Z",
+              "run": "2026-09-08-0538-i3",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004107,
+                "claude-sonnet-5": 1.6632229999999992
+              },
+              "costUSD": 1.6673299999999993,
+              "turns": 58,
+              "subagents": 1,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "the-0-75-escape-combo-penalty-applies-to-ad-hoc-spawns-nobod",

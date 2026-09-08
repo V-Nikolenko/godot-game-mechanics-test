@@ -350,6 +350,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `tests/integration/test_station_reinforcements.gd` now asserts every squad ship is
       bullet-killable so the class of mistake cannot recur silently.
       -> [docs/plans/ramship-cannot-be-hit-by-the-player-s-primary-weapon-and-its](docs/plans/ramship-cannot-be-hit-by-the-player-s-primary-weapon-and-its)
+      1 run(s), $1.67; last on claude-sonnet-5
 
 - [ ] **The 0.75× escape-combo penalty applies to ad-hoc spawns nobody expects to kill.** _(todo - feature, medium, sonnet)_
       `assault/scenes/systems/score_tracker/score_tracker.gd:211` multiplies the combo by
