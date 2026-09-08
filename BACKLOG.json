@@ -861,6 +861,19 @@
               "subagents": 0,
               "outcome": "success",
               "gate": "pass"
+            },
+            {
+              "at": "2026-09-08T08:41:27.206Z",
+              "run": "2026-09-08-1038-i10",
+              "requested": "sonnet",
+              "primary": null,
+              "fallbackUsed": false,
+              "models": {},
+              "costUSD": 0,
+              "turns": 1,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
             }
           ]
         },

@@ -553,7 +553,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Found on 2026-09-06; recorded as an explicit out-of-scope follow-up (rejected alternative 3) in
       the approved plan for the contact-hitbox transform fix.
       -> [docs/plans/move-code-built-contact-hitboxes-into-the-scenes-as-the-aste](docs/plans/move-code-built-contact-hitboxes-into-the-scenes-as-the-aste)
-      2 run(s), $2.71; last on ?
+      3 run(s), $2.71; last on ?
 
 - [ ] **Wire the leak grep into /agent/verify.sh — the agent cannot, /agent is read-only** _(todo - feature, medium, sonnet)_
       `/agent` is mounted **read-only** inside the dev container (`/dev/bcache0 on /agent type btrfs
