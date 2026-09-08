@@ -20,10 +20,8 @@ func _ready() -> void:
 		health.current_health = config.max_health
 		speed = config.movement_speed
 		bomb_interval = config.bomb_interval
-		for child in get_children():
-			if child is HitBox:
-				(child as HitBox).damage = config.collision_damage
-				break
+		if contact_hit_box:
+			contact_hit_box.damage = config.collision_damage
 
 	# Child Timer fires independently of physics_process so bombing continues
 	# even when EnemyPathMover takes control of movement.

@@ -116,15 +116,13 @@ func _ready() -> void:
 			t.health.max_health = config.turret_health
 			t.health.current_health = config.turret_health
 
-		## BaseEnemy._add_contact_hitbox() hardcodes damage = 20 and never reads the config
-		## (base_enemy.gd:56), so it has to be re-applied here. bomber.gd:18-26,
-		## light_assault_ship.gd:23, ram_ship.gd:20-23 and gunship.gd:44-51 all do this.
-		## tests/integration/test_enemy_contact_damage.gd asserts it for the whole roster, so an
-		## enemy that forgets the re-apply now fails the gate instead of silently ramming for 20.
-		for child in get_children():
-			if child is HitBox:
-				(child as HitBox).damage = config.collision_damage
-				break
+		## The scene-authored ContactHitBox defaults to damage 20 and never reads the config,
+		## so it has to be re-applied here. bomber.gd, light_assault_ship.gd, ram_ship.gd and
+		## gunship.gd all do this. tests/integration/test_enemy_contact_damage.gd asserts it for
+		## the whole roster, so an enemy that forgets the re-apply now fails the gate instead of
+		## silently ramming for 20.
+		if contact_hit_box:
+			contact_hit_box.damage = config.collision_damage
 
 
 ## Public read-only view of the turret list, for nodes that need the emitters themselves rather
@@ -231,11 +229,9 @@ func _make_corpse_harmless() -> void:
 
 	## The contact HitBox is on layer 256 and the player's HurtBox is the side that MONITORS
 	## (mask 1281), so zeroing the layer here is what stops a dead 256 px hull from ramming the
-	## player. BaseEnemy._add_contact_hitbox() builds it as a direct child (base_enemy.gd:49-60).
-	for child in get_children():
-		if child is HitBox:
-			(child as HitBox).set_deferred("collision_layer", 0)
-			break
+	## player. Scene-authored as a direct child, "ContactHitBox".
+	if contact_hit_box:
+		contact_hit_box.set_deferred("collision_layer", 0)
 
 
 ## The end of the sequence: one final central blast, then the wreck leaves the container — which

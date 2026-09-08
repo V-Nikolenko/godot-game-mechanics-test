@@ -484,8 +484,8 @@ it.
 with `_RAY_BLOCK_MASK = 1 | 1024`, truncates the beam at the hull edge, then skips the blocker
 itself (`beam_behavior.gd:90`) and culls everything past `seg_len` (`:94`) — which would make the
 station **immune to the player's mining laser** and shield everything behind it. Layer 0 also stops
-the player colliding with a 256×256 body. Contact damage is unaffected: it comes from the `HitBox`
-on layer 256 built by `base_enemy.gd:53-55`. If the hull should later be a solid obstacle, the
+the player colliding with a 256×256 body. Contact damage is unaffected: it comes from the
+scene-authored `ContactHitBox` node on layer 256. If the hull should later be a solid obstacle, the
 opt-out is an `is_laser_blocking()` returning `false` (`beam_behavior.gd:67-68`).
 
 ✅ **Coverage gap — closed.** For most of this entity's life
@@ -610,10 +610,10 @@ exists. Adding one is a deliberate future change, not an oversight.
   re-enter its death handler. Both `_on_received_damage` and `_on_health_changed` carry an `_alive`
   guard; each alone is sufficient, and removing **both** makes `destroyed` fire 4× instead of 1×
   (verified by mutation test).
-- `BaseEnemy._add_contact_hitbox()` hardcodes `damage = 20` and ignores the config
-  (`base_enemy.gd:56`), so `space_station.gd` re-applies `collision_damage` after `super._ready()`.
-  It also copies the shape resource but **not** the `CollisionShape2D`'s `scale`/`position`, which
-  is why this scene authors its shape at true size with `scale = 1`.
+- `space_station.tscn`'s scene-authored `ContactHitBox` node defaults to `damage = 20` and knows
+  nothing about the config, so `space_station.gd` re-applies `collision_damage` off
+  `contact_hit_box` after `super._ready()`. Its `CollisionShape2D` references the body's own
+  `SubResource` shape id at `scale = 1` (unscaled), matching the body exactly.
 
 ---
 

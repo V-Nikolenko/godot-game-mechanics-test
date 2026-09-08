@@ -6,13 +6,13 @@
 ##
 ## ── Why this file exists ─────────────────────────────────────────────────────────────────────
 ##
-## `BaseEnemy._add_contact_hitbox()` (`base_enemy.gd:49-53`) builds the contact HitBox with a
-## hardcoded `damage = 20` and never looks at `config`. It runs from `BaseEnemy._ready()`, i.e.
-## BEFORE the subclass has had a chance to read its own `.tres`, so every enemy that wants its
-## configured `collision_damage` has to re-apply it afterwards. Most do
-## (`bomber.gd:23-26`, `light_assault_ship.gd:20-23`, `ram_ship.gd:20-23`,
-## `space_station.gd:119-122`) or override the helper outright (`drone_interceptor.gd:141-148`,
-## `kamikaze_drone.gd:53-60`, `bonus_drone.gd:29-30`).
+## The base `ContactHitBox` node authored on every `BaseEnemy` subclass's scene defaults to
+## `damage = 20` and knows nothing about `config`, which is only read at runtime. So every enemy
+## that wants its configured `collision_damage` has to re-apply it in `_ready()` afterwards. Most
+## do (`bomber.gd`, `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a
+## different default directly on their own scene's node (`drone_interceptor.tscn`,
+## `kamikaze_drone.tscn`, `ally_fighter.tscn` — 30/30/25 — with the script still re-applying where
+## a config can override it).
 ##
 ## The `Gunship` did not, so `gunship_config.tres`'s `collision_damage = 30` was dead and the
 ## heaviest ship in the roster rammed for 20. Nothing could see it: the field parses, the enemy
@@ -27,10 +27,10 @@
 ## anyway: the assertion is still meaningful, and if either default ever moves the mismatch
 ## surfaces here rather than in playtesting.
 ##
-## `bonus_drone` is the one deliberate exception — it overrides `_add_contact_hitbox()` to add
-## nothing at all, which is the correct realisation of its `collision_damage = 0`. `no_hitbox`
-## marks that, and the test asserts BOTH halves (no HitBox *and* a config that agrees), so
-## flipping the `.tres` to a non-zero value without touching the script fails.
+## `bonus_drone` is the one deliberate exception — `bonus_drone.tscn` authors no `ContactHitBox`
+## node at all, which is the correct realisation of its `collision_damage = 0`. `no_hitbox` marks
+## that, and the test asserts BOTH halves (no HitBox *and* a config that agrees), so flipping the
+## `.tres` to a non-zero value without touching the scene fails.
 ##
 ## ── Harness notes ────────────────────────────────────────────────────────────────────────────
 ##
@@ -42,10 +42,9 @@
 ##    application happens there — so every enemy is added to the tree, never just instantiated.
 ## 3. **Only DIRECT children are searched for the HitBox.** Bullets carry their own HitBox, but
 ##    they live under the enemy's `BulletPool`, and the station's turrets live under `Turrets`.
-##    Contact hitboxes are built in exactly four places in non-addon code (`base_enemy.gd`,
-##    `drone_interceptor.gd`, `kamikaze_drone.gd`, `ally_fighter.gd`, all via
-##    `HitBox.matching_shape()`), and the first three all `add_child()` straight onto the enemy —
-##    so "direct child" is unambiguous.
+##    Every entity in this roster authors its `ContactHitBox` as a direct scene child (named
+##    exactly that, next to `HurtBox`/`Health`/`HitFlashAnimationPlayer`), so "direct child" is
+##    unambiguous.
 extends GutTest
 
 ## `scene`: the enemy to instantiate. `config_path`: its `.tres`, or "" when it has none.
@@ -106,8 +105,9 @@ const ROSTER: Array[Dictionary] = [
 	},
 ]
 
-## `ShipConfig.collision_damage` default, and the value `BaseEnemy._add_contact_hitbox()`
-## hardcodes. The two agreeing is what makes the config-less entries above assertable.
+## `ShipConfig.collision_damage` default, and the `damage` every `BaseEnemy` subclass's scene
+## authors on its `ContactHitBox` node. The two agreeing is what makes the config-less entries
+## above assertable.
 const SHIP_CONFIG_DEFAULT_DAMAGE: int = 20
 
 

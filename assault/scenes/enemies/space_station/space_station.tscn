@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3 uid="uid://82pgd5bowmxe"]
+[gd_scene load_steps=19 format=3 uid="uid://82pgd5bowmxe"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_ss"]
 [ext_resource type="Script" uid="uid://btfpfe0ipovkd" path="res://assault/scenes/enemies/space_station/space_station.gd" id="2_ss"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" uid="uid://0dk0toyoxowg" path="res://assault/scenes/enemies/space_station/station_gunnery.gd" id="10_ss"]
 [ext_resource type="Script" uid="uid://jfdcv6l6phrr" path="res://assault/scenes/enemies/space_station/station_reinforcements.gd" id="11_ss"]
 [ext_resource type="Script" uid="uid://b4hwhdn0scrwi" path="res://assault/scenes/enemies/space_station/station_death_sequence.gd" id="12_ss"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="13_ss"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ss"]
 resource_local_to_scene = true
@@ -89,6 +90,16 @@ metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
 [node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
 libraries/ = SubResource("AnimationLibrary_ss")
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 0
+script = ExtResource("13_ss")
+damage = 20
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+shape = SubResource("RectangleShape2D_ss")
 
 [node name="Turrets" type="Node2D" parent="."]
 

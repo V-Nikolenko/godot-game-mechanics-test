@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 10 open)
+## Code health backlog  (`code-health-backlog`, 9 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -533,7 +533,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/code-built-contact-hitboxes-are-typed-as-laser-damage-not-co](docs/plans/code-built-contact-hitboxes-are-typed-as-laser-damage-not-co)
       1 run(s), $1.33; last on claude-sonnet-5
 
-- [ ] **Move code-built contact hitboxes into the scenes, as the asteroids already do** _(in progress - feature, medium, sonnet)_
+- [x] **Move code-built contact hitboxes into the scenes, as the asteroids already do** _(done - feature, medium, sonnet)_
       Four scripts build a contact `HitBox` at runtime (`base_enemy.gd:49-53`,
       `drone_interceptor.gd:141-148`, `kamikaze_drone.gd:53-60`, `ally_fighter.gd:72-77`), all now via
       `HitBox.matching_shape()`. The asteroid family already does it the other way:
@@ -757,7 +757,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       patterns must stay pure configuration, so those are deliberately shared and should be excluded
       rather than copied.
 
-- [ ] **No pickup or menu ever calls UpgradeState.unlock() for any weapon mode** _(todo - bug, medium, sonnet)_
+- [ ] **No pickup or menu ever calls UpgradeState.unlock() for any weapon mode** _(todo - feature, medium, opus)_
       While fixing the orphaned `long_range.tres` (ALL_IDS entry), a grep for `UpgradeState.unlock(`
       across the whole project (excluding `tests/`) found exactly one call site: `unlock_all()` inside
       `global/autoloads/upgrade_state.gd` itself, which nothing in game code ever invokes.

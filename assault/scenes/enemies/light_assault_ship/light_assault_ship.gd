@@ -18,10 +18,8 @@ func _ready() -> void:
 	if config:
 		health.max_health = config.max_health
 		health.current_health = config.max_health
-		for child in get_children():
-			if child is HitBox:
-				(child as HitBox).damage = config.collision_damage
-				break
+		if contact_hit_box:
+			contact_hit_box.damage = config.collision_damage
 
 	# Bullet pool
 	bullet_pool = BulletPool.new()

@@ -7,6 +7,7 @@ extends CharacterBody2D
 
 @onready var _health: Health = $Health
 @onready var _hurt_box: Area2D = $HurtBox
+@onready var _contact_hit_box: HitBox = get_node_or_null("ContactHitBox") as HitBox
 
 const _BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 
@@ -28,7 +29,6 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	add_to_group("allies")
 	_health.amount_changed.connect(_on_health_changed)
-	_add_contact_hitbox()
 
 	# Bullet pool
 	bullet_pool = BulletPool.new()
@@ -53,10 +53,8 @@ func _ready() -> void:
 	if config:
 		_health.max_health = config.max_health
 		_health.current_health = config.max_health
-		for child in get_children():
-			if child is HitBox:
-				(child as HitBox).damage = config.collision_damage
-				break
+		if _contact_hit_box:
+			_contact_hit_box.damage = config.collision_damage
 
 func _physics_process(_delta: float) -> void:
 	# Movement when no EnemyPathMover is attached (standalone ally).
@@ -86,10 +84,3 @@ func _on_health_changed(current: int) -> void:
 func _trace(message: String) -> void:
 	if OS.is_stdout_verbose():
 		print(message)
-
-func _add_contact_hitbox() -> void:
-	var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
-	if not col:
-		return
-	# Layer 64 = player_hitbox — enemy HurtBoxes (mask 97) detect this and take damage.
-	add_child(HitBox.matching_shape(col, 64, 0, 25))

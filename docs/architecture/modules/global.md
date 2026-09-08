@@ -120,7 +120,28 @@ if overflow > 0:
 
 `HitBox` (`extends Area2D`) is the *attacker* side: exports `damage: int = 1` and `damage_type: DamageType` (`enum DamageType { LASER, ROCKET, CONTACT }`). Put it on bullets, rockets, and ramming bodies.
 
-Static factory `HitBox.matching_shape(source: CollisionShape2D, layer, mask, dmg, dmg_type: DamageType = DamageType.CONTACT) -> HitBox` builds a `HitBox` whose geometry mirrors an existing body `CollisionShape2D` — the same `Shape2D` resource **and** the node `transform` that sizes and places it. Use it for any contact hitbox built in code; it returns the `HitBox` unparented, so a caller that needs `area_entered` can connect before `add_child()`. Copying `col.shape` by hand silently drops the scale (a `Shape2D` carries the radius, not the `CollisionShape2D.scale` that multiplies it), which is how every code-built contact box in the game ended up smaller than its visible hull — the gunship rammed with an 18 px box against a 41.5 px ship. `tests/integration/test_contact_hitbox_geometry.gd` sweeps every entity that has one and fails the gate if a hitbox stops matching its body; the same file also asserts `damage_type` defaults to `CONTACT` rather than the `HitBox` class default of `LASER`, since a ram is contact damage.
+**Contact hitboxes are scene-authored, not code-built.** An entity that damages the player on
+ramming contact — every assault enemy, `ally_fighter`, the asteroid family — authors a
+`ContactHitBox` node directly in its `.tscn`: an `Area2D` running `hitbox_component.gd`
+(`uid://deqgbl6m44nrj`), with a `CollisionShape2D` child whose `shape` references the **exact same
+`SubResource` id** as the entity's body `CollisionShape2D` (Godot resolves a `SubResource` id to
+one shared object per scene file, so this reproduces object-identity sharing, not a copy) and
+whose `scale` is copied verbatim from the body node. `layer`/`mask`/`damage`/`damage_type` are
+authored directly on the node; a script only overwrites `.damage` in `_ready()` when a
+`*_config.tres` needs to override the scene's default (see `BaseEnemy.contact_hit_box` below).
+Copying only the `Shape2D` and skipping the node's `scale` is how every code-built contact box in
+the game used to end up smaller than its visible hull — the gunship rammed with an 18 px box
+against a 41.5 px ship — which is why this is authored geometry now, not code. See
+`assault/scenes/hazards/big_asteroid/big_asteroid.tscn` for the pattern this was modelled on, and
+`assault/scenes/enemies/bomber/bomber.tscn` for a `BaseEnemy` subclass's version.
+`tests/integration/test_contact_hitbox_geometry.gd` sweeps every entity that has one and fails the
+gate if a hitbox stops matching its body; the same file also asserts `damage_type` is authored as
+`CONTACT` rather than the `HitBox` class default of `LASER`, since a ram is contact damage.
+
+`BaseEnemy` exposes the node as `@onready var contact_hit_box: HitBox =
+get_node_or_null("ContactHitBox") as HitBox` (nullable — `bonus_drone` authors none, which is its
+"contact-harmless" behaviour). `AllyFighter` (not a `BaseEnemy`) does the same under its own
+`_contact_hit_box`.
 
 `HurtBox` (`extends Area2D`) is the *target* side. In `_ready()` it connects `area_entered`; when an overlapping area is a `HitBox` (and passes the optional `accepted_damage_types` filter), it re-emits `received_damage(damage)`. Filtering by type is via the exported `accepted_damage_types: Array[HitBox.DamageType]` (empty = accept all).
 
@@ -135,12 +156,6 @@ func _ready() -> void:
     hurtbox.received_damage.connect(_on_hit)
 func _on_hit(damage: int) -> void:
     health.decrease(damage)   # or route through DamageReaction (below)
-```
-
-```gdscript
-# Building a contact hitbox in code, mirroring the body the scene author drew:
-var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
-add_child(HitBox.matching_shape(col, 256, 0, 20))   # layer, mask, damage
 ```
 
 ### Shield — `shield_component.gd`, `bubble_shield.tscn`, ordering in `damage_reaction.gd`

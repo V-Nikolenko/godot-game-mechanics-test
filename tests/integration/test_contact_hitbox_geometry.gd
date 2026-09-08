@@ -1,18 +1,18 @@
-## Invariant test: every code-built contact `HitBox` describes the same hull as the body it was
-## built from — the same `Shape2D` resource AND the node transform that sizes and places it.
+## Invariant test: every scene-authored contact `HitBox` describes the same hull as the body it
+## sits next to — the same `Shape2D` resource AND the node transform that sizes and places it.
 ##
 ## NOT characterization. A contact box that is a different size from the ship the player can see
-## is a defect, not a quirk to pin: the gunship's hull is 41.5 px wide and its ram box was built at
-## 18 px, so 62 % of the heaviest ship in the roster passed through the player like a ghost.
+## is a defect, not a quirk to pin: the gunship's hull is 41.5 px wide and its ram box was once
+## built at 18 px, so 62 % of the heaviest ship in the roster passed through the player like a
+## ghost.
 ##
 ## ── Why this file exists ─────────────────────────────────────────────────────────────────────
 ##
 ## A `Shape2D` is a resource; it carries the radius but NOT the `CollisionShape2D.scale` that
-## multiplies it at runtime. Four places built a contact `HitBox` by copying `col.shape` alone
-## (`base_enemy.gd`, `drone_interceptor.gd`, `kamikaze_drone.gd`, `ally_fighter.gd`), so every
-## entity that sizes its body by scaling its collision shape — six of them — got a contact box at
-## the *unscaled* radius. The fix is `HitBox.matching_shape()`, which copies the transform too;
-## this file is what keeps a fifth call site from getting it wrong again.
+## multiplies it at runtime. Ten scenes author a `ContactHitBox` node whose `CollisionShape2D`
+## must reference the exact same `SubResource` shape id as the body's `CollisionShape2D`, and copy
+## its `scale`, or the entity ends up with a contact box at the *unscaled* radius. This file is
+## what keeps a scene edit from getting that wrong.
 ##
 ## ── Harness notes ────────────────────────────────────────────────────────────────────────────
 ##
@@ -21,7 +21,7 @@
 ## `class_name AllyFighter extends CharacterBody2D` (`ally_fighter.gd:1-2`) and is not a
 ## `BaseEnemy`, so the enemy-typed harness would fail its row with "root is not a BaseEnemy" — a
 ## failure that looks exactly like the bug under test but is not one. `ally_fighter` must stay in
-## the roster regardless: it is the only coverage of the fourth call site.
+## the roster regardless: it is the only ally in this family.
 ##
 ## Otherwise the same three rules apply as in `test_enemy_contact_damage.gd`: each entity gets a
 ## throwaway container `Node2D` parent (effects and the bullet pool scribble on `get_parent()`),
@@ -199,10 +199,11 @@ func test_bonus_drone_still_has_no_contact_hitbox() -> void:
 		)
 
 
-## A ram deals CONTACT damage, not LASER — `matching_shape()` used to leave `damage_type` at the
-## `HitBox` default (`LASER`), so every ram in the game was silently typed as laser fire. Harmless
-## only because the player's `HurtBox` accepts every damage type; the moment anything filters on
-## damage type, a laser-immune target would also become ram-immune for no visible reason.
+## A ram deals CONTACT damage, not LASER — leaving `damage_type` unauthored on a `ContactHitBox`
+## node would fall back to the `HitBox` default (`LASER`), silently typing every ram in the game
+## as laser fire. Harmless only because the player's `HurtBox` accepts every damage type; the
+## moment anything filters on damage type, a laser-immune target would also become ram-immune for
+## no visible reason.
 func test_every_contact_hitbox_is_typed_as_contact_damage() -> void:
 	for entry in ROSTER:
 		if entry.get("no_hitbox", false):

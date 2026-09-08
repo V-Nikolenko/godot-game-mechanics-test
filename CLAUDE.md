@@ -79,15 +79,18 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   asserts intent for the ship menu's locked rows.
   `tests/integration/test_enemy_contact_damage.gd` is a third invariant check, over the balance
   data rather than the files: every assault enemy's contact `HitBox` must deal the damage its
-  `*_config.tres` declares. `BaseEnemy._add_contact_hitbox()` hardcodes `damage = 20` and runs
-  before the subclass reads its own `.tres`, so an enemy that forgets to re-apply
-  `collision_damage` leaves the field dead with no visible symptom — which is exactly how the
-  gunship rammed for 20 while its config said 30.
+  `*_config.tres` declares. Every `BaseEnemy` subclass's scene authors a `ContactHitBox` node
+  defaulting to `damage = 20`, which knows nothing about the subclass's own `.tres`, so an enemy
+  that forgets to re-apply `collision_damage` in `_ready()` leaves the field dead with no visible
+  symptom — which is exactly how the gunship rammed for 20 while its config said 30.
   `tests/integration/test_contact_hitbox_geometry.gd` is a fourth invariant check, over the same
-  hitboxes' *geometry*: a contact `HitBox` must carry the body `CollisionShape2D`'s transform, not
-  just its `Shape2D`. A `Shape2D` holds the radius but not the node scale that multiplies it, so
-  copying `col.shape` alone built the gunship's ram box at 18 px against a 41.5 px hull. All four
-  build sites now go through `HitBox.matching_shape()`.
+  hitboxes' *geometry*: a `ContactHitBox` node's `CollisionShape2D` must reference the same
+  `SubResource` shape id as the body `CollisionShape2D` and copy its `scale`, not just its bare
+  shape. A `Shape2D` holds the radius but not the node scale that multiplies it, so a mismatched
+  scale once built the gunship's ram box at 18 px against a 41.5 px hull — now every contact
+  hitbox is scene-authored next to the body it has to match, the same pattern the asteroid family
+  established (`assault/scenes/hazards/big_asteroid/big_asteroid.tscn`), and there is no runtime
+  construction left to get wrong.
   `tests/integration/test_enemy_hurtbox_geometry.gd` is a fifth, over the *other* side of that
   collision pair: every assault entity's `HurtBox` must **cover** the body `CollisionShape2D`,
   within 1 px per edge. Armour is a damage rule on a full-size hurtbox — deflect, flash, report 0 —

@@ -6,6 +6,7 @@ signal died
 @onready var health: Health = $Health
 @onready var hurt_box: HurtBox = $HurtBox
 @onready var hit_flash_player: AnimationPlayer = $HitFlashAnimationPlayer
+@onready var contact_hit_box: HitBox = get_node_or_null("ContactHitBox") as HitBox
 
 ## Read by ScoreTracker via the enemy's ShipConfig — overridable per-enemy if needed.
 var score_value: int = 0
@@ -49,7 +50,6 @@ func _ready() -> void:
 	health.amount_changed.connect(_on_health_changed)
 	hurt_box.collision_mask = 97 | 1024  # bullets (64) + rockets (32) + layer 1 + asteroid contact (1024)
 	_rotate_sprite()
-	_add_contact_hitbox()
 
 	_hit_effect = HitEffect.new()
 	add_child(_hit_effect)
@@ -71,12 +71,6 @@ func _rotate_sprite() -> void:
 	var sprite := get_node_or_null("AnimatedSprite2D") as Node2D
 	if sprite:
 		sprite.rotation_degrees = 180.0
-
-func _add_contact_hitbox() -> void:
-	var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
-	if not col:
-		return
-	add_child(HitBox.matching_shape(col, 256, 0, 20))
 
 func _on_received_damage(damage: int) -> void:
 	health.decrease(damage)

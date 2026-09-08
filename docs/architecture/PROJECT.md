@@ -80,10 +80,11 @@ Detail and APIs: [global.md](modules/global.md).
   **integration recipes** in [global.md](modules/global.md) for how to wire them.
 - **Config-driven enemies:** assault enemies read stats from a `*_config.tres`
   (`Resource`) applied in `_ready()`; the `.tres` value wins over the scene's Health node
-  where they differ. The exception is `collision_damage`:
-  `BaseEnemy._add_contact_hitbox()` hardcodes `damage = 20` and runs before the subclass has
-  read its config, so each enemy must re-apply it after `super._ready()` or override the
-  helper. `tests/integration/test_enemy_contact_damage.gd` asserts the whole roster does.
+  where they differ. The exception is `collision_damage`: the scene-authored `ContactHitBox`
+  node defaults to `damage = 20` and knows nothing about the config, so each enemy must
+  re-apply it in `_ready()` off `contact_hit_box`, or author a different default directly on
+  its own scene node. `tests/integration/test_enemy_contact_damage.gd` asserts the whole
+  roster does.
   Each entity holds a **private copy** of its config: `ShipConfig.privatise()` duplicates it from
   `BaseEnemy._init()`/`_enter_tree()` (and `AllyFighter`'s), because `ResourceLoader` caches by path
   and every entity of a type would otherwise share one object with each other and with every

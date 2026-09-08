@@ -848,7 +848,7 @@
           "id": "move-code-built-contact-hitboxes-into-the-scenes-as-the-aste",
           "head": "Move code-built contact hitboxes into the scenes, as the asteroids already do",
           "body": "Four scripts build a contact `HitBox` at runtime (`base_enemy.gd:49-53`,\n`drone_interceptor.gd:141-148`, `kamikaze_drone.gd:53-60`, `ally_fighter.gd:72-77`), all now via\n`HitBox.matching_shape()`. The asteroid family already does it the other way:\n`big_asteroid.tscn`/`small_asteroid.tscn` author a `ContactHitBox` node in the scene and\n`asteroid_base.gd:41-42` only sets `damage`/`damage_type` on it.\n\nThe scene-authored version is the cleaner end state — the hull geometry lives next to the body\nshape where an author can see both, instead of being reconstructed in code from it — and it is\nthe pattern already proven in this repo. It is also what removes the whole class of bug the\ntransform fix just closed.\n\nNot free: nine scene edits with UID risk, and the per-subclass layer/mask logic that\n`drone_interceptor.gd:147` and `kamikaze_drone.gd:59` depend on (mask 128 rather than 0) has to\nmove into the scenes too. `tests/integration/test_contact_hitbox_geometry.gd` covers the result\neither way, so the migration is verifiable.\n\nFound on 2026-09-06; recorded as an explicit out-of-scope follow-up (rejected alternative 3) in\nthe approved plan for the contact-hitbox transform fix.",
-          "state": "in_progress",
+          "state": "done",
           "badge": null,
           "planDir": "docs/plans/move-code-built-contact-hitboxes-into-the-scenes-as-the-aste",
           "kind": "impl",
@@ -996,9 +996,9 @@
           "badge": null,
           "planDir": null,
           "kind": "impl",
-          "type": "bug",
+          "type": "feature",
           "complexity": "medium",
-          "model": "sonnet",
+          "model": "opus",
           "dependsOn": [],
           "runs": []
         }

@@ -24,8 +24,3 @@ func _ready() -> void:
 	if sprite:
 		sprite.modulate = Color(1.4, 1.15, 0.4, 1.0)
 		sprite.scale = Vector2(1.5, 1.5)
-
-# Override: bonus drones do not damage the player on contact. The base helper
-# would otherwise add a contact HitBox with damage=20.
-func _add_contact_hitbox() -> void:
-	pass

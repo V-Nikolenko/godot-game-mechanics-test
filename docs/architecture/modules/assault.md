@@ -129,18 +129,19 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   fields (`score_value`, `counts_toward_wave_clear`, `counts_as_escape`) are pulled from
   the subclass's `ShipConfig` resource. Each concrete enemy lives in its own folder under
   `assault/scenes/enemies/<type>/` with a `*_config.tres` and (often) bespoke AI states.
-  **Contact damage is the one stat the base class does not wire up for you:**
-  `_add_contact_hitbox()` hardcodes `damage = 20` and runs from `BaseEnemy._ready()`, before the
-  subclass has read its own `.tres`, so a subclass wanting its configured `collision_damage`
-  must re-apply it after `super._ready()` (`gunship.gd`, `bomber.gd`, `light_assault_ship.gd`,
-  `ram_ship.gd`, `space_station.gd`) or override the helper entirely (`drone_interceptor.gd`,
-  `kamikaze_drone.gd`, `bonus_drone.gd`). Forgetting leaves the `.tres` value dead with no
+  **Contact damage is the one stat the base scene does not wire up for you:** every `BaseEnemy`
+  subclass's `.tscn` authors a `ContactHitBox` node with `damage = 20`, which knows nothing about
+  the subclass's own `.tres`, so a subclass wanting its configured `collision_damage` must
+  re-apply it in `_ready()` off `contact_hit_box` (`gunship.gd`, `bomber.gd`,
+  `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a different default
+  directly on its own scene node (`drone_interceptor.tscn`, `kamikaze_drone.tscn` — 30, still
+  re-applied from config where one exists). Forgetting leaves the `.tres` value dead with no
   symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
-  The hitbox's *geometry* is handled for you: all four code-built contact hitboxes
-  (`base_enemy.gd`, `drone_interceptor.gd`, `kamikaze_drone.gd`, `ally_fighter.gd`) go through
-  `HitBox.matching_shape()`, which copies the body `CollisionShape2D`'s transform as well as its
-  shape, so a scaled body gets a correctly sized ram box.
-  `tests/integration/test_contact_hitbox_geometry.gd` asserts that for every entity that has one.
+  The hitbox's *geometry* is handled for you: every `ContactHitBox` node's `CollisionShape2D`
+  references the same `SubResource` shape id as the body's and copies its `scale`, so a scaled
+  body gets a correctly sized ram box for free — see `global.md`'s Hurtbox/Hitbox section for the
+  authoring pattern. `tests/integration/test_contact_hitbox_geometry.gd` asserts that for every
+  entity that has one.
 
   The *incoming* side has its own invariant: an enemy's `HurtBox` must **cover** the body
   `CollisionShape2D` the player collides with, swept over the whole roster by

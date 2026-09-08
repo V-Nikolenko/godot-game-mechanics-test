@@ -218,26 +218,25 @@ polices **balance data** rather than the files or the engine. It asserts that ev
 enemy's contact `HitBox` deals the damage its `*_config.tres` declares — the `CLAUDE.md`
 convention that enemy stats live in the `.tres` and are applied in `_ready()`.
 
-It exists because `BaseEnemy._add_contact_hitbox()` (`base_enemy.gd:49-53`) builds that HitBox
-with a hardcoded `damage = 20` and never reads `config`. It runs from `BaseEnemy._ready()`, i.e.
-*before* the subclass has read its own `.tres`, so every enemy that wants its configured
-`collision_damage` has to re-apply it afterwards — `bomber.gd`, `light_assault_ship.gd`,
-`ram_ship.gd`, `gunship.gd` and `space_station.gd` all carry the same four-line loop, and
-`drone_interceptor.gd`, `kamikaze_drone.gd` and `bonus_drone.gd` override the helper outright.
-Miss it and the `.tres` field is simply dead: it parses, the enemy works, and the only symptom is
-a number nobody can see. The `Gunship` shipped that way — `collision_damage = 30` ignored, so the
-heaviest ship in the roster rammed for 20 — and nothing else in the suite could reach it, because
-no other test reads a HitBox.
+It exists because every `BaseEnemy` subclass's `.tscn` authors a `ContactHitBox` node with a
+hardcoded `damage = 20` and no way to read `config` — that only exists at runtime — so every
+enemy that wants its configured `collision_damage` has to re-apply it in `_ready()` off
+`contact_hit_box` — `bomber.gd`, `light_assault_ship.gd`, `ram_ship.gd`, `gunship.gd` and
+`space_station.gd` all do this, and `drone_interceptor.tscn`/`kamikaze_drone.tscn` author a
+different scene default (30) instead. Miss the re-apply and the `.tres` field is simply dead: it
+parses, the enemy works, and the only symptom is a number nobody can see. The `Gunship` shipped
+that way — `collision_damage = 30` ignored, so the heaviest ship in the roster rammed for 20 —
+and nothing else in the suite could reach it, because no other test reads a HitBox.
 
 Three things to know before extending it:
 
 - **The two config-less entries are still assertable.** `interceptor_config.tres` has no
   `collision_damage` line and `sniper_enemy` has no config at all, so both inherit `ShipConfig`'s
-  default of 20 (`ship_config.gd:8`) — which happens to equal the base helper's hardcoded 20. They
+  default of 20 (`ship_config.gd:8`) — which happens to equal the scene's hardcoded 20. They
   are listed so that if either value ever moves independently, the mismatch surfaces here.
-- **`bonus_drone` is the one deliberate exception**, asserted from both sides: it adds no contact
-  HitBox at all, *and* its config asks for 0. Flipping the `.tres` to a non-zero value without
-  touching the script fails the test rather than silently doing nothing.
+- **`bonus_drone` is the one deliberate exception**, asserted from both sides: `bonus_drone.tscn`
+  authors no `ContactHitBox` node at all, *and* its config asks for 0. Flipping the `.tres` to a
+  non-zero value without touching the scene fails the test rather than silently doing nothing.
 - **Only DIRECT children are searched for the HitBox.** Bullets carry their own, but they live
   under the enemy's `BulletPool`, and the station's turrets live under `Turrets`.
 
@@ -247,11 +246,13 @@ the one above: that file polices what a contact `HitBox` *deals*, this one polic
 `CollisionShape2D`'s `shape` **and** its `transform`.
 
 A `Shape2D` is a resource: it holds the radius, not the `CollisionShape2D.scale` that multiplies
-it at runtime. All four build sites used to copy `col.shape` alone, so every entity that sizes its
-hull by scaling its collision shape — six of them — got a contact box at the *unscaled* radius.
-The gunship scales an 18 px circle by 2.31 to match its 92x84 sprite, so it rammed with a box 38 %
-of the hull the player can see; the drone interceptor was 3.08x off. `HitBox.matching_shape()`
-(`global/components/hitbox_component.gd`) is the fix and now the only way these are built.
+it at runtime. Copying `col.shape` alone used to be how these hitboxes were built in code, so
+every entity that sizes its hull by scaling its collision shape — six of them — got a contact box
+at the *unscaled* radius. The gunship scales an 18 px circle by 2.31 to match its 92x84 sprite, so
+it rammed with a box 38% of the hull the player can see; the drone interceptor was 3.08x off. The
+fix, and now the only way these are built, is scene-authored: every `ContactHitBox` node's
+`CollisionShape2D` references the exact same `SubResource` shape id as the body's and copies its
+`scale`, next to the body it has to match instead of reconstructed from it at runtime.
 
 Two things to know before extending it:
 

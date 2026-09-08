@@ -115,3 +115,100 @@ scene-edit verification pass begins. Either way, `HitBox.matching_shape()` shoul
 Only Finding 1. Fix the build-sequence ordering (interleave script+scene edits per entity, or
 move all four call-site removals before any scene-edit verification pass, with
 `matching_shape()` itself deleted last), then this plan is ready to implement.
+
+## Round 2
+
+VERDICT: APPROVED
+
+### Summary
+
+The revision fixes round 1's blocking finding. I independently re-walked the new step
+sequence (`3-plan.md` steps 1–8) against the current code and confirmed the invariant that
+matters holds throughout: `HitBox.matching_shape()` (`global/components/hitbox_component.gd:20`)
+is not deleted until step 8, and every script that still contains a call to it after step 2 has
+that call removed in the very step that also lands its scene edit — step 4 for
+`drone_interceptor.gd:146`, step 5 for `kamikaze_drone.gd:58`, step 6 for
+`ally_fighter.gd:95`. At no point between step 2 and step 8 does any live `.gd` file contain a
+call to an already-deleted method, so the reproduced parse error from round 1
+(`load()` failing on a static-method-not-found error) cannot occur at any intermediate point.
+I also confirmed the converse doesn't happen either: no script calls a not-yet-deleted method
+that would need to exist earlier than it does — `matching_shape()`'s signature is untouched
+until the single deletion in step 8, so every call site that hasn't been edited yet is still
+calling a real method the whole time.
+
+I also checked the within-step ordering the plan doesn't spell out (e.g., for step 4, does it
+matter whether `drone_interceptor.tscn` or `drone_interceptor.gd` is edited first). It doesn't:
+`base_enemy.gd`'s `_ready()` no longer calls `_add_contact_hitbox()` as of step 2, so
+`DroneInterceptor._add_contact_hitbox()` (the override at `drone_interceptor.gd:141-148`) is
+already dead code — never invoked from anywhere — from step 2 onward, regardless of whether the
+scene or the script half of step 4 lands first. Same for `kamikaze_drone.gd` and step 5. Only
+`ally_fighter.gd` is different in kind: it is not a `BaseEnemy`, so its own `_ready()`
+(`ally_fighter.gd:31`) keeps calling its own `_add_contact_hitbox()` directly and keeps working
+via `matching_shape()` right up until step 6 edits it — confirmed unaffected by step 2's
+`base_enemy.gd` edit.
+
+### Finding 1 (non-blocking — prose accuracy): "a red result is attributable to this entity's edit" overstates what step 3's re-runs will actually show
+
+Both invariant tests iterate a single fixed `ROSTER` inside one test function —
+`test_contact_hitbox_geometry.gd:110` (`test_every_contact_hitbox_matches_its_body_shape`, 11
+entries) and `test_enemy_contact_damage.gd:143` (`test_every_enemy_contact_hitbox_matches_its_config`,
+10 entries, no `ally_fighter`) — and GUT's `assert_*` calls don't abort the loop on the first
+failure, so a single run reports one failure line per entry that's currently broken, not just
+one.
+
+Step 2 removes `_add_contact_hitbox()`'s call from `base_enemy.gd:52`, which is the sole
+dispatch point for **every** `BaseEnemy`-based entity's contact hitbox, including the two that
+override it (`drone_interceptor`, `kamikaze_drone` — see above, their overrides go dead the
+same moment, not just at their own step 4/5). From that point until each entity's own step
+lands, that entity has no contact hitbox at all and fails `assert_not_null(hb, ...)` in both
+files. Concretely: the first test run in step 3 (after e.g. `bomber` alone is migrated) will
+also show failures for `gunship`, `light_assault_ship`, `ram_ship`, `space_station`,
+`interceptor`, `sniper_enemy`, `drone_interceptor`, and `kamikaze_drone` — up to eight reds that
+have nothing to do with the edit just made, alongside whatever the `bomber` edit itself
+produced. The window closes at different points per file: step 5 for
+`test_enemy_contact_damage.gd` (its roster's last not-yet-migrated `BaseEnemy` entity,
+`kamikaze_drone`, lands there), step 6 for `test_contact_hitbox_geometry.gd` (its roster also
+carries `ally_fighter`, which is unaffected by step 2 and stays green throughout — not part of
+this window at all).
+
+None of this breaks anything mechanically — the tests still run to completion (no parse
+failure, no crash) and every failure message names its entity (`"%s: has no contact HitBox..."
+% entry["name"]`), so an implementer working through step 3 in order can still tell "my
+just-edited entity is red" from "an entity I haven't reached yet is red" by reading the
+messages. But the plan's literal claim — a red result at this point is attributable to *this*
+entity's edit — is not accurate for most of the build sequence: most reds in that window are
+attributable to entities not yet reached, not to the edit just made. Recommend tightening the
+prose in step 3 (and noting the same for steps 4–5) to say something like: "expect failures for
+every `BaseEnemy`-based entity not yet migrated in this window; treat only a failure naming the
+entity just edited, or an unexpected failure/pass for an already-migrated one, as a real
+signal" — a documentation fix, not a sequencing fix, since the underlying ordering is otherwise
+sound.
+
+### Spot checks of round 1's other findings against current code
+
+- **SubResource sharing, re-confirmed on a scene round 1 didn't quote directly**:
+  `gunship.tscn:63-75` — body `CollisionShape2D` and `HurtBox`'s `CollisionShape2D` both
+  reference `SubResource("CircleShape2D_gs")`, confirming the identity-sharing pattern the whole
+  plan rests on is real in the actual file, not just in the context doc's prose.
+- **Re-apply call sites unchanged since round 1**: `gunship.gd:51-52`, `ram_ship.gd:23-25`,
+  `space_station.gd:124-127` (including the `_make_corpse_harmless()` search at
+  `space_station.gd:236-237`) all still do the plain `for child in get_children(): if child is
+  HitBox:` pattern round 1 described, no `matching_shape()` call in any of the three — confirms
+  step 3's claim that these five scripts carry no risk of the parse-error class of bug.
+- **Insertion point**: `bomber.tscn`'s node order is `Sprite2D, CollisionShape2D, HurtBox,
+  Health, HitFlashAnimationPlayer` and `ally_fighter.tscn`'s is `AnimatedSprite2D,
+  CollisionShape2D, HurtBox, Health` (no flash player) — matches the plan's "after
+  `HitFlashAnimationPlayer` (after `Health` for `ally_fighter`)" placement exactly.
+- **Step 8's grep expectation**: ran `grep -rn "matching_shape" --include=*.gd .` fresh —
+  exactly the definition (`hitbox_component.gd:20`), the four real call sites being removed
+  (`ally_fighter.gd:95`, `base_enemy.gd:79`, `kamikaze_drone.gd:58`, `drone_interceptor.gd:146`),
+  and three comment mentions in the two test files. Matches the plan's prediction exactly.
+
+### Verdict rationale
+
+The one blocking issue from round 1 is genuinely fixed, not just asserted fixed — I reproduced
+the reasoning independently against the current file contents rather than trusting the plan's
+"Revised after review round 1" paragraph. Finding 1 above is real but cosmetic (a documentation
+clarity issue, not a functional or ordering defect), so it doesn't block. Plan is ready to
+implement as written; tightening the step 3 prose per Finding 1 is optional and can happen
+inline during implementation rather than requiring another review round.

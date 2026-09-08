@@ -44,20 +44,12 @@ func _ready() -> void:
 	# drones.png naturally faces UP, so offset by +PI/2 to align with _direction.
 	rotation = _direction.angle() + PI / 2
 
+	if contact_hit_box:
+		contact_hit_box.area_entered.connect(_on_contact_hit)
+
 func _physics_process(delta: float) -> void:
 	global_position += _direction * speed * delta
 	_check_off_screen()
-
-# Override so the contact HitBox also monitors the player HurtBox layer,
-# letting the drone detect the hit and trigger death through the health system.
-func _add_contact_hitbox() -> void:
-	var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
-	if not col:
-		return
-	# mask 128 = player HurtBox layer — fires area_entered on contact
-	var hb := HitBox.matching_shape(col, 256, 128, 30)
-	hb.area_entered.connect(_on_contact_hit)
-	add_child(hb)
 
 func _on_contact_hit(_area: Area2D) -> void:
 	# Guard against the signal firing twice before queue_free is processed.

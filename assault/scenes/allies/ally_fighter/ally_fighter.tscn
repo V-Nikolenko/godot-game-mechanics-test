@@ -4,6 +4,7 @@
 [ext_resource type="Texture2D" uid="uid://dbd7dsu05uan4" path="res://assault/assets/sprites/player/h_assault_fighter.png" id="2_alf"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="3_alf"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="4_alf"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="5_alf"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_alf"]
 atlas = ExtResource("2_alf")
@@ -51,5 +52,16 @@ debug_color = Color(0, 0.7, 0, 0.42)
 [node name="Health" type="Node" parent="."]
 script = ExtResource("4_alf")
 metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 64
+collision_mask = 0
+script = ExtResource("5_alf")
+damage = 25
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+scale = Vector2(1.83783, 1.83783)
+shape = SubResource("CircleShape2D_alf")
 
 [connection signal="received_damage" from="HurtBox" to="." method="_on_hurt_box_received_damage"]

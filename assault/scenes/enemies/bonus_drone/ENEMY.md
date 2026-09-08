@@ -10,7 +10,7 @@
 | Property | Value |
 |---|---|
 | HP | 1 |
-| Damage | 0 (no contact HitBox — `_add_contact_hitbox()` is overridden to do nothing) |
+| Damage | 0 (`bonus_drone.tscn` authors no `ContactHitBox` node) |
 | Speed | 280 (`movement_speed`; effective speed comes from the `.move()` path) |
 | Sprite | `drone.png` (gold modulate, 1.5× scale) |
 | Scene | `bonus_drone.tscn` |
