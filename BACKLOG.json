@@ -739,7 +739,24 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T08:13:43.042Z",
+              "run": "2026-09-08-1038-i5",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004038,
+                "claude-sonnet-5": 1.1891852
+              },
+              "costUSD": 1.1932232,
+              "turns": 62,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "two-committed-tscn-tmp-files-duplicate-lightassaultship-s-ui",
@@ -890,6 +907,20 @@
           "planDir": null,
           "kind": "impl",
           "type": "feature",
+          "complexity": "medium",
+          "model": "sonnet",
+          "dependsOn": [],
+          "runs": []
+        },
+        {
+          "id": "no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea",
+          "head": "No pickup or menu ever calls UpgradeState.unlock() for any weapon mode",
+          "body": "While fixing the orphaned `long_range.tres` (ALL_IDS entry), a grep for `UpgradeState.unlock(`\nacross the whole project (excluding `tests/`) found exactly one call site: `unlock_all()` inside\n`global/autoloads/upgrade_state.gd` itself, which nothing in game code ever invokes.\n\n`UpgradeState._ready()` seeds only `&\"default\"` on a fresh profile\n(`global/autoloads/upgrade_state.gd:26-28`). `sniper_shot`, `spread`, `gatling` and `mining_laser`\nare all listed in `ALL_IDS` and all have a `.tres` in `weapons/modes/` and (except `sniper_shot`)\nan icon in `player_menu.gd`'s `_WEAPON_ICONS` - the plumbing for a real unlock system is there -\nbut nothing in `global/pickups/` or anywhere else ever calls `UpgradeState.unlock(&\"gatling\")` etc.\nContrast with `ShipModuleState`, which has `ShipModuleUnlockerPickup` instances placed in the\nsector hub and an invariant test (`tests/integration/test_module_unlock_sources.gd`) guaranteeing\nevery module has one.\n\nNet effect: in an actual playthrough the player is permanently stuck on the default weapon mode.\nEither every other weapon mode is unreachable dead content, or there is an unlock path I did not\nfind and it needs a pointer added somewhere discoverable (a comment in upgrade_state.gd would have\nsaved this grep). Worth an epic-sized look rather than a quick fix: it likely needs pickup scenes\nplaced in the world (mirroring `ShipModuleUnlockerPickup`) plus the same kind of coverage test\n`test_module_unlock_sources.gd` already provides for ship modules.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "bug",
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],

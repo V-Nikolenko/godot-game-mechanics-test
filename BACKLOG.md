@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 11 open)
+## Code health backlog  (`code-health-backlog`, 12 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -479,6 +479,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `global/ui/player_menu/player_menu.gd` too) or delete the `.tres` and the `LongRangeBehavior`
       wiring. Same abandoned-migration origin as the reflect item — the plan at
       `docs/superpowers/plans/2026-05-06-abilities-health-shield.md` renamed the mode list.
+      1 run(s), $1.19; last on claude-sonnet-5
 
 - [ ] **Two committed `.tscn*.tmp` files duplicate light_assault_ship's UID and dodge every integrity check** _(todo - feature, medium, sonnet)_
       `assault/scenes/enemies/light_assault_ship/` has two Godot editor scratch files tracked in git —
@@ -750,6 +751,27 @@ the signal that the change was deliberate. Test names are given so the fix has a
       movement/formation/wave/level resources at the same time — `station_gunnery.gd:79` says attack
       patterns must stay pure configuration, so those are deliberately shared and should be excluded
       rather than copied.
+
+- [ ] **No pickup or menu ever calls UpgradeState.unlock() for any weapon mode** _(todo - bug, medium, sonnet)_
+      While fixing the orphaned `long_range.tres` (ALL_IDS entry), a grep for `UpgradeState.unlock(`
+      across the whole project (excluding `tests/`) found exactly one call site: `unlock_all()` inside
+      `global/autoloads/upgrade_state.gd` itself, which nothing in game code ever invokes.
+      
+      `UpgradeState._ready()` seeds only `&"default"` on a fresh profile
+      (`global/autoloads/upgrade_state.gd:26-28`). `sniper_shot`, `spread`, `gatling` and `mining_laser`
+      are all listed in `ALL_IDS` and all have a `.tres` in `weapons/modes/` and (except `sniper_shot`)
+      an icon in `player_menu.gd`'s `_WEAPON_ICONS` - the plumbing for a real unlock system is there -
+      but nothing in `global/pickups/` or anywhere else ever calls `UpgradeState.unlock(&"gatling")` etc.
+      Contrast with `ShipModuleState`, which has `ShipModuleUnlockerPickup` instances placed in the
+      sector hub and an invariant test (`tests/integration/test_module_unlock_sources.gd`) guaranteeing
+      every module has one.
+      
+      Net effect: in an actual playthrough the player is permanently stuck on the default weapon mode.
+      Either every other weapon mode is unreachable dead content, or there is an unlock path I did not
+      find and it needs a pointer added somewhere discoverable (a comment in upgrade_state.gd would have
+      saved this grep). Worth an epic-sized look rather than a quick fix: it likely needs pickup scenes
+      placed in the world (mirroring `ShipModuleUnlockerPickup`) plus the same kind of coverage test
+      `test_module_unlock_sources.gd` already provides for ship modules.
 
 ## Boss fight escalation: shared hull, flying laser projectors, desperation  (`boss-fight-escalation-shared-hull-flying-laser-projectors-de`, 7 open)
 
