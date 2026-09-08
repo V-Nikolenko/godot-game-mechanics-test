@@ -381,27 +381,34 @@ that `LevelDirector`'s ENEMIES_CLEARED poll ends on `child_exiting_tree`, honour
 window, and — the reason it exists — leaves nothing alive behind an early return. See the leak
 trap below.
 
-Two traps `test_station_assault_section.gd` had to work around, both worth knowing before you add
+One trap `test_station_assault_section.gd` had to work around, worth knowing before you add
 a `LevelDirector` test:
 
 - **`_wait_enemies_cleared()` polls once per second.** Its deadline is only re-checked *after*
   `_wait_for_child_exit_or_timeout(container, 1.0)` returns, so a 0.3 s timeout really fires at
   ~1.0 s, plus a 0.2 s settle. Budget off the poll, not the nominal timeout.
-- **A test that ends while that coroutine is suspended leaks**, and Godot only says so at process
-  exit, as `ObjectDB instances leaked` / `resources still in use`. Neither line matches the gate's
-  fatal-error regex, so **the gate stays green while leaking** — run
-  [`scripts/check-test-leaks.sh`](../scripts/check-test-leaks.sh) to see it (below). Empty the
-  container and wait for the director to advance before the test returns.
 
-  What leaks is the suspended `GDScriptFunctionState`, which holds `level_director.gd` open. That
-  part is inherent: freeing an object out from under its own coroutine strands the state, and no
-  amount of care inside `LevelDirector` can resume it afterwards. What is *no longer* part of it is
-  the abandoned `SceneTreeTimer`: `_wait_for_child_exit_or_timeout()` used to race a
-  `SceneTree.create_timer(poll_seconds)` against `child_exiting_tree`, so **every** early return —
-  the normal case, and not only an abandoned one — left a timer ticking for the rest of the poll
-  window. It now measures its deadline with `Time.get_ticks_msec()` and creates no timer at all.
-  `integration/test_level_director_polling.gd` is the regression test; it amplifies to 100 polls
-  because a single stranded timer is one object against the engine's own drift.
+A test that ends while that coroutine is suspended used to leak the suspended
+`GDScriptFunctionState`, which holds `level_director.gd` open — freeing the director out from under
+its own coroutine stranded the state forever, since Godot has no way to resume a function bound to
+a deallocated object. `LevelDirector` now carries a cancel seam for this: a private `_wait_tick`
+signal, fed once per frame while the node is in the tree, that every wait helper awaits instead of
+`get_tree().process_frame`. `_exit_tree()` sets a `_cancelled` flag and emits `_wait_tick` once more,
+synchronously, *before* the node is deallocated, so every suspended wait resumes right there, sees
+`_cancelled`, and returns — releasing its function state instead of leaking it. A test no longer
+*needs* to manually drain a wait before tearing the director down; doing so (as
+`test_station_assault_section.gd` still does) remains harmless, just no longer load-bearing.
+`integration/test_level_director_polling.gd` tests 4-6 are the regression coverage, freeing the
+director mid-wait and asserting the coroutine actually returns.
+
+Separately, `_wait_for_child_exit_or_timeout()` used to race a `SceneTree.create_timer(poll_seconds)`
+against `child_exiting_tree`, so **every** early return — not only an abandoned one — left a timer
+ticking for the rest of the poll window, reported only at process exit as `ObjectDB instances
+leaked` / `resources still in use` (neither line matches the gate's fatal-error regex, so **the gate
+stays green while leaking** — run [`scripts/check-test-leaks.sh`](../scripts/check-test-leaks.sh) to
+see it). It now measures its deadline with `Time.get_ticks_msec()` and creates no timer at all.
+`integration/test_level_director_polling.gd` test 3 is the regression test for that; it amplifies to
+100 polls because a single stranded timer is one object against the engine's own drift.
 
 ## These are characterization tests
 
