@@ -382,9 +382,19 @@ switch (cmd) {
       break;
     }
 
+    // stdin, optional: one "<sha>\t<subject>" line per commit the iteration made
+    // (the harness pipes `git log --format='%h%x09%s' <base>..HEAD`). The
+    // harness's own `agent: cycle` bookkeeping commits are dropped - they say
+    // nothing about what the task produced.
+    const commits = readStdin().split("\n")
+      .map((l) => l.trim()).filter(Boolean)
+      .map((l) => { const i = l.indexOf("\t"); return i < 0 ? null : { sha: l.slice(0, i), subject: l.slice(i + 1) }; })
+      .filter((c) => c && !/^agent: cycle/.test(c.subject));
+
     const record = {
       run: flags.run || null,
       requested: flags.requested || null,
+      commits: commits,
       primary: primary,
       models: models,
       costUSD: Number(result.total_cost_usd) || 0,
@@ -421,7 +431,8 @@ switch (cmd) {
     if (saved.skipped) { console.log("skipped: " + saved.skipped); break; }
     console.log("ok: " + saved.taskId + " ran on " + (saved.run.primary || "?") +
       (saved.run.fallbackUsed ? " (asked for " + saved.run.requested + " - FELL BACK)" : "") +
-      ", $" + saved.run.costUSD.toFixed(2) + ", " + saved.run.turns + " turns");
+      ", $" + saved.run.costUSD.toFixed(2) + ", " + saved.run.turns + " turns" +
+      ", " + saved.run.commits.length + " commit(s)");
     break;
   }
 

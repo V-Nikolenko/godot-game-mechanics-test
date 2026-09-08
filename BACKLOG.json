@@ -329,7 +329,8 @@
               "turns": 105,
               "subagents": 0,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": []
             },
             {
               "at": "2026-09-08T02:47:02.835Z",
@@ -345,7 +346,13 @@
               "turns": 59,
               "subagents": 0,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "ae0238c",
+                  "subject": "Fix RaceWall coroutine leak in explosion-placement test, sync docs"
+                }
+              ]
             }
           ]
         },
@@ -376,7 +383,8 @@
               "turns": 23,
               "subagents": 0,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": []
             }
           ]
         },
@@ -407,7 +415,13 @@
               "turns": 58,
               "subagents": 1,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "3020137",
+                  "subject": "Apply ram_ship's config max_health; document its armour-immunity design"
+                }
+              ]
             }
           ]
         },
@@ -438,7 +452,13 @@
               "turns": 73,
               "subagents": 1,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "e9a1094",
+                  "subject": "Bonus drone escape no longer costs combo; reinforcements' penalty untouched"
+                }
+              ]
             }
           ]
         },
@@ -469,7 +489,13 @@
               "turns": 89,
               "subagents": 2,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "5e04b58",
+                  "subject": "Fix spawn positions to resolve against the camera's current pan, not its resting position"
+                }
+              ]
             }
           ]
         },
@@ -500,7 +526,13 @@
               "turns": 28,
               "subagents": 0,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "efbe083",
+                  "subject": "Close race_ship.gd explosion-position task: fix already shipped"
+                }
+              ]
             }
           ]
         },
@@ -531,7 +563,13 @@
               "turns": 41,
               "subagents": 0,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "9cc2932",
+                  "subject": "Fix ObjectDB leak in gate step 1: guard GUT plugin's startup delay under --headless"
+                }
+              ]
             }
           ]
         },
@@ -562,7 +600,8 @@
               "turns": 21,
               "subagents": 0,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": []
             },
             {
               "at": "2026-09-08T07:43:43.658Z",
@@ -578,7 +617,13 @@
               "turns": 29,
               "subagents": 0,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "2c48e74",
+                  "subject": "Close ExplosionEffect container-footgun task: already fixed by prior work"
+                }
+              ]
             }
           ]
         },
@@ -609,7 +654,8 @@
               "turns": 73,
               "subagents": 0,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": []
             }
           ]
         },
@@ -640,7 +686,13 @@
               "turns": 76,
               "subagents": 1,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "f5277f3",
+                  "subject": "Add project-wide sweep for signal declared-vs-emitted arity mismatches"
+                }
+              ]
             }
           ]
         },
@@ -671,7 +723,13 @@
               "turns": 46,
               "subagents": 0,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "acadc9f",
+                  "subject": "Delete orphaned reflect_state.gd instead of finishing the AbilityState migration"
+                }
+              ]
             }
           ]
         },
@@ -702,7 +760,13 @@
               "turns": 62,
               "subagents": 0,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "8671161",
+                  "subject": "Delete orphaned long_range weapon mode instead of wiring it into ALL_IDS"
+                }
+              ]
             }
           ]
         },
@@ -733,7 +797,13 @@
               "turns": 24,
               "subagents": 0,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "1f9aeb5",
+                  "subject": "Remove tracked editor-scratch .tmp files, widen UID integrity test to catch them"
+                }
+              ]
             }
           ]
         },
@@ -764,7 +834,13 @@
               "turns": 19,
               "subagents": 1,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": [
+                {
+                  "sha": "7f03f66",
+                  "subject": "Type code-built contact hitboxes as CONTACT, not LASER"
+                }
+              ]
             }
           ]
         },
@@ -795,7 +871,8 @@
               "turns": 37,
               "subagents": 1,
               "outcome": "success",
-              "gate": "pass"
+              "gate": "pass",
+              "commits": []
             }
           ]
         },
