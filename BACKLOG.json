@@ -1107,13 +1107,36 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "69304a4",
+                  "subject": "Let homing and warhead missiles survive a deflected hit on the space station's core"
+                }
+              ],
+              "at": "2026-09-08T21:16:08.124Z",
+              "run": "2026-09-08-2337-i5",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004252000000000001,
+                "claude-sonnet-5": 2.4236932000000007
+              },
+              "costUSD": 2.4279452000000004,
+              "turns": 66,
+              "subagents": 1,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "there-are-five-tracked-tscn-tmp-files-not-two-the-existing-t",
           "head": "There are five tracked .tscn*.tmp files, not two — the existing task under-scopes it",
           "body": "While verifying the sprite-transparency sweep I found the tmp-file count in that task is wrong: `git ls-files | grep \"\\.tmp$\"` returns **five** tracked editor-scratch files, not two.\n\n    assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn777863979.tmp\n    assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn785603970.tmp\n    assault/scenes/player/player_fighter.tscn6026545143.tmp\n    infiltration/scenes/entities/player/player.tscn1097983848.tmp\n    infiltration/scenes/entities/player/player.tscn1101780008.tmp\n\nThe existing task `two-committed-tscn-tmp-files-duplicate-lightassaultship-s-ui` describes only the\ntwo under `light_assault_ship/` and its duplicate-UID analysis covers only those. The other three\nare the same class of file and dodge the same integrity checks (`test_resource_uid_integrity.gd`\nand `test_project_load_integrity.gd` both walk `.tscn`/`.tres`/`.gd` only, so no `.tmp` is ever\nread), and nobody has checked whether the player_fighter and infiltration ones also duplicate a\nlive UID.\n\nFold this into that task rather than doing it separately - the fix is the same one it already\nproposes (delete + `.gitignore` + widen the UID walk to any file declaring a `uid://` in a\n`gd_scene`/`gd_resource` header regardless of extension). Recording it so the scope is right when\nsomeone picks it up.\n\nFound 2026-09-07 while fixing the station core sprite background.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 4 open)
+## Code health backlog  (`code-health-backlog`, 3 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -720,8 +720,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-07 while closing the collision-layer coverage gap.
       -> [docs/plans/rockets-cannot-damage-the-space-station-s-turrets-they-deton](docs/plans/rockets-cannot-damage-the-space-station-s-turrets-they-deton)
+      1 run(s), $2.43; last on claude-sonnet-5
 
-- [ ] **There are five tracked .tscn*.tmp files, not two — the existing task under-scopes it** _(todo - feature, medium, sonnet)_
+- [x] **There are five tracked .tscn*.tmp files, not two — the existing task under-scopes it** _(done - feature, medium, sonnet)_
       While verifying the sprite-transparency sweep I found the tmp-file count in that task is wrong: `git ls-files | grep "\.tmp$"` returns **five** tracked editor-scratch files, not two.
       
           assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn777863979.tmp
