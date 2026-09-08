@@ -291,7 +291,8 @@ func _process(delta: float) -> void:
 ## over [duration] seconds. Cloud peel animations are scheduled as independent
 ## timers that fire after [phase.cloud_N_peel_start] seconds.
 func transition_to(phase: BackgroundPhase, duration: float) -> void:
-	print("[Background] transition_to: %s  over %.1f s" % [phase.phase_name, duration])
+	if OS.is_stdout_verbose():
+		print("[Background] transition_to: %s  over %.1f s" % [phase.phase_name, duration])
 
 	# ── Cancel previous transition ────────────────────────────────────────────
 	if _transition_tween and _transition_tween.is_valid():

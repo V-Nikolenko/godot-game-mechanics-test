@@ -638,7 +638,7 @@
           "id": "three-more-files-print-unconditionally-on-hot-paths-same-def",
           "head": "**Three more files print unconditionally on hot paths — same defect as the one just fixed,",
           "body": "out of the item's stated scope.** `global/ui/dialog_system/ui/dialog_box.gd` has **11**\nprints (`[DB] ...`), several per dialog *line*, including inside tween callbacks;\n`assault/scenes/player/movement_controller.gd:74,79` print `\"first/second time pressed …\"`\non **every double-press-eligible key press**, i.e. constantly during normal play; and\n`assault/scenes/player/states/dash_state.gd:54` prints on every dash attempt made during\ncooldown, so mashing dash spams it. The fix is mechanical and already has a precedent in\nthree files: wrap in `if OS.is_stdout_verbose():` or route through a `_trace()` helper.\nThe convention is now written down in `docs/architecture/PROJECT.md` → Conventions, so this\nis a tidy-up, not a decision. Lower-traffic leftovers, for completeness:\n`wave_manager.gd` (4), `level_1_director.gd` (4), `level_2_waves.gd` (3),\n`level_director.gd` (3), `ally_fighter.gd` (2), `boot.gd` (2),\n`skill_challenge_runner.gd` (2), `score_tracker.gd` (1), `level_1_background.gd` (1).",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

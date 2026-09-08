@@ -143,7 +143,7 @@ func _spawn_bonus_drone(camera_offset: Vector2, angle: float) -> void:
 
 	# Wave index -1 = not part of any wave clear bonus.
 	wave_manager.enemy_spawned.emit(entity, -1)
-	print("[Level1Director] Spawned BonusDrone at offset (%.0f, %.0f)" % [camera_offset.x, camera_offset.y])
+	_trace("[Level1Director] Spawned BonusDrone at offset (%.0f, %.0f)" % [camera_offset.x, camera_offset.y])
 
 
 # ── Laser hazard columns (section-side, telegraphed) ─────────────────────────
@@ -165,7 +165,7 @@ func _spawn_laser_columns(columns: Array, warn: float = 3.0, active: float = 4.0
 		level.add_child(laser)
 		laser.global_position = Vector2(float(col), -380.0)
 		laser.start()
-	print("[Level1Director] Laser columns lit: %s" % str(columns))
+	_trace("[Level1Director] Laser columns lit: %s" % str(columns))
 
 
 # ── Skill challenges ──────────────────────────────────────────────────────────
@@ -997,7 +997,7 @@ func _build_section_3() -> LevelSection:
 # ── Callbacks ─────────────────────────────────────────────────────────────────
 
 func _on_level_complete() -> void:
-	print("[Level1Director] Level complete — showing debrief dialog")
+	_trace("[Level1Director] Level complete — showing debrief dialog")
 	if score_tracker:
 		score_tracker.stop_tracking()
 
@@ -1027,9 +1027,15 @@ func _on_level_complete() -> void:
 	LevelExitCutscene.go_to_hub = MissionState.is_complete(_MISSION_NUMBER)
 	MissionState.record_score(_MISSION_NUMBER, final_score)
 	MissionState.complete(_MISSION_NUMBER, stars_earned)
-	print("[Level1Director] Saved score=%d stars=%d (mission %d)" % [final_score, stars_earned, _MISSION_NUMBER])
+	_trace("[Level1Director] Saved score=%d stars=%d (mission %d)" % [final_score, stars_earned, _MISSION_NUMBER])
 
 	var hud: Node = get_tree().root.get_node_or_null("HUD")
 	if hud:
 		hud.queue_free()
 	get_tree().change_scene_to_file("res://cutscenes/level_exit/level_exit_cutscene.tscn")
+
+
+## Off unless Godot was started with `--verbose`.
+func _trace(message: String) -> void:
+	if OS.is_stdout_verbose():
+		print(message)

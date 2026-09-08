@@ -51,7 +51,7 @@ func start_state_transition(key_name: String) -> void:
 		return
 	## Normal dash path.
 	if dash_cooldown_enabled && !cooldown_timer.is_stopped():
-		print("Dash in cooldown. Time to refresh: " + str(cooldown_timer.time_left) + "sec.")
+		_trace("Dash in cooldown. Time to refresh: " + str(cooldown_timer.time_left) + "sec.")
 		state_transition.emit(transition_state)
 		return
 	dashing_direction = get_dash_direction(key_name)
@@ -152,4 +152,11 @@ func _on_dash_timer_timeout() -> void:
 		cooldown_timer.start(dash_cooldown_in_sec)
 
 func _on_cooldown_timer_timeout() -> void:
-	print("Dash cooldown ended. Dash can be used again!")
+	_trace("Dash cooldown ended. Dash can be used again!")
+
+
+## Off unless Godot was started with `--verbose` — mashing dash during cooldown spams the
+## refresh-time line on every attempt.
+func _trace(message: String) -> void:
+	if OS.is_stdout_verbose():
+		print(message)

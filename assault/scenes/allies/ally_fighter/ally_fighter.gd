@@ -69,7 +69,7 @@ func _physics_process(_delta: float) -> void:
 	if cam:
 		var vp := get_viewport().get_visible_rect().size
 		if global_position.y < cam.global_position.y - vp.y * 0.5 - 80.0:
-			print("[Ally] %s DESPAWNED (off-screen) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
+			_trace("[Ally] %s DESPAWNED (off-screen) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
 			queue_free()
 
 func _on_hurt_box_received_damage(damage: int) -> void:
@@ -77,9 +77,15 @@ func _on_hurt_box_received_damage(damage: int) -> void:
 
 func _on_health_changed(current: int) -> void:
 	if current == 0:
-		print("[Ally] %s DESPAWNED (died) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
+		_trace("[Ally] %s DESPAWNED (died) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
 		_explosion_effect.explode()
 		queue_free()
+
+
+## Off unless Godot was started with `--verbose`.
+func _trace(message: String) -> void:
+	if OS.is_stdout_verbose():
+		print(message)
 
 func _add_contact_hitbox() -> void:
 	var col := get_node_or_null("CollisionShape2D") as CollisionShape2D

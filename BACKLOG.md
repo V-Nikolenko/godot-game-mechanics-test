@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 15 open)
+## Code health backlog  (`code-health-backlog`, 14 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -415,7 +415,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/explosioneffect-s-container-resolution-is-a-footgun-worth-a-](docs/plans/explosioneffect-s-container-resolution-is-a-footgun-worth-a-)
       4 run(s), $1.33; last on claude-sonnet-5
 
-- [ ] ****Three more files print unconditionally on hot paths — same defect as the one just fixed,** _(todo - feature, medium, sonnet)_
+- [x] ****Three more files print unconditionally on hot paths — same defect as the one just fixed,** _(done - feature, medium, sonnet)_
       out of the item's stated scope.** `global/ui/dialog_system/ui/dialog_box.gd` has **11**
       prints (`[DB] ...`), several per dialog *line*, including inside tween callbacks;
       `assault/scenes/player/movement_controller.gd:74,79` print `"first/second time pressed …"`

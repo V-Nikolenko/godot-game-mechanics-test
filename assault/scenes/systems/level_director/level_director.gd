@@ -45,14 +45,14 @@ func start() -> void:
 func _advance() -> void:
 	_current_index += 1
 	if _current_index >= _sections.size():
-		print("[LevelDirector] All sections complete")
+		_trace("[LevelDirector] All sections complete")
 		level_complete.emit()
 		set_process(false)
 		return
 
 	_section_elapsed = 0.0
 	var s := _sections[_current_index]
-	print("[LevelDirector] Section %d: '%s'  end=%s  transition_in=%.1f s" % [
+	_trace("[LevelDirector] Section %d: '%s'  end=%s  transition_in=%.1f s" % [
 		_current_index, s.section_name,
 		LevelSection.EndCondition.keys()[s.end_condition],
 		s.transition_in_duration
@@ -153,10 +153,16 @@ func _wait_enemies_cleared() -> void:
 			return
 
 	var elapsed_ms: int = Time.get_ticks_msec() - start_ms
-	print("[LevelDirector] Enemies cleared (%.2f s) — %d remaining" % [
+	_trace("[LevelDirector] Enemies cleared (%.2f s) — %d remaining" % [
 		elapsed_ms / 1000.0, container.get_child_count()
 	])
 	await _wait_seconds(0.2)
 	if not is_instance_valid(self):
 		return
 	_advance()
+
+
+## Off unless Godot was started with `--verbose`.
+func _trace(message: String) -> void:
+	if OS.is_stdout_verbose():
+		print(message)

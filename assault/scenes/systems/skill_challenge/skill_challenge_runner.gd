@@ -39,7 +39,8 @@ func _run() -> void:
 		# Hazard inherits the level scene as parent so it shares the camera.
 		get_parent().add_child(_hazard_instance)
 
-	print("[SkillChallenge] START '%s' (duration=%.1fs)" % [challenge.challenge_name, challenge.duration])
+	if OS.is_stdout_verbose():
+		print("[SkillChallenge] START '%s' (duration=%.1fs)" % [challenge.challenge_name, challenge.duration])
 	# TODO: emit a UI prompt event here once the HUD prompt component lands.
 
 	await get_tree().create_timer(challenge.duration).timeout
@@ -48,9 +49,10 @@ func _run() -> void:
 
 	var clean: bool = not _took_damage
 	var bonus: int = challenge.clean_bonus if clean else challenge.partial_bonus
-	print("[SkillChallenge] END '%s' — %s (+%d)" % [
-		challenge.challenge_name, "CLEAN" if clean else "PARTIAL", bonus,
-	])
+	if OS.is_stdout_verbose():
+		print("[SkillChallenge] END '%s' — %s (+%d)" % [
+			challenge.challenge_name, "CLEAN" if clean else "PARTIAL", bonus,
+		])
 	EventBus.skill_challenge_completed.emit(clean, bonus)
 
 	if _hazard_instance and is_instance_valid(_hazard_instance):

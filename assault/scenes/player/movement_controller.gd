@@ -33,11 +33,11 @@ signal movement_lock
 @onready var movement_lock_timer: Timer = $MovementLockTimer
 
 func lock_movement(time_sec: float) -> void:
-	print("Movement controller will be locked for " + str(time_sec) + " sec.")
+	_trace("Movement controller will be locked for " + str(time_sec) + " sec.")
 	movement_lock_timer.start(time_sec)
 
 func _on_movement_lock_timer_timeout() -> void:
-	print("Movement controller lock is ended.")
+	_trace("Movement controller lock is ended.")
 
 
 # --- Main Controller logic ---
@@ -71,21 +71,28 @@ func handle_double_press() -> bool:
 				last_press_key = ""
 				double_press_threshold.stop()
 				action_double_press.emit(double_press_key)
-				print("second time pressed " + str(double_press_key))
+				_trace("second time pressed " + str(double_press_key))
 				return true
 			else:
 				double_press_threshold.start()
 				last_press_key = double_press_key
-				print("first time pressed " + str(double_press_key))
+				_trace("first time pressed " + str(double_press_key))
 				return false
 	return false
 
 func _on_double_click_threshold_timeout() -> void:
 	last_press_key = ""
-	
-	
+
+
 # --- Handle single press tracking logic ---
 func handle_single_press() -> void:
 	for single_press_key in SINGLE_PRESS_ACTIONS:
 		if Input.is_action_just_pressed(single_press_key):
 			action_single_press.emit(single_press_key)
+
+
+## Input-cycle tracing. Off unless Godot was started with `--verbose` — the double-press
+## check runs on every eligible key press during normal play.
+func _trace(message: String) -> void:
+	if OS.is_stdout_verbose():
+		print(message)

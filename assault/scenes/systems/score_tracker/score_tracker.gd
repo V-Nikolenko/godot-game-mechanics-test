@@ -240,7 +240,8 @@ func _maybe_award_wave_clear(wave_index: int, tally: WaveTally, kill_pos: Vector
 	_breakdown["wave_clear"] += bonus
 	EventBus.score_changed.emit(_total_score)
 	EventBus.score_event.emit(kill_pos, bonus, "wave_clear")
-	print("[ScoreTracker] Wave %d cleared — bonus +%d (combo x%.1f)" % [wave_index, bonus, _combo])
+	if OS.is_stdout_verbose():
+		print("[ScoreTracker] Wave %d cleared — bonus +%d (combo x%.1f)" % [wave_index, bonus, _combo])
 
 
 # ── Player damage + survival ──────────────────────────────────────────────────
