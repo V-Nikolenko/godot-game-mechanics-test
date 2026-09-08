@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 12 open)
+## Code health backlog  (`code-health-backlog`, 11 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -481,7 +481,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `docs/superpowers/plans/2026-05-06-abilities-health-shield.md` renamed the mode list.
       1 run(s), $1.19; last on claude-sonnet-5
 
-- [ ] **Two committed `.tscn*.tmp` files duplicate light_assault_ship's UID and dodge every integrity check** _(todo - feature, medium, sonnet)_
+- [x] **Two committed `.tscn*.tmp` files duplicate light_assault_ship's UID and dodge every integrity check** _(done - feature, small, sonnet)_
       `assault/scenes/enemies/light_assault_ship/` has two Godot editor scratch files tracked in git —
       `light_assault_ship.tscn777863979.tmp` and `light_assault_ship.tscn785603970.tmp` (both added in
       `613ad48`). They are stale copies of `light_assault_ship.tscn`, and each one declares

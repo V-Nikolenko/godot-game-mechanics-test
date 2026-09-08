@@ -7,6 +7,12 @@
 export.cfg
 export_credentials.cfg
 
+# Editor atomic-save scratch files left behind by a crash mid-save
+# (e.g. light_assault_ship.tscn777863979.tmp) — each one duplicates its
+# source scene's UID verbatim; see tests/integration/test_resource_uid_integrity.gd.
+*.tscn*.tmp
+*.tres*.tmp
+
 # Imported translations (automatically generated from CSV files)
 *.translation
 

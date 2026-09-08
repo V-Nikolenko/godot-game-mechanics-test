@@ -154,11 +154,21 @@ func _collect_resource_files(dir_path: String) -> Array[String]:
 ## The UID a resource declares *on disk*, or "" if it declares none.
 ##
 ## Three storage formats, one per kind of resource:
-##   `.tscn` / `.tres` — in the `[gd_scene]` / `[gd_resource]` header line.
+##   `.tscn` / `.tres`, or anything with one of those as a substring — in the `[gd_scene]` /
+##                     `[gd_resource]` header line.
 ##   `.gd`             — in a sibling `<script>.gd.uid` file holding just the UID.
 ##   everything else   — in the sibling `<asset>.import` file generated on import.
+##
+## The substring check (not `ends_with`) is deliberate: Godot's own atomic-save scratch files are
+## named `<original>.tscn<digits>.tmp` / `<original>.tres<digits>.tmp` — the real extension lands
+## mid-filename, not at the end. Two such files for `light_assault_ship.tscn` and one each for
+## `player_fighter.tscn` and `infiltration`'s `player.tscn` were committed by an editor crash and
+## each declared its origin scene's UID verbatim, invisible to `ends_with(".tscn")`. Matching on
+## substring means the *next* stray scratch file of this shape is caught by
+## `test_no_two_resources_declare_the_same_uid` the moment it is committed, whatever random digits
+## or directory it lands in.
 func _declared_uid_for(path: String) -> String:
-	if path.ends_with(".tscn") or path.ends_with(".tres"):
+	if path.contains(".tscn") or path.contains(".tres"):
 		var header := FileAccess.get_file_as_string(path).split("\n")[0]
 		var m := _uid_re.search(header)
 		return "" if m == null else m.get_string(1)
