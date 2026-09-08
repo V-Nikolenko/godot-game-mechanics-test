@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 11 open)
+## Code health backlog  (`code-health-backlog`, 10 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -509,7 +509,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
          catches the next variant rather than this instance.
       1 run(s), $0.67; last on claude-sonnet-5
 
-- [ ] **Code-built contact hitboxes are typed as LASER damage, not CONTACT** _(todo - feature, medium, sonnet)_
+- [x] **Code-built contact hitboxes are typed as LASER damage, not CONTACT** _(done - feature, medium, sonnet)_
       Every code-built contact `HitBox` leaves `damage_type` at the `HitBox.DamageType.LASER` default.
       `HitBox.matching_shape()` (`global/components/hitbox_component.gd`) does not set it, and none of
       the four callers (`base_enemy.gd:49-53`, `drone_interceptor.gd:141-148`,
@@ -530,6 +530,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-06 while fixing the contact-hitbox transform bug (recorded as an explicit
       out-of-scope follow-up in that task's approved plan).
+      -> [docs/plans/code-built-contact-hitboxes-are-typed-as-laser-damage-not-co](docs/plans/code-built-contact-hitboxes-are-typed-as-laser-damage-not-co)
 
 - [ ] **Move code-built contact hitboxes into the scenes, as the asteroids already do** _(todo - feature, medium, sonnet)_
       Four scripts build a contact `HitBox` at runtime (`base_enemy.gd:49-53`,

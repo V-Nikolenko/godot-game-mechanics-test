@@ -197,3 +197,23 @@ func test_bonus_drone_still_has_no_contact_hitbox() -> void:
 			_contact_hitbox(entity),
 			"%s: is declared contact-harmless but carries a HitBox" % entry["name"]
 		)
+
+
+## A ram deals CONTACT damage, not LASER — `matching_shape()` used to leave `damage_type` at the
+## `HitBox` default (`LASER`), so every ram in the game was silently typed as laser fire. Harmless
+## only because the player's `HurtBox` accepts every damage type; the moment anything filters on
+## damage type, a laser-immune target would also become ram-immune for no visible reason.
+func test_every_contact_hitbox_is_typed_as_contact_damage() -> void:
+	for entry in ROSTER:
+		if entry.get("no_hitbox", false):
+			continue
+		var entity := _spawn(entry)
+		var hb := _contact_hitbox(entity)
+		assert_not_null(hb, "%s: has no contact HitBox as a direct child" % entry["name"])
+		if hb == null:
+			continue
+		assert_eq(
+			hb.damage_type,
+			HitBox.DamageType.CONTACT,
+			"%s: contact HitBox must be typed CONTACT, not the HitBox default of LASER" % entry["name"]
+		)
