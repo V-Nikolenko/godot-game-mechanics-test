@@ -129,6 +129,9 @@ func test_a_real_warhead_missile_damages_the_unarmored_core_through_the_collisio
 
 ## The armoured half: the core is *hittable* while armoured, so the missile must reach the HurtBox
 ## through the layers and be refused there, not fail to arrive.
+##
+## Fired on the centre lane, which has no turret behind it: the point of this test is the
+## deflection itself, not what (if anything) the rocket goes on to hit.
 func test_a_real_rocket_is_deflected_by_the_armored_core_rather_than_missing_it() -> void:
 	watch_signals(_station)
 	var full: int = _station.health.current_health
@@ -143,48 +146,51 @@ func test_a_real_rocket_is_deflected_by_the_armored_core_rather_than_missing_it(
 		+ "worked; silence cannot tell a wrong mask from working armour"
 	)
 	assert_eq(_station.health.current_health, full, "the armoured core loses no health to a rocket")
-	assert_false(is_instance_valid(missile), "the missile is spent on the deflect")
+	assert_true(
+		is_instance_valid(missile),
+		"a deflected hit must not consume the rocket, exactly like a deflected hit does not "
+		+ "consume a bullet (bullet.gd::_hit_is_deflected) — otherwise it can never reach a "
+		+ "turret behind the core"
+	)
 
 
-## CHARACTERIZED, and the sharp edge in this file: a rocket is **consumed by the first hurtbox it
-## overlaps**, which is exactly the rule a player bullet does *not* follow
-## (`tests/integration/test_player_bullet_lifetime.gd`). `homing_missile.gd:47-48` and
-## `warhead_missile.gd:22-23` both `queue_free()` on any `area_entered`.
+## Fixed by `rockets-cannot-damage-the-space-station-s-turrets-they-deton`
+## (`code-health-backlog`): a rocket now survives a **deflected** hit exactly like a bullet does
+## (`bullet.gd::_hit_is_deflected`) — `homing_missile.gd` and `warhead_missile.gd` duck-type
+## `is_armored()` on the hurtbox's parent before consuming themselves, so a deflection no longer
+## detonates the rocket.
 ##
-## The consequence, on this boss specifically: the core's HurtBox spans the whole 240x240 hull and
-## the turrets sit *inside* it at (+-76, +-76), so a rocket fired up a turret lane reaches the core
-## rect (y = +120) two frames before the turret rim (y = +102), deflects for 0 and dies there. The
-## player's missiles therefore cannot destroy a single station turret, and since the core is
-## armoured until all four are dead, rockets contribute nothing to this fight until it is already
-## won by other weapons.
-##
-## This is pinned rather than fixed: filed as
-## `rockets-cannot-damage-the-space-station-s-turrets-they-deton` in `code-health-backlog`. If it
-## is ever addressed, this test is the one that should go red.
-func test_a_rocket_up_a_turret_lane_dies_on_the_armored_core_and_never_reaches_the_turret() -> void:
+## The core's HurtBox spans the whole 240x240 hull and the turrets sit *inside* it at (+-76, +-76),
+## so a rocket fired up a turret lane reaches the core rect (y = +120) a couple of frames before
+## the turret rim (y = +102). It must now be deflected there (0 damage, `armor_deflected` fires)
+## and keep flying, then detonate on the live turret behind it for full damage.
+func test_a_rocket_up_a_turret_lane_survives_the_armored_core_and_damages_the_turret_behind_it() -> void:
 	watch_signals(_station)
 	var turret := _turrets()[_LANE_TURRET_INDEX] as StationTurret
 	var full_turret: int = turret.health.current_health
+	var full_core: int = _station.health.current_health
 
 	var missile := _spawn(HOMING_SCENE, Vector2(76.0, 200.0))
 	await wait_physics_frames(16)
 
-	assert_false(is_instance_valid(missile), "the missile is consumed by the core it crosses")
-	## Not decoration: without it this test passes just as happily on a station no rocket can
-	## reach at all, which is the very defect the rest of this file exists to catch.
 	assert_signal_emitted(
 		_station,
 		"armor_deflected",
-		"the rocket must have reached the core and been deflected there — that is *why* the "
-		+ "turret behind it takes nothing"
+		"the rocket must still be deflected by the armoured core it crosses on the way to the "
+		+ "turret — a deflect proves it actually reached the core rather than missing it"
+	)
+	assert_eq(
+		_station.health.current_health,
+		full_core,
+		"the armoured core must not lose health to a rocket that only crossed it"
 	)
 	assert_eq(
 		turret.health.current_health,
-		full_turret,
-		"CHARACTERIZED: the turret behind the armoured core takes nothing, because the rocket "
-		+ "detonated on the core. A bullet on this same lane takes 50 off it "
-		+ "(test_space_station.gd)"
+		full_turret - HOMING_DAMAGE,
+		"the turret behind the armoured core must take the rocket's full damage, exactly as a "
+		+ "bullet on this same lane does (test_space_station.gd)"
 	)
+	assert_false(is_instance_valid(missile), "the missile detonates on the live turret it reaches")
 
 
 # ── Asteroid contact: HurtBox.collision_mask & 1024 ───────────────────────────

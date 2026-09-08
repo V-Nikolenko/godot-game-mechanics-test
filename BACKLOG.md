@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 5 open)
+## Code health backlog  (`code-health-backlog`, 4 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -688,8 +688,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Confirm nothing references it (including by UID) before deleting, and check whether it has a
       sibling `.gd.uid`.
+      1 run(s), $0.44; last on claude-sonnet-5
 
-- [ ] **Rockets cannot damage the space station's turrets — they detonate on the armoured core** _(todo - feature, medium, sonnet)_
+- [x] **Rockets cannot damage the space station's turrets — they detonate on the armoured core** _(done - feature, medium, sonnet)_
       `homing_missile.gd:47-48` and `warhead_missile.gd:22-23` both `queue_free()` on ANY
       `area_entered`, so a rocket is consumed by the first hurtbox it overlaps. A player bullet is
       not (`tests/integration/test_player_bullet_lifetime.gd`), and the space station's whole armour
@@ -718,6 +719,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
         does not file this again.
       
       Found on 2026-09-07 while closing the collision-layer coverage gap.
+      -> [docs/plans/rockets-cannot-damage-the-space-station-s-turrets-they-deton](docs/plans/rockets-cannot-damage-the-space-station-s-turrets-they-deton)
 
 - [ ] **There are five tracked .tscn*.tmp files, not two — the existing task under-scopes it** _(todo - feature, medium, sonnet)_
       While verifying the sprite-transparency sweep I found the tmp-file count in that task is wrong: `git ls-files | grep "\.tmp$"` returns **five** tracked editor-scratch files, not two.

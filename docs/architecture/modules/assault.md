@@ -318,8 +318,8 @@ tree as wreckage. It is spawned by the **`station_assault`** section (`_build_st
 as a single zero-delay wave with no `MovementResource` — a spawn delay would let `waves_complete`
 fire before the station existed, and a movement resource would attach an `EnemyPathMover` that
 frees it on screen exit. Behaviour and the collision-layer rules — all four incoming damage paths
-now gated by physics rather than by reading the scene, and the one that does *not* work (rockets
-detonate on the armoured core and never reach a turret) —
+gated by physics rather than by reading the scene, and the duck-typed `is_armored()` exemption that
+lets both bullets and rockets survive a deflected hit on the core to reach a turret behind it —
 [`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md).
 
 It has **two phases**. Killing the last turret makes `SpaceStation` emit `armor_broken` (a

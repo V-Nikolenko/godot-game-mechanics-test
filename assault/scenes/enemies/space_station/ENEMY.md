@@ -526,17 +526,20 @@ Two things that file had to work around, worth knowing before extending it:
   `_accumulate_and_apply` only forwards whole numbers — so the first `armor_deflected` from the
   mining laser lands around frame **30**. A 4-frame budget passes the beam-endpoint assertion and
   silently drops the one that proves the beam found the core; that is how the test first ran.
-- **A rocket is consumed by the first hurtbox it overlaps** — see the next paragraph but one.
+- **A rocket now survives a deflected hit, same as a bullet** — see the next paragraph but one.
 
-⚠️ **A rocket cannot reach a turret behind the armoured core.** `homing_missile.gd:47-48` and
-`warhead_missile.gd:22-23` `queue_free()` on *any* `area_entered`, so unlike a bullet a rocket dies
-on the first hurtbox it touches. On this boss the core rect (`y = +120`) is reached about two
-frames before a turret rim (`y = +102`), so a missile fired up a turret lane deflects for 0 and is
-gone — the player's missiles destroy no turret, and therefore contribute nothing until the fight
-is already won with another weapon. Pinned as CHARACTERIZED by
-`test_a_rocket_up_a_turret_lane_dies_on_the_armored_core_and_never_reaches_the_turret`, filed as
-`rockets-cannot-damage-the-space-station-s-turrets-they-deton` in `code-health-backlog`, and
-**not** fixed here: which of the three fixes is right is a fight-design decision, not a one-liner.
+**A rocket reaches a turret behind the armoured core, exactly like a bullet does.**
+`homing_missile.gd` and `warhead_missile.gd` duck-type `is_armored()` on the hurtbox's parent
+before consuming themselves (`_hit_is_deflected()`, the same idiom `bullet.gd::_hit_is_deflected`
+uses), so a deflected hit no longer detonates the rocket. On this boss the core rect (`y = +120`)
+is reached about two frames before a turret rim (`y = +102`): the rocket is deflected there for 0
+(`armor_deflected` still fires — the armour still visibly registers the hit), keeps flying, and
+detonates on the live turret behind it for full damage. Fixed by
+`rockets-cannot-damage-the-space-station-s-turrets-they-deton` in `code-health-backlog`; pinned by
+`test_a_rocket_up_a_turret_lane_survives_the_armored_core_and_damages_the_turret_behind_it` and
+`test_a_real_rocket_is_deflected_by_the_armored_core_rather_than_missing_it` (the latter fires on
+the centre lane, with no turret behind it, and asserts the rocket still survives the deflection and
+keeps flying rather than being spent on it).
 
 For the record, because it was got wrong twice during sub-item 2's review: a player bullet is
 **not** consumed by the first HurtBox it overlaps. `BulletPool` is used only by four enemies and
@@ -588,10 +591,13 @@ for `is_armored() == true` on the hit target and, if true, the bullet keeps flyi
 exemption reads, and it is the only thing standing between "shots reach the turrets" and "the
 turrets — and the boss — are unkillable." **Any enemy that refuses damage while its hurtbox stays
 hittable must expose its own `is_armored()`-shaped method to get the same exemption, or a
-default-gun shot will stop dead on the first deflected hit.** Two tests turn a regression here into
-a red gate at the point of the change instead of an unshootable boss discovered later:
-`test_a_real_bullet_in_a_turret_lane_damages_the_turret_through_the_armored_core` here, and
-`test_a_deflected_hit_does_not_consume_the_bullet` at the bullet level
+default-gun shot will stop dead on the first deflected hit.** `homing_missile.gd` and
+`warhead_missile.gd` read the same query for the identical reason — see the rocket paragraph two
+sections up. Tests turn a regression here into a red gate at the point of the change instead of an
+unshootable boss discovered later:
+`test_a_real_bullet_in_a_turret_lane_damages_the_turret_through_the_armored_core` and
+`test_a_rocket_up_a_turret_lane_survives_the_armored_core_and_damages_the_turret_behind_it` here,
+and `test_a_deflected_hit_does_not_consume_the_bullet` at the bullet level
 (`tests/integration/test_player_bullet_lifetime.gd`).
 A geometry test cannot see it: it measures rectangles.
 

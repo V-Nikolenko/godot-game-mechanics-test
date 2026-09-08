@@ -1070,15 +1070,38 @@
           "complexity": "small",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "486ca4b",
+                  "subject": "Remove dead shooting_state.gd (ShootingState) from player states"
+                }
+              ],
+              "at": "2026-09-08T21:04:11.766Z",
+              "run": "2026-09-08-2337-i4",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004095,
+                "claude-sonnet-5": 0.437124
+              },
+              "costUSD": 0.441219,
+              "turns": 24,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "rockets-cannot-damage-the-space-station-s-turrets-they-deton",
           "head": "Rockets cannot damage the space station's turrets — they detonate on the armoured core",
           "body": "`homing_missile.gd:47-48` and `warhead_missile.gd:22-23` both `queue_free()` on ANY\n`area_entered`, so a rocket is consumed by the first hurtbox it overlaps. A player bullet is\nnot (`tests/integration/test_player_bullet_lifetime.gd`), and the space station's whole armour\ndesign rests on that difference.\n\nOn this boss it means: the core's HurtBox spans the full 240x240 hull and the four turrets sit\n*inside* it at (+-76, +-76), so a rocket fired up a turret lane reaches the core rect (y = +120)\nabout two frames before the turret rim (y = +102), deflects for 0 and dies there. The player's\nhoming and warhead missiles therefore cannot destroy a single station turret — and since the core\nis armoured until all four are dead, rockets contribute nothing to the fight until it is already\nwon with another weapon. A player who has invested in missiles reads that as \"my rockets are\nbroken\", which is exactly the failure mode `ENEMY.md` -> \"Core hurtbox\" argues against for the\n88x240 proposal.\n\nPinned today, not fixed:\n`tests/integration/test_station_incoming_damage_paths.gd`\n-> `test_a_rocket_up_a_turret_lane_dies_on_the_armored_core_and_never_reaches_the_turret`,\nmarked CHARACTERIZED. That test should go red when this is addressed.\n\nOptions worth weighing before touching it (this is a fight-design decision, not a one-line fix):\n- have the rocket ignore a hurtbox that refused the damage (needs a \"was this absorbed\" answer\n  back from HurtBox, which does not exist today);\n- give the station a separate armour-plate HurtBox over the core only, the Gradius idiom already\n  deferred in `ENEMY.md`;\n- accept it as intended weapon-vs-boss counterplay and say so in `ENEMY.md`, so the next reader\n  does not file this again.\n\nFound on 2026-09-07 while closing the collision-layer coverage gap.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
-          "planDir": null,
+          "planDir": "docs/plans/rockets-cannot-damage-the-space-station-s-turrets-they-deton",
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",
