@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 8 open)
+## Code health backlog  (`code-health-backlog`, 7 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -604,9 +604,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       needs the documented drain (`test_station_assault_section.gd` test 5). Bounded and small — this is
       tidiness, not a bug the player can feel.
       -> [docs/plans/freeing-leveldirector-mid-wait-still-strands-its-gdscriptfun](docs/plans/freeing-leveldirector-mid-wait-still-strands-its-gdscriptfun)
-      1 run(s), $2.32; last on claude-sonnet-5
+      2 run(s), $2.93; last on claude-sonnet-5
 
-- [ ] **Decide whether the player's default gun should stop on its first damaging hit (PierceModule is currently a downgrade)** _(todo - feature, medium, sonnet)_
+- [x] **Decide whether the player's default gun should stop on its first damaging hit (PierceModule is currently a downgrade)** _(done - feature, medium, sonnet)_
       **Split out of `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`, which fixed the
       projectile *leak* and deliberately left this balance question alone.**
       
@@ -642,6 +642,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       **Not in scope here:** the leak itself, which is fixed —
       `WeaponBehavior._launch()` now calls `Bullet.free_when_offscreen()` at all four spawn sites.
+      -> [docs/plans/decide-whether-the-player-s-default-gun-should-stop-on-its-f](docs/plans/decide-whether-the-player-s-default-gun-should-stop-on-its-f)
 
 - [ ] **Five weapon-mode .tres files still set homing_* keys that WeaponModeResource no longer declares** _(todo - feature, medium, sonnet)_
       Found while working `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`.

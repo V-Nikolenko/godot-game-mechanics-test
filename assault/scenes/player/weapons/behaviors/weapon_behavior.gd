@@ -11,11 +11,13 @@ func fire(_state: Node, _mode: WeaponModeResource, _muzzle: Marker2D) -> void:
 
 ## Spawns a configured bullet into the world and hands it its own lifetime.
 ##
-## USE THIS INSTEAD OF `state.add_child(bullet)`. Player bullets are unpooled, and nothing else in
-## the game frees them: `Bullet.expired` fires on an ordinary hit as well as at the screen edge, so
-## it cannot be wired to `queue_free` without consuming shots on first contact. Before this existed
-## every shot the player ever fired stayed in the level — travelling, running `_physics_process`
-## and holding a live HitBox — until the mission ended.
+## USE THIS INSTEAD OF `state.add_child(bullet)`. Player bullets are unpooled, so nothing else in
+## the game frees them. Two things end a bullet's flight, and both are wired here:
+##   - `free_when_offscreen()` frees it once it leaves the screen.
+##   - `expired -> queue_free` frees it on the first hit that actually deals damage (a deflected
+##     hit — see `bullet.gd`'s header — does not emit `expired`, so it does not free the bullet).
+## `AllyFighter`'s pooled bullets never go through `_launch()` (`BulletPool.acquire()` is a
+## separate spawn path), so this connection never reaches a bullet the pool still owns.
 ##
 ## Pinned by `test_player_bullet_lifetime.gd::test_every_weapon_behavior_hands_off_its_projectile_s_lifetime`,
 ## which enumerates `WeaponBehavior` subclasses from the project class list, so a behaviour added
@@ -23,3 +25,4 @@ func fire(_state: Node, _mode: WeaponModeResource, _muzzle: Marker2D) -> void:
 func _launch(state: Node, bullet: Bullet) -> void:
 	state.add_child(bullet)
 	bullet.free_when_offscreen()
+	bullet.expired.connect(bullet.queue_free)

@@ -577,17 +577,22 @@ and asserts it fails by 76 px per side. The Gradius idiom of a *separate armour-
 over the shoulders is the better long-term design and was deferred, not dismissed — it is a third
 HP bucket and new art on a boss whose approved epic is about to collapse five HP pools into one.
 
-⚠️ **Load-bearing dependency.** This decision assumes a player bullet is not consumed by the first
-hurtbox it overlaps. That is now a *stated rule with a gate* rather than an accident — see
-`tests/integration/test_player_bullet_lifetime.gd` and `bullet.gd`'s header — but whether the
-default gun *should* keep piercing is still open, as
-`code-health-backlog` → `decide-whether-the-player-s-default-gun-should-stop-on-its-f`.
-**If that is ever changed without also changing the station, every shot aimed at a turret is
-absorbed by the core one to two physics frames early, deflects for 0 and dies — the turrets become
-unkillable and so does the boss.** Two tests turn that into a red gate at the point of the change
-instead of an unshootable boss discovered later:
+⚠️ **Load-bearing dependency.** This decision assumes a player bullet is not consumed by the core's
+armoured hurtbox while it deflects. Since
+`code-health-backlog` → `decide-whether-the-player-s-default-gun-should-stop-on-its-f`
+(`docs/plans/decide-whether-the-player-s-default-gun-should-stop-on-its-f/`), the default gun DOES
+stop on its first damaging hit — `PierceModule` would otherwise still be the strict downgrade that
+task fixed — but a **deflected** hit is exempt: `bullet.gd::_hit_is_deflected()` duck-types a query
+for `is_armored() == true` on the hit target and, if true, the bullet keeps flying with no
+`expired`, no free, and no pierce charge spent. `SpaceStation.is_armored()` is the query this
+exemption reads, and it is the only thing standing between "shots reach the turrets" and "the
+turrets — and the boss — are unkillable." **Any enemy that refuses damage while its hurtbox stays
+hittable must expose its own `is_armored()`-shaped method to get the same exemption, or a
+default-gun shot will stop dead on the first deflected hit.** Two tests turn a regression here into
+a red gate at the point of the change instead of an unshootable boss discovered later:
 `test_a_real_bullet_in_a_turret_lane_damages_the_turret_through_the_armored_core` here, and
-`test_a_bullet_is_not_consumed_by_a_hurtbox_it_overlaps` at the bullet level.
+`test_a_deflected_hit_does_not_consume_the_bullet` at the bullet level
+(`tests/integration/test_player_bullet_lifetime.gd`).
 A geometry test cannot see it: it measures rectangles.
 
 ---

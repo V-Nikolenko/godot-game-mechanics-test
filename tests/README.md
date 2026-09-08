@@ -357,10 +357,12 @@ Four things to know before extending it:
 
 `integration/test_player_bullet_lifetime.gd` is intent as well, and it is the *other* end of that
 station dependency. It states the two projectile-lifetime rules directly rather than leaving them
-implied by the boss fight: **(1)** a player bullet is not consumed by a hurtbox it overlaps — the
-premise the station's armoured core rests on — and **(2)** an unpooled player bullet frees itself
-when it leaves the screen, which nothing did before. Its invariant test enumerates
-`WeaponBehavior` subclasses from `ProjectSettings.get_global_class_list()` rather than a
+implied by the boss fight: **(1)** a player bullet is consumed by the first hit that actually
+deals damage, but NOT by a *deflected* one (`bullet.gd::_hit_is_deflected()` duck-types a query
+for `is_armored()` on the hit target) — the premise the station's armoured core rests on, and the
+reason `PierceModule` is finally an upgrade rather than a downgrade — and **(2)** an unpooled
+player bullet frees itself when it leaves the screen, which nothing did before. Its invariant test
+enumerates `WeaponBehavior` subclasses from `ProjectSettings.get_global_class_list()` rather than a
 hand-written list, so a *sixth* behaviour added later is covered on the day it lands.
 
 Three traps it hit, all worth knowing:

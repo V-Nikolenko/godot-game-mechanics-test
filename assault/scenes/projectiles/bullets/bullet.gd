@@ -1,17 +1,26 @@
 ## Bullet — the player's primary projectile (also pooled by AllyFighter).
 ##
-## LIFETIME. Two rules, and they pull in opposite directions:
+## LIFETIME.
 ##
-##   1. **A bullet is NOT consumed by a hurtbox it overlaps.** `_on_hit_box_area_entered()` emits
-##      `expired` and keeps flying. This is deliberate and load-bearing: the space-station boss
-##      needs shots aimed at its turrets to survive crossing the armoured core, or the turrets —
-##      and so the boss — are unkillable. See `space_station/ENEMY.md` -> "Core hurtbox".
+##   1. **A bullet is consumed by the first hit that actually deals damage** — `expired` fires and
+##      (on the unpooled player path, via `WeaponBehavior._launch()`) frees the bullet. A
+##      **deflected** hit does NOT count: `_on_hit_box_area_entered()` checks whether the target
+##      reports `is_armored() == true` (duck-typed, same idiom as `is_laser_blocking()` in
+##      `beam_behavior.gd`) and, if so, returns without emitting `expired` or spending a pierce
+##      charge — the bullet keeps flying, at full damage, exactly as if the hit never happened.
+##      This is deliberate and load-bearing: the space-station boss's armoured core spans the
+##      whole hull, so a shot aimed at a turret has to survive crossing it, and the core's
+##      `is_armored()` query is what tells this bullet the crossing was a deflection, not a kill.
+##      See `space_station/ENEMY.md` -> "Core hurtbox". `PierceModule` raises the number of
+##      *damaging* hits a bullet survives before `expired` fires (see `MAX_PIERCE` below).
 ##   2. **An unpooled bullet frees itself when it leaves the screen**, via `free_when_offscreen()`.
 ##
-## Because of rule 1, `expired` means "something happened", NOT "I am done" — it fires on an
-## ordinary hit as well as at the range cap and the screen edge. **Never wire `expired` to
-## `queue_free` on the player path**: that consumes the shot on first contact and breaks rule 1.
-## `BulletPool` connects to it legitimately because recycling is reversible; freeing is not.
+## `expired` means "this bullet's flight is over" for both consumers: `WeaponBehavior._launch()`
+## connects it to `queue_free` for unpooled player bullets, and `BulletPool` connects it to a
+## deferred recycle for `AllyFighter`'s pooled ones (`_launch()` is never called on that path, so
+## the two wirings never collide). Any future entity that needs to deflect a bullet without
+## consuming it must expose its own `is_armored()`-shaped query — nothing else grants the
+## exemption.
 class_name Bullet
 extends Area2D
 
@@ -109,9 +118,24 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 			queue_free()
 		## Regular enemies: bullet passes through — do nothing, keep flying.
 		return
+	if _hit_is_deflected(area):
+		## Armour refused the damage (SpaceStation core while a turret still lives). The hit still
+		## registers visually on the target's own side; the bullet did not — no expired, no pierce
+		## charge spent, keep flying.
+		return
 	if pierces_remaining > 0:
 		## HurtBox already emitted received_damage(hb.damage) this physics step.
 		## Defer the damage reduction so HurtBox reads the un-reduced value first.
 		call_deferred("_apply_pierce")
 		return
 	expired.emit()
+
+
+## True when the hurtbox we just overlapped refused to apply damage (e.g. the space-station core
+## while any turret still lives). Duck-typed against `is_armored()` rather than a shared base
+## class or a cached HurtBox flag — same idiom as `is_laser_blocking()` in `beam_behavior.gd`.
+## Safe to query synchronously regardless of physics-signal ordering: `SpaceStation.is_armored()`
+## depends only on live turret count, which a hit against the core itself never changes.
+func _hit_is_deflected(area: Area2D) -> bool:
+	var target := area.get_parent()
+	return target != null and target.has_method("is_armored") and target.is_armored()

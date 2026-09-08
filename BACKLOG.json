@@ -959,6 +959,28 @@
               "subagents": 1,
               "outcome": "error 429",
               "gate": "pass"
+            },
+            {
+              "commits": [
+                {
+                  "sha": "db8bfe1",
+                  "subject": "Correct tests/README.md now that LevelDirector's cancel seam lets a mid-wait free resume cleanly"
+                }
+              ],
+              "at": "2026-09-08T20:40:44.085Z",
+              "run": "2026-09-08-2337-i1",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004472,
+                "claude-sonnet-5": 0.6032588
+              },
+              "costUSD": 0.6077308,
+              "turns": 27,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
             }
           ]
         },
@@ -966,9 +988,9 @@
           "id": "decide-whether-the-player-s-default-gun-should-stop-on-its-f",
           "head": "Decide whether the player's default gun should stop on its first damaging hit (PierceModule is currently a downgrade)",
           "body": "**Split out of `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`, which fixed the\nprojectile *leak* and deliberately left this balance question alone.**\n\n`PierceModule` (\"Penetrating Rounds\": `MAX_PIERCE = 3`, `PIERCE_DAMAGE_FACTOR = 0.55`) is\n**strictly a downgrade today**, because the base gun already pierces without limit. A default\nbullet is not consumed by a hurtbox it overlaps — `bullet.gd`'s ordinary-hit path emits `expired`\nand keeps flying — so against stacked hurtboxes the unmodded gun hits every one of them for full\ndamage. Equipping the module only *shrinks* hits 2-4 from 50 to 28/15/8 (verified on Godot 4.6.3:\n`50 -> 28 -> 15 -> 8 -> 4`), and once `pierces_remaining` reaches 0 the bullet flies on at 8\nanyway. Genre convention is the reverse: piercing is what an upgrade buys, not a baseline.\n\nPinned as characterization by\n`tests/integration/test_player_bullet_lifetime.gd::test_pierce_module_today_only_reduces_damage`,\nso any change to pierce behaviour fails that test — which is the signal the change was deliberate.\n\n**THE COUPLING, carried over verbatim so it is never orphaned.** Fixing this means deciding that\nthe default gun stops on its first damaging hit, and that decision cannot be made in isolation:\nthe space-station mini-boss depends on pass-through. Its armoured core spans the whole hull and\nsits between the player and the turrets, deflecting for 0. If the gun starts stopping on first\ncontact **without** the station also changing, every shot aimed at a turret is absorbed by the\ncore one to two physics frames early, deflects for 0 and dies — **the turrets become unkillable\nand so does the boss.** That is asserted, at two levels:\n  - `tests/integration/test_space_station.gd` — two real-physics tests firing a real `bullet.tscn`\n    up a turret lane through the core.\n  - `tests/integration/test_player_bullet_lifetime.gd::test_a_bullet_is_not_consumed_by_a_hurtbox_it_overlaps`\n    — the same premise at the bullet level.\nBackground: `assault/scenes/enemies/space_station/ENEMY.md` -> \"Core hurtbox: why it spans the\nwhole hull\".\n\nSo this is a coupled, whole-game balance change (player weapon feel + the first boss fight), not a\none-line fix. Any plan for it has to say what the station does instead — e.g. a damage rule that\nlets shots pass the core while any turret lives, rather than the current deflect-and-continue.\n\n**Not in scope here:** the leak itself, which is fixed —\n`WeaponBehavior._launch()` now calls `Bullet.free_when_offscreen()` at all four spawn sites.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
-          "planDir": null,
+          "planDir": "docs/plans/decide-whether-the-player-s-default-gun-should-stop-on-its-f",
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",

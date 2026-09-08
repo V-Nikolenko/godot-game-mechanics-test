@@ -1,31 +1,31 @@
-## Integration test for player-bullet lifetime and the pass-through rule.
+## Integration test for player-bullet lifetime.
 ##
-## NOT purely characterization. Tests 1, 4 and 5 pin behaviour that already ships; tests 2 and 3
-## assert *new* intent and are red before the change. Plan:
-## `docs/plans/two-consecutive-reviews-asserted-that-a-player-bullet-dies-o/3-plan.md`.
+## Two rules are under test, and they used to pull in opposite directions — which is why they
+## still live in one file even though neither is in tension with the other any more:
 ##
-## Two rules are under test, and they pull in opposite directions, which is why they live in one
-## file:
-##
-##   1. **A player bullet is NOT consumed by a hurtbox it overlaps.** This is not new — it is what
-##      ships today, by accident of three unrelated settings (`bullet.gd:84` emits `expired`
-##      without freeing, the `queue_free()` at `:49` is gated on `range_px > 0.0`, and
-##      `weapons/modes/default.tres` sets `range_px = 0.0`). The whole space-station mini-boss
-##      rests on it: shots aimed at a turret have to survive crossing the armoured core, or the
-##      turrets — and therefore the boss — become unkillable. See
-##      `assault/scenes/enemies/space_station/ENEMY.md` -> "Core hurtbox: why it spans the whole
-##      hull" and `test_space_station.gd`'s two real-physics bullet tests. Test 1 restates that
-##      premise at the bullet level so the next person to touch projectile lifetime finds a red
-##      test instead of an unwinnable boss.
+##   1. **A player bullet is consumed by the first hit that actually deals damage — but not by a
+##      deflected one.** Until `decide-whether-the-player-s-default-gun-should-stop-on-its-f`, a
+##      bullet was never consumed by ANY hurtbox overlap, by accident of three unrelated settings
+##      (`bullet.gd`'s ordinary-hit path emitted `expired` without freeing, the `queue_free()` at
+##      the range cap was gated on `range_px > 0.0`, and `weapons/modes/default.tres` sets
+##      `range_px = 0.0`) — which made `PierceModule` a strict downgrade, since the baseline
+##      already pierced everything at full damage forever. The fix distinguishes a hit that deals
+##      damage (consumes the bullet) from a **deflected** one (does not) via `is_armored()` —
+##      see `bullet.gd`'s header. The space-station mini-boss depends on the deflected case: its
+##      armoured core spans the whole hull, so a shot aimed at a turret has to survive crossing it
+##      undeflected. See `assault/scenes/enemies/space_station/ENEMY.md` -> "Core hurtbox: why it
+##      spans the whole hull" and `test_space_station.gd`'s two real-physics bullet tests, which
+##      exercise the same premise through real collision layers rather than a stand-in.
 ##
 ##   2. **An unpooled projectile owns its own lifetime and frees itself when it leaves the
-##      screen.** This IS new. Player bullets were the only projectiles in the game with no owner:
-##      all four spawn sites did a plain `state.add_child(bullet)` and nothing in the repo listened
-##      to their `expired`, so every shot ever fired stayed in the level for the whole mission.
+##      screen.** Player bullets were the only projectiles in the game with no owner: all four
+##      spawn sites did a plain `state.add_child(bullet)` and nothing in the repo listened to their
+##      `expired`, so every shot ever fired stayed in the level for the whole mission.
 ##
-## The tension between them is the reason the fix is `screen_exited -> queue_free` and NOT
-## `expired -> queue_free`: `expired` also fires on an ordinary hurtbox hit, so wiring it would
-## silently break rule 1.
+## Both rules are wired in the same place, `WeaponBehavior._launch()`
+## (`free_when_offscreen()` for rule 2, `expired -> queue_free` for rule 1), and neither reaches
+## `AllyFighter`'s pooled bullets — `BulletPool.acquire()` is a separate spawn path that never
+## calls `_launch()`.
 ##
 ## Lives in `integration/` rather than `unit/` because it loads real scenes and steps physics
 ## (`tests/README.md`: `unit/` is "no scene loading").
@@ -56,6 +56,15 @@ class StubState extends Node:
 class StubActor extends Node2D:
 	var velocity: Vector2 = Vector2.ZERO
 	var pierce_module_active: bool = false
+
+
+## A stand-in for `SpaceStation`'s armoured core — exposes the same duck-typed `is_armored()`
+## query `bullet.gd::_hit_is_deflected()` checks, without any of the real scene. Deliberately NOT
+## `SpaceStation` itself: `test_space_station.gd` already covers the real boss through real
+## collision layers; this file only has to prove the bullet honours the query.
+class ArmoredStandIn extends Node2D:
+	func is_armored() -> bool:
+		return true
 
 
 var _container: Node2D
@@ -98,20 +107,10 @@ func _notifier_of(bullet: Bullet) -> VisibleOnScreenNotifier2D:
 	return bullet.get_node_or_null("VisibleOnScreenNotifier2D") as VisibleOnScreenNotifier2D
 
 
-# ---------------------------------------------------------------------------------------------
-# 1. The pass-through premise — the rule the space station depends on.
-# ---------------------------------------------------------------------------------------------
-
-## A bullet overlapping a real HurtBox deals its damage and KEEPS FLYING, at full damage.
-##
 ## The layers are not decoration: `hurtbox_component.gd:12` fires off the HurtBox's *own*
 ## `area_entered`, so a default `HurtBox.new()` (layer 1 / mask 1) never sees the bullet's HitBox
-## on layer 64 and this test would pass without any collision ever happening.
-func test_a_bullet_is_not_consumed_by_a_hurtbox_it_overlaps() -> void:
-	var bullet := BULLET_SCENE.instantiate() as Bullet
-	_container.add_child(bullet)
-	bullet.global_position = Vector2(400.0, 300.0)
-
+## on layer 64 and a caller of this would pass without any collision ever happening.
+func _hurtbox_at(parent: Node2D, pos: Vector2) -> HurtBox:
 	var hurtbox := HurtBox.new()
 	hurtbox.collision_layer = _TARGET_LAYER
 	hurtbox.collision_mask = _HITBOX_LAYER
@@ -120,8 +119,21 @@ func test_a_bullet_is_not_consumed_by_a_hurtbox_it_overlaps() -> void:
 	circle.radius = 24.0
 	shape.shape = circle
 	hurtbox.add_child(shape)
-	_container.add_child(hurtbox)
-	hurtbox.global_position = Vector2(400.0, 300.0)
+	parent.add_child(hurtbox)
+	hurtbox.global_position = pos
+	return hurtbox
+
+
+# ---------------------------------------------------------------------------------------------
+# 1. The consumption rule — stop on damage, not on a deflected hit.
+# ---------------------------------------------------------------------------------------------
+
+## A launched bullet overlapping a real HurtBox deals its damage, at full, and is then consumed.
+func test_a_launched_bullet_stops_on_its_first_damaging_hit() -> void:
+	StraightBehavior.new().fire(_state, _mode(BULLET_SCENE), _muzzle)
+	var bullet := _spawned_bullets()[0]
+
+	var hurtbox := _hurtbox_at(_container, bullet.global_position)
 	watch_signals(hurtbox)
 
 	await get_tree().physics_frame
@@ -130,12 +142,34 @@ func test_a_bullet_is_not_consumed_by_a_hurtbox_it_overlaps() -> void:
 	# NOTE: this assert's 4th parameter is an emission *index*, not a message — passing a string
 	# there makes GUT compare a String to an int and the failure looks unrelated to the test.
 	assert_signal_emitted_with_parameters(hurtbox, "received_damage", [50])
-	assert_true(is_instance_valid(bullet) and bullet.is_inside_tree(),
-			"a player bullet must NOT be consumed by a hurtbox it overlaps — the station boss "
-			+ "becomes unkillable if it is (see this file's header)")
-	assert_false(bullet.is_queued_for_deletion(), "the bullet must not have been queued for free")
 	var hb := bullet.get_node("HitBox") as HitBox
 	assert_eq(hb.damage, 50, "damage must not decay on a non-pierce hit")
+	assert_true(bullet.is_queued_for_deletion(),
+			"a default bullet must stop on the first hit that actually deals damage")
+
+
+## Boundary: a hit that the target DEFLECTS (`is_armored() == true`) must not consume the bullet
+## or its pierce budget — this is the whole reason the space-station boss stays killable. See
+## `bullet.gd::_hit_is_deflected()`.
+func test_a_deflected_hit_does_not_consume_the_bullet() -> void:
+	StraightBehavior.new().fire(_state, _mode(BULLET_SCENE), _muzzle)
+	var bullet := _spawned_bullets()[0]
+	var starting_pierces := bullet.pierces_remaining
+
+	var armored := ArmoredStandIn.new()
+	_container.add_child(armored)
+	_hurtbox_at(armored, bullet.global_position)
+
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+	assert_true(is_instance_valid(bullet) and bullet.is_inside_tree(),
+			"a deflected hit must not consume the bullet — the station boss becomes unkillable "
+			+ "if it is (see this file's header)")
+	assert_false(bullet.is_queued_for_deletion(), "the bullet must not have been queued for free")
+	assert_eq(bullet.pierces_remaining, starting_pierces,
+			"a deflected hit must not spend a pierce charge — it never happened as far as the "
+			+ "gun is concerned")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -292,36 +326,44 @@ func test_a_pooled_bullet_survives_leaving_the_screen() -> void:
 # 5. Characterization: what PierceModule does today.
 # ---------------------------------------------------------------------------------------------
 
-## PIN, NOT ENDORSEMENT. `PierceModule` ("Penetrating Rounds") is strictly a DOWNGRADE today,
-## because the base gun already pierces without limit: equipping it only shrinks hits 2-4 from 50
-## to 28/15/8, and once `pierces_remaining` reaches 0 the bullet flies on at 8 anyway.
-##
-## Whether the default gun should instead stop on its first damaging hit is a coupled, whole-game
-## balance decision — it requires `SpaceStation`'s armoured core to stop absorbing shots aimed at
-## its turrets (test 1) — so it is filed as its own backlog task rather than folded in here.
-## Changing pierce behaviour should fail this test; that is the signal the change was deliberate.
-func test_pierce_module_today_only_reduces_damage() -> void:
-	var bullet := BULLET_SCENE.instantiate() as Bullet
-	_container.add_child(bullet)
+## `PierceModule` ("Penetrating Rounds") now does what it says: it grants exactly `MAX_PIERCE` (3)
+## extra damaging hits — enemies 2, 3 and 4 at decaying damage — before the bullet stops on the
+## 4th. Before `decide-whether-the-player-s-default-gun-should-stop-on-its-f`, the base gun already
+## pierced without limit, so equipping this only shrunk hits 2-4 and the bullet still never
+## stopped either way; that made the module a strict downgrade. Routed through a real
+## `StraightBehavior.fire()` (not a bare `BULLET_SCENE.instantiate()`) so the bullet actually
+## carries the `expired -> queue_free` wiring `WeaponBehavior._launch()` adds — otherwise this test
+## would prove nothing about whether the bullet actually stops.
+func test_pierce_module_extends_the_hit_count_before_stopping() -> void:
+	StraightBehavior.new().fire(_state, _mode(BULLET_SCENE), _muzzle)
+	var bullet := _spawned_bullets()[0]
 	bullet.pierces_remaining = Bullet.MAX_PIERCE
 	var hb := bullet.get_node("HitBox") as HitBox
 
 	var target := Area2D.new()
 	_container.add_child(target)
 
+	# Captured INSIDE the loop, right after the 4th hit and before the loop's trailing await: that
+	# await flushes the queue_free() the 4th hit just triggered, and `bullet` is a freed instance
+	# by the time the loop ends.
 	var seen: Array[int] = []
+	var pierces_after_fourth_hit: int = -1
+	var queued_after_fourth_hit: bool = false
 	for i in 4:
 		seen.append(hb.damage)
 		bullet._on_hit_box_area_entered(target)
+		if i == 3:
+			pierces_after_fourth_hit = bullet.pierces_remaining
+			queued_after_fourth_hit = bullet.is_queued_for_deletion()
 		# `_apply_pierce` is deferred so the HurtBox reads the un-reduced value first.
 		await get_tree().process_frame
 
 	assert_eq(seen, [50, 28, 15, 8] as Array[int],
 			"pierce damage decays by PIERCE_DAMAGE_FACTOR (0.55), rounded half away from zero")
-	assert_eq(bullet.pierces_remaining, 0, "three pierces spent over the first three hits")
-	assert_true(is_instance_valid(bullet) and not bullet.is_queued_for_deletion(),
-			"the bullet is STILL ALIVE after exhausting its pierces — it flies on at reduced "
-			+ "damage, which is why PierceModule reads as a limiter rather than an upgrade")
+	assert_eq(pierces_after_fourth_hit, 0, "three pierces spent over the first three hits")
+	assert_true(queued_after_fourth_hit,
+			"the 4th hit exhausts the pierce budget and must stop the bullet — PierceModule grants "
+			+ "extra hits, it does not grant infinite ones")
 
 
 ## The one free path a sniper bullet has today (`bullet.gd:71-76`): an `unlimited_pierce` bullet

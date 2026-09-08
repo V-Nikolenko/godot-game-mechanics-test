@@ -40,10 +40,18 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `ArenaCamera.WORLD_SCALE` (2.0) at runtime; never pre-multiply.
 - **Every projectile has exactly one owner** — either a `BulletPool` recycles it, or it frees
   itself when it leaves the world. Player bullets are unpooled: spawn them through
-  `WeaponBehavior._launch()`, which calls `Bullet.free_when_offscreen()`. **Never wire
-  `Bullet.expired` to `queue_free` on the player path** — `expired` also fires on an ordinary
-  hurtbox hit, and consuming a shot on first contact makes the space-station boss unkillable.
-  Spelled out in `docs/architecture/PROJECT.md` → Conventions; gated by
+  `WeaponBehavior._launch()`, which calls `Bullet.free_when_offscreen()` and connects
+  `Bullet.expired -> Bullet.queue_free`. **A default bullet stops on the first hit that actually
+  deals damage — a *deflected* hit does not count.** `bullet.gd::_hit_is_deflected()` checks
+  whether the target reports `is_armored() == true` (duck-typed, no shared interface) and, if so,
+  returns without emitting `expired` or spending a pierce charge. This is load-bearing: the
+  space-station boss's armoured core spans the whole hull, so a shot aimed at a turret has to
+  survive crossing it, and the core's `is_armored()` query is what tells the bullet the crossing
+  was a deflection, not a kill — consuming the shot there makes the turrets, and the boss,
+  unkillable. `PierceModule` raises the number of *damaging* hits a bullet survives (via
+  `Bullet.MAX_PIERCE`) before it stops. Any future entity that needs to deflect a bullet without
+  consuming it must expose its own `is_armored()`-shaped query. Spelled out in
+  `docs/architecture/PROJECT.md` → Conventions; gated by
   `tests/integration/test_player_bullet_lifetime.gd`.
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`

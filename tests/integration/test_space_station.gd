@@ -157,18 +157,18 @@ func test_config_turret_health_is_applied_to_every_turret() -> void:
 # (`docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-/3-plan.md`,
 # `ENEMY.md` → "Core hurtbox: why it spans the whole hull") rests on one load-bearing fact:
 #
-#   **a player bullet is not consumed by the first hurtbox it overlaps.**
+#   **a player bullet is not consumed by a DEFLECTED hit on the first hurtbox it overlaps.**
 #
-# That used to be true only by accident of three unrelated settings. It is now a stated rule with
-# its own gate — `tests/integration/test_player_bullet_lifetime.gd` and `bullet.gd`'s header —
-# which is what closed `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`.
-#
-# Whether the default gun *should* keep piercing is still open, as
-# `code-health-backlog` → `decide-whether-the-player-s-default-gun-should-stop-on-its-f`. If it is
-# ever changed without also changing the station, every shot aimed at a turret is absorbed by the
-# core one to two physics frames early, deflects for 0 and dies — **the turrets become unkillable
-# and so does the boss.** A geometry test cannot see that; this one goes red at the point of the
-# change, and `test_a_bullet_is_not_consumed_by_a_hurtbox_it_overlaps` does the same one level down.
+# Since `code-health-backlog` → `decide-whether-the-player-s-default-gun-should-stop-on-its-f`
+# (`docs/plans/decide-whether-the-player-s-default-gun-should-stop-on-its-f/`), the default gun
+# DOES stop on its first hit that actually deals damage — `bullet.gd::_hit_is_deflected()` is the
+# exemption that keeps this fact true only for a deflected (armoured, 0-damage) hit. If that
+# exemption is ever removed, or `SpaceStation.is_armored()` ever stops reporting correctly, every
+# shot aimed at a turret is absorbed by the core one to two physics frames early, deflects for 0
+# and dies — **the turrets become unkillable and so does the boss.** A geometry test cannot see
+# that; this one goes red at the point of the change, and
+# `test_a_deflected_hit_does_not_consume_the_bullet` (`test_player_bullet_lifetime.gd`) does the
+# same one level down.
 
 const BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 
