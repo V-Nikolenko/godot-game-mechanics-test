@@ -390,6 +390,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       which deserves its own before/after check. `explode()` now takes an optional position
       argument, so the fix is one line: `boom.explode(global_position)`. No test pins the current
       behaviour, so nothing will fight the change.
+      1 run(s), $0.52; last on claude-sonnet-5
 
 - [ ] **The gate's step 1 (`godot --headless --import`) leaks ObjectDB instances.** _(todo - feature, medium, sonnet)_
       It prints

@@ -511,7 +511,24 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T03:38:06.994Z",
+              "run": "2026-09-08-0538-i6",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003968,
+                "claude-sonnet-5": 0.5129944000000001
+              },
+              "costUSD": 0.5169624,
+              "turns": 28,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "the-gate-s-step-1-godot-headless-import-leaks-objectdb-insta",
