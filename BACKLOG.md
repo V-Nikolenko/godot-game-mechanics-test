@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 16 open)
+## Code health backlog  (`code-health-backlog`, 15 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -402,7 +402,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       cycle to find what the importer is holding.
       1 run(s), $0.87; last on claude-sonnet-5
 
-- [ ] **`ExplosionEffect`'s container resolution is a footgun worth a guard.** _(in progress - feature, medium, sonnet)_
+- [x] **`ExplosionEffect`'s container resolution is a footgun worth a guard.** _(done - feature, medium, sonnet)_
       `explode()` resolves
       its target as `get_parent().get_parent()` with no check on what that is, so attaching the
       effect one level too deep silently parents the particles inside the entity instead of the
@@ -412,6 +412,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       node, or an explicit `container` export, would turn a silent visual bug into a loud one.
       
       Found on 2026-09-03 while fixing the shared-component signal/logging defects.
+      -> [docs/plans/explosioneffect-s-container-resolution-is-a-footgun-worth-a-](docs/plans/explosioneffect-s-container-resolution-is-a-footgun-worth-a-)
       3 run(s), $0.49; last on ?
 
 - [ ] ****Three more files print unconditionally on hot paths — same defect as the one just fixed,** _(todo - feature, medium, sonnet)_
