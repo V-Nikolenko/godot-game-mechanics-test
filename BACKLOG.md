@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 22 open)
+## Code health backlog  (`code-health-backlog`, 21 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -320,7 +320,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin](docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin)
       4 run(s), $4.55; last on claude-sonnet-5
 
-- [ ] **The station's collision-layer coverage gap is now only half open.** _(todo - feature, medium, sonnet)_
+- [x] **The station's collision-layer coverage gap is now only half open.** _(done - feature, medium, sonnet)_
       `assault/scenes/enemies/space_station/ENEMY.md` records that
       `tests/integration/test_space_station.gd` drives damage by emitting `received_damage`
       directly and so proves nothing about collision layers.
@@ -331,6 +331,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       that instances `assault/scenes/projectiles/bullets/bullet.tscn` and steps physics.
       
       Found on 2026-09-03 while implementing station reinforcements (EPIC sub-item 4b).
+      1 run(s), $0.58; last on claude-sonnet-5
 
 - [ ] **`ram_ship` cannot be hit by the player's primary weapon, and its config HP is dead code.** _(todo - feature, medium, sonnet)_
       `assault/scenes/enemies/ram_ship/ram_ship.gd:19` narrows the HurtBox mask to

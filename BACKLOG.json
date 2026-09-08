@@ -379,7 +379,7 @@
           "id": "the-station-s-collision-layer-coverage-gap-is-now-only-half-",
           "head": "The station's collision-layer coverage gap is now only half open.",
           "body": "`assault/scenes/enemies/space_station/ENEMY.md` records that\n`tests/integration/test_space_station.gd` drives damage by emitting `received_damage`\ndirectly and so proves nothing about collision layers.\n`tests/integration/test_station_laser_phase.gd` does now exercise a **real** physics overlap\n— a layer-128 stub `HurtBox` placed in a beam's path, found by the beam's own `Area2D` — but\nonly for the *player* layer and only against a `LaserRay`. Nothing yet proves a player\n**bullet** can hit the core's layer-512 hurtbox or a turret's. Closing it still needs a test\nthat instances `assault/scenes/projectiles/bullets/bullet.tscn` and steps physics.\n\nFound on 2026-09-03 while implementing station reinforcements (EPIC sub-item 4b).",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",
@@ -387,7 +387,24 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T02:49:59.946Z",
+              "run": "2026-09-08-0538-i2",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003927,
+                "claude-sonnet-5": 0.5748428
+              },
+              "costUSD": 0.5787698,
+              "turns": 23,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "ramship-cannot-be-hit-by-the-player-s-primary-weapon-and-its",
