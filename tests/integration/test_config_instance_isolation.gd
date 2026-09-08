@@ -63,6 +63,7 @@ const _MIN_ENTITIES_WITH_CONFIG: int = 10
 const GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/gunship/gunship.tscn")
 const GUNSHIP_CONFIG_PATH := "res://assault/scenes/enemies/gunship/gunship_config.tres"
 const STATION_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_station/space_station.tscn")
+const SCORE_CONFIG_PATH := "res://global/resources/score_config_default.tres"
 
 
 ## Records what a CHILD saw in its own `_ready()`. Deliberately not named `Test*`: GUT treats an
@@ -326,4 +327,46 @@ func test_station_children_see_the_private_copy_in_their_ready() -> void:
 	assert_ne(
 		seen[0], seen[1],
 		"two stations' children saw the SAME config object, so the stations share their stats"
+	)
+
+
+# ── 7. ScoreTracker.score_config — same bug, a different owner shape ─────────
+
+## `ScoreTracker` isn't under `_ENTITY_DIRS` and its shared field is named `score_config`, not
+## `config`, so the sweep above structurally cannot reach it. There is only one ScoreTracker per
+## level, so this isn't cross-instance contamination in play — it's a test hazard: a test that
+## tunes scoring through `tracker.score_config` writes to the exact object every other
+## `preload("res://global/resources/score_config_default.tres")` in the suite also holds.
+## `ShipConfig.privatise()` closes it the same way it closes the entity case, called from
+## `ScoreTracker._ready()` with `"score_config"` instead of the default `"config"`.
+func test_writing_to_one_trackers_score_config_cannot_reach_another() -> void:
+	var shipped_step: float = (load(SCORE_CONFIG_PATH) as ScoreConfig).combo_step
+
+	var a := ScoreTracker.new()
+	add_child_autofree(a)
+	var b := ScoreTracker.new()
+	add_child_autofree(b)
+
+	(a.score_config as ScoreConfig).combo_step = shipped_step + 0.5
+
+	assert_eq(
+		b.score_config.combo_step, shipped_step,
+		"writing one ScoreTracker's score_config.combo_step changed a DIFFERENT tracker's"
+	)
+	assert_eq(
+		(load(SCORE_CONFIG_PATH) as ScoreConfig).combo_step, shipped_step,
+		"writing one ScoreTracker's score_config.combo_step rewrote the shipped .tres in memory"
+	)
+
+	var c := ScoreTracker.new()
+	add_child_autofree(c)
+	assert_eq(
+		c.score_config.combo_step, shipped_step,
+		"a ScoreTracker created AFTER the write inherited the poisoned value"
+	)
+
+	assert_true(
+		(a.score_config as Resource).resource_path.is_empty(),
+		"a's score_config has a non-blank resource_path, so it's still the cached shared object, "
+		+ "not a private copy — the values only happen to differ because we just wrote one"
 	)

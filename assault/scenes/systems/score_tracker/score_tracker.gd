@@ -50,6 +50,10 @@ var _breakdown: Dictionary = {
 func _ready() -> void:
 	if score_config == null:
 		score_config = preload("res://global/resources/score_config_default.tres")
+	## `ResourceLoader` caches by path, so an un-overridden `score_config` is the exact object
+	## every other `preload()` of the shipped default also holds. `ShipConfig.privatise()`
+	## (`global/resources/ship_config.gd`) gives this tracker its own copy — see its doc comment.
+	ShipConfig.privatise(self, "score_config")
 	_survival_remaining = score_config.survival_interval
 
 func start_tracking() -> void:

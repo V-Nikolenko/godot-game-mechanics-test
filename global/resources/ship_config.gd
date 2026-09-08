@@ -17,27 +17,31 @@ extends Resource
 @export var counts_as_escape: bool = true
 
 
-## Replace `node`'s `config` with a copy private to that node, if it still holds the shared,
-## process-wide resource `ResourceLoader` caches.
+## Replace `node`'s `property`-named field with a copy private to that node, if it still holds
+## the shared, process-wide resource `ResourceLoader` caches.
 ##
 ## Every entity declares `@export var config: XConfig = load("res://.../x_config.tres")`, and
 ## `ResourceLoader` caches by path — so without this, all ten entities of a type in the process
 ## hold ONE object, and it is the same object a test's `preload()` returns. Writing to one
 ## enemy's config rewrote the shipped balance data for every other live enemy of that type.
+## `ScoreTracker.score_config` (`property = "score_config"`) is the same pattern with a single
+## per-level owner instead of many simultaneous ones — the hazard there is a test writing through
+## `tracker.score_config` and poisoning every other `preload()` of the shipped default.
 ##
 ## Idempotent by construction: `duplicate()` blanks `resource_path`, so a blank path IS the marker
 ## of an already-private copy and a second call is a no-op. That is what lets `BaseEnemy` and
 ## `AllyFighter` call this from BOTH `_init()` and `_enter_tree()` — see their doc comments for
 ## why both are needed — and what stops a re-parent discarding per-instance values.
 ##
-## Nodes with no `config` property, or one holding something that is not a `ShipConfig`, are left
-## alone. Same generic `get()`/`is ShipConfig` idiom as `BaseEnemy._ready()`, so no subclass type
-## knowledge is needed here and a new enemy is covered the day it lands.
+## Nodes with no `property`-named field, or one holding something that is not a `Resource`, are
+## left alone. Same generic `get()`/`is Resource` idiom as `BaseEnemy._ready()`, so no subclass
+## type knowledge is needed here and a new entity or property is covered the day it lands.
 ##
-## The copy is shallow, which is complete only while every config class stays flat.
-## `tests/integration/test_config_instance_isolation.gd` asserts that flatness, so the day a config
-## gains a nested `Resource`/`Array`/`Dictionary` the gate says so rather than silently sharing it.
-static func privatise(node: Object) -> void:
-	var cfg: Variant = node.get("config")
-	if cfg is ShipConfig and not (cfg as ShipConfig).resource_path.is_empty():
-		node.set("config", (cfg as ShipConfig).duplicate())
+## The copy is shallow, which is complete only while the resource stays flat.
+## `tests/integration/test_config_instance_isolation.gd` asserts that flatness for every
+## `ShipConfig` subclass, so the day a config gains a nested `Resource`/`Array`/`Dictionary` the
+## gate says so rather than silently sharing it.
+static func privatise(node: Object, property: String = "config") -> void:
+	var res: Variant = node.get(property)
+	if res is Resource and not (res as Resource).resource_path.is_empty():
+		node.set(property, (res as Resource).duplicate())

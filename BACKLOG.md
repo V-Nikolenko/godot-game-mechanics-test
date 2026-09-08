@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 3 open)
+## Code health backlog  (`code-health-backlog`, 2 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -744,8 +744,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       someone picks it up.
       
       Found 2026-09-07 while fixing the station core sprite background.
+      1 run(s), $0.27; last on claude-sonnet-5
 
-- [ ] **`ScoreTracker.score_config` is still a shared process-wide resource** _(todo - feature, medium, sonnet)_
+- [x] **`ScoreTracker.score_config` is still a shared process-wide resource** _(done - feature, medium, sonnet)_
       `score_tracker.gd:26` declares `@export var score_config: ScoreConfig = preload("res://global/resources/score_config_default.tres")`
       and `:52` re-`preload()`s the same path as a fallback. This is the same
       `ResourceLoader`-caches-by-path sharing that
@@ -765,6 +766,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       movement/formation/wave/level resources at the same time — `station_gunnery.gd:79` says attack
       patterns must stay pure configuration, so those are deliberately shared and should be excluded
       rather than copied.
+      -> [docs/plans/scoretracker-scoreconfig-is-still-a-shared-process-wide-reso](docs/plans/scoretracker-scoreconfig-is-still-a-shared-process-wide-reso)
 
 - [ ] **No pickup or menu ever calls UpgradeState.unlock() for any weapon mode** _(todo - feature, medium, opus)_
       While fixing the orphaned `long_range.tres` (ALL_IDS entry), a grep for `UpgradeState.unlock(`
@@ -786,6 +788,156 @@ the signal that the change was deliberate. Test names are given so the fix has a
       saved this grep). Worth an epic-sized look rather than a quick fix: it likely needs pickup scenes
       placed in the world (mirroring `ShipModuleUnlockerPickup`) plus the same kind of coverage test
       `test_module_unlock_sources.gd` already provides for ship modules.
+
+## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 6 open)
+
+- [ ] **Every log record I find stays found, and the game knows how many are left** _(todo - feature, medium, sonnet)_
+      **Player outcome:** Logs I picked up three missions ago are still mine after quitting and
+      relaunching, and the game can always answer "how many logs are there, and how many do I have?"
+      without anyone hand-maintaining that number.
+      
+      **Why this is first:** every other task in this epic reads or writes this store. Nothing else can
+      be built until "what is a log" and "where is it saved" exist.
+      
+      **Shape (leave the details to this task's own plan):**
+      - A `LogEntryResource` (`Resource`) per lore entry — id, title, body text, and its position in
+        the reading order. Entries live as `.tres` files, matching the project's config-driven
+        convention (see `open_space/scenes/mission_data/mission_config_resource.gd` for the pattern).
+      - A `LogState` autoload alongside the existing eight in `project.godot`, persisting to
+        `user://` with `ConfigFile` exactly like `MissionState` and `ShipModuleState` already do.
+        Copy `ShipModuleState`'s validate-on-load behaviour: an unknown id in the save file is warned
+        about and dropped, never trusted.
+      - **The total must be derived, not typed.** The user's ask is that adding a log requires no
+        bookkeeping. Deriving it from the catalogue on disk is what makes that true; a hardcoded
+        `TOTAL_LOGS = 12` is the exact thing this task exists to avoid.
+      
+      **Open design question for the plan — flag it, don't silently pick:** the idea says lore logs
+      "are unlocked in a specific order". The cheapest reading, and the one that best matches "place the
+      collectible on the map and everything else happens automatically", is that a lore-log collectible
+      is *anonymous*: collecting one grants the next still-locked entry in catalogue order, so the story
+      always reads in sequence no matter which corner of the map the player explored first. The
+      alternative — each collectible names its entry, and the menu shows gaps — is also defensible but
+      makes placement order narratively load-bearing. Pick one in the plan and say why.
+      
+      **Done when:** `tests/unit/test_log_state.gd` covers collect / already-collected / save round-trip
+      / unknown-id-in-save / the derived total, and the gate is green. Follow `tests/README.md` for the
+      `user://` save-file sandbox — `LogState` writes to `user://` and will otherwise leak between tests.
+
+- [ ] **Flying into a log record in open space picks it up and tells me what I found** _(todo - feature, medium, sonnet)_
+      **Player outcome:** a log record floating in the sector hub is visually readable as
+      "something to collect", flying into it picks it up, and a one-line notification tells me what I
+      just recovered without stopping the ship.
+      
+      **Reuse — this should be a small script:** `PickupBase` (`global/pickups/pickup_base.gd`) already
+      does the whole dance: `body_entered` → check group `"player"` → `_collect(player)` →
+      `_get_dialog_text()` → non-blocking `DialogPlayer` line → `queue_free()`.
+      `ship_module_unlocker_pickup.gd` is the closest existing sibling (36 lines, an inspector enum, one
+      autoload call) and is the model to copy. If this task ends up writing its own overlap detection or
+      its own notification path, something has gone wrong.
+      
+      **Art:** the log record needs its own sprite. `assault/` and `open_space/` are strict top-down
+      orthographic — **invoke the `pixel-art-generation` skill before generating anything**, and open
+      the result and look at it. A 3/4-view collectible is unusable and cannot be fixed in code.
+      
+      **Done when:** a `lore_log_pickup.tscn` exists under `global/pickups/scenes/` next to the other
+      nine, collecting it advances `LogState`, collecting it twice in one run cannot double-count, and
+      the notification text names the entry. Test in `tests/unit/`.
+
+- [ ] **Reading a data tablet by a body doesn't interrupt the mission, and I can read it again** _(todo - feature, medium, sonnet)_
+      **Player outcome:** I walk or fly up to a tablet, a terminal, or a scrap of hull, a prompt
+      tells me I can read it, and pressing the key shows the message *without* yanking control away. If
+      I come back later it is still readable — it is scenery with something to say, not a consumable.
+      
+      **This is the other half of the user's idea:** information logs are not stored, not counted, and
+      not part of 100% completion. They exist to make a place feel inhabited.
+      
+      **Two things worth knowing before planning:**
+      - The `interact` action is already bound to **F** in `project.godot` (line ~121) and **no script
+        in the project uses it**. This task is the first user of it, so there is no existing interaction
+        system to extend — but also no existing conventions to fight.
+      - `PickupBase` is the wrong parent here: it frees itself on contact and requires no input. This is
+        a sibling of it, not a subclass.
+      
+      **Research finding that should shape the design:** the most common complaint about lore
+      collectibles in shipped games is that they stop the game dead — the player is parked in a menu
+      listening to something they could have read ten times faster
+      (https://www.giantbomb.com/forums/general-discussion-30/why-do-developers-keep-using-the-audio-log-game-me-1479403/,
+      https://www.resetera.com/threads/do-you-listen-to-audio-logs-that-require-you-to-stare-at-a-menu-as-it-plays.804642/).
+      That is the argument for the split the user already drew: short in-world text plays inline via
+      `DialogPlayer` with `pause_gameplay = false` (the pickup notification path already does exactly
+      this), and only the long-form lore lives in a menu the player opens deliberately.
+      
+      **Done when:** an interactable exists that shows a prompt on approach, replays its message on every
+      interaction, is unaffected by `LogState`, and refuses to fire while `DialogPlayer.is_active` (the
+      guard `PickupBase._show_notification()` already uses). Test the enter/exit/re-read cycle.
+
+- [ ] **The ESC menu has a Lore Logs section where I can re-read everything I've found** _(todo - feature, medium, sonnet)_
+      **Player outcome:** ESC → Lore Logs shows the whole catalogue. Entries I have found are
+      readable in full; ones I have not are visibly there but withheld, so I can see there is more to
+      find and roughly how much. The header tells me where I stand: "7 / 14".
+      
+      **Reuse — the locked/unlocked list already exists.** `global/ui/player_menu/module_list.gd`
+      (`ModuleList`) is a navigable overlay that renders one row per catalogue entry, greys locked rows,
+      and prefixes a locked row's description with a call to action rather than leaving it a dead end.
+      Its lock gate is `ShipModuleState.is_unlocked()`; this list's is `LogState`. Read
+      `tests/integration/test_module_list_lock.gd` — it already pins the locked-row behaviour and is the
+      model for this list's test.
+      
+      **The ESC menu itself:** `global/ui/pause_menu/pause_menu.gd` has exactly four hardcoded options
+      (`Option0..Option3`) wired by index in `_confirm()`, with `_navigate()` skipping hidden ones, and
+      `mission_mode` toggling options 1 and 2. Adding a fifth option means touching that index-matched
+      `match` and the scene's `MenuContainer`, plus the two scenes that instance it
+      (`pause_menu.tscn`, `open_space_pause_menu.tscn`). Worth deciding in the plan whether Lore Logs
+      appears in mission mode, in open space, or both.
+      
+      **Done when:** the section opens from ESC, unlocked entries show their full text, locked ones are
+      withheld but counted, the ratio is correct, and the gate is green. Note `ModuleList.MAX_ITEMS = 8`
+      — a log catalogue will outgrow one screen, so scrolling or paging is in scope for this task.
+
+- [ ] **Log records can be placed in assault and infiltration missions, not just the hub** _(todo - feature, medium, sonnet)_
+      **Player outcome:** the same log record I recognise from open space can be tucked into a
+      wave gap in an assault run or behind a crate on a ground mission, and it counts the same way.
+      
+      **This is the task with the real obstacle, and it is worth knowing up front:** the infiltration
+      player (`infiltration/scenes/entities/player/player.gd`) is a plain `CharacterBody2D` — it does
+      **not** extend `PlayerBase` and is **not** in the `"player"` group. `PickupBase` finds the player
+      by that group and then casts to `PlayerBase`, so **no existing pickup in the game can be collected
+      on a ground mission today.** The plan has to choose between widening the pickup's detection so it
+      does not require `PlayerBase`, or giving the ground player what the group contract expects — and
+      the second is a much larger change to a module this epic is not otherwise touching.
+      
+      **Also in scope:**
+      - Assault placement is authored in **640x360 design space, scaled by
+        `ArenaCamera.WORLD_SCALE` (2.0) at runtime — never pre-multiply.**
+      - An assault mission can be restarted or replayed from the pause menu. Decide and test what
+        happens to an already-collected log on a replay: it must not double-count, and a player who
+        quits mid-mission after grabbing one should not be punished for it. This is the "missable
+        collectible" trap — a counter stuck at 99% because of a bookkeeping edge is the single most
+        reliably infuriating thing about collectible systems
+        (https://www.gamedeveloper.com/design/miss-able-collectibles-i-want-it-but-not-so-bad-i-ll-start-the-game-over-again).
+      
+      **Done when:** a log placed in an assault level and one placed in the infiltration test scene are
+      both collectable, and a test pins the replay/restart behaviour. This task may well need splitting
+      once its plan is written — if so, split it rather than half-finishing both modes.
+
+- [ ] **Test logs on the open-space map prove both log types work end to end** _(todo - feature, medium, sonnet)_
+      **Player outcome (and the user's explicit ask):** boot the game, fly around the sector hub,
+      and actually find several lore logs and a couple of information logs — enough to see the counter
+      move, the ESC section fill up, and an in-world tablet re-read cleanly.
+      
+      **Where:** `open_space/scenes/levels/sector_hub.tscn` already carries nine pickup types and
+      fourteen module unlockers placed as scene instances; the log records go in the same way, so this
+      task is mostly authoring — placement, and writing real placeholder entry text rather than
+      "Lorem ipsum". Spread them so at least one requires actually leaving the mission-select lane.
+      
+      **Done when:** at least three lore logs and two information logs are placed in the hub, the
+      catalogue total reported by `LogState` matches what is placeable, and `bash /agent/verify.sh` is
+      green — `tests/integration/test_project_load_integrity.gd` will load the modified hub scene and
+      fail on any engine error or warning it produces.
+      
+      **Also finish the epic here:** update `docs/architecture/modules/global.md` (the pickups table in
+      section 6 and the autoload list), `docs/architecture/PROJECT.md`, `open_space.md`, and
+      `CLAUDE.md` via the `updating-project-docs` skill.
 
 ## Boss fight escalation: shared hull, flying laser projectors, desperation  (`boss-fight-escalation-shared-hull-flying-laser-projectors-de`, 7 open)
 
@@ -970,156 +1122,6 @@ the signal that the change was deliberate. Test names are given so the fix has a
       *Done when:* a test proves the sweep reverses at a deterministic point rather than a random one
       and does so identically on every run; and that the starting rate differs measurably between a
       full-strength station and one that has lost most of its parts.
-
-## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 6 open)
-
-- [ ] **Every log record I find stays found, and the game knows how many are left** _(todo - feature, medium, sonnet)_
-      **Player outcome:** Logs I picked up three missions ago are still mine after quitting and
-      relaunching, and the game can always answer "how many logs are there, and how many do I have?"
-      without anyone hand-maintaining that number.
-      
-      **Why this is first:** every other task in this epic reads or writes this store. Nothing else can
-      be built until "what is a log" and "where is it saved" exist.
-      
-      **Shape (leave the details to this task's own plan):**
-      - A `LogEntryResource` (`Resource`) per lore entry — id, title, body text, and its position in
-        the reading order. Entries live as `.tres` files, matching the project's config-driven
-        convention (see `open_space/scenes/mission_data/mission_config_resource.gd` for the pattern).
-      - A `LogState` autoload alongside the existing eight in `project.godot`, persisting to
-        `user://` with `ConfigFile` exactly like `MissionState` and `ShipModuleState` already do.
-        Copy `ShipModuleState`'s validate-on-load behaviour: an unknown id in the save file is warned
-        about and dropped, never trusted.
-      - **The total must be derived, not typed.** The user's ask is that adding a log requires no
-        bookkeeping. Deriving it from the catalogue on disk is what makes that true; a hardcoded
-        `TOTAL_LOGS = 12` is the exact thing this task exists to avoid.
-      
-      **Open design question for the plan — flag it, don't silently pick:** the idea says lore logs
-      "are unlocked in a specific order". The cheapest reading, and the one that best matches "place the
-      collectible on the map and everything else happens automatically", is that a lore-log collectible
-      is *anonymous*: collecting one grants the next still-locked entry in catalogue order, so the story
-      always reads in sequence no matter which corner of the map the player explored first. The
-      alternative — each collectible names its entry, and the menu shows gaps — is also defensible but
-      makes placement order narratively load-bearing. Pick one in the plan and say why.
-      
-      **Done when:** `tests/unit/test_log_state.gd` covers collect / already-collected / save round-trip
-      / unknown-id-in-save / the derived total, and the gate is green. Follow `tests/README.md` for the
-      `user://` save-file sandbox — `LogState` writes to `user://` and will otherwise leak between tests.
-
-- [ ] **Flying into a log record in open space picks it up and tells me what I found** _(todo - feature, medium, sonnet)_
-      **Player outcome:** a log record floating in the sector hub is visually readable as
-      "something to collect", flying into it picks it up, and a one-line notification tells me what I
-      just recovered without stopping the ship.
-      
-      **Reuse — this should be a small script:** `PickupBase` (`global/pickups/pickup_base.gd`) already
-      does the whole dance: `body_entered` → check group `"player"` → `_collect(player)` →
-      `_get_dialog_text()` → non-blocking `DialogPlayer` line → `queue_free()`.
-      `ship_module_unlocker_pickup.gd` is the closest existing sibling (36 lines, an inspector enum, one
-      autoload call) and is the model to copy. If this task ends up writing its own overlap detection or
-      its own notification path, something has gone wrong.
-      
-      **Art:** the log record needs its own sprite. `assault/` and `open_space/` are strict top-down
-      orthographic — **invoke the `pixel-art-generation` skill before generating anything**, and open
-      the result and look at it. A 3/4-view collectible is unusable and cannot be fixed in code.
-      
-      **Done when:** a `lore_log_pickup.tscn` exists under `global/pickups/scenes/` next to the other
-      nine, collecting it advances `LogState`, collecting it twice in one run cannot double-count, and
-      the notification text names the entry. Test in `tests/unit/`.
-
-- [ ] **Reading a data tablet by a body doesn't interrupt the mission, and I can read it again** _(todo - feature, medium, sonnet)_
-      **Player outcome:** I walk or fly up to a tablet, a terminal, or a scrap of hull, a prompt
-      tells me I can read it, and pressing the key shows the message *without* yanking control away. If
-      I come back later it is still readable — it is scenery with something to say, not a consumable.
-      
-      **This is the other half of the user's idea:** information logs are not stored, not counted, and
-      not part of 100% completion. They exist to make a place feel inhabited.
-      
-      **Two things worth knowing before planning:**
-      - The `interact` action is already bound to **F** in `project.godot` (line ~121) and **no script
-        in the project uses it**. This task is the first user of it, so there is no existing interaction
-        system to extend — but also no existing conventions to fight.
-      - `PickupBase` is the wrong parent here: it frees itself on contact and requires no input. This is
-        a sibling of it, not a subclass.
-      
-      **Research finding that should shape the design:** the most common complaint about lore
-      collectibles in shipped games is that they stop the game dead — the player is parked in a menu
-      listening to something they could have read ten times faster
-      (https://www.giantbomb.com/forums/general-discussion-30/why-do-developers-keep-using-the-audio-log-game-me-1479403/,
-      https://www.resetera.com/threads/do-you-listen-to-audio-logs-that-require-you-to-stare-at-a-menu-as-it-plays.804642/).
-      That is the argument for the split the user already drew: short in-world text plays inline via
-      `DialogPlayer` with `pause_gameplay = false` (the pickup notification path already does exactly
-      this), and only the long-form lore lives in a menu the player opens deliberately.
-      
-      **Done when:** an interactable exists that shows a prompt on approach, replays its message on every
-      interaction, is unaffected by `LogState`, and refuses to fire while `DialogPlayer.is_active` (the
-      guard `PickupBase._show_notification()` already uses). Test the enter/exit/re-read cycle.
-
-- [ ] **The ESC menu has a Lore Logs section where I can re-read everything I've found** _(todo - feature, medium, sonnet)_
-      **Player outcome:** ESC → Lore Logs shows the whole catalogue. Entries I have found are
-      readable in full; ones I have not are visibly there but withheld, so I can see there is more to
-      find and roughly how much. The header tells me where I stand: "7 / 14".
-      
-      **Reuse — the locked/unlocked list already exists.** `global/ui/player_menu/module_list.gd`
-      (`ModuleList`) is a navigable overlay that renders one row per catalogue entry, greys locked rows,
-      and prefixes a locked row's description with a call to action rather than leaving it a dead end.
-      Its lock gate is `ShipModuleState.is_unlocked()`; this list's is `LogState`. Read
-      `tests/integration/test_module_list_lock.gd` — it already pins the locked-row behaviour and is the
-      model for this list's test.
-      
-      **The ESC menu itself:** `global/ui/pause_menu/pause_menu.gd` has exactly four hardcoded options
-      (`Option0..Option3`) wired by index in `_confirm()`, with `_navigate()` skipping hidden ones, and
-      `mission_mode` toggling options 1 and 2. Adding a fifth option means touching that index-matched
-      `match` and the scene's `MenuContainer`, plus the two scenes that instance it
-      (`pause_menu.tscn`, `open_space_pause_menu.tscn`). Worth deciding in the plan whether Lore Logs
-      appears in mission mode, in open space, or both.
-      
-      **Done when:** the section opens from ESC, unlocked entries show their full text, locked ones are
-      withheld but counted, the ratio is correct, and the gate is green. Note `ModuleList.MAX_ITEMS = 8`
-      — a log catalogue will outgrow one screen, so scrolling or paging is in scope for this task.
-
-- [ ] **Log records can be placed in assault and infiltration missions, not just the hub** _(todo - feature, medium, sonnet)_
-      **Player outcome:** the same log record I recognise from open space can be tucked into a
-      wave gap in an assault run or behind a crate on a ground mission, and it counts the same way.
-      
-      **This is the task with the real obstacle, and it is worth knowing up front:** the infiltration
-      player (`infiltration/scenes/entities/player/player.gd`) is a plain `CharacterBody2D` — it does
-      **not** extend `PlayerBase` and is **not** in the `"player"` group. `PickupBase` finds the player
-      by that group and then casts to `PlayerBase`, so **no existing pickup in the game can be collected
-      on a ground mission today.** The plan has to choose between widening the pickup's detection so it
-      does not require `PlayerBase`, or giving the ground player what the group contract expects — and
-      the second is a much larger change to a module this epic is not otherwise touching.
-      
-      **Also in scope:**
-      - Assault placement is authored in **640x360 design space, scaled by
-        `ArenaCamera.WORLD_SCALE` (2.0) at runtime — never pre-multiply.**
-      - An assault mission can be restarted or replayed from the pause menu. Decide and test what
-        happens to an already-collected log on a replay: it must not double-count, and a player who
-        quits mid-mission after grabbing one should not be punished for it. This is the "missable
-        collectible" trap — a counter stuck at 99% because of a bookkeeping edge is the single most
-        reliably infuriating thing about collectible systems
-        (https://www.gamedeveloper.com/design/miss-able-collectibles-i-want-it-but-not-so-bad-i-ll-start-the-game-over-again).
-      
-      **Done when:** a log placed in an assault level and one placed in the infiltration test scene are
-      both collectable, and a test pins the replay/restart behaviour. This task may well need splitting
-      once its plan is written — if so, split it rather than half-finishing both modes.
-
-- [ ] **Test logs on the open-space map prove both log types work end to end** _(todo - feature, medium, sonnet)_
-      **Player outcome (and the user's explicit ask):** boot the game, fly around the sector hub,
-      and actually find several lore logs and a couple of information logs — enough to see the counter
-      move, the ESC section fill up, and an in-world tablet re-read cleanly.
-      
-      **Where:** `open_space/scenes/levels/sector_hub.tscn` already carries nine pickup types and
-      fourteen module unlockers placed as scene instances; the log records go in the same way, so this
-      task is mostly authoring — placement, and writing real placeholder entry text rather than
-      "Lorem ipsum". Spread them so at least one requires actually leaving the mission-select lane.
-      
-      **Done when:** at least three lore logs and two information logs are placed in the hub, the
-      catalogue total reported by `LogState` matches what is placeable, and `bash /agent/verify.sh` is
-      green — `tests/integration/test_project_load_integrity.gd` will load the modified hub scene and
-      fail on any engine error or warning it produces.
-      
-      **Also finish the epic here:** update `docs/architecture/modules/global.md` (the pickups table in
-      section 6 and the autoload list), `docs/architecture/PROJECT.md`, `open_space.md`, and
-      `CLAUDE.md` via the `updating-project-docs` skill.
 
 ## Foundations: test harness, UID integrity, art pipeline  [DONE]  (`foundations-test-harness-uid-integrity-art-pipeline`, 0 open)
 

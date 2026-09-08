@@ -1,0 +1,29 @@
+# Context
+
+## Modules and files involved
+
+| Path | What it does | Why it matters here |
+|---|---|---|
+| `assault/scenes/systems/score_tracker/score_tracker.gd` | Owns all assault-mission scoring math. `:26` declares `@export var score_config: ScoreConfig = preload("res://global/resources/score_config_default.tres")`; `:52` re-`preload()`s the same path as a null fallback in `_ready()`. | The property under fix. Exactly one `ScoreTracker` per level (added as a child in the level scene), so there is no cross-*instance* contamination today — but every `preload()` of `score_config_default.tres` anywhere (including in tests) returns the SAME object `ResourceLoader` caches by path, and `score_config` is that object until something privatises it. |
+| `global/resources/score_config.gd` | `class_name ScoreConfig extends Resource`. Ten flat `@export` fields (float/int), no nested `Object`/`Array`/`Dictionary`. | Confirms a shallow `duplicate()` is a complete copy — same precondition `ShipConfig.privatise()` already relies on for the ten entity configs. |
+| `global/resources/score_config_default.tres` | The single shipped `ScoreConfig` resource. | What gets corrupted if a live `score_config` write reaches the cached object. |
+| `global/resources/ship_config.gd` | `class_name ShipConfig extends Resource`. `static func privatise(node: Object) -> void` (`:40-42`) swaps `node.config` for a `duplicate()` of it, gated on `cfg is ShipConfig and not cfg.resource_path.is_empty()`. Called from `BaseEnemy._init()`/`_enter_tree()` and `AllyFighter`'s equivalents. | The existing, proven pattern for this exact class of bug. Reused here rather than re-invented — widened to take a property name and a `Resource` type check instead of hard-coding `"config"` / `ShipConfig`. |
+| `tests/integration/test_config_instance_isolation.gd` | Invariant test (329 lines) asserting every entity's `*_config.tres` is a private, value-identical, flat copy. Sweeps `assault/scenes/{enemies,allies}` by directory, so a config on a differently-shaped owner (a system node, not an entity) is out of its sweep entirely. | `ScoreTracker` is not an entity under those directories and holds its config under a differently-named property (`score_config`, not `config`), so this file's sweep does not and structurally cannot reach it. The task calls for widening the *fix*, and folding in one assertion here that specifically targets `ScoreTracker`. |
+| `tests/integration/test_score_tracker_escape_penalty.gd` | Existing `ScoreTracker` integration test. Builds a bare `ScoreTracker.new()`, `add_child_autofree`, `start_tracking()`. Does not touch `score_config`. | Shows the idiom this suite already uses for standing up a tracker in a test — reused for the new isolation test. |
+
+## Existing code to reuse
+
+| Path | What it gives us |
+|---|---|
+| `global/resources/ship_config.gd:40-42` | The exact algorithm needed: `get(prop)`, type + blank-`resource_path` check, `duplicate()`, `set(prop, copy)`. Only the hard-coded property name (`"config"`) and the hard-coded type check (`is ShipConfig`) need to change. |
+| `tests/integration/test_config_instance_isolation.gd`'s `test_writing_to_one_entitys_config_cannot_reach_another` (`:203-243`) | The shape of the regression test to write for `score_config`: two `ScoreTracker` instances, write to one's `score_config` field, assert the other + the shipped `.tres` are untouched. |
+
+## Conventions that constrain this
+
+- **Idempotence**: `duplicate()` blanks `resource_path`; the guard is "blank path ⇒ already private ⇒ no-op". Must be preserved exactly — it's what lets `privatise()` be called from both `_init()`-equivalent and `_ready()` safely, and what the existing isolation test (`test_reentering_the_tree_keeps_the_same_private_copy`) pins for the entity case.
+- **Shallow copy assumption**: `duplicate()` is shallow. `ScoreConfig` is flat (confirmed above — all ten fields are `int`/`float`), so this is safe today. No project convention currently enforces this for `ScoreConfig` the way `test_configs_are_flat_so_a_shallow_copy_is_complete` enforces it for `ShipConfig` subclasses; out of scope to add a parallel sweep for a single resource class, per the task's "cheapest fix" framing — one direct assertion is enough.
+- **What must stay shared** (explicitly excluded by the task body, confirmed by code reading):
+  - `global/resources/attack/*.gd` (`AttackPatternResource` and subclasses) — `station_gunnery.gd:79-81`: "runtime state lives HERE, not on the pattern resource — `attack_pattern_resource.gd:1-5` requires those to stay pure configuration." Every live user (`light_assault_ship.gd`, `interceptor.gd`, `ally_fighter.gd`, `station_gunnery.gd`) builds attack patterns with `.new()` per entity anyway, so there is no shared-instance hazard there today regardless.
+  - `global/resources/movement/*.gd`, `global/resources/formation/*.gd`, `global/resources/waves/*.gd`, `global/resources/levels/*.gd` — grep of runtime writes (`movement.speed =`, `w.trigger_time =`, `res.clean_bonus =`) shows every live write target is either a `.new()`-constructed instance (`level_1_director.gd:133-134`, `wave_builder.gd:213`) or a resource built and consumed once at wave-build time (`level_1_director.gd:177/185` for `SkillChallengeResource`), never a `preload()`-shared default read and written by multiple owners the way `score_config` and the ten entity configs are. These are wave/level authoring data, read once per spawn, not a `@export var x = preload(...)` default. No privatisation call needed for any of them.
+- **Signal arity / logging conventions** (`CLAUDE.md`) — not touched by this change; no new signals.
+- **`ResourcePrivatiser`/`ShipConfig.privatise()` widening must not change behaviour for any existing caller** (`BaseEnemy`, `AllyFighter`) — their call sites (`ShipConfig.privatise(self)`, no second argument) must keep privatising `"config"` exactly as today.
