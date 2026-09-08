@@ -449,7 +449,24 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T03:12:44.682Z",
+              "run": "2026-09-08-0538-i4",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004024000000000001,
+                "claude-sonnet-5": 2.7854175000000003
+              },
+              "costUSD": 2.7894415000000006,
+              "turns": 73,
+              "subagents": 1,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr",

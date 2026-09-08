@@ -365,6 +365,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_station_reinforcements.gd`. Recording it so the user can overrule: the fix, if wanted,
       is a `counts_as_escape` flag on the spawn rather than a special case for one enemy source.
       -> [docs/plans/the-0-75-escape-combo-penalty-applies-to-ad-hoc-spawns-nobod](docs/plans/the-0-75-escape-combo-penalty-applies-to-ad-hoc-spawns-nobod)
+      1 run(s), $2.79; last on claude-sonnet-5
 
 - [ ] **A spawn's off-screen margin cannot account for camera pan, project-wide.** _(todo - feature, medium, sonnet)_
       Every spawn in the game resolves its offset against `cam.global_position`, which
