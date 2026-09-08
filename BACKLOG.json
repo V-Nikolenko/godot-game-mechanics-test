@@ -731,7 +731,7 @@
           "id": "longrange-tres-is-an-orphaned-weapon-mode-with-no-id-in-alli",
           "head": "`long_range.tres` is an orphaned weapon mode with no id in ALL_IDS.",
           "body": "`assault/scenes/player/weapons/modes/` contains six `.tres` files but\n`UpgradeState.ALL_IDS` names only five: `default`, `sniper_shot`, `spread`, `gatling`,\n`mining_laser`. `long_range.tres` matches no id.\n\n`WeaponState._load_modes()` (`assault/scenes/player/states/weapon_state.gd:31-37`) iterates\nALL_IDS and skips paths that do not exist, so the resource is simply never loaded — the\nweapon cannot be selected, cycled to, or shown in the player menu. The behaviour is a\n`LONG` entry in `_build_behaviors()` (`weapon_state.gd:41`) that nothing can ever reach.\n\nEither add `&\"long_range\"` to `ALL_IDS` (it needs a `_WEAPON_ICONS` entry in\n`global/ui/player_menu/player_menu.gd` too) or delete the `.tres` and the `LongRangeBehavior`\nwiring. Same abandoned-migration origin as the reflect item — the plan at\n`docs/superpowers/plans/2026-05-06-abilities-health-shield.md` renamed the mode list.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

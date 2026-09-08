@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 12 open)
+## Code health backlog  (`code-health-backlog`, 11 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -465,7 +465,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `UpgradeState.ABILITY_IDS`. Right now it is a trap — it reads as a live feature.
       1 run(s), $0.93; last on claude-sonnet-5
 
-- [ ] **`long_range.tres` is an orphaned weapon mode with no id in ALL_IDS.** _(todo - feature, medium, sonnet)_
+- [x] **`long_range.tres` is an orphaned weapon mode with no id in ALL_IDS.** _(done - feature, medium, sonnet)_
       `assault/scenes/player/weapons/modes/` contains six `.tres` files but
       `UpgradeState.ALL_IDS` names only five: `default`, `sniper_shot`, `spread`, `gatling`,
       `mining_laser`. `long_range.tres` matches no id.

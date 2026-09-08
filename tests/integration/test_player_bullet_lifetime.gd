@@ -48,9 +48,9 @@ class StubState extends Node:
 	var actor: Node2D = null
 
 
-## `actor.velocity` is read DIRECTLY (not through `get()`) by four behaviours
-## (`straight_behavior.gd:19`, `long_range_behavior.gd:14`, `spread_behavior.gd:18`,
-## `sniper_behavior.gd:84`), so a plain `Node2D` raises "Invalid access to property" and reds the
+## `actor.velocity` is read DIRECTLY (not through `get()`) by three behaviours
+## (`straight_behavior.gd:19`, `spread_behavior.gd:18`, `sniper_behavior.gd:84`), so a plain
+## `Node2D` raises "Invalid access to property" and reds the
 ## test on setup rather than on behaviour. `pierce_module_active` IS read via `get()`, so it is
 ## safe either way — declared here anyway so the stub matches the real actor's surface.
 class StubActor extends Node2D:
@@ -183,7 +183,7 @@ func test_every_weapon_behavior_hands_off_its_projectile_s_lifetime() -> void:
 		if class_id == "BeamBehavior":
 			await _assert_beam_owns_its_own_projectiles(behavior)
 			continue
-		if class_id in ["StraightBehavior", "LongRangeBehavior", "SpreadBehavior"]:
+		if class_id in ["StraightBehavior", "SpreadBehavior"]:
 			behavior.fire(_state, _mode(BULLET_SCENE), _muzzle)
 		elif class_id == "SniperBehavior":
 			var mode := _mode(SNIPER_BULLET_SCENE)
