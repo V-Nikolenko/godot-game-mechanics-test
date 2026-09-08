@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 20 open)
+## Code health backlog  (`code-health-backlog`, 19 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -352,7 +352,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/ramship-cannot-be-hit-by-the-player-s-primary-weapon-and-its](docs/plans/ramship-cannot-be-hit-by-the-player-s-primary-weapon-and-its)
       1 run(s), $1.67; last on claude-sonnet-5
 
-- [ ] **The 0.75× escape-combo penalty applies to ad-hoc spawns nobody expects to kill.** _(todo - feature, medium, sonnet)_
+- [x] **The 0.75× escape-combo penalty applies to ad-hoc spawns nobody expects to kill.** _(done - feature, medium, sonnet)_
       `assault/scenes/systems/score_tracker/score_tracker.gd:211` multiplies the combo by
       `escape_combo_multiplier` **outside** the `if counts_in_wave:` block, so a `wave_index` of
       `-1` (every `EventBus.enemy_spawned_orphan` spawn) is not exempt, and neither is
@@ -364,6 +364,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       nothing at all, which reads as a bug — and pinned the exact number in
       `test_station_reinforcements.gd`. Recording it so the user can overrule: the fix, if wanted,
       is a `counts_as_escape` flag on the spawn rather than a special case for one enemy source.
+      -> [docs/plans/the-0-75-escape-combo-penalty-applies-to-ad-hoc-spawns-nobod](docs/plans/the-0-75-escape-combo-penalty-applies-to-ad-hoc-spawns-nobod)
 
 - [ ] **A spawn's off-screen margin cannot account for camera pan, project-wide.** _(todo - feature, medium, sonnet)_
       Every spawn in the game resolves its offset against `cam.global_position`, which

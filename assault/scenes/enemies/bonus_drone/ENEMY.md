@@ -22,7 +22,10 @@
 
 - **Movement:** Fully delegated to `EnemyPathMover` via the WaveBuilder `.move()` call — no internal physics. Typically a fast horizontal `StraightMovement` with `free_after`.
 - **Attack:** None. Does not shoot and deals no contact damage.
-- **Death / scoring:** Dies to a single hit (1 HP). Awards `score_value` 500 but `counts_toward_wave_clear = false`, so missing it does NOT block wave-clear bonuses.
+- **Death / scoring:** Dies to a single hit (1 HP). Awards `score_value` 500 but
+  `counts_toward_wave_clear = false`, so missing it does NOT block wave-clear bonuses, and
+  `counts_as_escape = false`, so missing it does NOT cost the `ScoreTracker` escape-combo penalty
+  either — the only two ways a spawn can attach to score, both explicitly opted out.
 
 ---
 
@@ -34,6 +37,7 @@
 | `collision_damage` | `0` | No contact damage (and no contact HitBox is added). |
 | `score_value` | `500` | Large bonus payout. |
 | `counts_toward_wave_clear` | `false` | Excluded from wave-clear bonus accounting. |
+| `counts_as_escape` | `false` | Excluded from `ScoreTracker`'s escape-combo penalty — missing it truly costs nothing. |
 | `movement_speed` | `280.0` | Nominal speed (actual path speed set by `.move()`). |
 
 (Read the real defaults from `bonus_drone_config.gd` and `bonus_drone_config.tres`.)

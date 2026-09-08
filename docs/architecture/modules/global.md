@@ -285,7 +285,8 @@ Pure-data `Resource` types (shareable `.tres` assets; runtime state is kept out 
 #### `ShipConfig` and per-instance config resources
 
 `ShipConfig` (`global/resources/ship_config.gd`) is the base of all ten entity configs
-(`max_health`, `collision_damage`, `score_value`, `counts_toward_wave_clear`). Every entity declares
+(`max_health`, `collision_damage`, `score_value`, `counts_toward_wave_clear`,
+`counts_as_escape`). Every entity declares
 `@export var config: XConfig = load("res://.../x_config.tres")`, and `ResourceLoader` caches by
 path — so without help, **every entity of a type in the process would hold the same object**, and it
 would be the same object a test's `preload()` returns. Writing one enemy's `config.max_health` then

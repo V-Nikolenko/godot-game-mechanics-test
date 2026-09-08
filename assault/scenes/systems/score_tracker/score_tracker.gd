@@ -133,6 +133,10 @@ func _process(delta: float) -> void:
 func _on_enemy_spawned(enemy: Node, wave_index: int) -> void:
 	var counts_in_wave: bool = bool(enemy.get("counts_toward_wave_clear")) \
 			if enemy.get("counts_toward_wave_clear") != null else true
+	## Independent of counts_in_wave — e.g. a reinforcement squad is exempt from wave-clear
+	## bonuses but still pays the escape penalty, while a bonus drone pays neither.
+	var counts_as_escape: bool = bool(enemy.get("counts_as_escape")) \
+			if enemy.get("counts_as_escape") != null else true
 
 	var base_value: int = _read_score_value(enemy)
 
@@ -159,7 +163,7 @@ func _on_enemy_spawned(enemy: Node, wave_index: int) -> void:
 			enemy.connect("died", bound, CONNECT_ONE_SHOT)
 
 	enemy.tree_exited.connect(
-		_on_enemy_freed.bind(enemy, wave_index, counts_in_wave),
+		_on_enemy_freed.bind(enemy, wave_index, counts_in_wave, counts_as_escape),
 		CONNECT_ONE_SHOT,
 	)
 
@@ -194,7 +198,9 @@ func _on_enemy_died(enemy: Node, wave_index: int, base_value: int, counts_in_wav
 			_maybe_award_wave_clear(wave_index, tally, kill_pos)
 
 
-func _on_enemy_freed(enemy: Node, wave_index: int, counts_in_wave: bool) -> void:
+func _on_enemy_freed(
+	enemy: Node, wave_index: int, counts_in_wave: bool, counts_as_escape: bool
+) -> void:
 	# If the enemy was killed, the died handler already ran and updated state.
 	# Guard with is_instance_valid: in rare edge cases (e.g. immediate free before
 	# the deferred add_child of a shard runs) the node may already be freed.
@@ -207,6 +213,8 @@ func _on_enemy_freed(enemy: Node, wave_index: int, counts_in_wave: bool) -> void
 		if tally and not tally.resolved:
 			tally.escaped = true
 			tally.resolved = true
+	if not counts_as_escape:
+		return
 	# Combo penalty for letting an enemy slip past.
 	_combo *= score_config.escape_combo_multiplier
 	if _combo < 1.0:

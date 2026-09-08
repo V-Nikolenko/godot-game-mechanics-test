@@ -1,7 +1,8 @@
 ## BonusDrone — rare, fast, non-shooting medal target.
 ##
 ## Awards a large score chunk on kill, with no penalty for missing it
-## (counts_toward_wave_clear = false on its config). Movement is supplied by
+## (counts_toward_wave_clear = false skips the wave-clear tally, counts_as_escape = false skips
+## ScoreTracker's escape-combo penalty on its config). Movement is supplied by
 ## EnemyPathMover via the WaveBuilder .move() call — no internal physics here.
 ##
 ## Visual: existing drone sprite, gold modulate, 50% scaled up.

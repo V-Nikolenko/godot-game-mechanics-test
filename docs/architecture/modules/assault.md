@@ -124,8 +124,8 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   aim vector.
 - **`BaseEnemy`** is the shared enemy root: it owns `Health` + `HurtBox`, a contact hitbox,
   hit-flash/explosion effects, and emits `died` on death (setting `was_killed`). Scoring
-  fields (`score_value`, `counts_toward_wave_clear`) are pulled from the subclass's
-  `ShipConfig` resource. Each concrete enemy lives in its own folder under
+  fields (`score_value`, `counts_toward_wave_clear`, `counts_as_escape`) are pulled from
+  the subclass's `ShipConfig` resource. Each concrete enemy lives in its own folder under
   `assault/scenes/enemies/<type>/` with a `*_config.tres` and (often) bespoke AI states.
   **Contact damage is the one stat the base class does not wire up for you:**
   `_add_contact_hitbox()` hardcodes `damage = 20` and runs from `BaseEnemy._ready()`, before the
@@ -214,7 +214,12 @@ UI nodes only subscribe to `EventBus`. It listens to `WaveManager.enemy_spawned`
   `counts_toward_wave_clear` count; bonus drones don't). `section_loaded` clears tallies so
   wave indices don't collide across sections.
 - **Survival** ticks, **skill-challenge** bonuses, and combo penalties on player damage or
-  enemy escape.
+  enemy escape — the escape penalty (`escape_combo_multiplier`, 0.75×) applies to every
+  spawn source (waves, station reinforcements, asteroid shards) **except** one whose
+  `ShipConfig.counts_as_escape` is `false` (currently only the bonus drone — see
+  `tests/integration/test_score_tracker_escape_penalty.gd`). Independent of
+  `counts_toward_wave_clear`: station reinforcements are exempt from wave-clear bonuses but
+  still deliberately pay the escape penalty (see below).
 
 Results publish via `EventBus.score_changed` / `combo_changed` / `score_event`, consumed
 by `gui/hud_score_widget.gd` and `gui/score_popup*.gd`. A categorized `_breakdown` feeds

@@ -15,6 +15,9 @@ var was_killed: bool = false
 ## True for bonus medal targets — they award points but do NOT count toward
 ## the wave-clear bonus.
 var counts_toward_wave_clear: bool = true
+## False for enemies ScoreTracker should not penalise on escape (e.g. bonus drones — see their
+## config's `counts_as_escape`). Independent of `counts_toward_wave_clear`.
+var counts_as_escape: bool = true
 
 var _hit_effect: HitEffect
 var _explosion_effect: ExplosionEffect
@@ -62,6 +65,7 @@ func _ready() -> void:
 	if cfg is ShipConfig:
 		score_value = cfg.score_value
 		counts_toward_wave_clear = cfg.counts_toward_wave_clear
+		counts_as_escape = cfg.counts_as_escape
 
 func _rotate_sprite() -> void:
 	var sprite := get_node_or_null("AnimatedSprite2D") as Node2D

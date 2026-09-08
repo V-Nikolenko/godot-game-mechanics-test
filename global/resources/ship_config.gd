@@ -11,6 +11,10 @@ extends Resource
 @export var score_value: int = 0
 ## If false, this ship doesn't count toward wave-clear bonuses (e.g. bonus drones).
 @export var counts_toward_wave_clear: bool = true
+## If false, ScoreTracker does not apply the escape-combo penalty when this ship leaves the tree
+## unkilled. Independent of `counts_toward_wave_clear` — a reinforcement squad, for example, is
+## exempt from wave-clear bonuses but is meant to keep paying the escape penalty.
+@export var counts_as_escape: bool = true
 
 
 ## Replace `node`'s `config` with a copy private to that node, if it still holds the shared,
