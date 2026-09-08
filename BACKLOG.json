@@ -646,7 +646,24 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T07:49:38.970Z",
+              "run": "2026-09-08-1038-i2",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.00407,
+                "claude-sonnet-5": 1.7197779999999998
+              },
+              "costUSD": 1.7238479999999998,
+              "turns": 73,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "declaring-a-signal-s-parameters-does-not-stop-the-mismatch-i",

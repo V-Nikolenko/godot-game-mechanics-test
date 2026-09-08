@@ -428,6 +428,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `wave_manager.gd` (4), `level_1_director.gd` (4), `level_2_waves.gd` (3),
       `level_director.gd` (3), `ally_fighter.gd` (2), `boot.gd` (2),
       `skill_challenge_runner.gd` (2), `score_tracker.gd` (1), `level_1_background.gd` (1).
+      1 run(s), $1.72; last on claude-sonnet-5
 
 - [ ] **Declaring a signal's parameters does not stop the mismatch it looks like it stops.** _(todo - feature, medium, sonnet)_
       Worth knowing before someone "fixes" the next one and assumes the problem is gone. **Measured
