@@ -677,7 +677,24 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T08:04:27.587Z",
+              "run": "2026-09-08-1038-i3",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003987,
+                "claude-sonnet-5": 3.0032893000000005
+              },
+              "costUSD": 3.0072763000000005,
+              "turns": 76,
+              "subagents": 1,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "the-reflect-abilitystate-migration-was-abandoned-half-done",

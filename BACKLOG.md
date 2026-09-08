@@ -444,6 +444,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       arity from a test the way `test_amount_changed_declares_the_int_it_emits` does, by reading
       `Object.get_signal_list()`.
       -> [docs/plans/declaring-a-signal-s-parameters-does-not-stop-the-mismatch-i](docs/plans/declaring-a-signal-s-parameters-does-not-stop-the-mismatch-i)
+      1 run(s), $3.01; last on claude-sonnet-5
 
 - [ ] **The reflect -> AbilityState migration was abandoned half-done.** _(todo - feature, medium, sonnet)_
       `docs/superpowers/plans/2026-05-06-abilities-health-shield.md` planned to replace the
