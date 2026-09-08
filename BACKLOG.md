@@ -378,6 +378,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-03 while building the station death sequence (EPIC sub-item 5).
       -> [docs/plans/a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr](docs/plans/a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr)
+      1 run(s), $4.65; last on claude-sonnet-5
 
 - [ ] ****`race_ship.gd:97-100` renders its death explosion at the container origin, not at the** _(todo - feature, medium, sonnet)_
       ship.** It does `get_parent().add_child(boom)` then `boom.global_position = global_position`
