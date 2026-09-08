@@ -767,8 +767,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       patterns must stay pure configuration, so those are deliberately shared and should be excluded
       rather than copied.
       -> [docs/plans/scoretracker-scoreconfig-is-still-a-shared-process-wide-reso](docs/plans/scoretracker-scoreconfig-is-still-a-shared-process-wide-reso)
+      1 run(s), $1.63; last on claude-sonnet-5
 
-- [ ] **No pickup or menu ever calls UpgradeState.unlock() for any weapon mode** _(todo - feature, medium, opus)_
+- [ ] **No pickup or menu ever calls UpgradeState.unlock() for any weapon mode** _(in progress - feature, medium, opus)_
       While fixing the orphaned `long_range.tres` (ALL_IDS entry), a grep for `UpgradeState.unlock(`
       across the whole project (excluding `tests/`) found exactly one call site: `unlock_all()` inside
       `global/autoloads/upgrade_state.gd` itself, which nothing in game code ever invokes.
@@ -788,6 +789,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       saved this grep). Worth an epic-sized look rather than a quick fix: it likely needs pickup scenes
       placed in the world (mirroring `ShipModuleUnlockerPickup`) plus the same kind of coverage test
       `test_module_unlock_sources.gd` already provides for ship modules.
+      -> [docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea](docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea)
 
 ## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 6 open)
 
