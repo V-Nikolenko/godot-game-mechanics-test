@@ -565,7 +565,7 @@
           "id": "explosioneffect-s-container-resolution-is-a-footgun-worth-a-",
           "head": "`ExplosionEffect`'s container resolution is a footgun worth a guard.",
           "body": "`explode()` resolves\nits target as `get_parent().get_parent()` with no check on what that is, so attaching the\neffect one level too deep silently parents the particles inside the entity instead of the\ncontainer — they are then freed with the entity and inherit its rotation, with no error. This\nis the same shape of trap as `bullet_pool.gd:47`, which the space-station scene warns about\ntwice in comments. A `push_warning` when the resolved container is itself an ancestor-owned\nnode, or an explicit `container` export, would turn a silent visual bug into a loud one.\n\nFound on 2026-09-03 while fixing the shared-component signal/logging defects.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
           "planDir": null,
           "kind": "impl",
@@ -573,7 +573,24 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T03:46:52.079Z",
+              "run": "2026-09-08-0538-i8",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003881,
+                "claude-sonnet-5": 0.48423020000000006
+              },
+              "costUSD": 0.4881112000000001,
+              "turns": 21,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "three-more-files-print-unconditionally-on-hot-paths-same-def",

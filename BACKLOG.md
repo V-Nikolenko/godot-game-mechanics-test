@@ -402,7 +402,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       cycle to find what the importer is holding.
       1 run(s), $0.87; last on claude-sonnet-5
 
-- [ ] **`ExplosionEffect`'s container resolution is a footgun worth a guard.** _(todo - feature, medium, sonnet)_
+- [ ] **`ExplosionEffect`'s container resolution is a footgun worth a guard.** _(in progress - feature, medium, sonnet)_
       `explode()` resolves
       its target as `get_parent().get_parent()` with no check on what that is, so attaching the
       effect one level too deep silently parents the particles inside the entity instead of the
@@ -412,6 +412,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       node, or an explicit `container` export, would turn a silent visual bug into a loud one.
       
       Found on 2026-09-03 while fixing the shared-component signal/logging defects.
+      1 run(s), $0.49; last on claude-sonnet-5
 
 - [ ] ****Three more files print unconditionally on hot paths — same defect as the one just fixed,** _(todo - feature, medium, sonnet)_
       out of the item's stated scope.** `global/ui/dialog_system/ui/dialog_box.gd` has **11**
