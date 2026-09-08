@@ -700,7 +700,7 @@
           "id": "the-reflect-abilitystate-migration-was-abandoned-half-done",
           "head": "The reflect -> AbilityState migration was abandoned half-done.",
           "body": "`docs/superpowers/plans/2026-05-06-abilities-health-shield.md` planned to replace the\n`reflect` upgrade with an `AbilityState` autoload. Only part of it landed:\n\n- `&\"reflect\"` WAS removed from `UpgradeState.ALL_IDS` (Step 5, done).\n- The `reflect` input action WAS replaced by `use_ability` in `project.godot:101` (Step 3, done).\n- `AbilityState` was NEVER created (Step 1/2 — `global/autoloads/` has no `ability_state.gd`,\n  and `project.godot` has no such autoload).\n\nThe leftover is `assault/scenes/player/states/reflect_state.gd`: 80 lines of working\nparry/reflect logic that is dead three times over — no `.tscn` instances it, its\n`_on_action(\"reflect\")` waits on an input action that no longer exists, and its\n`UpgradeState.is_unlocked(&\"reflect\")` gate is on an id nothing unlocks.\n\nDecide one way or the other: either finish the migration (build `AbilityState`, wire\n`reflect_state.gd` to `use_ability`) or delete the script and drop `&\"reflect\"` from\n`UpgradeState.ABILITY_IDS`. Right now it is a trap — it reads as a live feature.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

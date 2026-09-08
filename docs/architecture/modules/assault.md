@@ -28,14 +28,14 @@ assault/scenes/
 │   ├── player_fighter.gd        AssaultPlayer — extends PlayerBase; ship-module integration, death → GameOver
 │   ├── movement_controller.gd   Input → single/double-press signals + movement lock
 │   ├── overheat.gd / overheat_bar.gd   Weapon heat component + its HUD bar
-│   ├── states/                  State-machine states: idle, move, dash, shooting, reflect, warhead/rocket
+│   ├── states/                  State-machine states: idle, move, dash, shooting, warhead/rocket
 │   └── weapons/                 Weapon modes, fire behaviors, and aim visualizers
 │       ├── weapon_mode.gd       WeaponModeResource — per-weapon data (behavior, fire_interval, heat)
 │       ├── behaviors/           STRAIGHT / LONG / SPREAD / BEAM / SNIPER fire behaviors
 │       └── visualizers/         e.g. sniper aim line
 ├── projectiles/                 Player + enemy ordnance
 │   ├── bullets/bullet.gd        Player bullet — UNPOOLED, frees itself off-screen (pierce, sniper)
-│   ├── enemy_bullet/            EnemyBullet (can be reflected → become_friendly)
+│   ├── enemy_bullet/            EnemyBullet (become_friendly() flips it to a player projectile)
 │   ├── missiles/                homing/ + warhead/ missiles
 │   └── piercing_beam/           Sustained BEAM weapon projectile
 ├── systems/                     Mission orchestration (non-visual)
@@ -90,8 +90,6 @@ to the player via exported `actor` / `movement_controller` references.
   to a `WeaponBehavior` (STRAIGHT/LONG/SPREAD/BEAM/SNIPER), accrues heat per shot, and
   emits `EventBus.player_weapon_changed`.
 - `warhead_missile_shooting_state.gd` (`RocketState`) — secondary missiles (warhead/homing).
-- `reflect_state.gd` — timed parry: opens a brief `Area2D` that flips incoming
-  `EnemyBullet`s to friendly (`become_friendly()`); gated on the `reflect` upgrade.
 
 `movement_controller.gd` converts raw input into `action_single_press` /
 `action_double_press` signals and owns a movement lock used during dashes.
@@ -192,8 +190,10 @@ Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.g
   now despawns; that band is off-screen and unaimable, so it is accepted.
 
   All of the above is pinned by `tests/integration/test_player_bullet_lifetime.gd`.
-- `enemy_bullet/enemy_bullet.gd` — `EnemyBullet`; can be reflected by the player's parry
-  (`become_friendly()`), which flips its collision so it damages enemies.
+- `enemy_bullet/enemy_bullet.gd` — `EnemyBullet`; `become_friendly()` flips its direction and
+  collision so it damages enemies instead of the player. Currently unused — its only caller,
+  the parry ability `reflect_state.gd`, was removed as dead code (2026-09-08): its input action
+  had already been replaced by `use_ability` and no scene instanced it.
 - `missiles/` — `homing/` and `warhead/` secondary munitions fired by `RocketState`.
 - `piercing_beam/` — the sustained beam projectile for the BEAM weapon behavior.
 

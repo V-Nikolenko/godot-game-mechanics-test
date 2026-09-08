@@ -1,8 +1,8 @@
 ## Characterization tests for UpgradeState (global/autoloads/upgrade_state.gd).
 ##
 ## Exception: the tests marked `INTENT` below assert intended behaviour, not today's.
-## They cover the id validation in `unlock()` / `_load()` and the ALL_IDS vs
-## ABILITY_IDS split, which replaced a characterized silent-failure bug.
+## They cover the id validation in `unlock()` / `_load()`, which replaced a
+## characterized silent-failure bug.
 extends GutTest
 
 const SaveSandbox := preload("res://tests/helpers/save_sandbox.gd")
@@ -77,19 +77,6 @@ func test_unknown_ids_are_rejected() -> void:
 	us.free()
 
 
-## INTENT: `&"reflect"` is gated by `reflect_state.gd` via `is_unlocked()` but is an
-## ability, not a weapon mode — it has no `weapons/modes/reflect.tres`. It must be
-## unlockable, yet must stay out of `unlocked_ids()`, which feeds the weapon cycle
-## and the player menu's main-weapon column.
-func test_ability_ids_unlock_but_never_enter_the_weapon_list() -> void:
-	var us := _fresh()
-	us.unlock(&"reflect")
-	assert_true(us.is_unlocked(&"reflect"), "an ability id is a valid unlock target")
-	assert_eq(us.unlocked_ids(), [] as Array[StringName], "but it is not a weapon")
-	us.free()
-
-
-
 ## INTENT: an id that is invalid today (a renamed or removed upgrade left behind in
 ## an old profile) must not survive a load either, or the guard in `unlock()` is
 ## trivially bypassed by whatever is already on disk.
@@ -107,12 +94,12 @@ func test_load_drops_unknown_ids_left_in_the_save_file() -> void:
 	us.free()
 
 
-## Boundary: `unlock_all()` walks ALL_IDS, so it must not switch abilities on too.
+## Boundary: `unlock_all()` walks ALL_IDS only, so an id outside it stays untouched.
 func test_unlock_all_unlocks_every_known_id() -> void:
 	var us := _fresh()
 	us.unlock_all()
 	assert_eq(us.unlocked_ids(), UpgradeStateScript.ALL_IDS)
-	assert_false(us.is_unlocked(&"reflect"), "unlock_all covers ALL_IDS, not abilities")
+	assert_false(us.is_unlocked(&"not_a_real_upgrade"), "unlock_all covers ALL_IDS only")
 	us.free()
 
 

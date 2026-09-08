@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 13 open)
+## Code health backlog  (`code-health-backlog`, 12 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -446,7 +446,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/declaring-a-signal-s-parameters-does-not-stop-the-mismatch-i](docs/plans/declaring-a-signal-s-parameters-does-not-stop-the-mismatch-i)
       1 run(s), $3.01; last on claude-sonnet-5
 
-- [ ] **The reflect -> AbilityState migration was abandoned half-done.** _(todo - feature, medium, sonnet)_
+- [x] **The reflect -> AbilityState migration was abandoned half-done.** _(done - feature, medium, sonnet)_
       `docs/superpowers/plans/2026-05-06-abilities-health-shield.md` planned to replace the
       `reflect` upgrade with an `AbilityState` autoload. Only part of it landed:
       
