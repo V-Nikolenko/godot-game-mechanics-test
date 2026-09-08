@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 14 open)
+## Code health backlog  (`code-health-backlog`, 13 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -430,7 +430,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `skill_challenge_runner.gd` (2), `score_tracker.gd` (1), `level_1_background.gd` (1).
       1 run(s), $1.72; last on claude-sonnet-5
 
-- [ ] **Declaring a signal's parameters does not stop the mismatch it looks like it stops.** _(todo - feature, medium, sonnet)_
+- [x] **Declaring a signal's parameters does not stop the mismatch it looks like it stops.** _(done - feature, medium, sonnet)_
       Worth knowing before someone "fixes" the next one and assumes the problem is gone. **Measured
       on Godot 4.6.3 with a throwaway `SceneTree` probe**, not inferred: a signal's declared arity
       is **documentation only**. `signal foo` and
@@ -443,6 +443,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       completion, and nothing more. Anything that wants a *real* guarantee has to assert the
       arity from a test the way `test_amount_changed_declares_the_int_it_emits` does, by reading
       `Object.get_signal_list()`.
+      -> [docs/plans/declaring-a-signal-s-parameters-does-not-stop-the-mismatch-i](docs/plans/declaring-a-signal-s-parameters-does-not-stop-the-mismatch-i)
 
 - [ ] **The reflect -> AbilityState migration was abandoned half-done.** _(todo - feature, medium, sonnet)_
       `docs/superpowers/plans/2026-05-06-abilities-health-shield.md` planned to replace the

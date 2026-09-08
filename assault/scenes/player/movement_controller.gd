@@ -1,8 +1,8 @@
 class_name MovementController
 extends Node
 
-signal action_single_press
-signal action_double_press
+signal action_single_press(key_name: String)
+signal action_double_press(key_name: String)
 
 var SINGLE_PRESS_ACTIONS: Array = [
 	"move_left",

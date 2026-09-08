@@ -131,6 +131,17 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   fix rests on: the copy survives a re-parent (idempotence), and it exists before any **child's**
   `_ready()` — checked by identity from inside a probe child, because comparing values is green
   even on the `_ready()`-time design the test exists to reject.
+  `tests/integration/test_signal_emit_arity.gd` is a tenth, over signal **declarations**: Godot
+  never checks a `signal` line's declared parameters against how it is actually emitted — the
+  only place the declared arity is visible at all is `Object.get_signal_list()`, which is exactly
+  why `Health.amount_changed` and `State.state_transition` drifted silently until the 2026-09-03
+  fix. This generalizes that fix's two hand-written assertions into a project-wide sweep over
+  every **self-emit** (`name.emit(...)` where `name` is a signal declared in the same file — a
+  member-access emit like `hb.received_damage.emit(...)` needs cross-file type resolution and is
+  out of scope). Its first real run caught a live instance of the exact drift it exists to
+  prevent — `MovementController.action_single_press`/`action_double_press` declared bare while
+  every emit and every connected handler already agreed on one `String` argument — fixed
+  alongside the test, same shape as the original fix.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.

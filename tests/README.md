@@ -452,7 +452,13 @@ point of the suite is that a behaviour change is a *visible* change.
   `Method expected 0 argument(s), but called with 1` and reds the test. Both were declared with
   zero parameters until 2026-09-03 while being emitted with one; the declarations are now honest,
   which makes the mismatch visible in the source, but it does not make a zero-arg handler legal.
-  `push_warning` is *not* treated as a failure.
+  `push_warning` is *not* treated as a failure. **Declaring a signal's parameters does not stop
+  this on its own** — `emit()` never checks a declaration against its call sites, so the honesty
+  above only helps a reader, not the engine. `integration/test_signal_emit_arity.gd` is the actual
+  enforcement: a project-wide sweep asserting every self-emitted signal's call sites match its
+  declared arity (member-access emits, e.g. `hb.received_damage.emit(...)`, are out of its scope
+  — see the file's header). Its first run caught a live instance of the same drift in
+  `MovementController.action_single_press`/`action_double_press`, fixed alongside it.
 
 - Components that need a `_ready()` pass (`Health` builds its i-frame `Timer` there; `Shield`
   builds its regen `Timer` there) must actually be in the tree. Add the host to the tree *first*,
@@ -471,7 +477,9 @@ decoding rather than by string match, and the UID-only references in `project.go
 `export_presets.cfg` — plus two canaries against a wholesale UID strip; and
 (`integration/test_project_load_integrity.gd`) an engine-side load of every `.tscn`/`.tres`/`.gd`
 outside `addons/`, asserting nothing loads to `null`, every scene instantiates, every script
-compiles, and the engine logs no error or warning along the way.
+compiles, and the engine logs no error or warning along the way; and
+(`integration/test_signal_emit_arity.gd`) every self-emitted signal's declared parameter list
+against its actual `.emit()` call sites, project-wide.
 Tooling: the two local patches the vendored GUT addon needs under Godot 4.6.3
 (`integration/test_gut_local_patches.gd`).
 Art: entity sprite transparency (`integration/test_entity_sprite_transparency.gd`) — no texture an

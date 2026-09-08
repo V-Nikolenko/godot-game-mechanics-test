@@ -162,6 +162,12 @@ Detail and APIs: [global.md](modules/global.md).
   entity instances share a config object, the copy is value-identical to the shipped `.tres`, and
   every config class stays flat enough for a shallow `duplicate()` to be a complete copy — the
   roster is a directory sweep, so a new enemy is covered the day it lands)
+  and `tests/integration/test_signal_emit_arity.gd` (a signal's declared parameter list is never
+  checked by the engine against how it is actually emitted — the 2026-09-03 honesty fix to
+  `Health.amount_changed`/`State.state_transition` only helped a reader, not the engine — so this
+  sweeps every self-emitted signal project-wide and asserts declared arity matches every
+  `.emit()` call site; its first run caught the same drift live in `MovementController`'s
+  `action_single_press`/`action_double_press`, fixed alongside it)
   — plus the space-station family.
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).
