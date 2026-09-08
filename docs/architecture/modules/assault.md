@@ -85,10 +85,10 @@ to the player via exported `actor` / `movement_controller` references.
 - `idle_state.gd`, `move_state.gd` — resting / steered flight.
 - `dash_state.gd` — double-tap barrel-roll (i-frames on side rolls); when the Warp module
   is active it teleports + deals contact damage instead.
-- `shooting_state.gd` / `weapon_state.gd` — primary weapon. `weapon_state.gd` loads
-  `WeaponModeResource`s from `weapons/modes/`, gates on `UpgradeState` unlocks, dispatches
-  to a `WeaponBehavior` (STRAIGHT/LONG/SPREAD/BEAM/SNIPER), accrues heat per shot, and
-  emits `EventBus.player_weapon_changed`.
+- `weapon_state.gd` — primary weapon. Loads `WeaponModeResource`s from `weapons/modes/`,
+  gates on `UpgradeState` unlocks, dispatches to a `WeaponBehavior`
+  (STRAIGHT/LONG/SPREAD/BEAM/SNIPER), accrues heat per shot, and emits
+  `EventBus.player_weapon_changed`.
 - `warhead_missile_shooting_state.gd` (`RocketState`) — secondary missiles (warhead/homing).
 
 `movement_controller.gd` converts raw input into `action_single_press` /

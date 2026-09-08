@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 6 open)
+## Code health backlog  (`code-health-backlog`, 5 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -667,8 +667,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Small; verify with `bash /agent/verify.sh` (`test_project_load_integrity.gd` already loads every
       `.tres` and asserts the engine logs nothing).
+      1 run(s), $0.30; last on claude-sonnet-5
 
-- [ ] **assault/scenes/player/states/shooting_state.gd is dead code referenced by no scene** _(todo - feature, medium, sonnet)_
+- [x] **assault/scenes/player/states/shooting_state.gd is dead code referenced by no scene** _(done - feature, small, sonnet)_
       Found while working `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`, which had to
       decide whether it counted as a spawn site.
       

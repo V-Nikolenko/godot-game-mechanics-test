@@ -1033,18 +1033,41 @@
           "complexity": "small",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "46c029d",
+                  "subject": "Remove stale homing_* keys from weapon mode .tres files"
+                }
+              ],
+              "at": "2026-09-08T21:01:56.502Z",
+              "run": "2026-09-08-2337-i3",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.00408,
+                "claude-sonnet-5": 0.293748
+              },
+              "costUSD": 0.297828,
+              "turns": 14,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "assault-scenes-player-states-shootingstate-gd-is-dead-code-r",
           "head": "assault/scenes/player/states/shooting_state.gd is dead code referenced by no scene",
           "body": "Found while working `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`, which had to\ndecide whether it counted as a spawn site.\n\n`assault/scenes/player/states/shooting_state.gd` instantiates `bullets/bullet.tscn` directly\n(around line 42) and is a legacy shooter — the real player scenes mount only\n`warhead_missile_shooting_state.gd`. A repo-wide grep found it referenced by **no** `.tscn`:\n`player_fighter.tscn` and `open_space/.../player_ship.tscn` both list the warhead state and not\nthis one.\n\nTwo reasons it is worth removing rather than leaving:\n- It is the one remaining place that spawns a player bullet **outside** `WeaponBehavior._launch()`,\n  so it does not get `Bullet.free_when_offscreen()` and would leak if ever wired up. That is the\n  known, accepted residual gap in the lifetime fix; deleting the file closes it outright.\n- `tests/integration/test_project_load_integrity.gd` compiles it on every gate run, so it costs\n  maintenance without earning anything.\n\nConfirm nothing references it (including by UID) before deleting, and check whether it has a\nsibling `.gd.uid`.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",
           "type": "feature",
-          "complexity": "medium",
+          "complexity": "small",
           "model": "sonnet",
           "dependsOn": [],
           "runs": []
