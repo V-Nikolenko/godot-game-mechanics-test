@@ -531,6 +531,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Found on 2026-09-06 while fixing the contact-hitbox transform bug (recorded as an explicit
       out-of-scope follow-up in that task's approved plan).
       -> [docs/plans/code-built-contact-hitboxes-are-typed-as-laser-damage-not-co](docs/plans/code-built-contact-hitboxes-are-typed-as-laser-damage-not-co)
+      1 run(s), $1.33; last on claude-sonnet-5
 
 - [ ] **Move code-built contact hitboxes into the scenes, as the asteroids already do** _(todo - feature, medium, sonnet)_
       Four scripts build a contact `HitBox` at runtime (`base_enemy.gd:49-53`,

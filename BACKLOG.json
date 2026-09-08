@@ -801,7 +801,24 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T08:24:47.726Z",
+              "run": "2026-09-08-1038-i7",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004089,
+                "claude-sonnet-5": 1.3306295000000001
+              },
+              "costUSD": 1.3347185000000001,
+              "turns": 19,
+              "subagents": 1,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "move-code-built-contact-hitboxes-into-the-scenes-as-the-aste",
