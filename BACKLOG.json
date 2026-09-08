@@ -873,6 +873,28 @@
               "outcome": "success",
               "gate": "pass",
               "commits": []
+            },
+            {
+              "commits": [
+                {
+                  "sha": "b9bd29b",
+                  "subject": "Move code-built contact hitboxes into the scenes"
+                }
+              ],
+              "at": "2026-09-08T15:51:36.808Z",
+              "run": "2026-09-08-1837-i1",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004363,
+                "claude-sonnet-5": 4.6236523000000025
+              },
+              "costUSD": 4.628015300000002,
+              "turns": 145,
+              "subagents": 1,
+              "outcome": "success",
+              "gate": "pass"
             }
           ]
         },
@@ -880,8 +902,8 @@
           "id": "wire-the-leak-grep-into-agent-verify-sh-the-agent-cannot-age",
           "head": "Wire the leak grep into /agent/verify.sh — the agent cannot, /agent is read-only",
           "body": "`/agent` is mounted **read-only** inside the dev container (`/dev/bcache0 on /agent type btrfs\n(ro,...)`), so the agent cannot add leak patterns to the gate itself — verified by an append,\nwhich failed with \"Read-only file system\".\n\nEverything else is in place. `scripts/check-test-leaks.sh` (new this cycle) runs gate step 3 with\nthe *exact* same arguments and additionally greps the output for\n`ObjectDB instances leaked|resources still in use|Resource still in use`, exiting 1 on a hit. It\nwas verified both ways: green on the current 305-test suite, and red (exit 1) with a deliberate\nstranding test dropped in.\n\nThe gate change is one line in step 3 of `/agent/verify.sh`, after the existing `failing` grep:\n\n```bash\nLEAK='ObjectDB instances leaked|resources still in use|Resource still in use'\ngrep -Eq \"$LEAK\" \"$LOG\" && fail \"the GUT run leaked objects at exit\"\n```\n\n⚠️ Apply it to **step 3 only**. Step 1, the headless `--import`, emits one benign\n`ObjectDB instances leaked` of its own that predates the test suite — adding the pattern to the\nshared `FATAL` regex would fail the gate on every run forever.",
-          "state": "todo",
-          "badge": null,
+          "state": "in_progress",
+          "badge": "stuck",
           "planDir": null,
           "kind": "impl",
           "type": "feature",
