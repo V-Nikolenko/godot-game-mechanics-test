@@ -908,17 +908,35 @@
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",
-          "model": "sonnet",
+          "model": "opus",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [],
+              "at": "2026-09-08T15:53:23.652Z",
+              "run": "2026-09-08-1837-i2",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004072,
+                "claude-sonnet-5": 0.3485952
+              },
+              "costUSD": 0.35266719999999996,
+              "turns": 14,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "freeing-leveldirector-mid-wait-still-strands-its-gdscriptfun",
           "head": "Freeing LevelDirector mid-wait still strands its GDScriptFunctionState",
           "body": "Follow-up to the SceneTreeTimer fix. `_wait_for_child_exit_or_timeout()` and `_wait_seconds()` no\nlonger create timers, so an *early return* leaves nothing behind — but a test (or a scene change)\nthat frees the director while `_wait_enemies_cleared()` is suspended still strands the coroutine\nitself. Measured with `--verbose` after the fix:\n\n```\nLeaked instance: GDScriptNativeClass / GDScript / GDScriptFunctionState\nResource still in use: res://assault/scenes/systems/level_director/level_director.gd (GDScript)\n```\n\nThree objects per abandonment. It is inherent to Godot: once the object is freed the function\nstate can never be resumed, so nothing inside the loop's `if not is_instance_valid(self): return`\nguard can help — that guard only runs if the coroutine gets one more frame first.\n\nA real fix means giving the director a cancel seam: suspend on a director-owned signal\n(`await _wait_tick`) fed from `get_tree().process_frame`, and have `_exit_tree()` set a\n`_cancelled` flag and emit `_wait_tick` once, which resumes every suspended wait *synchronously*\nwhile the object is still alive so each can return and release its state. That is a change to live\ngameplay code with re-entry cases to get right (`_enter_tree` must reset the flag and reconnect),\nso it wants its own plan and review rather than being folded into the timer fix.\n\nCost of not doing it: three leaked objects per level teardown, plus every test that ends mid-wait\nneeds the documented drain (`test_station_assault_section.gd` test 5). Bounded and small — this is\ntidiness, not a bug the player can feel.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
-          "planDir": null,
+          "planDir": "docs/plans/freeing-leveldirector-mid-wait-still-strands-its-gdscriptfun",
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",

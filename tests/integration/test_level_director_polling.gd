@@ -14,6 +14,15 @@
 ## polls with a 30 s fallback window. Measured on the pre-fix code that read as +101 live objects;
 ## post-fix it reads +1, against a per-frame drift of about +1. Do not lower `N` — the margin is
 ## the whole point.
+##
+## Tests 4-6 cover the follow-up leak: fixing the abandoned timer did not fix freeing the
+## DIRECTOR itself while one of its own coroutines is suspended. That strands the coroutine's
+## `GDScriptFunctionState` (and the `GDScript` resource it holds open) permanently — once the
+## object backing the coroutine is deallocated nothing can ever resume it, so no in-coroutine
+## guard can help. The fix is a director-owned cancel seam (`_wait_tick` + `_cancelled`,
+## `level_director.gd`): `_exit_tree()` sets `_cancelled` and re-emits `_wait_tick` once,
+## synchronously, while the object is still alive, so every suspended wait gets to run its
+## cleanup and return before deallocation.
 extends GutTest
 
 ## Enough polls that a one-object-per-call leak clears the engine's own object-count drift by an
@@ -93,4 +102,89 @@ func test_early_returning_polls_leave_nothing_ticking() -> void:
 		"%d polls must not leave ~%d objects alive; %d survived (pre-fix this was %d)"
 			% [N, N, leaked, N + 1])
 	assert_eq(_container.get_child_count(), 0, "every probe child should be gone")
+
+
+# ── 4-6. Freeing the director itself mid-wait ──────────────────────────────────
+#
+# The follow-up leak: nothing above frees the DIRECTOR while it is suspended. Doing that strands
+# the coroutine's GDScriptFunctionState forever — once the object backing it is deallocated,
+# nothing can ever call resume() on it again, so an early-return guard inside the coroutine never
+# gets the chance to run. Confirmed live in test_station_assault_section.gd, whose
+# test_section_does_not_advance_while_an_enemy_lives has to manually drain
+# _wait_enemies_cleared() before its own director teardown for exactly this reason.
+#
+# Performance.OBJECT_COUNT, used above for the timer leak, does NOT detect this one: a suspended
+# GDScriptFunctionState that can never resume does not grow the live object count once it exists,
+# so a before/after delta reads 0 whether the coroutine is stranded forever or cleaned up
+# immediately (confirmed empirically against the pre-fix code). The leak is only externally visible
+# at process exit, as `ObjectDB instances leaked` / `resources still in use` — which is what
+# scripts/check-test-leaks.sh greps for. So these tests instead prove the thing that actually
+# matters: that the coroutine resumes and RETURNS once the director is freed, by observing a flag
+# only the coroutine's own continuation can set.
+
+## Regression test for the cancel seam: _exit_tree() must resume a suspended
+## _wait_for_child_exit_or_timeout() call synchronously (via _wait_tick) and let it return, instead
+## of stranding it forever the moment the director is deallocated.
+func test_freeing_the_director_mid_wait_lets_the_coroutine_return() -> void:
+	var finished := [false]
+	var run := func() -> void:
+		await _director._wait_for_child_exit_or_timeout(_container, 30.0)
+		finished[0] = true
+	run.call()
+	await get_tree().process_frame
+	assert_false(finished[0], "sanity: must still be suspended before the director is freed")
+
+	## free(), not queue_free(): _exit_tree() must run synchronously within this same call, not
+	## after a deferred deallocation on some later idle frame.
+	_director.free()
+	await get_tree().process_frame
+
+	assert_true(finished[0],
+		"freeing the director mid-wait must let _wait_for_child_exit_or_timeout() return, not strand it")
+	assert_eq(_container.get_signal_connection_list("child_exiting_tree").size(), 0,
+		"the cancelled wait must still disconnect its child_exiting_tree listener on the way out")
+
+
+## Same regression, against the other wait helper — it has its own loop and its own cancellation
+## check, so a fix to one does not guarantee the other.
+func test_freeing_the_director_mid_wait_seconds_lets_the_coroutine_return() -> void:
+	var finished := [false]
+	var run := func() -> void:
+		await _director._wait_seconds(30.0)
+		finished[0] = true
+	run.call()
+	await get_tree().process_frame
+	assert_false(finished[0], "sanity: must still be suspended before the director is freed")
+
+	_director.free()
+	await get_tree().process_frame
+
+	assert_true(finished[0],
+		"freeing the director mid-wait must let _wait_seconds() return, not strand it")
+
+
+## Boundary: a wait that already ended normally, before the director is ever freed, must be
+## unaffected by the new `not _cancelled` loop term — it must still end on child_exiting_tree and
+## not regress into burning the fallback window.
+func test_a_wait_that_already_ended_is_unaffected_by_a_later_free() -> void:
+	var child := Node2D.new()
+	_container.add_child(child)
+
+	var start_ms := Time.get_ticks_msec()
+	child.queue_free()
+	await _director._wait_for_child_exit_or_timeout(_container, 30.0)
+	var elapsed_ms := Time.get_ticks_msec() - start_ms
+
+	assert_lt(elapsed_ms, 1000,
+		"child_exiting_tree must still end the wait immediately after the cancel seam was added — took %d ms"
+			% elapsed_ms)
+
+	## Let the frame that just resumed the wait above finish unwinding before freeing the director.
+	## The resume happened inside _wait_tick's own emit() (level_director.gd:52), so calling
+	## free() before that call returns would hit Godot's "Attempted to free a locked object" —
+	## true of any object mid-emission, not something this fix introduces, but easy to trip over
+	## in a test that awaits a director call and then immediately frees the director.
+	await get_tree().process_frame
+	_director.free()
+	await get_tree().process_frame
 

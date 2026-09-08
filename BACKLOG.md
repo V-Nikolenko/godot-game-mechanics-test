@@ -555,7 +555,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/move-code-built-contact-hitboxes-into-the-scenes-as-the-aste](docs/plans/move-code-built-contact-hitboxes-into-the-scenes-as-the-aste)
       2 run(s), $7.34; last on claude-sonnet-5
 
-- [ ] **Wire the leak grep into /agent/verify.sh — the agent cannot, /agent is read-only** _(in progress, stuck - feature, medium, sonnet)_
+- [ ] **Wire the leak grep into /agent/verify.sh — the agent cannot, /agent is read-only** _(in progress, stuck - feature, medium, opus)_
       `/agent` is mounted **read-only** inside the dev container (`/dev/bcache0 on /agent type btrfs
       (ro,...)`), so the agent cannot add leak patterns to the gate itself — verified by an append,
       which failed with "Read-only file system".
@@ -576,8 +576,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       ⚠️ Apply it to **step 3 only**. Step 1, the headless `--import`, emits one benign
       `ObjectDB instances leaked` of its own that predates the test suite — adding the pattern to the
       shared `FATAL` regex would fail the gate on every run forever.
+      1 run(s), $0.35; last on claude-sonnet-5
 
-- [ ] **Freeing LevelDirector mid-wait still strands its GDScriptFunctionState** _(todo - feature, medium, sonnet)_
+- [ ] **Freeing LevelDirector mid-wait still strands its GDScriptFunctionState** _(in progress - feature, medium, sonnet)_
       Follow-up to the SceneTreeTimer fix. `_wait_for_child_exit_or_timeout()` and `_wait_seconds()` no
       longer create timers, so an *early return* leaves nothing behind — but a test (or a scene change)
       that frees the director while `_wait_enemies_cleared()` is suspended still strands the coroutine
@@ -602,6 +603,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Cost of not doing it: three leaked objects per level teardown, plus every test that ends mid-wait
       needs the documented drain (`test_station_assault_section.gd` test 5). Bounded and small — this is
       tidiness, not a bug the player can feel.
+      -> [docs/plans/freeing-leveldirector-mid-wait-still-strands-its-gdscriptfun](docs/plans/freeing-leveldirector-mid-wait-still-strands-its-gdscriptfun)
 
 - [ ] **Decide whether the player's default gun should stop on its first damaging hit (PierceModule is currently a downgrade)** _(todo - feature, medium, sonnet)_
       **Split out of `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`, which fixed the

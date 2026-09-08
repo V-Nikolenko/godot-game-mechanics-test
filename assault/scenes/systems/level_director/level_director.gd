@@ -11,12 +11,46 @@ extends Node
 signal section_started(index: int, section_name: StringName)
 signal level_complete
 
+## Cancel seam for the three wait helpers below. Fed once per frame from
+## get_tree().process_frame while this node is in the tree (see _enter_tree()/_on_process_frame()),
+## and fired once more, synchronously, from _exit_tree() — see the note there for why that second
+## emission is what stops a suspended wait from leaking its GDScriptFunctionState.
+signal _wait_tick
+
 @export var background:   BackgroundController
 @export var wave_manager: WaveManager
 
 var _sections:        Array[LevelSection] = []
 var _current_index:   int   = -1
 var _section_elapsed: float = 0.0
+var _cancelled:        bool = false
+
+
+## Resets on every entry so a re-parent (not observed anywhere today, but cheap to make safe)
+## reconnects rather than leaving the seam dead.
+func _enter_tree() -> void:
+	_cancelled = false
+	if not get_tree().process_frame.is_connected(_on_process_frame):
+		get_tree().process_frame.connect(_on_process_frame)
+
+
+## Runs synchronously, before this node is deallocated (immediately for free(), at the end of the
+## current frame for queue_free()). Setting _cancelled first and THEN emitting _wait_tick means
+## every wait helper suspended on `await _wait_tick` resumes right here, while self is still a
+## valid object, sees _cancelled and returns — releasing its GDScriptFunctionState instead of
+## leaking it. Checking is_instance_valid(self) instead would not work: self reads valid for the
+## whole duration of this call, so that check would pass and the coroutine would await a tick that
+## will never come again, trading this leak for the same one one line later.
+func _exit_tree() -> void:
+	_cancelled = true
+	if get_tree().process_frame.is_connected(_on_process_frame):
+		get_tree().process_frame.disconnect(_on_process_frame)
+	_wait_tick.emit()
+
+
+func _on_process_frame() -> void:
+	_wait_tick.emit()
+
 
 func _process(delta: float) -> void:
 	if _current_index < 0 or _current_index >= _sections.size():
@@ -91,6 +125,13 @@ func _advance() -> void:
 ## fatal-error regex, so it leaked in silence. Wall-clock also agrees with `_wait_enemies_cleared()`
 ## below, whose own deadline has always been ticks-based — the two no longer disagree while
 ## `Engine.time_scale` is off 1.0 (trajectory_calc_module.gd:34).
+##
+## Awaits _wait_tick rather than get_tree().process_frame so that freeing this node mid-wait can
+## resume this coroutine from _exit_tree() instead of stranding it — see _exit_tree()'s comment.
+## The loop condition, not a post-await check, is what ends the wait on cancellation: by the time
+## _wait_tick's emission from _exit_tree() resumes this coroutine, self still reads as a valid
+## object (deallocation happens only after _exit_tree() returns), so an is_instance_valid(self)
+## check here would pass and re-await a tick that will never come again.
 func _wait_for_child_exit_or_timeout(container: Node, poll_seconds: float) -> void:
 	var exited := [false]
 	var on_exit := func(_n: Node) -> void:
@@ -98,10 +139,8 @@ func _wait_for_child_exit_or_timeout(container: Node, poll_seconds: float) -> vo
 	container.child_exiting_tree.connect(on_exit, CONNECT_ONE_SHOT)
 
 	var deadline_ms: int = Time.get_ticks_msec() + int(poll_seconds * 1000.0)
-	while not exited[0] and Time.get_ticks_msec() < deadline_ms:
-		await get_tree().process_frame
-		if not is_instance_valid(self):
-			return
+	while not exited[0] and Time.get_ticks_msec() < deadline_ms and not _cancelled:
+		await _wait_tick
 
 	if is_instance_valid(container) and container.child_exiting_tree.is_connected(on_exit):
 		container.child_exiting_tree.disconnect(on_exit)
@@ -109,12 +148,12 @@ func _wait_for_child_exit_or_timeout(container: Node, poll_seconds: float) -> vo
 
 ## Frame-polled sleep, for the same reason as the helper above: a SceneTreeTimer is stranded by
 ## anything that ends the tree inside the wait, and this one is only a settle before _advance().
+## See _wait_for_child_exit_or_timeout() for why this awaits _wait_tick and checks _cancelled
+## rather than get_tree().process_frame and is_instance_valid(self).
 func _wait_seconds(seconds: float) -> void:
 	var deadline_ms: int = Time.get_ticks_msec() + int(seconds * 1000.0)
-	while Time.get_ticks_msec() < deadline_ms:
-		await get_tree().process_frame
-		if not is_instance_valid(self):
-			return
+	while Time.get_ticks_msec() < deadline_ms and not _cancelled:
+		await _wait_tick
 
 
 func _wait_enemies_cleared() -> void:
@@ -149,7 +188,7 @@ func _wait_enemies_cleared() -> void:
 				child.queue_free()
 			break
 		await _wait_for_child_exit_or_timeout(container, 1.0)
-		if not is_instance_valid(self):
+		if _cancelled:
 			return
 
 	var elapsed_ms: int = Time.get_ticks_msec() - start_ms
@@ -157,7 +196,7 @@ func _wait_enemies_cleared() -> void:
 		elapsed_ms / 1000.0, container.get_child_count()
 	])
 	await _wait_seconds(0.2)
-	if not is_instance_valid(self):
+	if _cancelled:
 		return
 	_advance()
 
