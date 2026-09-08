@@ -463,6 +463,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Decide one way or the other: either finish the migration (build `AbilityState`, wire
       `reflect_state.gd` to `use_ability`) or delete the script and drop `&"reflect"` from
       `UpgradeState.ABILITY_IDS`. Right now it is a trap — it reads as a live feature.
+      1 run(s), $0.93; last on claude-sonnet-5
 
 - [ ] **`long_range.tres` is an orphaned weapon mode with no id in ALL_IDS.** _(todo - feature, medium, sonnet)_
       `assault/scenes/player/weapons/modes/` contains six `.tres` files but

@@ -708,7 +708,24 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T08:08:32.789Z",
+              "run": "2026-09-08-1038-i4",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004049,
+                "claude-sonnet-5": 0.9260405999999999
+              },
+              "costUSD": 0.9300895999999998,
+              "turns": 46,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "longrange-tres-is-an-orphaned-weapon-mode-with-no-id-in-alli",
