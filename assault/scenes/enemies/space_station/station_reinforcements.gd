@@ -273,16 +273,18 @@ func _container() -> Node:
 	return _station.get_parent()
 
 
-## The camera's fixed centre, or the constant it is pinned to when there is no camera.
+## The camera's CURRENT view centre, or the constant it is pinned to when there is no camera.
 ##
-## The fallback is not a fudge: `arena_camera.gd:5-6` pins `global_position` at exactly (640, 360)
-## and pans through `offset` only (`:8-12`), so the two agree. It exists so a cameraless test
+## `arena_camera.gd:5-6` pins `global_position` at exactly (640, 360) and pans through `offset`
+## only (`:8-12`), so a spawn meant to land just off the visible edge has to add both, or a panned
+## player can see it appear. The no-camera fallback is not a fudge: it equals `global_position`
+## with `offset` at rest (`Vector2.ZERO`), so the two agree. It exists so a cameraless test
 ## exercises the real positioning code instead of `WaveManager`'s return-early-with-no-camera path
 ## (`wave_manager.gd:160-162`).
 func _spawn_origin() -> Vector2:
 	var cam := get_viewport().get_camera_2d()
 	if cam != null:
-		return cam.global_position
+		return cam.global_position + cam.offset
 	return Vector2(ArenaCamera.SCREEN_W, ArenaCamera.SCREEN_H) * 0.5
 
 

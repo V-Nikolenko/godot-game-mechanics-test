@@ -122,7 +122,9 @@ func _spawn_bonus_drone(camera_offset: Vector2, angle: float) -> void:
 
 	var scene: PackedScene = preload("res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn")
 	var entity: Node = scene.instantiate()
-	(entity as Node2D).global_position = cam.global_position + camera_offset
+	# cam.global_position is pinned at the level origin forever (arena_camera.gd:5-12); all panning
+	# happens through cam.offset, so a spawn meant to land off the visible edge has to add both.
+	(entity as Node2D).global_position = cam.global_position + cam.offset + camera_offset
 	container.add_child(entity)
 
 	# Attach the same EnemyPathMover the wave manager would, so the drone

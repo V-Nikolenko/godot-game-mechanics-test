@@ -83,7 +83,9 @@ individual `delay:` float, so a V-formation of 5 can stagger its arrivals by
 ```gdscript
 func _spawn_ship(spawn: Dictionary) -> void:
     var cam  := get_viewport().get_camera_2d()
-    var pos  := cam.global_position + spawn.get("offset", Vector2.ZERO)
+    # cam.global_position is pinned at the level origin forever; all camera panning happens
+    # through cam.offset, so a spawn meant to land off the visible edge has to add both.
+    var pos  := cam.global_position + cam.offset + spawn.get("offset", Vector2.ZERO) * ArenaCamera.WORLD_SCALE
     var entity: Node = scene.instantiate()
     entity.global_position = pos
 

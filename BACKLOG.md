@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 19 open)
+## Code health backlog  (`code-health-backlog`, 18 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -367,7 +367,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/the-0-75-escape-combo-penalty-applies-to-ad-hoc-spawns-nobod](docs/plans/the-0-75-escape-combo-penalty-applies-to-ad-hoc-spawns-nobod)
       1 run(s), $2.79; last on claude-sonnet-5
 
-- [ ] **A spawn's off-screen margin cannot account for camera pan, project-wide.** _(todo - feature, medium, sonnet)_
+- [x] **A spawn's off-screen margin cannot account for camera pan, project-wide.** _(done - feature, medium, sonnet)_
       Every spawn in the game resolves its offset against `cam.global_position`, which
       `arena_camera.gd:5-12` pins at (640, 360) and never moves — panning happens through `offset`.
       So a player panned fully down (`V_LIMIT` is 380) can in principle watch a bottom-edge spawn
@@ -377,6 +377,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `wave_manager.gd:172` and every spawn offset in the game — not a 4b-sized change.
       
       Found on 2026-09-03 while building the station death sequence (EPIC sub-item 5).
+      -> [docs/plans/a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr](docs/plans/a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr)
 
 - [ ] ****`race_ship.gd:97-100` renders its death explosion at the container origin, not at the** _(todo - feature, medium, sonnet)_
       ship.** It does `get_parent().add_child(boom)` then `boom.global_position = global_position`

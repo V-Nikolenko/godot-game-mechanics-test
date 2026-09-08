@@ -107,10 +107,14 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
 - **`WaveManager`** is a time-driven spawner. Each wave has a `trigger` time (relative to
   section start) and a list of spawn descriptors. `load_section()` resets the clock and
   loads a new section's waves; `_process()` fires each wave when `_time_elapsed` reaches
-  its trigger. On spawn it instantiates the ship scene at a **camera-relative offset**
-  (scaled by `ArenaCamera.WORLD_SCALE`), emits `enemy_spawned(enemy, wave_index)` for
-  `ScoreTracker`, and — when the descriptor carries a `MovementResource` — attaches an
-  `EnemyPathMover`. It also expands `FormationResource`s into per-slot spawns.
+  its trigger. On spawn it instantiates the ship scene at an offset (scaled by
+  `ArenaCamera.WORLD_SCALE`) from the camera's **current view** — `cam.global_position +
+  cam.offset`, not just `global_position`, since `ArenaCamera` pans entirely through
+  `offset` while pinning `global_position` at the level origin — so a spawn meant to land
+  off the visible edge stays off the visible edge regardless of how far the player has
+  panned. Emits `enemy_spawned(enemy, wave_index)` for `ScoreTracker`, and — when the
+  descriptor carries a `MovementResource` — attaches an `EnemyPathMover`. It also expands
+  `FormationResource`s into per-slot spawns.
 - **`WaveBuilder`** is a fluent authoring DSL (`b.fighter().at(x,y).move(b.straight(...))
   .delay(...).shoot_forward()` …). It builds `SpawnEntryResource` / `WaveResource` /
   `LevelResource` objects and centralizes the enemy scene-path constants. Movement helpers

@@ -7,8 +7,12 @@
 ##   This keeps cam.global_position stable so:
 ##     • EnemyPathMover's cam-scroll delta (cam.global_position.y - initial)
 ##       is always 0 — enemies are never displaced by player panning.
-##     • WaveManager spawn positions (cam.global_position + entry_offset)
-##       always resolve from the fixed screen centre — no drift on delayed spawns.
+##   Spawn positions (WaveManager, StationReinforcements, Level1Director's bonus drones) resolve
+##   against cam.global_position + cam.offset — the camera's CURRENT view, not its resting
+##   position — so a delayed spawn lands relative to wherever the player has panned to by the time
+##   it fires, not the screen centre. (Prior to this, spawns resolved against global_position
+##   alone, which a panned player could see land on screen — docs/plans/
+##   a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr/.)
 ##
 ## Background anchoring:
 ##   Each background CanvasLayer is screen-fixed by default — its content

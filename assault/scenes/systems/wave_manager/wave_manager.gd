@@ -167,9 +167,12 @@ func _spawn_ship(spawn: Dictionary) -> void:
 	if not scene:
 		return
 
-	# Position: camera-relative offset. Use direct typed assignment — 'as Vector2' is
-	# invalid on built-in value types in GDScript 4 and would silently return null.
-	var spawn_pos: Vector2 = cam.global_position + spawn.get("offset", Vector2.ZERO) * ArenaCamera.WORLD_SCALE
+	# Position: offset from the camera's CURRENT view, not its resting position. `cam.global_position`
+	# is pinned at the level origin forever (arena_camera.gd:5-12) — all panning happens through
+	# `cam.offset` — so a spawn meant to land just off the visible edge has to add both, or a panned
+	# player can see it appear. Use direct typed assignment — 'as Vector2' is invalid on built-in
+	# value types in GDScript 4 and would silently return null.
+	var spawn_pos: Vector2 = cam.global_position + cam.offset + spawn.get("offset", Vector2.ZERO) * ArenaCamera.WORLD_SCALE
 
 	var entity: Node = scene.instantiate()
 	entity.global_position = spawn_pos

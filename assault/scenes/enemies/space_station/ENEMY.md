@@ -271,12 +271,20 @@ either would double it.
 
 Why these numbers:
 
-- **±440 / ±290 design.** The margin has to exceed half the largest sprite plus the camera's pan.
-  The largest reinforcement is the interceptor at **64×74** (its `Sprite2D` carries no `scale` —
-  the `1.8` in `interceptor.tscn` is on the sibling `CollisionShape2D`), so half-extent **37**.
-  Horizontal budget `640 + H_LIMIT 100 + 37 = 777` world px; vertical `360 + 37 = 397`, with
-  `V_LIMIT` deliberately excluded because every spawn in the game resolves against the camera's
-  *fixed* centre and not the panned view. ±440 gives 880 and ±290 gives 580.
+- **±440 / ±290 design.** The margin has to exceed half the largest sprite. The largest
+  reinforcement is the interceptor at **64×74** (its `Sprite2D` carries no `scale` — the `1.8` in
+  `interceptor.tscn` is on the sibling `CollisionShape2D`), so half-extent **37**. Horizontal
+  budget `640 + 37 = 677` world px; vertical `360 + 37 = 397`. ±440 gives 880 and ±290 gives 580 —
+  both comfortably clear.
+  **Camera-pan headroom (`H_LIMIT`/`V_LIMIT`) is no longer part of this budget.** It used to be,
+  because `_spawn_origin()` resolved against the camera's fixed centre while a player could pan up
+  to `V_LIMIT` away from it — this doc originally excluded `V_LIMIT` on purpose as a known,
+  project-wide gap (see `docs/plans/station-reinforcements/3-plan.md`'s "Camera pan can reveal a
+  spawn" risk). `docs/plans/a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr/` fixed
+  the underlying gap project-wide: every spawn site, including this one's `_spawn_origin()`, now
+  resolves against `cam.global_position + cam.offset` — the camera's *current* view — so a
+  reinforcement spawn moves with the pan instead of being exposed by it. The margin numbers above
+  are unchanged; they already had headroom to spare without the pan budget.
 - **Side lanes at design y = 20 / 80**, the vertical middle — not hugging a border, which creates
   traps the player cannot escape.
 - **Top squad enters at x = ±250 angled inward**, clearing the hull by 41.8 design units against a
