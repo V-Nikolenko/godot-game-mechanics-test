@@ -770,7 +770,24 @@
           "complexity": "small",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T08:17:38.552Z",
+              "run": "2026-09-08-1038-i6",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.00431,
+                "claude-sonnet-5": 0.6694254000000001
+              },
+              "costUSD": 0.6737354,
+              "turns": 24,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "code-built-contact-hitboxes-are-typed-as-laser-damage-not-co",

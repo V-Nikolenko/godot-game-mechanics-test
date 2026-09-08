@@ -507,6 +507,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
          file that declares a `uid://` in a `gd_scene` / `gd_resource` header regardless of extension,
          or simply fail on tracked editor-scratch files by name. Widening the walk is the version that
          catches the next variant rather than this instance.
+      1 run(s), $0.67; last on claude-sonnet-5
 
 - [ ] **Code-built contact hitboxes are typed as LASER damage, not CONTACT** _(todo - feature, medium, sonnet)_
       Every code-built contact `HitBox` leaves `damage_type` at the `HitBox.DamageType.LASER` default.
