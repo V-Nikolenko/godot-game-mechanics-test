@@ -400,6 +400,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       step emits none. Harmless today (the gate does not match on it), but it is noise that will
       mask a real leak if one ever appears in step 1, and it costs time to re-diagnose. Worth one
       cycle to find what the importer is holding.
+      1 run(s), $0.87; last on claude-sonnet-5
 
 - [ ] **`ExplosionEffect`'s container resolution is a footgun worth a guard.** _(todo - feature, medium, sonnet)_
       `explode()` resolves

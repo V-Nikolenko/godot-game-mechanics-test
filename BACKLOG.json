@@ -542,7 +542,24 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "at": "2026-09-08T03:43:30.558Z",
+              "run": "2026-09-08-0538-i7",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003864,
+                "claude-sonnet-5": 0.8679467999999999
+              },
+              "costUSD": 0.8718107999999999,
+              "turns": 41,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "explosioneffect-s-container-resolution-is-a-footgun-worth-a-",
