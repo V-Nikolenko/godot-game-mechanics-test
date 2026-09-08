@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 17 open)
+## Code health backlog  (`code-health-backlog`, 16 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -392,7 +392,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       behaviour, so nothing will fight the change.
       1 run(s), $0.52; last on claude-sonnet-5
 
-- [ ] **The gate's step 1 (`godot --headless --import`) leaks ObjectDB instances.** _(todo - feature, medium, sonnet)_
+- [x] **The gate's step 1 (`godot --headless --import`) leaks ObjectDB instances.** _(done - feature, medium, sonnet)_
       It prints
       `WARNING: ObjectDB instances leaked at exit` plus a few RID-allocation errors on every run.
       Pre-existing and **not** caused by the test suite — verified by running the import against a

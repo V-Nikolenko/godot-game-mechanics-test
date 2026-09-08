@@ -72,7 +72,13 @@ func _enter_tree():
 	# UPDATE:
 	# I added it back in when doing the window stuff.  Starting in a window
 	# made it angry (don't remember how) until I added it back in.
-	await get_tree().create_timer(1).timeout
+	#
+	# LOCAL PATCH: skip under --headless (see LOCAL_PATCHES.md). There is no window or
+	# shortcut button to race against in that mode, and `--headless --import`/`--quit` exit
+	# before the main loop ever processes a frame, so the SceneTreeTimer this creates never
+	# fires - the coroutine still suspended on it leaks at engine shutdown every run.
+	if not GutUtils.is_headless():
+		await get_tree().create_timer(1).timeout
 	# ---
 
 	# Kick off a download of the remote versions file if it's been more than

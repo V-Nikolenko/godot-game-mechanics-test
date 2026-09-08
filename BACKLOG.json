@@ -534,7 +534,7 @@
           "id": "the-gate-s-step-1-godot-headless-import-leaks-objectdb-insta",
           "head": "The gate's step 1 (`godot --headless --import`) leaks ObjectDB instances.",
           "body": "It prints\n`WARNING: ObjectDB instances leaked at exit` plus a few RID-allocation errors on every run.\nPre-existing and **not** caused by the test suite — verified by running the import against a\nstashed working tree: baseline and current both emit exactly one occurrence, while the GUT\nstep emits none. Harmless today (the gate does not match on it), but it is noise that will\nmask a real leak if one ever appears in step 1, and it costs time to re-diagnose. Worth one\ncycle to find what the importer is holding.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",
