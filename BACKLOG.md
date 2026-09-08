@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 23 open)
+## Code health backlog  (`code-health-backlog`, 22 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -297,7 +297,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-02 while implementing the station laser phase (EPIC sub-item 3).
 
-- [ ] **`ExplosionEffect` orphans its particles onto whatever the dying entity's parent is.** _(in progress - feature, medium, sonnet)_
+- [x] **`ExplosionEffect` orphans its particles onto whatever the dying entity's parent is.** _(done - feature, medium, sonnet)_
       `global/components/explosion_effect.gd:28-52` adds the `CPUParticles2D` to
       `actor.get_parent()` and relies on `p.finished.connect(p.queue_free)` to clean up ~1 s later.
       In-game that parent is `WaveManager.enemy_container`, so it is harmless. In a test it is

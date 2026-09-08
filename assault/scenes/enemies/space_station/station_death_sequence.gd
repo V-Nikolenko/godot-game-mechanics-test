@@ -166,12 +166,13 @@ func _on_death_started() -> void:
 
 	## The ExplosionEffect is a child of the STATION, never of this node.
 	##
-	## `explosion_effect.gd:28` reads `actor = get_parent()` and `:31` reads
-	## `container = actor.get_parent()`. Parented here, that chain is one hop short: `actor` would
-	## be this node and `container` would be the station, so every blast would land INSIDE the
-	## hull — freed with the wreck, invisible to the container `_wait_enemies_cleared()` polls,
-	## and rotating with the spin applied below. `space_station.tscn` warns about that same
-	## hazard twice, for BulletPool and for StationReinforcements.
+	## `explosion_effect.gd`'s `explode()` resolves `actor` by walking up from its parent to the
+	## nearest Node2D, and defaults `container` to `actor.get_parent()`. This node (DeathSequence)
+	## is itself a Node2D, so parenting `_fx` here instead would resolve `actor` to THIS node on
+	## the very first hop — the walk does not help — and `container` to the station, so every
+	## blast would land INSIDE the hull — freed with the wreck, invisible to the container
+	## `_wait_enemies_cleared()` polls, and rotating with the spin applied below. `space_station.tscn`
+	## warns about that same hazard twice, for BulletPool and for StationReinforcements.
 	##
 	## Added HERE rather than in _ready() because `Node::_propagate_ready()` marks the parent
 	## blocked while it readies its children, so `_station.add_child()` from our _ready() would

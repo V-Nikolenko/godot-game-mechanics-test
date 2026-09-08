@@ -117,6 +117,12 @@ func test_a_race_wall_under_the_real_track_offset_explodes_at_the_wall() -> void
 	if found.size() == 1:
 		assert_almost_eq((found[0] as CPUParticles2D).global_position, expected, Vector2(0.5, 0.5))
 
+	## race_wall.gd:49 awaits a 0.7s SceneTreeTimer before its own queue_free(). If the test
+	## returns first, add_child_autofree frees `track` (and the wall with it) while that
+	## coroutine is still suspended, stranding the timer — the trap tests/README.md documents
+	## for LevelDirector, here on RaceWall's own death cleanup.
+	await wait_seconds(0.75)
+
 
 ## Defect 2: a hazard-eliminated racer used to blast at the world origin because the call site
 ## set the effect's own (parentless, hence local-only) position instead of letting the entity

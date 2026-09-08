@@ -548,21 +548,25 @@ Two things that file had to work around, both worth knowing:
   Overriding the **`LaserPhase` node's** own fields is still the recommended way to shorten the
   laser timings — not for safety now, but because those fields are the node's tunable surface and
   its no-config fallback.
-- **`ExplosionEffect.explode()` parents its `CPUParticles2D` to `actor.get_parent()`** and lets it
-  self-free on `finished` ~1 s later. A station added straight to the test script therefore leaves
-  particles behind as unfreed children when the test that kills the core returns
-  (`GUT WARNING: Test script has 2 unfreed children`). Parent entities that will die to a
-  container `Node2D` that `add_child_autofree` owns — which is also how they are really parented,
-  under `WaveManager.enemy_container`.
+- **`ExplosionEffect.explode()` parents its `CPUParticles2D` to the actor's parent by default**
+  (`global/components/explosion_effect.gd`) and lets it self-free on `finished` ~1 s later. A
+  station added straight to the test script therefore leaves particles behind as unfreed children
+  when the test that kills the core returns (`GUT WARNING: Test script has 2 unfreed children`).
+  Parent entities that will die to a container `Node2D` that `add_child_autofree` owns — which is
+  also how they are really parented, under `WaveManager.enemy_container`.
 
-  **The same rule bites one level down, and cost a whole gate cycle.** For a `StationTurret` the
-  "parent" `ExplosionEffect` writes into is the station's `$Turrets` node, so from the first turret
-  kill onward `$Turrets.get_children()` also contains `CPUParticles2D`. A test helper doing a raw
-  `get_children()` then hands back a particle node, `child as StationTurret` yields `null`, and the
-  next method call fails with `Invalid call. Nonexistent function 'is_alive' in base 'Nil'` — an
-  *Unexpected Error*, so GUT reds the test with no failed assertion to point at.
-  **Always filter a container's children by type before casting.** `SpaceStation._turrets()` does,
-  which is why production code never hit this.
+  **The same rule used to bite one level down, and cost a whole gate cycle** (fixed by
+  `docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin/`). A `StationTurret`
+  used to leave the default in place, so the "parent" `ExplosionEffect` wrote into was the
+  station's `$Turrets` node, and from the first turret kill onward `$Turrets.get_children()` also
+  contained `CPUParticles2D`. A test helper doing a raw `get_children()` then handed back a
+  particle node, `child as StationTurret` yielded `null`, and the next method call failed with
+  `Invalid call. Nonexistent function 'is_alive' in base 'Nil'` — an *Unexpected Error*, so GUT
+  reds the test with no failed assertion to point at. `station_turret.gd`'s `_destroy()` now
+  passes the station's own parent as an **explicit `container`** argument, so a destroyed turret's
+  blast survives outside the hull and never lands in `$Turrets` in the first place — but
+  **always filter a container's children by type before casting** regardless.
+  `SpaceStation._turrets()` does, which is why production code never hit this even before the fix.
 - **A beam's full lifetime is longer than it looks.** At `warn 0.2 / active 0.3` it is ~1.9 s, not
   0.5: `warn` + a ~0.56 s `laser_increase` charge-up + `active` + a 0.84 s dissolve. Any test
   volley interval must exceed it, or a second volley spawns while the first is still dissolving and

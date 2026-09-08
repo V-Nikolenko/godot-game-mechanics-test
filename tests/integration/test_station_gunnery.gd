@@ -55,11 +55,11 @@ func _add_player(at: Vector2) -> Node2D:
 	return _player
 
 
-## Filtered, never a raw `get_children()`: a destroyed turret's `ExplosionEffect` parents its
-## CPUParticles2D to `actor.get_parent()`, and for a turret that IS the `Turrets` node. So from
-## the first kill onward the container also holds particle nodes, and in an unfiltered list every
-## `child as StationTurret` cast on one of those returns null. Same filter `SpaceStation._turrets()`
-## applies, which is why the gunnery's own `_live_turrets()` was never affected.
+## Filtered, never a raw `get_children()`, on general principle: `station_turret.gd`'s `_destroy()`
+## passes the station's own parent as an explicit `container` to `ExplosionEffect.explode()`, so a
+## destroyed turret's blast lands outside the hull rather than in `Turrets` — but a helper reading
+## this node should not depend on that staying true. Same filter `SpaceStation._turrets()` applies,
+## which is why the gunnery's own `_live_turrets()` was never affected by the bug this once caused.
 func _turrets() -> Array[StationTurret]:
 	var out: Array[StationTurret] = []
 	for child in _station.get_node("Turrets").get_children():
