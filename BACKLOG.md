@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 7 open)
+## Code health backlog  (`code-health-backlog`, 6 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -643,8 +643,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       **Not in scope here:** the leak itself, which is fixed —
       `WeaponBehavior._launch()` now calls `Bullet.free_when_offscreen()` at all four spawn sites.
       -> [docs/plans/decide-whether-the-player-s-default-gun-should-stop-on-its-f](docs/plans/decide-whether-the-player-s-default-gun-should-stop-on-its-f)
+      1 run(s), $4.51; last on claude-sonnet-5
 
-- [ ] **Five weapon-mode .tres files still set homing_* keys that WeaponModeResource no longer declares** _(todo - feature, medium, sonnet)_
+- [x] **Five weapon-mode .tres files still set homing_* keys that WeaponModeResource no longer declares** _(done - feature, small, sonnet)_
       Found while working `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`.
       
       All five bullet-firing weapon modes — `default.tres`, `gatling.tres`, `long_range.tres`,

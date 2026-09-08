@@ -15,6 +15,4 @@ damage = 25
 heat_per_shot = 0.5
 pellet_count = 5
 pellet_spread_deg = 30.0
-homing_turn_rate_deg_per_sec = 90.0
-homing_lifetime_sec = 1.6
 beam_dps = 30.0

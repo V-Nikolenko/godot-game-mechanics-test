@@ -996,18 +996,41 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "2de8a69",
+                  "subject": "Make the default gun stop on its first damaging hit; PierceModule is now a real upgrade"
+                }
+              ],
+              "at": "2026-09-08T21:00:09.153Z",
+              "run": "2026-09-08-2337-i2",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004483,
+                "claude-sonnet-5": 4.5068681999999995
+              },
+              "costUSD": 4.5113512,
+              "turns": 49,
+              "subagents": 1,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "five-weapon-mode-tres-files-still-set-homing-keys-that-weapo",
           "head": "Five weapon-mode .tres files still set homing_* keys that WeaponModeResource no longer declares",
           "body": "Found while working `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`.\n\nAll five bullet-firing weapon modes — `default.tres`, `gatling.tres`, `long_range.tres`,\n`spread.tres`, `sniper_shot.tres` in `assault/scenes/player/weapons/modes/` — end with:\n\n```\nhoming_turn_rate_deg_per_sec = 90.0\nhoming_lifetime_sec = 1.6\n```\n\n`assault/scenes/player/weapons/weapon_mode.gd` declares neither property. They are leftovers from\nthe `primary_homing/` projectile directory, which no longer exists (`ls\nassault/scenes/projectiles/` → `bullets enemy_bullet enemy_bullets missiles piercing_beam`); the\ndocs reference to it was removed in that same task.\n\nGodot silently ignores unknown keys when loading a `.tres`, so nothing is broken today — but they\nread as live tuning knobs to anyone opening the file, and someone will eventually \"fix\" a homing\nbug by editing a number that does nothing. Delete the two lines from each of the five files.\n\nSmall; verify with `bash /agent/verify.sh` (`test_project_load_integrity.gd` already loads every\n`.tres` and asserts the engine logs nothing).",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",
           "type": "feature",
-          "complexity": "medium",
+          "complexity": "small",
           "model": "sonnet",
           "dependsOn": [],
           "runs": []
