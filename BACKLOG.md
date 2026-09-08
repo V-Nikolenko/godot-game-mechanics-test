@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 21 open)
+## Code health backlog  (`code-health-backlog`, 20 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -333,7 +333,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Found on 2026-09-03 while implementing station reinforcements (EPIC sub-item 4b).
       1 run(s), $0.58; last on claude-sonnet-5
 
-- [ ] **`ram_ship` cannot be hit by the player's primary weapon, and its config HP is dead code.** _(todo - feature, medium, sonnet)_
+- [x] **`ram_ship` cannot be hit by the player's primary weapon, and its config HP is dead code.** _(done - feature, medium, sonnet)_
       `assault/scenes/enemies/ram_ship/ram_ship.gd:19` narrows the HurtBox mask to
       `33` (`# missiles only (32 + 1); bullets ignored`) after `BaseEnemy._ready()` has set the
       normal `97 | 1024`. The player's bullet is `collision_layer = 64`
@@ -349,6 +349,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       be applied or deleted. 4b swapped its top squad to `fighter` to avoid the question, and
       `tests/integration/test_station_reinforcements.gd` now asserts every squad ship is
       bullet-killable so the class of mistake cannot recur silently.
+      -> [docs/plans/ramship-cannot-be-hit-by-the-player-s-primary-weapon-and-its](docs/plans/ramship-cannot-be-hit-by-the-player-s-primary-weapon-and-its)
 
 - [ ] **The 0.75× escape-combo penalty applies to ad-hoc spawns nobody expects to kill.** _(todo - feature, medium, sonnet)_
       `assault/scenes/systems/score_tracker/score_tracker.gd:211` multiplies the combo by

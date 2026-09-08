@@ -15,6 +15,8 @@ func _ready() -> void:
 
 	if config:
 		speed = config.movement_speed
+		health.max_health = config.max_health
+		health.current_health = config.max_health
 
 	hurt_box.collision_mask = 33  # missiles only (32 + 1); bullets ignored
 	for child in get_children():

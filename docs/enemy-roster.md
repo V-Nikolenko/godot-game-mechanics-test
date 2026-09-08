@@ -124,7 +124,7 @@ b.drone().at(-150, 400).move(b.straight(185, PI))
 **Scene:** `ram_ship.tscn`  
 **Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
 **Shoots:** No — high collision damage.  
-**HP:** Medium  
+**HP:** Bullet-proof until hit by a missile, then 100 HP (two bullets)  
 **Score:** Medium
 
 **Config fields** (`RamShipConfig`):
