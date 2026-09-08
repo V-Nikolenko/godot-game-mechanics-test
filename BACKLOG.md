@@ -318,7 +318,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       is now written up in `tests/README.md`. This is the second workaround for the same component;
       an explicit container argument on `explode()` would have prevented both.
       -> [docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin](docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin)
-      4 run(s), $4.55; last on claude-sonnet-5
+      2 run(s), $4.55; last on claude-sonnet-5
 
 - [x] **The station's collision-layer coverage gap is now only half open.** _(done - feature, medium, sonnet)_
       `assault/scenes/enemies/space_station/ENEMY.md` records that
@@ -413,7 +413,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-03 while fixing the shared-component signal/logging defects.
       -> [docs/plans/explosioneffect-s-container-resolution-is-a-footgun-worth-a-](docs/plans/explosioneffect-s-container-resolution-is-a-footgun-worth-a-)
-      4 run(s), $1.33; last on claude-sonnet-5
+      2 run(s), $1.33; last on claude-sonnet-5
 
 - [x] ****Three more files print unconditionally on hot paths — same defect as the one just fixed,** _(done - feature, medium, sonnet)_
       out of the item's stated scope.** `global/ui/dialog_system/ui/dialog_box.gd` has **11**
@@ -553,7 +553,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Found on 2026-09-06; recorded as an explicit out-of-scope follow-up (rejected alternative 3) in
       the approved plan for the contact-hitbox transform fix.
       -> [docs/plans/move-code-built-contact-hitboxes-into-the-scenes-as-the-aste](docs/plans/move-code-built-contact-hitboxes-into-the-scenes-as-the-aste)
-      3 run(s), $2.71; last on ?
+      1 run(s), $2.71; last on claude-sonnet-5
 
 - [ ] **Wire the leak grep into /agent/verify.sh — the agent cannot, /agent is read-only** _(todo - feature, medium, sonnet)_
       `/agent` is mounted **read-only** inside the dev container (`/dev/bcache0 on /agent type btrfs

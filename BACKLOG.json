@@ -332,32 +332,6 @@
               "gate": "pass"
             },
             {
-              "at": "2026-09-07T21:51:28.943Z",
-              "run": "2026-09-08-0038-i2",
-              "requested": "sonnet",
-              "primary": null,
-              "fallbackUsed": false,
-              "models": {},
-              "costUSD": 0,
-              "turns": 1,
-              "subagents": 0,
-              "outcome": "success",
-              "gate": "pass"
-            },
-            {
-              "at": "2026-09-07T21:51:58.098Z",
-              "run": "2026-09-08-0038-i3",
-              "requested": "sonnet",
-              "primary": null,
-              "fallbackUsed": false,
-              "models": {},
-              "costUSD": 0,
-              "turns": 1,
-              "subagents": 0,
-              "outcome": "success",
-              "gate": "pass"
-            },
-            {
               "at": "2026-09-08T02:47:02.835Z",
               "run": "2026-09-08-0538-i1",
               "requested": "sonnet",
@@ -586,32 +560,6 @@
               },
               "costUSD": 0.4881112000000001,
               "turns": 21,
-              "subagents": 0,
-              "outcome": "success",
-              "gate": "pass"
-            },
-            {
-              "at": "2026-09-08T03:47:21.859Z",
-              "run": "2026-09-08-0538-i9",
-              "requested": "sonnet",
-              "primary": null,
-              "fallbackUsed": false,
-              "models": {},
-              "costUSD": 0,
-              "turns": 1,
-              "subagents": 0,
-              "outcome": "success",
-              "gate": "pass"
-            },
-            {
-              "at": "2026-09-08T03:47:51.819Z",
-              "run": "2026-09-08-0538-i10",
-              "requested": "sonnet",
-              "primary": null,
-              "fallbackUsed": false,
-              "models": {},
-              "costUSD": 0,
-              "turns": 1,
               "subagents": 0,
               "outcome": "success",
               "gate": "pass"
@@ -846,32 +794,6 @@
               "costUSD": 2.7088740000000002,
               "turns": 37,
               "subagents": 1,
-              "outcome": "success",
-              "gate": "pass"
-            },
-            {
-              "at": "2026-09-08T08:40:56.839Z",
-              "run": "2026-09-08-1038-i9",
-              "requested": "sonnet",
-              "primary": null,
-              "fallbackUsed": false,
-              "models": {},
-              "costUSD": 0,
-              "turns": 1,
-              "subagents": 0,
-              "outcome": "success",
-              "gate": "pass"
-            },
-            {
-              "at": "2026-09-08T08:41:27.206Z",
-              "run": "2026-09-08-1038-i10",
-              "requested": "sonnet",
-              "primary": null,
-              "fallbackUsed": false,
-              "models": {},
-              "costUSD": 0,
-              "turns": 1,
-              "subagents": 0,
               "outcome": "success",
               "gate": "pass"
             }

@@ -368,6 +368,20 @@ switch (cmd) {
     for (const id of Object.keys(usage)) models[id] = Number(usage[id].costUSD) || 0;
     const primary = Object.keys(models).sort((a, b) => models[b] - models[a])[0] || null;
 
+    // A session that never ran is not a run. The case this actually hits is the
+    // 5-hour usage limit: Claude answers with subtype "success" but is_error
+    // true, a 429, one turn and no model usage at all. Recording it wrote rows
+    // claiming a model of "?" at $0, and made the harness commit a file whose
+    // only change was that row - which is where the contentless `agent: cycle`
+    // commits came from.
+    if (!primary) {
+      const why = result.is_error
+        ? (String(result.result || "").split("\n")[0] || ("api error " + (result.api_error_status || "?")))
+        : "the stream reports no model usage";
+      console.log("skipped: no model actually ran - " + why);
+      break;
+    }
+
     const record = {
       run: flags.run || null,
       requested: flags.requested || null,
@@ -376,7 +390,11 @@ switch (cmd) {
       costUSD: Number(result.total_cost_usd) || 0,
       turns: Number(result.num_turns) || 0,
       subagents: (result.subagent_stats && Number(result.subagent_stats.spawned)) || 0,
-      outcome: result.subtype || null,
+      // `subtype` says "success" even for a run that died on an API error, so it
+      // cannot be the whole story on its own.
+      outcome: result.is_error
+        ? ("error" + (result.api_error_status ? " " + result.api_error_status : ""))
+        : (result.subtype || null),
       gate: flags.gate || null,
     };
 
