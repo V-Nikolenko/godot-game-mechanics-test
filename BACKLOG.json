@@ -615,6 +615,22 @@
               "subagents": 0,
               "outcome": "success",
               "gate": "pass"
+            },
+            {
+              "at": "2026-09-08T07:43:43.658Z",
+              "run": "2026-09-08-1038-i1",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003883,
+                "claude-sonnet-5": 0.8341426000000002
+              },
+              "costUSD": 0.8380256,
+              "turns": 29,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
             }
           ]
         },

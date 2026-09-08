@@ -413,7 +413,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Found on 2026-09-03 while fixing the shared-component signal/logging defects.
       -> [docs/plans/explosioneffect-s-container-resolution-is-a-footgun-worth-a-](docs/plans/explosioneffect-s-container-resolution-is-a-footgun-worth-a-)
-      3 run(s), $0.49; last on ?
+      4 run(s), $1.33; last on claude-sonnet-5
 
 - [ ] ****Three more files print unconditionally on hot paths — same defect as the one just fixed,** _(todo - feature, medium, sonnet)_
       out of the item's stated scope.** `global/ui/dialog_system/ui/dialog_box.gd` has **11**
