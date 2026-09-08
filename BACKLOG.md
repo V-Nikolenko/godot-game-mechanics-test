@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 9 open)
+## Code health backlog  (`code-health-backlog`, 8 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -578,7 +578,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       shared `FATAL` regex would fail the gate on every run forever.
       1 run(s), $0.35; last on claude-sonnet-5
 
-- [ ] **Freeing LevelDirector mid-wait still strands its GDScriptFunctionState** _(in progress - feature, medium, sonnet)_
+- [x] **Freeing LevelDirector mid-wait still strands its GDScriptFunctionState** _(done - feature, medium, sonnet)_
       Follow-up to the SceneTreeTimer fix. `_wait_for_child_exit_or_timeout()` and `_wait_seconds()` no
       longer create timers, so an *early return* leaves nothing behind — but a test (or a scene change)
       that frees the director while `_wait_enemies_cleared()` is suspended still strands the coroutine
@@ -604,6 +604,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       needs the documented drain (`test_station_assault_section.gd` test 5). Bounded and small — this is
       tidiness, not a bug the player can feel.
       -> [docs/plans/freeing-leveldirector-mid-wait-still-strands-its-gdscriptfun](docs/plans/freeing-leveldirector-mid-wait-still-strands-its-gdscriptfun)
+      1 run(s), $2.32; last on claude-sonnet-5
 
 - [ ] **Decide whether the player's default gun should stop on its first damaging hit (PierceModule is currently a downgrade)** _(todo - feature, medium, sonnet)_
       **Split out of `two-consecutive-reviews-asserted-that-a-player-bullet-dies-o`, which fixed the
