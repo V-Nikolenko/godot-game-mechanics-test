@@ -903,8 +903,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       withheld but counted, the ratio is correct, and the gate is green. Note `ModuleList.MAX_ITEMS = 8`
       — a log catalogue will outgrow one screen, so scrolling or paging is in scope for this task.
       -> [docs/plans/the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve](docs/plans/the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve)
+      1 run(s), $4.80; last on claude-sonnet-5
 
-- [ ] **Log records can be placed in assault and infiltration missions, not just the hub** _(todo - feature, medium, sonnet)_
+- [ ] **Log records can be placed in assault and infiltration missions, not just the hub** _(in progress - feature, medium, sonnet)_
       **Player outcome:** the same log record I recognise from open space can be tucked into a
       wave gap in an assault run or behind a crate on a ground mission, and it counts the same way.
       
@@ -929,6 +930,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       **Done when:** a log placed in an assault level and one placed in the infiltration test scene are
       both collectable, and a test pins the replay/restart behaviour. This task may well need splitting
       once its plan is written — if so, split it rather than half-finishing both modes.
+      -> [docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio](docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio)
 
 - [ ] **Test logs on the open-space map prove both log types work end to end** _(todo - feature, medium, sonnet)_
       **Player outcome (and the user's explicit ask):** boot the game, fly around the sector hub,
