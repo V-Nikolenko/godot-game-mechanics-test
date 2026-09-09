@@ -828,7 +828,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m](docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m)
       1 run(s), $3.03; last on claude-sonnet-5
 
-- [ ] **Flying into a log record in open space picks it up and tells me what I found** _(in progress - feature, medium, sonnet)_
+- [ ] **Flying into a log record in open space picks it up and tells me what I found** _(in progress, stuck - feature, medium, sonnet)_
       **Player outcome:** a log record floating in the sector hub is visually readable as
       "something to collect", flying into it picks it up, and a one-line notification tells me what I
       just recovered without stopping the ship.
@@ -848,6 +848,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       nine, collecting it advances `LogState`, collecting it twice in one run cannot double-count, and
       the notification text names the entry. Test in `tests/unit/`.
       -> [docs/plans/flying-into-a-log-record-in-open-space-picks-it-up-and-tells](docs/plans/flying-into-a-log-record-in-open-space-picks-it-up-and-tells)
+      1 run(s), $0.93; last on claude-sonnet-5
 
 - [ ] **Reading a data tablet by a body doesn't interrupt the mission, and I can read it again** _(todo - feature, medium, sonnet)_
       **Player outcome:** I walk or fly up to a tablet, a terminal, or a scrap of hull, a prompt

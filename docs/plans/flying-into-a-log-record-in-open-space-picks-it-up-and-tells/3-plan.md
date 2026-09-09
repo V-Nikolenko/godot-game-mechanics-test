@@ -115,15 +115,22 @@ Cases:
    (`add_child_autofree`), call `_on_body_entered(player_stub)` (the real `PickupBase` signal
    handler, not `_collect` directly) once, and assert the pickup is queued for deletion
    (`is_queued_for_deletion()`) and `LogState.collected_count() == 1` — proves the wiring through
-   `PickupBase`, not just the overridden hooks in isolation.
+   `PickupBase`, not just the overridden hooks in isolation. Immediately after, call
+   `DialogPlayer.skip_dialog()` and assert `DialogPlayer.is_active == false`, so the
+   `await _box.line_finished` inside `DialogPlayer.play()` actually resolves before the test ends
+   instead of leaving a permanently-suspended coroutine.
 
 ## Risks
 
-- The live `DialogPlayer` autoload will start an async `play()` when `_on_body_entered` runs
-  (test case 4) — it does not need to be awaited to completion for the test's assertions, since
-  those only check `LogState` state and the pickup's own queued-for-deletion status, matching how
-  `test_dialog_player.gd` and `test_weapon_unlock_sources.gd` interact with `DialogPlayer` without
-  driving a full typewriter run to completion.
+- The live `DialogPlayer` autoload starts an async `play()` when `_on_body_entered` runs (test
+  case 4), and its non-auto-mode branch awaits `_box.line_finished`, which nothing but player
+  input, `DialogBox.advance()`/`close_now()`, or `DialogPlayer.skip_dialog()` ever emits. Case 4
+  must call `DialogPlayer.skip_dialog()` before the test ends to resolve that await — otherwise
+  it leaves a suspended `GDScriptFunctionState`, the same leak class `tests/README.md` and
+  `scripts/check-test-leaks.sh` document for `LevelDirector` (invisible to the gate's `FATAL`
+  regex, reported only at process exit) and leaves `DialogPlayer.is_active` stuck `true` for the
+  rest of the suite. Run `scripts/check-test-leaks.sh` once this test is written, per CLAUDE.md's
+  instruction to run it "after touching anything that awaits."
 
 ## Out of scope
 
