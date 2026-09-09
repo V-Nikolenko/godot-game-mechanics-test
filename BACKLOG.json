@@ -1277,15 +1277,38 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "943bada",
+                  "subject": "Add LogState: persistent lore-log store with a derived total"
+                }
+              ],
+              "at": "2026-09-09T02:13:03.483Z",
+              "run": "2026-09-09-0437-i2",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004345,
+                "claude-sonnet-5": 3.0294461999999998
+              },
+              "costUSD": 3.0337912,
+              "turns": 50,
+              "subagents": 1,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "flying-into-a-log-record-in-open-space-picks-it-up-and-tells",
           "head": "Flying into a log record in open space picks it up and tells me what I found",
           "body": "**Player outcome:** a log record floating in the sector hub is visually readable as\n\"something to collect\", flying into it picks it up, and a one-line notification tells me what I\njust recovered without stopping the ship.\n\n**Reuse — this should be a small script:** `PickupBase` (`global/pickups/pickup_base.gd`) already\ndoes the whole dance: `body_entered` → check group `\"player\"` → `_collect(player)` →\n`_get_dialog_text()` → non-blocking `DialogPlayer` line → `queue_free()`.\n`ship_module_unlocker_pickup.gd` is the closest existing sibling (36 lines, an inspector enum, one\nautoload call) and is the model to copy. If this task ends up writing its own overlap detection or\nits own notification path, something has gone wrong.\n\n**Art:** the log record needs its own sprite. `assault/` and `open_space/` are strict top-down\northographic — **invoke the `pixel-art-generation` skill before generating anything**, and open\nthe result and look at it. A 3/4-view collectible is unusable and cannot be fixed in code.\n\n**Done when:** a `lore_log_pickup.tscn` exists under `global/pickups/scenes/` next to the other\nnine, collecting it advances `LogState`, collecting it twice in one run cannot double-count, and\nthe notification text names the entry. Test in `tests/unit/`.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
-          "planDir": null,
+          "planDir": "docs/plans/flying-into-a-log-record-in-open-space-picks-it-up-and-tells",
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",
