@@ -520,7 +520,11 @@ game logic:
   `EventBus.score_event`.
 - `health_shield_bar.gd`, `overheat`'s `overheat_bar.gd` (under `player/`) — vitals.
 - `weapon_selector.gd` / `weapon_chip.gd` / `ability_chip.gd` — current weapon/ability
-  indicators, updated from `EventBus.player_weapon_changed`.
+  indicators, updated from `EventBus.player_weapon_changed`. `WeaponChip` draws
+  `WeaponModeResource.icon`, set in each `assault/scenes/player/weapons/modes/*.tres`. That field
+  is the single id → icon map: the ship menu's main-weapon column reads the same one. There used
+  to be a second, hard-coded map in `player_menu.gd` keyed on a mode id that no longer existed;
+  `tests/integration/test_weapon_unlock_sources.gd` now asserts every mode ships with an icon.
 - `game_over.gd` — death overlay (spawned by the player; pauses the tree).
 - `level_debrief.gd` — end-of-level score/stars breakdown screen.
 

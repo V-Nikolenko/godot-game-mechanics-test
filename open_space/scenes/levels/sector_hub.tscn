@@ -19,6 +19,7 @@
 [ext_resource type="PackedScene" uid="uid://brkwck4n8qa4f" path="res://global/pickups/scenes/temporary_health_shield_up_pickup.tscn" id="16_v8yrt"]
 [ext_resource type="PackedScene" uid="uid://csti8adftwjr8" path="res://global/pickups/scenes/temporary_health_up_pickup.tscn" id="17_rj32l"]
 [ext_resource type="PackedScene" uid="uid://db8j0pi368giu" path="res://global/pickups/scenes/temporary_shield_up_pickup.tscn" id="18_f6k3w"]
+[ext_resource type="PackedScene" uid="uid://c0oc8owfaowo3" path="res://global/pickups/scenes/weapon_mode_unlocker_pickup.tscn" id="19_wmu"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
@@ -176,3 +177,18 @@ module_id = 13
 position = Vector2(320, -415)
 module_slot = 3
 module_id = 14
+
+[node name="WeaponUnlockerSniperShot" parent="." instance=ExtResource("19_wmu")]
+position = Vector2(-280, -515)
+
+[node name="WeaponUnlockerSpread" parent="." instance=ExtResource("19_wmu")]
+position = Vector2(-180, -515)
+weapon = 1
+
+[node name="WeaponUnlockerGatling" parent="." instance=ExtResource("19_wmu")]
+position = Vector2(-80, -515)
+weapon = 2
+
+[node name="WeaponUnlockerMiningLaser" parent="." instance=ExtResource("19_wmu")]
+position = Vector2(20, -515)
+weapon = 3

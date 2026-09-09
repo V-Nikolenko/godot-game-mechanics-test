@@ -85,6 +85,17 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   (every module in `ShipModuleState.SLOT_MODULES` has an unlocker pickup in the sector hub, so
   the unlock gate cannot strand content), and `tests/integration/test_module_list_lock.gd`
   asserts intent for the ship menu's locked rows.
+  `tests/integration/test_weapon_unlock_sources.gd` is the same check over the *other* unlock
+  store, and is the one that closed the hole: `UpgradeState` seeds `STARTING_IDS` (`&"default"`)
+  and `unlock()` had exactly one caller project-wide — `unlock_all()`, which nothing invokes — so
+  `sniper_shot`, `spread`, `gatling` and `mining_laser` were tuned, implemented, iconed and
+  **unreachable**, and the player flew the Standard gun for the whole game. Every non-starting id
+  now needs a `WeaponModeUnlockerPickup` in the sector hub. Two of its cases go past placement:
+  one collects a real pickup against the live autoload (every placement test passes on a pickup
+  whose `_collect()` is empty), and one proves `PlayerMenu` rebuilds its weapon column on
+  `UpgradeState.unlocked_changed` — without that the menu is stale for the rest of the scene the
+  pickups live in. It also asserts every mode `.tres` sets `WeaponModeResource.icon`, now the
+  single id→icon map for both the ship menu and the HUD chip.
   `tests/integration/test_enemy_contact_damage.gd` is a third invariant check, over the balance
   data rather than the files: every assault enemy's contact `HitBox` must deal the damage its
   `*_config.tres` declares. Every `BaseEnemy` subclass's scene authors a `ContactHitBox` node

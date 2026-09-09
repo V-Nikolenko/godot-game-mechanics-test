@@ -18,6 +18,17 @@ const ALL_IDS: Array[StringName] = [
 	&"default", &"sniper_shot", &"spread", &"gatling", &"mining_laser"
 ]
 
+## Ids a fresh profile starts with. Every *other* id in ALL_IDS must be granted by a
+## `WeaponModeUnlockerPickup` placed in the world — there is no other unlock path, and
+## `unlock_all()` below is a debug affordance that nothing in the game calls. The four unlockers
+## live on the sector-hub bench (`open_space/scenes/levels/sector_hub.tscn`) and the pairing is
+## gated by `tests/integration/test_weapon_unlock_sources.gd`.
+##
+## Note this only ever reaches an *empty* store (see `_ready()`), so it is a fresh-profile
+## declaration, not a per-boot guarantee: adding a second entry later would not reach a profile
+## that has already been saved.
+const STARTING_IDS: Array[StringName] = [&"default"]
+
 signal unlocked_changed(id: StringName)
 
 var _unlocked: Dictionary = {}  # { StringName: bool }
@@ -25,7 +36,8 @@ var _unlocked: Dictionary = {}  # { StringName: bool }
 func _ready() -> void:
 	_load()
 	if _unlocked.is_empty():
-		_unlocked[&"default"] = true
+		for id: StringName in STARTING_IDS:
+			_unlocked[id] = true
 		_save()
 
 func is_unlocked(id: StringName) -> bool:

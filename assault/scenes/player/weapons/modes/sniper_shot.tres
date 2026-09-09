@@ -1,12 +1,14 @@
-[gd_resource type="Resource" script_class="WeaponModeResource" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="WeaponModeResource" load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/player/weapons/weapon_mode.gd" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://csnipbullet01" path="res://assault/scenes/projectiles/bullets/sniper_bullet.tscn" id="2_bullet"]
+[ext_resource type="Texture2D" uid="uid://yu1cwveum40p" path="res://global/assets/sprites/player_menu_ui/ship_menu_ui/weapon_icons/icon_ship_weapon_pierce.png" id="3_icon"]
 
 [resource]
 script = ExtResource("1_script")
 id = &"sniper_shot"
 display_name = "Sniper Shot"
+icon = ExtResource("3_icon")
 behavior = 4
 projectile_scene = ExtResource("2_bullet")
 range_px = 0.0

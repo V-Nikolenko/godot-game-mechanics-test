@@ -52,7 +52,7 @@ Registered in `project.godot` `[autoload]` (load order matters). Full detail in
 |---|---|---|
 | `MissionState` | `global/autoloads/mission_state.gd` | Mission completion, scores, and "cutscene seen" flags — persisted progression |
 | `DialogPlayer` | `global/autoload/dialog_player.gd` | Plays `DialogScriptResource` dialogue; `is_active` gates gameplay input |
-| `UpgradeState` | `global/autoloads/upgrade_state.gd` | Player upgrade selections |
+| `UpgradeState` | `global/autoloads/upgrade_state.gd` | Which main-weapon modes are unlocked. `STARTING_IDS` seeds a fresh profile; a `WeaponModeUnlockerPickup` in the world is the only other way in |
 | `EventBus` | `global/systems/event_bus.gd` | Global typed signals (decoupled cross-system events) |
 | `ShipModuleState` | `global/autoloads/ship_module_state.gd` | Which ship modules are equipped per slot, and which are unlocked — `equip()` refuses a locked module |
 | `ShipProgressionState` | `global/autoloads/ship_progression_state.gd` | Ship progression / unlocks |
@@ -106,6 +106,16 @@ Detail and APIs: [global.md](modules/global.md).
   `push_error` stay unconditional: they are for things that should not happen.
 - **Coordinates:** waves and spawn offsets are authored in **design units** (640×360
   space) and scaled by `ArenaCamera.WORLD_SCALE` (2.0) at runtime — never pre-multiply.
+- **Unlockable content needs a source in the world.** `ShipModuleState` and `UpgradeState` are
+  both written only by a `PickupBase` subclass placed in a level —
+  `ShipModuleUnlockerPickup` and `WeaponModeUnlockerPickup`, both benched in
+  `open_space/scenes/levels/sector_hub.tscn`. Nothing else calls `unlock()`, so an entry added to
+  `ShipModuleState.SLOT_MODULES` or `UpgradeState.ALL_IDS` without a matching pickup is content
+  the player can see in the ship menu and can never reach, with no warning at runtime. That is how
+  four tuned weapon modes sat unreachable behind a one-row weapon column. Both pairings are
+  invariant-tested (`tests/integration/test_module_unlock_sources.gd`,
+  `tests/integration/test_weapon_unlock_sources.gd`); the only exempt ids are
+  `UpgradeState.STARTING_IDS`, which a fresh profile is seeded with.
 - **Projectile lifetime — every projectile has exactly one owner.** Either a `BulletPool`
   recycles it (`docs/BULLET_POOL.md`: *the pool is smart, bullets are dumb*), or it frees itself
   when it leaves the world. There is no third option, and "nothing frees it" is the bug this rule

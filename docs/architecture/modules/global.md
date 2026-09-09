@@ -17,7 +17,7 @@ global/
 │   ├── session_state.gd       # SessionState: temp buffs surviving level transitions / restarts
 │   ├── ship_module_state.gd   # ShipModuleState: equipped/unlocked module per slot
 │   ├── ship_progression_state.gd # ShipProgressionState: permanent shield slot count
-│   └── upgrade_state.gd       # UpgradeState: unlocked weapon upgrade + ability ids (validated)
+│   └── upgrade_state.gd       # UpgradeState: unlocked weapon mode ids (validated); STARTING_IDS seeds a fresh profile
 ├── components/                # composable child-node behaviours
 │   ├── health_component.gd        # Health (Node)
 │   ├── temp_health_component.gd   # TempHealth (Node) — drains before Health
@@ -67,7 +67,7 @@ All eight are registered in `project.godot` under `[autoload]`. The `*` prefix m
 |---|---|---|---|
 | `MissionState` | `global/autoloads/mission_state.gd` | Per-mission `completed` / `stars` / `high_score`, plus cutscene-seen flags. Persists to `user://mission_state.cfg`. | Written on mission win (`complete`, `record_score`) and when a cutscene plays (`mark_cutscene_seen`); read by the mission-select hub and HUD. Stars run on a `MIN_STARS`–`MAX_STARS` (1–3) scale: **0 is the reserved "never completed" sentinel** returned by `get_stars()` for an unplayed mission and drawn as three empty stars by `MissionListItem`, so a stored clear is always worth at least 1 star. `complete()` clamps out-of-range input into the scale *and* `push_warning`s, since every caller comes via `MissionConfigResource.stars_for_score()` (already floored at 1) and an out-of-range value therefore means the caller miscomputed. |
 | `DialogPlayer` | `global/autoload/dialog_player.gd` | Active dialog run state (`is_active`, `auto_mode`, current script/line). Owns a `DialogBox` instance. | Written by callers via `play(script)` / `skip_dialog()`; read by player controllers to gate input while `is_active`. |
-| `UpgradeState` | `global/autoloads/upgrade_state.gd` | Set of unlocked ids, one list — `ALL_IDS` weapon modes (`default`, `sniper_shot`, `spread`, `gatling`, `mining_laser`). Persists to `user://upgrades.cfg`. | Written by `unlock(id)`; read by weapon-selection UI via `is_unlocked` / `unlocked_ids`. Emits `unlocked_changed`. Both `unlock()` and `_load()` reject any id failing `is_known_id()` with a `push_warning`, so a typo or a stale save entry can no longer sit in the store invisibly. |
+| `UpgradeState` | `global/autoloads/upgrade_state.gd` | Set of unlocked ids, one list — `ALL_IDS` weapon modes (`default`, `sniper_shot`, `spread`, `gatling`, `mining_laser`). Persists to `user://upgrades.cfg`. `STARTING_IDS` (`[&"default"]`) is what a fresh profile is seeded with; every other id must be granted by a `WeaponModeUnlockerPickup` in the world. | Written by `unlock(id)` — whose only production caller is that pickup; read by weapon-selection UI via `is_unlocked` / `unlocked_ids`. Emits `unlocked_changed`, which `PlayerMenu` listens to so the main-weapon column rebuilds when an unlock lands mid-scene. Both `unlock()` and `_load()` reject any id failing `is_known_id()` with a `push_warning`, so a typo or a stale save entry can no longer sit in the store invisibly. |
 | `EventBus` | `global/systems/event_bus.gd` | No state — pure signal hub (health, overheat, weapon, mission, scoring signals). | Emitted by gameplay (e.g. `PlayerBase` emits `player_health_changed`); subscribed by HUD/UI instead of polling nodes. |
 | `ShipModuleState` | `global/autoloads/ship_module_state.gd` | Equipped + unlocked module id per slot (`cockpit`/`armor`/`weapons`/`engines`). Persists to `user://ship_modules.cfg`. **`equip()` refuses a module that is not unlocked** (`&""`/unequip is exempt), so `unlock()` is the only way in. | Written by `equip` / `unlock`; read by the ship menu (`ModuleList` greys locked rows) and the player ship on spawn. Emits `module_equipped` / `module_unequipped` / `module_unlocked`. |
 | `ShipProgressionState` | `global/autoloads/ship_progression_state.gd` | Permanent shield slot count (clamped 1..5). Persists to `user://ship_progression.cfg`. | Written by `add_permanent_shield` / `set_permanent_shield_count`; read by `Shield._ready()` when `bind_progression == true`. Emits `permanent_shield_count_changed`. |
@@ -282,8 +282,11 @@ Subclasses call `super()` in `_ready()` (and in the overridable hooks `_setup_ef
 | `temporary_shield_up_pickup.gd`, `temporary_health_up_pickup.gd`, `temporary_health_shield_up_pickup.gd` | add temp shield charge / temp-HP stack (persisted by `SessionState`) |
 | `temporary_damage_up_pickup.gd` | `player.apply_temp_damage_buff(0.5, 15.0)` |
 | `ship_module_unlocker_pickup.gd` | `ShipModuleState.unlock(slot, module_id)`; inspector-selectable `module_slot` / `module_id` enums |
+| `weapon_mode_unlocker_pickup.gd` | `UpgradeState.unlock(weapon_id())` — grants one main-weapon mode permanently; inspector-selectable `weapon` enum (`SNIPER_SHOT`, `SPREAD`, `GATLING`, `MINING_LASER`). Dialog line reads `display_name` off the mode's own `.tres`. |
 
 Each has a matching scene under `global/pickups/scenes/`.
+
+**Unlocker pickups are the only unlock source in the game.** Neither `ShipModuleState` nor `UpgradeState` is written from anywhere else, so a module or weapon mode with no unlocker placed in the world is content the player can see and never reach. Both benches live in `open_space/scenes/levels/sector_hub.tscn`, and both pairings are invariant-tested — `tests/integration/test_module_unlock_sources.gd` and `tests/integration/test_weapon_unlock_sources.gd`. The weapon exception is `UpgradeState.STARTING_IDS` (`[&"default"]`), seeded on a fresh profile.
 
 ### Resources (`global/resources/`)
 Pure-data `Resource` types (shareable `.tres` assets; runtime state is kept out of them so multiple ships can share one asset).

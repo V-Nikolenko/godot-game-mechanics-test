@@ -672,3 +672,37 @@ rows: `ModuleList._clear()` `remove_child()`s and `queue_free()`s them, and the 
 not flush before the test ends. Pre-existing `ModuleList` behaviour, harmless in play (menu opens
 are frames apart), and awaiting `process_frame` does not change the count. Not worth contorting
 the test over — but do not read it as a leak you introduced.
+
+### The weapon-mode unlock gate
+
+`integration/test_weapon_unlock_sources.gd` is the same gate as `test_module_unlock_sources.gd`,
+for the other unlock store. `UpgradeState._ready()` seeds `STARTING_IDS` (`&"default"`) and
+nothing else, and before this test existed `unlock()` had exactly one caller project-wide —
+`unlock_all()` inside the autoload, which nothing invokes. So `sniper_shot`, `spread`, `gatling`
+and `mining_laser` each had a tuned `.tres`, a `WeaponBehavior` and a menu row, and none could
+ever be fired. The four `WeaponModeUnlockerPickup` instances on the sector-hub bench are the fix;
+this test is what stops a fifth mode landing without one.
+
+Two of its seven tests are worth knowing about before you write anything nearby:
+
+- **`test_collecting_an_unlocker_actually_unlocks_the_mode`** is the only one that would fail
+  against a pickup whose `_collect()` is empty — the other placement tests all pass on a
+  do-nothing pickup. It calls `_collect()` directly, so it proves the *effect*, not the trigger.
+- **`test_unlocking_repopulates_an_already_built_player_menu`** covers the half of the feature the
+  player sees. `PlayerMenu._populate_lists()` runs once, from `connect_states()` during HUD
+  `_ready()`; `_toggle()` never repopulates. Without `PlayerMenu`'s connection to
+  `UpgradeState.unlocked_changed` the column is stale for the rest of the scene — which is exactly
+  the scene the pickups live in. Its second half re-unlocks the same id to prove the handler is
+  not appending duplicate rows (`unlock()` early-returns without emitting).
+
+⚠️ Like `test_module_list_lock.gd`, this file **reads and restores the live `UpgradeState`
+singleton** (`_unlocked`) in `before_all`/`after_all`, on top of `SaveSandbox`. `SaveSandbox`
+covers the *file*, not the autoload's in-memory dictionary, and the pickup calls the autoload by
+name — so a fresh script instance would prove nothing about `_collect()`, and mutating the live
+one without restoring would leave `gatling` unlocked for every later test in the process.
+`_unlocked` is a flat `StringName -> bool` dict, so a shallow `duplicate()` is a complete
+snapshot (unlike `ShipModuleState`'s dict-of-arrays, which needs the inner `duplicate()`).
+
+⚠️ The PlayerMenu test reports **12 orphans** — `WeaponFrame.populate()` `queue_free()`s the
+previous rows and the delete queue does not flush before the test ends, the same effect documented
+above for `ModuleList`. Not a leak you introduced.

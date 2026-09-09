@@ -18,10 +18,10 @@
 | Path | What it gives us |
 |---|---|
 | `global/pickups/pickup_base.gd` | `body_entered` → group check → `_collect(player)` → optional dialog → `queue_free()`. Subclass overrides two methods; no new plumbing. |
-| `global/pickups/scenes/ship_module_unlocker_pickup.tscn` | Exact node layout + collision layer/mask/shape for a hub pickup; copy verbatim with a different script + texture. |
-| `global/assets/sprites/upgrade_1.png` | An existing 32×32 weapon-crate sprite **referenced by nothing in the project**. Reusing it spends no PixelLab allowance. |
+| `global/pickups/scenes/ship_module_unlocker_pickup.tscn` | Node *layout* + collision layer/mask (16/4) + `CircleShape2D` r=8 for a hub pickup. Copy the layout, **not** its `scale` — that is tuned to a 64×64 sprite. |
+| `global/assets/sprites/upgrade_1.png` | An existing **48×48** weapon-crate sprite (IHDR `48 48 8 3`, has `tRNS`) **referenced by nothing in the project**, uid `uid://dptqytf5g71or`. Reusing it spends no PixelLab allowance. 48×48 pickups in `global/pickups/scenes/` all use `CollisionShape2D` scale `3.111`, not the 64×64 module unlocker's `3.531701`. |
 | `assault/scenes/player/weapons/modes/*.tres` | `WeaponModeResource.display_name` ("Sniper Shot", "Spread", "Gatling", "Mining Laser") for the pickup dialog line — no hand-typed names. |
-| `global/assets/sprites/player_menu_ui/ship_menu_ui/weapon_icons/icon_ship_weapon_pierce.png` | Already imported; currently reachable only under the dead `&"piercing"` key. |
+| `global/assets/sprites/player_menu_ui/ship_menu_ui/weapon_icons/icon_ship_weapon_pierce.png` | Already imported (uid `uid://yu1cwveum40p`); currently reachable only under the dead `&"piercing"` key in `_WEAPON_ICONS`, which `3-plan.md` §4 deletes in favour of `WeaponModeResource.icon`. |
 
 ## Conventions that constrain this
 
@@ -34,8 +34,28 @@
 - `docs/architecture/modules/global.md` documents `global/pickups/` and must be updated
   (`updating-project-docs`) since this adds a pickup type.
 
-## What is *not* broken
+## What is *not* broken — and what is
 
-`WeaponState` and `PlayerMenu` are both already unlock-driven and correct. This is purely a
-**missing source** problem, structurally identical to the one `ShipModuleState` solved with
-`ShipModuleUnlockerPickup` + `test_module_unlock_sources.gd`. No consumer needs redesign.
+> **Corrected after review round 1.** This section originally read "`WeaponState` and `PlayerMenu`
+> are both already unlock-driven and correct… No consumer needs redesign." Half of that is wrong.
+
+`WeaponState` **is** already unlock-driven and correct: `_load_modes()` (`:31-37`) walks `ALL_IDS`,
+and `_cycle()` (`:137-152`) / `select_weapon()` (`:163-166`) read `unlocked_ids()` / `is_unlocked()`
+live, every time. It picks a newly unlocked mode up with no change.
+
+`PlayerMenu` **is not**. `_populate_lists()` (`player_menu.gd:189`) has one caller,
+`connect_states()` (`:47`), whose only callers are `mission_hud.gd:19/24/43` inside HUD `_ready()`.
+`_toggle()` never repopulates. So the main-weapon column is built once per scene load, and an
+unlock that lands mid-scene — which is exactly what this task introduces — is invisible until the
+next scene. It also makes `_init_cursor()`/`_confirm_selection()` (live `unlocked_ids()`) disagree
+with `_current_max_row()` (stale `_main_frame.get_count()`), which cannot happen today.
+
+`UpgradeState.unlocked_changed` (`upgrade_state.gd:21`) exists and has **zero** listeners
+project-wide — it is the hook for this, unused. See `3-plan.md` §3.
+
+There is also a **second** id→icon map nobody was using: `WeaponModeResource.icon`
+(`weapon_mode.gd:11`) is what `WeaponChip` draws (`weapon_chip.gd:26`), and no `modes/*.tres` sets
+it, so the in-game HUD chip renders a null texture today. See `3-plan.md` §4.
+
+The **missing source** remains the core of the task, and it is still structurally identical to the
+one `ShipModuleState` solved with `ShipModuleUnlockerPickup` + `test_module_unlock_sources.gd`.
