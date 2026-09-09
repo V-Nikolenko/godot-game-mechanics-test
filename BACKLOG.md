@@ -952,6 +952,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       section 6 and the autoload list), `docs/architecture/PROJECT.md`, `open_space.md`, and
       `CLAUDE.md` via the `updating-project-docs` skill.
       -> [docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en](docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en)
+      1 run(s), $1.84; last on claude-sonnet-5
 
 ## Foundations: test harness, UID integrity, art pipeline  [DONE]  (`foundations-test-harness-uid-integrity-art-pipeline`, 0 open)
 
