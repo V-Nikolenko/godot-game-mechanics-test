@@ -30,10 +30,24 @@ fix (1) to work in every mode.
 ### 1. Infiltration pickup detection (fixes the named "real obstacle")
 
 - `infiltration/scenes/entities/player/player.gd::_ready()` gains `add_to_group("player")` as its
-  first line (mirroring `global/entities/player_base.gd:56` exactly). This alone makes
-  `InfoLogInteractable` work in infiltration — it never required a `PlayerBase` cast.
-- `global/pickups/pickup_base.gd` widens its detection so a **future** `PickupBase`-derived pickup
-  (i.e. the eventual `LoreLogPickup`) also works there, per the task's explicit option (a):
+  first line (mirroring `global/entities/player_base.gd:56` exactly).
+- **Discovered during implementation, not caught by either review round**: the group fix alone
+  is not sufficient. `InfoLogInteractable`/`PickupBase` Area2Ds only ever emit `body_entered` for
+  a body whose `collision_layer` overlaps their `collision_mask` (`4`, the `"environemnt_player"`
+  layer every pickup/interactable scene uses — `player_fighter.tscn` sets `collision_layer = 4`
+  to be detectable by it). `infiltration/scenes/entities/player/player.tscn`'s `CharacterBody2D`
+  set no `collision_layer` at all (Godot default: layer 1 only), so the signal itself would never
+  have fired for the infiltration player regardless of group membership — every test that calls
+  `_on_body_entered()` directly (including the ones in this plan's own test list) passes on this
+  broken state, since it bypasses physics entirely. Fixed by adding `collision_layer = 4` to the
+  `Player` node in `player.tscn`, alongside the group fix. A new integration test,
+  `test_test_isometric_scene_log_record_detects_the_real_player_via_physics` in
+  `tests/integration/test_log_record_mission_placement.gd`, positions both bodies overlapping and
+  awaits real `physics_frame`s rather than calling the handler directly — verified this test
+  fails without the `collision_layer` line and passes with it.
+- `global/pickups/pickup_base.gd` widens its **detection** (the group/cast gate in
+  `_on_body_entered`) without widening the `_collect` override contract itself, per the task's
+  explicit option (a):
 
   ```gdscript
   func _on_body_entered(body: Node2D) -> void:
@@ -42,7 +56,14 @@ fix (1) to work in every mode.
       if persistent_id != &"" and PickupState.has_collected(persistent_id):
           queue_free()
           return
-      _collect(body)
+      var player := body as PlayerBase
+      var handled := true
+      if player != null:
+          _collect(player)
+      else:
+          handled = _collect_any(body)
+      if not handled:
+          return
       if persistent_id != &"":
           PickupState.mark_collected(persistent_id)
       var text: String = _get_dialog_text()
@@ -50,21 +71,48 @@ fix (1) to work in every mode.
           _show_notification(text)
       queue_free()
 
-  func _collect(_player: Node2D) -> void:
+  func _collect(_player: PlayerBase) -> void:
       pass
+
+  ## Fallback hook for a body that is in group "player" but is not a PlayerBase (e.g. the
+  ## infiltration CharacterBody2D). Returning false (the default) means "not for me" — the
+  ## pickup does not consume itself, mark persistent_id, or notify, exactly as if detection had
+  ## never widened. A future non-PlayerBase-aware pickup overrides this and returns true.
+  func _collect_any(_body: Node2D) -> bool:
+      return false
   ```
 
   Rejected alternative — option (b), giving the infiltration player `PlayerBase`: explicitly ruled
   out by the task body as a much larger change to a module this epic isn't touching.
 
-  **Why this is safe for the 9 existing `PickupBase` subclasses** (which all override
-  `_collect(player: PlayerBase)` and several dereference `player.health_component` /
-  `player.shield_component`): verified empirically against this Godot build
-  (`godot --headless --path . --import` against two throwaway classes) that GDScript does not
-  error or warn when an override narrows a base method's parameter type back down to a subtype —
-  each of the 9 keeps compiling unchanged and is still only ever handed a real `PlayerBase`
-  instance, since none of them are placed anywhere but `open_space`/`assault`. No file among the 9
-  needs to change.
+  **Correction from review round 1**: the original design proposed retyping `_collect`'s
+  parameter from `PlayerBase` to `Node2D` directly, on the claim that GDScript permits an
+  override to narrow a parent's declared parameter type back down to a subtype, "verified" via
+  `godot --headless --path . --import` against two throwaway classes. The independent reviewer
+  reproduced the same scenario against this exact build (4.6.3) and got a real
+  `SCRIPT ERROR: Parse Error: The function signature doesn't match the parent` — `--import` only
+  does lightweight class-name registration and never forces the full compile that surfaces this,
+  so the original verification method was not sufficient evidence. Retyping `_collect` as
+  written would have broken compilation of all 9 existing subclasses project-wide.
+
+  The corrected design instead adds a **second, separate virtual hook**, `_collect_any(body:
+  Node2D)`, with a no-op default — `_collect(player: PlayerBase)`'s signature is completely
+  untouched. This is safe for the 9 existing `PickupBase` subclasses
+  (`armor_tank_pickup.gd`, `health_tank_pickup.gd`, `armor_and_health_pickup.gd`,
+  `ship_shield_up_pickup.gd`, `temporary_damage_up_pickup.gd`,
+  `temporary_health_shield_up_pickup.gd`, `temporary_health_up_pickup.gd`,
+  `temporary_shield_up_pickup.gd`, `ship_module_unlocker_pickup.gd`,
+  `weapon_mode_unlocker_pickup.gd`) because none of them override `_collect_any`, they keep
+  overriding `_collect(player: PlayerBase)` exactly as today with no signature change at all, and
+  they are still only ever handed a real `PlayerBase` instance (confirmed: none of the 9 are
+  placed anywhere but `open_space`/`assault`, where the body is always a `PlayerBase`). **No file
+  among the 9 needs to change.** A future non-`PlayerBase`-aware pickup (e.g. a `LoreLogPickup`
+  variant meant to work in infiltration) overrides `_collect_any` instead of `_collect`. Behavior
+  for a body that is in group `"player"` but fails the `PlayerBase` cast (the infiltration
+  player, and only the infiltration player) is unchanged from today for all 9 existing pickups —
+  `_collect_any`'s default no-op means nothing happens, the pickup does not free itself or fire
+  its notification, exactly as if detection had never widened for them at all — while a pickup
+  that opts in by overriding `_collect_any` now works there.
 
 ### 2. Restart-safe one-time pickups (`PickupState` autoload)
 
@@ -157,9 +205,17 @@ idempotent."
 1. `infiltration/scenes/entities/player/player.gd`: add `add_to_group("player")` in `_ready()`.
    Failing test first: `tests/unit/test_infiltration_player_group.gd` (new) instantiates the
    player scene, asserts `is_in_group("player")`.
-2. `global/pickups/pickup_base.gd`: widen `_collect`'s parameter type, add `persistent_id` +
+2. `global/autoloads/pickup_state.gd` + `project.godot` autoload registration +
+   `tests/helpers/save_sandbox.gd` path. `tests/unit/test_pickup_state.gd` (new, modeled on
+   `test_log_state.gd`): collect-once, idempotent-on-repeat, survives a save/load round trip.
+   **(Reordered ahead of the `PickupBase` step below after round-2 review: `PickupBase` step 3
+   references `PickupState.has_collected`/`mark_collected`, which must exist and be tested first
+   or step 3 cannot compile/be tested standalone.)**
+3. `global/pickups/pickup_base.gd`: add the `_collect_any(body: Node2D) -> bool` fallback hook
+   (default `return false`, `_collect(player: PlayerBase)` untouched), add `persistent_id` +
    `PickupState` checks. Failing tests first, extending `tests/unit/test_pickup_base.gd` (new,
-   using a tiny test-double `PickupBase` subclass — no existing pickup test file exists to extend):
+   using tiny test-double `PickupBase` subclasses — no existing pickup test file exists to
+   extend):
    - a persistent-id pickup collects once and calls `_collect`.
    - a **second** instance sharing the same `persistent_id` (simulating a scene reload
      respawning the node) does not call `_collect` again and frees itself immediately — the
@@ -167,10 +223,13 @@ idempotent."
    - a pickup with `persistent_id == &""` (every existing pickup) is unaffected — collects every
      time, matching current behavior exactly (characterization).
    - a body that is in group `"player"` but is a plain `Node2D` (simulating the infiltration
-     player) still reaches `_collect()` — proves the widened detection.
-3. `global/autoloads/pickup_state.gd` + `project.godot` autoload registration +
-   `tests/helpers/save_sandbox.gd` path. `tests/unit/test_pickup_state.gd` (new, modeled on
-   `test_log_state.gd`): collect-once, idempotent-on-repeat, survives a save/load round trip.
+     player), against a test-double whose `_collect_any` override returns `true`: the pickup
+     calls `_collect_any` and consumes itself (marks `persistent_id`, notifies, frees) — proves
+     the opt-in generic path works end-to-end.
+   - the same plain-`Node2D` body against the **base class default** (`_collect_any` not
+     overridden, returns `false`): the pickup does **not** free itself, mark `persistent_id`, or
+     notify — proves the 9 existing subclasses are inert against a non-`PlayerBase` body exactly
+     as before, the boundary case Finding 1 of the round-1 review exists to guard.
 4. Place `InfoLogInteractable` in `level_1.tscn` and `TestIsometricScene.tscn`.
    `tests/integration/test_log_record_mission_placement.gd` (new):
    - loads `level_1.tscn`, finds the placed `InfoLogInteractable` by type, asserts it exists and
@@ -187,9 +246,11 @@ Each step is independently checkable.
 ## Test plan
 
 - `tests/unit/test_infiltration_player_group.gd` — infiltration `Player` is in group `"player"`.
-- `tests/unit/test_pickup_base.gd` — widened detection (a plain `Node2D` player reaches
-  `_collect`), `persistent_id` collect-once/replay-safety (the boundary case), and the
-  `persistent_id == &""` characterization case proving zero behavior change for existing pickups.
+- `tests/unit/test_pickup_base.gd` — the opt-in `_collect_any` fallback (a plain `Node2D` body
+  reaches a test-double's `_collect_any` and is consumed when it returns `true`, and is left
+  untouched when the base-class default returns `false`), `persistent_id` collect-once/replay-
+  safety (the boundary case), and the `persistent_id == &""` characterization case proving zero
+  behavior change for existing pickups.
 - `tests/unit/test_pickup_state.gd` — `has_collected`/`mark_collected`, idempotent double-mark,
   save/load round trip (via `SaveSandbox`, same pattern as `test_log_state.gd`).
 - `tests/integration/test_log_record_mission_placement.gd` — the "Done when" proof: a log placed
@@ -203,9 +264,13 @@ Each step is independently checkable.
   here because it's exactly why this plan avoids that path, but it is a pre-existing property of
   `ScoreTracker`, not something this task fixes (out of scope: it isn't touched by any placement
   this task makes).
-- The Godot override-signature behavior (widening `_collect`'s param type) was verified against
-  this exact Godot build (4.6.3), not against documentation — re-verify if the engine version
-  changes.
+- Round 1 review (`4-review.md`) reproduced a real Parse Error against this exact Godot build
+  (4.6.3) when `_collect`'s declared parameter type is narrowed in a subclass override —
+  `godot --headless --path . --import` alone does not surface this (it never forces a full script
+  reload), so any future verification of a GDScript override-compatibility claim must force a real
+  reload (e.g. run the GUT suite, or `test_project_load_integrity.gd`) rather than `--import`
+  alone. The corrected design in this plan (a separate `_collect_any` hook, `_collect`'s signature
+  untouched) sidesteps the override-compatibility question entirely rather than relying on it.
 
 ## Out of scope
 

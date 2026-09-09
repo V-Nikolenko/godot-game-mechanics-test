@@ -792,7 +792,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea](docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea)
       2 run(s), $14.88; last on claude-opus-5
 
-## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 3 open)
+## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 2 open)
 
 - [x] **Every log record I find stays found, and the game knows how many are left** _(done - feature, medium, sonnet)_
       **Player outcome:** Logs I picked up three missions ago are still mine after quitting and
@@ -905,7 +905,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve](docs/plans/the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve)
       1 run(s), $4.80; last on claude-sonnet-5
 
-- [ ] **Log records can be placed in assault and infiltration missions, not just the hub** _(in progress - feature, medium, sonnet)_
+- [x] **Log records can be placed in assault and infiltration missions, not just the hub** _(done - feature, medium, sonnet)_
       **Player outcome:** the same log record I recognise from open space can be tucked into a
       wave gap in an assault run or behind a crate on a ground mission, and it counts the same way.
       
@@ -931,6 +931,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       both collectable, and a test pins the replay/restart behaviour. This task may well need splitting
       once its plan is written — if so, split it rather than half-finishing both modes.
       -> [docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio](docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio)
+      1 run(s), $2.09; last on claude-sonnet-5
 
 - [ ] **Test logs on the open-space map prove both log types work end to end** _(todo - feature, medium, sonnet)_
       **Player outcome (and the user's explicit ask):** boot the game, fly around the sector hub,

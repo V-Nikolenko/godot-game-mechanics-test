@@ -17,7 +17,9 @@ global/
 │   ├── session_state.gd       # SessionState: temp buffs surviving level transitions / restarts
 │   ├── ship_module_state.gd   # ShipModuleState: equipped/unlocked module per slot
 │   ├── ship_progression_state.gd # ShipProgressionState: permanent shield slot count
-│   └── upgrade_state.gd       # UpgradeState: unlocked weapon mode ids (validated); STARTING_IDS seeds a fresh profile
+│   ├── upgrade_state.gd       # UpgradeState: unlocked weapon mode ids (validated); STARTING_IDS seeds a fresh profile
+│   ├── log_state.gd           # LogState: which lore-log entries are collected, catalogue swept from disk
+│   └── pickup_state.gd        # PickupState: which persistent_id pickup placements have ever been collected
 ├── components/                # composable child-node behaviours
 │   ├── health_component.gd        # Health (Node)
 │   ├── temp_health_component.gd   # TempHealth (Node) — drains before Health
@@ -65,7 +67,7 @@ global/
 
 ## 3. Autoloads
 
-All nine are registered in `project.godot` under `[autoload]`. The `*` prefix means the script is the singleton root. Note the path quirk: most live in `global/autoloads/` (plural), `DialogPlayer` lives in `global/autoload/` (singular), and `EventBus`/`CameraShake` live in `global/systems/`.
+All ten are registered in `project.godot` under `[autoload]`. The `*` prefix means the script is the singleton root. Note the path quirk: most live in `global/autoloads/` (plural), `DialogPlayer` lives in `global/autoload/` (singular), and `EventBus`/`CameraShake` live in `global/systems/`.
 
 | Autoload | File | State it owns | Read / written |
 |---|---|---|---|
@@ -78,6 +80,7 @@ All nine are registered in `project.godot` under `[autoload]`. The `*` prefix me
 | `SessionState` | `global/autoloads/session_state.gd` | Cross-level temporary buffs: temp shield count, temp HP pool, timed damage buff (saved as Unix expiry). Persists to `user://session.cfg`. | `apply_to(player)` called from `PlayerBase._setup_components()`; auto-saved when shield/temp-HP/damage-buff state changes. `apply_to` binds the `TempHealth` node into the `amount_changed` handler so the saved stack size is read off the component rather than derived from the payload. |
 | `CameraShake` | `global/systems/camera_shake.gd` | A single `_trauma` float (0..1) that decays each frame. | Written by any system via `add(amount)`; read each frame by cameras via `get_offset()` (used inside `CameraDirector`). |
 | `LogState` | `global/autoloads/log_state.gd` | Which `LogEntryResource` ids are collected. Persists to `user://log_state.cfg`. `total_count()` is a `DirAccess` sweep of `catalogue_dir` (`global/resources/logs/entries/` in production) — never a hand-maintained list, unlike `UpgradeState.ALL_IDS`. | `collect_next()` is the only mutator: an anonymous lore-log pickup calls it with no id and it grants the lowest-`sequence` entry not yet collected, so the story reads in catalogue order regardless of where in the world it was found. Read via `is_collected` / `collected_ids` / `all_ids` (catalogue order, unfiltered — the ESC menu's Lore Logs reader below is its only caller) / `get_entry` / `total_count`. Emits `log_collected(id)`. Validates on load like `ShipModuleState`/`UpgradeState`: an id in the save file with no matching catalogue entry is `push_warning`ed and dropped. Information logs (one-time, non-persisted) never touch this store. |
+| `PickupState` | `global/autoloads/pickup_state.gd` | Which `StringName` `persistent_id`s have ever been collected, independent of any physical node. Persists to `user://pickup_state.cfg`, same `ConfigFile` shape as `LogState`. | `mark_collected(id)` (idempotent) is the only mutator, called from `PickupBase._on_body_entered()` when a collected pickup's `persistent_id` is non-empty; `has_collected(id)` gates the same handler so a respawned pickup (e.g. an assault mission restart, which reloads the scene) does not re-grant an id already collected. A pickup that leaves `persistent_id` at its default `&""` (every pickup shipped today) never touches this store and keeps respawning every scene load. |
 
 ## 4. Shared systems (`global/systems/`)
 
@@ -300,7 +303,9 @@ Subclasses call `super()` in `_ready()` (and in the overridable hooks `_setup_ef
 ## 6. Pickups & resources
 
 ### Pickups (`global/pickups/`)
-`PickupBase` (`class_name PickupBase extends Area2D`) connects `body_entered`; when a body in group `"player"` (cast to `PlayerBase`) enters, it calls `_collect(player)`, optionally shows a notification via `DialogPlayer` if `_get_dialog_text()` is non-empty, then `queue_free()`s. Subclasses override `_collect` / `_get_dialog_text`. Concrete pickups:
+`PickupBase` (`class_name PickupBase extends Area2D`) connects `body_entered`; when a body in group `"player"` enters, it casts to `PlayerBase` and, if that succeeds, calls `_collect(player)` exactly as before — subclasses override `_collect(player: PlayerBase)` / `_get_dialog_text`, and none of the 9 concrete pickups below changed. If the cast fails (the body is in group `"player"` but is not a `PlayerBase` — currently only the infiltration player), it instead calls the opt-in fallback hook `_collect_any(body: Node2D) -> bool`, whose base-class default returns `false` and leaves the pickup completely untouched (no free, no notification) — the same no-op as before this hook existed. A subclass meant to work against a non-`PlayerBase` body overrides `_collect_any` and returns `true` when it handles the pickup. Either path then checks `@export var persistent_id: StringName` (empty by default, matching every pickup today): if set and `PickupState.has_collected(persistent_id)` is already true, the pickup silently `queue_free()`s without re-running `_collect`/`_collect_any` — this is what stops a one-time pickup placed in a replayable mission (an assault restart does `get_tree().reload_current_scene()`, respawning every static child fresh) from re-granting itself. `PickupState` (`global/autoloads/pickup_state.gd`, autoload) is the persisted "ever collected" store behind it, modeled on `LogState`'s save shape. Then, same as before: shows a notification via `DialogPlayer` if `_get_dialog_text()` is non-empty, then `queue_free()`s.
+
+**A pickup/interactable Area2D also only ever sees a body whose `collision_layer` overlaps its `collision_mask`** (every pickup scene and `InfoLogInteractable` use `collision_mask = 4`, the `"environemnt_player"` layer) — the group/cast check inside the handler is a second, independent gate that only runs once the signal has already fired. `assault/scenes/player/player_fighter.tscn` sets `collision_layer = 4` on its body; `infiltration/scenes/entities/player/player.tscn`'s `CharacterBody2D` now does too (added alongside its `"player"` group membership — see Interactables below). Concrete pickups:
 
 | Pickup | Effect |
 |---|---|
@@ -336,9 +341,13 @@ pickup scene uses to detect the `open_space`/`assault` player bodies, which set
 `global/interactables/scenes/info_log_interactable.tscn`, carries no sprite by design — "tablet",
 "terminal", and "scrap of hull" are different physical dressings for the same interaction
 contract, so a placement site adds its own `Sprite2D` child and sets `message`/`prompt_text`.
-`infiltration/`'s player is not currently in group `"player"` and sits on the default physics
-layer (1), so it cannot yet trigger this interactable — wiring it in is a later epic task's job,
-not this component's.
+`infiltration/`'s player is now in group `"player"` (`player.gd::_ready()`) and on
+`collision_layer = 4` (`player.tscn`), matching what this interactable and every `PickupBase`
+scene require to detect it — both were needed together; the group alone does not make the
+Area2D's `body_entered` signal fire at all. `assault/scenes/levels/edelia/1/level_1.tscn` and
+`infiltration/scenes/levels/TestIsometricScene.tscn` each place one `InfoLogInteractable`
+(node name `LogRecord`) as a static scene child, proving both placements — see
+`tests/integration/test_log_record_mission_placement.gd`.
 
 **Unlocker pickups are the only unlock source in the game.** Neither `ShipModuleState` nor `UpgradeState` is written from anywhere else, so a module or weapon mode with no unlocker placed in the world is content the player can see and never reach. Both benches live in `open_space/scenes/levels/sector_hub.tscn`, and both pairings are invariant-tested — `tests/integration/test_module_unlock_sources.gd` and `tests/integration/test_weapon_unlock_sources.gd`. The weapon exception is `UpgradeState.STARTING_IDS` (`[&"default"]`), seeded on a fresh profile.
 

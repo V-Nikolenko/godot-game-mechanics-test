@@ -8,6 +8,7 @@
 [ext_resource type="Texture2D" uid="uid://bh10rxoott4yj" path="res://infiltration/scenes/levels/enemy_base_entrance__template.png" id="1_bg"]
 [ext_resource type="PackedScene" uid="uid://c5uhjngq8bl5n" path="res://infiltration/scenes/entities/player/player.tscn" id="2_w6leu"]
 [ext_resource type="PackedScene" uid="uid://b7mp4u8g6nf85" path="res://global/ui/pause_menu/pause_menu.tscn" id="3_pm"]
+[ext_resource type="PackedScene" uid="uid://bgtlo5mhub0mh" path="res://global/interactables/scenes/info_log_interactable.tscn" id="4_ilog"]
 
 [node name="TestIsometricScene" type="Node2D"]
 
@@ -20,3 +21,7 @@ texture = ExtResource("1_bg")
 position = Vector2(166, -120)
 
 [node name="PauseMenu" parent="." instance=ExtResource("3_pm")]
+
+[node name="LogRecord" parent="." instance=ExtResource("4_ilog")]
+position = Vector2(260, -120)
+message = "Field terminal: entrance log, last sync before the blackout."

@@ -15,7 +15,7 @@ The mode is currently an **early prototype centered on the player controller**. 
 
 `effects/` and `entities/props/explosive_barrel/` exist as empty placeholder directories for planned content (afterimage/impact effects and destructible props) — there is no code in them yet.
 
-The player is **not** built on the shared `global/entities/player_base.gd`; it is a standalone `CharacterBody2D` with its own composition of plain-`RefCounted`/`Resource` modules (see [Mechanics](#3-mechanics)). It reuses `global/` mainly through the shared **pause menu** and the **input map actions** defined at the project level.
+The player is **not** built on the shared `global/entities/player_base.gd`; it is a standalone `CharacterBody2D` with its own composition of plain-`RefCounted`/`Resource` modules (see [Mechanics](#3-mechanics)). It reuses `global/` mainly through the shared **pause menu** and the **input map actions** defined at the project level. It **is** in group `"player"` (`player.gd::_ready()`) and on `collision_layer = 4` (`player.tscn`, the `"environemnt_player"` layer) — both were required for it to be detectable at all by a `global/interactables/` object or a `global/pickups/` `PickupBase` (group membership alone does not make an `Area2D`'s `body_entered` signal fire; the collision layer/mask is what triggers the signal, group membership is a second check inside the handler). `PickupBase` subclasses that need `player.health_component`/`shield_component`-style access still require a real `PlayerBase` and are only ever placed in `open_space`/`assault`; a pickup meant to work here overrides `PickupBase._collect_any(body: Node2D)` instead of `_collect(player: PlayerBase)` — see [global.md](global.md).
 
 ## 2. Directory map
 

@@ -1434,7 +1434,7 @@
           "id": "log-records-can-be-placed-in-assault-and-infiltration-missio",
           "head": "Log records can be placed in assault and infiltration missions, not just the hub",
           "body": "**Player outcome:** the same log record I recognise from open space can be tucked into a\nwave gap in an assault run or behind a crate on a ground mission, and it counts the same way.\n\n**This is the task with the real obstacle, and it is worth knowing up front:** the infiltration\nplayer (`infiltration/scenes/entities/player/player.gd`) is a plain `CharacterBody2D` — it does\n**not** extend `PlayerBase` and is **not** in the `\"player\"` group. `PickupBase` finds the player\nby that group and then casts to `PlayerBase`, so **no existing pickup in the game can be collected\non a ground mission today.** The plan has to choose between widening the pickup's detection so it\ndoes not require `PlayerBase`, or giving the ground player what the group contract expects — and\nthe second is a much larger change to a module this epic is not otherwise touching.\n\n**Also in scope:**\n- Assault placement is authored in **640x360 design space, scaled by\n  `ArenaCamera.WORLD_SCALE` (2.0) at runtime — never pre-multiply.**\n- An assault mission can be restarted or replayed from the pause menu. Decide and test what\n  happens to an already-collected log on a replay: it must not double-count, and a player who\n  quits mid-mission after grabbing one should not be punished for it. This is the \"missable\n  collectible\" trap — a counter stuck at 99% because of a bookkeeping edge is the single most\n  reliably infuriating thing about collectible systems\n  (https://www.gamedeveloper.com/design/miss-able-collectibles-i-want-it-but-not-so-bad-i-ll-start-the-game-over-again).\n\n**Done when:** a log placed in an assault level and one placed in the infiltration test scene are\nboth collectable, and a test pins the replay/restart behaviour. This task may well need splitting\nonce its plan is written — if so, split it rather than half-finishing both modes.",
-          "state": "in_progress",
+          "state": "done",
           "badge": null,
           "planDir": "docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio",
           "kind": "impl",
@@ -1442,7 +1442,25 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [],
+              "at": "2026-09-09T07:35:49.716Z",
+              "run": "2026-09-09-0937-i4",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.0042450000000000005,
+                "claude-sonnet-5": 2.086255
+              },
+              "costUSD": 2.0904999999999996,
+              "turns": 53,
+              "subagents": 2,
+              "outcome": "error 429",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "test-logs-on-the-open-space-map-prove-both-log-types-work-en",

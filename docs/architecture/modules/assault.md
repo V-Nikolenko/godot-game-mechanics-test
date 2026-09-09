@@ -265,6 +265,18 @@ director's `_wait_enemies_cleared()` polls the enemy container before advancing.
 `ScoreTracker`, shows `gui/level_debrief.tscn`, persists to `MissionState`, and transitions
 to the exit cutscene.
 
+**`level_1.tscn` also carries static, non-wave children** — `PlayerFighter`, `LaserWallWave`,
+and (added for the log-records epic) one `InfoLogInteractable` instance (node name `LogRecord`,
+see [global.md](global.md)) — parented directly under the level root at a resolved-pixel
+`position`, never routed through `WaveManager`. A pickup or interactable spawned through
+`WaveManager` would fire `ScoreTracker`'s `enemy_spawned`/`enemy_freed` bookkeeping (`_spawn_ship`
+emits `enemy_spawned` for *any* `PackedScene`, and a spawned node with neither
+`counts_in_wave` nor `counts_as_escape` defaults both to `true`), so collecting it would silently
+misfire the wave-clear tally and the escape-combo penalty — static placement sidesteps that
+entirely. `LogRecord`'s position is derived from the same design-space formula waves use, at
+`t = 0` (`world_pos = Vector2(640, 360) + design_offset * ArenaCamera.WORLD_SCALE`), with the
+derivation written as a `;`-comment in the `.tscn` file.
+
 ### Hazards
 
 Source: `assault/scenes/hazards/`.

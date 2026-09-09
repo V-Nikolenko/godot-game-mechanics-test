@@ -8,6 +8,7 @@
 [ext_resource type="Script" uid="uid://capmx7rfwb78x" path="res://assault/scenes/levels/edelia/1/level_1_director.gd" id="16_dir1"]
 [ext_resource type="Script" uid="uid://dc5h1m5dnyb1l" path="res://assault/scenes/systems/score_tracker/score_tracker.gd" id="17_strk"]
 [ext_resource type="Script" uid="uid://darena5cam001" path="res://assault/scenes/systems/arena_camera.gd" id="18_arcam"]
+[ext_resource type="PackedScene" uid="uid://bgtlo5mhub0mh" path="res://global/interactables/scenes/info_log_interactable.tscn" id="21_ilog"]
 
 [node name="Level1" type="Node2D" unique_id=432592397]
 
@@ -45,3 +46,13 @@ position = Vector2(0, -380)
 
 [node name="PlayerFighter" parent="." unique_id=1634176334 instance=ExtResource("3_60rwg")]
 position = Vector2(604, 542)
+
+; Static placement, not routed through WaveManager — a collected pickup queue_free()s itself,
+; which WaveManager/ScoreTracker would otherwise misread as an escaped enemy (ScoreTracker
+; defaults counts_in_wave/counts_as_escape to true for any freed node with neither property).
+; Position derived from the same design-space formula waves use, at t=0 (cam.offset == ZERO at
+; level start): world_pos = Vector2(640, 360) + design_offset * ArenaCamera.WORLD_SCALE, with
+; design_offset = (-60, -60) -> (520, 240). Clear of LaserWallWave (y = -380).
+[node name="LogRecord" parent="." instance=ExtResource("21_ilog")]
+position = Vector2(520, 240)
+message = "Salvage log: deep-space nav beacon, corroded but still transmitting."

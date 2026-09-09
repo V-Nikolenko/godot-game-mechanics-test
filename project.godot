@@ -29,6 +29,7 @@ ShipModuleState="*res://global/autoloads/ship_module_state.gd"
 ShipProgressionState="*res://global/autoloads/ship_progression_state.gd"
 SessionState="*res://global/autoloads/session_state.gd"
 LogState="*res://global/autoloads/log_state.gd"
+PickupState="*res://global/autoloads/pickup_state.gd"
 CameraShake="*res://global/systems/camera_shake.gd"
 
 [debug_draw_3d]

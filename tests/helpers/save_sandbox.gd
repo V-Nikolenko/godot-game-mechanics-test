@@ -1,7 +1,7 @@
 ## SaveSandbox — protects the real `user://` save files from the test suite.
 ##
 ## Every persistent autoload (MissionState, UpgradeState, ShipProgressionState,
-## ShipModuleState, SessionState, LogState) writes to a fixed `user://*.cfg` path, and the
+## ShipModuleState, SessionState, LogState, PickupState) writes to a fixed `user://*.cfg` path, and the
 ## live autoload instances read those files at boot. A test that exercises a save
 ## path would therefore leak into the next run of the game AND into the next run
 ## of the suite.
@@ -20,6 +20,7 @@ const PATHS: Array[String] = [
 	"user://ship_modules.cfg",
 	"user://session.cfg",
 	"user://log_state.cfg",
+	"user://pickup_state.cfg",
 ]
 
 ## path -> file contents, or `null` if the file did not exist when captured.

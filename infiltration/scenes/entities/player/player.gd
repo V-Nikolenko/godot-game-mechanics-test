@@ -33,6 +33,7 @@ var visuals: PlayerVisualController
 
 
 func _ready() -> void:
+	add_to_group("player")
 	refresh_modules()
 
 
