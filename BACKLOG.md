@@ -931,9 +931,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       both collectable, and a test pins the replay/restart behaviour. This task may well need splitting
       once its plan is written — if so, split it rather than half-finishing both modes.
       -> [docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio](docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio)
-      1 run(s), $2.09; last on claude-sonnet-5
+      2 run(s), $7.97; last on claude-sonnet-5
 
-- [ ] **Test logs on the open-space map prove both log types work end to end** _(todo - feature, medium, sonnet)_
+- [ ] **Test logs on the open-space map prove both log types work end to end** _(in progress - feature, medium, sonnet)_
       **Player outcome (and the user's explicit ask):** boot the game, fly around the sector hub,
       and actually find several lore logs and a couple of information logs — enough to see the counter
       move, the ESC section fill up, and an in-world tablet re-read cleanly.
@@ -951,6 +951,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       **Also finish the epic here:** update `docs/architecture/modules/global.md` (the pickups table in
       section 6 and the autoload list), `docs/architecture/PROJECT.md`, `open_space.md`, and
       `CLAUDE.md` via the `updating-project-docs` skill.
+      -> [docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en](docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en)
 
 ## Foundations: test harness, UID integrity, art pipeline  [DONE]  (`foundations-test-harness-uid-integrity-art-pipeline`, 0 open)
 

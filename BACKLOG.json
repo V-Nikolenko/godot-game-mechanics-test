@@ -1459,6 +1459,28 @@
               "subagents": 2,
               "outcome": "error 429",
               "gate": "pass"
+            },
+            {
+              "commits": [
+                {
+                  "sha": "ad4d5d7",
+                  "subject": "Place a collectible log record in an assault mission and the infiltration test scene"
+                }
+              ],
+              "at": "2026-09-09T12:08:05.663Z",
+              "run": "2026-09-09-1444-i1",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004494000000000001,
+                "claude-sonnet-5": 5.874752
+              },
+              "costUSD": 5.879246,
+              "turns": 128,
+              "subagents": 2,
+              "outcome": "success",
+              "gate": "pass"
             }
           ]
         },
@@ -1466,9 +1488,9 @@
           "id": "test-logs-on-the-open-space-map-prove-both-log-types-work-en",
           "head": "Test logs on the open-space map prove both log types work end to end",
           "body": "**Player outcome (and the user's explicit ask):** boot the game, fly around the sector hub,\nand actually find several lore logs and a couple of information logs — enough to see the counter\nmove, the ESC section fill up, and an in-world tablet re-read cleanly.\n\n**Where:** `open_space/scenes/levels/sector_hub.tscn` already carries nine pickup types and\nfourteen module unlockers placed as scene instances; the log records go in the same way, so this\ntask is mostly authoring — placement, and writing real placeholder entry text rather than\n\"Lorem ipsum\". Spread them so at least one requires actually leaving the mission-select lane.\n\n**Done when:** at least three lore logs and two information logs are placed in the hub, the\ncatalogue total reported by `LogState` matches what is placeable, and `bash /agent/verify.sh` is\ngreen — `tests/integration/test_project_load_integrity.gd` will load the modified hub scene and\nfail on any engine error or warning it produces.\n\n**Also finish the epic here:** update `docs/architecture/modules/global.md` (the pickups table in\nsection 6 and the autoload list), `docs/architecture/PROJECT.md`, `open_space.md`, and\n`CLAUDE.md` via the `updating-project-docs` skill.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
-          "planDir": null,
+          "planDir": "docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en",
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",
