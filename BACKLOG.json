@@ -1368,15 +1368,38 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "33f8303",
+                  "subject": "Add InfoLogInteractable: re-readable environmental message, distinct from LogState"
+                }
+              ],
+              "at": "2026-09-09T07:02:44.392Z",
+              "run": "2026-09-09-0937-i2",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004286000000000001,
+                "claude-sonnet-5": 3.3977473999999996
+              },
+              "costUSD": 3.4020333999999997,
+              "turns": 93,
+              "subagents": 2,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve",
           "head": "The ESC menu has a Lore Logs section where I can re-read everything I've found",
           "body": "**Player outcome:** ESC → Lore Logs shows the whole catalogue. Entries I have found are\nreadable in full; ones I have not are visibly there but withheld, so I can see there is more to\nfind and roughly how much. The header tells me where I stand: \"7 / 14\".\n\n**Reuse — the locked/unlocked list already exists.** `global/ui/player_menu/module_list.gd`\n(`ModuleList`) is a navigable overlay that renders one row per catalogue entry, greys locked rows,\nand prefixes a locked row's description with a call to action rather than leaving it a dead end.\nIts lock gate is `ShipModuleState.is_unlocked()`; this list's is `LogState`. Read\n`tests/integration/test_module_list_lock.gd` — it already pins the locked-row behaviour and is the\nmodel for this list's test.\n\n**The ESC menu itself:** `global/ui/pause_menu/pause_menu.gd` has exactly four hardcoded options\n(`Option0..Option3`) wired by index in `_confirm()`, with `_navigate()` skipping hidden ones, and\n`mission_mode` toggling options 1 and 2. Adding a fifth option means touching that index-matched\n`match` and the scene's `MenuContainer`, plus the two scenes that instance it\n(`pause_menu.tscn`, `open_space_pause_menu.tscn`). Worth deciding in the plan whether Lore Logs\nappears in mission mode, in open space, or both.\n\n**Done when:** the section opens from ESC, unlocked entries show their full text, locked ones are\nwithheld but counted, the ratio is correct, and the gate is green. Note `ModuleList.MAX_ITEMS = 8`\n— a log catalogue will outgrow one screen, so scrolling or paging is in scope for this task.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
-          "planDir": null,
+          "planDir": "docs/plans/the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve",
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",

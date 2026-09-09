@@ -77,7 +77,7 @@ All nine are registered in `project.godot` under `[autoload]`. The `*` prefix me
 | `ShipProgressionState` | `global/autoloads/ship_progression_state.gd` | Permanent shield slot count (clamped 1..5). Persists to `user://ship_progression.cfg`. | Written by `add_permanent_shield` / `set_permanent_shield_count`; read by `Shield._ready()` when `bind_progression == true`. Emits `permanent_shield_count_changed`. |
 | `SessionState` | `global/autoloads/session_state.gd` | Cross-level temporary buffs: temp shield count, temp HP pool, timed damage buff (saved as Unix expiry). Persists to `user://session.cfg`. | `apply_to(player)` called from `PlayerBase._setup_components()`; auto-saved when shield/temp-HP/damage-buff state changes. `apply_to` binds the `TempHealth` node into the `amount_changed` handler so the saved stack size is read off the component rather than derived from the payload. |
 | `CameraShake` | `global/systems/camera_shake.gd` | A single `_trauma` float (0..1) that decays each frame. | Written by any system via `add(amount)`; read each frame by cameras via `get_offset()` (used inside `CameraDirector`). |
-| `LogState` | `global/autoloads/log_state.gd` | Which `LogEntryResource` ids are collected. Persists to `user://log_state.cfg`. `total_count()` is a `DirAccess` sweep of `catalogue_dir` (`global/resources/logs/entries/` in production) — never a hand-maintained list, unlike `UpgradeState.ALL_IDS`. | `collect_next()` is the only mutator: an anonymous lore-log pickup calls it with no id and it grants the lowest-`sequence` entry not yet collected, so the story reads in catalogue order regardless of where in the world it was found. Read via `is_collected` / `collected_ids` / `get_entry` / `total_count`. Emits `log_collected(id)`. Validates on load like `ShipModuleState`/`UpgradeState`: an id in the save file with no matching catalogue entry is `push_warning`ed and dropped. Information logs (one-time, non-persisted) never touch this store. |
+| `LogState` | `global/autoloads/log_state.gd` | Which `LogEntryResource` ids are collected. Persists to `user://log_state.cfg`. `total_count()` is a `DirAccess` sweep of `catalogue_dir` (`global/resources/logs/entries/` in production) — never a hand-maintained list, unlike `UpgradeState.ALL_IDS`. | `collect_next()` is the only mutator: an anonymous lore-log pickup calls it with no id and it grants the lowest-`sequence` entry not yet collected, so the story reads in catalogue order regardless of where in the world it was found. Read via `is_collected` / `collected_ids` / `all_ids` (catalogue order, unfiltered — the ESC menu's Lore Logs reader below is its only caller) / `get_entry` / `total_count`. Emits `log_collected(id)`. Validates on load like `ShipModuleState`/`UpgradeState`: an id in the save file with no matching catalogue entry is `push_warning`ed and dropped. Information logs (one-time, non-persisted) never touch this store. |
 
 ## 4. Shared systems (`global/systems/`)
 
@@ -226,6 +226,29 @@ A *module* is a `RefCounted` strategy object (not a node) that mutates the playe
 **The unlock gate.** `equip(slot, id)` validates the slot, then the catalogue, then `is_unlocked(slot, id)` — a module the player has not recovered cannot be installed. `&""` (unequip) is exempt at every layer, so a slot can always be cleared; a gate that could trap a module in a slot would be worse than no gate. `ShipModuleUnlockerPickup` is the only writer of the unlock store, and the sector hub carries one unlocker for every module (see [`open_space.md`](./open_space.md)). `_load()` grandfathers a module that is equipped but not unlocked — that is every save written before the gate existed — appending it to the slot's unlocked list rather than confiscating a loadout the player is flying with; the append is guarded on `!= &""` and `not in list`, so it neither pollutes the store with the `&""` sentinel nor duplicates on every boot.
 
 In the ship menu, `ModuleList` shows locked modules greyed rather than hiding them, prefixes their description with `LOCKED — recover this module's unlocker to install it.`, and makes `confirm()` a defined no-op on a locked row — the same shape `MissionSelectMenu` already uses for a locked mission. Row 0 (`&""`/None) is never locked.
+
+### Lore Logs reader — `pause_menu/lore_log_list.gd` (`LoreLogList`), `lore_log_list_item.gd`
+
+A fifth `PauseMenu` option (`Option3`, present in both `mission_mode` states) opens a full-catalogue
+reader over `LogState`: every entry from `LogState.all_ids()` gets a row in catalogue order, found
+ones show their real title and — once the cursor lands on them — their full body, unfound ones show
+a `???` title and a locked placeholder body. The header reads `Lore Logs — <collected> / <total>`.
+It reuses `ModuleList`'s locked-row modulate language (`LoreLogListItem` — title only, no icon, no
+equipped tint, since nothing here is ever installed) but **pages instead of truncating**:
+`ModuleList.MAX_ITEMS = 8` silently drops any row past the 8th, which is fine for a module slot list
+that never grows past a handful of options but wrong for a log catalogue expected to outgrow one
+screen. `LoreLogList.PAGE_SIZE = 8` instead splits the catalogue into fixed-size pages —
+`menu_left`/`menu_right` change page (header appends `(Page P/N)` when there's more than one),
+`menu_up`/`menu_down` move the cursor within the current page. There is no separate "confirm to
+read" step; navigating already reveals a row's body, the same way `ModuleList._refresh_cursor()`
+shows a hovered row's description.
+
+`PauseMenu` owns opening/closing it directly (`_lore_logs_open: bool`, mirroring
+`PlayerMenu._module_list_open`) rather than the reader emitting a `closed`/`cancelled` signal:
+while it's open, `_unhandled_input` routes `menu_up/down/left/right` to the reader and absorbs
+everything else (`menu_confirm` included — it must never fall through to `_confirm()` and
+re-trigger `_lore_log_list.open()`), and `ui_cancel` closes the reader back to the option list
+instead of closing the whole pause menu.
 
 To add a new module:
 1. Create `global/ship_modules/foo_module.gd` (`class_name FooModule extends ShipModuleBase`); override `get_slot`, names/icon, and `apply`/`remove` (+ `try_activate`/`tick` if active).

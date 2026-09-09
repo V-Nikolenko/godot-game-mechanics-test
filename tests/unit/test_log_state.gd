@@ -119,6 +119,16 @@ func test_load_drops_unknown_ids_left_in_the_save_file() -> void:
 	ls.free()
 
 
+func test_all_ids_returns_every_entry_in_catalogue_order_regardless_of_collection() -> void:
+	var ls := _fresh()
+	ls._load_catalogue()
+	ls.collect_next()  # entry_beta
+
+	assert_eq(ls.all_ids(), [&"entry_beta", &"entry_gamma", &"entry_alpha"] as Array[StringName],
+		"collecting one entry must not shrink or reorder the full catalogue walk")
+	ls.free()
+
+
 func test_get_entry_returns_the_matching_resource() -> void:
 	var ls := _fresh()
 	ls._load_catalogue()

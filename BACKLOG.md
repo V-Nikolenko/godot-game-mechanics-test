@@ -792,7 +792,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea](docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea)
       2 run(s), $14.88; last on claude-opus-5
 
-## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 4 open)
+## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 3 open)
 
 - [x] **Every log record I find stays found, and the game knows how many are left** _(done - feature, medium, sonnet)_
       **Player outcome:** Logs I picked up three missions ago are still mine after quitting and
@@ -878,8 +878,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       interaction, is unaffected by `LogState`, and refuses to fire while `DialogPlayer.is_active` (the
       guard `PickupBase._show_notification()` already uses). Test the enter/exit/re-read cycle.
       -> [docs/plans/reading-a-data-tablet-by-a-body-doesn-t-interrupt-the-missio](docs/plans/reading-a-data-tablet-by-a-body-doesn-t-interrupt-the-missio)
+      1 run(s), $3.40; last on claude-sonnet-5
 
-- [ ] **The ESC menu has a Lore Logs section where I can re-read everything I've found** _(todo - feature, medium, sonnet)_
+- [x] **The ESC menu has a Lore Logs section where I can re-read everything I've found** _(done - feature, medium, sonnet)_
       **Player outcome:** ESC → Lore Logs shows the whole catalogue. Entries I have found are
       readable in full; ones I have not are visibly there but withheld, so I can see there is more to
       find and roughly how much. The header tells me where I stand: "7 / 14".
@@ -901,6 +902,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       **Done when:** the section opens from ESC, unlocked entries show their full text, locked ones are
       withheld but counted, the ratio is correct, and the gate is green. Note `ModuleList.MAX_ITEMS = 8`
       — a log catalogue will outgrow one screen, so scrolling or paging is in scope for this task.
+      -> [docs/plans/the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve](docs/plans/the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve)
 
 - [ ] **Log records can be placed in assault and infiltration missions, not just the hub** _(todo - feature, medium, sonnet)_
       **Player outcome:** the same log record I recognise from open space can be tucked into a

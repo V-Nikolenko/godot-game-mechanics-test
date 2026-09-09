@@ -61,6 +61,15 @@ func collected_ids() -> Array[StringName]:
 	return out
 
 
+## Catalogue-order ids for every entry, collected or not — the Lore Logs reader walks this to
+## render the whole catalogue, including rows it has to show as still locked.
+func all_ids() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for entry in _catalogue:
+		out.append(entry.id)
+	return out
+
+
 func get_entry(id: StringName) -> LogEntryResource:
 	return _by_id.get(id, null)
 

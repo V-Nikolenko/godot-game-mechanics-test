@@ -1,11 +1,17 @@
 ## global/ui/pause_menu/pause_menu.gd
 ## ESC pause menu shown during missions and open space.
 ##
-## mission_mode = true  (missions)   : Resume / Restart / Exit Mission / Exit Game
-## mission_mode = false (open space) : Resume / Exit Game only
+## mission_mode = true  (missions)   : Resume / Restart / Exit Mission / Lore Logs / Exit Game
+## mission_mode = false (open space) : Resume / Lore Logs / Exit Game only
 ##
 ## Opens with ESC. Blocked while DialogPlayer is running or any other system
 ## has already paused the tree (e.g. PlayerMenu).
+##
+## Lore Logs opens a full-catalogue reader (LoreLogList) in place of the option list, the same
+## "sub-overlay with its own input routing" shape PlayerMenu uses for ModuleList: while it's open,
+## _unhandled_input absorbs all menu input (including menu_confirm — it must never fall through to
+## _confirm() and re-open the reader) and ui_cancel closes the reader back to this menu rather than
+## closing the whole pause menu.
 ##
 ## Navigation: W / S  |  Space / F to confirm  |  ESC to close.
 ## On open: Camera2D zooms toward the player ship (ship sits in the right half).
@@ -27,9 +33,13 @@ const _CAMERA_OFFSET := Vector2(-107.0, 0.0)
 ## false = open-space mode: only Resume and Exit Game are shown.
 @export var mission_mode: bool = true
 
+@onready var _menu_container: Node2D    = $MenuContainer
+@onready var _lore_log_list:  LoreLogList = $LoreLogList
+
 var _options:          Array[Node2D] = []
 var _cursor:           int           = 0
 var _was_paused_by_us: bool          = false
+var _lore_logs_open:   bool          = false
 var _zoom_tween:       Tween         = null
 var _orig_zoom:        Vector2
 var _orig_cam_pos:     Vector2
@@ -44,6 +54,7 @@ func _ready() -> void:
 		$MenuContainer/Option1,
 		$MenuContainer/Option2,
 		$MenuContainer/Option3,
+		$MenuContainer/Option4,
 	]
 	_options[1].visible = mission_mode
 	_options[2].visible = mission_mode
@@ -52,7 +63,9 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("ui_cancel"):
-		if visible:
+		if _lore_logs_open:
+			_close_lore_logs()
+		elif visible:
 			_close()
 		else:
 			_try_open()
@@ -61,6 +74,18 @@ func _unhandled_input(event: InputEvent) -> void:
 
 	if not visible:
 		return
+
+	if _lore_logs_open:
+		if event.is_action_pressed("menu_up"):
+			_lore_log_list.navigate(-1)
+		elif event.is_action_pressed("menu_down"):
+			_lore_log_list.navigate(1)
+		elif event.is_action_pressed("menu_left"):
+			_lore_log_list.page(-1)
+		elif event.is_action_pressed("menu_right"):
+			_lore_log_list.page(1)
+		get_viewport().set_input_as_handled()
+		return  ## All other input blocked while the reader is open — menu_confirm included.
 
 	if event.is_action_pressed("menu_up"):
 		_navigate(-1)
@@ -81,6 +106,8 @@ func _try_open() -> void:
 	if DialogPlayer.is_active:
 		return
 	_cursor = 0
+	_lore_logs_open = false
+	_menu_container.visible = true
 	_hide_hud()
 	visible = true
 	get_tree().paused = true
@@ -90,6 +117,10 @@ func _try_open() -> void:
 
 
 func _close() -> void:
+	## Defensive: nothing should reach _close() with the reader still open (ui_cancel routes
+	## there first), but this stops a forced close from leaving stale state for the next _try_open().
+	if _lore_logs_open:
+		_close_lore_logs()
 	visible = false
 	_show_hud()
 	if _was_paused_by_us:
@@ -130,7 +161,21 @@ func _confirm() -> void:
 				hud.queue_free()
 			get_tree().change_scene_to_file(_HUB_PATH)
 		3:
+			_open_lore_logs()
+		4:
 			get_tree().quit()
+
+
+func _open_lore_logs() -> void:
+	_menu_container.visible = false
+	_lore_log_list.open()
+	_lore_logs_open = true
+
+
+func _close_lore_logs() -> void:
+	_lore_log_list.close()
+	_menu_container.visible = true
+	_lore_logs_open = false
 
 
 ## ── Navigation ──────────────────────────────────────────────────────────────
