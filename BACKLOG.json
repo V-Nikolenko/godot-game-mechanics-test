@@ -1230,6 +1230,28 @@
               "subagents": 1,
               "outcome": "error 429",
               "gate": "pass"
+            },
+            {
+              "commits": [
+                {
+                  "sha": "17040a6",
+                  "subject": "Make the four locked weapon modes obtainable in the sector hub"
+                }
+              ],
+              "at": "2026-09-09T01:58:54.086Z",
+              "run": "2026-09-09-0437-i1",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004412,
+                "claude-opus-5": 11.8951785
+              },
+              "costUSD": 11.8995905,
+              "turns": 59,
+              "subagents": 1,
+              "outcome": "success",
+              "gate": "pass"
             }
           ]
         }
@@ -1247,9 +1269,9 @@
           "id": "every-log-record-i-find-stays-found-and-the-game-knows-how-m",
           "head": "Every log record I find stays found, and the game knows how many are left",
           "body": "**Player outcome:** Logs I picked up three missions ago are still mine after quitting and\nrelaunching, and the game can always answer \"how many logs are there, and how many do I have?\"\nwithout anyone hand-maintaining that number.\n\n**Why this is first:** every other task in this epic reads or writes this store. Nothing else can\nbe built until \"what is a log\" and \"where is it saved\" exist.\n\n**Shape (leave the details to this task's own plan):**\n- A `LogEntryResource` (`Resource`) per lore entry — id, title, body text, and its position in\n  the reading order. Entries live as `.tres` files, matching the project's config-driven\n  convention (see `open_space/scenes/mission_data/mission_config_resource.gd` for the pattern).\n- A `LogState` autoload alongside the existing eight in `project.godot`, persisting to\n  `user://` with `ConfigFile` exactly like `MissionState` and `ShipModuleState` already do.\n  Copy `ShipModuleState`'s validate-on-load behaviour: an unknown id in the save file is warned\n  about and dropped, never trusted.\n- **The total must be derived, not typed.** The user's ask is that adding a log requires no\n  bookkeeping. Deriving it from the catalogue on disk is what makes that true; a hardcoded\n  `TOTAL_LOGS = 12` is the exact thing this task exists to avoid.\n\n**Open design question for the plan — flag it, don't silently pick:** the idea says lore logs\n\"are unlocked in a specific order\". The cheapest reading, and the one that best matches \"place the\ncollectible on the map and everything else happens automatically\", is that a lore-log collectible\nis *anonymous*: collecting one grants the next still-locked entry in catalogue order, so the story\nalways reads in sequence no matter which corner of the map the player explored first. The\nalternative — each collectible names its entry, and the menu shows gaps — is also defensible but\nmakes placement order narratively load-bearing. Pick one in the plan and say why.\n\n**Done when:** `tests/unit/test_log_state.gd` covers collect / already-collected / save round-trip\n/ unknown-id-in-save / the derived total, and the gate is green. Follow `tests/README.md` for the\n`user://` save-file sandbox — `LogState` writes to `user://` and will otherwise leak between tests.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
-          "planDir": null,
+          "planDir": "docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m",
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",

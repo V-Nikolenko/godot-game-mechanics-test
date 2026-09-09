@@ -58,6 +58,7 @@ Registered in `project.godot` `[autoload]` (load order matters). Full detail in
 | `ShipProgressionState` | `global/autoloads/ship_progression_state.gd` | Ship progression / unlocks |
 | `SessionState` | `global/autoloads/session_state.gd` | Per-run session data |
 | `CameraShake` | `global/systems/camera_shake.gd` | Global camera-shake requests |
+| `LogState` | `global/autoloads/log_state.gd` | Which lore-log entries are collected. Total is derived from a `LogEntryResource` `.tres` directory sweep, never hand-counted; `collect_next()` grants entries in catalogue order |
 
 ---
 

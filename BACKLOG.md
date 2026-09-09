@@ -790,11 +790,11 @@ the signal that the change was deliberate. Test names are given so the fix has a
       placed in the world (mirroring `ShipModuleUnlockerPickup`) plus the same kind of coverage test
       `test_module_unlock_sources.gd` already provides for ship modules.
       -> [docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea](docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea)
-      1 run(s), $2.98; last on claude-opus-5
+      2 run(s), $14.88; last on claude-opus-5
 
-## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 6 open)
+## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 5 open)
 
-- [ ] **Every log record I find stays found, and the game knows how many are left** _(todo - feature, medium, sonnet)_
+- [x] **Every log record I find stays found, and the game knows how many are left** _(done - feature, medium, sonnet)_
       **Player outcome:** Logs I picked up three missions ago are still mine after quitting and
       relaunching, and the game can always answer "how many logs are there, and how many do I have?"
       without anyone hand-maintaining that number.
@@ -825,6 +825,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       **Done when:** `tests/unit/test_log_state.gd` covers collect / already-collected / save round-trip
       / unknown-id-in-save / the derived total, and the gate is green. Follow `tests/README.md` for the
       `user://` save-file sandbox — `LogState` writes to `user://` and will otherwise leak between tests.
+      -> [docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m](docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m)
 
 - [ ] **Flying into a log record in open space picks it up and tells me what I found** _(todo - feature, medium, sonnet)_
       **Player outcome:** a log record floating in the sector hub is visually readable as

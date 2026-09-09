@@ -61,7 +61,7 @@ global/
 
 ## 3. Autoloads
 
-All eight are registered in `project.godot` under `[autoload]`. The `*` prefix means the script is the singleton root. Note the path quirk: most live in `global/autoloads/` (plural), `DialogPlayer` lives in `global/autoload/` (singular), and `EventBus`/`CameraShake` live in `global/systems/`.
+All nine are registered in `project.godot` under `[autoload]`. The `*` prefix means the script is the singleton root. Note the path quirk: most live in `global/autoloads/` (plural), `DialogPlayer` lives in `global/autoload/` (singular), and `EventBus`/`CameraShake` live in `global/systems/`.
 
 | Autoload | File | State it owns | Read / written |
 |---|---|---|---|
@@ -73,6 +73,7 @@ All eight are registered in `project.godot` under `[autoload]`. The `*` prefix m
 | `ShipProgressionState` | `global/autoloads/ship_progression_state.gd` | Permanent shield slot count (clamped 1..5). Persists to `user://ship_progression.cfg`. | Written by `add_permanent_shield` / `set_permanent_shield_count`; read by `Shield._ready()` when `bind_progression == true`. Emits `permanent_shield_count_changed`. |
 | `SessionState` | `global/autoloads/session_state.gd` | Cross-level temporary buffs: temp shield count, temp HP pool, timed damage buff (saved as Unix expiry). Persists to `user://session.cfg`. | `apply_to(player)` called from `PlayerBase._setup_components()`; auto-saved when shield/temp-HP/damage-buff state changes. `apply_to` binds the `TempHealth` node into the `amount_changed` handler so the saved stack size is read off the component rather than derived from the payload. |
 | `CameraShake` | `global/systems/camera_shake.gd` | A single `_trauma` float (0..1) that decays each frame. | Written by any system via `add(amount)`; read each frame by cameras via `get_offset()` (used inside `CameraDirector`). |
+| `LogState` | `global/autoloads/log_state.gd` | Which `LogEntryResource` ids are collected. Persists to `user://log_state.cfg`. `total_count()` is a `DirAccess` sweep of `catalogue_dir` (`global/resources/logs/entries/` in production) — never a hand-maintained list, unlike `UpgradeState.ALL_IDS`. | `collect_next()` is the only mutator: an anonymous lore-log pickup calls it with no id and it grants the lowest-`sequence` entry not yet collected, so the story reads in catalogue order regardless of where in the world it was found. Read via `is_collected` / `collected_ids` / `get_entry` / `total_count`. Emits `log_collected(id)`. Validates on load like `ShipModuleState`/`UpgradeState`: an id in the save file with no matching catalogue entry is `push_warning`ed and dropped. Information logs (one-time, non-persisted) never touch this store. |
 
 ## 4. Shared systems (`global/systems/`)
 
@@ -298,6 +299,9 @@ Pure-data `Resource` types (shareable `.tres` assets; runtime state is kept out 
 - **formation/** — `FormationResource` (base; `compute_slots() -> Array[FormationSlot]`, each slot an `offset` + `delay`). Subtypes: `line`, `v`, `wedge`, `diagonal`, `cluster`. `WaveManager` spawns one ship per slot.
 - **waves/** — `LevelResource` (`level_name` + ordered `waves`), `WaveResource` (`trigger_time` + `entries`), `SpawnEntryResource` (one ship/formation: `ship_scene`, `base_offset`, `spawn_delay`, `movement`, `exit_mode`, `look_*`, optional `formation`, `initial_props`).
 - **levels/** — `LevelSection` (one timed segment: `background_phase`, `transition_in_duration`, section-relative `waves`, `end_condition` ∈ {DURATION, WAVES_COMPLETE, ENEMIES_CLEARED}, `duration`) and `BackgroundPhase` (target alphas/scales/timings for the background renderer to tween toward).
+- **logs/** — `LogEntryResource` (`id`, `title`, `body`, `sequence`). One `.tres` per lore-log
+  entry; the catalogue is whatever sits in `entries/` at runtime — `LogState` sweeps the directory
+  rather than reading a hand-written list, so a new entry needs no registration anywhere else.
 - Top-level: `ship_config.gd`, `score_config.gd`, `skill_challenge_resource.gd` configure ship stats, scoring tuning, and skill-challenge windows respectively.
 
 #### `ShipConfig` and per-instance config resources
