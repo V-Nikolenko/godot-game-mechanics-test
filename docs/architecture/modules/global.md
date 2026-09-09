@@ -37,6 +37,10 @@ global/
 │   └── low_health_smoke.gd        # LowHealthSmoke — smoke below an HP threshold
 ├── entities/
 │   └── player_base.gd         # PlayerBase (CharacterBody2D) — shared player base class
+├── interactables/              # input-driven world objects (sibling of pickups/, not a subclass)
+│   ├── info_log_interactable.gd    # InfoLogInteractable (Area2D) — re-readable message, never consumed
+│   └── scenes/
+│       └── info_log_interactable.tscn
 ├── statemachine/
 │   ├── state.gd               # State base contract
 │   └── state_machine.gd       # StateMachine — runs child States
@@ -286,6 +290,32 @@ Subclasses call `super()` in `_ready()` (and in the overridable hooks `_setup_ef
 | `weapon_mode_unlocker_pickup.gd` | `UpgradeState.unlock(weapon_id())` — grants one main-weapon mode permanently; inspector-selectable `weapon` enum (`SNIPER_SHOT`, `SPREAD`, `GATLING`, `MINING_LASER`). Dialog line reads `display_name` off the mode's own `.tres`. |
 
 Each has a matching scene under `global/pickups/scenes/`.
+
+### Interactables (`global/interactables/`)
+Deliberately **not** under `pickups/` and **not** a `PickupBase` subclass: `InfoLogInteractable`
+(`class_name InfoLogInteractable extends Area2D`) is input-driven and never consumes itself, the
+opposite of a pickup's free-on-contact contract. It represents an **information log** — a tablet,
+terminal, or scrap of hull carrying one-time flavor text that is never stored and never counted
+toward completion (contrast `LogState`'s lore logs, above). `body_entered`/`body_exited` (filtered
+to group `"player"`) track how many player bodies currently overlap it and show/hide a child
+`PromptLabel` accordingly; `_unhandled_input` fires on the `interact` action (bound to **F** in
+`project.godot`) while a player is in range, guarded by `DialogPlayer.is_active` exactly like
+`PickupBase._show_notification()`'s busy-guard. Firing builds a one-line, `INSTANT`, `INNER_THOUGHT` `DialogScriptResource` with
+`pause_gameplay = false` via its own `_build_script()` (mirrors `PickupBase`'s notification
+construction rather than sharing code with it — the two call sites' lifecycles differ enough,
+and it's only two of them, that extracting a shared helper wasn't worth touching an unrelated
+file for) and hands it to `DialogPlayer.play()` — nothing frees the node or marks it "read," so
+interacting again replays the same message.
+Physics layers: `collision_layer = 2` (`environment_interactable`, named for exactly this kind of
+object in `project.godot`), `collision_mask = 4` (`environemnt_player` — the same mask every
+pickup scene uses to detect the `open_space`/`assault` player bodies, which set
+`collision_layer = 4` on their main shape). The shipped scene,
+`global/interactables/scenes/info_log_interactable.tscn`, carries no sprite by design — "tablet",
+"terminal", and "scrap of hull" are different physical dressings for the same interaction
+contract, so a placement site adds its own `Sprite2D` child and sets `message`/`prompt_text`.
+`infiltration/`'s player is not currently in group `"player"` and sits on the default physics
+layer (1), so it cannot yet trigger this interactable — wiring it in is a later epic task's job,
+not this component's.
 
 **Unlocker pickups are the only unlock source in the game.** Neither `ShipModuleState` nor `UpgradeState` is written from anywhere else, so a module or weapon mode with no unlocker placed in the world is content the player can see and never reach. Both benches live in `open_space/scenes/levels/sector_hub.tscn`, and both pairings are invariant-tested — `tests/integration/test_module_unlock_sources.gd` and `tests/integration/test_weapon_unlock_sources.gd`. The weapon exception is `UpgradeState.STARTING_IDS` (`[&"default"]`), seeded on a fresh profile.
 

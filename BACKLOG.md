@@ -792,7 +792,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea](docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea)
       2 run(s), $14.88; last on claude-opus-5
 
-## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 5 open)
+## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 4 open)
 
 - [x] **Every log record I find stays found, and the game knows how many are left** _(done - feature, medium, sonnet)_
       **Player outcome:** Logs I picked up three missions ago are still mine after quitting and
@@ -848,9 +848,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       nine, collecting it advances `LogState`, collecting it twice in one run cannot double-count, and
       the notification text names the entry. Test in `tests/unit/`.
       -> [docs/plans/flying-into-a-log-record-in-open-space-picks-it-up-and-tells](docs/plans/flying-into-a-log-record-in-open-space-picks-it-up-and-tells)
-      1 run(s), $0.93; last on claude-sonnet-5
+      2 run(s), $2.46; last on claude-sonnet-5
 
-- [ ] **Reading a data tablet by a body doesn't interrupt the mission, and I can read it again** _(todo - feature, medium, sonnet)_
+- [x] **Reading a data tablet by a body doesn't interrupt the mission, and I can read it again** _(done - feature, medium, sonnet)_
       **Player outcome:** I walk or fly up to a tablet, a terminal, or a scrap of hull, a prompt
       tells me I can read it, and pressing the key shows the message *without* yanking control away. If
       I come back later it is still readable — it is scenery with something to say, not a consumable.
@@ -877,6 +877,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       **Done when:** an interactable exists that shows a prompt on approach, replays its message on every
       interaction, is unaffected by `LogState`, and refuses to fire while `DialogPlayer.is_active` (the
       guard `PickupBase._show_notification()` already uses). Test the enter/exit/re-read cycle.
+      -> [docs/plans/reading-a-data-tablet-by-a-body-doesn-t-interrupt-the-missio](docs/plans/reading-a-data-tablet-by-a-body-doesn-t-interrupt-the-missio)
 
 - [ ] **The ESC menu has a Lore Logs section where I can re-read everything I've found** _(todo - feature, medium, sonnet)_
       **Player outcome:** ESC → Lore Logs shows the whole catalogue. Entries I have found are

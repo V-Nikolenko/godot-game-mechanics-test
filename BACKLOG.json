@@ -1331,6 +1331,28 @@
               "subagents": 1,
               "outcome": "error 429",
               "gate": "pass"
+            },
+            {
+              "commits": [
+                {
+                  "sha": "c222f37",
+                  "subject": "Two-round review of lore-log pickup plan surfaces DialogPlayer coroutine leak, task stopped for next cycle"
+                }
+              ],
+              "at": "2026-09-09T06:47:38.940Z",
+              "run": "2026-09-09-0937-i1",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004357,
+                "claude-sonnet-5": 1.5246248000000004
+              },
+              "costUSD": 1.5289818000000002,
+              "turns": 21,
+              "subagents": 2,
+              "outcome": "success",
+              "gate": "pass"
             }
           ]
         },
@@ -1338,9 +1360,9 @@
           "id": "reading-a-data-tablet-by-a-body-doesn-t-interrupt-the-missio",
           "head": "Reading a data tablet by a body doesn't interrupt the mission, and I can read it again",
           "body": "**Player outcome:** I walk or fly up to a tablet, a terminal, or a scrap of hull, a prompt\ntells me I can read it, and pressing the key shows the message *without* yanking control away. If\nI come back later it is still readable — it is scenery with something to say, not a consumable.\n\n**This is the other half of the user's idea:** information logs are not stored, not counted, and\nnot part of 100% completion. They exist to make a place feel inhabited.\n\n**Two things worth knowing before planning:**\n- The `interact` action is already bound to **F** in `project.godot` (line ~121) and **no script\n  in the project uses it**. This task is the first user of it, so there is no existing interaction\n  system to extend — but also no existing conventions to fight.\n- `PickupBase` is the wrong parent here: it frees itself on contact and requires no input. This is\n  a sibling of it, not a subclass.\n\n**Research finding that should shape the design:** the most common complaint about lore\ncollectibles in shipped games is that they stop the game dead — the player is parked in a menu\nlistening to something they could have read ten times faster\n(https://www.giantbomb.com/forums/general-discussion-30/why-do-developers-keep-using-the-audio-log-game-me-1479403/,\nhttps://www.resetera.com/threads/do-you-listen-to-audio-logs-that-require-you-to-stare-at-a-menu-as-it-plays.804642/).\nThat is the argument for the split the user already drew: short in-world text plays inline via\n`DialogPlayer` with `pause_gameplay = false` (the pickup notification path already does exactly\nthis), and only the long-form lore lives in a menu the player opens deliberately.\n\n**Done when:** an interactable exists that shows a prompt on approach, replays its message on every\ninteraction, is unaffected by `LogState`, and refuses to fire while `DialogPlayer.is_active` (the\nguard `PickupBase._show_notification()` already uses). Test the enter/exit/re-read cycle.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
-          "planDir": null,
+          "planDir": "docs/plans/reading-a-data-tablet-by-a-body-doesn-t-interrupt-the-missio",
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",
