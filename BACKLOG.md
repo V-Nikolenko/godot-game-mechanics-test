@@ -1182,7 +1182,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       ---
       -> [docs/plans/station-death-handoff](docs/plans/station-death-handoff)
 
-## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  [DRAFT - preparation in progress]  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 8 open)
+## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  [DRAFT - preparation in progress]  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 7 open)
 
 **Preparation**
 
@@ -1195,7 +1195,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
       2 run(s), $6.35; last on claude-opus-5
 
-- [ ] **Plan: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(in progress - plan)_
+- [x] **Plan: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(done - plan)_
       Consume the research and write the implementation plan to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.
       after: research-open-space-mouse-aiming-inertial-turn-to-cursor-wit
       -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
