@@ -1749,13 +1749,36 @@
           "dependsOn": [
             "research-open-space-mouse-aiming-inertial-turn-to-cursor-wit"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "88f301c",
+                  "subject": "Plan the open-space mouse-aiming epic and break it into six tasks"
+                }
+              ],
+              "at": "2026-09-13T13:45:32.700Z",
+              "run": "2026-09-13-1616-i4",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.0039959999999999996,
+                "claude-opus-5": 2.9746075
+              },
+              "costUSD": 2.9786034999999997,
+              "turns": 30,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "plan-review-open-space-mouse-aiming-inertial-turn-to-cursor-",
           "head": "Plan review: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting",
           "body": "Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
           "planDir": "docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr",
           "kind": "prep",

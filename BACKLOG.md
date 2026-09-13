@@ -1199,8 +1199,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Consume the research and write the implementation plan to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.
       after: research-open-space-mouse-aiming-inertial-turn-to-cursor-wit
       -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
+      1 run(s), $2.98; last on claude-opus-5
 
-- [ ] **Plan review: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(todo - plan-review)_
+- [ ] **Plan review: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(in progress - plan-review)_
       Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.
       after: plan-open-space-mouse-aiming-inertial-turn-to-cursor-with-a-
       -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
