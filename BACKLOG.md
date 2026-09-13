@@ -70,6 +70,518 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
+## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 2 open)
+
+- [x] **Every log record I find stays found, and the game knows how many are left** _(done - feature, medium, sonnet)_
+      **Player outcome:** Logs I picked up three missions ago are still mine after quitting and
+      relaunching, and the game can always answer "how many logs are there, and how many do I have?"
+      without anyone hand-maintaining that number.
+      
+      **Why this is first:** every other task in this epic reads or writes this store. Nothing else can
+      be built until "what is a log" and "where is it saved" exist.
+      
+      **Shape (leave the details to this task's own plan):**
+      - A `LogEntryResource` (`Resource`) per lore entry — id, title, body text, and its position in
+        the reading order. Entries live as `.tres` files, matching the project's config-driven
+        convention (see `open_space/scenes/mission_data/mission_config_resource.gd` for the pattern).
+      - A `LogState` autoload alongside the existing eight in `project.godot`, persisting to
+        `user://` with `ConfigFile` exactly like `MissionState` and `ShipModuleState` already do.
+        Copy `ShipModuleState`'s validate-on-load behaviour: an unknown id in the save file is warned
+        about and dropped, never trusted.
+      - **The total must be derived, not typed.** The user's ask is that adding a log requires no
+        bookkeeping. Deriving it from the catalogue on disk is what makes that true; a hardcoded
+        `TOTAL_LOGS = 12` is the exact thing this task exists to avoid.
+      
+      **Open design question for the plan — flag it, don't silently pick:** the idea says lore logs
+      "are unlocked in a specific order". The cheapest reading, and the one that best matches "place the
+      collectible on the map and everything else happens automatically", is that a lore-log collectible
+      is *anonymous*: collecting one grants the next still-locked entry in catalogue order, so the story
+      always reads in sequence no matter which corner of the map the player explored first. The
+      alternative — each collectible names its entry, and the menu shows gaps — is also defensible but
+      makes placement order narratively load-bearing. Pick one in the plan and say why.
+      
+      **Done when:** `tests/unit/test_log_state.gd` covers collect / already-collected / save round-trip
+      / unknown-id-in-save / the derived total, and the gate is green. Follow `tests/README.md` for the
+      `user://` save-file sandbox — `LogState` writes to `user://` and will otherwise leak between tests.
+      -> [docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m](docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m)
+      1 run(s), $3.03; last on claude-sonnet-5
+
+- [ ] **Flying into a log record in open space picks it up and tells me what I found** _(in progress - feature, medium, sonnet)_
+      **Player outcome:** a log record floating in the sector hub is visually readable as
+      "something to collect", flying into it picks it up, and a one-line notification tells me what I
+      just recovered without stopping the ship.
+      
+      **Reuse — this should be a small script:** `PickupBase` (`global/pickups/pickup_base.gd`) already
+      does the whole dance: `body_entered` → check group `"player"` → `_collect(player)` →
+      `_get_dialog_text()` → non-blocking `DialogPlayer` line → `queue_free()`.
+      `ship_module_unlocker_pickup.gd` is the closest existing sibling (36 lines, an inspector enum, one
+      autoload call) and is the model to copy. If this task ends up writing its own overlap detection or
+      its own notification path, something has gone wrong.
+      
+      **Art:** the log record needs its own sprite. `assault/` and `open_space/` are strict top-down
+      orthographic — **invoke the `pixel-art-generation` skill before generating anything**, and open
+      the result and look at it. A 3/4-view collectible is unusable and cannot be fixed in code.
+      
+      **Done when:** a `lore_log_pickup.tscn` exists under `global/pickups/scenes/` next to the other
+      nine, collecting it advances `LogState`, collecting it twice in one run cannot double-count, and
+      the notification text names the entry. Test in `tests/unit/`.
+      -> [docs/plans/flying-into-a-log-record-in-open-space-picks-it-up-and-tells](docs/plans/flying-into-a-log-record-in-open-space-picks-it-up-and-tells)
+      2 run(s), $2.46; last on claude-sonnet-5
+
+- [x] **Reading a data tablet by a body doesn't interrupt the mission, and I can read it again** _(done - feature, medium, sonnet)_
+      **Player outcome:** I walk or fly up to a tablet, a terminal, or a scrap of hull, a prompt
+      tells me I can read it, and pressing the key shows the message *without* yanking control away. If
+      I come back later it is still readable — it is scenery with something to say, not a consumable.
+      
+      **This is the other half of the user's idea:** information logs are not stored, not counted, and
+      not part of 100% completion. They exist to make a place feel inhabited.
+      
+      **Two things worth knowing before planning:**
+      - The `interact` action is already bound to **F** in `project.godot` (line ~121) and **no script
+        in the project uses it**. This task is the first user of it, so there is no existing interaction
+        system to extend — but also no existing conventions to fight.
+      - `PickupBase` is the wrong parent here: it frees itself on contact and requires no input. This is
+        a sibling of it, not a subclass.
+      
+      **Research finding that should shape the design:** the most common complaint about lore
+      collectibles in shipped games is that they stop the game dead — the player is parked in a menu
+      listening to something they could have read ten times faster
+      (https://www.giantbomb.com/forums/general-discussion-30/why-do-developers-keep-using-the-audio-log-game-me-1479403/,
+      https://www.resetera.com/threads/do-you-listen-to-audio-logs-that-require-you-to-stare-at-a-menu-as-it-plays.804642/).
+      That is the argument for the split the user already drew: short in-world text plays inline via
+      `DialogPlayer` with `pause_gameplay = false` (the pickup notification path already does exactly
+      this), and only the long-form lore lives in a menu the player opens deliberately.
+      
+      **Done when:** an interactable exists that shows a prompt on approach, replays its message on every
+      interaction, is unaffected by `LogState`, and refuses to fire while `DialogPlayer.is_active` (the
+      guard `PickupBase._show_notification()` already uses). Test the enter/exit/re-read cycle.
+      -> [docs/plans/reading-a-data-tablet-by-a-body-doesn-t-interrupt-the-missio](docs/plans/reading-a-data-tablet-by-a-body-doesn-t-interrupt-the-missio)
+      1 run(s), $3.40; last on claude-sonnet-5
+
+- [x] **The ESC menu has a Lore Logs section where I can re-read everything I've found** _(done - feature, medium, sonnet)_
+      **Player outcome:** ESC → Lore Logs shows the whole catalogue. Entries I have found are
+      readable in full; ones I have not are visibly there but withheld, so I can see there is more to
+      find and roughly how much. The header tells me where I stand: "7 / 14".
+      
+      **Reuse — the locked/unlocked list already exists.** `global/ui/player_menu/module_list.gd`
+      (`ModuleList`) is a navigable overlay that renders one row per catalogue entry, greys locked rows,
+      and prefixes a locked row's description with a call to action rather than leaving it a dead end.
+      Its lock gate is `ShipModuleState.is_unlocked()`; this list's is `LogState`. Read
+      `tests/integration/test_module_list_lock.gd` — it already pins the locked-row behaviour and is the
+      model for this list's test.
+      
+      **The ESC menu itself:** `global/ui/pause_menu/pause_menu.gd` has exactly four hardcoded options
+      (`Option0..Option3`) wired by index in `_confirm()`, with `_navigate()` skipping hidden ones, and
+      `mission_mode` toggling options 1 and 2. Adding a fifth option means touching that index-matched
+      `match` and the scene's `MenuContainer`, plus the two scenes that instance it
+      (`pause_menu.tscn`, `open_space_pause_menu.tscn`). Worth deciding in the plan whether Lore Logs
+      appears in mission mode, in open space, or both.
+      
+      **Done when:** the section opens from ESC, unlocked entries show their full text, locked ones are
+      withheld but counted, the ratio is correct, and the gate is green. Note `ModuleList.MAX_ITEMS = 8`
+      — a log catalogue will outgrow one screen, so scrolling or paging is in scope for this task.
+      -> [docs/plans/the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve](docs/plans/the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve)
+      1 run(s), $4.80; last on claude-sonnet-5
+
+- [x] **Log records can be placed in assault and infiltration missions, not just the hub** _(done - feature, medium, sonnet)_
+      **Player outcome:** the same log record I recognise from open space can be tucked into a
+      wave gap in an assault run or behind a crate on a ground mission, and it counts the same way.
+      
+      **This is the task with the real obstacle, and it is worth knowing up front:** the infiltration
+      player (`infiltration/scenes/entities/player/player.gd`) is a plain `CharacterBody2D` — it does
+      **not** extend `PlayerBase` and is **not** in the `"player"` group. `PickupBase` finds the player
+      by that group and then casts to `PlayerBase`, so **no existing pickup in the game can be collected
+      on a ground mission today.** The plan has to choose between widening the pickup's detection so it
+      does not require `PlayerBase`, or giving the ground player what the group contract expects — and
+      the second is a much larger change to a module this epic is not otherwise touching.
+      
+      **Also in scope:**
+      - Assault placement is authored in **640x360 design space, scaled by
+        `ArenaCamera.WORLD_SCALE` (2.0) at runtime — never pre-multiply.**
+      - An assault mission can be restarted or replayed from the pause menu. Decide and test what
+        happens to an already-collected log on a replay: it must not double-count, and a player who
+        quits mid-mission after grabbing one should not be punished for it. This is the "missable
+        collectible" trap — a counter stuck at 99% because of a bookkeeping edge is the single most
+        reliably infuriating thing about collectible systems
+        (https://www.gamedeveloper.com/design/miss-able-collectibles-i-want-it-but-not-so-bad-i-ll-start-the-game-over-again).
+      
+      **Done when:** a log placed in an assault level and one placed in the infiltration test scene are
+      both collectable, and a test pins the replay/restart behaviour. This task may well need splitting
+      once its plan is written — if so, split it rather than half-finishing both modes.
+      -> [docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio](docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio)
+      2 run(s), $7.97; last on claude-sonnet-5
+
+- [ ] **Test logs on the open-space map prove both log types work end to end** _(in progress - feature, medium, sonnet)_
+      **Player outcome (and the user's explicit ask):** boot the game, fly around the sector hub,
+      and actually find several lore logs and a couple of information logs — enough to see the counter
+      move, the ESC section fill up, and an in-world tablet re-read cleanly.
+      
+      **Where:** `open_space/scenes/levels/sector_hub.tscn` already carries nine pickup types and
+      fourteen module unlockers placed as scene instances; the log records go in the same way, so this
+      task is mostly authoring — placement, and writing real placeholder entry text rather than
+      "Lorem ipsum". Spread them so at least one requires actually leaving the mission-select lane.
+      
+      **Done when:** at least three lore logs and two information logs are placed in the hub, the
+      catalogue total reported by `LogState` matches what is placeable, and `bash /agent/verify.sh` is
+      green — `tests/integration/test_project_load_integrity.gd` will load the modified hub scene and
+      fail on any engine error or warning it produces.
+      
+      **Also finish the epic here:** update `docs/architecture/modules/global.md` (the pickups table in
+      section 6 and the autoload list), `docs/architecture/PROJECT.md`, `open_space.md`, and
+      `CLAUDE.md` via the `updating-project-docs` skill.
+      -> [docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en](docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en)
+      1 run(s), $1.84; last on claude-sonnet-5
+
+## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  [CHANGES REQUESTED - being revised]  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 7 open)
+
+**Review history**
+
+- _2026-09-13T14:02:11.598Z_ **changes** - Sorry, I moved 'plan review' step from progress to done. Looks like you didn't finish it yet, so I rejecting it for you to move it to done when you ready. As for now it looks great!
+
+**Preparation**
+
+- [x] **Research: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(done - research)_
+      Investigate this as a professional game developer would, before anything is designed: the existing architecture and systems it touches, reusable patterns already in the project, dependencies, constraints, candidate approaches with their tradeoffs, risks, edge cases, testing requirements, and impact on other systems. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage RESEARCH. Output: `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/1-context.md` and `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/2-research.md`.
+      
+      **Triage summary:** The user wants open-space flight to steer with the mouse: the ship turns toward the cursor with a deliberate lag/inertia rather than snapping to it, turning noticeably slower than the current keys so precision aiming is not free, with weapons and movement abilities still firing along the ship's actual facing (the cursor only sets the target angle) - a Jet Lancer-style responsive-but-inertial feel. A/D turning stays as a selectable legacy scheme, the change must not reach assault or infiltration, and a setting toggles the schemes with mouse-aim as the default. What it builds on: open_space/scenes/entities/player/player_ship.gd is the only mode-specific controller (its `_handle_rotation()` is a flat `rotation += rotation_speed_deg * turn * delta` with no angular velocity, next to `_handle_thrust()`'s already-inertial thrust/damping/max_speed/flip-boost model), and because the open-space ship reuses the shared assault WeaponState node whose behaviors all fire from `actor.rotation` (straight_behavior.gd:16, spread_behavior.gd:15, sniper_behavior.gd:81, beam_behavior.gd:53), the 'weapons follow facing, not the cursor' requirement comes for free the moment the mouse only drives rotation - and mode isolation comes for free too, since assault's player is a separate scene (assault/scenes/player/player_fighter.tscn) with its own controller. The gap is the settings half: the project reads no mouse input anywhere (zero `get_global_mouse_position` / `InputEventMouseMotion` uses) and has no options system at all - no settings autoload, no options screen, and a PauseMenu whose five entries are hard-coded Node2D children - so this needs a small persisted settings store following the `user://*.cfg` ConfigFile pattern of SessionState/MissionState/ShipModuleState, plus a UI entry point to flip the scheme. Open questions for research and the plan: the turn model (max turn rate plus angular acceleration/damping, versus exponential smoothing toward the cursor angle) and the actual numbers that make mouse turning feel responsive yet slower than the 220 deg/s keyboard rate; whether the cursor should keep steering while the mission-select menu, PlayerMenu or PauseMenu is open, and what the cursor looks like on screen (crosshair, dead zone near the ship); and how mouse aim coexists with AiTargetingModule, which writes `actor.rotation` directly every frame to snap onto a target and would otherwise fight the turn controller, and EngineBoostModule, which latches its direction from `actor.rotation` at activation. Note for scheduling only: a separate untriaged idea, 'Add Boost/Burst Movement to Open Space', touches the same `_handle_thrust()` code path.
+      
+      **Original idea (idea-1789305113892):** Rework Open-Space Movement & Mouse Aiming:  Rework open-space movement to support mouse-based ship rotation and aiming.  Keep the existing A/D rotation controls as an alternative/legacy control scheme.  The new mouse system should rotate the ship toward the mouse position, providing more precise movement and shooting control.  Add a slight rotation delay/inertia when following the mouse, rather than making the ship instantly point at the cursor.  Make mouse-based rotation somewhat slower to keep the system balanced and avoid making aiming too powerful.  Weapons and movement abilities must follow the ship's actual facing direction, not the mouse position. The mouse only determines the direction the ship is trying to rotate toward.  This system should apply only to open-space missions and must not affect assault/land missions or other gameplay modes.  Add a setting/option to switch between the new mouse movement and the existing movement system, with the new mouse-based system enabled by default.  Overall movement should aim for a responsive but inertia-based feel, inspired by the movement style of Jet Lancer.
+      -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
+      2 run(s), $6.35; last on claude-opus-5
+
+- [x] **Plan: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(done - plan)_
+      Consume the research and write the implementation plan to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.
+      after: research-open-space-mouse-aiming-inertial-turn-to-cursor-wit
+      -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
+      1 run(s), $2.98; last on claude-opus-5
+
+- [ ] **Plan review: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(in progress - plan-review)_
+      Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.
+      after: plan-open-space-mouse-aiming-inertial-turn-to-cursor-with-a-
+      -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
+      1 run(s), $3.27; last on claude-opus-5
+
+**Implementation**
+
+- [ ] **Your ship leans toward the mouse cursor instead of snapping to it** _(todo - feature, medium, sonnet)_
+      Adds `open_space/scenes/entities/player/ship_turn_controller.gd` (`class_name ShipTurnController extends Node`) and wires it into `open_space/scenes/entities/player/player_ship.tscn` as a child node of PlayerShip. It becomes the only writer of the open-space ship's rotation.
+      
+      Implements BOTH schemes behind an `@export var scheme: StringName` defaulting to `&"mouse"`:
+      - mouse: clamped exponential chase toward the cursor angle (see `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/3-plan.md` -> "Turn model" for the exact five lines), dead zone holds the target angle, `rotate_toward` applies the step.
+      - keys: today's behaviour exactly, 220 deg/s, instantaneous, cursor ignored.
+      
+      `player_ship.gd::_handle_rotation` shrinks to reading the A/D axis, calling `set_aim_target(global_position, get_global_mouse_position())` and `rotation = _turn.step(rotation, turn, delta)`. `rotation_speed_deg` moves off `player_ship.gd` onto the controller. `get_global_mouse_position()` must appear in exactly one line project-wide.
+      
+      DONE WHEN: `tests/unit/test_ship_turn_controller.gd` passes with every case in the plan's test plan for that file - frame-rate independence, the turn-rate cap, no overshoot, wrap-around across +-pi, cursor-exactly-on-ship, the 47.9/48.1 px dead-zone edge, the 180-degree tie-break, "classic is still 220 deg/s", "classic ignores the cursor", "mouse ignores A/D". No autoload and no UI in this task - the scheme is flipped by hand in the test / inspector. Gate green.
+
+- [ ] **The game remembers which steering scheme you fly with** _(todo - feature, small, sonnet)_
+      Adds `global/autoloads/settings_state.gd` (`SettingsState`), the project's first settings store. Near-copy of the `ConfigFile` template in `global/autoloads/ship_module_state.gd`: `SAVE_PATH = "user://settings.cfg"`, `SECTION = "controls"`, key `open_space_scheme`, `SCHEMES = [&"mouse", &"keys"]`, `DEFAULT_SCHEME = &"mouse"`, `signal open_space_scheme_changed(scheme: StringName)` (declared with its argument - `test_signal_emit_arity.gd` sweeps self-emits).
+      
+      Default-on-missing comes from `ConfigFile.get_value(SECTION, KEY, default)` and is re-validated against `SCHEMES` on load. Deliberately NOT the `UpgradeState.STARTING_IDS` idiom - see the plan's "the setting is a new SettingsState autoload" for why that shape is wrong here.
+      
+      Also: register in `project.godot` `[autoload]`; add `"user://settings.cfg"` to `tests/helpers/save_sandbox.gd::PATHS` (without it every test touching the setting leaks into the player's profile and the next suite run). `player_ship.gd` seeds `_turn.scheme` from the autoload in `_ready()` and connects `open_space_scheme_changed` to `_turn.set_scheme(scheme, rotation)`.
+      
+      DONE WHEN: `tests/unit/test_settings_state.gd` passes - default on empty disk, round-trips through a second instance's `_load()`, falls back to the default on a hand-corrupted value, rejects a value not in SCHEMES, and does not emit when set to the value it already holds. Plus the "scheme flip mid-flight causes no rotation jump" case in `tests/unit/test_ship_turn_controller.gd`. No UI yet. Gate green.
+      after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
+
+- [ ] **AI Targeting still snaps your nose onto an enemy, and the snap holds** _(todo - feature, small, sonnet)_
+      `global/ship_modules/ai_targeting_module.gd:38` writes `actor.rotation =` directly. Under the turn controller that write is undone within a frame or two, so the 15-second-cooldown module the player unlocked and equipped visibly does nothing under mouse aim.
+      
+      Fix, per the plan's chosen option (a):
+      - `OpenSpacePlayerShip.face_instant(angle: float)` - sets rotation, adopts `angle` as the controller's target, and suppresses cursor steering.
+      - The module calls it duck-typed (`if actor.has_method("face_instant")`), the same shape as `is_armored()` in CLAUDE.md, because the module lives in `global/` and must not assume an open-space actor.
+      - Suppression is cleared by REAL mouse motion, not by cursor position: `get_global_mouse_position()` is a world position that moves with the camera, so a physically still mouse would otherwise clear it immediately. `player_ship.gd::_input()` gains an `InputEventMouseMotion` branch calling `_turn.notify_mouse_moved()` before its existing `use_ability` early-return. Do not mark motion events as handled.
+      
+      DONE WHEN: the "snap holds until the mouse moves" case in `tests/unit/test_ship_turn_controller.gd` passes (face_instant, then steps with a cursor 90 degrees away leave rotation put; notify_mouse_moved, and the next step turns), and the module still snaps under `scheme = &"keys"` exactly as it does today. Gate green.
+      after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
+
+- [ ] **A future ship module cannot silently fight your steering** _(todo - test, small, sonnet)_
+      Adds `tests/integration/test_ship_rotation_single_writer.gd`, the suite's eleventh invariant test. After this epic the "exactly one writer of the open-space ship's rotation" rule is what keeps mouse aim working, and it is precisely the kind of rule the fifteenth ship module breaks with no visible symptom - which is exactly how `ai_targeting_module.gd` came to fight the controller in the first place.
+      
+      Sweep every `global/ship_modules/*.gd` and assert none assigns to `actor.rotation` (`=`, `+=`, `-=`). Allowlist empty; the sanctioned route is `face_instant()`.
+      
+      Boundary cases that make it able to fail:
+      - the sweep must find a non-zero number of module files and must find `ai_targeting_module.gd` among them by name - a glob that silently matched nothing must not read as a pass;
+      - `OpenSpacePlayerShip` must expose a `face_instant` method, so the rule points at a replacement rather than only forbidding the old call.
+      
+      DONE WHEN: the test passes on the fixed tree, and reverting the duck-typed call in `ai_targeting_module.gd` makes it fail (check that by hand before committing - an invariant that cannot fail is worth nothing). Gate green. Add the test to the list in `CLAUDE.md` and `tests/README.md` alongside the other invariant tests.
+      after: ai-targeting-still-snaps-your-nose-onto-an-enemy-and-the-sna
+
+- [ ] **Alt-tabbing away no longer leaves your ship turning on its own** _(todo - feature, small, sonnet)_
+      When the game window loses focus the OS pointer stops updating but `get_global_mouse_position()` keeps returning the last in-window position, so the ship holds a stale target angle and keeps turning toward it while the player is in another window.
+      
+      Adds `ShipTurnController.set_steering_enabled(enabled: bool)` - while false the target angle is frozen and `step()` still runs (so no rotation discontinuity on resume) - and `player_ship.gd::_notification()` handling `NOTIFICATION_APPLICATION_FOCUS_OUT` / `NOTIFICATION_APPLICATION_FOCUS_IN`.
+      
+      Explicitly NOT doing pointer confinement (`MOUSE_MODE_CONFINED` takes the pointer hostage on a multi-monitor desktop) or capture with a software cursor - both are out of scope per the plan. The narrower "pointer left the window but the window is still focused" case stays uncovered and that is accepted.
+      
+      DONE WHEN: the "steering disabled freezes the target" case in `tests/unit/test_ship_turn_controller.gd` passes - cursor moves while disabled and rotation does not change, re-enabling resumes with no jump. Gate green.
+      after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
+
+- [ ] **Choose mouse aim or classic A/D steering from the pause menu** _(todo - feature, medium, sonnet)_
+      The last step: the player can actually pick a scheme. Until this lands the setting exists but only a test can change it.
+      
+      `global/ui/pause_menu/pause_menu.gd` hard-codes `Option0..Option4` and `_confirm()` matches on the index. Add a new `Option4` = "Settings" and move today's Exit Game to `Option5`, in BOTH `pause_menu.tscn` and `open_space_pause_menu.tscn` (they duplicate their option nodes rather than sharing them). Settings goes before Exit Game so Exit Game stays last where a player expects it; `tests/integration/test_pause_menu_lore_logs.gd` references only indices 1-3 so it needs no change - confirm that before assuming it.
+      
+      `global/ui/pause_menu/settings_panel.{gd,tscn}` is a sub-overlay copying `LoreLogList`'s `open()`/`close()`/`navigate()` shape and the `_lore_logs_open` routing branch verbatim in spirit: while open it absorbs ALL menu input including `menu_confirm` (it must never fall through to `_confirm()` and re-open itself), and `ui_cancel` returns to the option list rather than closing the whole menu. One row - "Open-Space Steering: Mouse Aim / Classic (A/D)" - with menu_left/menu_right cycling the value straight into `SettingsState`. No generic settings framework for one two-valued key.
+      
+      The row is shown in all three modes: it is a stored preference, and hiding it in missions would make a player fly back to the hub to change their controls. The label names its scope, which is what keeps it from being a discoverability trap.
+      
+      New `.tscn`/`.gd` go UID-less or get a UID minted with the headless `ResourceUID.create_id()` snippet in `tests/README.md`. Never hand-typed, never copied from a sibling.
+      
+      DONE WHEN: `tests/integration/test_pause_menu_settings.gd` passes with every case in the plan's test plan for that file - including the one that drives the LIVE `SettingsState` through `menu_right` (a settings row whose handler is empty passes every "is it visible and labelled" assertion), and the one proving `menu_confirm` does not fall through while the panel is open. Sandboxed via `tests/helpers/save_sandbox.gd`. Gate green, and `updating-project-docs` run - this adds a UI component to a shared module.
+      after: the-game-remembers-which-steering-scheme-you-fly-with
+
+## Open-space boost: Shift burst movement on an upgradeable boost meter  [DRAFT - preparation in progress]  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 3 open)
+
+**Preparation**
+
+- [ ] **Research: Open-space boost: Shift burst movement on an upgradeable boost meter** _(todo - research)_
+      Investigate this as a professional game developer would, before anything is designed: the existing architecture and systems it touches, reusable patterns already in the project, dependencies, constraints, candidate approaches with their tradeoffs, risks, edge cases, testing requirements, and impact on other systems. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage RESEARCH. Output: `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/1-context.md` and `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/2-research.md`.
+      
+      **Triage summary:** The user wants Jet Lancer-style momentum movement in open space: Shift fires a burst of speed along the ship's current facing, drains a dedicated boost meter, shows the existing blue/cyan afterburner, and a ~180-degree turn plus boost should kill current momentum and redirect it, so flying becomes bursts and redirects rather than held thrust. The meter should be an upgradeable resource like health and shields, with a bar shown next to the weapon overheat meter, and none of it may touch assault or infiltration. Much of this already exists in pieces. OpenSpacePlayerShip (open_space/scenes/entities/player/player_ship.gd) already carries the momentum model (thrust_acceleration 380, reverse_acceleration 220, max_speed 420, damping 0.6) and a prototype of the flip mechanic: _trigger_flip_boost() fires when move_up is pressed while the ship is travelling backwards at >= boost_speed_threshold 180 px/s, snapping velocity to boost_redirect_speed 200 for boost_duration_sec 0.3 - the idea is essentially to promote that hidden special case into the primary, metered, upgradeable verb. ThrusterEffect.State.BOOST is the cyan afterburner the idea asks to reuse, and the ship sprite has a flame_boost animation. ShipProgressionState (global/autoloads/ship_progression_state.gd) is the exact precedent for a persisted, clamped, signal-emitting upgrade stat, and ShipShieldUpPickup plus the test_module_unlock_sources.gd placement invariant are the precedent for the collectible that raises it. Mode exclusivity is structural rather than a flag: this player script is open-space only. The open question the research stage has to settle is EngineBoostModule (global/ship_modules/engine_boost_module.gd), the equippable engines-slot module that already does a facing-direction burst - 1500 px/s easing to 500 over 0.55 s, i-frames, 45 contact damage, 2 s cooldown on the H key - and owns velocity by setting engine_boost_active to make _handle_thrust() stand down. A core Shift boost would be a second system claiming the same velocity, the same cyan flame and the same fantasy, so the epic must decide whether the module is superseded, re-cast as a meter upgrade, or kept as a distinct heavier ability. Three smaller decisions go with it: no boost input action exists (dash is already bound to Shift but is read only by the infiltration player); in open space the overheat meter is a world-space bar under the ship, not a HUD control, so where the boost bar actually belongs needs a call; and the sibling draft epic open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr rewrites _handle_rotation in the same _physics_process, so the two need a shared story about who owns open-space movement.
+      
+      **Original idea (idea-1789305251413):** Add Boost/Burst Movement to Open Space  Introduce a dedicated boost mechanic for open-space movement.  Reuse the existing blue boost flames/effect as the visual feedback for boosting.  Pressing Shift activates the boost and consumes a dedicated boost meter.  Boost should provide a significant burst of speed in the current direction the ship is facing.  The boost meter should become a progression/resource system that can be improved through collectibles/upgrades, similar to the existing health and shield upgrades.  Move the existing thrust/braking behavior into the boost system.  If the player turns the ship approximately 180° and activates boost, the ship should use the boost to rapidly reduce its current movement and transition into movement in the newly facing direction.  The goal is to allow quick direction changes and momentum manipulation rather than requiring continuous thrusting.  The overall movement should aim to reproduce the fast, momentum-based combat movement of Jet Lancer, while fitting the game's existing physics and balance.  Add a boost meter UI near the existing weapon overheat meter so both combat resources are visible together.  Boost should be exclusive to open-space gameplay and should not alter movement in other mission types.
+      -> [docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos](docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos)
+      1 run(s), $1.46; last on claude-opus-5
+
+- [ ] **Plan: Open-space boost: Shift burst movement on an upgradeable boost meter** _(todo - plan)_
+      Consume the research and write the implementation plan to `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.
+      after: research-open-space-boost-shift-burst-movement-on-an-upgrade
+      -> [docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos](docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos)
+
+- [ ] **Plan review: Open-space boost: Shift burst movement on an upgradeable boost meter** _(todo - plan-review)_
+      Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.
+      after: plan-open-space-boost-shift-burst-movement-on-an-upgradeable
+      -> [docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos](docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos)
+
+## Foundations: test harness, UID integrity, art pipeline  [DONE]  (`foundations-test-harness-uid-integrity-art-pipeline`, 0 open)
+
+- [x] **Bootstrap the test harness.** _(done - feature, medium, sonnet)_
+      Install GUT into `addons/gut/`, create `tests/`, and write
+      characterization tests for the eight autoloads and the `global/components/` set (Health,
+      Hurtbox/Hitbox, Shield, Overheat, DamageReaction). Tests must pin down current behaviour,
+      bugs included — no fixes this run. Done when `bash /agent/verify.sh` passes with a green
+      suite. *(The agent does this automatically while `addons/gut/` is missing, ignoring
+      everything below.)*
+      **Done 2026-08-31** — GUT 9.7.1 vendored into `addons/gut/` (two files patched for Godot
+      4.6.3, see `addons/gut/LOCAL_PATCHES.md`), 153 tests / 490 asserts across 16 scripts in
+      `tests/`, gate green. Conventions and the gotchas that cost time are in `tests/README.md`.
+
+- [x] **Fix the stale UID in `open_space/scenes/gui/hud.tscn:6`.** _(done - feature, medium, sonnet)_
+      Its `ext_resource` for
+      the pause menu declares `uid://bospm3nuos001`, but
+      `global/ui/pause_menu/open_space_pause_menu.tscn` actually declares
+      `uid://b10bam3tnq6vw`. Godot currently falls back to the text path and only warns, so
+      nothing is broken — but the fallback disappears if that scene is ever moved. Fix the
+      reference, then run the Godot MCP `update_project_uids` tool and check whether any
+      other file has the same problem. Done when `godot --headless --import` is warning-free.
+      **Done 2026-09-01** — it was **8** stale references, not 1, in 8 files: `assault/scenes/gui/hud.tscn`,
+      `assault/scenes/levels/level_2.tscn`, `open_space/scenes/gui/hud.tscn`, and the five
+      `open_space/scenes/mission_data/planets/**/…_infiltration_mission_*.tres`. All 8 named a UID
+      no resource declares. Added `tests/integration/test_resource_uid_integrity.gd` (3 tests) so
+      the class of defect cannot come back. Verified on a **cold** `.godot/` cache by loading all
+      126 `.tscn`/`.tres`: 3 `invalid UID` warnings before, 0 after, 0 load failures.
+      The suggested `update_project_uids` MCP step is a no-op — see *Discovered*.
+      
+      ---
+
+- [x] **Regenerate the turret sprites — `station_turret.png` is 3/4 view, not top-down.** _(done - feature, medium, sonnet)_
+      The barrel is drawn from the side with visible cylinder faces and the base sits in
+      perspective; `station_core.png` in the same set is correctly overhead, so the set is
+      visually inconsistent. Root cause: PixelLab was almost certainly called with
+      `view: "low top-down"`, which is the 3/4 look.
+      **Invoke the `pixel-art-generation` skill first.** Regenerate with
+      `view: "high top-down"` and `isometric: false`, describing the shape as seen from
+      above (base reads as a circle, barrel as a short flat rectangle lying across it),
+      plus the negative constraints. Regenerate `station_turret_destroyed.png` to match.
+      Save with `./scripts/pixellab.sh save-b64` — **never** the Write tool, it corrupts
+      PNG data. Re-import so the `.import` sidecars update.
+      *Done when:* both turret sprites have been opened with the Read tool and confirmed
+      to show no side faces, and they sit consistently beside `station_core.png`.
+      **Done 2026-09-01** — the guessed root cause was wrong in an instructive way. It was not
+      `view: "low top-down"`; it was the **tool**. The originals came from `create_image_pixflux`
+      (`docs/plans/station-mini-boss-destructible/5-progress.md:19`), whose `view` **defaults to
+      `null` and is documented as "weakly guiding"** — so it was never set, and setting it would
+      only have been a soft hint anyway. `create_map_object` defaults it to `"high top-down"` and
+      honours it. The skill has been corrected: it previously named `low top-down` as "the most
+      likely cause of a wrong-angle sprite in this project", which would have sent the next run
+      hunting for a wrong value rather than a wrong tool.
+      Regenerated with **`create_map_object`** (`view: "high top-down"`, `outline: "lineless"`,
+      `detail`/`shading` medium, 64×64) and the destroyed variant with **`create_object_state`** off
+      the intact one, which keeps the footprint and palette aligned for free. `isometric` is not a
+      parameter on either tool — the negatives went in the description instead. **2 generations
+      used**, no aesthetic iteration. Both opened at 6× and composited with `station_core.png` at
+      true in-game layout (256×256 hull, turrets at ±76): no side faces, no tilt, transparent
+      backgrounds (corner alpha `0.00`, was opaque before), and the dead turrets read as burnt
+      craters against the light hull. Provenance and the exact prompt shape are now in `ENEMY.md`
+      so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
+      `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
+
+## Level 1 space-station mini-boss  [DONE]  (`station-mini-boss`, 0 open)
+
+- [x] **1. Station and turrets exist as a destructible entity.** _(done - feature, medium, sonnet)_
+      Generate the station and turret
+      sprites via PixelLab. Assemble the station scene with N turrets as child entities, each
+      individually damageable. The station core takes no damage while any turret is alive.
+      *Done when:* a GUT test destroys turrets one at a time and proves the core is invulnerable
+      until the last turret dies, then becomes damageable.
+      **Done 2026-09-01** — `assault/scenes/enemies/space_station/` (`SpaceStation extends BaseEnemy`
+      + 4 `StationTurret` children + `SpaceStationConfig`), three PixelLab sprites, and
+      `tests/integration/test_space_station.gd` (9 tests). Gate green: 165 tests / 527 asserts.
+      Core refuses damage via a `_on_received_damage` override while keeping the HurtBox **live**,
+      because `plasma_nova_module.gd:39-41` and `beam_behavior.gd:99-102` both emit
+      `received_damage` directly and a disabled hurtbox would leak both. Plan + two review rounds:
+      `docs/plans/station-mini-boss-destructible/`. **Known gap:** the tests emit `received_damage`
+      directly, so they do not prove the collision layers — that needs sub-item 2.
+      -> [docs/plans/station-mini-boss-destructible](docs/plans/station-mini-boss-destructible)
+
+- [x] **2. The encounter blocks level progress.** _(done - feature, medium, sonnet)_
+      Add a new `LevelSection` (suggested name
+      `station_assault`) to `level_1_director.gd`, between `asteroid_belt` and `planet_approach`,
+      using `ENEMIES_CLEARED`. Add the matching `phases/phase_station_assault.tres`.
+      *Done when:* a headless test proves the section does not advance while the station lives,
+      and advances to `planet_approach` when it dies.
+      **Done 2026-09-01** — `station_assault` is Level 1's third section. New
+      `LevelSection.enemies_cleared_timeout` (default `10.0`, so `cloud_descent` is bit-identical;
+      the station sets `180.0`), `LevelDirector` now **frees leftover container children on
+      expiry** instead of dragging the boss into the next section, `WaveBuilder.space_station()`,
+      `phases/phase_station_assault.tres`, and a `_build_sections()` refactor that makes the
+      section order assertable without booting the level.
+      `tests/integration/test_station_assault_section.gd` (7 tests). Gate green: 19 scripts /
+      172 tests / 551 asserts.
+      Plan + **two** review rounds: `docs/plans/station-assault-section/`. Round 2 **withdrew**
+      round 1's blocking finding — see *Discovered*; that reversal is the most useful thing this
+      cycle produced.
+      -> [docs/plans/station-assault-section](docs/plans/station-assault-section)
+
+- [x] **3. Laser phase.** _(done - feature, medium, sonnet)_
+      Once all turrets are destroyed, the station rotates and fires
+      `LaserRay` beams at varying positions, forcing the player to keep moving. Beams must
+      telegraph before they damage (`warn_duration`) — an instant-kill beam with no tell is
+      unfair, and research should set the actual timing.
+      *Done when:* a test proves the phase only starts after the last turret dies, and that a
+      beam damages the player only during its active window, not its warning window.
+      **Done 2026-09-02.** New `StationLaserPhase` (`station_laser_phase.gd`, wired into
+      `space_station.tscn` as `LaserPhase`), a zero-arg `SpaceStation.armor_broken` signal with a
+      once-only latch, five laser fields on `SpaceStationConfig` + the `.tres`, and an additive
+      `LaserRay.hit_mask_override` export. `tests/integration/test_station_laser_phase.gd`
+      (12 tests) + `test_laser_ray_hit_mask.gd` (4 tests). Gate green: 21 scripts / 188 tests /
+      605 asserts.
+      Plan + **three** review rounds: `docs/plans/station-laser-phase/`. Rounds 1 and 2 were
+      CHANGES_REQUESTED and were worth every minute — round 1 caught that the headline "the boss
+      must not kill itself with its own beam" test **could not fail** as specified (only the
+      *diagonal* volley angles overlap the core hurtbox), and round 2 caught that the test plan
+      would have clobbered the process-wide shared config `.tres`. Round 3 verified both fixes at
+      runtime and approved.
+      Two things a future cycle should not have to rediscover: the station's beams **must** set
+      `hit_mask_override = 128` before `add_child()` or the boss kills itself in one frame
+      (`600 → 0 HP`, reproduced), and the volley angles are a fixed list, never `randf()` — random
+      attack ordering cannot be balanced or tested.
+      
+      **Split on 2026-09-02** into 4a (the station's own fire) and 4b (reinforcements). One
+      session each; 4a is the half that changes the first phase from passive to a fight.
+      -> [docs/plans/station-laser-phase](docs/plans/station-laser-phase)
+
+- [x] **4a. The station shoots back.** _(done - feature, medium, sonnet)_
+      Turrets and core fire bullet-hell patterns through
+      `bullet_pool`.
+      *Done when:* every live turret fires an aimed pattern, killing a turret removes its gun from
+      the volley, the core fires its own pattern once the armour breaks, projectiles route through
+      `bullet_pool`, and a headless run produces no errors.
+      **Done 2026-09-02.** `StationGunnery` (`assault/scenes/enemies/space_station/station_gunnery.gd`)
+      as a sibling node of `StationLaserPhase`, driving a new shared
+      `global/resources/attack/radial_attack_pattern.gd` (`RadialAttackPattern` — one resource
+      covering both the ring and the fan). Ten new `SpaceStationConfig` fields; `BulletPool` +
+      `Gunnery` authored into `space_station.tscn`. Tests: `test_station_gunnery.gd` (16) +
+      `test_radial_attack_pattern.gd` (10). Gate green: 23 scripts / 214 tests / 767 asserts.
+      Plan + **two** review rounds: `docs/plans/station-bullet-hell/`. Round 1 was
+      CHANGES_REQUESTED and earned its keep twice over — it caught that the planned
+      `_station.add_child(_pool)` from the gunnery's `_ready()` **cannot work** (`_propagate_ready()`
+      blocks the parent while readying its children), and that the planned `core_ring_step = 0.21`
+      had exactly the defect the research said to avoid: `3 × 0.21 ≈ 0.6283` = the ring spacing, so
+      rings collapse onto three radial lanes and leave a permanent safe lane. Shipped value is the
+      golden-angle `0.24`, and a test now locks it.
+      Two things a future cycle should not have to rediscover: the `BulletPool` **must** stay a
+      direct child of `SpaceStation` (`bullet_pool.gd:47` hardcodes `get_parent().get_parent()`, so
+      anywhere else the whole bullet field rotates with the hull), and a `node_paths=` tag on the
+      `Gunnery` node is required or the exported reference is silently left null **with the gate
+      still green**.
+      -> [docs/plans/station-bullet-hell](docs/plans/station-bullet-hell)
+
+- [x] **4b. Reinforcements.** _(done - feature, medium, sonnet)_
+      During the fight, existing enemy ships fly in from the sides, top
+      and bottom.
+      *Done when:* reinforcement waves spawn from at least three screen edges and a headless run of
+      the section produces no errors.
+      **Done 2026-09-03.** `StationReinforcements`
+      (`assault/scenes/enemies/space_station/station_reinforcements.gd`) as a third sibling node
+      alongside `StationLaserPhase` and `StationGunnery` — `space_station.gd` gained **nothing**,
+      not even an accessor. Squads cycle `LEFT → RIGHT → BOTTOM → TOP` (**four** edges, not the
+      three the done-condition asked for): 2 × `interceptor` from either side, 2 × `kamikaze_drone`
+      from below, 2 × `fighter` + `.shoot_forward()` from above, all authored with `WaveBuilder`'s
+      own fluent API in 640×360 design units. Three new `SpaceStationConfig` fields (8 s first
+      delay / 10 s interval / cap 4). Tests: `test_station_reinforcements.gd` (18). Gate green:
+      24 scripts / 232 tests / 868 asserts.
+      Plan + **two** review rounds: `docs/plans/station-reinforcements/`. Round 1 was
+      CHANGES_REQUESTED and paid for itself: it caught that the planned top squad (`ram_ship`) is
+      **immune to the player's primary weapon** — `ram_ship.gd:19` narrows its HurtBox mask to 33,
+      which excludes the bullet's layer 64 — so the squad would have been two indestructible
+      obstacles by accident; and that registering adds with `ScoreTracker` also opts them into the
+      0.75× escape-combo penalty, which nobody had examined. Round 2 approved.
+      Both backlog warnings were handled: reinforcements come from a station-owned node rather than
+      the station's own wave, and stopping at `armor_broken` plus `FREE_ON_DURATION` means nothing
+      can be left alive to hold `ENEMIES_CLEARED` open.
+      Four things a future cycle should not have to rediscover: reinforcements must be **siblings**
+      of the station and never children (the laser phase rotates the hull, and `bullet_pool.gd:47`
+      hardcodes `get_parent().get_parent()`); `FREE_ON_SCREEN_EXIT` cannot be used for an
+      off-screen spawn because it only culls a ship that has already been on screen once; the
+      station's `died` signal cannot be tested without unhooking `armor_broken` first, because the
+      armour rule makes `armor_broken` the only route to it; and a ship's **runtime** HurtBox mask
+      comes from `base_enemy.gd:25`, never from the value authored in its `.tscn`.
+      -> [docs/plans/station-reinforcements](docs/plans/station-reinforcements)
+
+- [x] **5. Destruction hands off to the planet approach.** _(done - feature, medium, sonnet)_
+      Station death plays out and the level
+      continues into `planet_approach` and the planet entry.
+      *Done when:* a headless run of the full Level 1 section sequence completes end to end.
+      **Done 2026-09-03.** `StationDeathSequence`
+      (`assault/scenes/enemies/space_station/station_death_sequence.gd`) as a **fifth** sibling
+      node; `space_station.gd` gained a `death_started` signal, a public `death_duration`, a
+      `_dying` latch and an `_on_health_changed` override that moves **only** `queue_free()`.
+      Additive support: `BulletPool.cancel_active()` (extracted from `_exit_tree()`) and
+      `ExplosionEffect.explode(at)` (optional position, default preserves today's behaviour).
+      Two new `SpaceStationConfig` fields. Tests: `test_station_death_sequence.gd` (15) +
+      `test_level_1_sequence.gd` (1 end-to-end) + 2 in `test_station_gunnery.gd`.
+      Gate green: 26 scripts / 249 tests / 941 asserts.
+      Plan + **two** review rounds: `docs/plans/station-death-handoff/`. Round 1 was
+      CHANGES_REQUESTED on the **test plan**, not the design, and earned its keep three times:
+      the headline "blasts land in the container" test **could not fail for the right reason**
+      (`hit_effect.gd:21,34` keeps a permanent `CPUParticles2D` under every `BaseEnemy`, so a
+      recursive search always fails and a direct one is vacuously true); the determinism test
+      compared *world* offsets while the same plan rotates the hull, making it a frame-timing
+      race; and the end-to-end test would have **leaked `SceneTreeTimer`s with the gate green**.
+      Round 2 APPROVED with one blocking pre-condition (finding K) that was also correct — see
+      below.
+      Four things a future cycle should not have to rediscover:
+      **(1)** the `ExplosionEffect` must be a child of the **station**, never of the sequence node
+      — `explosion_effect.gd` resolves its container as `get_parent().get_parent()`, so one hop too
+      deep puts every blast inside the rotating hull, where it is freed with the wreck and invisible
+      to the container the director polls; and it must be added in the `death_started` handler, not
+      `_ready()`, because `_propagate_ready()` blocks the parent.
+      **(2)** `was_killed`/`died` must fire at HP 0, not at the free, or `ScoreTracker` scores the
+      boss as an *escape* and applies the 0.75× combo penalty — silent, and no visual test catches it.
+      **(3)** the handoff needed **no** `LevelDirector` change at all: `_wait_enemies_cleared()`
+      already polls the container's child count, so a lingering wreck holds its section open for free.
+      **(4)** compressing Level 1 for a test needs `stagger_delay` zeroed as well as `spawn_delay`
+      — every formation type staggers its own slots, and missing it leaks while the gate stays green.
+      
+      **Open questions for the plan stage** (research these, do not guess):
+      PixelLab maximum sprite dimensions; how many turrets makes the first phase interesting rather
+      than tedious; standard telegraph durations for sweeping-laser boss attacks in shmups.
+      
+      ---
+      -> [docs/plans/station-death-handoff](docs/plans/station-death-handoff)
+
 ## Code health backlog  (`code-health-backlog`, 0 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
@@ -791,513 +1303,6 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_module_unlock_sources.gd` already provides for ship modules.
       -> [docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea](docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea)
       2 run(s), $14.88; last on claude-opus-5
-
-## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 2 open)
-
-- [x] **Every log record I find stays found, and the game knows how many are left** _(done - feature, medium, sonnet)_
-      **Player outcome:** Logs I picked up three missions ago are still mine after quitting and
-      relaunching, and the game can always answer "how many logs are there, and how many do I have?"
-      without anyone hand-maintaining that number.
-      
-      **Why this is first:** every other task in this epic reads or writes this store. Nothing else can
-      be built until "what is a log" and "where is it saved" exist.
-      
-      **Shape (leave the details to this task's own plan):**
-      - A `LogEntryResource` (`Resource`) per lore entry — id, title, body text, and its position in
-        the reading order. Entries live as `.tres` files, matching the project's config-driven
-        convention (see `open_space/scenes/mission_data/mission_config_resource.gd` for the pattern).
-      - A `LogState` autoload alongside the existing eight in `project.godot`, persisting to
-        `user://` with `ConfigFile` exactly like `MissionState` and `ShipModuleState` already do.
-        Copy `ShipModuleState`'s validate-on-load behaviour: an unknown id in the save file is warned
-        about and dropped, never trusted.
-      - **The total must be derived, not typed.** The user's ask is that adding a log requires no
-        bookkeeping. Deriving it from the catalogue on disk is what makes that true; a hardcoded
-        `TOTAL_LOGS = 12` is the exact thing this task exists to avoid.
-      
-      **Open design question for the plan — flag it, don't silently pick:** the idea says lore logs
-      "are unlocked in a specific order". The cheapest reading, and the one that best matches "place the
-      collectible on the map and everything else happens automatically", is that a lore-log collectible
-      is *anonymous*: collecting one grants the next still-locked entry in catalogue order, so the story
-      always reads in sequence no matter which corner of the map the player explored first. The
-      alternative — each collectible names its entry, and the menu shows gaps — is also defensible but
-      makes placement order narratively load-bearing. Pick one in the plan and say why.
-      
-      **Done when:** `tests/unit/test_log_state.gd` covers collect / already-collected / save round-trip
-      / unknown-id-in-save / the derived total, and the gate is green. Follow `tests/README.md` for the
-      `user://` save-file sandbox — `LogState` writes to `user://` and will otherwise leak between tests.
-      -> [docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m](docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m)
-      1 run(s), $3.03; last on claude-sonnet-5
-
-- [ ] **Flying into a log record in open space picks it up and tells me what I found** _(in progress - feature, medium, sonnet)_
-      **Player outcome:** a log record floating in the sector hub is visually readable as
-      "something to collect", flying into it picks it up, and a one-line notification tells me what I
-      just recovered without stopping the ship.
-      
-      **Reuse — this should be a small script:** `PickupBase` (`global/pickups/pickup_base.gd`) already
-      does the whole dance: `body_entered` → check group `"player"` → `_collect(player)` →
-      `_get_dialog_text()` → non-blocking `DialogPlayer` line → `queue_free()`.
-      `ship_module_unlocker_pickup.gd` is the closest existing sibling (36 lines, an inspector enum, one
-      autoload call) and is the model to copy. If this task ends up writing its own overlap detection or
-      its own notification path, something has gone wrong.
-      
-      **Art:** the log record needs its own sprite. `assault/` and `open_space/` are strict top-down
-      orthographic — **invoke the `pixel-art-generation` skill before generating anything**, and open
-      the result and look at it. A 3/4-view collectible is unusable and cannot be fixed in code.
-      
-      **Done when:** a `lore_log_pickup.tscn` exists under `global/pickups/scenes/` next to the other
-      nine, collecting it advances `LogState`, collecting it twice in one run cannot double-count, and
-      the notification text names the entry. Test in `tests/unit/`.
-      -> [docs/plans/flying-into-a-log-record-in-open-space-picks-it-up-and-tells](docs/plans/flying-into-a-log-record-in-open-space-picks-it-up-and-tells)
-      2 run(s), $2.46; last on claude-sonnet-5
-
-- [x] **Reading a data tablet by a body doesn't interrupt the mission, and I can read it again** _(done - feature, medium, sonnet)_
-      **Player outcome:** I walk or fly up to a tablet, a terminal, or a scrap of hull, a prompt
-      tells me I can read it, and pressing the key shows the message *without* yanking control away. If
-      I come back later it is still readable — it is scenery with something to say, not a consumable.
-      
-      **This is the other half of the user's idea:** information logs are not stored, not counted, and
-      not part of 100% completion. They exist to make a place feel inhabited.
-      
-      **Two things worth knowing before planning:**
-      - The `interact` action is already bound to **F** in `project.godot` (line ~121) and **no script
-        in the project uses it**. This task is the first user of it, so there is no existing interaction
-        system to extend — but also no existing conventions to fight.
-      - `PickupBase` is the wrong parent here: it frees itself on contact and requires no input. This is
-        a sibling of it, not a subclass.
-      
-      **Research finding that should shape the design:** the most common complaint about lore
-      collectibles in shipped games is that they stop the game dead — the player is parked in a menu
-      listening to something they could have read ten times faster
-      (https://www.giantbomb.com/forums/general-discussion-30/why-do-developers-keep-using-the-audio-log-game-me-1479403/,
-      https://www.resetera.com/threads/do-you-listen-to-audio-logs-that-require-you-to-stare-at-a-menu-as-it-plays.804642/).
-      That is the argument for the split the user already drew: short in-world text plays inline via
-      `DialogPlayer` with `pause_gameplay = false` (the pickup notification path already does exactly
-      this), and only the long-form lore lives in a menu the player opens deliberately.
-      
-      **Done when:** an interactable exists that shows a prompt on approach, replays its message on every
-      interaction, is unaffected by `LogState`, and refuses to fire while `DialogPlayer.is_active` (the
-      guard `PickupBase._show_notification()` already uses). Test the enter/exit/re-read cycle.
-      -> [docs/plans/reading-a-data-tablet-by-a-body-doesn-t-interrupt-the-missio](docs/plans/reading-a-data-tablet-by-a-body-doesn-t-interrupt-the-missio)
-      1 run(s), $3.40; last on claude-sonnet-5
-
-- [x] **The ESC menu has a Lore Logs section where I can re-read everything I've found** _(done - feature, medium, sonnet)_
-      **Player outcome:** ESC → Lore Logs shows the whole catalogue. Entries I have found are
-      readable in full; ones I have not are visibly there but withheld, so I can see there is more to
-      find and roughly how much. The header tells me where I stand: "7 / 14".
-      
-      **Reuse — the locked/unlocked list already exists.** `global/ui/player_menu/module_list.gd`
-      (`ModuleList`) is a navigable overlay that renders one row per catalogue entry, greys locked rows,
-      and prefixes a locked row's description with a call to action rather than leaving it a dead end.
-      Its lock gate is `ShipModuleState.is_unlocked()`; this list's is `LogState`. Read
-      `tests/integration/test_module_list_lock.gd` — it already pins the locked-row behaviour and is the
-      model for this list's test.
-      
-      **The ESC menu itself:** `global/ui/pause_menu/pause_menu.gd` has exactly four hardcoded options
-      (`Option0..Option3`) wired by index in `_confirm()`, with `_navigate()` skipping hidden ones, and
-      `mission_mode` toggling options 1 and 2. Adding a fifth option means touching that index-matched
-      `match` and the scene's `MenuContainer`, plus the two scenes that instance it
-      (`pause_menu.tscn`, `open_space_pause_menu.tscn`). Worth deciding in the plan whether Lore Logs
-      appears in mission mode, in open space, or both.
-      
-      **Done when:** the section opens from ESC, unlocked entries show their full text, locked ones are
-      withheld but counted, the ratio is correct, and the gate is green. Note `ModuleList.MAX_ITEMS = 8`
-      — a log catalogue will outgrow one screen, so scrolling or paging is in scope for this task.
-      -> [docs/plans/the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve](docs/plans/the-esc-menu-has-a-lore-logs-section-where-i-can-re-read-eve)
-      1 run(s), $4.80; last on claude-sonnet-5
-
-- [x] **Log records can be placed in assault and infiltration missions, not just the hub** _(done - feature, medium, sonnet)_
-      **Player outcome:** the same log record I recognise from open space can be tucked into a
-      wave gap in an assault run or behind a crate on a ground mission, and it counts the same way.
-      
-      **This is the task with the real obstacle, and it is worth knowing up front:** the infiltration
-      player (`infiltration/scenes/entities/player/player.gd`) is a plain `CharacterBody2D` — it does
-      **not** extend `PlayerBase` and is **not** in the `"player"` group. `PickupBase` finds the player
-      by that group and then casts to `PlayerBase`, so **no existing pickup in the game can be collected
-      on a ground mission today.** The plan has to choose between widening the pickup's detection so it
-      does not require `PlayerBase`, or giving the ground player what the group contract expects — and
-      the second is a much larger change to a module this epic is not otherwise touching.
-      
-      **Also in scope:**
-      - Assault placement is authored in **640x360 design space, scaled by
-        `ArenaCamera.WORLD_SCALE` (2.0) at runtime — never pre-multiply.**
-      - An assault mission can be restarted or replayed from the pause menu. Decide and test what
-        happens to an already-collected log on a replay: it must not double-count, and a player who
-        quits mid-mission after grabbing one should not be punished for it. This is the "missable
-        collectible" trap — a counter stuck at 99% because of a bookkeeping edge is the single most
-        reliably infuriating thing about collectible systems
-        (https://www.gamedeveloper.com/design/miss-able-collectibles-i-want-it-but-not-so-bad-i-ll-start-the-game-over-again).
-      
-      **Done when:** a log placed in an assault level and one placed in the infiltration test scene are
-      both collectable, and a test pins the replay/restart behaviour. This task may well need splitting
-      once its plan is written — if so, split it rather than half-finishing both modes.
-      -> [docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio](docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio)
-      2 run(s), $7.97; last on claude-sonnet-5
-
-- [ ] **Test logs on the open-space map prove both log types work end to end** _(in progress - feature, medium, sonnet)_
-      **Player outcome (and the user's explicit ask):** boot the game, fly around the sector hub,
-      and actually find several lore logs and a couple of information logs — enough to see the counter
-      move, the ESC section fill up, and an in-world tablet re-read cleanly.
-      
-      **Where:** `open_space/scenes/levels/sector_hub.tscn` already carries nine pickup types and
-      fourteen module unlockers placed as scene instances; the log records go in the same way, so this
-      task is mostly authoring — placement, and writing real placeholder entry text rather than
-      "Lorem ipsum". Spread them so at least one requires actually leaving the mission-select lane.
-      
-      **Done when:** at least three lore logs and two information logs are placed in the hub, the
-      catalogue total reported by `LogState` matches what is placeable, and `bash /agent/verify.sh` is
-      green — `tests/integration/test_project_load_integrity.gd` will load the modified hub scene and
-      fail on any engine error or warning it produces.
-      
-      **Also finish the epic here:** update `docs/architecture/modules/global.md` (the pickups table in
-      section 6 and the autoload list), `docs/architecture/PROJECT.md`, `open_space.md`, and
-      `CLAUDE.md` via the `updating-project-docs` skill.
-      -> [docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en](docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en)
-      1 run(s), $1.84; last on claude-sonnet-5
-
-## Foundations: test harness, UID integrity, art pipeline  [DONE]  (`foundations-test-harness-uid-integrity-art-pipeline`, 0 open)
-
-- [x] **Bootstrap the test harness.** _(done - feature, medium, sonnet)_
-      Install GUT into `addons/gut/`, create `tests/`, and write
-      characterization tests for the eight autoloads and the `global/components/` set (Health,
-      Hurtbox/Hitbox, Shield, Overheat, DamageReaction). Tests must pin down current behaviour,
-      bugs included — no fixes this run. Done when `bash /agent/verify.sh` passes with a green
-      suite. *(The agent does this automatically while `addons/gut/` is missing, ignoring
-      everything below.)*
-      **Done 2026-08-31** — GUT 9.7.1 vendored into `addons/gut/` (two files patched for Godot
-      4.6.3, see `addons/gut/LOCAL_PATCHES.md`), 153 tests / 490 asserts across 16 scripts in
-      `tests/`, gate green. Conventions and the gotchas that cost time are in `tests/README.md`.
-
-- [x] **Fix the stale UID in `open_space/scenes/gui/hud.tscn:6`.** _(done - feature, medium, sonnet)_
-      Its `ext_resource` for
-      the pause menu declares `uid://bospm3nuos001`, but
-      `global/ui/pause_menu/open_space_pause_menu.tscn` actually declares
-      `uid://b10bam3tnq6vw`. Godot currently falls back to the text path and only warns, so
-      nothing is broken — but the fallback disappears if that scene is ever moved. Fix the
-      reference, then run the Godot MCP `update_project_uids` tool and check whether any
-      other file has the same problem. Done when `godot --headless --import` is warning-free.
-      **Done 2026-09-01** — it was **8** stale references, not 1, in 8 files: `assault/scenes/gui/hud.tscn`,
-      `assault/scenes/levels/level_2.tscn`, `open_space/scenes/gui/hud.tscn`, and the five
-      `open_space/scenes/mission_data/planets/**/…_infiltration_mission_*.tres`. All 8 named a UID
-      no resource declares. Added `tests/integration/test_resource_uid_integrity.gd` (3 tests) so
-      the class of defect cannot come back. Verified on a **cold** `.godot/` cache by loading all
-      126 `.tscn`/`.tres`: 3 `invalid UID` warnings before, 0 after, 0 load failures.
-      The suggested `update_project_uids` MCP step is a no-op — see *Discovered*.
-      
-      ---
-
-- [x] **Regenerate the turret sprites — `station_turret.png` is 3/4 view, not top-down.** _(done - feature, medium, sonnet)_
-      The barrel is drawn from the side with visible cylinder faces and the base sits in
-      perspective; `station_core.png` in the same set is correctly overhead, so the set is
-      visually inconsistent. Root cause: PixelLab was almost certainly called with
-      `view: "low top-down"`, which is the 3/4 look.
-      **Invoke the `pixel-art-generation` skill first.** Regenerate with
-      `view: "high top-down"` and `isometric: false`, describing the shape as seen from
-      above (base reads as a circle, barrel as a short flat rectangle lying across it),
-      plus the negative constraints. Regenerate `station_turret_destroyed.png` to match.
-      Save with `./scripts/pixellab.sh save-b64` — **never** the Write tool, it corrupts
-      PNG data. Re-import so the `.import` sidecars update.
-      *Done when:* both turret sprites have been opened with the Read tool and confirmed
-      to show no side faces, and they sit consistently beside `station_core.png`.
-      **Done 2026-09-01** — the guessed root cause was wrong in an instructive way. It was not
-      `view: "low top-down"`; it was the **tool**. The originals came from `create_image_pixflux`
-      (`docs/plans/station-mini-boss-destructible/5-progress.md:19`), whose `view` **defaults to
-      `null` and is documented as "weakly guiding"** — so it was never set, and setting it would
-      only have been a soft hint anyway. `create_map_object` defaults it to `"high top-down"` and
-      honours it. The skill has been corrected: it previously named `low top-down` as "the most
-      likely cause of a wrong-angle sprite in this project", which would have sent the next run
-      hunting for a wrong value rather than a wrong tool.
-      Regenerated with **`create_map_object`** (`view: "high top-down"`, `outline: "lineless"`,
-      `detail`/`shading` medium, 64×64) and the destroyed variant with **`create_object_state`** off
-      the intact one, which keeps the footprint and palette aligned for free. `isometric` is not a
-      parameter on either tool — the negatives went in the description instead. **2 generations
-      used**, no aesthetic iteration. Both opened at 6× and composited with `station_core.png` at
-      true in-game layout (256×256 hull, turrets at ±76): no side faces, no tilt, transparent
-      backgrounds (corner alpha `0.00`, was opaque before), and the dead turrets read as burnt
-      craters against the light hull. Provenance and the exact prompt shape are now in `ENEMY.md`
-      so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
-      `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
-
-## Level 1 space-station mini-boss  [DONE]  (`station-mini-boss`, 0 open)
-
-- [x] **1. Station and turrets exist as a destructible entity.** _(done - feature, medium, sonnet)_
-      Generate the station and turret
-      sprites via PixelLab. Assemble the station scene with N turrets as child entities, each
-      individually damageable. The station core takes no damage while any turret is alive.
-      *Done when:* a GUT test destroys turrets one at a time and proves the core is invulnerable
-      until the last turret dies, then becomes damageable.
-      **Done 2026-09-01** — `assault/scenes/enemies/space_station/` (`SpaceStation extends BaseEnemy`
-      + 4 `StationTurret` children + `SpaceStationConfig`), three PixelLab sprites, and
-      `tests/integration/test_space_station.gd` (9 tests). Gate green: 165 tests / 527 asserts.
-      Core refuses damage via a `_on_received_damage` override while keeping the HurtBox **live**,
-      because `plasma_nova_module.gd:39-41` and `beam_behavior.gd:99-102` both emit
-      `received_damage` directly and a disabled hurtbox would leak both. Plan + two review rounds:
-      `docs/plans/station-mini-boss-destructible/`. **Known gap:** the tests emit `received_damage`
-      directly, so they do not prove the collision layers — that needs sub-item 2.
-      -> [docs/plans/station-mini-boss-destructible](docs/plans/station-mini-boss-destructible)
-
-- [x] **2. The encounter blocks level progress.** _(done - feature, medium, sonnet)_
-      Add a new `LevelSection` (suggested name
-      `station_assault`) to `level_1_director.gd`, between `asteroid_belt` and `planet_approach`,
-      using `ENEMIES_CLEARED`. Add the matching `phases/phase_station_assault.tres`.
-      *Done when:* a headless test proves the section does not advance while the station lives,
-      and advances to `planet_approach` when it dies.
-      **Done 2026-09-01** — `station_assault` is Level 1's third section. New
-      `LevelSection.enemies_cleared_timeout` (default `10.0`, so `cloud_descent` is bit-identical;
-      the station sets `180.0`), `LevelDirector` now **frees leftover container children on
-      expiry** instead of dragging the boss into the next section, `WaveBuilder.space_station()`,
-      `phases/phase_station_assault.tres`, and a `_build_sections()` refactor that makes the
-      section order assertable without booting the level.
-      `tests/integration/test_station_assault_section.gd` (7 tests). Gate green: 19 scripts /
-      172 tests / 551 asserts.
-      Plan + **two** review rounds: `docs/plans/station-assault-section/`. Round 2 **withdrew**
-      round 1's blocking finding — see *Discovered*; that reversal is the most useful thing this
-      cycle produced.
-      -> [docs/plans/station-assault-section](docs/plans/station-assault-section)
-
-- [x] **3. Laser phase.** _(done - feature, medium, sonnet)_
-      Once all turrets are destroyed, the station rotates and fires
-      `LaserRay` beams at varying positions, forcing the player to keep moving. Beams must
-      telegraph before they damage (`warn_duration`) — an instant-kill beam with no tell is
-      unfair, and research should set the actual timing.
-      *Done when:* a test proves the phase only starts after the last turret dies, and that a
-      beam damages the player only during its active window, not its warning window.
-      **Done 2026-09-02.** New `StationLaserPhase` (`station_laser_phase.gd`, wired into
-      `space_station.tscn` as `LaserPhase`), a zero-arg `SpaceStation.armor_broken` signal with a
-      once-only latch, five laser fields on `SpaceStationConfig` + the `.tres`, and an additive
-      `LaserRay.hit_mask_override` export. `tests/integration/test_station_laser_phase.gd`
-      (12 tests) + `test_laser_ray_hit_mask.gd` (4 tests). Gate green: 21 scripts / 188 tests /
-      605 asserts.
-      Plan + **three** review rounds: `docs/plans/station-laser-phase/`. Rounds 1 and 2 were
-      CHANGES_REQUESTED and were worth every minute — round 1 caught that the headline "the boss
-      must not kill itself with its own beam" test **could not fail** as specified (only the
-      *diagonal* volley angles overlap the core hurtbox), and round 2 caught that the test plan
-      would have clobbered the process-wide shared config `.tres`. Round 3 verified both fixes at
-      runtime and approved.
-      Two things a future cycle should not have to rediscover: the station's beams **must** set
-      `hit_mask_override = 128` before `add_child()` or the boss kills itself in one frame
-      (`600 → 0 HP`, reproduced), and the volley angles are a fixed list, never `randf()` — random
-      attack ordering cannot be balanced or tested.
-      
-      **Split on 2026-09-02** into 4a (the station's own fire) and 4b (reinforcements). One
-      session each; 4a is the half that changes the first phase from passive to a fight.
-      -> [docs/plans/station-laser-phase](docs/plans/station-laser-phase)
-
-- [x] **4a. The station shoots back.** _(done - feature, medium, sonnet)_
-      Turrets and core fire bullet-hell patterns through
-      `bullet_pool`.
-      *Done when:* every live turret fires an aimed pattern, killing a turret removes its gun from
-      the volley, the core fires its own pattern once the armour breaks, projectiles route through
-      `bullet_pool`, and a headless run produces no errors.
-      **Done 2026-09-02.** `StationGunnery` (`assault/scenes/enemies/space_station/station_gunnery.gd`)
-      as a sibling node of `StationLaserPhase`, driving a new shared
-      `global/resources/attack/radial_attack_pattern.gd` (`RadialAttackPattern` — one resource
-      covering both the ring and the fan). Ten new `SpaceStationConfig` fields; `BulletPool` +
-      `Gunnery` authored into `space_station.tscn`. Tests: `test_station_gunnery.gd` (16) +
-      `test_radial_attack_pattern.gd` (10). Gate green: 23 scripts / 214 tests / 767 asserts.
-      Plan + **two** review rounds: `docs/plans/station-bullet-hell/`. Round 1 was
-      CHANGES_REQUESTED and earned its keep twice over — it caught that the planned
-      `_station.add_child(_pool)` from the gunnery's `_ready()` **cannot work** (`_propagate_ready()`
-      blocks the parent while readying its children), and that the planned `core_ring_step = 0.21`
-      had exactly the defect the research said to avoid: `3 × 0.21 ≈ 0.6283` = the ring spacing, so
-      rings collapse onto three radial lanes and leave a permanent safe lane. Shipped value is the
-      golden-angle `0.24`, and a test now locks it.
-      Two things a future cycle should not have to rediscover: the `BulletPool` **must** stay a
-      direct child of `SpaceStation` (`bullet_pool.gd:47` hardcodes `get_parent().get_parent()`, so
-      anywhere else the whole bullet field rotates with the hull), and a `node_paths=` tag on the
-      `Gunnery` node is required or the exported reference is silently left null **with the gate
-      still green**.
-      -> [docs/plans/station-bullet-hell](docs/plans/station-bullet-hell)
-
-- [x] **4b. Reinforcements.** _(done - feature, medium, sonnet)_
-      During the fight, existing enemy ships fly in from the sides, top
-      and bottom.
-      *Done when:* reinforcement waves spawn from at least three screen edges and a headless run of
-      the section produces no errors.
-      **Done 2026-09-03.** `StationReinforcements`
-      (`assault/scenes/enemies/space_station/station_reinforcements.gd`) as a third sibling node
-      alongside `StationLaserPhase` and `StationGunnery` — `space_station.gd` gained **nothing**,
-      not even an accessor. Squads cycle `LEFT → RIGHT → BOTTOM → TOP` (**four** edges, not the
-      three the done-condition asked for): 2 × `interceptor` from either side, 2 × `kamikaze_drone`
-      from below, 2 × `fighter` + `.shoot_forward()` from above, all authored with `WaveBuilder`'s
-      own fluent API in 640×360 design units. Three new `SpaceStationConfig` fields (8 s first
-      delay / 10 s interval / cap 4). Tests: `test_station_reinforcements.gd` (18). Gate green:
-      24 scripts / 232 tests / 868 asserts.
-      Plan + **two** review rounds: `docs/plans/station-reinforcements/`. Round 1 was
-      CHANGES_REQUESTED and paid for itself: it caught that the planned top squad (`ram_ship`) is
-      **immune to the player's primary weapon** — `ram_ship.gd:19` narrows its HurtBox mask to 33,
-      which excludes the bullet's layer 64 — so the squad would have been two indestructible
-      obstacles by accident; and that registering adds with `ScoreTracker` also opts them into the
-      0.75× escape-combo penalty, which nobody had examined. Round 2 approved.
-      Both backlog warnings were handled: reinforcements come from a station-owned node rather than
-      the station's own wave, and stopping at `armor_broken` plus `FREE_ON_DURATION` means nothing
-      can be left alive to hold `ENEMIES_CLEARED` open.
-      Four things a future cycle should not have to rediscover: reinforcements must be **siblings**
-      of the station and never children (the laser phase rotates the hull, and `bullet_pool.gd:47`
-      hardcodes `get_parent().get_parent()`); `FREE_ON_SCREEN_EXIT` cannot be used for an
-      off-screen spawn because it only culls a ship that has already been on screen once; the
-      station's `died` signal cannot be tested without unhooking `armor_broken` first, because the
-      armour rule makes `armor_broken` the only route to it; and a ship's **runtime** HurtBox mask
-      comes from `base_enemy.gd:25`, never from the value authored in its `.tscn`.
-      -> [docs/plans/station-reinforcements](docs/plans/station-reinforcements)
-
-- [x] **5. Destruction hands off to the planet approach.** _(done - feature, medium, sonnet)_
-      Station death plays out and the level
-      continues into `planet_approach` and the planet entry.
-      *Done when:* a headless run of the full Level 1 section sequence completes end to end.
-      **Done 2026-09-03.** `StationDeathSequence`
-      (`assault/scenes/enemies/space_station/station_death_sequence.gd`) as a **fifth** sibling
-      node; `space_station.gd` gained a `death_started` signal, a public `death_duration`, a
-      `_dying` latch and an `_on_health_changed` override that moves **only** `queue_free()`.
-      Additive support: `BulletPool.cancel_active()` (extracted from `_exit_tree()`) and
-      `ExplosionEffect.explode(at)` (optional position, default preserves today's behaviour).
-      Two new `SpaceStationConfig` fields. Tests: `test_station_death_sequence.gd` (15) +
-      `test_level_1_sequence.gd` (1 end-to-end) + 2 in `test_station_gunnery.gd`.
-      Gate green: 26 scripts / 249 tests / 941 asserts.
-      Plan + **two** review rounds: `docs/plans/station-death-handoff/`. Round 1 was
-      CHANGES_REQUESTED on the **test plan**, not the design, and earned its keep three times:
-      the headline "blasts land in the container" test **could not fail for the right reason**
-      (`hit_effect.gd:21,34` keeps a permanent `CPUParticles2D` under every `BaseEnemy`, so a
-      recursive search always fails and a direct one is vacuously true); the determinism test
-      compared *world* offsets while the same plan rotates the hull, making it a frame-timing
-      race; and the end-to-end test would have **leaked `SceneTreeTimer`s with the gate green**.
-      Round 2 APPROVED with one blocking pre-condition (finding K) that was also correct — see
-      below.
-      Four things a future cycle should not have to rediscover:
-      **(1)** the `ExplosionEffect` must be a child of the **station**, never of the sequence node
-      — `explosion_effect.gd` resolves its container as `get_parent().get_parent()`, so one hop too
-      deep puts every blast inside the rotating hull, where it is freed with the wreck and invisible
-      to the container the director polls; and it must be added in the `death_started` handler, not
-      `_ready()`, because `_propagate_ready()` blocks the parent.
-      **(2)** `was_killed`/`died` must fire at HP 0, not at the free, or `ScoreTracker` scores the
-      boss as an *escape* and applies the 0.75× combo penalty — silent, and no visual test catches it.
-      **(3)** the handoff needed **no** `LevelDirector` change at all: `_wait_enemies_cleared()`
-      already polls the container's child count, so a lingering wreck holds its section open for free.
-      **(4)** compressing Level 1 for a test needs `stagger_delay` zeroed as well as `spawn_delay`
-      — every formation type staggers its own slots, and missing it leaks while the gate stays green.
-      
-      **Open questions for the plan stage** (research these, do not guess):
-      PixelLab maximum sprite dimensions; how many turrets makes the first phase interesting rather
-      than tedious; standard telegraph durations for sweeping-laser boss attacks in shmups.
-      
-      ---
-      -> [docs/plans/station-death-handoff](docs/plans/station-death-handoff)
-
-## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  [DRAFT - preparation in progress]  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 7 open)
-
-**Preparation**
-
-- [x] **Research: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(done - research)_
-      Investigate this as a professional game developer would, before anything is designed: the existing architecture and systems it touches, reusable patterns already in the project, dependencies, constraints, candidate approaches with their tradeoffs, risks, edge cases, testing requirements, and impact on other systems. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage RESEARCH. Output: `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/1-context.md` and `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/2-research.md`.
-      
-      **Triage summary:** The user wants open-space flight to steer with the mouse: the ship turns toward the cursor with a deliberate lag/inertia rather than snapping to it, turning noticeably slower than the current keys so precision aiming is not free, with weapons and movement abilities still firing along the ship's actual facing (the cursor only sets the target angle) - a Jet Lancer-style responsive-but-inertial feel. A/D turning stays as a selectable legacy scheme, the change must not reach assault or infiltration, and a setting toggles the schemes with mouse-aim as the default. What it builds on: open_space/scenes/entities/player/player_ship.gd is the only mode-specific controller (its `_handle_rotation()` is a flat `rotation += rotation_speed_deg * turn * delta` with no angular velocity, next to `_handle_thrust()`'s already-inertial thrust/damping/max_speed/flip-boost model), and because the open-space ship reuses the shared assault WeaponState node whose behaviors all fire from `actor.rotation` (straight_behavior.gd:16, spread_behavior.gd:15, sniper_behavior.gd:81, beam_behavior.gd:53), the 'weapons follow facing, not the cursor' requirement comes for free the moment the mouse only drives rotation - and mode isolation comes for free too, since assault's player is a separate scene (assault/scenes/player/player_fighter.tscn) with its own controller. The gap is the settings half: the project reads no mouse input anywhere (zero `get_global_mouse_position` / `InputEventMouseMotion` uses) and has no options system at all - no settings autoload, no options screen, and a PauseMenu whose five entries are hard-coded Node2D children - so this needs a small persisted settings store following the `user://*.cfg` ConfigFile pattern of SessionState/MissionState/ShipModuleState, plus a UI entry point to flip the scheme. Open questions for research and the plan: the turn model (max turn rate plus angular acceleration/damping, versus exponential smoothing toward the cursor angle) and the actual numbers that make mouse turning feel responsive yet slower than the 220 deg/s keyboard rate; whether the cursor should keep steering while the mission-select menu, PlayerMenu or PauseMenu is open, and what the cursor looks like on screen (crosshair, dead zone near the ship); and how mouse aim coexists with AiTargetingModule, which writes `actor.rotation` directly every frame to snap onto a target and would otherwise fight the turn controller, and EngineBoostModule, which latches its direction from `actor.rotation` at activation. Note for scheduling only: a separate untriaged idea, 'Add Boost/Burst Movement to Open Space', touches the same `_handle_thrust()` code path.
-      
-      **Original idea (idea-1789305113892):** Rework Open-Space Movement & Mouse Aiming:  Rework open-space movement to support mouse-based ship rotation and aiming.  Keep the existing A/D rotation controls as an alternative/legacy control scheme.  The new mouse system should rotate the ship toward the mouse position, providing more precise movement and shooting control.  Add a slight rotation delay/inertia when following the mouse, rather than making the ship instantly point at the cursor.  Make mouse-based rotation somewhat slower to keep the system balanced and avoid making aiming too powerful.  Weapons and movement abilities must follow the ship's actual facing direction, not the mouse position. The mouse only determines the direction the ship is trying to rotate toward.  This system should apply only to open-space missions and must not affect assault/land missions or other gameplay modes.  Add a setting/option to switch between the new mouse movement and the existing movement system, with the new mouse-based system enabled by default.  Overall movement should aim for a responsive but inertia-based feel, inspired by the movement style of Jet Lancer.
-      -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
-      2 run(s), $6.35; last on claude-opus-5
-
-- [x] **Plan: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(done - plan)_
-      Consume the research and write the implementation plan to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.
-      after: research-open-space-mouse-aiming-inertial-turn-to-cursor-wit
-      -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
-      1 run(s), $2.98; last on claude-opus-5
-
-- [ ] **Plan review: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(in progress - plan-review)_
-      Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.
-      after: plan-open-space-mouse-aiming-inertial-turn-to-cursor-with-a-
-      -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
-
-**Implementation**
-
-- [ ] **Your ship leans toward the mouse cursor instead of snapping to it** _(todo - feature, medium, sonnet)_
-      Adds `open_space/scenes/entities/player/ship_turn_controller.gd` (`class_name ShipTurnController extends Node`) and wires it into `open_space/scenes/entities/player/player_ship.tscn` as a child node of PlayerShip. It becomes the only writer of the open-space ship's rotation.
-      
-      Implements BOTH schemes behind an `@export var scheme: StringName` defaulting to `&"mouse"`:
-      - mouse: clamped exponential chase toward the cursor angle (see `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/3-plan.md` -> "Turn model" for the exact five lines), dead zone holds the target angle, `rotate_toward` applies the step.
-      - keys: today's behaviour exactly, 220 deg/s, instantaneous, cursor ignored.
-      
-      `player_ship.gd::_handle_rotation` shrinks to reading the A/D axis, calling `set_aim_target(global_position, get_global_mouse_position())` and `rotation = _turn.step(rotation, turn, delta)`. `rotation_speed_deg` moves off `player_ship.gd` onto the controller. `get_global_mouse_position()` must appear in exactly one line project-wide.
-      
-      DONE WHEN: `tests/unit/test_ship_turn_controller.gd` passes with every case in the plan's test plan for that file - frame-rate independence, the turn-rate cap, no overshoot, wrap-around across +-pi, cursor-exactly-on-ship, the 47.9/48.1 px dead-zone edge, the 180-degree tie-break, "classic is still 220 deg/s", "classic ignores the cursor", "mouse ignores A/D". No autoload and no UI in this task - the scheme is flipped by hand in the test / inspector. Gate green.
-
-- [ ] **The game remembers which steering scheme you fly with** _(todo - feature, small, sonnet)_
-      Adds `global/autoloads/settings_state.gd` (`SettingsState`), the project's first settings store. Near-copy of the `ConfigFile` template in `global/autoloads/ship_module_state.gd`: `SAVE_PATH = "user://settings.cfg"`, `SECTION = "controls"`, key `open_space_scheme`, `SCHEMES = [&"mouse", &"keys"]`, `DEFAULT_SCHEME = &"mouse"`, `signal open_space_scheme_changed(scheme: StringName)` (declared with its argument - `test_signal_emit_arity.gd` sweeps self-emits).
-      
-      Default-on-missing comes from `ConfigFile.get_value(SECTION, KEY, default)` and is re-validated against `SCHEMES` on load. Deliberately NOT the `UpgradeState.STARTING_IDS` idiom - see the plan's "the setting is a new SettingsState autoload" for why that shape is wrong here.
-      
-      Also: register in `project.godot` `[autoload]`; add `"user://settings.cfg"` to `tests/helpers/save_sandbox.gd::PATHS` (without it every test touching the setting leaks into the player's profile and the next suite run). `player_ship.gd` seeds `_turn.scheme` from the autoload in `_ready()` and connects `open_space_scheme_changed` to `_turn.set_scheme(scheme, rotation)`.
-      
-      DONE WHEN: `tests/unit/test_settings_state.gd` passes - default on empty disk, round-trips through a second instance's `_load()`, falls back to the default on a hand-corrupted value, rejects a value not in SCHEMES, and does not emit when set to the value it already holds. Plus the "scheme flip mid-flight causes no rotation jump" case in `tests/unit/test_ship_turn_controller.gd`. No UI yet. Gate green.
-      after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
-
-- [ ] **AI Targeting still snaps your nose onto an enemy, and the snap holds** _(todo - feature, small, sonnet)_
-      `global/ship_modules/ai_targeting_module.gd:38` writes `actor.rotation =` directly. Under the turn controller that write is undone within a frame or two, so the 15-second-cooldown module the player unlocked and equipped visibly does nothing under mouse aim.
-      
-      Fix, per the plan's chosen option (a):
-      - `OpenSpacePlayerShip.face_instant(angle: float)` - sets rotation, adopts `angle` as the controller's target, and suppresses cursor steering.
-      - The module calls it duck-typed (`if actor.has_method("face_instant")`), the same shape as `is_armored()` in CLAUDE.md, because the module lives in `global/` and must not assume an open-space actor.
-      - Suppression is cleared by REAL mouse motion, not by cursor position: `get_global_mouse_position()` is a world position that moves with the camera, so a physically still mouse would otherwise clear it immediately. `player_ship.gd::_input()` gains an `InputEventMouseMotion` branch calling `_turn.notify_mouse_moved()` before its existing `use_ability` early-return. Do not mark motion events as handled.
-      
-      DONE WHEN: the "snap holds until the mouse moves" case in `tests/unit/test_ship_turn_controller.gd` passes (face_instant, then steps with a cursor 90 degrees away leave rotation put; notify_mouse_moved, and the next step turns), and the module still snaps under `scheme = &"keys"` exactly as it does today. Gate green.
-      after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
-
-- [ ] **A future ship module cannot silently fight your steering** _(todo - test, small, sonnet)_
-      Adds `tests/integration/test_ship_rotation_single_writer.gd`, the suite's eleventh invariant test. After this epic the "exactly one writer of the open-space ship's rotation" rule is what keeps mouse aim working, and it is precisely the kind of rule the fifteenth ship module breaks with no visible symptom - which is exactly how `ai_targeting_module.gd` came to fight the controller in the first place.
-      
-      Sweep every `global/ship_modules/*.gd` and assert none assigns to `actor.rotation` (`=`, `+=`, `-=`). Allowlist empty; the sanctioned route is `face_instant()`.
-      
-      Boundary cases that make it able to fail:
-      - the sweep must find a non-zero number of module files and must find `ai_targeting_module.gd` among them by name - a glob that silently matched nothing must not read as a pass;
-      - `OpenSpacePlayerShip` must expose a `face_instant` method, so the rule points at a replacement rather than only forbidding the old call.
-      
-      DONE WHEN: the test passes on the fixed tree, and reverting the duck-typed call in `ai_targeting_module.gd` makes it fail (check that by hand before committing - an invariant that cannot fail is worth nothing). Gate green. Add the test to the list in `CLAUDE.md` and `tests/README.md` alongside the other invariant tests.
-      after: ai-targeting-still-snaps-your-nose-onto-an-enemy-and-the-sna
-
-- [ ] **Alt-tabbing away no longer leaves your ship turning on its own** _(todo - feature, small, sonnet)_
-      When the game window loses focus the OS pointer stops updating but `get_global_mouse_position()` keeps returning the last in-window position, so the ship holds a stale target angle and keeps turning toward it while the player is in another window.
-      
-      Adds `ShipTurnController.set_steering_enabled(enabled: bool)` - while false the target angle is frozen and `step()` still runs (so no rotation discontinuity on resume) - and `player_ship.gd::_notification()` handling `NOTIFICATION_APPLICATION_FOCUS_OUT` / `NOTIFICATION_APPLICATION_FOCUS_IN`.
-      
-      Explicitly NOT doing pointer confinement (`MOUSE_MODE_CONFINED` takes the pointer hostage on a multi-monitor desktop) or capture with a software cursor - both are out of scope per the plan. The narrower "pointer left the window but the window is still focused" case stays uncovered and that is accepted.
-      
-      DONE WHEN: the "steering disabled freezes the target" case in `tests/unit/test_ship_turn_controller.gd` passes - cursor moves while disabled and rotation does not change, re-enabling resumes with no jump. Gate green.
-      after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
-
-- [ ] **Choose mouse aim or classic A/D steering from the pause menu** _(todo - feature, medium, sonnet)_
-      The last step: the player can actually pick a scheme. Until this lands the setting exists but only a test can change it.
-      
-      `global/ui/pause_menu/pause_menu.gd` hard-codes `Option0..Option4` and `_confirm()` matches on the index. Add a new `Option4` = "Settings" and move today's Exit Game to `Option5`, in BOTH `pause_menu.tscn` and `open_space_pause_menu.tscn` (they duplicate their option nodes rather than sharing them). Settings goes before Exit Game so Exit Game stays last where a player expects it; `tests/integration/test_pause_menu_lore_logs.gd` references only indices 1-3 so it needs no change - confirm that before assuming it.
-      
-      `global/ui/pause_menu/settings_panel.{gd,tscn}` is a sub-overlay copying `LoreLogList`'s `open()`/`close()`/`navigate()` shape and the `_lore_logs_open` routing branch verbatim in spirit: while open it absorbs ALL menu input including `menu_confirm` (it must never fall through to `_confirm()` and re-open itself), and `ui_cancel` returns to the option list rather than closing the whole menu. One row - "Open-Space Steering: Mouse Aim / Classic (A/D)" - with menu_left/menu_right cycling the value straight into `SettingsState`. No generic settings framework for one two-valued key.
-      
-      The row is shown in all three modes: it is a stored preference, and hiding it in missions would make a player fly back to the hub to change their controls. The label names its scope, which is what keeps it from being a discoverability trap.
-      
-      New `.tscn`/`.gd` go UID-less or get a UID minted with the headless `ResourceUID.create_id()` snippet in `tests/README.md`. Never hand-typed, never copied from a sibling.
-      
-      DONE WHEN: `tests/integration/test_pause_menu_settings.gd` passes with every case in the plan's test plan for that file - including the one that drives the LIVE `SettingsState` through `menu_right` (a settings row whose handler is empty passes every "is it visible and labelled" assertion), and the one proving `menu_confirm` does not fall through while the panel is open. Sandboxed via `tests/helpers/save_sandbox.gd`. Gate green, and `updating-project-docs` run - this adds a UI component to a shared module.
-      after: the-game-remembers-which-steering-scheme-you-fly-with
-
-## Open-space boost: Shift burst movement on an upgradeable boost meter  [DRAFT - preparation in progress]  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 3 open)
-
-**Preparation**
-
-- [ ] **Research: Open-space boost: Shift burst movement on an upgradeable boost meter** _(todo - research)_
-      Investigate this as a professional game developer would, before anything is designed: the existing architecture and systems it touches, reusable patterns already in the project, dependencies, constraints, candidate approaches with their tradeoffs, risks, edge cases, testing requirements, and impact on other systems. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage RESEARCH. Output: `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/1-context.md` and `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/2-research.md`.
-      
-      **Triage summary:** The user wants Jet Lancer-style momentum movement in open space: Shift fires a burst of speed along the ship's current facing, drains a dedicated boost meter, shows the existing blue/cyan afterburner, and a ~180-degree turn plus boost should kill current momentum and redirect it, so flying becomes bursts and redirects rather than held thrust. The meter should be an upgradeable resource like health and shields, with a bar shown next to the weapon overheat meter, and none of it may touch assault or infiltration. Much of this already exists in pieces. OpenSpacePlayerShip (open_space/scenes/entities/player/player_ship.gd) already carries the momentum model (thrust_acceleration 380, reverse_acceleration 220, max_speed 420, damping 0.6) and a prototype of the flip mechanic: _trigger_flip_boost() fires when move_up is pressed while the ship is travelling backwards at >= boost_speed_threshold 180 px/s, snapping velocity to boost_redirect_speed 200 for boost_duration_sec 0.3 - the idea is essentially to promote that hidden special case into the primary, metered, upgradeable verb. ThrusterEffect.State.BOOST is the cyan afterburner the idea asks to reuse, and the ship sprite has a flame_boost animation. ShipProgressionState (global/autoloads/ship_progression_state.gd) is the exact precedent for a persisted, clamped, signal-emitting upgrade stat, and ShipShieldUpPickup plus the test_module_unlock_sources.gd placement invariant are the precedent for the collectible that raises it. Mode exclusivity is structural rather than a flag: this player script is open-space only. The open question the research stage has to settle is EngineBoostModule (global/ship_modules/engine_boost_module.gd), the equippable engines-slot module that already does a facing-direction burst - 1500 px/s easing to 500 over 0.55 s, i-frames, 45 contact damage, 2 s cooldown on the H key - and owns velocity by setting engine_boost_active to make _handle_thrust() stand down. A core Shift boost would be a second system claiming the same velocity, the same cyan flame and the same fantasy, so the epic must decide whether the module is superseded, re-cast as a meter upgrade, or kept as a distinct heavier ability. Three smaller decisions go with it: no boost input action exists (dash is already bound to Shift but is read only by the infiltration player); in open space the overheat meter is a world-space bar under the ship, not a HUD control, so where the boost bar actually belongs needs a call; and the sibling draft epic open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr rewrites _handle_rotation in the same _physics_process, so the two need a shared story about who owns open-space movement.
-      
-      **Original idea (idea-1789305251413):** Add Boost/Burst Movement to Open Space  Introduce a dedicated boost mechanic for open-space movement.  Reuse the existing blue boost flames/effect as the visual feedback for boosting.  Pressing Shift activates the boost and consumes a dedicated boost meter.  Boost should provide a significant burst of speed in the current direction the ship is facing.  The boost meter should become a progression/resource system that can be improved through collectibles/upgrades, similar to the existing health and shield upgrades.  Move the existing thrust/braking behavior into the boost system.  If the player turns the ship approximately 180° and activates boost, the ship should use the boost to rapidly reduce its current movement and transition into movement in the newly facing direction.  The goal is to allow quick direction changes and momentum manipulation rather than requiring continuous thrusting.  The overall movement should aim to reproduce the fast, momentum-based combat movement of Jet Lancer, while fitting the game's existing physics and balance.  Add a boost meter UI near the existing weapon overheat meter so both combat resources are visible together.  Boost should be exclusive to open-space gameplay and should not alter movement in other mission types.
-      -> [docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos](docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos)
-      1 run(s), $1.46; last on claude-opus-5
-
-- [ ] **Plan: Open-space boost: Shift burst movement on an upgradeable boost meter** _(todo - plan)_
-      Consume the research and write the implementation plan to `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.
-      after: research-open-space-boost-shift-burst-movement-on-an-upgrade
-      -> [docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos](docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos)
-
-- [ ] **Plan review: Open-space boost: Shift burst movement on an upgradeable boost meter** _(todo - plan-review)_
-      Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.
-      after: plan-open-space-boost-shift-burst-movement-on-an-upgradeable
-      -> [docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos](docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos)
 
 ## Ideas turned into epics
 
