@@ -46,7 +46,7 @@ func test_collecting_advances_log_state_to_the_lowest_sequence_entry() -> void:
 	var pickup := LoreLogPickup.new()
 	add_child_autofree(pickup)
 
-	pickup._collect(PlayerStub.spawn())
+	pickup._collect(autofree(PlayerStub.spawn()))
 
 	assert_eq(LogState.collected_count(), 1)
 	assert_true(LogState.is_collected(&"entry_beta"), "entry_beta has the lowest sequence (0) in the fixture set")
@@ -56,7 +56,7 @@ func test_notification_text_names_the_collected_entry() -> void:
 	var pickup := LoreLogPickup.new()
 	add_child_autofree(pickup)
 
-	pickup._collect(PlayerStub.spawn())
+	pickup._collect(autofree(PlayerStub.spawn()))
 
 	assert_string_contains(pickup._get_dialog_text(), "Test Entry Beta")
 
@@ -69,7 +69,7 @@ func test_boundary_collecting_after_the_catalogue_is_exhausted_does_not_double_c
 
 	var pickup := LoreLogPickup.new()
 	add_child_autofree(pickup)
-	pickup._collect(PlayerStub.spawn())
+	pickup._collect(autofree(PlayerStub.spawn()))
 
 	assert_eq(LogState.collected_count(), 3, "a fourth collection must not double-count")
 	assert_eq(pickup._get_dialog_text(), "", "no false notification once the catalogue is exhausted")
