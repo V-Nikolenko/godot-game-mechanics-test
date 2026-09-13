@@ -1676,7 +1676,7 @@
           "id": "research-open-space-mouse-aiming-inertial-turn-to-cursor-wit",
           "head": "Research: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting",
           "body": "Investigate this as a professional game developer would, before anything is designed: the existing architecture and systems it touches, reusable patterns already in the project, dependencies, constraints, candidate approaches with their tradeoffs, risks, edge cases, testing requirements, and impact on other systems. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage RESEARCH. Output: `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/1-context.md` and `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/2-research.md`.\n\n**Triage summary:** The user wants open-space flight to steer with the mouse: the ship turns toward the cursor with a deliberate lag/inertia rather than snapping to it, turning noticeably slower than the current keys so precision aiming is not free, with weapons and movement abilities still firing along the ship's actual facing (the cursor only sets the target angle) - a Jet Lancer-style responsive-but-inertial feel. A/D turning stays as a selectable legacy scheme, the change must not reach assault or infiltration, and a setting toggles the schemes with mouse-aim as the default. What it builds on: open_space/scenes/entities/player/player_ship.gd is the only mode-specific controller (its `_handle_rotation()` is a flat `rotation += rotation_speed_deg * turn * delta` with no angular velocity, next to `_handle_thrust()`'s already-inertial thrust/damping/max_speed/flip-boost model), and because the open-space ship reuses the shared assault WeaponState node whose behaviors all fire from `actor.rotation` (straight_behavior.gd:16, spread_behavior.gd:15, sniper_behavior.gd:81, beam_behavior.gd:53), the 'weapons follow facing, not the cursor' requirement comes for free the moment the mouse only drives rotation - and mode isolation comes for free too, since assault's player is a separate scene (assault/scenes/player/player_fighter.tscn) with its own controller. The gap is the settings half: the project reads no mouse input anywhere (zero `get_global_mouse_position` / `InputEventMouseMotion` uses) and has no options system at all - no settings autoload, no options screen, and a PauseMenu whose five entries are hard-coded Node2D children - so this needs a small persisted settings store following the `user://*.cfg` ConfigFile pattern of SessionState/MissionState/ShipModuleState, plus a UI entry point to flip the scheme. Open questions for research and the plan: the turn model (max turn rate plus angular acceleration/damping, versus exponential smoothing toward the cursor angle) and the actual numbers that make mouse turning feel responsive yet slower than the 220 deg/s keyboard rate; whether the cursor should keep steering while the mission-select menu, PlayerMenu or PauseMenu is open, and what the cursor looks like on screen (crosshair, dead zone near the ship); and how mouse aim coexists with AiTargetingModule, which writes `actor.rotation` directly every frame to snap onto a target and would otherwise fight the turn controller, and EngineBoostModule, which latches its direction from `actor.rotation` at activation. Note for scheduling only: a separate untriaged idea, 'Add Boost/Burst Movement to Open Space', touches the same `_handle_thrust()` code path.\n\n**Original idea (idea-1789305113892):** Rework Open-Space Movement & Mouse Aiming:  Rework open-space movement to support mouse-based ship rotation and aiming.  Keep the existing A/D rotation controls as an alternative/legacy control scheme.  The new mouse system should rotate the ship toward the mouse position, providing more precise movement and shooting control.  Add a slight rotation delay/inertia when following the mouse, rather than making the ship instantly point at the cursor.  Make mouse-based rotation somewhat slower to keep the system balanced and avoid making aiming too powerful.  Weapons and movement abilities must follow the ship's actual facing direction, not the mouse position. The mouse only determines the direction the ship is trying to rotate toward.  This system should apply only to open-space missions and must not affect assault/land missions or other gameplay modes.  Add a setting/option to switch between the new mouse movement and the existing movement system, with the new mouse-based system enabled by default.  Overall movement should aim for a responsive but inertia-based feel, inspired by the movement style of Jet Lancer.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": "docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr",
           "kind": "prep",
@@ -1767,7 +1767,30 @@
           "complexity": "large",
           "model": "opus",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "4ca5714",
+                  "subject": "Triage the open-space boost idea into a prepared epic"
+                }
+              ],
+              "at": "2026-09-13T13:26:55.418Z",
+              "run": "2026-09-13-1616-i2",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003947,
+                "claude-opus-5": 1.4564645000000003
+              },
+              "costUSD": 1.4604115000000002,
+              "turns": 24,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "plan-open-space-boost-shift-burst-movement-on-an-upgradeable",
