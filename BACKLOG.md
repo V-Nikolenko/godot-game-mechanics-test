@@ -1182,7 +1182,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       ---
       -> [docs/plans/station-death-handoff](docs/plans/station-death-handoff)
 
-## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  [DRAFT - preparation in progress]  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 2 open)
+## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  [DRAFT - preparation in progress]  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 8 open)
 
 **Preparation**
 
@@ -1193,9 +1193,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       **Original idea (idea-1789305113892):** Rework Open-Space Movement & Mouse Aiming:  Rework open-space movement to support mouse-based ship rotation and aiming.  Keep the existing A/D rotation controls as an alternative/legacy control scheme.  The new mouse system should rotate the ship toward the mouse position, providing more precise movement and shooting control.  Add a slight rotation delay/inertia when following the mouse, rather than making the ship instantly point at the cursor.  Make mouse-based rotation somewhat slower to keep the system balanced and avoid making aiming too powerful.  Weapons and movement abilities must follow the ship's actual facing direction, not the mouse position. The mouse only determines the direction the ship is trying to rotate toward.  This system should apply only to open-space missions and must not affect assault/land missions or other gameplay modes.  Add a setting/option to switch between the new mouse movement and the existing movement system, with the new mouse-based system enabled by default.  Overall movement should aim for a responsive but inertia-based feel, inspired by the movement style of Jet Lancer.
       -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
-      1 run(s), $1.88; last on claude-opus-5
+      2 run(s), $6.35; last on claude-opus-5
 
-- [ ] **Plan: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(todo - plan)_
+- [ ] **Plan: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(in progress - plan)_
       Consume the research and write the implementation plan to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.
       after: research-open-space-mouse-aiming-inertial-turn-to-cursor-wit
       -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
@@ -1204,6 +1204,76 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.
       after: plan-open-space-mouse-aiming-inertial-turn-to-cursor-with-a-
       -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
+
+**Implementation**
+
+- [ ] **Your ship leans toward the mouse cursor instead of snapping to it** _(todo - feature, medium, sonnet)_
+      Adds `open_space/scenes/entities/player/ship_turn_controller.gd` (`class_name ShipTurnController extends Node`) and wires it into `open_space/scenes/entities/player/player_ship.tscn` as a child node of PlayerShip. It becomes the only writer of the open-space ship's rotation.
+      
+      Implements BOTH schemes behind an `@export var scheme: StringName` defaulting to `&"mouse"`:
+      - mouse: clamped exponential chase toward the cursor angle (see `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/3-plan.md` -> "Turn model" for the exact five lines), dead zone holds the target angle, `rotate_toward` applies the step.
+      - keys: today's behaviour exactly, 220 deg/s, instantaneous, cursor ignored.
+      
+      `player_ship.gd::_handle_rotation` shrinks to reading the A/D axis, calling `set_aim_target(global_position, get_global_mouse_position())` and `rotation = _turn.step(rotation, turn, delta)`. `rotation_speed_deg` moves off `player_ship.gd` onto the controller. `get_global_mouse_position()` must appear in exactly one line project-wide.
+      
+      DONE WHEN: `tests/unit/test_ship_turn_controller.gd` passes with every case in the plan's test plan for that file - frame-rate independence, the turn-rate cap, no overshoot, wrap-around across +-pi, cursor-exactly-on-ship, the 47.9/48.1 px dead-zone edge, the 180-degree tie-break, "classic is still 220 deg/s", "classic ignores the cursor", "mouse ignores A/D". No autoload and no UI in this task - the scheme is flipped by hand in the test / inspector. Gate green.
+
+- [ ] **The game remembers which steering scheme you fly with** _(todo - feature, small, sonnet)_
+      Adds `global/autoloads/settings_state.gd` (`SettingsState`), the project's first settings store. Near-copy of the `ConfigFile` template in `global/autoloads/ship_module_state.gd`: `SAVE_PATH = "user://settings.cfg"`, `SECTION = "controls"`, key `open_space_scheme`, `SCHEMES = [&"mouse", &"keys"]`, `DEFAULT_SCHEME = &"mouse"`, `signal open_space_scheme_changed(scheme: StringName)` (declared with its argument - `test_signal_emit_arity.gd` sweeps self-emits).
+      
+      Default-on-missing comes from `ConfigFile.get_value(SECTION, KEY, default)` and is re-validated against `SCHEMES` on load. Deliberately NOT the `UpgradeState.STARTING_IDS` idiom - see the plan's "the setting is a new SettingsState autoload" for why that shape is wrong here.
+      
+      Also: register in `project.godot` `[autoload]`; add `"user://settings.cfg"` to `tests/helpers/save_sandbox.gd::PATHS` (without it every test touching the setting leaks into the player's profile and the next suite run). `player_ship.gd` seeds `_turn.scheme` from the autoload in `_ready()` and connects `open_space_scheme_changed` to `_turn.set_scheme(scheme, rotation)`.
+      
+      DONE WHEN: `tests/unit/test_settings_state.gd` passes - default on empty disk, round-trips through a second instance's `_load()`, falls back to the default on a hand-corrupted value, rejects a value not in SCHEMES, and does not emit when set to the value it already holds. Plus the "scheme flip mid-flight causes no rotation jump" case in `tests/unit/test_ship_turn_controller.gd`. No UI yet. Gate green.
+      after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
+
+- [ ] **AI Targeting still snaps your nose onto an enemy, and the snap holds** _(todo - feature, small, sonnet)_
+      `global/ship_modules/ai_targeting_module.gd:38` writes `actor.rotation =` directly. Under the turn controller that write is undone within a frame or two, so the 15-second-cooldown module the player unlocked and equipped visibly does nothing under mouse aim.
+      
+      Fix, per the plan's chosen option (a):
+      - `OpenSpacePlayerShip.face_instant(angle: float)` - sets rotation, adopts `angle` as the controller's target, and suppresses cursor steering.
+      - The module calls it duck-typed (`if actor.has_method("face_instant")`), the same shape as `is_armored()` in CLAUDE.md, because the module lives in `global/` and must not assume an open-space actor.
+      - Suppression is cleared by REAL mouse motion, not by cursor position: `get_global_mouse_position()` is a world position that moves with the camera, so a physically still mouse would otherwise clear it immediately. `player_ship.gd::_input()` gains an `InputEventMouseMotion` branch calling `_turn.notify_mouse_moved()` before its existing `use_ability` early-return. Do not mark motion events as handled.
+      
+      DONE WHEN: the "snap holds until the mouse moves" case in `tests/unit/test_ship_turn_controller.gd` passes (face_instant, then steps with a cursor 90 degrees away leave rotation put; notify_mouse_moved, and the next step turns), and the module still snaps under `scheme = &"keys"` exactly as it does today. Gate green.
+      after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
+
+- [ ] **A future ship module cannot silently fight your steering** _(todo - test, small, sonnet)_
+      Adds `tests/integration/test_ship_rotation_single_writer.gd`, the suite's eleventh invariant test. After this epic the "exactly one writer of the open-space ship's rotation" rule is what keeps mouse aim working, and it is precisely the kind of rule the fifteenth ship module breaks with no visible symptom - which is exactly how `ai_targeting_module.gd` came to fight the controller in the first place.
+      
+      Sweep every `global/ship_modules/*.gd` and assert none assigns to `actor.rotation` (`=`, `+=`, `-=`). Allowlist empty; the sanctioned route is `face_instant()`.
+      
+      Boundary cases that make it able to fail:
+      - the sweep must find a non-zero number of module files and must find `ai_targeting_module.gd` among them by name - a glob that silently matched nothing must not read as a pass;
+      - `OpenSpacePlayerShip` must expose a `face_instant` method, so the rule points at a replacement rather than only forbidding the old call.
+      
+      DONE WHEN: the test passes on the fixed tree, and reverting the duck-typed call in `ai_targeting_module.gd` makes it fail (check that by hand before committing - an invariant that cannot fail is worth nothing). Gate green. Add the test to the list in `CLAUDE.md` and `tests/README.md` alongside the other invariant tests.
+      after: ai-targeting-still-snaps-your-nose-onto-an-enemy-and-the-sna
+
+- [ ] **Alt-tabbing away no longer leaves your ship turning on its own** _(todo - feature, small, sonnet)_
+      When the game window loses focus the OS pointer stops updating but `get_global_mouse_position()` keeps returning the last in-window position, so the ship holds a stale target angle and keeps turning toward it while the player is in another window.
+      
+      Adds `ShipTurnController.set_steering_enabled(enabled: bool)` - while false the target angle is frozen and `step()` still runs (so no rotation discontinuity on resume) - and `player_ship.gd::_notification()` handling `NOTIFICATION_APPLICATION_FOCUS_OUT` / `NOTIFICATION_APPLICATION_FOCUS_IN`.
+      
+      Explicitly NOT doing pointer confinement (`MOUSE_MODE_CONFINED` takes the pointer hostage on a multi-monitor desktop) or capture with a software cursor - both are out of scope per the plan. The narrower "pointer left the window but the window is still focused" case stays uncovered and that is accepted.
+      
+      DONE WHEN: the "steering disabled freezes the target" case in `tests/unit/test_ship_turn_controller.gd` passes - cursor moves while disabled and rotation does not change, re-enabling resumes with no jump. Gate green.
+      after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
+
+- [ ] **Choose mouse aim or classic A/D steering from the pause menu** _(todo - feature, medium, sonnet)_
+      The last step: the player can actually pick a scheme. Until this lands the setting exists but only a test can change it.
+      
+      `global/ui/pause_menu/pause_menu.gd` hard-codes `Option0..Option4` and `_confirm()` matches on the index. Add a new `Option4` = "Settings" and move today's Exit Game to `Option5`, in BOTH `pause_menu.tscn` and `open_space_pause_menu.tscn` (they duplicate their option nodes rather than sharing them). Settings goes before Exit Game so Exit Game stays last where a player expects it; `tests/integration/test_pause_menu_lore_logs.gd` references only indices 1-3 so it needs no change - confirm that before assuming it.
+      
+      `global/ui/pause_menu/settings_panel.{gd,tscn}` is a sub-overlay copying `LoreLogList`'s `open()`/`close()`/`navigate()` shape and the `_lore_logs_open` routing branch verbatim in spirit: while open it absorbs ALL menu input including `menu_confirm` (it must never fall through to `_confirm()` and re-open itself), and `ui_cancel` returns to the option list rather than closing the whole menu. One row - "Open-Space Steering: Mouse Aim / Classic (A/D)" - with menu_left/menu_right cycling the value straight into `SettingsState`. No generic settings framework for one two-valued key.
+      
+      The row is shown in all three modes: it is a stored preference, and hiding it in missions would make a player fly back to the hub to change their controls. The label names its scope, which is what keeps it from being a discoverability trap.
+      
+      New `.tscn`/`.gd` go UID-less or get a UID minted with the headless `ResourceUID.create_id()` snippet in `tests/README.md`. Never hand-typed, never copied from a sibling.
+      
+      DONE WHEN: `tests/integration/test_pause_menu_settings.gd` passes with every case in the plan's test plan for that file - including the one that drives the LIVE `SettingsState` through `menu_right` (a settings row whose handler is empty passes every "is it visible and labelled" assertion), and the one proving `menu_confirm` does not fall through while the panel is open. Sandboxed via `tests/helpers/save_sandbox.gd`. Gate green, and `updating-project-docs` run - this adds a UI component to a shared module.
+      after: the-game-remembers-which-steering-scheme-you-fly-with
 
 ## Open-space boost: Shift burst movement on an upgradeable boost meter  [DRAFT - preparation in progress]  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 3 open)
 
