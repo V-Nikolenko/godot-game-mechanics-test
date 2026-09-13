@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Code health backlog  (`code-health-backlog`, 1 open)
+## Code health backlog  (`code-health-backlog`, 0 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -555,7 +555,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/move-code-built-contact-hitboxes-into-the-scenes-as-the-aste](docs/plans/move-code-built-contact-hitboxes-into-the-scenes-as-the-aste)
       2 run(s), $7.34; last on claude-sonnet-5
 
-- [ ] **Wire the leak grep into /agent/verify.sh — the agent cannot, /agent is read-only** _(in progress, stuck - feature, medium, opus)_
+- [x] **Wire the leak grep into /agent/verify.sh — the agent cannot, /agent is read-only** _(done - feature, medium, opus)_
       `/agent` is mounted **read-only** inside the dev container (`/dev/bcache0 on /agent type btrfs
       (ro,...)`), so the agent cannot add leak patterns to the gate itself — verified by an append,
       which failed with "Read-only file system".
@@ -828,7 +828,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m](docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m)
       1 run(s), $3.03; last on claude-sonnet-5
 
-- [ ] **Flying into a log record in open space picks it up and tells me what I found** _(in progress, stuck - feature, medium, sonnet)_
+- [ ] **Flying into a log record in open space picks it up and tells me what I found** _(in progress - feature, medium, sonnet)_
       **Player outcome:** a log record floating in the sector hub is visually readable as
       "something to collect", flying into it picks it up, and a one-line notification tells me what I
       just recovered without stopping the ship.
