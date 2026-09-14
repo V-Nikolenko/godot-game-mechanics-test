@@ -232,7 +232,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en](docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en)
       1 run(s), $1.84; last on claude-sonnet-5
 
-## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  [CHANGES REQUESTED - being revised]  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 7 open)
+## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  [AWAITING YOUR REVIEW]  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 6 open)
 
 **Review history**
 
@@ -255,7 +255,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
       1 run(s), $2.98; last on claude-opus-5
 
-- [ ] **Plan review: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(in progress - plan-review)_
+- [x] **Plan review: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting** _(done - plan-review)_
       Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.
       after: plan-open-space-mouse-aiming-inertial-turn-to-cursor-with-a-
       -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
@@ -263,7 +263,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
 
 **Implementation**
 
-- [ ] **Your ship leans toward the mouse cursor instead of snapping to it** _(todo - feature, medium, sonnet)_
+- [ ] **Your ship leans toward the mouse cursor instead of snapping to it** _(todo - feature, medium, opus)_
       Adds `open_space/scenes/entities/player/ship_turn_controller.gd` (`class_name ShipTurnController extends Node`) and wires it into `open_space/scenes/entities/player/player_ship.tscn` as a child node of PlayerShip. It becomes the only writer of the open-space ship's rotation.
       
       Implements BOTH schemes behind an `@export var scheme: StringName` defaulting to `&"mouse"`:

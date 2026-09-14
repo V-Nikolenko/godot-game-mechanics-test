@@ -6,7 +6,13 @@ Stage: **PLAN**. Written 2026-09-13 against `agent/auto-dev` @ `df37d42`.
 [`4-review.md`](./4-review.md) (`VERDICT: CHANGES_REQUESTED`, blocking findings B1-B5 plus
 twelve observations). Every change is listed under [Response to review](#response-to-review) at
 the foot of this file; the sections themselves have been edited in place rather than annotated,
-so what you read above that section is the plan as it now stands.
+so what you read above that section is the plan as it now stands. Round 2 returned
+`VERDICT: APPROVED` with nine non-blocking findings; those are folded into the sections below and
+listed at the end.
+
+> **Implementation sessions: your task body was written from revision 1 and `backlog-cli` cannot
+> rewrite it. Read [Task-body corrections](#task-body-corrections-read-this-before-starting-any-implementation-task)
+> before you start.**
 Builds on [`1-context.md`](./1-context.md) (what is already here) and
 [`2-research.md`](./2-research.md) (how shipped games solve it). Neither is re-derived below.
 Both were corrected in the same revision (B3, obs 8, obs 9).
@@ -96,6 +102,18 @@ A scene node rather than a `RefCounted` created in `_ready()` for one concrete r
 tuning numbers are `@export`s and have to be inspector-visible on the ship scene, exactly like
 `rotation_speed_deg` is today. A `.new()` object's exports are not.
 
+**It is not the scene's existing `MovementController`, and does not overlap it** (review N5).
+`player_ship.tscn:283` already instances `assault/scenes/player/movement_controller.gd`
+(`class_name MovementController extends Node`), wired into `WeaponState` and
+`WarheadMissileShootingState` by `NodePath`. It polls `Input.is_action_just_pressed` and emits
+`action_single_press` / `action_double_press`; it writes no rotation and holds no turn state, so
+nothing is being reinvented — but a reader who finds two "controller" siblings deserves the
+sentence. It also **strengthens** the "A/D do nothing under mouse aim" decision below:
+`action_double_press` has no consumer in open space (`DashState` is its only subscriber and is not
+in this scene) and `action_single_press` reaches only `WeaponState._on_action` and
+`WarheadMissileShootingState._on_action`, neither of which acts on `move_left`/`move_right`. A/D
+really are free.
+
 It lives under `open_space/`, not `global/`, because mode isolation for the **turn model** is
 structural: `player_ship.tscn` is instantiated by exactly one scene, `sector_hub.tscn`, so no
 code is needed to enforce it, and putting the controller in `global/` would invite exactly the
@@ -137,6 +155,16 @@ on the next frame. The re-seed matters while steering is disabled, inside the de
 `&"keys"`; **the thing that actually prevents a visible jump on a mid-flight scheme flip is the
 per-frame rate cap**, which no code path can bypass. The test plan says so explicitly rather than
 implying the re-seed is the guard.
+
+**`player_ship.gd:46`'s `rotation = 0.0` is deleted in the same step** (review N1). `_ready()`
+currently wipes the hull angle before anything can read it, which would make the ready-time seed a
+no-op and the wiring test's "target seeded from the hull's facing" boundary case **unpassable** —
+the seed would be exactly the "both happen to default to `0.0`" coincidence that case exists to
+reject. The deletion is behaviour-neutral: `player_ship.tscn`'s root
+(`[node name="PlayerShip" type="CharacterBody2D"]`, line 214) sets no `rotation`, so the scene
+default already supplies `0.0`, and nothing else in the project overrides it. **Do not** resolve
+this the other way by moving the assertion after `_ready()`; that turns the case into a
+restatement of `set_scheme()` and removes the only thing pinning the seed to the hull.
 
 `player_ship.gd::_handle_rotation` shrinks to the integration:
 
@@ -302,11 +330,22 @@ index, so this is a real edit to a shared file. The plan:
   35-37 reference indices 1, 2 and 3 and are genuinely unaffected.
   Settings still goes *before* Exit Game: Exit Game stays last in the list where a player expects
   it, which is worth one two-line test edit.
-- **Layout is spelled out, because the rows are absolutely positioned.** `MenuContainer` sits at
-  `y = 184` with option rows at `110 / 178 / 244 / 310 / 376` — a 66 px pitch — so the new sixth
-  row goes at `y ≈ 442`, landing around 626 px down a 720 px viewport once the container offset
-  and the button sprite's `+14` are counted. It fits, with little room to spare; if a fly-test says
-  it crowds the bottom edge, the fix is to lift `MenuContainer` rather than to re-order the list.
+- **Layout is spelled out per scene, because the rows are absolutely positioned and the two scenes
+  do not agree** (review N4 — nothing headless catches a misplaced row, and nobody sees this menu
+  during an unattended run).
+  - `pause_menu.tscn`: `MenuContainer` at `y = 184`, rows `Option0..Option4` at
+    `110 / 178 / 244 / 310 / 376` — a 66 px pitch. The list grows by one visual row: the **new
+    `Option4` (Settings) takes `y = 376`**, the slot Exit Game occupies today, and the **new
+    `Option5` (Exit Game) goes to `y = 442`**. That is ~626 px down a 720 px viewport once the
+    container offset and the button sprite's `+14` are counted. It fits, with little room to
+    spare; if a fly-test says it crowds the bottom edge, lift `MenuContainer` rather than
+    re-ordering the list.
+  - `open_space_pause_menu.tscn` is **different**: `MenuContainer` at `y = 226`, and its rows at
+    `112 / — / — / 178 / 244` (verified — `Option1` and `Option2` carry no `position` line at all,
+    because they are hidden in open space and the visible rows close up). There, **Settings is
+    `Option4` at `y = 244`** and **Exit Game becomes `Option5` at `y = 310`**. Copying the other
+    scene's `442` into this one leaves a ~130 px hole between Settings and Exit Game in the hub
+    menu.
 - **The two scenes are not symmetrical, and a test must not assume they are.** In
   `pause_menu.tscn` every `Option0..Option4` has `Bg` + `Label` (and all but `Option3` an `Icon`).
   In `open_space_pause_menu.tscn`, `Option1` and `Option2` — Restart Mission and Exit Mission,
@@ -403,6 +442,13 @@ so an interrupted window loses at most one of them.
 Tree-less `ShipTurnController.new()`; `step()` called by hand, per the `tests/README.md` house rule
 on keeping `_physics_process` out of the tree.
 
+**`free()` it in `after_each`** (review N8). `ShipTurnController` extends `Node`, and a `Node`
+built with `.new()` and never freed prints `ObjectDB instances leaked` at *process exit* — after
+GUT has set the exit code, in words the gate's `FATAL` regex does not match, so
+`/agent/verify.sh` prints `GATE PASS` on a leaking suite. Follow
+`tests/unit/test_overheat_component.gd:12-19` (`before_each` `.new()`, `after_each` `.free()`),
+and run `scripts/check-test-leaks.sh` once in step 1.
+
 | Case | Assertion |
 |---|---|
 | Frame-rate independence | From `rotation = 0.0` toward a target of **0.3 rad** (small on purpose — see below), 60 × `step(…, 1.0/60.0)` and 30 × `step(…, 1.0/30.0)` land within 1e-3 rad of each other. Verified in-engine: both give `0.29787721016188`, difference exactly `0.0`, while a bare `lerpf(…, 0.1)` gives `0.29946` vs `0.28728` — 0.0122 apart, so the case reds on finding 3's bug. **The target must be inside the unclamped band.** With the shipped numbers (half-life 0.14 s, cap 150 °/s) a target of π keeps the cap binding for the whole second, which makes the model a constant-rate turn and the case passes for the wrong reason — it would then pin the clamp, not the exponential. |
@@ -430,12 +476,25 @@ nothing more. This file is the one that fails on an unwired build. It instantiat
 `player_ship.tscn`, is sandboxed (it touches `SettingsState`), and is sized to the headless
 constraint — **it never tries to place a cursor.**
 
+**Call `ship.set_physics_process(false)` immediately after `add_child_autofree`** (review N6).
+The ship has to be *in* the tree, because `_ready()` is part of what is under test — but once it
+is, `player_ship.gd:85`'s `_physics_process` runs `_handle_rotation` + `_handle_thrust` +
+`move_and_slide` on every real physics frame against whatever `get_global_mouse_position()`
+returns headlessly, racing the hand-called `_handle_rotation(1.0)`. This is `tests/README.md`'s
+"keep `_process`/`_physics_process` out of the tree and call them by hand", applied to a node
+that cannot be kept out of it.
+
+**Two of the six cases land in build step 2, not step 1** (review N2): "The scheme is seeded on
+ready" and "The scheme signal is connected" both name `SettingsState`, which does not exist until
+then. They are marked below. A task-1 session writes the other four and leaves those two out
+rather than trying to reference an unregistered autoload.
+
 | Case | Assertion |
 |---|---|
 | The controller is in the scene | The instantiated `player_ship.tscn` has a `ShipTurnController` child, found by class not by node path, so a rename does not silently pass. |
 | `_handle_rotation` actually delegates | With `scheme = &"keys"` and `move_right` pressed via `Input.action_press`, a hand-called `_handle_rotation(1.0)` moves `rotation` by the value the **controller instance** returns for the same inputs — compared against `controller.step(…)` computed in the test, not against a hard-coded 220°, so a controller whose rate was changed still proves delegation rather than coincidence. |
-| The scheme is seeded on ready | After `_ready()`, the child controller's `scheme` equals `SettingsState.get_open_space_scheme()`. Fails on the "the setting is cosmetic" build — the exact failure `test_weapon_unlock_sources.gd` exists to remember. |
-| The scheme signal is connected | Emitting `SettingsState.open_space_scheme_changed(&"keys")` (or calling the setter) re-seeds the live controller's `scheme` without a scene reload. |
+| The scheme is seeded on ready **(step 2)** | After `_ready()`, the child controller's `scheme` equals `SettingsState.get_open_space_scheme()`. Fails on the "the setting is cosmetic" build — the exact failure `test_weapon_unlock_sources.gd` exists to remember. |
+| The scheme signal is connected **(step 2)** | Emitting `SettingsState.open_space_scheme_changed(&"keys")` (or calling the setter) re-seeds the live controller's `scheme` without a scene reload. |
 | The target angle starts at the hull's facing (**boundary**) | Set the ship's `rotation` to a non-zero angle before `_ready()` runs, and assert the first `step()` with steering disabled returns that same angle — i.e. the controller was seeded from the ship rather than both happening to default to `0.0`. |
 | Old API is gone | `rotation_speed_deg` no longer exists on `OpenSpacePlayerShip` (it moved to the controller), so a half-finished step 1 that leaves both cannot read as done. |
 
@@ -513,6 +572,13 @@ its `scheme: StringName` argument.
 
 ## Risks
 
+- **The AI-Targeting snap releases on the next mouse twitch** (review N7). `notify_mouse_moved()`
+  fires on *any* `InputEventMouseMotion`, including one pixel of hand tremor, so for a player
+  actively aiming the hold lasts a fraction of a second. Decision (a) is still right and the
+  alternatives are still rejected for the reasons given — but "the snap holds" is true only for a
+  player who stops moving the mouse. **Goes on the same fly-test list as the three turn numbers.**
+  If it reads badly, the dial is a short *timed* hold instead of a motion-gated one, and it fits
+  behind the same `notify_mouse_moved()` seam with no other change.
 - **The turn numbers cannot be validated by this project's gate.** 150 °/s, 0.14 s and 48 px are
   judgement calls. The gate can prove the model is frame-rate correct, capped and wrap-safe; it
   cannot tell anyone whether the ship feels good. **A human has to fly the sector hub**, and the
@@ -574,21 +640,32 @@ it starts.
 
 | Task | Correction |
 |---|---|
-| `your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-` | **Add to DONE WHEN:** `tests/integration/test_player_ship_turn_wiring.gd` passes (the anti-inert test — write it first; the unit tests alone are all green on a build where the controller is never added to `player_ship.tscn`). **Add:** the controller declares **no signals** (`scheme_applied` is dropped), and `player_ship.gd::_ready()` seeds the controller's target angle from the hull's actual `rotation` via `set_scheme()`. **Add:** invoke `updating-project-docs` — this adds a node class to the ship scene, which `docs/architecture/modules/open_space.md:19-20` and `:78` enumerate by name. |
-| `the-game-remembers-which-steering-scheme-you-fly-with` | **Add to DONE WHEN:** the two wiring cases in `test_player_ship_turn_wiring.gd` — the scheme is seeded from `SettingsState` in `_ready()`, and emitting `open_space_scheme_changed` re-seeds the live controller without a scene reload. Without those the setting is cosmetic and every named test still passes. **Add:** invoke `updating-project-docs` — this is the project's **eleventh** autoload, and `docs/architecture/modules/global.md:68-79` carries a per-autoload table introduced by the sentence "**All ten** are registered in `project.godot`", which must become eleven. |
+| `your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-` | **Add to DONE WHEN:** the **four step-1 cases** of `tests/integration/test_player_ship_turn_wiring.gd` pass (the anti-inert test — write it first; the unit tests alone are all green on a build where the controller is never added to `player_ship.tscn`). The two `SettingsState` cases belong to the next task (N2). **Add:** delete `player_ship.gd:46`'s `rotation = 0.0`, or the ready-time seed is a no-op and the seeded-angle boundary case cannot pass (N1). **Add:** `set_physics_process(false)` on the instantiated ship in the wiring test (N6) and `free()` the tree-less controller in the unit test's `after_each`, then run `scripts/check-test-leaks.sh` (N8). **Model raised to `opus`** — see below. **Add:** the controller declares **no signals** (`scheme_applied` is dropped), and `player_ship.gd::_ready()` seeds the controller's target angle from the hull's actual `rotation` via `set_scheme()`. **Add:** invoke `updating-project-docs` — this adds a node class to the ship scene, which `docs/architecture/modules/open_space.md:19-20` and `:78` enumerate by name. |
+| `the-game-remembers-which-steering-scheme-you-fly-with` | **Add to DONE WHEN:** the two `SettingsState` wiring cases in `test_player_ship_turn_wiring.gd` (they are *this* task's, not task 1's — N2) — the scheme is seeded from `SettingsState` in `_ready()`, and emitting `open_space_scheme_changed` re-seeds the live controller without a scene reload. Without those the setting is cosmetic and every named test still passes. **Add:** invoke `updating-project-docs` — this is the project's **eleventh** autoload, and `docs/architecture/modules/global.md:68-79` carries a per-autoload table introduced by the sentence "**All ten** are registered in `project.godot`", which must become eleven. |
 | `ai-targeting-still-snaps-your-nose-onto-an-enemy-and-the-sna` | **Changed, not added.** The duck-typed call has **no `else: actor.rotation = angle` fallback** — the body's shape is from revision 1 and would fail the next task's sweep (review B2). Instead, `AssaultPlayer` gets its own one-line `face_instant(angle)` (`rotation = angle`, nothing else), because activating this module in an **assault** mission writes the fighter's rotation today and deleting the fallback without that would silently change assault (review B3). **Add to DONE WHEN:** `tests/integration/test_ai_targeting_faces_actor.gd` passes, including the assault case and the "actor without `face_instant` keeps its cooldown" boundary. |
 | `a-future-ship-module-cannot-silently-fight-your-steering` | **Add:** the `face_instant` existence assertion covers **both** `OpenSpacePlayerShip` **and** `AssaultPlayer`, not only the open-space ship. The empty allowlist is correct **and** achievable only because the task above removed the fallback — if you find yourself wanting to allowlist a line, the previous task is unfinished. |
 | `alt-tabbing-away-no-longer-leaves-your-ship-turning-on-its-o` | No correction. |
-| `choose-mouse-aim-or-classic-a-d-steering-from-the-pause-menu` | **Changed.** The body says `test_pause_menu_lore_logs.gd` "references only indices 1-3 so it needs no change — confirm that before assuming it". It was confirmed, and it is **false**: line 82-83 is `test_exit_game_is_now_at_index_4` asserting `_options[4]` reads "Exit Game" (review B1). **Add to DONE WHEN:** rename that test to `…_index_5` and change the index. **Also:** `open_space_pause_menu.tscn`'s `Option1`/`Option2` are bare `Node2D`s with **no `Label` child** — never loop `get_node("Label")` over `_options` in that scene. **Model raised to `opus`** (see below). |
+| `choose-mouse-aim-or-classic-a-d-steering-from-the-pause-menu` | **Changed.** The body says `test_pause_menu_lore_logs.gd` "references only indices 1-3 so it needs no change — confirm that before assuming it". It was confirmed, and it is **false**: line 82-83 is `test_exit_game_is_now_at_index_4` asserting `_options[4]` reads "Exit Game" (review B1). **Add to DONE WHEN:** rename that test to `…_index_5` and change the index. **Also:** `open_space_pause_menu.tscn`'s `Option1`/`Option2` are bare `Node2D`s with **no `Label` child** — never loop `get_node("Label")` over `_options` in that scene — **and its row geometry differs from `pause_menu.tscn`'s**: container `y = 226`, Settings at `y = 244`, Exit Game at `y = 310`, not `376`/`442` (N4). Nothing headless catches a misplaced row. **Model raised to `opus`** (see below). |
 
 ### Model and complexity
 
-One change, applied with `set-meta`: `choose-mouse-aim-or-classic-a-d-steering-from-the-pause-menu`
+Two changes, applied with `set-meta`, both **keeping `complexity: medium`** so the tasks stay on
+the Direct track — the epic's plan is written and reviewed, and a second plan for either would be
+waste.
+
+`your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-` moves from `sonnet` to **`opus`**
+(review N3). It absorbed most of both revisions' new work: a new `class_name` with eight public
+members, the `player_ship.gd` integration, a `player_ship.tscn` node addition, a ~13-case unit
+test, four cases of a new integration test, the `rotation_speed_deg` removal, N1's line deletion
+and an `updating-project-docs` pass. It is still **one** task — nothing in it can be finished
+without the rest — so this is a model finding, not a decomposition one.
+
+`choose-mouse-aim-or-classic-a-d-steering-from-the-pause-menu`
 moves from `sonnet` to **`opus`**, staying `medium` (so it stays on the Direct track — the epic's
 plan is written and reviewed, and a second plan for it would be waste). It is the epic's
 highest-blast-radius task: it edits a file shared by all three modes whose `_confirm()` is matched
 by *index*, in two scenes that are **not** structurally identical, adds a new sub-overlay scene and
-script, and must edit an existing test. The other five stay `sonnet`; none of them is
+script, and must edit an existing test. The remaining four stay `sonnet`; none of them is
 architectural and all read from this plan.
 
 Dependencies are unchanged and still correct: tasks 3, 5 and 6 depend on task 1; task 4 on task 3;
@@ -627,3 +704,25 @@ boundary case), **12** (no change needed — noted that `PlayerBase` declares no
 
 All numeric claims above were re-verified in this container against Godot 4.6.3 headless before
 being written into the test plan.
+
+### Round 2 — `VERDICT: APPROVED`
+
+Round 2 confirmed B1-B5 resolved **in the files** (it re-ran the module sweep across all 17
+`global/ship_modules/*.gd`, re-ran the three corrected test-plan numbers in Godot 4.6.3, and
+checked two things this plan had not: `grep -rn "_options\[" tests/` hits only
+`test_pause_menu_lore_logs.gd`, so B1's single edit is the complete set of existing-test changes;
+and `try_activate` has exactly two production call sites with infiltration applying no ship
+modules at all, so the duck-typed call really is total). It raised nine non-blocking findings, all
+folded in above:
+
+| Finding | What changed |
+|---|---|
+| **N1** — `player_ship.gd:46`'s `rotation = 0.0` wipes the hull angle before the new ready-time seed can read it, making the seed a no-op and the wiring test's boundary case unpassable | Confirmed at source (and `player_ship.tscn:214` sets no `rotation`, so deleting the line is behaviour-neutral). The deletion is now part of build step 1 and of task 1's correction row, with the explicit instruction **not** to fix it by weakening the assertion instead. |
+| **N2** — two of the six wiring cases name `SettingsState`, which does not exist in step 1 | The two cases are marked "(step 2)" in the test-plan table, and both task correction rows now say which cases are theirs. |
+| **N3** — task 1 absorbed most of the new work and was still `sonnet` | Raised to `opus`, `complexity` unchanged at `medium` so it stays on the Direct track. |
+| **N4** — the row geometry was right for `pause_menu.tscn` and silently wrong for `open_space_pause_menu.tscn` | Verified (container `y = 226`, rows `112 / — / — / 178 / 244`). Both scenes' numbers are now given separately, with the note that nothing headless catches a misplaced row. |
+| **N5** — the scene already has a `MovementController` sibling | One paragraph in "Where it lives" saying what it does and why there is no overlap; it also independently confirms A/D are free under mouse aim. |
+| **N6** — the wiring test hand-calls `_handle_rotation()` on a node whose `_physics_process` is live | `set_physics_process(false)` right after `add_child_autofree`, stated in the test-plan section. |
+| **N7** — the AI-Targeting snap releases on any 1 px mouse motion | Added to Risks and to the fly-test list; the timed-hold alternative is named, behind the same seam. |
+| **N8** — a tree-less `Node` that is never freed leaks past the gate's `FATAL` regex | `free()` in `after_each` per `test_overheat_component.gd:12-19`, plus one `scripts/check-test-leaks.sh` run in step 1. |
+| **N9** — the corrections mechanism is sufficient (checked against `/agent/backlog-store.js:371-381`), but the revision banner did not point at it | The banner now carries a direct instruction to implementation sessions to read the corrections section first. |

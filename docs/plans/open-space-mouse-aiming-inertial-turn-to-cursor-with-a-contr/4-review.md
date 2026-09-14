@@ -283,3 +283,298 @@ asks for a `CLAUDE.md` / `tests/README.md` entry, which is the same obligation s
 12. **Window-focus hold is the right call, but note where the notification is handled.**
     `PlayerBase` declares no `_notification`, so `player_ship.gd` can add one without a `super()`
     call — verified, no conflict.
+
+---
+
+# Round 2 — 2026-09-14
+
+VERDICT: APPROVED
+
+Reviewed against `agent/auto-dev` @ `2e8055c` ("Revise the open-space mouse-aiming plan against
+review round 1"). Read `4-review.md` round 1 in full, then the revised `3-plan.md` (629 lines),
+`1-context.md`, `2-research.md`, the six impl tasks from `epic show` **and their raw bodies out of
+`BACKLOG.json`**, and the files all of them name. Every numeric claim was re-run in this container
+on Godot 4.6.3.stable. Nothing below was taken from the plan's "Response to review" table on trust.
+
+**B1–B5 are genuinely resolved, and resolved in the files rather than asserted.** The remaining
+items are non-blocking, but **N1 is a real defect that the task-1 session must handle**, and I have
+written it so that it is actionable from the plan alone.
+
+---
+
+## B1–B5: verification
+
+### B1 — resolved, and its scope is now provably complete
+
+`tests/integration/test_pause_menu_lore_logs.gd:82-83` is, verbatim:
+
+```gdscript
+func test_exit_game_is_now_at_index_4() -> void:
+	assert_eq(_menu._options[4].get_node("Label").text, "Exit Game")
+```
+
+The plan no longer claims the file is unaffected. The mandatory rename + reindex appears in three
+places — `3-plan.md` "Decision: a Settings sub-overlay…" (with the code quoted), "Changes to
+existing tests" ("**One, and it is mandatory**"), and the `choose-mouse-aim-…` row of the
+Task-body corrections — and in build step 6. Lines 25-26 and 35-37 of that test do use indices 1-3
+and are genuinely unaffected (checked; `test_lore_logs_option_is_visible_and_labelled_in_mission_mode`
+and `…_in_open_space_mode_too`).
+
+Additional check round 1 did not make: `grep -rn "_options\[" tests/` returns hits in **only** that
+one file (`tests/integration/test_lore_log_list.gd` touches `LoreLogList`, never `_options`). So the
+single edit the plan names is the complete set of existing-test changes.
+
+### B2 — resolved by deletion, and the sweep is now achievable
+
+`3-plan.md` "Decision: `AITargetingModule` keeps its snap" now prescribes `if not
+actor.has_method("face_instant"): push_warning(...); return false` with **no `actor.rotation`
+fallback anywhere in the snippet**, and the single-writer decision says the empty allowlist "is
+consistent with the code above only because the `else: actor.rotation = angle` fallback is gone".
+I re-ran the sweep the test will perform: across all 17 `global/ship_modules/*.gd`, the only match
+for `actor.rotation` followed by an assignment is `ai_targeting_module.gd:38`. After the prescribed
+change that count is zero, so the empty allowlist holds. The two steps are no longer mutually
+exclusive.
+
+The cooldown ordering in the prescribed snippet is also correct: `_cooldown_left = _COOLDOWN` is
+set *after* the `has_method` guard, which is what makes the "the cooldown is not spent" boundary
+case in `test_ai_targeting_faces_actor.gd` reachable.
+
+### B3 — resolved, and the duck-typed call is now provably total
+
+Confirmed at source: `assault/scenes/player/player_fighter.gd:4` is `class_name AssaultPlayer
+extends PlayerBase`; `:32-35` applies every equipped `ShipModuleState` module; `:92-93` ticks them;
+`:114-118` calls `mod.try_activate(self)` on `use_ability`. `AITargetingModule` therefore writes the
+assault fighter's `rotation` today. `AssaultPlayer.face_instant(angle) → rotation = angle` is
+character-for-character the effect of `ai_targeting_module.gd:38`, so assault is unchanged.
+
+A check the plan does not make but which its "no fallback" decision depends on: `grep -rn
+"try_activate" --include=*.gd .` shows exactly **two** production call sites — `player_fighter.gd:116`
+and `player_ship.gd:103`. Infiltration applies no ship modules (`grep -rln ShipModuleState
+infiltration/` is empty; only the three `global/ui/player_menu/` files and the two players touch the
+store). So there is no third actor that would silently fall into the new `return false` path. The
+duck-typed call is total, as the plan claims.
+
+`1-context.md` is corrected at both sites (the `player_fighter.gd` row and the "Contained" bullet),
+and the correction is dated and attributed to B3 rather than quietly rewritten.
+
+Deliberately not putting `face_instant` on `PlayerBase` is right for the reason given —
+`tests/helpers/player_stub.gd` extends it, and an inherited silent snap is the failure the
+single-writer rule exists to surface.
+
+### B4 — resolved
+
+Two new integration files: `test_player_ship_turn_wiring.gd` (controller present by class not path,
+`_handle_rotation` delegates to *that instance* compared against `controller.step()` rather than a
+hard-coded 220°, scheme seeded on ready, signal re-seeds live, `rotation_speed_deg` gone) and
+`test_ai_targeting_faces_actor.gd` (stub records the angle and `rotation` stays untouched; assault
+case; no-`face_instant` boundary). Both stay inside the headless constraint. This is the right shape
+— the "misspelled `has_method` guard" hole is specifically closed by the first case of the second
+file. See **N1** and **N2** for two problems inside the first file.
+
+### B5 — resolved
+
+Docs are a named paragraph in the build sequence with the exact files, and repeated per task in the
+corrections table. The line references check out: `docs/architecture/modules/open_space.md:19-20`
+are the `player_ship.gd` / `player_ship.tscn` tree lines, `:78` is "The ship scene
+(`player_ship.tscn`) is built by composition: … and a `MovementController`", `global.md:70` really
+reads "All ten are registered in `project.godot`", and `project.godot`'s `[autoload]` really has
+**10** entries.
+
+---
+
+## Non-blocking observations 1–12: spot-check
+
+Obs 1, 2 and 3 become assertions, so I re-ran them rather than reading them. Godot 4.6.3.stable,
+the plan's own five-line model with half-life `0.14` and cap `150 °/s`:
+
+| Claim in the plan | Measured |
+|---|---|
+| obs 1 — target **0.3 rad**, 60×1/60 vs 30×1/30 | `0.29787721016188` at both, difference exactly `0.0`; bare `lerpf(…, 0.1)` gives `0.29946` vs `0.28728`, `0.01218` apart. Plan's numbers are exact. The π version is indeed vacuous — both rates give `-2.61799387799149`. |
+| obs 2 — one `step(delta = 1.0)` from 0 toward π | `-2.61799387799149`, and `deg_to_rad(150.0) == 2.61799387799149`, so `absf(result)` is the only assertion that reads sanely. Unclamped the exponential term is `0.992924` of the difference, so the case does fail without the clamp. |
+| obs 3 — sixty accumulations of `deg_to_rad(220)/60` | prints `3.83972435438753`, identical text to `deg_to_rad(220.0)`, and `==` returns **false**. The plan's "use `assert_almost_eq` or a single step" is right. |
+| wrap case | 600 steps from `3.0` toward `-3.0` end at `3.28318530717958`, i.e. `0.28318530717958` of travel, first step `+0.0224`. Matches. |
+
+Obs 4, 5, 7, 11, 12 are addressed in the plan text. Obs 6 is addressed but incompletely — see **N4**.
+Obs 8 and 9 are corrected at source in `2-research.md` (finding 5 carries a dated withdrawal and
+finding 7 no longer calls the software cursor a Nova Drift behaviour) and in `1-context.md`
+(`[autoload]`: 10). Obs 10 is applied on the board: `choose-mouse-aim-…` reads
+`"model": "opus"`, `"complexity": "medium"` in `BACKLOG.json`, so it stays on the Direct track.
+
+---
+
+## Non-blocking findings
+
+### N1. `player_ship.gd:46` makes the ready-time seed a no-op and the wiring test's boundary case unpassable — task `your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-`
+
+This is the one thing in the revision that does not hold together, and it is the plan's own answer
+to round-1 obs 11.
+
+`open_space/scenes/entities/player/player_ship.gd:44-46`:
+
+```gdscript
+func _ready() -> void:
+	super()  # add_to_group, _setup_components, _setup_effects
+	rotation = 0.0
+```
+
+The plan adds (API table, and the task-1 correction row) "`set_scheme()` … is the **ready-time
+seeder**: the ship calls it in `_ready()` so the target angle starts at the hull's actual facing
+instead of relying on both defaulting to `0.0`", and the wiring test's boundary case is:
+
+> Set the ship's `rotation` to a non-zero angle **before `_ready()` runs**, and assert the first
+> `step()` with steering disabled returns that same angle.
+
+Line 46 wipes that angle before any seeding can read it. The hull's facing on ready is *always*
+`0.0`, so the seed is exactly the "both happening to default to `0.0`" coincidence the case exists
+to reject, and the case cannot pass as written. Same class of internal contradiction as round-1 B2,
+which is why I am naming it explicitly rather than leaving it to be discovered.
+
+**The fix is one line and is behaviour-neutral**: delete `player_ship.gd:46`. `player_ship.tscn`'s
+root (`[node name="PlayerShip" type="CharacterBody2D"]`, line 213-215) sets no `rotation`, so the
+scene default already provides `0.0`, and nothing else in the project overrides it. Do that in step
+1, alongside removing `rotation_speed_deg`, and mention it in `3-plan.md`'s build-sequence step 1 —
+it is currently the only edit to `player_ship.gd` the plan does not list.
+
+Do **not** resolve it the other way (by moving the assertion after `_ready()`): that turns the case
+into a restatement of `set_scheme()` and removes the only thing pinning the seed to the hull.
+
+### N2. Two of the six wiring-test cases cannot pass in task 1 — tasks `your-ship-leans-…` and `the-game-remembers-which-steering-scheme-you-fly-with`
+
+`3-plan.md` lists `test_player_ship_turn_wiring.gd` as one table of six cases, and the task-1
+correction row says "**Add to DONE WHEN:** `tests/integration/test_player_ship_turn_wiring.gd`
+passes". But two of those cases ("The scheme is seeded on ready", "The scheme signal is connected")
+name `SettingsState`, which does not exist until task 2 — and the task-2 correction row correctly
+claims those same two cases for itself.
+
+The allocation is therefore stated, but only by reading both rows together; the task-1 row reads as
+"all six". Make the split explicit in the test-plan table (mark the two `SettingsState` cases
+"lands in step 2"), so a task-1 session does not spend the session trying to reference an autoload
+that is not registered yet. Harmless if caught, an hour if not.
+
+### N3. Task 1 absorbed most of the revision's new work and is still `medium` / `sonnet` — task `your-ship-leans-…`
+
+As now specified it is: a new `class_name` with eight public members, the `player_ship.gd`
+integration, a `player_ship.tscn` node addition, a ~13-case unit test, four cases of a new
+integration test, the `rotation_speed_deg` removal, N1's line deletion, and an
+`updating-project-docs` pass over `open_space.md`. Round 1 judged it a single session before B4
+added the wiring test. It is still *one* task (nothing in it can be finished without the rest), so
+this is not a decomposition finding — but if any model assignment in this epic deserves a second
+look it is this one, not the pause menu. `set-meta … --model opus` while leaving `--complexity
+medium` keeps it on the Direct track, exactly as was done for `choose-mouse-aim-…`.
+
+### N4. The pause-menu row geometry is spelled out for one scene and silently wrong for the other — task `choose-mouse-aim-or-classic-a-d-steering-from-the-pause-menu`
+
+The plan's layout bullet ("`MenuContainer` sits at `y = 184` with option rows at
+`110 / 178 / 244 / 310 / 376` … the new sixth row goes at `y ≈ 442`") is correct for
+`global/ui/pause_menu/pause_menu.tscn` (verified: container `position = Vector2(0, 184)`, rows at
+110/178/244/310/376).
+
+It is **not** correct for `open_space_pause_menu.tscn`, which the plan treats as asymmetric only in
+its missing `Label` children. That scene has `MenuContainer` at `position = Vector2(0, 226)` and its
+rows at **112 / — / — / 178 / 244**: `Option1` and `Option2` are bare `Node2D`s with no `position`
+line at all, because they are hidden in open space and the visible rows close up. So the new
+`Option5` belongs at `y = 310` there, not `442`; an implementer copying the plan's number into both
+scenes leaves a ~130 px gap between "Settings" and "Exit Game" in the hub menu.
+
+Nothing in the test plan can catch this and nobody sees the menu during an unattended run. Add the
+open-space numbers to that bullet (`Settings → Option4 at y = 244`, `Exit Game → Option5 at
+y = 310`, container `y = 226`).
+
+### N5. The ship scene already has a node called `MovementController`; the plan never mentions it
+
+`player_ship.tscn:283` instantiates `assault/scenes/player/movement_controller.gd`
+(`class_name MovementController extends Node`), wired into `WeaponState` and
+`WarheadMissileShootingState` by `NodePath`. Nothing is being reinvented — it polls
+`Input.is_action_just_pressed` and emits `action_single_press` / `action_double_press`, writes no
+rotation and holds no turn state — but adding a sibling named `ShipTurnController` to a scene that
+already has a `MovementController` is worth one sentence in `3-plan.md` → "Where it lives", if only
+so the reader does not go looking for an overlap.
+
+It also *strengthens* the plan's "A/D do nothing under mouse aim" decision, which currently rests on
+`1-context.md`'s Warp-module row: `action_double_press` has no consumer in open space (`DashState`
+is the only subscriber and is not in `player_ship.tscn`), and `action_single_press` reaches only
+`WeaponState._on_action` and `WarheadMissileShootingState._on_action`, neither of which acts on
+`move_left`/`move_right`. Confirmed by grep; A/D really are free.
+
+### N6. The wiring test hand-calls `_handle_rotation()` on a node that is also running `_physics_process`
+
+`test_player_ship_turn_wiring.gd` instantiates `player_ship.tscn` and adds it to the tree (it has
+to — `_ready()` is the thing under test). Once in the tree, `player_ship.gd:85`'s `_physics_process`
+runs `_handle_rotation` + `_handle_thrust` + `move_and_slide` on every real physics frame, using
+whatever `get_global_mouse_position()` returns headlessly, *in addition* to the hand-called
+`_handle_rotation(1.0)` the test makes. Call `ship.set_physics_process(false)` immediately after
+`add_child_autofree`, or the delegation and seeded-angle assertions are racing the frame clock.
+This is the same reasoning as `tests/README.md`'s "Keep `_process` / `_physics_process` out of the
+tree and call them by hand", applied to a node that cannot be kept out of the tree.
+
+### N7. The AI-Targeting snap lasts exactly until the next mouse twitch — a fly-test item, not a bug
+
+`notify_mouse_moved()` is called from an `InputEventMouseMotion` branch, so *any* motion, including
+one pixel of hand tremor, releases the suppression and the ship starts turning back to the cursor.
+For a player actively aiming that is a fraction of a second. The plan's decision (a) is still the
+right one and the alternatives it rejects are rejected for good reasons, but "the snap holds" in the
+task title is true only for a player who stops moving the mouse. Worth putting on the same fly-test
+list as the three turn numbers; the obvious dial if it reads badly is a short timed hold rather than
+a motion-gated one, and it fits behind the same `notify_mouse_moved()` seam.
+
+### N8. Free the tree-less controller
+
+`ShipTurnController extends Node`, and `test_ship_turn_controller.gd` is specified as a tree-less
+`.new()`. A `Node` created with `.new()` and never freed prints `ObjectDB instances leaked` at
+process exit, which — per `CLAUDE.md` and `tests/README.md` — does **not** match the gate's fatal
+regex, so `/agent/verify.sh` prints `GATE PASS` on a leaking suite. Follow
+`tests/unit/test_overheat_component.gd:12-19` (`before_each` `.new()`, `after_each` `_oh.free()`),
+and run `scripts/check-test-leaks.sh` once in step 1.
+
+### N9. The "Task-body corrections" mechanism is sufficient — with one cheap reinforcement
+
+I checked the mechanism rather than assuming it. `nextWork()` → `workItem()` in
+`/agent/backlog-store.js:371-381` ships **both** `body` and `prepDir` with every work item, and the
+`feature-workflow` skill's Direct track opens with "**1. Read the epic's plan.** `<prepDir>/3-plan.md`
+is the design this task came out of". So an implementation session reaches the plan by process, not
+by luck.
+
+More importantly, the corrections are **not** confined to the corrections table: each one is also
+present in the plan's own prose — the no-fallback module snippet is in "Decision: `AITargetingModule`
+keeps its snap", both `face_instant` implementations are in the table under it, the mandatory
+`test_pause_menu_lore_logs.gd` edit is in "Decision: a Settings sub-overlay" *and* in "Changes to
+existing tests", and the docs obligations are in the build sequence. A session that reads the plan
+normally and never scrolls to the corrections table still gets every correction. That redundancy is
+what makes the mechanism adequate; a corrections table alone would not have been.
+
+The one gap: the revision banner at `3-plan.md:5-12` points the reader at "Response to review" at
+the foot of the file and does not mention "Task-body corrections" at all. Add a sentence there —
+"**Implementation sessions: your task body was written from revision 1. Read
+[Task-body corrections](#task-body-corrections) before you start.**" That is the cheapest available
+mitigation and it needs no backlog command.
+
+---
+
+## Also checked, and correct
+
+- The idea, clause by clause, re-read from `epic show` → `sourceIdea.text`: mouse rotation ✓;
+  A/D kept as a selectable legacy scheme at 220 °/s ✓; lag not snap ✓; deliberately slower ✓;
+  weapons and abilities follow the hull ✓ (no weapon file is touched, and every behaviour still
+  reads `actor.rotation`); open-space only ✓ — with the `global/ship_modules/` exception now
+  correctly identified and tested rather than denied; setting with mouse as default ✓;
+  Jet Lancer inertia ✓ with the true-inertial alternative examined and rejected for a stated,
+  testability-driven reason.
+- Conventions: composition over inheritance (a `Node` child) ✓; `.tres`-config and 640×360
+  design-space rules correctly identified as not applying ✓; signal declared with its parameter ✓;
+  UID minting rule stated ✓; `"user://settings.cfg"` → `tests/helpers/save_sandbox.gd::PATHS`
+  (a hard-coded 7-entry list, so the addition really is required) ✓; no projectile-ownership
+  impact ✓. Nothing here duplicates an existing `global/components/` component — see N5 for the
+  one near-miss.
+- Decomposition and ordering: six build steps, six tasks, 1:1, no orphan step. `dependsOn` on the
+  board matches the build sequence (`your-ship-leans` ← {`the-game-remembers`, `ai-targeting`,
+  `alt-tabbing`}; `ai-targeting` ← `a-future-ship-module`; `the-game-remembers` ←
+  `choose-mouse-aim`). Tasks 3, 5 and 6 touch disjoint files. Step 4 landing *after* step 3 so the
+  invariant goes green on arrival is the right order, and its task body correctly requires
+  hand-reverting the fix to prove the invariant can fail.
+- `pause_menu.gd:52-58` still hard-codes `Option0..Option4`, `_confirm()` (`:134`) still matches by
+  index with `4: get_tree().quit()`, `_navigate()` (`:184`) skips hidden options, and
+  `_options[1]/[2].visible = mission_mode`. The renumber the plan describes is exactly what those
+  three sites need.
+- `AITargetingModule`'s `_COOLDOWN = 15.0` matches the "15-second ability" language, and
+  `get_description()` really promises "instantly snaps weapon aim", which is what makes option (a)
+  the right call over (b) and (c).

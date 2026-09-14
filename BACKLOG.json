@@ -264,7 +264,7 @@
     {
       "id": "open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr",
       "title": "Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting",
-      "status": "changes_requested",
+      "status": "review",
       "sourceIdeaId": "idea-1789305113892",
       "prepDir": "docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr",
       "feedback": [
@@ -382,7 +382,7 @@
           "id": "plan-review-open-space-mouse-aiming-inertial-turn-to-cursor-",
           "head": "Plan review: Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting",
           "body": "Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.",
-          "state": "in_progress",
+          "state": "done",
           "badge": null,
           "planDir": "docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr",
           "kind": "prep",
@@ -456,7 +456,7 @@
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",
-          "model": "sonnet",
+          "model": "opus",
           "dependsOn": [],
           "runs": []
         },
