@@ -9,6 +9,7 @@
 //   ./scripts/backlog-cli.js set-badge <taskId> blocked|stuck|clear
 //   ./scripts/backlog-cli.js set-plandir <taskId> <docs/plans/...>
 //   ./scripts/backlog-cli.js set-meta <taskId> [--type T] [--complexity C] [--model M]
+//   ./scripts/backlog-cli.js set-body <taskId>                 (new body on stdin)
 //   ./scripts/backlog-cli.js ideas list
 //   ./scripts/backlog-cli.js ideas claim <ideaId>          (harness; marks it triaging)
 //   ./scripts/backlog-cli.js ideas reject <ideaId>         (reason on stdin)
@@ -188,6 +189,37 @@ switch (cmd) {
       found.task.planDir = dir;
     });
     console.log("ok: " + taskId + " planDir -> " + dir);
+    break;
+  }
+
+  // A plan review that requires a change to a TASK BODY had no way to make it
+  // before this command existed: add-task writes a body, nothing could rewrite
+  // one, and BACKLOG.json is not hand-editable. The observed failure was silent
+  // and expensive - the plan stage recorded "the requirement was pushed into the
+  // step 2 and step 3 task bodies" in its response-to-review table, no such edit
+  // was possible, and the next review caught the same finding again a full cycle
+  // later. Bodies are what an implementation session actually executes from, so a
+  // body that disagrees with its plan is a live instruction to build the wrong
+  // thing. Whole body at once, on stdin, like add-task: patching a sentence in
+  // place would need a match string, and a silent no-match is the same class of
+  // bug this exists to fix.
+  case "set-body": {
+    const [taskId] = args;
+    if (!taskId) die("usage: set-body <taskId>   (new body on stdin, replaces the whole body)");
+    // Trimmed to match what addTask() stores, so a body written here and a body
+    // written at creation render identically in BACKLOG.md. Without it the
+    // trailing newline from a heredoc becomes a stray indented blank line.
+    const body = readStdin().trim();
+    if (!body) die("set-body: refusing to write an empty body (pass the new body on stdin)");
+    const result = mutate((store) => {
+      const found = S.findTask(store, taskId);
+      if (!found) die("no such task: " + taskId);
+      const t = found.task;
+      const before = (t.body || "").length;
+      t.body = body;
+      return { taskId: t.id, bodyCharsBefore: before, bodyCharsAfter: t.body.length };
+    });
+    out(result);
     break;
   }
 
@@ -443,7 +475,7 @@ switch (cmd) {
   }
 
   default:
-    die("usage: backlog-cli.js {next|set-state|set-badge|set-plandir|set-meta|ideas|draft-epic|epic|close-epic|add-task|record-run|sweep-triaging} ...");
+    die("usage: backlog-cli.js {next|set-state|set-badge|set-plandir|set-meta|set-body|ideas|draft-epic|epic|close-epic|add-task|record-run|sweep-triaging} ...");
 }
 } catch (e) {
   // The one place process.exit() is safe to call directly: everything has

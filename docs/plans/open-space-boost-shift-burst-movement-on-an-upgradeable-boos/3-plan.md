@@ -115,8 +115,12 @@ Three properties fall out of this, all of them wanted:
    branch runs `velocity.lerp(ZERO, damping * delta)`. So: W held → thrust cannot outrun the
    ceiling once it starts falling (380 px/s² of push against 400 px/s² of ceiling decay), and the
    ship rides the ceiling down, staying above cruise for the whole window. W released → the damping
-   bleeds `0.6 x 700 = 420 px/s` in the first second, marginally faster than the ceiling falls, so
-   speed is actively lost rather than merely permitted to be lost. That asymmetry is free, readable
+   bleeds faster than the ceiling falls, so speed is actively *lost* rather than merely permitted
+   to be lost. (Careful with the units: `0.6 x 700 = 420` is px/s**²**, the instantaneous rate at
+   700 px/s, not the loss over one second. The real curve is `v *= (1 - 0.6·dt)` per frame, so one
+   second at 60 Hz leaves `700·(1−0.01)^60 ≈ 383 px/s`, a loss of ~317 px/s. Simulated against a
+   ceiling falling at 400 px/s² from t = 0.35 s, velocity stays strictly under it throughout —
+   567 vs 700 at 0.35 s, 460 vs 560 at 0.70 s, 373 vs 420 at 1.05 s — so the conclusion holds.) That asymmetry is free, readable
    depth, and it keeps W meaningful during a boost. *(Do not reason from a "damping plus thrust"
    force balance — the two branches never both run.)*
 3. **A module boost still wins.** `_handle_thrust()` returns early while `engine_boost_active`
@@ -152,6 +156,19 @@ func _step_boost(boost_pressed: bool, delta: float) -> void:
         return                      ## deliberately redundant — see below
     ...
 ```
+
+**One tree touch, named here so the "no tree access" line above is not read too literally.** The
+trigger branch plays `flame_boost` on `SpriteAnchor/ShipSprite2D` and sets both `ThrusterEffect`s to
+`State.BOOST`, following `engine_boost_module.gd:15,63-67`. Everything else in `_step_boost()` is
+pure. Every test in the verb file parents the ship anyway (see "Ship instances go in the tree"), so
+this costs nothing testability-wise and it buys the epic's "reuse the blue boost flames" bullet a
+real assertion: `sprite.animation == &"flame_boost"` is readable headless.
+
+Because `_step_boost()` runs at the **tail** of `_handle_thrust()` while the `ThrusterEffect` state
+is chosen in the branches above it (`player_ship.gd:136-153`), the cyan flame starts and ends one
+physics frame after the boost. Today's code sets `_boost_timer` at `:129-132`, *before* the
+branches, so this is a real (if imperceptible) behaviour change. Accepted; recorded so it is not
+rediscovered as a bug.
 
 `_step_boost()` owns the meter tick, the trigger decision, the ceiling decay **and the final speed
 clamp** (it replaces `_handle_thrust()`'s existing tail clamp, so there is exactly one place that
@@ -320,8 +337,17 @@ Draw: `OverheatBar`'s 32×4 shape, split into `max_charges` segments with a 1 px
 throughout, filled segments in the thruster's cyan `Color(0.35, 0.9, 1.0)`; the partially-recharged
 segment fills proportionally so the refill is visible rather than a pop. Always visible — it is a
 persistent resource, and a boost meter you cannot see is precisely the failure the epic names.
-Subscribes to `BoostMeter.charges_changed`; the segment count follows `maximum`, so an upgrade
+`setup(meter)` **seeds `_charges` / `_max_charges` from the meter and calls `queue_redraw()`, then
+subscribes to `BoostMeter.charges_changed`**; the segment count follows `maximum`, so an upgrade
 collected mid-session widens the bar with no extra wiring.
+
+⚠️ **The seed is not optional.** Children `_ready()` before parents, so `BoostMeter._ready()` — which
+copies `shield_component.gd:38-45` and emits its initial state — fires *before*
+`OpenSpacePlayerShip._ready()` creates the bar and calls `setup()`. Connect-only means the bar holds
+its initial member values until the first spend, so a freshly loaded hub draws an empty bar on a
+full meter. `OverheatBar` gets away with connect-only because `setup()` sets `visible = false`
+(`overheat_bar.gd:11`) and it stays hidden until the first overheat tick; an always-visible bar has
+no such cover. The case below pins it.
 
 **The handler stores what it draws.** `_on_charges_changed` assigns `_charges: float` and
 `_max_charges: int` as members and then calls `queue_redraw()` — it must not compute geometry
@@ -473,15 +499,22 @@ func before_each() -> void:
     ShipProgressionState._permanent_shield_count = 1
 ```
 
-**Which files need it, and when.** `test_boost_upgrade_source.gd` (step 5) and
-`test_ship_progression_state.gd` (step 4) obviously do. Less obviously, **so do
-`test_open_space_boost_wiring.gd` (step 2) and `test_boost_bar.gd` (step 3)**: both instantiate
+**Which files need it, and when.** `test_boost_upgrade_source.gd` (step 5) does — it collects a real
+pickup, and `_collect()` calls the singleton. `test_ship_progression_state.gd` (step 4) **does not,
+and must not start**: it builds tree-less `ProgressionScript.new()` instances through its own
+`_fresh()` helper (`:18-19`) and never touches the autoload, which is `tests/README.md`'s house rule
+("prefer a tree-less `Script.new()` instance to the live autoload"). Write the new boost cases
+against `_fresh()` exactly like their shield siblings; adding the snapshot block there would be
+harmless but it would also invite an implementer to convert the file to the live singleton to match
+this plan. Less obviously, **the two that DO need it are `test_open_space_boost_wiring.gd` (step 2)
+and `test_boost_bar.gd` (step 3)**: both instantiate
 `player_ship.tscn`, and from step 4 onwards that scene carries a `BoostMeter` with
 `bind_progression = true`, whose `_ready()` reads the live autoload. Those two files are **written
 in steps 2 and 3, before the binding exists**, so the discipline will not be obvious to whoever
 writes them — it is therefore written into their task bodies now rather than retrofitted after step
-4 breaks them. Add the block above to all four files from the start; it is inert until step 4 and
-correct afterwards.
+4 breaks them. Add the block above to those **three** files — `test_open_space_boost_wiring.gd`,
+`test_boost_bar.gd` and `test_boost_upgrade_source.gd` — from the start; it is inert until step 4
+and correct afterwards. **Not** `test_ship_progression_state.gd`, for the reason just given.
 
 **Ship instances go in the tree.** Any case that calls `ship._handle_thrust(delta)` (rather than
 `ship._step_boost()` alone) must `add_child_autofree(ship)` first: `_handle_thrust` reaches
@@ -508,6 +541,7 @@ that is in the tree (see "Ship instances go in the tree" above).
 | The ceiling permits, then closes | After a boost, step with `boost_pressed = false`: at `t = boost_hold_sec / 2` the ship may exceed `max_speed`; at `t = boost_hold_sec + 700/boost_ceiling_decay + 0.1` `velocity.length() <= max_speed + 0.5`. |
 | The ceiling never drops below cruise | After the window has fully closed, `_speed_ceiling == max_speed` exactly. |
 | Retrigger floor | A second `_step_boost(true, d)` inside `boost_hold_sec` leaves `velocity` on its existing decay curve (no re-slam to 700). |
+| **Boundary: a retriggered boost burns no charge** | **Ordering is part of the contract: the `boost_hold_sec` window is checked BEFORE `meter.try_spend()`**, so mashing Shift inside the window costs nothing. Two `_step_boost(true, d)` calls inside `boost_hold_sec` → `charges` down by exactly 1.0. (Meter exists from step 2; until then assert the `velocity` half only.) |
 | **A module boost wins** | `engine_boost_active = true`; `_step_boost(true, d)` leaves `velocity` unchanged. This is the case the doubled guard exists for — it calls `_step_boost()` directly and so bypasses `_handle_thrust()`'s early return. **If it fails, add the guard; do not weaken the case.** |
 | **Regression: the hidden flip-boost is gone** | `ship.has_method("_trigger_flip_boost")` is false and `"boost_speed_threshold" not in ship`. Fails on today's build. |
 
@@ -541,16 +575,21 @@ here passes on a build where `BoostMeter` exists but is not in the scene — exc
 | **An empty meter refuses, and costs nothing** | `charges = 0.0`; `_step_boost(true, d)` → `velocity` unchanged, `charges` still 0.0. |
 | **Boundary: a boost refused by a module burns no charge** | `engine_boost_active = true`, full meter; `_step_boost(true, d)` → `charges` unchanged. Same note as the verb file's precedence case: this passes on `_step_boost()`'s own `if engine_boost_active: return` and on nothing else. |
 | The ship drives the meter | The meter does not tick itself: after a spend, repeated `ship._handle_thrust(d)` calls (on a ship **in the tree**) restore the charge over `recharge_delay_sec + 1/recharge_rate`. |
-| **Invariant: the boost is open-space only** | `assault/scenes/player/player_fighter.tscn` and the infiltration player scene, walked by class, contain **no** `BoostMeter` and no `BoostBar`. |
+| **Invariant: the boost is open-space only** | `assault/scenes/player/player_fighter.tscn` and the infiltration player scene under `infiltration/scenes/entities/player/` — **name the actual file, do not write "the infiltration player scene"**, or the sweep quietly covers one scene — walked by class, contain **no** `BoostMeter` and no `BoostBar`. |
 | **Invariant: nothing outside `open_space/` reads the `boost` action** | A directory sweep of `.gd` files outside `open_space/` and `tests/` finds no `"boost"` action string passed to an `Input.is_action_*` call. |
 
 ### `tests/integration/test_boost_bar.gd` — step 3
+
+**Every case here needs `add_child_autofree(ship)`, not just the overlap one.** The bar is
+constructed in `_ready()` (`:311-313`, mirroring `player_ship.gd:50-53`), so on a merely-instantiated
+ship there is no `BoostBar` child at all and even "the bar is in the scene" fails.
 
 | Case | Assertion |
 |---|---|
 | The bar is in the scene | The instantiated ship has a `BoostBar` child with `top_level == true`. |
 | It is visible at full | `visible == true` with a full meter — a resource readout that hides itself is the failure mode. |
-| **Boundary: it does not overlap the overheat bar** | Ship added to the tree, one physics frame awaited: `abs(boost_bar.global_position.y - overheat_bar.global_position.y) >= OverheatBar.BAR_HEIGHT`. |
+| **Seeded at `_ready()`, before any signal** | With **no** `charges_changed` emitted, `bar._max_charges == meter.max_charges`. This is the N3 hole; "visible at full" passes on the broken build because `visible` defaults `true`. |
+| **Boundary: it does not overlap the overheat bar** | One physics frame awaited: `abs(boost_bar.global_position.y - overheat_bar.global_position.y) >= OverheatBar.BAR_HEIGHT`. |
 | Segments follow capacity | Emitting `charges_changed(2.0, 4)` leaves `bar._max_charges == 4` — the member the `_draw()` segment loop reads (see "The handler stores what it draws"). A `_draw()`-only bar would make this case unwritable. |
 | **The fill tracks `current`, not just capacity** | `charges_changed(2.0, 4)` then `charges_changed(3.5, 4)` → `bar._charges` is `3.5`, so a partially-recharged segment is representable and the refill animates rather than popping. |
 | **Boundary: capacity 0 does not divide by zero** | `charges_changed(0.0, 0)` — defensive only; the meter never emits it, but `_draw()`'s segment width is `BAR_WIDTH / max_charges`. Asserts no error is logged. |
@@ -673,8 +712,8 @@ was re-verified against the code before editing — `save_sandbox.gd:16-47` real
 
 | Finding | Change |
 |---|---|
-| **B1** — "sandboxed autoload" is not a thing; `SaveSandbox` covers files only, so the step-5 pickup test poisons the live `ShipProgressionState` and breaks step 4's meter test in a full-suite run | New **"Autoload discipline"** block in the test plan with the explicit two-layer `before_all`/`after_all`/`before_each` pattern and the reason it is needed; the two offending cases reworded; **and the requirement pushed into the step 2 and step 3 task bodies now**, since those files are written before the binding that makes them vulnerable exists |
-| **B2** — two test cases drive `_step_boost()` directly and expect it to honour `engine_boost_active`, which as specified it never reads | `_step_boost()` now opens with `if engine_boost_active: return`; new **"the precedence guard is deliberately doubled"** paragraph explains why the redundancy is required rather than sloppy; both cases annotated **"if it fails, add the guard, do not weaken the case"**; task 1's "Do NOT" line reworded to forbid *writing* the flag, not reading it |
+| **B1** — "sandboxed autoload" is not a thing; `SaveSandbox` covers files only, so the step-5 pickup test poisons the live `ShipProgressionState` and breaks step 4's meter test in a full-suite run | New **"Autoload discipline"** block in the test plan with the explicit two-layer `before_all`/`after_all`/`before_each` pattern and the reason it is needed; the two offending cases reworded; **and the requirement pushed into the step 2, 3 and 5 task bodies** (the files that instantiate `player_ship.tscn` or collect a real pickup; step 4 deliberately stays tree-less, see N7) (done in review round 2 via the new `backlog-cli.js set-body`, which did not exist when this table was first written — see round 2 finding N1), since the step 2 and step 3 files are written before the binding that makes them vulnerable exists |
+| **B2** — two test cases drive `_step_boost()` directly and expect it to honour `engine_boost_active`, which as specified it never reads | `_step_boost()` now opens with `if engine_boost_active: return`; new **"the precedence guard is deliberately doubled"** paragraph explains why the redundancy is required rather than sloppy; both cases annotated **"if it fails, add the guard, do not weaken the case"**; task 1's "Do NOT" line reworded to forbid *writing* the flag, not reading it, and the guard added to its Touches list (applied in review round 2; see N1) |
 | **A1** — "damping removes 420 while W adds 380" treats exclusive branches as simultaneous forces | Design property 2 rewritten from the actual branch structure. Conclusion unchanged, reasoning fixed, with an explicit warning not to reason from a force balance |
 | **A2** — the "~54 px" figure does not reproduce | Corrected to **~104 px**, with both computations shown by the same method so a tuner can check them. 700 still wins |
 | **A3** — nothing tests the idea's "must not alter other mission types" bullet | Two invariant cases added to `test_open_space_boost_wiring.gd` (no `BoostMeter`/`BoostBar` in the assault or infiltration player scenes; no `boost` action read outside `open_space/`), plus an honest note that `class_name` is global regardless of directory |
@@ -682,7 +721,7 @@ was re-verified against the code before editing — `save_sandbox.gd:16-47` real
 | **A5** — `Shield` is closer prior art than the plan admits and is never rejected in writing | Explicit rejection paragraph added: what `Shield` already does, why sharing it is churn in a file assault depends on, and that the ~20 lines of duplication are the cheaper side of the trade |
 | **A6** — the meter silently freezes during a module boost | Documented in design property 3, including the instruction not to "fix" it by hoisting `step()` above the early return |
 | **A7** — the wiring test's `_handle_thrust` case needs the ship in the tree | **"Ship instances go in the tree"** added to the test-plan preamble, with the `_thruster`-is-null mechanism and the note that parenting also runs `SessionState.apply_to()` |
-| **A8** — pre-existing: `player_ship.tscn:223` authors `ShieldComponent` with no `bind_progression`, so the hub's shield-up pickup raises a number the open-space ship never reads | Not this epic's to fix. **Filed separately** on `code-health-backlog`. The two places this plan leaned on shields as working precedent are corrected below |
+| **A8** — pre-existing: `player_ship.tscn:223` authors `ShieldComponent` with no `bind_progression`, so the hub's shield-up pickup raises a number the open-space ship never reads | Not this epic's to fix. **Filed separately** on `code-health-backlog` as `the-open-space-ship-never-reads-the-permanent-shield-upgrade`. The two places this plan leaned on shields as working precedent are corrected below |
 
 **Correction carried into the plan body:** the persistence sections claim boost capacity will
 persist *"exactly like the permanent shield count already does"*. The **stat** does persist; the
@@ -690,3 +729,43 @@ open-space **ship** does not currently consume it. This plan's step 4 sets
 `bind_progression = true` on the `BoostMeter` node explicitly, so the boost track does not inherit
 that omission — the precedent being followed is `player_fighter.tscn:301`, the one scene that gets
 it right, not `player_ship.tscn`'s `ShieldComponent`.
+
+---
+
+## Response to review round 2
+
+Round 2 (now the `## Round 2` section of `4-review.md`) returned **CHANGES_REQUESTED** with two blocking findings (N1, N2) and eight
+advisories (N3–N10). Round 2 confirmed all ten of round 1's findings are correctly answered in this
+document and that **the design did not change and did not need to**. Both blocking findings were
+about **task bodies in `BACKLOG.json`, not about this plan** — and specifically about edits the
+round-1 response table above *claimed* had been made.
+
+**Why they had not been made: there was no way to make them.** `backlog-cli.js` could create a task
+body (`add-task`) but never rewrite one, and `BACKLOG.json` is not hand-editable. So round 1's
+requirement was recorded as done, was impossible, and round 2 caught the identical finding a full
+cycle later. A `set-body <taskId>` subcommand was added to `scripts/backlog-cli.js` in this round;
+the four task bodies were then actually rewritten.
+
+| Finding | Change |
+|---|---|
+| **N1** — round 1's three required task-body edits were never made, and the response table claims they were | `set-body` added to `scripts/backlog-cli.js`; bodies of tasks 1, 2, 3 and 5 rewritten. Task 1 now requires `_step_boost()`'s `if engine_boost_active: return` in its Touches list and reworded "Do NOT" to forbid **writing** the flag. Tasks 2, 3 and 5 now carry the two-layer autoload-snapshot requirement, each pointing at **Test plan → "Autoload discipline"** *by name* (round 2's point that every body pointed only at **Design** headings). "(sandboxed) autoload" is gone from task 5 |
+| **N2** — task 4's body licensed relying on the `@export` default, contradicting this plan's ⚠️ | Task 4's body rewritten: `bind_progression = true` **must** be an explicit line in `player_ship.tscn` and show in the scene diff, citing `player_ship.tscn:223`'s live failure and the now-filed `the-open-space-ship-never-reads-the-permanent-shield-upgrade` |
+| **N3** — `BoostBar` renders nothing until the first charge change; `OverheatBar` hides the same hole behind `visible = false` | "The bar" now specifies `setup()` **seeds** `_charges` / `_max_charges` and calls `queue_redraw()` before subscribing, with the child-before-parent `_ready()` reasoning; a new case asserts `bar._max_charges == meter.max_charges` with no signal emitted |
+| **N4** — only one `test_boost_bar.gd` case was told to parent the ship; all of them need it | Preamble added to that file's section; the overlap case no longer owns the requirement |
+| **N5** — units slip: `0.6 x 700 = 420 px/s` is a rate (px/s²), not a one-second loss | Design property 2 corrected with the real curve (`700·(1−0.01)^60 ≈ 383`, a ~317 px/s loss) and the simulated release curve against the falling ceiling. Conclusion unchanged |
+| **N6** — a boost refused by the retrigger floor had no specified charge cost and no test | Ordering is now contract: the hold window is checked **before** `try_spend()`. New boundary case, and the rule is in tasks 1 and 2 |
+| **N7** — `test_ship_progression_state.gd` was told to use the live-singleton discipline it correctly avoids today | "Which files need it" rewritten: that file stays on its tree-less `_fresh()` helper per `tests/README.md`; task 4's body says so explicitly, so a `sonnet` implementer does not convert it |
+| **N8** — nobody owned `flame_boost` playback, and "no tree access" contradicted it | Named explicitly as `_step_boost()`'s one tree touch, following `engine_boost_module.gd:15,63-67`, with `sprite.animation == &"flame_boost"` called out as headless-assertable |
+| **N9** — the open-space-only invariant said "the infiltration player scene" with no path | Now requires the actual file under `infiltration/scenes/entities/player/` to be named |
+| **N10** — the thruster visual lags the boost by one physics frame | Recorded as an accepted, deliberate consequence of `_step_boost()` running at the tail of `_handle_thrust()` |
+
+**Process note.** This is the third review pass, one past the skill's two-round cap. The cap is
+there to stop a plan being ground down until a reviewer relents; it was exceeded here because both
+blocking findings were objectively checkable bookkeeping ("does this task body contain this text")
+rather than a design judgement that could be argued away, and because the alternative — marking the
+epic stuck — would have sent the user an epic whose only defect was a missing CLI command. The
+overrun is recorded here and in `4-review.md` rather than quietly absorbed.
+
+Round 3 returned **VERDICT: APPROVED**, with four non-blocking findings (NF-1 to NF-4) that were
+all introduced by this round's own fix pass and were all fixed before the epic was handed over.
+They are listed under "Round 3 follow-up" in `4-review.md`.
