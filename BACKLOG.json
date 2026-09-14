@@ -573,13 +573,36 @@
           "dependsOn": [
             "your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "6187050",
+                  "subject": "Add SettingsState autoload: persist the open-space steering scheme"
+                }
+              ],
+              "at": "2026-09-14T23:03:55.136Z",
+              "run": "2026-09-15-0129-i4",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.00442,
+                "claude-sonnet-5": 1.3695290000000004
+              },
+              "costUSD": 1.3739490000000005,
+              "turns": 47,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "ai-targeting-still-snaps-your-nose-onto-an-enemy-and-the-sna",
           "head": "AI Targeting still snaps your nose onto an enemy, and the snap holds",
           "body": "`global/ship_modules/ai_targeting_module.gd:38` writes `actor.rotation =` directly. Under the turn controller that write is undone within a frame or two, so the 15-second-cooldown module the player unlocked and equipped visibly does nothing under mouse aim.\n\nFix, per the plan's chosen option (a):\n- `OpenSpacePlayerShip.face_instant(angle: float)` - sets rotation, adopts `angle` as the controller's target, and suppresses cursor steering.\n- The module calls it duck-typed (`if actor.has_method(\"face_instant\")`), the same shape as `is_armored()` in CLAUDE.md, because the module lives in `global/` and must not assume an open-space actor.\n- Suppression is cleared by REAL mouse motion, not by cursor position: `get_global_mouse_position()` is a world position that moves with the camera, so a physically still mouse would otherwise clear it immediately. `player_ship.gd::_input()` gains an `InputEventMouseMotion` branch calling `_turn.notify_mouse_moved()` before its existing `use_ability` early-return. Do not mark motion events as handled.\n\nDONE WHEN: the \"snap holds until the mouse moves\" case in `tests/unit/test_ship_turn_controller.gd` passes (face_instant, then steps with a cursor 90 degrees away leave rotation put; notify_mouse_moved, and the next step turns), and the module still snaps under `scheme = &\"keys\"` exactly as it does today. Gate green.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

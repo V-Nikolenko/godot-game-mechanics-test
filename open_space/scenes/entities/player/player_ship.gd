@@ -115,6 +115,15 @@ func _physics_process(delta: float) -> void:
 		_module_pool[id].tick(self, delta)
 
 func _input(event: InputEvent) -> void:
+	## Real mouse motion releases an AITargetingModule snap. Deliberately NOT keyed off
+	## cursor position: get_global_mouse_position() is a world position that moves with
+	## the camera, so a physically still mouse would otherwise clear the snap on the
+	## very next frame. Not marked handled — this must not steal the event from anything
+	## else that reads mouse motion.
+	if event is InputEventMouseMotion:
+		if _turn != null:
+			_turn.notify_mouse_moved()
+		return
 	## _input fires before _unhandled_input — modules get first pick of H-key.
 	if not event.is_action_pressed("use_ability"):
 		return
@@ -123,6 +132,15 @@ func _input(event: InputEvent) -> void:
 		if mod.try_activate(self):
 			get_viewport().set_input_as_handled()
 			return  ## Consumed by module.
+
+## Duck-typed entry point for AITargetingModule (and anything else that needs an
+## instant snap): adopt `angle` as the hull's rotation AND the turn controller's
+## target, and suppress cursor steering until the player's next real mouse motion —
+## otherwise the controller's own step() would undo the snap within a frame or two.
+func face_instant(angle: float) -> void:
+	rotation = angle
+	if _turn != null:
+		_turn.face_instant(angle)
 
 func _handle_rotation(delta: float) -> void:
 	var turn: float = 0.0

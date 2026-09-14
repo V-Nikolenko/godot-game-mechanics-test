@@ -105,6 +105,12 @@ func _physics_process(_delta: float) -> void:
 		_thruster.set_state(tstate)
 		_thruster_right.set_state(tstate)
 
+## Duck-typed entry point for AITargetingModule. Assault has no turn controller to
+## suppress, so this is character-for-character what the module used to write directly
+## — assault behaviour is unchanged by the open-space turn controller epic.
+func face_instant(angle: float) -> void:
+	rotation = angle
+
 func _input(event: InputEvent) -> void:
 	## _input fires before _unhandled_input — modules get first pick of H-key.
 	if not event.is_action_pressed("use_ability"):

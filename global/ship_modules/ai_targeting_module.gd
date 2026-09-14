@@ -32,10 +32,17 @@ func try_activate(player: Node) -> bool:
 	var target := _find_nearest_enemy(actor)
 	if target == null:
 		return false
+	## Duck-typed, exactly like Bullet's is_armored() query: this module lives in
+	## global/ and must not assume which mode's player it is looking at. No rotation
+	## fallback — an actor that cannot face is an actor this module has nothing to do
+	## with, and the cooldown is deliberately NOT spent in that case.
+	if not actor.has_method("face_instant"):
+		push_warning("AITargetingModule: %s has no face_instant(); snap skipped." % actor.name)
+		return false
 	_cooldown_left = _COOLDOWN
 	## Snap rotation so Vector2.UP.rotated(rotation) points toward target.
 	var dir: Vector2 = target.global_position - actor.global_position
-	actor.rotation = dir.angle() + PI * 0.5
+	actor.face_instant(dir.angle() + PI * 0.5)
 	return true
 
 func tick(player: Node, delta: float) -> void:

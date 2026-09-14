@@ -232,7 +232,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en](docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en)
       2 run(s), $3.58; last on claude-sonnet-5
 
-## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 4 open)
+## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 3 open)
 
 **Review history**
 
@@ -285,8 +285,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       DONE WHEN: `tests/unit/test_settings_state.gd` passes - default on empty disk, round-trips through a second instance's `_load()`, falls back to the default on a hand-corrupted value, rejects a value not in SCHEMES, and does not emit when set to the value it already holds. Plus the "scheme flip mid-flight causes no rotation jump" case in `tests/unit/test_ship_turn_controller.gd`. No UI yet. Gate green.
       after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
+      1 run(s), $1.37; last on claude-sonnet-5
 
-- [ ] **AI Targeting still snaps your nose onto an enemy, and the snap holds** _(todo - feature, small, sonnet)_
+- [x] **AI Targeting still snaps your nose onto an enemy, and the snap holds** _(done - feature, small, sonnet)_
       `global/ship_modules/ai_targeting_module.gd:38` writes `actor.rotation =` directly. Under the turn controller that write is undone within a frame or two, so the 15-second-cooldown module the player unlocked and equipped visibly does nothing under mouse aim.
       
       Fix, per the plan's chosen option (a):
