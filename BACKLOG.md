@@ -232,7 +232,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en](docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en)
       2 run(s), $3.58; last on claude-sonnet-5
 
-## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 5 open)
+## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 4 open)
 
 **Review history**
 
@@ -274,8 +274,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `player_ship.gd::_handle_rotation` shrinks to reading the A/D axis, calling `set_aim_target(global_position, get_global_mouse_position())` and `rotation = _turn.step(rotation, turn, delta)`. `rotation_speed_deg` moves off `player_ship.gd` onto the controller. `get_global_mouse_position()` must appear in exactly one line project-wide.
       
       DONE WHEN: `tests/unit/test_ship_turn_controller.gd` passes with every case in the plan's test plan for that file - frame-rate independence, the turn-rate cap, no overshoot, wrap-around across +-pi, cursor-exactly-on-ship, the 47.9/48.1 px dead-zone edge, the 180-degree tie-break, "classic is still 220 deg/s", "classic ignores the cursor", "mouse ignores A/D". No autoload and no UI in this task - the scheme is flipped by hand in the test / inspector. Gate green.
+      1 run(s), $4.08; last on claude-opus-5
 
-- [ ] **The game remembers which steering scheme you fly with** _(todo - feature, small, sonnet)_
+- [x] **The game remembers which steering scheme you fly with** _(done - feature, small, sonnet)_
       Adds `global/autoloads/settings_state.gd` (`SettingsState`), the project's first settings store. Near-copy of the `ConfigFile` template in `global/autoloads/ship_module_state.gd`: `SAVE_PATH = "user://settings.cfg"`, `SECTION = "controls"`, key `open_space_scheme`, `SCHEMES = [&"mouse", &"keys"]`, `DEFAULT_SCHEME = &"mouse"`, `signal open_space_scheme_changed(scheme: StringName)` (declared with its argument - `test_signal_emit_arity.gd` sweeps self-emits).
       
       Default-on-missing comes from `ConfigFile.get_value(SECTION, KEY, default)` and is re-validated against `SCHEMES` on load. Deliberately NOT the `UpgradeState.STARTING_IDS` idiom - see the plan's "the setting is a new SettingsState autoload" for why that shape is wrong here.

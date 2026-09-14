@@ -534,13 +534,36 @@
           "complexity": "medium",
           "model": "opus",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "49f7836",
+                  "subject": "Add ShipTurnController: the open-space ship leans toward the mouse cursor"
+                }
+              ],
+              "at": "2026-09-14T22:59:11.280Z",
+              "run": "2026-09-15-0129-i3",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004379,
+                "claude-opus-5": 4.078866499999999
+              },
+              "costUSD": 4.083245499999999,
+              "turns": 55,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "the-game-remembers-which-steering-scheme-you-fly-with",
           "head": "The game remembers which steering scheme you fly with",
           "body": "Adds `global/autoloads/settings_state.gd` (`SettingsState`), the project's first settings store. Near-copy of the `ConfigFile` template in `global/autoloads/ship_module_state.gd`: `SAVE_PATH = \"user://settings.cfg\"`, `SECTION = \"controls\"`, key `open_space_scheme`, `SCHEMES = [&\"mouse\", &\"keys\"]`, `DEFAULT_SCHEME = &\"mouse\"`, `signal open_space_scheme_changed(scheme: StringName)` (declared with its argument - `test_signal_emit_arity.gd` sweeps self-emits).\n\nDefault-on-missing comes from `ConfigFile.get_value(SECTION, KEY, default)` and is re-validated against `SCHEMES` on load. Deliberately NOT the `UpgradeState.STARTING_IDS` idiom - see the plan's \"the setting is a new SettingsState autoload\" for why that shape is wrong here.\n\nAlso: register in `project.godot` `[autoload]`; add `\"user://settings.cfg\"` to `tests/helpers/save_sandbox.gd::PATHS` (without it every test touching the setting leaks into the player's profile and the next suite run). `player_ship.gd` seeds `_turn.scheme` from the autoload in `_ready()` and connects `open_space_scheme_changed` to `_turn.set_scheme(scheme, rotation)`.\n\nDONE WHEN: `tests/unit/test_settings_state.gd` passes - default on empty disk, round-trips through a second instance's `_load()`, falls back to the default on a hand-corrupted value, rejects a value not in SCHEMES, and does not emit when set to the value it already holds. Plus the \"scheme flip mid-flight causes no rotation jump\" case in `tests/unit/test_ship_turn_controller.gd`. No UI yet. Gate green.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

@@ -58,9 +58,12 @@ func _ready() -> void:
 			_turn = child as ShipTurnController
 			break
 	if _turn != null:
-		## Seed the target angle from the hull's ACTUAL facing, rather than relying on
-		## the controller and the ship both happening to default to 0.0.
-		_turn.set_scheme(_turn.scheme, rotation)
+		## Seed the scheme from the persisted setting, and the target angle from the
+		## hull's ACTUAL facing, rather than relying on the controller and the ship
+		## both happening to default to 0.0.
+		_turn.set_scheme(SettingsState.get_open_space_scheme(), rotation)
+		SettingsState.open_space_scheme_changed.connect(
+				func(scheme: StringName) -> void: _turn.set_scheme(scheme, rotation))
 
 	## Overheat bar — top_level keeps it upright as the ship rotates;
 	## _physics_process updates its global_position to track the player.

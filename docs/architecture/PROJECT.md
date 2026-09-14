@@ -60,6 +60,7 @@ Registered in `project.godot` `[autoload]` (load order matters). Full detail in
 | `CameraShake` | `global/systems/camera_shake.gd` | Global camera-shake requests |
 | `LogState` | `global/autoloads/log_state.gd` | Which lore-log entries are collected. Total is derived from a `LogEntryResource` `.tres` directory sweep, never hand-counted; `collect_next()` grants entries in catalogue order |
 | `PickupState` | `global/autoloads/pickup_state.gd` | Which `persistent_id`-tagged `PickupBase` placements have ever been collected, independent of the physical node — so a one-time pickup placed in a replayable mission (assault restart reloads the scene) doesn't re-grant on reload. Opt-in: a pickup that leaves `persistent_id` empty (every pickup today) ignores this entirely |
+| `SettingsState` | `global/autoloads/settings_state.gd` | Player-chosen settings. First key: `open_space_scheme` (`&"mouse"` / `&"keys"`), read by `OpenSpacePlayerShip` to seed and live-update its `ShipTurnController` |
 
 ---
 

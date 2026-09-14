@@ -31,6 +31,7 @@ SessionState="*res://global/autoloads/session_state.gd"
 LogState="*res://global/autoloads/log_state.gd"
 PickupState="*res://global/autoloads/pickup_state.gd"
 CameraShake="*res://global/systems/camera_shake.gd"
+SettingsState="*res://global/autoloads/settings_state.gd"
 
 [debug_draw_3d]
 

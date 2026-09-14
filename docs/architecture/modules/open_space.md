@@ -89,7 +89,7 @@ The ship scene (`player_ship.tscn`) is built by composition: `HealthComponent`, 
 
 #### 3.2.1 Steering — `ShipTurnController`
 
-`open_space/scenes/entities/player/ship_turn_controller.gd` (`class_name ShipTurnController extends Node`), a direct child of `PlayerShip` in `player_ship.tscn` and **the only thing in open space that writes the ship's `rotation`**. `player_ship.gd::_ready()` resolves it **by type**, not by node path, and seeds its target angle from the hull's actual facing via `set_scheme()`.
+`open_space/scenes/entities/player/ship_turn_controller.gd` (`class_name ShipTurnController extends Node`), a direct child of `PlayerShip` in `player_ship.tscn` and **the only thing in open space that writes the ship's `rotation`**. `player_ship.gd::_ready()` resolves it **by type**, not by node path, seeds its `scheme` from `SettingsState.get_open_space_scheme()` and its target angle from the hull's actual facing via `set_scheme()`, and connects `SettingsState.open_space_scheme_changed` to re-seed the live controller without a scene reload.
 
 It is a pure step function over injected inputs — cursor world position, the A/D axis, `delta`. It reads no `Input` and never asks for the mouse itself: `Input.warp_mouse()` cannot place a cursor in a headless GUT run, so the mouse is read in exactly **one** line project-wide (`player_ship.gd::_handle_rotation`) and passed in. That is what makes the turn model testable at all.
 
@@ -102,7 +102,7 @@ Two schemes, selected by the `scheme` export:
 
 | Export | Default | Job |
 |---|---|---|
-| `scheme` | `&"mouse"` | Which scheme is live. |
+| `scheme` | `&"mouse"` | Which scheme is live. Seeded from `SettingsState` (`global.md` §3), not this default, once the ship is in the scene. |
 | `keyboard_turn_rate_deg` | `220.0` | Classic turn rate. Must stay 220 — Classic is today's behaviour. |
 | `mouse_max_turn_rate_deg` | `150.0` | The **balance** lever: the hard cap. 180° in 1.2 s. |
 | `mouse_turn_half_life` | `0.14` | The **feel** lever: seconds to close half the remaining angle. |
@@ -110,7 +110,7 @@ Two schemes, selected by the `scheme` export:
 
 The three mouse numbers are judgement calls that **no headless gate can validate**; they are `@export`s on the ship scene precisely so a fly-test is an inspector change. `set_steering_enabled(false)` freezes the target (window focus loss) and `face_instant()`/`notify_mouse_moved()` let an AI-targeting snap survive until the player's next mouse movement; both are wired up by later tasks in the same epic.
 
-Covered by `tests/unit/test_ship_turn_controller.gd` (the turn model: frame-rate independence, the cap, no overshoot, ±PI wrap, the dead-zone edge, the 180° tie-break, and that Classic is unchanged) and `tests/integration/test_player_ship_turn_wiring.gd` (the anti-inert gate: the node is in the scene, `_handle_rotation` really delegates to it, the target is seeded from the hull, and `rotation_speed_deg` is gone).
+Covered by `tests/unit/test_ship_turn_controller.gd` (the turn model: frame-rate independence, the cap, no overshoot, ±PI wrap, the dead-zone edge, the 180° tie-break, and that Classic is unchanged) and `tests/integration/test_player_ship_turn_wiring.gd` (the anti-inert gate: the node is in the scene, `_handle_rotation` really delegates to it, the target is seeded from the hull and from `SettingsState`, the scheme-change signal re-seeds the live controller, and `rotation_speed_deg` is gone).
 
 ### 3.3 Ambient enemy — `PatrolDrone`
 

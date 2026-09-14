@@ -9,23 +9,25 @@
 ##
 ## It never tries to place a cursor — `Input.warp_mouse()` does nothing in a headless
 ## run, which is the whole reason the controller takes the cursor as an argument.
-##
-## Two further cases (the scheme is seeded from SettingsState on ready, and the
-## `open_space_scheme_changed` signal re-seeds the live controller) belong to the NEXT
-## task in this epic, because the SettingsState autoload does not exist yet.
 extends GutTest
 
 const SHIP_SCENE: PackedScene = preload("res://open_space/scenes/entities/player/player_ship.tscn")
 const SaveSandbox := preload("res://tests/helpers/save_sandbox.gd")
 
 var _sandbox := SaveSandbox.new()
+var _saved_scheme: StringName
 
 
 func before_all() -> void:
 	_sandbox.capture()
+	_saved_scheme = SettingsState.get_open_space_scheme()
 
 
 func after_all() -> void:
+	## Restored directly rather than through set_open_space_scheme(), which is a no-op
+	## (and emits nothing) when the value already matches — exactly the case on the run
+	## where the suite left the live scheme where it started.
+	SettingsState._open_space_scheme = _saved_scheme
 	_sandbox.restore()
 
 
@@ -52,6 +54,32 @@ func _controller_of(ship: Node) -> ShipTurnController:
 		if child is ShipTurnController:
 			return child as ShipTurnController
 	return null
+
+
+## The scheme is seeded from SettingsState, not the controller's own @export default —
+## a build where the setting is cosmetic would still pass every other case here.
+func test_scheme_is_seeded_from_settings_state_on_ready() -> void:
+	SettingsState.set_open_space_scheme(&"keys")
+	var ship := _spawn_ship()
+	var ctl := _controller_of(ship)
+	assert_eq(ctl.scheme, SettingsState.get_open_space_scheme(),
+			"the controller's scheme must come from SettingsState, not its own default")
+	assert_eq(ctl.scheme, &"keys")
+	SettingsState.set_open_space_scheme(&"mouse")
+
+
+## Flipping the setting mid-flight (e.g. from a future settings panel) must reach the
+## LIVE controller without a scene reload.
+func test_scheme_signal_reseeds_the_live_controller() -> void:
+	SettingsState.set_open_space_scheme(&"mouse")
+	var ship := _spawn_ship()
+	var ctl := _controller_of(ship)
+	assert_eq(ctl.scheme, &"mouse")
+
+	SettingsState.set_open_space_scheme(&"keys")
+	assert_eq(ctl.scheme, &"keys",
+			"open_space_scheme_changed must re-seed the controller without a reload")
+	SettingsState.set_open_space_scheme(&"mouse")
 
 
 func test_ship_scene_carries_a_turn_controller() -> void:

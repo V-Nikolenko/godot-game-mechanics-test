@@ -19,7 +19,8 @@ global/
 │   ├── ship_progression_state.gd # ShipProgressionState: permanent shield slot count
 │   ├── upgrade_state.gd       # UpgradeState: unlocked weapon mode ids (validated); STARTING_IDS seeds a fresh profile
 │   ├── log_state.gd           # LogState: which lore-log entries are collected, catalogue swept from disk
-│   └── pickup_state.gd        # PickupState: which persistent_id pickup placements have ever been collected
+│   ├── pickup_state.gd        # PickupState: which persistent_id pickup placements have ever been collected
+│   └── settings_state.gd      # SettingsState: player settings (open_space_scheme mouse/keys)
 ├── components/                # composable child-node behaviours
 │   ├── health_component.gd        # Health (Node)
 │   ├── temp_health_component.gd   # TempHealth (Node) — drains before Health
@@ -67,7 +68,7 @@ global/
 
 ## 3. Autoloads
 
-All ten are registered in `project.godot` under `[autoload]`. The `*` prefix means the script is the singleton root. Note the path quirk: most live in `global/autoloads/` (plural), `DialogPlayer` lives in `global/autoload/` (singular), and `EventBus`/`CameraShake` live in `global/systems/`.
+All eleven are registered in `project.godot` under `[autoload]`. The `*` prefix means the script is the singleton root. Note the path quirk: most live in `global/autoloads/` (plural), `DialogPlayer` lives in `global/autoload/` (singular), and `EventBus`/`CameraShake` live in `global/systems/`.
 
 | Autoload | File | State it owns | Read / written |
 |---|---|---|---|
@@ -81,6 +82,7 @@ All ten are registered in `project.godot` under `[autoload]`. The `*` prefix mea
 | `CameraShake` | `global/systems/camera_shake.gd` | A single `_trauma` float (0..1) that decays each frame. | Written by any system via `add(amount)`; read each frame by cameras via `get_offset()` (used inside `CameraDirector`). |
 | `LogState` | `global/autoloads/log_state.gd` | Which `LogEntryResource` ids are collected. Persists to `user://log_state.cfg`. `total_count()` is a `DirAccess` sweep of `catalogue_dir` (`global/resources/logs/entries/` in production) — never a hand-maintained list, unlike `UpgradeState.ALL_IDS`. | `collect_next()` is the only mutator: an anonymous lore-log pickup calls it with no id and it grants the lowest-`sequence` entry not yet collected, so the story reads in catalogue order regardless of where in the world it was found. Read via `is_collected` / `collected_ids` / `all_ids` (catalogue order, unfiltered — the ESC menu's Lore Logs reader below is its only caller) / `get_entry` / `total_count`. Emits `log_collected(id)`. Validates on load like `ShipModuleState`/`UpgradeState`: an id in the save file with no matching catalogue entry is `push_warning`ed and dropped. Information logs (one-time, non-persisted) never touch this store. |
 | `PickupState` | `global/autoloads/pickup_state.gd` | Which `StringName` `persistent_id`s have ever been collected, independent of any physical node. Persists to `user://pickup_state.cfg`, same `ConfigFile` shape as `LogState`. | `mark_collected(id)` (idempotent) is the only mutator, called from `PickupBase._on_body_entered()` when a collected pickup's `persistent_id` is non-empty; `has_collected(id)` gates the same handler so a respawned pickup (e.g. an assault mission restart, which reloads the scene) does not re-grant an id already collected. A pickup that leaves `persistent_id` at its default `&""` (every pickup shipped today) never touches this store and keeps respawning every scene load. |
+| `SettingsState` | `global/autoloads/settings_state.gd` | Player settings, one `ConfigFile` (`user://settings.cfg`). First key: `open_space_scheme` (`&"mouse"` / `&"keys"`, default `&"mouse"`), re-validated against `SCHEMES` on load with a fallback to the default. Named `SettingsState`, not `ControlsState`, so a future setting (e.g. mouse sensitivity) lands as another key here rather than a second autoload. | `set_open_space_scheme(scheme)` validates, saves and emits `open_space_scheme_changed(scheme: StringName)` — but only on an actual change, so a redundant set neither writes to disk nor re-seeds a live `ShipTurnController` mid-flight. `OpenSpacePlayerShip._ready()` seeds its `ShipTurnController.scheme` from `get_open_space_scheme()` and connects the signal to re-seed it live, without a scene reload. |
 
 ## 4. Shared systems (`global/systems/`)
 
