@@ -88,6 +88,27 @@ func test_ship_scene_carries_a_turn_controller() -> void:
 			"player_ship.tscn must have a ShipTurnController child, or the feature ships inert")
 
 
+## Alt-tab: NOTIFICATION_APPLICATION_FOCUS_OUT must freeze the controller's target and
+## FOCUS_IN must resume it — otherwise the ship keeps turning toward a cursor position
+## the OS stopped updating the moment the window lost focus. Driven by calling
+## _notification() directly (legal in Godot) rather than a real OS focus event, which a
+## headless run cannot generate.
+func test_focus_out_disables_steering_and_focus_in_re_enables() -> void:
+	var ship := _spawn_ship(0.7)
+	var ctl := _controller_of(ship)
+	ctl.set_scheme(&"mouse", 0.7)
+
+	ship._notification(NOTIFICATION_APPLICATION_FOCUS_OUT)
+	ctl.set_aim_target(Vector2.ZERO, Vector2(1000.0, 0.0))
+	assert_almost_eq(ctl.get_target_angle(), 0.7, 1e-6,
+			"focus-out must freeze the target against a moving cursor")
+
+	ship._notification(NOTIFICATION_APPLICATION_FOCUS_IN)
+	ctl.set_aim_target(Vector2.ZERO, Vector2(1000.0, 0.0))
+	assert_ne(ctl.get_target_angle(), 0.7,
+			"focus-in must resume steering")
+
+
 ## The delegation itself. Compared against what the LIVE controller instance returns for
 ## the same inputs — not against a hard-coded 220 °/s — so a ship that kept its own turn
 ## maths and merely happens to agree on the number still fails.

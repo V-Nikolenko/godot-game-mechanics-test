@@ -232,7 +232,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en](docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en)
       2 run(s), $3.58; last on claude-sonnet-5
 
-## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 2 open)
+## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 1 open)
 
 **Review history**
 
@@ -310,8 +310,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       DONE WHEN: the test passes on the fixed tree, and reverting the duck-typed call in `ai_targeting_module.gd` makes it fail (check that by hand before committing - an invariant that cannot fail is worth nothing). Gate green. Add the test to the list in `CLAUDE.md` and `tests/README.md` alongside the other invariant tests.
       after: ai-targeting-still-snaps-your-nose-onto-an-enemy-and-the-sna
+      1 run(s), $1.02; last on claude-sonnet-5
 
-- [ ] **Alt-tabbing away no longer leaves your ship turning on its own** _(todo - feature, small, sonnet)_
+- [x] **Alt-tabbing away no longer leaves your ship turning on its own** _(done - feature, small, sonnet)_
       When the game window loses focus the OS pointer stops updating but `get_global_mouse_position()` keeps returning the last in-window position, so the ship holds a stale target angle and keeps turning toward it while the player is in another window.
       
       Adds `ShipTurnController.set_steering_enabled(enabled: bool)` - while false the target angle is frozen and `step()` still runs (so no rotation discontinuity on resume) - and `player_ship.gd::_notification()` handling `NOTIFICATION_APPLICATION_FOCUS_OUT` / `NOTIFICATION_APPLICATION_FOCUS_IN`.

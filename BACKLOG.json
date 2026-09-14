@@ -651,13 +651,36 @@
           "dependsOn": [
             "ai-targeting-still-snaps-your-nose-onto-an-enemy-and-the-sna"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "5ee8951",
+                  "subject": "Add the single-writer invariant test for ship rotation"
+                }
+              ],
+              "at": "2026-09-14T23:12:42.522Z",
+              "run": "2026-09-15-0129-i6",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004276,
+                "claude-sonnet-5": 1.0186304000000002
+              },
+              "costUSD": 1.0229064,
+              "turns": 43,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "alt-tabbing-away-no-longer-leaves-your-ship-turning-on-its-o",
           "head": "Alt-tabbing away no longer leaves your ship turning on its own",
           "body": "When the game window loses focus the OS pointer stops updating but `get_global_mouse_position()` keeps returning the last in-window position, so the ship holds a stale target angle and keeps turning toward it while the player is in another window.\n\nAdds `ShipTurnController.set_steering_enabled(enabled: bool)` - while false the target angle is frozen and `step()` still runs (so no rotation discontinuity on resume) - and `player_ship.gd::_notification()` handling `NOTIFICATION_APPLICATION_FOCUS_OUT` / `NOTIFICATION_APPLICATION_FOCUS_IN`.\n\nExplicitly NOT doing pointer confinement (`MOUSE_MODE_CONFINED` takes the pointer hostage on a multi-monitor desktop) or capture with a software cursor - both are out of scope per the plan. The narrower \"pointer left the window but the window is still focused\" case stays uncovered and that is accepted.\n\nDONE WHEN: the \"steering disabled freezes the target\" case in `tests/unit/test_ship_turn_controller.gd` passes - cursor moves while disabled and rotation does not change, re-enabling resumes with no jump. Gate green.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

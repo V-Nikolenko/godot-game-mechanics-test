@@ -114,6 +114,20 @@ func _physics_process(delta: float) -> void:
 	for id: StringName in _module_pool.keys():
 		_module_pool[id].tick(self, delta)
 
+## The OS pointer stops updating while the window is unfocused, but
+## get_global_mouse_position() keeps returning the last in-window position — so without
+## this the ship holds a stale target angle and keeps turning toward it while the player
+## is alt-tabbed away. Freezing (rather than clearing) the target means resuming on
+## FOCUS_IN has no discontinuity: step() keeps running throughout, it just has nothing
+## new to chase.
+func _notification(what: int) -> void:
+	if _turn == null:
+		return
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_turn.set_steering_enabled(false)
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		_turn.set_steering_enabled(true)
+
 func _input(event: InputEvent) -> void:
 	## Real mouse motion releases an AITargetingModule snap. Deliberately NOT keyed off
 	## cursor position: get_global_mouse_position() is a world position that moves with
