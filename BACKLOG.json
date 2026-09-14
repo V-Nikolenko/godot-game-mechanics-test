@@ -612,13 +612,36 @@
           "dependsOn": [
             "your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "4d6bed2",
+                  "subject": "AITargetingModule snaps through face_instant, not a raw rotation write"
+                }
+              ],
+              "at": "2026-09-14T23:09:02.927Z",
+              "run": "2026-09-15-0129-i5",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004342,
+                "claude-sonnet-5": 1.1904868
+              },
+              "costUSD": 1.1948287999999998,
+              "turns": 42,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "a-future-ship-module-cannot-silently-fight-your-steering",
           "head": "A future ship module cannot silently fight your steering",
           "body": "Adds `tests/integration/test_ship_rotation_single_writer.gd`, the suite's eleventh invariant test. After this epic the \"exactly one writer of the open-space ship's rotation\" rule is what keeps mouse aim working, and it is precisely the kind of rule the fifteenth ship module breaks with no visible symptom - which is exactly how `ai_targeting_module.gd` came to fight the controller in the first place.\n\nSweep every `global/ship_modules/*.gd` and assert none assigns to `actor.rotation` (`=`, `+=`, `-=`). Allowlist empty; the sanctioned route is `face_instant()`.\n\nBoundary cases that make it able to fail:\n- the sweep must find a non-zero number of module files and must find `ai_targeting_module.gd` among them by name - a glob that silently matched nothing must not read as a pass;\n- `OpenSpacePlayerShip` must expose a `face_instant` method, so the rule points at a replacement rather than only forbidding the old call.\n\nDONE WHEN: the test passes on the fixed tree, and reverting the duck-typed call in `ai_targeting_module.gd` makes it fail (check that by hand before committing - an invariant that cannot fail is worth nothing). Gate green. Add the test to the list in `CLAUDE.md` and `tests/README.md` alongside the other invariant tests.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

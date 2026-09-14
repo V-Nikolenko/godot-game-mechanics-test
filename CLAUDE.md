@@ -174,6 +174,15 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   prevent — `MovementController.action_single_press`/`action_double_press` declared bare while
   every emit and every connected handler already agreed on one `String` argument — fixed
   alongside the test, same shape as the original fix.
+  `tests/integration/test_ship_rotation_single_writer.gd` is an eleventh, over the open-space
+  ship's **single writer of `rotation`**: after the mouse-aiming epic, `ShipTurnController` is the
+  only thing allowed to write `OpenSpacePlayerShip.rotation` (and `AssaultPlayer`'s own one-liner
+  is the only writer of the fighter's), and a ship module that assigns `actor.rotation` directly
+  fights whichever one owns it — exactly what `ai_targeting_module.gd:38` did until it was
+  rewritten to call the duck-typed `face_instant()` every player class now exposes (same precedent
+  as `Bullet.is_armored()`, above). It sweeps every `global/ship_modules/*.gd` for a direct
+  `.rotation =`/`+=`/`-=` with an empty, permanent allowlist; reverting the duck-typed call back to
+  a raw rotation write makes it fail, which is the proof it can.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.

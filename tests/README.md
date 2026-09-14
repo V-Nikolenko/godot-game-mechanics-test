@@ -706,3 +706,21 @@ snapshot (unlike `ShipModuleState`'s dict-of-arrays, which needs the inner `dupl
 ⚠️ The PlayerMenu test reports **12 orphans** — `WeaponFrame.populate()` `queue_free()`s the
 previous rows and the delete queue does not flush before the test ends, the same effect documented
 above for `ModuleList`. Not a leak you introduced.
+
+### The ship-rotation single-writer gate
+
+`integration/test_ship_rotation_single_writer.gd` is another invariant test, over the open-space
+mouse-aiming feature: after that epic, `ShipTurnController` is the only thing allowed to write
+`OpenSpacePlayerShip.rotation`, and `AssaultPlayer`'s own one-liner is the only writer of the
+fighter's — both player classes expose `face_instant(angle)` as the sanctioned route instead. It
+sweeps every `global/ship_modules/*.gd` for a direct `.rotation =`/`+=`/`-=` assignment with an
+empty, permanent allowlist, plus two boundary cases (the sweep must find a non-zero number of
+module scripts and must find `ai_targeting_module.gd` among them by name — a glob matching nothing
+must not read as a pass) and two coverage cases (both player classes must declare `face_instant`,
+checked via `GDScript.get_script_method_list()` rather than instantiation, so the assertion fails
+if the method is only inherited from `PlayerBase` rather than declared per mode). This is exactly
+the class of regression `ai_targeting_module.gd:38` used to be: it wrote `actor.rotation` directly
+and fought the turn controller's own target angle within a frame or two, until it was rewritten to
+call `face_instant()` (the same duck-typed-query precedent as `Bullet.is_armored()`). Reverting
+that call back to a raw rotation write was checked by hand to fail this test before it was
+committed.

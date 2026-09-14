@@ -232,7 +232,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en](docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en)
       2 run(s), $3.58; last on claude-sonnet-5
 
-## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 3 open)
+## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 2 open)
 
 **Review history**
 
@@ -297,8 +297,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       DONE WHEN: the "snap holds until the mouse moves" case in `tests/unit/test_ship_turn_controller.gd` passes (face_instant, then steps with a cursor 90 degrees away leave rotation put; notify_mouse_moved, and the next step turns), and the module still snaps under `scheme = &"keys"` exactly as it does today. Gate green.
       after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
+      1 run(s), $1.19; last on claude-sonnet-5
 
-- [ ] **A future ship module cannot silently fight your steering** _(todo - test, small, sonnet)_
+- [x] **A future ship module cannot silently fight your steering** _(done - test, small, sonnet)_
       Adds `tests/integration/test_ship_rotation_single_writer.gd`, the suite's eleventh invariant test. After this epic the "exactly one writer of the open-space ship's rotation" rule is what keeps mouse aim working, and it is precisely the kind of rule the fifteenth ship module breaks with no visible symptom - which is exactly how `ai_targeting_module.gd` came to fight the controller in the first place.
       
       Sweep every `global/ship_modules/*.gd` and assert none assigns to `actor.rotation` (`=`, `+=`, `-=`). Allowlist empty; the sanctioned route is `face_instant()`.
