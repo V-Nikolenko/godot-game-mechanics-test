@@ -93,6 +93,16 @@ Detail and APIs: [global.md](modules/global.md).
   `preload()` in the test suite. Details and the two remaining windows: the `ShipConfig` section of
   [global.md](modules/global.md); pinned by `tests/integration/test_config_instance_isolation.gd`.
   **The object `load()`/`preload()` returns is still shared — never write to it.**
+- **The mouse is read in exactly one line project-wide.** `player_ship.gd::_handle_rotation`'s
+  `get_global_mouse_position()` is it. Everything downstream — the whole open-space turn model in
+  `ShipTurnController` (see [open_space.md](modules/open_space.md) §3.2.1) — takes the cursor as an
+  injected `Vector2`. This is not style: `Input.warp_mouse()` cannot place a cursor in a headless
+  GUT run, so any logic that reads the mouse itself is untestable by this project's gate. Use
+  `get_global_mouse_position()` (a `CanvasItem` method that honours the canvas transform and the
+  project's `stretch/mode="canvas_items"`), never `DisplayServer.mouse_get_position()`.
+- **One writer per transform.** In open space, `ShipTurnController` is the only thing that writes
+  the player ship's `rotation`; a second writer (a ship module, a state) fights it invisibly at
+  frame rate. Anything that needs to turn the ship goes through the controller's `face_instant()`.
 - **State machines:** `global/statemachine/state_machine.gd` + `state.gd`; entities with
   complex behaviour keep one `State` node per file in a `states/` folder (player, racers,
   light_assault_ship). Simpler enemies use in-script `enum` phases.

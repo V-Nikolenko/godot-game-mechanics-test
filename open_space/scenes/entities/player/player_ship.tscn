@@ -11,6 +11,7 @@
 [ext_resource type="Script" uid="uid://biyvn45plxdd2" path="res://assault/scenes/player/states/warhead_missile_shooting_state.gd" id="10_rs"]
 [ext_resource type="Script" uid="uid://cdfmqrq3idtak" path="res://assault/scenes/player/movement_controller.gd" id="11_mc"]
 [ext_resource type="Script" uid="uid://bua2ltv8ifbl7" path="res://global/components/temp_health_component.gd" id="13_tmphp"]
+[ext_resource type="Script" uid="uid://m68figqyr4vm" path="res://open_space/scenes/entities/player/ship_turn_controller.gd" id="14_turn"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ttx1s"]
 atlas = ExtResource("5_k37g2")
@@ -279,6 +280,13 @@ movement_controller = NodePath("../../MovementController")
 [node name="CooldownTimer" type="Timer" parent="AttackStateMachine/WarheadMissileShootingState" unique_id=1022747725]
 wait_time = 5.0
 one_shot = true
+
+; Owns the ship's rotation — mouse-aim chase and the Classic A/D rate both live here.
+; Resolved by TYPE from player_ship.gd::_ready(), so this node may be renamed but must
+; stay a direct child of PlayerShip. Not to be confused with MovementController below,
+; which polls single/double action presses for the weapon states and writes no rotation.
+[node name="ShipTurnController" type="Node" parent="."]
+script = ExtResource("14_turn")
 
 [node name="MovementController" type="Node" parent="." unique_id=1619942092]
 script = ExtResource("11_mc")

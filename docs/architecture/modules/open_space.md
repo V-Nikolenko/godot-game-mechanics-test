@@ -17,7 +17,8 @@ open_space/scenes/
 ├── entities/
 │   ├── player/
 │   │   ├── player_ship.gd        # OpenSpacePlayerShip (extends PlayerBase) — free-flight controller + ship modules
-│   │   └── player_ship.tscn       # ship scene: components, attack state machine, animated sprite
+│   │   ├── player_ship.tscn       # ship scene: components, attack state machine, animated sprite
+│   │   └── ship_turn_controller.gd # ShipTurnController — the ONLY writer of the ship's rotation
 │   └── enemies/
 │       ├── patrol_drone.gd        # PatrolDrone — ambient hub enemy that drifts in a straight line
 │       └── patrol_drone.tscn
@@ -78,12 +79,38 @@ The script's only logic is `_spawn_initial_drones()`: in `_ready()` it instantia
 
 `open_space/scenes/entities/player/player_ship.gd` (`class_name OpenSpacePlayerShip extends PlayerBase`). It inherits all the shared health/shield/overheat/temp-HP plumbing and `EventBus` emission from `PlayerBase` (see [`./global.md`](./global.md) → PlayerBase) and adds free-flight specifics:
 
-- **Movement** (`_physics_process` → `_handle_rotation` + `_handle_thrust` + `move_and_slide`): rotate with `move_left`/`move_right`, thrust forward/back with `move_up`/`move_down`, with damping and a `max_speed` cap. A "flip boost" redirects momentum when you reverse-thrust above `boost_speed_threshold`. Thruster particle state is driven each frame.
+- **Movement** (`_physics_process` → `_handle_rotation` + `_handle_thrust` + `move_and_slide`): steer toward the mouse cursor (or with `move_left`/`move_right` under the Classic scheme — see `ShipTurnController` below), thrust forward/back with `move_up`/`move_down`, with damping and a `max_speed` cap. A "flip boost" redirects momentum when you reverse-thrust above `boost_speed_threshold`. Thruster particle state is driven each frame.
+- **Turning** is delegated in full to the `ShipTurnController` child (§3.2.1). `_handle_rotation` only reads the A/D axis, passes the cursor in via the project's single `get_global_mouse_position()` call, and assigns what `step()` returns. The old `rotation_speed_deg` export is gone from this script — it is now the controller's `keyboard_turn_rate_deg`.
 - **Camera feel** (`_update_camera_feel`): pushes a combined speed-zoom + lead-offset target into the child `Camera2D`'s `CameraDirector` under effect name `&"speed_feel"` at priority `0`. The planet dwell (below) overrides this at priority `10`, so approaching a planet smoothly takes over the camera.
 - **Ship modules**: on `_ready()` it re-applies every module already equipped in `ShipModuleState` (reads `ShipModuleState.SLOTS` / `get_equipped`) and connects `module_equipped` / `module_unequipped` for live equip/unequip. Each frame it ticks all active modules. The `use_ability` action (H-key) is offered to modules first via `_input`. This is the same module system described in [`./global.md`](./global.md).
 - **Death**: `_on_health_changed(0)` plays the explosion, shakes the camera, waits, and `reload_current_scene()` — i.e. respawn in the hub.
 
-The ship scene (`player_ship.tscn`) is built by composition: `HealthComponent`, `ShieldComponent`, `OverheatComponent`, `TempHealthComponent`, a `HurtBox`, an `AttackStateMachine` (`WeaponState` + `WarheadMissileShootingState`), and a `MovementController` — all shared classes from `global/` and `assault/`.
+The ship scene (`player_ship.tscn`) is built by composition: `HealthComponent`, `ShieldComponent`, `OverheatComponent`, `TempHealthComponent`, a `HurtBox`, an `AttackStateMachine` (`WeaponState` + `WarheadMissileShootingState`), a `ShipTurnController`, and a `MovementController` — all shared classes from `global/` and `assault/`, except `ShipTurnController`, which is open-space-only by design.
+
+#### 3.2.1 Steering — `ShipTurnController`
+
+`open_space/scenes/entities/player/ship_turn_controller.gd` (`class_name ShipTurnController extends Node`), a direct child of `PlayerShip` in `player_ship.tscn` and **the only thing in open space that writes the ship's `rotation`**. `player_ship.gd::_ready()` resolves it **by type**, not by node path, and seeds its target angle from the hull's actual facing via `set_scheme()`.
+
+It is a pure step function over injected inputs — cursor world position, the A/D axis, `delta`. It reads no `Input` and never asks for the mouse itself: `Input.warp_mouse()` cannot place a cursor in a headless GUT run, so the mouse is read in exactly **one** line project-wide (`player_ship.gd::_handle_rotation`) and passed in. That is what makes the turn model testable at all.
+
+Two schemes, selected by the `scheme` export:
+
+| Scheme | Behaviour |
+|---|---|
+| `&"mouse"` (default) | Clamped exponential chase toward the cursor angle. The ship *leans into* the cursor rather than snapping: `angle_difference` for the signed, wrap-correct error, `1 - exp(-ln2 * delta / half_life)` for the frame-rate-independent approach, a hard per-frame cap, then `rotate_toward` to apply it so a large step cannot overshoot. |
+| `&"keys"` | The pre-epic behaviour to the degree: `rotation += deg_to_rad(220) * turn * delta`, instantaneous, cursor ignored. |
+
+| Export | Default | Job |
+|---|---|---|
+| `scheme` | `&"mouse"` | Which scheme is live. |
+| `keyboard_turn_rate_deg` | `220.0` | Classic turn rate. Must stay 220 — Classic is today's behaviour. |
+| `mouse_max_turn_rate_deg` | `150.0` | The **balance** lever: the hard cap. 180° in 1.2 s. |
+| `mouse_turn_half_life` | `0.14` | The **feel** lever: seconds to close half the remaining angle. |
+| `mouse_dead_zone_px` | `48.0` | Ship→cursor **world** distance below which the target angle is held, so aim does not thrash when the cursor sits under the hull. Never measured from screen centre — the camera leads the ship by up to 140 px. |
+
+The three mouse numbers are judgement calls that **no headless gate can validate**; they are `@export`s on the ship scene precisely so a fly-test is an inspector change. `set_steering_enabled(false)` freezes the target (window focus loss) and `face_instant()`/`notify_mouse_moved()` let an AI-targeting snap survive until the player's next mouse movement; both are wired up by later tasks in the same epic.
+
+Covered by `tests/unit/test_ship_turn_controller.gd` (the turn model: frame-rate independence, the cap, no overshoot, ±PI wrap, the dead-zone edge, the 180° tie-break, and that Classic is unchanged) and `tests/integration/test_player_ship_turn_wiring.gd` (the anti-inert gate: the node is in the scene, `_handle_rotation` really delegates to it, the target is seeded from the hull, and `rotation_speed_deg` is gone).
 
 ### 3.3 Ambient enemy — `PatrolDrone`
 

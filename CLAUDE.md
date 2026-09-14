@@ -30,6 +30,16 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   a type would otherwise share one object with each other and with every `preload()` in the suite.
   **The object `load()`/`preload()` returns is still shared — never write to it.** Gated by
   `tests/integration/test_config_instance_isolation.gd`.
+- **The mouse is read in exactly one line project-wide** — `player_ship.gd::_handle_rotation`'s
+  `get_global_mouse_position()`. Open-space steering lives in `ShipTurnController`
+  (`open_space/scenes/entities/player/ship_turn_controller.gd`), a child of `player_ship.tscn` and
+  **the only writer of that ship's `rotation`**; it takes the cursor as an injected `Vector2` and
+  reads no `Input`, because `Input.warp_mouse()` cannot place a cursor in a headless GUT run and
+  anything that reads the mouse itself is untestable by the gate. Gated by
+  `tests/integration/test_player_ship_turn_wiring.gd` (the anti-inert test — every unit test for
+  the turn model is green on a build where the controller was never added to the scene) and
+  `tests/unit/test_ship_turn_controller.gd`. Details in
+  [open_space.md](docs/architecture/modules/open_space.md) → §3.2.1.
 - **State machines** — `global/statemachine/`; one `State` node per file in a `states/`
   folder for complex entities; simpler enemies use in-script `enum` phases.
 - **Signal arity & logging** — a signal is declared with exactly what it emits

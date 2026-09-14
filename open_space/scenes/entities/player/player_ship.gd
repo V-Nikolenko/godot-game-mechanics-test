@@ -5,7 +5,6 @@ class_name OpenSpacePlayerShip
 extends PlayerBase
 
 @export_category("Movement")
-@export var rotation_speed_deg: float = 220.0
 @export var thrust_acceleration: float = 380.0
 @export var reverse_acceleration: float = 220.0
 @export var max_speed: float = 420.0
@@ -38,12 +37,30 @@ var overclock_module_active: bool = false
 var _boost_timer: float = 0.0
 var _overheat_bar: OverheatBar = null
 
+## The ShipTurnController child — the only thing that writes this ship's rotation.
+## Resolved by TYPE in _ready(), not by node path, so the wiring cannot be broken by a
+## rename in the scene. Turning parameters (including the Classic 220 °/s that used to
+## be this script's `rotation_speed_deg`) live on it as inspector-visible @exports.
+var _turn: ShipTurnController = null
+
 ## Active module instances — created lazily in _apply_module().
 var _module_pool: Dictionary = {}  # { StringName: ShipModuleBase }
 
 func _ready() -> void:
 	super()  # add_to_group, _setup_components, _setup_effects
-	rotation = 0.0
+
+	## Turning. The old `rotation = 0.0` that stood here is deliberately gone: it wiped
+	## the hull angle before anything could read it, which would make the seed below a
+	## no-op. It was behaviour-neutral to delete — player_ship.tscn's root sets no
+	## rotation, so the scene default already supplies 0.0.
+	for child: Node in get_children():
+		if child is ShipTurnController:
+			_turn = child as ShipTurnController
+			break
+	if _turn != null:
+		## Seed the target angle from the hull's ACTUAL facing, rather than relying on
+		## the controller and the ship both happening to default to 0.0.
+		_turn.set_scheme(_turn.scheme, rotation)
 
 	## Overheat bar — top_level keeps it upright as the ship rotates;
 	## _physics_process updates its global_position to track the player.
@@ -110,7 +127,16 @@ func _handle_rotation(delta: float) -> void:
 		turn -= 1.0
 	if Input.is_action_pressed("move_right"):
 		turn += 1.0
-	rotation += deg_to_rad(rotation_speed_deg) * turn * delta
+	if _turn == null:
+		return
+	## `get_global_mouse_position()` is a CanvasItem method: it accounts for the canvas
+	## transform and the project's stretch/mode="canvas_items", so it is correct at any
+	## window size where a raw DisplayServer.mouse_get_position() would not be. This is
+	## the ONE place the mouse is read project-wide — everything downstream of here takes
+	## the cursor as an injected argument, which is what makes the turn model testable in
+	## a headless run that cannot place a cursor.
+	_turn.set_aim_target(global_position, get_global_mouse_position())
+	rotation = _turn.step(rotation, turn, delta)
 
 func _handle_thrust(delta: float) -> void:
 	## EngineBoostModule controls velocity directly while active;
