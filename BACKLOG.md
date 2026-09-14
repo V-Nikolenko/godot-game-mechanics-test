@@ -259,7 +259,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.
       after: plan-open-space-mouse-aiming-inertial-turn-to-cursor-with-a-
       -> [docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr](docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr)
-      1 run(s), $3.27; last on claude-opus-5
+      2 run(s), $4.56; last on claude-opus-5
 
 **Implementation**
 

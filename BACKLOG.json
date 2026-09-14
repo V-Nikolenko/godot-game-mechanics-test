@@ -409,6 +409,23 @@
               "subagents": 1,
               "outcome": "error 429",
               "gate": "pass"
+            },
+            {
+              "commits": [],
+              "at": "2026-09-13T21:30:39.555Z",
+              "run": "2026-09-14-0029-i1",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.0041400000000000005,
+                "claude-opus-5": 1.28034125
+              },
+              "costUSD": 1.28448125,
+              "turns": 2,
+              "subagents": 1,
+              "outcome": "error 429",
+              "gate": "pass"
             }
           ]
         },
