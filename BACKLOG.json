@@ -264,7 +264,7 @@
     {
       "id": "open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr",
       "title": "Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting",
-      "status": "review",
+      "status": "active",
       "sourceIdeaId": "idea-1789305113892",
       "prepDir": "docs/plans/open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr",
       "feedback": [
@@ -273,6 +273,12 @@
           "author": "user",
           "decision": "changes",
           "text": "Sorry, I moved 'plan review' step from progress to done. Looks like you didn't finish it yet, so I rejecting it for you to move it to done when you ready. As for now it looks great!"
+        },
+        {
+          "at": "2026-09-14T08:26:43.992Z",
+          "author": "user",
+          "decision": "approve",
+          "text": ""
         }
       ],
       "tasks": [
@@ -643,7 +649,7 @@
           "id": "plan-open-space-boost-shift-burst-movement-on-an-upgradeable",
           "head": "Plan: Open-space boost: Shift burst movement on an upgradeable boost meter",
           "body": "Consume the research and write the implementation plan to `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.",
-          "state": "in_progress",
+          "state": "done",
           "badge": null,
           "planDir": "docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos",
           "kind": "prep",
@@ -653,7 +659,25 @@
           "dependsOn": [
             "research-open-space-boost-shift-burst-movement-on-an-upgrade"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [],
+              "at": "2026-09-14T08:04:41.811Z",
+              "run": "2026-09-14-1029-i3",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003928,
+                "claude-opus-5": 1.404344
+              },
+              "costUSD": 1.408272,
+              "turns": 20,
+              "subagents": 0,
+              "outcome": "error 429",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "plan-review-open-space-boost-shift-burst-movement-on-an-upgr",
@@ -668,6 +692,100 @@
           "model": "opus",
           "dependsOn": [
             "plan-open-space-boost-shift-burst-movement-on-an-upgradeable"
+          ],
+          "runs": []
+        },
+        {
+          "id": "shift-slams-your-ship-onto-its-new-heading-and-launches-it",
+          "head": "Shift slams your ship onto its new heading and launches it",
+          "body": "The core verb, with no meter yet. Plan: `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/3-plan.md`\n(sections **Design → The one decision**, **The speed cap**, **Where Input is read**, **What is deleted**).\n\nDONE WHEN a player in the sector hub can press Shift and have the ship's momentum snap onto the\nnose's heading at `boost_exit_speed = 700` px/s (vs `max_speed = 420`), with the cyan `flame_boost`\nanimation and both `ThrusterEffect`s in `BOOST` for `boost_hold_sec = 0.35` s — so a 180° turn plus\nShift replaces the ~3.0 s manual reversal — and all ten cases of the new\n`tests/integration/test_open_space_boost_verb.gd` pass.\n\nTouches:\n- `project.godot` `[input]` — new `boost` action on Shift (`physical_keycode 4194325`). Third\n  action on that key; deliberate, argued in the plan.\n- `open_space/scenes/entities/player/player_ship.gd` — new `@export`s (`boost_exit_speed`,\n  `boost_hold_sec`, `boost_ceiling_decay`); new `_step_boost(boost_pressed: bool, delta: float)`\n  holding the whole model; `_handle_thrust()` reads `Input.is_action_just_pressed(\"boost\")` in\n  **exactly one place** and calls `_step_boost()` last; `_step_boost()` takes over the tail speed\n  clamp via the decaying `_speed_ceiling` (there must be exactly one clamp when you are done).\n- **Delete** `_trigger_flip_boost()`, its `move_up`-just-pressed trigger, and the\n  `boost_redirect_speed` / `boost_speed_threshold` exports. Rename `boost_duration_sec` →\n  `boost_hold_sec`.\n- New `tests/integration/test_open_space_boost_verb.gd`.\n\nDo NOT: set or add anything like `engine_boost_active` (it is read-only here — a module boost wins\nand `_handle_thrust` already returns early); edit `global/entities/player_base.gd`; edit\n`global/ship_modules/engine_boost_module.gd` or anything in `assault/`; touch the `damping` line.\n\nWrite the regression case first — `ship.has_method(\"_trigger_flip_boost\")` is false and\n`\"boost_speed_threshold\" not in ship` — and the cruise-boost boundary case\n(`velocity = UP * 420`, boost, `velocity.length() > max_speed`). Both fail on today's build.\n\n**Re-read `player_ship.gd` and `player_ship.tscn` from HEAD before editing** — the mouse-aiming\nepic lands first and moves these line numbers (it deletes `_ready()`'s `rotation = 0.0`; boost\nreads `rotation` for facing, which is fine). **Do not work this in the same window as a\nmouse-aiming task.**\n\nInvoke `updating-project-docs`: this adds an input action and a movement verb that\n`docs/architecture/modules/open_space.md` enumerates.\n\nThe numbers are `@export`s on purpose — the gate cannot say whether 700 px/s feels right. Say so in\nthe report and leave them for a human fly-test.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "medium",
+          "model": "opus",
+          "dependsOn": [],
+          "runs": []
+        },
+        {
+          "id": "boosting-costs-a-charge-and-charges-come-back-on-their-own",
+          "head": "Boosting costs a charge, and charges come back on their own",
+          "body": "The cost. Plan section **Design → The meter: `BoostMeter`, a component beside the ship**.\n\nDONE WHEN each Shift boost spends one charge from a 2-charge meter, an empty meter refuses the\nboost outright (nothing happens, nothing is spent, W/S still fly the ship), charges refill at 0.7\nper second starting 0.5 s after the last boost — empty to full in ~3.4 s — and both new test files\npass.\n\nTouches:\n- New `open_space/scenes/entities/player/boost_meter.gd` — `class_name BoostMeter extends Node`.\n  `signal charges_changed(current: float, maximum: int)` (declared with its parameters —\n  `tests/integration/test_signal_emit_arity.gd` sweeps this). `@export`s `recharge_rate`,\n  `recharge_delay_sec`, `bind_progression`. API `can_spend()`, `try_spend()`, `step(delta)`.\n  Continuous internal float, whole-unit spends.\n- `open_space/scenes/entities/player/player_ship.tscn` — add the `BoostMeter` child node.\n- `player_ship.gd` — `_step_boost()` calls `meter.step(delta)` and gates the trigger on\n  `meter.try_spend()`, replacing step 1's `boost_hold_sec`-only floor (the hold window stays, as\n  the flame window and a retrigger floor).\n- New `tests/unit/test_boost_meter.gd` (tree-less `BoostMeter.new()`, `free()` in `after_each`).\n- New `tests/integration/test_open_space_boost_wiring.gd`.\n\n`BoostMeter` must NOT define its own `_physics_process` — the ship drives `step()`. That is a\ndeliberate difference from `Overheat`, because `set_physics_process(false)` on the ship (which\n`MissionTrigger._open_menu()` calls) does not stop a child's own physics tick, and because a\nhand-driven `step()` is what makes the component unit-testable headless. It must also read no\n`Input` and touch no tree.\n\n`bind_progression` exists now but has nothing to bind to yet — default it `false` here and leave\nthe `ShipProgressionState` hookup to the persistence task. `max_charges` starts at 2.\n\nWrite `tests/integration/test_open_space_boost_wiring.gd` FIRST — it is the anti-inert test, and\nthe unit tests are all green on a build where `BoostMeter` is never added to `player_ship.tscn`.\nFind the node **by class, not by node path**. Its two boundary cases matter most: an empty meter\nleaves `velocity` untouched, and a boost refused because `engine_boost_active` is true burns no\ncharge.\n\nRun `scripts/check-test-leaks.sh` if any test awaits.\n\nInvoke `updating-project-docs`: a new component class in the ship scene, which\n`docs/architecture/modules/open_space.md` and `global.md` enumerate.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "medium",
+          "model": "opus",
+          "dependsOn": [
+            "shift-slams-your-ship-onto-its-new-heading-and-launches-it"
+          ],
+          "runs": []
+        },
+        {
+          "id": "a-cyan-pip-bar-under-your-ship-shows-how-many-boosts-you-hav",
+          "head": "A cyan pip bar under your ship shows how many boosts you have left",
+          "body": "The readout. Plan section **Design → The bar**.\n\nDONE WHEN the player can see their boost charges as cyan pips in a 32x4 bar drawn just below the\nexisting overheat bar under the hull, the partially-recharged pip fills smoothly as it recovers,\nand `tests/integration/test_boost_bar.gd` passes.\n\nTouches:\n- New `open_space/scenes/gui/boost_bar.gd` — `class_name BoostBar extends Node2D`, modelled on\n  `assault/scenes/player/overheat_bar.gd`: `_draw()` with a dark backing rect, `BAR_WIDTH 32`,\n  `BAR_HEIGHT 4`, split into `max_charges` segments with a 1 px gap, filled segments in the\n  thruster cyan `Color(0.35, 0.9, 1.0)`. `setup(meter: BoostMeter)` connects\n  `charges_changed`; the segment count follows the signal's `maximum` argument so a mid-session\n  upgrade widens the bar with no extra wiring.\n- `player_ship.gd::_ready()` — create it exactly as `_overheat_bar` is created (`top_level = true`,\n  `add_child`), and in `_physics_process` position it at `global_position + Vector2(0, 26)`.\n- New `tests/integration/test_boost_bar.gd`.\n\n**Where it goes is settled, do not re-litigate it.** The epic asks for the bar \"near the existing\nweapon overheat meter\"; in open space the overheat meter is a world-space bar under the ship at\n`(0, 20)`, NOT a HUD element — `open_space/scenes/gui/hud.tscn` has no overheat element at all.\nPutting this in the HUD would satisfy the words and break the intent.\n\nThe bar is always visible, including at full charges. A resource readout that hides itself is the\nfailure the epic exists to fix. Pin that in a test.\n\nThe overlap boundary case needs the ship in the tree for one physics frame; assert the two bars'\n`global_position.y` differ by at least `OverheatBar.BAR_HEIGHT`.\n\nInvoke `updating-project-docs`: a new UI class under `open_space/scenes/gui/`.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "small",
+          "model": "sonnet",
+          "dependsOn": [
+            "boosting-costs-a-charge-and-charges-come-back-on-their-own"
+          ],
+          "runs": []
+        },
+        {
+          "id": "extra-boost-charges-you-earn-stay-with-your-ship-between-run",
+          "head": "Extra boost charges you earn stay with your ship between runs",
+          "body": "The persistence. Plan section **Design → Persistence and the upgrade**.\n\nDONE WHEN the ship's boost capacity is a saved stat (2 at base, 5 at cap) that survives quitting\nthe game, raising it mid-flight immediately widens the live meter AND grants the new charge right\naway rather than next session, and the new cases in `tests/unit/test_ship_progression_state.gd`\nand `tests/unit/test_boost_meter.gd` pass.\n\nTouches:\n- `global/autoloads/ship_progression_state.gd` — a **second key on the existing ConfigFile**, not a\n  new autoload: `KEY_BOOST`, `MIN_BOOST_CHARGES = 2`, `MAX_BOOST_CHARGES = 5`,\n  `signal boost_charge_count_changed(new_count: int)`, `boost_charge_count` getter,\n  `set_boost_charge_count()` (clamp, no-op when unchanged, save, emit) and `add_boost_charge()`\n  (false at cap). Mirror the shield stat line for line, including the out-of-range\n  `push_warning` on load. `_save()` writes both keys; `_load()` reads and clamps both independently.\n- `open_space/scenes/entities/player/boost_meter.gd` — flip `bind_progression` to `true` by\n  default and implement `_ready()` / `_on_progression_changed()` copying\n  `global/components/shield_component.gd:38-46` and `:116-124`, **including the immediate grant of\n  the new charge**.\n- `open_space/scenes/entities/player/player_ship.tscn` — set `bind_progression = true` on the node\n  if it is not the resource default.\n- Extend `tests/unit/test_ship_progression_state.gd` and `tests/unit/test_boost_meter.gd`.\n\nEvery test here touches a `user://`-persisting autoload, so it MUST use\n`tests/helpers/save_sandbox.gd` (`tests/README.md`).\n\nThree boundary cases are the point of this task: `add_boost_charge()` at the cap returns false and\nemits **nothing**; a saved value of 99 clamps on load; and adding a boost charge does not disturb\n`permanent_shield_count`, because the two stats share one `ConfigFile`.\n\nInvoke `updating-project-docs`: `docs/architecture/modules/global.md` documents the autoload's\ncontract.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "small",
+          "model": "sonnet",
+          "dependsOn": [
+            "boosting-costs-a-charge-and-charges-come-back-on-their-own"
+          ],
+          "runs": []
+        },
+        {
+          "id": "a-pickup-in-the-hub-permanently-adds-a-boost-charge",
+          "head": "A pickup in the hub permanently adds a boost charge",
+          "body": "The source. Plan section **Design → Persistence and the upgrade** (pickup paragraph).\n\nDONE WHEN the player can fly into a collectible on the sector hub's pickup bench, see the \"+1\nboost\" notification, watch the pip bar gain a segment on the spot, and still have that charge after\nrestarting the game — and `tests/integration/test_boost_upgrade_source.gd` passes.\n\nTouches:\n- New `global/pickups/ship_boost_up_pickup.gd` — `class_name ShipBoostUpPickup extends PickupBase`,\n  a near-verbatim copy of `ship_shield_up_pickup.gd`: `_collect()` calls\n  `ShipProgressionState.add_boost_charge()`, `_get_dialog_text()` returns the notification line.\n- New `global/pickups/scenes/ship_boost_up_pickup.tscn` — copy\n  `scenes/ship_shield_up_pickup.tscn`: `Area2D` `collision_layer = 16`, `collision_mask = 4`,\n  `Sprite2D`, `CollisionShape2D` with a `CircleShape2D` radius 8 at `scale = 3.111`.\n  **v1 reuses the existing `global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_engine_boost.png`**\n  (40x30) scaled to roughly match the shield pickup's 48x48 on-screen size. Do not generate art in\n  this task — that is its own, droppable task.\n- `open_space/scenes/levels/sector_hub.tscn` — instance it on the bench row at\n  `position = Vector2(620, -212)`. The row currently runs x = 27, 104, 205, 304, 413, 519.\n- New `tests/integration/test_boost_upgrade_source.gd`, in the same family as\n  `tests/integration/test_module_unlock_sources.gd`.\n\n**Never hand-type a `uid://` and never copy one from a sibling file.** Leave the new `.tscn`\nUID-less (legal) or mint one with the headless `ResourceUID.create_id()` snippet in\n`tests/README.md`. `tests/integration/test_resource_uid_integrity.gd` and\n`test_project_load_integrity.gd` both see this file.\n\nThe second test case is the one that matters: every placement test passes on a pickup whose\n`_collect()` is empty, so collect a **real instance against the live (sandboxed) autoload** and\nassert the count went up. Copy that pattern from `test_weapon_unlock_sources.gd`.\n\nInvoke `updating-project-docs`: a new pickup, which `docs/architecture/modules/global.md`\nenumerates.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "small",
+          "model": "sonnet",
+          "dependsOn": [
+            "extra-boost-charges-you-earn-stay-with-your-ship-between-run"
+          ],
+          "runs": []
+        },
+        {
+          "id": "the-boost-up-pickup-has-its-own-sprite-instead-of-a-borrowed",
+          "head": "The boost-up pickup has its own sprite instead of a borrowed menu icon",
+          "body": "Cosmetic finish. **Optional and droppable** — the feature is complete and playable without it, and\nthis task spends the capped monthly PixelLab allowance irreversibly. Drop it if the allowance is\ntight.\n\nDONE WHEN the boost-up collectible on the hub bench reads as its own thing rather than a menu icon\nsomeone dropped into the world, matching the visual weight of `ship_shield_up.png` (48x48) next to\nit on the same row.\n\nTouches:\n- One new sprite under `global/assets/sprites/`.\n- `global/pickups/scenes/ship_boost_up_pickup.tscn` — swap the `Sprite2D` texture and drop the\n  scale workaround the previous task added.\n\n**Invoke the `pixel-art-generation` skill before generating anything.** `open_space/` is strict\ntop-down orthographic and NEVER isometric; the skill enforces that with explicit PixelLab\nparameters (`view: \"high top-down\"`, `isometric: false`), picks the right tool for a single small\nobject, and covers saving the binary safely via `scripts/pixellab.sh` (the Write tool corrupts\nPNGs). **Open the generated image and look at it before committing** — a wrong-angle sprite cannot\nbe fixed in code.\n\nRead cyan/blue to match the thruster's boost palette `Color(0.35, 0.9, 1.0)` and the pip bar, so\nthe pickup and the resource it feeds are visibly the same system.\n\nCheck it against `tests/integration/test_entity_sprite_transparency.gd`'s rule (no painted-in\nbackground) even though a pickup under `global/` is outside that test's roots — a card of opaque\nbackground cut out of the starfield looks just as wrong here.",
+          "state": "todo",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "art",
+          "complexity": "small",
+          "model": "sonnet",
+          "dependsOn": [
+            "a-pickup-in-the-hub-permanently-adds-a-boost-charge"
           ],
           "runs": []
         }
