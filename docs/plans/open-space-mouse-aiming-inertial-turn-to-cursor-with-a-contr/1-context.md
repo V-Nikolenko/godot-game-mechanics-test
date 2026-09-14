@@ -29,8 +29,8 @@ overall feel "responsive but inertia-based, inspired by Jet Lancer".
 | `global/ship_modules/warp_module.gd` | Sets `warp_module_active`; the blink is driven by `MovementController.action_double_press`, which in open space **has no consumer** (no `DashState` in `player_ship.tscn`). | So the Warp module is inert in open space today, and double-tap A/D is free. Relevant because the plan must decide what A/D *do* under the mouse scheme. |
 | `assault/scenes/player/weapons/behaviors/*.gd` | `StraightBehavior:16`, `SpreadBehavior:15`, `SniperBehavior`, `BeamBehavior:53` all spawn from `Vector2.UP.rotated(actor.rotation)` / `actor.rotation + jitter`. `RocketState._launch_warhead()` likewise (`rocket.rotation = actor.rotation`). | **"Weapons follow facing, not the cursor" is already true** and stays true as long as the mouse only writes `rotation`. No weapon code should be touched. Any design that aims a weapon at the cursor directly would break this requirement. |
 | `assault/scenes/player/movement_controller.gd` | Polls `Input.is_action_just_pressed` over `move_*`, `special_weapon`, `switch_weapon`, `cycle_weapon`; emits `action_single_press(String)` / `action_double_press(String)`. | Shared with assault. It polls **actions**, not devices, so it is untouched by this work — but it is a reminder that input here is action-based, and `shoot` already has **LMB bound** in `project.godot` alongside `J`. |
-| `assault/scenes/player/player_fighter.gd` | The assault player. Grep for `rotation` returns **nothing**. | Mode isolation confirmed from the other side: the assault ship has no rotation to corrupt. Infiltration likewise uses its own controller. |
-| `project.godot` | `[input]` has 20 actions; the only mouse binding anywhere is LMB on `shoot`. `[display]`: viewport 1280×720, window override 1920×1080, `stretch/mode="canvas_items"`. `[autoload]`: 11 entries. | A new autoload is a `project.godot` edit. The stretch mode matters: `Node2D.get_global_mouse_position()` accounts for the canvas transform and stretch, so it is correct at any window size — a raw `DisplayServer.mouse_get_position()` would not be. |
+| `assault/scenes/player/player_fighter.gd` | The assault player (`class_name AssaultPlayer extends PlayerBase`). The **file** contains no `rotation` reference, but `:29-35` apply every equipped `ShipModuleState` module to the fighter, `:92-93` tick them and `:108-118` call `try_activate(self)` on `use_ability`. | **Corrected 2026-09-14 (plan review B3).** The earlier claim "the assault ship has no rotation to corrupt" was true of the file and false of the system: activating **AI Targeting** in an assault mission runs `ai_targeting_module.gd:38` against the fighter and writes its `rotation` today. Mode isolation holds for the *turn model* (`player_ship.tscn` is instantiated only by `sector_hub.tscn`) but **not** for `global/ship_modules/`, which both players share. Any edit to `ai_targeting_module.gd` is an edit to assault. Infiltration uses its own controller and shares no modules. |
+| `project.godot` | `[input]` has 20 actions; the only mouse binding anywhere is LMB on `shoot`. `[display]`: viewport 1280×720, window override 1920×1080, `stretch/mode="canvas_items"`. `[autoload]`: **10** entries (corrected 2026-09-14; `docs/architecture/modules/global.md:70` says "All ten", which is right). | A new autoload is a `project.godot` edit. The stretch mode matters: `Node2D.get_global_mouse_position()` accounts for the canvas transform and stretch, so it is correct at any window size — a raw `DisplayServer.mouse_get_position()` would not be. |
 
 ## Existing code to reuse
 
@@ -72,7 +72,7 @@ overall feel "responsive but inertia-based, inspired by Jet Lancer".
 **Contained.** The mode-isolation requirement is satisfied by the existing structure, not by new code:
 
 - `player_ship.tscn` is instantiated by exactly one scene (`sector_hub.tscn`).
-- The assault player has no rotation at all; infiltration has its own controller.
+- The assault player's own script never touches rotation and infiltration has its own controller — but **both players share `global/ship_modules/`**, so a module edit is cross-mode (see the `player_fighter.gd` row above).
 - Weapons already fire from `actor.rotation`, so restricting the mouse to *writing rotation only*
   keeps the "weapons follow facing" requirement true with zero weapon-code change.
 
@@ -143,7 +143,7 @@ concurrently in the same window.
 - Scheme flipped mid-flight → no rotation jump, no stranded angular velocity.
 - Frame-rate independence: the same wall-clock turn from 1/60 s steps and 1/30 s steps (see
   `2-research.md` finding 3 — a raw `lerp(rotation, target, 0.1)` fails this).
-- Assault and infiltration unaffected — cheap to assert, because their players expose no rotation.
+- Assault and infiltration unaffected. Cheap for the *turn model* (their players never instance `ShipTurnController`); **not** free for `global/ship_modules/` — an `ai_targeting_module.gd` edit must leave the assault fighter's snap byte-for-byte identical, and nothing tests that today.
 
 **Testing requirements (the hard constraint)**
 

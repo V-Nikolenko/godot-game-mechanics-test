@@ -426,6 +426,23 @@
               "subagents": 1,
               "outcome": "error 429",
               "gate": "pass"
+            },
+            {
+              "commits": [],
+              "at": "2026-09-14T02:39:44.132Z",
+              "run": "2026-09-14-0529-i1",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.025807999999999998,
+                "claude-opus-5": 4.247125500000001
+              },
+              "costUSD": 4.272933500000001,
+              "turns": 10,
+              "subagents": 1,
+              "outcome": "error 429",
+              "gate": "pass"
             }
           ]
         },
@@ -517,7 +534,7 @@
           "kind": "impl",
           "type": "feature",
           "complexity": "medium",
-          "model": "sonnet",
+          "model": "opus",
           "dependsOn": [
             "the-game-remembers-which-steering-scheme-you-fly-with"
           ],
