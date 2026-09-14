@@ -332,7 +332,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       DONE WHEN: `tests/integration/test_pause_menu_settings.gd` passes with every case in the plan's test plan for that file - including the one that drives the LIVE `SettingsState` through `menu_right` (a settings row whose handler is empty passes every "is it visible and labelled" assertion), and the one proving `menu_confirm` does not fall through while the panel is open. Sandboxed via `tests/helpers/save_sandbox.gd`. Gate green, and `updating-project-docs` run - this adds a UI component to a shared module.
       after: the-game-remembers-which-steering-scheme-you-fly-with
 
-## Open-space boost: Shift burst movement on an upgradeable boost meter  [DRAFT - preparation in progress]  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 7 open)
+## Open-space boost: Shift burst movement on an upgradeable boost meter  [AWAITING YOUR REVIEW]  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 6 open)
 
 **Preparation**
 
@@ -351,7 +351,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos](docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos)
       2 run(s), $5.04; last on claude-opus-5
 
-- [ ] **Plan review: Open-space boost: Shift burst movement on an upgradeable boost meter** _(in progress - plan-review)_
+- [x] **Plan review: Open-space boost: Shift burst movement on an upgradeable boost meter** _(done - plan-review)_
       Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.
       after: plan-open-space-boost-shift-burst-movement-on-an-upgradeable
       -> [docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos](docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos)

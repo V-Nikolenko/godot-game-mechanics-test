@@ -577,7 +577,7 @@
     {
       "id": "open-space-boost-shift-burst-movement-on-an-upgradeable-boos",
       "title": "Open-space boost: Shift burst movement on an upgradeable boost meter",
-      "status": "draft",
+      "status": "review",
       "sourceIdeaId": "idea-1789305251413",
       "prepDir": "docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos",
       "feedback": [],
@@ -705,7 +705,7 @@
           "id": "plan-review-open-space-boost-shift-burst-movement-on-an-upgr",
           "head": "Plan review: Open-space boost: Shift burst movement on an upgradeable boost meter",
           "body": "Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.",
-          "state": "in_progress",
+          "state": "done",
           "badge": null,
           "planDir": "docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos",
           "kind": "prep",
