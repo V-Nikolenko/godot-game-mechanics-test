@@ -610,6 +610,32 @@
               "subagents": 0,
               "outcome": "success",
               "gate": "pass"
+            },
+            {
+              "commits": [
+                {
+                  "sha": "8657358",
+                  "subject": "agent: mark boost research task done"
+                },
+                {
+                  "sha": "f558923",
+                  "subject": "Research the open-space Shift boost epic: context and prior art"
+                }
+              ],
+              "at": "2026-09-14T08:01:33.666Z",
+              "run": "2026-09-14-1029-i2",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.19680500000000004,
+                "claude-opus-5": 7.9959815
+              },
+              "costUSD": 8.192786500000002,
+              "turns": 85,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
             }
           ]
         },
@@ -617,7 +643,7 @@
           "id": "plan-open-space-boost-shift-burst-movement-on-an-upgradeable",
           "head": "Plan: Open-space boost: Shift burst movement on an upgradeable boost meter",
           "body": "Consume the research and write the implementation plan to `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
           "planDir": "docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos",
           "kind": "prep",
