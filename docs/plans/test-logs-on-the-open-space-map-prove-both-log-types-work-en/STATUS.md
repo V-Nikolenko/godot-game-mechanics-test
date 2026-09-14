@@ -12,7 +12,17 @@
 - [ ] 5. Gate green
 - [ ] 6. Docs updated, task ticked
 
-**Important scope note:** `LoreLogPickup` — the pickup class this task needs to place lore logs
+**Superseded scope note (2026-09-15):** the paragraph below described the state as of this task's
+last cycle — it no longer holds. The sibling task
+`flying-into-a-log-record-in-open-space-picks-it-up-and-tells` got its own stuck review
+unblocked in its own cycle and shipped `global/pickups/lore_log_pickup.gd`,
+`global/pickups/scenes/lore_log_pickup.tscn`, `global/assets/sprites/lore_log.png`, and
+`tests/unit/test_lore_log_pickup.gd` itself, then closed its own `STATUS.md`/backlog state. **This
+task must not rebuild those files or attempt to close out that task** — see `5-progress.md`,
+steps 1-5 are already done. Resume at step 6 (author the 3 `LogEntryResource` `.tres` files) using
+the pickup as shipped.
+
+~~**Important scope note:** `LoreLogPickup` — the pickup class this task needs to place lore logs
 — does not exist yet. It was the sole deliverable of the sibling task
 `flying-into-a-log-record-in-open-space-picks-it-up-and-tells`, which stopped after two review
 rounds on a test-leak issue in its **test case 4 only** (see that task's `STATUS.md` and
@@ -21,6 +31,7 @@ reviewer's second round ends with a precise, named fix for the test. This task's
 carries that design forward unchanged (attributed, not re-litigated) with the reviewer's own
 recommended fix applied, because building it is a hard prerequisite for placing any lore log in
 the hub. On completion this task also closes out that sibling task's `STATUS.md` and backlog
-state, since its entire scope ships here.
+state, since its entire scope ships here.~~
 
-**Next action:** dispatch independent review of `3-plan.md`.
+**Next action:** implement step 6 onward per `3-plan.md` (catalogue `.tres` files, hub placement,
+`tests/integration/test_hub_log_placement.gd`), skipping the plan's steps 1-5, which are done.

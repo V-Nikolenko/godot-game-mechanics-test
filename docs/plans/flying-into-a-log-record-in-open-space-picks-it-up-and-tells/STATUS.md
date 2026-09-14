@@ -7,12 +7,28 @@
 
 - [x] 1. Context gathered → `1-context.md`
 - [x] 2. Plan written → `3-plan.md`
-- [ ] 3. Reviewed and APPROVED → `4-review.md` — **BLOCKED, see below**
-- [ ] 4. Implemented → `5-progress.md`
-- [ ] 5. Gate green
-- [ ] 6. Docs updated, task ticked
+- [x] 3. Reviewed and APPROVED → `4-review.md` (round 3, after fix (a) applied to case 4)
+- [x] 4. Implemented → `lore_log_pickup.gd`, `lore_log_pickup.tscn`, `lore_log.png`,
+  `tests/unit/test_lore_log_pickup.gd`
+- [x] 5. Gate green (`bash /agent/verify.sh`, 440/440 GUT tests, `scripts/check-test-leaks.sh`
+  clean)
+- [x] 6. Docs updated (`docs/architecture/modules/global.md` pickups table), task ticked done
 
-## Blocked — two review rounds, neither approved
+**Done.** See the final report for detail. The sibling task
+`test-logs-on-the-open-space-map-prove-both-log-types-work-en` had planned to build this same
+pickup itself and close this task out on completion (see its `STATUS.md` history) — that premise
+is now stale since this task shipped its own scope directly; its `STATUS.md`/`5-progress.md` have
+been updated accordingly so it resumes at hub placement instead of rebuilding the pickup.
+
+## Resolved — round 3 approved
+
+Case 4 revised to pre-set `DialogPlayer.is_active = true` before calling `_on_body_entered()`,
+which makes `_show_notification()`'s existing guard short-circuit before `DialogPlayer.play()` is
+ever called — no coroutine starts, so there is no suspended-await leak and no timing hazard.
+Round 3 review (`4-review.md`) confirms this by tracing the exact call path. Proceeding to
+implementation.
+
+## History — two earlier review rounds, neither approved
 
 Round 1 (`4-review.md`): `VERDICT: CHANGES_REQUESTED` — test case 4 (driving the real
 `_on_body_entered()` end-to-end) starts a real `DialogPlayer.play()` coroutine that awaits

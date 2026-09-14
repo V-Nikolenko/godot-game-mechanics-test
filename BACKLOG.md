@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 2 open)
+## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 1 open)
 
 - [x] **Every log record I find stays found, and the game knows how many are left** _(done - feature, medium, sonnet)_
       **Player outcome:** Logs I picked up three missions ago are still mine after quitting and
@@ -106,7 +106,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m](docs/plans/every-log-record-i-find-stays-found-and-the-game-knows-how-m)
       1 run(s), $3.03; last on claude-sonnet-5
 
-- [ ] **Flying into a log record in open space picks it up and tells me what I found** _(in progress - feature, medium, sonnet)_
+- [x] **Flying into a log record in open space picks it up and tells me what I found** _(done - feature, medium, sonnet)_
       **Player outcome:** a log record floating in the sector hub is visually readable as
       "something to collect", flying into it picks it up, and a one-line notification tells me what I
       just recovered without stopping the ship.
@@ -332,7 +332,11 @@ the signal that the change was deliberate. Test names are given so the fix has a
       DONE WHEN: `tests/integration/test_pause_menu_settings.gd` passes with every case in the plan's test plan for that file - including the one that drives the LIVE `SettingsState` through `menu_right` (a settings row whose handler is empty passes every "is it visible and labelled" assertion), and the one proving `menu_confirm` does not fall through while the panel is open. Sandboxed via `tests/helpers/save_sandbox.gd`. Gate green, and `updating-project-docs` run - this adds a UI component to a shared module.
       after: the-game-remembers-which-steering-scheme-you-fly-with
 
-## Open-space boost: Shift burst movement on an upgradeable boost meter  [AWAITING YOUR REVIEW]  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 6 open)
+## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 6 open)
+
+**Review history**
+
+- _2026-09-14T20:57:44.351Z_ **approve**
 
 **Preparation**
 
@@ -355,7 +359,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.
       after: plan-open-space-boost-shift-burst-movement-on-an-upgradeable
       -> [docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos](docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos)
-      1 run(s), $5.59; last on claude-opus-5
+      2 run(s), $16.76; last on claude-opus-5
 
 **Implementation**
 

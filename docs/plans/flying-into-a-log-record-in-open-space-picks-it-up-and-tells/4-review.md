@@ -159,3 +159,69 @@ implemented it incorrectly.
 - Build sequence (`3-plan.md:75-85`) is unaffected by this issue and still internally consistent.
 - Everything else re-verified against round 1 (art, scene shape, scope boundary, `LogState`
   reuse) is unchanged from round 1's plan and still holds.
+
+## Round 3
+
+VERDICT: APPROVED
+
+### Verified: pre-setting `DialogPlayer.is_active = true` before `_on_body_entered()` is a correct fix, with no ordering hazard
+
+`3-plan.md:114-124` now implements option (a) from round 2's recommendation: set
+`DialogPlayer.is_active = true` before calling `_on_body_entered(player_stub)` on an in-tree
+`LoreLogPickup`, then restore it to `false` afterward. I traced the exact call path this produces
+rather than trusting the plan's prose, the same way round 1 and round 2 did.
+
+- `_on_body_entered` (`pickup_base.gd:20-39`) is entirely synchronous — no `await` anywhere in
+  the file. It calls `_collect(player)` first (line 29), then, only if `_get_dialog_text()` is
+  non-empty, calls `_show_notification(text)` (line 38).
+- `_show_notification` (`pickup_base.gd:60-73`) checks `if DialogPlayer.is_active: return` as its
+  *first statement* (lines 63-64), before constructing any `DialogLineResource` /
+  `DialogScriptResource` and before ever referencing `DialogPlayer.play`. With `is_active`
+  pre-set `true`, this guard fires and the function returns immediately. `DialogPlayer.play()` is
+  never called at all — not entered and then aborted, simply never invoked.
+- Even if it were invoked, `play()`'s own first statement (`dialog_player.gd:37-39`) is the same
+  kind of synchronous guard: `if is_active: push_warning(...); return`. A GDScript function that
+  returns before reaching its first internal `await` completes synchronously in the same call
+  frame — no `GDScriptFunctionState` is created, so there is nothing left suspended. This is
+  categorically different from round 2's `skip_dialog()` approach, which tried to act on a
+  coroutine *after* `play()` had already progressed into `present_line()`'s fade-in await; here,
+  the coroutine body past the guard clause never executes, so there is no "which await is it
+  parked on right now" question to get wrong.
+- Because `_collect(player)` runs *before* the `_show_notification` guard is even reached, the
+  test's assertions (`is_queued_for_deletion()` true, `LogState.collected_count() == 1`) still
+  exercise the real `_collect` → mark → `queue_free` wiring through `PickupBase`, which was case
+  4's stated purpose. Nothing about suppressing the notification weakens that.
+- Restoring `DialogPlayer.is_active = false` afterward is correct and necessary, not just tidy:
+  `tests/unit/test_dialog_player.gd:15` (`before_each`) asserts
+  `assert_false(DialogPlayer.is_active, "DialogPlayer starts each test idle")` against the same
+  live autoload (confirmed singleton, `project.godot:25`:
+  `DialogPlayer="*res://global/autoload/dialog_player.gd"`), so a leaked `true` would break that
+  file if it runs afterward in the same suite process.
+- No coroutine is created, so there is nothing for `scripts/check-test-leaks.sh` to catch here —
+  running it is still reasonable due diligence per CLAUDE.md's "after touching anything that
+  awaits," but this specific case introduces no new await.
+
+### Fixture and citation check
+
+- `tests/unit/fixtures/log_entries/entry_b.tres`: `id = &"entry_beta"`, `sequence = 0` (lowest),
+  `title = "Test Entry Beta"` — matches the plan's cases 1-2 and is independently confirmed by
+  `tests/unit/test_log_state.gd:60` (`"lowest sequence value goes first"`).
+- Both line citations in the revised case 4 and Risks section resolve exactly as claimed:
+  `pickup_base.gd:63-64` is the `if DialogPlayer.is_active: return` guard, and
+  `dialog_player.gd:37-39` is `play()`'s own `if is_active: push_warning(...); return`.
+
+### Final skim of the rest of the plan
+
+No drift found outside case 4 and the Risks paragraph — Design, Rejected alternative, Scene, Art,
+Build sequence, cases 1-3, and Out of scope are byte-for-byte what rounds 1-2 already reviewed and
+did not flag. No new `@export`, no hand-typed/copied `uid://`, no new signal declarations.
+
+### Nit (non-blocking)
+
+Case 4's restore step (`DialogPlayer.is_active = false`) has no `try`/`finally` equivalent in
+GDScript, so it only runs if execution reaches that line. This is consistent with how every other
+test in this suite handles autoload-state restoration (e.g. `test_weapon_unlock_sources.gd`'s
+`UpgradeState._unlocked` snapshot/restore has the same property) and GUT's `assert_*` calls do not
+abort the test function on failure, so a failed assertion earlier in case 4 would still fall
+through to the restore line. Not a defect, just worth knowing if a future case in this file adds an
+early `return` before the restore.

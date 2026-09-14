@@ -112,25 +112,29 @@ Cases:
    the player: assert `LogState.collected_count()` is unchanged (still 3, never 4) and
    `_get_dialog_text()` returns `""` (no false notification).
 4. **`_on_body_entered` end-to-end**: add the pickup as a child of the test tree
-   (`add_child_autofree`), call `_on_body_entered(player_stub)` (the real `PickupBase` signal
-   handler, not `_collect` directly) once, and assert the pickup is queued for deletion
-   (`is_queued_for_deletion()`) and `LogState.collected_count() == 1` — proves the wiring through
-   `PickupBase`, not just the overridden hooks in isolation. Immediately after, call
-   `DialogPlayer.skip_dialog()` and assert `DialogPlayer.is_active == false`, so the
-   `await _box.line_finished` inside `DialogPlayer.play()` actually resolves before the test ends
-   instead of leaving a permanently-suspended coroutine.
+   (`add_child_autofree`), set `DialogPlayer.is_active = true` **before** calling it so
+   `_show_notification()`'s existing guard (`pickup_base.gd:63-64`: "skip silently if another
+   dialog is already running") short-circuits and `DialogPlayer.play()` is never entered — its own
+   first line (`dialog_player.gd:37-39`) is a synchronous `if is_active: push_warning(...); return`
+   with no coroutine ever started, so this is not a timing race the way skip_dialog() was. Then
+   call `_on_body_entered(player_stub)` (the real `PickupBase` signal handler, not `_collect`
+   directly) once, and assert the pickup is queued for deletion (`is_queued_for_deletion()`) and
+   `LogState.collected_count() == 1` — proves the wiring through `PickupBase` (collect + mark +
+   queue_free), not just the overridden hooks in isolation. Restore `DialogPlayer.is_active = false`
+   afterward so the flag doesn't leak into later tests.
 
 ## Risks
 
-- The live `DialogPlayer` autoload starts an async `play()` when `_on_body_entered` runs (test
-  case 4), and its non-auto-mode branch awaits `_box.line_finished`, which nothing but player
-  input, `DialogBox.advance()`/`close_now()`, or `DialogPlayer.skip_dialog()` ever emits. Case 4
-  must call `DialogPlayer.skip_dialog()` before the test ends to resolve that await — otherwise
-  it leaves a suspended `GDScriptFunctionState`, the same leak class `tests/README.md` and
+- Case 4 must not let `DialogPlayer.play()` actually start, or its non-auto-mode branch's
+  `await _box.line_finished` (nothing in a synchronous test resolves it) leaves a permanently
+  suspended `GDScriptFunctionState` — the same leak class `tests/README.md` and
   `scripts/check-test-leaks.sh` document for `LevelDirector` (invisible to the gate's `FATAL`
-  regex, reported only at process exit) and leaves `DialogPlayer.is_active` stuck `true` for the
-  rest of the suite. Run `scripts/check-test-leaks.sh` once this test is written, per CLAUDE.md's
-  instruction to run it "after touching anything that awaits."
+  regex, reported only at process exit). Pre-setting `DialogPlayer.is_active = true` makes
+  `_show_notification()` skip calling `play()` entirely (`pickup_base.gd:63-64`), so no coroutine
+  is ever created — there is no await to leave stuck, and no ordering hazard to get wrong (unlike
+  `skip_dialog()`, which only helps once `play()` has already reached the specific await it
+  targets). Run `scripts/check-test-leaks.sh` once this test is written, per CLAUDE.md's
+  instruction to run it "after touching anything that awaits," to confirm.
 
 ## Out of scope
 
