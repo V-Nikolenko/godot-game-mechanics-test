@@ -79,5 +79,5 @@ func test_menu_confirm_while_reader_open_does_not_reopen_it_or_reach_the_pause_m
 	assert_eq(_menu._cursor, 3)
 
 
-func test_exit_game_is_now_at_index_4() -> void:
-	assert_eq(_menu._options[4].get_node("Label").text, "Exit Game")
+func test_exit_game_is_now_at_index_5() -> void:
+	assert_eq(_menu._options[5].get_node("Label").text, "Exit Game")

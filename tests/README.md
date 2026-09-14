@@ -724,3 +724,33 @@ and fought the turn controller's own target angle within a frame or two, until i
 call `face_instant()` (the same duck-typed-query precedent as `Bullet.is_armored()`). Reverting
 that call back to a raw rotation write was checked by hand to fail this test before it was
 committed.
+
+### The pause-menu Settings panel
+
+`integration/test_pause_menu_settings.gd` is an intent test over the last step of the mouse-aiming
+epic: the `Settings` option (`Option4`) and the `SettingsPanel` sub-overlay it opens. It uses the
+same technique as `test_pause_menu_lore_logs.gd` — set `_cursor`, call `_confirm()` directly, never
+pause the tree — because `PauseMenu._try_open()` sets `get_tree().paused = true`, which would
+freeze the GUT runner itself.
+
+Two of its cases are the reason the file exists:
+
+- **`test_menu_right_on_the_steering_row_flips_the_live_setting_and_the_value_label`** drives the
+  **live `SettingsState`** and asserts both the store *and* the row's `ValueLabel` changed. This is
+  the placement-only trap `test_weapon_unlock_sources.gd` records for pickups, in UI form: a
+  settings row whose handler is empty passes every "is it visible and labelled" assertion in the
+  file. If only one case in this file survives a rewrite, make it this one.
+- **`test_menu_confirm_while_panel_open_does_not_fall_through_to_confirm`** sets `_cursor = 5`
+  (Exit Game) before sending `menu_confirm`, so a fall-through would call `get_tree().quit()` and
+  kill the run outright rather than failing quietly — the sub-overlay routing bug with teeth.
+
+⚠️ Like `test_module_list_lock.gd` and `test_weapon_unlock_sources.gd`, this file **reads and
+restores the live `SettingsState` singleton** in `before_all`/`after_all`, on top of `SaveSandbox`:
+the sandbox covers `user://settings.cfg`, not the autoload's in-memory `_open_space_scheme`, and
+the panel calls the autoload by name. Leaving it on `&"keys"` would re-seed every later test's
+`ShipTurnController` in the same process.
+
+⚠️ Assert on `_options[4]` / `_options[5]` **specifically, never in a loop over `_options`**.
+`open_space_pause_menu.tscn`'s `Option1` and `Option2` are bare `Node2D`s with no `Label` child at
+all (they are hidden in open space and the visible rows close up), so any loop calling
+`get_node("Label")` crashes on that scene and passes on the other.

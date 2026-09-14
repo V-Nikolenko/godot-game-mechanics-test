@@ -232,7 +232,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en](docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en)
       2 run(s), $3.58; last on claude-sonnet-5
 
-## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 1 open)
+## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 0 open)
 
 **Review history**
 
@@ -321,8 +321,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       DONE WHEN: the "steering disabled freezes the target" case in `tests/unit/test_ship_turn_controller.gd` passes - cursor moves while disabled and rotation does not change, re-enabling resumes with no jump. Gate green.
       after: your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-
+      1 run(s), $0.60; last on claude-sonnet-5
 
-- [ ] **Choose mouse aim or classic A/D steering from the pause menu** _(todo - feature, medium, opus)_
+- [x] **Choose mouse aim or classic A/D steering from the pause menu** _(done - feature, medium, opus)_
       The last step: the player can actually pick a scheme. Until this lands the setting exists but only a test can change it.
       
       `global/ui/pause_menu/pause_menu.gd` hard-codes `Option0..Option4` and `_confirm()` matches on the index. Add a new `Option4` = "Settings" and move today's Exit Game to `Option5`, in BOTH `pause_menu.tscn` and `open_space_pause_menu.tscn` (they duplicate their option nodes rather than sharing them). Settings goes before Exit Game so Exit Game stays last where a player expects it; `tests/integration/test_pause_menu_lore_logs.gd` references only indices 1-3 so it needs no change - confirm that before assuming it.

@@ -690,13 +690,36 @@
           "dependsOn": [
             "your-ship-leans-toward-the-mouse-cursor-instead-of-snapping-"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "50debd3",
+                  "subject": "Freeze ship steering on window focus loss, resume without a jump"
+                }
+              ],
+              "at": "2026-09-14T23:15:43.550Z",
+              "run": "2026-09-15-0129-i7",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004249,
+                "claude-sonnet-5": 0.5971029999999999
+              },
+              "costUSD": 0.6013519999999999,
+              "turns": 29,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "choose-mouse-aim-or-classic-a-d-steering-from-the-pause-menu",
           "head": "Choose mouse aim or classic A/D steering from the pause menu",
           "body": "The last step: the player can actually pick a scheme. Until this lands the setting exists but only a test can change it.\n\n`global/ui/pause_menu/pause_menu.gd` hard-codes `Option0..Option4` and `_confirm()` matches on the index. Add a new `Option4` = \"Settings\" and move today's Exit Game to `Option5`, in BOTH `pause_menu.tscn` and `open_space_pause_menu.tscn` (they duplicate their option nodes rather than sharing them). Settings goes before Exit Game so Exit Game stays last where a player expects it; `tests/integration/test_pause_menu_lore_logs.gd` references only indices 1-3 so it needs no change - confirm that before assuming it.\n\n`global/ui/pause_menu/settings_panel.{gd,tscn}` is a sub-overlay copying `LoreLogList`'s `open()`/`close()`/`navigate()` shape and the `_lore_logs_open` routing branch verbatim in spirit: while open it absorbs ALL menu input including `menu_confirm` (it must never fall through to `_confirm()` and re-open itself), and `ui_cancel` returns to the option list rather than closing the whole menu. One row - \"Open-Space Steering: Mouse Aim / Classic (A/D)\" - with menu_left/menu_right cycling the value straight into `SettingsState`. No generic settings framework for one two-valued key.\n\nThe row is shown in all three modes: it is a stored preference, and hiding it in missions would make a player fly back to the hub to change their controls. The label names its scope, which is what keeps it from being a discoverability trap.\n\nNew `.tscn`/`.gd` go UID-less or get a UID minted with the headless `ResourceUID.create_id()` snippet in `tests/README.md`. Never hand-typed, never copied from a sibling.\n\nDONE WHEN: `tests/integration/test_pause_menu_settings.gd` passes with every case in the plan's test plan for that file - including the one that drives the LIVE `SettingsState` through `menu_right` (a settings row whose handler is empty passes every \"is it visible and labelled\" assertion), and the one proving `menu_confirm` does not fall through while the panel is open. Sandboxed via `tests/helpers/save_sandbox.gd`. Gate green, and `updating-project-docs` run - this adds a UI component to a shared module.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

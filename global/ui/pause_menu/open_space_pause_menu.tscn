@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" uid="uid://beenus811sqbl" path="res://global/assets/sprites/pause_menu_ui/esc_resume_icon.png" id="4_ic0"]
 [ext_resource type="Texture2D" uid="uid://cyu2jy4t6xfmy" path="res://global/assets/sprites/pause_menu_ui/esc_exit_icon.png" id="7_ic3"]
 [ext_resource type="PackedScene" path="res://global/ui/pause_menu/lore_log_list.tscn" id="8_lll"]
+[ext_resource type="PackedScene" path="res://global/ui/pause_menu/settings_panel.tscn" id="9_stp"]
 
 [node name="PauseMenu" type="CanvasLayer" unique_id=173352987]
 process_mode = 3
@@ -83,20 +84,37 @@ theme_override_font_sizes/font_size = 20
 text = "Lore Logs"
 metadata/_edit_use_anchors_ = true
 
-[node name="Option4" type="Node2D" parent="MenuContainer" unique_id=814843902]
+[node name="Option4" type="Node2D" parent="MenuContainer"]
 position = Vector2(0, 244)
 
-[node name="Bg" type="Sprite2D" parent="MenuContainer/Option4" unique_id=472545538]
+[node name="Bg" type="Sprite2D" parent="MenuContainer/Option4"]
 position = Vector2(209.0, 14.0)
 scale = Vector2(2, 2)
 texture = ExtResource("3_btn")
 
-[node name="Icon" type="Sprite2D" parent="MenuContainer/Option4" unique_id=795907913]
+[node name="Label" type="Label" parent="MenuContainer/Option4"]
+offset_left = 95.87
+offset_top = -2.0
+offset_right = 345.86
+offset_bottom = 30.0
+theme_override_font_sizes/font_size = 20
+text = "Settings"
+metadata/_edit_use_anchors_ = true
+
+[node name="Option5" type="Node2D" parent="MenuContainer" unique_id=814843902]
+position = Vector2(0, 310)
+
+[node name="Bg" type="Sprite2D" parent="MenuContainer/Option5" unique_id=472545538]
+position = Vector2(209.0, 14.0)
+scale = Vector2(2, 2)
+texture = ExtResource("3_btn")
+
+[node name="Icon" type="Sprite2D" parent="MenuContainer/Option5" unique_id=795907913]
 position = Vector2(59.0, 14.0)
 scale = Vector2(2, 2)
 texture = ExtResource("7_ic3")
 
-[node name="Label" type="Label" parent="MenuContainer/Option4" unique_id=794298608]
+[node name="Label" type="Label" parent="MenuContainer/Option5" unique_id=794298608]
 offset_left = 95.87
 offset_top = -2.0
 offset_right = 345.86
@@ -106,4 +124,7 @@ text = "Exit Game"
 metadata/_edit_use_anchors_ = true
 
 [node name="LoreLogList" parent="." instance=ExtResource("8_lll")]
+position = Vector2(640, 360)
+
+[node name="SettingsPanel" parent="." instance=ExtResource("9_stp")]
 position = Vector2(640, 360)

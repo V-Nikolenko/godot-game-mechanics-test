@@ -82,7 +82,7 @@ All eleven are registered in `project.godot` under `[autoload]`. The `*` prefix 
 | `CameraShake` | `global/systems/camera_shake.gd` | A single `_trauma` float (0..1) that decays each frame. | Written by any system via `add(amount)`; read each frame by cameras via `get_offset()` (used inside `CameraDirector`). |
 | `LogState` | `global/autoloads/log_state.gd` | Which `LogEntryResource` ids are collected. Persists to `user://log_state.cfg`. `total_count()` is a `DirAccess` sweep of `catalogue_dir` (`global/resources/logs/entries/` in production) — never a hand-maintained list, unlike `UpgradeState.ALL_IDS`. | `collect_next()` is the only mutator: an anonymous lore-log pickup calls it with no id and it grants the lowest-`sequence` entry not yet collected, so the story reads in catalogue order regardless of where in the world it was found. Read via `is_collected` / `collected_ids` / `all_ids` (catalogue order, unfiltered — the ESC menu's Lore Logs reader below is its only caller) / `get_entry` / `total_count`. Emits `log_collected(id)`. Validates on load like `ShipModuleState`/`UpgradeState`: an id in the save file with no matching catalogue entry is `push_warning`ed and dropped. Information logs (one-time, non-persisted) never touch this store. |
 | `PickupState` | `global/autoloads/pickup_state.gd` | Which `StringName` `persistent_id`s have ever been collected, independent of any physical node. Persists to `user://pickup_state.cfg`, same `ConfigFile` shape as `LogState`. | `mark_collected(id)` (idempotent) is the only mutator, called from `PickupBase._on_body_entered()` when a collected pickup's `persistent_id` is non-empty; `has_collected(id)` gates the same handler so a respawned pickup (e.g. an assault mission restart, which reloads the scene) does not re-grant an id already collected. A pickup that leaves `persistent_id` at its default `&""` (every pickup shipped today) never touches this store and keeps respawning every scene load. |
-| `SettingsState` | `global/autoloads/settings_state.gd` | Player settings, one `ConfigFile` (`user://settings.cfg`). First key: `open_space_scheme` (`&"mouse"` / `&"keys"`, default `&"mouse"`), re-validated against `SCHEMES` on load with a fallback to the default. Named `SettingsState`, not `ControlsState`, so a future setting (e.g. mouse sensitivity) lands as another key here rather than a second autoload. | `set_open_space_scheme(scheme)` validates, saves and emits `open_space_scheme_changed(scheme: StringName)` — but only on an actual change, so a redundant set neither writes to disk nor re-seeds a live `ShipTurnController` mid-flight. `OpenSpacePlayerShip._ready()` seeds its `ShipTurnController.scheme` from `get_open_space_scheme()` and connects the signal to re-seed it live, without a scene reload. |
+| `SettingsState` | `global/autoloads/settings_state.gd` | Player settings, one `ConfigFile` (`user://settings.cfg`). First key: `open_space_scheme` (`&"mouse"` / `&"keys"`, default `&"mouse"`), re-validated against `SCHEMES` on load with a fallback to the default. Named `SettingsState`, not `ControlsState`, so a future setting (e.g. mouse sensitivity) lands as another key here rather than a second autoload. | `set_open_space_scheme(scheme)` validates, saves and emits `open_space_scheme_changed(scheme: StringName)` — but only on an actual change, so a redundant set neither writes to disk nor re-seeds a live `ShipTurnController` mid-flight. `OpenSpacePlayerShip._ready()` seeds its `ShipTurnController.scheme` from `get_open_space_scheme()` and connects the signal to re-seed it live, without a scene reload. The player changes it from the ESC menu's **Settings** panel (`SettingsPanel`, below) — the store's only writer outside tests. |
 
 ## 4. Shared systems (`global/systems/`)
 
@@ -234,7 +234,7 @@ In the ship menu, `ModuleList` shows locked modules greyed rather than hiding th
 
 ### Lore Logs reader — `pause_menu/lore_log_list.gd` (`LoreLogList`), `lore_log_list_item.gd`
 
-A fifth `PauseMenu` option (`Option3`, present in both `mission_mode` states) opens a full-catalogue
+A fourth `PauseMenu` option (`Option3`, present in both `mission_mode` states) opens a full-catalogue
 reader over `LogState`: every entry from `LogState.all_ids()` gets a row in catalogue order, found
 ones show their real title and — once the cursor lands on them — their full body, unfound ones show
 a `???` title and a locked placeholder body. The header reads `Lore Logs — <collected> / <total>`.
@@ -254,6 +254,38 @@ while it's open, `_unhandled_input` routes `menu_up/down/left/right` to the read
 everything else (`menu_confirm` included — it must never fall through to `_confirm()` and
 re-trigger `_lore_log_list.open()`), and `ui_cancel` closes the reader back to the option list
 instead of closing the whole pause menu.
+
+### Settings panel — `pause_menu/settings_panel.gd` (`SettingsPanel`)
+
+`Option4` = **Settings**, which opens a second sub-overlay with exactly the same
+`open()`/`close()`/`navigate(dir)` shape as `LoreLogList` and the same routing rules
+(`_settings_open: bool`; while open `_unhandled_input` absorbs **all** menu input, `menu_confirm`
+included, and `ui_cancel` returns to the option list rather than closing the pause menu). It adds
+one verb the reader does not have: `cycle(dir)`, bound to `menu_left`/`menu_right`.
+
+Settings was **appended before Exit Game, not inserted elsewhere**, so Exit Game stays last where a
+player expects it — which moved Exit Game from `Option4` to **`Option5`** in both
+`pause_menu.tscn` and `open_space_pause_menu.tscn` (the two scenes duplicate their option nodes
+rather than sharing them, and their row geometry differs: mission rows sit at
+`110/178/244/310/376/442` under a container at `y = 184`, open-space rows at `112/—/—/178/244/310`
+under a container at `y = 226`, with `Option1`/`Option2` bare `Node2D`s carrying no `Label` child
+at all — never loop `get_node("Label")` over `_options` in that scene).
+
+One row today — **Open-Space Steering: Mouse Aim / Classic (A/D)** — cycling straight into
+`SettingsState.set_open_space_scheme()`, which owns validation, persistence and the change signal.
+`_refresh()` re-reads the store on every `open()` and every `cycle()` rather than caching, because
+the panel is built with the pause-menu scene long before anyone opens it. A second row is another
+entry in `_rows` plus another branch in `cycle()`; there is deliberately **no generic settings
+framework**, which for a single two-valued key would be pure churn.
+
+The row is shown in **all three modes**, not just open space: it is a stored preference, and hiding
+it during a mission would mean flying back to the hub to change your controls. The label names its
+scope, which is what keeps it from being a discoverability trap.
+
+Gated by `tests/integration/test_pause_menu_settings.gd`, whose load-bearing case drives the **live**
+`SettingsState` through `menu_right` — a settings row with an empty handler passes every "is it
+visible and labelled" assertion, the same placement-only trap `test_weapon_unlock_sources.gd`
+records for pickups.
 
 To add a new module:
 1. Create `global/ship_modules/foo_module.gd` (`class_name FooModule extends ShipModuleBase`); override `get_slot`, names/icon, and `apply`/`remove` (+ `try_activate`/`tick` if active).
