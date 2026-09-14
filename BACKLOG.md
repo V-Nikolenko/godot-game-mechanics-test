@@ -232,7 +232,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en](docs/plans/test-logs-on-the-open-space-map-prove-both-log-types-work-en)
       2 run(s), $3.58; last on claude-sonnet-5
 
-## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 6 open)
+## Open-space mouse aiming: inertial turn-to-cursor with a control-scheme setting  (`open-space-mouse-aiming-inertial-turn-to-cursor-with-a-contr`, 5 open)
 
 **Review history**
 
@@ -264,7 +264,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
 
 **Implementation**
 
-- [ ] **Your ship leans toward the mouse cursor instead of snapping to it** _(in progress - feature, medium, opus)_
+- [x] **Your ship leans toward the mouse cursor instead of snapping to it** _(done - feature, medium, opus)_
       Adds `open_space/scenes/entities/player/ship_turn_controller.gd` (`class_name ShipTurnController extends Node`) and wires it into `open_space/scenes/entities/player/player_ship.tscn` as a child node of PlayerShip. It becomes the only writer of the open-space ship's rotation.
       
       Implements BOTH schemes behind an `@export var scheme: StringName` defaulting to `&"mouse"`:
