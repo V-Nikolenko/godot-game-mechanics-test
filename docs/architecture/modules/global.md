@@ -316,7 +316,7 @@ Subclasses call `super()` in `_ready()` (and in the overridable hooks `_setup_ef
 | `temporary_damage_up_pickup.gd` | `player.apply_temp_damage_buff(0.5, 15.0)` |
 | `ship_module_unlocker_pickup.gd` | `ShipModuleState.unlock(slot, module_id)`; inspector-selectable `module_slot` / `module_id` enums |
 | `weapon_mode_unlocker_pickup.gd` | `UpgradeState.unlock(weapon_id())` — grants one main-weapon mode permanently; inspector-selectable `weapon` enum (`SNIPER_SHOT`, `SPREAD`, `GATLING`, `MINING_LASER`). Dialog line reads `display_name` off the mode's own `.tres`. |
-| `lore_log_pickup.gd` | `LogState.collect_next()` — no `@export`, deliberately anonymous like `LogState`'s own model: grants whichever catalogue entry has the lowest `sequence` and isn't collected yet, regardless of where in the world it was found. Dialog line names the entry title, or is empty (no notification) once the catalogue is exhausted. |
+| `lore_log_pickup.gd` | `LogState.collect_next()` — no `@export`, deliberately anonymous like `LogState`'s own model: grants whichever catalogue entry has the lowest `sequence` and isn't collected yet, regardless of where in the world it was found. Dialog line names the entry title, or is empty (no notification) once the catalogue is exhausted. Placed 3 times in `open_space/scenes/levels/sector_hub.tscn`, one per `global/resources/logs/entries/*.tres` — see [`../open_space.md`](../open_space.md) → 3.1. |
 
 Each has a matching scene under `global/pickups/scenes/`.
 
@@ -348,7 +348,9 @@ scene require to detect it — both were needed together; the group alone does n
 Area2D's `body_entered` signal fire at all. `assault/scenes/levels/edelia/1/level_1.tscn` and
 `infiltration/scenes/levels/TestIsometricScene.tscn` each place one `InfoLogInteractable`
 (node name `LogRecord`) as a static scene child, proving both placements — see
-`tests/integration/test_log_record_mission_placement.gd`.
+`tests/integration/test_log_record_mission_placement.gd`. `open_space/scenes/levels/sector_hub.tscn`
+places two more (`InfoLogHubTerminal`, `InfoLogVoeterWreck`, each with its own `message`) — see
+[`../open_space.md`](../open_space.md) → 3.1 and `tests/integration/test_hub_log_placement.gd`.
 
 **Unlocker pickups are the only unlock source in the game.** Neither `ShipModuleState` nor `UpgradeState` is written from anywhere else, so a module or weapon mode with no unlocker placed in the world is content the player can see and never reach. Both benches live in `open_space/scenes/levels/sector_hub.tscn`, and both pairings are invariant-tested — `tests/integration/test_module_unlock_sources.gd` and `tests/integration/test_weapon_unlock_sources.gd`. The weapon exception is `UpgradeState.STARTING_IDS` (`[&"default"]`), seeded on a fresh profile.
 

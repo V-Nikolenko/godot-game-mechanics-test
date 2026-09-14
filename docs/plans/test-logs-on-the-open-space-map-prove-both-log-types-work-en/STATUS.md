@@ -8,9 +8,16 @@
 - [x] 1. Context gathered → `1-context.md`
 - [x] 2. Plan written → `3-plan.md`
 - [x] 3. Reviewed and APPROVED → `4-review.md` (round 1: CHANGES_REQUESTED, fixed; round 2: APPROVED)
-- [ ] 4. Implemented → `5-progress.md`
-- [ ] 5. Gate green
-- [ ] 6. Docs updated, task ticked
+- [x] 4. Implemented → `5-progress.md`
+- [x] 5. Gate green
+- [x] 6. Docs updated, task ticked
+
+**Done (2026-09-15).** Catalogued 3 `LogEntryResource` `.tres` files, placed 3 `LoreLogPickup` +
+2 `InfoLogInteractable` instances in `sector_hub.tscn`, added
+`tests/integration/test_hub_log_placement.gd`, verified `bash /agent/verify.sh` and
+`scripts/check-test-leaks.sh` green, updated `docs/architecture/modules/global.md` and
+`open_space.md`. This was the epic's last open task — epic closed via
+`./scripts/backlog-cli.js close-epic log-records-discoverable-lore-and-info-logs-across-all-three`.
 
 **Superseded scope note (2026-09-15):** the paragraph below described the state as of this task's
 last cycle — it no longer holds. The sibling task

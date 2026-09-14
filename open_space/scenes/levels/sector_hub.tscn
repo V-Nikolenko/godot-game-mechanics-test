@@ -20,6 +20,8 @@
 [ext_resource type="PackedScene" uid="uid://csti8adftwjr8" path="res://global/pickups/scenes/temporary_health_up_pickup.tscn" id="17_rj32l"]
 [ext_resource type="PackedScene" uid="uid://db8j0pi368giu" path="res://global/pickups/scenes/temporary_shield_up_pickup.tscn" id="18_f6k3w"]
 [ext_resource type="PackedScene" uid="uid://c0oc8owfaowo3" path="res://global/pickups/scenes/weapon_mode_unlocker_pickup.tscn" id="19_wmu"]
+[ext_resource type="PackedScene" uid="uid://cvnfy2iwb4n5s" path="res://global/pickups/scenes/lore_log_pickup.tscn" id="20_lore"]
+[ext_resource type="PackedScene" uid="uid://bgtlo5mhub0mh" path="res://global/interactables/scenes/info_log_interactable.tscn" id="21_ilog"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
@@ -192,3 +194,20 @@ weapon = 2
 [node name="WeaponUnlockerMiningLaser" parent="." instance=ExtResource("19_wmu")]
 position = Vector2(20, -515)
 weapon = 3
+
+[node name="LoreLogBeaconStatic" parent="." instance=ExtResource("20_lore")]
+position = Vector2(620, -212)
+
+[node name="LoreLogEdeliaSurvey" parent="." instance=ExtResource("20_lore")]
+position = Vector2(720, 420)
+
+[node name="LoreLogFortunaManifest" parent="." instance=ExtResource("20_lore")]
+position = Vector2(-700, 460)
+
+[node name="InfoLogHubTerminal" parent="." instance=ExtResource("21_ilog")]
+position = Vector2(0, -150)
+message = "Sector hub maintenance terminal: all patrol drones nominal. Somebody left the coffee dispenser running for six years."
+
+[node name="InfoLogVoeterWreck" parent="." instance=ExtResource("21_ilog")]
+position = Vector2(-480, -300)
+message = "Salvaged hull plate, drifting near Voeter K05M: scorch pattern doesn't match any registered weapon signature."

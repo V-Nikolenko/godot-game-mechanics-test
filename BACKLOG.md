@@ -70,7 +70,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a
       scene. The authored `rotation = 0` remains, as a spawn orientation.
 
-## Log records: discoverable lore and info logs across all three modes  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 1 open)
+## Log records: discoverable lore and info logs across all three modes  [DONE]  (`log-records-discoverable-lore-and-info-logs-across-all-three`, 0 open)
 
 - [x] **Every log record I find stays found, and the game knows how many are left** _(done - feature, medium, sonnet)_
       **Player outcome:** Logs I picked up three missions ago are still mine after quitting and
@@ -126,7 +126,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       nine, collecting it advances `LogState`, collecting it twice in one run cannot double-count, and
       the notification text names the entry. Test in `tests/unit/`.
       -> [docs/plans/flying-into-a-log-record-in-open-space-picks-it-up-and-tells](docs/plans/flying-into-a-log-record-in-open-space-picks-it-up-and-tells)
-      2 run(s), $2.46; last on claude-sonnet-5
+      3 run(s), $5.48; last on claude-sonnet-5
 
 - [x] **Reading a data tablet by a body doesn't interrupt the mission, and I can read it again** _(done - feature, medium, sonnet)_
       **Player outcome:** I walk or fly up to a tablet, a terminal, or a scrap of hull, a prompt
@@ -211,7 +211,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio](docs/plans/log-records-can-be-placed-in-assault-and-infiltration-missio)
       2 run(s), $7.97; last on claude-sonnet-5
 
-- [ ] **Test logs on the open-space map prove both log types work end to end** _(in progress - feature, medium, sonnet)_
+- [x] **Test logs on the open-space map prove both log types work end to end** _(done - feature, medium, sonnet)_
       **Player outcome (and the user's explicit ask):** boot the game, fly around the sector hub,
       and actually find several lore logs and a couple of information logs — enough to see the counter
       move, the ESC section fill up, and an in-world tablet re-read cleanly.

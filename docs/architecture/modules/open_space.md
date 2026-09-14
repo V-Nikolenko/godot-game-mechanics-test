@@ -63,6 +63,14 @@ open_space/scenes/
 - An `EnemyContainer` (drones are added here at runtime) and a row of every shared pickup from `global/pickups/scenes/` (armor/health, module unlocker, temp buffs) so the hub doubles as a test/equip bench.
 - Above that row, **two further rows of `ShipModuleUnlockerPickup` instances (y = -315 and y = -415)** — one per ship module, 15 in total counting the `trajectory_calc` unlocker on the original bench row. Since `ShipModuleState.equip()` gained its unlock gate these are the game's only way to make a module installable, so the bench is currently the unlock *source*, not just a test convenience. `tests/integration/test_module_unlock_sources.gd` asserts the coverage stays complete. Distributing unlockers through missions instead is not done yet.
 - Above *those*, a fourth row of **`WeaponModeUnlockerPickup` instances (y = -515, x -280..20)** — one each for `sniper_shot`, `spread`, `gatling` and `mining_laser`. Same story, same shape: `UpgradeState._ready()` seeds only `STARTING_IDS` (`&"default"`), and `unlock()` has no other production caller, so before this bench row existed four tuned weapon modes with working `WeaponBehavior`s were unreachable and the player flew the Standard gun for the whole game. `tests/integration/test_weapon_unlock_sources.gd` is the matching coverage gate. Gating weapon modes behind missions rather than a bench is an open design question, same as for modules.
+- The hub also carries every `LoreLogPickup` the game ships (3, matching `LogState.total_count()`
+  one-for-one) and two `InfoLogInteractable` instances — the demonstrable end-to-end proof for the
+  whole log-records system (see [`./global.md`](./global.md) → Pickups & resources). Two of the
+  five sit off the bench row near the existing pickups (`LoreLogBeaconStatic` at `(620, -212)`,
+  `InfoLogHubTerminal` at `(0, -150)`); the other three sit near a planet/station arc each
+  (`LoreLogEdeliaSurvey`, `LoreLogFortunaManifest`, `InfoLogVoeterWreck`), so at least some require
+  actually leaving the mission-select lane. `tests/integration/test_hub_log_placement.gd` asserts
+  the placed count and the catalogue-total match, and exercises one of each end to end.
 
 The script's only logic is `_spawn_initial_drones()`: in `_ready()` it instantiates `drone_count` (`3`) `PatrolDrone`s at random angles/distances within `spawn_radius` (`600`) and gives each a random `initial_direction`.
 

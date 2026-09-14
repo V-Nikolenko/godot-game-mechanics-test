@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="LogEntryResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://global/resources/logs/log_entry_resource.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"fortuna_manifest"
+title = "Fortuna Station Manifest"
+body = "Fortuna Station intake, cycle close: three transports cleared, one held for a mismatched cargo seal. The seal checked out an hour later — somebody just filled out the wrong form again. Docking bay four is still down for repairs."
+sequence = 2
