@@ -2700,13 +2700,36 @@
           "dependsOn": [
             "research-open-space-movement-feel-pass-2-aim-reticle-camera-"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "3081621",
+                  "subject": "Plan the pass-2 movement epic: camera lead fix, reticle, banking, hold-to-boost"
+                }
+              ],
+              "at": "2026-09-15T19:05:58.340Z",
+              "run": "2026-09-15-2135-i3",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003972,
+                "claude-opus-5": 3.9166764999999995
+              },
+              "costUSD": 3.9206484999999995,
+              "turns": 31,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "plan-review-open-space-movement-feel-pass-2-aim-reticle-came",
           "head": "Plan review: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
           "body": "Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
           "planDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
           "kind": "prep",
