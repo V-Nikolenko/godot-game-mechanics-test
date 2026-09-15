@@ -31,16 +31,23 @@ signal charges_changed(current: float, maximum: int)
 ## Pause after a spend before any refill starts, at the value `Overheat._SHOOT_GRACE` already
 ## uses: without it a mashed key trickle-charges between activations.
 @export var recharge_delay_sec: float = 0.5
-## Take `max_charges` from `ShipProgressionState` instead of the local default. The autoload
-## has no boost stat yet — the persistence task adds the key and the `_ready()` binding — so
-## this defaults OFF and is inert until then.
-@export var bind_progression: bool = false
+## Take `max_charges` from `ShipProgressionState` instead of the local default. Mirrors
+## `Shield.bind_progression` (`shield_component.gd:20,38-46,116-124`) line for line, including
+## the immediate grant of the new charge on a mid-session upgrade.
+@export var bind_progression: bool = true
 
 var max_charges: int = 2
 var charges: float = 2.0
 
 ## Seconds left of the post-spend pause.
 var _delay_left: float = 0.0
+
+
+func _ready() -> void:
+	if bind_progression:
+		max_charges = ShipProgressionState.boost_charge_count
+		ShipProgressionState.boost_charge_count_changed.connect(_on_progression_changed)
+	charges = float(max_charges)
 
 
 func can_spend() -> bool:
@@ -77,4 +84,16 @@ func step(delta: float) -> void:
 	if charges >= float(max_charges):
 		return
 	charges = minf(charges + recharge_rate * delta, float(max_charges))
+	charges_changed.emit(charges, max_charges)
+
+
+## `ShipProgressionState.boost_charge_count_changed` — mirrors
+## `Shield._on_progression_changed` (`shield_component.gd:116-124`): raises the cap and grants
+## the new charge immediately, so a pickup collected mid-flight is usable now rather than next
+## session, not just wider on the next boot.
+func _on_progression_changed(new_max: int) -> void:
+	max_charges = new_max
+	charges = clampf(charges, 0.0, float(max_charges))
+	if charges < float(max_charges):
+		charges = minf(charges + 1.0, float(max_charges))
 	charges_changed.emit(charges, max_charges)

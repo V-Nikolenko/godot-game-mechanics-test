@@ -338,7 +338,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       after: the-game-remembers-which-steering-scheme-you-fly-with
       1 run(s), $5.28; last on claude-opus-5
 
-## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 3 open)
+## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 2 open)
 
 **Review history**
 
@@ -558,8 +558,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Invoke `updating-project-docs`: a new UI class under `open_space/scenes/gui/`.
       after: boosting-costs-a-charge-and-charges-come-back-on-their-own
+      1 run(s), $1.41; last on claude-sonnet-5
 
-- [ ] **Extra boost charges you earn stay with your ship between runs** _(todo - feature, small, sonnet)_
+- [x] **Extra boost charges you earn stay with your ship between runs** _(done - feature, small, sonnet)_
       The persistence. Plan sections **Design → Persistence and the upgrade** AND **Test plan →
       Autoload discipline**.
       

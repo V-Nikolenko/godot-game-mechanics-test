@@ -10,16 +10,43 @@
 ## `tests/integration/test_open_space_boost_wiring.gd` is the file that catches that.
 extends GutTest
 
+const SaveSandbox := preload("res://tests/helpers/save_sandbox.gd")
+
 ## One physics frame at the project's 60 Hz.
 const D: float = 1.0 / 60.0
 
 var _meter: BoostMeter = null
 
+## Two-layer discipline (`3-plan.md` → Test plan → "Autoload discipline"): `SaveSandbox` covers
+## the `user://` file only, and the mid-session-upgrade case below binds a `BoostMeter` to the
+## LIVE `ShipProgressionState`, which never re-reads the file after boot. Without the explicit
+## snapshot/restore of the singleton's own members, that one case would leak a raised boost
+## count into every test that runs after it in the same GUT process.
+var _sandbox := SaveSandbox.new()
+var _saved_boost: int = 0
+var _saved_shields: int = 0
+
+
+func before_all() -> void:
+	_sandbox.capture()
+	_saved_boost = ShipProgressionState._boost_charge_count
+	_saved_shields = ShipProgressionState._permanent_shield_count
+
+
+func after_all() -> void:
+	ShipProgressionState._boost_charge_count = _saved_boost
+	ShipProgressionState._permanent_shield_count = _saved_shields
+	_sandbox.restore()
+
 
 func before_each() -> void:
+	## Assigned to the backing field directly, not via set_boost_charge_count(), so the fixture
+	## does not depend on the code under test and writes nothing to disk.
+	ShipProgressionState._boost_charge_count = ShipProgressionState.MIN_BOOST_CHARGES
+	ShipProgressionState._permanent_shield_count = 1
 	_meter = BoostMeter.new()
-	## Explicit, not assumed: every case below is about the meter's own economy, with no
-	## autoload in the loop. The binding lands with the persistence task.
+	## Explicit, not assumed: every case below except the mid-session-upgrade one is about the
+	## meter's own economy, with no autoload in the loop.
 	_meter.bind_progression = false
 
 
@@ -144,3 +171,27 @@ func test_charges_changed_carries_current_and_maximum() -> void:
 	_meter.step(D)
 	assert_signal_emit_count(_meter, "charges_changed", 2,
 			"a refill tick announces itself too, so the readout can animate")
+
+
+## ── Persistence: the mid-session upgrade ─────────────────────────────────────────────────
+## `bind_progression = true`, under the full two-layer autoload discipline above (before_each
+## pins the live count to MIN_BOOST_CHARGES): raising the saved capacity mid-flight must widen
+## the live meter AND grant the new charge immediately, not just on the next load.
+func test_a_mid_session_upgrade_widens_the_meter_and_grants_the_charge_now() -> void:
+	_meter.free()
+	_meter = BoostMeter.new()
+	_meter.bind_progression = true
+	_meter._ready()   ## tree-less: nothing calls _ready() for us, so drive it by hand.
+
+	assert_eq(_meter.max_charges, ShipProgressionState.MIN_BOOST_CHARGES,
+			"a freshly bound meter takes its capacity from the live autoload")
+	assert_almost_eq(_meter.charges, float(_meter.max_charges), 0.001, "and starts full")
+
+	assert_true(_meter.try_spend(), "spend one so the grant is observable, not just a full meter")
+	var before_grant: float = _meter.charges
+
+	ShipProgressionState.set_boost_charge_count(3)
+
+	assert_eq(_meter.max_charges, 3, "the meter's cap follows the raised save immediately")
+	assert_almost_eq(_meter.charges, before_grant + 1.0, 0.001,
+			"the new charge is granted right away, usable this session, not next")

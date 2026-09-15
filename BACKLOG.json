@@ -1036,13 +1036,36 @@
           "dependsOn": [
             "boosting-costs-a-charge-and-charges-come-back-on-their-own"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "a0fa46a",
+                  "subject": "Add a cyan pip boost bar under the ship for the Shift boost meter"
+                }
+              ],
+              "at": "2026-09-15T03:52:41.886Z",
+              "run": "2026-09-15-0629-i3",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.005104,
+                "claude-sonnet-5": 1.4058908000000003
+              },
+              "costUSD": 1.4109948,
+              "turns": 46,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "extra-boost-charges-you-earn-stay-with-your-ship-between-run",
           "head": "Extra boost charges you earn stay with your ship between runs",
           "body": "The persistence. Plan sections **Design → Persistence and the upgrade** AND **Test plan →\nAutoload discipline**.\n\nDONE WHEN the ship's boost capacity is a saved stat (2 at base, 5 at cap) that survives quitting\nthe game, raising it mid-flight immediately widens the live meter AND grants the new charge right\naway rather than next session, and the new cases in `tests/unit/test_ship_progression_state.gd`\nand `tests/unit/test_boost_meter.gd` pass.\n\nTouches:\n- `global/autoloads/ship_progression_state.gd` — a **second key on the existing ConfigFile**, not a\n  new autoload: `KEY_BOOST`, `MIN_BOOST_CHARGES = 2`, `MAX_BOOST_CHARGES = 5`,\n  `signal boost_charge_count_changed(new_count: int)`, `boost_charge_count` getter,\n  `set_boost_charge_count()` (clamp, no-op when unchanged, save, emit) and `add_boost_charge()`\n  (false at cap). Mirror the shield stat line for line, including the out-of-range\n  `push_warning` on load. `_save()` writes both keys; `_load()` reads and clamps both independently.\n- `open_space/scenes/entities/player/boost_meter.gd` — flip `bind_progression` to `true` by\n  default and implement `_ready()` / `_on_progression_changed()` copying\n  `global/components/shield_component.gd:38-46` and `:116-124`, **including the immediate grant of\n  the new charge**.\n- ⚠️ `open_space/scenes/entities/player/player_ship.tscn` — **set `bind_progression = true`\n  explicitly on the `BoostMeter` node, and make sure the scene diff shows that line.** The\n  `@export` default is not enough to rely on, and this is not hypothetical: `player_ship.tscn:223`\n  authors its `ShieldComponent` with no `bind_progression` line, falls back to\n  `shield_component.gd:20`'s `false`, and that is exactly why the hub's shield-up pickup raises a\n  number the open-space ship never reads (filed as\n  `the-open-space-ship-never-reads-the-permanent-shield-upgrade`). Follow\n  `assault/scenes/player/player_fighter.tscn:301`, the one scene that gets this right — **not**\n  `player_ship.tscn`'s `ShieldComponent`. A meter that silently ignores the upgrade makes the next\n  two tasks ship a pickup that does nothing visible.\n- Extend `tests/unit/test_ship_progression_state.gd` and `tests/unit/test_boost_meter.gd`.\n\n**Write the autoload cases against a tree-less `ProgressionScript.new()` via the existing\n`_fresh()` helper (`test_ship_progression_state.gd:18-19`), like their shield siblings** — that\nfile does not touch the live singleton today and should not start. `tests/README.md`'s house rule\nis to prefer a tree-less `Script.new()` instance. `SaveSandbox` still applies wherever a save path\nis exercised. The live-singleton snapshot pattern is for the files that instantiate\n`player_ship.tscn` or collect a real pickup, not for this one.\n\nNote that flipping `bind_progression` to `true` is what arms the hazard the wiring and bar test\nfiles were told to guard against — if either starts failing only in a **full-suite** run, it is\nmissing the two-layer snapshot block, not broken.\n\nThree boundary cases are the point of this task: `add_boost_charge()` at the cap returns false and\nemits **nothing**; a saved value of 99 clamps on load; and adding a boost charge does not disturb\n`permanent_shield_count`, because the two stats share one `ConfigFile`.\n\nInvoke `updating-project-docs`: `docs/architecture/modules/global.md` documents the autoload's\ncontract.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

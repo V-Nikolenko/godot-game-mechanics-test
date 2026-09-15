@@ -294,6 +294,7 @@ script = ExtResource("14_turn")
 ; own -- the ship calls step() from _step_boost(), so freezing the ship freezes the meter with it.
 [node name="BoostMeter" type="Node" parent="."]
 script = ExtResource("15_boost")
+bind_progression = true
 
 [node name="MovementController" type="Node" parent="." unique_id=1619942092]
 script = ExtResource("11_mc")
