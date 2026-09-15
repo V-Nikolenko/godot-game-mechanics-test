@@ -43,6 +43,12 @@ func _ready() -> void:
 		_track_speed           = config.track_speed
 		_track_player          = config.track_player
 		_retreat_hp_ratio      = config.retreat_hp_ratio
+		## The scene-authored ContactHitBox defaults to damage 20 and never reads the config,
+		## so it has to be re-applied here — same as bomber.gd, light_assault_ship.gd, ram_ship.gd
+		## and space_station.gd. Pinned for the whole roster by
+		## tests/integration/test_enemy_contact_damage.gd.
+		if contact_hit_box:
+			contact_hit_box.damage = config.collision_damage
 
 	var viewport_size := get_viewport().get_visible_rect().size
 	var cam := get_viewport().get_camera_2d()

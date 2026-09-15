@@ -36,7 +36,9 @@ var _equipped: Dictionary = {
 	&"engines":  &"",
 }
 
-## slot → Array[StringName] of unlocked module IDs (equipping doesn't require unlocking).
+## slot → Array[StringName] of unlocked module IDs. `equip()` refuses anything not in
+## here; &"" (unequip) is exempt, so a slot can always be cleared. Unlockers are the
+## ShipModuleUnlockerPickup instances in the world.
 var _unlocked: Dictionary = {
 	&"cockpit":  [] as Array[StringName],
 	&"armor":    [] as Array[StringName],
@@ -79,6 +81,11 @@ func equip(slot: StringName, module_id: StringName) -> void:
 	if module_id != &"" and module_id not in valid_ids:
 		push_warning("ShipModuleState: module_id '%s' is not valid for slot '%s'" % [module_id, slot])
 		return
+	## &"" means "take the module out" and is always allowed — a gate that could trap a
+	## module in a slot would be a worse bug than the one this check exists to fix.
+	if module_id != &"" and not is_unlocked(slot, module_id):
+		push_warning("ShipModuleState: module_id '%s' is not unlocked for slot '%s'" % [module_id, slot])
+		return
 	var prev: StringName = _equipped.get(slot, &"")
 	if prev == module_id:
 		return
@@ -119,4 +126,12 @@ func _load() -> void:
 			var entry_id := StringName(String(entry))
 			if entry_id in valid:
 				list.append(entry_id)
+		## Grandfather a module that is equipped but not unlocked — that is every save
+		## written before equipping required an unlock. Confiscating it would strip a
+		## loadout the player is currently flying with. Both guards matter: &"" is in
+		## `valid` for every slot (SLOT_MODULES lists it first), and re-loading an
+		## already-migrated save must not append a second copy.
+		var installed: StringName = _equipped.get(slot, &"")
+		if installed != &"" and installed not in list:
+			list.append(installed)
 		_unlocked[slot] = list

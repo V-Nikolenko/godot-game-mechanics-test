@@ -18,4 +18,4 @@ func fire(state: Node, mode: WeaponModeResource, muzzle: Marker2D) -> void:
 		pellet.shooter_velocity = actor.velocity
 		if actor.get("pierce_module_active"):
 			pellet.pierces_remaining = Bullet.MAX_PIERCE
-		state.add_child(pellet)
+		_launch(state, pellet)

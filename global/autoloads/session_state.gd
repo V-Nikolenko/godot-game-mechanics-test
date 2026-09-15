@@ -57,7 +57,11 @@ func apply_to(player: PlayerBase) -> void:
 	if player.shield_component:
 		player.shield_component.shield_state_changed.connect(_on_shield_state_changed)
 	if player.temp_health_component:
-		player.temp_health_component.amount_changed.connect(_on_temp_health_changed)
+		## Bound so the handler can read the stack size off the component that emitted,
+		## rather than reconstructing it from the `maximum` in the payload.
+		player.temp_health_component.amount_changed.connect(
+			_on_temp_health_changed.bind(player.temp_health_component)
+		)
 
 
 ## Called by PlayerBase.apply_temp_damage_buff when a buff is applied or refreshed.
@@ -79,10 +83,14 @@ func _on_shield_state_changed(snap: Dictionary) -> void:
 	_save()
 
 
-func _on_temp_health_changed(current: int, maximum: int) -> void:
+## `maximum` is part of TempHealth.amount_changed's declared arity and is deliberately
+## unused: the stack size is read from `source` (bound at connect time in apply_to), not
+## recovered as `maximum / MAX_STACKS`. That division truncated toward zero the moment
+## `maximum` was not an exact multiple of MAX_STACKS, handing the player back a smaller
+## pool than the one they earned.
+func _on_temp_health_changed(current: int, _maximum: int, source: TempHealth) -> void:
 	_temp_hp_current = current
-	## Recover stack_hp from maximum: maximum = MAX_STACKS * stack_hp.
-	_temp_hp_stack = maximum / TempHealth.MAX_STACKS if maximum > 0 else 0
+	_temp_hp_stack = source.stack_hp
 	_save()
 
 

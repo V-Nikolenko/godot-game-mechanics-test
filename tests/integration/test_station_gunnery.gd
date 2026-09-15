@@ -6,10 +6,13 @@
 ##
 ## ── Three harness rules this file must obey ──────────────────────────────────────────────────
 ##
-## 1. **Never write to `station.config`.** `space_station.gd:36` `load()`s the `.tres` and
-##    ResourceLoader caches, so every station in the process shares ONE object — the same one
-##    `preload()` hands this file. Timings are overridden on the GUNNERY NODE, which copies the
-##    config in `_ready()` and never reads it again.
+## 1. **Never write to `STATION_CONFIG`, the `preload()`ed resource.** That object is the shared,
+##    process-wide balance data, and a write to it rewrites the shipped values for every later test
+##    in the run. `station.config` itself is now a private per-instance copy
+##    (`ShipConfig.privatise()`, from `BaseEnemy._init()` / `_enter_tree()`; held shut by
+##    `test_config_instance_isolation.gd`), so writing to *that* is safe — but timings are still
+##    overridden on the GUNNERY NODE, which is the node's tunable surface and its no-config
+##    fallback.
 ## 2. **All ring tests set `LaserPhase.rotation_speed = 0.0` first.** `station_laser_phase.gd:123`
 ##    rotates the hull at 0.5 rad/s during exactly the phase the ring fires in; without pinning it
 ##    to 0 every absolute-angle assertion becomes timing-dependent.
@@ -52,11 +55,11 @@ func _add_player(at: Vector2) -> Node2D:
 	return _player
 
 
-## Filtered, never a raw `get_children()`: a destroyed turret's `ExplosionEffect` parents its
-## CPUParticles2D to `actor.get_parent()`, and for a turret that IS the `Turrets` node. So from
-## the first kill onward the container also holds particle nodes, and in an unfiltered list every
-## `child as StationTurret` cast on one of those returns null. Same filter `SpaceStation._turrets()`
-## applies, which is why the gunnery's own `_live_turrets()` was never affected.
+## Filtered, never a raw `get_children()`, on general principle: `station_turret.gd`'s `_destroy()`
+## passes the station's own parent as an explicit `container` to `ExplosionEffect.explode()`, so a
+## destroyed turret's blast lands outside the hull rather than in `Turrets` — but a helper reading
+## this node should not depend on that staying true. Same filter `SpaceStation._turrets()` applies,
+## which is why the gunnery's own `_live_turrets()` was never affected by the bug this once caused.
 func _turrets() -> Array[StationTurret]:
 	var out: Array[StationTurret] = []
 	for child in _station.get_node("Turrets").get_children():
@@ -127,7 +130,7 @@ func test_config_values_are_copied_onto_the_gunnery() -> void:
 	assert_eq(_gunnery.core_ring_step, STATION_CONFIG.core_ring_step, "core_ring_step copied")
 	assert_eq(_gunnery.core_bullet_damage, STATION_CONFIG.core_bullet_damage, "core_bullet_damage copied")
 	assert_eq(_gunnery.core_bullet_speed, STATION_CONFIG.core_bullet_speed, "core_bullet_speed copied")
-	## The copy must not write back through the shared process-wide resource.
+	## The copy must not write back through the `preload()`ed resource, which is still shared.
 	assert_eq(STATION_CONFIG.core_ring_step, 0.24, "the shipped .tres must be left untouched")
 
 

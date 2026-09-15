@@ -1,7 +1,8 @@
 ## BonusDrone — rare, fast, non-shooting medal target.
 ##
 ## Awards a large score chunk on kill, with no penalty for missing it
-## (counts_toward_wave_clear = false on its config). Movement is supplied by
+## (counts_toward_wave_clear = false skips the wave-clear tally, counts_as_escape = false skips
+## ScoreTracker's escape-combo penalty on its config). Movement is supplied by
 ## EnemyPathMover via the WaveBuilder .move() call — no internal physics here.
 ##
 ## Visual: existing drone sprite, gold modulate, 50% scaled up.
@@ -23,8 +24,3 @@ func _ready() -> void:
 	if sprite:
 		sprite.modulate = Color(1.4, 1.15, 0.4, 1.0)
 		sprite.scale = Vector2(1.5, 1.5)
-
-# Override: bonus drones do not damage the player on contact. The base helper
-# would otherwise add a contact HitBox with damage=20.
-func _add_contact_hitbox() -> void:
-	pass

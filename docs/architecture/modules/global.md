@@ -17,7 +17,10 @@ global/
 │   ├── session_state.gd       # SessionState: temp buffs surviving level transitions / restarts
 │   ├── ship_module_state.gd   # ShipModuleState: equipped/unlocked module per slot
 │   ├── ship_progression_state.gd # ShipProgressionState: permanent shield slot count
-│   └── upgrade_state.gd       # UpgradeState: unlocked weapon upgrade ids
+│   ├── upgrade_state.gd       # UpgradeState: unlocked weapon mode ids (validated); STARTING_IDS seeds a fresh profile
+│   ├── log_state.gd           # LogState: which lore-log entries are collected, catalogue swept from disk
+│   ├── pickup_state.gd        # PickupState: which persistent_id pickup placements have ever been collected
+│   └── settings_state.gd      # SettingsState: player settings (open_space_scheme mouse/keys)
 ├── components/                # composable child-node behaviours
 │   ├── health_component.gd        # Health (Node)
 │   ├── temp_health_component.gd   # TempHealth (Node) — drains before Health
@@ -37,6 +40,10 @@ global/
 │   └── low_health_smoke.gd        # LowHealthSmoke — smoke below an HP threshold
 ├── entities/
 │   └── player_base.gd         # PlayerBase (CharacterBody2D) — shared player base class
+├── interactables/              # input-driven world objects (sibling of pickups/, not a subclass)
+│   ├── info_log_interactable.gd    # InfoLogInteractable (Area2D) — re-readable message, never consumed
+│   └── scenes/
+│       └── info_log_interactable.tscn
 ├── statemachine/
 │   ├── state.gd               # State base contract
 │   └── state_machine.gd       # StateMachine — runs child States
@@ -61,18 +68,21 @@ global/
 
 ## 3. Autoloads
 
-All eight are registered in `project.godot` under `[autoload]`. The `*` prefix means the script is the singleton root. Note the path quirk: most live in `global/autoloads/` (plural), `DialogPlayer` lives in `global/autoload/` (singular), and `EventBus`/`CameraShake` live in `global/systems/`.
+All eleven are registered in `project.godot` under `[autoload]`. The `*` prefix means the script is the singleton root. Note the path quirk: most live in `global/autoloads/` (plural), `DialogPlayer` lives in `global/autoload/` (singular), and `EventBus`/`CameraShake` live in `global/systems/`.
 
 | Autoload | File | State it owns | Read / written |
 |---|---|---|---|
-| `MissionState` | `global/autoloads/mission_state.gd` | Per-mission `completed` / `stars` / `high_score`, plus cutscene-seen flags. Persists to `user://mission_state.cfg`. | Written on mission win (`complete`, `record_score`) and when a cutscene plays (`mark_cutscene_seen`); read by the mission-select hub and HUD. |
+| `MissionState` | `global/autoloads/mission_state.gd` | Per-mission `completed` / `stars` / `high_score`, plus cutscene-seen flags. Persists to `user://mission_state.cfg`. | Written on mission win (`complete`, `record_score`) and when a cutscene plays (`mark_cutscene_seen`); read by the mission-select hub and HUD. Stars run on a `MIN_STARS`–`MAX_STARS` (1–3) scale: **0 is the reserved "never completed" sentinel** returned by `get_stars()` for an unplayed mission and drawn as three empty stars by `MissionListItem`, so a stored clear is always worth at least 1 star. `complete()` clamps out-of-range input into the scale *and* `push_warning`s, since every caller comes via `MissionConfigResource.stars_for_score()` (already floored at 1) and an out-of-range value therefore means the caller miscomputed. |
 | `DialogPlayer` | `global/autoload/dialog_player.gd` | Active dialog run state (`is_active`, `auto_mode`, current script/line). Owns a `DialogBox` instance. | Written by callers via `play(script)` / `skip_dialog()`; read by player controllers to gate input while `is_active`. |
-| `UpgradeState` | `global/autoloads/upgrade_state.gd` | Set of unlocked weapon-upgrade ids (`default`, `sniper_shot`, `spread`, `gatling`, `mining_laser`). Persists to `user://upgrades.cfg`. | Written by `unlock(id)`; read by weapon-selection UI via `is_unlocked` / `unlocked_ids`. Emits `unlocked_changed`. |
+| `UpgradeState` | `global/autoloads/upgrade_state.gd` | Set of unlocked ids, one list — `ALL_IDS` weapon modes (`default`, `sniper_shot`, `spread`, `gatling`, `mining_laser`). Persists to `user://upgrades.cfg`. `STARTING_IDS` (`[&"default"]`) is what a fresh profile is seeded with; every other id must be granted by a `WeaponModeUnlockerPickup` in the world. | Written by `unlock(id)` — whose only production caller is that pickup; read by weapon-selection UI via `is_unlocked` / `unlocked_ids`. Emits `unlocked_changed`, which `PlayerMenu` listens to so the main-weapon column rebuilds when an unlock lands mid-scene. Both `unlock()` and `_load()` reject any id failing `is_known_id()` with a `push_warning`, so a typo or a stale save entry can no longer sit in the store invisibly. |
 | `EventBus` | `global/systems/event_bus.gd` | No state — pure signal hub (health, overheat, weapon, mission, scoring signals). | Emitted by gameplay (e.g. `PlayerBase` emits `player_health_changed`); subscribed by HUD/UI instead of polling nodes. |
-| `ShipModuleState` | `global/autoloads/ship_module_state.gd` | Equipped + unlocked module id per slot (`cockpit`/`armor`/`weapons`/`engines`). Persists to `user://ship_modules.cfg`. | Written by `equip` / `unlock`; read by the ship menu and player ship on spawn. Emits `module_equipped` / `module_unequipped` / `module_unlocked`. |
-| `ShipProgressionState` | `global/autoloads/ship_progression_state.gd` | Permanent shield slot count (clamped 1..5). Persists to `user://ship_progression.cfg`. | Written by `add_permanent_shield` / `set_permanent_shield_count`; read by `Shield._ready()` when `bind_progression == true`. Emits `permanent_shield_count_changed`. |
-| `SessionState` | `global/autoloads/session_state.gd` | Cross-level temporary buffs: temp shield count, temp HP pool, timed damage buff (saved as Unix expiry). Persists to `user://session.cfg`. | `apply_to(player)` called from `PlayerBase._setup_components()`; auto-saved when shield/temp-HP/damage-buff state changes. |
+| `ShipModuleState` | `global/autoloads/ship_module_state.gd` | Equipped + unlocked module id per slot (`cockpit`/`armor`/`weapons`/`engines`). Persists to `user://ship_modules.cfg`. **`equip()` refuses a module that is not unlocked** (`&""`/unequip is exempt), so `unlock()` is the only way in. | Written by `equip` / `unlock`; read by the ship menu (`ModuleList` greys locked rows) and the player ship on spawn. Emits `module_equipped` / `module_unequipped` / `module_unlocked`. |
+| `ShipProgressionState` | `global/autoloads/ship_progression_state.gd` | Two independent stats on one `ConfigFile`: permanent shield slot count (clamped 1..5) and open-space boost charge capacity (clamped `MIN_BOOST_CHARGES`..`MAX_BOOST_CHARGES` = 2..5). Persists to `user://ship_progression.cfg` (`KEY_SHIELDS` / `KEY_BOOST`). | Shield side written by `add_permanent_shield` / `set_permanent_shield_count`, read by `Shield._ready()` when `bind_progression == true`, emits `permanent_shield_count_changed`. Boost side written by `add_boost_charge` / `set_boost_charge_count`, read by `BoostMeter._ready()` when `bind_progression == true` (the default), emits `boost_charge_count_changed`; `BoostMeter._on_progression_changed()` raises `max_charges` **and** grants the new charge immediately, so a pickup collected mid-flight is usable that session, not the next. Each stat's setter clamps, no-ops when unchanged, saves, and emits independently — raising one never disturbs the other on the shared file. |
+| `SessionState` | `global/autoloads/session_state.gd` | Cross-level temporary buffs: temp shield count, temp HP pool, timed damage buff (saved as Unix expiry). Persists to `user://session.cfg`. | `apply_to(player)` called from `PlayerBase._setup_components()`; auto-saved when shield/temp-HP/damage-buff state changes. `apply_to` binds the `TempHealth` node into the `amount_changed` handler so the saved stack size is read off the component rather than derived from the payload. |
 | `CameraShake` | `global/systems/camera_shake.gd` | A single `_trauma` float (0..1) that decays each frame. | Written by any system via `add(amount)`; read each frame by cameras via `get_offset()` (used inside `CameraDirector`). |
+| `LogState` | `global/autoloads/log_state.gd` | Which `LogEntryResource` ids are collected. Persists to `user://log_state.cfg`. `total_count()` is a `DirAccess` sweep of `catalogue_dir` (`global/resources/logs/entries/` in production) — never a hand-maintained list, unlike `UpgradeState.ALL_IDS`. | `collect_next()` is the only mutator: an anonymous lore-log pickup calls it with no id and it grants the lowest-`sequence` entry not yet collected, so the story reads in catalogue order regardless of where in the world it was found. Read via `is_collected` / `collected_ids` / `all_ids` (catalogue order, unfiltered — the ESC menu's Lore Logs reader below is its only caller) / `get_entry` / `total_count`. Emits `log_collected(id)`. Validates on load like `ShipModuleState`/`UpgradeState`: an id in the save file with no matching catalogue entry is `push_warning`ed and dropped. Information logs (one-time, non-persisted) never touch this store. |
+| `PickupState` | `global/autoloads/pickup_state.gd` | Which `StringName` `persistent_id`s have ever been collected, independent of any physical node. Persists to `user://pickup_state.cfg`, same `ConfigFile` shape as `LogState`. | `mark_collected(id)` (idempotent) is the only mutator, called from `PickupBase._on_body_entered()` when a collected pickup's `persistent_id` is non-empty; `has_collected(id)` gates the same handler so a respawned pickup (e.g. an assault mission restart, which reloads the scene) does not re-grant an id already collected. A pickup that leaves `persistent_id` at its default `&""` (every pickup shipped today) never touches this store and keeps respawning every scene load. |
+| `SettingsState` | `global/autoloads/settings_state.gd` | Player settings, one `ConfigFile` (`user://settings.cfg`). First key: `open_space_scheme` (`&"mouse"` / `&"keys"`, default `&"mouse"`), re-validated against `SCHEMES` on load with a fallback to the default. Named `SettingsState`, not `ControlsState`, so a future setting (e.g. mouse sensitivity) lands as another key here rather than a second autoload. | `set_open_space_scheme(scheme)` validates, saves and emits `open_space_scheme_changed(scheme: StringName)` — but only on an actual change, so a redundant set neither writes to disk nor re-seeds a live `ShipTurnController` mid-flight. `OpenSpacePlayerShip._ready()` seeds its `ShipTurnController.scheme` from `get_open_space_scheme()` and connects the signal to re-seed it live, without a scene reload. The player changes it from the ESC menu's **Settings** panel (`SettingsPanel`, below) — the store's only writer outside tests. |
 
 ## 4. Shared systems (`global/systems/`)
 
@@ -92,6 +102,8 @@ Abstract base for level background renderers. Subclasses must override `transiti
 
 > Entities compose behaviour by adding child nodes and wiring signals. The canonical wiring of all of this for the player is `PlayerBase` (`global/entities/player_base.gd`); generic ships use `DamageReaction` instead. Verify the API of each component (linked file) before copying a snippet.
 
+> **Not every component lives here.** Two of the open-space ship's children are deliberately kept beside it in `open_space/scenes/entities/player/` rather than in `global/components/`, because they are open-space-only verbs and this project's mode isolation is structural: `ShipTurnController` (steering — [open_space.md](open_space.md) §3.2.1) and `BoostMeter` (the Shift boost's charge economy — §3.2.3). Both are resolved **by type** from `player_ship.gd::_ready()`. `class_name` still registers globally, so the placement is a signal of intent; the enforcement is `tests/integration/test_open_space_boost_wiring.gd`'s invariant cases over the assault and infiltration player scenes.
+
 > **Every component in this section has a characterization test.** Before changing one, read its
 > test — it is the fastest correct description of what the component actually does, including the
 > edge cases the source does not spell out. Mapping: `Health` → `tests/unit/test_health_component.gd`,
@@ -107,6 +119,8 @@ Add a `Health` node (`class_name Health extends Node`) as a child named `HealthC
 
 `TempHealth` (`class_name TempHealth extends Node`, child named `TempHealthComponent`) is an optional buffer that drains *before* `Health`. `add_stack(base_health)` adds one stack of `base_health/2` HP (cap `MAX_STACKS = 5`); `take_damage(amount)` drains and returns the overflow that should hit `Health`. Signal `amount_changed(current, maximum)`.
 
+Read-only properties `max_temp` (the cap, `MAX_STACKS * stack_hp`) and `stack_hp` (what one stack is worth, locked in by the first `add_stack`/`restore` and `0` before that). **Anything persisting the pool must save `stack_hp` and feed it back through `restore(current, saved_stack_hp)` — never recover it as `max_temp / MAX_STACKS`.** That division inverts an invariant the component is free to change, and truncates toward zero if it stops holding, silently handing the player back a smaller pool than they earned. `SessionState` does this correctly by binding the component into its `amount_changed` handler.
+
 ```gdscript
 # Manual damage routing (TempHealth in front of Health):
 var overflow := temp_health.take_damage(damage)   # returns leftover
@@ -118,9 +132,34 @@ if overflow > 0:
 
 `HitBox` (`extends Area2D`) is the *attacker* side: exports `damage: int = 1` and `damage_type: DamageType` (`enum DamageType { LASER, ROCKET, CONTACT }`). Put it on bullets, rockets, and ramming bodies.
 
+**Contact hitboxes are scene-authored, not code-built.** An entity that damages the player on
+ramming contact — every assault enemy, `ally_fighter`, the asteroid family — authors a
+`ContactHitBox` node directly in its `.tscn`: an `Area2D` running `hitbox_component.gd`
+(`uid://deqgbl6m44nrj`), with a `CollisionShape2D` child whose `shape` references the **exact same
+`SubResource` id** as the entity's body `CollisionShape2D` (Godot resolves a `SubResource` id to
+one shared object per scene file, so this reproduces object-identity sharing, not a copy) and
+whose `scale` is copied verbatim from the body node. `layer`/`mask`/`damage`/`damage_type` are
+authored directly on the node; a script only overwrites `.damage` in `_ready()` when a
+`*_config.tres` needs to override the scene's default (see `BaseEnemy.contact_hit_box` below).
+Copying only the `Shape2D` and skipping the node's `scale` is how every code-built contact box in
+the game used to end up smaller than its visible hull — the gunship rammed with an 18 px box
+against a 41.5 px ship — which is why this is authored geometry now, not code. See
+`assault/scenes/hazards/big_asteroid/big_asteroid.tscn` for the pattern this was modelled on, and
+`assault/scenes/enemies/bomber/bomber.tscn` for a `BaseEnemy` subclass's version.
+`tests/integration/test_contact_hitbox_geometry.gd` sweeps every entity that has one and fails the
+gate if a hitbox stops matching its body; the same file also asserts `damage_type` is authored as
+`CONTACT` rather than the `HitBox` class default of `LASER`, since a ram is contact damage.
+
+`BaseEnemy` exposes the node as `@onready var contact_hit_box: HitBox =
+get_node_or_null("ContactHitBox") as HitBox` (nullable — `bonus_drone` authors none, which is its
+"contact-harmless" behaviour). `AllyFighter` (not a `BaseEnemy`) does the same under its own
+`_contact_hit_box`.
+
 `HurtBox` (`extends Area2D`) is the *target* side. In `_ready()` it connects `area_entered`; when an overlapping area is a `HitBox` (and passes the optional `accepted_damage_types` filter), it re-emits `received_damage(damage)`. Filtering by type is via the exported `accepted_damage_types: Array[HitBox.DamageType]` (empty = accept all).
 
 Collision wiring: set the `HitBox`'s `collision_layer` to a "damage" layer and leave its mask empty; set the `HurtBox`'s `collision_mask` to scan that same layer. Only `Area2D`↔`Area2D` overlap is detected — `HurtBox` ignores non-`HitBox` areas. The damage path is **HitBox overlaps HurtBox → `HurtBox.received_damage` → your handler (or `DamageReaction`) → Shield/Health**.
+
+Geometry: a `HurtBox` should **cover** the body `CollisionShape2D` the entity collides with. Armour and invulnerability are damage *rules* applied in the `received_damage` handler — deflect, flash, report 0 — never a shrunken or absent hurtbox, which leaves visible hull that swallows shots and reports nothing (it reads to the player as a broken gun, not as armour, and it silently disables the two systems that drive `received_damage` with no physics at all). `tests/integration/test_enemy_hurtbox_geometry.gd` sweeps every assault entity and fails the gate on a hurtbox that stops covering its body.
 
 ```gdscript
 # On the target entity:
@@ -191,10 +230,70 @@ A *module* is a `RefCounted` strategy object (not a node) that mutates the playe
 
 `ShipModuleState` persists which module id is equipped/unlocked per slot (`SLOT_MODULES` lists the valid ids; the registered ids are: cockpit `trajectory_calc`/`emp_blast`/`ai_targeting`/`cockpit_heal`; armor `armor_plating`/`parry`/`shield_overload`/`final_resort`; weapons `overclock`/`plasma_nova`/`overheat_nullifier`/`pierce`/`shooting`; engines `warp`/`engine_boost`). All 15 module scripts are registered in `create()` (one class per id).
 
+**The unlock gate.** `equip(slot, id)` validates the slot, then the catalogue, then `is_unlocked(slot, id)` — a module the player has not recovered cannot be installed. `&""` (unequip) is exempt at every layer, so a slot can always be cleared; a gate that could trap a module in a slot would be worse than no gate. `ShipModuleUnlockerPickup` is the only writer of the unlock store, and the sector hub carries one unlocker for every module (see [`open_space.md`](./open_space.md)). `_load()` grandfathers a module that is equipped but not unlocked — that is every save written before the gate existed — appending it to the slot's unlocked list rather than confiscating a loadout the player is flying with; the append is guarded on `!= &""` and `not in list`, so it neither pollutes the store with the `&""` sentinel nor duplicates on every boot.
+
+In the ship menu, `ModuleList` shows locked modules greyed rather than hiding them, prefixes their description with `LOCKED — recover this module's unlocker to install it.`, and makes `confirm()` a defined no-op on a locked row — the same shape `MissionSelectMenu` already uses for a locked mission. Row 0 (`&""`/None) is never locked.
+
+### Lore Logs reader — `pause_menu/lore_log_list.gd` (`LoreLogList`), `lore_log_list_item.gd`
+
+A fourth `PauseMenu` option (`Option3`, present in both `mission_mode` states) opens a full-catalogue
+reader over `LogState`: every entry from `LogState.all_ids()` gets a row in catalogue order, found
+ones show their real title and — once the cursor lands on them — their full body, unfound ones show
+a `???` title and a locked placeholder body. The header reads `Lore Logs — <collected> / <total>`.
+It reuses `ModuleList`'s locked-row modulate language (`LoreLogListItem` — title only, no icon, no
+equipped tint, since nothing here is ever installed) but **pages instead of truncating**:
+`ModuleList.MAX_ITEMS = 8` silently drops any row past the 8th, which is fine for a module slot list
+that never grows past a handful of options but wrong for a log catalogue expected to outgrow one
+screen. `LoreLogList.PAGE_SIZE = 8` instead splits the catalogue into fixed-size pages —
+`menu_left`/`menu_right` change page (header appends `(Page P/N)` when there's more than one),
+`menu_up`/`menu_down` move the cursor within the current page. There is no separate "confirm to
+read" step; navigating already reveals a row's body, the same way `ModuleList._refresh_cursor()`
+shows a hovered row's description.
+
+`PauseMenu` owns opening/closing it directly (`_lore_logs_open: bool`, mirroring
+`PlayerMenu._module_list_open`) rather than the reader emitting a `closed`/`cancelled` signal:
+while it's open, `_unhandled_input` routes `menu_up/down/left/right` to the reader and absorbs
+everything else (`menu_confirm` included — it must never fall through to `_confirm()` and
+re-trigger `_lore_log_list.open()`), and `ui_cancel` closes the reader back to the option list
+instead of closing the whole pause menu.
+
+### Settings panel — `pause_menu/settings_panel.gd` (`SettingsPanel`)
+
+`Option4` = **Settings**, which opens a second sub-overlay with exactly the same
+`open()`/`close()`/`navigate(dir)` shape as `LoreLogList` and the same routing rules
+(`_settings_open: bool`; while open `_unhandled_input` absorbs **all** menu input, `menu_confirm`
+included, and `ui_cancel` returns to the option list rather than closing the pause menu). It adds
+one verb the reader does not have: `cycle(dir)`, bound to `menu_left`/`menu_right`.
+
+Settings was **appended before Exit Game, not inserted elsewhere**, so Exit Game stays last where a
+player expects it — which moved Exit Game from `Option4` to **`Option5`** in both
+`pause_menu.tscn` and `open_space_pause_menu.tscn` (the two scenes duplicate their option nodes
+rather than sharing them, and their row geometry differs: mission rows sit at
+`110/178/244/310/376/442` under a container at `y = 184`, open-space rows at `112/—/—/178/244/310`
+under a container at `y = 226`, with `Option1`/`Option2` bare `Node2D`s carrying no `Label` child
+at all — never loop `get_node("Label")` over `_options` in that scene).
+
+One row today — **Open-Space Steering: Mouse Aim / Classic (A/D)** — cycling straight into
+`SettingsState.set_open_space_scheme()`, which owns validation, persistence and the change signal.
+`_refresh()` re-reads the store on every `open()` and every `cycle()` rather than caching, because
+the panel is built with the pause-menu scene long before anyone opens it. A second row is another
+entry in `_rows` plus another branch in `cycle()`; there is deliberately **no generic settings
+framework**, which for a single two-valued key would be pure churn.
+
+The row is shown in **all three modes**, not just open space: it is a stored preference, and hiding
+it during a mission would mean flying back to the hub to change your controls. The label names its
+scope, which is what keeps it from being a discoverability trap.
+
+Gated by `tests/integration/test_pause_menu_settings.gd`, whose load-bearing case drives the **live**
+`SettingsState` through `menu_right` — a settings row with an empty handler passes every "is it
+visible and labelled" assertion, the same placement-only trap `test_weapon_unlock_sources.gd`
+records for pickups.
+
 To add a new module:
 1. Create `global/ship_modules/foo_module.gd` (`class_name FooModule extends ShipModuleBase`); override `get_slot`, names/icon, and `apply`/`remove` (+ `try_activate`/`tick` if active).
 2. Add a `match` arm in `ShipModuleBase.create()`.
-3. Add its id to the slot's list in `ShipModuleState.SLOT_MODULES` (and the `ShipModuleUnlockerPickup.Module` enum if a pickup should grant it).
+3. Add its id to the slot's list in `ShipModuleState.SLOT_MODULES` **and** to the `ShipModuleUnlockerPickup.Module` enum.
+4. Place a `ship_module_unlocker_pickup.tscn` instance that grants it. This is **not optional** since the unlock gate landed: a module with no unlocker is a row the player can see and can never install. `tests/integration/test_module_unlock_sources.gd` fails if you skip it.
 
 ```gdscript
 class_name FooModule
@@ -211,7 +310,7 @@ func remove(player: Node) -> void:
 All are `Node2D` wrappers around `CPUParticles2D`. Set their `@export`s *before* `add_child()` so `_ready()` reads them.
 
 - **`HitEffect`** — one-shot burst on damage. Call `burst()` from the hit handler. Exports include `amount: int = 10`, `lifetime: float = 0.25`, `color`, velocity/scale ranges.
-- **`ExplosionEffect`** — bigger one-shot burst on death; call `explode()` just before `queue_free()`. Spawns particles into the *parent* container so they outlive the entity. `always_process: bool = false` lets the player death burst render while paused. `explode(at)` takes an **optional** `Vector2` overriding the spawn position, for entities whose death is a chain of blasts across a large hull rather than one central burst (`StationDeathSequence`); omitting it keeps the historic behaviour exactly. ⚠️ `at` moves the blast but does **not** re-home it — particles are still parented to `get_parent().get_parent()`, so an `ExplosionEffect` must be a child of the **entity**, never of one of the entity's own behaviour nodes.
+- **`ExplosionEffect`** — bigger one-shot burst on death; call `explode()` just before `queue_free()`. Resolves its **actor** by walking up from its own parent to the nearest `Node2D` ancestor — so it may sit under a non-`Node2D` behaviour node (`DamageReaction`) without losing its position — and spawns particles at that actor's world position, into that actor's parent by default. `explode(at, container)`: `at` (optional `Vector2`) overrides *where* the blast lands, for entities whose death is a chain of blasts across a large hull rather than one central burst (`StationDeathSequence`); `container` (optional `Node`) overrides *what it lands in*, for an actor whose default parent is not a safe home (`StationTurret`, whose particles would otherwise die with the hull or inherit its spin). Both default to the historic behaviour when omitted. A `container` that is null, freed, or outside the tree falls back to the actor's parent. If no `Node2D` ancestor exists at all, it `push_warning()`s and does nothing, rather than failing silently. `always_process: bool = false` lets the player death burst render while paused.
 - **`ThrusterEffect`** — continuous engine flame. Call `set_state(state)` each physics frame with `State.{IDLE,THRUST,BOOST,POWER,BOOST_PANEL}`; transitions are instant and de-duplicated.
 - **`LowHealthSmoke`** — call `setup(health)` after `add_child()`; it connects `health.amount_changed` and emits smoke automatically when HP ≤ `threshold` (default `0.3`) and `current > 0`. `deactivate()` stops it.
 - **`RocketTrail`** — continuous world-space trail; add under a rocket scene. `offset_behind: float = 8.0` places it behind the nose.
@@ -240,18 +339,57 @@ Subclasses call `super()` in `_ready()` (and in the overridable hooks `_setup_ef
 ## 6. Pickups & resources
 
 ### Pickups (`global/pickups/`)
-`PickupBase` (`class_name PickupBase extends Area2D`) connects `body_entered`; when a body in group `"player"` (cast to `PlayerBase`) enters, it calls `_collect(player)`, optionally shows a notification via `DialogPlayer` if `_get_dialog_text()` is non-empty, then `queue_free()`s. Subclasses override `_collect` / `_get_dialog_text`. Concrete pickups:
+`PickupBase` (`class_name PickupBase extends Area2D`) connects `body_entered`; when a body in group `"player"` enters, it casts to `PlayerBase` and, if that succeeds, calls `_collect(player)` exactly as before — subclasses override `_collect(player: PlayerBase)` / `_get_dialog_text`, and none of the 10 concrete pickups below changed. If the cast fails (the body is in group `"player"` but is not a `PlayerBase` — currently only the infiltration player), it instead calls the opt-in fallback hook `_collect_any(body: Node2D) -> bool`, whose base-class default returns `false` and leaves the pickup completely untouched (no free, no notification) — the same no-op as before this hook existed. A subclass meant to work against a non-`PlayerBase` body overrides `_collect_any` and returns `true` when it handles the pickup. Either path then checks `@export var persistent_id: StringName` (empty by default, matching every pickup today): if set and `PickupState.has_collected(persistent_id)` is already true, the pickup silently `queue_free()`s without re-running `_collect`/`_collect_any` — this is what stops a one-time pickup placed in a replayable mission (an assault restart does `get_tree().reload_current_scene()`, respawning every static child fresh) from re-granting itself. `PickupState` (`global/autoloads/pickup_state.gd`, autoload) is the persisted "ever collected" store behind it, modeled on `LogState`'s save shape. Then, same as before: shows a notification via `DialogPlayer` if `_get_dialog_text()` is non-empty, then `queue_free()`s.
+
+**A pickup/interactable Area2D also only ever sees a body whose `collision_layer` overlaps its `collision_mask`** (every pickup scene and `InfoLogInteractable` use `collision_mask = 4`, the `"environemnt_player"` layer) — the group/cast check inside the handler is a second, independent gate that only runs once the signal has already fired. `assault/scenes/player/player_fighter.tscn` sets `collision_layer = 4` on its body; `infiltration/scenes/entities/player/player.tscn`'s `CharacterBody2D` now does too (added alongside its `"player"` group membership — see Interactables below). Concrete pickups:
 
 | Pickup | Effect |
 |---|---|
 | `health_tank_pickup.gd` | `health.increase(40)` |
 | `armor_and_health_pickup.gd`, `armor_tank_pickup.gd` | restore armor (shields) and/or health |
 | `ship_shield_up_pickup.gd` | `ShipProgressionState.add_permanent_shield()` (permanent slot) |
+| `ship_boost_up_pickup.gd` | `ShipProgressionState.add_boost_charge()` (open-space Shift-boost capacity, +1, capped at `MAX_BOOST_CHARGES`) |
 | `temporary_shield_up_pickup.gd`, `temporary_health_up_pickup.gd`, `temporary_health_shield_up_pickup.gd` | add temp shield charge / temp-HP stack (persisted by `SessionState`) |
 | `temporary_damage_up_pickup.gd` | `player.apply_temp_damage_buff(0.5, 15.0)` |
 | `ship_module_unlocker_pickup.gd` | `ShipModuleState.unlock(slot, module_id)`; inspector-selectable `module_slot` / `module_id` enums |
+| `weapon_mode_unlocker_pickup.gd` | `UpgradeState.unlock(weapon_id())` — grants one main-weapon mode permanently; inspector-selectable `weapon` enum (`SNIPER_SHOT`, `SPREAD`, `GATLING`, `MINING_LASER`). Dialog line reads `display_name` off the mode's own `.tres`. |
+| `lore_log_pickup.gd` | `LogState.collect_next()` — no `@export`, deliberately anonymous like `LogState`'s own model: grants whichever catalogue entry has the lowest `sequence` and isn't collected yet, regardless of where in the world it was found. Dialog line names the entry title, or is empty (no notification) once the catalogue is exhausted. Placed 3 times in `open_space/scenes/levels/sector_hub.tscn`, one per `global/resources/logs/entries/*.tres` — see [`../open_space.md`](../open_space.md) → 3.1. |
 
 Each has a matching scene under `global/pickups/scenes/`.
+
+### Interactables (`global/interactables/`)
+Deliberately **not** under `pickups/` and **not** a `PickupBase` subclass: `InfoLogInteractable`
+(`class_name InfoLogInteractable extends Area2D`) is input-driven and never consumes itself, the
+opposite of a pickup's free-on-contact contract. It represents an **information log** — a tablet,
+terminal, or scrap of hull carrying one-time flavor text that is never stored and never counted
+toward completion (contrast `LogState`'s lore logs, above). `body_entered`/`body_exited` (filtered
+to group `"player"`) track how many player bodies currently overlap it and show/hide a child
+`PromptLabel` accordingly; `_unhandled_input` fires on the `interact` action (bound to **F** in
+`project.godot`) while a player is in range, guarded by `DialogPlayer.is_active` exactly like
+`PickupBase._show_notification()`'s busy-guard. Firing builds a one-line, `INSTANT`, `INNER_THOUGHT` `DialogScriptResource` with
+`pause_gameplay = false` via its own `_build_script()` (mirrors `PickupBase`'s notification
+construction rather than sharing code with it — the two call sites' lifecycles differ enough,
+and it's only two of them, that extracting a shared helper wasn't worth touching an unrelated
+file for) and hands it to `DialogPlayer.play()` — nothing frees the node or marks it "read," so
+interacting again replays the same message.
+Physics layers: `collision_layer = 2` (`environment_interactable`, named for exactly this kind of
+object in `project.godot`), `collision_mask = 4` (`environemnt_player` — the same mask every
+pickup scene uses to detect the `open_space`/`assault` player bodies, which set
+`collision_layer = 4` on their main shape). The shipped scene,
+`global/interactables/scenes/info_log_interactable.tscn`, carries no sprite by design — "tablet",
+"terminal", and "scrap of hull" are different physical dressings for the same interaction
+contract, so a placement site adds its own `Sprite2D` child and sets `message`/`prompt_text`.
+`infiltration/`'s player is now in group `"player"` (`player.gd::_ready()`) and on
+`collision_layer = 4` (`player.tscn`), matching what this interactable and every `PickupBase`
+scene require to detect it — both were needed together; the group alone does not make the
+Area2D's `body_entered` signal fire at all. `assault/scenes/levels/edelia/1/level_1.tscn` and
+`infiltration/scenes/levels/TestIsometricScene.tscn` each place one `InfoLogInteractable`
+(node name `LogRecord`) as a static scene child, proving both placements — see
+`tests/integration/test_log_record_mission_placement.gd`. `open_space/scenes/levels/sector_hub.tscn`
+places two more (`InfoLogHubTerminal`, `InfoLogVoeterWreck`, each with its own `message`) — see
+[`../open_space.md`](../open_space.md) → 3.1 and `tests/integration/test_hub_log_placement.gd`.
+
+**Unlocker pickups are the only unlock source in the game.** Neither `ShipModuleState` nor `UpgradeState` is written from anywhere else, so a module or weapon mode with no unlocker placed in the world is content the player can see and never reach. Both benches live in `open_space/scenes/levels/sector_hub.tscn`, and both pairings are invariant-tested — `tests/integration/test_module_unlock_sources.gd` and `tests/integration/test_weapon_unlock_sources.gd`. The weapon exception is `UpgradeState.STARTING_IDS` (`[&"default"]`), seeded on a fresh profile.
 
 ### Resources (`global/resources/`)
 Pure-data `Resource` types (shareable `.tres` assets; runtime state is kept out of them so multiple ships can share one asset).
@@ -263,4 +401,42 @@ Pure-data `Resource` types (shareable `.tres` assets; runtime state is kept out 
 - **formation/** — `FormationResource` (base; `compute_slots() -> Array[FormationSlot]`, each slot an `offset` + `delay`). Subtypes: `line`, `v`, `wedge`, `diagonal`, `cluster`. `WaveManager` spawns one ship per slot.
 - **waves/** — `LevelResource` (`level_name` + ordered `waves`), `WaveResource` (`trigger_time` + `entries`), `SpawnEntryResource` (one ship/formation: `ship_scene`, `base_offset`, `spawn_delay`, `movement`, `exit_mode`, `look_*`, optional `formation`, `initial_props`).
 - **levels/** — `LevelSection` (one timed segment: `background_phase`, `transition_in_duration`, section-relative `waves`, `end_condition` ∈ {DURATION, WAVES_COMPLETE, ENEMIES_CLEARED}, `duration`) and `BackgroundPhase` (target alphas/scales/timings for the background renderer to tween toward).
+- **logs/** — `LogEntryResource` (`id`, `title`, `body`, `sequence`). One `.tres` per lore-log
+  entry; the catalogue is whatever sits in `entries/` at runtime — `LogState` sweeps the directory
+  rather than reading a hand-written list, so a new entry needs no registration anywhere else.
 - Top-level: `ship_config.gd`, `score_config.gd`, `skill_challenge_resource.gd` configure ship stats, scoring tuning, and skill-challenge windows respectively.
+
+#### `ShipConfig` and per-instance config resources
+
+`ShipConfig` (`global/resources/ship_config.gd`) is the base of all ten entity configs
+(`max_health`, `collision_damage`, `score_value`, `counts_toward_wave_clear`,
+`counts_as_escape`). Every entity declares
+`@export var config: XConfig = load("res://.../x_config.tres")`, and `ResourceLoader` caches by
+path — so without help, **every entity of a type in the process would hold the same object**, and it
+would be the same object a test's `preload()` returns. Writing one enemy's `config.max_health` then
+rewrote the shipped balance data for every other live enemy of that type and for the rest of the
+process.
+
+`ShipConfig.privatise(node)` swaps a node's `config` for a `duplicate()` of it, and is called from
+**both** `_init()` and `_enter_tree()` on `BaseEnemy` (`assault/scenes/enemies/base_enemy.gd`) and
+`AllyFighter` (`assault/scenes/allies/ally_fighter/ally_fighter.gd`). Both hooks are needed:
+
+- `_init()` runs before `instantiate()` returns, so `config` is private for writes made **before**
+  the entity enters the tree — which is where `wave_manager.gd:177-181` applies `initial_props`,
+  deliberately. An `_enter_tree()`-only copy would leave the project's own spawn-override idiom
+  writing to the shared resource.
+- `_enter_tree()` catches a `config` that a `.tscn` override or `initial_props` substituted in after
+  the constructor, and still runs before any **child's** `_ready()` — which the space station depends
+  on, since its four child nodes read `_station.config` in their own `_ready()`.
+
+They compose because `duplicate()` blanks `resource_path`, so a blank path *is* the marker of an
+already-private copy and the second call is a no-op.
+
+**The copy is shallow**, which is complete only while every config class stays flat — a `Resource`
+inside an `Array`/`Dictionary` is never duplicated, not even by `duplicate(true)`.
+`tests/integration/test_config_instance_isolation.gd` asserts the isolation, the value-identity
+against each shipped `.tres`, and that flatness, and it finds entities by directory sweep so a new
+enemy cannot escape it. **The object `load()`/`preload()` returns is still process-wide** — read it,
+never write to it. Two windows stay open and are written up in that test's header:
+`Node.duplicate()` hands two nodes one private copy, and `entity.config = load(...)` on an entity
+already in the tree fires neither hook. Neither is reachable from non-addon code today.

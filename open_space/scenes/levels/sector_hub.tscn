@@ -19,6 +19,10 @@
 [ext_resource type="PackedScene" uid="uid://brkwck4n8qa4f" path="res://global/pickups/scenes/temporary_health_shield_up_pickup.tscn" id="16_v8yrt"]
 [ext_resource type="PackedScene" uid="uid://csti8adftwjr8" path="res://global/pickups/scenes/temporary_health_up_pickup.tscn" id="17_rj32l"]
 [ext_resource type="PackedScene" uid="uid://db8j0pi368giu" path="res://global/pickups/scenes/temporary_shield_up_pickup.tscn" id="18_f6k3w"]
+[ext_resource type="PackedScene" uid="uid://c0oc8owfaowo3" path="res://global/pickups/scenes/weapon_mode_unlocker_pickup.tscn" id="19_wmu"]
+[ext_resource type="PackedScene" uid="uid://cvnfy2iwb4n5s" path="res://global/pickups/scenes/lore_log_pickup.tscn" id="20_lore"]
+[ext_resource type="PackedScene" uid="uid://bgtlo5mhub0mh" path="res://global/interactables/scenes/info_log_interactable.tscn" id="21_ilog"]
+[ext_resource type="PackedScene" path="res://global/pickups/scenes/ship_boost_up_pickup.tscn" id="22_sbu"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
@@ -101,6 +105,9 @@ position = Vector2(413, -212)
 [node name="TemporaryDamageUpPickup" parent="." unique_id=1714602967 instance=ExtResource("15_i5skt")]
 position = Vector2(519, -210)
 
+[node name="ShipBoostUpPickup" parent="." instance=ExtResource("22_sbu")]
+position = Vector2(730, -212)
+
 [node name="TemporaryHealthShieldUpPickup" parent="." unique_id=1412861584 instance=ExtResource("16_v8yrt")]
 position = Vector2(-130, -216)
 
@@ -109,3 +116,102 @@ position = Vector2(-280, -223)
 
 [node name="TemporaryShieldUpPickup" parent="." unique_id=2051867966 instance=ExtResource("18_f6k3w")]
 position = Vector2(-214, -215)
+
+[node name="ModuleUnlockerEmpBlast" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-280, -315)
+module_id = 1
+
+[node name="ModuleUnlockerAiTargeting" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-180, -315)
+module_id = 2
+
+[node name="ModuleUnlockerCockpitHeal" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-80, -315)
+module_id = 3
+
+[node name="ModuleUnlockerArmorPlating" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(20, -315)
+module_slot = 1
+module_id = 4
+
+[node name="ModuleUnlockerParry" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(120, -315)
+module_slot = 1
+module_id = 5
+
+[node name="ModuleUnlockerShieldOverload" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(220, -315)
+module_slot = 1
+module_id = 6
+
+[node name="ModuleUnlockerFinalResort" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(320, -315)
+module_slot = 1
+module_id = 7
+
+[node name="ModuleUnlockerOverclock" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-280, -415)
+module_slot = 2
+module_id = 8
+
+[node name="ModuleUnlockerPlasmaNova" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-180, -415)
+module_slot = 2
+module_id = 9
+
+[node name="ModuleUnlockerOverheatNullifier" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(-80, -415)
+module_slot = 2
+module_id = 10
+
+[node name="ModuleUnlockerPierce" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(20, -415)
+module_slot = 2
+module_id = 11
+
+[node name="ModuleUnlockerShooting" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(120, -415)
+module_slot = 2
+module_id = 12
+
+[node name="ModuleUnlockerWarp" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(220, -415)
+module_slot = 3
+module_id = 13
+
+[node name="ModuleUnlockerEngineBoost" parent="." instance=ExtResource("13_b4ymh")]
+position = Vector2(320, -415)
+module_slot = 3
+module_id = 14
+
+[node name="WeaponUnlockerSniperShot" parent="." instance=ExtResource("19_wmu")]
+position = Vector2(-280, -515)
+
+[node name="WeaponUnlockerSpread" parent="." instance=ExtResource("19_wmu")]
+position = Vector2(-180, -515)
+weapon = 1
+
+[node name="WeaponUnlockerGatling" parent="." instance=ExtResource("19_wmu")]
+position = Vector2(-80, -515)
+weapon = 2
+
+[node name="WeaponUnlockerMiningLaser" parent="." instance=ExtResource("19_wmu")]
+position = Vector2(20, -515)
+weapon = 3
+
+[node name="LoreLogBeaconStatic" parent="." instance=ExtResource("20_lore")]
+position = Vector2(620, -212)
+
+[node name="LoreLogEdeliaSurvey" parent="." instance=ExtResource("20_lore")]
+position = Vector2(720, 420)
+
+[node name="LoreLogFortunaManifest" parent="." instance=ExtResource("20_lore")]
+position = Vector2(-700, 460)
+
+[node name="InfoLogHubTerminal" parent="." instance=ExtResource("21_ilog")]
+position = Vector2(0, -150)
+message = "Sector hub maintenance terminal: all patrol drones nominal. Somebody left the coffee dispenser running for six years."
+
+[node name="InfoLogVoeterWreck" parent="." instance=ExtResource("21_ilog")]
+position = Vector2(-480, -300)
+message = "Salvaged hull plate, drifting near Voeter K05M: scorch pattern doesn't match any registered weapon signature."

@@ -7,9 +7,10 @@
 ##
 ## ── Harness rules, inherited from `test_station_gunnery.gd` ──────────────────────────────────
 ##
-## 1. **Never write to `station.config`.** `space_station.gd:36` `load()`s the `.tres` and
-##    ResourceLoader caches, so every station in the process shares ONE object. Overrides go on the
-##    REINFORCEMENTS NODE, which copies the config in `_ready()` and never reads it again.
+## 1. **Never write to the `preload()`ed config resource.** That object is the shared, process-wide
+##    balance data. `station.config` is a private per-instance copy (`ShipConfig.privatise()`, from
+##    `BaseEnemy._init()` / `_enter_tree()`), so writing to that is safe — but overrides still go on
+##    the REINFORCEMENTS NODE, which is its tunable surface and its no-config fallback.
 ## 2. **The station is parented to a container `Node2D`.** Reinforcements spawn as SIBLINGS of the
 ##    station into `_station.get_parent()`, which in the real level is
 ##    `WaveManager.enemy_container` — so the container is what a test counts.

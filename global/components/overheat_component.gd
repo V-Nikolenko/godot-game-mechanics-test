@@ -12,7 +12,7 @@ var heat: float = 0.0
 ## Seconds remaining in the shoot-grace window.
 ## Reset to _SHOOT_GRACE on every increase_heat() call.
 ## While > 0 the player is still in an active shooting window and heat must not dissipate.
-## Must exceed the longest weapon fire_interval in the game (long_range = 0.45 s).
+## Must exceed the longest weapon fire_interval in the game (sniper_shot = 0.5 s).
 var _no_shoot_timer: float = 0.0
 const _SHOOT_GRACE: float = 0.5
 

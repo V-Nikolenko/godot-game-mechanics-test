@@ -12,9 +12,11 @@ const HUB_PATH := "res://open_space/scenes/levels/sector_hub.tscn"
 func _ready() -> void:
 	var path: String
 	if MissionState.has_cutscene_been_seen(INTRO_CUTSCENE_ID):
-		print("[BOOT] intro already seen — going to hub")
+		if OS.is_stdout_verbose():
+			print("[BOOT] intro already seen — going to hub")
 		path = HUB_PATH
 	else:
-		print("[BOOT] first launch — playing intro cutscene")
+		if OS.is_stdout_verbose():
+			print("[BOOT] first launch — playing intro cutscene")
 		path = INTRO_PATH
 	get_tree().change_scene_to_file.call_deferred(path)

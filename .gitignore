@@ -7,6 +7,12 @@
 export.cfg
 export_credentials.cfg
 
+# Editor atomic-save scratch files left behind by a crash mid-save
+# (e.g. light_assault_ship.tscn777863979.tmp) — each one duplicates its
+# source scene's UID verbatim; see tests/integration/test_resource_uid_integrity.gd.
+*.tscn*.tmp
+*.tres*.tmp
+
 # Imported translations (automatically generated from CSV files)
 *.translation
 
@@ -14,3 +20,8 @@ export_credentials.cfg
 .mono/
 data_*/
 mono_crash.*.json
+
+# Transient lock directory for BACKLOG.json's writer coordination
+# (backlog-store.js withLock, used by scripts/backlog-cli.js and backlog-ui.js).
+# Should never exist outside an in-flight write; never commit it if it does.
+BACKLOG.json.lock/

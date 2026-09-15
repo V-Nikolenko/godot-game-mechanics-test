@@ -8,14 +8,13 @@ extends CanvasLayer
 
 const _MODES_DIR := "res://assault/scenes/player/weapons/modes/"
 
-const _WEAPON_ICONS: Dictionary = {
-	&"default":      preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/weapon_icons/icon_ship_weapon_laser.png"),
-	&"piercing":     preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/weapon_icons/icon_ship_weapon_pierce.png"),
-	&"spread":       preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/weapon_icons/icon_ship_weapon_spread.png"),
-	&"gatling":      preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/weapon_icons/icon_ship_weapon_gatling.png"),
-	&"mining_laser": preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/weapon_icons/icon_ship_weapon_mining_laser.png"),
-}
-
+## Main-weapon icons live on `WeaponModeResource.icon`, in the mode's own `.tres` next to its
+## `display_name` — the same field the in-game HUD chip draws (`weapon_chip.gd`). There used to be
+## a second id -> icon map here; it was keyed `&"piercing"`, an id that has not existed since the
+## mode was renamed `sniper_shot`, and nothing reported it. One map, in the file that owns the id.
+##
+## Sub-weapons are not in that catalogue: `RocketState` selects them positionally, so their icons
+## and names stay as parallel arrays here.
 const _SUB_WEAPON_ICONS: Array[Texture2D] = [
 	preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/sub_weapon_icons/icon_ship_subweapon_missiles_barage.png"),
 	preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/sub_weapon_icons/icon_ship_subweapon_homming_misile.png"),
@@ -43,6 +42,12 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	_module_list.confirmed.connect(_on_module_confirmed)
 	_module_list.cancelled.connect(_on_module_cancelled)
+	## The main-weapon column is built once, by connect_states() during HUD _ready(); _toggle()
+	## never repopulates. So without this the player collects a WeaponModeUnlockerPickup in the
+	## sector hub and the column is still stale when they open the menu a moment later — and
+	## _confirm_selection() (live unlocked_ids()) and _current_max_row() (frame count) disagree.
+	## Connecting the signal means every unlock source, present and future, needs no extra wiring.
+	UpgradeState.unlocked_changed.connect(_on_upgrade_unlocked)
 
 func connect_states(weapon: WeaponState, rocket: RocketState) -> void:
 	_weapon_state = weapon
@@ -186,6 +191,14 @@ func _on_module_confirmed(module_id: StringName) -> void:
 func _on_module_cancelled() -> void:
 	_close_module_list()
 
+func _on_upgrade_unlocked(_id: StringName) -> void:
+	_populate_lists()
+	## The column just grew; clamp defensively and re-render both cursor and selection, since
+	## _populate_lists() rebuilds the sub-weapon frame too and would otherwise drop its highlight.
+	_cursor_row = mini(_cursor_row, _current_max_row())
+	_refresh_cursor()
+	_refresh_selection()
+
 func _populate_lists() -> void:
 	var ids := UpgradeState.unlocked_ids()
 	var main_names: Array[String] = []
@@ -193,7 +206,7 @@ func _populate_lists() -> void:
 	for id: StringName in ids:
 		var mode := _load_mode(id)
 		main_names.append(mode.display_name if mode != null else String(id))
-		main_icons.append(_WEAPON_ICONS.get(id, null) as Texture2D)
+		main_icons.append(mode.icon if mode != null else null)
 	_main_frame.populate(main_names, main_icons)
 	_sub_frame.populate(_SUB_WEAPON_NAMES, _SUB_WEAPON_ICONS)
 

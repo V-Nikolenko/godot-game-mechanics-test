@@ -76,8 +76,18 @@ func _destroy() -> void:
 	if shape:
 		shape.set_deferred("disabled", true)
 
+	## Explicit container: left to the default, the blast would land inside $Turrets, a child
+	## of the station hull. It would then inherit the hull's rotation while it lives and be
+	## freed with the wreck mid-burst if the hull dies first (SpaceStation._finish_death()
+	## frees the whole station) — exactly the order test_level_1_sequence.gd's last-turret-
+	## then-core kill performs. Re-homing it to the station's own parent (the enemy container)
+	## survives that. A null station or a null station parent falls back to the default.
+	var station := get_parent().get_parent() as SpaceStation
+	var station_container: Node = null
+	if station:
+		station_container = station.get_parent()
 	var explosion := ExplosionEffect.new()
 	add_child(explosion)
-	explosion.explode()
+	explosion.explode(null, station_container)
 
 	destroyed.emit(self)

@@ -9,13 +9,16 @@
 ##
 ## ── Two harness rules this file must obey ────────────────────────────────────────────────────
 ##
-## 1. **Never write to `station.config`.** `space_station.gd:24` `load()`s the `.tres` and
-##    `ResourceLoader` caches, so every SpaceStation in the process shares ONE
-##    `SpaceStationConfig` — the same object `preload()` hands this file. Mutating it to shorten
-##    the timings would permanently rewrite the shipped values for every later test in the run,
-##    including `test_config_laser_values_win_over_script_defaults` below. Tests shorten timings
-##    by writing the **phase node's own copied fields** instead (`StationLaserPhase` copies them
-##    in `_ready()`), which touches no shared state.
+## 1. **Never write to `STATION_CONFIG`, the `preload()`ed resource.** `ResourceLoader` caches by
+##    path, so that object is the shared, process-wide balance data; mutating it to shorten the
+##    timings would permanently rewrite the shipped values for every later test in the run,
+##    including `test_config_laser_values_win_over_script_defaults` below.
+##
+##    `station.config` is no longer that object: `ShipConfig.privatise()`, called from
+##    `BaseEnemy._init()` / `_enter_tree()`, gives every station a private `duplicate()`, and
+##    `test_config_instance_isolation.gd` holds that shut. Tests still shorten timings by writing
+##    the **phase node's own copied fields** (`StationLaserPhase` copies them in `_ready()`),
+##    because those are its tunable surface and its no-config fallback.
 ##
 ## 2. **Test timings are `warn 0.2 / active 0.3 / interval 2.5`.** The interval must stay LONGER
 ##    than a full beam lifetime (~1.9 s at these durations: warn + 0.56 s charge + 0.3 s active +
@@ -108,7 +111,7 @@ func _phase() -> StationLaserPhase:
 	return _station.get_node("LaserPhase") as StationLaserPhase
 
 
-## Shorten the timings on the PHASE NODE, never on `station.config` — see the header. Must be
+## Shorten the timings on the PHASE NODE, never on `STATION_CONFIG` — see the header. Must be
 ## called before the phase starts, i.e. before the last turret dies.
 ##
 ## `interval 2.5` is chosen to stay LONGER than a full beam lifetime at these durations
@@ -364,9 +367,11 @@ func test_beams_stop_and_do_not_outlive_the_station() -> void:
 
 ## Test 10 — `CLAUDE.md`'s config-driven rule.
 ##
-## Asserted against the PHASE NODE's copied fields, not `station.config`: `station.config` IS the
-## object `preload()` returns here, so comparing the two would be an identity check that cannot
-## fail. What actually needs pinning is that the copy in `_ready()` happened.
+## Asserted against the PHASE NODE's copied fields, not `station.config`. `station.config` is a
+## `duplicate()` of `STATION_CONFIG` (`ShipConfig.privatise()`), so comparing the two would only
+## re-assert what `test_config_instance_isolation.gd` already pins — and before that change it was
+## the very same object, i.e. an identity check that could not fail. What actually needs pinning
+## here is that the copy in `StationLaserPhase._ready()` happened.
 func test_config_laser_values_win_over_script_defaults() -> void:
 	var p := _phase()
 	assert_almost_eq(p.warn_duration, STATION_CONFIG.laser_warn_duration, 0.0001,

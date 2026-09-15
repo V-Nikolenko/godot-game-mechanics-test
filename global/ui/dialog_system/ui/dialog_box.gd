@@ -50,7 +50,7 @@ func _ready() -> void:
 
 ## Display one line. Awaitable — resolves when the player advances or skip fires.
 func present_line(line: DialogLineResource) -> void:
-	print("[DB] present_line enter  state=%d  active_bar=%s  top_bar=%s  bot_bar=%s" % [
+	_trace("present_line enter  state=%d  active_bar=%s  top_bar=%s  bot_bar=%s" % [
 		_state, _active_bar, _top_bar, _bot_bar])
 	if _state != State.IDLE:
 		push_warning("[DialogBox] present_line while not IDLE; forcing close.")
@@ -95,24 +95,24 @@ func present_line(line: DialogLineResource) -> void:
 	_state = State.FADE_IN
 	_active_bar.modulate.a = 0.0
 	_active_bar.visible = true
-	print("[DB] starting fade-in tween  active_bar=%s  tree_paused=%s" % [
+	_trace("starting fade-in tween  active_bar=%s  tree_paused=%s" % [
 		_active_bar, get_tree().paused])
 	_fade_in_tween = create_tween()
 	_fade_in_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 	_fade_in_tween.tween_property(_active_bar, "modulate:a", 1.0, _FADE_SEC)
 	await _fade_in_tween.finished
-	print("[DB] fade-in tween DONE")
+	_trace("fade-in tween DONE")
 	# Guard: if force-closed during fade-in, abort
 	if _state == State.IDLE:
 		return
 
 	# Reveal the text.
 	_state = State.TYPING
-	print("[DB] starting text reveal  reveal_mode=%d  text_len=%d" % [line.reveal, line.text.length()])
+	_trace("starting text reveal  reveal_mode=%d  text_len=%d" % [line.reveal, line.text.length()])
 	match line.reveal:
 		DialogLineResource.Reveal.TYPEWRITER:
 			var duration: float = max(line.text.length() / max(line.typing_speed, 1.0), 0.05)
-			print("[DB] typewriter tween  duration=%.2f" % duration)
+			_trace("typewriter tween  duration=%.2f" % duration)
 			_typing_tween = create_tween()
 			_typing_tween.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 			_typing_tween.tween_property(_active_text, "visible_ratio", 1.0, duration)
@@ -121,13 +121,13 @@ func present_line(line: DialogLineResource) -> void:
 			## which calls _typing_tween.kill() then emits typing_completed, also
 			## resolves this await. kill() does NOT emit finished in Godot 4.
 			_typing_tween.finished.connect(func() -> void:
-				print("[DB] typewriter tween finished naturally")
+				_trace("typewriter tween finished naturally")
 				if _state == State.TYPING:
 					_state = State.READY
 					typing_completed.emit()
 			, CONNECT_ONE_SHOT)
 			await typing_completed
-			print("[DB] typing_completed received  state=%d" % _state)
+			_trace("typing_completed received  state=%d" % _state)
 			## Return early — _state was already set to READY by the lambda or skip_typing.
 			return
 		DialogLineResource.Reveal.FADE_IN:
@@ -137,14 +137,14 @@ func present_line(line: DialogLineResource) -> void:
 			t.set_pause_mode(Tween.TWEEN_PAUSE_PROCESS)
 			t.tween_property(_active_text, "modulate:a", 1.0, 0.35)
 			await t.finished
-			print("[DB] fade-in text tween DONE")
+			_trace("fade-in text tween DONE")
 		DialogLineResource.Reveal.INSTANT:
 			_active_text.visible_ratio = 1.0
-			print("[DB] instant reveal DONE")
+			_trace("instant reveal DONE")
 
 	## Reached only by FADE_IN and INSTANT paths.
 	_state = State.READY
-	print("[DB] state=READY, emitting typing_completed")
+	_trace("state=READY, emitting typing_completed")
 	typing_completed.emit()
 
 
@@ -164,7 +164,7 @@ func advance() -> void:
 func skip_typing() -> void:
 	if _state != State.TYPING:
 		return
-	print("[DB] skip_typing — killing tween, emitting typing_completed")
+	_trace("skip_typing — killing tween, emitting typing_completed")
 	if _typing_tween:
 		_typing_tween.kill()  ## Does NOT emit finished in Godot 4.
 	_active_text.visible_ratio = 1.0
@@ -217,3 +217,10 @@ func _force_close() -> void:
 	_bot_bar.visible = false
 	_state = State.IDLE
 	line_finished.emit()
+
+
+## Per-line/per-tween tracing. Off unless Godot was started with `--verbose` — several of
+## these fire per dialog line, including from inside tween callbacks.
+func _trace(message: String) -> void:
+	if OS.is_stdout_verbose():
+		print("[DB] %s" % message)

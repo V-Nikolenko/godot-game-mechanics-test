@@ -5,16 +5,23 @@ class_name OpenSpacePlayerShip
 extends PlayerBase
 
 @export_category("Movement")
-@export var rotation_speed_deg: float = 220.0
 @export var thrust_acceleration: float = 380.0
 @export var reverse_acceleration: float = 220.0
 @export var max_speed: float = 420.0
 @export var damping: float = 0.6
 
 @export_category("Boost")
-@export var boost_redirect_speed: float = 200.0
-@export var boost_duration_sec: float = 0.3
-@export var boost_speed_threshold: float = 180.0
+## Shift boost. The nose's heading becomes the momentum, at a speed deliberately ABOVE
+## max_speed — below it the redirect reads as a brake, which is exactly what the deleted
+## flip-boost's 200 px/s was. These three are @exports because no headless gate can say
+## whether 700 px/s FEELS right; they are meant to be fly-tested from the inspector.
+@export var boost_exit_speed: float = 700.0
+## How long the boost holds its ceiling and its cyan flame — and, doubling up, the floor
+## under a retrigger, so mashing Shift cannot chain boosts.
+@export var boost_hold_sec: float = 0.35
+## px/s² the speed ceiling falls at once the hold window closes, back down to max_speed.
+## 700 → 420 in 0.70 s, so the whole above-cruise signature is ~1.05 s.
+@export var boost_ceiling_decay: float = 400.0
 
 ## Set true by WarpModule.apply(). Not used in open space (no DashState), but
 ## the property must exist so WarpModule can set/clear it without error.
@@ -35,15 +42,57 @@ const _LEAD_MAX        : float = 140.0  ## Max camera lead distance (px).
 ## Set true by OverclockModule.apply(). Allows firing past overheat.
 var overclock_module_active: bool = false
 
-var _boost_timer: float = 0.0
+## The ONE speed clamp on this ship, and the reason _handle_thrust() no longer carries a
+## tail max_speed clamp of its own. It is floored at max_speed, so it can only ever PERMIT
+## a boost's excess speed — it never yanks the ship's normal handling around.
+var _speed_ceiling: float = 420.0
+## Seconds left of the boost's hold window: the cyan flame, and the retrigger floor.
+var _boost_hold_left: float = 0.0
 var _overheat_bar: OverheatBar = null
+var _boost_bar: BoostBar = null
+
+## Same node path EngineBoostModule uses (engine_boost_module.gd:15).
+const _SPRITE_PATH: String = "SpriteAnchor/ShipSprite2D"
+
+## The ShipTurnController child — the only thing that writes this ship's rotation.
+## Resolved by TYPE in _ready(), not by node path, so the wiring cannot be broken by a
+## rename in the scene. Turning parameters (including the Classic 220 °/s that used to
+## be this script's `rotation_speed_deg`) live on it as inspector-visible @exports.
+var _turn: ShipTurnController = null
+
+## The BoostMeter child — the boost's charge economy. Resolved by TYPE in _ready() for the same
+## reason as _turn above. Null-checked at every use so a ship stripped of the node still flies
+## (the node being present is asserted by tests/integration/test_open_space_boost_wiring.gd,
+## not by a crash in the middle of a mission).
+var _boost_meter: BoostMeter = null
 
 ## Active module instances — created lazily in _apply_module().
 var _module_pool: Dictionary = {}  # { StringName: ShipModuleBase }
 
 func _ready() -> void:
 	super()  # add_to_group, _setup_components, _setup_effects
-	rotation = 0.0
+
+	## Seeded here, not at the declaration: an @export override from the scene lands after
+	## _init() but before _ready(), so this is the first point at which max_speed is the
+	## value the ship will actually fly at.
+	_speed_ceiling = max_speed
+
+	## Turning. The old `rotation = 0.0` that stood here is deliberately gone: it wiped
+	## the hull angle before anything could read it, which would make the seed below a
+	## no-op. It was behaviour-neutral to delete — player_ship.tscn's root sets no
+	## rotation, so the scene default already supplies 0.0.
+	for child: Node in get_children():
+		if child is ShipTurnController and _turn == null:
+			_turn = child as ShipTurnController
+		elif child is BoostMeter and _boost_meter == null:
+			_boost_meter = child as BoostMeter
+	if _turn != null:
+		## Seed the scheme from the persisted setting, and the target angle from the
+		## hull's ACTUAL facing, rather than relying on the controller and the ship
+		## both happening to default to 0.0.
+		_turn.set_scheme(SettingsState.get_open_space_scheme(), rotation)
+		SettingsState.open_space_scheme_changed.connect(
+				func(scheme: StringName) -> void: _turn.set_scheme(scheme, rotation))
 
 	## Overheat bar — top_level keeps it upright as the ship rotates;
 	## _physics_process updates its global_position to track the player.
@@ -51,6 +100,15 @@ func _ready() -> void:
 	_overheat_bar.top_level = true
 	add_child(_overheat_bar)
 	_overheat_bar.setup(overheat_component)
+
+	## Boost bar — same top_level pattern as the overheat bar, positioned 6 px under it
+	## (OverheatBar.BAR_HEIGHT = 4) in _physics_process. Only created if the ship actually
+	## carries a BoostMeter, so a ship stripped of the node does not crash.
+	if _boost_meter != null:
+		_boost_bar = BoostBar.new()
+		_boost_bar.top_level = true
+		add_child(_boost_bar)
+		_boost_bar.setup(_boost_meter)
 
 	## Connect module state signals for live equip/unequip during gameplay.
 	ShipModuleState.module_equipped.connect(_on_module_equipped)
@@ -89,12 +147,37 @@ func _physics_process(delta: float) -> void:
 	## Keep overheat bar centred on the ship in world space.
 	if _overheat_bar != null:
 		_overheat_bar.global_position = global_position + Vector2(0.0, 20.0)
+	if _boost_bar != null:
+		_boost_bar.global_position = global_position + Vector2(0.0, 26.0)
 	_update_camera_feel(delta)
 	## Tick all equipped modules every frame (handles cooldowns, timed effects).
 	for id: StringName in _module_pool.keys():
 		_module_pool[id].tick(self, delta)
 
+## The OS pointer stops updating while the window is unfocused, but
+## get_global_mouse_position() keeps returning the last in-window position — so without
+## this the ship holds a stale target angle and keeps turning toward it while the player
+## is alt-tabbed away. Freezing (rather than clearing) the target means resuming on
+## FOCUS_IN has no discontinuity: step() keeps running throughout, it just has nothing
+## new to chase.
+func _notification(what: int) -> void:
+	if _turn == null:
+		return
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT:
+		_turn.set_steering_enabled(false)
+	elif what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		_turn.set_steering_enabled(true)
+
 func _input(event: InputEvent) -> void:
+	## Real mouse motion releases an AITargetingModule snap. Deliberately NOT keyed off
+	## cursor position: get_global_mouse_position() is a world position that moves with
+	## the camera, so a physically still mouse would otherwise clear the snap on the
+	## very next frame. Not marked handled — this must not steal the event from anything
+	## else that reads mouse motion.
+	if event is InputEventMouseMotion:
+		if _turn != null:
+			_turn.notify_mouse_moved()
+		return
 	## _input fires before _unhandled_input — modules get first pick of H-key.
 	if not event.is_action_pressed("use_ability"):
 		return
@@ -104,13 +187,31 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return  ## Consumed by module.
 
+## Duck-typed entry point for AITargetingModule (and anything else that needs an
+## instant snap): adopt `angle` as the hull's rotation AND the turn controller's
+## target, and suppress cursor steering until the player's next real mouse motion —
+## otherwise the controller's own step() would undo the snap within a frame or two.
+func face_instant(angle: float) -> void:
+	rotation = angle
+	if _turn != null:
+		_turn.face_instant(angle)
+
 func _handle_rotation(delta: float) -> void:
 	var turn: float = 0.0
 	if Input.is_action_pressed("move_left"):
 		turn -= 1.0
 	if Input.is_action_pressed("move_right"):
 		turn += 1.0
-	rotation += deg_to_rad(rotation_speed_deg) * turn * delta
+	if _turn == null:
+		return
+	## `get_global_mouse_position()` is a CanvasItem method: it accounts for the canvas
+	## transform and the project's stretch/mode="canvas_items", so it is correct at any
+	## window size where a raw DisplayServer.mouse_get_position() would not be. This is
+	## the ONE place the mouse is read project-wide — everything downstream of here takes
+	## the cursor as an injected argument, which is what makes the turn model testable in
+	## a headless run that cannot place a cursor.
+	_turn.set_aim_target(global_position, get_global_mouse_position())
+	rotation = _turn.step(rotation, turn, delta)
 
 func _handle_thrust(delta: float) -> void:
 	## EngineBoostModule controls velocity directly while active;
@@ -124,20 +225,13 @@ func _handle_thrust(delta: float) -> void:
 	if Input.is_action_pressed("move_down"):
 		thrust_input -= 1.0
 
-	_boost_timer = max(_boost_timer - delta, 0.0)
-
-	if Input.is_action_just_pressed("move_up") and _boost_timer <= 0.0:
-		var backward_speed := -velocity.dot(forward)
-		if backward_speed >= boost_speed_threshold:
-			_trigger_flip_boost(forward)
-
 	if thrust_input > 0.0:
 		velocity += forward * thrust_acceleration * delta
 		_thruster.set_state(
-				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
 				else ThrusterEffect.State.THRUST)
 		_thruster_right.set_state(
-				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
 				else ThrusterEffect.State.THRUST)
 	elif thrust_input < 0.0:
 		velocity -= forward * reverse_acceleration * delta
@@ -146,18 +240,81 @@ func _handle_thrust(delta: float) -> void:
 	else:
 		velocity = velocity.lerp(Vector2.ZERO, clamp(damping * delta, 0.0, 1.0))
 		_thruster.set_state(
-				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
 				else ThrusterEffect.State.IDLE)
 		_thruster_right.set_state(
-				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
 				else ThrusterEffect.State.IDLE)
 
-	if velocity.length() > max_speed:
-		velocity = velocity.normalized() * max_speed
+	## LAST, and the only Input read this feature has. Everything the boost does — the
+	## trigger, the ceiling, and the speed clamp that used to sit right here — lives in
+	## _step_boost(), which takes the press as an argument so a headless run (where
+	## Input.is_action_just_pressed() can never return true) can still drive it.
+	_step_boost(Input.is_action_just_pressed("boost"), delta)
 
-func _trigger_flip_boost(forward: Vector2) -> void:
-	velocity = forward * boost_redirect_speed
-	_boost_timer = boost_duration_sec
+## The whole boost model. Pure apart from the flame in the trigger branch (below): no Input,
+## no Engine singletons, so every test calls it directly with an injected press.
+func _step_boost(boost_pressed: bool, delta: float) -> void:
+	## DELIBERATELY REDUNDANT with _handle_thrust()'s own early return, and not to be
+	## "cleaned up": every test drives _step_boost() directly and so bypasses that return.
+	## Without this line the two cases pinning module precedence fail on a CORRECT build,
+	## and the cheapest way to green them would be to delete them. engine_boost_active is
+	## READ here and never written — it stays owned by global/ship_modules/engine_boost_module.gd.
+	if engine_boost_active:
+		return
+
+	## The meter has no _physics_process of its own — the ship owns its clock, so a meter on a
+	## ship whose physics is off (a mission menu opening) is frozen with it. Stepped before the
+	## trigger so the spend below sets a full, un-decremented recharge pause.
+	if _boost_meter != null:
+		_boost_meter.step(delta)
+
+	## ORDER IS PART OF THE CONTRACT: the hold-window floor is checked BEFORE any spend
+	## (`and` short-circuits left to right), so mashing Shift inside the window costs nothing —
+	## and an empty meter refuses outright, spending nothing and leaving velocity alone.
+	if boost_pressed and _boost_hold_left <= 0.0 \
+			and (_boost_meter == null or _boost_meter.try_spend()):
+		velocity = Vector2.UP.rotated(rotation) * boost_exit_speed
+		_speed_ceiling = boost_exit_speed
+		_boost_hold_left = boost_hold_sec
+		_play_boost_flame()
+
+	if _boost_hold_left > 0.0:
+		_boost_hold_left = maxf(_boost_hold_left - delta, 0.0)
+		if _boost_hold_left <= 0.0:
+			_release_boost_flame()
+	else:
+		## move_toward is a linear ramp, so this is exactly frame-rate independent (unlike the
+		## lerp damping above, which is deliberately left alone here). maxf keeps the ceiling
+		## from ever dropping below cruise.
+		_speed_ceiling = maxf(
+				move_toward(_speed_ceiling, max_speed, boost_ceiling_decay * delta),
+				max_speed)
+
+	if velocity.length() > _speed_ceiling:
+		velocity = velocity.normalized() * _speed_ceiling
+
+## _step_boost()'s one tree touch, following engine_boost_module.gd:15,63-67 — the cyan flame is
+## the epic's chosen tell for "that was a boost". _handle_thrust()'s branches hold both thrusters
+## in BOOST for as long as _boost_hold_left is positive; setting them here too means the trigger
+## frame itself is not missing the flame.
+func _play_boost_flame() -> void:
+	var sprite := get_node_or_null(_SPRITE_PATH) as AnimatedSprite2D
+	if sprite != null:
+		sprite.play(&"flame_boost")
+	if _thruster != null:
+		_thruster.set_state(ThrusterEffect.State.BOOST)
+	if _thruster_right != null:
+		_thruster_right.set_state(ThrusterEffect.State.BOOST)
+
+## The counterpart of the above, and not optional: flame_boost has `loop = false`, so without it
+## the hull sits on the animation's last frame for the rest of the scene. Guarded on the current
+## animation so it cannot stomp an EngineBoostModule boost or the hub's planet_dive that started
+## inside our window.
+func _release_boost_flame() -> void:
+	var sprite := get_node_or_null(_SPRITE_PATH) as AnimatedSprite2D
+	if sprite != null and sprite.animation == &"flame_boost":
+		sprite.play(&"idle")
 
 func _get_or_create_module(id: StringName) -> ShipModuleBase:
 	if not _module_pool.has(id):

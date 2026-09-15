@@ -1,0 +1,20 @@
+[gd_scene format=3 uid="uid://c0oc8owfaowo3"]
+
+[ext_resource type="Script" path="res://global/pickups/weapon_mode_unlocker_pickup.gd" id="1_wmu"]
+[ext_resource type="Texture2D" uid="uid://dptqytf5g71or" path="res://global/assets/sprites/upgrade_1.png" id="2_wmu"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_wmu"]
+radius = 8.0
+
+[node name="WeaponModeUnlockerPickup" type="Area2D"]
+collision_layer = 16
+collision_mask = 4
+script = ExtResource("1_wmu")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture_filter = 1
+texture = ExtResource("2_wmu")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+scale = Vector2(3.111, 3.111)
+shape = SubResource("CircleShape2D_wmu")

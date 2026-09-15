@@ -7,16 +7,28 @@ extends CharacterBody2D
 
 @onready var _health: Health = $Health
 @onready var _hurt_box: Area2D = $HurtBox
+@onready var _contact_hit_box: HitBox = get_node_or_null("ContactHitBox") as HitBox
 
 const _BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 
 var bullet_pool: BulletPool
 var _explosion_effect: ExplosionEffect
 
+## Same two hooks, and the same reasoning, as `BaseEnemy._init()`/`_enter_tree()` — see the doc
+## comment there. `AllyFighter` extends `CharacterBody2D` directly rather than `BaseEnemy`, so it
+## is the one entity that would otherwise keep sharing its `ally_config.tres` with every other ally
+## in the process.
+func _init() -> void:
+	ShipConfig.privatise(self)
+
+
+func _enter_tree() -> void:
+	ShipConfig.privatise(self)
+
+
 func _ready() -> void:
 	add_to_group("allies")
 	_health.amount_changed.connect(_on_health_changed)
-	_add_contact_hitbox()
 
 	# Bullet pool
 	bullet_pool = BulletPool.new()
@@ -41,10 +53,8 @@ func _ready() -> void:
 	if config:
 		_health.max_health = config.max_health
 		_health.current_health = config.max_health
-		for child in get_children():
-			if child is HitBox:
-				(child as HitBox).damage = config.collision_damage
-				break
+		if _contact_hit_box:
+			_contact_hit_box.damage = config.collision_damage
 
 func _physics_process(_delta: float) -> void:
 	# Movement when no EnemyPathMover is attached (standalone ally).
@@ -57,7 +67,7 @@ func _physics_process(_delta: float) -> void:
 	if cam:
 		var vp := get_viewport().get_visible_rect().size
 		if global_position.y < cam.global_position.y - vp.y * 0.5 - 80.0:
-			print("[Ally] %s DESPAWNED (off-screen) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
+			_trace("[Ally] %s DESPAWNED (off-screen) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
 			queue_free()
 
 func _on_hurt_box_received_damage(damage: int) -> void:
@@ -65,20 +75,12 @@ func _on_hurt_box_received_damage(damage: int) -> void:
 
 func _on_health_changed(current: int) -> void:
 	if current == 0:
-		print("[Ally] %s DESPAWNED (died) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
+		_trace("[Ally] %s DESPAWNED (died) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
 		_explosion_effect.explode()
 		queue_free()
 
-func _add_contact_hitbox() -> void:
-	var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
-	if not col:
-		return
-	# Layer 64 = player_hitbox — enemy HurtBoxes (mask 97) detect this and take damage.
-	var hb := HitBox.new()
-	hb.collision_layer = 64
-	hb.collision_mask = 0
-	hb.damage = 25
-	var shape_node := CollisionShape2D.new()
-	shape_node.shape = col.shape
-	hb.add_child(shape_node)
-	add_child(hb)
+
+## Off unless Godot was started with `--verbose`.
+func _trace(message: String) -> void:
+	if OS.is_stdout_verbose():
+		print(message)

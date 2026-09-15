@@ -318,6 +318,12 @@ No case awaits more than a frame; nothing is driven by a wall clock.
   property of the spawn convention, not something 4b introduces, and diverging from the convention
   for one node would be worse. Hence `V_LIMIT` is excluded from the vertical margin budget above.
   Goes to `BACKLOG.md` *Discovered*.
+  **Resolved:** `docs/plans/a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr/` fixed
+  this project-wide — `_spawn_origin()` and every other spawn site now resolve against
+  `cam.global_position + cam.offset` (the camera's current view), so panning no longer moves a
+  spawn relative to what's visible and `V_LIMIT`/`H_LIMIT` headroom is no longer needed in the
+  margin budget at all (`ENEMY.md` updated accordingly). The shipped margin numbers above are
+  unchanged.
 - **[R2] The combo penalty** (see *Scoring and combo*). Accepted deliberately, pinned by test 17,
   and raised in `BACKLOG.md` *Discovered* and the run report for the user to overrule.
 - **Test noise.** Real enemy scenes instantiate real timers and AI. Squads are 2 ships, every test

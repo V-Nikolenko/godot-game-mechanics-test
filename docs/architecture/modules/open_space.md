@@ -17,12 +17,15 @@ open_space/scenes/
 ├── entities/
 │   ├── player/
 │   │   ├── player_ship.gd        # OpenSpacePlayerShip (extends PlayerBase) — free-flight controller + ship modules
-│   │   └── player_ship.tscn       # ship scene: components, attack state machine, animated sprite
+│   │   ├── player_ship.tscn       # ship scene: components, attack state machine, animated sprite
+│   │   ├── ship_turn_controller.gd # ShipTurnController — the ONLY writer of the ship's rotation
+│   │   └── boost_meter.gd          # BoostMeter — the Shift boost's charge economy (spend + refill)
 │   └── enemies/
 │       ├── patrol_drone.gd        # PatrolDrone — ambient hub enemy that drifts in a straight line
 │       └── patrol_drone.tscn
 ├── gui/
-│   └── hud.tscn                   # OpenSpaceHUD (CanvasLayer) — reuses global/ui/mission_hud.gd + shared HUD parts
+│   ├── hud.tscn                   # OpenSpaceHUD (CanvasLayer) — reuses global/ui/mission_hud.gd + shared HUD parts
+│   └── boost_bar.gd               # BoostBar — cyan pip readout for BoostMeter, drawn under the hull
 ├── levels/
 │   ├── sector_hub.gd              # SectorHub (Node2D) — the hub level; spawns drones, holds planets + pickups
 │   └── sector_hub.tscn            # composed scene: parallax bg, two planets, player+camera, HUD, pickups
@@ -60,7 +63,17 @@ open_space/scenes/
 - Two `MissionTrigger` instances of `mission_select_hub.tscn` named `edelia` and `voeter_k05m`, each with a different `PlanetConfigResource` (`planets/edelia.tres`, `planets/voeter_k05m.tres`) and per-instance `arc_*` overrides positioning the dwell-progress ring on the visible planet.
 - The `PlayerShip` instance, with a child `Camera2D` that itself carries a `CameraDirector` node (the shared camera arbitrator from [`./global.md`](./global.md)).
 - The `OpenSpaceHUD` (`gui/hud.tscn`).
-- An `EnemyContainer` (drones are added here at runtime) and a row of every shared pickup from `global/pickups/scenes/` (armor/health, module unlocker, temp buffs) so the hub doubles as a test/equip bench.
+- An `EnemyContainer` (drones are added here at runtime) and a row of every shared pickup from `global/pickups/scenes/` (armor/health, module unlocker, temp buffs) so the hub doubles as a test/equip bench. `ShipBoostUpPickup` (`x = 730, y = -212`) sits at the end of this row — `ShipProgressionState.add_boost_charge()`, the capacity upgrade for the open-space Shift boost meter; `x = 620` on the row was already taken by `LoreLogBeaconStatic`, so it lands one slot further out. `tests/integration/test_boost_upgrade_source.gd` asserts it is placed and that collecting it raises the live count.
+- Above that row, **two further rows of `ShipModuleUnlockerPickup` instances (y = -315 and y = -415)** — one per ship module, 15 in total counting the `trajectory_calc` unlocker on the original bench row. Since `ShipModuleState.equip()` gained its unlock gate these are the game's only way to make a module installable, so the bench is currently the unlock *source*, not just a test convenience. `tests/integration/test_module_unlock_sources.gd` asserts the coverage stays complete. Distributing unlockers through missions instead is not done yet.
+- Above *those*, a fourth row of **`WeaponModeUnlockerPickup` instances (y = -515, x -280..20)** — one each for `sniper_shot`, `spread`, `gatling` and `mining_laser`. Same story, same shape: `UpgradeState._ready()` seeds only `STARTING_IDS` (`&"default"`), and `unlock()` has no other production caller, so before this bench row existed four tuned weapon modes with working `WeaponBehavior`s were unreachable and the player flew the Standard gun for the whole game. `tests/integration/test_weapon_unlock_sources.gd` is the matching coverage gate. Gating weapon modes behind missions rather than a bench is an open design question, same as for modules.
+- The hub also carries every `LoreLogPickup` the game ships (3, matching `LogState.total_count()`
+  one-for-one) and two `InfoLogInteractable` instances — the demonstrable end-to-end proof for the
+  whole log-records system (see [`./global.md`](./global.md) → Pickups & resources). Two of the
+  five sit off the bench row near the existing pickups (`LoreLogBeaconStatic` at `(620, -212)`,
+  `InfoLogHubTerminal` at `(0, -150)`); the other three sit near a planet/station arc each
+  (`LoreLogEdeliaSurvey`, `LoreLogFortunaManifest`, `InfoLogVoeterWreck`), so at least some require
+  actually leaving the mission-select lane. `tests/integration/test_hub_log_placement.gd` asserts
+  the placed count and the catalogue-total match, and exercises one of each end to end.
 
 The script's only logic is `_spawn_initial_drones()`: in `_ready()` it instantiates `drone_count` (`3`) `PatrolDrone`s at random angles/distances within `spawn_radius` (`600`) and gives each a random `initial_direction`.
 
@@ -68,12 +81,94 @@ The script's only logic is `_spawn_initial_drones()`: in `_ready()` it instantia
 
 `open_space/scenes/entities/player/player_ship.gd` (`class_name OpenSpacePlayerShip extends PlayerBase`). It inherits all the shared health/shield/overheat/temp-HP plumbing and `EventBus` emission from `PlayerBase` (see [`./global.md`](./global.md) → PlayerBase) and adds free-flight specifics:
 
-- **Movement** (`_physics_process` → `_handle_rotation` + `_handle_thrust` + `move_and_slide`): rotate with `move_left`/`move_right`, thrust forward/back with `move_up`/`move_down`, with damping and a `max_speed` cap. A "flip boost" redirects momentum when you reverse-thrust above `boost_speed_threshold`. Thruster particle state is driven each frame.
+- **Movement** (`_physics_process` → `_handle_rotation` + `_handle_thrust` + `move_and_slide`): steer toward the mouse cursor (or with `move_left`/`move_right` under the Classic scheme — see `ShipTurnController` below), thrust forward/back with `move_up`/`move_down`, with damping and a speed cap. Thruster particle state is driven each frame. The **Shift boost** (§3.2.2) is the other half of the verb set.
+- **Turning** is delegated in full to the `ShipTurnController` child (§3.2.1). `_handle_rotation` only reads the A/D axis, passes the cursor in via the project's single `get_global_mouse_position()` call, and assigns what `step()` returns. The old `rotation_speed_deg` export is gone from this script — it is now the controller's `keyboard_turn_rate_deg`.
 - **Camera feel** (`_update_camera_feel`): pushes a combined speed-zoom + lead-offset target into the child `Camera2D`'s `CameraDirector` under effect name `&"speed_feel"` at priority `0`. The planet dwell (below) overrides this at priority `10`, so approaching a planet smoothly takes over the camera.
 - **Ship modules**: on `_ready()` it re-applies every module already equipped in `ShipModuleState` (reads `ShipModuleState.SLOTS` / `get_equipped`) and connects `module_equipped` / `module_unequipped` for live equip/unequip. Each frame it ticks all active modules. The `use_ability` action (H-key) is offered to modules first via `_input`. This is the same module system described in [`./global.md`](./global.md).
 - **Death**: `_on_health_changed(0)` plays the explosion, shakes the camera, waits, and `reload_current_scene()` — i.e. respawn in the hub.
 
-The ship scene (`player_ship.tscn`) is built by composition: `HealthComponent`, `ShieldComponent`, `OverheatComponent`, `TempHealthComponent`, a `HurtBox`, an `AttackStateMachine` (`WeaponState` + `WarheadMissileShootingState`), and a `MovementController` — all shared classes from `global/` and `assault/`.
+The ship scene (`player_ship.tscn`) is built by composition: `HealthComponent`, `ShieldComponent`, `OverheatComponent`, `TempHealthComponent`, a `HurtBox`, an `AttackStateMachine` (`WeaponState` + `WarheadMissileShootingState`), a `ShipTurnController`, a `BoostMeter`, and a `MovementController` — all shared classes from `global/` and `assault/`, except `ShipTurnController` and `BoostMeter`, which live beside the ship and are open-space-only by design. `OpenSpacePlayerShip._ready()` also builds a `BoostBar` alongside the existing `OverheatBar`, both `top_level` world-space bars repositioned every physics frame — see §3.2.4.
+
+#### 3.2.1 Steering — `ShipTurnController`
+
+`open_space/scenes/entities/player/ship_turn_controller.gd` (`class_name ShipTurnController extends Node`), a direct child of `PlayerShip` in `player_ship.tscn` and **the only thing in open space that writes the ship's `rotation`**. `player_ship.gd::_ready()` resolves it **by type**, not by node path, seeds its `scheme` from `SettingsState.get_open_space_scheme()` and its target angle from the hull's actual facing via `set_scheme()`, and connects `SettingsState.open_space_scheme_changed` to re-seed the live controller without a scene reload.
+
+It is a pure step function over injected inputs — cursor world position, the A/D axis, `delta`. It reads no `Input` and never asks for the mouse itself: `Input.warp_mouse()` cannot place a cursor in a headless GUT run, so the mouse is read in exactly **one** line project-wide (`player_ship.gd::_handle_rotation`) and passed in. That is what makes the turn model testable at all.
+
+Two schemes, selected by the `scheme` export:
+
+| Scheme | Behaviour |
+|---|---|
+| `&"mouse"` (default) | Clamped exponential chase toward the cursor angle. The ship *leans into* the cursor rather than snapping: `angle_difference` for the signed, wrap-correct error, `1 - exp(-ln2 * delta / half_life)` for the frame-rate-independent approach, a hard per-frame cap, then `rotate_toward` to apply it so a large step cannot overshoot. |
+| `&"keys"` | The pre-epic behaviour to the degree: `rotation += deg_to_rad(220) * turn * delta`, instantaneous, cursor ignored. |
+
+| Export | Default | Job |
+|---|---|---|
+| `scheme` | `&"mouse"` | Which scheme is live. Seeded from `SettingsState` (`global.md` §3), not this default, once the ship is in the scene. |
+| `keyboard_turn_rate_deg` | `220.0` | Classic turn rate. Must stay 220 — Classic is today's behaviour. |
+| `mouse_max_turn_rate_deg` | `150.0` | The **balance** lever: the hard cap. 180° in 1.2 s. |
+| `mouse_turn_half_life` | `0.14` | The **feel** lever: seconds to close half the remaining angle. |
+| `mouse_dead_zone_px` | `48.0` | Ship→cursor **world** distance below which the target angle is held, so aim does not thrash when the cursor sits under the hull. Never measured from screen centre — the camera leads the ship by up to 140 px. |
+
+The three mouse numbers are judgement calls that **no headless gate can validate**; they are `@export`s on the ship scene precisely so a fly-test is an inspector change. `set_steering_enabled(false)` freezes the target angle without pausing `step()`, so there is no rotation discontinuity when it re-enables; `player_ship.gd::_notification()` calls it on `NOTIFICATION_APPLICATION_FOCUS_OUT`/`_IN`, so alt-tabbing away no longer leaves the ship turning toward a cursor position the OS stopped updating. Pointer confinement and capture are explicitly out of scope (see plan), so the ship still holds a stale target if the cursor merely leaves the window while it keeps focus. `face_instant()`/`notify_mouse_moved()` let an AI-targeting snap survive until the player's next mouse movement.
+
+Covered by `tests/unit/test_ship_turn_controller.gd` (the turn model: frame-rate independence, the cap, no overshoot, ±PI wrap, the dead-zone edge, the 180° tie-break, Classic is unchanged, and disabled steering freezes the target with no resume jump) and `tests/integration/test_player_ship_turn_wiring.gd` (the anti-inert gate: the node is in the scene, `_handle_rotation` really delegates to it, the target is seeded from the hull and from `SettingsState`, the scheme-change signal re-seeds the live controller, `rotation_speed_deg` is gone, and `_notification()` really disables/re-enables steering on focus loss/gain).
+
+#### 3.2.2 Boost — the `boost` action and `_step_boost()`
+
+Shift is a verb. One press slams the ship's momentum onto whatever heading the nose is pointing and launches it above cruise — so a 180° turn plus Shift replaces the ~3.0 s manual reversal the damping model used to cost. The redirect is **unconditional**: there is no angle test and no second branch, only `velocity = Vector2.UP.rotated(rotation) * boost_exit_speed`, so a boost from rest, from cruise and from full reverse are all one readable behaviour (ULTRAKILL's rule; see the epic's `2-research.md`).
+
+The whole model lives in `player_ship.gd::_step_boost(boost_pressed: bool, delta: float)`, called **last** from `_handle_thrust()`, which does the feature's single `Input.is_action_just_pressed("boost")` read. Same seam as `ShipTurnController` above and for the same reason: `Input` can never report a press in a headless GUT run, so the model takes the press as an argument and every test drives it directly.
+
+| Export | Default | Job |
+|---|---|---|
+| `boost_exit_speed` | `700.0` | Speed the hull is slammed to. **Must exceed `max_speed` (420)** or the redirect reads as a brake — which is exactly what the deleted flip-boost's 200 px/s was. |
+| `boost_hold_sec` | `0.35` | The hold window: the cyan flame, and the floor under a retrigger. |
+| `boost_ceiling_decay` | `400.0` | px/s² the speed ceiling falls at once the window closes. 700 → 420 in 0.70 s, so the whole above-cruise signature is ~1.05 s. |
+
+Three things about the shape of it are load-bearing:
+
+- **There is exactly one speed clamp**, and it is `_step_boost()`'s. `_handle_thrust()`'s old tail `max_speed` clamp is gone; in its place a `_speed_ceiling` starts at boost speed, holds for `boost_hold_sec`, then `move_toward`s back to `max_speed` (linear, so exactly frame-rate independent). It is floored at `max_speed`, so it only ever *permits* — normal handling is untouched the moment the window closes. Because thrust and damping are mutually exclusive branches, holding W rides the ceiling down while releasing it bleeds faster than the ceiling falls.
+- **The retrigger floor is checked before any spend.** `boost_pressed and _boost_hold_left <= 0.0 and (_boost_meter == null or _boost_meter.try_spend())` short-circuits left to right, so a boost refused by the hold window never reaches `try_spend()` and mashing Shift inside the window costs nothing. The meter is stepped *before* the trigger, so a spend sets a full, un-decremented recharge pause. See §3.2.3.
+- **The `engine_boost_active` guard is deliberately doubled.** `_handle_thrust()` already returns early while an `EngineBoostModule` dash owns `velocity`, so `_step_boost()`'s own copy of that guard is dead code on the shipped call path. It is required anyway: every test calls `_step_boost()` directly and so bypasses the outer return, and without the inner line the two cases that pin module precedence fail on a *correct* build. `engine_boost_active` is **read** here and never written — it stays owned by `global/ship_modules/engine_boost_module.gd`.
+
+`_step_boost()`'s one tree touch is the flame: the trigger branch plays `flame_boost` on `SpriteAnchor/ShipSprite2D` and drives both `ThrusterEffect`s to `State.BOOST` (following `engine_boost_module.gd:15,63-67`), and `_release_boost_flame()` hands the sprite back to `idle` when the window closes — `flame_boost` has `loop = false`, so without that the hull would sit on its last frame forever. Since `_step_boost()` runs at the tail of `_handle_thrust()` while the thruster state is chosen in the branches above it, the flame *ends* one physics frame after the boost. Known and accepted.
+
+`project.godot` `[input]` binds `boost` to Shift (`physical_keycode 4194325`). That is the **third** action on that key — `dash` (infiltration) and `race_brake` (the assault race sub-mode) are the others — which is safe because the three consumers are separate scenes that each read only their own action name, and deliberate: reusing `dash` would make a future rebind of infiltration's dash silently move the open-space boost.
+
+The numbers above are judgement calls **no headless gate can validate** and are `@export`s so a fly-test is an inspector change. Covered by `tests/integration/test_open_space_boost_verb.gd` (the redirect from rest / cruise / full reverse, facing rather than velocity picking the direction, the zero-velocity boundary, the ceiling permitting then closing and never falling below cruise, `_handle_thrust()` no longer re-clamping, the retrigger floor and its expiry, module precedence, the flame and its release, the `boost` binding, and the regression that `_trigger_flip_boost()` / `boost_redirect_speed` / `boost_speed_threshold` are gone).
+
+#### 3.2.3 The cost — `BoostMeter`
+
+`open_space/scenes/entities/player/boost_meter.gd` (`class_name BoostMeter extends Node`), a direct child of `PlayerShip` in `player_ship.tscn`, resolved **by type** from `player_ship.gd::_ready()` exactly like `ShipTurnController`. It is the boost's charge economy and nothing else: no `Input`, no tree access, no `_physics_process`.
+
+| Export | Default | Job |
+|---|---|---|
+| `recharge_rate` | `0.7` | Charges per second — one boost back per ~1.43 s. |
+| `recharge_delay_sec` | `0.5` | Pause after a spend before any refill, the value `Overheat._SHOOT_GRACE` already uses. Without it a mashed key trickle-charges between activations. |
+| `bind_progression` | `true` | Take `max_charges` from `ShipProgressionState.boost_charge_count` instead of the local default, and stay subscribed to `boost_charge_count_changed` for the rest of the meter's life. Explicitly authored `true` on the `BoostMeter` node in `player_ship.tscn` — the `@export` default is not trusted alone, since `player_ship.tscn`'s `ShieldComponent` shows what happens when a scene relies on the default instead (filed as `the-open-space-ship-never-reads-the-permanent-shield-upgrade`). |
+
+`max_charges` starts at **2** (`ShipProgressionState.MIN_BOOST_CHARGES`) and rises with the save, up to **5** (`MAX_BOOST_CHARGES`) — mirroring `Shield`'s binding to `permanent_shield_count` line for line, including `_on_progression_changed()` granting the newly-unlocked charge immediately rather than waiting for the next full recharge or the next session. `charges` is a continuous float that is only ever spent in whole units: a partial charge refuses (`can_spend()` is `charges >= 1.0`), so there is no half boost, while the refill can still animate a partly-filled pip. Empty to full is ~3.4 s at base capacity (0.5 s pause + 2 / 0.7), ~7.6 s at the cap. `charges_changed(current: float, maximum: int)` is emitted on every spend, every refill tick, and every progression change — declared with its parameters, which `tests/integration/test_signal_emit_arity.gd` sweeps.
+
+Two shape decisions are load-bearing:
+
+- **The ship drives the clock.** `step(delta)` is called from `_step_boost()`; the meter has no `_physics_process` of its own, deliberately unlike `Overheat`. `set_physics_process(false)` on the ship (which `MissionTrigger._open_menu()` calls) does **not** stop a child's own physics tick, so a self-ticking meter would keep charging while a mission menu is open — and a hand-driven `step()` is what makes the component unit-testable in a headless run. The pause eats only as much of a frame as it needs and the remainder still recharges, so the rate does not depend on where the frame boundary fell.
+- **It lives beside the ship, not in `global/components/`.** The boost is open-space-only, and this project's mode isolation is structural. `class_name` registers globally whatever directory the file sits in, so the directory is a signal of intent; the enforcement is the two invariant cases in `tests/integration/test_open_space_boost_wiring.gd` (neither `assault/scenes/player/player_fighter.tscn` nor `infiltration/scenes/entities/player/player.tscn` may carry a `BoostMeter` or a `BoostBar`, and no `.gd` outside `open_space/` may read the `boost` action). **`Shield` was rejected as a base or a shared component on purpose** — it implements four of the same five behaviours, but its charge is entangled with `consume_one()` on the incoming-damage chain, temporary charges, the hacked state and `ShieldIconStrip`'s snapshot `Dictionary`; merging would grow a damage-path component an upgrade-meter concept to save ~20 lines.
+
+There is **no exhaustion/soft-failure state and no i-frames**. Boost is the verb the player crosses the hub with, so an empty meter simply refuses while W/S still fly the ship; and blanket immunity is `EngineBoostModule`'s whole value as an equippable, so a free metered boost must not duplicate it.
+
+`tests/unit/test_boost_meter.gd` covers the economy tree-less (spend, partial/empty refusal, the pause, the rate, the clamp, `step(0.0)`, the signal's arity and values, and — with `bind_progression = true` driven by hand-calling `_ready()` on an unparented instance — the mid-session upgrade widening `max_charges` and granting the new charge immediately). `tests/integration/test_open_space_boost_wiring.gd` is the **anti-inert** gate: every unit case is green on a build where `BoostMeter` exists but was never added to `player_ship.tscn`, so the wiring file asserts the scene carries exactly one (found **by class**), that a boost spends from *that* node, that an empty meter leaves `velocity` untouched, that a boost refused by `engine_boost_active` or by the retrigger floor burns no charge, and that `_handle_thrust()` — not the meter itself — is what recharges it. `tests/unit/test_ship_progression_state.gd` covers `boost_charge_count` / `add_boost_charge` / `set_boost_charge_count` tree-less against `ShipProgressionScript.new()`, including the cap boundary, a corrupt-save clamp, and that raising the boost count leaves `permanent_shield_count` untouched on the shared `ConfigFile`.
+
+#### 3.2.4 The readout — `BoostBar`
+
+`open_space/scenes/gui/boost_bar.gd` (`class_name BoostBar extends Node2D`), created in `OpenSpacePlayerShip._ready()` the same way as `_overheat_bar` (`top_level = true`, `add_child`, repositioned every physics frame) and only when the ship actually carries a `BoostMeter`. It draws `OverheatBar`'s 32×4 shape at `global_position + (0, 26)` — 2 px clear of the overheat bar's own 4 px height at `(0, 20)` — split into `max_charges` 1 px-gapped segments filled in the thruster's cyan `Color(0.35, 0.9, 1.0)`.
+
+Two things distinguish it from `OverheatBar`, both because a resource meter must not lie about its state:
+
+- **Always visible, including at full charges.** `OverheatBar` hides itself until the first overheat tick; a boost meter that did the same would hide the exact resource the epic exists to surface.
+- **`setup(meter)` seeds `_charges` / `_max_charges` from the meter and calls `queue_redraw()` *before* subscribing to `charges_changed`.** Children `_ready()` before parents, so `BoostMeter`'s initial state already exists by the time the ship's `_ready()` creates the bar — connect-only would leave the bar reading its zeroed defaults until the first spend, drawing an empty bar over a full meter on every freshly loaded hub. `_on_charges_changed` stores what it draws (`_charges: float`, `_max_charges: int`) exactly as `OverheatBar._percentage` does, so the fill and segment count are things a headless test can assert without touching `_draw()`.
+
+`tests/integration/test_boost_bar.gd` covers the seed-before-signal case, that the bar stays visible at full, that it does not overlap the overheat bar (one physics frame awaited, on a ship left running rather than frozen — the bars only move from `_physics_process`), that the segment count follows `charges_changed`'s `maximum`, that the fill tracks a partial `current` rather than only capacity, and that zero capacity does not error.
 
 ### 3.3 Ambient enemy — `PatrolDrone`
 
@@ -144,7 +239,7 @@ Autoloads (defined and documented in [`./global.md`](./global.md)) used by this 
 | Autoload | Read by open_space | Written by open_space |
 |---|---|---|
 | `MissionState` | `MissionSelectMenu._is_locked` (`is_complete`, `get_high_score`) for lock gates; `MissionListItem.configure` (`get_stars`) for the star display. | Not written here — completion/score/stars are recorded **inside missions on win**; the hub only reads them. |
-| `ShipModuleState` | `OpenSpacePlayerShip._ready` re-applies equipped modules (`SLOTS`, `get_equipped`) and listens to `module_equipped` / `module_unequipped`. | Indirectly via the `ShipModuleUnlockerPickup` placed in the hub (calls `ShipModuleState.unlock`). |
+| `ShipModuleState` | `OpenSpacePlayerShip._ready` re-applies equipped modules (`SLOTS`, `get_equipped`) and listens to `module_equipped` / `module_unequipped`. | Via the `ShipModuleUnlockerPickup` instances in the hub (call `ShipModuleState.unlock`) — one per module, and the only unlock source in the game. |
 | `SessionState` | Restored on spawn through `PlayerBase._setup_components()` → `SessionState.apply_to(player)` (cross-level temp buffs). | Indirectly via the hub's temp-buff pickups (which persist through `SessionState`). |
 | `EventBus` | — | `OpenSpacePlayerShip` (via `PlayerBase`) emits `player_health_changed` / `player_overheat_changed`, consumed by `OpenSpaceHUD`. |
 | `CameraShake` | `CameraDirector` composes its offset for speed/dwell/death shake. | `OpenSpacePlayerShip` adds trauma on hit/death. |

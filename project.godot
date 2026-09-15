@@ -28,7 +28,10 @@ EventBus="*res://global/systems/event_bus.gd"
 ShipModuleState="*res://global/autoloads/ship_module_state.gd"
 ShipProgressionState="*res://global/autoloads/ship_progression_state.gd"
 SessionState="*res://global/autoloads/session_state.gd"
+LogState="*res://global/autoloads/log_state.gd"
+PickupState="*res://global/autoloads/pickup_state.gd"
 CameraShake="*res://global/systems/camera_shake.gd"
+SettingsState="*res://global/autoloads/settings_state.gd"
 
 [debug_draw_3d]
 
@@ -155,6 +158,11 @@ dialog_auto={
 ]
 }
 race_brake={
+"deadzone": 0.2,
+"events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194325,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
+]
+}
+boost={
 "deadzone": 0.2,
 "events": [Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":4194325,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)
 ]

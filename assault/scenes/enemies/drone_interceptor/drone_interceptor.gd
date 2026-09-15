@@ -55,6 +55,10 @@ func _ready() -> void:
 	_orbit_angle = randf_range(0.0, TAU)
 	_dash_timer  = randf_range(1.0, 2.0)
 
+	if contact_hit_box:
+		contact_hit_box.damage = config.collision_damage if config else 30
+		contact_hit_box.area_entered.connect(_on_contact_hit)
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 func _physics_process(delta: float) -> void:
@@ -136,21 +140,6 @@ func _check_off_screen() -> void:
 		queue_free()
 
 # ─── CONTACT KILL ─────────────────────────────────────────────────────────────
-
-## Override: collision_mask = 128 (player HurtBox) so we detect contact and kamikaze.
-func _add_contact_hitbox() -> void:
-	var col := get_node_or_null("CollisionShape2D") as CollisionShape2D
-	if not col:
-		return
-	var hb := HitBox.new()
-	hb.collision_layer = 256
-	hb.collision_mask  = 128   # player HurtBox — fires area_entered on contact
-	hb.damage = config.collision_damage if config else 30
-	var shape_node := CollisionShape2D.new()
-	shape_node.shape = col.shape
-	hb.add_child(shape_node)
-	hb.area_entered.connect(_on_contact_hit)
-	add_child(hb)
 
 func _on_contact_hit(_area: Area2D) -> void:
 	## Guard against double-firing before queue_free processes.

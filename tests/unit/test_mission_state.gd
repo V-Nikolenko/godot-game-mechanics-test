@@ -1,6 +1,9 @@
 ## Characterization tests for MissionState (global/autoloads/mission_state.gd).
 ## These pin down what the code does TODAY. Where behaviour looks surprising it is
 ## marked "CHARACTERIZED" and the suspicion is logged in BACKLOG.md → Discovered.
+## The star-scale tests are the exception: they are individually marked "INTENT"
+## because the 1–3 clamp was reviewed and confirmed deliberate, so they assert what
+## the code SHOULD do and a change to it is a regression, not a re-baseline.
 extends GutTest
 
 const SaveSandbox := preload("res://tests/helpers/save_sandbox.gd")
@@ -47,14 +50,39 @@ func test_complete_keeps_the_higher_star_count() -> void:
 	ms.free()
 
 
+## INTENT (not characterization): the 1–3 clamp is deliberate and load-bearing.
+## 0 is the reserved "never completed" sentinel — `get_stars()` returns it for a
+## mission that was never played, and `MissionListItem.configure()` renders it as
+## three empty stars — so a stored clear is always worth at least one star. A real
+## 0-star clear would be indistinguishable from never having played the mission.
 func test_stars_are_clamped_into_one_to_three() -> void:
 	var ms := _fresh()
-	## CHARACTERIZED: clampi(stars, 1, 3) means a 0-star completion is stored as 1.
-	## There is no way to record a completed-but-zero-star run.
 	ms.complete(1, 0)
-	assert_eq(ms.get_stars(1), 1, "0 stars is clamped up to 1")
+	assert_eq(ms.get_stars(1), 1, "0 stars is clamped up to 1, keeping 0 as the never-played sentinel")
 	ms.complete(2, 99)
 	assert_eq(ms.get_stars(2), 3, "stars above 3 are clamped down to 3")
+	ms.free()
+
+
+## INTENT: the clamp must not be silent. Every shipped caller reaches `complete()`
+## through `MissionConfigResource.stars_for_score()`, which already floors at 1 and
+## caps at 3, so an out-of-range value means the caller computed it wrong — a bug
+## worth a warning, not something to quietly round into the valid range.
+func test_out_of_range_stars_warn_the_caller() -> void:
+	var ms := _fresh()
+	ms.complete(1, 0)
+	ms.complete(2, 99)
+	assert_push_warning_count(2, "each out-of-range star count warns once")
+	ms.free()
+
+
+## INTENT: the in-range path stays quiet, so the warning above keeps its signal.
+func test_in_range_stars_do_not_warn() -> void:
+	var ms := _fresh()
+	ms.complete(1, 1)
+	ms.complete(2, 2)
+	ms.complete(3, 3)
+	assert_push_warning_count(0, "a valid star count is not a caller bug")
 	ms.free()
 
 

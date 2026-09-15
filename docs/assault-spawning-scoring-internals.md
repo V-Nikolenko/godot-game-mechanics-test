@@ -83,7 +83,9 @@ individual `delay:` float, so a V-formation of 5 can stagger its arrivals by
 ```gdscript
 func _spawn_ship(spawn: Dictionary) -> void:
     var cam  := get_viewport().get_camera_2d()
-    var pos  := cam.global_position + spawn.get("offset", Vector2.ZERO)
+    # cam.global_position is pinned at the level origin forever; all camera panning happens
+    # through cam.offset, so a spawn meant to land off the visible edge has to add both.
+    var pos  := cam.global_position + cam.offset + spawn.get("offset", Vector2.ZERO) * ArenaCamera.WORLD_SCALE
     var entity: Node = scene.instantiate()
     entity.global_position = pos
 
@@ -155,7 +157,9 @@ wave_manager.enemy_spawned.emit(entity, -1)
 ```
 
 Wave index −1 again — bonus drones have `counts_toward_wave_clear = false`
-on their config so they are excluded from wave tallies.
+on their config so they are excluded from wave tallies. They also have
+`counts_as_escape = false`, so missing one does not cost the escape-combo
+penalty either — see §3.4.
 
 ---
 
@@ -190,10 +194,14 @@ enemy.died.connect(
 
 # Escape path — fires when the node exits the scene tree for any reason
 enemy.tree_exited.connect(
-    _on_enemy_freed.bind(enemy, wave_index, counts_in_wave),
+    _on_enemy_freed.bind(enemy, wave_index, counts_in_wave, counts_as_escape),
     CONNECT_ONE_SHOT
 )
 ```
+
+`counts_as_escape` is read from the enemy the same way as `counts_in_wave` (an
+`enemy.get("counts_as_escape")` fallback to `true`), and is **independent** of
+`counts_in_wave` — see §3.4.
 
 `CONNECT_ONE_SHOT` ensures each handler runs **exactly once** per enemy,
 regardless of how many times `tree_exited` might otherwise fire.
@@ -250,12 +258,21 @@ EnemyPathMover._check_off_screen → _actor.queue_free()
 end-of-frame: actor freed → tree_exited
   → ScoreTracker._on_enemy_freed:
       if was_killed → return (it was actually a kill, handled above)
-      tally.escaped = true; tally.resolved = true
+      if counts_in_wave → tally.escaped = true; tally.resolved = true
+      if not counts_as_escape → return (e.g. bonus drones — no penalty)
       _combo *= escape_combo_multiplier   # 0.75 — penalty
       EventBus.combo_changed.emit(...)
 ```
 
-No score is ever awarded in the escape path. Only the combo is penalised.
+No score is ever awarded in the escape path. Only the combo is penalised, and
+only when the enemy's `counts_as_escape` (from its `ShipConfig`, default
+`true`) allows it. This is independent of `counts_in_wave`: station
+reinforcements have `counts_in_wave = false` (wave index −1) but
+`counts_as_escape = true` — a deliberate balance decision pinned by
+`tests/integration/test_station_reinforcements.gd`
+(`test_a_squad_that_flies_through_costs_two_escape_combo_penalties`) — while
+bonus drones have both flags `false`, pinned by
+`tests/integration/test_score_tracker_escape_penalty.gd`.
 
 ### 3.5 Wave-clear bonus
 

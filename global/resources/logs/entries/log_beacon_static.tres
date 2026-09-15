@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="LogEntryResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://global/resources/logs/log_entry_resource.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"beacon_static"
+title = "Beacon Static"
+body = "Sector nav beacon, autolog: signal degraded 40% over baseline, cause unknown. Recommend flagging for maintenance pass before the next convoy transits. Filed and forgotten, same as always."
+sequence = 0

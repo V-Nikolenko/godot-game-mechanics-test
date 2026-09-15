@@ -28,17 +28,16 @@ assault/scenes/
 │   ├── player_fighter.gd        AssaultPlayer — extends PlayerBase; ship-module integration, death → GameOver
 │   ├── movement_controller.gd   Input → single/double-press signals + movement lock
 │   ├── overheat.gd / overheat_bar.gd   Weapon heat component + its HUD bar
-│   ├── states/                  State-machine states: idle, move, dash, shooting, reflect, warhead/rocket
+│   ├── states/                  State-machine states: idle, move, dash, shooting, warhead/rocket
 │   └── weapons/                 Weapon modes, fire behaviors, and aim visualizers
 │       ├── weapon_mode.gd       WeaponModeResource — per-weapon data (behavior, fire_interval, heat)
 │       ├── behaviors/           STRAIGHT / LONG / SPREAD / BEAM / SNIPER fire behaviors
 │       └── visualizers/         e.g. sniper aim line
 ├── projectiles/                 Player + enemy ordnance
-│   ├── bullets/bullet.gd        Pooled player bullet (pierce, sniper unlimited-pierce)
-│   ├── enemy_bullet/            EnemyBullet (can be reflected → become_friendly)
+│   ├── bullets/bullet.gd        Player bullet — UNPOOLED, frees itself off-screen (pierce, sniper)
+│   ├── enemy_bullet/            EnemyBullet (become_friendly() flips it to a player projectile)
 │   ├── missiles/                homing/ + warhead/ missiles
-│   ├── piercing_beam/           Sustained BEAM weapon projectile
-│   └── primary_homing/          Homing primary-weapon variant
+│   └── piercing_beam/           Sustained BEAM weapon projectile
 ├── systems/                     Mission orchestration (non-visual)
 │   ├── scroll_controller/       Drives the autoscroll: moves the camera + emits distance
 │   ├── arena_camera.gd          Pinned camera; WORLD_SCALE for design-unit → world conversion
@@ -86,13 +85,11 @@ to the player via exported `actor` / `movement_controller` references.
 - `idle_state.gd`, `move_state.gd` — resting / steered flight.
 - `dash_state.gd` — double-tap barrel-roll (i-frames on side rolls); when the Warp module
   is active it teleports + deals contact damage instead.
-- `shooting_state.gd` / `weapon_state.gd` — primary weapon. `weapon_state.gd` loads
-  `WeaponModeResource`s from `weapons/modes/`, gates on `UpgradeState` unlocks, dispatches
-  to a `WeaponBehavior` (STRAIGHT/LONG/SPREAD/BEAM/SNIPER), accrues heat per shot, and
-  emits `EventBus.player_weapon_changed`.
+- `weapon_state.gd` — primary weapon. Loads `WeaponModeResource`s from `weapons/modes/`,
+  gates on `UpgradeState` unlocks, dispatches to a `WeaponBehavior`
+  (STRAIGHT/LONG/SPREAD/BEAM/SNIPER), accrues heat per shot, and emits
+  `EventBus.player_weapon_changed`.
 - `warhead_missile_shooting_state.gd` (`RocketState`) — secondary missiles (warhead/homing).
-- `reflect_state.gd` — timed parry: opens a brief `Area2D` that flips incoming
-  `EnemyBullet`s to friendly (`become_friendly()`); gated on the `reflect` upgrade.
 
 `movement_controller.gd` converts raw input into `action_single_press` /
 `action_double_press` signals and owns a movement lock used during dashes.
@@ -108,10 +105,14 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
 - **`WaveManager`** is a time-driven spawner. Each wave has a `trigger` time (relative to
   section start) and a list of spawn descriptors. `load_section()` resets the clock and
   loads a new section's waves; `_process()` fires each wave when `_time_elapsed` reaches
-  its trigger. On spawn it instantiates the ship scene at a **camera-relative offset**
-  (scaled by `ArenaCamera.WORLD_SCALE`), emits `enemy_spawned(enemy, wave_index)` for
-  `ScoreTracker`, and — when the descriptor carries a `MovementResource` — attaches an
-  `EnemyPathMover`. It also expands `FormationResource`s into per-slot spawns.
+  its trigger. On spawn it instantiates the ship scene at an offset (scaled by
+  `ArenaCamera.WORLD_SCALE`) from the camera's **current view** — `cam.global_position +
+  cam.offset`, not just `global_position`, since `ArenaCamera` pans entirely through
+  `offset` while pinning `global_position` at the level origin — so a spawn meant to land
+  off the visible edge stays off the visible edge regardless of how far the player has
+  panned. Emits `enemy_spawned(enemy, wave_index)` for `ScoreTracker`, and — when the
+  descriptor carries a `MovementResource` — attaches an `EnemyPathMover`. It also expands
+  `FormationResource`s into per-slot spawns.
 - **`WaveBuilder`** is a fluent authoring DSL (`b.fighter().at(x,y).move(b.straight(...))
   .delay(...).shoot_forward()` …). It builds `SpawnEntryResource` / `WaveResource` /
   `LevelResource` objects and centralizes the enemy scene-path constants. Movement helpers
@@ -125,27 +126,80 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   aim vector.
 - **`BaseEnemy`** is the shared enemy root: it owns `Health` + `HurtBox`, a contact hitbox,
   hit-flash/explosion effects, and emits `died` on death (setting `was_killed`). Scoring
-  fields (`score_value`, `counts_toward_wave_clear`) are pulled from the subclass's
-  `ShipConfig` resource. Each concrete enemy lives in its own folder under
+  fields (`score_value`, `counts_toward_wave_clear`, `counts_as_escape`) are pulled from
+  the subclass's `ShipConfig` resource. Each concrete enemy lives in its own folder under
   `assault/scenes/enemies/<type>/` with a `*_config.tres` and (often) bespoke AI states.
+  **Contact damage is the one stat the base scene does not wire up for you:** every `BaseEnemy`
+  subclass's `.tscn` authors a `ContactHitBox` node with `damage = 20`, which knows nothing about
+  the subclass's own `.tres`, so a subclass wanting its configured `collision_damage` must
+  re-apply it in `_ready()` off `contact_hit_box` (`gunship.gd`, `bomber.gd`,
+  `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a different default
+  directly on its own scene node (`drone_interceptor.tscn`, `kamikaze_drone.tscn` — 30, still
+  re-applied from config where one exists). Forgetting leaves the `.tres` value dead with no
+  symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
+  The hitbox's *geometry* is handled for you: every `ContactHitBox` node's `CollisionShape2D`
+  references the same `SubResource` shape id as the body's and copies its `scale`, so a scaled
+  body gets a correctly sized ram box for free — see `global.md`'s Hurtbox/Hitbox section for the
+  authoring pattern. `tests/integration/test_contact_hitbox_geometry.gd` asserts that for every
+  entity that has one.
+
+  The *incoming* side has its own invariant: an enemy's `HurtBox` must **cover** the body
+  `CollisionShape2D` the player collides with, swept over the whole roster by
+  `tests/integration/test_enemy_hurtbox_geometry.gd`. Armour is a damage *rule* on a full-size
+  hurtbox (deflect, flash, report 0), never a missing hurtbox — a shrunken one leaves visible hull
+  that swallows shots and reports nothing, which reads as a broken gun rather than as armour. The
+  space station is the worked example and the reason the file exists: see its
+  [ENEMY.md](../../../assault/scenes/enemies/space_station/ENEMY.md) -> "Core hurtbox: why it
+  spans the whole hull".
+
+  A third sweep polices the **art** rather than the collision shapes:
+  `tests/integration/test_entity_sprite_transparency.gd` fails any texture an entity draws over
+  the game world that is 90%+ fully opaque, because a painted-in background renders as a card that
+  cuts a hard rectangle out of the starfield. `station_core.png` shipped that way at 100% and
+  survived two cycles, since nothing in the gate renders a scene. Recovery for art that is already
+  correct in angle and palette is `./scripts/strip-sprite-bg.sh` (border flood fill) rather than a
+  regeneration.
 
 ### Projectiles & bullet pool
 
 Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.gd`
 (see [BULLET_POOL.md](../../BULLET_POOL.md)).
 
-- `bullets/bullet.gd` — the pooled player bullet (`Area2D`). Moves forward, optionally
+- `bullets/bullet.gd` — the player bullet (`Area2D`). Moves forward, optionally
   inherits the shooter's forward velocity, supports **pierce** (limited, with per-hit
   damage decay) and **sniper unlimited-pierce** (passes through regular enemies, stops on
-  asteroids/ram-ships). Uses `HitBox`/`HurtBox` from `global/`. `expired` signals the pool
-  to reclaim it.
-- `enemy_bullet/enemy_bullet.gd` — `EnemyBullet`; can be reflected by the player's parry
-  (`become_friendly()`), which flips its collision so it damages enemies.
+  asteroids/ram-ships). Uses `HitBox`/`HurtBox` from `global/`.
+
+  **The player's bullets are not pooled.** `WeaponBehavior._launch()` spawns them and calls
+  `Bullet.free_when_offscreen()`, so each one owns its own lifetime and frees itself at the
+  viewport edge. The same scene *is* pooled by `AllyFighter`, which is why that free is opt-in
+  rather than built into `bullet.gd` — see `free_when_offscreen()`'s comment and
+  [BULLET_POOL.md](../../BULLET_POOL.md) ("the pool is smart, bullets are dumb").
+
+  **`expired` means "something happened", not "I am done".** It fires on an ordinary hurtbox hit
+  as well as at the range cap and the screen edge, and only the range cap frees. A pool can
+  legitimately listen to it (recycling is reversible); the player path must not wire it to
+  `queue_free`, because that consumes the shot on first contact and makes the space-station boss
+  unkillable — see the ENEMY.md link above.
+
+  **Player and enemy projectiles despawn on different boundaries, deliberately.** Player bullets
+  use `VisibleOnScreenNotifier2D` (the *viewport* edge); `EnemyBullet` uses an explicit
+  arena-bounds check ("the full 740×740 arena, not just the viewport edge"). The player's weapons
+  are also mounted in Open Space (`player_ship.tscn`), which has a different camera and world
+  extent, so hardcoding the assault arena's bounds into them would be wrong in one of the two
+  modes. The cost is that a shot fired at an enemy that is in the arena but above the visible top
+  now despawns; that band is off-screen and unaimable, so it is accepted.
+
+  All of the above is pinned by `tests/integration/test_player_bullet_lifetime.gd`.
+- `enemy_bullet/enemy_bullet.gd` — `EnemyBullet`; `become_friendly()` flips its direction and
+  collision so it damages enemies instead of the player. Currently unused — its only caller,
+  the parry ability `reflect_state.gd`, was removed as dead code (2026-09-08): its input action
+  had already been replaced by `use_ability` and no scene instanced it.
 - `missiles/` — `homing/` and `warhead/` secondary munitions fired by `RocketState`.
 - `piercing_beam/` — the sustained beam projectile for the BEAM weapon behavior.
-- `primary_homing/` — homing variant of the primary weapon.
 
-`BulletPool` (in `global/`) is instantiated by shooters (player, allies, many enemies) to
+`BulletPool` (in `global/`) is instantiated by shooters (allies and many enemies — **not** the
+player, whose bullets are unpooled) to
 recycle bullet instances rather than allocate per shot — see the linked doc for the
 pool/`AttackController`/`AttackPattern` flow.
 
@@ -165,7 +219,12 @@ UI nodes only subscribe to `EventBus`. It listens to `WaveManager.enemy_spawned`
   `counts_toward_wave_clear` count; bonus drones don't). `section_loaded` clears tallies so
   wave indices don't collide across sections.
 - **Survival** ticks, **skill-challenge** bonuses, and combo penalties on player damage or
-  enemy escape.
+  enemy escape — the escape penalty (`escape_combo_multiplier`, 0.75×) applies to every
+  spawn source (waves, station reinforcements, asteroid shards) **except** one whose
+  `ShipConfig.counts_as_escape` is `false` (currently only the bonus drone — see
+  `tests/integration/test_score_tracker_escape_penalty.gd`). Independent of
+  `counts_toward_wave_clear`: station reinforcements are exempt from wave-clear bonuses but
+  still deliberately pay the escape penalty (see below).
 
 Results publish via `EventBus.score_changed` / `combo_changed` / `score_event`, consumed
 by `gui/hud_score_widget.gd` and `gui/score_popup*.gd`. A categorized `_breakdown` feeds
@@ -206,6 +265,18 @@ director's `_wait_enemies_cleared()` polls the enemy container before advancing.
 `ScoreTracker`, shows `gui/level_debrief.tscn`, persists to `MissionState`, and transitions
 to the exit cutscene.
 
+**`level_1.tscn` also carries static, non-wave children** — `PlayerFighter`, `LaserWallWave`,
+and (added for the log-records epic) one `InfoLogInteractable` instance (node name `LogRecord`,
+see [global.md](global.md)) — parented directly under the level root at a resolved-pixel
+`position`, never routed through `WaveManager`. A pickup or interactable spawned through
+`WaveManager` would fire `ScoreTracker`'s `enemy_spawned`/`enemy_freed` bookkeeping (`_spawn_ship`
+emits `enemy_spawned` for *any* `PackedScene`, and a spawned node with neither
+`counts_in_wave` nor `counts_as_escape` defaults both to `true`), so collecting it would silently
+misfire the wave-clear tally and the escape-combo penalty — static placement sidesteps that
+entirely. `LogRecord`'s position is derived from the same design-space formula waves use, at
+`t = 0` (`world_pos = Vector2(640, 360) + design_offset * ArenaCamera.WORLD_SCALE`), with the
+derivation written as a `;`-comment in the `.tscn` file.
+
 ### Hazards
 
 Source: `assault/scenes/hazards/`.
@@ -234,6 +305,22 @@ catalogued stats and how to spawn each one, see the per-enemy detail in the sour
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).
 
+#### Per-instance config resources
+
+Every entity declares `@export var config: XConfig = load("res://.../x_config.tres")` and
+`ResourceLoader` caches by path, so all instances of a type would otherwise share **one** config
+object — the same one a test's `preload()` returns. `ShipConfig.privatise()` gives each entity a
+`duplicate()` instead, called from `BaseEnemy._init()` **and** `_enter_tree()` (and the same pair on
+`AllyFighter`, which is not a `BaseEnemy`). `_init()` covers writes made before `add_child`, which is
+where `WaveManager` applies `initial_props`; `_enter_tree()` covers an override substituted in
+afterwards and still lands before any child's `_ready()`, which the space station's four child nodes
+depend on. Full reasoning: the `ShipConfig` section of [global.md](global.md). Pinned by
+`tests/integration/test_config_instance_isolation.gd`.
+
+⚠️ **The object `load()`/`preload()` returns is still shared and must never be written** — that is
+process-wide balance data. The per-instance copy is what `entity.config` holds, not what the loader
+hands you.
+
 **`space_station/`** is the odd one out: a multi-part **mini-boss** rather than a wave enemy.
 `SpaceStation` (`extends BaseEnemy`) carries four `StationTurret` children, each individually
 damageable on its own `Health`, and its core refuses all damage while any turret lives —
@@ -242,7 +329,9 @@ damageable on its own `Health`, and its core refuses all damage while any turret
 tree as wreckage. It is spawned by the **`station_assault`** section (`_build_station_assault()`),
 as a single zero-delay wave with no `MovementResource` — a spawn delay would let `waves_complete`
 fire before the station existed, and a movement resource would attach an `EnemyPathMover` that
-frees it on screen exit. Behaviour, the collision-layer rules and the known test-coverage gap:
+frees it on screen exit. Behaviour and the collision-layer rules — all four incoming damage paths
+gated by physics rather than by reading the scene, and the duck-typed `is_armored()` exemption that
+lets both bullets and rockets survive a deflected hit on the core to reach a turret behind it —
 [`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md).
 
 It has **two phases**. Killing the last turret makes `SpaceStation` emit `armor_broken` (a
@@ -253,8 +342,9 @@ zero-argument signal, latched so it fires exactly once), which starts **`Station
 angle list (never `randf()` — random attack ordering cannot be balanced or tested; the rotating
 hull already varies the world angle). Beams are children of the phase node, so rotating the
 station sweeps them for free. All five timings live in `space_station_config.tres` and are
-**copied into the phase's own fields in `_ready()`** — that `.tres` is a single process-wide
-instance, so reading through it at runtime would be reading mutable global state.
+**copied into the phase's own fields in `_ready()`** — those fields are the phase's tunable surface
+(what tests override) and its fallback when a station has no config at all. Each station's
+`config` is a private copy: see **Per-instance config resources** below.
 
 ⚠️ **A station beam must not use `LaserRay`'s default hit mask.** `_HIT_MASK` is
 `128 | 256 | 512`, and the station's own core `HurtBox` is on layer 512, so a beam fired from
@@ -288,7 +378,7 @@ what frees in-flight bullets, which otherwise hold `ENEMIES_CLEARED` open. Pinne
 `tests/integration/test_station_gunnery.gd`.
 
 The ten gunnery timings live in `space_station_config.tres` and are **copied into the gunnery's
-own fields in `_ready()`**, for the same process-wide-instance reason as the laser block.
+own fields in `_ready()`**, for the same reason as the laser block.
 
 **The station calls for help**, via a third sibling node, **`StationReinforcements`**
 (`station_reinforcements.gd`) — the same composition split again, so `space_station.gd` gained
@@ -368,6 +458,19 @@ remove it, and `_wait_enemies_cleared()` polls that same container, so a leftove
 next `ENEMIES_CLEARED` section forever. Each freed child takes `ScoreTracker`'s escape path, so
 timing out costs one combo penalty (x0.75) per leftover.
 
+**How the wait actually polls.** `_wait_enemies_cleared()` loops on the container's child count and
+re-checks its deadline only *between* polls, so the effective granularity is
+`_wait_for_child_exit_or_timeout(container, 1.0)` — a 0.3 s timeout really expires at ~1.0 s, plus
+a 0.2 s settle in `_wait_seconds()` before `_advance()`. Budget any test off the poll, not the
+nominal timeout. Both helpers measure their deadline with `Time.get_ticks_msec()` and create **no**
+`SceneTreeTimer`: the old implementation raced a `create_timer(poll_seconds)` against
+`child_exiting_tree`, so every early return — which is the normal case, since a dying enemy ends
+the poll on the next frame — abandoned a timer that kept ticking for the rest of the window and
+leaked if anything tore the tree down first. Wall-clock also matches the outer
+`enemies_cleared_timeout` deadline, which was always ticks-based, so the two no longer disagree
+while `Engine.time_scale` is off 1.0 (`trajectory_calc_module.gd:34`). Pinned by
+`tests/integration/test_level_director_polling.gd`.
+
 ### Race sub-mode
 
 Source: `assault/scenes/race/` (high-level only).
@@ -429,7 +532,11 @@ game logic:
   `EventBus.score_event`.
 - `health_shield_bar.gd`, `overheat`'s `overheat_bar.gd` (under `player/`) — vitals.
 - `weapon_selector.gd` / `weapon_chip.gd` / `ability_chip.gd` — current weapon/ability
-  indicators, updated from `EventBus.player_weapon_changed`.
+  indicators, updated from `EventBus.player_weapon_changed`. `WeaponChip` draws
+  `WeaponModeResource.icon`, set in each `assault/scenes/player/weapons/modes/*.tres`. That field
+  is the single id → icon map: the ship menu's main-weapon column reads the same one. There used
+  to be a second, hard-coded map in `player_menu.gd` keyed on a mode id that no longer existed;
+  `tests/integration/test_weapon_unlock_sources.gd` now asserts every mode ships with an icon.
 - `game_over.gd` — death overlay (spawned by the player; pauses the tree).
 - `level_debrief.gd` — end-of-level score/stars breakdown screen.
 

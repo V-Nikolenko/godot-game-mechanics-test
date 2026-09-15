@@ -8,6 +8,7 @@
 [ext_resource type="Script" uid="uid://c5678cxr4wb7q" path="res://global/statemachine/state_machine.gd" id="5_smach"]
 [ext_resource type="Script" uid="uid://b7apobhemit5l" path="res://assault/scenes/enemies/light_assault_ship/states/approach_state.gd" id="6_appr"]
 [ext_resource type="Script" uid="uid://c67ni1baldu33" path="res://assault/scenes/enemies/light_assault_ship/states/strafe_exit_state.gd" id="7_strf"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="8_hb"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_b2sn1"]
 resource_local_to_scene = true
@@ -95,6 +96,17 @@ metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
 [node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="." unique_id=1933004266]
 libraries/ = SubResource("AnimationLibrary_1dtrx")
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 0
+script = ExtResource("8_hb")
+damage = 20
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+scale = Vector2(2.199998, 2.199998)
+shape = SubResource("CircleShape2D_siexo")
 
 [node name="AIStateMachine" type="Node" parent="." unique_id=731265478 node_paths=PackedStringArray("initial_state")]
 script = ExtResource("5_smach")

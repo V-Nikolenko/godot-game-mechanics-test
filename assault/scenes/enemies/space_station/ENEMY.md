@@ -9,17 +9,25 @@ sweeping beams and precessing bullet rings from the exposed core.
 teaches the rule without any UI: kill the guns first, then the core. Stripping the armour is not a
 reward — it wakes the superweapon up, and the second half is fought on the move.
 
-> **Status: EPIC sub-items 1–3, 4a and 4b done.** The entity exists and is destructible (1), gates
-> Level 1 as the `station_assault` section (2), has the rotating laser phase (3), **shoots back**
-> with aimed turret fans and precessing core rings (4a), and now **calls for reinforcements** —
-> squads of existing enemy ships crossing in from all four screen edges during phase 1 (4b). Still
-> outstanding: no bespoke death sequence or handoff into `planet_approach` (sub-item 5). Plans and
-> reviews:
+> **Status: the EPIC is complete — all six sub-items done (2026-09-03).** The entity exists and is
+> destructible (1), gates Level 1 as the `station_assault` section (2), has the rotating laser
+> phase (3), **shoots back** with aimed turret fans and precessing core rings (4a), **calls for
+> reinforcements** — squads of existing enemy ships crossing in from all four screen edges during
+> phase 1 (4b) — and **dies on screen**, holding its section open for a staged blast chain before
+> handing off to `planet_approach` (5).
+>
+> **What is still open is not code:** nobody has played this fight. (`station_core.png`'s opaque
+> background — the hull rendering as a grey square — was fixed on 2026-09-07; see *Sprite
+> provenance* below.) That and every other known
+> gap are in the epic dossier —
+> [`docs/epics-done/station-mini-boss/`](../../../../docs/epics-done/station-mini-boss/)
+> (`REPORT.md` → *Known gaps*). Plans and reviews:
 > [`docs/plans/station-mini-boss-destructible/`](../../../../docs/plans/station-mini-boss-destructible/),
 > [`docs/plans/station-assault-section/`](../../../../docs/plans/station-assault-section/),
 > [`docs/plans/station-laser-phase/`](../../../../docs/plans/station-laser-phase/),
 > [`docs/plans/station-bullet-hell/`](../../../../docs/plans/station-bullet-hell/),
-> [`docs/plans/station-reinforcements/`](../../../../docs/plans/station-reinforcements/).
+> [`docs/plans/station-reinforcements/`](../../../../docs/plans/station-reinforcements/),
+> [`docs/plans/station-death-handoff/`](../../../../docs/plans/station-death-handoff/).
 
 ---
 
@@ -56,7 +64,22 @@ mandates them.
 |---|---|---|
 | `station_turret.png` | `create_map_object` | `view: "high top-down"`, `outline: "lineless"`, `detail: "medium detail"`, `shading: "medium shading"`, 64×64 |
 | `station_turret_destroyed.png` | `create_object_state` off the intact turret | inherits the source's view; keeps the footprint and palette aligned |
-| `station_core.png` | `create_image_pixflux` (original) | **has an opaque background** — see *Discovered* in `BACKLOG.md` |
+| `station_core.png` | `create_image_pixflux` (original), then `./scripts/strip-sprite-bg.sh` | **`create_image_pixflux` painted a background** because `no_background` is optional and defaults to unset. Not regenerated — the artwork is correct in angle and palette and the two turrets were designed to match it; the background was keyed out instead |
+
+**The core's background was keyed out, not regenerated (2026-09-07).** It shipped at
+**65536/65536 px at alpha 1.0** and rendered as a 256×256 grey card cutting a hard rectangle out
+of the starfield — invisible to every gate step, because none of them renders a scene. The fix
+was a 4-connected flood fill seeded from the image border
+(`./scripts/strip-sprite-bg.sh assault/assets/sprites/enemies/station_core.png`, then
+`--import`), which removed **34324 px** of `#565657` sky and changed **no RGB byte at all**;
+the **41 px** of that colour the artwork encloses were kept, because a global colour key would
+have punched 41 holes through the hull. Opacity went **100.00% → 47.63%**, against
+`station_turret.png`'s 54.71%. Verified three ways: the composite at 1×, a 4× zoom of the hull
+edge over a checkerboard (no halo — the importer's `process/fix_alpha_border=true`, no mipmaps,
+and `project.godot:175`'s Nearest filtering each rule the fringe out independently), and the
+alpha silhouette as a black/white mask (solid, hole-free). Regenerating was rejected: it spends a
+capped monthly allowance, cannot be undone, and would have discarded the core the turrets match.
+`tests/integration/test_entity_sprite_transparency.gd` now fails the gate if it regresses.
 
 The prompt that worked names the 2D shapes seen from above — "the base reads as a flat **circle**,
 the barrels as two short flat **rectangles** lying across it" — plus the skill's negative list.
@@ -248,12 +271,20 @@ either would double it.
 
 Why these numbers:
 
-- **±440 / ±290 design.** The margin has to exceed half the largest sprite plus the camera's pan.
-  The largest reinforcement is the interceptor at **64×74** (its `Sprite2D` carries no `scale` —
-  the `1.8` in `interceptor.tscn` is on the sibling `CollisionShape2D`), so half-extent **37**.
-  Horizontal budget `640 + H_LIMIT 100 + 37 = 777` world px; vertical `360 + 37 = 397`, with
-  `V_LIMIT` deliberately excluded because every spawn in the game resolves against the camera's
-  *fixed* centre and not the panned view. ±440 gives 880 and ±290 gives 580.
+- **±440 / ±290 design.** The margin has to exceed half the largest sprite. The largest
+  reinforcement is the interceptor at **64×74** (its `Sprite2D` carries no `scale` — the `1.8` in
+  `interceptor.tscn` is on the sibling `CollisionShape2D`), so half-extent **37**. Horizontal
+  budget `640 + 37 = 677` world px; vertical `360 + 37 = 397`. ±440 gives 880 and ±290 gives 580 —
+  both comfortably clear.
+  **Camera-pan headroom (`H_LIMIT`/`V_LIMIT`) is no longer part of this budget.** It used to be,
+  because `_spawn_origin()` resolved against the camera's fixed centre while a player could pan up
+  to `V_LIMIT` away from it — this doc originally excluded `V_LIMIT` on purpose as a known,
+  project-wide gap (see `docs/plans/station-reinforcements/3-plan.md`'s "Camera pan can reveal a
+  spawn" risk). `docs/plans/a-spawn-s-off-screen-margin-cannot-account-for-camera-pan-pr/` fixed
+  the underlying gap project-wide: every spawn site, including this one's `_spawn_origin()`, now
+  resolves against `cam.global_position + cam.offset` — the camera's *current* view — so a
+  reinforcement spawn moves with the pan instead of being exposed by it. The margin numbers above
+  are unchanged; they already had headroom to spare without the pan budget.
 - **Side lanes at design y = 20 / 80**, the vertical middle — not hugging a border, which creates
   traps the player cannot escape.
 - **Top squad enters at x = ±250 angled inward**, clearing the hull by 41.8 design units against a
@@ -453,23 +484,122 @@ it.
 with `_RAY_BLOCK_MASK = 1 | 1024`, truncates the beam at the hull edge, then skips the blocker
 itself (`beam_behavior.gd:90`) and culls everything past `seg_len` (`:94`) — which would make the
 station **immune to the player's mining laser** and shield everything behind it. Layer 0 also stops
-the player colliding with a 256×256 body. Contact damage is unaffected: it comes from the `HitBox`
-on layer 256 built by `base_enemy.gd:53-55`. If the hull should later be a solid obstacle, the
+the player colliding with a 256×256 body. Contact damage is unaffected: it comes from the
+scene-authored `ContactHitBox` node on layer 256. If the hull should later be a solid obstacle, the
 opt-out is an `is_laser_blocking()` returning `false` (`beam_behavior.gd:67-68`).
 
-⚠️ **Known coverage gap — still open.** `tests/integration/test_space_station.gd` drives damage by
-emitting `received_damage` directly, so it does **not** prove any of these layer values. A core no
-bullet could ever hit passes all nine tests. Sub-item 2 placed the station in a live level but did
-**not** close this: `tests/integration/test_station_assault_section.gd` asserts the section's
-gating and wave data, not a projectile overlap. Closing it needs a test that instances
-`assault/scenes/projectiles/bullets/bullet.tscn` and steps physics.
+✅ **Coverage gap — closed.** For most of this entity's life
+`tests/integration/test_space_station.gd` drove damage by emitting `received_damage` directly, so
+it proved nothing about any of these layer values: a core no bullet could ever hit passed all nine
+tests. Sub-item 2 did not close it either —
+`tests/integration/test_station_assault_section.gd` asserts the section's gating and wave data, not
+a projectile overlap.
+
+The two tests at the bottom of `test_space_station.gd` closed the **bullet (64)** path. They
+instance a real `assault/scenes/projectiles/bullets/bullet.tscn` and step physics, so the
+layer/mask chain has to work for them to pass:
+
+- `test_a_real_bullet_in_a_turret_lane_damages_the_turret_through_the_armored_core` — a bullet
+  fired up the `x = 76` lane crosses the core rect (bottom edge `y = +120`, ~6 frames at
+  900 px/s), fires `armor_deflected` for 0, keeps flying, and takes exactly 50 off the turret at
+  `y = +102`.
+- `test_a_real_bullet_damages_the_core_once_the_armor_is_broken` — with the turrets dead, a bullet
+  on the centre lane takes 50 off the core itself.
+
+`tests/integration/test_station_incoming_damage_paths.gd` closes the other three, the same way —
+real scenes, real physics, no `received_damage` emit anywhere in the damage path:
+
+| Row of the table above | Tests | Proof it is not vacuous |
+|---|---|---|
+| `HurtBox.collision_mask & 32` (rockets) | a real `homing_missile.tscn` takes 100 off the unarmoured core, a real `warhead_missile.tscn` takes 50, and each fires `armor_deflected` for 0 while the armour holds | setting the mask to the gunship's raw `65` reds all four |
+| `HurtBox.collision_mask & 1024` (asteroid contact) | a real `big_asteroid.tscn` parked inside the hull takes 40 off the unarmoured core and deflects while armoured | the same `65` mutation reds both |
+| `SpaceStation` root on **layer 0** | `BeamBehavior.tick()` is driven from a real `_physics_process` (the only place `direct_space_state` may be queried); the beam runs its full 1200 px through the hull and burns the core | `test_a_station_on_the_default_body_layer_would_block_its_own_fight` sets the root to layer 1 on a live instance and asserts the beam stops dead at `y = +120` and damages nothing |
+
+That last one is the boundary test, in the same shape as
+`test_enemy_hurtbox_geometry.gd::test_the_88x240_proposal_fails_this_sweep`: the rejected
+configuration is applied to a live station and asserted to fail, so "root is layer 0 on purpose"
+is a gate rather than a paragraph.
+
+Two things that file had to work around, worth knowing before extending it:
+
+- **`beam_dps = 12` is 0.2 damage per physics frame**, and `beam_behavior.gd`'s
+  `_accumulate_and_apply` only forwards whole numbers — so the first `armor_deflected` from the
+  mining laser lands around frame **30**. A 4-frame budget passes the beam-endpoint assertion and
+  silently drops the one that proves the beam found the core; that is how the test first ran.
+- **A rocket now survives a deflected hit, same as a bullet** — see the next paragraph but one.
+
+**A rocket reaches a turret behind the armoured core, exactly like a bullet does.**
+`homing_missile.gd` and `warhead_missile.gd` duck-type `is_armored()` on the hurtbox's parent
+before consuming themselves (`_hit_is_deflected()`, the same idiom `bullet.gd::_hit_is_deflected`
+uses), so a deflected hit no longer detonates the rocket. On this boss the core rect (`y = +120`)
+is reached about two frames before a turret rim (`y = +102`): the rocket is deflected there for 0
+(`armor_deflected` still fires — the armour still visibly registers the hit), keeps flying, and
+detonates on the live turret behind it for full damage. Fixed by
+`rockets-cannot-damage-the-space-station-s-turrets-they-deton` in `code-health-backlog`; pinned by
+`test_a_rocket_up_a_turret_lane_survives_the_armored_core_and_damages_the_turret_behind_it` and
+`test_a_real_rocket_is_deflected_by_the_armored_core_rather_than_missing_it` (the latter fires on
+the centre lane, with no turret behind it, and asserts the rocket still survives the deflection and
+keeps flying rather than being spent on it).
 
 For the record, because it was got wrong twice during sub-item 2's review: a player bullet is
 **not** consumed by the first HurtBox it overlaps. `BulletPool` is used only by four enemies and
 the ally fighter — `straight_behavior.gd:22` just does `state.add_child(bullet)` — so
 `Bullet.expired` has no listener on the player path, and `default.tres` sets `range_px = 0.0` so
 `bullet.gd:49` never frees it either. A bullet crosses the armoured core (deflected) and goes on
-to hit the turrets behind it.
+to hit the turrets behind it. **This is now pinned by the first test above, not just written
+down** — see the load-bearing dependency note in the next section.
+
+### Core hurtbox: why it spans the whole hull, and why 88 x 240 was rejected
+
+The core `HurtBox` shares the body's 240 x 240 `RectangleShape2D_ss`
+(`space_station.tscn:22-23`, `:71-72`, `:80-81`). It was proposed that it shrink to an 88-wide
+central strip so its x-extents (`[-44, 44]`) stop overlapping the turrets' (`[50, 102]`) — the
+argument being that a shot fired up a turret lane triggers a redundant core deflection before it
+reaches the turret.
+
+**Rejected. Do not narrow it.** Full reasoning in
+`docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-/`. The short version:
+
+- The stated benefit does not exist. The bullet *does* still hit the turret, in the same pass, for
+  full damage (previous section). All narrowing buys is the removal of one extra hull flash.
+- The cost is `2 x (6 + 26) = 64` px of the boss's 256 px visible width — **25 %** — that swallows
+  shots and reports nothing. Not "deflected": *absent*.
+- In phase 2 it is far worse. `station_turret.gd:73-77` closes each turret's hurtbox on death, so
+  once the armour is gone the strip is the only damageable thing left: 88/256 = **34 % of the
+  visible width live, 66 % dead** — at the exact moment the fight has told the player the core is
+  open.
+- And the hull is *rotating* through phase 2 at `laser_rotation_speed = 0.5` rad/s, so which lanes
+  connect would depend on the hull's current angle — unreadable, and not a skill this fight
+  teaches.
+
+The rule this states, and the one the whole roster already follows: **an enemy's `HurtBox` covers
+the body collider the player collides with. Armour is a damage rule on a full-size hurtbox, never
+an absent hurtbox.** It is enforced by `tests/integration/test_enemy_hurtbox_geometry.gd`, whose
+`test_the_88x240_proposal_fails_this_sweep` applies this exact proposal to a live station instance
+and asserts it fails by 76 px per side. The Gradius idiom of a *separate armour-plate `HurtBox`*
+over the shoulders is the better long-term design and was deferred, not dismissed — it is a third
+HP bucket and new art on a boss whose approved epic is about to collapse five HP pools into one.
+
+⚠️ **Load-bearing dependency.** This decision assumes a player bullet is not consumed by the core's
+armoured hurtbox while it deflects. Since
+`code-health-backlog` → `decide-whether-the-player-s-default-gun-should-stop-on-its-f`
+(`docs/plans/decide-whether-the-player-s-default-gun-should-stop-on-its-f/`), the default gun DOES
+stop on its first damaging hit — `PierceModule` would otherwise still be the strict downgrade that
+task fixed — but a **deflected** hit is exempt: `bullet.gd::_hit_is_deflected()` duck-types a query
+for `is_armored() == true` on the hit target and, if true, the bullet keeps flying with no
+`expired`, no free, and no pierce charge spent. `SpaceStation.is_armored()` is the query this
+exemption reads, and it is the only thing standing between "shots reach the turrets" and "the
+turrets — and the boss — are unkillable." **Any enemy that refuses damage while its hurtbox stays
+hittable must expose its own `is_armored()`-shaped method to get the same exemption, or a
+default-gun shot will stop dead on the first deflected hit.** `homing_missile.gd` and
+`warhead_missile.gd` read the same query for the identical reason — see the rocket paragraph two
+sections up. Tests turn a regression here into a red gate at the point of the change instead of an
+unshootable boss discovered later:
+`test_a_real_bullet_in_a_turret_lane_damages_the_turret_through_the_armored_core` and
+`test_a_rocket_up_a_turret_lane_survives_the_armored_core_and_damages_the_turret_behind_it` here,
+and `test_a_deflected_hit_does_not_consume_the_bullet` at the bullet level
+(`tests/integration/test_player_bullet_lifetime.gd`).
+A geometry test cannot see it: it measures rectangles.
 
 ---
 
@@ -491,10 +621,10 @@ exists. Adding one is a deliberate future change, not an oversight.
   re-enter its death handler. Both `_on_received_damage` and `_on_health_changed` carry an `_alive`
   guard; each alone is sufficient, and removing **both** makes `destroyed` fire 4× instead of 1×
   (verified by mutation test).
-- `BaseEnemy._add_contact_hitbox()` hardcodes `damage = 20` and ignores the config
-  (`base_enemy.gd:56`), so `space_station.gd` re-applies `collision_damage` after `super._ready()`.
-  It also copies the shape resource but **not** the `CollisionShape2D`'s `scale`/`position`, which
-  is why this scene authors its shape at true size with `scale = 1`.
+- `space_station.tscn`'s scene-authored `ContactHitBox` node defaults to `damage = 20` and knows
+  nothing about the config, so `space_station.gd` re-applies `collision_damage` off
+  `contact_hit_box` after `super._ready()`. Its `CollisionShape2D` references the body's own
+  `SubResource` shape id at `scale = 1` (unscaled), matching the body exactly.
 
 ---
 
@@ -542,19 +672,25 @@ rings, 0.21 leaves a largest lane gap of **31.8 %** of the spacing; 0.24 leaves 
 (so it locks the shipped `.tres`, not a literal) and rejects anything above 25 % — a bound that
 deliberately catches re-tread periods 2, 3 and 4 but not 5+.
 
-The gunnery timings are read exactly once, by `StationGunnery._ready()`, for the same process-wide
-`.tres` reason spelled out below. The two `spawn_radius` values are **not** in the config —
+The gunnery timings are read exactly once, by `StationGunnery._ready()`, for the same reason
+spelled out below. The two `spawn_radius` values are **not** in the config —
 `turret_spawn_radius = 26.0` (the turret hurtbox rim) and `core_spawn_radius = 130.0` (outside the
 240×240 hull) are scene geometry, so they are exports on the gunnery node, exactly as
 `emitter_radius` is on the phase node.
 
 **The laser timings are read exactly once**, by `StationLaserPhase._ready()`, which copies them
-into its own fields; nothing reads `config` afterwards. That is not a micro-optimisation —
-`space_station.gd` `load()`s the `.tres` and `ResourceLoader` caches, so **every `SpaceStation` in
-the process shares one `SpaceStationConfig`**, and it is the same object `preload()` hands a test.
-Reading through it at runtime is reading mutable global state; a test writing to it to shorten the
-timings would permanently rewrite the shipped values for the rest of the process. Tests override
-the **phase node's** fields instead. The phase's own field defaults are a conservative fallback for
+into its own fields; nothing reads `config` afterwards.
+
+That used to be a safety measure: `space_station.gd` `load()`s the `.tres` and `ResourceLoader`
+caches, so every `SpaceStation` in the process shared one `SpaceStationConfig` — the same object
+`preload()` hands a test — and a test writing to it to shorten the timings would permanently
+rewrite the shipped values for the rest of the process. **That is no longer true of
+`station.config`:** `ShipConfig.privatise()`, called from `BaseEnemy._init()` / `_enter_tree()`,
+gives every station its own `duplicate()`, and `tests/integration/test_config_instance_isolation.gd`
+holds it shut for all ten entities. The object a test `preload()`s is still shared and must still
+never be written.
+
+Tests override the **phase node's** fields regardless. The phase's own field defaults are a conservative fallback for
 a null config (longer telegraph, shorter lethal window, no rotation, one beam) and are
 intentionally different from the `.tres`, which is what stops the config test passing vacuously.
 
@@ -621,7 +757,10 @@ Shared code it depends on: `global/resources/attack/radial_attack_pattern.gd`
 Sprites: `assault/assets/sprites/enemies/station_core.png`, `station_turret.png`,
 `station_turret_destroyed.png`. The laser phase adds **no new art** — it reuses
 `assault/scenes/hazards/laser_ray/laser_ray.tscn`'s existing frames.
-Tests: `tests/integration/test_space_station.gd` (armour rule, turret lifecycle, config),
+Tests: `tests/integration/test_space_station.gd` (armour rule, turret lifecycle, config, and two
+real-bullet physics tests that pin the collision layers and the not-consumed-bullet premise),
+`tests/integration/test_enemy_hurtbox_geometry.gd` (the project-wide invariant that a `HurtBox`
+covers its body collider — carries the permanent 88x240 rejection),
 `tests/integration/test_station_laser_phase.gd` (trigger, telegraph window, self-damage
 regression, rotation rate, volley determinism, teardown, config),
 `tests/integration/test_laser_ray_hit_mask.gd` (the shared `LaserRay` export),

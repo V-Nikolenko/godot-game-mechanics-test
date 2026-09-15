@@ -29,6 +29,24 @@ func test_a_stack_is_half_of_base_health() -> void:
 	assert_eq(_events, [[50, 250]])
 
 
+## INTENT: `stack_hp` is the persistence hook SessionState saves and feeds back to
+## `restore()`. It must report the locked-in stack size without the caller having to
+## divide `max_temp` by MAX_STACKS.
+func test_stack_hp_reports_the_locked_in_stack_size() -> void:
+	assert_eq(_th.stack_hp, 0, "0 until the first stack fixes the size")
+	_th.add_stack(21)
+	assert_eq(_th.stack_hp, 10, "maxi(1, 21 / 2)")
+	assert_eq(_th.max_temp, TempHealth.MAX_STACKS * _th.stack_hp)
+	_th.take_damage(3)
+	assert_eq(_th.stack_hp, 10, "draining the pool does not change the stack size")
+
+
+func test_stack_hp_is_set_by_restore_too() -> void:
+	_th.restore(9, 7)
+	assert_eq(_th.stack_hp, 7)
+	assert_eq(_th.max_temp, 35)
+
+
 func test_stack_size_is_locked_to_the_first_call() -> void:
 	## CHARACTERIZED: _stack_hp is set once and never revisited, so picking up a
 	## temp-HP crate on a ship whose base health later changes keeps the old size.

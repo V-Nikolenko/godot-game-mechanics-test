@@ -4,7 +4,7 @@ extends Node
 @export var wave_manager: WaveManager
 
 func _ready() -> void:
-	print("[LEVEL] Level 2 started — building wave data")
+	_trace("[LEVEL] Level 2 started — building wave data")
 
 	var builder := WaveBuilder.new()
 	var L := builder.ARC_LEFT
@@ -148,10 +148,16 @@ func _node_timer(seconds: float) -> Signal:
 	return t.timeout
 
 func _on_waves_complete() -> void:
-	print("[LEVEL] All waves triggered — waiting for enemies to clear...")
+	_trace("[LEVEL] All waves triggered — waiting for enemies to clear...")
 	var container := get_node("../EnemyContainer") as Node2D
 	while container and is_instance_valid(container) and container.get_child_count() > 0:
 		await _node_timer(1.0)
 	await _node_timer(2.0)
-	print("[LEVEL] Level 2 complete! Transitioning to infiltration mission...")
+	_trace("[LEVEL] Level 2 complete! Transitioning to infiltration mission...")
 	get_tree().change_scene_to_file("res://infiltration/scenes/levels/TestIsometricScene.tscn")
+
+
+## Off unless Godot was started with `--verbose`.
+func _trace(message: String) -> void:
+	if OS.is_stdout_verbose():
+		print(message)

@@ -33,7 +33,7 @@ otherwise it loads the Open Space hub. Full detail: [`docs/game-structure.md`](.
 | Assault Mission | `assault/` | Autoscroller shmup; hosts the race sub-mode | [assault.md](modules/assault.md) |
 | Open Space | `open_space/` | Persistent hub world + mission select | [open_space.md](modules/open_space.md) |
 | Infiltration | `infiltration/` | Isometric ground combat | [infiltration.md](modules/infiltration.md) |
-| Global (shared) | `global/` | Components, entities, ship modules, state machine, pickups, resources, UI, autoloads | [global.md](modules/global.md) |
+| Global (shared) | `global/` | Components, entities, ship modules, state machine, pickups, interactables, resources, UI, autoloads | [global.md](modules/global.md) |
 | Shell | `boot/`, `cutscenes/`, `dialog/` | Boot entry, cutscenes, dialog data | [shell.md](modules/shell.md) |
 | Tests | `tests/` (+ `addons/gut/`) | GUT suite over the autoloads and `global/` | [tests/README.md](../../tests/README.md) |
 
@@ -52,12 +52,15 @@ Registered in `project.godot` `[autoload]` (load order matters). Full detail in
 |---|---|---|
 | `MissionState` | `global/autoloads/mission_state.gd` | Mission completion, scores, and "cutscene seen" flags — persisted progression |
 | `DialogPlayer` | `global/autoload/dialog_player.gd` | Plays `DialogScriptResource` dialogue; `is_active` gates gameplay input |
-| `UpgradeState` | `global/autoloads/upgrade_state.gd` | Player upgrade selections |
+| `UpgradeState` | `global/autoloads/upgrade_state.gd` | Which main-weapon modes are unlocked. `STARTING_IDS` seeds a fresh profile; a `WeaponModeUnlockerPickup` in the world is the only other way in |
 | `EventBus` | `global/systems/event_bus.gd` | Global typed signals (decoupled cross-system events) |
-| `ShipModuleState` | `global/autoloads/ship_module_state.gd` | Which ship modules are equipped per slot |
+| `ShipModuleState` | `global/autoloads/ship_module_state.gd` | Which ship modules are equipped per slot, and which are unlocked — `equip()` refuses a locked module |
 | `ShipProgressionState` | `global/autoloads/ship_progression_state.gd` | Ship progression / unlocks |
 | `SessionState` | `global/autoloads/session_state.gd` | Per-run session data |
 | `CameraShake` | `global/systems/camera_shake.gd` | Global camera-shake requests |
+| `LogState` | `global/autoloads/log_state.gd` | Which lore-log entries are collected. Total is derived from a `LogEntryResource` `.tres` directory sweep, never hand-counted; `collect_next()` grants entries in catalogue order |
+| `PickupState` | `global/autoloads/pickup_state.gd` | Which `persistent_id`-tagged `PickupBase` placements have ever been collected, independent of the physical node — so a one-time pickup placed in a replayable mission (assault restart reloads the scene) doesn't re-grant on reload. Opt-in: a pickup that leaves `persistent_id` empty (every pickup today) ignores this entirely |
+| `SettingsState` | `global/autoloads/settings_state.gd` | Player-chosen settings. First key: `open_space_scheme` (`&"mouse"` / `&"keys"`), read by `OpenSpacePlayerShip` to seed and live-update its `ShipTurnController`; set by the ESC menu's Settings panel |
 
 ---
 
@@ -80,7 +83,27 @@ Detail and APIs: [global.md](modules/global.md).
   **integration recipes** in [global.md](modules/global.md) for how to wire them.
 - **Config-driven enemies:** assault enemies read stats from a `*_config.tres`
   (`Resource`) applied in `_ready()`; the `.tres` value wins over the scene's Health node
-  where they differ.
+  where they differ. The exception is `collision_damage`: the scene-authored `ContactHitBox`
+  node defaults to `damage = 20` and knows nothing about the config, so each enemy must
+  re-apply it in `_ready()` off `contact_hit_box`, or author a different default directly on
+  its own scene node. `tests/integration/test_enemy_contact_damage.gd` asserts the whole
+  roster does.
+  Each entity holds a **private copy** of its config: `ShipConfig.privatise()` duplicates it from
+  `BaseEnemy._init()`/`_enter_tree()` (and `AllyFighter`'s), because `ResourceLoader` caches by path
+  and every entity of a type would otherwise share one object with each other and with every
+  `preload()` in the test suite. Details and the two remaining windows: the `ShipConfig` section of
+  [global.md](modules/global.md); pinned by `tests/integration/test_config_instance_isolation.gd`.
+  **The object `load()`/`preload()` returns is still shared — never write to it.**
+- **The mouse is read in exactly one line project-wide.** `player_ship.gd::_handle_rotation`'s
+  `get_global_mouse_position()` is it. Everything downstream — the whole open-space turn model in
+  `ShipTurnController` (see [open_space.md](modules/open_space.md) §3.2.1) — takes the cursor as an
+  injected `Vector2`. This is not style: `Input.warp_mouse()` cannot place a cursor in a headless
+  GUT run, so any logic that reads the mouse itself is untestable by this project's gate. Use
+  `get_global_mouse_position()` (a `CanvasItem` method that honours the canvas transform and the
+  project's `stretch/mode="canvas_items"`), never `DisplayServer.mouse_get_position()`.
+- **One writer per transform.** In open space, `ShipTurnController` is the only thing that writes
+  the player ship's `rotation`; a second writer (a ship module, a state) fights it invisibly at
+  frame rate. Anything that needs to turn the ship goes through the controller's `face_instant()`.
 - **State machines:** `global/statemachine/state_machine.gd` + `state.gd`; entities with
   complex behaviour keep one `State` node per file in a `states/` folder (player, racers,
   light_assault_ship). Simpler enemies use in-script `enum` phases.
@@ -96,18 +119,111 @@ Detail and APIs: [global.md](modules/global.md).
   `push_error` stay unconditional: they are for things that should not happen.
 - **Coordinates:** waves and spawn offsets are authored in **design units** (640×360
   space) and scaled by `ArenaCamera.WORLD_SCALE` (2.0) at runtime — never pre-multiply.
+- **Unlockable content needs a source in the world.** `ShipModuleState` and `UpgradeState` are
+  both written only by a `PickupBase` subclass placed in a level —
+  `ShipModuleUnlockerPickup` and `WeaponModeUnlockerPickup`, both benched in
+  `open_space/scenes/levels/sector_hub.tscn`. Nothing else calls `unlock()`, so an entry added to
+  `ShipModuleState.SLOT_MODULES` or `UpgradeState.ALL_IDS` without a matching pickup is content
+  the player can see in the ship menu and can never reach, with no warning at runtime. That is how
+  four tuned weapon modes sat unreachable behind a one-row weapon column. Both pairings are
+  invariant-tested (`tests/integration/test_module_unlock_sources.gd`,
+  `tests/integration/test_weapon_unlock_sources.gd`); the only exempt ids are
+  `UpgradeState.STARTING_IDS`, which a fresh profile is seeded with.
+- **Projectile lifetime — every projectile has exactly one owner.** Either a `BulletPool`
+  recycles it (`docs/BULLET_POOL.md`: *the pool is smart, bullets are dumb*), or it frees itself
+  when it leaves the world. There is no third option, and "nothing frees it" is the bug this rule
+  exists to prevent: the player's bullets had no owner at all, so every shot ever fired stayed in
+  the level for the whole mission. Player bullets go through `WeaponBehavior._launch()`, which
+  calls `Bullet.free_when_offscreen()` and connects `Bullet.expired -> Bullet.queue_free`. **A
+  default bullet stops on the first hit that actually deals damage; a *deflected* hit does not
+  count** — `bullet.gd::_hit_is_deflected()` duck-types a query for `is_armored()` on the hit
+  target and, if it returns `true`, the bullet keeps flying at full damage with no pierce charge
+  spent. This exists because the space-station boss's armoured core spans the whole hull, so a
+  shot aimed at a turret has to survive crossing it undeflected, or the turrets — and the boss —
+  are unkillable. `PierceModule` raises the number of damaging hits a bullet survives before it
+  stops. Player bullets despawn at the *viewport* edge and `EnemyBullet` at the *arena* bound;
+  that asymmetry is deliberate, because the player's weapons are also mounted in Open Space, which
+  has no `ArenaCamera`. Gated by `tests/integration/test_player_bullet_lifetime.gd`.
 - **Testing:** **GUT 9.7.1**, vendored in `addons/gut/`, enabled from the
   `[editor_plugins]` section of `project.godot`. Tests live in `tests/` and run headless:
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`.
   The suite is almost entirely **characterization**: it pins behaviour as it is today, bugs
-  included, so any behaviour change shows up as a failing test rather than as silence. The one
-  exception is `tests/integration/test_resource_uid_integrity.gd`, which asserts an invariant
-  (every `[ext_resource]` UID matches the UID its target declares) and the space-station family.
+  included, so any behaviour change shows up as a failing test rather than as silence. The
+  exceptions are the integrity tests — `tests/integration/test_resource_uid_integrity.gd`
+  (every `[ext_resource]` UID matches the UID its target declares, resolves to a file that
+  actually declares it, is not claimed by two files at once, and the same for the UID-only
+  references in `project.godot` / `export_presets.cfg`),
+  `tests/integration/test_suite_integrity.gd` (every `tests/**/test_*.gd` compiles and extends
+  `GutTest`, because GUT otherwise drops an unloadable test script with only a warning and still
+  exits 0), `tests/integration/test_gut_local_patches.gd` (the two local patches
+  `addons/gut/LOCAL_PATCHES.md` documents are still applied, since re-vendoring GUT drops them
+  and the resulting breakage is silent) and `tests/integration/test_project_load_integrity.gd`
+  (every `.tscn`/`.tres`/`.gd` outside `addons/` loads, instantiates and compiles, and the engine
+  logs nothing while it happens — the gate's `--import` step never loads a scene at all and its
+  `--quit` step boots only `res://boot/…`, so everything reachable only from an assault level,
+  the race sub-mode, the hub or infiltration was previously unloaded by any gate step)
+  and `tests/integration/test_enemy_contact_damage.gd` (the only one over **balance data**:
+  every assault enemy's contact `HitBox` deals the damage its `*_config.tres` declares, which
+  is otherwise dead the moment a subclass forgets the re-apply above)
+  and `tests/integration/test_contact_hitbox_geometry.gd` (its geometry companion: a contact
+  `HitBox` must carry the body `CollisionShape2D`'s transform, not just its `Shape2D` — copying
+  the shape alone drops the scale that sizes it, so the gunship rammed with an 18 px box against
+  a 41.5 px hull)
+  and `tests/integration/test_entity_sprite_transparency.gd` (the only invariant over **art**:
+  no texture an entity under `assault/scenes/{enemies,player,projectiles,hazards,allies}` draws
+  over the game world may be 90%+ fully opaque, because a painted-in background renders as a card
+  that cuts a hard rectangle out of the starfield — `station_core.png` shipped at 100% and no
+  gate step could see it, since `--import` loads no scene and `--quit` boots only `res://boot/…`.
+  It reads scenes through `PackedScene.get_state()` rather than instantiating them, and resolves
+  `Sprite2D.texture`, `AnimatedSprite2D.sprite_frames` and `AtlasTexture.atlas` — a
+  `Sprite2D`-only walk finds 9 textures and four of the five roots contribute nothing)
+  and `tests/integration/test_enemy_hurtbox_geometry.gd` (the other side of the same collision
+  pair: every assault entity's `HurtBox` must **cover** its body `CollisionShape2D`, so armour is
+  a damage *rule* on a full-size hurtbox and never an absent one — it carries a permanent
+  boundary test that applies the rejected "narrow the station core to 88 x 240" proposal to a live
+  instance and asserts it fails)
+  and `tests/integration/test_player_bullet_lifetime.gd` (the projectile-lifetime rule above:
+  every `WeaponBehavior` subclass — enumerated from the project class list, so a *future* one is
+  covered too — hands off its bullet's lifetime, a pooled bullet is **not** freed by the same
+  change, a bullet is consumed by its first damaging hit, and a deflected hit does not consume it)
+  and `tests/integration/test_config_instance_isolation.gd` (the config-copy rule above: no two
+  entity instances share a config object, the copy is value-identical to the shipped `.tres`, and
+  every config class stays flat enough for a shallow `duplicate()` to be a complete copy — the
+  roster is a directory sweep, so a new enemy is covered the day it lands)
+  and `tests/integration/test_signal_emit_arity.gd` (a signal's declared parameter list is never
+  checked by the engine against how it is actually emitted — the 2026-09-03 honesty fix to
+  `Health.amount_changed`/`State.state_transition` only helped a reader, not the engine — so this
+  sweeps every self-emitted signal project-wide and asserts declared arity matches every
+  `.emit()` call site; its first run caught the same drift live in `MovementController`'s
+  `action_single_press`/`action_double_press`, fixed alongside it)
+  — plus the space-station family.
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).
   Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the
   save-file sandbox, and the signal-arity trap that will otherwise fail tests for reasons
   unrelated to the code under test.
+- **Timers inside coroutines that can be abandoned:** prefer a `Time.get_ticks_msec()` deadline
+  over `get_tree().create_timer()` when the wait can end early or the owner can be freed mid-wait.
+  A `SceneTreeTimer` outlives an early `return` by its whole remaining duration, and a
+  `GDScriptFunctionState` suspended when its object is freed is stranded outright; Godot only
+  reports either at *process exit*, as `ObjectDB instances leaked` / `resources still in use`.
+  **The gate cannot see those lines** — they arrive after GUT has set the exit code and they match
+  none of `/agent/verify.sh`'s `FATAL` patterns, so a leaking suite still prints `GATE PASS`. Run
+  `scripts/check-test-leaks.sh` (same arguments as gate step 3, plus a grep for the leak lines)
+  after touching anything that awaits. `LevelDirector._wait_for_child_exit_or_timeout()` and
+  `_wait_seconds()` are the worked example; `tests/integration/test_level_director_polling.gd` is
+  the regression test.
+- **Resource UIDs:** a UID is minted by the editor and cannot be written by hand, so a reference
+  with no `uid=` is legal (Godot falls back to the `res://` path) but an *invented* one is a
+  dangling reference that still loads. `tests/integration/test_resource_uid_integrity.gd` is the
+  only tool for this: it reads UIDs from disk — never `ResourceUID`, whose answers depend on how
+  warm the gitignored `.godot/uid_cache.bin` is, and which keeps dead UIDs alive as aliases —
+  checks every `[ext_resource]` pairing, catches dangling and duplicated UIDs plus the UID-only
+  references in `project.godot` / `export_presets.cfg`, and carries two canaries against a mass
+  strip. **Do not run the Godot MCP `update_project_uids` tool** — as
+  the MCP calls it it is a silent no-op (it searches `res:///work/repo/`), and pointed at `res://`
+  by hand it resaves every scene, deleting all UIDs and all comments. Written up in
+  [`tests/README.md`](../../tests/README.md).
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---
@@ -167,7 +283,13 @@ For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-ro
 - [`docs/BULLET_POOL.md`](../BULLET_POOL.md) — bullet pooling
 - [`tests/README.md`](../../tests/README.md) — how to run and write tests
 - [`addons/gut/LOCAL_PATCHES.md`](../../addons/gut/LOCAL_PATCHES.md) — the two changes GUT
-  needs to load under Godot 4.6.3; re-apply on any GUT upgrade
+  needs to load under Godot 4.6.3; re-apply on any GUT upgrade, and
+  `tests/integration/test_gut_local_patches.gd` fails if you forget
+- [`docs/plans/`](../plans/) — one directory per feature: context, research, plan, the
+  independent review verdict, and the implementation log. The audit trail for unattended work
+- [`docs/epics-done/`](../epics-done/) — one dossier per finished epic (`PRD.md` / `SOURCES.md` /
+  `REPORT.md`). **Start here** for why a shipped system is built the way it is, where its tuning
+  numbers came from, and what is known to be unfinished about it
 
 ---
 

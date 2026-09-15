@@ -8,4 +8,5 @@ max_health = 1
 collision_damage = 0
 score_value = 500
 counts_toward_wave_clear = false
+counts_as_escape = false
 movement_speed = 280.0

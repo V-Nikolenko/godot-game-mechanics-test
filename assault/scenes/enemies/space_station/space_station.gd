@@ -45,13 +45,17 @@ signal death_started
 @export var config: SpaceStationConfig = load("res://assault/scenes/enemies/space_station/space_station_config.tres")
 
 ## Seconds the wreck stays in the tree after HP reaches 0. Copied from
-## `config.death_sequence_duration` in `_ready()` and never read back through the resource — the
-## `.tres` is a single process-wide cached instance, so a runtime read would be a read of mutable
-## global state shared with every other station and every test in the process.
+## `config.death_sequence_duration` in `_ready()` and never read back through the resource.
 ##
 ## PUBLIC, and that is the supported override point: a test shortens the sequence by writing
 ## `station.death_duration = 0.05` AFTER `_ready()`, exactly as `test_station_laser_phase.gd` and
-## `test_station_gunnery.gd` override their nodes' copied timings. Never write to `station.config`.
+## `test_station_gunnery.gd` override their nodes' copied timings.
+##
+## `station.config` is a per-instance copy (`ShipConfig.privatise()`, called from
+## `BaseEnemy._init()` / `_enter_tree()`), so writing to it no longer reaches other stations — but
+## the node's own fields remain the documented override point, because they are also what a station
+## with no config at all falls back to. The object `load()`/`preload()` returns is still
+## process-wide and must never be written.
 ##
 ## 0.0 means "free in the same frame", i.e. precisely what BaseEnemy has always done — so a
 ## station with no config keeps the old behaviour rather than hanging in the container.
@@ -112,14 +116,13 @@ func _ready() -> void:
 			t.health.max_health = config.turret_health
 			t.health.current_health = config.turret_health
 
-		## BaseEnemy._add_contact_hitbox() hardcodes damage = 20 and never reads the config
-		## (base_enemy.gd:56), so it has to be re-applied here. bomber.gd:18-26,
-		## light_assault_ship.gd:23 and ram_ship.gd:20-23 all do this; the gunship forgot to,
-		## which is why gunship_config.tres's collision_damage = 30 is silently ignored.
-		for child in get_children():
-			if child is HitBox:
-				(child as HitBox).damage = config.collision_damage
-				break
+		## The scene-authored ContactHitBox defaults to damage 20 and never reads the config,
+		## so it has to be re-applied here. bomber.gd, light_assault_ship.gd, ram_ship.gd and
+		## gunship.gd all do this. tests/integration/test_enemy_contact_damage.gd asserts it for
+		## the whole roster, so an enemy that forgets the re-apply now fails the gate instead of
+		## silently ramming for 20.
+		if contact_hit_box:
+			contact_hit_box.damage = config.collision_damage
 
 
 ## Public read-only view of the turret list, for nodes that need the emitters themselves rather
@@ -226,11 +229,9 @@ func _make_corpse_harmless() -> void:
 
 	## The contact HitBox is on layer 256 and the player's HurtBox is the side that MONITORS
 	## (mask 1281), so zeroing the layer here is what stops a dead 256 px hull from ramming the
-	## player. BaseEnemy._add_contact_hitbox() builds it as a direct child (base_enemy.gd:49-60).
-	for child in get_children():
-		if child is HitBox:
-			(child as HitBox).set_deferred("collision_layer", 0)
-			break
+	## player. Scene-authored as a direct child, "ContactHitBox".
+	if contact_hit_box:
+		contact_hit_box.set_deferred("collision_layer", 0)
 
 
 ## The end of the sequence: one final central blast, then the wreck leaves the container — which

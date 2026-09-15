@@ -1,4 +1,4 @@
-[gd_scene load_steps=8 format=3 uid="uid://braceasteroid01"]
+[gd_scene load_steps=8 format=3 uid="uid://ctmejjlwnwajg"]
 
 [ext_resource type="Script" path="res://assault/scenes/race/track/race_asteroid.gd" id="1_rast"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="2_health"]

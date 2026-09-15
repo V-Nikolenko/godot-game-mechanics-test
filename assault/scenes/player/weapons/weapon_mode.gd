@@ -2,14 +2,16 @@
 class_name WeaponModeResource
 extends Resource
 
-enum Behavior { STRAIGHT, LONG, BEAM, SPREAD, SNIPER }
+## Value 1 is deliberately unused, so shipped `.tres` files' integer `behavior` fields
+## (BEAM=2, SPREAD=3, SNIPER=4) stay valid regardless of which Behavior entries exist.
+enum Behavior { STRAIGHT = 0, BEAM = 2, SPREAD = 3, SNIPER = 4 }
 
 @export var id: StringName = &""
 @export var display_name: String = ""
 @export var icon: Texture2D
 @export var behavior: WeaponModeResource.Behavior = WeaponModeResource.Behavior.STRAIGHT
 
-## Projectile scene used by STRAIGHT / LONG / SPREAD. Ignored for BEAM.
+## Projectile scene used by STRAIGHT / SPREAD. Ignored for BEAM.
 @export var projectile_scene: PackedScene
 
 ## Per-shot range cap in pixels. 0 = no cap (off-screen exits).
@@ -20,7 +22,7 @@ enum Behavior { STRAIGHT, LONG, BEAM, SPREAD, SNIPER }
 
 @export var damage: int = 10
 
-## For STRAIGHT/LONG/SPREAD: heat per shot. For BEAM: heat per second.
+## For STRAIGHT/SPREAD: heat per shot. For BEAM: heat per second.
 @export_range(0.0, 20.0, 0.1) var heat_per_shot: float = 1.0
 
 ## SPREAD only: number of pellets per shot.

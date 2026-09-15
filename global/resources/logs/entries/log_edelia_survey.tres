@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="LogEntryResource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://global/resources/logs/log_entry_resource.gd" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+id = &"edelia_survey"
+title = "Edelia Survey, Entry 12"
+body = "Edelia's south arc keeps reading warmer than the model predicts. Not enough to matter for the settlement charter, but enough that I keep flying back out here to double-check the sensor rather than trust it. Filing this one anyway."
+sequence = 1

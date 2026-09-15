@@ -14,7 +14,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
 | Assault Mission | `assault/` | Autoscroller shmup; hosts the race sub-mode | [assault.md](docs/architecture/modules/assault.md) |
 | Open Space | `open_space/` | Persistent hub world + mission select | [open_space.md](docs/architecture/modules/open_space.md) |
 | Infiltration | `infiltration/` | Isometric ground combat | [infiltration.md](docs/architecture/modules/infiltration.md) |
-| Global (shared) | `global/` | Components, entities, ship modules, state machine, pickups, resources, UI, autoloads | [global.md](docs/architecture/modules/global.md) |
+| Global (shared) | `global/` | Components, entities, ship modules, state machine, pickups, interactables, resources, UI, autoloads | [global.md](docs/architecture/modules/global.md) |
 | Shell | `boot/`, `cutscenes/`, `dialog/` | Boot entry, cutscenes, dialog data | [shell.md](docs/architecture/modules/shell.md) |
 | Tests | `tests/` (+ `addons/gut/`) | GUT suite over the autoloads and `global/` | [tests/README.md](tests/README.md) |
 
@@ -24,7 +24,22 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
 - **Composition over inheritance** — entities are built from `global/components/`
   (Health, Hurtbox/Hitbox, Shield, Overheat, DamageReaction, effects).
 - **Config-driven enemies** — assault enemies load stats from a `*_config.tres` applied in
-  `_ready()` (the `.tres` value wins over the scene's Health node where they differ).
+  `_ready()` (the `.tres` value wins over the scene's Health node where they differ). Each entity
+  holds a **private copy**: `ShipConfig.privatise()` duplicates it from `BaseEnemy._init()` *and*
+  `_enter_tree()` (and `AllyFighter`'s), because `ResourceLoader` caches by path and every entity of
+  a type would otherwise share one object with each other and with every `preload()` in the suite.
+  **The object `load()`/`preload()` returns is still shared — never write to it.** Gated by
+  `tests/integration/test_config_instance_isolation.gd`.
+- **The mouse is read in exactly one line project-wide** — `player_ship.gd::_handle_rotation`'s
+  `get_global_mouse_position()`. Open-space steering lives in `ShipTurnController`
+  (`open_space/scenes/entities/player/ship_turn_controller.gd`), a child of `player_ship.tscn` and
+  **the only writer of that ship's `rotation`**; it takes the cursor as an injected `Vector2` and
+  reads no `Input`, because `Input.warp_mouse()` cannot place a cursor in a headless GUT run and
+  anything that reads the mouse itself is untestable by the gate. Gated by
+  `tests/integration/test_player_ship_turn_wiring.gd` (the anti-inert test — every unit test for
+  the turn model is green on a build where the controller was never added to the scene) and
+  `tests/unit/test_ship_turn_controller.gd`. Details in
+  [open_space.md](docs/architecture/modules/open_space.md) → §3.2.1.
 - **State machines** — `global/statemachine/`; one `State` node per file in a `states/`
   folder for complex entities; simpler enemies use in-script `enum` phases.
 - **Signal arity & logging** — a signal is declared with exactly what it emits
@@ -33,31 +48,173 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   spelled out in `docs/architecture/PROJECT.md` → Conventions.
 - **Design-unit coordinates** — waves/spawns authored in 640×360 space, scaled by
   `ArenaCamera.WORLD_SCALE` (2.0) at runtime; never pre-multiply.
+- **Every projectile has exactly one owner** — either a `BulletPool` recycles it, or it frees
+  itself when it leaves the world. Player bullets are unpooled: spawn them through
+  `WeaponBehavior._launch()`, which calls `Bullet.free_when_offscreen()` and connects
+  `Bullet.expired -> Bullet.queue_free`. **A default bullet stops on the first hit that actually
+  deals damage — a *deflected* hit does not count.** `bullet.gd::_hit_is_deflected()` checks
+  whether the target reports `is_armored() == true` (duck-typed, no shared interface) and, if so,
+  returns without emitting `expired` or spending a pierce charge. This is load-bearing: the
+  space-station boss's armoured core spans the whole hull, so a shot aimed at a turret has to
+  survive crossing it, and the core's `is_armored()` query is what tells the bullet the crossing
+  was a deflection, not a kill — consuming the shot there makes the turrets, and the boss,
+  unkillable. `PierceModule` raises the number of *damaging* hits a bullet survives (via
+  `Bullet.MAX_PIERCE`) before it stops. Any future entity that needs to deflect a bullet without
+  consuming it must expose its own `is_armored()`-shaped query. Spelled out in
+  `docs/architecture/PROJECT.md` → Conventions; gated by
+  `tests/integration/test_player_bullet_lifetime.gd`.
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
   pins today's behaviour, bugs included. The exceptions are
   `tests/integration/test_resource_uid_integrity.gd`, an invariant check over `[ext_resource]`
-  UIDs, and the space-station family — `tests/integration/test_space_station.gd`,
+  UIDs and the UID-only references in `project.godot` / `export_presets.cfg` (read from disk, so
+  it is immune to the stale aliases a warm `.godot/uid_cache.bin` keeps alive) that also asserts
+  every UID we write is one the editor could have minted and detects collisions by decoding
+  rather than by string match — `uid://` is base-34 text for a 64-bit int, so a hand-typed UID is
+  usually an alias for one owned elsewhere, which no text comparison can see,
+  `tests/integration/test_suite_integrity.gd`, which asserts every `tests/**/test_*.gd`
+  compiles and extends `GutTest` (GUT otherwise drops an unloadable test script with only a
+  warning and still exits 0, so the gate stays green while a test file silently vanishes),
+  `tests/integration/test_gut_local_patches.gd`, which asserts the three hand-applied patches
+  `addons/gut/LOCAL_PATCHES.md` documents are still in place (re-vendoring GUT drops them, and
+  the resulting breakage is silent — parse errors on stderr, suite still exit 0, doubler gone;
+  the third patch guards a leaked `SceneTreeTimer` on every headless run instead),
+  `tests/integration/test_project_load_integrity.gd`, which loads every `.tscn`/`.tres`/`.gd`
+  outside `addons/` and asserts each one loads, instantiates and compiles with no engine error or
+  warning logged (the gate's `--import` step never loads a scene and its `--quit` step boots only
+  `res://boot/…`, so most of the project was previously unloaded by every gate step),
+  and the space-station family — `tests/integration/test_space_station.gd`,
   `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
-  `test_station_gunnery.gd`, `test_station_reinforcements.gd` and `test_radial_attack_pattern.gd` —
+  `test_station_gunnery.gd`, `test_station_reinforcements.gd`,
+  `test_station_incoming_damage_paths.gd` and `test_radial_attack_pattern.gd` —
   which cover new code and so
-  assert intent. A few characterization files also carry individually-marked intent tests
-  (`test_health_component.gd`, `test_state_machine.gd`); each says so in a comment.
+  assert intent. The last of those closes the boss's collision-layer coverage gap: real missiles,
+  a real asteroid and a real `BeamBehavior` prove the `HurtBox` mask bits 32 and 1024 and the
+  layer-0 root that keeps the hull from blocking the player's mining laser. `tests/integration/test_module_unlock_sources.gd` is a second invariant check
+  (every module in `ShipModuleState.SLOT_MODULES` has an unlocker pickup in the sector hub, so
+  the unlock gate cannot strand content), and `tests/integration/test_module_list_lock.gd`
+  asserts intent for the ship menu's locked rows.
+  `tests/integration/test_weapon_unlock_sources.gd` is the same check over the *other* unlock
+  store, and is the one that closed the hole: `UpgradeState` seeds `STARTING_IDS` (`&"default"`)
+  and `unlock()` had exactly one caller project-wide — `unlock_all()`, which nothing invokes — so
+  `sniper_shot`, `spread`, `gatling` and `mining_laser` were tuned, implemented, iconed and
+  **unreachable**, and the player flew the Standard gun for the whole game. Every non-starting id
+  now needs a `WeaponModeUnlockerPickup` in the sector hub. Two of its cases go past placement:
+  one collects a real pickup against the live autoload (every placement test passes on a pickup
+  whose `_collect()` is empty), and one proves `PlayerMenu` rebuilds its weapon column on
+  `UpgradeState.unlocked_changed` — without that the menu is stale for the rest of the scene the
+  pickups live in. It also asserts every mode `.tres` sets `WeaponModeResource.icon`, now the
+  single id→icon map for both the ship menu and the HUD chip.
+  `tests/integration/test_enemy_contact_damage.gd` is a third invariant check, over the balance
+  data rather than the files: every assault enemy's contact `HitBox` must deal the damage its
+  `*_config.tres` declares. Every `BaseEnemy` subclass's scene authors a `ContactHitBox` node
+  defaulting to `damage = 20`, which knows nothing about the subclass's own `.tres`, so an enemy
+  that forgets to re-apply `collision_damage` in `_ready()` leaves the field dead with no visible
+  symptom — which is exactly how the gunship rammed for 20 while its config said 30.
+  `tests/integration/test_contact_hitbox_geometry.gd` is a fourth invariant check, over the same
+  hitboxes' *geometry*: a `ContactHitBox` node's `CollisionShape2D` must reference the same
+  `SubResource` shape id as the body `CollisionShape2D` and copy its `scale`, not just its bare
+  shape. A `Shape2D` holds the radius but not the node scale that multiplies it, so a mismatched
+  scale once built the gunship's ram box at 18 px against a 41.5 px hull — now every contact
+  hitbox is scene-authored next to the body it has to match, the same pattern the asteroid family
+  established (`assault/scenes/hazards/big_asteroid/big_asteroid.tscn`), and there is no runtime
+  construction left to get wrong.
+  `tests/integration/test_enemy_hurtbox_geometry.gd` is a fifth, over the *other* side of that
+  collision pair: every assault entity's `HurtBox` must **cover** the body `CollisionShape2D`,
+  within 1 px per edge. Armour is a damage rule on a full-size hurtbox — deflect, flash, report 0 —
+  never an absent hurtbox, because a shrunken one leaves visible hull that swallows shots and
+  reports nothing. It carries a permanent boundary test that applies the rejected "narrow the
+  station core to 88 x 240" proposal to a live instance and asserts it fails, so that decision is a
+  gate rather than prose someone re-litigates.
+  `tests/integration/test_player_bullet_lifetime.gd` is a sixth, over projectile *ownership*. It
+  states the two rules that used to be implied by the space-station fight: a player bullet is not
+  consumed by a hurtbox it overlaps (the premise the boss's armoured core rests on), and an
+  unpooled player bullet frees itself off-screen — which nothing did, so every shot ever fired
+  stayed in the level for the whole mission. Its invariant enumerates `WeaponBehavior` subclasses
+  from the project class list rather than a hand-written list, so a *sixth* behaviour is covered
+  the day it lands, and its boundary case asserts the same free must **not** reach a pooled bullet
+  (checked on `BulletPool.acquire()`, never on `_idle.size()`, which reads healthy even on the
+  broken build).
+  `tests/integration/test_level_director_polling.gd` is a seventh, over the ENEMIES_CLEARED poll: it
+  asserts the poll ends on `child_exiting_tree`, honours its fallback window, and leaves nothing
+  alive behind an early return. That last one is the reason it exists — the poll used to abandon a
+  `SceneTreeTimer` on every early return, and a leak is reported only at *process exit*, after GUT
+  has set the exit code and in words the gate's `FATAL` regex does not match, so **the gate prints
+  `GATE PASS` on a leaking suite**. `scripts/check-test-leaks.sh` runs gate step 3 and additionally
+  greps for the leak lines; run it after touching anything that awaits. It is a separate script
+  because `/agent` is mounted read-only, so the gate itself cannot be changed from in here.
+  `tests/integration/test_entity_sprite_transparency.gd` is an eighth, and the only one over the
+  **art**: no texture an entity under `assault/scenes/{enemies,player,projectiles,hazards,allies}`
+  draws over the game world may be 90%+ fully opaque, because a painted-in background renders as a
+  card that cuts a hard rectangle out of the starfield. `station_core.png` shipped at
+  65536/65536 px opaque and survived two cycles, because **no gate step renders a scene** —
+  `--import` loads no `.tscn` and `--quit` boots only `res://boot/…`. It reads scenes through
+  `PackedScene.get_state()` instead of instantiating them, and resolves `Sprite2D.texture`,
+  `AnimatedSprite2D.sprite_frames` and `AtlasTexture.atlas` — a `Sprite2D`-only walk finds 9
+  textures and four of its five roots contribute nothing. Fix a sprite that trips it with
+  `./scripts/strip-sprite-bg.sh <png>` (border flood fill, then `--import`) rather than a
+  regeneration, which spends the capped monthly PixelLab allowance and cannot be undone.
+  `tests/integration/test_config_instance_isolation.gd` is a ninth, over resource **ownership**:
+  no two entity instances may share a `*_config.tres` object, the private copy must be
+  value-identical to the shipped `.tres`, and every config class must stay flat enough for the
+  shallow `duplicate()` to be a complete copy. Its roster is a directory sweep rather than a hand
+  list, so a new enemy is covered the day it lands, and its boundary cases pin the two things the
+  fix rests on: the copy survives a re-parent (idempotence), and it exists before any **child's**
+  `_ready()` — checked by identity from inside a probe child, because comparing values is green
+  even on the `_ready()`-time design the test exists to reject.
+  `tests/integration/test_signal_emit_arity.gd` is a tenth, over signal **declarations**: Godot
+  never checks a `signal` line's declared parameters against how it is actually emitted — the
+  only place the declared arity is visible at all is `Object.get_signal_list()`, which is exactly
+  why `Health.amount_changed` and `State.state_transition` drifted silently until the 2026-09-03
+  fix. This generalizes that fix's two hand-written assertions into a project-wide sweep over
+  every **self-emit** (`name.emit(...)` where `name` is a signal declared in the same file — a
+  member-access emit like `hb.received_damage.emit(...)` needs cross-file type resolution and is
+  out of scope). Its first real run caught a live instance of the exact drift it exists to
+  prevent — `MovementController.action_single_press`/`action_double_press` declared bare while
+  every emit and every connected handler already agreed on one `String` argument — fixed
+  alongside the test, same shape as the original fix.
+  `tests/integration/test_ship_rotation_single_writer.gd` is an eleventh, over the open-space
+  ship's **single writer of `rotation`**: after the mouse-aiming epic, `ShipTurnController` is the
+  only thing allowed to write `OpenSpacePlayerShip.rotation` (and `AssaultPlayer`'s own one-liner
+  is the only writer of the fighter's), and a ship module that assigns `actor.rotation` directly
+  fights whichever one owns it — exactly what `ai_targeting_module.gd:38` did until it was
+  rewritten to call the duck-typed `face_instant()` every player class now exposes (same precedent
+  as `Bullet.is_armored()`, above). It sweeps every `global/ship_modules/*.gd` for a direct
+  `.rotation =`/`+=`/`-=` with an empty, permanent allowlist; reverting the duck-typed call back to
+  a raw rotation write makes it fail, which is the proof it can.
+  A few characterization files also carry individually-marked intent tests
+  (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
+  so in a comment.
   **Read [`tests/README.md`](tests/README.md) before writing a
   test** — it covers the `user://` save-file sandbox, the signal-arity trap, and the
   `LevelDirector` coroutine-leak trap, all of which cause failures (or silent leaks) unrelated to
   the code under test.
-- **NEVER commit — the user handles all git.** Work directly on `main` unless asked
-  otherwise; no worktrees/branches unless requested.
-  - *Exception — autonomous NAS loop only* (`SRCW_AUTOMATION=1` in the environment): you are
-    already checked out on `agent/auto-dev`, and you **may** commit and push to that branch.
-    Run `bash /agent/verify.sh` and get a green gate **before** pushing — never push work you
-    have not verified. The harness also commits and pushes anything you leave uncommitted, but
+- **Resource UIDs — never run the Godot MCP `update_project_uids` tool.** As the MCP calls it it
+  is a silent no-op (it searches `res:///work/repo/` and reports success); pointed at `res://` by
+  hand it resaves every scene and strips all UIDs and all comments. Use
+  `tests/integration/test_resource_uid_integrity.gd`, which reports instead of rewriting; the
+  reasoning is in [tests/README.md](tests/README.md).
+- **Never hand-type a `uid://` and never copy one from a sibling file.** A copy is a duplicate
+  declaration; a typed one is usually an *alias* decoding to a UID another resource owns, and both
+  fail silently. Leave the reference UID-less (legal — Godot falls back to the path) or mint one
+  with the headless `ResourceUID.create_id()` snippet in [tests/README.md](tests/README.md).
+- **Commit and push to `agent/auto-dev` — that is the working branch for all Claude work**,
+  whether that is the unattended NAS loop or an interactive session. You do not need to ask.
+  Don't leave finished work sitting uncommitted for the user to stage by hand.
+  - Check you are on it first (`git branch --show-current`). If you are not, switch — do not
+    start committing wherever you happen to be.
+  - **Get a green gate before you push**: `bash /agent/verify.sh` in the container, or
+    `godot --headless --path . --import` plus the GUT suite locally. Never push work you have not
+    verified. In the NAS loop the harness also commits and pushes anything left uncommitted, but
     only after the same gate passes.
+  - Write a real commit subject that names what changed. `agent: cycle <stamp>` is the harness's
+    own bookkeeping prefix — don't use it for actual work, or the change vanishes from the
+    "shipped features" list, which filters that prefix out.
+  - No other branches and no worktrees unless asked.
   - **`main` stays off-limits.** Never commit to it, never push to it, never merge into it,
-    never force-push or rewrite history on any branch. The user merges `agent/auto-dev` to
-    `main` by hand.
+    never force-push or rewrite history on any branch. **The user merges `agent/auto-dev` to
+    `main` by hand — that is the only human-only git operation here.**
 
 ## Where things live
 
@@ -84,16 +241,27 @@ tool corrupts PNGs), and the mandatory visual check on every generated image.
 A wrong-angle sprite cannot be fixed in code; it has to be regenerated from a capped
 monthly allowance. Do not skip the check.
 
-## MANDATORY — plan before building
+## MANDATORY — match the process to the work
 
-Before implementing any **non-trivial** feature or mechanic, invoke the **`feature-workflow`**
-skill. It gathers context, researches how shipped games solve the same problem, writes a plan to
-`docs/plans/`, has an **independent subagent review it**, and only then implements. It has a
-short Track B path for bug fixes, renames and tuning — use the skill to pick the track rather
-than skipping it.
+Invoke the **`feature-workflow`** skill at the start of every work item. It is a router, not one
+fixed pipeline: it reads the item's `kind`, `type` and `complexity` and picks how much process the
+work actually warrants.
 
-Implementation starts only on `VERDICT: APPROVED`. A rejected plan is a legitimate outcome: it
-means wrong work was avoided cheaply.
+- **Preparation** (an epic's research / plan / plan-review tasks) — the full pipeline: read the
+  code, research how shipped games solve the same problem, write a plan to `docs/plans/<epicId>/`,
+  have an **independent subagent review it**, then hand the epic to the user for approval.
+- **Direct** (small and medium implementation) — the epic's plan is already written, reviewed and
+  approved, so: failing test → implement → verify. No new plan, no second review.
+- **Escalated** (large or architectural implementation) — its own plan directory and its own
+  independent review before any code.
+
+Implementation of a large item starts only on `VERDICT: APPROVED`. A rejected plan is a legitimate
+outcome: it means wrong work was avoided cheaply.
+
+**Running the heavyweight pipeline on a one-line fix is as much a failure as skipping it on a
+system change.** If a small item turns out to need architectural work, record the escalation with
+`./scripts/backlog-cli.js set-meta <taskId> --complexity large --model opus` rather than quietly
+switching tracks — the board should show what is actually happening.
 
 ## MANDATORY — keep the docs current
 

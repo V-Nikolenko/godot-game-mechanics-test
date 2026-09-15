@@ -54,9 +54,11 @@ extends Node2D
 
 ## ── Tuning, copied from SpaceStationConfig in _ready() ────────────────────────
 ##
-## Copied rather than read through `_station.config` per volley, because that resource is a
-## SINGLE PROCESS-WIDE INSTANCE (`space_station.gd:36` `load()`s it and ResourceLoader caches),
-## shared by every station in the process and by every test that preloads the `.tres`.
+## Copied rather than read through `_station.config` per volley. The original reason — that the
+## resource was a single process-wide instance shared by every station — no longer holds:
+## `ShipConfig.privatise()` gives each station its own copy (`base_enemy.gd`). The decision stands
+## on the two reasons that survive: these fields are this node's own tunable surface, which is what
+## the tests override, and they carry the fallback below.
 ##
 ## The defaults below are the CONSERVATIVE FALLBACK for a station with no config at all: one slow
 ## weak bullet, a long cadence, and no ring precession. They are intentionally different from the
@@ -99,8 +101,10 @@ func _ready() -> void:
 		return
 
 	## Godot readies children before parents, so this runs BEFORE SpaceStation._ready(). Safe for
-	## `config`, which is an @export initialised at property-init time. NOT safe for anything the
-	## station derives in its own _ready() — see the lazy turret resolution in _live_turrets().
+	## `config`: it is an @export initialised at property-init time, and `BaseEnemy._init()` /
+	## `_enter_tree()` install the station's PRIVATE copy of it before any child is ready — pinned
+	## by `tests/integration/test_config_instance_isolation.gd`. NOT safe for anything the station
+	## derives in its own _ready() — see the lazy turret resolution in _live_turrets().
 	var cfg := _station.config
 	if cfg != null:
 		turret_fire_interval = cfg.turret_fire_interval

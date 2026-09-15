@@ -70,9 +70,11 @@ enum Edge { LEFT, RIGHT, BOTTOM, TOP }
 
 ## ── Tuning, copied from SpaceStationConfig in _ready() ────────────────────────
 ##
-## Copied rather than read through `_station.config` per squad, because that resource is a SINGLE
-## PROCESS-WIDE INSTANCE (`space_station.gd:36` `load()`s it and ResourceLoader caches), shared by
-## every station in the process and by every test that preloads the `.tres`.
+## Copied rather than read through `_station.config` per squad. The original reason — that the
+## resource was a single process-wide instance shared by every station — no longer holds:
+## `ShipConfig.privatise()` gives each station its own copy (`base_enemy.gd`). The decision stands
+## on the two reasons that survive: these fields are this node's own tunable surface, which is what
+## the tests override, and they carry the fallback below.
 ##
 ## The defaults below are the CONSERVATIVE FALLBACK for a station with no config at all: a long
 ## opening, a slow cadence and a tight cap. They are intentionally different from the shipped
@@ -104,8 +106,9 @@ func _ready() -> void:
 		return
 
 	## Godot readies children before parents, so this runs BEFORE SpaceStation._ready(). Safe for
-	## `config`, which is an @export initialised at property-init time (the same reasoning
-	## `station_gunnery.gd:101-104` documents). NOT safe for anything the station derives in its
+	## `config`: it is an @export initialised at property-init time and the station's PRIVATE copy
+	## is installed by `BaseEnemy._init()` / `_enter_tree()` before any child is ready (the same
+	## reasoning `station_gunnery.gd` documents). NOT safe for anything the station derives in its
 	## own _ready() — nothing here touches `turret_root`.
 	var cfg := _station.config
 	if cfg != null:
@@ -270,16 +273,18 @@ func _container() -> Node:
 	return _station.get_parent()
 
 
-## The camera's fixed centre, or the constant it is pinned to when there is no camera.
+## The camera's CURRENT view centre, or the constant it is pinned to when there is no camera.
 ##
-## The fallback is not a fudge: `arena_camera.gd:5-6` pins `global_position` at exactly (640, 360)
-## and pans through `offset` only (`:8-12`), so the two agree. It exists so a cameraless test
+## `arena_camera.gd:5-6` pins `global_position` at exactly (640, 360) and pans through `offset`
+## only (`:8-12`), so a spawn meant to land just off the visible edge has to add both, or a panned
+## player can see it appear. The no-camera fallback is not a fudge: it equals `global_position`
+## with `offset` at rest (`Vector2.ZERO`), so the two agree. It exists so a cameraless test
 ## exercises the real positioning code instead of `WaveManager`'s return-early-with-no-camera path
 ## (`wave_manager.gd:160-162`).
 func _spawn_origin() -> Vector2:
 	var cam := get_viewport().get_camera_2d()
 	if cam != null:
-		return cam.global_position
+		return cam.global_position + cam.offset
 	return Vector2(ArenaCamera.SCREEN_W, ArenaCamera.SCREEN_H) * 0.5
 
 

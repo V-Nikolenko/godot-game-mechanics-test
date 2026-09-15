@@ -69,7 +69,7 @@ func load_level(level: LevelResource) -> void:
 		for entry: SpawnEntryResource in wave.entries:
 			spawns.append(_entry_to_dict(entry))
 		register_wave(wave.trigger_time, spawns)
-	print("[WaveManager] Loaded '%s' — %d waves" % [level.level_name, level.waves.size()])
+	_trace("[WaveManager] Loaded '%s' — %d waves" % [level.level_name, level.waves.size()])
 
 ## Clears current waves and loads a new batch with a reset clock.
 ## Call this when LevelDirector advances to a new section.
@@ -83,7 +83,7 @@ func load_section(waves: Array[WaveResource]) -> void:
 		for entry: SpawnEntryResource in wave.entries:
 			spawns.append(_entry_to_dict(entry))
 		_waves.append({"trigger": wave.trigger_time, "spawns": spawns})
-	print("[WaveManager] Loaded section — %d waves" % _waves.size())
+	_trace("[WaveManager] Loaded section — %d waves" % _waves.size())
 	## Notify listeners (e.g. ScoreTracker) that a new section is starting so
 	## they can clear state that is keyed by wave_index.  Emit BEFORE the new
 	## waves are processed so listeners reset before any enemy_spawned fires.
@@ -113,7 +113,7 @@ func _entry_to_dict(entry: SpawnEntryResource) -> Dictionary:
 	return d
 
 func _trigger_wave(wave: Dictionary, index: int) -> void:
-	print("[Wave %d] TRIGGERED at %.1fs — %d spawns" % [index, _time_elapsed, wave.spawns.size()])
+	_trace("[Wave %d] TRIGGERED at %.1fs — %d spawns" % [index, _time_elapsed, wave.spawns.size()])
 	wave_triggered.emit(index)
 	_current_wave_index = index
 	for spawn in wave.spawns:
@@ -167,9 +167,12 @@ func _spawn_ship(spawn: Dictionary) -> void:
 	if not scene:
 		return
 
-	# Position: camera-relative offset. Use direct typed assignment — 'as Vector2' is
-	# invalid on built-in value types in GDScript 4 and would silently return null.
-	var spawn_pos: Vector2 = cam.global_position + spawn.get("offset", Vector2.ZERO) * ArenaCamera.WORLD_SCALE
+	# Position: offset from the camera's CURRENT view, not its resting position. `cam.global_position`
+	# is pinned at the level origin forever (arena_camera.gd:5-12) — all panning happens through
+	# `cam.offset` — so a spawn meant to land just off the visible edge has to add both, or a panned
+	# player can see it appear. Use direct typed assignment — 'as Vector2' is invalid on built-in
+	# value types in GDScript 4 and would silently return null.
+	var spawn_pos: Vector2 = cam.global_position + cam.offset + spawn.get("offset", Vector2.ZERO) * ArenaCamera.WORLD_SCALE
 
 	var entity: Node = scene.instantiate()
 	entity.global_position = spawn_pos
@@ -179,7 +182,7 @@ func _spawn_ship(spawn: Dictionary) -> void:
 		spawn.on_spawned.call(entity)
 
 	enemy_container.add_child(entity)
-	print("[Spawn] %s at (%.0f, %.0f)" % [scene.resource_path.get_file(), spawn_pos.x, spawn_pos.y])
+	_trace("[Spawn] %s at (%.0f, %.0f)" % [scene.resource_path.get_file(), spawn_pos.x, spawn_pos.y])
 
 	# Announce the spawn for ScoreTracker / other systems that need to
 	# associate this enemy with the wave that produced it.
@@ -203,3 +206,10 @@ func _spawn_ship(spawn: Dictionary) -> void:
 		if spawn.has("look_angle"):
 			mover.look_angle = spawn["look_angle"]
 		entity.add_child(mover)
+
+
+## Off unless Godot was started with `--verbose` — fires once per spawned enemy, which is
+## several lines a second in a dense wave.
+func _trace(message: String) -> void:
+	if OS.is_stdout_verbose():
+		print(message)
