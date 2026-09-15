@@ -1114,13 +1114,31 @@
           "dependsOn": [
             "extra-boost-charges-you-earn-stay-with-your-ship-between-run"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [],
+              "at": "2026-09-15T04:03:00.343Z",
+              "run": "2026-09-15-0629-i5",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004932,
+                "claude-sonnet-5": 1.3508563999999996
+              },
+              "costUSD": 1.3557883999999996,
+              "turns": 48,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "the-boost-up-pickup-has-its-own-sprite-instead-of-a-borrowed",
           "head": "The boost-up pickup has its own sprite instead of a borrowed menu icon",
           "body": "Cosmetic finish. **Optional and droppable** — the feature is complete and playable without it, and\nthis task spends the capped monthly PixelLab allowance irreversibly. Drop it if the allowance is\ntight.\n\nDONE WHEN the boost-up collectible on the hub bench reads as its own thing rather than a menu icon\nsomeone dropped into the world, matching the visual weight of `ship_shield_up.png` (48x48) next to\nit on the same row.\n\nTouches:\n- One new sprite under `global/assets/sprites/`.\n- `global/pickups/scenes/ship_boost_up_pickup.tscn` — swap the `Sprite2D` texture and drop the\n  scale workaround the previous task added.\n\n**Invoke the `pixel-art-generation` skill before generating anything.** `open_space/` is strict\ntop-down orthographic and NEVER isometric; the skill enforces that with explicit PixelLab\nparameters (`view: \"high top-down\"`, `isometric: false`), picks the right tool for a single small\nobject, and covers saving the binary safely via `scripts/pixellab.sh` (the Write tool corrupts\nPNGs). **Open the generated image and look at it before committing** — a wrong-angle sprite cannot\nbe fixed in code.\n\nRead cyan/blue to match the thruster's boost palette `Color(0.35, 0.9, 1.0)` and the pip bar, so\nthe pickup and the resource it feeds are visibly the same system.\n\nCheck it against `tests/integration/test_entity_sprite_transparency.gd`'s rule (no painted-in\nbackground) even though a pickup under `global/` is outside that test's roots — a card of opaque\nbackground cut out of the starfield looks just as wrong here.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

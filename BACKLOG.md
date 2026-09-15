@@ -338,7 +338,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       after: the-game-remembers-which-steering-scheme-you-fly-with
       1 run(s), $5.28; last on claude-opus-5
 
-## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 1 open)
+## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 0 open)
 
 **Review history**
 
@@ -662,8 +662,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Invoke `updating-project-docs`: a new pickup, which `docs/architecture/modules/global.md`
       enumerates.
       after: extra-boost-charges-you-earn-stay-with-your-ship-between-run
+      1 run(s), $1.36; last on claude-sonnet-5
 
-- [ ] **The boost-up pickup has its own sprite instead of a borrowed menu icon** _(todo - art, small, sonnet)_
+- [x] **The boost-up pickup has its own sprite instead of a borrowed menu icon** _(done - art, small, sonnet)_
       Cosmetic finish. **Optional and droppable** — the feature is complete and playable without it, and
       this task spends the capped monthly PixelLab allowance irreversibly. Drop it if the allowance is
       tight.
