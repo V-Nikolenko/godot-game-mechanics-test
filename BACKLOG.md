@@ -338,7 +338,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       after: the-game-remembers-which-steering-scheme-you-fly-with
       1 run(s), $5.28; last on claude-opus-5
 
-## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 5 open)
+## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 4 open)
 
 **Review history**
 
@@ -435,8 +435,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       The numbers are `@export`s on purpose — the gate cannot say whether 700 px/s feels right. Say so in
       the report and leave them for a human fly-test.
+      1 run(s), $4.09; last on claude-opus-5
 
-- [ ] **Boosting costs a charge, and charges come back on their own** _(todo - feature, medium, opus)_
+- [x] **Boosting costs a charge, and charges come back on their own** _(done - feature, medium, opus)_
       The cost. Plan sections **Design → The meter: `BoostMeter`, a component beside the ship** AND
       **Test plan → Autoload discipline** (read both — the second one is not optional, see below).
       

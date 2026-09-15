@@ -59,6 +59,12 @@ const _SPRITE_PATH: String = "SpriteAnchor/ShipSprite2D"
 ## be this script's `rotation_speed_deg`) live on it as inspector-visible @exports.
 var _turn: ShipTurnController = null
 
+## The BoostMeter child — the boost's charge economy. Resolved by TYPE in _ready() for the same
+## reason as _turn above. Null-checked at every use so a ship stripped of the node still flies
+## (the node being present is asserted by tests/integration/test_open_space_boost_wiring.gd,
+## not by a crash in the middle of a mission).
+var _boost_meter: BoostMeter = null
+
 ## Active module instances — created lazily in _apply_module().
 var _module_pool: Dictionary = {}  # { StringName: ShipModuleBase }
 
@@ -75,9 +81,10 @@ func _ready() -> void:
 	## no-op. It was behaviour-neutral to delete — player_ship.tscn's root sets no
 	## rotation, so the scene default already supplies 0.0.
 	for child: Node in get_children():
-		if child is ShipTurnController:
+		if child is ShipTurnController and _turn == null:
 			_turn = child as ShipTurnController
-			break
+		elif child is BoostMeter and _boost_meter == null:
+			_boost_meter = child as BoostMeter
 	if _turn != null:
 		## Seed the scheme from the persisted setting, and the target angle from the
 		## hull's ACTUAL facing, rather than relying on the controller and the ship
@@ -244,9 +251,17 @@ func _step_boost(boost_pressed: bool, delta: float) -> void:
 	if engine_boost_active:
 		return
 
-	## ORDER IS PART OF THE CONTRACT: the hold-window floor is checked BEFORE any spend, so
-	## mashing Shift inside the window costs nothing once the meter lands (step 2 of the epic).
-	if boost_pressed and _boost_hold_left <= 0.0:
+	## The meter has no _physics_process of its own — the ship owns its clock, so a meter on a
+	## ship whose physics is off (a mission menu opening) is frozen with it. Stepped before the
+	## trigger so the spend below sets a full, un-decremented recharge pause.
+	if _boost_meter != null:
+		_boost_meter.step(delta)
+
+	## ORDER IS PART OF THE CONTRACT: the hold-window floor is checked BEFORE any spend
+	## (`and` short-circuits left to right), so mashing Shift inside the window costs nothing —
+	## and an empty meter refuses outright, spending nothing and leaving velocity alone.
+	if boost_pressed and _boost_hold_left <= 0.0 \
+			and (_boost_meter == null or _boost_meter.try_spend()):
 		velocity = Vector2.UP.rotated(rotation) * boost_exit_speed
 		_speed_ceiling = boost_exit_speed
 		_boost_hold_left = boost_hold_sec

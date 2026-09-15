@@ -12,6 +12,7 @@
 [ext_resource type="Script" uid="uid://cdfmqrq3idtak" path="res://assault/scenes/player/movement_controller.gd" id="11_mc"]
 [ext_resource type="Script" uid="uid://bua2ltv8ifbl7" path="res://global/components/temp_health_component.gd" id="13_tmphp"]
 [ext_resource type="Script" uid="uid://m68figqyr4vm" path="res://open_space/scenes/entities/player/ship_turn_controller.gd" id="14_turn"]
+[ext_resource type="Script" uid="uid://cll5pusgqj0n" path="res://open_space/scenes/entities/player/boost_meter.gd" id="15_boost"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_ttx1s"]
 atlas = ExtResource("5_k37g2")
@@ -287,6 +288,12 @@ one_shot = true
 ; which polls single/double action presses for the weapon states and writes no rotation.
 [node name="ShipTurnController" type="Node" parent="."]
 script = ExtResource("14_turn")
+
+; The Shift boost's charge economy. Resolved by TYPE from player_ship.gd::_ready(), so this node
+; may be renamed but must stay a direct child of PlayerShip. It has no _physics_process of its
+; own -- the ship calls step() from _step_boost(), so freezing the ship freezes the meter with it.
+[node name="BoostMeter" type="Node" parent="."]
+script = ExtResource("15_boost")
 
 [node name="MovementController" type="Node" parent="." unique_id=1619942092]
 script = ExtResource("11_mc")

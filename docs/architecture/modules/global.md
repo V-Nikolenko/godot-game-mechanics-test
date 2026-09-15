@@ -102,6 +102,8 @@ Abstract base for level background renderers. Subclasses must override `transiti
 
 > Entities compose behaviour by adding child nodes and wiring signals. The canonical wiring of all of this for the player is `PlayerBase` (`global/entities/player_base.gd`); generic ships use `DamageReaction` instead. Verify the API of each component (linked file) before copying a snippet.
 
+> **Not every component lives here.** Two of the open-space ship's children are deliberately kept beside it in `open_space/scenes/entities/player/` rather than in `global/components/`, because they are open-space-only verbs and this project's mode isolation is structural: `ShipTurnController` (steering — [open_space.md](open_space.md) §3.2.1) and `BoostMeter` (the Shift boost's charge economy — §3.2.3). Both are resolved **by type** from `player_ship.gd::_ready()`. `class_name` still registers globally, so the placement is a signal of intent; the enforcement is `tests/integration/test_open_space_boost_wiring.gd`'s invariant cases over the assault and infiltration player scenes.
+
 > **Every component in this section has a characterization test.** Before changing one, read its
 > test — it is the fastest correct description of what the component actually does, including the
 > edge cases the source does not spell out. Mapping: `Health` → `tests/unit/test_health_component.gd`,

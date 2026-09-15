@@ -958,13 +958,36 @@
           "complexity": "medium",
           "model": "opus",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "625488a",
+                  "subject": "Shift boost: slam open-space momentum onto the nose and launch above cruise"
+                }
+              ],
+              "at": "2026-09-15T03:37:19.690Z",
+              "run": "2026-09-15-0629-i1",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.005274,
+                "claude-opus-5": 4.0807115
+              },
+              "costUSD": 4.0859855,
+              "turns": 49,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "boosting-costs-a-charge-and-charges-come-back-on-their-own",
           "head": "Boosting costs a charge, and charges come back on their own",
           "body": "The cost. Plan sections **Design → The meter: `BoostMeter`, a component beside the ship** AND\n**Test plan → Autoload discipline** (read both — the second one is not optional, see below).\n\nDONE WHEN each Shift boost spends one charge from a 2-charge meter, an empty meter refuses the\nboost outright (nothing happens, nothing is spent, W/S still fly the ship), charges refill at 0.7\nper second starting 0.5 s after the last boost — empty to full in ~3.4 s — and both new test files\npass.\n\nTouches:\n- New `open_space/scenes/entities/player/boost_meter.gd` — `class_name BoostMeter extends Node`.\n  `signal charges_changed(current: float, maximum: int)` (declared with its parameters —\n  `tests/integration/test_signal_emit_arity.gd` sweeps this). `@export`s `recharge_rate`,\n  `recharge_delay_sec`, `bind_progression`. API `can_spend()`, `try_spend()`, `step(delta)`.\n  Continuous internal float, whole-unit spends.\n- `open_space/scenes/entities/player/player_ship.tscn` — add the `BoostMeter` child node.\n- `player_ship.gd` — `_step_boost()` calls `meter.step(delta)` and gates the trigger on\n  `meter.try_spend()`, replacing step 1's `boost_hold_sec`-only floor (the hold window stays, as\n  the flame window and a retrigger floor). **Check the hold window before the spend**, so a boost\n  refused by the retrigger floor costs nothing; assert it (two `_step_boost(true, d)` inside\n  `boost_hold_sec` → `charges` down by exactly 1.0).\n- New `tests/unit/test_boost_meter.gd` (tree-less `BoostMeter.new()`, `free()` in `after_each`).\n- New `tests/integration/test_open_space_boost_wiring.gd`.\n\n⚠️ **`test_open_space_boost_wiring.gd` must carry the autoload-snapshot block from day one**, even\nthough nothing here binds to the autoload yet. It instantiates `player_ship.tscn`, and from the\npersistence task onward that scene carries a `BoostMeter` whose `_ready()` reads the **live**\n`ShipProgressionState`. `tests/helpers/save_sandbox.gd` covers the `user://` **file only** and does\nnothing to the in-memory singleton, so `SaveSandbox` alone is not enough. Copy the two-layer\n`before_all` / `after_all` / `before_each` pattern from **`3-plan.md` → Test plan → \"Autoload\ndiscipline\"** (the shape is `tests/integration/test_weapon_unlock_sources.gd:38-53`): sandbox the\nfile **plus** snapshot and restore `ShipProgressionState._boost_charge_count` and\n`_permanent_shield_count`. It is inert today and correct later; retrofitting it after the\npersistence task means debugging a failure that only reproduces in a **full-suite** run.\n\nShip instances go in the tree: `add_child_autofree(ship)` before any `_handle_thrust()` call, or\n`_thruster` is null and the call is a hard error.\n\n`BoostMeter` must NOT define its own `_physics_process` — the ship drives `step()`. That is a\ndeliberate difference from `Overheat`, because `set_physics_process(false)` on the ship (which\n`MissionTrigger._open_menu()` calls) does not stop a child's own physics tick, and because a\nhand-driven `step()` is what makes the component unit-testable headless. It must also read no\n`Input` and touch no tree.\n\n`bind_progression` exists now but has nothing to bind to yet — default it `false` here and leave\nthe `ShipProgressionState` hookup to the persistence task. `max_charges` starts at 2.\n\nWrite `tests/integration/test_open_space_boost_wiring.gd` FIRST — it is the anti-inert test, and\nthe unit tests are all green on a build where `BoostMeter` is never added to `player_ship.tscn`.\nFind the node **by class, not by node path**. Its two boundary cases matter most: an empty meter\nleaves `velocity` untouched, and a boost refused because `engine_boost_active` is true burns no\ncharge (that one passes on `_step_boost()`'s own guard and on nothing else — if it fails, add the\nguard, do not weaken the case).\n\nThe \"boost is open-space only\" invariant names two scenes explicitly:\n`assault/scenes/player/player_fighter.tscn` and the infiltration player scene under\n`infiltration/scenes/entities/player/` — name the actual file, or the sweep quietly covers one.\n\nRun `scripts/check-test-leaks.sh` if any test awaits.\n\nInvoke `updating-project-docs`: a new component class in the ship scene, which\n`docs/architecture/modules/open_space.md` and `global.md` enumerate.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",
