@@ -22,6 +22,7 @@
 [ext_resource type="PackedScene" uid="uid://c0oc8owfaowo3" path="res://global/pickups/scenes/weapon_mode_unlocker_pickup.tscn" id="19_wmu"]
 [ext_resource type="PackedScene" uid="uid://cvnfy2iwb4n5s" path="res://global/pickups/scenes/lore_log_pickup.tscn" id="20_lore"]
 [ext_resource type="PackedScene" uid="uid://bgtlo5mhub0mh" path="res://global/interactables/scenes/info_log_interactable.tscn" id="21_ilog"]
+[ext_resource type="PackedScene" path="res://global/pickups/scenes/ship_boost_up_pickup.tscn" id="22_sbu"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
@@ -103,6 +104,9 @@ position = Vector2(413, -212)
 
 [node name="TemporaryDamageUpPickup" parent="." unique_id=1714602967 instance=ExtResource("15_i5skt")]
 position = Vector2(519, -210)
+
+[node name="ShipBoostUpPickup" parent="." instance=ExtResource("22_sbu")]
+position = Vector2(730, -212)
 
 [node name="TemporaryHealthShieldUpPickup" parent="." unique_id=1412861584 instance=ExtResource("16_v8yrt")]
 position = Vector2(-130, -216)

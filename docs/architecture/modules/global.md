@@ -348,6 +348,7 @@ Subclasses call `super()` in `_ready()` (and in the overridable hooks `_setup_ef
 | `health_tank_pickup.gd` | `health.increase(40)` |
 | `armor_and_health_pickup.gd`, `armor_tank_pickup.gd` | restore armor (shields) and/or health |
 | `ship_shield_up_pickup.gd` | `ShipProgressionState.add_permanent_shield()` (permanent slot) |
+| `ship_boost_up_pickup.gd` | `ShipProgressionState.add_boost_charge()` (open-space Shift-boost capacity, +1, capped at `MAX_BOOST_CHARGES`) |
 | `temporary_shield_up_pickup.gd`, `temporary_health_up_pickup.gd`, `temporary_health_shield_up_pickup.gd` | add temp shield charge / temp-HP stack (persisted by `SessionState`) |
 | `temporary_damage_up_pickup.gd` | `player.apply_temp_damage_buff(0.5, 15.0)` |
 | `ship_module_unlocker_pickup.gd` | `ShipModuleState.unlock(slot, module_id)`; inspector-selectable `module_slot` / `module_id` enums |

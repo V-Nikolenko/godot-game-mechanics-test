@@ -338,7 +338,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       after: the-game-remembers-which-steering-scheme-you-fly-with
       1 run(s), $5.28; last on claude-opus-5
 
-## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 2 open)
+## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 1 open)
 
 **Review history**
 
@@ -610,8 +610,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Invoke `updating-project-docs`: `docs/architecture/modules/global.md` documents the autoload's
       contract.
       after: boosting-costs-a-charge-and-charges-come-back-on-their-own
+      1 run(s), $1.66; last on claude-sonnet-5
 
-- [ ] **A pickup in the hub permanently adds a boost charge** _(todo - feature, small, sonnet)_
+- [x] **A pickup in the hub permanently adds a boost charge** _(done - feature, small, sonnet)_
       The source. Plan sections **Design → Persistence and the upgrade** (pickup paragraph) AND
       **Test plan → Autoload discipline**.
       

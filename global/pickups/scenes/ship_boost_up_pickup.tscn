@@ -1,0 +1,21 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://global/pickups/ship_boost_up_pickup.gd" id="1_sbu"]
+[ext_resource type="Texture2D" path="res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_engine_boost.png" id="2_sbu"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_sbu"]
+radius = 8.0
+
+[node name="ShipBoostUpPickup" type="Area2D"]
+collision_layer = 16
+collision_mask = 4
+script = ExtResource("1_sbu")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture_filter = 1
+texture = ExtResource("2_sbu")
+scale = Vector2(1.2, 1.2)
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+scale = Vector2(3.111, 3.111)
+shape = SubResource("CircleShape2D_sbu")

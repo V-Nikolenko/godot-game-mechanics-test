@@ -1075,13 +1075,36 @@
           "dependsOn": [
             "boosting-costs-a-charge-and-charges-come-back-on-their-own"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "79bfc77",
+                  "subject": "Boost capacity persists across runs and binds to the live meter"
+                }
+              ],
+              "at": "2026-09-15T03:57:20.542Z",
+              "run": "2026-09-15-0629-i4",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004889999999999999,
+                "claude-sonnet-5": 1.6505201999999997
+              },
+              "costUSD": 1.6554101999999997,
+              "turns": 52,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "a-pickup-in-the-hub-permanently-adds-a-boost-charge",
           "head": "A pickup in the hub permanently adds a boost charge",
           "body": "The source. Plan sections **Design → Persistence and the upgrade** (pickup paragraph) AND\n**Test plan → Autoload discipline**.\n\nDONE WHEN the player can fly into a collectible on the sector hub's pickup bench, see the \"+1\nboost\" notification, watch the pip bar gain a segment on the spot, and still have that charge after\nrestarting the game — and `tests/integration/test_boost_upgrade_source.gd` passes.\n\nTouches:\n- New `global/pickups/ship_boost_up_pickup.gd` — `class_name ShipBoostUpPickup extends PickupBase`,\n  a near-verbatim copy of `ship_shield_up_pickup.gd`: `_collect()` calls\n  `ShipProgressionState.add_boost_charge()`, `_get_dialog_text()` returns the notification line.\n- New `global/pickups/scenes/ship_boost_up_pickup.tscn` — copy\n  `scenes/ship_shield_up_pickup.tscn`: `Area2D` `collision_layer = 16`, `collision_mask = 4`,\n  `Sprite2D`, `CollisionShape2D` with a `CircleShape2D` radius 8 at `scale = 3.111`.\n  **v1 reuses the existing `global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_engine_boost.png`**\n  (40x30) scaled to roughly match the shield pickup's 48x48 on-screen size. Do not generate art in\n  this task — that is its own, droppable task.\n- `open_space/scenes/levels/sector_hub.tscn` — instance it on the bench row at\n  `position = Vector2(620, -212)`. The row currently runs x = 27, 104, 205, 304, 413, 519.\n- New `tests/integration/test_boost_upgrade_source.gd`, in the same family as\n  `tests/integration/test_module_unlock_sources.gd`.\n\n**Never hand-type a `uid://` and never copy one from a sibling file.** Leave the new `.tscn`\nUID-less (legal) or mint one with the headless `ResourceUID.create_id()` snippet in\n`tests/README.md`. `tests/integration/test_resource_uid_integrity.gd` and\n`test_project_load_integrity.gd` both see this file.\n\nThe second test case is the one that matters: every placement test passes on a pickup whose\n`_collect()` is empty, so collect a **real instance** and assert the count went up.\n\n⚠️ **`_collect()` calls the `ShipProgressionState` AUTOLOAD**, not any instance the test holds, and\nthe whole GUT process shares it — so a fresh script instance would prove nothing, and mutating the\nlive one leaks a raised boost count into every later test. `tests/helpers/save_sandbox.gd` covers\nthe `user://` **file only** and does nothing to the in-memory singleton; there is no such thing as\na \"sandboxed autoload\". Use the two-layer pattern in **`3-plan.md` → Test plan → \"Autoload\ndiscipline\"**, whose shape is `tests/integration/test_weapon_unlock_sources.gd:38-53`: `SaveSandbox`\nfor the file, **plus** `before_all`/`after_all` snapshot and restore of\n`ShipProgressionState._boost_charge_count` and `_permanent_shield_count`, and a `before_each` that\nassigns the backing fields directly so the fixture does not depend on the code under test.\nGet this wrong and `tests/unit/test_boost_meter.gd` fails — GUT walks `res://tests` with\n`-ginclude_subdirs`, so `integration/` runs before `unit/` and the damage only shows up in a\n**full-suite** run.\n\nReach the cap for the at-cap boundary case by assigning `_boost_charge_count` directly, never by\ncollecting five pickups — same reason: the fixture must not depend on the code under test.\n\nInvoke `updating-project-docs`: a new pickup, which `docs/architecture/modules/global.md`\nenumerates.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",
