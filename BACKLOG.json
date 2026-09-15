@@ -997,13 +997,36 @@
           "dependsOn": [
             "shift-slams-your-ship-onto-its-new-heading-and-launches-it"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "2c44052",
+                  "subject": "Meter the Shift boost: two charges, spent on boost, refilled on their own"
+                }
+              ],
+              "at": "2026-09-15T03:46:01.493Z",
+              "run": "2026-09-15-0629-i2",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.005198,
+                "claude-opus-5": 3.6691345000000015
+              },
+              "costUSD": 3.6743325000000016,
+              "turns": 51,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "a-cyan-pip-bar-under-your-ship-shows-how-many-boosts-you-hav",
           "head": "A cyan pip bar under your ship shows how many boosts you have left",
           "body": "The readout. Plan sections **Design → The bar** AND **Test plan → Autoload discipline**.\n\nDONE WHEN the player can see their boost charges as cyan pips in a 32x4 bar drawn just below the\nexisting overheat bar under the hull, the bar is correct **the instant the scene loads** (not only\nafter the first boost), the partially-recharged pip fills smoothly as it recovers, and\n`tests/integration/test_boost_bar.gd` passes.\n\nTouches:\n- New `open_space/scenes/gui/boost_bar.gd` — `class_name BoostBar extends Node2D`, modelled on\n  `assault/scenes/player/overheat_bar.gd`: `_draw()` with a dark backing rect, `BAR_WIDTH 32`,\n  `BAR_HEIGHT 4`, split into `max_charges` segments with a 1 px gap, filled segments in the\n  thruster cyan `Color(0.35, 0.9, 1.0)`. `setup(meter: BoostMeter)` connects `charges_changed`;\n  the segment count follows the signal's `maximum` argument so a mid-session upgrade widens the\n  bar with no extra wiring.\n- **The handler stores what it draws:** `_on_charges_changed` assigns members `_charges: float`\n  and `_max_charges: int` then calls `queue_redraw()`. Do not compute geometry inline in `_draw()`\n  from a held meter reference — `overheat_bar.gd:7` keeps `_percentage` the same way, and a\n  `_draw()`-only node exposes nothing a headless test can assert.\n- ⚠️ **`setup()` must also SEED `_charges` / `_max_charges` from the meter and `queue_redraw()`.**\n  Children `_ready()` before parents, so `BoostMeter`'s initial emit fires *before*\n  `OpenSpacePlayerShip._ready()` creates the bar and calls `setup()`. Connecting alone means\n  nothing emits again until the first spend, so a freshly loaded hub draws an empty bar on a full\n  meter. `OverheatBar` hides this hole with `visible = false`; an always-visible bar cannot.\n  Assert it: immediately after `_ready()`, with **no** signal emitted, `bar._max_charges ==\n  meter.max_charges`. The \"visible at full\" case passes on the broken build (`visible` defaults\n  true), so it does not cover this.\n- `player_ship.gd::_ready()` — create it exactly as `_overheat_bar` is created (`top_level = true`,\n  `add_child`), and in `_physics_process` position it at `global_position + Vector2(0, 26)`.\n- New `tests/integration/test_boost_bar.gd`.\n\n**Every case in this file needs `add_child_autofree(ship)`**, not just the overlap one: the bar is\nconstructed in `_ready()`, so on a merely-instantiated ship there is no `BoostBar` child at all and\neven \"the bar is in the scene\" fails.\n\n⚠️ **This file needs the autoload-snapshot block from day one.** It instantiates `player_ship.tscn`\nand adds it to the tree, and from the persistence task onward that scene carries a `BoostMeter`\nwhose `_ready()` reads the **live** `ShipProgressionState`. `tests/helpers/save_sandbox.gd` covers\nthe `user://` **file only**. Copy the two-layer pattern from **`3-plan.md` → Test plan → \"Autoload\ndiscipline\"** (shape: `tests/integration/test_weapon_unlock_sources.gd:38-53`) — sandbox the file\n**plus** snapshot/restore `ShipProgressionState._boost_charge_count` and `_permanent_shield_count`.\nInert today, correct later, and it saves debugging a full-suite-only failure.\n\n**Where it goes is settled, do not re-litigate it.** The epic asks for the bar \"near the existing\nweapon overheat meter\"; in open space the overheat meter is a world-space bar under the ship at\n`(0, 20)`, NOT a HUD element — `open_space/scenes/gui/hud.tscn` has no overheat element at all.\nPutting this in the HUD would satisfy the words and break the intent.\n\nThe bar is always visible, including at full charges. A resource readout that hides itself is the\nfailure the epic exists to fix. Pin that in a test.\n\nThe overlap boundary case needs one physics frame awaited; assert the two bars' `global_position.y`\ndiffer by at least `OverheatBar.BAR_HEIGHT`.\n\nInvoke `updating-project-docs`: a new UI class under `open_space/scenes/gui/`.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

@@ -24,7 +24,8 @@ open_space/scenes/
 │       ├── patrol_drone.gd        # PatrolDrone — ambient hub enemy that drifts in a straight line
 │       └── patrol_drone.tscn
 ├── gui/
-│   └── hud.tscn                   # OpenSpaceHUD (CanvasLayer) — reuses global/ui/mission_hud.gd + shared HUD parts
+│   ├── hud.tscn                   # OpenSpaceHUD (CanvasLayer) — reuses global/ui/mission_hud.gd + shared HUD parts
+│   └── boost_bar.gd               # BoostBar — cyan pip readout for BoostMeter, drawn under the hull
 ├── levels/
 │   ├── sector_hub.gd              # SectorHub (Node2D) — the hub level; spawns drones, holds planets + pickups
 │   └── sector_hub.tscn            # composed scene: parallax bg, two planets, player+camera, HUD, pickups
@@ -86,7 +87,7 @@ The script's only logic is `_spawn_initial_drones()`: in `_ready()` it instantia
 - **Ship modules**: on `_ready()` it re-applies every module already equipped in `ShipModuleState` (reads `ShipModuleState.SLOTS` / `get_equipped`) and connects `module_equipped` / `module_unequipped` for live equip/unequip. Each frame it ticks all active modules. The `use_ability` action (H-key) is offered to modules first via `_input`. This is the same module system described in [`./global.md`](./global.md).
 - **Death**: `_on_health_changed(0)` plays the explosion, shakes the camera, waits, and `reload_current_scene()` — i.e. respawn in the hub.
 
-The ship scene (`player_ship.tscn`) is built by composition: `HealthComponent`, `ShieldComponent`, `OverheatComponent`, `TempHealthComponent`, a `HurtBox`, an `AttackStateMachine` (`WeaponState` + `WarheadMissileShootingState`), a `ShipTurnController`, a `BoostMeter`, and a `MovementController` — all shared classes from `global/` and `assault/`, except `ShipTurnController` and `BoostMeter`, which live beside the ship and are open-space-only by design.
+The ship scene (`player_ship.tscn`) is built by composition: `HealthComponent`, `ShieldComponent`, `OverheatComponent`, `TempHealthComponent`, a `HurtBox`, an `AttackStateMachine` (`WeaponState` + `WarheadMissileShootingState`), a `ShipTurnController`, a `BoostMeter`, and a `MovementController` — all shared classes from `global/` and `assault/`, except `ShipTurnController` and `BoostMeter`, which live beside the ship and are open-space-only by design. `OpenSpacePlayerShip._ready()` also builds a `BoostBar` alongside the existing `OverheatBar`, both `top_level` world-space bars repositioned every physics frame — see §3.2.4.
 
 #### 3.2.1 Steering — `ShipTurnController`
 
@@ -157,6 +158,17 @@ Two shape decisions are load-bearing:
 There is **no exhaustion/soft-failure state and no i-frames**. Boost is the verb the player crosses the hub with, so an empty meter simply refuses while W/S still fly the ship; and blanket immunity is `EngineBoostModule`'s whole value as an equippable, so a free metered boost must not duplicate it.
 
 `tests/unit/test_boost_meter.gd` covers the economy tree-less (spend, partial/empty refusal, the pause, the rate, the clamp, `step(0.0)`, the signal's arity and values). `tests/integration/test_open_space_boost_wiring.gd` is the **anti-inert** gate: every unit case is green on a build where `BoostMeter` exists but was never added to `player_ship.tscn`, so the wiring file asserts the scene carries exactly one (found **by class**), that a boost spends from *that* node, that an empty meter leaves `velocity` untouched, that a boost refused by `engine_boost_active` or by the retrigger floor burns no charge, and that `_handle_thrust()` — not the meter itself — is what recharges it.
+
+#### 3.2.4 The readout — `BoostBar`
+
+`open_space/scenes/gui/boost_bar.gd` (`class_name BoostBar extends Node2D`), created in `OpenSpacePlayerShip._ready()` the same way as `_overheat_bar` (`top_level = true`, `add_child`, repositioned every physics frame) and only when the ship actually carries a `BoostMeter`. It draws `OverheatBar`'s 32×4 shape at `global_position + (0, 26)` — 2 px clear of the overheat bar's own 4 px height at `(0, 20)` — split into `max_charges` 1 px-gapped segments filled in the thruster's cyan `Color(0.35, 0.9, 1.0)`.
+
+Two things distinguish it from `OverheatBar`, both because a resource meter must not lie about its state:
+
+- **Always visible, including at full charges.** `OverheatBar` hides itself until the first overheat tick; a boost meter that did the same would hide the exact resource the epic exists to surface.
+- **`setup(meter)` seeds `_charges` / `_max_charges` from the meter and calls `queue_redraw()` *before* subscribing to `charges_changed`.** Children `_ready()` before parents, so `BoostMeter`'s initial state already exists by the time the ship's `_ready()` creates the bar — connect-only would leave the bar reading its zeroed defaults until the first spend, drawing an empty bar over a full meter on every freshly loaded hub. `_on_charges_changed` stores what it draws (`_charges: float`, `_max_charges: int`) exactly as `OverheatBar._percentage` does, so the fill and segment count are things a headless test can assert without touching `_draw()`.
+
+`tests/integration/test_boost_bar.gd` covers the seed-before-signal case, that the bar stays visible at full, that it does not overlap the overheat bar (one physics frame awaited, on a ship left running rather than frozen — the bars only move from `_physics_process`), that the segment count follows `charges_changed`'s `maximum`, that the fill tracks a partial `current` rather than only capacity, and that zero capacity does not error.
 
 ### 3.3 Ambient enemy — `PatrolDrone`
 

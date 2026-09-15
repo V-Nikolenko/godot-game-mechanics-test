@@ -338,7 +338,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       after: the-game-remembers-which-steering-scheme-you-fly-with
       1 run(s), $5.28; last on claude-opus-5
 
-## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 4 open)
+## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 3 open)
 
 **Review history**
 
@@ -500,8 +500,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Invoke `updating-project-docs`: a new component class in the ship scene, which
       `docs/architecture/modules/open_space.md` and `global.md` enumerate.
       after: shift-slams-your-ship-onto-its-new-heading-and-launches-it
+      1 run(s), $3.67; last on claude-opus-5
 
-- [ ] **A cyan pip bar under your ship shows how many boosts you have left** _(todo - feature, small, sonnet)_
+- [x] **A cyan pip bar under your ship shows how many boosts you have left** _(done - feature, small, sonnet)_
       The readout. Plan sections **Design → The bar** AND **Test plan → Autoload discipline**.
       
       DONE WHEN the player can see their boost charges as cyan pips in a 32x4 bar drawn just below the

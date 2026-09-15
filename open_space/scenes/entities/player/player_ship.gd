@@ -49,6 +49,7 @@ var _speed_ceiling: float = 420.0
 ## Seconds left of the boost's hold window: the cyan flame, and the retrigger floor.
 var _boost_hold_left: float = 0.0
 var _overheat_bar: OverheatBar = null
+var _boost_bar: BoostBar = null
 
 ## Same node path EngineBoostModule uses (engine_boost_module.gd:15).
 const _SPRITE_PATH: String = "SpriteAnchor/ShipSprite2D"
@@ -100,6 +101,15 @@ func _ready() -> void:
 	add_child(_overheat_bar)
 	_overheat_bar.setup(overheat_component)
 
+	## Boost bar — same top_level pattern as the overheat bar, positioned 6 px under it
+	## (OverheatBar.BAR_HEIGHT = 4) in _physics_process. Only created if the ship actually
+	## carries a BoostMeter, so a ship stripped of the node does not crash.
+	if _boost_meter != null:
+		_boost_bar = BoostBar.new()
+		_boost_bar.top_level = true
+		add_child(_boost_bar)
+		_boost_bar.setup(_boost_meter)
+
 	## Connect module state signals for live equip/unequip during gameplay.
 	ShipModuleState.module_equipped.connect(_on_module_equipped)
 	ShipModuleState.module_unequipped.connect(_on_module_unequipped)
@@ -137,6 +147,8 @@ func _physics_process(delta: float) -> void:
 	## Keep overheat bar centred on the ship in world space.
 	if _overheat_bar != null:
 		_overheat_bar.global_position = global_position + Vector2(0.0, 20.0)
+	if _boost_bar != null:
+		_boost_bar.global_position = global_position + Vector2(0.0, 26.0)
 	_update_camera_feel(delta)
 	## Tick all equipped modules every frame (handles cooldowns, timed effects).
 	for id: StringName in _module_pool.keys():
