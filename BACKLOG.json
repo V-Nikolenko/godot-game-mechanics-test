@@ -2627,7 +2627,7 @@
           "id": "research-open-space-movement-feel-pass-2-aim-reticle-camera-",
           "head": "Research: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
           "body": "Investigate this as a professional game developer would, before anything is designed: the existing architecture and systems it touches, reusable patterns already in the project, dependencies, constraints, candidate approaches with their tradeoffs, risks, edge cases, testing requirements, and impact on other systems. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage RESEARCH. Output: `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/1-context.md` and `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/2-research.md`.\n\n**Triage summary:** Play-test follow-up to the two shipped open-space epics (mouse aiming, Shift boost). Four threads, all in open_space/: (1) replace the OS mouse pointer with an in-world aim reticle - nothing project-wide sets Input.set_custom_mouse_cursor or MOUSE_MODE today, and the one mouse read is player_ship.gd::_handle_rotation's get_global_mouse_position(), so a reticle node fed from that single line (or an OpenSpaceHUD child) is the natural place; ShipTurnController.mouse_dead_zone_px (48 px) and the snap/steering-disabled states should be visible in it. (2) Fix and rethink the camera. OpenSpacePlayerShip._update_camera_feel() pushes zoom + a lead offset of facing * _LEAD_MAX(140) * clamp(speed/400) into the CameraDirector effect &\"speed_feel\"; the lead uses the ship's FACING while the magnitude uses the speed of the actual velocity, so after a turn - e.g. cursor dragged to the bottom of the screen while momentum still carries the ship up - the camera extends opposite to travel, which is exactly the reported 'camera ends up behind the ship' and 'mixes up and down'. Compounding it, damping = 0.6 gives velocity a ~1.2 s half-life so the ship looks stopped while the lead is still at full strength, the Camera2D is an unrotated child of a CharacterBody2D whose rotation is rewritten every frame, and the director blends at only 6/s so a fast turn whips a 140 px offset around the screen - the reported motion sickness. The user's own proposal (extend the camera only once the ship is actually rotated/moving toward the cursor) needs to be researched against how top-down space games do look-ahead. (3) A genuine research thread, requested explicitly as a separate task: how shipped top-down space games make free flight feel responsive and dynamic (strafe, drift/inertia handling, banking and roll animation on turn, dodge/roll skills, speed-line and FOV feedback), and which of those fit a ship built from global/components/ plus the ShipModuleState slot system. (4) Rework boost into two tiers: WITHOUT the Boost Drive module (EngineBoostModule, get_display_name() 'Boost Drive', engines slot, H key, 1500 px/s, 45 damage, 2 s cooldown) Shift becomes HOLD-to-boost drawing from one long continuous bar rather than today's discrete BoostMeter pips (BoostMeter/BoostBar/ShipProgressionState.boost_charge_count 2-5 already model the persistence and the upgrade pickup, so the capacity economy is reusable but the pip rendering and the whole-charge try_spend() are not), the bar's length is what the upgrade extends, and the default tier must include the 180-degree flip boost from the original idea (rotate ~180 degrees, hold Shift, and the ship rapidly reverses onto the new heading) which the shipped boost approximates only as a one-shot 700 px/s redirect with no orientation condition; WITH Boost Drive equipped the same bar is SEGMENTED into 3-4 discrete, more powerful charges scaling with upgrades. Open questions for the plan: whether hold-to-boost and the 180 flip are one verb or two; whether the segmented bar belongs in BoostMeter with a mode flag or a second component; and whether the camera rework should be a new CameraDirector effect or a rewrite of _update_camera_feel.\n\n**Original idea (idea-1789493425846):** I just tested movement improvements you did. We still have a few places to improve: 1. Add target icon or something like that instead of the mouse cursor 2. When I move mouse to the bottom of the screen, when ship stays in place, it moves camera in the wrong direction. Like it is behind the ship, Also rotating it at thigh speed makes me sick. Maybe we can research other ways to do camera, like extend it only when ship is rotated to that direction of the mouse. Also take a look why it mixes up and down and extends itself incorreclty. 3. In general movement is not very fun. I want you to do an aditional research as a separate tasks to find ideas from the industry, on how it is done for such open space gameplay with view from top. I want it to be more responding and dynamic. Maybe movement features, animations,, skills,  4. Lastly, Boosting is not what I imagined. We have Boost Drive that works as current boost implementation, except it doesn't have charges, which is a nice addition. Let's move existing boosting with charges to the 'boost drive' module, but make it more powerful. Without boost module, we must have 'hold to boost' approach. We still have charges, but as one long charging line that is upgradable. This line can be split to 3-4 parts for boost drive module depending on the amount of upgrades. This default charge must have an 180 degrees speed boost that was discussed in initial idea. When we rotate 180 degrees and press and hold shift, we quickly start moving to other direction.",
-          "state": "todo",
+          "state": "in_progress",
           "badge": null,
           "planDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
           "kind": "prep",
@@ -2635,7 +2635,30 @@
           "complexity": "large",
           "model": "opus",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "f8d7f34",
+                  "subject": "Draft the open-space movement feel pass-2 epic from the play-test idea"
+                }
+              ],
+              "at": "2026-09-15T18:39:07.499Z",
+              "run": "2026-09-15-2135-i1",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003995,
+                "claude-opus-5": 2.025762
+              },
+              "costUSD": 2.0297569999999996,
+              "turns": 29,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "plan-open-space-movement-feel-pass-2-aim-reticle-camera-rewo",
