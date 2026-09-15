@@ -2588,6 +2588,85 @@
           "complexity": "small",
           "model": "sonnet",
           "dependsOn": [],
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "6c2840a",
+                  "subject": "Bind the open-space ship's shield to permanent shield progression"
+                }
+              ],
+              "at": "2026-09-15T04:09:13.261Z",
+              "run": "2026-09-15-0629-i7",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004056,
+                "claude-sonnet-5": 0.6756998
+              },
+              "costUSD": 0.6797558,
+              "turns": 27,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+      "title": "Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
+      "status": "draft",
+      "sourceIdeaId": "idea-1789493425846",
+      "prepDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+      "feedback": [],
+      "tasks": [
+        {
+          "id": "research-open-space-movement-feel-pass-2-aim-reticle-camera-",
+          "head": "Research: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
+          "body": "Investigate this as a professional game developer would, before anything is designed: the existing architecture and systems it touches, reusable patterns already in the project, dependencies, constraints, candidate approaches with their tradeoffs, risks, edge cases, testing requirements, and impact on other systems. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage RESEARCH. Output: `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/1-context.md` and `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/2-research.md`.\n\n**Triage summary:** Play-test follow-up to the two shipped open-space epics (mouse aiming, Shift boost). Four threads, all in open_space/: (1) replace the OS mouse pointer with an in-world aim reticle - nothing project-wide sets Input.set_custom_mouse_cursor or MOUSE_MODE today, and the one mouse read is player_ship.gd::_handle_rotation's get_global_mouse_position(), so a reticle node fed from that single line (or an OpenSpaceHUD child) is the natural place; ShipTurnController.mouse_dead_zone_px (48 px) and the snap/steering-disabled states should be visible in it. (2) Fix and rethink the camera. OpenSpacePlayerShip._update_camera_feel() pushes zoom + a lead offset of facing * _LEAD_MAX(140) * clamp(speed/400) into the CameraDirector effect &\"speed_feel\"; the lead uses the ship's FACING while the magnitude uses the speed of the actual velocity, so after a turn - e.g. cursor dragged to the bottom of the screen while momentum still carries the ship up - the camera extends opposite to travel, which is exactly the reported 'camera ends up behind the ship' and 'mixes up and down'. Compounding it, damping = 0.6 gives velocity a ~1.2 s half-life so the ship looks stopped while the lead is still at full strength, the Camera2D is an unrotated child of a CharacterBody2D whose rotation is rewritten every frame, and the director blends at only 6/s so a fast turn whips a 140 px offset around the screen - the reported motion sickness. The user's own proposal (extend the camera only once the ship is actually rotated/moving toward the cursor) needs to be researched against how top-down space games do look-ahead. (3) A genuine research thread, requested explicitly as a separate task: how shipped top-down space games make free flight feel responsive and dynamic (strafe, drift/inertia handling, banking and roll animation on turn, dodge/roll skills, speed-line and FOV feedback), and which of those fit a ship built from global/components/ plus the ShipModuleState slot system. (4) Rework boost into two tiers: WITHOUT the Boost Drive module (EngineBoostModule, get_display_name() 'Boost Drive', engines slot, H key, 1500 px/s, 45 damage, 2 s cooldown) Shift becomes HOLD-to-boost drawing from one long continuous bar rather than today's discrete BoostMeter pips (BoostMeter/BoostBar/ShipProgressionState.boost_charge_count 2-5 already model the persistence and the upgrade pickup, so the capacity economy is reusable but the pip rendering and the whole-charge try_spend() are not), the bar's length is what the upgrade extends, and the default tier must include the 180-degree flip boost from the original idea (rotate ~180 degrees, hold Shift, and the ship rapidly reverses onto the new heading) which the shipped boost approximates only as a one-shot 700 px/s redirect with no orientation condition; WITH Boost Drive equipped the same bar is SEGMENTED into 3-4 discrete, more powerful charges scaling with upgrades. Open questions for the plan: whether hold-to-boost and the 180 flip are one verb or two; whether the segmented bar belongs in BoostMeter with a mode flag or a second component; and whether the camera rework should be a new CameraDirector effect or a rewrite of _update_camera_feel.\n\n**Original idea (idea-1789493425846):** I just tested movement improvements you did. We still have a few places to improve: 1. Add target icon or something like that instead of the mouse cursor 2. When I move mouse to the bottom of the screen, when ship stays in place, it moves camera in the wrong direction. Like it is behind the ship, Also rotating it at thigh speed makes me sick. Maybe we can research other ways to do camera, like extend it only when ship is rotated to that direction of the mouse. Also take a look why it mixes up and down and extends itself incorreclty. 3. In general movement is not very fun. I want you to do an aditional research as a separate tasks to find ideas from the industry, on how it is done for such open space gameplay with view from top. I want it to be more responding and dynamic. Maybe movement features, animations,, skills,  4. Lastly, Boosting is not what I imagined. We have Boost Drive that works as current boost implementation, except it doesn't have charges, which is a nice addition. Let's move existing boosting with charges to the 'boost drive' module, but make it more powerful. Without boost module, we must have 'hold to boost' approach. We still have charges, but as one long charging line that is upgradable. This line can be split to 3-4 parts for boost drive module depending on the amount of upgrades. This default charge must have an 180 degrees speed boost that was discussed in initial idea. When we rotate 180 degrees and press and hold shift, we quickly start moving to other direction.",
+          "state": "todo",
+          "badge": null,
+          "planDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+          "kind": "prep",
+          "type": "research",
+          "complexity": "large",
+          "model": "opus",
+          "dependsOn": [],
+          "runs": []
+        },
+        {
+          "id": "plan-open-space-movement-feel-pass-2-aim-reticle-camera-rewo",
+          "head": "Plan: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
+          "body": "Consume the research and write the implementation plan to `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.",
+          "state": "todo",
+          "badge": null,
+          "planDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+          "kind": "prep",
+          "type": "plan",
+          "complexity": "large",
+          "model": "opus",
+          "dependsOn": [
+            "research-open-space-movement-feel-pass-2-aim-reticle-camera-"
+          ],
+          "runs": []
+        },
+        {
+          "id": "plan-review-open-space-movement-feel-pass-2-aim-reticle-came",
+          "head": "Plan review: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
+          "body": "Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.",
+          "state": "todo",
+          "badge": null,
+          "planDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+          "kind": "prep",
+          "type": "plan-review",
+          "complexity": "large",
+          "model": "opus",
+          "dependsOn": [
+            "plan-open-space-movement-feel-pass-2-aim-reticle-camera-rewo"
+          ],
           "runs": []
         }
       ]
@@ -2625,6 +2704,14 @@
       "status": "drafted",
       "epicId": "open-space-boost-shift-burst-movement-on-an-upgradeable-boos",
       "decidedAt": "2026-09-13T13:24:53.049Z"
+    },
+    {
+      "id": "idea-1789493425846",
+      "text": "I just tested movement improvements you did. We still have a few places to improve:\n1. Add target icon or something like that instead of the mouse cursor\n2. When I move mouse to the bottom of the screen, when ship stays in place, it moves camera in the wrong direction. Like it is behind the ship, Also rotating it at thigh speed makes me sick. Maybe we can research other ways to do camera, like extend it only when ship is rotated to that direction of the mouse. Also take a look why it mixes up and down and extends itself incorreclty.\n3. In general movement is not very fun. I want you to do an aditional research as a separate tasks to find ideas from the industry, on how it is done for such open space gameplay with view from top. I want it to be more responding and dynamic. Maybe movement features, animations,, skills, \n4. Lastly, Boosting is not what I imagined. We have Boost Drive that works as current boost implementation, except it doesn't have charges, which is a nice addition. Let's move existing boosting with charges to the 'boost drive' module, but make it more powerful. Without boost module, we must have 'hold to boost' approach. We still have charges, but as one long charging line that is upgradable. This line can be split to 3-4 parts for boost drive module depending on the amount of upgrades. This default charge must have an 180 degrees speed boost that was discussed in initial idea. When we rotate 180 degrees and press and hold shift, we quickly start moving to other direction.",
+      "submittedAt": "2026-09-15T17:30:25.846Z",
+      "status": "drafted",
+      "epicId": "open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+      "decidedAt": "2026-09-15T18:37:14.801Z"
     }
   ],
   "notes": "## Migration note\n\nThis file was migrated from a flat checklist on 2026-09-03. The historical *Discovered* bugfix log (found-and-fixed defects, not tasks) is preserved below verbatim rather than modeled as board items.\n\n---\n\n<!-- The agent appends suspected bugs and follow-ups it found but did not act on. Triage these. -->\n\nFound on 2026-08-31 while writing the characterization suite. Each one is **pinned by a passing\ntest that asserts the current behaviour**, so changing any of them will fail that test — which is\nthe signal that the change was deliberate. Test names are given so the fix has an obvious anchor.\n\n- [x] **`Health.amount_changed` is declared with zero parameters but emitted with one.**\n      `global/components/health_component.gd:4` declares `signal amount_changed`, and line 42\n      emits `amount_changed.emit(current_health)`. One-argument handlers (`DamageReaction`,\n      `PlayerBase._on_health_changed`) work, but any zero-argument handler raises\n      `Error calling from signal 'amount_changed' ... Method expected 0 argument(s), but called\n      with 1` at runtime. Fix is one line: `signal amount_changed(current: int)`.\n      Same defect in `global/statemachine/state.gd:4` — `signal state_transition` is emitted with\n      the target `State`. Pinned by `tests/unit/test_health_component.gd` (see the file header)\n      and `tests/unit/test_state_machine.gd::test_states_request_transitions_through_their_own_signal`.\n      **Fixed 2026-09-03.** Both declarations now name the argument they emit\n      (`amount_changed(current_health: int)`, `state_transition(new_state: State)`). This is a\n      readability/tooling fix only — it does **not** make a zero-argument handler legal, and\n      `tests/README.md` now says so explicitly instead of describing the old shape. Two new intent\n      tests read the declared arity back off `get_signal_list()`\n      (`test_amount_changed_declares_the_int_it_emits`,\n      `test_state_transition_declares_the_state_it_emits`), so the declarations cannot silently\n      drift from the emits again. The rule is now a convention in `docs/architecture/PROJECT.md`.\n\n- [x] **`StateMachine.change_state()` crashes if the machine has no current state.**\n      `global/statemachine/state_machine.gd:29` does `print(\"Exiting previous state: \" +\n      current_state.name)` **before** the `if current_state:` guard on line 31. Any machine built\n      without an `initial_state` (or whose state was cleared) dies on its first transition. Not\n      reachable today because every shipped machine sets `initial_state`, so it is latent rather\n      than live. Deliberately *not* covered by a test — the test would have to trigger the crash.\n      **Fixed 2026-09-03.** The log line moved inside the `if current_state:` guard, together with\n      the `exit()` call it sits next to. It **is** covered by a test now —\n      `test_state_machine.gd::test_change_state_from_an_idle_machine_enters_without_crashing`\n      builds a machine with no `initial_state` and transitions it; before the fix that test failed\n      with `Invalid access to property or key 'name' on a base object of type 'Nil'`, which is\n      exactly the crash, provoked deliberately in a place where it is harmless.\n\n- [x] **`Health.decrease()` prints to stdout on every single hit.**\n      `global/components/health_component.gd:34`. In a bullet-hell section that is one line per\n      projectile per frame; `print` is not free and it buries real errors in the log. Should be a\n      debug-gated helper or removed. `StateMachine.change_state` and `DialogPlayer` print\n      unconditionally too (`[DP] ...` on every line of every conversation).\n      **Fixed 2026-09-03.** All three now trace behind `if OS.is_stdout_verbose():`, so the\n      messages survive for debugging (`godot --verbose ...`) but cost nothing in a normal run.\n      Measured on the GUT suite: **181 lines** suppressed (173 `[Health]`, 6 `[StateMachine]`,\n      2 `[DP]`), and a normal suite run now greps 0 for all three prefixes. `DialogPlayer`'s nine\n      prints went through a `_trace()` helper; its `_unhandled_input` one is additionally\n      guarded at the call site because `event.as_text()` allocates per input event.\n      `Health.decrease()` no longer needs a parent, since the fallback replaced the bare\n      `get_parent().name`. `dialog_box.gd`, `movement_controller.gd` and `dash_state.gd` have the\n      same problem and were **not** in scope — refiled below.\n\n- [x] **The turret sprite's barrels point at −Y and no turret sets `rotation`.** All four\n      `space_station.tscn` turret instances are placed at `rotation = 0`, so every barrel points\n      toward the top of the screen — *away* from the player, who is always below the station.\n      **Closed 2026-09-02 by sub-item 4a**, at exactly the moment it predicted.\n      `StationGunnery.fire_turret_volley()` sets each firing turret's `global_rotation` to\n      `aim.angle() + PI/2` immediately before firing — `global_rotation`, not `rotation`, so it\n      survives the laser phase spinning the hull. Pinned by\n      `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a\n      scene. The authored `rotation = 0` remains, as a spawn orientation."
