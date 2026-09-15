@@ -1665,7 +1665,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       project has the same omission while you are there.
       1 run(s), $0.68; last on claude-sonnet-5
 
-## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  [DRAFT - preparation in progress]  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 11 open)
+## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  [DRAFT - preparation in progress]  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 10 open)
 
 **Preparation**
 
@@ -1678,7 +1678,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy](docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy)
       2 run(s), $8.59; last on claude-opus-5
 
-- [ ] **Plan: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost** _(in progress - plan)_
+- [x] **Plan: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost** _(done - plan)_
       Consume the research and write the implementation plan to `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.
       after: research-open-space-movement-feel-pass-2-aim-reticle-camera-
       -> [docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy](docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy)

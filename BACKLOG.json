@@ -2690,7 +2690,7 @@
           "id": "plan-open-space-movement-feel-pass-2-aim-reticle-camera-rewo",
           "head": "Plan: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
           "body": "Consume the research and write the implementation plan to `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.",
-          "state": "in_progress",
+          "state": "done",
           "badge": null,
           "planDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
           "kind": "prep",
