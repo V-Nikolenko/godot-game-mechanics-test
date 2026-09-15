@@ -692,6 +692,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       background) even though a pickup under `global/` is outside that test's roots — a card of opaque
       background cut out of the starfield looks just as wrong here.
       after: a-pickup-in-the-hub-permanently-adds-a-boost-charge
+      1 run(s), $0.84; last on claude-sonnet-5
 
 ## Foundations: test harness, UID integrity, art pipeline  [DONE]  (`foundations-test-harness-uid-integrity-art-pipeline`, 0 open)
 
@@ -921,7 +922,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       ---
       -> [docs/plans/station-death-handoff](docs/plans/station-death-handoff)
 
-## Code health backlog  (`code-health-backlog`, 1 open)
+## Code health backlog  (`code-health-backlog`, 0 open)
 
 - [x] **Write the dossier for the completed station mini-boss epic** _(done - feature, medium, sonnet)_
       into
@@ -1643,7 +1644,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea](docs/plans/no-pickup-or-menu-ever-calls-upgradestate-unlock-for-any-wea)
       2 run(s), $14.88; last on claude-opus-5
 
-- [ ] **The open-space ship never reads the permanent shield upgrade** _(todo - bug, small, sonnet)_
+- [x] **The open-space ship never reads the permanent shield upgrade** _(done - bug, small, sonnet)_
       `open_space/scenes/entities/player/player_ship.tscn:223-224` authors its `ShieldComponent` with
       no `bind_progression` line, so it falls back to `global/components/shield_component.gd:20`'s
       default of `false` and the open-space ship starts with the component's own charge count instead of

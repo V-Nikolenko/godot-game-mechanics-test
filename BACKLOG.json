@@ -1148,7 +1148,30 @@
           "dependsOn": [
             "a-pickup-in-the-hub-permanently-adds-a-boost-charge"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "96486ca",
+                  "subject": "Give the boost-up pickup its own cyan energy-canister sprite"
+                }
+              ],
+              "at": "2026-09-15T04:06:24.897Z",
+              "run": "2026-09-15-0629-i6",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004304,
+                "claude-sonnet-5": 0.8318406
+              },
+              "costUSD": 0.8361446000000001,
+              "turns": 42,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         }
       ]
     },
@@ -2557,7 +2580,7 @@
           "id": "the-open-space-ship-never-reads-the-permanent-shield-upgrade",
           "head": "The open-space ship never reads the permanent shield upgrade",
           "body": "`open_space/scenes/entities/player/player_ship.tscn:223-224` authors its `ShieldComponent` with\nno `bind_progression` line, so it falls back to `global/components/shield_component.gd:20`'s\ndefault of `false` and the open-space ship starts with the component's own charge count instead of\n`ShipProgressionState.permanent_shield_count`.\n\n`assault/scenes/player/player_fighter.tscn:301` is the only scene that sets it. So the hub's\n`ShipShieldUpPickup` raises a saved number that the ship the player flies in the hub never reads —\nthe upgrade is visible in the menu and inert in open space.\n\nFound while reviewing the open-space boost plan (finding A8 of\n`docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/4-review.md`); confirmed\nagainst the scene and the component. Not that epic's to fix.\n\nDone looks like: `bind_progression = true` on the `ShieldComponent` node in `player_ship.tscn`,\nplus a test that fails on today's build — instantiate `player_ship.tscn`, set the live\n`ShipProgressionState` permanent shield count (snapshot and restore it, `SaveSandbox` only covers\nthe file), and assert the ship's shield charges follow it. Check whether any other scene in the\nproject has the same omission while you are there.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

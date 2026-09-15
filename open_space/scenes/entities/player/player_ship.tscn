@@ -224,6 +224,7 @@ current_health = 50
 
 [node name="ShieldComponent" type="Node" parent="." unique_id=1957955819]
 script = ExtResource("5_shld")
+bind_progression = true
 
 [node name="OverheatComponent" type="Node" parent="." unique_id=1754973202]
 script = ExtResource("7_oheat")
