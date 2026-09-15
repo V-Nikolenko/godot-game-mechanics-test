@@ -729,7 +729,30 @@
           "dependsOn": [
             "the-game-remembers-which-steering-scheme-you-fly-with"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "43e7cb7",
+                  "subject": "Add a Settings row to the pause menu so the steering scheme is choosable"
+                }
+              ],
+              "at": "2026-09-14T23:26:33.946Z",
+              "run": "2026-09-15-0129-i8",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004562,
+                "claude-opus-5": 5.2770795
+              },
+              "costUSD": 5.2816415,
+              "turns": 71,
+              "subagents": 0,
+              "outcome": "error 429",
+              "gate": "pass"
+            }
+          ]
         }
       ]
     },
@@ -927,7 +950,7 @@
           "id": "shift-slams-your-ship-onto-its-new-heading-and-launches-it",
           "head": "Shift slams your ship onto its new heading and launches it",
           "body": "The core verb, with no meter yet. Plan: `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/3-plan.md`\n(sections **Design → The one decision**, **The speed cap**, **Where Input is read**, **What is\ndeleted**, and **Test plan → Ship instances go in the tree**).\n\nDONE WHEN a player in the sector hub can press Shift and have the ship's momentum snap onto the\nnose's heading at `boost_exit_speed = 700` px/s (vs `max_speed = 420`), with the cyan `flame_boost`\nanimation and both `ThrusterEffect`s in `BOOST` for `boost_hold_sec = 0.35` s — so a 180° turn plus\nShift replaces the ~3.0 s manual reversal — and all cases of the new\n`tests/integration/test_open_space_boost_verb.gd` pass.\n\nTouches:\n- `project.godot` `[input]` — new `boost` action on Shift (`physical_keycode 4194325`). Third\n  action on that key; deliberate, argued in the plan.\n- `open_space/scenes/entities/player/player_ship.gd` — new `@export`s (`boost_exit_speed`,\n  `boost_hold_sec`, `boost_ceiling_decay`); new `_step_boost(boost_pressed: bool, delta: float)`\n  holding the whole model; `_handle_thrust()` reads `Input.is_action_just_pressed(\"boost\")` in\n  **exactly one place** and calls `_step_boost()` last; `_step_boost()` takes over the tail speed\n  clamp via the decaying `_speed_ceiling` (there must be exactly one clamp when you are done).\n- **`_step_boost()` opens with `if engine_boost_active: return`.** This is deliberately redundant\n  with `_handle_thrust()`'s own early return and must not be \"cleaned up\": every test calls\n  `_step_boost()` directly and so bypasses the outer guard, so without this line the two cases\n  that pin module precedence fail on a *correct* build. See `3-plan.md` → \"the precedence guard is\n  deliberately doubled\". If either precedence case fails, add the guard — do not weaken the case.\n- **Delete** `_trigger_flip_boost()`, its `move_up`-just-pressed trigger, and the\n  `boost_redirect_speed` / `boost_speed_threshold` exports. Rename `boost_duration_sec` →\n  `boost_hold_sec`.\n- New `tests/integration/test_open_space_boost_verb.gd`.\n\nDo NOT: **write** `engine_boost_active` — it is read here and stays owned by\n`global/ship_modules/engine_boost_module.gd`; edit `global/entities/player_base.gd`; edit\n`engine_boost_module.gd` or anything in `assault/`; touch the `damping` line.\n\n**Order inside `_step_boost()` is part of the contract:** the `boost_hold_sec` retrigger floor is\nchecked **before** any spend, so mashing Shift inside the hold window costs nothing. Assert it —\ntwo `_step_boost(true, d)` calls inside `boost_hold_sec` leave `charges` down by exactly 1.0 once\nthe meter exists (step 2); in this task assert only that the second call does not re-slam\n`velocity` to 700.\n\n**Who plays the flame:** `_step_boost()` is otherwise pure, but the animation needs the tree —\nput the `flame_boost` / `ThrusterEffect.State.BOOST` call in `_step_boost()`'s trigger branch and\nnote in the plan that this is its one tree touch, following\n`global/ship_modules/engine_boost_module.gd:15,63-67`. `sprite.animation == &\"flame_boost\"` is\nassertable headless, so give the epic's \"reuse the blue boost flames\" bullet a real case.\nNote that because `_step_boost()` runs at the *tail* of `_handle_thrust()`, the thruster visual\nlands one physics frame after the boost (today's `_boost_timer` is set before the branches). That\nis a known, accepted one-frame difference, not a bug to chase.\n\n**Every case in this file adds the ship to the tree** (`add_child_autofree(ship)`) before calling\nanything: `_handle_thrust` dereferences `_thruster`, which only exists after `_setup_effects()`\nruns from `_ready()`. Parenting also runs `SessionState.apply_to()`.\n\nWrite the regression case first — `ship.has_method(\"_trigger_flip_boost\")` is false and\n`\"boost_speed_threshold\" not in ship` — and the cruise-boost boundary case\n(`velocity = UP * 420`, boost, `velocity.length() > max_speed`). Both fail on today's build.\n\n**Re-read `player_ship.gd` and `player_ship.tscn` from HEAD before editing** — the mouse-aiming\nepic lands first and moves these line numbers (it deletes `_ready()`'s `rotation = 0.0`; boost\nreads `rotation` for facing, which is fine). **Do not work this in the same window as a\nmouse-aiming task.**\n\nInvoke `updating-project-docs`: this adds an input action and a movement verb that\n`docs/architecture/modules/open_space.md` enumerates.\n\nThe numbers are `@export`s on purpose — the gate cannot say whether 700 px/s feels right. Say so in\nthe report and leave them for a human fly-test.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

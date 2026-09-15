@@ -769,3 +769,35 @@ overrun is recorded here and in `4-review.md` rather than quietly absorbed.
 Round 3 returned **VERDICT: APPROVED**, with four non-blocking findings (NF-1 to NF-4) that were
 all introduced by this round's own fix pass and were all fixed before the epic was handed over.
 They are listed under "Round 3 follow-up" in `4-review.md`.
+
+---
+
+## Implementation notes from step 1 (the verb), 2026-09-15
+
+Recorded here rather than by editing the approved design above, so steps 2–6 do not rediscover them.
+
+**The flame needs a release, so `_step_boost()` has two tree touches, not one.** The design named
+exactly one (`flame_boost` + both `ThrusterEffect`s in the trigger branch). `flame_boost` is
+authored with `loop = false` in `player_ship.tscn`, so the animation stops on its last frame and
+the hull would sit on a boost frame for the rest of the scene. `_release_boost_flame()` therefore
+plays `idle` on the frame `_boost_hold_left` reaches 0, and is guarded on
+`sprite.animation == &"flame_boost"` so it cannot stomp an `EngineBoostModule` boost or the hub's
+`planet_dive` that began inside our window. `engine_boost_module.gd:107-111` restores the same way.
+Pinned by `test_the_flame_is_released_when_the_hold_window_closes`.
+
+**`_speed_ceiling` is seeded in `_ready()`, not at its declaration.** A scene `@export` override of
+`max_speed` lands after `_init()` but before `_ready()`, so the declaration initialiser would bake
+in the script default rather than the value the ship actually flies at. (The `maxf(..., max_speed)`
+in the decay branch self-heals it within a frame either way; the seed just makes the first frame
+right too.)
+
+**Two cases were added beyond the plan's table**, both cheap and both gating something that nothing
+else in the suite would notice: `test_the_boost_action_is_bound_to_shift` (the `project.godot`
+`[input]` entry itself) and `test_handle_thrust_no_longer_clamps_the_boost_away`, which drives a
+real `_handle_thrust()` frame after a boost and asserts the ship is still above cruise — the
+"exactly one clamp" rule made observable, since the deleted tail clamp would have cut 700 → 420 on
+the very next frame.
+
+**The numbers are untested by anything but a human.** `boost_exit_speed = 700`,
+`boost_hold_sec = 0.35` and `boost_ceiling_decay = 400` ship as `@export`s at the plan's values and
+have had **no fly-test**. The gate proves the model, not the feel.

@@ -11,9 +11,17 @@ extends PlayerBase
 @export var damping: float = 0.6
 
 @export_category("Boost")
-@export var boost_redirect_speed: float = 200.0
-@export var boost_duration_sec: float = 0.3
-@export var boost_speed_threshold: float = 180.0
+## Shift boost. The nose's heading becomes the momentum, at a speed deliberately ABOVE
+## max_speed — below it the redirect reads as a brake, which is exactly what the deleted
+## flip-boost's 200 px/s was. These three are @exports because no headless gate can say
+## whether 700 px/s FEELS right; they are meant to be fly-tested from the inspector.
+@export var boost_exit_speed: float = 700.0
+## How long the boost holds its ceiling and its cyan flame — and, doubling up, the floor
+## under a retrigger, so mashing Shift cannot chain boosts.
+@export var boost_hold_sec: float = 0.35
+## px/s² the speed ceiling falls at once the hold window closes, back down to max_speed.
+## 700 → 420 in 0.70 s, so the whole above-cruise signature is ~1.05 s.
+@export var boost_ceiling_decay: float = 400.0
 
 ## Set true by WarpModule.apply(). Not used in open space (no DashState), but
 ## the property must exist so WarpModule can set/clear it without error.
@@ -34,8 +42,16 @@ const _LEAD_MAX        : float = 140.0  ## Max camera lead distance (px).
 ## Set true by OverclockModule.apply(). Allows firing past overheat.
 var overclock_module_active: bool = false
 
-var _boost_timer: float = 0.0
+## The ONE speed clamp on this ship, and the reason _handle_thrust() no longer carries a
+## tail max_speed clamp of its own. It is floored at max_speed, so it can only ever PERMIT
+## a boost's excess speed — it never yanks the ship's normal handling around.
+var _speed_ceiling: float = 420.0
+## Seconds left of the boost's hold window: the cyan flame, and the retrigger floor.
+var _boost_hold_left: float = 0.0
 var _overheat_bar: OverheatBar = null
+
+## Same node path EngineBoostModule uses (engine_boost_module.gd:15).
+const _SPRITE_PATH: String = "SpriteAnchor/ShipSprite2D"
 
 ## The ShipTurnController child — the only thing that writes this ship's rotation.
 ## Resolved by TYPE in _ready(), not by node path, so the wiring cannot be broken by a
@@ -48,6 +64,11 @@ var _module_pool: Dictionary = {}  # { StringName: ShipModuleBase }
 
 func _ready() -> void:
 	super()  # add_to_group, _setup_components, _setup_effects
+
+	## Seeded here, not at the declaration: an @export override from the scene lands after
+	## _init() but before _ready(), so this is the first point at which max_speed is the
+	## value the ship will actually fly at.
+	_speed_ceiling = max_speed
 
 	## Turning. The old `rotation = 0.0` that stood here is deliberately gone: it wiped
 	## the hull angle before anything could read it, which would make the seed below a
@@ -185,20 +206,13 @@ func _handle_thrust(delta: float) -> void:
 	if Input.is_action_pressed("move_down"):
 		thrust_input -= 1.0
 
-	_boost_timer = max(_boost_timer - delta, 0.0)
-
-	if Input.is_action_just_pressed("move_up") and _boost_timer <= 0.0:
-		var backward_speed := -velocity.dot(forward)
-		if backward_speed >= boost_speed_threshold:
-			_trigger_flip_boost(forward)
-
 	if thrust_input > 0.0:
 		velocity += forward * thrust_acceleration * delta
 		_thruster.set_state(
-				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
 				else ThrusterEffect.State.THRUST)
 		_thruster_right.set_state(
-				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
 				else ThrusterEffect.State.THRUST)
 	elif thrust_input < 0.0:
 		velocity -= forward * reverse_acceleration * delta
@@ -207,18 +221,73 @@ func _handle_thrust(delta: float) -> void:
 	else:
 		velocity = velocity.lerp(Vector2.ZERO, clamp(damping * delta, 0.0, 1.0))
 		_thruster.set_state(
-				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
 				else ThrusterEffect.State.IDLE)
 		_thruster_right.set_state(
-				ThrusterEffect.State.BOOST if _boost_timer > 0.0
+				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
 				else ThrusterEffect.State.IDLE)
 
-	if velocity.length() > max_speed:
-		velocity = velocity.normalized() * max_speed
+	## LAST, and the only Input read this feature has. Everything the boost does — the
+	## trigger, the ceiling, and the speed clamp that used to sit right here — lives in
+	## _step_boost(), which takes the press as an argument so a headless run (where
+	## Input.is_action_just_pressed() can never return true) can still drive it.
+	_step_boost(Input.is_action_just_pressed("boost"), delta)
 
-func _trigger_flip_boost(forward: Vector2) -> void:
-	velocity = forward * boost_redirect_speed
-	_boost_timer = boost_duration_sec
+## The whole boost model. Pure apart from the flame in the trigger branch (below): no Input,
+## no Engine singletons, so every test calls it directly with an injected press.
+func _step_boost(boost_pressed: bool, delta: float) -> void:
+	## DELIBERATELY REDUNDANT with _handle_thrust()'s own early return, and not to be
+	## "cleaned up": every test drives _step_boost() directly and so bypasses that return.
+	## Without this line the two cases pinning module precedence fail on a CORRECT build,
+	## and the cheapest way to green them would be to delete them. engine_boost_active is
+	## READ here and never written — it stays owned by global/ship_modules/engine_boost_module.gd.
+	if engine_boost_active:
+		return
+
+	## ORDER IS PART OF THE CONTRACT: the hold-window floor is checked BEFORE any spend, so
+	## mashing Shift inside the window costs nothing once the meter lands (step 2 of the epic).
+	if boost_pressed and _boost_hold_left <= 0.0:
+		velocity = Vector2.UP.rotated(rotation) * boost_exit_speed
+		_speed_ceiling = boost_exit_speed
+		_boost_hold_left = boost_hold_sec
+		_play_boost_flame()
+
+	if _boost_hold_left > 0.0:
+		_boost_hold_left = maxf(_boost_hold_left - delta, 0.0)
+		if _boost_hold_left <= 0.0:
+			_release_boost_flame()
+	else:
+		## move_toward is a linear ramp, so this is exactly frame-rate independent (unlike the
+		## lerp damping above, which is deliberately left alone here). maxf keeps the ceiling
+		## from ever dropping below cruise.
+		_speed_ceiling = maxf(
+				move_toward(_speed_ceiling, max_speed, boost_ceiling_decay * delta),
+				max_speed)
+
+	if velocity.length() > _speed_ceiling:
+		velocity = velocity.normalized() * _speed_ceiling
+
+## _step_boost()'s one tree touch, following engine_boost_module.gd:15,63-67 — the cyan flame is
+## the epic's chosen tell for "that was a boost". _handle_thrust()'s branches hold both thrusters
+## in BOOST for as long as _boost_hold_left is positive; setting them here too means the trigger
+## frame itself is not missing the flame.
+func _play_boost_flame() -> void:
+	var sprite := get_node_or_null(_SPRITE_PATH) as AnimatedSprite2D
+	if sprite != null:
+		sprite.play(&"flame_boost")
+	if _thruster != null:
+		_thruster.set_state(ThrusterEffect.State.BOOST)
+	if _thruster_right != null:
+		_thruster_right.set_state(ThrusterEffect.State.BOOST)
+
+## The counterpart of the above, and not optional: flame_boost has `loop = false`, so without it
+## the hull sits on the animation's last frame for the rest of the scene. Guarded on the current
+## animation so it cannot stomp an EngineBoostModule boost or the hub's planet_dive that started
+## inside our window.
+func _release_boost_flame() -> void:
+	var sprite := get_node_or_null(_SPRITE_PATH) as AnimatedSprite2D
+	if sprite != null and sprite.animation == &"flame_boost":
+		sprite.play(&"idle")
 
 func _get_or_create_module(id: StringName) -> ShipModuleBase:
 	if not _module_pool.has(id):

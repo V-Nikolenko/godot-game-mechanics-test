@@ -336,8 +336,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       DONE WHEN: `tests/integration/test_pause_menu_settings.gd` passes with every case in the plan's test plan for that file - including the one that drives the LIVE `SettingsState` through `menu_right` (a settings row whose handler is empty passes every "is it visible and labelled" assertion), and the one proving `menu_confirm` does not fall through while the panel is open. Sandboxed via `tests/helpers/save_sandbox.gd`. Gate green, and `updating-project-docs` run - this adds a UI component to a shared module.
       after: the-game-remembers-which-steering-scheme-you-fly-with
+      1 run(s), $5.28; last on claude-opus-5
 
-## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 6 open)
+## Open-space boost: Shift burst movement on an upgradeable boost meter  (`open-space-boost-shift-burst-movement-on-an-upgradeable-boos`, 5 open)
 
 **Review history**
 
@@ -368,7 +369,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
 
 **Implementation**
 
-- [ ] **Shift slams your ship onto its new heading and launches it** _(todo - feature, medium, opus)_
+- [x] **Shift slams your ship onto its new heading and launches it** _(done - feature, medium, opus)_
       The core verb, with no meter yet. Plan: `docs/plans/open-space-boost-shift-burst-movement-on-an-upgradeable-boos/3-plan.md`
       (sections **Design → The one decision**, **The speed cap**, **Where Input is read**, **What is
       deleted**, and **Test plan → Ship instances go in the tree**).
