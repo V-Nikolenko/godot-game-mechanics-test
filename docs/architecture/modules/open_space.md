@@ -19,7 +19,8 @@ open_space/scenes/
 │   │   ├── player_ship.gd        # OpenSpacePlayerShip (extends PlayerBase) — free-flight controller + ship modules
 │   │   ├── player_ship.tscn       # ship scene: components, attack state machine, animated sprite
 │   │   ├── ship_turn_controller.gd # ShipTurnController — the ONLY writer of the ship's rotation
-│   │   └── boost_meter.gd          # BoostMeter — the Shift boost's charge economy (spend + refill)
+│   │   ├── boost_meter.gd          # BoostMeter — the Shift boost's charge economy (spend + refill)
+│   │   └── open_space_camera_rig.gd # OpenSpaceCameraRig — speed-zoom + camera-lead formula behind speed_feel
 │   └── enemies/
 │       ├── patrol_drone.gd        # PatrolDrone — ambient hub enemy that drifts in a straight line
 │       └── patrol_drone.tscn
@@ -83,11 +84,11 @@ The script's only logic is `_spawn_initial_drones()`: in `_ready()` it instantia
 
 - **Movement** (`_physics_process` → `_handle_rotation` + `_handle_thrust` + `move_and_slide`): steer toward the mouse cursor (or with `move_left`/`move_right` under the Classic scheme — see `ShipTurnController` below), thrust forward/back with `move_up`/`move_down`, with damping and a speed cap. Thruster particle state is driven each frame. The **Shift boost** (§3.2.2) is the other half of the verb set.
 - **Turning** is delegated in full to the `ShipTurnController` child (§3.2.1). `_handle_rotation` only reads the A/D axis, passes the cursor in via the project's single `get_global_mouse_position()` call, and assigns what `step()` returns. The old `rotation_speed_deg` export is gone from this script — it is now the controller's `keyboard_turn_rate_deg`.
-- **Camera feel** (`_update_camera_feel`): pushes a combined speed-zoom + lead-offset target into the child `Camera2D`'s `CameraDirector` under effect name `&"speed_feel"` at priority `0`. The planet dwell (below) overrides this at priority `10`, so approaching a planet smoothly takes over the camera.
+- **Camera feel** (`_update_camera_feel`): steps the `OpenSpaceCameraRig` child (§3.2.5) with the ship's velocity and pushes its speed-zoom + lead-offset output into the child `Camera2D`'s `CameraDirector` under effect name `&"speed_feel"` at priority `0`. The planet dwell (below) overrides this at priority `10`, so approaching a planet smoothly takes over the camera.
 - **Ship modules**: on `_ready()` it re-applies every module already equipped in `ShipModuleState` (reads `ShipModuleState.SLOTS` / `get_equipped`) and connects `module_equipped` / `module_unequipped` for live equip/unequip. Each frame it ticks all active modules. The `use_ability` action (H-key) is offered to modules first via `_input`. This is the same module system described in [`./global.md`](./global.md).
 - **Death**: `_on_health_changed(0)` plays the explosion, shakes the camera, waits, and `reload_current_scene()` — i.e. respawn in the hub.
 
-The ship scene (`player_ship.tscn`) is built by composition: `HealthComponent`, `ShieldComponent`, `OverheatComponent`, `TempHealthComponent`, a `HurtBox`, an `AttackStateMachine` (`WeaponState` + `WarheadMissileShootingState`), a `ShipTurnController`, a `BoostMeter`, and a `MovementController` — all shared classes from `global/` and `assault/`, except `ShipTurnController` and `BoostMeter`, which live beside the ship and are open-space-only by design. `OpenSpacePlayerShip._ready()` also builds a `BoostBar` alongside the existing `OverheatBar`, both `top_level` world-space bars repositioned every physics frame — see §3.2.4.
+The ship scene (`player_ship.tscn`) is built by composition: `HealthComponent`, `ShieldComponent`, `OverheatComponent`, `TempHealthComponent`, a `HurtBox`, an `AttackStateMachine` (`WeaponState` + `WarheadMissileShootingState`), a `ShipTurnController`, a `BoostMeter`, an `OpenSpaceCameraRig`, and a `MovementController` — all shared classes from `global/` and `assault/`, except `ShipTurnController`, `BoostMeter` and `OpenSpaceCameraRig`, which live beside the ship and are open-space-only by design. `OpenSpacePlayerShip._ready()` also builds a `BoostBar` alongside the existing `OverheatBar`, both `top_level` world-space bars repositioned every physics frame — see §3.2.4.
 
 #### 3.2.1 Steering — `ShipTurnController`
 
@@ -108,7 +109,7 @@ Two schemes, selected by the `scheme` export:
 | `keyboard_turn_rate_deg` | `220.0` | Classic turn rate. Must stay 220 — Classic is today's behaviour. |
 | `mouse_max_turn_rate_deg` | `150.0` | The **balance** lever: the hard cap. 180° in 1.2 s. |
 | `mouse_turn_half_life` | `0.14` | The **feel** lever: seconds to close half the remaining angle. |
-| `mouse_dead_zone_px` | `48.0` | Ship→cursor **world** distance below which the target angle is held, so aim does not thrash when the cursor sits under the hull. Never measured from screen centre — the camera leads the ship by up to 140 px. |
+| `mouse_dead_zone_px` | `48.0` | Ship→cursor **world** distance below which the target angle is held, so aim does not thrash when the cursor sits under the hull. Never measured from screen centre — the camera leads the ship by up to `OpenSpaceCameraRig.lead_max_px` (§3.2.5, default 90 px). |
 
 The three mouse numbers are judgement calls that **no headless gate can validate**; they are `@export`s on the ship scene precisely so a fly-test is an inspector change. `set_steering_enabled(false)` freezes the target angle without pausing `step()`, so there is no rotation discontinuity when it re-enables; `player_ship.gd::_notification()` calls it on `NOTIFICATION_APPLICATION_FOCUS_OUT`/`_IN`, so alt-tabbing away no longer leaves the ship turning toward a cursor position the OS stopped updating. Pointer confinement and capture are explicitly out of scope (see plan), so the ship still holds a stale target if the cursor merely leaves the window while it keeps focus. `face_instant()`/`notify_mouse_moved()` let an AI-targeting snap survive until the player's next mouse movement.
 
@@ -169,6 +170,28 @@ Two things distinguish it from `OverheatBar`, both because a resource meter must
 - **`setup(meter)` seeds `_charges` / `_max_charges` from the meter and calls `queue_redraw()` *before* subscribing to `charges_changed`.** Children `_ready()` before parents, so `BoostMeter`'s initial state already exists by the time the ship's `_ready()` creates the bar — connect-only would leave the bar reading its zeroed defaults until the first spend, drawing an empty bar over a full meter on every freshly loaded hub. `_on_charges_changed` stores what it draws (`_charges: float`, `_max_charges: int`) exactly as `OverheatBar._percentage` does, so the fill and segment count are things a headless test can assert without touching `_draw()`.
 
 `tests/integration/test_boost_bar.gd` covers the seed-before-signal case, that the bar stays visible at full, that it does not overlap the overheat bar (one physics frame awaited, on a ship left running rather than frozen — the bars only move from `_physics_process`), that the segment count follows `charges_changed`'s `maximum`, that the fill tracks a partial `current` rather than only capacity, and that zero capacity does not error.
+
+#### 3.2.5 Camera feel — `OpenSpaceCameraRig`
+
+`open_space/scenes/entities/player/open_space_camera_rig.gd` (`class_name OpenSpaceCameraRig extends Node`), a direct child of `PlayerShip` in `player_ship.tscn`, resolved **by type** from `player_ship.gd::_ready()` exactly like `ShipTurnController` and `BoostMeter`. It owns the speed-zoom + camera-lead formula behind the ship's `speed_feel` effect as a pure `step(velocity, delta)` / `get_offset()` / `get_zoom(velocity)`, so it is drivable and assertable with no `Camera2D` at all — the camera itself is not part of `player_ship.tscn` (it is added as a sibling-of-nothing child of `PlayerShip` in `sector_hub.tscn`, alongside its own `CameraDirector`), so every headless test that instantiates the ship scene alone takes `_update_camera_feel()`'s early return and never reaches a formula that lived inline.
+
+It exists to fix a bug: the previous inline formula took the lead's *magnitude* from `velocity` but its *direction* from the hull's facing (`Vector2.UP.rotated(rotation)`), so turning the nose away from the ship's momentum swung the camera lead **opposite to travel**. The rig's direction is `velocity.normalized()`, never `rotation` — `OpenSpacePlayerShip` no longer reads its own `rotation` for this at all.
+
+| Export | Default | Job |
+|---|---|---|
+| `lookahead_time` | `0.30` | Seconds of travel the raw lead is computed over: `velocity * lookahead_time`. |
+| `lead_max_px` | `90.0` | Hard cap on the lead distance. |
+| `lead_dead_zone_px` | `32.0` | Raw lead under this reads as zero, and is **subtracted** (not clipped) above it — so the applied lead grows continuously from the dead-zone edge instead of popping from 0 to 32 px the instant the ship crosses it. |
+| `lead_half_life` | `0.20` | Smoothing half-life on the lead vector, separate from `CameraDirector.blend_speed` (which handles hand-off *between* effects, not this smoothing). |
+| `zoom_min` | `0.85` | Zoom level at/above `zoom_speed_threshold`. |
+| `zoom_speed_threshold` | `400.0` | Speed (px/s) at which the zoom reaches `zoom_min`. |
+| `boost_zoom_bonus` | `0.06` | Extra pull-back while `set_boosting(true)` — the boost's camera punch. |
+
+`get_motion_scale()` is public and load-bearing beyond the rig's own use: the rig owns the accessibility scale (`_motion_scale`, driven by `SettingsState.camera_motion` — `full`/`reduced`/`off` → `1.0`/`0.5`/`0.0`), but `CameraShake.add()` for the boost punch is called from the ship, outside the rig, and still has to honour the same setting. Every automatic-motion channel in the epic routes its amplitude through this one reader.
+
+`_update_camera_feel()` on the ship now does only three things: step the rig with the live `velocity`, find the child `Camera2D` → find its `CameraDirector`, and push `director.set_effect(&"speed_feel", rig.get_zoom(velocity), rig.get_offset(), 0)`. The rig is stepped unconditionally (even with no camera present), so its smoothing state does not reset the moment a camera appears or disappears.
+
+Covered by `tests/unit/test_open_space_camera_rig.gd` (tree-less, pure `step()`: the lead-magnitude cap, direction tracks the velocity argument, the dead-zone boundary settles to exactly zero, no pop at the dead-zone edge, frame-rate independence, `_motion_scale = 0.0` zeroes both offset and zoom, and boosting lowers the zoom target). **The epic's defining case is deliberately NOT there** — `step()` never receives `rotation`, so "lead follows velocity, not facing" is unobservable at the unit level and is guaranteed by the signature alone. `tests/integration/test_open_space_camera_wiring.gd` is the anti-inert file that drives a *real* ship under a `Camera2D` + `CameraDirector` harness matching `sector_hub.tscn` (`Camera2D` a direct child of the ship, `CameraDirector` a child of that — `_update_camera_feel()` finds both by exact node name and silently no-ops if either is missing), asserts the rig is wired into the scene by class, and — the defining case — sets `rotation = PI` (nose down) with `velocity = (0, -400)` (travelling up) and asserts the pushed offset has `y < 0`, plus the mirror case, so a stuck sign cannot pass either.
 
 ### 3.3 Ambient enemy — `PatrolDrone`
 

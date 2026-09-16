@@ -27,18 +27,6 @@ extends PlayerBase
 ## the property must exist so WarpModule can set/clear it without error.
 var warp_module_active: bool = false
 
-## Camera feel ────────────────────────────────────────────────────────────────
-## Zoom-out + camera lead applied together as the ship accelerates.
-##   Zoom:  pulls back to _ZOOM_MIN at full threshold speed.
-##   Lead:  shifts the viewport ahead in the direction of travel (facing).
-## Both scale from 0 → full effect over 0 → _SPEED_THRESHOLD px/s.
-##
-## Hand-off to other systems (planet dwell, pause, shake) is managed by the
-## CameraDirector child of Camera2D. We just push our target each frame; the
-## director picks the highest-priority effect and smoothly blends to it.
-const _ZOOM_MIN        : float = 0.85   ## Zoom level at full speed.
-const _SPEED_THRESHOLD : float = 400.0  ## Speed (px/s) for full effect (zoom + lead).
-const _LEAD_MAX        : float = 140.0  ## Max camera lead distance (px).
 ## Set true by OverclockModule.apply(). Allows firing past overheat.
 var overclock_module_active: bool = false
 
@@ -66,6 +54,12 @@ var _turn: ShipTurnController = null
 ## not by a crash in the middle of a mission).
 var _boost_meter: BoostMeter = null
 
+## The OpenSpaceCameraRig child — the speed-zoom + camera-lead formula behind the
+## speed_feel effect. Resolved by TYPE in _ready() for the same reason as _turn and
+## _boost_meter above. Null-checked at every use so a ship stripped of the node still
+## flies with no camera feel rather than crashing.
+var _camera_rig: OpenSpaceCameraRig = null
+
 ## Active module instances — created lazily in _apply_module().
 var _module_pool: Dictionary = {}  # { StringName: ShipModuleBase }
 
@@ -86,6 +80,8 @@ func _ready() -> void:
 			_turn = child as ShipTurnController
 		elif child is BoostMeter and _boost_meter == null:
 			_boost_meter = child as BoostMeter
+		elif child is OpenSpaceCameraRig and _camera_rig == null:
+			_camera_rig = child as OpenSpaceCameraRig
 	if _turn != null:
 		## Seed the scheme from the persisted setting, and the target angle from the
 		## hull's ACTUAL facing, rather than relying on the controller and the ship
@@ -361,27 +357,21 @@ func _on_health_changed(current: int) -> void:
 		if is_instance_valid(self):
 			get_tree().reload_current_scene()
 
-## Pushes the speed-zoom + camera-lead targets into the CameraDirector.
-## The director blends smoothly between active effects, so no internal lerp
-## is needed here — we just compute instantaneous targets each frame and let
-## the director arbitrate against other effects (planet dwell, shake, etc).
-func _update_camera_feel(_delta: float) -> void:
+## Pushes the speed-zoom + camera-lead targets (computed by _camera_rig) into the
+## CameraDirector. The director blends smoothly between active effects, so no internal
+## lerp is needed here beyond the rig's own smoothing — we just step the rig and forward
+## its output, and let the director arbitrate against other effects (planet dwell, shake).
+func _update_camera_feel(delta: float) -> void:
+	if _camera_rig == null:
+		return
+	_camera_rig.step(velocity, delta)
 	var cam := get_node_or_null("Camera2D") as Camera2D
 	if cam == null:
 		return
 	var director := cam.get_node_or_null("CameraDirector") as CameraDirector
 	if director == null:
 		return
-
-	var spd := velocity.length()
-	var t   := clampf(spd / _SPEED_THRESHOLD, 0.0, 1.0)
-
-	## Zoom out + camera lead — combined under one effect slot.
-	## Lead direction tracks ship facing (not velocity) so rotation feels snappy.
-	var target_zoom   := Vector2.ONE * lerpf(1.0, _ZOOM_MIN, t)
-	var facing        := Vector2.UP.rotated(rotation)
-	var target_offset := facing * _LEAD_MAX * t if spd > 1.0 else Vector2.ZERO
-	director.set_effect(&"speed_feel", target_zoom, target_offset, 0)
+	director.set_effect(&"speed_feel", _camera_rig.get_zoom(velocity), _camera_rig.get_offset(), 0)
 
 
 ## Override: overheat gating with overclock and overdrive module support.

@@ -757,7 +757,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
       `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
 
-## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  [AWAITING YOUR REVIEW]  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 9 open)
+## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  [AWAITING YOUR REVIEW]  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 8 open)
 
 **Preparation**
 
@@ -784,7 +784,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
 
 **Implementation**
 
-- [ ] **The camera leads where the ship is actually travelling, not where its nose points** _(todo - bug, medium, sonnet)_
+- [x] **The camera leads where the ship is actually travelling, not where its nose points** _(done - bug, medium, sonnet)_
       Fixes the epic's headline bug (`3-plan.md` → Design → Thread 2, and `1-context.md` §4.1): the camera
       lead takes its magnitude from `velocity` but its direction from the hull's facing, so turning the
       nose away from your momentum extends the camera OPPOSITE to travel — "it is behind the ship",
