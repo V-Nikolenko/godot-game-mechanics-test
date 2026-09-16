@@ -447,3 +447,166 @@ B1–B6 are all fixable by editing `3-plan.md` — no re-research and no redesig
 `2-research.md`. The four threads, the decomposition, the complexities and the dependency chain are
 otherwise sound, and the underlying diagnosis of the camera bug is correct and well-measured. Fix the
 seven and this is an approve.
+
+---
+
+# Round 2 — 2026-09-16
+
+VERDICT: APPROVED
+
+Epic: `open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`. Stage: **PLAN-REVIEW**, round 2
+of 2. Re-reviewed: the revised [`3-plan.md`](./3-plan.md) in full (including its
+`## Response to review round 1`), [`2-research.md`](./2-research.md) finding 9 and its sourcing note,
+[`1-context.md`](./1-context.md), the nine generated tasks, and the source files listed at the
+bottom. Round 1's findings were re-derived from the source rather than taken on trust, in both
+directions.
+
+All seven blocking findings are fixed in the plan body, not just in the response table, and each fix
+is consistent with the build sequence, the test plan and the task bodies. Ten of the twelve notes are
+applied; the two that are not are declined with reasons I accept. **No new blocking findings.** Nine
+non-blocking notes below — six of them are concrete traps in BST-2/BST-3 that the implementing task
+will hit and should be told about up front; none changes a design decision.
+
+## Disposition of round 1
+
+| # | Disposition | Verified at |
+|---|---|---|
+| B1 | **fixed** — defining case moved to the wiring file; it fails on today's build (`rotation = PI` ⇒ `facing = (0,+1)` ⇒ `offset.y > 0`), and the mirror case makes a stuck sign non-passing | `3-plan.md:619-626, 641-663`; `player_ship.gd:368-384` |
+| B2 | **fixed** — and round 1 was **right**. `_handle_thrust()` returns on `engine_boost_active` at `player_ship.gd:219-220`, before its last line `253` calls `_step_boost()`, so the draft's reorder was unreachable. The plan takes round 1's option (b): the tick stays put and the freeze is documented as intended. What is "withdrawn" is the *draft's change*, not the finding. The 0.035-bar-unit figure checks out (0.55 s burst − 0.5 s `recharge_delay_sec` = 0.05 s × `recharge_rate 0.7`) | `3-plan.md:538-571`; `player_ship.gd:219-220,253`; `boost_meter.gd:30,33,63` |
+| B3 | **fixed** — `module.can_activate() and meter.try_spend_tank()`. `can_activate()` is specified as exactly `try_activate()`'s own guard negated (`engine_boost_module.gd:43-44`), so within a frame the two cannot disagree and no tank can be lost; the new boundary case covers full-meter/module-cooling | `3-plan.md:479-507, 750-755`; `engine_boost_module.gd:42-44`; `ship_module_base.gd:58-59` |
+| B4 | **fixed** — sustain re-asserts `velocity` along the current nose; the tell moves onto `_boosting`; three new cases including the one that fails on the draft. Ordering holds: `_step_boost()` runs last inside `_handle_thrust()`, so the assignment lands after thrust *and* after damping, and `velocity.length() == _speed_ceiling` is not `>`, so the tail clamp does not bite (but see **R2-N1**) | `3-plan.md:396-441, 726-737`; `player_ship.gd:228-253,282-295` |
+| B5 | **fixed** — target is `$SpriteAnchor/ShipSprite2D`, which has no children at all in the scene; the muzzles and engine markers are its siblings. Boundary case pins all four | `3-plan.md:278-288, 771-777`; `player_ship.tscn:235-252, 270-275` |
+| B6 | **fixed** — `get_motion_scale()` on the rig, `CameraShake.add(trauma * scale)` at the call site, `_motion_scale == 0.0 ⇒ no trauma` case. The declined CAM-2 dependency is **correct**: `_motion_scale` defaults to `1.0`, so FLY-2 shipped before CAM-2 produces exactly today's amplitude (right answer, nothing to regress), and the day CAM-2 lands the accessor reads the live value with no FLY-2 edit. The `backlog-cli.js` limitation is real but is not what carries the argument — the design does | `3-plan.md:135-141, 295-324, 780-784`; `camera_shake.gd:31`; `scripts/backlog-cli.js:344` |
+| B7 | **fixed** — finding 9 is now an explicitly marked paraphrase with its retrieval method stated, and the sourcing note carries the correction | `2-research.md:13-19, 51` |
+| N1 | fixed (bundling now explicitly rejected, with the "every knob is an `@export`, so a fly-test can revert to pure-sign-fix behaviour" answer) | `3-plan.md:85-97` |
+| N2 | fixed — and the scene claim is accurate: `Rows/Row0` with `NameLabel`/`ValueLabel` is a node block in `settings_panel.tscn` | `3-plan.md:170-177`; `settings_panel.tscn:24-40`; `settings_panel.gd:29,36` |
+| N3 | fixed (two-layer capture/restore spelled out for CAM-2, RET-1/2 and BST-1) | `3-plan.md:610-617`; `tests/README.md:745-751`; `test_player_ship_turn_wiring.gd:21-31` |
+| N4 | fixed (`tests/integration/test_open_space_flight_feel.gd`, new file) | `3-plan.md:759-764` |
+| N5 | fixed (`tanks`, with the collision spelled out) | `3-plan.md:359-363`; `test_boost_bar.gd:143` |
+| N6 | **declined — reasonably.** Not a required change in round 1; both halves are fully specified and Risk 7 carries the escalation route | `3-plan.md:876-879` |
+| N7 | fixed (`const` → `@export`, with an honest account of what it does and does not buy) | `3-plan.md:509-522`; `engine_boost_module.gd:5-10` |
+| N8 | fixed (`get_description()` update folded into BST-3; no test pins the string, so nothing else breaks) | `3-plan.md:524-527`; `grep get_description tests/` → no hits |
+| N9 | **partially fixed, correctly** — recorded as Risk 8 and raised with the user; filing an epic is genuinely a triage-stage action, not a plan-stage one | `3-plan.md:831-836` |
+| N10 | fixed (`player_ship.gd:84-88`, `player_fighter.gd:114-124`, the guidelines phrasing and the Ridge Racer (PSP) attribution are all corrected) — one new slip, see R2-N7 | `3-plan.md:71,536`; `2-research.md:45,49`; `player_fighter.gd:114-124` |
+| N11 | fixed (`global_position` reassigned every physics frame, with the bars' precedent and the `Vector2.ZERO` offset) | `3-plan.md:218-224`; `player_ship.gd:148-151` |
+| N12 | fixed (Risk 7, with the exact `set-meta` command) | `3-plan.md:823-830` |
+
+## New blocking findings
+
+None.
+
+## Non-blocking notes
+
+**R2-N1 — BST-2: the sustain will fight the ceiling-decay branch after 0.35 s, and the plan's own
+±1 px/s case is what catches it.** The new sustain sets `_speed_ceiling = boost_exit_speed` and
+writes `velocity`, but the existing block below it (`player_ship.gd:282-295`) still runs: once
+`_boost_hold_left` reaches 0 mid-hold, the `else` branch decays the ceiling by
+`boost_ceiling_decay * delta` and the tail clamp trims `velocity` to `700 - 400*delta` — 693.3 px/s
+at 60 Hz, 686.7 at 30 Hz, i.e. frame-rate dependent. That fails
+`3-plan.md:728-730` ("`boost_exit_speed` ± 1 px/s"), which is the right outcome. The fix is one
+condition — gate the decay `else` on `not _boosting` (or set the ceiling after the decay block).
+**Do not fix it by loosening the tolerance**, which would ship a frame-rate-dependent sustain speed.
+
+**R2-N2 — BST-2 must also own `tests/integration/test_open_space_boost_wiring.gd`, which the test
+plan never names.** `_step_boost(` has **37 call sites across two files**, and the plan lists only
+`test_open_space_boost_verb.gd`. The arity change reds all of them at runtime (GDScript resolves the
+call at call time, so this is a red suite, not a parse error), and
+`test_open_space_boost_wiring.gd:120-129` asserts *"a Shift boost must spend exactly one charge"* —
+which BST-2 deliberately invalidates (a tap now costs `drain_rate * boost_hold_sec` = 0.35). That
+rewrite is legitimate characterization churn, but it belongs in the task's scope up front rather
+than as a surprise at gate time.
+
+**R2-N3 — BST-1: "`try_spend_tank()` … replacing `try_spend()`" is the one ambiguity left in thread
+4, and the wrong reading is a live regression.** At the default `tanks = 1`, `tank_size()` is
+`max_charges / 1` — the *whole bar* — so repointing `player_ship.gd:276` at `try_spend_tank()` in
+BST-1 makes one Shift tap drain everything, and `tests/unit/test_boost_meter.gd` carries 12
+`try_spend()` call sites that would have to be rewritten to match. BST-1 should **add**
+`try_spend_tank()` and leave `try_spend()` and its cases alone; retiring it belongs to BST-2/BST-3,
+which are the tasks that remove its last caller. (`test_open_space_boost_wiring.gd:128` catches the
+wrong reading, so this is loud rather than silent — but it is a session's worth of noise.)
+
+**R2-N4 — BST-3: activating the module from inside `_step_boost()` puts it in front of the tail
+speed clamp for one frame.** Today `EngineBoostModule.try_activate()` runs from `_input`, *before*
+`_physics_process`, so `_handle_thrust()`'s `engine_boost_active` return (`player_ship.gd:219-220`)
+shields the 1500 px/s frame-one burst. Moved onto Shift, activation happens *inside* `_step_boost()`,
+and execution then falls through to `player_ship.gd:294-295` with `_speed_ceiling` still at
+`max_speed = 420` — clipping the burst to 420 for exactly one frame until `tick()` re-asserts it.
+Cheapest fix: `return` immediately after a successful `module.try_activate()` (the module has already
+set `engine_boost_active`, so the return is the same rule the function already opens with).
+
+**R2-N5 — BST-2: the release frame drops the sprite but not the thrusters.**
+`_release_boost_flame()` (`player_ship.gd:314-317`) only touches the `AnimatedSprite2D`; thruster
+state is recomputed in `_handle_thrust()`, which runs *before* `_step_boost()`. So on the first
+released frame `_boosting` is still true when the thrusters are set, and only the sprite drops —
+the plan's case *"one released frame drops both"* (`3-plan.md:735-737`) fails as written. Give the
+stop branch a counterpart to `_play_boost_flame()` that also sets both thrusters, rather than
+weakening the case to two frames.
+
+**R2-N6 — RET-2: name who hides the ring under the mission menu.** The plan says the reticle is
+hidden while the ship's physics is off (`3-plan.md:246-248, 698`), but the ship is precisely what
+`MissionTrigger._open_menu()` freezes (`mission_select_hub.gd`), so it cannot hide anything at that
+moment — the reticle needs its own `_process` poll of the parent's `is_physics_processing()`, or the
+hide has to move into the mission trigger. As specified there is no implementation that satisfies the
+test; one sentence fixes it.
+
+**R2-N7 — three citation slips, none load-bearing.** `player_ship.gd:380-381` for
+`facing * _LEAD_MAX * t` is actually `382-383` (`380-381` is the comment and the zoom line);
+`test_boost_bar.gd:142` is the section comment, the function is at `143`; `settings_panel.tscn`'s
+Row0 block runs to line `40`, not `35`. Everything else I spot-checked was exact.
+
+**R2-N8 — `CameraDirector` still has no test, and the plan neither schedules one nor declines it.**
+`1-context.md:268-270` called it *"worth one file regardless of which camera design wins"*; grep
+confirms zero references to `CameraDirector`, `speed_feel` or `_update_camera_feel` anywhere under
+`tests/`. CAM-1's wiring test exercises it incidentally (it reads the pushed effect), which is
+probably enough for this epic — but it should be an explicit line in Out of scope rather than a
+silent drop.
+
+**R2-N9 — two things only a human can close, and both are already flagged.** (a) Idea point 4's
+*"make it more powerful"* is still answered by relabelling plus the `@export` conversion, with no
+numeric buff — and Boost Drive now *costs* a tank it previously did not, so the first fly-test should
+ask the player directly whether it reads as stronger; the knobs now exist to answer "no" cheaply.
+(b) FLY-1's skew moves `ShipSprite2D` only, which is correct for B5 — but `_thruster` /
+`_thruster_right` are parented to `EngineLeft`/`EngineRight` (`player_ship.gd:136-141`), *siblings*
+of the sprite, so the exhaust will not lean with the hull. At `bank_max_rad = 0.12` that is probably
+invisible; it is one more thing for the mandatory eyes-on check the plan already requires.
+
+## What I verified
+
+Opened and read in full or in the cited ranges, not taken from the plan or from round 1 on trust:
+
+- `open_space/scenes/entities/player/player_ship.gd` (whole file — control flow of
+  `_physics_process` → `_handle_thrust` → `_step_boost`, both `engine_boost_active` returns, the
+  ceiling/clamp tail, the flame pair, `_update_camera_feel`)
+- `open_space/scenes/entities/player/boost_meter.gd`, `open_space/scenes/gui/boost_bar.gd`,
+  `open_space/scenes/entities/player/ship_turn_controller.gd`
+- `open_space/scenes/entities/player/player_ship.tscn` (SpriteAnchor subtree, `weapon_muzzles`,
+  `ShipTurnController`/`BoostMeter` children), `open_space/scenes/levels/sector_hub.tscn:83-85`
+- `global/ship_modules/ship_module_base.gd`, `global/ship_modules/engine_boost_module.gd`
+- `global/systems/camera_director.gd`, `global/systems/camera_shake.gd`
+- `global/autoloads/settings_state.gd`, `global/ui/pause_menu/settings_panel.gd` + `.tscn`
+- `assault/scenes/player/player_fighter.gd:108-124`
+- `tests/integration/test_open_space_boost_verb.gd` (header + module-precedence cases),
+  `tests/integration/test_open_space_boost_wiring.gd:110-148`,
+  `tests/integration/test_boost_bar.gd:135-160`,
+  `tests/integration/test_player_ship_turn_wiring.gd:15-40`, `tests/README.md:740-751`
+- `grep` sweeps: `try_spend` (14 hits, 12 of them in `tests/unit/test_boost_meter.gd`),
+  `_step_boost(` in `tests/` (37 hits across 2 files), `get_description`/`supercharge engines` in
+  `tests/` (0 hits), `CameraDirector`/`speed_feel`/`_LEAD_MAX` in `tests/` (0 hits)
+- `./scripts/backlog-cli.js epic show …` — the nine tasks' ids, complexities and `dependsOn` still
+  match the plan's build-order table exactly, including FLY-2 → `[BST-2, CAM-1]`.
+
+**Conventions.** Re-checked against `CLAUDE.md`: composition over inheritance (rig, reticle and
+meter are typed child nodes resolved by class) ✓; the one-mouse-read rule (the reticle is fed the
+same injected `Vector2`) ✓; single-writer-of-`rotation` (banking is a sprite skew, with its own
+boundary case, and nothing in thread 4 writes `rotation`) ✓; signal arity declared for
+`tanks_changed` / `camera_motion_changed` ✓; no hand-typed `uid://` ✓; no `.tres` stat and no
+640×360 design-space coordinate is in scope ✓; projectile ownership untouched ✓. No reinvention: the
+sweep of `global/components/` and `global/systems/` still shows no camera-rig, cursor or reticle
+component, `BoostMeter` is extended rather than replaced, and `CameraShake`/`CameraDirector` are
+used through their existing APIs.
+
+**Complexity and graph.** Every assignment still reads correctly. BST-3 remains the only
+cross-cutting task and is the one with four of the nine notes above against it; it is still
+defensibly `medium` (two three-line virtuals, a two-line tier switch, a mechanical `const` → `@export`
+pass), and Risk 7 records the exact escalation command if it opens up. No task is really three, no
+chain stalls, and the serialisation argument (one task per cycle on one branch) still holds.

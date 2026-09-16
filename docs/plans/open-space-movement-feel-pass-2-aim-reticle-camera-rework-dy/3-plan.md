@@ -879,3 +879,34 @@ stated and left as one task: the reviewer did not ask for a split, the plan spec
 completely, and Risk 7's escalation route covers it if it overruns. **N9** (file the follow-up
 engines epic) is not this stage's to do — filing an epic is a triage action — so it is recorded as
 Risk 8 and raised with the user instead.
+
+## Review round 2 — APPROVED, with traps to read before implementing
+
+`4-review.md` round 2 (2026-09-16) returned **VERDICT: APPROVED** with **no new blocking findings**.
+All seven round-1 blockers were confirmed fixed in the plan body (and round 1's B2 confirmed
+*correct* — what this document withdrew is its own draft change, not the finding). Nothing in the
+design below changes as a result, so this section adds no decisions.
+
+What it does add is a pointer. Six of the nine round-2 notes are concrete traps in the existing
+`player_ship.gd` control flow that the implementing task **will** hit, and each costs a session if
+discovered at gate time rather than up front. **Whoever picks up BST-1, BST-2, BST-3 or RET-2 must
+read `4-review.md` § "Non-blocking notes" (R2-N1 … R2-N9) first.** In brief, by task:
+
+| Task | Notes | The trap in one line |
+|---|---|---|
+| BST-1 | R2-N3 | **Add** `try_spend_tank()`; leave `try_spend()` and its 12 unit cases alone. At the default `tanks = 1` a tank *is* the whole bar, so repointing the caller here makes one tap drain everything. |
+| BST-2 | R2-N1, R2-N2, R2-N5 | The ceiling-decay `else` at `player_ship.gd:282-295` still runs mid-hold and trims velocity frame-rate-dependently — gate it on `not _boosting`, do not loosen the ±1 px/s case. `_step_boost(` has 37 call sites across **two** test files; `test_open_space_boost_wiring.gd` is in scope too. The release frame needs a thruster counterpart to `_play_boost_flame()`, not a weakened case. |
+| BST-3 | R2-N4 | Activating the module from inside `_step_boost()` puts the 1500 px/s frame-one burst in front of the tail clamp — `return` immediately after a successful `try_activate()`. |
+| RET-2 | R2-N6 | The ship is what the mission menu freezes, so it cannot hide the reticle at that moment; the reticle polls the parent's `is_physics_processing()` itself. |
+| FLY-1 | R2-N9(b) | The thrusters are parented to `EngineLeft`/`EngineRight`, siblings of `ShipSprite2D`, so the exhaust will not lean with the hull. Probably invisible at `bank_max_rad = 0.12` — one more item for the mandatory eyes-on check. |
+
+Two notes are for the user rather than for a task: **R2-N8** — `CameraDirector` still has no test of
+its own and this epic does not add one (CAM-1's wiring test exercises it incidentally); treat that as
+an explicit Out-of-scope line. **R2-N9(a)** — idea point 4's *"make it more powerful"* is still
+answered by relabelling plus the `@export` conversion, and Boost Drive now *costs* a tank it
+previously did not, so the first fly-test should ask the player directly whether it reads as
+stronger. The knobs now exist to answer "no" cheaply.
+
+**R2-N7** records three off-by-a-line citation slips in this document
+(`player_ship.gd:382-383` not `380-381`; `test_boost_bar.gd:143` not `142`; the `settings_panel.tscn`
+Row0 block ends at line 40, not 35). No decision depends on any of them.

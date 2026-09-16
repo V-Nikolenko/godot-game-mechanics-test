@@ -757,7 +757,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
       `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
 
-## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  [DRAFT - preparation in progress]  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 10 open)
+## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  [AWAITING YOUR REVIEW]  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 9 open)
 
 **Preparation**
 
@@ -776,11 +776,11 @@ the signal that the change was deliberate. Test names are given so the fix has a
       -> [docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy](docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy)
       1 run(s), $3.92; last on claude-opus-5
 
-- [ ] **Plan review: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost** _(in progress - plan-review)_
+- [x] **Plan review: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost** _(done - plan-review)_
       Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.
       after: plan-open-space-movement-feel-pass-2-aim-reticle-camera-rewo
       -> [docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy](docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy)
-      1 run(s), $2.92; last on claude-opus-5
+      2 run(s), $19.00; last on claude-opus-5
 
 **Implementation**
 

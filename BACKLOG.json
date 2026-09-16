@@ -1230,7 +1230,7 @@
     {
       "id": "open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
       "title": "Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
-      "status": "draft",
+      "status": "review",
       "sourceIdeaId": "idea-1789493425846",
       "prepDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
       "feedback": [],
@@ -1341,7 +1341,7 @@
           "id": "plan-review-open-space-movement-feel-pass-2-aim-reticle-came",
           "head": "Plan review: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
           "body": "Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.",
-          "state": "in_progress",
+          "state": "done",
           "badge": null,
           "planDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
           "kind": "prep",
@@ -1366,6 +1366,23 @@
               "costUSD": 2.9201807500000005,
               "turns": 1,
               "subagents": 1,
+              "outcome": "error 429",
+              "gate": "pass"
+            },
+            {
+              "commits": [],
+              "at": "2026-09-16T00:03:04.817Z",
+              "run": "2026-09-16-0235-i1",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.03533,
+                "claude-opus-5": 16.049397
+              },
+              "costUSD": 16.084727,
+              "turns": 1,
+              "subagents": 3,
               "outcome": "error 429",
               "gate": "pass"
             }
