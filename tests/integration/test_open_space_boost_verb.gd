@@ -360,6 +360,77 @@ func test_the_flame_is_released_when_the_hold_window_closes() -> void:
 	assert_eq(sprite.animation, &"idle", "the hull returns to idle after boost_hold_sec")
 
 
+## ── The camera punch (FLY-2) ─────────────────────────────────────────────────────────────
+## CameraShake is a global autoload — its trauma is reset to 0.0 before each case here so an
+## earlier test's decay-in-progress trauma cannot leak into these assertions.
+func test_boost_start_adds_camera_shake_trauma() -> void:
+	var ship := _spawn_ship(0.0)
+	CameraShake._trauma = 0.0
+	ship._step_boost(true, true, D)
+	assert_almost_eq(CameraShake._trauma, ship.boost_shake_trauma, 0.0001,
+			"a boost's start frame must punch the camera between the 0.35-on-a-hit and nothing")
+
+
+func test_holding_boost_does_not_add_further_trauma_after_the_start_frame() -> void:
+	var ship := _spawn_ship(0.0)
+	CameraShake._trauma = 0.0
+	ship._step_boost(true, true, D)
+	var after_start: float = CameraShake._trauma
+	ship._step_boost(false, true, D)
+	assert_eq(CameraShake._trauma, after_start,
+			"sustaining a hold must not re-punch the camera every frame")
+	CameraShake._trauma = 0.0
+
+
+## BOUNDARY (task): with the rig's _motion_scale at 0.0 (camera_motion = off), a boost start
+## must add NO trauma at all — without this, camera_motion = off would still shake the screen
+## outside the rig's own accessibility gate.
+func test_boost_start_adds_no_trauma_when_camera_motion_is_off() -> void:
+	var ship := _spawn_ship(0.0)
+	ship._camera_rig.set_motion_scale(0.0)
+	CameraShake._trauma = 0.0
+	ship._step_boost(true, true, D)
+	assert_eq(CameraShake._trauma, 0.0,
+			"camera_motion = off must zero the boost punch, not just scale down the lead/zoom")
+	CameraShake._trauma = 0.0
+
+
+## BOUNDARY: a ship stripped of its OpenSpaceCameraRig child (the null-checked contract every
+## other rig-touching line in this file already honours) must still punch the camera at full
+## trauma, not throw — the fallback scale is 1.0, so a bare instantiated ship behaves exactly
+## as it did before FLY-2 existed.
+func test_boost_start_falls_back_to_full_trauma_with_no_camera_rig() -> void:
+	var ship := _spawn_ship(0.0)
+	ship._camera_rig = null
+	CameraShake._trauma = 0.0
+	ship._step_boost(true, true, D)
+	assert_almost_eq(CameraShake._trauma, ship.boost_shake_trauma, 0.0001,
+			"no rig must fall back to a scale of 1.0, not to zero trauma")
+
+
+## The rig reports _boosting for the whole hold and clears the instant the hold ends — the
+## signal FLY-2's zoom pull relies on (OpenSpaceCameraRig.get_zoom() reads it directly).
+func test_camera_rig_reports_boosting_for_the_hold_and_clears_on_release() -> void:
+	var ship := _spawn_ship(0.0)
+	ship._step_boost(true, true, D)
+	assert_true(ship._camera_rig._boosting, "the rig must know a boost is in progress")
+	var elapsed: float = D
+	while elapsed < ship.boost_hold_sec + D:
+		ship._step_boost(false, false, D)
+		elapsed += D
+	assert_false(ship._camera_rig._boosting, "the rig must clear the flag once the hold ends")
+
+
+## BOUNDARY: with the rig's _motion_scale at 0.0, the zoom stays Vector2.ONE for the whole
+## boost, not just at rest — camera_motion = off must mean off even while boosting.
+func test_zoom_stays_neutral_while_boosting_with_camera_motion_off() -> void:
+	var ship := _spawn_ship(0.0)
+	ship._camera_rig.set_motion_scale(0.0)
+	ship._step_boost(true, true, D)
+	assert_eq(ship._camera_rig.get_zoom(ship.velocity), Vector2.ONE,
+			"camera_motion = off must keep the zoom neutral even mid-boost")
+
+
 ## ── Boundaries around the meter (BST-2) ──────────────────────────────────────────────────
 ## A meter short of `min_start_charge` refuses outright — no velocity write, no drain — the
 ## same "refuse, don't weaken" contract `BoostMeter.try_spend()`/`drain()` already use.

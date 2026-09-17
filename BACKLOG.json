@@ -1672,13 +1672,36 @@
           "complexity": "small",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "44a73c2",
+                  "subject": "Bank the hull sprite into its turns (FLY-1)"
+                }
+              ],
+              "at": "2026-09-17T01:39:28.844Z",
+              "run": "2026-09-17-0335-i7",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004653,
+                "claude-sonnet-5": 2.0495105999999996
+              },
+              "costUSD": 2.0541636,
+              "turns": 60,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "boosting-punches-the-camera-so-speed-reads-at-a-glance",
           "head": "Boosting punches the camera so speed reads at a glance",
           "body": "`2-research.md` finding 7: Ridge Racer 6 displays a \"tunnel vision\" effect across the whole screen\nand HUD on its strongest nitrous tier; finding 2 notes Celeste wobbles the camera in the direction of\na dash \"to really sell the speed and power\". Today a boost looks identical to cruising apart from the\nflame.\n\nDone when:\n- The boost's start frame calls `CameraShake.add(boost_shake_trauma * _rig.get_motion_scale())` with\n  `boost_shake_trauma = 0.25` — between the existing `0.35` on a hit and nothing. Fall back to a\n  scale of 1.0 if the ship has no rig, so a bare instantiated ship behaves as it does today.\n- **The shake must be scaled, and it does not get that for free** (plan review B6). The rig applies\n  `_motion_scale` inside `get_zoom()`, but `CameraShake` is an autoload (`project.godot:33`) called\n  from the SHIP, outside the rig — so without the `get_motion_scale()` reader that CAM-1 adds,\n  `camera_motion = off` still shakes the screen. Finding 3 lists \"camera shakes or tilting\" among the\n  problem cases by name.\n- `OpenSpaceCameraRig.set_boosting(true)` for the boost's duration pulls the zoom a further\n  `boost_zoom_bonus = 0.06` out, and clears on release.\n- Tests: trauma rises on the start frame; the rig reports `_boosting` for the duration and clears;\n  `get_zoom()` with boosting true is lower than with it false at the same speed. REQUIRED BOUNDARY:\n  with the rig's `_motion_scale` at 0.0, a boost start adds NO trauma and the zoom stays\n  `Vector2.ONE`. Set the scale on the rig directly rather than through `SettingsState` — that is what\n  keeps this task independent of CAM-2 having shipped, and is why there is no `dependsOn` on it.\n\nREJECTED and out of scope: a directional `CameraShake`. It has only a scalar trauma model and adding\na direction channel is a change to a tested shared autoload for a flourish.\n\nFiles: `open_space/scenes/entities/player/player_ship.gd`,\n`open_space/scenes/entities/player/open_space_camera_rig.gd`,\n`tests/unit/test_open_space_camera_rig.gd`, `tests/integration/test_open_space_flight_feel.gd`.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

@@ -757,7 +757,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
       `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
 
-## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 1 open)
+## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 0 open)
 
 **Review history**
 
@@ -1076,8 +1076,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Files: `open_space/scenes/entities/player/player_ship.gd`, `player_ship.tscn` (the exports),
       `tests/integration/test_open_space_flight_feel.gd` (NEW — not `test_open_space_boost_verb.gd`,
       whose header scopes it to "the whole model lives in `_step_boost`"; banking is not the boost verb).
+      1 run(s), $2.05; last on claude-sonnet-5
 
-- [ ] **Boosting punches the camera so speed reads at a glance** _(todo - feature, small, sonnet)_
+- [x] **Boosting punches the camera so speed reads at a glance** _(done - feature, small, sonnet)_
       `2-research.md` finding 7: Ridge Racer 6 displays a "tunnel vision" effect across the whole screen
       and HUD on its strongest nitrous tier; finding 2 notes Celeste wobbles the camera in the direction of
       a dash "to really sell the speed and power". Today a boost looks identical to cruising apart from the

@@ -22,6 +22,11 @@ extends PlayerBase
 ## px/s² the speed ceiling falls at once the hold window closes, back down to max_speed.
 ## 700 → 420 in 0.70 s, so the whole above-cruise signature is ~1.05 s.
 @export var boost_ceiling_decay: float = 400.0
+## Trauma injected into CameraShake on the boost's start frame (FLY-2) — between the
+## existing 0.35 on a hit and nothing, so a boost reads as a punch, not a collision. Scaled
+## by _camera_rig.get_motion_scale() so camera_motion = off (CAM-2) drops it to zero rather
+## than shaking the screen outside the rig's own accessibility gate.
+@export var boost_shake_trauma: float = 0.25
 
 @export_category("Bank")
 ## The visual limit of the hull's lean into a turn, in radians (~7°). A sprite transform
@@ -400,6 +405,12 @@ func _step_boost(boost_pressed: bool, boost_held: bool, delta: float) -> void:
 		velocity = Vector2.UP.rotated(rotation) * boost_exit_speed
 		_speed_ceiling = boost_exit_speed
 		_play_boost_flame()
+		## FLY-2: the start-frame punch. Falls back to a scale of 1.0 with no rig, so a bare
+		## instantiated ship (no OpenSpaceCameraRig child) behaves as it does today.
+		CameraShake.add(boost_shake_trauma
+				* (_camera_rig.get_motion_scale() if _camera_rig != null else 1.0))
+		if _camera_rig != null:
+			_camera_rig.set_boosting(true)
 
 	if _boost_hold_left > 0.0:
 		## Ticks down unconditionally, independent of _boosting: it is what lets the floor
@@ -419,6 +430,8 @@ func _step_boost(boost_pressed: bool, boost_held: bool, delta: float) -> void:
 		if not meter_ok or (not boost_held and _boost_hold_left <= 0.0):
 			_boosting = false
 			_release_boost_flame()
+			if _camera_rig != null:
+				_camera_rig.set_boosting(false)
 
 	if not _boosting:
 		## move_toward is a linear ramp, so this is exactly frame-rate independent (unlike the
