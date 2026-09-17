@@ -34,8 +34,15 @@ var overclock_module_active: bool = false
 ## tail max_speed clamp of its own. It is floored at max_speed, so it can only ever PERMIT
 ## a boost's excess speed — it never yanks the ship's normal handling around.
 var _speed_ceiling: float = 420.0
-## Seconds left of the boost's hold window: the cyan flame, and the retrigger floor.
+## Seconds left of the boost's MINIMUM burn window (a tap still buys boost_hold_sec of
+## sustained thrust) and, doubling up, the anti-mash retrigger floor. No longer the flame's
+## tell — see _boosting below.
 var _boost_hold_left: float = 0.0
+## True for the whole duration of a hold-to-boost burn, from the trigger frame through
+## release or an empty meter. Drives the cyan flame and both thruster tells — NOT
+## _boost_hold_left, which is now just the minimum-burn timer and can reach zero while a
+## held boost is still running.
+var _boosting: bool = false
 var _overheat_bar: OverheatBar = null
 var _boost_bar: BoostBar = null
 
@@ -266,10 +273,10 @@ func _handle_thrust(delta: float) -> void:
 	if thrust_input > 0.0:
 		velocity += forward * thrust_acceleration * delta
 		_thruster.set_state(
-				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
+				ThrusterEffect.State.BOOST if _boosting
 				else ThrusterEffect.State.THRUST)
 		_thruster_right.set_state(
-				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
+				ThrusterEffect.State.BOOST if _boosting
 				else ThrusterEffect.State.THRUST)
 	elif thrust_input < 0.0:
 		velocity -= forward * reverse_acceleration * delta
@@ -278,21 +285,26 @@ func _handle_thrust(delta: float) -> void:
 	else:
 		velocity = velocity.lerp(Vector2.ZERO, clamp(damping * delta, 0.0, 1.0))
 		_thruster.set_state(
-				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
+				ThrusterEffect.State.BOOST if _boosting
 				else ThrusterEffect.State.IDLE)
 		_thruster_right.set_state(
-				ThrusterEffect.State.BOOST if _boost_hold_left > 0.0
+				ThrusterEffect.State.BOOST if _boosting
 				else ThrusterEffect.State.IDLE)
 
-	## LAST, and the only Input read this feature has. Everything the boost does — the
-	## trigger, the ceiling, and the speed clamp that used to sit right here — lives in
-	## _step_boost(), which takes the press as an argument so a headless run (where
-	## Input.is_action_just_pressed() can never return true) can still drive it.
-	_step_boost(Input.is_action_just_pressed("boost"), delta)
+	## LAST, and the only Input reads this feature has. Everything the boost does — the
+	## trigger, the sustain, the ceiling, and the speed clamp that used to sit right here —
+	## lives in _step_boost(), which takes both the edge and the level as arguments so a
+	## headless run (where neither Input.is_action_just_pressed() nor
+	## Input.is_action_pressed() can ever return true) can still drive it.
+	## MUST run AFTER the thrust/damping block above: a sustained hold re-asserts `velocity`
+	## every frame (see _step_boost()), and that overwrite is what stops this block's own
+	## damping branch from fighting a held boost. Reordering the call ahead of the block
+	## would let a no-thrust-input frame damp the boost away underneath it.
+	_step_boost(Input.is_action_just_pressed("boost"), Input.is_action_pressed("boost"), delta)
 
-## The whole boost model. Pure apart from the flame in the trigger branch (below): no Input,
-## no Engine singletons, so every test calls it directly with an injected press.
-func _step_boost(boost_pressed: bool, delta: float) -> void:
+## The whole boost model. Pure apart from the flame calls in the trigger/stop branches: no
+## Input, no Engine singletons, so every test calls it directly with injected edge/level bools.
+func _step_boost(boost_pressed: bool, boost_held: bool, delta: float) -> void:
 	## DELIBERATELY REDUNDANT with _handle_thrust()'s own early return, and not to be
 	## "cleaned up": every test drives _step_boost() directly and so bypasses that return.
 	## Without this line the two cases pinning module precedence fail on a CORRECT build,
@@ -303,25 +315,42 @@ func _step_boost(boost_pressed: bool, delta: float) -> void:
 
 	## The meter has no _physics_process of its own — the ship owns its clock, so a meter on a
 	## ship whose physics is off (a mission menu opening) is frozen with it. Stepped before the
-	## trigger so the spend below sets a full, un-decremented recharge pause.
+	## trigger so the drain below (if any) sets a full, un-decremented recharge pause.
 	if _boost_meter != null:
 		_boost_meter.step(delta)
 
-	## ORDER IS PART OF THE CONTRACT: the hold-window floor is checked BEFORE any spend
-	## (`and` short-circuits left to right), so mashing Shift inside the window costs nothing —
-	## and an empty meter refuses outright, spending nothing and leaving velocity alone.
-	if boost_pressed and _boost_hold_left <= 0.0 \
-			and (_boost_meter == null or _boost_meter.try_spend()):
+	## ORDER IS PART OF THE CONTRACT: `not _boosting` and the hold-window floor are both
+	## checked BEFORE anything else (`and` short-circuits left to right), so mashing Shift
+	## while a boost is already running never restarts the minimum-burn timer, and a meter
+	## below min_start_charge refuses outright — no velocity write, no drain.
+	if boost_pressed and not _boosting and _boost_hold_left <= 0.0 \
+			and (_boost_meter == null or _boost_meter.charges >= _boost_meter.min_start_charge):
+		_boosting = true
+		_boost_hold_left = boost_hold_sec
 		velocity = Vector2.UP.rotated(rotation) * boost_exit_speed
 		_speed_ceiling = boost_exit_speed
-		_boost_hold_left = boost_hold_sec
 		_play_boost_flame()
 
 	if _boost_hold_left > 0.0:
+		## Ticks down unconditionally, independent of _boosting: it is what lets the floor
+		## keep counting even across an empty-meter stop (below), rather than getting stuck.
 		_boost_hold_left = maxf(_boost_hold_left - delta, 0.0)
-		if _boost_hold_left <= 0.0:
+
+	if _boosting:
+		## THE SUSTAIN. drain() is the continuous spend; re-asserting `velocity` along the
+		## CURRENT nose (not a direction captured at the trigger) every frame is what makes
+		## the hold buy anything at all — _speed_ceiling is a clamp, never a force, so a
+		## ceiling-only sustain would leave the thrust/damping block above free to slow the
+		## ship down while the bar drains underneath it.
+		var meter_ok: bool = _boost_meter == null or _boost_meter.drain(_boost_meter.drain_rate * delta)
+		if meter_ok:
+			_speed_ceiling = boost_exit_speed
+			velocity = Vector2.UP.rotated(rotation) * boost_exit_speed
+		if not meter_ok or (not boost_held and _boost_hold_left <= 0.0):
+			_boosting = false
 			_release_boost_flame()
-	else:
+
+	if not _boosting:
 		## move_toward is a linear ramp, so this is exactly frame-rate independent (unlike the
 		## lerp damping above, which is deliberately left alone here). maxf keeps the ceiling
 		## from ever dropping below cruise.

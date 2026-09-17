@@ -757,7 +757,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
       `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
 
-## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 4 open)
+## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 3 open)
 
 **Review history**
 
@@ -945,8 +945,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       
       Files: `open_space/scenes/entities/player/boost_meter.gd`, `open_space/scenes/gui/boost_bar.gd`,
       `tests/unit/test_boost_meter.gd`, `tests/integration/test_boost_bar.gd`.
+      1 run(s), $1.27; last on claude-sonnet-5
 
-- [ ] **Holding Shift burns the bar for sustained speed; a tap still flips your momentum** _(todo - feature, medium, sonnet)_
+- [x] **Holding Shift burns the bar for sustained speed; a tap still flips your momentum** _(done - feature, medium, sonnet)_
       The verb the player asked for: "Without boost module, we must have 'hold to boost' approach… This
       default charge must have an 180 degrees speed boost… When we rotate 180 degrees and press and hold
       shift, we quickly start moving to other direction."

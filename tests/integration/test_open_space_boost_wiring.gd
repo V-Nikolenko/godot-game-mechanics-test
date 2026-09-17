@@ -116,20 +116,20 @@ func test_the_ship_scene_carries_exactly_one_boost_meter() -> void:
 			"player_ship.tscn must carry exactly one BoostMeter child (found by class)")
 
 
-## ── Boosting spends from THAT meter ──────────────────────────────────────────────────────
-func test_a_boost_spends_exactly_one_charge_from_the_scene_meter() -> void:
+## ── Boosting drains from THAT meter ──────────────────────────────────────────────────────
+func test_a_held_boost_drains_continuously_from_the_scene_meter() -> void:
 	var ship := _spawn_ship()
 	var meter := _meter_of(ship)
 	assert_not_null(meter, "no BoostMeter in player_ship.tscn")
 	if meter == null:
 		return
 	var before: float = meter.charges
-	ship._step_boost(true, D)
-	assert_almost_eq(meter.charges, before - 1.0, 0.001,
-			"a Shift boost must spend exactly one charge from the ship's own meter")
+	ship._step_boost(true, true, D)
+	assert_almost_eq(meter.charges, before - meter.drain_rate * D, 0.001,
+			"a Shift boost drains the ship's own meter continuously — one frame's worth per frame")
 
 
-## ── Boundary: an empty meter refuses, and costs nothing ──────────────────────────────────
+## ── Boundary: a meter below min_start_charge refuses, and costs nothing ──────────────────
 ## `recharge_rate = 0.0` for this case only, so `charges` can be asserted at exactly 0.0:
 ## the meter's step() would otherwise trickle a frame's worth of refill back in and mask the
 ## difference between "refused" and "spent then refilled". The refill itself has its own case.
@@ -142,7 +142,7 @@ func test_an_empty_meter_refuses_the_boost_and_spends_nothing() -> void:
 	meter.recharge_rate = 0.0
 	meter.charges = 0.0
 	ship.velocity = Vector2.ZERO
-	ship._step_boost(true, D)
+	ship._step_boost(true, true, D)
 	assert_eq(ship.velocity, Vector2.ZERO,
 			"an empty meter must refuse outright — nothing happens to velocity")
 	assert_eq(meter.charges, 0.0, "a refused boost must not go negative or spend anything")
@@ -161,26 +161,28 @@ func test_a_boost_refused_by_an_active_module_burns_no_charge() -> void:
 	ship.engine_boost_active = true
 	var before: float = meter.charges
 	var velocity_before: Vector2 = ship.velocity
-	ship._step_boost(true, D)
+	ship._step_boost(true, true, D)
 	assert_eq(meter.charges, before,
 			"an EngineBoostModule boost outranks Shift — the refused press must cost nothing")
 	assert_eq(ship.velocity, velocity_before, "the module owns velocity while it is active")
 
 
-## ── Boundary: a retriggered boost burns no charge ────────────────────────────────────────
-## Ordering is part of the contract: the `boost_hold_sec` retrigger floor is checked BEFORE
-## `meter.try_spend()`, so mashing Shift inside the window costs nothing.
-func test_mashing_shift_inside_the_hold_window_spends_only_one_charge() -> void:
+## ── Boundary: mashing Shift mid-hold does not over-drain ─────────────────────────────────
+## Ordering is part of the contract: `not _boosting` and the `boost_hold_sec` retrigger floor
+## are both checked BEFORE the sustain drain, so a mashed press mid-hold cannot trigger a
+## second start-and-drain in the same frame — the meter loses exactly one frame's worth of
+## drain per physics frame, mash or not.
+func test_mashing_shift_while_already_boosting_does_not_overdrain() -> void:
 	var ship := _spawn_ship()
 	var meter := _meter_of(ship)
 	assert_not_null(meter, "no BoostMeter in player_ship.tscn")
 	if meter == null:
 		return
 	var before: float = meter.charges
-	ship._step_boost(true, D)
-	ship._step_boost(true, D)  ## still inside boost_hold_sec (0.35 s)
-	assert_almost_eq(meter.charges, before - 1.0, 0.001,
-			"a boost refused by the retrigger floor must be refused before the spend")
+	ship._step_boost(true, true, D)  ## trigger frame — one frame of drain
+	ship._step_boost(true, true, D)  ## mashed press mid-hold — must not double-drain
+	assert_almost_eq(meter.charges, before - meter.drain_rate * D * 2.0, 0.001,
+			"two physics frames of a held boost drain exactly two frames' worth, mash or not")
 
 
 ## ── The ship drives the meter, and the meter never ticks itself ──────────────────────────
@@ -194,9 +196,12 @@ func test_the_ship_recharges_the_meter_through_handle_thrust() -> void:
 	assert_not_null(meter, "no BoostMeter in player_ship.tscn")
 	if meter == null:
 		return
-	ship._step_boost(true, D)
+	## Spent directly, bypassing the trigger: headless Input can never report `boost` pressed
+	## or held, so a call through _handle_thrust() below can never start a NEW boost — only
+	## _step_boost()'s unconditional meter.step(delta) call is what this case means to exercise.
+	meter.drain(1.0)
 	var spent: float = meter.charges
-	assert_almost_eq(spent, float(meter.max_charges) - 1.0, 0.001, "precondition: one spent")
+	assert_almost_eq(spent, float(meter.max_charges) - 1.0, 0.001, "precondition: one unit spent")
 
 	## Half the delay window: still paused, so nothing has come back yet.
 	var delay_frames: int = int(meter.recharge_delay_sec / D) / 2

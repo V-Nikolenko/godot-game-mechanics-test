@@ -1557,13 +1557,36 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "0e11dd2",
+                  "subject": "Give BoostMeter tanks: one long bar, or N discrete partitions of the same pool"
+                }
+              ],
+              "at": "2026-09-17T01:02:27.305Z",
+              "run": "2026-09-17-0335-i4",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004657,
+                "claude-sonnet-5": 1.2621174
+              },
+              "costUSD": 1.2667744,
+              "turns": 36,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "holding-shift-burns-the-bar-for-sustained-speed-a-tap-still-",
           "head": "Holding Shift burns the bar for sustained speed; a tap still flips your momentum",
           "body": "The verb the player asked for: \"Without boost module, we must have 'hold to boost' approach… This\ndefault charge must have an 180 degrees speed boost… When we rotate 180 degrees and press and hold\nshift, we quickly start moving to other direction.\"\n\nDone when:\n- `_step_boost(boost_pressed, delta)` becomes `_step_boost(pressed, held, delta)` — the injected-input\n  shape is not optional, `Input.is_action_pressed()` can never return true in the gate\n  (`1-context.md` §3). `_handle_thrust()` does both reads. No new input action: `boost` is already\n  bound to physical Shift.\n- Start (pressed, not already boosting, hold window closed, `charges >= min_start_charge`):\n  `velocity = Vector2.UP.rotated(rotation) * boost_exit_speed` on FRAME ONE, ceiling up,\n  `_boost_hold_left = boost_hold_sec` as a MINIMUM burn, `_boosting = true`, flame on.\n- **Sustain must WRITE VELOCITY, not just raise the ceiling** (plan review B4). `_speed_ceiling` is a\n  clamp — `player_ship.gd:294-295` only ever reduces velocity — so a ceiling-only sustain leaves\n  `_handle_thrust()`'s damping branch (`player_ship.gd:241`, 1.16 s half-life) slowing the ship down\n  while the bar drains. Each sustain frame: `meter.drain(drain_rate * delta)`, hold the ceiling, and\n  re-assert `velocity = Vector2.UP.rotated(rotation) * boost_exit_speed` along the CURRENT nose\n  (deliberately not a direction locked at the start, unlike `EngineBoostModule._boost_dir` — a held\n  boost the player can steer makes the 180 flip continuous instead of one-shot).\n  Stop on release past the minimum, or on empty; the ceiling then decays at `boost_ceiling_decay`.\n- **Move the flame/thruster tell onto `_boosting`.** Today both thrusters and the cyan flame read\n  `_boost_hold_left > 0.0` (`player_ship.gd:231-235,243-247,282-285`), which is now a 0.35 s MINIMUM\n  rather than the boost's length — leave it and the tell drops out mid-boost while the bar is still\n  draining. Required test case.\n- **NO RAMP AND NO SPIN-UP.** `2-research.md` finding 8 is a shipped game (Ridge Racer 3D) that\n  nerfed this exact verb by requiring a second of hold before the speed arrived and made it \"nearly\n  hard to strategize\". The hold SUSTAINS, never BUILDS — which is also what keeps the 180 flip\n  intact, since the redirect is a single frame-one assignment.\n- **The flip stays UNCONDITIONAL** — no \">120 degrees\" threshold. It is a judgement call with no\n  source behind it, the boost epic's ULTRAKILL finding uses no threshold, and an unconditional\n  redirect already satisfies the ask with nothing to mistune.\n- Shift held while the mission menu opens must not drain the bar and must not auto-resume on close\n  (§6.6). This falls out of the existing freeze design; the job here is the test that pins it.\n\nRequired cases beyond the existing ones: holding with NO thrust input keeps `velocity.length()` at\n`boost_exit_speed` (fails on a ceiling-only sustain); steering mid-hold turns the momentum within a\nframe; the tell still reads BOOST 30 held frames in. The ordering that makes all this work —\n`_step_boost()` runs AFTER the thrust/damping block, as the last line of `_handle_thrust()`\n(`player_ship.gd:253`) — is load-bearing and undocumented at the call site; add that comment.\n\nFiles: `open_space/scenes/entities/player/player_ship.gd`,\n`tests/integration/test_open_space_boost_verb.gd`.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",
