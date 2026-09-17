@@ -1635,13 +1635,36 @@
           "dependsOn": [
             "holding-shift-burns-the-bar-for-sustained-speed-a-tap-still-"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "15044ff",
+                  "subject": "Equipping Boost Drive re-partitions the boost bar into 3-4 tanks"
+                }
+              ],
+              "at": "2026-09-17T01:31:46.606Z",
+              "run": "2026-09-17-0335-i6",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.00511,
+                "claude-sonnet-5": 4.306700800000001
+              },
+              "costUSD": 4.311810800000001,
+              "turns": 97,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "the-hull-leans-into-its-turns-instead-of-pivoting-like-a-rig",
           "head": "The hull leans into its turns instead of pivoting like a rigid sprite",
           "body": "Part of the player's \"movement is not very fun… I want it to be more responding and dynamic\". The\nresearch's main answer to that is the boost rework (`2-research.md` findings 5 and 10: two shipped\ntop-down games deliberately withheld strafe to protect the meaning of facing, and \"the boost becomes\nthe dodge\"). This task is the cheap legibility half.\n\nDone when:\n- `$SpriteAnchor/ShipSprite2D.skew` is driven from the per-frame rotation delta, smoothed and\n  clamped, via a pure `_step_bank(rotation_delta, delta) -> float` on the ship. `@export`s:\n  `bank_max_rad = 0.12` (~7 degrees), `bank_rate_ref_deg = 150.0`, `bank_half_life = 0.12`.\n- **Skew `ShipSprite2D`, NOT `SpriteAnchor`** (plan review B5). `SpriteAnchor`\n  (`player_ship.tscn:235`) also parents `MuzzleLeft` / `MuzzleRight` — the bullet spawn points\n  `WeaponState` reads (`player_ship.tscn:270-275`) — and `EngineLeft` / `EngineRight` at y = 30.\n  `Node2D.skew` propagates to children, so skewing the anchor walks the engine markers ~3.6 px\n  sideways at full bank and would walk the gun barrels too if `bank_max_rad` were ever raised.\n  REQUIRED BOUNDARY TEST: capture all four markers' `global_position`, drive a full-amplitude bank,\n  assert they are unchanged while `ShipSprite2D.skew` is non-zero. That case fails on the anchor.\n- **It is a SPRITE transform, never a hull rotation.** `ShipTurnController` is the only writer of\n  `OpenSpacePlayerShip.rotation` (`test_ship_rotation_single_writer.gd`), and that test sweeps\n  `global/ship_modules/*.gd` only — so a case asserting the ship's `rotation` is byte-identical to\n  what `step()` returned after a bank step is what covers the ship script itself. Required boundary.\n- Tests: zero for no rotation change, saturates at `bank_max_rad`, sign-correct both directions,\n  decays back to 0 when turning stops.\n\n**A HUMAN MUST LOOK AT THIS ONE.** A shear on a top-down hull either reads as a lean or reads as a\nglitch and no headless test can tell the difference. Mitigation is built in: `bank_max_rad = 0.0`\nreverts it with no code change, and banked sprite frames (PixelLab, capped allowance) become a\nfollow-up rather than a blocker. Say so in the report.\n\nFiles: `open_space/scenes/entities/player/player_ship.gd`, `player_ship.tscn` (the exports),\n`tests/integration/test_open_space_flight_feel.gd` (NEW — not `test_open_space_boost_verb.gd`,\nwhose header scopes it to \"the whole model lives in `_step_boost`\"; banking is not the boost verb).",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

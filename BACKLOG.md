@@ -757,7 +757,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
       `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
 
-## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 2 open)
+## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 1 open)
 
 **Review history**
 
@@ -1042,8 +1042,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       still a medium, but if it turns out to need structural change, escalate with
       `set-meta ... --complexity large --model opus` rather than pushing through.
       after: holding-shift-burns-the-bar-for-sustained-speed-a-tap-still-
+      1 run(s), $4.31; last on claude-sonnet-5
 
-- [ ] **The hull leans into its turns instead of pivoting like a rigid sprite** _(todo - feature, small, sonnet)_
+- [x] **The hull leans into its turns instead of pivoting like a rigid sprite** _(done - feature, small, sonnet)_
       Part of the player's "movement is not very fun… I want it to be more responding and dynamic". The
       research's main answer to that is the boost rework (`2-research.md` findings 5 and 10: two shipped
       top-down games deliberately withheld strafe to protect the meaning of facing, and "the boost becomes

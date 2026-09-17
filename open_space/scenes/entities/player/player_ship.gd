@@ -23,6 +23,19 @@ extends PlayerBase
 ## 700 → 420 in 0.70 s, so the whole above-cruise signature is ~1.05 s.
 @export var boost_ceiling_decay: float = 400.0
 
+@export_category("Bank")
+## The visual limit of the hull's lean into a turn, in radians (~7°). A sprite transform
+## only — never a hull rotation, see _step_bank() below. 0.0 reverts the whole effect with
+## no code change, which is the mitigation for "a shear on a top-down hull either reads as
+## a lean or reads as a glitch and no headless test can tell the difference".
+@export var bank_max_rad: float = 0.12
+## The turn rate (deg/s) that saturates the lean at bank_max_rad. Below this the lean scales
+## linearly with how hard the ship is actually turning.
+@export var bank_rate_ref_deg: float = 150.0
+## Exponential smoothing half-life (seconds) for the lean, both rising into a turn and
+## decaying back to 0 once it stops.
+@export var bank_half_life: float = 0.12
+
 ## Set true by WarpModule.apply(). Not used in open space (no DashState), but
 ## the property must exist so WarpModule can set/clear it without error.
 var warp_module_active: bool = false
@@ -45,6 +58,9 @@ var _boost_hold_left: float = 0.0
 var _boosting: bool = false
 var _overheat_bar: OverheatBar = null
 var _boost_bar: BoostBar = null
+## The lean carried between physics frames — _step_bank() reads and returns the smoothed
+## value, the same shape _step_boost() uses for its own state (_boost_hold_left etc.).
+var _bank_skew: float = 0.0
 
 ## Same node path EngineBoostModule uses (engine_boost_module.gd:15).
 const _SPRITE_PATH: String = "SpriteAnchor/ShipSprite2D"
@@ -258,12 +274,37 @@ func _handle_rotation(delta: float) -> void:
 	## the cursor as an injected argument, which is what makes the turn model testable in
 	## a headless run that cannot place a cursor.
 	_turn.set_aim_target(global_position, get_global_mouse_position())
+	var previous_rotation: float = rotation
 	rotation = _turn.step(rotation, turn, delta)
 	## Fed what the controller just computed, on the very next line — never its own read of
 	## the mouse. Ring radius comes straight from the controller's export; never duplicated.
 	if _reticle != null:
 		_reticle.set_aim(_turn.mouse_dead_zone_px, _turn.get_target_angle(), rotation,
 				_turn.is_snap_held(), _turn.is_steering_enabled())
+	## Sprite lean, computed from what _turn.step() just wrote — never the other way round.
+	## Target is $SpriteAnchor/ShipSprite2D, NOT $SpriteAnchor itself: Node2D.skew propagates
+	## to children, and SpriteAnchor also parents MuzzleLeft/MuzzleRight (WeaponState's bullet
+	## spawn points) and EngineLeft/EngineRight — skewing the anchor would shear all four.
+	var sprite := get_node_or_null(_SPRITE_PATH) as AnimatedSprite2D
+	if sprite != null:
+		sprite.skew = _step_bank(rotation - previous_rotation, delta)
+
+## Pure apart from carrying its own smoothed state in _bank_skew (same shape as
+## _step_boost()'s _boost_hold_left/_boosting): no Input, no node access, so a test can
+## drive it directly with injected rotation deltas across repeated calls and see the
+## smoothing accumulate. rotation_delta is the hull's rotation change over `delta`, exactly
+## what _handle_rotation() just wrote to `rotation` minus what it was a moment before — this
+## function never writes `rotation` itself, only ever reads the delta it was handed.
+func _step_bank(rotation_delta: float, delta: float) -> float:
+	var target: float = 0.0
+	if delta > 0.0:
+		var rate_deg: float = rad_to_deg(rotation_delta) / delta
+		target = clampf(rate_deg / bank_rate_ref_deg, -1.0, 1.0) * bank_max_rad
+	var weight: float = 1.0
+	if bank_half_life > 0.0:
+		weight = clampf(1.0 - pow(0.5, delta / bank_half_life), 0.0, 1.0)
+	_bank_skew = lerpf(_bank_skew, target, weight)
+	return _bank_skew
 
 func _handle_thrust(delta: float) -> void:
 	## EngineBoostModule controls velocity directly while active;

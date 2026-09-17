@@ -220,6 +220,20 @@ Two independent things hide it, both because there is nothing useful to show: `s
 
 Covered by `tests/unit/test_aim_reticle.gd` (what `set_aim()` stores; state/colour for normal, snap and disabled, with disabled winning over snap; the scheme-visible / physics-off gating in isolation, off-tree) and `tests/integration/test_aim_reticle_wiring.gd` (the anti-inert gate: the node is in the scene by class; the ship reassigns its `global_position` every physics frame; the ring radius comes from the live controller's `mouse_dead_zone_px`, not a copy; the hull tick tracks `rotation` post-step; the dead-zone-on-cursor boundary does not spin the target tick to world-right; a held snap and disabled steering both reach the ring; `&"keys"` hides it and `&"mouse"` shows it; and the ship's physics being off hides it regardless of scheme, with a resume case proving it reappears).
 
+#### 3.2.8 Bank — the sprite lean
+
+`player_ship.gd::_step_bank(rotation_delta: float, delta: float) -> float`, called from the tail of `_handle_rotation` right after `rotation = _turn.step(...)`. It smooths and clamps a turn-rate-proportional lean into `_bank_skew` (instance state, the same shape `_step_boost()`'s `_boost_hold_left`/`_boosting` use) and assigns it to `$SpriteAnchor/ShipSprite2D.skew` — **never** `$SpriteAnchor` itself, and never `rotation`. `ShipTurnController` stays the ship's only writer of `rotation` (§3.2.1); this is a sprite transform layered on top of what it wrote, computed from the delta between the hull's rotation before and after that write.
+
+`$SpriteAnchor` also parents `MuzzleLeft`/`MuzzleRight` (the bullet spawn points `WeaponState` reads) and `EngineLeft`/`EngineRight`, and `Node2D.skew` propagates to children — skewing the anchor would shear all four along with the art. Skewing `ShipSprite2D` alone shears only the sprite.
+
+| Export | Default | Job |
+|---|---|---|
+| `bank_max_rad` | `0.12` (~7°) | Hard clamp on the lean. `0.0` reverts the whole effect with no code change — the mitigation for "a shear on a top-down hull either reads as a lean or reads as a glitch, and no headless test can tell the difference." |
+| `bank_rate_ref_deg` | `150.0` | Turn rate (deg/s) that saturates the lean at `bank_max_rad`; below it the lean scales linearly. |
+| `bank_half_life` | `0.12` | Exponential smoothing half-life, both rising into a turn and decaying back to level once it stops. |
+
+Covered by `tests/integration/test_open_space_flight_feel.gd`: `_step_bank()` driven directly with injected rotation deltas (zero for no change, saturates at `bank_max_rad`, sign-correct both directions, decays to zero once turning stops), plus two wiring boundaries on a real ship — `rotation` after a bank-driving `_handle_rotation()` call is (within float tolerance) exactly what `ShipTurnController.step()` returned, and `MuzzleLeft`/`MuzzleRight`/`EngineLeft`/`EngineRight` do not move a pixel across frames where the lean is non-zero but mid-decay (fails on a `$SpriteAnchor`-skewing build). **A human still has to fly it** — no headless test can say whether the lean itself reads as a lean or a glitch.
+
 ### 3.3 Ambient enemy — `PatrolDrone`
 
 `open_space/scenes/entities/enemies/patrol_drone.gd` (`class_name PatrolDrone extends CharacterBody2D`). Minimal hub flavour enemy: adds itself to group `"enemies"`, drifts at `move_speed` along `initial_direction` forever, routes `HurtBox` damage into its `HealthComponent`, and `queue_free`s (emitting `died`) at 0 HP. No AI beyond straight-line drift.
