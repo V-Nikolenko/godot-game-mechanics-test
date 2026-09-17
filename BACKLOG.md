@@ -757,7 +757,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
       `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
 
-## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 7 open)
+## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 6 open)
 
 **Review history**
 
@@ -853,8 +853,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       `global/ui/pause_menu/settings_panel.tscn`, `open_space/scenes/entities/player/open_space_camera_rig.gd`,
       `tests/unit/test_settings_state.gd`, `tests/integration/test_pause_menu_settings.gd`.
       after: the-camera-leads-where-the-ship-is-actually-travelling-not-w
+      1 run(s), $1.23; last on claude-sonnet-5
 
-- [ ] **Flying the hub shows a crosshair instead of the desktop arrow** _(todo - feature, medium, sonnet)_
+- [x] **Flying the hub shows a crosshair instead of the desktop arrow** _(done - feature, medium, sonnet)_
       The player's first ask: "Add target icon or something like that instead of the mouse cursor."
       `2-research.md` finding 4 is Godot's own doc: a software cursor adds "at least one frame of latency",
       so the AIM POINT should be a hardware cursor (`Input.set_custom_mouse_cursor()`). The state ring is a

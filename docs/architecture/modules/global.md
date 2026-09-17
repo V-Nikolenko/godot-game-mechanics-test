@@ -54,7 +54,8 @@ global/
 │   ├── event_bus.gd           # EventBus (autoload) — decoupled signals
 │   ├── camera_shake.gd        # CameraShake (autoload) — trauma-based screen shake
 │   ├── camera_director.gd     # CameraDirector — arbitrates zoom/offset effects
-│   └── background_controller.gd # BackgroundController — abstract level-bg base
+│   ├── background_controller.gd # BackgroundController — abstract level-bg base
+│   └── aim_cursor.gd          # AimCursor — static helper: hardware crosshair cursor (apply/restore)
 ├── pickups/                   # PickupBase + collectibles (+ scenes/)
 ├── resources/                 # data-driven Resource definitions
 │   ├── attack/                # AttackPatternResource + subtypes
@@ -97,6 +98,9 @@ Owns a `Camera2D` (default sibling at `camera_path = ".."`) and arbitrates compe
 
 ### `background_controller.gd` — `BackgroundController`
 Abstract base for level background renderers. Subclasses must override `transition_to(phase: BackgroundPhase, duration)` to tween toward a `BackgroundPhase` snapshot. Optional overrides `set_scroll_multiplier(m)` and `set_throttle_scroll(m)` (default no-ops) let dash panels / race throttle speed up scrolling. `LevelDirector` calls these per section.
+
+### `aim_cursor.gd` — `AimCursor`
+Static-only helper (`RefCounted`, never instantiated) that swaps the OS mouse arrow for a procedurally-drawn 32×32 crosshair via `Input.set_custom_mouse_cursor()` — a hardware cursor rather than a `_draw()`-based one, since a software cursor adds a frame of input latency the engine docs call out by name. `build_image(size, color)` is a pure `Image` builder (four ticks around a transparent centre gap); `apply()`/`restore()` wrap the sticky, process-global `Input` call, and `is_applied()` is the read-back seam tests use since `Input`'s cursor state itself cannot be queried. Currently owned by `OpenSpacePlayerShip` — see [open_space.md](open_space.md) §3.2.6 — but lives here rather than beside the ship because nothing about it is open-space-specific.
 
 ## 5. Integration recipes — "How to add X to an entity"
 

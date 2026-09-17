@@ -90,6 +90,14 @@ func _ready() -> void:
 		SettingsState.open_space_scheme_changed.connect(
 				func(scheme: StringName) -> void: _turn.set_scheme(scheme, rotation))
 
+	## The crosshair replaces the OS arrow only under mouse steering — under &"keys" there
+	## is no cursor aiming to call out, so the bare arrow stays. AimCursor's install is
+	## process-global and sticky (survives scene changes), so _exit_tree() below MUST
+	## restore it on every exit path: mission launch, the death reload_current_scene(),
+	## and quit.
+	if SettingsState.get_open_space_scheme() == &"mouse":
+		AimCursor.apply()
+
 	if _camera_rig != null:
 		## Seed the accessibility scale from the persisted setting and follow it live —
 		## a player who turns camera_motion off mid-flight should feel it immediately,
@@ -122,6 +130,12 @@ func _ready() -> void:
 		var id: StringName = ShipModuleState.get_equipped(slot)
 		if id != &"":
 			_apply_module(id)
+
+## The symmetric half of the AimCursor.apply() call in _ready() above. restore() is a safe
+## no-op if apply() was never called (the &"keys" scheme, or a ship freed before _ready()
+## finished), which is what lets this run unconditionally on every exit path.
+func _exit_tree() -> void:
+	AimCursor.restore()
 
 func _setup_effects() -> void:
 	_hit_effect = HitEffect.new()

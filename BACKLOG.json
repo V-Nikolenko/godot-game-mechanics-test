@@ -1446,13 +1446,36 @@
           "dependsOn": [
             "the-camera-leads-where-the-ship-is-actually-travelling-not-w"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "0952fd2",
+                  "subject": "Add camera_motion accessibility setting to turn down/off auto camera movement"
+                }
+              ],
+              "at": "2026-09-17T00:39:49.520Z",
+              "run": "2026-09-17-0335-i1",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.00457,
+                "claude-sonnet-5": 1.2245700000000002
+              },
+              "costUSD": 1.2291400000000001,
+              "turns": 37,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "flying-the-hub-shows-a-crosshair-instead-of-the-desktop-arro",
           "head": "Flying the hub shows a crosshair instead of the desktop arrow",
           "body": "The player's first ask: \"Add target icon or something like that instead of the mouse cursor.\"\n`2-research.md` finding 4 is Godot's own doc: a software cursor adds \"at least one frame of latency\",\nso the AIM POINT should be a hardware cursor (`Input.set_custom_mouse_cursor()`). The state ring is a\nseparate task.\n\nDone when:\n- A new `AimCursor` (`global/systems/aim_cursor.gd`) builds its 32x32 crosshair PROCEDURALLY from an\n  `Image` — four ticks with a transparent centre gap so what is under the cursor stays visible. No\n  PixelLab (it is a UI asset, costs allowance, and a generated `.png` would also have to clear\n  `test_entity_sprite_transparency.gd`). 32x32 is inside finding 4's \"128x128 or smaller\".\n- `OpenSpacePlayerShip` applies it from `_ready()` and restores it from `_exit_tree()` — the only\n  symmetric pair that covers mission launch, the death `reload_current_scene()` and quit.\n  `Input.set_custom_mouse_cursor()` is PROCESS-GLOBAL and sticky (`1-context.md` §6.1): a missed\n  restore leaves a crosshair in the boot menu and in every other mode.\n- Under the `&\"keys\"` scheme there is no cursor steering, so it is never applied.\n- `restore()` without a prior `apply()` is a safe no-op (boundary case).\n\nFiles: `global/systems/aim_cursor.gd` (new), `open_space/scenes/entities/player/player_ship.gd`,\n`tests/unit/test_aim_cursor.gd` (new), `tests/integration/test_open_space_aim_cursor.gd` (new).\n`Input`'s cursor state is not readable, so assert through a static `is_applied()` seam on `AimCursor`.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",
