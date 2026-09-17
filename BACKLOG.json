@@ -1230,10 +1230,17 @@
     {
       "id": "open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
       "title": "Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
-      "status": "review",
+      "status": "active",
       "sourceIdeaId": "idea-1789493425846",
       "prepDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
-      "feedback": [],
+      "feedback": [
+        {
+          "at": "2026-09-16T20:25:32.439Z",
+          "author": "user",
+          "decision": "approve",
+          "text": ""
+        }
+      ],
       "tasks": [
         {
           "id": "research-open-space-movement-feel-pass-2-aim-reticle-camera-",
@@ -1400,13 +1407,36 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "02d465d",
+                  "subject": "Fix camera lead direction: track velocity, not facing"
+                }
+              ],
+              "at": "2026-09-16T14:43:15.320Z",
+              "run": "2026-09-16-1735-i1",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.0047,
+                "claude-sonnet-5": 2.4982146000000007
+              },
+              "costUSD": 2.502914600000001,
+              "turns": 72,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "players-who-get-motion-sick-can-turn-the-camera-s-automatic-",
           "head": "Players who get motion sick can turn the camera's automatic movement down or off",
           "body": "`2-research.md` finding 3: the Game Accessibility Guidelines classify automatic camera movement\nwithout the player's input as a Vision/Intermediate barrier and prescribe a TOGGLE, not removal. The\nplayer's own words were \"rotating it at high speed makes me sick\".\n\nDone when:\n- `SettingsState` gains a `camera_motion` key with values `&\"full\"` / `&\"reduced\"` / `&\"off\"`, a\n  `camera_motion_changed(value: StringName)` signal (parameter declared — the arity sweep checks\n  this), validation against the value list, and a fallback to `&\"full\"` on an unknown/absent value.\n- It persists in a new `SECTION_CAMERA = \"camera\"`. **`_save()` must write BOTH keys** — today it\n  writes one (`settings_state.gd:43-48`) and would clobber `open_space_scheme`. That is the\n  boundary test, in both directions.\n- The settings panel gains a second row (\"Camera Motion\"). This is a SCENE edit as well as a script\n  edit: the row is a node in `global/ui/pause_menu/settings_panel.tscn` (`Rows/Row0` with its\n  `NameLabel` / `ValueLabel` children, lines 26-35), so add a `Row1` of the same shape, one more\n  entry in `_rows`, one more branch in `cycle()`, and generalise `_refresh()` off the single\n  `@onready _value_lbl`.\n- `OpenSpaceCameraRig._motion_scale` becomes 1.0 / 0.5 / 0.0 and scales BOTH the lead and the\n  speed-zoom, live, via the signal. `off` means the offset is exactly zero and the zoom exactly\n  `Vector2.ONE` at any speed.\n\nTEST HYGIENE: `tests/helpers/save_sandbox.gd` is only half of it. Per `tests/README.md:745-751` the\nsandbox covers the `user://` file, NOT the autoload's in-memory value, and a test that leaves\n`SettingsState` changed re-seeds every later test in the same GUT process. Do the two-layer\ncapture-and-restore by hand, the way `test_player_ship_turn_wiring.gd:21-31` and\n`test_pause_menu_settings.gd` already do.\n\nFiles: `global/autoloads/settings_state.gd`, `global/ui/pause_menu/settings_panel.gd`,\n`global/ui/pause_menu/settings_panel.tscn`, `open_space/scenes/entities/player/open_space_camera_rig.gd`,\n`tests/unit/test_settings_state.gd`, `tests/integration/test_pause_menu_settings.gd`.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

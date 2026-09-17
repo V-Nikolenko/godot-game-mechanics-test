@@ -757,7 +757,11 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
       `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
 
-## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  [AWAITING YOUR REVIEW]  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 8 open)
+## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 7 open)
+
+**Review history**
+
+- _2026-09-16T20:25:32.439Z_ **approve**
 
 **Preparation**
 
@@ -816,8 +820,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       file pass vacuously): `ship.rotation = PI`, `ship.velocity = (0, -400)`, one physics frame, assert
       the pushed `speed_feel` offset has `y < 0`. That FAILS on today's `player_ship.gd:380-381`. Add the
       mirror case (`rotation = 0`, velocity `(0, +400)` ⇒ `y > 0`) so a stuck sign cannot pass.
+      1 run(s), $2.50; last on claude-sonnet-5
 
-- [ ] **Players who get motion sick can turn the camera's automatic movement down or off** _(todo - feature, small, sonnet)_
+- [x] **Players who get motion sick can turn the camera's automatic movement down or off** _(done - feature, small, sonnet)_
       `2-research.md` finding 3: the Game Accessibility Guidelines classify automatic camera movement
       without the player's input as a Vision/Intermediate barrier and prescribe a TOGGLE, not removal. The
       player's own words were "rotating it at high speed makes me sick".
