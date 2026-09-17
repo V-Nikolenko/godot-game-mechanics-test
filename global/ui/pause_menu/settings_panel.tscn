@@ -39,6 +39,22 @@ offset_bottom = 28.0
 theme_override_font_sizes/font_size = 16
 text = "Mouse Aim"
 
+[node name="Row1" type="Node2D" parent="Rows"]
+position = Vector2(-440, -150)
+
+[node name="NameLabel" type="Label" parent="Rows/Row1"]
+offset_right = 320.0
+offset_bottom = 28.0
+theme_override_font_sizes/font_size = 16
+text = "Camera Motion"
+
+[node name="ValueLabel" type="Label" parent="Rows/Row1"]
+offset_left = 340.0
+offset_right = 660.0
+offset_bottom = 28.0
+theme_override_font_sizes/font_size = 16
+text = "Full"
+
 [node name="HintLabel" type="Label" parent="."]
 offset_left = -460.0
 offset_top = 210.0

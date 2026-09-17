@@ -54,7 +54,8 @@ global/
 │   ├── event_bus.gd           # EventBus (autoload) — decoupled signals
 │   ├── camera_shake.gd        # CameraShake (autoload) — trauma-based screen shake
 │   ├── camera_director.gd     # CameraDirector — arbitrates zoom/offset effects
-│   └── background_controller.gd # BackgroundController — abstract level-bg base
+│   ├── background_controller.gd # BackgroundController — abstract level-bg base
+│   └── aim_cursor.gd          # AimCursor — static helper: hardware crosshair cursor (apply/restore)
 ├── pickups/                   # PickupBase + collectibles (+ scenes/)
 ├── resources/                 # data-driven Resource definitions
 │   ├── attack/                # AttackPatternResource + subtypes
@@ -97,6 +98,9 @@ Owns a `Camera2D` (default sibling at `camera_path = ".."`) and arbitrates compe
 
 ### `background_controller.gd` — `BackgroundController`
 Abstract base for level background renderers. Subclasses must override `transition_to(phase: BackgroundPhase, duration)` to tween toward a `BackgroundPhase` snapshot. Optional overrides `set_scroll_multiplier(m)` and `set_throttle_scroll(m)` (default no-ops) let dash panels / race throttle speed up scrolling. `LevelDirector` calls these per section.
+
+### `aim_cursor.gd` — `AimCursor`
+Static-only helper (`RefCounted`, never instantiated) that swaps the OS mouse arrow for a procedurally-drawn 32×32 crosshair via `Input.set_custom_mouse_cursor()` — a hardware cursor rather than a `_draw()`-based one, since a software cursor adds a frame of input latency the engine docs call out by name. `build_image(size, color)` is a pure `Image` builder (four ticks around a transparent centre gap); `apply()`/`restore()` wrap the sticky, process-global `Input` call, and `is_applied()` is the read-back seam tests use since `Input`'s cursor state itself cannot be queried. Currently owned by `OpenSpacePlayerShip` — see [open_space.md](open_space.md) §3.2.6 — but lives here rather than beside the ship because nothing about it is open-space-specific.
 
 ## 5. Integration recipes — "How to add X to an entity"
 
@@ -226,7 +230,9 @@ func process_physics(delta: float) -> void:
 
 > **Full per-module roster:** [`global/ship_modules/SHIP_MODULES.md`](../../../global/ship_modules/SHIP_MODULES.md) — id, class, slot, type, and effect for every module.
 
-A *module* is a `RefCounted` strategy object (not a node) that mutates the player on equip. `ShipModuleBase` defines the contract and a central `static func create(id) -> ShipModuleBase` registry. Override points: `get_display_name`, `get_description`, `get_icon`, `get_slot` (`cockpit`/`armor`/`weapons`/`engines`), `apply(player)` (on equip), `remove(player)` (on unequip/scene change), `try_activate(player) -> bool` (H-key for active modules), and `tick(player, delta)` (per-frame for the equipped active module, e.g. cooldown/expiry). Passive modules (e.g. `ArmorPlatingModule` adds +40 HP and +0.25 `damage_reduction`) only override `apply`/`remove`; active ones (e.g. `TrajectoryCalcModule`, `EMPBlastModule`) implement `try_activate`/`tick`.
+A *module* is a `RefCounted` strategy object (not a node) that mutates the player on equip. `ShipModuleBase` defines the contract and a central `static func create(id) -> ShipModuleBase` registry. Override points: `get_display_name`, `get_description`, `get_icon`, `get_slot` (`cockpit`/`armor`/`weapons`/`engines`), `apply(player)` (on equip), `remove(player)` (on unequip/scene change), `try_activate(player) -> bool` (H-key for active modules), `tick(player, delta)` (per-frame for the equipped active module, e.g. cooldown/expiry), `can_activate() -> bool` (report readiness *without* spending anything — mirrors `try_activate()`'s own guard, defaults `false`), and `is_open_space_boost_verb() -> bool` (defaults `false`; `true` marks a module as the open-space Shift boost's own upgraded tier, currently only `EngineBoostModule` — see below). Passive modules (e.g. `ArmorPlatingModule` adds +40 HP and +0.25 `damage_reduction`) only override `apply`/`remove`; active ones (e.g. `TrajectoryCalcModule`, `EMPBlastModule`) implement `try_activate`/`tick`.
+
+**`EngineBoostModule` is the one module `OpenSpacePlayerShip` treats specially.** Equipping it into `&"engines"` re-partitions the ship's `BoostMeter` from one continuous bar (`tanks = 1`) into 3 discrete tanks (4 once `ShipProgressionState.boost_charge_count` is maxed) — `OpenSpacePlayerShip._update_boost_tanks()`, called from the existing `module_equipped`/`module_unequipped` wiring, so the tier switch needed no new state. With it equipped, Shift (`_step_boost()`'s press branch) stops running the default hold-to-boost model and instead spends one tank (`BoostMeter.try_spend_tank()`) to fire the module's own burst — gated on `can_activate()` *before* the spend, so a press during the module's 2 s cooldown costs nothing (the module's own retrigger floor is shorter than the ship's, so spending first would burn a tank for an activation that was always going to refuse). `is_open_space_boost_verb() == true` is also what makes `OpenSpacePlayerShip._input`'s H-key loop skip this module in open space — Shift already pays for the same burst there, so leaving H wired would fire it for free; `AssaultPlayer`'s own H loop does not consult this at all, so Boost Drive still fires on H in assault, where there is no Shift boost to conflict with.
 
 `ShipModuleState` persists which module id is equipped/unlocked per slot (`SLOT_MODULES` lists the valid ids; the registered ids are: cockpit `trajectory_calc`/`emp_blast`/`ai_targeting`/`cockpit_heal`; armor `armor_plating`/`parry`/`shield_overload`/`final_resort`; weapons `overclock`/`plasma_nova`/`overheat_nullifier`/`pierce`/`shooting`; engines `warp`/`engine_boost`). All 15 module scripts are registered in `create()` (one class per id).
 

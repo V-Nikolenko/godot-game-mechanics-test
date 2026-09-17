@@ -71,6 +71,8 @@ All methods are overridable. Base implementations are no-ops / empty returns.
 | `remove` | `(player: Node) -> void` | Undo passive effect on unequip or scene change; also used to clean up an active effect if unequipped mid-use. |
 | `try_activate` | `(player: Node) -> bool` | Active modules: called on **H**. Return `true` if the input was consumed (effect started or on cooldown gate). Passive modules leave the base `false`. |
 | `tick` | `(player: Node, delta: float) -> void` | Active modules: called every physics frame for every pooled module. Handles cooldown countdown and timed-effect expiry. **`delta` is real-time** — `Engine.time_scale` is already applied, so a module that slows time (e.g. `TrajectoryCalcModule`) must divide by its own time scale to recover real seconds. |
+| `can_activate` | `() -> bool` | Active modules: report whether the module is ready to fire *without* spending anything. Mirrors `try_activate()`'s own guard and defaults `false` the same way — a caller that must check readiness before paying a cost (e.g. a `BoostMeter` tank) calls this first. Only `EngineBoostModule` overrides it today. |
+| `is_open_space_boost_verb` | `() -> bool` | Defaults `false`. `true` marks the module as the open-space Shift boost's own upgraded tier — `OpenSpacePlayerShip._input` skips such a module on **H** in open space, since Shift already spends the resource that pays for it there. Only `EngineBoostModule` overrides it today; `AssaultPlayer`'s H loop does not consult this at all. |
 
 `ShipModuleBase.create(id: StringName) -> ShipModuleBase` is a static factory; an
 unknown id logs `push_warning` and returns `null`.
@@ -293,7 +295,11 @@ counts the lockout down). `remove()` clears lockout/timers.
 
 ### 4.13 EngineBoostModule — boost drive
 
-A forward dash burst: invincible, ramming damage, short cooldown.
+A forward dash burst: invincible, ramming damage, short cooldown. **In open space it is
+paid for with a `BoostMeter` tank instead of being free** — see
+[open_space.md](../../docs/architecture/modules/open_space.md) §3.2.3 and
+[global.md](../../docs/architecture/modules/global.md) for the tier-switch wiring.
+In assault it still fires on **H**, unchanged.
 
 - **id:** `&"engine_boost"` · **class:** `EngineBoostModule` · **slot:** `&"engines"` · **type:** active
 
@@ -306,7 +312,11 @@ sets it to `1.0` (invincible), locks the boost direction to the ship's facing, s
 the hit radius once each, and ends the boost when time runs out. `_end_boost()`
 restores `damage_reduction`, clears `engine_boost_active`, and resets the sprite.
 `remove()` ends the boost if active. Immune classes (no boost damage): `BigAsteroid`,
-`SmallAsteroid`, `Asteroid`, `RamShip`. Gated while active or on cooldown.
+`SmallAsteroid`, `Asteroid`, `RamShip`. Gated while active or on cooldown —
+`can_activate()` exposes that same gate (`not _active and _cooldown_left <= 0.0`) so
+`OpenSpacePlayerShip._step_boost()` can check readiness *before* spending a `BoostMeter`
+tank. `is_open_space_boost_verb()` returns `true`, which is what makes H a no-op for this
+module in open space (Shift is the paid verb there) without touching assault's own H loop.
 
 - Boost start speed: `1500.0 px/s`
 - Boost end speed: `500.0 px/s`
@@ -315,6 +325,13 @@ restores `damage_reduction`, clears `engine_boost_active`, and resets the sprite
 - Hit radius: `32.0 px`
 - Cooldown: `2.0 s`
 - During boost: `damage_reduction = 1.0` (invincible)
+
+All six of the numbers above are `@export var` (not `const`) — the one module whose
+numbers the player explicitly asked to be "more powerful" is the only feel number in the
+open-space movement epic that used to be unmovable without editing the source. There is no
+inspector row (`ShipModuleBase` is a `RefCounted` built by `.new()`, never placed in a
+scene); the win is a test can set these without touching the shipped defaults, which are
+unchanged.
 
 ### 4.14 PierceModule — penetrating rounds
 

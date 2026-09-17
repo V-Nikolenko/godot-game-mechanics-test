@@ -1228,6 +1228,495 @@
       ]
     },
     {
+      "id": "open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+      "title": "Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
+      "status": "active",
+      "sourceIdeaId": "idea-1789493425846",
+      "prepDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+      "feedback": [
+        {
+          "at": "2026-09-16T20:25:32.439Z",
+          "author": "user",
+          "decision": "approve",
+          "text": ""
+        }
+      ],
+      "tasks": [
+        {
+          "id": "research-open-space-movement-feel-pass-2-aim-reticle-camera-",
+          "head": "Research: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
+          "body": "Investigate this as a professional game developer would, before anything is designed: the existing architecture and systems it touches, reusable patterns already in the project, dependencies, constraints, candidate approaches with their tradeoffs, risks, edge cases, testing requirements, and impact on other systems. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage RESEARCH. Output: `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/1-context.md` and `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/2-research.md`.\n\n**Triage summary:** Play-test follow-up to the two shipped open-space epics (mouse aiming, Shift boost). Four threads, all in open_space/: (1) replace the OS mouse pointer with an in-world aim reticle - nothing project-wide sets Input.set_custom_mouse_cursor or MOUSE_MODE today, and the one mouse read is player_ship.gd::_handle_rotation's get_global_mouse_position(), so a reticle node fed from that single line (or an OpenSpaceHUD child) is the natural place; ShipTurnController.mouse_dead_zone_px (48 px) and the snap/steering-disabled states should be visible in it. (2) Fix and rethink the camera. OpenSpacePlayerShip._update_camera_feel() pushes zoom + a lead offset of facing * _LEAD_MAX(140) * clamp(speed/400) into the CameraDirector effect &\"speed_feel\"; the lead uses the ship's FACING while the magnitude uses the speed of the actual velocity, so after a turn - e.g. cursor dragged to the bottom of the screen while momentum still carries the ship up - the camera extends opposite to travel, which is exactly the reported 'camera ends up behind the ship' and 'mixes up and down'. Compounding it, damping = 0.6 gives velocity a ~1.2 s half-life so the ship looks stopped while the lead is still at full strength, the Camera2D is an unrotated child of a CharacterBody2D whose rotation is rewritten every frame, and the director blends at only 6/s so a fast turn whips a 140 px offset around the screen - the reported motion sickness. The user's own proposal (extend the camera only once the ship is actually rotated/moving toward the cursor) needs to be researched against how top-down space games do look-ahead. (3) A genuine research thread, requested explicitly as a separate task: how shipped top-down space games make free flight feel responsive and dynamic (strafe, drift/inertia handling, banking and roll animation on turn, dodge/roll skills, speed-line and FOV feedback), and which of those fit a ship built from global/components/ plus the ShipModuleState slot system. (4) Rework boost into two tiers: WITHOUT the Boost Drive module (EngineBoostModule, get_display_name() 'Boost Drive', engines slot, H key, 1500 px/s, 45 damage, 2 s cooldown) Shift becomes HOLD-to-boost drawing from one long continuous bar rather than today's discrete BoostMeter pips (BoostMeter/BoostBar/ShipProgressionState.boost_charge_count 2-5 already model the persistence and the upgrade pickup, so the capacity economy is reusable but the pip rendering and the whole-charge try_spend() are not), the bar's length is what the upgrade extends, and the default tier must include the 180-degree flip boost from the original idea (rotate ~180 degrees, hold Shift, and the ship rapidly reverses onto the new heading) which the shipped boost approximates only as a one-shot 700 px/s redirect with no orientation condition; WITH Boost Drive equipped the same bar is SEGMENTED into 3-4 discrete, more powerful charges scaling with upgrades. Open questions for the plan: whether hold-to-boost and the 180 flip are one verb or two; whether the segmented bar belongs in BoostMeter with a mode flag or a second component; and whether the camera rework should be a new CameraDirector effect or a rewrite of _update_camera_feel.\n\n**Original idea (idea-1789493425846):** I just tested movement improvements you did. We still have a few places to improve: 1. Add target icon or something like that instead of the mouse cursor 2. When I move mouse to the bottom of the screen, when ship stays in place, it moves camera in the wrong direction. Like it is behind the ship, Also rotating it at thigh speed makes me sick. Maybe we can research other ways to do camera, like extend it only when ship is rotated to that direction of the mouse. Also take a look why it mixes up and down and extends itself incorreclty. 3. In general movement is not very fun. I want you to do an aditional research as a separate tasks to find ideas from the industry, on how it is done for such open space gameplay with view from top. I want it to be more responding and dynamic. Maybe movement features, animations,, skills,  4. Lastly, Boosting is not what I imagined. We have Boost Drive that works as current boost implementation, except it doesn't have charges, which is a nice addition. Let's move existing boosting with charges to the 'boost drive' module, but make it more powerful. Without boost module, we must have 'hold to boost' approach. We still have charges, but as one long charging line that is upgradable. This line can be split to 3-4 parts for boost drive module depending on the amount of upgrades. This default charge must have an 180 degrees speed boost that was discussed in initial idea. When we rotate 180 degrees and press and hold shift, we quickly start moving to other direction.",
+          "state": "done",
+          "badge": null,
+          "planDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+          "kind": "prep",
+          "type": "research",
+          "complexity": "large",
+          "model": "opus",
+          "dependsOn": [],
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "f8d7f34",
+                  "subject": "Draft the open-space movement feel pass-2 epic from the play-test idea"
+                }
+              ],
+              "at": "2026-09-15T18:39:07.499Z",
+              "run": "2026-09-15-2135-i1",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003995,
+                "claude-opus-5": 2.025762
+              },
+              "costUSD": 2.0297569999999996,
+              "turns": 29,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            },
+            {
+              "commits": [
+                {
+                  "sha": "a236e05",
+                  "subject": "Mark the pass-2 movement research task done"
+                },
+                {
+                  "sha": "fc483db",
+                  "subject": "Research the open-space movement feel pass-2 epic: reticle, camera, flight, boost"
+                }
+              ],
+              "at": "2026-09-15T18:54:52.003Z",
+              "run": "2026-09-15-2135-i2",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.29249600000000003,
+                "claude-opus-5": 6.264835499999999
+              },
+              "costUSD": 6.557331499999997,
+              "turns": 64,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
+        },
+        {
+          "id": "plan-open-space-movement-feel-pass-2-aim-reticle-camera-rewo",
+          "head": "Plan: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
+          "body": "Consume the research and write the implementation plan to `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/3-plan.md`, then add this epic's implementation tasks with `add-task` - each with its own type, complexity, model and dependencies. The task list is half the deliverable: it is what the user reviews and prioritises. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN.",
+          "state": "done",
+          "badge": null,
+          "planDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+          "kind": "prep",
+          "type": "plan",
+          "complexity": "large",
+          "model": "opus",
+          "dependsOn": [
+            "research-open-space-movement-feel-pass-2-aim-reticle-camera-"
+          ],
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "3081621",
+                  "subject": "Plan the pass-2 movement epic: camera lead fix, reticle, banking, hold-to-boost"
+                }
+              ],
+              "at": "2026-09-15T19:05:58.340Z",
+              "run": "2026-09-15-2135-i3",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.003972,
+                "claude-opus-5": 3.9166764999999995
+              },
+              "costUSD": 3.9206484999999995,
+              "turns": 31,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
+        },
+        {
+          "id": "plan-review-open-space-movement-feel-pass-2-aim-reticle-came",
+          "head": "Plan review: Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost",
+          "body": "Dispatch an independent subagent to critique the plan AND the generated task list - technical correctness, missing requirements, architectural problems, unnecessary complexity, regressions, wrong task decomposition, wrong model assignments, missing tests or dependencies, and whether it actually solves the original idea. Verdict to `docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy/4-review.md`. Follow the `feature-workflow` skill's `references/epic-prep.md`, stage PLAN REVIEW. Marking this done sends the epic to the user for approval.",
+          "state": "done",
+          "badge": null,
+          "planDir": "docs/plans/open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+          "kind": "prep",
+          "type": "plan-review",
+          "complexity": "large",
+          "model": "opus",
+          "dependsOn": [
+            "plan-open-space-movement-feel-pass-2-aim-reticle-camera-rewo"
+          ],
+          "runs": [
+            {
+              "commits": [],
+              "at": "2026-09-15T19:10:09.152Z",
+              "run": "2026-09-15-2135-i4",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004006,
+                "claude-opus-5": 2.9161747500000006
+              },
+              "costUSD": 2.9201807500000005,
+              "turns": 1,
+              "subagents": 1,
+              "outcome": "error 429",
+              "gate": "pass"
+            },
+            {
+              "commits": [],
+              "at": "2026-09-16T00:03:04.817Z",
+              "run": "2026-09-16-0235-i1",
+              "requested": "opus",
+              "primary": "claude-opus-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.03533,
+                "claude-opus-5": 16.049397
+              },
+              "costUSD": 16.084727,
+              "turns": 1,
+              "subagents": 3,
+              "outcome": "error 429",
+              "gate": "pass"
+            }
+          ]
+        },
+        {
+          "id": "the-camera-leads-where-the-ship-is-actually-travelling-not-w",
+          "head": "The camera leads where the ship is actually travelling, not where its nose points",
+          "body": "Fixes the epic's headline bug (`3-plan.md` → Design → Thread 2, and `1-context.md` §4.1): the camera\nlead takes its magnitude from `velocity` but its direction from the hull's facing, so turning the\nnose away from your momentum extends the camera OPPOSITE to travel — \"it is behind the ship\",\n\"it mixes up and down\".\n\nDone when:\n- A new `OpenSpaceCameraRig` (`Node`, `class_name`) is a child of `player_ship.tscn`, resolved BY\n  TYPE in `player_ship.gd::_ready()` the way `_turn` and `_boost_meter` already are.\n- It owns the speed-zoom + lead computation as a pure `step(velocity, delta)` / `get_offset()` /\n  `get_zoom(velocity)` / `get_motion_scale()`, with `@export`s: `lookahead_time = 0.30`,\n  `lead_max_px = 90.0`, `lead_dead_zone_px = 32.0`, `lead_half_life = 0.20`, `zoom_min = 0.85`,\n  `zoom_speed_threshold = 400.0`. `get_motion_scale()` is public because FLY-2's `CameraShake`\n  call lives on the ship, outside the rig, and still has to honour the accessibility setting.\n- The lead direction is `velocity.normalized()`; the dead zone is SUBTRACTED, not clipped (no pop at\n  the boundary); the result is smoothed with the `1 - exp(-lambda*dt)` form.\n- `_update_camera_feel()` keeps only: find `Camera2D` → find `CameraDirector` → push one\n  `speed_feel` effect at priority 0. `CameraDirector.blend_speed` stays 6.0 (§4.2).\n\nFiles: `open_space/scenes/entities/player/open_space_camera_rig.gd` (new),\n`open_space/scenes/entities/player/player_ship.tscn`, `open_space/scenes/entities/player/player_ship.gd`,\n`tests/unit/test_open_space_camera_rig.gd` (new),\n`tests/integration/test_open_space_camera_wiring.gd` (new, anti-inert).\n\nTHE DEFINING TEST CASE BELONGS IN THE WIRING FILE, NOT THE UNIT FILE (plan review B1). `step()`\nnever receives `rotation`, so a unit-level \"velocity up, nose down ⇒ lead up\" is guaranteed by the\nsignature and cannot fail. Write it against a real ship under a `Camera2D` + `CameraDirector`\nharness matching `sector_hub.tscn:80-85` (camera is a CHILD of the ship, director a child of that —\n`_update_camera_feel()` returns silently if either lookup misses, which would make every case in the\nfile pass vacuously): `ship.rotation = PI`, `ship.velocity = (0, -400)`, one physics frame, assert\nthe pushed `speed_feel` offset has `y < 0`. That FAILS on today's `player_ship.gd:380-381`. Add the\nmirror case (`rotation = 0`, velocity `(0, +400)` ⇒ `y > 0`) so a stuck sign cannot pass.",
+          "state": "done",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "bug",
+          "complexity": "medium",
+          "model": "sonnet",
+          "dependsOn": [],
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "02d465d",
+                  "subject": "Fix camera lead direction: track velocity, not facing"
+                }
+              ],
+              "at": "2026-09-16T14:43:15.320Z",
+              "run": "2026-09-16-1735-i1",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.0047,
+                "claude-sonnet-5": 2.4982146000000007
+              },
+              "costUSD": 2.502914600000001,
+              "turns": 72,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
+        },
+        {
+          "id": "players-who-get-motion-sick-can-turn-the-camera-s-automatic-",
+          "head": "Players who get motion sick can turn the camera's automatic movement down or off",
+          "body": "`2-research.md` finding 3: the Game Accessibility Guidelines classify automatic camera movement\nwithout the player's input as a Vision/Intermediate barrier and prescribe a TOGGLE, not removal. The\nplayer's own words were \"rotating it at high speed makes me sick\".\n\nDone when:\n- `SettingsState` gains a `camera_motion` key with values `&\"full\"` / `&\"reduced\"` / `&\"off\"`, a\n  `camera_motion_changed(value: StringName)` signal (parameter declared — the arity sweep checks\n  this), validation against the value list, and a fallback to `&\"full\"` on an unknown/absent value.\n- It persists in a new `SECTION_CAMERA = \"camera\"`. **`_save()` must write BOTH keys** — today it\n  writes one (`settings_state.gd:43-48`) and would clobber `open_space_scheme`. That is the\n  boundary test, in both directions.\n- The settings panel gains a second row (\"Camera Motion\"). This is a SCENE edit as well as a script\n  edit: the row is a node in `global/ui/pause_menu/settings_panel.tscn` (`Rows/Row0` with its\n  `NameLabel` / `ValueLabel` children, lines 26-35), so add a `Row1` of the same shape, one more\n  entry in `_rows`, one more branch in `cycle()`, and generalise `_refresh()` off the single\n  `@onready _value_lbl`.\n- `OpenSpaceCameraRig._motion_scale` becomes 1.0 / 0.5 / 0.0 and scales BOTH the lead and the\n  speed-zoom, live, via the signal. `off` means the offset is exactly zero and the zoom exactly\n  `Vector2.ONE` at any speed.\n\nTEST HYGIENE: `tests/helpers/save_sandbox.gd` is only half of it. Per `tests/README.md:745-751` the\nsandbox covers the `user://` file, NOT the autoload's in-memory value, and a test that leaves\n`SettingsState` changed re-seeds every later test in the same GUT process. Do the two-layer\ncapture-and-restore by hand, the way `test_player_ship_turn_wiring.gd:21-31` and\n`test_pause_menu_settings.gd` already do.\n\nFiles: `global/autoloads/settings_state.gd`, `global/ui/pause_menu/settings_panel.gd`,\n`global/ui/pause_menu/settings_panel.tscn`, `open_space/scenes/entities/player/open_space_camera_rig.gd`,\n`tests/unit/test_settings_state.gd`, `tests/integration/test_pause_menu_settings.gd`.",
+          "state": "done",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "small",
+          "model": "sonnet",
+          "dependsOn": [
+            "the-camera-leads-where-the-ship-is-actually-travelling-not-w"
+          ],
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "0952fd2",
+                  "subject": "Add camera_motion accessibility setting to turn down/off auto camera movement"
+                }
+              ],
+              "at": "2026-09-17T00:39:49.520Z",
+              "run": "2026-09-17-0335-i1",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.00457,
+                "claude-sonnet-5": 1.2245700000000002
+              },
+              "costUSD": 1.2291400000000001,
+              "turns": 37,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
+        },
+        {
+          "id": "flying-the-hub-shows-a-crosshair-instead-of-the-desktop-arro",
+          "head": "Flying the hub shows a crosshair instead of the desktop arrow",
+          "body": "The player's first ask: \"Add target icon or something like that instead of the mouse cursor.\"\n`2-research.md` finding 4 is Godot's own doc: a software cursor adds \"at least one frame of latency\",\nso the AIM POINT should be a hardware cursor (`Input.set_custom_mouse_cursor()`). The state ring is a\nseparate task.\n\nDone when:\n- A new `AimCursor` (`global/systems/aim_cursor.gd`) builds its 32x32 crosshair PROCEDURALLY from an\n  `Image` — four ticks with a transparent centre gap so what is under the cursor stays visible. No\n  PixelLab (it is a UI asset, costs allowance, and a generated `.png` would also have to clear\n  `test_entity_sprite_transparency.gd`). 32x32 is inside finding 4's \"128x128 or smaller\".\n- `OpenSpacePlayerShip` applies it from `_ready()` and restores it from `_exit_tree()` — the only\n  symmetric pair that covers mission launch, the death `reload_current_scene()` and quit.\n  `Input.set_custom_mouse_cursor()` is PROCESS-GLOBAL and sticky (`1-context.md` §6.1): a missed\n  restore leaves a crosshair in the boot menu and in every other mode.\n- Under the `&\"keys\"` scheme there is no cursor steering, so it is never applied.\n- `restore()` without a prior `apply()` is a safe no-op (boundary case).\n\nFiles: `global/systems/aim_cursor.gd` (new), `open_space/scenes/entities/player/player_ship.gd`,\n`tests/unit/test_aim_cursor.gd` (new), `tests/integration/test_open_space_aim_cursor.gd` (new).\n`Input`'s cursor state is not readable, so assert through a static `is_applied()` seam on `AimCursor`.",
+          "state": "done",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "medium",
+          "model": "sonnet",
+          "dependsOn": [],
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "d99cd25",
+                  "subject": "Replace open-space OS cursor with a hardware crosshair (AimCursor)"
+                }
+              ],
+              "at": "2026-09-17T00:46:29.788Z",
+              "run": "2026-09-17-0335-i2",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004324,
+                "claude-sonnet-5": 1.5637506000000005
+              },
+              "costUSD": 1.5680746000000005,
+              "turns": 51,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
+        },
+        {
+          "id": "a-ring-around-the-ship-shows-where-the-nose-is-actually-head",
+          "head": "A ring around the ship shows where the nose is actually heading",
+          "body": "The other half of the reticle (`3-plan.md` → Thread 1). `2-research.md` finding 6 (a dual-stick\npost-mortem) keeps a \"target\" and a \"view\" value and says the crosshair should show the gap rather\nthan snap; `ShipTurnController` already IS that pair. Finding 6 is also explicit that aim assists\nmust be VISIBLE, because invisible auto-aim \"created problematic gaps between input and display\".\n\nDone when:\n- A new `AimReticle extends Node2D` (`top_level`) is a child of `player_ship.tscn`, drawn with\n  `_draw()` primitives in the `BoostBar` / `OverheatBar` idiom, found BY CLASS in `_ready()`.\n- **The ship must reassign `_reticle.global_position` every physics frame** (plan review N11).\n  `top_level` reinterprets local coordinates as GLOBAL, so without that line the ring sits at world\n  origin, not on the ship. Same pattern as the two bars at `player_ship.gd:148-151`, but at offset\n  `Vector2.ZERO` since the ring is centred on the hull. `top_level` is what keeps it upright while\n  the hull rotates — an angular readout that rotates with what it measures reads nothing.\n- Centred on the ship it draws: the dead-zone ring, a tick at the turn controller's `_target_angle`,\n  a tick at the hull's `rotation` (the gap between them is the inertial lag made visible), and a\n  state colour for `_snap_held` and for steering-disabled (window unfocused).\n- The ring radius is READ from `ShipTurnController.mouse_dead_zone_px`, never duplicated as a\n  constant. `ShipTurnController` gains read-only `is_snap_held()` / `is_steering_enabled()` beside\n  the existing `get_target_angle()`; no behaviour change.\n- It is FED the cursor from `_handle_rotation`'s single `get_global_mouse_position()` call\n  (`1-context.md` §3 — the mouse is read in exactly one line project-wide; a reticle that read it\n  itself would be untestable headlessly).\n- Hidden under the `&\"keys\"` scheme and while the ship's physics is off (the mission-menu freeze,\n  §6.5), so it is never left mid-swing behind the menu.\n- It stores what it draws as members (`_ring_radius`, `_target_angle`, `_hull_angle`, `_state`) — a\n  `_draw()`-only node exposes nothing a headless test can assert on.\n\nTEST HYGIENE: the scheme-dependent cases touch `SettingsState`, whose in-memory value survives the\n`user://` sandbox — do the two-layer capture-and-restore by hand (`tests/README.md:745-751`,\n`test_player_ship_turn_wiring.gd:21-31`).\n\nFiles: `open_space/scenes/gui/aim_reticle.gd` (new), `player_ship.tscn`, `player_ship.gd`,\n`ship_turn_controller.gd`, `tests/unit/test_aim_reticle.gd` (new),\n`tests/integration/test_aim_reticle_wiring.gd` (new, anti-inert).",
+          "state": "done",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "medium",
+          "model": "sonnet",
+          "dependsOn": [],
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "a6736fe",
+                  "subject": "Add AimReticle: a ring on the hull showing dead zone, aim lag and assist state"
+                }
+              ],
+              "at": "2026-09-17T00:56:27.499Z",
+              "run": "2026-09-17-0335-i3",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004701,
+                "claude-sonnet-5": 3.3838598000000006
+              },
+              "costUSD": 3.3885608000000005,
+              "turns": 80,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
+        },
+        {
+          "id": "the-boost-meter-is-one-long-line-that-gets-longer-with-every",
+          "head": "The boost meter is one long line that gets longer with every upgrade",
+          "body": "The resource side of the player's ask: \"We still have charges, but as one long charging line that is\nupgradable.\" `2-research.md` finding 7 (Ridge Racer 7) is the shipped precedent: the long held gauge\nand the discrete tanks are the SAME pool, rendered and spent differently. `1-context.md` §1 records\nthat `BoostMeter.charges` is already a continuous float — only `try_spend()` and `BoostBar._draw()`\nare whole-charge, so this is the smaller change as well as the better-precedented one.\n\nDone when:\n- `BoostMeter` gains `tanks: int = 1` (1 = one long bar), `set_tanks()`, `tank_size()`,\n  `drain(amount) -> bool` (continuous spend, false on the frame it empties), `try_spend_tank()`\n  (whole-tank spend, replacing `try_spend()`), and `@export`s `drain_rate = 1.0` (bar-units/s) and\n  `min_start_charge = 0.25`. Both spends set the full `recharge_delay_sec` pause.\n  `tanks_changed(tanks: int)` is declared WITH its parameter (`test_signal_emit_arity.gd`).\n  `bind_progression`, `_on_progression_changed` and the hand-driven `step(delta)` are untouched.\n- THE NOUN IS \"TANKS\", NOT \"SEGMENTS\" (plan review N5): `test_boost_bar.gd:142` already has\n  `test_segments_follow_capacity_on_signal` where \"segments\" means the per-charge PIPS, i.e.\n  `max_charges`. Reusing the word puts `max_charges = 5, tanks = 4` in one file with two meanings of\n  one noun. \"Tanks\" is also finding 7's own vocabulary.\n- `BoostBar` width becomes PROPORTIONAL to capacity (`_UNIT_WIDTH = 16.0`: 2 units = today's 32 px,\n  5 units = 80 px). Finding 9 (Breath of the Wild's stamina wheel) is why: re-slicing a fixed 32 px\n  into more, thinner pieces reads as a DOWNGRADE. \"Upgradable line\" means it gets longer.\n- It draws `tanks` tanks across that width, faint unit ticks at every whole bar-unit in BOTH\n  tiers (finding 9 again), and a different fill colour per tier (finding 7 ships per-tier colours).\n  The `setup()` seed-then-connect pattern stays verbatim.\n- NO SAVE MIGRATION: `ShipProgressionState.boost_charge_count` keeps its name, its 2-5 range and its\n  `+1 boost` pickup; only the meaning changes from \"pips\" to \"bar units\", and every on-disk value\n  stays legal. State it and test it — do not assume it.\n\nFiles: `open_space/scenes/entities/player/boost_meter.gd`, `open_space/scenes/gui/boost_bar.gd`,\n`tests/unit/test_boost_meter.gd`, `tests/integration/test_boost_bar.gd`.",
+          "state": "done",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "refactor",
+          "complexity": "medium",
+          "model": "sonnet",
+          "dependsOn": [],
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "0e11dd2",
+                  "subject": "Give BoostMeter tanks: one long bar, or N discrete partitions of the same pool"
+                }
+              ],
+              "at": "2026-09-17T01:02:27.305Z",
+              "run": "2026-09-17-0335-i4",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004657,
+                "claude-sonnet-5": 1.2621174
+              },
+              "costUSD": 1.2667744,
+              "turns": 36,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
+        },
+        {
+          "id": "holding-shift-burns-the-bar-for-sustained-speed-a-tap-still-",
+          "head": "Holding Shift burns the bar for sustained speed; a tap still flips your momentum",
+          "body": "The verb the player asked for: \"Without boost module, we must have 'hold to boost' approach… This\ndefault charge must have an 180 degrees speed boost… When we rotate 180 degrees and press and hold\nshift, we quickly start moving to other direction.\"\n\nDone when:\n- `_step_boost(boost_pressed, delta)` becomes `_step_boost(pressed, held, delta)` — the injected-input\n  shape is not optional, `Input.is_action_pressed()` can never return true in the gate\n  (`1-context.md` §3). `_handle_thrust()` does both reads. No new input action: `boost` is already\n  bound to physical Shift.\n- Start (pressed, not already boosting, hold window closed, `charges >= min_start_charge`):\n  `velocity = Vector2.UP.rotated(rotation) * boost_exit_speed` on FRAME ONE, ceiling up,\n  `_boost_hold_left = boost_hold_sec` as a MINIMUM burn, `_boosting = true`, flame on.\n- **Sustain must WRITE VELOCITY, not just raise the ceiling** (plan review B4). `_speed_ceiling` is a\n  clamp — `player_ship.gd:294-295` only ever reduces velocity — so a ceiling-only sustain leaves\n  `_handle_thrust()`'s damping branch (`player_ship.gd:241`, 1.16 s half-life) slowing the ship down\n  while the bar drains. Each sustain frame: `meter.drain(drain_rate * delta)`, hold the ceiling, and\n  re-assert `velocity = Vector2.UP.rotated(rotation) * boost_exit_speed` along the CURRENT nose\n  (deliberately not a direction locked at the start, unlike `EngineBoostModule._boost_dir` — a held\n  boost the player can steer makes the 180 flip continuous instead of one-shot).\n  Stop on release past the minimum, or on empty; the ceiling then decays at `boost_ceiling_decay`.\n- **Move the flame/thruster tell onto `_boosting`.** Today both thrusters and the cyan flame read\n  `_boost_hold_left > 0.0` (`player_ship.gd:231-235,243-247,282-285`), which is now a 0.35 s MINIMUM\n  rather than the boost's length — leave it and the tell drops out mid-boost while the bar is still\n  draining. Required test case.\n- **NO RAMP AND NO SPIN-UP.** `2-research.md` finding 8 is a shipped game (Ridge Racer 3D) that\n  nerfed this exact verb by requiring a second of hold before the speed arrived and made it \"nearly\n  hard to strategize\". The hold SUSTAINS, never BUILDS — which is also what keeps the 180 flip\n  intact, since the redirect is a single frame-one assignment.\n- **The flip stays UNCONDITIONAL** — no \">120 degrees\" threshold. It is a judgement call with no\n  source behind it, the boost epic's ULTRAKILL finding uses no threshold, and an unconditional\n  redirect already satisfies the ask with nothing to mistune.\n- Shift held while the mission menu opens must not drain the bar and must not auto-resume on close\n  (§6.6). This falls out of the existing freeze design; the job here is the test that pins it.\n\nRequired cases beyond the existing ones: holding with NO thrust input keeps `velocity.length()` at\n`boost_exit_speed` (fails on a ceiling-only sustain); steering mid-hold turns the momentum within a\nframe; the tell still reads BOOST 30 held frames in. The ordering that makes all this work —\n`_step_boost()` runs AFTER the thrust/damping block, as the last line of `_handle_thrust()`\n(`player_ship.gd:253`) — is load-bearing and undocumented at the call site; add that comment.\n\nFiles: `open_space/scenes/entities/player/player_ship.gd`,\n`tests/integration/test_open_space_boost_verb.gd`.",
+          "state": "done",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "medium",
+          "model": "sonnet",
+          "dependsOn": [
+            "the-boost-meter-is-one-long-line-that-gets-longer-with-every"
+          ],
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "618ae4a",
+                  "subject": "Hold Shift to sustain the boost, not just tap-trigger it"
+                }
+              ],
+              "at": "2026-09-17T01:16:09.783Z",
+              "run": "2026-09-17-0335-i5",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004889,
+                "claude-sonnet-5": 2.8291038000000004
+              },
+              "costUSD": 2.8339928000000003,
+              "turns": 50,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
+        },
+        {
+          "id": "equipping-boost-drive-splits-the-bar-into-3-4-tanks-each-spe",
+          "head": "Equipping Boost Drive splits the bar into 3-4 tanks, each spent on a far stronger burst",
+          "body": "The other half of the player's ask: \"Let's move existing boosting with charges to the 'boost drive'\nmodule, but make it more powerful… This line can be split to 3-4 parts for boost drive module\ndepending on the amount of upgrades.\" `2-research.md` finding 7: Ridge Racer's Extended Type\nre-partitions the SAME pool, Quad extends it — tanks and long bar are one gauge.\n\nDone when:\n- The tier switch needs NO new state: `OpenSpacePlayerShip` already connects\n  `ShipModuleState.module_equipped` / `module_unequipped` and applies equipped modules in `_ready()`.\n  `tanks = 1` without the module; 3 with it; 4 at full `boost_charge_count`.\n- **Check the module's readiness BEFORE spending the tank** (plan review B3):\n  `if module.can_activate() and meter.try_spend_tank(): module.try_activate(self)`.\n  `EngineBoostModule.try_activate()` refuses on a 2.0 s cooldown (`engine_boost_module.gd:10,42-44`)\n  while the Shift-side floor is only `boost_hold_sec = 0.35`, so a spend-first ordering burns a whole\n  tank for nothing on every press in that window. Add `can_activate()` as a virtual on\n  `ShipModuleBase` returning `false` (mirroring the base `try_activate()`, `ship_module_base.gd:58`),\n  overridden in `EngineBoostModule` as `not _active and _cooldown_left <= 0.0`. Same short-circuit\n  discipline the existing press branch already documents at `player_ship.gd:272-274`.\n  REQUIRED BOUNDARY TEST: a press on a FULL meter during the module's cooldown spends nothing and\n  activates nothing.\n- The module keeps its 1500->500 px/s burst, its full i-frames and its 45 contact damage — that is\n  the \"more powerful\" half — and is now PAID FOR with a tank instead of being free. Convert its six\n  `const`s (`engine_boost_module.gd:5-10`) to `@export var` with identical defaults so the one thing\n  the player asked to be stronger is actually tunable after a fly-test; behaviour-neutral.\n- Update `get_description()` (`engine_boost_module.gd:30`), which still says \"Press H to supercharge\n  engines\" and is rendered verbatim in the ship menu. Name Shift and the tank cost; scope H to assault.\n- **Close the free-activation hole.** `player_ship.gd::_input` loops the whole module pool on\n  `use_ability` (H), so leaving it makes Boost Drive fireable for free on H while Shift charges a\n  tank. Fix with the project's duck-typed precedent (`Bullet.is_armored()`, `face_instant()`):\n  `ShipModuleBase.is_open_space_boost_verb() -> bool` returning false, overridden true on\n  `EngineBoostModule`, and `OpenSpacePlayerShip._input` skips modules that report it.\n  `player_fighter.gd:114-124`'s own H loop is UNTOUCHED — Boost Drive must still work on H in\n  assault, where there is no Shift boost to conflict with. That is a required boundary test.\n- **Do NOT move `_boost_meter.step(delta)`.** An earlier draft said to hoist it above the\n  `engine_boost_active` early return \"so the pool refills during the module's burst\"; that is wrong\n  and is withdrawn (plan review B2). `_handle_thrust()` returns on the same flag FIRST\n  (`player_ship.gd:219-220`) and only then would call `_step_boost()` (line 253), so during a module\n  burst `_step_boost()` is never reached at all. The freeze is correct and intentional — the ship\n  owns the meter's clock (`boost_meter.gd:68-72`) — and the amount at stake is ~0.035 bar-units,\n  since the tank spend already set `recharge_delay_sec = 0.5` of the 0.55 s burst. Add a comment\n  saying so; re-run the module-precedence cases rather than assuming they stay green.\n\nFiles: `open_space/scenes/entities/player/player_ship.gd`, `global/ship_modules/ship_module_base.gd`,\n`global/ship_modules/engine_boost_module.gd`, `tests/integration/test_open_space_boost_verb.gd`.\n\nThis is the epic's one cross-cutting task (it edits the base class of all fifteen modules). It is\nstill a medium, but if it turns out to need structural change, escalate with\n`set-meta ... --complexity large --model opus` rather than pushing through.",
+          "state": "done",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "medium",
+          "model": "sonnet",
+          "dependsOn": [
+            "holding-shift-burns-the-bar-for-sustained-speed-a-tap-still-"
+          ],
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "15044ff",
+                  "subject": "Equipping Boost Drive re-partitions the boost bar into 3-4 tanks"
+                }
+              ],
+              "at": "2026-09-17T01:31:46.606Z",
+              "run": "2026-09-17-0335-i6",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.00511,
+                "claude-sonnet-5": 4.306700800000001
+              },
+              "costUSD": 4.311810800000001,
+              "turns": 97,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
+        },
+        {
+          "id": "the-hull-leans-into-its-turns-instead-of-pivoting-like-a-rig",
+          "head": "The hull leans into its turns instead of pivoting like a rigid sprite",
+          "body": "Part of the player's \"movement is not very fun… I want it to be more responding and dynamic\". The\nresearch's main answer to that is the boost rework (`2-research.md` findings 5 and 10: two shipped\ntop-down games deliberately withheld strafe to protect the meaning of facing, and \"the boost becomes\nthe dodge\"). This task is the cheap legibility half.\n\nDone when:\n- `$SpriteAnchor/ShipSprite2D.skew` is driven from the per-frame rotation delta, smoothed and\n  clamped, via a pure `_step_bank(rotation_delta, delta) -> float` on the ship. `@export`s:\n  `bank_max_rad = 0.12` (~7 degrees), `bank_rate_ref_deg = 150.0`, `bank_half_life = 0.12`.\n- **Skew `ShipSprite2D`, NOT `SpriteAnchor`** (plan review B5). `SpriteAnchor`\n  (`player_ship.tscn:235`) also parents `MuzzleLeft` / `MuzzleRight` — the bullet spawn points\n  `WeaponState` reads (`player_ship.tscn:270-275`) — and `EngineLeft` / `EngineRight` at y = 30.\n  `Node2D.skew` propagates to children, so skewing the anchor walks the engine markers ~3.6 px\n  sideways at full bank and would walk the gun barrels too if `bank_max_rad` were ever raised.\n  REQUIRED BOUNDARY TEST: capture all four markers' `global_position`, drive a full-amplitude bank,\n  assert they are unchanged while `ShipSprite2D.skew` is non-zero. That case fails on the anchor.\n- **It is a SPRITE transform, never a hull rotation.** `ShipTurnController` is the only writer of\n  `OpenSpacePlayerShip.rotation` (`test_ship_rotation_single_writer.gd`), and that test sweeps\n  `global/ship_modules/*.gd` only — so a case asserting the ship's `rotation` is byte-identical to\n  what `step()` returned after a bank step is what covers the ship script itself. Required boundary.\n- Tests: zero for no rotation change, saturates at `bank_max_rad`, sign-correct both directions,\n  decays back to 0 when turning stops.\n\n**A HUMAN MUST LOOK AT THIS ONE.** A shear on a top-down hull either reads as a lean or reads as a\nglitch and no headless test can tell the difference. Mitigation is built in: `bank_max_rad = 0.0`\nreverts it with no code change, and banked sprite frames (PixelLab, capped allowance) become a\nfollow-up rather than a blocker. Say so in the report.\n\nFiles: `open_space/scenes/entities/player/player_ship.gd`, `player_ship.tscn` (the exports),\n`tests/integration/test_open_space_flight_feel.gd` (NEW — not `test_open_space_boost_verb.gd`,\nwhose header scopes it to \"the whole model lives in `_step_boost`\"; banking is not the boost verb).",
+          "state": "done",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "small",
+          "model": "sonnet",
+          "dependsOn": [],
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "44a73c2",
+                  "subject": "Bank the hull sprite into its turns (FLY-1)"
+                }
+              ],
+              "at": "2026-09-17T01:39:28.844Z",
+              "run": "2026-09-17-0335-i7",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004653,
+                "claude-sonnet-5": 2.0495105999999996
+              },
+              "costUSD": 2.0541636,
+              "turns": 60,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
+        },
+        {
+          "id": "boosting-punches-the-camera-so-speed-reads-at-a-glance",
+          "head": "Boosting punches the camera so speed reads at a glance",
+          "body": "`2-research.md` finding 7: Ridge Racer 6 displays a \"tunnel vision\" effect across the whole screen\nand HUD on its strongest nitrous tier; finding 2 notes Celeste wobbles the camera in the direction of\na dash \"to really sell the speed and power\". Today a boost looks identical to cruising apart from the\nflame.\n\nDone when:\n- The boost's start frame calls `CameraShake.add(boost_shake_trauma * _rig.get_motion_scale())` with\n  `boost_shake_trauma = 0.25` — between the existing `0.35` on a hit and nothing. Fall back to a\n  scale of 1.0 if the ship has no rig, so a bare instantiated ship behaves as it does today.\n- **The shake must be scaled, and it does not get that for free** (plan review B6). The rig applies\n  `_motion_scale` inside `get_zoom()`, but `CameraShake` is an autoload (`project.godot:33`) called\n  from the SHIP, outside the rig — so without the `get_motion_scale()` reader that CAM-1 adds,\n  `camera_motion = off` still shakes the screen. Finding 3 lists \"camera shakes or tilting\" among the\n  problem cases by name.\n- `OpenSpaceCameraRig.set_boosting(true)` for the boost's duration pulls the zoom a further\n  `boost_zoom_bonus = 0.06` out, and clears on release.\n- Tests: trauma rises on the start frame; the rig reports `_boosting` for the duration and clears;\n  `get_zoom()` with boosting true is lower than with it false at the same speed. REQUIRED BOUNDARY:\n  with the rig's `_motion_scale` at 0.0, a boost start adds NO trauma and the zoom stays\n  `Vector2.ONE`. Set the scale on the rig directly rather than through `SettingsState` — that is what\n  keeps this task independent of CAM-2 having shipped, and is why there is no `dependsOn` on it.\n\nREJECTED and out of scope: a directional `CameraShake`. It has only a scalar trauma model and adding\na direction channel is a change to a tested shared autoload for a flourish.\n\nFiles: `open_space/scenes/entities/player/player_ship.gd`,\n`open_space/scenes/entities/player/open_space_camera_rig.gd`,\n`tests/unit/test_open_space_camera_rig.gd`, `tests/integration/test_open_space_flight_feel.gd`.",
+          "state": "done",
+          "badge": null,
+          "planDir": null,
+          "kind": "impl",
+          "type": "feature",
+          "complexity": "small",
+          "model": "sonnet",
+          "dependsOn": [
+            "holding-shift-burns-the-bar-for-sustained-speed-a-tap-still-",
+            "the-camera-leads-where-the-ship-is-actually-travelling-not-w"
+          ],
+          "runs": []
+        }
+      ]
+    },
+    {
       "id": "station-mini-boss",
       "title": "Level 1 space-station mini-boss",
       "status": "done",
@@ -2588,7 +3077,30 @@
           "complexity": "small",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "6c2840a",
+                  "subject": "Bind the open-space ship's shield to permanent shield progression"
+                }
+              ],
+              "at": "2026-09-15T04:09:13.261Z",
+              "run": "2026-09-15-0629-i7",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004056,
+                "claude-sonnet-5": 0.6756998
+              },
+              "costUSD": 0.6797558,
+              "turns": 27,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         }
       ]
     }
@@ -2625,6 +3137,14 @@
       "status": "drafted",
       "epicId": "open-space-boost-shift-burst-movement-on-an-upgradeable-boos",
       "decidedAt": "2026-09-13T13:24:53.049Z"
+    },
+    {
+      "id": "idea-1789493425846",
+      "text": "I just tested movement improvements you did. We still have a few places to improve:\n1. Add target icon or something like that instead of the mouse cursor\n2. When I move mouse to the bottom of the screen, when ship stays in place, it moves camera in the wrong direction. Like it is behind the ship, Also rotating it at thigh speed makes me sick. Maybe we can research other ways to do camera, like extend it only when ship is rotated to that direction of the mouse. Also take a look why it mixes up and down and extends itself incorreclty.\n3. In general movement is not very fun. I want you to do an aditional research as a separate tasks to find ideas from the industry, on how it is done for such open space gameplay with view from top. I want it to be more responding and dynamic. Maybe movement features, animations,, skills, \n4. Lastly, Boosting is not what I imagined. We have Boost Drive that works as current boost implementation, except it doesn't have charges, which is a nice addition. Let's move existing boosting with charges to the 'boost drive' module, but make it more powerful. Without boost module, we must have 'hold to boost' approach. We still have charges, but as one long charging line that is upgradable. This line can be split to 3-4 parts for boost drive module depending on the amount of upgrades. This default charge must have an 180 degrees speed boost that was discussed in initial idea. When we rotate 180 degrees and press and hold shift, we quickly start moving to other direction.",
+      "submittedAt": "2026-09-15T17:30:25.846Z",
+      "status": "drafted",
+      "epicId": "open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy",
+      "decidedAt": "2026-09-15T18:37:14.801Z"
     }
   ],
   "notes": "## Migration note\n\nThis file was migrated from a flat checklist on 2026-09-03. The historical *Discovered* bugfix log (found-and-fixed defects, not tasks) is preserved below verbatim rather than modeled as board items.\n\n---\n\n<!-- The agent appends suspected bugs and follow-ups it found but did not act on. Triage these. -->\n\nFound on 2026-08-31 while writing the characterization suite. Each one is **pinned by a passing\ntest that asserts the current behaviour**, so changing any of them will fail that test — which is\nthe signal that the change was deliberate. Test names are given so the fix has an obvious anchor.\n\n- [x] **`Health.amount_changed` is declared with zero parameters but emitted with one.**\n      `global/components/health_component.gd:4` declares `signal amount_changed`, and line 42\n      emits `amount_changed.emit(current_health)`. One-argument handlers (`DamageReaction`,\n      `PlayerBase._on_health_changed`) work, but any zero-argument handler raises\n      `Error calling from signal 'amount_changed' ... Method expected 0 argument(s), but called\n      with 1` at runtime. Fix is one line: `signal amount_changed(current: int)`.\n      Same defect in `global/statemachine/state.gd:4` — `signal state_transition` is emitted with\n      the target `State`. Pinned by `tests/unit/test_health_component.gd` (see the file header)\n      and `tests/unit/test_state_machine.gd::test_states_request_transitions_through_their_own_signal`.\n      **Fixed 2026-09-03.** Both declarations now name the argument they emit\n      (`amount_changed(current_health: int)`, `state_transition(new_state: State)`). This is a\n      readability/tooling fix only — it does **not** make a zero-argument handler legal, and\n      `tests/README.md` now says so explicitly instead of describing the old shape. Two new intent\n      tests read the declared arity back off `get_signal_list()`\n      (`test_amount_changed_declares_the_int_it_emits`,\n      `test_state_transition_declares_the_state_it_emits`), so the declarations cannot silently\n      drift from the emits again. The rule is now a convention in `docs/architecture/PROJECT.md`.\n\n- [x] **`StateMachine.change_state()` crashes if the machine has no current state.**\n      `global/statemachine/state_machine.gd:29` does `print(\"Exiting previous state: \" +\n      current_state.name)` **before** the `if current_state:` guard on line 31. Any machine built\n      without an `initial_state` (or whose state was cleared) dies on its first transition. Not\n      reachable today because every shipped machine sets `initial_state`, so it is latent rather\n      than live. Deliberately *not* covered by a test — the test would have to trigger the crash.\n      **Fixed 2026-09-03.** The log line moved inside the `if current_state:` guard, together with\n      the `exit()` call it sits next to. It **is** covered by a test now —\n      `test_state_machine.gd::test_change_state_from_an_idle_machine_enters_without_crashing`\n      builds a machine with no `initial_state` and transitions it; before the fix that test failed\n      with `Invalid access to property or key 'name' on a base object of type 'Nil'`, which is\n      exactly the crash, provoked deliberately in a place where it is harmless.\n\n- [x] **`Health.decrease()` prints to stdout on every single hit.**\n      `global/components/health_component.gd:34`. In a bullet-hell section that is one line per\n      projectile per frame; `print` is not free and it buries real errors in the log. Should be a\n      debug-gated helper or removed. `StateMachine.change_state` and `DialogPlayer` print\n      unconditionally too (`[DP] ...` on every line of every conversation).\n      **Fixed 2026-09-03.** All three now trace behind `if OS.is_stdout_verbose():`, so the\n      messages survive for debugging (`godot --verbose ...`) but cost nothing in a normal run.\n      Measured on the GUT suite: **181 lines** suppressed (173 `[Health]`, 6 `[StateMachine]`,\n      2 `[DP]`), and a normal suite run now greps 0 for all three prefixes. `DialogPlayer`'s nine\n      prints went through a `_trace()` helper; its `_unhandled_input` one is additionally\n      guarded at the call site because `event.as_text()` allocates per input event.\n      `Health.decrease()` no longer needs a parent, since the fallback replaced the bare\n      `get_parent().name`. `dialog_box.gd`, `movement_controller.gd` and `dash_state.gd` have the\n      same problem and were **not** in scope — refiled below.\n\n- [x] **The turret sprite's barrels point at −Y and no turret sets `rotation`.** All four\n      `space_station.tscn` turret instances are placed at `rotation = 0`, so every barrel points\n      toward the top of the screen — *away* from the player, who is always below the station.\n      **Closed 2026-09-02 by sub-item 4a**, at exactly the moment it predicted.\n      `StationGunnery.fire_turret_volley()` sets each firing turret's `global_rotation` to\n      `aim.angle() + PI/2` immediately before firing — `global_rotation`, not `rotation`, so it\n      survives the laser phase spinning the hull. Pinned by\n      `test_turret_barrels_face_the_player_when_firing`, which fails by ~180° against the pre-4a\n      scene. The authored `rotation = 0` remains, as a spawn orientation."

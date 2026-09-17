@@ -58,6 +58,21 @@ func remove(_player: Node) -> void:
 func try_activate(_player: Node) -> bool:
 	return false
 
+## Override in active modules: report whether the module is currently ready to fire
+## (mirrors try_activate()'s own guard, and defaults false the same way). Callers that
+## must check readiness WITHOUT spending a resource first (e.g. a boost tank) call this
+## before try_activate() rather than paying for a call that would just refuse.
+func can_activate() -> bool:
+	return false
+
+## Override true on a module that IS the open-space Shift boost's upgraded tier (currently
+## only EngineBoostModule). OpenSpacePlayerShip._input skips such a module on H
+## (use_ability) in open space, because Shift already spends the resource that pays for it
+## there — leaving H wired would let the same burst fire for free. Assault has no Shift
+## boost to conflict with, so its own H loop does not consult this at all.
+func is_open_space_boost_verb() -> bool:
+	return false
+
 ## Override in active modules: called every physics frame by player_fighter
 ## for the currently equipped active module. Use for cooldown tracking and
 ## timed effect expiry. `delta` is real-time delta (Engine.time_scale already applied).

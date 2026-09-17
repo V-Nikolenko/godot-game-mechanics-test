@@ -173,3 +173,82 @@ func test_zero_capacity_does_not_error_on_draw() -> void:
 		return
 	bar._on_charges_changed(0.0, 0)
 	assert_eq(bar._max_charges, 0)
+
+
+## ── Width is proportional to capacity, not fixed ─────────────────────────────────────────
+## The assertion that fails on a fixed-width implementation (finding 9's whole point: an
+## upgrade has to make the line visibly longer, not re-slice the same 32 px into more pieces).
+func test_bar_width_grows_with_capacity() -> void:
+	var ship := _spawn_ship()
+	var bar := _bar_of(ship)
+	assert_not_null(bar)
+	if bar == null:
+		return
+	bar._on_charges_changed(2.0, 2)
+	assert_almost_eq(bar._bar_width(), 32.0, 0.001, "2 units is today's 32 px width")
+	bar._on_charges_changed(5.0, 5)
+	assert_almost_eq(bar._bar_width(), 80.0, 0.001, "5 units is a visibly longer 80 px bar")
+
+
+## ── tanks partitions the bar into that many equal, gapped rects ──────────────────────────
+func test_one_tank_draws_one_long_bar() -> void:
+	var ship := _spawn_ship()
+	var bar := _bar_of(ship)
+	assert_not_null(bar)
+	if bar == null:
+		return
+	bar._on_charges_changed(2.0, 2)
+	bar._on_tanks_changed(1)
+	var rects: Array[Rect2] = bar._tank_rects()
+	assert_eq(rects.size(), 1, "tanks == 1 is one long bar, not a special case")
+	assert_almost_eq(rects[0].size.x, bar._bar_width(), 0.001,
+			"the single tank spans the whole bar width")
+
+
+func test_three_tanks_draw_three_even_gapped_rects() -> void:
+	var ship := _spawn_ship()
+	var bar := _bar_of(ship)
+	assert_not_null(bar)
+	if bar == null:
+		return
+	bar._on_charges_changed(3.0, 3)
+	bar._on_tanks_changed(3)
+	var rects: Array[Rect2] = bar._tank_rects()
+	assert_eq(rects.size(), 3)
+	var width0: float = rects[0].size.x
+	for rect: Rect2 in rects:
+		assert_almost_eq(rect.size.x, width0, 0.001, "all three tanks are the same width")
+	var total_width: float = rects[2].position.x + rects[2].size.x - rects[0].position.x
+	assert_almost_eq(total_width, bar._bar_width(), 0.001,
+			"three tanks plus their gaps still span exactly the bar width")
+
+
+## ── Faint unit ticks mark every whole bar-unit boundary, in both tiers ───────────────────
+func test_unit_ticks_mark_every_whole_bar_unit_in_both_tiers() -> void:
+	var ship := _spawn_ship()
+	var bar := _bar_of(ship)
+	assert_not_null(bar)
+	if bar == null:
+		return
+	bar._on_charges_changed(4.0, 4)
+	bar._on_tanks_changed(1)
+	assert_eq(bar._unit_tick_xs().size(), 3, "4 bar-units have 3 interior boundaries")
+
+	bar._on_tanks_changed(4)
+	assert_eq(bar._unit_tick_xs().size(), 3,
+			"the ticks mark bar-units, not tanks — unchanged when the partition count changes")
+
+
+## ── Fill colour differs between the two tiers ────────────────────────────────────────────
+func test_fill_colour_differs_between_continuous_and_tank_tiers() -> void:
+	var ship := _spawn_ship()
+	var bar := _bar_of(ship)
+	assert_not_null(bar)
+	if bar == null:
+		return
+	bar._on_tanks_changed(1)
+	var continuous_color: Color = bar._fill_color()
+	bar._on_tanks_changed(3)
+	var tank_color: Color = bar._fill_color()
+	assert_ne(continuous_color, tank_color,
+			"finding 7: Ridge Racer 7 ships a distinct colour per nitrous tier")

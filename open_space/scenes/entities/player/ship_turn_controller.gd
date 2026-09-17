@@ -129,3 +129,15 @@ func set_scheme(new_scheme: StringName, current_rotation: float) -> void:
 ## `step()` returns, not the target.
 func get_target_angle() -> float:
 	return _target_angle
+
+
+## Read-only accessor for AimReticle: an AI-Targeting snap is being honoured, and the
+## ring should say so rather than leave the assist invisible.
+func is_snap_held() -> bool:
+	return _snap_held
+
+
+## Read-only accessor for AimReticle: false while the window has lost focus and the target
+## is frozen against a cursor the player is no longer driving.
+func is_steering_enabled() -> bool:
+	return _steering_enabled
