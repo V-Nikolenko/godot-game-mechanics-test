@@ -757,7 +757,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
       `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
 
-## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 5 open)
+## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 4 open)
 
 **Review history**
 
@@ -913,8 +913,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Files: `open_space/scenes/gui/aim_reticle.gd` (new), `player_ship.tscn`, `player_ship.gd`,
       `ship_turn_controller.gd`, `tests/unit/test_aim_reticle.gd` (new),
       `tests/integration/test_aim_reticle_wiring.gd` (new, anti-inert).
+      1 run(s), $3.39; last on claude-sonnet-5
 
-- [ ] **The boost meter is one long line that gets longer with every upgrade** _(todo - refactor, medium, sonnet)_
+- [x] **The boost meter is one long line that gets longer with every upgrade** _(done - refactor, medium, sonnet)_
       The resource side of the player's ask: "We still have charges, but as one long charging line that is
       upgradable." `2-research.md` finding 7 (Ridge Racer 7) is the shipped precedent: the long held gauge
       and the discrete tanks are the SAME pool, rendered and spent differently. `1-context.md` §1 records

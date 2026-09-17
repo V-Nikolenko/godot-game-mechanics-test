@@ -19,6 +19,11 @@
 ## "+1 boost" stays legible as a pip. There is no exhaustion/soft-failure state — boost is the
 ## verb the player crosses the hub with, and an empty meter simply refuses while W/S still fly
 ## the ship.
+##
+## The pool also supports two OTHER spend shapes on top of the same float, rather than being a
+## second resource: `drain()` is a continuous, per-frame spend for a held boost, and
+## `try_spend_tank()` divides the pool into `tanks` equal partitions for a Boost-Drive-style
+## burst. `try_spend()` (whole-charge) stays as the pip-native spend; nothing here retires it.
 class_name BoostMeter
 extends Node
 
@@ -26,6 +31,8 @@ extends Node
 ## (`tests/integration/test_signal_emit_arity.gd` sweeps this).
 ## `current` is a float so a partially recharged charge is representable.
 signal charges_changed(current: float, maximum: int)
+## Emitted whenever the tank partition count changes, declared with what it emits.
+signal tanks_changed(tanks: int)
 
 @export var recharge_rate: float = 0.7          ## charges per second
 ## Pause after a spend before any refill starts, at the value `Overheat._SHOOT_GRACE` already
@@ -35,9 +42,16 @@ signal charges_changed(current: float, maximum: int)
 ## `Shield.bind_progression` (`shield_component.gd:20,38-46,116-124`) line for line, including
 ## the immediate grant of the new charge on a mid-session upgrade.
 @export var bind_progression: bool = true
+## Bar-units per second a held boost spends via `drain()`.
+@export var drain_rate: float = 1.0
+## Below this many charges, a held boost refuses to start at all.
+@export var min_start_charge: float = 0.25
 
 var max_charges: int = 2
 var charges: float = 2.0
+## How many equal partitions the pool is currently spent as. 1 = one long bar (the default,
+## continuous tier); N = N discrete tanks (e.g. Boost Drive).
+var tanks: int = 1
 
 ## Seconds left of the post-spend pause.
 var _delay_left: float = 0.0
@@ -60,6 +74,47 @@ func try_spend() -> bool:
 	if not can_spend():
 		return false
 	charges -= 1.0
+	_delay_left = recharge_delay_sec
+	charges_changed.emit(charges, max_charges)
+	return true
+
+
+## The size, in charge-units, of one tank at the current partition count.
+func tank_size() -> float:
+	return float(max_charges) / float(tanks)
+
+
+## Set the number of equal partitions the pool is spent as (clamped to >= 1; 1 = one long bar).
+## Does not touch `charges` — re-partitioning mid-hold never loses or grants charge.
+func set_tanks(n: int) -> void:
+	var clamped: int = maxi(n, 1)
+	if clamped == tanks:
+		return
+	tanks = clamped
+	tanks_changed.emit(tanks)
+
+
+## Continuous spend for a held boost: subtracts `amount` from `charges`, clamped at zero, and
+## restarts the post-spend pause on every call (so recharge never sneaks in while the boost is
+## actively draining). Returns false on the frame the meter reaches zero, which is what tells
+## the caller to stop the boost — same "refuse, don't weaken" contract as `try_spend()`.
+func drain(amount: float) -> bool:
+	var before: float = charges
+	charges = maxf(charges - amount, 0.0)
+	_delay_left = recharge_delay_sec
+	if charges != before:
+		charges_changed.emit(charges, max_charges)
+	return charges > 0.0
+
+
+## Whole-tank spend at the current partition count. Refuses — changing and announcing nothing —
+## if the remaining charge is short of a full tank by any amount, the same "refuse, don't
+## weaken" contract `try_spend()` uses for a whole charge.
+func try_spend_tank() -> bool:
+	var size: float = tank_size()
+	if charges < size:
+		return false
+	charges -= size
 	_delay_left = recharge_delay_sec
 	charges_changed.emit(charges, max_charges)
 	return true

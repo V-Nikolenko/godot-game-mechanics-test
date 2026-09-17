@@ -173,6 +173,130 @@ func test_charges_changed_carries_current_and_maximum() -> void:
 			"a refill tick announces itself too, so the readout can animate")
 
 
+## ── Tanks: one long bar, or N discrete partitions of the same pool ──────────────────────────
+func test_the_meter_starts_as_one_tank() -> void:
+	assert_eq(_meter.tanks, 1, "the default tier is one long bar, not per-charge tanks")
+	assert_almost_eq(_meter.tank_size(), float(_meter.max_charges), 0.001,
+			"at tanks == 1 the whole pool is one tank")
+
+
+func test_set_tanks_clamps_to_at_least_one_and_emits_once() -> void:
+	watch_signals(_meter)
+	_meter.set_tanks(3)
+	assert_eq(_meter.tanks, 3)
+	assert_signal_emit_count(_meter, "tanks_changed", 1, "one change, one emit")
+
+	_meter.set_tanks(0)
+	assert_eq(_meter.tanks, 1, "set_tanks() clamps to >= 1")
+
+	_meter.set_tanks(-5)
+	assert_eq(_meter.tanks, 1, "a negative request also clamps to 1, not below")
+
+
+func test_set_tanks_to_the_same_value_emits_nothing() -> void:
+	_meter.set_tanks(3)
+	watch_signals(_meter)
+	_meter.set_tanks(3)
+	assert_signal_not_emitted(_meter, "tanks_changed", "no change, no emit")
+
+
+func test_set_tanks_does_not_touch_charges() -> void:
+	_meter.charges = 1.5
+	_meter.set_tanks(3)
+	assert_almost_eq(_meter.charges, 1.5, 0.0001,
+			"re-partitioning the bar must not lose or grant charge")
+
+
+## ── drain(): the continuous, per-frame spend behind a held boost ───────────────────────────
+func test_drain_spends_continuously_and_returns_true_while_charge_remains() -> void:
+	_meter.charges = 2.0
+	assert_true(_meter.drain(0.5), "charge remains after the drain")
+	assert_almost_eq(_meter.charges, 1.5, 0.0001, "drain() subtracts exactly the amount asked")
+
+
+## Boundary: pins "false on the frame it empties" — the emptying call itself must report false.
+func test_drain_returns_false_on_the_frame_it_empties() -> void:
+	_meter.charges = 0.2
+	assert_false(_meter.drain(0.5), "the meter is empty after this drain")
+	assert_eq(_meter.charges, 0.0, "a drain past the remaining charge lands exactly on zero")
+
+
+func test_drain_never_goes_negative() -> void:
+	_meter.charges = 0.1
+	_meter.drain(10.0)
+	assert_eq(_meter.charges, 0.0, "a drain far larger than the remainder still clamps to zero")
+
+
+func test_drain_sets_the_full_recharge_delay_every_call() -> void:
+	_meter.charges = 2.0
+	_meter._delay_left = 0.0
+	_meter.drain(0.1)
+	assert_almost_eq(_meter._delay_left, _meter.recharge_delay_sec, 0.0001,
+			"a sustained drain must keep re-arming the pause, or it would trickle-charge mid-hold")
+
+
+## ── try_spend_tank(): the whole-tank spend at the current partition count ──────────────────
+func test_try_spend_tank_spends_exactly_one_partition() -> void:
+	_meter.max_charges = 3
+	_meter.charges = 3.0
+	_meter.set_tanks(3)
+	assert_true(_meter.try_spend_tank())
+	assert_almost_eq(_meter.charges, 2.0, 0.0001, "tanks == 3 over 3 charges: one tank == 1.0")
+
+
+func test_try_spend_tank_at_a_fractional_tank_size() -> void:
+	_meter.max_charges = 5
+	_meter.charges = 5.0
+	_meter.set_tanks(4)
+	assert_true(_meter.try_spend_tank())
+	assert_almost_eq(_meter.charges, 3.75, 0.0001, "tanks == 4 over 5 charges: one tank == 1.25")
+
+
+## Boundary: short by any amount refuses outright, same "refuse, don't weaken" contract as
+## try_spend().
+func test_try_spend_tank_refuses_when_short_by_any_amount() -> void:
+	_meter.max_charges = 4
+	_meter.set_tanks(4)
+	_meter.charges = 0.99
+	watch_signals(_meter)
+	assert_false(_meter.try_spend_tank(), "0.99 of a 1.0 tank is not a tank")
+	assert_almost_eq(_meter.charges, 0.99, 0.0001, "a refused spend costs nothing")
+	assert_signal_not_emitted(_meter, "charges_changed", "nothing changed, so nothing is announced")
+
+
+func test_try_spend_tank_sets_the_full_recharge_delay() -> void:
+	_meter.set_tanks(2)
+	_meter._delay_left = 0.0
+	assert_true(_meter.try_spend_tank())
+	assert_almost_eq(_meter._delay_left, _meter.recharge_delay_sec, 0.0001)
+
+
+## ── Persistence: tanks partitioning across the legal boost_charge_count range ──────────────
+func test_tank_size_is_legal_across_the_saved_capacity_range() -> void:
+	_meter.max_charges = ShipProgressionState.MIN_BOOST_CHARGES
+	_meter.set_tanks(1)
+	assert_almost_eq(_meter.tank_size(), float(ShipProgressionState.MIN_BOOST_CHARGES), 0.0001)
+
+	_meter.max_charges = ShipProgressionState.MAX_BOOST_CHARGES
+	_meter.set_tanks(1)
+	assert_almost_eq(_meter.tank_size(), float(ShipProgressionState.MAX_BOOST_CHARGES), 0.0001)
+
+
+## Boundary: a capacity raise mid-hold (the existing _on_progression_changed contract) must not
+## drop charges — re-confirmed here because BST-1 changes what "a bar-unit" means, not the
+## contract that grants one on a raise.
+func test_a_capacity_raise_mid_hold_does_not_drop_charges() -> void:
+	_meter.free()
+	_meter = BoostMeter.new()
+	_meter.bind_progression = true
+	_meter._ready()
+	_meter.charges = 0.5
+
+	ShipProgressionState.set_boost_charge_count(ShipProgressionState.MAX_BOOST_CHARGES)
+
+	assert_gte(_meter.charges, 0.5, "raising the cap mid-hold must never drop charges")
+
+
 ## ── Persistence: the mid-session upgrade ─────────────────────────────────────────────────
 ## `bind_progression = true`, under the full two-layer autoload discipline above (before_each
 ## pins the live count to MIN_BOOST_CHARGES): raising the saved capacity mid-flight must widen

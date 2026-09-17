@@ -1520,13 +1520,36 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "a6736fe",
+                  "subject": "Add AimReticle: a ring on the hull showing dead zone, aim lag and assist state"
+                }
+              ],
+              "at": "2026-09-17T00:56:27.499Z",
+              "run": "2026-09-17-0335-i3",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004701,
+                "claude-sonnet-5": 3.3838598000000006
+              },
+              "costUSD": 3.3885608000000005,
+              "turns": 80,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "the-boost-meter-is-one-long-line-that-gets-longer-with-every",
           "head": "The boost meter is one long line that gets longer with every upgrade",
           "body": "The resource side of the player's ask: \"We still have charges, but as one long charging line that is\nupgradable.\" `2-research.md` finding 7 (Ridge Racer 7) is the shipped precedent: the long held gauge\nand the discrete tanks are the SAME pool, rendered and spent differently. `1-context.md` §1 records\nthat `BoostMeter.charges` is already a continuous float — only `try_spend()` and `BoostBar._draw()`\nare whole-charge, so this is the smaller change as well as the better-precedented one.\n\nDone when:\n- `BoostMeter` gains `tanks: int = 1` (1 = one long bar), `set_tanks()`, `tank_size()`,\n  `drain(amount) -> bool` (continuous spend, false on the frame it empties), `try_spend_tank()`\n  (whole-tank spend, replacing `try_spend()`), and `@export`s `drain_rate = 1.0` (bar-units/s) and\n  `min_start_charge = 0.25`. Both spends set the full `recharge_delay_sec` pause.\n  `tanks_changed(tanks: int)` is declared WITH its parameter (`test_signal_emit_arity.gd`).\n  `bind_progression`, `_on_progression_changed` and the hand-driven `step(delta)` are untouched.\n- THE NOUN IS \"TANKS\", NOT \"SEGMENTS\" (plan review N5): `test_boost_bar.gd:142` already has\n  `test_segments_follow_capacity_on_signal` where \"segments\" means the per-charge PIPS, i.e.\n  `max_charges`. Reusing the word puts `max_charges = 5, tanks = 4` in one file with two meanings of\n  one noun. \"Tanks\" is also finding 7's own vocabulary.\n- `BoostBar` width becomes PROPORTIONAL to capacity (`_UNIT_WIDTH = 16.0`: 2 units = today's 32 px,\n  5 units = 80 px). Finding 9 (Breath of the Wild's stamina wheel) is why: re-slicing a fixed 32 px\n  into more, thinner pieces reads as a DOWNGRADE. \"Upgradable line\" means it gets longer.\n- It draws `tanks` tanks across that width, faint unit ticks at every whole bar-unit in BOTH\n  tiers (finding 9 again), and a different fill colour per tier (finding 7 ships per-tier colours).\n  The `setup()` seed-then-connect pattern stays verbatim.\n- NO SAVE MIGRATION: `ShipProgressionState.boost_charge_count` keeps its name, its 2-5 range and its\n  `+1 boost` pickup; only the meaning changes from \"pips\" to \"bar units\", and every on-disk value\n  stays legal. State it and test it — do not assume it.\n\nFiles: `open_space/scenes/entities/player/boost_meter.gd`, `open_space/scenes/gui/boost_bar.gd`,\n`tests/unit/test_boost_meter.gd`, `tests/integration/test_boost_bar.gd`.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",
