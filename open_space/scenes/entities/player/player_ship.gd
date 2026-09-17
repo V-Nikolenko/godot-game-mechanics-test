@@ -149,6 +149,7 @@ func _ready() -> void:
 		var id: StringName = ShipModuleState.get_equipped(slot)
 		if id != &"":
 			_apply_module(id)
+	_update_boost_tanks(ShipModuleState.get_equipped(&"engines"))
 
 ## The symmetric half of the AimCursor.apply() call in _ready() above. restore() is a safe
 ## no-op if apply() was never called (the &"keys" scheme, or a ship freed before _ready()
@@ -223,6 +224,12 @@ func _input(event: InputEvent) -> void:
 		return
 	for id: StringName in _module_pool.keys():
 		var mod: ShipModuleBase = _module_pool[id]
+		## Boost Drive is fired from Shift in open space (it spends a boost tank there —
+		## see _step_boost()); leaving H wired to it too would fire the same burst for free.
+		## player_fighter.gd's own H loop does not skip this — assault has no Shift boost to
+		## conflict with.
+		if mod.is_open_space_boost_verb():
+			continue
 		if mod.try_activate(self):
 			get_viewport().set_input_as_handled()
 			return  ## Consumed by module.
@@ -316,14 +323,36 @@ func _step_boost(boost_pressed: bool, boost_held: bool, delta: float) -> void:
 	## The meter has no _physics_process of its own — the ship owns its clock, so a meter on a
 	## ship whose physics is off (a mission menu opening) is frozen with it. Stepped before the
 	## trigger so the drain below (if any) sets a full, un-decremented recharge pause.
+	## The same freeze also covers a Boost Drive burst (the early `return` above stops this
+	## line from running at all while engine_boost_active is true) — that is correct, not a
+	## gap to route around: the tank spend already sets recharge_delay_sec = 0.5 of the
+	## module's 0.55 s burst, so at most ~0.05 s worth of regen is ever at stake.
 	if _boost_meter != null:
 		_boost_meter.step(delta)
 
+	## Boost Drive equipped: Shift becomes a tank-spend trigger for the module's OWN burst
+	## instead of the default hold-to-boost model below — the module's tick() drives
+	## `velocity` directly once engine_boost_active is set, and the early return at the top
+	## of this function is what stops the two systems fighting over it from the next frame.
+	## ORDER IS PART OF THE CONTRACT here too, same discipline as the default press branch
+	## below: can_activate() is checked BEFORE the spend, because try_activate() itself
+	## refuses outright on the module's 2.0 s cooldown while the retrigger floor here is only
+	## boost_hold_sec = 0.35 s — spending first would burn a whole tank on every press in
+	## that window for a `try_activate()` that was always going to return false.
+	var drive: ShipModuleBase = _module_pool.get(&"engine_boost", null) as ShipModuleBase
+	if drive != null:
+		if boost_pressed and drive.can_activate() \
+				and (_boost_meter == null or _boost_meter.try_spend_tank()):
+			drive.try_activate(self)
+			## Return immediately (review R2-N4): the module's 1500 px/s frame-one burst
+			## must not run into the tail clamp below, which would otherwise clip it straight
+			## back down to _speed_ceiling on the very frame it started.
+			return
 	## ORDER IS PART OF THE CONTRACT: `not _boosting` and the hold-window floor are both
 	## checked BEFORE anything else (`and` short-circuits left to right), so mashing Shift
 	## while a boost is already running never restarts the minimum-burn timer, and a meter
 	## below min_start_charge refuses outright — no velocity write, no drain.
-	if boost_pressed and not _boosting and _boost_hold_left <= 0.0 \
+	elif boost_pressed and not _boosting and _boost_hold_left <= 0.0 \
 			and (_boost_meter == null or _boost_meter.charges >= _boost_meter.min_start_charge):
 		_boosting = true
 		_boost_hold_left = boost_hold_sec
@@ -407,10 +436,34 @@ func _remove_module(id: StringName) -> void:
 func _on_module_equipped(_slot: StringName, module_id: StringName) -> void:
 	if module_id != &"":
 		_apply_module(module_id)
+	_update_boost_tanks(ShipModuleState.get_equipped(&"engines"))
 
-func _on_module_unequipped(_slot: StringName, prev_id: StringName) -> void:
+## `slot` deliberately NOT prefixed `_` here, unlike the sibling above: it is read below.
+func _on_module_unequipped(slot: StringName, prev_id: StringName) -> void:
 	if prev_id != &"":
 		_remove_module(prev_id)
+	## NOT ShipModuleState.get_equipped(&"engines") here — ShipModuleState.equip() emits
+	## module_unequipped BEFORE it writes _equipped[slot], so querying it from this handler
+	## would read back prev_id, the module that is in the process of being removed, and an
+	## unequip-to-nothing (no module_equipped emit to follow and correct it) would leave the
+	## bar stuck at 3/4 tanks forever. Reason from what this signal actually tells us instead.
+	var engines_now: StringName = \
+			&"" if slot == &"engines" else ShipModuleState.get_equipped(&"engines")
+	_update_boost_tanks(engines_now)
+
+## The tier switch (BST-3): no new state beyond what the caller already knows about the
+## engines slot. tanks = 1 (one long bar) without Boost Drive equipped; 3 with it; 4 once
+## ShipProgressionState.boost_charge_count is maxed out — the player's own "3-4 parts
+## depending on the amount of upgrades".
+func _update_boost_tanks(engines_equipped: StringName) -> void:
+	if _boost_meter == null:
+		return
+	if engines_equipped != &"engine_boost":
+		_boost_meter.set_tanks(1)
+		return
+	var at_max_capacity: bool = \
+			ShipProgressionState.boost_charge_count >= ShipProgressionState.MAX_BOOST_CHARGES
+	_boost_meter.set_tanks(4 if at_max_capacity else 3)
 
 ## Scene-connected: HurtBox.received_damage → _on_received_damage.
 func _on_received_damage(damage: int) -> void:

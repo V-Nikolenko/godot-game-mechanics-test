@@ -23,13 +23,47 @@ const D: float = 1.0 / 60.0
 
 var _sandbox := SaveSandbox.new()
 
+## Two-layer discipline (tests/README.md): SaveSandbox covers the user:// file ShipModuleState
+## and ShipProgressionState write, but neither autoload re-reads its file after boot, so the
+## BST-3 cases below also snapshot/restore the live in-memory state by hand, the same shape
+## tests/integration/test_module_list_lock.gd uses.
+var _saved_engine_equipped: StringName = &""
+var _saved_engine_unlocked: Array = []
+var _saved_boost_charge_count: int = 0
+
 
 func before_all() -> void:
 	_sandbox.capture()
+	_saved_engine_equipped = ShipModuleState.get_equipped(&"engines")
+	_saved_engine_unlocked = (ShipModuleState._unlocked[&"engines"] as Array).duplicate()
+	_saved_boost_charge_count = ShipProgressionState.boost_charge_count
 
 
 func after_all() -> void:
+	ShipModuleState._equipped[&"engines"] = _saved_engine_equipped
+	ShipModuleState._unlocked[&"engines"] = _saved_engine_unlocked
+	ShipProgressionState._boost_charge_count = _saved_boost_charge_count
 	_sandbox.restore()
+
+
+## Runs before EVERY case in this file, not just the BST-3 ones below — resetting the engines
+## slot to unequipped is a no-op for every earlier case, since none of them equips anything,
+## and is what stops a BST-3 case that forgets to clean up from leaking into its neighbours.
+func before_each() -> void:
+	ShipModuleState._equipped[&"engines"] = &""
+	(ShipModuleState._unlocked[&"engines"] as Array).clear()
+
+
+## Real unlock()/equip() calls (not direct dict writes) so the signals OpenSpacePlayerShip
+## connects to in _ready() actually fire — needed for the mid-hold re-partition case, which
+## equips onto an already-spawned ship rather than a fresh one.
+func _equip_engine_boost() -> void:
+	ShipModuleState.unlock(&"engines", &"engine_boost")
+	ShipModuleState.equip(&"engines", &"engine_boost")
+
+
+func _unequip_engine_boost() -> void:
+	ShipModuleState.equip(&"engines", &"")
 
 
 ## In the tree (see the header), but with its own _physics_process off: otherwise the real
@@ -376,3 +410,120 @@ func test_shift_held_across_a_physics_freeze_does_not_auto_resume() -> void:
 	ship._step_boost(false, true, D)
 	assert_false(ship._boosting, "a stale 'held' with no fresh press edge must not start a boost")
 	assert_almost_eq(ship._boost_meter.charges, before, 0.0001, "no charge spent across the freeze")
+
+
+## ── BST-3: Boost Drive re-partitions the bar and moves onto Shift ────────────────────────
+const FIGHTER_SCENE: PackedScene = preload("res://assault/scenes/player/player_fighter.tscn")
+
+func test_engine_boost_equipped_partitions_the_bar_into_three_tanks() -> void:
+	ShipProgressionState._boost_charge_count = ShipProgressionState.MIN_BOOST_CHARGES
+	_equip_engine_boost()
+	var ship := _spawn_ship(0.0)
+	assert_eq(ship._boost_meter.tanks, 3,
+			"Boost Drive equipped (below max boost_charge_count) partitions the bar into 3 tanks")
+
+
+func test_engine_boost_at_max_capacity_partitions_the_bar_into_four_tanks() -> void:
+	ShipProgressionState._boost_charge_count = ShipProgressionState.MAX_BOOST_CHARGES
+	_equip_engine_boost()
+	var ship := _spawn_ship(0.0)
+	assert_eq(ship._boost_meter.tanks, 4,
+			"a fully upgraded boost_charge_count gives Boost Drive its 4th tank")
+
+
+func test_without_engine_boost_the_bar_stays_one_long_tank() -> void:
+	var ship := _spawn_ship(0.0)
+	assert_eq(ship._boost_meter.tanks, 1, "no Boost Drive equipped means one long bar")
+
+
+## THE HEADLINE CASE for the tier switch: a press spends exactly one tank (not the whole
+## bar) and activates the module rather than the default hold-to-boost redirect.
+func test_engine_boost_press_spends_one_tank_and_activates_the_module() -> void:
+	_equip_engine_boost()
+	var ship := _spawn_ship(0.0)
+	var meter := ship._boost_meter
+	var before: float = meter.charges
+	ship._step_boost(true, true, D)
+	assert_almost_eq(meter.charges, before - meter.tank_size(), 0.0001,
+			"one press must spend exactly one tank, not a continuous drain")
+	assert_true(ship.engine_boost_active, "the module must have activated")
+
+
+## BOUNDARY: short of a full tank, the press must refuse outright — no spend, no activation
+## — the same "refuse, don't weaken" contract try_spend_tank() already uses.
+func test_engine_boost_refuses_a_press_short_of_a_full_tank() -> void:
+	_equip_engine_boost()
+	var ship := _spawn_ship(0.0)
+	var meter := ship._boost_meter
+	meter.recharge_rate = 0.0
+	meter.charges = meter.tank_size() * 0.5
+	ship._step_boost(true, true, D)
+	assert_almost_eq(meter.charges, meter.tank_size() * 0.5, 0.0001,
+			"a press short of a full tank must not spend anything")
+	assert_false(ship.engine_boost_active, "a refused press must not activate the module")
+
+
+## BOUNDARY (review B3): the module's own 2.0 s cooldown is checked BEFORE the spend, so a
+## press on a FULL meter during that cooldown costs nothing and activates nothing. This is
+## the case that fails on a spend-first ordering — every press between boost_hold_sec (0.35 s)
+## and the module's cooldown (2.0 s) would otherwise burn a whole tank for a try_activate()
+## that was always going to refuse.
+func test_engine_boost_press_during_cooldown_on_a_full_meter_costs_nothing() -> void:
+	_equip_engine_boost()
+	var ship := _spawn_ship(0.0)
+	var meter := ship._boost_meter
+	meter.recharge_rate = 0.0
+	var mod: ShipModuleBase = ship._module_pool[&"engine_boost"]
+	ship._step_boost(true, true, D)  ## first activation, starts the module's burst
+	assert_true(ship.engine_boost_active, "precondition: the module activated")
+	## Run the module's own burst out (0.55 s) so it ends and starts its 2.0 s cooldown —
+	## _end_boost() is what actually sets _cooldown_left, not the passage of wall-clock time.
+	var elapsed: float = 0.0
+	while elapsed < 0.6:
+		mod.tick(ship, D)
+		elapsed += D
+	assert_false(ship.engine_boost_active, "precondition: the burst has ended")
+	## Well past boost_hold_sec (0.35 s) but well inside the module's 2.0 s cooldown.
+	meter.charges = float(meter.max_charges)  ## refill to full, as if nothing had been spent
+	var before: float = meter.charges
+	ship._step_boost(true, true, D)
+	assert_almost_eq(meter.charges, before, 0.0001,
+			"a press refused by the module's cooldown must not spend a tank")
+	assert_false(ship.engine_boost_active, "the module must not have activated a second time")
+
+
+## Equipping the module while the ship already exists (mid-hold in spirit — the meter keeps
+## whatever charge it had) must re-partition the bar without granting or losing any charge.
+func test_equipping_engine_boost_mid_session_repartitions_without_losing_charge() -> void:
+	ShipProgressionState._boost_charge_count = ShipProgressionState.MIN_BOOST_CHARGES
+	var ship := _spawn_ship(0.0)
+	var meter := ship._boost_meter
+	assert_eq(meter.tanks, 1, "precondition: no module yet, one long bar")
+	var before: float = meter.charges
+	_equip_engine_boost()
+	assert_eq(meter.tanks, 3, "equipping mid-session must re-partition to 3 tanks")
+	assert_almost_eq(meter.charges, before, 0.0001,
+			"re-partitioning must not change the charge already in the pool")
+	_unequip_engine_boost()
+	assert_eq(meter.tanks, 1, "unequipping must return the bar to one long tank")
+
+
+## BOUNDARY: the free-activation hole this task closes. H (use_ability) must still fire Boost
+## Drive in assault, where there is no Shift boost to conflict with, but must NOT fire it in
+## open space, where Shift already spends the tank that pays for the same burst.
+func test_engine_boost_fires_on_h_in_assault_but_not_in_open_space() -> void:
+	_equip_engine_boost()
+	var h_press := InputEventAction.new()
+	h_press.action = &"use_ability"
+	h_press.pressed = true
+
+	var ship := _spawn_ship(0.0)
+	ship._input(h_press)
+	assert_false(ship.engine_boost_active,
+			"H must be a no-op for Boost Drive in open space — Shift is the paid verb there")
+
+	var fighter := FIGHTER_SCENE.instantiate() as AssaultPlayer
+	add_child_autofree(fighter)
+	fighter._input(h_press)
+	assert_true(fighter.engine_boost_active,
+			"H must still fire Boost Drive in assault — it has no Shift boost to conflict with")

@@ -2,12 +2,18 @@
 class_name EngineBoostModule
 extends ShipModuleBase
 
-const _BOOST_SPEED: float = 1500.0   ## px/s at the very start of the dash.
-const _BOOST_END_SPEED: float = 500.0 ## px/s at the tail end (ease-out target).
-const _BOOST_DURATION: float = 0.55  ## Seconds of the boost window.
-const _DAMAGE: int = 45              ## Damage per enemy hit during boost.
-const _HIT_RADIUS: float = 32.0      ## px around ship center to detect enemies.
-const _COOLDOWN: float = 2.0
+## These six are @export, not const, because this is the one module the player explicitly
+## asked to be "more powerful" (BST-3) — every other feel number in the epic is a fly-test
+## @export already, and this was the one exception. Defaults are unchanged, so this is
+## behaviour-neutral on its own; there is no inspector row (ShipModuleBase is a RefCounted
+## built by .new(), never placed in a scene), so the real win is a test can set these
+## without touching the shipped numbers.
+@export var _BOOST_SPEED: float = 1500.0   ## px/s at the very start of the dash.
+@export var _BOOST_END_SPEED: float = 500.0 ## px/s at the tail end (ease-out target).
+@export var _BOOST_DURATION: float = 0.55  ## Seconds of the boost window.
+@export var _DAMAGE: int = 45              ## Damage per enemy hit during boost.
+@export var _HIT_RADIUS: float = 32.0      ## px around ship center to detect enemies.
+@export var _COOLDOWN: float = 2.0
 
 ## Classes immune to boost damage (asteroids, ram ships — indestructible by design).
 const _IMMUNE_CLASSES: Array[String] = ["BigAsteroid", "SmallAsteroid", "Asteroid", "RamShip"]
@@ -27,7 +33,7 @@ var _prev_animation: StringName = &""
 
 func get_display_name() -> String: return "Boost Drive"
 func get_description() -> String:
-	return "Press H to supercharge engines. Blasts the ship forward with a speed burst that rapidly decelerates over 0.4 seconds. Invincible during boost. Deals 45 damage to anything in the path — asteroids and ram ships are immune to damage. 2-second cooldown."
+	return "In open space, hold Shift to spend one boost tank on a supercharged engine burst (Press H instead in Assault). Blasts the ship forward with a speed burst that rapidly decelerates over 0.4 seconds. Invincible during boost. Deals 45 damage to anything in the path — asteroids and ram ships are immune to damage. 2-second cooldown."
 func get_icon() -> Texture2D:
 	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_engine_boost.png")
 func get_slot() -> StringName: return &"engines"
@@ -38,6 +44,16 @@ func apply(_player: Node) -> void:
 func remove(player: Node) -> void:
 	if _active:
 		_end_boost(player)
+
+## try_activate()'s own first two lines, negated, and kept to exactly that expression on
+## purpose — the caller (OpenSpacePlayerShip._step_boost()) checks this BEFORE spending a
+## tank, so keeping the two guards in lockstep is what stops a tank being spent on a press
+## try_activate() would have refused anyway.
+func can_activate() -> bool:
+	return not _active and _cooldown_left <= 0.0
+
+func is_open_space_boost_verb() -> bool:
+	return true
 
 func try_activate(player: Node) -> bool:
 	if _active or _cooldown_left > 0.0:

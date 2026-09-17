@@ -1596,13 +1596,36 @@
           "dependsOn": [
             "the-boost-meter-is-one-long-line-that-gets-longer-with-every"
           ],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "618ae4a",
+                  "subject": "Hold Shift to sustain the boost, not just tap-trigger it"
+                }
+              ],
+              "at": "2026-09-17T01:16:09.783Z",
+              "run": "2026-09-17-0335-i5",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004889,
+                "claude-sonnet-5": 2.8291038000000004
+              },
+              "costUSD": 2.8339928000000003,
+              "turns": 50,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "equipping-boost-drive-splits-the-bar-into-3-4-tanks-each-spe",
           "head": "Equipping Boost Drive splits the bar into 3-4 tanks, each spent on a far stronger burst",
           "body": "The other half of the player's ask: \"Let's move existing boosting with charges to the 'boost drive'\nmodule, but make it more powerful… This line can be split to 3-4 parts for boost drive module\ndepending on the amount of upgrades.\" `2-research.md` finding 7: Ridge Racer's Extended Type\nre-partitions the SAME pool, Quad extends it — tanks and long bar are one gauge.\n\nDone when:\n- The tier switch needs NO new state: `OpenSpacePlayerShip` already connects\n  `ShipModuleState.module_equipped` / `module_unequipped` and applies equipped modules in `_ready()`.\n  `tanks = 1` without the module; 3 with it; 4 at full `boost_charge_count`.\n- **Check the module's readiness BEFORE spending the tank** (plan review B3):\n  `if module.can_activate() and meter.try_spend_tank(): module.try_activate(self)`.\n  `EngineBoostModule.try_activate()` refuses on a 2.0 s cooldown (`engine_boost_module.gd:10,42-44`)\n  while the Shift-side floor is only `boost_hold_sec = 0.35`, so a spend-first ordering burns a whole\n  tank for nothing on every press in that window. Add `can_activate()` as a virtual on\n  `ShipModuleBase` returning `false` (mirroring the base `try_activate()`, `ship_module_base.gd:58`),\n  overridden in `EngineBoostModule` as `not _active and _cooldown_left <= 0.0`. Same short-circuit\n  discipline the existing press branch already documents at `player_ship.gd:272-274`.\n  REQUIRED BOUNDARY TEST: a press on a FULL meter during the module's cooldown spends nothing and\n  activates nothing.\n- The module keeps its 1500->500 px/s burst, its full i-frames and its 45 contact damage — that is\n  the \"more powerful\" half — and is now PAID FOR with a tank instead of being free. Convert its six\n  `const`s (`engine_boost_module.gd:5-10`) to `@export var` with identical defaults so the one thing\n  the player asked to be stronger is actually tunable after a fly-test; behaviour-neutral.\n- Update `get_description()` (`engine_boost_module.gd:30`), which still says \"Press H to supercharge\n  engines\" and is rendered verbatim in the ship menu. Name Shift and the tank cost; scope H to assault.\n- **Close the free-activation hole.** `player_ship.gd::_input` loops the whole module pool on\n  `use_ability` (H), so leaving it makes Boost Drive fireable for free on H while Shift charges a\n  tank. Fix with the project's duck-typed precedent (`Bullet.is_armored()`, `face_instant()`):\n  `ShipModuleBase.is_open_space_boost_verb() -> bool` returning false, overridden true on\n  `EngineBoostModule`, and `OpenSpacePlayerShip._input` skips modules that report it.\n  `player_fighter.gd:114-124`'s own H loop is UNTOUCHED — Boost Drive must still work on H in\n  assault, where there is no Shift boost to conflict with. That is a required boundary test.\n- **Do NOT move `_boost_meter.step(delta)`.** An earlier draft said to hoist it above the\n  `engine_boost_active` early return \"so the pool refills during the module's burst\"; that is wrong\n  and is withdrawn (plan review B2). `_handle_thrust()` returns on the same flag FIRST\n  (`player_ship.gd:219-220`) and only then would call `_step_boost()` (line 253), so during a module\n  burst `_step_boost()` is never reached at all. The freeze is correct and intentional — the ship\n  owns the meter's clock (`boost_meter.gd:68-72`) — and the amount at stake is ~0.035 bar-units,\n  since the tank spend already set `recharge_delay_sec = 0.5` of the 0.55 s burst. Add a comment\n  saying so; re-run the module-precedence cases rather than assuming they stay green.\n\nFiles: `open_space/scenes/entities/player/player_ship.gd`, `global/ship_modules/ship_module_base.gd`,\n`global/ship_modules/engine_boost_module.gd`, `tests/integration/test_open_space_boost_verb.gd`.\n\nThis is the epic's one cross-cutting task (it edits the base class of all fifteen modules). It is\nstill a medium, but if it turns out to need structural change, escalate with\n`set-meta ... --complexity large --model opus` rather than pushing through.",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

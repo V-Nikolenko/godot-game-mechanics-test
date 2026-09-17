@@ -757,7 +757,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
       `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
 
-## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 3 open)
+## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 2 open)
 
 **Review history**
 
@@ -991,8 +991,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Files: `open_space/scenes/entities/player/player_ship.gd`,
       `tests/integration/test_open_space_boost_verb.gd`.
       after: the-boost-meter-is-one-long-line-that-gets-longer-with-every
+      1 run(s), $2.83; last on claude-sonnet-5
 
-- [ ] **Equipping Boost Drive splits the bar into 3-4 tanks, each spent on a far stronger burst** _(todo - feature, medium, sonnet)_
+- [x] **Equipping Boost Drive splits the bar into 3-4 tanks, each spent on a far stronger burst** _(done - feature, medium, sonnet)_
       The other half of the player's ask: "Let's move existing boosting with charges to the 'boost drive'
       module, but make it more powerful… This line can be split to 3-4 parts for boost drive module
       depending on the amount of upgrades." `2-research.md` finding 7: Ridge Racer's Extended Type
