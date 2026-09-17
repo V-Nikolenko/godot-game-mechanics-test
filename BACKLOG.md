@@ -757,7 +757,7 @@ the signal that the change was deliberate. Test names are given so the fix has a
       so a future regeneration cannot repeat the mistake. Two defects found in passing — an opaque
       `station_core.png` and a broken `scripts/pixellab.sh` — are under *Discovered*.
 
-## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 6 open)
+## Open-space movement feel, pass 2: aim reticle, camera rework, dynamic flight, hold-to-boost  (`open-space-movement-feel-pass-2-aim-reticle-camera-rework-dy`, 5 open)
 
 **Review history**
 
@@ -876,8 +876,9 @@ the signal that the change was deliberate. Test names are given so the fix has a
       Files: `global/systems/aim_cursor.gd` (new), `open_space/scenes/entities/player/player_ship.gd`,
       `tests/unit/test_aim_cursor.gd` (new), `tests/integration/test_open_space_aim_cursor.gd` (new).
       `Input`'s cursor state is not readable, so assert through a static `is_applied()` seam on `AimCursor`.
+      1 run(s), $1.57; last on claude-sonnet-5
 
-- [ ] **A ring around the ship shows where the nose is actually heading** _(todo - feature, medium, sonnet)_
+- [x] **A ring around the ship shows where the nose is actually heading** _(done - feature, medium, sonnet)_
       The other half of the reticle (`3-plan.md` → Thread 1). `2-research.md` finding 6 (a dual-stick
       post-mortem) keeps a "target" and a "view" value and says the crosshair should show the gap rather
       than snap; `ShipTurnController` already IS that pair. Finding 6 is also explicit that aim assists

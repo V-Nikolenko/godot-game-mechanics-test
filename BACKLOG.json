@@ -1483,13 +1483,36 @@
           "complexity": "medium",
           "model": "sonnet",
           "dependsOn": [],
-          "runs": []
+          "runs": [
+            {
+              "commits": [
+                {
+                  "sha": "d99cd25",
+                  "subject": "Replace open-space OS cursor with a hardware crosshair (AimCursor)"
+                }
+              ],
+              "at": "2026-09-17T00:46:29.788Z",
+              "run": "2026-09-17-0335-i2",
+              "requested": "sonnet",
+              "primary": "claude-sonnet-5",
+              "fallbackUsed": false,
+              "models": {
+                "claude-haiku-4-5-20251001": 0.004324,
+                "claude-sonnet-5": 1.5637506000000005
+              },
+              "costUSD": 1.5680746000000005,
+              "turns": 51,
+              "subagents": 0,
+              "outcome": "success",
+              "gate": "pass"
+            }
+          ]
         },
         {
           "id": "a-ring-around-the-ship-shows-where-the-nose-is-actually-head",
           "head": "A ring around the ship shows where the nose is actually heading",
           "body": "The other half of the reticle (`3-plan.md` → Thread 1). `2-research.md` finding 6 (a dual-stick\npost-mortem) keeps a \"target\" and a \"view\" value and says the crosshair should show the gap rather\nthan snap; `ShipTurnController` already IS that pair. Finding 6 is also explicit that aim assists\nmust be VISIBLE, because invisible auto-aim \"created problematic gaps between input and display\".\n\nDone when:\n- A new `AimReticle extends Node2D` (`top_level`) is a child of `player_ship.tscn`, drawn with\n  `_draw()` primitives in the `BoostBar` / `OverheatBar` idiom, found BY CLASS in `_ready()`.\n- **The ship must reassign `_reticle.global_position` every physics frame** (plan review N11).\n  `top_level` reinterprets local coordinates as GLOBAL, so without that line the ring sits at world\n  origin, not on the ship. Same pattern as the two bars at `player_ship.gd:148-151`, but at offset\n  `Vector2.ZERO` since the ring is centred on the hull. `top_level` is what keeps it upright while\n  the hull rotates — an angular readout that rotates with what it measures reads nothing.\n- Centred on the ship it draws: the dead-zone ring, a tick at the turn controller's `_target_angle`,\n  a tick at the hull's `rotation` (the gap between them is the inertial lag made visible), and a\n  state colour for `_snap_held` and for steering-disabled (window unfocused).\n- The ring radius is READ from `ShipTurnController.mouse_dead_zone_px`, never duplicated as a\n  constant. `ShipTurnController` gains read-only `is_snap_held()` / `is_steering_enabled()` beside\n  the existing `get_target_angle()`; no behaviour change.\n- It is FED the cursor from `_handle_rotation`'s single `get_global_mouse_position()` call\n  (`1-context.md` §3 — the mouse is read in exactly one line project-wide; a reticle that read it\n  itself would be untestable headlessly).\n- Hidden under the `&\"keys\"` scheme and while the ship's physics is off (the mission-menu freeze,\n  §6.5), so it is never left mid-swing behind the menu.\n- It stores what it draws as members (`_ring_radius`, `_target_angle`, `_hull_angle`, `_state`) — a\n  `_draw()`-only node exposes nothing a headless test can assert on.\n\nTEST HYGIENE: the scheme-dependent cases touch `SettingsState`, whose in-memory value survives the\n`user://` sandbox — do the two-layer capture-and-restore by hand (`tests/README.md:745-751`,\n`test_player_ship_turn_wiring.gd:21-31`).\n\nFiles: `open_space/scenes/gui/aim_reticle.gd` (new), `player_ship.tscn`, `player_ship.gd`,\n`ship_turn_controller.gd`, `tests/unit/test_aim_reticle.gd` (new),\n`tests/integration/test_aim_reticle_wiring.gd` (new, anti-inert).",
-          "state": "todo",
+          "state": "done",
           "badge": null,
           "planDir": null,
           "kind": "impl",

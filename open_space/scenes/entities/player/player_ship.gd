@@ -60,6 +60,11 @@ var _boost_meter: BoostMeter = null
 ## flies with no camera feel rather than crashing.
 var _camera_rig: OpenSpaceCameraRig = null
 
+## The AimReticle child — the ring that shows the dead zone, the aim lag and whether an
+## assist is being honoured. Resolved by TYPE for the same reason as the three above.
+## Null-checked at every use so a ship stripped of the node still flies with no ring.
+var _reticle: AimReticle = null
+
 ## Active module instances — created lazily in _apply_module().
 var _module_pool: Dictionary = {}  # { StringName: ShipModuleBase }
 
@@ -82,6 +87,8 @@ func _ready() -> void:
 			_boost_meter = child as BoostMeter
 		elif child is OpenSpaceCameraRig and _camera_rig == null:
 			_camera_rig = child as OpenSpaceCameraRig
+		elif child is AimReticle and _reticle == null:
+			_reticle = child as AimReticle
 	if _turn != null:
 		## Seed the scheme from the persisted setting, and the target angle from the
 		## hull's ACTUAL facing, rather than relying on the controller and the ship
@@ -97,6 +104,11 @@ func _ready() -> void:
 	## and quit.
 	if SettingsState.get_open_space_scheme() == &"mouse":
 		AimCursor.apply()
+
+	## Same scheme gate as the cursor above: under &"keys" there is nothing for the ring to
+	## show, since the controller never reads the cursor and _target_angle == rotation.
+	if _reticle != null:
+		_reticle.set_scheme_visible(SettingsState.get_open_space_scheme() == &"mouse")
 
 	if _camera_rig != null:
 		## Seed the accessibility scale from the persisted setting and follow it live —
@@ -167,6 +179,9 @@ func _physics_process(delta: float) -> void:
 		_overheat_bar.global_position = global_position + Vector2(0.0, 20.0)
 	if _boost_bar != null:
 		_boost_bar.global_position = global_position + Vector2(0.0, 26.0)
+	## Centred on the hull, unlike the two bars above — the ring measures the ship itself.
+	if _reticle != null:
+		_reticle.global_position = global_position
 	_update_camera_feel(delta)
 	## Tick all equipped modules every frame (handles cooldowns, timed effects).
 	for id: StringName in _module_pool.keys():
@@ -230,6 +245,11 @@ func _handle_rotation(delta: float) -> void:
 	## a headless run that cannot place a cursor.
 	_turn.set_aim_target(global_position, get_global_mouse_position())
 	rotation = _turn.step(rotation, turn, delta)
+	## Fed what the controller just computed, on the very next line — never its own read of
+	## the mouse. Ring radius comes straight from the controller's export; never duplicated.
+	if _reticle != null:
+		_reticle.set_aim(_turn.mouse_dead_zone_px, _turn.get_target_angle(), rotation,
+				_turn.is_snap_held(), _turn.is_steering_enabled())
 
 func _handle_thrust(delta: float) -> void:
 	## EngineBoostModule controls velocity directly while active;
