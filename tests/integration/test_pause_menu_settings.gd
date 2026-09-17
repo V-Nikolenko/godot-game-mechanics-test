@@ -20,20 +20,24 @@ const OPEN_SPACE_SCENE: PackedScene = preload("res://global/ui/pause_menu/open_s
 var _sandbox := SaveSandbox.new()
 var _menu: PauseMenu
 var _scheme_before: StringName
+var _camera_motion_before: StringName
 
 
 func before_all() -> void:
 	_sandbox.capture()
 	_scheme_before = SettingsState.get_open_space_scheme()
+	_camera_motion_before = SettingsState.get_camera_motion()
 
 
 func after_all() -> void:
 	SettingsState.set_open_space_scheme(_scheme_before)
+	SettingsState.set_camera_motion(_camera_motion_before)
 	_sandbox.restore()
 
 
 func before_each() -> void:
 	SettingsState.set_open_space_scheme(&"mouse")
+	SettingsState.set_camera_motion(&"full")
 	_menu = MISSION_SCENE.instantiate() as PauseMenu
 	add_child_autofree(_menu)
 	_menu.visible = true  ## Skip _try_open(): no tree pause, no camera/HUD side effects.
@@ -156,3 +160,59 @@ func test_panel_reflects_a_value_changed_behind_its_back_before_open() -> void:
 
 	assert_eq(_menu._settings_panel._value_lbl.text, "Classic (A/D)",
 			"open() re-reads SettingsState rather than trusting a stale label")
+
+
+## ── The camera-motion row (CAM-2) ───────────────────────────────────────────
+
+func test_two_rows_exist_and_navigate_reaches_the_camera_row() -> void:
+	_menu._cursor = 4
+	_menu._confirm()
+	var panel: SettingsPanel = _menu._settings_panel
+
+	assert_eq(panel._rows.size(), 2, "the panel grew by exactly one row")
+	assert_eq(panel._cursor_row, 0)
+
+	panel.navigate(1)
+
+	assert_eq(panel._cursor_row, 1)
+
+
+func test_cycle_on_the_camera_row_walks_full_reduced_off_full() -> void:
+	_menu._cursor = 4
+	_menu._confirm()
+	var panel: SettingsPanel = _menu._settings_panel
+	panel.navigate(1)
+	assert_eq(SettingsState.get_camera_motion(), &"full", "precondition")
+
+	panel.cycle(1)
+	assert_eq(SettingsState.get_camera_motion(), &"reduced")
+	assert_eq(panel._value_lbls[1].text, "Reduced")
+
+	panel.cycle(1)
+	assert_eq(SettingsState.get_camera_motion(), &"off")
+	assert_eq(panel._value_lbls[1].text, "Off")
+
+	panel.cycle(1)
+	assert_eq(SettingsState.get_camera_motion(), &"full", "the three values wrap")
+	assert_eq(panel._value_lbls[1].text, "Full")
+
+
+func test_ships_rig_motion_scale_follows_a_live_camera_motion_change() -> void:
+	## THE PLACEMENT-ONLY TRAP, same shape as the steering row's own case: proves the setting
+	## reaches a live OpenSpaceCameraRig through the signal, not just the settings store.
+	var ship := (preload("res://open_space/scenes/entities/player/player_ship.tscn") as PackedScene).instantiate()
+	add_child_autofree(ship)
+	ship.set_physics_process(false)
+	var rig: OpenSpaceCameraRig = null
+	for child: Node in ship.get_children():
+		if child is OpenSpaceCameraRig:
+			rig = child as OpenSpaceCameraRig
+	assert_not_null(rig, "precondition: player_ship.tscn must wire OpenSpaceCameraRig")
+
+	SettingsState.set_camera_motion(&"off")
+
+	assert_eq(rig.get_motion_scale(), 0.0, "a live change must reach the ship's rig immediately")
+
+	SettingsState.set_camera_motion(&"full")
+
+	assert_eq(rig.get_motion_scale(), 1.0)

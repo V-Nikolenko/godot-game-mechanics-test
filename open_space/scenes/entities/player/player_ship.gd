@@ -90,6 +90,14 @@ func _ready() -> void:
 		SettingsState.open_space_scheme_changed.connect(
 				func(scheme: StringName) -> void: _turn.set_scheme(scheme, rotation))
 
+	if _camera_rig != null:
+		## Seed the accessibility scale from the persisted setting and follow it live —
+		## a player who turns camera_motion off mid-flight should feel it immediately,
+		## not on the next scene load.
+		_camera_rig.set_motion_scale(_camera_motion_scale(SettingsState.get_camera_motion()))
+		SettingsState.camera_motion_changed.connect(
+				func(value: StringName) -> void: _camera_rig.set_motion_scale(_camera_motion_scale(value)))
+
 	## Overheat bar — top_level keeps it upright as the ship rotates;
 	## _physics_process updates its global_position to track the player.
 	_overheat_bar = OverheatBar.new()
@@ -356,6 +364,17 @@ func _on_health_changed(current: int) -> void:
 		await get_tree().create_timer(1.2).timeout
 		if is_instance_valid(self):
 			get_tree().reload_current_scene()
+
+## SettingsState.camera_motion (&"full"/&"reduced"/&"off") -> the rig's _motion_scale.
+## An unrecognised value reads as &"full" here too, matching SettingsState's own fallback.
+static func _camera_motion_scale(value: StringName) -> float:
+	match value:
+		&"off":
+			return 0.0
+		&"reduced":
+			return 0.5
+		_:
+			return 1.0
 
 ## Pushes the speed-zoom + camera-lead targets (computed by _camera_rig) into the
 ## CameraDirector. The director blends smoothly between active effects, so no internal
