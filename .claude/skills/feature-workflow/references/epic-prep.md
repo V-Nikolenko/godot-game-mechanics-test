@@ -21,10 +21,24 @@ and the triage summary. Every stage works from them:
   document name) and research the ones that need it. Where the documents reference existing code
   or docs (e.g. `docs/enemy-rework/current-enemies.md`), read those too.
 - **Plan:** add a *Requirements coverage* table to `3-plan.md` — each requirement → the task key(s)
-  in `tasks.json` that deliver it, or "out of scope" with the reason. Nothing may be silently
-  dropped. If the documents describe more than one epic's worth of work, plan the part the epic
-  description scopes and list the rest as out of scope.
+  in `tasks.json` that deliver it, "later phase N" when another phase owns it, or "out of scope"
+  with the reason. Nothing may be silently dropped.
 - **Review:** pass the documents to the reviewer along with the idea (see below).
+
+**Phases.** A large idea is split into an ordered chain of phase epics that share one idea
+folder, `docs/ideas/<idea id>/`: the attached documents and `DECISIONS.md`, the running log of
+decisions every phase must respect. Phase N only starts once phase N-1 is implemented. When your
+prompt has a *Phase X of N* section:
+
+- **Stay inside your phase's scope.** Plan and create tasks only for what the scope names;
+  requirements owned by other phases go in the coverage table as "later phase N", not into tasks.
+- **Build on earlier phases, don't redo them.** Before anything else read `DECISIONS.md` and each
+  earlier phase's `3-plan.md` (paths are in the prompt), and read the code they produced. Never
+  contradict a recorded decision silently — if one must change, say so explicitly in `3-plan.md`
+  and in the decision log.
+- **Plan stage: append to `DECISIONS.md`** (never rewrite earlier sections) a
+  `## Phase N - <title> (<date>)` section with what later phases must know: architecture choices,
+  conventions, names and interfaces they will build on, and what was deliberately deferred.
 
 You are doing **one** stage — the one named by your item's type. Do not run ahead into the next
 stage even if it looks quick: each is a fresh session with a clean context on purpose, and the
@@ -35,7 +49,8 @@ new epics). The harness reads the files named below after your run; **their exac
 are a contract** — a missing or malformed file fails the run.
 
 **Prep is documents only.** Prep runs skip the project's verification gate (`/agent/verify.sh`), so
-they may only change files under the epic plan directory — touching any other file fails the run and
+they may only change files under the epic plan directory (and, for an idea's phases, the shared
+docs/ideas/<idea id>/ folder) — touching any other file fails the run and
 nothing is committed. Don't run the gate yourself either; read code, don't change it. Your final
 message is shown to the owner on the task, and the plan directory's documents appear in AI-Kanban
 under the epic's *Plan documents*.
