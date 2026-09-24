@@ -12,6 +12,20 @@ TRIAGE  ->  RESEARCH  ->  PLAN  ->  PLAN REVIEW  ->  the owner decides
 its code — not the model — creates the epic and the three prep tasks. By the time you run, the
 epic exists: its description is the triage summary, and the prompt quotes the **Original idea**.
 
+**Attached documents.** When the owner attached `.md` files to the idea, your prompt carries them in
+full under *Attached documents*. They are the owner's detailed spec and outrank the one-line idea
+and the triage summary. Every stage works from them:
+
+- **Research:** list every concrete requirement, constraint and open question the documents state
+  (in `1-context.md` under *Requirements from the attached documents*, each quoted briefly with the
+  document name) and research the ones that need it. Where the documents reference existing code
+  or docs (e.g. `docs/enemy-rework/current-enemies.md`), read those too.
+- **Plan:** add a *Requirements coverage* table to `3-plan.md` — each requirement → the task key(s)
+  in `tasks.json` that deliver it, or "out of scope" with the reason. Nothing may be silently
+  dropped. If the documents describe more than one epic's worth of work, plan the part the epic
+  description scopes and list the rest as out of scope.
+- **Review:** pass the documents to the reviewer along with the idea (see below).
+
 You are doing **one** stage — the one named by your item's type. Do not run ahead into the next
 stage even if it looks quick: each is a fresh session with a clean context on purpose, and the
 artifacts are how they hand off.
@@ -175,7 +189,7 @@ This list is what the owner reads and prioritises, so:
 ## PLAN REVIEW (type `plan-review`)
 
 Dispatch a **subagent** (Task tool, `subagent_type: general-purpose`) with the prompt below, the
-epic plan directory filled in, and the **Original idea** from your own prompt pasted at the end —
+epic plan directory filled in, and the **Original idea** and any **Attached documents** from your own prompt pasted at the end —
 the subagent cannot see your prompt. It must be able to genuinely say no. Never review your own plan and call it approved — the verdict
 must come from the subagent.
 
@@ -205,7 +219,8 @@ Then record its verdict in `review.json` next to `4-review.md`:
 > before hours of unattended implementation.
 >
 > Request changes or reject if any of these hold:
-> - It does not actually solve the original idea (pasted at the end of this prompt).
+> - It does not actually solve the original idea (pasted at the end of this prompt), or it drops a
+>   requirement from the attached documents without listing it as out of scope with a reason.
 > - It reinvents something that already exists in `global/components/` or elsewhere.
 > - It contradicts a convention in `CLAUDE.md` (composition over inheritance, config-driven `.tres`
 >   stats, 640x360 design-space coordinates scaled by `ArenaCamera.WORLD_SCALE`).
