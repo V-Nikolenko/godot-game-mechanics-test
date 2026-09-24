@@ -199,18 +199,18 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   declaration; a typed one is usually an *alias* decoding to a UID another resource owns, and both
   fail silently. Leave the reference UID-less (legal — Godot falls back to the path) or mint one
   with the headless `ResourceUID.create_id()` snippet in [tests/README.md](tests/README.md).
-- **Commit and push to `agent/auto-dev` — that is the working branch for all Claude work**,
-  whether that is the unattended NAS loop or an interactive session. You do not need to ask.
-  Don't leave finished work sitting uncommitted for the user to stage by hand.
+- **`agent/auto-dev` is the working branch for all Claude work**, whether that is an AI-Kanban
+  run on the NAS or an interactive session. You do not need to ask to commit there.
   - Check you are on it first (`git branch --show-current`). If you are not, switch — do not
     start committing wherever you happen to be.
-  - **Get a green gate before you push**: `bash /agent/verify.sh` in the container, or
-    `godot --headless --path . --import` plus the GUT suite locally. Never push work you have not
-    verified. In the NAS loop the harness also commits and pushes anything left uncommitted, but
-    only after the same gate passes.
-  - Write a real commit subject that names what changed. `agent: cycle <stamp>` is the harness's
-    own bookkeeping prefix — don't use it for actual work, or the change vanishes from the
-    "shipped features" list, which filters that prefix out.
+  - **Get a green gate before you commit**: `bash /agent/verify.sh` in the container, or
+    `godot --headless --path . --import` plus the GUT suite locally. Never commit work you have not
+    verified.
+  - **In an AI-Kanban run, do not push.** The worker has no GitHub credentials; the harness runs
+    the same gate after you and commits whatever you left, only if it passes. The owner pushes.
+    In an interactive session, commit and push as usual — don't leave finished work sitting
+    uncommitted for the user to stage by hand.
+  - Write a real commit subject that names what changed.
   - No other branches and no worktrees unless asked.
   - **`main` stays off-limits.** Never commit to it, never push to it, never merge into it,
     never force-push or rewrite history on any branch. **The user merges `agent/auto-dev` to
@@ -259,9 +259,9 @@ Implementation of a large item starts only on `VERDICT: APPROVED`. A rejected pl
 outcome: it means wrong work was avoided cheaply.
 
 **Running the heavyweight pipeline on a one-line fix is as much a failure as skipping it on a
-system change.** If a small item turns out to need architectural work, record the escalation with
-`./scripts/backlog-cli.js set-meta <taskId> --complexity large --model opus` rather than quietly
-switching tracks — the board should show what is actually happening.
+system change.** If a small item turns out to need architectural work, stop and end the run with
+`Result: ESCALATE` and why (see the `feature-workflow` skill) rather than quietly switching
+tracks — the owner re-sizes the task on the board, so it shows what is actually happening.
 
 ## MANDATORY — keep the docs current
 

@@ -415,8 +415,8 @@ see it). It now measures its deadline with `Time.get_ticks_msec()` and creates n
 ## These are characterization tests
 
 They pin down what the code does **today**, bugs included. A test that documents surprising
-behaviour is marked `CHARACTERIZED` in a comment, and the suspicion is filed as a task via
-`./scripts/backlog-cli.js add-task code-health-backlog "<short head>"`. Do not "fix" the code to
+behaviour is marked `CHARACTERIZED` in a comment, and the suspicion is listed under **Follow-ups**
+in the run's final message (known ones: `docs/discovered-bugs.md`). Do not "fix" the code to
 make one of these read better without first deciding that the behaviour itself is wrong — the
 point of the suite is that a behaviour change is a *visible* change.
 

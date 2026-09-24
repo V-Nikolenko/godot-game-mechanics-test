@@ -316,7 +316,7 @@ multiplies the combo by `escape_combo_multiplier` (0.75) *outside* its `if count
 so `wave_index == -1` does not exempt it. A squad the player ignores costs 0.75 **twice**, i.e.
 0.5625. This is a **deliberate balance decision**, pinned by a test with real numbers — the
 alternative (not announcing) means killing a reinforcement awards nothing at all, which reads as a
-bug. Raised in `BACKLOG.md` under *Discovered* for the user to overrule.
+bug. Logged in `docs/discovered-bugs.md` for the user to overrule.
 
 ### The cap
 

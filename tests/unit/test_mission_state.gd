@@ -1,6 +1,6 @@
 ## Characterization tests for MissionState (global/autoloads/mission_state.gd).
 ## These pin down what the code does TODAY. Where behaviour looks surprising it is
-## marked "CHARACTERIZED" and the suspicion is logged in BACKLOG.md → Discovered.
+## marked "CHARACTERIZED" and the suspicion is logged in docs/discovered-bugs.md.
 ## The star-scale tests are the exception: they are individually marked "INTENT"
 ## because the 1–3 clamp was reviewed and confirmed deliberate, so they assert what
 ## the code SHOULD do and a change to it is a regression, not a re-baseline.
