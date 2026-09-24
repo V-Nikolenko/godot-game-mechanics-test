@@ -31,8 +31,14 @@ stage even if it looks quick: each is a fresh session with a clean context on pu
 artifacts are how they hand off.
 
 Everything lives in the **epic plan directory** from your work item (`docs/plans/<Epic ID>/` for
-new epics). The harness reads the files named below after your run and the verification gate pass;
-**their exact names and shapes are a contract** — a missing or malformed file fails the run.
+new epics). The harness reads the files named below after your run; **their exact names and shapes
+are a contract** — a missing or malformed file fails the run.
+
+**Prep is documents only.** Prep runs skip the project's verification gate (`/agent/verify.sh`), so
+they may only change files under the epic plan directory — touching any other file fails the run and
+nothing is committed. Don't run the gate yourself either; read code, don't change it. Your final
+message is shown to the owner on the task, and the plan directory's documents appear in AI-Kanban
+under the epic's *Plan documents*.
 
 ---
 
