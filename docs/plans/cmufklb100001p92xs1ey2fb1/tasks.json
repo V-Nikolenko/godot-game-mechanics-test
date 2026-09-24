@@ -1,0 +1,164 @@
+{
+  "tasks": [
+    {
+      "key": "t1-pin-base-enemy",
+      "title": "Every enemy's current damage, death and hurtbox behaviour is pinned by tests before the base class changes",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §3 step 1, §4 row test_base_enemy.gd. Characterization only, with no production change. Add tests/integration/test_base_enemy.gd, which sweeps assault/scenes/enemies/*/*.tscn and pins the post-_ready() hurtbox mask for every enemy (1121; ram_ship 33, then 97 after its first received hit; the station turret 1121). It also pins the damage → hit flash → died → queue_free flow (died emitted once, was_killed set), scoring fields copied from config, and the 180° AnimatedSprite2D flip (light_assault_ship, ram_ship).",
+      "acceptanceCriteria": "- The test is green on the current code and fails if base_enemy.gd:51 is changed to any other value (verify once by hand, then revert).\n- The roster is a directory sweep, so a new enemy dir is covered automatically.\n- Non-lethal damage does not emit died.\n- No production files are changed. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "test",
+      "complexity": "medium",
+      "dependsOn": []
+    },
+    {
+      "key": "t2-pin-path-mover",
+      "title": "Path-driven Assault waves are pinned by tests: position, AI suspension, exits and off-screen culling",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §3 step 2, §4 row test_enemy_path_mover.gd. Characterization of assault/scenes/enemies/enemy_path_mover.gd. Pin position = spawn + movement.sample(t) * ArenaCamera.WORLD_SCALE; actor physics suspended; a child named AIStateMachine disabled; FREE_ON_DURATION with exit_time and with total_duration(); FREE_ON_SCREEN_EXIT with the 80 px margin; the never-on-screen actor that is not culled; the no-camera warning path (no error); and nose-down facing atan2(-vel.x, vel.y). Use simulate() with a fixed delta, a test Camera2D, and a minimal CharacterBody2D actor under tests/helpers/.",
+      "acceptanceCriteria": "- Boundary cases: exactly 80 px outside is not culled, and just beyond is culled; an actor spawned off-screen that never enters is never culled.\n- No production files are changed. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "test",
+      "complexity": "medium",
+      "dependsOn": []
+    },
+    {
+      "key": "t3-pin-drones",
+      "title": "The Drone Interceptor's orbit-and-dash and the Open Space Patrol Drone's drift are pinned by tests",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §3 step 3, §4 rows test_drone_interceptor.gd and test_patrol_drone.gd. Characterization. Drone Interceptor: zero velocity with no player; ENTER at approach_speed toward the player; switches to ORBIT at <= orbit_radius; orbit correction speed clamped to [60, orbit_correct_speed]; the dash starts when its timer expires; the dash direction uses player.velocity * dash_prediction_time; dash_speed; contact sets health to 0; facing converges nose-up toward the target. Seed the global RNG inside the test. PatrolDrone: drift = initial_direction * move_speed; a zero direction falls back to RIGHT; scene-wired damage decreases health; health 0 → died + freed. Pin, marked as characterization of a bug: HurtBox mask == 64 (the player's rockets pass through it) and body layer 256. These tests become the port's acceptance test in t14-port-interceptor.",
+      "acceptanceCriteria": "- The tests assert on public observable state (velocity, position, rotation, health, freed), not on private _phase names, so they survive the t14 port unchanged apart from setup.\n- Boundary: at exactly orbit_radius the drone switches to ORBIT.\n- No production files are changed. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "test",
+      "complexity": "medium",
+      "dependsOn": []
+    },
+    {
+      "key": "t4-layers",
+      "title": "Every collision layer the game uses has a name, and code can refer to layers by name instead of magic numbers",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.8 and P-6. In project.godot [layer_names]: fix the layer 3 typo (environemnt_player → environment_player) and name layer 5 pickups, layer 6 player_rockets and layer 11 hazard_contact. Numeric values are unchanged. Add global/physics/collision_layers.gd (class_name CollisionLayers) with constants for every named layer. Add the invariant test tests/integration/test_collision_layer_names.gd: every bit set in any .tscn/.tres collision_layer/collision_mask outside addons/ has a name; every constant equals 1 << (n-1) for the layer with the matching name; a synthetic mask using bit 4 (8) is reported as unnamed. Do not allocate new layers.",
+      "acceptanceCriteria": "- The invariant test fails if a layer name is removed from project.godot.\n- No scene or mask values change (git diff shows only project.godot names, the new script and the test). The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "chore",
+      "complexity": "medium",
+      "dependsOn": []
+    },
+    {
+      "key": "t5-defense-profile",
+      "title": "Enemy hurtbox rules become per-enemy data (DefenseProfile) instead of one hardcoded mask, with every enemy taking damage exactly as before",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.8, P-4 and P-5. Add global/components/defense_profile.gd (a Node component). It has accepts_* flags (default all true → 1121), accepted_damage_types (default empty), and a one-way alternate mask set by apply_alternate(). mask() and apply_to(hurt_box) use CollisionLayers constants. BaseEnemy._ready() resolves a DefenseProfile child by type, or creates a default one, then applies it. Delete base_enemy.gd:51. Ram ship: a scene-authored profile giving 33 (rockets + environment), with the alternate 97 applied in _enter_damaged_state(). Station turret: use CollisionLayers constants for its own 512/1121 write.",
+      "acceptanceCriteria": "- t1-pin-base-enemy is green unchanged, and so are test_ram_ship.gd and test_station_incoming_damage_paths.gd.\n- New unit tests cover DefenseProfile.mask() for each flag combination, and a scene-authored profile is not duplicated by BaseEnemy.\n- No raw mask integers remain in base_enemy.gd or ram_ship.gd. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "refactor",
+      "complexity": "medium",
+      "dependsOn": [
+        "t1-pin-base-enemy",
+        "t4-layers"
+      ]
+    },
+    {
+      "key": "t6-base-enemy-debt",
+      "title": "BaseEnemy follows project conventions: quiet death logs, one declared sprite facing, documented damage/death hooks, grouped config fields",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.10 and P-3/P-15. Move the death print in base_enemy.gd behind OS.is_stdout_verbose(). Add @export var sprite_forward_angle: float = PI/2 (nose-down default; no visual change). Keep _rotate_sprite()'s 180° AnimatedSprite2D flip, and document it as child-sprite art correction. Add ## docs naming _on_received_damage/_on_health_changed as the virtual damage/death hooks. Fix the stale line references in space_station.gd:184, station_turret.gd:31 and space_station/ENEMY.md:475. Wrap ShipConfig fields in @export_group(\"Defense\") and @export_group(\"Scoring\"). DamageReaction is NOT adopted (deferred to phase 5).",
+      "acceptanceCriteria": "- t1-pin-base-enemy is still green.\n- A test asserts the death print only runs under verbose (a structural check of the source, or captured output).\n- test_config_instance_isolation.gd is green (the groups change no values). The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "refactor",
+      "complexity": "small",
+      "dependsOn": [
+        "t1-pin-base-enemy"
+      ]
+    },
+    {
+      "key": "t7-target-info",
+      "title": "Enemies have one reliable way to know where the player is and where they will be, including when a shot cannot catch them",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.6 and P-11. Add global/enemy_ai/target_info.gd (class_name TargetInfo extends RefCounted). It is a snapshot with has_target, position, velocity, facing, distance_from, relative_angle_from and predicted_position(t). intercept(from, shot_speed) returns {ok, point, time} using the closed-form quadratic, with ok=false when there is no positive root, when shot_speed is 0, or when there is no target. aim_direction(from, shot_speed, accuracy) blends direct aim (0) with intercept aim (1); a failed intercept falls back to direct; with no target it returns Vector2.DOWN. line_of_sight(from) is a stub returning has_target (the real raycast is phase 4). static player(tree) is the single player resolver; static of(node). Unit tests: tests/unit/test_target_info.gd with every case in the plan's §4 row.",
+      "acceptanceCriteria": "- Boundary cases: a target outrunning the shot → ok false; a target at the shooter's position → no NaN; a target freed after the snapshot → safe.\n- accuracy 0/0.5/1 give direct/midpoint/intercept. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": []
+    },
+    {
+      "key": "t8-attack-controller",
+      "title": "Enemy guns can hold fire, fire on command, share the AI clock, and aim ahead of the player through one accuracy setting — with every current shooter unchanged",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.7 and P-2. Extend global/components/attack_controller.gd; do not create a second controller. Add enabled (hold fire keeps the timer phase), driven_by_brain (the _process tick becomes inert; the owner calls tick(delta)), and fire_now(). Add @export accuracy: float = 0.0 to AimedAttackPattern and GatlingAttackPattern. They aim via TargetInfo.player(tree).aim_direction(...). First pin today's direction for both patterns (they have no test yet), then migrate. New tests/integration/test_attack_controller.gd.",
+      "acceptanceCriteria": "- Default-configured controllers (light_assault_ship, interceptor, ally_fighter) keep identical cadence and direction, proven by the pin tests written before the change.\n- accuracy 0 → same direction as before; accuracy 1 against a moving target → the intercept direction.\n- Nothing outside the two patterns calls get_nodes_in_group(\"player\") for aiming in the touched files. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t7-target-info"
+      ]
+    },
+    {
+      "key": "t9-steering",
+      "title": "Enemies can seek, arrive, orbit, intercept, evade, strafe, hold position and drift in world space, each move testable on its own",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.4. Add global/enemy_ai/steering.gd (class_name Steering) with pure static functions returning a desired velocity: seek, arrive (slowing radius derived as v²/(2·accel)), orbit (the anchor is center + RIGHT.rotated(angle)·radius, and the speed clamp(dist·4, 60, max_correct) matches drone_interceptor.gd:95-109 exactly), intercept (Reynolds pursuit via TargetInfo.predicted_position), evade, retreat_from, strafe (side ±1), hold_position and drift. boost is stateful and is part of EnemyMover in t10. Spiral, corkscrew, formation_slot, lead_target, break_contact and regroup belong to later phases; do not build them. Unit tests: tests/unit/test_steering.gd.",
+      "acceptanceCriteria": "- Each primitive has a direction and magnitude test.\n- arrive returns 0 at the target and full speed outside the derived radius.\n- orbit matches the interceptor's formula numerically.\n- No NaN for zero vectors or a coincident target. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t7-target-info"
+      ]
+    },
+    {
+      "key": "t10-brain-mover",
+      "title": "Enemies can run their own AI on a brain + mover split that ticks on physics, and Assault's rail-driven waves still override it cleanly",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.2, §2.3, §2.4, §2.10 (suspend_ai) and P-9/P-10. Add global/enemy_ai/enemy_brain.gd (EnemyBrain: tick(delta), on_suspended(), actor/mover/attack resolved by type, a seedable rng via an rng_seed export, and the IDEAS §4 state vocabulary documented in its header). Add global/enemy_ai/enemy_mover.gd (EnemyMover: one primary request per tick, an offered add_nudge, boost(dir, speed, duration), max_speed/acceleration/turn_lerp limits, constraint filter, the single move_and_slide, and the one facing rule rotation = heading.angle() - actor.sprite_forward_angle; constraint_mode AUTO|NONE; an injected constraint wins; a bad parent only warns). Add global/enemy_ai/movement_constraint.gd (MovementConstraint base, identity filter). Add BaseEnemy._physics_process: inert without a brain, otherwise brain.tick then mover.step. Add BaseEnemy.suspend_ai(). EnemyPathMover._ready() calls _actor.suspend_ai() when present, keeping set_physics_process(false) and the AIStateMachine fallback. Add a fixture enemy under tests/helpers/. New tests: tests/unit/test_enemy_mover.gd and tests/integration/test_enemy_brain_contract.gd. Large: it is cross-cutting architecture every later phase builds on, so it gets its own plan and review.",
+      "acceptanceCriteria": "- t2-pin-path-mover is green; with a path attached, the fixture's brain is suspended and its position equals the path sample exactly.\n- Legacy subclasses with their own _physics_process behave identically (t1/t3 pins green).\n- Same rng_seed → same decision sequence.\n- test_project_load_integrity.gd is green (no errors when components are instantiated bare).\n- All new signals are declared with their emitted arguments. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "feature",
+      "complexity": "large",
+      "dependsOn": [
+        "t6-base-enemy-debt",
+        "t9-steering",
+        "t2-pin-path-mover"
+      ]
+    },
+    {
+      "key": "t11-corridor",
+      "title": "In Assault, AI-driven enemies stay inside the play corridor with soft edges, and can still fly in from off-screen without being teleported",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.5, P-7 and P-13. Add assault/scenes/systems/assault_corridor_constraint.gd (extends MovementConstraint). The visible rect is derived from ArenaCamera constants (x −100…1380, y −380…1100). The soft band is 120 px with inward pressure growing with depth; the hard band is 450 px, with outward components removed so the enemy slides and never stalls. The not-yet-entered rule keeps only the inward component, or supplies a minimum inward speed, until the entered latch sets. Also add is_past_cull(pos), reproducing the Drone Interceptor's legacy cull (camera global_position ± viewport/2 ± 80). ArenaCamera joins group &\"assault_arena\" and gains enemy_movement_constraint() (a new instance each call) and projectile_world_rect() (the derived rect + 64 px = today's EnemyBullet bounds). EnemyMover AUTO mode resolves the constraint from that group; with no provider there is no constraint. Unit tests: tests/unit/test_assault_corridor_constraint.gd.",
+      "acceptanceCriteria": "- Boundary: a spawn above the screen with outward intent gets a strictly inward velocity until it enters, and the latch then holds.\n- Beyond the hard band the tangential component is kept.\n- The derived rect equals ArenaCamera's constants, and projectile_world_rect() equals x −164…1444, y −444…1164.\n- No file under global/ references the ArenaCamera class. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t10-brain-mover"
+      ]
+    },
+    {
+      "key": "t12-dual-harness",
+      "title": "The same enemy behaviour spec runs automatically in both an Open Space and an Assault test world",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §4 row test_enemy_dual_mode.gd and P-17. Add a tests/helpers/ harness builder with open_space() (no provider, no constraint) and assault() (an ArenaCamera provider and the corridor), each placing a fake player CharacterBody2D in group \"player\" with a controllable velocity. Add tests/integration/test_enemy_dual_mode.gd, using use_parameters over both harnesses and running the fixture brain's behaviour spec. Assertions are stated relative to the constraint (the radius is held within tolerance, or the enemy stays inside the soft band when clamped). t14 adds the interceptor to this file.",
+      "acceptanceCriteria": "- The same spec function is used for both parameters; only the harness differs.\n- The assault harness case with an above-screen spawn enters the corridor.\n- The tests are deterministic (seeded rng, fixed delta, no Timer awaits); scripts/check-test-leaks.sh is clean. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "test",
+      "complexity": "medium",
+      "dependsOn": [
+        "t11-corridor"
+      ]
+    },
+    {
+      "key": "t13-projectile-lifetime",
+      "title": "Enemy bullets expire by world rules (time, distance, and the Assault arena when there is one) so they work in Open Space, while Assault and races keep today's bullet range",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.9 and P-12. Add global/components/projectile_lifetime.gd: max_time, max_distance from the origin, and use_world_rect. reset() records the origin and clears the clock. The first rule that trips emits the host's expired exactly once (duck-typed); it never queue_frees. The world rect comes from the &\"assault_arena\" provider's projectile_world_rect(). Add the node to enemy_bullet.tscn with max_time 10 s and max_distance 2400 px, chosen so neither can trip inside today's rect. Remove the hardcoded bounds in enemy_bullet.gd:6-16 and call the lifetime from EnemyBullet.reset(). Race mode: RacerWeapon fires EnemyBullet, so read the race scene and give it a provider that returns the legacy rect, keeping race bullets identical. Document persist_after_owner_death in the component header as the future BulletPool policy (phase 5); do not build it. The sniper shot (enemy_sniper_bullet.tscn, unpooled) keeps freeing through its expired → queue_free. If t11 has not landed, add the ArenaCamera provider here (whichever lands first owns it). Tests: tests/unit/test_projectile_lifetime.gd and tests/integration/test_enemy_bullet_lifetime.gd.",
+      "acceptanceCriteria": "- Boundary: with the Assault provider, a bullet at x=1444 lives and at 1444.1 expires; with no provider the same position lives.\n- A pooled bullet is recycled, never freed (checked via BulletPool.acquire() reuse, not _idle.size()); expired fires once per life.\n- The defaults cannot trip before the rect for the slowest shipped enemy bullet speed; the test derives that speed from the shipped patterns and configs.\n- A race bullet still expires at the legacy rect.\n- test_player_bullet_lifetime.gd, test_station_gunnery.gd and test_radial_attack_pattern.gd are green. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": []
+    },
+    {
+      "key": "t14-port-interceptor",
+      "title": "The Drone Interceptor runs on the new AI architecture: it plays the same in Assault and now also hunts the player in Open Space",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.11 and P-8. Replace drone_interceptor.gd's _physics_process and phase logic with a DroneInterceptorBrain (assault/scenes/enemies/drone_interceptor/drone_interceptor_brain.gd) holding ENTER/ORBIT/DASH (documented as APPROACH/POSITION/ATTACK). It uses Steering.seek/orbit, TargetInfo.player().predicted_position(dash_prediction_time), and brain.rng for the initial orbit angle and the 1–2 s dash timer. Add EnemyMover (acceleration 0, turn_lerp 7) and the brain to drone_interceptor.tscn. Set sprite_forward_angle = -PI/2 (nose-up, so facing is unchanged). The dash end in Assault is the constraint's is_past_cull(); in Open Space it is the new flat config field dash_max_distance = 1600 px, after which the drone frees itself. Group the config's fields with @export_group (Movement/Attack). The contact kill is unchanged. Add the interceptor to test_enemy_dual_mode.gd.",
+      "acceptanceCriteria": "- The t3-pin-drones interceptor tests pass with only harness/setup changes (no changed expected values).\n- test_station_reinforcements.gd, test_enemy_contact_damage.gd, test_contact_hitbox_geometry.gd, test_enemy_hurtbox_geometry.gd and test_config_instance_isolation.gd are green.\n- The dual-mode test proves the same dash direction in both modes for the same seed, and that the Open Space drone frees after dash_max_distance.\n- drone_interceptor.gd and its brain contain no direct rotation or velocity writes (EnemyMover is the single writer) and no get_nodes_in_group(\"player\").\n- Human eyeball item for the dossier: play level 1's two drone interceptors and the station reinforcement. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "refactor",
+      "complexity": "medium",
+      "dependsOn": [
+        "t3-pin-drones",
+        "t12-dual-harness"
+      ]
+    },
+    {
+      "key": "t15-docs",
+      "title": "The architecture docs, CLAUDE.md and the idea's decision log describe the enemy AI stack as actually built",
+      "description": "See docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §3 step 15. Invoke the updating-project-docs skill. Update docs/architecture/modules/global.md (a new enemy_ai/ section, DefenseProfile, ProjectileLifetime, CollisionLayers, the AttackController extension) and assault.md (the corridor constraint, the ArenaCamera provider, EnemyPathMover's suspend_ai, EnemyBullet lifetime). Update docs/architecture/PROJECT.md conventions (the layer names and CollisionLayers; brains tick on physics; EnemyMover is the single writer of an AI enemy's velocity/rotation; the mode is found through the assault_arena provider), drone_interceptor/ENEMY.md, and CLAUDE.md's test-gate paragraph for test_collision_layer_names.gd. If this is the last open task, write the epic dossier docs/epics-done/cmufklb100001p92xs1ey2fb1/ and append '## Phase 1 - as built' to docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md.",
+      "acceptanceCriteria": "- Every new class_name from this phase is documented in the module doc that owns its path.\n- Every deviation from 3-plan.md recorded in DECISIONS.md is reflected. The existing gates stay green (config isolation, contact-damage, contact-hitbox and hurtbox geometry, player-bullet lifetime, signal arity, project load integrity, station family). `bash /agent/verify.sh` passes.",
+      "type": "chore",
+      "complexity": "small",
+      "dependsOn": [
+        "t5-defense-profile",
+        "t8-attack-controller",
+        "t13-projectile-lifetime",
+        "t14-port-interceptor"
+      ]
+    }
+  ]
+}
