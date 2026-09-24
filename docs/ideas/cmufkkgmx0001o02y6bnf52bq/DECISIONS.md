@@ -6,7 +6,7 @@ Where a phase's *as built* section disagrees with its plan section, the *as buil
 ## Phase 1 - Enemy rework, phase 1: mode-neutral enemy AI architecture and plan for the full roster (2026-09-25)
 
 Plan: `docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md`, with research in `1-context.md` and `2-research.md` in
-the same directory. The 17-phase roadmap is in §7 of the plan, and the requirement → phase coverage table is in §8.
+the same directory (revision 2, after plan review round 1 — `4-review.md`). The 19-phase roadmap is in §7 of the plan, and the requirement → phase coverage table is in §8.
 These are *planned* decisions; check this phase's `as built` section, once written, before relying on them.
 
 ### Names and places (later phases build on these)
@@ -14,8 +14,15 @@ These are *planned* decisions; check this phase's `as built` section, once writt
   - **Never `MovementController`.** That name is the player's input handler.
   - When active, it is the **single writer** of an AI enemy's `velocity` and `rotation`, and it performs the one
     `move_and_slide()`.
-- `EnemyBrain` (`global/enemy_ai/enemy_brain.gd`) exposes `tick(delta)`, `on_suspended()`, `actor`, `mover`,
-  `attack` and `rng`.
+  - Exports `max_speed`, `acceleration`, `braking` (0 = same as acceleration), `turn_lerp`, `max_turn_rate`
+    (rad/s, 0 = off; IDEAS §3.1 `turn_rate`) and `constraint_mode` (`AUTO` | `NONE`).
+  - Reads the actor's `sprite_forward_angle` duck-typed (default `PI/2`); nothing in `global/enemy_ai/` is typed
+    against `BaseEnemy`.
+  - Gated by `tests/integration/test_enemy_mover_single_writer.gd`: brains, `global/enemy_ai/*` and the root
+    script of any enemy scene with an `EnemyMover` must not assign `velocity`/`rotation` or call
+    `move_and_slide()`. Empty permanent allowlist.
+- `EnemyBrain` (`global/enemy_ai/enemy_brain.gd`) exposes `tick(delta)`, `on_suspended()`, `actor`
+  (typed `CharacterBody2D`), `mover`, `attack` and `rng`.
   - `rng` is a seedable `RandomNumberGenerator` (the `rng_seed` export).
   - Concrete brains extend it and live beside their enemy, e.g. `drone_interceptor_brain.gd`.
 - `Steering` (`global/enemy_ai/steering.gd`) holds pure static primitives that return a desired velocity:
@@ -24,8 +31,13 @@ These are *planned* decisions; check this phase's `as built` section, once writt
   - Deferred to later phases: `spiral`/`corkscrew`/`formation_slot` → Ph2, `lead_target` → Ph3 (it is
     `TargetInfo.aim_direction`), `break_contact` → Ph4, `regroup` → Ph14.
 - `MovementConstraint` (`global/enemy_ai/movement_constraint.gd`) is the identity `filter(pos, desired) -> Vector2`.
-  - `AssaultCorridorConstraint` (`assault/scenes/systems/`) extends it with a soft band of 120 px, a hard band of
-    450 px and an "entered" latch, so spawns can enter from off-screen.
+  - `AssaultCorridorConstraint` (`assault/scenes/systems/`) extends it. It filters **per axis**, speeds in px/s:
+    not yet entered → inward only, at least `entry_speed` 60, other axis free, hard band not applied until the
+    "entered" latch; soft band (0–120 px) → outward kept + pressure `edge_pressure·d/120` (`edge_pressure` 200);
+    outer band (120–450 px) → full pressure, outward scaled to 0 at 450; beyond 450 → outward removed + full
+    pressure ("forced to re-enter"). Tangential motion is always kept.
+- `EnemyWorld` (`global/enemy_ai/enemy_world.gd`, static) is the **only** lookup of the mode provider:
+  `arena(tree)`, `projectile_world_rect(tree)`, `cull_rect(tree)`, `movement_constraint(tree)`, all duck-typed.
 - `TargetInfo` (`global/enemy_ai/target_info.gd`, RefCounted snapshot) is the **only** way new code finds or
   predicts the player.
   - `TargetInfo.player(tree)` is the resolver. `intercept()` returns `{ok, point, time}` and can fail.
@@ -39,20 +51,31 @@ These are *planned* decisions; check this phase's `as built` section, once writt
   - Phase 1 supports only a one-way alternate mask, which is what the ram ship needs. Multi-state armour is Ph4's.
 - `ProjectileLifetime` (`global/components/projectile_lifetime.gd`) has `max_time`, `max_distance` and
   `use_world_rect` rules.
-  - It emits the host's `expired` once and **never frees**, which preserves the one-owner rule.
+  - It emits the host's `expired` once and **never frees**, which preserves the one-owner rule. `expire_now()` is
+    IDEAS §12's `explicit_destroy()`.
+  - It **arms lazily**: on `reset()` or its first physics tick, whichever comes first, never in `_ready()` —
+    because unpooled projectiles (the sniper shot) are never `reset()`.
+  - `max_distance` is measured from the origin, not the owner (owner distance → Ph5).
+  - `EnemyBullet` defaults are **derived**: `max_distance = ceil_to_100(diag + 64) = 2400 px`,
+    `max_time = ceil(diag / min_speed) + 2 s = 18 s`, with `diag ≈ 2274 px` (legacy rect) and `min_speed = 150`
+    over every shipped enemy-bullet speed source (table in plan §2.9). A new, slower bullet must be added to the
+    source list in `test_enemy_bullet_lifetime.gd`, and the defaults re-derived.
   - `persist_after_owner_death` is documented only. It becomes a `BulletPool` policy in Ph5.
 - `CollisionLayers` (`global/physics/collision_layers.gd`) holds the named constants. The layer names are:
   `environment` 1, `environment_interactable` 2, `environment_player` 4 (typo fixed), `pickups` 16,
   `player_rockets` 32, `player_hitbox` 64, `player_hurtbox` 128, `enemy_hitbox` 256, `enemy_hurtbox` 512,
   `hazard_contact` 1024.
   - **No numeric value changed.**
-  - No new layer is allocated until something uses it. Ph6 allocates `area_control` (bit 12, 2048).
+  - No new layer is allocated until something uses it. Ph6 allocates `area_control` (bit 12, 2048), IDEAS §15's
+    "area-control / special hazards" meaning.
   - Bosses get no layer of their own; their modules are ordinary enemy hurtboxes.
 
 ### Conventions
 - **How the mode is detected:** the world declares it. `ArenaCamera` joins the group `&"assault_arena"` and answers
-  `enemy_movement_constraint()` (a new instance per call) and `projectile_world_rect()` (today's EnemyBullet
-  bounds, x −164…1444, y −444…1164).
+  `projectile_world_rect()` (today's EnemyBullet bounds, x −164…1444, y −444…1164), `enemy_cull_rect()` (the Drone
+  Interceptor's legacy camera ± viewport/2 ± 80 cull) and `enemy_movement_constraint()` (a new instance per call).
+  - Because the race scene's camera is an `ArenaCamera`, the race is an Assault arena with no extra wiring.
+    `level_2.tscn` (plain `Camera2D`, unreferenced) is not.
   - With no provider, the mode is Open Space: no constraint and no rect.
   - Nothing under `global/` may reference the `ArenaCamera` class.
   - Tests inject the constraint or rect directly.
@@ -60,8 +83,10 @@ These are *planned* decisions; check this phase's `as built` section, once writt
   `mover.step`.
   - Clocks are accumulated `delta` values. There are no `Timer` nodes, and randomness comes only from `brain.rng`.
   - Legacy subclasses that define their own `_physics_process` are untouched.
-- **Rails:** `EnemyPathMover` suspends AI by calling `suspend_ai()`, with the `"AIStateMachine"` name lookup kept
-  as a fallback.
+- **Rails:** `EnemyPathMover` suspends AI by calling `suspend_ai()` **in addition to** `set_physics_process(false)`
+  and the `"AIStateMachine"` name lookup, all three unconditionally. The lookup is not a fallback: the light
+  assault ship is a `BaseEnemy` whose state machine moves it from `_process`, and only the lookup stops that.
+  Pinned on the real `light_assault_ship.tscn`. The lookup retires in Ph15.
   - While a path is attached, the path mover remains the only position writer.
   - Rail-driven waves stay unchanged until Ph15.
 - **Facing:** there is one rule for mover-driven enemies:
@@ -79,7 +104,10 @@ These are *planned* decisions; check this phase's `as built` section, once writt
 - **Proof consumer:** the Drone Interceptor is ported to be driven by `DroneInterceptorBrain` + `EnemyMover`,
   with acceleration 0 so its feel is unchanged.
   - New flat config field `dash_max_distance` (1600 px) is its Open Space dash end.
-  - In Assault it keeps the legacy camera cull via `AssaultCorridorConstraint.is_past_cull()`.
+  - It runs with `constraint_mode = NONE` in Phase 1, so it is 1:1 with today in Assault. **Ph2 (Razor Drone)
+    turns the corridor on** and must re-pin its edge behaviour.
+  - In Assault it keeps the legacy camera cull via the provider's `enemy_cull_rect()`.
+  - Its only live spawns are level 1's two (`level_1_director.gd:290-291`); the station reinforcements never use it.
   - Ph2's Razor Drone evolves this port rather than replacing it.
 
 ### Deliberately deferred
@@ -97,4 +125,8 @@ These are *planned* decisions; check this phase's `as built` section, once writt
 | Leash / search | Ph13 | |
 | Difficulty tiers | Ph16 | Only the `accuracy` hook exists. |
 | Moving `BaseEnemy` to `global/` | Ph15 | |
+| The corridor on the Drone Interceptor / Razor Drone | Ph2 | Kept off in Phase 1 so the port is 1:1. |
+| Retiring the path mover's `"AIStateMachine"` name lookup | Ph15 | Needs the light assault ship on a brain first. |
+| `max_distance_from_owner` lifetime | Ph5 | With owner-bound projectiles and `persist_after_owner_death`. |
+| Stale `base_enemy.gd:<line>` citations | this phase, t15 | Fixed once as a repo-wide sweep citing symbols. |
 | Retiring `EnemyPathMover` as the default | Ph15 | |
