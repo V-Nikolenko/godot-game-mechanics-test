@@ -27,15 +27,23 @@ and the triage summary. Every stage works from them:
 
 **Phases.** A large idea is split into an ordered chain of phase epics that share one idea
 folder, `docs/ideas/<idea id>/`: the attached documents and `DECISIONS.md`, the running log of
-decisions every phase must respect. Phase N only starts once phase N-1 is implemented. When your
+decisions every phase must respect. Phase N only starts once phase N-1 is implemented, and more
+phases may be planned later as the chain goes on (the prompt shows the chain so far). When your
 prompt has a *Phase X of N* section:
 
 - **Stay inside your phase's scope.** Plan and create tasks only for what the scope names;
   requirements owned by other phases go in the coverage table as "later phase N", not into tasks.
-- **Build on earlier phases, don't redo them.** Before anything else read `DECISIONS.md` and each
-  earlier phase's `3-plan.md` (paths are in the prompt), and read the code they produced. Never
+- **Build on what was actually built, not on what was planned.** Before anything else read
+  `DECISIONS.md` — especially each earlier phase's *as built* section — each finished phase's
+  dossier `docs/epics-done/<epic id>/REPORT.md`, and their `3-plan.md` (paths are in the prompt).
+  Then read the code: where the code and the documents disagree, **the code is the truth**. Never
   contradict a recorded decision silently — if one must change, say so explicitly in `3-plan.md`
   and in the decision log.
+- **Research: re-validate your scope first.** Your scope was written before the earlier phases
+  ran. Check it against the code and the as-built notes: if an earlier phase already did part of it,
+  changed the approach it assumed, or left a gap that belongs to you, adjust the scope — and put a
+  *Scope check* section at the top of `2-research.md` saying exactly what changed and why, so the
+  plan and the owner see it.
 - **Plan stage: append to `DECISIONS.md`** (never rewrite earlier sections) a
   `## Phase N - <title> (<date>)` section with what later phases must know: architecture choices,
   conventions, names and interfaces they will build on, and what was deliberately deferred.

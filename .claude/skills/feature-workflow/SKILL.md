@@ -82,6 +82,23 @@ DONE | ESCALATE | BLOCKED — one line on why
 The harness runs the verification gate after you and commits only if it passes; the task then
 waits in *In review* for the owner. Never try to update the board yourself.
 
+### Working inside a phase (the prompt has *Phase X of N*)
+
+A big idea is built as a chain of phase epics. Later phases are researched and planned from the
+shared idea folder `docs/ideas/<idea id>/`, and the code decides whether they succeed, so keep that
+folder true to what was actually built:
+
+- **Log deviations as you make them.** If your implementation departs from the approved plan in a
+  way a later phase will depend on — a renamed or removed class, signal or interface, a changed data
+  format or scene structure, a piece dropped or deferred — append a line to `DECISIONS.md` under
+  this phase's section before you finish: what changed and why. Small internal choices don't belong
+  there.
+- **Closing the phase.** If yours is the last open task of a phase epic, you are finishing the
+  phase: write the epic dossier (below) and append a `## Phase X - as built (<date>)` section to
+  `DECISIONS.md`: what was actually built (key files, nodes, signals), every deviation from the
+  plan, and the gaps left for later phases. The next phase's research starts from this section and
+  from the code.
+
 ---
 
 ## Track: Direct
@@ -215,7 +232,8 @@ Never review your own plan and call it approved. The review file must come from 
 
 - Tests first. Update `5-progress.md` after **each build step**, not at the end — a window can end
   at any moment.
-- If reality contradicts the plan, update `3-plan.md`. A stale plan is worse than none.
+- If reality contradicts the plan, update `3-plan.md`. A stale plan is worse than none. In a phase
+  epic, also log the deviation in `DECISIONS.md` (see *Working inside a phase*).
 - Discovered work goes under **Follow-ups** in your final message — never silently folded into
   this change.
 
@@ -306,7 +324,9 @@ What is unfinished, fragile, or untested. Anything a human still has to eyeball.
 The plan directories, the epic id, key commits.
 ```
 
-Name the dossier path in your final message so the owner finds it.
+Name the dossier path in your final message so the owner finds it. For a phase epic, also append
+the `## Phase X - as built` section to the idea's `DECISIONS.md` (see *Working inside a phase*) —
+later phases read `REPORT.md` and that section before planning.
 
 **Be honest in `Known gaps`.** A dossier claiming everything is finished and verified is worth less
 than one that names the two things nobody has looked at — headless tests cannot tell you whether a
