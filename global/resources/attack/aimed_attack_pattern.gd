@@ -8,6 +8,9 @@ extends AttackPatternResource
 @export var bullet_damage: int = 10
 @export var bullet_speed: float = 250.0   ## Travel speed of each bullet (px/s).
 @export var aim_at_player: bool = true
+## 0 = direct aim at the player (today's behaviour); 1 = lead the intercept point;
+## in between blends the two. See TargetInfo.aim_direction.
+@export var accuracy: float = 0.0
 @export var spawn_offset: Vector2 = Vector2(0.0, 10.0)  ## Offset from ship position.
 
 func fire(ship: Node2D, pool: BulletPool) -> void:
@@ -19,12 +22,8 @@ func fire(ship: Node2D, pool: BulletPool) -> void:
 		hb.damage = bullet_damage
 	bullet.speed = bullet_speed
 	if aim_at_player:
-		var players := ship.get_tree().get_nodes_in_group("player")
-		if players.size() > 0:
-			var dir: Vector2 = ((players[0] as Node2D).global_position - ship.global_position).normalized()
-			bullet.set_direction(dir)
-		else:
-			bullet.set_direction(Vector2.DOWN)
+		var dir := TargetInfo.player(ship.get_tree()).aim_direction(ship.global_position, bullet_speed, accuracy)
+		bullet.set_direction(dir)
 	else:
 		# Use the ship's current rotation — EnemyPathMover keeps this aligned
 		# with the direction of travel (rotation = 0 means facing down).
