@@ -96,6 +96,12 @@ func enemy_cull_rect() -> Rect2:
 	return Rect2(global_position - half, half * 2.0)
 
 
+## A fresh AssaultCorridorConstraint (§2.5) — one instance per call, since a constraint holds a
+## per-enemy "entered" latch (EnemyMover.AUTO resolves this once, in _ready()).
+func enemy_movement_constraint() -> MovementConstraint:
+	return AssaultCorridorConstraint.new()
+
+
 ## The corridor's visible rect: the pinned screen centre, ± half the viewport, ± the offset
 ## limits. A 1480×1480 world-space square (H_LIMIT + V_LIMIT both add to 740 past the half
 ## viewport on their axis) — see the class doc's "Offset limits".

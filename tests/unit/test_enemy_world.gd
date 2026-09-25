@@ -39,13 +39,14 @@ func test_arena_camera_cull_rect_is_camera_position_plus_or_minus_half_viewport_
 	assert_eq(rect.end, cam.global_position + vp * 0.5 + Vector2(80.0, 80.0))
 
 
-func test_arena_camera_has_no_movement_constraint_yet() -> void:
-	## t4b state: ArenaCamera does not implement enemy_movement_constraint() yet (a later task
-	## adds it), so the lookup must report "no constraint", not error.
+func test_arena_camera_provides_a_fresh_movement_constraint_each_call() -> void:
 	var cam := ArenaCamera.new()
 	add_child_autofree(cam)
-	assert_false(EnemyWorld.has_movement_constraint(get_tree()))
-	assert_null(EnemyWorld.movement_constraint(get_tree()))
+	assert_true(EnemyWorld.has_movement_constraint(get_tree()))
+	var a := EnemyWorld.movement_constraint(get_tree())
+	var b := EnemyWorld.movement_constraint(get_tree())
+	assert_true(a is AssaultCorridorConstraint)
+	assert_ne(a, b, "one instance per call, so each mover holds its own 'entered' latch")
 
 
 func test_plain_camera2d_is_not_a_provider() -> void:
