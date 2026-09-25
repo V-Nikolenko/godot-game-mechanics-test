@@ -8,6 +8,12 @@ signal died
 @onready var hit_flash_player: AnimationPlayer = $HitFlashAnimationPlayer
 @onready var contact_hit_box: HitBox = get_node_or_null("ContactHitBox") as HitBox
 
+## The direction the *art's nose* points in texture space, before any node rotation is applied.
+## Default is nose-down, the Assault path-mover convention (`EnemyPathMover`'s facing rule reads
+## this). A ported enemy whose art points up sets `-PI / 2` instead — `atan2(dir.x, -dir.y)` equals
+## `dir.angle() + PI / 2`, so its on-screen facing is unchanged from before it declared this.
+@export var sprite_forward_angle: float = PI / 2
+
 ## Read by ScoreTracker via the enemy's ShipConfig — overridable per-enemy if needed.
 var score_value: int = 0
 ## True ONLY when this enemy died from damage (so ScoreTracker can tell
@@ -84,19 +90,31 @@ func _resolve_defense_profile() -> DefenseProfile:
 	return profile
 
 
+## Rotates a child `AnimatedSprite2D` 180° (light assault ship, ram ship). This is a child-sprite
+## art correction, independent of `sprite_forward_angle`: those two ships' animated art is drawn
+## facing the opposite way from the body's own facing convention, and this rotation is what makes
+## them agree on screen. It says nothing about the body's own rotation or facing.
 func _rotate_sprite() -> void:
 	var sprite := get_node_or_null("AnimatedSprite2D") as Node2D
 	if sprite:
 		sprite.rotation_degrees = 180.0
 
+## Virtual damage hook: called whenever this enemy's `HurtBox` reports a hit. The default applies
+## the damage to `health`. A subclass overrides this to change what a hit does — e.g. `RamShip`'s
+## first hit only arms it, and `SpaceStation` deflects every hit while a turret is alive.
 func _on_received_damage(damage: int) -> void:
 	health.decrease(damage)
 
+## Virtual death hook: called on every `health.amount_changed`. The default plays the hit-flash
+## animation on any change, and on reaching 0 sets `was_killed`, emits `died`, plays the explosion
+## and frees the enemy. A subclass overrides this to change what death does — e.g. `SpaceStation`
+## holds its wreck in the tree for `death_duration` seconds instead of freeing immediately.
 func _on_health_changed(current: int) -> void:
 	hit_flash_player.play("hit")
 	_hit_effect.burst()
 	if current == 0:
-		print("[Enemy] %s DESPAWNED (died) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
+		if OS.is_stdout_verbose():
+			print("[Enemy] %s DESPAWNED (died) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
 		was_killed = true
 		died.emit()
 		_explosion_effect.explode()
