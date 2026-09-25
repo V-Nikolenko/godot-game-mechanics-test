@@ -267,3 +267,184 @@ work from Phase 15's `BaseEnemy` move. Note it either way.
 6. F6 and F7: fix the factual errors and reconcile 17 vs 18 phases.
 
 F8 to F11 can be folded into the same revision.
+
+---
+
+# Round 2 review
+
+VERDICT: APPROVED
+
+Scope of this pass: the revised `3-plan.md` and `tasks.json` and the idea's `DECISIONS.md`, as of commit `48b9399`, checked against the code on `agent/auto-dev`. All seven required findings (F1–F7) and the four optional ones (F8–F11) are resolved in the plan, the tasks and the decision log. I checked the numbers again myself; they are listed in the table.
+
+The revision introduced no dependency cycle and no new file collision between tasks. It also introduced no contradiction between the plan, the tasks and `DECISIONS.md`.
+
+What remains is below as N1–N7. Every one of them is either caught by an acceptance test the plan already requires, or it is limited to docs. None needs another re-plan. The implementer should apply N1–N3 as written, because each one corrects a statement in the plan or a task that is wrong as it stands.
+
+## Round-1 findings
+
+| # | Status | Evidence |
+|---|---|---|
+| F1 | Resolved | See F1 detail below. |
+| F2 | Resolved | See F2 detail below. |
+| F3 | Resolved | See F3 detail below. |
+| F4 | Resolved | See F4 detail below. |
+| F5 | Resolved | See F5 detail below. |
+| F6 | Resolved | See F6 detail below. |
+| F7 | Resolved for the 18-phase count. Since superseded: the board now has 20 phases. | See F7 detail below, and N4. |
+| F8 | Resolved | `braking` and `max_turn_rate` (rad/s, 0 = off) are in 3-plan.md:172-181 and 188, and in t10 with unit tests. `expire_now()` stands for `explicit_destroy()` (3-plan.md:353-357). Distance is measured from the origin, and the plan gives the reason; owner distance goes to Phase 5 and player distance to Phase 13 (3-plan.md:605-609, §8 R5). |
+| F9 | Resolved (see N3 for what is left) | The fix moved to t15 as a repo-wide sweep that cites symbols (3-plan.md:421-426; t15 description). t6 no longer touches it. |
+| F10 | Resolved (see N2 for a spec conflict) | See F10 detail below. |
+| F11 | Resolved | `EnemyBrain.actor` is typed `CharacterBody2D` (3-plan.md:122). `sprite_forward_angle` is read duck-typed, with a default of PI/2 (3-plan.md:183-186). t10 has a unit test for an actor that lacks the property. |
+
+**F1: resolved.**
+- Arming is lazy. It happens on `reset()` or on the first physics tick, and never in `_ready()` (3-plan.md:340-350; t13).
+- The sniper shot is driven through the real `SniperEnemy._phase_fire()` and must be freed when it crosses the rect, well before 18 s (3-plan.md:399-402; t13 acceptance criteria).
+- The "one frame past the muzzle" figure is right: 1400 / 60 ≈ 23 px, against a 126 px margin (2400 − 2274).
+
+**F2: resolved.** I recomputed the numbers:
+- The rect is x −164…1444 and y −444…1164, which is 1608 × 1608 px. Its diagonal is 2274.1 px.
+- `min_speed = 150` comes from `station_gunnery.gd:70,75`, which I checked.
+- `ceil(2274 / 150) + 2 = 18 s`, and `ceil_to_100(2338) = 2400`.
+- The source table (3-plan.md:379-390) matches every `bullet_speed` and `speed` writer I found with a grep:
+  - `gunship.gd:150`
+  - `interceptor.gd:39`
+  - `light_assault_ship.gd:42`
+  - `racer_weapon.gd:26` together with the three racer states
+  - the three patterns
+  - `space_station_config.tres:21,26`
+  - `enemy_sniper_bullet.tscn:19`
+- The one writer the table leaves out is `reacher_aim_state.gd:11` (700). It is faster than the minimum, so it does not change the result.
+- `DECISIONS.md` has been corrected to match.
+
+**F3: resolved.**
+- P-10 (3-plan.md:37) and §2.10 (3-plan.md:427-434) say that all three suspension steps run unconditionally.
+- t10's description explicitly forbids the `if has_method … else` form.
+- t2 adds a case on the real `light_assault_ship.tscn`, and t10 has to keep it green unchanged.
+- I confirmed the mechanism in the code:
+  - `light_assault_ship.tscn:111` has a node named `AIStateMachine`.
+  - `state_machine.gd:16-18` ticks `process_physics` from `_process`.
+  - `approach_state.gd:24-25` and `strafe_exit_state.gd:14-15` both call `move_and_slide()`.
+
+**F4: resolved.**
+- The plan takes option (a): the interceptor runs with `constraint_mode = NONE` (3-plan.md:455-458; t14; `DECISIONS.md`).
+- §2.5 (3-plan.md:214-242) now covers what round 1 asked for:
+  - it filters per axis;
+  - speeds are in px/s;
+  - it has four bands;
+  - it states what "forced to re-enter" means;
+  - it says the hard band does not apply until the enemy has entered.
+- The band maths is continuous at d = 120, where both sides apply full pressure of 200 with the outward component scaled by 1. It is also continuous at d = 450, where the outward component is 0.
+- The y ≈ −860 spawn figure checks out: 360 − 380 − 840 = −860, against a hard edge at −380 − 450 = −830.
+- Every legacy cull bound (x −80…1360, y −80…800) lies inside `visible`.
+
+**F5: resolved.**
+- t6 now depends on t5.
+- The new task t4b is the only first owner of `arena_camera.gd`. t11 depends on t4b, and t13 depends on t4b and never edits the file (3-plan.md:248-251 and 536-537; tasks.json).
+- The `base_enemy.gd` chain is t1 → t5 → t6 → t10. The `arena_camera.gd` chain is t4b → t11.
+- I found no remaining shared file between tasks that can run in parallel:
+  - t8 edits the attack controller and the patterns.
+  - t13 edits the enemy bullet.
+  - t14 edits the drone and its config. It runs after t6 through the chain t14 → t12 → t11 → t10 → t6.
+- The task graph has no cycle.
+
+**F6: resolved.** Each factual error is corrected:
+- P-2 now reads "two enemies plus the ally fighter" (3-plan.md:29).
+- P-6 now uses the 2048 meaning (3-plan.md:33).
+- The race has no separate wiring. `race_level_1.tscn:8,67` uses `arena_camera.gd` (3-plan.md:362-364).
+- `level_2.tscn` is recorded as unreferenced, which I confirmed: only its own file mentions it (3-plan.md:365-367).
+- The Open Space camera is correctly placed under `PlayerShip` (`sector_hub.tscn:83`; 3-plan.md:464-470).
+- The station reinforcements never use the drone. I confirmed this in `test_station_reinforcements.gd:320-326`, and the only live spawns are `level_1_director.gd:290-291` (3-plan.md:471-474; t14 eyeball item).
+
+**F7: resolved for the 18-phase count, since superseded.**
+- §7 (3-plan.md:613-638) maps phases 1–19, and board phases 18 and 19 match rows 18 and 19.
+- P-14 (3-plan.md:41) makes the board the source of truth for the phase count.
+- The board now has **20** phases, though, and phase 20 is not mapped. See N4.
+
+**F10: resolved.**
+- There is a new invariant test, `test_enemy_mover_single_writer.gd` (3-plan.md:194-200; t10). N2 describes a conflict in its spec.
+- t3 is now seed-robust: it checks the [1.0, 2.0] s window and the orbit by radius (3-plan.md:506-510; t3).
+- t1's roster uses `<dir>/<dir>.tscn` with a `BaseEnemy` root, plus the turret (3-plan.md:495-500; t1).
+
+## New findings (non-blocking; apply during implementation)
+
+### N1 (medium). The sniper shot does not "inherit" the lifetime node. `3-plan.md:399-402`, P-12 (3-plan.md:39); task **t13-projectile-lifetime**
+
+The plan says the sniper shot inherits the lifetime node. It cannot:
+- `enemy_sniper_bullet.tscn:1-19` is a **standalone** scene. It has its own root node and only references `enemy_bullet.gd` as an `ext_resource`. It is not an inherited scene of `enemy_bullet.tscn`.
+- `sniper_enemy.gd:32-33` preloads that scene.
+- t13 only says to "add the node to enemy_bullet.tscn". Doing just that leaves the sniper shot with **no** lifetime rule once the constants at `enemy_bullet.gd:6-16` are deleted. Every sniper shot would then live until the level ends.
+
+t13's required "sniper through the real `_phase_fire()` path is freed" criterion fails on that build, so the defect is caught rather than silent.
+
+**Fix:** in t13, give `enemy_sniper_bullet.tscn` its own `ProjectileLifetime` node. Leave the `ext_resource` without a UID and do not copy one. Alternatively, have `EnemyBullet._ready()` add a default child when none exists, following the `DefenseProfile` pattern. Keep `reset()` null-safe in either case.
+
+### N2 (medium). The single-writer sweep, as specified, flags `TargetInfo`, and `suspend_ai()` writes `velocity` itself. `3-plan.md:194-200, 274, 427`; `DECISIONS.md` "EnemyMover" bullet; task **t10-brain-mover**
+
+The sweep covers every `global/enemy_ai/*.gd` except `enemy_mover.gd`, forbids any `velocity =`, and has an empty, permanent allowlist.
+- `target_info.gd` sits in that directory. Its snapshot has a `velocity` member (3-plan.md:274), which it must assign in `of()` or its constructor.
+- The sweep therefore goes red on t7's file the moment t10 adds it.
+- `BaseEnemy.suspend_ai()` "zeroes `velocity`" (3-plan.md:427). That is a second velocity writer beside the mover. It escapes the sweep only because `base_enemy.gd` is not the root script of a swept scene. If the fixture enemy uses `base_enemy.gd` as its root script, the sweep flags it too.
+
+t10 is a large task with its own plan and review, and the gate goes red immediately, so this will surface. The risk is that someone "fixes" it by renaming `TargetInfo.velocity` or by adding an allowlist entry.
+
+**Fix, for t10's own plan:**
+- In the `global/enemy_ai/` scripts and in brains, match only writes through a receiver: `actor.`, `_actor.` or `body.`, followed by `velocity` or `rotation`.
+- In the root scripts of mover-driven scenes, which extend `CharacterBody2D`, match bare `velocity` and `rotation` writes.
+- In all of these files, match `move_and_slide(`.
+- Route `suspend_ai()`'s zeroing through the mover, for example with `mover.halt()`.
+- Keep the allowlist empty.
+
+### N3 (low–medium). t15's grep criterion cannot be met without rewriting historical and owner documents. Task **t15-docs**; `3-plan.md:421-426`
+
+The criterion is: "`grep -rn "base_enemy.gd:[0-9]"` returns no hits", run over the whole repo. Today that grep also hits files that must not be rewritten:
+- `docs/plans/**`, including this plan and this review;
+- `docs/ideas/…/ENEMIES.md`, which is an attachment from the owner;
+- `docs/enemy-rework/current-enemies.md`, which has about 25 hits and is an audit snapshot;
+- `DECISIONS.md`, which is append-only.
+
+The plan's list of known hits is also incomplete. It misses:
+- `station_reinforcements.gd:128`
+- `test_station_incoming_damage_paths.gd:17`
+
+An implementer following the criterion literally would edit the owner's attachments and historical records.
+
+**Fix:** scope the sweep to `assault/`, `global/`, `open_space/`, `tests/`, `docs/architecture/` and `tests/README.md`. Exclude `docs/plans/`, `docs/epics-done/`, `docs/ideas/` and `docs/enemy-rework/`.
+
+### N4 (low; for the owner or harness to reconcile, not a defect in this phase). The roadmap maps 19 phases; the board now has 20. `3-plan.md:10, 41, 613, 706`; `DECISIONS.md:9`
+
+Board phase 20 is "late-system integration — jammer-linked turret groups, difficulty tiers and checklist audit for the phase 18–19 behaviour". It has no row in §7.
+
+No requirement is dropped:
+- IDEAS §6.5's "connected to a jamming or power structure … disable the entire turret group" is covered through Ph8 (§6.5) and Ph9 (§6.6).
+- The difficulty tiers are in Ph16.
+- The checklist audit is in Ph17.
+
+Phase 20 applies those phases to the output of Ph18 and Ph19. There is one real risk: a Ph9 implementer reading §7 could build linked turret groups that the board has placed in Ph20.
+
+This does not block Phase 1. No Phase 1 task, interface or test depends on it, and P-14 already makes the board the source of truth. Revision 1 also went stale for the same reason: phases were added after the plan was written. Two reconciliations would close it:
+- When t15 appends "Phase 1 - as built" to `DECISIONS.md`, it adds a roadmap line: "Ph20: §6.5 turret-group linkage to Ph9 jammers/power, Ph16 tiers and Ph17 checklist applied to Ph18–19 output; Ph8/Ph9 build the pieces, Ph20 links them."
+- The owner corrects "19" in the plan header. Either one is enough.
+
+### N5 (low). `ArenaCamera._ready()` returns early. `arena_camera.gd:61-64`; task **t4b-arena-provider**
+
+`_ready()` returns early when there is no `Level1Background`. The group must be joined **before** that `return`, or a bare `ArenaCamera` is never a provider. t4b's unit test catches this: it asserts that an `ArenaCamera` in the tree is a provider. It is noted here so the first attempt is right.
+
+### N6 (low). The rect edge in t13
+
+Today's check expires only on `x > 1444` (`enemy_bullet.gd:33-34`). `Rect2.has_point()` excludes the right and bottom edges, so a `has_point`-based rule would expire a bullet at exactly x = 1444. The required boundary case catches this. The implementer should use explicit comparisons that reproduce `<` and `>`.
+
+### N7 (low). A timing boundary in t3 and t14
+
+Today, the dash velocity lands one frame *after* `_begin_dash()`: `drone_interceptor.gd:100-102` returns without setting velocity, and `:125-126` sets it on the next tick. Summing 1/60 in floating point can also add one more frame. The criterion "a dash by 2.0 s + 1 frame" can therefore be off by one on today's code.
+
+**Fix:** allow two frames, or assert on the onset of `|velocity| == dash_speed` with a tolerance of ±2 frames. Both t3 and the port must use the same rule.
+
+## Other checks that passed
+
+- **Complexity** is appropriate throughout. t4b and t6 are small. t10 is large, so it is escalated with its own plan and review. The rest are medium.
+- **Model assignments:** none are present in `tasks.json`.
+- **Dependencies:** t15 depends on every leaf task, directly or transitively.
+- **Behaviour preserved:**
+  - `BulletPool._prewarm()` disables idle bullets through `process_mode` (`bullet_pool.gd:53`). An idle bullet's `ProjectileLifetime` child therefore never ticks, and it cannot emit `expired` while idle.
+  - No enemy scene authors `HurtBox.accepted_damage_types`. Only the asteroid and race hazards do. So `DefenseProfile.apply_to()` writing the default empty list changes no enemy's behaviour.
+- **Research and tradeoffs:** unchanged from round 1, and still adequate.
