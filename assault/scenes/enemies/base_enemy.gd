@@ -23,6 +23,11 @@ var counts_as_escape: bool = true
 var _hit_effect: HitEffect
 var _explosion_effect: ExplosionEffect
 
+## Resolved in `_ready()`: the scene-authored `DefenseProfile` child if there is one, otherwise a
+## default one (all `accepts_*` true, mask 1121) created on the fly. Exposed so a subclass can
+## call `apply_alternate()` on it, as `RamShip` does.
+var defense_profile: DefenseProfile
+
 ## Give this enemy a config resource of its own, at construction and again on tree entry.
 ##
 ## Both hooks are needed, and they close different windows:
@@ -48,7 +53,8 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	hurt_box.received_damage.connect(_on_received_damage)
 	health.amount_changed.connect(_on_health_changed)
-	hurt_box.collision_mask = 97 | 1024  # bullets (64) + rockets (32) + layer 1 + asteroid contact (1024)
+	defense_profile = _resolve_defense_profile()
+	defense_profile.apply_to(hurt_box)
 	_rotate_sprite()
 
 	_hit_effect = HitEffect.new()
@@ -66,6 +72,17 @@ func _ready() -> void:
 		score_value = cfg.score_value
 		counts_toward_wave_clear = cfg.counts_toward_wave_clear
 		counts_as_escape = cfg.counts_as_escape
+
+## Returns the scene-authored `DefenseProfile` child if there is one, so a scene that places one
+## (e.g. the ram ship) never gets a second, default-flagged profile alongside it.
+func _resolve_defense_profile() -> DefenseProfile:
+	for child in get_children():
+		if child is DefenseProfile:
+			return child
+	var profile := DefenseProfile.new()
+	add_child(profile)
+	return profile
+
 
 func _rotate_sprite() -> void:
 	var sprite := get_node_or_null("AnimatedSprite2D") as Node2D

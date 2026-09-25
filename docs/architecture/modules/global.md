@@ -28,6 +28,7 @@ global/
 │   ├── hitbox_component.gd        # HitBox (Area2D) — deals hits, DamageType enum
 │   ├── shield_component.gd        # Shield (Node) — discrete-charge shield
 │   ├── damage_reaction.gd         # DamageReaction (Node) — generic "take a hit" router
+│   ├── defense_profile.gd         # DefenseProfile (Node) — per-instance HurtBox mask/damage-type data
 │   ├── overheat_component.gd      # Overheat (Node) — weapon heat
 │   ├── attack_controller.gd       # AttackController (Node) — drives an AttackPatternResource
 │   ├── bullet_pool.gd             # BulletPool — bullet object pool
@@ -113,6 +114,7 @@ Static-only helper (`RefCounted`, never instantiated) that swaps the OS mouse ar
 > edge cases the source does not spell out. Mapping: `Health` → `tests/unit/test_health_component.gd`,
 > `TempHealth` → `test_temp_health_component.gd`, `HitBox`/`HurtBox` → `test_hitbox_hurtbox.gd`,
 > `Shield` → `test_shield_component.gd`, `DamageReaction` → `test_damage_reaction.gd`,
+> `DefenseProfile` → `test_defense_profile.gd`,
 > `Overheat` → `test_overheat_component.gd`, the state machine → `test_state_machine.gd`, and the
 > whole `PlayerBase` damage chain → `tests/integration/test_player_damage_chain.gd`. The autoloads
 > in §3–4 are covered by `tests/unit/test_<autoload>.gd`. See [`tests/README.md`](../../../tests/README.md).
@@ -172,6 +174,40 @@ func _ready() -> void:
     hurtbox.received_damage.connect(_on_hit)
 func _on_hit(damage: int) -> void:
     health.decrease(damage)   # or route through DamageReaction (below)
+```
+
+### DefenseProfile — `defense_profile.gd`
+
+`DefenseProfile` (`class_name DefenseProfile extends Node`) is per-instance data for what a
+`HurtBox` accepts, replacing a hardcoded mask assignment. A `Node`, not a `Resource`, because
+armour state is runtime state that must be per-instance — a shared `Resource` would leak one
+instance's "armour stripped" flip to every instance using it, the same trap `ShipConfig.privatise()`
+exists to avoid.
+
+Exports `accepts_player_bullets` / `accepts_player_rockets` / `accepts_environment` /
+`accepts_hazard_contact` (all default `true`) and `accepted_damage_types: Array[HitBox.DamageType]`
+(default empty = accept all). `mask()` folds the four flags into a `CollisionLayers` bitmask (all
+four true = 1121: `PLAYER_HITBOX | PLAYER_ROCKETS | ENVIRONMENT | HAZARD_CONTACT`). `apply_to(hurt_box)`
+writes `mask()` and `accepted_damage_types` onto a `HurtBox` and remembers it for later.
+
+`apply_alternate()` is a **one-way** switch to a second flag set (`alternate_accepts_*`, same
+defaults) and re-applies to the last `HurtBox` passed to `apply_to()` — exactly the ram ship's
+"armour breaks on the first missile hit and never re-forms" rule, and no more. There is no way
+back to the primary flags once switched.
+
+`BaseEnemy._ready()` resolves a `DefenseProfile` child by type if the scene authored one (e.g.
+`ram_ship.tscn`, whose profile gives 33 — rockets + environment — with the alternate 97 applied in
+`RamShip._enter_damaged_state()`), otherwise creates a default one on the fly (mask 1121, so no
+scene needs editing) and exposes it as `defense_profile` for a subclass to call `apply_alternate()`
+on. `StationTurret` (a plain `Node2D`, not a `BaseEnemy`) reproduces the default mask by hand
+through the same `CollisionLayers` constants rather than using a profile, since it has nothing to
+resolve one for it.
+
+```gdscript
+# Scene-authored two-state armour (see ram_ship.tscn / ram_ship.gd):
+@onready var defense_profile: DefenseProfile = $DefenseProfile   # or BaseEnemy.defense_profile
+func _enter_damaged_state() -> void:
+    defense_profile.apply_alternate()   # one-way; re-applies to the HurtBox automatically
 ```
 
 ### Shield — `shield_component.gd`, `bubble_shield.tscn`, ordering in `damage_reaction.gd`

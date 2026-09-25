@@ -26,13 +26,16 @@ func _ready() -> void:
 	hurt_box.received_damage.connect(_on_received_damage)
 	health.amount_changed.connect(_on_health_changed)
 
-	## BaseEnemy._ready() sets these for every other enemy; a plain Node2D has nothing doing it.
-	## Layer 512 (enemy_hurtbox) is what the projectile HitBoxes monitor — their mask is 513.
-	## The mask mirrors base_enemy.gd:25: bullets (64) + rockets (32) + layer 1 + asteroids
-	## (1024). Copying the gunship scene's raw `collision_mask = 65` instead would omit bit 6
+	## BaseEnemy._ready() resolves a DefenseProfile for every other enemy; a plain Node2D has
+	## nothing doing it, so this reproduces the default profile's mask (1121) by hand, through the
+	## same named constants: player bullets + player rockets + environment + hazard contact.
+	## Copying the gunship scene's raw `collision_mask = 65` instead would omit bit 6 (rockets)
 	## and the player's homing and warhead missiles would pass straight through every turret.
-	hurt_box.collision_layer = 512
-	hurt_box.collision_mask = 97 | 1024
+	hurt_box.collision_layer = CollisionLayers.ENEMY_HURTBOX
+	hurt_box.collision_mask = (
+		CollisionLayers.PLAYER_HITBOX | CollisionLayers.PLAYER_ROCKETS
+		| CollisionLayers.ENVIRONMENT | CollisionLayers.HAZARD_CONTACT
+	)
 
 	_hit_effect = HitEffect.new()
 	add_child(_hit_effect)
