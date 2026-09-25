@@ -130,3 +130,20 @@ These are *planned* decisions; check this phase's `as built` section, once writt
 | `max_distance_from_owner` lifetime | Ph5 | With owner-bound projectiles and `persist_after_owner_death`. |
 | Stale `base_enemy.gd:<line>` citations | this phase, t15 | Fixed once as a repo-wide sweep citing symbols. |
 | Retiring `EnemyPathMover` as the default | Ph15 | |
+
+### Built in t10-brain-mover (2026-09-25) — details later phases depend on
+- `EnemyMover` requests are **per step**: `request_velocity()` / nudges / `face_toward()` clear after every `step()`,
+  so a brain must request every tick (a brain that stops requesting brakes to zero). All limits default to 0
+  (off/instant), including `max_speed` (0 = uncapped). `boost()` ignores requests, nudges, `max_speed` and the
+  accel/braking limits, but not the constraint. `halt()` is the sanctioned velocity zeroing (used by `suspend_ai()`).
+- `arrive()` / `hold_position()` wrappers size the slowing radius with the mover's **deceleration**
+  (`braking`, else `acceleration`), not `acceleration`.
+- `BaseEnemy` API: `suspend_ai()` (idempotent), `is_ai_suspended()`; `_brain` / `_mover` are resolved by type.
+  `EnemyBrain` resolves `actor` / `mover` / `attack` in its own `_ready()` — concrete brains that override
+  `_ready()` must call `super._ready()`.
+- **Phase 15:** a rail suspends the brain, so a `driven_by_brain = true` `AttackController` **stops firing** on a
+  path-driven spawn (the brain no longer ticks it). Timer-driven (`_process`) controllers keep firing as today.
+  Phase 15's migration must decide who ticks fire on a rail.
+- The single-writer gate is stricter than planned: it also forbids `velocity.x/.y` writes, `look_at(` / `rotate(`,
+  `set_velocity(` / `set_rotation(` and `move_and_collide(`, and sweeps the mover-driven root script's **ancestors**
+  (so `base_enemy.gd` must never write `velocity`/`rotation` either). Test fixture: `tests/helpers/fixture_enemy.tscn`.

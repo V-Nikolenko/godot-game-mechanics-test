@@ -39,6 +39,13 @@ global/
 │   ├── thruster_effect.gd         # ThrusterEffect — engine flame
 │   ├── rocket_trail.gd            # RocketTrail — missile trail
 │   └── low_health_smoke.gd        # LowHealthSmoke — smoke below an HP threshold
+├── enemy_ai/                  # mode-neutral enemy AI stack (enemy rework phase 1)
+│   ├── enemy_brain.gd         # EnemyBrain (Node) — decides: tick(delta), on_suspended(), seeded rng
+│   ├── enemy_mover.gd         # EnemyMover (Node) — the single writer of an AI enemy's velocity/rotation
+│   ├── movement_constraint.gd # MovementConstraint (RefCounted) — identity filter; mode constraints extend it
+│   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift primitives
+│   ├── target_info.gd         # TargetInfo — player resolver + prediction/intercept snapshot
+│   └── enemy_world.gd         # EnemyWorld — the one lookup of the &"assault_arena" mode provider
 ├── entities/
 │   └── player_base.gd         # PlayerBase (CharacterBody2D) — shared player base class
 ├── interactables/              # input-driven world objects (sibling of pickups/, not a subclass)
@@ -209,6 +216,48 @@ resolve one for it.
 func _enter_damaged_state() -> void:
     defense_profile.apply_alternate()   # one-way; re-applies to the HurtBox automatically
 ```
+
+### Enemy AI — `enemy_brain.gd` + `enemy_mover.gd` (`global/enemy_ai/`)
+
+An AI-driven enemy is a `BaseEnemy` with two extra children, both resolved **by type** in
+`BaseEnemy._ready()`: an `EnemyBrain` subclass (decides) and an `EnemyMover` (moves).
+`BaseEnemy._physics_process` is the one clock: `brain.tick(delta)` then `mover.step(delta)`, once per
+physics frame. With no brain it returns immediately, so every legacy enemy is unchanged (the ones with
+their own `_physics_process` replace it outright — GDScript does not chain callbacks).
+
+```
+# my_enemy.tscn
+MyEnemy (CharacterBody2D, my_enemy.gd extends BaseEnemy)
+├── Health / HurtBox / HitFlashAnimationPlayer    # as every BaseEnemy
+├── EnemyMover        # max_speed, acceleration, braking (0 = acceleration), turn_lerp,
+│                     # max_turn_rate (rad/s, 0 = off), constraint_mode AUTO | NONE
+└── Brain (my_enemy_brain.gd extends EnemyBrain)  # rng_seed export (0 = randomize)
+
+# my_enemy_brain.gd
+func tick(delta: float) -> void:
+	var player := TargetInfo.player(get_tree())     # perception only through TargetInfo
+	_clock += delta                                  # accumulated delta, never a Timer
+	if player.has_target:
+		mover.orbit(player.position, 130.0, _angle, 350.0)  # one primary request per tick
+		mover.face_toward(player.position)
+```
+
+- **Requests are per step.** `request_velocity()` (or a `Steering` wrapper: `seek`, `arrive`, `orbit`,
+  `intercept`, `retreat_from`, `evade`, `strafe`, `hold_position`, `drift`) is the one primary
+  request — a second call replaces it; `add_nudge()` adds an offered correction; `face_toward()`
+  overrides the heading; all three clear after `step()`. `boost(dir, speed, duration)` overrides
+  requests and limits for `duration`; `halt()` stops dead.
+- **Facing, one rule:** `rotation → heading.angle() - sprite_forward_angle`, heading = the face
+  request or the velocity; `sprite_forward_angle` is read duck-typed off the actor (default `PI/2`).
+- **Constraint:** `AUTO` asks `EnemyWorld.movement_constraint(tree)` once in `_ready()` (none in
+  Open Space); `NONE` never asks; a `constraint` set before `add_child` wins.
+- **Single writer:** with a mover present, nothing else writes the body's `velocity`/`rotation` or
+  calls `move_and_slide()` — gated by `tests/integration/test_enemy_mover_single_writer.gd`.
+- **Rails override it:** `EnemyPathMover._ready()` calls `suspend_ai()` (brain `on_suspended()`, mover
+  `halt()`, no more ticks) *in addition to* its unconditional `set_physics_process(false)` and
+  `"AIStateMachine"` lookup. A `driven_by_brain` `AttackController` stops with the brain.
+- Contract tests: `tests/unit/test_enemy_mover.gd`, `tests/integration/test_enemy_brain_contract.gd`;
+  fixture enemy: `tests/helpers/fixture_enemy.tscn`.
 
 ### Shield — `shield_component.gd`, `bubble_shield.tscn`, ordering in `damage_reaction.gd`
 

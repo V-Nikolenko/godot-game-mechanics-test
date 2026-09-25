@@ -34,6 +34,13 @@ var _explosion_effect: ExplosionEffect
 ## call `apply_alternate()` on it, as `RamShip` does.
 var defense_profile: DefenseProfile
 
+## The AI stack (docs/plans/cmug33ldn00d3m52wfe1j6fct/3-plan.md), resolved by type in `_ready()`: the
+## first `EnemyBrain` / `EnemyMover` child, or null. With no brain, `_physics_process` is inert —
+## every legacy enemy either has none or overrides `_physics_process` itself.
+var _brain: EnemyBrain
+var _mover: EnemyMover
+var _ai_suspended: bool = false
+
 ## Give this enemy a config resource of its own, at construction and again on tree entry.
 ##
 ## Both hooks are needed, and they close different windows:
@@ -62,6 +69,7 @@ func _ready() -> void:
 	defense_profile = _resolve_defense_profile()
 	defense_profile.apply_to(hurt_box)
 	_rotate_sprite()
+	_resolve_ai()
 
 	_hit_effect = HitEffect.new()
 	add_child(_hit_effect)
@@ -78,6 +86,46 @@ func _ready() -> void:
 		score_value = cfg.score_value
 		counts_toward_wave_clear = cfg.counts_toward_wave_clear
 		counts_as_escape = cfg.counts_as_escape
+
+## The one AI tick: the brain decides, then the mover applies it — once per physics frame, on one
+## clock. Inert without a brain or once `suspend_ai()` has run. A subclass that defines its own
+## `_physics_process` (bomber, gunship, kamikaze, ram, drone interceptor) replaces this entirely —
+## GDScript does not chain virtual callbacks — so it keeps its legacy behaviour untouched.
+## Deliberately never calls `set_physics_process(false)`: that would switch those overrides off too.
+func _physics_process(delta: float) -> void:
+	if _ai_suspended or _brain == null:
+		return
+	_brain.tick(delta)
+	if _mover != null:
+		_mover.step(delta)
+
+
+## Hands the enemy over to something else (a rail — `EnemyPathMover` calls this): the brain gets
+## `on_suspended()` once, the mover halts (it zeroes velocity, so the mover stays velocity's only
+## writer), and the tick above never runs again. Idempotent. Timer-driven fire (`AttackController`
+## on `_process`) is not touched, so a rail-driven ship keeps shooting as it always has; a
+## `driven_by_brain` controller stops with its brain.
+func suspend_ai() -> void:
+	if _ai_suspended:
+		return
+	_ai_suspended = true
+	if _brain != null:
+		_brain.on_suspended()
+	if _mover != null:
+		_mover.halt()
+
+
+func is_ai_suspended() -> bool:
+	return _ai_suspended
+
+
+func _resolve_ai() -> void:
+	for child in get_children():
+		if _brain == null and child is EnemyBrain:
+			_brain = child
+		elif _mover == null and child is EnemyMover:
+			_mover = child
+
 
 ## Returns the scene-authored `DefenseProfile` child if there is one, so a scene that places one
 ## (e.g. the ram ship) never gets a second, default-flagged profile alongside it.

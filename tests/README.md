@@ -725,6 +725,27 @@ call `face_instant()` (the same duck-typed-query precedent as `Bullet.is_armored
 that call back to a raw rotation write was checked by hand to fail this test before it was
 committed.
 
+### The enemy-mover single-writer gate
+
+`integration/test_enemy_mover_single_writer.gd` is an invariant test over the enemy AI stack: an
+enemy with an `EnemyMover` must leave its `velocity`, `rotation` and `move_and_slide()` to that mover.
+It sweeps two rosters with two matchers. **AI scripts** (every `*_brain.gd`, and every
+`global/enemy_ai/*.gd` except `enemy_mover.gd`) may not write through a body receiver (`actor.`,
+`_actor.`, `body.`, `_body.`, `self.`) — which is what lets `TargetInfo`'s `info.velocity = …`
+snapshot through without an allowlist. **Mover-driven enemy roots** (the root script of every scene
+referencing `enemy_mover.gd`, read with `PackedScene.get_state()`, *plus its ancestors* — so
+`base_enemy.gd` is swept) may not write bare or via `self.`. Both forbid `velocity` (incl. `.x`/`.y`),
+`rotation`, `global_rotation`, `rotation_degrees` assignments, `set_velocity(`/`set_rotation(`/
+`look_at(`/`rotate(`, and `move_and_slide(`/`move_and_collide(`; comments and string contents are
+blanked first. Allowlist empty and permanent; roster-sanity cases stop an empty glob passing, and
+synthetic-source boundary cases prove each matcher fires. Planting `actor.velocity = …` in the fixture
+brain and `rotation = 0.0` in the fixture root was checked by hand to fail it.
+
+The fixture it (and `test_enemy_brain_contract.gd`) runs on is `helpers/fixture_enemy.tscn` — a
+UID-less, hand-written `BaseEnemy` scene with an `EnemyMover` and a configurable `fixture_brain.gd`.
+Timing cases step with `dt = 1/64`, which is exact in binary floating point, so accumulated clocks hit
+their boundaries exactly (1/60 drifts by a frame).
+
 ### The pause-menu Settings panel
 
 `integration/test_pause_menu_settings.gd` is an intent test over the last step of the mouse-aiming

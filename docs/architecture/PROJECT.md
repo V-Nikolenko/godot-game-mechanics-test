@@ -94,6 +94,12 @@ Detail and APIs: [global.md](modules/global.md).
   `preload()` in the test suite. Details and the two remaining windows: the `ShipConfig` section of
   [global.md](modules/global.md); pinned by `tests/integration/test_config_instance_isolation.gd`.
   **The object `load()`/`preload()` returns is still shared — never write to it.**
+- **An AI-driven enemy has one writer of its motion.** When an enemy carries an `EnemyMover`
+  (`global/enemy_ai/enemy_mover.gd`), that mover is the only writer of its `velocity` and `rotation`
+  and the only caller of `move_and_slide()`; its `EnemyBrain` only *requests* movement, on the one
+  physics tick `BaseEnemy._physics_process` owns. Rails (`EnemyPathMover`) take over through
+  `suspend_ai()`. Recipe: [global.md](modules/global.md) → *Enemy AI*; gated by
+  `tests/integration/test_enemy_mover_single_writer.gd`.
 - **The mouse is read in exactly one line project-wide.** `player_ship.gd::_handle_rotation`'s
   `get_global_mouse_position()` is it. Everything downstream — the whole open-space turn model in
   `ShipTurnController` (see [open_space.md](modules/open_space.md) §3.2.1) — takes the cursor as an

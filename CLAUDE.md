@@ -183,6 +183,14 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   as `Bullet.is_armored()`, above). It sweeps every `global/ship_modules/*.gd` for a direct
   `.rotation =`/`+=`/`-=` with an empty, permanent allowlist; reverting the duck-typed call back to
   a raw rotation write makes it fail, which is the proof it can.
+  `tests/integration/test_enemy_mover_single_writer.gd` is a twelfth, over the enemy AI stack's
+  **single writer of motion**: an enemy with an `EnemyMover` (`global/enemy_ai/`) must leave its
+  `velocity`, `rotation` and `move_and_slide()` to that mover — its `EnemyBrain` only requests,
+  on the one tick `BaseEnemy._physics_process` owns. It sweeps every `*_brain.gd` and
+  `global/enemy_ai/*.gd` (receiver writes) and every mover-driven scene's root script plus its
+  ancestors (bare writes), with an empty, permanent allowlist and boundary cases that prove it
+  fires. Rails still win: `EnemyPathMover` calls `suspend_ai()` *in addition to* its unconditional
+  physics switch-off and `"AIStateMachine"` lookup — never instead of it.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.
