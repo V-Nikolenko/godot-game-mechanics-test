@@ -172,11 +172,14 @@ boost={
 
 2d_physics/layer_1="environment"
 2d_physics/layer_2="environment_interactable"
-2d_physics/layer_3="environemnt_player"
+2d_physics/layer_3="environment_player"
+2d_physics/layer_5="pickups"
+2d_physics/layer_6="player_rockets"
 2d_physics/layer_7="player_hitbox"
 2d_physics/layer_8="player_hurtbox"
 2d_physics/layer_9="enemy_hitbox"
 2d_physics/layer_10="enemy_hurtbox"
+2d_physics/layer_11="hazard_contact"
 
 [rendering]
 
