@@ -147,3 +147,39 @@ These are *planned* decisions; check this phase's `as built` section, once writt
 - The single-writer gate is stricter than planned: it also forbids `velocity.x/.y` writes, `look_at(` / `rotate(`,
   `set_velocity(` / `set_rotation(` and `move_and_collide(`, and sweeps the mover-driven root script's **ancestors**
   (so `base_enemy.gd` must never write `velocity`/`rotation` either). Test fixture: `tests/helpers/fixture_enemy.tscn`.
+
+### Built in t12-dual-harness (2026-09-25) — details t14 depends on
+- `tests/helpers/enemy_ai_harness.gd` (no `class_name`, preload it) exposes `open_space()` and `assault()`,
+  each returning a `RefCounted` with `root: Node2D`, `player: CharacterBody2D` (already in group `"player"`)
+  and `is_assault: bool`. `assault()`'s `root` also holds a bare `ArenaCamera`, so an `AUTO` `EnemyMover` under
+  it resolves `AssaultCorridorConstraint` through `EnemyWorld`, the same lookup the real game uses.
+  `open_space()`'s `root` holds no provider. The caller adds `root` to the tree itself
+  (`add_child_autofree(harness.root)`) before parenting anything under it.
+- **A real GUT footgun the harness's shape forces on every caller, including t14:** `use_parameters([...])` is a
+  default-argument expression, and GDScript re-evaluates a default argument's expression on **every** call, not
+  just the first — `use_parameters()` itself only *uses* the first call's array, but every later call still
+  builds (and immediately abandons) a fresh one. `HARNESS.open_space()` / `HARNESS.assault()` build a `Node2D`
+  subtree, and a `Node` is not ref-counted, so an abandoned one is a genuine, silent leak (`scripts/
+  check-test-leaks.sh` catches it: `ObjectDB instances leaked` / `resources still in use` at process exit).
+  **Never write `use_parameters([HARNESS.open_space(), HARNESS.assault()])`.** Parameterize on a bare label
+  instead and build the harness from it inside the test body:
+  `func test_x(mode: String = use_parameters(["open_space", "assault"])) -> void:` then
+  `var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()`. `test_enemy_dual_mode.gd`
+  follows this shape throughout; t14 adding the interceptor's case to the same file must too.
+- `test_enemy_dual_mode.gd`'s `_tick(entity, delta)` helper is the one way this file (and t14's addition to it)
+  should drive a mover-owned `CharacterBody2D` for many manual ticks: it calls `entity._physics_process(delta)`
+  then overwrites `entity.global_position` with `before + entity.velocity * delta`, discarding whatever
+  `move_and_slide()` actually displaced it by. `move_and_slide()` reads `get_physics_process_delta_time()`
+  internally rather than the passed-in `delta`, and that value is not reliable when driven by hand outside a
+  real physics substep (`test_drone_interceptor.gd`'s harness notes already flagged this) — confirmed again
+  here: the corridor-entry case passed standalone and failed inside the full 845-test suite before `_tick()`
+  was added, purely from that drift between runs. `velocity` itself is exact regardless (`EnemyMover` assigns
+  it directly, before `move_and_slide` ever runs), so re-deriving position from it removes the dependency
+  entirely.
+- The orbit spec (`test_orbit_behaviour_matches_the_constraint`) deliberately orbits around the corridor's dead
+  centre (640, 360) with a small radius, so the Assault run's constraint never actually engages — it proves the
+  identical spec produces the identical held orbit in both modes. It does **not** exercise the "or stays inside
+  the soft band when clamped" branch of the row's own assertion; that branch exists for t14's ported
+  interceptor, whose real orbit sits near a corridor edge. The separate
+  `test_assault_harness_above_screen_spawn_enters_the_corridor` case is what exercises the constraint while it
+  is actively clamping in this phase.
