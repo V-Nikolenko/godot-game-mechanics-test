@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3 uid="uid://wi7ci5dkn7k7"]
+[gd_scene load_steps=5 format=3 uid="uid://wi7ci5dkn7k7"]
 
 [ext_resource type="Script" uid="uid://mwpc142w8h70" path="res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.gd" id="1_ebullet"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="2_ebullet"]
+[ext_resource type="Script" path="res://global/components/projectile_lifetime.gd" id="3_ebullet"]
 
 [sub_resource type="CapsuleShape2D" id="CapsuleShape2D_eb"]
 radius = 2.0
@@ -9,6 +10,11 @@ height = 10.0
 
 [node name="EnemyBullet" type="Area2D"]
 script = ExtResource("1_ebullet")
+
+[node name="ProjectileLifetime" type="Node" parent="."]
+script = ExtResource("3_ebullet")
+max_time = 18.0
+max_distance = 2400.0
 
 [node name="Visual" type="Line2D" parent="."]
 modulate = Color(1, 0.4, 0.1, 1)
