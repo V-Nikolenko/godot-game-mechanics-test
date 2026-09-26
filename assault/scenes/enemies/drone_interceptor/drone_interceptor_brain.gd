@@ -59,10 +59,19 @@ func _ready() -> void:
 	_dash_timer = rng.randf_range(1.0, 2.0)
 
 
-## Two passes, matching the pre-port `_physics_process`'s own two `match _phase:` blocks exactly:
-## the first decides velocity (and may transition `phase` — e.g. ENTER reaching `orbit_radius`),
-## the second faces using whatever `phase` is *after* that transition. So a tick that flips
-## ENTER -> ORBIT still faces the player that same tick, even though it requests no velocity.
+## Two passes, matching the pre-port `_physics_process`'s own two `match _phase:` blocks: the first
+## decides velocity (and may transition `phase` — e.g. ENTER reaching `orbit_radius`), the second
+## faces using whatever `phase` is *after* that transition. So a tick that flips ENTER -> ORBIT
+## still faces the player that same tick, even though it requests no velocity. Not an exact match,
+## though: the old code faced using the position *before* that tick's move, while `EnemyMover.step()`
+## resolves `face_toward()`'s point after `move_and_slide()` has already run (plan review, round 1,
+## finding 2). Against the player's position (ENTER/ORBIT) the difference is one enemy-step's worth
+## of drone movement out of the whole bearing — negligible. DASH never calls `face_toward()` at all,
+## for exactly this reason: `_dash_direction` is a fixed offset from the drone's OWN position, so
+## resolving it post-move turned it into a point behind the drone, and the drone dashed tail-first
+## (same finding, point 1). Leaving DASH's `_has_face_point` unset falls through to `step()`'s
+## default heading, the requested velocity itself (`_dash_direction * dash_speed`, set below by
+## `_tick_dash()`), which needs no position at all and so cannot be thrown off by the move.
 func tick(delta: float) -> void:
 	var target := TargetInfo.player(get_tree())
 	match phase:
@@ -75,7 +84,7 @@ func tick(delta: float) -> void:
 			if target.has_target:
 				mover.face_toward(target.position)
 		Phase.DASH:
-			mover.face_toward(actor.global_position + _dash_direction)
+			pass  # faces along the dash velocity itself — see the header comment above
 
 
 func _tick_enter(target: TargetInfo) -> void:

@@ -367,6 +367,35 @@ func test_facing_converges_toward_the_target_over_time() -> void:
 	assert_almost_eq(drone.rotation, PI / 2.0, 0.1, "nose-up toward a player straight ahead")
 
 
+## Regression test for the plan review's round-1 finding 1: mid-DASH, the drone must turn to face
+## the direction it is dashing IN, not away from it. Deliberately does NOT use `_tick()` — this is
+## the one case that needs `move_and_slide()`'s own real displacement, since that displacement is
+## exactly what the original bug depended on: the brain used to call
+## `mover.face_toward(actor.global_position + _dash_direction)`, a point only 1 px ahead of the
+## PRE-move position, but `EnemyMover.step()` resolves a face point AFTER `move_and_slide()` has
+## already moved the actor several px along `_dash_direction` — turning the face point into a point
+## effectively BEHIND the drone, and the fixed pre-port `_face_direction(delta, _dash_direction)`
+## into `atan2` of the drone's own recent motion instead. The fix removes DASH's `face_toward()`
+## call entirely, so facing falls through to `step()`'s default heading — the requested velocity
+## itself, which needs no position and so cannot be perturbed by the move.
+func test_facing_converges_toward_dash_direction_during_the_dash() -> void:
+	_spawn_player(Vector2(300.0, 0.0))
+	var drone := _spawn_drone(Vector2(0.0, 0.0))
+
+	_brain(drone)._begin_dash()
+	drone._physics_process(DT)
+	# Public state only (harness convention): read the direction back from velocity rather than the
+	# brain's private `_dash_direction` — it is locked at dash onset and never changes for the dash.
+	var dir: Vector2 = drone.velocity.normalized()
+
+	for _i in 59:  # 1 s total elapsed: several turn-lerp time constants at 7.0/s
+		drone._physics_process(DT)
+
+	var expected: float = atan2(dir.x, -dir.y)
+	assert_almost_eq(drone.rotation, expected, 0.01,
+		"the drone must turn to face the direction it is dashing in, not away from it")
+
+
 # ── 10. Dash ends when the drone leaves the legacy cull rect (Assault world) ───
 
 ## `cam.global_position ± viewport/2 ± 80`, with the camera pinned at (640, 360) and the project's
