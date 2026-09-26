@@ -369,9 +369,10 @@ func test_spawning_a_squad_does_not_touch_the_timer() -> void:
 # ── 16. Every squad ship is killable by the primary weapon ────────────────────
 
 ## The `ram_ship` class of defect, caught automatically the next time someone swaps a squad ship.
-## The mask must be read IN THE TREE: `hurt_box` is `@onready` (`base_enemy.gd:7`) and the
-## governing value is written in `_ready()` (`base_enemy.gd:25` sets 97|1024 = 1121; `ram_ship.gd:19`
-## is the one subclass that narrows it to 33 afterwards).
+## The mask must be read IN THE TREE: `hurt_box` is `@onready` (`BaseEnemy.hurt_box`) and the
+## governing value is written by `DefenseProfile.apply_to()`, called from `_ready()` (the default
+## profile's mask folds to 97|1024 = 1121; `ram_ship.gd:19` is the one subclass that narrows it to
+## 33 afterwards).
 ##
 ## This iterates the squad table, so the ram case is discriminating but counterfactual today:
 ## 1121 & 64 == 64 passes for all three chosen ships, 33 & 64 == 0 would fail.

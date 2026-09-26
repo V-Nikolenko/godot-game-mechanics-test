@@ -100,6 +100,26 @@ Detail and APIs: [global.md](modules/global.md).
   physics tick `BaseEnemy._physics_process` owns. Rails (`EnemyPathMover`) take over through
   `suspend_ai()`. Recipe: [global.md](modules/global.md) → *Enemy AI*; gated by
   `tests/integration/test_enemy_mover_single_writer.gd`.
+- **Brains tick on physics, on one clock, with no `Timer` nodes.** `BaseEnemy._physics_process`
+  calls `brain.tick(delta)` then `mover.step(delta)`, once per physics frame; a brain's clocks are
+  accumulated `delta` values and its randomness comes only from its own seeded `rng`
+  (`RandomNumberGenerator`), never the global RNG — `StateMachine` ticks in `_process` instead, and
+  GUT's `simulate()` never fires a `Timer`, which is why the light assault ship's `AIStateMachine`
+  needs the separate name-lookup suspension `EnemyPathMover` still performs unconditionally.
+- **The mode (Assault vs. Open Space) is declared by the world, found by duck type.**
+  `ArenaCamera` joins group `&"assault_arena"`; `EnemyWorld` (`global/enemy_ai/enemy_world.gd`) is
+  the *only* code that looks that group up, and does so via `has_method` rather than importing the
+  Assault-only `ArenaCamera` class — nothing under `global/` may reference it by name. With no
+  provider in the tree the mode is Open Space: no projectile rect, no cull rect, no movement
+  constraint. See [global.md](modules/global.md) → *Enemy AI* and
+  [assault.md](modules/assault.md) → *Enemy AI in Assault*.
+- **Every physics collision layer bit in use has a name.** `project.godot [layer_names]` is the
+  single place a bit gets a human name — Godot never checks that a bit actually used in a scene or
+  resource has one — and `global/physics/collision_layers.gd`'s `CollisionLayers` mirrors it with
+  one constant per named layer (`1 << (n-1)`), so code refers to a layer by name instead of a magic
+  number. No layer's numeric value changes when it is named. Gated by
+  `tests/integration/test_collision_layer_names.gd`, which sweeps every `.tscn`/`.tres` outside
+  `addons/` for an unnamed bit and checks every named layer has a matching constant.
 - **The mouse is read in exactly one line project-wide.** `player_ship.gd::_handle_rotation`'s
   `get_global_mouse_position()` is it. Everything downstream — the whole open-space turn model in
   `ShipTurnController` (see [open_space.md](modules/open_space.md) §3.2.1) — takes the cursor as an
@@ -202,7 +222,11 @@ Detail and APIs: [global.md](modules/global.md).
   sweeps every self-emitted signal project-wide and asserts declared arity matches every
   `.emit()` call site; its first run caught the same drift live in `MovementController`'s
   `action_single_press`/`action_double_press`, fixed alongside it)
-  — plus the space-station family.
+  and `tests/integration/test_collision_layer_names.gd` (every collision layer bit used anywhere
+  is named in `project.godot [layer_names]`, and every named layer has a matching
+  `CollisionLayers` constant)
+  — plus the space-station family and `tests/integration/test_enemy_mover_single_writer.gd`
+  (the AI single-writer rule above).
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).
   Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the

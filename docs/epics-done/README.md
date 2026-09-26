@@ -27,6 +27,7 @@ re-reading the diff.
 | Epic | Folder | Shipped | One-line |
 |---|---|---|---|
 | Level 1 space-station mini-boss | [`station-mini-boss/`](station-mini-boss/) | 2026-09-01 → 2026-09-03, six cycles | A two-phase cores-and-turrets mini-boss that gates Level 1's third section. Built, gated, armed, reinforced and staged, with 93 tests — **never played by a human**, and its hull sprite currently renders opaque. |
+| Enemy rework, phase 1: mode-neutral enemy AI architecture | [`cmufklb100001p92xs1ey2fb1/`](cmufklb100001p92xs1ey2fb1/) | 2026-09-25 → 2026-09-27, 16 tasks | The `EnemyBrain`/`EnemyMover`/`AttackController`/`DefenseProfile`/`TargetInfo`/`ProjectileLifetime` architecture the rest of the 20-phase roster rework builds on, plus the Drone Interceptor ported onto it as proof — **never played by a human**, and the Assault corridor constraint is untested by any real AI-driven enemy yet. |
 
 `foundations-test-harness-uid-integrity-art-pipeline` also completed (GUT bootstrap, UID integrity
 test, PixelLab pipeline) but predates this folder, so it has no dossier — its record is the plan

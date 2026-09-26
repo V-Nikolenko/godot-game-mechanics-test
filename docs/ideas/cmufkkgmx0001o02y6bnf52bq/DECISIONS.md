@@ -183,3 +183,66 @@ These are *planned* decisions; check this phase's `as built` section, once writt
   interceptor, whose real orbit sits near a corridor edge. The separate
   `test_assault_harness_above_screen_spawn_enters_the_corridor` case is what exercises the constraint while it
   is actively clamping in this phase.
+
+## Phase 1 - as built (2026-09-27)
+
+All 15 build-sequence tasks (t1–t15) landed on `agent/auto-dev`, plus the plan/research/review
+preparation tasks. This closes the epic. `docs/epics-done/cmufklb100001p92xs1ey2fb1/` has the full
+dossier (PRD/SOURCES/REPORT); this section is the short version later phases should read first.
+
+### What was actually built
+
+Everything the "Names and places" and "Conventions" tables above describe as *planned* landed
+**as specified**, with no code-level deviation found while writing this section against the final
+source: `global/enemy_ai/` (`enemy_brain.gd`, `enemy_mover.gd`, `steering.gd`, `target_info.gd`,
+`movement_constraint.gd`, `enemy_world.gd`), `global/components/defense_profile.gd` and
+`projectile_lifetime.gd`, `global/physics/collision_layers.gd`, `assault/scenes/systems/
+assault_corridor_constraint.gd`, `ArenaCamera`'s three provider methods and its `&"assault_arena"`
+group membership (joined **before** its early return, per the plan's N5), and the Drone
+Interceptor's port onto `DroneInterceptorBrain` + `EnemyMover` with `constraint_mode = NONE`. The
+"Built in t10-brain-mover" and "Built in t12-dual-harness" notes above, written during
+implementation, are still accurate and are not repeated here.
+
+`EnemyPathMover` suspends AI through all three unconditional steps the plan required (F3):
+`set_physics_process(false)`, the `"AIStateMachine"` name lookup, and `_actor.suspend_ai()` when
+present — pinned on the real `light_assault_ship.tscn`, not just a bare test fixture.
+`ProjectileLifetime` arms lazily (F1) and the sniper's unpooled shot carries its own instance
+(N1's fix) rather than trying to "inherit" one from a non-inherited scene. `EnemyBullet`'s derived
+defaults are `max_time = 18 s`, `max_distance = 2400 px` (F2's corrected derivation), matching what
+ships in `enemy_bullet.tscn` / `enemy_sniper_bullet.tscn` today.
+
+### Deviations from `3-plan.md`
+
+None material. The plan's own revision 2 already absorbed every round-1 review finding (F1–F11)
+before implementation started, so no further deviation surfaced during the build that a later
+phase needs to know about beyond what "Built in t10"/"Built in t12" above already record (the
+`Engine.get_physics_frames()` tick-counting fix, the sweep blanking string literals as well as
+comments, and the GUT default-argument-leak trap in the dual-mode harness).
+
+**This docs task (t15) made one scoping call the plan's own review had already approved (N3):**
+the repo-wide `grep -rn "base_enemy.gd:[0-9]"` sweep excludes `docs/plans/`, `docs/epics-done/`,
+`docs/ideas/` and `docs/enemy-rework/` — historical plan/review records, finished-epic dossiers,
+and the owner's own attached audit documents, none of which this phase may rewrite. Within that
+scope the actual hit list differed slightly from `3-plan.md`'s "known hits today": `station_turret.gd:31`
+had already been cleaned up by an earlier task (t5/t6), and two hits the plan missed —
+`station_reinforcements.gd:128` and `test_station_incoming_damage_paths.gd:17` — were found and
+fixed alongside the eight the plan named. All ten were rewritten to cite the symbol
+(`BaseEnemy._on_health_changed`, `BaseEnemy.died`, `BaseEnemy.hurt_box`, or the `DefenseProfile`
+call that now owns the mask write) rather than a line number; no test assertion changed.
+
+### Gaps left for later phases
+
+Everything in the "Deliberately deferred" table above still stands — nothing in this docs pass
+closed any of it. In particular, for the phases that read this section next:
+
+- **Phase 2 (Razor Drone)** turns the Assault corridor on for a ported-style enemy for the first
+  time and must re-pin the Drone Interceptor's edge behaviour if it evolves the same port; it also
+  owns `PatrolDrone`'s replacement and `BulletPool`'s grandparent-container assumption.
+- **Phase 4** owns real line-of-sight (`TargetInfo.line_of_sight()` is still a stub), armour as
+  deflection vs. mask exclusion, and the sniper's `FLY_IN_TIME` coupling.
+- **Phase 15** owns retiring `EnemyPathMover`'s `"AIStateMachine"` name-lookup fallback (once the
+  light assault ship moves onto a brain) and moving `BaseEnemy` itself into `global/`.
+- **Phase 16** owns difficulty tiers; only the `accuracy` hook on `TargetInfo.aim_direction` /
+  the aimed and gatling patterns exists today, and every shipped pattern still defaults it to `0.0`.
+- No numeric collision-layer bit changed meaning or value in this phase; bit 4 (value 8) remains
+  unnamed and unallocated, and bit 12 (`area_control`, 2048) is reserved for Phase 6.

@@ -123,7 +123,14 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   the ship's own physics/AI (so timer-based shooting still works), faces the travel
   direction (or a fixed `look_angle`), and frees the enemy on screen exit or after a
   duration (`ExitMode`). `PlayerFocusMovement` is duplicated per-ship so each gets its own
-  aim vector.
+  aim vector. **Suspension is three unconditional steps, never a conditional fallback:**
+  `_actor.set_physics_process(false)`, the `"AIStateMachine"` child name lookup →
+  `PROCESS_MODE_DISABLED` (both today's behaviour), *and* `_actor.suspend_ai()` when the actor
+  `has_method` it (new — see [global.md](global.md) → *Enemy AI*). The name lookup is not a
+  fallback the brain contract can switch off: the light assault ship is a `BaseEnemy` (so it
+  *has* `suspend_ai()`), but its `AIStateMachine` states write `velocity` and call
+  `move_and_slide()` from `StateMachine._process`, which only the name lookup stops. All 264
+  path-driven spawns in Level 1 are unchanged by this addition.
 - **`BaseEnemy`** is the shared enemy root: it owns `Health` + `HurtBox`, a contact hitbox,
   hit-flash/explosion effects, and emits `died` on death (setting `was_killed`). Scoring
   fields (`score_value`, `counts_toward_wave_clear`, `counts_as_escape`) are pulled from
@@ -160,6 +167,50 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   correct in angle and palette is `./scripts/strip-sprite-bg.sh` (border flood fill) rather than a
   regeneration.
 
+### Enemy AI in Assault — the `ArenaCamera` provider and the corridor constraint
+
+The mode-neutral enemy AI stack (`global/enemy_ai/`, see [global.md](global.md) → *Enemy AI*)
+knows nothing about Assault by name. It finds the mode by duck type, through one group:
+`ArenaCamera` (`systems/arena_camera.gd`) joins `&"assault_arena"` in `_ready()`, **before** its
+early return for a missing `Level1Background` sibling — a bare `ArenaCamera` (e.g. in a test) is
+still a provider. It answers three methods, each with an `EnemyWorld.has_*` companion so "no
+provider" and "a legitimately empty `Rect2()`" are never confused:
+
+- **`projectile_world_rect()`** — the corridor's visible rect grown by 64 px: x −164…1444, y
+  −444…1164. Consumed by `ProjectileLifetime` (above).
+- **`enemy_cull_rect()`** — the Drone Interceptor's legacy off-screen cull: `global_position` ±
+  half the viewport ± 80 px. It is a *provider* method, not a constraint method, because the
+  ported drone runs with `constraint_mode = NONE` (below) and still needs this exact cull to end
+  its dash where it always has.
+- **`enemy_movement_constraint()`** — a fresh `AssaultCorridorConstraint` instance per call (a
+  constraint holds a per-enemy "entered" latch, so `EnemyMover.AUTO` must get its own).
+
+**`AssaultCorridorConstraint`** (`systems/assault_corridor_constraint.gd`, extends
+`global/enemy_ai/movement_constraint.gd`'s identity `MovementConstraint`) is the velocity filter
+between an `EnemyMover`'s desired velocity and its one `move_and_slide()`. It works **per axis**
+against the corridor's `visible` rect (the same 1480×1480 square `ArenaCamera` frames, derived
+from its own `SCREEN_W`/`SCREEN_H`/`H_LIMIT`/`V_LIMIT` constants — never duplicated):
+
+| Band | Rule |
+|---|---|
+| Not yet entered (an axis outside `visible`) | Outward velocity discarded; inward speed floored at `entry_speed` (60 px/s). Every Assault spawn starts above the screen, so a fresh enemy is governed by this rule alone until both axes are inside. |
+| Soft band (0–120 px past `visible`) | Outward component kept, reduced by `edge_pressure · d / soft_band` (200 px/s at the outer edge). |
+| Outer band (120–450 px) | Full `edge_pressure`; the outward component itself scales linearly to 0 at `hard_band` (450 px). |
+| Past `hard_band` | Outward component removed entirely, full `edge_pressure` applied — "forced to re-enter" (IDEAS §34). |
+
+The `entered` latch is permanent once set: an enemy that has been inside `visible` at least once
+never re-triggers the not-yet-entered rule. The tangential axis (already inside `visible`) is
+always passed through untouched, so a corridor-constrained orbit or strafe is not damped on its
+free axis.
+
+**The Drone Interceptor is ported onto the brain/mover contracts with `constraint_mode = NONE`
+(kept 1:1 with its pre-rework behaviour)** — see
+[drone_interceptor/ENEMY.md](../../../assault/scenes/enemies/drone_interceptor/ENEMY.md). It is the
+proof consumer for the whole stack; a later phase turns its corridor on. Contract tests:
+`tests/unit/test_assault_corridor_constraint.gd`; the same behaviour spec runs in both an Open
+Space and an Assault harness via `tests/helpers/enemy_ai_harness.gd` and
+`tests/integration/test_enemy_dual_mode.gd`.
+
 ### Projectiles & bullet pool
 
 Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.gd`
@@ -183,14 +234,23 @@ Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.g
   unkillable — see the ENEMY.md link above.
 
   **Player and enemy projectiles despawn on different boundaries, deliberately.** Player bullets
-  use `VisibleOnScreenNotifier2D` (the *viewport* edge); `EnemyBullet` uses an explicit
-  arena-bounds check ("the full 740×740 arena, not just the viewport edge"). The player's weapons
-  are also mounted in Open Space (`player_ship.tscn`), which has a different camera and world
-  extent, so hardcoding the assault arena's bounds into them would be wrong in one of the two
-  modes. The cost is that a shot fired at an enemy that is in the arena but above the visible top
-  now despawns; that band is off-screen and unaimable, so it is accepted.
+  use `VisibleOnScreenNotifier2D` (the *viewport* edge); `EnemyBullet` carries a
+  `ProjectileLifetime` child (`global/components/projectile_lifetime.gd` — see
+  [global.md](global.md)) with world-space rules instead: `max_time = 18 s`, `max_distance = 2400
+  px` from where it armed, and — when an `ArenaCamera` provider is in the tree — the corridor's
+  `projectile_world_rect()` (x −164…1444, y −444…1164, reproducing the old hardcoded arena-bounds
+  check exactly). The player's weapons are also mounted in Open Space (`player_ship.tscn`), which
+  has no `ArenaCamera` and a different world extent, so hardcoding the assault arena's bounds into
+  them would be wrong in one of the two modes; `ProjectileLifetime`'s `max_time`/`max_distance`
+  rules are what govern an enemy bullet fired in Open Space, with no rect at all. The cost is that
+  a shot fired at an enemy that is in the arena but above the visible top now despawns; that band
+  is off-screen and unaimable, so it is accepted. The sniper's unpooled shot
+  (`enemy_sniper_bullet.tscn`, same script) carries its own `ProjectileLifetime` and arms lazily on
+  its first physics tick, since it is positioned at the muzzle only *after* `add_child()` and is
+  never `reset()`.
 
-  All of the above is pinned by `tests/integration/test_player_bullet_lifetime.gd`.
+  All of the above is pinned by `tests/integration/test_player_bullet_lifetime.gd` and
+  `tests/integration/test_enemy_bullet_lifetime.gd`.
 - `enemy_bullet/enemy_bullet.gd` — `EnemyBullet`; `become_friendly()` flips its direction and
   collision so it damages enemies instead of the player. Currently unused — its only caller,
   the parry ability `reflect_state.gd`, was removed as dead code (2026-09-08): its input action
@@ -417,7 +477,7 @@ rather than a stat — the same split that keeps `laser_emitter_radius` on the p
 
 **The station's death plays out**, via a fifth sibling node, **`StationDeathSequence`**
 (`station_death_sequence.gd`) — the same composition split a fifth time. `BaseEnemy` emits `died`
-and calls `queue_free()` in the same call (`base_enemy.gd:65-73`), which gave the 256×256 mini-boss
+and calls `queue_free()` in the same call (`BaseEnemy._on_health_changed`), which gave the 256×256 mini-boss
 the identical one-frame death a 40 px interceptor gets. `SpaceStation` now overrides
 `_on_health_changed`: everything that happened *at* the moment of death still happens there —
 `was_killed`, `died`, and disarming the corpse — and only `queue_free()` moves, behind a

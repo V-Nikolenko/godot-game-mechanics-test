@@ -326,8 +326,8 @@ and asteroid (1024) mask bits and the incoming mining-laser ray — with the sam
 scenes, stepped physics, and no `received_damage` emit anywhere in the damage path. A real
 `homing_missile.tscn` and `warhead_missile.tscn` take 100 and 50 off the unarmoured core; a real
 `big_asteroid.tscn` parked inside the hull takes 40; the mining laser runs its full 1200 px
-*through* the station and burns it. All four were checked by mutation — setting
-`base_enemy.gd:25`'s `97 | 1024` to the gunship's raw `65` reds five of the nine tests with
+*through* the station and burns it. All four were checked by mutation — setting the default
+`DefenseProfile`'s `97 | 1024` mask to the gunship's raw `65` reds five of the nine tests with
 messages that name the missing bit — and the mask values live in code, not in the scene, so
 mutating the `.tscn` proves nothing.
 

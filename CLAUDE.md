@@ -191,6 +191,14 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   ancestors (bare writes), with an empty, permanent allowlist and boundary cases that prove it
   fires. Rails still win: `EnemyPathMover` calls `suspend_ai()` *in addition to* its unconditional
   physics switch-off and `"AIStateMachine"` lookup — never instead of it.
+  `tests/integration/test_collision_layer_names.gd` is a thirteenth, over collision-layer
+  **naming**: `project.godot [layer_names]` is the one place a physics layer bit gets a human
+  name, and Godot never checks that a bit actually used in a scene or resource has one there. It
+  sweeps every `.tscn`/`.tres` outside `addons/` for a `collision_layer`/`collision_mask` value,
+  decomposes each into its set bits, and asserts every bit found is named — plus that
+  `global/physics/collision_layers.gd`'s `CollisionLayers` declares one matching constant
+  (`1 << (layer_number - 1)`) per named layer, so code can refer to a layer by name instead of a
+  magic number. A synthetic-bit boundary case (bit 4, unnamed today) proves the check can reject.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.

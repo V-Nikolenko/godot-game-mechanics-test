@@ -31,6 +31,7 @@ global/
 │   ├── defense_profile.gd         # DefenseProfile (Node) — per-instance HurtBox mask/damage-type data
 │   ├── overheat_component.gd      # Overheat (Node) — weapon heat
 │   ├── attack_controller.gd       # AttackController (Node) — drives an AttackPatternResource
+│   ├── projectile_lifetime.gd     # ProjectileLifetime (Node) — world-space projectile expiry
 │   ├── bullet_pool.gd             # BulletPool — bullet object pool
 │   ├── bubble_shield.gd/.tscn     # BubbleShield (AnimatedSprite2D) — shield visual
 │   ├── shield_icon*.gd/.tscn      # ShieldIconStrip / ShieldIcon — shield HUD
@@ -46,6 +47,8 @@ global/
 │   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift primitives
 │   ├── target_info.gd         # TargetInfo — player resolver + prediction/intercept snapshot
 │   └── enemy_world.gd         # EnemyWorld — the one lookup of the &"assault_arena" mode provider
+├── physics/
+│   └── collision_layers.gd    # CollisionLayers — named constants, one per project.godot layer_names entry
 ├── entities/
 │   └── player_base.gd         # PlayerBase (CharacterBody2D) — shared player base class
 ├── interactables/              # input-driven world objects (sibling of pickups/, not a subclass)
@@ -121,7 +124,9 @@ Static-only helper (`RefCounted`, never instantiated) that swaps the OS mouse ar
 > edge cases the source does not spell out. Mapping: `Health` → `tests/unit/test_health_component.gd`,
 > `TempHealth` → `test_temp_health_component.gd`, `HitBox`/`HurtBox` → `test_hitbox_hurtbox.gd`,
 > `Shield` → `test_shield_component.gd`, `DamageReaction` → `test_damage_reaction.gd`,
-> `DefenseProfile` → `test_defense_profile.gd`,
+> `DefenseProfile` → `test_defense_profile.gd`, `AttackController` → `test_attack_controller.gd`,
+> `ProjectileLifetime` → `test_projectile_lifetime.gd` (+ `tests/integration/test_enemy_bullet_lifetime.gd`
+> for the `EnemyBullet` migration), `TargetInfo` → `test_target_info.gd`,
 > `Overheat` → `test_overheat_component.gd`, the state machine → `test_state_machine.gd`, and the
 > whole `PlayerBase` damage chain → `tests/integration/test_player_damage_chain.gd`. The autoloads
 > in §3–4 are covered by `tests/unit/test_<autoload>.gd`. See [`tests/README.md`](../../../tests/README.md).
@@ -183,6 +188,34 @@ func _on_hit(damage: int) -> void:
     health.decrease(damage)   # or route through DamageReaction (below)
 ```
 
+### CollisionLayers — `global/physics/collision_layers.gd`
+
+`CollisionLayers` (`class_name CollisionLayers extends RefCounted`, constants only) names every
+physics layer bit the project uses, mirroring `project.godot [layer_names]` exactly: one constant
+per named `2d_physics/layer_N`, equal to `1 << (N - 1)`. Layer numbers and every scene's authored
+`collision_layer`/`collision_mask` values are unchanged — this only gives code a name to write
+instead of a magic number.
+
+| Constant | Value | `project.godot` name |
+|---|---|---|
+| `ENVIRONMENT` | 1 | `environment` |
+| `ENVIRONMENT_INTERACTABLE` | 2 | `environment_interactable` |
+| `ENVIRONMENT_PLAYER` | 4 | `environment_player` (typo `environemnt_player` fixed) |
+| `PICKUPS` | 16 | `pickups` |
+| `PLAYER_ROCKETS` | 32 | `player_rockets` |
+| `PLAYER_HITBOX` | 64 | `player_hitbox` |
+| `PLAYER_HURTBOX` | 128 | `player_hurtbox` |
+| `ENEMY_HITBOX` | 256 | `enemy_hitbox` |
+| `ENEMY_HURTBOX` | 512 | `enemy_hurtbox` |
+| `HAZARD_CONTACT` | 1024 | `hazard_contact` |
+
+Bit 4 (value 8) is deliberately unnamed and unused; no layer is allocated until something uses it
+(e.g. `area_control`, 2048, planned for the gravity-well phase). `tests/integration/
+test_collision_layer_names.gd` sweeps every `.tscn`/`.tres` outside `addons/` for a
+`collision_layer`/`collision_mask` value and fails the gate if any set bit has no name in
+`project.godot`, and separately asserts every named layer has a matching `CollisionLayers`
+constant of the right value.
+
 ### DefenseProfile — `defense_profile.gd`
 
 `DefenseProfile` (`class_name DefenseProfile extends Node`) is per-instance data for what a
@@ -216,6 +249,24 @@ resolve one for it.
 func _enter_damaged_state() -> void:
     defense_profile.apply_alternate()   # one-way; re-applies to the HurtBox automatically
 ```
+
+### AttackController — `attack_controller.gd` (extended for the enemy AI stack)
+
+`AttackController` (`class_name AttackController extends Node`) drives an `AttackPatternResource`
+on a timer; add it as a child of any ship with `pattern` and `bullet_pool` set. Two exports beyond
+the original per-ship timer: `enabled: bool = true` is a **hold-fire switch** — while `false` the
+fire-interval timer keeps running and wrapping, but the shot itself is withheld, so re-enabling
+mid-interval never fires early or double-fires; `driven_by_brain: bool = false` hands the timer to
+the owner — `_process` becomes a no-op and something else (an `EnemyBrain`) must call `tick(delta)`
+itself, on the same clock as its own AI tick. Existing timer-driven users leave both at their
+defaults and are unaffected. `fire_now()` fires immediately regardless of the timer's phase, for a
+telegraphed shot the caller triggers directly — it ignores `enabled` and never touches the timer.
+
+`aimed_attack_pattern.gd` and `gatling_attack_pattern.gd` both add `accuracy: float = 0.0` and aim
+through `TargetInfo.player(ship.get_tree()).aim_direction(ship.global_position, bullet_speed,
+accuracy)` instead of aiming straight at the player. `accuracy = 0.0` (every shipped pattern's
+default) reproduces today's direct aim exactly; `1.0` aims at the full lead/intercept point. See
+`TargetInfo.aim_direction` below.
 
 ### Enemy AI — `enemy_brain.gd` + `enemy_mover.gd` (`global/enemy_ai/`)
 
@@ -258,6 +309,51 @@ func tick(delta: float) -> void:
   `"AIStateMachine"` lookup. A `driven_by_brain` `AttackController` stops with the brain.
 - Contract tests: `tests/unit/test_enemy_mover.gd`, `tests/integration/test_enemy_brain_contract.gd`;
   fixture enemy: `tests/helpers/fixture_enemy.tscn`.
+
+**`EnemyWorld` (`enemy_world.gd`, static-only `RefCounted`) is the one lookup of the Assault-vs-Open-Space
+mode provider.** The provider is whatever node has joined group `&"assault_arena"` (today, only
+`ArenaCamera` — see [assault.md](assault.md) §"Enemy AI in Assault"); `EnemyWorld` is the only file
+project-wide that looks that group up, and it does so duck-typed (`has_method`), so nothing under
+`global/` names the Assault-only `ArenaCamera` class. With no provider, the mode is Open Space:
+every `EnemyWorld` getter returns empty/null. `arena(tree)` returns the provider node or `null`;
+`projectile_world_rect(tree)`, `cull_rect(tree)` and `movement_constraint(tree)` each have a
+`has_*` companion, because an absent result and a legitimately empty `Rect2()` are not
+distinguishable by value alone. `EnemyMover`'s `AUTO` constraint mode and `ProjectileLifetime`
+(below) are its two callers; tests inject a rect/constraint directly instead of building a provider.
+
+**`TargetInfo` (`target_info.gd`, `RefCounted`) is the one way new code finds or predicts the
+player** — a snapshot (`position`, `velocity`, `facing`, `has_target`) taken once, so reading it
+after the source node is freed is safe. `TargetInfo.player(tree)` is the resolver (replaces
+scattered `get_nodes_in_group("player")[0]` calls); `TargetInfo.of(node)` snapshots any `Node2D`.
+`intercept(from, shot_speed)` is a closed-form quadratic solve returning `{ok, point, time}` — `ok`
+is `false` with no target, a non-positive `shot_speed`, or no `t >= 0` solution (the target outruns
+the shot). `aim_direction(from, shot_speed, accuracy)` blends direct aim at `position` (`accuracy
+0.0`) with the intercept point (`1.0`), clamped, falling back to direct aim whenever `intercept`
+fails — this is what `AttackController`'s aimed/gatling patterns call (above). `line_of_sight()` is
+a stub that always agrees with `has_target`; the real raycast is a later phase.
+
+### ProjectileLifetime — `projectile_lifetime.gd`
+
+`ProjectileLifetime` (`class_name ProjectileLifetime extends Node`) is a projectile's world-space
+lifetime: add it as a child of the projectile (the "host"). Three independent rules, each disabled
+at its zero default: `max_time` (seconds since arming), `max_distance` (px from the origin — the
+point where it armed, not the owner, which may move or die), and `use_world_rect` (expire on
+leaving the mode's rect, via `EnemyWorld.projectile_world_rect()` — a no-op in Open Space or on any
+Assault camera that is not a provider). It never frees anything itself: the first rule that trips
+emits the host's `expired` signal exactly once (duck-typed via `has_signal("expired")`, so it has
+no dependency on `EnemyBullet`) and latches until the next `reset()`. A pooled bullet recycles
+through its pool's `expired` connection; an unpooled one frees itself through its own `expired ->
+queue_free` wiring. `expire_now()` is an immediate, explicit trip through the same latch.
+
+**It arms lazily** — on `reset()`, or on its own first physics tick, whichever comes first, never
+in `_ready()` — because an unpooled projectile positioned at its muzzle only *after* `add_child()`
+(the sniper shot, `sniper_enemy.gd`) is never `reset()`; arming in `_ready()` would record the
+wrong origin and never resolve the rect. `EnemyBullet` carries one with derived defaults
+(`max_time = 18 s`, `max_distance = 2400 px`) that reproduce its old hardcoded arena-bounds check
+exactly against every shipped enemy-bullet speed; a new, slower bullet source must be added to
+`tests/integration/test_enemy_bullet_lifetime.gd`'s source list and the defaults re-derived.
+`persist_after_owner_death` is documented only in Phase 1 — a future flag for `BulletPool` to skip
+`cancel_active()` on a flagged projectile.
 
 ### Shield — `shield_component.gd`, `bubble_shield.tscn`, ordering in `damage_reaction.gd`
 

@@ -50,8 +50,9 @@ const _ENEMY_ROOT := "res://assault/scenes/enemies"
 const _STATION_TURRET_SCENE := "res://assault/scenes/enemies/space_station/station_turret.tscn"
 const _RAM_SHIP_SCENE := "res://assault/scenes/enemies/ram_ship/ram_ship.tscn"
 
-## `base_enemy.gd:51`: `hurt_box.collision_mask = 97 | 1024`. Spelled out rather than computed so
-## a change to that line is what this test is pinned against, not a copy of the same expression.
+## `DefenseProfile.apply_to()`: `hurt_box.collision_mask = 97 | 1024` (the default profile's mask).
+## Spelled out rather than computed so a change to that value is what this test is pinned against,
+## not a copy of the same expression.
 const _DEFAULT_MASK_AFTER_READY := 1121
 
 ## `ram_ship.gd:21`, applied after `super._ready()` sets the default above.
