@@ -14,3 +14,4 @@ approach_speed = 200.0
 orbit_correct_speed = 160.0
 dash_speed = 480.0
 dash_prediction_time = 0.2
+dash_max_distance = 1600.0

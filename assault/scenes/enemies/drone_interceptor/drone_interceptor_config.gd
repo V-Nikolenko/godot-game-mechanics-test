@@ -3,6 +3,7 @@
 class_name DroneInterceptorConfig
 extends ShipConfig
 
+@export_group("Movement")
 ## Preferred distance from the player while orbiting (px).
 @export var orbit_radius         : float = 130.0
 ## Angular velocity of the orbit anchor (rad/s). Positive = counter-clockwise.
@@ -11,7 +12,11 @@ extends ShipConfig
 @export var approach_speed       : float = 200.0
 ## Maximum speed when correcting orbit position (px/s).
 @export var orbit_correct_speed  : float = 160.0
+
+@export_group("Attack")
 ## Burst speed during the kamikaze dash (px/s).
 @export var dash_speed           : float = 480.0
 ## How far ahead to predict the player position for the dash target (seconds).
 @export var dash_prediction_time : float = 0.2
+## Open Space only (no Assault provider): the dash frees the drone this far from where it began.
+@export var dash_max_distance    : float = 1600.0

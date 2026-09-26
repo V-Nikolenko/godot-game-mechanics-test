@@ -6,6 +6,8 @@
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_dri"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_dri"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_dri"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="7_dri"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/drone_interceptor/drone_interceptor_brain.gd" id="8_dri"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_dri"]
 resource_local_to_scene = true
@@ -54,6 +56,7 @@ _data = {
 
 [node name="DroneInterceptor" type="CharacterBody2D" unique_id=493255760]
 script = ExtResource("2_dri")
+sprite_forward_angle = -1.5707963267948966
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=917862899]
 material = SubResource("ShaderMaterial_dri")
@@ -82,6 +85,14 @@ metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
 [node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="." unique_id=1969697854]
 libraries/ = SubResource("AnimationLibrary_dri")
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("7_dri")
+turn_lerp = 7.0
+constraint_mode = 1
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("8_dri")
 
 [node name="ContactHitBox" type="Area2D" parent="."]
 collision_layer = 256
