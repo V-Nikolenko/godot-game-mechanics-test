@@ -228,6 +228,25 @@ func test_rear_count_counts_valid_rear_members() -> void:
 	assert_eq(board.rear_count(), 1, "a freed REAR is not counted")
 
 
+## `member_index`/`member_count` (t8d): join order across the WHOLE squad, regardless of role —
+## the hub idle ring's spacing, unlike `rear_index`/`rear_count`'s REAR-only view.
+func test_member_index_and_count_cover_every_role_in_join_order() -> void:
+	var board := SquadController.new()
+	assert_eq(board.member_count(), 0, "empty board")
+	var ms: Array[Node2D] = []
+	for i in 4:
+		var m := _member(Vector2(0, -10 - 10 * i))
+		ms.append(m)
+		board.join(m)
+		assert_eq(board.member_index(m), i, "joined at index %d" % i)
+		assert_eq(board.member_count(), i + 1)
+	var freed := ms[1]
+	ms.remove_at(1)
+	freed.free()
+	assert_eq(board.member_count(), 3, "a freed member is not counted")
+	assert_eq(board.member_index(ms[1]), 1, "indices close up after the free")
+
+
 func test_rear_ring_angle_starts_unset() -> void:
 	assert_true(is_nan(SquadController.new().rear_ring_angle), "NAN until a REAR initialises it")
 

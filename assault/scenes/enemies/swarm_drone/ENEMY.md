@@ -51,7 +51,28 @@ the lunge and it swings back once for a second try. Harmless to touch unless its
     window whenever the lead changes (death, hand-over, a closer join), so after a kill that moves
     the lead the flanks wait for the new lead's burst — expected, not a bug.
   - Flocking (separation/alignment/cohesion) + an evade within 90 px of the player, as one nudge
-    capped at 0.35 × `max_speed`, in APPROACH / CLOSE_IN / FORM only.
+    capped at 0.35 × `max_speed`, in APPROACH / CLOSE_IN / FORM / IDLE / RETURNING.
+- **Hub idle (Open Space only)** — a squad-wide patrol handover, on top of the ram cycle above:
+  each drone owns an `AnchorIdle` (`global/enemy_ai/anchor_idle.gd`) around an exported
+  `patrol_anchor` (`Vector2.INF` = "unset", defaulted to the spawn position in `_start()`; a real
+  squad spawner sets the SAME anchor on every member before `add_child`, so they share one ring).
+  Assault never builds one — `EngagementBudget.active` alone decides combat-from-spawn there, and
+  `start_engaged` is a test-only seam that makes an Open Space drone skip idle too, for every test
+  written before this behaviour existed.
+  - **IDLE** — a slow ring orbit (`idle_radius` 140 px, `idle_speed` 0.6 rad/s) around
+    `patrol_anchor`, angle = `phase_offset + join_index × TAU / squad_size + idle_speed × t`, plus
+    the flocking nudge. `SquadController.member_index()` / `member_count()` give the whole-squad
+    join order (unlike `rear_index()` / `rear_count()`, which only count REARs).
+  - A member that perceives the player (`perceive_radius` 380 px) calls
+    `squad.set_engaged(self, true)` and enters **NOTICING**: the light blinks once, it faces the
+    player for `notice_time` (0.35 s), then hands over to APPROACH from its *current* velocity — no
+    `halt()`, no `boost()`, so the mover's own accel/turn-rate caps bound the handover.
+  - Any member in IDLE/RETURNING that sees `squad.is_engaged()` calls `force_notice()` too, so the
+    whole squad is out of IDLE within one physics tick of the first perceiver. While any member is
+    engaged, every member's `hold_combat` stays true, so nobody returns alone; a member drops its own
+    `engaged` flag once it is beyond `lose_radius` (620 px) of the player, and once none are engaged,
+    hold_combat clears and every member enters **RETURNING** (`arrive` at `patrol_anchor`) together,
+    reaching IDLE once within the ring.
 
 ---
 
@@ -68,6 +89,12 @@ APPROACH ≤360 px                                                  ▼
 
  any phase but BURST ──budget expired (Assault only)──▶ DISENGAGE ──outside world rect──▶ freed
  (a REAR in APPROACH/FORM expires at rear_engage_seconds; everyone else at engage_seconds)
+
+ Open Space only, cold start:
+ IDLE ──perceives (or a squad mate does)──▶ NOTICING ──notice_time──▶ APPROACH (current velocity)
+   ▲                                                                        │
+   └──arrives at patrol_anchor────────────────── RETURNING ◀──beyond lose_radius, nobody engaged──┘
+      (any phase but BURST)
 ```
 
 Phases are an `enum` in `swarm_drone_brain.gd` (no `states/` folder); every transition goes through
@@ -89,6 +116,10 @@ Phases are an `enum` in `swarm_drone_brain.gd` (no `states/` folder); every tran
 - **DISENGAGE** (Assault) — after `engage_seconds` 5.5: release the corridor, seek 64 px past the
   nearest edge of `projectile_world_rect()`, free once strictly outside it.
 - **Rails** — an `EnemyPathMover` suspends the brain; the profile is armed and the light red.
+- **IDLE** (Open Space only) — `Steering.orbit` around `patrol_anchor` at `idle_radius` 140 px.
+- **NOTICING** — blink the light once, `face_toward` the player for `notice_time` 0.35 s.
+- **RETURNING** — `mover.arrive` at `patrol_anchor`; reaches IDLE within the ring, or NOTICING again
+  if the player re-enters `perceive_radius` first.
 
 ---
 
@@ -111,6 +142,8 @@ Phases are an `enum` in `swarm_drone_brain.gd` (no `states/` folder); every tran
 | `flank_distance` / `flank_angle_deg` | 200 / 70 | FLANK slots; also the LEAD's CLOSE_IN ring |
 | `separation_radius` / `flock_nudge_cap` / `evade_radius` | 30 / 0.35 / 90 | the nudge (cap 0 = off) |
 | `rear_engage_seconds` | 5.5 | Assault: a REAR leaves after this; ≤ `engage_seconds` (t15 lever) |
+| `perceive_radius` / `lose_radius` / `notice_time` | 380 / 620 / 0.35 | Open Space idle: enter / drop combat, and the NOTICING beat |
+| `idle_radius` / `idle_speed` | 140 / 0.6 | Open Space patrol ring radius (px) and angular speed (rad/s) |
 
 ---
 

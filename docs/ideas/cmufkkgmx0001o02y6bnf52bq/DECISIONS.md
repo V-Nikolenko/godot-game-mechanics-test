@@ -502,3 +502,38 @@ Task plan `docs/plans/cmuj4y8rj0074p52xqmin24gu/` (two review rounds, approved r
   read only from a `CharacterBody2D`.
 - **Per-role budget:** in Assault, a REAR in APPROACH/FORM expires at `rear_engage_seconds` (5.5, pinned
   `≤ engage_seconds`). No new `EngagementBudget` API: elapsed is `seconds − remaining()`.
+
+### Built in t8d-swarm-idle (2026-09-28): details t11-razor-idle and t16-hub-patrol depend on
+
+Task `cmuj4y8rm0078p52x5qa7v6fo`. `AnchorIdle` and `SquadController.set_engaged/is_engaged` already existed
+(t7-anchor-idle, t4-squad-controller); this task is the first thing to wire either into a real brain.
+
+- **`patrol_anchor` sentinel: `Vector2.INF` means "unset".** `SwarmDroneBrain._start()` defaults it to
+  `actor.global_position` the first tick it is still `Vector2.INF` (`Vector2.is_finite()` checks it). A real squad
+  spawner (t16) sets the SAME `patrol_anchor` value on every member **before** `add_child`, so they share one ring;
+  a lone drone left unset patrols around wherever it spawned. **t11-razor-idle's own `patrol_anchor` ("defaults to
+  the spawn position") should reuse this exact sentinel**, not invent a second convention.
+- **`SwarmDroneBrain.start_engaged` is a test-only seam**, not a gameplay flag: every t8b/t8c test built a drone
+  assuming combat-from-spawn, which stopped being the Open Space default the moment idle existed. Setting it true on
+  the brain (before the first `tick()`) skips `AnchorIdle` construction and starts in APPROACH exactly as before —
+  every existing `test_swarm_drone.gd` helper (`_spawn`, `_squad_drone`, `_squad_of`, `_real_drone`, and the FORM
+  contact-safety loop) sets it so none of those cases changed behaviour. **t11-razor-idle will hit the identical
+  problem** (`test_razor_drone.gd` / `test_drone_interceptor.gd`'s existing cases assume immediate combat) and should
+  add the same seam rather than rewrite those tests' geometry.
+- **Engagement precedence (review round 2, N17):** `squad.set_engaged(member, on)` is computed fresh every tick as
+  `on = (anchor_idle_state in {NOTICING, COMBAT}) and distance_to_player < lose_radius` — never from `hold_combat`
+  or the Phase enum alone. Without the distance term, a member held in COMBAT by its squad mates (via `hold_combat`)
+  would itself always read as "engaged", and the squad could never lose the player at all.
+- **The idle ring's shared angle is per-member, not board state** (unlike the REAR ring's `rear_ring_angle`): each
+  member computes `phase_offset + join_index × TAU / squad_size + idle_speed × t` independently, where `t` is its own
+  `_phase_time` since last entering IDLE. New `SquadController.member_index()` / `member_count()` — whole-squad join
+  order, unlike `rear_index()` / `rear_count()`, which only count REARs. **t16-hub-patrol and any later squad-wide
+  ring should use these**, not re-derive join order by hand.
+- **NOTICING owns no timer of its own** — `AnchorIdle` already tracks `notice_time` internally; the brain's
+  NOTICING phase only blinks the light once (entry) and calls `face_toward` every tick, and hands over to APPROACH
+  the moment `AnchorIdle.update()` reports COMBAT. That handover can cascade into CLOSE_IN/WINDUP **within the same
+  physics tick** if the player is already close (the existing bounded `for _i in 4` chain in `tick()`), same as any
+  other same-tick phase chain in this brain.
+- **RETURNING never interrupts a live BURST** (same guard the budget-expiry check already used): `AnchorIdle`'s own
+  state can flip to RETURNING mid-burst, but the brain's `Phase` only follows on the next tick once the burst has
+  ended, so a contact-armed pass always finishes.

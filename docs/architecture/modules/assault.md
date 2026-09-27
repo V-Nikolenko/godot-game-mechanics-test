@@ -219,7 +219,15 @@ Space and an Assault harness via `tests/helpers/enemy_ai_harness.gd` and
 AUTO`)** — see [swarm_drone/ENEMY.md](../../../assault/scenes/enemies/swarm_drone/ENEMY.md). Its
 `SwarmDroneBrain` runs the solo ram cycle (corkscrew → spiral → wind-up → burst → curved overshoot →
 one more pass) under an `EngagementBudget`, with an EXPLOSIVE `ContactProfile` and a `StateLight`;
-its behaviour spec runs in both harnesses in `tests/integration/test_swarm_drone.gd`.
+its behaviour spec runs in both harnesses in `tests/integration/test_swarm_drone.gd`. In Assault the
+`EngagementBudget` being active is also what skips the Open Space hub idle below — the level has
+already decided the fight is on, so the brain starts straight in APPROACH.
+
+**The same brain patrols its `patrol_anchor` in Open Space when nobody has engaged it** — `AnchorIdle`
+(`global/enemy_ai/anchor_idle.gd`) decides IDLE / NOTICING / (attack-cycle) / RETURNING; a whole
+`SquadController` squad wakes together the tick after any one member perceives the player
+(`squad.set_engaged` / `is_engaged` / `hold_combat`) and returns together once none of them are
+engaged. See swarm_drone/ENEMY.md's "Hub idle" section for the exact radii and timings.
 
 ### Projectiles & bullet pool
 

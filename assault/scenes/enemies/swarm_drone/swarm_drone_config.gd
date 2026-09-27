@@ -72,3 +72,16 @@ extends ShipConfig
 ## Assault only: a REAR member leaves after this many seconds, attackers after `engage_seconds`. Must
 ## not exceed `engage_seconds` (the §2.6 deadline uses that); a pre-approved t15 lever.
 @export var rear_engage_seconds: float = 5.5
+
+@export_group("Idle")
+## Open Space only (t8d): enter combat when the player is within this of the drone (px).
+@export var perceive_radius: float = 380.0
+## Open Space only: drop back toward patrol once the player is beyond this (px). Must exceed
+## `perceive_radius` (AnchorIdle's hysteresis margin).
+@export var lose_radius: float = 620.0
+## Open Space only: the NOTICING beat before entering combat (s).
+@export var notice_time: float = 0.35
+## Open Space only: the slow patrol ring's radius around `patrol_anchor` (px).
+@export var idle_radius: float = 140.0
+## Open Space only: the patrol ring's angular speed (rad/s).
+@export var idle_speed: float = 0.6

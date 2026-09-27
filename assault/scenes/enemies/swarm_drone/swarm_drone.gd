@@ -76,6 +76,11 @@ func _apply_config(cfg: SwarmDroneConfig) -> void:
 	_drone_brain.flock_nudge_cap = cfg.flock_nudge_cap
 	_drone_brain.evade_radius = cfg.evade_radius
 	_drone_brain.rear_engage_seconds = cfg.rear_engage_seconds
+	_drone_brain.perceive_radius = cfg.perceive_radius
+	_drone_brain.lose_radius = cfg.lose_radius
+	_drone_brain.notice_time = cfg.notice_time
+	_drone_brain.idle_radius = cfg.idle_radius
+	_drone_brain.idle_speed = cfg.idle_speed
 
 
 ## A registered touch (only ever while armed — EXPLOSIVE): the profile has already detonated; the

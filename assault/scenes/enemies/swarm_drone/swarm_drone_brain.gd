@@ -27,13 +27,27 @@
 ##             (LEAD), FORM (other roles) or APPROACH (far).
 ##   DISENGAGE [DISENGAGE] Assault only (`EngagementBudget`): release the corridor, seek the nearest
 ##                          edge of the projectile world rect, free once strictly outside it.
+##   IDLE      [SEARCH]    Open Space only (t8d): a slow ring orbit around `patrol_anchor`.
+##   NOTICING  [SEARCH]    a beat: the light blinks once and the drone faces the player for
+##                          `notice_time`, then hands over to APPROACH from its CURRENT velocity —
+##                          no `halt()`, no `boost()` (the handover guard).
+##   RETURNING [REPOSITION] `arrive` back at `patrol_anchor`, then IDLE.
 ##
 ## Tunables are exported here and overwritten from `SwarmDroneConfig` by `swarm_drone.gd`'s
 ## `_ready()`, which runs AFTER this node's `_ready()` (children first). So nothing that depends on
 ## a tunable is derived in `_ready()`: the budget and `passes_left` are built on the first tick.
 ##
-## Nudges (flocking + evade) are offered in APPROACH, CLOSE_IN and FORM only: never in WINDUP/BURST
-## (committed) nor OVERSHOOT (its per-tick curve bound assumes the one request).
+## Nudges (flocking + evade) are offered in APPROACH, CLOSE_IN, FORM, IDLE and RETURNING only: never
+## in WINDUP/BURST (committed), OVERSHOOT (its per-tick curve bound assumes the one request) or
+## NOTICING (a beat, not a positioning phase).
+##
+## Hub idle (t8d, §2.7.3): Open Space only (`EngagementBudget.active == false`) — Assault always
+## starts in combat, since the level has already decided the fight is on. Each member owns an
+## `AnchorIdle` on the squad's shared `patrol_anchor`. A perceiving member calls
+## `squad.set_engaged(actor, true)`; a member in IDLE/RETURNING sees `squad.is_engaged()` and calls
+## `force_notice()`; `hold_combat` keeps every member fighting while any one of them is engaged, so
+## the squad returns together once none are. `start_engaged` is a test seam: every pre-t8d test
+## sets it so a spawned drone starts already fighting, exactly as every drone did before this task.
 ##
 ## Requests only (single-writer gate): the one field writes on the mover are `max_speed` and
 ## `release_constraint()` on DISENGAGE. Board writes (`attack_window_open`, `rear_ring_angle`) are
@@ -41,8 +55,8 @@
 class_name SwarmDroneBrain
 extends EnemyBrain
 
-## FORM is appended so the t8b values do not move.
-enum Phase { APPROACH, CLOSE_IN, WINDUP, BURST, OVERSHOOT, REJOIN, DISENGAGE, FORM }
+## FORM is appended so the t8b values do not move; IDLE/NOTICING/RETURNING likewise for t8c's.
+enum Phase { APPROACH, CLOSE_IN, WINDUP, BURST, OVERSHOOT, REJOIN, DISENGAGE, FORM, IDLE, NOTICING, RETURNING }
 
 ## Emitted on every transition, with the phase entered.
 signal phase_changed(new_phase: int)
@@ -113,7 +127,26 @@ const ATTACK_GATE_MARGIN := 0.15
 @export var evade_radius: float = 90.0
 @export var rear_engage_seconds: float = 5.5
 
+@export_group("Idle")
+@export var perceive_radius: float = 380.0
+@export var lose_radius: float = 620.0
+@export var notice_time: float = 0.35
+@export var idle_radius: float = 140.0
+@export var idle_speed: float = 0.6
+## The Open Space hub idle's ring centre. `Vector2.INF` (unfinished) means "not set" — `_start()`
+## then defaults it to the spawn position, so a loose drone with no owner still patrols somewhere.
+@export var patrol_anchor: Vector2 = Vector2.INF
+
+## Test seam (t8d): every pre-idle test sets this so a spawned drone starts already fighting, the
+## only behaviour that existed before this task. Real spawns (SectorHub) never set it — an Open
+## Space Swarm Drone always patrols `patrol_anchor` until it perceives the player. Assault ignores
+## it: `EngagementBudget.active` alone decides combat-from-spawn there.
+var start_engaged: bool = false
+
 var phase: Phase = Phase.APPROACH
+## Open Space only (`budget.active == false` and not `start_engaged`); null otherwise. Built once,
+## in `_start()`.
+var anchor_idle: AnchorIdle
 ## This drone's offset on the REAR ring (rad), drawn once from `rng` in `_ready()` (R2.3).
 var phase_offset: float = 0.0
 ## Extra passes left in the current attack cycle.
@@ -168,9 +201,12 @@ func tick(delta: float) -> void:
 	if squad != null and not squad.attack_window_open:
 		_answered_window = false
 
-	var expired := budget.update(delta) or _rear_budget_expired()
-	if expired and phase != Phase.DISENGAGE and phase != Phase.BURST:
-		enter_phase(Phase.DISENGAGE)
+	if anchor_idle != null:
+		_tick_anchor_idle(delta, target, squad)
+	else:
+		var expired := budget.update(delta) or _rear_budget_expired()
+		if expired and phase != Phase.DISENGAGE and phase != Phase.BURST:
+			enter_phase(Phase.DISENGAGE)
 
 	# A transition hands over to the new phase's handler in the same tick, so a tick never goes
 	# without a request. Bounded: no chain is longer than OVERSHOOT -> REJOIN -> FORM -> WINDUP.
@@ -192,6 +228,8 @@ func enter_phase(p: Phase) -> void:
 		Phase.OVERSHOOT: _enter_overshoot()
 		Phase.REJOIN: _enter_rejoin()
 		Phase.DISENGAGE: _enter_disengage()
+		Phase.NOTICING: _enter_noticing()
+		Phase.RETURNING: _enter_returning()
 	phase_changed.emit(p)
 
 
@@ -215,6 +253,11 @@ func _start() -> void:
 	_started = true
 	budget = EngagementBudget.new(engage_seconds, get_tree())
 	passes_left = second_passes
+	if not patrol_anchor.is_finite():
+		patrol_anchor = actor.global_position
+	if not budget.active and not start_engaged:
+		anchor_idle = AnchorIdle.new(patrol_anchor, perceive_radius, lose_radius, notice_time, idle_radius)
+		enter_phase(Phase.IDLE)
 
 
 func _tick_phase(delta: float, target: TargetInfo) -> void:
@@ -227,6 +270,9 @@ func _tick_phase(delta: float, target: TargetInfo) -> void:
 		Phase.REJOIN: _tick_rejoin(target)
 		Phase.DISENGAGE: _tick_disengage()
 		Phase.FORM: _tick_form(delta, target)
+		Phase.IDLE: _tick_idle(delta, target)
+		Phase.NOTICING: _tick_noticing(target)
+		Phase.RETURNING: _tick_returning(target)
 
 
 ## In Assault, a REAR that is not attacking leaves after `rear_engage_seconds` (t8c; ≤
@@ -495,6 +541,84 @@ func _tick_disengage() -> void:
 		actor.queue_free()
 		return
 	mover.seek(_exit_point, exit_speed)
+
+
+# ── Hub idle (t8d; epic §2.7.3) ──────────────────────────────────────────────────────────────────
+
+## The meta-state that decides whether this member is patrolling, noticing or fighting, run once a
+## tick alongside (not instead of) the phase dispatch below — `anchor_idle`'s own state (IDLE /
+## NOTICING / COMBAT / RETURNING) tracks this member's own proximity to the target independently of
+## whichever attack-cycle phase it is currently in, so a squad still returns together even while one
+## member is mid-FORM (§2.7.3 "hold_combat keeps everyone fighting").
+func _tick_anchor_idle(delta: float, target: TargetInfo, squad: SquadController) -> void:
+	if squad != null and (phase == Phase.IDLE or phase == Phase.RETURNING) and squad.is_engaged():
+		anchor_idle.force_notice()
+	var state := anchor_idle.update(delta, actor.global_position, target)
+	if squad != null:
+		# Review N17: engaged only while both perceiving/fighting AND still within lose_radius —
+		# never from hold_combat alone, or a member held in COMBAT by its mates would itself never
+		# stop reporting engaged, and the squad could never lose the player at all.
+		var near := target.has_target and actor.global_position.distance_squared_to(target.position) < lose_radius * lose_radius
+		var engaged := (state == AnchorIdle.State.NOTICING or state == AnchorIdle.State.COMBAT) and near
+		squad.set_engaged(actor, engaged)
+		anchor_idle.hold_combat = squad.is_engaged()
+	match state:
+		AnchorIdle.State.IDLE:
+			if phase != Phase.IDLE:
+				enter_phase(Phase.IDLE)
+		AnchorIdle.State.NOTICING:
+			if phase != Phase.NOTICING:
+				enter_phase(Phase.NOTICING)
+		AnchorIdle.State.COMBAT:
+			# From NOTICING only: entering combat from FORM/CLOSE_IN/etc. would re-enter a phase
+			# that is already running. From the drone's CURRENT velocity — enter_phase(APPROACH)
+			# runs no entry code, so the handover guard rests entirely on the mover's own bounds.
+			if phase == Phase.NOTICING:
+				enter_phase(Phase.APPROACH)
+		AnchorIdle.State.RETURNING:
+			# Never interrupts a live BURST (same guard the budget-expiry check above uses).
+			if phase != Phase.RETURNING and phase != Phase.BURST:
+				enter_phase(Phase.RETURNING)
+
+
+func _enter_noticing() -> void:
+	var light := actor.get_node_or_null("StateLight") as StateLight if actor != null else null
+	if light != null:
+		light.set_state(StateLight.State.OFF)
+		light.blink_once()
+
+
+func _tick_noticing(target: TargetInfo) -> void:
+	if target.has_target:
+		mover.face_toward(target.position)
+
+
+func _enter_returning() -> void:
+	_set_armed(false)
+	_set_light(StateLight.State.OFF)
+
+
+func _tick_returning(target: TargetInfo) -> void:
+	mover.arrive(patrol_anchor, max_speed)
+	_apply_nudge(target)
+
+
+func _tick_idle(delta: float, target: TargetInfo) -> void:
+	_phase_time += delta
+	mover.orbit(patrol_anchor, idle_radius, _idle_ring_angle(), max_speed)
+	_apply_nudge(target)
+
+
+## `phase_offset + index × TAU / n + idle_speed × t` (§2.7.3), with `index` the member's join order
+## among the whole squad — a squad of one (or no squad) is index 0 of 1.
+func _idle_ring_angle() -> float:
+	var squad := _squad()
+	var index := 0
+	var n := 1
+	if squad != null:
+		index = maxi(squad.member_index(actor), 0)
+		n = maxi(squad.member_count(), 1)
+	return phase_offset + index * TAU / n + idle_speed * _phase_time
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────────────────────────

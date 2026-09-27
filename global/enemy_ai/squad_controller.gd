@@ -103,6 +103,19 @@ func rear_count() -> int:
 	return n
 
 
+## 0..n-1 in join order among every valid member, regardless of role — the hub idle ring's spacing
+## (t8d), which spaces the whole squad rather than one role. -1 if member is not a valid member.
+func member_index(member: Node) -> int:
+	_prune()
+	return _members.find(member)
+
+
+## `members().size()` without the allocation — `member_index()`'s range, for ring spacing (t8d).
+func member_count() -> int:
+	_prune()
+	return _members.size()
+
+
 ## Returns an unclaimed sector nearest `preferred`, latched to `member` until release_side(). If
 ## every sector is taken, `preferred` is returned anyway (shared). Re-claiming replaces a member's
 ## own prior claim rather than blocking on it.

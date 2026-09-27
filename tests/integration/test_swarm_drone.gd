@@ -39,7 +39,9 @@ func _harness(mode: String) -> RefCounted:
 func _spawn(h: RefCounted, pos: Vector2, configure: Callable = Callable(), rng_seed: int = SEED) -> SwarmDrone:
 	var drone := SCENE.instantiate() as SwarmDrone
 	drone.global_position = pos
-	(drone.get_node("Brain") as SwarmDroneBrain).rng_seed = rng_seed
+	var brain := drone.get_node("Brain") as SwarmDroneBrain
+	brain.rng_seed = rng_seed
+	brain.start_engaged = true  # pre-t8d: every case here predates the hub idle (§ t8d below)
 	if configure.is_valid():
 		configure.call(drone.config)
 	h.root.add_child(drone)
@@ -373,6 +375,7 @@ func _real_drone(container: Node2D, pos: Vector2, hold_still: bool) -> SwarmDron
 	var drone := SCENE.instantiate() as SwarmDrone
 	drone.position = pos
 	_brain(drone).rng_seed = SEED
+	_brain(drone).start_engaged = true  # pre-t8d
 	container.add_child(drone)
 	if hold_still:
 		drone.set_physics_process(false)
@@ -583,6 +586,7 @@ func _squad_drone(h: RefCounted, squad: SquadController) -> SwarmDrone:
 	var drone := SCENE.instantiate() as SwarmDrone
 	drone.global_position = MID
 	_brain(drone).rng_seed = SEED
+	_brain(drone).start_engaged = true  # pre-t8d
 	drone.squad = squad
 	h.root.add_child(drone)
 	drone.set_physics_process(false)
@@ -659,7 +663,9 @@ func _squad_of(h: RefCounted, positions: Array, configure: Callable = Callable()
 	for i in positions.size():
 		var drone := SCENE.instantiate() as SwarmDrone
 		drone.global_position = positions[i]
-		(drone.get_node("Brain") as SwarmDroneBrain).rng_seed = int(seeds[i]) if i < seeds.size() else SEED + i
+		var brain := drone.get_node("Brain") as SwarmDroneBrain
+		brain.rng_seed = int(seeds[i]) if i < seeds.size() else SEED + i
+		brain.start_engaged = true  # pre-t8d
 		if configure.is_valid():
 			configure.call(drone.config)
 		drone.squad = squad
@@ -910,6 +916,7 @@ func test_no_contact_damage_while_in_form(mode: String = use_parameters(["open_s
 		var drone := SCENE.instantiate() as SwarmDrone
 		drone.position = pos
 		_brain(drone).rng_seed = SEED
+		_brain(drone).start_engaged = true  # pre-t8d
 		_frozen(drone.config)
 		drone.squad = squad
 		world.add_child(drone)
@@ -1162,3 +1169,205 @@ func test_the_nudge_is_capped_and_off_outside_formation_phases() -> void:
 	mover_a.step(DT)
 	_brain(b).flock_nudge_cap = 0.0
 	assert_eq(_brain(b)._nudge(target), Vector2.ZERO, "cap 0 turns every nudge off")
+
+
+# ══ t8d: hub idle (epic §2.7.3; task docs/plans/cmuj4y8rm0078p52x5qa7v6fo) ══
+#
+# Cold-start helpers: unlike `_spawn()` / `_squad_of()` above (which set `start_engaged = true` so
+# every t8b/t8c case keeps assuming combat-from-spawn, exactly as it did before this task), these
+# leave the brain to decide for itself — Open Space starts IDLE, Assault starts in combat.
+
+const FAR_AWAY := Vector2(100000.0, 100000.0)
+
+
+func _idle_spawn(h: RefCounted, pos: Vector2, configure: Callable = Callable(), rng_seed: int = SEED) -> SwarmDrone:
+	var drone := SCENE.instantiate() as SwarmDrone
+	drone.global_position = pos
+	(drone.get_node("Brain") as SwarmDroneBrain).rng_seed = rng_seed
+	if configure.is_valid():
+		configure.call(drone.config)
+	h.root.add_child(drone)
+	drone.set_physics_process(false)
+	return drone
+
+
+## One squad, one shared `patrol_anchor` set explicitly on every member (as `SectorHub` will), each
+## spawned at `anchor + offsets[i]`.
+func _idle_squad(h: RefCounted, anchor: Vector2, offsets: Array, configure: Callable = Callable(), seeds: Array = []) -> Array[SwarmDrone]:
+	var squad := SquadController.new()
+	var out: Array[SwarmDrone] = []
+	for i in offsets.size():
+		var drone := SCENE.instantiate() as SwarmDrone
+		drone.global_position = anchor + offsets[i]
+		var brain := drone.get_node("Brain") as SwarmDroneBrain
+		brain.rng_seed = int(seeds[i]) if i < seeds.size() else SEED + i
+		brain.patrol_anchor = anchor
+		if configure.is_valid():
+			configure.call(drone.config)
+		drone.squad = squad
+		h.root.add_child(drone)
+		drone.set_physics_process(false)
+		out.append(drone)
+	return out
+
+
+func test_open_space_cold_start_begins_idle() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var drone := _idle_spawn(h, Vector2(500, 500))
+	_tick(drone)
+	assert_eq(_brain(drone).phase, P.IDLE, "Open Space starts on patrol, not in combat")
+	assert_not_null(_brain(drone).anchor_idle, "an AnchorIdle was built")
+
+
+func test_the_assault_harness_starts_in_approach() -> void:
+	var h := _harness("assault")
+	h.player.global_position = MID
+	var drone := _idle_spawn(h, MID + Vector2(0, -700))  # far enough that APPROACH does not hand over on tick 1
+	_tick(drone)
+	assert_eq(_brain(drone).phase, P.APPROACH, "Assault always starts in combat: the level decided the fight is on")
+	assert_null(_brain(drone).anchor_idle, "no AnchorIdle is built in Assault")
+
+
+func test_patrol_anchor_defaults_to_the_spawn_position() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var pos := Vector2(321.0, -654.0)
+	var drone := _idle_spawn(h, pos)
+	_tick(drone)
+	assert_eq(_brain(drone).patrol_anchor, pos, "unset (Vector2.INF) defaults to where the drone spawned")
+
+
+func test_idle_stays_within_the_ring_over_20_seconds() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var anchor := Vector2(500.0, -400.0)
+	var drones := _idle_squad(h, anchor, [Vector2(20, 0), Vector2(-15, 10), Vector2(0, -25)])
+	var worst := 0.0
+	for _i in int(20.0 / DT):
+		_tick_all(drones)
+		for d in drones:
+			assert_eq(_brain(d).phase, P.IDLE, "stays on patrol with the player this far away")
+			worst = maxf(worst, d.global_position.distance_to(anchor))
+	assert_lte(worst, CONFIG.idle_radius + 30.0,
+		"every member stayed within idle_radius + 30 of the anchor over 20 s (worst %.1f px)" % worst)
+
+
+## Array order = squad join order = `_tick_all()`'s per-tick order. The perceiver is ticked LAST,
+## so the other two are ticked before it notices in the tick it happens — proving the guarantee is
+## really "by the end of the NEXT tick", not "instantly, every time", which array order alone could
+## have hidden (if the perceiver had gone first, everyone would (also correctly) leave IDLE the very
+## same tick).
+func test_one_member_perceiving_wakes_the_whole_squad_by_the_next_tick() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var anchor := Vector2.ZERO
+	# Far apart from each other — only proximity to the PLAYER should matter to perception, so this
+	# rules out a false pass from the other two coincidentally sitting inside perceive_radius too.
+	var drones := _idle_squad(h, anchor, [Vector2(-5000, 0), Vector2(5000, 0), Vector2(0, 0)])
+	_tick_all(drones)  # starts every brain; the player is far, so all settle into IDLE
+	for d in drones:
+		assert_eq(_brain(d).phase, P.IDLE, "sanity: all idle with the player far away")
+	var perceiver := drones[2]
+	h.player.global_position = perceiver.global_position + Vector2(CONFIG.perceive_radius - 50.0, 0)
+	_tick_all(drones)
+	assert_ne(_brain(perceiver).phase, P.IDLE, "the perceiver itself leaves IDLE the tick it perceives")
+	assert_eq(_brain(drones[0]).phase, P.IDLE, "sanity: not yet — ticked before the perceiver, same tick")
+	assert_eq(_brain(drones[1]).phase, P.IDLE, "sanity: not yet — ticked before the perceiver, same tick")
+	_tick_all(drones)
+	for d in drones:
+		assert_ne(_brain(d).phase, P.IDLE, "every member is out of IDLE by the end of the next tick")
+
+
+func test_hysteresis_holds_for_5_seconds_between_the_radii() -> void:
+	var h := _harness("open_space")
+	var drone := _idle_spawn(h, Vector2(1000.0, 0.0))
+	h.player.global_position = drone.global_position + Vector2(200.0, 0.0)  # inside perceive_radius
+	var notice_ticks := int(CONFIG.notice_time / DT) + 2
+	for _i in notice_ticks:
+		_tick(drone)
+	assert_true(_brain(drone).phase != P.IDLE and _brain(drone).phase != P.NOTICING,
+		"sanity: reached combat (phase %d)" % _brain(drone).phase)
+	var mid := (CONFIG.perceive_radius + CONFIG.lose_radius) / 2.0
+	for _i in int(5.0 / DT):
+		h.player.global_position = drone.global_position + Vector2(mid, 0.0)
+		_tick(drone)
+		assert_ne(_brain(drone).phase, P.RETURNING, "never returns while within lose_radius")
+		assert_ne(_brain(drone).phase, P.IDLE, "never idles while within lose_radius")
+
+
+func test_a_member_beyond_lose_radius_does_not_return_while_another_is_engaged() -> void:
+	var h := _harness("open_space")
+	var anchor := Vector2.ZERO
+	var drones := _idle_squad(h, anchor, [Vector2.ZERO, Vector2.ZERO])
+	var a := drones[0]
+	var b := drones[1]
+	h.player.global_position = FAR_AWAY
+	_tick_all(drones)
+	assert_eq(_brain(a).phase, P.IDLE, "sanity")
+	assert_eq(_brain(b).phase, P.IDLE, "sanity")
+	h.player.global_position = a.global_position + Vector2(200.0, 0.0)  # inside A's perceive_radius
+	b.global_position = a.global_position + Vector2(CONFIG.lose_radius + 300.0, 0.0)  # beyond B's own lose_radius
+	for _i in int(1.0 / DT):
+		_tick_all(drones)
+		assert_ne(_brain(b).phase, P.RETURNING, "B stays engaged while A still is")
+		assert_ne(_brain(b).phase, P.IDLE, "B stays engaged while A still is")
+
+
+func test_all_beyond_lose_radius_return_together_then_idle() -> void:
+	var h := _harness("open_space")
+	var anchor := Vector2.ZERO
+	var drones := _idle_squad(h, anchor, [Vector2(20, 0), Vector2(-20, 0)])
+	h.player.global_position = anchor + Vector2(200.0, 0.0)
+	for _i in int(CONFIG.notice_time / DT) + 5:
+		_tick_all(drones)
+	for d in drones:
+		assert_ne(_brain(d).phase, P.IDLE, "sanity: both engaged")
+	h.player.global_position = FAR_AWAY  # well beyond every member's lose_radius
+	# `hold_combat` clears one tick after the last member's `engaged` flag does (§2.7.3's own lag:
+	# it is read for THIS tick's update() but written from THIS tick's is_engaged() only at the end
+	# of `_tick_anchor_idle`), so members can reach RETURNING on different ticks. What matters is
+	# that every one of them passes through it on the way home — not that they all line up on one
+	# single tick — so this tracks each member's own visit rather than requiring a simultaneous one.
+	var saw_returning := {}
+	var settled := false
+	for _i in int(15.0 / DT):
+		_tick_all(drones)
+		for d in drones:
+			if _brain(d).phase == P.RETURNING:
+				saw_returning[d] = true
+		if drones.all(func(d: SwarmDrone) -> bool: return _brain(d).phase == P.IDLE):
+			settled = true
+			break
+	for d in drones:
+		assert_true(saw_returning.has(d), "every member passed through RETURNING on the way back")
+	assert_true(settled, "all members reach IDLE, back at the anchor")
+	for d in drones:
+		assert_lte(d.global_position.distance_to(anchor), CONFIG.idle_radius + 30.0, "settled back inside the ring")
+
+
+## The handover guard (review N10): the mover's own `move_toward` / rotation-rate cap bounds every
+## tick regardless of phase, so this only fails if the brain calls `halt()` or `boost()` on the
+## NOTICING -> APPROACH transition. Uses `maxf(acceleration, braking)`, not `acceleration` alone —
+## the deceleration-to-a-stop that opens NOTICING runs at `braking`, which exceeds `acceleration`.
+func test_the_handover_from_noticing_to_combat_never_snaps() -> void:
+	var h := _harness("open_space")
+	var drone := _idle_spawn(h, Vector2(1000.0, 500.0))
+	h.player.global_position = drone.global_position + Vector2(200.0, 0.0)
+	_tick(drone)
+	assert_eq(_brain(drone).phase, P.NOTICING, "sanity: perceives immediately")
+	var v_cap := maxf(CONFIG.acceleration, CONFIG.braking) * DT + 0.5
+	var r_cap := CONFIG.max_turn_rate * DT + 0.01
+	var left_noticing := false
+	for _i in 60:
+		var v0 := drone.velocity
+		var rot0 := drone.rotation
+		_tick(drone)
+		assert_lte(drone.velocity.distance_to(v0), v_cap, "no per-tick velocity snap through the handover")
+		assert_lte(absf(angle_difference(rot0, drone.rotation)), r_cap, "no per-tick rotation snap through the handover")
+		# Stop at the handover itself: once in combat, a normal BURST legitimately snaps velocity
+		# via `boost()`, which is not what this guard is about (review N10).
+		if _brain(drone).phase != P.NOTICING:
+			left_noticing = true
+			break
+	assert_true(left_noticing, "sanity: leaves NOTICING within the window")
