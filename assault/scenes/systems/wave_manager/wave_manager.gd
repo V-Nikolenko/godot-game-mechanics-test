@@ -34,6 +34,8 @@ var _current_wave_index: int = -1
 #   "movement":                 MovementResource  — optional, attaches EnemyPathMover
 #   "exit_mode":                EnemyPathMover.ExitMode  — optional, defaults to FREE_ON_SCREEN_EXIT
 #   "look_in_moving_direction": bool              — optional, defaults to true
+#   "squad_id":                 String            — optional, shared by loose entries in one wave
+#   "squad_key":                String            — written by _trigger_wave(), never by callers
 # }
 #
 # Ships self-configure from their own ShipConfig resource on _ready().
@@ -42,6 +44,12 @@ var _current_wave_index: int = -1
 var _waves: Array[Dictionary] = []
 var _next_wave_index: int = 0
 var _time_elapsed: float = 0.0
+
+## Squad boards, keyed by squad key (String) -> WeakRef(SquadController). The spawn dicts
+## themselves never hold a board (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.4.1) — only
+## this map does, and only weakly, so a squad whose members have all died is released even while
+## its section is still running. Cleared in load_section().
+var _squads: Dictionary = {}
 
 # ── Time-based wave triggering ────────────────────────────────────────────────
 
@@ -78,6 +86,7 @@ func load_section(waves: Array[WaveResource]) -> void:
 	_waves.clear()
 	_next_wave_index = 0
 	_time_elapsed    = 0.0
+	_squads.clear()
 	for wave: WaveResource in waves:
 		var spawns: Array = []
 		for entry: SpawnEntryResource in wave.entries:
@@ -101,6 +110,7 @@ func _entry_to_dict(entry: SpawnEntryResource) -> Dictionary:
 		"exit_time": entry.exit_time,
 		"look_in_moving_direction": entry.look_in_moving_direction,
 		"look_angle": entry.look_angle,
+		"squad_id": String(entry.squad_id),
 	}
 	if entry.formation:
 		d["formation"] = entry.formation
@@ -116,12 +126,21 @@ func _trigger_wave(wave: Dictionary, index: int) -> void:
 	_trace("[Wave %d] TRIGGERED at %.1fs — %d spawns" % [index, _time_elapsed, wave.spawns.size()])
 	wave_triggered.emit(index)
 	_current_wave_index = index
-	for spawn in wave.spawns:
-		# Stamp the wave index on each expanded entry so the deferred
-		# spawn callable (delayed by .delay()) knows which wave it belongs
+	for spawn_index in wave.spawns.size():
+		var spawn: Dictionary = wave.spawns[spawn_index]
+		# The squad key (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.4.1) is computed once
+		# per spawn entry, BEFORE formation expansion, so every slot a formation expands into
+		# shares it automatically. A loose entry's own squad() id is shared across entries that
+		# ask for it; a loose entry with no id falls back to its own index, which no other entry
+		# in this wave can share, giving it a squad of one.
+		var squad_id: String = spawn.get("squad_id", "")
+		var squad_key: String = "%d:%s" % [index, squad_id if not squad_id.is_empty() else str(spawn_index)]
+		# Stamp the wave index and squad key on each expanded entry so the deferred
+		# spawn callable (delayed by .delay()) knows which wave/squad it belongs
 		# to even after _current_wave_index advances to a later wave.
 		for entry in _expand_formation(spawn):
 			entry["wave_index"] = index
+			entry["squad_key"] = squad_key
 			_spawn_with_delay(entry)
 
 ## Expands a spawn dict that has a "formation" key into one dict per slot.
@@ -181,6 +200,12 @@ func _spawn_ship(spawn: Dictionary) -> void:
 	if spawn.has("on_spawned"):
 		spawn.on_spawned.call(entity)
 
+	# Same window as on_spawned: set BEFORE add_child so the squad is readable during _ready().
+	# Duck-typed through `in` — an entity with no "squad" property (most non-drone spawns) ignores
+	# this entirely (§2.4.1).
+	if spawn.has("squad_key") and "squad" in entity:
+		entity.set("squad", _resolve_squad(spawn["squad_key"]))
+
 	enemy_container.add_child(entity)
 	_trace("[Spawn] %s at (%.0f, %.0f)" % [scene.resource_path.get_file(), spawn_pos.x, spawn_pos.y])
 
@@ -206,6 +231,19 @@ func _spawn_ship(spawn: Dictionary) -> void:
 		if spawn.has("look_angle"):
 			mover.look_angle = spawn["look_angle"]
 		entity.add_child(mover)
+
+
+## Reuses the live board for `key`, or replaces a dead/missing one with a new board. The map holds
+## only a WeakRef, so a squad whose members have all died is released even while this section is
+## still running — nothing here keeps a board alive on its own.
+func _resolve_squad(key: String) -> SquadController:
+	if _squads.has(key):
+		var board: SquadController = (_squads[key] as WeakRef).get_ref()
+		if board != null:
+			return board
+	var board := SquadController.new()
+	_squads[key] = weakref(board)
+	return board
 
 
 ## Off unless Godot was started with `--verbose` — fires once per spawned enemy, which is
