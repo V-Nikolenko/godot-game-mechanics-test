@@ -83,3 +83,97 @@ static func hold_position(pos: Vector2, vel: Vector2, anchor: Vector2, tolerance
 ## zero-length direction — PatrolDrone itself is what falls that back to RIGHT (test_patrol_drone.gd).
 static func drift(direction: Vector2, speed: float) -> Vector2:
 	return direction.normalized() * speed
+
+
+## Phase 2 additions (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.2).
+
+
+## Like `orbit`, but with an added radial term so the caller can widen or narrow the ring the
+## anchor sits on: `radius_rate` is the speed, px/s, the returned velocity carries outward
+## (positive) or inward (negative) along the line from `center` through `pos`. Zero holds the
+## current radius exactly — at the anchor itself (`pos == anchor`) the tangential term is already
+## zero (as in `orbit`), so the whole return value is the radial term alone.
+static func spiral(pos: Vector2, center: Vector2, radius: float, angle: float, radius_rate: float, max_correct_speed: float) -> Vector2:
+	var v := orbit(pos, center, radius, angle, max_correct_speed)
+	v += (pos - center).normalized() * radius_rate
+	return v
+
+
+## Forward motion plus a perpendicular sinusoid of `amplitude`, at `phase` (the caller advances
+## `phase` itself each tick). Its mean over one full period of `phase` is `forward_dir * speed` —
+## the sinusoid only bends the path, it never changes the average heading. Zero `forward_dir`
+## collapses both terms to zero.
+static func corkscrew(_pos: Vector2, forward_dir: Vector2, speed: float, amplitude: float, phase: float) -> Vector2:
+	var forward := forward_dir.normalized()
+	var perpendicular := forward.rotated(PI / 2.0)
+	return forward * speed + perpendicular * amplitude * sin(phase)
+
+
+## `arrive` at a slot fixed relative to a moving formation: `anchor + slot_offset` rotated by
+## `heading`'s facing. A zero `slot_offset` is exactly `arrive` at `anchor` itself.
+static func formation_slot(pos: Vector2, vel: Vector2, anchor: Vector2, heading: Vector2, slot_offset: Vector2, speed: float, decel: float) -> Vector2:
+	var target := anchor + slot_offset.rotated(heading.angle())
+	return arrive(pos, vel, target, speed, decel)
+
+
+## Boids separation: push away from every neighbour within `radius`, strongest at zero distance.
+## Zero with no neighbours. A neighbour exactly on top of `pos` has no defined direction to push
+## along, so it pushes along a fixed axis instead of dividing by zero — finite, never NaN.
+static func separation(pos: Vector2, neighbours: Array[Vector2], radius: float) -> Vector2:
+	var push := Vector2.ZERO
+	for neighbour in neighbours:
+		var offset := pos - neighbour
+		var dist := offset.length()
+		if dist >= radius:
+			continue
+		if dist <= 0.0001:
+			push += Vector2.RIGHT * radius
+		else:
+			push += offset.normalized() * (radius - dist)
+	return push
+
+
+## Boids alignment: the mean of the neighbours' velocities. Zero with no neighbours.
+static func alignment(_vel: Vector2, neighbour_vels: Array[Vector2]) -> Vector2:
+	if neighbour_vels.is_empty():
+		return Vector2.ZERO
+	var total := Vector2.ZERO
+	for v in neighbour_vels:
+		total += v
+	return total / neighbour_vels.size()
+
+
+## Boids cohesion: the vector from `pos` toward the neighbours' centroid. Zero with no neighbours.
+static func cohesion(pos: Vector2, neighbours: Array[Vector2]) -> Vector2:
+	if neighbours.is_empty():
+		return Vector2.ZERO
+	var centroid := Vector2.ZERO
+	for neighbour in neighbours:
+		centroid += neighbour
+	centroid /= neighbours.size()
+	return centroid - pos
+
+
+## The 0.4-0.8 s ram prediction window (finding 5): `distance / speed`, clamped to `[t_min, t_max]`.
+## A zero or negative `speed` returns `t_min` rather than dividing by zero.
+static func clamped_lead_time(distance: float, speed: float, t_min: float, t_max: float) -> float:
+	if speed <= 0.0:
+		return t_min
+	return clampf(distance / speed, t_min, t_max)
+
+
+## The only way a brain bends a path (D7): rotates the unit vector `current_dir` toward
+## `desired_dir` by at most `max_rate * delta` radians, taking the short way across ±π, and never
+## overshooting past `desired_dir`. Always returns a unit vector. A zero `current_dir` snaps
+## straight to `desired_dir` (nothing to rotate from); a zero `desired_dir` holds `current_dir`
+## (nothing to rotate toward).
+static func turn_toward(current_dir: Vector2, desired_dir: Vector2, max_rate: float, delta: float) -> Vector2:
+	if current_dir == Vector2.ZERO:
+		return desired_dir.normalized()
+	if desired_dir == Vector2.ZERO:
+		return current_dir.normalized()
+	var current := current_dir.normalized()
+	var desired := desired_dir.normalized()
+	var diff := current.angle_to(desired)
+	var step := clampf(diff, -max_rate * delta, max_rate * delta)
+	return current.rotated(step)

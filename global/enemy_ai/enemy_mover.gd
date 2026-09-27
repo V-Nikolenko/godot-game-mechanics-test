@@ -147,6 +147,14 @@ func drift(direction: Vector2, speed: float) -> void:
 	request_velocity(Steering.drift(direction, speed))
 
 
+func spiral(center: Vector2, radius: float, angle: float, radius_rate: float, max_correct_speed: float) -> void:
+	request_velocity(Steering.spiral(_pos(), center, radius, angle, radius_rate, max_correct_speed))
+
+
+func formation_slot(anchor: Vector2, heading: Vector2, slot_offset: Vector2, speed: float) -> void:
+	request_velocity(Steering.formation_slot(_pos(), _vel(), anchor, heading, slot_offset, speed, _decel()))
+
+
 # ── The step (called by the owner after the brain's tick) ──────────────────────────────────────
 
 func step(delta: float) -> void:

@@ -1,5 +1,7 @@
 ## Unit tests for Steering (global/enemy_ai/steering.gd), the pure movement primitives.
 ## docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.4 / §4's test_steering.gd row.
+## Phase 2 additions (spiral, corkscrew, formation_slot, separation, alignment, cohesion,
+## clamped_lead_time, turn_toward): docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.2 / §4.
 extends GutTest
 
 
@@ -193,3 +195,241 @@ func test_drift_zero_direction_is_zero_no_nan() -> void:
 	var v := Steering.drift(Vector2.ZERO, 50.0)
 	assert_eq(v, Vector2.ZERO)
 	_assert_no_nan(v)
+
+
+# ── spiral ────────────────────────────────────────────────────────────────────
+
+func test_spiral_combines_orbit_and_radial_term() -> void:
+	var center := Vector2(500.0, 500.0)
+	var radius := 130.0
+	var angle := 0.3
+	var pos := center + Vector2(20.0, 0.0)
+	var expected := Steering.orbit(pos, center, radius, angle, 160.0) + (pos - center).normalized() * -40.0
+	var v := Steering.spiral(pos, center, radius, angle, -40.0, 160.0)
+	assert_almost_eq(v.x, expected.x, 0.01)
+	assert_almost_eq(v.y, expected.y, 0.01)
+
+
+func test_spiral_holds_radius_when_rate_zero() -> void:
+	var center := Vector2(500.0, 500.0)
+	var radius := 130.0
+	var angle := 0.4
+	var pos := center + Vector2.RIGHT.rotated(angle) * radius
+	var v := Steering.spiral(pos, center, radius, angle, 0.0, 160.0)
+	assert_eq(v, Vector2.ZERO)
+
+
+func test_spiral_shrinks_inward_when_rate_negative() -> void:
+	var center := Vector2(500.0, 500.0)
+	var radius := 130.0
+	var angle := 0.4
+	var pos := center + Vector2.RIGHT.rotated(angle) * radius
+	var v := Steering.spiral(pos, center, radius, angle, -50.0, 160.0)
+	var expected := (center - pos).normalized() * 50.0
+	assert_almost_eq(v.x, expected.x, 0.01)
+	assert_almost_eq(v.y, expected.y, 0.01)
+	assert_true(v.length() > 0.0)
+	_assert_no_nan(v)
+
+
+# ── corkscrew ─────────────────────────────────────────────────────────────────
+
+func test_corkscrew_adds_perpendicular_sinusoid() -> void:
+	var forward := Vector2(1.0, 0.0)
+	var v := Steering.corkscrew(Vector2.ZERO, forward, 100.0, 30.0, PI / 2.0)
+	assert_almost_eq(v.x, 100.0, 0.01)
+	assert_almost_eq(v.y, 30.0, 0.01)
+
+
+func test_corkscrew_mean_heading_matches_forward_over_one_period() -> void:
+	var forward := Vector2(1.0, 0.0)
+	var speed := 100.0
+	var amplitude := 30.0
+	var samples := 8
+	var total := Vector2.ZERO
+	for i in samples:
+		var phase := (float(i) / float(samples)) * TAU
+		total += Steering.corkscrew(Vector2.ZERO, forward, speed, amplitude, phase)
+	var mean := total / float(samples)
+	assert_almost_eq(mean.x, speed, 0.01)
+	assert_almost_eq(mean.y, 0.0, 0.01)
+
+
+func test_corkscrew_zero_forward_is_zero_no_nan() -> void:
+	var v := Steering.corkscrew(Vector2.ZERO, Vector2.ZERO, 100.0, 30.0, 1.0)
+	assert_eq(v, Vector2.ZERO)
+	_assert_no_nan(v)
+
+
+# ── formation_slot ────────────────────────────────────────────────────────────
+
+func test_formation_slot_offset_rotates_with_heading() -> void:
+	var pos := Vector2.ZERO
+	var vel := Vector2.ZERO
+	var anchor := Vector2.ZERO
+	var heading := Vector2(0.0, 1.0)
+	var slot_offset := Vector2(50.0, 0.0)
+	var v := Steering.formation_slot(pos, vel, anchor, heading, slot_offset, 200.0, 50.0)
+	var expected_target := anchor + slot_offset.rotated(heading.angle())
+	var expected := Steering.arrive(pos, vel, expected_target, 200.0, 50.0)
+	assert_almost_eq(v.x, expected.x, 0.01)
+	assert_almost_eq(v.y, expected.y, 0.01)
+
+
+func test_formation_slot_zero_offset_is_arrive_at_anchor() -> void:
+	var pos := Vector2(505.0, 5.0)
+	var vel := Vector2.ZERO
+	var anchor := Vector2(500.0, 0.0)
+	var heading := Vector2(1.0, 0.0)
+	var v := Steering.formation_slot(pos, vel, anchor, heading, Vector2.ZERO, 200.0, 50.0)
+	var expected := Steering.arrive(pos, vel, anchor, 200.0, 50.0)
+	assert_almost_eq(v.x, expected.x, 0.01)
+	assert_almost_eq(v.y, expected.y, 0.01)
+
+
+func test_formation_slot_stops_at_slot() -> void:
+	var anchor := Vector2(500.0, 0.0)
+	var heading := Vector2(1.0, 0.0)
+	var slot_offset := Vector2(50.0, 0.0)
+	var pos := anchor + slot_offset.rotated(heading.angle())
+	var v := Steering.formation_slot(pos, Vector2.ZERO, anchor, heading, slot_offset, 200.0, 50.0)
+	assert_eq(v, Vector2.ZERO)
+
+
+# ── separation ────────────────────────────────────────────────────────────────
+
+func test_separation_pushes_away_from_close_neighbour() -> void:
+	var pos := Vector2.ZERO
+	var neighbours: Array[Vector2] = [Vector2(10.0, 0.0)]
+	var v := Steering.separation(pos, neighbours, 50.0)
+	assert_true(v.x < 0.0)
+	assert_almost_eq(v.y, 0.0, 0.01)
+
+
+func test_separation_ignores_neighbour_outside_radius() -> void:
+	var pos := Vector2.ZERO
+	var neighbours: Array[Vector2] = [Vector2(1000.0, 0.0)]
+	var v := Steering.separation(pos, neighbours, 50.0)
+	assert_eq(v, Vector2.ZERO)
+
+
+func test_separation_zero_with_no_neighbours() -> void:
+	var neighbours: Array[Vector2] = []
+	var v := Steering.separation(Vector2.ZERO, neighbours, 50.0)
+	assert_eq(v, Vector2.ZERO)
+
+
+func test_separation_finite_with_coincident_neighbour() -> void:
+	var pos := Vector2(10.0, 10.0)
+	var neighbours: Array[Vector2] = [Vector2(10.0, 10.0)]
+	var v := Steering.separation(pos, neighbours, 50.0)
+	_assert_no_nan(v)
+	assert_true(v.length() > 0.0)
+
+
+# ── alignment ─────────────────────────────────────────────────────────────────
+
+func test_alignment_is_mean_neighbour_velocity() -> void:
+	var neighbour_vels: Array[Vector2] = [Vector2(100.0, 0.0), Vector2(0.0, 100.0)]
+	var v := Steering.alignment(Vector2.ZERO, neighbour_vels)
+	assert_almost_eq(v.x, 50.0, 0.01)
+	assert_almost_eq(v.y, 50.0, 0.01)
+
+
+func test_alignment_zero_with_no_neighbours_no_nan() -> void:
+	var neighbour_vels: Array[Vector2] = []
+	var v := Steering.alignment(Vector2(10.0, 0.0), neighbour_vels)
+	assert_eq(v, Vector2.ZERO)
+	_assert_no_nan(v)
+
+
+# ── cohesion ──────────────────────────────────────────────────────────────────
+
+func test_cohesion_toward_centroid() -> void:
+	var pos := Vector2.ZERO
+	var neighbours: Array[Vector2] = [Vector2(100.0, 0.0), Vector2(0.0, 100.0)]
+	var v := Steering.cohesion(pos, neighbours)
+	assert_almost_eq(v.x, 50.0, 0.01)
+	assert_almost_eq(v.y, 50.0, 0.01)
+
+
+func test_cohesion_zero_with_no_neighbours_no_nan() -> void:
+	var neighbours: Array[Vector2] = []
+	var v := Steering.cohesion(Vector2(10.0, 10.0), neighbours)
+	assert_eq(v, Vector2.ZERO)
+	_assert_no_nan(v)
+
+
+# ── clamped_lead_time ─────────────────────────────────────────────────────────
+
+func test_clamped_lead_time_normal_case() -> void:
+	var t := Steering.clamped_lead_time(300.0, 500.0, 0.4, 0.8)
+	assert_almost_eq(t, 0.6, 0.001)
+
+
+func test_clamped_lead_time_clamps_at_lower_bound() -> void:
+	var t := Steering.clamped_lead_time(10.0, 1000.0, 0.4, 0.8)
+	assert_almost_eq(t, 0.4, 0.001)
+
+
+func test_clamped_lead_time_clamps_at_upper_bound() -> void:
+	var t := Steering.clamped_lead_time(10000.0, 100.0, 0.4, 0.8)
+	assert_almost_eq(t, 0.8, 0.001)
+
+
+func test_clamped_lead_time_zero_speed_is_t_min() -> void:
+	var t := Steering.clamped_lead_time(100.0, 0.0, 0.4, 0.8)
+	assert_almost_eq(t, 0.4, 0.001)
+
+
+func test_clamped_lead_time_negative_speed_is_t_min() -> void:
+	var t := Steering.clamped_lead_time(100.0, -5.0, 0.4, 0.8)
+	assert_almost_eq(t, 0.4, 0.001)
+
+
+# ── turn_toward ───────────────────────────────────────────────────────────────
+
+func test_turn_toward_turns_by_exactly_max_rate_delta_when_far() -> void:
+	var current := Vector2(1.0, 0.0)
+	var desired := Vector2(0.0, 1.0)
+	var max_rate := 1.0
+	var delta := 0.1
+	var v := Steering.turn_toward(current, desired, max_rate, delta)
+	var angle_turned: float = current.angle_to(v)
+	assert_almost_eq(angle_turned, max_rate * delta, 0.0001)
+	assert_almost_eq(v.length(), 1.0, 0.0001)
+
+
+func test_turn_toward_lands_exactly_on_target_within_one_step() -> void:
+	var current := Vector2(1.0, 0.0)
+	var desired := Vector2(0.0, 1.0)
+	var v := Steering.turn_toward(current, desired, 100.0, 1.0)
+	assert_almost_eq(v.x, desired.x, 0.0001)
+	assert_almost_eq(v.y, desired.y, 0.0001)
+
+
+func test_turn_toward_takes_short_way_across_pi() -> void:
+	var current := Vector2(-1.0, -0.01).normalized()
+	var desired := Vector2(-1.0, 0.01).normalized()
+	var v := Steering.turn_toward(current, desired, 10.0, 0.1)
+	var turned: float = current.angle_to(v)
+	assert_true(absf(turned) < 0.1)
+
+
+func test_turn_toward_zero_current_returns_desired() -> void:
+	var v := Steering.turn_toward(Vector2.ZERO, Vector2(3.0, 4.0), 1.0, 0.1)
+	assert_almost_eq(v.x, 0.6, 0.0001)
+	assert_almost_eq(v.y, 0.8, 0.0001)
+
+
+func test_turn_toward_zero_desired_returns_current() -> void:
+	var current := Vector2(0.6, 0.8)
+	var v := Steering.turn_toward(current, Vector2.ZERO, 1.0, 0.1)
+	assert_almost_eq(v.x, 0.6, 0.0001)
+	assert_almost_eq(v.y, 0.8, 0.0001)
+
+
+func test_turn_toward_always_unit_length() -> void:
+	var current := Vector2(2.0, 0.0)
+	var v := Steering.turn_toward(current, Vector2(0.0, 5.0), 0.5, 0.1)
+	assert_almost_eq(v.length(), 1.0, 0.0001)

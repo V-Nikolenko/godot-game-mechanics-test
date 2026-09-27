@@ -398,6 +398,22 @@ func test_drift_wrapper() -> void:
 	assert_eq(mover.actor.velocity, expected)
 
 
+func test_spiral_wrapper() -> void:
+	var mover := _wrapper_rig()
+	var expected := Steering.spiral(Vector2(100, 200), Vector2(300, 300), 130.0, 0.7, -40.0, 350.0)
+	mover.spiral(Vector2(300, 300), 130.0, 0.7, -40.0, 350.0)
+	mover.step(DT)
+	assert_eq(mover.actor.velocity, expected)
+
+
+func test_formation_slot_wrapper() -> void:
+	var mover := _wrapper_rig()
+	var expected := Steering.formation_slot(Vector2(100, 200), Vector2.ZERO, Vector2(300, 300), Vector2(0, 1), Vector2(50, 0), 200.0, 0.0)
+	mover.formation_slot(Vector2(300, 300), Vector2(0, 1), Vector2(50, 0), 200.0)
+	mover.step(DT)
+	assert_eq(mover.actor.velocity, expected)
+
+
 # ── Bad parents ────────────────────────────────────────────────────────────────
 
 ## Boundary: a mover under a non-CharacterBody2D warns (never errors — load integrity and GUT's
