@@ -28,6 +28,14 @@
 ## each is added to the tree so `_ready()` runs, and only DIRECT children are searched for the
 ## `HitBox` (bullets carry their own, under the pool; the station's turrets carry theirs, under
 ## `Turrets`).
+##
+## ── Completeness guard (Enemy rework phase 2, t1) ────────────────────────────────────────────
+##
+## `ROSTER` is hand-maintained, so a new `BaseEnemy` scene under `assault/scenes/enemies/` would
+## silently escape this sweep. `test_every_baseenemy_scene_is_in_the_roster` closes that gap with
+## the same directory-sweep shape `test_enemy_hurtbox_geometry.gd`'s guard uses, scoped to
+## `BaseEnemy`-rooted scenes only — `ally_fighter` stays in `ROSTER` above for the geometry sweep
+## itself, but the guard never requires it, since it lives under `allies/`, not `enemies/`.
 extends GutTest
 
 ## `scene`: the entity to instantiate. `no_hitbox`: expected to carry no contact HitBox at all.
@@ -78,6 +86,9 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn",
 	},
 ]
+
+## Top-level directories only — see `test_enemy_hurtbox_geometry.gd`'s `_ENEMY_DIRS` for why.
+const _ENEMY_ROOT := "res://assault/scenes/enemies"
 
 
 ## Typed `Node2D`, not `BaseEnemy` — see the harness note in the file header.
@@ -217,4 +228,36 @@ func test_every_contact_hitbox_is_typed_as_contact_damage() -> void:
 			hb.damage_type,
 			HitBox.DamageType.CONTACT,
 			"%s: contact HitBox must be typed CONTACT, not the HitBox default of LASER" % entry["name"]
+		)
+
+
+# ── Completeness guard ────────────────────────────────────────────────────────
+
+## Every `<dir>/<dir>.tscn` under `assault/scenes/enemies` whose root is a `BaseEnemy` must be in
+## `ROSTER`, or its contact HitBox geometry could drift from its body collider unnoticed. Same
+## sweep shape as `test_enemy_hurtbox_geometry.gd:317-336`, scoped to `BaseEnemy` roots only.
+func test_every_baseenemy_scene_is_in_the_roster() -> void:
+	var rostered: Array[String] = []
+	for entry in ROSTER:
+		rostered.append(entry["scene"])
+	var dir := DirAccess.open(_ENEMY_ROOT)
+	assert_not_null(dir, "cannot open %s" % _ENEMY_ROOT)
+	if dir == null:
+		return
+	for sub in dir.get_directories():
+		var scene_path := "%s/%s/%s.tscn" % [_ENEMY_ROOT, sub, sub]
+		if not ResourceLoader.exists(scene_path):
+			continue
+		var scene: PackedScene = load(scene_path) as PackedScene
+		var probe: Node = scene.instantiate()
+		var is_base_enemy: bool = probe is BaseEnemy
+		probe.free()
+		if not is_base_enemy:
+			continue
+		assert_true(
+			rostered.has(scene_path),
+			(
+				"%s has a BaseEnemy root but is not in this file's ROSTER, so its contact HitBox "
+				+ "geometry is unchecked. Add it."
+			) % scene_path
 		)
