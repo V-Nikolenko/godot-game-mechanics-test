@@ -144,6 +144,10 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   directly on its own scene node (`drone_interceptor.tscn`, `kamikaze_drone.tscn` — 30, still
   re-applied from config where one exists). Forgetting leaves the `.tres` value dead with no
   symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
+  *When* that hitbox is live is the enemy's `contact_profile` (`ContactProfile`, resolved like
+  `defense_profile`): every legacy enemy gets the default COLLISION (always live, hitbox untouched);
+  RAMMING and EXPLOSIVE arm it only in a committed state, and `suspend_ai()` arms it on rails — see
+  [global.md](global.md) → ContactProfile.
   The hitbox's *geometry* is handled for you: every `ContactHitBox` node's `CollisionShape2D`
   references the same `SubResource` shape id as the body's and copies its `scale`, so a scaled
   body gets a correctly sized ram box for free — see `global.md`'s Hurtbox/Hitbox section for the

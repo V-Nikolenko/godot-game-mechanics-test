@@ -34,6 +34,11 @@ var _explosion_effect: ExplosionEffect
 ## call `apply_alternate()` on it, as `RamShip` does.
 var defense_profile: DefenseProfile
 
+## Resolved in `_ready()` the same way: the scene-authored `ContactProfile` child, otherwise a default
+## COLLISION one (the hitbox untouched, i.e. exactly the pre-profile behaviour). It owns what touching
+## this enemy does — see `global/components/contact_profile.gd`. `suspend_ai()` arms it.
+var contact_profile: ContactProfile
+
 ## The AI stack (docs/plans/cmug33ldn00d3m52wfe1j6fct/3-plan.md), resolved by type in `_ready()`: the
 ## first `EnemyBrain` / `EnemyMover` child, or null. With no brain, `_physics_process` is inert —
 ## every legacy enemy either has none or overrides `_physics_process` itself.
@@ -68,6 +73,8 @@ func _ready() -> void:
 	health.amount_changed.connect(_on_health_changed)
 	defense_profile = _resolve_defense_profile()
 	defense_profile.apply_to(hurt_box)
+	contact_profile = _resolve_contact_profile()
+	contact_profile.setup(self, contact_hit_box, health)
 	_rotate_sprite()
 	_resolve_ai()
 
@@ -109,6 +116,10 @@ func suspend_ai() -> void:
 	if _ai_suspended:
 		return
 	_ai_suspended = true
+	# A rail drives this enemy from now on, so it hurts on contact the way a rail enemy always has:
+	# a no-op for COLLISION (every legacy enemy), and it arms RAMMING / EXPLOSIVE.
+	if contact_profile != null:
+		contact_profile.set_armed(true)
 	if _brain != null:
 		_brain.on_suspended()
 	if _mover != null:
@@ -134,6 +145,17 @@ func _resolve_defense_profile() -> DefenseProfile:
 		if child is DefenseProfile:
 			return child
 	var profile := DefenseProfile.new()
+	add_child(profile)
+	return profile
+
+
+## Same shape as `_resolve_defense_profile()`: a scene-authored `ContactProfile` wins, otherwise a
+## default (COLLISION) one is created, so every enemy has exactly one.
+func _resolve_contact_profile() -> ContactProfile:
+	for child in get_children():
+		if child is ContactProfile:
+			return child
+	var profile := ContactProfile.new()
 	add_child(profile)
 	return profile
 

@@ -29,6 +29,8 @@ global/
 │   ├── shield_component.gd        # Shield (Node) — discrete-charge shield
 │   ├── damage_reaction.gd         # DamageReaction (Node) — generic "take a hit" router
 │   ├── defense_profile.gd         # DefenseProfile (Node) — per-instance HurtBox mask/damage-type data
+│   ├── contact_profile.gd         # ContactProfile (Node) — what touching an enemy does: NONE / COLLISION / RAMMING / EXPLOSIVE
+│   ├── contact_blast.gd           # ContactBlast (HitBox) — code-built blast an EXPLOSIVE profile leaves in the owner's parent
 │   ├── overheat_component.gd      # Overheat (Node) — weapon heat
 │   ├── attack_controller.gd       # AttackController (Node) — drives an AttackPatternResource
 │   ├── projectile_lifetime.gd     # ProjectileLifetime (Node) — world-space projectile expiry
@@ -124,7 +126,7 @@ Static-only helper (`RefCounted`, never instantiated) that swaps the OS mouse ar
 > edge cases the source does not spell out. Mapping: `Health` → `tests/unit/test_health_component.gd`,
 > `TempHealth` → `test_temp_health_component.gd`, `HitBox`/`HurtBox` → `test_hitbox_hurtbox.gd`,
 > `Shield` → `test_shield_component.gd`, `DamageReaction` → `test_damage_reaction.gd`,
-> `DefenseProfile` → `test_defense_profile.gd`, `AttackController` → `test_attack_controller.gd`,
+> `DefenseProfile` → `test_defense_profile.gd`, `ContactProfile`/`ContactBlast` → `test_contact_profile.gd` (+ `tests/integration/test_contact_blast_damage.gd`, real player hurtbox and health), `AttackController` → `test_attack_controller.gd`,
 > `ProjectileLifetime` → `test_projectile_lifetime.gd` (+ `tests/integration/test_enemy_bullet_lifetime.gd`
 > for the `EnemyBullet` migration), `TargetInfo` → `test_target_info.gd`,
 > `Overheat` → `test_overheat_component.gd`, the state machine → `test_state_machine.gd`, and the
@@ -248,6 +250,42 @@ resolve one for it.
 @onready var defense_profile: DefenseProfile = $DefenseProfile   # or BaseEnemy.defense_profile
 func _enter_damaged_state() -> void:
     defense_profile.apply_alternate()   # one-way; re-applies to the HurtBox automatically
+```
+
+### ContactProfile and ContactBlast — `contact_profile.gd`, `contact_blast.gd`
+
+`ContactProfile` (`class_name ContactProfile extends Node`) is the offensive twin of `DefenseProfile`:
+per-instance data for what **touching** an enemy does. `BaseEnemy._ready()` resolves a scene-authored one by
+type, otherwise creates a default, exposes it as `contact_profile`, and calls
+`setup(self, contact_hit_box, health)` (the hitbox may be null — the Bonus Drone has none).
+
+| `mode` | `ContactHitBox` | On a registered touch |
+|---|---|---|
+| `NONE` | disabled | nothing |
+| `COLLISION` (default) | **never touched** — every legacy enemy keeps its hitbox exactly as authored | `contact_made(area)` |
+| `RAMMING` | on only while armed | `contact_made(area)` |
+| `EXPLOSIVE` | on only while armed | `contact_made(area)`, then `detonate()` |
+
+- **Damage is always the hitbox's own `damage`** (`config.collision_damage`); "ramming only hurts while
+  committed" is full damage while armed and none at rest.
+- `set_armed(bool)` (RAMMING / EXPLOSIVE only; a no-op otherwise) toggles `monitorable` + `monitoring` with
+  `set_deferred`, so it is legal from a physics callback. Arming while already overlapping the player registers
+  exactly one hit (pinned engine behaviour). `BaseEnemy.suspend_ai()` arms the profile, so a rail-driven enemy hurts
+  on contact.
+- EXPLOSIVE also detonates when the owner's `Health` (the one passed to `setup()`) reaches 0 **while armed**; dying
+  unarmed never detonates. `detonate()` is idempotent and emits `detonated(position)` once.
+- The blast is a `ContactBlast` (`extends HitBox`, layer 256, mask 0, CONTACT damage, circle of `blast_radius`) built
+  by `ContactBlast.spawn(container, at, radius, damage, frames)` into the **owner's parent**, at the owner's global
+  position, so it outlives the owner (same reason as `ExplosionEffect`). It parents itself through a deferred call
+  on the blast (safe inside `area_entered`; frees itself if the container is gone first), stays live for
+  `blast_frames` physics frames (default 3, clamped to ≥ 2 with an error) on its own counter — never
+  `create_timer` — and then frees itself. The player's `HurtBox` (mask 1281) takes it like an enemy bullet.
+
+```gdscript
+# Scene-authored: add a ContactProfile child to the enemy's .tscn, then from the brain:
+contact_profile.set_armed(true)     # entering the committed attack state
+contact_profile.set_armed(false)    # leaving it
+contact_profile.contact_made.connect(func(_a: Area2D) -> void: health.set_health(0))  # a drone that dies on impact
 ```
 
 ### AttackController — `attack_controller.gd` (extended for the enemy AI stack)

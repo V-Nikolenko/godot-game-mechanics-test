@@ -371,3 +371,15 @@ are *planned* decisions. Once this phase's *as built* section exists, check it f
 | Enemy friendly fire (blasts, beams) | undecided (Ph8 at the earliest) | No design decision yet |
 | Enemy audio telegraphs | Ph17 | No enemy SFX pipeline exists |
 | Level-1 swarm balance by feel | owner playtest | The gate cannot judge fun; the concurrency ratios above are the gated floor |
+
+### Built in t3-contact-profile (2026-09-27): details later phases depend on
+
+- `ContactProfile` (`global/components/contact_profile.gd`) and `ContactBlast` (`global/components/contact_blast.gd`)
+  follow plan §2.3's API exactly. `BaseEnemy.contact_profile` is always non-null after `_ready()`.
+- **Deviation:** the blast is parented by a deferred call **on the blast**, `ContactBlast._attach(container)`, not
+  `container.add_child.call_deferred(blast)`. If the container is freed first, the engine drops a deferred call on the
+  container and the orphaned blast leaks. `_attach` has an untyped parameter and `queue_free()`s the blast when the
+  container is gone. Timing is unchanged: both run in the same message flush. (Task review, round 2.)
+- COLLISION never writes the hitbox (not even `monitorable = true`), so `SpaceStation`'s death-time
+  `collision_layer = 0` and every legacy scene's authored flags stay as they are. The Kamikaze and the Interceptor
+  still connect `contact_hit_box.area_entered` themselves; t8b and t9 move them onto `contact_made`.

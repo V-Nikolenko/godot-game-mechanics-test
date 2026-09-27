@@ -324,3 +324,53 @@ func test_enemies_without_an_animated_sprite_are_unaffected_by_the_flip() -> voi
 			"%s: expected no AnimatedSprite2D child" % entry["name"]
 		)
 	assert_gte(checked, _MIN_ROSTER_SIZE - 2, "roster sweep too small")
+
+
+# ── 5. ContactProfile resolution (task cmuj4y8qx006cp52x77tfozc2, INTENT) ─────────────────────────
+#
+# Intent tests, not characterization: they pin the new contract (docs/plans/cmufs7ek60001nm2x6d0bt2et/
+# 3-plan.md §2.3) that every legacy enemy resolves a default COLLISION profile — the mode that never
+# touches the hitbox, so today's behaviour is unchanged — and that a scene-authored profile wins.
+
+const _CONTACT_FIXTURE := preload("res://tests/helpers/contact_fixture.gd")
+
+
+func test_every_legacy_enemy_resolves_exactly_one_collision_contact_profile() -> void:
+	var checked := 0
+	for entry in _sweep():
+		var entity := _spawn(entry["scene"]) as BaseEnemy
+		if entity == null:
+			continue
+		checked += 1
+		assert_not_null(entity.contact_profile, "%s: a contact profile is resolved" % entry["name"])
+		if entity.contact_profile == null:
+			continue
+		assert_eq(entity.contact_profile.mode, ContactProfile.Mode.COLLISION, "%s: default mode" % entry["name"])
+		var profiles := entity.get_children().filter(func(c: Node) -> bool: return c is ContactProfile)
+		assert_eq(profiles.size(), 1, "%s: exactly one ContactProfile child" % entry["name"])
+		if entity.contact_hit_box != null:
+			assert_true(entity.contact_hit_box.monitorable, "%s: COLLISION leaves the hitbox monitorable" % entry["name"])
+			assert_true(entity.contact_hit_box.monitoring, "%s: COLLISION leaves the hitbox monitoring" % entry["name"])
+	assert_gte(checked, _MIN_ROSTER_SIZE, "roster sweep too small")
+
+
+## Boundary: the Bonus Drone authors no ContactHitBox, and still resolves cleanly (no error is
+## raised — GUT would fail this test on one).
+func test_the_bonus_drone_resolves_a_profile_without_a_contact_hitbox() -> void:
+	var drone := _spawn("%s/bonus_drone/bonus_drone.tscn" % _ENEMY_ROOT) as BaseEnemy
+	assert_null(drone.contact_hit_box, "the bonus drone has no ContactHitBox")
+	assert_not_null(drone.contact_profile)
+	assert_false(drone.contact_profile.is_armed())
+	drone.suspend_ai()  # arming a hitbox-less profile is harmless
+	assert_eq(drone.hurt_box.collision_mask, _DEFAULT_MASK_AFTER_READY, "hurtbox mask unchanged")
+
+
+func test_a_scene_authored_contact_profile_is_used_instead_of_a_default() -> void:
+	var container := Node2D.new()
+	add_child_autofree(container)
+	var authored := _CONTACT_FIXTURE.profile(ContactProfile.Mode.RAMMING)
+	var entity := _CONTACT_FIXTURE.build_enemy(authored, Vector2.ZERO)
+	container.add_child(entity)
+	assert_same(entity.contact_profile, authored)
+	var profiles := entity.get_children().filter(func(c: Node) -> bool: return c is ContactProfile)
+	assert_eq(profiles.size(), 1, "no default profile is added alongside an authored one")
