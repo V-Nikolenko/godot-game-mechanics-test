@@ -179,6 +179,33 @@ func test_injected_constraint_wins_over_auto() -> void:
 	assert_eq(provider.made.size(), 0)
 
 
+# ── release_constraint() — the Assault DISENGAGE exit ───────────────────────────
+
+func test_release_constraint_drops_it_and_a_later_outward_velocity_passes_unfiltered() -> void:
+	var doubling: MovementConstraint = _script(DOUBLING_CONSTRAINT_SRC).new()
+	var mover := _rig(func(m: EnemyMover) -> void: m.constraint = doubling)
+	mover.release_constraint()
+	assert_null(mover.constraint, "released: no constraint left to filter")
+	mover.request_velocity(Vector2(50, 10))
+	mover.step(DT)
+	assert_eq(mover.actor.velocity, Vector2(50, 10), "unfiltered: the doubling constraint no longer runs")
+
+
+func test_release_constraint_flags_itself_released() -> void:
+	var mover := _rig()
+	assert_false(mover.constraint_released())
+	mover.release_constraint()
+	assert_true(mover.constraint_released())
+
+
+func test_release_constraint_is_idempotent_and_harmless_with_no_constraint() -> void:
+	var mover := _rig()
+	mover.release_constraint()
+	mover.release_constraint()
+	assert_null(mover.constraint)
+	assert_true(mover.constraint_released())
+
+
 # ── Facing ─────────────────────────────────────────────────────────────────────
 
 func test_actor_without_sprite_forward_angle_faces_with_pi_over_2() -> void:

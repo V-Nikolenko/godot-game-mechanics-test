@@ -57,6 +57,7 @@ var _face_point: Vector2 = Vector2.ZERO
 var _has_face_point: bool = false
 var _boost_velocity: Vector2 = Vector2.ZERO
 var _boost_left: float = 0.0
+var _constraint_released: bool = false
 
 
 func _ready() -> void:
@@ -95,6 +96,21 @@ func boost(dir: Vector2, speed: float, duration: float) -> void:
 
 func is_boosting() -> bool:
 	return _boost_left > 0.0
+
+
+## Drop the mode's movement rule so a later `step()` passes the brain's request through
+## unfiltered — the Assault DISENGAGE exit (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.6):
+## the corridor would otherwise fight an outward request all the way to the world-rect edge. A
+## field write, not a motion write, so it does not touch the single-writer gate. Idempotent, and
+## harmless in Open Space, where there was no constraint to drop.
+func release_constraint() -> void:
+	constraint = null
+	_constraint_released = true
+
+
+## True once `release_constraint()` has run.
+func constraint_released() -> bool:
+	return _constraint_released
 
 
 ## Stop dead: zero the actor's velocity, clear every request and cancel any boost. Used by

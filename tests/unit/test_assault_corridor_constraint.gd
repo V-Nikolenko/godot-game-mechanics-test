@@ -30,6 +30,16 @@ func test_visible_rect_equals_arena_camera_constants() -> void:
 	assert_eq(rect.end, VIS_HI)
 
 
+## §2.6: a brain keeps an orbit/hold-position centre inside inner_rect() without naming
+## ArenaCamera. The corridor's inner_rect() is its own visible rect, not the identity's empty one.
+func test_inner_rect_equals_the_visible_rect() -> void:
+	var c := _rig()
+	var rect: Rect2 = c.inner_rect()
+	assert_eq(rect.position, VIS_LO)
+	assert_eq(rect.end, VIS_HI)
+	assert_eq(rect, c._visible_rect())
+
+
 # ── Inside visible: untouched ─────────────────────────────────────────────────
 
 func test_inside_visible_is_a_pass_through() -> void:

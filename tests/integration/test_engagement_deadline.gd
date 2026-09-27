@@ -1,0 +1,114 @@
+## The §2.6 deadline: an AI drone's Assault exit must clear the level before the section's own
+## ENEMIES_CLEARED safety net gives up (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.6).
+##
+## For every drone/razor spawn in every ENEMIES_CLEARED section of level 1:
+##
+##   last_wave_max_delay + engage_seconds + exit_distance / exit_speed
+##       + exit_speed / (2 * acceleration) + margin  <  enemies_cleared_timeout
+##
+## `last_wave_max_delay` is the largest `spawn_delay + slot.delay` in the SECTION'S LAST WAVE
+## (`waves_complete` fires when that wave TRIGGERS, not when its spawns land — level_director.gd),
+## so a drone/razor anywhere in an earlier wave is already less time-pressured than one spawned
+## last. `exit_distance` is half the shorter side of the LIVE `projectile_world_rect()` — the
+## worst-case straight-line distance from any point inside it to the nearest edge.
+##
+## Until t8b lands the Swarm Drone (and its config), the numbers are the constants the plan pins:
+## `engage_seconds` 5.5 s, `exit_speed` 320 px/s, `acceleration` 600 px/s². t8b repoints this test
+## at `swarm_drone_config.tres` once it exists. Both scenes checked here — the Kamikaze Drone and
+## the Drone Interceptor — are today's stand-ins for the Swarm Drone and the Razor Drone.
+extends GutTest
+
+const DIRECTOR_SCRIPT := preload("res://assault/scenes/levels/edelia/1/level_1_director.gd")
+
+## [judgement, pinned by the plan]: repointed at swarm_drone_config.tres in t8b.
+const ENGAGE_SECONDS := 5.5
+const EXIT_SPEED := 320.0
+const ACCELERATION := 600.0
+const MARGIN := 0.5
+
+const DRONE_OR_RAZOR_SCENES: Array[String] = [
+	"res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.tscn",
+	"res://assault/scenes/enemies/drone_interceptor/drone_interceptor.tscn",
+]
+
+
+## `Level1Director._build_sections()` touches only `LevelSection.new()`, `preload` and
+## `WaveBuilder` (a `RefCounted`), so this is safe to call on a bare instance that never entered
+## the tree (test_level_1_sequence.gd already relies on the same fact).
+func _sections() -> Array:
+	var d: Node = DIRECTOR_SCRIPT.new()
+	autofree(d)
+	return d._build_sections()
+
+
+func _is_drone_or_razor(entry: SpawnEntryResource) -> bool:
+	return entry.ship_scene != null and DRONE_OR_RAZOR_SCENES.has(entry.ship_scene.resource_path)
+
+
+func _last_wave(section: LevelSection) -> WaveResource:
+	var last: WaveResource = null
+	for w in section.waves:
+		var wave: WaveResource = w
+		if last == null or wave.trigger_time > last.trigger_time:
+			last = wave
+	return last
+
+
+## The largest `spawn_delay + slot.delay` across every ship the wave spawns, a formation's slots
+## included (`FormationResource.compute_slots()`, wave_manager.gd: `base_delay + slot.delay`).
+func _max_delay(wave: WaveResource) -> float:
+	var max_delay := 0.0
+	for e in wave.entries:
+		var entry: SpawnEntryResource = e
+		if entry.formation != null:
+			for s in entry.formation.compute_slots():
+				var slot: FormationResource.FormationSlot = s
+				max_delay = maxf(max_delay, entry.spawn_delay + slot.delay)
+		else:
+			max_delay = maxf(max_delay, entry.spawn_delay)
+	return max_delay
+
+
+func _section_has_drone_or_razor(section: LevelSection) -> bool:
+	for w in section.waves:
+		var wave: WaveResource = w
+		for e in wave.entries:
+			if _is_drone_or_razor(e):
+				return true
+	return false
+
+
+func test_every_enemies_cleared_sections_drone_exit_clears_the_timeout() -> void:
+	var cam := ArenaCamera.new()
+	add_child_autofree(cam)
+	var rect := cam.projectile_world_rect()
+	var exit_distance := minf(rect.size.x, rect.size.y) / 2.0
+
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		if not _section_has_drone_or_razor(section):
+			continue
+		checked += 1
+
+		var last_wave_max_delay := _max_delay(_last_wave(section))
+		var deadline := last_wave_max_delay + ENGAGE_SECONDS + exit_distance / EXIT_SPEED \
+			+ EXIT_SPEED / (2.0 * ACCELERATION) + MARGIN
+
+		assert_lt(deadline, section.enemies_cleared_timeout,
+			"section %s: %.2f s must clear its %.1f s timeout"
+				% [section.section_name, deadline, section.enemies_cleared_timeout])
+
+	assert_gt(checked, 0, "sanity: at least one ENEMIES_CLEARED section must actually have a drone")
+
+
+## Sanity on the live rect this test depends on — 1608x1608, half the shorter side 804 px, so the
+## formula above evaluates to about 9.58 s on today's data (cloud_descent's last wave has a 0.8 s
+## max delay: docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.6).
+func test_projectile_world_rect_matches_the_plans_804_px_exit_distance() -> void:
+	var cam := ArenaCamera.new()
+	add_child_autofree(cam)
+	var rect := cam.projectile_world_rect()
+	assert_almost_eq(minf(rect.size.x, rect.size.y) / 2.0, 804.0, 0.01)

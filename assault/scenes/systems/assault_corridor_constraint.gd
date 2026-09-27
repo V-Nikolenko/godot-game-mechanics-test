@@ -76,6 +76,11 @@ func _apply_axis(side: float, d: float, v: float) -> float:
 	return u * side
 
 
+## The corridor's own visible rect — see `MovementConstraint.inner_rect()`.
+func inner_rect() -> Rect2:
+	return _visible_rect()
+
+
 func _visible_rect() -> Rect2:
 	var pinned_centre := Vector2(ArenaCamera.SCREEN_W, ArenaCamera.SCREEN_H) * 0.5
 	var half := Vector2(

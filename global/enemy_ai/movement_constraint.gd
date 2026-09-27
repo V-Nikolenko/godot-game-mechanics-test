@@ -14,3 +14,10 @@ extends RefCounted
 ## its brain wants. The identity here.
 func filter(_position: Vector2, desired: Vector2) -> Vector2:
 	return desired
+
+
+## The region a brain may treat as "inside the fight" without naming the mode's provider — an
+## orbit or hold-position centre kept inside this rect stays clear of the constraint's own edge
+## pressure (R2.13). An empty `Rect2()` (the identity here) means "unbounded".
+func inner_rect() -> Rect2:
+	return Rect2()

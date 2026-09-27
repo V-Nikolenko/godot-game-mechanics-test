@@ -48,6 +48,7 @@ global/
 │   ├── movement_constraint.gd # MovementConstraint (RefCounted) — identity filter; mode constraints extend it
 │   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift primitives
 │   ├── target_info.gd         # TargetInfo — player resolver + prediction/intercept snapshot
+│   ├── engagement_budget.gd   # EngagementBudget (RefCounted) — Assault-only per-brain exit timer
 │   └── enemy_world.gd         # EnemyWorld — the one lookup of the &"assault_arena" mode provider
 ├── physics/
 │   └── collision_layers.gd    # CollisionLayers — named constants, one per project.godot layer_names entry
@@ -340,6 +341,11 @@ func tick(delta: float) -> void:
   request or the velocity; `sprite_forward_angle` is read duck-typed off the actor (default `PI/2`).
 - **Constraint:** `AUTO` asks `EnemyWorld.movement_constraint(tree)` once in `_ready()` (none in
   Open Space); `NONE` never asks; a `constraint` set before `add_child` wins.
+  `MovementConstraint.inner_rect()` returns the region a brain may treat as "inside the fight"
+  without naming the mode's provider — an empty `Rect2()` (the identity) means "unbounded";
+  `AssaultCorridorConstraint.inner_rect()` returns its own visible rect, so a brain can keep an
+  orbit or hold-position centre clear of the corridor's edge pressure. `mover.release_constraint()`
+  drops the constraint for good (a field write, not a motion write — see the Assault exit below).
 - **Single writer:** with a mover present, nothing else writes the body's `velocity`/`rotation` or
   calls `move_and_slide()` — gated by `tests/integration/test_enemy_mover_single_writer.gd`.
 - **Rails override it:** `EnemyPathMover._ready()` calls `suspend_ai()` (brain `on_suspended()`, mover
@@ -369,6 +375,22 @@ the shot). `aim_direction(from, shot_speed, accuracy)` blends direct aim at `pos
 0.0`) with the intercept point (`1.0`), clamped, falling back to direct aim whenever `intercept`
 fails — this is what `AttackController`'s aimed/gatling patterns call (above). `line_of_sight()` is
 a stub that always agrees with `has_target`; the real raycast is a later phase.
+
+**`EngagementBudget` (`engagement_budget.gd`, `RefCounted`) is how an Assault AI enemy leaves the
+arena in time for an `ENEMIES_CLEARED` section to advance**, rather than living until killed —
+`AssaultCorridorConstraint` otherwise forces it to keep re-entering forever. A brain constructs one
+with `EngagementBudget.new(seconds, tree)`: `active` resolves once, from `EnemyWorld.arena(tree)
+!= null`, so it is only ever true in Assault — in Open Space `update(delta)` is a permanent no-op
+and always returns `false`, and the same brain runs there without an exit. The brain calls
+`update(delta)` every tick from its first one (the spawn frame); the first `true` is the signal to
+enter a DISENGAGE-style state: call `mover.release_constraint()`, raise `mover.max_speed` to an
+exit speed, `seek()` the nearest point outside `EnemyWorld.projectile_world_rect()`, and free the
+actor once outside that rect (strict compare, as `EnemyPathMover._check_dash_end()` does). Scoring
+is unchanged — the actor leaves with `was_killed == false`, counted as an escape.
+`tests/integration/test_engagement_deadline.gd` pins the arithmetic that keeps this from stalling a
+level: for every drone/razor spawn in every `ENEMIES_CLEARED` section, the worst-case time from
+`waves_complete` to that enemy leaving the level must clear the section's own
+`enemies_cleared_timeout`.
 
 ### ProjectileLifetime — `projectile_lifetime.gd`
 
