@@ -10,7 +10,7 @@
 ## `damage = 20` and knows nothing about `config`, which is only read at runtime. So every enemy
 ## that wants its configured `collision_damage` has to re-apply it in `_ready()` afterwards. Most
 ## do (`bomber.gd`, `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a
-## different default directly on their own scene's node (`drone_interceptor.tscn`,
+## different default directly on their own scene's node (`razor_drone.tscn`,
 ## `kamikaze_drone.tscn`, `ally_fighter.tscn` — 30/30/25 — with the script still re-applying where
 ## a config can override it).
 ##
@@ -71,9 +71,9 @@ const ROSTER: Array[Dictionary] = [
 		"no_hitbox": true,
 	},
 	{
-		"name": "drone_interceptor",
-		"scene": "res://assault/scenes/enemies/drone_interceptor/drone_interceptor.tscn",
-		"config": "res://assault/scenes/enemies/drone_interceptor/drone_interceptor_config.tres",
+		"name": "razor_drone",
+		"scene": "res://assault/scenes/enemies/razor_drone/razor_drone.tscn",
+		"config": "res://assault/scenes/enemies/razor_drone/razor_drone_config.tres",
 	},
 	{
 		"name": "gunship",

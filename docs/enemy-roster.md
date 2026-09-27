@@ -253,10 +253,10 @@ b.interceptor().at(-500, 0).move(b.straight(200, PI / 2)).free_after(5.0)
 
 ---
 
-### `drone_interceptor` — Drone Interceptor (Kamikaze Orbiter)
+### `razor_drone` — Razor Drone (Kamikaze Orbiter)
 
-**Builder:** `b.drone_interceptor()`  
-**Scene:** `drone_interceptor.tscn`  
+**Builder:** `b.razor_drone()`  
+**Scene:** `razor_drone.tscn`  
 **Movement:** ⚠️ **Self-managed AI. Do NOT add `.move()`.** Adding `.move()` disables `_physics_process` and breaks the AI entirely.  
 **Shoots:** No — kamikaze dash on contact.  
 **HP:** Very low  
@@ -267,7 +267,7 @@ b.interceptor().at(-500, 0).move(b.straight(200, PI / 2)).free_after(5.0)
 2. `ORBIT` — circles the player for 1–2 seconds (randomised).
 3. `DASH` — locks direction to predicted player position, flies at `dash_speed` indefinitely.
 
-**Config fields** (`DroneInterceptorConfig`):
+**Config fields** (`RazorDroneConfig`):
 
 | Field | Default | Notes |
 |-------|---------|-------|
@@ -281,8 +281,8 @@ b.interceptor().at(-500, 0).move(b.straight(200, PI / 2)).free_after(5.0)
 **Examples:**
 ```gdscript
 # Self-managed — just .at(), no .move()
-b.drone_interceptor().at(-160, -420)
-b.drone_interceptor().at( 160, -420).delay(0.35)
+b.razor_drone().at(-160, -420)
+b.razor_drone().at( 160, -420).delay(0.35)
 ```
 
 ---
@@ -476,7 +476,7 @@ b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180)
 | Rule | Detail |
 |------|--------|
 | **Always `.move()` path-following enemies** | `fighter`, `drone`, `ram`, `sniper`, `sniper_enemy`, `interceptor`, `bomber` — they have no self-managed movement. |
-| **Never `.move()` self-AI enemies** | `drone_interceptor`, `gunship` — attaching `EnemyPathMover` disables their `_physics_process`. |
+| **Never `.move()` self-AI enemies** | `razor_drone`, `gunship` — attaching `EnemyPathMover` disables their `_physics_process`. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` needs a `sequence()`** | The approach step must be `straight(speed, 0.0, 2.5)` (exactly 2.5 s). Hold step must cover `shot_count × 2.5 s`. |
 | **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |
@@ -512,7 +512,7 @@ from either side, two `kamikaze_drone` from below, two `fighter` with `.shoot_fo
 above. Things to know if you edit that table (`station_reinforcements.gd::_build_squads()`):
 
 - It uses this file's own vocabulary — `b.interceptor().at(…).move(b.straight(…)).free_after(…)` —
-  so the rules below apply unchanged. In particular **`gunship` and `drone_interceptor` must never
+  so the rules below apply unchanged. In particular **`gunship` and `razor_drone` must never
   go in it**: both are self-managed AI, and `EnemyPathMover` silently disables the AI they need.
   A test enforces that.
 - **Every entry needs `.free_after(…)`.** The default `FREE_ON_SCREEN_EXIT` only culls a ship that

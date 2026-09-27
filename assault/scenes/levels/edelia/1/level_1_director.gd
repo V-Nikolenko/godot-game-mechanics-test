@@ -285,10 +285,10 @@ func _build_section_1() -> LevelSection:
 			b.drone().at( 260, -400).move(b.straight(180, -PI / 4)).delay(0.2),
 		]),
 
-		# 1.5 s — drone interceptor pair for testing; self-managed AI, no .move() needed
+		# 1.5 s — razor drone pair for testing; self-managed AI, no .move() needed
 		b.wave(1.5, [
-			b.drone_interceptor().at(-160, -420),
-			b.drone_interceptor().at( 160, -420).delay(0.35),
+			b.razor_drone().at(-160, -420),
+			b.razor_drone().at( 160, -420).delay(0.35),
 		]),
 
 		# 3.5 s — gunship test; self-managed AI, no .move() needed

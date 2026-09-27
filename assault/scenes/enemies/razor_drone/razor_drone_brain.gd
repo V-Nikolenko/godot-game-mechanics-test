@@ -1,12 +1,12 @@
-## The Drone Interceptor's brain — the phase logic that used to live in
-## `drone_interceptor.gd`'s own `_physics_process`, ported onto the brain/mover contracts as the
+## The Razor Drone's brain — the phase logic that used to live in
+## `razor_drone.gd`'s own `_physics_process`, ported onto the brain/mover contracts as the
 ## Phase 1 architecture's proof consumer (docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.11,
 ## P-8; task cmug33ldz00djm52wqu66uc4z).
 ##
 ## Kept 1:1 with the pre-port behaviour: the sibling `EnemyMover` runs with `acceleration = 0`
 ## (velocity is still assigned directly, exactly as the old `_phase_*` methods did),
 ## `turn_lerp = 7.0` (the old `ROTATION_LERP`), and `constraint_mode = NONE` — the port stays
-## unconstrained in Assault (plan §2.5 "Phase 1 consumers"); Phase 2's Razor Drone turns the
+## unconstrained in Assault (plan §2.5 "Phase 1 consumers"); Phase 2's combat evolution turns the
 ## corridor on and re-pins.
 ##
 ## State mapping onto the IDEAS §4 vocabulary documented in `enemy_brain.gd`'s header:
@@ -17,9 +17,9 @@
 ##                       cull rect (`EnemyWorld.cull_rect`) when there is one, else
 ##                       `dash_max_distance` from the dash's own start position (Open Space).
 ##
-## Tuning is copied from `DroneInterceptorConfig` by `drone_interceptor.gd`'s `_ready()`, same as
+## Tuning is copied from `RazorDroneConfig` by `razor_drone.gd`'s `_ready()`, same as
 ## before the port — this script only owns the state machine and the movement/facing requests.
-class_name DroneInterceptorBrain
+class_name RazorDroneBrain
 extends EnemyBrain
 
 enum Phase { ENTER, ORBIT, DASH }

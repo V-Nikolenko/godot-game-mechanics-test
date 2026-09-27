@@ -1,4 +1,4 @@
-# Drone Interceptor — Kamikaze orbiter
+# Razor Drone — Kamikaze orbiter
 
 **Role:** Self-managed pursuit drone. Closes on the player, circles briefly, then commits to a one-way predictive dash that explodes on contact.
 **Fantasy / threat:** A wasp that won't be shaken — it stalks, winds up an orbit, then lances at where you're *about* to be. Must be killed before it commits.
@@ -13,8 +13,8 @@
 | Damage | 30 (contact HitBox — kamikaze on player contact) |
 | Speed | 200 approach / 480 dash (`approach_speed` / `dash_speed`) |
 | Sprite | `drone_2.png` |
-| Scene | `drone_interceptor.tscn` |
-| Config | `drone_interceptor_config.tres` |
+| Scene | `razor_drone.tscn` |
+| Config | `razor_drone_config.tres` |
 
 ---
 
@@ -22,12 +22,12 @@
 
 - **Movement:** ⚠️ Self-managed AI, on the shared brain/mover architecture
   (`docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md` §2.11) — the first enemy ported onto it.
-  `DroneInterceptorBrain` (a child `EnemyMover`-sibling `EnemyBrain`) decides; a sibling
+  `RazorDroneBrain` (a child `EnemyMover`-sibling `EnemyBrain`) decides; a sibling
   `EnemyMover` (`acceleration = 0`, `turn_lerp = 7`, `constraint_mode = NONE`) turns that into
   `velocity`/`move_and_slide()`/facing, via the shared `BaseEnemy._physics_process` tick loop —
-  `drone_interceptor.gd` itself defines no `_physics_process` any more. `constraint_mode = NONE`
+  `razor_drone.gd` itself defines no `_physics_process` any more. `constraint_mode = NONE`
   means it ignores the Assault corridor even when one exists, keeping it 1:1 with its pre-Phase-1
-  behaviour; Phase 2's Razor Drone is the one that turns the corridor on. Do NOT attach `.move()`
+  behaviour; Phase 2's combat evolution is the one that turns the corridor on. Do NOT attach `.move()`
   — `EnemyPathMover` suspends the brain (`BaseEnemy.suspend_ai()`) exactly like any other
   brain-driven enemy, which defeats the point of a self-managed kamikaze. Three phases: ENTER →
   ORBIT → DASH, using `Steering.seek` / `Steering.orbit` and `TargetInfo.player()` for perception
@@ -52,22 +52,22 @@ toward player              correct toward ring                  fly at dash_spee
 
 **Initial phase:** `ENTER`
 
-> Note: phases are an `enum` inside `drone_interceptor_brain.gd` (not separate `State` node
+> Note: phases are an `enum` inside `razor_drone_brain.gd` (not separate `State` node
 > files); there is no `states/` folder. IDEAS §4's shared vocabulary (documented in
 > `global/enemy_ai/enemy_brain.gd`): ENTER = APPROACH, ORBIT = POSITION, DASH = ATTACK.
 
-### ENTER (`drone_interceptor_brain.gd`)
+### ENTER (`razor_drone_brain.gd`)
 - Flies straight at the player at `approach_speed` (`Steering.seek`).
 - When distance ≤ `orbit_radius`, transitions to ORBIT.
 
-### ORBIT (`drone_interceptor_brain.gd`)
+### ORBIT (`razor_drone_brain.gd`)
 - Counts down a randomised `_dash_timer` (1.0–2.0 s, drawn from `brain.rng` at spawn, so a seeded
   run is reproducible).
 - Advances `_orbit_angle` by `orbit_speed`, steers toward the orbit ring (`Steering.orbit`,
   correction speed clamped to `[60, orbit_correct_speed]`).
 - When `_dash_timer ≤ 0` → DASH.
 
-### DASH (`drone_interceptor_brain.gd`)
+### DASH (`razor_drone_brain.gd`)
 - On entry, locks `_dash_direction` toward `TargetInfo.player().predicted_position(dash_prediction_time)`
   (straight down with no player).
 - Flies at `dash_speed`. Freed once it leaves the world: the Assault provider's legacy off-screen
@@ -92,14 +92,14 @@ toward player              correct toward ring                  fly at dash_spee
 | `dash_prediction_time` | `0.2` | Seconds ahead to predict player position. |
 | `dash_max_distance` | `1600.0` | Open Space only (no Assault provider): DASH frees the drone this far from where it began. |
 
-(Read the real defaults from `drone_interceptor_config.gd` and `drone_interceptor_config.tres` —
-copied onto `DroneInterceptorBrain`'s own matching `@export`s by `drone_interceptor.gd`'s `_ready()`.)
+(Read the real defaults from `razor_drone_config.gd` and `razor_drone_config.tres` —
+copied onto `RazorDroneBrain`'s own matching `@export`s by `razor_drone.gd`'s `_ready()`.)
 
 ---
 
 ## Spawn notes
 
-- WaveBuilder method: `b.drone_interceptor()` — see `docs/enemy-roster.md`.
+- WaveBuilder method: `b.razor_drone()` — see `docs/enemy-roster.md`.
 - ⚠️ Spawn with `.at(x, y)` only — never `.move()`. Stagger orbit angle/dash timers are randomised so clusters don't behave identically.
 
 ---
@@ -107,10 +107,10 @@ copied onto `DroneInterceptorBrain`'s own matching `@export`s by `drone_intercep
 ## Files
 
 ```
-drone_interceptor/
-├── ENEMY.md                    ← this file
-├── drone_interceptor.tscn      ← CharacterBody2D + EnemyMover + Brain children
-├── drone_interceptor.gd        ← wires config onto the brain; contact-kill only
-├── drone_interceptor_brain.gd  ← ENTER/ORBIT/DASH decision logic (EnemyBrain)
-└── drone_interceptor_config.gd / .tres
+razor_drone/
+├── ENEMY.md                ← this file
+├── razor_drone.tscn        ← CharacterBody2D + EnemyMover + Brain children
+├── razor_drone.gd          ← wires config onto the brain; contact-kill only
+├── razor_drone_brain.gd    ← ENTER/ORBIT/DASH decision logic (EnemyBrain)
+└── razor_drone_config.gd / .tres
 ```

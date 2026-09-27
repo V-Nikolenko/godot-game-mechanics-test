@@ -321,8 +321,8 @@ func test_no_squad_uses_a_self_managed_ai_enemy() -> void:
 	for e in _all_entries():
 		var path: String = e.ship_scene.resource_path
 		assert_ne(path, WaveBuilder.GUNSHIP, "gunship is self-managed AI and must never get a mover")
-		assert_ne(path, WaveBuilder.DRONE_INTERCEPTOR,
-			"drone_interceptor is self-managed AI and must never get a mover")
+		assert_ne(path, WaveBuilder.RAZOR_DRONE,
+			"razor_drone is self-managed AI and must never get a mover")
 
 
 ## 4a lost time to an unwired export that left the gate green. The node has to be in the scene.

@@ -1,15 +1,15 @@
-## Characterization tests for `DroneInterceptor`, kept as the **acceptance test** for its port onto
+## Characterization tests for `RazorDrone`, kept as the **acceptance test** for its port onto
 ## the Phase 1 brain/mover architecture
 ## (`docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md` §2.11, P-8; task cmug33ldz00djm52wqu66uc4z,
 ## "t14-port-interceptor"). The phase logic (ENTER/ORBIT/DASH) now lives in the sibling
-## `DroneInterceptorBrain` (`drone_interceptor_brain.gd`), driven by `EnemyMover`; every assertion
+## `RazorDroneBrain` (`razor_drone_brain.gd`), driven by `EnemyMover`; every assertion
 ## below still reads only PUBLIC, observable state (velocity, position, rotation, health,
 ## `is_queued_for_deletion()`), never a private field, and no expected value changed from the
 ## pre-port pin — only the setup needed to reach that state changed (task acceptance criteria).
 ##
 ## ── Harness notes ─────────────────────────────────────────────────────────────────────────────
 ##
-## 1. `DroneInterceptor` moves through `move_and_slide()` (inside `EnemyMover.step()`), unlike
+## 1. `RazorDrone` moves through `move_and_slide()` (inside `EnemyMover.step()`), unlike
 ##    `EnemyPathMover` (`test_enemy_path_mover.gd`), which writes `global_position` directly.
 ##    `CharacterBody2D.move_and_slide()` reads `get_physics_process_delta_time()` internally
 ##    instead of taking a delta argument, and that value is NOT reliably `1/60` when the method is
@@ -34,7 +34,7 @@
 ##    (`set_physics_process(false)`) and is ticked only by calling `_physics_process(delta)`
 ##    directly — same technique `test_enemy_dual_mode.gd` uses for the fixture — so elapsed time is
 ##    exact regardless of how many real engine frames the test happens to run for.
-## 3. `DroneInterceptorBrain._begin_dash()` and `._check_dash_end()` are called directly on the
+## 3. `RazorDroneBrain._begin_dash()` and `._check_dash_end()` are called directly on the
 ##    brain in a few cases, the same idiom `test_ram_ship.gd` uses for `_on_received_damage()`: it
 ##    isolates the dash-DIRECTION formula and the off-screen-cull formula from the random
 ##    dash-TIMING mechanism (covered separately, seed-robustly, in its own case) and from
@@ -44,7 +44,7 @@
 ##    phase never transitions to ORBIT during the test window — this keeps the bearing to the
 ##    player effectively constant while the drone closes a little distance, which is what makes the
 ##    facing-convergence case's target angle stay put without needing a stationary orbit.
-## 5. `DroneInterceptorConfig`'s shipped tuning (`drone_interceptor_config.tres`) is read through
+## 5. `RazorDroneConfig`'s shipped tuning (`razor_drone_config.tres`) is read through
 ##    the preloaded resource rather than hardcoded, so a tuning change does not silently desync the
 ##    pinned numbers from the values the game actually ships (same technique `test_ram_ship.gd`
 ##    uses for `RamShipConfig`).
@@ -75,9 +75,9 @@
 extends GutTest
 
 const DRONE_SCENE: PackedScene = \
-		preload("res://assault/scenes/enemies/drone_interceptor/drone_interceptor.tscn")
-const DRONE_CONFIG: DroneInterceptorConfig = \
-		preload("res://assault/scenes/enemies/drone_interceptor/drone_interceptor_config.tres")
+		preload("res://assault/scenes/enemies/razor_drone/razor_drone.tscn")
+const DRONE_CONFIG: RazorDroneConfig = \
+		preload("res://assault/scenes/enemies/razor_drone/razor_drone_config.tres")
 
 const DT := 1.0 / 60.0
 
@@ -87,11 +87,11 @@ const DT := 1.0 / 60.0
 const _SEEDS := [1, 2, 3, 4, 5, 42, 100]
 
 
-func _spawn_drone(pos: Vector2, rng_seed: int = 0) -> DroneInterceptor:
+func _spawn_drone(pos: Vector2, rng_seed: int = 0) -> RazorDrone:
 	var container := Node2D.new()
 	add_child_autofree(container)
-	var drone := DRONE_SCENE.instantiate() as DroneInterceptor
-	assert_not_null(drone, "sanity: drone_interceptor.tscn's root is not a DroneInterceptor")
+	var drone := DRONE_SCENE.instantiate() as RazorDrone
+	assert_not_null(drone, "sanity: razor_drone.tscn's root is not a RazorDrone")
 	drone.global_position = pos
 	if rng_seed != 0:
 		_brain(drone).rng_seed = rng_seed
@@ -100,8 +100,8 @@ func _spawn_drone(pos: Vector2, rng_seed: int = 0) -> DroneInterceptor:
 	return drone
 
 
-func _brain(drone: DroneInterceptor) -> DroneInterceptorBrain:
-	return drone.get_node("Brain") as DroneInterceptorBrain
+func _brain(drone: RazorDrone) -> RazorDroneBrain:
+	return drone.get_node("Brain") as RazorDroneBrain
 
 
 func _spawn_player(pos: Vector2, vel: Vector2 = Vector2.ZERO) -> CharacterBody2D:
@@ -133,7 +133,7 @@ func _tick(drone: BaseEnemy, delta: float) -> void:
 ## dash begins (detected publicly, via `velocity` crossing the midpoint between
 ## `orbit_correct_speed` and `dash_speed`), since nothing here has a notion of "stop ticking me".
 ## Returns every nonzero orbit-correction speed sampled, in call order.
-func _run_orbit_and_collect_speeds(drone: DroneInterceptor, steps: int) -> Array[float]:
+func _run_orbit_and_collect_speeds(drone: RazorDrone, steps: int) -> Array[float]:
 	var dash_threshold: float = (DRONE_CONFIG.orbit_correct_speed + DRONE_CONFIG.dash_speed) * 0.5
 	var speeds: Array[float] = []
 	for _i in steps:
@@ -148,7 +148,7 @@ func _run_orbit_and_collect_speeds(drone: DroneInterceptor, steps: int) -> Array
 
 ## Same drive as `_run_orbit_and_collect_speeds()`, but tracks the min/max distance from the
 ## player instead of the raw speed samples.
-func _run_orbit_and_measure_distance(drone: DroneInterceptor, player: CharacterBody2D, steps: int) -> Dictionary:
+func _run_orbit_and_measure_distance(drone: RazorDrone, player: CharacterBody2D, steps: int) -> Dictionary:
 	var dash_threshold: float = (DRONE_CONFIG.orbit_correct_speed + DRONE_CONFIG.dash_speed) * 0.5
 	var min_dist := INF
 	var max_dist := 0.0
@@ -309,7 +309,7 @@ func test_dash_direction_uses_the_predicted_player_position() -> void:
 	assert_almost_eq(drone.velocity.length(), DRONE_CONFIG.dash_speed, 0.5)
 
 
-## BOUNDARY: no player at dash onset. The documented fallback (`DroneInterceptorBrain._begin_dash`)
+## BOUNDARY: no player at dash onset. The documented fallback (`RazorDroneBrain._begin_dash`)
 ## predicts straight down from the drone's own position, not toward anything player-related.
 func test_dash_with_no_player_at_onset_goes_straight_down() -> void:
 	var drone := _spawn_drone(Vector2(DRONE_CONFIG.orbit_radius, 0.0))
@@ -337,7 +337,7 @@ func test_contact_sets_health_to_zero() -> void:
 # ── 9. Facing converges nose-up toward the target ──────────────────────────────
 
 ## The FIRST tick's rotation is fully deterministic — no RNG, no prior movement — so it is pinned
-## exactly, matching `lerp_angle(0.0, target_rotation, delta * 7.0)` with the DroneInterceptor's own
+## exactly, matching `lerp_angle(0.0, target_rotation, delta * 7.0)` with the RazorDrone's own
 ## nose-up convention `atan2(dir.x, -dir.y)` (the reverse of BaseEnemy's default nose-down
 ## convention — see plan §2.10; the port declares `sprite_forward_angle = -PI/2` on the scene root,
 ## which `EnemyMover`'s single facing rule turns into the exact same `atan2(dir.x, -dir.y)` formula).

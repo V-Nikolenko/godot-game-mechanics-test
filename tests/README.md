@@ -222,7 +222,7 @@ It exists because every `BaseEnemy` subclass's `.tscn` authors a `ContactHitBox`
 hardcoded `damage = 20` and no way to read `config` — that only exists at runtime — so every
 enemy that wants its configured `collision_damage` has to re-apply it in `_ready()` off
 `contact_hit_box` — `bomber.gd`, `light_assault_ship.gd`, `ram_ship.gd`, `gunship.gd` and
-`space_station.gd` all do this, and `drone_interceptor.tscn`/`kamikaze_drone.tscn` author a
+`space_station.gd` all do this, and `razor_drone.tscn`/`kamikaze_drone.tscn` author a
 different scene default (30) instead. Miss the re-apply and the `.tres` field is simply dead: it
 parses, the enemy works, and the only symptom is a number nobody can see. The `Gunship` shipped
 that way — `collision_damage = 30` ignored, so the heaviest ship in the roster rammed for 20 —
@@ -249,7 +249,7 @@ A `Shape2D` is a resource: it holds the radius, not the `CollisionShape2D.scale`
 it at runtime. Copying `col.shape` alone used to be how these hitboxes were built in code, so
 every entity that sizes its hull by scaling its collision shape — six of them — got a contact box
 at the *unscaled* radius. The gunship scales an 18 px circle by 2.31 to match its 92x84 sprite, so
-it rammed with a box 38% of the hull the player can see; the drone interceptor was 3.08x off. The
+it rammed with a box 38% of the hull the player can see; the razor drone was 3.08x off. The
 fix, and now the only way these are built, is scene-authored: every `ContactHitBox` node's
 `CollisionShape2D` references the exact same `SubResource` shape id as the body's and copies its
 `scale`, next to the body it has to match instead of reconstructed from it at runtime.

@@ -81,8 +81,8 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 	},
 	{
-		"name": "drone_interceptor",
-		"scene": "res://assault/scenes/enemies/drone_interceptor/drone_interceptor.tscn",
+		"name": "razor_drone",
+		"scene": "res://assault/scenes/enemies/razor_drone/razor_drone.tscn",
 	},
 	{
 		"name": "gunship",

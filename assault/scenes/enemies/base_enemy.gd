@@ -96,7 +96,7 @@ func _ready() -> void:
 
 ## The one AI tick: the brain decides, then the mover applies it — once per physics frame, on one
 ## clock. Inert without a brain or once `suspend_ai()` has run. A subclass that defines its own
-## `_physics_process` (bomber, gunship, kamikaze, ram, drone interceptor) replaces this entirely —
+## `_physics_process` (bomber, gunship, kamikaze, ram, razor drone) replaces this entirely —
 ## GDScript does not chain virtual callbacks — so it keeps its legacy behaviour untouched.
 ## Deliberately never calls `set_physics_process(false)`: that would switch those overrides off too.
 func _physics_process(delta: float) -> void:

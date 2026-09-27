@@ -50,8 +50,8 @@ const ARENA_GROUP : StringName = &"assault_arena"
 ## Margin added to the corridor's visible rect for a projectile's world bounds — reproduces
 ## today's EnemyBullet arena bounds exactly (docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.9).
 const _PROJECTILE_MARGIN : float = 64.0
-## Margin added to the viewport half-size for the Drone Interceptor's legacy off-screen cull
-## (drone_interceptor.gd's _check_off_screen, ported to a provider method in §2.5a/§2.11).
+## Margin added to the viewport half-size for the Razor Drone's legacy off-screen cull
+## (razor_drone.gd's _check_off_screen, ported to a provider method in §2.5a/§2.11).
 const _CULL_MARGIN : float = 80.0
 
 ## Lerp weight per second.  Higher = snappier follow; 1.0 per frame is the cap.
@@ -89,8 +89,8 @@ func projectile_world_rect() -> Rect2:
 	return _visible_rect().grow(_PROJECTILE_MARGIN)
 
 
-## The Drone Interceptor's legacy off-screen cull rect: this camera's global_position, ± half the
-## viewport, ± 80 px (drone_interceptor.gd's _check_off_screen, before the §2.11 port).
+## The Razor Drone's legacy off-screen cull rect: this camera's global_position, ± half the
+## viewport, ± 80 px (razor_drone.gd's _check_off_screen, before the §2.11 port).
 func enemy_cull_rect() -> Rect2:
 	var half : Vector2 = get_viewport().get_visible_rect().size * 0.5 + Vector2.ONE * _CULL_MARGIN
 	return Rect2(global_position - half, half * 2.0)

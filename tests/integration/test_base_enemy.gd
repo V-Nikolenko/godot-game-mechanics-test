@@ -60,7 +60,7 @@ const _RAM_MASK_BEFORE_HIT := 33
 ## `ram_ship.gd:45`, applied inside `_enter_damaged_state()` on the first received hit.
 const _RAM_MASK_AFTER_HIT := 97
 
-## `bomber`, `bonus_drone`, `drone_interceptor`, `gunship`, `interceptor`, `kamikaze_drone`,
+## `bomber`, `bonus_drone`, `razor_drone`, `gunship`, `interceptor`, `kamikaze_drone`,
 ## `light_assault_ship`, `ram_ship`, `sniper_enemy`, `space_station`. A sweep that finds fewer has
 ## broken, and every assertion below is vacuous on a broken sweep.
 const _MIN_ROSTER_SIZE := 10

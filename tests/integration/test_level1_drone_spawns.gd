@@ -1,4 +1,4 @@
-## Characterization: pins every Kamikaze Drone and Drone Interceptor spawn in Level 1, the space
+## Characterization: pins every Kamikaze Drone and Razor Drone spawn in Level 1, the space
 ## station's BOTTOM reinforcement squad, and Open Space's ambient PatrolDrone spawn — the state of
 ## the world BEFORE Enemy rework phase 2 touches any of it
 ## (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §3 step 1). t14/t15/t16 replace the enemies these
@@ -22,7 +22,7 @@
 ## ── The peak-concurrency numbers ─────────────────────────────────────────────────────────────
 ##
 ## `DroneConcurrency` (`tests/helpers/level1_drone_concurrency.gd`) computes, for every DRONE /
-## DRONE_INTERCEPTOR spawn moment in a section (formations expanded through
+## RAZOR_DRONE spawn moment in a section (formations expanded through
 ## `FormationResource.compute_slots()`, exactly as `WaveManager._expand_formation()` does), the
 ## largest number simultaneously alive under a fixed lifetime window. At today's legacy lifetime
 ## (each drone dies in a single ramming pass, well under the plan's assumed 3.5 s), the computed
@@ -37,14 +37,14 @@ const _HUB_SCRIPT := "res://open_space/scenes/levels/sector_hub.gd"
 const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.gd")
 
 const _DRONE := WaveBuilder.DRONE
-const _DRONE_INTERCEPTOR := WaveBuilder.DRONE_INTERCEPTOR
+const _RAZOR_DRONE := WaveBuilder.RAZOR_DRONE
 
 ## Legacy lifetime: every drone in the shipped level dies (or is culled) within one ramming pass,
 ## which is over well inside 3.5 s — the plan's §5 assumption, pinned as a computed value below
 ## rather than merely asserted.
 const _LEGACY_LIFETIME: float = 3.5
 
-## Every DRONE / DRONE_INTERCEPTOR entry in `_build_sections()`, in encounter order, as pinned by
+## Every DRONE / RAZOR_DRONE entry in `_build_sections()`, in encounter order, as pinned by
 ## hand from the live data on 2026-09-27 (`git log` / this task's HEAD). `formation`/`formation_count`
 ## are `&"none"`/`-1` for an unformationed entry. Regenerate by walking `_build_sections()` the same
 ## way `_actual_drone_spawns()` below does — never hand-edit a single row without re-deriving the
@@ -52,8 +52,8 @@ const _LEGACY_LIFETIME: float = 3.5
 const EXPECTED: Array[Dictionary] = [
 	{"section": &"deep_space", "kind": "DRONE", "trigger": 1.00, "offset": Vector2(-260.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
 	{"section": &"deep_space", "kind": "DRONE", "trigger": 1.00, "offset": Vector2(260.0, -400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE_INTERCEPTOR", "trigger": 1.50, "offset": Vector2(-160.0, -420.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
-	{"section": &"deep_space", "kind": "DRONE_INTERCEPTOR", "trigger": 1.50, "offset": Vector2(160.0, -420.0), "delay": 0.35, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "RAZOR_DRONE", "trigger": 1.50, "offset": Vector2(-160.0, -420.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "RAZOR_DRONE", "trigger": 1.50, "offset": Vector2(160.0, -420.0), "delay": 0.35, "formation": &"none", "formation_count": -1, "movement": false},
 	{"section": &"deep_space", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(-220.0, -400.0), "delay": 0.10, "formation": &"none", "formation_count": -1, "movement": true},
 	{"section": &"deep_space", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(220.0, -400.0), "delay": 0.10, "formation": &"none", "formation_count": -1, "movement": true},
 	{"section": &"deep_space", "kind": "DRONE", "trigger": 3.00, "offset": Vector2(120.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
@@ -191,7 +191,7 @@ func _build_sections() -> Array[LevelSection]:
 	return sections
 
 
-## Walks every wave of every section and records one row per DRONE / DRONE_INTERCEPTOR entry, in
+## Walks every wave of every section and records one row per DRONE / RAZOR_DRONE entry, in
 ## the same shape as `EXPECTED`. Formations are recorded as a class name + count, never expanded
 ## into per-slot rows — `EXPECTED` pins entries (what `WaveBuilder` authors), not spawned ships
 ## (what `WaveManager` produces); `DroneConcurrency.spawn_times()` is what expands them.
@@ -201,7 +201,7 @@ func _actual_drone_spawns(sections: Array[LevelSection]) -> Array[Dictionary]:
 		for wave: WaveResource in section.waves:
 			for entry: SpawnEntryResource in wave.entries:
 				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
-				if path != _DRONE and path != _DRONE_INTERCEPTOR:
+				if path != _DRONE and path != _RAZOR_DRONE:
 					continue
 				var formation_name: StringName = &"none"
 				var formation_count: int = -1
@@ -211,7 +211,7 @@ func _actual_drone_spawns(sections: Array[LevelSection]) -> Array[Dictionary]:
 					formation_count = f.count
 				out.append({
 					"section": section.section_name,
-					"kind": "DRONE" if path == _DRONE else "DRONE_INTERCEPTOR",
+					"kind": "DRONE" if path == _DRONE else "RAZOR_DRONE",
 					"trigger": wave.trigger_time,
 					"offset": entry.base_offset,
 					"delay": entry.spawn_delay,
@@ -224,45 +224,45 @@ func _actual_drone_spawns(sections: Array[LevelSection]) -> Array[Dictionary]:
 
 # ── The pin ───────────────────────────────────────────────────────────────────
 
-func test_pinned_drone_and_interceptor_spawns_match_todays_data() -> void:
+func test_pinned_drone_and_razor_drone_spawns_match_todays_data() -> void:
 	var actual := _actual_drone_spawns(_build_sections())
 	assert_eq(actual.size(), EXPECTED.size(),
-		"the number of DRONE/DRONE_INTERCEPTOR entries in _build_sections() has changed")
+		"the number of DRONE/RAZOR_DRONE entries in _build_sections() has changed")
 	assert_eq(actual, EXPECTED,
-		"a drone or interceptor spawn's section, trigger, offset, delay, formation or movement changed")
+		"a drone or razor drone spawn's section, trigger, offset, delay, formation or movement changed")
 
 
 ## All 121 pinned rows, split by kind. If this count ever drifts from `EXPECTED.size()` the roster
 ## text above is stale relative to itself, independent of whether `_build_sections()` changed.
 func test_the_pin_itself_is_internally_consistent() -> void:
 	var drone_rows := 0
-	var interceptor_rows := 0
+	var razor_rows := 0
 	for row: Dictionary in EXPECTED:
 		if row["kind"] == "DRONE":
 			drone_rows += 1
 		else:
-			interceptor_rows += 1
-	assert_eq(drone_rows + interceptor_rows, EXPECTED.size())
+			razor_rows += 1
+	assert_eq(drone_rows + razor_rows, EXPECTED.size())
 	assert_gt(drone_rows, 0, "the pin must contain drone rows or this file asserts nothing")
-	assert_eq(interceptor_rows, 2, "level 1 has exactly one drone_interceptor pair today")
+	assert_eq(razor_rows, 2, "level 1 has exactly one razor_drone pair today")
 
 
-## Every drone line ships with a movement (it flies a path); both interceptor lines do not (drone
-## interceptors are self-managed AI — `docs/enemy-roster.md`, `wave_builder.gd:288-292`). Called
+## Every drone line ships with a movement (it flies a path); both razor drone lines do not (razor
+## drones are self-managed AI — `docs/enemy-roster.md`, `wave_builder.gd:288-292`). Called
 ## out as its own case per the task's acceptance criteria, even though the full-row comparison
 ## above already implies it.
-func test_every_drone_has_movement_and_every_interceptor_does_not() -> void:
+func test_every_drone_has_movement_and_every_razor_drone_does_not() -> void:
 	for row: Dictionary in EXPECTED:
 		if row["kind"] == "DRONE":
 			assert_true(row["movement"], "drone at %s (%s) has no movement" % [row["offset"], row["section"]])
 		else:
-			assert_false(row["movement"], "drone_interceptor at %s (%s) unexpectedly has a movement" % [row["offset"], row["section"]])
+			assert_false(row["movement"], "razor_drone at %s (%s) unexpectedly has a movement" % [row["offset"], row["section"]])
 
 
 ## The specific regression this pin exists to catch once t15 removes every drone's `.move()`
 ## (§2.10 step 2, plan §4 row for this file: "movement == null for every drone and razor... A
 ## drone line re-given `.move()` fails"). Verified now, against today's data, by hand-flipping one
-## row's `movement` to `false` and observing `test_pinned_drone_and_interceptor_spawns_match_todays_data`
+## row's `movement` to `false` and observing `test_pinned_drone_and_razor_drone_spawns_match_todays_data`
 ## go red — see the task's acceptance criteria. Left as a comment rather than code because doing it
 ## in-line would require mutating `EXPECTED`, which is a `const`.
 
@@ -292,7 +292,7 @@ func test_level_1_has_14_drone_formations_by_type() -> void:
 # ── Peak concurrency (plan §5 C3) ───────────────────────────────────────────────
 
 func test_legacy_peak_concurrency_per_section() -> void:
-	var ship_paths: Array[String] = [_DRONE, _DRONE_INTERCEPTOR]
+	var ship_paths: Array[String] = [_DRONE, _RAZOR_DRONE]
 	for section: LevelSection in _build_sections():
 		if not _EXPECTED_LEGACY_PEAKS.has(section.section_name):
 			continue
@@ -308,8 +308,8 @@ func test_a_section_with_no_drones_has_zero_peak_concurrency() -> void:
 	for section: LevelSection in _build_sections():
 		if section.section_name != &"asteroid_belt":
 			continue
-		var times := DroneConcurrency.spawn_times(section, [_DRONE, _DRONE_INTERCEPTOR])
-		assert_eq(times.size(), 0, "asteroid_belt spawns no drones or interceptors")
+		var times := DroneConcurrency.spawn_times(section, [_DRONE, _RAZOR_DRONE])
+		assert_eq(times.size(), 0, "asteroid_belt spawns no drones or razor drones")
 		assert_eq(DroneConcurrency.peak_concurrency(times, _LEGACY_LIFETIME), 0)
 
 

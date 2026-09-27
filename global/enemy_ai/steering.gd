@@ -35,7 +35,7 @@ static func arrive(pos: Vector2, vel: Vector2, target_pos: Vector2, max_speed: f
 	return to_target.normalized() * speed
 
 
-## Exactly the Drone Interceptor's orbit formula (drone_interceptor.gd:95-109): the anchor point
+## Exactly the Razor Drone's orbit formula (razor_drone_brain.gd:95-109): the anchor point
 ## walks the circle of `radius` around `center` at `angle` (the caller advances `angle`), and the
 ## correction speed toward that anchor is `clamp(dist * 4, 60, max_correct_speed)`.
 static func orbit(pos: Vector2, center: Vector2, radius: float, angle: float, max_correct_speed: float) -> Vector2:

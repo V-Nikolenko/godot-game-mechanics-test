@@ -42,7 +42,7 @@ static func has_cull_rect(tree: SceneTree) -> bool:
 	return provider != null and provider.has_method("enemy_cull_rect")
 
 
-## The Drone Interceptor's legacy off-screen cull rect, or an empty Rect2() with no provider.
+## The Razor Drone's legacy off-screen cull rect, or an empty Rect2() with no provider.
 static func cull_rect(tree: SceneTree) -> Rect2:
 	if not has_cull_rect(tree):
 		return Rect2()

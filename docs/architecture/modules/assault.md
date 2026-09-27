@@ -141,7 +141,7 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   the subclass's own `.tres`, so a subclass wanting its configured `collision_damage` must
   re-apply it in `_ready()` off `contact_hit_box` (`gunship.gd`, `bomber.gd`,
   `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a different default
-  directly on its own scene node (`drone_interceptor.tscn`, `kamikaze_drone.tscn` — 30, still
+  directly on its own scene node (`razor_drone.tscn`, `kamikaze_drone.tscn` — 30, still
   re-applied from config where one exists). Forgetting leaves the `.tres` value dead with no
   symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
   *When* that hitbox is live is the enemy's `contact_profile` (`ContactProfile`, resolved like
@@ -182,7 +182,7 @@ provider" and "a legitimately empty `Rect2()`" are never confused:
 
 - **`projectile_world_rect()`** — the corridor's visible rect grown by 64 px: x −164…1444, y
   −444…1164. Consumed by `ProjectileLifetime` (above).
-- **`enemy_cull_rect()`** — the Drone Interceptor's legacy off-screen cull: `global_position` ±
+- **`enemy_cull_rect()`** — the Razor Drone's legacy off-screen cull: `global_position` ±
   half the viewport ± 80 px. It is a *provider* method, not a constraint method, because the
   ported drone runs with `constraint_mode = NONE` (below) and still needs this exact cull to end
   its dash where it always has.
@@ -207,9 +207,9 @@ never re-triggers the not-yet-entered rule. The tangential axis (already inside 
 always passed through untouched, so a corridor-constrained orbit or strafe is not damped on its
 free axis.
 
-**The Drone Interceptor is ported onto the brain/mover contracts with `constraint_mode = NONE`
+**The Razor Drone is ported onto the brain/mover contracts with `constraint_mode = NONE`
 (kept 1:1 with its pre-rework behaviour)** — see
-[drone_interceptor/ENEMY.md](../../../assault/scenes/enemies/drone_interceptor/ENEMY.md). It is the
+[razor_drone/ENEMY.md](../../../assault/scenes/enemies/razor_drone/ENEMY.md). It is the
 proof consumer for the whole stack; a later phase turns its corridor on. Contract tests:
 `tests/unit/test_assault_corridor_constraint.gd`; the same behaviour spec runs in both an Open
 Space and an Assault harness via `tests/helpers/enemy_ai_harness.gd` and
@@ -377,7 +377,7 @@ Source: `assault/scenes/enemies/`.
 
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
-(e.g. `light_assault_ship/states/`). Roster: bomber, bonus_drone, drone_interceptor,
+(e.g. `light_assault_ship/states/`). Roster: bomber, bonus_drone, razor_drone,
 gunship, interceptor, kamikaze_drone, light_assault_ship, ram_ship, sniper_enemy, swarm_drone
 (no level spawns the Swarm Drone yet — see its
 [ENEMY.md](../../../assault/scenes/enemies/swarm_drone/ENEMY.md)). For the

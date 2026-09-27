@@ -1,6 +1,6 @@
-## DroneInterceptorConfig — tuning resource for the DroneInterceptor enemy.
+## RazorDroneConfig — tuning resource for the RazorDrone enemy.
 ## Extends ShipConfig (provides max_health, collision_damage, score_value).
-class_name DroneInterceptorConfig
+class_name RazorDroneConfig
 extends ShipConfig
 
 @export_group("Movement")

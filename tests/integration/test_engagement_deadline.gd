@@ -13,8 +13,8 @@
 ## worst-case straight-line distance from any point inside it to the nearest edge.
 ##
 ## `engage_seconds`, `exit_speed` and `acceleration` are read from `swarm_drone_config.tres` (t8b).
-## The Kamikaze Drone and the Drone Interceptor stay in the scene list as today's stand-ins until
-## the Swarm Drone replaces them in level 1 (t14) and the interceptor becomes the Razor Drone (t9).
+## The Kamikaze Drone and the Razor Drone stay in the scene list as today's stand-ins until
+## the Swarm Drone replaces the Kamikaze Drone in level 1 (t14).
 ## The Swarm Drone never starts an attack its budget cannot finish (`SwarmDroneBrain.can_start_attack`),
 ## so the budget always expires outside a burst, at <= max_speed, and DISENGAGE begins exactly at
 ## `engage_seconds`: the formula below needs no burst term.
@@ -28,7 +28,7 @@ const MARGIN := 0.5
 const DRONE_OR_RAZOR_SCENES: Array[String] = [
 	"res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn",
 	"res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.tscn",
-	"res://assault/scenes/enemies/drone_interceptor/drone_interceptor.tscn",
+	"res://assault/scenes/enemies/razor_drone/razor_drone.tscn",
 ]
 
 

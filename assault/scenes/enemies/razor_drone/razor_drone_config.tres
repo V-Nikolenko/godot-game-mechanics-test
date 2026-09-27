@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="DroneInterceptorConfig" format=3]
+[gd_resource type="Resource" script_class="RazorDroneConfig" format=3]
 
-[ext_resource type="Script" path="res://assault/scenes/enemies/drone_interceptor/drone_interceptor_config.gd" id="1"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/razor_drone/razor_drone_config.gd" id="1"]
 
 [resource]
 script = ExtResource("1")

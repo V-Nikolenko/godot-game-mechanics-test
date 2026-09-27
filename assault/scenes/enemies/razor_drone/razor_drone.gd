@@ -1,22 +1,22 @@
-# assault/scenes/enemies/drone_interceptor/drone_interceptor.gd
-class_name DroneInterceptor
+# assault/scenes/enemies/razor_drone/razor_drone.gd
+class_name RazorDrone
 extends BaseEnemy
 
 ## Kamikaze pursuit unit. Orbits the player briefly, then locks direction and commits to a
 ## one-way dash — exploding on contact with the player.
 ##
-## The phase logic (ENTER/ORBIT/DASH) lives in the sibling `DroneInterceptorBrain`, driven by
+## The phase logic (ENTER/ORBIT/DASH) lives in the sibling `RazorDroneBrain`, driven by
 ## `EnemyMover`, through the shared brain/mover tick loop in `BaseEnemy._physics_process`
 ## (docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.11 — the Phase 1 architecture's proof
 ## consumer). This script only copies the shipped config onto the brain and keeps the
 ## contact-kill behaviour, both unchanged from before the port.
 ##
-## Spawn with b.drone_interceptor().at(x, y) — no .move() needed.
+## Spawn with b.razor_drone().at(x, y) — no .move() needed.
 
-@export var config: DroneInterceptorConfig = preload(
-		"res://assault/scenes/enemies/drone_interceptor/drone_interceptor_config.tres")
+@export var config: RazorDroneConfig = preload(
+		"res://assault/scenes/enemies/razor_drone/razor_drone_config.tres")
 
-@onready var _drone_brain: DroneInterceptorBrain = $Brain
+@onready var _drone_brain: RazorDroneBrain = $Brain
 
 # ─────────────────────────────────────────────────────────────────────────────
 

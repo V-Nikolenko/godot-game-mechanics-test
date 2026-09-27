@@ -20,7 +20,7 @@
 ## through `move_and_slide()`, which reads `get_physics_process_delta_time()` internally instead of
 ## taking a delta argument, and that value is not reliably `1/60` when the method is invoked by
 ## hand outside a real physics substep (confirmed empirically while writing the sibling
-## `test_drone_interceptor.gd` — see that file's harness note 1). `velocity` is assigned directly by
+## `test_razor_drone.gd` — see that file's harness note 1). `velocity` is assigned directly by
 ## script logic before `move_and_slide()` ever runs, so a single tick reads back exactly what
 ## `_direction * move_speed` computes, unaffected by that unreliable delta — matching the same
 ## precedent `test_open_space_boost_verb.gd` established for `OpenSpacePlayerShip`.
