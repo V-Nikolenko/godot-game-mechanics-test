@@ -246,3 +246,99 @@ closed any of it. In particular, for the phases that read this section next:
   the aimed and gatling patterns exists today, and every shipped pattern still defaults it to `0.0`.
 - No numeric collision-layer bit changed meaning or value in this phase; bit 4 (value 8) remains
   unnamed and unallocated, and bit 12 (`area_control`, 2048) is reserved for Phase 6.
+
+## Phase 2 - Enemy rework, phase 2: Swarm Drone, Razor Drone and squad roles (2026-09-27)
+
+Plan: `docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md` (revision 1). Research: `1-context.md` and `2-research.md` in
+the same directory. Tasks: `tasks.json` (t1–t17). These are *planned* decisions. Once this phase's *as built* section
+exists, check it first.
+
+### Changes to Phase 1 decisions (stated in plan §2.0)
+- **Explosive collision** is built in Ph2, not Ph7. Its consumer is the Swarm Drone. Ph7 (mines) reuses `ContactProfile`.
+- **The generic anchor-idle → combat handover (`AnchorIdle`) and the Razor idle** are built in Ph2. Idle profiles for
+  other families stay in Ph14 and must use `AnchorIdle`.
+- **Assault migration:** only level 1's Kamikaze/Interceptor spawns go off rails in Ph2. Every other level-1 spawn, and
+  the station's two BOTTOM drones, stay on rails until Ph15.
+- **`BulletPool` injectable container (P-18): not done.** Every real parent chain satisfies pool → ship → container.
+  A hub test pins the Razor's pulse landing in `EnemyContainer`. This is reopened for Ph5 (owner-bound projectiles).
+- **Drone Interceptor "1:1" pins are retired.** It becomes the Razor Drone with `constraint_mode = AUTO` and a non-zero
+  acceleration and braking. `dash_max_distance` is removed, because the Razor survives its dash.
+- **The Assault AI exit rule** frees a *live* AI enemy outside `EnemyWorld.projectile_world_rect()`, not `cull_rect()`.
+  `cull_rect()` ignores the camera `offset`, so it could free a visible enemy. `cull_rect()` stays for legacy users.
+
+### Names and places (later phases build on these)
+- **`ContactProfile`** (`global/components/contact_profile.gd`) is a `Node` that mirrors `DefenseProfile`. `BaseEnemy`
+  resolves a scene-authored one or creates a default `COLLISION` one.
+  - `enum Mode { NONE, COLLISION, RAMMING, EXPLOSIVE }`.
+  - It has `set_armed(bool)`, `is_armed()` and `detonate()`, and the signals `contact_made(area: Area2D)` and
+    `detonated(position: Vector2)`.
+  - The `ContactHitBox` damage is always `config.collision_damage`. RAMMING and EXPLOSIVE switch the hitbox on only
+    while armed (deferred `monitorable`/`monitoring`).
+  - The EXPLOSIVE blast is a one-physics-frame `HitBox` (layer 256, mask 128, CONTACT). It fires on contact while armed
+    and on death while armed, never on death while unarmed. Blasts do not hit enemies: enemy friendly fire is undecided.
+  - `BaseEnemy.suspend_ai()` arms the profile, so rail-driven rammers hurt on contact.
+  - **Armour collision is Ph4's** new mode on the same enum.
+- **`SquadController`** (`global/enemy_ai/squad_controller.gd`) is a `RefCounted` role board. It is **event-driven, with
+  no clock and no motion**.
+  - `enum Role { NONE, LEAD, FLANK_LEFT, FLANK_RIGHT, REAR }` and `enum Side { LEFT, RIGHT, FRONT, BACK }` (relative to
+    the player's heading).
+  - It has `join`, `role_of`, `members`, `rear_index`, `claim_side`/`release_side`, `release_lead`,
+    `attack_window_open`, `engaged` and `target_position_hint`, and the signal `role_changed(member: Node, role: int)`.
+  - Membership is weak, and members hold the only strong reference, so the board dies with its last member.
+  - Brains read it through a duck-typed `actor.squad` property. `EnemyBrain` itself is unchanged.
+  - Ph3 fighters reuse it; Ph14 adds messages on top of it. **`engaged` is shared state, not a message bus.**
+- **Squads from spawns:**
+  - `WaveBuilder.SpawnConfig.squad(id: StringName)`.
+  - A `formation()` is automatically one squad.
+  - `WaveManager` creates one board per (wave index, squad key) and sets `entity.squad` before `add_child`.
+  - Formation helpers are **spawn layouts only** (IDEAS §35).
+- **`AnchorIdle`** (`global/enemy_ai/anchor_idle.gd`) is a `RefCounted` helper.
+  - It holds `anchor`, `perceive_radius` < `lose_radius` (hysteresis) and `notice_time`. `update()` returns
+    IDLE / NOTICING / COMBAT / RETURNING.
+  - It decides *when* to hand over; the brain decides the idle *motion*. The handover never sets a velocity: the mover's
+    acceleration and braking blend it.
+  - **Assault skips idle** (a provider exists, so the enemy starts in combat).
+- **`EngagementBudget`** (`global/enemy_ai/engagement_budget.gd`) is a `RefCounted` helper, active only when
+  `EnemyWorld.arena(tree)` exists. When it expires, the brain goes to DISENGAGE, calls
+  `EnemyMover.release_constraint()` (new) and frees the actor outside the world rect. A drone that leaves is an
+  *escape* for `ScoreTracker` (legacy parity).
+- **`MovementConstraint.inner_rect() -> Rect2`** is new. The identity returns an empty rect (unbounded); the corridor
+  returns its visible rect. Brains clamp orbit centres with it rather than naming `ArenaCamera`.
+- **`StateLight`** (`global/components/state_light.gd`) is a presentation child with the states OFF / ARMED (red) /
+  CHARGING (yellow) / COMMIT (white), dimmer than enemy bullets.
+  - It is the one gameplay light per state (IDEAS §21.1). Later roster phases reuse it; they do not recolour hulls.
+  - **COMMIT (white) is exclusive to a real attack.** A feint may only show CHARGING.
+- **`Steering` additions:** `spiral`, `corkscrew`, `formation_slot`, `separation`, `alignment`, `cohesion` and
+  `clamped_lead_time`. Flocking terms are only ever an `add_nudge()` capped at a fraction of `max_speed`; the primary
+  request stays single (Phase 1 rule).
+- **New enemies:** `assault/scenes/enemies/swarm_drone/` (`SwarmDrone`, `SwarmDroneBrain`, `SwarmDroneConfig`) and
+  `assault/scenes/enemies/razor_drone/` (a `git mv` of `drone_interceptor/`: `RazorDrone`, `RazorDroneBrain`,
+  `RazorDroneConfig`).
+  - Enemies that fly in both modes still live under `assault/scenes/enemies/` until Ph15 moves `BaseEnemy`, because the
+    invariant gates sweep that directory.
+  - `WaveBuilder.DRONE` → the Swarm Drone scene. `DRONE_INTERCEPTOR`/`drone_interceptor()` → `RAZOR_DRONE`/`razor_drone()`.
+- **Retired:** `kamikaze_drone/` (t14) and `open_space/.../patrol_drone.*` + `test_patrol_drone.gd` (t16). The Bonus
+  Drone is unchanged.
+- **Test seams:** Razor `force_next_choice(&"real" | &"fake" | &"reverse")`. `SectorHub.patrol_seed`.
+
+### Conventions
+- **Rammers are armed only in their committed state**, and the `StateLight` shows it (red). Touching an unarmed rammer
+  deals 0.
+- **"Missed attack"** means the boost ended with no `contact_made`, never a distance threshold.
+- **Assault AI lifetimes are derived:** legacy on-screen time + one attack cycle (Swarm 6 s). A test keeps
+  `engage_seconds` plus the worst-case exit under `enemies_cleared_timeout` (10 s).
+- The contact-damage and contact-geometry gates get **roster completeness guards** (t1). A new enemy directory under
+  `assault/scenes/enemies/` fails them until it is added.
+
+### Deliberately deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| Armour collision profile | Ph4 | Ram Corvette |
+| Squad messages (`TARGET_MARKED`, …) | Ph14 | Only role assignment is in scope |
+| Idle profiles for other families | Ph14 | Must use `AnchorIdle` |
+| Leash / search / hub respawn / Salvage Drone event | Ph13 | EncounterDirector |
+| Other level-1 enemies off rails; retiring `SineMovement` etc. | Ph15 | |
+| `BulletPool` container injection | Ph5 | Not needed yet (see above) |
+| Enemy friendly fire (blasts, beams) | undecided (Ph8 at the earliest) | No design decision yet |
+| Enemy audio telegraphs | Ph17 | No enemy SFX pipeline exists |
+| Level-1 swarm balance by feel | owner playtest | The gate cannot judge fun. t15 escalates if peak concurrency is more than 2× legacy |
