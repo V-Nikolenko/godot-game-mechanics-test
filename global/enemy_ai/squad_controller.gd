@@ -27,11 +27,16 @@ const _SIDE_RING := {
 
 signal role_changed(member: Node, role: int)
 
-## Set true by the LEAD entering BURST, so FLANKs can start their own windup (§2.7.2). Only ever
-## written true by the current LEAD, so leave()/release_lead() clear it whenever the member giving
-## up LEAD held it — otherwise a LEAD that self-destructs on a successful hit would leave this
-## stuck open forever (round-2 review N13).
+## Set true by the LEAD entering BURST, so FLANKs can start their own windup (§2.7.2). The window
+## belongs to the lead that opened it, so `_reassign()` closes it whenever the LEAD member changes —
+## whatever caused the change: the lead leaving or releasing, a flank that detonated and left while
+## members had moved, a closer join, a prune (t8c task plan review round 1 B4; epic review N13).
 var attack_window_open: bool = false
+
+## The REAR ring's shared angle (rad), t8c. `NAN` until a REAR in FORM initialises it; only the
+## member with `rear_index() == 0` advances it. A field, not motion — the single-writer gate is
+## unaffected. Never reset, so a member that becomes REAR later may cross the ring to its slot.
+var rear_ring_angle: float = NAN
 
 var target_position_hint: Vector2 = Vector2.ZERO
 var target_heading_hint: Vector2 = Vector2.ZERO
@@ -61,7 +66,7 @@ func leave(member: Node) -> void:
 	_sides.erase(member)
 	_engaged.erase(member)
 	if was_lead:
-		attack_window_open = false
+		attack_window_open = false  # also covers the last member leaving (_reassign returns early)
 	_reassign()
 
 
@@ -86,6 +91,16 @@ func rear_index(member: Node) -> int:
 			return i
 		i += 1
 	return -1
+
+
+## The number of valid REAR members — `rear_index()`'s range, for ring spacing (t8c).
+func rear_count() -> int:
+	_prune()
+	var n := 0
+	for m in _members:
+		if _roles.get(m, Role.NONE) == Role.REAR:
+			n += 1
+	return n
 
 
 ## Returns an unclaimed sector nearest `preferred`, latched to `member` until release_side(). If
@@ -118,7 +133,6 @@ func release_lead(member: Node) -> void:
 	_prune()
 	if _roles.get(member, Role.NONE) != Role.LEAD:
 		return
-	attack_window_open = false
 	_reassign(member)
 
 
@@ -160,6 +174,7 @@ func _prune() -> void:
 ## excludes one still-valid member from LEAD/FLANK candidacy for this call only (release_lead()'s
 ## rotation) and is pinned to REAR regardless of its distance to the hint.
 func _reassign(force_rear: Node = null) -> void:
+	var lead_before := _lead()
 	if _members.is_empty():
 		return
 	var eligible := _members.duplicate()
@@ -184,6 +199,17 @@ func _reassign(force_rear: Node = null) -> void:
 
 	if force_rear != null and _members.has(force_rear):
 		_set_role(force_rear, Role.REAR)
+
+	if _lead() != lead_before:
+		attack_window_open = false
+
+
+## The member currently holding LEAD, or null. Called only from `_reassign()`, before and after.
+func _lead() -> Node:
+	for m in _roles:
+		if _roles[m] == Role.LEAD:
+			return m
+	return null
 
 
 ## Strict weak order: closer to target_position_hint first, ties broken by join order.

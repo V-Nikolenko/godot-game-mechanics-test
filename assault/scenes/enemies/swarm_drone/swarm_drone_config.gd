@@ -50,3 +50,25 @@ extends ShipConfig
 @export var engage_seconds: float = 5.5
 ## Assault only: speed cap while leaving (px/s).
 @export var exit_speed: float = 320.0
+
+@export_group("Squad")
+## REAR members circle the target on this ring (px). APPROACH hands over at this + 100 px, and
+## CLOSE_IN / FORM fall back to APPROACH beyond this + 200 px.
+@export var rear_orbit_radius: float = 260.0
+## The REAR ring's angular speed (rad/s). Keep `rear_orbit_speed × rear_orbit_radius` well under
+## `max_speed`, or a REAR falls behind its slot and cuts inside the ring (the epic's 1.4 rad/s would be
+## 364 px/s against a 220 px/s cap; t8c task plan D1).
+@export var rear_orbit_speed: float = 0.55
+## FLANK slots sit this far from the target (px). It is also the LEAD's CLOSE_IN ring.
+@export var flank_distance: float = 200.0
+## FLANK slots sit this far either side of the target's heading (degrees).
+@export var flank_angle_deg: float = 70.0
+## Squad mates closer than this push apart (px).
+@export var separation_radius: float = 30.0
+## The flocking + evade nudge is capped at this fraction of `max_speed`. 0 = nudges off.
+@export var flock_nudge_cap: float = 0.35
+## Outside WINDUP/BURST a drone this close to the target steers away from it (px).
+@export var evade_radius: float = 90.0
+## Assault only: a REAR member leaves after this many seconds, attackers after `engage_seconds`. Must
+## not exceed `engage_seconds` (the §2.6 deadline uses that); a pre-approved t15 lever.
+@export var rear_engage_seconds: float = 5.5

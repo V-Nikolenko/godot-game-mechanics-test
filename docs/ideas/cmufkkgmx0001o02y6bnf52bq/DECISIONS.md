@@ -468,3 +468,37 @@ Task plan `docs/plans/cmuj4y8rh0070p52xk6vzfvbe/` (two review rounds, approved r
 - Collision circle r 13 shared by body, `HurtBox` and `ContactHitBox` (one sub-resource, scale 1).
   `swarm_drone` is in the contact-damage, contact-geometry and hurtbox-geometry rosters; the deadline
   test reads `swarm_drone_config.tres`.
+
+### Built in t8c-swarm-squad (2026-09-27): details t8d, t15, t16 and Ph3/Ph14 depend on
+
+Task plan `docs/plans/cmuj4y8rj0074p52xqmin24gu/` (two review rounds, approved round 2 with amendments A1–A2).
+
+- **`SwarmDroneBrain.Phase.FORM` is appended** (value 7), so t8b's phase values are unchanged. APPROACH hands over at
+  `rear_orbit_radius + 100` to CLOSE_IN (LEAD) or FORM (others); CLOSE_IN, FORM and REJOIN fall back to APPROACH
+  beyond `rear_orbit_radius + 200`. CLOSE_IN's ring is `flank_distance`. The t8b constants `APPROACH_EXIT_RADIUS`,
+  `APPROACH_REENTER_RADIUS` and `CLOSE_IN_RADIUS` are gone.
+- **`rear_orbit_speed` 0.55 rad/s, not the epic table's 1.4** (D1): 1.4 × 260 px = 364 px/s is beyond `max_speed`
+  220, so a REAR could never hold the ring. A config test pins `rear_orbit_speed × rear_orbit_radius ≤ 0.7 ×
+  max_speed`.
+- **`phase_offset` is bounded to ±0.35 rad** (D2), drawn from `rng` after t8b's draws. An offset anywhere in
+  `[0, TAU)` would undo the ring's index spacing. t8d's idle ring uses the same field.
+- **The REAR ring's angle is shared state on the board** (D3): `SquadController.rear_ring_angle` (`NAN` until a REAR
+  in FORM finds it unset and starts it at its own bearing), advanced only by `rear_index == 0`, never reset. New
+  `SquadController.rear_count()`. A REAR orbits `inner_rect()`-clamped centres in Assault.
+- **The attack window** (D4 and review B4/A1):
+  - The LEAD opens it on BURST, but only if it wound up as LEAD **and** still leads.
+  - `SquadController._reassign()` closes it **whenever the LEAD member changes**, whatever the cause. This replaces
+    t4's two special-case clears.
+  - A sole member closes its own window at REJOIN.
+  - A FLANK answers each window **once** (`_answered_window`, reset whenever the window reads closed). So the lead's
+    second-pass burst does not trigger a second flank attack.
+  - Consequence, expected: a kill that moves the lead through the distance recompute closes the window, and the flanks
+    wait for the new lead's burst.
+- **Role changes mid-pass:** `_pass_role` is taken on WINDUP entry. A different role at the end of OVERSHOOT skips any
+  remaining pass (→ REJOIN). REJOIN hands the lead on only after a pass made as LEAD by a drone that still leads.
+- **Nudge:** flocking (separation × 6, (mean mate velocity − own) × 0.1, cohesion × 0.05) plus `Steering.evade`
+  inside `evade_radius`, capped at `flock_nudge_cap × max_speed`, offered **only in APPROACH, CLOSE_IN and FORM**. It
+  is never offered in OVERSHOOT, because t8b's per-tick curve bound assumes the one request. A mate's velocity is
+  read only from a `CharacterBody2D`.
+- **Per-role budget:** in Assault, a REAR in APPROACH/FORM expires at `rear_engage_seconds` (5.5, pinned
+  `≤ engage_seconds`). No new `EngagementBudget` API: elapsed is `seconds − remaining()`.

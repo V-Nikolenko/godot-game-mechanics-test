@@ -34,35 +34,58 @@ the lunge and it swings back once for a second try. Harmless to touch unless its
   otherwise.
 - **Death / scoring:** 10 points. A contact death is scored as a kill (`was_killed`), like the
   Kamikaze. Leaving the arena in Assault is an escape.
-- **Squad:** `squad` (a `SquadController`) may be set before `add_child`; the drone joins it and
-  calls `claim_side` / `release_side` / `release_lead` / `leave`, but still attacks as a LEAD — role
-  behaviour is a later task.
+- **Squad:** `squad` (a `SquadController`) may be set before `add_child`; the drone joins it in
+  `_ready()` and reads `role_of(self)` every tick (never cached: the board recomputes on every join
+  and leave). Without a squad it is a squad of one and its own LEAD.
+  - **LEAD** — CLOSE_IN, then rams. Its BURST opens `squad.attack_window_open`; its REJOIN
+    `release_lead()`s (with a mate), so the closest mate leads next and it drops to REAR.
+  - **FLANK_LEFT / FLANK_RIGHT** — hold a `formation_slot` 200 px from the player at ±70° off its
+    heading (right = clockwise in y-down). Each answers an open window **once** with its own
+    WINDUP → the pincer. Side claims keep two attackers off the same sector and offset each aim by a
+    hull width toward it.
+  - **REAR** — circles on the 260 px ring (0.55 rad/s), evenly spaced by `rear_index`, plus its own
+    `phase_offset` (±0.35 rad, from `rng`). Never attacks. The ring angle lives on the board
+    (`rear_ring_angle`, advanced by rear 0 only) and is never reset, so a drone that becomes REAR
+    later may cross the ring to its slot. In Assault the ring centre is kept inside the corridor.
+  - A role change during WINDUP/BURST/OVERSHOOT takes effect after that pass. The board closes the
+    window whenever the lead changes (death, hand-over, a closer join), so after a kill that moves
+    the lead the flanks wait for the new lead's burst — expected, not a bug.
+  - Flocking (separation/alignment/cohesion) + an evade within 90 px of the player, as one nudge
+    capped at 0.35 × `max_speed`, in APPROACH / CLOSE_IN / FORM only.
 
 ---
 
 ## State Graph
 
 ```
-APPROACH ──≤360 px──▶ CLOSE_IN ──on the 200 px ring (or 2.5 s)──▶ WINDUP ──0.4 s──▶ BURST
-   ▲                     ▲  │ >460 px back to APPROACH                ▲               │ boost ends
-   │                     │                                            │ passes_left   ▼
-   └──── >460 px ─── REJOIN ◀────────── no passes left ─────────── OVERSHOOT (0.8 s curve)
+            ┌─ LEAD ──▶ CLOSE_IN ──on the 200 px ring (or 2.5 s)──┐
+APPROACH ≤360 px                                                  ▼
+            └─ other ─▶ FORM ──FLANK: window open, not answered──▶ WINDUP ──0.4 s──▶ BURST
+                         ▲  (REAR never leaves FORM to attack)       ▲               │ boost ends
+                         │                                           │ passes_left,  ▼
+   >460 px back to APPROACH from CLOSE_IN / FORM / REJOIN            │ same role   OVERSHOOT (0.8 s curve)
+                         └──── REJOIN (→ CLOSE_IN if LEAD) ◀── no passes left / role changed
 
  any phase but BURST ──budget expired (Assault only)──▶ DISENGAGE ──outside world rect──▶ freed
+ (a REAR in APPROACH/FORM expires at rear_engage_seconds; everyone else at engage_seconds)
 ```
 
 Phases are an `enum` in `swarm_drone_brain.gd` (no `states/` folder); every transition goes through
 `enter_phase()` and emits `phase_changed(new_phase)`.
 
 - **APPROACH** — `Steering.corkscrew` at the player, phase drawn from `rng`.
-- **CLOSE_IN** — `Steering.spiral` on a ring shrinking at 120 px/s to 200 px, anchor moving 130 px/s.
+- **CLOSE_IN** (LEAD only) — `Steering.spiral` on a ring shrinking at 120 px/s to `flank_distance` 200 px, anchor moving 130 px/s.
 - **WINDUP** — hold at the stopping point, face the prediction `clamp(dist / 480, 0.4, 0.8)` s ahead
   (re-evaluated every tick, locked on the last). Entered only if the Assault budget has ≥ 1.29 s left,
   so a burst never straddles the exit.
 - **BURST** — `mover.boost()` at 480 px/s for 0.45 s, armed.
 - **OVERSHOOT** — each tick `Steering.turn_toward(current velocity, player, 2.4 rad/s)` × 220: a real
   curve (~76° over 0.8 s), never stopping. Then one more WINDUP (`second_passes` 1), then REJOIN.
-- **REJOIN** — resets the passes, hands the lead on (only with a mate), back to CLOSE_IN.
+- **FORM** — by role: a FLANK holds its slot (and answers the window), a REAR circles the ring.
+  A LEAD in FORM goes to CLOSE_IN; a non-LEAD in CLOSE_IN goes to FORM.
+- **REJOIN** — resets the passes; after a pass made as LEAD by a drone that still leads, hands the
+  lead on (only with a mate; a sole member closes its own window instead). Then CLOSE_IN (LEAD) or
+  FORM.
 - **DISENGAGE** (Assault) — after `engage_seconds` 5.5: release the corridor, seek 64 px past the
   nearest edge of `projectile_world_rect()`, free once strictly outside it.
 - **Rails** — an `EnemyPathMover` suspends the brain; the profile is armed and the light red.
@@ -84,6 +107,10 @@ Phases are an `enum` in `swarm_drone_brain.gd` (no `states/` folder); every tran
 | `overshoot_seconds` / `overshoot_turn_rate` / `second_passes` | 0.8 / 2.4 / 1 | the miss curve |
 | `blast_radius` / `blast_damage` | 48 / 15 | EXPLOSIVE blast |
 | `engage_seconds` / `exit_speed` | 5.5 / 320 | Assault exit |
+| `rear_orbit_radius` / `rear_orbit_speed` | 260 / 0.55 | REAR ring; APPROACH hands over at radius + 100, falls back beyond radius + 200 |
+| `flank_distance` / `flank_angle_deg` | 200 / 70 | FLANK slots; also the LEAD's CLOSE_IN ring |
+| `separation_radius` / `flock_nudge_cap` / `evade_radius` | 30 / 0.35 / 90 | the nudge (cap 0 = off) |
+| `rear_engage_seconds` | 5.5 | Assault: a REAR leaves after this; ≤ `engage_seconds` (t15 lever) |
 
 ---
 

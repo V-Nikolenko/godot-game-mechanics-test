@@ -180,6 +180,58 @@ func test_release_lead_clears_the_attack_window() -> void:
 	assert_false(board.attack_window_open)
 
 
+## t8c (task plan docs/plans/cmuj4y8rj0074p52xqmin24gu, review round 1 B4): the recompute is by
+## distance, so a NON-lead leaving can move LEAD when members have moved since the last recompute.
+## The window belongs to the lead that opened it, so any change of lead closes it.
+func test_a_non_lead_leave_that_moves_the_lead_clears_the_window() -> void:
+	var rig := _rig_four()
+	var board: SquadController = rig.board
+	rig.b.global_position = Vector2(0, -2)  # now closer than a; no recompute yet
+	board.attack_window_open = true
+	rig.c.free()
+	assert_eq(board.role_of(rig.b), Role.LEAD, "sanity: the recompute moved LEAD to b")
+	assert_false(board.attack_window_open, "a new lead never inherits the old lead's window")
+
+
+func test_a_non_lead_leave_that_keeps_the_lead_keeps_the_window() -> void:
+	var rig := _rig_four()
+	var board: SquadController = rig.board
+	board.attack_window_open = true
+	rig.d.free()
+	assert_eq(board.role_of(rig.a), Role.LEAD, "sanity: a still leads")
+	assert_true(board.attack_window_open, "boundary: the same lead keeps its window open")
+
+
+func test_a_join_that_takes_the_lead_clears_the_window() -> void:
+	var rig := _rig_four()
+	var board: SquadController = rig.board
+	board.attack_window_open = true
+	var e := _member(Vector2(0, -1))
+	board.join(e)
+	assert_eq(board.role_of(e), Role.LEAD, "sanity: the newcomer is closest")
+	assert_false(board.attack_window_open)
+
+
+# ── REAR ring (t8c) ─────────────────────────────────────────────────────────────
+
+func test_rear_count_counts_valid_rear_members() -> void:
+	var board := SquadController.new()
+	assert_eq(board.rear_count(), 0, "empty board")
+	board.update_target(Vector2.ZERO, Vector2.UP)
+	var ms: Array[Node2D] = []
+	for i in 5:
+		var m := _member(Vector2(0, -10 - 10 * i))
+		ms.append(m)
+		board.join(m)
+		assert_eq(board.rear_count(), maxi(0, i + 1 - 3), "%d members" % (i + 1))
+	ms[4].free()
+	assert_eq(board.rear_count(), 1, "a freed REAR is not counted")
+
+
+func test_rear_ring_angle_starts_unset() -> void:
+	assert_true(is_nan(SquadController.new().rear_ring_angle), "NAN until a REAR initialises it")
+
+
 # ── Left/right from the heading hint (§2.4, "Assignment") ──────────────────────
 
 func test_side_follows_the_heading_hint_sign() -> void:

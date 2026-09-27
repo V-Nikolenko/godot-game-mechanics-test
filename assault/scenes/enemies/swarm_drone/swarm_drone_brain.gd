@@ -1,20 +1,30 @@
-## The Swarm Drone's brain — the solo ram cycle (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md
-## §2.7.1; task plan docs/plans/cmuj4y8rh0070p52xk6vzfvbe/3-plan.md).
+## The Swarm Drone's brain: the ram cycle and the squad roles (docs/plans/cmufs7ek60001nm2x6d0bt2et/
+## 3-plan.md §2.7.1 and §2.7.2; task plans docs/plans/cmuj4y8rh0070p52xk6vzfvbe/ (solo, t8b) and
+## docs/plans/cmuj4y8rj0074p52xqmin24gu/ (squad, t8c)).
 ##
-## A drone with no squad (`actor.squad == null`) is a squad of one and its own LEAD. With a squad it
-## still behaves as a LEAD here — roles, FORM and the flank pincer are t8c's — but it already makes
-## the board calls t8c builds on: `update_target()` every tick, `claim_side()` on WINDUP entry,
-## `release_side()` on OVERSHOOT entry, `release_lead()` at REJOIN (only with a mate to hand it to),
-## and `leave()` on DISENGAGE or rail suspension.
+## A drone with no squad (`actor.squad == null`) is a squad of one and its own LEAD. With a squad the
+## board (`SquadController`) hands out roles and this brain reads `role_of(actor)` every tick:
+## - **LEAD** spirals in (CLOSE_IN) and rams. Its BURST opens `squad.attack_window_open`.
+## - **FLANK_LEFT / FLANK_RIGHT** hold a formation slot `flank_distance` from the target at
+##   ±`flank_angle_deg` off its heading (FORM). Each answers an open window **once** with its own
+##   WINDUP, which gives the pincer.
+## - **REAR** circles the target on `rear_orbit_radius` (FORM), evenly spaced by `rear_index`, and
+##   never attacks. In Assault it leaves after `rear_engage_seconds`.
+## A role change during WINDUP/BURST/OVERSHOOT takes effect after that pass (REJOIN routes by the new
+## role). Board calls: `update_target()` every tick, `claim_side()` on WINDUP entry, `release_side()`
+## on OVERSHOOT entry, `release_lead()` at REJOIN after a pass made as LEAD, `leave()` on DISENGAGE
+## or rail suspension.
 ##
 ## Phases (IDEAS §4 vocabulary in brackets):
 ##   APPROACH  [APPROACH]  corkscrew toward the player, phase drawn from `rng` (R2.3).
-##   CLOSE_IN  [POSITION]  spiral in on a shrinking ring to CLOSE_IN_RADIUS.
+##   FORM      [POSITION]  FLANK slot or REAR ring, by role (t8c).
+##   CLOSE_IN  [POSITION]  the LEAD spirals in on a shrinking ring to `flank_distance`.
 ##   WINDUP    [ATTACK]    hold at the stopping point, face the clamped 0.4-0.8 s prediction; yellow.
 ##   BURST     [ATTACK]    `mover.boost()` at the aim locked on WINDUP's last tick; red, contact armed.
 ##   OVERSHOOT [REPOSITION] a missed burst curves back toward the player — `Steering.turn_toward()`
 ##                          from the actor's CURRENT velocity every tick (D7), never a zero request.
-##   REJOIN    one tick: hand the lead on, reset the passes, back to CLOSE_IN / APPROACH.
+##   REJOIN    one tick: hand the lead on (a pass made as LEAD), reset the passes, then CLOSE_IN
+##             (LEAD), FORM (other roles) or APPROACH (far).
 ##   DISENGAGE [DISENGAGE] Assault only (`EngagementBudget`): release the corridor, seek the nearest
 ##                          edge of the projectile world rect, free once strictly outside it.
 ##
@@ -22,28 +32,41 @@
 ## `_ready()`, which runs AFTER this node's `_ready()` (children first). So nothing that depends on
 ## a tunable is derived in `_ready()`: the budget and `passes_left` are built on the first tick.
 ##
+## Nudges (flocking + evade) are offered in APPROACH, CLOSE_IN and FORM only: never in WINDUP/BURST
+## (committed) nor OVERSHOOT (its per-tick curve bound assumes the one request).
+##
 ## Requests only (single-writer gate): the one field writes on the mover are `max_speed` and
-## `release_constraint()` on DISENGAGE.
+## `release_constraint()` on DISENGAGE. Board writes (`attack_window_open`, `rear_ring_angle`) are
+## field writes too.
 class_name SwarmDroneBrain
 extends EnemyBrain
 
-enum Phase { APPROACH, CLOSE_IN, WINDUP, BURST, OVERSHOOT, REJOIN, DISENGAGE }
+## FORM is appended so the t8b values do not move.
+enum Phase { APPROACH, CLOSE_IN, WINDUP, BURST, OVERSHOOT, REJOIN, DISENGAGE, FORM }
 
 ## Emitted on every transition, with the phase entered.
 signal phase_changed(new_phase: int)
 
-## APPROACH hands over to CLOSE_IN inside this distance (px). t8c repoints it at
-## `rear_orbit_radius + 100`.
-const APPROACH_EXIT_RADIUS := 360.0
-## CLOSE_IN falls back to APPROACH beyond this distance (px).
-const APPROACH_REENTER_RADIUS := 460.0
-## The ring CLOSE_IN spirals down to before winding up (px). t8c: `flank_distance`.
-const CLOSE_IN_RADIUS := 200.0
+## APPROACH hands over at `rear_orbit_radius` + this (px).
+const APPROACH_EXIT_MARGIN := 100.0
+## CLOSE_IN / FORM / REJOIN fall back to APPROACH beyond `rear_orbit_radius` + this (px).
+const APPROACH_REENTER_MARGIN := 200.0
+## `phase_offset` is drawn from ±this (rad): R2.3's per-drone offset, bounded so it never undoes the
+## REAR ring's index spacing (t8c task plan D2: ≥ 50° between REARs at the widest 90° spacing).
+const MAX_PHASE_OFFSET := 0.35
+## Flocking gains [judgement], summed then capped at `flock_nudge_cap × max_speed`: separation in
+## px/s per px of overlap, alignment on (mean mate velocity − own), cohesion on the offset to the
+## mates' centroid.
+const SEPARATION_GAIN := 6.0
+const ALIGNMENT_GAIN := 0.1
+const COHESION_GAIN := 0.05
+## Evade's look-ahead on the target's velocity (s).
+const EVADE_LOOKAHEAD := 0.25
 ## How fast CLOSE_IN's ring shrinks (px/s).
 const CLOSE_IN_SHRINK_SPEED := 120.0
 ## CLOSE_IN's tangential anchor speed (px/s) — below `max_speed`, so the anchor stays catchable.
 const CLOSE_IN_TANGENT_SPEED := 130.0
-## CLOSE_IN is "on the ring" within this distance of CLOSE_IN_RADIUS (px).
+## CLOSE_IN is "on the ring" within this distance of `flank_distance` (px).
 const CLOSE_IN_TOLERANCE := 30.0
 ## CLOSE_IN winds up after this long even if it never settled (s).
 const CLOSE_IN_MAX_SECONDS := 2.5
@@ -80,7 +103,19 @@ const ATTACK_GATE_MARGIN := 0.15
 @export var engage_seconds: float = 5.5
 @export var exit_speed: float = 320.0
 
+@export_group("Squad")
+@export var rear_orbit_radius: float = 260.0
+@export var rear_orbit_speed: float = 0.55
+@export var flank_distance: float = 200.0
+@export var flank_angle_deg: float = 70.0
+@export var separation_radius: float = 30.0
+@export var flock_nudge_cap: float = 0.35
+@export var evade_radius: float = 90.0
+@export var rear_engage_seconds: float = 5.5
+
 var phase: Phase = Phase.APPROACH
+## This drone's offset on the REAR ring (rad), drawn once from `rng` in `_ready()` (R2.3).
+var phase_offset: float = 0.0
 ## Extra passes left in the current attack cycle.
 var passes_left: int = 0
 ## The ram point: re-evaluated every WINDUP tick, locked on the last one.
@@ -105,30 +140,41 @@ var _last_target_pos: Vector2 = Vector2.ZERO
 var _exit_point: Vector2 = Vector2.ZERO
 ## The side `claim_side()` returned on WINDUP entry, or -1 (none / released).
 var _claimed_side: int = -1
+## The role this drone held on its last WINDUP entry, or -1. A different `_role()` at the end of
+## the pass means the role changed mid-pass.
+var _pass_role: int = -1
+## True once this FLANK has answered the currently open attack window; cleared whenever the window
+## reads closed, so each window is answered once (the lead's second-pass burst re-opens nothing).
+var _answered_window: bool = false
 
 
 func _ready() -> void:
 	super._ready()
 	cork_phase = rng.randf_range(0.0, TAU)
 	_spin = 1.0 if rng.randf() < 0.5 else -1.0
+	# Drawn last, so the t8b draws above keep their values for a given seed.
+	phase_offset = rng.randf_range(-MAX_PHASE_OFFSET, MAX_PHASE_OFFSET)
 
 
 func tick(delta: float) -> void:
 	if not _started:
 		_start()
 	var target := TargetInfo.player(get_tree())
+	var squad := _squad()
 	if target.has_target:
 		_last_target_pos = target.position
-		var squad := _squad()
 		if squad != null:
 			squad.update_target(target.position, _heading_of(target))
+	if squad != null and not squad.attack_window_open:
+		_answered_window = false
 
-	if budget.update(delta) and phase != Phase.DISENGAGE and phase != Phase.BURST:
+	var expired := budget.update(delta) or _rear_budget_expired()
+	if expired and phase != Phase.DISENGAGE and phase != Phase.BURST:
 		enter_phase(Phase.DISENGAGE)
 
 	# A transition hands over to the new phase's handler in the same tick, so a tick never goes
-	# without a request. Bounded: no chain is longer than REJOIN -> CLOSE_IN -> WINDUP.
-	for _i in 3:
+	# without a request. Bounded: no chain is longer than OVERSHOOT -> REJOIN -> FORM -> WINDUP.
+	for _i in 4:
 		var before := phase
 		_tick_phase(delta, target)
 		if phase == before:
@@ -180,6 +226,18 @@ func _tick_phase(delta: float, target: TargetInfo) -> void:
 		Phase.OVERSHOOT: _tick_overshoot(delta, target)
 		Phase.REJOIN: _tick_rejoin(target)
 		Phase.DISENGAGE: _tick_disengage()
+		Phase.FORM: _tick_form(delta, target)
+
+
+## In Assault, a REAR that is not attacking leaves after `rear_engage_seconds` (t8c; ≤
+## `engage_seconds`, so the §2.6 deadline still bounds it). Never cuts a pass: an attacker is never
+## REAR in APPROACH/FORM.
+func _rear_budget_expired() -> bool:
+	if not budget.active or _role() != SquadController.Role.REAR:
+		return false
+	if phase != Phase.APPROACH and phase != Phase.FORM:
+		return false
+	return budget.seconds - budget.remaining() >= rear_engage_seconds
 
 
 # ── APPROACH ─────────────────────────────────────────────────────────────────────────────────────
@@ -189,12 +247,65 @@ func _tick_approach(delta: float, target: TargetInfo) -> void:
 		_hold_here()
 		return
 	var pos := actor.global_position
-	if pos.distance_to(target.position) <= APPROACH_EXIT_RADIUS:
-		enter_phase(Phase.CLOSE_IN)
+	if pos.distance_to(target.position) <= rear_orbit_radius + APPROACH_EXIT_MARGIN:
+		enter_phase(Phase.CLOSE_IN if _role() == SquadController.Role.LEAD else Phase.FORM)
 		return
 	mover.request_velocity(Steering.corkscrew(
 		pos, target.position - pos, max_speed, corkscrew_amplitude, cork_phase))
 	cork_phase = fposmod(cork_phase + TAU * corkscrew_frequency * delta, TAU)
+	_apply_nudge(target)
+
+
+# ── FORM (t8c): FLANK slot or REAR ring ──────────────────────────────────────────────────────────
+
+func _tick_form(delta: float, target: TargetInfo) -> void:
+	if not target.has_target:
+		_hold_here()
+		return
+	if actor.global_position.distance_to(target.position) > _reenter_radius():
+		enter_phase(Phase.APPROACH)
+		return
+	var role := _role()
+	var squad := _squad()
+	if role == SquadController.Role.LEAD or squad == null:
+		enter_phase(Phase.CLOSE_IN)
+		return
+	if role == SquadController.Role.REAR:
+		_form_rear(delta, target, squad)
+	else:
+		if squad.attack_window_open and not _answered_window and can_start_attack():
+			_answered_window = true
+			enter_phase(Phase.WINDUP)
+			return
+		var side := 1.0 if role == SquadController.Role.FLANK_RIGHT else -1.0
+		var slot := Vector2.RIGHT.rotated(side * deg_to_rad(flank_angle_deg)) * flank_distance
+		mover.formation_slot(target.position, _heading_of(target), slot, max_speed)
+	_apply_nudge(target)
+
+
+## The member's slot on the shared ring: `rear_ring_angle + rear_index × TAU / rear_count +
+## phase_offset`. Any REAR that finds the ring unset starts it where it already is; only rear 0
+## advances it, so while rear 0 is elsewhere (still approaching) the ring stands still.
+func _form_rear(delta: float, target: TargetInfo, squad: SquadController) -> void:
+	var centre := _ring_centre(target.position)
+	var spacing := TAU / maxi(squad.rear_count(), 1)
+	var index := maxi(squad.rear_index(actor), 0)
+	if is_nan(squad.rear_ring_angle):
+		squad.rear_ring_angle = (actor.global_position - centre).angle() - index * spacing - phase_offset
+	if index == 0:
+		squad.rear_ring_angle = fposmod(squad.rear_ring_angle + rear_orbit_speed * delta, TAU)
+	mover.orbit(centre, rear_orbit_radius, squad.rear_ring_angle + index * spacing + phase_offset, max_speed)
+
+
+## The target position, kept inside the constraint's `inner_rect()` shrunk by the ring radius, so a
+## ring near a corridor edge does not fight the edge pressure (§2.7.1). Unbounded (Open Space): as is.
+func _ring_centre(p: Vector2) -> Vector2:
+	if mover.constraint == null:
+		return p
+	var inner := mover.constraint.inner_rect().grow(-rear_orbit_radius)
+	if not inner.has_area():
+		return p
+	return p.clamp(inner.position, inner.end)
 
 
 # ── CLOSE_IN ─────────────────────────────────────────────────────────────────────────────────────
@@ -203,7 +314,7 @@ func _enter_close_in() -> void:
 	var target := TargetInfo.player(get_tree())
 	var center := target.position if target.has_target else _last_target_pos
 	var offset := actor.global_position - center
-	_ring = maxf(offset.length(), CLOSE_IN_RADIUS)
+	_ring = maxf(offset.length(), flank_distance)
 	_ring_angle = offset.angle()
 
 
@@ -212,17 +323,21 @@ func _tick_close_in(delta: float, target: TargetInfo) -> void:
 		_hold_here()
 		return
 	var dist := actor.global_position.distance_to(target.position)
-	if dist > APPROACH_REENTER_RADIUS:
+	if dist > _reenter_radius():
 		enter_phase(Phase.APPROACH)
 		return
+	if _role() != SquadController.Role.LEAD:
+		enter_phase(Phase.FORM)
+		return
 	_phase_time += delta
-	var settled := is_equal_approx(_ring, CLOSE_IN_RADIUS) and absf(dist - CLOSE_IN_RADIUS) <= CLOSE_IN_TOLERANCE
+	var settled := is_equal_approx(_ring, flank_distance) and absf(dist - flank_distance) <= CLOSE_IN_TOLERANCE
 	if (settled or _phase_time >= CLOSE_IN_MAX_SECONDS) and can_start_attack():
 		enter_phase(Phase.WINDUP)
 		return
-	_ring = move_toward(_ring, CLOSE_IN_RADIUS, CLOSE_IN_SHRINK_SPEED * delta)
+	_ring = move_toward(_ring, flank_distance, CLOSE_IN_SHRINK_SPEED * delta)
 	_ring_angle += _spin * CLOSE_IN_TANGENT_SPEED / _ring * delta
 	mover.spiral(target.position, _ring, _ring_angle, 0.0, max_speed)
+	_apply_nudge(target)
 
 
 # ── WINDUP ───────────────────────────────────────────────────────────────────────────────────────
@@ -237,12 +352,13 @@ func _enter_windup() -> void:
 		_hold_at = pos + v.normalized() * (v.length_squared() / (2.0 * braking))
 	_set_armed(false)
 	_set_light(StateLight.State.CHARGING)
+	_pass_role = _role()
 	var squad := _squad()
 	if squad != null:
 		var target := TargetInfo.player(get_tree())
 		if target.has_target:
 			_claimed_side = squad.claim_side(actor, _sector_of(pos, target))
-	aim = pos + _facing() * CLOSE_IN_RADIUS
+	aim = pos + _facing() * flank_distance
 
 
 func _tick_windup(delta: float, target: TargetInfo) -> void:
@@ -267,6 +383,13 @@ func _enter_burst() -> void:
 	_burst_dir = dir.normalized()
 	_set_armed(true)
 	_set_light(StateLight.State.ARMED)
+	if _pass_role < 0:
+		_pass_role = _role()  # a burst entered without a WINDUP (the `enter_phase` test seam)
+	# Only a lead that wound up as lead and still is opens the window: one demoted during its
+	# WINDUP must not open a window for the new lead (t8c task plan review round 2 A1).
+	var squad := _squad()
+	if squad != null and _pass_role == SquadController.Role.LEAD and _role() == SquadController.Role.LEAD:
+		squad.attack_window_open = true
 	mover.boost(_burst_dir, burst_speed, burst_seconds)
 
 
@@ -290,7 +413,8 @@ func _enter_overshoot() -> void:
 func _tick_overshoot(delta: float, target: TargetInfo) -> void:
 	_phase_time += delta
 	if _phase_time > overshoot_seconds + 0.0001:
-		if passes_left > 0 and can_start_attack():
+		# A role change during the pass takes effect now: no further pass in the old role.
+		if _role() == _pass_role and passes_left > 0 and can_start_attack():
 			passes_left -= 1
 			enter_phase(Phase.WINDUP)
 		else:
@@ -308,20 +432,29 @@ func _tick_overshoot(delta: float, target: TargetInfo) -> void:
 
 # ── REJOIN ───────────────────────────────────────────────────────────────────────────────────────
 
+## Only a cycle made as LEAD, by a drone that still is LEAD, hands the token on. A member promoted
+## mid-pass keeps it (it has not attacked as lead yet); a flank has nothing to hand on.
 func _enter_rejoin() -> void:
 	passes_left = second_passes
 	var squad := _squad()
+	if squad == null or _pass_role != SquadController.Role.LEAD or _role() != SquadController.Role.LEAD:
+		return
 	# A sole member keeps its lead: `release_lead()` would leave nobody eligible and pin it to REAR
 	# (squad_controller.gd `_reassign(force_rear)`), and every loose level spawn is a squad of one.
-	if squad != null and squad.members().size() >= 2:
+	# It closes its own window instead, so a later joiner never finds it stuck open.
+	if squad.members().size() >= 2:
 		squad.release_lead(actor)
+	else:
+		squad.attack_window_open = false
 
 
 func _tick_rejoin(target: TargetInfo) -> void:
-	if target.has_target and actor.global_position.distance_to(target.position) > APPROACH_REENTER_RADIUS:
+	if target.has_target and actor.global_position.distance_to(target.position) > _reenter_radius():
 		enter_phase(Phase.APPROACH)
-	else:
+	elif _role() == SquadController.Role.LEAD:
 		enter_phase(Phase.CLOSE_IN)
+	else:
+		enter_phase(Phase.FORM)
 
 
 # ── DISENGAGE ────────────────────────────────────────────────────────────────────────────────────
@@ -365,6 +498,56 @@ func _tick_disengage() -> void:
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────────────────────────
+
+## This drone's role: LEAD without a squad (a squad of one) and after it has left one (NONE); the
+## board's otherwise. Read every tick, never cached — the board recomputes on any join or leave.
+## `int`, not `SquadController.Role`: the cross-script nested-enum rule (DECISIONS, t4).
+func _role() -> int:
+	var squad := _squad()
+	if squad == null:
+		return SquadController.Role.LEAD
+	var role: int = squad.role_of(actor)
+	return SquadController.Role.LEAD if role == SquadController.Role.NONE else role
+
+
+## CLOSE_IN / FORM / REJOIN fall back to APPROACH beyond this distance (px).
+func _reenter_radius() -> float:
+	return rear_orbit_radius + APPROACH_REENTER_MARGIN
+
+
+## Offers `_nudge()` to the mover, when it is non-zero.
+func _apply_nudge(target: TargetInfo) -> void:
+	var nudge := _nudge(target)
+	if nudge != Vector2.ZERO:
+		mover.add_nudge(nudge)
+
+
+## Flocking over squad mates plus an evade inside `evade_radius` of the target, capped at
+## `flock_nudge_cap × max_speed` (§2.2 composition rule: one request, one capped nudge). A mate's
+## velocity is read only from a `CharacterBody2D`; anything else counts as still.
+func _nudge(target: TargetInfo) -> Vector2:
+	var cap := flock_nudge_cap * max_speed
+	if cap <= 0.0:
+		return Vector2.ZERO
+	var pos := actor.global_position
+	var total := Vector2.ZERO
+	var squad := _squad()
+	if squad != null:
+		var mate_pos: Array[Vector2] = []
+		var mate_vel: Array[Vector2] = []
+		for m in squad.members():
+			if m == actor:
+				continue
+			mate_pos.append(m.global_position)
+			mate_vel.append((m as CharacterBody2D).velocity if m is CharacterBody2D else Vector2.ZERO)
+		if not mate_pos.is_empty():
+			total += Steering.separation(pos, mate_pos, separation_radius) * SEPARATION_GAIN
+			total += (Steering.alignment(actor.velocity, mate_vel) - actor.velocity) * ALIGNMENT_GAIN
+			total += Steering.cohesion(pos, mate_pos) * COHESION_GAIN
+	if target.has_target and pos.distance_to(target.position) < evade_radius:
+		total += Steering.evade(pos, target.position, target.velocity, max_speed, EVADE_LOOKAHEAD)
+	return total.limit_length(cap)
+
 
 func _hold_here() -> void:
 	mover.hold_position(actor.global_position, HOLD_TOLERANCE, max_speed)

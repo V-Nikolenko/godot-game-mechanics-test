@@ -170,7 +170,7 @@ func test_close_in_settles_on_the_ring(mode: String = use_parameters(["open_spac
 	assert_true(entered, "%s: reaches WINDUP" % mode)
 	assert_lt(close_in_ticks, int(SwarmDroneBrain.CLOSE_IN_MAX_SECONDS / DT),
 		"%s: settled on the ring rather than timing out" % mode)
-	assert_almost_eq(drone.global_position.distance_to(MID), SwarmDroneBrain.CLOSE_IN_RADIUS,
+	assert_almost_eq(drone.global_position.distance_to(MID), _brain(drone).flank_distance,
 		SwarmDroneBrain.CLOSE_IN_TOLERANCE, "%s: winds up on the ring" % mode)
 	assert_gte(min_dist, 150.0, "%s: never cuts inside the ring" % mode)
 
@@ -628,3 +628,537 @@ func test_a_lead_with_a_mate_hands_the_lead_on_at_rejoin() -> void:
 	_tick_until(drone, P.REJOIN, 400)
 	assert_ne(squad.role_of(drone), SquadController.Role.LEAD, "the finishing lead handed the token on")
 	assert_eq(squad.role_of(mate), SquadController.Role.LEAD, "to its mate")
+
+
+# ══ t8c: squad behaviour (epic §2.7.2 / §4 row t8c; task plan docs/plans/cmuj4y8rj0074p52xqmin24gu) ══
+#
+# Hand-ticked unless stated: every drone is ticked each step, in join order. Budget rule (task plan
+# review round 1 B1): in the Assault harness every drone leaves at 5.5 s and cannot wind up after
+# ~4.2 s, so the long cases lift `engage_seconds` / `rear_engage_seconds` on each private config.
+# "Frozen" adds `windup_seconds = 100`: the lead holds in WINDUP, no window opens, roles never rotate.
+
+const R := SquadController.Role
+const LONG_BUDGET := 1000.0
+
+
+func _budget_rule(c: SwarmDroneConfig) -> void:
+	c.engage_seconds = LONG_BUDGET
+	c.rear_engage_seconds = LONG_BUDGET
+
+
+func _frozen(c: SwarmDroneConfig) -> void:
+	_budget_rule(c)
+	c.windup_seconds = 100.0
+
+
+## One drone per position, all on one new board, joined in array order. `configure` runs on each
+## private config copy before the tree; `seeds` defaults to SEED + index.
+func _squad_of(h: RefCounted, positions: Array, configure: Callable = Callable(), seeds: Array = []) -> Array[SwarmDrone]:
+	var squad := SquadController.new()
+	var out: Array[SwarmDrone] = []
+	for i in positions.size():
+		var drone := SCENE.instantiate() as SwarmDrone
+		drone.global_position = positions[i]
+		(drone.get_node("Brain") as SwarmDroneBrain).rng_seed = int(seeds[i]) if i < seeds.size() else SEED + i
+		if configure.is_valid():
+			configure.call(drone.config)
+		drone.squad = squad
+		h.root.add_child(drone)
+		drone.set_physics_process(false)
+		out.append(drone)
+	return out
+
+
+func _tick_all(drones: Array[SwarmDrone]) -> void:
+	for d in drones:
+		if is_instance_valid(d) and not d.is_queued_for_deletion():
+			_tick(d)
+
+
+func _run(drones: Array[SwarmDrone], ticks: int) -> void:
+	for _i in ticks:
+		_tick_all(drones)
+
+
+func _with_role(drones: Array[SwarmDrone], role: int) -> Array[SwarmDrone]:
+	var out: Array[SwarmDrone] = []
+	for d in drones:
+		if is_instance_valid(d) and d.squad.role_of(d) == role:
+			out.append(d)
+	return out
+
+
+## Five drones in a row 300 px above `centre`: the middle one is closest, so it leads.
+func _row_of_five(centre: Vector2) -> Array:
+	return [centre + Vector2(0, -300), centre + Vector2(-40, -300), centre + Vector2(40, -300),
+		centre + Vector2(-80, -300), centre + Vector2(80, -300)]
+
+
+## Where a FLANK's formation slot is right now (the brain's own formula).
+func _flank_slot(drone: SwarmDrone, target_pos: Vector2) -> Vector2:
+	var brain := _brain(drone)
+	var side := 1.0 if drone.squad.role_of(drone) == R.FLANK_RIGHT else -1.0
+	var heading := brain._heading_of(TargetInfo.player(get_tree()))
+	return target_pos + (Vector2.RIGHT.rotated(side * deg_to_rad(brain.flank_angle_deg)) * brain.flank_distance).rotated(heading.angle())
+
+
+func _in_tolerance(drone: SwarmDrone, target_pos: Vector2) -> bool:
+	var brain := _brain(drone)
+	if drone.squad.role_of(drone) == R.REAR:
+		return absf(drone.global_position.distance_to(target_pos) - brain.rear_orbit_radius) <= 0.1 * brain.rear_orbit_radius
+	return drone.global_position.distance_to(_flank_slot(drone, target_pos)) <= 30.0
+
+
+# ── Config ───────────────────────────────────────────────────────────────────────────────────────
+
+func test_config_keeps_the_rear_ring_catchable() -> void:
+	assert_lte(CONFIG.rear_orbit_speed * CONFIG.rear_orbit_radius, 0.7 * CONFIG.max_speed,
+		"the ring's tangential speed leaves the orbit correction headroom under max_speed (task plan D1)")
+
+
+func test_config_rear_budget_never_exceeds_the_attackers() -> void:
+	assert_lte(CONFIG.rear_engage_seconds, CONFIG.engage_seconds,
+		"the §2.6 deadline uses engage_seconds, so a REAR may leave earlier, never later")
+
+
+func test_squad_config_flows_through_to_the_brain() -> void:
+	var h := _harness("open_space")
+	var drone := _spawn(h, Vector2(0, -300), func(c: SwarmDroneConfig) -> void:
+		c.rear_orbit_radius = 301.0
+		c.rear_orbit_speed = 0.31
+		c.flank_distance = 171.0
+		c.flank_angle_deg = 55.0
+		c.separation_radius = 41.0
+		c.flock_nudge_cap = 0.21
+		c.evade_radius = 77.0
+		c.rear_engage_seconds = 3.3)
+	var brain := _brain(drone)
+	assert_eq(brain.rear_orbit_radius, 301.0)
+	assert_eq(brain.rear_orbit_speed, 0.31)
+	assert_eq(brain.flank_distance, 171.0)
+	assert_eq(brain.flank_angle_deg, 55.0)
+	assert_eq(brain.separation_radius, 41.0)
+	assert_eq(brain.flock_nudge_cap, 0.21)
+	assert_eq(brain.evade_radius, 77.0)
+	assert_eq(brain.rear_engage_seconds, 3.3)
+
+
+# ── FORM: the REAR ring ──────────────────────────────────────────────────────────────────────────
+
+func test_rear_holds_the_orbit_radius(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var h := _harness(mode)
+	h.player.global_position = MID
+	var drones := _squad_of(h, _row_of_five(MID), _frozen)
+	var rears := _with_role(drones, R.REAR)
+	assert_eq(rears.size(), 2, "%s: sanity: a squad of 5 has two REARs" % mode)
+	_run(drones, 240)
+	var worst := 0.0
+	var angle_moved := 0.0
+	var last_angle: float = drones[0].squad.rear_ring_angle
+	for _i in 180:
+		_tick_all(drones)
+		for d in rears:
+			assert_eq(_brain(d).phase, P.FORM, "%s: the REAR stays in FORM" % mode)
+			worst = maxf(worst, absf(d.global_position.distance_to(MID) - CONFIG.rear_orbit_radius))
+		angle_moved += absf(angle_difference(last_angle, drones[0].squad.rear_ring_angle))
+		last_angle = drones[0].squad.rear_ring_angle
+	assert_lte(worst, 0.1 * CONFIG.rear_orbit_radius, "%s: every REAR within ± 10 %% of the ring (worst %.1f px)" % [mode, worst])
+	assert_almost_eq(angle_moved, CONFIG.rear_orbit_speed * 3.0, 0.02, "%s: the ring turns at rear_orbit_speed" % mode)
+	var a := rears[0].global_position - MID
+	var b := rears[1].global_position - MID
+	assert_gt(absf(a.angle_to(b)), deg_to_rad(120.0), "%s: two REARs sit on opposite sides of the ring" % mode)
+
+
+## Review round 1 B3 / round 2 A2: rear 0 (joined first, far away) is still approaching while rear 1
+## is in FORM. The ring must still be initialised — a NAN angle would put rear 1 at NAN.
+func test_a_rear_finds_the_ring_while_rear_0_is_still_approaching() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = MID
+	var far := MID + Vector2(0, -2000)
+	var positions := [far, MID + Vector2(0, -200), MID + Vector2(-60, -200), MID + Vector2(60, -200), MID + Vector2(0, -290)]
+	var drones := _squad_of(h, positions, _frozen)
+	var squad: SquadController = drones[0].squad
+	assert_eq(squad.role_of(drones[0]), R.REAR, "sanity: the far drone is a REAR")
+	assert_eq(squad.rear_index(drones[0]), 0, "sanity: and it is rear 0 (joined first)")
+	assert_eq(squad.rear_index(drones[4]), 1, "sanity: the near REAR is rear 1")
+	var rear1 := drones[4]
+	for _i in 240:
+		_tick_all(drones)
+		assert_true(rear1.velocity.is_finite() and rear1.global_position.is_finite(), "rear 1 stays finite")
+	assert_eq(_brain(drones[0]).phase, P.APPROACH, "sanity: rear 0 is still approaching")
+	assert_eq(_brain(rear1).phase, P.FORM)
+	assert_almost_eq(rear1.global_position.distance_to(MID), CONFIG.rear_orbit_radius, 0.1 * CONFIG.rear_orbit_radius,
+		"rear 1 is on the ring")
+
+
+func test_the_rear_ring_centre_stays_inside_the_corridor() -> void:
+	var h := _harness("assault")
+	var inner := AssaultCorridorConstraint.new().inner_rect()
+	var player_pos := Vector2(inner.get_center().x, inner.position.y + 100.0)
+	h.player.global_position = player_pos
+	var drones := _squad_of(h, _row_of_five(player_pos + Vector2(0, 600)), _frozen)
+	var rears := _with_role(drones, R.REAR)
+	var shrunk := inner.grow(-CONFIG.rear_orbit_radius)
+	var centre := player_pos.clamp(shrunk.position, shrunk.end)
+	assert_ne(centre, player_pos, "sanity: the centre was clamped")
+	assert_true(shrunk.has_point(centre), "the ring centre is inside inner_rect() shrunk by the radius")
+	_run(drones, 360)
+	var worst_centre := 0.0
+	var worst_player := 0.0
+	for _i in 180:
+		_tick_all(drones)
+		for d in rears:
+			worst_centre = maxf(worst_centre, absf(d.global_position.distance_to(centre) - CONFIG.rear_orbit_radius))
+			worst_player = maxf(worst_player, absf(d.global_position.distance_to(player_pos) - CONFIG.rear_orbit_radius))
+	assert_lte(worst_centre, 0.1 * CONFIG.rear_orbit_radius, "REARs hold the ring around the clamped centre (worst %.1f)" % worst_centre)
+	assert_gt(worst_player, 0.1 * CONFIG.rear_orbit_radius, "boundary: measured from the player itself, they do not")
+
+
+# ── Who attacks ──────────────────────────────────────────────────────────────────────────────────
+
+## Per-drone phase entries with the step they happened on, and every WINDUP entry's role.
+func _record(drones: Array[SwarmDrone], step: Array, log: Dictionary, windup_roles: Array) -> void:
+	for d in drones:
+		log[d] = []
+		var drone := d
+		_brain(d).phase_changed.connect(func(p: int) -> void:
+			log[drone].append([step[0], p])
+			if p == P.WINDUP:
+				windup_roles.append(drone.squad.role_of(drone)))
+
+
+func _first(log: Dictionary, d: SwarmDrone, p: int) -> int:
+	for e in log[d]:
+		if e[1] == p:
+			return e[0]
+	return -1
+
+
+func test_flanks_wind_up_only_after_the_leads_burst(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var h := _harness(mode)
+	h.player.global_position = MID
+	var drones := _squad_of(h, [MID + Vector2(0, -300), MID + Vector2(-60, -310), MID + Vector2(60, -310), MID + Vector2(0, -380)], _budget_rule)
+	var lead := _with_role(drones, R.LEAD)[0]
+	var flanks := _with_role(drones, R.FLANK_LEFT) + _with_role(drones, R.FLANK_RIGHT)
+	assert_eq(flanks.size(), 2, "%s: sanity: two flanks" % mode)
+	var step := [0]
+	var log := {}
+	var windup_roles := []
+	_record(drones, step, log, windup_roles)
+	for i in 600:
+		step[0] = i
+		_tick_all(drones)
+	var burst := _first(log, lead, P.BURST)
+	assert_gt(burst, -1, "%s: the lead burst" % mode)
+	for f in flanks:
+		var w := _first(log, f, P.WINDUP)
+		assert_gt(w, -1, "%s: each flank answers the window" % mode)
+		assert_gte(w, burst, "%s: a flank winds up only once the lead has committed" % mode)
+	assert_false(windup_roles.has(R.REAR), "%s: no drone ever winds up while it is a REAR" % mode)
+	assert_gt(windup_roles.size(), 3, "%s: sanity: several attacks happened" % mode)
+
+
+func test_two_attackers_never_share_a_side(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var h := _harness(mode)
+	h.player.global_position = MID
+	var drones := _squad_of(h, [MID + Vector2(0, -300), MID + Vector2(-60, -310), MID + Vector2(60, -310), MID + Vector2(0, -380)], _budget_rule)
+	var most := 0
+	for _i in 600:
+		_tick_all(drones)
+		var sides := []
+		for d in drones:
+			var b := _brain(d)
+			if (b.phase == P.WINDUP or b.phase == P.BURST) and b._claimed_side >= 0:
+				assert_false(sides.has(b._claimed_side), "%s: two attackers claimed the same side" % mode)
+				sides.append(b._claimed_side)
+		most = maxi(most, sides.size())
+	assert_gte(most, 2, "%s: sanity: attackers overlapped, so the check could fail" % mode)
+
+
+## Review round 2 A1: a lead demoted during its WINDUP must not open a window at its BURST.
+func test_a_lead_demoted_during_windup_opens_no_window() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = MID
+	var drones := _squad_of(h, [MID + Vector2(0, -200), MID + Vector2(-60, -210), MID + Vector2(60, -210)], _budget_rule)
+	var lead := drones[0]
+	var squad: SquadController = lead.squad
+	_brain(lead).enter_phase(P.WINDUP)
+	var newcomer := SCENE.instantiate() as SwarmDrone
+	newcomer.global_position = MID + Vector2(0, 20)
+	newcomer.squad = squad
+	h.root.add_child(newcomer)
+	newcomer.set_physics_process(false)
+	assert_eq(squad.role_of(newcomer), R.LEAD, "sanity: the closer newcomer took the lead")
+	assert_ne(squad.role_of(lead), R.LEAD, "sanity: the old lead was demoted mid-WINDUP")
+	assert_gt(_tick_until(lead, P.BURST, 60), 0, "the demoted drone still finishes its pass")
+	assert_false(squad.attack_window_open, "but its burst opens no window for the new lead")
+
+
+# ── Real physics: no contact damage in FORM ──────────────────────────────────────────────────────
+
+func test_no_contact_damage_while_in_form(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var world := Node2D.new()
+	add_child_autofree(world)
+	if mode == "assault":
+		var cam := ArenaCamera.new()
+		cam.global_position = MID
+		world.add_child(cam)
+	var health := _real_player(world, MID)
+	var squad := SquadController.new()
+	var drones: Array[SwarmDrone] = []
+	for pos in [MID + Vector2(0, -200), MID + Vector2(-60, -210), MID + Vector2(60, -210), MID + Vector2(0, -290)]:
+		var drone := SCENE.instantiate() as SwarmDrone
+		drone.position = pos
+		_brain(drone).rng_seed = SEED
+		_frozen(drone.config)
+		drone.squad = squad
+		world.add_child(drone)
+		drones.append(drone)
+	await wait_physics_frames(30)
+	var formers := _with_role(drones, R.FLANK_LEFT) + _with_role(drones, R.REAR)
+	assert_eq(formers.size(), 2, "%s: sanity: a flank and a rear" % mode)
+	for _i in 10:
+		for d in formers:
+			d.position = MID
+		await wait_physics_frames(1)
+		for d in formers:
+			assert_eq(_brain(d).phase, P.FORM, "%s: still in FORM" % mode)
+			assert_false(d.contact_profile.is_armed(), "%s: unarmed in FORM" % mode)
+	assert_eq(health.current_health, Fixture.PLAYER_MAX_HEALTH, "%s: touching FORM drones deals 0" % mode)
+
+
+# ── Reassignment ─────────────────────────────────────────────────────────────────────────────────
+
+func test_the_lead_freed_mid_burst_hands_over_and_the_flank_is_refilled(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var h := _harness(mode)
+	h.player.global_position = MID
+	var drones := _squad_of(h, [MID + Vector2(0, -300), MID + Vector2(-60, -310), MID + Vector2(60, -310), MID + Vector2(0, -380)], _budget_rule)
+	var squad: SquadController = drones[0].squad
+	var lead := _with_role(drones, R.LEAD)[0]
+	var rear := _with_role(drones, R.REAR)[0]
+	var step := [0]
+	var log := {}
+	_record(drones, step, log, [])
+	var i := 0
+	while _brain(lead).phase != P.BURST and i < 600:
+		step[0] = i
+		_tick_all(drones)
+		i += 1
+	assert_eq(_brain(lead).phase, P.BURST, "%s: sanity: the lead is bursting" % mode)
+	assert_true(squad.attack_window_open, "%s: sanity: its burst opened the window" % mode)
+	drones.erase(lead)
+	lead.free()
+	var freed_at := i
+	assert_false(squad.attack_window_open, "%s: the window died with its lead" % mode)
+	var roles := []
+	for d in drones:
+		roles.append(squad.role_of(d))
+	roles.sort()
+	assert_eq(roles, [R.LEAD, R.FLANK_LEFT, R.FLANK_RIGHT], "%s: a new lead and both flanks" % mode)
+	assert_true(squad.role_of(rear) == R.FLANK_LEFT or squad.role_of(rear) == R.FLANK_RIGHT,
+		"%s: the former REAR fills the vacated flank" % mode)
+	var promoted := _with_role(drones, R.LEAD)[0]
+	var mid_pass := [P.WINDUP, P.BURST, P.OVERSHOOT].has(_brain(promoted).phase)
+	for j in 600:
+		step[0] = freed_at + j
+		_tick_all(drones)
+	# The promoted member's entries after the free: if it was mid-pass, it finishes that pass and
+	# rejoins before any new WINDUP — it picks up nothing it had not started.
+	var after: Array = log[promoted].filter(func(e: Array) -> bool: return e[0] >= freed_at)
+	var phases := after.map(func(e: Array) -> int: return e[1])
+	if mid_pass:
+		var rejoin := phases.find(P.REJOIN)
+		assert_gt(rejoin, -1, "%s: the promoted member rejoins after its pass" % mode)
+		assert_false(phases.slice(0, rejoin).has(P.WINDUP), "%s: no new pass before it rejoins" % mode)
+		assert_eq(phases[rejoin + 1], P.CLOSE_IN, "%s: then closes in as the new lead" % mode)
+	# The new lead's burst opens the window again and a flank answers it (epic review N13).
+	var lead_burst := -1
+	for e in after:
+		if e[1] == P.BURST and (not mid_pass or e[0] > after[phases.find(P.CLOSE_IN)][0]):
+			lead_burst = e[0]
+			break
+	assert_gt(lead_burst, -1, "%s: the new lead attacks" % mode)
+	var answered := false
+	for d in drones:
+		if d == promoted:
+			continue
+		for e in log[d]:
+			if e[1] == P.WINDUP and e[0] >= lead_burst:
+				answered = true
+	assert_true(answered, "%s: a flank answers the new lead's window" % mode)
+
+
+## Review round 1 B4: a flank that leaves (e.g. detonated on the player) while members have moved
+## can move the lead by the distance recompute. The old lead's window must close with it, so the
+## flank that already answered it re-arms for the new lead's burst.
+func test_a_lead_change_closes_the_window_and_the_new_lead_is_answered() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = MID
+	var drones := _squad_of(h, [MID + Vector2(0, -300), MID + Vector2(-60, -310), MID + Vector2(60, -310), MID + Vector2(0, -380)], _budget_rule)
+	var squad: SquadController = drones[0].squad
+	var lead := _with_role(drones, R.LEAD)[0]
+	var i := 0
+	while _brain(lead).phase != P.OVERSHOOT and i < 600:
+		_tick_all(drones)
+		i += 1
+	assert_eq(_brain(lead).phase, P.OVERSHOOT, "sanity: the lead is overshooting")
+	assert_true(squad.attack_window_open, "sanity: the window is open")
+	var flanks := _with_role(drones, R.FLANK_LEFT) + _with_role(drones, R.FLANK_RIGHT)
+	lead.global_position = MID + Vector2(0, 420)  # farther than every mate: the next recompute demotes it
+	var gone := flanks[0]
+	var stays := flanks[1]
+	stays.global_position = MID + Vector2(0, -150)
+	drones.erase(gone)
+	gone.free()
+	assert_eq(squad.role_of(stays), R.LEAD, "sanity: the recompute moved the lead")
+	assert_false(squad.attack_window_open, "a change of lead closes the old lead's window")
+	var step := [0]
+	var log := {}
+	_record(drones, step, log, [])
+	for j in 600:
+		step[0] = j
+		_tick_all(drones)
+	var burst := -1
+	for e in log[stays]:
+		if e[1] == P.BURST:
+			burst = e[0]
+			break
+	assert_gt(burst, -1, "the new lead attacks")
+	var answered := false
+	for d in drones:
+		if d != stays:
+			for e in log[d]:
+				if e[1] == P.WINDUP and e[0] >= burst:
+					answered = true
+	assert_true(answered, "its window is answered by a flank")
+
+
+# ── Formation recovery ───────────────────────────────────────────────────────────────────────────
+
+func test_formation_recovers_after_a_150_px_displacement(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var h := _harness(mode)
+	h.player.global_position = MID
+	var drones := _squad_of(h, _row_of_five(MID), _frozen)
+	var formers := _with_role(drones, R.REAR) + _with_role(drones, R.FLANK_LEFT) + _with_role(drones, R.FLANK_RIGHT)
+	assert_eq(formers.size(), 4, "%s: sanity" % mode)
+	_run(drones, 240)
+	for d in formers:
+		assert_true(_in_tolerance(d, MID), "%s: sanity: settled before the push" % mode)
+	for d in formers:
+		var out := (d.global_position - MID).normalized()
+		var push := out if d.squad.role_of(d) == R.REAR else out.rotated(PI / 2.0)
+		d.global_position += push * 150.0
+		assert_false(_in_tolerance(d, MID), "%s: boundary: the push put it out of tolerance" % mode)
+	var back := {}
+	for i in 180:
+		_tick_all(drones)
+		for d in formers:
+			if not back.has(d) and _in_tolerance(d, MID):
+				back[d] = i
+	assert_eq(back.size(), 4, "%s: every member was back in tolerance within 3 s (%s)" % [mode, back.values()])
+	for d in formers:
+		assert_true(_in_tolerance(d, MID), "%s: and is still in tolerance at 3 s" % mode)
+		assert_eq(_brain(d).phase, P.FORM, "%s: in FORM" % mode)
+
+
+# ── Phase offsets (R2.3) ─────────────────────────────────────────────────────────────────────────
+
+func test_phase_offsets_come_from_the_rng(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var h := _harness(mode)
+	h.player.global_position = MID
+	var no_flock := func(c: SwarmDroneConfig) -> void: c.flock_nudge_cap = 0.0
+	var drones := _squad_of(h, [MID + Vector2(0, -300), MID + Vector2(-60, -300), MID + Vector2(60, -300), MID + Vector2(0, -400)],
+		no_flock, [11, 22, 33, 11])
+	var b := drones.map(func(d: SwarmDrone) -> SwarmDroneBrain: return _brain(d))
+	for i in 3:
+		for j in range(i + 1, 3):
+			assert_ne(b[i].phase_offset, b[j].phase_offset, "%s: distinct seeds, distinct ring offsets" % mode)
+			assert_ne(b[i].cork_phase, b[j].cork_phase, "%s: distinct seeds, distinct corkscrew phases" % mode)
+	for x in b:
+		assert_lte(absf(x.phase_offset), SwarmDroneBrain.MAX_PHASE_OFFSET, "%s: bounded (D2)" % mode)
+	assert_eq(b[0].phase_offset, b[3].phase_offset, "%s: control: the same seed gives the same offset" % mode)
+	assert_eq(b[0].cork_phase, b[3].cork_phase, "%s: control: and the same corkscrew phase" % mode)
+
+
+# ── Rails and the per-role budget ────────────────────────────────────────────────────────────────
+
+func test_a_rail_suspended_member_leaves_and_the_squad_reassigns(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var h := _harness(mode)
+	h.player.global_position = MID
+	if mode == "assault":
+		(h.root.get_node("ArenaCamera") as Camera2D).make_current()
+	else:
+		var cam := Camera2D.new()
+		h.root.add_child(cam)
+		cam.make_current()
+	var drones := _squad_of(h, [MID + Vector2(0, -300), MID + Vector2(-60, -310), MID + Vector2(60, -310)])
+	var squad: SquadController = drones[0].squad
+	var lead := _with_role(drones, R.LEAD)[0]
+	lead.add_child(EnemyPathMover.new())
+	assert_true(lead.is_ai_suspended(), "%s: sanity: the rail took over" % mode)
+	assert_false(squad.members().has(lead), "%s: the railed drone left the squad" % mode)
+	var roles := []
+	for d in drones:
+		if d != lead:
+			roles.append(squad.role_of(d))
+	roles.sort()
+	assert_eq(roles, [R.LEAD, R.FLANK_LEFT], "%s: the two left reassign to LEAD + FLANK" % mode)
+
+
+func _rear_budget_squad(h: RefCounted) -> Array[SwarmDrone]:
+	h.player.global_position = MID
+	return _squad_of(h, [MID + Vector2(0, -300), MID + Vector2(-60, -310), MID + Vector2(60, -310), MID + Vector2(0, -380)],
+		func(c: SwarmDroneConfig) -> void: c.rear_engage_seconds = 2.0)
+
+
+func test_a_rear_member_honours_rear_engage_seconds() -> void:
+	var h := _harness("assault")
+	var drones := _rear_budget_squad(h)
+	var rear := _with_role(drones, R.REAR)[0]
+	var others := drones.filter(func(d: SwarmDrone) -> bool: return d != rear)
+	var ticks := 0
+	while _brain(rear).phase != P.DISENGAGE and ticks < 400:
+		_tick_all(drones)
+		ticks += 1
+	assert_between(ticks, 120, 121, "the REAR leaves at rear_engage_seconds (2.0 s), not engage_seconds")
+	_run(drones, 12)
+	for d in others:
+		assert_ne(_brain(d).phase, P.DISENGAGE, "attackers keep their full engage_seconds")
+
+
+func test_rear_engage_seconds_does_nothing_in_open_space() -> void:
+	var h := _harness("open_space")
+	var drones := _rear_budget_squad(h)
+	var log := {}
+	_record(drones, [0], log, [])
+	_run(drones, 240)
+	for d in drones:
+		assert_false(log[d].any(func(e: Array) -> bool: return e[1] == P.DISENGAGE), "no exit without an arena")
+
+
+# ── Nudges ───────────────────────────────────────────────────────────────────────────────────────
+
+func test_the_nudge_is_capped_and_off_outside_formation_phases() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = MID
+	var drones := _squad_of(h, [MID + Vector2(20, 0), MID + Vector2(20, 0)])
+	var a := drones[0]
+	var b := drones[1]
+	var target := TargetInfo.player(get_tree())
+	var nudge := _brain(b)._nudge(target)
+	assert_gt(nudge.length(), 0.0, "sanity: a coincident mate and the player 20 px away push")
+	assert_lte(nudge.length(), CONFIG.flock_nudge_cap * CONFIG.max_speed + 0.001, "capped at flock_nudge_cap × max_speed")
+	assert_gt(nudge.dot(b.global_position - MID), 0.0, "and it points away from the player (evade)")
+	var mover_a := a.get_node("EnemyMover") as EnemyMover
+	var mover_b := b.get_node("EnemyMover") as EnemyMover
+	_brain(b).tick(DT)
+	assert_eq(_brain(b).phase, P.FORM, "sanity: the mate is in FORM")
+	assert_ne(mover_b._nudge, Vector2.ZERO, "control: FORM offers the nudge")
+	mover_b.step(DT)
+	_brain(a).enter_phase(P.WINDUP)
+	_brain(a).tick(DT)
+	assert_eq(_brain(a).phase, P.WINDUP)
+	assert_eq(mover_a._nudge, Vector2.ZERO, "WINDUP offers no nudge (committed)")
+	mover_a.step(DT)
+	_brain(b).flock_nudge_cap = 0.0
+	assert_eq(_brain(b)._nudge(target), Vector2.ZERO, "cap 0 turns every nudge off")
