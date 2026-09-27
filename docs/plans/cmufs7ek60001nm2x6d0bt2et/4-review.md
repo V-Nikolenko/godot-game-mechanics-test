@@ -200,3 +200,214 @@ Then:
 - Dependencies t14 → t9 and t13 → t11.
 - Complexities on the other tasks are reasonable. t3 as large is defensible because it touches the `BaseEnemy` hook
   for every enemy.
+
+---
+
+# Plan review, round 2: Enemy rework phase 2 (Revision 2)
+VERDICT: CHANGES_REQUESTED
+
+I reviewed `3-plan.md` rev 2 and `tasks.json` against the code at HEAD `f1a7725`. I did not take the plan's numbers on
+trust. I re-derived them:
+- a headless script over `Level1Director._build_sections()` (in `/tmp`, nothing committed);
+- a step-for-step replay of `EnemyMover.step()`'s velocity maths for both overshoot curves;
+- a headless `GradientTexture2D.get_image()` probe;
+- the real node positions in `sector_hub.tscn`.
+
+Most of the revision is right:
+- B1, B3, B4 and ten of the twelve N-findings are fixed.
+- The C3 and deadline numbers are correct.
+- The new `ContactBlast` mechanism is sound.
+
+Two new problems block approval. Both are wrong **numbers** in fixes for round-1 findings, and each makes a task's own
+acceptance criteria contradict each other:
+- The Swarm's overshoot config cannot reach the ≥ 60° turn its own test demands.
+- The Razor's hub anchor sits inside `perceive_radius` of a row of pickups, so the t16 clearance test fails on today's
+  scene.
+
+Each fix is a few numbers, so round 3 should be a quick confirmation.
+
+## Round-1 findings
+
+| Finding | Status | Evidence |
+|---|---|---|
+| B1 blast never lands | **Resolved** | See "ContactBlast in Godot 4.6" below |
+| B2 `max_turn_rate` only turns the sprite | **Partially** | The mechanism is right: D7, `Steering.turn_toward`, a request rebuilt from `actor.velocity` every tick, and the per-tick bound, which holds because `move_toward` stays on the segment between the current and requested vectors. The **Swarm numbers are wrong**, see B5. The Razor numbers work |
+| B3 Swarm hub idle unowned | **Resolved** | t8d exists, `dependsOn` [t8c, t7], config rows, and the requested tests. Swarm clearance is checked: fortuna_station (−635, 385) is 884 px from (0, 1000), and 884 − 170 = 714 > 380. Small API gaps: N15, N16 |
+| B4 t8 too big | **Resolved** | Split into t8a/b/c/d. t9 → t8b, t10 → t8a, t15 → t8c and t16 → t8d are all in `tasks.json`. Acyclic |
+| N1 deadline | **Resolved** | 0.8 [recomputed: cloud_descent's last wave at 76.0 s has a 0.80 s max delay] + 5.5 + 804/320 + 320/1200 + 0.5 = 9.58 s. The 804 px is correct: `_visible_rect()` 1480 plus a 64 px margin on each side = 1608. Raising the budget to 6.0 gives 10.08, so the "fails at 6.0" check works. There is also the t15 integration case. One residual in N19 |
+| N2 C3 | **Resolved** | My recount matches exactly. Legacy 3.5 s: 14 / 6 / 5. At 9.1 s, all: 23 / 9 / 10; attack-capable: 19 / 8 / 7. At the real 8.3 s lifetime, capable is 16 / 7 / 7, so t15 has headroom. The levers and thresholds are decided in advance |
+| N3 API gaps | **Resolved** | `leave()`, `update_target()`, and a `WeakRef` map with string keys in the spawn dicts. That fits `wave_manager.gd` (`_trigger_wave` / `_expand_formation` / `_spawn_ship` already set props before `add_child`). `Callable`s to a `RefCounted` hold an `ObjectID`, so `tree_exiting → leave` does not keep the board alive. See N14 and N15 |
+| N4 phase test | **Resolved** | A same-seed control. It works because `EnemyBrain._ready()` seeds `rng` before a subclass's `_ready()` draws, as long as the subclass calls `super()` first |
+| N5 feint geometry | **Resolved** | Recomputed: start at (−130, 0), lunge 162 px at 25°, then 92.6 px of braking. It ends at about 147 px from the player at a bearing of about 47° against 180°: a 133° change, above 120° |
+| N6 ordering | **Resolved** | t6 → t2 and t9 → t5 are present |
+| N7 grep / count | **Resolved** | `.claude/` is excluded, and there are 14 formations |
+| N8 StateLight texture | **Resolved** | I verified headless that a code-built radial `GradientTexture2D` 8×8 returns an image with corner alpha 0.0, so the t8a assertion is runnable |
+| N9 inner-rect case | **Resolved** | The player is placed within `orbit_radius` of a corridor edge |
+| N10 Δv guard wording | **Resolved** | Facing continuity was added |
+| N11 hub ring near planets | **Partially** | Fixed for the planets. Wrong for the **pickups**, see B6 |
+| N12 sweep scope | **Resolved** | Limited to `.gd`, `.tscn` and `.tres` |
+
+## ContactBlast in Godot 4.6 (B1 check)
+
+I checked `hitbox_component.gd`, `hurtbox_component.gd`, `explosion_effect.gd`, `base_enemy.gd:153-169`,
+`health_component.gd:51-53`, `score_tracker.gd:136-172` and `level_director.gd:160-205`.
+
+**Stepping.** One main-loop iteration runs `PhysicsServer2D.flush_queries()`, then `SceneTree.physics_process` (scripts,
+then the `MessageQueue` flush), then `PhysicsServer2D.step()`.
+- A `call_deferred(add_child)` queued from an `area_entered` callback, or from a brain's tick, lands in that same
+  iteration's message flush, before `step()`.
+- The step creates the pair with the player `HurtBox`, which is monitoring with mask 1281 ∋ 256.
+- The next iteration's `flush_queries` emits `area_entered`, and `HurtBox._on_area_entered` casts to `HitBox`, which
+  `ContactBlast` is. The `CONTACT` damage type passes because the player's `accepted_damage_types` is empty.
+- The blast's own `_physics_process` counts 1 in that iteration and 2 in the next, then calls `queue_free()`. So the
+  report comes before the free even at the minimum of 2. The default of 3 gives one more step of slack, for a detonation
+  from idle time or a transform update that is applied one step late.
+
+**Lifetime and position.**
+- The blast is parented to `actor.get_parent()`, which is still valid because `BaseEnemy` frees with a deferred
+  `queue_free()`.
+- `Health.set_health` emits on every call, and the `_detonated` flag makes repeats harmless.
+
+**No side-effects.**
+- `ScoreTracker` registers only `WaveManager.enemy_spawned` entities, so a blast is never scored as an escape.
+- `_wait_enemies_cleared` counts container children, which delays it by at most 3 frames. It already tolerates pooled
+  bullets in the same container.
+
+**Test.** The new `test_contact_blast_damage.gd` asserts that player **health** actually drops, which is the
+observable round 1 asked for.
+
+---
+
+## Blocking
+
+### B5: The Swarm's overshoot config cannot produce the curve its own test requires (t8b; plan §2.2, §2.7 table, §2.7.1)
+
+Checked `enemy_mover.gd:157-169`: a boost leaves `actor.velocity` at the boost vector, and a desired speed below the
+current one selects `braking`.
+
+**What happens.**
+- OVERSHOOT starts at `burst_speed` 480 and requests `turn_toward(...) × max_speed` 220, so every tick is a *braking*
+  tick at 500 px/s².
+- Almost the whole Δv budget goes on shedding speed along the current heading. Heading only really turns once the speed
+  nears 220, which takes (480 − 220) / 500 = **0.52 s of the 0.8 s window**.
+- Replaying `step()` exactly (60 Hz, player 90° off the burst line at 50–400 px) gives **44°** of total turn, every
+  time.
+- The plan says "turns up to about 110°". The t8b acceptance criterion requires **≥ 60°**.
+
+**Why the config test misses it.** The pinned inequality `overshoot_turn_rate × max_speed ≤ acceleration`
+(528 ≤ 600) is the steady-state condition only. It ignores the deceleration phase, so it passes while the curve fails.
+
+**What the implementer faces.** Contradictory acceptance criteria. The easy way out is to weaken the ≥ 60° assertion,
+and that assertion is the one that proves B2 is fixed.
+
+**The Razor is fine.** It starts at 480, requests 200, brakes at 700 and turns at 3.0 rad/s. It turns 90–145° before
+its 20° exit or the 1.2 s cap.
+
+**Required:**
+- Pick values that satisfy the real bound and state it. Replayed results:
+  - braking 900 with 0.8 s → 76°;
+  - braking 1200 → 86°;
+  - braking 500 with `overshoot_seconds` 1.1 → 85°. This lengthens the ram cycle to 1.95 s, which still fits
+    3.5 + 1.95 ≤ 5.5.
+- Replace the config pin, in both configs, with the bound that includes the braking phase:
+  `overshoot_turn_rate × (overshoot_seconds − (burst_speed − max_speed) / braking) ≥ deg_to_rad(60)`. For the Razor,
+  use `overshoot_max_seconds`, `dash_speed` and `overshoot_speed`: 3.0 × (1.2 − 0.4) = 2.4 rad.
+- Keep the steady-state pin alongside it.
+- Correct the "about 110°" sentence.
+
+### B6: The Razor's hub anchor is within `perceive_radius` of a row of pickups (t16; plan §2.11 table and AC)
+
+Checked `sector_hub.tscn`:
+- `WeaponUnlockerSniperShot` / `Spread` / `Gatling` / `MiningLaser` sit at y = −515 (lines 187–199);
+- the second `ModuleUnlocker*` row sits at y = −415 (lines 152–183).
+
+The plan says the pickups lie at "y ≈ −212 to −315" and that the nearest to (0, −1000) is `ModuleUnlockerEmpBlast` at
+740 px.
+
+**The real numbers.**
+- The nearest pickup is `WeaponUnlockerMiningLaser` (20, −515), **485 px** from the anchor.
+- 485 − 200 = 285, which is **below** `perceive_radius` 450.
+- A player collecting the weapon unlockers is inside an idle Razor's reach, which is exactly the ambush C4 exists to
+  prevent.
+
+**What the implementer faces.** The t16 clearance test, correctly written, fails on the unchanged scene. The t16 AC
+hard-codes "Razor 540 > 450 on today's scene". The two cannot both hold.
+
+**Required:**
+- Put the Razor farther out, for example a separate `razor_ring_radius`, or `patrol_ring_radius` 1300. The (20, −515)
+  pickup is then 785 px away, and 785 − 200 = 585 > 450.
+- 1200 px would only just pass (485 > 450, a 35 px margin that ignores pickup and trigger radii).
+- If both groups share one radius, the Swarm at (0, 1300) is still clear: fortuna_station is 1113 px away.
+- Recompute the §2.11 table and the t16 AC from every direct child, including the `WeaponUnlocker*` and `LoreLog*` nodes.
+- Consider adding a margin for pickup and trigger radii.
+
+---
+
+## Non-blocking (fix in the revision if convenient; otherwise the implementer resolves them in the named task and records the choice in DECISIONS)
+
+- **N13: `attack_window_open` can stay open forever** (§2.4, §2.7.2; t4/t8c).
+  - It is "cleared when its burst ends", but the Swarm lead's *successful* burst ends with a self-destruct on contact.
+    So the burst never "ends" in the brain, and the flag stays true.
+  - If the flanks trigger on the edge, they never pincer again. If they trigger on the level, they attack continuously.
+  - Fix: the board records who opened the window and clears it in `leave()` / `release_lead()` for that member.
+  - Add a t4 case ("the window owner freed → window closed") and a t8c case: a lead that hits the player
+    → the next lead's burst opens the window again and the flanks wind up.
+- **N14: `join()` semantics are unspecified** (§2.4; t4).
+  - Roles are "recomputed on join". With staggered `delay()` spawns (t5), a full recompute on every join can hand LEAD to
+    a newcomer or reshuffle the flanks while the current lead is mid-pass.
+  - The first joins also happen before any `update_target()`, so "closest to the hint" means closest to (0, 0).
+  - Specify: `join()` only fills a vacant LEAD or FLANK, otherwise it gives REAR, and never demotes. A brain calls
+    `update_target()` before `join()` in `_ready()`.
+- **N15: `TargetInfo` has no `heading`** (`target_info.gd`: `position`, `velocity`, `facing` only). §2.4's "as
+  `TargetInfo` already gives it" and §2.7.2's `target.heading` do not exist.
+  - Either add a pure `heading(min_speed := 20.0)` helper to `TargetInfo` in t4, with a unit case, or compute it in the
+    brain in t8c.
+  - Name the owner so t4's tests and t8c's calls agree.
+- **N16: `AnchorIdle` has no home radius** (§2.5; t7).
+  - "RETURNING → IDLE on reaching `anchor` within the idle ring" needs a ring size the API lacks. The Swarm idles on a
+    140 px ring and the Razor on 160 ± 40.
+  - Add `home_radius`: Swarm about 170, Razor 200. t7's tests should use it.
+- **N17: engagement precedence for t8d** (§2.7.3).
+  - "Reaches NOTICING → `set_engaged(true)`" and "beyond `lose_radius` → `set_engaged(false)`" conflict for a member
+    that `force_notice()` wakes while it is beyond `lose_radius`. Possible when a member perceives at 380 px and a mate
+    on the far side of a 140 px ring is at up to about 660 > 620.
+  - Define one per-tick rule: `engaged = state in {NOTICING, COMBAT} and dist < lose_radius`, with `set_engaged`
+    idempotent.
+- **N18: `spiral()` as a pure function.** Its `radius_rate` argument only means something if the function uses it,
+  for example as an added radial velocity component. The test "shrinks when negative" needs that stated. Resolve it in
+  t2.
+- **N19: The deadline formula ignores DISENGAGE starting mid-BURST** (§2.6).
+  - `boost()` ignores requests for up to `burst_seconds` (0.45 s). The drone may then have to reverse from 480 px/s
+    under `braking`.
+  - The worst case is unlikely, because the nearest edge is re-chosen every tick. But the 0.5 s margin does not cover
+    it analytically.
+  - The t15 integration case is the arbiter. If it fails, the implementer should defer the budget's expiry until the
+    boost ends and add `burst_seconds` to the formula, rather than raise the timeout.
+  - B5's higher braking also helps here.
+- **N20: carry-over between DURATION sections** (§5 C3; t15). `deep_space`'s last wave triggers at 29.0 s of a 30 s
+  section. At 8.3 s lifetimes about 7 s of its drones overlap `asteroid_belt`, which the per-section peak does not
+  count. Put "deep_space → asteroid_belt handover density" on t15's playtest checklist.
+
+## tasks.json, holistic
+
+- **Ownership.** Every plan section has an owning task:
+  - §2.2 → t2, §2.3 → t3, §2.4 → t4, §2.4.1 → t5, §2.5 → t7, §2.6 → t6/t8b/t15;
+  - §2.7 → t8b/c/d, §2.8 → t9/10/11, §2.9 → t8a/t12/t13;
+  - §2.10 → t14/t15, §2.11 → t16, docs → t17.
+- **Dependencies** are acyclic and complete for the file overlaps I checked:
+  - `enemy_mover.gd`: t2 → t6;
+  - `wave_builder.gd`: t5 → t9 → t14 → t15;
+  - rosters: t8b → t9 → t14;
+  - the Razor scene: t10 → t11 → t13.
+- **Complexities are sensible.** t3, t8b, t8c, t10 and t15 are large. t8d, t11 and t16 are medium. t2, t7 and t8a
+  are small. `tasks.json` carries no model field. That is unchanged from round 1 and not a finding.
+- **Acceptance criteria are testable**, apart from the two numeric contradictions in B5 (t8b) and B6 (t16).
+
+## Checked and fine (new in rev 2)
+
+- `SquadController.update_target / set_engaged / is_engaged / leave`, and `AnchorIdle.hold_combat / force_notice`, are
+  consistent with the single-writer rule: they are field and state writes, never motion.
+- The `EngagementBudget` is gated on `EnemyWorld.arena()` (`enemy_world.gd:20`).
+  `AssaultCorridorConstraint._visible_rect()` exists for `inner_rect()`.
+- `release_constraint()` plus the `max_speed` write does not trip `test_enemy_mover_single_writer.gd`.
+- The D7 correction to `1-context.md` is accurate (`enemy_mover.gd:182-185`).
