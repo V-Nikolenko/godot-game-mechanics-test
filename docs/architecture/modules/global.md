@@ -387,6 +387,8 @@ enter a DISENGAGE-style state: call `mover.release_constraint()`, raise `mover.m
 exit speed, `seek()` the nearest point outside `EnemyWorld.projectile_world_rect()`, and free the
 actor once outside that rect (strict compare, as `EnemyPathMover._check_dash_end()` does). Scoring
 is unchanged — the actor leaves with `was_killed == false`, counted as an escape.
+`remaining()` returns the seconds left (`INF` when inactive); the Swarm Drone reads it to never start
+an attack it cannot finish before expiry, so its exit always begins exactly at `seconds`.
 `tests/integration/test_engagement_deadline.gd` pins the arithmetic that keeps this from stalling a
 level: for every drone/razor spawn in every `ENEMIES_CLEARED` section, the worst-case time from
 `waves_complete` to that enemy leaving the level must clear the section's own

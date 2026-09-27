@@ -55,3 +55,21 @@ func test_counting_only_advances_by_fed_delta() -> void:
 	var budget := EngagementBudget.new(1.0, get_tree())
 	assert_false(budget.update(0.0), "no delta fed yet; elapsed stays at 0")
 	assert_true(budget.update(1.0))
+
+
+## `remaining()` is what the Swarm Drone's WINDUP gate reads (docs/plans/cmuj4y8rh0070p52xk6vzfvbe):
+## INF with no arena (never expires), counting down by fed delta, floored at 0 once expired.
+func test_remaining_is_inf_without_an_arena() -> void:
+	var budget := EngagementBudget.new(1.0, get_tree())
+	budget.update(5.0)
+	assert_eq(budget.remaining(), INF)
+
+
+func test_remaining_counts_down_and_floors_at_zero() -> void:
+	_with_arena()
+	var budget := EngagementBudget.new(1.0, get_tree())
+	assert_almost_eq(budget.remaining(), 1.0, 0.0001)
+	budget.update(0.25)
+	assert_almost_eq(budget.remaining(), 0.75, 0.0001)
+	budget.update(3.0)
+	assert_eq(budget.remaining(), 0.0)

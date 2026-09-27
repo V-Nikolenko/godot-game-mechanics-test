@@ -85,6 +85,10 @@ const ROSTER: Array[Dictionary] = [
 		"name": "sniper_enemy",
 		"scene": "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn",
 	},
+	{
+		"name": "swarm_drone",
+		"scene": "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn",
+	},
 ]
 
 ## Top-level directories only — see `test_enemy_hurtbox_geometry.gd`'s `_ENEMY_DIRS` for why.

@@ -215,6 +215,12 @@ proof consumer for the whole stack; a later phase turns its corridor on. Contrac
 Space and an Assault harness via `tests/helpers/enemy_ai_harness.gd` and
 `tests/integration/test_enemy_dual_mode.gd`.
 
+**The Swarm Drone is the first Phase 2 enemy on the stack with the corridor on (`constraint_mode =
+AUTO`)** — see [swarm_drone/ENEMY.md](../../../assault/scenes/enemies/swarm_drone/ENEMY.md). Its
+`SwarmDroneBrain` runs the solo ram cycle (corkscrew → spiral → wind-up → burst → curved overshoot →
+one more pass) under an `EngagementBudget`, with an EXPLOSIVE `ContactProfile` and a `StateLight`;
+its behaviour spec runs in both harnesses in `tests/integration/test_swarm_drone.gd`.
+
 ### Projectiles & bullet pool
 
 Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.gd`
@@ -364,7 +370,9 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `light_assault_ship/states/`). Roster: bomber, bonus_drone, drone_interceptor,
-gunship, interceptor, kamikaze_drone, light_assault_ship, ram_ship, sniper_enemy. For the
+gunship, interceptor, kamikaze_drone, light_assault_ship, ram_ship, sniper_enemy, swarm_drone
+(no level spawns the Swarm Drone yet — see its
+[ENEMY.md](../../../assault/scenes/enemies/swarm_drone/ENEMY.md)). For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).

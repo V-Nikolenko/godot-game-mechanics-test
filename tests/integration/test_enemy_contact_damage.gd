@@ -101,6 +101,11 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/ram_ship/ram_config.tres",
 	},
 	{
+		"name": "swarm_drone",
+		"scene": "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn",
+		"config": "res://assault/scenes/enemies/swarm_drone/swarm_drone_config.tres",
+	},
+	{
 		"name": "space_station",
 		"scene": "res://assault/scenes/enemies/space_station/space_station.tscn",
 		"config": "res://assault/scenes/enemies/space_station/space_station_config.tres",

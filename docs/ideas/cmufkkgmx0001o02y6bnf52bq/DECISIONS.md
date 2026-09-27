@@ -420,3 +420,51 @@ are *planned* decisions. Once this phase's *as built* section exists, check it f
   caller stores it in (`entity.set("squad", board)`, §2.4.1) — `WaveManager`'s `_squads` map must
   keep only `WeakRef`s as planned, and t5 must give the spawned entity a `squad` property before
   `add_child()`, or the board is never kept alive by anything and dies on the next reassign's prune.
+
+### Built in t8b-swarm-solo (2026-09-27): details t8c, t8d, t14 and t15 depend on
+
+Task plan `docs/plans/cmuj4y8rh0070p52xk6vzfvbe/` (two review rounds, approved round 2).
+
+- **Config deviations from the §2.7 table.** `braking` **900** (not 500): epic review round 2 B5 was
+  never folded into the plan — at 500 the overshoot sheds 480 → 220 px/s for 0.52 s of its 0.8 s and
+  turns only ~44°; at 900 it turns ~76°. The config test pins both `overshoot_turn_rate × max_speed ≤
+  acceleration` and `overshoot_turn_rate × (overshoot_seconds − (burst_speed − max_speed) / braking) ≥
+  60°`. The epic's "turns up to about 110°" was wrong. `max_turn_rate` **10** rad/s (not 5) and the
+  mover's `turn_lerp` **20**, so the 0.4 s wind-up can swing the nose through 180° onto the burst line.
+  `corkscrew_amplitude` **120 px/s at 0.6 Hz** (not 60 at 1.5): `Steering.corkscrew`'s amplitude is a
+  *velocity*, lateral swing ≈ amplitude / (2π·f), so 60 @ 1.5 Hz swung ~6 px on a 32 px hull.
+- **`SwarmDroneBrain.phase_changed(new_phase: int)`** is emitted on every transition; `enter_phase(p)`
+  is the one transition path and the test seam. Phases: APPROACH, CLOSE_IN, WINDUP, BURST, OVERSHOOT,
+  REJOIN, DISENGAGE. t8b constants t8c repoints at config: `APPROACH_EXIT_RADIUS` 360,
+  `CLOSE_IN_RADIUS` 200. CLOSE_IN spirals with `radius_rate` 0 (only the ring shrinks, 120 px/s) and a
+  130 px/s tangential anchor so the anchor never outruns `max_speed`.
+- **Brain tunables are copied by `SwarmDrone._ready()`, which runs after the brain's own `_ready()`**,
+  so the `EngagementBudget` and `passes_left` are built on the brain's first tick, never in `_ready()`.
+  Any brain whose root copies config onto it must do the same.
+- **No DISENGAGE deferral through a burst (instead of epic review N19).** WINDUP is entered only while
+  `budget.remaining() ≥ windup + burst + (burst_speed − max_speed)/braking + 0.15 s` (1.29 s), so the
+  budget can only expire outside a burst, at ≤ `max_speed`, and DISENGAGE starts exactly at
+  `engage_seconds`. The §2.6 formula needs no burst term. New: `EngagementBudget.remaining()` (INF when
+  inactive). Honest residual (plan review round 2): the formula assumes the exit starts from rest; a
+  drone moving at 220 px/s away from its exit edge loses ~0.49 s more — worst case ≈ 9.57 s, still
+  under 10 s; t15's integration case is the arbiter.
+- **Lock timing:** the aim and lead are re-evaluated every WINDUP tick (the nose visibly tracks) and
+  locked on the last one, so `lead_time` is measured from the burst's start.
+- **Squad calls:** `update_target` each tick; `claim_side` on WINDUP entry (the sector the drone is in,
+  by the same cross-product sign as `SquadController`'s flanks), aim offset one hull width (32 px)
+  toward it; `release_side` on OVERSHOOT; `release_lead` at REJOIN **only with ≥ 2 members** —
+  `release_lead` on a sole member pins it to REAR with nobody to take LEAD, and every loose level spawn
+  is a squad of one (t5). t8c: either keep this rule or teach `SquadController.release_lead` that a sole
+  member keeps LEAD. DISENGAGE and rail suspension call `squad.leave(self)`. `SwarmDrone.squad` is the
+  duck-typed slot `WaveManager` writes; `SwarmDrone._ready()` calls `update_target` then `join`.
+- **DISENGAGE picks the nearest edge of `projectile_world_rect()` once, on entry** (not every tick),
+  seeks 64 px past it, frees once strictly outside the rect (re-read each tick).
+- **Epic §4 "a burst toward a stationary player uses facing"** was read as: the aim degenerates to the
+  player's position and the drone's own facing at burst start lies along the burst direction (the
+  wind-up telegraph points where it goes) — not the player's `TargetInfo.facing`.
+- **Placeholder art:** `drones.png` cell 0 cropped `Rect2(2,2,38,38)` (the sheet is 3×2 cells of 42×42
+  with grid marks on the cell borders); its nose points **down**, so `sprite_forward_angle` stays
+  `BaseEnemy`'s default `PI/2`. t12 replaces it (and sets its own forward angle).
+- Collision circle r 13 shared by body, `HurtBox` and `ContactHitBox` (one sub-resource, scale 1).
+  `swarm_drone` is in the contact-damage, contact-geometry and hurtbox-geometry rosters; the deadline
+  test reads `swarm_drone_config.tres`.

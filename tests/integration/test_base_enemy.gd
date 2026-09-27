@@ -334,6 +334,12 @@ func test_enemies_without_an_animated_sprite_are_unaffected_by_the_flip() -> voi
 
 const _CONTACT_FIXTURE := preload("res://tests/helpers/contact_fixture.gd")
 
+## Phase 2 enemies that author their own `ContactProfile` in the scene, with the mode they declare. Every
+## other enemy in the sweep is legacy and must resolve the default COLLISION.
+const _AUTHORED_CONTACT_MODES := {
+	"swarm_drone": ContactProfile.Mode.EXPLOSIVE,
+}
+
 
 func test_every_legacy_enemy_resolves_exactly_one_collision_contact_profile() -> void:
 	var checked := 0
@@ -345,10 +351,11 @@ func test_every_legacy_enemy_resolves_exactly_one_collision_contact_profile() ->
 		assert_not_null(entity.contact_profile, "%s: a contact profile is resolved" % entry["name"])
 		if entity.contact_profile == null:
 			continue
-		assert_eq(entity.contact_profile.mode, ContactProfile.Mode.COLLISION, "%s: default mode" % entry["name"])
+		var expected_mode: int = _AUTHORED_CONTACT_MODES.get(entry["name"], ContactProfile.Mode.COLLISION)
+		assert_eq(entity.contact_profile.mode, expected_mode, "%s: resolved mode" % entry["name"])
 		var profiles := entity.get_children().filter(func(c: Node) -> bool: return c is ContactProfile)
 		assert_eq(profiles.size(), 1, "%s: exactly one ContactProfile child" % entry["name"])
-		if entity.contact_hit_box != null:
+		if entity.contact_hit_box != null and expected_mode == ContactProfile.Mode.COLLISION:
 			assert_true(entity.contact_hit_box.monitorable, "%s: COLLISION leaves the hitbox monitorable" % entry["name"])
 			assert_true(entity.contact_hit_box.monitoring, "%s: COLLISION leaves the hitbox monitoring" % entry["name"])
 	assert_gte(checked, _MIN_ROSTER_SIZE, "roster sweep too small")

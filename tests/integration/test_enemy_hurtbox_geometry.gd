@@ -112,6 +112,10 @@ const ROSTER: Array[Dictionary] = [
 		"name": "sniper_enemy",
 		"scene": "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn",
 	},
+	{
+		"name": "swarm_drone",
+		"scene": "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn",
+	},
 ]
 
 

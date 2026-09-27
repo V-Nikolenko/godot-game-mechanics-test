@@ -12,21 +12,21 @@
 ## last. `exit_distance` is half the shorter side of the LIVE `projectile_world_rect()` — the
 ## worst-case straight-line distance from any point inside it to the nearest edge.
 ##
-## Until t8b lands the Swarm Drone (and its config), the numbers are the constants the plan pins:
-## `engage_seconds` 5.5 s, `exit_speed` 320 px/s, `acceleration` 600 px/s². t8b repoints this test
-## at `swarm_drone_config.tres` once it exists. Both scenes checked here — the Kamikaze Drone and
-## the Drone Interceptor — are today's stand-ins for the Swarm Drone and the Razor Drone.
+## `engage_seconds`, `exit_speed` and `acceleration` are read from `swarm_drone_config.tres` (t8b).
+## The Kamikaze Drone and the Drone Interceptor stay in the scene list as today's stand-ins until
+## the Swarm Drone replaces them in level 1 (t14) and the interceptor becomes the Razor Drone (t9).
+## The Swarm Drone never starts an attack its budget cannot finish (`SwarmDroneBrain.can_start_attack`),
+## so the budget always expires outside a burst, at <= max_speed, and DISENGAGE begins exactly at
+## `engage_seconds`: the formula below needs no burst term.
 extends GutTest
 
 const DIRECTOR_SCRIPT := preload("res://assault/scenes/levels/edelia/1/level_1_director.gd")
 
-## [judgement, pinned by the plan]: repointed at swarm_drone_config.tres in t8b.
-const ENGAGE_SECONDS := 5.5
-const EXIT_SPEED := 320.0
-const ACCELERATION := 600.0
+const SWARM_CONFIG: SwarmDroneConfig = preload("res://assault/scenes/enemies/swarm_drone/swarm_drone_config.tres")
 const MARGIN := 0.5
 
 const DRONE_OR_RAZOR_SCENES: Array[String] = [
+	"res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn",
 	"res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.tscn",
 	"res://assault/scenes/enemies/drone_interceptor/drone_interceptor.tscn",
 ]
@@ -94,8 +94,8 @@ func test_every_enemies_cleared_sections_drone_exit_clears_the_timeout() -> void
 		checked += 1
 
 		var last_wave_max_delay := _max_delay(_last_wave(section))
-		var deadline := last_wave_max_delay + ENGAGE_SECONDS + exit_distance / EXIT_SPEED \
-			+ EXIT_SPEED / (2.0 * ACCELERATION) + MARGIN
+		var deadline := last_wave_max_delay + SWARM_CONFIG.engage_seconds + exit_distance / SWARM_CONFIG.exit_speed \
+			+ SWARM_CONFIG.exit_speed / (2.0 * SWARM_CONFIG.acceleration) + MARGIN
 
 		assert_lt(deadline, section.enemies_cleared_timeout,
 			"section %s: %.2f s must clear its %.1f s timeout"

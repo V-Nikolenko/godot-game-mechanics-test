@@ -42,3 +42,12 @@ func update(delta: float) -> bool:
 		if _elapsed >= seconds:
 			_expired = true
 	return _expired
+
+
+## Seconds left before `update()` reports expired: `INF` when not `active` (it never expires),
+## otherwise `seconds` minus the elapsed time fed so far, floored at 0. A brain uses it to avoid
+## starting an attack it cannot finish before the exit (docs/plans/cmuj4y8rh0070p52xk6vzfvbe).
+func remaining() -> float:
+	if not active:
+		return INF
+	return maxf(seconds - _elapsed, 0.0)
