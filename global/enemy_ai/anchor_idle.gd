@@ -13,13 +13,14 @@ extends RefCounted
 
 enum State { IDLE, NOTICING, COMBAT, RETURNING }
 
-## Below this squared distance to `anchor`, RETURNING considers itself home.
-const ARRIVAL_RADIUS := 8.0
-
 var anchor: Vector2
 var perceive_radius: float
 var lose_radius: float
 var notice_time: float
+## RETURNING reaches IDLE once within this distance of `anchor` - the drone's idle orbit ring, not
+## the anchor point itself (Swarm ~170, Razor ~200; see plan §2.5, §2.7.3, §2.8.4 and plan-review
+## N16). A brain that idles tighter or looser than the default should pass its own ring radius.
+var home_radius: float
 ## An external reason to keep fighting (e.g. a squad mate still engaged). While true, COMBAT
 ## never drops to RETURNING regardless of distance. Clearing it re-checks on the next update().
 var hold_combat: bool = false
@@ -28,10 +29,11 @@ var _state := State.IDLE
 var _notice_elapsed: float = 0.0
 
 
-func _init(p_anchor: Vector2, p_perceive_radius: float, p_lose_radius: float, p_notice_time: float) -> void:
+func _init(p_anchor: Vector2, p_perceive_radius: float, p_lose_radius: float, p_notice_time: float, p_home_radius: float = 8.0) -> void:
 	anchor = p_anchor
 	perceive_radius = p_perceive_radius
 	notice_time = p_notice_time
+	home_radius = p_home_radius
 	if p_perceive_radius >= p_lose_radius:
 		push_error("AnchorIdle: perceive_radius (%s) must be < lose_radius (%s); clamping" % [p_perceive_radius, p_lose_radius])
 		lose_radius = p_perceive_radius * 1.25
@@ -63,7 +65,7 @@ func update(delta: float, actor_pos: Vector2, target: TargetInfo) -> int:
 		State.RETURNING:
 			if _within(actor_pos, target, perceive_radius):
 				_enter_noticing()
-			elif actor_pos.distance_squared_to(anchor) <= ARRIVAL_RADIUS * ARRIVAL_RADIUS:
+			elif actor_pos.distance_squared_to(anchor) <= home_radius * home_radius:
 				_state = State.IDLE
 	return _state
 

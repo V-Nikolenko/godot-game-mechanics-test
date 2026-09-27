@@ -93,6 +93,27 @@ func test_returning_to_idle_at_the_anchor() -> void:
 	assert_eq(idle.update(DT, ANCHOR, _no_target()), State.IDLE, "already at the anchor")
 
 
+## RETURNING reaches IDLE on arriving at the idle ring (home_radius), not only when it reaches
+## the anchor point itself - a drone returns to its patrol slot on that ring, never to the anchor.
+func test_returning_to_idle_at_the_idle_ring() -> void:
+	var idle := AnchorIdle.new(ANCHOR, PERCEIVE, LOSE, NOTICE_TIME, 170.0)
+	idle.force_notice()
+	idle.update(NOTICE_TIME, ANCHOR, _no_target())  # -> COMBAT
+	assert_eq(idle.update(DT, ANCHOR, _no_target()), State.RETURNING, "no target -> leave COMBAT")
+	var ring_pos := ANCHOR + Vector2(150.0, 0.0)  # inside the 170 px idle ring
+	assert_eq(idle.update(DT, ring_pos, _no_target()), State.IDLE, "arrived at the idle ring")
+
+
+## Just outside home_radius, RETURNING stays RETURNING.
+func test_returning_stays_returning_outside_the_idle_ring() -> void:
+	var idle := AnchorIdle.new(ANCHOR, PERCEIVE, LOSE, NOTICE_TIME, 170.0)
+	idle.force_notice()
+	idle.update(NOTICE_TIME, ANCHOR, _no_target())  # -> COMBAT
+	assert_eq(idle.update(DT, ANCHOR, _no_target()), State.RETURNING, "no target -> leave COMBAT")
+	var outside_ring := ANCHOR + Vector2(171.0, 0.0)  # just outside the 170 px idle ring
+	assert_eq(idle.update(DT, outside_ring, _no_target()), State.RETURNING, "not yet at the idle ring")
+
+
 func test_returning_to_noticing_inside_perceive_radius() -> void:
 	var idle := _idle()
 	idle.force_notice()
