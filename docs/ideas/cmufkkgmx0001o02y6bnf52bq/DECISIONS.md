@@ -383,3 +383,40 @@ are *planned* decisions. Once this phase's *as built* section exists, check it f
 - COLLISION never writes the hitbox (not even `monitorable = true`), so `SpaceStation`'s death-time
   `collision_layer = 0` and every legacy scene's authored flags stay as they are. The Kamikaze and the Interceptor
   still connect `contact_hit_box.area_entered` themselves; t8b and t9 move them onto `contact_made`.
+
+### Built in t4-squad-controller (2026-09-27): details later phases (t5, t8c, Ph3) depend on
+
+- `SquadController` (`global/enemy_ai/squad_controller.gd`) follows plan §2.4's API, with three
+  resolutions the round-2 review left to this task (N13, N14, N3's "only strong reference" claim):
+- **Assignment is a full recompute, not an incremental fill.** `join()`, `leave()` and
+  `release_lead()` all call one `_reassign()` that re-sorts every current member by distance to
+  `target_position_hint` (ties by join order) and reassigns LEAD/FLANK_LEFT/FLANK_RIGHT/REAR from
+  scratch every time. This is what makes "LEAD goes to the closest member" a live invariant rather
+  than a one-time election (round-1 N14 asked for the opposite — join() only fills a vacancy — but
+  that cannot produce "the lead is closest to the hint" as a steady-state property, which t4's own
+  acceptance criteria required). The plan's reassignment bullets ("existing flanks keep their role
+  unless one becomes the new lead", "the closest REAR fills the vacated flank") are a **consequence**
+  of this design when a lead is removed, not a separate code path — verified in
+  `test_freeing_the_lead_reassigns_in_the_same_call`. `release_lead(member)` is the one exception:
+  it pins the releasing member to REAR for that call (`_reassign(force_rear)`), because a plain
+  recompute would just re-elect the same still-closest member and never rotate the token.
+  **Consequence for t5/t8c:** a squad member's role can change on every teammate's join, not only
+  on death — a brain reading `squad.role_of(self)` every tick (as §2.7.2 already assumes) sees this
+  correctly; nothing should cache a role across ticks.
+- **`attack_window_open` self-clears (round-1 N13).** Only the current LEAD is ever supposed to set
+  it true (§2.7.2), so `leave()` and `release_lead()` clear it whenever the departing/releasing
+  member held LEAD. A brain still sets it directly (`squad.attack_window_open = true`) on entering
+  BURST — this is a safety net against it sticking open after a lead free, not a new API.
+- **`claim_side()`/`release_side()` take and return `int`, not `Side`.** Passing
+  `SquadController.Side.LEFT` from another script into a parameter or return typed `Side` fails to
+  compile under Godot 4.6's static checker — the same cross-script nested-enum mismatch that
+  already made `role_changed` declare `role: int` rather than `Role`. Any caller (t8c, t10) passes
+  `SquadController.Side.LEFT`-style values as plain ints; comparisons and dictionary keys still work
+  because enum members are ints underneath.
+- **"Members hold the only strong reference" is the member's own `squad` property, not the
+  `tree_exiting` connection `join()` makes.** Probed directly: connecting
+  `member.tree_exiting.connect(leave.bind(member))` does **not** keep a `RefCounted` target alive in
+  this Godot version once every other reference is dropped. The board only survives via whatever the
+  caller stores it in (`entity.set("squad", board)`, §2.4.1) — `WaveManager`'s `_squads` map must
+  keep only `WeakRef`s as planned, and t5 must give the spawned entity a `squad` property before
+  `add_child()`, or the board is never kept alive by anything and dies on the next reassign's prune.
