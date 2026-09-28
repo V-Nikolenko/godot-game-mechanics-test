@@ -1,6 +1,6 @@
-## Characterization: pins every Kamikaze Drone and Razor Drone spawn in Level 1, the space
-## station's BOTTOM reinforcement squad, and Open Space's ambient PatrolDrone spawn — the state of
-## the world BEFORE Enemy rework phase 2 touches any of it
+## Characterization: pins every Swarm Drone (`WaveBuilder.DRONE`) and Razor Drone spawn in Level 1,
+## the space station's BOTTOM reinforcement squad, and Open Space's ambient PatrolDrone spawn — the
+## state of the world BEFORE Enemy rework phase 2 touches any of it
 ## (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §3 step 1). t14/t15/t16 replace the enemies these
 ## pins describe; this file exists so those tasks start from a known-true baseline instead of
 ## trusting memory of what the level "used to do".

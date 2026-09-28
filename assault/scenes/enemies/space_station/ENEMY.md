@@ -257,7 +257,7 @@ and pull the player across the screen rather than nudging them.
 |---|---|---|---|---|
 | 0 | Left | 2 × `interceptor` | (-440, 20), (-440, 80) | `straight(200, PI/2)` — rightward |
 | 1 | Right | 2 × `interceptor` | (440, 20), (440, 80) | `straight(200, -PI/2)` — leftward |
-| 2 | Bottom | 2 × `kamikaze_drone` | (-100, 290), (100, 290) | `straight(170, PI)` — upward |
+| 2 | Bottom | 2 × `swarm_drone` | (-100, 290), (100, 290) | `straight(170, PI)` — upward |
 | 3 | Top | 2 × `fighter` + `.shoot_forward()` | (-250, -290), (250, -290) | `straight(170, ±0.5)` — down-and-inward |
 
 Every entry also gets `.free_after(reinforcement_lifetime)` (7.0 s).

@@ -86,10 +86,10 @@ b.fighter().at(260, -400).move(b.u_sweep(510, 730, 10)).free_after(12).shoot_for
 
 ---
 
-### `drone` — Kamikaze Drone
+### `drone` — Swarm Drone
 
 **Builder:** `b.drone()`  
-**Scene:** `kamikaze_drone.tscn`  
+**Scene:** `swarm_drone.tscn`  
 **Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
 **Shoots:** No — rams the player on contact.  
 **HP:** Very low  
@@ -513,7 +513,7 @@ footprint at 45°.
 
 **It also spawns other enemies from this roster.** During phase 1 only, `StationReinforcements`
 sends squads across the arena on a fixed `LEFT → RIGHT → BOTTOM → TOP` cycle: two `interceptor`
-from either side, two `kamikaze_drone` from below, two `fighter` with `.shoot_forward()` from
+from either side, two `swarm_drone` from below, two `fighter` with `.shoot_forward()` from
 above. Things to know if you edit that table (`station_reinforcements.gd::_build_squads()`):
 
 - It uses this file's own vocabulary — `b.interceptor().at(…).move(b.straight(…)).free_after(…)` —

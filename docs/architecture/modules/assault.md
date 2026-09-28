@@ -141,7 +141,7 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   the subclass's own `.tres`, so a subclass wanting its configured `collision_damage` must
   re-apply it in `_ready()` off `contact_hit_box` (`gunship.gd`, `bomber.gd`,
   `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a different default
-  directly on its own scene node (`razor_drone.tscn`, `kamikaze_drone.tscn` — 30, still
+  directly on its own scene node (`razor_drone.tscn`, `swarm_drone.tscn` — 30, still
   re-applied from config where one exists). Forgetting leaves the `.tres` value dead with no
   symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
   *When* that hitbox is live is the enemy's `contact_profile` (`ContactProfile`, resolved like
@@ -389,9 +389,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `light_assault_ship/states/`). Roster: bomber, bonus_drone, razor_drone,
-gunship, interceptor, kamikaze_drone, light_assault_ship, ram_ship, sniper_enemy, swarm_drone
-(no level spawns the Swarm Drone yet — see its
-[ENEMY.md](../../../assault/scenes/enemies/swarm_drone/ENEMY.md)). For the
+gunship, interceptor, light_assault_ship, ram_ship, sniper_enemy, swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).
@@ -477,7 +475,7 @@ nothing at all this time. On a one-shot `Timer` it spawns small squads of **exis
 scenes that cross the arena, so the player can no longer camp one spot while streaming into a
 turret. The squad table is fixed and cycles `LEFT → RIGHT → BOTTOM → TOP` (never `randf()`, for
 the same reason the beam angles are a list): two `interceptor` sweeping in from either side
-through the vertical middle, two `kamikaze_drone` rising from below, two `fighter` with
+through the vertical middle, two `swarm_drone` rising from below, two `fighter` with
 `.shoot_forward()` angling down-and-inward from above. Squads are authored with `WaveBuilder`'s
 own fluent API (`b.interceptor().at(…).move(b.straight(…)).free_after(…)`), in **640×360 design
 units** scaled by `ArenaCamera.WORLD_SCALE` once at spawn — speeds are left unscaled because

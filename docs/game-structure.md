@@ -43,7 +43,7 @@ interacts with a planet to select and launch missions.
 Top-down vertical shoot-em-up. Enemies scroll in from the top in scripted waves.
 
 - **Player:** `PlayerFighter` — state-machine movement (idle / move / dash), homing missiles, warhead missiles, overheat system
-- **Enemies:** 8 types — Light Assault, Sniper, Gunship, Bomber, Ram, Kamikaze Drone + allies + asteroids
+- **Enemies:** 8 types — Light Assault, Sniper, Gunship, Bomber, Ram, Swarm Drone + allies + asteroids
 - **Waves:** Defined in `level_1_waves.gd` / `level_2_waves.gd` using `WaveBuilder`
 - **Exit:** All waves complete → `LevelExitCutscene` → Infiltration (first clear) or Hub (replay)
 
