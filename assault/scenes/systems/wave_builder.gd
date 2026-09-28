@@ -238,7 +238,7 @@ func level(name: String, waves: Array) -> LevelResource:
 # ── Scene path constants ──────────────────────────────────────────────────────
 
 const FIGHTER        := "res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn"
-const DRONE          := "res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.tscn"
+const DRONE          := "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn"
 const RAM            := "res://assault/scenes/enemies/ram_ship/ram_ship.tscn"
 const SNIPER         := "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn"
 const SNIPER_ENEMY   := SNIPER  ## Alias kept so existing b.sniper_enemy() calls still compile.

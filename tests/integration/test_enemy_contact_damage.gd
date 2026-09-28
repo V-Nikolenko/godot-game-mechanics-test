@@ -11,7 +11,7 @@
 ## that wants its configured `collision_damage` has to re-apply it in `_ready()` afterwards. Most
 ## do (`bomber.gd`, `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a
 ## different default directly on their own scene's node (`razor_drone.tscn`,
-## `kamikaze_drone.tscn`, `ally_fighter.tscn` — 30/30/25 — with the script still re-applying where
+## `swarm_drone.tscn`, `ally_fighter.tscn` — 30/30/25 — with the script still re-applying where
 ## a config can override it).
 ##
 ## The `Gunship` did not, so `gunship_config.tres`'s `collision_damage = 30` was dead and the
@@ -84,11 +84,6 @@ const ROSTER: Array[Dictionary] = [
 		"name": "interceptor",
 		"scene": "res://assault/scenes/enemies/interceptor/interceptor.tscn",
 		"config": "res://assault/scenes/enemies/interceptor/interceptor_config.tres",
-	},
-	{
-		"name": "kamikaze_drone",
-		"scene": "res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.tscn",
-		"config": "res://assault/scenes/enemies/kamikaze_drone/drone_config.tres",
 	},
 	{
 		"name": "light_assault_ship",

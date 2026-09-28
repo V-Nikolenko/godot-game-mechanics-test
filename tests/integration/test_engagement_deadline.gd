@@ -14,8 +14,6 @@
 ##
 ## The Swarm formula reads `swarm_drone_config.tres` (t8b); a section with a Razor Drone is also judged by
 ## the Razor formula, from `razor_drone_config.tres` (t10), which adds its dash deferral.
-## The Kamikaze Drone and the Razor Drone stay in the scene list as today's stand-ins until
-## the Swarm Drone replaces the Kamikaze Drone in level 1 (t14).
 ## The Swarm Drone never starts an attack its budget cannot finish (`SwarmDroneBrain.can_start_attack`),
 ## so the budget always expires outside a burst, at <= max_speed, and DISENGAGE begins exactly at
 ## `engage_seconds`: the formula below needs no burst term.
@@ -30,7 +28,6 @@ const MARGIN := 0.5
 
 const DRONE_OR_RAZOR_SCENES: Array[String] = [
 	"res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn",
-	"res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.tscn",
 	"res://assault/scenes/enemies/razor_drone/razor_drone.tscn",
 ]
 
@@ -81,7 +78,7 @@ func _section_has_drone_or_razor(section: LevelSection) -> bool:
 	return false
 
 
-## The Swarm (and the Kamikaze stand-in) never starts an attack its budget cannot finish, so its exit
+## The Swarm never starts an attack its budget cannot finish, so its exit
 ## begins exactly at `engage_seconds`, from at most `max_speed`.
 func _swarm_deadline(last_wave_max_delay: float, exit_distance: float) -> float:
 	return last_wave_max_delay + SWARM_CONFIG.engage_seconds + exit_distance / SWARM_CONFIG.exit_speed \
