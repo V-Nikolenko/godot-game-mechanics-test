@@ -78,6 +78,7 @@ func _spawn_razor_drone(harness, pos: Vector2, rng_seed: int = 0) -> RazorDrone:
 	entity.global_position = pos
 	if rng_seed != 0:
 		_razor_brain(entity).rng_seed = rng_seed
+	_razor_brain(entity).start_engaged = true  # pre-t11: predates the hub idle (test_razor_drone.gd)
 	harness.root.add_child(entity)
 	entity.set_physics_process(false)  # driven only by hand below (test_razor_drone.gd's technique)
 	return entity

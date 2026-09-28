@@ -68,3 +68,18 @@ extends ShipConfig
 ## A dash starts only from a bearing this many degrees off the vertical axis (Assault only).
 @export var side_lane_min_deg    : float = 30.0
 @export var side_lane_max_deg    : float = 75.0
+
+@export_group("Idle")
+## Open Space only: the patrol ring's radius (px), redrawn ± this jitter at the start of every leg.
+@export var idle_radius          : float = 160.0
+@export var idle_radius_jitter   : float = 40.0
+## Open Space only: the patrol ring's angular speed (rad/s), redrawn ± this jitter every leg.
+@export var idle_speed           : float = 0.5
+@export var idle_speed_jitter    : float = 0.2
+## Open Space only: enter combat once the player is within this of the drone (px).
+@export var perceive_radius      : float = 450.0
+## Open Space only: drop back toward patrol once the player is beyond this (px). Must exceed
+## perceive_radius (AnchorIdle's hysteresis margin).
+@export var lose_radius          : float = 700.0
+## Open Space only: the NOTICING beat before combat (s).
+@export var notice_time          : float = 0.35

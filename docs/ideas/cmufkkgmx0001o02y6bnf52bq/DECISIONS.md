@@ -587,3 +587,43 @@ Task plan `docs/plans/cmuj4y8rr007gp52xxs8dec5s/` (two review rounds; approved i
   and a later cleanup (Ph15/Ph17) may retire them.
 - **Scene:** `ContactProfile` (RAMMING), `StateLight` at (0, −10) (t13 may move it for the new sprite), `BulletPool`
   and `AttackController`. `test_base_enemy.gd`'s `_AUTHORED_CONTACT_MODES` gains `razor_drone → RAMMING`.
+
+### Built in t11-razor-idle (2026-09-28): details t16-hub-patrol depends on
+
+Plan §2.8.4. Follows the t8d-swarm-idle precedent above (`AnchorIdle`, the `patrol_anchor` sentinel, the
+`start_engaged` test seam), adapted for a single drone with no `SquadController`.
+
+- **`RazorDroneBrain.Phase` gains `IDLE_ORBIT, IDLE_BRAKE, IDLE_REVERSE, IDLE_BOOST, NOTICING, RETURNING`**,
+  appended after `DISENGAGE` so every existing pinned value is unchanged. `RETURNING` is deliberately not named
+  `RETURN` — that name is already the post-overshoot return to the combat orbit ring, and t11's own `RETURNING`
+  must never collide with or interrupt it.
+- **`home_radius` is `idle_radius` itself** (160 by default), not `idle_radius + idle_radius_jitter` as an earlier
+  draft considered — matching what `SwarmDroneBrain` actually passes (`idle_radius`, not the ~170 the t8d review
+  comment estimated). A `RETURNING` drone counts as "home" once within the nominal ring radius of the anchor, not
+  the jittered maximum.
+- **The idle ring owns its own angle/radius/speed fields** (`_idle_angle`, `_idle_ring_radius`, `_idle_speed_mag`),
+  separate from combat's `_orbit_angle` / `orbit_centre` / `angular_speed`. This is load-bearing: `tick()` sets
+  `orbit_centre = _centre_of(target.position)` on **every** tick the player exists, regardless of phase, and the
+  player exists (just far away) in every idle test. Reusing the combat fields for idle would have let that
+  assignment clobber the idle ring's centre every tick; `tick()` now skips it while in an idle-related phase
+  (`_in_anchor_idle_phase()`: the four idle legs plus NOTICING and RETURNING) and resumes updating it the moment
+  the brain hands over to ENTER.
+- **Each idle leg is exactly one of `IDLE_BRAKE` / `IDLE_REVERSE` / `IDLE_BOOST`, equally likely**, drawn from `rng`
+  when the current `IDLE_ORBIT` leg's 2–4 s timer runs out; `force_next_idle_leg(&"brake" | &"reverse" | &"boost")`
+  is the test seam, mirroring `force_next_choice`. All three hand back to a **fresh** `IDLE_ORBIT` leg (which
+  re-anchors and redraws radius/speed/duration) rather than resuming the old one.
+- **`IDLE_REVERSE` reuses `reverse_seconds`** (the combat reversal's ramp time) rather than a new config field —
+  the two reversals never run concurrently, and the plan's own config-field list for t11 names only the `idle_*`
+  triplet, `perceive_radius`, `lose_radius` and `notice_time`.
+- **`IDLE_BOOST`'s speed is `1.8 × current leg's tangential speed`** (`idle_speed_mag × idle_ring_radius`), along
+  the drone's current velocity direction (its facing, if nearly stopped) — not a fixed exported speed, so a boost
+  during a wide, fast leg is a bigger burst than one during a tight, slow leg.
+- **`NOTICING → ENTER` needed no new code path**: `enter_phase()`'s match already runs nothing for `ENTER`, so the
+  handover keeps the drone's current velocity for free — the same trick t8d used for the Swarm's
+  `NOTICING → APPROACH`.
+- **`RETURNING` never interrupts a live `DASH`** (the single guarded phase, matching t8d's `BURST` guard for the
+  Swarm) — a contact-armed pass always finishes. It is not guarded against interrupting `WINDUP` or the feint
+  phases, same judgement call as t8d.
+- **Every pre-existing `test_razor_drone.gd` / `test_enemy_dual_mode.gd` case sets `start_engaged = true`** on the
+  brain (three spawn helpers: `test_razor_drone.gd`'s `_spawn()`, its two manual `SCENE.instantiate()` cases, and
+  `test_enemy_dual_mode.gd`'s `_spawn_razor_drone()`), so none of them changed behaviour.

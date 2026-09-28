@@ -79,3 +79,10 @@ func _apply_config(cfg: RazorDroneConfig) -> void:
 	b.exit_speed = cfg.exit_speed
 	b.side_lane_min_deg = cfg.side_lane_min_deg
 	b.side_lane_max_deg = cfg.side_lane_max_deg
+	b.idle_radius = cfg.idle_radius
+	b.idle_radius_jitter = cfg.idle_radius_jitter
+	b.idle_speed = cfg.idle_speed
+	b.idle_speed_jitter = cfg.idle_speed_jitter
+	b.perceive_radius = cfg.perceive_radius
+	b.lose_radius = cfg.lose_radius
+	b.notice_time = cfg.notice_time

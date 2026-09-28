@@ -215,7 +215,16 @@ clamps its orbit centre into `inner_rect()` and attacks only from a 30°–75° 
 pulse through a brain-driven `AttackController.fire_now()`. Its behaviour spec is
 `tests/integration/test_razor_drone.gd`, mostly dual-mode. The fixture's and the Razor's cross-mode
 cases are in `tests/integration/test_enemy_dual_mode.gd`, built on `tests/helpers/enemy_ai_harness.gd`;
-the corridor's contract tests are `tests/unit/test_assault_corridor_constraint.gd`.
+the corridor's contract tests are `tests/unit/test_assault_corridor_constraint.gd`. In Assault the
+`EngagementBudget` being active also skips the Open Space hub idle below — the level has already
+decided the fight is on, so the brain starts straight in ENTER.
+
+**The same brain patrols its own `patrol_anchor` in Open Space until it notices the player** —
+`AnchorIdle` (`global/enemy_ai/anchor_idle.gd`) decides IDLE / NOTICING / (orbit-and-dash) /
+RETURNING; the idle ring itself drifts, brakes, reverses and takes short boosts (`IDLE_ORBIT` /
+`IDLE_BRAKE` / `IDLE_REVERSE` / `IDLE_BOOST`), and NOTICING hands over to combat from the drone's
+current velocity, with no `halt()` or `boost()`. See razor_drone/ENEMY.md's "Hub idle" section for
+the exact radii and timings.
 
 **The Swarm Drone is the first Phase 2 enemy on the stack with the corridor on (`constraint_mode =
 AUTO`)** — see [swarm_drone/ENEMY.md](../../../assault/scenes/enemies/swarm_drone/ENEMY.md). Its

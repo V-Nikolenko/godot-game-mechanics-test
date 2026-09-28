@@ -44,7 +44,9 @@ func _harness(mode: String) -> RefCounted:
 func _spawn(h: RefCounted, pos: Vector2, configure: Callable = Callable(), rng_seed: int = SEED) -> RazorDrone:
 	var drone := SCENE.instantiate() as RazorDrone
 	drone.global_position = pos
-	(drone.get_node("Brain") as RazorDroneBrain).rng_seed = rng_seed
+	var brain := drone.get_node("Brain") as RazorDroneBrain
+	brain.rng_seed = rng_seed
+	brain.start_engaged = true  # pre-t11: every case here predates the hub idle (§ t11 below)
 	if configure.is_valid():
 		configure.call(drone.config)
 	h.root.add_child(drone)
@@ -138,7 +140,14 @@ func test_config_flows_through_to_every_node() -> void:
 		c.pulse_speed = 333.0
 		c.orbit_radius = 111.0
 		c.feint_clearance_px = 66.0
-		c.engage_seconds = 2.0)
+		c.engage_seconds = 2.0
+		c.idle_radius = 99.0
+		c.idle_radius_jitter = 12.0
+		c.idle_speed = 0.9
+		c.idle_speed_jitter = 0.3
+		c.perceive_radius = 321.0
+		c.lose_radius = 654.0
+		c.notice_time = 0.6)
 	_tick(drone)
 	var mover := drone.get_node("EnemyMover") as EnemyMover
 	var pattern := (drone.get_node("AttackController") as AttackController).pattern as AimedAttackPattern
@@ -153,10 +162,22 @@ func test_config_flows_through_to_every_node() -> void:
 	assert_eq(_brain(drone).orbit_radius, 111.0)
 	assert_eq(_brain(drone).feint_clearance_px, 66.0)
 	assert_eq(_brain(drone).budget.seconds, 2.0)
+	assert_eq(_brain(drone).idle_radius, 99.0)
+	assert_eq(_brain(drone).idle_radius_jitter, 12.0)
+	assert_eq(_brain(drone).idle_speed, 0.9)
+	assert_eq(_brain(drone).idle_speed_jitter, 0.3)
+	assert_eq(_brain(drone).perceive_radius, 321.0)
+	assert_eq(_brain(drone).lose_radius, 654.0)
+	assert_eq(_brain(drone).notice_time, 0.6)
 	assert_not_null(pattern, "the pulse pattern is built")
 	assert_eq(pattern.bullet_damage, 7)
 	assert_eq(pattern.bullet_speed, 333.0)
 	assert_eq(pattern.accuracy, 0.0)
+
+
+func test_config_pins_the_idle_hysteresis_margin() -> void:
+	assert_gt(CONFIG.lose_radius, CONFIG.perceive_radius,
+		"lose_radius must exceed perceive_radius (AnchorIdle's hysteresis margin)")
 
 
 ## Two drones never share one pattern: it is built per instance, not a scene sub-resource.
@@ -192,6 +213,7 @@ func test_no_player_requests_zero() -> void:
 	add_child_autofree(container)
 	var drone := SCENE.instantiate() as RazorDrone
 	drone.global_position = Vector2(500, 500)
+	_brain(drone).start_engaged = true  # pre-t11: ENTER's own "no target" behaviour, not idle's
 	container.add_child(drone)
 	drone.set_physics_process(false)
 	_tick(drone)
@@ -554,6 +576,7 @@ func test_a_real_dash_hurts_a_real_player_and_orbit_contact_does_not() -> void:
 	var drone := SCENE.instantiate() as RazorDrone
 	drone.position = player_pos + Vector2(CONFIG.orbit_radius, 0)
 	_brain(drone).rng_seed = SEED
+	_brain(drone).start_engaged = true  # pre-t11: this case predates the hub idle
 	world.add_child(drone)
 	await wait_physics_frames(2)
 	assert_eq(_brain(drone).phase, P.ORBIT, "sanity: orbiting")
@@ -702,3 +725,210 @@ func test_the_first_tick_facing_is_capped() -> void:
 	var target := Vector2.RIGHT.angle() + PI / 2.0  # nose-up art: sprite_forward_angle = -PI/2
 	var expected := minf(lerp_angle(0.0, target, DT * 7.0), CONFIG.max_turn_rate * DT)
 	assert_almost_eq(drone.rotation, expected, 0.001)
+
+
+# ── Hub idle (t11; epic §2.8.4, plan §2.5) ──────────────────────────────────────────────────────────
+
+# Cold-start helpers: unlike `_spawn()` above (which sets `start_engaged = true` so every t9/t10 case
+# keeps assuming combat-from-spawn, exactly as it did before this task), these leave the brain to
+# decide for itself — Open Space starts on patrol, Assault always starts in combat.
+
+const FAR_AWAY := Vector2(100000.0, 100000.0)
+const IDLE_PHASES: Array[int] = [P.IDLE_ORBIT, P.IDLE_BRAKE, P.IDLE_REVERSE, P.IDLE_BOOST]
+
+
+func _idle_spawn(h: RefCounted, pos: Vector2, configure: Callable = Callable(), rng_seed: int = SEED) -> RazorDrone:
+	var drone := SCENE.instantiate() as RazorDrone
+	drone.global_position = pos
+	(drone.get_node("Brain") as RazorDroneBrain).rng_seed = rng_seed
+	if configure.is_valid():
+		configure.call(drone.config)
+	h.root.add_child(drone)
+	drone.set_physics_process(false)
+	return drone
+
+
+func test_open_space_cold_start_begins_idle() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var drone := _idle_spawn(h, Vector2(500, 500))
+	_tick(drone)
+	assert_eq(_brain(drone).phase, P.IDLE_ORBIT, "Open Space starts on patrol, not in combat")
+	assert_not_null(_brain(drone).anchor_idle, "an AnchorIdle was built")
+
+
+func test_the_assault_harness_starts_in_combat() -> void:
+	var h := _harness("assault")
+	h.player.global_position = MID
+	var drone := _idle_spawn(h, MID + Vector2(0, -700))  # far enough that ENTER does not hand over on tick 1
+	_tick(drone)
+	assert_eq(_brain(drone).phase, P.ENTER, "Assault always starts in combat: the level decided the fight is on")
+	assert_null(_brain(drone).anchor_idle, "no AnchorIdle is built in Assault")
+
+
+func test_patrol_anchor_defaults_to_the_spawn_position() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var pos := Vector2(321.0, -654.0)
+	var drone := _idle_spawn(h, pos)
+	_tick(drone)
+	assert_eq(_brain(drone).patrol_anchor, pos, "unset (Vector2.INF) defaults to where the drone spawned")
+
+
+## Acceptance: over a seeded 30 s it stays within the anchor ring, and brake, reverse and boost all
+## occur. The ring bound is measured on IDLE_ORBIT/IDLE_BRAKE/IDLE_REVERSE ticks only — IDLE_BOOST is
+## deliberately a short excursion off the ring, not a violation of it.
+func test_idle_holds_the_ring_and_every_leg_occurs_over_30_seconds() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var anchor := Vector2(500.0, -400.0)
+	var seen := {}
+	var worst := 0.0
+	for s in SEEDS:
+		var drone := _idle_spawn(h, anchor, Callable(), s)
+		for _i in int(30.0 / DT):
+			_tick(drone)
+			var p: int = _brain(drone).phase
+			assert_true(IDLE_PHASES.has(p), "seed %d: stays on patrol with the player this far away" % s)
+			seen[p] = true
+			if p != P.IDLE_BOOST:
+				worst = maxf(worst, drone.global_position.distance_to(anchor))
+		drone.free()
+	assert_lte(worst, CONFIG.idle_radius + CONFIG.idle_radius_jitter + 40.0,
+		"orbiting/braking/reversing legs stayed within idle_radius + jitter + 40 of the anchor (worst %.1f px)" % worst)
+	assert_true(seen.has(P.IDLE_BRAKE), "a brake leg occurred across the seeded run")
+	assert_true(seen.has(P.IDLE_REVERSE), "a reverse leg occurred across the seeded run")
+	assert_true(seen.has(P.IDLE_BOOST), "a boost leg occurred across the seeded run")
+
+
+func test_idle_brake_holds_then_resumes_orbit() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var drone := _idle_spawn(h, Vector2(500, 500))
+	var brain := _brain(drone)
+	_tick(drone)
+	assert_eq(brain.phase, P.IDLE_ORBIT, "sanity: patrolling")
+	brain.force_next_idle_leg(&"brake")
+	assert_gt(_tick_until(drone, P.IDLE_BRAKE, 300), 0, "the forced brake starts")
+	# Well short of IDLE_BRAKE_SECONDS, so this never straddles the hand-back tick.
+	for _i in int(RazorDroneBrain.IDLE_BRAKE_SECONDS / DT / 2):
+		_tick(drone)
+		assert_eq(brain.phase, P.IDLE_BRAKE, "still braking")
+	assert_almost_eq(drone.velocity.length(), 0.0, 5.0, "velocity fell to ~0 during the brake")
+	assert_gt(_tick_until(drone, P.IDLE_ORBIT, 60), 0, "resumes patrol after the brake")
+
+
+## Same shape as `test_the_reversal_passes_through_zero`, around the patrol anchor.
+func test_idle_reverse_ramps_through_zero() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var anchor := Vector2(500.0, 500.0)
+	var drone := _idle_spawn(h, anchor)
+	var brain := _brain(drone)
+	_tick(drone)
+	brain.force_next_idle_leg(&"reverse")
+	assert_gt(_tick_until(drone, P.IDLE_REVERSE, 300), 0, "the forced reversal starts")
+	var d := brain.orbit_dir
+	var limit := maxf(CONFIG.acceleration, CONFIG.braking) * DT + 0.001
+	var max_dv := 0.0
+	var actual: Array[float] = []
+	for _i in 60:
+		var v0 := drone.velocity
+		_tick(drone)
+		max_dv = maxf(max_dv, (drone.velocity - v0).length())
+		var rel := drone.global_position - anchor
+		if rel.length_squared() > 0.000001:
+			actual.append(rel.cross(drone.velocity) / rel.length_squared())
+		if brain.phase != P.IDLE_REVERSE and brain.phase != P.IDLE_ORBIT:
+			break
+	assert_eq(brain.orbit_dir, -d, "orbit_dir flipped")
+	assert_gt(actual[0] * d, 0.0, "the body starts turning in the old sense")
+	assert_lt(actual[-1] * d, 0.0, "and ends in the new one")
+	assert_lte(max_dv, limit, "per-tick |Δv| within the mover's limits (never instant)")
+
+
+func test_idle_boost_moves_faster_then_resumes_orbit() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var drone := _idle_spawn(h, Vector2(500, 500))
+	var brain := _brain(drone)
+	brain.force_next_idle_leg(&"boost")
+	# The cruising speed just before the leg ends and the forced boost takes over — measured here
+	# rather than right after spawn, where `Steering.orbit`'s correction toward a freshly-drawn ring
+	# can run faster than the boost itself (the ring's tangential speed is well under
+	# `orbit_correct_speed`, unlike combat's ORBIT).
+	var cruising_speed := 0.0
+	var guard := 0
+	while brain.phase != P.IDLE_BOOST and guard < 300:
+		if brain.phase == P.IDLE_ORBIT:
+			cruising_speed = drone.velocity.length()
+		_tick(drone)
+		guard += 1
+	assert_eq(brain.phase, P.IDLE_BOOST, "sanity: the forced boost starts")
+	assert_gt(drone.velocity.length(), cruising_speed, "the boost is faster than the cruising orbit")
+	assert_gt(_tick_until(drone, P.IDLE_ORBIT, 60), 0, "resumes patrol after the boost")
+
+
+func test_hysteresis_holds_for_5_seconds_between_the_radii() -> void:
+	var h := _harness("open_space")
+	var drone := _idle_spawn(h, Vector2(1000.0, 0.0))
+	h.player.global_position = drone.global_position + Vector2(200.0, 0.0)  # inside perceive_radius
+	var notice_ticks := int(CONFIG.notice_time / DT) + 2
+	for _i in notice_ticks:
+		_tick(drone)
+	assert_false(IDLE_PHASES.has(_brain(drone).phase) or _brain(drone).phase == P.NOTICING,
+		"sanity: reached combat (phase %d)" % _brain(drone).phase)
+	var mid := (CONFIG.perceive_radius + CONFIG.lose_radius) / 2.0
+	for _i in int(5.0 / DT):
+		h.player.global_position = drone.global_position + Vector2(mid, 0.0)
+		_tick(drone)
+		assert_ne(_brain(drone).phase, P.RETURNING, "never returns while within lose_radius")
+		assert_false(IDLE_PHASES.has(_brain(drone).phase), "never idles while within lose_radius")
+
+
+func test_returns_to_idle_beyond_lose_radius() -> void:
+	var h := _harness("open_space")
+	var anchor := Vector2(1000.0, 0.0)
+	var drone := _idle_spawn(h, anchor)
+	h.player.global_position = anchor + Vector2(200.0, 0.0)
+	for _i in int(CONFIG.notice_time / DT) + 5:
+		_tick(drone)
+	assert_false(IDLE_PHASES.has(_brain(drone).phase) or _brain(drone).phase == P.NOTICING, "sanity: engaged")
+	h.player.global_position = FAR_AWAY  # well beyond lose_radius
+	var saw_returning := false
+	var settled := false
+	for _i in int(15.0 / DT):
+		_tick(drone)
+		if _brain(drone).phase == P.RETURNING:
+			saw_returning = true
+		if _brain(drone).phase == P.IDLE_ORBIT:
+			settled = true
+			break
+	assert_true(saw_returning, "passed through RETURNING on the way back")
+	assert_true(settled, "reaches IDLE_ORBIT, back at the anchor")
+	assert_lte(drone.global_position.distance_to(anchor), CONFIG.idle_radius + 30.0, "settled back inside the ring")
+
+
+## The handover guard (review N10): the mover's own `move_toward` / rotation-rate cap bounds every
+## tick regardless of phase, so this only fails if the brain calls `halt()` or `boost()` on the
+## NOTICING -> ENTER transition. Uses `maxf(acceleration, braking)`, not `acceleration` alone — the
+## deceleration-to-a-stop that opens NOTICING runs at `braking`, which exceeds `acceleration`.
+func test_the_handover_from_noticing_to_combat_never_snaps() -> void:
+	var h := _harness("open_space")
+	var drone := _idle_spawn(h, Vector2(1000.0, 500.0))
+	h.player.global_position = drone.global_position + Vector2(200.0, 0.0)
+	_tick(drone)
+	assert_eq(_brain(drone).phase, P.NOTICING, "sanity: perceives immediately")
+	var v_cap := maxf(CONFIG.acceleration, CONFIG.braking) * DT + 0.5
+	var r_cap := CONFIG.max_turn_rate * DT + 0.01
+	var left_noticing := false
+	for _i in 60:
+		var v0 := drone.velocity
+		var rot0 := drone.rotation
+		_tick(drone)
+		assert_lte(drone.velocity.distance_to(v0), v_cap, "no per-tick velocity snap through the handover")
+		assert_lte(absf(angle_difference(rot0, drone.rotation)), r_cap, "no per-tick rotation snap through the handover")
+		if _brain(drone).phase != P.NOTICING:
+			left_noticing = true
+			break
+	assert_true(left_noticing, "sanity: leaves NOTICING within the window")

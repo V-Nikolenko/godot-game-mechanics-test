@@ -49,6 +49,22 @@ Plan: `docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md` §2.8.2–§2.8.3. Task p
   goes to DISENGAGE: it releases the corridor, seeks the nearest edge of `projectile_world_rect()`, and is freed once
   strictly outside it, which counts as an escape. Open Space never disengages.
 - **Death / scoring:** shot down (25 HP) → `score_value` 40.
+- **Hub idle (Open Space only)** — the drone owns an `AnchorIdle` (`global/enemy_ai/anchor_idle.gd`) around an
+  exported `patrol_anchor` (`Vector2.INF` = "unset", defaulted to the spawn position in `_start()`). Assault never
+  builds one — `EngagementBudget.active` alone decides combat-from-spawn there, and `start_engaged` is a test-only
+  seam that makes an Open Space drone skip idle too, for every test written before this behaviour existed.
+  - **IDLE_ORBIT** — a slow ring orbit around `patrol_anchor`, radius `idle_radius` ± `idle_radius_jitter` and
+    angular speed `idle_speed` ± `idle_speed_jitter`, both redrawn every 2–4 s leg. Re-anchors on entry (from a
+    fresh spawn, a brake, a reversal, a boost or a return), so it never snaps to the far side of the ring.
+  - Each leg ends in one of, equally likely: **IDLE_BRAKE** (a 0.6 s hold), **IDLE_REVERSE** (the ring's angular
+    speed ramps through zero to the opposite sense, like combat's REVERSE), or **IDLE_BOOST** (a brief boost at
+    1.8× the leg's tangential speed along the current heading).
+  - A drone that perceives the player (`perceive_radius` 450 px) enters **NOTICING**: the light blinks once, it
+    faces the player for `notice_time` (0.35 s), then hands over to **ENTER** from its *current* velocity — no
+    `halt()`, no `boost()`, so the mover's own accel/turn-rate caps bound the handover.
+  - It drops back to patrol once beyond `lose_radius` (700 px), never before — no flicker at the boundary. It
+    enters **RETURNING** (`arrive` at `patrol_anchor`), reaching `IDLE_ORBIT` once within the ring. RETURNING never
+    interrupts a live DASH: a contact-armed pass always finishes first.
 
 ---
 
@@ -73,11 +89,19 @@ ENTER ──≤ orbit_radius──▶ ORBIT ◀───────────
                                                    ▼                              │
                                              RETURN (arrive on ring) ─────────────┘
 Assault only: any phase ──budget expired, not boosting──▶ DISENGAGE ──outside world rect──▶ freed
+
+Open Space only, cold start:
+IDLE_ORBIT ──2-4s leg ends, roll──▶ IDLE_BRAKE / IDLE_REVERSE / IDLE_BOOST ──▶ IDLE_ORBIT (fresh leg)
+   │
+   ├──perceives (perceive_radius)──▶ NOTICING ──notice_time──▶ ENTER (current velocity)
+   ▲                                                                  │
+   └──arrives at patrol_anchor──────────── RETURNING ◀──beyond lose_radius (never mid-DASH)──┘
 ```
 
 Phases are an `enum` in `razor_drone_brain.gd` (there is no `states/` folder). ENTER, ORBIT and DASH keep the
 values 0–2; the rest are appended. `phase_changed(new_phase: int)` fires on every transition, and `enter_phase()` is
-the one transition path (and the test seam). `force_next_choice(&"real" | &"fake" | &"reverse")` forces the next roll.
+the one transition path (and the test seam). `force_next_choice(&"real" | &"fake" | &"reverse")` forces the next
+combat roll; `force_next_idle_leg(&"brake" | &"reverse" | &"boost")` forces the next idle-leg roll.
 
 - **ORBIT:** `Steering.orbit` round `orbit_centre` at `orbit_correct_speed` 260, which is at least
   `orbit_speed × orbit_radius`, so it holds about 119 px. It re-anchors where it arrives (never on the far side).
@@ -96,6 +120,16 @@ the one transition path (and the test seam). `force_next_choice(&"real" | &"fake
   the current velocity (D7). It turns about 145° in 1.2 s and never stops. It ends within 20° of the bearing, or after
   `overshoot_max_seconds`.
 - **RETURN:** `arrive` back on the ring at `approach_speed`, within 20 px or after 2 s, then ORBIT with a new window.
+- **IDLE_ORBIT** (Open Space only) — `Steering.orbit` around `patrol_anchor` at `idle_radius` ± `idle_radius_jitter`,
+  angular speed `idle_speed` ± `idle_speed_jitter`, both redrawn every 2–4 s leg; re-anchors on entry.
+- **IDLE_BRAKE** — holds (zero velocity request) for 0.6 s, then a fresh IDLE_ORBIT leg.
+- **IDLE_REVERSE** — the ring's angular speed ramps through zero to the opposite sense over `reverse_seconds`
+  (shared with combat's REVERSE), flips `orbit_dir`, then a fresh IDLE_ORBIT leg.
+- **IDLE_BOOST** — a brief boost (0.4 s) at 1.8× the leg's tangential speed along the current heading, then a fresh
+  IDLE_ORBIT leg.
+- **NOTICING** — blink the light once, `face_toward` the player for `notice_time` 0.35 s.
+- **RETURNING** — `mover.arrive` at `patrol_anchor`; reaches IDLE_ORBIT within the ring, or NOTICING again if the
+  player re-enters `perceive_radius` first. Never interrupts a live DASH.
 
 ---
 
@@ -121,6 +155,10 @@ the brain's matching exports.
 | `pulse_damage` / `pulse_speed` | 10 / 250 | The post-miss pulse |
 | `engage_seconds` / `exit_speed` | 9.0 s / 320 px/s | Assault exit. Razors spawn only in DURATION sections; `test_engagement_deadline.gd` fails if one is added to an ENEMIES_CLEARED one |
 | `side_lane_min_deg` / `side_lane_max_deg` | 30 / 75 | Assault side lane |
+| `idle_radius` / `idle_radius_jitter` | 160 / 40 px | Open Space patrol ring radius, redrawn ± jitter every leg |
+| `idle_speed` / `idle_speed_jitter` | 0.5 / 0.2 rad/s | Open Space patrol ring angular speed, redrawn ± jitter every leg |
+| `perceive_radius` / `lose_radius` | 450 / 700 px | Open Space idle: enter / drop combat (hysteresis; `lose_radius` must exceed `perceive_radius`) |
+| `notice_time` | 0.35 s | Open Space idle: the NOTICING beat before combat |
 
 ---
 

@@ -4,7 +4,8 @@
 ##
 ## Phases (IDEAS §4 vocabulary in brackets):
 ##   ENTER        [APPROACH]   seek the player; on reaching `orbit_radius` re-anchor the orbit where the
-##                             drone is (A2) and ORBIT.
+##                             drone is (A2) and ORBIT. Also the handover target from NOTICING: no
+##                             entry code runs, so a perceiving drone keeps its current velocity.
 ##   ORBIT        [POSITION]   `Steering.orbit` round `orbit_centre` (the player; in Assault clamped into
 ##                             the corridor's `inner_rect()` shrunk by `orbit_radius`). Each rng window
 ##                             (1-2 s) ends in a roll: REVERSE, a fake or a real attack.
@@ -22,11 +23,28 @@
 ##   RETURN       [REPOSITION] `arrive` back onto the orbit ring, then ORBIT with a new window.
 ##   DISENGAGE    [DISENGAGE]  Assault only (`EngagementBudget`): release the corridor, seek the nearest
 ##                             edge of the projectile world rect, free once strictly outside it.
+##   IDLE_ORBIT   [SEARCH]     Open Space only (t11): a slow, irregular patrol ring round `patrol_anchor`.
+##                             Re-anchors on entry (never a snap) and redraws its radius/speed/duration.
+##   IDLE_BRAKE   [SEARCH]     a short hold (`IDLE_BRAKE_SECONDS`), then a fresh IDLE_ORBIT leg.
+##   IDLE_REVERSE [SEARCH]     like REVERSE, but on the idle ring: ramps through zero, flips `orbit_dir`.
+##   IDLE_BOOST   [SEARCH]     a short boost along the current heading, then a fresh IDLE_ORBIT leg.
+##   NOTICING     [SEARCH]     a beat: the light blinks once and the drone faces the player for
+##                             `notice_time`, then hands over to ENTER from its CURRENT velocity — no
+##                             `halt()`, no `boost()` (the handover guard).
+##   RETURNING    [REPOSITION] Open Space only: `arrive` back at `patrol_anchor`, then IDLE_ORBIT. Named
+##                             differently from the combat RETURN (the post-overshoot return to the
+##                             orbit ring), which it never interrupts.
 ##
 ## Side lane (Assault only): an attack starts only when the point the REAL dash will start from lies
 ## `side_lane_min_deg`-`side_lane_max_deg` off the vertical axis about the player. For a real attack
 ## that is the WINDUP hold point; for a fake it is the predicted far-side stop, and the lunge side is
 ## chosen so that it lands in the lane.
+##
+## Hub idle (t11, §2.8.4): Open Space only (`EngagementBudget.active == false`) — Assault always starts
+## in combat, since the level has already decided the fight is on. The drone owns an `AnchorIdle` on
+## `patrol_anchor` (an exported sentinel `Vector2.INF` defaults it to the spawn position, same
+## convention as the Swarm's). `start_engaged` is a test seam: every pre-t11 test sets it so a spawned
+## drone starts already fighting, exactly as every drone did before this task.
 ##
 ## Tunables are exported here and overwritten from `RazorDroneConfig` by `razor_drone.gd`'s `_ready()`,
 ## which runs AFTER this node's `_ready()`, so the budget is built on the first tick. Requests only
@@ -36,7 +54,10 @@ class_name RazorDroneBrain
 extends EnemyBrain
 
 ## ENTER, ORBIT and DASH keep their Phase 1 values; later phases append.
-enum Phase { ENTER, ORBIT, DASH, REVERSE, FEINT_WINDUP, FEINT_LUNGE, FEINT_BRAKE, WINDUP, OVERSHOOT, RETURN, DISENGAGE }
+enum Phase {
+	ENTER, ORBIT, DASH, REVERSE, FEINT_WINDUP, FEINT_LUNGE, FEINT_BRAKE, WINDUP, OVERSHOOT, RETURN, DISENGAGE,
+	IDLE_ORBIT, IDLE_BRAKE, IDLE_REVERSE, IDLE_BOOST, NOTICING, RETURNING,
+}
 
 ## Emitted on every transition, with the phase entered.
 signal phase_changed(new_phase: int)
@@ -65,6 +86,14 @@ const RETURN_MAX_SECONDS := 2.0
 const NO_TARGET_LOCK_DISTANCE := 200.0
 ## DISENGAGE seeks a point this far beyond the chosen edge (px).
 const EXIT_OVERSHOOT := 64.0
+## Each idle leg lasts this long (s), drawn from `rng`.
+const IDLE_LEG_MIN := 2.0
+const IDLE_LEG_MAX := 4.0
+## IDLE_BRAKE holds for this long (s).
+const IDLE_BRAKE_SECONDS := 0.6
+## IDLE_BOOST's speed is this many times the leg's tangential speed (idle_speed × idle_radius).
+const IDLE_BOOST_MULT := 1.8
+const IDLE_BOOST_SECONDS := 0.4
 
 @export_group("Movement")
 @export var orbit_radius: float = 130.0
@@ -104,6 +133,23 @@ const EXIT_OVERSHOOT := 64.0
 @export var side_lane_min_deg: float = 30.0
 @export var side_lane_max_deg: float = 75.0
 
+@export_group("Idle")
+@export var idle_radius: float = 160.0
+@export var idle_radius_jitter: float = 40.0
+@export var idle_speed: float = 0.5
+@export var idle_speed_jitter: float = 0.2
+@export var perceive_radius: float = 450.0
+@export var lose_radius: float = 700.0
+@export var notice_time: float = 0.35
+## The Open Space hub idle's ring centre. `Vector2.INF` (unfinished) means "not set" — `_start()`
+## then defaults it to the spawn position, the same sentinel `SwarmDroneBrain.patrol_anchor` uses.
+@export var patrol_anchor: Vector2 = Vector2.INF
+
+## Test seam (t11): every pre-idle test sets this so a spawned drone starts already fighting, the
+## only behaviour that existed before this task. A real spawn always patrols `patrol_anchor` until it
+## perceives the player. Assault ignores it: `EngagementBudget.active` alone decides combat-from-spawn.
+var start_engaged: bool = false
+
 var phase: Phase = Phase.ENTER
 ## +1 or -1: the orbit's sense. Drawn from `rng` in `_ready()`.
 var orbit_dir: float = 1.0
@@ -121,6 +167,9 @@ var pulses_fired: int = 0
 var lunge_side: float = 1.0
 ## Built on the first tick. Null before it.
 var budget: EngagementBudget
+## Open Space only (`budget.active == false` and not `start_engaged`); null otherwise. Built once,
+## in `_start()`.
+var anchor_idle: AnchorIdle
 
 var _started: bool = false
 var _orbit_angle: float = 0.0
@@ -136,6 +185,15 @@ var _hold_at: Vector2 = Vector2.ZERO
 var _locked: bool = false
 var _locked_point: Vector2 = Vector2.ZERO
 var _exit_point: Vector2 = Vector2.ZERO
+## The idle ring's own angle/radius/tangential speed (rad, px, rad/s) — kept apart from the combat
+## `_orbit_angle` / `orbit_centre`, which the player-following ORBIT phase owns.
+var _idle_angle: float = 0.0
+var _idle_ring_radius: float = 0.0
+var _idle_speed_mag: float = 0.0
+var _idle_leg_left: float = 0.0
+## The next idle leg's roll, forced by `force_next_idle_leg()`: &"" (none), &"brake", &"reverse" or
+## &"boost".
+var _forced_idle: StringName = &""
 
 
 func _ready() -> void:
@@ -152,9 +210,11 @@ func tick(delta: float) -> void:
 	if not _started:
 		_start()
 	var target := TargetInfo.player(get_tree())
-	if target.has_target:
+	if target.has_target and not _in_anchor_idle_phase():
 		orbit_centre = _centre_of(target.position)
-	if budget.update(delta) and phase != Phase.DISENGAGE and not mover.is_boosting():
+	if anchor_idle != null:
+		_tick_anchor_idle(delta, target)
+	elif budget.update(delta) and phase != Phase.DISENGAGE and not mover.is_boosting():
 		enter_phase(Phase.DISENGAGE)
 	# A transition hands over to the new phase's handler in the same tick. Bounded: the longest
 	# chain is DASH -> OVERSHOOT -> RETURN -> ORBIT.
@@ -178,12 +238,22 @@ func enter_phase(p: Phase) -> void:
 		Phase.DASH: _enter_dash()
 		Phase.OVERSHOOT: _enter_overshoot()
 		Phase.DISENGAGE: _enter_disengage()
+		Phase.IDLE_ORBIT: _enter_idle_orbit()
+		Phase.IDLE_REVERSE: _enter_idle_reverse()
+		Phase.IDLE_BOOST: _enter_idle_boost()
+		Phase.NOTICING: _enter_noticing()
+		Phase.RETURNING: _enter_returning()
 	phase_changed.emit(p)
 
 
 ## Test seam: the next window roll takes `choice` (&"real", &"fake" or &"reverse").
 func force_next_choice(choice: StringName) -> void:
 	_forced = choice
+
+
+## Test seam: the next idle-leg roll takes `choice` (&"brake", &"reverse" or &"boost").
+func force_next_idle_leg(choice: StringName) -> void:
+	_forced_idle = choice
 
 
 ## `ContactProfile.contact_made` (only ever while armed, i.e. in DASH): the dash hit.
@@ -199,6 +269,11 @@ func on_suspended() -> void:
 func _start() -> void:
 	_started = true
 	budget = EngagementBudget.new(engage_seconds, get_tree())
+	if not patrol_anchor.is_finite():
+		patrol_anchor = actor.global_position
+	if not budget.active and not start_engaged:
+		anchor_idle = AnchorIdle.new(patrol_anchor, perceive_radius, lose_radius, notice_time, idle_radius)
+		enter_phase(Phase.IDLE_ORBIT)
 
 
 func _tick_phase(delta: float, target: TargetInfo) -> void:
@@ -214,6 +289,12 @@ func _tick_phase(delta: float, target: TargetInfo) -> void:
 		Phase.OVERSHOOT: _tick_overshoot(delta, target)
 		Phase.RETURN: _tick_return(delta, target)
 		Phase.DISENGAGE: _tick_disengage()
+		Phase.IDLE_ORBIT: _tick_idle_orbit(delta)
+		Phase.IDLE_BRAKE: _tick_idle_brake(delta)
+		Phase.IDLE_REVERSE: _tick_idle_reverse(delta)
+		Phase.IDLE_BOOST: _tick_idle_boost()
+		Phase.NOTICING: _tick_noticing(target)
+		Phase.RETURNING: _tick_returning()
 
 
 # ── ENTER ────────────────────────────────────────────────────────────────────────────────────────
@@ -517,6 +598,126 @@ func _tick_disengage() -> void:
 		actor.queue_free()
 		return
 	mover.seek(_exit_point, exit_speed)
+
+
+# ── Hub idle (t11; epic §2.8.4) ──────────────────────────────────────────────────────────────────
+
+## The meta-state that decides whether the drone is patrolling, noticing or fighting, run once a tick
+## alongside (not instead of) the phase dispatch below.
+func _tick_anchor_idle(delta: float, target: TargetInfo) -> void:
+	var state := anchor_idle.update(delta, actor.global_position, target)
+	match state:
+		AnchorIdle.State.IDLE:
+			if not _in_idle_leg_phase():
+				enter_phase(Phase.IDLE_ORBIT)
+		AnchorIdle.State.NOTICING:
+			if phase != Phase.NOTICING:
+				enter_phase(Phase.NOTICING)
+		AnchorIdle.State.COMBAT:
+			# From NOTICING only, and from the drone's CURRENT velocity — `enter_phase(ENTER)` runs no
+			# entry code, so the handover guard rests entirely on the mover's own bounds.
+			if phase == Phase.NOTICING:
+				enter_phase(Phase.ENTER)
+		AnchorIdle.State.RETURNING:
+			# Never interrupts a live DASH: a contact-armed pass always finishes.
+			if phase != Phase.RETURNING and phase != Phase.DASH:
+				enter_phase(Phase.RETURNING)
+
+
+func _in_idle_leg_phase() -> bool:
+	return phase == Phase.IDLE_ORBIT or phase == Phase.IDLE_BRAKE \
+			or phase == Phase.IDLE_REVERSE or phase == Phase.IDLE_BOOST
+
+
+func _in_anchor_idle_phase() -> bool:
+	return _in_idle_leg_phase() or phase == Phase.NOTICING or phase == Phase.RETURNING
+
+
+## Re-anchors where the drone actually is (never a snap to the far side of the ring) and draws a
+## fresh radius, tangential speed and leg duration, all ± their jitter, from `rng`.
+func _enter_idle_orbit() -> void:
+	_idle_angle = (actor.global_position - patrol_anchor).angle()
+	_idle_ring_radius = maxf(idle_radius + rng.randf_range(-idle_radius_jitter, idle_radius_jitter), 10.0)
+	_idle_speed_mag = maxf(idle_speed + rng.randf_range(-idle_speed_jitter, idle_speed_jitter), 0.0)
+	_idle_leg_left = rng.randf_range(IDLE_LEG_MIN, IDLE_LEG_MAX)
+
+
+func _tick_idle_orbit(delta: float) -> void:
+	_idle_leg_left -= delta
+	_idle_angle += orbit_dir * _idle_speed_mag * delta
+	mover.orbit(patrol_anchor, _idle_ring_radius, _idle_angle, orbit_correct_speed)
+	if _idle_leg_left <= 0.0:
+		_roll_idle_leg()
+
+
+## Equally likely IDLE_BRAKE / IDLE_REVERSE / IDLE_BOOST, unless `force_next_idle_leg()` set one.
+func _roll_idle_leg() -> void:
+	var choice := _forced_idle
+	if choice != &"":
+		_forced_idle = &""
+	else:
+		choice = [&"brake", &"reverse", &"boost"][rng.randi_range(0, 2)]
+	match choice:
+		&"brake": enter_phase(Phase.IDLE_BRAKE)
+		&"reverse": enter_phase(Phase.IDLE_REVERSE)
+		_: enter_phase(Phase.IDLE_BOOST)
+
+
+func _tick_idle_brake(delta: float) -> void:
+	mover.request_velocity(Vector2.ZERO)
+	_phase_time += delta
+	if _phase_time >= IDLE_BRAKE_SECONDS - 0.0001:
+		enter_phase(Phase.IDLE_ORBIT)
+
+
+func _enter_idle_reverse() -> void:
+	_reverse_from = orbit_dir * _idle_speed_mag
+
+
+func _tick_idle_reverse(delta: float) -> void:
+	_phase_time += delta
+	var t := clampf(_phase_time / reverse_seconds, 0.0, 1.0) if reverse_seconds > 0.0 else 1.0
+	var w := lerpf(_reverse_from, -_reverse_from, t)
+	_idle_angle += w * delta
+	mover.orbit(patrol_anchor, _idle_ring_radius, _idle_angle, orbit_correct_speed)
+	if t >= 1.0:
+		orbit_dir = -orbit_dir
+		enter_phase(Phase.IDLE_ORBIT)
+
+
+## A brief boost at `IDLE_BOOST_MULT` × the leg's tangential speed, along the drone's current
+## heading, then a fresh IDLE_ORBIT leg.
+func _enter_idle_boost() -> void:
+	var v := actor.velocity
+	var dir := v.normalized() if v.length_squared() > 0.000001 else _facing()
+	var speed := IDLE_BOOST_MULT * maxf(_idle_speed_mag * _idle_ring_radius, 1.0)
+	mover.boost(dir, speed, IDLE_BOOST_SECONDS)
+
+
+func _tick_idle_boost() -> void:
+	if not mover.is_boosting():
+		enter_phase(Phase.IDLE_ORBIT)
+
+
+func _enter_noticing() -> void:
+	var light := actor.get_node_or_null("StateLight") as StateLight if actor != null else null
+	if light != null:
+		light.set_state(StateLight.State.OFF)
+		light.blink_once()
+
+
+func _tick_noticing(target: TargetInfo) -> void:
+	if target.has_target:
+		mover.face_toward(target.position)
+
+
+func _enter_returning() -> void:
+	_set_armed(false)
+	_set_light(StateLight.State.OFF)
+
+
+func _tick_returning() -> void:
+	mover.arrive(patrol_anchor, approach_speed)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────────────────────────
