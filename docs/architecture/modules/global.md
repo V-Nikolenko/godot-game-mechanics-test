@@ -31,6 +31,7 @@ global/
 │   ├── defense_profile.gd         # DefenseProfile (Node) — per-instance HurtBox mask/damage-type data
 │   ├── contact_profile.gd         # ContactProfile (Node) — what touching an enemy does: NONE / COLLISION / RAMMING / EXPLOSIVE
 │   ├── contact_blast.gd           # ContactBlast (HitBox) — code-built blast an EXPLOSIVE profile leaves in the owner's parent
+│   ├── state_light.gd             # StateLight (Node2D) — one small red/yellow/white attack-telegraph light
 │   ├── overheat_component.gd      # Overheat (Node) — weapon heat
 │   ├── attack_controller.gd       # AttackController (Node) — drives an AttackPatternResource
 │   ├── projectile_lifetime.gd     # ProjectileLifetime (Node) — world-space projectile expiry
@@ -42,13 +43,15 @@ global/
 │   ├── thruster_effect.gd         # ThrusterEffect — engine flame
 │   ├── rocket_trail.gd            # RocketTrail — missile trail
 │   └── low_health_smoke.gd        # LowHealthSmoke — smoke below an HP threshold
-├── enemy_ai/                  # mode-neutral enemy AI stack (enemy rework phase 1)
+├── enemy_ai/                  # mode-neutral enemy AI stack (enemy rework phase 1, squads/idle phase 2)
 │   ├── enemy_brain.gd         # EnemyBrain (Node) — decides: tick(delta), on_suspended(), seeded rng
 │   ├── enemy_mover.gd         # EnemyMover (Node) — the single writer of an AI enemy's velocity/rotation
 │   ├── movement_constraint.gd # MovementConstraint (RefCounted) — identity filter; mode constraints extend it
-│   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift primitives
+│   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift/spiral/corkscrew/… primitives
 │   ├── target_info.gd         # TargetInfo — player resolver + prediction/intercept snapshot
 │   ├── engagement_budget.gd   # EngagementBudget (RefCounted) — Assault-only per-brain exit timer
+│   ├── squad_controller.gd    # SquadController (RefCounted) — event-driven lead/flank/rear role board
+│   ├── anchor_idle.gd         # AnchorIdle (RefCounted) — generic idle-around-an-anchor → combat handover
 │   └── enemy_world.gd         # EnemyWorld — the one lookup of the &"assault_arena" mode provider
 ├── physics/
 │   └── collision_layers.gd    # CollisionLayers — named constants, one per project.godot layer_names entry
@@ -130,6 +133,10 @@ Static-only helper (`RefCounted`, never instantiated) that swaps the OS mouse ar
 > `DefenseProfile` → `test_defense_profile.gd`, `ContactProfile`/`ContactBlast` → `test_contact_profile.gd` (+ `tests/integration/test_contact_blast_damage.gd`, real player hurtbox and health), `AttackController` → `test_attack_controller.gd`,
 > `ProjectileLifetime` → `test_projectile_lifetime.gd` (+ `tests/integration/test_enemy_bullet_lifetime.gd`
 > for the `EnemyBullet` migration), `TargetInfo` → `test_target_info.gd`,
+> `SquadController` → `test_squad_controller.gd` (+ `tests/integration/test_wave_squads.gd` for how
+> Assault spawns get one), `AnchorIdle` → `test_anchor_idle.gd`, `EngagementBudget` →
+> `test_engagement_budget.gd` (+ `tests/integration/test_engagement_deadline.gd`, the level-timing
+> proof), `StateLight` → `test_state_light.gd`, `Steering` → `test_steering.gd`,
 > `Overheat` → `test_overheat_component.gd`, the state machine → `test_state_machine.gd`, and the
 > whole `PlayerBase` damage chain → `tests/integration/test_player_damage_chain.gd`. The autoloads
 > in §3–4 are covered by `tests/unit/test_<autoload>.gd`. See [`tests/README.md`](../../../tests/README.md).
@@ -289,6 +296,91 @@ contact_profile.set_armed(false)    # leaving it
 contact_profile.contact_made.connect(func(_a: Area2D) -> void: health.set_health(0))  # a drone that dies on impact
 ```
 
+### SquadController — `squad_controller.gd`
+
+`SquadController` (`class_name SquadController extends RefCounted`) is a **role board, not a
+mover** — it holds `LEAD` / `FLANK_LEFT` / `FLANK_RIGHT` / `REAR` assignments for a group of
+`Node2D` members and moves nothing itself, so it never touches the single-writer gate. It is
+**event-driven**: roles are recomputed only inside `join()`, `leave()` and `release_lead()` —
+there is no clock and no `_process`.
+
+- `join(member)` / `leave(member)` (explicit and idempotent — rail suspension calls `leave()`
+  directly, same as a free) / `role_of(member)` / `members()`.
+- **Assignment is a full recompute every time**, not an incremental fill: on any join/leave/
+  release it re-sorts every current member by distance to `target_position_hint` (ties by join
+  order) and reassigns LEAD/FLANK_LEFT/FLANK_RIGHT/REAR from scratch. LEAD always goes to
+  whoever is currently closest — "the closest steals the token" is a **steady-state property**,
+  not a one-time election. `release_lead(member)` is the one exception: it pins the releasing
+  member to REAR for that call only, so a plain recompute cannot just re-elect the same member
+  and stall the rotation.
+- `update_target(position, heading)` is how members report `TargetInfo` to the board each tick
+  (`target_position_hint` / `target_heading_hint`); left/right is the sign of
+  `heading.cross(member_pos - position)`, falling back to the squad-centroid → target direction
+  when the heading is zero.
+- `claim_side(member, preferred: int)` / `release_side(member)` hand out one of four sectors
+  (`Side.LEFT/RIGHT/FRONT/BACK`, relative to the target's heading) so two attackers don't
+  converge on one point; if every sector is taken, the preferred one is shared. **`claim_side`
+  and `role_changed` pass `Side`/`Role` as plain `int`, not the enum type** — Godot 4.6's static
+  checker treats `SquadController.Side` named from outside the script as a different type from
+  `Side` named from inside, so a caller passes `SquadController.Side.LEFT`-shaped values and
+  compares/keys on the underlying int.
+- `set_engaged(member, on)` / `is_engaged()` is shared *state*, not a message: it is how a whole
+  hub squad wakes and returns together (§*AnchorIdle* below and
+  [assault.md](assault.md) → *Enemy AI in Assault*). `attack_window_open` is set by the current
+  LEAD entering its committed state so FLANKs know to start their own wind-up, and is cleared
+  automatically whenever `_reassign()` changes who holds LEAD — not just on a clean end-of-burst.
+- **Membership is weak** (`is_instance_valid`, pruned on every read) and **members hold the only
+  strong reference to the board** — `join()` connects `member.tree_exiting -> leave(member)`, but
+  that connection does not itself keep a `RefCounted` alive in this Godot version, so the board
+  dies once every member drops its own reference. A caller that wants to keep a board across
+  spawns (`WaveManager`, see [assault.md](assault.md) → *Wave / spawn system*) must store only a
+  `WeakRef`.
+- Brains read it through a duck-typed `actor.squad` property; `null` means "a squad of one".
+  `EnemyBrain` itself gained nothing — this is entirely a brain-side convention.
+
+### AnchorIdle — `anchor_idle.gd`
+
+`AnchorIdle` (`class_name AnchorIdle extends RefCounted`) is the **generic idle-around-an-anchor
+→ combat handover** any brain can own — it decides *when* to fight, never *how to move*:
+
+```
+var state := anchor_idle.update(delta, actor.global_position, TargetInfo.player(tree))
+# state is IDLE / NOTICING / COMBAT / RETURNING (int, same int-boundary reason as SquadController)
+```
+
+- **Two radii give hysteresis on purpose:** IDLE → NOTICING → COMBAT at `perceive_radius`;
+  COMBAT only drops to RETURNING beyond the larger `lose_radius`, so a target drifting back and
+  forth across `perceive_radius` alone never flips state. Construction rejects
+  `perceive_radius >= lose_radius` (`push_error`, then `lose_radius = perceive_radius * 1.25`).
+  RETURNING reaches IDLE within `home_radius` of `anchor` (the idle ring's own radius, not the
+  anchor point) and re-enters NOTICING if the target comes back inside `perceive_radius`.
+- `hold_combat` is an external reason to keep fighting (a squad mate is still engaged) — while
+  true, COMBAT never drops to RETURNING regardless of distance. `force_notice()` moves IDLE or
+  RETURNING straight to NOTICING (a squad mate perceived first).
+- **It never snaps a velocity.** The handover is a state change only; the brain's own request and
+  the mover's `acceleration`/`braking` produce the actual turn. Idle ticks are a squared-distance
+  check only — no `TargetInfo` prediction, no squad query — so idling is cheap.
+- **Assault skips it entirely:** a brain in a world with a provider (`EnemyWorld.arena(tree) !=
+  null`) starts straight in combat, because the level has already decided the fight is on.
+- The idle *motion* (the ring's drift, brakes, reversals, boosts) is the brain's own request, not
+  `AnchorIdle`'s — see [assault.md](assault.md) → *Enemy AI in Assault* and each drone's
+  `ENEMY.md` for the exact per-enemy shape.
+
+### StateLight — `state_light.gd`
+
+`StateLight` (`class_name StateLight extends Node2D`) is the **one small light** an enemy shows
+to telegraph its own attack intent (IDEAS §21.1 — one gameplay light per state, never a recoloured
+hull): `set_state(OFF | ARMED | CHARGING | COMMIT)` maps to invisible / red / yellow / white, and
+`blink_once()` flashes CHARGING for `BLINK_SECONDS` then restores whatever state was active
+before the call (used for a NOTICING beat, which is not a threat level of its own). Its texture is
+a radial `GradientTexture2D` **built in code in `_ready()`**, 8×8 px, white fading to alpha 0 at
+the edge — never scene-authored, so `test_entity_sprite_transparency.gd`'s `.tscn` sweep never
+sees it; the state colour lives entirely in `modulate`, capped at `MAX_ALPHA = 0.85` so a
+projectile stays the most vivid thing on screen. Brains resolve it duck-typed
+(`actor.get_node_or_null("StateLight")`). **`COMMIT` (white) is exclusive to a real, committed
+attack — a feint may only ever show CHARGING**, so the white flash is the one moment worth
+reacting to.
+
 ### AttackController — `attack_controller.gd` (extended for the enemy AI stack)
 
 `AttackController` (`class_name AttackController extends Node`) drives an `AttackPatternResource`
@@ -333,10 +425,26 @@ func tick(delta: float) -> void:
 ```
 
 - **Requests are per step.** `request_velocity()` (or a `Steering` wrapper: `seek`, `arrive`, `orbit`,
-  `intercept`, `retreat_from`, `evade`, `strafe`, `hold_position`, `drift`) is the one primary
-  request — a second call replaces it; `add_nudge()` adds an offered correction; `face_toward()`
+  `intercept`, `retreat_from`, `evade`, `strafe`, `hold_position`, `drift`, `spiral`, `corkscrew`,
+  `formation_slot`) is the one primary request — a second call replaces it; `add_nudge()` adds an
+  offered correction (flocking's `separation`/`alignment`/`cohesion`, capped at a fraction of
+  `max_speed` — there is no weighted blend of every term into the primary request); `face_toward()`
   overrides the heading; all three clear after `step()`. `boost(dir, speed, duration)` overrides
-  requests and limits for `duration`; `halt()` stops dead.
+  requests and limits for `duration`; `halt()` stops dead. `clamped_lead_time(distance, speed,
+  t_min, t_max)` is the pure `clamp(distance / speed, t_min, t_max)` behind a prediction window
+  (e.g. the Swarm Drone's 0.4–0.8 s ram lead).
+- **`EnemyMover.max_turn_rate` only turns the sprite — it never bends the path.** `step()` sets
+  `velocity` by `move_toward` toward the requested vector and applies `max_turn_rate` to
+  `rotation` alone, so a brain that wants an actual curved path (an overshoot after a missed
+  attack, a wide turn-back) must build it itself with **`Steering.turn_toward(current_dir,
+  desired_dir, max_rate, delta)`**, called every tick from the actor's *current* velocity — never
+  from the brain's own last request, which would let the curve run away from what the mover can
+  actually follow. Because `move_toward` only ever moves the velocity along the straight segment
+  from where it is to what was just requested, the true heading turns by at most `max_rate·delta`
+  per tick, which is the bound every curving enemy's test asserts. A config that curves must pin
+  `turn_rate × speed ≤ acceleration` so the mover's own accel/braking can keep up with the
+  request — see `swarm_drone/ENEMY.md` and `razor_drone/ENEMY.md`'s OVERSHOOT sections for the
+  worked numbers.
 - **Facing, one rule:** `rotation → heading.angle() - sprite_forward_angle`, heading = the face
   request or the velocity; `sprite_forward_angle` is read duck-typed off the actor (default `PI/2`).
 - **Constraint:** `AUTO` asks `EnemyWorld.movement_constraint(tree)` once in `_ready()` (none in

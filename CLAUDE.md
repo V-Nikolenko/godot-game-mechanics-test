@@ -199,6 +199,35 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `global/physics/collision_layers.gd`'s `CollisionLayers` declares one matching constant
   (`1 << (layer_number - 1)`) per named layer, so code can refer to a layer by name instead of a
   magic number. A synthetic-bit boundary case (bit 4, unnamed today) proves the check can reject.
+  `tests/integration/test_enemy_contact_damage.gd::test_every_baseenemy_scene_is_in_the_roster`
+  and `tests/integration/test_contact_hitbox_geometry.gd::test_every_baseenemy_scene_is_in_the_roster`
+  are a fourteenth and fifteenth, **roster completeness guards**: each sweeps
+  `assault/scenes/enemies/` for every `<dir>/<dir>.tscn` with a `BaseEnemy` root and fails if it is
+  missing from that file's hand-maintained `ROSTER`, following the same sweep shape
+  `tests/integration/test_enemy_hurtbox_geometry.gd::test_every_enemy_scene_is_in_the_roster`
+  already used — so a new enemy scene added under that directory and never wired into a gate's
+  roster fails loudly instead of silently shipping unchecked contact damage or geometry.
+  `tests/integration/test_engagement_deadline.gd` is a sixteenth, over **Assault AI timing**: for
+  every Swarm Drone or Razor Drone spawn in every `ENEMIES_CLEARED` section of level 1, the
+  worst-case time from the section's last wave triggering to that enemy actually leaving the
+  level (its engagement budget, plus its own worst-case exit — the Razor's formula also covers a
+  dash deferring its budget's expiry) must clear the section's own `enemies_cleared_timeout`, so
+  an AI enemy that outlives being killed can never stall a level the way an un-exiting rail enemy
+  would. A boundary case pins that a Razor placed in an `ENEMIES_CLEARED` section (it ships only
+  in `deep_space`, a `DURATION` section) would miss the timeout. The companion **concurrency**
+  check lives inside the otherwise-characterization `tests/integration/test_level1_drone_spawns.gd`:
+  once AI drones can outlive a single ramming pass, `tests/helpers/level1_drone_concurrency.gd`'s
+  peak-alive computation is asserted as a genuine ceiling — the attack-capable peak (lead plus
+  flanks) at most 2.0× and the all-drones peak at most 2.5× the legacy per-section peak — rather
+  than merely pinned, so a later spawn change that pushes level-1 density past the pre-approved
+  levers (documented in `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md`) fails the gate instead
+  of degrading play quietly.
+  `tests/integration/test_sector_hub_patrol.gd` is a seventeenth, the **hub clearance check**: for
+  the Open Space hub's ambient Swarm squad and Razor Drone, it sweeps every `MissionTrigger` and
+  `PickupBase` child of the real `sector_hub.tscn` plus the player's spawn point and asserts each
+  one clears that group's own idle ring plus its `perceive_radius` — a planet or a pickup placed
+  later within reach of a patrol's anchor fails it instead of ambushing the player mid-dwell. The
+  same file also sweeps the whole project to confirm no `PatrolDrone` reference survives.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.

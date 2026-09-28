@@ -131,6 +131,19 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   *has* `suspend_ai()`), but its `AIStateMachine` states write `velocity` and call
   `move_and_slide()` from `StateMachine._process`, which only the name lookup stops. All 264
   path-driven spawns in Level 1 are unchanged by this addition.
+- **Squads from spawns.** `WaveBuilder.SpawnConfig.squad(id: StringName)` stamps a
+  `SpawnEntryResource.squad_id`; a `formation()` is automatically one squad, and loose entries in
+  one `b.wave()` that share a `squad()` id form one squad (level 1 uses `&"w<n>"`, `n` the wave's
+  index, for every loose wave of 2–7 drones — see [enemy roster](../../enemy-roster.md)). A loose
+  entry with no id gets a squad of one. `WaveManager` never stores a `SquadController` object in
+  its own spawn dicts, only a `"<wave index>:<id-or-slot-index>"` **key** string; `_spawn_ship()`
+  resolves that key against its own `_squads: Dictionary` of key → `WeakRef(SquadController)` —
+  reusing a live board or building a new one — and, for an entity with a duck-typed `squad`
+  property, sets it **before** `add_child()` (the same window `on_spawned` uses), so a squad is
+  readable from the entity's own `_ready()`. `_squads` is cleared in `load_section()`. Because
+  `WaveManager` keeps only weak references, a squad whose members have all died is released even
+  mid-section — a delayed spawn whose squad mates already died gets a fresh board rather than an
+  empty one. See [global.md](global.md) → *SquadController*.
 - **`BaseEnemy`** is the shared enemy root: it owns `Health` + `HurtBox`, a contact hitbox,
   hit-flash/explosion effects, and emits `died` on death (setting `was_killed`). Scoring
   fields (`score_value`, `counts_toward_wave_clear`, `counts_as_escape`) are pulled from

@@ -100,6 +100,44 @@ Detail and APIs: [global.md](modules/global.md).
   physics tick `BaseEnemy._physics_process` owns. Rails (`EnemyPathMover`) take over through
   `suspend_ai()`. Recipe: [global.md](modules/global.md) → *Enemy AI*; gated by
   `tests/integration/test_enemy_mover_single_writer.gd`.
+- **Touching an enemy is governed by an explicit contact profile, not a hard-coded hitbox.**
+  `ContactProfile` (`global/components/contact_profile.gd`) is the offensive twin of
+  `DefenseProfile`: `NONE` (no hitbox), `COLLISION` (today's always-on hitbox, the default —
+  every legacy enemy), `RAMMING` (the hitbox is live only while the brain calls `set_armed(true)`)
+  or `EXPLOSIVE` (RAMMING, plus a `ContactBlast` — a separate `HitBox` re-homed into the *owner's
+  parent* so it survives the owner's death, following `ExplosionEffect`'s pattern, since a child
+  node dies with its parent in the same frame it would need to be detected in). `BaseEnemy.
+  suspend_ai()` arms the profile, so a rail-driven rammer still hurts on contact. Recipe:
+  [global.md](modules/global.md) → *ContactProfile and ContactBlast*.
+- **Drones in a group share roles through a board, not a message bus.** `SquadController`
+  (`global/enemy_ai/squad_controller.gd`, `RefCounted`) assigns `LEAD`/`FLANK_LEFT`/
+  `FLANK_RIGHT`/`REAR` and reassigns them the instant the lead leaves — it moves nothing itself,
+  members read it and request their own motion, so it never touches the single-writer rule above.
+  `AnchorIdle` (`global/enemy_ai/anchor_idle.gd`) is the generic hysteresis-gated idle-around-an-
+  anchor → combat handover any brain can own (Assault skips it — the level has already decided
+  the fight is on), and a squad-wide version of it (`SquadController.set_engaged`/`is_engaged`)
+  is how a whole hub patrol wakes and returns together. Recipes: [global.md](modules/global.md) →
+  *SquadController*, *AnchorIdle*.
+- **An Assault AI enemy leaves the arena on a budget, not when killed.** `EngagementBudget`
+  (`global/enemy_ai/engagement_budget.gd`) is active only in Assault (`EnemyWorld.arena(tree) !=
+  null`); on expiry the brain releases its movement constraint, raises its exit speed, and seeks
+  the nearest point **outside `EnemyWorld.projectile_world_rect()`**, freeing itself once strictly
+  past that edge — the corridor constraint otherwise forces re-entry forever, so without this an
+  AI drone would live until killed and stall a level's `ENEMIES_CLEARED` section. Scored as an
+  escape, same as a legacy rail enemy leaving the bottom of the screen. Recipe:
+  [global.md](modules/global.md) → *EngagementBudget*.
+- **`EnemyMover.max_turn_rate` turns the sprite only — a curved path is always a brain-side
+  request.** `step()` moves `velocity` by `move_toward`, so bending a path (an overshoot after a
+  missed attack, a wide turn-back) means calling `Steering.turn_toward(current_dir, desired_dir,
+  max_rate, delta)` every tick from the actor's *current* velocity; the true heading then turns by
+  at most `max_rate·delta` per tick, and a config that curves pins `turn_rate × speed ≤
+  acceleration` so the mover can keep up. Recipe: [global.md](modules/global.md) → *Enemy AI*.
+- **An enemy telegraphs its own attack state with one small light, never a recoloured hull.**
+  `StateLight` (`global/components/state_light.gd`) is OFF / ARMED (red) / CHARGING (yellow) /
+  COMMIT (white); COMMIT is reserved for a real, committed attack, so a feint or a fake can only
+  ever show CHARGING. Its texture is a radial gradient built in code, never scene-authored, so it
+  never trips the sprite-transparency gate below. Recipe: [global.md](modules/global.md) →
+  *StateLight*.
 - **Brains tick on physics, on one clock, with no `Timer` nodes.** `BaseEnemy._physics_process`
   calls `brain.tick(delta)` then `mover.step(delta)`, once per physics frame; a brain's clocks are
   accumulated `delta` values and its randomness comes only from its own seeded `rng`

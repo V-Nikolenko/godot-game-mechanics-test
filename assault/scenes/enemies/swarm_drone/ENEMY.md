@@ -1,8 +1,9 @@
 # Swarm Drone — small explosive rammer
 
 **Role:** Cheap contact drone. Corkscrews in, spirals close, winds up visibly, rams where the player
-is *going*, and on a miss curves round for exactly one more pass. Replaces the Kamikaze Drone and the
-Open Space PatrolDrone (later tasks of phase 2 do the swap; nothing spawns it in a level yet).
+is *going*, and on a miss curves round for exactly one more pass. Replaces the old Kamikaze Drone
+(now deleted) on every level-1 and station-reinforcement rail, and the old Open Space PatrolDrone
+(now deleted) in the hub's ambient patrol — see "Spawn notes" below.
 **Fantasy / threat:** A hornet that circles, tenses (yellow light), then lunges (red light) — dodge
 the lunge and it swings back once for a second try. Harmless to touch unless its red light is on.
 

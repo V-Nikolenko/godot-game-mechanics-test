@@ -678,3 +678,123 @@ Swarm squad, its own `patrol_anchor` for the Razor) with one numeric correction:
   characterization test, and every comment that used to name it (`swarm_drone.gd`, `steering.gd`, `sector_hub.gd`,
   `test_level1_drone_spawns.gd`). `test_sector_hub_patrol.gd`'s own sweep for the name builds its search terms by
   string concatenation rather than as a literal, so the sweep file does not trip on itself.
+
+## Phase 2 - as built (2026-09-28)
+
+All 20 build-sequence tasks (t1, t2, t3, t4, t5, t6, t7, t8a–t8d, t9, t10, t11, t12, t13, t14, t15, t16, t17-docs)
+landed on `agent/auto-dev`, plus the plan/research/review preparation tasks and three rounds of plan review
+(`4-review.md`: round 1 CHANGES_REQUESTED on B1–B4, round 2 CHANGES_REQUESTED on B5–B6, round 3 APPROVED). This
+closes the epic. `docs/epics-done/cmufs7ek60001nm2x6d0bt2et/` has the full dossier (PRD/SOURCES/REPORT); this
+section is the short version Phase 3 and later phases should read first, alongside the per-task "Built in tX" notes
+above, which this section indexes rather than repeats.
+
+### What was actually built
+
+Everything in the "Names and places" and "Conventions" tables above landed **as specified**, checked against the
+final source on `agent/auto-dev`: `global/components/contact_profile.gd` + `contact_blast.gd`,
+`global/enemy_ai/squad_controller.gd` + `anchor_idle.gd` + `engagement_budget.gd`, `global/components/state_light.gd`,
+the `Steering` additions (`spiral`, `corkscrew`, `formation_slot`, `separation`, `alignment`, `cohesion`,
+`clamped_lead_time`, `turn_toward`), `MovementConstraint.inner_rect()` / `AssaultCorridorConstraint.inner_rect()`,
+`EnemyMover.release_constraint()`, `WaveBuilder.SpawnConfig.squad()` / `SpawnEntryResource.squad_id`, and the two
+enemies: `assault/scenes/enemies/swarm_drone/` (new) and `assault/scenes/enemies/razor_drone/` (`git mv` of
+`drone_interceptor/`, classes and constants renamed). Both fly in both modes, both have dedicated top-down art
+(swarm 32×32, razor 48×48) and a `StateLight`, and both are wired into every invariant gate's roster. The Open
+Space hub's ambient spawn is a Swarm squad + a Razor Drone (`SectorHub._spawn_patrol()`); level 1's drone and
+Razor spawns run off rails, as squads, under the corridor constraint, with the same triggers/offsets/delays as
+before (`test_level1_drone_spawns.gd`'s t1 pin, updated in place rather than replaced). `KamikazeDrone`,
+`DroneInterceptor` and `PatrolDrone` are gone from the codebase; the Bonus Drone is untouched.
+
+### Deviations from `3-plan.md`
+
+Every deviation below is already recorded in detail in its task's "Built in tX" note above; this list is the
+index, in build order, so a later phase can scan it without re-reading all nine notes.
+
+- **t3 (`ContactProfile`/`ContactBlast`):** the blast parents itself via a deferred call **on the blast**
+  (`ContactBlast._attach(container)`), not `container.add_child.call_deferred(blast)` as §2.3 wrote it — so an
+  already-freed container drops the deferred call safely instead of erroring. See "Built in t3-contact-profile".
+- **t4 (`SquadController`):** round-1 N14 asked for `join()` to only fill a vacancy; the round-2 review of
+  `3-plan.md` left the actual resolution to this task, which built a **full recompute on every join/leave/release**
+  instead, because that is
+  the only design where "LEAD is whoever is closest to the hint" is a standing property rather than a one-time
+  election, which the epic's own acceptance criteria needed. `attack_window_open` self-clears whenever `_reassign()`
+  changes who holds LEAD, not only on a clean burst end. `claim_side()`/`release_side()`/`role_changed` pass
+  `Side`/`Role` as plain `int` (a Godot 4.6 static-checker constraint on cross-script nested enums, same shape as an
+  existing `role_changed` decision). See "Built in t4-squad-controller".
+- **t8b (Swarm solo cycle) config, three numbers off the plan's own §2.7 table:** `braking` 900 not 500 (the plan's
+  own round-2-approved fix for its round-1 B5, never folded into the table); `max_turn_rate` 10 not 5; `corkscrew_
+  amplitude` 120 px/s @ 0.6 Hz not 60 @ 1.5 Hz (the plan's number produced a ~6 px swing on a 32 px hull because the
+  primitive's amplitude is a velocity, not a displacement). The overshoot turns ~76°, not the plan's "~110°". See
+  "Built in t8b-swarm-solo".
+- **t8c (Swarm squad) config, two numbers (D1, D2) plus one API addition (D3, D4) off the plan:** `rear_orbit_speed`
+  0.55 rad/s not the table's 1.4 (1.4 × 260 px exceeds `max_speed`, so a REAR could never hold the ring);
+  `phase_offset` bounded to ±0.35 rad, not the plan's unstated full range; the REAR ring's shared angle is new board
+  state (`SquadController.rear_ring_angle`); the attack window's closing rule generalizes t4's two special cases into
+  one (closes whenever the LEAD changes, for any reason). See "Built in t8c-swarm-squad".
+- **t8d (Swarm hub idle):** the `patrol_anchor` sentinel is `Vector2.INF` ("unset"), not stated in the plan; the
+  engagement-precedence formula (round-2 review N17) is computed fresh every tick from distance and `AnchorIdle`
+  state, never cached from `hold_combat` alone (the plan's §2.7.3 wording under-specified this and would have let a
+  squad-held member always read as self-engaged). See "Built in t8d-swarm-idle".
+- **t10 (Razor combat), the largest single set of deviations, mostly geometry corrections found live rather than by
+  arithmetic on paper:** the feint lunge aims `feint_clearance_px` (70 px) beside the player, not the plan's 25°
+  offset — the drone's real orbit radius (measured ~82–110 px, not the plan's assumed 130) made a 25° lunge pass
+  *through* the player's hull; `orbit_correct_speed` raised to 260 (from a lower value) so the orbit actually holds
+  ≈119 px; a reversal now bars the *next* reversal until the next attack begins, not "once per window" (the literal
+  plan wording allowed endless back-and-forth); the Assault side-lane check reads the drone's position **at the
+  point the real dash will start from** (the WINDUP hold point, or the feint's predicted far-side stop), not its
+  current position; the orbit re-anchors to the drone's own bearing on every re-entry, never to the far side of the
+  player; a feint shows the light **OFF**, not CHARGING, during its lunge and brake legs (CHARGING is reserved for
+  the real WINDUP); a budget expiring mid-dash goes straight to DISENGAGE after the boost with no pulse fired; and
+  the deadline formula defers a Razor's budget expiry while it is boosting, since a dash cannot be cut off mid-flight
+  — pinned in `test_engagement_deadline.gd` with a boundary case showing a Razor in an `ENEMIES_CLEARED` section
+  would miss the timeout (~15.4 s), which is why Razors are restricted to `DURATION` sections (`deep_space` only).
+  `dash_max_distance`, `_begin_dash()`, `_check_dash_end()` and the dash's contact self-kill are removed outright,
+  since the Razor now survives its dash. See "Built in t10-razor-combat".
+- **t11 (Razor hub idle):** `home_radius` is `idle_radius` itself (160), not `idle_radius + idle_radius_jitter`
+  (~170) as the round-2 review's own estimate assumed — matching what `SwarmDroneBrain` actually passes. See
+  "Built in t11-razor-idle".
+- **t15 (level 1 off rails), §5 C3 concurrency: no lever pulled.** The plan pre-approved three levers (lower
+  `rear_engage_seconds`, lower Swarm `engage_seconds`, split a large loose wave) to use *only if* a section's
+  post-migration peak exceeded the ceiling. Measured against the real shipped configs and the live world rect, every
+  section stayed inside it without touching any of them: attack-capable / all-drones peaks were deep_space 17/23
+  (1.21×/1.64× of the legacy 14), planet_approach 7/9 (1.17×/1.50× of 6), cloud_descent 7/10 (1.40×/2.00× of 5) —
+  against the pre-approved ceiling of ≤ 2.0× / ≤ 2.5×. `rear_engage_seconds` stays 5.5 and Swarm `engage_seconds`
+  stays 5.5, both at their t8b/t8c defaults. See "Built in t15-level1-ai".
+- **t16 (hub patrol):** `patrol_ring_radius` is 1300, not the plan's 1000. The plan's own round-2 B6 fix had already
+  corrected the round-1 ring radius once, using a manual check of one pickup row; t16's full sweep of every
+  `MissionTrigger`/`PickupBase` child of the real `sector_hub.tscn` found a second, closer interactable the manual
+  check missed (`WeaponUnlockerMiningLaser`, 485 px from the plan's 1000 px anchor — inside the Razor's 450 px
+  `perceive_radius`), so the radius went to 1300 to restore clearance for both groups against everything in the
+  scene, not just the one row checked by hand. See "Built in t16-hub-patrol".
+- **t9 (rename), t12/t13 (art), t14 (Kamikaze swap under rails), t1/t2/t6/t7 (foundations):** no deviation from the
+  plan surfaced during these tasks that a later phase needs to know about; each has no "Built in tX" note above for
+  that reason.
+
+### Gaps left for later phases
+
+Everything in the "Deliberately deferred" table above still stands. In particular, for the phases that read this
+section next:
+
+- **Phase 3 (Fighter, Gatling Interceptor)** is the first roster phase to reuse `SquadController` for a
+  non-drone family, and the first to need `Steering.lead_target` / `break_contact` (both still deferred).
+- **Phase 4** owns the Armour contact-collision profile (the `ContactProfile.Mode` enum is already shaped for a
+  fifth case), real line-of-sight, and the Ram Corvette.
+- **Phase 5** owns `BulletPool`'s injectable grandparent container (deferred a second time in this phase — every
+  real parent chain still satisfies pool → ship → container, so nothing forced it) and owner-bound projectile
+  lifetime (`persist_after_owner_death`).
+- **Phase 13 (EncounterDirector)** must replace `SectorHub._spawn_patrol()` with an equivalent per-group clearance
+  check — the geometry test this phase shipped (`test_sector_hub_patrol.gd`) is pinned to the hub's own static
+  scene layout, not to a director that can place drones dynamically.
+- **Phase 14** owns squad messages beyond shared engagement (`TARGET_MARKED` and friends) and idle profiles for
+  every family besides these two drones — both must build on the `AnchorIdle` contract this phase shipped, not a
+  new one.
+- **Phase 15** owns taking every other level-1 enemy off rails, retiring `SineMovement` and friends, and moving
+  `BaseEnemy` itself into `global/`.
+- **Phase 17** owns the readability audit for the rest of the roster and, if the owner wants it, enemy audio
+  telegraphs — this phase shipped none (no enemy SFX pipeline exists anywhere in the project).
+- **Known gaps the gate cannot see, left for a human:** whether the Swarm and Razor read as fun and distinct in
+  play, whether level 1's new density (drones alive ~8.3 s instead of ~3.5 s) feels right despite passing the C3
+  ceiling, whether the `StateLight` cues read at Assault's speed, and whether the hub patrols stay quiet while the
+  player dwells at a planet's mission trigger or the pickup bench (`sector_hub.tscn`'s pickups sit closer to the
+  Razor's patrol ring than the planets do). `docs/epics-done/cmufs7ek60001nm2x6d0bt2et/REPORT.md` lists these as
+  known gaps in full, plus the hand-playtest checklists t15 and t16 ended their runs with.
+- No numeric collision-layer bit changed meaning or value in this phase.
