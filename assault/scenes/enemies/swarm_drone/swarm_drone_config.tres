@@ -1,0 +1,41 @@
+[gd_resource type="Resource" script_class="SwarmDroneConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/swarm_drone/swarm_drone_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 30
+collision_damage = 30
+score_value = 10
+counts_toward_wave_clear = true
+max_speed = 220.0
+acceleration = 600.0
+braking = 900.0
+max_turn_rate = 10.0
+corkscrew_amplitude = 120.0
+corkscrew_frequency = 0.6
+windup_seconds = 0.4
+burst_speed = 480.0
+burst_seconds = 0.45
+lead_time_min = 0.4
+lead_time_max = 0.8
+overshoot_seconds = 0.8
+overshoot_turn_rate = 2.4
+second_passes = 1
+blast_radius = 48.0
+blast_damage = 15
+engage_seconds = 5.5
+exit_speed = 320.0
+rear_orbit_radius = 260.0
+rear_orbit_speed = 0.55
+flank_distance = 200.0
+flank_angle_deg = 70.0
+separation_radius = 30.0
+flock_nudge_cap = 0.35
+evade_radius = 90.0
+rear_engage_seconds = 5.5
+perceive_radius = 380.0
+lose_radius = 620.0
+notice_time = 0.35
+idle_radius = 140.0
+idle_speed = 0.6

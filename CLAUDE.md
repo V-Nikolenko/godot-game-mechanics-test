@@ -183,6 +183,51 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   as `Bullet.is_armored()`, above). It sweeps every `global/ship_modules/*.gd` for a direct
   `.rotation =`/`+=`/`-=` with an empty, permanent allowlist; reverting the duck-typed call back to
   a raw rotation write makes it fail, which is the proof it can.
+  `tests/integration/test_enemy_mover_single_writer.gd` is a twelfth, over the enemy AI stack's
+  **single writer of motion**: an enemy with an `EnemyMover` (`global/enemy_ai/`) must leave its
+  `velocity`, `rotation` and `move_and_slide()` to that mover — its `EnemyBrain` only requests,
+  on the one tick `BaseEnemy._physics_process` owns. It sweeps every `*_brain.gd` and
+  `global/enemy_ai/*.gd` (receiver writes) and every mover-driven scene's root script plus its
+  ancestors (bare writes), with an empty, permanent allowlist and boundary cases that prove it
+  fires. Rails still win: `EnemyPathMover` calls `suspend_ai()` *in addition to* its unconditional
+  physics switch-off and `"AIStateMachine"` lookup — never instead of it.
+  `tests/integration/test_collision_layer_names.gd` is a thirteenth, over collision-layer
+  **naming**: `project.godot [layer_names]` is the one place a physics layer bit gets a human
+  name, and Godot never checks that a bit actually used in a scene or resource has one there. It
+  sweeps every `.tscn`/`.tres` outside `addons/` for a `collision_layer`/`collision_mask` value,
+  decomposes each into its set bits, and asserts every bit found is named — plus that
+  `global/physics/collision_layers.gd`'s `CollisionLayers` declares one matching constant
+  (`1 << (layer_number - 1)`) per named layer, so code can refer to a layer by name instead of a
+  magic number. A synthetic-bit boundary case (bit 4, unnamed today) proves the check can reject.
+  `tests/integration/test_enemy_contact_damage.gd::test_every_baseenemy_scene_is_in_the_roster`
+  and `tests/integration/test_contact_hitbox_geometry.gd::test_every_baseenemy_scene_is_in_the_roster`
+  are a fourteenth and fifteenth, **roster completeness guards**: each sweeps
+  `assault/scenes/enemies/` for every `<dir>/<dir>.tscn` with a `BaseEnemy` root and fails if it is
+  missing from that file's hand-maintained `ROSTER`, following the same sweep shape
+  `tests/integration/test_enemy_hurtbox_geometry.gd::test_every_enemy_scene_is_in_the_roster`
+  already used — so a new enemy scene added under that directory and never wired into a gate's
+  roster fails loudly instead of silently shipping unchecked contact damage or geometry.
+  `tests/integration/test_engagement_deadline.gd` is a sixteenth, over **Assault AI timing**: for
+  every Swarm Drone or Razor Drone spawn in every `ENEMIES_CLEARED` section of level 1, the
+  worst-case time from the section's last wave triggering to that enemy actually leaving the
+  level (its engagement budget, plus its own worst-case exit — the Razor's formula also covers a
+  dash deferring its budget's expiry) must clear the section's own `enemies_cleared_timeout`, so
+  an AI enemy that outlives being killed can never stall a level the way an un-exiting rail enemy
+  would. A boundary case pins that a Razor placed in an `ENEMIES_CLEARED` section (it ships only
+  in `deep_space`, a `DURATION` section) would miss the timeout. The companion **concurrency**
+  check lives inside the otherwise-characterization `tests/integration/test_level1_drone_spawns.gd`:
+  once AI drones can outlive a single ramming pass, `tests/helpers/level1_drone_concurrency.gd`'s
+  peak-alive computation is asserted as a genuine ceiling — the attack-capable peak (lead plus
+  flanks) at most 2.0× and the all-drones peak at most 2.5× the legacy per-section peak — rather
+  than merely pinned, so a later spawn change that pushes level-1 density past the pre-approved
+  levers (documented in `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md`) fails the gate instead
+  of degrading play quietly.
+  `tests/integration/test_sector_hub_patrol.gd` is a seventeenth, the **hub clearance check**: for
+  the Open Space hub's ambient Swarm squad and Razor Drone, it sweeps every `MissionTrigger` and
+  `PickupBase` child of the real `sector_hub.tscn` plus the player's spawn point and asserts each
+  one clears that group's own idle ring plus its `perceive_radius` — a planet or a pickup placed
+  later within reach of a patrol's anchor fails it instead of ambushing the player mid-dwell. The
+  same file also sweeps the whole project to confirm no `PatrolDrone` reference survives.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.
@@ -199,18 +244,18 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   declaration; a typed one is usually an *alias* decoding to a UID another resource owns, and both
   fail silently. Leave the reference UID-less (legal — Godot falls back to the path) or mint one
   with the headless `ResourceUID.create_id()` snippet in [tests/README.md](tests/README.md).
-- **Commit and push to `agent/auto-dev` — that is the working branch for all Claude work**,
-  whether that is the unattended NAS loop or an interactive session. You do not need to ask.
-  Don't leave finished work sitting uncommitted for the user to stage by hand.
+- **`agent/auto-dev` is the working branch for all Claude work**, whether that is an AI-Kanban
+  run on the NAS or an interactive session. You do not need to ask to commit there.
   - Check you are on it first (`git branch --show-current`). If you are not, switch — do not
     start committing wherever you happen to be.
-  - **Get a green gate before you push**: `bash /agent/verify.sh` in the container, or
-    `godot --headless --path . --import` plus the GUT suite locally. Never push work you have not
-    verified. In the NAS loop the harness also commits and pushes anything left uncommitted, but
-    only after the same gate passes.
-  - Write a real commit subject that names what changed. `agent: cycle <stamp>` is the harness's
-    own bookkeeping prefix — don't use it for actual work, or the change vanishes from the
-    "shipped features" list, which filters that prefix out.
+  - **Get a green gate before you commit**: `bash /agent/verify.sh` in the container, or
+    `godot --headless --path . --import` plus the GUT suite locally. Never commit work you have not
+    verified.
+  - **In an AI-Kanban run, do not push.** The worker has no GitHub credentials; the harness runs
+    the same gate after you and commits whatever you left, only if it passes. The owner pushes.
+    In an interactive session, commit and push as usual — don't leave finished work sitting
+    uncommitted for the user to stage by hand.
+  - Write a real commit subject that names what changed.
   - No other branches and no worktrees unless asked.
   - **`main` stays off-limits.** Never commit to it, never push to it, never merge into it,
     never force-push or rewrite history on any branch. **The user merges `agent/auto-dev` to
@@ -259,9 +304,9 @@ Implementation of a large item starts only on `VERDICT: APPROVED`. A rejected pl
 outcome: it means wrong work was avoided cheaply.
 
 **Running the heavyweight pipeline on a one-line fix is as much a failure as skipping it on a
-system change.** If a small item turns out to need architectural work, record the escalation with
-`./scripts/backlog-cli.js set-meta <taskId> --complexity large --model opus` rather than quietly
-switching tracks — the board should show what is actually happening.
+system change.** If a small item turns out to need architectural work, stop and end the run with
+`Result: ESCALATE` and why (see the `feature-workflow` skill) rather than quietly switching
+tracks — the owner re-sizes the task on the board, so it shows what is actually happening.
 
 ## MANDATORY — keep the docs current
 

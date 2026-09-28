@@ -8,6 +8,12 @@ signal died
 @onready var hit_flash_player: AnimationPlayer = $HitFlashAnimationPlayer
 @onready var contact_hit_box: HitBox = get_node_or_null("ContactHitBox") as HitBox
 
+## The direction the *art's nose* points in texture space, before any node rotation is applied.
+## Default is nose-down, the Assault path-mover convention (`EnemyPathMover`'s facing rule reads
+## this). A ported enemy whose art points up sets `-PI / 2` instead — `atan2(dir.x, -dir.y)` equals
+## `dir.angle() + PI / 2`, so its on-screen facing is unchanged from before it declared this.
+@export var sprite_forward_angle: float = PI / 2
+
 ## Read by ScoreTracker via the enemy's ShipConfig — overridable per-enemy if needed.
 var score_value: int = 0
 ## True ONLY when this enemy died from damage (so ScoreTracker can tell
@@ -22,6 +28,23 @@ var counts_as_escape: bool = true
 
 var _hit_effect: HitEffect
 var _explosion_effect: ExplosionEffect
+
+## Resolved in `_ready()`: the scene-authored `DefenseProfile` child if there is one, otherwise a
+## default one (all `accepts_*` true, mask 1121) created on the fly. Exposed so a subclass can
+## call `apply_alternate()` on it, as `RamShip` does.
+var defense_profile: DefenseProfile
+
+## Resolved in `_ready()` the same way: the scene-authored `ContactProfile` child, otherwise a default
+## COLLISION one (the hitbox untouched, i.e. exactly the pre-profile behaviour). It owns what touching
+## this enemy does — see `global/components/contact_profile.gd`. `suspend_ai()` arms it.
+var contact_profile: ContactProfile
+
+## The AI stack (docs/plans/cmug33ldn00d3m52wfe1j6fct/3-plan.md), resolved by type in `_ready()`: the
+## first `EnemyBrain` / `EnemyMover` child, or null. With no brain, `_physics_process` is inert —
+## every legacy enemy either has none or overrides `_physics_process` itself.
+var _brain: EnemyBrain
+var _mover: EnemyMover
+var _ai_suspended: bool = false
 
 ## Give this enemy a config resource of its own, at construction and again on tree entry.
 ##
@@ -48,8 +71,12 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	hurt_box.received_damage.connect(_on_received_damage)
 	health.amount_changed.connect(_on_health_changed)
-	hurt_box.collision_mask = 97 | 1024  # bullets (64) + rockets (32) + layer 1 + asteroid contact (1024)
+	defense_profile = _resolve_defense_profile()
+	defense_profile.apply_to(hurt_box)
+	contact_profile = _resolve_contact_profile()
+	contact_profile.setup(self, contact_hit_box, health)
 	_rotate_sprite()
+	_resolve_ai()
 
 	_hit_effect = HitEffect.new()
 	add_child(_hit_effect)
@@ -67,19 +94,97 @@ func _ready() -> void:
 		counts_toward_wave_clear = cfg.counts_toward_wave_clear
 		counts_as_escape = cfg.counts_as_escape
 
+## The one AI tick: the brain decides, then the mover applies it — once per physics frame, on one
+## clock. Inert without a brain or once `suspend_ai()` has run. A subclass that defines its own
+## `_physics_process` (bomber, gunship, ram, razor drone) replaces this entirely —
+## GDScript does not chain virtual callbacks — so it keeps its legacy behaviour untouched.
+## Deliberately never calls `set_physics_process(false)`: that would switch those overrides off too.
+func _physics_process(delta: float) -> void:
+	if _ai_suspended or _brain == null:
+		return
+	_brain.tick(delta)
+	if _mover != null:
+		_mover.step(delta)
+
+
+## Hands the enemy over to something else (a rail — `EnemyPathMover` calls this): the brain gets
+## `on_suspended()` once, the mover halts (it zeroes velocity, so the mover stays velocity's only
+## writer), and the tick above never runs again. Idempotent. Timer-driven fire (`AttackController`
+## on `_process`) is not touched, so a rail-driven ship keeps shooting as it always has; a
+## `driven_by_brain` controller stops with its brain.
+func suspend_ai() -> void:
+	if _ai_suspended:
+		return
+	_ai_suspended = true
+	# A rail drives this enemy from now on, so it hurts on contact the way a rail enemy always has:
+	# a no-op for COLLISION (every legacy enemy), and it arms RAMMING / EXPLOSIVE.
+	if contact_profile != null:
+		contact_profile.set_armed(true)
+	if _brain != null:
+		_brain.on_suspended()
+	if _mover != null:
+		_mover.halt()
+
+
+func is_ai_suspended() -> bool:
+	return _ai_suspended
+
+
+func _resolve_ai() -> void:
+	for child in get_children():
+		if _brain == null and child is EnemyBrain:
+			_brain = child
+		elif _mover == null and child is EnemyMover:
+			_mover = child
+
+
+## Returns the scene-authored `DefenseProfile` child if there is one, so a scene that places one
+## (e.g. the ram ship) never gets a second, default-flagged profile alongside it.
+func _resolve_defense_profile() -> DefenseProfile:
+	for child in get_children():
+		if child is DefenseProfile:
+			return child
+	var profile := DefenseProfile.new()
+	add_child(profile)
+	return profile
+
+
+## Same shape as `_resolve_defense_profile()`: a scene-authored `ContactProfile` wins, otherwise a
+## default (COLLISION) one is created, so every enemy has exactly one.
+func _resolve_contact_profile() -> ContactProfile:
+	for child in get_children():
+		if child is ContactProfile:
+			return child
+	var profile := ContactProfile.new()
+	add_child(profile)
+	return profile
+
+
+## Rotates a child `AnimatedSprite2D` 180° (light assault ship, ram ship). This is a child-sprite
+## art correction, independent of `sprite_forward_angle`: those two ships' animated art is drawn
+## facing the opposite way from the body's own facing convention, and this rotation is what makes
+## them agree on screen. It says nothing about the body's own rotation or facing.
 func _rotate_sprite() -> void:
 	var sprite := get_node_or_null("AnimatedSprite2D") as Node2D
 	if sprite:
 		sprite.rotation_degrees = 180.0
 
+## Virtual damage hook: called whenever this enemy's `HurtBox` reports a hit. The default applies
+## the damage to `health`. A subclass overrides this to change what a hit does — e.g. `RamShip`'s
+## first hit only arms it, and `SpaceStation` deflects every hit while a turret is alive.
 func _on_received_damage(damage: int) -> void:
 	health.decrease(damage)
 
+## Virtual death hook: called on every `health.amount_changed`. The default plays the hit-flash
+## animation on any change, and on reaching 0 sets `was_killed`, emits `died`, plays the explosion
+## and frees the enemy. A subclass overrides this to change what death does — e.g. `SpaceStation`
+## holds its wreck in the tree for `death_duration` seconds instead of freeing immediately.
 func _on_health_changed(current: int) -> void:
 	hit_flash_player.play("hit")
 	_hit_effect.burst()
 	if current == 0:
-		print("[Enemy] %s DESPAWNED (died) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
+		if OS.is_stdout_verbose():
+			print("[Enemy] %s DESPAWNED (died) at position %.0f, %.0f" % [name, global_position.x, global_position.y])
 		was_killed = true
 		died.emit()
 		_explosion_effect.explode()

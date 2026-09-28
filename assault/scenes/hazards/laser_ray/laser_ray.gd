@@ -74,7 +74,7 @@ const _KILL_DAMAGE: int = 9999
 
 ## Collision mask covers every known HurtBox layer:
 ##   128 = player_hurtbox (layer 8)
-##   256 = enemy HurtBox set in code (drone_interceptor, kamikaze_drone)
+##   256 = enemy HurtBox set in code (razor_drone)
 ##   512 = enemy_hurtbox (layer 10) used by most enemies and asteroids in .tscn
 const _HIT_MASK: int = 128 | 256 | 512
 

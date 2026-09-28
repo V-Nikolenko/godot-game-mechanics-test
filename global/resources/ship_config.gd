@@ -4,8 +4,11 @@
 class_name ShipConfig
 extends Resource
 
+@export_group("Defense")
 @export var max_health: int = 100
 @export var collision_damage: int = 20
+
+@export_group("Scoring")
 ## Points awarded to the player for destroying this ship.
 ## Read by ScoreTracker via the enemy's config resource.
 @export var score_value: int = 0

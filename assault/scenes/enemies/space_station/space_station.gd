@@ -181,7 +181,7 @@ func is_dying() -> bool:
 	return _dying
 
 
-## Override. BaseEnemy frees the actor in the SAME call that emits `died` (base_enemy.gd:65-73),
+## Override. BaseEnemy frees the actor in the SAME call that emits `died` (`BaseEnemy._on_health_changed`),
 ## which gives a 256x256 mini-boss the identical one-frame death a 40 px interceptor gets. A boss
 ## needs the wreck to stay in the tree long enough to explode.
 ##

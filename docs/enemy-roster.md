@@ -86,34 +86,35 @@ b.fighter().at(260, -400).move(b.u_sweep(510, 730, 10)).free_after(12).shoot_for
 
 ---
 
-### `drone` — Kamikaze Drone
+### `drone` — Swarm Drone
 
 **Builder:** `b.drone()`  
-**Scene:** `kamikaze_drone.tscn`  
-**Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
-**Shoots:** No — rams the player on contact.  
+**Scene:** `swarm_drone.tscn`  
+**Movement:** ⚠️ **Self-managed squad AI. Do NOT add `.move()`** in a level wave. A rail suspends its brain and arms
+its contact (it then flies the path and rams like the old Kamikaze Drone); only the space station's BOTTOM
+reinforcement squad still does that on purpose.  
+**Squads:** a `.formation()` is automatically one squad. Loose `b.drone()` lines in one `b.wave()` form a squad only
+if they share `.squad(&"<id>")`; level 1 uses `&"w<n>"` for every wave with 2–7 loose drones. A loose line with no
+id is a squad of one.  
+**Shoots:** No — corkscrews in, winds up (yellow), rams the predicted player position (red), explodes on contact.  
+**Assault exit:** leaves by the nearest edge after `engage_seconds` (5.5 s; REAR members after
+`rear_engage_seconds`), so an ENEMIES_CLEARED section is never held open (`test_level1_drone_exit.gd`).  
 **HP:** Very low  
 **Score:** Very low
 
-**Config fields** (`DroneConfig`):
-
-| Field | Default | Notes |
-|-------|---------|-------|
-| `movement_speed` | 140.0 | Irrelevant when EnemyPathMover is attached — use `.move()` speed. |
+**Config fields** (`SwarmDroneConfig`): the full table is in `swarm_drone/ENEMY.md`.
 
 **Examples:**
 ```gdscript
-# Sine weave from the top
-b.drone().at(-260, -400).move(b.sine(170, 30))
+# A pair arriving from the top as one squad
+b.drone().at(-260, -400).squad(&"w2"),
+b.drone().at( 260, -400).delay(0.2).squad(&"w2"),
 
-# Straight dive with stagger
-b.drone().at(-100, -400).move(b.straight(220)).delay(0.15)
+# A formation is one squad on its own
+b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).delay(0.4)
 
-# Cluster formation rushing down
-b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180))
-
-# Approaching from below
-b.drone().at(-150, 400).move(b.straight(185, PI))
+# Arriving from below
+b.drone().at(-150, 400)
 ```
 
 ---
@@ -253,36 +254,41 @@ b.interceptor().at(-500, 0).move(b.straight(200, PI / 2)).free_after(5.0)
 
 ---
 
-### `drone_interceptor` — Drone Interceptor (Kamikaze Orbiter)
+### `razor_drone` — Razor Drone (orbiting duellist)
 
-**Builder:** `b.drone_interceptor()`  
-**Scene:** `drone_interceptor.tscn`  
-**Movement:** ⚠️ **Self-managed AI. Do NOT add `.move()`.** Adding `.move()` disables `_physics_process` and breaks the AI entirely.  
-**Shoots:** No — kamikaze dash on contact.  
-**HP:** Very low  
-**Score:** Low
+**Builder:** `b.razor_drone()`  
+**Scene:** `razor_drone.tscn`  
+**Movement:** ⚠️ **Self-managed AI. Do NOT add `.move()`.** A rail suspends its brain.  
+**Shoots:** One pulse shot (10 dmg, 250 px/s), only after a *missed* dash.  
+**Contact:** RAMMING — hurts (30) only while it is dashing (red light).  
+**HP:** Very low (25)  
+**Score:** Low (40)
 
-**Behaviour phases:**
+**Behaviour** (full detail in `razor_drone/ENEMY.md`):
 1. `ENTER` — flies toward the player.
-2. `ORBIT` — circles the player for 1–2 seconds (randomised).
-3. `DASH` — locks direction to predicted player position, flies at `dash_speed` indefinitely.
+2. `ORBIT` — circles the player. Every 1–2 s it rolls to reverse its orbit, to fake a dash, or to make a real one.
+3. **Fake:** a long yellow wind-up, a lunge that passes 70 px beside the player, a brake on the far side, then
+   straight into a real wind-up.
+4. **Real:** yellow 0.5 s, white 0.12 s (only a real dash is ever white), then a dash through the predicted player
+   position. It survives, curves back round and returns to orbit.
+5. Assault only: it attacks from a 30°–75° side lane, stays inside the corridor, and leaves by the nearest edge after
+   9 s.
 
-**Config fields** (`DroneInterceptorConfig`):
+**Config fields** (`RazorDroneConfig`): the full table is in `razor_drone/ENEMY.md`. The key ones:
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `orbit_radius` | 130.0 | Distance from player while orbiting. |
-| `orbit_speed` | 1.8 rad/s | Counter-clockwise by default. |
-| `approach_speed` | 200.0 | px/s during ENTER. |
-| `orbit_correct_speed` | 160.0 | Max correction speed during ORBIT. |
-| `dash_speed` | 480.0 | px/s during kamikaze DASH. |
-| `dash_prediction_time` | 0.2 s | How far ahead to predict player position. |
+| `orbit_radius` / `orbit_speed` | 130 / 1.8 rad/s | The orbit ring |
+| `reverse_chance` / `fake_chance` | 0.35 / 0.35 | Roll odds |
+| `windup_seconds` / `commit_flash_seconds` | 0.5 / 0.12 s | Telegraph |
+| `dash_speed` | 480 | px/s |
+| `engage_seconds` | 9.0 s | Assault time in the fight |
 
 **Examples:**
 ```gdscript
 # Self-managed — just .at(), no .move()
-b.drone_interceptor().at(-160, -420)
-b.drone_interceptor().at( 160, -420).delay(0.35)
+b.razor_drone().at(-160, -420)
+b.razor_drone().at( 160, -420).delay(0.35)
 ```
 
 ---
@@ -475,8 +481,8 @@ b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180)
 
 | Rule | Detail |
 |------|--------|
-| **Always `.move()` path-following enemies** | `fighter`, `drone`, `ram`, `sniper`, `sniper_enemy`, `interceptor`, `bomber` — they have no self-managed movement. |
-| **Never `.move()` self-AI enemies** | `drone_interceptor`, `gunship` — attaching `EnemyPathMover` disables their `_physics_process`. |
+| **Always `.move()` path-following enemies** | `fighter`, `ram`, `sniper`, `sniper_enemy`, `interceptor`, `bomber` — they have no self-managed movement. |
+| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship` — attaching `EnemyPathMover` suspends their AI. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` needs a `sequence()`** | The approach step must be `straight(speed, 0.0, 2.5)` (exactly 2.5 s). Hold step must cover `shot_count × 2.5 s`. |
 | **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |
@@ -508,11 +514,11 @@ footprint at 45°.
 
 **It also spawns other enemies from this roster.** During phase 1 only, `StationReinforcements`
 sends squads across the arena on a fixed `LEFT → RIGHT → BOTTOM → TOP` cycle: two `interceptor`
-from either side, two `kamikaze_drone` from below, two `fighter` with `.shoot_forward()` from
+from either side, two `swarm_drone` from below, two `fighter` with `.shoot_forward()` from
 above. Things to know if you edit that table (`station_reinforcements.gd::_build_squads()`):
 
 - It uses this file's own vocabulary — `b.interceptor().at(…).move(b.straight(…)).free_after(…)` —
-  so the rules below apply unchanged. In particular **`gunship` and `drone_interceptor` must never
+  so the rules below apply unchanged. In particular **`gunship` and `razor_drone` must never
   go in it**: both are self-managed AI, and `EnemyPathMover` silently disables the AI they need.
   A test enforces that.
 - **Every entry needs `.free_after(…)`.** The default `FREE_ON_SCREEN_EXIT` only culls a ship that

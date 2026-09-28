@@ -1,0 +1,43 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/helpers/fixture_enemy.gd" id="1_fix"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="2_fix"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="3_fix"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="4_fix"]
+[ext_resource type="Script" path="res://tests/helpers/fixture_brain.gd" id="5_fix"]
+
+[sub_resource type="Animation" id="Animation_reset_fix"]
+length = 0.001
+
+[sub_resource type="Animation" id="Animation_hit_fix"]
+resource_name = "hit"
+length = 0.2
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_fix"]
+_data = {
+&"RESET": SubResource("Animation_reset_fix"),
+&"hit": SubResource("Animation_hit_fix")
+}
+
+[node name="FixtureEnemy" type="CharacterBody2D"]
+motion_mode = 1
+script = ExtResource("1_fix")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 97
+script = ExtResource("3_fix")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_fix")
+max_health = 10
+current_health = 10
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries/ = SubResource("AnimationLibrary_fix")
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("4_fix")
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("5_fix")

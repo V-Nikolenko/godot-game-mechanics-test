@@ -1,54 +1,71 @@
 # Epic preparation
 
-Loaded when your work item has `kind: "prep"`. Turning a rough idea into an epic the user can
-actually decide on happens in four steps, each a separate iteration with its own model and its own
-artifact:
+Loaded when your work item's kind is `prep`. Turning a rough idea into an epic the owner can
+actually decide on happens in stages, each a separate run with its own model and its own artifact:
 
 ```
-TRIAGE  ->  RESEARCH  ->  PLAN  ->  PLAN REVIEW  ->  the user decides
+TRIAGE  ->  RESEARCH  ->  PLAN  ->  PLAN REVIEW  ->  the owner decides
+(AI-Kanban)   (you: one of these three, named by your item's type)
 ```
 
-You are doing **one** of these — the one named by your item's `type`. Do not run ahead into the
-next stage even if it looks quick: each is a fresh session with a clean context on purpose, and the
+**Triage is not yours.** AI-Kanban runs it as a read-only session when an idea is submitted, and
+its code — not the model — creates the epic and the three prep tasks. By the time you run, the
+epic exists: its description is the triage summary, and the prompt quotes the **Original idea**.
+
+**Attached documents.** When the owner attached `.md` files to the idea, your prompt carries them in
+full under *Attached documents*. They are the owner's detailed spec and outrank the one-line idea
+and the triage summary. Every stage works from them:
+
+- **Research:** list every concrete requirement, constraint and open question the documents state
+  (in `1-context.md` under *Requirements from the attached documents*, each quoted briefly with the
+  document name) and research the ones that need it. Where the documents reference existing code
+  or docs (e.g. `docs/enemy-rework/current-enemies.md`), read those too.
+- **Plan:** add a *Requirements coverage* table to `3-plan.md` — each requirement → the task key(s)
+  in `tasks.json` that deliver it, "later phase N" when another phase owns it, or "out of scope"
+  with the reason. Nothing may be silently dropped.
+- **Review:** pass the documents to the reviewer along with the idea (see below).
+
+**Phases.** A large idea is split into an ordered chain of phase epics that share one idea
+folder, `docs/ideas/<idea id>/`: the attached documents and `DECISIONS.md`, the running log of
+decisions every phase must respect. Phase N only starts once phase N-1 is implemented, and more
+phases may be planned later as the chain goes on (the prompt shows the chain so far). When your
+prompt has a *Phase X of N* section:
+
+- **Stay inside your phase's scope.** Plan and create tasks only for what the scope names;
+  requirements owned by other phases go in the coverage table as "later phase N", not into tasks.
+- **Build on what was actually built, not on what was planned.** Before anything else read
+  `DECISIONS.md` — especially each earlier phase's *as built* section — each finished phase's
+  dossier `docs/epics-done/<epic id>/REPORT.md`, and their `3-plan.md` (paths are in the prompt).
+  Then read the code: where the code and the documents disagree, **the code is the truth**. Never
+  contradict a recorded decision silently — if one must change, say so explicitly in `3-plan.md`
+  and in the decision log.
+- **Research: re-validate your scope first.** Your scope was written before the earlier phases
+  ran. Check it against the code and the as-built notes: if an earlier phase already did part of it,
+  changed the approach it assumed, or left a gap that belongs to you, adjust the scope — and put a
+  *Scope check* section at the top of `2-research.md` saying exactly what changed and why, so the
+  plan and the owner see it.
+- **Plan stage: append to `DECISIONS.md`** (never rewrite earlier sections) a
+  `## Phase N - <title> (<date>)` section with what later phases must know: architecture choices,
+  conventions, names and interfaces they will build on, and what was deliberately deferred.
+
+You are doing **one** stage — the one named by your item's type. Do not run ahead into the next
+stage even if it looks quick: each is a fresh session with a clean context on purpose, and the
 artifacts are how they hand off.
 
-Everything lives in the epic's `prepDir` (`docs/plans/<epicId>/`), which is on your work item.
+Everything lives in the **epic plan directory** from your work item (`docs/plans/<Epic ID>/` for
+new epics). The harness reads the files named below after your run; **their exact names and shapes
+are a contract** — a missing or malformed file fails the run.
+
+**Prep is documents only.** Prep runs skip the project's verification gate (`/agent/verify.sh`), so
+they may only change files under the epic plan directory (and, for an idea's phases, the shared
+docs/ideas/<idea id>/ folder) — touching any other file fails the run and
+nothing is committed. Don't run the gate yourself either; read code, don't change it. Your final
+message is shown to the owner on the task, and the plan directory's documents appear in AI-Kanban
+under the epic's *Plan documents*.
 
 ---
 
-## TRIAGE (work item `kind: "idea"`)
-
-The user submitted a rough idea through the web UI — a sentence or two, not a spec. Your job is to
-decide what epic it should become, and nothing more.
-
-1. **Read the idea.** It is in your work item, verbatim.
-2. **Read the actual code** for what it would build on. A draft that reinvents an existing system
-   wastes the user's review time as much as a bad plan would. This project favours composition —
-   the answer is often "assemble existing `global/components/`".
-3. **Decide: epic, or not.**
-   - Already shipped, a duplicate of a live epic, or something the code shows is already possible:
-     `./scripts/backlog-cli.js ideas reject <ideaId>` with the reason on stdin. Closing an idea
-     honestly is a good outcome; drafting an epic for work that already exists is not.
-   - Otherwise, draft it:
-
-```bash
-echo '{"title": "<epic title>", "ideaId": "<ideaId>", "summary": "<one paragraph>"}' \
-  | ./scripts/backlog-cli.js draft-epic
-```
-
-The `summary` is what the research stage starts from: say what the user seems to want, what you
-found that it would build on, and what the open question is. One paragraph, not a plan.
-
-`draft-epic` creates the research, plan and plan-review tasks itself and links the idea to the
-epic. **Do not write implementation tasks** — they come out of the reviewed plan, three stages
-later. That ordering is the whole point: implementation tasks written off a one-sentence idea are
-guesses wearing a checklist's clothing.
-
-4. **Stop.** Do not start the research in the same iteration.
-
----
-
-## RESEARCH (`type: "research"`)
+## RESEARCH (type `research`)
 
 Investigate as a professional game developer and software engineer would, before anything is
 designed. Two outputs.
@@ -88,6 +105,9 @@ developers hit, so the plan avoids them.
 
 Write it as a table: `| Finding | Tradeoff | Typical values | Source |`.
 
+When both files are written, finish. The harness marks the research done and the epic moves on to
+planning.
+
 ### When WebFetch is blocked — do NOT give up on the source
 
 Many of the best sources are game-dev forums and blogs that return **403 to automated clients**
@@ -122,13 +142,13 @@ paste two reports end to end and call it research.
 
 ---
 
-## PLAN (`type: "plan"`)
+## PLAN (type `plan`)
 
 Two deliverables, and the second matters as much as the first.
 
-**If your work item has `feedback`, read it first.** The user saw a previous version of this plan
-and sent it back in their own words. Address every point explicitly — a revision that quietly
-ignores half the comment gets sent back again, at full cost.
+**If the prompt has Human Feedback, or the plan directory has a `4-review.md`, read them first.**
+Someone saw a previous version of this plan and sent it back. Address every point explicitly — a
+revision that quietly ignores half the comment gets sent back again, at full cost.
 
 ### `3-plan.md`
 
@@ -148,23 +168,39 @@ The GUT tests that will prove this works, named, with specific cases - including
 ## Risks
 ## Out of scope
 ## Response to feedback
-<only when this is a revision: each point the user raised, and what changed>
+<only when this is a revision: each point raised, and what changed>
 ```
 
-### The implementation tasks
+### `tasks.json` — the implementation tasks
 
-Then turn the build sequence into real tasks:
+Turn the build sequence into real tasks. The harness validates this file after your run and creates
+the tasks on the board (replacing any earlier proposal for this epic that has not started):
 
-```bash
-./scripts/backlog-cli.js add-task <epicId> "<player-facing outcome>" \
-  --type feature|bug|refactor|test|art|chore \
-  --complexity small|medium|large \
-  --depends-on <taskId>,<taskId>          # optional
+```json
+{
+  "tasks": [
+    {
+      "key": "t1",
+      "title": "<player-facing outcome, max 200 chars>",
+      "description": "<what done looks like, and which files it touches>",
+      "acceptanceCriteria": "<optional: checkable conditions>",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": []
+    },
+    { "key": "t2", "title": "...", "type": "test", "complexity": "small", "dependsOn": ["t1"] }
+  ]
+}
 ```
 
-(body on stdin — what "done" looks like, and which files it touches.)
+- 1 to 30 tasks. `key` is any short unique label, used only for `dependsOn` inside this file.
+- `type`: `feature` | `bug` | `refactor` | `test` | `art` | `chore`.
+  `complexity`: `small` | `medium` | `large`.
+- `dependsOn` lists other keys in this file; no cycles.
+- Write it with a tool that produces valid JSON (e.g. build it in a script and `JSON.stringify`
+  it), then re-read it. A malformed file fails the run and the whole stage is retried.
 
-This list is what the user reads and prioritises, so:
+This list is what the owner reads and prioritises, so:
 
 - **Each task states a player-facing outcome**, not an implementation step. Not "add a timer" —
   "dashing off a ledge should still work if you press it a moment late".
@@ -172,39 +208,48 @@ This list is what the user reads and prioritises, so:
 - **Complexity is the honest estimate, not a default.** It picks the workflow track and the model
   the task runs on: `small`/`medium` go straight to implement-and-test on sonnet; `large` gets its
   own plan and an independent review on opus. Marking real system work `small` is how untested
-  architecture gets shipped; marking a typo `large` is how a window gets burned.
+  architecture gets shipped; marking a typo `large` is how a run gets burned.
 - **Dependencies only where the order genuinely matters.** A task that depends on an unfinished one
   is not workable, so a wrong dependency stalls the epic.
 - Do not over-specify. Each task gets its own context pass when it is worked; leave it room.
 
 ---
 
-## PLAN REVIEW (`type: "plan-review"`)
+## PLAN REVIEW (type `plan-review`)
 
-Dispatch a **subagent** (Task tool, `subagent_type: general-purpose`) with the prompt below. It
-must be able to genuinely say no. Never review your own plan and call it approved — the verdict
-file must come from the subagent.
+Dispatch a **subagent** (Task tool, `subagent_type: general-purpose`) with the prompt below, the
+epic plan directory filled in, and the **Original idea** and any **Attached documents** from your own prompt pasted at the end —
+the subagent cannot see your prompt. It must be able to genuinely say no. Never review your own plan and call it approved — the verdict
+must come from the subagent.
 
-Then apply the verdict:
+Then record its verdict in `review.json` next to `4-review.md`:
 
-- `APPROVED` → `./scripts/backlog-cli.js set-state <taskId> done`. That sends the epic to the user
-  for approval; **do not implement anything from it.**
-- `CHANGES_REQUESTED` → revise `3-plan.md` and the task list, re-review. **Maximum two rounds**,
-  appended to `4-review.md`, never overwritten.
-- `REJECTED`, or not approved after two rounds → do not mark the review done. `set-badge <taskId>
-  stuck` and report it, so the user sees an epic that needs their input rather than one that
-  silently stalled.
+```json
+{ "verdict": "APPROVE", "findings": "<the reviewer's findings, verbatim>" }
+```
+
+`verdict` is `APPROVE`, `CHANGES_REQUESTED` or `REJECT` (the reviewer writes `APPROVED` /
+`REJECTED` in `4-review.md`; map them). `findings` is required unless the verdict is `APPROVE`.
+
+**One verdict per run — do not revise the plan yourself.** The harness routes it:
+
+- `APPROVE` → the epic goes to the owner for approval. **Do not implement anything from it.**
+- `CHANGES_REQUESTED`, first round → the plan stage runs again in a fresh session, with this
+  review to address. That is where the revision happens.
+- `REJECT`, or changes requested again → the epic goes to the owner with the findings, so they see
+  an epic that needs their input rather than one that silently stalled.
 
 ### Reviewer prompt
 
 > You are reviewing an implementation plan for a Godot 4.6 game, and the task breakdown generated
-> from it. Read `docs/plans/<epicId>/3-plan.md` and its siblings `1-context.md` and `2-research.md`,
-> run `./scripts/backlog-cli.js epic show <epicId>` to see the tasks, then read the **actual code**
-> they reference — do not take the plan's claims about the codebase on trust. You are the last
-> check before hours of unattended implementation.
+> from it. Read `<epic plan directory>/3-plan.md`, its siblings `1-context.md` and
+> `2-research.md`, and the proposed tasks in `tasks.json`, then read the **actual code** they
+> reference — do not take the plan's claims about the codebase on trust. You are the last check
+> before hours of unattended implementation.
 >
 > Request changes or reject if any of these hold:
-> - It does not actually solve the original idea (quoted in the epic's research task body).
+> - It does not actually solve the original idea (pasted at the end of this prompt), or it drops a
+>   requirement from the attached documents without listing it as out of scope with a reason.
 > - It reinvents something that already exists in `global/components/` or elsewhere.
 > - It contradicts a convention in `CLAUDE.md` (composition over inheritance, config-driven `.tres`
 >   stats, 640x360 design-space coordinates scaled by `ArenaCamera.WORLD_SCALE`).
@@ -213,13 +258,13 @@ Then apply the verdict:
 > - The research has no tradeoffs, or cites sources that do not support the claims.
 > - **The task decomposition is wrong**: a task that cannot be finished and verified in one
 >   session, a task that is really three, or an ordering that will not work.
-> - **A complexity or model assignment is wrong** — system or cross-cutting work marked
->   small/sonnet, or a trivial change marked large/opus.
+> - **A complexity assignment is wrong** — system or cross-cutting work marked small, or a trivial
+>   change marked large.
 > - **Dependencies are missing or wrong** — two tasks that will collide, or a chain that stalls.
 > - Tests are missing for something that can regress.
 >
-> Write your verdict to `docs/plans/<epicId>/4-review.md`, beginning with exactly one of:
-> `VERDICT: APPROVED`, `VERDICT: CHANGES_REQUESTED`, or `VERDICT: REJECTED`.
-> Then list findings, each naming the file and line you checked, and for task-level findings the
-> task id. Approving a plan with real problems is worse than rejecting a good one — do not
-> rubber-stamp.
+> Write your verdict to `<epic plan directory>/4-review.md`, appending below any earlier round,
+> beginning with exactly one of: `VERDICT: APPROVED`, `VERDICT: CHANGES_REQUESTED`, or
+> `VERDICT: REJECTED`. Then list findings, each naming the file and line you checked, and for
+> task-level findings the task key from `tasks.json`. Approving a plan with real problems is worse
+> than rejecting a good one — do not rubber-stamp.

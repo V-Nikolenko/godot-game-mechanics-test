@@ -14,7 +14,8 @@
 ## | asteroid contact | `HurtBox.collision_mask & 1024` | the hull is immune to the debris the level throws at it |
 ## | player mining laser | `SpaceStation.collision_layer == 0` | the hull blocks the beam AND shields everything behind it |
 ##
-## The mask bits come from `base_enemy.gd:25` (`97 | 1024`, code) and `space_station.tscn:75-76`
+## The mask bits come from the default `DefenseProfile` `BaseEnemy._resolve_defense_profile()`
+## creates (`DefenseProfile.mask()` folds to `97 | 1024`, code) and `space_station.tscn:75-76`
 ## (the same value, authored). The laser row is the odd one out: `BeamBehavior` finds its targets
 ## by group and geometry, not by layer, so what is under test there is the *root body's* layer —
 ## `beam_behavior.gd` rays bodies with `_RAY_BLOCK_MASK = 1 | 1024`, and a station on the default

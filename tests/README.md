@@ -222,7 +222,7 @@ It exists because every `BaseEnemy` subclass's `.tscn` authors a `ContactHitBox`
 hardcoded `damage = 20` and no way to read `config` — that only exists at runtime — so every
 enemy that wants its configured `collision_damage` has to re-apply it in `_ready()` off
 `contact_hit_box` — `bomber.gd`, `light_assault_ship.gd`, `ram_ship.gd`, `gunship.gd` and
-`space_station.gd` all do this, and `drone_interceptor.tscn`/`kamikaze_drone.tscn` author a
+`space_station.gd` all do this, and `razor_drone.tscn`/`swarm_drone.tscn` author a
 different scene default (30) instead. Miss the re-apply and the `.tres` field is simply dead: it
 parses, the enemy works, and the only symptom is a number nobody can see. The `Gunship` shipped
 that way — `collision_damage = 30` ignored, so the heaviest ship in the roster rammed for 20 —
@@ -249,7 +249,7 @@ A `Shape2D` is a resource: it holds the radius, not the `CollisionShape2D.scale`
 it at runtime. Copying `col.shape` alone used to be how these hitboxes were built in code, so
 every entity that sizes its hull by scaling its collision shape — six of them — got a contact box
 at the *unscaled* radius. The gunship scales an 18 px circle by 2.31 to match its 92x84 sprite, so
-it rammed with a box 38% of the hull the player can see; the drone interceptor was 3.08x off. The
+it rammed with a box 38% of the hull the player can see; the razor drone was 3.08x off. The
 fix, and now the only way these are built, is scene-authored: every `ContactHitBox` node's
 `CollisionShape2D` references the exact same `SubResource` shape id as the body's and copies its
 `scale`, next to the body it has to match instead of reconstructed from it at runtime.
@@ -326,8 +326,8 @@ and asteroid (1024) mask bits and the incoming mining-laser ray — with the sam
 scenes, stepped physics, and no `received_damage` emit anywhere in the damage path. A real
 `homing_missile.tscn` and `warhead_missile.tscn` take 100 and 50 off the unarmoured core; a real
 `big_asteroid.tscn` parked inside the hull takes 40; the mining laser runs its full 1200 px
-*through* the station and burns it. All four were checked by mutation — setting
-`base_enemy.gd:25`'s `97 | 1024` to the gunship's raw `65` reds five of the nine tests with
+*through* the station and burns it. All four were checked by mutation — setting the default
+`DefenseProfile`'s `97 | 1024` mask to the gunship's raw `65` reds five of the nine tests with
 messages that name the missing bit — and the mask values live in code, not in the scene, so
 mutating the `.tscn` proves nothing.
 
@@ -415,8 +415,8 @@ see it). It now measures its deadline with `Time.get_ticks_msec()` and creates n
 ## These are characterization tests
 
 They pin down what the code does **today**, bugs included. A test that documents surprising
-behaviour is marked `CHARACTERIZED` in a comment, and the suspicion is filed as a task via
-`./scripts/backlog-cli.js add-task code-health-backlog "<short head>"`. Do not "fix" the code to
+behaviour is marked `CHARACTERIZED` in a comment, and the suspicion is listed under **Follow-ups**
+in the run's final message (known ones: `docs/discovered-bugs.md`). Do not "fix" the code to
 make one of these read better without first deciding that the behaviour itself is wrong — the
 point of the suite is that a behaviour change is a *visible* change.
 
@@ -724,6 +724,27 @@ and fought the turn controller's own target angle within a frame or two, until i
 call `face_instant()` (the same duck-typed-query precedent as `Bullet.is_armored()`). Reverting
 that call back to a raw rotation write was checked by hand to fail this test before it was
 committed.
+
+### The enemy-mover single-writer gate
+
+`integration/test_enemy_mover_single_writer.gd` is an invariant test over the enemy AI stack: an
+enemy with an `EnemyMover` must leave its `velocity`, `rotation` and `move_and_slide()` to that mover.
+It sweeps two rosters with two matchers. **AI scripts** (every `*_brain.gd`, and every
+`global/enemy_ai/*.gd` except `enemy_mover.gd`) may not write through a body receiver (`actor.`,
+`_actor.`, `body.`, `_body.`, `self.`) — which is what lets `TargetInfo`'s `info.velocity = …`
+snapshot through without an allowlist. **Mover-driven enemy roots** (the root script of every scene
+referencing `enemy_mover.gd`, read with `PackedScene.get_state()`, *plus its ancestors* — so
+`base_enemy.gd` is swept) may not write bare or via `self.`. Both forbid `velocity` (incl. `.x`/`.y`),
+`rotation`, `global_rotation`, `rotation_degrees` assignments, `set_velocity(`/`set_rotation(`/
+`look_at(`/`rotate(`, and `move_and_slide(`/`move_and_collide(`; comments and string contents are
+blanked first. Allowlist empty and permanent; roster-sanity cases stop an empty glob passing, and
+synthetic-source boundary cases prove each matcher fires. Planting `actor.velocity = …` in the fixture
+brain and `rotation = 0.0` in the fixture root was checked by hand to fail it.
+
+The fixture it (and `test_enemy_brain_contract.gd`) runs on is `helpers/fixture_enemy.tscn` — a
+UID-less, hand-written `BaseEnemy` scene with an `EnemyMover` and a configurable `fixture_brain.gd`.
+Timing cases step with `dt = 1/64`, which is exact in binary floating point, so accumulated clocks hit
+their boundaries exactly (1/60 drifts by a frame).
 
 ### The pause-menu Settings panel
 

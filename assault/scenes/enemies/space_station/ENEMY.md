@@ -257,7 +257,7 @@ and pull the player across the screen rather than nudging them.
 |---|---|---|---|---|
 | 0 | Left | 2 × `interceptor` | (-440, 20), (-440, 80) | `straight(200, PI/2)` — rightward |
 | 1 | Right | 2 × `interceptor` | (440, 20), (440, 80) | `straight(200, -PI/2)` — leftward |
-| 2 | Bottom | 2 × `kamikaze_drone` | (-100, 290), (100, 290) | `straight(170, PI)` — upward |
+| 2 | Bottom | 2 × `swarm_drone` | (-100, 290), (100, 290) | `straight(170, PI)` — upward |
 | 3 | Top | 2 × `fighter` + `.shoot_forward()` | (-250, -290), (250, -290) | `straight(170, ±0.5)` — down-and-inward |
 
 Every entry also gets `.free_after(reinforcement_lifetime)` (7.0 s).
@@ -316,7 +316,7 @@ multiplies the combo by `escape_combo_multiplier` (0.75) *outside* its `if count
 so `wave_index == -1` does not exempt it. A squad the player ignores costs 0.75 **twice**, i.e.
 0.5625. This is a **deliberate balance decision**, pinned by a test with real numbers — the
 alternative (not announcing) means killing a reinforcement awards nothing at all, which reads as a
-bug. Raised in `BACKLOG.md` under *Discovered* for the user to overrule.
+bug. Logged in `docs/discovered-bugs.md` for the user to overrule.
 
 ### The cap
 
@@ -347,7 +347,7 @@ and cull themselves within 7 s, well before the boss can die.
 
 Before EPIC sub-item 5 the 256×256 mini-boss vanished **between one frame and the next** behind a
 single 22-particle burst — the identical death a 40 px interceptor gets — because
-`base_enemy.gd:65-73` emits `died` and calls `queue_free()` in the same call. Four sessions of
+`BaseEnemy._on_health_changed` emits `died` and calls `queue_free()` in the same call. Four sessions of
 build-up ended with a poof.
 
 The split is deliberate and is the fifth instance of the same composition pattern:
@@ -472,7 +472,7 @@ teaching signal. Do not "simplify" this into a disabled hurtbox.
 | Node | Layer | Mask | Why |
 |---|---|---|---|
 | `SpaceStation` (root) | **0** | **0** | Deliberate; see below. |
-| `HurtBox` (core) | 512 | 1121 (`97 \| 1024`) | Layer authored **in the scene** — `BaseEnemy._ready()` sets the *mask* only (`base_enemy.gd:25`) and never touches the layer. |
+| `HurtBox` (core) | 512 | 1121 (`97 \| 1024`) | Layer authored **in the scene** — `BaseEnemy._ready()` resolves a `DefenseProfile` and calls `DefenseProfile.apply_to()`, which sets the *mask* only and never touches the layer. |
 | `StationTurret/HurtBox` | 512 | 1121 | Set in `station_turret.gd::_ready()`; a plain `Node2D` has nothing setting it. |
 
 Mask `97 | 1024` = bullets (64) + rockets (32) + layer 1 + asteroids (1024). Copying the gunship

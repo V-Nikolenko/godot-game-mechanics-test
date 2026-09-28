@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_rs"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_rs"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_rs"]
+[ext_resource type="Script" path="res://global/components/defense_profile.gd" id="7_rs"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_rs"]
 resource_local_to_scene = true
@@ -66,6 +67,12 @@ _data = {
 
 [node name="RamShip" type="CharacterBody2D"]
 script = ExtResource("2_rs")
+
+[node name="DefenseProfile" type="Node" parent="."]
+script = ExtResource("7_rs")
+accepts_player_bullets = false
+accepts_hazard_contact = false
+alternate_accepts_hazard_contact = false
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 material = SubResource("ShaderMaterial_rs")

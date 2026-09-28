@@ -16,6 +16,7 @@ class SpawnConfig:
 	var _props: Dictionary                                           = {}
 	var _look_in_moving_direction: bool                              = true
 	var _look_angle: float                                           = 0.0
+	var _squad_id: StringName                                        = &""
 
 	func _init(scene: String) -> void:
 		_scene = scene
@@ -44,6 +45,13 @@ class SpawnConfig:
 	## Expand this entry into a formation of ships.
 	func formation(f: FormationResource) -> SpawnConfig:
 		_formation = f
+		return self
+
+	## Loose entries in the same b.wave() call that share an id form one squad (§2.4.1). No id
+	## means a squad of one. Ignored on an entry that also calls .formation() — a formation is
+	## always automatically one squad.
+	func squad(id: StringName) -> SpawnConfig:
+		_squad_id = id
 		return self
 
 	## Shoot straight in the direction of travel (ignores player position).
@@ -81,7 +89,7 @@ func ram()            -> SpawnConfig: return SpawnConfig.new(RAM)
 func sniper()         -> SpawnConfig: return SpawnConfig.new(SNIPER)
 func sniper_enemy()   -> SpawnConfig: return SpawnConfig.new(SNIPER_ENEMY)
 func interceptor()    -> SpawnConfig: return SpawnConfig.new(INTERCEPTOR)
-func drone_interceptor() -> SpawnConfig: return SpawnConfig.new(DRONE_INTERCEPTOR)
+func razor_drone()    -> SpawnConfig: return SpawnConfig.new(RAZOR_DRONE)
 func gunship()        -> SpawnConfig: return SpawnConfig.new(GUNSHIP)
 func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
 func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
@@ -203,6 +211,7 @@ func _config_to_entry(c: SpawnConfig) -> SpawnEntryResource:
 	e.exit_time     = c._exit_time
 	e.look_in_moving_direction = c._look_in_moving_direction
 	e.look_angle    = c._look_angle
+	e.squad_id      = c._squad_id
 	if c._formation:
 		e.formation = c._formation
 	e.initial_props = c._props
@@ -229,12 +238,12 @@ func level(name: String, waves: Array) -> LevelResource:
 # ── Scene path constants ──────────────────────────────────────────────────────
 
 const FIGHTER        := "res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn"
-const DRONE          := "res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.tscn"
+const DRONE          := "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn"
 const RAM            := "res://assault/scenes/enemies/ram_ship/ram_ship.tscn"
 const SNIPER         := "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn"
 const SNIPER_ENEMY   := SNIPER  ## Alias kept so existing b.sniper_enemy() calls still compile.
 const INTERCEPTOR    := "res://assault/scenes/enemies/interceptor/interceptor.tscn"
-const DRONE_INTERCEPTOR := "res://assault/scenes/enemies/drone_interceptor/drone_interceptor.tscn"
+const RAZOR_DRONE    := "res://assault/scenes/enemies/razor_drone/razor_drone.tscn"
 const GUNSHIP        := "res://assault/scenes/enemies/gunship/gunship.tscn"
 const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"
 const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"

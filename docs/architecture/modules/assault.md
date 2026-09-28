@@ -123,7 +123,27 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   the ship's own physics/AI (so timer-based shooting still works), faces the travel
   direction (or a fixed `look_angle`), and frees the enemy on screen exit or after a
   duration (`ExitMode`). `PlayerFocusMovement` is duplicated per-ship so each gets its own
-  aim vector.
+  aim vector. **Suspension is three unconditional steps, never a conditional fallback:**
+  `_actor.set_physics_process(false)`, the `"AIStateMachine"` child name lookup →
+  `PROCESS_MODE_DISABLED` (both today's behaviour), *and* `_actor.suspend_ai()` when the actor
+  `has_method` it (new — see [global.md](global.md) → *Enemy AI*). The name lookup is not a
+  fallback the brain contract can switch off: the light assault ship is a `BaseEnemy` (so it
+  *has* `suspend_ai()`), but its `AIStateMachine` states write `velocity` and call
+  `move_and_slide()` from `StateMachine._process`, which only the name lookup stops. All 264
+  path-driven spawns in Level 1 are unchanged by this addition.
+- **Squads from spawns.** `WaveBuilder.SpawnConfig.squad(id: StringName)` stamps a
+  `SpawnEntryResource.squad_id`; a `formation()` is automatically one squad, and loose entries in
+  one `b.wave()` that share a `squad()` id form one squad (level 1 uses `&"w<n>"`, `n` the wave's
+  index, for every loose wave of 2–7 drones — see [enemy roster](../../enemy-roster.md)). A loose
+  entry with no id gets a squad of one. `WaveManager` never stores a `SquadController` object in
+  its own spawn dicts, only a `"<wave index>:<id-or-slot-index>"` **key** string; `_spawn_ship()`
+  resolves that key against its own `_squads: Dictionary` of key → `WeakRef(SquadController)` —
+  reusing a live board or building a new one — and, for an entity with a duck-typed `squad`
+  property, sets it **before** `add_child()` (the same window `on_spawned` uses), so a squad is
+  readable from the entity's own `_ready()`. `_squads` is cleared in `load_section()`. Because
+  `WaveManager` keeps only weak references, a squad whose members have all died is released even
+  mid-section — a delayed spawn whose squad mates already died gets a fresh board rather than an
+  empty one. See [global.md](global.md) → *SquadController*.
 - **`BaseEnemy`** is the shared enemy root: it owns `Health` + `HurtBox`, a contact hitbox,
   hit-flash/explosion effects, and emits `died` on death (setting `was_killed`). Scoring
   fields (`score_value`, `counts_toward_wave_clear`, `counts_as_escape`) are pulled from
@@ -134,9 +154,13 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   the subclass's own `.tres`, so a subclass wanting its configured `collision_damage` must
   re-apply it in `_ready()` off `contact_hit_box` (`gunship.gd`, `bomber.gd`,
   `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a different default
-  directly on its own scene node (`drone_interceptor.tscn`, `kamikaze_drone.tscn` — 30, still
+  directly on its own scene node (`razor_drone.tscn`, `swarm_drone.tscn` — 30, still
   re-applied from config where one exists). Forgetting leaves the `.tres` value dead with no
   symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
+  *When* that hitbox is live is the enemy's `contact_profile` (`ContactProfile`, resolved like
+  `defense_profile`): every legacy enemy gets the default COLLISION (always live, hitbox untouched);
+  RAMMING and EXPLOSIVE arm it only in a committed state, and `suspend_ai()` arms it on rails — see
+  [global.md](global.md) → ContactProfile.
   The hitbox's *geometry* is handled for you: every `ContactHitBox` node's `CollisionShape2D`
   references the same `SubResource` shape id as the body's and copies its `scale`, so a scaled
   body gets a correctly sized ram box for free — see `global.md`'s Hurtbox/Hitbox section for the
@@ -159,6 +183,75 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   survived two cycles, since nothing in the gate renders a scene. Recovery for art that is already
   correct in angle and palette is `./scripts/strip-sprite-bg.sh` (border flood fill) rather than a
   regeneration.
+
+### Enemy AI in Assault — the `ArenaCamera` provider and the corridor constraint
+
+The mode-neutral enemy AI stack (`global/enemy_ai/`, see [global.md](global.md) → *Enemy AI*)
+knows nothing about Assault by name. It finds the mode by duck type, through one group:
+`ArenaCamera` (`systems/arena_camera.gd`) joins `&"assault_arena"` in `_ready()`, **before** its
+early return for a missing `Level1Background` sibling — a bare `ArenaCamera` (e.g. in a test) is
+still a provider. It answers three methods, each with an `EnemyWorld.has_*` companion so "no
+provider" and "a legitimately empty `Rect2()`" are never confused:
+
+- **`projectile_world_rect()`** — the corridor's visible rect grown by 64 px: x −164…1444, y
+  −444…1164. Consumed by `ProjectileLifetime` (above).
+- **`enemy_cull_rect()`** — the legacy off-screen cull: `global_position` ± half the viewport ± 80 px. Phase 1's
+  Razor Drone ended its dash with it; since Phase 2 (t10) the Razor survives its dash and leaves through
+  `EngagementBudget` instead, so nothing in production reads it. It is kept behind `EnemyWorld.cull_rect()`.
+- **`enemy_movement_constraint()`** — a fresh `AssaultCorridorConstraint` instance per call (a
+  constraint holds a per-enemy "entered" latch, so `EnemyMover.AUTO` must get its own).
+
+**`AssaultCorridorConstraint`** (`systems/assault_corridor_constraint.gd`, extends
+`global/enemy_ai/movement_constraint.gd`'s identity `MovementConstraint`) is the velocity filter
+between an `EnemyMover`'s desired velocity and its one `move_and_slide()`. It works **per axis**
+against the corridor's `visible` rect (the same 1480×1480 square `ArenaCamera` frames, derived
+from its own `SCREEN_W`/`SCREEN_H`/`H_LIMIT`/`V_LIMIT` constants — never duplicated):
+
+| Band | Rule |
+|---|---|
+| Not yet entered (an axis outside `visible`) | Outward velocity discarded; inward speed floored at `entry_speed` (60 px/s). Every Assault spawn starts above the screen, so a fresh enemy is governed by this rule alone until both axes are inside. |
+| Soft band (0–120 px past `visible`) | Outward component kept, reduced by `edge_pressure · d / soft_band` (200 px/s at the outer edge). |
+| Outer band (120–450 px) | Full `edge_pressure`; the outward component itself scales linearly to 0 at `hard_band` (450 px). |
+| Past `hard_band` | Outward component removed entirely, full `edge_pressure` applied — "forced to re-enter" (IDEAS §34). |
+
+The `entered` latch is permanent once set: an enemy that has been inside `visible` at least once
+never re-triggers the not-yet-entered rule. The tangential axis (already inside `visible`) is
+always passed through untouched, so a corridor-constrained orbit or strafe is not damped on its
+free axis.
+
+**The Razor Drone was Phase 1's proof consumer for the stack (as the Drone Interceptor, with
+`constraint_mode = NONE`), and since Phase 2 t10 it runs with the corridor on (`constraint_mode =
+AUTO`)** — see [razor_drone/ENEMY.md](../../../assault/scenes/enemies/razor_drone/ENEMY.md). Its
+`RazorDroneBrain` orbits, reverses, feints and dashes under an `EngagementBudget` (9 s). In Assault it
+clamps its orbit centre into `inner_rect()` and attacks only from a 30°–75° side lane. It has a RAMMING
+`ContactProfile` (armed only in DASH), a `StateLight` (white only before a real dash), and a post-miss
+pulse through a brain-driven `AttackController.fire_now()`. Its behaviour spec is
+`tests/integration/test_razor_drone.gd`, mostly dual-mode. The fixture's and the Razor's cross-mode
+cases are in `tests/integration/test_enemy_dual_mode.gd`, built on `tests/helpers/enemy_ai_harness.gd`;
+the corridor's contract tests are `tests/unit/test_assault_corridor_constraint.gd`. In Assault the
+`EngagementBudget` being active also skips the Open Space hub idle below — the level has already
+decided the fight is on, so the brain starts straight in ENTER.
+
+**The same brain patrols its own `patrol_anchor` in Open Space until it notices the player** —
+`AnchorIdle` (`global/enemy_ai/anchor_idle.gd`) decides IDLE / NOTICING / (orbit-and-dash) /
+RETURNING; the idle ring itself drifts, brakes, reverses and takes short boosts (`IDLE_ORBIT` /
+`IDLE_BRAKE` / `IDLE_REVERSE` / `IDLE_BOOST`), and NOTICING hands over to combat from the drone's
+current velocity, with no `halt()` or `boost()`. See razor_drone/ENEMY.md's "Hub idle" section for
+the exact radii and timings.
+
+**The Swarm Drone is the first Phase 2 enemy on the stack with the corridor on (`constraint_mode =
+AUTO`)** — see [swarm_drone/ENEMY.md](../../../assault/scenes/enemies/swarm_drone/ENEMY.md). Its
+`SwarmDroneBrain` runs the solo ram cycle (corkscrew → spiral → wind-up → burst → curved overshoot →
+one more pass) under an `EngagementBudget`, with an EXPLOSIVE `ContactProfile` and a `StateLight`;
+its behaviour spec runs in both harnesses in `tests/integration/test_swarm_drone.gd`. In Assault the
+`EngagementBudget` being active is also what skips the Open Space hub idle below — the level has
+already decided the fight is on, so the brain starts straight in APPROACH.
+
+**The same brain patrols its `patrol_anchor` in Open Space when nobody has engaged it** — `AnchorIdle`
+(`global/enemy_ai/anchor_idle.gd`) decides IDLE / NOTICING / (attack-cycle) / RETURNING; a whole
+`SquadController` squad wakes together the tick after any one member perceives the player
+(`squad.set_engaged` / `is_engaged` / `hold_combat`) and returns together once none of them are
+engaged. See swarm_drone/ENEMY.md's "Hub idle" section for the exact radii and timings.
 
 ### Projectiles & bullet pool
 
@@ -183,14 +276,23 @@ Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.g
   unkillable — see the ENEMY.md link above.
 
   **Player and enemy projectiles despawn on different boundaries, deliberately.** Player bullets
-  use `VisibleOnScreenNotifier2D` (the *viewport* edge); `EnemyBullet` uses an explicit
-  arena-bounds check ("the full 740×740 arena, not just the viewport edge"). The player's weapons
-  are also mounted in Open Space (`player_ship.tscn`), which has a different camera and world
-  extent, so hardcoding the assault arena's bounds into them would be wrong in one of the two
-  modes. The cost is that a shot fired at an enemy that is in the arena but above the visible top
-  now despawns; that band is off-screen and unaimable, so it is accepted.
+  use `VisibleOnScreenNotifier2D` (the *viewport* edge); `EnemyBullet` carries a
+  `ProjectileLifetime` child (`global/components/projectile_lifetime.gd` — see
+  [global.md](global.md)) with world-space rules instead: `max_time = 18 s`, `max_distance = 2400
+  px` from where it armed, and — when an `ArenaCamera` provider is in the tree — the corridor's
+  `projectile_world_rect()` (x −164…1444, y −444…1164, reproducing the old hardcoded arena-bounds
+  check exactly). The player's weapons are also mounted in Open Space (`player_ship.tscn`), which
+  has no `ArenaCamera` and a different world extent, so hardcoding the assault arena's bounds into
+  them would be wrong in one of the two modes; `ProjectileLifetime`'s `max_time`/`max_distance`
+  rules are what govern an enemy bullet fired in Open Space, with no rect at all. The cost is that
+  a shot fired at an enemy that is in the arena but above the visible top now despawns; that band
+  is off-screen and unaimable, so it is accepted. The sniper's unpooled shot
+  (`enemy_sniper_bullet.tscn`, same script) carries its own `ProjectileLifetime` and arms lazily on
+  its first physics tick, since it is positioned at the muzzle only *after* `add_child()` and is
+  never `reset()`.
 
-  All of the above is pinned by `tests/integration/test_player_bullet_lifetime.gd`.
+  All of the above is pinned by `tests/integration/test_player_bullet_lifetime.gd` and
+  `tests/integration/test_enemy_bullet_lifetime.gd`.
 - `enemy_bullet/enemy_bullet.gd` — `EnemyBullet`; `become_friendly()` flips its direction and
   collision so it damages enemies instead of the player. Currently unused — its only caller,
   the parry ability `reflect_state.gd`, was removed as dead code (2026-09-08): its input action
@@ -299,8 +401,8 @@ Source: `assault/scenes/enemies/`.
 
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
-(e.g. `light_assault_ship/states/`). Roster: bomber, bonus_drone, drone_interceptor,
-gunship, interceptor, kamikaze_drone, light_assault_ship, ram_ship, sniper_enemy. For the
+(e.g. `light_assault_ship/states/`). Roster: bomber, bonus_drone, razor_drone,
+gunship, interceptor, light_assault_ship, ram_ship, sniper_enemy, swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).
@@ -386,7 +488,7 @@ nothing at all this time. On a one-shot `Timer` it spawns small squads of **exis
 scenes that cross the arena, so the player can no longer camp one spot while streaming into a
 turret. The squad table is fixed and cycles `LEFT → RIGHT → BOTTOM → TOP` (never `randf()`, for
 the same reason the beam angles are a list): two `interceptor` sweeping in from either side
-through the vertical middle, two `kamikaze_drone` rising from below, two `fighter` with
+through the vertical middle, two `swarm_drone` rising from below, two `fighter` with
 `.shoot_forward()` angling down-and-inward from above. Squads are authored with `WaveBuilder`'s
 own fluent API (`b.interceptor().at(…).move(b.straight(…)).free_after(…)`), in **640×360 design
 units** scaled by `ArenaCamera.WORLD_SCALE` once at spawn — speeds are left unscaled because
@@ -417,7 +519,7 @@ rather than a stat — the same split that keeps `laser_emitter_radius` on the p
 
 **The station's death plays out**, via a fifth sibling node, **`StationDeathSequence`**
 (`station_death_sequence.gd`) — the same composition split a fifth time. `BaseEnemy` emits `died`
-and calls `queue_free()` in the same call (`base_enemy.gd:65-73`), which gave the 256×256 mini-boss
+and calls `queue_free()` in the same call (`BaseEnemy._on_health_changed`), which gave the 256×256 mini-boss
 the identical one-frame death a 40 px interceptor gets. `SpaceStation` now overrides
 `_on_health_changed`: everything that happened *at* the moment of death still happens there —
 `was_killed`, `died`, and disarming the corpse — and only `queue_free()` moves, behind a

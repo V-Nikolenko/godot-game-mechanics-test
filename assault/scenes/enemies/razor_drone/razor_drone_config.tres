@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="RazorDroneConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/razor_drone/razor_drone_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 25
+collision_damage = 30
+score_value = 40
+counts_toward_wave_clear = true
+orbit_radius = 130.0
+orbit_speed = 1.8
+approach_speed = 200.0
+orbit_correct_speed = 260.0
+acceleration = 900.0
+braking = 700.0
+max_turn_rate = 6.0
+reverse_chance = 0.35
+reverse_seconds = 0.25
+fake_chance = 0.35
+fake_windup_scale = 1.5
+feint_lunge_speed = 360.0
+feint_lunge_seconds = 0.45
+feint_clearance_px = 70.0
+windup_seconds = 0.5
+commit_flash_seconds = 0.12
+dash_speed = 480.0
+dash_prediction_time = 0.2
+overshoot_px = 120.0
+max_dash_seconds = 0.9
+overshoot_speed = 200.0
+overshoot_turn_rate = 3.0
+overshoot_max_seconds = 1.2
+pulse_damage = 10
+pulse_speed = 250.0
+engage_seconds = 9.0
+exit_speed = 320.0
+side_lane_min_deg = 30.0
+side_lane_max_deg = 75.0
+idle_radius = 160.0
+idle_radius_jitter = 40.0
+idle_speed = 0.5
+idle_speed_jitter = 0.2
+perceive_radius = 450.0
+lose_radius = 700.0
+notice_time = 0.35

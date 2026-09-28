@@ -10,8 +10,8 @@
 ## `damage = 20` and knows nothing about `config`, which is only read at runtime. So every enemy
 ## that wants its configured `collision_damage` has to re-apply it in `_ready()` afterwards. Most
 ## do (`bomber.gd`, `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a
-## different default directly on their own scene's node (`drone_interceptor.tscn`,
-## `kamikaze_drone.tscn`, `ally_fighter.tscn` — 30/30/25 — with the script still re-applying where
+## different default directly on their own scene's node (`razor_drone.tscn`,
+## `swarm_drone.tscn`, `ally_fighter.tscn` — 30/30/25 — with the script still re-applying where
 ## a config can override it).
 ##
 ## The `Gunship` did not, so `gunship_config.tres`'s `collision_damage = 30` was dead and the
@@ -31,6 +31,14 @@
 ## node at all, which is the correct realisation of its `collision_damage = 0`. `no_hitbox` marks
 ## that, and the test asserts BOTH halves (no HitBox *and* a config that agrees), so flipping the
 ## `.tres` to a non-zero value without touching the scene fails.
+##
+## ── Completeness guard (Enemy rework phase 2, t1) ────────────────────────────────────────────
+##
+## `ROSTER` is hand-maintained, so a new `BaseEnemy` scene under `assault/scenes/enemies/` would
+## silently escape this sweep. `test_every_baseenemy_scene_is_in_the_roster` closes that gap with
+## the same directory-sweep shape `test_enemy_hurtbox_geometry.gd`'s guard uses, scoped to
+## `BaseEnemy`-rooted scenes only (`allies/` is out of scope here — `AllyFighter` is not a
+## `BaseEnemy`, unlike that file's roster, which needs it for a different reason).
 ##
 ## ── Harness notes ────────────────────────────────────────────────────────────────────────────
 ##
@@ -63,9 +71,9 @@ const ROSTER: Array[Dictionary] = [
 		"no_hitbox": true,
 	},
 	{
-		"name": "drone_interceptor",
-		"scene": "res://assault/scenes/enemies/drone_interceptor/drone_interceptor.tscn",
-		"config": "res://assault/scenes/enemies/drone_interceptor/drone_interceptor_config.tres",
+		"name": "razor_drone",
+		"scene": "res://assault/scenes/enemies/razor_drone/razor_drone.tscn",
+		"config": "res://assault/scenes/enemies/razor_drone/razor_drone_config.tres",
 	},
 	{
 		"name": "gunship",
@@ -78,11 +86,6 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/interceptor/interceptor_config.tres",
 	},
 	{
-		"name": "kamikaze_drone",
-		"scene": "res://assault/scenes/enemies/kamikaze_drone/kamikaze_drone.tscn",
-		"config": "res://assault/scenes/enemies/kamikaze_drone/drone_config.tres",
-	},
-	{
 		"name": "light_assault_ship",
 		"scene": "res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn",
 		"config": "res://assault/scenes/enemies/light_assault_ship/fighter_config.tres",
@@ -91,6 +94,11 @@ const ROSTER: Array[Dictionary] = [
 		"name": "ram_ship",
 		"scene": "res://assault/scenes/enemies/ram_ship/ram_ship.tscn",
 		"config": "res://assault/scenes/enemies/ram_ship/ram_config.tres",
+	},
+	{
+		"name": "swarm_drone",
+		"scene": "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn",
+		"config": "res://assault/scenes/enemies/swarm_drone/swarm_drone_config.tres",
 	},
 	{
 		"name": "space_station",
@@ -109,6 +117,11 @@ const ROSTER: Array[Dictionary] = [
 ## authors on its `ContactHitBox` node. The two agreeing is what makes the config-less entries
 ## above assertable.
 const SHIP_CONFIG_DEFAULT_DAMAGE: int = 20
+
+## Top-level directories only, deliberately: `assault/scenes/enemies/` also holds loose scripts
+## (`base_enemy.gd`, `enemy_path_mover.gd`), and a recursive walk would need to filter those out
+## anyway. Mirrors `test_enemy_hurtbox_geometry.gd`'s `_ENEMY_DIRS`.
+const _ENEMY_ROOT := "res://assault/scenes/enemies"
 
 
 func _spawn(entry: Dictionary) -> BaseEnemy:
@@ -193,3 +206,36 @@ func test_gunship_rams_for_its_configured_collision_damage() -> void:
 	assert_not_null(hb, "gunship: has no contact HitBox as a direct child")
 	if hb != null:
 		assert_eq(hb.damage, cfg.collision_damage)
+
+
+# ── Completeness guard ────────────────────────────────────────────────────────
+
+## Every `<dir>/<dir>.tscn` under `assault/scenes/enemies` whose root is a `BaseEnemy` must be in
+## `ROSTER`, or its contact-damage config could drift dead and nothing here would notice — the
+## exact hole the gunship fell through before this file existed. `DirAccess` precedent:
+## `test_suite_integrity.gd:51`, `test_enemy_hurtbox_geometry.gd:317-336`.
+func test_every_baseenemy_scene_is_in_the_roster() -> void:
+	var rostered: Array[String] = []
+	for entry in ROSTER:
+		rostered.append(entry["scene"])
+	var dir := DirAccess.open(_ENEMY_ROOT)
+	assert_not_null(dir, "cannot open %s" % _ENEMY_ROOT)
+	if dir == null:
+		return
+	for sub in dir.get_directories():
+		var scene_path := "%s/%s/%s.tscn" % [_ENEMY_ROOT, sub, sub]
+		if not ResourceLoader.exists(scene_path):
+			continue
+		var scene: PackedScene = load(scene_path) as PackedScene
+		var probe: Node = scene.instantiate()
+		var is_base_enemy: bool = probe is BaseEnemy
+		probe.free()
+		if not is_base_enemy:
+			continue
+		assert_true(
+			rostered.has(scene_path),
+			(
+				"%s has a BaseEnemy root but is not in this file's ROSTER, so its contact-damage "
+				+ "config could drift dead unnoticed. Add it."
+			) % scene_path
+		)

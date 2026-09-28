@@ -18,7 +18,6 @@ func _ready() -> void:
 		health.max_health = config.max_health
 		health.current_health = config.max_health
 
-	hurt_box.collision_mask = 33  # missiles only (32 + 1); bullets ignored
 	if contact_hit_box:
 		# Ram uses config collision_damage if available, otherwise hardcoded 50
 		contact_hit_box.damage = config.collision_damage if config else 50
@@ -42,7 +41,7 @@ func _enter_damaged_state() -> void:
 	_sprite.play("default")
 
 	# Now vulnerable to bullets too
-	hurt_box.collision_mask = 97
+	defense_profile.apply_alternate()
 
 	# Reset to standard ship HP so two bullets finish it
 	health.max_health = 100

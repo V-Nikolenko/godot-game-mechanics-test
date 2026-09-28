@@ -3,26 +3,22 @@ extends Area2D
 
 signal expired
 
-## Arena bounds matching arena_camera.gd (cam.global_position=(640,360),
-## H_LIMIT=100, V_LIMIT=380, viewport 1280×720):
-##   x ∈ [-100, 1380]  (1280 + 2×100)
-##   y ∈ [-380, 1100]  (720 + 2×380)
-## A small margin (64 px) lets bullets travel just past the edge before
-## expiring, matching the visual boundary cleanly.
-const _ARENA_MARGIN : float = 64.0
-const _ARENA_LEFT   : float = -100.0  - _ARENA_MARGIN
-const _ARENA_RIGHT  : float = 1380.0  + _ARENA_MARGIN
-const _ARENA_TOP    : float = -380.0  - _ARENA_MARGIN
-const _ARENA_BOTTOM : float = 1100.0  + _ARENA_MARGIN
-
 @export var speed: float = 250.0
 
 var _direction: Vector2 = Vector2.DOWN
+
+## Present on every EnemyBullet-derived scene (see enemy_bullet.tscn and
+## enemy_sniper_bullet.tscn); null-checked so a scene that forgot the child fails safe rather than
+## erroring on reset(). See global/components/projectile_lifetime.gd for the world-space rules
+## this used to hardcode (arena bounds matching arena_camera.gd's legacy visible rect).
+@onready var _lifetime: ProjectileLifetime = get_node_or_null("ProjectileLifetime") as ProjectileLifetime
 
 func reset() -> void:
 	_direction = Vector2.DOWN
 	rotation = 0.0
 	speed = 250.0
+	if _lifetime:
+		_lifetime.reset()
 
 func set_direction(dir: Vector2) -> void:
 	_direction = dir.normalized()
@@ -30,11 +26,6 @@ func set_direction(dir: Vector2) -> void:
 
 func _physics_process(delta: float) -> void:
 	global_position += _direction * speed * delta
-	# Expire when the bullet leaves the full 740×740 arena, not just the viewport.
-	var p := global_position
-	if p.x < _ARENA_LEFT or p.x > _ARENA_RIGHT \
-			or p.y < _ARENA_TOP or p.y > _ARENA_BOTTOM:
-		expired.emit()
 
 func _on_hit_box_area_entered(_area: Area2D) -> void:
 	expired.emit()

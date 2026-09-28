@@ -1,0 +1,116 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_swd"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/swarm_drone/swarm_drone.gd" id="2_swd"]
+[ext_resource type="Texture2D" uid="uid://dpg7gexvv57bl" path="res://assault/assets/sprites/enemies/swarm_drone.png" id="3_swd"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_swd"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_swd"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_swd"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="7_swd"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/swarm_drone/swarm_drone_brain.gd" id="8_swd"]
+[ext_resource type="Script" path="res://global/components/contact_profile.gd" id="9_swd"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="10_swd"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_swd"]
+resource_local_to_scene = true
+shader = ExtResource("1_swd")
+shader_parameter/enabled = false
+shader_parameter/flash_color = Color(1, 1, 1, 1)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_swd"]
+radius = 13.0
+
+[sub_resource type="Animation" id="Animation_reset_swd"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
+[sub_resource type="Animation" id="Animation_hit_swd"]
+resource_name = "hit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [true, false]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_swd"]
+_data = {
+&"RESET": SubResource("Animation_reset_swd"),
+&"hit": SubResource("Animation_hit_swd")
+}
+
+[node name="SwarmDrone" type="CharacterBody2D"]
+script = ExtResource("2_swd")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+material = SubResource("ShaderMaterial_swd")
+texture = ExtResource("3_swd")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_swd")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 97
+script = ExtResource("4_swd")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_swd")
+debug_color = Color(0.7, 0, 0, 0.42)
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("5_swd")
+max_health = 30
+current_health = 30
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries/ = SubResource("AnimationLibrary_swd")
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 128
+script = ExtResource("6_swd")
+damage = 30
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+shape = SubResource("CircleShape2D_swd")
+
+[node name="ContactProfile" type="Node" parent="."]
+script = ExtResource("9_swd")
+mode = 3
+blast_radius = 48.0
+blast_damage = 15
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("7_swd")
+max_speed = 220.0
+acceleration = 600.0
+braking = 900.0
+turn_lerp = 20.0
+max_turn_rate = 10.0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("8_swd")
+
+[node name="StateLight" type="Node2D" parent="."]
+position = Vector2(0, 8)
+script = ExtResource("10_swd")

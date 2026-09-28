@@ -125,7 +125,7 @@ func _ready() -> void:
 	add_child(_timer)
 
 	_station.armor_broken.connect(_stop)
-	## Zero-argument signals, declared and emitted that way (`base_enemy.gd:4`,
+	## Zero-argument signals, declared and emitted that way (`BaseEnemy.died`,
 	## `space_station.gd:34`), so zero-arg handlers are correct.
 	_station.died.connect(_stop)
 

@@ -33,6 +33,9 @@ extends GutTest
 const STATION_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_station/space_station.tscn")
 const STATION_CONFIG := preload("res://assault/scenes/enemies/space_station/space_station_config.tres")
 
+## A real player HurtBox/Health pair (§18), the same fixture `test_contact_blast_damage.gd` uses.
+const Fixture := preload("res://tests/helpers/contact_fixture.gd")
+
 ## The player's primary bullet is `collision_layer = 64` (`bullet.tscn:44`). A HurtBox whose mask
 ## excludes that bit cannot be hit by it at all — the `ram_ship` defect review round 1 caught.
 const PLAYER_BULLET_LAYER: int = 64
@@ -321,8 +324,8 @@ func test_no_squad_uses_a_self_managed_ai_enemy() -> void:
 	for e in _all_entries():
 		var path: String = e.ship_scene.resource_path
 		assert_ne(path, WaveBuilder.GUNSHIP, "gunship is self-managed AI and must never get a mover")
-		assert_ne(path, WaveBuilder.DRONE_INTERCEPTOR,
-			"drone_interceptor is self-managed AI and must never get a mover")
+		assert_ne(path, WaveBuilder.RAZOR_DRONE,
+			"razor_drone is self-managed AI and must never get a mover")
 
 
 ## 4a lost time to an unwired export that left the gate green. The node has to be in the scene.
@@ -369,9 +372,10 @@ func test_spawning_a_squad_does_not_touch_the_timer() -> void:
 # ── 16. Every squad ship is killable by the primary weapon ────────────────────
 
 ## The `ram_ship` class of defect, caught automatically the next time someone swaps a squad ship.
-## The mask must be read IN THE TREE: `hurt_box` is `@onready` (`base_enemy.gd:7`) and the
-## governing value is written in `_ready()` (`base_enemy.gd:25` sets 97|1024 = 1121; `ram_ship.gd:19`
-## is the one subclass that narrows it to 33 afterwards).
+## The mask must be read IN THE TREE: `hurt_box` is `@onready` (`BaseEnemy.hurt_box`) and the
+## governing value is written by `DefenseProfile.apply_to()`, called from `_ready()` (the default
+## profile's mask folds to 97|1024 = 1121; `ram_ship.gd:19` is the one subclass that narrows it to
+## 33 afterwards).
 ##
 ## This iterates the squad table, so the ram case is discriminating but counterfactual today:
 ## 1121 & 64 == 64 passes for all three chosen ships, 33 & 64 == 0 would fail.
@@ -421,3 +425,59 @@ func test_a_squad_that_flies_through_costs_two_escape_combo_penalties() -> void:
 
 	assert_almost_eq(float(tracker.get("_combo")), 2.25, 0.001,
 		"two reinforcements flying through must cost 4.0 * 0.75 * 0.75 — the accepted balance cost")
+
+
+# ── 18. BOTTOM squad is the Swarm Drone (t14) ─────────────────────────────────
+
+## §2.10 step 1: `WaveBuilder.DRONE` now points at `swarm_drone.tscn`. The BOTTOM squad — the only
+## squad `_build_squads()` builds with `b.drone()` — spawns the current `DRONE` scene on the exact
+## same rail path as before; only the scene changed.
+func test_the_bottom_squad_is_two_swarm_drones_on_the_same_rail_path() -> void:
+	var bottom: Array = _reinf.squads()[StationReinforcements.Edge.BOTTOM]
+	assert_eq(bottom.size(), 2, "the BOTTOM squad is still two ships")
+	for e: SpawnEntryResource in bottom:
+		assert_eq(e.ship_scene.resource_path, WaveBuilder.DRONE,
+			"a BOTTOM squad ship must be whatever WaveBuilder.DRONE currently points at")
+		assert_almost_eq(e.movement.sample(1.0).length(), 170.0, 0.01,
+			"the BOTTOM squad's speed must be unchanged by the scene swap")
+
+
+## Acceptance: "A rail Swarm Drone touching the player deals collision_damage and detonates."
+## Real player HurtBox/Health (`contact_fixture.gd`; no i-frames running), and a real BOTTOM-squad
+## entry spawned through `_spawn_entry()` exactly as `spawn_next_squad()` would. A rail suspends the
+## brain and arms the EXPLOSIVE profile permanently (`BaseEnemy.suspend_ai()`), so a real contact
+## both deals the `ContactHitBox`'s `collision_damage` AND detonates the blast at the same spot.
+func test_a_rail_swarm_drone_touching_the_player_deals_collision_damage_and_detonates() -> void:
+	var player := Fixture.build_player(Vector2(900.0, 900.0))
+	_container.add_child(player)
+	var player_health := player.get_node("Health") as Health
+
+	var bottom: Array = _reinf.squads()[StationReinforcements.Edge.BOTTOM]
+	_reinf._spawn_entry(bottom[0])
+	var drone: SwarmDrone = null
+	for e in _reinforcements():
+		if e is SwarmDrone:
+			drone = e as SwarmDrone
+	assert_not_null(drone, "the BOTTOM squad must spawn a SwarmDrone")
+	assert_true(drone.contact_profile.is_armed(),
+		"a rail-suspended Swarm Drone must be armed the moment its EnemyPathMover is added")
+	## Read before the contact below frees the drone (Kamikaze parity: it self-destructs on hit).
+	var collision_damage: int = drone.config.collision_damage
+	var blast_damage: int = drone.config.blast_damage
+
+	## EnemyPathMover overwrites `global_position` every physics frame from its own spawn point —
+	## freeing it (arming already happened, and stays set) is what lets the test place the drone
+	## on the player without the rail immediately dragging it back off.
+	for child in drone.get_children():
+		if child is EnemyPathMover:
+			child.free()
+
+	var detonations: Array[Vector2] = []
+	drone.contact_profile.detonated.connect(func(at: Vector2) -> void: detonations.append(at))
+
+	drone.global_position = player.global_position
+	await wait_physics_frames(5)
+
+	assert_eq(detonations.size(), 1, "touching an armed rail drone must detonate its blast")
+	assert_eq(player_health.current_health, Fixture.PLAYER_MAX_HEALTH - collision_damage - blast_damage,
+		"the contact box's collision_damage and the blast's blast_damage must both land")

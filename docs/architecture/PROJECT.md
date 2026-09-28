@@ -94,6 +94,70 @@ Detail and APIs: [global.md](modules/global.md).
   `preload()` in the test suite. Details and the two remaining windows: the `ShipConfig` section of
   [global.md](modules/global.md); pinned by `tests/integration/test_config_instance_isolation.gd`.
   **The object `load()`/`preload()` returns is still shared — never write to it.**
+- **An AI-driven enemy has one writer of its motion.** When an enemy carries an `EnemyMover`
+  (`global/enemy_ai/enemy_mover.gd`), that mover is the only writer of its `velocity` and `rotation`
+  and the only caller of `move_and_slide()`; its `EnemyBrain` only *requests* movement, on the one
+  physics tick `BaseEnemy._physics_process` owns. Rails (`EnemyPathMover`) take over through
+  `suspend_ai()`. Recipe: [global.md](modules/global.md) → *Enemy AI*; gated by
+  `tests/integration/test_enemy_mover_single_writer.gd`.
+- **Touching an enemy is governed by an explicit contact profile, not a hard-coded hitbox.**
+  `ContactProfile` (`global/components/contact_profile.gd`) is the offensive twin of
+  `DefenseProfile`: `NONE` (no hitbox), `COLLISION` (today's always-on hitbox, the default —
+  every legacy enemy), `RAMMING` (the hitbox is live only while the brain calls `set_armed(true)`)
+  or `EXPLOSIVE` (RAMMING, plus a `ContactBlast` — a separate `HitBox` re-homed into the *owner's
+  parent* so it survives the owner's death, following `ExplosionEffect`'s pattern, since a child
+  node dies with its parent in the same frame it would need to be detected in). `BaseEnemy.
+  suspend_ai()` arms the profile, so a rail-driven rammer still hurts on contact. Recipe:
+  [global.md](modules/global.md) → *ContactProfile and ContactBlast*.
+- **Drones in a group share roles through a board, not a message bus.** `SquadController`
+  (`global/enemy_ai/squad_controller.gd`, `RefCounted`) assigns `LEAD`/`FLANK_LEFT`/
+  `FLANK_RIGHT`/`REAR` and reassigns them the instant the lead leaves — it moves nothing itself,
+  members read it and request their own motion, so it never touches the single-writer rule above.
+  `AnchorIdle` (`global/enemy_ai/anchor_idle.gd`) is the generic hysteresis-gated idle-around-an-
+  anchor → combat handover any brain can own (Assault skips it — the level has already decided
+  the fight is on), and a squad-wide version of it (`SquadController.set_engaged`/`is_engaged`)
+  is how a whole hub patrol wakes and returns together. Recipes: [global.md](modules/global.md) →
+  *SquadController*, *AnchorIdle*.
+- **An Assault AI enemy leaves the arena on a budget, not when killed.** `EngagementBudget`
+  (`global/enemy_ai/engagement_budget.gd`) is active only in Assault (`EnemyWorld.arena(tree) !=
+  null`); on expiry the brain releases its movement constraint, raises its exit speed, and seeks
+  the nearest point **outside `EnemyWorld.projectile_world_rect()`**, freeing itself once strictly
+  past that edge — the corridor constraint otherwise forces re-entry forever, so without this an
+  AI drone would live until killed and stall a level's `ENEMIES_CLEARED` section. Scored as an
+  escape, same as a legacy rail enemy leaving the bottom of the screen. Recipe:
+  [global.md](modules/global.md) → *EngagementBudget*.
+- **`EnemyMover.max_turn_rate` turns the sprite only — a curved path is always a brain-side
+  request.** `step()` moves `velocity` by `move_toward`, so bending a path (an overshoot after a
+  missed attack, a wide turn-back) means calling `Steering.turn_toward(current_dir, desired_dir,
+  max_rate, delta)` every tick from the actor's *current* velocity; the true heading then turns by
+  at most `max_rate·delta` per tick, and a config that curves pins `turn_rate × speed ≤
+  acceleration` so the mover can keep up. Recipe: [global.md](modules/global.md) → *Enemy AI*.
+- **An enemy telegraphs its own attack state with one small light, never a recoloured hull.**
+  `StateLight` (`global/components/state_light.gd`) is OFF / ARMED (red) / CHARGING (yellow) /
+  COMMIT (white); COMMIT is reserved for a real, committed attack, so a feint or a fake can only
+  ever show CHARGING. Its texture is a radial gradient built in code, never scene-authored, so it
+  never trips the sprite-transparency gate below. Recipe: [global.md](modules/global.md) →
+  *StateLight*.
+- **Brains tick on physics, on one clock, with no `Timer` nodes.** `BaseEnemy._physics_process`
+  calls `brain.tick(delta)` then `mover.step(delta)`, once per physics frame; a brain's clocks are
+  accumulated `delta` values and its randomness comes only from its own seeded `rng`
+  (`RandomNumberGenerator`), never the global RNG — `StateMachine` ticks in `_process` instead, and
+  GUT's `simulate()` never fires a `Timer`, which is why the light assault ship's `AIStateMachine`
+  needs the separate name-lookup suspension `EnemyPathMover` still performs unconditionally.
+- **The mode (Assault vs. Open Space) is declared by the world, found by duck type.**
+  `ArenaCamera` joins group `&"assault_arena"`; `EnemyWorld` (`global/enemy_ai/enemy_world.gd`) is
+  the *only* code that looks that group up, and does so via `has_method` rather than importing the
+  Assault-only `ArenaCamera` class — nothing under `global/` may reference it by name. With no
+  provider in the tree the mode is Open Space: no projectile rect, no cull rect, no movement
+  constraint. See [global.md](modules/global.md) → *Enemy AI* and
+  [assault.md](modules/assault.md) → *Enemy AI in Assault*.
+- **Every physics collision layer bit in use has a name.** `project.godot [layer_names]` is the
+  single place a bit gets a human name — Godot never checks that a bit actually used in a scene or
+  resource has one — and `global/physics/collision_layers.gd`'s `CollisionLayers` mirrors it with
+  one constant per named layer (`1 << (n-1)`), so code refers to a layer by name instead of a magic
+  number. No layer's numeric value changes when it is named. Gated by
+  `tests/integration/test_collision_layer_names.gd`, which sweeps every `.tscn`/`.tres` outside
+  `addons/` for an unnamed bit and checks every named layer has a matching constant.
 - **The mouse is read in exactly one line project-wide.** `player_ship.gd::_handle_rotation`'s
   `get_global_mouse_position()` is it. Everything downstream — the whole open-space turn model in
   `ShipTurnController` (see [open_space.md](modules/open_space.md) §3.2.1) — takes the cursor as an
@@ -196,7 +260,11 @@ Detail and APIs: [global.md](modules/global.md).
   sweeps every self-emitted signal project-wide and asserts declared arity matches every
   `.emit()` call site; its first run caught the same drift live in `MovementController`'s
   `action_single_press`/`action_double_press`, fixed alongside it)
-  — plus the space-station family.
+  and `tests/integration/test_collision_layer_names.gd` (every collision layer bit used anywhere
+  is named in `project.godot [layer_names]`, and every named layer has a matching
+  `CollisionLayers` constant)
+  — plus the space-station family and `tests/integration/test_enemy_mover_single_writer.gd`
+  (the AI single-writer rule above).
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).
   Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the

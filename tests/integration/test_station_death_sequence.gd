@@ -55,7 +55,8 @@ func _sequence() -> StationDeathSequence:
 
 ## Direct CPUParticles2D children of the container. Direct-only and type-filtered on purpose:
 ## a recursive search would also find the permanent HitEffect particles every BaseEnemy carries
-## (base_enemy.gd:29-30 + hit_effect.gd:21,34) and the turret explosions under $Turrets.
+## (`BaseEnemy._hit_effect`/`_explosion_effect` + hit_effect.gd:21,34) and the turret explosions
+## under $Turrets.
 func _container_particles() -> Array:
 	var out: Array = []
 	for child in _container.get_children():
