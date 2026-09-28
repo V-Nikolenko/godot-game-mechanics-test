@@ -3,8 +3,8 @@
     {
       "key": "t1-pin",
       "title": "Level 1's fighter and interceptor spawns, their legacy density and the station's rail reinforcements firing are pinned before anything changes",
-      "description": "Plan §2.9.1. New tests/integration/test_level1_fighter_spawns.gd pins every b.fighter()/b.interceptor() entry of Level1Director._build_sections() from data (section, trigger, offset, delay, formation type/size, aim_mode prop, free_after, movement set), plus per-section legacy peak concurrent fighters and legacy peak shots/s (aimed 1/0.8, forward 1/0.3, interceptor 1/0.09 per alive shooter), computed with tests/helpers/level1_drone_concurrency.gd (generalise it to take a lifetime function per kind). Add test_station_reinforcements.gd::test_rail_reinforcements_fire (every TOP fighter and LEFT/RIGHT interceptor fires >= 1 bullet within 2 s) and read the interceptor half-extent from the scene instead of the literal 37 (C13). No production code changes.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "Green on today's code; counts come from data, not hand-typed; the rail-fire case fails if a rail fighter's AttackController is disabled (checked once by hand); scripts/check-test-leaks.sh clean.",
+      "description": "Plan §2.9.1. New tests/integration/test_level1_fighter_spawns.gd pins every b.fighter()/b.interceptor() entry of Level1Director._build_sections() from data (section, trigger, offset, delay, formation type/size, aim_mode prop, free_after, whether movement is set). Per section it computes the legacy peak concurrent fighters and the legacy peak shots/s (aimed 1/0.8, forward 1/0.3, interceptor 1/0.09 per alive shooter), with each rail's lifetime = free_after, or its MovementResource sampled (x WORLD_SCALE, from its offset) until it leaves ArenaCamera.enemy_cull_rect(), capped at 20 s. Generalise tests/helpers/level1_drone_concurrency.gd to take a lifetime function per kind. FREEZE the results as constants _LEGACY_PEAK_FIGHTERS and _LEGACY_PEAK_SHOTS_PER_S (the Ph2 _EXPECTED_LEGACY_PEAKS shape), filled in from the first computed run, and assert the live computation equals them. Later tasks (t16/t17) delete the rails and divide by these constants. Add test_station_reinforcements.gd::test_rail_reinforcements_fire (every TOP fighter and LEFT/RIGHT interceptor fires >= 1 bullet within 2 s; a FORWARD rail fighter's shot lies along its travel, compared with angle_difference) and read the interceptor half-extent from the scene instead of the literal 37 (C13). No production code changes.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "Green on today's code. Counts and both legacy constants come from a computed run, and a test asserts live == constant per section. The rail-fire case fails if a rail fighter's AttackController is disabled (checked once by hand). scripts/check-test-leaks.sh is clean.",
       "type": "test",
       "complexity": "medium",
       "dependsOn": []
@@ -12,8 +12,8 @@
     {
       "key": "t2-rounds",
       "title": "Enemy rounds read differently: a red-pink Pulse bolt, a short-range Scatter pellet, a thin Gatling streak and a big slow Heavy Shell exist as pooled rounds any enemy can pick",
-      "description": "Plan §2.2. Four inherited scenes of enemy_bullet.tscn under assault/scenes/projectiles/enemy_bullet/rounds/ (pulse_round, scatter_round, gatling_stream_round, heavy_shell) with the table's Line2D visual, hitbox, ProjectileLifetime, default speed/damage and z_index; layers inherited 256/128. EnemyRounds (enemy_rounds.gd) with the four scene paths and static pool_size_for(max_burst, round_lifetime, min_burst_period). EnemyBullet captures _authored_speed/_authored_damage in _ready() and reset() restores them (legacy stays 250). Rewrite test_enemy_bullet_lifetime.gd as a per-round sweep that reads speeds from configs, not by regex over light_assault_ship.gd. New test_enemy_rounds.gd including a fixture shooter firing a Heavy Shell. Legacy enemy_bullet.tscn look unchanged.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "test_enemy_rounds.gd and the rewritten lifetime test green, including the boundary cases in plan §4 (Scatter expires by 450 px, Pulse alive at 1280 px, synthetic 100 px/s round fails the sweep); every existing enemy still fires the legacy bullet; gate green.",
+      "description": "Plan §2.2. Four inherited scenes of enemy_bullet.tscn under assault/scenes/projectiles/enemy_bullet/rounds/ (pulse_round, scatter_round, gatling_stream_round, heavy_shell), each with the table's Line2D visual, hitbox, ProjectileLifetime, default speed/damage and z_index; layers inherited 256/128. EnemyRounds (enemy_rounds.gd) holds the four scene paths and static pool_size_for(max_burst, round_lifetime, min_burst_period); a rail cadence is a burst of 1. EnemyBullet captures _authored_speed/_authored_damage in _ready(), and reset() restores them (legacy stays 250). Extend test_enemy_bullet_lifetime.gd into a per-round sweep, max_distance / min_fired_speed <= max_time plus the range floor (>= 1280 px except Scatter). Speed sources stay the ones that exist today: the regex over light_assault_ship.gd and InterceptorConfig. A round with no shooter yet is checked at its scene speed. (t8a and t10 later switch the sweep to config fields.) New test_enemy_rounds.gd, including a fixture shooter firing a Heavy Shell. The legacy enemy_bullet.tscn look is unchanged.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "test_enemy_rounds.gd and the extended lifetime test are green, including the plan §4 boundaries: Scatter expires by 450 px, Pulse is alive at 1280 px, a synthetic 100 px/s round fails the sweep, and pool_size_for handles a burst of 1. Every existing enemy still fires the legacy bullet. Gate green.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": []
@@ -21,8 +21,8 @@
     {
       "key": "t3-burst-patterns",
       "title": "Enemy bursts fire an exact number of shots, and 'fire forward' goes out of the nose whichever way a sprite was drawn",
-      "description": "Plan §2.3 and X7. New global/enemy_ai/burst_clock.gd (BurstClock RefCounted: start, advance -> shots due, is_running, shots_fired, stop; accumulated delta, subtract-not-reset). AimedAttackPattern gains spread_angle, per-instance rng and aim_point (Vector2.INF = unset); GatlingAttackPattern gains rng and aim_point (rng null keeps the global randf exactly). Both patterns' forward branch uses Vector2.RIGHT.rotated(rotation + sprite_forward_angle) read duck-typed with PI/2 fallback; EnemyPathMover facing becomes vel.angle() - sprite_forward_angle with the same fallback. AttackController is not changed.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "tests/unit/test_burst_clock.gd and test_attack_patterns_forward.gd per plan §4, including bit-identical legacy results for PI/2 / no property and correct results for -PI/2; every existing pattern, path-mover and station test stays green.",
+      "description": "Plan §2.3 and X7. New global/enemy_ai/burst_clock.gd (BurstClock RefCounted: start, advance -> shots due, is_running, shots_fired, stop; accumulated delta, subtract-not-reset). AimedAttackPattern gains spread_angle, a per-instance rng and aim_point (Vector2.INF = unset). GatlingAttackPattern gains rng and aim_point; rng null keeps the global randf. New public static EnemyMover.sprite_forward_angle_of(node) -> float (the duck-typed read with the PI/2 default); EnemyMover._sprite_forward_angle() calls it. Both patterns' forward branch uses Vector2.RIGHT.rotated(rotation + sprite_forward_angle_of(ship)). EnemyPathMover facing becomes vel.angle() - sprite_forward_angle_of(actor). AttackController is not changed.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "tests/unit/test_burst_clock.gd and test_attack_patterns_forward.gd pass per plan §4. Legacy equivalence is checked with assert_almost_eq (1e-5 per component) and angle_difference, never bit-for-bit, including vel = (-1,-1), where the raw angles differ by 2*PI. The -PI/2 case is correct. A source sweep finds no other get(&\"sprite_forward_angle\") reader. Every existing pattern, path-mover and station test stays green.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": []
@@ -30,8 +30,8 @@
     {
       "key": "t4-convergence-field",
       "title": "A squad can share one convergence aim point that disappears the moment its leader changes",
-      "description": "Plan X6 / §2.6.1. Add SquadController.convergence_point: Vector2 = Vector2.INF; _reassign() clears it whenever the LEAD member changes (same rule as attack_window_open). No clock, no motion. Extend tests/unit/test_squad_controller.gd.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "convergence_point starts INF, survives a non-LEAD join, clears on LEAD leave and on a closer member taking LEAD; existing SquadController tests unchanged.",
+      "description": "Plan X6 / §2.6.1. Add two data fields to SquadController, with no clock: convergence_point: Vector2 = Vector2.INF, and convergence_stage: Dictionary (member -> 0 answered / 1 ready / 2 done). _reassign() clears both whenever the LEAD member changes (the attack_window_open rule). leave() erases the leaving member's stage key. Extend tests/unit/test_squad_controller.gd.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "Both fields start empty/INF and survive a non-LEAD join. Both clear on a LEAD leave and on a closer member taking LEAD. leave() erases only the leaver's key. Existing SquadController tests are unchanged.",
       "type": "feature",
       "complexity": "small",
       "dependsOn": []
@@ -39,8 +39,8 @@
     {
       "key": "t5-w-formation",
       "title": "Level authors can lay out a W formation as well as V, wedge, line, diagonal and cluster",
-      "description": "Plan §2.5. WaveBuilder.w_formation(count := 5, spread := 60.0, depth := 40.0) — zig-zag, slot i at x=(i-(count-1)/2)*spread, y=depth for odd i, 0 otherwise — returning the same FormationResource/FormationSlot shape as the other helpers, in design units. New tests/integration/test_wave_builder_formations.gd. No level uses it yet.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "Layout test green incl. w_formation(1) = one slot at the origin; a W formation expanded by WaveManager is one squad (reuse the Ph2 fixture).",
+      "description": "Plan §2.5 (W formation). New WFormation extends FormationResource in global/resources/formation/w_formation.gd (VFormation's shape): @export count 5, spread 60, depth 40, stagger_delay 0.1. compute_slots(): slot i at x=(i-(count-1)/2)*spread, y=-depth for odd i and 0 otherwise; delay = stagger_delay * floor(|i-(count-1)/2|), i.e. centre first. WaveBuilder.w_formation(count := 5, spread := 60.0, depth := 40.0, stagger := 0.1) -> WFormation. New tests/integration/test_wave_builder_formations.gd. No level uses it yet. Never hand-type a uid for the new script.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "W5 offsets are (-120,0),(-60,-40),(0,0),(60,-40),(120,0) with delays 0.2/0.1/0/0.1/0.2. w_formation(1) is one slot at the origin with delay 0. A W formation expanded by WaveManager is one squad (reuse the Ph2 fixture). UID integrity is green.",
       "type": "feature",
       "complexity": "small",
       "dependsOn": []
@@ -48,33 +48,34 @@
     {
       "key": "t6-rename-fighter",
       "title": "The Light Assault Ship is renamed the Fighter everywhere with no change in how it plays",
-      "description": "Plan §2.1, X4. git mv assault/scenes/enemies/light_assault_ship -> fighter (files fighter.gd/.tscn; class LightAssaultShip -> Fighter; FighterConfig kept). Update WaveBuilder.FIGHTER path, every gate roster (contact damage, contact geometry, hurtbox geometry, base_enemy sprite-flip list, config isolation), comments naming the old file, and repoint test_enemy_path_mover.gd's AIStateMachine case at a new test fixture scene under tests/ (the lookup itself stays until Ph15). Never hand-type a UID; git mv keeps .uid sidecars.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "t1 pin and every legacy test green unchanged in substance; no reference to light_assault_ship/LightAssaultShip left in .gd/.tscn/.tres; test_resource_uid_integrity and project-load integrity green.",
+      "description": "Plan §2.1, X4. git mv assault/scenes/enemies/light_assault_ship -> fighter (files fighter.gd/.tscn; class LightAssaultShip -> Fighter; FighterConfig kept). Update the WaveBuilder.FIGHTER path; every gate roster (contact damage, contact geometry, hurtbox geometry, config isolation, and test_base_enemy.gd's AnimatedSprite2D flip list, light_assault_ship -> fighter); the regex path in test_enemy_bullet_lifetime.gd; and comments naming the old file. Repoint test_enemy_path_mover.gd's AIStateMachine case at a new fixture scene under tests/ (the lookup itself stays until Ph15). Never hand-type a UID; git mv keeps the .uid sidecars.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "The t1 pin and every legacy test stay green, unchanged in substance. No reference to light_assault_ship/LightAssaultShip is left in .gd/.tscn/.tres. test_resource_uid_integrity and project-load integrity are green.",
       "type": "refactor",
       "complexity": "medium",
       "dependsOn": [
-        "t1-pin"
+        "t1-pin",
+        "t2-rounds"
       ]
     },
     {
       "key": "t7-rename-gatling",
       "title": "The Interceptor is renamed the Gatling Interceptor everywhere with no change in how it plays",
-      "description": "Plan §2.1. git mv assault/scenes/enemies/interceptor -> gatling_interceptor (classes Interceptor -> GatlingInterceptor, InterceptorConfig -> GatlingInterceptorConfig); WaveBuilder INTERCEPTOR/interceptor() -> GATLING_INTERCEPTOR/gatling_interceptor() with the level-1 (2) and station (4) call sites; every roster and test reference.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
+      "description": "Plan §2.1. git mv assault/scenes/enemies/interceptor -> gatling_interceptor (classes Interceptor -> GatlingInterceptor, InterceptorConfig -> GatlingInterceptorConfig). Rename WaveBuilder INTERCEPTOR/interceptor() -> GATLING_INTERCEPTOR/gatling_interceptor() and update the level-1 (2) and station (4) call sites, station_reinforcements.gd, level_1_director.gd, the five gate rosters, test_station_reinforcements.gd and test_enemy_bullet_lifetime.gd's InterceptorConfig read.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
       "acceptanceCriteria": "t1 pin (updated for the builder rename only) and all legacy tests green; no stale Interceptor/interceptor() reference outside the Razor/ally names; UID and load-integrity gates green.",
       "type": "refactor",
-      "complexity": "small",
+      "complexity": "medium",
       "dependsOn": [
         "t1-pin",
         "t6-rename-fighter"
       ]
     },
     {
-      "key": "t8-fighter-run",
-      "title": "The Fighter flies attack runs: it passes beside the player, bursts, makes a visible wide turn and comes back, choosing an aimed or a close-range burst by distance — and still fires on rails",
-      "description": "Plan §2.4 and §2.8 (Fighter half). FighterBrain (phases APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE; phase_changed/enter_phase; weapon_mode + weapon_mode_changed(mode: int)), fighter.tscn with EnemyMover (AUTO), StateLight, AimedAttack (Pulse pool 10) and ForwardAttack (Scatter pool 8) controllers, per-instance patterns from flat FighterConfig fields; delete states/ and the AIStateMachine. Rail fallback in on_suspended() reading aim_mode. Assault budget + DISENGAGE (Ph2 shape). Dual-mode specs in tests/integration/test_fighter.gd and test_enemy_dual_mode.gd. Legacy placeholder texture kept, sprite_forward_angle PI/2.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "All test_fighter.gd cases in plan §4 green in both harnesses, incl. the hysteresis and mid-burst latch boundaries and 'aim_mode on an AI fighter changes nothing'; t1 station rail-fire test and level-1 pin still green (rail fighters now fire Pulse rounds via the fallback); single-writer, signal-arity, config-isolation and geometry gates green; check-test-leaks clean.",
+      "key": "t8a-fighter-shell",
+      "title": "The Fighter is rebuilt as an AI enemy that still behaves exactly as before on rails, and in Assault leaves the corridor cleanly when its time is up",
+      "description": "Plan §2.4 (scene, config), §2.2 (pools) and §2.8 (Fighter rail fallback). Rebuild fighter.tscn: FighterBrain, EnemyMover (AUTO), StateLight, the AimedAttack and ForwardAttack AttackControllers (driven_by_brain, disabled), and AimedPool (Pulse, 12) and ForwardPool (Scatter, 8) as DIRECT CHILDREN OF THE ROOT (BulletPool resolves its container as get_parent().get_parent()). Keep the legacy AnimatedSprite2D placeholder (sprite_forward_angle PI/2). Delete states/ and the AIStateMachine. Extend FighterConfig (flat, @export_group) with every §2.4.2 field, including the rail fields rail_aimed_speed 250, rail_forward_speed 420, rail_forward_interval 0.3. A minimal FighterBrain: the full Phase enum, phase_changed(new_phase: int)/enter_phase(), APPROACH as a plain curved intercept, the Assault EngagementBudget and the Ph2-shape DISENGAGE; no AI firing yet. on_suspended() installs the rail pattern from config fields (aim_mode FORWARD -> Pulse every 0.3 s at 420, else aimed Pulse every 0.8 s at 250). Switch test_enemy_bullet_lifetime.gd from the regex to FighterConfig fields, the rail speeds included. Start tests/integration/test_fighter.gd and add the fighter to test_enemy_dual_mode.gd.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "The t8a rows of plan §4 pass: pools are root children; pool >= pool_size_for for both the AI and rail cadences; rail cadence and speeds come from config; aim_mode on an AI fighter changes nothing; Assault DISENGAGE frees the fighter outside the world rect; the turn_rate*max_speed <= acceleration pin holds. The t1 level-1 pin and the station rail-fire test stay green (rail fighters now fire Pulse rounds). No regex is left in the lifetime test for the fighter. Single-writer, signal-arity, config-isolation, geometry, UID and load-integrity gates are green. check-test-leaks is clean.",
       "type": "feature",
-      "complexity": "large",
+      "complexity": "medium",
       "dependsOn": [
         "t2-rounds",
         "t3-burst-patterns",
@@ -82,14 +83,25 @@
       ]
     },
     {
-      "key": "t9-fighter-squad",
-      "title": "Three fighters close as a pincer while a fourth comes head-on, extra fighters wait their turn, and a fallen fighter's place is taken at once",
-      "description": "Plan §2.5. Fighter role semantics on the existing SquadController: LEAD frontal pass opening attack_window_open on RUN_IN, FLANK_L/R pincer answering each window once with flank_wait_max fallback, REAR dry passes on rear_standoff_radius spaced by rear_index/rear_count; _pass_role taken at RUN_IN. New tests/integration/test_fighter_squad.gd through a real WaveManager (V3 and W5).\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "Plan §4 test_fighter_squad.gd cases green in both harnesses, incl. same-call reassignment on LEAD death, closest REAR promoted, no member crossing sides of the player, REARs fire 0 shots.",
+      "key": "t8b-fighter-run",
+      "title": "The Fighter flies attack runs: it passes a set distance beside the player, bursts, makes a visible wide turn and comes back, choosing an aimed or a close-range burst by distance",
+      "description": "Plan §2.4.1 and §2.4.2. Pass geometry: bearing b, run direction u = -b, lane l perpendicular to u. The start point S = P_hat + b*standoff_radius + l lies on the pass line, so the closest approach equals |l|. Pass kinds FLANK_LEFT/FLANK_RIGHT-shaped (lanes ahead of the player, pass_offset and pass_offset + flank_lane_gap), FRONTAL (lane right(h)*sigma*pass_offset) and solo alternation. APPROACH seeks the first S. RUN_IN is path following with a lookahead point (never stalls) and ends when (P_hat - X).u < 0. EXTEND (>= 350 px, 0.6-1.5 s). TURN via turn_toward. REPOSITION seeks S, routed round the player outside reposition_min_radius. Assault: clamps into inner_rect(), the lane flips behind near the corridor top, and the bearing flips when the run would be shorter than min_run_length. Weapons: opportunities (a) and (b), mode by distance with hysteresis, FORWARD taken only with the nose within nose_cone_deg (otherwise skipped, not spent), latched per burst, weapon_mode_changed(mode: int), a 0.3 s CHARGING telegraph then ARMED via BurstClock. Budget expiry during a telegraph or burst defers DISENGAGE to the burst's end (<= 0.8 s).\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "The t8b rows of plan §4 pass in both harnesses. Open Space closest approach is pass_offset +-40 (FLANK_LEFT, FRONTAL) and pass_offset+flank_lane_gap +-40 (FLANK_RIGHT) on the stated side, for a holding and a moving player, matching §2.4.1's worked check. The TURN radius is within 15%. There is no hurtbox overlap. RUN_IN's seek target is always ahead. The Assault lateral-pass, lane-flip and min_run_length boundaries hold. The weapon-selection boundaries hold: 250/400/330 hysteresis, off-nose FORWARD skipped, no mid-burst change. Cadence is within one tick. Deferred DISENGAGE is within 0.8 s. The t1 pin and station rail test stay green. All invariant gates are green. check-test-leaks is clean.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
-        "t8-fighter-run",
+        "t8a-fighter-shell"
+      ]
+    },
+    {
+      "key": "t9-fighter-squad",
+      "title": "Three fighters close as a pincer while a fourth comes head-on, extra fighters wait their turn, and a fallen fighter's place is taken at once",
+      "description": "Plan §2.5. Fighter role semantics on the existing SquadController: role -> pass kind (LEAD FRONTAL, FLANK_LEFT/RIGHT the pincer on two lanes, REAR dry passes on rear_standoff_radius spaced by rear_index/rear_count; at most three attack, X9). The LEAD opens attack_window_open on RUN_IN entry (only while it leads) and closes it on its own EXTEND entry. Flanks loiter at S, answer each window once (_answered_window, reset on reading it closed) and go anyway after flank_wait_max. The pass (_pass_role, b, u, l) is latched at RUN_IN entry; a new pass kind is taken only through REPOSITION, whose seek target never passes within reposition_min_radius. New tests/integration/test_fighter_squad.gd through a real WaveManager (V3 and W5).\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "The plan §4 test_fighter_squad.gd cases pass in both harnesses: the window open/close and answer-once reset; same-call reassignment on LEAD death; the closest REAR promoted when a FLANK dies in a W5; the side-change rule asserted as the latched pass plus REPOSITION seek-target clearance (not an absolute side); body separation >= 2 x hull radius (the only pre-approved fix is flank_stagger); REARs fire 0 shots.",
+      "type": "feature",
+      "complexity": "large",
+      "dependsOn": [
+        "t8b-fighter-run",
         "t4-convergence-field",
         "t5-w-formation"
       ]
@@ -97,33 +109,33 @@
     {
       "key": "t10-gatling-windows",
       "title": "The Gatling Interceptor holds side-on range and fires readable pressure windows — yellow spin-up, one 8–12 round stream, a pause, then a swing to the other flank — and still fires on rails",
-      "description": "Plan §2.6 and §2.8 (Gatling half). GatlingInterceptorBrain (APPROACH, SWING_IN, SPIN_UP, STREAM, COOLDOWN, REPOSITION, DISENGAGE), scene with EnemyMover (AUTO), StateLight, one driven_by_brain controller + Gatling Stream pool 36, per-instance GatlingAttackPattern with the brain rng; Assault flank = the corridor half opposite the player. Rail fallback = legacy constant stream. Dual-mode specs in tests/integration/test_gatling_interceptor.gd and test_enemy_dual_mode.gd.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "Plan §4 test_gatling_interceptor.gd cases green in both harnesses incl. N in [8,12] over a seed sweep, 0 shots in SPIN_UP/COOLDOWN, stream never cut by budget expiry; t1 station rail-fire test green; all invariant gates green; check-test-leaks clean.",
+      "description": "Plan §2.6 and §2.8 (Gatling half). GatlingInterceptorBrain (APPROACH, SWING_IN, SPIN_UP, STREAM, COOLDOWN, REPOSITION, DISENGAGE). The scene has EnemyMover (AUTO), StateLight, one driven_by_brain controller, and StreamPool (Gatling Stream, 36) as a DIRECT CHILD OF THE ROOT, plus a per-instance GatlingAttackPattern with the brain rng. Side rule: the first window takes its current side (Open Space) or the corridor half opposite the player's x (Assault); REPOSITION flips side for every later window, except in Assault when the flipped point would be closer than min_flank_range to the player. SWING_IN is entered only with remaining budget >= swing_in_max; expiry in SWING_IN/SPIN_UP/STREAM defers DISENGAGE to COOLDOWN entry. Rail fallback: the legacy constant stream from config fields (rail_stream_interval 0.09, rail_stream_speed 220, rail_spread 0.08); the rail keeps the legacy pool-starvation shape (pool 36, not 71), named as deliberate. Switch test_enemy_bullet_lifetime.gd to GatlingInterceptorConfig fields (round_speed, rail_stream_speed). Dual-mode specs in tests/integration/test_gatling_interceptor.gd and test_enemy_dual_mode.gd.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "The plan §4 test_gatling_interceptor.gd cases pass in both harnesses: N in [8,12] over a seed sweep (both ends seen); 0 shots in SPIN_UP/COOLDOWN; the first-window opposite-half rule, later alternation and the wall exception as separate cases; no SWING_IN without budget; deferred DISENGAGE within 2.08 s. The pool is a root child, >= 36 and >= 20. After this task no speed in the lifetime sweep is hand-typed or regex-read. The t1 station rail-fire test is green. All invariant gates are green. check-test-leaks is clean.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
         "t2-rounds",
         "t3-burst-patterns",
+        "t4-convergence-field",
         "t7-rename-gatling",
-        "t8-fighter-run"
+        "t8b-fighter-run"
       ]
     },
     {
       "key": "t11-gatling-convergence",
       "title": "Two Gatling Interceptors charge together and cross their streams at the player's likely next position from the same side, leaving the other side open",
-      "description": "Plan §2.6.1. LEAD writes squad.convergence_point on SPIN_UP; FLANKs answer each window once, take the LEAD's side (cross-product sign) at convergence_bearing_offset_deg 40 toward h, aim via pattern.aim_point with independent rng error; aim_point reset on window close; REARs hold dry. New tests/integration/test_gatling_convergence.gd.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "Plan §4 convergence cases green: CHARGING within one tick, same half-plane, >= 30 deg separation, aim lines within 48 px of the point, LEAD death clears point and FLANK aim_point; solo Gatling never converges.",
+      "description": "Plan §2.6.1 (resequenced). The LEAD opens the window at its SWING_IN entry and writes squad.convergence_point every tick until close. A FLANK within 1.5 x preferred_range answers once on its next tick: it enters SWING_IN (CHARGING) toward its flank point on the LEAD's side, rotated 40 deg toward h. Rendezvous in SPIN_UP via convergence_stage: STREAM starts when every participant is ready or after sync_wait_max (0.75 s). Each shooter aims at the refreshed point with a +-3 deg per-window error. Stage 2 on COOLDOWN. The LEAD closes the window on the LATER COOLDOWN entry. leave() erases a dead participant; a LEAD change clears everything, and a FLANK mid-stream finishes at its own predicted point. The LEAD opens no new window while one is open. New tests/integration/test_gatling_convergence.gd.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "The plan §4 convergence cases pass: CHARGING within one tick; same half-plane; >= 30 deg separation; overlapping STREAM intervals (starts within one tick, overlap >= 0.6 s) with every round fired with a finite aim_point; aim lines within 48 px of the point; close on the later COOLDOWN; the bounded-wait case; a far FLANK skips; LEAD death clears the point and stages while the FLANK's stream still fires all N; a solo Gatling never converges.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
-        "t10-gatling-windows",
-        "t4-convergence-field"
+        "t10-gatling-windows"
       ]
     },
     {
       "key": "t12-shooter-idle",
       "title": "In Open Space, fighters and Gatlings drift calmly around their patrol point until the player comes close, then turn to fight, and drift home when the player leaves",
-      "description": "Plan §2.10 idle half, X2. Append IDLE, NOTICING, RETURNING to both brains following the Swarm t8d shape: AnchorIdle, patrol_anchor Vector2.INF sentinel, shared ring by member_index/member_count, start_engaged test seam set by every earlier test, engagement recomputed each tick, RETURNING never interrupts a burst/stream. Assault skips idle. perceive/lose radii per plan.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
+      "description": "Plan §2.10 idle half, X2. Append IDLE, NOTICING, RETURNING to both brains following the Swarm t8d shape: AnchorIdle, patrol_anchor Vector2.INF sentinel, shared ring by member_index/member_count, start_engaged test seam set by every earlier test, engagement recomputed each tick, RETURNING never interrupts a burst/stream. Assault skips idle. perceive/lose radii per plan.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
       "acceptanceCriteria": "Idle cases from plan §4 green; every earlier fighter/Gatling test sets start_engaged and is otherwise unchanged; no shot fired while IDLE.",
       "type": "feature",
       "complexity": "medium",
@@ -135,7 +147,7 @@
     {
       "key": "t13-hub-patrol",
       "title": "The Open Space hub has a fighter pair and a Gatling pair on patrol, well clear of the planets, pickups and the spawn point",
-      "description": "Plan §2.10 spawn half. SectorHub._spawn_patrol() adds a fighter squad of 2 and a Gatling squad of 2 on fighter_anchor_bearing_deg / gatling_anchor_bearing_deg / shooter_ring_radius (starting 180 / 0 / 1500), shared anchors set before add_child, seeded by patrol_seed. Compute clearance with the existing generic sweep (the Gatling estimate is only ~89 px) and move a bearing or the ring if needed — never hand-pick. Update test_sector_hub_patrol.gd: per-group counts replace the total child count; clearance rows for both new groups; a Pulse fired in the hub lands in EnemyContainer.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
+      "description": "Plan §2.10 spawn half. SectorHub._spawn_patrol() adds a fighter squad of 2 and a Gatling squad of 2 on fighter_anchor_bearing_deg / gatling_anchor_bearing_deg / shooter_ring_radius (starting 180 / 0 / 1500), shared anchors set before add_child, seeded by patrol_seed. Compute clearance with the existing generic sweep (the Gatling estimate is only ~89 px) and move a bearing or the ring if needed — never hand-pick. Update test_sector_hub_patrol.gd: per-group counts replace the total child count; clearance rows for both new groups; a Pulse fired in the hub lands in EnemyContainer.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
       "acceptanceCriteria": "test_sector_hub_patrol.gd green with all four groups cleared by the sweep; seed reproducible; the chosen bearings/radius and computed clearances are recorded in DECISIONS.",
       "type": "feature",
       "complexity": "medium",
@@ -146,8 +158,8 @@
     {
       "key": "t14-art-fighter",
       "title": "The Fighter has its own readable top-down sprite: dark hull, cool edge light, red stripe, clearly a fighter",
-      "description": "Plan §2.7. Invoke the pixel-art-generation skill first (strict top-down, isometric false). 64x64, save via scripts/pixellab.sh, look at it, set sprite_forward_angle to its nose, move the StateLight onto the hull, keep the collision circle covering the hull (geometry gates). Fix any painted background with scripts/strip-sprite-bg.sh.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "Sprite viewed and approved by eye; transparency, hurtbox/contact geometry and forward-fire tests green; forward burst still leaves the nose.",
+      "description": "Plan §2.7. Invoke the pixel-art-generation skill first (strict top-down, isometric false). 64x64, saved via scripts/pixellab.sh and looked at. KEEP the node type and name (a single-frame AnimatedSprite2D named AnimatedSprite2D, which BaseEnemy._rotate_sprite() flips 180 deg), so the HitFlashAnimationPlayer track paths and test_base_enemy.gd's flip list stay valid. Set sprite_forward_angle to the nose direction as seen in the root frame AFTER that flip. Move the StateLight onto the hull. Keep the collision circle covering the hull (geometry gates). Fix any painted background with scripts/strip-sprite-bg.sh.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "The sprite is viewed and approved by eye. A forward rail shot on the real scene leaves along the travel direction. test_base_enemy.gd's flip cases are green. If the node type had to change, the track paths, the flip list and the angle are updated in the same task. Transparency and hurtbox/contact geometry tests are green.",
       "type": "art",
       "complexity": "medium",
       "dependsOn": [
@@ -157,8 +169,8 @@
     {
       "key": "t15-art-gatling",
       "title": "The Gatling Interceptor has its own readable top-down sprite with a visible rotary cannon, unmistakable from the Fighter",
-      "description": "Plan §2.7. Same rules as t14; 64x64 (72x72 allowed), side-heavy silhouette with a rotary cannon pod. Update sprite_forward_angle and StateLight; update test_station_reinforcements' half-extent only via the scene read t1 introduced.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "Sprite viewed by eye; all geometry, transparency and station tests green.",
+      "description": "Plan §2.7. Same rules as t14. 64x64 (72x72 allowed), a side-heavy silhouette with a rotary cannon pod. KEEP the Sprite2D node (no flip) and its HitFlash track path. Set sprite_forward_angle to the nose in the root frame, and move the StateLight. test_station_reinforcements' half-extent changes only through the scene read t1 introduced.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "The sprite is viewed by eye. The forward-direction check on the real scene passes. test_base_enemy.gd's 'no AnimatedSprite2D' case is still green. All geometry, transparency and station tests are green.",
       "type": "art",
       "complexity": "medium",
       "dependsOn": [
@@ -168,8 +180,8 @@
     {
       "key": "t16-level1-duration",
       "title": "In level 1's deep-space and planet-approach sections, fighters and the Gatling pair arrive at the same moments and places as before, then fight as squads inside the corridor and leave",
-      "description": "Plan §2.9.2. Strip .move()/.free_after()/shoot_* from every fighter line in deep_space and planet_approach; keep .at()/.formation()/.delay(); tag loose lines squad(&\"w<n>f\"); the two interceptors become gatling_interceptor() squad(&\"w<n>g\"). Update the t1 pin in place and add the density gates (attack-capable <= 1.5x, all-alive <= 2.0x, shots/s <= 1.25x legacy). Only the pre-approved levers (engage 6.0 -> 4.5, new assault_passes 2 -> 1, split a 5+ formation) may be used if a gate fails.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "Pin shows unchanged triggers/offsets/delays/formations with movement null; density gates green with values printed; no aim_mode left in those sections; gate green.",
+      "description": "Plan §2.9.2. Strip .move()/.free_after()/shoot_* from every fighter line in deep_space and planet_approach; keep .at()/.formation()/.delay(); tag loose lines squad(&\"w<n>f\"). The two interceptors become gatling_interceptor() squad(&\"w<n>g\"). Update the t1 pin in place; retire the 'live == frozen legacy constant' assertion for these two sections only, with a comment. Add the density gates dividing by the FROZEN t1 constants (attack-capable <= 1.5x, all-alive <= 2.0x _LEGACY_PEAK_FIGHTERS; shots/s <= 1.25x _LEGACY_PEAK_SHOTS_PER_S). Only the pre-approved levers (engage 6.0 -> 4.5, new assault_passes 2 -> 1, split a 5+ formation) may be used if a gate fails.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "The pin shows unchanged triggers/offsets/delays/formations with movement null. The density gates are green with their values printed, and no denominator is recomputed from deleted rail data or hand-typed. No aim_mode is left in those sections. Gate green.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
@@ -181,8 +193,8 @@
     {
       "key": "t17-level1-cloud",
       "title": "In level 1's cloud-descent section the fighters fight off rails too, and the section still clears in time for the level to move on",
-      "description": "Plan §2.9.3, X8. Same edit for cloud_descent's fighter lines. Extend test_engagement_deadline.gd with per-entry fighter rows (spawn + engage + worst exit + 0.5 <= waves_complete + timeout; no bullet term — bullets die with their ship) and boundary rows (fighter in the 76 s wave fails; a Gatling in any ENEMIES_CLEARED section fails). New tests/integration/test_level1_fighter_exit.gd running the real WaveManager from 66 s with a stub player.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
-      "acceptanceCriteria": "Deadline and exit tests green with measured margin reported; every fighter leaves by DISENGAGE with no EnemyPathMover; density gates from t16 still green for cloud_descent; check-test-leaks clean.",
+      "description": "Plan §2.9.3 (corrected). The same edit for cloud_descent's fighter lines, retiring that section's live==constant assertion. Extend test_engagement_deadline.gd with per-entry fighter rows in the file's relative form: (entry_time - last_wave_trigger) + engage_seconds + deferral (burst_telegraph + max(aimed_max*aimed_gap, forward_max*forward_gap)) + worst_exit (Razor-shaped, from max_speed) + MARGIN < enemies_cleared_timeout. The clock starts at the 76.0 s trigger (waves_complete fires on that tick). There is no bullet term: bullets die with their ship. Boundary rows name their delay: a fighter in the 76.0 s wave at delay 0.8 fails (computed >= 10.9); a Gatling at delay 0 in any ENEMIES_CLEARED last wave fails (its deferral spin_up + sync_wait_max + 12 x 0.09); no ENEMIES_CLEARED section contains the Gatling scene. New tests/integration/test_level1_fighter_exit.gd runs the real WaveManager from 66 s with a stub player.\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
+      "acceptanceCriteria": "Deadline and exit tests are green, with the computed per-entry margin and the measured real-run margin reported. Each boundary row asserts the computed value exceeds the timeout. Every fighter leaves by DISENGAGE with no EnemyPathMover. The t16 density gates are still green, and cloud_descent's gate uses its frozen constant. check-test-leaks is clean.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
@@ -192,7 +204,7 @@
     {
       "key": "t18-docs",
       "title": "Project docs, the enemy roster and the decision log describe the Fighter, the Gatling Interceptor and the bullet family as actually built",
-      "description": "Invoke updating-project-docs. Update both ENEMY.md files (answer the §43 checklist; correct the Gatling 'always fires forward' claim), docs/enemy-roster.md, assault.md, global.md, PROJECT.md, docs/BULLET_POOL.md, the CLAUDE.md gate paragraph (round lifetime sweep, fighter pin/density, fighter deadline rows, rail-fire test), append DECISIONS 'Phase 3 - as built', and write docs/epics-done/cmufs7ekv000lnm2x7nbswijy/ (PRD, SOURCES, REPORT).\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md.",
+      "description": "Invoke updating-project-docs. Update both ENEMY.md files (answer the §43 checklist; correct the Gatling 'always fires forward' claim), docs/enemy-roster.md, assault.md, global.md, PROJECT.md, docs/BULLET_POOL.md, the CLAUDE.md gate paragraph (round lifetime sweep, fighter pin/density, fighter deadline rows, rail-fire test), append DECISIONS 'Phase 3 - as built', and write docs/epics-done/cmufs7ekv000lnm2x7nbswijy/ (PRD, SOURCES, REPORT).\n\nPlan: docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md (Revision 2).",
       "acceptanceCriteria": "Docs match the code; DECISIONS as-built lists every deviation; dossier present with honest known gaps (feel of density, readability at speed).",
       "type": "chore",
       "complexity": "medium",

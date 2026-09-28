@@ -799,12 +799,13 @@ section next:
   known gaps in full, plus the hand-playtest checklists t15 and t16 ended their runs with.
 - No numeric collision-layer bit changed meaning or value in this phase.
 
-## Phase 3 - Enemy rework, phase 3: Fighter, Gatling Interceptor and the bullet family (2026-09-28)
+## Phase 3 - Enemy rework, phase 3: Fighter, Gatling Interceptor and the bullet family (2026-09-29)
 
 These are the **planned** decisions:
-- plan: `docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md` (revision 1);
+- plan: `docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md` (**revision 2**, which answers the owner's
+  CHANGES_REQUESTED review; its §9 maps each point);
 - research: `1-context.md` and `2-research.md` in the same directory;
-- tasks: `tasks.json` (18 tasks, t1–t18).
+- tasks: `tasks.json` (19 tasks, t1–t18, with t8 split into t8a/t8b).
 
 Once this phase's *as built* section exists, check it first.
 
@@ -813,7 +814,8 @@ Once this phase's *as built* section exists, check it first.
   - When a brain is suspended on a rail (`on_suspended()`), it:
     - leaves its squad and turns its `StateLight` off;
     - sets `attack.driven_by_brain = false` and `attack.enabled = true`;
-    - installs a pattern equivalent to the legacy weapon.
+    - installs a pattern equivalent to the legacy weapon, **built from config fields**
+      (`rail_*` fields, so the lifetime sweep can read them).
   - `AttackController._process` then self-times the fire.
   - `aim_mode` / `shoot_forward()` / `shoot_at_player()` are now **rail-only inputs**; an AI fighter ignores them.
   - **Ph15 reuses this rule** for every other shooter it takes off rails.
@@ -826,22 +828,32 @@ Once this phase's *as built* section exists, check it first.
   because the Light Assault Ship's state machine is deleted.
 - **`Steering.lead_target` / `break_contact` are not built.** Lead targeting is `TargetInfo.aim_direction()` /
   `intercept()`. `break_contact` stays with the Sniper (Ph4).
-- **`SquadController` gains exactly one field, `convergence_point: Vector2`** (`Vector2.INF` = unset).
-  - Only the LEAD writes it. `_reassign()` clears it whenever the LEAD changes, the same rule as
-    `attack_window_open`.
-  - There is still no clock on the board.
-- **Forward fire honours `sprite_forward_angle`.**
-  - `AimedAttackPattern` / `GatlingAttackPattern` fire forward along
-    `Vector2.RIGHT.rotated(rotation + sprite_forward_angle)`, and `EnemyPathMover` faces with
-    `vel.angle() - sprite_forward_angle`.
-  - Both read the angle duck-typed, with a fallback of `PI/2`, so every existing user is bit-identical.
-  - New art may be drawn nose-up or nose-down.
-- **Deadline formula for fighters is per entry:** `spawn_time + engage + worst_exit + 0.5 ≤ waves_complete_time +
-  timeout`. The drone rows keep Ph2's conservative form.
+- **`SquadController` gains two data fields and still has no clock:**
+  - `convergence_point: Vector2` (`Vector2.INF` = unset). The LEAD writes it every tick while its window is open.
+  - `convergence_stage: Dictionary`, member → `0` answered / `1` ready / `2` done.
+  - `_reassign()` clears both whenever the LEAD changes, the `attack_window_open` rule. `leave()` erases the leaving
+    member's key.
+- **Forward fire honours `sprite_forward_angle`**, through one shared static helper,
+  **`EnemyMover.sprite_forward_angle_of(node) -> float`** (duck-typed, default `PI/2`). There is no other reader.
+  - Patterns fire forward along `Vector2.RIGHT.rotated(rotation + sprite_forward_angle_of(ship))`.
+  - `EnemyPathMover` faces with `vel.angle() − sprite_forward_angle_of(actor)`.
+  - **Legacy equivalence is angular, not bitwise.** A rotation can differ by 2π from `atan2(−vel.x, vel.y)`. Tests use
+    `angle_difference` / `assert_almost_eq`.
+  - **`sprite_forward_angle` is the nose direction in the root's frame after `BaseEnemy._rotate_sprite()`'s 180° flip**
+    of a child named `AnimatedSprite2D`.
+- **Deadline formula for fighters is per entry**, in the existing test's relative form:
+  `(entry_time − last_wave_trigger) + engage + deferral + worst_exit + 0.5 < timeout`.
+  - `waves_complete` fires **on the tick the last wave triggers**, so delays do not move the clock.
+  - `deferral` is the longest attack the budget may not interrupt: fighter `burst_telegraph` + longest burst (0.8 s);
+    Gatling `spin_up + sync_wait_max + longest stream` (2.08 s).
+  - `worst_exit` is Razor-shaped, from `max_speed`.
+  - The drone rows keep Ph2's conservative form.
 - **Correction to the research: in-flight enemy bullets never outlive their shooter.** `BulletPool._exit_tree()` →
-  `cancel_active()`. So ENEMIES_CLEARED deadlines need **no bullet-flight term**, and no round is barred from those
-  sections for lifetime reasons. The side effect is that a leaving shooter's bullets vanish mid-screen (legacy did the
-  same). Owner-bound lifetime stays Ph5.
+  `cancel_active()`. So ENEMIES_CLEARED deadlines need **no bullet-flight term**. The side effect is that a leaving
+  shooter's bullets vanish mid-screen (legacy did the same). Owner-bound lifetime stays Ph5.
+- **Deviation from IDEAS §5.3 ("three … pincer, while a fourth performs a frontal pass"): at most three fighters
+  attack at once.** LEAD (frontal) + FLANK_LEFT + FLANK_RIGHT (the pincer). A fourth and later fighters are dry REARs,
+  promoted when an attacker dies. Reason: research finding 1's three-attacker cap and the level-1 density gates.
 
 ### Names and places (later phases build on these)
 - **Fighter:** `assault/scenes/enemies/fighter/` (a `git mv` of `light_assault_ship/`).
@@ -851,19 +863,30 @@ Once this phase's *as built* section exists, check it first.
     appended.
   - Signals and seams: `phase_changed(new_phase: int)`, `enter_phase()`, `weapon_mode` (read-only), and
     `weapon_mode_changed(mode: int)`.
-  - Two controllers: `AimedAttack` (Pulse pool) and `ForwardAttack` (Scatter pool). `brain.attack` is the aimed one;
-    `brain.forward_attack` is the second.
+  - Two controllers: `AimedAttack` (whose pool is `AimedPool`, Pulse, 12) and `ForwardAttack` (`ForwardPool`,
+    Scatter, 8). `brain.attack` is the aimed one; `brain.forward_attack` is the second.
+  - It keeps its sprite as a single-frame `AnimatedSprite2D` (flipped by `BaseEnemy`).
+- **Fighter pass geometry** (plan §2.4.1; other attack-run enemies should reuse this vocabulary):
+  - A pass is a bearing `b` (the side it comes from), a run direction `u = −b`, and a lane `l ⟂ u` (the side and the
+    distance it passes at).
+  - The start point `S = P̂ + b·standoff + l` lies on the pass line, so the closest approach equals `|l|`.
+  - RUN_IN is path following with a look-ahead point (it never stalls). It ends when `(P̂ − X)·u < 0`.
+  - Pass kinds: FLANK_LEFT/RIGHT-shaped (lanes ahead of the player, `pass_offset` and
+    `pass_offset + flank_lane_gap`), FRONTAL (lane to one side of the heading line, alternating), and solo
+    (alternates the flank shapes).
+  - `left(v) = v.rotated(−PI/2)`, `right(v) = v.rotated(PI/2)` in y-down screen space.
 - **Gatling Interceptor:** `assault/scenes/enemies/gatling_interceptor/` (a `git mv` of `interceptor/`).
   - Classes: `GatlingInterceptor`, `GatlingInterceptorBrain`, `GatlingInterceptorConfig`.
   - `WaveBuilder.GATLING_INTERCEPTOR` / `gatling_interceptor()`; `interceptor()` is gone.
   - Phases: `APPROACH, SWING_IN, SPIN_UP, STREAM, COOLDOWN, REPOSITION, DISENGAGE`, with the idle phases appended.
+  - It keeps its `Sprite2D` (no flip). `StreamPool` (Gatling Stream, 36).
   - **The Gatling aims its streams at a predicted point.** This settles the "forward or at the player" question; the old
     docs that said "always fires forward" were wrong.
 - **The bullet family:** `assault/scenes/projectiles/enemy_bullet/rounds/`, holding `pulse_round.tscn`,
   `scatter_round.tscn`, `gatling_stream_round.tscn` and `heavy_shell.tscn`.
   - They are inherited scenes of `enemy_bullet.tscn`, with no new script, and **one pool per round per shooter**.
   - `EnemyRounds` (`enemy_rounds.gd`) holds the four paths plus `pool_size_for(max_burst, round_lifetime,
-    min_burst_period)`.
+    min_burst_period)`. A self-timed rail pattern counts as a burst of 1.
   - `EnemyBullet.reset()` restores the scene's authored speed and damage.
   - **Heavy Shell has no consumer in Ph3.** Its first consumer is Ph4 (Bomber/Ram) or Ph10 (Heavy Gunship).
   - Legacy `enemy_bullet.tscn` stays orange, and legacy shooters keep it until Ph17's audit.
@@ -875,33 +898,58 @@ Once this phase's *as built* section exists, check it first.
   `rng: RandomNumberGenerator` and `aim_point: Vector2` (`INF` = ask `TargetInfo`).
   - With `rng == null`, the pattern keeps the global `randf`, as legacy does.
   - Patterns stay **built per instance in code**.
-- **`WaveBuilder.w_formation(count, spread, depth)`** is a spawn layout only.
+- **`WFormation`** (`global/resources/formation/w_formation.gd`) and **`WaveBuilder.w_formation(count, spread, depth,
+  stagger)`**, a spawn layout only. Slots zig-zag, with odd slots trailing at `−depth`; spawn order is centre first.
+- **Level-1 legacy baselines are frozen constants** in `test_level1_fighter_spawns.gd`: `_LEGACY_PEAK_FIGHTERS` and
+  `_LEGACY_PEAK_SHOTS_PER_S`, computed from the live rails in t1 and asserted equal while the rails exist. Any later
+  migration (Ph15) freezes its baselines the same way **before** deleting rails.
 
 ### Conventions
 - **Weapon mode is chosen by distance at each burst opportunity, with hysteresis, and latched for the whole burst:**
-  FORWARD below 300 px, AIMED from 360 px, and the last mode in between. It is never a spawn property.
+  FORWARD below 300 px, AIMED from 360 px, and the last mode in between. It is never a spawn property. **A FORWARD
+  opportunity is taken only with the nose within `nose_cone_deg` of the player**; otherwise it is skipped, not spent.
 - **Attacker cap without new API:** in a fighter squad, LEAD + FLANK_L + FLANK_R fire and REARs fly **dry** passes. In
   a Gatling squad, LEAD + FLANKs fire and REARs hold.
-- **Convergence pairs stay on the same half-plane** of the player, about 40° apart, so the far side stays open. Both
-  light CHARGING together.
+- **Fighter attack window:** the LEAD opens it on RUN_IN entry and closes it on its EXTEND entry. Flanks answer each
+  window once (the Swarm `_answered_window` rule).
+- **Side changes:** a fighter's pass is latched at RUN_IN. It takes a new pass kind only through REPOSITION, which never
+  seeks a point whose segment passes within `reposition_min_radius` of the player. A member may therefore hold a role
+  whose side it is not yet on (`_side_for` can do that).
+- **Convergence pairs stay on the same half-plane** of the player, about 40° apart, so the far side stays open. The
+  window opens at the LEAD's SWING_IN (both lights CHARGING within one tick). The pair meets in SPIN_UP, capped by
+  `sync_wait_max`. The point is refreshed every tick. The window closes on the **later** COOLDOWN entry.
+- **No false telegraphs:** the Gatling never enters SWING_IN (CHARGING) with less budget than `swing_in_max` left (the
+  Swarm `can_start_attack` precedent).
+- **Gatling sides:** the first window takes the current side (Open Space) or the corridor half opposite the player
+  (Assault). Every later window flips, except in Assault when the flipped point would be within `min_flank_range` of a
+  player hugging a wall.
 - **Squads stay per family.** Level-1 loose fighter lines use the id `&"w<n>f"` and Gatlings `&"w<n>g"`. Drones keep
   `&"w<n>"`.
-- **Heading reference in Assault is `Vector2.UP`.** Fighter flank passes are lateral runs across the corridor. The
-  Gatling's flank is the corridor half opposite the player.
+- **Heading reference in Assault is `Vector2.UP`.** Fighter flank and solo passes are lateral runs across the corridor.
+  The ahead lane flips behind near the corridor top, and a run shorter than `min_run_length` takes the other bearing.
 - **`StateLight`:** CHARGING = the burst telegraph / Gatling swing-in and spin-up; ARMED = firing; OFF otherwise.
   **Neither shooter uses COMMIT** (Ph2 reserved it for committed ram attacks).
-- **Pools are sized by formula and pinned:** `max_burst × ceil(round_lifetime / min_burst_period)`.
+- **Pools are sized by formula and pinned for the AI and the rail cadence:**
+  `max_burst × ceil(round_lifetime / min_burst_period)`, taking the larger of the two.
+  - **Every `BulletPool` is a direct child of the enemy root** (`BulletPool` resolves its container as the
+    grandparent).
+  - The one exception to "the larger": the rail Gatling keeps the legacy pool-starvation shape (36 in flight, then a
+    stall). A true 11 shots/s hose would need 71 and would be a balance change.
+- **Round lifetimes are checked against the slowest speed any shooter fires that round at**, read from config fields.
+  No speed in the lifetime sweep is hand-typed or regex-read after this phase.
 - **Gatlings stay out of ENEMIES_CLEARED sections**, and the deadline test has a boundary row for it, as for the Razor.
-- **Level-1 shooter density is gated:** attack-capable ≤ 1.5×, all-alive ≤ 2.0× and shots/s ≤ 1.25× the legacy
+- **Level-1 shooter density is gated:** attack-capable ≤ 1.5×, all-alive ≤ 2.0× and shots/s ≤ 1.25× the frozen legacy
   per-section peak. The pre-approved levers, in order: fighter `engage_seconds` 6.0 → 4.5, `assault_passes` 2 → 1, and
   split a formation of 5+.
+- **Art tasks keep an enemy's sprite node type and name**, so animation track paths and `test_base_enemy.gd`'s flip
+  cases stay valid. Changing a node type means updating all three, and re-deriving `sprite_forward_angle`.
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |
 |---|---|---|
 | Heavy Shell gameplay consumer | Ph4 / Ph10 | No in-scope enemy fires it; tested with a fixture shooter |
 | Recolouring legacy enemy bullets | Ph17 | Would change every legacy shooter's look |
-| Station reinforcements off rails | Ph15 | Reuses the rail-fire rule above |
+| Station reinforcements off rails (and the rail Gatling's legacy starvation) | Ph15 | Reuses the rail-fire rule above |
 | Cross-squad / cross-family attacker arbitration | Ph14 | Needs squad messages |
 | Leash / re-engage for Open Space fighters (they fight indefinitely) | Ph13 | EncounterDirector |
 | Muzzle flash, spin-up particles, enemy SFX | Ph17 | `StateLight` is the only telegraph |
