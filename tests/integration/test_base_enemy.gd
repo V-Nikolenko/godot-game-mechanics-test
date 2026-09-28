@@ -338,6 +338,7 @@ const _CONTACT_FIXTURE := preload("res://tests/helpers/contact_fixture.gd")
 ## other enemy in the sweep is legacy and must resolve the default COLLISION.
 const _AUTHORED_CONTACT_MODES := {
 	"swarm_drone": ContactProfile.Mode.EXPLOSIVE,
+	"razor_drone": ContactProfile.Mode.RAMMING,
 }
 
 

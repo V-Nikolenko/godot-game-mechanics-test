@@ -392,7 +392,9 @@ an attack it cannot finish before expiry, so its exit always begins exactly at `
 `tests/integration/test_engagement_deadline.gd` pins the arithmetic that keeps this from stalling a
 level: for every drone/razor spawn in every `ENEMIES_CLEARED` section, the worst-case time from
 `waves_complete` to that enemy leaving the level must clear the section's own
-`enemies_cleared_timeout`.
+`enemies_cleared_timeout`. Each kind is judged by its own config: the Razor Drone, which defers its
+expiry through a dash, has a longer formula, and a boundary case asserts a Razor placed in
+cloud_descent would miss the timeout (Razors spawn only in DURATION sections).
 
 ### ProjectileLifetime — `projectile_lifetime.gd`
 

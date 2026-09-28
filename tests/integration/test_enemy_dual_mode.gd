@@ -9,10 +9,9 @@
 ## as of t14, the real ported Razor Drone
 ## (`assault/scenes/enemies/razor_drone/razor_drone_brain.gd`): the second proof that
 ## the harness — not just the fixture — carries a real enemy's behaviour spec across both modes.
-## The Razor Drone runs with `EnemyMover.constraint_mode = NONE` in Phase 1 (plan §2.11, P-8), so
-## its cases assert something stronger than "relative to the constraint": its Assault run and its
-## Open Space run must produce IDENTICAL motion for identical inputs, because no constraint is ever
-## resolved in either one.
+## Since Phase 2 (t10) the Razor Drone runs with the corridor on (`constraint_mode = AUTO`), so its
+## cases assert "identical relative to the constraint": mid-corridor, where the constraint never
+## engages, its Assault and Open Space runs still produce identical motion for identical inputs.
 ##
 ## Every case drives its enemy by hand through `_tick()` (see below) with a fixed `delta`, never
 ## an engine frame or a `Timer` — deterministic per `docs/plans/.../3-plan.md`'s test-plan rules.
@@ -72,9 +71,8 @@ func _spawn_orbiter(harness, pos: Vector2) -> BaseEnemy:
 	return entity
 
 
-## Same shape as `_spawn_orbiter()`, for the real ported Razor Drone. `EnemyMover.constraint_mode`
-## is `NONE` on this scene (plan §2.11), so it never resolves the harness's constraint either way —
-## that is exactly the property these cases check by comparing the two modes directly.
+## Same shape as `_spawn_orbiter()`, for the real Razor Drone. Its AUTO `EnemyMover` resolves the
+## harness's constraint (or none) through the real lookup, exactly as in the game.
 func _spawn_razor_drone(harness, pos: Vector2, rng_seed: int = 0) -> RazorDrone:
 	var entity := RAZOR_SCENE.instantiate() as RazorDrone
 	entity.global_position = pos
@@ -169,13 +167,14 @@ func test_assault_harness_above_screen_spawn_enters_the_corridor() -> void:
 		ENTRY_TIMEOUT_FRAMES)
 
 
-# ── The ported Razor Drone: identical in both modes (t14) ────────────────────────────────
+# ── The Razor Drone: identical relative to the constraint (t10) ──────────────────────────────────
 
-## ORBIT-phase comparison only: 30 frames (0.5 s) is safely under the brain's minimum 1.0 s dash
-## delay regardless of the rng-drawn timer, so both runs are still orbiting when compared. The same
-## `rng_seed` on both drones makes the (mode-independent) initial orbit angle identical too, so
-## this is a true apples-to-apples comparison, not just "both hold roughly the same radius".
-func test_ported_razor_drone_orbit_is_identical_in_assault_and_open_space() -> void:
+## Phase 2 turned the corridor on for the Razor Drone (`constraint_mode = AUTO`, DECISIONS D5), so the
+## Phase 1 claim "identical in both modes" became "identical relative to the constraint": mid-corridor
+## the constraint never engages and the orbit-centre clamp is a no-op, so the same seed still flies the
+## same orbit. Near an edge the two modes differ on purpose (test_razor_drone.gd covers that case). 30
+## frames (0.5 s) is safely under the 1 s minimum orbit window, so both runs are still orbiting.
+func test_razor_drone_orbit_mid_corridor_is_identical_in_both_modes() -> void:
 	var open_harness = HARNESS.open_space()
 	add_child_autofree(open_harness.root)
 	open_harness.player.global_position = Vector2(640.0, 360.0)
@@ -184,25 +183,27 @@ func test_ported_razor_drone_orbit_is_identical_in_assault_and_open_space() -> v
 	add_child_autofree(assault_harness.root)
 	assault_harness.player.global_position = Vector2(640.0, 360.0)
 
-	var start := Vector2(640.0 + RAZOR_CONFIG.orbit_radius, 360.0)
+	var start := Vector2(640.0 + RAZOR_CONFIG.orbit_radius - 1.0, 360.0)
 	var open_drone := _spawn_razor_drone(open_harness, start, 7)
 	var assault_drone := _spawn_razor_drone(assault_harness, start, 7)
+	assert_true(_razor_brain(assault_drone).mover.constraint is AssaultCorridorConstraint,
+		"sanity: the Assault run really has the corridor")
 
 	for _i in 30:
 		_tick(open_drone, DT)
 		_tick(assault_drone, DT)
 
+	assert_eq(_razor_brain(open_drone).phase, RazorDroneBrain.Phase.ORBIT, "sanity: still orbiting")
 	assert_almost_eq(open_drone.global_position.x, assault_drone.global_position.x, 0.01,
-		"the Razor Drone's orbit must be identical in both modes: no constraint is ever resolved (constraint_mode = NONE)")
+		"mid-corridor the Razor Drone's orbit is identical in both modes")
 	assert_almost_eq(open_drone.global_position.y, assault_drone.global_position.y, 0.01)
 	assert_almost_eq(open_drone.rotation, assault_drone.rotation, 0.0001)
 	assert_almost_eq(open_drone.velocity.length(), assault_drone.velocity.length(), 0.01)
 
 
-## The dash direction locks from `TargetInfo.player().predicted_position(...)`, which never
-## consults the world provider — so it must come out identical whether an `ArenaCamera` is in the
-## tree or not, for the same player state and the same drone position.
-func test_ported_razor_drone_dash_direction_is_identical_in_both_modes() -> void:
+## The dash direction locks from `TargetInfo.player().predicted_position(...)`, which never consults
+## the world provider — so it comes out identical whether an `ArenaCamera` is in the tree or not.
+func test_razor_drone_dash_direction_is_identical_in_both_modes() -> void:
 	var open_harness = HARNESS.open_space()
 	add_child_autofree(open_harness.root)
 	open_harness.player.global_position = Vector2(300.0, 200.0)
@@ -217,37 +218,32 @@ func test_ported_razor_drone_dash_direction_is_identical_in_both_modes() -> void
 	var open_drone := _spawn_razor_drone(open_harness, start)
 	var assault_drone := _spawn_razor_drone(assault_harness, start)
 
-	_razor_brain(open_drone)._begin_dash()
-	_razor_brain(assault_drone)._begin_dash()
-	open_drone._physics_process(DT)
-	assault_drone._physics_process(DT)
+	_razor_brain(open_drone).enter_phase(RazorDroneBrain.Phase.DASH)
+	_razor_brain(assault_drone).enter_phase(RazorDroneBrain.Phase.DASH)
+	_tick(open_drone, DT)
+	_tick(assault_drone, DT)
 
 	assert_almost_eq(open_drone.velocity.x, assault_drone.velocity.x, 0.001)
 	assert_almost_eq(open_drone.velocity.y, assault_drone.velocity.y, 0.001)
 	assert_almost_eq(open_drone.velocity.length(), RAZOR_CONFIG.dash_speed, 0.001)
 
 
-## Open Space has no provider, so `EnemyWorld.has_cull_rect()` is false and the brain's dash end
-## falls back to `dash_max_distance` from the dash's own start (plan §2.11) — checked at the exact
-## frame boundary, the same style as `test_razor_drone.gd`'s legacy-cull boundary case.
-func test_ported_razor_drone_open_space_dash_frees_past_dash_max_distance() -> void:
-	var harness = HARNESS.open_space()
+## Replaces Phase 1's "an Open Space dash frees the drone past dash_max_distance": the Razor Drone now
+## survives its dash in both modes and comes back round to orbit.
+func test_razor_drone_survives_its_dash_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
 	add_child_autofree(harness.root)
-	harness.player.global_position = Vector2(0.0, 0.0)
+	harness.player.global_position = Vector2(640.0, 360.0)
 
-	var drone := _spawn_razor_drone(harness, Vector2(RAZOR_CONFIG.orbit_radius, 0.0))
+	var drone := _spawn_razor_drone(harness, Vector2(640.0 - RAZOR_CONFIG.orbit_radius, 360.0))
 	var brain := _razor_brain(drone)
-	brain._begin_dash()
+	brain.enter_phase(RazorDroneBrain.Phase.DASH)
 
-	var frames_to_cover_max_distance := int(ceil(
-		brain.dash_max_distance / RAZOR_CONFIG.dash_speed / DT))
-
-	for _i in frames_to_cover_max_distance - 2:
+	var back_in_orbit := false
+	for _i in 240:
 		_tick(drone, DT)
-	assert_false(drone.is_queued_for_deletion(),
-		"sanity: not freed just short of covering dash_max_distance")
-
-	for _i in 4:
-		_tick(drone, DT)
-	assert_true(drone.is_queued_for_deletion(),
-		"an Open Space dash must free the drone once it has travelled dash_max_distance")
+		if brain.phase == RazorDroneBrain.Phase.ORBIT:
+			back_in_orbit = true
+			break
+	assert_true(back_in_orbit, "%s: the drone comes back round to orbit after its dash" % mode)
+	assert_false(drone.is_queued_for_deletion(), "%s: a dash never frees the drone" % mode)

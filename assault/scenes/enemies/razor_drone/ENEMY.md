@@ -1,7 +1,12 @@
-# Razor Drone — Kamikaze orbiter
+# Razor Drone — blade-like orbiting duellist
 
-**Role:** Self-managed pursuit drone. Closes on the player, circles briefly, then commits to a one-way predictive dash that explodes on contact.
-**Fantasy / threat:** A wasp that won't be shaken — it stalks, winds up an orbit, then lances at where you're *about* to be. Must be killed before it commits.
+**Role:** A self-managed pursuit drone that circles the player, reverses, fakes dashes, and makes a telegraphed
+real dash that it survives. After a missed dash it fires one pulse shot and curves back round.
+**Fantasy / threat:** A fencer. It circles you, feints a lunge past you, and then commits from the far side. The white
+flash is the one moment to dodge; yellow alone might be a bluff.
+
+Plan: `docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md` §2.8.2–§2.8.3. Task plan (numbers, review):
+`docs/plans/cmuj4y8rr007gp52xxs8dec5s/`.
 
 ---
 
@@ -10,9 +15,10 @@
 | Property | Value |
 |---|---|
 | HP | 25 |
-| Damage | 30 (contact HitBox — kamikaze on player contact) |
-| Speed | 200 approach / 480 dash (`approach_speed` / `dash_speed`) |
-| Sprite | `drone_2.png` |
+| Damage | 30 contact while dashing (RAMMING); pulse shot 10 |
+| Speed | 200 approach/return · orbit anchor 1.8 rad/s at 130 px · 360 feint lunge · 480 dash · 200 overshoot · 320 exit |
+| Mover | acceleration 900, braking 700, `max_turn_rate` 6 rad/s, `turn_lerp` 7, `constraint_mode = AUTO` |
+| Sprite | `drone_2.png` (placeholder until the t13 sprite; nose-up, `sprite_forward_angle = -PI/2`) |
 | Scene | `razor_drone.tscn` |
 | Config | `razor_drone_config.tres` |
 
@@ -20,87 +26,110 @@
 
 ## Behaviour & Movement
 
-- **Movement:** ⚠️ Self-managed AI, on the shared brain/mover architecture
-  (`docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md` §2.11) — the first enemy ported onto it.
-  `RazorDroneBrain` (a child `EnemyMover`-sibling `EnemyBrain`) decides; a sibling
-  `EnemyMover` (`acceleration = 0`, `turn_lerp = 7`, `constraint_mode = NONE`) turns that into
-  `velocity`/`move_and_slide()`/facing, via the shared `BaseEnemy._physics_process` tick loop —
-  `razor_drone.gd` itself defines no `_physics_process` any more. `constraint_mode = NONE`
-  means it ignores the Assault corridor even when one exists, keeping it 1:1 with its pre-Phase-1
-  behaviour; Phase 2's combat evolution is the one that turns the corridor on. Do NOT attach `.move()`
-  — `EnemyPathMover` suspends the brain (`BaseEnemy.suspend_ai()`) exactly like any other
-  brain-driven enemy, which defeats the point of a self-managed kamikaze. Three phases: ENTER →
-  ORBIT → DASH, using `Steering.seek` / `Steering.orbit` and `TargetInfo.player()` for perception
-  and dash prediction.
-- **Attack:** No projectiles. Its contact HitBox uses `collision_mask = 128` (player HurtBox); on contact it sets its own health to 0 (kamikaze), dealing `collision_damage` 30.
-- **Death / scoring:** Dies on contact or when shot down (25 HP). Awards `score_value` 40. The DASH
-  flies until it leaves the world: in Assault, the legacy off-screen cull (camera ± viewport/2 ±
-  80 px, via `ArenaCamera.enemy_cull_rect()`); in Open Space (no `ArenaCamera` in the tree), the new
-  `dash_max_distance` (1600 px) travelled from the dash's own start.
+- **Movement:** self-managed AI on the shared brain/mover architecture. `RazorDroneBrain` decides, and the sibling
+  `EnemyMover` moves the drone through `BaseEnemy`'s shared tick; `razor_drone.gd` has no `_physics_process`.
+  - The corridor is **on** (`constraint_mode = AUTO`). In Assault it keeps to the corridor and its orbit centre is
+    clamped into `inner_rect()` shrunk by `orbit_radius`.
+  - Do NOT attach `.move()`: a rail suspends the brain (`BaseEnemy.suspend_ai()`, which arms the RAMMING profile and
+    shows the light red).
+- **Contact:** a scene-authored `ContactProfile` in **RAMMING** mode. The `ContactHitBox` (damage =
+  `collision_damage`) is live **only during DASH**, and touching it at any other time deals 0. A registered touch
+  marks the dash as a hit; it does **not** kill the drone.
+- **Telegraph:** a `StateLight` at the nose:
+  - CHARGING (yellow) during both wind-ups;
+  - COMMIT (white) only in the 0.12 s before a real dash (the only code path that shows white);
+  - ARMED (red) while dashing;
+  - OFF otherwise, including during the feint's lunge and brake.
+- **Attack:** after a *missed* dash (the boost ended with no `contact_made`), one pulse shot at OVERSHOOT entry:
+  - the scene-authored `AttackController` (`driven_by_brain`, `enabled = false`) calls `fire_now()` with an
+    `AimedAttackPattern` built per instance in `razor_drone.gd` (`pulse_damage` 10, `pulse_speed` 250, accuracy 0);
+  - the bullet comes from its own `BulletPool` (4 × `enemy_bullet.tscn`) and flies in the drone's container.
+  - A hit fires nothing.
+- **Assault exit:** an `EngagementBudget` of `engage_seconds` (9 s). Expiry waits for any boost to end, then the drone
+  goes to DISENGAGE: it releases the corridor, seeks the nearest edge of `projectile_world_rect()`, and is freed once
+  strictly outside it, which counts as an escape. Open Space never disengages.
+- **Death / scoring:** shot down (25 HP) → `score_value` 40.
 
 ---
 
 ## State Graph
 
 ```
-        within orbit_radius
-ENTER ──────────────────────▶ ORBIT ──dash_timer (1–2 s) expires──▶ DASH
-  │                              │                                     │
-fly at approach_speed      circle player,                       lock predicted dir,
-toward player              correct toward ring                  fly at dash_speed →
+ENTER ──≤ orbit_radius──▶ ORBIT ◀──────────────────────────────────────────────┐
+                            │ window (1–2 s) ends → roll                          │
+          ┌─────────────────┼──────────────────────┐                              │
+     reverse_chance    fake_chance             otherwise                          │
+          ▼                 ▼                      │                              │
+       REVERSE        FEINT_WINDUP (0.75 s)        │                              │
+     (ω ramps through  → FEINT_LUNGE (70 px        │                              │
+      0, 0.25 s)          beside the player)       │                              │
+          │            → FEINT_BRAKE (< 40 px/s)   │                              │
+          ▼                 │ flip orbit_dir       ▼                              │
+        ORBIT               └──────────────▶ WINDUP (0.5 s yellow, 0.12 s white)  │
+                                                   ▼                              │
+                                             DASH (armed, red)                    │
+                                                   ▼                              │
+                                             OVERSHOOT (pulse if missed; turn_toward curve)
+                                                   ▼                              │
+                                             RETURN (arrive on ring) ─────────────┘
+Assault only: any phase ──budget expired, not boosting──▶ DISENGAGE ──outside world rect──▶ freed
 ```
 
-**Initial phase:** `ENTER`
+Phases are an `enum` in `razor_drone_brain.gd` (there is no `states/` folder). ENTER, ORBIT and DASH keep the
+values 0–2; the rest are appended. `phase_changed(new_phase: int)` fires on every transition, and `enter_phase()` is
+the one transition path (and the test seam). `force_next_choice(&"real" | &"fake" | &"reverse")` forces the next roll.
 
-> Note: phases are an `enum` inside `razor_drone_brain.gd` (not separate `State` node
-> files); there is no `states/` folder. IDEAS §4's shared vocabulary (documented in
-> `global/enemy_ai/enemy_brain.gd`): ENTER = APPROACH, ORBIT = POSITION, DASH = ATTACK.
-
-### ENTER (`razor_drone_brain.gd`)
-- Flies straight at the player at `approach_speed` (`Steering.seek`).
-- When distance ≤ `orbit_radius`, transitions to ORBIT.
-
-### ORBIT (`razor_drone_brain.gd`)
-- Counts down a randomised `_dash_timer` (1.0–2.0 s, drawn from `brain.rng` at spawn, so a seeded
-  run is reproducible).
-- Advances `_orbit_angle` by `orbit_speed`, steers toward the orbit ring (`Steering.orbit`,
-  correction speed clamped to `[60, orbit_correct_speed]`).
-- When `_dash_timer ≤ 0` → DASH.
-
-### DASH (`razor_drone_brain.gd`)
-- On entry, locks `_dash_direction` toward `TargetInfo.player().predicted_position(dash_prediction_time)`
-  (straight down with no player).
-- Flies at `dash_speed`. Freed once it leaves the world: the Assault provider's legacy off-screen
-  cull rect when there is one (`ArenaCamera.enemy_cull_rect()`), else `dash_max_distance` travelled
-  from the dash's own start (Open Space). Kamikazes on player contact.
+- **ORBIT:** `Steering.orbit` round `orbit_centre` at `orbit_correct_speed` 260, which is at least
+  `orbit_speed × orbit_radius`, so it holds about 119 px. It re-anchors where it arrives (never on the far side).
+  - A reversal is barred from its end until the next attack begins.
+  - **Side lane (Assault only):** an attack starts only when the point the *real* dash will start from is 30°–75° off
+    the vertical axis about the player, with a 3° inner margin. That point is the WINDUP hold point for a real attack,
+    or the predicted far-side stop for a feint; the lunge side is chosen so it lands in a lane. Otherwise ORBIT waits,
+    for at most 2 s.
+- **FEINT:** the lunge aims `feint_clearance_px` beside the player, so the closest approach is about 62 px against a
+  44 px hull + player hurtbox. It sweeps about 128° round (measured from the lunge start), brakes, flips `orbit_dir`,
+  and enters WINDUP at once, with no orbit leg. The profile is never armed and the light never goes white.
+- **WINDUP:** holds at its stopping point (`hold_position(…, 4, orbit_correct_speed)`). It locks the dash point on the
+  first white tick: `TargetInfo.predicted_position(dash_prediction_time)`.
+- **DASH:** `boost` for `min((distance + overshoot_px) / dash_speed, max_dash_seconds)`, facing along the velocity.
+- **OVERSHOOT:** each tick requests `Steering.turn_toward(actor.velocity, to_player, 3.0 rad/s) × 200`, rebuilt from
+  the current velocity (D7). It turns about 145° in 1.2 s and never stops. It ends within 20° of the bearing, or after
+  `overshoot_max_seconds`.
+- **RETURN:** `arrive` back on the ring at `approach_speed`, within 20 px or after 2 s, then ORBIT with a new window.
 
 ---
 
 ## Config exports
 
+Read from `razor_drone_config.gd` / `.tres`. `razor_drone.gd`'s `_ready()` copies them onto the mover, the pattern and
+the brain's matching exports.
+
 | Export | Default | Meaning |
 |---|---|---|
-| `max_health` | `25` | HP. |
-| `collision_damage` | `30` | Kamikaze contact damage. |
-| `score_value` | `40` | Points on kill. |
-| `counts_toward_wave_clear` | `true` | Counts toward wave-clear bonus. |
-| `orbit_radius` | `130.0` | Preferred distance from player while orbiting (px). |
-| `orbit_speed` | `1.8` | Orbit angular velocity (rad/s, counter-clockwise). |
-| `approach_speed` | `200.0` | Speed during ENTER (px/s). |
-| `orbit_correct_speed` | `160.0` | Max correction speed during ORBIT (px/s). |
-| `dash_speed` | `480.0` | Burst speed during DASH (px/s). |
-| `dash_prediction_time` | `0.2` | Seconds ahead to predict player position. |
-| `dash_max_distance` | `1600.0` | Open Space only (no Assault provider): DASH frees the drone this far from where it began. |
-
-(Read the real defaults from `razor_drone_config.gd` and `razor_drone_config.tres` —
-copied onto `RazorDroneBrain`'s own matching `@export`s by `razor_drone.gd`'s `_ready()`.)
+| `max_health` / `collision_damage` / `score_value` | 25 / 30 / 40 | `ShipConfig` basics; contact damage applies only while dashing |
+| `orbit_radius` / `orbit_speed` | 130 px / 1.8 rad/s | The orbit ring and its anchor's angular speed |
+| `approach_speed` | 200 px/s | ENTER and RETURN |
+| `orbit_correct_speed` | 260 px/s | Orbit correction cap; must be ≥ `orbit_speed × orbit_radius` (pinned) |
+| `acceleration` / `braking` / `max_turn_rate` | 900 / 700 / 6.0 | `EnemyMover` limits |
+| `reverse_chance` / `reverse_seconds` | 0.35 / 0.25 s | Orbit reversal |
+| `fake_chance` / `fake_windup_scale` | 0.35 / 1.5 | Feint odds; its wind-up = `windup_seconds` × this |
+| `feint_lunge_speed` / `feint_lunge_seconds` / `feint_clearance_px` | 360 / 0.45 s / 70 px | The feint lunge |
+| `windup_seconds` / `commit_flash_seconds` | 0.5 / 0.12 s | Yellow, then white |
+| `dash_speed` / `dash_prediction_time` | 480 px/s / 0.2 s | The real dash |
+| `overshoot_px` / `max_dash_seconds` | 120 px / 0.9 s | Dash length past the locked point, capped |
+| `overshoot_speed` / `overshoot_turn_rate` / `overshoot_max_seconds` | 200 / 3.0 / 1.2 s | The curve; pinned `rate × speed ≤ acceleration` and ≥ 60° after shedding the dash speed |
+| `pulse_damage` / `pulse_speed` | 10 / 250 | The post-miss pulse |
+| `engage_seconds` / `exit_speed` | 9.0 s / 320 px/s | Assault exit. Razors spawn only in DURATION sections; `test_engagement_deadline.gd` fails if one is added to an ENEMIES_CLEARED one |
+| `side_lane_min_deg` / `side_lane_max_deg` | 30 / 75 | Assault side lane |
 
 ---
 
 ## Spawn notes
 
-- WaveBuilder method: `b.razor_drone()` — see `docs/enemy-roster.md`.
-- ⚠️ Spawn with `.at(x, y)` only — never `.move()`. Stagger orbit angle/dash timers are randomised so clusters don't behave identically.
+- WaveBuilder method: `b.razor_drone()`; see `docs/enemy-roster.md`. Level 1 spawns one pair in `deep_space`.
+- Spawn with `.at(x, y)` only, never `.move()`. An above-screen spawn enters through the corridor's entry rule.
+- Tests: `tests/integration/test_razor_drone.gd` (the behaviour spec, most cases in both harnesses) and the Razor
+  cases in `tests/integration/test_enemy_dual_mode.gd`.
 
 ---
 
@@ -109,8 +138,9 @@ copied onto `RazorDroneBrain`'s own matching `@export`s by `razor_drone.gd`'s `_
 ```
 razor_drone/
 ├── ENEMY.md                ← this file
-├── razor_drone.tscn        ← CharacterBody2D + EnemyMover + Brain children
-├── razor_drone.gd          ← wires config onto the brain; contact-kill only
-├── razor_drone_brain.gd    ← ENTER/ORBIT/DASH decision logic (EnemyBrain)
+├── razor_drone.tscn        ← CharacterBody2D + EnemyMover + Brain + ContactProfile (RAMMING) + StateLight
+│                             + BulletPool + AttackController
+├── razor_drone.gd          ← config copy, per-instance pulse pattern, contact_made → brain
+├── razor_drone_brain.gd    ← the phase machine (EnemyBrain)
 └── razor_drone_config.gd / .tres
 ```

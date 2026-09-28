@@ -2,14 +2,18 @@
 class_name RazorDrone
 extends BaseEnemy
 
-## Kamikaze pursuit unit. Orbits the player briefly, then locks direction and commits to a
-## one-way dash — exploding on contact with the player.
+## Blade-like pursuit drone that evolves Phase 1's Drone Interceptor
+## (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.8.2; task plan
+## docs/plans/cmuj4y8rr007gp52xxs8dec5s/3-plan.md). It orbits the player, sometimes reverses, and
+## sometimes feints a dash past them before attacking from the far side. Only a real dash shows the
+## white commit flash and arms its RAMMING contact. It survives its dash, and after a miss it fires
+## one pulse shot while it curves back round. In Assault it keeps to the corridor, attacks from a
+## side lane and leaves after `engage_seconds`.
 ##
-## The phase logic (ENTER/ORBIT/DASH) lives in the sibling `RazorDroneBrain`, driven by
-## `EnemyMover`, through the shared brain/mover tick loop in `BaseEnemy._physics_process`
-## (docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.11 — the Phase 1 architecture's proof
-## consumer). This script only copies the shipped config onto the brain and keeps the
-## contact-kill behaviour, both unchanged from before the port.
+## The phase logic lives in the sibling `RazorDroneBrain`, driven through `BaseEnemy`'s shared
+## brain/mover tick; this script defines no `_physics_process`. It copies the config onto every node
+## that uses it (the `.tres` wins over the scene), builds the pulse pattern, and forwards a registered
+## touch to the brain. A touch no longer kills the drone.
 ##
 ## Spawn with b.razor_drone().at(x, y) — no .move() needed.
 
@@ -17,31 +21,61 @@ extends BaseEnemy
 		"res://assault/scenes/enemies/razor_drone/razor_drone_config.tres")
 
 @onready var _drone_brain: RazorDroneBrain = $Brain
+@onready var _drone_mover: EnemyMover = $EnemyMover
+@onready var _attack: AttackController = $AttackController
 
-# ─────────────────────────────────────────────────────────────────────────────
 
 func _ready() -> void:
 	super._ready()
 	add_to_group("enemies")
 	if config:
-		health.max_health           = config.max_health
-		health.current_health       = config.max_health
-		score_value                 = config.score_value
-		_drone_brain.orbit_radius         = config.orbit_radius
-		_drone_brain.orbit_speed          = config.orbit_speed
-		_drone_brain.approach_speed       = config.approach_speed
-		_drone_brain.orbit_correct_speed  = config.orbit_correct_speed
-		_drone_brain.dash_speed           = config.dash_speed
-		_drone_brain.dash_prediction_time = config.dash_prediction_time
-		_drone_brain.dash_max_distance    = config.dash_max_distance
+		_apply_config(config)
+	contact_profile.contact_made.connect(_drone_brain.on_contact)
 
+
+func _apply_config(cfg: RazorDroneConfig) -> void:
+	health.max_health = cfg.max_health
+	health.current_health = cfg.max_health
+	score_value = cfg.score_value
 	if contact_hit_box:
-		contact_hit_box.damage = config.collision_damage if config else 30
-		contact_hit_box.area_entered.connect(_on_contact_hit)
+		contact_hit_box.damage = cfg.collision_damage
 
-# ─── CONTACT KILL ─────────────────────────────────────────────────────────────
+	_drone_mover.acceleration = cfg.acceleration
+	_drone_mover.braking = cfg.braking
+	_drone_mover.max_turn_rate = cfg.max_turn_rate
 
-func _on_contact_hit(_area: Area2D) -> void:
-	## Guard against double-firing before queue_free processes.
-	if health.current_health > 0:
-		health.set_health(0)
+	# Built per instance: a scene sub-resource would be shared by every Razor Drone.
+	var pattern := AimedAttackPattern.new()
+	pattern.bullet_damage = cfg.pulse_damage
+	pattern.bullet_speed = cfg.pulse_speed
+	pattern.aim_at_player = true
+	pattern.accuracy = 0.0
+	pattern.spawn_offset = Vector2.ZERO
+	_attack.pattern = pattern
+
+	var b := _drone_brain
+	b.orbit_radius = cfg.orbit_radius
+	b.orbit_speed = cfg.orbit_speed
+	b.approach_speed = cfg.approach_speed
+	b.orbit_correct_speed = cfg.orbit_correct_speed
+	b.braking = cfg.braking
+	b.reverse_chance = cfg.reverse_chance
+	b.reverse_seconds = cfg.reverse_seconds
+	b.fake_chance = cfg.fake_chance
+	b.fake_windup_scale = cfg.fake_windup_scale
+	b.feint_lunge_speed = cfg.feint_lunge_speed
+	b.feint_lunge_seconds = cfg.feint_lunge_seconds
+	b.feint_clearance_px = cfg.feint_clearance_px
+	b.windup_seconds = cfg.windup_seconds
+	b.commit_flash_seconds = cfg.commit_flash_seconds
+	b.dash_speed = cfg.dash_speed
+	b.dash_prediction_time = cfg.dash_prediction_time
+	b.overshoot_px = cfg.overshoot_px
+	b.max_dash_seconds = cfg.max_dash_seconds
+	b.overshoot_speed = cfg.overshoot_speed
+	b.overshoot_turn_rate = cfg.overshoot_turn_rate
+	b.overshoot_max_seconds = cfg.overshoot_max_seconds
+	b.engage_seconds = cfg.engage_seconds
+	b.exit_speed = cfg.exit_speed
+	b.side_lane_min_deg = cfg.side_lane_min_deg
+	b.side_lane_max_deg = cfg.side_lane_max_deg

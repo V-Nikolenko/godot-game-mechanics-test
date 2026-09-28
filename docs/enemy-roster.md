@@ -253,30 +253,35 @@ b.interceptor().at(-500, 0).move(b.straight(200, PI / 2)).free_after(5.0)
 
 ---
 
-### `razor_drone` — Razor Drone (Kamikaze Orbiter)
+### `razor_drone` — Razor Drone (orbiting duellist)
 
 **Builder:** `b.razor_drone()`  
 **Scene:** `razor_drone.tscn`  
-**Movement:** ⚠️ **Self-managed AI. Do NOT add `.move()`.** Adding `.move()` disables `_physics_process` and breaks the AI entirely.  
-**Shoots:** No — kamikaze dash on contact.  
-**HP:** Very low  
-**Score:** Low
+**Movement:** ⚠️ **Self-managed AI. Do NOT add `.move()`.** A rail suspends its brain.  
+**Shoots:** One pulse shot (10 dmg, 250 px/s), only after a *missed* dash.  
+**Contact:** RAMMING — hurts (30) only while it is dashing (red light).  
+**HP:** Very low (25)  
+**Score:** Low (40)
 
-**Behaviour phases:**
+**Behaviour** (full detail in `razor_drone/ENEMY.md`):
 1. `ENTER` — flies toward the player.
-2. `ORBIT` — circles the player for 1–2 seconds (randomised).
-3. `DASH` — locks direction to predicted player position, flies at `dash_speed` indefinitely.
+2. `ORBIT` — circles the player. Every 1–2 s it rolls to reverse its orbit, to fake a dash, or to make a real one.
+3. **Fake:** a long yellow wind-up, a lunge that passes 70 px beside the player, a brake on the far side, then
+   straight into a real wind-up.
+4. **Real:** yellow 0.5 s, white 0.12 s (only a real dash is ever white), then a dash through the predicted player
+   position. It survives, curves back round and returns to orbit.
+5. Assault only: it attacks from a 30°–75° side lane, stays inside the corridor, and leaves by the nearest edge after
+   9 s.
 
-**Config fields** (`RazorDroneConfig`):
+**Config fields** (`RazorDroneConfig`): the full table is in `razor_drone/ENEMY.md`. The key ones:
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `orbit_radius` | 130.0 | Distance from player while orbiting. |
-| `orbit_speed` | 1.8 rad/s | Counter-clockwise by default. |
-| `approach_speed` | 200.0 | px/s during ENTER. |
-| `orbit_correct_speed` | 160.0 | Max correction speed during ORBIT. |
-| `dash_speed` | 480.0 | px/s during kamikaze DASH. |
-| `dash_prediction_time` | 0.2 s | How far ahead to predict player position. |
+| `orbit_radius` / `orbit_speed` | 130 / 1.8 rad/s | The orbit ring |
+| `reverse_chance` / `fake_chance` | 0.35 / 0.35 | Roll odds |
+| `windup_seconds` / `commit_flash_seconds` | 0.5 / 0.12 s | Telegraph |
+| `dash_speed` | 480 | px/s |
+| `engage_seconds` | 9.0 s | Assault time in the fight |
 
 **Examples:**
 ```gdscript

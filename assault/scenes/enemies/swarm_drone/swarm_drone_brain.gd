@@ -533,7 +533,7 @@ func _enter_disengage() -> void:
 
 
 ## Deliberately strict `<`/`>` against the rect's edges, not `Rect2.has_point()` (half-open), the
-## same rule `RazorDroneBrain._check_dash_end()` follows.
+## same rule `RazorDroneBrain._tick_disengage()` follows (a point exactly on the edge is still inside).
 func _tick_disengage() -> void:
 	var rect := EnemyWorld.projectile_world_rect(get_tree())
 	var pos := actor.global_position

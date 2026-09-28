@@ -182,10 +182,9 @@ provider" and "a legitimately empty `Rect2()`" are never confused:
 
 - **`projectile_world_rect()`** — the corridor's visible rect grown by 64 px: x −164…1444, y
   −444…1164. Consumed by `ProjectileLifetime` (above).
-- **`enemy_cull_rect()`** — the Razor Drone's legacy off-screen cull: `global_position` ±
-  half the viewport ± 80 px. It is a *provider* method, not a constraint method, because the
-  ported drone runs with `constraint_mode = NONE` (below) and still needs this exact cull to end
-  its dash where it always has.
+- **`enemy_cull_rect()`** — the legacy off-screen cull: `global_position` ± half the viewport ± 80 px. Phase 1's
+  Razor Drone ended its dash with it; since Phase 2 (t10) the Razor survives its dash and leaves through
+  `EngagementBudget` instead, so nothing in production reads it. It is kept behind `EnemyWorld.cull_rect()`.
 - **`enemy_movement_constraint()`** — a fresh `AssaultCorridorConstraint` instance per call (a
   constraint holds a per-enemy "entered" latch, so `EnemyMover.AUTO` must get its own).
 
@@ -207,13 +206,16 @@ never re-triggers the not-yet-entered rule. The tangential axis (already inside 
 always passed through untouched, so a corridor-constrained orbit or strafe is not damped on its
 free axis.
 
-**The Razor Drone is ported onto the brain/mover contracts with `constraint_mode = NONE`
-(kept 1:1 with its pre-rework behaviour)** — see
-[razor_drone/ENEMY.md](../../../assault/scenes/enemies/razor_drone/ENEMY.md). It is the
-proof consumer for the whole stack; a later phase turns its corridor on. Contract tests:
-`tests/unit/test_assault_corridor_constraint.gd`; the same behaviour spec runs in both an Open
-Space and an Assault harness via `tests/helpers/enemy_ai_harness.gd` and
-`tests/integration/test_enemy_dual_mode.gd`.
+**The Razor Drone was Phase 1's proof consumer for the stack (as the Drone Interceptor, with
+`constraint_mode = NONE`), and since Phase 2 t10 it runs with the corridor on (`constraint_mode =
+AUTO`)** — see [razor_drone/ENEMY.md](../../../assault/scenes/enemies/razor_drone/ENEMY.md). Its
+`RazorDroneBrain` orbits, reverses, feints and dashes under an `EngagementBudget` (9 s). In Assault it
+clamps its orbit centre into `inner_rect()` and attacks only from a 30°–75° side lane. It has a RAMMING
+`ContactProfile` (armed only in DASH), a `StateLight` (white only before a real dash), and a post-miss
+pulse through a brain-driven `AttackController.fire_now()`. Its behaviour spec is
+`tests/integration/test_razor_drone.gd`, mostly dual-mode. The fixture's and the Razor's cross-mode
+cases are in `tests/integration/test_enemy_dual_mode.gd`, built on `tests/helpers/enemy_ai_harness.gd`;
+the corridor's contract tests are `tests/unit/test_assault_corridor_constraint.gd`.
 
 **The Swarm Drone is the first Phase 2 enemy on the stack with the corridor on (`constraint_mode =
 AUTO`)** — see [swarm_drone/ENEMY.md](../../../assault/scenes/enemies/swarm_drone/ENEMY.md). Its

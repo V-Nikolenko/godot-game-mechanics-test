@@ -537,3 +537,53 @@ Task `cmuj4y8rm0078p52x5qa7v6fo`. `AnchorIdle` and `SquadController.set_engaged/
 - **RETURNING never interrupts a live BURST** (same guard the budget-expiry check already used): `AnchorIdle`'s own
   state can flip to RETURNING mid-burst, but the brain's `Phase` only follows on the next tick once the burst has
   ended, so a contact-armed pass always finishes.
+
+### Built in t10-razor-combat (2026-09-28): details t11, t13, t15, t16 and later phases depend on
+
+Task plan `docs/plans/cmuj4y8rr007gp52xxs8dec5s/` (two review rounds; approved in round 2 with amendments A1–A5).
+
+- **`RazorDroneBrain.Phase`** is `ENTER, ORBIT, DASH, REVERSE, FEINT_WINDUP, FEINT_LUNGE, FEINT_BRAKE, WINDUP,
+  OVERSHOOT, RETURN, DISENGAGE`.
+  - The first three keep their Phase 1 values. **t11 appends IDLE, NOTICING and RETURNING-to-anchor.** The combat
+    `RETURN` is the post-overshoot return to the orbit ring, so t11 needs a different name for the anchor return.
+  - `phase_changed(new_phase: int)`, `enter_phase()` (the one transition path and test seam), and
+    `force_next_choice(&"real" | &"fake" | &"reverse")`.
+  - Public read-only state: `orbit_dir`, `angular_speed`, `orbit_centre`, `dash_direction`, `dash_hit`, `pulses_fired`,
+    `lunge_side`, `budget`. `static lane_angle_deg(rel)`.
+  - Like the Swarm, it builds its budget on the first tick, because the root copies the config after the brain's
+    `_ready()`. **t11 needs the Swarm's `start_engaged` test seam for exactly this reason:** every
+    `test_razor_drone.gd` case assumes combat from spawn.
+- **Deviation: the feint lunge aims `feint_clearance_px` (70) beside the player, not 25° off it.**
+  - The drone actually orbited at 82–110 px, not 130, because `orbit_correct_speed` 160 < `orbit_speed ×
+    orbit_radius` 234. A 25° lunge from there passed 37–46 px from the player, *through* its 44 px hull + hurtbox.
+  - **`orbit_correct_speed` is now 260** (orbit ≈ 119 px on every seed), and a config test pins ≥ `orbit_speed ×
+    orbit_radius`.
+  - Measured result: closest approach 61.7 px, sweep 128.3°.
+- **"The fake ends > 120° round from where it started"** is measured from the bearing at **FEINT_LUNGE entry** (the
+  hold point it lunges from). This is also what the epic's N5 ≈ 130° assumed. From FEINT_WINDUP entry the hold's
+  drift makes it about 111°.
+- **Deviation: a reversal bars the next reversal until the next attack begins**, not "once per window". Read
+  literally, "once per window" allows endless back-and-forth reversals.
+- **The Assault side lane is checked at the point the real dash will start from**, not at the drone's current position:
+  - for a real attack, the WINDUP hold point (the stopping point `pos + v̂·|v|²/(2·braking)`);
+  - for a feint, the predicted far-side stop, with the lunge side chosen so it lands in a lane;
+  - the check band is narrowed by 3° at each end, and an attack waits at most 2 s for a lane.
+  - The post-feint dash therefore comes from a lane too, with no orbit leg.
+- **The orbit re-anchors on ENTER → ORBIT** (and on RETURN and after FEINT_BRAKE) to the drone's own bearing. It is
+  never started on the far side of the player.
+- **FEINT_LUNGE and FEINT_BRAKE show the light OFF**, not CHARGING. The fake reads yellow → dark → then the real
+  yellow → white → red.
+- **Pulse:** a scene-authored `BulletPool` (4) and `AttackController` (`driven_by_brain`, `enabled = false`), fired
+  with `fire_now()` once at OVERSHOOT entry after a miss.
+  - The `AimedAttackPattern` is **built per instance** in `razor_drone.gd`, never as a scene sub-resource, because
+    those are shared between instances.
+  - A budget expiring during a dash goes straight to DISENGAGE after the boost, so that dash fires no pulse.
+- **Budget expiry is deferred while the mover is boosting.** `test_engagement_deadline.gd` now judges each kind by its
+  own config and gives the Razor a conservative formula that includes the deferral. A boundary case asserts that a
+  Razor placed in cloud_descent would miss the 10 s timeout (about 15.4 s). **Razors must stay out of
+  ENEMIES_CLEARED sections** unless that formula is revisited.
+- **Removed:** `dash_max_distance`, `_begin_dash()`, `_check_dash_end()` and the contact self-kill.
+  `EnemyWorld.cull_rect()` / `ArenaCamera.enemy_cull_rect()` **now have no production consumer**, but they are kept,
+  and a later cleanup (Ph15/Ph17) may retire them.
+- **Scene:** `ContactProfile` (RAMMING), `StateLight` at (0, −10) (t13 may move it for the new sprite), `BulletPool`
+  and `AttackController`. `test_base_enemy.gd`'s `_AUTHORED_CONTACT_MODES` gains `razor_drone → RAMMING`.

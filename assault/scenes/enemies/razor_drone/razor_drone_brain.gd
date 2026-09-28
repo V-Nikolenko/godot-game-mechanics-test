@@ -1,154 +1,588 @@
-## The Razor Drone's brain — the phase logic that used to live in
-## `razor_drone.gd`'s own `_physics_process`, ported onto the brain/mover contracts as the
-## Phase 1 architecture's proof consumer (docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.11,
-## P-8; task cmug33ldz00djm52wqu66uc4z).
+## The Razor Drone's brain: orbit, reversal, feint and the real dash
+## (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.8.2; task plan
+## docs/plans/cmuj4y8rr007gp52xxs8dec5s/3-plan.md, rev 2 + amendments A1-A5).
 ##
-## Kept 1:1 with the pre-port behaviour: the sibling `EnemyMover` runs with `acceleration = 0`
-## (velocity is still assigned directly, exactly as the old `_phase_*` methods did),
-## `turn_lerp = 7.0` (the old `ROTATION_LERP`), and `constraint_mode = NONE` — the port stays
-## unconstrained in Assault (plan §2.5 "Phase 1 consumers"); Phase 2's combat evolution turns the
-## corridor on and re-pins.
+## Phases (IDEAS §4 vocabulary in brackets):
+##   ENTER        [APPROACH]   seek the player; on reaching `orbit_radius` re-anchor the orbit where the
+##                             drone is (A2) and ORBIT.
+##   ORBIT        [POSITION]   `Steering.orbit` round `orbit_centre` (the player; in Assault clamped into
+##                             the corridor's `inner_rect()` shrunk by `orbit_radius`). Each rng window
+##                             (1-2 s) ends in a roll: REVERSE, a fake or a real attack.
+##   REVERSE      [POSITION]   the anchor's angular speed ramps through zero to the opposite sense over
+##                             `reverse_seconds`. Barred again until the next attack begins.
+##   FEINT_WINDUP [ATTACK]     yellow for `windup_seconds × fake_windup_scale`, holding.
+##   FEINT_LUNGE  [ATTACK]     a boost aimed `feint_clearance_px` BESIDE the player; light off, never armed.
+##   FEINT_BRAKE  [ATTACK]     brake to a stop on the far side, flip the orbit, WINDUP at once.
+##   WINDUP       [ATTACK]     yellow for `windup_seconds`, then white (COMMIT) for
+##                             `commit_flash_seconds` with the dash point locked on its first tick.
+##                             The only code path that shows white.
+##   DASH         [ATTACK]     RAMMING contact armed, red; a boost through the locked point.
+##   OVERSHOOT    [REPOSITION] disarm; after a miss fire ONE pulse; curve back with
+##                             `Steering.turn_toward()` from the actor's CURRENT velocity (D7).
+##   RETURN       [REPOSITION] `arrive` back onto the orbit ring, then ORBIT with a new window.
+##   DISENGAGE    [DISENGAGE]  Assault only (`EngagementBudget`): release the corridor, seek the nearest
+##                             edge of the projectile world rect, free once strictly outside it.
 ##
-## State mapping onto the IDEAS §4 vocabulary documented in `enemy_brain.gd`'s header:
-##   ENTER (APPROACH) — `Steering.seek` straight at the player until within `orbit_radius`.
-##   ORBIT (POSITION) — `Steering.orbit`; an `rng`-drawn 1-2s timer triggers DASH.
-##   DASH  (ATTACK)   — direction locked once, to `TargetInfo.player().predicted_position(...)`,
-##                       at `dash_speed`. Freed on leaving the world: the Assault provider's legacy
-##                       cull rect (`EnemyWorld.cull_rect`) when there is one, else
-##                       `dash_max_distance` from the dash's own start position (Open Space).
+## Side lane (Assault only): an attack starts only when the point the REAL dash will start from lies
+## `side_lane_min_deg`-`side_lane_max_deg` off the vertical axis about the player. For a real attack
+## that is the WINDUP hold point; for a fake it is the predicted far-side stop, and the lunge side is
+## chosen so that it lands in the lane.
 ##
-## Tuning is copied from `RazorDroneConfig` by `razor_drone.gd`'s `_ready()`, same as
-## before the port — this script only owns the state machine and the movement/facing requests.
+## Tunables are exported here and overwritten from `RazorDroneConfig` by `razor_drone.gd`'s `_ready()`,
+## which runs AFTER this node's `_ready()`, so the budget is built on the first tick. Requests only
+## (single-writer gate): the one field writes on the mover are `max_speed` and `release_constraint()`
+## on DISENGAGE.
 class_name RazorDroneBrain
 extends EnemyBrain
 
-enum Phase { ENTER, ORBIT, DASH }
+## ENTER, ORBIT and DASH keep their Phase 1 values; later phases append.
+enum Phase { ENTER, ORBIT, DASH, REVERSE, FEINT_WINDUP, FEINT_LUNGE, FEINT_BRAKE, WINDUP, OVERSHOOT, RETURN, DISENGAGE }
+
+## Emitted on every transition, with the phase entered.
+signal phase_changed(new_phase: int)
+
+## Orbit windows are drawn from this range (s).
+const WINDOW_MIN := 1.0
+const WINDOW_MAX := 2.0
+## An attack pending on the lane waits at most this long, then goes anyway (s).
+const LANE_WAIT_MAX := 2.0
+## The lane check's inner margin at each end (deg): the hold tolerance plus prediction error. The
+## lunge runs 28 ticks rather than 27 from float accumulation; this margin absorbs that — do not
+## tighten it (task review round 2).
+const LANE_MARGIN_DEG := 3.0
+## The WINDUP hold tolerance (px).
+const HOLD_TOLERANCE := 4.0
+## FEINT_BRAKE hands over below this speed (px/s)...
+const FEINT_STOP_SPEED := 40.0
+## ...or after this long (s), in case the corridor pins the drone.
+const FEINT_BRAKE_MAX_SECONDS := 1.0
+## OVERSHOOT ends once the heading is within this of the bearing to the player (deg).
+const OVERSHOOT_EXIT_DEG := 20.0
+## RETURN hands over within this of the ring (px), or after this long (s).
+const RETURN_TOLERANCE := 20.0
+const RETURN_MAX_SECONDS := 2.0
+## With no target, WINDUP locks this far along the facing (px).
+const NO_TARGET_LOCK_DISTANCE := 200.0
+## DISENGAGE seeks a point this far beyond the chosen edge (px).
+const EXIT_OVERSHOOT := 64.0
 
 @export_group("Movement")
-## Preferred distance from the player while orbiting (px).
 @export var orbit_radius: float = 130.0
-## Angular velocity of the orbit anchor (rad/s). Positive = counter-clockwise.
 @export var orbit_speed: float = 1.8
-## Movement speed during ENTER (px/s).
 @export var approach_speed: float = 200.0
-## Maximum speed when correcting orbit position (px/s).
-@export var orbit_correct_speed: float = 160.0
+@export var orbit_correct_speed: float = 260.0
+## The mover's braking (px/s²), for the stopping-point and far-side predictions.
+@export var braking: float = 700.0
+
+@export_group("Choices")
+@export var reverse_chance: float = 0.35
+@export var reverse_seconds: float = 0.25
+@export var fake_chance: float = 0.35
+
+@export_group("Feint")
+@export var fake_windup_scale: float = 1.5
+@export var feint_lunge_speed: float = 360.0
+@export var feint_lunge_seconds: float = 0.45
+@export var feint_clearance_px: float = 70.0
 
 @export_group("Attack")
-## Burst speed during the kamikaze dash (px/s).
+@export var windup_seconds: float = 0.5
+@export var commit_flash_seconds: float = 0.12
 @export var dash_speed: float = 480.0
-## How far ahead to predict the player position for the dash target (seconds).
 @export var dash_prediction_time: float = 0.2
-## Open Space only (no Assault provider): the dash frees the drone this far from where it began
-## (judgement call, plan §2.11 — a little more than a 1280 px screen width plus the orbit radius).
-@export var dash_max_distance: float = 1600.0
+@export var overshoot_px: float = 120.0
+@export var max_dash_seconds: float = 0.9
+
+@export_group("Overshoot")
+@export var overshoot_speed: float = 200.0
+@export var overshoot_turn_rate: float = 3.0
+@export var overshoot_max_seconds: float = 1.2
+
+@export_group("Assault")
+@export var engage_seconds: float = 9.0
+@export var exit_speed: float = 320.0
+@export var side_lane_min_deg: float = 30.0
+@export var side_lane_max_deg: float = 75.0
 
 var phase: Phase = Phase.ENTER
+## +1 or -1: the orbit's sense. Drawn from `rng` in `_ready()`.
+var orbit_dir: float = 1.0
+## The orbit anchor's angular speed (rad/s) this tick: `orbit_dir × orbit_speed`, except in REVERSE.
+var angular_speed: float = 0.0
+## What the orbit circles: the player, clamped into the corridor in Assault.
+var orbit_centre: Vector2 = Vector2.ZERO
+## The current (or last) dash's unit direction.
+var dash_direction: Vector2 = Vector2.ZERO
+## True once the current dash registered a contact.
+var dash_hit: bool = false
+## Pulse shots fired since spawn (one per missed dash at most).
+var pulses_fired: int = 0
+## The side (±1) the current feint lunges on; defaults to `orbit_dir`.
+var lunge_side: float = 1.0
+## Built on the first tick. Null before it.
+var budget: EngagementBudget
 
+var _started: bool = false
 var _orbit_angle: float = 0.0
-var _dash_timer: float = 0.0
-var _dash_direction: Vector2 = Vector2.ZERO
-var _dash_start: Vector2 = Vector2.ZERO
+var _window_left: float = 0.0
+var _phase_time: float = 0.0
+var _forced: StringName = &""
+## The roll's result while it waits for the lane: &"" (none), &"fake" or &"real".
+var _pending: StringName = &""
+var _pending_wait: float = 0.0
+var _reverse_barred: bool = false
+var _reverse_from: float = 0.0
+var _hold_at: Vector2 = Vector2.ZERO
+var _locked: bool = false
+var _locked_point: Vector2 = Vector2.ZERO
+var _exit_point: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
 	super._ready()
-	## Staggers groups so they don't all orbit/dash in lockstep — the same effect the pre-port
-	## `randf_range` calls had, moved onto `rng` (plan review F10) so a seeded run is reproducible.
+	# Same order as the Phase 1 port, so a seed keeps its orbit angle and first window.
 	_orbit_angle = rng.randf_range(0.0, TAU)
-	_dash_timer = rng.randf_range(1.0, 2.0)
+	_window_left = rng.randf_range(WINDOW_MIN, WINDOW_MAX)
+	orbit_dir = 1.0 if rng.randf() < 0.5 else -1.0
+	angular_speed = orbit_dir * orbit_speed
+	lunge_side = orbit_dir
 
 
-## Two passes, matching the pre-port `_physics_process`'s own two `match _phase:` blocks: the first
-## decides velocity (and may transition `phase` — e.g. ENTER reaching `orbit_radius`), the second
-## faces using whatever `phase` is *after* that transition. So a tick that flips ENTER -> ORBIT
-## still faces the player that same tick, even though it requests no velocity. Not an exact match,
-## though: the old code faced using the position *before* that tick's move, while `EnemyMover.step()`
-## resolves `face_toward()`'s point after `move_and_slide()` has already run (plan review, round 1,
-## finding 2). Against the player's position (ENTER/ORBIT) the difference is one enemy-step's worth
-## of drone movement out of the whole bearing — negligible. DASH never calls `face_toward()` at all,
-## for exactly this reason: `_dash_direction` is a fixed offset from the drone's OWN position, so
-## resolving it post-move turned it into a point behind the drone, and the drone dashed tail-first
-## (same finding, point 1). Leaving DASH's `_has_face_point` unset falls through to `step()`'s
-## default heading, the requested velocity itself (`_dash_direction * dash_speed`, set below by
-## `_tick_dash()`), which needs no position at all and so cannot be thrown off by the move.
 func tick(delta: float) -> void:
+	if not _started:
+		_start()
 	var target := TargetInfo.player(get_tree())
+	if target.has_target:
+		orbit_centre = _centre_of(target.position)
+	if budget.update(delta) and phase != Phase.DISENGAGE and not mover.is_boosting():
+		enter_phase(Phase.DISENGAGE)
+	# A transition hands over to the new phase's handler in the same tick. Bounded: the longest
+	# chain is DASH -> OVERSHOOT -> RETURN -> ORBIT.
+	for _i in 4:
+		var before := phase
+		_tick_phase(delta, target)
+		if phase == before:
+			break
+
+
+## Test seam and the one place a transition happens: runs `p`'s entry code, then emits.
+func enter_phase(p: Phase) -> void:
+	phase = p
+	_phase_time = 0.0
+	match p:
+		Phase.ORBIT: _enter_orbit()
+		Phase.REVERSE: _enter_reverse()
+		Phase.FEINT_WINDUP: _enter_feint_windup()
+		Phase.FEINT_LUNGE: _enter_feint_lunge()
+		Phase.WINDUP: _enter_windup()
+		Phase.DASH: _enter_dash()
+		Phase.OVERSHOOT: _enter_overshoot()
+		Phase.DISENGAGE: _enter_disengage()
+	phase_changed.emit(p)
+
+
+## Test seam: the next window roll takes `choice` (&"real", &"fake" or &"reverse").
+func force_next_choice(choice: StringName) -> void:
+	_forced = choice
+
+
+## `ContactProfile.contact_made` (only ever while armed, i.e. in DASH): the dash hit.
+func on_contact(_area: Area2D) -> void:
+	if phase == Phase.DASH:
+		dash_hit = true
+
+
+func on_suspended() -> void:
+	_set_light(StateLight.State.ARMED)
+
+
+func _start() -> void:
+	_started = true
+	budget = EngagementBudget.new(engage_seconds, get_tree())
+
+
+func _tick_phase(delta: float, target: TargetInfo) -> void:
 	match phase:
 		Phase.ENTER: _tick_enter(target)
 		Phase.ORBIT: _tick_orbit(delta, target)
+		Phase.REVERSE: _tick_reverse(delta, target)
+		Phase.FEINT_WINDUP: _tick_feint_windup(delta, target)
+		Phase.FEINT_LUNGE: _tick_feint_lunge()
+		Phase.FEINT_BRAKE: _tick_feint_brake(delta, target)
+		Phase.WINDUP: _tick_windup(delta, target)
 		Phase.DASH: _tick_dash()
+		Phase.OVERSHOOT: _tick_overshoot(delta, target)
+		Phase.RETURN: _tick_return(delta, target)
+		Phase.DISENGAGE: _tick_disengage()
 
-	match phase:
-		Phase.ENTER, Phase.ORBIT:
-			if target.has_target:
-				mover.face_toward(target.position)
-		Phase.DASH:
-			pass  # faces along the dash velocity itself — see the header comment above
 
+# ── ENTER ────────────────────────────────────────────────────────────────────────────────────────
 
 func _tick_enter(target: TargetInfo) -> void:
 	if not target.has_target:
 		mover.request_velocity(Vector2.ZERO)
 		return
 	if actor.global_position.distance_to(target.position) <= orbit_radius:
-		phase = Phase.ORBIT
+		# A2: start the orbit where the drone is, never on the far side of the player.
+		_reanchor()
+		enter_phase(Phase.ORBIT)
 		return
 	mover.seek(target.position, approach_speed)
+	mover.face_toward(target.position)
+
+
+# ── ORBIT / REVERSE ──────────────────────────────────────────────────────────────────────────────
+
+func _enter_orbit() -> void:
+	angular_speed = orbit_dir * orbit_speed
 
 
 func _tick_orbit(delta: float, target: TargetInfo) -> void:
-	_dash_timer -= delta
 	if not target.has_target:
 		mover.request_velocity(Vector2.ZERO)
 		return
-	if _dash_timer <= 0.0:
-		_begin_dash()
-		return
-	_orbit_angle += orbit_speed * delta
-	mover.orbit(target.position, orbit_radius, _orbit_angle, orbit_correct_speed)
-
-
-## Locks the dash direction from the current player prediction (or straight down with no target,
-## the pre-port fallback) and enters DASH. Called from `tick()` on timer expiry; also exposed so a
-## test can trigger a dash directly, isolating the direction formula from the random timer — the
-## same technique `test_ram_ship.gd` uses for its own damage hook.
-func _begin_dash() -> void:
-	phase = Phase.DASH
-	var target := TargetInfo.player(get_tree())
-	var predicted: Vector2
-	if target.has_target:
-		predicted = target.predicted_position(dash_prediction_time)
+	if _pending == &"":
+		_window_left -= delta
+		if _window_left <= 0.0:
+			_roll()
+			if _pending == &"reverse":
+				_pending = &""
+				enter_phase(Phase.REVERSE)
+				return
 	else:
-		predicted = actor.global_position + Vector2(0.0, 200.0)
-	_dash_direction = (predicted - actor.global_position).normalized()
-	_dash_start = actor.global_position
+		_pending_wait += delta
+	if _pending != &"" and _try_start_attack(target):
+		return
+	_orbit_step(delta, target)
+
+
+func _enter_reverse() -> void:
+	_reverse_from = orbit_dir * orbit_speed
+
+
+func _tick_reverse(delta: float, target: TargetInfo) -> void:
+	if not target.has_target:
+		mover.request_velocity(Vector2.ZERO)
+		return
+	_phase_time += delta
+	var t := clampf(_phase_time / reverse_seconds, 0.0, 1.0) if reverse_seconds > 0.0 else 1.0
+	angular_speed = lerpf(_reverse_from, -_reverse_from, t)
+	_orbit_angle += angular_speed * delta
+	mover.orbit(orbit_centre, orbit_radius, _orbit_angle, orbit_correct_speed)
+	mover.face_toward(target.position)
+	if t >= 1.0:
+		orbit_dir = -orbit_dir
+		_reverse_barred = true
+		_new_window()
+		enter_phase(Phase.ORBIT)
+
+
+func _orbit_step(delta: float, target: TargetInfo) -> void:
+	angular_speed = orbit_dir * orbit_speed
+	_orbit_angle += angular_speed * delta
+	mover.orbit(orbit_centre, orbit_radius, _orbit_angle, orbit_correct_speed)
+	mover.face_toward(target.position)
+
+
+## Sets `_pending` to &"reverse", &"fake" or &"real". A forced choice wins and is consumed.
+func _roll() -> void:
+	_pending_wait = 0.0
+	if _forced != &"":
+		_pending = _forced
+		_forced = &""
+		return
+	if not _reverse_barred and rng.randf() < reverse_chance:
+		_pending = &"reverse"
+	elif rng.randf() < fake_chance:
+		_pending = &"fake"
+	else:
+		_pending = &"real"
+
+
+## Starts the pending attack if the lane allows it (Assault) or the wait ran out. Returns true when
+## it started.
+func _try_start_attack(target: TargetInfo) -> bool:
+	var stop := _stop_point()
+	var lane_active := budget.active
+	var side := orbit_dir
+	if lane_active:
+		var ok := false
+		if _pending == &"real":
+			ok = _in_lane(stop, target.position, LANE_MARGIN_DEG)
+		else:
+			for s in [orbit_dir, -orbit_dir]:
+				if _in_lane(_predicted_feint_stop(stop, target.position, s), target.position, LANE_MARGIN_DEG):
+					side = s
+					ok = true
+					break
+		if not ok and _pending_wait < LANE_WAIT_MAX:
+			return false
+	var choice := _pending
+	_pending = &""
+	_reverse_barred = false
+	if choice == &"fake":
+		lunge_side = side
+		enter_phase(Phase.FEINT_WINDUP)
+	else:
+		enter_phase(Phase.WINDUP)
+	return true
+
+
+# ── FEINT ────────────────────────────────────────────────────────────────────────────────────────
+
+func _enter_feint_windup() -> void:
+	_hold_at = _stop_point()
+	_set_armed(false)
+	_set_light(StateLight.State.CHARGING)
+
+
+func _tick_feint_windup(delta: float, target: TargetInfo) -> void:
+	mover.hold_position(_hold_at, HOLD_TOLERANCE, orbit_correct_speed)
+	if target.has_target:
+		mover.face_toward(target.position)
+	_phase_time += delta
+	if _phase_time >= windup_seconds * fake_windup_scale - 0.0001:
+		enter_phase(Phase.FEINT_LUNGE)
+
+
+func _enter_feint_lunge() -> void:
+	var target := TargetInfo.player(get_tree())
+	var pos := actor.global_position
+	var dir := _facing()
+	if target.has_target:
+		dir = _lunge_direction(pos, target.position, lunge_side)
+	# Dark while it lunges and brakes, so the real wind-up that follows reads as a new telegraph.
+	_set_light(StateLight.State.OFF)
+	mover.boost(dir, feint_lunge_speed, feint_lunge_seconds)
+
+
+func _tick_feint_lunge() -> void:
+	# The boost ignores requests and faces along its own velocity.
+	if not mover.is_boosting():
+		enter_phase(Phase.FEINT_BRAKE)
+
+
+func _tick_feint_brake(delta: float, target: TargetInfo) -> void:
+	_phase_time += delta
+	if actor.velocity.length() < FEINT_STOP_SPEED or _phase_time >= FEINT_BRAKE_MAX_SECONDS:
+		_reanchor()
+		# The lunge swept round in the -lunge_side sense; the new orbit continues that sweep.
+		orbit_dir = -lunge_side
+		enter_phase(Phase.WINDUP)
+		return
+	mover.request_velocity(Vector2.ZERO)
+	if target.has_target:
+		mover.face_toward(target.position)
+
+
+## The lunge aims `feint_clearance_px` beside the player, on side `s` (±1).
+func _lunge_direction(from: Vector2, target_pos: Vector2, s: float) -> Vector2:
+	var to_player := (target_pos - from).normalized()
+	var aside := target_pos + to_player.rotated(s * PI / 2.0) * feint_clearance_px
+	return (aside - from).normalized()
+
+
+## Where a feint lunging from `from` on side `s` comes to rest: the boost's distance plus the brake
+## from `feint_lunge_speed` down to `FEINT_STOP_SPEED`.
+func _predicted_feint_stop(from: Vector2, target_pos: Vector2, s: float) -> Vector2:
+	var travel := feint_lunge_speed * feint_lunge_seconds
+	if braking > 0.0:
+		travel += (feint_lunge_speed * feint_lunge_speed - FEINT_STOP_SPEED * FEINT_STOP_SPEED) / (2.0 * braking)
+	return from + _lunge_direction(from, target_pos, s) * travel
+
+
+# ── WINDUP / DASH ────────────────────────────────────────────────────────────────────────────────
+
+func _enter_windup() -> void:
+	_hold_at = _stop_point()
+	_locked = false
+	_set_armed(false)
+	_set_light(StateLight.State.CHARGING)
+
+
+func _tick_windup(delta: float, target: TargetInfo) -> void:
+	_phase_time += delta
+	mover.hold_position(_hold_at, HOLD_TOLERANCE, orbit_correct_speed)
+	if not _locked and _phase_time >= windup_seconds - 0.0001:
+		_lock(target)
+		_set_light(StateLight.State.COMMIT)
+	if _locked:
+		mover.face_toward(_locked_point)
+	elif target.has_target:
+		mover.face_toward(target.position)
+	if _phase_time >= windup_seconds + commit_flash_seconds - 0.0001:
+		enter_phase(Phase.DASH)
+
+
+func _lock(target: TargetInfo) -> void:
+	_locked = true
+	if target.has_target:
+		_locked_point = target.predicted_position(dash_prediction_time)
+	else:
+		_locked_point = actor.global_position + _facing() * NO_TARGET_LOCK_DISTANCE
+
+
+func _enter_dash() -> void:
+	if not _locked:
+		_lock(TargetInfo.player(get_tree()))  # entered without a WINDUP (the test seam)
+	var to_point := _locked_point - actor.global_position
+	dash_direction = to_point.normalized() if to_point.length_squared() > 0.000001 else _facing()
+	dash_hit = false
+	_set_armed(true)
+	_set_light(StateLight.State.ARMED)
+	var seconds := (to_point.length() + overshoot_px) / dash_speed if dash_speed > 0.0 else 0.0
+	mover.boost(dash_direction, dash_speed, minf(seconds, max_dash_seconds))
+	_locked = false
 
 
 func _tick_dash() -> void:
-	mover.request_velocity(_dash_direction * dash_speed)
-	_check_dash_end()
+	# Faces along the boost velocity itself (no face_toward: the Phase 1 tail-first fix).
+	if not mover.is_boosting():
+		enter_phase(Phase.OVERSHOOT)
 
 
-## Frees the drone once it has left the world: the Assault provider's legacy cull rect when there
-## is one, else `dash_max_distance` from the dash's own start (Open Space — IDEAS §3.3/§38 reject a
-## screen-visibility rule there, so distance travelled stands in for it; plan §2.11). Also callable
-## directly, isolating the cull formula from the dash's own timing/direction (same technique as
-## `_begin_dash()`, above).
-##
-## Deliberately explicit `<`/`>` comparisons, not `Rect2.has_point()`: Godot's `has_point()` treats
-## a rect as half-open (inclusive min edge, EXCLUSIVE max edge), so it would cull a drone sitting
-## exactly on the legacy cull rect's right/bottom edge — `_check_off_screen()` never did (same trap
-## `ProjectileLifetime._physics_process()` avoids for the world-rect rule, plan review N6).
-func _check_dash_end() -> void:
-	var tree := get_tree()
-	if EnemyWorld.has_cull_rect(tree):
-		var rect := EnemyWorld.cull_rect(tree)
-		var pos := actor.global_position
-		var right := rect.position.x + rect.size.x
-		var bottom := rect.position.y + rect.size.y
-		if pos.x < rect.position.x or pos.x > right or pos.y < rect.position.y or pos.y > bottom:
-			actor.queue_free()
+# ── OVERSHOOT / RETURN ───────────────────────────────────────────────────────────────────────────
+
+func _enter_overshoot() -> void:
+	_set_armed(false)
+	_set_light(StateLight.State.OFF)
+	if not dash_hit and attack != null:
+		attack.fire_now()
+		pulses_fired += 1
+
+
+func _tick_overshoot(delta: float, target: TargetInfo) -> void:
+	var current := actor.velocity
+	if current.length_squared() < 0.000001:
+		current = dash_direction
+	var toward := (target.position - actor.global_position) if target.has_target else current
+	_phase_time += delta
+	if absf(current.angle_to(toward)) <= deg_to_rad(OVERSHOOT_EXIT_DEG) \
+			or _phase_time > overshoot_max_seconds + 0.0001:
+		enter_phase(Phase.RETURN)
 		return
-	if actor.global_position.distance_to(_dash_start) >= dash_max_distance:
+	# Rebuilt from the actor's CURRENT velocity every tick, never from the previous request, so the
+	# mover's straight-segment `move_toward` bounds the heading change to `overshoot_turn_rate · delta`.
+	var dir := Steering.turn_toward(current.normalized(), toward, overshoot_turn_rate, delta)
+	mover.request_velocity(dir * overshoot_speed)
+
+
+func _tick_return(delta: float, target: TargetInfo) -> void:
+	if not target.has_target:
+		mover.request_velocity(Vector2.ZERO)
+		return
+	_phase_time += delta
+	var pos := actor.global_position
+	var out := pos - orbit_centre
+	var ring_point := orbit_centre + (out.normalized() if out.length_squared() > 0.000001 else Vector2.RIGHT) * orbit_radius
+	if pos.distance_to(ring_point) <= RETURN_TOLERANCE or _phase_time >= RETURN_MAX_SECONDS:
+		_reanchor()
+		_new_window()
+		enter_phase(Phase.ORBIT)
+		return
+	mover.arrive(ring_point, approach_speed)
+	mover.face_toward(target.position)
+
+
+# ── DISENGAGE (the Swarm Drone's exit, docs/plans/cmuj4y8rh0070p52xk6vzfvbe) ─────────────────────
+
+func _enter_disengage() -> void:
+	_set_armed(false)
+	_set_light(StateLight.State.OFF)
+	_pending = &""
+	mover.release_constraint()
+	mover.max_speed = exit_speed
+	var rect := EnemyWorld.projectile_world_rect(get_tree())
+	var pos := actor.global_position
+	var to_left := pos.x - rect.position.x
+	var to_right := rect.end.x - pos.x
+	var to_top := pos.y - rect.position.y
+	var to_bottom := rect.end.y - pos.y
+	var nearest := minf(minf(to_left, to_right), minf(to_top, to_bottom))
+	if nearest == to_left:
+		_exit_point = Vector2(rect.position.x - EXIT_OVERSHOOT, pos.y)
+	elif nearest == to_right:
+		_exit_point = Vector2(rect.end.x + EXIT_OVERSHOOT, pos.y)
+	elif nearest == to_top:
+		_exit_point = Vector2(pos.x, rect.position.y - EXIT_OVERSHOOT)
+	else:
+		_exit_point = Vector2(pos.x, rect.end.y + EXIT_OVERSHOOT)
+
+
+## Deliberately strict `<`/`>` against the rect's edges, not `Rect2.has_point()` (half-open).
+func _tick_disengage() -> void:
+	var rect := EnemyWorld.projectile_world_rect(get_tree())
+	var pos := actor.global_position
+	if pos.x < rect.position.x or pos.x > rect.end.x or pos.y < rect.position.y or pos.y > rect.end.y:
 		actor.queue_free()
+		return
+	mover.seek(_exit_point, exit_speed)
+
+
+# ── Helpers ──────────────────────────────────────────────────────────────────────────────────────
+
+## The player's position, kept inside the constraint's `inner_rect()` shrunk by `orbit_radius`, so an
+## orbit near a corridor edge does not fight the edge pressure (R2.13). Unbounded (Open Space): as is.
+func _centre_of(p: Vector2) -> Vector2:
+	if mover == null or mover.constraint == null:
+		return p
+	var inner := mover.constraint.inner_rect().grow(-orbit_radius)
+	if not inner.has_area():
+		return p
+	return p.clamp(inner.position, inner.end)
+
+
+## Where the drone comes to rest if it brakes now: the point WINDUP / FEINT_WINDUP hold at.
+func _stop_point() -> Vector2:
+	var pos := actor.global_position
+	var v := actor.velocity
+	if braking <= 0.0 or v.length_squared() <= 0.0:
+		return pos
+	return pos + v.normalized() * (v.length_squared() / (2.0 * braking))
+
+
+## True when `point` is `side_lane_min_deg`-`side_lane_max_deg` off the vertical axis about
+## `target_pos`, with `margin` degrees taken off each end.
+func _in_lane(point: Vector2, target_pos: Vector2, margin: float) -> bool:
+	var angle := lane_angle_deg(point - target_pos)
+	return angle >= side_lane_min_deg + margin and angle <= side_lane_max_deg - margin
+
+
+## The angle (deg, 0-90) between `rel` and the vertical axis.
+static func lane_angle_deg(rel: Vector2) -> float:
+	var length := rel.length()
+	if length <= 0.000001:
+		return 0.0
+	return rad_to_deg(acos(clampf(absf(rel.y) / length, 0.0, 1.0)))
+
+
+func _reanchor() -> void:
+	_orbit_angle = (actor.global_position - orbit_centre).angle()
+
+
+func _new_window() -> void:
+	_window_left = rng.randf_range(WINDOW_MIN, WINDOW_MAX)
+	_pending = &""
+
+
+## The unit vector the actor's nose points along, from its rotation and `sprite_forward_angle`.
+func _facing() -> Vector2:
+	var forward: Variant = actor.get(&"sprite_forward_angle")
+	var offset := float(forward) if (forward is float or forward is int) else PI / 2.0
+	return Vector2.RIGHT.rotated(actor.rotation + offset)
+
+
+func _profile() -> ContactProfile:
+	return actor.get(&"contact_profile") as ContactProfile if actor != null else null
+
+
+func _set_armed(armed: bool) -> void:
+	var profile := _profile()
+	if profile != null:
+		profile.set_armed(armed)
+
+
+func _set_light(state: int) -> void:
+	var light := actor.get_node_or_null("StateLight") as StateLight if actor != null else null
+	if light != null:
+		light.set_state(state)

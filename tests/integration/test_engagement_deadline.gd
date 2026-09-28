@@ -12,7 +12,8 @@
 ## last. `exit_distance` is half the shorter side of the LIVE `projectile_world_rect()` — the
 ## worst-case straight-line distance from any point inside it to the nearest edge.
 ##
-## `engage_seconds`, `exit_speed` and `acceleration` are read from `swarm_drone_config.tres` (t8b).
+## The Swarm formula reads `swarm_drone_config.tres` (t8b); a section with a Razor Drone is also judged by
+## the Razor formula, from `razor_drone_config.tres` (t10), which adds its dash deferral.
 ## The Kamikaze Drone and the Razor Drone stay in the scene list as today's stand-ins until
 ## the Swarm Drone replaces the Kamikaze Drone in level 1 (t14).
 ## The Swarm Drone never starts an attack its budget cannot finish (`SwarmDroneBrain.can_start_attack`),
@@ -23,6 +24,8 @@ extends GutTest
 const DIRECTOR_SCRIPT := preload("res://assault/scenes/levels/edelia/1/level_1_director.gd")
 
 const SWARM_CONFIG: SwarmDroneConfig = preload("res://assault/scenes/enemies/swarm_drone/swarm_drone_config.tres")
+const RAZOR_CONFIG: RazorDroneConfig = preload("res://assault/scenes/enemies/razor_drone/razor_drone_config.tres")
+const RAZOR_SCENE := "res://assault/scenes/enemies/razor_drone/razor_drone.tscn"
 const MARGIN := 0.5
 
 const DRONE_OR_RAZOR_SCENES: Array[String] = [
@@ -78,12 +81,42 @@ func _section_has_drone_or_razor(section: LevelSection) -> bool:
 	return false
 
 
-func test_every_enemies_cleared_sections_drone_exit_clears_the_timeout() -> void:
+## The Swarm (and the Kamikaze stand-in) never starts an attack its budget cannot finish, so its exit
+## begins exactly at `engage_seconds`, from at most `max_speed`.
+func _swarm_deadline(last_wave_max_delay: float, exit_distance: float) -> float:
+	return last_wave_max_delay + SWARM_CONFIG.engage_seconds + exit_distance / SWARM_CONFIG.exit_speed \
+		+ SWARM_CONFIG.exit_speed / (2.0 * SWARM_CONFIG.acceleration) + MARGIN
+
+
+## The Razor defers its expiry through a boost, so it can start its exit up to `max_dash_seconds` late
+## and moving at `dash_speed` AWAY from its exit edge: it must shed that, turn through, and win back
+## the ground it lost (task plan docs/plans/cmuj4y8rr007gp52xxs8dec5s, review round 2 A4). Conservative.
+func _razor_deadline(last_wave_max_delay: float, exit_distance: float) -> float:
+	var c := RAZOR_CONFIG
+	return last_wave_max_delay + c.engage_seconds + c.max_dash_seconds \
+		+ (c.dash_speed + c.exit_speed) / minf(c.acceleration, c.braking) \
+		+ (exit_distance + c.dash_speed * c.dash_speed / (2.0 * c.braking)) / c.exit_speed + MARGIN
+
+
+func _section_has_scene(section: LevelSection, scene_path: String) -> bool:
+	for w in section.waves:
+		var wave: WaveResource = w
+		for e in wave.entries:
+			var entry: SpawnEntryResource = e
+			if entry.ship_scene != null and entry.ship_scene.resource_path == scene_path:
+				return true
+	return false
+
+
+func _exit_distance() -> float:
 	var cam := ArenaCamera.new()
 	add_child_autofree(cam)
 	var rect := cam.projectile_world_rect()
-	var exit_distance := minf(rect.size.x, rect.size.y) / 2.0
+	return minf(rect.size.x, rect.size.y) / 2.0
 
+
+func test_every_enemies_cleared_sections_drone_exit_clears_the_timeout() -> void:
+	var exit_distance := _exit_distance()
 	var checked := 0
 	for s in _sections():
 		var section: LevelSection = s
@@ -94,14 +127,38 @@ func test_every_enemies_cleared_sections_drone_exit_clears_the_timeout() -> void
 		checked += 1
 
 		var last_wave_max_delay := _max_delay(_last_wave(section))
-		var deadline := last_wave_max_delay + SWARM_CONFIG.engage_seconds + exit_distance / SWARM_CONFIG.exit_speed \
-			+ SWARM_CONFIG.exit_speed / (2.0 * SWARM_CONFIG.acceleration) + MARGIN
+		# Each kind is judged by its own config: a Razor here uses the Razor's (longer) formula.
+		var deadline := _swarm_deadline(last_wave_max_delay, exit_distance)
+		if _section_has_scene(section, RAZOR_SCENE):
+			deadline = maxf(deadline, _razor_deadline(last_wave_max_delay, exit_distance))
 
 		assert_lt(deadline, section.enemies_cleared_timeout,
 			"section %s: %.2f s must clear its %.1f s timeout"
 				% [section.section_name, deadline, section.enemies_cleared_timeout])
 
 	assert_gt(checked, 0, "sanity: at least one ENEMIES_CLEARED section must actually have a drone")
+
+
+## Boundary (task review B1): the guard really fires for a Razor. A Razor spawned in cloud_descent's
+## last wave would need about 15.4 s against a 10 s timeout, so adding one there fails the case above.
+## Without this, the Razor formula could silently regress to the Swarm's again.
+func test_a_razor_in_an_enemies_cleared_section_would_miss_the_timeout() -> void:
+	var exit_distance := _exit_distance()
+	var found := false
+	for s in _sections():
+		var section: LevelSection = s
+		if section.section_name != &"cloud_descent":
+			continue
+		found = true
+		assert_eq(section.end_condition, LevelSection.EndCondition.ENEMIES_CLEARED, "sanity")
+		var delay := _max_delay(_last_wave(section))
+		var razor := _razor_deadline(delay, exit_distance)
+		assert_gt(razor, section.enemies_cleared_timeout,
+			"a Razor there (%.2f s) must fail the %.1f s timeout" % [razor, section.enemies_cleared_timeout])
+		assert_lt(_swarm_deadline(delay, exit_distance), section.enemies_cleared_timeout,
+			"control: the Swarm there passes")
+		assert_false(_section_has_scene(section, RAZOR_SCENE), "sanity: no Razor spawns there today")
+	assert_true(found, "sanity: cloud_descent exists")
 
 
 ## Sanity on the live rect this test depends on — 1608x1608, half the shorter side 804 px, so the
