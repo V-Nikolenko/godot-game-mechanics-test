@@ -1,9 +1,10 @@
-## Characterization: pins every Swarm Drone (`WaveBuilder.DRONE`) and Razor Drone spawn in Level 1,
-## the space station's BOTTOM reinforcement squad, and Open Space's ambient PatrolDrone spawn — the
-## state of the world BEFORE Enemy rework phase 2 touches any of it
-## (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §3 step 1). t14/t15/t16 replace the enemies these
-## pins describe; this file exists so those tasks start from a known-true baseline instead of
-## trusting memory of what the level "used to do".
+## Characterization: pins every Swarm Drone (`WaveBuilder.DRONE`) and Razor Drone spawn in Level 1
+## and the space station's BOTTOM reinforcement squad — the state of the world BEFORE Enemy rework
+## phase 2 touches any of it (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §3 step 1). t14/t15
+## replace the enemies these pins describe; this file exists so those tasks start from a
+## known-true baseline instead of trusting memory of what the level "used to do". Open Space's old
+## ambient drone spawn used to be pinned here too; t16 replaced it with a Swarm squad + a Razor
+## Drone, which `test_sector_hub_patrol.gd` covers as intent, not characterization.
 ##
 ## NOT an invariant — the opposite of `test_enemy_contact_damage.gd`'s "config drift is a bug".
 ## Every number here is a deliberate design choice this file freezes, not a rule it derives. A
@@ -31,8 +32,6 @@ extends GutTest
 
 const _DIRECTOR_SCRIPT := "res://assault/scenes/levels/edelia/1/level_1_director.gd"
 const _STATION_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_station/space_station.tscn")
-const _HUB_SCENE: PackedScene = preload("res://open_space/scenes/levels/sector_hub.tscn")
-const _HUB_SCRIPT := "res://open_space/scenes/levels/sector_hub.gd"
 
 const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.gd")
 
@@ -471,23 +470,3 @@ func test_station_reinforcements_bottom_squad_is_two_drones_straight_170() -> vo
 			"BOTTOM squad free_after duration changed")
 	assert_true(offsets.has(Vector2(-100.0, 290.0)), "BOTTOM squad missing its left offset")
 	assert_true(offsets.has(Vector2(100.0, 290.0)), "BOTTOM squad missing its right offset")
-
-
-# ── The Open Space hub's ambient PatrolDrone spawn ──────────────────────────────
-
-## `sector_hub.tscn` is instantiated but never added to the tree, per the established pattern in
-## `test_hub_log_placement.gd` / `test_weapon_unlock_sources.gd`: `_ready()` boots a real player,
-## HUD and mission wiring this test needs none of. Reading the exported spawn parameters directly
-## is enough to pin "3 PatrolDrones, 300-600 px from origin" — `_spawn_initial_drones()` places
-## each at `randf_range(spawn_radius * 0.5, spawn_radius)`.
-func test_sector_hub_spawns_three_patrol_drones_in_a_300_to_600_band() -> void:
-	var hub := _HUB_SCENE.instantiate()
-	assert_eq(int(hub.drone_count), 3, "SectorHub.drone_count changed")
-	assert_almost_eq(float(hub.spawn_radius), 600.0, 0.001, "SectorHub.spawn_radius changed")
-
-	var constants: Dictionary = load(_HUB_SCRIPT).get_script_constant_map()
-	assert_true(constants.has("PATROL_DRONE"), "SectorHub must still reference a PATROL_DRONE scene")
-	var patrol_drone: PackedScene = constants.get("PATROL_DRONE")
-	assert_eq(patrol_drone.resource_path, "res://open_space/scenes/entities/enemies/patrol_drone.tscn",
-		"SectorHub's ambient spawn must still be PatrolDrone")
-	hub.free()

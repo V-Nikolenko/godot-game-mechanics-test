@@ -2,8 +2,9 @@
 class_name SwarmDrone
 extends BaseEnemy
 
-## Small, cheap contact drone that replaces the Kamikaze Drone and the Open Space PatrolDrone
-## (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.7). Corkscrews in, spirals close, winds up
+## Small, cheap contact drone that replaces the Kamikaze Drone and the Open Space hub's old
+## ambient drone spawn (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.7). Corkscrews in,
+## spirals close, winds up
 ## (yellow light), rams the player's predicted position (red light, EXPLOSIVE contact armed), and on
 ## a miss curves round for one more pass. In Assault it leaves by the nearest edge after
 ## `engage_seconds`.

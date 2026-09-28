@@ -79,8 +79,8 @@ static func hold_position(pos: Vector2, vel: Vector2, anchor: Vector2, tolerance
 	return arrive(pos, vel, anchor, max_speed, accel)
 
 
-## Constant velocity in direction, at speed. PatrolDrone's movement model. Zero with a
-## zero-length direction — PatrolDrone itself is what falls that back to RIGHT (test_patrol_drone.gd).
+## Constant velocity in direction, at speed. Zero with a zero-length direction — the caller decides
+## the fallback (the retired ambient hub drone fell back to RIGHT).
 static func drift(direction: Vector2, speed: float) -> Vector2:
 	return direction.normalized() * speed
 

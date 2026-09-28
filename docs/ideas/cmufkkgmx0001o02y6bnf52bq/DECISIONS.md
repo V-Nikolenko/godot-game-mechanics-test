@@ -650,3 +650,31 @@ Task plan `docs/plans/cmuj4y8s30080p52xxk0ioy1n/` (two review rounds, approved r
   DISENGAGE with no `EnemyPathMover`. The margin is about 1.6 s; a slower exit or a longer budget will trip it.
 - **`tests/helpers/level1_drone_concurrency.gd`** gained `worst_exit_seconds()`, `squad_intervals()`,
   `peak_intervals()` and `peak_min_alive_three()` — reusable when Ph15 takes the other level-1 enemies off rails.
+
+### Built in t16-hub-patrol (2026-09-28): `patrol_ring_radius` corrected to 1300, not the plan's 1000
+
+Task `cmuj4y8s70084p52x8g2hl0tm`. `SectorHub._spawn_patrol()` matches §2.11 exactly (`patrol_seed`, `squad_size` 4,
+`swarm_anchor_bearing_deg` 90, `razor_anchor_bearing_deg` 270, one shared `SquadController` + `patrol_anchor` for the
+Swarm squad, its own `patrol_anchor` for the Razor) with one numeric correction:
+
+- **`patrol_ring_radius` is 1300, not the plan's 1000.** The round-2 review's B6 fix computed the Razor's nearest
+  interactable as `ModuleUnlockerEmpBlast` (−280, −315) at 740 px, giving 740 − 200 = 540 > 450 and landing in the
+  approved plan's own table and AC ("Razor 540 > 450 on today's scene"). A full sweep over every `MissionTrigger` and
+  `PickupBase` child of `sector_hub.tscn` (not just the one pickup row the plan's manual check looked at) finds a
+  closer one at 1000 px: `WeaponUnlockerMiningLaser` (20, −515), 485 px from (0, −1000) — clearance 485 − 200 = 285,
+  **below** 450. The plan's own arithmetic missed the y = −515 weapon-unlocker row. Raising the shared
+  `patrol_ring_radius` to 1300 (one of B6's two suggested fixes) restores clearance for both groups against every
+  interactable, computed and pinned in `tests/integration/test_sector_hub_patrol.gd`: Swarm 543 > 380 (nearest now
+  `LoreLogFortunaManifest`, 1093 px), Razor 135 > 450 margin (nearest still `WeaponUnlockerMiningLaser`, now 785 px).
+- **`test_sector_hub_patrol.gd`'s clearance cases sweep every direct `MissionTrigger`/`PickupBase` child and the
+  player spawn**, rather than checking named points by hand — the same generic-sweep fix applied to the geometry
+  check itself, so a pickup added later that lands too close fails the gate instead of silently repeating this bug.
+- **The spawn-behaviour cases (composition, shared anchors, seed reproducibility, frame-0 perception, the pulse's
+  container) run against a minimal harness** — the real `sector_hub.gd` script plus a bare `EnemyContainer` child,
+  under `enemy_ai_harness.gd`'s `open_space()` root — rather than the full `sector_hub.tscn` (player ship, HUD, three
+  mission triggers). The full scene loads cleanly inside a real GUT test (autoloads registered), but nothing here
+  needs the extra weight; the clearance cases already cover the real scene's node positions.
+- **`PatrolDrone`/`patrol_drone` is gone from every `.gd`/`.tscn`/`.tres`** — the two source files, its own
+  characterization test, and every comment that used to name it (`swarm_drone.gd`, `steering.gd`, `sector_hub.gd`,
+  `test_level1_drone_spawns.gd`). `test_sector_hub_patrol.gd`'s own sweep for the name builds its search terms by
+  string concatenation rather than as a literal, so the sweep file does not trip on itself.

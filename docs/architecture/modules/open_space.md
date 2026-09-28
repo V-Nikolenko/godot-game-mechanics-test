@@ -15,21 +15,18 @@ Progression is read from and written to the global autoloads documented in [`./g
 ```
 open_space/scenes/
 ├── entities/
-│   ├── player/
-│   │   ├── player_ship.gd        # OpenSpacePlayerShip (extends PlayerBase) — free-flight controller + ship modules
-│   │   ├── player_ship.tscn       # ship scene: components, attack state machine, animated sprite
-│   │   ├── ship_turn_controller.gd # ShipTurnController — the ONLY writer of the ship's rotation
-│   │   ├── boost_meter.gd          # BoostMeter — the Shift boost's charge economy (spend + refill)
-│   │   └── open_space_camera_rig.gd # OpenSpaceCameraRig — speed-zoom + camera-lead formula behind speed_feel
-│   └── enemies/
-│       ├── patrol_drone.gd        # PatrolDrone — ambient hub enemy that drifts in a straight line
-│       └── patrol_drone.tscn
+│   └── player/
+│       ├── player_ship.gd        # OpenSpacePlayerShip (extends PlayerBase) — free-flight controller + ship modules
+│       ├── player_ship.tscn       # ship scene: components, attack state machine, animated sprite
+│       ├── ship_turn_controller.gd # ShipTurnController — the ONLY writer of the ship's rotation
+│       ├── boost_meter.gd          # BoostMeter — the Shift boost's charge economy (spend + refill)
+│       └── open_space_camera_rig.gd # OpenSpaceCameraRig — speed-zoom + camera-lead formula behind speed_feel
 ├── gui/
 │   ├── hud.tscn                   # OpenSpaceHUD (CanvasLayer) — reuses global/ui/mission_hud.gd + shared HUD parts
 │   ├── boost_bar.gd               # BoostBar — cyan pip readout for BoostMeter, drawn under the hull
 │   └── aim_reticle.gd             # AimReticle — dead-zone/snap/lag ring drawn on the hull
 ├── levels/
-│   ├── sector_hub.gd              # SectorHub (Node2D) — the hub level; spawns drones, holds planets + pickups
+│   ├── sector_hub.gd              # SectorHub (Node2D) — the hub level; spawns the ambient patrol, holds planets + pickups
 │   └── sector_hub.tscn            # composed scene: parallax bg, two planets, player+camera, HUD, pickups
 ├── mission_data/                  # per-mission data resources (the "what to launch" layer)
 │   ├── mission_config_resource.gd        # MissionConfigResource (base): name, scene_path, gating, scoring hook
@@ -77,7 +74,7 @@ open_space/scenes/
   actually leaving the mission-select lane. `tests/integration/test_hub_log_placement.gd` asserts
   the placed count and the catalogue-total match, and exercises one of each end to end.
 
-The script's only logic is `_spawn_initial_drones()`: in `_ready()` it instantiates `drone_count` (`3`) `PatrolDrone`s at random angles/distances within `spawn_radius` (`600`) and gives each a random `initial_direction`.
+The script's only logic is `_spawn_patrol()`: in `_ready()` it spawns the ambient patrol described in §3.3 — a Swarm Drone squad and a Razor Drone, both reused from `assault/scenes/enemies/` — into the `EnemyContainer`.
 
 ### 3.2 Player entity — `OpenSpacePlayerShip`
 
@@ -234,9 +231,38 @@ Covered by `tests/unit/test_aim_reticle.gd` (what `set_aim()` stores; state/colo
 
 Covered by `tests/integration/test_open_space_flight_feel.gd`: `_step_bank()` driven directly with injected rotation deltas (zero for no change, saturates at `bank_max_rad`, sign-correct both directions, decays to zero once turning stops), plus two wiring boundaries on a real ship — `rotation` after a bank-driving `_handle_rotation()` call is (within float tolerance) exactly what `ShipTurnController.step()` returned, and `MuzzleLeft`/`MuzzleRight`/`EngineLeft`/`EngineRight` do not move a pixel across frames where the lean is non-zero but mid-decay (fails on a `$SpriteAnchor`-skewing build). **A human still has to fly it** — no headless test can say whether the lean itself reads as a lean or a glitch.
 
-### 3.3 Ambient enemy — `PatrolDrone`
+### 3.3 Ambient patrol — Swarm Drone squad + Razor Drone
 
-`open_space/scenes/entities/enemies/patrol_drone.gd` (`class_name PatrolDrone extends CharacterBody2D`). Minimal hub flavour enemy: adds itself to group `"enemies"`, drifts at `move_speed` along `initial_direction` forever, routes `HurtBox` damage into its `HealthComponent`, and `queue_free`s (emitting `died`) at 0 HP. No AI beyond straight-line drift.
+`SectorHub._spawn_patrol()` (`open_space/scenes/levels/sector_hub.gd`) is the hub's only enemy
+spawn. It reuses the Assault roster's two Tier-1 drones directly — `assault/scenes/enemies/
+swarm_drone/swarm_drone.tscn` and `.../razor_drone/razor_drone.tscn` — rather than a hub-local
+enemy scene; see [`./assault.md`](./assault.md) and each drone's own `ENEMY.md` for behaviour.
+The `PatrolDrone` this replaced (a straight-line-drift `CharacterBody2D` with no AI) is gone.
+
+- `@export var patrol_seed`, `squad_size` (`4`), `patrol_ring_radius` (`1300`),
+  `swarm_anchor_bearing_deg` (`90`, below the hub) and `razor_anchor_bearing_deg` (`270`, above
+  it) — both anchors sit `patrol_ring_radius` px from the origin on `Vector2.RIGHT.rotated(bearing)`.
+  `patrol_ring_radius` is 1300, not the 1000 the drones' own idle-radius/perceive-radius geometry
+  would suggest is enough — see `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md`, Phase 2,
+  "t16-hub-patrol", for the closer pickup the smaller radius missed.
+- `patrol_seed` (`0` = randomize) seeds a local `RandomNumberGenerator` that in turn draws each
+  spawned drone's own `EnemyBrain.rng_seed`, so the whole patrol is reproducible.
+- One `SquadController` (`global/enemy_ai/squad_controller.gd`) is shared by the whole Swarm
+  squad, along with one shared `patrol_anchor`; the Razor Drone patrols its own `patrol_anchor`
+  alone. Both anchors are set directly on each drone's `Brain` node before `add_child()`, since a
+  `SwarmDrone`'s own `_ready()` joins its `squad` immediately.
+- With no `ArenaCamera` in the hub, `EnemyWorld.arena()` finds no provider, so both drones' brains
+  build an `AnchorIdle` (`global/enemy_ai/anchor_idle.gd`) around their anchor and start idling —
+  they never start in combat the way an Assault spawn does — and notice the player only once it
+  is within `perceive_radius` of the live drone (not the anchor).
+- `tests/integration/test_sector_hub_patrol.gd` pins the geometry (every `MissionTrigger` and
+  `PickupBase` child of the hub, plus the player spawn, clears each group's own idle ring plus its
+  `perceive_radius`), that nobody perceives the player on frame 0, that a fixed `patrol_seed`
+  reproduces the same derived rng seeds, and that a Razor pulse bullet's parent is the hub's
+  `EnemyContainer` — and sweeps the whole project to confirm no `PatrolDrone` reference remains.
+- **Known gap:** no headless test can confirm the drones stay quiet while the player dwells at a
+  planet's mission trigger or browses the pickup bench — hand-playtest that before relying on the
+  geometry pin alone.
 
 ### 3.4 Mission-select trigger (the "planet") — `MissionTrigger`
 
