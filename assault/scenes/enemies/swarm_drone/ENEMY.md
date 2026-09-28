@@ -15,7 +15,7 @@ the lunge and it swings back once for a second try. Harmless to touch unless its
 | HP | 30 |
 | Damage | 30 contact (only while armed) + 15 blast within 48 px (on contact, or when shot while armed) |
 | Speed | 220 cruise / 480 burst / 320 exit (Assault) |
-| Sprite | `assault/assets/sprites/enemies/drones.png`, cell `Rect2(2, 2, 38, 38)` — placeholder until its own sprite |
+| Sprite | `assault/assets/sprites/enemies/swarm_drone.png`, 32×32, dedicated top-down art (four-prong caltrop, dark hull, blue edge highlight, red/maroon faction stripe) |
 | Scene | `swarm_drone.tscn` |
 | Config | `swarm_drone_config.tres` |
 
