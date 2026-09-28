@@ -90,30 +90,31 @@ b.fighter().at(260, -400).move(b.u_sweep(510, 730, 10)).free_after(12).shoot_for
 
 **Builder:** `b.drone()`  
 **Scene:** `swarm_drone.tscn`  
-**Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
-**Shoots:** No — rams the player on contact.  
+**Movement:** ⚠️ **Self-managed squad AI. Do NOT add `.move()`** in a level wave. A rail suspends its brain and arms
+its contact (it then flies the path and rams like the old Kamikaze Drone); only the space station's BOTTOM
+reinforcement squad still does that on purpose.  
+**Squads:** a `.formation()` is automatically one squad. Loose `b.drone()` lines in one `b.wave()` form a squad only
+if they share `.squad(&"<id>")`; level 1 uses `&"w<n>"` for every wave with 2–7 loose drones. A loose line with no
+id is a squad of one.  
+**Shoots:** No — corkscrews in, winds up (yellow), rams the predicted player position (red), explodes on contact.  
+**Assault exit:** leaves by the nearest edge after `engage_seconds` (5.5 s; REAR members after
+`rear_engage_seconds`), so an ENEMIES_CLEARED section is never held open (`test_level1_drone_exit.gd`).  
 **HP:** Very low  
 **Score:** Very low
 
-**Config fields** (`DroneConfig`):
-
-| Field | Default | Notes |
-|-------|---------|-------|
-| `movement_speed` | 140.0 | Irrelevant when EnemyPathMover is attached — use `.move()` speed. |
+**Config fields** (`SwarmDroneConfig`): the full table is in `swarm_drone/ENEMY.md`.
 
 **Examples:**
 ```gdscript
-# Sine weave from the top
-b.drone().at(-260, -400).move(b.sine(170, 30))
+# A pair arriving from the top as one squad
+b.drone().at(-260, -400).squad(&"w2"),
+b.drone().at( 260, -400).delay(0.2).squad(&"w2"),
 
-# Straight dive with stagger
-b.drone().at(-100, -400).move(b.straight(220)).delay(0.15)
+# A formation is one squad on its own
+b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).delay(0.4)
 
-# Cluster formation rushing down
-b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180))
-
-# Approaching from below
-b.drone().at(-150, 400).move(b.straight(185, PI))
+# Arriving from below
+b.drone().at(-150, 400)
 ```
 
 ---
@@ -480,8 +481,8 @@ b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180)
 
 | Rule | Detail |
 |------|--------|
-| **Always `.move()` path-following enemies** | `fighter`, `drone`, `ram`, `sniper`, `sniper_enemy`, `interceptor`, `bomber` — they have no self-managed movement. |
-| **Never `.move()` self-AI enemies** | `razor_drone`, `gunship` — attaching `EnemyPathMover` disables their `_physics_process`. |
+| **Always `.move()` path-following enemies** | `fighter`, `ram`, `sniper`, `sniper_enemy`, `interceptor`, `bomber` — they have no self-managed movement. |
+| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship` — attaching `EnemyPathMover` suspends their AI. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` needs a `sequence()`** | The approach step must be `straight(speed, 0.0, 2.5)` (exactly 2.5 s). Hold step must cover `shot_count × 2.5 s`. |
 | **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |

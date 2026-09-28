@@ -627,3 +627,26 @@ Plan §2.8.4. Follows the t8d-swarm-idle precedent above (`AnchorIdle`, the `pat
 - **Every pre-existing `test_razor_drone.gd` / `test_enemy_dual_mode.gd` case sets `start_engaged = true`** on the
   brain (three spawn helpers: `test_razor_drone.gd`'s `_spawn()`, its two manual `SCENE.instantiate()` cases, and
   `test_enemy_dual_mode.gd`'s `_spawn_razor_drone()`), so none of them changed behaviour.
+
+### Built in t15-level1-ai (2026-09-28): details Ph15 and the phase-2 dossier depend on
+
+Task plan `docs/plans/cmuj4y8s30080p52xxk0ioy1n/` (two review rounds, approved round 2).
+
+- **Every `b.drone()` line in `level_1_director.gd` has no `.move()`** (119 lines), and the two cloud_descent side
+  drones lost their `.free_after(5.0)` (read only by `EnemyPathMover`). `.at()`, `.formation()` and `.delay()` are
+  unchanged; the t1 pin still matches row for row with `movement: false`, and now also asserts `exit_mode ==
+  FREE_ON_SCREEN_EXIT` for every drone and razor entry.
+- **Squad ids are `&"w<n>"`, `n` = the wave's 0-based index in its section's `raw_waves`.** Only uniqueness within a
+  wave matters (the `WaveManager` key already contains the wave index). 97 loose lines are tagged; a lone loose
+  drone stays a squad of one. The station's BOTTOM squad is still on rails.
+- **C3: no lever pulled.** Lifetimes from the shipped configs and the live world rect: Swarm attacker/REAR 5.5 s +
+  2.78 s worst exit, Razor 9.0 s + its own worst exit (dash deferral included). Peaks, attack-capable (first three
+  per squad, plus every Razor) / all: deep_space 17 / 23 (1.21× / 1.64× of 14), planet_approach 7 / 9 (1.17× /
+  1.50× of 6), cloud_descent 7 / 10 (1.40× / 2.00× of 5). `test_level1_drone_spawns.gd` asserts ≤ 2.0× / ≤ 2.5×
+  per section; the rotating `min(alive, 3)`-per-squad count is printed (same values today), not asserted.
+  `rear_engage_seconds` stays 5.5 and `engage_seconds` 5.5.
+- **Measured exit:** cloud_descent's last wave, run for real (`test_level1_drone_exit.gd`, stationary hurtbox-less
+  player stub), empties in 8.0–8.4 s of game time against the 10 s `enemies_cleared_timeout`, every drone leaving in
+  DISENGAGE with no `EnemyPathMover`. The margin is about 1.6 s; a slower exit or a longer budget will trip it.
+- **`tests/helpers/level1_drone_concurrency.gd`** gained `worst_exit_seconds()`, `squad_intervals()`,
+  `peak_intervals()` and `peak_min_alive_three()` — reusable when Ph15 takes the other level-1 enemies off rails.

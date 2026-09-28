@@ -149,8 +149,13 @@ Phases are an `enum` in `swarm_drone_brain.gd` (no `states/` folder); every tran
 
 ## Spawn notes
 
-- Not spawned by any level yet, and no `WaveBuilder` method yet (phase 2 later tasks). Do not attach
-  `.move()` unless it is meant to fly a rail (then it rams on contact like the Kamikaze).
+- `b.drone()` (`WaveBuilder.DRONE`). Every level-1 drone line spawns with no `.move()`: it arrives at its `.at()` /
+  `.delay()` and fights under the corridor constraint. Formations are one squad; loose lines in one wave share
+  `.squad(&"w<n>")` when there are 2–7 of them (`level_1_director.gd` header). Pinned by
+  `tests/integration/test_level1_drone_spawns.gd` (rows, grouping, the §5 C3 concurrency ratios) and
+  `tests/integration/test_level1_drone_exit.gd` (cloud_descent's last wave leaves under AI before the timeout).
+- Do not attach `.move()` unless it is meant to fly a rail (then it is armed and rams on contact like the old
+  Kamikaze). The space station's BOTTOM reinforcement squad is the one deliberate rail user.
 
 ## Tests
 

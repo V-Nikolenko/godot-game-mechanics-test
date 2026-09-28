@@ -50,127 +50,127 @@ const _LEGACY_LIFETIME: float = 3.5
 ## way `_actual_drone_spawns()` below does — never hand-edit a single row without re-deriving the
 ## whole table, or a typo would pass by accident.
 const EXPECTED: Array[Dictionary] = [
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 1.00, "offset": Vector2(-260.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 1.00, "offset": Vector2(260.0, -400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": true},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 1.00, "offset": Vector2(-260.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 1.00, "offset": Vector2(260.0, -400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": false},
 	{"section": &"deep_space", "kind": "RAZOR_DRONE", "trigger": 1.50, "offset": Vector2(-160.0, -420.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
 	{"section": &"deep_space", "kind": "RAZOR_DRONE", "trigger": 1.50, "offset": Vector2(160.0, -420.0), "delay": 0.35, "formation": &"none", "formation_count": -1, "movement": false},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(-220.0, -400.0), "delay": 0.10, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(220.0, -400.0), "delay": 0.10, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 3.00, "offset": Vector2(120.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 3.00, "offset": Vector2(180.0, -400.0), "delay": 0.25, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 3.00, "offset": Vector2(240.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 4.00, "offset": Vector2(-220.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 4.00, "offset": Vector2(220.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 4.00, "offset": Vector2(0.0, -400.0), "delay": 0.40, "formation": &"ClusterFormation", "formation_count": 3, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 8.00, "offset": Vector2(-140.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 8.00, "offset": Vector2(140.0, -400.0), "delay": 0.70, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 9.50, "offset": Vector2(-100.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 9.50, "offset": Vector2(0.0, -400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 9.50, "offset": Vector2(100.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 11.00, "offset": Vector2(0.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 12.50, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 3, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 14.00, "offset": Vector2(200.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 14.00, "offset": Vector2(-200.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 16.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"LineFormation", "formation_count": 4, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 17.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 4, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 20.00, "offset": Vector2(0.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 21.00, "offset": Vector2(-110.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 3, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(-60.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(60.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(30.0, -400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(-120.0, -400.0), "delay": 0.35, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(120.0, -400.0), "delay": 0.35, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 23.00, "offset": Vector2(-180.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 23.00, "offset": Vector2(180.0, -400.0), "delay": 0.15, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 26.00, "offset": Vector2(0.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 27.00, "offset": Vector2(-100.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 27.00, "offset": Vector2(0.0, -400.0), "delay": 0.15, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 27.00, "offset": Vector2(100.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(-200.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(-100.0, -400.0), "delay": 0.10, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(-50.0, -400.0), "delay": 0.15, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(0.0, -400.0), "delay": 0.25, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(50.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(100.0, -400.0), "delay": 0.35, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(200.0, -400.0), "delay": 0.45, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(-180.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(180.0, -400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 5.00, "offset": Vector2(160.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 8.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 3, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 13.00, "offset": Vector2(-60.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 13.00, "offset": Vector2(60.0, -400.0), "delay": 0.25, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 16.00, "offset": Vector2(-80.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 16.00, "offset": Vector2(0.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 16.00, "offset": Vector2(80.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 24.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 4, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 32.00, "offset": Vector2(120.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(-95.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(-36.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(24.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(84.0, -400.0), "delay": 0.90, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(180.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(240.0, -400.0), "delay": 0.70, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 42.00, "offset": Vector2(140.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 3, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 44.00, "offset": Vector2(0.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 44.00, "offset": Vector2(-80.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 44.00, "offset": Vector2(80.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 50.00, "offset": Vector2(-200.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 50.00, "offset": Vector2(200.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 53.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 3, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 58.00, "offset": Vector2(-72.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 58.00, "offset": Vector2(72.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 62.00, "offset": Vector2(-150.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 62.00, "offset": Vector2(150.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(-220.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(-110.0, -400.0), "delay": 0.15, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(0.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(110.0, -400.0), "delay": 0.45, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(220.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 75.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 4, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 84.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 5, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(95.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(36.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(-24.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(-84.0, -400.0), "delay": 0.90, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(-150.0, -400.0), "delay": 1.10, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(150.0, -400.0), "delay": 1.10, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 106.00, "offset": Vector2(-220.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 106.00, "offset": Vector2(-110.0, -400.0), "delay": 0.15, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 106.00, "offset": Vector2(0.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 106.00, "offset": Vector2(110.0, -400.0), "delay": 0.45, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"planet_approach", "kind": "DRONE", "trigger": 106.00, "offset": Vector2(220.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(-130.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(130.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 5.00, "offset": Vector2(-500.0, 150.0), "delay": 0.90, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 9.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 3, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 14.00, "offset": Vector2(500.0, 150.0), "delay": 0.90, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 18.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 4, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(-150.0, 400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(-75.0, 400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(0.0, 400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(75.0, 400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(150.0, 400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 32.00, "offset": Vector2(0.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 36.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 4, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 46.00, "offset": Vector2(-100.0, 400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 46.00, "offset": Vector2(0.0, 400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 46.00, "offset": Vector2(100.0, 400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 56.00, "offset": Vector2(-130.0, 400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 56.00, "offset": Vector2(-65.0, 400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 56.00, "offset": Vector2(0.0, 400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 56.00, "offset": Vector2(65.0, 400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 56.00, "offset": Vector2(130.0, 400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 62.00, "offset": Vector2(0.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 62.00, "offset": Vector2(-150.0, -400.0), "delay": 0.70, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 62.00, "offset": Vector2(150.0, -400.0), "delay": 0.70, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(-100.0, 400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(100.0, 400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 76.00, "offset": Vector2(-180.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 76.00, "offset": Vector2(-90.0, -400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 76.00, "offset": Vector2(0.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 76.00, "offset": Vector2(90.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": true},
-	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 76.00, "offset": Vector2(180.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "movement": true},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(-220.0, -400.0), "delay": 0.10, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(220.0, -400.0), "delay": 0.10, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 3.00, "offset": Vector2(120.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 3.00, "offset": Vector2(180.0, -400.0), "delay": 0.25, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 3.00, "offset": Vector2(240.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 4.00, "offset": Vector2(-220.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 4.00, "offset": Vector2(220.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 4.00, "offset": Vector2(0.0, -400.0), "delay": 0.40, "formation": &"ClusterFormation", "formation_count": 3, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 8.00, "offset": Vector2(-140.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 8.00, "offset": Vector2(140.0, -400.0), "delay": 0.70, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 9.50, "offset": Vector2(-100.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 9.50, "offset": Vector2(0.0, -400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 9.50, "offset": Vector2(100.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 11.00, "offset": Vector2(0.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 12.50, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 3, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 14.00, "offset": Vector2(200.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 14.00, "offset": Vector2(-200.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 16.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"LineFormation", "formation_count": 4, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 17.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 4, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 20.00, "offset": Vector2(0.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 21.00, "offset": Vector2(-110.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 3, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(-60.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(60.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(30.0, -400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(-120.0, -400.0), "delay": 0.35, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(120.0, -400.0), "delay": 0.35, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 23.00, "offset": Vector2(-180.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 23.00, "offset": Vector2(180.0, -400.0), "delay": 0.15, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 26.00, "offset": Vector2(0.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 27.00, "offset": Vector2(-100.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 27.00, "offset": Vector2(0.0, -400.0), "delay": 0.15, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 27.00, "offset": Vector2(100.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(-200.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(-100.0, -400.0), "delay": 0.10, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(-50.0, -400.0), "delay": 0.15, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(0.0, -400.0), "delay": 0.25, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(50.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(100.0, -400.0), "delay": 0.35, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"deep_space", "kind": "DRONE", "trigger": 28.00, "offset": Vector2(200.0, -400.0), "delay": 0.45, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(-180.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(180.0, -400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 5.00, "offset": Vector2(160.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 8.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 3, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 13.00, "offset": Vector2(-60.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 13.00, "offset": Vector2(60.0, -400.0), "delay": 0.25, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 16.00, "offset": Vector2(-80.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 16.00, "offset": Vector2(0.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 16.00, "offset": Vector2(80.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 24.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 4, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 32.00, "offset": Vector2(120.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(-95.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(-36.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(24.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(84.0, -400.0), "delay": 0.90, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(180.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 35.00, "offset": Vector2(240.0, -400.0), "delay": 0.70, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 42.00, "offset": Vector2(140.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 3, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 44.00, "offset": Vector2(0.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 44.00, "offset": Vector2(-80.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 44.00, "offset": Vector2(80.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 50.00, "offset": Vector2(-200.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 50.00, "offset": Vector2(200.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 53.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 3, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 58.00, "offset": Vector2(-72.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 58.00, "offset": Vector2(72.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 62.00, "offset": Vector2(-150.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 62.00, "offset": Vector2(150.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(-220.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(-110.0, -400.0), "delay": 0.15, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(0.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(110.0, -400.0), "delay": 0.45, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(220.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 75.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 4, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 84.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 5, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(95.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(36.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(-24.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(-84.0, -400.0), "delay": 0.90, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(-150.0, -400.0), "delay": 1.10, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 95.00, "offset": Vector2(150.0, -400.0), "delay": 1.10, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 106.00, "offset": Vector2(-220.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 106.00, "offset": Vector2(-110.0, -400.0), "delay": 0.15, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 106.00, "offset": Vector2(0.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 106.00, "offset": Vector2(110.0, -400.0), "delay": 0.45, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"planet_approach", "kind": "DRONE", "trigger": 106.00, "offset": Vector2(220.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(-130.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 2.00, "offset": Vector2(130.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 5.00, "offset": Vector2(-500.0, 150.0), "delay": 0.90, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 9.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 3, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 14.00, "offset": Vector2(500.0, 150.0), "delay": 0.90, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 18.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"ClusterFormation", "formation_count": 4, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(-150.0, 400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(-75.0, 400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(0.0, 400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(75.0, 400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 22.00, "offset": Vector2(150.0, 400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 32.00, "offset": Vector2(0.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 36.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 4, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 46.00, "offset": Vector2(-100.0, 400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 46.00, "offset": Vector2(0.0, 400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 46.00, "offset": Vector2(100.0, 400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 56.00, "offset": Vector2(-130.0, 400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 56.00, "offset": Vector2(-65.0, 400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 56.00, "offset": Vector2(0.0, 400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 56.00, "offset": Vector2(65.0, 400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 56.00, "offset": Vector2(130.0, 400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 62.00, "offset": Vector2(0.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 62.00, "offset": Vector2(-150.0, -400.0), "delay": 0.70, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 62.00, "offset": Vector2(150.0, -400.0), "delay": 0.70, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(-100.0, 400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 68.00, "offset": Vector2(100.0, 400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 76.00, "offset": Vector2(-180.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 76.00, "offset": Vector2(-90.0, -400.0), "delay": 0.20, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 76.00, "offset": Vector2(0.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 76.00, "offset": Vector2(90.0, -400.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "movement": false},
+	{"section": &"cloud_descent", "kind": "DRONE", "trigger": 76.00, "offset": Vector2(180.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "movement": false},
 ]
 
 ## Legacy per-section peaks at `_LEGACY_LIFETIME`, from plan §5's precomputed table — asserted as
@@ -247,24 +247,71 @@ func test_the_pin_itself_is_internally_consistent() -> void:
 	assert_eq(razor_rows, 2, "level 1 has exactly one razor_drone pair today")
 
 
-## Every drone line ships with a movement (it flies a path); both razor drone lines do not (razor
-## drones are self-managed AI — `docs/enemy-roster.md`, `wave_builder.gd:288-292`). Called
-## out as its own case per the task's acceptance criteria, even though the full-row comparison
-## above already implies it.
-func test_every_drone_has_movement_and_every_razor_drone_does_not() -> void:
-	for row: Dictionary in EXPECTED:
-		if row["kind"] == "DRONE":
-			assert_true(row["movement"], "drone at %s (%s) has no movement" % [row["offset"], row["section"]])
-		else:
-			assert_false(row["movement"], "razor_drone at %s (%s) unexpectedly has a movement" % [row["offset"], row["section"]])
+## t15 (§2.10 step 2): no drone or razor drone in level 1 flies a rail any more — every one is
+## squad-AI driven inside the Assault corridor and leaves through `EngagementBudget`. Read from live
+## data, not from `EXPECTED`, so this case stands on its own. `exit_mode` is checked too: a leftover
+## `.free_after()` (read only by `EnemyPathMover`) would set FREE_ON_DURATION with no mover to honour it.
+func test_no_drone_or_razor_drone_has_a_movement() -> void:
+	var checked := 0
+	for section: LevelSection in _build_sections():
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+				if path != _DRONE and path != _RAZOR_DRONE:
+					continue
+				checked += 1
+				assert_null(entry.movement, "%s at %s (%s, %.2f s) still flies a rail"
+					% [path.get_file(), entry.base_offset, section.section_name, wave.trigger_time])
+				assert_eq(entry.exit_mode, EnemyPathMover.ExitMode.FREE_ON_SCREEN_EXIT,
+					"%s at %s (%s, %.2f s) keeps a path-mover-only .free_after()"
+						% [path.get_file(), entry.base_offset, section.section_name, wave.trigger_time])
+	assert_eq(checked, EXPECTED.size(), "sanity: every pinned entry was checked")
 
 
-## The specific regression this pin exists to catch once t15 removes every drone's `.move()`
-## (§2.10 step 2, plan §4 row for this file: "movement == null for every drone and razor... A
-## drone line re-given `.move()` fails"). Verified now, against today's data, by hand-flipping one
-## row's `movement` to `false` and observing `test_pinned_drone_and_razor_drone_spawns_match_todays_data`
-## go red — see the task's acceptance criteria. Left as a comment rather than code because doing it
-## in-line would require mutating `EXPECTED`, which is a `const`.
+## Boundary (the task's acceptance criterion): a drone line re-given `.move()` fails the pin. Done on
+## a fresh `_build_sections()` result, so nothing shared is mutated.
+func test_a_drone_line_regiven_a_move_fails_the_pin() -> void:
+	var sections := _build_sections()
+	var mutated := false
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if not mutated and entry.ship_scene and entry.ship_scene.resource_path == _DRONE:
+					entry.movement = StraightMovement.new()
+					mutated = true
+	assert_true(mutated, "sanity: level 1 has a drone line to mutate")
+	assert_ne(_actual_drone_spawns(sections), EXPECTED,
+		"a drone line with a movement must not match the rails-off pin")
+
+
+## §2.10 step 2 grouping rule: in each wave, loose (unformationed) drone lines share one squad id when
+## there are 2–7 of them; a lone loose drone has none (a squad of one); formation entries carry none
+## (a formation is automatically one squad, `WaveManager._trigger_wave()`). No loose wave exceeds 7,
+## the "3–6 + one" ceiling (IDEAS §17).
+func test_loose_drone_lines_share_one_squad_per_wave() -> void:
+	var grouped_waves := 0
+	for section: LevelSection in _build_sections():
+		for wave: WaveResource in section.waves:
+			var loose: Array[SpawnEntryResource] = []
+			for entry: SpawnEntryResource in wave.entries:
+				if entry.ship_scene == null or entry.ship_scene.resource_path != _DRONE:
+					continue
+				if entry.formation != null:
+					assert_eq(entry.squad_id, &"", "%s %.2f s: a formation needs no squad id"
+						% [section.section_name, wave.trigger_time])
+				else:
+					loose.append(entry)
+			var where := "%s %.2f s" % [section.section_name, wave.trigger_time]
+			assert_lte(loose.size(), 7, "%s: a loose drone wave larger than 7 must be split" % where)
+			if loose.size() == 1:
+				assert_eq(loose[0].squad_id, &"", "%s: a lone loose drone is a squad of one" % where)
+			elif loose.size() >= 2:
+				grouped_waves += 1
+				var id: StringName = loose[0].squad_id
+				assert_ne(id, &"", "%s: %d loose drones must share a squad id" % [where, loose.size()])
+				for e: SpawnEntryResource in loose:
+					assert_eq(e.squad_id, id, "%s: every loose drone must share one squad id" % where)
+	assert_gt(grouped_waves, 0, "sanity: level 1 has loose drone waves to group")
 
 
 ## Count formations directly from a fresh call to `_build_sections()` — not derived from
@@ -300,6 +347,83 @@ func test_legacy_peak_concurrency_per_section() -> void:
 		var peak: int = DroneConcurrency.peak_concurrency(times, _LEGACY_LIFETIME)
 		assert_eq(peak, int(_EXPECTED_LEGACY_PEAKS[section.section_name]),
 			"%s: legacy peak concurrent drones changed" % section.section_name)
+
+
+
+## §5 C3 (t15): with rails off, drones live `engage_seconds` plus their exit instead of one ~3.5 s
+## pass. The ceilings are the epic plan's pre-decided thresholds: the attack-capable peak (the first
+## three members of every squad, plus every Razor) at most 2.0 × the legacy peak, and every drone
+## at most 2.5 ×. Lifetimes come from the shipped configs and the live world rect, so a config or
+## spawn change that pushes a section past them fails here.
+const _C3_CAPABLE_RATIO := 2.0
+const _C3_ALL_RATIO := 2.5
+const _SWARM_CONFIG: SwarmDroneConfig = preload("res://assault/scenes/enemies/swarm_drone/swarm_drone_config.tres")
+const _RAZOR_CONFIG: RazorDroneConfig = preload("res://assault/scenes/enemies/razor_drone/razor_drone_config.tres")
+
+
+func _c3_lifetimes() -> Dictionary:
+	var cam := ArenaCamera.new()
+	add_child_autofree(cam)
+	var rect := cam.projectile_world_rect()
+	var exit_distance := minf(rect.size.x, rect.size.y) / 2.0
+	var s := _SWARM_CONFIG
+	var r := _RAZOR_CONFIG
+	var swarm_exit := DroneConcurrency.worst_exit_seconds(exit_distance, s.exit_speed, s.acceleration)
+	# The Razor's own worst exit (test_engagement_deadline.gd's Razor formula): its expiry can wait
+	# out a dash and start moving at dash_speed away from the edge.
+	var razor_exit := r.max_dash_seconds + (r.dash_speed + r.exit_speed) / minf(r.acceleration, r.braking) \
+		+ (exit_distance + r.dash_speed * r.dash_speed / (2.0 * r.braking)) / r.exit_speed
+	return {
+		"swarm_attacker": s.engage_seconds + swarm_exit,
+		"swarm_rear": s.rear_engage_seconds + swarm_exit,
+		"razor": r.engage_seconds + razor_exit,
+	}
+
+
+func test_c3_peak_concurrency_stays_within_the_pre_decided_ratios() -> void:
+	var lifetimes := _c3_lifetimes()
+	var ship_paths: Array[String] = [_DRONE, _RAZOR_DRONE]
+	var checked := 0
+	for section: LevelSection in _build_sections():
+		if not _EXPECTED_LEGACY_PEAKS.has(section.section_name):
+			continue
+		checked += 1
+		var legacy: int = DroneConcurrency.peak_concurrency(
+			DroneConcurrency.spawn_times(section, ship_paths), _LEGACY_LIFETIME)
+		var intervals := DroneConcurrency.squad_intervals(section, _DRONE, _RAZOR_DRONE, lifetimes)
+		var capable := DroneConcurrency.peak_intervals(intervals, true)
+		var all := DroneConcurrency.peak_intervals(intervals)
+		var rotating := DroneConcurrency.peak_min_alive_three(intervals)
+		gut.p("C3 %s: legacy %d, capable %d (%.2f x), all %d (%.2f x), min(alive,3)/squad %d (%.2f x)" % [
+			section.section_name, legacy, capable, float(capable) / legacy, all, float(all) / legacy,
+			rotating, float(rotating) / legacy])
+		assert_lte(float(capable), _C3_CAPABLE_RATIO * legacy,
+			"%s: attack-capable peak %d exceeds %.1f x legacy %d" % [section.section_name, capable, _C3_CAPABLE_RATIO, legacy])
+		assert_lte(float(all), _C3_ALL_RATIO * legacy,
+			"%s: all-drones peak %d exceeds %.1f x legacy %d" % [section.section_name, all, _C3_ALL_RATIO, legacy])
+	assert_eq(checked, 3, "sanity: all three drone sections were checked")
+
+
+## Boundary for the helper's squad model: one 5-drone formation is one squad with 3 attack-capable
+## members (LEAD + two flanks) and 2 REAR, and the REAR ones get the REAR lifetime.
+func test_c3_helper_counts_three_attackers_per_squad() -> void:
+	var b := WaveBuilder.new()
+	var section := LevelSection.new()
+	var waves: Array[WaveResource] = [b.wave(0.0, [b.drone().formation(b.wedge_formation(5, 40, 14)).at(0, -400)])]
+	section.waves = waves
+	var intervals := DroneConcurrency.squad_intervals(section, _DRONE, _RAZOR_DRONE,
+		{"swarm_attacker": 8.0, "swarm_rear": 3.0, "razor": 12.0})
+	assert_eq(intervals.size(), 5)
+	var capable := 0
+	for iv: Dictionary in intervals:
+		if iv["capable"]:
+			capable += 1
+			assert_almost_eq(float(iv["end"]) - float(iv["start"]), 8.0, 0.001)
+		else:
+			assert_almost_eq(float(iv["end"]) - float(iv["start"]), 3.0, 0.001)
+	assert_eq(capable, 3, "a 5-drone squad fields exactly three attackers")
+	assert_eq(DroneConcurrency.peak_intervals(intervals, true), 3)
+	assert_eq(DroneConcurrency.peak_intervals(intervals), 5)
 
 
 ## Boundary: a section with no drones at all must compute a peak of 0, not error or return a
