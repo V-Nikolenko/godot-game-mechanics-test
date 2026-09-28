@@ -18,7 +18,7 @@ Plan: `docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md` §2.8.2–§2.8.3. Task p
 | Damage | 30 contact while dashing (RAMMING); pulse shot 10 |
 | Speed | 200 approach/return · orbit anchor 1.8 rad/s at 130 px · 360 feint lunge · 480 dash · 200 overshoot · 320 exit |
 | Mover | acceleration 900, braking 700, `max_turn_rate` 6 rad/s, `turn_lerp` 7, `constraint_mode = AUTO` |
-| Sprite | `drone_2.png` (placeholder until the t13 sprite; nose-up, `sprite_forward_angle = -PI/2`) |
+| Sprite | `assault/assets/sprites/enemies/razor_drone.png`, 48×48, dedicated top-down art (blade/crescent silhouette, dark gunmetal hull, cyan edge highlight, red faction accent; nose-up, `sprite_forward_angle = -PI/2`) |
 | Scene | `razor_drone.tscn` |
 | Config | `razor_drone_config.tres` |
 

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cxyclr7xctgct"
-path="res://.godot/imported/drone_2.png-9d89febf09bc03b1c4109779bd281743.ctex"
+uid="uid://cxkcr88ndg1u2"
+path="res://.godot/imported/razor_drone.png-e9d51ff17d3e639b5ae44486bbe2ab70.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assault/assets/sprites/enemies/drone_2.png"
-dest_files=["res://.godot/imported/drone_2.png-9d89febf09bc03b1c4109779bd281743.ctex"]
+source_file="res://assault/assets/sprites/enemies/razor_drone.png"
+dest_files=["res://.godot/imported/razor_drone.png-e9d51ff17d3e639b5ae44486bbe2ab70.ctex"]
 
 [params]
 
