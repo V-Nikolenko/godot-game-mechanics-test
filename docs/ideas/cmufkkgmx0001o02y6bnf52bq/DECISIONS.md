@@ -798,3 +798,112 @@ section next:
   Razor's patrol ring than the planets do). `docs/epics-done/cmufs7ek60001nm2x6d0bt2et/REPORT.md` lists these as
   known gaps in full, plus the hand-playtest checklists t15 and t16 ended their runs with.
 - No numeric collision-layer bit changed meaning or value in this phase.
+
+## Phase 3 - Enemy rework, phase 3: Fighter, Gatling Interceptor and the bullet family (2026-09-28)
+
+These are the **planned** decisions:
+- plan: `docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md` (revision 1);
+- research: `1-context.md` and `2-research.md` in the same directory;
+- tasks: `tasks.json` (18 tasks, t1–t18).
+
+Once this phase's *as built* section exists, check it first.
+
+### Changes to Phase 1 and 2 decisions (plan §2.0)
+- **Rails and brain-driven fire (Ph1 t10 note, which gave this to Ph15) are decided now, for these two enemies.**
+  - When a brain is suspended on a rail (`on_suspended()`), it:
+    - leaves its squad and turns its `StateLight` off;
+    - sets `attack.driven_by_brain = false` and `attack.enabled = true`;
+    - installs a pattern equivalent to the legacy weapon.
+  - `AttackController._process` then self-times the fire.
+  - `aim_mode` / `shoot_forward()` / `shoot_at_player()` are now **rail-only inputs**; an AI fighter ignores them.
+  - **Ph15 reuses this rule** for every other shooter it takes off rails.
+- **Minimal hub idle for the Fighter and the Gatling** (the Ph2 rule was "other families → Ph14"). It is an
+  `AnchorIdle` shared ring (IDLE / NOTICING / RETURNING, the Swarm t8d shape), with no bespoke legs. Richer idle stays
+  Ph14.
+- **Level 1's fighter and interceptor spawns go off rails in Ph3.** Every other level-1 spawn, and every station
+  reinforcement, stays on rails until Ph15.
+- **The `EnemyPathMover` `"AIStateMachine"` lookup is kept** (Ph1 decision). Its test moves onto a fixture scene,
+  because the Light Assault Ship's state machine is deleted.
+- **`Steering.lead_target` / `break_contact` are not built.** Lead targeting is `TargetInfo.aim_direction()` /
+  `intercept()`. `break_contact` stays with the Sniper (Ph4).
+- **`SquadController` gains exactly one field, `convergence_point: Vector2`** (`Vector2.INF` = unset).
+  - Only the LEAD writes it. `_reassign()` clears it whenever the LEAD changes, the same rule as
+    `attack_window_open`.
+  - There is still no clock on the board.
+- **Forward fire honours `sprite_forward_angle`.**
+  - `AimedAttackPattern` / `GatlingAttackPattern` fire forward along
+    `Vector2.RIGHT.rotated(rotation + sprite_forward_angle)`, and `EnemyPathMover` faces with
+    `vel.angle() - sprite_forward_angle`.
+  - Both read the angle duck-typed, with a fallback of `PI/2`, so every existing user is bit-identical.
+  - New art may be drawn nose-up or nose-down.
+- **Deadline formula for fighters is per entry:** `spawn_time + engage + worst_exit + 0.5 ≤ waves_complete_time +
+  timeout`. The drone rows keep Ph2's conservative form.
+- **Correction to the research: in-flight enemy bullets never outlive their shooter.** `BulletPool._exit_tree()` →
+  `cancel_active()`. So ENEMIES_CLEARED deadlines need **no bullet-flight term**, and no round is barred from those
+  sections for lifetime reasons. The side effect is that a leaving shooter's bullets vanish mid-screen (legacy did the
+  same). Owner-bound lifetime stays Ph5.
+
+### Names and places (later phases build on these)
+- **Fighter:** `assault/scenes/enemies/fighter/` (a `git mv` of `light_assault_ship/`).
+  - Classes: `Fighter` (was `LightAssaultShip`), `FighterBrain`, and `FighterConfig` (kept, extended, flat).
+  - `WaveBuilder.FIGHTER` / `fighter()` keep their names.
+  - `FighterBrain.Phase`: `APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE`, with `IDLE, NOTICING, RETURNING`
+    appended.
+  - Signals and seams: `phase_changed(new_phase: int)`, `enter_phase()`, `weapon_mode` (read-only), and
+    `weapon_mode_changed(mode: int)`.
+  - Two controllers: `AimedAttack` (Pulse pool) and `ForwardAttack` (Scatter pool). `brain.attack` is the aimed one;
+    `brain.forward_attack` is the second.
+- **Gatling Interceptor:** `assault/scenes/enemies/gatling_interceptor/` (a `git mv` of `interceptor/`).
+  - Classes: `GatlingInterceptor`, `GatlingInterceptorBrain`, `GatlingInterceptorConfig`.
+  - `WaveBuilder.GATLING_INTERCEPTOR` / `gatling_interceptor()`; `interceptor()` is gone.
+  - Phases: `APPROACH, SWING_IN, SPIN_UP, STREAM, COOLDOWN, REPOSITION, DISENGAGE`, with the idle phases appended.
+  - **The Gatling aims its streams at a predicted point.** This settles the "forward or at the player" question; the old
+    docs that said "always fires forward" were wrong.
+- **The bullet family:** `assault/scenes/projectiles/enemy_bullet/rounds/`, holding `pulse_round.tscn`,
+  `scatter_round.tscn`, `gatling_stream_round.tscn` and `heavy_shell.tscn`.
+  - They are inherited scenes of `enemy_bullet.tscn`, with no new script, and **one pool per round per shooter**.
+  - `EnemyRounds` (`enemy_rounds.gd`) holds the four paths plus `pool_size_for(max_burst, round_lifetime,
+    min_burst_period)`.
+  - `EnemyBullet.reset()` restores the scene's authored speed and damage.
+  - **Heavy Shell has no consumer in Ph3.** Its first consumer is Ph4 (Bomber/Ram) or Ph10 (Heavy Gunship).
+  - Legacy `enemy_bullet.tscn` stays orange, and legacy shooters keep it until Ph17's audit.
+- **`BurstClock`** (`global/enemy_ai/burst_clock.gd`, `RefCounted`) is the one way a brain sequences N shots at a gap.
+  - API: `start`, `advance → shots due`, `is_running`, `shots_fired`, `stop`.
+  - The brain calls `fire_now()` once per shot due. `AttackController` is unchanged.
+  - Later enemies with bursts or salvos (Bomber, Missile Corvette, Gunship) reuse it.
+- **Pattern additions:** `AimedAttackPattern.spread_angle`, and on both aimed and Gatling patterns a per-instance
+  `rng: RandomNumberGenerator` and `aim_point: Vector2` (`INF` = ask `TargetInfo`).
+  - With `rng == null`, the pattern keeps the global `randf`, as legacy does.
+  - Patterns stay **built per instance in code**.
+- **`WaveBuilder.w_formation(count, spread, depth)`** is a spawn layout only.
+
+### Conventions
+- **Weapon mode is chosen by distance at each burst opportunity, with hysteresis, and latched for the whole burst:**
+  FORWARD below 300 px, AIMED from 360 px, and the last mode in between. It is never a spawn property.
+- **Attacker cap without new API:** in a fighter squad, LEAD + FLANK_L + FLANK_R fire and REARs fly **dry** passes. In
+  a Gatling squad, LEAD + FLANKs fire and REARs hold.
+- **Convergence pairs stay on the same half-plane** of the player, about 40° apart, so the far side stays open. Both
+  light CHARGING together.
+- **Squads stay per family.** Level-1 loose fighter lines use the id `&"w<n>f"` and Gatlings `&"w<n>g"`. Drones keep
+  `&"w<n>"`.
+- **Heading reference in Assault is `Vector2.UP`.** Fighter flank passes are lateral runs across the corridor. The
+  Gatling's flank is the corridor half opposite the player.
+- **`StateLight`:** CHARGING = the burst telegraph / Gatling swing-in and spin-up; ARMED = firing; OFF otherwise.
+  **Neither shooter uses COMMIT** (Ph2 reserved it for committed ram attacks).
+- **Pools are sized by formula and pinned:** `max_burst × ceil(round_lifetime / min_burst_period)`.
+- **Gatlings stay out of ENEMIES_CLEARED sections**, and the deadline test has a boundary row for it, as for the Razor.
+- **Level-1 shooter density is gated:** attack-capable ≤ 1.5×, all-alive ≤ 2.0× and shots/s ≤ 1.25× the legacy
+  per-section peak. The pre-approved levers, in order: fighter `engage_seconds` 6.0 → 4.5, `assault_passes` 2 → 1, and
+  split a formation of 5+.
+
+### Deliberately deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| Heavy Shell gameplay consumer | Ph4 / Ph10 | No in-scope enemy fires it; tested with a fixture shooter |
+| Recolouring legacy enemy bullets | Ph17 | Would change every legacy shooter's look |
+| Station reinforcements off rails | Ph15 | Reuses the rail-fire rule above |
+| Cross-squad / cross-family attacker arbitration | Ph14 | Needs squad messages |
+| Leash / re-engage for Open Space fighters (they fight indefinitely) | Ph13 | EncounterDirector |
+| Muzzle flash, spin-up particles, enemy SFX | Ph17 | `StateLight` is the only telegraph |
+| Rotating `spawn_offset` with the nose | Ph17 | 10 px sits inside a 64 px hull |
+| `BulletPool` container injection, `persist_after_owner_death` | Ph5 | Unchanged from Ph2 |
