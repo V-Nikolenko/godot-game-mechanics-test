@@ -231,11 +231,17 @@ func _decel() -> float:
 	return braking if braking > 0.0 else acceleration
 
 
-## The actor's `sprite_forward_angle`, read duck-typed; `PI / 2` (nose-down) when it has none.
 func _sprite_forward_angle() -> float:
-	if actor == null:
+	return sprite_forward_angle_of(actor)
+
+
+## `node`'s `sprite_forward_angle`, read duck-typed; `PI / 2` (nose-down) when it has none. The one
+## shared reader for every consumer of the convention (X7) — forward-fire direction
+## (`AimedAttackPattern`, `GatlingAttackPattern`), this mover's own facing, and `EnemyPathMover`'s.
+static func sprite_forward_angle_of(node: Node) -> float:
+	if node == null:
 		return DEFAULT_SPRITE_FORWARD_ANGLE
-	var value: Variant = actor.get(&"sprite_forward_angle")
+	var value: Variant = node.get(&"sprite_forward_angle")
 	if value is float or value is int:
 		return float(value)
 	return DEFAULT_SPRITE_FORWARD_ANGLE

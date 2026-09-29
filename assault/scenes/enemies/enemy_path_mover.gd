@@ -88,9 +88,10 @@ func _physics_process(delta: float) -> void:
 		# previous frame's time. Keep the increment BEFORE this line or direction will invert.
 		var vel: Vector2 = pos_offset - movement.sample(_elapsed - delta) * ArenaCamera.WORLD_SCALE
 		if vel.length_squared() > 0.0001:
-			# Sprite's natural facing is +Y (down). atan2(-vel.x, vel.y) maps travel
-			# direction to that convention.
-			_actor.rotation = atan2(-vel.x, vel.y)
+			# vel.angle() names the travel direction; sprite_forward_angle_of() is the nose's
+			# own offset from rotation 0 (X7, EnemyMover.sprite_forward_angle_of), duck-typed off
+			# the actor so a nose-up sprite still points the right way.
+			_actor.rotation = vel.angle() - EnemyMover.sprite_forward_angle_of(_actor)
 	else:
 		_actor.rotation = look_angle
 
