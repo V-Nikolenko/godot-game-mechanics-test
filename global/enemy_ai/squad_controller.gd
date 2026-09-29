@@ -41,6 +41,16 @@ var rear_ring_angle: float = NAN
 var target_position_hint: Vector2 = Vector2.ZERO
 var target_heading_hint: Vector2 = Vector2.ZERO
 
+## Convergence fire's shared aim point (§2.6.1). `Vector2.INF` = unset; the LEAD writes it every
+## tick while its window is open. Cleared alongside `attack_window_open` whenever the LEAD
+## changes — the window and the point belong to the lead that opened them.
+var convergence_point: Vector2 = Vector2.INF
+
+## member -> 0 answered / 1 ready (SPIN_UP) / 2 stream done, for the convergence rendezvous
+## (§2.6.1). `leave()` erases only the leaving member's key; a LEAD change clears the whole
+## dictionary, same rule as `convergence_point`.
+var convergence_stage: Dictionary = {}
+
 var _members: Array[Node2D] = []
 var _roles: Dictionary = {}     # Node2D -> Role
 var _sides: Dictionary = {}    # Node -> Side
@@ -65,8 +75,11 @@ func leave(member: Node) -> void:
 	_roles.erase(member)
 	_sides.erase(member)
 	_engaged.erase(member)
+	convergence_stage.erase(member)
 	if was_lead:
 		attack_window_open = false  # also covers the last member leaving (_reassign returns early)
+		convergence_point = Vector2.INF
+		convergence_stage.clear()
 	_reassign()
 
 
@@ -215,6 +228,8 @@ func _reassign(force_rear: Node = null) -> void:
 
 	if _lead() != lead_before:
 		attack_window_open = false
+		convergence_point = Vector2.INF
+		convergence_stage.clear()
 
 
 ## The member currently holding LEAD, or null. Called only from `_reassign()`, before and after.
