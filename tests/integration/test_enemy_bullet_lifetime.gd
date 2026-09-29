@@ -133,6 +133,53 @@ func test_enemy_bullet_defaults_are_derived_from_every_shipped_speed_source() ->
 
 
 # ---------------------------------------------------------------------------------------------
+# Per-round sweep (t2, 3-plan.md §2.2, review B5): max_distance / min_fired_speed <= max_time,
+# plus a range floor (>= 1280px, except the Scatter Round, whose short range IS the design).
+# A round with no shooter yet (all four this task) is checked at its own scene default speed.
+# t6/t7 only repoint the regex/config-class names the OTHER sweep above reads; t8a/t10 give the
+# Fighter and the Gatling Interceptor's rounds real config-field speeds, including their rail
+# fallbacks, and this sweep switches to reading those instead of the scene default.
+# ---------------------------------------------------------------------------------------------
+
+const _ROUNDS_RANGE_FLOOR_PX: float = 1280.0
+
+
+## True when a round fired at its slowest speed reaches max_distance before max_time runs out -
+## distance ends the bullet first, exactly like the legacy scene today.
+func _round_clears_its_lifetime(max_distance: float, min_fired_speed: float, max_time: float) -> bool:
+	return max_distance / min_fired_speed <= max_time
+
+
+func test_every_round_clears_its_own_lifetime_at_its_slowest_fired_speed() -> void:
+	var entries: Array[Dictionary] = [
+		{"scene": EnemyRounds.PULSE, "floor": _ROUNDS_RANGE_FLOOR_PX},
+		{"scene": EnemyRounds.GATLING_STREAM, "floor": _ROUNDS_RANGE_FLOOR_PX},
+		{"scene": EnemyRounds.HEAVY_SHELL, "floor": _ROUNDS_RANGE_FLOOR_PX},
+		{"scene": EnemyRounds.SCATTER, "floor": 0.0},
+	]
+	for entry: Dictionary in entries:
+		var scene: PackedScene = entry["scene"]
+		var bullet: EnemyBullet = scene.instantiate()
+		add_child_autofree(bullet)
+		var lifetime := bullet.get_node("ProjectileLifetime") as ProjectileLifetime
+		# No AI or rail shooter picks a round yet - the slowest speed it is ever fired at is its
+		# own scene default, until t8a/t10 give it a real config-field speed to read instead.
+		var min_fired_speed: float = bullet.speed
+
+		assert_true(_round_clears_its_lifetime(lifetime.max_distance, min_fired_speed, lifetime.max_time),
+				"%s must not run out of max_time before max_distance at its slowest fired speed"
+				% scene.resource_path)
+		assert_gte(lifetime.max_distance, entry["floor"] as float, scene.resource_path)
+
+
+func test_a_synthetic_100px_per_s_round_fails_the_sweep() -> void:
+	# The shared legacy budget (18s / 2400px, this file's own derived defaults above) at a
+	# hypothetical 100px/s: 2400 / 100 = 24 > 18 - this round would time out short of its range.
+	assert_false(_round_clears_its_lifetime(2400.0, 100.0, 18.0),
+			"a round this slow would time out before it reaches its own max_distance")
+
+
+# ---------------------------------------------------------------------------------------------
 # Boundary: x = 1444 lives, x = 1444.1 expires, with the Assault provider. No provider: both live.
 # ---------------------------------------------------------------------------------------------
 
