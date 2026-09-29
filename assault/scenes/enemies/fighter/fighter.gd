@@ -1,49 +1,73 @@
 class_name Fighter
 extends BaseEnemy
 
+## The gun-armed Tier 1 fighter (docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md §2.4; task
+## t8a-fighter-shell). It replaces the legacy Light Assault Ship: a `FighterBrain` decides and an
+## `EnemyMover` moves it, driven through `BaseEnemy`'s shared brain/mover tick, so this script
+## defines no `_physics_process`.
+##
+## `_ready()` copies the config onto every node that uses it (the `.tres` wins over the scene) and
+## builds the two attack patterns per instance from flat config fields (a scene sub-resource would be
+## shared by every fighter). It runs AFTER its children's `_ready()`, so the brain builds its
+## `EngagementBudget` on its first tick.
+##
+## Both bullet pools are direct children of this root: `BulletPool` resolves its container as
+## `get_parent().get_parent()`, so a pool authored under an `AttackController` would put live bullets
+## under the ship and they would move with it.
+##
+## Rails: while an `EnemyPathMover` owns the motion, `FighterBrain.on_suspended()` runs the legacy
+## weapon (Pulse rounds). `aim_mode` is read there and nowhere else.
+##
+## Spawn with b.fighter().at(x, y); `.move()` is only needed until level 1 leaves its rails.
+
 @export var config: FighterConfig = load("res://assault/scenes/enemies/fighter/fighter_config.tres")
 
-const _BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn")
-
-## Overrides config.aim_mode when set via SpawnConfig.shoot_forward() / shoot_at_player()
-## before the node enters the tree. "FORWARD" or "PLAYER". Empty = use config default.
+## Rail fallback only. Overrides config.aim_mode when set via SpawnConfig.shoot_forward() /
+## shoot_at_player() before the node enters the tree: "FORWARD" or "PLAYER". Empty = use the config
+## default. An AI fighter ignores it.
 var aim_mode: String = ""
 
-var bullet_pool: BulletPool
+@onready var _fighter_brain: FighterBrain = $Brain
+@onready var _fighter_mover: EnemyMover = $EnemyMover
+@onready var _aimed_attack: AttackController = $AimedAttack
+@onready var _forward_attack: AttackController = $ForwardAttack
+
 
 func _ready() -> void:
 	super._ready()
 	add_to_group("enemies")
-
 	if config:
-		health.max_health = config.max_health
-		health.current_health = config.max_health
-		if contact_hit_box:
-			contact_hit_box.damage = config.collision_damage
+		_apply_config(config)
 
-	# Bullet pool
-	bullet_pool = BulletPool.new()
-	bullet_pool.bullet_scene = _BULLET_SCENE
-	# Arena diagonal 1047px / 420px/s / 0.3s interval ≈ 8.3 → 20 is comfortable.
-	bullet_pool.pool_size = 20
-	add_child(bullet_pool)
 
-	# aim_mode set via spawn props takes priority over the config default.
-	var effective_aim: String = aim_mode if not aim_mode.is_empty() \
-			else (config.aim_mode if config else "PLAYER")
-	var forward: bool = (effective_aim == "FORWARD")
+func _apply_config(cfg: FighterConfig) -> void:
+	health.max_health = cfg.max_health
+	health.current_health = cfg.max_health
+	score_value = cfg.score_value
+	if contact_hit_box:
+		contact_hit_box.damage = cfg.collision_damage
 
-	# Attack pattern built from config values.
-	# Forward shooters fire faster with faster bullets — they can't lead their target,
-	# so higher volume compensates.
-	var pattern := AimedAttackPattern.new()
-	pattern.fire_interval = 0.3 if forward else (config.fire_interval if config else 0.8)
-	pattern.bullet_damage = config.bullet_damage if config else 8
-	pattern.bullet_speed  = 420.0 if forward else 250.0
-	pattern.aim_at_player = not forward
-	pattern.spawn_offset  = Vector2(0.0, 10.0)
+	_fighter_mover.max_speed = cfg.max_speed
+	_fighter_mover.acceleration = cfg.acceleration
+	_fighter_mover.braking = cfg.braking
+	_fighter_mover.max_turn_rate = cfg.turn_rate
 
-	var controller := AttackController.new()
-	controller.pattern = pattern
-	controller.bullet_pool = bullet_pool
-	add_child(controller)
+	var aimed := AimedAttackPattern.new()
+	aimed.bullet_damage = cfg.aimed_damage
+	aimed.bullet_speed = cfg.aimed_speed
+	aimed.aim_at_player = true
+	aimed.accuracy = cfg.aimed_accuracy
+	aimed.spread_angle = cfg.aimed_spread
+	aimed.rng = _fighter_brain.rng
+	_aimed_attack.pattern = aimed
+
+	var forward := AimedAttackPattern.new()
+	forward.bullet_damage = cfg.forward_damage
+	forward.bullet_speed = cfg.forward_speed
+	forward.aim_at_player = false
+	forward.spread_angle = cfg.forward_spread
+	forward.rng = _fighter_brain.rng
+	_forward_attack.pattern = forward
+
+	_fighter_brain.config = cfg
+	_fighter_brain.rail_aim_mode = aim_mode if not aim_mode.is_empty() else cfg.aim_mode

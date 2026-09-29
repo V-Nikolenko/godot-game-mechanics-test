@@ -299,10 +299,17 @@ func _spawn_in(container: Node2D, path: String, aim_mode: String) -> Node:
 ## A ship's own `BulletPool` and `AttackController.pattern`, found by type rather than by field
 ## name — `Fighter.bullet_pool` is public but `GatlingInterceptor._bullet_pool` is not, and this
 ## must read both the same way. Frees `ship`.
+##
+## The Fighter (t8a) is read the way a rail fighter fires: `suspend_ai()` installs the rail pattern on
+## `AimedAttack`, and its second pool / controller (`ForwardPool`, `ForwardAttack`, AI-only) are skipped.
 func _attack_stats_of(ship: Node) -> Dictionary:
+	if ship is BaseEnemy and ship.get_node_or_null("AimedAttack") != null:
+		(ship as BaseEnemy).suspend_ai()
 	var pool: BulletPool = null
 	var pattern: AttackPatternResource = null
 	for child in ship.get_children():
+		if child.name == &"ForwardPool" or child.name == &"ForwardAttack":
+			continue
 		if child is BulletPool:
 			pool = child as BulletPool
 		elif child is AttackController:

@@ -1,7 +1,13 @@
-# Fighter — standard gun-armed fighter (formerly the Light Assault Ship)
+# Fighter — gun-armed Tier 1 fighter (formerly the Light Assault Ship)
 
-**Role:** The baseline shooter. Path-following workhorse that flies in, holds a line, and fires aimed (or forward) shots. Has its own fallback state machine for when no path is attached.
-**Fantasy / threat:** Bread-and-butter opposition. Manageable alone; dangerous in formations where overlapping fire pins the player down.
+**Role:** The baseline shooter. Built as an AI enemy (`FighterBrain` decides, `EnemyMover` moves). While a level
+rail (`EnemyPathMover`) owns its motion it falls back to the legacy weapon, so level 1 and the station's
+reinforcements play as before.
+**Fantasy / threat:** Bread-and-butter opposition. Manageable alone; dangerous in numbers.
+
+> **Status (Phase 3, task t8a):** the shell. The full phase enum, APPROACH, the Assault exit and the rail fallback are
+> built. The attack run (RUN_IN / EXTEND / TURN / REPOSITION), weapon selection by distance and the AI bursts arrive in
+> t8b, so an AI fighter today closes on the player, holds at `standoff_radius` and does not fire.
 
 ---
 
@@ -9,81 +15,60 @@
 
 | Property | Value |
 |---|---|
-| HP | 60 (from `fighter_config.tres`; the `.tscn` Health node has no explicit max, so config sets it) |
-| Damage | 20 contact (`collision_damage`) / 8 per bullet (`bullet_damage`) |
-| Speed | 100 (`movement_speed`, AI fallback only); StrafeExit `strafe_speed` 120, Approach `speed` 80 |
-| Sprite | `assault.png` |
+| HP | 60 (`fighter_config.tres`) |
+| Damage | 20 contact / 8 per Pulse round on rails |
+| Speed | `max_speed` 300, `acceleration` 700, `turn_rate` 1.8 rad/s (turn radius ≈ 167 px) |
+| Sprite | `assault.png` placeholder `AnimatedSprite2D` (flipped 180° by `_rotate_sprite`); `sprite_forward_angle` PI/2 |
 | Scene | `fighter.tscn` |
-| Config | `fighter_config.tres` |
+| Config | `fighter_config.tres` (flat, `@export_group`ed) |
 
 ---
 
-## Behaviour & Movement
+## Scene
 
-- **Movement:** Normally fully delegated to `EnemyPathMover` via `.move()`. If no `EnemyPathMover` is attached, the built-in `AIStateMachine` (`ApproachState` → `StrafeExitState`) drives it instead. `EnemyPathMover` disables this state machine via `process_mode = DISABLED`.
-- **Attack:** `AttackController` driving an `AimedAttackPattern` built in `_ready()`. `aim_mode` comes from spawn props (`shoot_forward()`/`shoot_at_player()`) or the config default `"PLAYER"`. PLAYER: `fire_interval` 0.8 s, bullet speed 250, aims at player. FORWARD: faster `fire_interval` 0.3 s, bullet speed 420, fires straight down. `bullet_damage` 8 either way; bullets pooled (size 20).
-- **Death / scoring:** Awards `score_value` 25 on kill.
+`Fighter` root, `Brain` (`FighterBrain`), `EnemyMover` (`constraint_mode = AUTO`), `StateLight`, the shared body /
+`HurtBox` / `ContactHitBox` circle, and:
 
----
+- `AimedAttack` + `ForwardAttack` — `AttackController`s, `driven_by_brain`, `enabled = false`;
+- `AimedPool` (Pulse Round, 20) and `ForwardPool` (Scatter Round, 8) — **direct children of the root**:
+  `BulletPool` resolves its container as `get_parent().get_parent()`, so a pool under a controller would carry its live
+  bullets with the ship. Gated by `tests/integration/test_fighter.gd`.
 
-## State Graph
+There is no `AIStateMachine` and no `states/` folder.
 
-```
-ApproachState ──reaches hold line (hold_y_offset)──▶ StrafeExitState
-   │                                                      │
-descend at `speed`                            strafe sideways (random L/R) +
-until hold_y                                  downward drift → free at screen edge
-```
+Pool sizes are `max(AI need, rail need)` from `EnemyRounds.pool_size_for(...)`: the aimed burst (5 × ceil(4.67 s / 1.2 s))
+is 20, the FORWARD rail cadence 12, the aimed rail cadence 7; the Scatter burst is 7, rounded to 8.
 
-**Initial state:** `ApproachState` (set on the `AIStateMachine` node). Active ONLY when no `EnemyPathMover` is attached.
+## Brain phases (`FighterBrain.Phase`)
 
-### APPROACH (`states/approach_state.gd`)
-- On `enter()`, computes `_hold_y = cam.y - viewport.y*0.5 + hold_y_offset`.
-- Each physics frame, moves down at `speed` until `global_position.y ≥ _hold_y`, then emits a transition to the strafe state.
-- Firing is handled by the ship's `AttackController`, not this state.
+`APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE` (t12 appends the idle phases). `phase_changed(new_phase: int)`
+fires on every transition; `enter_phase()` is the one transition path.
 
-| Export | Default | Meaning |
-|---|---|---|
-| `actor` | (NodePath `../..`) | The Fighter this state drives. |
-| `speed` | `80.0` | Downward approach speed (px/s). |
-| `hold_y_offset` | `80.0` | Px below the top edge where it stops descending. |
-| `strafe_state` | (NodePath to StrafeExitState) | State to transition to on arrival. |
+- **APPROACH** — a plain curved intercept (`Steering.turn_toward` at `turn_rate`, predicted player position), brakes at
+  `standoff_radius`.
+- **RUN_IN .. REPOSITION** — t8b.
+- **DISENGAGE** — Assault only, when the `EngagementBudget` (`engage_seconds`) expires: releases the corridor constraint,
+  raises the mover to `exit_speed`, curves toward the nearest edge of the projectile world rect and frees itself once
+  outside it. Open Space never disengages.
 
-### STRAFE EXIT (`states/strafe_exit_state.gd`)
-- On `enter()`, picks a random horizontal direction (`±1`).
-- Each frame, moves `Vector2(_direction * strafe_speed, downward_drift)`; frees itself once past the left/right screen edge (+60 px).
+## Rail fallback
 
-| Export | Default | Meaning |
-|---|---|---|
-| `actor` | (NodePath `../..`) | The Fighter this state drives. |
-| `strafe_speed` | `120.0` | Horizontal strafe speed (px/s). |
-| `downward_drift` | `20.0` | Constant downward drift while strafing (px/s). |
+`BaseEnemy.suspend_ai()` calls `FighterBrain.on_suspended()`, which hands `AimedAttack` back to self-timed fire from config
+fields: `aim_mode == "FORWARD"` → a Pulse round every `rail_forward_interval` (0.3 s) at `rail_forward_speed` (420);
+otherwise an aimed round every `fire_interval` (0.8 s) at `rail_aimed_speed` (250). Damage is `bullet_damage` (8).
+`aim_mode` (spawn props `shoot_forward()` / `shoot_at_player()`, else the config default) is read **only** there; an AI
+fighter ignores it.
 
----
+## Config
 
-## Config exports
-
-| Export | Default | Meaning |
-|---|---|---|
-| `max_health` | `60` | HP. |
-| `collision_damage` | `20` | Contact HitBox damage. |
-| `score_value` | `25` | Points on kill. |
-| `counts_toward_wave_clear` | `true` | Counts toward wave-clear bonus. |
-| `movement_speed` | `100.0` | Used by the AI fallback when no `EnemyPathMover` is present; otherwise irrelevant. |
-| `fire_interval` | `0.8` | Seconds between shots in PLAYER mode (FORWARD overrides to 0.3). |
-| `bullet_damage` | `8` | Per-bullet damage. |
-| `aim_mode` | `"PLAYER"` | `"PLAYER"` (aim at player) or `"FORWARD"` (shoot down). |
-
-(Read the real defaults from `fighter_config.gd` and `fighter_config.tres`.)
-
----
+Read the real fields from `fighter_config.gd` (groups: Movement, Geometry, Attack, Tactics, Rail). The pin
+`turn_rate × max_speed ≤ acceleration` is asserted in `tests/integration/test_fighter.gd`.
 
 ## Spawn notes
 
-- WaveBuilder method: `b.fighter()` — see `docs/enemy-roster.md`. **Always add `.move()`.**
-- Combine with `.shoot_at_player()` / `.shoot_forward()` and formations (`b.v_formation`, `b.diagonal_formation`). Side entries need `.free_after()`.
-
----
+- WaveBuilder method: `b.fighter()` — see `docs/enemy-roster.md`. Level 1 still gives it `.move()` (a rail) until its
+  migration task.
+- `.shoot_forward()` / `.shoot_at_player()` are rail-only inputs.
 
 ## Files
 
@@ -92,8 +77,6 @@ fighter/
 ├── ENEMY.md            ← this file
 ├── fighter.tscn
 ├── fighter.gd
-├── fighter_config.gd / .tres
-└── states/
-    ├── approach_state.gd
-    └── strafe_exit_state.gd
+├── fighter_brain.gd
+└── fighter_config.gd / .tres
 ```

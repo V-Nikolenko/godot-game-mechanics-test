@@ -955,3 +955,18 @@ Once this phase's *as built* section exists, check it first.
 | Muzzle flash, spin-up particles, enemy SFX | Ph17 | `StateLight` is the only telegraph |
 | Rotating `spawn_offset` with the nose | Ph17 | 10 px sits inside a 64 px hull |
 | `BulletPool` container injection, `persist_after_owner_death` | Ph5 | Unchanged from Ph2 |
+
+### Phase 3, built in t8a (Fighter shell)
+
+- `fighter.tscn` is the AI scene: `Brain` (`FighterBrain`), `EnemyMover` (AUTO), `StateLight`, `AimedAttack` /
+  `ForwardAttack` (`driven_by_brain`, disabled). `AimedPool` (Pulse) and `ForwardPool` (Scatter) are direct children of the
+  root. `states/` and the `AIStateMachine` are deleted, so **`EnemyPathMover`'s `"AIStateMachine"` name lookup now has no
+  subject** (Ph15 can drop it).
+- **`AimedPool` is 20, not 12** (review N4): `FighterConfig.min_burst_period` (1.2 s) sizes it, so 5 × ceil(4.67 / 1.2) = 20
+  covers the AI burst, the FORWARD rail cadence (12) and the aimed rail cadence (7). The Scatter pool is 8.
+- `aim_mode`, `shoot_forward()` and `shoot_at_player()` are **rail-only inputs**, read in `FighterBrain.on_suspended()` and
+  nowhere else. The rail speeds and intervals are `FighterConfig` fields (`rail_aimed_speed` 250, `rail_forward_speed` 420,
+  `rail_forward_interval` 0.3, plus the legacy `fire_interval` 0.8 and `bullet_damage` 8), and
+  `test_enemy_bullet_lifetime.gd` reads them; the regex over `fighter.gd` is gone.
+- `test_level1_fighter_spawns.gd` reads a fighter's rate through `suspend_ai()` on `AimedAttack` / `AimedPool`, so the frozen
+  legacy constants still hold unchanged (rail fighters fire the same cadence, now with Pulse rounds).
