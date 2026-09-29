@@ -199,6 +199,15 @@ func cluster_formation(count: int, radius: float = 30.0, seed_override: int = 0)
 		f.random_seed = seed_override
 	return f
 
+## W shape: centre slot first, then the outer pair and the trailing pair stagger outward.
+func w_formation(count: int = 5, spread: float = 60.0, depth: float = 40.0, stagger: float = 0.1) -> WFormation:
+	var f := WFormation.new()
+	f.count = count
+	f.spread = spread
+	f.depth = depth
+	f.stagger_delay = stagger
+	return f
+
 # ── Wave & level builders ─────────────────────────────────────────────────────
 
 func _config_to_entry(c: SpawnConfig) -> SpawnEntryResource:
