@@ -103,7 +103,7 @@ func _free_all_reinforcements() -> void:
 
 
 ## A ship's own `BulletPool`, found by type rather than by field name — `Fighter.
-## bullet_pool` is public but `Interceptor._bullet_pool` is not, and this must work for both.
+## bullet_pool` is public but `GatlingInterceptor._bullet_pool` is not, and this must work for both.
 func _bullet_pool_of(ship: BaseEnemy) -> BulletPool:
 	for child in ship.get_children():
 		if child is BulletPool:
@@ -127,7 +127,7 @@ func _bullets() -> Array[EnemyBullet]:
 ## of its `Sprite2D`'s texture — the same measure `test_every_entry_clears_the_off_screen_spawn_margin`
 ## used to hand-type as 37.
 func _interceptor_half_extent() -> float:
-	var scene: PackedScene = load(WaveBuilder.INTERCEPTOR)
+	var scene: PackedScene = load(WaveBuilder.GATLING_INTERCEPTOR)
 	var inst := scene.instantiate()
 	var sprite := inst.get_node("Sprite2D") as Sprite2D
 	var size: Vector2 = sprite.texture.get_size()
@@ -183,7 +183,7 @@ func test_every_entry_starts_outside_the_play_area() -> void:
 ## Boundary, research finding 5: the margin must exceed half the largest sprite plus the camera's
 ## horizontal pan. Half-extent is read from the interceptor's own scene (review C13, `_interceptor_
 ## half_extent()`) instead of a hand-typed 37, so this stops drifting the moment the sprite is
-## replaced (currently the interceptor's 64x74 sprite; `interceptor.tscn:58-60` has no scale on the
+## replaced (currently the interceptor's 64x74 sprite; `gatling_interceptor.tscn:58-60` has no scale on the
 ## Sprite2D, so its texture size IS its screen size). Horizontal budget 640 + H_LIMIT 100 + half-extent;
 ## vertical 360 + half-extent, V_LIMIT deliberately excluded because every spawn in the game resolves
 ## against the camera's fixed centre. This is a live constraint on future edits: it fails at design +/-380.
@@ -526,7 +526,7 @@ func test_a_rail_swarm_drone_touching_the_player_deals_collision_damage_and_deto
 ## squad that LOOKS dangerous and never fires a shot. `simulate()` steps `_process` deterministically
 ## (200 x 0.01 s = 2.0 s) instead of awaiting a wall clock, as the file header requires. TOP is
 ## fighters on `.shoot_forward()` (0.3 s interval, `fighter.gd:40`); LEFT/RIGHT are
-## interceptors (0.09 s interval, always aimed at the player, `interceptor.gd:37`) — both
+## interceptors (0.09 s interval, always aimed at the player, `gatling_interceptor.gd:37`) — both
 ## comfortably inside 2 s. Manually confirmed to fail when a squad's `AttackController.enabled` is
 ## forced false before the simulate call (not committed as a boundary case — the manual check is
 ## the acceptance criterion, docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md task t1-pin).

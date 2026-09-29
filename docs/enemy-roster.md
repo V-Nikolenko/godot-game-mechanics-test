@@ -225,16 +225,16 @@ b.sniper_enemy().at(120, -500).move(b.sequence([
 
 ---
 
-### `interceptor` — Gatling Interceptor
+### `gatling_interceptor` — Gatling Interceptor
 
-**Builder:** `b.interceptor()`  
-**Scene:** `interceptor.tscn`  
+**Builder:** `b.gatling_interceptor()`  
+**Scene:** `gatling_interceptor.tscn`  
 **Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
 **Shoots:** Yes — rapid-fire Gatling (0.09 s interval, slight spread). Always fires forward (in direction of travel).  
 **HP:** Low–Medium  
 **Score:** Medium
 
-**Config fields** (`InterceptorConfig`):
+**Config fields** (`GatlingInterceptorConfig`):
 
 | Field | Default | Notes |
 |-------|---------|-------|
@@ -246,10 +246,10 @@ b.sniper_enemy().at(120, -500).move(b.sequence([
 **Examples:**
 ```gdscript
 # Player-focus dive — locks on at spawn time and flies through
-b.interceptor().at(-200, -420).move(b.player_focus(240))
+b.gatling_interceptor().at(-200, -420).move(b.player_focus(240))
 
 # Strafing run from the side
-b.interceptor().at(-500, 0).move(b.straight(200, PI / 2)).free_after(5.0)
+b.gatling_interceptor().at(-500, 0).move(b.straight(200, PI / 2)).free_after(5.0)
 ```
 
 ---
@@ -481,7 +481,7 @@ b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180)
 
 | Rule | Detail |
 |------|--------|
-| **Always `.move()` path-following enemies** | `fighter`, `ram`, `sniper`, `sniper_enemy`, `interceptor`, `bomber` — they have no self-managed movement. |
+| **Always `.move()` path-following enemies** | `fighter`, `ram`, `sniper`, `sniper_enemy`, `gatling_interceptor`, `bomber` — they have no self-managed movement. |
 | **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship` — attaching `EnemyPathMover` suspends their AI. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` needs a `sequence()`** | The approach step must be `straight(speed, 0.0, 2.5)` (exactly 2.5 s). Hold step must cover `shot_count × 2.5 s`. |
@@ -513,11 +513,11 @@ a stationary target, and its rotating 240×240 core hurtbox sweeps ~34 px past i
 footprint at 45°.
 
 **It also spawns other enemies from this roster.** During phase 1 only, `StationReinforcements`
-sends squads across the arena on a fixed `LEFT → RIGHT → BOTTOM → TOP` cycle: two `interceptor`
+sends squads across the arena on a fixed `LEFT → RIGHT → BOTTOM → TOP` cycle: two `gatling_interceptor`
 from either side, two `swarm_drone` from below, two `fighter` with `.shoot_forward()` from
 above. Things to know if you edit that table (`station_reinforcements.gd::_build_squads()`):
 
-- It uses this file's own vocabulary — `b.interceptor().at(…).move(b.straight(…)).free_after(…)` —
+- It uses this file's own vocabulary — `b.gatling_interceptor().at(…).move(b.straight(…)).free_after(…)` —
   so the rules below apply unchanged. In particular **`gunship` and `razor_drone` must never
   go in it**: both are self-managed AI, and `EnemyPathMover` silently disables the AI they need.
   A test enforces that.

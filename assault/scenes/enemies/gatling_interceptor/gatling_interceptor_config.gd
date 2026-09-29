@@ -1,6 +1,6 @@
-## InterceptorConfig — tuning resource for the Interceptor enemy.
+## GatlingInterceptorConfig — tuning resource for the Gatling Interceptor enemy.
 ## Extends ShipConfig (provides max_health, collision_damage, score_value).
-class_name InterceptorConfig
+class_name GatlingInterceptorConfig
 extends ShipConfig
 
 ## Seconds between shots (fire rate = 1 / fire_interval).

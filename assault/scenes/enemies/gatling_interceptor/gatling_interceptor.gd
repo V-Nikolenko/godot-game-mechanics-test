@@ -1,16 +1,16 @@
-# assault/scenes/enemies/interceptor/interceptor.gd
-class_name Interceptor
+# assault/scenes/enemies/gatling_interceptor/gatling_interceptor.gd
+class_name GatlingInterceptor
 extends BaseEnemy
 
 ## Flying Gatling gunship. No self-managed movement AI.
 ## Movement is fully delegated to EnemyPathMover via WaveBuilder .move().
 ##
 ## Typical usages:
-##   b.interceptor().at(x, y).move(b.straight(200))       — strafing run
-##   b.interceptor().at(x, y).move(b.player_focus(240))   — locks on and flies through
+##   b.gatling_interceptor().at(x, y).move(b.straight(200))       — strafing run
+##   b.gatling_interceptor().at(x, y).move(b.player_focus(240))   — locks on and flies through
 
-@export var config: InterceptorConfig = preload(
-		"res://assault/scenes/enemies/interceptor/interceptor_config.tres")
+@export var config: GatlingInterceptorConfig = preload(
+		"res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres")
 
 const _BULLET_SCENE: PackedScene = preload(
 		"res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn")

@@ -266,8 +266,8 @@ func _build_section_1() -> LevelSection:
 	var raw_waves: Array = [
 		# 0.0 s — interceptor pair: lock onto player and fly through with Gatling
 		b.wave(0.0, [
-			b.interceptor().at(-200, -420).move(b.player_focus(240)),
-			b.interceptor().at( 200, -420).move(b.player_focus(240)).delay(0.4),
+			b.gatling_interceptor().at(-200, -420).move(b.player_focus(240)),
+			b.gatling_interceptor().at( 200, -420).move(b.player_focus(240)).delay(0.4),
 		]),
 
 		# 0.5 s — sniper pair drops in, fires 5 times, then retreats

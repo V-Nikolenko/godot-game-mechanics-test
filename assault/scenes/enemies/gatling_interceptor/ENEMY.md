@@ -1,4 +1,4 @@
-# Interceptor — Flying Gatling gunship
+# Gatling Interceptor — Flying Gatling gunship
 
 **Role:** Path-following strafer that hoses a rapid stream of slightly-scattered bullets in its direction of travel.
 **Fantasy / threat:** A buzzsaw of low-damage rounds. Individually each shot is trivial, but the 11-shots-per-second stream punishes anyone sitting in its lane.
@@ -12,9 +12,9 @@
 | HP | 70 |
 | Damage | 20 contact (`collision_damage`, default ShipConfig — not overridden in `.tres`) / 4 per bullet (`bullet_damage`) |
 | Speed | n/a internally — movement is fully delegated to the `.move()` path |
-| Sprite | `interceptor.png` |
-| Scene | `interceptor.tscn` |
-| Config | `interceptor_config.tres` |
+| Sprite | `interceptor.png` (legacy art, replaced in the sprite task) |
+| Scene | `gatling_interceptor.tscn` |
+| Config | `gatling_interceptor_config.tres` |
 
 ---
 
@@ -39,13 +39,13 @@
 | `bullet_speed` | `220.0` | — | Bullet speed (px/s); lower = shorter range. |
 | `spread_angle` | `0.08` | — | Max random scatter per shot (rad, ≈±4.5°). |
 
-(Read the real defaults from `interceptor_config.gd` and `interceptor_config.tres`. The `.tres` only overrides `max_health` and `score_value`; all other fields use the script defaults.)
+(Read the real defaults from `gatling_interceptor_config.gd` and `gatling_interceptor_config.tres`. The `.tres` only overrides `max_health` and `score_value`; all other fields use the script defaults.)
 
 ---
 
 ## Spawn notes
 
-- WaveBuilder method: `b.interceptor()` — see `docs/enemy-roster.md`. **Always add `.move()`.**
+- WaveBuilder method: `b.gatling_interceptor()` — see `docs/enemy-roster.md`. **Always add `.move()`.**
 - `b.player_focus(240)` for a lock-on dive; `b.straight(200, PI/2).free_after(5.0)` for a side strafing run.
 
 ---
@@ -53,9 +53,9 @@
 ## Files
 
 ```
-interceptor/
+gatling_interceptor/
 ├── ENEMY.md            ← this file
-├── interceptor.tscn
-├── interceptor.gd
-└── interceptor_config.gd / .tres
+├── gatling_interceptor.tscn
+├── gatling_interceptor.gd
+└── gatling_interceptor_config.gd / .tres
 ```

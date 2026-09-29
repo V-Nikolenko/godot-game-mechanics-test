@@ -3,7 +3,7 @@
 ## check (§5 C3), and Ph3's `test_level1_fighter_spawns.gd` (docs/plans/cmufs7ekv000lnm2x7nbswijy/
 ## 3-plan.md §2.9.1). The Ph2 functions below share ONE lifetime constant across every DRONE/
 ## RAZOR_DRONE entry, because every legacy drone dies in the same single ramming pass. `fighter()`/
-## `interceptor()` rails have no such shortcut — each entry's on-screen time is its OWN `free_after`
+## `gatling_interceptor()` rails have no such shortcut — each entry's on-screen time is its OWN `free_after`
 ## or its OWN sampled `MovementResource` — so `spawn_intervals()`/`peak_interval_count()`/
 ## `peak_interval_rate()` (bottom of file) generalise the same interval-overlap arithmetic to a
 ## per-entry `{start, end, rate}` supplied by the caller instead of one shared float.

@@ -1,8 +1,8 @@
-## Characterization: pins every Fighter (`WaveBuilder.FIGHTER`, still `Fighter`/
-## `fighter.tscn` today) and Gatling Interceptor (`WaveBuilder.INTERCEPTOR`, still
-## `Interceptor`/`interceptor.tscn`) spawn in Level 1 — the state of the world BEFORE Enemy rework
+## Characterization: pins every Fighter (`WaveBuilder.FIGHTER`, now `Fighter`/
+## `fighter.tscn` today) and Gatling Interceptor (`WaveBuilder.GATLING_INTERCEPTOR`, now
+## `GatlingInterceptor`/`gatling_interceptor.tscn`) spawn in Level 1 — the state of the world BEFORE Enemy rework
 ## phase 3 touches any of it (docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md §2.9.1, task t1-pin).
-## t6/t7 rename the scenes and classes this file points at (no behaviour change, so this pin stays
+## t6/t7 renamed the scenes and classes this file points at (no behaviour change, so this pin stays
 ## green); t16/t17 strip `.move()`/`.free_after()`/`shoot_*()` from the DURATION and ENEMIES_CLEARED
 ## sections respectively, at which point the per-section "live equals constant" legacy check below
 ## is retired for that section only, per §2.9.1 — the frozen `_LEGACY_PEAK_FIGHTERS` /
@@ -60,10 +60,10 @@ const _DIRECTOR_SCRIPT := "res://assault/scenes/levels/edelia/1/level_1_director
 const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.gd")
 
 const _FIGHTER := WaveBuilder.FIGHTER
-const _INTERCEPTOR := WaveBuilder.INTERCEPTOR
+const _GATLING := WaveBuilder.GATLING_INTERCEPTOR
 
 ## Both ships preload this exact scene as their `_BULLET_SCENE` today (`fighter.gd:6`,
-## `interceptor.gd:15-16`); its `ProjectileLifetime.max_distance` is what `_capped_rate()` reads.
+## `gatling_interceptor.gd:15-16`); its `ProjectileLifetime.max_distance` is what `_capped_rate()` reads.
 const _BULLET_SCENE_PATH := "res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn"
 
 ## The rail sampling cap (§2.9.1) and step. 20 s comfortably exceeds every real rail's lifetime
@@ -73,7 +73,7 @@ const _CULL_CAP: float = 20.0
 const _CULL_STEP: float = 0.02
 
 
-## Every FIGHTER / INTERCEPTOR entry in `_build_sections()`, in encounter order, as pinned from a
+## Every FIGHTER / GATLING_INTERCEPTOR entry in `_build_sections()`, in encounter order, as pinned from a
 ## computed run of `_actual_fighter_spawns()` below (this task's HEAD — see `git log`). `aim_mode`
 ## is the literal `SpawnConfig.shoot_forward()`/`.shoot_at_player()` string ("" when neither was
 ## called — the ship then falls back to its config default, "PLAYER"). `free_after` is the
@@ -81,8 +81,8 @@ const _CULL_STEP: float = 0.02
 ## Regenerate by walking `_build_sections()` the same way `_actual_fighter_spawns()` does — never
 ## hand-edit a single row without re-deriving the whole table.
 const EXPECTED: Array[Dictionary] = [
-	{"section": &"deep_space", "kind": "INTERCEPTOR", "trigger": 0.00, "offset": Vector2(-200.0, -420.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": true},
-	{"section": &"deep_space", "kind": "INTERCEPTOR", "trigger": 0.00, "offset": Vector2(200.0, -420.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": true},
+	{"section": &"deep_space", "kind": "GATLING_INTERCEPTOR", "trigger": 0.00, "offset": Vector2(-200.0, -420.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": true},
+	{"section": &"deep_space", "kind": "GATLING_INTERCEPTOR", "trigger": 0.00, "offset": Vector2(200.0, -420.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": true},
 	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 2.00, "offset": Vector2(-150.0, -400.0), "delay": 0.50, "formation": &"VFormation", "formation_count": 5, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
 	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(260.0, -400.0), "delay": 0.50, "formation": &"VFormation", "formation_count": 3, "aim_mode": "FORWARD", "free_after": 12.00, "movement": true},
 	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 6.50, "offset": Vector2(-500.0, -30.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.50, "movement": true},
@@ -171,7 +171,7 @@ func _build_sections() -> Array[LevelSection]:
 	return sections
 
 
-## One row per FIGHTER / INTERCEPTOR entry, in the same shape as `EXPECTED`. Formations are
+## One row per FIGHTER / GATLING_INTERCEPTOR entry, in the same shape as `EXPECTED`. Formations are
 ## recorded as a class name + count, never expanded into per-slot rows, matching
 ## `test_level1_drone_spawns.gd`'s convention.
 func _actual_fighter_spawns(sections: Array[LevelSection]) -> Array[Dictionary]:
@@ -180,7 +180,7 @@ func _actual_fighter_spawns(sections: Array[LevelSection]) -> Array[Dictionary]:
 		for wave: WaveResource in section.waves:
 			for entry: SpawnEntryResource in wave.entries:
 				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
-				if path != _FIGHTER and path != _INTERCEPTOR:
+				if path != _FIGHTER and path != _GATLING:
 					continue
 				var formation_name: StringName = &"none"
 				var formation_count: int = -1
@@ -191,7 +191,7 @@ func _actual_fighter_spawns(sections: Array[LevelSection]) -> Array[Dictionary]:
 				var free_after: float = entry.exit_time if entry.exit_mode == EnemyPathMover.ExitMode.FREE_ON_DURATION else 0.0
 				out.append({
 					"section": section.section_name,
-					"kind": "FIGHTER" if path == _FIGHTER else "INTERCEPTOR",
+					"kind": "FIGHTER" if path == _FIGHTER else "GATLING_INTERCEPTOR",
 					"trigger": wave.trigger_time,
 					"offset": entry.base_offset,
 					"delay": entry.spawn_delay,
@@ -206,10 +206,10 @@ func _actual_fighter_spawns(sections: Array[LevelSection]) -> Array[Dictionary]:
 
 # ── The pin ───────────────────────────────────────────────────────────────────
 
-func test_pinned_fighter_and_interceptor_spawns_match_todays_data() -> void:
+func test_pinned_fighter_and_gatling_spawns_match_todays_data() -> void:
 	var actual := _actual_fighter_spawns(_build_sections())
 	assert_eq(actual.size(), EXPECTED.size(),
-		"the number of FIGHTER/INTERCEPTOR entries in _build_sections() has changed")
+		"the number of FIGHTER/GATLING_INTERCEPTOR entries in _build_sections() has changed")
 	assert_eq(actual, EXPECTED,
 		"a fighter or interceptor spawn's section, trigger, offset, delay, formation, aim_mode, "
 			+ "free_after or movement changed")
@@ -297,7 +297,7 @@ func _spawn_in(container: Node2D, path: String, aim_mode: String) -> Node:
 
 
 ## A ship's own `BulletPool` and `AttackController.pattern`, found by type rather than by field
-## name — `Fighter.bullet_pool` is public but `Interceptor._bullet_pool` is not, and this
+## name — `Fighter.bullet_pool` is public but `GatlingInterceptor._bullet_pool` is not, and this
 ## must read both the same way. Frees `ship`.
 func _attack_stats_of(ship: Node) -> Dictionary:
 	var pool: BulletPool = null
@@ -334,7 +334,7 @@ func _live_attack_stats() -> Dictionary:
 
 	var forward := _attack_stats_of(_spawn_in(container, _FIGHTER, "FORWARD"))
 	var aimed := _attack_stats_of(_spawn_in(container, _FIGHTER, "PLAYER"))
-	var interceptor := _attack_stats_of(_spawn_in(container, _INTERCEPTOR, ""))
+	var interceptor := _attack_stats_of(_spawn_in(container, _GATLING, ""))
 
 	var bullet: Node = (load(_BULLET_SCENE_PATH) as PackedScene).instantiate()
 	var lifetime := bullet.get_node("ProjectileLifetime") as ProjectileLifetime
@@ -367,7 +367,7 @@ func _capped_rate(flat: float, bullet_speed: float, pool_size: int) -> float:
 func _rate_for(path: String, _offset: Vector2, _movement: MovementResource, _exit_mode: int,
 		_exit_time: float, aim_mode: String) -> float:
 	var live := _live_attack_stats()
-	if path == _INTERCEPTOR:
+	if path == _GATLING:
 		return _capped_rate(1.0 / live["interceptor_interval"], live["interceptor_speed"],
 			live["interceptor_pool_size"])
 	if aim_mode == "FORWARD":
@@ -380,7 +380,7 @@ func _rate_for(path: String, _offset: Vector2, _movement: MovementResource, _exi
 func test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants() -> void:
 	var cam := ArenaCamera.new()
 	add_child_autofree(cam)
-	var ship_paths: Array[String] = [_FIGHTER, _INTERCEPTOR]
+	var ship_paths: Array[String] = [_FIGHTER, _GATLING]
 	var lifetime_fn := Callable(self, "_rail_lifetime").bind(cam)
 	var rate_fn := Callable(self, "_rate_for")
 
@@ -404,7 +404,7 @@ func test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants() -> void:
 func test_a_section_with_no_fighters_has_zero_peak_concurrency_and_rate() -> void:
 	var cam := ArenaCamera.new()
 	add_child_autofree(cam)
-	var ship_paths: Array[String] = [_FIGHTER, _INTERCEPTOR]
+	var ship_paths: Array[String] = [_FIGHTER, _GATLING]
 	var lifetime_fn := Callable(self, "_rail_lifetime").bind(cam)
 	var rate_fn := Callable(self, "_rate_for")
 	for section: LevelSection in _build_sections():

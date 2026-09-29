@@ -402,7 +402,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `fighter/states/`). Roster: bomber, bonus_drone, razor_drone,
-gunship, interceptor, fighter, ram_ship, sniper_enemy, swarm_drone. For the
+gunship, gatling_interceptor, fighter, ram_ship, sniper_enemy, swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).
@@ -487,10 +487,10 @@ own fields in `_ready()`**, for the same reason as the laser block.
 nothing at all this time. On a one-shot `Timer` it spawns small squads of **existing** enemy
 scenes that cross the arena, so the player can no longer camp one spot while streaming into a
 turret. The squad table is fixed and cycles `LEFT → RIGHT → BOTTOM → TOP` (never `randf()`, for
-the same reason the beam angles are a list): two `interceptor` sweeping in from either side
+the same reason the beam angles are a list): two `gatling_interceptor` sweeping in from either side
 through the vertical middle, two `swarm_drone` rising from below, two `fighter` with
 `.shoot_forward()` angling down-and-inward from above. Squads are authored with `WaveBuilder`'s
-own fluent API (`b.interceptor().at(…).move(b.straight(…)).free_after(…)`), in **640×360 design
+own fluent API (`b.gatling_interceptor().at(…).move(b.straight(…)).free_after(…)`), in **640×360 design
 units** scaled by `ArenaCamera.WORLD_SCALE` once at spawn — speeds are left unscaled because
 `EnemyPathMover` applies the scale itself.
 

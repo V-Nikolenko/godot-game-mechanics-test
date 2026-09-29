@@ -1,8 +1,0 @@
-[gd_resource type="Resource" script_class="InterceptorConfig" format=3 uid="uid://cikpyxo6s3o53"]
-
-[ext_resource type="Script" uid="uid://cqe8efewhvfud" path="res://assault/scenes/enemies/interceptor/interceptor_config.gd" id="1"]
-
-[resource]
-script = ExtResource("1")
-max_health = 70
-score_value = 75

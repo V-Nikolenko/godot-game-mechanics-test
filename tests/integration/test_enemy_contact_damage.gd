@@ -21,7 +21,7 @@
 ##
 ## ── Reading the table ────────────────────────────────────────────────────────────────────────
 ##
-## The two enemies with no `collision_damage` line in their `.tres` (`interceptor_config.tres`,
+## The two enemies with no `collision_damage` line in their `.tres` (`gatling_interceptor_config.tres`,
 ## and `sniper_enemy` which has no config at all) inherit `ShipConfig`'s default of 20
 ## (`ship_config.gd:8`), which happens to equal the base helper's hardcoded 20. They are listed
 ## anyway: the assertion is still meaningful, and if either default ever moves the mismatch
@@ -81,9 +81,9 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/gunship/gunship_config.tres",
 	},
 	{
-		"name": "interceptor",
-		"scene": "res://assault/scenes/enemies/interceptor/interceptor.tscn",
-		"config": "res://assault/scenes/enemies/interceptor/interceptor_config.tres",
+		"name": "gatling_interceptor",
+		"scene": "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn",
+		"config": "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres",
 	},
 	{
 		"name": "fighter",

@@ -1,5 +1,5 @@
 ## GatlingAttackPattern — high-cadence weapon with slight random scatter.
-## Designed for Interceptor: fast fire rate, low damage, moderate range.
+## Designed for the Gatling Interceptor: fast fire rate, low damage, moderate range.
 ## fire_interval is inherited from AttackPatternResource (default 0.8 — override per ship).
 class_name GatlingAttackPattern
 extends AttackPatternResource

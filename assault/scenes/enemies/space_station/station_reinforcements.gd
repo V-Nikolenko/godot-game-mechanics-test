@@ -32,7 +32,7 @@
 ## `_container()` is `_station.get_parent()`, which in the level is `WaveManager.enemy_container`
 ## (`level_1.tscn:22-26`, a bare Node2D with an identity transform). Parenting a reinforcement
 ## under the station would drag it around the arena, because `station_laser_phase.gd:123` writes
-## `_station.rotation` during phase 2 — and a reinforcement `interceptor` or `fighter` builds its
+## `_station.rotation` during phase 2 — and a reinforcement `gatling_interceptor` or `fighter` builds its
 ## own `BulletPool`, whose container is the hardcoded `get_parent().get_parent()`
 ## (`bullet_pool.gd:47`), so its bullet field would swing with the hull too.
 ##
@@ -151,18 +151,18 @@ func _build_squads() -> Array:
 	## `StraightMovement.sample()` is `Vector2(sin(angle), cos(angle)) * speed * t`, i.e.
 	## 0 = down, PI/2 = right, -PI/2 = left, PI = up (`straight_movement.gd:2,13`).
 
-	## LEFT — two interceptors sweeping rightward through the vertical middle. Lanes at design
+	## LEFT — two Gatling Interceptors sweeping rightward through the vertical middle. Lanes at design
 	## y = 20 / 80, never hugging the top or bottom border: research finding 3, "the edges of the
 	## screen don't have lanes to prevent awkward traps".
 	out.append(b.wave(0.0, [
-		b.interceptor().at(-440.0, 20.0).move(b.straight(200.0, PI / 2.0)).free_after(reinforcement_lifetime),
-		b.interceptor().at(-440.0, 80.0).move(b.straight(200.0, PI / 2.0)).free_after(reinforcement_lifetime),
+		b.gatling_interceptor().at(-440.0, 20.0).move(b.straight(200.0, PI / 2.0)).free_after(reinforcement_lifetime),
+		b.gatling_interceptor().at(-440.0, 80.0).move(b.straight(200.0, PI / 2.0)).free_after(reinforcement_lifetime),
 	]).entries)
 
 	## RIGHT — the mirror, so consecutive squads pull the player across the screen.
 	out.append(b.wave(0.0, [
-		b.interceptor().at(440.0, 20.0).move(b.straight(200.0, -PI / 2.0)).free_after(reinforcement_lifetime),
-		b.interceptor().at(440.0, 80.0).move(b.straight(200.0, -PI / 2.0)).free_after(reinforcement_lifetime),
+		b.gatling_interceptor().at(440.0, 20.0).move(b.straight(200.0, -PI / 2.0)).free_after(reinforcement_lifetime),
+		b.gatling_interceptor().at(440.0, 80.0).move(b.straight(200.0, -PI / 2.0)).free_after(reinforcement_lifetime),
 	]).entries)
 
 	## BOTTOM — from behind the player, so deliberately the SLOWEST ships in the table (170 vs 200)

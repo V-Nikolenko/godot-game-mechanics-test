@@ -88,7 +88,7 @@ func drone()          -> SpawnConfig: return SpawnConfig.new(DRONE)
 func ram()            -> SpawnConfig: return SpawnConfig.new(RAM)
 func sniper()         -> SpawnConfig: return SpawnConfig.new(SNIPER)
 func sniper_enemy()   -> SpawnConfig: return SpawnConfig.new(SNIPER_ENEMY)
-func interceptor()    -> SpawnConfig: return SpawnConfig.new(INTERCEPTOR)
+func gatling_interceptor() -> SpawnConfig: return SpawnConfig.new(GATLING_INTERCEPTOR)
 func razor_drone()    -> SpawnConfig: return SpawnConfig.new(RAZOR_DRONE)
 func gunship()        -> SpawnConfig: return SpawnConfig.new(GUNSHIP)
 func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
@@ -251,7 +251,7 @@ const DRONE          := "res://assault/scenes/enemies/swarm_drone/swarm_drone.ts
 const RAM            := "res://assault/scenes/enemies/ram_ship/ram_ship.tscn"
 const SNIPER         := "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn"
 const SNIPER_ENEMY   := SNIPER  ## Alias kept so existing b.sniper_enemy() calls still compile.
-const INTERCEPTOR    := "res://assault/scenes/enemies/interceptor/interceptor.tscn"
+const GATLING_INTERCEPTOR := "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn"
 const RAZOR_DRONE    := "res://assault/scenes/enemies/razor_drone/razor_drone.tscn"
 const GUNSHIP        := "res://assault/scenes/enemies/gunship/gunship.tscn"
 const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"

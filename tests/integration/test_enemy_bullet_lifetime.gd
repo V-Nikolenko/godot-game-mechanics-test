@@ -58,8 +58,8 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 	speeds.append(GatlingAttackPattern.new().bullet_speed)
 	speeds.append(AimedAttackPattern.new().bullet_speed)
 
-	# interceptor_config.gd's default (the shipped .tres does not override bullet_speed).
-	speeds.append(InterceptorConfig.new().bullet_speed)
+	# gatling_interceptor_config.gd's default (the shipped .tres does not override bullet_speed).
+	speeds.append(GatlingInterceptorConfig.new().bullet_speed)
 
 	# gunship_config.tres.
 	var gunship_cfg: GunshipConfig = \
