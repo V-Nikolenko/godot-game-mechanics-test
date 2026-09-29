@@ -1,6 +1,6 @@
 [gd_scene format=3]
 
-[ext_resource type="Script" path="res://tests/helpers/path_mover_actor.gd" id="1_actor"]
+[ext_resource type="Script" path="res://tests/helpers/ai_state_machine_actor.gd" id="1_actor"]
 [ext_resource type="Script" path="res://tests/helpers/ai_state_machine_fixture.gd" id="2_sm"]
 
 [node name="AIStateMachineFixture" type="CharacterBody2D"]
