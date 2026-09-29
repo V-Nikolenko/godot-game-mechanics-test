@@ -238,7 +238,7 @@ func _spawn_entry(entry: SpawnEntryResource) -> void:
 	entity.global_position = _spawn_origin() + entry.base_offset * ArenaCamera.WORLD_SCALE
 
 	## Applied BEFORE add_child so they are readable during _ready() — which is the whole point for
-	## `aim_mode`, the property `.shoot_forward()` sets (`light_assault_ship.gd:33-36`).
+	## `aim_mode`, the property `.shoot_forward()` sets (`fighter.gd:33-36`).
 	for key: String in entry.initial_props:
 		entity.set(key, entry.initial_props[key])
 

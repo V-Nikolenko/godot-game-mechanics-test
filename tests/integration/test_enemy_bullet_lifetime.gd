@@ -71,14 +71,14 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 	speeds.append(default_bullet.speed)
 	default_bullet.free()
 
-	# light_assault_ship.gd:42 — `pattern.bullet_speed = 420.0 if forward else 250.0`, a literal,
+	# fighter.gd:42 — `pattern.bullet_speed = 420.0 if forward else 250.0`, a literal,
 	# not an export, so it is read out of the shipped source text rather than hardcoded here.
 	var light_assault_src: String = FileAccess.get_file_as_string(
-			"res://assault/scenes/enemies/light_assault_ship/light_assault_ship.gd")
+			"res://assault/scenes/enemies/fighter/fighter.gd")
 	var m := RegEx.new()
 	m.compile("bullet_speed\\s*=\\s*([0-9.]+)\\s*if forward else\\s*([0-9.]+)")
 	var found := m.search(light_assault_src)
-	assert_not_null(found, "light_assault_ship.gd's bullet_speed line must still match this shape")
+	assert_not_null(found, "fighter.gd's bullet_speed line must still match this shape")
 	speeds.append(found.get_string(1).to_float())
 	speeds.append(found.get_string(2).to_float())
 

@@ -161,7 +161,7 @@ func _collect_resource_files(dir_path: String) -> Array[String]:
 ##
 ## The substring check (not `ends_with`) is deliberate: Godot's own atomic-save scratch files are
 ## named `<original>.tscn<digits>.tmp` / `<original>.tres<digits>.tmp` — the real extension lands
-## mid-filename, not at the end. Two such files for `light_assault_ship.tscn` and one each for
+## mid-filename, not at the end. Two such files for `fighter.tscn` and one each for
 ## `player_fighter.tscn` and `infiltration`'s `player.tscn` were committed by an editor crash and
 ## each declared its origin scene's UID verbatim, invisible to `ends_with(".tscn")`. Matching on
 ## substring means the *next* stray scratch file of this shape is caught by

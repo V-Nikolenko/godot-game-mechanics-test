@@ -1,5 +1,5 @@
-## Characterization: pins every Fighter (`WaveBuilder.FIGHTER`, still `LightAssaultShip`/
-## `light_assault_ship.tscn` today) and Gatling Interceptor (`WaveBuilder.INTERCEPTOR`, still
+## Characterization: pins every Fighter (`WaveBuilder.FIGHTER`, still `Fighter`/
+## `fighter.tscn` today) and Gatling Interceptor (`WaveBuilder.INTERCEPTOR`, still
 ## `Interceptor`/`interceptor.tscn`) spawn in Level 1 — the state of the world BEFORE Enemy rework
 ## phase 3 touches any of it (docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md §2.9.1, task t1-pin).
 ## t6/t7 rename the scenes and classes this file points at (no behaviour change, so this pin stays
@@ -62,7 +62,7 @@ const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.
 const _FIGHTER := WaveBuilder.FIGHTER
 const _INTERCEPTOR := WaveBuilder.INTERCEPTOR
 
-## Both ships preload this exact scene as their `_BULLET_SCENE` today (`light_assault_ship.gd:6`,
+## Both ships preload this exact scene as their `_BULLET_SCENE` today (`fighter.gd:6`,
 ## `interceptor.gd:15-16`); its `ProjectileLifetime.max_distance` is what `_capped_rate()` reads.
 const _BULLET_SCENE_PATH := "res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn"
 
@@ -287,7 +287,7 @@ func _rail_lifetime(path: String, offset: Vector2, movement: MovementResource, e
 ## Instantiates `path` as a child of `container` — two levels under a scene-tree node, matching
 ## `BulletPool._ready()`'s `pool -> ship -> container` resolution — so `_ready()` actually builds
 ## the pool and the `AttackController`. `aim_mode` is set first when non-empty, so it is read by
-## `light_assault_ship.gd:32` before `_ready()` runs. Caller frees the returned ship.
+## `fighter.gd:32` before `_ready()` runs. Caller frees the returned ship.
 func _spawn_in(container: Node2D, path: String, aim_mode: String) -> Node:
 	var ship: Node = (load(path) as PackedScene).instantiate()
 	if aim_mode != "":
@@ -297,7 +297,7 @@ func _spawn_in(container: Node2D, path: String, aim_mode: String) -> Node:
 
 
 ## A ship's own `BulletPool` and `AttackController.pattern`, found by type rather than by field
-## name — `LightAssaultShip.bullet_pool` is public but `Interceptor._bullet_pool` is not, and this
+## name — `Fighter.bullet_pool` is public but `Interceptor._bullet_pool` is not, and this
 ## must read both the same way. Frees `ship`.
 func _attack_stats_of(ship: Node) -> Dictionary:
 	var pool: BulletPool = null

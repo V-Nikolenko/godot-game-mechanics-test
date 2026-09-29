@@ -153,7 +153,7 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   subclass's `.tscn` authors a `ContactHitBox` node with `damage = 20`, which knows nothing about
   the subclass's own `.tres`, so a subclass wanting its configured `collision_damage` must
   re-apply it in `_ready()` off `contact_hit_box` (`gunship.gd`, `bomber.gd`,
-  `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a different default
+  `fighter.gd`, `ram_ship.gd`, `space_station.gd`) or author a different default
   directly on its own scene node (`razor_drone.tscn`, `swarm_drone.tscn` — 30, still
   re-applied from config where one exists). Forgetting leaves the `.tres` value dead with no
   symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
@@ -401,8 +401,8 @@ Source: `assault/scenes/enemies/`.
 
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
-(e.g. `light_assault_ship/states/`). Roster: bomber, bonus_drone, razor_drone,
-gunship, interceptor, light_assault_ship, ram_ship, sniper_enemy, swarm_drone. For the
+(e.g. `fighter/states/`). Roster: bomber, bonus_drone, razor_drone,
+gunship, interceptor, fighter, ram_ship, sniper_enemy, swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).

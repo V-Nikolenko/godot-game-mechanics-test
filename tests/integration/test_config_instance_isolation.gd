@@ -50,7 +50,7 @@
 extends GutTest
 
 ## Top-level directories only — `assault/scenes/enemies/` also holds loose scripts and its
-## subdirectories hold non-entity scenes (`bomber/bomb.tscn`, `light_assault_ship/states/`).
+## subdirectories hold non-entity scenes (`bomber/bomb.tscn`, `fighter/states/`).
 const _ENTITY_DIRS: Array[String] = [
 	"res://assault/scenes/enemies",
 	"res://assault/scenes/allies",

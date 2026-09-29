@@ -85,7 +85,7 @@ func _ready() -> void:
 	add_child(_explosion_effect)
 
 	# Propagate scoring fields from the subclass `config` property if it exists.
-	# Subclasses (LightAssaultShip, RamShip, etc.) declare `@export var config:
+	# Subclasses (Fighter, RamShip, etc.) declare `@export var config:
 	# SomeConfig` — Godot exposes that via get(), so we don't need to know the
 	# concrete type here.
 	var cfg: Variant = get("config")
@@ -160,7 +160,7 @@ func _resolve_contact_profile() -> ContactProfile:
 	return profile
 
 
-## Rotates a child `AnimatedSprite2D` 180° (light assault ship, ram ship). This is a child-sprite
+## Rotates a child `AnimatedSprite2D` 180° (fighter, ram ship). This is a child-sprite
 ## art correction, independent of `sprite_forward_angle`: those two ships' animated art is drawn
 ## facing the opposite way from the body's own facing convention, and this rotation is what makes
 ## them agree on screen. It says nothing about the body's own rotation or facing.

@@ -1,7 +1,7 @@
-class_name LightAssaultShip
+class_name Fighter
 extends BaseEnemy
 
-@export var config: FighterConfig = load("res://assault/scenes/enemies/light_assault_ship/fighter_config.tres")
+@export var config: FighterConfig = load("res://assault/scenes/enemies/fighter/fighter_config.tres")
 
 const _BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn")
 

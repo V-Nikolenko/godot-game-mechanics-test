@@ -1,12 +1,12 @@
 ## FighterApproachState — moves the ship downward until it reaches the hold line,
 ## then transitions to FighterStrafeExitState.
 ##
-## Firing is handled by the ship's AttackController (added in LightAssaultShip._ready()).
+## Firing is handled by the ship's AttackController (added in Fighter._ready()).
 ## This state previously fired bullets directly without the pool — that bug is now fixed.
 class_name FighterApproachState
 extends State
 
-@export var actor: LightAssaultShip
+@export var actor: Fighter
 @export var speed: float = 80.0
 @export var hold_y_offset: float = 80.0
 @export var strafe_state: State

@@ -9,7 +9,7 @@
 ## The base `ContactHitBox` node authored on every `BaseEnemy` subclass's scene defaults to
 ## `damage = 20` and knows nothing about `config`, which is only read at runtime. So every enemy
 ## that wants its configured `collision_damage` has to re-apply it in `_ready()` afterwards. Most
-## do (`bomber.gd`, `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a
+## do (`bomber.gd`, `fighter.gd`, `ram_ship.gd`, `space_station.gd`) or author a
 ## different default directly on their own scene's node (`razor_drone.tscn`,
 ## `swarm_drone.tscn`, `ally_fighter.tscn` — 30/30/25 — with the script still re-applying where
 ## a config can override it).
@@ -86,9 +86,9 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/interceptor/interceptor_config.tres",
 	},
 	{
-		"name": "light_assault_ship",
-		"scene": "res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn",
-		"config": "res://assault/scenes/enemies/light_assault_ship/fighter_config.tres",
+		"name": "fighter",
+		"scene": "res://assault/scenes/enemies/fighter/fighter.tscn",
+		"config": "res://assault/scenes/enemies/fighter/fighter_config.tres",
 	},
 	{
 		"name": "ram_ship",

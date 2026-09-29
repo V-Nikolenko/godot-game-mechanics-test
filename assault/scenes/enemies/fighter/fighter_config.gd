@@ -1,4 +1,4 @@
-## FighterConfig — configuration for LightAssaultShip.
+## FighterConfig — configuration for Fighter.
 class_name FighterConfig
 extends ShipConfig
 

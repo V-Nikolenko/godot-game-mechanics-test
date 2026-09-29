@@ -64,7 +64,7 @@ func _ready() -> void:
 	if state_machine:
 		state_machine.process_mode = Node.PROCESS_MODE_DISABLED
 	# ADDITIONALLY suspend a brain-driven enemy through its contract. Both steps above stay
-	# unconditional — never an else-branch of this: the light assault ship is a BaseEnemy (so it has
+	# unconditional — never an else-branch of this: the fighter is a BaseEnemy (so it has
 	# suspend_ai()), but its AIStateMachine states move it from _process, which only the name lookup
 	# stops (plan §2.10 / review F3; pinned by test_enemy_path_mover.gd). Retires in Phase 15.
 	if _actor.has_method("suspend_ai"):

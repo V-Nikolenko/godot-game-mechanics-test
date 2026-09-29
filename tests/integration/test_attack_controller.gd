@@ -3,7 +3,7 @@
 ## GatlingAttackPattern (docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.7, task t8).
 ##
 ## The "default path unchanged" cases are the pin: they exercise AttackController and the two
-## patterns exactly as light_assault_ship.gd, interceptor.gd and ally_fighter.gd configure them
+## patterns exactly as fighter.gd, interceptor.gd and ally_fighter.gd configure them
 ## (default enabled/driven_by_brain, aim_at_player as before, the new accuracy at its 0.0
 ## default). Because all three ships only ever add a plain AttackController and one of these
 ## patterns — ally_fighter's ForwardAttackPattern is untouched by this task — pinning the

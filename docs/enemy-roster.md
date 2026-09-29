@@ -51,10 +51,10 @@ s.waves.assign(raw_waves)
 
 ## Enemy Types
 
-### `fighter` — Light Assault Ship
+### `fighter` — Fighter
 
 **Builder:** `b.fighter()`  
-**Scene:** `light_assault_ship.tscn`  
+**Scene:** `fighter.tscn`  
 **Movement:** Fully delegated to `EnemyPathMover`. **Always add `.move()`.**  
 **Shoots:** Yes — at player or forward depending on `aim_mode`.  
 **HP:** Low  

@@ -102,7 +102,7 @@ func _free_all_reinforcements() -> void:
 		e.free()
 
 
-## A ship's own `BulletPool`, found by type rather than by field name — `LightAssaultShip.
+## A ship's own `BulletPool`, found by type rather than by field name — `Fighter.
 ## bullet_pool` is public but `Interceptor._bullet_pool` is not, and this must work for both.
 func _bullet_pool_of(ship: BaseEnemy) -> BulletPool:
 	for child in ship.get_children():
@@ -525,7 +525,7 @@ func test_a_rail_swarm_drone_touching_the_player_deals_collision_damage_and_deto
 ## `AttackController` wired up but `enabled = false`, or a pattern/pool left null, would leave a
 ## squad that LOOKS dangerous and never fires a shot. `simulate()` steps `_process` deterministically
 ## (200 x 0.01 s = 2.0 s) instead of awaiting a wall clock, as the file header requires. TOP is
-## fighters on `.shoot_forward()` (0.3 s interval, `light_assault_ship.gd:40`); LEFT/RIGHT are
+## fighters on `.shoot_forward()` (0.3 s interval, `fighter.gd:40`); LEFT/RIGHT are
 ## interceptors (0.09 s interval, always aimed at the player, `interceptor.gd:37`) — both
 ## comfortably inside 2 s. Manually confirmed to fail when a squad's `AttackController.enabled` is
 ## forced false before the simulate call (not committed as a boundary case — the manual check is

@@ -170,7 +170,7 @@ Detail and APIs: [global.md](modules/global.md).
   frame rate. Anything that needs to turn the ship goes through the controller's `face_instant()`.
 - **State machines:** `global/statemachine/state_machine.gd` + `state.gd`; entities with
   complex behaviour keep one `State` node per file in a `states/` folder (player, racers,
-  light_assault_ship). Simpler enemies use in-script `enum` phases.
+  fighter). Simpler enemies use in-script `enum` phases.
 - **Signal arity:** a signal is declared with exactly the arguments it is emitted with.
   Godot does not enforce this — `Health.amount_changed` and `State.state_transition` were
   declared with zero parameters and emitted with one until 2026-09-03 — but a mismatch makes

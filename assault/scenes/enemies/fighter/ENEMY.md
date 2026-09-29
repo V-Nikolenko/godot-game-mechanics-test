@@ -1,4 +1,4 @@
-# Light Assault Ship — Standard fighter
+# Fighter — standard gun-armed fighter (formerly the Light Assault Ship)
 
 **Role:** The baseline shooter. Path-following workhorse that flies in, holds a line, and fires aimed (or forward) shots. Has its own fallback state machine for when no path is attached.
 **Fantasy / threat:** Bread-and-butter opposition. Manageable alone; dangerous in formations where overlapping fire pins the player down.
@@ -13,7 +13,7 @@
 | Damage | 20 contact (`collision_damage`) / 8 per bullet (`bullet_damage`) |
 | Speed | 100 (`movement_speed`, AI fallback only); StrafeExit `strafe_speed` 120, Approach `speed` 80 |
 | Sprite | `assault.png` |
-| Scene | `light_assault_ship.tscn` |
+| Scene | `fighter.tscn` |
 | Config | `fighter_config.tres` |
 
 ---
@@ -44,7 +44,7 @@ until hold_y                                  downward drift → free at screen 
 
 | Export | Default | Meaning |
 |---|---|---|
-| `actor` | (NodePath `../..`) | The LightAssaultShip this state drives. |
+| `actor` | (NodePath `../..`) | The Fighter this state drives. |
 | `speed` | `80.0` | Downward approach speed (px/s). |
 | `hold_y_offset` | `80.0` | Px below the top edge where it stops descending. |
 | `strafe_state` | (NodePath to StrafeExitState) | State to transition to on arrival. |
@@ -55,7 +55,7 @@ until hold_y                                  downward drift → free at screen 
 
 | Export | Default | Meaning |
 |---|---|---|
-| `actor` | (NodePath `../..`) | The LightAssaultShip this state drives. |
+| `actor` | (NodePath `../..`) | The Fighter this state drives. |
 | `strafe_speed` | `120.0` | Horizontal strafe speed (px/s). |
 | `downward_drift` | `20.0` | Constant downward drift while strafing (px/s). |
 
@@ -88,10 +88,10 @@ until hold_y                                  downward drift → free at screen 
 ## Files
 
 ```
-light_assault_ship/
+fighter/
 ├── ENEMY.md            ← this file
-├── light_assault_ship.tscn
-├── light_assault_ship.gd
+├── fighter.tscn
+├── fighter.gd
 ├── fighter_config.gd / .tres
 └── states/
     ├── approach_state.gd

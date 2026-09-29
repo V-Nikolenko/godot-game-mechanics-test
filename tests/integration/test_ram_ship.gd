@@ -5,7 +5,7 @@
 ## `ram_config.tres` value (999) — a config field a developer can read but the runtime never
 ## honours, the same class of defect `test_enemy_contact_damage.gd` closed for `collision_damage`.
 ## Fixed by applying it in `_ready()`, matching every other config-driven enemy
-## (`bomber.gd:19-20`, `light_assault_ship.gd:19-20`, etc).
+## (`bomber.gd:19-20`, `fighter.gd:19-20`, etc).
 ##
 ## The mask assertions ARE characterization, and deliberately so: the armour gimmick (bullet-proof
 ## until a missile strips it, per `ram_ship/ENEMY.md`) is intentional design, confirmed

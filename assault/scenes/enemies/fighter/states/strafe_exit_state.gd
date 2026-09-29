@@ -1,7 +1,7 @@
 class_name FighterStrafeExitState
 extends State
 
-@export var actor: LightAssaultShip
+@export var actor: Fighter
 @export var strafe_speed: float = 120.0
 @export var downward_drift: float = 20.0
 

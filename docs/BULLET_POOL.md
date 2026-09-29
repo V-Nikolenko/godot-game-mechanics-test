@@ -225,7 +225,7 @@ This parent chain is the linchpin of the design. The pool auto-discovers where t
 ### Creating a pool:
 
 ```gdscript
-class_name LightAssaultShip
+class_name Fighter
 extends BaseEnemy
 
 const _BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn")

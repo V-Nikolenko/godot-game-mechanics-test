@@ -27,8 +27,8 @@
 extends GutTest
 
 const PathMoverActor := preload("res://tests/helpers/path_mover_actor.gd")
-const LIGHT_ASSAULT_SHIP_SCENE: PackedScene = \
-		preload("res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn")
+const AI_STATE_MACHINE_SCENE: PackedScene = \
+		preload("res://tests/helpers/ai_state_machine_fixture.tscn")
 
 const _DT := 1.0 / 60.0
 
@@ -254,26 +254,26 @@ func test_facing_matches_the_nose_down_convention() -> void:
 	assert_almost_eq(actor.rotation, expected_rotation, 0.0001)
 
 
-# ── 7. The real light_assault_ship.tscn (review F3) ────────────────────────────
+# ── 7. A host carrying a legacy AIStateMachine (review F3) ───────────────────────────────────────────────────────────────────
 
-## `LightAssaultShip`'s `AIStateMachine` states write `actor.velocity` and call
-## `move_and_slide()` from `StateMachine._process` (`approach_state.gd:24-25`,
-## `strafe_exit_state.gd:14-15`), which `set_physics_process(false)` does NOT stop — only the
+## A legacy `AIStateMachine` (`tests/helpers/ai_state_machine_fixture.gd` stands in for the
+## Fighter's old states, deleted once it became brain-driven) writes `actor.velocity` and calls
+## `move_and_slide()` from `_process`, which `set_physics_process(false)` does NOT stop — only the
 ## "AIStateMachine" name lookup does. This case must keep failing if that lookup is ever made
 ## conditional on a future `suspend_ai()` contract (t10 depends on this file staying green
-## unchanged): attach a mover to the REAL scene and assert both effects independently.
-func test_light_assault_ship_ai_state_machine_disabled_and_position_matches_path() -> void:
+## unchanged): attach a mover to the fixture scene and assert both effects independently.
+func test_legacy_ai_state_machine_disabled_and_position_matches_path() -> void:
 	var container := Node2D.new()
 	add_child_autofree(container)
 
 	var spawn := Vector2(300.0, 200.0)
-	var entity := LIGHT_ASSAULT_SHIP_SCENE.instantiate() as CharacterBody2D
-	assert_not_null(entity, "sanity: light_assault_ship.tscn's root must be a CharacterBody2D")
+	var entity := AI_STATE_MACHINE_SCENE.instantiate() as CharacterBody2D
+	assert_not_null(entity, "sanity: the fixture's root must be a CharacterBody2D")
 	entity.global_position = spawn
 	container.add_child(entity)  # entity._ready() (incl. AIStateMachine.enter()) runs here.
 
 	var state_machine := entity.get_node_or_null("AIStateMachine")
-	assert_not_null(state_machine, "sanity: light_assault_ship.tscn must carry an AIStateMachine")
+	assert_not_null(state_machine, "sanity: the fixture must carry an AIStateMachine")
 	assert_eq(state_machine.process_mode, Node.PROCESS_MODE_INHERIT, "sanity: enabled before the mover attaches")
 
 	var movement := StraightMovement.new()
@@ -286,7 +286,7 @@ func test_light_assault_ship_ai_state_machine_disabled_and_position_matches_path
 
 	assert_eq(
 		state_machine.process_mode, Node.PROCESS_MODE_DISABLED,
-		"attaching a path mover must disable the ship's own AIStateMachine"
+		"attaching a path mover must disable the host's own AIStateMachine"
 	)
 
 	var elapsed := 0.0
