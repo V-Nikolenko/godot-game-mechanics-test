@@ -102,6 +102,15 @@ func _free_all_reinforcements() -> void:
 		e.free()
 
 
+## A ship's own `BulletPool`, found by type rather than by field name — `LightAssaultShip.
+## bullet_pool` is public but `Interceptor._bullet_pool` is not, and this must work for both.
+func _bullet_pool_of(ship: BaseEnemy) -> BulletPool:
+	for child in ship.get_children():
+		if child is BulletPool:
+			return child as BulletPool
+	return null
+
+
 ## Bullets land in the container, not under a ship — `bullet_pool.gd:47`'s grandparent resolution,
 ## same filter `test_station_gunnery.gd:84-89` uses.
 func _bullets() -> Array[EnemyBullet]:
@@ -547,13 +556,20 @@ func test_rail_reinforcements_fire() -> void:
 			## A default bullet's fire direction is `Vector2.DOWN.rotated(ship.rotation)`
 			## (`aimed_attack_pattern.gd:30`), and `EnemyPathMover` keeps `ship.rotation` aligned to
 			## the direction of travel (`enemy_path_mover.gd:93`) — so a forward shot must lie along
-			## the ship's own travel, not the squad's shared nominal heading.
+			## the ship's own travel, not the squad's shared nominal heading. Checked only against
+			## bullets still tracked by THAT ship's own pool (`BulletPool._active`, review round 1
+			## finding 1) — any bullet anywhere in the container would let one correctly-aimed ship
+			## paper over a broken one.
 			for ship in ships:
+				var pool := _bullet_pool_of(ship)
+				assert_not_null(pool, "%s has no BulletPool child" % ship.name)
 				var expected_dir: Vector2 = Vector2.DOWN.rotated(ship.rotation)
 				var matched := false
-				for b in bullets:
+				for b in pool._active:
+					if not is_instance_valid(b):
+						continue
 					var dir: Vector2 = (b as EnemyBullet)._direction
-					if angle_difference(dir.angle(), expected_dir.angle()) < 0.01:
+					if absf(angle_difference(dir.angle(), expected_dir.angle())) < 1e-3:
 						matched = true
 						break
 				assert_true(matched,

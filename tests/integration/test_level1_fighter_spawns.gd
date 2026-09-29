@@ -39,12 +39,16 @@
 ##
 ## `_LEGACY_PEAK_SHOTS_PER_S` applies review N6's correction: a legacy shooter's rate is
 ## `min(1 / fire_interval, pool_size / round_lifetime)`, not a flat `1 / fire_interval` — a 20-round
-## pool cannot sustain the Gatling's 1/0.09 s/round forever. `round_lifetime` is the live
-## `ArenaCamera.projectile_world_rect()`'s half-diagonal divided by the shooter's own bullet speed,
-## the same "arena diagonal / bullet speed" pool-sizing convention `light_assault_ship.gd:27` and
-## `interceptor.gd:32` already use in their own comments. Only the interceptor's rate is actually
-## capped by this (its pool of 20 against a ~4.76 s round life caps it at ~4.20 shots/s); the
-## fighter's forward/aimed rates stay well under their own pool's ceiling.
+## pool cannot sustain the Gatling's 1/0.09 s/round forever. `round_lifetime` is `max_distance /
+## bullet_speed` — the same formula the plan's own pool-sizing arithmetic uses throughout §2.2
+## ("lifetime = max_distance / speed") — with `max_distance` read live off `ProjectileLifetime` on
+## the shared `enemy_bullet.tscn` both ships preload today (review round 1 finding 3; NOT
+## `ArenaCamera.projectile_world_rect()`'s diagonal, which is a camera/culling rect no shot's own
+## expiry rule ever consults). Pool size, fire interval and bullet speed are likewise read live by
+## instantiating the actual ships, never hand-typed (review round 1 finding 2) — see
+## `_live_attack_stats()`. Only the interceptor's rate is actually capped by this (its pool of 20
+## against a ~10.9 s round life caps it well below its flat 1/0.09 rate); the fighter's forward/
+## aimed rates stay well under their own pool's ceiling.
 ##
 ## Both constants are filled in from the FIRST computed run — nothing here is typed from the plan
 ## — and `test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants()` asserts the live
@@ -58,12 +62,9 @@ const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.
 const _FIGHTER := WaveBuilder.FIGHTER
 const _INTERCEPTOR := WaveBuilder.INTERCEPTOR
 
-## Pool sizes and bullet speeds read from the live ships/configs, not hand-typed — see the class
-## doc's N6 paragraph. `light_assault_ship.gd:28,42` and `interceptor.gd:33,39` are the sources.
-const _POOL_SIZE: int = 20
-const _FIGHTER_FORWARD_SPEED: float = 420.0
-const _FIGHTER_AIMED_SPEED: float = 250.0
-const _INTERCEPTOR_SPEED: float = 220.0
+## Both ships preload this exact scene as their `_BULLET_SCENE` today (`light_assault_ship.gd:6`,
+## `interceptor.gd:15-16`); its `ProjectileLifetime.max_distance` is what `_capped_rate()` reads.
+const _BULLET_SCENE_PATH := "res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn"
 
 ## The rail sampling cap (§2.9.1) and step. 20 s comfortably exceeds every real rail's lifetime
 ## (the longest `free_after` in the pin below is 12 s); 0.02 s keeps the cull-rect crossing
@@ -283,22 +284,97 @@ func _rail_lifetime(path: String, offset: Vector2, movement: MovementResource, e
 	return _CULL_CAP
 
 
-## Review N6: `min(flat fire rate, pool_size / round_lifetime)`. `round_lifetime` is the live
-## `projectile_world_rect()`'s half-diagonal over the shooter's own bullet speed — the same "arena
-## diagonal / bullet speed" convention `light_assault_ship.gd`/`interceptor.gd` already comment
-## their own pool sizes with.
-func _capped_rate(flat: float, bullet_speed: float, cam: ArenaCamera) -> float:
-	var round_lifetime: float = (cam.projectile_world_rect().size * 0.5).length() / bullet_speed
-	return minf(flat, float(_POOL_SIZE) / round_lifetime)
+## Instantiates `path` as a child of `container` — two levels under a scene-tree node, matching
+## `BulletPool._ready()`'s `pool -> ship -> container` resolution — so `_ready()` actually builds
+## the pool and the `AttackController`. `aim_mode` is set first when non-empty, so it is read by
+## `light_assault_ship.gd:32` before `_ready()` runs. Caller frees the returned ship.
+func _spawn_in(container: Node2D, path: String, aim_mode: String) -> Node:
+	var ship: Node = (load(path) as PackedScene).instantiate()
+	if aim_mode != "":
+		ship.set("aim_mode", aim_mode)
+	container.add_child(ship)
+	return ship
+
+
+## A ship's own `BulletPool` and `AttackController.pattern`, found by type rather than by field
+## name — `LightAssaultShip.bullet_pool` is public but `Interceptor._bullet_pool` is not, and this
+## must read both the same way. Frees `ship`.
+func _attack_stats_of(ship: Node) -> Dictionary:
+	var pool: BulletPool = null
+	var pattern: AttackPatternResource = null
+	for child in ship.get_children():
+		if child is BulletPool:
+			pool = child as BulletPool
+		elif child is AttackController:
+			pattern = (child as AttackController).pattern
+	assert_not_null(pool, "%s has no BulletPool child" % ship.name)
+	assert_not_null(pattern, "%s has no AttackController.pattern" % ship.name)
+	var stats: Dictionary = {
+		"pool_size": pool.pool_size,
+		"fire_interval": pattern.fire_interval,
+		"bullet_speed": float(pattern.get("bullet_speed")),
+	}
+	ship.free()
+	return stats
+
+
+## Review round 1 finding 2: pool sizes, fire intervals and bullet speeds read live by
+## instantiating the real ships, never hand-typed. Computed once and memoized for the file's run —
+## the same one-time-setup shape `before_all()` uses elsewhere in this suite (tests/README.md);
+## kept lazy here because only two of this file's tests need it.
+var _live_cache: Dictionary = {}
+
+func _live_attack_stats() -> Dictionary:
+	if not _live_cache.is_empty():
+		return _live_cache
+	var outer := Node2D.new()
+	add_child_autofree(outer)
+	var container := Node2D.new()
+	outer.add_child(container)
+
+	var forward := _attack_stats_of(_spawn_in(container, _FIGHTER, "FORWARD"))
+	var aimed := _attack_stats_of(_spawn_in(container, _FIGHTER, "PLAYER"))
+	var interceptor := _attack_stats_of(_spawn_in(container, _INTERCEPTOR, ""))
+
+	var bullet: Node = (load(_BULLET_SCENE_PATH) as PackedScene).instantiate()
+	var lifetime := bullet.get_node("ProjectileLifetime") as ProjectileLifetime
+	var max_distance: float = lifetime.max_distance
+	bullet.free()
+
+	_live_cache = {
+		"max_distance": max_distance,
+		"fighter_pool_size": int(forward["pool_size"]),
+		"fighter_forward_interval": float(forward["fire_interval"]),
+		"fighter_forward_speed": float(forward["bullet_speed"]),
+		"fighter_aimed_interval": float(aimed["fire_interval"]),
+		"fighter_aimed_speed": float(aimed["bullet_speed"]),
+		"interceptor_pool_size": int(interceptor["pool_size"]),
+		"interceptor_interval": float(interceptor["fire_interval"]),
+		"interceptor_speed": float(interceptor["bullet_speed"]),
+	}
+	return _live_cache
+
+
+## Review round 1 finding 3: `min(flat fire rate, pool_size / round_lifetime)`, where
+## `round_lifetime` is `max_distance / bullet_speed` — the plan's own pool-sizing formula
+## throughout §2.2 ("lifetime = max_distance / speed") — never `projectile_world_rect()`'s
+## diagonal, which no shot's own expiry rule (`ProjectileLifetime`) actually consults.
+func _capped_rate(flat: float, bullet_speed: float, pool_size: int) -> float:
+	var round_lifetime: float = _live_attack_stats()["max_distance"] / bullet_speed
+	return minf(flat, float(pool_size) / round_lifetime)
 
 
 func _rate_for(path: String, _offset: Vector2, _movement: MovementResource, _exit_mode: int,
-		_exit_time: float, aim_mode: String, cam: ArenaCamera) -> float:
+		_exit_time: float, aim_mode: String) -> float:
+	var live := _live_attack_stats()
 	if path == _INTERCEPTOR:
-		return _capped_rate(1.0 / 0.09, _INTERCEPTOR_SPEED, cam)
+		return _capped_rate(1.0 / live["interceptor_interval"], live["interceptor_speed"],
+			live["interceptor_pool_size"])
 	if aim_mode == "FORWARD":
-		return _capped_rate(1.0 / 0.3, _FIGHTER_FORWARD_SPEED, cam)
-	return _capped_rate(1.0 / 0.8, _FIGHTER_AIMED_SPEED, cam)
+		return _capped_rate(1.0 / live["fighter_forward_interval"], live["fighter_forward_speed"],
+			live["fighter_pool_size"])
+	return _capped_rate(1.0 / live["fighter_aimed_interval"], live["fighter_aimed_speed"],
+		live["fighter_pool_size"])
 
 
 func test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants() -> void:
@@ -306,7 +382,7 @@ func test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants() -> void:
 	add_child_autofree(cam)
 	var ship_paths: Array[String] = [_FIGHTER, _INTERCEPTOR]
 	var lifetime_fn := Callable(self, "_rail_lifetime").bind(cam)
-	var rate_fn := Callable(self, "_rate_for").bind(cam)
+	var rate_fn := Callable(self, "_rate_for")
 
 	var checked := 0
 	for section: LevelSection in _build_sections():
@@ -330,7 +406,7 @@ func test_a_section_with_no_fighters_has_zero_peak_concurrency_and_rate() -> voi
 	add_child_autofree(cam)
 	var ship_paths: Array[String] = [_FIGHTER, _INTERCEPTOR]
 	var lifetime_fn := Callable(self, "_rail_lifetime").bind(cam)
-	var rate_fn := Callable(self, "_rate_for").bind(cam)
+	var rate_fn := Callable(self, "_rate_for")
 	for section: LevelSection in _build_sections():
 		if section.section_name != &"asteroid_belt":
 			continue
