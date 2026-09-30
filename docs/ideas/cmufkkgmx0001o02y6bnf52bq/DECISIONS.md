@@ -970,3 +970,51 @@ Once this phase's *as built* section exists, check it first.
   `test_enemy_bullet_lifetime.gd` reads them; the regex over `fighter.gd` is gone.
 - `test_level1_fighter_spawns.gd` reads a fighter's rate through `suspend_ai()` on `AimedAttack` / `AimedPool`, so the frozen
   legacy constants still hold unchanged (rail fighters fire the same cadence, now with Pulse rounds).
+
+### Phase 3, built in t8b (Fighter attack runs)
+
+Task plan: `docs/plans/cmulwkar000btqj2x1e58sfd4/3-plan.md` (revision 2, approved with binding notes I1–I8 in
+`4-review.md`). The epic's §2.4.1 geometry (`b`, `u = −b`, `l ⟂ u`, `S = P̂ + b·standoff_radius + l`) and §2.4.2
+weapons are built as the epic wrote them. The deviations later phases depend on:
+
+- **New shared class `DubinsPath`** (`global/enemy_ai/dubins_path.gd`, pure `RefCounted`): the shortest
+  turn-radius-limited path between two poses, all candidates sorted by length. APPROACH and REPOSITION are Dubins lead-ins
+  to S that arrive pointing along the run, planned at 1.1 × the turn radius and tracked with `turn_toward`. The first
+  candidate whose 16 px samples clear the player's predicted positions wins. Ph4's attack-run enemies (Bomber, Ram) can
+  plan with it.
+- **TURN ≠ the epic's "turn toward S".** Its first step is a full-rate turn back toward the player until the nose is on
+  it (opportunity (b), the snapshot, capped at a full circle, I4). It then flies a break-away: the REPOSITION path's first
+  arc, with a 120 px clearance on that arc only, or a peel when no path exists. REPOSITION flies the rest of the path,
+  outside `reposition_min_radius`. The literal epic rule was degenerate for the solo alternation (review N8), and it never
+  brought the nose on the player, so FORWARD never fired.
+- **`forward_range` 300 → 325** (the epic's K5 lever): the snapshot comes nose-on at ≈ 220–305 px. Hysteresis is still
+  60, so the acceptance numbers 250 / 400 / 330 are unchanged.
+- **APPROACH clearance and breach radius come from S:** clearance = `min(standoff, |S − P̂|) − 1`, breach radius = that −
+  24 px. A breach, or the APPROACH/REPOSITION **deadline**, starts a FRONTAL-shaped pass from the current bearing, with
+  its lane ⟂ the new `u` on the drift side (N9). The deadline is (the remaining length of the first plan in that phase) /
+  `max_speed` + `reposition_max` (I1).
+- **P̂'s lead is latched at RUN_IN entry** together with `b`, `u`, `l` and the kind, and released at EXTEND's end. Before
+  RUN_IN the pass is re-derived every tick. RUN_IN feeds forward the lane's sideways velocity, and the handover heading is
+  the run heading `g` (`u` for a holding player).
+- **Re-planning follows S's predicted track** (`S_plan + v_P·age`), not S's distance from where it was at plan time. The
+  literal rule re-plans every ≈ 0.12 s against a moving player (I5's measurement). The arrival prediction
+  `T = length(S + v_P·T) / max_speed` is refined three times, capped at 3 s.
+- **Assault:** h = UP. S is clamped along the run axis into `inner_rect()` shrunk by `2 × 1.1 × turn radius + hull`. A
+  flank lane under the corridor top flips behind, and a FRONTAL lane at a side wall flips σ. The bearing flips when the run
+  would be shorter than `min_run_length`. EXTEND ends when the point 0.3 s ahead leaves `inner_rect().grow(−hull)`, and the
+  ring fallback clamps 200 px inside the rect (I7, the prototyped rules). The turn-in takes the long way when only that
+  circle fits.
+- **Weapons:** the FORWARD burst holds the nose (rotation, via `mover.face_toward`) on the player, never the path. The
+  shot bearing runs up to ≈ 1.75 rad/s, under the mover's 1.8 cap, and the distance still falls to ≈ 150–200 px (I3).
+  `min_burst_period` is enforced between burst starts. Opportunity (b) is TURN-only.
+- **New config fields:** `run_in_max` 4.0 and `regroup_seconds` 1.5 (Tactics).
+- **Seams for t9:** `forced_pass_kind` (≥ 0 gives every pass that kind, with FLANK_RIGHT's role-shaped outer lane), the
+  read-only `pass_*` fields, `passes_done`, and the Open Space loiter at S.
+- **For t16 (I8, and task-plan deviation 8):** at `engage_seconds` 6.0 an Assault fighter flies exactly one lateral pass
+  with one AIMED burst and leaves during EXTEND. So it **never fires FORWARD in Assault**, and the lever
+  "`assault_passes` 2 → 1" changes nothing today. The epic's "in Assault FORWARD is more common" does not hold.
+- **Moving player (I6):** against a player cruising at 200 px/s the fighter closes at ≈ 100 px/s along the course, and
+  REPOSITION rarely reaches a moving S before its deadline. The steady state is a breach-shaped pass about every 15 s,
+  none touching the player. From abeam or behind, the first pass comes from APPROACH's deadline at 5–11 s.
+  `test_fighter.gd`'s natural-play case spawns ahead-and-beside the course. A holding player gets a flank pass about
+  every 10 s.

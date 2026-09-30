@@ -40,8 +40,9 @@ extends ShipConfig
 ## A burst opportunity opens inside this distance to the player (px).
 @export var fire_range: float = 520.0
 ## Below this distance the burst is FORWARD; at `forward_range + mode_hysteresis` or more it is
-## AIMED; in between the last mode holds (px).
-@export var forward_range: float = 300.0
+## AIMED; in between the last mode holds (px). 325, not the epic's 300 (its K5 lever): the TURN snapshot
+## comes nose-on at ≈ 305 px, and it should be the close spray (task plan cmulwkar000btqj2x1e58sfd4 §4).
+@export var forward_range: float = 325.0
 @export var mode_hysteresis: float = 60.0
 ## A FORWARD burst needs the nose within this of the player (deg).
 @export var nose_cone_deg: float = 12.0
@@ -74,6 +75,10 @@ extends ShipConfig
 @export var rear_standoff_radius: float = 560.0
 ## A flank with no window from its leader attacks after this long at its start point (s).
 @export var flank_wait_max: float = 2.0
+## RUN_IN gives up after this long whatever the geometry (s): a player running away along the run.
+@export var run_in_max: float = 4.0
+## Open Space: after `passes` passes, the fighter holds its next start point this long (s).
+@export var regroup_seconds: float = 1.5
 
 @export_group("Rail")
 ## The rail fallback (plan §2.8): what a fighter does while an `EnemyPathMover` owns its motion.

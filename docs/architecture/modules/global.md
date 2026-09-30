@@ -51,6 +51,7 @@ global/
 │   ├── target_info.gd         # TargetInfo — player resolver + prediction/intercept snapshot
 │   ├── engagement_budget.gd   # EngagementBudget (RefCounted) — Assault-only per-brain exit timer
 │   ├── burst_clock.gd         # BurstClock (RefCounted) — counts down an exact-size, evenly-spaced burst
+│   ├── dubins_path.gd         # DubinsPath (RefCounted) — shortest turn-radius-limited path between two poses
 │   ├── squad_controller.gd    # SquadController (RefCounted) — event-driven lead/flank/rear role board
 │   ├── anchor_idle.gd         # AnchorIdle (RefCounted) — generic idle-around-an-anchor → combat handover
 │   └── enemy_world.gd         # EnemyWorld — the one lookup of the &"assault_arena" mode provider
@@ -137,7 +138,7 @@ Static-only helper (`RefCounted`, never instantiated) that swaps the OS mouse ar
 > `SquadController` → `test_squad_controller.gd` (+ `tests/integration/test_wave_squads.gd` for how
 > Assault spawns get one), `AnchorIdle` → `test_anchor_idle.gd`, `EngagementBudget` →
 > `test_engagement_budget.gd` (+ `tests/integration/test_engagement_deadline.gd`, the level-timing
-> proof), `BurstClock` → `test_burst_clock.gd`, `StateLight` → `test_state_light.gd`, `Steering` → `test_steering.gd`,
+> proof), `BurstClock` → `test_burst_clock.gd`, `DubinsPath` → `test_dubins_path.gd`, `StateLight` → `test_state_light.gd`, `Steering` → `test_steering.gd`,
 > `Overheat` → `test_overheat_component.gd`, the state machine → `test_state_machine.gd`, and the
 > whole `PlayerBase` damage chain → `tests/integration/test_player_damage_chain.gd`. The autoloads
 > in §3–4 are covered by `tests/unit/test_<autoload>.gd`. See [`tests/README.md`](../../../tests/README.md).
@@ -526,9 +527,23 @@ the burst, however large `delta` is. The first shot is due immediately on the fi
 call, whatever `delta` is — the internal clock starts pre-loaded with `gap`. Time accumulates with
 subtract-not-reset, the same overshoot-preserving rule `AttackController.tick()` uses. `is_running()`
 reports whether shots remain; `stop()` ends the burst early. `shots_fired` is a running count, reset
-by `start()`. Has no consumer yet this phase (docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md §2.3);
-the Fighter and Gatling Interceptor brains, landing later in the same phase, are its first callers —
+by `start()` (docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md §2.3);
+the Fighter brain (t8b) and the Gatling Interceptor brain (later in the same phase) are its callers —
 an exact 3–5 / 5–7 / 8–12-round burst instead of a free-running interval timer.
+
+**`DubinsPath` (`dubins_path.gd`, `RefCounted`) is the shortest path between two poses (position +
+heading) for a vehicle with a minimum turn radius** — Dubins 1957, LaValle *Planning Algorithms*
+§15.3.1: at most three pieces, each a full-rate arc or a straight. `DubinsPath.candidates(p0, h0,
+p1, h1, r)` returns every valid shape **sorted by length**: the four CSC paths (RSR, LSL, and the
+inner-tangent RSL/LSR only when the circle centres are ≥ 2r apart), the two CCC paths (only when
+the centres are ≤ 4r apart), and a single arc when start and goal share a circle. Per path:
+`kind`, `length`, `segments`, `first_arc_angle()`, `first_arc_samples(step)`, the analytic
+`end_heading()` and `sample(step) -> PackedVector2Array`. Frame: Godot's y-down world, a turn's
+`sign` is +1 when the heading angle increases. Pure maths — no node, no motion writes, so it passes
+`test_enemy_mover_single_writer.gd`'s sweep. Its first caller is `FighterBrain`, which plans an
+attack run's lead-in with it (take the first candidate whose samples are clear of the player, then
+track the samples with `Steering.turn_toward`) — later attack-run enemies (the Ph4 Bomber/Ram
+passes) can plan with it the same way. Tests: `tests/unit/test_dubins_path.gd`.
 
 ### ProjectileLifetime — `projectile_lifetime.gd`
 
