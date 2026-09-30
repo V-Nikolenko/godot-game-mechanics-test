@@ -1018,3 +1018,21 @@ weapons are built as the epic wrote them. The deviations later phases depend on:
   none touching the player. From abeam or behind, the first pass comes from APPROACH's deadline at 5–11 s.
   `test_fighter.gd`'s natural-play case spawns ahead-and-beside the course. A holding player gets a flank pass about
   every 10 s.
+
+### Phase 3, t9 (fighter squads): escalated, nothing built (2026-09-30)
+
+Findings: `docs/plans/cmulwkar300bxqj2xgtk6jyu3/5-escalation.md`. The fighter code is unchanged (t8b), and both measured
+variants are kept as patches in that task's `prototype/`. What later tasks need to know now:
+
+- **§2.5's "`flank_stagger` is the one separation fix" does not hold.** 271 of the 290 failing runs in a 420-layout sweep
+  are closest within 2 s of spawn: the formation fans out from 80 px slots before any run exists to stagger. Today's t8b
+  formations (independent solos) already overlap in 293 of 420 layouts. Only a reactive avoidance layer (ORCA, measured
+  5/420) met the criterion. That is a scope change awaiting the owner.
+- **The Assault budget (6.0 s) does not fit a pincer rendezvous.** A flank can reach its S too late for any run to fit before
+  expiry. At the shipped budget, 3 of 18 Assault squads leave an attacker silent even with no avoidance at all, and lever 1 (→ 4.5 s) would
+  make most squads silent. t16/t17 must not assume squads fight in Assault until the owner decides.
+- **Fighter bodies physically collide with each other** (layer 1 "environment", mask 1). In a hand-ticked GUT run that
+  collides with mates' unstepped spawn positions and makes a squad simulation non-deterministic. Any squad test needs
+  `add_collision_exception_with()` between members.
+- **t8b's ring fallback** (`_fly_ring`) seeks chords that pass 231–249 px from the player, inside
+  `reposition_min_radius` (288). The acceptance line's seek-target rule needs the tangent cap the prototypes carry.

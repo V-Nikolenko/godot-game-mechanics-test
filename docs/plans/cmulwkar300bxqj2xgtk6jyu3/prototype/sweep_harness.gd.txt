@@ -1,0 +1,178 @@
+## PROTOTYPE sweep (scratch, deleted before commit).
+extends GutTest
+
+const HARNESS: GDScript = preload("res://tests/helpers/enemy_ai_harness.gd")
+const DT := 1.0 / 60.0
+const P := FighterBrain.Phase
+const R := SquadController.Role
+
+
+func _world(mode: String, player_pos: Vector2) -> Dictionary:
+	var h: RefCounted = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child(h.root)
+	h.player.global_position = player_pos
+	var cam: Camera2D
+	if mode == "open_space":
+		cam = Camera2D.new()
+		cam.global_position = Vector2(640, 360)
+		h.root.add_child(cam)
+	else:
+		cam = h.root.get_node("ArenaCamera") as Camera2D
+	cam.make_current()
+	var wm := WaveManager.new()
+	wm.enemy_container = h.root
+	h.root.add_child(wm)
+	return {"h": h, "wm": wm}
+
+
+func _form(name: String) -> FormationResource:
+	var b := WaveBuilder.new()
+	match name:
+		"v3": return b.v_formation(3, 40.0, 12.0, 0.0)
+		"v4": return b.v_formation(4, 40.0, 12.0, 0.0)
+		"v6": return b.v_formation(6, 40.0, 12.0, 0.0)
+		"line4": return b.line_formation(4, 50.0)
+		_: return b.w_formation(5, 60.0, 40.0, 0.0)
+
+
+func _run(mode: String, formation: FormationResource, at: Vector2, player: Vector2, seconds: float = 16.0, engage: float = 0.0) -> Dictionary:
+	var w := _world(mode, player)
+	var b := WaveBuilder.new()
+	var waves: Array[WaveResource] = [b.wave(0.0, [b.fighter().at(at.x, at.y).formation(formation)])]
+	(w.wm as WaveManager).load_section(waves)
+	(w.wm as WaveManager)._process(0.0)
+	var fighters: Array[Fighter] = []
+	for c in (w.h.root as Node).get_children():
+		if c is Fighter:
+			c.set_physics_process(false)
+			(c.get_node("Brain") as FighterBrain).rng.seed = 7 + fighters.size()
+			if engage > 0.0:
+				c.config.engage_seconds = engage
+			fighters.append(c)
+	for a in fighters:
+		for c in fighters:
+			if a != c:
+				a.add_collision_exception_with(c)
+	var squad: SquadController = fighters[0].get(&"squad") as SquadController
+	var lead: Fighter
+	var attacker := {}
+	for f in fighters:
+		var role := squad.role_of(f) if squad != null else R.LEAD
+		if role == R.LEAD:
+			lead = f
+		attacker[f] = role != R.REAR
+	var shots := {}
+	var was_hold := {}
+	var was_phase := {}
+	var first_run := {}
+	var breach := 0
+	var breach_note := ""
+	var lead_runs := 0
+	var min_sep := INF
+	var min_player := INF
+	var sep_note := ""
+	var player_note := ""
+	var t := 0.0
+	for f in fighters:
+		shots[f] = 0
+		was_hold[f] = false
+		was_phase[f] = -1
+	for i in int(seconds / DT):
+		for f in fighters:
+			if is_instance_valid(f) and not f.is_queued_for_deletion():
+				var before := f.global_position
+				f._physics_process(DT)
+				f.global_position = before + f.velocity * DT
+		t += DT
+		var live: Array[Fighter] = []
+		for f in fighters:
+			if not is_instance_valid(f) or f.is_queued_for_deletion():
+				continue
+			live.append(f)
+			var br := f.get_node("Brain") as FighterBrain
+			for pool_name in ["AimedPool", "ForwardPool"]:
+				var pool := f.get_node(pool_name) as BulletPool
+				for bl in pool._active.duplicate():
+					shots[f] += 1
+					pool._recycle(bl)
+			if br.phase == P.RUN_IN and was_phase[f] != P.RUN_IN:
+				if not first_run.has(f):
+					first_run[f] = t
+				if not was_hold[f] and squad != null and squad.member_count() >= 2:
+					breach += 1
+					breach_note = "%.2f %s from %s" % [t, R.keys()[squad.role_of(f)], P.keys()[was_phase[f]]]
+				if f == lead:
+					lead_runs += 1
+			was_hold[f] = br.has_method(&"is_holding") and br.call(&"is_holding")
+			was_phase[f] = br.phase
+			var dp := f.global_position.distance_to(w.h.player.global_position)
+			if dp < min_player:
+				min_player = dp
+				player_note = "%.2f %s" % [t, P.keys()[br.phase]]
+		for a in live.size():
+			for c in range(a + 1, live.size()):
+				var d := live[a].global_position.distance_to(live[c].global_position)
+				if d < min_sep:
+					min_sep = d
+					var ba := live[a].get_node("Brain") as FighterBrain
+					var bc := live[c].get_node("Brain") as FighterBrain
+					sep_note = "%.2f %s/%s" % [t, P.keys()[ba.phase], P.keys()[bc.phase]]
+		if mode == "open_space" and lead_runs >= 2:
+			break
+		if live.is_empty():
+			break
+	var silent := 0
+	for f in fighters:
+		if attacker[f] and shots[f] == 0:
+			silent += 1
+	var lead_first: float = first_run.get(lead, INF)
+	(w.h.root as Node).get_parent().remove_child(w.h.root)
+	(w.h.root as Node).free()
+	return {"sep": min_sep, "player": min_player, "note": sep_note, "pnote": player_note, "breach": breach,
+		"bnote": breach_note, "silent": silent, "lead_first": lead_first, "t": t}
+
+
+func _sweep(label: String, forms: Array, players: Array, offsets: Array, modes: Array) -> void:
+	var n := 0
+	var counts := {"SEP": 0, "HIT": 0, "BREACH": 0, "SILENT": 0}
+	var worst_sep := INF
+	var worst_player := INF
+	var lead_first := []
+	for mode in modes:
+		for form_name in forms:
+			for player in players:
+				for at in offsets:
+					var res := _run(mode, _form(form_name), at, player)
+					n += 1
+					worst_sep = minf(worst_sep, res.sep)
+					worst_player = minf(worst_player, res.player)
+					if mode == "assault":
+						lead_first.append(res.lead_first)
+					var tags := []
+					if res.sep < 57.2:
+						tags.append("SEP")
+					if res.player < 42.1:
+						tags.append("HIT")
+					if res.breach > 0:
+						tags.append("BREACH")
+					if mode == "assault" and res.silent > 0:
+						tags.append("SILENT")
+					for tag in tags:
+						counts[tag] += 1
+					if not tags.is_empty():
+						gut.p("%s %s %s P%s at%s: sep %.1f (%s) player %.1f (%s) breach %d (%s) silent %d" % [tags, mode, form_name, player, at, res.sep, res.note, res.player, res.pnote, res.breach, res.bnote, res.silent])
+	lead_first.sort()
+	gut.p("%s n=%d %s worst sep %.1f worst player %.1f; assault lead first run median %.2f max %.2f" % [label, n, counts, worst_sep, worst_player, lead_first[lead_first.size() / 2] if not lead_first.is_empty() else -1.0, lead_first[-1] if not lead_first.is_empty() else -1.0])
+	assert_true(true)
+
+
+func test_sweep() -> void:
+	_sweep("SWEEP", ["v3", "w5"], [Vector2(640, 560), Vector2(480, 520), Vector2(820, 600)],
+		[Vector2(0, -230), Vector2(-110, -260), Vector2(120, -200)], ["open_space", "assault"])
+
+
+func test_wide() -> void:
+	_sweep("WIDE", ["v3", "v4", "v6", "line4", "w5"],
+		[Vector2(640, 560), Vector2(480, 520), Vector2(820, 600), Vector2(640, 600), Vector2(400, 480), Vector2(900, 640), Vector2(640, 380)],
+		[Vector2(0, -230), Vector2(-110, -260), Vector2(120, -200), Vector2(0, -250), Vector2(-160, -220), Vector2(170, -240)],
+		["open_space", "assault"])
