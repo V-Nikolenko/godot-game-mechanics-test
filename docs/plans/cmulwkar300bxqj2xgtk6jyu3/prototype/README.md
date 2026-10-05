@@ -1,14 +1,14 @@
 # t9 prototypes (not shipped)
 
-Both patches apply cleanly to HEAD `6711274` (`git apply --check`, 2026-09-30). Each is a complete variant of
-`assault/scenes/enemies/fighter/{fighter.gd, fighter_brain.gd, fighter_config.gd, fighter_config.tres}`; the ORCA one
-also touches `global/enemy_ai/enemy_mover.gd`. Apply **one**, not both. The measurements behind each are in
-`../5-escalation.md`.
+Each patch is a complete variant of `assault/scenes/enemies/fighter/{fighter.gd, fighter_brain.gd, fighter_config.gd,
+fighter_config.tres}`. Apply **one**. The measurements behind each are in `../5-escalation.md`.
 
 | File | What it is |
 |---|---|
-| `orca_variant.patch` | Squad roles, window, holds, REAR dry passes, crossing stagger, budget-bounded holds, ring-fallback clearance. Adds the ORCA give-way (`avoidance()`, `_share()`, `give_way_rank()`, along-track-only for the run and turn-in, nothing toward the player). Adds D5: `_heading()` returns the brain's last primary request, and a velocity jump bigger than the mover's acceleration drops it. Adds D6: `EnemyMover.requested_velocity()`. **Contains two measurement leftovers to remove before shipping:** the `OS.get_environment("NO_GW")` switch round `_give_way()`, and the `dbg_nudge` field. |
-| `routing_variant.patch` | The same squad code without D4–D6. Instead, each lead-in is planned clear of mates' `predicted_position(t)` (priority LEAD < FLANK_LEFT < FLANK_RIGHT < REARs; holding mates and mates on a run, turn or exit are always avoided), and re-checked every 0.2 s. |
-| `test_fighter_squad_draft.gd.txt` | The draft `tests/integration/test_fighter_squad.gd` (15 cases, green on the ORCA variant before the harness fix). **It must gain `add_collision_exception_with()` between the spawned fighters** (review B5), plus the review's B2, B4 and B6 changes, before it is committed. |
-| `test_fighter_avoidance_draft.gd.txt` | Unit cases for the ORCA variant's `avoidance()` / `_share()` (10/10 green against it). |
-| `sweep_harness.gd.txt` | The measurement sweep: a clean harness (collision exceptions), with shipped and wide sets and the SEP / HIT / BREACH / SILENT metrics. It runs against either variant, and against HEAD. Rename it to `tests/integration/test_zz_sweep.gd` to run it, and **delete it again before committing**: the load-integrity gate compiles every `.gd` outside `addons/`. |
+| `revision2_variant.patch` | **Revision 2 (2026-10-05), the latest.** Applies cleanly to `f753884`. Squad roles, window, holds, REAR dry passes, crossing stagger (one-gap parallel trail), budget-bounded holds, ring-fallback clearance, plus the in-scope give-way: `_slide_aside()` (a holder steps off a moving mate's planned track) and `_slow_for_mates()` (a member on a lead-in slows along its own track), the settled-on-S rule, and the budget-pressure start rule. The current-role REAR fire gate (round-1 N3). No env switches or debug fields. Round-2 review: CHANGES_REQUESTED (second-window REAR/turn overlaps). |
+| `test_fighter_squad_rev2.gd.txt` | Its `tests/integration/test_fighter_squad.gd` (15 cases, dual where the acceptance line asks; green on the patch; ≈ 40 s). Its separation case stops at the LEAD's second RUN_IN — round-2 B1 asks for the third. |
+| `orca_variant.patch` | Revision 1 (2026-09-30). Applies to `6711274`. Adds the ORCA give-way, D5 and D6 (`EnemyMover.requested_velocity()`). Contains two measurement leftovers: the `NO_GW` switch and `dbg_nudge`. Ruled a scope change (round-1 B1). |
+| `routing_variant.patch` | Revision 1's alternative (2026-09-30). Applies to `6711274`. Lead-ins planned clear of mates' `predicted_position(t)`. Measured worse on breaches and silence. |
+| `test_fighter_squad_draft.gd.txt` | Revision 1's draft test (superseded by `test_fighter_squad_rev2.gd.txt`). |
+| `test_fighter_avoidance_draft.gd.txt` | Unit cases for the ORCA variant only. |
+| `sweep_harness.gd.txt` | The measurement sweep: clean harness (collision exceptions), dense / wide sets, SEP / CYC / HIT / BREACH / SILENT metrics, plus `_trace` and a flank-only debug case. Rename it to `tests/integration/test_zz_sweep.gd` to run it, and **delete it again before committing**: the load-integrity gate compiles every `.gd` outside `addons/`, and the gate would run it. |

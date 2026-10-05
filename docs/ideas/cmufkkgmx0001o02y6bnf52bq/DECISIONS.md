@@ -1037,6 +1037,25 @@ variants are kept as patches in that task's `prototype/`. What later tasks need 
 - **t8b's ring fallback** (`_fly_ring`) seeks chords that pass 231–249 px from the player, inside
   `reposition_min_radius` (288). The acceptance line's seek-target rule needs the tangent cap the prototypes carry.
 
+### Phase 3, t9 (fighter squads) round 2: blocked, still nothing built (2026-10-05)
+
+Findings: `docs/plans/cmulwkar300bxqj2xgtk6jyu3/5-escalation.md` → "Round 2". The fighter code is unchanged (t8b +
+t10). Revision 2 (in-scope give-way, no ORCA) is kept as `prototype/revision2_variant.patch`. What later tasks need:
+
+- **Without ORCA, the first attack window can be made clean.** A holder stepping off a moving mate's planned track, a
+  member on a lead-in slowing along its own track for attackers, and "only a member settled on its S answers a window"
+  gave 0 in-cycle overlaps in 168 layouts (V3/W5, both modes), with no breach passes. Routing lead-ins round mates was
+  measured and made breaches and silence worse.
+- **The REARs' dry passes are the unsolved part.** Over a full two-pass cycle a W5 overlaps in 35 of 42 Open Space
+  layouts (worst 3.5 px): a REAR's dry-pass TURN against an attacker's TURN in the second window. TURN does not give
+  way, and `flank_stagger` only spaces run starts. A level formation with REARs (more than three fighters) is not
+  separation-safe until this is designed.
+- **Still open for the owner, and t16/t17 must not assume either:** whether the separation criterion covers a full
+  cycle or the first window only; the Assault budget (with the rendezvous, 7 of 84 Assault layouts leave a flank that
+  holds and leaves without firing — a flank that crossed most of the corridor); fighter body collision.
+- **Spawn fan-out is the spawn layout's problem (t16):** from 80 px slots, 19 of 168 layouts still overlap before the
+  first window even with the give-way.
+
 ### Phase 3, built in t10 (Gatling Interceptor pressure windows) (2026-10-05)
 
 Task plan: `docs/plans/cmulwkar600c1qj2xnqykqsvo/3-plan.md` (approved, with binding notes A1–A8 in `4-review.md`). The

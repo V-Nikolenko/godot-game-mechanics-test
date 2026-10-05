@@ -135,3 +135,61 @@ What is left against it:
   four shooters.
 - N4: assert the W5 promotion as the full recompute, not "it holds a FLANK role".
 - N5–N7: list the REAR lane spacing, the t8b latch release at EXTEND's end, and the `_ready()` join as deviations.
+
+---
+
+# Round 2 (2026-10-05): BLOCKED after the last review round
+
+**Result: BLOCKED.** The task was re-queued with no recorded owner decision on the three questions above. This run
+dropped the ORCA layer (D4–D6) and built Revision 2 inside the task's scope (`3-plan.md`): the roles, window, holds,
+REAR dry passes and crossing stagger, plus two brain-local give-way rules — a member *holding* its station slides
+aside, perpendicular to a moving mate's planned track; a member *flying to* its station slows along its own track for
+a mate on a run, a turn or an exit — and two rendezvous rules (only a member settled on its station answers a window;
+under budget pressure it still starts only settled or already lined up). Round-2 review: **CHANGES_REQUESTED**, the
+second and last round. **Nothing is shipped**; the fighter code is at HEAD (t8b). The build is
+`prototype/revision2_variant.patch` (applies cleanly to `f753884`), its test `prototype/test_fighter_squad_rev2.gd.txt`
+(15 cases, all green on the patch, each mutation-checked by the reviewer).
+
+## What Revision 2 achieved (deterministic clean harness, `prototype/sweep_harness.gd.txt`)
+
+| Dense set, 168 runs (V3, W5 × 7 players × 6 offsets × 2 modes), shipped budget | CYC | SEP | BREACH | SILENT |
+|---|---|---|---|---|
+| Stagger only (the pre-approved scope) | 23 | 137 | 0 | 12 |
+| + routing round mates' plans (round-1 option i) | 9 | 59 | 34 | 48 |
+| + routing round holding mates only | 12 | 117 | 36 | 16 |
+| **Revision 2** | **0** | 19 | **0** | 7 |
+
+CYC = two members under 2 × hull radius (57.2 px) between the LEAD's first window and its **second** RUN_IN (Open
+Space) / everyone leaving (Assault). SEP = the same from spawn. BREACH = a squad run not started from a hold. SILENT =
+an Assault LEAD/FLANK that fired nothing (all 7 are budget holds: a flank that crossed most of the corridor and whose
+run no longer fit, held rather than sent out mid-run).
+
+## Why it is blocked (round-2 B1)
+
+The window above stops at the LEAD's second RUN_IN, which is exactly when the REARs first fly (a REAR answers every
+second window). The reviewer extended it to a full two-pass cycle (to the LEAD's third RUN_IN, both windows):
+
+| Open Space, full cycle | Failing layouts | Worst |
+|---|---|---|
+| V3 | 0 of 42 | 77.4 px |
+| **W5** | **35 of 42** | **3.5 px** — a REAR's dry-pass TURN against the LEAD's or a FLANK's TURN, in the second window |
+
+With a long budget in Assault (two passes), V3 fails in 11 of 42 and W5 in 27 of 42. TURN never gives way in
+Revision 2, and the stagger only spaces run starts. Restoring the two-gap parallel trail does not help (35 of 42,
+worst 2.2 px). In game the bodies collide, so these REARs would ram their attackers.
+
+## Decisions needed from you (these replace decision 1 above; 2 and 3 stand)
+
+1. **Which interval the separation criterion covers.**
+   - (a) **A full cycle, both windows** (the reviewer's reading): the next run must design REAR / turn separation and
+     re-measure. Candidates the reviewer named, none measured: a REAR dry pass that never shares a window with the
+     attackers' runs (answer on the window *close*, or start after the last attacker leaves TURN); a separation rule
+     for TURN; REAR lanes or standoff further out.
+   - (b) **The first window only** (Revision 2 as built, green): ship `revision2_variant.patch` with its test as is,
+     recording the second-window REAR overlaps as a known gap.
+2. **Assault budget** (unchanged from above). Revision 2 took "a late flank holds and leaves" (7 of 84 dense Assault
+   layouts, 14 of 210 wide); the reviewer ruled that is your call, not this task's. Still open.
+3. **Fighter body collision** (unchanged). Still open.
+
+Review non-blocking notes N1–N9 (round 2) apply to the patch whichever you choose; N1 (a stale comment) is already
+fixed in it.

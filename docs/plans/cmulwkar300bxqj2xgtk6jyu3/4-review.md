@@ -200,3 +200,165 @@ single-harness.**
   (`:745`, `:762`), per N3.
 - D6 is additive and read-only (`enemy_mover.gd:79-82`). The config fields are flat.
 - The t8b lock-step `aim_mode` case exists as described (`test_fighter.gd:352-367`), so strangers must not interact.
+
+# Round 2 (Revision 2)
+
+VERDICT: CHANGES_REQUESTED
+
+I checked Revision 2 against the uncommitted working-tree code (`git diff` vs `f753884`). I also ran everything in a
+throw-away copy (`/tmp/rev`) and touched nothing in the repo except this file. In that copy:
+- `test_fighter_squad.gd` passes 15/15 in 39 s. Its sweep prints the plan's numbers: worst separation 66.3 px (Open
+  Space) and 67.3 px (Assault), and 7 Assault attackers held silent by the budget.
+- These files are green on the working tree: `test_fighter.gd` 52/52, `test_enemy_mover_single_writer` 9/9,
+  `test_config_instance_isolation` 7/7, `test_signal_emit_arity` 8/8, `test_enemy_dual_mode` 9/9,
+  `test_level1_fighter_spawns` 5/5, `test_wave_squads` 8/8 and `test_enemy_contact_damage` 4/4.
+- I did not run `scripts/check-test-leaks.sh`. The file uses stagger 0, so it creates no `SceneTreeTimer`.
+
+## Question 1: scope
+
+**The give-way is within the task's discretion.** It is materially different from what round-1 B1 ruled out:
+- B1's objections were three things:
+  - D5, a new heading source for **every** phase;
+  - D6, new API on the shared `EnemyMover`;
+  - a reciprocal layer that also bent the attack legs.
+- Revision 2 has none of them:
+  - `_give_way()` (`fighter_brain.gd:1317-1323`) runs only for a holder, through `_slide_aside()`, and for a member
+    on a lead-in, through `_slow_for_mates()`;
+  - RUN_IN, EXTEND, TURN and DISENGAGE are untouched;
+  - it changes no heading source;
+  - it only re-issues `mover.request_velocity()`, which replaces the earlier request (`enemy_mover.gd:75-76`);
+  - the single-writer gate is green.
+- Round 1 itself listed the Swarm's `Steering.separation` nudge as an in-scope precedent to measure. A brain-local
+  rule for "wait at your station without being run through" fills a phase the epic leaves to the implementation.
+- §8's "option i's spirit" is overstated: this is reactive avoidance, not routing. That wording is cosmetic and does
+  not block.
+
+**The "over a full cycle" reading is a relaxation, and it hides a real failure (B1 below).**
+- The *start* point is defensible. The epic uses "cycle" for the attack: "after `passes` passes … a 1.5 s regroup,
+  then a new cycle" (epic `3-plan.md:269-270`), and research gives "one full pass cycle ≈ 3 s × 2 passes"
+  (`2-research.md:146`). The only fix it pre-approves, a FLANK_RIGHT start delay, addresses run crossings, not the
+  fan-out from spawn.
+- The plan should still say plainly that this is the option `5-escalation.md` put to the owner as decision 1(b),
+  "relax the criterion". It now calls it "the epic's wording" without explaining the change of position.
+- The *end* point is not defensible. The test stops at the LEAD's **second RUN_IN** (`test_fighter_squad.gd:486`).
+  That is one pass, not the epic's `passes` = 2.
+- It also stops at the exact frame the second window opens. The second window is the first window on which REARs
+  fly: a REAR answers every second window (`fighter_brain.gd:777`).
+- Read "cycle" either way and the result is the same:
+  - as `passes` passes, the measured interval is half a cycle;
+  - as one window, the way the implementation reads the REAR row's "every other cycle", the test measures only the
+    one cycle in which no REAR ever moves.
+- So no REAR dry pass is ever inside a separation check:
+  - in Open Space, the measurement ends as REARs launch;
+  - in Assault, at the shipped budget, REARs never fly (round-1 B4).
+
+## Blocking
+
+**B1 — Over a full two-pass cycle the W5 fails separation in 35 of 42 Open Space layouts, worst 3.5 px.**
+- Reproduction, a copy of `test_fighter_squad.gd` with two edits:
+  - `_cycle` stops at `lead_runs >= 3`, i.e. the first RUN_IN of the next cycle, instead of `>= 2` (line 486);
+  - the cap goes from 20 s to 45 s (line 450).
+- All 84 Open Space runs reach the third LEAD RUN_IN, within 28.9 s, so nothing stalls. Results:
+
+  | Formation | Failing layouts | Worst / range |
+  |---|---|---|
+  | V3 | 0 of 42 | 77.4 px |
+  | **W5** | **35 of 42** | **3.5–44.5 px** |
+
+- Every W5 failure falls at 15.6–20.4 s, in the **second window**. With role logging added, the closest pair is:
+  - almost always a REAR on its dry pass in TURN, against the LEAD's, FLANK_LEFT's or FLANK_RIGHT's TURN
+    (`TURN/TURN roles REAR/FLANK_RIGHT passroles 4/3`, `REAR/LEAD`, `REAR/FLANK_LEFT`);
+  - in a few layouts, FLANK_LEFT against FLANK_RIGHT in REPOSITION/TURN.
+- TURN never gives way, by design (§3.3). `_crossing_stagger()` only spaces run **starts**:
+  - the parallel same-direction branch (`fighter_brain.gd:815-822`) trails by one gap;
+  - its own comment (816-817) warns that "their turns at the far end would converge".
+- Restoring Revision 1's two-gap trail does not help: still 35 of 42, worst 2.2 px. It also pushes Assault silent
+  attackers from 7 to 16.
+- **Supporting data (not a separate blocker).** In Assault with a long PRIVATE budget, the squad flies its second
+  pass. Then V3 fails in 11 of 42 layouts and W5 in 27 of 42, including REPOSITION/REPOSITION at 0.9 px (see N5).
+  So the in-cycle 0/168 holds only because the shipped 6 s budget allows one window.
+- **This is the task's own new behaviour failing**, not pre-existing fan-out: REAR dry passes are X9 and are built
+  here. In game the bodies collide (layer 1 / mask 1), so these REARs would ram their attackers.
+- No small fix exists that I could approve without measuring it. The candidates all need design and a new sweep:
+  - a REAR dry pass that never shares a window with the attackers' runs, for example answering on the window
+    *close*, or starting after the last attacker leaves TURN;
+  - a separation rule for TURN;
+  - REAR lanes or standoff further out.
+- **Required:**
+  - the separation case must cover a full cycle: Open Space to the LEAD's third RUN_IN, i.e. both windows, so the
+    REARs fly. Equivalently: every window up to and including the first one a REAR answers;
+  - the criterion must hold there;
+  - otherwise the run escalates again. This time the owner gets this measurement, and the reading "first window
+    only" is an explicit owner decision (escalation 1(b)), not a re-interpretation.
+
+## Non-blocking
+
+The implementer can apply these directly in a future run. None of them rescues B1.
+- **N1:** Stale comment, `fighter_brain.gd:816-817`. It says "trails the mate's by at least twice the crossing gap",
+  but line 819 trails by one. Make it say one gap.
+- **N2:** The N3 current-role REAR gate (`fighter_brain.gd:1109`) has no test. Mutating it to `pass_role == REAR`
+  only leaves all 15 cases green. Add a case: a closer member joins mid-pass, so a FLANK is demoted to REAR, and it
+  fires nothing after the demotion.
+- **N3:** `_cycle` never asserts that it reached its end point. With the 20 s cap, a stall after window 1 would
+  silently shorten the measured interval. Add, in Open Space, `assert_gte(lead_runs, <end>, where)` before
+  `_drop(w)` (`test_fighter_squad.gd:497`).
+- **N4:** The separation check skips any pair with a role-NONE member (`test_fighter_squad.gd:480`), i.e. anyone on
+  its DISENGAGE exit. Yet `_slow_for_mates()` deliberately yields to exiting ex-members (`fighter_brain.gd:1326`,
+  `:1397`). State that exclusion in plan §5, or measure it.
+- **N5: hole in the give-way.** A mate braking onto its station is in `Steering.arrive`: slow, but not holding yet.
+  - It is not slid from: `_slide_aside` treats it as a moving track with ~zero length (`:1366`, `q != prev`).
+  - It is not yielded to: `_slow_for_mates` skips mates under 0.3 × `max_speed` (`:1392`).
+  - A second member flying to its own station therefore just closes in. That is the likely cause of the 0.9 px
+    REPOSITION/REPOSITION in the long-budget Assault data.
+  - Treat a mate that is slow but not holding as a static obstacle for the slower member's speed choice, or count
+    "braking onto S" as holding for `_slide_aside`.
+- **N6: possible Open Space stall.** In `_tick_hold`, both `lead_wait_max` and `flank_wait_max` sit behind
+  `if not is_settled(): return` (`fighter_brain.gd:762`).
+  - A member held more than 32 px off S therefore never runs in Open Space, with no budget to break the hold.
+    Two causes: two holders inside the clearance pushing apart forever (`:1349-1354`), or a mate repeatedly crossing
+    its station.
+  - Only `HOLD_DRIFT_PX` (160) rescues it.
+  - It is not seen on the grid. The nominal stations are ≥ 100 px apart, against an 86 px clearance. But the epic
+    gives `flank_wait_max` precisely so that "a flank whose lead is dead or slow still attacks".
+  - Consider letting the `lead_wait_max` / `flank_wait_max` timers fire when the member is merely holding, from a
+    bounded off-S distance.
+- **N7:** Escalation decision 2, the Assault budget, is closed unilaterally as "a late flank holds and leaves". That
+  closure relaxes round-1 B2 ("each LEAD/FLANK fires ≥ 1 round"; the test asserts it only for attackers that ran).
+  Nothing ships wrong today, because every level-1 fighter formation is still on rails
+  (`level_1_director.gd:308,329,346,378`). But DECISIONS must record decision 2 as still open for the owner, not as
+  decided.
+- **N8:** §3.3 says "nothing is ever nudged toward the player (the slide is perpendicular to a mate's track)".
+  Perpendicular is not "away from the player". The measured clearance (≥ 120 px) supports the outcome, but not that
+  claim. Reword it as measured, not by construction.
+- **N9:** `_mates()` scans the whole `enemies` group every tick, for every squad fighter in a hold or lead-in
+  (`fighter_brain.gd:1330`). Each mate then gets up to 15 predictions, times 6 speed steps. That is fine at V3/W5,
+  but read the board's `members()` plus a cached ex-member list if t16 brings larger squads.
+
+## Checked and fine
+
+- **Tests:** each acceptance case is dual where the acceptance line requires it. Each has teeth; I mutated the
+  `/tmp` copy and re-ran:
+
+  | Mutation | Cases that go red |
+  |---|---|
+  | `_give_way` off | 46 sweep asserts |
+  | `_slide_aside` off | 36 |
+  | `_slow_for_mates` off | 8 |
+  | dry-REAR guard removed | `test_rears_fire_nothing` |
+  | `_close_window` off | window test, both modes |
+  | the LEAD never opens | window test |
+  | `_answered_window` reset removed | answer-once test ("reset on reading the window closed", "window 2 is answered") |
+  | `_flanks_ready()` always true | LEAD-waits test, both modes |
+  | ring tangent cap removed (`outside := false`) | seek-target clearance test |
+
+- **Round-1 points:**
+  - B4: the REAR case's precondition holds (each REAR flies a dry pass);
+  - B5: collision exceptions are in `_spawn()`;
+  - B3: the sweep is the whole grid, with no hand-picked placements;
+  - B2: breach passes are asserted.
+- **Solo fighters:** they are unchanged. Every squad rule is gated on `member_count() ≥ 2`, and `test_fighter.gd`
+  stays at 52/52.
+- **Board membership:**
+  - joining in `_ready()` happens before a rail's `suspend_ai()` leave, because the `EnemyPathMover` is added after
+    `add_child`;
+  - leaving on DISENGAGE (`:1209`) and on suspension (`:300`) is as planned.

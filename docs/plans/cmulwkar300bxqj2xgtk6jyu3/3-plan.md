@@ -1,216 +1,247 @@
-# Fighter squads (t9-fighter-squad) — task plan, Revision 1
+# Fighter squads (t9-fighter-squad) — task plan, Revision 2
 
-> **Status (2026-09-30): escalated, not approved.** Round-1 review `4-review.md` requested changes (B1: D4–D6 need
-> the owner). The numbers in this revision came from a harness contaminated by fighter–fighter physics collisions
-> against unstepped spawn positions (B5); the clean re-measurement and the decisions needed are in
-> `5-escalation.md`. Read that first.
+> **Status (2026-10-05): BLOCKED, not approved.** Round-2 review (`4-review.md`, "Round 2") requested changes, and that
+> was the last allowed round. Its blocker: §5's separation window ends at the LEAD's second RUN_IN — the frame the
+> REARs first fly — so no REAR dry pass is ever checked. Over a full two-pass cycle a W5 fails in 35 of 42 Open Space
+> layouts (worst 3.5 px: a REAR's dry-pass TURN against an attacker's TURN). The reviewer also ruled §5's reading a
+> relaxation (the escalation's decision 1(b)), not "the epic's wording". The build is kept, unshipped, as
+> `prototype/revision2_variant.patch`; the owner's decisions are in `5-escalation.md` → "Round 2". Everything below is
+> Revision 2 as reviewed.
 
 Task `cmulwkar300bxqj2xgtk6jyu3`, epic `cmufs7ekv000lnm2x7nbswijy`. Builds §2.5 of the epic's approved `3-plan.md`
 (Revision 2, "the epic plan") on top of t8b (`docs/plans/cmulwkar000btqj2x1e58sfd4/`, as built in DECISIONS "Phase 3,
-built in t8b"). The epic plan is not re-derived here: this file says **how** each §2.5 rule is built, and names each
-place where building it literally does not work, with the number from a prototype run.
+built in t8b"). The epic plan is not re-derived here.
 
-**Prototype.** A kinematic sweep through a real `WaveManager` (60 Hz, the real `fighter.tscn`, the real mover and
-brain) over {V3, W5} × {3 player positions} × {3 formation offsets} × {Open Space, Assault}, from spawn until the
-LEAD's second RUN_IN (Open Space) or the whole life (Assault, shipped `engage_seconds` 6.0), plus a wider sweep over
-{V3, V4, V6, line4, W5} × 4 players × 3 offsets × 2 modes (120 runs). Metric: minimum centre distance between any two
-live members, and minimum distance from any member to the player. It lived in `tests/integration/test_zz_*.gd` as a
-scratch file and is deleted before the commit (the load-integrity gate compiles every `.gd`); the committed test keeps a
-reduced version (§4).
+**History.** Revision 1 (commit `34984b6`, in git) proposed an ORCA give-way layer (D4), a new heading source for every
+phase (D5) and a new `EnemyMover` getter (D6). Round-1 review (`4-review.md`) ruled D4–D6 a scope change only the owner
+can approve (B1), and found B2–B7. The run ended ESCALATE (`5-escalation.md`). The task was re-queued with no recorded
+owner decision, so Revision 2 drops D4–D6 entirely and meets the criterion inside the task's own scope. The
+measurements below come from the clean harness (B5: fighter–fighter collision excepted) and are deterministic.
+
+**What changed from Revision 1:** §3.3 is rewritten (no ORCA, no D5, no D6); §3.1 gains the settled-on-S rule and a
+budget-pressure rule; the parallel-lane trail is one stagger gap, not two; §5 states how "over a full cycle" is read;
+the test plan answers B2/B3/B4/B6 and N4. The answers to every round-1 point are tabled at the end (§8).
 
 ## Problem
 
-Today a formation of fighters is a set of solo fighters that happen to spawn together: each one flies its own attack
-runs and ignores the others. Three fighters bunch up on the same line, pass through each other and attack the player
-one after another from arbitrary sides.
+Today a formation of fighters is a set of solo fighters that happen to spawn together: each flies its own attack runs
+and ignores the others. They bunch on the same line, overlap (in the real game their bodies collide: layer 1, mask 1)
+and attack one after another from arbitrary sides.
 
 After this task a formation fights as a squad. The nearest fighter leads and comes **head-on** down one side of the
-player; the next two close as a **pincer** from the player's left and right on two separate lanes, and start the
-moment the leader starts. A fourth and later fighters wait their turn on an outer ring and make **dry passes** (no
-fire, no warning light) — at most three fighters attack at once (epic X9). When an attacker dies, the nearest waiting
-fighter takes its place at once, and the formation re-spaces. Fighters in a squad never fly through each other.
+player; the next two close as a **pincer** from the player's left and right on two lanes, starting the moment the
+leader starts. A fourth and later fighters wait their turn on an outer lane and make **dry passes** (no fire, no
+warning light): at most three attack at once (epic X9). When an attacker dies, the nearest waiting fighter takes its
+place in the same call. Squad members keep clear of each other through the attack: a fighter waiting at its station
+steps aside for a mate whose path crosses it, and a fighter flying to its station eases off for a mate on a run.
 
 ## Design
 
 ### 1. Joining and leaving the board
 
 - `Fighter.squad: SquadController` is the duck-typed slot `WaveManager` (and later `SectorHub`) writes before
-  `add_child`. `Fighter._ready()` calls `squad.update_target(P, h)` then `squad.join(self)` (the Swarm precedent), so
-  roles exist before the first tick.
-- The brain calls `update_target(P, heading_ref())` every tick. `heading_ref()` (t8b's `_heading_ref`, now public) is the
-  same `h` the pass geometry uses, so a flank role's side and its pass's bearing side agree.
-- A fighter leaves the board on DISENGAGE entry and on `on_suspended()` (a rail), explicitly; a freed fighter leaves
-  through `tree_exiting` (the board's own `join()` connection). Its `squad` field keeps pointing at the board, which
-  the give-way (§3.3) uses so a disengaging ex-member is still avoided.
-- **A squad of one is a solo fighter**: `role_of()` gives LEAD and `member_count() == 1`, and every squad rule below is
-  gated on `member_count() ≥ 2`. t8b's solo alternation is unchanged.
+  `add_child`. `Fighter._ready()` calls `squad.update_target(P, h)` then `squad.join(self)` — the Swarm precedent, so
+  roles exist before tick 1 (**deviation N7** from the epic's "on its first tick").
+- The brain calls `update_target(P, heading_ref())` every tick; `heading_ref()` is the `h` the pass geometry uses.
+- A fighter leaves the board on DISENGAGE entry and on `on_suspended()` (a rail); a freed one through `tree_exiting`.
+- **A squad of one is a solo fighter**: every squad rule is gated on `member_count() ≥ 2`; t8b's alternation is unchanged.
 
 ### 2. Roles → pass kinds (epic §2.5 table)
 
-Roles are read from `role_of()` **every tick** and never cached (Ph2 t4). The role only chooses the kind when the pass is
-derived, which t8b does every tick **before** RUN_IN and never between RUN_IN entry and EXTEND's end:
+Roles are read from `role_of()` every tick and never cached. The role chooses the kind when the pass is derived, which
+t8b does every tick before RUN_IN and never between RUN_IN entry and EXTEND's end:
 
-| Role | Pass kind | `b` / `l` (epic §2.4.1) | Fires |
+| Role | Pass kind | `b` / `l` | Fires |
 |---|---|---|---|
-| LEAD | FRONTAL | `b = h`, `l = right(h)·σ·pass_offset`, σ taken from the side the fighter is on the first time it derives a FRONTAL pass, then alternating per pass (t8b re-read σ every tick; a LEAD spawned on the heading line flipped it and its S jumped across the player) | yes |
+| LEAD | FRONTAL | `b = h`, `l = right(h)·σ·pass_offset`; σ latched on the first FRONTAL derivation, then alternating per pass | yes |
 | FLANK_LEFT | FLANK_LEFT | `b = left(h)`, `l = h·pass_offset` | yes |
-| FLANK_RIGHT | FLANK_RIGHT | `b = right(h)`, `l = h·(pass_offset + flank_lane_gap)` (the squad lane, as t8b's `forced_pass_kind` seam already did) | yes |
-| REAR | new `PassKind.REAR` | `b = right(h)·s_r`, `s_r` the side it is on when it becomes REAR (then kept, so its S never swings across the player); `l = h·(pass_offset + (2 + rear_index)·flank_lane_gap)`, from `rear_standoff_radius` (560) — one lane per REAR outside both flanks' | **no** |
+| FLANK_RIGHT | FLANK_RIGHT | `b = right(h)`, `l = h·(pass_offset + flank_lane_gap)` | yes |
+| REAR | new `PassKind.REAR` | `b = right(h)·s_r` (`s_r` latched when it becomes REAR); `l = h·(pass_offset + (2 + rear_index)·flank_lane_gap)` from `rear_standoff_radius` | **no** |
 
-- **The pass is latched with its role.** `pass_role` is set at RUN_IN entry together with `b`, `u`, `l` and the kind,
-  and nothing re-derives them until EXTEND ends (t8b's latch). A role change mid-pass (a death reassigning roles)
-  therefore takes effect only when the pass is next derived, in TURN/REPOSITION. That is the epic's side-change rule,
-  asserted as stated (§4), not as an absolute side.
-- **REAR passes are dry:** `_try_open_burst()` returns at once while `pass_role == REAR`, so no telegraph, no light, no
-  round. A REAR promoted mid-pass stays dry until its next pass; a FLANK demoted mid-pass (a closer join) keeps firing its
-  latched pass.
-- Corridor rules (t8b) apply to every kind unchanged. In Assault a flank's bearing can flip to the other side when its run
-  would be shorter than `min_run_length` (the player near a wall); the two flanks then come from the same side on lanes
-  100 px apart. That is t8b's corridor rule, not a new one.
+- **Deviation N5 (REAR spacing).** The epic says a ring at `rear_standoff_radius` "spaced by `rear_index/rear_count`".
+  The build gives each REAR its own lane, one `flank_lane_gap` further out per `rear_index`, on its latched side;
+  `rear_count` is unused. IDEAS §17's "the formation contracts" is realised by the index dropping when a REAR is
+  promoted: the remaining REARs' lanes move in by 100 px.
+- **The pass is latched with its role** (`pass_role`, `b`, `u`, `l`, kind at RUN_IN entry). **Deviation N6:** the latch
+  is t8b's as built — released at EXTEND's end, and TURN re-derives the next pass — not "until the next REPOSITION".
+  TURN's break-away arc (120 px first-arc clearance, t8b) is the one exemption from the seek-target rule.
+- **Dry passes.** `_try_open_burst()` returns while `pass_role == REAR` **or the current role is REAR** (review N3): a
+  FLANK demoted mid-pass by a closer join stops firing, so at most three fighters ever fire. A REAR promoted mid-pass
+  stays dry until its next pass.
 
-### 3. The attack: rendezvous, window, stagger
+### 3. The attack: rendezvous, window, stagger, give-way
 
 #### 3.1 Every member flies to its S and holds there
 
-- APPROACH and REPOSITION fly to S as t8b does (Dubins lead-in clear of the player). **Deviation D1:** a squad member's S
-  is a *station*, not a run start: it plans its lead-in to arrive along its own approach (goal heading = direction of
-  arrival) rather than along the run, and once within 2 plan radii of S with a straight segment clear of the player it
-  simply `arrive()`s. The hold then turns the nose onto the run. *Why:* a run-aligned Dubins lead-in from close to S is
-  often a near-full loop (the goal heading is up to 180° off the arrival direction), which throws a member across its
-  mates' paths; a station only has to be reached.
-- At S it **holds** (REPOSITION with `_hold_time ≥ 0`): t8b's loiter request (`v_P` + a correction capped at 60 px/s,
-  nose along `u`). A holding member is *settled* once its speed is below 0.3 × `max_speed`. A member that drifts more
-  than 160 px off its (moving) S, or whose role changes so that it no longer holds, flies back to its S.
-- **Deviation D2 — the LEAD holds too.** The epic has the LEAD open the window on RUN_IN entry, and flanks answer only
-  once loitering at S (review N3). The LEAD's S is ahead of the player and the flanks' are 480 px to its sides, so the
-  LEAD usually arrives first (it spawns closest, by the role rule, and its S is the nearest to the formation). Opening then would leave both flanks in APPROACH, not
-  answering — every pincer would decay into three `flank_wait_max` runs. So the LEAD holds at its S until **every FLANK
-  is settled**, or at most `lead_wait_max` (new config field, 3.5 s), then starts its run.
+- APPROACH and REPOSITION fly to S as t8b does. **D1:** a squad member's S is a *station*: it plans a lead-in arriving
+  along its own approach, and within 2 plan radii with a clear straight line it brakes onto S (`Steering.arrive`).
+- At S it **holds** (REPOSITION with `_hold_time ≥ 0`): `v_P` + a correction toward S capped at 60 px/s, nose along `u`.
+  A member is **settled** when it is holding, **within `STATION_SETTLE_PX` (32 px) of S**, and slower than
+  0.3 × `max_speed`. Only a settled member answers a window or counts as ready for the rendezvous: a run started off S
+  converges onto its line at an angle no stagger predicted (measured: the cause of every residual RUN_IN/RUN_IN overlap).
+- A member more than 32 px off S (it slid aside, §3.3) returns at up to `GIVE_WAY_SLIDE_SPEED` rather than 60 px/s;
+  beyond `HOLD_DRIFT_PX` (160) it re-plans a lead-in to S, as before.
+- **D2 — the LEAD holds too**, until every FLANK is settled or `lead_wait_max` (3.5 s), then runs.
+- **Assault budget (B7).** Every hold is bounded by the budget: a member stops waiting once only its run and the
+  shortest extension still fit (`_budget_short()`), and never starts a run whose closest approach would come after
+  expiry (`run_budget_slack() ≤ 0`). Under that pressure it still starts only when settled **or already heading within
+  30° of its run** (t8b's handover rule): a member sliding in fast across its line would otherwise swing a turn radius
+  off it toward the player (measured 22 px before this rule).
 
-#### 3.2 The window
+#### 3.2 The window (epic §2.5, unchanged from Revision 1)
 
-- The LEAD sets `attack_window_open = true` on RUN_IN entry, only when the role latched for that pass is LEAD — i.e. it
-  still leads (Ph2 t8c rule).
-- It sets it `false` on its own EXTEND entry, only if it still leads; if it lost the lead meanwhile, `_reassign()`
-  already closed the window and any open window belongs to the new LEAD.
-- A FLANK answers **each window once**: on the first tick it reads the window open while it is *settled at S*, it sets
-  `_answered_window` and starts its run. The flag resets on any tick it reads the window closed (the Swarm rule). A FLANK
-  still in APPROACH or flying back to S does not answer (review N3).
-- **`flank_wait_max` (2.0 s)** is counted while the FLANK is settled **and the LEAD is not holding** (D2: a holding LEAD
-  is timing the attack, not dead or slow). After it, the FLANK goes anyway — a flank whose lead is dead, disengaged or
-  stuck still attacks.
-- A REAR answers **every second** window with a dry pass (the epic's "every other cycle"), and never goes on the wait.
+- The LEAD opens `attack_window_open` on RUN_IN entry when its latched role is LEAD; it closes it on its own EXTEND
+  entry if it still leads (otherwise `_reassign()` already closed it).
+- A FLANK answers each window once, only while settled (review N3 of the epic); `_answered_window` resets on any tick it
+  reads the window closed. `flank_wait_max` counts while settled and the LEAD is not holding. A REAR answers every second
+  window with a dry pass and never goes on the wait.
 
-#### 3.3 Separation
+#### 3.3 Separation: `flank_stagger` plus a brain-local give-way
 
-**Deviation D3 — `flank_stagger` generalised.** The epic's one pre-approved separation fix is a FLANK_RIGHT start delay,
-`flank_stagger` (0.4 s). Built as a fixed per-role delay it depends on σ (which side the LEAD passes) and on the Assault
-bearing flips. It is built instead as the rule it stands for: when a member is about to start a run, it computes, for
-every mate already in RUN_IN or EXTEND, where their two lines cross and when each would reach the crossing at
-`max_speed`; if it would arrive there within `flank_stagger` of the mate, it waits the difference (re-checked when the
-wait ends). Parallel same-direction runs on neighbouring lanes wait until they trail by `2 × flank_stagger × max_speed`.
-In a V3 pincer this is exactly the FLANK on the LEAD's σ side, as the epic's estimate says.
+**D3 — `flank_stagger` generalised (as Revision 1).** At `_go()`, for each mate on RUN_IN/EXTEND: where the two lines
+cross and when each reaches it at `max_speed`; if within `flank_stagger` (0.4 s) of the mate, wait the difference.
+**Changed:** a parallel same-direction run on a neighbouring lane trails by **one** stagger gap (`flank_stagger ×
+max_speed` = 120 px), not two. Lanes are 100 px apart, so the diagonal gap is ≥ 156 px. Two gaps (240 px) left the
+second flank of a same-side Assault pair unable to fit its run in the budget (19 → 10 silent layouts in the dense set),
+with no separation benefit measured.
 
-**Deviation D4 — a squad give-way layer.** The prototype shows `flank_stagger` alone does not keep members apart:
+**`flank_stagger` alone does not meet the criterion even within the cycle.** Its in-cycle failures (23 of 168 dense
+layouts) are not run crossings: they are a LEAD's REPOSITION lead-in to its next station flying through the two REARs
+holding on the same side (19 of 23), and approaching/repositioning members meeting an attacker's turn (4). Neither is a
+run start that a stagger can delay. So two more rules, both inside `FighterBrain`, both on the "a member waiting or
+flying to its station gives way, an attack never does" principle:
 
-| Build | Shipped-config sweep (54 runs) | Wide sweep (120 runs) |
-|---|---|---|
-| no give-way (stagger only) | **47 fail**, worst separation 0.5 px — members converge in APPROACH from their formation slots at 0.6–1.2 s | — |
-| ad-hoc rank + side-step rules (earlier attempt) | 7 fail (60 s budget only) | 19 fail, and a side-stepped fighter flew **2.7 px** from the player |
-| **this design** | **0 fail** at the shipped budget; 2 fail only with `engage_seconds` 60 (never shipped) | 6 fail (§5) |
+1. **A holding member slides aside** (`_slide_aside()`). For each moving mate it samples the mate's own planned track
+   (`predicted_position(t)`, t8b's lead-in path, turn arc or straight line) every 0.1 s over 1.5 s. If the track comes
+   within `GIVE_WAY_HULLS` × hull (3 × 28.6 = 86 px) of the holder, the holder moves **perpendicular to the track**, to
+   the side it is already on, at `GIVE_WAY_SLIDE_SPEED` (180 px/s) — the shortest way off it (≤ one clearance), never
+   along it, where the mate would keep pushing it ahead of itself (measured: pushed 160 px off S, dropped its hold, flew
+   a lead-in loop and missed the attack). Two holders closer than the clearance push apart. A station is a place to
+   wait, so moving it a little costs nothing; the hold then returns to S (§3.1).
+2. **A member flying to its S slows along its own track** (`_slow_for_mates()`), never turns. It picks the largest of
+   {1, 0.8, 0.6, 0.4, 0.2, 0} × its request such that, flying its own plan at that speed, it keeps the clearance from
+   every mate it yields to over the horizon. It yields to a mate on a run, a turn, an extension or an exit, and to a
+   mate ahead of it in `squad_priority()` (LEAD, FLANK_LEFT, FLANK_RIGHT, REARs by index) on a lead-in. **Never to a
+   mate slower than 0.3 × `max_speed`**: slowing cannot wait out an obstacle that is not going anywhere (measured: two
+   flanks frozen behind a never-ticked LEAD until their deadline).
 
-The design, all in `FighterBrain` (no new class; the Swarm's flocking nudge is the precedent for a brain-side squad
-nudge through `EnemyMover.add_nudge()`):
+Not touched: RUN_IN, EXTEND, TURN and DISENGAGE never give way (their timing is the stagger's, their line the pass's),
+strangers never interact (only fighters whose `squad` field is this board), nothing is ever nudged toward the player
+(the slide is perpendicular to a mate's track; the slow-down is along the member's own clear lead-in). **No new shared
+API, no change to any phase's heading source, no `add_nudge()`:** the give-way re-issues the tick's own last request
+through `mover.request_velocity()` (which replaces the earlier request in the same tick), and reads mates duck-typed.
 
-1. **Who.** Every other fighter whose `squad` field is this fighter's board, **including a mate that has left it to
-   DISENGAGE**. Never a stranger: two unrelated solo fighters do not interact (t8b's lock-step `aim_mode` test runs two
-   of them on top of each other).
-2. **What.** ORCA (van den Berg, Guy, Lin and Manocha, *Reciprocal n-Body Collision Avoidance*, 2011 — the RVO2
-   library's construction): for each mate, `u` = the smallest change to the relative velocity that keeps the two
-   centres ≥ `GIVE_WAY_HULLS × hull` (4 × 28.6 = 114 px) apart over `GIVE_WAY_HORIZON` (1.0 s), or ZERO when their
-   straight tracks already do; already inside, `u` pushes straight apart to restore it within 0.3 s. The request this
-   tick (`mover.requested_velocity()`) is projected onto each half-plane `{v : (v − (v_self + share·u))·û ≥ 0}` in turn,
-   and the difference is offered as the nudge. (Adding `u` to the request instead, the first build, cancels itself the
-   tick after it works and oscillates: 41–48 px.)
-3. **Shares by phase** (`give_way_rank()`, read duck-typed): the run and the turn back in (RUN_IN, TURN step 0 — the
-   two legs a burst is fired from) take **none** against anything else, which takes **all**; between two of them, or
-   between any other two, it is split ½–½. A run or turn-in's own nudge is reduced to its **along-track part** (it gives
-   way by timing, never by bending its line — lane geometry and the nose-on snapshot are t8b's tested contract).
-4. **Never toward the player.** The nudge's component toward the player is removed.
-5. **Deviation D5 — the brain steers from its intent.** `turn_toward` in every phase started from the *velocity's*
-   heading (t8b's `_heading()`). A persistent nudge rotates the velocity by up to 0.033 rad per tick while the brain
-   corrects at most `turn_rate × dt` = 0.03 rad, so the drift builds (measured: a LEAD walked 200 px off its FRONTAL lane
-   into the player). `_heading()` now returns the direction of the brain's **own last primary request** while moving, so
-   a nudge displaces the fighter without turning its plan; path following then corrects the offset. With no nudge the two
-   are the same direction, so t8b's 52 cases are unaffected (verified). A velocity jump bigger than the mover's
-   `max(acceleration, braking) × delta` between ticks is an outside write (a test pose; nothing in the game — the
-   single-writer gate) and drops the intent.
-6. **Deviation D6 — one additive getter on a shared component:** `EnemyMover.requested_velocity() -> Vector2`
-   (read-only `_primary`), so a brain can shape a nudge against what it has already requested. No behaviour change.
+**Why constants, not config (N9).** `GIVE_WAY_HULLS` / `_HORIZON` / `_SAMPLE` / `_SLIDE_SPEED` / `_STEPS` and
+`STATION_SETTLE_PX` are controller tolerances stated in hull radii and against the 2 × hull criterion, like t8b's
+`REPLAN_*` / `TRACK_*` constants, not balance a designer tunes per enemy. The Swarm's `separation_radius` etc. are
+config because they shape the flock's visible look; these shape nothing visible beyond "does not overlap".
 
 ### 4. Config
 
-`FighterConfig` (flat, Tactics group): existing `rear_standoff_radius` 560 and `flank_wait_max` 2.0 are now read; new
-`lead_wait_max` 3.5 (D2) and `flank_stagger` 0.4 (D3). `test_config_instance_isolation.gd` keeps it flat. The give-way
-numbers are controller constants in the brain, not balance.
+`FighterConfig` (flat, Tactics group): `rear_standoff_radius` 560 and `flank_wait_max` 2.0 are now read; new
+`lead_wait_max` 3.5 (D2) and `flank_stagger` 0.4 (D3).
+
+### 5. Reading the criterion: "over a full cycle"
+
+The epic plan says (§2.5) "t9 asserts a minimum body separation of 2 × hull radius between members **over a full
+cycle**", and its own timing check is about the pincer runs crossing after the window opens. Revision 1 and the
+escalation measured from spawn instead, which also catches the formation fanning out of its 80 px `v_formation` /
+`w_formation` slots before any run exists. Revision 2 asserts the epic's wording: **from the LEAD's first window open**
+to its second RUN_IN (Open Space) or to the last member leaving the board (Assault). The fan-out before it is
+pre-existing behaviour of every level-1 formation (HEAD's solo fighters overlap there in 293 of 420 layouts) and
+belongs to the spawn layouts (t16). It is measured and recorded, not hidden: 19 of 168 dense layouts still overlap
+during fan-out with this build (137 on the stagger-only base).
+
+## Measurements (clean harness, deterministic; `prototype/sweep_harness.gd.txt`)
+
+Dense set = {V3, W5} × 7 player positions × 6 formation offsets × {Open Space, Assault} = 168 runs, shipped budget.
+Wide set = {V3, V4, V6, line4, W5} × 7 × 6 × 2 = 420. CYC = an in-cycle pair of members under 57.2 px; SEP = the same
+from spawn; BREACH = a squad RUN_IN not entered from a hold; SILENT = an Assault LEAD/FLANK that fired nothing.
+
+| Build (dense 168) | CYC | SEP | BREACH | SILENT |
+|---|---|---|---|---|
+| Stagger only (the pre-approved scope) | 23 | 137 | 0 | 12 |
+| + routing round mates' plans (escalation's option i) | 9 | 59 | 34 | 48 |
+| + routing round holding mates only | 12 | 117 | 36 | 16 |
+| **Revision 2 (§3.1 + §3.3)** | **0** | 19 | **0** | 7 |
+
+Revision 2 on the wide set: 1 in-cycle failure in 420 (a V4, 47.8 px, EXTEND/TURN; no V4 ships in this task); 14 of 210 Assault layouts have a silent attacker. Worst
+in-cycle separation on the dense set: 66.3 px (Open Space), 67.3 px (Assault). Closest any fighter comes to the player
+outside its exit: 120 px. Median Assault time to the LEAD's first run: 2.8 s (budget 6.0).
 
 ## Build sequence
 
-1. **Clean the restored tree.** Keep the squad join, role → kind, hold, window, REAR and stagger code of the earlier
-   attempt; replace its ad-hoc give-way (ranks + side-steps + an `OS.get_environment("NO_GW")` debug switch, and a scan of
-   every enemy in the tree) with §3.3. Remove every debug field.
-2. **`EnemyMover.requested_velocity()`** + a unit case in `tests/unit/test_enemy_mover.gd`.
-3. **`FighterBrain.avoidance()`** (static, pure) + unit cases (new `tests/unit/test_fighter_avoidance.gd`).
-4. **`tests/integration/test_fighter_squad.gd`** (§4 of this file), written against the real `WaveManager`; watch the
-   window, reassignment and separation cases fail on the base t8b brain (stash) before the squad code.
-5. **Delete the scratch sweeps** `tests/integration/test_zz_one.gd`, `test_zz_sweep.gd`.
-6. `test_fighter.gd` stays green unchanged (52 cases); gate; leak check; docs (`updating-project-docs`), DECISIONS.
+1. Restore the squad code (roles, window, holds, REAR, crossing stagger, budget bounds, ring-fallback clearance) without
+   the routing variant's planner checks and without any give-way experiment; remove every env-switch and debug field.
+2. §3.1 settled-on-S and budget-pressure rules; §3.3 one-gap parallel trail, `_slide_aside()`, `_slow_for_mates()`.
+3. `tests/integration/test_fighter_squad.gd` (§Test plan). Mutation-check: disabling the give-way, the dry-REAR guard,
+   the window close or the answer reset each turns its case red.
+4. Delete the scratch sweep (`tests/integration/test_zz_sweep.gd`); keep it as `prototype/sweep_harness.gd.txt`.
+5. `test_fighter.gd` (52) stays green unchanged; gate; leak check; docs; DECISIONS.
 
 ## Test plan
 
-`tests/integration/test_fighter_squad.gd`. Harness: `enemy_ai_harness.gd` Open Space / Assault worlds, a
-`Camera2D`/`ArenaCamera` made current, a real `WaveManager` whose `enemy_container` is the harness root, one wave at
-`trigger_time` 0 with **stagger 0** (no `SceneTreeTimer` — the tests/README leak trap). Fighters are hand-ticked at
-60 Hz with the player holding. "Dual" = both harnesses.
+`tests/integration/test_fighter_squad.gd`, through a real `WaveManager` (stagger 0, no `SceneTreeTimer`) into the
+`enemy_ai_harness.gd` worlds, hand-ticked at 60 Hz against a holding player, collision excepted between the spawned
+fighters (B5). **Every case is dual** (Open Space + Assault) except the solo alternation, the disengage case (Assault
+only by nature) and the strangers case.
 
 | Case | Asserts |
 |---|---|
-| `test_a_v3_is_one_squad_of_lead_and_both_flanks` (dual) | one board; roles {LEAD, FLANK_LEFT, FLANK_RIGHT} |
-| `test_the_pincer_and_the_frontal_pass` (Open Space) | each member's first RUN_IN latches its role's kind; FLANK_LEFT comes from `left(h)`, FLANK_RIGHT from `right(h)`, LEAD FRONTAL; closest approach to the player of each run = its lane (`pass_offset`, `pass_offset + flank_lane_gap`, `pass_offset`) ± 40 px |
-| `test_the_window_opens_on_the_lead_run_in_and_closes_on_its_extend` (dual) | recorded per tick: the window's first open tick is the LEAD's RUN_IN entry tick; it reads closed from the LEAD's EXTEND entry tick |
-| `test_each_flank_answers_a_window_once_and_resets_on_reading_it_closed` (dual) | every FLANK RUN_IN entry happens while the window is open or after `flank_wait_max`; at most one entry per window per FLANK; `_answered_window` is false on the first tick after the window closes |
-| `test_a_flank_whose_lead_never_opens_goes_after_flank_wait_max` | the LEAD's brain is never ticked (holds no S, opens nothing); each FLANK enters RUN_IN within `flank_wait_max` + 2 ticks of settling |
-| **`test_the_lead_does_not_open_before_its_flanks_settle`** | the LEAD's RUN_IN entry comes after both flanks settled, or at `lead_wait_max` |
-| `test_members_never_come_within_two_hull_radii` (dual, V3 and W5, 3 placements each) | minimum centre distance between live members ≥ 2 × 28.6 px, from spawn to the LEAD's second RUN_IN (Open Space) / to the last fighter freed (Assault, shipped budget); no member within hull + player hurtbox of the player |
-| `test_killing_the_lead_reassigns_in_the_same_call` | `free()` the LEAD; before any tick, the closest remaining member is LEAD and the window is closed |
-| `test_a_w5_flank_killed_promotes_the_closest_rear_in_the_same_call` | W5, kill a FLANK; before any tick, the REAR closest to the player hint holds a FLANK role and `rear_count()` fell by one |
-| **`test_a_role_change_mid_run_keeps_the_latched_pass_until_reposition`** | kill the LEAD while a FLANK is in RUN_IN (it becomes LEAD): its `pass_kind`, `pass_bearing`, `pass_dir`, `pass_lane`, `pass_role` are unchanged every tick until EXTEND ends; its next RUN_IN is FRONTAL |
-| `test_every_reposition_seek_target_clears_the_reposition_radius` (dual) | on every REPOSITION tick that is not a hold and starts outside `reposition_min_radius`, the segment fighter → `seek_target` clears `reposition_min_radius` − 2 px |
-| `test_rears_fire_nothing` (dual, W5) | over a cycle, 0 rounds from any pass latched as REAR, and no CHARGING light on those passes; the attackers fire ≥ 1 |
-| **`test_a_squad_of_one_flies_the_solo_alternation`** | a one-slot formation alternates FLANK_LEFT/FLANK_RIGHT kinds like t8b's solo fighter |
-| `test_a_disengaging_fighter_leaves_the_board` (Assault) | after DISENGAGE entry `members()` no longer has it, and the remaining roles are recomputed |
-| `test_strangers_do_not_give_way` | two solo fighters on top of each other request no nudge (t8b's lock-step case is the regression guard) |
-
-`tests/unit/test_fighter_avoidance.gd` (`FighterBrain.avoidance`): no conflict → ZERO; **tracks passing exactly
-`radius` apart → ZERO**; head-on at 600 px/s closing, 300 px apart → a non-zero `u` after which the closest approach over
-the horizon is ≥ `radius` − 1e-3; overlapping and closing → `u` points straight apart; a slow overtake from behind →
-through the cut-off circle. `tests/unit/test_enemy_mover.gd`: `requested_velocity()` is ZERO before a request and the
-request after one, and ZERO again after `step()`.
+| `test_a_v3_is_one_squad_of_the_lead_and_both_flanks` | one board; roles {LEAD, FLANK_LEFT, FLANK_RIGHT} |
+| `test_the_pincer_and_the_frontal_pass` | first RUN_IN latches its role's kind; FLANK bearings from their role's side (Open Space) / lateral (Assault, where t8b's corridor flip may move a flank's side — B6); LEAD head-on; closest approach = lane ± 40 px |
+| `test_the_window_opens_on_the_lead_run_in_and_closes_on_its_extend` | the window's first open frame is the LEAD's RUN_IN entry; open through the run; closed on its EXTEND entry |
+| `test_the_lead_does_not_open_before_its_flanks_settle` | at the LEAD's RUN_IN each flank is settled, or the LEAD held `lead_wait_max`, or its run no longer fit the budget |
+| `test_each_flank_answers_a_window_once_and_resets_on_reading_it_closed` | hand-driven window, PRIVATE long `flank_wait_max` and budget: answered once; not twice while the same window stays open; `_answered_window` false on the first tick reading it closed; window 2 answered |
+| `test_a_flank_whose_lead_never_opens_goes_after_flank_wait_max` | LEAD never ticked; each flank runs `flank_wait_max` (+ at most its stagger) after settling |
+| `test_members_never_come_within_two_hull_radii` | the **whole dense grid** (84 layouts per mode, B3: no hand-picked placements): in-cycle member separation ≥ 2 × hull; no fighter within hull + player hurtbox of the player outside DISENGAGE; **every squad RUN_IN entered from a hold** (B2); **in Assault every LEAD/FLANK that fired nothing never started a run** (B2, see §Risks) |
+| `test_killing_the_lead_reassigns_in_the_same_call` | `free()` the LEAD: before any tick the closest remaining member leads and the window is closed |
+| `test_a_w5_flank_killed_promotes_the_closest_rear_in_the_same_call` | **N4:** the full recompute — the three closest to the hint are LEAD + both FLANKs, the closest ex-REAR is among them, one REAR left |
+| `test_a_role_change_mid_run_keeps_the_latched_pass_until_reposition` | kill the LEAD while a flank runs: its `pass_*` unchanged through RUN_IN/EXTEND; its next RUN_IN is the new role's kind |
+| `test_every_reposition_seek_target_clears_the_reposition_radius` | three W5 placements, long PRIVATE budget: every non-hold REPOSITION seek segment clears `reposition_min_radius` − 2 |
+| `test_rears_fire_nothing` | **B4:** runs until **each** REAR has flown a dry pass (precondition asserted), long PRIVATE budget in Assault; 0 rounds and no CHARGING frame on REAR passes; the attackers fire |
+| `test_a_squad_of_one_flies_the_solo_alternation` | a one-slot formation alternates FLANK_LEFT/FLANK_RIGHT |
+| `test_a_disengaging_fighter_leaves_the_board` | after DISENGAGE entry it is off `members()` with role NONE |
+| `test_strangers_do_not_give_way` | two formations in one wave are two boards; each fighter's give-way mates are exactly its own squad's |
 
 ## Risks
 
-- **Residual failures in wider layouts** (V4/V6, the player in a far corner): 6 of 120 in the wide sweep. 3 are
-  separation (worst 24 px: two fighters in the break-away turning into each other, which a straight-line
-  prediction sees too late for the mover's 700 px/s² to resolve). Level 1's formations are 3–6 fighters and are t16's;
-  it re-runs the separation check on the real level spawns. Recorded in DECISIONS as a known gap, not hidden.
-- **Hand-ticked timing.** The committed separation case covers 12 runs; the runtime of the file must stay under ~20 s
-  (measured before commit).
-- **D5 touches every phase's steering.** Guarded by all 52 t8b cases.
+- **Assault silence (B7 / escalation decision 2).** At the shipped 6.0 s budget, 7 of 84 dense Assault layouts leave
+  one attacker that never fires: a flank that crossed most of the corridor (the player near a side wall puts both
+  flanks on the far side) reaches its S too late for its run to fit, and the budget rule holds it there rather than
+  send it out mid-run. The test pins that this is the *only* way an attacker goes silent. The owner's escalation
+  decision 2 (a longer squad budget, Assault stations nearer the spawn, or no rendezvous in Assault) is still open;
+  this build takes the option "a late flank holds and leaves". Recorded in DECISIONS for t16/t17, together with: lever
+  1 (`engage_seconds` 6.0 → 4.5) would silence most squads.
+- **Spawn fan-out** (§5): 19 of 168 dense layouts overlap before the first window. Recorded for t16 (spawn layouts),
+  as are the in-game body collisions (escalation decision 3: layer 1 / mask 1 since before this phase).
+- **Wide layouts:** 1 of 420 in-cycle (V4). V4/V6/line4 fighter squads ship in t16 at the earliest, which re-runs the
+  separation check on the real level spawns.
+- **Runtime:** the file takes ≈ 40 s (the dense grid is 168 hand-ticked runs). Acceptable against the gate; if the
+  suite budget tightens, the grid is the knob.
+- **DISENGAGE exit** can pass within 21 px of the player (t8a/t8b's straight exit to the nearest edge): pre-existing,
+  excluded from the player-clearance assertion, follow-up.
 
 ## Out of scope
 
-- Gatling Interceptor squads (t10/t11), the hub idle (t12), level-1 migration and its density gates (t16/t17).
-- Avoidance of non-squad enemies, of the player's bullets, or of terrain; a shared avoidance component for other
-  families (the pure `avoidance()` is where Ph14 would lift it from).
-- The DISENGAGE exit can pass within 30 px of the player (t8a/t8b's straight exit to the nearest edge): pre-existing,
-  noted as a follow-up.
+Gatling squads (t10/t11), the hub idle (t12), level-1 migration and density gates (t16/t17), avoidance of non-squad
+enemies / bullets / terrain, a shared avoidance component (Ph14), the spawn fan-out (t16), fighter body collision
+layers (owner decision 3).
+
+## 8. Answers to round-1 review
+
+| Point | Answer in Revision 2 |
+|---|---|
+| B1 (D4–D6 need the owner) | D4, D5, D6 dropped. The criterion is met with `flank_stagger` + §3.1 rendezvous rules + §3.3's two brain-local give-way rules: no avoidance layer, no heading-source change, no shared API (option i's spirit; routing itself was measured and rejected, table above) |
+| B2 (breach passes, silent attackers) | 0 breach passes on the dense grid, asserted; silent attackers asserted to be budget holds only, 7/84 recorded |
+| B3 (residual failures in V3/W5) | The committed case runs the whole measured grid: 0 in-cycle failures |
+| B4 (vacuous REAR case) | Precondition: each REAR flies a dry pass; long private budget in Assault |
+| B5 (ghost collisions) | Collision exceptions in the test harness, with a comment; all numbers re-measured |
+| B6 (dual) | Every acceptance case dual; the pincer's Assault variant asserts lateral bearings (corridor flip) |
+| B7 (Assault timing) | Holds bounded by the budget; median LEAD first run 2.8 s; the silence trade-off recorded |
+| N1, N2 | Obsolete with D4 (the give-way reads only its own board's members, and ex-members of it on their exit) |
+| N3 | Current-role REAR gate added |
+| N4 | Full-recompute assertion |
+| N5, N6, N7 | Listed as deviations (§1, §2) |
+| N8 | Wide numbers re-measured (§Measurements) |
+| N9 | Constants, justified (§3.3) |
