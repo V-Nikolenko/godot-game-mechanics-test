@@ -27,6 +27,15 @@
 ## (review A3). Every later window flips, except in Assault when the flipped F would sit within
 ## `min_flank_range` (horizontally) of a player hugging a wall.
 ##
+## Convergence (plan §2.6.1): a squad of two or more shares `squad.convergence_point`. The LEAD opens the
+## window at its SWING_IN entry (`attack_window_open`, `convergence_stage`) and rewrites the point every
+## tick until the window closes. A FLANK within `convergence_join_range_factor × preferred_range`
+## answers once, from APPROACH, COOLDOWN or REPOSITION: it takes the LEAD's side and a flank point
+## `convergence_bearing_offset_deg` toward the heading, then both hold in SPIN_UP until each is ready
+## (stage 1 = own spin-up done) or `sync_wait_max` has passed. Stage 2 = stream done; the LEAD closes
+## the window when every key is 2. A cleared board (LEAD change or death) drops a member back to its
+## own predicted point without cutting its stream.
+##
 ## Rails (§2.8, X1): `on_suspended()` hands `attack` back to the legacy self-timed constant stream, from
 ## the `rail_*` config fields, on the same 36-round `StreamPool` (the legacy starvation shape, deliberate).
 ##
@@ -66,6 +75,15 @@ const STRAFE_LATCH_MIN_SPEED := 40.0
 const ROUTE_SAMPLE_DEG := 25.0
 ## Hull radius used when the scene has no readable body circle (px).
 const DEFAULT_HULL_RADIUS := 25.0
+## The shared aim point is the player predicted this far ahead (s), clamped like P̂'s lead.
+const CONVERGENCE_LEAD_MIN := 0.4
+const CONVERGENCE_LEAD_MAX := 0.8
+## A FLANK's convergence flank point is at least this far round the player from the LEAD's (deg).
+const CONVERGENCE_MIN_SEPARATION_DEG := 30.0
+## `convergence_stage` values: answered / ready to stream (own spin-up done) / stream done.
+const STAGE_ANSWERED := 0
+const STAGE_READY := 1
+const STAGE_DONE := 2
 
 ## Set by `gatling_interceptor.gd` before the first tick. A fresh default keeps a bare brain steppable.
 var config: GatlingInterceptorConfig = GatlingInterceptorConfig.new()
@@ -97,6 +115,12 @@ var _strafe_sign: float = 1.0
 var _clock := BurstClock.new()
 var _disengage_pending: bool = false
 var _exit_point: Vector2 = Vector2.ZERO
+## This FLANK has already decided about the squad's open window (joined or skipped it).
+var _answered_window: bool = false
+## This member joined a window as a FLANK, so its flank point is the offset one.
+var _conv_flank: bool = false
+## The window's aim error (rad), drawn once on STREAM entry.
+var _aim_error: float = 0.0
 
 
 func _ready() -> void:
@@ -116,6 +140,11 @@ func tick(delta: float) -> void:
 	var target := TargetInfo.player(get_tree())
 	if budget.update(delta) and phase != Phase.DISENGAGE:
 		_request_disengage()
+	var squad := _squad()
+	if squad != null:
+		if target.has_target:
+			squad.update_target(target.position, _heading_ref(target))
+		_tick_convergence(target, squad)
 	match phase:
 		Phase.APPROACH: _tick_approach(delta, target)
 		Phase.SWING_IN: _tick_swing_in(delta, target)
@@ -136,6 +165,7 @@ func enter_phase(p: Phase) -> void:
 	match p:
 		Phase.SWING_IN:
 			_set_light(StateLight.State.CHARGING)
+			_open_window()
 		Phase.SPIN_UP:
 			_set_light(StateLight.State.CHARGING)
 			_enter_spin_up()
@@ -143,8 +173,12 @@ func enter_phase(p: Phase) -> void:
 			stream_rounds = rng.randi_range(config.stream_rounds_min, config.stream_rounds_max)
 			_clock.start(stream_rounds, config.stream_interval)
 			_set_light(StateLight.State.ARMED)
+			if _converging(_squad()):
+				var err := deg_to_rad(config.convergence_aim_error_deg)
+				_aim_error = rng.randf_range(-err, err)
 		Phase.COOLDOWN:
 			_set_light(StateLight.State.OFF)
+			_set_aim_point(Vector2.INF)
 		Phase.REPOSITION:
 			_set_light(StateLight.State.OFF)
 			_reposition_min_time = rng.randf_range(config.reposition_min, config.reposition_max)
@@ -165,6 +199,8 @@ func on_suspended() -> void:
 	_clock.stop()
 	_disengage_pending = false
 	_set_light(StateLight.State.OFF)
+	_leave_squad()
+	_set_aim_point(Vector2.INF)
 	if attack == null:
 		return
 	var pattern := GatlingAttackPattern.new()
@@ -182,7 +218,7 @@ func on_suspended() -> void:
 ## True when a new window may start: SWING_IN's CHARGING light must always be followed by a stream, so
 ## it needs at least `swing_in_max` of budget left (always true outside Assault).
 func can_start_window() -> bool:
-	return budget == null or budget.remaining() >= config.swing_in_max
+	return (budget == null or budget.remaining() >= config.swing_in_max) and not _own_window_open()
 
 
 ## The shortest time between two stream starts (s): sizes `StreamPool` with
@@ -230,7 +266,7 @@ func _tick_swing_in(delta: float, target: TargetInfo) -> void:
 	if not target.has_target:
 		mover.request_velocity(Vector2.ZERO)
 		return
-	flank_point = _flank_for(side, target)
+	flank_point = _convergence_flank(target) if _conv_flank and _converging(_squad()) else _flank_for(side, target)
 	_route(delta, target, true)
 	if actor.global_position.distance_to(flank_point) <= SWING_IN_ARRIVE_PX or _phase_time >= config.swing_in_max:
 		enter_phase(Phase.SPIN_UP)
@@ -253,17 +289,28 @@ func _enter_spin_up() -> void:
 
 func _tick_spin_up(target: TargetInfo) -> void:
 	_strafe(target, true)
-	if _phase_time >= config.spin_up_seconds:
-		enter_phase(Phase.STREAM)
+	if _phase_time < config.spin_up_seconds:
+		return
+	# A convergence pair holds here until every participant's own spin-up is over, but never longer than
+	# `sync_wait_max` (plan §2.6.1, review B2): a partner that died or got stuck cannot stall this one.
+	var squad := _squad()
+	if _converging(squad):
+		if squad.convergence_stage[actor] < STAGE_READY:
+			squad.convergence_stage[actor] = STAGE_READY
+		if not _partners_ready(squad) and _phase_time < config.spin_up_seconds + config.sync_wait_max:
+			return
+	enter_phase(Phase.STREAM)
 
 
 func _tick_stream(delta: float, target: TargetInfo) -> void:
 	_strafe(target, true)
+	_aim_stream(_squad())
 	for _i in _clock.advance(delta):
 		if attack != null:
 			attack.fire_now()
 	if not _clock.is_running():
 		windows_done += 1
+		_finish_convergence()
 		if _disengage_pending:
 			_disengage_pending = false
 			enter_phase(Phase.DISENGAGE)
@@ -300,6 +347,176 @@ func _request_disengage() -> void:
 		_disengage_pending = true
 	else:
 		enter_phase(Phase.DISENGAGE)
+
+
+# ── Convergence (plan §2.6.1) ────────────────────────────────────────────────────────────────────
+
+## `_heading_ref()` for the actor's `squad.update_target()` (the Fighter's `heading_ref()` shape).
+func heading_ref(target: TargetInfo) -> Vector2:
+	return _heading_ref(target)
+
+
+## The squad board `WaveManager` / `SectorHub` wrote on the actor (duck-typed), or null.
+func _squad() -> SquadController:
+	if actor == null:
+		return null
+	return actor.get(&"squad") as SquadController
+
+
+## True for a member of a squad of two or more that still holds a role.
+func _in_pair(squad: SquadController) -> bool:
+	return squad != null and squad.member_count() >= 2 and squad.role_of(actor) != SquadController.Role.NONE
+
+
+## True while this member is a participant of the squad's open window (its key is on the board).
+func _converging(squad: SquadController) -> bool:
+	return squad != null and squad.attack_window_open and squad.convergence_stage.has(actor)
+
+
+## True while this member leads a squad whose window is still open: it opens no second one.
+func _own_window_open() -> bool:
+	var squad := _squad()
+	return squad != null and squad.attack_window_open and squad.role_of(actor) == SquadController.Role.LEAD
+
+
+## LEAD, SWING_IN entry: opens the window and writes the first point. No-op for anyone else, for a
+## solo Gatling and while the last window is still open.
+func _open_window() -> void:
+	var squad := _squad()
+	if not _in_pair(squad) or squad.attack_window_open or squad.role_of(actor) != SquadController.Role.LEAD:
+		return
+	squad.attack_window_open = true
+	squad.convergence_stage[actor] = STAGE_ANSWERED
+	var target := TargetInfo.player(get_tree())
+	if target.has_target:
+		squad.convergence_point = _convergence_point(target)
+
+
+## Every tick: the LEAD refreshes the point and closes the window; a FLANK decides once about it.
+func _tick_convergence(target: TargetInfo, squad: SquadController) -> void:
+	if not squad.attack_window_open:
+		_answered_window = false
+		_conv_flank = false
+		return
+	if not squad.convergence_stage.has(actor):
+		_conv_flank = false
+		if not _answered_window:
+			_answer_window(target, squad)
+		return
+	if squad.role_of(actor) == SquadController.Role.LEAD:
+		if target.has_target:
+			squad.convergence_point = _convergence_point(target)
+		_try_close_window(squad)
+
+
+## A FLANK's one answer to the open window: join it from APPROACH, COOLDOWN or REPOSITION (never
+## abort a live window or stream) when within `convergence_join_range_factor × preferred_range` of the
+## player, else skip it — either way this window is decided.
+func _answer_window(target: TargetInfo, squad: SquadController) -> void:
+	_answered_window = true
+	var role := squad.role_of(actor)
+	if role != SquadController.Role.FLANK_LEFT and role != SquadController.Role.FLANK_RIGHT:
+		return
+	if phase != Phase.APPROACH and phase != Phase.COOLDOWN and phase != Phase.REPOSITION:
+		return
+	if not target.has_target or not can_start_window():
+		return
+	if actor.global_position.distance_to(target.position) > config.convergence_join_range_factor * config.preferred_range:
+		return
+	var lead := _lead_brain(squad)
+	if lead == null:
+		return
+	# The LEAD's intended side (its `side`, flipped at its REPOSITION), not where its hull is now.
+	side = lead.side
+	_side_latched = true
+	squad.convergence_stage[actor] = STAGE_ANSWERED
+	_conv_flank = true
+	enter_phase(Phase.SWING_IN)
+
+
+func _lead_brain(squad: SquadController) -> GatlingInterceptorBrain:
+	for m in squad.members():
+		if squad.role_of(m) == SquadController.Role.LEAD:
+			return m.get_node_or_null("Brain") as GatlingInterceptorBrain
+	return null
+
+
+## The shared aim point: the player predicted `d / round_speed` seconds ahead, `d` this shooter's range.
+func _convergence_point(target: TargetInfo) -> Vector2:
+	var d := actor.global_position.distance_to(target.position)
+	return target.predicted_position(Steering.clamped_lead_time(d, config.round_speed, CONVERGENCE_LEAD_MIN, CONVERGENCE_LEAD_MAX))
+
+
+## A FLANK's flank point: the LEAD's (same `side`) rotated `convergence_bearing_offset_deg` toward the
+## heading round the player. When the corridor clamp leaves that closer than
+## `CONVERGENCE_MIN_SEPARATION_DEG` to the LEAD's, the other way round is taken instead.
+func _convergence_flank(target: TargetInfo) -> Vector2:
+	var anchor := _anchor(target)
+	var base := _flank_for(side, target)
+	var v := base - anchor
+	var offset := deg_to_rad(config.convergence_bearing_offset_deg) * -side
+	var best := _clamp_if_corridor(anchor + v.rotated(offset))
+	var best_gap := absf(v.angle_to(best - anchor))
+	if rad_to_deg(best_gap) < CONVERGENCE_MIN_SEPARATION_DEG:
+		var other := _clamp_if_corridor(anchor + v.rotated(-offset))
+		if absf(v.angle_to(other - anchor)) > best_gap:
+			best = other
+	return best
+
+
+func _clamp_if_corridor(p: Vector2) -> Vector2:
+	return _clamp_corridor(p) if _corridor().has_area() else p
+
+
+## True when every participant has finished its own spin-up (or streamed already).
+func _partners_ready(squad: SquadController) -> bool:
+	for stage in squad.convergence_stage.values():
+		if stage < STAGE_READY:
+			return false
+	return true
+
+
+## The LEAD closes the window on the first tick every key is STREAM-done: the later COOLDOWN entry.
+func _try_close_window(squad: SquadController) -> void:
+	for stage in squad.convergence_stage.values():
+		if stage != STAGE_DONE:
+			return
+	squad.attack_window_open = false
+	squad.convergence_point = Vector2.INF
+	squad.convergence_stage.clear()
+
+
+## STREAM end: this participant is done, and the aim returns to its own prediction.
+func _finish_convergence() -> void:
+	var squad := _squad()
+	if _converging(squad):
+		squad.convergence_stage[actor] = STAGE_DONE
+		if squad.role_of(actor) == SquadController.Role.LEAD:
+			_try_close_window(squad)
+	_set_aim_point(Vector2.INF)
+
+
+## Each STREAM tick: aim at the shared point with this window's error, or — no point (a solo Gatling,
+## or the board was cleared mid-stream) — at its own predicted point.
+func _aim_stream(squad: SquadController) -> void:
+	if _converging(squad) and squad.convergence_point.is_finite():
+		var from := actor.global_position
+		_set_aim_point(from + (squad.convergence_point - from).rotated(_aim_error))
+	else:
+		_set_aim_point(Vector2.INF)
+
+
+func _set_aim_point(p: Vector2) -> void:
+	var pattern := attack.pattern as GatlingAttackPattern if attack != null else null
+	if pattern != null:
+		pattern.aim_point = p
+
+
+func _leave_squad() -> void:
+	var squad := _squad()
+	if squad != null:
+		squad.leave(actor)
+	_conv_flank = false
 
 
 # ── Sides and geometry (task plan §D4, §D5) ──────────────────────────────────────────────────────
@@ -432,6 +649,8 @@ func _heading_ref(target: TargetInfo) -> Vector2:
 
 func _enter_disengage() -> void:
 	_clock.stop()
+	_leave_squad()
+	_set_aim_point(Vector2.INF)
 	_disengage_pending = false
 	_set_light(StateLight.State.OFF)
 	mover.release_constraint()

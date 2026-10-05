@@ -6,7 +6,7 @@ player. It fires one readable stream there, goes quiet, and swings round to the 
 *going*. Move across it, or away from it, and the pressure stops until it comes round again.
 
 Plan: `docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md` §2.6 and §2.8. Task plan, with the numbers and the one
-deviation: `docs/plans/cmulwkar600c1qj2xnqykqsvo/3-plan.md`. Convergence fire for a pair (t11) and hub idle (t12) are
+deviation: `docs/plans/cmulwkar600c1qj2xnqykqsvo/3-plan.md`. Convergence fire for a pair is built (t11, below); hub idle (t12) is
 not built yet.
 
 ---
@@ -70,6 +70,26 @@ the brain, then the mover. The brain only requests motion (the single-writer gat
   - It uses the same 36-round `StreamPool`. The rail need is 71, so a rail Gatling fires about 36 rounds and then stalls
     until they expire. That is the legacy starvation shape (the legacy pool was 20), kept deliberately until Ph15 takes
     the rails away.
+- **Convergence fire (a squad of two or more; plan §2.6.1):** two Gatlings charge together, cross their streams at the
+  player's likely next position from the *same* side, and leave the other side open. A solo Gatling, or a squad of
+  one, never converges.
+  - The LEAD opens the window at its SWING_IN entry (`squad.attack_window_open`, `convergence_stage[lead] = 0`) and
+    rewrites `squad.convergence_point` every tick until the window closes: the player predicted
+    `clamp(d / round_speed, 0.4, 0.8)` s ahead. It opens no second window while one is open (it holds in REPOSITION).
+  - A FLANK within `convergence_join_range_factor × preferred_range` (570 px) of the player answers **once**, on its
+    next tick, only from APPROACH, COOLDOWN or REPOSITION: it takes the LEAD's *intended* `side` (not the half its
+    hull is in — after a REPOSITION flip the LEAD has not crossed yet) and swings to a flank point rotated
+    `convergence_bearing_offset_deg` (40°) toward the heading. Both lights go yellow within one tick. A far FLANK, or
+    one in its own SWING_IN / SPIN_UP / STREAM, skips the window and keeps its own rhythm. A REAR never joins.
+  - **Rendezvous:** each participant marks itself ready (`convergence_stage` 1) when its own spin-up is over and
+    streams once every participant is ready, or after `sync_wait_max` (0.75 s) of waiting. Both streams then start
+    within one tick.
+  - **Aim:** every round is aimed at the shared point, rotated by a ±`convergence_aim_error_deg` (3°) error drawn
+    once per window, plus the usual jitter. The pattern's `aim_point` is cleared on COOLDOWN.
+  - **Close:** a finished stream marks the member done (stage 2); the LEAD closes the window (point and stages
+    cleared) on the first tick every key is done, i.e. the *later* COOLDOWN. A member that leaves the board (dies,
+    DISENGAGE, rail) is erased. If the LEAD dies or changes, the whole board is cleared and a FLANK mid-stream
+    finishes all its rounds at its own predicted point.
 - **Death / scoring:** 75 points on kill.
 
 ---

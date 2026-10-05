@@ -234,6 +234,7 @@ b.sniper_enemy().at(120, -500).move(b.sequence([
 **Scene:** `gatling_interceptor.tscn`  
 **Movement:** AI (`GatlingInterceptorBrain`): holds side-on range on the player's flank, swings to the other flank between windows. With `.move()` it rides the rail instead. See `assault/scenes/enemies/gatling_interceptor/ENEMY.md`.  
 **Shoots:** Yes — pressure windows: yellow spin-up, one 8–12-round Gatling Stream aimed at the player's predicted position, a pause, a swing. On a rail: the legacy constant stream (0.09 s, slight spread), also aimed at the player.  
+**Squads:** two Gatlings in one squad (a `.formation()` or a shared `.squad(&"<id>")`) charge together and cross their streams at the player's likely next position from the same side, leaving the other side open; a solo Gatling never does. See `ENEMY.md` → *Convergence fire*.  
 **HP:** Low–Medium  
 **Score:** Medium
 
@@ -245,6 +246,7 @@ b.sniper_enemy().at(120, -500).move(b.sequence([
 | `stream_rounds_min/max`, `stream_interval` | 8 / 12, 0.09 s | One stream per window. |
 | `round_speed`, `round_damage` | 240, 4 | The AI stream's Gatling Stream rounds. |
 | `engage_seconds` | 7.0 s | Assault budget before it leaves. |
+| `convergence_bearing_offset_deg`, `convergence_aim_error_deg`, `convergence_join_range_factor` | 40°, 3°, 1.5 | Convergence fire for a squad of two or more: the FLANK's bearing offset from the LEAD, each shooter's per-window aim error, and the FLANK's join range (× `preferred_range`). |
 | `rail_stream_interval`, `rail_stream_speed`, `rail_spread`, `rail_damage` | 0.09 s, 220, 0.08 rad, 4 | The rail (`.move()`) fallback: the legacy constant stream. |
 
 Full table in `ENEMY.md`.

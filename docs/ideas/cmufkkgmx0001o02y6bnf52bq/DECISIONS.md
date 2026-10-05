@@ -1114,6 +1114,31 @@ epic's §2.6 solo Gatling and its §2.8 rail fallback are built as written, exce
   - No constant was re-frozen. If a later change pulls the pair into a peak, freeze the legacy interceptor's inputs
     (pool 20, 2400 px round, 220 px/s, 0.09 s) as constants, per B6. Do not derive a delta.
 
+### Phase 3, built in t11 (Gatling convergence fire) (2026-10-05)
+
+Plan §2.6.1 (Revision 2) as written, with these differences. `GatlingInterceptor` gains `var squad: SquadController`
+(joined in `_ready()` like the Fighter's), and `GatlingInterceptorBrain` the convergence logic. Tests:
+`tests/integration/test_gatling_convergence.gd`.
+
+- **"Ready" is stage 1 set when the member's *own spin-up has elapsed*, not on SPIN_UP entry.** With entry-based
+  readiness the early shooter streams as soon as its partner *enters* SPIN_UP, 0.25 s before the partner can stream,
+  so the §4 acceptance "STREAM starts within one tick" cannot hold. The bounded wait is unchanged: at most
+  `spin_up_seconds + sync_wait_max` after reaching SPIN_UP.
+- **Only APPROACH, COOLDOWN and REPOSITION FLANKs answer** (review N3); a FLANK in its own SWING_IN / SPIN_UP / STREAM
+  skips the window, and so does a far one — a FLANK decides once per window (`_answered_window`, reset on reading it
+  closed), whether it joins or not.
+- **The FLANK takes the LEAD's `side`, read from the LEAD's brain** (`members()` / `role_of()`, no SquadController
+  API), so a second window's FLANK follows the LEAD's REPOSITION flip even before the LEAD has crossed. Its flank
+  point is the LEAD's, rotated toward the heading; when the Assault corridor clamp leaves it < 30° from the LEAD's,
+  it is rotated the other way instead.
+- **A LEAD holds in REPOSITION while a window it owns is open** (`can_start_window()` gained that term), at most
+  one stream long.
+- **Not built (t12+ / later):** a REAR Gatling keeps its own rhythm — §2.6.1's "REARs hold at `preferred_range + 200`
+  and never fire" is not implemented, so a third Gatling in a squad fires solo windows. Nothing places three Gatlings
+  in one squad before t16, which should decide whether it is needed.
+- **Config:** `GatlingInterceptorConfig` gains `convergence_bearing_offset_deg` 40, `convergence_aim_error_deg` 3,
+  `convergence_join_range_factor` 1.5 (all [judgement], from the plan).
+
 ### Phase 3, built in t9 (fighter squads), Revision 3 (2026-10-05)
 
 Supersedes the two "t9 … nothing built" sections above where they differ.

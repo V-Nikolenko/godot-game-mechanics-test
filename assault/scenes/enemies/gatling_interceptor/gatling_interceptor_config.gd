@@ -36,7 +36,7 @@ extends ShipConfig
 ## The longest SWING_IN (s). A window starts only with at least this much budget left.
 @export var swing_in_max: float = 1.5
 @export var spin_up_seconds: float = 0.25
-## A convergence pair's longest wait for its partner in SPIN_UP (s). Used from t11; a solo Gatling
+## A convergence pair's longest wait for its partner once its own spin-up is over (s); a solo Gatling
 ## never waits.
 @export var sync_wait_max: float = 0.75
 @export var stream_rounds_min: int = 8
@@ -57,6 +57,15 @@ extends ShipConfig
 @export var stream_spread: float = 0.05
 ## 0 = direct aim at the player, 1 = lead the intercept (`TargetInfo.aim_direction`).
 @export var accuracy: float = 0.8
+
+@export_group("Convergence")
+## A FLANK's flank point sits this many degrees of bearing from the LEAD's, toward the player's
+## heading, so the pair is on one side of the player and the other side stays open.
+@export var convergence_bearing_offset_deg: float = 40.0
+## Each shooter's aim at the shared point is off by up to this much, drawn once per window (deg).
+@export var convergence_aim_error_deg: float = 3.0
+## A FLANK joins the LEAD's window only within this many `preferred_range`s of the player.
+@export var convergence_join_range_factor: float = 1.5
 
 @export_group("Tactics")
 ## Assault only: seconds in the fight before DISENGAGE.

@@ -24,6 +24,10 @@ extends BaseEnemy
 @export var config: GatlingInterceptorConfig = preload(
 		"res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres")
 
+## The squad board, written by `WaveManager` / `SectorHub` before `add_child` (duck-typed through
+## `in`). Null = a squad of one. A squad of two or more converges its streams (plan §2.6.1).
+var squad: SquadController
+
 @onready var _gatling_brain: GatlingInterceptorBrain = $Brain
 @onready var _gatling_mover: EnemyMover = $EnemyMover
 @onready var _attack: AttackController = $Attack
@@ -34,6 +38,11 @@ func _ready() -> void:
 	add_to_group("enemies")
 	if config:
 		_apply_config(config)
+	if squad != null:
+		var target := TargetInfo.player(get_tree())
+		if target.has_target:
+			squad.update_target(target.position, _gatling_brain.heading_ref(target))
+		squad.join(self)
 
 
 func _apply_config(cfg: GatlingInterceptorConfig) -> void:
