@@ -6,6 +6,12 @@
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_int"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_int"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_int"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="7_mover"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_brain.gd" id="8_brain"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="9_light"]
+[ext_resource type="Script" path="res://global/components/bullet_pool.gd" id="10_pool"]
+[ext_resource type="Script" path="res://global/components/attack_controller.gd" id="11_attack"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_bullet/rounds/gatling_stream_round.tscn" id="12_stream"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_int"]
 resource_local_to_scene = true
@@ -94,3 +100,25 @@ damage_type = 2
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
 scale = Vector2(1.8000002, 1.8000002)
 shape = SubResource("CircleShape2D_int")
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("7_mover")
+constraint_mode = 0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("8_brain")
+
+[node name="StateLight" type="Node2D" parent="."]
+position = Vector2(0, -10)
+script = ExtResource("9_light")
+
+[node name="StreamPool" type="Node" parent="."]
+script = ExtResource("10_pool")
+bullet_scene = ExtResource("12_stream")
+pool_size = 36
+
+[node name="Attack" type="Node" parent="." node_paths=PackedStringArray("bullet_pool")]
+script = ExtResource("11_attack")
+bullet_pool = NodePath("../StreamPool")
+enabled = false
+driven_by_brain = true

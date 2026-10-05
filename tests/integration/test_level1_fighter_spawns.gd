@@ -42,13 +42,14 @@
 ## pool cannot sustain the Gatling's 1/0.09 s/round forever. `round_lifetime` is `max_distance /
 ## bullet_speed` — the same formula the plan's own pool-sizing arithmetic uses throughout §2.2
 ## ("lifetime = max_distance / speed") — with `max_distance` read live off `ProjectileLifetime` on
-## the shared `enemy_bullet.tscn` both ships preload today (review round 1 finding 3; NOT
+## the round each ship's own pool fires (review round 1 finding 3, t10 review A4; NOT
 ## `ArenaCamera.projectile_world_rect()`'s diagonal, which is a camera/culling rect no shot's own
 ## expiry rule ever consults). Pool size, fire interval and bullet speed are likewise read live by
 ## instantiating the actual ships, never hand-typed (review round 1 finding 2) — see
-## `_live_attack_stats()`. Only the interceptor's rate is actually capped by this (its pool of 20
-## against a ~10.9 s round life caps it well below its flat 1/0.09 rate); the fighter's forward/
-## aimed rates stay well under their own pool's ceiling.
+## `_live_attack_stats()`. Only the interceptor's rate is actually capped by this (its pool —
+## 20 when frozen, 36 since t10 — against its round life caps it well below its flat 1/0.09 rate; the
+## pair sits outside deep_space's peak window, so the frozen peak is unaffected); the fighter's
+## forward/aimed rates stay well under their own pool's ceiling.
 ##
 ## Both constants are filled in from the FIRST computed run — nothing here is typed from the plan
 ## — and `test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants()` asserts the live
@@ -61,10 +62,6 @@ const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.
 
 const _FIGHTER := WaveBuilder.FIGHTER
 const _GATLING := WaveBuilder.GATLING_INTERCEPTOR
-
-## Both ships preload this exact scene as their `_BULLET_SCENE` today (`fighter.gd:6`,
-## `gatling_interceptor.gd:15-16`); its `ProjectileLifetime.max_distance` is what `_capped_rate()` reads.
-const _BULLET_SCENE_PATH := "res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn"
 
 ## The rail sampling cap (§2.9.1) and step. 20 s comfortably exceeds every real rail's lifetime
 ## (the longest `free_after` in the pin below is 12 s); 0.02 s keeps the cull-rect crossing
@@ -300,10 +297,16 @@ func _spawn_in(container: Node2D, path: String, aim_mode: String) -> Node:
 ## name — `Fighter.bullet_pool` is public but `GatlingInterceptor._bullet_pool` is not, and this
 ## must read both the same way. Frees `ship`.
 ##
-## The Fighter (t8a) is read the way a rail fighter fires: `suspend_ai()` installs the rail pattern on
-## `AimedAttack`, and its second pool / controller (`ForwardPool`, `ForwardAttack`, AI-only) are skipped.
+## Every AI ship (one with a `Brain`: the Fighter since t8a, the Gatling Interceptor since t10) is read
+## the way it fires on a rail: `suspend_ai()` installs the rail pattern from its config. The Fighter's
+## second pool / controller (`ForwardPool`, `ForwardAttack`, AI-only) are skipped.
+##
+## `max_distance` is read from the round the ship's own pool fires (t10 review A4), not a shared bullet
+## scene: the Fighter fires Pulse and the Gatling Gatling Stream, both 1400 px against the legacy
+## round's 2400. At the time of t10 every section's peak is unchanged by this (measured: the deep_space
+## peak window holds no interceptor, and the fighters are capped by their interval, not their pool).
 func _attack_stats_of(ship: Node) -> Dictionary:
-	if ship is BaseEnemy and ship.get_node_or_null("AimedAttack") != null:
+	if ship is BaseEnemy and ship.get_node_or_null("Brain") != null:
 		(ship as BaseEnemy).suspend_ai()
 	var pool: BulletPool = null
 	var pattern: AttackPatternResource = null
@@ -320,9 +323,18 @@ func _attack_stats_of(ship: Node) -> Dictionary:
 		"pool_size": pool.pool_size,
 		"fire_interval": pattern.fire_interval,
 		"bullet_speed": float(pattern.get("bullet_speed")),
+		"max_distance": _round_max_distance(pool.bullet_scene),
 	}
 	ship.free()
 	return stats
+
+
+## The `ProjectileLifetime.max_distance` of the round `bullet_scene` fires.
+func _round_max_distance(bullet_scene: PackedScene) -> float:
+	var bullet: Node = bullet_scene.instantiate()
+	var max_distance: float = (bullet.get_node("ProjectileLifetime") as ProjectileLifetime).max_distance
+	bullet.free()
+	return max_distance
 
 
 ## Review round 1 finding 2: pool sizes, fire intervals and bullet speeds read live by
@@ -343,18 +355,14 @@ func _live_attack_stats() -> Dictionary:
 	var aimed := _attack_stats_of(_spawn_in(container, _FIGHTER, "PLAYER"))
 	var interceptor := _attack_stats_of(_spawn_in(container, _GATLING, ""))
 
-	var bullet: Node = (load(_BULLET_SCENE_PATH) as PackedScene).instantiate()
-	var lifetime := bullet.get_node("ProjectileLifetime") as ProjectileLifetime
-	var max_distance: float = lifetime.max_distance
-	bullet.free()
-
 	_live_cache = {
-		"max_distance": max_distance,
+		"fighter_max_distance": float(forward["max_distance"]),
 		"fighter_pool_size": int(forward["pool_size"]),
 		"fighter_forward_interval": float(forward["fire_interval"]),
 		"fighter_forward_speed": float(forward["bullet_speed"]),
 		"fighter_aimed_interval": float(aimed["fire_interval"]),
 		"fighter_aimed_speed": float(aimed["bullet_speed"]),
+		"interceptor_max_distance": float(interceptor["max_distance"]),
 		"interceptor_pool_size": int(interceptor["pool_size"]),
 		"interceptor_interval": float(interceptor["fire_interval"]),
 		"interceptor_speed": float(interceptor["bullet_speed"]),
@@ -366,8 +374,8 @@ func _live_attack_stats() -> Dictionary:
 ## `round_lifetime` is `max_distance / bullet_speed` — the plan's own pool-sizing formula
 ## throughout §2.2 ("lifetime = max_distance / speed") — never `projectile_world_rect()`'s
 ## diagonal, which no shot's own expiry rule (`ProjectileLifetime`) actually consults.
-func _capped_rate(flat: float, bullet_speed: float, pool_size: int) -> float:
-	var round_lifetime: float = _live_attack_stats()["max_distance"] / bullet_speed
+func _capped_rate(flat: float, bullet_speed: float, pool_size: int, max_distance: float) -> float:
+	var round_lifetime: float = max_distance / bullet_speed
 	return minf(flat, float(pool_size) / round_lifetime)
 
 
@@ -376,12 +384,12 @@ func _rate_for(path: String, _offset: Vector2, _movement: MovementResource, _exi
 	var live := _live_attack_stats()
 	if path == _GATLING:
 		return _capped_rate(1.0 / live["interceptor_interval"], live["interceptor_speed"],
-			live["interceptor_pool_size"])
+			live["interceptor_pool_size"], live["interceptor_max_distance"])
 	if aim_mode == "FORWARD":
 		return _capped_rate(1.0 / live["fighter_forward_interval"], live["fighter_forward_speed"],
-			live["fighter_pool_size"])
+			live["fighter_pool_size"], live["fighter_max_distance"])
 	return _capped_rate(1.0 / live["fighter_aimed_interval"], live["fighter_aimed_speed"],
-		live["fighter_pool_size"])
+		live["fighter_pool_size"], live["fighter_max_distance"])
 
 
 func test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants() -> void:

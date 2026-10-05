@@ -2,44 +2,60 @@
 class_name GatlingInterceptor
 extends BaseEnemy
 
-## Flying Gatling gunship. No self-managed movement AI.
-## Movement is fully delegated to EnemyPathMover via WaveBuilder .move().
+## The Tier 2 suppression gunship (docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md §2.6, §2.8; task
+## plan docs/plans/cmulwkar600c1qj2xnqykqsvo/3-plan.md). A `GatlingInterceptorBrain` decides and an
+## `EnemyMover` moves it, driven through `BaseEnemy`'s shared brain/mover tick, so this script defines
+## no `_physics_process`.
 ##
-## Typical usages:
-##   b.gatling_interceptor().at(x, y).move(b.straight(200))       — strafing run
-##   b.gatling_interceptor().at(x, y).move(b.player_focus(240))   — locks on and flies through
+## `_ready()` copies the config onto every node that uses it (the `.tres` wins over the scene) and
+## builds the stream's `GatlingAttackPattern` per instance from flat config fields, with the brain's
+## `rng` (a scene sub-resource would be shared by every Gatling). It runs AFTER its children's
+## `_ready()`, so the brain builds its `EngagementBudget` on its first tick.
+##
+## `StreamPool` is a direct child of this root: `BulletPool` resolves its container as
+## `get_parent().get_parent()`, so a pool authored under the `AttackController` would put live rounds
+## under the ship and they would move with it.
+##
+## Rails: while an `EnemyPathMover` owns the motion, `GatlingInterceptorBrain.on_suspended()` runs the
+## legacy constant stream from the config's `rail_*` fields.
+##
+## Spawn with b.gatling_interceptor().at(x, y); `.move()` is only needed until level 1 leaves its rails.
 
 @export var config: GatlingInterceptorConfig = preload(
 		"res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres")
 
-const _BULLET_SCENE: PackedScene = preload(
-		"res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn")
+@onready var _gatling_brain: GatlingInterceptorBrain = $Brain
+@onready var _gatling_mover: EnemyMover = $EnemyMover
+@onready var _attack: AttackController = $Attack
 
-var _bullet_pool       : BulletPool
-var _attack_controller : AttackController
 
 func _ready() -> void:
 	super._ready()
 	add_to_group("enemies")
-
 	if config:
-		health.max_health     = config.max_health
-		health.current_health = config.max_health
-		score_value           = config.score_value
+		_apply_config(config)
 
-	_bullet_pool            = BulletPool.new()
-	_bullet_pool.bullet_scene = _BULLET_SCENE
-	## pool_size: at 0.09 s interval and ~1.5 s effective range → ceil(1.5/0.09)+buffer = 20.
-	_bullet_pool.pool_size  = 20
-	add_child(_bullet_pool)
 
-	var pattern              := GatlingAttackPattern.new()
-	pattern.fire_interval    = config.fire_interval if config else 0.09
-	pattern.bullet_damage    = config.bullet_damage if config else 4
-	pattern.bullet_speed     = config.bullet_speed  if config else 220.0
-	pattern.spread_angle     = config.spread_angle  if config else 0.08
+func _apply_config(cfg: GatlingInterceptorConfig) -> void:
+	health.max_health = cfg.max_health
+	health.current_health = cfg.max_health
+	score_value = cfg.score_value
+	if contact_hit_box:
+		contact_hit_box.damage = cfg.collision_damage
 
-	_attack_controller             = AttackController.new()
-	_attack_controller.pattern     = pattern
-	_attack_controller.bullet_pool = _bullet_pool
-	add_child(_attack_controller)
+	_gatling_mover.max_speed = cfg.max_speed
+	_gatling_mover.acceleration = cfg.acceleration
+	_gatling_mover.braking = cfg.braking
+	_gatling_mover.max_turn_rate = cfg.turn_rate
+
+	var stream := GatlingAttackPattern.new()
+	stream.fire_interval = cfg.stream_interval  # unused while brain-driven: the brain sequences rounds
+	stream.bullet_damage = cfg.round_damage
+	stream.bullet_speed = cfg.round_speed
+	stream.spread_angle = cfg.stream_spread
+	stream.aim_at_player = true
+	stream.accuracy = cfg.accuracy
+	stream.rng = _gatling_brain.rng
+	_attack.pattern = stream
+
+	_gatling_brain.config = cfg

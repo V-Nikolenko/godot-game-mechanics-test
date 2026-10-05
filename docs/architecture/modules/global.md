@@ -528,7 +528,7 @@ call, whatever `delta` is — the internal clock starts pre-loaded with `gap`. T
 subtract-not-reset, the same overshoot-preserving rule `AttackController.tick()` uses. `is_running()`
 reports whether shots remain; `stop()` ends the burst early. `shots_fired` is a running count, reset
 by `start()` (docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md §2.3);
-the Fighter brain (t8b) and the Gatling Interceptor brain (later in the same phase) are its callers —
+the Fighter brain (t8b) and the Gatling Interceptor brain (t10, one stream per pressure window) are its callers —
 an exact 3–5 / 5–7 / 8–12-round burst instead of a free-running interval timer.
 
 **`DubinsPath` (`dubins_path.gd`, `RefCounted`) is the shortest path between two poses (position +

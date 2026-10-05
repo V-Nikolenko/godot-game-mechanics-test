@@ -49,6 +49,15 @@ func _fighter_speeds() -> Dictionary:
 	}
 
 
+## Every speed the Gatling Interceptor fires Gatling Stream rounds at: the AI stream (`round_speed`) and
+## the rail fallback's legacy constant stream (`rail_stream_speed`, 220, below the round's 240 default).
+## Both are `GatlingInterceptorConfig` fields read from the shipped `.tres` (t10).
+func _gatling_speeds() -> Dictionary:
+	var cfg: GatlingInterceptorConfig = \
+			load("res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres")
+	return {"stream": cfg.round_speed, "rail_stream": cfg.rail_stream_speed}
+
+
 ## One array, per the plan: add a new, slower bullet source here and the defaults must be
 ## re-derived (`3-plan.md` §2.9).
 func _every_shipped_enemy_bullet_speed() -> Array[float]:
@@ -71,8 +80,9 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 	speeds.append(GatlingAttackPattern.new().bullet_speed)
 	speeds.append(AimedAttackPattern.new().bullet_speed)
 
-	# gatling_interceptor_config.gd's default (the shipped .tres does not override bullet_speed).
-	speeds.append(GatlingInterceptorConfig.new().bullet_speed)
+	# The Gatling Interceptor's shipped tuning: the AI stream and the rail fallback, config fields.
+	for s in _gatling_speeds().values():
+		speeds.append(s as float)
 
 	# gunship_config.tres.
 	var gunship_cfg: GunshipConfig = \
@@ -142,8 +152,8 @@ func test_enemy_bullet_defaults_are_derived_from_every_shipped_speed_source() ->
 # Per-round sweep (t2, 3-plan.md §2.2, review B5): max_distance / min_fired_speed <= max_time,
 # plus a range floor (>= 1280px, except the Scatter Round, whose short range IS the design).
 # A round with no shooter yet (all four this task) is checked at its own scene default speed.
-# t8a gave the Fighter's rounds real config-field speeds, rail fallbacks included, and this sweep
-# reads them; t10 does the same for the Gatling Interceptor's Gatling Stream.
+# t8a gave the Fighter's rounds real config-field speeds, rail fallbacks included, and t10 the Gatling
+# Interceptor's Gatling Stream; this sweep reads them, so no speed in it is hand-typed or regex-read.
 # ---------------------------------------------------------------------------------------------
 
 const _ROUNDS_RANGE_FLOOR_PX: float = 1280.0
@@ -157,10 +167,12 @@ func _round_clears_its_lifetime(max_distance: float, min_fired_speed: float, max
 
 func test_every_round_clears_its_own_lifetime_at_its_slowest_fired_speed() -> void:
 	var fs := _fighter_speeds()
+	var gs := _gatling_speeds()
 	var entries: Array[Dictionary] = [
 		{"scene": EnemyRounds.PULSE, "floor": _ROUNDS_RANGE_FLOOR_PX,
 			"speeds": [fs["aimed"], fs["rail_aimed"], fs["rail_forward"]]},
-		{"scene": EnemyRounds.GATLING_STREAM, "floor": _ROUNDS_RANGE_FLOOR_PX},
+		{"scene": EnemyRounds.GATLING_STREAM, "floor": _ROUNDS_RANGE_FLOOR_PX,
+			"speeds": [gs["stream"], gs["rail_stream"]]},
 		{"scene": EnemyRounds.HEAVY_SHELL, "floor": _ROUNDS_RANGE_FLOOR_PX},
 		{"scene": EnemyRounds.SCATTER, "floor": 0.0, "speeds": [fs["forward"]]},
 	]
@@ -169,8 +181,8 @@ func test_every_round_clears_its_own_lifetime_at_its_slowest_fired_speed() -> vo
 		var bullet: EnemyBullet = scene.instantiate()
 		add_child_autofree(bullet)
 		var lifetime := bullet.get_node("ProjectileLifetime") as ProjectileLifetime
-		# The slowest speed any shooter fires this round at; a round nobody fires yet (Gatling Stream
-		# until t10, Heavy Shell) is checked at its own scene default.
+		# The slowest speed any shooter fires this round at; a round nobody fires yet (Heavy Shell) is
+		# checked at its own scene default.
 		var min_fired_speed: float = bullet.speed
 		if entry.has("speeds"):
 			min_fired_speed = (entry["speeds"] as Array).min() as float

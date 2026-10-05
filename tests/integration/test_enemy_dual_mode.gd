@@ -305,3 +305,65 @@ func test_fighter_disengage_frees_it_in_assault_only(mode: String = use_paramete
 			break
 	assert_eq(freed, mode == "assault",
 		"%s: the fighter is freed by its budget in Assault and never in Open Space" % mode)
+
+
+# ── The Gatling Interceptor (Phase 3, t10) ───────────────────────────────────────────────────────
+
+const GATLING_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn")
+
+
+func _spawn_gatling(harness, pos: Vector2) -> GatlingInterceptor:
+	var entity := GATLING_SCENE.instantiate() as GatlingInterceptor
+	entity.global_position = pos
+	(entity.get_node("Brain") as GatlingInterceptorBrain).rng_seed = 3
+	harness.root.add_child(entity)
+	entity.set_physics_process(false)  # hand-ticked, same technique as the Razor Drone above
+	return entity
+
+
+## Mid-corridor, with the player below the corridor centre so both modes pick the same first flank
+## (+1: the Open Space side it is on, and the Assault half opposite the player), the Gatling's
+## APPROACH is the same curve in both modes for the same inputs (P-17: relative to the constraint).
+func test_gatling_approach_mid_corridor_is_identical_in_both_modes() -> void:
+	var open_harness = HARNESS.open_space()
+	var assault_harness = HARNESS.assault()
+	add_child_autofree(open_harness.root)
+	add_child_autofree(assault_harness.root)
+	open_harness.player.global_position = Vector2(560.0, 360.0)
+	assault_harness.player.global_position = Vector2(560.0, 360.0)
+
+	var start := Vector2(900.0, -200.0)
+	var open_gatling := _spawn_gatling(open_harness, start)
+	var assault_gatling := _spawn_gatling(assault_harness, start)
+	assert_true((assault_gatling.get_node("EnemyMover") as EnemyMover).constraint is AssaultCorridorConstraint,
+		"sanity: the Assault Gatling runs under the corridor")
+	for _i in 30:
+		_tick(open_gatling, DT)
+		_tick(assault_gatling, DT)
+
+	var open_brain := open_gatling.get_node("Brain") as GatlingInterceptorBrain
+	var assault_brain := assault_gatling.get_node("Brain") as GatlingInterceptorBrain
+	assert_eq(open_brain.phase, GatlingInterceptorBrain.Phase.APPROACH, "sanity: still approaching")
+	assert_eq(open_brain.side, assault_brain.side, "the same first flank")
+	assert_almost_eq(open_gatling.velocity.x, assault_gatling.velocity.x, 0.001)
+	assert_almost_eq(open_gatling.velocity.y, assault_gatling.velocity.y, 0.001)
+	assert_gt(open_gatling.velocity.length(), 0.0, "sanity: it is moving")
+
+
+## The mode-specific half: the budget frees the Gatling in Assault, and nothing ever forces it out in
+## Open Space.
+func test_gatling_disengage_frees_it_in_assault_only(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 360.0)
+	var gatling := _spawn_gatling(harness, Vector2(640.0, 60.0))
+	gatling.config.engage_seconds = 0.2
+	var freed := false
+	for _i in 1500:
+		_tick(gatling, DT)
+		if gatling.is_queued_for_deletion():
+			freed = true
+			break
+	assert_eq(freed, mode == "assault",
+		"%s: the Gatling is freed by its budget in Assault and never in Open Space" % mode)

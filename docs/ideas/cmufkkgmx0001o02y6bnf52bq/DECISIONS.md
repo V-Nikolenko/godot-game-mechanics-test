@@ -1036,3 +1036,61 @@ variants are kept as patches in that task's `prototype/`. What later tasks need 
   `add_collision_exception_with()` between members.
 - **t8b's ring fallback** (`_fly_ring`) seeks chords that pass 231–249 px from the player, inside
   `reposition_min_radius` (288). The acceptance line's seek-target rule needs the tangent cap the prototypes carry.
+
+### Phase 3, built in t10 (Gatling Interceptor pressure windows) (2026-10-05)
+
+Task plan: `docs/plans/cmulwkar600c1qj2xnqykqsvo/3-plan.md` (approved, with binding notes A1–A8 in `4-review.md`). The
+epic's §2.6 solo Gatling and its §2.8 rail fallback are built as written, except as follows. Later tasks depend on these.
+
+- **Scene and names.** `gatling_interceptor.tscn` keeps every legacy node and gains:
+  - `EnemyMover` (AUTO), `Brain` (`GatlingInterceptorBrain`) and `StateLight`;
+  - `StreamPool` (Gatling Stream, 36), a root child;
+  - `Attack`: the one `AttackController`, `driven_by_brain`, disabled.
+
+  The stream pattern is built per instance in `gatling_interceptor.gd`, with the brain's `rng`. `aim_point` stays INF.
+  That is t11's hook.
+- **Config renames.** The legacy weapon fields `fire_interval` / `bullet_speed` / `spread_angle` / `bullet_damage` are
+  now `rail_stream_interval` / `rail_stream_speed` / `rail_spread` / `rail_damage`. The AI stream is `round_speed` 240,
+  `round_damage` 4, `stream_spread` 0.05 and `accuracy` 0.8. `test_enemy_bullet_lifetime.gd` reads `round_speed` and
+  `rail_stream_speed`, so no speed in the sweep is hand-typed or regex-read.
+- **Deviation (task plan D2): a swing to the other flank does not fit in REPOSITION 1.0–1.5 s + SWING_IN ≤ 1.5 s.** The
+  shortest route that keeps clear of the player is ≈ 891 px (3.4 s at 260 px/s), and round the ring it is ≈ 970 px.
+  - REPOSITION now lasts at least its rng 1.0–1.5 s **and** until the new `F` is within the new `swing_in_reach` (300 px),
+    capped by the new `reposition_cap` (5.0 s).
+  - APPROACH hands over on the same reach rule, or after `reposition_cap` once within `preferred_range + approach_margin`
+    (new, 250).
+  - Every epic rule is unchanged: CHARGING only in SWING_IN + SPIN_UP and always followed by a stream, SWING_IN only with
+    `swing_in_max` of budget left, and SWING_IN ≤ `swing_in_max`.
+- **Routing and strafe.**
+  - Swings step round the 380 px ring, 50° at a time, never across the player.
+  - In Assault they go round **ahead** of the player, except that a route the corridor clamp would pull within
+    `min_flank_range` goes round behind (review A2, test seam `route_fallback`).
+  - In Open Space they take the short way.
+  - The strafe in SPIN_UP / STREAM / COOLDOWN continues the arrival velocity (A1). It runs at `stream_strafe_speed` with
+    a range-holding correction, and the player's velocity is fed forward.
+- **Sides.**
+  - **First window:** APPROACH re-derives the side every tick and latches it on exit (A3).
+  - **Later windows:** REPOSITION entered from COOLDOWN flips the side. In Assault the flip is skipped when the flipped
+    `F` is within `min_flank_range` of the player horizontally.
+- **For t16 (A7). Read this before tuning level 1.**
+  - The average window period is ≈ 5.8 s (≈ 1.7 shots/s), against the epic's ≈ 2.8 s (≈ 3.5 shots/s).
+  - The *minimum* period, `GatlingInterceptorBrain.min_window_period()` = 2.28 s, is shorter than the epic's 2.8 s. It
+    is reachable in the Assault wall case, where there is no swing.
+  - So a shots/s numerator of `max_rounds / min_window_period()` gives 5.26 shots/s per Gatling, against the epic's
+    12 / 2.8 = 4.29. "Lower density" holds on average only, and t16 must choose which bound its gate uses.
+  - **An Assault Gatling at `engage_seconds` 7.0 usually gets one window before it leaves**, so R3.7's "attacks from the
+    other side" is rarely seen in Assault. The owner should see this when t16 tunes `engage_seconds`.
+- **For t11 (A7).**
+  - `min_window_period()` bounds `StreamPool` (36) only if every path into SWING_IN passes REPOSITION's minimum. A FLANK
+    that answers a window from COOLDOWN skips it. The period then drops to ≈ 0.9 s, and the need to
+    12 × ceil(5.83 / 0.9) = 84, so 36 would starve silently.
+  - t11 must answer only from REPOSITION after its minimum, or recompute the pool assertion.
+  - A FLANK entering SWING_IN directly bypasses the `swing_in_reach` gate. That is acceptable: `swing_in_max` still caps
+    it.
+- **Level-1 frozen constants (A4).** `test_level1_fighter_spawns.gd` now suspends every ship that has a `Brain` before
+  reading its rail stats, and reads each ship's round range from its own pool's round (Pulse or Gatling Stream, 1400 px),
+  not the legacy 2400 px bullet.
+  - All three frozen sections still equal their constants. deep_space's Gatling pair is outside its peak window, and the
+    fighters are capped by their interval.
+  - No constant was re-frozen. If a later change pulls the pair into a peak, freeze the legacy interceptor's inputs
+    (pool 20, 2400 px round, 220 px/s, 0.09 s) as constants, per B6. Do not derive a delta.

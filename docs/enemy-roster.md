@@ -229,8 +229,8 @@ b.sniper_enemy().at(120, -500).move(b.sequence([
 
 **Builder:** `b.gatling_interceptor()`  
 **Scene:** `gatling_interceptor.tscn`  
-**Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
-**Shoots:** Yes — rapid-fire Gatling (0.09 s interval, slight spread). Always fires forward (in direction of travel).  
+**Movement:** AI (`GatlingInterceptorBrain`): holds side-on range on the player's flank, swings to the other flank between windows. With `.move()` it rides the rail instead. See `assault/scenes/enemies/gatling_interceptor/ENEMY.md`.  
+**Shoots:** Yes — pressure windows: yellow spin-up, one 8–12-round Gatling Stream aimed at the player's predicted position, a pause, a swing. On a rail: the legacy constant stream (0.09 s, slight spread), also aimed at the player.  
 **HP:** Low–Medium  
 **Score:** Medium
 
@@ -238,10 +238,13 @@ b.sniper_enemy().at(120, -500).move(b.sequence([
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `fire_interval` | 0.09 s | Very fast — 11 shots/second. |
-| `bullet_damage` | 4 | Per-bullet damage. |
-| `bullet_speed` | 220.0 | px/s. |
-| `spread_angle` | 0.08 rad | ±4.5° random scatter per shot. |
+| `preferred_range` | 380 px | Side-on distance a window is fired from. |
+| `stream_rounds_min/max`, `stream_interval` | 8 / 12, 0.09 s | One stream per window. |
+| `round_speed`, `round_damage` | 240, 4 | The AI stream's Gatling Stream rounds. |
+| `engage_seconds` | 7.0 s | Assault budget before it leaves. |
+| `rail_stream_interval`, `rail_stream_speed`, `rail_spread`, `rail_damage` | 0.09 s, 220, 0.08 rad, 4 | The rail (`.move()`) fallback: the legacy constant stream. |
+
+Full table in `ENEMY.md`.
 
 **Examples:**
 ```gdscript
@@ -481,7 +484,7 @@ b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180)
 
 | Rule | Detail |
 |------|--------|
-| **Always `.move()` path-following enemies** | `fighter`, `ram`, `sniper`, `sniper_enemy`, `gatling_interceptor`, `bomber` — they have no self-managed movement. |
+| **Always `.move()` path-following enemies** | `ram`, `sniper`, `sniper_enemy`, `bomber` (the `fighter` and `gatling_interceptor` are AI enemies; `.move()` puts them on a rail) — they have no self-managed movement. |
 | **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship` — attaching `EnemyPathMover` suspends their AI. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` needs a `sequence()`** | The approach step must be `straight(speed, 0.0, 2.5)` (exactly 2.5 s). Hold step must cover `shot_count × 2.5 s`. |
