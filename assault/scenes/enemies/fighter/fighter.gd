@@ -27,6 +27,10 @@ extends BaseEnemy
 ## default. An AI fighter ignores it.
 var aim_mode: String = ""
 
+## The squad board, written by `WaveManager` / `SectorHub` before `add_child` (duck-typed through
+## `in`). Null = a squad of one. The brain reads its role every tick (epic §2.5).
+var squad: SquadController
+
 @onready var _fighter_brain: FighterBrain = $Brain
 @onready var _fighter_mover: EnemyMover = $EnemyMover
 @onready var _aimed_attack: AttackController = $AimedAttack
@@ -38,6 +42,11 @@ func _ready() -> void:
 	add_to_group("enemies")
 	if config:
 		_apply_config(config)
+	if squad != null:
+		var target := TargetInfo.player(get_tree())
+		if target.has_target:
+			squad.update_target(target.position, _fighter_brain.heading_ref(target))
+		squad.join(self)
 
 
 func _apply_config(cfg: FighterConfig) -> void:

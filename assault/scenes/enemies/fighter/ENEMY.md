@@ -5,10 +5,11 @@ rail (`EnemyPathMover`) owns its motion it falls back to the legacy weapon, so l
 reinforcements play as before.
 **Fantasy / threat:** Bread-and-butter opposition. Manageable alone; dangerous in numbers.
 
-> **Status (Phase 3, task t8b):** flies attack runs in both modes — a lead-in to the pass's start, a run past the
+> **Status (Phase 3, tasks t8b + t9):** flies attack runs in both modes — a lead-in to the pass's start, a run past the
 > player at a set lane with an aimed Pulse burst, a wide turn back in with a close Scatter spray when the nose comes
-> on, a break-away and the next pass. Squad roles (t9), idle (t12) and level-1 migration (t16/t17) are still to come:
-> level 1 keeps it on rails today. Task plan: `docs/plans/cmulwkar000btqj2x1e58sfd4/3-plan.md`.
+> on, a break-away and the next pass — and a formation fights as a squad (§Squad below). Idle (t12) and level-1
+> migration (t16/t17) are still to come: level 1 keeps it on rails today. Task plans:
+> `docs/plans/cmulwkar000btqj2x1e58sfd4/3-plan.md` (t8b), `docs/plans/cmulwkar300bxqj2xgtk6jyu3/3-plan.md` (t9).
 
 ---
 
@@ -96,6 +97,40 @@ REPOSITION usually cannot reach a moving S before its deadline. The steady state
 about every 15 s**, none of which touches the player (`test_a_cruising_player_still_gets_attack_runs_that_never_touch_it`).
 A holding player gets a flank pass about every 10 s.
 
+## Squad (t9, epic §2.5)
+
+A formation spawned by `WaveManager` shares one `SquadController`: `Fighter.squad` is written before `add_child` and
+`Fighter._ready()` joins it. A fighter leaves the board on DISENGAGE entry or a rail (`on_suspended()`); a squad of one
+is a solo fighter (every rule below is gated on two or more members). Gated by `tests/integration/test_fighter_squad.gd`
+(dual, through a real `WaveManager`).
+
+| Role (`role_of()`, read every tick) | Pass kind | Fires |
+|---|---|---|
+| LEAD (closest to the player) | FRONTAL, head-on down one side | yes |
+| FLANK_LEFT / FLANK_RIGHT | the pincer: FLANK_LEFT on lane `pass_offset`, FLANK_RIGHT on `pass_offset + flank_lane_gap` | yes |
+| REAR (4th and later) | `PassKind.REAR`, a dry pass from `rear_standoff_radius` on its own lane, one `flank_lane_gap` further out per `rear_index` | **no** — no burst, no light |
+
+- **Latch.** `pass_role` is latched with the pass at RUN_IN entry and released at EXTEND's end; a role change mid-run
+  takes effect on the next pass. A fighter demoted to REAR mid-run stops firing at once (at most three ever shoot).
+- **Rendezvous.** Every member flies to its S and **holds** there (nose along the run). It is *settled* within 32 px of
+  S and slower than 0.3 × `max_speed`. The LEAD holds until both flanks are settled or `lead_wait_max` (3.5 s).
+- **The window.** The LEAD opens `attack_window_open` on its RUN_IN entry and closes it on its EXTEND entry. A settled
+  FLANK answers each window once (`_answered_window`, reset on reading it closed), or goes on its own after
+  `flank_wait_max` (2 s). A member kept unsettled for 2 × its own wait goes anyway.
+- **REAR dry passes.** Open Space: a REAR becomes due on every second window and flies after that window closes, once no
+  mate is on a pass and every attacker holds; the LEAD's next window waits for it. Assault: never — a fighter leaves
+  after `passes` passes there, so REARs are promoted as the attackers leave.
+- **Separation (≥ 2 × hull radius, 57.2 px).** `flank_stagger` (0.4 s) delays a run that would reach the crossing with
+  a mate's run within that time, and a parallel same-way run trails by `flank_stagger × max_speed`. A holding member
+  slides off a moving mate's planned track (`predicted_position(t)`); a member on a lead-in slows along its own track,
+  and slides aside when no speed keeps clear of a mate on a pass. RUN_IN, EXTEND, TURN and DISENGAGE never give way.
+  Measured 0 overlaps over a full cycle on 168 V3/W5 layouts; **after a member dies** the recomputed roles can still
+  bring two fighters together (not asserted; see the task plan's §Risks).
+- **Assault budget.** Holds are bounded by the `EngagementBudget`: a member never starts a run that would not reach its
+  closest approach in time, so a flank that crossed most of the corridor can hold and leave without firing (7 of 84
+  dense layouts; an open owner decision).
+- Fighters physically collide with each other in game (layer 1 / mask 1; an open owner decision).
+
 ## Weapons (epic §2.4.2)
 
 Ticked every AI tick before the phase logic. **Legs:** leg A = RUN_IN (+ EXTEND), leg B = TURN; at most one burst per
@@ -125,12 +160,15 @@ fighter ignores it.
 Read the real fields from `fighter_config.gd` (groups: Movement, Geometry, Attack, Tactics, Rail). t8b added
 `run_in_max` (4.0) and `regroup_seconds` (1.5) and moved `forward_range` 300 → 325 (the epic's K5 lever: the TURN
 snapshot comes nose-on inside it, so it can be FORWARD). The pin
-`turn_rate × max_speed ≤ acceleration` is asserted in `tests/integration/test_fighter.gd`.
+`turn_rate × max_speed ≤ acceleration` is asserted in `tests/integration/test_fighter.gd`. t9 reads `rear_standoff_radius`
+(560) and `flank_wait_max` (2.0) and adds `lead_wait_max` (3.5) and `flank_stagger` (0.4) to the Tactics group.
 
 ## Spawn notes
 
 - WaveBuilder method: `b.fighter()` — see `docs/enemy-roster.md`. Level 1 still gives it `.move()` (a rail) until its
   migration task.
+- `.formation(...)` on a fighter entry makes one squad of the whole formation (§Squad); a V3 is LEAD + both flanks,
+  a W5 adds two REARs.
 - `.shoot_forward()` / `.shoot_at_player()` are rail-only inputs.
 
 ## Files

@@ -56,6 +56,9 @@ s.waves.assign(raw_waves)
 **Builder:** `b.fighter()`  
 **Scene:** `fighter.tscn`  
 **Movement:** Fully delegated to `EnemyPathMover`. **Always add `.move()`.**  
+**Squads (Ph3 t9):** without `.move()` it is an AI enemy, and a `.formation()` fights as one squad — the closest
+leads head-on, the next two close as a pincer, a 4th and later wait as REARs (dry passes, never fire). Details:
+`assault/scenes/enemies/fighter/ENEMY.md` → *Squad*. Level 1 keeps `.move()` until its migration task.  
 **Shoots:** Yes — at player or forward depending on `aim_mode`.  
 **HP:** Low  
 **Score:** Low

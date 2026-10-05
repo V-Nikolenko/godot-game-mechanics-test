@@ -75,6 +75,12 @@ extends ShipConfig
 @export var rear_standoff_radius: float = 560.0
 ## A flank with no window from its leader attacks after this long at its start point (s).
 @export var flank_wait_max: float = 2.0
+## A squad LEAD at its start point waits at most this long for its flanks to be holding theirs (s).
+@export var lead_wait_max: float = 3.5
+## A squad member whose run would reach the crossing with a mate's run within this of the mate starts
+## that much later; a run the same way on a neighbouring lane trails the mate's by this × `max_speed`.
+## In a pincer it is the FLANK on the side the LEAD passes that waits (s).
+@export var flank_stagger: float = 0.4
 ## RUN_IN gives up after this long whatever the geometry (s): a player running away along the run.
 @export var run_in_max: float = 4.0
 ## Open Space: after `passes` passes, the fighter holds its next start point this long (s).

@@ -1113,3 +1113,52 @@ epic's §2.6 solo Gatling and its §2.8 rail fallback are built as written, exce
     fighters are capped by their interval.
   - No constant was re-frozen. If a later change pulls the pair into a peak, freeze the legacy interceptor's inputs
     (pool 20, 2400 px round, 220 px/s, 0.09 s) as constants, per B6. Do not derive a delta.
+
+### Phase 3, built in t9 (fighter squads), Revision 3 (2026-10-05)
+
+Supersedes the two "t9 … nothing built" sections above where they differ.
+Task plan: `docs/plans/cmulwkar300bxqj2xgtk6jyu3/3-plan.md` (Revision 3; review history in `4-review.md`). The task was
+re-queued after round 2 with no recorded owner decision, so it took escalation option (a), the reviewer's own reading:
+**separation is asserted over a full cycle** (Open Space: every window up to and including the first one each REAR
+flies a dry pass on), which relaxes nothing. Later tasks depend on these.
+
+- **Names.** `Fighter.squad: SquadController` is the duck-typed slot `WaveManager` (and later `SectorHub`) writes
+  before `add_child`; `Fighter._ready()` joins it (epic "on its first tick" → `_ready()`, the Swarm precedent). A
+  fighter leaves the board on DISENGAGE entry and on a rail (`on_suspended()`). `FighterBrain.PassKind.REAR` is new.
+  `FighterConfig` gains `lead_wait_max` 3.5 and `flank_stagger` 0.4, and `rear_standoff_radius` / `flank_wait_max` are
+  now read. Duck-typed brain queries mates read: `is_holding()`, `is_settled()`, `is_on_pass()`,
+  `is_braking_onto_station()`, `predicted_position(t)`, `squad_priority()`, `run_budget_slack()`, `pass_role`.
+- **Deviations from epic §2.5.**
+  - **REAR spacing:** each REAR has its own lane, one `flank_lane_gap` further out per `rear_index`, on a side latched
+    when it becomes REAR; `rear_count` is unused (not a ring spaced by `rear_index/rear_count`).
+  - **The latch** (`pass_role`, `b`, `u`, `l`, kind) is set at RUN_IN entry and released at EXTEND's end (t8b's TURN
+    re-derives the next pass), not "until the next REPOSITION". TURN's break-away is the one exemption from the
+    seek-target rule.
+  - **Every member holds at its S** (the LEAD too, until its flanks settle or `lead_wait_max`); only a member *settled*
+    on S (within 32 px, slow) answers a window or counts as ready.
+  - **`flank_stagger` is generalised** to the crossing time of any two runs (and a one-gap trail for parallel same-way
+    runs), not only "FLANK_RIGHT's start".
+  - **Separation needs more than `flank_stagger`** (the only fix the epic pre-approved): a holding member slides off a
+    moving mate's planned track, a member on a lead-in slows along its own track (and, when no speed keeps clear, slides
+    aside from a mate on a pass). Round 2 ruled these within the task's discretion: brain-local, no shared API, no
+    heading-source change, RUN_IN/EXTEND/TURN/DISENGAGE never give way.
+  - **REAR dry passes have their own slot** ("every other cycle" made concrete): in Open Space a REAR becomes due on
+    every second window and flies after that window closes, once no mate is on a pass and every attacker holds; the
+    LEAD's next window and a FLANK's `flank_wait_max` run wait for it. **In Assault a REAR never dry-passes**: an
+    Assault fighter leaves after `passes` passes, so REARs are reserves promoted as the attackers leave.
+  - **A hold off S is bounded:** a member unsettled for 2 × its own wait goes anyway (no endless Open Space hold).
+- **Still open for the owner — not decided by this task:**
+  - **Decision 2, the Assault budget.** At the shipped 6.0 s, 7 of 84 dense Assault layouts leave one flank that
+    crossed most of the corridor holding at S and leaving without firing (the build's current handling, "a late flank
+    holds and leaves", is the default, not a decision). A longer budget is not separation-safe yet: with two passes,
+    V3 fails 13/42 and W5 25/42 (worst 0.9 px — flank turns converging in the corridor, and a LEAD/FLANK station swap
+    after a member leaves). Lever 1 (→ 4.5 s) would silence most squads.
+  - **Decision 3, fighter body collision** (layer 1, mask 1). Squad tests except collision between mates.
+- **Gaps left for later tasks (measured, `3-plan.md` §Measurements):**
+  - **After a death** `SquadController._reassign()` recomputes every role by distance, which can swap two members'
+    stations or leave a mid-pass squad with a new LEAD whose turn meets a flank's turn; separation is not asserted
+    there and fails in up to 9 of 42 W5 layouts (worst 7.3 px, V3). A post-reassignment resync is a follow-up.
+  - **V6** fails 1 of 42 in Open Space (a third REAR); V4 is clean; line4 was not measurable (its stagger awaits a
+    timer). t16 must re-run separation on whatever formations it ships.
+  - **Spawn fan-out** before the first window (19 of 168 layouts, measured for Revision 2) is t16's spawn-layout problem.
+  - **`_mates()` scans the `enemies` group** per tick; fine at V3/W5, revisit for larger squads.

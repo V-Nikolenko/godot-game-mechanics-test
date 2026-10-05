@@ -1,10 +1,14 @@
-## PROTOTYPE sweep (scratch, deleted before commit).
+## SCRATCH sweep (deleted before commit).
 extends GutTest
 
 const HARNESS: GDScript = preload("res://tests/helpers/enemy_ai_harness.gd")
 const DT := 1.0 / 60.0
 const P := FighterBrain.Phase
 const R := SquadController.Role
+const PLAYERS := [Vector2(640, 560), Vector2(480, 520), Vector2(820, 600), Vector2(640, 600),
+	Vector2(400, 480), Vector2(900, 640), Vector2(640, 380)]
+const OFFSETS := [Vector2(0, -230), Vector2(-110, -260), Vector2(120, -200), Vector2(0, -250),
+	Vector2(-160, -220), Vector2(170, -240)]
 
 
 func _world(mode: String, player_pos: Vector2) -> Dictionary:
@@ -35,17 +39,17 @@ func _form(name: String) -> FormationResource:
 		_: return b.w_formation(5, 60.0, 40.0, 0.0)
 
 
-func _run(mode: String, formation: FormationResource, at: Vector2, player: Vector2, seconds: float = 16.0, engage: float = 0.0) -> Dictionary:
+func _run(mode: String, form_name: String, at: Vector2, player: Vector2, end_runs: int, cap: float, engage: float) -> Dictionary:
 	var w := _world(mode, player)
 	var b := WaveBuilder.new()
-	var waves: Array[WaveResource] = [b.wave(0.0, [b.fighter().at(at.x, at.y).formation(formation)])]
+	var waves: Array[WaveResource] = [b.wave(0.0, [b.fighter().at(at.x, at.y).formation(_form(form_name))])]
 	(w.wm as WaveManager).load_section(waves)
 	(w.wm as WaveManager)._process(0.0)
 	var fighters: Array[Fighter] = []
 	for c in (w.h.root as Node).get_children():
 		if c is Fighter:
 			c.set_physics_process(false)
-			(c.get_node("Brain") as FighterBrain).rng.seed = 7 + fighters.size()
+			(c.get_node("Brain") as FighterBrain).rng.seed = 100 + fighters.size()
 			if engage > 0.0:
 				c.config.engage_seconds = engage
 			fighters.append(c)
@@ -55,32 +59,36 @@ func _run(mode: String, formation: FormationResource, at: Vector2, player: Vecto
 				a.add_collision_exception_with(c)
 	var squad: SquadController = fighters[0].get(&"squad") as SquadController
 	var lead: Fighter
-	var attacker := {}
 	for f in fighters:
-		var role := squad.role_of(f) if squad != null else R.LEAD
-		if role == R.LEAD:
+		if squad.role_of(f) == R.LEAD:
 			lead = f
-		attacker[f] = role != R.REAR
-	var shots := {}
-	var was_hold := {}
 	var was_phase := {}
-	var first_run := {}
-	var breach := 0
-	var breach_note := ""
-	var lead_runs := 0
-	var min_sep := INF
-	var cyc_sep := INF
-	var cyc_note := ""
-	var window_seen := false
-	var min_player := INF
-	var sep_note := ""
-	var player_note := ""
-	var t := 0.0
+	var was_hold := {}
+	var shots := {}
+	var attacker := {}
+	var ran := {}
+	var rear_dry := {}
 	for f in fighters:
-		shots[f] = 0
-		was_hold[f] = false
 		was_phase[f] = -1
-	for i in int(seconds / DT):
+		was_hold[f] = false
+		shots[f] = 0
+		attacker[f] = squad.role_of(f) != R.REAR
+		ran[f] = false
+	var lead_runs := 0
+	var rear_done := {}
+	var after_dry := false
+	var rears0 := 0
+	for f in fighters:
+		if squad.role_of(f) == R.REAR:
+			rears0 += 1
+	var window_seen := false
+	var cyc := INF
+	var note := ""
+	var near := INF
+	var breach := 0
+	var t := 0.0
+	var rear_shots := 0
+	for i in int(cap / DT):
 		for f in fighters:
 			if is_instance_valid(f) and not f.is_queued_for_deletion():
 				var before := f.global_position
@@ -93,167 +101,121 @@ func _run(mode: String, formation: FormationResource, at: Vector2, player: Vecto
 				continue
 			live.append(f)
 			var br := f.get_node("Brain") as FighterBrain
+			var n := 0
 			for pool_name in ["AimedPool", "ForwardPool"]:
 				var pool := f.get_node(pool_name) as BulletPool
 				for bl in pool._active.duplicate():
-					shots[f] += 1
+					n += 1
 					pool._recycle(bl)
+			shots[f] += n
+			if br.pass_role == R.REAR or squad.role_of(f) == R.REAR:
+				rear_shots += n
 			if br.phase == P.RUN_IN and was_phase[f] != P.RUN_IN:
-				if not first_run.has(f):
-					first_run[f] = t
-				if not was_hold[f] and squad != null and squad.member_count() >= 2:
+				ran[f] = true
+				if not was_hold[f]:
 					breach += 1
-					breach_note = "%.2f %s from %s" % [t, R.keys()[squad.role_of(f)], P.keys()[was_phase[f]]]
+					gut.p("    BREACH %s %s %s P%s at%s %.2f %s from %s" % [mode, form_name, f.name.right(2), player, at, t, R.keys()[squad.role_of(f)], P.keys()[was_phase[f]]])
 				if f == lead:
 					lead_runs += 1
-			was_hold[f] = br.has_method(&"is_holding") and br.call(&"is_holding")
+				if br.pass_role == R.REAR:
+					rear_dry[f] = true
+				if f == lead and rear_done.size() >= rears0 and not after_dry:
+					after_dry = true
+			if br.pass_role == R.REAR and br.phase == P.REPOSITION and was_phase[f] == P.TURN:
+				rear_done[f] = true
+			if br.phase != P.DISENGAGE:
+				near = minf(near, f.global_position.distance_to(w.h.player.global_position))
+			was_hold[f] = br.is_holding()
 			was_phase[f] = br.phase
-			var dp := f.global_position.distance_to(w.h.player.global_position)
-			if dp < min_player:
-				min_player = dp
-				player_note = "%.2f %s" % [t, P.keys()[br.phase]]
-		if squad != null and squad.attack_window_open:
+		if squad.attack_window_open:
 			window_seen = true
-		for a in live.size():
-			for c in range(a + 1, live.size()):
-				var d := live[a].global_position.distance_to(live[c].global_position)
-				if d < min_sep:
-					min_sep = d
-					var ba := live[a].get_node("Brain") as FighterBrain
-					var bc := live[c].get_node("Brain") as FighterBrain
-					sep_note = "%.2f %s/%s" % [t, P.keys()[ba.phase], P.keys()[bc.phase]]
-				var both_members := squad != null and squad.role_of(live[a]) != R.NONE and squad.role_of(live[c]) != R.NONE
-				if window_seen and both_members and d < cyc_sep:
-					cyc_sep = d
-					var ba2 := live[a].get_node("Brain") as FighterBrain
-					var bc2 := live[c].get_node("Brain") as FighterBrain
-					cyc_note = "%.2f %s%s%s/%s%s%s" % [t, R.keys()[squad.role_of(live[a])].left(6), P.keys()[ba2.phase].left(5), "H" if ba2.is_holding() else "", R.keys()[squad.role_of(live[c])].left(6), P.keys()[bc2.phase].left(5), "H" if bc2.is_holding() else ""]
-		if mode == "open_space" and lead_runs >= 2:
+		if window_seen:
+			for a in live.size():
+				for c in range(a + 1, live.size()):
+					if OS.get_environment("SW_NONE") == "" and (squad.role_of(live[a]) == R.NONE or squad.role_of(live[c]) == R.NONE):
+						continue
+					var d := live[a].global_position.distance_to(live[c].global_position)
+					if d < cyc:
+						cyc = d
+						var ba := live[a].get_node("Brain") as FighterBrain
+						var bc := live[c].get_node("Brain") as FighterBrain
+						note = "%.2f %s(%s)%s%s/%s(%s)%s%s" % [t, R.keys()[squad.role_of(live[a])].left(6), ba.pass_role, P.keys()[ba.phase].left(5), "H" if ba.is_holding() else "",
+							R.keys()[squad.role_of(live[c])].left(6), bc.pass_role, P.keys()[bc.phase].left(5), "H" if bc.is_holding() else ""]
+		if mode == "open_space" and lead_runs >= end_runs and after_dry:
 			break
 		if live.is_empty():
 			break
 	var silent := 0
 	for f in fighters:
-		if attacker[f] and shots[f] == 0:
+		if attacker[f] and shots[f] == 0 and is_instance_valid(f):
 			silent += 1
-	var lead_first: float = first_run.get(lead, INF)
+	var rears := 0
+	for f in fighters:
+		if not attacker[f]:
+			rears += 1
 	(w.h.root as Node).get_parent().remove_child(w.h.root)
 	(w.h.root as Node).free()
-	return {"sep": min_sep, "cyc": cyc_sep, "cnote": cyc_note, "player": min_player, "note": sep_note, "pnote": player_note, "breach": breach,
-		"bnote": breach_note, "silent": silent, "lead_first": lead_first, "t": t}
+	return {"cyc": cyc, "note": note, "t": t, "lead_runs": lead_runs, "near": near, "breach": breach, "silent": silent,
+		"rear_dry": rear_done.size(), "after": after_dry, "rears": rears, "rear_shots": rear_shots}
 
 
-func _sweep(label: String, forms: Array, players: Array, offsets: Array, modes: Array) -> void:
-	var n := 0
-	var counts := {"CYC": 0, "SEP": 0, "HIT": 0, "BREACH": 0, "SILENT": 0}
-	var worst_sep := INF
-	var worst_player := INF
-	var lead_first := []
+func _sweep(label: String, forms: Array, modes: Array, end_runs: int, cap: float, engage: float) -> void:
 	for mode in modes:
 		for form_name in forms:
-			for player in players:
-				for at in offsets:
-					var res := _run(mode, _form(form_name), at, player)
+			var fails := 0
+			var n := 0
+			var worst := INF
+			var worst_near := INF
+			var tmax := 0.0
+			var short := 0
+			var brs := 0
+			var sil := 0
+			var dry_missing := 0
+			var rs := 0
+			for player in PLAYERS:
+				for at in OFFSETS:
+					var r := _run(mode, form_name, at, player, end_runs, cap, engage)
 					n += 1
-					worst_sep = minf(worst_sep, res.sep)
-					worst_player = minf(worst_player, res.player)
-					if mode == "assault":
-						lead_first.append(res.lead_first)
-					var tags := []
-					if res.cyc < 57.2:
-						tags.append("CYC")
-					if res.sep < 57.2:
-						tags.append("SEP")
-					if res.player < 42.1:
-						tags.append("HIT")
-					if res.breach > 0:
-						tags.append("BREACH")
-					if mode == "assault" and res.silent > 0:
-						gut.p("SILENTX %s %s P%s at%s lead_first %.2f" % [mode, form_name, player, at, res.lead_first])
-						tags.append("SILENT")
-					for tag in tags:
-						counts[tag] += 1
-					if not tags.is_empty():
-						gut.p("%s %s %s P%s at%s: cyc %.1f (%s) sep %.1f (%s) player %.1f (%s) breach %d (%s) silent %d" % [tags, mode, form_name, player, at, res.cyc, res.cnote, res.sep, res.note, res.player, res.pnote, res.breach, res.bnote, res.silent])
-	lead_first.sort()
-	gut.p("%s n=%d %s worst sep %.1f worst player %.1f; assault lead first run median %.2f max %.2f" % [label, n, counts, worst_sep, worst_player, lead_first[lead_first.size() / 2] if not lead_first.is_empty() else -1.0, lead_first[-1] if not lead_first.is_empty() else -1.0])
+					worst = minf(worst, r.cyc)
+					worst_near = minf(worst_near, r.near)
+					tmax = maxf(tmax, r.t)
+					brs += r.breach
+					sil += r.silent
+					rs += r.rear_shots
+					if r.rear_dry < r.rears:
+						dry_missing += 1
+						gut.p("    NODRY %s %s P%s at%s t%.1f" % [mode, form_name, player, at, r.t])
+					if mode == "open_space" and (r.lead_runs < end_runs or not r.after):
+						short += 1
+					if r.cyc < 57.2:
+						fails += 1
+						gut.p("  FAIL %s %s P%s at%s %.1f %s" % [mode, form_name, player, at, r.cyc, r.note])
+			gut.p("%s %s %s: fail %d/%d worst %.1f near %.1f tmax %.1f short %d breach %d silent %d rear_no_dry %d rear_shots %d" % [label, mode, form_name, fails, n, worst, worst_near, tmax, short, brs, sil, dry_missing, rs])
 	assert_true(true)
 
 
-func test_sweep() -> void:
-	_sweep("SWEEP", ["v3", "w5"], [Vector2(640, 560), Vector2(480, 520), Vector2(820, 600)],
-		[Vector2(0, -230), Vector2(-110, -260), Vector2(120, -200)], ["open_space", "assault"])
-
-
-func test_wide() -> void:
-	_sweep("WIDE", ["v3", "v4", "v6", "line4", "w5"],
-		[Vector2(640, 560), Vector2(480, 520), Vector2(820, 600), Vector2(640, 600), Vector2(400, 480), Vector2(900, 640), Vector2(640, 380)],
-		[Vector2(0, -230), Vector2(-110, -260), Vector2(120, -200), Vector2(0, -250), Vector2(-160, -220), Vector2(170, -240)],
-		["open_space", "assault"])
-
-
-func _trace(mode: String, form_name: String, at: Vector2, player: Vector2, seconds: float, every: int = 6) -> void:
-	var w := _world(mode, player)
-	var b := WaveBuilder.new()
-	var waves: Array[WaveResource] = [b.wave(0.0, [b.fighter().at(at.x, at.y).formation(_form(form_name))])]
-	(w.wm as WaveManager).load_section(waves)
-	(w.wm as WaveManager)._process(0.0)
-	var fighters: Array[Fighter] = []
-	for c in (w.h.root as Node).get_children():
-		if c is Fighter:
-			c.set_physics_process(false)
-			(c.get_node("Brain") as FighterBrain).rng.seed = 7 + fighters.size()
-			fighters.append(c)
-	for a in fighters:
-		for c in fighters:
-			if a != c:
-				a.add_collision_exception_with(c)
-	var squad: SquadController = fighters[0].get(&"squad") as SquadController
-	for i in int(seconds / DT):
-		for f in fighters:
-			if is_instance_valid(f) and not f.is_queued_for_deletion():
-				var before := f.global_position
-				f._physics_process(DT)
-				f.global_position = before + f.velocity * DT
-		for f in fighters:
-			if is_instance_valid(f) and not f.is_queued_for_deletion():
-				var brx := f.get_node("Brain") as FighterBrain
-				if brx._telegraph_left >= 0.0 and brx._telegraph_left > 0.3 - DT * 1.5:
-					gut.p("TELEGRAPH %.2f %s" % [i * DT, f.name.right(3)])
-				for pn in ["AimedPool", "ForwardPool"]:
-					var pl := f.get_node(pn) as BulletPool
-					for bl in pl._active.duplicate():
-						gut.p("SHOT %.2f %s" % [i * DT, f.name.right(3)])
-						pl._recycle(bl)
-		if i % every == 0:
-			var line := "%.2f" % (i * DT)
-			for f in fighters:
-				if not is_instance_valid(f) or f.is_queued_for_deletion():
-					continue
-				var br := f.get_node("Brain") as FighterBrain
-				line += " | %s %s %s pos(%d,%d) S(%d,%d) dP%d%s" % [f.name.right(3), R.keys()[squad.role_of(f)].left(6), P.keys()[br.phase].left(5), f.global_position.x, f.global_position.y, br.pass_start.x, br.pass_start.y, f.global_position.distance_to(Vector2(640, 380)), (" k%d L%s D%s sk(%d,%d) hold%.2f" % [br.pass_kind, br.pass_lane, br.pass_dir, br.seek_target.x, br.seek_target.y, br._hold_time]) if br.phase == P.RUN_IN or br.is_holding() else ""]
-			line += " W" if squad.attack_window_open else ""
-			gut.p(line)
-	(w.h.root as Node).get_parent().remove_child(w.h.root)
-	(w.h.root as Node).free()
-	assert_true(true)
+func test_full_cycle() -> void:
+	var forms: Array = OS.get_environment("SW_FORMS").split(",") if OS.get_environment("SW_FORMS") != "" else ["v3", "w5"]
+	var modes: Array = OS.get_environment("SW_MODES").split(",") if OS.get_environment("SW_MODES") != "" else ["open_space", "assault"]
+	var engage := float(OS.get_environment("SW_ENGAGE")) if OS.get_environment("SW_ENGAGE") != "" else 0.0
+	var end_runs := int(OS.get_environment("SW_END")) if OS.get_environment("SW_END") != "" else 3
+	var cap := float(OS.get_environment("SW_CAP")) if OS.get_environment("SW_CAP") != "" else 45.0
+	_sweep("FULL", forms, modes, end_runs, cap, engage)
 
 
 func test_trace() -> void:
-	_trace("assault", "v3", Vector2(170, -240), Vector2(640, 380), 7.0, 6)
-
-
-func test_dense() -> void:
-	_sweep("DENSE", ["v3", "w5"],
-		[Vector2(640, 560), Vector2(480, 520), Vector2(820, 600), Vector2(640, 600), Vector2(400, 480), Vector2(900, 640), Vector2(640, 380)],
-		[Vector2(0, -230), Vector2(-110, -260), Vector2(120, -200), Vector2(0, -250), Vector2(-160, -220), Vector2(170, -240)],
-		["open_space", "assault"])
-
-
-func test_dbg_flanks() -> void:
-	var w := _world("open_space", Vector2(640, 560))
+	if OS.get_environment("SW_TRACE") == "":
+		assert_true(true)
+		return
+	var mode := OS.get_environment("SW_TMODE") if OS.get_environment("SW_TMODE") != "" else "open_space"
+	var px := OS.get_environment("SW_TRACE").split(",")
+	var player := Vector2(float(px[0]), float(px[1]))
+	var at := Vector2(float(px[2]), float(px[3]))
+	var t0 := float(px[4])
+	var t1 := float(px[5])
+	var w := _world(mode, player)
 	var b := WaveBuilder.new()
-	var waves: Array[WaveResource] = [b.wave(0.0, [b.fighter().at(0, -230).formation(_form("v3"))])]
+	var waves: Array[WaveResource] = [b.wave(0.0, [b.fighter().at(at.x, at.y).formation(_form(OS.get_environment("SW_TFORM") if OS.get_environment("SW_TFORM") != "" else "w5"))])]
 	(w.wm as WaveManager).load_section(waves)
 	(w.wm as WaveManager)._process(0.0)
 	var fighters: Array[Fighter] = []
@@ -261,25 +223,116 @@ func test_dbg_flanks() -> void:
 		if c is Fighter:
 			c.set_physics_process(false)
 			(c.get_node("Brain") as FighterBrain).rng.seed = 100 + fighters.size()
-			c.config.flank_wait_max = 600.0
+			if OS.get_environment("SW_TENGAGE") != "":
+				c.config.engage_seconds = float(OS.get_environment("SW_TENGAGE"))
 			fighters.append(c)
 	for a in fighters:
 		for c in fighters:
 			if a != c:
 				a.add_collision_exception_with(c)
 	var squad: SquadController = fighters[0].squad
-	for i in int(8.0 / DT):
+	var t := 0.0
+	var i := 0
+	while t < t1:
 		for f in fighters:
-			if squad.role_of(f) != R.LEAD:
+			if is_instance_valid(f) and not f.is_queued_for_deletion():
 				var before := f.global_position
 				f._physics_process(DT)
 				f.global_position = before + f.velocity * DT
-		if i % 30 == 0:
-			var line := "%.2f" % (i * DT)
+		t += DT
+		i += 1
+		if OS.get_environment("SW_TKILL") != "" and absf(t - float(OS.get_environment("SW_TKILL"))) < DT * 0.5:
 			for f in fighters:
+				if is_instance_valid(f) and squad.role_of(f) == R.LEAD:
+					fighters.erase(f)
+					f.free()
+					break
+		if t >= t0 and i % 6 == 0:
+			var line := "%.2f%s" % [t, " W" if squad.attack_window_open else "  "]
+			for f in fighters:
+				if not is_instance_valid(f) or f.is_queued_for_deletion():
+					continue
 				var br := f.get_node("Brain") as FighterBrain
-				line += " | %s %s pos(%d,%d) S(%d,%d) v%d %s%s" % [R.keys()[squad.role_of(f)].left(6), P.keys()[br.phase].left(5), f.global_position.x, f.global_position.y, br.pass_start.x, br.pass_start.y, f.velocity.length(), " H" if br.is_holding() else "", " ST" if br.is_settled() else ""]
+				line += " | %s %s%s %s%s%s (%d,%d) v%d S(%d,%d) dl%.1f/%.1f p%d" % [f.name.right(2), R.keys()[squad.role_of(f)].left(5), br.pass_role, P.keys()[br.phase].left(5), "H" if br.is_holding() else "", "D" if br._rear_due else "", f.global_position.x, f.global_position.y, f.velocity.length(), br.pass_start.x, br.pass_start.y, br._phase_time, br._deadline, br._path_pts.size()]
 			gut.p(line)
 	(w.h.root as Node).get_parent().remove_child(w.h.root)
 	(w.h.root as Node).free()
+	assert_true(true)
+
+
+## Kill one member (by role) at a given time and measure separation from the kill for `after` seconds.
+func test_kill_sweep() -> void:
+	if OS.get_environment("SW_KILL") == "":
+		assert_true(true)
+		return
+	var role_names := {"lead": R.LEAD, "flank": R.FLANK_LEFT, "flankr": R.FLANK_RIGHT, "rear": R.REAR}
+	var spec := OS.get_environment("SW_KILL").split(",")  # role,time,after
+	var kill_role: int = role_names[spec[0]]
+	var kill_t := float(spec[1])
+	var after := float(spec[2])
+	var forms: Array = OS.get_environment("SW_FORMS").split(",") if OS.get_environment("SW_FORMS") != "" else ["v3", "w5"]
+	var modes: Array = OS.get_environment("SW_MODES").split(",") if OS.get_environment("SW_MODES") != "" else ["open_space"]
+	for mode in modes:
+		for form_name in forms:
+			var fails := 0
+			var worst := INF
+			var n := 0
+			for player in PLAYERS:
+				for at in OFFSETS:
+					var w := _world(mode, player)
+					var b := WaveBuilder.new()
+					var waves: Array[WaveResource] = [b.wave(0.0, [b.fighter().at(at.x, at.y).formation(_form(form_name))])]
+					(w.wm as WaveManager).load_section(waves)
+					(w.wm as WaveManager)._process(0.0)
+					var fighters: Array[Fighter] = []
+					for c in (w.h.root as Node).get_children():
+						if c is Fighter:
+							c.set_physics_process(false)
+							(c.get_node("Brain") as FighterBrain).rng.seed = 100 + fighters.size()
+							fighters.append(c)
+					for a in fighters:
+						for c in fighters:
+							if a != c:
+								a.add_collision_exception_with(c)
+					var squad: SquadController = fighters[0].squad
+					var t := 0.0
+					var killed := false
+					var cyc := INF
+					var note := ""
+					while t < kill_t + after:
+						for f in fighters:
+							if is_instance_valid(f) and not f.is_queued_for_deletion():
+								var before := f.global_position
+								f._physics_process(DT)
+								f.global_position = before + f.velocity * DT
+						t += DT
+						if not killed and t >= kill_t:
+							killed = true
+							for f in fighters:
+								if is_instance_valid(f) and squad.role_of(f) == kill_role:
+									fighters.erase(f)
+									f.free()
+									break
+						if not killed:
+							continue
+						var live: Array[Fighter] = []
+						for f in fighters:
+							if is_instance_valid(f) and not f.is_queued_for_deletion() and squad.role_of(f) != R.NONE:
+								live.append(f)
+						for a in live.size():
+							for c in range(a + 1, live.size()):
+								var d := live[a].global_position.distance_to(live[c].global_position)
+								if d < cyc:
+									cyc = d
+									var ba := live[a].get_node("Brain") as FighterBrain
+									var bc := live[c].get_node("Brain") as FighterBrain
+									note = "%.2f %s(%s)%s/%s(%s)%s" % [t, R.keys()[squad.role_of(live[a])].left(6), ba.pass_role, P.keys()[ba.phase].left(5), R.keys()[squad.role_of(live[c])].left(6), bc.pass_role, P.keys()[bc.phase].left(5)]
+					n += 1
+					worst = minf(worst, cyc)
+					if cyc < 57.2:
+						fails += 1
+						gut.p("  FAIL %s %s P%s at%s %.1f %s" % [mode, form_name, player, at, cyc, note])
+					(w.h.root as Node).get_parent().remove_child(w.h.root)
+					(w.h.root as Node).free()
+			gut.p("KILL %s@%.1f %s %s: fail %d/%d worst %.1f" % [spec[0], kill_t, mode, form_name, fails, n, worst])
 	assert_true(true)

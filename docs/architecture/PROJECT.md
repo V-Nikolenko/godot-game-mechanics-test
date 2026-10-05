@@ -109,7 +109,7 @@ Detail and APIs: [global.md](modules/global.md).
   node dies with its parent in the same frame it would need to be detected in). `BaseEnemy.
   suspend_ai()` arms the profile, so a rail-driven rammer still hurts on contact. Recipe:
   [global.md](modules/global.md) → *ContactProfile and ContactBlast*.
-- **Drones in a group share roles through a board, not a message bus.** `SquadController`
+- **Drones and fighters in a group share roles through a board, not a message bus.** `SquadController`
   (`global/enemy_ai/squad_controller.gd`, `RefCounted`) assigns `LEAD`/`FLANK_LEFT`/
   `FLANK_RIGHT`/`REAR` and reassigns them the instant the lead leaves — it moves nothing itself,
   members read it and request their own motion, so it never touches the single-writer rule above.

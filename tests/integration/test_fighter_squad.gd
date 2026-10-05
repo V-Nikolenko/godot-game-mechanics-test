@@ -390,11 +390,51 @@ func test_a_flank_whose_lead_never_opens_goes_after_flank_wait_max(mode: String 
 					"it goes after flank_wait_max (plus at most its crossing stagger)")
 
 
+## Round-2 review N6: a flank kept off its S — here pinned 50 px off it every tick, as two holders
+## pushing apart or a mate crossing its station again and again would keep it — never settles, so
+## neither a window nor `flank_wait_max` can start it, and Open Space has no budget to end the hold. It
+## still goes once it has been unsettled `UNSETTLED_WAIT_FACTOR` × `flank_wait_max`, and not before.
+func test_a_flank_kept_off_its_station_still_goes() -> void:
+	var w := _world("open_space", PLAYERS[0])
+	var fighters := _spawn(w, [_v3()], OFFSETS[0])
+	var lead := _index_of_role(fighters, R.LEAD)
+	var flank: Fighter = fighters[(lead + 1) % fighters.size()]
+	var brain := _brain(flank)
+	var off := Vector2(50.0, 0.0)
+	assert_lt(off.length(), FighterBrain.HOLD_DRIFT_PX, "sanity: inside the drift limit, so it keeps holding")
+	var pinned_at := -1.0
+	var ran_at := -1.0
+	var t := 0.0
+	for _i in int(round(16.0 / DT)):
+		_tick(flank)  # the LEAD is never ticked: no window ever opens
+		t += DT
+		if brain.phase == P.RUN_IN:
+			ran_at = t
+			break
+		if brain.is_holding():
+			if pinned_at < 0.0:
+				pinned_at = t
+			flank.global_position = brain.pass_start + off
+			flank.velocity = Vector2.ZERO
+	assert_gt(pinned_at, 0.0, "the flank reached its station and held")
+	assert_gt(ran_at, 0.0, "a flank kept off its station still runs")
+	if pinned_at > 0.0 and ran_at > 0.0:
+		var bound := FighterBrain.UNSETTLED_WAIT_FACTOR * CONFIG.flank_wait_max
+		assert_between(ran_at - pinned_at, bound - 2.0 * DT, bound + CONFIG.flank_stagger + 3.0 * DT,
+				"after UNSETTLED_WAIT_FACTOR x flank_wait_max unsettled")
+
+
 # ── Separation, and every attack from the rendezvous ─────────────────────────────────────────────
 
-## Over one attack cycle — from the LEAD opening its first window to its second RUN_IN in Open Space,
-## and to the last fighter leaving in Assault (the shipped budget flies one pass) — no two squad
-## members come within 2 × hull radius, on every layout of the measured grid (V3 and W5). Before the
+## Over a full attack cycle — every window up to and including the first one each REAR flies a dry
+## pass on — no two squad members come within 2 × hull radius, on every layout of the measured grid
+## (V3 and W5). In Open Space that is from the LEAD opening its first window to its first RUN_IN at or
+## after its third, once every REAR has finished a dry pass (round-2 review B1: the REARs fly on the
+## second window, so a measurement that stops at the LEAD's second RUN_IN never sees one); the run
+## asserts it got there (round-2 N3). In Assault it is to the last fighter leaving: the shipped budget
+## flies one pass, and a REAR never dry-passes there (an Assault fighter leaves after `passes`, so its
+## REARs are promoted, not sent on a dry pass). A fighter on its DISENGAGE exit has left the board but
+## still counts (round-2 N4): the give-way yields to an exiting ex-member, so the check measures it. Before the
 ## first window the formation is still fanning out of its 80 px spawn slots, which is the spawn
 ## layout's business (t16), not the squad's (DECISIONS, t9).
 ##
@@ -415,6 +455,9 @@ func test_members_never_come_within_two_hull_radii(mode: String = use_parameters
 				runs += 1
 				var where := "%s %s P%s at%s" % [mode, form_name, player, at]
 				assert_true(res.window_seen, "%s: the LEAD opened a window" % where)
+				if mode == "open_space":
+					assert_gte(res.lead_runs, 3, "%s: the cycle reached the LEAD's third run" % where)
+					assert_eq(res.rears_done, res.rears, "%s: every REAR flew its dry pass inside the cycle" % where)
 				assert_gte(res.sep, 2.0 * res.hull, "%s: members stay apart over the cycle (%s)" % [where, res.sep_note])
 				assert_gt(res.near, res.hull + PLAYER_HURTBOX_RADIUS, "%s: nobody touches the player" % where)
 				assert_eq(res.breaches, [], "%s: every squad run starts from a hold at S" % where)
@@ -434,20 +477,24 @@ func _cycle(mode: String, form_name: String, player_pos: Vector2, at: Vector2) -
 	var hull := _hull(fighters[0])
 	var lead: Fighter = fighters[_index_of_role(fighters, R.LEAD)]
 	var res := {"hull": hull, "sep": INF, "sep_note": "", "near": INF, "breaches": [], "silent_runners": [],
-		"silent_held": 0, "window_seen": false}
+		"silent_held": 0, "window_seen": false, "lead_runs": 0, "rears": 0, "rears_done": 0}
 	var shots := {}
 	var ran := {}
 	var was_hold := {}
 	var was_phase := {}
 	var attackers: Array[Fighter] = []
 	var lead_runs := 0
+	var rears_done := {}
+	var all_dry := false
 	for f in fighters:
+		if squad.role_of(f) == R.REAR:
+			res.rears += 1
 		shots[f] = 0
 		ran[f] = false
 		was_hold[f] = false
 		was_phase[f] = -1
 	var t := 0.0
-	for _i in int(round(20.0 / DT)):
+	for _i in int(round(50.0 / DT)):
 		for f in fighters:
 			if _alive(f):
 				_tick(f)
@@ -465,6 +512,9 @@ func _cycle(mode: String, form_name: String, player_pos: Vector2, at: Vector2) -
 					res.breaches.append("%.2f %s" % [t, R.keys()[squad.role_of(f)]])
 				if f == lead:
 					lead_runs += 1
+					all_dry = all_dry or rears_done.size() >= res.rears
+			if brain.pass_role == R.REAR and was_phase[f] == P.TURN and brain.phase != P.TURN:
+				rears_done[f] = true  # the dry pass is over
 			if brain.phase != P.DISENGAGE:
 				res.near = minf(res.near, f.global_position.distance_to(player.global_position))
 			was_hold[f] = brain.is_holding()
@@ -477,13 +527,11 @@ func _cycle(mode: String, form_name: String, player_pos: Vector2, at: Vector2) -
 		if res.window_seen:
 			for a in live.size():
 				for b in range(a + 1, live.size()):
-					if squad.role_of(live[a]) == R.NONE or squad.role_of(live[b]) == R.NONE:
-						continue  # a fighter on its exit has left the board
 					var d := live[a].global_position.distance_to(live[b].global_position)
 					if d < res.sep:
 						res.sep = d
 						res.sep_note = "%.2f s, %s/%s" % [t, P.keys()[_brain(live[a]).phase], P.keys()[_brain(live[b]).phase]]
-		if mode == "open_space" and lead_runs >= 2:
+		if mode == "open_space" and lead_runs >= 3 and all_dry:
 			break
 		if live.is_empty():
 			break
@@ -494,6 +542,8 @@ func _cycle(mode: String, form_name: String, player_pos: Vector2, at: Vector2) -
 					res.silent_runners.append(f.name)
 				else:
 					res.silent_held += 1
+	res.lead_runs = lead_runs
+	res.rears_done = rears_done.size()
 	_drop(w)
 	return res
 
@@ -626,8 +676,14 @@ func test_every_reposition_seek_target_clears_the_reposition_radius(mode: String
 
 # ── REARs ────────────────────────────────────────────────────────────────────────────────────────
 
-## REARs fire nothing and never light the warning — asserted only once each REAR has actually flown a
-## dry pass (review B4), with a long PRIVATE budget so the Assault REARs live long enough to.
+## REARs fire nothing and never light the warning (review B4: never asserted vacuously), with a long
+## PRIVATE budget:
+## - Open Space: only once each REAR has actually flown a dry pass (it answers every second window, in
+##   the slot after it — task plan §3.4);
+## - Assault: a fighter leaves after `passes` passes, so a REAR never reaches its dry pass there — it
+##   holds through the attackers' windows and is promoted as they leave. The case runs until each REAR
+##   has been promoted and has fired as an attacker: the guard is the role, not the fighter.
+## A FLANK demoted to REAR mid-pass is the next case.
 func test_rears_fire_nothing(mode: String = use_parameters(["open_space", "assault"])) -> void:
 	var w := _world(mode, PLAYERS[0])
 	var fighters := _spawn(w, [_w5()], OFFSETS[0], _long_budget)
@@ -637,19 +693,32 @@ func test_rears_fire_nothing(mode: String = use_parameters(["open_space", "assau
 		if squad.role_of(fighters[k]) == R.REAR:
 			rear_ks.append(k)
 	assert_eq(rear_ks.size(), 2)
-	var rear_runs := {}
-	var state := {"was": {}}
+	var state := {"was": {}, "runs": {}, "windows": {}, "window_was": false, "fired_promoted": {}}
 	var frames := _run(w, fighters, 60.0, func(frame: Dictionary) -> bool:
 		for k in rear_ks:
 			var rec: Variant = frame.f[k]
-			var run: bool = rec != null and rec.phase == P.RUN_IN and rec.pass_role == R.REAR
+			if rec == null:
+				continue
+			var run: bool = rec.phase == P.RUN_IN and rec.pass_role == R.REAR
 			if run and not state.was.get(k, false):
-				rear_runs[k] = rear_runs.get(k, 0) + 1
+				state.runs[k] = state.runs.get(k, 0) + 1
 			state.was[k] = run
-		# Stop once every REAR has finished a dry pass (it has left RUN_IN after one).
-		return rear_ks.all(func(k: int) -> bool: return rear_runs.get(k, 0) >= 1 and not state.was.get(k, false)))
+			if frame.window and not state.window_was and rec.role == R.REAR:
+				state.windows[k] = state.windows.get(k, 0) + 1
+			if rec.role != R.REAR and rec.pass_role != R.REAR and rec.shots > 0:
+				state.fired_promoted[k] = true
+		state.window_was = frame.window
+		if mode == "open_space":
+			# Stop once every REAR has finished a dry pass (it has left RUN_IN after one).
+			return rear_ks.all(func(k: int) -> bool: return state.runs.get(k, 0) >= 1 and not state.was.get(k, false))
+		return rear_ks.all(func(k: int) -> bool: return state.fired_promoted.has(k)))
 	for k in rear_ks:
-		assert_gte(rear_runs.get(k, 0), 1, "precondition: REAR %d flew a dry pass" % k)
+		if mode == "open_space":
+			assert_gte(state.runs.get(k, 0), 1, "precondition: REAR %d flew a dry pass" % k)
+		else:
+			assert_gte(state.windows.get(k, 0), 1, "precondition: REAR %d held through a window as REAR" % k)
+			assert_eq(state.runs.get(k, 0), 0, "an Assault REAR is promoted, never sent on a dry pass")
+			assert_true(state.fired_promoted.has(k), "precondition: REAR %d was promoted and then fired" % k)
 	var rear_shots := 0
 	var rear_charging := 0
 	var attacker_shots := 0
@@ -666,6 +735,51 @@ func test_rears_fire_nothing(mode: String = use_parameters(["open_space", "assau
 	assert_eq(rear_shots, 0, "REAR passes are dry")
 	assert_eq(rear_charging, 0, "and never light the warning")
 	assert_gt(attacker_shots, 0, "sanity: the attackers fire")
+
+
+## Round-2 review N2: a FLANK demoted to REAR mid-run — by a closer member joining, here the board's
+## `_reassign(force_rear)` seam (`release_lead()`'s rotation) so the demoted runner is the one chosen —
+## fires nothing from that tick on, although its latched pass is still a FLANK's. A control run of the
+## same seeded squad with no demotion proves that very pass fires, so the case has teeth: only the
+## current-role REAR gate (`_try_open_burst()`) holds it.
+func test_a_flank_demoted_to_rear_mid_run_fires_nothing_after(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var fired := []
+	for demote in [false, true]:
+		var w := _world(mode, PLAYERS[0])
+		var fighters := _spawn(w, [_v3()], OFFSETS[0], _long_budget)
+		var squad: SquadController = fighters[0].squad
+		var runner_k := [-1]
+		_run(w, fighters, 12.0, func(frame: Dictionary) -> bool:
+			for k in frame.f.size():
+				var rec: Variant = frame.f[k]
+				if rec != null and rec.phase == P.RUN_IN and (rec.pass_role == R.FLANK_LEFT or rec.pass_role == R.FLANK_RIGHT):
+					runner_k[0] = k
+					return true
+			return false)
+		assert_ne(runner_k[0], -1, "a flank started its run")
+		if runner_k[0] == -1:
+			_drop(w)
+			return
+		var runner := fighters[runner_k[0]]
+		var brain := _brain(runner)
+		var latched := brain.pass_role
+		if demote:
+			squad._reassign(runner)
+			assert_eq(squad.role_of(runner), R.REAR, "sanity: demoted to REAR mid-run")
+		var shots := 0
+		var t := 0.0
+		while t < 4.0 and (brain.phase == P.RUN_IN or brain.phase == P.EXTEND):
+			for f in fighters:
+				if _alive(f):
+					_tick(f)
+			t += DT
+			shots += _take_shots(runner)
+			if demote:
+				assert_eq(brain.pass_role, latched, "the latched pass is still the flank's")
+		fired.append(shots)
+		_drop(w)
+	assert_gt(fired[0], 0, "control: this very pass fires when the flank keeps its role")
+	assert_eq(fired[1], 0, "demoted mid-run, it fires nothing")
 
 
 # ── Edges ────────────────────────────────────────────────────────────────────────────────────────

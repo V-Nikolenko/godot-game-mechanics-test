@@ -339,6 +339,11 @@ there is no clock and no `_process`.
   `WeakRef`.
 - Brains read it through a duck-typed `actor.squad` property; `null` means "a squad of one".
   `EnemyBrain` itself gained nothing — this is entirely a brain-side convention.
+- **Consumers:** the Swarm Drone (`swarm_drone_brain.gd`, Ph2) and the Fighter (`fighter_brain.gd`, Ph3 t9). Each
+  brain gives `attack_window_open` its own timing — the Fighter LEAD opens it on its RUN_IN entry and closes it on its
+  own EXTEND entry, and FLANKs answer each window once; REARs fly dry passes in a slot between windows. Details beside
+  each entity (`assault/scenes/enemies/fighter/ENEMY.md` → *Squad*). Every board role is recomputed by distance on
+  every join/leave, so a brain must expect a role (and its station) to change after any death.
 
 ### AnchorIdle — `anchor_idle.gd`
 
