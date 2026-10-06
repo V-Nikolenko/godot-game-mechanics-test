@@ -1,0 +1,113 @@
+extends GutTest
+const HARNESS := preload("res://tests/helpers/enemy_ai_harness.gd")
+
+var _container: Node2D
+var _seen := {}
+var _shots: Array = []   # [time, count]
+var _alive_peak := 0
+var _min_sep := INF
+var _min_sep_t := -1.0
+var _spawned := 0
+var _left := 0
+var _exit_phases := {}
+
+func _section(script_path: String, name: StringName) -> LevelSection:
+	var d: Node = load(script_path).new()
+	autofree(d)
+	for s in d._build_sections():
+		if s.section_name == name:
+			return s
+	return null
+
+func _sim(script_path: String, name: StringName, seconds: float) -> void:
+	_seen = {}; _shots = []; _alive_peak = 0; _min_sep = INF; _spawned = 0; _left = 0; _exit_phases = {}
+	var section := _section(script_path, name)
+	var waves: Array[WaveResource] = []
+	for w in section.waves:
+		var nw := WaveResource.new()
+		nw.trigger_time = w.trigger_time
+		var es: Array[SpawnEntryResource] = []
+		for e in w.entries:
+			if e.ship_scene and (e.ship_scene.resource_path == WaveBuilder.FIGHTER or e.ship_scene.resource_path == WaveBuilder.GATLING_INTERCEPTOR):
+				es.append(e)
+		nw.entries = es
+		if not es.is_empty():
+			waves.append(nw)
+	var h = HARNESS.assault()
+	add_child_autofree(h.root)
+	var cam := h.root.get_node("ArenaCamera") as Camera2D
+	cam.make_current()
+	h.player.global_position = cam.global_position + Vector2(0.0, 250.0)
+	_container = Node2D.new()
+	_container.name = "EnemyContainer"
+	h.root.add_child(_container)
+	var wm := WaveManager.new()
+	wm.enemy_container = _container
+	h.root.add_child(wm)
+	wm.enemy_spawned.connect(func(e: Node, _i: int) -> void:
+		_spawned += 1
+		e.tree_exiting.connect(func() -> void:
+			_left += 1
+			var b = e.get_node_or_null("Brain")
+			var k := "%s:%s" % [e.get_script().get_global_name(), str(b.phase) if b else "-"]
+			_exit_phases[k] = int(_exit_phases.get(k, 0)) + 1))
+	wm.load_section(waves)
+	var t := 0.0
+	while t < seconds:
+		await get_tree().physics_frame
+		t += get_physics_process_delta_time()
+		var new_shots := 0
+		var ships: Array[Node2D] = []
+		for c in _container.get_children():
+			if c is EnemyBullet:
+				if c.visible:
+					var id := c.get_instance_id()
+					if not _seen.has(id):
+						new_shots += 1
+					_seen[id] = true
+				else:
+					_seen.erase(c.get_instance_id())
+			elif c is BaseEnemy and not c.is_queued_for_deletion():
+				ships.append(c)
+		# drop bullets no longer active
+		for id in _seen.keys():
+			var o = instance_from_id(id)
+			if o == null or not (o as Node2D).visible or (o as Node).get_parent() != _container:
+				_seen.erase(id)
+		if new_shots > 0:
+			_shots.append([t, new_shots])
+		_alive_peak = maxi(_alive_peak, ships.size())
+		for i in ships.size():
+			for j in range(i + 1, ships.size()):
+				var d := ships[i].global_position.distance_to(ships[j].global_position)
+				if d < _min_sep:
+					_min_sep = d; _min_sep_t = t
+	var report := ""
+	for win in [1.0, 2.0, 5.0]:
+		var peak := 0
+		for a in _shots:
+			var n := 0
+			for b in _shots:
+				if b[0] >= a[0] and b[0] < a[0] + win:
+					n += b[1]
+			peak = maxi(peak, n)
+		report += " peak/%.0fs=%.2f/s" % [win, peak / win]
+	var total := 0
+	for a in _shots: total += a[1]
+	gut.p("%s %s: spawned %d left %d alive_peak %d total_shots %d%s min_sep %.1f@%.1f exits %s" % [script_path.get_file(), name, _spawned, _left, _alive_peak, total, report, _min_sep, _min_sep_t, str(_exit_phases)])
+
+func test_ai_deep() -> void:
+	await _sim("res://assault/scenes/levels/edelia/1/level_1_director.gd", &"deep_space", 42.0)
+	assert_true(true)
+
+func test_legacy_deep() -> void:
+	await _sim("res://tests/scratch/legacy_director.gd", &"deep_space", 42.0)
+	assert_true(true)
+
+func test_ai_planet() -> void:
+	await _sim("res://assault/scenes/levels/edelia/1/level_1_director.gd", &"planet_approach", 120.0)
+	assert_true(true)
+
+func test_legacy_planet() -> void:
+	await _sim("res://tests/scratch/legacy_director.gd", &"planet_approach", 120.0)
+	assert_true(true)

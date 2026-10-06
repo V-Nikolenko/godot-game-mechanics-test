@@ -1214,3 +1214,21 @@ flies a dry pass on), which relaxes nothing. Later tasks depend on these.
 - Shooter rng seeds are drawn after the drones', so the Swarm and Razor seeds for a given `patrol_seed` are unchanged.
 - `test_sector_hub_patrol.gd`: per-group counts replace the total-child-count assertion; clearance rows for both new groups;
   shared anchors, frame-0 IDLE, and a fighter Pulse / Gatling round landing in `EnemyContainer`.
+
+### Phase 3, t16 (level 1 deep_space / planet_approach off rails): escalated, nothing built (2026-10-06)
+
+Findings: `docs/plans/cmulwkarm00cpqj2xfwq3ue8h/5-escalation.md`. The level and the t1 pin are unchanged; the mechanical
+level edit is kept as `prototype/level1_duration_rails_off.patch`. What later tasks need to know now:
+
+- **The epic §2.9.2 shots/s gate cannot pass with the pre-approved levers.** With the plan's numerator (fighter 7 / 1.55
+  = 4.52, Gatling 12 / 2.8 = 4.29 shots/s per attack-capable ship) deep_space computes 58.25 against a 39.06 limit
+  (1.86×) and planet_approach 63.23 against 41.67 (1.90×). Lever 1 leaves deep_space unchanged (its peak is set by
+  overlapping *spawn times*), lever 2 changes nothing (the budget bounds the lifetime), lever 3 raises the attacker
+  count. The all-alive (≤ 2.0×: 17, 16) and capable (≤ 1.5×: 13, 14) gates pass.
+- **The AI is much quieter than the analytic model says.** A real run (stationary player) fires 114 shots in each
+  section against the rails' 524 / 1029; peak shots/s over 2 s is 12.0 / 6.5 against the rails' 31.0 / 35.0 (which
+  reproduce the frozen constants). An Assault fighter fires about one burst per life.
+- **Awaiting the owner:** which shots/s check replaces or relaxes the analytic one (options A–E in the escalation; A, a
+  measured real-run check, is recommended). t17 (cloud_descent) will meet the same gate shape.
+- **Separation in the shipped formations** (the t9 note): closest approach 50.4 / 54.0 px against a 57.2 px hull
+  diameter — brief contacts. Not gated.
