@@ -154,7 +154,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `AnimatedSprite2D.sprite_frames` and `AtlasTexture.atlas` — a `Sprite2D`-only walk finds 9
   textures and four of its five roots contribute nothing. Fix a sprite that trips it with
   `./scripts/strip-sprite-bg.sh <png>` (border flood fill, then `--import`) rather than a
-  regeneration, which spends the capped monthly PixelLab allowance and cannot be undone.
+  regeneration, which gives a different sprite and so breaks a set drawn to match it.
   `tests/integration/test_config_instance_isolation.gd` is a ninth, over resource **ownership**:
   no two entity instances may share a `*_config.tres` object, the private copy must be
   value-identical to the shipped `.tres`, and every config class must stay flat enough for the
@@ -283,8 +283,12 @@ covers tool choice per asset type, safe binary saving via `scripts/pixellab.sh` 
 tool corrupts PNGs), and the mandatory visual check on every generated image.
 
 `infiltration/` is the one genuinely isometric mode and is out of scope for that skill.
-A wrong-angle sprite cannot be fixed in code; it has to be regenerated from a capped
-monthly allowance. Do not skip the check.
+A wrong-angle sprite cannot be fixed in code; it has to be regenerated. Do not skip the check.
+
+**Use PixelLab freely.** The plan gives about 1,500 generations a month and the project uses a
+handful a week. Generate candidates for important art, regenerate what is wrong, and refine what
+is only acceptable until it is good; do not settle for the first result to save generations. The
+skill's §5 and §7 say how far to go and when to stop.
 
 ## MANDATORY — match the process to the work
 
