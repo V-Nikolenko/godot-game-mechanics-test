@@ -261,6 +261,7 @@ const FIGHTER_CONFIG: FighterConfig = \
 func _spawn_fighter(harness, pos: Vector2) -> Fighter:
 	var entity := FIGHTER_SCENE.instantiate() as Fighter
 	entity.global_position = pos
+	(entity.get_node("Brain") as FighterBrain).start_engaged = true  # pre-t12: predates the hub idle
 	harness.root.add_child(entity)
 	entity.set_physics_process(false)  # hand-ticked, same technique as the Razor Drone above
 	return entity
@@ -317,6 +318,7 @@ func _spawn_gatling(harness, pos: Vector2) -> GatlingInterceptor:
 	var entity := GATLING_SCENE.instantiate() as GatlingInterceptor
 	entity.global_position = pos
 	(entity.get_node("Brain") as GatlingInterceptorBrain).rng_seed = 3
+	(entity.get_node("Brain") as GatlingInterceptorBrain).start_engaged = true  # pre-t12: predates the hub idle
 	harness.root.add_child(entity)
 	entity.set_physics_process(false)  # hand-ticked, same technique as the Razor Drone above
 	return entity

@@ -22,6 +22,12 @@
 ##                           `regroup_seconds` first.
 ##   DISENGAGE  [DISENGAGE]  Assault only: budget expiry or `passes` done (deferred to the end of a
 ##                           running burst); release the corridor, curve out of the world rect, free.
+##   IDLE       [SEARCH]     Open Space only (t12): a slow ring orbit round `patrol_anchor`, no shots.
+##   NOTICING   [SEARCH]     a beat: the light blinks once and the fighter faces the player, then APPROACH.
+##   RETURNING  [REPOSITION] `arrive` back at `patrol_anchor` (never interrupts a burst), then IDLE.
+##
+## Hub idle (epic §2.10, X2): `AnchorIdle` on the squad's shared `patrol_anchor`, the Swarm Drone's shape.
+## Assault (`EngagementBudget.active`) and the `start_engaged` test seam skip it and start in APPROACH.
 ##
 ## The pass is re-derived every tick until RUN_IN (so it follows the player's heading and the squad
 ## role) and latched from RUN_IN entry to EXTEND's end, lead time included.
@@ -50,8 +56,8 @@
 class_name FighterBrain
 extends EnemyBrain
 
-## t12 appends IDLE, NOTICING and RETURNING.
-enum Phase { APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE }
+## IDLE, NOTICING and RETURNING are appended (t12) so the earlier values do not move.
+enum Phase { APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING }
 ## The shape of a pass (epic §2.4.1). The solo alternation uses the flank shapes at `pass_offset`;
 ## squad roles (and the `forced_pass_kind` seam) use FLANK_RIGHT's outer lane. REAR is a squad REAR's
 ## dry pass.
@@ -139,6 +145,20 @@ var rail_aim_mode: String = "PLAYER"
 var forward_attack: AttackController
 ## Test seam: ≥ 0 makes every pass this `PassKind`, with its role-shaped lane, and no squad hold.
 var forced_pass_kind: int = -1
+## The Open Space hub idle's ring centre. `Vector2.INF` (unset) means "not set" — `_start()` then
+## defaults it to the spawn position, so a loose fighter with no owner still patrols somewhere.
+var patrol_anchor: Vector2 = Vector2.INF
+## Test seam (t12): every pre-idle test sets this so a spawned fighter starts already fighting, the
+## only behaviour that existed before. Real spawns (SectorHub) never set it — an Open Space fighter
+## patrols `patrol_anchor` until it perceives the player. Assault ignores it: `EngagementBudget.active`
+## alone decides combat-from-spawn there.
+var start_engaged: bool = false
+## Open Space only (`budget.active == false` and not `start_engaged`); null otherwise. Built once, in
+## `_start()`.
+var anchor_idle: AnchorIdle
+## This fighter's offset on the idle ring (rad), drawn from `rng` when the idle starts (never for an
+## engaged fighter, so a seeded combat sequence is unchanged).
+var idle_phase_offset: float = 0.0
 
 var phase: Phase = Phase.APPROACH
 ## Built on the first tick. Null before it.
@@ -255,9 +275,14 @@ func tick(delta: float) -> void:
 			_answered_window = false
 	if budget.update(delta) and phase != Phase.DISENGAGE:
 		_request_disengage()
+	if anchor_idle != null:
+		_tick_anchor_idle(delta, target, squad)
 	_tick_weapons(delta, target)
 	var was := phase
 	match phase:
+		Phase.IDLE: _tick_idle(delta, target)
+		Phase.NOTICING: _tick_noticing(target)
+		Phase.RETURNING: _tick_returning(target)
 		Phase.APPROACH: _tick_approach(delta, target)
 		Phase.RUN_IN: _tick_run_in(delta, target)
 		Phase.EXTEND: _tick_extend(target)
@@ -293,12 +318,17 @@ func enter_phase(p: Phase) -> void:
 			_enter_turn()
 		Phase.DISENGAGE:
 			_enter_disengage()
+		Phase.IDLE, Phase.RETURNING:
+			_enter_calm()
+		Phase.NOTICING:
+			_enter_noticing()
 	phase_changed.emit(p)
 
 
 ## `BaseEnemy.suspend_ai()`: a rail took the enemy over. Self-timed fire from the same pool, from
 ## config fields (`rail_*`), so the round-lifetime sweep reads the same numbers the rail fires with.
 func on_suspended() -> void:
+	anchor_idle = null  # a rail owns the motion: no idle
 	_abort_burst()
 	_set_light(StateLight.State.OFF)
 	var squad := _squad()
@@ -367,6 +397,103 @@ func _start() -> void:
 	_started = true
 	budget = EngagementBudget.new(config.engage_seconds, get_tree())
 	_deadline = config.reposition_max
+	if not patrol_anchor.is_finite():
+		patrol_anchor = actor.global_position
+	if not budget.active and not start_engaged:
+		anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time, config.idle_radius)
+		idle_phase_offset = rng.randf_range(0.0, TAU)
+		enter_phase(Phase.IDLE)
+
+
+# ── Hub idle (t12; epic §2.10) ───────────────────────────────────────────────────────────────────
+
+## The meta-state that decides whether this member is patrolling, noticing or fighting, run once a tick
+## ahead of the phase dispatch (the Swarm Drone's shape): `anchor_idle` tracks the fighter's own
+## proximity to the target whatever pass it is in, and a squad returns together because
+## `hold_combat` keeps every member fighting while any one of them is engaged.
+func _tick_anchor_idle(delta: float, target: TargetInfo, squad: SquadController) -> void:
+	if squad != null and _is_calm() and squad.is_engaged():
+		anchor_idle.force_notice()
+	var state := anchor_idle.update(delta, actor.global_position, target)
+	if squad != null:
+		# Engaged only while perceiving/fighting AND within lose_radius — never from hold_combat alone,
+		# or a member held in COMBAT by its mates could never stop reporting engaged.
+		var near := target.has_target and actor.global_position.distance_squared_to(target.position) < config.lose_radius * config.lose_radius
+		squad.set_engaged(actor, (state == AnchorIdle.State.NOTICING or state == AnchorIdle.State.COMBAT) and near)
+		anchor_idle.hold_combat = squad.is_engaged()
+	match state:
+		AnchorIdle.State.IDLE:
+			if phase != Phase.IDLE and not is_bursting():
+				enter_phase(Phase.IDLE)
+		AnchorIdle.State.NOTICING:
+			if phase != Phase.NOTICING and not is_bursting():
+				enter_phase(Phase.NOTICING)
+		AnchorIdle.State.COMBAT:
+			# From NOTICING only: any other phase is already fighting.
+			if phase == Phase.NOTICING:
+				passes_done = 0
+				enter_phase(Phase.APPROACH)
+		AnchorIdle.State.RETURNING:
+			# Neither this nor IDLE or NOTICING interrupts a burst: retried every tick until it has ended.
+			if phase != Phase.RETURNING and not is_bursting():
+				enter_phase(Phase.RETURNING)
+
+
+func _is_calm() -> bool:
+	return phase == Phase.IDLE or phase == Phase.RETURNING
+
+
+## IDLE and RETURNING entry: forget the pass in progress, so the next fight starts from a clean APPROACH.
+func _enter_calm() -> void:
+	_clear_path()
+	_latched = false
+	_pass_prepared = false
+	_leg_a_open = false
+	_leg_b_open = false
+	_regroup_pending = false
+	_loiter_time = -1.0
+	_hold_time = -1.0
+	_stagger_left = -1.0
+	_wait_time = 0.0
+	_rear_due = false
+	_answered_window = false
+	var squad := _squad()
+	if squad != null and squad.role_of(actor) == SquadController.Role.LEAD:
+		squad.attack_window_open = false
+	pass_role = -1
+	_set_light(StateLight.State.OFF)
+
+
+func _enter_noticing() -> void:
+	var light := actor.get_node_or_null("StateLight") as StateLight if actor != null else null
+	if light != null:
+		light.set_state(StateLight.State.OFF)
+		light.blink_once()
+
+
+func _tick_noticing(target: TargetInfo) -> void:
+	if target.has_target:
+		mover.face_toward(target.position)
+
+
+func _tick_returning(_target: TargetInfo) -> void:
+	mover.arrive(patrol_anchor, config.max_speed)
+
+
+func _tick_idle(_delta: float, _target: TargetInfo) -> void:
+	mover.orbit(patrol_anchor, config.idle_radius, _idle_ring_angle(), config.max_speed)
+
+
+## `offset + index × TAU / n + idle_speed × t`: `index` is the member's join order among the whole
+## squad — a squad of one (or no squad) is index 0 of 1 — so a squad spreads round one shared ring.
+func _idle_ring_angle() -> float:
+	var squad := _squad()
+	var index := 0
+	var n := 1
+	if squad != null:
+		index = maxi(squad.member_index(actor), 0)
+		n = maxi(squad.member_count(), 1)
+	return idle_phase_offset + index * TAU / n + config.idle_speed * _phase_time
 
 
 # ── Pass geometry (epic §2.4.1) ──────────────────────────────────────────────────────────────────

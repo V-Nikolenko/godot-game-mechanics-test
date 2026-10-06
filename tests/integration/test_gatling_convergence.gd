@@ -53,6 +53,7 @@ func _spawn(h: RefCounted, pos: Vector2, board: SquadController, configure: Call
 	g.global_position = pos
 	g.squad = board
 	(g.get_node("Brain") as GatlingInterceptorBrain).rng_seed = rng_seed
+	(g.get_node("Brain") as GatlingInterceptorBrain).start_engaged = true  # pre-t12: predates the hub idle
 	if configure.is_valid():
 		configure.call(g.config)
 	h.root.add_child(g)

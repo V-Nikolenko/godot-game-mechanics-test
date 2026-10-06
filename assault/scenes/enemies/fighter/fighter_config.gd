@@ -86,6 +86,17 @@ extends ShipConfig
 ## Open Space: after `passes` passes, the fighter holds its next start point this long (s).
 @export var regroup_seconds: float = 1.5
 
+@export_group("Idle")
+## Open Space only (epic §2.10). `perceive_radius` is at least `fire_range`, or the fighter would shoot
+## before it noticed; `lose_radius` is the hysteresis margin that keeps it from flipping at the edge (px).
+@export var perceive_radius: float = 540.0
+@export var lose_radius: float = 900.0
+## The beat between perceiving the player and fighting (s).
+@export var notice_time: float = 0.35
+## The patrol ring's radius round `patrol_anchor` (px) and its angular speed (rad/s).
+@export var idle_radius: float = 150.0
+@export var idle_speed: float = 0.5
+
 @export_group("Rail")
 ## The rail fallback (plan §2.8): what a fighter does while an `EnemyPathMover` owns its motion.
 ## Read only by `FighterBrain.on_suspended()`; an AI fighter ignores `aim_mode`.

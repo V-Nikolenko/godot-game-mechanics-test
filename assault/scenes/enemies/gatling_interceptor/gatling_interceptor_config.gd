@@ -72,6 +72,18 @@ extends ShipConfig
 @export var engage_seconds: float = 7.0
 @export var exit_speed: float = 520.0
 
+@export_group("Idle")
+## Open Space only (epic §2.10). `perceive_radius` is at least `preferred_range`, or the Gatling would
+## open fire before it noticed; `lose_radius` is the hysteresis margin that keeps it from flipping at the
+## edge (px).
+@export var perceive_radius: float = 560.0
+@export var lose_radius: float = 900.0
+## The beat between perceiving the player and fighting (s).
+@export var notice_time: float = 0.35
+## The patrol ring's radius round `patrol_anchor` (px) and its angular speed (rad/s).
+@export var idle_radius: float = 150.0
+@export var idle_speed: float = 0.5
+
 @export_group("Rail")
 ## The rail fallback (plan §2.8): the legacy constant stream, fired while an `EnemyPathMover` owns the
 ## motion. Read only by `GatlingInterceptorBrain.on_suspended()`.

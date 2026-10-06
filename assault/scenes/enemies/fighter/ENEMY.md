@@ -43,7 +43,7 @@ is 20, the FORWARD rail cadence 12, the aimed rail cadence 7; the Scatter burst 
 
 ## Brain phases (`FighterBrain.Phase`)
 
-`APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE` (t12 appends the idle phases). `phase_changed(new_phase: int)`
+`APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING` (the idle phases were appended in t12 so the earlier values did not move). `phase_changed(new_phase: int)`
 fires on every transition; `enter_phase()` is the one transition path.
 
 **A pass** (epic §2.4.1) is a bearing `b` (the side it comes from), a run direction `u = −b` and a lane `l ⟂ u`. It
@@ -181,3 +181,18 @@ fighter/
 ├── fighter_brain.gd   (uses global/enemy_ai/dubins_path.gd)
 └── fighter_config.gd / .tres
 ```
+
+## Hub idle (t12, epic §2.10, X2)
+
+Open Space only. A fighter with no `EngagementBudget` (no Assault arena) and `start_engaged == false` builds an
+`AnchorIdle` on `patrol_anchor` (`Vector2.INF` = its spawn point; `SectorHub` sets one shared anchor per squad) and
+starts in **IDLE**: a slow ring orbit (`idle_radius` 150, `idle_speed` 0.5 rad/s, angle = `idle_phase_offset +
+member_index × TAU / member_count + idle_speed × t`), no shots. Within `perceive_radius` (540, ≥ `fire_range`) it goes
+**NOTICING** (one `blink_once`, nose on the player, `notice_time` 0.35 s), then APPROACH. Engagement is recomputed
+every tick; a squad stays engaged while any member is (`hold_combat`) and goes **RETURNING** together beyond
+`lose_radius` (900), `arrive`-ing at the anchor, then IDLE. Entering IDLE/RETURNING drops the pass in progress, closes a
+LEAD's window and clears the path.
+
+IDLE, NOTICING and RETURNING never interrupt a telegraph or burst: the phase change is retried every tick until
+`is_bursting()` is false. Assault skips idle. `start_engaged` is a test seam that every combat test sets; real spawns
+never do. `idle_phase_offset` is drawn from `rng` only when idle starts, so a seeded combat sequence is unchanged.

@@ -79,6 +79,7 @@ func _spawn(w: Dictionary, formations: Array, at: Vector2, configure: Callable =
 		if c is Fighter:
 			c.set_physics_process(false)
 			_brain(c).rng.seed = SEED + out.size()
+			_brain(c).start_engaged = true  # pre-t12: predates the hub idle
 			if configure.is_valid():
 				configure.call(c.config)
 			out.append(c)

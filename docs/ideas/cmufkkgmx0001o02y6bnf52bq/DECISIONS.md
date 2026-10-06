@@ -1187,3 +1187,16 @@ flies a dry pass on), which relaxes nothing. Later tasks depend on these.
     timer). t16 must re-run separation on whatever formations it ships.
   - **Spawn fan-out** before the first window (19 of 168 layouts, measured for Revision 2) is t16's spawn-layout problem.
   - **`_mates()` scans the `enemies` group** per tick; fine at V3/W5, revisit for larger squads.
+
+### Phase 3, built in t12 (Fighter and Gatling hub idle) (2026-10-06)
+
+- **Shape:** both brains append `IDLE, NOTICING, RETURNING` (Fighter 6/7/8, Gatling 7/8/9) and use the Swarm's `AnchorIdle`
+  meta-state. `patrol_anchor` and `start_engaged` are brain fields (the hub, t13, sets `patrol_anchor` on the brain before
+  `add_child`); the radii live on the config: `perceive_radius` 540 / 560, `lose_radius` 900, `notice_time` 0.35,
+  `idle_radius` 150, `idle_speed` 0.5 (Fighter / Gatling) **[judgement]**.
+- **Deviation from the Swarm shape:** the Swarm defers only RETURNING while it bursts. Here **IDLE and NOTICING are deferred too**
+  (fighter: while `is_bursting()`; Gatling: while `is_in_window()`, so a yellow light is always followed by its stream).
+  Without it a shooter already near its anchor goes COMBAT → RETURNING → IDLE in one burst and keeps firing from IDLE.
+- `idle_phase_offset` is drawn in `_start()` only when idle begins, never in `_ready()`, so seeded combat sequences are unchanged.
+- Every earlier fighter/Gatling test spawns through a helper that sets `start_engaged`; new cold-start cases are at the end of
+  `test_fighter.gd` and `test_gatling_interceptor.gd`.

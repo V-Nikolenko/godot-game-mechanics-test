@@ -6,8 +6,7 @@ player. It fires one readable stream there, goes quiet, and swings round to the 
 *going*. Move across it, or away from it, and the pressure stops until it comes round again.
 
 Plan: `docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md` §2.6 and §2.8. Task plan, with the numbers and the one
-deviation: `docs/plans/cmulwkar600c1qj2xnqykqsvo/3-plan.md`. Convergence fire for a pair is built (t11, below); hub idle (t12) is
-not built yet.
+deviation: `docs/plans/cmulwkar600c1qj2xnqykqsvo/3-plan.md`. Convergence fire for a pair is built (t11, below); hub idle (t12) is built (below).
 
 ---
 
@@ -144,3 +143,12 @@ gatling_interceptor/
 ├── gatling_interceptor_brain.gd     (GatlingInterceptorBrain)
 └── gatling_interceptor_config.gd / .tres
 ```
+
+## Hub idle (t12, epic §2.10, X2)
+
+Open Space only, the Fighter's shape (see `fighter/ENEMY.md`): `AnchorIdle` on `patrol_anchor`, **IDLE** (ring orbit,
+`idle_radius` 150, no shots), **NOTICING** (a blink, nose on the player) within `perceive_radius` 560 (≥
+`preferred_range`), then APPROACH; **RETURNING** beyond `lose_radius` 900. Phases `IDLE, NOTICING, RETURNING` are
+appended after DISENGAGE. IDLE, NOTICING and RETURNING never interrupt a *window* (SWING_IN, SPIN_UP or STREAM): a
+yellow light is always followed by its stream, so the change waits for COOLDOWN. Entering IDLE/RETURNING clears the
+latched side, so the next fight picks its first flank afresh. Assault skips idle; `start_engaged` is the test seam.

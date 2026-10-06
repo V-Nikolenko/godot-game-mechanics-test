@@ -41,6 +41,7 @@ func _spawn(h: RefCounted, pos: Vector2, configure: Callable = Callable(), rng_s
 	var g := SCENE.instantiate() as GatlingInterceptor
 	g.global_position = pos
 	(g.get_node("Brain") as GatlingInterceptorBrain).rng_seed = rng_seed
+	(g.get_node("Brain") as GatlingInterceptorBrain).start_engaged = true  # pre-t12: predates the hub idle
 	if configure.is_valid():
 		configure.call(g.config)
 	h.root.add_child(g)
@@ -728,3 +729,225 @@ func test_the_state_light_sits_on_the_hull() -> void:
 	var local := (g.get_node("StateLight") as Node2D).position - sprite.position + Vector2(img.get_size()) * 0.5
 	g.free()
 	assert_gt(img.get_pixelv(Vector2i(local)).a, 0.99, "StateLight at texture pixel %s is on opaque hull" % local)
+
+
+# ══ t12: hub idle (epic §2.10, X2; task docs/plans/cmulwkarc00c9qj2xd96u20gn) ═══════════════════════
+#
+# Cold-start helpers: unlike `_spawn()` (which sets `start_engaged = true`, so every case above keeps
+# assuming combat-from-spawn exactly as before this task), these leave the brain to decide for itself —
+# Open Space starts IDLE, Assault starts in combat.
+
+const FAR_AWAY := Vector2(100000.0, 100000.0)
+
+
+func _idle_spawn(h: RefCounted, pos: Vector2, squad: SquadController = null, anchor: Vector2 = Vector2.INF) -> GatlingInterceptor:
+	var g := SCENE.instantiate() as GatlingInterceptor
+	g.global_position = pos
+	g.squad = squad
+	_brain(g).rng_seed = SEED
+	_brain(g).patrol_anchor = anchor
+	h.root.add_child(g)
+	g.set_physics_process(false)
+	return g
+
+
+## One squad, one shared `patrol_anchor` on every member (as `SectorHub` will), each at `anchor + offsets[i]`.
+func _idle_squad(h: RefCounted, anchor: Vector2, offsets: Array) -> Array[GatlingInterceptor]:
+	var squad := SquadController.new()
+	var out: Array[GatlingInterceptor] = []
+	for off in offsets:
+		out.append(_idle_spawn(h, anchor + off, squad, anchor))
+	return out
+
+
+func _tick_all(gatlings: Array[GatlingInterceptor]) -> void:
+	for g in gatlings:
+		_tick(g)
+
+
+## Ticks `g` until `cond` is true or `seconds` run out; returns whether it became true.
+func _until(g: GatlingInterceptor, seconds: float, cond: Callable) -> bool:
+	for _i in int(seconds / DT):
+		_tick(g)
+		if cond.call():
+			return true
+	return false
+
+
+func _in_fight(g: GatlingInterceptor) -> bool:
+	var p := _brain(g).phase
+	return p != P.IDLE and p != P.NOTICING and p != P.RETURNING
+
+
+func test_idle_phases_are_appended_so_the_earlier_values_do_not_move() -> void:
+	assert_eq(P.APPROACH, 0)
+	assert_eq(P.DISENGAGE, 6)
+	assert_eq(P.IDLE, 7)
+	assert_eq(P.NOTICING, 8)
+	assert_eq(P.RETURNING, 9)
+
+
+func test_the_idle_radii_clear_the_preferred_range_with_a_hysteresis_margin() -> void:
+	assert_gte(CONFIG.perceive_radius, CONFIG.preferred_range, "it must notice the player before it can shoot")
+	assert_gt(CONFIG.lose_radius, CONFIG.perceive_radius, "AnchorIdle's hysteresis margin")
+
+
+func test_open_space_cold_start_begins_idle_on_the_spawn_point() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var pos := Vector2(321.0, -654.0)
+	var g := _idle_spawn(h, pos)
+	_tick(g)
+	assert_eq(_brain(g).phase, P.IDLE, "Open Space starts on patrol, not in combat")
+	assert_not_null(_brain(g).anchor_idle)
+	assert_eq(_brain(g).patrol_anchor, pos, "an unset anchor defaults to the spawn position")
+
+
+func test_the_assault_harness_starts_in_approach_with_no_idle() -> void:
+	var h := _harness("assault")
+	var g := _idle_spawn(h, MID + Vector2(0, -700))
+	_tick(g)
+	assert_eq(_brain(g).phase, P.APPROACH, "Assault always starts in combat")
+	assert_null(_brain(g).anchor_idle, "no AnchorIdle is built in Assault")
+
+
+func test_no_shot_is_fired_while_idle() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = MID
+	var g := _idle_spawn(h, MID + Vector2(CONFIG.perceive_radius + CONFIG.idle_radius + 80.0, 0.0))  # the whole ring is clear
+	var run := _simulate(h, g, 10.0)
+	assert_eq(run.shots.size(), 0, "no shot while the player is outside perceive_radius")
+	for r in run.ticks:
+		assert_eq(r.phase, P.IDLE)
+
+
+func test_idle_stays_on_the_ring_over_20_seconds() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var anchor := Vector2(500.0, -400.0)
+	var gatlings := _idle_squad(h, anchor, [Vector2(20, 0), Vector2(-15, 10)])
+	var worst := 0.0
+	for _i in int(20.0 / DT):
+		_tick_all(gatlings)
+		for g in gatlings:
+			assert_eq(_brain(g).phase, P.IDLE)
+			worst = maxf(worst, g.global_position.distance_to(anchor))
+	assert_lte(worst, CONFIG.idle_radius + 30.0, "worst %.1f px from the anchor" % worst)
+
+
+## `member_index × TAU / n`: a pair sits opposite each other on the shared ring.
+func test_a_pair_sits_opposite_each_other_on_the_ring() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var pair := _idle_squad(h, Vector2(-800.0, 300.0), [Vector2.ZERO, Vector2.ZERO])
+	for _i in int(8.0 / DT):
+		_tick_all(pair)
+	var gap := pair[0].global_position.distance_to(pair[1].global_position)
+	assert_gt(gap, CONFIG.idle_radius * 1.6, "a pair is spread round the ring (%.0f px apart)" % gap)
+
+
+func test_perceiving_the_player_notices_then_fights_with_no_shot_in_between() -> void:
+	var h := _harness("open_space")
+	var g := _idle_spawn(h, MID + Vector2(0.0, -400.0))
+	var run := _simulate(h, g, 0.5)
+	var seq := _sequence(run)
+	assert_eq(seq[0], P.NOTICING, "NOTICING for a beat first")
+	assert_true(seq.size() > 1 and seq[1] != P.IDLE, "then the fight starts (phases %s)" % [seq])
+	assert_eq(run.shots.size(), 0, "no shot in the first half second")
+
+
+func test_a_player_just_outside_perceive_radius_changes_nothing_and_just_inside_wakes_it() -> void:
+	var h := _harness("open_space")
+	var g := _idle_spawn(h, Vector2.ZERO)
+	h.player.global_position = Vector2(CONFIG.perceive_radius + CONFIG.idle_radius + 40.0, 0.0)  # the whole ring is clear
+	for _i in 120:
+		_tick(g)
+	assert_eq(_brain(g).phase, P.IDLE)
+	h.player.global_position = g.global_position + Vector2(CONFIG.perceive_radius - 40.0, 0.0)
+	_tick(g)
+	assert_eq(_brain(g).phase, P.NOTICING)
+
+
+func test_it_stays_engaged_between_the_radii() -> void:
+	var h := _harness("open_space")
+	var g := _idle_spawn(h, Vector2.ZERO)
+	h.player.global_position = Vector2(300.0, 0.0)
+	assert_true(_until(g, 2.0, func() -> bool: return _in_fight(g)), "reached combat")
+	var mid := (CONFIG.perceive_radius + CONFIG.lose_radius) / 2.0
+	for _i in int(5.0 / DT):
+		h.player.global_position = g.global_position + Vector2(mid, 0.0)
+		_tick(g)
+		assert_ne(_brain(g).phase, P.RETURNING, "never returns while within lose_radius")
+		assert_ne(_brain(g).phase, P.IDLE)
+
+
+func test_beyond_lose_radius_it_returns_to_the_ring_and_can_fight_again() -> void:
+	var h := _harness("open_space")
+	var anchor := Vector2.ZERO
+	var g := _idle_spawn(h, anchor + Vector2(100.0, 0.0), null, anchor)
+	h.player.global_position = Vector2(400.0, 0.0)
+	assert_true(_until(g, 2.0, func() -> bool: return _in_fight(g)))
+	for _i in int(2.0 / DT):
+		_tick(g)
+	g.global_position += Vector2(0.0, 700.0)  # well away from home, so there is a way back to walk
+	h.player.global_position = FAR_AWAY
+	var saw := {"returning": false}  # a lambda captures a bool by value
+	var settled := _until(g, 40.0, func() -> bool:
+		saw.returning = saw.returning or _brain(g).phase == P.RETURNING
+		return _brain(g).phase == P.IDLE)
+	assert_true(saw.returning, "it passes through RETURNING on the way home")
+	assert_true(settled, "and reaches IDLE")
+	assert_lte(g.global_position.distance_to(anchor), CONFIG.idle_radius + 30.0, "back inside the ring")
+	# …and turns to fight again: a real window, not a stale one.
+	h.player.global_position = g.global_position + Vector2(0.0, -400.0)
+	assert_true(_until(g, 12.0, func() -> bool: return _brain(g).phase == P.STREAM), "a second engagement fires a stream")
+
+
+## RETURNING (and IDLE) wait for the window to end: every round of the drawn stream is fired.
+func test_returning_never_interrupts_a_window() -> void:
+	var h := _harness("open_space")
+	var g := _idle_spawn(h, MID + Vector2(0.0, -400.0), null, MID + Vector2(0.0, -1000.0))  # home is far
+	assert_true(_until(g, 12.0, func() -> bool: return _brain(g).phase == P.SWING_IN), "a window opened")
+	h.player.global_position = FAR_AWAY
+	var pool := g.get_node("StreamPool") as BulletPool
+	var rounds := 0
+	var saw_window_end := false
+	for _i in int(8.0 / DT):
+		_tick(g)
+		for bullet in pool._active.duplicate():
+			rounds += 1
+			pool._recycle(bullet)
+		if _brain(g).is_in_window():
+			assert_ne(_brain(g).phase, P.RETURNING, "RETURNING waits for the window")
+			assert_ne(_brain(g).phase, P.IDLE)
+		elif _brain(g).phase == P.RETURNING:
+			saw_window_end = true
+			break
+	assert_true(saw_window_end, "the Gatling heads home once the window is over")
+	assert_eq(rounds, _brain(g).stream_rounds, "the whole stream was fired")
+
+
+func test_one_member_perceiving_wakes_the_whole_squad() -> void:
+	var h := _harness("open_space")
+	h.player.global_position = FAR_AWAY
+	var gatlings := _idle_squad(h, Vector2.ZERO, [Vector2(-5000, 0), Vector2(0, 0)])
+	_tick_all(gatlings)
+	h.player.global_position = gatlings[1].global_position + Vector2(CONFIG.perceive_radius - 50.0, 0.0)
+	_tick_all(gatlings)
+	_tick_all(gatlings)
+	for g in gatlings:
+		assert_ne(_brain(g).phase, P.IDLE, "every member is out of IDLE by the end of the next tick")
+
+
+func test_a_pair_that_goes_home_leaves_no_convergence_window_open() -> void:
+	var h := _harness("open_space")
+	var gatlings := _idle_squad(h, Vector2.ZERO, [Vector2.ZERO, Vector2.ZERO])
+	h.player.global_position = Vector2(400.0, 0.0)
+	for _i in int(8.0 / DT):
+		_tick_all(gatlings)
+	h.player.global_position = FAR_AWAY
+	for _i in int(40.0 / DT):
+		_tick_all(gatlings)
+	for g in gatlings:
+		assert_eq(_brain(g).phase, P.IDLE, "the whole pair is home")
+	assert_false(gatlings[0].squad.attack_window_open, "no window stays open behind a pair that went home")

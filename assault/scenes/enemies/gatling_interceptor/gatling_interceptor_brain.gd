@@ -21,6 +21,13 @@
 ##                           `swing_in_reach`, capped by `reposition_cap` (task plan §D2).
 ##   DISENGAGE  [DISENGAGE]  Assault only: budget expiry (deferred to the end of a running window);
 ##                           release the corridor, curve out of the world rect, free.
+##   IDLE       [SEARCH]     Open Space only (t12): a slow ring orbit round `patrol_anchor`, no shots.
+##   NOTICING   [SEARCH]     a beat: the light blinks once and the Gatling faces the player, then APPROACH.
+##   RETURNING  [REPOSITION] `arrive` back at `patrol_anchor`, then IDLE. Never interrupts a window: a
+##                           yellow light is always followed by its stream, so it waits for COOLDOWN.
+##
+## Hub idle (epic §2.10, X2): `AnchorIdle` on the squad's shared `patrol_anchor`, the Swarm Drone's shape.
+## Assault (`EngagementBudget.active`) and the `start_engaged` test seam skip it and start in APPROACH.
 ##
 ## Side rule (epic §2.6): the first window takes the side the Gatling is on (Open Space) or the corridor
 ## half opposite the player's x (Assault). APPROACH re-derives it every tick and latches it on exit
@@ -44,8 +51,8 @@
 class_name GatlingInterceptorBrain
 extends EnemyBrain
 
-## t12 appends IDLE, NOTICING and RETURNING.
-enum Phase { APPROACH, SWING_IN, SPIN_UP, STREAM, COOLDOWN, REPOSITION, DISENGAGE }
+## IDLE, NOTICING and RETURNING are appended (t12) so the earlier values do not move.
+enum Phase { APPROACH, SWING_IN, SPIN_UP, STREAM, COOLDOWN, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING }
 
 ## Emitted on every transition, with the phase entered.
 signal phase_changed(new_phase: int)
@@ -89,6 +96,18 @@ const STAGE_DONE := 2
 var config: GatlingInterceptorConfig = GatlingInterceptorConfig.new()
 ## Test seam (review A2 boundary): false disables the Assault swing's round-behind fallback.
 var route_fallback: bool = true
+## The Open Space hub idle's ring centre. `Vector2.INF` (unset) means "not set" — `_start()` then
+## defaults it to the spawn position, so a loose Gatling with no owner still patrols somewhere.
+var patrol_anchor: Vector2 = Vector2.INF
+## Test seam (t12): every pre-idle test sets this so a spawned Gatling starts already fighting, the
+## only behaviour that existed before. Real spawns (SectorHub) never set it. Assault ignores it:
+## `EngagementBudget.active` alone decides combat-from-spawn there.
+var start_engaged: bool = false
+## Open Space only (`budget.active == false` and not `start_engaged`); null otherwise.
+var anchor_idle: AnchorIdle
+## This Gatling's offset on the idle ring (rad), drawn from `rng` when the idle starts (never for an
+## engaged Gatling, so a seeded combat sequence is unchanged).
+var idle_phase_offset: float = 0.0
 
 var phase: Phase = Phase.APPROACH
 ## Built on the first tick. Null before it.
@@ -145,7 +164,12 @@ func tick(delta: float) -> void:
 		if target.has_target:
 			squad.update_target(target.position, _heading_ref(target))
 		_tick_convergence(target, squad)
+	if anchor_idle != null:
+		_tick_anchor_idle(delta, target, squad)
 	match phase:
+		Phase.IDLE: _tick_idle()
+		Phase.NOTICING: _tick_noticing(target)
+		Phase.RETURNING: _tick_returning()
 		Phase.APPROACH: _tick_approach(delta, target)
 		Phase.SWING_IN: _tick_swing_in(delta, target)
 		Phase.SPIN_UP: _tick_spin_up(target)
@@ -186,6 +210,10 @@ func enter_phase(p: Phase) -> void:
 				_flip_side(TargetInfo.player(get_tree()))
 		Phase.DISENGAGE:
 			_enter_disengage()
+		Phase.IDLE, Phase.RETURNING:
+			_enter_calm()
+		Phase.NOTICING:
+			_enter_noticing()
 		_:
 			_set_light(StateLight.State.OFF)
 	phase_changed.emit(p)
@@ -196,6 +224,7 @@ func enter_phase(p: Phase) -> void:
 ## It shares the 36-round `StreamPool`: the rail need is 71, so a rail Gatling fires about 36 rounds and
 ## stalls until they expire — the legacy pool-starvation shape (it was 20), kept deliberately (epic §2.2).
 func on_suspended() -> void:
+	anchor_idle = null  # a rail owns the motion: no idle
 	_clock.stop()
 	_disengage_pending = false
 	_set_light(StateLight.State.OFF)
@@ -236,6 +265,92 @@ func is_in_window() -> bool:
 func _start() -> void:
 	_started = true
 	budget = EngagementBudget.new(config.engage_seconds, get_tree())
+	if not patrol_anchor.is_finite():
+		patrol_anchor = actor.global_position
+	if not budget.active and not start_engaged:
+		anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time, config.idle_radius)
+		idle_phase_offset = rng.randf_range(0.0, TAU)
+		enter_phase(Phase.IDLE)
+
+
+# ── Hub idle (t12; epic §2.10) ───────────────────────────────────────────────────────────────────
+
+## The meta-state that decides whether this member is patrolling, noticing or fighting, run once a tick
+## ahead of the phase dispatch (the Swarm Drone's shape): `anchor_idle` tracks the Gatling's own
+## proximity to the target whatever phase it is in, and a squad returns together because `hold_combat`
+## keeps every member fighting while any one of them is engaged.
+func _tick_anchor_idle(delta: float, target: TargetInfo, squad: SquadController) -> void:
+	if squad != null and _is_calm() and squad.is_engaged():
+		anchor_idle.force_notice()
+	var state := anchor_idle.update(delta, actor.global_position, target)
+	if squad != null:
+		# Engaged only while perceiving/fighting AND within lose_radius — never from hold_combat alone,
+		# or a member held in COMBAT by its mates could never stop reporting engaged.
+		var near := target.has_target and actor.global_position.distance_squared_to(target.position) < config.lose_radius * config.lose_radius
+		squad.set_engaged(actor, (state == AnchorIdle.State.NOTICING or state == AnchorIdle.State.COMBAT) and near)
+		anchor_idle.hold_combat = squad.is_engaged()
+	match state:
+		AnchorIdle.State.IDLE:
+			if phase != Phase.IDLE and not is_in_window():
+				enter_phase(Phase.IDLE)
+		AnchorIdle.State.NOTICING:
+			if phase != Phase.NOTICING and not is_in_window():
+				enter_phase(Phase.NOTICING)
+		AnchorIdle.State.COMBAT:
+			# From NOTICING only: any other phase is already fighting.
+			if phase == Phase.NOTICING:
+				enter_phase(Phase.APPROACH)
+		AnchorIdle.State.RETURNING:
+			# Neither this nor IDLE or NOTICING interrupts a window: retried every tick until its stream is over.
+			if phase != Phase.RETURNING and not is_in_window():
+				enter_phase(Phase.RETURNING)
+
+
+func _is_calm() -> bool:
+	return phase == Phase.IDLE or phase == Phase.RETURNING
+
+
+## IDLE and RETURNING entry: forget the window and the side, so the next fight starts from a clean
+## APPROACH.
+func _enter_calm() -> void:
+	_clock.stop()
+	_set_aim_point(Vector2.INF)
+	_set_light(StateLight.State.OFF)
+	_side_latched = false
+	_close_time = -1.0
+	_conv_flank = false
+
+
+func _enter_noticing() -> void:
+	var light := actor.get_node_or_null("StateLight") as StateLight if actor != null else null
+	if light != null:
+		light.set_state(StateLight.State.OFF)
+		light.blink_once()
+
+
+func _tick_noticing(target: TargetInfo) -> void:
+	if target.has_target:
+		mover.face_toward(target.position)
+
+
+func _tick_returning() -> void:
+	mover.arrive(patrol_anchor, config.max_speed)
+
+
+func _tick_idle() -> void:
+	mover.orbit(patrol_anchor, config.idle_radius, _idle_ring_angle(), config.max_speed)
+
+
+## `offset + index × TAU / n + idle_speed × t`: `index` is the member's join order among the whole
+## squad — a squad of one (or no squad) is index 0 of 1 — so a squad spreads round one shared ring.
+func _idle_ring_angle() -> float:
+	var squad := _squad()
+	var index := 0
+	var n := 1
+	if squad != null:
+		index = maxi(squad.member_index(actor), 0)
+		n = maxi(squad.member_count(), 1)
+	return idle_phase_offset + index * TAU / n + config.idle_speed * _phase_time
 
 
 # ── APPROACH ─────────────────────────────────────────────────────────────────────────────────────
