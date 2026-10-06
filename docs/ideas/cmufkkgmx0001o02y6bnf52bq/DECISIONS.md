@@ -1279,3 +1279,32 @@ the "escalated, nothing built" note above.
   analytic count gates, the frozen constants and the Ph2 drone pin all model them at 2.0 s and 3.0 s. That is
   consistent with their own denominators, but differs from the game by up to 1.5 s.
 - **Known gaps:** one scenario (stationary player). A moving player is not measured. No human playtest.
+
+### Phase 3, built in t17 (level 1 cloud_descent off rails) (2026-10-06)
+Task plan `docs/plans/cmulwkarp00ctqj2x6ih09c0k/3-plan.md` (Revision 2; review `4-review.md`).
+- **Level:** all 27 cloud_descent fighter lines lost `.move()` / `.free_after()` / `shoot_*()`; triggers, offsets, delays
+  and formations unchanged. Loose lines sharing a wave are tagged `w<raw_waves index>f` (`w2f w5f w8f w12f w13f w15f
+  w20f w22f`); the 59 s wedge and the 72 s V3 are formation squads. **Nothing in level 1 flies a fighter or Gatling rail
+  any more.** No lever used.
+- **The pin:** `_RAIL_SECTIONS` is empty; the frozen constants are untouched (cloud_descent 8 / 15.0) and a new
+  assertion requires every frozen key to be live-checked or divided by a gate. `MIGRATED_SECTIONS` has all three
+  sections. Count gates for cloud_descent: all-alive 9 ≤ 16, attack-capable 8 ≤ 12. Measured shots/s 8.5 ≤ 18.75.
+- **Deviation from the task wording — the fighter deadline's exit term is a curved-exit bound, not Razor-shaped.**
+  `FighterBrain._tick_disengage` turns the *velocity* toward its exit point at ω = min(turn_rate, acceleration /
+  exit_speed) = 1.346 rad/s while asking for `exit_speed`, so a fighter flying away from its exit swings round on a
+  ≈ 386 px radius. Measured on the real `fighter.tscn`: **4.87 s** from the rect centre heading away; the Razor-shaped
+  straight-line term says 2.84 s; just above the standing-start threshold (91 px/s) it is **5.20 s**. `test_engagement_deadline.gd` now uses `π/ω + (exit_distance + 2·exit_speed/ω) /
+  exit_speed` = **5.37 s** and gates it on the real scene (`test_the_fighter_exit_term_bounds_a_real_fighters_disengage`,
+  404 starts: grid × headings × {max_speed, standing-start threshold + 1}; real slack 0.17 s). Per-entry result: worst entry 72.8 s → 9.47 s of the 10 s timeout, **margin 0.53 s** (the straight-line
+  figure would have reported 3.06 s). The Gatling boundary row keeps the Razor-shaped term (it must fail; a longer real
+  exit only fails it harder).
+- **Owner item, not changed here:** `DroneConcurrency.ai_shooter_kinds()` — the t16 count gates' fighter lifetime —
+  still uses the straight-line exit (9.64 s). With the curved bound (≈ 12.2 s) the task reviewer measured deep_space's
+  all-alive peak at **21 against t16's limit of 20**. Correcting it is t16's gate and needs the owner's call (a lever, or
+  accepting the measured 11.67 s life, which gives 18). The Ph2 Swarm/Razor deadline formulas also assume a straight
+  exit; whoever owns them should check the drones' curved exit the same way.
+- **Real run:** `tests/integration/test_level1_fighter_exit.gd` replays cloud_descent from 66.0 s (re-timed) through a
+  real `WaveManager` with a stationary stub player at 1×. Container empty **9.07 s** after `waves_complete` (margin
+  0.93 s — set by the 76 s Swarm drones, as in Ph2's own run) and the last fighter gone 4.35–5.12 s after it, every
+  fighter in DISENGAGE with no `EnemyPathMover`. "waves_complete fires on the last trigger" is judged on `WaveManager`'s
+  own idle-delta clock: the summed physics clock can lag it by the first frame's set-up hitch (0.12 s seen once).

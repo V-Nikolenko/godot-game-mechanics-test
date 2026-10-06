@@ -20,7 +20,9 @@
 ## `free_after` 0 and no `aim_mode`. Their density gates are at the bottom of this file (all-alive
 ## and attack-capable, analytic) and in `test_level1_fighter_fire_density.gd` (shots/s, measured on a
 ## real `WaveManager` run — the owner's option A, docs/plans/cmulwkarm00cpqj2xfwq3ue8h/5-escalation.md).
-## cloud_descent (t17) is still on rails.
+## t17 (docs/plans/cmulwkarp00ctqj2x6ih09c0k/3-plan.md) did the same for cloud_descent's 27 rows: nothing
+## in level 1 flies a fighter or Gatling rail any more, and cloud_descent's gates divide by its own frozen
+## constants (8 fighters, 15.0 shots/s).
 ##
 ## ── Why `_build_sections()`, not the level scene ─────────────────────────────────────────────
 ##
@@ -83,7 +85,7 @@ const _CULL_STEP: float = 0.02
 ## computed run of `_actual_fighter_spawns()` below (this task's HEAD — see `git log`). `aim_mode`
 ## is the literal `SpawnConfig.shoot_forward()`/`.shoot_at_player()` string ("" when neither was
 ## called — a rail ship then falls back to its config default, "PLAYER"; an AI ship ignores it).
-## deep_space and planet_approach rows are AI rows since t16 (no movement, no aim_mode). `free_after` is the
+## deep_space and planet_approach rows are AI rows since t16, cloud_descent's since t17 (no movement, no aim_mode). `free_after` is the
 ## `.free_after(seconds)` value, or 0.0 when the entry uses the default FREE_ON_SCREEN_EXIT.
 ## Regenerate by walking `_build_sections()` the same way `_actual_fighter_spawns()` does — never
 ## hand-edit a single row without re-deriving the whole table.
@@ -125,33 +127,33 @@ const EXPECTED: Array[Dictionary] = [
 	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 98.00, "offset": Vector2(-180.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
 	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 98.00, "offset": Vector2(180.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
 	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 102.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 5, "aim_mode": "", "free_after": 0.00, "movement": false},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(-500.0, 20.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(-500.0, 60.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(-500.0, 100.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 14.00, "offset": Vector2(500.0, 20.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 14.00, "offset": Vector2(500.0, 60.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 14.00, "offset": Vector2(500.0, 100.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 26.00, "offset": Vector2(-260.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 26.00, "offset": Vector2(260.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 38.00, "offset": Vector2(-500.0, 0.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 38.00, "offset": Vector2(500.0, 0.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(-500.0, 0.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(-500.0, 60.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(500.0, 0.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(500.0, 60.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(-500.0, 120.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(500.0, 120.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 50.00, "offset": Vector2(-65.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 5.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 50.00, "offset": Vector2(0.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 50.00, "offset": Vector2(65.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 5.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 59.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 3, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 66.00, "offset": Vector2(-500.0, 40.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 66.00, "offset": Vector2(500.0, 40.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(-500.0, 40.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(500.0, 40.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(0.0, -400.0), "delay": 0.50, "formation": &"VFormation", "formation_count": 3, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(-500.0, 100.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
-	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(500.0, 100.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(-500.0, 20.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(-500.0, 60.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(-500.0, 100.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 14.00, "offset": Vector2(500.0, 20.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 14.00, "offset": Vector2(500.0, 60.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 14.00, "offset": Vector2(500.0, 100.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 26.00, "offset": Vector2(-260.0, -400.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 26.00, "offset": Vector2(260.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 38.00, "offset": Vector2(-500.0, 0.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 38.00, "offset": Vector2(500.0, 0.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(-500.0, 0.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(-500.0, 60.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(500.0, 0.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(500.0, 60.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(-500.0, 120.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 42.00, "offset": Vector2(500.0, 120.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 50.00, "offset": Vector2(-65.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 50.00, "offset": Vector2(0.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 50.00, "offset": Vector2(65.0, -400.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 59.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 3, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 66.00, "offset": Vector2(-500.0, 40.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 66.00, "offset": Vector2(500.0, 40.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(-500.0, 40.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(500.0, 40.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(0.0, -400.0), "delay": 0.50, "formation": &"VFormation", "formation_count": 3, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(-500.0, 100.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(500.0, 100.0), "delay": 0.80, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
 ]
 
 ## Legacy per-section peaks, from a computed run — asserted as computed values below, not merely
@@ -405,8 +407,9 @@ func _rate_for(path: String, _offset: Vector2, _movement: MovementResource, _exi
 ## The sections whose rails still exist, so their frozen constants can still be recomputed from live
 ## data. t16 retired deep_space and planet_approach from this check: their `.move()` / `.free_after()`
 ## / `shoot_*()` are gone, so there is nothing left to recompute the constants FROM — the constants
-## stay frozen above and the t16 density gates keep dividing by them (review B6). t17 empties this.
-const _RAIL_SECTIONS: Array[StringName] = [&"cloud_descent"]
+## stay frozen above and the t16 density gates keep dividing by them (review B6). t17 retired cloud_descent
+## the same way, so this is empty; the check re-arms by itself if a section is ever put back on rails.
+const _RAIL_SECTIONS: Array[StringName] = []
 
 
 func test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants() -> void:
@@ -429,6 +432,11 @@ func test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants() -> void:
 		assert_almost_eq(peak_rate, float(_LEGACY_PEAK_SHOTS_PER_S[section.section_name]), 0.01,
 			"%s: legacy peak shots/s changed" % section.section_name)
 	assert_eq(checked, _RAIL_SECTIONS.size(), "sanity: every section still on rails was checked")
+	# Never vacuous: with no section on rails, every frozen constant must still be divided by a gate.
+	for frozen: Dictionary in [_LEGACY_PEAK_FIGHTERS, _LEGACY_PEAK_SHOTS_PER_S]:
+		for key: StringName in frozen:
+			assert_true(_RAIL_SECTIONS.has(key) or MIGRATED_SECTIONS.has(key),
+				"frozen constant for %s is neither live-checked nor gated" % key)
 
 
 ## Boundary for the shared helper: an empty section computes a peak of 0, never an error or a
@@ -450,9 +458,9 @@ func test_a_section_with_no_fighters_has_zero_peak_concurrency_and_rate() -> voi
 
 # ── t16: deep_space and planet_approach off rails (docs/plans/cmulwkarm00cpqj2xfwq3ue8h/3-plan.md) ──
 
-## The sections t16 migrated. Their shots/s gate is measured, not computed — see
+## The sections t16 (deep_space, planet_approach) and t17 (cloud_descent) migrated. Their shots/s gate is measured, not computed — see
 ## `test_level1_fighter_fire_density.gd` (owner option A).
-const MIGRATED_SECTIONS: Array[StringName] = [&"deep_space", &"planet_approach"]
+const MIGRATED_SECTIONS: Array[StringName] = [&"deep_space", &"planet_approach", &"cloud_descent"]
 
 ## Ratios of epic §2.9.2, against the FROZEN `_LEGACY_PEAK_FIGHTERS` (never recomputed — the rails it
 ## was computed from are gone). Shots/s's 1.25 lives in the measured gate's file.
@@ -480,7 +488,7 @@ func test_migrated_sections_have_no_rail_left() -> void:
 				assert_ne(entry.exit_mode, EnemyPathMover.ExitMode.FREE_ON_DURATION,
 					"%s still has .free_after()" % where)
 				assert_false(entry.initial_props.has("aim_mode"), "%s still has a shoot_*() aim_mode" % where)
-	assert_eq(checked, 37, "sanity: the 18 + 19 migrated fighter/Gatling lines were all checked")
+	assert_eq(checked, 64, "sanity: the 18 + 19 + 27 migrated fighter/Gatling lines were all checked")
 
 
 ## Loose lines of one kind that share a wave fight as one squad, tagged `w<wave index>f` (fighters) or
@@ -505,7 +513,8 @@ func test_loose_pairs_are_tagged_with_their_wave_index() -> void:
 					tagged += 1
 					assert_eq(String(entry.squad_id), expected, "%s wave %d (%.1f s): loose %s line's squad tag"
 						% [section.section_name, wave_index, wave.trigger_time, path.get_file()])
-	assert_eq(tagged, 18, "sanity: 9 loose pairs (1 Gatling, 8 fighter) across the two sections")
+	assert_eq(tagged, 43,
+		"sanity: 18 loose lines across deep_space / planet_approach + 25 in cloud_descent's 8 fighter squads")
 
 
 ## Boundary: a migrated fighter line given a rail again must not match the pin.
@@ -563,7 +572,7 @@ func test_migrated_sections_all_alive_and_attack_capable_peaks_within_their_rati
 			continue
 		checked += 1
 		_assert_count_gates(section.section_name, DroneConcurrency.shooter_squad_intervals(section, kinds))
-	assert_eq(checked, MIGRATED_SECTIONS.size(), "sanity: both migrated sections were checked")
+	assert_eq(checked, MIGRATED_SECTIONS.size(), "sanity: every migrated section was checked")
 
 
 ## Boundary: the count gates can reject. One extra V of 3 fighters at planet_approach's own

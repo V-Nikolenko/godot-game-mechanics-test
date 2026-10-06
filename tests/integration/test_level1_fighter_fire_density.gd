@@ -1,6 +1,7 @@
-## Intent (Ph3 t16, docs/plans/cmulwkarm00cpqj2xfwq3ue8h/3-plan.md, Revision 2): level 1's deep_space and
-## planet_approach must not become noisier than they were on rails. Their fighters and Gatling pair
-## fight off rails since t16, so their fire density is a property of the AI's behaviour, not of a
+## Intent (Ph3 t16, docs/plans/cmulwkarm00cpqj2xfwq3ue8h/3-plan.md, Revision 2; t17,
+## docs/plans/cmulwkarp00ctqj2x6ih09c0k/3-plan.md): level 1's deep_space, planet_approach and cloud_descent
+## must not become noisier than they were on rails. Their fighters and Gatling pair
+## fight off rails since t16 (cloud_descent: t17), so their fire density is a property of the AI's behaviour, not of a
 ## timer, and this file MEASURES it: the section's real waves through a real `WaveManager`, under a
 ## real `ArenaCamera` (corridor and world rect), against a stationary, hurtbox-less player stub at the
 ## lower centre of the view — the `test_level1_drone_exit.gd` shape.
@@ -306,6 +307,12 @@ func test_deep_space_measured_shots_per_s_within_1_25x() -> void:
 
 func test_planet_approach_measured_shots_per_s_within_1_25x() -> void:
 	await _assert_measured_gate(&"planet_approach")
+
+
+## t17 (docs/plans/cmulwkarp00ctqj2x6ih09c0k/3-plan.md): cloud_descent's fighters are off rails too, so
+## its gate is the same measurement against its own frozen constant (15.0 shots/s).
+func test_cloud_descent_measured_shots_per_s_within_1_25x() -> void:
+	await _assert_measured_gate(&"cloud_descent")
 
 
 ## The measured run follows the shipped schedule: each wave triggers at its own trigger time, or at the previous wave's (list order — `WaveManager` never triggers a later-listed wave first), within

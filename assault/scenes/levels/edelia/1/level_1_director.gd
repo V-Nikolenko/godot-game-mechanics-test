@@ -815,8 +815,6 @@ func _build_section_3() -> LevelSection:
 	s.duration               = 0.0
 
 	var b := WaveBuilder.new()
-	var L: ArcMovement.ArcDirection = WaveBuilder.LEFT
-	var R: ArcMovement.ArcDirection = WaveBuilder.RIGHT
 
 	var raw_waves: Array = [
 		# 0.0 s — 5-ship ally escort arrowhead arriving from below
@@ -835,11 +833,11 @@ func _build_section_3() -> LevelSection:
 			b.drone().at( 130, -400).delay(0.3).squad(&"w1"),
 		]),
 
-		# 5.0 s — 3 fighters sweep left-to-right (+ drone chasers)
+		# 5.0 s — 3 fighters entering from the left (+ drone chasers)
 		b.wave(5.0, [
-			b.fighter().at(-500,  20).move(b.straight(265, PI / 2)).free_after(4.5).shoot_at_player(),
-			b.fighter().at(-500,  60).move(b.straight(265, PI / 2)).delay(0.3).free_after(4.5).shoot_at_player(),
-			b.fighter().at(-500, 100).move(b.straight(265, PI / 2)).delay(0.6).free_after(4.5).shoot_at_player(),
+			b.fighter().at(-500,  20).squad(&"w2f"),
+			b.fighter().at(-500,  60).delay(0.3).squad(&"w2f"),
+			b.fighter().at(-500, 100).delay(0.6).squad(&"w2f"),
 			b.drone().at(-500, 150).delay(0.9),
 		]),
 
@@ -853,11 +851,11 @@ func _build_section_3() -> LevelSection:
 			b.sniper().at(-260, 400).move(b.straight(100, -PI / 2 - PI / 12)).shoot_at_player().free_after(5.5),
 		]),
 
-		# 14.0 s — 3 fighters sweep right-to-left (+ drone chasers)
+		# 14.0 s — 3 fighters entering from the right (+ drone chasers)
 		b.wave(14.0, [
-			b.fighter().at(500,  20).move(b.straight(265, -PI / 2)).free_after(4.5).shoot_at_player(),
-			b.fighter().at(500,  60).move(b.straight(265, -PI / 2)).delay(0.3).free_after(4.5).shoot_at_player(),
-			b.fighter().at(500, 100).move(b.straight(265, -PI / 2)).delay(0.6).free_after(4.5).shoot_at_player(),
+			b.fighter().at(500,  20).squad(&"w5f"),
+			b.fighter().at(500,  60).delay(0.3).squad(&"w5f"),
+			b.fighter().at(500, 100).delay(0.6).squad(&"w5f"),
 			b.drone().at(500, 150).delay(0.9),
 		]),
 
@@ -875,10 +873,10 @@ func _build_section_3() -> LevelSection:
 			b.drone().at( 150, 400).delay(0.8).squad(&"w7"),
 		]),
 
-		# 26.0 s — fighter pair arc from above
+		# 26.0 s — fighter pair from above
 		b.wave(26.0, [
-			b.fighter().at(-260, -400).move(b.arc(R, 160, 4.0)).shoot_at_player().free_after(5.0),
-			b.fighter().at( 260, -400).move(b.arc(L, 160, 4.0)).shoot_at_player().free_after(5.0).delay(0.3),
+			b.fighter().at(-260, -400).squad(&"w8f"),
+			b.fighter().at( 260, -400).delay(0.3).squad(&"w8f"),
 		]),
 
 		# 28.0 s — ram from below corner (surprise)
@@ -903,19 +901,19 @@ func _build_section_3() -> LevelSection:
 
 		# 38.0 s — fighter pair from off-screen sides + ram support
 		b.wave(38.0, [
-			b.fighter().at(-500, 0).move(b.straight(225, PI / 2)).shoot_at_player().free_after(5.0),
-			b.fighter().at( 500, 0).move(b.straight(225, -PI / 2)).shoot_at_player().free_after(5.0).delay(0.3),
+			b.fighter().at(-500, 0).squad(&"w12f"),
+			b.fighter().at( 500, 0).delay(0.3).squad(&"w12f"),
 			b.ram().at(0, -400).move(b.straight(320)).delay(0.6),
 		]),
 
 		# 42.0 s — 4 fighters from both flanks (+ 2 extras)
 		b.wave(42.0, [
-			b.fighter().at(-500,   0).move(b.straight(240, PI / 2)).free_after(4.0).shoot_at_player(),
-			b.fighter().at(-500,  60).move(b.straight(240, PI / 2)).delay(0.4).free_after(4.0).shoot_at_player(),
-			b.fighter().at( 500,   0).move(b.straight(240, -PI / 2)).free_after(4.0).shoot_at_player(),
-			b.fighter().at( 500,  60).move(b.straight(240, -PI / 2)).delay(0.4).free_after(4.0).shoot_at_player(),
-			b.fighter().at(-500, 120).move(b.straight(240, PI / 2)).delay(0.8).free_after(4.0).shoot_at_player(),
-			b.fighter().at( 500, 120).move(b.straight(240, -PI / 2)).delay(0.8).free_after(4.0).shoot_at_player(),
+			b.fighter().at(-500,   0).squad(&"w13f"),
+			b.fighter().at(-500,  60).delay(0.4).squad(&"w13f"),
+			b.fighter().at( 500,   0).squad(&"w13f"),
+			b.fighter().at( 500,  60).delay(0.4).squad(&"w13f"),
+			b.fighter().at(-500, 120).delay(0.8).squad(&"w13f"),
+			b.fighter().at( 500, 120).delay(0.8).squad(&"w13f"),
 		]),
 
 		# 46.0 s — drone burst from below
@@ -928,9 +926,9 @@ func _build_section_3() -> LevelSection:
 		# 50.0 s — gunship + 3 covering fighters (+ ram chaser)
 		b.wave(50.0, [
 			b.gunship().at(  0, -400).move(b.straight(42)),
-			b.fighter().at(-65, -400).move(b.arc(L, 145, 4.5)).delay(0.8).free_after(5.0),
-			b.fighter().at(  0, -400).move(b.straight(95)).delay(0.8),
-			b.fighter().at( 65, -400).move(b.arc(R, 145, 4.5)).delay(0.8).free_after(5.0),
+			b.fighter().at(-65, -400).delay(0.8).squad(&"w15f"),
+			b.fighter().at(  0, -400).delay(0.8).squad(&"w15f"),
+			b.fighter().at( 65, -400).delay(0.8).squad(&"w15f"),
 			b.ram().at(-220, -400).move(b.straight(330, PI / 12)).delay(1.5),
 			b.ram().at( 220, -400).move(b.straight(330, -PI / 12)).delay(1.5),
 		]),
@@ -952,7 +950,7 @@ func _build_section_3() -> LevelSection:
 
 		# 59.0 s — fighter wedge support
 		b.wave(59.0, [
-			b.fighter().formation(b.wedge_formation(3, 40, 14)).at(0, -400).move(b.straight(165)).shoot_forward(),
+			b.fighter().formation(b.wedge_formation(3, 40, 14)).at(0, -400),
 		]),
 
 		# 62.0 s — second gunship wave with snipers (+ drone screen)
@@ -966,10 +964,10 @@ func _build_section_3() -> LevelSection:
 			b.drone().at( 150, -400).delay(0.7).squad(&"w19"),
 		]),
 
-		# 66.0 s — fighter arc finisher
+		# 66.0 s — fighter pair finisher from both sides
 		b.wave(66.0, [
-			b.fighter().at(-500,  40).move(b.straight(255, PI / 2)).free_after(4.5).shoot_at_player(),
-			b.fighter().at( 500,  40).move(b.straight(255, -PI / 2)).free_after(4.5).shoot_at_player(),
+			b.fighter().at(-500,  40).squad(&"w20f"),
+			b.fighter().at( 500,  40).squad(&"w20f"),
 		]),
 
 		# 68.0 s — drones from below
@@ -980,11 +978,11 @@ func _build_section_3() -> LevelSection:
 
 		# 72.0 s — final fighter assault from all directions (extended)
 		b.wave(72.0, [
-			b.fighter().at(-500,  40).move(b.straight(265, PI / 2)).free_after(4.5).shoot_at_player(),
-			b.fighter().at( 500,  40).move(b.straight(265, -PI / 2)).free_after(4.5).shoot_at_player(),
-			b.fighter().formation(b.v_formation(3)).at(0, -400).move(b.straight(150)).delay(0.5).shoot_forward(),
-			b.fighter().at(-500, 100).move(b.straight(265, PI / 2)).free_after(4.5).shoot_at_player().delay(0.8),
-			b.fighter().at( 500, 100).move(b.straight(265, -PI / 2)).free_after(4.5).shoot_at_player().delay(0.8),
+			b.fighter().at(-500,  40).squad(&"w22f"),
+			b.fighter().at( 500,  40).squad(&"w22f"),
+			b.fighter().formation(b.v_formation(3)).at(0, -400).delay(0.5),
+			b.fighter().at(-500, 100).delay(0.8).squad(&"w22f"),
+			b.fighter().at( 500, 100).delay(0.8).squad(&"w22f"),
 			b.ram().at(0, 400).move(b.straight(300, PI)).delay(1.2),
 		]),
 
