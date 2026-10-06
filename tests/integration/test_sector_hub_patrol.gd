@@ -27,6 +27,11 @@ const SWARM_CONFIG: SwarmDroneConfig = preload(
 const RAZOR_CONFIG: RazorDroneConfig = preload(
 		"res://assault/scenes/enemies/razor_drone/razor_drone_config.tres")
 
+const FIGHTER_CONFIG: FighterConfig = preload(
+		"res://assault/scenes/enemies/fighter/fighter_config.tres")
+const GATLING_CONFIG: GatlingInterceptorConfig = preload(
+		"res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres")
+
 const DT := 1.0 / 60.0
 const PATROL_SEED := 20260928
 
@@ -90,6 +95,43 @@ func test_razor_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void
 	var worst_idle_offset := RAZOR_CONFIG.idle_radius + RAZOR_CONFIG.idle_radius_jitter
 	_assert_group_clears(anchor, worst_idle_offset, RAZOR_CONFIG.perceive_radius,
 			_interactable_points(hub), "Razor")
+	hub.free()
+
+
+func _shooter_anchor(hub: Node, bearing_deg: float) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * float(hub.shooter_ring_radius)
+
+
+## Epic plan §2.10: clearance = distance to the nearest interactable − `idle_radius` −
+## `perceive_radius`. The bearings and ring are whatever this sweep accepts — never hand-picked.
+func test_fighter_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	_assert_group_clears(_shooter_anchor(hub, float(hub.fighter_anchor_bearing_deg)),
+			FIGHTER_CONFIG.idle_radius, FIGHTER_CONFIG.perceive_radius,
+			_interactable_points(hub), "Fighter")
+	hub.free()
+
+
+func test_gatling_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	_assert_group_clears(_shooter_anchor(hub, float(hub.gatling_anchor_bearing_deg)),
+			GATLING_CONFIG.idle_radius, GATLING_CONFIG.perceive_radius,
+			_interactable_points(hub), "Gatling")
+	hub.free()
+
+
+func test_the_four_patrol_anchors_are_well_apart() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var anchors: Array[Vector2] = [
+		Vector2.RIGHT.rotated(deg_to_rad(float(hub.swarm_anchor_bearing_deg))) * float(hub.patrol_ring_radius),
+		Vector2.RIGHT.rotated(deg_to_rad(float(hub.razor_anchor_bearing_deg))) * float(hub.patrol_ring_radius),
+		_shooter_anchor(hub, float(hub.fighter_anchor_bearing_deg)),
+		_shooter_anchor(hub, float(hub.gatling_anchor_bearing_deg)),
+	]
+	for i: int in anchors.size():
+		for j: int in range(i + 1, anchors.size()):
+			assert_gt(anchors[i].distance_to(anchors[j]), 1000.0,
+					"patrol anchors %d and %d must not sit on top of each other" % [i, j])
 	hub.free()
 
 
@@ -188,6 +230,17 @@ func _swarm_and_razor(container: Node2D) -> Dictionary:
 	return {"swarms": swarms, "razor": razor}
 
 
+func _shooters(container: Node2D) -> Dictionary:
+	var fighters: Array[Fighter] = []
+	var gatlings: Array[GatlingInterceptor] = []
+	for c: Node in container.get_children():
+		if c is Fighter:
+			fighters.append(c)
+		elif c is GatlingInterceptor:
+			gatlings.append(c)
+	return {"fighters": fighters, "gatlings": gatlings}
+
+
 func test_spawns_one_swarm_squad_and_one_razor_drone() -> void:
 	var built := _spawn_hub(PATROL_SEED)
 	var container: Node2D = built.container
@@ -195,8 +248,27 @@ func test_spawns_one_swarm_squad_and_one_razor_drone() -> void:
 	var swarms: Array = found.swarms
 	assert_eq(swarms.size(), 4, "the default squad_size Swarm Drones spawned")
 	assert_not_null(found.razor, "exactly one Razor Drone spawned")
-	assert_eq(container.get_child_count(), swarms.size() + 1,
-			"nothing else spawned into EnemyContainer")
+	var shooters := _shooters(container)
+	var fighters: Array = shooters.fighters
+	var gatlings: Array = shooters.gatlings
+	assert_eq(fighters.size(), 2, "a fighter squad of 2 spawned")
+	assert_eq(gatlings.size(), 2, "a Gatling squad of 2 spawned")
+	assert_eq(container.get_child_count(), swarms.size() + 1 + fighters.size() + gatlings.size(),
+			"nothing but the four groups spawned into EnemyContainer")
+
+	var f_squad: SquadController = (fighters[0] as Fighter).squad if not fighters.is_empty() else null
+	var g_squad: SquadController = (gatlings[0] as GatlingInterceptor).squad if not gatlings.is_empty() else null
+	assert_not_null(f_squad, "the fighters share a SquadController")
+	assert_not_null(g_squad, "the Gatlings share a SquadController")
+	assert_ne(f_squad, g_squad, "the two shooter groups are separate squads")
+	for f: Fighter in fighters:
+		assert_eq(f.squad, f_squad, "every fighter shares one SquadController")
+	for g: GatlingInterceptor in gatlings:
+		assert_eq(g.squad, g_squad, "every Gatling shares one SquadController")
+	if f_squad != null:
+		assert_eq(f_squad.member_count(), 2, "both fighters joined the board")
+	if g_squad != null:
+		assert_eq(g_squad.member_count(), 2, "both Gatlings joined the board")
 
 	var squad: SquadController = (swarms[0] as SwarmDrone).squad if not swarms.is_empty() else null
 	assert_not_null(squad, "the Swarm squad shares a SquadController")
@@ -210,6 +282,9 @@ func test_squad_size_is_configurable() -> void:
 	var built := _spawn_hub(PATROL_SEED, 2)
 	var found := _swarm_and_razor(built.container)
 	assert_eq((found.swarms as Array).size(), 2, "squad_size drives the spawned count")
+	var shooters := _shooters(built.container)
+	assert_eq((shooters.fighters as Array).size(), 2, "squad_size drives the Swarm squad only")
+	assert_eq((shooters.gatlings as Array).size(), 2, "squad_size drives the Swarm squad only")
 
 
 func test_every_member_carries_its_groups_shared_patrol_anchor() -> void:
@@ -228,6 +303,24 @@ func test_every_member_carries_its_groups_shared_patrol_anchor() -> void:
 	if razor != null:
 		assert_eq((razor.get_node("Brain") as RazorDroneBrain).patrol_anchor, razor_anchor,
 				"the Razor patrols its own anchor")
+
+
+func test_shooters_carry_their_groups_shared_patrol_anchor() -> void:
+	var built := _spawn_hub(PATROL_SEED)
+	var hub: Node2D = built.hub
+	var shooters := _shooters(built.container)
+	var f_anchor := _shooter_anchor(hub, float(hub.fighter_anchor_bearing_deg))
+	var g_anchor := _shooter_anchor(hub, float(hub.gatling_anchor_bearing_deg))
+	assert_eq((shooters.fighters as Array).size(), 2, "sanity: the fighters spawned")
+	assert_eq((shooters.gatlings as Array).size(), 2, "sanity: the Gatlings spawned")
+	for f: Fighter in shooters.fighters:
+		assert_eq((f.get_node("Brain") as FighterBrain).patrol_anchor, f_anchor,
+				"every fighter shares the squad's patrol_anchor")
+		assert_eq(f.global_position, f_anchor, "a fighter spawns on its anchor")
+	for g: GatlingInterceptor in shooters.gatlings:
+		assert_eq((g.get_node("Brain") as GatlingInterceptorBrain).patrol_anchor, g_anchor,
+				"every Gatling shares the squad's patrol_anchor")
+		assert_eq(g.global_position, g_anchor, "a Gatling spawns on its anchor")
 
 
 func _brain_seeds(container: Node2D) -> Array[int]:
@@ -252,8 +345,17 @@ func test_nobody_perceives_the_player_at_frame_0() -> void:
 	all_drones.append_array(swarms)
 	if found.razor != null:
 		all_drones.append(found.razor)
+	var shooters := _shooters(built.container)
+	all_drones.append_array(shooters.fighters)
+	all_drones.append_array(shooters.gatlings)
 	assert_gt(all_drones.size(), 1, "sanity: something spawned")
 	_tick_all(all_drones)
+	for f: Fighter in shooters.fighters:
+		assert_eq((f.get_node("Brain") as FighterBrain).phase, FighterBrain.Phase.IDLE,
+				"a fighter must not notice the player on its first tick")
+	for g: GatlingInterceptor in shooters.gatlings:
+		assert_eq((g.get_node("Brain") as GatlingInterceptorBrain).phase, GatlingInterceptorBrain.Phase.IDLE,
+				"a Gatling must not notice the player on its first tick")
 	for d: SwarmDrone in swarms:
 		assert_eq((d.get_node("Brain") as SwarmDroneBrain).phase, SwarmDroneBrain.Phase.IDLE,
 				"a Swarm member must not notice the player on its first tick")
@@ -289,3 +391,24 @@ func test_a_razor_pulse_bullets_parent_is_the_enemy_container() -> void:
 	var container: Node2D = built.container
 	var bullets: Array[Node] = container.get_children().filter(func(c: Node) -> bool: return c is EnemyBullet)
 	assert_eq(bullets.size(), 1, "the pulse's parent is EnemyContainer (D4 grandparent rule)")
+
+
+## Plan §2.10: pools resolve to `EnemyContainer` (pool → ship → container). A fighter's Pulse and a
+## Gatling's stream round, fired from the hub-spawned ships, must land there too.
+func test_a_fighter_pulse_and_a_gatling_round_land_in_the_enemy_container() -> void:
+	var built := _spawn_hub(PATROL_SEED, -1, _player_spawn)
+	var container: Node2D = built.container
+	var shooters := _shooters(container)
+	var fighters: Array = shooters.fighters
+	var gatlings: Array = shooters.gatlings
+	assert_false(fighters.is_empty(), "sanity: a fighter spawned")
+	assert_false(gatlings.is_empty(), "sanity: a Gatling spawned")
+	if fighters.is_empty() or gatlings.is_empty():
+		return
+	var before := container.get_children().filter(func(c: Node) -> bool: return c is EnemyBullet).size()
+	((fighters[0] as Fighter).get_node("AimedAttack") as AttackController).fire_now()
+	var after_pulse := container.get_children().filter(func(c: Node) -> bool: return c is EnemyBullet).size()
+	assert_gt(after_pulse, before, "the fighter's Pulse is parented to EnemyContainer")
+	((gatlings[0] as GatlingInterceptor).get_node("Attack") as AttackController).fire_now()
+	var after_stream := container.get_children().filter(func(c: Node) -> bool: return c is EnemyBullet).size()
+	assert_gt(after_stream, after_pulse, "the Gatling's stream round is parented to EnemyContainer")

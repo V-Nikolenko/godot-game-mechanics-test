@@ -1200,3 +1200,17 @@ flies a dry pass on), which relaxes nothing. Later tasks depend on these.
 - `idle_phase_offset` is drawn in `_start()` only when idle begins, never in `_ready()`, so seeded combat sequences are unchanged.
 - Every earlier fighter/Gatling test spawns through a helper that sets `start_engaged`; new cold-start cases are at the end of
   `test_fighter.gd` and `test_gatling_interceptor.gd`.
+
+### Phase 3, built in t13 (hub patrol: fighter pair + Gatling pair) (2026-10-06)
+
+- `SectorHub._spawn_patrol()` adds a fighter squad of 2 and a Gatling squad of 2 (`SHOOTER_SQUAD_SIZE`), each sharing one
+  `SquadController` and one `patrol_anchor` set on the brains before `add_child`. Exports: `shooter_ring_radius` **1500**,
+  `fighter_anchor_bearing_deg` **180**, `gatling_anchor_bearing_deg` **0** — the plan's starting values, **unchanged**: the
+  generic sweep accepted them, so no bearing or ring was moved.
+- **Computed clearances** (nearest `MissionTrigger` / `PickupBase` / player spawn; `idle_radius` 150 for both):
+  fighter anchor (−1500, 0): nearest `LoreLogFortunaManifest`, 922.8 px → 772.8 after the ring → **+232.8** over `perceive_radius` 540.
+  Gatling anchor (1500, 0): nearest `ShipBoostUpPickup`, 798.7 px → 648.7 → **+88.7** over `perceive_radius` 560. These match the
+  plan's estimates (233 / 89). The Gatling's 89 px is thin but positive; a pickup added within ~89 px less will fail the sweep.
+- Shooter rng seeds are drawn after the drones', so the Swarm and Razor seeds for a given `patrol_seed` are unchanged.
+- `test_sector_hub_patrol.gd`: per-group counts replace the total-child-count assertion; clearance rows for both new groups;
+  shared anchors, frame-0 IDLE, and a fighter Pulse / Gatling round landing in `EnemyContainer`.
