@@ -20,7 +20,7 @@ reinforcements play as before.
 | HP | 60 (`fighter_config.tres`) |
 | Damage | 20 contact / 8 per Pulse round on rails |
 | Speed | `max_speed` 300, `acceleration` 700, `turn_rate` 1.8 rad/s (turn radius ≈ 167 px) |
-| Sprite | `assault.png` placeholder `AnimatedSprite2D` (flipped 180° by `_rotate_sprite`); `sprite_forward_angle` PI/2 |
+| Sprite | `fighter.png` (64×64, drawn nose-up: dark hull, pale-blue edge light, red centre stripe, twin engines) in a single-frame `AnimatedSprite2D` flipped 180° by `_rotate_sprite`, so the nose is down in the root frame; `sprite_forward_angle` PI/2; `StateLight` sits on the cockpit at (0, 12) |
 | Scene | `fighter.tscn` |
 | Config | `fighter_config.tres` (flat, `@export_group`ed) |
 

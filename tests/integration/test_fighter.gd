@@ -1344,3 +1344,84 @@ func test_a_squad_leaves_idle_with_no_attack_window_left_open() -> void:
 	for f in fighters:
 		assert_eq(_brain(f).phase, P.IDLE, "the whole squad is home")
 	assert_false(fighters[0].squad.attack_window_open, "no window stays open behind a squad that went home")
+
+
+# ── Art (t14-art-fighter, plan §2.7) ─────────────────────────────────────────────────────────────
+
+## The PNG is drawn nose-UP and the sprite is a single-frame `AnimatedSprite2D`, which
+## `BaseEnemy._rotate_sprite()` turns 180° on entering the tree, so the nose in the root's frame is
+## straight down: PI/2. The node keeps its type and name, so the HitFlash track path and
+## `test_base_enemy.gd`'s flip list stay valid.
+func test_the_scene_declares_the_nose_the_sprite_was_drawn_with() -> void:
+	var h := _harness("open_space")
+	var f := _spawn(h, MID + Vector2(0, -400))
+	var sprite := f.get_node_or_null("AnimatedSprite2D") as AnimatedSprite2D
+	assert_not_null(sprite, "the node the HitFlash track and the flip list name")
+	assert_almost_eq(sprite.rotation_degrees, 180.0, 0.001, "flipped by _rotate_sprite")
+	assert_almost_eq(f.sprite_forward_angle, PI / 2.0, 0.0001)
+	var nose_in_root := Vector2.UP.rotated(sprite.rotation)  # the PNG's nose is up
+	assert_almost_eq(Vector2.RIGHT.rotated(f.sprite_forward_angle).dot(nose_in_root), 1.0, 0.0001,
+		"the declared nose is where the flipped art's nose points")
+
+
+## The declared angle is honest about the PNG: a compact dart — the top rows (the nose) are narrow,
+## the wings at mid-hull are the widest part, and it is well inside a 64 px canvas.
+func test_the_art_is_a_compact_dart_with_the_nose_at_the_top() -> void:
+	var f := SCENE.instantiate() as Fighter
+	var img: Image = ((f.get_node("AnimatedSprite2D") as AnimatedSprite2D).sprite_frames.get_frame_texture(&"default", 0)).get_image()
+	f.free()
+	var first_row := -1
+	var nose_width := 0
+	var widest := 0
+	for y in img.get_height():
+		var lo := img.get_width()
+		var hi := -1
+		for x in img.get_width():
+			if img.get_pixel(x, y).a > 0.5:
+				lo = mini(lo, x)
+				hi = maxi(hi, x)
+		if hi < 0:
+			continue
+		var w := hi - lo + 1
+		if first_row < 0:
+			first_row = y
+			nose_width = w
+		widest = maxi(widest, w)
+	assert_lte(first_row, 6, "the nose reaches the top of the texture")
+	assert_lt(nose_width * 4, widest, "a pointed nose, far narrower than the wings")
+	assert_lte(img.get_width(), 72)
+	assert_lte(img.get_height(), 72)
+	assert_gte(img.get_height(), 56, "56-72 px readable hull")
+
+
+## A forward rail shot on the REAL scene leaves along the travel direction: at the rotation
+## `EnemyMover` would give each heading, the Pulse round goes that way.
+func test_a_forward_rail_shot_leaves_along_the_travel_direction_on_the_real_scene() -> void:
+	var h := _harness("open_space")
+	var f := _spawn(h, MID + Vector2(0, -400), "FORWARD")
+	f.suspend_ai()
+	var p := (f.get_node("AimedAttack") as AttackController).pattern as AimedAttackPattern
+	p.spread_angle = 0.0
+	var pool := f.get_node("AimedPool") as BulletPool
+	for heading in [Vector2.DOWN, Vector2.UP, Vector2.RIGHT]:
+		f.rotation = (heading as Vector2).angle() - f.sprite_forward_angle
+		p.fire(f, pool)
+		var shot: EnemyBullet = null
+		for c in h.root.get_children():
+			if c is EnemyBullet and (c as EnemyBullet).visible:
+				shot = c
+		assert_not_null(shot)
+		var dir := Vector2.from_angle(shot.rotation + PI / 2.0)
+		assert_gt(dir.dot(heading), 0.999, "the round leaves along the travel direction %s" % heading)
+		shot.visible = false
+
+
+## The StateLight sits on the hull (an opaque pixel of the sprite), not floating off the art.
+func test_the_state_light_sits_on_the_hull() -> void:
+	var h := _harness("open_space")
+	var f := _spawn(h, MID + Vector2(0, -400))
+	var sprite := f.get_node("AnimatedSprite2D") as AnimatedSprite2D
+	var tex := sprite.sprite_frames.get_frame_texture(&"default", 0)
+	var img := tex.get_image()
+	var local := sprite.to_local((f.get_node("StateLight") as Node2D).global_position) + Vector2(img.get_size()) * 0.5
+	assert_gt(img.get_pixelv(Vector2i(local)).a, 0.99, "StateLight at texture pixel %s is on opaque hull" % local)
