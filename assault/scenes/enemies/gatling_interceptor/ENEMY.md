@@ -19,7 +19,7 @@ not built yet.
 | Damage | 20 contact (`collision_damage`, applied from config) / 4 per round (`round_damage`; rail `rail_damage`) |
 | Speed | 260 px/s cruise; 140 px/s strafe while firing; 520 px/s on the Assault exit |
 | Rounds | Gatling Stream (`EnemyRounds.GATLING_STREAM`): a thin red streak, 1400 px range. AI 240 px/s, rail 220 px/s |
-| Sprite | `interceptor.png` (legacy placeholder, a `Sprite2D`; replaced in t15) |
+| Sprite | `interceptor.png`, 64x64 top-down, drawn nose-down (`sprite_forward_angle` = PI/2, the default); a `Sprite2D`, so no 180° flip. Wide wing pods and a three-barrel rotary cannon at the nose; `StateLight` at (0, 14) on the hull |
 | Scene | `gatling_interceptor.tscn` |
 | Config | `gatling_interceptor_config.tres` |
 

@@ -109,7 +109,7 @@ constraint_mode = 0
 script = ExtResource("8_brain")
 
 [node name="StateLight" type="Node2D" parent="."]
-position = Vector2(0, -10)
+position = Vector2(0, 14)
 script = ExtResource("9_light")
 
 [node name="StreamPool" type="Node" parent="."]

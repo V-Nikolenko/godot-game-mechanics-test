@@ -272,9 +272,9 @@ either would double it.
 Why these numbers:
 
 - **±440 / ±290 design.** The margin has to exceed half the largest sprite. The largest
-  reinforcement is the interceptor at **64×74** (its `Sprite2D` carries no `scale` — the `1.8` in
-  `gatling_interceptor.tscn` is on the sibling `CollisionShape2D`), so half-extent **37**. Horizontal
-  budget `640 + 37 = 677` world px; vertical `360 + 37 = 397`. ±440 gives 880 and ±290 gives 580 —
+  reinforcement is the interceptor at **64×64** (was 64×74 before its t15 sprite) (its `Sprite2D` carries no `scale` — the `1.8` in
+  `gatling_interceptor.tscn` is on the sibling `CollisionShape2D`), so half-extent **32**. Horizontal
+  budget `640 + 32 = 672` world px; vertical `360 + 32 = 392`. ±440 gives 880 and ±290 gives 580 —
   both comfortably clear.
   **Camera-pan headroom (`H_LIMIT`/`V_LIMIT`) is no longer part of this budget.** It used to be,
   because `_spawn_origin()` resolved against the camera's fixed centre while a player could pan up

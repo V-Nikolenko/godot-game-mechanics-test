@@ -653,3 +653,78 @@ func test_phase_changed_carries_the_phase_entered() -> void:
 	watch_signals(_brain(g))
 	_brain(g).enter_phase(P.COOLDOWN)
 	assert_signal_emitted_with_parameters(_brain(g), "phase_changed", [P.COOLDOWN])
+
+
+# ── Art (t15-art-gatling, plan §2.7) ─────────────────────────────────────────────────────────────
+
+## The sprite is drawn nose-DOWN (rotation 0 faces the way an Assault enemy enters) and is a plain
+## `Sprite2D`, which `BaseEnemy._rotate_sprite()` never flips, so the nose in the root's frame is straight
+## down: PI/2. The old placeholder was drawn nose-up under the same default, so it faced out of its tail.
+func test_the_scene_declares_the_nose_the_sprite_was_drawn_with() -> void:
+	var g := SCENE.instantiate() as GatlingInterceptor
+	assert_almost_eq(g.sprite_forward_angle, PI / 2.0, 0.0001)
+	assert_not_null(g.get_node_or_null("Sprite2D") as Sprite2D, "the node the HitFlash track names")
+	assert_null(g.get_node_or_null("AnimatedSprite2D"), "a Sprite2D, so no 180 deg flip")
+	g.free()
+
+
+## The declared angle is honest about the PNG: the bottom-most opaque rows (the barrel cluster) are a narrow
+## nose, the widest row is the side-heavy wing span, and the nose is narrower than 1/4 of that span.
+func test_the_art_has_a_narrow_nose_and_a_side_heavy_hull() -> void:
+	var g := SCENE.instantiate() as GatlingInterceptor
+	var img: Image = (g.get_node("Sprite2D") as Sprite2D).texture.get_image()
+	g.free()
+	var nose_row := -1
+	var widest := 0
+	var nose_width := 0
+	for y in img.get_height():
+		var lo := img.get_width()
+		var hi := -1
+		for x in img.get_width():
+			if img.get_pixel(x, y).a > 0.5:
+				lo = mini(lo, x)
+				hi = maxi(hi, x)
+		if hi < 0:
+			continue
+		var w := hi - lo + 1
+		nose_row = y
+		nose_width = w
+		widest = maxi(widest, w)
+	assert_gte(nose_row, img.get_height() - 3, "the nose reaches the bottom edge of the texture")
+	assert_gte(widest, 44, "side-heavy: the wing span is most of the 64 px canvas")
+	assert_lt(nose_width * 4, widest, "the nose (rotary cannon) is far narrower than the wings")
+	assert_lte(img.get_width(), 72)
+	assert_lte(img.get_height(), 72)
+
+
+## Forward fire goes out of the nose on the REAL scene, not along a hard-coded direction: at rotation 0
+## it goes down, and turned by `EnemyMover`'s own facing rule to head UP or RIGHT it follows.
+func test_forward_fire_leaves_the_nose_on_the_real_scene() -> void:
+	var h := _harness("open_space")
+	var g := _spawn(h, MID + Vector2(0, -400))
+	g.suspend_ai()
+	var p := (g.get_node("Attack") as AttackController).pattern as GatlingAttackPattern
+	p.aim_at_player = false
+	p.spread_angle = 0.0
+	var pool := g.get_node("StreamPool") as BulletPool
+	for heading in [Vector2.UP, Vector2.RIGHT, Vector2.DOWN]:
+		g.rotation = (heading as Vector2).angle() - g.sprite_forward_angle
+		p.fire(g, pool)
+		var shot: EnemyBullet = null
+		for c in h.root.get_children():
+			if c is EnemyBullet and (c as EnemyBullet).visible:
+				shot = c
+		assert_not_null(shot)
+		var dir := Vector2.from_angle(shot.rotation + PI / 2.0)
+		assert_gt(dir.dot(heading), 0.999, "the round leaves along the nose %s" % heading)
+		shot.visible = false
+
+
+## The StateLight sits on the hull (an opaque pixel of the sprite), not floating off the art.
+func test_the_state_light_sits_on_the_hull() -> void:
+	var g := SCENE.instantiate() as GatlingInterceptor
+	var sprite := g.get_node("Sprite2D") as Sprite2D
+	var img: Image = sprite.texture.get_image()
+	var local := (g.get_node("StateLight") as Node2D).position - sprite.position + Vector2(img.get_size()) * 0.5
+	g.free()
+	assert_gt(img.get_pixelv(Vector2i(local)).a, 0.99, "StateLight at texture pixel %s is on opaque hull" % local)
