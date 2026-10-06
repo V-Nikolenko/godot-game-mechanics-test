@@ -1120,11 +1120,11 @@ func test_budget_expiry_with_no_burst_disengages_on_the_same_tick() -> void:
 const FAR_AWAY := Vector2(100000.0, 100000.0)
 
 
-func _idle_spawn(h: RefCounted, pos: Vector2, squad: SquadController = null, anchor: Vector2 = Vector2.INF) -> Fighter:
+func _idle_spawn(h: RefCounted, pos: Vector2, squad: SquadController = null, anchor: Vector2 = Vector2.INF, rng_seed: int = SEED) -> Fighter:
 	var f := SCENE.instantiate() as Fighter
 	f.global_position = pos
 	f.squad = squad
-	_brain(f).rng_seed = SEED
+	_brain(f).rng_seed = rng_seed
 	_brain(f).patrol_anchor = anchor
 	h.root.add_child(f)
 	f.set_physics_process(false)
@@ -1135,8 +1135,9 @@ func _idle_spawn(h: RefCounted, pos: Vector2, squad: SquadController = null, anc
 func _idle_squad(h: RefCounted, anchor: Vector2, offsets: Array) -> Array[Fighter]:
 	var squad := SquadController.new()
 	var out: Array[Fighter] = []
-	for off in offsets:
-		out.append(_idle_spawn(h, anchor + off, squad, anchor))
+	for i in offsets.size():
+		# Each member has its own seed, as the hub gives them, so ring spacing is tested under real draws.
+		out.append(_idle_spawn(h, anchor + offsets[i], squad, anchor, SEED + i))
 	return out
 
 

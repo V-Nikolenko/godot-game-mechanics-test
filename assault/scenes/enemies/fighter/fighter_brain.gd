@@ -156,9 +156,12 @@ var start_engaged: bool = false
 ## Open Space only (`budget.active == false` and not `start_engaged`); null otherwise. Built once, in
 ## `_start()`.
 var anchor_idle: AnchorIdle
-## This fighter's offset on the idle ring (rad), drawn from `rng` when the idle starts (never for an
+## This fighter's offset on the idle ring (rad), drawn from `rng` within ±`MAX_IDLE_PHASE_OFFSET` when the idle starts (never for an
 ## engaged fighter, so a seeded combat sequence is unchanged).
 var idle_phase_offset: float = 0.0
+## `idle_phase_offset` is drawn from ±this (rad), bounded so it never undoes the idle ring's
+## `member_index × TAU / member_count` spacing (same idea as the Swarm's `MAX_PHASE_OFFSET`).
+const MAX_IDLE_PHASE_OFFSET := 0.35
 
 var phase: Phase = Phase.APPROACH
 ## Built on the first tick. Null before it.
@@ -401,7 +404,7 @@ func _start() -> void:
 		patrol_anchor = actor.global_position
 	if not budget.active and not start_engaged:
 		anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time, config.idle_radius)
-		idle_phase_offset = rng.randf_range(0.0, TAU)
+		idle_phase_offset = rng.randf_range(-MAX_IDLE_PHASE_OFFSET, MAX_IDLE_PHASE_OFFSET)
 		enter_phase(Phase.IDLE)
 
 

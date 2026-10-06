@@ -740,11 +740,11 @@ func test_the_state_light_sits_on_the_hull() -> void:
 const FAR_AWAY := Vector2(100000.0, 100000.0)
 
 
-func _idle_spawn(h: RefCounted, pos: Vector2, squad: SquadController = null, anchor: Vector2 = Vector2.INF) -> GatlingInterceptor:
+func _idle_spawn(h: RefCounted, pos: Vector2, squad: SquadController = null, anchor: Vector2 = Vector2.INF, rng_seed: int = SEED) -> GatlingInterceptor:
 	var g := SCENE.instantiate() as GatlingInterceptor
 	g.global_position = pos
 	g.squad = squad
-	_brain(g).rng_seed = SEED
+	_brain(g).rng_seed = rng_seed
 	_brain(g).patrol_anchor = anchor
 	h.root.add_child(g)
 	g.set_physics_process(false)
@@ -755,8 +755,9 @@ func _idle_spawn(h: RefCounted, pos: Vector2, squad: SquadController = null, anc
 func _idle_squad(h: RefCounted, anchor: Vector2, offsets: Array) -> Array[GatlingInterceptor]:
 	var squad := SquadController.new()
 	var out: Array[GatlingInterceptor] = []
-	for off in offsets:
-		out.append(_idle_spawn(h, anchor + off, squad, anchor))
+	for i in offsets.size():
+		# Each member has its own seed, as the hub gives them, so ring spacing is tested under real draws.
+		out.append(_idle_spawn(h, anchor + offsets[i], squad, anchor, SEED + i))
 	return out
 
 

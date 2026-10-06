@@ -187,7 +187,7 @@ fighter/
 Open Space only. A fighter with no `EngagementBudget` (no Assault arena) and `start_engaged == false` builds an
 `AnchorIdle` on `patrol_anchor` (`Vector2.INF` = its spawn point; `SectorHub` sets one shared anchor per squad) and
 starts in **IDLE**: a slow ring orbit (`idle_radius` 150, `idle_speed` 0.5 rad/s, angle = `idle_phase_offset +
-member_index × TAU / member_count + idle_speed × t`), no shots. Within `perceive_radius` (540, ≥ `fire_range`) it goes
+member_index × TAU / member_count + idle_speed × t`, offset bounded to ±0.35 rad so it never undoes the spacing), no shots. Within `perceive_radius` (540, ≥ `fire_range`) it goes
 **NOTICING** (one `blink_once`, nose on the player, `notice_time` 0.35 s), then APPROACH. Engagement is recomputed
 every tick; a squad stays engaged while any member is (`hold_combat`) and goes **RETURNING** together beyond
 `lose_radius` (900), `arrive`-ing at the anchor, then IDLE. Entering IDLE/RETURNING drops the pass in progress, closes a
