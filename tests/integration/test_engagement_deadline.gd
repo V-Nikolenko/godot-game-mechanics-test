@@ -20,6 +20,7 @@
 extends GutTest
 
 const DIRECTOR_SCRIPT := preload("res://assault/scenes/levels/edelia/1/level_1_director.gd")
+const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.gd")
 
 const SWARM_CONFIG: SwarmDroneConfig = preload("res://assault/scenes/enemies/swarm_drone/swarm_drone_config.tres")
 const RAZOR_CONFIG: RazorDroneConfig = preload("res://assault/scenes/enemies/razor_drone/razor_drone_config.tres")
@@ -91,8 +92,8 @@ func _swarm_deadline(last_wave_max_delay: float, exit_distance: float) -> float:
 func _razor_deadline(last_wave_max_delay: float, exit_distance: float) -> float:
 	var c := RAZOR_CONFIG
 	return last_wave_max_delay + c.engage_seconds + c.max_dash_seconds \
-		+ (c.dash_speed + c.exit_speed) / minf(c.acceleration, c.braking) \
-		+ (exit_distance + c.dash_speed * c.dash_speed / (2.0 * c.braking)) / c.exit_speed + MARGIN
+		+ DroneConcurrency.worst_exit_after_speed(c.dash_speed, c.exit_speed, c.acceleration, c.braking,
+			exit_distance) + MARGIN
 
 
 func _section_has_scene(section: LevelSection, scene_path: String) -> bool:

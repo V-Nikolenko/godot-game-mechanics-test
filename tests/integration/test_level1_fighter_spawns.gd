@@ -13,6 +13,15 @@
 ## choice this file freezes, not a rule it derives. A failure means "the fighter/interceptor spawns
 ## changed", which is expected starting at t6 (rename) and t8-t17 (AI rebuild + migration).
 ##
+## ── t16: deep_space and planet_approach are AI sections now ───────────────────────────────────
+##
+## t16 (docs/plans/cmulwkarm00cpqj2xfwq3ue8h/3-plan.md) took their fighters and the Gatling pair off
+## rails: their 37 rows below keep trigger, offset, delay and formation, with `movement` false,
+## `free_after` 0 and no `aim_mode`. Their density gates are at the bottom of this file (all-alive
+## and attack-capable, analytic) and in `test_level1_fighter_fire_density.gd` (shots/s, measured on a
+## real `WaveManager` run — the owner's option A, docs/plans/cmulwkarm00cpqj2xfwq3ue8h/5-escalation.md).
+## cloud_descent (t17) is still on rails.
+##
 ## ── Why `_build_sections()`, not the level scene ─────────────────────────────────────────────
 ##
 ## Same reasoning as `test_level1_drone_spawns.gd`: `Level1Director._build_sections()` is callable
@@ -73,48 +82,49 @@ const _CULL_STEP: float = 0.02
 ## Every FIGHTER / GATLING_INTERCEPTOR entry in `_build_sections()`, in encounter order, as pinned from a
 ## computed run of `_actual_fighter_spawns()` below (this task's HEAD — see `git log`). `aim_mode`
 ## is the literal `SpawnConfig.shoot_forward()`/`.shoot_at_player()` string ("" when neither was
-## called — the ship then falls back to its config default, "PLAYER"). `free_after` is the
+## called — a rail ship then falls back to its config default, "PLAYER"; an AI ship ignores it).
+## deep_space and planet_approach rows are AI rows since t16 (no movement, no aim_mode). `free_after` is the
 ## `.free_after(seconds)` value, or 0.0 when the entry uses the default FREE_ON_SCREEN_EXIT.
 ## Regenerate by walking `_build_sections()` the same way `_actual_fighter_spawns()` does — never
 ## hand-edit a single row without re-deriving the whole table.
 const EXPECTED: Array[Dictionary] = [
-	{"section": &"deep_space", "kind": "GATLING_INTERCEPTOR", "trigger": 0.00, "offset": Vector2(-200.0, -420.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": true},
-	{"section": &"deep_space", "kind": "GATLING_INTERCEPTOR", "trigger": 0.00, "offset": Vector2(200.0, -420.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 2.00, "offset": Vector2(-150.0, -400.0), "delay": 0.50, "formation": &"VFormation", "formation_count": 5, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(260.0, -400.0), "delay": 0.50, "formation": &"VFormation", "formation_count": 3, "aim_mode": "FORWARD", "free_after": 12.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 6.50, "offset": Vector2(-500.0, -30.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.50, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 6.50, "offset": Vector2(500.0, -30.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.50, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 8.00, "offset": Vector2(370.0, -400.0), "delay": 0.00, "formation": &"DiagonalFormation", "formation_count": 5, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 13.50, "offset": Vector2(-500.0, 30.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "FORWARD", "free_after": 5.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 14.00, "offset": Vector2(-370.0, -400.0), "delay": 0.00, "formation": &"DiagonalFormation", "formation_count": 5, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 17.00, "offset": Vector2(-500.0, 30.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 18.50, "offset": Vector2(-500.0, 0.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "FORWARD", "free_after": 5.50, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 18.50, "offset": Vector2(500.0, 0.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "FORWARD", "free_after": 5.50, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 20.00, "offset": Vector2(260.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "aim_mode": "FORWARD", "free_after": 6.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 20.00, "offset": Vector2(-260.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "aim_mode": "FORWARD", "free_after": 6.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 24.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 5, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 25.00, "offset": Vector2(-500.0, -30.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 25.00, "offset": Vector2(500.0, -30.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.00, "movement": true},
-	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 29.00, "offset": Vector2(0.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(-260.0, -400.0), "delay": 0.00, "formation": &"VFormation", "formation_count": 3, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 11.00, "offset": Vector2(-500.0, -30.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 20.00, "offset": Vector2(260.0, -400.0), "delay": 0.00, "formation": &"VFormation", "formation_count": 3, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 20.00, "offset": Vector2(-500.0, 30.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "aim_mode": "FORWARD", "free_after": 5.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 39.00, "offset": Vector2(-500.0, 50.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.50, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 39.00, "offset": Vector2(500.0, 50.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.50, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 47.00, "offset": Vector2(500.0, -30.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 50.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"VFormation", "formation_count": 5, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 58.00, "offset": Vector2(-500.0, -30.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 58.00, "offset": Vector2(500.0, -30.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 5.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(-220.0, -400.0), "delay": 0.00, "formation": &"DiagonalFormation", "formation_count": 3, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(220.0, -400.0), "delay": 0.30, "formation": &"DiagonalFormation", "formation_count": 3, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 78.00, "offset": Vector2(-500.0, 60.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "FORWARD", "free_after": 4.50, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 78.00, "offset": Vector2(500.0, 60.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "FORWARD", "free_after": 4.50, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 80.00, "offset": Vector2(375.0, -400.0), "delay": 0.00, "formation": &"DiagonalFormation", "formation_count": 5, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 80.00, "offset": Vector2(-280.0, -400.0), "delay": 0.40, "formation": &"DiagonalFormation", "formation_count": 3, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 98.00, "offset": Vector2(-180.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 98.00, "offset": Vector2(180.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
-	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 102.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 5, "aim_mode": "FORWARD", "free_after": 0.00, "movement": true},
+	{"section": &"deep_space", "kind": "GATLING_INTERCEPTOR", "trigger": 0.00, "offset": Vector2(-200.0, -420.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "GATLING_INTERCEPTOR", "trigger": 0.00, "offset": Vector2(200.0, -420.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 2.00, "offset": Vector2(-150.0, -400.0), "delay": 0.50, "formation": &"VFormation", "formation_count": 5, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(260.0, -400.0), "delay": 0.50, "formation": &"VFormation", "formation_count": 3, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 6.50, "offset": Vector2(-500.0, -30.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 6.50, "offset": Vector2(500.0, -30.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 8.00, "offset": Vector2(370.0, -400.0), "delay": 0.00, "formation": &"DiagonalFormation", "formation_count": 5, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 13.50, "offset": Vector2(-500.0, 30.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 14.00, "offset": Vector2(-370.0, -400.0), "delay": 0.00, "formation": &"DiagonalFormation", "formation_count": 5, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 17.00, "offset": Vector2(-500.0, 30.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 18.50, "offset": Vector2(-500.0, 0.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 18.50, "offset": Vector2(500.0, 0.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 20.00, "offset": Vector2(260.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 20.00, "offset": Vector2(-260.0, -400.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 24.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 5, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 25.00, "offset": Vector2(-500.0, -30.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 25.00, "offset": Vector2(500.0, -30.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"deep_space", "kind": "FIGHTER", "trigger": 29.00, "offset": Vector2(0.0, -400.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(-260.0, -400.0), "delay": 0.00, "formation": &"VFormation", "formation_count": 3, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 11.00, "offset": Vector2(-500.0, -30.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 20.00, "offset": Vector2(260.0, -400.0), "delay": 0.00, "formation": &"VFormation", "formation_count": 3, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 20.00, "offset": Vector2(-500.0, 30.0), "delay": 0.50, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 39.00, "offset": Vector2(-500.0, 50.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 39.00, "offset": Vector2(500.0, 50.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 47.00, "offset": Vector2(500.0, -30.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 50.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"VFormation", "formation_count": 5, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 58.00, "offset": Vector2(-500.0, -30.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 58.00, "offset": Vector2(500.0, -30.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(-220.0, -400.0), "delay": 0.00, "formation": &"DiagonalFormation", "formation_count": 3, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 72.00, "offset": Vector2(220.0, -400.0), "delay": 0.30, "formation": &"DiagonalFormation", "formation_count": 3, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 78.00, "offset": Vector2(-500.0, 60.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 78.00, "offset": Vector2(500.0, 60.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 80.00, "offset": Vector2(375.0, -400.0), "delay": 0.00, "formation": &"DiagonalFormation", "formation_count": 5, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 80.00, "offset": Vector2(-280.0, -400.0), "delay": 0.40, "formation": &"DiagonalFormation", "formation_count": 3, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 98.00, "offset": Vector2(-180.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 98.00, "offset": Vector2(180.0, -400.0), "delay": 0.40, "formation": &"none", "formation_count": -1, "aim_mode": "", "free_after": 0.00, "movement": false},
+	{"section": &"planet_approach", "kind": "FIGHTER", "trigger": 102.00, "offset": Vector2(0.0, -400.0), "delay": 0.00, "formation": &"WedgeFormation", "formation_count": 5, "aim_mode": "", "free_after": 0.00, "movement": false},
 	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(-500.0, 20.0), "delay": 0.00, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
 	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(-500.0, 60.0), "delay": 0.30, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
 	{"section": &"cloud_descent", "kind": "FIGHTER", "trigger": 5.00, "offset": Vector2(-500.0, 100.0), "delay": 0.60, "formation": &"none", "formation_count": -1, "aim_mode": "PLAYER", "free_after": 4.50, "movement": true},
@@ -392,6 +402,13 @@ func _rate_for(path: String, _offset: Vector2, _movement: MovementResource, _exi
 		live["fighter_pool_size"], live["fighter_max_distance"])
 
 
+## The sections whose rails still exist, so their frozen constants can still be recomputed from live
+## data. t16 retired deep_space and planet_approach from this check: their `.move()` / `.free_after()`
+## / `shoot_*()` are gone, so there is nothing left to recompute the constants FROM — the constants
+## stay frozen above and the t16 density gates keep dividing by them (review B6). t17 empties this.
+const _RAIL_SECTIONS: Array[StringName] = [&"cloud_descent"]
+
+
 func test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants() -> void:
 	var cam := ArenaCamera.new()
 	add_child_autofree(cam)
@@ -401,7 +418,7 @@ func test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants() -> void:
 
 	var checked := 0
 	for section: LevelSection in _build_sections():
-		if not _LEGACY_PEAK_FIGHTERS.has(section.section_name):
+		if not _RAIL_SECTIONS.has(section.section_name):
 			continue
 		checked += 1
 		var intervals := DroneConcurrency.spawn_intervals(section, ship_paths, lifetime_fn, rate_fn)
@@ -411,7 +428,7 @@ func test_legacy_peak_fighters_and_shots_per_s_match_frozen_constants() -> void:
 			"%s: legacy peak concurrent fighters/interceptors changed" % section.section_name)
 		assert_almost_eq(peak_rate, float(_LEGACY_PEAK_SHOTS_PER_S[section.section_name]), 0.01,
 			"%s: legacy peak shots/s changed" % section.section_name)
-	assert_eq(checked, 3, "sanity: all three fighter/interceptor sections were checked")
+	assert_eq(checked, _RAIL_SECTIONS.size(), "sanity: every section still on rails was checked")
 
 
 ## Boundary for the shared helper: an empty section computes a peak of 0, never an error or a
@@ -429,3 +446,159 @@ func test_a_section_with_no_fighters_has_zero_peak_concurrency_and_rate() -> voi
 		assert_eq(intervals.size(), 0, "asteroid_belt spawns no fighters or interceptors")
 		assert_eq(DroneConcurrency.peak_interval_count(intervals), 0)
 		assert_eq(DroneConcurrency.peak_interval_rate(intervals), 0.0)
+
+
+# ── t16: deep_space and planet_approach off rails (docs/plans/cmulwkarm00cpqj2xfwq3ue8h/3-plan.md) ──
+
+## The sections t16 migrated. Their shots/s gate is measured, not computed — see
+## `test_level1_fighter_fire_density.gd` (owner option A).
+const MIGRATED_SECTIONS: Array[StringName] = [&"deep_space", &"planet_approach"]
+
+## Ratios of epic §2.9.2, against the FROZEN `_LEGACY_PEAK_FIGHTERS` (never recomputed — the rails it
+## was computed from are gone). Shots/s's 1.25 lives in the measured gate's file.
+const _ALL_ALIVE_RATIO := 2.0
+const _CAPABLE_RATIO := 1.5
+
+const _FIGHTER_CONFIG: FighterConfig = preload("res://assault/scenes/enemies/fighter/fighter_config.tres")
+const _GATLING_CONFIG: GatlingInterceptorConfig = \
+	preload("res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres")
+
+
+func test_migrated_sections_have_no_rail_left() -> void:
+	var checked := 0
+	for section: LevelSection in _build_sections():
+		if not MIGRATED_SECTIONS.has(section.section_name):
+			continue
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+				if path != _FIGHTER and path != _GATLING:
+					continue
+				checked += 1
+				var where := "%s @ %.1f s, offset %s" % [section.section_name, wave.trigger_time, entry.base_offset]
+				assert_null(entry.movement, "%s still has a rail (.move())" % where)
+				assert_ne(entry.exit_mode, EnemyPathMover.ExitMode.FREE_ON_DURATION,
+					"%s still has .free_after()" % where)
+				assert_false(entry.initial_props.has("aim_mode"), "%s still has a shoot_*() aim_mode" % where)
+	assert_eq(checked, 37, "sanity: the 18 + 19 migrated fighter/Gatling lines were all checked")
+
+
+## Loose lines of one kind that share a wave fight as one squad, tagged `w<wave index>f` (fighters) or
+## `w<wave index>g` (Gatlings) — the Ph2 convention. A lone loose line stays untagged: `WaveManager`
+## keys it as a squad of one either way.
+func test_loose_pairs_are_tagged_with_their_wave_index() -> void:
+	var tagged := 0
+	for section: LevelSection in _build_sections():
+		if not MIGRATED_SECTIONS.has(section.section_name):
+			continue
+		for wave_index in section.waves.size():
+			var wave: WaveResource = section.waves[wave_index]
+			for path: String in [_FIGHTER, _GATLING]:
+				var loose: Array[SpawnEntryResource] = []
+				for entry: SpawnEntryResource in wave.entries:
+					if entry.ship_scene and entry.ship_scene.resource_path == path and entry.formation == null:
+						loose.append(entry)
+				if loose.size() < 2:
+					continue
+				var expected := "w%d%s" % [wave_index, "g" if path == _GATLING else "f"]
+				for entry: SpawnEntryResource in loose:
+					tagged += 1
+					assert_eq(String(entry.squad_id), expected, "%s wave %d (%.1f s): loose %s line's squad tag"
+						% [section.section_name, wave_index, wave.trigger_time, path.get_file()])
+	assert_eq(tagged, 18, "sanity: 9 loose pairs (1 Gatling, 8 fighter) across the two sections")
+
+
+## Boundary: a migrated fighter line given a rail again must not match the pin.
+func test_a_fighter_line_given_move_again_fails_the_pin() -> void:
+	var sections := _build_sections()
+	var mutated := false
+	for section: LevelSection in sections:
+		if section.section_name != &"deep_space":
+			continue
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if not mutated and entry.ship_scene and entry.ship_scene.resource_path == _FIGHTER:
+					entry.movement = StraightMovement.new()
+					mutated = true
+	assert_true(mutated, "sanity: deep_space has a fighter line to mutate")
+	assert_ne(_actual_fighter_spawns(sections), EXPECTED,
+		"a deep_space fighter line with .move() put back must not match the pin")
+
+
+## Half the shorter side of the live `projectile_world_rect()` — the farthest a ship can be from
+## its nearest exit edge (the same `exit_distance` `test_engagement_deadline.gd` uses).
+func _exit_distance() -> float:
+	var cam := ArenaCamera.new()
+	add_child_autofree(cam)
+	var rect := cam.projectile_world_rect()
+	return minf(rect.size.x, rect.size.y) / 2.0
+
+
+## Each AI kind's lifetime, attackers per squad and analytic rate, from the shipped configs — see
+## `DroneConcurrency.ai_shooter_kinds()`.
+func _ai_kinds() -> Dictionary:
+	return DroneConcurrency.ai_shooter_kinds(_FIGHTER_CONFIG, _GATLING_CONFIG, _exit_distance())
+
+
+## The all-alive and attack-capable gates for one section's intervals, with every figure printed.
+func _assert_count_gates(name: StringName, intervals: Array[Dictionary]) -> void:
+	var legacy := int(_LEGACY_PEAK_FIGHTERS[name])
+	var all_alive := DroneConcurrency.peak_intervals(intervals)
+	var capable := DroneConcurrency.peak_intervals(intervals, true)
+	gut.p("%s: all-alive peak %d (limit %.1f = %.1f x frozen %d); attack-capable peak %d (limit %.1f), "
+		% [name, all_alive, _ALL_ALIVE_RATIO * legacy, _ALL_ALIVE_RATIO, legacy, capable, _CAPABLE_RATIO * legacy]
+		+ "min(alive, cap) model %d; analytic shots/s %.2f (printed only, frozen %.2f)"
+		% [DroneConcurrency.peak_min_alive_cap(intervals), DroneConcurrency.peak_interval_rate(intervals),
+			float(_LEGACY_PEAK_SHOTS_PER_S[name])])
+	assert_lte(float(all_alive), _ALL_ALIVE_RATIO * legacy, "%s: all-alive peak over %.1fx legacy" % [name, _ALL_ALIVE_RATIO])
+	assert_lte(float(capable), _CAPABLE_RATIO * legacy, "%s: attack-capable peak over %.1fx legacy" % [name, _CAPABLE_RATIO])
+
+
+func test_migrated_sections_all_alive_and_attack_capable_peaks_within_their_ratios() -> void:
+	var kinds := _ai_kinds()
+	gut.p("AI lifetimes: fighter %.2f s, Gatling %.2f s" % [kinds[_FIGHTER]["life"], kinds[_GATLING]["life"]])
+	var checked := 0
+	for section: LevelSection in _build_sections():
+		if not MIGRATED_SECTIONS.has(section.section_name):
+			continue
+		checked += 1
+		_assert_count_gates(section.section_name, DroneConcurrency.shooter_squad_intervals(section, kinds))
+	assert_eq(checked, MIGRATED_SECTIONS.size(), "sanity: both migrated sections were checked")
+
+
+## Boundary: the count gates can reject. One extra V of 3 fighters at planet_approach's own
+## attack-capable peak moment pushes that peak past 1.5x the frozen constant; two more Vs of 5 push
+## the all-alive peak past 2.0x. Computed through the same `shooter_squad_intervals()` the gate uses,
+## on a fresh `_build_sections()`, so nothing shared is mutated.
+func test_extra_formations_at_the_peak_break_the_count_gates() -> void:
+	var kinds := _ai_kinds()
+	var section: LevelSection = null
+	for s: LevelSection in _build_sections():
+		if s.section_name == &"planet_approach":
+			section = s
+	assert_not_null(section, "sanity: level 1 has planet_approach")
+	if section == null:
+		return
+	var legacy := int(_LEGACY_PEAK_FIGHTERS[&"planet_approach"])
+	var before := DroneConcurrency.shooter_squad_intervals(section, kinds)
+	var t_peak := DroneConcurrency.capable_peak_time(before)
+	var capable_before := DroneConcurrency.peak_intervals(before, true)
+	var all_before := DroneConcurrency.peak_intervals(before)
+
+	var b := WaveBuilder.new()
+	section.waves.append(b.wave(t_peak, [b.fighter().formation(b.v_formation(3, 40.0, 12.0, 0.0)).at(0, -400)]))
+	var with_v3 := DroneConcurrency.shooter_squad_intervals(section, kinds)
+	var capable_after := DroneConcurrency.peak_intervals(with_v3, true)
+	gut.p("planet_approach + V3 at %.2f s: attack-capable %d -> %d (limit %.1f)"
+		% [t_peak, capable_before, capable_after, _CAPABLE_RATIO * legacy])
+	assert_eq(capable_after, capable_before + 3, "a V of 3 at the capable peak adds exactly its 3 attackers")
+	assert_gt(float(capable_after), _CAPABLE_RATIO * legacy, "the attack-capable gate must reject this")
+
+	section.waves.append(b.wave(t_peak, [
+		b.fighter().formation(b.v_formation(5, 40.0, 12.0, 0.0)).at(-200, -400),
+		b.fighter().formation(b.v_formation(5, 40.0, 12.0, 0.0)).at(200, -400),
+	]))
+	var all_after := DroneConcurrency.peak_intervals(DroneConcurrency.shooter_squad_intervals(section, kinds))
+	gut.p("planet_approach + V3 + 2 x V5 at %.2f s: all-alive %d -> %d (limit %.1f)"
+		% [t_peak, all_before, all_after, _ALL_ALIVE_RATIO * legacy])
+	assert_gt(float(all_after), _ALL_ALIVE_RATIO * legacy, "the all-alive gate must reject this")

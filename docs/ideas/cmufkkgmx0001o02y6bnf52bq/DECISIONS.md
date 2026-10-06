@@ -1232,3 +1232,50 @@ level edit is kept as `prototype/level1_duration_rails_off.patch`. What later ta
   measured real-run check, is recommended). t17 (cloud_descent) will meet the same gate shape.
 - **Separation in the shipped formations** (the t9 note): closest approach 50.4 / 54.0 px against a 57.2 px hull
   diameter — brief contacts. Not gated.
+
+### Phase 3, t16 (level 1 deep_space / planet_approach off rails): built with the owner's option A (2026-10-06)
+
+Plan: `docs/plans/cmulwkarm00cpqj2xfwq3ue8h/3-plan.md` (Revision 2, independent review round 2 APPROVED). This supersedes
+the "escalated, nothing built" note above.
+
+- **Level edit as epic §2.9.2.** In `_build_section_1()` and `_build_section_2()`, every fighter line lost `.move()`,
+  `.free_after()` and `shoot_*()`. The deep_space pair is `gatling_interceptor()` `squad(&"w0g")`. Loose pairs are tagged
+  `w9f w20f w22f w27f` (deep_space) and `w11f w18f w24f w30f` (planet_approach). **Lone loose fighters stay untagged
+  on purpose:** `WaveManager` keys them as a squad of one either way, which is the Ph2 lone-drone convention. Triggers,
+  offsets, delays and formations are unchanged, as the pin shows.
+- **Owner decision, option A: the shots/s gate is measured, not computed.** The epic's analytic shots/s figure is
+  printed but not asserted. `tests/integration/test_level1_fighter_fire_density.gd` (**new intent test; t18: add it to
+  the CLAUDE.md gate paragraph**) runs each section's fighter and Gatling entries through a real `WaveManager`, with
+  every wave kept in list order and a stationary player stub. It counts every `EnemyBullet` entering the container and
+  asserts that the peak shots in any 2 s window ÷ 2 is at most 1.25 × the frozen `_LEGACY_PEAK_SHOTS_PER_S`. Every brain
+  is seeded from its spawn index (`EnemyBrain.rng_seed`), so this is one seeded scenario. The run is sped up 4× with the
+  physics step held at 1/60 s: `time_scale`, `physics_ticks_per_second` and `max_physics_steps_per_frame` are scaled
+  together and restored in `after_each`.
+  - Measured: deep_space **9.0** shots/s (limit 39.06; 110 shots, 90 fighter + 20 Gatling) and planet_approach
+    **6.5** (limit 41.67; 118 shots).
+  - Analytic, printed only: 60.2 and 63.2. The Gatling rate now reads the brain's `min_window_period()` instead of the
+    plan's typed 2.8 s.
+- **Count gates (analytic, asserted) divide by the frozen `_LEGACY_PEAK_FIGHTERS`.**
+  - All-alive: 17 and 16, against a limit of 20.
+  - Attack-capable (first 3 per fighter squad, first 2 per Gatling squad): 13 and 14, against a limit of 15. The
+    `min(alive, cap)` model gives the same values and is printed alongside.
+  - Lifetimes are read from the configs: fighter 9.64 s (engage 6.0 + deferral 0.8 + Razor-shaped exit), Gatling
+    12.0 s.
+  - Shared helpers in `tests/helpers/level1_drone_concurrency.gd`: `squad_key()`, `shooter_squad_intervals()`,
+    `ai_shooter_kinds()`, `worst_exit_after_speed()`, `peak_min_alive_cap()`, `capable_peak_time()` and
+    `peak_window_rate()`. `test_engagement_deadline.gd::_razor_deadline` now calls `worst_exit_after_speed()`, with the
+    same arithmetic. **t17 should reuse all of these**, including the measured gate for cloud_descent (legacy 15.0).
+- **No lever used.** `engage_seconds` stays 6.0, there is no `assault_passes`, and no formation is split.
+- **The pin:** the 37 rows are AI rows (`movement` false, `free_after` 0, `aim_mode` ""). The live-equals-constant
+  check now runs for `_RAIL_SECTIONS = [cloud_descent]` only; t17 retires it. The constants themselves are unchanged.
+- **Superseded epic §4 boundary.** "A 3rd Gatling added to deep_space's pair pushes shots/s over" was written for the
+  analytic figure option A removed, and a third Gatling cannot move the measured ≈ 9 past 39. Its replacements:
+  - `test_peak_window_rate_rejects_a_dense_burst` shows the shots/s gate can reject;
+  - `test_extra_formations_at_the_peak_break_the_count_gates` shows the count gates can: a V3 added at
+    planet_approach's capable peak gives 14 → 17 > 15.
+- **Wave-order quirk, found and not fixed (triggers are pinned).** `WaveManager` triggers strictly in list order. In
+  deep_space, the 2.0 s V5-fighter wave and the 3.0 s drone wave are listed after the 3.5 s gunship wave, so in the game
+  both trigger at **3.5 s**. The measured run reproduces this (`test_waves_trigger_on_the_shipped_schedule`). The
+  analytic count gates, the frozen constants and the Ph2 drone pin all model them at 2.0 s and 3.0 s. That is
+  consistent with their own denominators, but differs from the game by up to 1.5 s.
+- **Known gaps:** one scenario (stationary player). A moving player is not measured. No human playtest.

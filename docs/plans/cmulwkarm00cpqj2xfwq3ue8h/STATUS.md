@@ -6,15 +6,14 @@
 **Started:** 2026-10-06
 
 - [x] 1. Context gathered → `1-context.md` (includes the measurements)
-- [ ] 2. Plan written → `3-plan.md` — not written: escalated before planning, see below
-- [ ] 3. Reviewed and APPROVED → `4-review.md`
+- [x] 2. Plan written → `3-plan.md` (owner option A, 2026-10-06)
+- [x] 3. Reviewed and APPROVED → `4-review.md` (round 2, 2026-10-06)
 - [ ] 4. Implemented → `5-progress.md`
 - [ ] 5. Gate green
 - [ ] 6. Docs updated
 
-**ESCALATED (2026-10-06) → `5-escalation.md`.** The epic's shots/s density gate (≤ 1.25 × the frozen legacy
-constant, plan numerator) fails in both sections (1.86× / 1.90×), and none of the three pre-approved levers can fix
-deep_space. The epic says any other change needs the owner. A real run shows the AI fires 11–22 % of the legacy shots.
+Attempt 1 escalated (`5-escalation.md`): the analytic shots/s gate could not pass with the pre-approved levers.
+**Owner decision (2026-10-06): option A** — keep the analytic all-alive / capable gates, replace the analytic shots/s
+check with a measured real-run one. The level patch from `prototype/` is applied in the working tree.
 
-**Next action:** Owner picks an option in `5-escalation.md` (A recommended). Then: apply
-`prototype/level1_duration_rails_off.patch`, write `3-plan.md` for the chosen gate, independent review, implement.
+**Next action:** Implement per `3-plan.md` (Revision 2 wins) — progress in `5-progress.md`.
