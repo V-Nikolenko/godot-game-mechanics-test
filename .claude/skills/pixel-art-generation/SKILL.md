@@ -109,8 +109,8 @@ an opaque card that cuts a hard rectangle out of the starfield. This is not hypo
 The tools in the table above (`create_map_object`, `create_character`, the tilesets) are transparent
 by construction and need no flag, which is why the turrets came back correct without anyone asking.
 
-Prefer the cheapest tool that meets the need. `create_character` on something that never rotates
-wastes the generation budget.
+Pick the tool that fits the asset, not the cheapest one. `create_character` on something that never
+rotates is the wrong tool whatever it costs: the humanoid template shapes the result.
 
 ## 4. Saving images — NEVER use the Write tool
 
@@ -136,10 +136,17 @@ Then answer in your report:
 2. Does it match the rest of its set for angle, lighting direction and scale?
 3. Does it read correctly at in-game size?
 
-If it fails, regenerate **once** with `view: "high top-down"` and a sharper shape description. If
-the second attempt also fails, keep the better one, list it under **Follow-ups** in your final
-message, and move on — do not
-burn the budget iterating.
+If it fails any of the three, **regenerate until it passes**: `view: "high top-down"`, a sharper
+shape description, a different tool or model where one fits better. Change something each time -
+the same prompt again mostly gives the same mistake. Do the same for art that passes but is only
+serviceable: muddy silhouette, weak contrast against the starfield, a palette that drifts from its
+set, detail that turns to noise at in-game size. For anything the player looks at a lot (the
+player's ship, a boss, a new enemy type) generate **2-3 candidates up front** and keep the best.
+The allowance is there to be used (§7).
+
+Give up on one asset only after about **six** attempts that are not getting closer: keep the best,
+say in your final message under **Follow-ups** what is still wrong with it and what you tried, and
+move on.
 
 This step exists because `station_turret.png` shipped as a 3/4 view with a visible barrel side
 while `station_core.png`, generated in the same session, was correctly overhead. Nothing in the
@@ -175,9 +182,10 @@ godot --headless --path /work/repo --import                            # or the 
 It flood-fills inward from the image border, so it removes the sky without punching holes through
 background-coloured detail the artwork encloses. It refuses to run unless all four corners are one
 opaque colour, and refuses to write if the fill would swallow the sprite. Prefer it to
-regeneration for art that is already correct in angle and palette: a regeneration spends the
-capped monthly allowance, cannot be undone, and here would have discarded a core the four turrets
-were designed to match. `tests/integration/test_entity_sprite_transparency.gd` is the gate that
+regeneration for art that is already correct in angle and palette: a regeneration gives a
+*different* sprite, and here would have discarded a core the four turrets were designed to match.
+That is about keeping a set consistent, not about saving generations - when the art itself is not
+good enough, regenerate. `tests/integration/test_entity_sprite_transparency.gd` is the gate that
 fails the build when a world sprite is near-solid.
 
 ## 6. Sizing and import
@@ -190,9 +198,17 @@ fails the build when a world sprite is near-solid.
   sidecar together.
 - Ignore the Phaser/TypeScript examples in the `pixellab` skill — this is a Godot 4.6 project.
 
-## 7. Budget
+## 7. Budget: use it
 
-Tier 1: **2,000 generations/month, $0 credits.** When the allowance is gone, generation stops
-dead. Call `get_balance` before any batch over ~20. Do not iterate on aesthetics — if a sprite is
-serviceable *and the angle is correct*, keep it. Wrong angle is the one exception: those are
-unusable and must be regenerated.
+The plan gives about **1,500 generations a month** and this project has been using a handful a
+week - nearly all of it expires unused. The owner's instruction is to **use it as much as the art
+needs**: generate candidates, regenerate what is wrong, and refine what is only acceptable until it
+is good (§5). A sprite that is merely serviceable is not a reason to stop. Do not hold back to
+save generations.
+
+Two guards, so one task cannot starve the rest of the month:
+- Call `get_balance` before a batch of more than ~50 generations, and again if a task runs past
+  ~150.
+- When fewer than **100** remain, stop generating new candidates, finish with the best you have,
+  and say so in your final message. When the allowance is gone, generation stops dead until the
+  month rolls over.

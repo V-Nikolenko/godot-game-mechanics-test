@@ -1,8 +1,8 @@
 # open_space/scenes/levels/sector_hub.gd
 extends Node2D
 
-## Open Space hub. Spawns an idle Swarm Drone squad and a Razor Drone patrolling their own anchor
-## points, and assigns the planet config.
+## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair and a Gatling pair, each
+## patrolling its own anchor point, and assigns the planet config.
 ## To change this planet's missions, background, or sprite — edit edelia.tres.
 ## To use a different config, change the path in _configure_planet().
 ##
@@ -17,6 +17,11 @@ extends Node2D
 
 const SWARM_DRONE: PackedScene = preload("res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn")
 const RAZOR_DRONE: PackedScene = preload("res://assault/scenes/enemies/razor_drone/razor_drone.tscn")
+const FIGHTER: PackedScene = preload("res://assault/scenes/enemies/fighter/fighter.tscn")
+const GATLING_INTERCEPTOR: PackedScene = preload("res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn")
+
+## Fighters and Gatlings patrol in pairs, a squad of two each (epic plan §2.10).
+const SHOOTER_SQUAD_SIZE := 2
 
 ## 0 = every drone's rng seed randomizes; any other value seeds a local RandomNumberGenerator that
 ## in turn seeds each drone's own brain, so the whole patrol is reproducible.
@@ -25,6 +30,12 @@ const RAZOR_DRONE: PackedScene = preload("res://assault/scenes/enemies/razor_dro
 @export var patrol_ring_radius: float = 1300.0
 @export var swarm_anchor_bearing_deg: float = 90.0
 @export var razor_anchor_bearing_deg: float = 270.0
+
+## The fighter pair and the Gatling pair patrol a separate, wider ring (epic plan §2.10): their
+## `perceive_radius` (540 / 560) is wider than a drone's, so the 1300 ring leaves too little room.
+@export var shooter_ring_radius: float = 1500.0
+@export var fighter_anchor_bearing_deg: float = 180.0
+@export var gatling_anchor_bearing_deg: float = 0.0
 
 @onready var enemy_container: Node2D = $EnemyContainer
 
@@ -39,9 +50,40 @@ func _spawn_patrol() -> void:
 		rng.randomize()
 	_spawn_swarm_squad(_anchor(swarm_anchor_bearing_deg), rng)
 	_spawn_razor(_anchor(razor_anchor_bearing_deg), rng)
+	_spawn_fighter_squad(_shooter_anchor(fighter_anchor_bearing_deg), rng)
+	_spawn_gatling_squad(_shooter_anchor(gatling_anchor_bearing_deg), rng)
 
 func _anchor(bearing_deg: float) -> Vector2:
 	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * patrol_ring_radius
+
+func _shooter_anchor(bearing_deg: float) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * shooter_ring_radius
+
+## A fighter pair: one shared `SquadController` and `patrol_anchor`, both set before `add_child()`
+## (`Fighter._ready()` joins the squad itself). Drawn from `rng` after the drones, so adding the
+## shooters leaves the drones' seeds unchanged.
+func _spawn_fighter_squad(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var squad := SquadController.new()
+	for i: int in SHOOTER_SQUAD_SIZE:
+		var fighter := FIGHTER.instantiate() as Fighter
+		fighter.global_position = anchor
+		var brain := fighter.get_node("Brain") as FighterBrain
+		brain.rng_seed = _next_seed(rng)
+		brain.patrol_anchor = anchor
+		fighter.squad = squad
+		enemy_container.add_child(fighter)
+
+## A Gatling pair, wired like the fighter pair; a squad of two converges its streams.
+func _spawn_gatling_squad(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var squad := SquadController.new()
+	for i: int in SHOOTER_SQUAD_SIZE:
+		var gatling := GATLING_INTERCEPTOR.instantiate() as GatlingInterceptor
+		gatling.global_position = anchor
+		var brain := gatling.get_node("Brain") as GatlingInterceptorBrain
+		brain.rng_seed = _next_seed(rng)
+		brain.patrol_anchor = anchor
+		gatling.squad = squad
+		enemy_container.add_child(gatling)
 
 ## One squad, one shared `SquadController` and `patrol_anchor` — `SwarmDrone._ready()` calls
 ## `squad.join(self)` itself once `squad` is set, so it must be assigned before `add_child()`.

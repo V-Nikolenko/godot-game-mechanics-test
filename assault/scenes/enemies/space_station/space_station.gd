@@ -117,7 +117,7 @@ func _ready() -> void:
 			t.health.current_health = config.turret_health
 
 		## The scene-authored ContactHitBox defaults to damage 20 and never reads the config,
-		## so it has to be re-applied here. bomber.gd, light_assault_ship.gd, ram_ship.gd and
+		## so it has to be re-applied here. bomber.gd, fighter.gd, ram_ship.gd and
 		## gunship.gd all do this. tests/integration/test_enemy_contact_damage.gd asserts it for
 		## the whole roster, so an enemy that forgets the re-apply now fails the gate instead of
 		## silently ramming for 20.

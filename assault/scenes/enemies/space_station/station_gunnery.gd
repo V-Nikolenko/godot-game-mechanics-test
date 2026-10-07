@@ -119,7 +119,7 @@ func _ready() -> void:
 		core_bullet_speed = cfg.core_bullet_speed
 
 	## Built with .new() and never loaded from a shared .tres, so writing `base_angle` between
-	## shots cannot leak into another ship. `interceptor.gd:36` does the same.
+	## shots cannot leak into another ship. `gatling_interceptor.gd:36` does the same.
 	_turret_pattern = RadialAttackPattern.new()
 	_core_pattern = RadialAttackPattern.new()
 

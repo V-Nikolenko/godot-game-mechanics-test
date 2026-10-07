@@ -1,0 +1,25 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="PackedScene" uid="uid://wi7ci5dkn7k7" path="res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn" id="1_scatter"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_scatter"]
+radius = 2.0
+
+[node name="ScatterRound" instance=ExtResource("1_scatter")]
+speed = 420.0
+
+[node name="ProjectileLifetime" parent="."]
+max_time = 2.0
+max_distance = 450.0
+
+[node name="Visual" parent="."]
+modulate = Color(1, 0.35, 0.6, 1)
+points = PackedVector2Array(0, -2.5, 0, 2.5)
+width = 4.0
+default_color = Color(1, 0.35, 0.6, 1)
+
+[node name="HitBox" parent="."]
+damage = 6
+
+[node name="CollisionShape2D" parent="HitBox"]
+shape = SubResource("CircleShape2D_scatter")

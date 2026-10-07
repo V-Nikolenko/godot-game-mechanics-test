@@ -102,6 +102,39 @@ func _free_all_reinforcements() -> void:
 		e.free()
 
 
+## A ship's own `BulletPool`, found by type rather than by field name — `Fighter.
+## bullet_pool` is public but `GatlingInterceptor._bullet_pool` is not, and this must work for both.
+func _bullet_pool_of(ship: BaseEnemy) -> BulletPool:
+	for child in ship.get_children():
+		if child is BulletPool:
+			return child as BulletPool
+	return null
+
+
+## Bullets land in the container, not under a ship — `bullet_pool.gd:47`'s grandparent resolution,
+## same filter `test_station_gunnery.gd:84-89` uses.
+func _bullets() -> Array[EnemyBullet]:
+	var out: Array[EnemyBullet] = []
+	for child in _container.get_children():
+		var b := child as EnemyBullet
+		if b != null:
+			out.append(b)
+	return out
+
+
+## The interceptor's hull half-extent, read from its own scene (review C13) instead of a
+## hand-typed literal that silently drifts the moment the sprite changes: half of the larger side
+## of its `Sprite2D`'s texture — the same measure `test_every_entry_clears_the_off_screen_spawn_margin`
+## used to hand-type as 37.
+func _interceptor_half_extent() -> float:
+	var scene: PackedScene = load(WaveBuilder.GATLING_INTERCEPTOR)
+	var inst := scene.instantiate()
+	var sprite := inst.get_node("Sprite2D") as Sprite2D
+	var size: Vector2 = sprite.texture.get_size()
+	inst.free()
+	return maxf(size.x, size.y) * 0.5
+
+
 # ── 1. Config ─────────────────────────────────────────────────────────────────
 
 ## Cannot pass vacuously: the node's own defaults are 20 / 30 / 2 against the config's 8 / 10 / 4,
@@ -148,13 +181,16 @@ func test_every_entry_starts_outside_the_play_area() -> void:
 
 
 ## Boundary, research finding 5: the margin must exceed half the largest sprite plus the camera's
-## horizontal pan. Half-extent is 37 (the interceptor's 64x74 sprite; `interceptor.tscn:58-60` has
-## no scale on the Sprite2D). Horizontal budget 640 + H_LIMIT 100 + 37 = 777 world px; vertical
-## 360 + 37 = 397, V_LIMIT deliberately excluded because every spawn in the game resolves against
-## the camera's fixed centre. This is a live constraint on future edits: it fails at design +/-380.
+## horizontal pan. Half-extent is read from the interceptor's own scene (review C13, `_interceptor_
+## half_extent()`) instead of a hand-typed 37, so this stops drifting the moment the sprite is
+## replaced (currently the interceptor's 64x74 sprite; `gatling_interceptor.tscn:58-60` has no scale on the
+## Sprite2D, so its texture size IS its screen size). Horizontal budget 640 + H_LIMIT 100 + half-extent;
+## vertical 360 + half-extent, V_LIMIT deliberately excluded because every spawn in the game resolves
+## against the camera's fixed centre. This is a live constraint on future edits: it fails at design +/-380.
 func test_every_entry_clears_the_off_screen_spawn_margin() -> void:
-	var h_margin: float = 640.0 + ArenaCamera.H_LIMIT + 37.0
-	var v_margin: float = 360.0 + 37.0
+	var half_extent := _interceptor_half_extent()
+	var h_margin: float = 640.0 + ArenaCamera.H_LIMIT + half_extent
+	var v_margin: float = 360.0 + half_extent
 	for e in _all_entries():
 		var world: Vector2 = e.base_offset * ArenaCamera.WORLD_SCALE
 		var clears: bool = absf(world.x) > h_margin or absf(world.y) > v_margin
@@ -481,3 +517,62 @@ func test_a_rail_swarm_drone_touching_the_player_deals_collision_damage_and_deto
 	assert_eq(detonations.size(), 1, "touching an armed rail drone must detonate its blast")
 	assert_eq(player_health.current_health, Fixture.PLAYER_MAX_HEALTH - collision_damage - blast_damage,
 		"the contact box's collision_damage and the blast's blast_damage must both land")
+
+
+# ── 19. Rail squads actually fire (Ph3 t1, docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md §2.9.1) ──
+
+## Every TOP fighter and LEFT/RIGHT interceptor is armed the instant it is spawned this way — an
+## `AttackController` wired up but `enabled = false`, or a pattern/pool left null, would leave a
+## squad that LOOKS dangerous and never fires a shot. `simulate()` steps `_process` deterministically
+## (200 x 0.01 s = 2.0 s) instead of awaiting a wall clock, as the file header requires. TOP is
+## fighters on `.shoot_forward()` (0.3 s interval, `fighter.gd:40`); LEFT/RIGHT are
+## interceptors (0.09 s interval, always aimed at the player, `gatling_interceptor.gd:37`) — both
+## comfortably inside 2 s. Manually confirmed to fail when a squad's `AttackController.enabled` is
+## forced false before the simulate call (not committed as a boundary case — the manual check is
+## the acceptance criterion, docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md task t1-pin).
+func test_rail_reinforcements_fire() -> void:
+	var squads := _reinf.squads()
+	var edges: Array[StationReinforcements.Edge] = [
+		StationReinforcements.Edge.TOP, StationReinforcements.Edge.LEFT, StationReinforcements.Edge.RIGHT,
+	]
+	var checked := 0
+	for edge in edges:
+		_free_all_reinforcements()
+		await wait_physics_frames(1)  ## let any bullets a freed ship's pool just queue_free()'d leave the container
+
+		var squad: Array = squads[edge]
+		for entry: SpawnEntryResource in squad:
+			_reinf._spawn_entry(entry)
+		var ships := _reinforcements()
+		assert_eq(ships.size(), squad.size(), "edge %d must spawn its whole squad" % edge)
+
+		simulate(_container, 200, 0.01)
+
+		var bullets := _bullets()
+		assert_gt(bullets.size(), 0, "edge %d fired no bullets within 2 s of spawning" % edge)
+		checked += 1
+
+		if edge == StationReinforcements.Edge.TOP:
+			## A default bullet's fire direction is `Vector2.DOWN.rotated(ship.rotation)`
+			## (`aimed_attack_pattern.gd:30`), and `EnemyPathMover` keeps `ship.rotation` aligned to
+			## the direction of travel (`enemy_path_mover.gd:93`) — so a forward shot must lie along
+			## the ship's own travel, not the squad's shared nominal heading. Checked only against
+			## bullets still tracked by THAT ship's own pool (`BulletPool._active`, review round 1
+			## finding 1) — any bullet anywhere in the container would let one correctly-aimed ship
+			## paper over a broken one.
+			for ship in ships:
+				var pool := _bullet_pool_of(ship)
+				assert_not_null(pool, "%s has no BulletPool child" % ship.name)
+				var expected_dir: Vector2 = Vector2.DOWN.rotated(ship.rotation)
+				var matched := false
+				for b in pool._active:
+					if not is_instance_valid(b):
+						continue
+					var dir: Vector2 = (b as EnemyBullet)._direction
+					if absf(angle_difference(dir.angle(), expected_dir.angle())) < 1e-3:
+						matched = true
+						break
+				assert_true(matched,
+					"TOP fighter at %s (rotation %.3f) fired no shot along its own travel direction"
+						% [ship.global_position, ship.rotation])
+	assert_eq(checked, edges.size(), "sanity: all three rail squads (TOP, LEFT, RIGHT) were checked")

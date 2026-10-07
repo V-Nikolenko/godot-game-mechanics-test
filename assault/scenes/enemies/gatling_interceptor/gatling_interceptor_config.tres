@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="GatlingInterceptorConfig" format=3 uid="uid://cikpyxo6s3o53"]
+
+[ext_resource type="Script" uid="uid://cqe8efewhvfud" path="res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 70
+collision_damage = 20
+score_value = 75
+max_speed = 260.0
+acceleration = 600.0
+braking = 900.0
+turn_rate = 2.0
+preferred_range = 380.0
+min_flank_range = 220.0
+approach_margin = 250.0
+swing_in_reach = 300.0
+reposition_cap = 5.0
+swing_in_max = 1.5
+spin_up_seconds = 0.25
+sync_wait_max = 0.75
+stream_rounds_min = 8
+stream_rounds_max = 12
+stream_interval = 0.09
+stream_strafe_speed = 140.0
+cooldown_seconds = 0.4
+reposition_min = 1.0
+reposition_max = 1.5
+round_speed = 240.0
+round_damage = 4
+stream_spread = 0.05
+accuracy = 0.8
+convergence_bearing_offset_deg = 40.0
+convergence_aim_error_deg = 3.0
+convergence_join_range_factor = 1.5
+engage_seconds = 7.0
+exit_speed = 520.0
+perceive_radius = 560.0
+lose_radius = 900.0
+notice_time = 0.35
+idle_radius = 150.0
+idle_speed = 0.5
+rail_stream_interval = 0.09
+rail_stream_speed = 220.0
+rail_spread = 0.08
+rail_damage = 4

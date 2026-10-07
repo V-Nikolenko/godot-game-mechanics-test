@@ -36,6 +36,28 @@ func _legacy_rect_diagonal() -> float:
 # enemy_bullet.tscn / enemy_sniper_bullet.tscn defaults are >= the recomputed numbers.
 # ---------------------------------------------------------------------------------------------
 
+## Every speed the Fighter fires at, by the round it fires: Pulse gets the AI aimed burst and both rail
+## fallbacks (250 / 420, below the Pulse scene's 300), Scatter gets the AI forward burst. All are
+## `FighterConfig` fields, so nothing here is typed by hand or read by regex.
+func _fighter_speeds() -> Dictionary:
+	var cfg: FighterConfig = load("res://assault/scenes/enemies/fighter/fighter_config.tres")
+	return {
+		"aimed": cfg.aimed_speed,
+		"forward": cfg.forward_speed,
+		"rail_aimed": cfg.rail_aimed_speed,
+		"rail_forward": cfg.rail_forward_speed,
+	}
+
+
+## Every speed the Gatling Interceptor fires Gatling Stream rounds at: the AI stream (`round_speed`) and
+## the rail fallback's legacy constant stream (`rail_stream_speed`, 220, below the round's 240 default).
+## Both are `GatlingInterceptorConfig` fields read from the shipped `.tres` (t10).
+func _gatling_speeds() -> Dictionary:
+	var cfg: GatlingInterceptorConfig = \
+			load("res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres")
+	return {"stream": cfg.round_speed, "rail_stream": cfg.rail_stream_speed}
+
+
 ## One array, per the plan: add a new, slower bullet source here and the defaults must be
 ## re-derived (`3-plan.md` §2.9).
 func _every_shipped_enemy_bullet_speed() -> Array[float]:
@@ -58,8 +80,9 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 	speeds.append(GatlingAttackPattern.new().bullet_speed)
 	speeds.append(AimedAttackPattern.new().bullet_speed)
 
-	# interceptor_config.gd's default (the shipped .tres does not override bullet_speed).
-	speeds.append(InterceptorConfig.new().bullet_speed)
+	# The Gatling Interceptor's shipped tuning: the AI stream and the rail fallback, config fields.
+	for s in _gatling_speeds().values():
+		speeds.append(s as float)
 
 	# gunship_config.tres.
 	var gunship_cfg: GunshipConfig = \
@@ -71,16 +94,9 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 	speeds.append(default_bullet.speed)
 	default_bullet.free()
 
-	# light_assault_ship.gd:42 — `pattern.bullet_speed = 420.0 if forward else 250.0`, a literal,
-	# not an export, so it is read out of the shipped source text rather than hardcoded here.
-	var light_assault_src: String = FileAccess.get_file_as_string(
-			"res://assault/scenes/enemies/light_assault_ship/light_assault_ship.gd")
-	var m := RegEx.new()
-	m.compile("bullet_speed\\s*=\\s*([0-9.]+)\\s*if forward else\\s*([0-9.]+)")
-	var found := m.search(light_assault_src)
-	assert_not_null(found, "light_assault_ship.gd's bullet_speed line must still match this shape")
-	speeds.append(found.get_string(1).to_float())
-	speeds.append(found.get_string(2).to_float())
+	# The Fighter's shipped tuning: AI rounds and the rail fallback's speeds, all config fields.
+	for s in _fighter_speeds().values():
+		speeds.append(s as float)
 
 	# Racer weapon states (fired through RacerWeapon, which spawns EnemyBullet).
 	var fang := FangHuntState.new()
@@ -130,6 +146,58 @@ func test_enemy_bullet_defaults_are_derived_from_every_shipped_speed_source() ->
 		assert_gte(lifetime.max_distance, expected_max_distance,
 				"%s's max_distance must not be able to trip inside the legacy rect" % scene.resource_path)
 		bullet.free()
+
+
+# ---------------------------------------------------------------------------------------------
+# Per-round sweep (t2, 3-plan.md §2.2, review B5): max_distance / min_fired_speed <= max_time,
+# plus a range floor (>= 1280px, except the Scatter Round, whose short range IS the design).
+# A round with no shooter yet (all four this task) is checked at its own scene default speed.
+# t8a gave the Fighter's rounds real config-field speeds, rail fallbacks included, and t10 the Gatling
+# Interceptor's Gatling Stream; this sweep reads them, so no speed in it is hand-typed or regex-read.
+# ---------------------------------------------------------------------------------------------
+
+const _ROUNDS_RANGE_FLOOR_PX: float = 1280.0
+
+
+## True when a round fired at its slowest speed reaches max_distance before max_time runs out -
+## distance ends the bullet first, exactly like the legacy scene today.
+func _round_clears_its_lifetime(max_distance: float, min_fired_speed: float, max_time: float) -> bool:
+	return max_distance / min_fired_speed <= max_time
+
+
+func test_every_round_clears_its_own_lifetime_at_its_slowest_fired_speed() -> void:
+	var fs := _fighter_speeds()
+	var gs := _gatling_speeds()
+	var entries: Array[Dictionary] = [
+		{"scene": EnemyRounds.PULSE, "floor": _ROUNDS_RANGE_FLOOR_PX,
+			"speeds": [fs["aimed"], fs["rail_aimed"], fs["rail_forward"]]},
+		{"scene": EnemyRounds.GATLING_STREAM, "floor": _ROUNDS_RANGE_FLOOR_PX,
+			"speeds": [gs["stream"], gs["rail_stream"]]},
+		{"scene": EnemyRounds.HEAVY_SHELL, "floor": _ROUNDS_RANGE_FLOOR_PX},
+		{"scene": EnemyRounds.SCATTER, "floor": 0.0, "speeds": [fs["forward"]]},
+	]
+	for entry: Dictionary in entries:
+		var scene: PackedScene = entry["scene"]
+		var bullet: EnemyBullet = scene.instantiate()
+		add_child_autofree(bullet)
+		var lifetime := bullet.get_node("ProjectileLifetime") as ProjectileLifetime
+		# The slowest speed any shooter fires this round at; a round nobody fires yet (Heavy Shell) is
+		# checked at its own scene default.
+		var min_fired_speed: float = bullet.speed
+		if entry.has("speeds"):
+			min_fired_speed = (entry["speeds"] as Array).min() as float
+
+		assert_true(_round_clears_its_lifetime(lifetime.max_distance, min_fired_speed, lifetime.max_time),
+				"%s must not run out of max_time before max_distance at its slowest fired speed"
+				% scene.resource_path)
+		assert_gte(lifetime.max_distance, entry["floor"] as float, scene.resource_path)
+
+
+func test_a_synthetic_100px_per_s_round_fails_the_sweep() -> void:
+	# The shared legacy budget (18s / 2400px, this file's own derived defaults above) at a
+	# hypothetical 100px/s: 2400 / 100 = 24 > 18 - this round would time out short of its range.
+	assert_false(_round_clears_its_lifetime(2400.0, 100.0, 18.0),
+			"a round this slow would time out before it reaches its own max_distance")
 
 
 # ---------------------------------------------------------------------------------------------

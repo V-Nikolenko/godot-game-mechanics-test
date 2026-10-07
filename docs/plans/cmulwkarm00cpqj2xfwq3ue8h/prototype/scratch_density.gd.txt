@@ -1,0 +1,105 @@
+extends GutTest
+const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.gd")
+const FC: FighterConfig = preload("res://assault/scenes/enemies/fighter/fighter_config.tres")
+const GC: GatlingInterceptorConfig = preload("res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres")
+
+func _secs() -> Array:
+	var inst: Node = load("res://assault/scenes/levels/edelia/1/level_1_director.gd").new()
+	var s = inst._build_sections()
+	inst.free()
+	return s
+
+func _intervals(section: LevelSection, f_life: float, g_life: float, f_rate: float, g_rate: float) -> Array:
+	var squads := {}
+	var order := 0
+	for wi in section.waves.size():
+		var wave: WaveResource = section.waves[wi]
+		for ei in wave.entries.size():
+			var e: SpawnEntryResource = wave.entries[ei]
+			if e.ship_scene == null: continue
+			var p := e.ship_scene.resource_path
+			var g := p == WaveBuilder.GATLING_INTERCEPTOR
+			if p != WaveBuilder.FIGHTER and not g: continue
+			var key := "%d:%d" % [wi, ei]
+			if e.formation == null and not String(e.squad_id).is_empty():
+				key = "%d:%s" % [wi, e.squad_id]
+			var ms: Array = squads.get(key, [])
+			var times := []
+			if e.formation:
+				for sl in e.formation.compute_slots(): times.append(wave.trigger_time + e.spawn_delay + sl.delay)
+			else: times.append(wave.trigger_time + e.spawn_delay)
+			for t in times:
+				ms.append({"start": t, "end": t + (g_life if g else f_life), "cap": 2 if g else 3, "rate": g_rate if g else f_rate, "squad": key})
+			squads[key] = ms
+	var out := []
+	for k in squads: out.append_array(squads[k])
+	return out
+
+func _peaks(iv: Array) -> Dictionary:
+	var pa := 0; var pc := 0; var pr := 0.0
+	for a in iv:
+		var t: float = a["start"]
+		var per := {}
+		for b in iv:
+			if b["start"] <= t and t < b["end"]:
+				var l: Array = per.get(b["squad"], [])
+				l.append(b); per[b["squad"]] = l
+		var alive := 0; var cap := 0; var rate := 0.0
+		for k in per:
+			var l: Array = per[k]
+			alive += l.size()
+			var c: int = mini(l.size(), int(l[0]["cap"]))
+			cap += c
+			rate += c * float(l[0]["rate"])
+		pa = maxi(pa, alive); pc = maxi(pc, cap); pr = maxf(pr, rate)
+	return {"all": pa, "cap": pc, "rate": pr}
+
+func _peaks_first(iv: Array) -> Dictionary:
+	# plan model: first `cap` members per squad by spawn time are capable for their whole life
+	var by := {}
+	for a in iv:
+		var l: Array = by.get(a["squad"], []); l.append(a); by[a["squad"]] = l
+	var capable := []
+	for k in by:
+		var l: Array = by[k]
+		l.sort_custom(func(x, y): return x["start"] < y["start"])
+		for i in l.size():
+			if i < int(l[i]["cap"]): capable.append(l[i])
+	var pc := 0; var pr := 0.0
+	for a in capable:
+		var t: float = a["start"]
+		var c := 0; var r := 0.0
+		for b in capable:
+			if b["start"] <= t and t < b["end"]:
+				c += 1; r += float(b["rate"])
+		pc = maxi(pc, c); pr = maxf(pr, r)
+	return {"cap": pc, "rate": pr}
+
+func test_measure() -> void:
+	var cam := ArenaCamera.new()
+	add_child_autofree(cam)
+	var rect := cam.projectile_world_rect()
+	var exit_d := minf(rect.size.x, rect.size.y) / 2.0
+	var f := FC
+	var g := GC
+	var f_def := f.burst_telegraph + maxf(f.aimed_max * f.aimed_gap, f.forward_max * f.forward_gap)
+	var f_exit := (f.max_speed + f.exit_speed) / minf(f.acceleration, f.braking) + (exit_d + f.max_speed * f.max_speed / (2.0 * f.braking)) / f.exit_speed
+	var g_def := g.spin_up_seconds + g.sync_wait_max + g.stream_rounds_max * g.stream_interval
+	var g_exit := (g.max_speed + g.exit_speed) / minf(g.acceleration, g.braking) + (exit_d + g.max_speed * g.max_speed / (2.0 * g.braking)) / g.exit_speed
+	var g_life: float = g.engage_seconds + g_def + g_exit
+	var rates := {
+		"plan": [maxf(f.forward_max / (f.forward_gap * f.forward_max + f.min_burst_period), f.aimed_max / (f.aimed_gap * f.aimed_max + f.min_burst_period)), g.stream_rounds_max / 2.8],
+		"strict": [maxf(f.forward_max, f.aimed_max) / f.min_burst_period, g.stream_rounds_max / 2.28],
+		"aimedonly": [f.aimed_max / (f.aimed_gap * f.aimed_max + f.min_burst_period), g.stream_rounds_max / 2.8],
+	}
+	for engage in [6.0, 4.5, 3.0, 2.0]:
+		var f_life: float = engage + f_def + f_exit
+		gut.p("engage %.1f f_life %.2f g_life %.2f" % [engage, f_life, g_life])
+		for s in _secs():
+			if s.section_name != &"deep_space" and s.section_name != &"planet_approach": continue
+			for rk in rates:
+				var iv := _intervals(s, f_life, g_life, rates[rk][0], rates[rk][1])
+				var pk := _peaks(iv)
+				var pf := _peaks_first(iv)
+				gut.p("  %s %-9s: all %d | minalive cap %d rate %.2f | first3 cap %d rate %.2f" % [s.section_name, rk, pk["all"], pk["cap"], pk["rate"], pf["cap"], pf["rate"]])
+	assert_true(true)

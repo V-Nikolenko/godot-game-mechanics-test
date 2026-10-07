@@ -60,8 +60,8 @@ const _RAM_MASK_BEFORE_HIT := 33
 ## `ram_ship.gd:45`, applied inside `_enter_damaged_state()` on the first received hit.
 const _RAM_MASK_AFTER_HIT := 97
 
-## `bomber`, `bonus_drone`, `razor_drone`, `gunship`, `interceptor`, `swarm_drone`,
-## `light_assault_ship`, `ram_ship`, `sniper_enemy`, `space_station`. A sweep that finds fewer has
+## `bomber`, `bonus_drone`, `razor_drone`, `gunship`, `gatling_interceptor`, `swarm_drone`,
+## `fighter`, `ram_ship`, `sniper_enemy`, `space_station`. A sweep that finds fewer has
 ## broken, and every assertion below is vacuous on a broken sweep.
 const _MIN_ROSTER_SIZE := 10
 
@@ -301,7 +301,7 @@ func test_sniper_enemy_hardcodes_its_score_value() -> void:
 # ── 4. AnimatedSprite2D 180° flip ─────────────────────────────────────────────
 
 func test_animated_sprite_is_flipped_180_degrees() -> void:
-	for name in ["light_assault_ship", "ram_ship"]:
+	for name in ["fighter", "ram_ship"]:
 		var entity := _spawn("%s/%s/%s.tscn" % [_ENEMY_ROOT, name, name])
 		var sprite := entity.get_node_or_null("AnimatedSprite2D") as Node2D
 		assert_not_null(sprite, "%s: expected an AnimatedSprite2D child" % name)
@@ -315,7 +315,7 @@ func test_animated_sprite_is_flipped_180_degrees() -> void:
 func test_enemies_without_an_animated_sprite_are_unaffected_by_the_flip() -> void:
 	var checked := 0
 	for entry in _sweep():
-		if entry["name"] in ["light_assault_ship", "ram_ship"]:
+		if entry["name"] in ["fighter", "ram_ship"]:
 			continue
 		var entity := _spawn(entry["scene"])
 		checked += 1

@@ -9,7 +9,7 @@
 ## The base `ContactHitBox` node authored on every `BaseEnemy` subclass's scene defaults to
 ## `damage = 20` and knows nothing about `config`, which is only read at runtime. So every enemy
 ## that wants its configured `collision_damage` has to re-apply it in `_ready()` afterwards. Most
-## do (`bomber.gd`, `light_assault_ship.gd`, `ram_ship.gd`, `space_station.gd`) or author a
+## do (`bomber.gd`, `fighter.gd`, `ram_ship.gd`, `space_station.gd`) or author a
 ## different default directly on their own scene's node (`razor_drone.tscn`,
 ## `swarm_drone.tscn`, `ally_fighter.tscn` — 30/30/25 — with the script still re-applying where
 ## a config can override it).
@@ -21,7 +21,7 @@
 ##
 ## ── Reading the table ────────────────────────────────────────────────────────────────────────
 ##
-## The two enemies with no `collision_damage` line in their `.tres` (`interceptor_config.tres`,
+## The two enemies with no `collision_damage` line in their `.tres` (`gatling_interceptor_config.tres`,
 ## and `sniper_enemy` which has no config at all) inherit `ShipConfig`'s default of 20
 ## (`ship_config.gd:8`), which happens to equal the base helper's hardcoded 20. They are listed
 ## anyway: the assertion is still meaningful, and if either default ever moves the mismatch
@@ -81,14 +81,14 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/gunship/gunship_config.tres",
 	},
 	{
-		"name": "interceptor",
-		"scene": "res://assault/scenes/enemies/interceptor/interceptor.tscn",
-		"config": "res://assault/scenes/enemies/interceptor/interceptor_config.tres",
+		"name": "gatling_interceptor",
+		"scene": "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn",
+		"config": "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres",
 	},
 	{
-		"name": "light_assault_ship",
-		"scene": "res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn",
-		"config": "res://assault/scenes/enemies/light_assault_ship/fighter_config.tres",
+		"name": "fighter",
+		"scene": "res://assault/scenes/enemies/fighter/fighter.tscn",
+		"config": "res://assault/scenes/enemies/fighter/fighter_config.tres",
 	},
 	{
 		"name": "ram_ship",

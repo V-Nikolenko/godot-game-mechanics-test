@@ -1,5 +1,5 @@
 ## GatlingAttackPattern — high-cadence weapon with slight random scatter.
-## Designed for Interceptor: fast fire rate, low damage, moderate range.
+## Designed for the Gatling Interceptor: fast fire rate, low damage, moderate range.
 ## fire_interval is inherited from AttackPatternResource (default 0.8 — override per ship).
 class_name GatlingAttackPattern
 extends AttackPatternResource
@@ -17,6 +17,12 @@ extends AttackPatternResource
 @export var accuracy: float = 0.0
 ## Spawn offset relative to the ship's position.
 @export var spawn_offset: Vector2 = Vector2(0.0, 10.0)
+## Per-instance RNG for jitter. null (default) draws from the global `randf_range`, matching every
+## existing consumer (legacy rail streams, and the station).
+var rng: RandomNumberGenerator = null
+## When finite, the shot aims here instead of asking `TargetInfo` for the player. `Vector2.INF`
+## (default) means unset.
+var aim_point: Vector2 = Vector2.INF
 
 func fire(ship: Node2D, pool: BulletPool) -> void:
 	var bullet := pool.acquire(ship.global_position + spawn_offset) as EnemyBullet
@@ -29,8 +35,14 @@ func fire(ship: Node2D, pool: BulletPool) -> void:
 
 	var base_dir: Vector2
 	if aim_at_player:
-		base_dir = TargetInfo.player(ship.get_tree()).aim_direction(ship.global_position, bullet_speed, accuracy)
+		if aim_point.is_finite():
+			base_dir = (aim_point - (ship.global_position + spawn_offset)).normalized()
+		else:
+			base_dir = TargetInfo.player(ship.get_tree()).aim_direction(ship.global_position, bullet_speed, accuracy)
 	else:
-		base_dir = Vector2.DOWN.rotated(ship.rotation)
+		# Vector2.RIGHT.rotated(rotation + PI/2) == Vector2.DOWN.rotated(rotation), the legacy
+		# nose-down default — but reads the ship's own nose whichever way its art was drawn (X7).
+		base_dir = Vector2.RIGHT.rotated(ship.rotation + EnemyMover.sprite_forward_angle_of(ship))
 
-	bullet.set_direction(base_dir.rotated(randf_range(-spread_angle, spread_angle)))
+	var jitter := rng.randf_range(-spread_angle, spread_angle) if rng != null else randf_range(-spread_angle, spread_angle)
+	bullet.set_direction(base_dir.rotated(jitter))

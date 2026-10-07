@@ -89,12 +89,12 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/gunship/gunship.tscn",
 	},
 	{
-		"name": "interceptor",
-		"scene": "res://assault/scenes/enemies/interceptor/interceptor.tscn",
+		"name": "gatling_interceptor",
+		"scene": "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn",
 	},
 	{
-		"name": "light_assault_ship",
-		"scene": "res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn",
+		"name": "fighter",
+		"scene": "res://assault/scenes/enemies/fighter/fighter.tscn",
 	},
 	{
 		"name": "ram_ship",
@@ -312,7 +312,7 @@ func test_the_station_core_hurtbox_spans_the_hull_not_just_the_core() -> void:
 ##
 ## Top-level directories only, deliberately: `assault/scenes/enemies/` also holds loose scripts
 ## (`base_enemy.gd`, `enemy_path_mover.gd`) and its subdirectories hold non-entity scenes
-## (`light_assault_ship/states/`, `bomber/bomb.tscn`), all of which a recursive walk would raise
+## (`fighter/states/`, `bomber/bomb.tscn`), all of which a recursive walk would raise
 ## as false failures.
 func test_every_enemy_scene_is_in_the_roster() -> void:
 	var rostered: Array[String] = []

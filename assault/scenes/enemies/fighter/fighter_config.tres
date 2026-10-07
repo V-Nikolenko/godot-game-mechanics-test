@@ -1,0 +1,60 @@
+[gd_resource type="Resource" script_class="FighterConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/fighter/fighter_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 60
+collision_damage = 20
+score_value = 25
+max_speed = 300.0
+acceleration = 700.0
+braking = 700.0
+turn_rate = 1.8
+standoff_radius = 480.0
+pass_offset = 160.0
+flank_lane_gap = 100.0
+lookahead = 220.0
+start_tolerance = 80.0
+min_run_length = 200.0
+reposition_min_radius = 288.0
+reposition_max = 3.0
+passes = 2
+fire_range = 520.0
+forward_range = 325.0
+mode_hysteresis = 60.0
+nose_cone_deg = 12.0
+burst_telegraph = 0.3
+min_burst_period = 1.2
+aimed_min = 3
+aimed_max = 5
+aimed_gap = 0.1
+aimed_speed = 300.0
+aimed_damage = 8
+aimed_accuracy = 0.7
+aimed_spread = 0.035
+forward_min = 5
+forward_max = 7
+forward_gap = 0.05
+forward_speed = 420.0
+forward_damage = 6
+forward_spread = 0.13
+engage_seconds = 6.0
+exit_speed = 520.0
+rear_standoff_radius = 560.0
+flank_wait_max = 2.0
+lead_wait_max = 3.5
+flank_stagger = 0.4
+run_in_max = 4.0
+regroup_seconds = 1.5
+perceive_radius = 540.0
+lose_radius = 900.0
+notice_time = 0.35
+idle_radius = 150.0
+idle_speed = 0.5
+fire_interval = 0.8
+bullet_damage = 8
+aim_mode = "PLAYER"
+rail_aimed_speed = 250.0
+rail_forward_speed = 420.0
+rail_forward_interval = 0.3

@@ -225,9 +225,10 @@ This parent chain is the linchpin of the design. The pool auto-discovers where t
 ### Creating a pool:
 
 ```gdscript
-class_name LightAssaultShip
+class_name MyShooter
 extends BaseEnemy
 
+# Legacy bolt. A Ph3-style shooter picks one of the round family instead (see below).
 const _BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn")
 @export var bullet_pool: BulletPool
 
@@ -242,6 +243,30 @@ func _ready() -> void:
 	
 	# Pool._ready() fires on add_child and handles prewarm + container resolution
 ```
+
+### Picking a round (the enemy bullet family, Ph3)
+
+The Fighter and the Gatling Interceptor do not build a pool in code. Their scenes author a `BulletPool` node whose
+`bullet_scene` is one of the four rounds in `assault/scenes/projectiles/enemy_bullet/rounds/`
+(`EnemyRounds.PULSE / SCATTER / GATLING_STREAM / HEAVY_SHELL` — inherited scenes of `enemy_bullet.tscn`, each with its
+own speed, damage, look and `ProjectileLifetime`). Rules the pool relies on:
+
+- **A pool is a direct child of the enemy root**, never of an `AttackController`. `BulletPool._ready()` resolves its
+  container as `get_parent().get_parent()`; a pool under a controller would put live bullets under the *ship*, and they
+  would move with it. (`FighterBrain`'s `AimedPool` / `ForwardPool` and the Gatling's `StreamPool` follow this;
+  `test_fighter.gd` asserts it.)
+- **One pool per round per shooter.** The Fighter has two (Pulse for its aimed burst, Scatter for its forward burst).
+- **`EnemyBullet.reset()` restores the scene's own authored speed and damage** (captured in `_ready()`), so a pooled round
+  always comes back as itself even after a pattern overwrote `speed` / `damage` on the acquired bullet.
+- **Size a pool with `EnemyRounds.pool_size_for(max_burst, round_lifetime, min_burst_period)`** = `max_burst ×
+  ceil(round_lifetime / min_burst_period)`, taking the larger of the AI burst need and the rail-fallback cadence (a
+  self-timed pattern is a burst of 1 at its own interval). The Fighter's `AimedPool` is 20 (5 × ceil(4.67 / 1.2)),
+  `ForwardPool` 8, the Gatling's `StreamPool` 36. `acquire()` returns `null` plus a warning on exhaustion and the shot is
+  silently dropped — which is why the sizes are pinned by tests rather than eyeballed.
+  - **The one deliberate exception:** a Gatling on a rail (the station's reinforcements) keeps 36, although a true 11
+    shots/s hose would need 71; it fires about 36 rounds and stalls until they expire, as its legacy 20-round pool did.
+- A round's lifetime is checked against the slowest speed any shooter fires it at (`test_enemy_bullet_lifetime.gd`);
+  the speeds come from config fields, never typed in the test.
 
 ### Firing bullets:
 
@@ -285,7 +310,7 @@ if not bullet:
 	return
 ```
 
-**Mitigation**: Size pools conservatively. A fighter with `fire_interval = 0.8s` and bullets lasting 3-4s won't exceed pool_size = 10 in normal play.
+**Mitigation**: Size pools from the formula above, not by feel. (The old rule of thumb — "a fighter at 0.8 s and 3–4 s bullets fits 10" — predates bursts: a 5-round burst every 1.2 s with a 4.67 s round life needs 20.)
 
 ### **Double-Fire of `expired` Signal**
 
@@ -310,6 +335,8 @@ def _recycle(bullet: Node) -> void:
 		# Pool is being freed, so just destroy the bullet too
 		bullet.queue_free()
 ```
+
+**A shooter's in-flight bullets vanish when it dies or leaves**: `BulletPool._exit_tree()` calls `cancel_active()`, so no enemy round outlives its owner (this is legacy behaviour; an owner-bound lifetime, `persist_after_owner_death`, is a Ph5 item). It means an ENEMIES_CLEARED deadline needs no bullet-flight term, and that a leaving fighter's rounds disappear mid-screen.
 
 If the pool's `_ready()` never fires (ship not added to tree), `_container` remains null and `acquire()` will crash on `bullet.reparent(_container)`. But this shouldn't happen in normal flow since ships are spawned via `WaveManager`, which guarantees `add_child()` before ship's `_ready()`.
 

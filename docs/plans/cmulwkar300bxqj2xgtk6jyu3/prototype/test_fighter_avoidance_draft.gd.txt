@@ -1,0 +1,79 @@
+## INTENT tests for `FighterBrain.avoidance()` and `_share()` — the ORCA variant's pure core
+## (orca_variant.patch). `rel_pos` is theirs − mine, `rel_vel` mine − theirs; the returned `u` is the
+## smallest change to `rel_vel` after which the two stay `radius` apart for `horizon` seconds.
+## These all passed (10/10) against orca_variant.patch on 2026-09-30.
+extends GutTest
+
+const RADIUS := 114.0
+const HORIZON := 1.0
+const EPS := 1e-3
+
+
+func _closest(rel_pos: Vector2, rel_vel: Vector2, horizon: float = HORIZON) -> float:
+	var speed_sq := rel_vel.length_squared()
+	var t := 0.0 if speed_sq < 1e-9 else clampf(rel_pos.dot(rel_vel) / speed_sq, 0.0, horizon)
+	return (rel_pos - rel_vel * t).length()
+
+
+func test_diverging_tracks_need_nothing() -> void:
+	assert_eq(FighterBrain.avoidance(Vector2(200, 0), Vector2(-100, 0), RADIUS, HORIZON), Vector2.ZERO)
+
+
+func test_no_relative_motion_outside_the_radius_needs_nothing() -> void:
+	assert_eq(FighterBrain.avoidance(Vector2(200, 0), Vector2.ZERO, RADIUS, HORIZON), Vector2.ZERO)
+
+
+func test_a_collision_beyond_the_horizon_needs_nothing() -> void:
+	assert_eq(FighterBrain.avoidance(Vector2(400, 0), Vector2(100, 0), RADIUS, HORIZON), Vector2.ZERO)
+
+
+func test_tracks_passing_exactly_radius_apart_need_nothing() -> void:
+	assert_eq(FighterBrain.avoidance(Vector2(300, RADIUS), Vector2(300, 0), RADIUS, HORIZON), Vector2.ZERO)
+
+
+func test_head_on_the_change_restores_the_radius() -> void:
+	var rel_pos := Vector2(300, 0)
+	var rel_vel := Vector2(600, 0)
+	assert_lt(_closest(rel_pos, rel_vel), RADIUS, "sanity: a collision")
+	var u := FighterBrain.avoidance(rel_pos, rel_vel, RADIUS, HORIZON)
+	assert_ne(u, Vector2.ZERO)
+	assert_gte(_closest(rel_pos, rel_vel + u), RADIUS - EPS, "clear after the change")
+
+
+func test_a_crossing_is_cleared_through_the_nearer_leg() -> void:
+	var rel_pos := Vector2(300, 40)
+	var rel_vel := Vector2(400, 0)
+	var u := FighterBrain.avoidance(rel_pos, rel_vel, RADIUS, HORIZON)
+	assert_gte(_closest(rel_pos, rel_vel + u), RADIUS - EPS, "clear after the change")
+	assert_lt(u.y, 0.0, "it passes on the side it is already on")
+
+
+func test_a_slow_overtake_leaves_through_the_cut_off_circle() -> void:
+	var rel_pos := Vector2(500, 0)
+	var rel_vel := Vector2(450, 0)
+	var u := FighterBrain.avoidance(rel_pos, rel_vel, RADIUS, HORIZON)
+	assert_almost_eq(u, Vector2(-64, 0), Vector2(EPS, EPS))
+	assert_almost_eq(_closest(rel_pos, rel_vel + u), RADIUS, EPS)
+
+
+func test_overlapping_and_closing_pushes_straight_apart() -> void:
+	var rel_pos := Vector2(30, 0)
+	var rel_vel := Vector2(100, 0)
+	var u := FighterBrain.avoidance(rel_pos, rel_vel, RADIUS, HORIZON)
+	assert_almost_eq(u.normalized(), Vector2(-1, 0), Vector2(EPS, EPS), "straight away from the mate")
+	var away_speed := (rel_vel + u).dot(Vector2(-1, 0))
+	assert_almost_eq(away_speed, (RADIUS - 30.0) / FighterBrain.GIVE_WAY_SEPARATE_SECONDS, EPS)
+
+
+func test_overlapping_but_already_separating_fast_enough_needs_nothing() -> void:
+	var fast := (RADIUS - 30.0) / FighterBrain.GIVE_WAY_SEPARATE_SECONDS + 1.0
+	assert_eq(FighterBrain.avoidance(Vector2(30, 0), Vector2(-fast, 0), RADIUS, HORIZON), Vector2.ZERO)
+
+
+func test_shares_by_rank() -> void:
+	var run := FighterBrain.RUN_RANK
+	assert_eq(FighterBrain._share(run, run), 0.5)
+	assert_eq(FighterBrain._share(run, 1), 0.5, "a run slows for anything (along-track only, _give_way)")
+	assert_eq(FighterBrain._share(1, run), 1.0)
+	assert_eq(FighterBrain._share(3, 1), 0.5)
+	assert_eq(FighterBrain._share(0, 2), 0.5)

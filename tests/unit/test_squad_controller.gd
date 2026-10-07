@@ -212,6 +212,61 @@ func test_a_join_that_takes_the_lead_clears_the_window() -> void:
 	assert_false(board.attack_window_open)
 
 
+# ── Convergence fields (X6, §2.6.1) ─────────────────────────────────────────────
+
+func test_convergence_fields_start_empty() -> void:
+	var board := SquadController.new()
+	assert_eq(board.convergence_point, Vector2.INF)
+	assert_true(board.convergence_stage.is_empty())
+
+
+func test_convergence_fields_survive_a_non_lead_join() -> void:
+	var rig := _rig_four()
+	var board: SquadController = rig.board
+	board.convergence_point = Vector2(10, 20)
+	board.convergence_stage[rig.a] = 1
+	var e := _member(Vector2(-15, -61))  # further than d → REAR, not LEAD
+	board.join(e)
+	assert_eq(board.role_of(rig.a), Role.LEAD, "sanity: e did not take the lead")
+	assert_eq(board.convergence_point, Vector2(10, 20))
+	assert_eq(board.convergence_stage.get(rig.a), 1)
+
+
+func test_convergence_fields_clear_when_the_lead_leaves() -> void:
+	var rig := _rig_four()
+	var board: SquadController = rig.board
+	board.convergence_point = Vector2(10, 20)
+	board.convergence_stage[rig.a] = 1
+	board.convergence_stage[rig.b] = 0
+	board.leave(rig.a)
+	assert_eq(board.convergence_point, Vector2.INF)
+	assert_true(board.convergence_stage.is_empty())
+
+
+func test_convergence_fields_clear_when_a_closer_member_takes_the_lead() -> void:
+	var rig := _rig_four()
+	var board: SquadController = rig.board
+	board.convergence_point = Vector2(10, 20)
+	board.convergence_stage[rig.a] = 1
+	var e := _member(Vector2(0, -1))  # closer than a → steals LEAD
+	board.join(e)
+	assert_eq(board.role_of(e), Role.LEAD, "sanity: e took the lead")
+	assert_eq(board.convergence_point, Vector2.INF)
+	assert_true(board.convergence_stage.is_empty())
+
+
+func test_leave_erases_only_the_leavers_stage_key() -> void:
+	var rig := _rig_four()
+	var board: SquadController = rig.board
+	board.convergence_stage[rig.a] = 1
+	board.convergence_stage[rig.b] = 0
+	board.convergence_stage[rig.c] = 2
+	board.leave(rig.b)  # non-LEAD leave, does not move LEAD (c is next closest either way)
+	assert_false(board.convergence_stage.has(rig.b), "leaver's key is gone")
+	assert_eq(board.convergence_stage.get(rig.a), 1, "lead's key untouched")
+	assert_eq(board.convergence_stage.get(rig.c), 2, "other member's key untouched")
+
+
 # ── REAR ring (t8c) ─────────────────────────────────────────────────────────────
 
 func test_rear_count_counts_valid_rear_members() -> void:

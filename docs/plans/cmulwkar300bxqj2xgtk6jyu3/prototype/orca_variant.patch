@@ -1,0 +1,880 @@
+diff --git a/assault/scenes/enemies/fighter/fighter.gd b/assault/scenes/enemies/fighter/fighter.gd
+index 138b80d..c2d3db6 100755
+--- a/assault/scenes/enemies/fighter/fighter.gd
++++ b/assault/scenes/enemies/fighter/fighter.gd
+@@ -27,6 +27,10 @@ extends BaseEnemy
+ ## default. An AI fighter ignores it.
+ var aim_mode: String = ""
+ 
++## The squad board, written by `WaveManager` / `SectorHub` before `add_child` (duck-typed through
++## `in`). Null = a squad of one. The brain reads its role every tick (epic §2.5).
++var squad: SquadController
++
+ @onready var _fighter_brain: FighterBrain = $Brain
+ @onready var _fighter_mover: EnemyMover = $EnemyMover
+ @onready var _aimed_attack: AttackController = $AimedAttack
+@@ -38,6 +42,11 @@ func _ready() -> void:
+ 	add_to_group("enemies")
+ 	if config:
+ 		_apply_config(config)
++	if squad != null:
++		var target := TargetInfo.player(get_tree())
++		if target.has_target:
++			squad.update_target(target.position, _fighter_brain.heading_ref(target))
++		squad.join(self)
+ 
+ 
+ func _apply_config(cfg: FighterConfig) -> void:
+diff --git a/assault/scenes/enemies/fighter/fighter_brain.gd b/assault/scenes/enemies/fighter/fighter_brain.gd
+index 0f161eb..8359fc1 100755
+--- a/assault/scenes/enemies/fighter/fighter_brain.gd
++++ b/assault/scenes/enemies/fighter/fighter_brain.gd
+@@ -23,8 +23,18 @@
+ ##   DISENGAGE  [DISENGAGE]  Assault only: budget expiry or `passes` done (deferred to the end of a
+ ##                           running burst); release the corridor, curve out of the world rect, free.
+ ##
+-## The pass is re-derived every tick until RUN_IN (so it follows the player's heading and, in t9, the
+-## squad role) and latched from RUN_IN entry to EXTEND's end, lead time included.
++## The pass is re-derived every tick until RUN_IN (so it follows the player's heading and the squad
++## role) and latched from RUN_IN entry to EXTEND's end, lead time included.
++##
++## Squads (epic §2.5; task plan docs/plans/cmulwkar300bxqj2xgtk6jyu3/3-plan.md). With a squad of two or
++## more, `SquadController.role_of()` — read every tick, never cached — picks the pass kind: LEAD a
++## FRONTAL pass, FLANK_LEFT / FLANK_RIGHT the pincer on two lanes, REAR a dry pass on an outer lane
++## from `rear_standoff_radius`. The LEAD opens `attack_window_open` on RUN_IN entry and closes it on its
++## own EXTEND entry. FLANKs and REARs fly to their S and hold there; a FLANK answers each window once
++## (`_answered_window`, reset on reading the window closed) or goes after `flank_wait_max`; a REAR
++## answers every other window and never fires. The role a pass was flown in (`pass_role`) is latched
++## with it, so a new role's pass kind is only ever reached through TURN and REPOSITION. A squad of one
++## is a solo fighter (t8b's alternation).
+ ##
+ ## Weapons are an independent layer ticked before the phase logic: at most one burst per leg (leg A =
+ ## RUN_IN/EXTEND, leg B = TURN), `min_burst_period` apart; the mode is chosen by distance with
+@@ -43,8 +53,9 @@ extends EnemyBrain
+ ## t12 appends IDLE, NOTICING and RETURNING.
+ enum Phase { APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE }
+ ## The shape of a pass (epic §2.4.1). The solo alternation uses the flank shapes at `pass_offset`;
+-## squad roles (t9, and the `forced_pass_kind` seam) use FLANK_RIGHT's outer lane.
+-enum PassKind { FLANK_LEFT, FLANK_RIGHT, FRONTAL }
++## squad roles (and the `forced_pass_kind` seam) use FLANK_RIGHT's outer lane. REAR is a squad REAR's
++## dry pass.
++enum PassKind { FLANK_LEFT, FLANK_RIGHT, FRONTAL, REAR }
+ enum WeaponMode { AIMED, FORWARD }
+ 
+ ## Emitted on every transition, with the phase entered.
+@@ -84,6 +95,8 @@ const CORRIDOR_SLACK := 60.0
+ ## this far inside it (px) — the prototyped rules (review I7).
+ const EXTEND_CORRIDOR_LOOKAHEAD := 0.3
+ const RING_CORRIDOR_MARGIN := 200.0
++## The ring fallback halves its angle at most this many times to clear the corridor clamp.
++const RING_SHRINK_STEPS := 6
+ const LOITER_SPEED := 60.0
+ const LOITER_GAIN := 2.0
+ ## A moving player's goal is predicted at most this far ahead (s), refined this many times.
+@@ -91,6 +104,24 @@ const GOAL_PREDICT_MAX := 3.0
+ const GOAL_PREDICT_ITERATIONS := 3
+ ## The peel gives up after this (s). (The turn-in gives up after a full circle, review I4.)
+ const PEEL_MAX_SECONDS := 2.5
++## A holding squad member flies back to its S once it drifts this far from it (px).
++const HOLD_DRIFT_PX := 160.0
++## Slack on top of the run's own time when a squad member checks it still fits the budget (s).
++const BUDGET_RUN_MARGIN := 0.25
++## A squad member within this many plan radii of its S, with a clear straight line to it, brakes onto
++## it instead of flying a lead-in.
++const STATION_ARRIVE_PLAN_RADII := 2.0
++## Below this fraction of `max_speed` a RUN_IN sets off along the line instead of turning onto it.
++const STANDING_START_FRACTION := 0.3
++## Two runs whose directions differ by less than this sine are parallel (≈ 10°).
++const PARALLEL_SIN := 0.17
++## Give way: squad mates keep this many hull radii apart over this horizon (s); already closer, they
++## are pushed apart to restore it within this long (s).
++const GIVE_WAY_HULLS := 4.0
++const GIVE_WAY_HORIZON := 1.0
++const GIVE_WAY_SEPARATE_SECONDS := 0.3
++## `give_way_rank()` of the run and the turn back in: the legs whose line a give-way must not bend.
++const RUN_RANK := 4
+ ## Hull radius used when the scene has no readable body circle (px).
+ const DEFAULT_HULL_RADIUS := 28.0
+ 
+@@ -101,7 +132,7 @@ var config: FighterConfig = FighterConfig.new()
+ var rail_aim_mode: String = "PLAYER"
+ ## The sibling `AttackController` past `attack` (`ForwardAttack`), or null.
+ var forward_attack: AttackController
+-## Test seam (and t9's hook): ≥ 0 makes every pass this `PassKind`, with its role-shaped lane.
++## Test seam: ≥ 0 makes every pass this `PassKind`, with its role-shaped lane, and no squad hold.
+ var forced_pass_kind: int = -1
+ 
+ var phase: Phase = Phase.APPROACH
+@@ -121,6 +152,15 @@ var pass_start: Vector2 = Vector2.ZERO
+ ## The point the fighter is steering at this tick.
+ var seek_target: Vector2 = Vector2.ZERO
+ var passes_done: int = 0
++## The squad role the current (or last) pass was entered in, latched at RUN_IN entry; -1 before the
++## first. Read-only outside this script.
++var pass_role: int = -1
++var dbg_nudge := Vector2.ZERO
++## The direction of this tick's primary request, before any give-way nudge; ZERO when it asked to
++## (nearly) stop. See `_heading()`.
++var _intent: Vector2 = Vector2.ZERO
++## The velocity at the start of the last tick, to spot an outside write (see `tick()`).
++var _seen_velocity: Vector2 = Vector2.INF
+ ## The mode of the last burst started. Read-only outside this script.
+ var weapon_mode: int = WeaponMode.AIMED
+ 
+@@ -139,6 +179,19 @@ var _frontal_sigma: float = 0.0
+ var _regroup_pending: bool = false
+ var _loiter_time: float = -1.0
+ 
++# Squad state.
++## ≥ 0 while a FLANK / REAR holds at S waiting for the LEAD's window (s held).
++var _hold_time: float = -1.0
++var _answered_window: bool = false
++## Windows a REAR has seen while holding: it dry-passes on every second one.
++var _rear_windows: int = 0
++## The side (+1 = `right(h)`) a REAR's dry pass comes from; 0 until it first derives one as REAR.
++var _rear_side: float = 0.0
++## ≥ 0 while a FLANK on the LEAD's side counts down `flank_stagger` before its run (s).
++var _stagger_left: float = -1.0
++## Seconds a FLANK has held while its LEAD was not holding too: `flank_wait_max` bounds this.
++var _wait_time: float = 0.0
++
+ # Lead-in path.
+ var _path_pts: PackedVector2Array = PackedVector2Array()
+ var _path_idx: int = 0
+@@ -187,7 +240,18 @@ func tick(delta: float) -> void:
+ 		_start()
+ 	_phase_time += delta
+ 	_since_burst += delta
++	# Only the mover writes velocity, at most `acceleration` (or `braking`) × delta per step: a bigger jump
++	# is an outside write (a test pose, the corridor's filter), and the intent no longer describes it.
++	if _seen_velocity.is_finite() and actor.velocity.distance_to(_seen_velocity) > maxf(config.acceleration, config.braking) * delta + 1.0:
++		_intent = Vector2.ZERO
++	_seen_velocity = actor.velocity
+ 	var target := TargetInfo.player(get_tree())
++	var squad := _squad()
++	if squad != null:
++		if target.has_target:
++			squad.update_target(target.position, heading_ref(target))
++		if not squad.attack_window_open:
++			_answered_window = false
+ 	if budget.update(delta) and phase != Phase.DISENGAGE:
+ 		_request_disengage()
+ 	_tick_weapons(delta, target)
+@@ -201,6 +265,10 @@ func tick(delta: float) -> void:
+ 		Phase.DISENGAGE: _tick_disengage(delta)
+ 	if phase == Phase.RUN_IN and was != Phase.RUN_IN:
+ 		_steer_run_in(delta, target)
++	var requested := mover.requested_velocity()
++	_intent = requested.normalized() if requested.length() > HEADING_MIN_SPEED else Vector2.ZERO
++	if OS.get_environment("NO_GW") == "":
++		_give_way()
+ 
+ 
+ ## Test seam and the one place a transition happens: runs `p`'s entry code, then emits.
+@@ -214,12 +282,13 @@ func enter_phase(p: Phase) -> void:
+ 			_deadline = config.reposition_max
+ 			_deadline_from_plan = false
+ 			_loiter_time = -1.0
++			_hold_time = -1.0
+ 			if p == Phase.REPOSITION and not _path_pts.is_empty():
+ 				_set_deadline_from_path()
+ 		Phase.RUN_IN:
+ 			_enter_run_in()
+ 		Phase.EXTEND:
+-			pass
++			_close_window()
+ 		Phase.TURN:
+ 			_enter_turn()
+ 		Phase.DISENGAGE:
+@@ -232,6 +301,9 @@ func enter_phase(p: Phase) -> void:
+ func on_suspended() -> void:
+ 	_abort_burst()
+ 	_set_light(StateLight.State.OFF)
++	var squad := _squad()
++	if squad != null:
++		squad.leave(actor)
+ 	if forward_attack != null:
+ 		forward_attack.enabled = false
+ 	if attack == null:
+@@ -264,6 +336,17 @@ func is_bursting() -> bool:
+ 	return _telegraph_left >= 0.0 or _clock.is_running()
+ 
+ 
++## True while a FLANK / REAR holds at its S waiting for the LEAD's window.
++func is_holding() -> bool:
++	return phase == Phase.REPOSITION and _hold_time >= 0.0
++
++
++## Holding and slow enough to set off along its run from a standing start: only a settled member
++## counts as ready for the rendezvous, or answers a window.
++func is_settled() -> bool:
++	return is_holding() and actor.velocity.length() < config.max_speed * STANDING_START_FRACTION
++
++
+ ## The turn radius the attack run flies at full rate (px).
+ func turn_radius() -> float:
+ 	return config.max_speed / config.turn_rate if config.turn_rate > 0.0 else INF
+@@ -277,8 +360,9 @@ func _start() -> void:
+ 
+ # ── Pass geometry (epic §2.4.1) ──────────────────────────────────────────────────────────────────
+ 
+-## The heading reference `h`: UP in the corridor, else the player's velocity or facing.
+-func _heading_ref(target: TargetInfo) -> Vector2:
++## The heading reference `h`: UP in the corridor, else the player's velocity or facing. Also the
++## squad board's heading hint, so a flank role's side and its pass's bearing side agree.
++func heading_ref(target: TargetInfo) -> Vector2:
+ 	if _corridor().has_area():
+ 		return Vector2.UP
+ 	if target.velocity.length() > HEADING_REF_MIN_SPEED:
+@@ -293,12 +377,15 @@ func _derive_pass(target: TargetInfo) -> void:
+ 	var pos := actor.global_position
+ 	_lead = Steering.clamped_lead_time(pos.distance_to(target.position), config.max_speed, LEAD_MIN, LEAD_MAX)
+ 	var anchor := target.predicted_position(_lead)
+-	var h := _heading_ref(target)
++	var h := heading_ref(target)
+ 	var right := h.rotated(PI / 2.0)
+ 	var kind := _kind_for(right, pos - anchor)
+ 	var b: Vector2
+ 	var l: Vector2
+ 	var side := 1.0
++	var standoff := config.standoff_radius
++	if kind != PassKind.REAR:
++		_rear_side = 0.0
+ 	match kind:
+ 		PassKind.FLANK_LEFT:
+ 			b = h.rotated(-PI / 2.0)
+@@ -306,14 +393,28 @@ func _derive_pass(target: TargetInfo) -> void:
+ 		PassKind.FLANK_RIGHT:
+ 			b = right
+ 			var lane := config.pass_offset
+-			if forced_pass_kind >= 0:
++			if _role_shaped():
+ 				lane += config.flank_lane_gap
+ 			l = h * lane
++		PassKind.REAR:
++			# The side it is on when it becomes REAR, then kept, so a REAR that crosses the heading
++			# line never swings its S across the player. One lane per REAR, outside both flanks'.
++			if _rear_side == 0.0:
++				_rear_side = -1.0 if right.dot(pos - anchor) < 0.0 else 1.0
++			side = _rear_side
++			b = right * side
++			var squad := _squad()
++			var index := maxi(squad.rear_index(actor), 0) if squad != null else 0
++			l = h * (config.pass_offset + (2 + index) * config.flank_lane_gap)
++			standoff = config.rear_standoff_radius
+ 		_:
+ 			b = h
++			# σ is taken from the fighter's side on the first FRONTAL derivation and then kept (it
++			# alternates per pass): re-read every tick, a LEAD spawned on the heading line flips it
++			# as it moves, and its S jumps across the player.
++			if _frontal_sigma == 0.0:
++				_frontal_sigma = -1.0 if right.dot(pos - anchor) < 0.0 else 1.0
+ 			side = _frontal_sigma
+-			if side == 0.0:
+-				side = -1.0 if right.dot(pos - anchor) < 0.0 else 1.0
+ 			l = right * side * config.pass_offset
+ 	var rect := _corridor()
+ 	if rect.has_area():
+@@ -324,12 +425,12 @@ func _derive_pass(target: TargetInfo) -> void:
+ 				l = -l
+ 		elif anchor.y + l.y - _hull_radius < rect.position.y:
+ 			l = -l  # the ahead lane does not fit under the corridor top: pass behind
+-	var s := anchor + b * config.standoff_radius + l
++	var s := anchor + b * standoff + l
+ 	if rect.has_area():
+ 		s = _clamp_run(s, b, rect)
+ 		if (anchor + l - s).dot(-b) < config.min_run_length:
+ 			b = -b
+-			s = _clamp_run(anchor + b * config.standoff_radius + l, b, rect)
++			s = _clamp_run(anchor + b * standoff + l, b, rect)
+ 	pass_kind = kind
+ 	pass_bearing = b
+ 	pass_dir = -b
+@@ -343,6 +444,12 @@ func _derive_pass(target: TargetInfo) -> void:
+ func _kind_for(right: Vector2, offset: Vector2) -> int:
+ 	if forced_pass_kind >= 0:
+ 		return forced_pass_kind
++	if _in_squad():
++		match _role():
++			SquadController.Role.FLANK_LEFT: return PassKind.FLANK_LEFT
++			SquadController.Role.FLANK_RIGHT: return PassKind.FLANK_RIGHT
++			SquadController.Role.REAR: return PassKind.REAR
++			_: return PassKind.FRONTAL
+ 	if _next_solo_kind >= 0:
+ 		return _next_solo_kind
+ 	return PassKind.FLANK_LEFT if right.dot(offset) < 0.0 else PassKind.FLANK_RIGHT
+@@ -397,12 +504,20 @@ func _tick_approach(delta: float, target: TargetInfo) -> void:
+ 		return
+ 	_derive_pass(target)
+ 	var clear := minf(config.standoff_radius, pass_start.distance_to(pass_anchor)) - 1.0
+-	if actor.global_position.distance_to(target.position) < clear - BREACH_MARGIN:
++	if _waits_for_window():
++		# A squad member flies to S to hold there, like REPOSITION: its clearance, and no breach
++		# (a hold never circles the player waiting). The deadline below still bounds it.
++		clear = config.reposition_min_radius
++	elif actor.global_position.distance_to(target.position) < clear - BREACH_MARGIN:
+ 		_begin_breach_pass(target)
+ 		return
+ 	_fly_to_start(delta, target, clear, -1.0)
+ 	if _at_start():
+-		enter_phase(Phase.RUN_IN)
++		if _waits_for_window():
++			enter_phase(Phase.REPOSITION)
++			_begin_hold()
++		else:
++			enter_phase(Phase.RUN_IN)
+ 	elif _phase_time >= _deadline:
+ 		_begin_breach_pass(target)
+ 
+@@ -442,6 +557,13 @@ func _enter_run_in() -> void:
+ 	_leg_a_open = true
+ 	_regroup_pending = false
+ 	_loiter_time = -1.0
++	_hold_time = -1.0
++	_stagger_left = -1.0
++	_wait_time = 0.0
++	pass_role = _role()
++	var squad := _squad()
++	if squad != null and pass_role == SquadController.Role.LEAD:
++		squad.attack_window_open = true
+ 
+ 
+ func _tick_run_in(delta: float, target: TargetInfo) -> void:
+@@ -467,7 +589,10 @@ func _steer_run_in(delta: float, target: TargetInfo) -> void:
+ 	var v_perp := target.velocity - u * target.velocity.dot(u)
+ 	var along := sqrt(maxf(config.max_speed * config.max_speed - v_perp.length_squared(), 0.0))
+ 	var desired := v_perp + (seek_target - pos).normalized() * along
+-	var dir := Steering.turn_toward(_heading(), desired, config.turn_rate, delta)
++	# From (nearly) rest — a squad member leaving its hold — there is no heading to turn from: the
++	# mover's acceleration limit shapes the start, and the run sets off along the line.
++	var heading := desired.normalized() if actor.velocity.length() < config.max_speed * STANDING_START_FRACTION else _heading()
++	var dir := Steering.turn_toward(heading, desired, config.turn_rate, delta)
+ 	mover.request_velocity(dir * config.max_speed)
+ 
+ 
+@@ -551,9 +676,14 @@ func _tick_reposition(delta: float, target: TargetInfo) -> void:
+ 	if _loiter_time >= 0.0:
+ 		_tick_loiter(delta, target)
+ 		return
++	if _hold_time >= 0.0:
++		_tick_hold(delta, target)
++		return
+ 	_fly_to_start(delta, target, config.reposition_min_radius, -1.0)
+ 	if _at_start():
+-		if _regroup_pending:
++		if _waits_for_window():
++			_begin_hold()
++		elif _regroup_pending:
+ 			_loiter_time = 0.0
+ 		else:
+ 			enter_phase(Phase.RUN_IN)
+@@ -565,17 +695,180 @@ func _tick_reposition(delta: float, target: TargetInfo) -> void:
+ ## is capped, so a moving player's S can still be held.
+ func _tick_loiter(delta: float, target: TargetInfo) -> void:
+ 	_loiter_time += delta
++	_hold_station(target)
++	if _loiter_time >= config.regroup_seconds:
++		enter_phase(Phase.RUN_IN)
++
++
++func _hold_station(target: TargetInfo) -> void:
+ 	var correction := ((pass_start - actor.global_position) * LOITER_GAIN).limit_length(LOITER_SPEED)
+ 	seek_target = pass_start
+ 	mover.request_velocity(target.velocity + correction)
+ 	mover.face_toward(actor.global_position + pass_dir * 100.0)
+-	if _loiter_time >= config.regroup_seconds:
++
++
++# ── Squad hold (epic §2.5) ───────────────────────────────────────────────────────────────────────
++
++## Every member of a squad of two or more holds at S: a FLANK or REAR for the LEAD's window, the
++## LEAD for its flanks. A solo fighter and the `forced_pass_kind` seam never do.
++func _waits_for_window() -> bool:
++	return forced_pass_kind < 0 and _in_squad()
++
++
++## True when every FLANK of the squad is holding at its S (duck-typed through the board).
++func _flanks_ready() -> bool:
++	var squad := _squad()
++	for m in squad.members():
++		var role := squad.role_of(m)
++		if role != SquadController.Role.FLANK_LEFT and role != SquadController.Role.FLANK_RIGHT:
++			continue
++		var brain := m.get_node_or_null("Brain")
++		if brain != null and brain.has_method(&"is_settled") and not brain.is_settled():
++			return false
++	return true
++
++
++func _begin_hold() -> void:
++	_hold_time = 0.0
++	_stagger_left = -1.0
++	_wait_time = 0.0
++	_regroup_pending = false  # the hold is a squad member's regroup
++
++
++## Holds S. A FLANK answers each window once, or goes after `flank_wait_max`; a REAR answers every
++## other window. A member that drifts off S, or is promoted to LEAD, flies back to (its new) S.
++func _tick_hold(delta: float, target: TargetInfo) -> void:
++	_hold_time += delta
++	if not _waits_for_window() or actor.global_position.distance_to(pass_start) > HOLD_DRIFT_PX:
++		_hold_time = -1.0
++		_clear_path()
++		_deadline = _phase_time + config.reposition_max
++		_deadline_from_plan = false
++		_fly_to_start(delta, target, config.reposition_min_radius, -1.0)
++		return
++	_hold_station(target)
++	if _stagger_left >= 0.0:
++		_stagger_left -= delta
++		if _stagger_left <= 0.0:
++			_go()
++		return
++	var role := _role()
++	if role != SquadController.Role.REAR and _budget_short():
++		_go()  # Assault: waiting any longer would leave no time for the run
++		return
++	if not is_settled():
++		return  # still sliding in: a run started now would curve off its line
++	var squad := _squad()
++	if role == SquadController.Role.LEAD:
++		if _flanks_ready() or _hold_time >= config.lead_wait_max:
++			_go()
++		return
++	# A holding LEAD is timing the attack, not dead or slow: the wait only runs while it is not.
++	if not _lead_holding():
++		_wait_time += delta
++	var is_rear := role == SquadController.Role.REAR
++	if squad.attack_window_open and not _answered_window:
++		_answered_window = true
++		if is_rear:
++			_rear_windows += 1
++		if not is_rear or _rear_windows % 2 == 0:
++			_go()
++			return
++	if not is_rear and _wait_time >= config.flank_wait_max:
++		_go()
++
++
++## Starts the run now, or — if a squad mate already on a run would reach the crossing of the two
++## lines within `flank_stagger` of this fighter — that much later (re-checked when the wait ends).
++## Never once the run's closest approach no longer fits the budget (`run_budget_slack()`).
++func _go() -> void:
++	if run_budget_slack() <= 0.0:
++		return  # Assault: too late for this run; it holds and leaves with the budget
++	var wait := _crossing_stagger()
++	if wait > 0.0:
++		_stagger_left = wait
++	else:
+ 		enter_phase(Phase.RUN_IN)
+ 
+ 
++## The delay that puts this fighter at least `flank_stagger` behind every squad mate on a run (RUN_IN
++## or EXTEND) at the crossing of their lines, both flying at `max_speed`. 0 when no line crosses
++## ahead of both, or every crossing is already far enough apart. In a pincer this is the flank on
++## the side the LEAD's lane passes (its σ): the two lines' crossing is the same distance from both.
++func _crossing_stagger() -> float:
++	var squad := _squad()
++	var need := 0.0
++	for m in squad.members():
++		if m == actor:
++			continue
++		var mate := m.get_node_or_null("Brain") as FighterBrain
++		if mate == null or (mate.phase != Phase.RUN_IN and mate.phase != Phase.EXTEND):
++			continue
++		# On a run the line is the pass line (a run just started from rest has no useful velocity yet);
++		# EXTEND holds its heading.
++		var mate_dir: Vector2 = mate.pass_dir
++		if mate.phase == Phase.EXTEND and m.velocity.length() > HEADING_MIN_SPEED:
++			mate_dir = m.velocity.normalized()
++		if absf(mate_dir.cross(pass_dir)) < PARALLEL_SIN and mate_dir.dot(pass_dir) > 0.0:
++			# The same way on a parallel lane: their turns at the far end would converge, so this run
++			# trails the mate's by at least twice the crossing gap.
++			var ahead := (m.global_position - actor.global_position).dot(pass_dir)
++			var trail := 2.0 * config.flank_stagger * config.max_speed
++			if ahead < trail:
++				need = maxf(need, (trail - ahead) / config.max_speed)
++			continue
++		var hit: Variant = Geometry2D.line_intersects_line(m.global_position, mate_dir, actor.global_position, pass_dir)
++		if hit == null:
++			continue
++		var t_mate := ((hit as Vector2) - m.global_position).dot(mate_dir) / config.max_speed
++		var t_mine := ((hit as Vector2) - actor.global_position).dot(pass_dir) / config.max_speed
++		if t_mate < 0.0 or t_mine < 0.0 or absf(t_mine - t_mate) >= config.flank_stagger:
++			continue
++		need = maxf(need, t_mate + config.flank_stagger - t_mine)
++	return need
++
++
++## Assault: the engagement budget left once this pass's run, from here to its closest approach (plus
++## `BUDGET_RUN_MARGIN`), is flown (s); INF with no running budget. A squad member stops waiting for its
++## squad once only the run and the shortest extension still fit (`_budget_short()`), and never starts a
++## run at all below 0: that run would still be heading at the player when the budget sends it out.
++func run_budget_slack() -> float:
++	if budget == null or not budget.active:
++		return INF
++	var along := maxf((pass_anchor + pass_lane - actor.global_position).dot(pass_dir), 0.0)
++	return budget.remaining() - (along / config.max_speed + BUDGET_RUN_MARGIN)
++
++
++func _budget_short() -> bool:
++	return run_budget_slack() <= EXTEND_MIN_SECONDS
++
++
++## True while the squad's LEAD holds at its own S.
++func _lead_holding() -> bool:
++	var squad := _squad()
++	for m in squad.members():
++		if squad.role_of(m) == SquadController.Role.LEAD:
++			var lead := m.get_node_or_null("Brain") as FighterBrain
++			return lead != null and lead.is_holding()
++	return false
++
++
++## The LEAD's window closes on its own EXTEND entry — unless it has lost the lead, when
++## `SquadController._reassign()` already closed it and any open window is the new LEAD's.
++func _close_window() -> void:
++	var squad := _squad()
++	if squad != null and pass_role == SquadController.Role.LEAD and squad.role_of(actor) == SquadController.Role.LEAD:
++		squad.attack_window_open = false
++
++
++## At S: within `start_tolerance`, and — for a fighter that starts its run straight away — with the
++## heading within 30° of the run heading. A squad member only has to reach S: it holds there, and the
++## hold turns its nose onto the run.
+ func _at_start() -> bool:
+-	return actor.global_position.distance_to(pass_start) <= config.start_tolerance \
+-			and absf(_heading().angle_to(_run_heading)) <= deg_to_rad(HANDOVER_HEADING_DEG)
++	if actor.global_position.distance_to(pass_start) > config.start_tolerance:
++		return false
++	return _waits_for_window() \
++			or absf(_heading().angle_to(_run_heading)) <= deg_to_rad(HANDOVER_HEADING_DEG)
+ 
+ 
+ # ── Lead-in paths (task plan §3) ─────────────────────────────────────────────────────────────────
+@@ -587,17 +880,29 @@ func _plan_radius() -> float:
+ ## Plans (when needed) and tracks a Dubins lead-in to S; the epic's ring routing with no clear path.
+ func _fly_to_start(delta: float, target: TargetInfo, clearance: float, first_clearance: float) -> void:
+ 	var pos := actor.global_position
++	if _waits_for_window() and pos.distance_to(pass_start) <= STATION_ARRIVE_PLAN_RADII * _plan_radius() \
++			and _segment_clears(pos, pass_start, target.position, clearance):
++		# A squad member's S is a station it stops at, not a run it must line up for: close in, it
++		# brakes and slides onto it (a Dubins lead-in from here can be a full loop, review of t9).
++		_clear_path()
++		seek_target = pass_start
++		mover.arrive(pass_start, config.max_speed)
++		return
+ 	var replan := _path_pts.is_empty() \
+ 			or pass_start.distance_to(_path_goal + _path_goal_velocity * _path_age) > REPLAN_GOAL_PX \
+ 			or pos.distance_to(_path_pts[_path_idx]) > REPLAN_OFF_PATH_PX
+ 	if replan and _plan(target, clearance, first_clearance) and not _deadline_from_plan:
+ 		_set_deadline_from_path()
+ 	if _path_pts.is_empty():
+-		_fly_ring(delta, target)
++		_fly_ring(delta, target, clearance)
+ 	else:
+ 		_track(delta)
+ 
+ 
++func _segment_clears(a: Vector2, b: Vector2, point: Vector2, clearance: float) -> bool:
++	return Geometry2D.get_closest_point_to_segment(point, a, b).distance_to(point) >= clearance
++
++
+ ## The phase's deadline: this path's flying time plus `reposition_max`, measured from now.
+ func _set_deadline_from_path() -> void:
+ 	var remaining := maxf(_path_length - _path_idx * TRACK_SAMPLE_PX, 0.0)
+@@ -640,7 +945,12 @@ func _best_path(goal: Vector2, target: TargetInfo, clearance: float, first_clear
+ 	# Planning from inside `clearance` (after a break-away): the path's start is held only to the
+ 	# break-away clearance until it first leaves the radius (review I5).
+ 	var starts_inside := first_clearance < 0.0 and pos.distance_to(target.position) < clearance
+-	for path in DubinsPath.candidates(pos, _heading().angle(), goal, _run_heading.angle(), _plan_radius()):
++	# A squad member plans to S as a station (arriving along its own approach, no loop to line up);
++	# everyone else arrives pointing along the run.
++	var goal_heading := _run_heading.angle()
++	if _waits_for_window() and goal != pos:
++		goal_heading = (goal - pos).angle()
++	for path in DubinsPath.candidates(pos, _heading().angle(), goal, goal_heading, _plan_radius()):
+ 		var pts := path.sample(PLAN_SAMPLE_PX)
+ 		var first_n := path.first_arc_samples(PLAN_SAMPLE_PX) if first_clearance >= 0.0 else -1
+ 		var exempt := starts_inside
+@@ -682,15 +992,32 @@ func _track(delta: float) -> void:
+ 	mover.request_velocity(dir * config.max_speed)
+ 
+ 
+-## The epic's REPOSITION routing: seek a point on the standoff ring at most 90° round toward S.
+-func _fly_ring(delta: float, target: TargetInfo) -> void:
++## The epic's REPOSITION routing: seek a point on the standoff ring at most 90° round toward S — but
++## never so far round that the straight segment to it cuts inside `clearance` (task plan t9 §2.2,
++## the side-change rule's seek-target clearance). From radius r outside it, the farthest clear ring
++## point is acos(c / r) + acos(c / R) round: the chord tangent to the clearance circle. In Assault the
++## corridor clamp can pull the point back in, so the angle is halved until the clamped chord clears.
++func _fly_ring(delta: float, target: TargetInfo, clearance: float) -> void:
+ 	var pos := actor.global_position
++	var r := pos.distance_to(pass_anchor)
++	var ring_r := config.standoff_radius
+ 	var b_now := (pos - pass_anchor).normalized()
+ 	var b_goal := (pass_start - pass_anchor).normalized()
+-	var ring := pass_anchor + b_now.rotated(clampf(b_now.angle_to(b_goal), -PI / 2.0, PI / 2.0)) * config.standoff_radius
++	var reach := PI / 2.0
++	var outside := clearance > 0.0 and r > clearance and ring_r > clearance
++	if outside:
++		reach = minf(reach, acos(clearance / r) + acos(clearance / ring_r))
++	var angle := clampf(b_now.angle_to(b_goal), -reach, reach)
++	var ring := pass_anchor + b_now.rotated(angle) * ring_r
+ 	var rect := _corridor()
+ 	if rect.has_area():
+ 		var inner := rect.grow(-RING_CORRIDOR_MARGIN)
++		for _k in RING_SHRINK_STEPS:
++			var clamped := ring.clamp(inner.position, inner.end)
++			if not outside or _segment_clears(pos, clamped, pass_anchor, clearance):
++				break
++			angle *= 0.5
++			ring = pass_anchor + b_now.rotated(angle) * ring_r
+ 		ring = ring.clamp(inner.position, inner.end)
+ 	seek_target = ring
+ 	mover.request_velocity(Steering.turn_toward(_heading(), ring - pos, config.turn_rate, delta) * config.max_speed)
+@@ -706,6 +1033,124 @@ func _clear_path() -> void:
+ 	_path_first_end = 0
+ 
+ 
++
++# ── Give way (task plan §2.3) ────────────────────────────────────────────────────────────────────
++
++## The phase a give-way reads (task plan §2.3), duck-typed by squad mates: the run and the turn back in
++## (the two legs a burst is fired from), then the extension and the break-away, then DISENGAGE, then
++## flying to S; a holding fighter ranks lowest.
++func give_way_rank() -> int:
++	match phase:
++		Phase.RUN_IN:
++			return RUN_RANK
++		Phase.TURN:
++			return RUN_RANK if _turn_step == 0 else 3
++		Phase.EXTEND:
++			return 3
++		Phase.DISENGAGE:
++			return 2
++		_:
++			return 0 if is_holding() else 1
++
++
++## The smallest change to the relative velocity `rel_vel` (mine − theirs) that keeps two bodies whose
++## centres are `rel_pos` apart (theirs − mine) at least `radius` apart for the next `horizon` seconds,
++## or ZERO when their straight-line tracks already do: the truncated velocity obstacle of ORCA (van
++## den Berg, Guy, Lin and Manocha, "Reciprocal n-Body Collision Avoidance", 2011; the RVO2 library's
++## construction). Already inside `radius`, it is the push straight apart that restores it within
++## `GIVE_WAY_SEPARATE_SECONDS`.
++static func avoidance(rel_pos: Vector2, rel_vel: Vector2, radius: float, horizon: float) -> Vector2:
++	var dist_sq := rel_pos.length_squared()
++	var r_sq := radius * radius
++	if dist_sq <= r_sq:
++		var dist := sqrt(dist_sq)
++		var away := -rel_pos / dist if dist > 1e-3 else Vector2.RIGHT
++		var needed := (radius - dist) / GIVE_WAY_SEPARATE_SECONDS - rel_vel.dot(away)
++		return away * needed if needed > 0.0 else Vector2.ZERO
++	var speed_sq := rel_vel.length_squared()
++	if speed_sq < 1e-6:
++		return Vector2.ZERO
++	var t := clampf(rel_pos.dot(rel_vel) / speed_sq, 0.0, horizon)
++	if (rel_pos - rel_vel * t).length_squared() >= r_sq:
++		return Vector2.ZERO
++	var w := rel_vel - rel_pos / horizon
++	var w_len_sq := w.length_squared()
++	var dot := w.dot(rel_pos)
++	if dot < 0.0 and dot * dot > r_sq * w_len_sq:
++		# Out through the cut-off circle (the collision is beyond the horizon's reach of the legs).
++		var w_len := sqrt(w_len_sq)
++		return w / w_len * (radius / horizon - w_len)
++	# Out through the nearer leg of the cone.
++	var leg := sqrt(dist_sq - r_sq)
++	var dir: Vector2
++	if rel_pos.cross(w) > 0.0:
++		dir = Vector2(rel_pos.x * leg - rel_pos.y * radius, rel_pos.x * radius + rel_pos.y * leg) / dist_sq
++	else:
++		dir = -Vector2(rel_pos.x * leg + rel_pos.y * radius, -rel_pos.x * radius + rel_pos.y * leg) / dist_sq
++	return dir * rel_vel.dot(dir) - rel_vel
++
++
++## Offers the mover this fighter's share of the avoidance against every other fighter on the same
++## squad board (a mate that has left it to DISENGAGE included): all of it against a higher rank, half
++## against an equal one, none against a lower. The sum never points at the player.
++func _give_way() -> void:
++	var squad := _squad()
++	if squad == null or actor == null:
++		return
++	var rank := give_way_rank()
++	var me := actor.global_position
++	var radius := GIVE_WAY_HULLS * _hull_radius
++	var preferred := mover.requested_velocity()
++	var v := preferred
++	for node in get_tree().get_nodes_in_group(&"enemies"):
++		var m := node as CharacterBody2D
++		if m == null or m == actor or m.get(&"squad") != squad or m.is_queued_for_deletion():
++			continue
++		var brain := m.get_node_or_null("Brain")
++		if brain == null or not brain.has_method(&"give_way_rank"):
++			continue
++		var share := _share(rank, brain.give_way_rank())
++		if share == 0.0:
++			continue
++		var u := avoidance(m.global_position - me, actor.velocity - m.velocity, radius, GIVE_WAY_HORIZON)
++		if u == Vector2.ZERO:
++			continue
++		# ORCA's half-plane: velocities at least `share × u` beyond the current one along u's
++		# direction; the request is moved onto it only when it lies short of it.
++		var n := u.normalized()
++		var deficit := (actor.velocity + u * share - v).dot(n)
++		if deficit > 0.0:
++			v += n * deficit
++	var nudge := v - preferred
++	if rank == RUN_RANK:
++		# A run gives way by timing only: the along-track part, so its line is kept.
++		var along := preferred.normalized()
++		nudge = along * nudge.dot(along)
++	nudge = _off_player(nudge)
++	dbg_nudge = nudge
++	if nudge != Vector2.ZERO:
++		mover.add_nudge(nudge)
++
++
++## This fighter's share of an avoidance against a mate of rank `theirs`: ORCA's reciprocal half,
++## except that anything else takes all of it against a run or a turn-in (whose own half is then only
++## ever the along-track part: it slows, never bends its line).
++static func _share(mine: int, theirs: int) -> float:
++	if theirs == RUN_RANK and mine != RUN_RANK:
++		return 1.0
++	return 0.5
++
++
++## `v` without any component toward the player.
++func _off_player(v: Vector2) -> Vector2:
++	var target := TargetInfo.player(get_tree())
++	if not target.has_target:
++		return v
++	var to_player := (target.position - actor.global_position).normalized()
++	var toward := v.dot(to_player)
++	return v - to_player * toward if toward > 0.0 else v
++
++
+ # ── Weapons (epic §2.4.2) ────────────────────────────────────────────────────────────────────────
+ 
+ func _tick_weapons(delta: float, target: TargetInfo) -> void:
+@@ -730,6 +1175,8 @@ func _tick_weapons(delta: float, target: TargetInfo) -> void:
+ func _try_open_burst(target: TargetInfo) -> void:
+ 	if not target.has_target or _disengage_pending or _since_burst < config.min_burst_period:
+ 		return
++	if pass_role == SquadController.Role.REAR:
++		return  # a REAR's pass is dry: weapons held, light off
+ 	var open := (phase == Phase.RUN_IN and _leg_a_open) or (phase == Phase.TURN and _turn_step == 0 and _leg_b_open and _nose_on(target))
+ 	if not open:
+ 		return
+@@ -826,6 +1273,9 @@ func _request_disengage() -> void:
+ # ── DISENGAGE (the Swarm and Razor Drones' exit, curved) ─────────────────────────────────────────
+ 
+ func _enter_disengage() -> void:
++	var squad := _squad()
++	if squad != null:
++		squad.leave(actor)
+ 	_abort_burst()
+ 	_disengage_pending = false
+ 	_set_light(StateLight.State.OFF)
+@@ -859,19 +1309,51 @@ func _tick_disengage(delta: float) -> void:
+ 	var rate := config.turn_rate
+ 	if config.exit_speed > 0.0:
+ 		rate = minf(rate, config.acceleration / config.exit_speed)
+-	var dir := Steering.turn_toward(_heading(), _exit_point - pos, rate, delta)
++	# From (nearly) rest — a squad member whose budget ran out while it held — it sets off straight
++	# at the exit instead of turning round on an exit-speed arc.
++	var heading := (_exit_point - pos).normalized() if actor.velocity.length() < config.max_speed * STANDING_START_FRACTION else _heading()
++	var dir := Steering.turn_toward(heading, _exit_point - pos, rate, delta)
+ 	mover.request_velocity(dir * config.exit_speed)
+ 
+ 
+ # ── Helpers ──────────────────────────────────────────────────────────────────────────────────────
+ 
+-## The direction of travel, or the nose's direction while (nearly) at rest.
++## The heading the brain steers from: the direction it last asked the mover for while moving (so a
++## squad give-way nudge displaces the fighter without turning its plan, task plan §2.3), else the
++## direction of travel, or the nose's direction while (nearly) at rest.
+ func _heading() -> Vector2:
+ 	if actor.velocity.length() > HEADING_MIN_SPEED:
+-		return actor.velocity.normalized()
++		return _intent if _intent != Vector2.ZERO else actor.velocity.normalized()
+ 	return _nose()
+ 
+ 
++## The squad board `WaveManager` / `SectorHub` wrote on the actor (duck-typed), or null.
++func _squad() -> SquadController:
++	if actor == null:
++		return null
++	return actor.get(&"squad") as SquadController
++
++
++## The actor's squad role; LEAD with no squad (a squad of one is its own lead).
++func _role() -> int:
++	var squad := _squad()
++	if squad == null:
++		return SquadController.Role.LEAD
++	var role: int = squad.role_of(actor)
++	return SquadController.Role.LEAD if role == SquadController.Role.NONE else role
++
++
++## A squad of two or more: roles pick the pass kind. A squad of one flies the solo alternation.
++func _in_squad() -> bool:
++	var squad := _squad()
++	return squad != null and squad.member_count() >= 2
++
++
++## Lanes shaped by a role (FLANK_RIGHT's outer lane): squad members and the `forced_pass_kind` seam.
++func _role_shaped() -> bool:
++	return forced_pass_kind >= 0 or _in_squad()
++
++
+ ## The corridor rect while the mover holds a constraint with one; `Rect2()` otherwise.
+ func _corridor() -> Rect2:
+ 	if mover == null or mover.constraint == null:
+diff --git a/assault/scenes/enemies/fighter/fighter_config.gd b/assault/scenes/enemies/fighter/fighter_config.gd
+index 1d49337..79020a3 100755
+--- a/assault/scenes/enemies/fighter/fighter_config.gd
++++ b/assault/scenes/enemies/fighter/fighter_config.gd
+@@ -75,6 +75,11 @@ extends ShipConfig
+ @export var rear_standoff_radius: float = 560.0
+ ## A flank with no window from its leader attacks after this long at its start point (s).
+ @export var flank_wait_max: float = 2.0
++## A squad LEAD at its start point waits at most this long for its flanks to be holding theirs (s).
++@export var lead_wait_max: float = 3.5
++## The FLANK on the side the LEAD passes starts its run this much later, so the two never reach
++## their crossing together (s).
++@export var flank_stagger: float = 0.4
+ ## RUN_IN gives up after this long whatever the geometry (s): a player running away along the run.
+ @export var run_in_max: float = 4.0
+ ## Open Space: after `passes` passes, the fighter holds its next start point this long (s).
+diff --git a/assault/scenes/enemies/fighter/fighter_config.tres b/assault/scenes/enemies/fighter/fighter_config.tres
+index 98f0273..b8fdaf4 100755
+--- a/assault/scenes/enemies/fighter/fighter_config.tres
++++ b/assault/scenes/enemies/fighter/fighter_config.tres
+@@ -43,6 +43,8 @@ engage_seconds = 6.0
+ exit_speed = 520.0
+ rear_standoff_radius = 560.0
+ flank_wait_max = 2.0
++lead_wait_max = 3.5
++flank_stagger = 0.4
+ run_in_max = 4.0
+ regroup_seconds = 1.5
+ fire_interval = 0.8
+diff --git a/global/enemy_ai/enemy_mover.gd b/global/enemy_ai/enemy_mover.gd
+index 1268813..4d652a9 100755
+--- a/global/enemy_ai/enemy_mover.gd
++++ b/global/enemy_ai/enemy_mover.gd
+@@ -76,6 +76,12 @@ func request_velocity(v: Vector2) -> void:
+ 	_primary = v
+ 
+ 
++## This step's primary request so far (ZERO before any): read-only, for a brain that shapes a nudge
++## against what it has already asked for (the Fighter's squad give-way).
++func requested_velocity() -> Vector2:
++	return _primary
++
++
+ ## An offered, additive correction summed onto the primary request this step.
+ func add_nudge(v: Vector2) -> void:
+ 	_nudge += v

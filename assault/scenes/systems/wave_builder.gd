@@ -88,7 +88,7 @@ func drone()          -> SpawnConfig: return SpawnConfig.new(DRONE)
 func ram()            -> SpawnConfig: return SpawnConfig.new(RAM)
 func sniper()         -> SpawnConfig: return SpawnConfig.new(SNIPER)
 func sniper_enemy()   -> SpawnConfig: return SpawnConfig.new(SNIPER_ENEMY)
-func interceptor()    -> SpawnConfig: return SpawnConfig.new(INTERCEPTOR)
+func gatling_interceptor() -> SpawnConfig: return SpawnConfig.new(GATLING_INTERCEPTOR)
 func razor_drone()    -> SpawnConfig: return SpawnConfig.new(RAZOR_DRONE)
 func gunship()        -> SpawnConfig: return SpawnConfig.new(GUNSHIP)
 func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
@@ -199,6 +199,15 @@ func cluster_formation(count: int, radius: float = 30.0, seed_override: int = 0)
 		f.random_seed = seed_override
 	return f
 
+## W shape: centre slot first, then the outer pair and the trailing pair stagger outward.
+func w_formation(count: int = 5, spread: float = 60.0, depth: float = 40.0, stagger: float = 0.1) -> WFormation:
+	var f := WFormation.new()
+	f.count = count
+	f.spread = spread
+	f.depth = depth
+	f.stagger_delay = stagger
+	return f
+
 # ── Wave & level builders ─────────────────────────────────────────────────────
 
 func _config_to_entry(c: SpawnConfig) -> SpawnEntryResource:
@@ -237,12 +246,12 @@ func level(name: String, waves: Array) -> LevelResource:
 
 # ── Scene path constants ──────────────────────────────────────────────────────
 
-const FIGHTER        := "res://assault/scenes/enemies/light_assault_ship/light_assault_ship.tscn"
+const FIGHTER        := "res://assault/scenes/enemies/fighter/fighter.tscn"
 const DRONE          := "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn"
 const RAM            := "res://assault/scenes/enemies/ram_ship/ram_ship.tscn"
 const SNIPER         := "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn"
 const SNIPER_ENEMY   := SNIPER  ## Alias kept so existing b.sniper_enemy() calls still compile.
-const INTERCEPTOR    := "res://assault/scenes/enemies/interceptor/interceptor.tscn"
+const GATLING_INTERCEPTOR := "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn"
 const RAZOR_DRONE    := "res://assault/scenes/enemies/razor_drone/razor_drone.tscn"
 const GUNSHIP        := "res://assault/scenes/enemies/gunship/gunship.tscn"
 const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"

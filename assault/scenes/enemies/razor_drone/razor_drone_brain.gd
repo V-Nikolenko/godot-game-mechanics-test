@@ -768,9 +768,7 @@ func _new_window() -> void:
 
 ## The unit vector the actor's nose points along, from its rotation and `sprite_forward_angle`.
 func _facing() -> Vector2:
-	var forward: Variant = actor.get(&"sprite_forward_angle")
-	var offset := float(forward) if (forward is float or forward is int) else PI / 2.0
-	return Vector2.RIGHT.rotated(actor.rotation + offset)
+	return Vector2.RIGHT.rotated(actor.rotation + EnemyMover.sprite_forward_angle_of(actor))
 
 
 func _profile() -> ContactProfile:

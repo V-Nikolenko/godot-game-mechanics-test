@@ -50,6 +50,8 @@ global/
 │   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift/spiral/corkscrew/… primitives
 │   ├── target_info.gd         # TargetInfo — player resolver + prediction/intercept snapshot
 │   ├── engagement_budget.gd   # EngagementBudget (RefCounted) — Assault-only per-brain exit timer
+│   ├── burst_clock.gd         # BurstClock (RefCounted) — counts down an exact-size, evenly-spaced burst
+│   ├── dubins_path.gd         # DubinsPath (RefCounted) — shortest turn-radius-limited path between two poses
 │   ├── squad_controller.gd    # SquadController (RefCounted) — event-driven lead/flank/rear role board
 │   ├── anchor_idle.gd         # AnchorIdle (RefCounted) — generic idle-around-an-anchor → combat handover
 │   └── enemy_world.gd         # EnemyWorld — the one lookup of the &"assault_arena" mode provider
@@ -136,7 +138,7 @@ Static-only helper (`RefCounted`, never instantiated) that swaps the OS mouse ar
 > `SquadController` → `test_squad_controller.gd` (+ `tests/integration/test_wave_squads.gd` for how
 > Assault spawns get one), `AnchorIdle` → `test_anchor_idle.gd`, `EngagementBudget` →
 > `test_engagement_budget.gd` (+ `tests/integration/test_engagement_deadline.gd`, the level-timing
-> proof), `StateLight` → `test_state_light.gd`, `Steering` → `test_steering.gd`,
+> proof), `BurstClock` → `test_burst_clock.gd`, `DubinsPath` → `test_dubins_path.gd`, `StateLight` → `test_state_light.gd`, `Steering` → `test_steering.gd`,
 > `Overheat` → `test_overheat_component.gd`, the state machine → `test_state_machine.gd`, and the
 > whole `PlayerBase` damage chain → `tests/integration/test_player_damage_chain.gd`. The autoloads
 > in §3–4 are covered by `tests/unit/test_<autoload>.gd`. See [`tests/README.md`](../../../tests/README.md).
@@ -335,8 +337,20 @@ there is no clock and no `_process`.
   dies once every member drops its own reference. A caller that wants to keep a board across
   spawns (`WaveManager`, see [assault.md](assault.md) → *Wave / spawn system*) must store only a
   `WeakRef`.
+- **Convergence fields (Ph3, `convergence_point` / `convergence_stage`).** Two plain data fields, *no clock*, for a pair
+  of Gatlings that cross their streams: `convergence_point: Vector2` (`Vector2.INF` = unset) is the shared aim point
+  the LEAD rewrites every tick while its window is open, and `convergence_stage: Dictionary` maps member → `0`
+  answered / `1` ready / `2` stream done for the rendezvous. `_reassign()` clears both whenever the LEAD changes (the
+  `attack_window_open` rule — the window and its point belong to the lead that opened them), and `leave()` erases only
+  the leaving member's key. Brains read the *LEAD's intended side* through `members()` / `role_of()`; there is no
+  further `SquadController` API.
 - Brains read it through a duck-typed `actor.squad` property; `null` means "a squad of one".
   `EnemyBrain` itself gained nothing — this is entirely a brain-side convention.
+- **Consumers:** the Swarm Drone (`swarm_drone_brain.gd`, Ph2), the Fighter (`fighter_brain.gd`, Ph3 t9) and the Gatling Interceptor (`gatling_interceptor_brain.gd`, Ph3 t11 — LEAD opens the window at SWING_IN, FLANKs answer from APPROACH / COOLDOWN / REPOSITION, the window closes on the *later* COOLDOWN). Each
+  brain gives `attack_window_open` its own timing — the Fighter LEAD opens it on its RUN_IN entry and closes it on its
+  own EXTEND entry, and FLANKs answer each window once; REARs fly dry passes in a slot between windows. Details beside
+  each entity (`assault/scenes/enemies/fighter/ENEMY.md` → *Squad*). Every board role is recomputed by distance on
+  every join/leave, so a brain must expect a role (and its station) to change after any death.
 
 ### AnchorIdle — `anchor_idle.gd`
 
@@ -399,6 +413,15 @@ accuracy)` instead of aiming straight at the player. `accuracy = 0.0` (every shi
 default) reproduces today's direct aim exactly; `1.0` aims at the full lead/intercept point. See
 `TargetInfo.aim_direction` below.
 
+Both patterns also carry `aim_point: Vector2 = Vector2.INF` — when finite (`.is_finite()`), the
+shot aims there instead of querying `TargetInfo` (a squad's shared convergence point); a per-instance
+`rng: RandomNumberGenerator = null` — `null` (every existing consumer) draws jitter from the global
+`randf_range`, as before; and `AimedAttackPattern` gained `spread_angle: float = 0.0` (Gatling
+already had it), so both patterns jitter the same way. Their non-aimed (`aim_at_player = false`)
+branch is `Vector2.RIGHT.rotated(ship.rotation + EnemyMover.sprite_forward_angle_of(ship))` — equal
+to the legacy `Vector2.DOWN.rotated(ship.rotation)` only when the actor's `sprite_forward_angle` is
+the default `PI/2`, and correct for any other value (see "Facing, one rule" below).
+
 ### Enemy AI — `enemy_brain.gd` + `enemy_mover.gd` (`global/enemy_ai/`)
 
 An AI-driven enemy is a `BaseEnemy` with two extra children, both resolved **by type** in
@@ -446,7 +469,11 @@ func tick(delta: float) -> void:
   request — see `swarm_drone/ENEMY.md` and `razor_drone/ENEMY.md`'s OVERSHOOT sections for the
   worked numbers.
 - **Facing, one rule:** `rotation → heading.angle() - sprite_forward_angle`, heading = the face
-  request or the velocity; `sprite_forward_angle` is read duck-typed off the actor (default `PI/2`).
+  request or the velocity; `sprite_forward_angle` is read duck-typed off the actor (default `PI/2`)
+  through the one shared reader, the public static `EnemyMover.sprite_forward_angle_of(node)` —
+  `EnemyPathMover`'s own facing, and both `AimedAttackPattern`/`GatlingAttackPattern`'s forward
+  (non-aimed) fire direction, call the same function instead of duplicating the duck-typed read, so
+  a shot fired "forward" always leaves the actor's actual nose, whichever way its sprite was drawn.
 - **Constraint:** `AUTO` asks `EnemyWorld.movement_constraint(tree)` once in `_ready()` (none in
   Open Space); `NONE` never asks; a `constraint` set before `add_child` wins.
   `MovementConstraint.inner_rect()` returns the region a brain may treat as "inside the fight"
@@ -459,6 +486,13 @@ func tick(delta: float) -> void:
 - **Rails override it:** `EnemyPathMover._ready()` calls `suspend_ai()` (brain `on_suspended()`, mover
   `halt()`, no more ticks) *in addition to* its unconditional `set_physics_process(false)` and
   `"AIStateMachine"` lookup. A `driven_by_brain` `AttackController` stops with the brain.
+  **Rail fallback rule (Ph3, decided for the Fighter and the Gatling; Ph15 reuses it for every other shooter it takes
+  off rails):** a brain whose actor gets a rail does not go silent. Its `on_suspended()` leaves its squad, turns its
+  `StateLight` off, sets `attack.driven_by_brain = false` and `attack.enabled = true`, and installs a pattern equivalent
+  to the legacy weapon **built from flat config fields** (`rail_*`, so the round-lifetime sweep can read them).
+  `AttackController._process` then self-times the fire. `aim_mode` / `shoot_forward()` / `shoot_at_player()` are
+  rail-only inputs; an AI fighter ignores them. The `"AIStateMachine"` name lookup in `EnemyPathMover` has had no
+  subject since the Light Assault Ship's state machine was deleted (kept for Ph15).
 - Contract tests: `tests/unit/test_enemy_mover.gd`, `tests/integration/test_enemy_brain_contract.gd`;
   fixture enemy: `tests/helpers/fixture_enemy.tscn`.
 
@@ -503,6 +537,32 @@ level: for every drone/razor spawn in every `ENEMIES_CLEARED` section, the worst
 `enemies_cleared_timeout`. Each kind is judged by its own config: the Razor Drone, which defers its
 expiry through a dash, has a longer formula, and a boundary case asserts a Razor placed in
 cloud_descent would miss the timeout (Razors spawn only in DURATION sections).
+
+**`BurstClock` (`burst_clock.gd`, `RefCounted`) counts down a fixed-size, evenly-spaced burst of
+shots — no node, no `Timer`.** A brain calls `start(count, gap)` once, then `advance(delta) -> int`
+from its own tick, firing `attack.fire_now()` once per shot the call reports due; the burst's size
+is exact even across a long frame, because `advance()` never reports more shots due than remain in
+the burst, however large `delta` is. The first shot is due immediately on the first `advance()`
+call, whatever `delta` is — the internal clock starts pre-loaded with `gap`. Time accumulates with
+subtract-not-reset, the same overshoot-preserving rule `AttackController.tick()` uses. `is_running()`
+reports whether shots remain; `stop()` ends the burst early. `shots_fired` is a running count, reset
+by `start()` (docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md §2.3);
+the Fighter brain (t8b) and the Gatling Interceptor brain (t10, one stream per pressure window) are its callers —
+an exact 3–5 / 5–7 / 8–12-round burst instead of a free-running interval timer.
+
+**`DubinsPath` (`dubins_path.gd`, `RefCounted`) is the shortest path between two poses (position +
+heading) for a vehicle with a minimum turn radius** — Dubins 1957, LaValle *Planning Algorithms*
+§15.3.1: at most three pieces, each a full-rate arc or a straight. `DubinsPath.candidates(p0, h0,
+p1, h1, r)` returns every valid shape **sorted by length**: the four CSC paths (RSR, LSL, and the
+inner-tangent RSL/LSR only when the circle centres are ≥ 2r apart), the two CCC paths (only when
+the centres are ≤ 4r apart), and a single arc when start and goal share a circle. Per path:
+`kind`, `length`, `segments`, `first_arc_angle()`, `first_arc_samples(step)`, the analytic
+`end_heading()` and `sample(step) -> PackedVector2Array`. Frame: Godot's y-down world, a turn's
+`sign` is +1 when the heading angle increases. Pure maths — no node, no motion writes, so it passes
+`test_enemy_mover_single_writer.gd`'s sweep. Its first caller is `FighterBrain`, which plans an
+attack run's lead-in with it (take the first candidate whose samples are clear of the player, then
+track the samples with `Steering.turn_toward`) — later attack-run enemies (the Ph4 Bomber/Ram
+passes) can plan with it the same way. Tests: `tests/unit/test_dubins_path.gd`.
 
 ### ProjectileLifetime — `projectile_lifetime.gd`
 
@@ -757,7 +817,7 @@ Pure-data `Resource` types (shareable `.tres` assets; runtime state is kept out 
   - `radial_attack_pattern.gd` (`RadialAttackPattern`) fires `bullet_count` bullets spread around `base_angle` in one shot, and covers both boss shapes in one resource: **`arc >= TAU` is a full ring** (spacing `TAU / count`, no duplicate at the seam) and **`arc < TAU` is a fan** of that width *centred* on the base direction (spacing `arc / (count - 1)`). `aim_at_player` adds the angle to the player (`Vector2.DOWN` fallback); `spawn_radius` offsets each bullet **along its own angle**, so a ring emerges from the hull rim and a fan from the barrel mouth. `bullet_count <= 0` fires nothing.
     ⚠️ Unlike its two siblings it **deliberately ignores `ship.rotation`** — `base_angle` is absolute world space and the caller owns any precession. `StationLaserPhase` spins the station at 0.5 rad/s during exactly the phase the core ring fires in, so folding in the hull rotation would add ~1.6 ring spacings of uncontrolled drift per ring. Pinned by `tests/integration/test_radial_attack_pattern.gd`.
 - **movement/** — `MovementResource` (base; `sample(t) -> Vector2` displacement from spawn, `total_duration()`). Subtypes: `straight`, `sine`, `arc`, `curve`, `hold`, `u_sweep`, `player_focus`, `sequence`. Consumed by `EnemyPathMover`.
-- **formation/** — `FormationResource` (base; `compute_slots() -> Array[FormationSlot]`, each slot an `offset` + `delay`). Subtypes: `line`, `v`, `wedge`, `diagonal`, `cluster`. `WaveManager` spawns one ship per slot.
+- **formation/** — `FormationResource` (base; `compute_slots() -> Array[FormationSlot]`, each slot an `offset` + `delay`). Subtypes: `line`, `v`, `w` (`WFormation`, Ph3: centre first, odd slots trailing at `−depth`, delay growing outward), `wedge`, `diagonal`, `cluster`. `WaveManager` spawns one ship per slot. **A formation is a spawn layout, not a behaviour**: for an AI enemy it only decides where and when the ships appear — their squad roles come from `SquadController` afterwards.
 - **waves/** — `LevelResource` (`level_name` + ordered `waves`), `WaveResource` (`trigger_time` + `entries`), `SpawnEntryResource` (one ship/formation: `ship_scene`, `base_offset`, `spawn_delay`, `movement`, `exit_mode`, `look_*`, optional `formation`, `initial_props`).
 - **levels/** — `LevelSection` (one timed segment: `background_phase`, `transition_in_duration`, section-relative `waves`, `end_condition` ∈ {DURATION, WAVES_COMPLETE, ENEMIES_CLEARED}, `duration`) and `BackgroundPhase` (target alphas/scales/timings for the background renderer to tween toward).
 - **logs/** — `LogEntryResource` (`id`, `title`, `body`, `sequence`). One `.tres` per lore-log
