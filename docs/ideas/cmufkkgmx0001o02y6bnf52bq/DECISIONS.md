@@ -1438,3 +1438,123 @@ index a later phase should read first. **Where a per-task note and this section 
 | Leash / re-engage for Open Space fighters | Ph13 | They fight until the player is beyond `lose_radius`. |
 | Recolouring legacy enemy bullets; muzzle flash, spin-up particles, enemy SFX; deleting `light_assault_ship.png`; rotating `spawn_offset` with the nose | Ph17 | The `StateLight` is the only telegraph. |
 | Rail-Gatling REAR rule, the post-death resync of squad stations | any phase that places three Gatlings / large fighter squads | See open items. |
+
+## Phase 4 - Enemy rework, phase 4: Bomber, Sniper and Ram Corvette (2026-10-07)
+
+Plan: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` (Revision 1), with research in `1-context.md` and
+`2-research.md` in the same directory. These are *planned* decisions. Check this phase's *as built* section, once
+written, before relying on them.
+
+### Changes to earlier decisions
+- **`persist_after_owner_death` is built in Ph4, not Ph5.** It takes the shape Ph1 designed: a `BulletPool` export,
+  default `false`.
+  - On `_exit_tree()` with the flag on, every in-flight projectile is **handed over**. The pool's stored recycle
+    `Callable` is disconnected, `expired → queue_free` is connected, and the projectile leaves `_active`.
+  - `_recycle()` ignores a projectile the pool no longer owns.
+  - `cancel_active()` is unchanged whatever the flag says.
+  - Ph5 builds owner-distance lifetime and rockets **on** this flag; it does not create its own.
+- **Multi-state armour is not a `DefenseProfile` feature.** Armour = breakable parts (`ArmorPlate`) plus a hull rule
+  (`is_armored()` / `deflects_hit()` and an `_on_received_damage` deflect). This is the station's
+  turret-over-armoured-core pattern.
+  - `DefenseProfile.apply_alternate()` stays, with no shipped user. Ph17 may delete it.
+  - A mask-based armour is rejected for good: it silently consumes bullets.
+- **The armour query is hit-aware, additively.** A target may expose `deflects_hit(hit_box: HitBox) -> bool`. Player
+  projectiles call `ArmorQuery.deflects(area, hit_box)` (`global/components/armor_query.gd`), which asks `deflects_hit`
+  first and falls back to `is_armored()`.
+  - The space station implements neither new method, and its behaviour is unchanged.
+  - Any later armoured entity must use one of the two queries. A plate answers "deflect anything that is not ROCKET".
+- **Homing rockets steer at `homing_point(from: Vector2) -> Vector2`** when their target has it, else at
+  `global_position`. Without it, a rocket deflected by an armoured hull parks at the hull's centre. The station has no
+  `homing_point` (a known follow-up for Ph11).
+- **Group `ram_ships` and the old Ram's layer immunity are retired.** The Ram Corvette is in `enemies`.
+  - The EMP immune list keeps the Ram (renamed `RamCorvette`).
+  - The engine-boost immune list drops it: the hull rule protects it while armoured.
+- **`TargetInfo.line_of_sight(from, space, exclude := [])`** is real. It delegates to `LineOfSight.clear(space, from, to,
+  exclude)` (`global/enemy_ai/line_of_sight.gd`).
+- **Heavy Shell:** still no consumer. Ph10 (Heavy Gunship) owns its first use.
+
+### Names and places later phases build on
+- **`Steering.break_contact(pos, threat_pos, threat_vel, side, max_speed, lateral_weight := 0.6)`** plus
+  `EnemyMover.break_contact(...)`: away from the threat, angled to `side`, with the lateral share doubled while the
+  threat is closing.
+- **`LineOfSight`:**
+  - ray mask `ENVIRONMENT | HAZARD_CONTACT`, bodies only;
+  - **opt-in blockers**: group `asteroids`, or a collider answering `blocks_line_of_sight() == true`. Every other body is
+    excluded and the ray recast (max 4);
+  - physics step only.
+
+  Ph6 wrecks and Ph19 heavy-ship LOS plug in by answering `blocks_line_of_sight()`, not by changing the mask.
+- **`ArmorPlate`** (`global/components/armor_plate.gd`) is the first reusable breakable part. Ph10 modular damage
+  should extend or compose it, not invent a second one.
+  - **Children:** `HurtBox` (512 / mask 96, `accepted_damage_types = [ROCKET]`), `Health`, `Sprite`.
+  - **Signals:** `broken(plate: ArmorPlate)`, `deflected(hit_box: HitBox)`.
+  - **Methods:** `deflects_hit`, `is_alive`, `set_glow(0..1)`.
+  - **Break:** close the hurtbox (deferred), hide, burst, free.
+  - **Placement:** parts are never direct children of the enemy root (they sit under a group node such as `Plates` or
+    `Turrets`), so the hurtbox-geometry gate's single direct-child `HurtBox` still covers the body.
+- **`ContactProfile.Mode.ARMOR`** is appended (value 4). It is armable and armed at `setup()`, never detonates, and
+  never harms its owner. The Corvette keeps it armed while plates remain, then uses it RAMMING-style (armed only in
+  CHARGE).
+- **Enemy ordnance family:** `assault/scenes/projectiles/enemy_ordnance/`. It is separate from the rounds family: not
+  `EnemyBullet`s and not `BaseEnemy`s.
+  - `EnemyOrdnance extends Area2D` (`Kind { GRAVITY_BOMB, MINE, PURSUIT_BOMB }`), with `expired`, `reset()` and
+    `launch()`.
+  - A `HurtBox` + `Health` 1, so any player hit **defuses** it (no blast). A proximity area on the player hurtbox. A
+    `ProjectileLifetime`. Its own accumulated clock.
+  - It detonates through `ContactBlast.spawn`. It is not in `enemies` and never registered with `ScoreTracker`.
+  - **Ph7's Mine Layer and mine variants should extend this family.**
+- **Rail round:** `enemy_bullet/rounds/rail_round.tscn` (no `WorldEnvironment`), drawn with a self-freeing `RailTrail`
+  `Line2D` in the container. `enemy_sniper_bullet.tscn` is deleted.
+- **Renames:** `ram_ship/` → `ram_corvette/` (`RamCorvette`, `RamCorvetteConfig`); `sniper_enemy/` → `sniper/`
+  (`Sniper`, new `SniperConfig`).
+  - `WaveBuilder.ram()`, `sniper()` and the `sniper_enemy()` alias are kept.
+  - `Bomber` keeps its name. `bomb.gd/.tscn` are deleted.
+- **Sniper telegraph:** the enemy owns `SniperTelegraph`. The player's `SniperAimVisualizer` is not shared with
+  enemies any more.
+
+### Conventions
+- **A specialist's Assault life is one attack:** sniper `engage_seconds` 9.0 (1–2 shots), ram 4.5 (one charge), bomber
+  8.0 (one run).
+  - A telegraphed attack is never cut off: the budget defers to the shot, the charge's end or the run's end.
+  - An Assault ram exits **straight along its charge heading**. Its deadline row uses a straight-exit bound; the sniper
+    and bomber use the measured curved bound (the Ph3 rule).
+- **Bombers never spawn in an `ENEMIES_CLEARED` section.** Persisted ordnance would hold it open. This is a deadline
+  boundary row, the Gatling precedent.
+- **Stationary** means `velocity.length() < 2` px/s and drift < 1 px. A firing point in Assault lies inside
+  `inner_rect().grow(−margin)`, where the corridor constraint is identity. The "off-screen band" is the off-camera part
+  of `inner_rect()`, never outside it.
+- **"Different firing position"** is asserted as a ≥ 45° change of bearing **in the player's frame** (velocity if
+  moving, else facing), never as float inequality.
+- **Prediction horizons:**
+  - the sniper locks on the full rail-speed intercept;
+  - the ram uses `clamped_lead_time(…, 0.15, 0.6)`;
+  - the bomber uses a damped lead (0.6 × smoothed velocity, horizon ≤ 1.2 s), so a committed turn always escapes.
+- **Difficulty hooks:**
+  - `SniperConfig.decoy_telegraph` (default `false`) is the first behaviour-branch flag;
+  - a decoy is CHARGING-only, never COMMIT;
+  - Ph16 should shorten `aim_seconds`, never `lock_seconds` (0.5 s is the reactable floor).
+- **Rail fallbacks:**
+  - Bomber: a root `_process` clock while suspended, dropping gravity bombs DOWN every 1.2 s.
+  - Sniper: `SniperTelegraph`'s own rail cycle at the legacy 2.0 / 0.5 s timings and 1400 px/s, never writing
+    rotation.
+  - Ram: ARMOR contact.
+
+  `level_2_waves.gd` (unreferenced scene) relies on these.
+- **Level-1 specialist density:** `_LEGACY_PEAK_SPECIALISTS` is a frozen per-section constant
+  (`test_level1_specialist_spawns.gd`). The gate is ≤ 2.5×. Pre-approved levers: ram engage → 3.5, sniper → 6.0,
+  bomber → 6.0. Beyond them it is an owner decision.
+- **Hub:** the three specialists take bearings 135° (Sniper), 45° (Bomber) and 225° (Ram) on a ≈ 1700 px ring, drawn
+  from the seeded rng **after** the existing four groups. 315° stays free (nearest to the pickup bench).
+
+### Deliberately deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| Difficulty tiers ("relocates sooner, more varied angles") | Ph16 | Only the decoy flag is in scope; `aim_seconds` / `min_bearing_change` are the levers |
+| Sniper marking the player for fighters (squad messages) | Ph14 | |
+| LOS blockers in shipped content (wrecks), sniper hiding behind cover | Ph6 / Ph19 | The hub has no physics bodies; the refusal is proven by fixtures |
+| Mine variants, minefields, Mine Layer | Ph7 | Ph4's mine is one proximity kind |
+| Owner-distance lifetime, enemy rockets | Ph5 | Built on `persist_after_owner_death` |
+| Modular damage beyond three plates, per-plate weapons | Ph10 | Builds on `ArmorPlate` |
+| Station `homing_point` (rockets parking in the armoured core) | Ph11 | Not changed here, to keep the boss byte-identical |
+| `level_2_waves.gd` off rails | Ph15 | Scene unreferenced |
+| Deleting `DefenseProfile.apply_alternate()` | Ph17 | No shipped user after Ph4 |
