@@ -1441,7 +1441,7 @@ index a later phase should read first. **Where a per-task note and this section 
 
 ## Phase 4 - Enemy rework, phase 4: Bomber, Sniper and Ram Corvette (2026-10-07)
 
-Plan: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` (Revision 1), with research in `1-context.md` and
+Plan: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` (Revision 2, after review round 1), with research in `1-context.md` and
 `2-research.md` in the same directory. These are *planned* decisions. Check this phase's *as built* section, once
 written, before relying on them.
 
@@ -1472,6 +1472,14 @@ written, before relying on them.
 - **`TargetInfo.line_of_sight(from, space, exclude := [])`** is real. It delegates to `LineOfSight.clear(space, from, to,
   exclude)` (`global/enemy_ai/line_of_sight.gd`).
 - **Heavy Shell:** still no consumer. Ph10 (Heavy Gunship) owns its first use.
+- **A persistent wall is not an aimed shot.** Ph1's F9 damped lead stays the rule for aimed shots (the gravity bomb and
+  the pursuit aim point included). The Bomber's **mine wall** uses an undamped lead on the bomber's own timeline: the time
+  its middle mine will be armed (approach left + half the run + arm delay + 0.4 s, capped at 3 s). Ph7's Mine Layer
+  should use the same rule for any wall it lays.
+- **Budgets count from spawn, so attacks must be proven to fit.** Every Ph4 specialist has an **attack-in-budget row**:
+  from each level-1 spawn class, through a real `WaveManager`, it reaches its attack state (Ram WIND_UP, Sniper AIM,
+  Bomber RUN) before its Assault budget expires. Every density or deadline lever is legal only while those rows stay
+  green. Later phases should add the same row for any enemy with a budget.
 
 ### Names and places later phases build on
 - **`Steering.break_contact(pos, threat_pos, threat_vel, side, max_speed, lateral_weight := 0.6)`** plus
@@ -1486,7 +1494,11 @@ written, before relying on them.
   Ph6 wrecks and Ph19 heavy-ship LOS plug in by answering `blocks_line_of_sight()`, not by changing the mask.
 - **`ArmorPlate`** (`global/components/armor_plate.gd`) is the first reusable breakable part. Ph10 modular damage
   should extend or compose it, not invent a second one.
-  - **Children:** `HurtBox` (512 / mask 96, `accepted_damage_types = [ROCKET]`), `Health`, `Sprite`.
+  - **Children:** `HurtBox` (512 / mask 96, `accepted_damage_types` empty), `Health`, `Sprite`.
+  - **One hit-aware classifier** on the HurtBox's `area_entered` (never `received_damage`, which carries no type):
+    `breaks_on(hit_box)` = `ROCKET`, or the projectile answers `is_high_impact() == true`. Breaking hits decrease Health;
+    others emit `deflected`. Direct emitters (beam, nova, dash) do nothing to a plate.
+  - `deflects_hit(hit_box)` = `not is_alive() or not breaks_on(hit_box)`: a plate broken this frame consumes nothing.
   - **Signals:** `broken(plate: ArmorPlate)`, `deflected(hit_box: HitBox)`.
   - **Methods:** `deflects_hit`, `is_alive`, `set_glow(0..1)`.
   - **Break:** close the hurtbox (deferred), hide, burst, free.
@@ -1495,6 +1507,12 @@ written, before relying on them.
 - **`ContactProfile.Mode.ARMOR`** is appended (value 4). It is armable and armed at `setup()`, never detonates, and
   never harms its owner. The Corvette keeps it armed while plates remain, then uses it RAMMING-style (armed only in
   CHARGE).
+  - `shove_speed` (default 0): an armed touch calls the touched owner's duck-typed `apply_knockback(impulse)` (IDEAS §16
+    "stagger"). The Corvette shoves at 260 px/s while armoured only.
+  - **`OpenSpacePlayerShip.apply_knockback(impulse)`** exists from Ph4: `velocity += impulse`. Never call
+    `PlayerBase.apply_knockback_motion()` in Open Space: it clamps to the Assault bounds.
+- **`Bullet.is_high_impact()`** returns `unlimited_pierce` (the player's Sniper Shot). It is the duck-typed opt-in for
+  "high-impact weapons" (IDEAS §5.7); a later heavy player weapon answers it to break armour parts.
 - **Enemy ordnance family:** `assault/scenes/projectiles/enemy_ordnance/`. It is separate from the rounds family: not
   `EnemyBullet`s and not `BaseEnemy`s.
   - `EnemyOrdnance extends Area2D` (`Kind { GRAVITY_BOMB, MINE, PURSUIT_BOMB }`), with `expired`, `reset()` and
@@ -1502,6 +1520,11 @@ written, before relying on them.
   - A `HurtBox` + `Health` 1, so any player hit **defuses** it (no blast). A proximity area on the player hurtbox. A
     `ProjectileLifetime`. Its own accumulated clock.
   - It detonates through `ContactBlast.spawn`. It is not in `enemies` and never registered with `ScoreTracker`.
+  - Lifetime caps: gravity bomb 16 s / 1800 px, pursuit bomb 10 s / 2400 px, mine 10 s (life 8 s).
+  - **Ordnance has per-kind rows in `test_enemy_bullet_lifetime.gd`** (constant speed; a two-speed travel bound for the
+    pursuit bomb; time-only for mines), speeds read from config. **Ordnance speeds never enter
+    `_every_shipped_enemy_bullet_speed()`**, which stays the round family's list (its ≥ 150 px/s rule and derived
+    18 s / 2400 px defaults are round-only).
   - **Ph7's Mine Layer and mine variants should extend this family.**
 - **Rail round:** `enemy_bullet/rounds/rail_round.tscn` (no `WorldEnvironment`), drawn with a self-freeing `RailTrail`
   `Line2D` in the container. `enemy_sniper_bullet.tscn` is deleted.
@@ -1509,15 +1532,26 @@ written, before relying on them.
   (`Sniper`, new `SniperConfig`).
   - `WaveBuilder.ram()`, `sniper()` and the `sniper_enemy()` alias are kept.
   - `Bomber` keeps its name. `bomb.gd/.tscn` are deleted.
+  - Art: `bomber.png` and `sniper.png` are overwritten in place (UIDs kept); `ram_corvette.png`, two plate PNGs and
+    `sniper_barrel.png` are new; `ram_ship.png` / `ram_ship_damaged.png` are deleted in the ram art task.
+  - The Bomber's body is a `RectangleShape2D` (≈ 96 × 44) shared by its contact box and hurtbox, so a wide sprite is
+    shootable where it is drawn.
 - **Sniper telegraph:** the enemy owns `SniperTelegraph`. The player's `SniperAimVisualizer` is not shared with
   enemies any more.
 
 ### Conventions
 - **A specialist's Assault life is one attack:** sniper `engage_seconds` 9.0 (1–2 shots), ram 4.5 (one charge), bomber
-  8.0 (one run).
-  - A telegraphed attack is never cut off: the budget defers to the shot, the charge's end or the run's end.
-  - An Assault ram exits **straight along its charge heading**. Its deadline row uses a straight-exit bound; the sniper
-    and bomber use the measured curved bound (the Ph3 rule).
+  8.0 (one run), each proven by its attack-in-budget row.
+  - Speeds sized for that: ram `cruise_speed` 280 (exposed 340), Bomber transit 240 and run 170; the sniper's first
+    firing point is the nearest legal one.
+  - A telegraphed attack is never cut off: the budget defers to the shot (≤ `aim + lock` 1.8 s), the charge's end
+    (≤ `wind_up_seconds + charge_max_time` = 0.65 + 1.45 = 2.1 s) or the run's end (≤ 2.12 s).
+  - **The Ram's LINE_UP never defers.** It is capped at `line_up_cap` (0.5 s) and entered only if
+    `budget.remaining() ≥ line_up_cap` (the Swarm Drone / Gatling attack-gate precedent). `charge_max_time` is a hard
+    cap on the charge boost.
+  - An Assault ram exits **straight along its charge heading** after a charge. Its deadline row uses the larger of the
+    straight bound and the measured nearest-edge bound; the sniper and bomber use the measured curved bound (the Ph3
+    rule). **Count gates use measured exits too**, never a straight-line exit for a curved exiter.
 - **Bombers never spawn in an `ENEMIES_CLEARED` section.** Persisted ordnance would hold it open. This is a deadline
   boundary row, the Gatling precedent.
 - **Stationary** means `velocity.length() < 2` px/s and drift < 1 px. A firing point in Assault lies inside
@@ -1528,7 +1562,9 @@ written, before relying on them.
 - **Prediction horizons:**
   - the sniper locks on the full rail-speed intercept;
   - the ram uses `clamped_lead_time(…, 0.15, 0.6)`;
-  - the bomber uses a damped lead (0.6 × smoothed velocity, horizon ≤ 1.2 s), so a committed turn always escapes.
+  - the bomber's gravity bomb and pursuit aim use a damped lead (0.6 × smoothed velocity, horizon ≤ 1.2 s);
+  - the bomber's mine wall uses the undamped bomber-timeline lead above, only for 150 ≤ |v̄| ≤ 440 px/s (a boosting
+    player gets a pursuit bomb). Its placement test asserts against the **live** player, not only against P̂.
 - **Difficulty hooks:**
   - `SniperConfig.decoy_telegraph` (default `false`) is the first behaviour-branch flag;
   - a decoy is CHARGING-only, never COMMIT;
@@ -1541,8 +1577,12 @@ written, before relying on them.
 
   `level_2_waves.gd` (unreferenced scene) relies on these.
 - **Level-1 specialist density:** `_LEGACY_PEAK_SPECIALISTS` is a frozen per-section constant
-  (`test_level1_specialist_spawns.gd`). The gate is ≤ 2.5×. Pre-approved levers: ram engage → 3.5, sniper → 6.0,
-  bomber → 6.0. Beyond them it is an owner decision.
+  (`test_level1_specialist_spawns.gd`). The gate is ≤ 2.5×, in all three sections (cloud_descent included). Pre-approved
+  levers, in order, each conditional on the attack-in-budget rows: ram `exit_speed` → 600, sniper engage → 7.0, bomber
+  → 6.5, ram engage down to its measured floor. Beyond them it is an owner decision.
+- **Hub radii (perceive / lose):** Sniper 700 / 1300, Bomber 650 / 1700, Ram 600 / 1300. Each `lose_radius` sits above
+  the largest actor–player distance the enemy's own cycle opens, by a config inequality. Ph3's 900 is a fighter value;
+  a later specialist must size its own the same way, or `AnchorIdle` sends it home mid-cycle.
 - **Hub:** the three specialists take bearings 135° (Sniper), 45° (Bomber) and 225° (Ram) on a ≈ 1700 px ring, drawn
   from the seeded rng **after** the existing four groups. 315° stays free (nearest to the pickup bench).
 
@@ -1556,5 +1596,8 @@ written, before relying on them.
 | Owner-distance lifetime, enemy rockets | Ph5 | Built on `persist_after_owner_death` |
 | Modular damage beyond three plates, per-plate weapons | Ph10 | Builds on `ArmorPlate` |
 | Station `homing_point` (rockets parking in the armoured core) | Ph11 | Not changed here, to keep the boss byte-identical |
+| Reconciling the race-mode mine (`assault/scenes/race/track/mine.gd`, group `mines`) with enemy ordnance mines | Ph7 | Two unrelated mine concepts exist; Ph4 does not touch the race one |
+| Player knockback from anything other than armour contact | later (Ph6 hazards, Ph17) | Ph4 adds only the Open Space ship's `apply_knockback` the shove needs |
+| A warhead-friendly Assault ram (`assault_plate_count` 1) | owner decision | A frontal warhead volley strips one plate; one homing volley strips all three. Default keeps three plates |
 | `level_2_waves.gd` off rails | Ph15 | Scene unreferenced |
 | Deleting `DefenseProfile.apply_alternate()` | Ph17 | No shipped user after Ph4 |
