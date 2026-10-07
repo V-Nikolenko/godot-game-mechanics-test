@@ -63,8 +63,8 @@ the brain, then the mover. The brain only requests motion (the single-writer gat
 - **Rhythm:** a window comes about every 5.8 s, ≈ 1.7 shots/s on average. The shortest possible period is 2.28 s
   (`min_window_period()`), which sizes the pool.
   - In Assault, at `engage_seconds` 7.0, a Gatling usually gets **one** window before it leaves.
-- **Rails** (`.move()`, the station's LEFT/RIGHT reinforcements, and level 1 until it migrates): `on_suspended()` runs
-  the legacy constant stream from the `rail_*` fields.
+- **Rails** (`.move()`; today only the station's LEFT/RIGHT reinforcements — level 1's pair is an AI pair since t16):
+  `on_suspended()` runs the legacy constant stream from the `rail_*` fields.
   - Every 0.09 s, 220 px/s, ±0.08 rad, aimed at the player with accuracy 0.
   - It uses the same 36-round `StreamPool`. The rail need is 71, so a rail Gatling fires about 36 rounds and then stalls
     until they expire. That is the legacy starvation shape (the legacy pool was 20), kept deliberately until Ph15 takes
@@ -119,7 +119,50 @@ the brain, then the mover. The brain only requests motion (the single-writer gat
 
 - WaveBuilder method: `b.gatling_interceptor()`. See `docs/enemy-roster.md`.
 - With no `.move()` it is an AI Gatling. With `.move(...)` it rides the rail and fires the legacy stream.
-- Keep it out of ENEMIES_CLEARED sections (epic plan §2.6). Its window deferral is not in the deadline formula.
+- A `.formation()` or a shared `.squad(&"<id>")` makes one squad. Two Gatlings in one squad converge; a third is not
+  given the REAR rule of epic §2.6.1 ("holds at `preferred_range + 200`, never fires") — it fires solo windows
+  (not built; nothing places three in one squad).
+- Keep it out of ENEMIES_CLEARED sections (epic plan §2.6). Its window deferral is not in the deadline formula, and
+  `test_engagement_deadline.gd` has a boundary row proving a Gatling placed in one would miss the timeout.
+
+## Level 1 (t16, epic §2.9)
+
+deep_space's Gatling pair is `b.gatling_interceptor()` with `.squad(&"w0g")` and no `.move()` / `.free_after()`;
+nothing else in level 1 spawns one. It arrives at the same moment and place as the rail pair did, then flanks inside
+the corridor and leaves at `engage_seconds` (7.0 s). It sits in a `DURATION` section, so there is no deadline row for
+it. The pin is `tests/integration/test_level1_fighter_spawns.gd`; the measured fire-density gate is
+`test_level1_fighter_fire_density.gd` (deep_space peak 9.0 shots/s against a limit of 39.1, from 90 fighter + 20 Gatling
+shots in a run). The density is **far** below the rail's: an average window is ≈ 5.8 s (≈ 1.7 shots/s) against the
+legacy 11 shots/s hose.
+
+## Design checklist (IDEAS §43)
+
+| Question | Answer |
+|---|---|
+| Unique silhouette? | 64 × 64, wide wing pods and a visible three-barrel rotary cannon at the nose; wider and heavier than the Fighter, with no red stripe. |
+| Preferred combat distance? | Side-on at `preferred_range` 380 px (bearing within 90° ± 35° of the player's heading). |
+| Movement signature? | Holds a flank, strafes slowly (140 px/s) while firing, then swings round the player on a 380 px ring to the *other* flank. |
+| How does it attack? | One pressure window at a time: spin-up 0.25 s, a stream of 8–12 Gatling Stream rounds 0.09 s apart aimed at the player's predicted point, a 0.4 s pause. |
+| Player approaches from behind? | `F` is derived from the player's heading, so the flank point moves with the player; the swing routes round the ring and never across the player. In Assault `h` is always UP. |
+| Player boosts away? | The flank point and prediction follow the player (`P̂` 0.3–0.8 s ahead); REPOSITION/APPROACH cap at 5 s, and the Open Space idle breaks off beyond `lose_radius` 900. Not play-tested. |
+| Fights off-screen? | Open Space: by distance, no camera. Assault: confined to the corridor by the mover constraint. |
+| Retreat / reposition? | REPOSITION is a built-in phase (the swing to the other flank); Assault ends in DISENGAGE. |
+| Distinct telegraph? | `StateLight` yellow through SWING_IN and SPIN_UP, red while STREAMing. A yellow light is always followed by its stream. |
+| Does killing it change the encounter? | A paired Gatling loses its convergence partner (the point and stages clear, the survivor finishes its stream alone); in-flight rounds vanish with the shooter. |
+| Open Space without camera coordinates? | Yes (`TargetInfo`, world-space patrol anchor). |
+| Same behaviour in Assault, constrained? | Yes — same brain, corridor `inner_rect()`, first side = the half opposite the player, routing round ahead of the player, an `EngagementBudget` exit that never starts a window it cannot finish. |
+| Does its sprite communicate state? | Through the `StateLight` only; the barrels do not animate (a Ph17 polish item, with spin-up particles). |
+| Armour, shields, weak points? | None. 70 HP. |
+| Works alone? | Yes; the solo window rhythm is the baseline. |
+| Better combined? | Yes: a pair crosses its streams from one side. It also layers with fighters (a different axis: sustained side pressure vs head-on bursts). |
+| Deterministic tests? | Yes — seeded `rng`, `StateLight` read, `min_window_period()`; `test_gatling_interceptor.gd`, `test_gatling_convergence.gd`, `test_enemy_dual_mode.gd`. |
+
+**Corrects the old docs:** `interceptor/ENEMY.md` and `docs/enemy-roster.md` said the Interceptor "always fires forward
+(in direction of travel)". It never did on the AI path: every round is aimed at a predicted player position, and on a
+rail the legacy stream was already aimed at the player (`accuracy` 0, spread ±0.08 rad).
+
+**Known gaps:** the readability of the yellow/red light at Assault speed and the feel of one window per life in Assault
+are untested by hand. The rail Gatling's pool-starvation shape is kept deliberately (see *Rails*).
 
 ---
 

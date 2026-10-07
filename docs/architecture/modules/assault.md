@@ -36,6 +36,7 @@ assault/scenes/
 ├── projectiles/                 Player + enemy ordnance
 │   ├── bullets/bullet.gd        Player bullet — UNPOOLED, frees itself off-screen (pierce, sniper)
 │   ├── enemy_bullet/            EnemyBullet (become_friendly() flips it to a player projectile)
+│   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell .tscn + EnemyRounds
 │   ├── missiles/                homing/ + warhead/ missiles
 │   └── piercing_beam/           Sustained BEAM weapon projectile
 ├── systems/                     Mission orchestration (non-visual)
@@ -117,7 +118,7 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   .delay(...).shoot_forward()` …). It builds `SpawnEntryResource` / `WaveResource` /
   `LevelResource` objects and centralizes the enemy scene-path constants. Movement helpers
   (`straight`, `arc`, `sine`, `u_sweep`, `curve`, `player_focus`, `sequence`, `hold`) and
-  formation helpers (`v_`, `wedge_`, `line_`, `diagonal_`, `cluster_`) live here.
+  formation helpers (`v_`, `w_`, `wedge_`, `line_`, `diagonal_`, `cluster_`) live here — a formation is a *spawn layout* only; an AI enemy takes its squad role from `SquadController` once it is alive (the `w_` shape is Ph3's `WFormation`).
 - **`EnemyPathMover`** attaches to any `CharacterBody2D` enemy and drives **position only**
   by sampling its `MovementResource` each frame plus the camera scroll offset. It suspends
   the ship's own physics/AI (so timer-based shooting still works), faces the travel
@@ -127,14 +128,16 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   `_actor.set_physics_process(false)`, the `"AIStateMachine"` child name lookup →
   `PROCESS_MODE_DISABLED` (both today's behaviour), *and* `_actor.suspend_ai()` when the actor
   `has_method` it (new — see [global.md](global.md) → *Enemy AI*). The name lookup is not a
-  fallback the brain contract can switch off: the light assault ship is a `BaseEnemy` (so it
-  *has* `suspend_ai()`), but its `AIStateMachine` states write `velocity` and call
-  `move_and_slide()` from `StateMachine._process`, which only the name lookup stops. All 264
-  path-driven spawns in Level 1 are unchanged by this addition.
+  fallback the brain contract can switch off. It had one subject, the old Light Assault Ship's `AIStateMachine`
+  (its states wrote `velocity` and called `move_and_slide()` from `StateMachine._process`); that state machine was
+  deleted when the ship became the Fighter (Ph3), so the lookup now has **no subject in the game** and is kept (and
+  pinned on `tests/helpers/ai_state_machine_fixture.tscn` by `tests/integration/test_enemy_path_mover.gd`) for Ph15 to drop. The path mover's facing is
+  `vel.angle() − EnemyMover.sprite_forward_angle_of(actor)`, so a rail ship noses along its path whichever way its art
+  was drawn. Level 1 no longer attaches a path mover to any Fighter or Gatling Interceptor.
 - **Squads from spawns.** `WaveBuilder.SpawnConfig.squad(id: StringName)` stamps a
   `SpawnEntryResource.squad_id`; a `formation()` is automatically one squad, and loose entries in
   one `b.wave()` that share a `squad()` id form one squad (level 1 uses `&"w<n>"`, `n` the wave's
-  index, for every loose wave of 2–7 drones — see [enemy roster](../../enemy-roster.md)). A loose
+  index, for every loose wave of 2–7 drones, `&"w<n>f"` for loose fighters and `&"w<n>g"` for the Gatling pair — squads stay per family — see [enemy roster](../../enemy-roster.md)). A loose
   entry with no id gets a squad of one. `WaveManager` never stores a `SquadController` object in
   its own spawn dicts, only a `"<wave index>:<id-or-slot-index>"` **key** string; `_spawn_ship()`
   resolves that key against its own `_squads: Dictionary` of key → `WeakRef(SquadController)` —
@@ -253,6 +256,21 @@ already decided the fight is on, so the brain starts straight in APPROACH.
 (`squad.set_engaged` / `is_engaged` / `hold_combat`) and returns together once none of them are
 engaged. See swarm_drone/ENEMY.md's "Hub idle" section for the exact radii and timings.
 
+**The Fighter and the Gatling Interceptor are the Phase 3 AI shooters** — see
+[fighter/ENEMY.md](../../../assault/scenes/enemies/fighter/ENEMY.md) and
+[gatling_interceptor/ENEMY.md](../../../assault/scenes/enemies/gatling_interceptor/ENEMY.md). The Fighter
+(`FighterBrain`, formerly the Light Assault Ship) flies Dubins-planned attack runs — lead-in, pass at a set lane,
+wide turn, reposition, second pass — and picks an aimed Pulse burst or a forward Scatter burst by distance; the Gatling
+(`GatlingInterceptorBrain`, formerly the Interceptor) holds a side-on flank and fires one pressure window at a time
+(spin-up, an 8–12 round Gatling Stream aimed at the player's predicted point, a pause, a swing to the other flank),
+two of them converging their streams from one side. Both run in both harnesses (`test_fighter.gd`,
+`test_gatling_interceptor.gd`, `test_enemy_dual_mode.gd`), both fight as `SquadController` squads, both fall back to the
+legacy weapon on a rail (`on_suspended()`, so the station's reinforcements still fire), and **all 64 of level 1's
+fighter and Gatling spawns are AI spawns** (no `.move()`, `.free_after()` or `shoot_*()`): the three level-1 sections
+arrive at the same moments and places as before and then fight inside the corridor and leave on their
+`EngagementBudget`. Their corridor behaviour is the shared `AssaultCorridorConstraint` above — a Fighter's flank
+lanes flip behind the player near the corridor top, a Gatling's first side is the half opposite the player.
+
 ### Projectiles & bullet pool
 
 Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.gd`
@@ -297,6 +315,17 @@ Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.g
   collision so it damages enemies instead of the player. Currently unused — its only caller,
   the parry ability `reflect_state.gd`, was removed as dead code (2026-09-08): its input action
   had already been replaced by `use_ability` and no scene instanced it.
+- `enemy_bullet/rounds/` — **the enemy round family** (Ph3): `pulse_round.tscn`, `scatter_round.tscn`,
+  `gatling_stream_round.tscn` and `heavy_shell.tscn`, each an *inherited scene* of `enemy_bullet.tscn` with no new
+  script (so each is a pooled `EnemyBullet` with its own `ProjectileLifetime`), plus `EnemyRounds`
+  (`enemy_rounds.gd`: the four `PackedScene` constants and `pool_size_for(max_burst, round_lifetime,
+  min_burst_period)`). A shooter picks a round by pointing its `BulletPool.bullet_scene` at one — **one pool per round
+  per shooter, a direct child of the enemy root**. `EnemyBullet.reset()` restores the *scene's authored* speed and
+  damage (captured in `_ready()`), so a pooled Scatter pellet never comes back with a Pulse's numbers. Stats, looks and
+  users are tabled in the [enemy roster](../../enemy-roster.md) → *Enemy Rounds*. The Fighter fires Pulse and Scatter,
+  the Gatling fires Gatling Stream, the **Heavy Shell has no consumer yet**; every other enemy keeps the legacy orange
+  `enemy_bullet.tscn` until Ph17's audit. `test_enemy_bullet_lifetime.gd` sweeps every round: `max_distance` over the
+  slowest speed any shooter fires it at (read from config fields, never typed) must fit `max_time`.
 - `missiles/` — `homing/` and `warhead/` secondary munitions fired by `RocketState`.
 - `piercing_beam/` — the sustained beam projectile for the BEAM weapon behavior.
 

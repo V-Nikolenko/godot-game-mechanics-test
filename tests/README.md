@@ -300,8 +300,7 @@ Four things to know before extending it:
 - **The roster has a completeness guard**, which the two older files still lack: a `DirAccess`
   pass over the top level of `assault/scenes/enemies/` and `assault/scenes/allies/` fails if a
   `<dir>/<dir>.tscn` exists that the roster does not list. Top level only — the enemies directory
-  also holds loose scripts, and subdirectories hold non-entity scenes (`bomber/bomb.tscn`,
-  `fighter/states/`).
+  also holds loose scripts, and subdirectories hold non-entity scenes (`bomber/bomb.tscn`).
 
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
@@ -724,6 +723,29 @@ and fought the turn controller's own target angle within a frame or two, until i
 call `face_instant()` (the same duck-typed-query precedent as `Bullet.is_armored()`). Reverting
 that call back to a raw rotation write was checked by hand to fail this test before it was
 committed.
+
+### The Phase 3 shooters (Fighter, Gatling Interceptor, the round family)
+
+Files: `integration/test_fighter.gd`, `test_fighter_squad.gd`, `test_gatling_interceptor.gd`,
+`test_gatling_convergence.gd`, `test_enemy_rounds.gd`, `test_enemy_bullet_lifetime.gd`,
+`test_wave_builder_formations.gd`, the level-1 files `test_level1_fighter_spawns.gd`,
+`test_level1_fighter_fire_density.gd`, `test_level1_fighter_exit.gd`, `test_engagement_deadline.gd`, plus
+`unit/test_burst_clock.gd`, `test_dubins_path.gd`, `test_attack_patterns_forward.gd`, and the Gatling/fighter cases in
+`test_enemy_dual_mode.gd` (both harnesses) and `test_sector_hub_patrol.gd`. Unlike the older characterization suite these
+**assert intent**. Four traps they hit:
+
+- **Cold-start a hub brain on purpose.** Both brains start in IDLE in Open Space unless `start_engaged` is set, so every
+  combat test spawns through a helper that sets it; the cold-start cases are at the end of each file. Assault skips idle
+  (an `EngagementBudget` exists).
+- **Fighters collide with each other** (layer 1, mask 1). A squad simulation stepped by hand collides with mates'
+  *unstepped* spawn positions and becomes non-deterministic — call `add_collision_exception_with()` between members.
+- **Seed every brain** (`EnemyBrain.rng_seed`) and read pool sizes, speeds and ranges from the config fields; a typed
+  number goes stale the first time a shooter is retuned (the round-lifetime sweep refuses a regex).
+- **The measured level-1 run scales the clock.** `test_level1_fighter_fire_density.gd` speeds a real `WaveManager` run up
+  4× by scaling `time_scale`, `physics_ticks_per_second` and `max_physics_steps_per_frame` together (physics step held
+  at 1/60 s) and restores all three in `after_each`; it also waits three *idle* frames before `load_section()`, or wave 0
+  triggers after a catch-up burst. Judge `waves_complete` on `WaveManager`'s own clock, not the summed physics clock.
+  Anything that awaits still needs `scripts/check-test-leaks.sh`.
 
 ### The enemy-mover single-writer gate
 

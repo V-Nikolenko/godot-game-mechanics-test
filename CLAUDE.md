@@ -227,7 +227,49 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `PickupBase` child of the real `sector_hub.tscn` plus the player's spawn point and asserts each
   one clears that group's own idle ring plus its `perceive_radius` — a planet or a pickup placed
   later within reach of a patrol's anchor fails it instead of ambushing the player mid-dwell. The
-  same file also sweeps the whole project to confirm no `PatrolDrone` reference survives.
+  same file also sweeps the whole project to confirm no `PatrolDrone` reference survives. The
+  Phase 3 shooters joined it: the hub also patrols a fighter pair and a Gatling pair, and the same
+  sweep now also asserts each of those groups clears its own ring (the Gatling's margin is only
+  +88.7 px, so a pickup added closer than that fails it).
+  `tests/integration/test_enemy_bullet_lifetime.gd` is an eighteenth, the **round lifetime sweep**,
+  and `tests/integration/test_enemy_rounds.gd` its companion over the bullet family (Pulse, Scatter,
+  Gatling Stream, Heavy Shell under `assault/scenes/projectiles/enemy_bullet/rounds/`): for every
+  round, `max_distance / the slowest speed any shooter fires it at` must fit its `max_time`, with
+  those speeds read from `FighterConfig` / `GatlingInterceptorConfig` fields (`aimed_speed`,
+  `forward_speed`, `round_speed` and the `rail_*` speeds) — never a regex or a typed number, so a
+  retuned shooter cannot quietly outrun its round's life. A synthetic 100 px/s round with the shared
+  18 s / 2400 px caps proves the sweep can reject. `test_enemy_rounds.gd` pins what a round *is*
+  (an `EnemyBullet` with a `ProjectileLifetime`, `reset()` restoring the scene's own speed and
+  damage, the Scatter round expiring at 450 px) and `EnemyRounds.pool_size_for()`; the Heavy Shell,
+  which no enemy fires yet, is exercised by a fixture shooter.
+  `tests/integration/test_level1_fighter_spawns.gd` and `test_level1_fighter_fire_density.gd` are a
+  nineteenth and twentieth, the level-1 **fighter pin and density gates**: the pin freezes all 64
+  fighter / Gatling spawn rows (trigger, offset, delay, formation, and that none has `.move()`,
+  `.free_after()` or an `aim_mode` any more), so the migration off rails can only change *how* they
+  fight, never when or where they arrive; `_LEGACY_PEAK_FIGHTERS` and `_LEGACY_PEAK_SHOTS_PER_S`
+  are **frozen constants** (computed from the live rails before they were deleted) that the count
+  gates divide by — attack-capable at most 1.5× and all-alive at most 2.0×. The shots/s gate is
+  **measured**, not computed: the density test runs each section's fighters and Gatlings through a
+  real `WaveManager` and asserts the peak shots in any 2 s window is at most 1.25× the legacy peak.
+  Boundary cases show a fighter line given `.move()` again, a changed delay, a dense burst and an
+  extra formation at the peak each fail. Read the "wave-order quirk" in the Phase 3 DECISIONS
+  before touching a section's wave list.
+  The sixteenth gate was extended for the same migration: `test_engagement_deadline.gd` gains
+  **per-entry fighter rows** for cloud_descent (engagement budget + the 0.8 s burst deferral + a
+  *curved-exit* bound of 5.37 s, gated on the real `fighter.tscn` over 404 starts — the straight-line
+  Razor term would under-report by 2.5 s), a boundary derived from the config rather than a fixed
+  delay, and a Gatling boundary plus a "no `ENEMIES_CLEARED` section contains a Gatling" row.
+  `tests/integration/test_level1_fighter_exit.gd` replays cloud_descent through a real
+  `WaveManager`: the container is empty 9.07 s after `waves_complete` of a 10 s timeout.
+  `tests/integration/test_station_reinforcements.gd::test_rail_reinforcements_fire` is a twenty-first,
+  the **rail-fire test**: every TOP fighter and LEFT/RIGHT Gatling the space station spawns on a rail
+  must put at least one bullet in the container within 2 s, and a forward rail fighter's shot must
+  leave along its travel. It exists because the fighter and the Gatling moved to brains and a rail
+  now **suspends** the brain: without the rail-fallback weapon (`on_suspended()`, built from `rail_*`
+  config fields) a squad that looks dangerous would never fire, with no other gate noticing.
+  The behaviour specs for the two enemies themselves (`test_fighter.gd`, `test_fighter_squad.gd`,
+  `test_gatling_interceptor.gd`, `test_gatling_convergence.gd`, plus their cases in
+  `test_enemy_dual_mode.gd`) are intent tests that run in both the Assault and Open Space harnesses.
   A few characterization files also carry individually-marked intent tests
   (`test_health_component.gd`, `test_state_machine.gd`, `test_ship_module_state.gd`); each says
   so in a comment.

@@ -1,15 +1,17 @@
 # Fighter — gun-armed Tier 1 fighter (formerly the Light Assault Ship)
 
 **Role:** The baseline shooter. Built as an AI enemy (`FighterBrain` decides, `EnemyMover` moves). While a level
-rail (`EnemyPathMover`) owns its motion it falls back to the legacy weapon, so level 1 and the station's
-reinforcements play as before.
+rail (`EnemyPathMover`) owns its motion — today only the space station's TOP reinforcements — it falls back to the
+legacy weapon and flies the path as before.
 **Fantasy / threat:** Bread-and-butter opposition. Manageable alone; dangerous in numbers.
 
-> **Status (Phase 3, tasks t8b + t9):** flies attack runs in both modes — a lead-in to the pass's start, a run past the
+> **Status (Phase 3, as built):** flies attack runs in both modes — a lead-in to the pass's start, a run past the
 > player at a set lane with an aimed Pulse burst, a wide turn back in with a close Scatter spray when the nose comes
-> on, a break-away and the next pass — and a formation fights as a squad (§Squad below). Idle (t12) and level-1
-> migration (t16/t17) are still to come: level 1 keeps it on rails today. Task plans:
-> `docs/plans/cmulwkar000btqj2x1e58sfd4/3-plan.md` (t8b), `docs/plans/cmulwkar300bxqj2xgtk6jyu3/3-plan.md` (t9).
+> on, a break-away and the next pass. A formation fights as a squad (§Squad), it idles around a patrol point in the
+> Open Space hub (§Hub idle), and **every level-1 fighter is now an AI fighter** — none flies a rail any more (§Level 1).
+> Only the station's TOP reinforcements still ride one. Task plans: `docs/plans/cmulwkar000btqj2x1e58sfd4/3-plan.md`
+> (t8b), `docs/plans/cmulwkar300bxqj2xgtk6jyu3/3-plan.md` (t9), `docs/plans/cmulwkarm00cpqj2xfwq3ue8h/3-plan.md` (t16),
+> `docs/plans/cmulwkarp00ctqj2x6ih09c0k/3-plan.md` (t17). Epic plan: `docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md`.
 
 ---
 
@@ -18,7 +20,7 @@ reinforcements play as before.
 | Property | Value |
 |---|---|
 | HP | 60 (`fighter_config.tres`) |
-| Damage | 20 contact / 8 per Pulse round on rails |
+| Damage | 20 contact / 8 per Pulse Round (`aimed_damage`; rail `bullet_damage`) / 6 per Scatter Round (`forward_damage`) |
 | Speed | `max_speed` 300, `acceleration` 700, `turn_rate` 1.8 rad/s (turn radius ≈ 167 px) |
 | Sprite | `fighter.png` (64×64, drawn nose-up: dark hull, pale-blue edge light, red centre stripe, twin engines) in a single-frame `AnimatedSprite2D` flipped 180° by `_rotate_sprite`, so the nose is down in the root frame; `sprite_forward_angle` PI/2; `StateLight` sits on the cockpit at (0, 12) |
 | Scene | `fighter.tscn` |
@@ -165,11 +167,65 @@ snapshot comes nose-on inside it, so it can be FORWARD). The pin
 
 ## Spawn notes
 
-- WaveBuilder method: `b.fighter()` — see `docs/enemy-roster.md`. Level 1 still gives it `.move()` (a rail) until its
-  migration task.
+- WaveBuilder method: `b.fighter()` — see `docs/enemy-roster.md`. **Do not add `.move()`** in a level wave: that puts it
+  on a rail and its brain is suspended (only the station's TOP reinforcements do this, on purpose).
 - `.formation(...)` on a fighter entry makes one squad of the whole formation (§Squad); a V3 is LEAD + both flanks,
-  a W5 adds two REARs.
+  a W5 adds two REARs. Loose lines in one wave share a squad only through `.squad(&"w<n>f")`.
 - `.shoot_forward()` / `.shoot_at_player()` are rail-only inputs.
+- Typical placement: an Assault `DURATION` section (it **may** be in an `ENEMIES_CLEARED` section only if the per-entry
+  deadline in `test_engagement_deadline.gd` clears — cloud_descent's does, by 0.53 s), or the Open Space hub patrol.
+
+## Level 1 (t16 / t17, epic §2.9)
+
+All 64 fighter and Gatling lines of level 1 (deep_space 18, planet_approach 19, cloud_descent 27) lost `.move()`,
+`.free_after()` and `shoot_*()`; their triggers, offsets, delays and formations are unchanged, and the ships still arrive
+at the same moments and places. They then fight inside the corridor and leave on `engage_seconds` (6.0 s) — no density
+lever was used.
+
+- **Pinned** by `tests/integration/test_level1_fighter_spawns.gd` (the spawn rows, the frozen legacy peak constants, the
+  count gates ≤ 1.5× attack-capable / ≤ 2.0× all-alive).
+- **Fire density is measured, not computed:** `test_level1_fighter_fire_density.gd` runs each section through a real
+  `WaveManager` and asserts the peak shots in any 2 s ≤ 1.25× the legacy peak. Measured: deep_space 9.0, planet_approach
+  6.5, cloud_descent 8.5 shots/s, against limits of 39.1 / 41.7 / 18.75. An Assault fighter fires about one burst a life.
+- **Deadline.** cloud_descent is an `ENEMIES_CLEARED` section, so the fighter has a per-entry deadline in
+  `test_engagement_deadline.gd`: `(entry − last wave trigger) + engage 6.0 + deferral 0.8 + exit + 0.5 < 10`. The exit
+  term is a **curved-exit bound of 5.37 s**, not the Razor's straight line (2.84 s): `_tick_disengage` turns the *velocity*
+  toward the exit at ≤ 1.35 rad/s, so a fighter flying away from its exit swings round on a ≈ 386 px radius (gated on the
+  real scene, 404 starts). Worst entry 9.47 s of the 10 s timeout. `test_level1_fighter_exit.gd` replays the section
+  through a real `WaveManager`: the container is empty 9.07 s after `waves_complete`.
+
+## Design checklist (IDEAS §43)
+
+| Question | Answer |
+|---|---|
+| Unique silhouette? | Dark hull with a red centre stripe, a pale-blue edge light and twin engines, drawn to be clearly different from the Gatling's wide wing pods. Sprite 64 × 64, nose-up in the file, flipped by `_rotate_sprite`. |
+| Preferred combat distance? | Passes 160–260 px beside the player (`pass_offset`, `+ flank_lane_gap`), starting 480 px out (`standoff_radius`); bursts open inside 520 px (`fire_range`). |
+| Movement signature? | Acceleration-limited attack runs: a curved lead-in, a straight pass, a visible wide turn (radius ≈ 167 px), a break-away, a second pass. Never orbits or rams. |
+| How does it attack? | A burst per pass leg: AIMED 3–5 Pulse Rounds at the predicted point from ≥ 385 px, FORWARD 5–7 Scatter Rounds out of the nose below 325 px. Chosen by distance. |
+| Player approaches from behind? | The pass geometry is relative to the player's heading `h`, so a fighter that is behind the player flies a Dubins lead-in round to a start point ahead of it and attacks from there; it does not turn on the spot. (In Assault `h` is always UP.) |
+| Player boosts away? | A fast player drags out the closing speed (≈ 100 px/s at 200 px/s cruise): the fighter degrades to a breach-shaped pass about every 15 s rather than chasing forever, and `run_in_max` (4 s) and the APPROACH/REPOSITION deadlines stop any phase stalling. In Open Space it breaks off beyond `lose_radius` (900) and returns home. Measured; not play-tested. |
+| Fights off-screen? | Open Space has no camera: it perceives and fights by distance alone. Assault confines it to the corridor (`inner_rect()`) until it exits. |
+| Retreat / reposition? | Yes: TURN → REPOSITION flies a clear arc to the next start point outside `reposition_min_radius`; in Assault DISENGAGE curves out of the world. |
+| Distinct telegraph? | A yellow `StateLight` 0.3 s before every burst, then ARMED while it fires. Rail fighters show none. |
+| Does killing it change the encounter? | Yes. `SquadController` reassigns roles at once: a fallen LEAD is replaced by the next-closest, and a dry REAR is promoted so the squad keeps three attackers. Its in-flight rounds vanish with it (`BulletPool` cancels on exit; legacy behaviour). |
+| Works in Open Space without camera coordinates? | Yes — it reads `TargetInfo` and the squad board, never a camera; idle uses a world-space patrol anchor. |
+| Same behaviour in Assault, constrained? | Yes — the same brain with the corridor's `inner_rect()`: lateral runs, clamped start points, an `EngagementBudget` exit. Assault never reaches a TURN snapshot, so it never fires FORWARD there today. |
+| Does its sprite communicate state? | Only through the `StateLight` (yellow telegraph, ARMED while firing) and the hit flash. The sprite does not change. |
+| Armour, shields, weak points? | None. 60 HP, one hurtbox. |
+| Works alone? | Yes: a solo fighter alternates FLANK_LEFT / FLANK_RIGHT passes. |
+| Better combined with another enemy? | Yes: a V3 is a pincer plus a head-on pass; paired with Gatlings (deep_space) it adds a second gun axis. Cross-squad arbitration is not built (Ph14). |
+| Deterministic tests? | Yes: seeded `rng`, `BurstClock`, `TargetInfo` stubs; `test_fighter.gd`, `test_fighter_squad.gd`, `test_enemy_dual_mode.gd` run in both harnesses. |
+
+**Known gaps:** whether the pass reads at speed, whether the yellow light is seen in time, and whether level 1's density
+*feels* right are untested by hand; nothing headless can say. Separation after a member dies, and the late-flank
+silence in Assault, are documented in §Squad.
+
+## Tests
+
+`tests/integration/test_fighter.gd` (scene, pools, rail fallback, pass geometry, weapons, Assault rules, idle),
+`test_fighter_squad.gd` (roles, window, separation, regroup), `test_enemy_dual_mode.gd` (both harnesses),
+`test_enemy_rounds.gd` / `test_enemy_bullet_lifetime.gd` (the rounds it fires), `tests/unit/test_dubins_path.gd`,
+`test_burst_clock.gd`, and the level-1 gates in §Level 1.
 
 ## Files
 

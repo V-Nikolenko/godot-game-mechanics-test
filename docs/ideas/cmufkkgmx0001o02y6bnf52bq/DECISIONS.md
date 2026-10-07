@@ -1308,3 +1308,133 @@ Task plan `docs/plans/cmulwkarp00ctqj2x6ih09c0k/3-plan.md` (Revision 2; review `
   0.93 s — set by the 76 s Swarm drones, as in Ph2's own run) and the last fighter gone 4.35–5.12 s after it, every
   fighter in DISENGAGE with no `EnemyPathMover`. "waves_complete fires on the last trigger" is judged on `WaveManager`'s
   own idle-delta clock: the summed physics clock can lag it by the first frame's set-up hitch (0.12 s seen once).
+
+## Phase 3 - as built (2026-10-07)
+
+All 18 build-sequence keys of `docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md` (**Revision 2**) landed on
+`agent/auto-dev`: t1–t7, t8a/t8b, t9–t17, plus this t18. Preparation was research → plan (Revision 1, owner
+CHANGES_REQUESTED on B1–B6 and ten should-fix points) → Revision 2 (round-2 review APPROVED with notes N1–N12, all
+applied). Five build tasks (t8b, t9, t10, t16, t17) were planned and independently reviewed on their own — t9 and t16 first
+ended a run escalated with nothing built, and t9 was re-planned three times — each has a task plan directory under
+`docs/plans/cmulwkar…/` with its own review. `docs/epics-done/cmufs7ekv000lnm2x7nbswijy/`
+holds the dossier (PRD / SOURCES / REPORT). The per-task "built in tX" notes above are the detail; this section is the
+index a later phase should read first. **Where a per-task note and this section differ, this section wins.**
+
+### What was actually built
+
+- **The bullet family.** `assault/scenes/projectiles/enemy_bullet/rounds/` — `pulse_round.tscn`, `scatter_round.tscn`,
+  `gatling_stream_round.tscn`, `heavy_shell.tscn` (inherited scenes of `enemy_bullet.tscn`, no new script) and
+  `EnemyRounds` (`enemy_rounds.gd`: the four scene constants + `pool_size_for`). `EnemyBullet` gained `_authored_speed` /
+  `_authored_damage` so `reset()` restores *the scene's own* identity. The Heavy Shell has a second `Line2D` (`Rim`).
+  The Scatter round has a 2 px circle hitbox and a 450 px range.
+- **Shared AI machinery** (all pure `RefCounted` or static; none moves a node, so all pass the single-writer gate):
+  `BurstClock` (`global/enemy_ai/burst_clock.gd`), `DubinsPath` (`global/enemy_ai/dubins_path.gd` — **not in the plan**,
+  see deviations), `EnemyMover.sprite_forward_angle_of()` (static, the one reader), and the `SquadController`
+  `convergence_point` / `convergence_stage` fields. `AimedAttackPattern` / `GatlingAttackPattern` gained `rng`,
+  `aim_point` and (aimed) `spread_angle`; their forward branch fires along the nose. `Swarm` and `Razor` brains'
+  `_facing()` were migrated to the shared reader (review N2).
+- **`WFormation`** (`global/resources/formation/w_formation.gd`) + `WaveBuilder.w_formation(count, spread, depth,
+  stagger)`.
+- **The Fighter** (`assault/scenes/enemies/fighter/`, a `git mv` of `light_assault_ship/`): `Fighter`, `FighterBrain`
+  (1642 lines), flat `FighterConfig`. `states/` and the `AIStateMachine` deleted. Attack runs, weapon selection by
+  distance, squads (LEAD frontal + two flank lanes + dry REARs), Assault DISENGAGE, hub idle, rail fallback.
+- **The Gatling Interceptor** (`assault/scenes/enemies/gatling_interceptor/`, a `git mv` of `interceptor/`):
+  `GatlingInterceptor`, `GatlingInterceptorBrain`, flat `GatlingInterceptorConfig`. Pressure windows, side-on flank
+  point, swing to the other flank, convergence fire for a pair, hub idle, rail fallback.
+- **Art.** `fighter.png` (new, 64×64: dark hull, pale-blue edge light, red stripe, twin engines) and a redrawn
+  `interceptor.png` (64×64: wide wing pods and a three-barrel rotary cannon). Each keeps its sprite node type and name
+  (`AnimatedSprite2D` for the Fighter, flipped by `_rotate_sprite`; `Sprite2D` for the Gatling).
+- **Open Space.** `SectorHub._spawn_patrol()` adds a fighter pair and a Gatling pair on a 1500 px ring (anchors at 180° and
+  0°), each sharing one `SquadController` and one `patrol_anchor`.
+- **Level 1.** All 64 fighter / Gatling lines (62 fighters + the deep_space Gatling pair; 18 + 19 + 27 per section) are AI
+  spawns: no `.move()`, `.free_after()` or `shoot_*()`. Triggers, offsets, delays and formations are unchanged and pinned.
+  **Nothing in level 1 flies a rail of these two any more.** Only the station's TOP/LEFT/RIGHT reinforcements still do.
+- **Gates added or extended:** `test_enemy_rounds.gd`, `test_enemy_bullet_lifetime.gd` (round sweep),
+  `test_level1_fighter_spawns.gd` (pin + count gates), `test_level1_fighter_fire_density.gd` (measured gate),
+  `test_level1_fighter_exit.gd` (real `WaveManager` run), `test_engagement_deadline.gd` (fighter rows, Gatling boundary,
+  real-scene exit probe), `test_station_reinforcements.gd::test_rail_reinforcements_fire`, and the behaviour specs
+  `test_fighter.gd`, `test_fighter_squad.gd`, `test_gatling_interceptor.gd`, `test_gatling_convergence.gd`,
+  `test_wave_builder_formations.gd`, `test_burst_clock.gd`, `test_dubins_path.gd`, `test_attack_patterns_forward.gd`.
+
+### Deviations from `3-plan.md` (every one that a later phase can depend on)
+
+| # | Plan said | What was built | Why / consequence |
+|---|---|---|---|
+| 1 | §2.2: `AimedPool` 12 | **20** | Review N4: a `min_burst_period` of 1.2 s (new `FighterConfig` field, enforced by the brain) makes the Pulse AI need 5 × ceil(4.67 / 1.2) = 20. The rail cadences fit inside it. |
+| 2 | (no such class) | **`DubinsPath`** | A pass geometry that is correct on paper needs a turn-radius-limited lead-in that arrives pointing along the run (review B1, N8). Reusable by Ph4's Bomber/Ram. |
+| 3 | §2.4: TURN "turns toward S" | TURN first turns **back onto the player** (opportunity (b), the snapshot), then flies a break-away arc | The literal rule was degenerate for the solo alternation and never brought the nose on the player, so FORWARD never fired. |
+| 4 | `forward_range` 300 | **325** (the epic's K5 lever) | The snapshot comes nose-on at ≈ 220–305 px. |
+| 5 | IDEAS §5.3 "three … pincer, a fourth frontal" | **At most three attack:** LEAD (frontal) + two flank lanes; a 4th+ is a dry REAR | Research finding 1's three-attacker cap and the density gates. (Plan X9 already recorded this.) |
+| 6 | §2.5: REARs spaced by `rear_index / rear_count` | Each REAR has its **own lane**, one `flank_lane_gap` further out per `rear_index`; `rear_count` unused | Measured separation. |
+| 7 | §2.5: latch "until the next REPOSITION" | Latched **RUN_IN entry → EXTEND end** (TURN re-derives the next pass) | t9 Revision 3. |
+| 8 | §2.5: `flank_stagger` is the one separation fix | Not enough. Added brain-local give-way (slide off a mate's planned track, slow a lead-in, a REAR dry-pass slot) | Round-2 ruled these in the task's discretion. Still brain-local, no shared API. |
+| 9 | §2.5 REAR dry passes "every other cycle" | **Open Space only**, a REAR is due on every second window; **in Assault a REAR never dry-passes** (promoted as attackers leave) | An Assault fighter leaves after `passes` passes. |
+| 10 | §2.6: SWING_IN reachable from REPOSITION 1.0–1.5 s | REPOSITION lasts the rng 1.0–1.5 s **and** until the new `F` is within `swing_in_reach` (300), capped by `reposition_cap` (5 s); APPROACH hands over on the same rule | Measured: a swing to the other flank is ≈ 891 px (3.4 s at 260 px/s). New config fields `swing_in_reach`, `reposition_cap`, `approach_margin`. |
+| 11 | §2.6 Gatling rhythm ≈ 2.8 s (≈ 3.5 shots/s) | Average window period **≈ 5.8 s (≈ 1.7 shots/s)**; the *minimum* is 2.28 s (`min_window_period()`) | Consequence of 10. In Assault at `engage_seconds` 7.0 a Gatling usually gets **one** window, so "attacks from the other side" is rarely seen there. |
+| 12 | §2.6.1: "ready" on SPIN_UP entry | "Ready" = stage 1 set when the member's **own spin-up has elapsed** | Entry-based readiness lets the early shooter stream 0.25 s before its partner can, so "both STREAM starts within one tick" could not hold. |
+| 13 | §2.6.1: REAR Gatlings "hold at `preferred_range + 200`, never fire" | **Not built.** A third Gatling in a squad fires solo windows | Nothing places three in one squad. Ph14 or a later level edit must decide. |
+| 14 | §2.6.1: LEAD opens the window at SWING_IN | Same, and a LEAD **holds in REPOSITION while its own window is open** (`can_start_window()`); only APPROACH / COOLDOWN / REPOSITION FLANKs answer; the FLANK follows the LEAD's *intended* `side` | Review N3. |
+| 15 | §2.10 Swarm-shaped idle (only RETURNING deferred) | IDLE and NOTICING are **also** deferred while a burst/window runs | Otherwise a shooter near its anchor goes COMBAT → RETURNING → IDLE in one burst and fires from IDLE. |
+| 16 | Config field names (`fire_interval`, `bullet_speed`, `spread_angle`, `bullet_damage` on the Gatling) | Renamed `rail_stream_interval`, `rail_stream_speed`, `rail_spread`, `rail_damage`; the AI stream is `round_speed` 240, `round_damage` 4, `stream_spread` 0.05, `accuracy` 0.8 | So the round-lifetime sweep reads config fields (B5). |
+| 17 | §2.9.2: shots/s gate computed (fighter 7 / 1.55, Gatling 12 / 2.8) | **Measured** (`test_level1_fighter_fire_density.gd`): peak shots in any 2 s ÷ 2 ≤ 1.25 × the frozen legacy peak. The analytic figure is printed only | The analytic figure failed (1.86× / 1.90×) with no pre-approved lever able to fix it, while the real run is far quieter (9.0 / 6.5 / 8.5 shots/s). **Owner decision, option A.** The §4 boundary "a 3rd Gatling pushes shots/s over" was dropped as unattainable; replaced by `test_peak_window_rate_rejects_a_dense_burst` and `test_extra_formations_at_the_peak_break_the_count_gates`. |
+| 18 | §2.9.3: fighter exit term Razor-shaped (2.84 s) | **Curved-exit bound, 5.37 s**, gated on the real scene (404 starts) | `_tick_disengage` turns the velocity at ≤ 1.35 rad/s, so a fighter flying away from its exit swings round on a ≈ 386 px radius. Worst cloud_descent entry 9.47 s of the 10 s timeout (margin 0.53 s); the real run's container is empty 9.07 s after `waves_complete`. |
+| 19 | §2.9.2: levers 1 (engage 6.0 → 4.5) and 2 (`assault_passes`) | **No lever used.** `assault_passes` does not exist; "passes" is the config's `passes` (2) | At 6.0 s an Assault fighter flies exactly **one** lateral pass with one AIMED burst and leaves during EXTEND, so lever 2 would change nothing. |
+| 20 | `Steering.lead_target` / `break_contact` | Not built (lead = `TargetInfo.aim_direction()`); `break_contact` stays with the Sniper (Ph4) | Unchanged from the planned decision. |
+| 21 | Sprite file renamed with the enemy | `interceptor.png` kept its name (the Gatling's art); **`light_assault_ship.png` is now unreferenced** | Left in place; Ph17 can delete it. |
+
+### Conventions a later phase must keep
+
+(In addition to the "Conventions" list planned above, which all stand.)
+
+- **Fighter pass vocabulary** (`b`, `u = −b`, `l ⟂ u`, `S = P̂ + b·standoff + l`; `left(v) = v.rotated(−PI/2)`) and the
+  rule that a lead-in is a `DubinsPath` arriving along the run: reuse it for any later attack-run enemy.
+- **A moving player is measured against `P̂`**, the lane's own anchor, never the live player (review N1).
+- **A rail shooter is a brain with a fallback, not a silent ship** (the X1 rule above). Ph15 inherits it.
+- **A pool is a root child, sized by `pool_size_for` for the AI *and* the rail cadence;** the one named exception is the
+  rail Gatling (36, starving by design).
+- **Level-1 density gates divide by frozen constants:** `_LEGACY_PEAK_FIGHTERS` 10 / 10 / 8 and `_LEGACY_PEAK_SHOTS_PER_S`
+  31.25 / 33.33 / 15.0 (deep_space / planet_approach / cloud_descent). The legacy shooter rate was
+  `min(1 / fire_interval, pool / round_lifetime)` (review N6), not a flat 1 / interval.
+- **An `ENEMIES_CLEARED` deadline uses the *curved-exit* bound for any enemy that turns its velocity** (Fighter 5.37 s). The
+  Ph2 drone rows still use a straight exit.
+
+### Open items — nothing here is decided
+
+- **Owner (from t9, unresolved in the record):** (a) the Assault `engage_seconds` budget — at 6.0 s, 7 of 84 dense Assault
+  layouts leave one flank that holds at its start point and leaves without firing, and a longer budget is not
+  separation-safe yet (V3 13/42, W5 25/42 over two passes); lever 1 (→ 4.5) would silence most squads. (b) Fighter body
+  collision (layer 1, mask 1): squads physically bump. (c) The t9 build took the reviewer's reading, "separation is asserted
+  over a full cycle", without a recorded owner answer.
+- **Owner (from t17):** `DroneConcurrency.ai_shooter_kinds()` — the t16 *count* gates' fighter lifetime — still uses the
+  straight-line exit (9.64 s). With the curved bound (≈ 12.2 s) the reviewer measured deep_space's all-alive peak at **21
+  against a limit of 20**; accepting the measured 11.67 s life gives 18. The Ph2 Swarm/Razor deadline formulas also assume
+  a straight exit.
+- **Wave-order quirk (found, not fixed — triggers are pinned):** `WaveManager` triggers strictly in list order, so in
+  deep_space the 2.0 s V5-fighter wave and the 3.0 s drone wave, listed after the 3.5 s gunship wave, trigger at **3.5 s**
+  in the game. The analytic gates and the Ph2 drone pin model them at 2.0 / 3.0 s.
+- **Gaps in the squad code (measured):** after a death `_reassign()` recomputes every role by distance, which can swap two
+  stations and bring two fighters within hull distance (fails up to 9 of 42 W5 layouts, worst 7.3 px); a V6 fails 1 of 42 in
+  Open Space; spawn fan-out from 80 px slots overlaps before the first window in 19 of 168 layouts; the shipped level-1
+  formations come within 50–54 px of each other against a 57.2 px hull diameter (brief contacts, not gated). `_mates()`
+  scans the `enemies` group every tick (fine at V3/W5).
+- **The "Assault never fires FORWARD" consequence** of the 6.0 s budget: the close-range Scatter burst and the weapon
+  switch are only seen in Open Space (and in a long-budget test). The IDEAS line "in Assault FORWARD is more common" does
+  not hold.
+- **A moving player in Open Space** (cruising at 200 px/s) gets a breach-shaped pass about every 15 s rather than a clean
+  attack run every ≈ 10 s; from abeam or behind, the first pass comes from APPROACH's deadline at 5–11 s.
+- **Not play-tested (the gate cannot see it):** whether the passes and the yellow/red lights read at Assault's speed;
+  whether level 1's density (fighters now live out their 6 s budget plus a curved exit instead of a rail's on-screen time, but fire about one burst a life) *feels* right; whether
+  Open Space's noticing/return feels calm; whether a fighter's in-flight rounds vanishing when it leaves is visible.
+
+### Handed to later phases
+
+| Item | Phase | Note |
+|---|---|---|
+| Heavy Shell's first consumer | Ph4 (Bomber/Ram) or Ph10 (Heavy Gunship) | Tested with a fixture shooter; no enemy fires it. |
+| `EnemyPathMover`'s `"AIStateMachine"` lookup | Ph15 | No subject in the game; pinned on `ai_state_machine_fixture.tscn`. |
+| Taking the station's reinforcements off rails; the rail Gatling's pool starvation | Ph15 | Reuses the rail-fallback rule. |
+| Owner-bound bullet lifetime (`persist_after_owner_death`), `BulletPool` container injection | Ph5 | In-flight rounds still vanish with their shooter. |
+| Cross-squad / cross-family attacker arbitration; richer idle profiles | Ph14 | A fighter squad and a Swarm squad do not know about each other. |
+| Leash / re-engage for Open Space fighters | Ph13 | They fight until the player is beyond `lose_radius`. |
+| Recolouring legacy enemy bullets; muzzle flash, spin-up particles, enemy SFX; deleting `light_assault_ship.png`; rotating `spawn_offset` with the nose | Ph17 | The `StateLight` is the only telegraph. |
+| Rail-Gatling REAR rule, the post-death resync of squad stations | any phase that places three Gatlings / large fighter squads | See open items. |

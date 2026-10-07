@@ -55,40 +55,44 @@ s.waves.assign(raw_waves)
 
 **Builder:** `b.fighter()`  
 **Scene:** `fighter.tscn`  
-**Movement:** Fully delegated to `EnemyPathMover`. **Always add `.move()`.**  
-**Squads (Ph3 t9):** without `.move()` it is an AI enemy, and a `.formation()` fights as one squad — the closest
-leads head-on, the next two close as a pincer, a 4th and later wait as REARs (dry passes, never fire). Details:
-`assault/scenes/enemies/fighter/ENEMY.md` → *Squad*. Level 1 keeps `.move()` until its migration task.  
-**Shoots:** Yes — at player or forward depending on `aim_mode`.  
-**HP:** Low  
-**Score:** Low
+**Movement:** AI (`FighterBrain` + `EnemyMover`): attack runs — a lead-in to a start point, a pass at a set lane beside the player, a wide turn, a reposition and a second pass. **Do NOT add `.move()` in a level wave**: a rail (`EnemyPathMover`) suspends the brain, and the fighter then fires the legacy weapon along the path (the station's TOP reinforcements still do this on purpose). Nothing in level 1 flies a fighter rail any more.  
+**Squads:** a `.formation()` is automatically one squad. Loose `b.fighter()` lines in one `b.wave()` form a squad only if they share `.squad(&"<id>")`; level 1 uses `&"w<n>f"` (fighters) / `&"w<n>g"` (Gatlings) per wave. A loose line with no id is a squad of one. Roles: the closest leads head-on (FRONTAL pass), the next two close as a pincer (FLANK_LEFT / FLANK_RIGHT lanes), a 4th and later wait as REARs (dry passes, never fire). At most three fighters shoot at once. Details: `assault/scenes/enemies/fighter/ENEMY.md` → *Squad*.  
+**Shoots:** Yes — a burst per pass leg, chosen by **distance** (never by a spawn property): an AIMED burst of 3–5 Pulse Rounds at the player's predicted point from 385 px and beyond, a FORWARD burst of 5–7 Scatter Rounds out of the nose below 325 px (in between: the last mode). A yellow light shows 0.3 s before every burst. `.shoot_forward()` / `.shoot_at_player()` are **rail-only** inputs.  
+**Assault exit:** leaves by the nearest edge after `engage_seconds` (6.0 s) or two passes, curving out of the corridor (`test_level1_fighter_exit.gd`).  
+**HP:** Low (60)  
+**Score:** Low (25)
 
-**Config fields** (`FighterConfig`):
+**Config fields** (`FighterConfig`): the full table is in `fighter/ENEMY.md`. The ones a level author meets:
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `movement_speed` | 100.0 | Used internally by the AI state machine when no EnemyPathMover is present. Usually irrelevant — use `.move()` speed instead. |
-| `fire_interval` | 0.8 s | Seconds between shots. |
-| `bullet_damage` | 8 | Per-bullet damage. |
-| `aim_mode` | `"PLAYER"` | `"PLAYER"` or `"FORWARD"`. Set via `.shoot_at_player()` / `.shoot_forward()`. |
+| `engage_seconds` | 6.0 s | Assault budget before DISENGAGE (pre-approved level-1 lever: 4.5). |
+| `passes` | 2 | Passes per cycle. |
+| `pass_offset`, `flank_lane_gap` | 160, 100 px | How far beside the player a pass goes. |
+| `forward_range`, `mode_hysteresis` | 325, 60 px | The distance rule that picks the weapon. |
+| `min_burst_period` | 1.2 s | The fewest seconds between two burst starts; sizes the pools. |
+| `aim_mode`, `fire_interval`, `bullet_damage`, `rail_*` | `"PLAYER"`, 0.8 s, 8, … | **Rail fallback only** (`.move()`). |
 
 **Examples:**
 ```gdscript
-# Straight dive from above
-b.fighter().at(0, -400).move(b.straight(150)).shoot_at_player()
+# A lone fighter — spawn and let it fly its own attack runs (no .move())
+b.fighter().at(-160, -400).delay(0.5)
 
-# Sweep in from off-screen left (must use free_after — never exits top)
-b.fighter().at(-500, 30).move(b.straight(230, PI / 2)).shoot_forward().free_after(5.0)
+# A V of 3 is one squad: lead head-on, two flanks as a pincer
+b.fighter().formation(b.v_formation(3, 80)).at(0, -420)
 
-# V-formation of 5
-b.fighter().formation(b.v_formation(5)).at(0, -400).move(b.straight(138)).shoot_forward()
+# A W of 5 adds two REARs (dry passes, never fire); the first spawns are staggered centre-out
+b.fighter().formation(b.w_formation(5)).at(0, -420)
 
-# U-sweep arc from the right
-b.fighter().at(260, -400).move(b.u_sweep(510, 730, 10)).free_after(12).shoot_forward()
+# Two loose fighters in one wave as one squad
+b.fighter().at(-120, -400).squad(&"w9f")
+b.fighter().at(120, -400).squad(&"w9f")
+
+# On a rail (station reinforcement shape): legacy weapon, fired along the path
+b.fighter().at(-60, -360).move(b.straight(180)).shoot_forward().free_after(6.0)
 ```
 
 ---
-
 ### `drone` — Swarm Drone
 
 **Builder:** `b.drone()`  
@@ -232,8 +236,9 @@ b.sniper_enemy().at(120, -500).move(b.sequence([
 
 **Builder:** `b.gatling_interceptor()`  
 **Scene:** `gatling_interceptor.tscn`  
-**Movement:** AI (`GatlingInterceptorBrain`): holds side-on range on the player's flank, swings to the other flank between windows. With `.move()` it rides the rail instead. See `assault/scenes/enemies/gatling_interceptor/ENEMY.md`.  
-**Shoots:** Yes — pressure windows: yellow spin-up, one 8–12-round Gatling Stream aimed at the player's predicted position, a pause, a swing. On a rail: the legacy constant stream (0.09 s, slight spread), also aimed at the player.  
+**Movement:** AI (`GatlingInterceptorBrain`): holds side-on range on the player's flank, swings to the other flank between windows. **Do NOT add `.move()` in a level wave** — a rail suspends the brain and it fires the legacy stream along the path (only the station's LEFT/RIGHT reinforcements still do this). See `assault/scenes/enemies/gatling_interceptor/ENEMY.md`.  
+**Shoots:** Yes — pressure windows: yellow spin-up, one 8–12-round Gatling Stream **aimed at the player's predicted position** (it never fires "forward"; the old "always fires forward" note was wrong), a pause, a swing. On a rail: the legacy constant stream (0.09 s, slight spread), also aimed at the player.  
+**Assault exit:** leaves after `engage_seconds` (7.0 s), never starting a window it cannot finish. **Keep it out of `ENEMIES_CLEARED` sections** — its window deferral is not in the deadline formula (a boundary row in `test_engagement_deadline.gd` pins this).  
 **Squads:** two Gatlings in one squad (a `.formation()` or a shared `.squad(&"<id>")`) charge together and cross their streams at the player's likely next position from the same side, leaving the other side open; a solo Gatling never does. See `ENEMY.md` → *Convergence fire*.  
 **HP:** Low–Medium  
 **Score:** Medium
@@ -253,10 +258,14 @@ Full table in `ENEMY.md`.
 
 **Examples:**
 ```gdscript
-# Player-focus dive — locks on at spawn time and flies through
-b.gatling_interceptor().at(-200, -420).move(b.player_focus(240))
+# A Gatling pair in one squad: they charge together and cross their streams
+b.gatling_interceptor().at(-200, -420).squad(&"w0g")
+b.gatling_interceptor().at(200, -420).squad(&"w0g")
 
-# Strafing run from the side
+# A lone Gatling
+b.gatling_interceptor().at(0, -420)
+
+# On a rail (station reinforcement shape): the legacy constant stream
 b.gatling_interceptor().at(-500, 0).move(b.straight(200, PI / 2)).free_after(5.0)
 ```
 
@@ -471,17 +480,51 @@ Formations expand **one** `SpawnConfig` entry into N ships. Offsets and delays a
 | `b.line_formation(count, spacing, axis)` | Horizontal or vertical line | `count`, `spacing` (px, default 30), `axis` (HORIZONTAL/VERTICAL) |
 | `b.diagonal_formation(count, step_x, step_y, stagger)` | Diagonal stagger | `count`, `step_x` (px), `step_y` (px), `stagger` (s, default 0.15) |
 | `b.cluster_formation(count, radius, seed_override)` | Random cluster | `count`, `radius` (px, default 30), `seed_override` (int) |
+| `b.w_formation(count, spread, depth, stagger)` | W shape: centre and outer slots forward, the odd slots trail | `count` (5), `spread` (px, 60), `depth` (px the odd slots trail, 40), `stagger` (s per step out from the centre, 0.1). Spawns centre first (`WFormation`, Ph3) |
+
+**A formation is a spawn layout, not a behaviour.** The slots only decide where and when the ships appear. An AI enemy
+(`fighter`, `gatling_interceptor`, `drone`) then takes its role from the squad's `SquadController` — closest = LEAD, the
+next two = flanks, the rest = REARs, recomputed whenever someone joins or leaves — and the layout is forgotten. A
+formation with `.move()` on a rail ship keeps its shape for as long as the rail runs. (Ph3: `test_wave_builder_formations.gd`
+for the layout, `test_fighter_squad.gd` for the handoff.) A W5 of fighters is LEAD + two flanks + two dry REARs; only three
+ever shoot.
 
 ```gdscript
-# V of 5 fighters straight down
-b.fighter().formation(b.v_formation(5)).at(0, -400).move(b.straight(138)).shoot_forward()
+# V of 5 fighters: one squad (lead + two flanks + two dry REARs), flying its own attack runs
+b.fighter().formation(b.v_formation(5)).at(0, -400)
 
-# Diagonal formation from the right
-b.fighter().formation(b.diagonal_formation(5, 30, 35)).at(370, -400).move(b.straight(220, -PI / 3.6))
+# Diagonal formation of rail ships from the right (a rail keeps the shape)
+b.ram().formation(b.diagonal_formation(5, 30, 35)).at(370, -400).move(b.straight(220, -PI / 3.6))
 
 # Random cluster of drones
-b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180))
+b.drone().formation(b.cluster_formation(3, 30)).at(0, -400)
 ```
+
+---
+
+## Enemy Rounds (the bullet family, Ph3)
+
+`assault/scenes/projectiles/enemy_bullet/rounds/` holds four **pooled** enemy rounds, each an inherited scene of
+`enemy_bullet.tscn` (so each is an `EnemyBullet` with a `ProjectileLifetime`). `EnemyRounds` (`enemy_rounds.gd`) holds
+the four `PackedScene` constants and `pool_size_for()`. A shooter picks one by giving its `BulletPool.bullet_scene`
+that scene — there is no per-bullet script and no per-round retuning.
+
+| Round | Constant | Scene speed | Damage | Lifetime (`max_time` / `max_distance`) | Look | Used by |
+|---|---|---|---|---|---|---|
+| Pulse | `EnemyRounds.PULSE` | 300 | 8 | 8 s / 1400 px | red-pink bolt, 3 px wide | Fighter (AIMED burst) |
+| Scatter | `EnemyRounds.SCATTER` | 420 | 6 | 2 s / 450 px | short pink pellet, 4 px wide, 2 px hitbox | Fighter (FORWARD burst) |
+| Gatling Stream | `EnemyRounds.GATLING_STREAM` | 240 | 4 | 8 s / 1400 px | thin red streak, 2 px wide | Gatling Interceptor |
+| Heavy Shell | `EnemyRounds.HEAVY_SHELL` | 160 | 20 | 12 s / 1800 px | big pale-pink slug with a dark rim | **nobody yet** (first consumer: Ph4 Bomber/Ram or Ph10 Gunship) |
+
+- **One pool per round per shooter**, a direct child of the enemy root. Size it with
+  `EnemyRounds.pool_size_for(max_burst, round_lifetime, min_burst_period)`; a self-timed rail pattern is a burst of 1
+  at its own interval. The shooter's pattern may still override `speed` / `damage` on the acquired bullet;
+  `EnemyBullet.reset()` restores the scene's own authored values on reuse.
+- `enemy_bullet.tscn` itself stays the legacy orange bolt, and every other enemy (Gunship, Bomber, Sniper, Ram, the
+  drones' pulse shots) keeps it until the Ph17 audit.
+- Each round's `max_distance / slowest speed any shooter fires it at` must fit its `max_time`
+  (`test_enemy_bullet_lifetime.gd`), reading the speeds from the shooters' config fields.
+- Tests: `tests/integration/test_enemy_rounds.gd` (shape, reset, lifetimes, the Heavy Shell fixture shooter).
 
 ---
 
@@ -490,7 +533,7 @@ b.drone().formation(b.cluster_formation(3, 30)).at(0, -400).move(b.straight(180)
 | Rule | Detail |
 |------|--------|
 | **Always `.move()` path-following enemies** | `ram`, `sniper`, `sniper_enemy`, `bomber` (the `fighter` and `gatling_interceptor` are AI enemies; `.move()` puts them on a rail) — they have no self-managed movement. |
-| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship` — attaching `EnemyPathMover` suspends their AI. |
+| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship`, `fighter`, `gatling_interceptor` — attaching `EnemyPathMover` suspends their AI. `fighter` and `gatling_interceptor` fall back to the legacy weapon on a rail (so the station's reinforcements still fire); everything else in this list goes quiet. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` needs a `sequence()`** | The approach step must be `straight(speed, 0.0, 2.5)` (exactly 2.5 s). Hold step must cover `shot_count × 2.5 s`. |
 | **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |

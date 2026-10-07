@@ -118,6 +118,30 @@ Detail and APIs: [global.md](modules/global.md).
   the fight is on), and a squad-wide version of it (`SquadController.set_engaged`/`is_engaged`)
   is how a whole hub patrol wakes and returns together. Recipes: [global.md](modules/global.md) →
   *SquadController*, *AnchorIdle*.
+- **A shooter taken off its brain by a rail keeps firing its legacy weapon (Ph3).** `FighterBrain` and
+  `GatlingInterceptorBrain` implement `on_suspended()` to leave their squad, switch their `StateLight` off, hand their
+  `AttackController` back to self-timed fire and install a legacy-equivalent pattern **built from flat `rail_*` config
+  fields** — so level 1 and the station's reinforcements stay armed on a path while level 1 itself no longer uses
+  rails for these two. `aim_mode` / `shoot_forward()` / `shoot_at_player()` are rail-only inputs. Ph15 applies the same
+  rule to every other shooter it migrates. Recipe: [global.md](modules/global.md) → *Enemy AI*.
+- **An enemy picks a round, it does not retune one bullet (Ph3).** The pooled `EnemyBullet` family —
+  Pulse, Scatter, Gatling Stream, Heavy Shell (`assault/scenes/projectiles/enemy_bullet/rounds/`, `EnemyRounds`) — are
+  inherited scenes of `enemy_bullet.tscn`, each with its own `ProjectileLifetime`; `EnemyBullet.reset()` restores the
+  scene's authored speed and damage. **One pool per round per shooter, a direct child of the enemy root** (a pool under
+  a controller would carry its live bullets with the ship), sized with `EnemyRounds.pool_size_for()` for the AI burst
+  *and* the rail cadence. Every round's range must fit its lifetime at the slowest speed any shooter fires it at, read
+  from config fields (`tests/integration/test_enemy_bullet_lifetime.gd`). Detail: [assault.md](modules/assault.md) →
+  *Projectiles & bullet pool*; [BULLET_POOL.md](../BULLET_POOL.md).
+- **A burst has an exact size, and "forward" is the nose.** `BurstClock` (`global/enemy_ai/burst_clock.gd`) is the one way
+  a brain sequences N shots at a gap — never a free-running interval timer — and
+  `EnemyMover.sprite_forward_angle_of(node)` is the one reader of an actor's `sprite_forward_angle`, so a "fire forward"
+  pattern leaves the nose whichever way the art was drawn. A weapon mode is chosen **by distance, with hysteresis,
+  latched for the whole burst — never by a spawn property**. `DubinsPath` plans an attack run's lead-in. Recipes:
+  [global.md](modules/global.md) → *BurstClock*, *DubinsPath*.
+- **A formation is a spawn layout; the squad board decides roles.** `WaveBuilder`'s V / W / wedge / line / diagonal /
+  cluster only place ships in time and space; an AI enemy then reads its role (LEAD, FLANK_LEFT/RIGHT, REAR) from its
+  `SquadController` and the layout is forgotten. At most three fighters attack at once (LEAD + the two flanks); a
+  fourth and later are REARs. A Gatling pair shares `SquadController.convergence_point` / `convergence_stage`.
 - **An Assault AI enemy leaves the arena on a budget, not when killed.** `EngagementBudget`
   (`global/enemy_ai/engagement_budget.gd`) is active only in Assault (`EnemyWorld.arena(tree) !=
   null`); on expiry the brain releases its movement constraint, raises its exit speed, and seeks
@@ -142,8 +166,9 @@ Detail and APIs: [global.md](modules/global.md).
   calls `brain.tick(delta)` then `mover.step(delta)`, once per physics frame; a brain's clocks are
   accumulated `delta` values and its randomness comes only from its own seeded `rng`
   (`RandomNumberGenerator`), never the global RNG — `StateMachine` ticks in `_process` instead, and
-  GUT's `simulate()` never fires a `Timer`, which is why the light assault ship's `AIStateMachine`
-  needs the separate name-lookup suspension `EnemyPathMover` still performs unconditionally.
+  GUT's `simulate()` never fires a `Timer`. (The separate `"AIStateMachine"` name-lookup suspension
+  `EnemyPathMover` still performs unconditionally existed for the old Light Assault Ship; since Ph3 it has no
+  subject, is pinned on a test fixture, and is left for Ph15.)
 - **The mode (Assault vs. Open Space) is declared by the world, found by duck type.**
   `ArenaCamera` joins group `&"assault_arena"`; `EnemyWorld` (`global/enemy_ai/enemy_world.gd`) is
   the *only* code that looks that group up, and does so via `has_method` rather than importing the
@@ -169,8 +194,9 @@ Detail and APIs: [global.md](modules/global.md).
   the player ship's `rotation`; a second writer (a ship module, a state) fights it invisibly at
   frame rate. Anything that needs to turn the ship goes through the controller's `face_instant()`.
 - **State machines:** `global/statemachine/state_machine.gd` + `state.gd`; entities with
-  complex behaviour keep one `State` node per file in a `states/` folder (player, racers,
-  fighter). Simpler enemies use in-script `enum` phases.
+  complex behaviour keep one `State` node per file in a `states/` folder (player, racers).
+  Enemies use a brain (`EnemyBrain` + `EnemyMover`) or in-script `enum` phases; the Fighter's `states/` folder was
+  deleted in Ph3.
 - **Signal arity:** a signal is declared with exactly the arguments it is emitted with.
   Godot does not enforce this — `Health.amount_changed` and `State.state_transition` were
   declared with zero parameters and emitted with one until 2026-09-03 — but a mismatch makes

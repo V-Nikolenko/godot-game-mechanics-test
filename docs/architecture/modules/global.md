@@ -337,9 +337,16 @@ there is no clock and no `_process`.
   dies once every member drops its own reference. A caller that wants to keep a board across
   spawns (`WaveManager`, see [assault.md](assault.md) → *Wave / spawn system*) must store only a
   `WeakRef`.
+- **Convergence fields (Ph3, `convergence_point` / `convergence_stage`).** Two plain data fields, *no clock*, for a pair
+  of Gatlings that cross their streams: `convergence_point: Vector2` (`Vector2.INF` = unset) is the shared aim point
+  the LEAD rewrites every tick while its window is open, and `convergence_stage: Dictionary` maps member → `0`
+  answered / `1` ready / `2` stream done for the rendezvous. `_reassign()` clears both whenever the LEAD changes (the
+  `attack_window_open` rule — the window and its point belong to the lead that opened them), and `leave()` erases only
+  the leaving member's key. Brains read the *LEAD's intended side* through `members()` / `role_of()`; there is no
+  further `SquadController` API.
 - Brains read it through a duck-typed `actor.squad` property; `null` means "a squad of one".
   `EnemyBrain` itself gained nothing — this is entirely a brain-side convention.
-- **Consumers:** the Swarm Drone (`swarm_drone_brain.gd`, Ph2) and the Fighter (`fighter_brain.gd`, Ph3 t9). Each
+- **Consumers:** the Swarm Drone (`swarm_drone_brain.gd`, Ph2), the Fighter (`fighter_brain.gd`, Ph3 t9) and the Gatling Interceptor (`gatling_interceptor_brain.gd`, Ph3 t11 — LEAD opens the window at SWING_IN, FLANKs answer from APPROACH / COOLDOWN / REPOSITION, the window closes on the *later* COOLDOWN). Each
   brain gives `attack_window_open` its own timing — the Fighter LEAD opens it on its RUN_IN entry and closes it on its
   own EXTEND entry, and FLANKs answer each window once; REARs fly dry passes in a slot between windows. Details beside
   each entity (`assault/scenes/enemies/fighter/ENEMY.md` → *Squad*). Every board role is recomputed by distance on
@@ -479,6 +486,13 @@ func tick(delta: float) -> void:
 - **Rails override it:** `EnemyPathMover._ready()` calls `suspend_ai()` (brain `on_suspended()`, mover
   `halt()`, no more ticks) *in addition to* its unconditional `set_physics_process(false)` and
   `"AIStateMachine"` lookup. A `driven_by_brain` `AttackController` stops with the brain.
+  **Rail fallback rule (Ph3, decided for the Fighter and the Gatling; Ph15 reuses it for every other shooter it takes
+  off rails):** a brain whose actor gets a rail does not go silent. Its `on_suspended()` leaves its squad, turns its
+  `StateLight` off, sets `attack.driven_by_brain = false` and `attack.enabled = true`, and installs a pattern equivalent
+  to the legacy weapon **built from flat config fields** (`rail_*`, so the round-lifetime sweep can read them).
+  `AttackController._process` then self-times the fire. `aim_mode` / `shoot_forward()` / `shoot_at_player()` are
+  rail-only inputs; an AI fighter ignores them. The `"AIStateMachine"` name lookup in `EnemyPathMover` has had no
+  subject since the Light Assault Ship's state machine was deleted (kept for Ph15).
 - Contract tests: `tests/unit/test_enemy_mover.gd`, `tests/integration/test_enemy_brain_contract.gd`;
   fixture enemy: `tests/helpers/fixture_enemy.tscn`.
 
@@ -803,7 +817,7 @@ Pure-data `Resource` types (shareable `.tres` assets; runtime state is kept out 
   - `radial_attack_pattern.gd` (`RadialAttackPattern`) fires `bullet_count` bullets spread around `base_angle` in one shot, and covers both boss shapes in one resource: **`arc >= TAU` is a full ring** (spacing `TAU / count`, no duplicate at the seam) and **`arc < TAU` is a fan** of that width *centred* on the base direction (spacing `arc / (count - 1)`). `aim_at_player` adds the angle to the player (`Vector2.DOWN` fallback); `spawn_radius` offsets each bullet **along its own angle**, so a ring emerges from the hull rim and a fan from the barrel mouth. `bullet_count <= 0` fires nothing.
     ⚠️ Unlike its two siblings it **deliberately ignores `ship.rotation`** — `base_angle` is absolute world space and the caller owns any precession. `StationLaserPhase` spins the station at 0.5 rad/s during exactly the phase the core ring fires in, so folding in the hull rotation would add ~1.6 ring spacings of uncontrolled drift per ring. Pinned by `tests/integration/test_radial_attack_pattern.gd`.
 - **movement/** — `MovementResource` (base; `sample(t) -> Vector2` displacement from spawn, `total_duration()`). Subtypes: `straight`, `sine`, `arc`, `curve`, `hold`, `u_sweep`, `player_focus`, `sequence`. Consumed by `EnemyPathMover`.
-- **formation/** — `FormationResource` (base; `compute_slots() -> Array[FormationSlot]`, each slot an `offset` + `delay`). Subtypes: `line`, `v`, `wedge`, `diagonal`, `cluster`. `WaveManager` spawns one ship per slot.
+- **formation/** — `FormationResource` (base; `compute_slots() -> Array[FormationSlot]`, each slot an `offset` + `delay`). Subtypes: `line`, `v`, `w` (`WFormation`, Ph3: centre first, odd slots trailing at `−depth`, delay growing outward), `wedge`, `diagonal`, `cluster`. `WaveManager` spawns one ship per slot. **A formation is a spawn layout, not a behaviour**: for an AI enemy it only decides where and when the ships appear — their squad roles come from `SquadController` afterwards.
 - **waves/** — `LevelResource` (`level_name` + ordered `waves`), `WaveResource` (`trigger_time` + `entries`), `SpawnEntryResource` (one ship/formation: `ship_scene`, `base_offset`, `spawn_delay`, `movement`, `exit_mode`, `look_*`, optional `formation`, `initial_props`).
 - **levels/** — `LevelSection` (one timed segment: `background_phase`, `transition_in_duration`, section-relative `waves`, `end_condition` ∈ {DURATION, WAVES_COMPLETE, ENEMIES_CLEARED}, `duration`) and `BackgroundPhase` (target alphas/scales/timings for the background renderer to tween toward).
 - **logs/** — `LogEntryResource` (`id`, `title`, `body`, `sequence`). One `.tres` per lore-log
