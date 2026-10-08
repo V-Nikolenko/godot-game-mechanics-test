@@ -26,6 +26,8 @@ global/
 │   ├── temp_health_component.gd   # TempHealth (Node) — drains before Health
 │   ├── hurtbox_component.gd       # HurtBox (Area2D) — receives hits
 │   ├── hitbox_component.gd        # HitBox (Area2D) — deals hits, DamageType enum
+│   ├── armor_query.gd             # ArmorQuery (static) — "does this target refuse my hit?": `deflects_hit(hit_box)` first, else `is_armored()`
+│   ├── armor_plate.gd             # ArmorPlate (Node2D) — breakable armour piece: HurtBox + Health + Sprite; rockets / high-impact shots break it, bullets glance off
 │   ├── shield_component.gd        # Shield (Node) — discrete-charge shield
 │   ├── damage_reaction.gd         # DamageReaction (Node) — generic "take a hit" router
 │   ├── defense_profile.gd         # DefenseProfile (Node) — per-instance HurtBox mask/damage-type data
@@ -201,6 +203,29 @@ func _on_hit(damage: int) -> void:
     health.decrease(damage)   # or route through DamageReaction (below)
 ```
 
+
+### Armour that deflects bullets but breaks to rockets — `armor_query.gd`, `armor_plate.gd`
+
+`ArmorQuery.deflects(area, hit_box)` is the one place a player projectile (`bullet.gd`, `homing_missile.gd`,
+`warhead_missile.gd`, each through its kept `_hit_is_deflected` wrapper) asks whether the hurtbox it overlapped
+refused the hit. The hurtbox's parent may answer `deflects_hit(hit_box: HitBox) -> bool` (hit-aware, tried first) or
+the older hit-blind `is_armored() -> bool` (the space station's core, which implements no `deflects_hit` and is
+unchanged). Projectiles do not duck-type either method directly any more.
+
+`ArmorPlate` (a `Node2D`, `HurtBox` layer `ENEMY_HURTBOX` / mask `PLAYER_ROCKETS | PLAYER_HITBOX` with **empty**
+`accepted_damage_types`, plus `Health` and a `Sprite2D` named `Sprite`; built in `_ready()` if the scene omits them) is
+the first reusable breakable part. It never connects `received_damage` (that carries no type): it classifies each
+`HitBox` itself. `breaks_on(hb)` is true for `DamageType.ROCKET` or a projectile answering `is_high_impact()`
+(`Bullet.is_high_impact()` returns `unlimited_pierce`, the player's Sniper Shot); a break applies `hb.damage` to the
+plate's Health, anything else emits `deflected(hit_box)`. `deflects_hit(hb)` = "not alive, or not breakable". The
+projectile's query and the plate's own `area_entered` have no defined order, so both go through one idempotent
+`_resolve(hb)`: the first caller decides and applies damage, later callers read the recorded answer. A rocket is
+therefore consumed by the plate it breaks whichever callback runs first, and a plate already broken consumes nothing
+(the next rocket of a volley flies on to the next plate). Break = hurtbox closed deferred, sprite hidden, an
+`ExplosionEffect`, `broken(plate)`, `queue_free()`. Keep plates under a `Plates` node, never as direct children of the
+entity root (the hurtbox-geometry gate). A target made of parts may also answer `homing_point(from: Vector2) ->
+Vector2`; `homing_missile._fly_to_target` steers at it instead of `global_position`. Gated by
+`tests/integration/test_armor_query.gd` (fixture: `tests/helpers/armored_fixture.gd`).
 ### CollisionLayers — `global/physics/collision_layers.gd`
 
 `CollisionLayers` (`class_name CollisionLayers extends RefCounted`, constants only) names every

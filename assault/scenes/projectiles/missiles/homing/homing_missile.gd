@@ -33,7 +33,12 @@ func _physics_process(delta: float) -> void:
 
 
 func _fly_to_target(delta: float) -> void:
-	var direction = (locked_target.global_position - global_position).normalized()
+	## A target made of parts (the Ram Corvette's plates) names the point to steer at, so a rocket
+	## fired from behind meets a plate instead of parking at the hull centre.
+	var aim: Vector2 = locked_target.global_position
+	if locked_target.has_method("homing_point"):
+		aim = locked_target.homing_point(global_position)
+	var direction := (aim - global_position).normalized()
 	rotation = direction.angle() + PI / 2
 	global_position += direction * speed * delta
 
@@ -54,5 +59,4 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 ## `bullet.gd::_hit_is_deflected` — a rocket gets the same exemption a bullet already has, so it
 ## survives crossing the boss's armoured core instead of detonating on it before reaching a turret.
 func _hit_is_deflected(area: Area2D) -> bool:
-	var target := area.get_parent()
-	return target != null and target.has_method("is_armored") and target.is_armored()
+	return ArmorQuery.deflects(area, get_node_or_null("HitBox") as HitBox)

@@ -1601,3 +1601,8 @@ written, before relying on them.
 | A warhead-friendly Assault ram (`assault_plate_count` 1) | owner decision | A frontal warhead volley strips one plate; one homing volley strips all three. Default keeps three plates |
 | `level_2_waves.gd` off rails | Ph15 | Scene unreferenced |
 | Deleting `DefenseProfile.apply_alternate()` | Ph17 | No shipped user after Ph4 |
+
+### Phase 4, built in t4 (armour query, `ArmorPlate`) (2026-10-08)
+- `ArmorPlate` resolves each `HitBox` through one **idempotent** `_resolve(hit_box)` (decision recorded per HitBox instance id, erased on the hurtbox's `area_exited`), called from both its own hurtbox `area_entered` and `deflects_hit()`. Revision 2 of the plan had the plate damage itself in `area_entered` and answer `deflects_hit()` from live state, which made "the rocket that breaks a plate is consumed" depend on Godot's undefined callback order (review round 2, B2). Later phases adding breakable parts (Ph10) keep this shape.
+- The plate builds its `HurtBox` / `Health` / `Sprite` in `_ready()` when the scene does not author them (exports `max_health` 50, `hurt_size`, `texture`). A plate's HurtBox is the area the projectile overlaps, so `ArmorQuery` reaches `ArmorPlate.deflects_hit` directly (`area.get_parent()` is the plate); the entity root's `is_armored()` only answers for the hull.
+- The Sniper Shot is not routed through `ArmorQuery` (`bullet.gd`'s `unlimited_pierce` branch returns before it); it damages the plate only through the plate's own classifier. The Sniper Shot's scene damage is 50, so a plate (HP 50) falls to one unmodified shot; the t4 test sets 40 to prove the two-shot rule. The weapon-mode damage decides the real figure.

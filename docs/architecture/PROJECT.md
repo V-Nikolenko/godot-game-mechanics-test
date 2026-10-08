@@ -226,7 +226,7 @@ Detail and APIs: [global.md](modules/global.md).
   the level for the whole mission. Player bullets go through `WeaponBehavior._launch()`, which
   calls `Bullet.free_when_offscreen()` and connects `Bullet.expired -> Bullet.queue_free`. **A
   default bullet stops on the first hit that actually deals damage; a *deflected* hit does not
-  count** — `bullet.gd::_hit_is_deflected()` duck-types a query for `is_armored()` on the hit
+  count** — `bullet.gd::_hit_is_deflected()` asks `ArmorQuery.deflects()`, which duck-types `deflects_hit(hit_box)` (hit-aware; `ArmorPlate`) and falls back to `is_armored()` on the hit
   target and, if it returns `true`, the bullet keeps flying at full damage with no pierce charge
   spent. This exists because the space-station boss's armoured core spans the whole hull, so a
   shot aimed at a turret has to survive crossing it undeflected, or the turrets — and the boss —
