@@ -1,6 +1,6 @@
 ---
 name: feature-workflow
-description: Use at the start of every autonomous work item - routes the item to the right amount of process based on its kind, type and complexity, from the full research/plan/review pipeline for epic preparation down to a direct implement-and-test path for small bugs. Every stage checkpoints to disk so an interrupted cycle resumes instead of restarting.
+description: Use at the start of every autonomous work item - routes the item to the right amount of process based on its kind, type and complexity, from the full research/plan/review pipeline for epic preparation down to a direct implement-and-test path for small bugs. Every stage leaves its artifact and progress notes so an interrupted run resumes instead of restarting.
 ---
 
 # Feature Workflow
@@ -17,6 +17,11 @@ So the amount of process is matched to the item, and the item already says how m
 window, and can end mid-item. Nothing already done may be redone: re-reading the codebase and
 re-running the same web searches costs a large part of a run and produces the same answer.
 
+**The prompt already carries what you would otherwise go and read.** AI-Kanban puts your part of
+the epic's plan, the reports of the tasks yours depends on, and the notes of an earlier unfinished
+run straight into the prompt. Use them as given: reading the whole plan or re-deriving what a
+prerequisite built costs tokens on every later turn of the run and tells you nothing new.
+
 ---
 
 ## Step 1 — Read your work item
@@ -31,8 +36,12 @@ change its status yourself: the board moves it when your run ends. The parts tha
 | **Work item → Complexity** | `small` / `medium` / `large` — the main lever on how much process. |
 | **Work item → Task ID / Epic ID** | Join keys: plan directories and dossiers are named after them, **exactly**. |
 | **Work item → Epic plan directory** | Where the epic's research and approved plan live (the old `prepDir`). |
+| **Your part of the plan** | The sections of the epic's approved plan this task builds from. When present, it *is* the plan for you — see the Direct track. |
+| **What the tasks this one depends on delivered** | The final reports of your prerequisites. Build on the files, names and interfaces they name instead of working them out from the code again. |
+| **Progress notes** | The file to keep your running notes in (done / next / decisions). The harness never commits it. |
+| **Where the earlier run stopped** | An earlier run's own notes — you are resuming, see below. |
 | **Previous Attempts** | Present when an earlier run already worked on this task — you are resuming, see below. |
-| **Human Feedback** | The owner's words when they sent the epic back. Verbatim. Read them first. |
+| **Plan review** / **Plan review history** | What the AI plan review and the owner said about the epic's plan (older prompts call it *Human Feedback*). Read it first. |
 
 ## Step 2 — Route
 
@@ -106,10 +115,14 @@ folder true to what was actually built:
 For a small fix, or a medium task whose epic already has an approved plan: a bug fix, a stale
 reference, a rename, tuning a value, adding a test, a contained piece the plan already described.
 
-1. **Read the epic's plan.** `<epic plan directory>/3-plan.md` is the design this task came out
-   of, and it was reviewed and approved by the owner. **Do not re-derive it and do not redesign
-   it.** If there is no `3-plan.md` and this item is not genuinely small, you are on the wrong
-   track — go back to the routing table.
+1. **Work from your part of the plan.** If the prompt has **Your part of the plan**, that is the
+   approved design for this task: the sections the planner named for it, plus what every task of
+   the epic must follow. Do **not** read `3-plan.md` end to end — open one further section only
+   when your part points at it and doesn't contain it. Only when the prompt has no such section (a
+   task planned before plans were handed out in parts, or one a person wrote) read
+   `<epic plan directory>/3-plan.md` itself. Either way the plan was reviewed and approved by the
+   owner: **do not re-derive it and do not redesign it.** If there is no `3-plan.md` at all and
+   this item is not genuinely small, you are on the wrong track — go back to the routing table.
 2. **Write the failing test first**, from the plan's test plan where one exists. Watch it fail.
 3. Implement.
 4. `bash /agent/verify.sh`.
@@ -140,32 +153,28 @@ escalated track. Do not try to do architectural work on the model that was budge
 For `complexity: "large"` implementation: a new mechanic or system, more than ~3 files, or any
 design choice a reasonable person could disagree about.
 
-### Create the checkpoint directory first
+### The plan directory, and where you keep your place
 
-Create `docs/plans/<Task ID>/STATUS.md`, using the **exact** Task ID from your work item as the
-directory name — never re-derive or reword it. It is the join key a later run uses to find and
-resume this work, so a mismatch makes the artifacts invisible even though the files exist.
+The task's own artifacts go in `docs/plans/<Task ID>/`, using the **exact** Task ID from your work
+item as the directory name — never re-derive or reword it. It is the join key a later run uses to
+find this work, so a mismatch makes the artifacts invisible even though the files exist.
 
-```markdown
-# STATUS — <feature name>
+The stages, in order — each is done when its artifact exists:
 
-**Track:** Escalated
-**Task:** <taskId> (epic: <epicId>)
-**Item:** <head, verbatim>
-**Started:** <YYYY-MM-DD>
+1. Context gathered → `1-context.md`
+2. Plan written → `3-plan.md`
+3. Reviewed and APPROVED → `4-review.md`
+4. Implemented
+5. Gate green
+6. Docs updated
 
-- [ ] 1. Context gathered → `1-context.md`
-- [ ] 2. Plan written → `3-plan.md`
-- [ ] 3. Reviewed and APPROVED → `4-review.md`
-- [ ] 4. Implemented → `5-progress.md`
-- [ ] 5. Gate green
-- [ ] 6. Docs updated
-
-**Next action:** Gather context.
-```
-
-**Tick a box the moment its artifact is written, and rewrite `Next action` every time.** If your
-window ends, that line is the only thing standing between the next cycle and starting over.
+**Where you are goes in your progress notes** — the file the prompt names under **Progress notes**:
+which stage is finished, which build step you are on, what is next. Rewrite them the moment a
+stage or a build step is done. If your window ends, that file is the only thing standing between
+the next run and starting over. There is no `STATUS.md` and no `5-progress.md` any more: the
+artifacts say which stages are done, the notes say where you are inside one. (A prompt with no
+**Progress notes** section names no file — then keep none; the artifacts and the working tree are
+what the next run resumes from.)
 
 ### 1. Context → `1-context.md`
 
@@ -213,25 +222,16 @@ Dispatch a **subagent** (Task tool, `subagent_type: general-purpose`) with the r
 - `CHANGES_REQUESTED` → revise `3-plan.md`, re-review. **Maximum two rounds.** Append each round
   to `4-review.md` rather than overwriting — the history matters.
 - `REJECTED`, or not approved after two rounds → **stop. Do not implement.** Leave every
-  artifact in place (the harness commits them), mark `STATUS.md` blocked with the reason, and end
-  with `Result: BLOCKED` quoting the reviewer. A run producing a well-researched rejected plan is
-  a **successful** run.
+  artifact in place (the harness commits them) and end with `Result: BLOCKED` quoting the
+  reviewer. A run producing a well-researched rejected plan is a **successful** run.
 
 Never review your own plan and call it approved. The review file must come from the subagent.
 
-### 4. Implement → `5-progress.md`
+### 4. Implement
 
-```markdown
-# Progress
-- [x] Step 1 of build sequence — <what was done, which files>
-- [ ] Step 2 — <not started>
-
-**Resume at:** step 2.
-**Deviations from plan:** <or "none">
-```
-
-- Tests first. Update `5-progress.md` after **each build step**, not at the end — a window can end
-  at any moment.
+- Tests first. Update your progress notes after **each build step**, not at the end — a window can
+  end at any moment: which steps of the build sequence are done (and in which files), which one is
+  next.
 - If reality contradicts the plan, update `3-plan.md`. A stale plan is worse than none. In a phase
   epic, also log the deviation in `DECISIONS.md` (see *Working inside a phase*).
 - Discovered work goes under **Follow-ups** in your final message — never silently folded into
@@ -248,20 +248,26 @@ delete work to make the gate pass.** If something is genuinely unsalvageable, re
 and say so explicitly in your final message.
 
 Then: invoke **`updating-project-docs`** if the change was structural (required by `CLAUDE.md`),
-mark `STATUS.md` complete, and quote the review verdict verbatim in your final message.
+say in your final message where the plan was departed from (or "no deviations"), and quote the
+review verdict verbatim.
 
 ---
 
 ## Resuming (the prompt lists **Previous Attempts**)
 
 An earlier run already worked on this task. Their errors are in the prompt — read them: a gate
-failure or a timeout tells you exactly what to avoid. Then read `docs/plans/<Task ID>/STATUS.md`
-if it exists, read the artifacts of the completed stages, and continue from the **first unchecked
-stage**. The `Next action` line tells you exactly where to pick up.
+failure or a timeout tells you exactly what to avoid. Then find your place, in this order:
+
+1. **Where the earlier run stopped** in the prompt — that run's own notes. Continue from them, and
+   keep the same file up to date.
+2. For an escalated item, `docs/plans/<Task ID>/`: a stage whose artifact exists is done
+   (`4-review.md` must say APPROVED). Read the artifacts and continue from the first stage without
+   one.
+3. **Unfinished work restored** in the prompt means the earlier run's uncommitted edits are back
+   in the working tree. A failed run's edits are never committed, so check `git status` /
+   `git diff` either way before writing anything.
 
 Do not re-gather context, do not re-run the same web searches, and do not rewrite an approved plan.
-Previous attempts with no plan directory mean a direct-track item: a failed run's edits are not
-committed, so check `git status` / `git diff` for anything left behind before starting over.
 
 ---
 
@@ -281,8 +287,8 @@ is fresh; reconstructing it later from diffs is far more expensive and less accu
 ## The ask
 The epic's tasks (titles + descriptions) verbatim, plus anything the owner clarified afterwards. If
 this epic came from an idea, quote the original idea text (under **Original idea** in the prompt), and
-quote every comment under **Human Feedback** — those are the owner's own words about what they
-wanted changed.
+quote the owner's notes under **Plan review** (older prompts: *Human Feedback*) — those are the
+owner's own words about what they wanted changed.
 ## Player-facing goal
 What the player should experience. Not implementation.
 ## Scope
@@ -349,5 +355,8 @@ boss fight *feels* right, and the report should say so.
   scratch.
 - **Treating the reviewer as a formality.** If every plan is approved first time, the reviewer
   prompt is not being followed.
-- **Letting `STATUS.md` go stale.** An unticked box that is actually done, or a wrong
-  `Next action`, sends the next cycle to redo hours of work.
+- **Letting the progress notes go stale.** A step that is actually done but not noted, or a wrong
+  "next", sends the next run to redo hours of work.
+- **Reading the whole plan when the prompt gave you your part of it.** The planner chose those
+  sections for this task; the rest is other tasks' business and stays in your context for the
+  whole run once read.
