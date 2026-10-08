@@ -1,7 +1,7 @@
-class_name RamShip
+class_name RamCorvette
 extends BaseEnemy
 
-@export var config: RamShipConfig = load("res://assault/scenes/enemies/ram_ship/ram_config.tres")
+@export var config: RamCorvetteConfig = load("res://assault/scenes/enemies/ram_corvette/ram_corvette_config.tres")
 
 @export var speed: float = 100.0
 

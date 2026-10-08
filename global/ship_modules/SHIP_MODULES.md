@@ -188,7 +188,7 @@ Ship-wide stun that disables nearby enemies.
 `"enemies"` group that isn't immune, by setting `process_mode = DISABLED` and
 re-enabling it via a `SceneTree` timer after the stun duration. `tick()` counts the
 cooldown down. Immune classes: `BigAsteroid`, `SmallAsteroid`, `Asteroid`,
-`RamShip`.
+`RamCorvette`.
 
 - Stun duration: `5.0 s`
 - Cooldown: `15.0 s`
@@ -312,7 +312,7 @@ sets it to `1.0` (invincible), locks the boost direction to the ship's facing, s
 the hit radius once each, and ends the boost when time runs out. `_end_boost()`
 restores `damage_reduction`, clears `engine_boost_active`, and resets the sprite.
 `remove()` ends the boost if active. Immune classes (no boost damage): `BigAsteroid`,
-`SmallAsteroid`, `Asteroid`, `RamShip`. Gated while active or on cooldown —
+`SmallAsteroid`, `Asteroid`, `RamCorvette`. Gated while active or on cooldown —
 `can_activate()` exposes that same gate (`not _active and _cooldown_left <= 0.0`) so
 `OpenSpacePlayerShip._step_boost()` can check readiness *before* spending a `BoostMeter`
 tank. `is_open_space_boost_verb()` returns `true`, which is what makes H a no-op for this

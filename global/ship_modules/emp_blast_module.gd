@@ -6,7 +6,7 @@ const _STUN_DURATION: float = 5.0
 const _COOLDOWN: float = 15.0
 
 ## Classes/groups that are immune to the EMP stun.
-const _IMMUNE_CLASSES: Array[String] = ["BigAsteroid", "SmallAsteroid", "Asteroid", "RamShip"]
+const _IMMUNE_CLASSES: Array[String] = ["BigAsteroid", "SmallAsteroid", "Asteroid", "RamCorvette"]
 
 ## Visual constants.
 const _RING_COLOR: Color = Color(0.2, 1.0, 0.5, 0.9)

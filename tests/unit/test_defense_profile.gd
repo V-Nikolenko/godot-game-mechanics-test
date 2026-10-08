@@ -3,7 +3,7 @@
 ## (docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.8, task t5-defense-profile).
 extends GutTest
 
-const RAM_SHIP_SCENE := "res://assault/scenes/enemies/ram_ship/ram_ship.tscn"
+const RAM_CORVETTE_SCENE := "res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn"
 
 ## Mirrors CollisionLayers so a drift in the constants file shows up as a mismatch here too.
 const _PLAYER_HITBOX := 64
@@ -132,8 +132,8 @@ func test_apply_alternate_without_a_prior_apply_to_does_not_crash() -> void:
 func test_scene_authored_profile_is_not_duplicated_by_base_enemy() -> void:
 	var container := Node2D.new()
 	add_child_autofree(container)
-	var scene := load(RAM_SHIP_SCENE) as PackedScene
-	assert_not_null(scene, "%s failed to load" % RAM_SHIP_SCENE)
+	var scene := load(RAM_CORVETTE_SCENE) as PackedScene
+	assert_not_null(scene, "%s failed to load" % RAM_CORVETTE_SCENE)
 	var ram := scene.instantiate() as BaseEnemy
 	container.add_child(ram)  # runs _ready()
 

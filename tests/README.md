@@ -221,7 +221,7 @@ convention that enemy stats live in the `.tres` and are applied in `_ready()`.
 It exists because every `BaseEnemy` subclass's `.tscn` authors a `ContactHitBox` node with a
 hardcoded `damage = 20` and no way to read `config` — that only exists at runtime — so every
 enemy that wants its configured `collision_damage` has to re-apply it in `_ready()` off
-`contact_hit_box` — `bomber.gd`, `fighter.gd`, `ram_ship.gd`, `gunship.gd` and
+`contact_hit_box` — `bomber.gd`, `fighter.gd`, `ram_corvette.gd`, `gunship.gd` and
 `space_station.gd` all do this, and `razor_drone.tscn`/`swarm_drone.tscn` author a
 different scene default (30) instead. Miss the re-apply and the `.tres` field is simply dead: it
 parses, the enemy works, and the only symptom is a number nobody can see. The `Gunship` shipped

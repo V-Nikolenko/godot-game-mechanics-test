@@ -16,7 +16,7 @@ extends ShipModuleBase
 @export var _COOLDOWN: float = 2.0
 
 ## Classes immune to boost damage (asteroids, ram ships — indestructible by design).
-const _IMMUNE_CLASSES: Array[String] = ["BigAsteroid", "SmallAsteroid", "Asteroid", "RamShip"]
+const _IMMUNE_CLASSES: Array[String] = ["BigAsteroid", "SmallAsteroid", "Asteroid", "RamCorvette"]
 
 const _SPRITE_PATH: String = "SpriteAnchor/ShipSprite2D"
 const _BOOST_COLOR: Color = Color(0.35, 0.85, 1.0, 1.0)

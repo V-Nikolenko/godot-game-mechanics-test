@@ -13,8 +13,8 @@
 | Damage | 50 (contact HitBox — `collision_damage`) |
 | Speed | 100 (`movement_speed`) |
 | Sprite | `ram_ship.png` (swaps to `ram_ship_damaged.png` once armour is stripped) |
-| Scene | `ram_ship.tscn` |
-| Config | `ram_config.tres` |
+| Scene | `ram_corvette.tscn` |
+| Config | `ram_corvette_config.tres` |
 
 ---
 
@@ -37,7 +37,7 @@
 | `counts_toward_wave_clear` | `true` | Counts toward wave-clear bonus. |
 | `movement_speed` | `100.0` | Downward charge speed. |
 
-(Read the real defaults from `ram_config.gd` and `ram_config.tres`.)
+(Read the real defaults from `ram_corvette_config.gd` and `ram_corvette_config.tres`.)
 
 ---
 
@@ -51,9 +51,9 @@
 ## Files
 
 ```
-ram_ship/
+ram_corvette/
 ├── ENEMY.md            ← this file
-├── ram_ship.tscn
-├── ram_ship.gd
-└── ram_config.gd / .tres
+├── ram_corvette.tscn
+├── ram_corvette.gd
+└── ram_corvette_config.gd / .tres
 ```

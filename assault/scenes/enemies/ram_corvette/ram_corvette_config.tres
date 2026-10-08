@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="RamCorvetteConfig" load_steps=2 format=3 uid="uid://dvrneif71d0rc"]
+
+[ext_resource type="Script" uid="uid://dnag07jm0f7xa" path="res://assault/scenes/enemies/ram_corvette/ram_corvette_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+movement_speed = 100.0
+max_health = 999
+collision_damage = 50
+score_value = 35

@@ -97,8 +97,8 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/fighter/fighter.tscn",
 	},
 	{
-		"name": "ram_ship",
-		"scene": "res://assault/scenes/enemies/ram_ship/ram_ship.tscn",
+		"name": "ram_corvette",
+		"scene": "res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn",
 	},
 	{
 		"name": "space_station",

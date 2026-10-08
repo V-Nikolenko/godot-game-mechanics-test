@@ -31,7 +31,7 @@ var _explosion_effect: ExplosionEffect
 
 ## Resolved in `_ready()`: the scene-authored `DefenseProfile` child if there is one, otherwise a
 ## default one (all `accepts_*` true, mask 1121) created on the fly. Exposed so a subclass can
-## call `apply_alternate()` on it, as `RamShip` does.
+## call `apply_alternate()` on it, as `RamCorvette` does.
 var defense_profile: DefenseProfile
 
 ## Resolved in `_ready()` the same way: the scene-authored `ContactProfile` child, otherwise a default
@@ -85,7 +85,7 @@ func _ready() -> void:
 	add_child(_explosion_effect)
 
 	# Propagate scoring fields from the subclass `config` property if it exists.
-	# Subclasses (Fighter, RamShip, etc.) declare `@export var config:
+	# Subclasses (Fighter, RamCorvette, etc.) declare `@export var config:
 	# SomeConfig` — Godot exposes that via get(), so we don't need to know the
 	# concrete type here.
 	var cfg: Variant = get("config")
@@ -170,7 +170,7 @@ func _rotate_sprite() -> void:
 		sprite.rotation_degrees = 180.0
 
 ## Virtual damage hook: called whenever this enemy's `HurtBox` reports a hit. The default applies
-## the damage to `health`. A subclass overrides this to change what a hit does — e.g. `RamShip`'s
+## the damage to `health`. A subclass overrides this to change what a hit does — e.g. `RamCorvette`'s
 ## first hit only arms it, and `SpaceStation` deflects every hit while a turret is alive.
 func _on_received_damage(damage: int) -> void:
 	health.decrease(damage)
