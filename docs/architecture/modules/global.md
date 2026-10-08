@@ -31,7 +31,7 @@ global/
 │   ├── shield_component.gd        # Shield (Node) — discrete-charge shield
 │   ├── damage_reaction.gd         # DamageReaction (Node) — generic "take a hit" router
 │   ├── defense_profile.gd         # DefenseProfile (Node) — per-instance HurtBox mask/damage-type data
-│   ├── contact_profile.gd         # ContactProfile (Node) — what touching an enemy does: NONE / COLLISION / RAMMING / EXPLOSIVE
+│   ├── contact_profile.gd         # ContactProfile (Node) — what touching an enemy does: NONE / COLLISION / RAMMING / EXPLOSIVE / ARMOR
 │   ├── contact_blast.gd           # ContactBlast (HitBox) — code-built blast an EXPLOSIVE profile leaves in the owner's parent
 │   ├── state_light.gd             # StateLight (Node2D) — one small red/yellow/white attack-telegraph light
 │   ├── overheat_component.gd      # Overheat (Node) — weapon heat
@@ -301,10 +301,11 @@ type, otherwise creates a default, exposes it as `contact_profile`, and calls
 | `COLLISION` (default) | **never touched** — every legacy enemy keeps its hitbox exactly as authored | `contact_made(area)` |
 | `RAMMING` | on only while armed | `contact_made(area)` |
 | `EXPLOSIVE` | on only while armed | `contact_made(area)`, then `detonate()` |
+| `ARMOR` | on from `setup()`, armable | `contact_made(area)`; never detonates, never harms its owner; with `shove_speed > 0` also duck-typed `apply_knockback(dir * shove_speed)` on the touched hurtbox's parent (`OpenSpacePlayerShip` adds to `velocity`; `PlayerFighter` uses the base shove) |
 
 - **Damage is always the hitbox's own `damage`** (`config.collision_damage`); "ramming only hurts while
   committed" is full damage while armed and none at rest.
-- `set_armed(bool)` (RAMMING / EXPLOSIVE only; a no-op otherwise) toggles `monitorable` + `monitoring` with
+- `set_armed(bool)` (RAMMING / EXPLOSIVE / ARMOR only; a no-op otherwise) toggles `monitorable` + `monitoring` with
   `set_deferred`, so it is legal from a physics callback. Arming while already overlapping the player registers
   exactly one hit (pinned engine behaviour). `BaseEnemy.suspend_ai()` arms the profile, so a rail-driven enemy hurts
   on contact.

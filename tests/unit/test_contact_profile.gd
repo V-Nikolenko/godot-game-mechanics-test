@@ -291,6 +291,171 @@ func test_a_blast_whose_container_is_freed_before_the_flush_frees_itself() -> vo
 	assert_false(is_instance_valid(blast), "the orphaned blast freed itself")
 
 
+# ── ARMOR (plan cmufs7ele0015nm2xvag3vrwc §2.6.3, X8 / X13) ───────────────────────
+
+## Stands in for a player: a node with a recording `apply_knockback`, under which a real
+## `HurtBox` hangs so `area.get_parent()` is the stub, exactly as for the real player.
+class ShoveStub extends Node2D:
+	var impulses: Array[Vector2] = []
+	var hurt_box: HurtBox = HurtBox.new()
+
+	func _init() -> void:
+		add_child(hurt_box)
+
+	func apply_knockback(impulse: Vector2) -> void:
+		impulses.append(impulse)
+
+
+## A target with a hurtbox but no `apply_knockback` at all.
+class BareTarget extends Node2D:
+	var hurt_box: HurtBox = HurtBox.new()
+
+	func _init() -> void:
+		add_child(hurt_box)
+
+
+func _armor(shove_speed: float = 0.0) -> ContactProfile:
+	var p := Fixture.profile(ContactProfile.Mode.ARMOR)
+	p.shove_speed = shove_speed
+	return p
+
+
+func test_armor_is_appended_so_serialized_ints_do_not_shift() -> void:
+	assert_eq(ContactProfile.Mode.NONE, 0)
+	assert_eq(ContactProfile.Mode.COLLISION, 1)
+	assert_eq(ContactProfile.Mode.RAMMING, 2)
+	assert_eq(ContactProfile.Mode.EXPLOSIVE, 3)
+	assert_eq(ContactProfile.Mode.ARMOR, 4)
+
+
+func test_armor_starts_armed_with_the_hitbox_on() -> void:
+	var enemy := _spawn(_armor())
+	assert_true(enemy.contact_profile.is_armed(), "armed at setup()")
+	await wait_physics_frames(2)
+	assert_true(enemy.contact_hit_box.monitorable, "monitorable at rest")
+	assert_true(enemy.contact_hit_box.monitoring, "monitoring at rest")
+
+
+func test_armor_contact_reports_without_detonating_or_spawning_a_blast() -> void:
+	var p := _armor()
+	var enemy := _spawn(p)
+	var container := enemy.get_parent()
+	watch_signals(p)
+	var area := _dummy_area()
+	enemy.contact_hit_box.area_entered.emit(area)
+	assert_signal_emit_count(p, "contact_made", 1)
+	assert_signal_emitted_with_parameters(p, "contact_made", [area])
+	assert_signal_not_emitted(p, "detonated")
+	await wait_physics_frames(1)
+	assert_eq(_blasts(container).size(), 0, "armour never spawns a blast")
+
+
+func test_armor_set_armed_false_closes_the_hitbox_and_true_reopens_it() -> void:
+	var p := _armor()
+	var enemy := _spawn(p)
+	await wait_physics_frames(1)
+	p.set_armed(false)
+	assert_false(p.is_armed())
+	await wait_physics_frames(1)
+	assert_false(enemy.contact_hit_box.monitorable, "closed: not monitorable")
+	assert_false(enemy.contact_hit_box.monitoring, "closed: not monitoring")
+	watch_signals(p)
+	enemy.contact_hit_box.area_entered.emit(_dummy_area())
+	assert_signal_not_emitted(p, "contact_made", "a closed armour reports nothing")
+	p.set_armed(true)
+	await wait_physics_frames(1)
+	assert_true(enemy.contact_hit_box.monitorable, "reopened")
+
+
+func test_armor_owner_death_never_detonates_armed_or_not() -> void:
+	for armed: bool in [true, false]:
+		var p := _armor()
+		var container := _container()
+		var enemy := _spawn(p, container)
+		p.set_armed(armed)
+		watch_signals(p)
+		enemy.health.set_health(0)
+		assert_signal_not_emitted(p, "detonated", "armed=%s" % armed)
+		await wait_physics_frames(1)
+		assert_eq(_blasts(container).size(), 0, "no blast, armed=%s" % armed)
+
+
+func test_armor_contact_does_not_harm_its_owner() -> void:
+	var p := _armor(260.0)
+	var enemy := _spawn(p)
+	var before: int = enemy.health.current_health
+	var target := ShoveStub.new()
+	add_child_autofree(target)
+	enemy.contact_hit_box.area_entered.emit(target.hurt_box)
+	assert_eq(enemy.health.current_health, before, "touching never hurts the armoured owner")
+
+
+func test_armor_shove_calls_apply_knockback_once_with_an_owner_to_target_impulse() -> void:
+	var p := _armor(260.0)
+	var enemy := _spawn(p)
+	var target := ShoveStub.new()
+	add_child_autofree(target)
+	target.global_position = enemy.global_position + Vector2(30, 40)  # 50 px away, direction (0.6, 0.8)
+	enemy.contact_hit_box.area_entered.emit(target.hurt_box)
+	assert_eq(target.impulses.size(), 1, "one call per armed touch")
+	if target.impulses.is_empty():
+		return
+	assert_almost_eq(target.impulses[0].length(), 260.0, 0.01, "impulse is shove_speed long")
+	assert_almost_eq(target.impulses[0].x, 156.0, 0.01, "points owner -> target (x)")
+	assert_almost_eq(target.impulses[0].y, 208.0, 0.01, "points owner -> target (y)")
+
+
+func test_armor_shove_with_zero_speed_calls_nothing() -> void:
+	var enemy := _spawn(_armor(0.0))
+	var target := ShoveStub.new()
+	add_child_autofree(target)
+	target.global_position = enemy.global_position + Vector2(30, 0)
+	enemy.contact_hit_box.area_entered.emit(target.hurt_box)
+	assert_eq(target.impulses.size(), 0)
+
+
+func test_armor_shove_onto_a_target_without_the_method_calls_nothing_and_errors_nothing() -> void:
+	var p := _armor(260.0)
+	var enemy := _spawn(p)
+	var target := BareTarget.new()
+	add_child_autofree(target)
+	watch_signals(p)
+	enemy.contact_hit_box.area_entered.emit(target.hurt_box)
+	assert_signal_emit_count(p, "contact_made", 1, "the touch still reports")
+
+
+func test_armor_shove_with_an_orphan_area_does_not_error() -> void:
+	var p := _armor(260.0)
+	var enemy := _spawn(p)
+	watch_signals(p)
+	enemy.contact_hit_box.area_entered.emit(_dummy_area())
+	assert_signal_emit_count(p, "contact_made", 1)
+
+
+func test_a_closed_armor_does_not_shove() -> void:
+	var p := _armor(260.0)
+	var enemy := _spawn(p)
+	p.set_armed(false)
+	var target := ShoveStub.new()
+	add_child_autofree(target)
+	target.global_position = enemy.global_position + Vector2(30, 0)
+	enemy.contact_hit_box.area_entered.emit(target.hurt_box)
+	assert_eq(target.impulses.size(), 0)
+
+
+## Only ARMOR shoves: a RAMMING profile with a (stray) shove_speed stays a plain contact.
+func test_only_armor_shoves() -> void:
+	var p := Fixture.profile(ContactProfile.Mode.RAMMING)
+	p.shove_speed = 260.0
+	var enemy := _spawn(p)
+	p.set_armed(true)
+	var target := ShoveStub.new()
+	add_child_autofree(target)
+	target.global_position = enemy.global_position + Vector2(30, 0)
+	enemy.contact_hit_box.area_entered.emit(target.hurt_box)
+	assert_eq(target.impulses.size(), 0)
+
+
 # ── Rails ──────────────────────────────────────────────────────────────────────
 
 func test_suspend_ai_arms_a_ramming_profile_and_leaves_collision_untouched() -> void:
