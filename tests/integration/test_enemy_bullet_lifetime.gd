@@ -201,6 +201,74 @@ func test_a_synthetic_100px_per_s_round_fails_the_sweep() -> void:
 
 
 # ---------------------------------------------------------------------------------------------
+# Enemy ordnance (3-plan.md of cmufs7ele0015nm2xvag3vrwc §2.3, task t6): a separate family with its
+# own explicit caps, so it gets per-KIND rows instead of joining the round sweep above. Its speeds
+# (120 and 90 px/s) must never enter `_every_shipped_enemy_bullet_speed()`: they would trip the
+# >= 150 px/s rule and shift the derived 18 s / 2400 px round defaults.
+#
+# Speeds and times are read from `BomberConfig`'s ordnance fields. Until t9 creates them, the fixture
+# config carries the same field names (tests/helpers/ordnance_config_fixture.gd).
+# ---------------------------------------------------------------------------------------------
+
+const _OrdnanceCfg := preload("res://tests/helpers/ordnance_config_fixture.gd")
+
+
+func _ordnance_lifetime(kind: EnemyOrdnance.Kind) -> ProjectileLifetime:
+	var o: EnemyOrdnance = EnemyOrdnanceScenes.scene_for(kind).instantiate()
+	add_child_autofree(o)
+	return o.get_node("ProjectileLifetime") as ProjectileLifetime
+
+
+## Constant-speed kind: its distance cap is reached before its time cap.
+func _constant_speed_kind_clears(max_distance: float, slowest_speed: float, max_time: float) -> bool:
+	return max_distance / slowest_speed <= max_time
+
+
+## Two-speed kind (steers at the launch speed for a window, then runs at the final speed): the
+## constant-speed formula does not model it.
+func _two_speed_kind_clears(window: float, launch_speed: float, final_speed: float,
+		max_distance: float, max_time: float) -> bool:
+	return window + (max_distance - launch_speed * window) / final_speed <= max_time
+
+
+func test_the_gravity_bomb_clears_its_lifetime_at_its_slowest_fired_speed() -> void:
+	var cfg = _OrdnanceCfg.new()
+	var lt := _ordnance_lifetime(EnemyOrdnance.Kind.GRAVITY_BOMB)
+	assert_true(_constant_speed_kind_clears(lt.max_distance,
+			minf(cfg.gravity_bomb_speed, cfg.rail_bomb_speed), lt.max_time),
+			"gravity bomb: max_distance / slowest speed must fit max_time (1800 / 120 = 15 <= 16)")
+
+
+func test_the_pursuit_bomb_clears_its_lifetime_through_both_of_its_speeds() -> void:
+	var cfg = _OrdnanceCfg.new()
+	var lt := _ordnance_lifetime(EnemyOrdnance.Kind.PURSUIT_BOMB)
+	assert_true(_two_speed_kind_clears(cfg.pursuit_steer_window, cfg.pursuit_launch_speed,
+			cfg.pursuit_final_speed, lt.max_distance, lt.max_time),
+			"pursuit bomb: steer window + the rest at the final speed must fit max_time (7.46 <= 10)")
+
+
+func test_the_mine_is_time_bound_only() -> void:
+	var cfg = _OrdnanceCfg.new()
+	var lt := _ordnance_lifetime(EnemyOrdnance.Kind.MINE)
+	assert_eq(lt.max_distance, 0.0, "a stationary mine has no distance cap")
+	assert_lt(cfg.mine_life, lt.max_time, "the mine fizzles before its backstop")
+
+
+func test_a_synthetic_100px_per_s_gravity_bomb_fails_its_row() -> void:
+	var lt := _ordnance_lifetime(EnemyOrdnance.Kind.GRAVITY_BOMB)
+	assert_false(_constant_speed_kind_clears(lt.max_distance, 100.0, lt.max_time),
+			"1800 / 100 = 18 s > the 16 s backstop: the row can reject")
+
+
+func test_no_ordnance_speed_is_in_the_round_speed_list() -> void:
+	var cfg = _OrdnanceCfg.new()
+	var speeds := _every_shipped_enemy_bullet_speed()
+	for s: float in [cfg.gravity_bomb_speed, cfg.rail_bomb_speed, cfg.pursuit_launch_speed]:
+		assert_false(speeds.has(s),
+				"%s px/s is ordnance, which has its own rows - it must not shift the round defaults" % s)
+
+
+# ---------------------------------------------------------------------------------------------
 # Boundary: x = 1444 lives, x = 1444.1 expires, with the Assault provider. No provider: both live.
 # ---------------------------------------------------------------------------------------------
 

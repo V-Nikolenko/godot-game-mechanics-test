@@ -37,6 +37,7 @@ assault/scenes/
 │   ├── bullets/bullet.gd        Player bullet — UNPOOLED, frees itself off-screen (pierce, sniper)
 │   ├── enemy_bullet/            EnemyBullet (become_friendly() flips it to a player projectile)
 │   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell .tscn + EnemyRounds
+│   ├── enemy_ordnance/         EnemyOrdnance: gravity_bomb / mine / pursuit_bomb .tscn + EnemyOrdnanceScenes (persistent, shoot-down-able, not in `enemies`)
 │   ├── missiles/                homing/ + warhead/ missiles
 │   └── piercing_beam/           Sustained BEAM weapon projectile
 ├── systems/                     Mission orchestration (non-visual)
@@ -326,6 +327,7 @@ Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.g
   the Gatling fires Gatling Stream, the **Heavy Shell has no consumer yet**; every other enemy keeps the legacy orange
   `enemy_bullet.tscn` until Ph17's audit. `test_enemy_bullet_lifetime.gd` sweeps every round: `max_distance` over the
   slowest speed any shooter fires it at (read from config fields, never typed) must fit `max_time`.
+- `enemy_ordnance/` — **enemy ordnance** (Ph4): `enemy_ordnance.gd` (`EnemyOrdnance`, an `Area2D` with a `Kind` enum), `gravity_bomb.tscn`, `mine.tscn`, `pursuit_bomb.tscn`, and `enemy_ordnance_scenes.gd` (`EnemyOrdnanceScenes`: the scene constants, `scene_for(kind)`, `pool_size_for(kind, cfg)`). Not an `EnemyBullet` and not a `BaseEnemy` (never in `enemies`, no score). `HurtBox` 512/96 + `Health` 1: any player bullet or rocket **defuses** it (a pop, no blast). A `ProximityArea` (mask 128) is polled each tick once armed; set off, it blinks for `warning_time` then detonates via `ContactBlast.spawn` into its parent. Gravity bomb: straight at `launch` speed, 16 s / 1800 px. Mine: ejected for 0.3 s, then stationary, fizzles (no blast) at `mine_life`, 10 s backstop. Pursuit bomb: steers at `turn_rate` for `steer_window`, then freezes its heading and accelerates, 10 s / 2400 px. One accumulated clock, no `Timer`. Pools should set `persist_after_owner_death`. Its speeds are NOT in `_every_shipped_enemy_bullet_speed()`; `test_enemy_bullet_lifetime.gd` has per-kind rows. Behaviour: `tests/integration/test_enemy_ordnance.gd`. No Bomber drops it yet (t9/t10).
 - `missiles/` — `homing/` and `warhead/` secondary munitions fired by `RocketState`.
 - `piercing_beam/` — the sustained beam projectile for the BEAM weapon behavior.
 

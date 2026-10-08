@@ -1,0 +1,64 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/projectiles/enemy_ordnance/enemy_ordnance.gd" id="1_ord"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_ord"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="3_ord"]
+[ext_resource type="Script" path="res://global/components/projectile_lifetime.gd" id="4_ord"]
+[ext_resource type="Script" path="res://global/components/explosion_effect.gd" id="5_ord"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
+radius = 11.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_prox"]
+radius = 48
+
+[node name="PursuitBomb" type="Area2D"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("1_ord")
+kind = 2
+arm_delay = 0.0
+trigger_radius = 48.0
+warning_time = 0.0
+blast_radius = 40.0
+blast_damage = 30
+steer_window = 1.5
+turn_rate = 1.2
+final_speed = 380.0
+body_radius = 8.0
+body_color = Color(0.25, 0.1, 0.12, 1)
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 96
+script = ExtResource("2_ord")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_hurt")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("3_ord")
+max_health = 1
+current_health = 1
+
+[node name="ProximityArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 128
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ProximityArea"]
+shape = SubResource("CircleShape2D_prox")
+
+[node name="ProjectileLifetime" type="Node" parent="."]
+script = ExtResource("4_ord")
+max_time = 10.0
+max_distance = 2400.0
+
+[node name="Pop" type="Node2D" parent="."]
+script = ExtResource("5_ord")
+amount = 10
+lifetime = 0.35
+color = Color(1.0, 0.35, 0.15, 1)
+min_velocity = 30.0
+max_velocity = 110.0
+min_scale = 1.5
+max_scale = 3.0
