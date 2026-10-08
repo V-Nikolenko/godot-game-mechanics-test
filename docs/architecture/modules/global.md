@@ -590,8 +590,10 @@ wrong origin and never resolve the rect. `EnemyBullet` carries one with derived 
 (`max_time = 18 s`, `max_distance = 2400 px`) that reproduce its old hardcoded arena-bounds check
 exactly against every shipped enemy-bullet speed; a new, slower bullet source must be added to
 `tests/integration/test_enemy_bullet_lifetime.gd`'s source list and the defaults re-derived.
-`persist_after_owner_death` is documented only in Phase 1 — a future flag for `BulletPool` to skip
-`cancel_active()` on a flagged projectile.
+`persist_after_owner_death` is built (Ph4) as a `BulletPool` `@export` (default false): with it on,
+the pool's `_exit_tree()` hands in-flight bullets over (recycle callable disconnected, `expired ->
+queue_free` one-shot) instead of `cancel_active()`, which ignores the flag. Pinned by
+`tests/unit/test_bullet_pool.gd`.
 
 ### Shield — `shield_component.gd`, `bubble_shield.tscn`, ordering in `damage_reaction.gd`
 

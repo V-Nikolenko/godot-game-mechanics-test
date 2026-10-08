@@ -176,7 +176,8 @@ If a bullet goes off-screen AND hits something in the same frame, `expired` fire
 
 ### **6. Cancelling In-Flight Bullets** (`cancel_active()`)
 
-`_exit_tree()` is a one-line call to the public **`cancel_active()`**, which frees every in-flight
+`_exit_tree()` calls the public **`cancel_active()`** (unless the pool sets
+`persist_after_owner_death` — it then hands in-flight bullets over instead), which frees every in-flight
 bullet and clears `_active`. A ship can call it directly when it must stop being dangerous
 *before* it leaves the tree.
 
@@ -336,7 +337,7 @@ def _recycle(bullet: Node) -> void:
 		bullet.queue_free()
 ```
 
-**A shooter's in-flight bullets vanish when it dies or leaves**: `BulletPool._exit_tree()` calls `cancel_active()`, so no enemy round outlives its owner (this is legacy behaviour; an owner-bound lifetime, `persist_after_owner_death`, is a Ph5 item). It means an ENEMIES_CLEARED deadline needs no bullet-flight term, and that a leaving fighter's rounds disappear mid-screen.
+**A shooter's in-flight bullets vanish when it dies or leaves**: `BulletPool._exit_tree()` calls `cancel_active()`, so no enemy round outlives its owner (the default; a pool with `persist_after_owner_death = true`, built in Ph4, instead hands its in-flight bullets over so they free themselves on their own `expired`; `cancel_active()` ignores the flag). It means an ENEMIES_CLEARED deadline needs no bullet-flight term, and that a leaving fighter's rounds disappear mid-screen.
 
 If the pool's `_ready()` never fires (ship not added to tree), `_container` remains null and `acquire()` will crash on `bullet.reparent(_container)`. But this shouldn't happen in normal flow since ships are spawned via `WaveManager`, which guarantees `add_child()` before ship's `_ready()`.
 

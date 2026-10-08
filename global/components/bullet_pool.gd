@@ -20,6 +20,14 @@
 ##   ship is killed never expire (their recycle callback targets a freed pool)
 ##   and accumulate until the scene restarts.
 ##
+## Outliving the owner (`persist_after_owner_death`):
+##   With the flag on, _exit_tree() hands every in-flight bullet over instead of freeing it. The
+##   pool disconnects its recycle callable, the bullet becomes self-owned (`expired -> queue_free`,
+##   one-shot) and leaves _active, so exactly one owner holds it at every instant. A bullet whose
+##   `expired` already fired this frame (its deferred recycle is queued) is freed on the spot, since
+##   nothing would ever emit `expired` for it again. Used by ordnance that must outlast its ship
+##   (a bomber's mines). `cancel_active()` ignores the flag.
+##
 ## Usage from a ship:
 ##   1. Create a BulletPool node, set bullet_scene and pool_size.
 ##   2. add_child(bullet_pool) — _ready() handles all setup automatically.
@@ -35,11 +43,19 @@ extends Node
 
 @export var bullet_scene: PackedScene
 @export var pool_size: int = 10
+## When true, bullets still in flight when this pool leaves the tree keep flying and free themselves
+## on their own `expired`, instead of being freed with the owner. Default false: rounds vanish with
+## their shooter.
+@export var persist_after_owner_death: bool = false
 
 var _idle: Array[Node] = []
 ## Tracks every in-flight bullet so _exit_tree can clean them up.
 var _active: Array[Node] = []
 var _container: Node
+## The recycle Callable connected to each bullet's `expired`, kept so it can be disconnected on handover.
+var _recycle_calls: Dictionary = {}
+## In-flight bullets whose `expired` has fired and whose deferred _recycle has not run yet.
+var _expired_pending: Dictionary = {}
 
 func _ready() -> void:
 	# Resolve the active container: pool's parent is the ship,
@@ -53,7 +69,9 @@ func _prewarm() -> void:
 		bullet.process_mode = Node.PROCESS_MODE_DISABLED
 		bullet.visible = false
 		add_child(bullet)
-		bullet.expired.connect(func(): call_deferred("_recycle", bullet))
+		var recycle_call: Callable = _on_bullet_expired.bind(bullet)
+		_recycle_calls[bullet] = recycle_call
+		bullet.expired.connect(recycle_call)
 		_idle.append(bullet)
 
 ## Returns an idle bullet placed at spawn_pos, already reset and enabled.
@@ -75,11 +93,17 @@ func acquire(spawn_pos: Vector2) -> Node:
 	_active.append(bullet)
 	return bullet
 
-## Called automatically when a bullet's `expired` signal fires.
+func _on_bullet_expired(bullet: Node) -> void:
+	_expired_pending[bullet] = true
+	call_deferred("_recycle", bullet)
+
+## Called (deferred) when a bullet's `expired` signal fires.
 ## Private — ships never call this directly.
 func _recycle(bullet: Node) -> void:
-	# Guard against `expired` firing twice in the same frame (hit + off-screen).
-	if _idle.has(bullet):
+	_expired_pending.erase(bullet)
+	# Ignore a bullet this pool does not own: one already recycled (`expired` fired twice in the same
+	# frame, hit + off-screen), or one handed over / cancelled in the frame the owner died.
+	if not _active.has(bullet):
 		return
 	_active.erase(bullet)
 	bullet.visible = false
@@ -108,9 +132,30 @@ func cancel_active() -> void:
 			bullet.queue_free()
 	_active.clear()
 
-## When the enemy ship is destroyed, free every bullet still in flight.
+## Releases every in-flight bullet to its own devices (`persist_after_owner_death`).
+func _hand_over_active() -> void:
+	for bullet: Node in _active:
+		if not is_instance_valid(bullet):
+			continue
+		var recycle_call: Callable = _recycle_calls.get(bullet, Callable())
+		if recycle_call.is_valid() and bullet.expired.is_connected(recycle_call):
+			bullet.expired.disconnect(recycle_call)
+		_recycle_calls.erase(bullet)
+		if _expired_pending.has(bullet):
+			# Already expired this frame; no further `expired` will come, so it ends here.
+			bullet.queue_free()
+		else:
+			bullet.expired.connect(bullet.queue_free, CONNECT_ONE_SHOT)
+	_expired_pending.clear()
+	_active.clear()
+
+## When the enemy ship is destroyed, free every bullet still in flight — or, with
+## `persist_after_owner_death`, hand them over to their own lifetime.
 ## Without this, bullets orphaned in the container have no live pool to
 ## return to (the expired callback targets a freed object and is silently
 ## dropped), so they accumulate until the scene reloads.
 func _exit_tree() -> void:
-	cancel_active()
+	if persist_after_owner_death:
+		_hand_over_active()
+	else:
+		cancel_active()

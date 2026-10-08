@@ -23,9 +23,10 @@
 ## instead means the origin is read after that tick's movement, at most one frame of travel past
 ## the muzzle — immaterial next to the margin `max_distance` carries over the legacy rect diagonal.
 ##
-## `persist_after_owner_death` is documented only in Phase 1: a future flag that will tell
-## `BulletPool` to skip `cancel_active()` for a flagged projectile, so it can outlive its owner
-## (Phase 5, rockets).
+## `persist_after_owner_death` is built (Phase 4) as a `BulletPool` export: with it on, the pool's
+## `_exit_tree()` hands in-flight bullets over instead of calling `cancel_active()`, rewiring their
+## `expired` to `queue_free`. A persisting projectile therefore ends on exactly this component's
+## `expired` (or its own detonation), so every such round needs a rule here.
 class_name ProjectileLifetime
 extends Node
 
