@@ -105,8 +105,8 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/space_station/space_station.tscn",
 	},
 	{
-		"name": "sniper_enemy",
-		"scene": "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn",
+		"name": "sniper",
+		"scene": "res://assault/scenes/enemies/sniper/sniper.tscn",
 	},
 	{
 		"name": "swarm_drone",

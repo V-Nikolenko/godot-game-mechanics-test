@@ -61,7 +61,7 @@ const _RAM_MASK_BEFORE_HIT := 33
 const _RAM_MASK_AFTER_HIT := 97
 
 ## `bomber`, `bonus_drone`, `razor_drone`, `gunship`, `gatling_interceptor`, `swarm_drone`,
-## `fighter`, `ram_corvette`, `sniper_enemy`, `space_station`. A sweep that finds fewer has
+## `fighter`, `ram_corvette`, `sniper`, `space_station`. A sweep that finds fewer has
 ## broken, and every assertion below is vacuous on a broken sweep.
 const _MIN_ROSTER_SIZE := 10
 
@@ -276,7 +276,7 @@ func test_scoring_fields_are_copied_from_config() -> void:
 			continue
 		var cfg: Variant = entity.get("config")
 		if not (cfg is ShipConfig):
-			continue  # sniper_enemy has no `config` property at all.
+			continue  # sniper has no `config` property at all.
 		checked += 1
 		var ship_cfg := cfg as ShipConfig
 		assert_eq(entity.score_value, ship_cfg.score_value, "%s: score_value" % entry["name"])
@@ -287,14 +287,14 @@ func test_scoring_fields_are_copied_from_config() -> void:
 		assert_eq(
 			entity.counts_as_escape, ship_cfg.counts_as_escape, "%s: counts_as_escape" % entry["name"]
 		)
-	assert_gte(checked, _MIN_ROSTER_SIZE - 1, "roster sweep too small (sniper_enemy is the one exception)")
+	assert_gte(checked, _MIN_ROSTER_SIZE - 1, "roster sweep too small (sniper is the one exception)")
 
 
-## sniper_enemy has no `config` property, so BaseEnemy's generic copy never runs for it — it
-## hardcodes its score instead (`sniper_enemy.gd:45`). Pinned on its own since the generic sweep
+## sniper has no `config` property, so BaseEnemy's generic copy never runs for it — it
+## hardcodes its score instead (`sniper.gd:45`). Pinned on its own since the generic sweep
 ## above cannot see it.
-func test_sniper_enemy_hardcodes_its_score_value() -> void:
-	var sniper := _spawn("res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn")
+func test_sniper_hardcodes_its_score_value() -> void:
+	var sniper := _spawn("res://assault/scenes/enemies/sniper/sniper.tscn")
 	assert_eq(sniper.get("score_value"), 50)
 
 

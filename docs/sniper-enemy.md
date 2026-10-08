@@ -1,8 +1,8 @@
 # Sniper Enemy
 
-**Scene:** `res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn`  
-**Script:** `res://assault/scenes/enemies/sniper_enemy/sniper_enemy.gd`  
-**Class:** `SniperEnemy` (extends `BaseEnemy`)
+**Scene:** `res://assault/scenes/enemies/sniper/sniper.tscn`  
+**Script:** `res://assault/scenes/enemies/sniper/sniper.gd`  
+**Class:** `Sniper` (extends `BaseEnemy`)
 
 ---
 
@@ -97,7 +97,7 @@ The line is drawn from the muzzle (`Marker2D` at local `(0, –20)`) outward
 ## Node structure
 
 ```
-SniperEnemy  [CharacterBody2D]
+Sniper  [CharacterBody2D]
 ├── Sprite2D            scale (2, 2), sniper.png, hit-flash ShaderMaterial
 ├── CollisionShape2D    CircleShape2D r=14
 ├── Muzzle              [Marker2D]  position (0, –20)

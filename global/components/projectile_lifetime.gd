@@ -17,7 +17,7 @@
 ## Arms LAZILY: on `reset()`, or on its own first physics tick, whichever comes first — never in
 ## `_ready()`. Arming records the origin (`host.global_position` at that moment), zeroes the clock,
 ## clears the latch, and resolves the world rect through `EnemyWorld.projectile_world_rect()`. This
-## exists because the unpooled sniper shot (`sniper_enemy.gd`'s `_phase_fire()`) is never `reset()`
+## exists because the unpooled sniper shot (`sniper.gd`'s `_phase_fire()`) is never `reset()`
 ## — it is positioned at the muzzle only *after* `add_child()`, so arming in `_ready()` would record
 ## the wrong origin (the parent's) and never see the world rect. Arming on the first physics tick
 ## instead means the origin is read after that tick's movement, at most one frame of travel past

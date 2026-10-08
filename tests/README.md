@@ -231,7 +231,7 @@ and nothing else in the suite could reach it, because no other test reads a HitB
 Three things to know before extending it:
 
 - **The two config-less entries are still assertable.** `interceptor_config.tres` has no
-  `collision_damage` line and `sniper_enemy` has no config at all, so both inherit `ShipConfig`'s
+  `collision_damage` line and `sniper` has no config at all, so both inherit `ShipConfig`'s
   default of 20 (`ship_config.gd:8`) — which happens to equal the scene's hardcoded 20. They
   are listed so that if either value ever moves independently, the mismatch surfaces here.
 - **`bonus_drone` is the one deliberate exception**, asserted from both sides: `bonus_drone.tscn`

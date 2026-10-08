@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://csnipenemy01"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_se"]
-[ext_resource type="Script" uid="uid://hwji5rq8hhpr" path="res://assault/scenes/enemies/sniper_enemy/sniper_enemy.gd" id="2_se"]
+[ext_resource type="Script" uid="uid://hwji5rq8hhpr" path="res://assault/scenes/enemies/sniper/sniper.gd" id="2_se"]
 [ext_resource type="Texture2D" uid="uid://1vc2xqirwmmd" path="res://assault/assets/sprites/enemies/sniper.png" id="3_se"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_se"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_se"]
@@ -53,7 +53,7 @@ _data = {
 &"hit": SubResource("Animation_hit_se")
 }
 
-[node name="SniperEnemy" type="CharacterBody2D" unique_id=2044564659]
+[node name="Sniper" type="CharacterBody2D" unique_id=2044564659]
 script = ExtResource("2_se")
 
 [node name="Sprite2D" type="Sprite2D" parent="." unique_id=1239338233]

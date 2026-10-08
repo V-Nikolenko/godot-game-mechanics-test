@@ -611,7 +611,7 @@ queue_free` wiring. `expire_now()` is an immediate, explicit trip through the sa
 
 **It arms lazily** — on `reset()`, or on its own first physics tick, whichever comes first, never
 in `_ready()` — because an unpooled projectile positioned at its muzzle only *after* `add_child()`
-(the sniper shot, `sniper_enemy.gd`) is never `reset()`; arming in `_ready()` would record the
+(the sniper shot, `sniper.gd`) is never `reset()`; arming in `_ready()` would record the
 wrong origin and never resolve the rect. `EnemyBullet` carries one with derived defaults
 (`max_time = 18 s`, `max_distance = 2400 px`) that reproduce its old hardcoded arena-bounds check
 exactly against every shipped enemy-bullet speed; a new, slower bullet source must be added to

@@ -14,8 +14,8 @@ const ENEMY_BULLET_SCENE: PackedScene = \
 		preload("res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn")
 const SNIPER_BULLET_SCENE: PackedScene = \
 		preload("res://assault/scenes/projectiles/enemy_bullets/enemy_sniper_bullet.tscn")
-const SNIPER_ENEMY_SCENE: PackedScene = \
-		preload("res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn")
+const SNIPER_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/sniper/sniper.tscn")
 
 func _ceil_to_100(v: float) -> float:
 	return ceil(v / 100.0) * 100.0
@@ -343,10 +343,10 @@ func test_a_pooled_bullet_is_recycled_never_freed_when_its_lifetime_expires() ->
 
 
 # ---------------------------------------------------------------------------------------------
-# The unpooled sniper shot, through the REAL SniperEnemy._phase_fire() path.
+# The unpooled sniper shot, through the REAL Sniper._phase_fire() path.
 # ---------------------------------------------------------------------------------------------
 
-## `sniper_enemy.gd:99-105` never calls reset() — the shot is positioned at the muzzle only after
+## `sniper.gd:99-105` never calls reset() — the shot is positioned at the muzzle only after
 ## add_child(). This is exactly the case the lazy-arm rule (F1) exists for: if arming ever moved
 ## back into ProjectileLifetime._ready(), the shot would record the wrong origin at the parent's
 ## position and never see the Assault provider's rect, so it would fly for the full 18s instead of
@@ -357,7 +357,7 @@ func test_the_unpooled_sniper_shot_is_freed_after_crossing_the_legacy_rect() -> 
 
 	var container := Node2D.new()
 	add_child_autofree(container)
-	var sniper: SniperEnemy = SNIPER_ENEMY_SCENE.instantiate()
+	var sniper: Sniper = SNIPER_SCENE.instantiate()
 	container.add_child(sniper)
 
 	# Muzzle sits at local (0, -20); rotation = PI/2 makes Vector2.UP.rotated(rotation) point at
@@ -375,7 +375,7 @@ func test_the_unpooled_sniper_shot_is_freed_after_crossing_the_legacy_rect() -> 
 			bullet = child as EnemyBullet
 	assert_not_null(bullet, "_phase_fire() must have spawned the real enemy_sniper_bullet.tscn")
 	assert_true(bullet.expired.is_connected(bullet.queue_free),
-			"sniper_enemy.gd wires expired -> queue_free itself for its unpooled shot")
+			"sniper.gd wires expired -> queue_free itself for its unpooled shot")
 
 	var freed := false
 	for _i in 30:  # 30 physics frames at 60fps = 0.5s, far short of the 18s max_time ceiling

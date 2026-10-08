@@ -49,7 +49,7 @@ func _draw() -> void:
 			var tip := Vector2.UP.rotated(current_angle) * LINE_LENGTH
 			draw_line(Vector2.ZERO, tip, LINE_COLOR, LINE_WIDTH)
 
-## Called each frame by SniperBehavior.tick() or SniperEnemy._process() with t in [0.0, 1.0].
+## Called each frame by SniperBehavior.tick() or Sniper._process() with t in [0.0, 1.0].
 func update_charge(t: float) -> void:
 	charge_fraction = t
 	queue_redraw()

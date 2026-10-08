@@ -193,7 +193,7 @@ b.sniper().at(-260, 400).move(b.straight(100, -PI / 2 - PI / 12)).shoot_at_playe
 ### `sniper_enemy` — Sniper Enemy (hovering)
 
 **Builder:** `b.sniper_enemy()`  
-**Scene:** `sniper_enemy.tscn`  
+**Scene:** `sniper.tscn`  
 **Movement:** Must use a **sequence movement**: fly in → hold → fly out.  
 **Shoots:** Yes — fires `shot_count` aimed sniper shots while hovering.  
 **HP:** Medium  

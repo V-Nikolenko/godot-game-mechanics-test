@@ -1,5 +1,5 @@
-# assault/scenes/enemies/sniper_enemy/sniper_enemy.gd
-class_name SniperEnemy
+# assault/scenes/enemies/sniper/sniper.gd
+class_name Sniper
 extends BaseEnemy
 
 ## Sniper that is carried in/out by EnemyPathMover (sequence movement) and

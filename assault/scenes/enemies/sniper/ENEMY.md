@@ -9,12 +9,12 @@
 
 | Property | Value |
 |---|---|
-| HP | 60 (from `sniper_enemy.tscn` Health node — no config file exists) |
+| HP | 60 (from `sniper.tscn` Health node — no config file exists) |
 | Damage | 20 contact (BaseEnemy default contact HitBox; no `collision_damage` config) / sniper bullet damage per `enemy_sniper_bullet.tscn` |
 | Speed | n/a internally — movement is supplied by the `.move()` sequence path |
 | Sprite | `sniper.png` |
-| Scene | `sniper_enemy.tscn` |
-| Config | n/a — there is no `sniper_enemy_config` resource; tuning lives as constants/exports in `sniper_enemy.gd` |
+| Scene | `sniper.tscn` |
+| Config | n/a — there is no `sniper_config` resource; tuning lives as constants/exports in `sniper.gd` |
 
 ---
 
@@ -39,7 +39,7 @@ APPROACH ──FLY_IN_TIME (2.5 s)──▶ AIM ──2.0 s──▶ LOCK ──
 
 **Initial phase:** `APPROACH`
 
-> Note: phases are an `enum` inside `sniper_enemy.gd`, not separate `State` node files — there is no `states/` folder. Constants are listed below.
+> Note: phases are an `enum` inside `sniper.gd`, not separate `State` node files — there is no `states/` folder. Constants are listed below.
 
 ### APPROACH
 - Holds `rotation = PI` (nose-down) against `EnemyPathMover`. After `FLY_IN_TIME` (2.5 s) → AIM.
@@ -69,7 +69,7 @@ APPROACH ──FLY_IN_TIME (2.5 s)──▶ AIM ──2.0 s──▶ LOCK ──
 | `FLY_IN_TIME` (const) | `2.5` | Approach duration; must match the path's fly-in step. |
 | `score_value` (set in `_ready()`) | `50` | Points on kill. |
 
-(No `.tres`/`.gd` config resource exists — values read directly from `sniper_enemy.gd`. HP 60 comes from the `.tscn` Health node.)
+(No `.tres`/`.gd` config resource exists — values read directly from `sniper.gd`. HP 60 comes from the `.tscn` Health node.)
 
 ---
 
@@ -83,8 +83,8 @@ APPROACH ──FLY_IN_TIME (2.5 s)──▶ AIM ──2.0 s──▶ LOCK ──
 ## Files
 
 ```
-sniper_enemy/
+sniper/
 ├── ENEMY.md            ← this file
-├── sniper_enemy.tscn
-└── sniper_enemy.gd
+├── sniper.tscn
+└── sniper.gd
 ```
