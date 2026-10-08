@@ -1,4 +1,5 @@
 VERDICT: CHANGES_REQUESTED
+(Round 2 verdict; round 1's verdict was CHANGES_REQUESTED — see below.)
 
 # Review: Enemy rework, phase 4 (Bomber, Sniper, Ram Corvette), plan Revision 1 and tasks.json
 
@@ -280,3 +281,150 @@ silhouette R4.1 asks for.
   `:340-370` lists the drones that must not perceive the player at frame 0. Both need the new groups (t20).
 - **Race-mode mine.** `assault/scenes/race/track/mine.gd` already uses group `mines`. Worth a line in §7 for Ph7, so
   the two mine concepts are reconciled there rather than collide.
+
+---
+
+# Review round 2 (2026-10-08)
+
+VERDICT: CHANGES_REQUESTED
+
+Reviewer: independent plan review, round 2. Read `3-plan.md` (Revision 2, incl. §9), `tasks.json`, `1-context.md`, `2-research.md`,
+DECISIONS Ph4 section, and re-checked the code: `bullet.gd`, `homing_missile.gd`, `warhead_missile.gd`,
+`hurtbox_component.gd`, `hitbox_component.gd`, `bullet_pool.gd`, `contact_profile.gd`, `player_base.gd`,
+`open_space/.../player_ship.gd`, `enemy_mover.gd`, `anchor_idle.gd`, `engagement_budget.gd`, `target_info.gd`,
+`arena_camera.gd`, `assault_corridor_constraint.gd`, `level_1_director.gd`, `warhead_missile_shooting_state.gd`,
+`sniper_behavior.gd`, `sniper_shot.tres`, the asteroid scenes and the test files the tasks edit.
+
+## Round-1 findings
+
+| # | Status | Evidence |
+|---|---|---|
+| 1 Bomber prediction time base | **Partially** | Fixed: undamped wall lead on the bomber's timeline (§2.4 item 1), re-plan every 0.25 s until RUN entry, drops by distance around `s*`, live-player assertion added. The fixed-point argument (line stands still for a constant-velocity player) checks out. **Not fixed:** with the plan's own mine numbers the wall still cannot hurt the player it is laid for, and the new assertion still passes. See new finding B1. |
+| 2 Ram deferral / `charge_max_time` | Resolved | Attack gate `remaining() ≥ line_up_cap`, LINE_UP capped 0.5 s and never defers, `charge_max_time` 1.45 s hard cap (§2.6.2). Arithmetic re-checked: 1.45 × 620 = 899 ≥ 420 + 0.6 × 420 + 220 = 892 (Assault player max 400 px/s, `move_state.gd:20-21`, gives 880). 73.2 s row: −2.8 + 4.5 + 2.1 + 4.55 + 0.5 = 8.85 < 10, slack 1.15 s, correct. World-rect diagonal 2274 px correct (`arena_camera.gd:88-112`, 1608²). Forced-first-LINE_UP boundary row present (t17, t22). Lever-floor nit: N4. |
+| 3 Attack inside the Assault budget | Resolved | §2.9.4 + rows in t10/t13/t17, boundary with cruise 160. Ram top-wide re-checked: spawn (±540, −800) px vs stub (0, +200) = 1136 px, (1136 − 420)/280 + 0.28 ≈ 2.8 s (side-offset path ≈ +0.16 s), WIND_UP ≈ 3.4 s < 4.5. The Assault arena does not scroll (`ArenaCamera` pans an offset only), so no scroll term is missing. Residuals: N3, N5. |
+| 4 Ordnance lifetimes | Resolved | 1800/120 = 15 ≤ 16; 1.5 + (2400 − 135)/380 = 7.46 ≤ 10; mine 8 < 10; by-name exclusion from `_every_shipped_enemy_bullet_speed()` (`test_enemy_bullet_lifetime.gd:63-117`). The pursuit bomb's acceleration ramp is unmodelled but sits inside 2.5 s of slack. |
+| 5 "High-impact" and "stagger" narrowed | Resolved | X12: `sniper_behavior.gd:85` sets `unlimited_pierce`, damage 40 (`sniper_shot.tres`) vs default 50, so a flag is the right discriminator. `bullet.gd:109-120` never consults the deflect query on that path, so the Sniper Shot crossing hull and plates behaves as the plan says once `ram_ships` is dropped. X13: `ContactProfile._on_contact(area)` receives the player HurtBox, `PlayerBase.apply_knockback` exists (`player_base.gd:132`), `OpenSpacePlayerShip extends PlayerBase` and has no knockback motion. DECISIONS wording is stale (N8). |
+| 6 Hub `lose_radius` | Resolved | `anchor_idle.gd:62-64` is actor–player. Inequalities re-checked: 1300 ≥ 1200, 1700 ≥ max(872, 1500) + 100, 1300 ≥ 1226. Full-cycle COMBAT rows present in t19. |
+| 7 Missing dependencies | Resolved | t8→t6, t11→t10, t15→t14, t18→t17, t19→t14, plus t21→t19, all present in `tasks.json`. One more collision was missed: N1. |
+| 8 Rocket volleys / TTK | Resolved on paper | Analysis, t16 volley rows and owner question §8.6 are there. However, "one homing volley strips all three plates" rests on the plate rule that B2 shows is order-dependent: the three homing rockets spawn 7 px apart at the same range (`warhead_missile_shooting_state.gd:70-71`), so they reach the first plate in the same frame. The warhead geometry claim also needs a constraint (N10). |
+| 9 RailTrail weakref | Resolved | One-shot `expired` plus a weakref kept only for `cancel_active()`; t13 row with a recycled round. |
+| 10 Beam recast wording | Resolved | §2.2.2 and t2 say the loop is new code. |
+| 11 Rename criteria vs assets | Resolved | t7 renames no PNG, assets excluded, t18 deletes them; t12 "behaviour unchanged". |
+| 12 `test_base_enemy.gd` cases | Resolved | Every named case exists (`test_base_enemy.gd:112,156,233,253,270,296,303,339`). |
+| 13 Count gate / replay | Resolved, with a new contradiction | Measured exits, cloud_descent count gate, replay from ≤ 62.0 s are all there. The new "spawns all 9 snipers and 6 rams" assertion is unsatisfiable from 62.0 s (N2). |
+| 14 Bomber body | Resolved | Shared `RectangleShape2D`; the gates are path-keyed and compare `get_rect()`s (`test_enemy_hurtbox_geometry.gd:159-162`), so a rectangle works with no roster edit. |
+| 15 Wording points | Resolved | |
+
+## New findings
+
+### B1. BLOCKING: the mine wall cannot damage a player who holds course, and the new live-player assertion cannot see it (R4.5) (t6, t10)
+
+These figures use the plan's own numbers (§2.3 table; §2.4 items 1 and 5). The player moves straight at the t10 test speed of 220 px/s.
+
+- **Timing at RUN entry.** `t_wall` = 180/170 + 0.5 + 0.4 = 1.96 s, so the line centre is 431 px ahead.
+- **Middle mine rest point.** It is bowed up to `arc_depth` 30 px toward the player, so it rests about 401 px ahead.
+- **Arm time.** The mine is released no earlier than when the bomber reaches `s*` (1.06 s), plus `e/170` for the backward ejection. It arms 0.5 s after that, at ≥ 1.56 s.
+- **The player is already inside the trigger radius when it arms.** At 1.56 s the player is at ≥ 343 px, ≤ 58 px from the mine. It crossed the 80 px `trigger_radius` at 1.46 s, before arming.
+- **Best case: the mine misses.** If arming checks existing overlaps, the 0.5 s warning detonates the mine at ≥ 2.06 s. The player is then ≥ 52 px past it, outside the 48 px blast.
+- **Worst case: it never fires.** If arming reacts only to `area_entered`, the mine never triggers.
+- **The neighbouring mines (±70 px lateral) also miss:** the player is about 100 px from each at detonation.
+- **General bound.** A straight-moving player can only be hit at speed ≤ (`trigger_radius` + blast) / warning = (80 + 48) / 0.5 = 256 px/s.
+- **The bound is below normal play speeds.** MINE is chosen for 150–440 px/s. The Open Space ship cruises at 420 (`player_ship.gd:10`), and the Assault fighter moves at 360–400 (`move_state.gd:20-21`). At the player's normal speed the wall is harmless unless they steer into it. That contradicts the plan's own fairness claim, "a committed turn, a stop or a reverse escapes it".
+- **Both t10 live-player clauses still pass on this design.** The middle mine is "ahead at arm time" by about 58 px. The path "passes within `trigger_radius` after arming". So R4.5 can still ship inert with every gate green, which was the point of round-1 finding 1.
+- **R4.5's own example is now excluded without being listed.** R4.5 (`1-context.md:28`) says "if the player is boosting right, the bomber drops a mine chain ahead". Revision 2 added `mine_speed_max` 440, which gives a boosting player a pursuit bomb instead. The reason appears only in §2.4 item 2. §6 marks R4.5 as covered, and §2.0, §7 and §8 do not mention the exclusion.
+
+**Resolve:**
+- (a) Add a config inequality, asserted in t6/t10: `(trigger_radius + mine_blast_radius) / mine_warning ≥ mine_speed_max`. For example, a 0.2 s warning gives 640 ≥ 440. Alternatively, detonate on entry once armed, with the armed blink as the telegraph.
+- (b) State that arming counts from release. On arming, the mine must check `get_overlapping_areas()`. Add a t6 row: a stub already inside the radius at arm time triggers it.
+- (c) Measure the wall margin to the middle mine's **trigger edge**: add `(trigger_radius + arc_depth) / |v̄|` to `t_wall`. That is ≤ 0.73 s at 150 px/s, so it stays under `mine_horizon`.
+- (d) Replace t10 assertion (2)'s second clause with an **outcome**, in both harnesses: a stub with a real player HurtBox (layer 128), flying straight at 220 px/s and at `mine_speed_max`, takes a wall `ContactBlast` hit. The same stub turning 90° at RUN entry takes none. Show once that it fails on the current Revision 2 numbers.
+- (e) For the boosting example, either honour it, or record it as an X-row with a §6 R4.5 note and a §8 owner question.
+
+### B2. BLOCKING: `ArmorPlate.deflects_hit` depends on physics-callback order, so "a rocket is consumed by the plate it breaks" is not deterministic (t4, t16)
+
+**The design.** The plate applies damage in its own HurtBox's `area_entered`, and the rocket asks `deflects_hit(hb) = not is_alive() or not breaks_on(hb)` in *its* `area_entered` (§2.2.4). The hit being judged changes the answer, so the outcome depends on which of the two areas' signals Godot flushes first.
+
+**The codebase already warns about this.** `bullet.gd:137-138` says the synchronous query is safe *only because* "`SpaceStation.is_armored()` … a hit against the core itself never changes". That premise does not hold for a plate.
+
+**What each flush order does:**
+- **Plate first:** the plate breaks, then the rocket sees a dead plate, is **not** consumed, and flies on. This fails t4's "a real warhead rocket … breaks it … and the rocket is consumed".
+- **Rockets first (two rockets in one frame):** both see a live plate and both are consumed. This fails t4's "the second is not consumed".
+- **Interleaved:** only the order R1, plate, R2 satisfies both rows.
+
+**The volley rows depend on it too.** t16's "one homing volley strips all three plates" relies on exactly this case. The three homing rockets spawn 7 px apart at the same range (`warhead_missile_shooting_state.gd:70-71`), so they arrive in the same frame.
+
+**Risk.** t4 is medium on sonnet with no further planning, so it will meet red or flaky rows and loosen them.
+
+**Resolve:** make the plate's decision **per HitBox and idempotent**:
+- A single `_resolve(hb)` is called from both the plate's `area_entered` and `deflects_hit(hb)`. The first call for a given `hb` decides:
+  - alive and `breaks_on` → apply damage, record `hb` as the consumer, and return "not deflected";
+  - otherwise → record "pass" and flash once.
+- Later calls return the recorded result.
+- Key the record by instance id, and keep it bounded or cleared on break.
+- Add a t4 row that runs the two-rocket case in both callback orders (calling the two handlers directly in each order) and asserts the same outcome: the breaker is consumed and the second rocket passes.
+
+### N1. NON-BLOCKING: `t8-rename-sniper` and `t9-bomber-shell` are unordered and edit the same files (`tasks.json`)
+
+- Both edit `test_enemy_bullet_lifetime.gd`: t8 renames the sniper references at `:15-18,278-310`, and t9 "points t6's lifetime rows at the real BomberConfig fields".
+- t9 deletes `bomb.tscn`, which comments name in `test_base_enemy.gd:11`, `test_config_instance_isolation.gd:53` and `test_enemy_hurtbox_geometry.gd:315`. t7/t8 edit all three files.
+
+**Resolve:** add `t9 → t8`. t12 already waits on both, so the critical path does not grow.
+
+### N2. NON-BLOCKING: the t22 replay assertion contradicts its own start time (t22)
+
+- cloud_descent's snipers trigger at 11.0, 32.0, 53.0 and 62.0 + 1.2 s. Its rams trigger at 28.0, 38.0 + 0.6, 50.0 + 1.5 and 72.0 + 1.2 s (`level_1_director.gd:849-986`).
+- A replay that starts at 62.0 s spawns 2 snipers and 1 ram, not "all 9 snipers and 6 rams" (§4 t22 row, t22 acceptance).
+
+**Resolve:** either replay from 0.0 and assert 15 spawns, or keep ≤ 62.0 s and assert the 63.2 s pair and the 73.2 s ram.
+
+### N3. NON-BLOCKING: the sniper's attack-in-budget spawn classes omit its farthest spawns (t13)
+
+`b.sniper_enemy().at(±120, −500)` (`level_1_director.gd:277,282`, deep_space at 0.5 s) is 1000 px above the camera centre and is not in §2.9.4's hand list. Derive the classes from the t1 pin's rows rather than a hand list.
+
+### N4. NON-BLOCKING: lever 4's ram budget floor is inconsistent with the attack gate (§2.9.2, t21)
+
+- The lever's floor is "worst spawn-to-WIND_UP + 0.25 s".
+- The gate needs `remaining() ≥ line_up_cap` at LINE_UP entry, so the floor must be ≥ worst spawn-to-LINE_UP + `line_up_cap`.
+
+The attack row would catch a wrong floor, but state the right formula.
+
+### N5. NON-BLOCKING: the Assault side offset is undefined for centred rams (t17)
+
+"Offset sideways … toward the side the Corvette is on" has no answer for the 8 of 22 rams that spawn at x = 0 (`level_1_director.gd:341,385,610,634,717,763,906,986`). Specify a tie-break, e.g. away from the player's side of the corridor centre, or `rng`.
+
+### N6. NON-BLOCKING: one more legacy test for t12 to name (t12)
+
+`test_enemy_bullet_lifetime.gd::test_the_unpooled_sniper_shot_is_freed_after_crossing_the_legacy_rect` (`:286-310`) calls `SniperEnemy._phase_fire()`, which t12 deletes. Name it to be retired or rewritten, in the same spirit as round-1 finding 12.
+
+### N7. NON-BLOCKING: the Assault variant of t10's live-player test needs a stated set-up (t10)
+
+- A 220 px/s stub moves 900–1300 px over the approach plus the run. The arena is 1480 px wide (`assault_corridor_constraint.gd::_visible_rect`).
+- So P̂ gets clamped while the live stub keeps going.
+
+**Resolve:** specify the Assault set-up (bomber `start_engaged` near its run start, stub starting at the far wall), or exempt clamped rest points.
+
+### N8. NON-BLOCKING: stale wording in DECISIONS
+
+The DECISIONS Ph4 section still says "A plate answers 'deflect anything that is not ROCKET'". That contradicts X12; it should read "not ROCKET and not high-impact".
+
+### N9. NON-BLOCKING: the shared attack-in-budget harness (t10, t13, t17)
+
+t10, t13 and t17 can run concurrently, and each builds a WaveManager + ArenaCamera + stub harness. Say the harness stays file-local, or let t10 own a `tests/helpers/` file that t13 and t17 depend on.
+
+### N10. NON-BLOCKING: the warhead "strips exactly one plate" row needs a geometry constraint (t16)
+
+- The outer warheads fly at ±16 px lateral with a capsule of r 7 (`warhead_missile_shooting_state.gd:54`, `warhead_missile.tscn:43-45`), so they reach ±23 px.
+- The side plates sit at about ±33.5 px.
+
+**Resolve:** state the constraint "side-plate inner edge > 23 px lateral" in t16. Otherwise the row fails on geometry and the plates get moved arbitrarily.
+
+## What holds up
+
+- **Every round-1 resolution except finding 1's is genuine.** The arithmetic re-checks (ram deferral and slack, charge envelope, ordnance lifetime rows, lose-radius inequalities, ram time-to-attack from 1136 px) are correct.
+- **The dependency graph has no other same-file collisions I could find.**
+- **X12 and X13 are built cheaply on existing duck types** (`unlimited_pierce`, `apply_knockback`), with no new hierarchy.
+- **Several design choices are sound:**
+  - the ram's attack gate reuses the `EngagementBudget.remaining()` precedent;
+  - LOS's opt-in blockers fit the real asteroid bodies (`CharacterBody2D` on default layer 1, group `asteroids`);
+  - `persist_after_owner_death` matches `BulletPool`'s real `_container`, lambda and `_recycle` shape.
+- **The plan stays inside Ph4.** It defers the mine families, rockets, squad messages, difficulty tiers and wrecks to the right phases.
