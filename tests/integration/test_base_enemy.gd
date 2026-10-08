@@ -8,7 +8,7 @@
 ##
 ## `_ENEMY_ROOT`'s subdirectories are swept for `<dir>/<dir>.tscn`, and only kept when the
 ## INSTANTIATED root `is BaseEnemy` — not merely "the directory has a scene", which is what
-## excludes `bomber/bomb.tscn` (a HitBox-less projectile, not an enemy) without a hand-written
+## excludes `enemy_ordnance/*.tscn` and similar non-enemy scenes without a hand-written
 ## skip list. Same sweep shape as `test_config_instance_isolation.gd`, checking type instead of
 ## config presence. A new enemy directory is covered automatically the day it lands.
 ##

@@ -206,11 +206,10 @@ func test_a_synthetic_100px_per_s_round_fails_the_sweep() -> void:
 # (120 and 90 px/s) must never enter `_every_shipped_enemy_bullet_speed()`: they would trip the
 # >= 150 px/s rule and shift the derived 18 s / 2400 px round defaults.
 #
-# Speeds and times are read from `BomberConfig`'s ordnance fields. Until t9 creates them, the fixture
-# config carries the same field names (tests/helpers/ordnance_config_fixture.gd).
+# Speeds and times are read from the shipped `BomberConfig` ordnance fields (bomber_config.tres).
 # ---------------------------------------------------------------------------------------------
 
-const _OrdnanceCfg := preload("res://tests/helpers/ordnance_config_fixture.gd")
+const _SHIPPED_BOMBER: BomberConfig = preload("res://assault/scenes/enemies/bomber/bomber_config.tres")  # read only
 
 
 func _ordnance_lifetime(kind: EnemyOrdnance.Kind) -> ProjectileLifetime:
@@ -232,7 +231,7 @@ func _two_speed_kind_clears(window: float, launch_speed: float, final_speed: flo
 
 
 func test_the_gravity_bomb_clears_its_lifetime_at_its_slowest_fired_speed() -> void:
-	var cfg = _OrdnanceCfg.new()
+	var cfg: BomberConfig = _SHIPPED_BOMBER
 	var lt := _ordnance_lifetime(EnemyOrdnance.Kind.GRAVITY_BOMB)
 	assert_true(_constant_speed_kind_clears(lt.max_distance,
 			minf(cfg.gravity_bomb_speed, cfg.rail_bomb_speed), lt.max_time),
@@ -240,7 +239,7 @@ func test_the_gravity_bomb_clears_its_lifetime_at_its_slowest_fired_speed() -> v
 
 
 func test_the_pursuit_bomb_clears_its_lifetime_through_both_of_its_speeds() -> void:
-	var cfg = _OrdnanceCfg.new()
+	var cfg: BomberConfig = _SHIPPED_BOMBER
 	var lt := _ordnance_lifetime(EnemyOrdnance.Kind.PURSUIT_BOMB)
 	assert_true(_two_speed_kind_clears(cfg.pursuit_steer_window, cfg.pursuit_launch_speed,
 			cfg.pursuit_final_speed, lt.max_distance, lt.max_time),
@@ -248,7 +247,7 @@ func test_the_pursuit_bomb_clears_its_lifetime_through_both_of_its_speeds() -> v
 
 
 func test_the_mine_is_time_bound_only() -> void:
-	var cfg = _OrdnanceCfg.new()
+	var cfg: BomberConfig = _SHIPPED_BOMBER
 	var lt := _ordnance_lifetime(EnemyOrdnance.Kind.MINE)
 	assert_eq(lt.max_distance, 0.0, "a stationary mine has no distance cap")
 	assert_lt(cfg.mine_life, lt.max_time, "the mine fizzles before its backstop")
@@ -261,7 +260,7 @@ func test_a_synthetic_100px_per_s_gravity_bomb_fails_its_row() -> void:
 
 
 func test_no_ordnance_speed_is_in_the_round_speed_list() -> void:
-	var cfg = _OrdnanceCfg.new()
+	var cfg: BomberConfig = _SHIPPED_BOMBER
 	var speeds := _every_shipped_enemy_bullet_speed()
 	for s: float in [cfg.gravity_bomb_speed, cfg.rail_bomb_speed, cfg.pursuit_launch_speed]:
 		assert_false(speeds.has(s),

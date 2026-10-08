@@ -367,8 +367,8 @@ b.wave(50.0, [
 
 **Builder:** `b.bomber()`  
 **Scene:** `bomber.tscn`  
-**Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
-**Shoots:** Yes — drops bombs at `bomb_interval`.  
+**Movement:** AI-driven (`BomberBrain` + `EnemyMover`); `.move()` puts it on a rail, where it drops a gravity bomb DOWN every `rail_bomb_interval`. Bomber runs (mines, bombs, pursuit bomb) arrive with Phase 4 t10.  
+**Shoots:** Yes — gravity bombs, mines, pursuit bombs (`EnemyOrdnance`), shootable.  
 **HP:** Medium–High  
 **Score:** Medium–High
 
@@ -376,8 +376,11 @@ b.wave(50.0, [
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `movement_speed` | 80.0 | Irrelevant — use `.move()` speed. |
-| `bomb_interval` | 1.2 s | Seconds between bombs. |
+| `max_speed` | 240.0 | Transit speed. |
+| `run_speed` | 170.0 | Bombing-run speed. |
+| `rail_bomb_interval` | 1.2 s | Seconds between bombs while on a rail. |
+
+(Plus the ordnance and prediction fields: read `bomber_config.gd`.)
 
 **Examples:**
 ```gdscript

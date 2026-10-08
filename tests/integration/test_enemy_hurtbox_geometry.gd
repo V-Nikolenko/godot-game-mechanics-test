@@ -312,7 +312,7 @@ func test_the_station_core_hurtbox_spans_the_hull_not_just_the_core() -> void:
 ##
 ## Top-level directories only, deliberately: `assault/scenes/enemies/` also holds loose scripts
 ## (`base_enemy.gd`, `enemy_path_mover.gd`) and its subdirectories hold non-entity scenes
-## (`fighter/states/`, `bomber/bomb.tscn`), all of which a recursive walk would raise
+## (`fighter/states/`), all of which a recursive walk would raise
 ## as false failures.
 func test_every_enemy_scene_is_in_the_roster() -> void:
 	var rostered: Array[String] = []

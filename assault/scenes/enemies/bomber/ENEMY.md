@@ -1,7 +1,11 @@
-# Bomber — Horizontal bomb-dropper
+# Bomber — area-denial bomb-dropper
 
-**Role:** Crosses the screen horizontally and rains gravity bombs onto the player's lane, forcing repositioning.
-**Fantasy / threat:** A slow, fat target that's easy to shoot — but ignore it and the bombs it leaves behind will catch you. Area denial on a timer.
+**Role:** Drops persistent ordnance (gravity bombs, proximity mines, a pursuit bomb) that forces the player to reposition.
+**Fantasy / threat:** A wide, slow, easy-to-hit target — but ignore it and what it leaves behind catches you. Every piece of ordnance can be shot down.
+
+> **Build state (Phase 4, t9 shell).** The scene, config, pools, rail fallback and Assault exit are built.
+> The AI bombing runs (prediction, ordnance choice, the bombing line, the Dubins approach, escape) are t10;
+> until then the AI Bomber only intercepts the player. Plan: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.4.
 
 ---
 
@@ -9,42 +13,32 @@
 
 | Property | Value |
 |---|---|
-| HP | 150 (from `bomber_config.tres`; the `.tscn` Health default of 250 is overwritten in `_ready()`) |
-| Damage | 35 contact (collision HitBox) / 40 per bomb (`bomb.tscn` HitBox) |
-| Speed | 80 (`movement_speed`) |
-| Sprite | `bomber.png` |
-| Scene | `bomber.tscn` |
-| Config | `bomber_config.tres` |
+| HP | 150 (`bomber_config.tres`; the `.tscn` Health node is overwritten in `_ready()`) |
+| Damage | 35 contact (`ContactHitBox`); ordnance blasts come from the config |
+| Speed | `max_speed` 240 transit, `run_speed` 170 for the bombing run |
+| Body | one 96 × 44 `RectangleShape2D`, shared by the body, `HurtBox` and `ContactHitBox` (the wings are shootable) |
+| Sprite | `bomber.png` (placeholder; nose-down) |
+| Scene / config | `bomber.tscn` / `bomber_config.tres` (flat `BomberConfig`) |
 
 ---
 
-## Behaviour & Movement
+## Behaviour
 
-- **Movement:** Self-managed in `_physics_process` — constant horizontal velocity `Vector2(direction * speed, 0)` (`direction` 1 = left-to-right, -1 = right-to-left). Frees itself when it passes the horizontal screen edge (+70 px margin). Despite the roster listing it as `EnemyPathMover`-driven, the script drives its own horizontal sweep; attaching `.move()` would suspend this via `set_physics_process(false)`.
-- **Attack:** Drops a `bomb.tscn` every `bomb_interval` (1.2 s) via a child `Timer` (fires independently of `_physics_process`). Each bomb falls at 120 px/s, auto-detonates after a 5 s fuse, or detonates 1 s after the player enters its 80-px proximity ring; the explosion HitBox deals 40 damage for 0.15 s.
-- **Death / scoring:** On HP 0, `BaseEnemy` emits `died`, plays explosion, awards `score_value` 80. Bombs already dropped persist and fall independently.
-
----
-
-## Config exports
-
-| Export | Default | Meaning |
-|---|---|---|
-| `max_health` | `150` | HP (overrides the scene Health node). |
-| `collision_damage` | `35` | Contact HitBox damage. |
-| `score_value` | `80` | Points on kill. |
-| `counts_toward_wave_clear` | `true` | Counts toward wave-clear bonus. |
-| `movement_speed` | `80.0` | Horizontal sweep speed. |
-| `bomb_interval` | `1.2` | Seconds between bomb drops. |
-
-(Read the real defaults from `bomber_config.gd` and `bomber_config.tres`.)
+- **Brain:** `BomberBrain` (`Phase { APPROACH, RUN, ESCAPE, REPOSITION, DISENGAGE }`, `enter_phase()` seam). APPROACH is a plain intercept; RUN / ESCAPE / REPOSITION are t10. Assault: an `EngagementBudget` (`engage_seconds` 8) then DISENGAGE, which curves out of the world rect and frees.
+- **Mover:** `EnemyMover` AUTO (`max_speed` 240, `acceleration` 260, `max_turn_rate` 1.6).
+- **Ordnance:** `Bomber.drop(kind, dir, speed, target_point)` takes it from `GravityBombPool` / `MinePool` / `PursuitBombPool`, root children with `persist_after_owner_death = true`, so a bomb or mine already dropped outlives the bomber. Pool sizes follow `EnemyOrdnanceScenes.pool_size_for()` (gated by `test_bomber.gd`).
+- **Rail fallback:** while `is_ai_suspended()`, `Bomber._process` drops a gravity bomb `Vector2.DOWN` at `rail_bomb_speed` (120) every `rail_bomb_interval` (1.2 s), aimed `rail_bomb_range` below. Nothing writes motion.
+- **Death / scoring:** `BaseEnemy` emits `died`, awards `score_value` 80.
 
 ---
 
 ## Spawn notes
 
-- WaveBuilder method: `b.bomber()` — see `docs/enemy-roster.md`.
-- The roster examples pair it with a `.move()` and escort drones; in practice the script also self-drives a horizontal pass. Use as a slow area-denial threat that the player must clear before its bombs accumulate.
+- WaveBuilder method: `b.bomber()` — see `docs/enemy-roster.md`. Level 1 still spawns it on a rail (`.move(b.straight(...))`).
+
+## Tests
+
+`tests/integration/test_bomber.gd`; the `Bomber` cases in `test_enemy_dual_mode.gd`; the ordnance itself in `test_enemy_ordnance.gd`.
 
 ---
 
@@ -55,7 +49,6 @@ bomber/
 ├── ENEMY.md            ← this file
 ├── bomber.tscn
 ├── bomber.gd
-├── bomber_config.gd / .tres
-├── bomb.tscn
-└── bomb.gd
+├── bomber_brain.gd
+└── bomber_config.gd / .tres
 ```

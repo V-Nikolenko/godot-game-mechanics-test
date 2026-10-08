@@ -7,16 +7,15 @@
 ## the same overlap queries the game uses. The blast is counted as the `ContactBlast` nodes that
 ## enter the container.
 ##
-## Config values come from `tests/helpers/ordnance_config_fixture.gd` (the field names `BomberConfig`
-## will carry), never a typed number.
+## Config values come from the shipped `BomberConfig` (bomber_config.tres), read only, never a typed number.
 extends GutTest
 
-const CfgScript := preload("res://tests/helpers/ordnance_config_fixture.gd")
+const CFG: BomberConfig = preload("res://assault/scenes/enemies/bomber/bomber_config.tres")
 
 const KINDS: Array[EnemyOrdnance.Kind] = [
 	EnemyOrdnance.Kind.GRAVITY_BOMB, EnemyOrdnance.Kind.MINE, EnemyOrdnance.Kind.PURSUIT_BOMB]
 
-var _cfg = CfgScript.new()
+var _cfg: BomberConfig = CFG  # shared resource: read, never write
 var _container: Node2D
 var _blasts: Array[ContactBlast] = []
 ## radius and damage of each blast, read as it enters the tree (it frees itself after a few frames)

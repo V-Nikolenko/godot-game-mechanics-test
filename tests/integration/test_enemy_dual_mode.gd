@@ -369,3 +369,60 @@ func test_gatling_disengage_frees_it_in_assault_only(mode: String = use_paramete
 			break
 	assert_eq(freed, mode == "assault",
 		"%s: the Gatling is freed by its budget in Assault and never in Open Space" % mode)
+
+
+# ── The Bomber (Phase 4, t9) ─────────────────────────────────────────────────────────────────────
+
+const BOMBER_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/bomber/bomber.tscn")
+
+
+func _spawn_bomber(harness, pos: Vector2) -> Bomber:
+	var entity := BOMBER_SCENE.instantiate() as Bomber
+	entity.global_position = pos
+	harness.root.add_child(entity)
+	entity.set_physics_process(false)  # hand-ticked, same technique as the Razor Drone above
+	entity.set_process(false)
+	return entity
+
+
+## Mid-corridor the Assault constraint never engages, so the Bomber's APPROACH is the same curve in
+## both modes for the same inputs (P-17: relative to the constraint).
+func test_bomber_approach_mid_corridor_is_identical_in_both_modes() -> void:
+	var open_harness = HARNESS.open_space()
+	var assault_harness = HARNESS.assault()
+	add_child_autofree(open_harness.root)
+	add_child_autofree(assault_harness.root)
+	open_harness.player.global_position = Vector2(640.0, 360.0)
+	assault_harness.player.global_position = Vector2(640.0, 360.0)
+
+	var start := Vector2(100.0, 60.0)
+	var open_bomber := _spawn_bomber(open_harness, start)
+	var assault_bomber := _spawn_bomber(assault_harness, start)
+	assert_true((assault_bomber.get_node("EnemyMover") as EnemyMover).constraint is AssaultCorridorConstraint,
+		"sanity: the Assault bomber runs under the corridor")
+	for _i in 30:
+		_tick(open_bomber, DT)
+		_tick(assault_bomber, DT)
+
+	assert_almost_eq(open_bomber.velocity.x, assault_bomber.velocity.x, 0.001)
+	assert_almost_eq(open_bomber.velocity.y, assault_bomber.velocity.y, 0.001)
+	assert_gt(open_bomber.velocity.length(), 0.0, "sanity: it is moving")
+
+
+## The mode-specific half: the budget frees the Bomber in Assault, and nothing ever forces it out in
+## Open Space.
+func test_bomber_disengage_frees_it_in_assault_only(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 360.0)
+	var bomber := _spawn_bomber(harness, Vector2(640.0, 60.0))
+	bomber.config.engage_seconds = 0.2
+	var freed := false
+	for _i in 1500:
+		_tick(bomber, DT)
+		if bomber.is_queued_for_deletion():
+			freed = true
+			break
+	assert_eq(freed, mode == "assault",
+		"%s: the Bomber is freed by its budget in Assault and never in Open Space" % mode)

@@ -300,7 +300,7 @@ Four things to know before extending it:
 - **The roster has a completeness guard**, which the two older files still lack: a `DirAccess`
   pass over the top level of `assault/scenes/enemies/` and `assault/scenes/allies/` fails if a
   `<dir>/<dir>.tscn` exists that the roster does not list. Top level only — the enemies directory
-  also holds loose scripts, and subdirectories hold non-entity scenes (`bomber/bomb.tscn`).
+  also holds loose scripts, and subdirectories hold non-entity scenes (`fighter/states/`).
 
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
