@@ -177,3 +177,26 @@ static func turn_toward(current_dir: Vector2, desired_dir: Vector2, max_rate: fl
 	var diff := current.angle_to(desired)
 	var step := clampf(diff, -max_rate * delta, max_rate * delta)
 	return current.rotated(step)
+
+
+## Phase 4 addition (docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md §2.2.1).
+
+
+## Open the distance to a threat without fleeing straight down its line of advance: away from
+## `threat_pos`, plus a sideways share (`lateral_weight` of the away component, on the `side`
+## the caller chose; `side < 0` is the left-hand mirror, anything else the right, as in `strafe`).
+## A *closing* threat (moving along the away axis, i.e. toward `pos`) doubles the lateral share —
+## a straight flight from a faster pursuer is the one direction it always catches. Always
+## `max_speed` long. Coincident positions have no away axis, so the ship leaves across the
+## threat's velocity, else `RIGHT` — finite, never NaN.
+static func break_contact(pos: Vector2, threat_pos: Vector2, threat_vel: Vector2, side: float, max_speed: float, lateral_weight: float = 0.6) -> Vector2:
+	var offset := pos - threat_pos
+	if offset.length() < 1e-3:
+		var across := threat_vel.orthogonal().normalized()
+		if across == Vector2.ZERO:
+			across = Vector2.RIGHT
+		return across * max_speed
+	var away := offset.normalized()
+	var lateral := away.orthogonal() * (-1.0 if side < 0.0 else 1.0)
+	var weight := lateral_weight * (2.0 if threat_vel.dot(away) > 0.0 else 1.0)
+	return (away + lateral * weight).normalized() * max_speed

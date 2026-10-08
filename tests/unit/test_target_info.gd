@@ -126,10 +126,30 @@ func test_distance_from_and_relative_angle_from() -> void:
 	assert_almost_eq(info.relative_angle_from(Vector2.ZERO, Vector2.RIGHT), 0.0, 0.0001)
 
 
-func test_line_of_sight_stub_agrees_with_has_target() -> void:
-	assert_false(TargetInfo.new().line_of_sight(Vector2.ZERO))
-	var info := TargetInfo.of(_make_body(Vector2.ONE, Vector2.ZERO))
-	assert_true(info.line_of_sight(Vector2.ZERO))
+func test_line_of_sight_is_false_without_a_target() -> void:
+	var space := get_tree().root.world_2d.direct_space_state
+	assert_false(TargetInfo.new().line_of_sight(Vector2.ZERO, space))
+
+
+func test_line_of_sight_delegates_to_the_real_raycast() -> void:
+	var info := TargetInfo.of(_make_body(Vector2(400.0, 0.0), Vector2.ZERO))
+	await get_tree().physics_frame
+	var space := get_tree().root.world_2d.direct_space_state
+	assert_true(info.line_of_sight(Vector2.ZERO, space), "open space is clear")
+
+	var rock := StaticBody2D.new()
+	rock.collision_layer = CollisionLayers.ENVIRONMENT
+	var shape := CollisionShape2D.new()
+	shape.shape = CircleShape2D.new()
+	rock.add_child(shape)
+	rock.add_to_group("asteroids")
+	add_child_autofree(rock)
+	rock.global_position = Vector2(200.0, 0.0)
+	await get_tree().physics_frame
+	space = get_tree().root.world_2d.direct_space_state
+	assert_false(info.line_of_sight(Vector2.ZERO, space), "an asteroid on the segment blocks it")
+	assert_true(info.line_of_sight(Vector2.ZERO, space, [rock.get_rid()] as Array[RID]),
+		"an excluded blocker does not")
 
 
 func _make_body(pos: Vector2, vel: Vector2) -> CharacterBody2D:

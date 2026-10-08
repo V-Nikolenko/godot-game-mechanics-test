@@ -49,6 +49,7 @@ global/
 │   ├── movement_constraint.gd # MovementConstraint (RefCounted) — identity filter; mode constraints extend it
 │   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift/spiral/corkscrew/… primitives
 │   ├── target_info.gd         # TargetInfo — player resolver + prediction/intercept snapshot
+│   ├── line_of_sight.gd       # LineOfSight (RefCounted) — opt-in-blocker ray between two points (asteroids / blocks_line_of_sight())
 │   ├── engagement_budget.gd   # EngagementBudget (RefCounted) — Assault-only per-brain exit timer
 │   ├── burst_clock.gd         # BurstClock (RefCounted) — counts down an exact-size, evenly-spaced burst
 │   ├── dubins_path.gd         # DubinsPath (RefCounted) — shortest turn-radius-limited path between two poses
@@ -448,7 +449,7 @@ func tick(delta: float) -> void:
 ```
 
 - **Requests are per step.** `request_velocity()` (or a `Steering` wrapper: `seek`, `arrive`, `orbit`,
-  `intercept`, `retreat_from`, `evade`, `strafe`, `hold_position`, `drift`, `spiral`, `corkscrew`,
+  `intercept`, `retreat_from`, `evade`, `break_contact`, `strafe`, `hold_position`, `drift`, `spiral`, `corkscrew`,
   `formation_slot`) is the one primary request — a second call replaces it; `add_nudge()` adds an
   offered correction (flocking's `separation`/`alignment`/`cohesion`, capped at a fraction of
   `max_speed` — there is no weighted blend of every term into the primary request); `face_toward()`
@@ -515,8 +516,13 @@ scattered `get_nodes_in_group("player")[0]` calls); `TargetInfo.of(node)` snapsh
 is `false` with no target, a non-positive `shot_speed`, or no `t >= 0` solution (the target outruns
 the shot). `aim_direction(from, shot_speed, accuracy)` blends direct aim at `position` (`accuracy
 0.0`) with the intercept point (`1.0`), clamped, falling back to direct aim whenever `intercept`
-fails — this is what `AttackController`'s aimed/gatling patterns call (above). `line_of_sight()` is
-a stub that always agrees with `has_target`; the real raycast is a later phase.
+fails — this is what `AttackController`'s aimed/gatling patterns call (above). `line_of_sight(from, space,
+exclude := [])` is a real raycast: it delegates to `LineOfSight.clear()` (mask `ENVIRONMENT | HAZARD_CONTACT`,
+bodies only; a hit blocks only if the collider is in group `asteroids` or answers `blocks_line_of_sight()`
+== true, every other body is excluded and the ray recast, at most 4 times, then the line counts as clear).
+Physics step only; tests await a physics frame after placing bodies. `Steering.break_contact(pos, threat_pos,
+threat_vel, side, max_speed, lateral_weight := 0.6)` flees the threat with a sideways share that doubles when
+the threat is closing (`EnemyMover.break_contact` wraps it).
 
 **`EngagementBudget` (`engagement_budget.gd`, `RefCounted`) is how an Assault AI enemy leaves the
 arena in time for an `ENEMIES_CLEARED` section to advance**, rather than living until killed —

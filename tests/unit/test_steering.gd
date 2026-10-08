@@ -143,6 +143,63 @@ func test_retreat_from_coincident_is_zero_no_nan() -> void:
 	_assert_no_nan(v)
 
 
+# ── break_contact (docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md §2.2.1) ───────────────────
+
+func test_break_contact_grows_distance_to_a_stationary_threat_every_step() -> void:
+	var threat := Vector2.ZERO
+	var pos := Vector2(200.0, 0.0)
+	var dt := 1.0 / 60.0
+	var previous := pos.distance_to(threat)
+	for i in 120:
+		pos += Steering.break_contact(pos, threat, Vector2.ZERO, 1.0, 300.0) * dt
+		var dist := pos.distance_to(threat)
+		assert_gt(dist, previous, "step %d must open the distance" % i)
+		previous = dist
+
+
+func test_break_contact_returns_exactly_max_speed() -> void:
+	for threat_vel in [Vector2.ZERO, Vector2(-80.0, 0.0), Vector2(80.0, 30.0)]:
+		var v := Steering.break_contact(Vector2(100.0, 40.0), Vector2.ZERO, threat_vel, 1.0, 275.0)
+		assert_almost_eq(v.length(), 275.0, 0.01)
+
+
+func test_break_contact_side_mirrors_the_lateral_component() -> void:
+	var left := Steering.break_contact(Vector2(100.0, 0.0), Vector2.ZERO, Vector2.ZERO, 1.0, 100.0)
+	var right := Steering.break_contact(Vector2(100.0, 0.0), Vector2.ZERO, Vector2.ZERO, -1.0, 100.0)
+	assert_almost_eq(left.x, right.x, 0.001, "the away component is the same either side")
+	assert_almost_eq(left.y, -right.y, 0.001, "the lateral component mirrors")
+	assert_ne(signf(left.y), 0.0)
+
+
+func test_break_contact_closing_threat_roughly_doubles_the_lateral_share() -> void:
+	var pos := Vector2(100.0, 0.0)
+	# Threat at the origin; away = +X. A velocity along +X is closing, along -X is opening.
+	var closing := Steering.break_contact(pos, Vector2.ZERO, Vector2(50.0, 0.0), 1.0, 100.0)
+	var opening := Steering.break_contact(pos, Vector2.ZERO, Vector2(-50.0, 0.0), 1.0, 100.0)
+	# |y / x| of the heading is the lateral weight: 0.6 opening, 1.2 closing.
+	assert_almost_eq(absf(opening.y / opening.x), 0.6, 0.001)
+	assert_almost_eq(absf(closing.y / closing.x), 1.2, 0.001)
+
+
+func test_break_contact_lateral_weight_is_a_parameter() -> void:
+	var v := Steering.break_contact(Vector2(100.0, 0.0), Vector2.ZERO, Vector2.ZERO, 1.0, 100.0, 0.0)
+	assert_almost_eq(v.y, 0.0, 0.001, "no lateral weight flees straight down the line")
+
+
+func test_break_contact_zero_distance_is_finite_and_max_speed_long() -> void:
+	var p := Vector2(10.0, 10.0)
+	for threat_vel in [Vector2.ZERO, Vector2(0.0, 90.0)]:
+		var v := Steering.break_contact(p, p, threat_vel, 1.0, 240.0)
+		_assert_no_nan(v)
+		assert_almost_eq(v.length(), 240.0, 0.01, "finite vector of max_speed length")
+
+
+func test_break_contact_zero_distance_leaves_across_the_threat_velocity() -> void:
+	var p := Vector2(10.0, 10.0)
+	var v := Steering.break_contact(p, p, Vector2(0.0, 90.0), 1.0, 100.0)
+	assert_almost_eq(v.dot(Vector2(0.0, 1.0)), 0.0, 0.01, "orthogonal to the threat's velocity")
+
+
 # ── strafe ────────────────────────────────────────────────────────────────────
 
 func test_strafe_is_perpendicular_side_positive() -> void:
