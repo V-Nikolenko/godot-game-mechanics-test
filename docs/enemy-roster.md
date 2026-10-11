@@ -156,79 +156,16 @@ b.ram().at(0, 400).move(b.straight(260, PI))
 
 ---
 
-### `sniper` — Sniper Skimmer
+### `sniper` — Sniper (alias `sniper_enemy`)
 
-**Builder:** `b.sniper()`  
-**Scene:** `sniper_skimmer.tscn`  
-**Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
-**Shoots:** Yes — fires once at midpoint of its travel. Always aims at player.  
-**HP:** Low  
-**Score:** Low–Medium
-
-**Config fields** (`SniperConfig`):
-
-| Field | Default | Notes |
-|-------|---------|-------|
-| `movement_speed` | 130.0 | Irrelevant — use `.move()` speed. |
-
-**Notes:**
-- Fires exactly once during its path — no burst, no repeat.
-- Typically use `.shoot_at_player()` (the default behaviour).
-- Use `.free_after()` when entering from off-screen sides.
-
-**Examples:**
-```gdscript
-# Diagonal skimmer from top-left
-b.sniper().at(-185, -400).move(b.straight(82, PI / 10)).shoot_at_player()
-
-# From off-screen side — must free explicitly
-b.sniper().at(-500, 50).move(b.straight(180, PI / 2)).shoot_at_player().free_after(4.0)
-
-# From below as an ambush
-b.sniper().at(-260, 400).move(b.straight(100, -PI / 2 - PI / 12)).shoot_at_player().free_after(5.5)
-```
-
----
-
-### `sniper_enemy` — Sniper Enemy (hovering)
-
-**Builder:** `b.sniper_enemy()`  
+**Builder:** `b.sniper()` (alias `b.sniper_enemy()`)  
 **Scene:** `sniper.tscn`  
-**Movement:** Must use a **sequence movement**: fly in → hold → fly out.  
-**Shoots:** Yes — fires `shot_count` aimed sniper shots while hovering.  
-**HP:** Medium  
-**Score:** Medium
+**Movement:** AI (`SniperBrain`): flies to its nearest legal firing point and holds (the relocation loop is t13). **Level 1 still gives it a `.move()` rail** until it is migrated: a rail suspends the brain and `SniperTelegraph` runs the legacy cycle (aim 2.0 s, lock 0.5 s, a 1400 px/s round, 5 shots), starting at spawn. There is no fly-in constant to match any more.  
+**Shoots:** Yes — one rail round per telegraphed shot (`rail_round.tscn`).  
+**Assault exit:** leaves after `engage_seconds` (9.0 s).  
+**HP:** 60 · **Score:** 50  
 
-**Behaviour phases:**
-1. `APPROACH` — descends into position (nose-down). Duration = first `straight()` step.
-2. `AIM` → `LOCK` → `FIRE` — cycles `shot_count` times. Each cycle: 2.0 s aim + 0.5 s lock.
-3. `IDLE` — `EnemyPathMover`'s exit step (last `straight()`) retreats the ship.
-
-**Key constant:** `FLY_IN_TIME = 2.5 s` — the approach step **must** be exactly 2.5 s duration.  
-**Hold duration formula:** `shot_count × 2.5 s` minimum (5 shots × 2.5 = 13 s → use `hold(13.0)`).
-
-**Exports:**
-
-| Field | Default | Notes |
-|-------|---------|-------|
-| `shot_count` | 5 | Override via `.prop("shot_count", N)`. |
-
-**Examples:**
-```gdscript
-# Standard 5-shot hovering sniper
-b.sniper_enemy().at(-120, -500).move(b.sequence([
-    b.straight(150, 0.0, 2.5),   # fly in (exactly 2.5 s)
-    b.hold(13.0),                 # hover (5 shots × 2.5 s)
-    b.straight(220, PI),          # retreat upward
-]))
-
-# 3-shot variant (holds for 7.5 s)
-b.sniper_enemy().at(120, -500).move(b.sequence([
-    b.straight(150, 0.0, 2.5),
-    b.hold(7.5),
-    b.straight(220, PI),
-])).prop("shot_count", 3)
-```
+See `assault/scenes/enemies/sniper/ENEMY.md`.
 
 ---
 

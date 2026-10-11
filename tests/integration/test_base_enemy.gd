@@ -276,7 +276,7 @@ func test_scoring_fields_are_copied_from_config() -> void:
 			continue
 		var cfg: Variant = entity.get("config")
 		if not (cfg is ShipConfig):
-			continue  # sniper has no `config` property at all.
+			continue
 		checked += 1
 		var ship_cfg := cfg as ShipConfig
 		assert_eq(entity.score_value, ship_cfg.score_value, "%s: score_value" % entry["name"])
@@ -287,14 +287,16 @@ func test_scoring_fields_are_copied_from_config() -> void:
 		assert_eq(
 			entity.counts_as_escape, ship_cfg.counts_as_escape, "%s: counts_as_escape" % entry["name"]
 		)
-	assert_gte(checked, _MIN_ROSTER_SIZE - 1, "roster sweep too small (sniper is the one exception)")
+	assert_gte(checked, _MIN_ROSTER_SIZE, "roster sweep too small")
 
 
-## sniper has no `config` property, so BaseEnemy's generic copy never runs for it — it
-## hardcodes its score instead (`sniper.gd:45`). Pinned on its own since the generic sweep
-## above cannot see it.
-func test_sniper_hardcodes_its_score_value() -> void:
+## The Sniper takes its score from `SniperConfig` like the rest of the roster (it used to hardcode 50 in
+## `_ready()`, because it had no `config` property). Pinned on its own, against the shipped `.tres`, so the
+## value is the legacy 50 and not whatever a future config default happens to be.
+func test_sniper_score_value_is_copied_from_its_config() -> void:
 	var sniper := _spawn("res://assault/scenes/enemies/sniper/sniper.tscn")
+	assert_true(sniper.get("config") is SniperConfig, "the sniper now has a config property")
+	assert_eq(sniper.get("score_value"), (load("res://assault/scenes/enemies/sniper/sniper_config.tres") as SniperConfig).score_value)
 	assert_eq(sniper.get("score_value"), 50)
 
 

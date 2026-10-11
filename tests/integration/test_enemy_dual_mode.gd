@@ -426,3 +426,49 @@ func test_bomber_disengage_frees_it_in_assault_only(mode: String = use_parameter
 			break
 	assert_eq(freed, mode == "assault",
 		"%s: the Bomber is freed by its budget in Assault and never in Open Space" % mode)
+
+
+# ── The Sniper (Phase 4, t12) ────────────────────────────────────────────────────────────────────
+
+const SNIPER_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/sniper/sniper.tscn")
+
+
+func _spawn_sniper(harness, pos: Vector2) -> Sniper:
+	var entity := SNIPER_SCENE.instantiate() as Sniper
+	entity.global_position = pos
+	harness.root.add_child(entity)
+	entity.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	return entity
+
+
+## The mode-neutral half: ENTER closes on the player in both modes and comes to rest, with no fly-in timer
+## to wait out. The mode-specific half (the firing range and the corridor margin) is in `test_sniper.gd`.
+func test_sniper_enter_comes_to_rest_at_its_point_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 560.0)
+	var sniper := _spawn_sniper(harness, Vector2(640.0, 80.0))
+	var brain := sniper.get_node("Brain") as SniperBrain
+	for _i in 480:  # 8 s: past arrival, inside the 9 s Assault budget
+		_tick(sniper, DT)
+	assert_true(brain.arrived, "%s: the sniper reaches its firing point" % mode)
+	assert_lt(sniper.velocity.length(), 2.0, "%s: and holds still there" % mode)
+	assert_false(sniper.is_queued_for_deletion(), "%s: well inside its budget, it stays" % mode)
+
+
+## The mode-specific half: the budget frees the Sniper in Assault, and nothing ever forces it out in Open Space.
+func test_sniper_disengage_frees_it_in_assault_only(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 360.0)
+	var sniper := _spawn_sniper(harness, Vector2(640.0, 60.0))
+	sniper.config.engage_seconds = 0.2
+	var freed := false
+	for _i in 1500:
+		_tick(sniper, DT)
+		if sniper.is_queued_for_deletion():
+			freed = true
+			break
+	assert_eq(freed, mode == "assault",
+		"%s: the Sniper is freed by its budget in Assault and never in Open Space" % mode)

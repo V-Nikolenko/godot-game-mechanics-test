@@ -21,10 +21,9 @@
 ##
 ## ── Reading the table ────────────────────────────────────────────────────────────────────────
 ##
-## The two enemies with no `collision_damage` line in their `.tres` (`gatling_interceptor_config.tres`,
-## and `sniper` which has no config at all) inherit `ShipConfig`'s default of 20
-## (`ship_config.gd:8`), which happens to equal the base helper's hardcoded 20. They are listed
-## anyway: the assertion is still meaningful, and if either default ever moves the mismatch
+## The enemy with no `collision_damage` line in its `.tres` (`gatling_interceptor_config.tres`) inherits `ShipConfig`'s default of 20
+## (`ship_config.gd:8`), which happens to equal the base helper's hardcoded 20. It is listed
+## anyway: the assertion is still meaningful, and if that default ever moves the mismatch
 ## surfaces here rather than in playtesting.
 ##
 ## `bonus_drone` is the one deliberate exception — `bonus_drone.tscn` authors no `ContactHitBox`
@@ -108,8 +107,7 @@ const ROSTER: Array[Dictionary] = [
 	{
 		"name": "sniper",
 		"scene": "res://assault/scenes/enemies/sniper/sniper.tscn",
-		"config": "",
-		"expected": 20,
+		"config": "res://assault/scenes/enemies/sniper/sniper_config.tres",
 	},
 ]
 

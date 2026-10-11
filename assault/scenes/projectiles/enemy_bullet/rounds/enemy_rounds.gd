@@ -11,6 +11,8 @@ const SCATTER: PackedScene = \
 		preload("res://assault/scenes/projectiles/enemy_bullet/rounds/scatter_round.tscn")
 const GATLING_STREAM: PackedScene = \
 		preload("res://assault/scenes/projectiles/enemy_bullet/rounds/gatling_stream_round.tscn")
+const RAIL: PackedScene = \
+		preload("res://assault/scenes/projectiles/enemy_bullet/rounds/rail_round.tscn")
 const HEAVY_SHELL: PackedScene = \
 		preload("res://assault/scenes/projectiles/enemy_bullet/rounds/heavy_shell.tscn")
 

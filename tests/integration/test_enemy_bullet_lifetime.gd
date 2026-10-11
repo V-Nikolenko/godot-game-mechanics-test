@@ -12,8 +12,7 @@ extends GutTest
 
 const ENEMY_BULLET_SCENE: PackedScene = \
 		preload("res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn")
-const SNIPER_BULLET_SCENE: PackedScene = \
-		preload("res://assault/scenes/projectiles/enemy_bullets/enemy_sniper_bullet.tscn")
+const SHIPPED_SNIPER: SniperConfig = preload("res://assault/scenes/enemies/sniper/sniper_config.tres")  # read only
 const SNIPER_SCENE: PackedScene = \
 		preload("res://assault/scenes/enemies/sniper/sniper.tscn")
 
@@ -33,7 +32,7 @@ func _legacy_rect_diagonal() -> float:
 
 # ---------------------------------------------------------------------------------------------
 # Derived defaults (F2): read every shipped speed source, recompute, and assert the shipped
-# enemy_bullet.tscn / enemy_sniper_bullet.tscn defaults are >= the recomputed numbers.
+# enemy_bullet.tscn / the derived defaults are >= the recomputed numbers (the rail round has its own, shorter caps and joins the per-round sweep below).
 # ---------------------------------------------------------------------------------------------
 
 ## Every speed the Fighter fires at, by the round it fires: Pulse gets the AI aimed burst and both rail
@@ -47,6 +46,13 @@ func _fighter_speeds() -> Dictionary:
 		"rail_aimed": cfg.rail_aimed_speed,
 		"rail_forward": cfg.rail_forward_speed,
 	}
+
+
+## Every speed the Sniper fires Rail rounds at: the AI shot (`rail_speed`) and the rail fallback
+## (`rail_fallback_speed`, today's 1400). Both are `SniperConfig` fields read from the shipped `.tres` (t12).
+func _sniper_speeds() -> Dictionary:
+	var cfg: SniperConfig = load("res://assault/scenes/enemies/sniper/sniper_config.tres")
+	return {"rail": cfg.rail_speed, "rail_fallback": cfg.rail_fallback_speed}
 
 
 ## Every speed the Gatling Interceptor fires Gatling Stream rounds at: the AI stream (`round_speed`) and
@@ -109,10 +115,9 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 	speeds.append(isac.bullet_speed)
 	isac.free()
 
-	# The sniper shot — by far the fastest, but enumerated for completeness.
-	var sniper_bullet: EnemyBullet = SNIPER_BULLET_SCENE.instantiate()
-	speeds.append(sniper_bullet.speed)
-	sniper_bullet.free()
+	# The Sniper's rail shots, by far the fastest, but enumerated for completeness (config fields).
+	for s in _sniper_speeds().values():
+		speeds.append(s as float)
 
 	return speeds
 
@@ -137,7 +142,7 @@ func test_enemy_bullet_defaults_are_derived_from_every_shipped_speed_source() ->
 	assert_almost_eq(expected_max_time, 18.0, 0.001, "sanity: matches the plan's derivation")
 	assert_almost_eq(expected_max_distance, 2400.0, 0.001, "sanity: matches the plan's derivation")
 
-	for scene: PackedScene in [ENEMY_BULLET_SCENE, SNIPER_BULLET_SCENE]:
+	for scene: PackedScene in [ENEMY_BULLET_SCENE]:
 		var bullet: EnemyBullet = scene.instantiate()
 		var lifetime := bullet.get_node("ProjectileLifetime") as ProjectileLifetime
 		assert_not_null(lifetime, "%s must carry a ProjectileLifetime child" % scene.resource_path)
@@ -168,11 +173,14 @@ func _round_clears_its_lifetime(max_distance: float, min_fired_speed: float, max
 func test_every_round_clears_its_own_lifetime_at_its_slowest_fired_speed() -> void:
 	var fs := _fighter_speeds()
 	var gs := _gatling_speeds()
+	var ss := _sniper_speeds()
 	var entries: Array[Dictionary] = [
 		{"scene": EnemyRounds.PULSE, "floor": _ROUNDS_RANGE_FLOOR_PX,
 			"speeds": [fs["aimed"], fs["rail_aimed"], fs["rail_forward"]]},
 		{"scene": EnemyRounds.GATLING_STREAM, "floor": _ROUNDS_RANGE_FLOOR_PX,
 			"speeds": [gs["stream"], gs["rail_stream"]]},
+		{"scene": EnemyRounds.RAIL, "floor": _ROUNDS_RANGE_FLOOR_PX,
+			"speeds": [ss["rail"], ss["rail_fallback"]]},
 		{"scene": EnemyRounds.HEAVY_SHELL, "floor": _ROUNDS_RANGE_FLOOR_PX},
 		{"scene": EnemyRounds.SCATTER, "floor": 0.0, "speeds": [fs["forward"]]},
 	]
@@ -342,15 +350,14 @@ func test_a_pooled_bullet_is_recycled_never_freed_when_its_lifetime_expires() ->
 
 
 # ---------------------------------------------------------------------------------------------
-# The unpooled sniper shot, through the REAL Sniper._phase_fire() path.
+# The Sniper's pooled rail round, through the REAL fallback fire path (`SniperTelegraph._fire_rail_shot`).
 # ---------------------------------------------------------------------------------------------
 
-## `sniper.gd:99-105` never calls reset() — the shot is positioned at the muzzle only after
-## add_child(). This is exactly the case the lazy-arm rule (F1) exists for: if arming ever moved
-## back into ProjectileLifetime._ready(), the shot would record the wrong origin at the parent's
-## position and never see the Assault provider's rect, so it would fly for the full 18s instead of
-## dying on this rect crossing.
-func test_the_unpooled_sniper_shot_is_freed_after_crossing_the_legacy_rect() -> void:
+## The rail round is pooled, so its single owner is the sniper's `RailPool`: it must be positioned at the
+## muzzle and armed by `reset()` (the pool calls it in `acquire()`), see the legacy rect, expire on crossing
+## it, and be RECYCLED - never freed - well under its 4 s `max_time`. This replaces the unpooled
+## `enemy_sniper_bullet.tscn` case (`Sniper._phase_fire()` is gone with the scene).
+func test_the_pooled_rail_round_expires_and_is_recycled_after_crossing_the_legacy_rect() -> void:
 	var cam := ArenaCamera.new()
 	add_child_autofree(cam)
 
@@ -359,32 +366,30 @@ func test_the_unpooled_sniper_shot_is_freed_after_crossing_the_legacy_rect() -> 
 	var sniper: Sniper = SNIPER_SCENE.instantiate()
 	container.add_child(sniper)
 
-	# Muzzle sits at local (0, -20); rotation = PI/2 makes Vector2.UP.rotated(rotation) point at
-	# +X, so the muzzle is 20px to the right of the ship and the shot flies further right — well
-	# inside the legacy rect (right edge x = 1444), crossing it in a couple of physics frames at
-	# the sniper shot's 1400 px/s.
+	# The muzzle sits at local (0, -20); rotation = PI/2 puts it 20 px to the right of the ship, and the
+	# round flies right - inside the legacy rect (right edge x = 1444) it crosses in a couple of physics
+	# frames at the fallback's 1400 px/s.
 	sniper.global_position = Vector2(1400.0, 300.0)
 	sniper.rotation = PI / 2.0
+	var telegraph := sniper.get_node("Telegraph") as SniperTelegraph
+	var pool := sniper.get_node("RailPool") as BulletPool
+	telegraph._rail_lock_point = telegraph.muzzle.global_position + Vector2.RIGHT * 100.0
 
-	sniper._phase_fire()
+	var bullet := telegraph._fire_rail_shot(telegraph.muzzle.global_position)
+	assert_not_null(bullet, "the fallback must have taken a real rail round from the pool")
+	assert_eq(bullet.speed, SHIPPED_SNIPER.rail_fallback_speed, "fired at the fallback speed")
 
-	var bullet: EnemyBullet = null
-	for child in container.get_children():
-		if child is EnemyBullet:
-			bullet = child as EnemyBullet
-	assert_not_null(bullet, "_phase_fire() must have spawned the real enemy_sniper_bullet.tscn")
-	assert_true(bullet.expired.is_connected(bullet.queue_free),
-			"sniper.gd wires expired -> queue_free itself for its unpooled shot")
-
-	var freed := false
-	for _i in 30:  # 30 physics frames at 60fps = 0.5s, far short of the 18s max_time ceiling
+	var left := false
+	for _i in 30:  # 30 physics frames at 60 fps = 0.5 s, far short of the 4 s max_time
 		await get_tree().physics_frame
-		if not is_instance_valid(bullet):
-			freed = true
+		if bullet.get_parent() == pool:
+			left = true
 			break
-	assert_true(freed,
-			"the unpooled sniper shot must be freed on crossing the legacy rect, well under 18s — "
-			+ "a build that only arms on reset() would keep it alive for the full max_time instead")
+	assert_true(left,
+			"the rail round must be recycled into its pool on crossing the legacy rect, well under its 4 s "
+			+ "max_time - a build that only arms on reset() would keep it flying instead")
+	assert_true(is_instance_valid(bullet) and not bullet.is_queued_for_deletion(),
+			"and recycled, never freed")
 
 
 # ---------------------------------------------------------------------------------------------

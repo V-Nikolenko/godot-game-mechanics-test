@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://csnipenemy01"]
+[gd_scene load_steps=18 format=3 uid="uid://csnipenemy01"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_se"]
 [ext_resource type="Script" uid="uid://hwji5rq8hhpr" path="res://assault/scenes/enemies/sniper/sniper.gd" id="2_se"]
@@ -6,6 +6,12 @@
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_se"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_se"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_se"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="7_se"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/sniper/sniper_brain.gd" id="8_se"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="9_se"]
+[ext_resource type="Script" path="res://global/components/bullet_pool.gd" id="10_se"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_bullet/rounds/rail_round.tscn" id="11_se"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/sniper/sniper_telegraph.gd" id="12_se"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_se"]
 resource_local_to_scene = true
@@ -15,6 +21,18 @@ shader_parameter/flash_color = Color(1, 1, 1, 1)
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_se"]
 radius = 14.0
+
+[sub_resource type="Gradient" id="Gradient_barrel"]
+offsets = PackedFloat32Array(0, 0.55, 1)
+colors = PackedColorArray(0.32, 0.34, 0.4, 1, 0.16, 0.17, 0.2, 1, 0.1, 0.11, 0.14, 0)
+
+[sub_resource type="GradientTexture2D" id="GradientTexture2D_barrel"]
+gradient = SubResource("Gradient_barrel")
+width = 6
+height = 16
+fill = 1
+fill_from = Vector2(0.5, 0.5)
+fill_to = Vector2(0.5, 0)
 
 [sub_resource type="Animation" id="Animation_reset_se"]
 length = 0.001
@@ -53,38 +71,43 @@ _data = {
 &"hit": SubResource("Animation_hit_se")
 }
 
-[node name="Sniper" type="CharacterBody2D" unique_id=2044564659]
+[node name="Sniper" type="CharacterBody2D"]
 script = ExtResource("2_se")
+sprite_forward_angle = -1.5707964
 
-[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1239338233]
+[node name="Sprite2D" type="Sprite2D" parent="."]
 material = SubResource("ShaderMaterial_se")
 texture = ExtResource("3_se")
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="." unique_id=1656821909]
+[node name="Barrel" type="Sprite2D" parent="."]
+position = Vector2(0, -14)
+texture = SubResource("GradientTexture2D_barrel")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 scale = Vector2(1.4400002, 1.4400002)
 shape = SubResource("CircleShape2D_se")
 
-[node name="Muzzle" type="Marker2D" parent="." unique_id=1204630735]
+[node name="Muzzle" type="Marker2D" parent="."]
 position = Vector2(0, -20)
 
-[node name="HurtBox" type="Area2D" parent="." unique_id=190819591]
+[node name="HurtBox" type="Area2D" parent="."]
 collision_layer = 512
 collision_mask = 97
 script = ExtResource("4_se")
 metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
 
-[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox" unique_id=635414780]
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
 scale = Vector2(1.4505496, 1.4505496)
 shape = SubResource("CircleShape2D_se")
 debug_color = Color(0.7, 0, 0, 0.42)
 
-[node name="Health" type="Node" parent="." unique_id=545614316]
+[node name="Health" type="Node" parent="."]
 script = ExtResource("5_se")
 max_health = 60
 current_health = 60
 metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
-[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="." unique_id=268362285]
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
 libraries/ = SubResource("AnimationLibrary_se")
 
 [node name="ContactHitBox" type="Area2D" parent="."]
@@ -97,3 +120,22 @@ damage_type = 2
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
 scale = Vector2(1.4400002, 1.4400002)
 shape = SubResource("CircleShape2D_se")
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("7_se")
+constraint_mode = 0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("8_se")
+
+[node name="StateLight" type="Node2D" parent="."]
+position = Vector2(0, 16)
+script = ExtResource("9_se")
+
+[node name="RailPool" type="Node" parent="."]
+script = ExtResource("10_se")
+bullet_scene = ExtResource("11_se")
+pool_size = 2
+
+[node name="Telegraph" type="Node2D" parent="."]
+script = ExtResource("12_se")

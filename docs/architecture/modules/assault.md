@@ -305,10 +305,10 @@ Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.g
   them would be wrong in one of the two modes; `ProjectileLifetime`'s `max_time`/`max_distance`
   rules are what govern an enemy bullet fired in Open Space, with no rect at all. The cost is that
   a shot fired at an enemy that is in the arena but above the visible top now despawns; that band
-  is off-screen and unaimable, so it is accepted. The sniper's unpooled shot
-  (`enemy_sniper_bullet.tscn`, same script) carries its own `ProjectileLifetime` and arms lazily on
-  its first physics tick, since it is positioned at the muzzle only *after* `add_child()` and is
-  never `reset()`.
+  is off-screen and unaimable, so it is accepted. The Sniper's rail round
+  (`enemy_bullet/rounds/rail_round.tscn`, pooled in the sniper's `RailPool`) carries its own
+  `ProjectileLifetime` (4 s / 2400 px) and joins the per-round sweep through `SniperConfig.rail_speed`
+  and `rail_fallback_speed`.
 
   All of the above is pinned by `tests/integration/test_player_bullet_lifetime.gd` and
   `tests/integration/test_enemy_bullet_lifetime.gd`.
@@ -433,7 +433,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `razor_drone/razor_drone_brain.gd`). Roster: bomber, bonus_drone, razor_drone,
-gunship, gatling_interceptor, fighter, ram_ship, sniper, swarm_drone. For the
+gunship, gatling_interceptor, fighter, ram_ship, sniper (`SniperBrain` + `SniperTelegraph` + a pooled rail round; relocation loop in a later task), swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).
