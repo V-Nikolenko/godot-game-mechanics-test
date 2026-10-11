@@ -160,7 +160,7 @@ b.ram().at(0, 400).move(b.straight(260, PI))
 
 **Builder:** `b.sniper()` (alias `b.sniper_enemy()`)  
 **Scene:** `sniper.tscn`  
-**Movement:** AI (`SniperBrain`): flies to its nearest legal firing point and holds (the relocation loop is t13). **Level 1 still gives it a `.move()` rail** until it is migrated: a rail suspends the brain and `SniperTelegraph` runs the legacy cycle (aim 2.0 s, lock 0.5 s, a 1400 px/s round, 5 shots), starting at spawn. There is no fly-in constant to match any more.  
+**Movement:** AI (`SniperBrain`): a relocation cycle — flies to its nearest legal firing point, settles, aims (1.3 s, dim line) and locks (0.5 s, bright line) standing still, fires one rail round (with a fading `RailTrail`), breaks contact, then relocates to a new firing angle at least 45° round the player, never across it; it holds fire when a rock blocks its line of sight. In Assault the firing points stay a margin inside the corridor and a budget expiry in AIM/LOCK waits for the shot. **Level 1 still gives it a `.move()` rail** until it is migrated: a rail suspends the brain and `SniperTelegraph` runs the legacy cycle (aim 2.0 s, lock 0.5 s, a 1400 px/s round, 5 shots), starting at spawn. There is no fly-in constant to match any more.  
 **Shoots:** Yes — one rail round per telegraphed shot (`rail_round.tscn`).  
 **Assault exit:** leaves after `engage_seconds` (9.0 s).  
 **HP:** 60 · **Score:** 50  

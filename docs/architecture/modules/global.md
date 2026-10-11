@@ -548,7 +548,8 @@ bodies only; a hit blocks only if the collider is in group `asteroids` or answer
 == true, every other body is excluded and the ray recast, at most 4 times, then the line counts as clear).
 Physics step only; tests await a physics frame after placing bodies. `Steering.break_contact(pos, threat_pos,
 threat_vel, side, max_speed, lateral_weight := 0.6)` flees the threat with a sideways share that doubles when
-the threat is closing (`EnemyMover.break_contact` wraps it).
+the threat is closing (`EnemyMover.break_contact` wraps it). First users: the Sniper (`SniperBrain` — its
+firing-point choice, SETTLE and LOCK line-of-sight checks, and its BREAK_CONTACT phase).
 
 **`EngagementBudget` (`engagement_budget.gd`, `RefCounted`) is how an Assault AI enemy leaves the
 arena in time for an `ENEMIES_CLEARED` section to advance**, rather than living until killed —

@@ -41,6 +41,23 @@ extends ShipConfig
 @export var break_cap: float = 2.0
 ## RELOCATE re-picks its point after this long (s).
 @export var relocate_cap: float = 4.0
+## BREAK_CONTACT never ends sooner than this, so a shot is always followed by a real break (s).
+@export var break_min: float = 1.0
+## The player's velocity is smoothed with this time constant before it orients the player frame (s).
+@export var velocity_smoothing: float = 0.3
+## Below this smoothed speed the player frame is the player's facing, not its velocity (px/s).
+@export var frame_speed: float = 60.0
+## The forward cone (`forward_cone`) applies only while the player moves at least this fast (px/s).
+@export var forward_cone_speed: float = 200.0
+## Each seed bearing is jittered by up to this much either side (deg).
+@export var seed_jitter: float = 15.0
+## Uniformly random bearings added to the seven seeds.
+@export var random_candidates: int = 3
+## At most this many line-of-sight rays per firing-point choice.
+@export var max_los_rays: int = 6
+## The straight path to a firing point never passes closer to the player than this share of the range (or than
+## the sniper already is), so a relocation never flies across the player.
+@export var pass_clearance_ratio: float = 0.45
 ## SETTLE ends when the speed is under this (px/s).
 @export var settle_epsilon: float = 2.0
 ## ENTER counts as arrived within this of its point (px).
@@ -54,6 +71,9 @@ extends ShipConfig
 @export var lock_seconds: float = 0.5
 @export var rail_speed: float = 2200.0
 @export var rail_damage: int = 28
+## The barrel unfolds over this long in AIM, and folds over `barrel_fold_seconds` after the shot (s).
+@export var barrel_unfold_seconds: float = 0.4
+@export var barrel_fold_seconds: float = 0.3
 ## How long a fired round's trail fades (s).
 @export var trail_fade: float = 0.4
 

@@ -36,7 +36,7 @@ assault/scenes/
 ├── projectiles/                 Player + enemy ordnance
 │   ├── bullets/bullet.gd        Player bullet — UNPOOLED, frees itself off-screen (pierce, sniper)
 │   ├── enemy_bullet/            EnemyBullet (become_friendly() flips it to a player projectile)
-│   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell .tscn + EnemyRounds
+│   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell / rail_round .tscn + EnemyRounds + RailTrail (the sniper shot's fading trail)
 │   ├── enemy_ordnance/         EnemyOrdnance: gravity_bomb / mine / pursuit_bomb .tscn + EnemyOrdnanceScenes (persistent, shoot-down-able, not in `enemies`)
 │   ├── missiles/                homing/ + warhead/ missiles
 │   └── piercing_beam/           Sustained BEAM weapon projectile
@@ -308,7 +308,10 @@ Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.g
   is off-screen and unaimable, so it is accepted. The Sniper's rail round
   (`enemy_bullet/rounds/rail_round.tscn`, pooled in the sniper's `RailPool`) carries its own
   `ProjectileLifetime` (4 s / 2400 px) and joins the per-round sweep through `SniperConfig.rail_speed`
-  and `rail_fallback_speed`.
+  and `rail_fallback_speed`. Each AI rail shot also leaves a `RailTrail` (`enemy_bullet/rounds/rail_trail.gd`, a
+  code-built `Line2D` in the round's container): it follows the round until the round's `expired` (connected
+  one-shot, because the pool recycles rather than frees it) or until the round is freed without one (owner death),
+  then fades over `trail_fade` on its own clock and frees itself — it owns itself, never the round.
 
   All of the above is pinned by `tests/integration/test_player_bullet_lifetime.gd` and
   `tests/integration/test_enemy_bullet_lifetime.gd`.
@@ -433,7 +436,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `razor_drone/razor_drone_brain.gd`). Roster: bomber, bonus_drone, razor_drone,
-gunship, gatling_interceptor, fighter, ram_ship, sniper (`SniperBrain` + `SniperTelegraph` + a pooled rail round; relocation loop in a later task), swarm_drone. For the
+gunship, gatling_interceptor, fighter, ram_ship, sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).

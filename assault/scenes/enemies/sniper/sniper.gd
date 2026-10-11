@@ -28,6 +28,7 @@ extends BaseEnemy
 @onready var _telegraph: SniperTelegraph = $Telegraph
 @onready var _muzzle: Marker2D = $Muzzle
 @onready var _rail_pool: BulletPool = $RailPool
+@onready var _barrel: Sprite2D = $Barrel
 
 
 func _ready() -> void:
@@ -51,6 +52,9 @@ func _apply_config(cfg: SniperConfig) -> void:
 
 	_sniper_brain.config = cfg
 	_sniper_brain.telegraph = _telegraph
+	_sniper_brain.muzzle = _muzzle
+	_sniper_brain.pool = _rail_pool
+	_sniper_brain.barrel = _barrel
 	_telegraph.config = cfg
 	_telegraph.muzzle = _muzzle
 	_telegraph.pool = _rail_pool

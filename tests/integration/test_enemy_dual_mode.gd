@@ -450,8 +450,11 @@ func test_sniper_enter_comes_to_rest_at_its_point_in_both_modes(mode: String = u
 	harness.player.global_position = Vector2(640.0, 560.0)
 	var sniper := _spawn_sniper(harness, Vector2(640.0, 80.0))
 	var brain := sniper.get_node("Brain") as SniperBrain
-	for _i in 480:  # 8 s: past arrival, inside the 9 s Assault budget
+	for _i in 480:  # 8 s at most, inside the 9 s Assault budget; it stops at AIM, after it has come to rest
 		_tick(sniper, DT)
+		if brain.phase == SniperBrain.Phase.AIM:
+			break
+	assert_eq(brain.phase, SniperBrain.Phase.AIM, "%s: the sniper aims from its first point" % mode)
 	assert_true(brain.arrived, "%s: the sniper reaches its firing point" % mode)
 	assert_lt(sniper.velocity.length(), 2.0, "%s: and holds still there" % mode)
 	assert_false(sniper.is_queued_for_deletion(), "%s: well inside its budget, it stays" % mode)
