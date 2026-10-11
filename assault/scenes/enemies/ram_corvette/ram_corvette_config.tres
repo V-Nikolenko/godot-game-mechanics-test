@@ -4,7 +4,14 @@
 
 [resource]
 script = ExtResource("1")
-movement_speed = 100.0
-max_health = 999
+max_health = 120
 collision_damage = 50
 score_value = 35
+plate_health = 50
+exposed_collision_damage = 60
+armor_shove_speed = 260.0
+cruise_speed = 280.0
+acceleration = 500.0
+max_turn_rate = 2.2
+engage_seconds = 4.5
+exit_speed = 500.0

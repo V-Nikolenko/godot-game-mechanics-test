@@ -5,13 +5,15 @@
 ## writes that mask (and `accepted_damage_types`) onto a real `HurtBox`, and remembers it so a
 ## later `apply_alternate()` can re-apply without the caller holding the `HurtBox` reference.
 ##
-## `apply_alternate()` is a one-way, permanent switch to a second flag set — exactly the ram
-## ship's "armour breaks on the first missile hit and never re-forms" rule, and no more: there is
-## no way back to the primary flags once switched. General multi-state armour is a later phase.
+## `apply_alternate()` is a one-way, permanent switch to a second flag set (built for the legacy ram
+## ship's "armour breaks on the first missile hit and never re-forms" rule), and no more: there is
+## no way back to the primary flags once switched. No shipped enemy uses it since the Ram Corvette's
+## armour became a deflection rule on a full-size hurtbox (`ArmorPlate`, t16); it is kept, tested on a
+## fixture.
 ##
 ## A node, not a `Resource`: armour state (which set of flags is currently active) is runtime
-## state that must be per-instance. A shared `Resource` would leak one ram ship's broken armour
-## to every other ram ship, the exact trap `ShipConfig.privatise()` exists to avoid.
+## state that must be per-instance. A shared `Resource` would leak one enemy's switched profile
+## to every other enemy of its type, the exact trap `ShipConfig.privatise()` exists to avoid.
 class_name DefenseProfile
 extends Node
 

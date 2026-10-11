@@ -15,8 +15,11 @@ extends ShipModuleBase
 @export var _HIT_RADIUS: float = 32.0      ## px around ship center to detect enemies.
 @export var _COOLDOWN: float = 2.0
 
-## Classes immune to boost damage (asteroids, ram ships — indestructible by design).
-const _IMMUNE_CLASSES: Array[String] = ["BigAsteroid", "SmallAsteroid", "Asteroid", "RamCorvette"]
+## Classes immune to boost damage (asteroids — indestructible by design). The Ram Corvette is NOT
+## here: its boost damage arrives as a direct `received_damage.emit`, which its hull deflects while
+## any armour plate lives and takes once exposed, so "contact damage does not bypass armour" holds
+## without a class list.
+const _IMMUNE_CLASSES: Array[String] = ["BigAsteroid", "SmallAsteroid", "Asteroid"]
 
 const _SPRITE_PATH: String = "SpriteAnchor/ShipSprite2D"
 const _BOOST_COLOR: Color = Color(0.35, 0.85, 1.0, 1.0)
@@ -33,7 +36,7 @@ var _prev_animation: StringName = &""
 
 func get_display_name() -> String: return "Boost Drive"
 func get_description() -> String:
-	return "In open space, hold Shift to spend one boost tank on a supercharged engine burst (Press H instead in Assault). Blasts the ship forward with a speed burst that rapidly decelerates over 0.4 seconds. Invincible during boost. Deals 45 damage to anything in the path — asteroids and ram ships are immune to damage. 2-second cooldown."
+	return "In open space, hold Shift to spend one boost tank on a supercharged engine burst (Press H instead in Assault). Blasts the ship forward with a speed burst that rapidly decelerates over 0.4 seconds. Invincible during boost. Deals 45 damage to anything in the path — asteroids are immune to damage, and an armoured Ram Corvette shrugs it off until its plates are gone. 2-second cooldown."
 func get_icon() -> Texture2D:
 	return preload("res://global/assets/sprites/player_menu_ui/ship_menu_ui/module_icons/icon_ship_module_engine_boost.png")
 func get_slot() -> StringName: return &"engines"

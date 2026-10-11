@@ -42,7 +42,7 @@ const PIERCE_DAMAGE_FACTOR: float = 0.55  ## 45% damage reduction per pierce.
 var pierces_remaining: int = 0
 
 ## Sniper-bullet flags. When unlimited_pierce is true the bullet passes through
-## every regular enemy at full damage, but stops on asteroids and ram-ships.
+## every regular enemy at full damage, but stops on asteroids.
 @export var unlimited_pierce: bool = false
 @export var no_damage_decay: bool = false
 
@@ -113,9 +113,10 @@ func _apply_pierce() -> void:
 func _on_hit_box_area_entered(area: Area2D) -> void:
 	if unlimited_pierce:
 		var parent := area.get_parent()
-		## Asteroids and ram-ships block the sniper bullet without taking damage.
+		## Asteroids block the sniper bullet without taking damage. (The Ram Corvette no longer does:
+		## its armoured hull deflects the shot through, its plates take it, an exposed hull is hurt.)
 		## Zero the HitBox damage first so the HurtBox reads 0 if it fires after us.
-		if parent.is_in_group("asteroids") or parent.is_in_group("ram_ships"):
+		if parent.is_in_group("asteroids"):
 			var hb := get_node_or_null("HitBox") as HitBox
 			if hb:
 				hb.damage = 0

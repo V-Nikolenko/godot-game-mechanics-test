@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3 uid="uid://b127jmx4xegam"]
+[gd_scene load_steps=20 format=3 uid="uid://b127jmx4xegam"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_rs"]
 [ext_resource type="Script" uid="uid://c5x5l0t1boeq2" path="res://assault/scenes/enemies/ram_corvette/ram_corvette.gd" id="2_rs"]
@@ -6,7 +6,11 @@
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_rs"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_rs"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_rs"]
-[ext_resource type="Script" path="res://global/components/defense_profile.gd" id="7_rs"]
+[ext_resource type="Script" path="res://global/components/contact_profile.gd" id="7_rs"]
+[ext_resource type="Script" path="res://global/components/armor_plate.gd" id="8_rs"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="9_rs"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/ram_corvette/ram_corvette_brain.gd" id="10_rs"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="11_rs"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_rs"]
 resource_local_to_scene = true
@@ -14,26 +18,23 @@ shader = ExtResource("1_rs")
 shader_parameter/enabled = false
 shader_parameter/flash_color = Color(1, 1, 1, 1)
 
-[sub_resource type="SpriteFrames" id="SpriteFrames_rs"]
-animations = [{
-"frames": [{
-"duration": 1.0,
-"texture": ExtResource("3_rs")
-}],
-"loop": false,
-"name": &"default",
-"speed": 5.0
-}]
-
 [sub_resource type="CircleShape2D" id="CircleShape2D_rs"]
-radius = 36.0
+radius = 34.0
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_front"]
+radius = 6.0
+height = 36.0
+
+[sub_resource type="CapsuleShape2D" id="CapsuleShape2D_side"]
+radius = 6.0
+height = 28.0
 
 [sub_resource type="Animation" id="Animation_reset_rs"]
 length = 0.001
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath("AnimatedSprite2D:material:shader_parameter/enabled")
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -49,7 +50,7 @@ length = 0.2
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath("AnimatedSprite2D:material:shader_parameter/enabled")
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -68,24 +69,18 @@ _data = {
 [node name="RamCorvette" type="CharacterBody2D"]
 script = ExtResource("2_rs")
 
-[node name="DefenseProfile" type="Node" parent="."]
-script = ExtResource("7_rs")
-accepts_player_bullets = false
-accepts_hazard_contact = false
-alternate_accepts_hazard_contact = false
-
-[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+[node name="Sprite2D" type="Sprite2D" parent="."]
 material = SubResource("ShaderMaterial_rs")
-scale = Vector2(1, 1)
-sprite_frames = SubResource("SpriteFrames_rs")
-autoplay = "default"
+rotation = 3.1415927
+scale = Vector2(2.6, 2.6)
+texture = ExtResource("3_rs")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_rs")
 
 [node name="HurtBox" type="Area2D" parent="."]
 collision_layer = 512
-collision_mask = 33
+collision_mask = 1121
 script = ExtResource("4_rs")
 metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
 
@@ -95,6 +90,8 @@ debug_color = Color(0.7, 0, 0, 0.419608)
 
 [node name="Health" type="Node" parent="."]
 script = ExtResource("5_rs")
+max_health = 120
+current_health = 120
 metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
 [node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
@@ -104,10 +101,105 @@ libraries = {
 
 [node name="ContactHitBox" type="Area2D" parent="."]
 collision_layer = 256
-collision_mask = 0
+collision_mask = 128
 script = ExtResource("6_rs")
-damage = 20
+damage = 50
 damage_type = 2
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
 shape = SubResource("CircleShape2D_rs")
+
+[node name="ContactProfile" type="Node" parent="."]
+script = ExtResource("7_rs")
+mode = 4
+shove_speed = 260.0
+
+[node name="Plates" type="Node2D" parent="."]
+
+[node name="PlateFront" type="Node2D" parent="Plates"]
+position = Vector2(0, 36)
+script = ExtResource("8_rs")
+
+[node name="HurtBox" type="Area2D" parent="Plates/PlateFront"]
+collision_layer = 512
+collision_mask = 96
+script = ExtResource("4_rs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Plates/PlateFront/HurtBox"]
+rotation = 1.5707964
+shape = SubResource("CapsuleShape2D_front")
+debug_color = Color(0.9, 0.7, 0.1, 0.42)
+
+[node name="Health" type="Node" parent="Plates/PlateFront"]
+script = ExtResource("5_rs")
+max_health = 50
+current_health = 50
+
+[node name="Sprite" type="Sprite2D" parent="Plates/PlateFront"]
+
+[node name="Placeholder" type="Polygon2D" parent="Plates/PlateFront/Sprite"]
+color = Color(0.55, 0.6, 0.68, 1)
+polygon = PackedVector2Array(-17, -4, 17, -4, 15, 4, -15, 4)
+
+[node name="PlateLeft" type="Node2D" parent="Plates"]
+position = Vector2(35.4531, -6.2513)
+rotation = -1.7453293
+script = ExtResource("8_rs")
+
+[node name="HurtBox" type="Area2D" parent="Plates/PlateLeft"]
+collision_layer = 512
+collision_mask = 96
+script = ExtResource("4_rs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Plates/PlateLeft/HurtBox"]
+rotation = 1.5707964
+shape = SubResource("CapsuleShape2D_side")
+debug_color = Color(0.9, 0.7, 0.1, 0.42)
+
+[node name="Health" type="Node" parent="Plates/PlateLeft"]
+script = ExtResource("5_rs")
+max_health = 50
+current_health = 50
+
+[node name="Sprite" type="Sprite2D" parent="Plates/PlateLeft"]
+
+[node name="Placeholder" type="Polygon2D" parent="Plates/PlateLeft/Sprite"]
+color = Color(0.55, 0.6, 0.68, 1)
+polygon = PackedVector2Array(-13, -4, 13, -4, 11, 4, -11, 4)
+
+[node name="PlateRight" type="Node2D" parent="Plates"]
+position = Vector2(-35.4531, -6.2513)
+rotation = 1.7453293
+script = ExtResource("8_rs")
+
+[node name="HurtBox" type="Area2D" parent="Plates/PlateRight"]
+collision_layer = 512
+collision_mask = 96
+script = ExtResource("4_rs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Plates/PlateRight/HurtBox"]
+rotation = 1.5707964
+shape = SubResource("CapsuleShape2D_side")
+debug_color = Color(0.9, 0.7, 0.1, 0.42)
+
+[node name="Health" type="Node" parent="Plates/PlateRight"]
+script = ExtResource("5_rs")
+max_health = 50
+current_health = 50
+
+[node name="Sprite" type="Sprite2D" parent="Plates/PlateRight"]
+
+[node name="Placeholder" type="Polygon2D" parent="Plates/PlateRight/Sprite"]
+color = Color(0.55, 0.6, 0.68, 1)
+polygon = PackedVector2Array(-13, -4, 13, -4, 11, 4, -11, 4)
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("9_rs")
+constraint_mode = 0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("10_rs")
+
+[node name="StateLight" type="Node2D" parent="."]
+position = Vector2(0, -22)
+script = ExtResource("11_rs")

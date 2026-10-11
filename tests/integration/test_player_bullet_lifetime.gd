@@ -367,7 +367,8 @@ func test_pierce_module_extends_the_hit_count_before_stopping() -> void:
 
 
 ## The one free path a sniper bullet has today (`bullet.gd:71-76`): an `unlimited_pierce` bullet
-## passes through every regular enemy, but an asteroid or ram-ship stops it dead for zero damage.
+## passes through every regular enemy, but an asteroid stops it dead for zero damage (the Ram Corvette
+## no longer does - see the plate rows below).
 ## `sniper_shot.tres:12` sets `range_px = 0.0`, so this is its ONLY self-destruct short of leaving
 ## the screen.
 func test_an_unlimited_pierce_bullet_is_stopped_by_an_asteroid_for_zero_damage() -> void:
@@ -386,3 +387,84 @@ func test_an_unlimited_pierce_bullet_is_stopped_by_an_asteroid_for_zero_damage()
 
 	assert_eq(hb.damage, 0, "the HitBox is zeroed first so a HurtBox firing after us reads 0")
 	assert_true(bullet.is_queued_for_deletion(), "an asteroid stops an unlimited-pierce bullet")
+
+
+# ---------------------------------------------------------------------------------------------
+# 4. The Ram Corvette's armour plates (Phase 4, t16). The same consumption rule on a real
+#    `RamCorvette`: a plate and an armoured hull deflect, an exposed hull is a damaging hit.
+# ---------------------------------------------------------------------------------------------
+
+const RAM_SCENE: PackedScene = preload("res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn")
+
+
+## A real, stationary Corvette placed so its front plate sits on the muzzle's spawn point (the nose
+## points to local +y, so `PlateFront` is 36 px below the hull centre).
+func _ram_on_the_muzzle() -> RamCorvette:
+	var ram := RAM_SCENE.instantiate() as RamCorvette
+	_container.add_child(ram)
+	ram.set_physics_process(false)
+	ram.global_position = _muzzle.global_position + Vector2(0.0, -40.0)
+	return ram
+
+
+func _strip_plates(ram: RamCorvette) -> void:
+	for plate in ram.get_node("Plates").get_children():
+		var hb := HitBox.new()
+		hb.damage_type = HitBox.DamageType.ROCKET
+		hb.damage = 9999
+		add_child_autofree(hb)
+		(plate as ArmorPlate)._on_hurt_box_area_entered(hb)
+	# Exposure is deferred to the end of the step the last plate breaks in.
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+
+func test_a_launched_bullet_crossing_a_live_armor_plate_is_not_consumed() -> void:
+	var ram := _ram_on_the_muzzle()
+	var front := ram.get_node("Plates/PlateFront") as ArmorPlate
+	StraightBehavior.new().fire(_state, _mode(BULLET_SCENE), _muzzle)
+	var bullet := _spawned_bullets()[0]
+	bullet.pierces_remaining = Bullet.MAX_PIERCE
+
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+	assert_true(is_instance_valid(bullet) and not bullet.is_queued_for_deletion(),
+			"a plate (and the armoured hull behind it) deflects the bullet: it flies on")
+	assert_eq(bullet.pierces_remaining, Bullet.MAX_PIERCE, "and spends no pierce charge")
+	assert_eq(front.health.current_health, 50, "a bullet never damages a plate")
+	assert_eq(ram.health.current_health, 120, "nor the armoured hull")
+
+
+func test_a_launched_bullet_at_an_exposed_hull_is_consumed() -> void:
+	var ram := _ram_on_the_muzzle()
+	await _strip_plates(ram)
+	assert_false(ram.is_armored(), "sanity: exposed")
+	StraightBehavior.new().fire(_state, _mode(BULLET_SCENE), _muzzle)
+	var bullet := _spawned_bullets()[0]
+
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+
+	assert_true(not is_instance_valid(bullet) or bullet.is_queued_for_deletion(),
+			"an exposed hull is a damaging hit: the bullet stops on it")
+	assert_eq(ram.health.current_health, 70, "for its full 50")
+
+
+## The legacy `ram_ships` group rule is gone: an `unlimited_pierce` shot crossing an armoured Corvette's
+## hull is not stopped and keeps its damage (the hull deflects it through; its plates take it). The
+## asteroid case above is the rule that remains.
+func test_an_unlimited_pierce_bullet_is_not_stopped_by_an_armoured_ram_corvette() -> void:
+	var ram := _ram_on_the_muzzle()
+	var bullet := SNIPER_BULLET_SCENE.instantiate() as Bullet
+	bullet.unlimited_pierce = true
+	_container.add_child(bullet)
+	bullet.global_position = Vector2(-500.0, -500.0)  # far from everything; the hit is driven by hand
+	var hb := bullet.get_node("HitBox") as HitBox
+	var damage_before := hb.damage
+
+	bullet._on_hit_box_area_entered(ram.hurt_box)
+
+	assert_false(ram.is_in_group("ram_ships"), "the group the old rule keyed on is gone")
+	assert_eq(hb.damage, damage_before, "the HitBox is not zeroed")
+	assert_false(bullet.is_queued_for_deletion(), "an armoured Corvette does not stop a Sniper Shot")

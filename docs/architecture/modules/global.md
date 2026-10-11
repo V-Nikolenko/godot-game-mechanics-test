@@ -226,6 +226,12 @@ therefore consumed by the plate it breaks whichever callback runs first, and a p
 entity root (the hurtbox-geometry gate). A target made of parts may also answer `homing_point(from: Vector2) ->
 Vector2`; `homing_missile._fly_to_target` steers at it instead of `global_position`. Gated by
 `tests/integration/test_armor_query.gd` (fixture: `tests/helpers/armored_fixture.gd`).
+
+First shipped user: the **Ram Corvette** (`assault/scenes/enemies/ram_corvette/`, t16) — three plates over a hull whose
+`deflects_hit` / `is_armored()` are true while any plate lives (every projectile passes the hull to reach a plate,
+and `_on_received_damage` deflects the direct emitters), `homing_point` = nearest live plate, exposure deferred one
+step after the last plate breaks. See its `ENEMY.md`; gated by `tests/integration/test_ram_corvette.gd`.
+
 ### CollisionLayers — `global/physics/collision_layers.gd`
 
 `CollisionLayers` (`class_name CollisionLayers extends RefCounted`, constants only) names every
@@ -269,22 +275,24 @@ four true = 1121: `PLAYER_HITBOX | PLAYER_ROCKETS | ENVIRONMENT | HAZARD_CONTACT
 writes `mask()` and `accepted_damage_types` onto a `HurtBox` and remembers it for later.
 
 `apply_alternate()` is a **one-way** switch to a second flag set (`alternate_accepts_*`, same
-defaults) and re-applies to the last `HurtBox` passed to `apply_to()` — exactly the ram ship's
-"armour breaks on the first missile hit and never re-forms" rule, and no more. There is no way
-back to the primary flags once switched.
+defaults) and re-applies to the last `HurtBox` passed to `apply_to()`. It was built for the legacy
+ram ship's "armour breaks on the first missile hit" rule; **no shipped enemy uses it** since the Ram
+Corvette's armour became a deflection rule on a full-size hurtbox (`ArmorPlate`, Phase 4 t16). It is
+kept and unit-tested on a fixture (`tests/unit/test_defense_profile.gd`). There is no way back to the
+primary flags once switched.
 
-`BaseEnemy._ready()` resolves a `DefenseProfile` child by type if the scene authored one (e.g.
-`ram_ship.tscn`, whose profile gives 33 — rockets + environment — with the alternate 97 applied in
-`RamShip._enter_damaged_state()`), otherwise creates a default one on the fly (mask 1121, so no
-scene needs editing) and exposes it as `defense_profile` for a subclass to call `apply_alternate()`
-on. `StationTurret` (a plain `Node2D`, not a `BaseEnemy`) reproduces the default mask by hand
+`BaseEnemy._ready()` resolves a `DefenseProfile` child by type if the scene authored one (no shipped
+scene does today), otherwise creates a default one on the fly (mask 1121, so no scene needs editing)
+and exposes it as `defense_profile`. **Armour is never a narrowed mask**: an armoured enemy keeps the
+default 1121 and refuses damage in `_on_received_damage` (`SpaceStation`, `RamCorvette`; see
+`ArmorPlate` / `ArmorQuery`). `StationTurret` (a plain `Node2D`, not a `BaseEnemy`) reproduces the default mask by hand
 through the same `CollisionLayers` constants rather than using a profile, since it has nothing to
 resolve one for it.
 
 ```gdscript
-# Scene-authored two-state armour (see ram_ship.tscn / ram_ship.gd):
+# A scene-authored profile (no shipped enemy does this today):
 @onready var defense_profile: DefenseProfile = $DefenseProfile   # or BaseEnemy.defense_profile
-func _enter_damaged_state() -> void:
+func _on_some_one_way_event() -> void:
     defense_profile.apply_alternate()   # one-way; re-applies to the HurtBox automatically
 ```
 

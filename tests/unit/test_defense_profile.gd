@@ -3,7 +3,9 @@
 ## (docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md §2.8, task t5-defense-profile).
 extends GutTest
 
-const RAM_CORVETTE_SCENE := "res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn"
+## No shipped enemy authors a `DefenseProfile` since the Ram Corvette's armour became plates (t16), so
+## the scene-authored case builds one on the minimal fixture enemy instead.
+const FIXTURE_ENEMY_SCENE := "res://tests/helpers/fixture_enemy.tscn"
 
 ## Mirrors CollisionLayers so a drift in the constants file shows up as a mismatch here too.
 const _PLAYER_HITBOX := 64
@@ -89,7 +91,7 @@ func test_apply_to_writes_the_mask_and_damage_types_onto_the_hurt_box() -> void:
 
 func test_apply_alternate_switches_to_the_alternate_flags_and_reapplies() -> void:
 	var p := _make()
-	# The ram ship's shape: primary 33 (rockets + environment), alternate 97 (+ bullets).
+	# An example shape (the legacy ram ship's): primary 33 (rockets + environment), alternate 97 (+ bullets).
 	p.accepts_player_bullets = false
 	p.accepts_hazard_contact = false
 	p.alternate_accepts_hazard_contact = false
@@ -132,15 +134,21 @@ func test_apply_alternate_without_a_prior_apply_to_does_not_crash() -> void:
 func test_scene_authored_profile_is_not_duplicated_by_base_enemy() -> void:
 	var container := Node2D.new()
 	add_child_autofree(container)
-	var scene := load(RAM_CORVETTE_SCENE) as PackedScene
-	assert_not_null(scene, "%s failed to load" % RAM_CORVETTE_SCENE)
-	var ram := scene.instantiate() as BaseEnemy
-	container.add_child(ram)  # runs _ready()
+	var scene := load(FIXTURE_ENEMY_SCENE) as PackedScene
+	assert_not_null(scene, "%s failed to load" % FIXTURE_ENEMY_SCENE)
+	var enemy := scene.instantiate() as BaseEnemy
+	var authored := DefenseProfile.new()
+	authored.name = "DefenseProfile"
+	authored.accepts_player_bullets = false
+	enemy.add_child(authored)  # before _ready(), exactly like a scene-authored child
+	container.add_child(enemy)  # runs _ready()
 
 	var profiles: Array[Node] = []
-	for child in ram.get_children():
+	for child in enemy.get_children():
 		if child is DefenseProfile:
 			profiles.append(child)
 
 	assert_eq(profiles.size(), 1, "BaseEnemy must reuse the scene-authored DefenseProfile, not add a second one")
-	assert_eq(ram.defense_profile, profiles[0], "BaseEnemy.defense_profile must be the scene-authored instance")
+	assert_eq(enemy.defense_profile, profiles[0], "BaseEnemy.defense_profile must be the scene-authored instance")
+	assert_eq(enemy.hurt_box.collision_mask, 1121 & ~_PLAYER_HITBOX,
+		"the authored profile's flags, not the default's, wrote the hurt box mask")

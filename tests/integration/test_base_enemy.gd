@@ -19,9 +19,10 @@
 ##
 ## ── Why ram_corvette and space_station are not in the generic damage/death sweep ─────────────────
 ##
-## `RamCorvette._on_received_damage()` (`ram_corvette.gd:27-31`) does not call `health.decrease()` on its
-## first hit at all — that hit only arms it (mask 33 -> 97) — so a single lethal-sized hit behaves
-## completely differently there than on every other enemy. It gets its own dedicated test.
+## `RamCorvette._on_received_damage()` deflects every hit while any of its three `ArmorPlate`s lives,
+## exactly like the station's core does while a turret lives, so a single lethal-sized hit on a fresh
+## Corvette deals nothing. Its plate-by-plate vulnerability (bullets glance off, each rocket breaks the
+## plate it hits, only then does the hull take damage) is owned by `test_ram_corvette.gd`.
 ##
 ## `SpaceStation` overrides both `_on_received_damage()` (deflects everything while a turret is
 ## alive) and `_on_health_changed()` (holds the wreck in the tree for `death_duration` seconds
@@ -48,17 +49,11 @@ extends GutTest
 
 const _ENEMY_ROOT := "res://assault/scenes/enemies"
 const _STATION_TURRET_SCENE := "res://assault/scenes/enemies/space_station/station_turret.tscn"
-const _RAM_CORVETTE_SCENE := "res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn"
 
 ## `DefenseProfile.apply_to()`: `hurt_box.collision_mask = 97 | 1024` (the default profile's mask).
 ## Spelled out rather than computed so a change to that value is what this test is pinned against,
 ## not a copy of the same expression.
 const _DEFAULT_MASK_AFTER_READY := 1121
-
-## `ram_corvette.gd:21`, applied after `super._ready()` sets the default above.
-const _RAM_MASK_BEFORE_HIT := 33
-## `ram_corvette.gd:45`, applied inside `_enter_damaged_state()` on the first received hit.
-const _RAM_MASK_AFTER_HIT := 97
 
 ## `bomber`, `bonus_drone`, `razor_drone`, `gunship`, `gatling_interceptor`, `swarm_drone`,
 ## `fighter`, `ram_corvette`, `sniper`, `space_station`. A sweep that finds fewer has
@@ -67,7 +62,8 @@ const _MIN_ROSTER_SIZE := 10
 
 ## Enemies whose damage/death flow diverges from the generic BaseEnemy path enough that a shared
 ## loop would either be meaningless (space_station never frees on the lethal frame) or wrong
-## (ram_corvette's first hit deals no damage at all). Both get their own dedicated test below.
+## (ram_corvette's hull deflects every hit while a plate lives, like the station's core). Each is
+## owned by its own suite (`test_station_death_sequence.gd`, `test_ram_corvette.gd`).
 const _EXCLUDED_FROM_GENERIC_DAMAGE_FLOW := ["ram_corvette", "space_station"]
 
 
@@ -117,11 +113,9 @@ func test_hurtbox_mask_after_ready_matches_the_pinned_value() -> void:
 		if entity == null:
 			continue
 		checked += 1
-		# ram_corvette is the one enemy whose scene-authored _ready() narrows the mask BaseEnemy
-		# just set — see test_ram_corvette_hurtbox_mask_flips_after_its_first_hit below.
-		var expected: int = _RAM_MASK_BEFORE_HIT if entry["name"] == "ram_corvette" else _DEFAULT_MASK_AFTER_READY
+		# No enemy narrows the mask any more: the Ram Corvette's armour is a deflection rule (t16).
 		assert_eq(
-			entity.hurt_box.collision_mask, expected,
+			entity.hurt_box.collision_mask, _DEFAULT_MASK_AFTER_READY,
 			"%s: post-_ready() hurtbox mask must equal the pinned value" % entry["name"]
 		)
 	assert_gte(
@@ -151,22 +145,6 @@ func test_station_turret_hurtbox_mask_matches_the_pinned_value() -> void:
 		hurt_box.collision_mask, _DEFAULT_MASK_AFTER_READY,
 		"the station turret's post-_ready() hurtbox mask must equal the pinned value"
 	)
-
-
-func test_ram_corvette_hurtbox_mask_flips_after_its_first_hit_and_never_reverts() -> void:
-	var ram := _spawn(_RAM_CORVETTE_SCENE) as BaseEnemy
-	assert_not_null(ram, "ram_corvette.tscn root is not a BaseEnemy")
-	if ram == null:
-		return
-	assert_eq(ram.hurt_box.collision_mask, _RAM_MASK_BEFORE_HIT, "mask before any hit")
-
-	ram.hurt_box.received_damage.emit(9999)
-	assert_eq(ram.hurt_box.collision_mask, _RAM_MASK_AFTER_HIT, "mask after the first received hit")
-
-	# Boundary: a second hit (now processed as ordinary damage, not an arming hit) must not
-	# revert the mask.
-	ram.hurt_box.received_damage.emit(1)
-	assert_eq(ram.hurt_box.collision_mask, _RAM_MASK_AFTER_HIT, "mask must never revert once armed")
 
 
 # ── 2. Damage -> hit flash -> died -> queue_free ──────────────────────────────
@@ -230,41 +208,6 @@ func test_non_lethal_damage_does_not_emit_died() -> void:
 	assert_gte(checked, 1, "roster sweep found no enemy that can take non-lethal damage")
 
 
-func test_ram_corvettes_first_hit_only_arms_it_and_deals_no_damage() -> void:
-	var ram := _spawn(_RAM_CORVETTE_SCENE) as BaseEnemy
-	assert_not_null(ram, "ram_corvette.tscn root is not a BaseEnemy")
-	if ram == null:
-		return
-	watch_signals(ram)
-	assert_eq(ram.health.max_health, 999, "ram_corvette_config.tres is the source of truth for this test")
-
-	ram.hurt_box.received_damage.emit(9999)
-
-	# _enter_damaged_state() (ram_corvette.gd:41-49) resets HP to a flat 100/100 as part of arming —
-	# not "no change" — so two ordinary bullets can finish an otherwise 999-HP hull. This is the
-	# damage amount, not health.decrease(), so `amount_changed`/`_on_health_changed` never fire.
-	assert_eq(ram.health.max_health, 100, "arming resets max_health to a flat 100")
-	assert_eq(ram.health.current_health, 100, "arming resets current_health to a flat 100")
-	assert_signal_not_emitted(ram, "died", "the arming hit must not kill the ram ship")
-	assert_false(ram.was_killed)
-	assert_false(ram.is_queued_for_deletion())
-
-
-func test_ram_corvette_dies_on_a_lethal_hit_after_being_armed() -> void:
-	var ram := _spawn(_RAM_CORVETTE_SCENE) as BaseEnemy
-	assert_not_null(ram, "ram_corvette.tscn root is not a BaseEnemy")
-	if ram == null:
-		return
-	watch_signals(ram)
-
-	ram.hurt_box.received_damage.emit(9999)  # arms it; _enter_damaged_state() resets HP to 100/100
-	ram.hurt_box.received_damage.emit(ram.health.max_health)  # now ordinary lethal damage
-
-	assert_signal_emit_count(ram, "died", 1, "died must fire exactly once")
-	assert_true(ram.was_killed)
-	assert_true(ram.is_queued_for_deletion())
-
-
 # ── 3. Scoring fields copied from config ──────────────────────────────────────
 
 func test_scoring_fields_are_copied_from_config() -> void:
@@ -303,7 +246,7 @@ func test_sniper_score_value_is_copied_from_its_config() -> void:
 # ── 4. AnimatedSprite2D 180° flip ─────────────────────────────────────────────
 
 func test_animated_sprite_is_flipped_180_degrees() -> void:
-	for name in ["fighter", "ram_corvette"]:
+	for name in ["fighter"]:
 		var entity := _spawn("%s/%s/%s.tscn" % [_ENEMY_ROOT, name, name])
 		var sprite := entity.get_node_or_null("AnimatedSprite2D") as Node2D
 		assert_not_null(sprite, "%s: expected an AnimatedSprite2D child" % name)
@@ -317,7 +260,7 @@ func test_animated_sprite_is_flipped_180_degrees() -> void:
 func test_enemies_without_an_animated_sprite_are_unaffected_by_the_flip() -> void:
 	var checked := 0
 	for entry in _sweep():
-		if entry["name"] in ["fighter", "ram_corvette"]:
+		if entry["name"] == "fighter":
 			continue
 		var entity := _spawn(entry["scene"])
 		checked += 1
@@ -325,7 +268,7 @@ func test_enemies_without_an_animated_sprite_are_unaffected_by_the_flip() -> voi
 			entity.get_node_or_null("AnimatedSprite2D"),
 			"%s: expected no AnimatedSprite2D child" % entry["name"]
 		)
-	assert_gte(checked, _MIN_ROSTER_SIZE - 2, "roster sweep too small")
+	assert_gte(checked, _MIN_ROSTER_SIZE - 1, "roster sweep too small")
 
 
 # ── 5. ContactProfile resolution (task cmuj4y8qx006cp52x77tfozc2, INTENT) ─────────────────────────
@@ -336,11 +279,12 @@ func test_enemies_without_an_animated_sprite_are_unaffected_by_the_flip() -> voi
 
 const _CONTACT_FIXTURE := preload("res://tests/helpers/contact_fixture.gd")
 
-## Phase 2 enemies that author their own `ContactProfile` in the scene, with the mode they declare. Every
+## Phase 2+ enemies that author their own `ContactProfile` in the scene, with the mode they declare. Every
 ## other enemy in the sweep is legacy and must resolve the default COLLISION.
 const _AUTHORED_CONTACT_MODES := {
 	"swarm_drone": ContactProfile.Mode.EXPLOSIVE,
 	"razor_drone": ContactProfile.Mode.RAMMING,
+	"ram_corvette": ContactProfile.Mode.ARMOR,
 }
 
 

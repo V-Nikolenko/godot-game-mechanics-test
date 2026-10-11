@@ -475,3 +475,60 @@ func test_sniper_disengage_frees_it_in_assault_only(mode: String = use_parameter
 			break
 	assert_eq(freed, mode == "assault",
 		"%s: the Sniper is freed by its budget in Assault and never in Open Space" % mode)
+
+
+# ── The Ram Corvette (Phase 4, t16) ──────────────────────────────────────────────────────────────
+
+const RAM_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn")
+
+
+func _spawn_ram(harness, pos: Vector2) -> RamCorvette:
+	var entity := RAM_SCENE.instantiate() as RamCorvette
+	entity.global_position = pos
+	harness.root.add_child(entity)
+	entity.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	return entity
+
+
+## Mid-corridor the Assault constraint never engages, so the Corvette's APPROACH (t16's plain intercept)
+## is the same curve in both modes for the same inputs (P-17: relative to the constraint).
+func test_ram_corvette_approach_mid_corridor_is_identical_in_both_modes() -> void:
+	var open_harness = HARNESS.open_space()
+	var assault_harness = HARNESS.assault()
+	add_child_autofree(open_harness.root)
+	add_child_autofree(assault_harness.root)
+	open_harness.player.global_position = Vector2(640.0, 360.0)
+	assault_harness.player.global_position = Vector2(640.0, 360.0)
+
+	var start := Vector2(200.0, 120.0)
+	var open_ram := _spawn_ram(open_harness, start)
+	var assault_ram := _spawn_ram(assault_harness, start)
+	assert_true((assault_ram.get_node("EnemyMover") as EnemyMover).constraint is AssaultCorridorConstraint,
+		"sanity: the Assault Corvette runs under the corridor")
+	for _i in 30:
+		_tick(open_ram, DT)
+		_tick(assault_ram, DT)
+
+	assert_almost_eq(open_ram.velocity.x, assault_ram.velocity.x, 0.001)
+	assert_almost_eq(open_ram.velocity.y, assault_ram.velocity.y, 0.001)
+	assert_gt(open_ram.velocity.length(), 0.0, "sanity: it is moving")
+	assert_gt(open_ram.velocity.dot(Vector2(640.0, 360.0) - start), 0.0, "and it closes on the player")
+
+
+## The mode-specific half: the budget frees the Corvette in Assault, and nothing ever forces it out in
+## Open Space.
+func test_ram_corvette_disengage_frees_it_in_assault_only(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 360.0)
+	var ram := _spawn_ram(harness, Vector2(640.0, 60.0))
+	ram.config.engage_seconds = 0.2
+	var freed := false
+	for _i in 1500:
+		_tick(ram, DT)
+		if ram.is_queued_for_deletion():
+			freed = true
+			break
+	assert_eq(freed, mode == "assault",
+		"%s: the Ram Corvette is freed by its budget in Assault and never in Open Space" % mode)

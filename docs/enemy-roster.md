@@ -126,20 +126,25 @@ b.drone().at(-150, 400)
 
 ---
 
-### `ram` — Ram Ship
+### `ram` — Ram Corvette
 
 **Builder:** `b.ram()`  
-**Scene:** `ram_ship.tscn`  
-**Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
-**Shoots:** No — high collision damage.  
-**HP:** Bullet-proof until hit by a missile, then 100 HP (two bullets)  
-**Score:** Medium
+**Scene:** `ram_corvette.tscn`  
+**Movement:** AI (`RamCorvetteBrain`): today a plain intercept at `cruise_speed` (the charge is Phase 4 t17); in Assault it leaves after `engage_seconds` (4.5 s). **Level 1 still gives it a `.move()` rail** until it is migrated; on a rail its brain is suspended and its ARMOR contact stays armed.  
+**Shoots:** No — contact damage 50 armoured (with a shove), 60 once exposed.  
+**HP:** three armour plates (50 each) over a 120 HP hull. Bullets glance off plates and hull (not consumed); each rocket breaks the plate it hits; a Sniper Shot chips a plate (40) and flies on; only with every plate gone does the hull take damage. One homing volley strips all three plates.  
+**Score:** Medium (35)
 
-**Config fields** (`RamShipConfig`):
+**Config fields** (`RamCorvetteConfig`, flat):
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `movement_speed` | 100.0 | Irrelevant — use `.move()` speed. |
+| `max_health` | 120 | The hull, once exposed. |
+| `plate_health` | 50 | Each of the three plates. |
+| `collision_damage` / `exposed_collision_damage` | 50 / 60 | Contact, armoured / exposed. |
+| `armor_shove_speed` | 260.0 | ARMOR contact shove while armoured; 0 once exposed. |
+| `cruise_speed` / `acceleration` / `max_turn_rate` | 280 / 500 / 2.2 | Mover caps. |
+| `engage_seconds` / `exit_speed` | 4.5 / 500 | Assault budget and exit. |
 
 **Examples:**
 ```gdscript
@@ -514,8 +519,8 @@ above. Things to know if you edit that table (`station_reinforcements.gd::_build
   A test enforces that.
 - **Every entry needs `.free_after(…)`.** The default `FREE_ON_SCREEN_EXIT` only culls a ship that
   has already been on screen once, so one that never arrives would hold `ENEMIES_CLEARED` open.
-- **A squad ship must be killable by the player's primary weapon.** `ram_ship` is not:
-  `ram_ship.gd` narrows its HurtBox mask to 33, which excludes the bullet's layer 64. A test
-  checks every ship in the table for this.
+- **A squad ship must be killable by the player's primary weapon.** The Ram Corvette is not: its hull
+  deflects every bullet until rockets have broken all three of its plates. A test checks every ship in
+  the table keeps the bullet layer in its HurtBox mask (the legacy ram narrowed it to 33).
 
 Behaviour and constraints: [`space_station/ENEMY.md`](../assault/scenes/enemies/space_station/ENEMY.md).
