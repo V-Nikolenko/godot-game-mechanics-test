@@ -5,7 +5,7 @@
 
 > **Build state (Phase 4, t12 shell + t13 cycle).** The scene, config, rail round, aim line, rail fallback, Assault
 > exit and the AI relocation cycle (with firing-point selection, the line-of-sight refusal and the rail trail) are
-> built. The decoy is t14; the real unfolding barrel art is t15 (the `Barrel` is a placeholder gradient whose length the
+> built. The decoy (t14, behind `decoy_telegraph`) is built; the real unfolding barrel art is t15 (the `Barrel` is a placeholder gradient whose length the
 > brain scales). Plans: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.5, §2.8;
 > `docs/plans/cmuyk2qq0008loa2xqwco8raj/3-plan.md` (the cycle).
 
@@ -45,7 +45,7 @@ ENTER ──arrived──► SETTLE ──still, LOS clear──► AIM ──1.
                      ▲                        ▼                                         ▼       ▼
                   RELOCATE ◄──point chosen── BREAK_CONTACT ◄────────────────────────────┴───────┘
 Assault budget expiry: DISENGAGE at once, except in AIM / LOCK, where it waits for the shot or the refusal.
-DECOY (t14) is never entered yet.
+With `SniperConfig.decoy_telegraph` (default false) SETTLE -> DECOY -> AIM: a 0.6 s dim orange line 25-35 deg off the player, CHARGING, never COMMIT, no round. A budget expiry in DECOY disengages at once.
 ```
 
 ### ENTER

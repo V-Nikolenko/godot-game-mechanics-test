@@ -400,11 +400,12 @@ func _harness(mode: String):
 
 
 ## A seeded sniper with the budget lifted. Player at (640, 560), stationary, facing up.
-func _cycle_sniper(harness, pos: Vector2 = Vector2(640.0, 80.0), seed_: int = 4242) -> Sniper:
+func _cycle_sniper(harness, pos: Vector2 = Vector2(640.0, 80.0), seed_: int = 4242, decoy: bool = false) -> Sniper:
 	harness.player.global_position = Vector2(640.0, 560.0)
 	var sniper := SNIPER_SCENE.instantiate() as Sniper
 	(sniper.get_node("Brain") as SniperBrain).rng_seed = seed_
 	sniper.config.engage_seconds = 1000.0
+	sniper.config.decoy_telegraph = decoy
 	sniper.global_position = pos
 	harness.root.add_child(sniper)
 	sniper.set_physics_process(false)
@@ -681,6 +682,100 @@ func test_commit_is_shown_only_in_lock_and_the_barrel_unfolds(mode: String = use
 			assert_lt(barrel.scale.y, 0.5, "%s: and folded while it relocates" % mode)
 	assert_eq(brain.shots_fired, 2, "%s: two whole cycles ran" % mode)
 	assert_true(seen.has(SniperBrain.Phase.RELOCATE), "%s: sanity: it relocated between them" % mode)
+
+
+# ── The decoy (t14, plan §2.5) ───────────────────────────────────────────────────────────────────
+
+## The angle (deg) between the telegraph line and the straight line from the muzzle to the player.
+func _line_offset_from_player(sniper: Sniper) -> float:
+	var telegraph := sniper.get_node("Telegraph") as SniperTelegraph
+	var pts := telegraph.line_points()
+	var muzzle := sniper.get_node("Muzzle") as Marker2D
+	var to_player: Vector2 = TargetInfo.player(get_tree()).position - muzzle.global_position
+	return rad_to_deg(absf((pts[1] - pts[0]).angle_to(to_player)))
+
+
+func test_the_decoy_flag_is_off_in_the_shipped_config() -> void:
+	assert_false(SHIPPED.decoy_telegraph, "the shipped game never shows the decoy")
+
+
+func test_flag_off_never_enters_decoy_over_three_cycles(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var sniper := _cycle_sniper(harness)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	var telegraph := sniper.get_node("Telegraph") as SniperTelegraph
+	var t := 0.0
+	while brain.shots_fired < 3 and t < 60.0:
+		_tick(sniper, DT)
+		t += DT
+		_recycle_rounds(sniper)
+		assert_ne(brain.phase, SniperBrain.Phase.DECOY, "%s: no DECOY with the flag off" % mode)
+		assert_ne(telegraph.line_color, SniperTelegraph.DECOY_COLOR, "%s: no orange line either" % mode)
+	assert_eq(brain.shots_fired, 3, "%s: sanity: three whole cycles ran" % mode)
+
+
+func test_flag_on_decoy_precedes_aim_off_the_player_and_never_looks_like_a_lock(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var sniper := _cycle_sniper(harness, Vector2(640.0, 80.0), 4242, true)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	var light := sniper.get_node("StateLight") as StateLight
+	var telegraph := sniper.get_node("Telegraph") as SniperTelegraph
+	var pool := sniper.get_node("RailPool") as BulletPool
+	var phases: Array[int] = []
+	brain.phase_changed.connect(func(p: int) -> void: phases.append(p))
+	var decoy_ticks := 0
+	var t := 0.0
+	while brain.shots_fired < 3 and t < 60.0:
+		var rounds_before := pool._active.size()
+		_tick(sniper, DT)
+		t += DT
+		if brain.phase == SniperBrain.Phase.DECOY:
+			decoy_ticks += 1
+			assert_eq(light.get_state(), StateLight.State.CHARGING, "%s: DECOY shows CHARGING" % mode)
+			assert_true(telegraph.line_visible and not telegraph.line_locked, "%s: a dim line" % mode)
+			assert_eq(telegraph.line_color, SniperTelegraph.DECOY_COLOR, "%s: the orange decoy colour" % mode)
+			assert_ne(telegraph.line_color, SniperTelegraph.LOCKED_COLOR, "%s: never the lock colour" % mode)
+			assert_eq(telegraph.line_width, SniperTelegraph.DECOY_WIDTH, "%s: width 1" % mode)
+			var offset := _line_offset_from_player(sniper)
+			assert_between(offset, 25.0 - 0.5, 35.0 + 0.5, "%s: the line is 25-35 deg off the player" % mode)
+			assert_eq(pool._active.size(), rounds_before, "%s: no round is acquired during DECOY" % mode)
+		_recycle_rounds(sniper)
+	assert_eq(brain.shots_fired, 3, "%s: sanity: three whole cycles ran" % mode)
+	var decoys := 0
+	for i in phases.size():
+		if phases[i] == SniperBrain.Phase.DECOY:
+			decoys += 1
+			assert_eq(phases[i - 1], SniperBrain.Phase.SETTLE, "%s: DECOY follows SETTLE" % mode)
+		if phases[i] == SniperBrain.Phase.AIM:
+			assert_eq(phases[i - 1], SniperBrain.Phase.DECOY, "%s: every AIM is preceded by a DECOY" % mode)
+	assert_eq(decoys, 3, "%s: one decoy per cycle" % mode)
+	assert_almost_eq(decoy_ticks * DT, 3.0 * sniper.config.decoy_seconds, 0.1, "%s: each lasts decoy_seconds" % mode)
+
+
+func test_the_decoy_picks_both_sides(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var sniper := _cycle_sniper(harness, Vector2(640.0, 80.0), 4242, true)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	var sides := {}
+	var t := 0.0
+	while sides.size() < 2 and t < 120.0:
+		_tick(sniper, DT)
+		t += DT
+		_recycle_rounds(sniper)
+		if brain.phase == SniperBrain.Phase.DECOY:
+			sides[signf(brain.decoy_angle)] = true
+	assert_eq(sides.size(), 2, "%s: both a left and a right decoy were drawn" % mode)
+
+
+func test_a_budget_expiry_in_decoy_disengages_without_a_shot() -> void:
+	var harness = _harness("assault")
+	var sniper := _cycle_sniper(harness, Vector2(640.0, 80.0), 4242, true)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	assert_true(_run_to(sniper, SniperBrain.Phase.DECOY, 20.0), "sanity: reached DECOY")
+	brain.budget.seconds = 0.0
+	_tick(sniper, DT)
+	assert_eq(brain.phase, SniperBrain.Phase.DISENGAGE, "a fake aim is not finished: it leaves at once")
+	assert_eq(brain.shots_fired, 0, "and nothing was fired")
 
 
 func test_the_lock_point_is_the_full_intercept(mode: String = use_parameters(_MODES)) -> void:

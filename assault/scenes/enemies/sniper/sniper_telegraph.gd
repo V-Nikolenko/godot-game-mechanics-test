@@ -4,7 +4,8 @@
 ## It is the sniper's OWN `Node2D` (review C9): the player weapon's `SniperAimVisualizer` is shared and is
 ## not touched. The line is drawn in global space from the muzzle toward an aim point, extended to
 ## `max(distance + 300, 900)` px so it reaches past the player when the sniper is off camera. Tracking is a
-## dim red line of width 1; a locked one is bright near-white, width 3. (The decoy's orange is t14's.)
+## dim red line of width 1; a locked one is bright near-white, width 3. The decoy is a dim orange
+## line of width 1 (`show_decoy_line()`).
 ##
 ## Rails: while an `EnemyPathMover` owns the sniper, `SniperBrain.on_suspended()` calls
 ## `start_rail_cycle()`. This node then runs its own `_process` cycle at the legacy timings - AIM
@@ -24,6 +25,9 @@ const TRACKING_COLOR := Color(1.0, 0.1, 0.1, 0.55)
 const TRACKING_WIDTH := 1.0
 const LOCKED_COLOR := Color(1.0, 0.96, 0.9, 1.0)
 const LOCKED_WIDTH := 3.0
+## The decoy line (SniperConfig.decoy_telegraph): dim orange, width 1 - never the lock's colour or width.
+const DECOY_COLOR := Color(1.0, 0.55, 0.1, 0.45)
+const DECOY_WIDTH := 1.0
 
 ## Set by `sniper.gd` in `_ready()`.
 var config: SniperConfig = SniperConfig.new()
@@ -55,6 +59,16 @@ func show_line(aim_point: Vector2, locked: bool) -> void:
 	line_locked = locked
 	line_color = LOCKED_COLOR if locked else TRACKING_COLOR
 	line_width = LOCKED_WIDTH if locked else TRACKING_WIDTH
+	line_visible = true
+	queue_redraw()
+
+
+## Shows the decoy: a dim orange line toward `aim_point`, which is not where the shot would go.
+func show_decoy_line(aim_point: Vector2) -> void:
+	_aim_point = aim_point
+	line_locked = false
+	line_color = DECOY_COLOR
+	line_width = DECOY_WIDTH
 	line_visible = true
 	queue_redraw()
 

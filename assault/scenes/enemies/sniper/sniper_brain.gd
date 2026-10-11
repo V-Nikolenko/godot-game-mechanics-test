@@ -12,7 +12,10 @@
 ##                               of the player's line it is already on; ends at `0.9 * range` or `break_cap`.
 ##   RELOCATE      [POSITION]    arrives at the next firing point, at a new bearing round the player.
 ##   SETTLE        [POSITION]    brakes to under `settle_epsilon`, then re-checks line of sight.
-##   DECOY         [ATTACK]      (t14) the fake orange line, behind `decoy_telegraph`. Never entered here.
+##   DECOY         [ATTACK]      only with `decoy_telegraph` (default off): after SETTLE, for `decoy_seconds`, a dim
+##                               orange line `decoy_offset_min..max` degrees off the player (side drawn per decoy),
+##                               CHARGING, never COMMIT, no round; then AIM. Stationary, still facing the player. A
+##                               budget expiry here leaves at once: a fake aim is not a shot to finish.
 ##   AIM           [ATTACK]      stationary: tracks the full-intercept lock point at <= `aim_track_rate`, dim line,
 ##                               CHARGING, the barrel unfolds.
 ##   LOCK          [ATTACK]      stationary and frozen: bright line, COMMIT. Line of sight (to the player and along
@@ -90,6 +93,8 @@ var last_trail: RailTrail
 var barrel_open: float = 0.0
 ## True when the budget expired in AIM or LOCK: DISENGAGE follows the shot (or the refusal).
 var disengage_pending: bool = false
+## The current decoy's signed bearing offset from the player (rad); 0 until the first decoy.
+var decoy_angle: float = 0.0
 
 ## `choose_firing_point()`'s last working, for tests: one Dictionary per candidate
 ## (`point`, `bearing`, `delta`, `tier`, `travel`, `score`, `rect_ok`, `cone_ok`, `path_ok`, `los` - null when no ray was
@@ -132,10 +137,11 @@ func tick(delta: float) -> void:
 		Phase.BREAK_CONTACT: _tick_break_contact(delta)
 		Phase.RELOCATE: _tick_relocate()
 		Phase.SETTLE: _tick_settle()
+		Phase.DECOY: _tick_decoy()
 		Phase.AIM: _tick_aim(delta)
 		Phase.LOCK: _tick_lock()
 		Phase.DISENGAGE: _tick_disengage(delta)
-		_: pass  # DECOY arrives with t14; FIRE never lasts past its own tick
+		_: pass  # FIRE never lasts past its own tick
 	_tick_barrel(delta)
 
 
@@ -151,6 +157,7 @@ func enter_phase(p: Phase) -> void:
 	match p:
 		Phase.BREAK_CONTACT: _enter_break_contact()
 		Phase.RELOCATE, Phase.ENTER: arrived = false
+		Phase.DECOY: _enter_decoy()
 		Phase.AIM: _enter_aim()
 		Phase.LOCK: _enter_lock()
 		Phase.DISENGAGE: _enter_disengage()
@@ -384,12 +391,38 @@ func _tick_settle() -> void:
 		mover.face_toward(_target.position)
 	if actor.velocity.length() < config.settle_epsilon:
 		if _line_clear():
-			enter_phase(Phase.AIM)
+			enter_phase(Phase.DECOY if config.decoy_telegraph else Phase.AIM)
 		else:
 			refusals += 1
 			enter_phase(Phase.BREAK_CONTACT)
 	elif _phase_time >= SETTLE_CAP:
 		enter_phase(Phase.BREAK_CONTACT)
+
+
+## Draws the side and size of this decoy's offset. The sign comes first so the draw order is fixed.
+func _enter_decoy() -> void:
+	var side := 1.0 if rng.randf() < 0.5 else -1.0
+	decoy_angle = side * deg_to_rad(rng.randf_range(config.decoy_offset_min, config.decoy_offset_max))
+	_set_light(StateLight.State.CHARGING)
+	_show_decoy_line()
+
+
+## The fake line keeps its offset from the player's current bearing (so it cannot drift onto the player), and the
+## sniper keeps facing the player. Ends in AIM.
+func _tick_decoy() -> void:
+	mover.request_velocity(Vector2.ZERO)
+	if _target.has_target:
+		mover.face_toward(_target.position)
+		_show_decoy_line()
+	if _phase_time >= config.decoy_seconds:
+		enter_phase(Phase.AIM)
+
+
+func _show_decoy_line() -> void:
+	if telegraph == null or not _target.has_target:
+		return
+	var from := _muzzle_pos()
+	telegraph.show_decoy_line(from + (_target.position - from).rotated(decoy_angle))
 
 
 func _enter_aim() -> void:
@@ -577,7 +610,7 @@ func _tick_barrel(delta: float) -> void:
 		_barrel_ready = true
 		_barrel_length = barrel.texture.get_height() if barrel.texture != null else 0.0
 		_barrel_base_y = barrel.position.y + _barrel_length * 0.5
-	var unfolding := phase == Phase.AIM or phase == Phase.LOCK
+	var unfolding := phase == Phase.DECOY or phase == Phase.AIM or phase == Phase.LOCK
 	if unfolding:
 		barrel_open = minf(barrel_open + delta / maxf(config.barrel_unfold_seconds, 0.001), 1.0)
 	else:
