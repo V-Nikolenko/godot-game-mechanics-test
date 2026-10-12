@@ -600,7 +600,7 @@ static func _drop_blocked(v: Vector2, blocked_low: Array, blocked_high: Array) -
 	return out
 
 
-# ── The barrel (a placeholder sprite until the art task) ─────────────────────────────────────────
+# ── The barrel (`sniper_barrel.png`, scaled along its length) ─────────────────────────────────────────
 
 ## Unfolds in AIM / LOCK, folds everywhere else. The base (the end nearest the hull) stays put.
 func _tick_barrel(delta: float) -> void:

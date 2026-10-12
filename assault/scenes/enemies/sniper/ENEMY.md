@@ -5,7 +5,7 @@
 
 > **Build state (Phase 4, t12 shell + t13 cycle).** The scene, config, rail round, aim line, rail fallback, Assault
 > exit and the AI relocation cycle (with firing-point selection, the line-of-sight refusal and the rail trail) are
-> built. The decoy (t14, behind `decoy_telegraph`) is built; the real unfolding barrel art is t15 (the `Barrel` is a placeholder gradient whose length the
+> built. The decoy (t14, behind `decoy_telegraph`) is built; the art is in (t15: a narrow 48x64 top-down hull `sniper.png` and an 8x42 `sniper_barrel.png` whose length the
 > brain scales). Plans: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.5, §2.8;
 > `docs/plans/cmuyk2qq0008loa2xqwco8raj/3-plan.md` (the cycle).
 
@@ -19,7 +19,7 @@
 | Damage | 20 contact (`ContactHitBox`); rail round 28 (`rail_damage`), 25 on a rail (`rail_fallback_damage`) |
 | Speed | `max_speed` 320, `relocate_speed` 260, `break_speed` 320, `exit_speed` 320 |
 | Score | 50 (`SniperConfig.score_value`; it used to be hardcoded in `_ready()`) |
-| Sprite | `sniper.png` (nose-up, so `sprite_forward_angle = -PI / 2`) plus a placeholder `Barrel` |
+| Sprite | `sniper.png` (nose-up, so `sprite_forward_angle = -PI / 2`) plus `sniper_barrel.png` on the `Barrel` node (rear end at y -4, tip at the `Muzzle`, y -46, once unfolded) |
 | Scene / config | `sniper.tscn` / `sniper_config.tres` (flat `SniperConfig`) |
 
 ---
