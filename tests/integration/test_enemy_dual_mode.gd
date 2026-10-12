@@ -491,8 +491,8 @@ func _spawn_ram(harness, pos: Vector2) -> RamCorvette:
 	return entity
 
 
-## Mid-corridor the Assault constraint never engages, so the Corvette's APPROACH (t16's plain intercept)
-## is the same curve in both modes for the same inputs (P-17: relative to the constraint).
+## Mid-corridor the Assault constraint never engages, so the Corvette's APPROACH (an intercept; in Assault plus
+## a side offset, zeroed here) is the same curve in both modes for the same inputs (P-17: relative to the constraint).
 func test_ram_corvette_approach_mid_corridor_is_identical_in_both_modes() -> void:
 	var open_harness = HARNESS.open_space()
 	var assault_harness = HARNESS.assault()
@@ -504,6 +504,12 @@ func test_ram_corvette_approach_mid_corridor_is_identical_in_both_modes() -> voi
 	var start := Vector2(200.0, 120.0)
 	var open_ram := _spawn_ram(open_harness, start)
 	var assault_ram := _spawn_ram(assault_harness, start)
+	# t17: the Assault approach aims beside the player (the diagonal charge); with that offset at 0 it is the
+	# same intercept as Open Space, which is what this case compares (the offset has its own tests). Zeroed on
+	# both: the two worlds share one tree, so the "open" Corvette's AUTO mover can also resolve the Assault
+	# world's corridor.
+	open_ram.config.assault_side_offset = 0.0
+	assault_ram.config.assault_side_offset = 0.0
 	assert_true((assault_ram.get_node("EnemyMover") as EnemyMover).constraint is AssaultCorridorConstraint,
 		"sanity: the Assault Corvette runs under the corridor")
 	for _i in 30:

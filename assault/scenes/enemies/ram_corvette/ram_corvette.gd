@@ -23,8 +23,8 @@ extends BaseEnemy
 ## sees in that step is still a deflection, and the next step sees an exposed hull.
 ##
 ## Contact: the ARMOR `ContactProfile` (armed at setup and for life on a rail) deals `collision_damage`
-## and shoves the player while armoured; exposed, `exposed_collision_damage` and no shove. Disarming
-## outside CHARGE once exposed lands with the charge (t17).
+## and shoves the player while armoured; exposed, `exposed_collision_damage` and no shove, and the brain arms it
+## only during CHARGE (on a rail it stays armed for life).
 ##
 ## Spawn with b.ram().at(x, y); `.move()` is only needed until level 1 leaves its rails.
 
@@ -54,6 +54,7 @@ func _ready() -> void:
 		_plates.append(plate)
 		plate.broken.connect(_on_plate_broken)
 		plate.deflected.connect(_on_plate_deflected)
+	_ram_brain.contact = contact_profile
 	if config:
 		_apply_config(config)
 
@@ -107,6 +108,13 @@ func homing_point(from: Vector2) -> Vector2:
 	return best
 
 
+## The wind-up glow (0..1) on every live plate; the brain drives it.
+func set_plate_glow(amount: float) -> void:
+	for plate in _plates:
+		if is_instance_valid(plate) and plate.is_alive():
+			plate.set_glow(amount)
+
+
 func live_plate_count() -> int:
 	var n := 0
 	for plate in _plates:
@@ -129,6 +137,7 @@ func _on_plate_deflected(_hit_box: HitBox) -> void:
 
 func _on_plate_broken(plate: ArmorPlate) -> void:
 	plate_broken.emit(plate.name)
+	_ram_brain.on_plate_broken()
 	if live_plate_count() == 0 and _armored:
 		call_deferred("_expose")
 
@@ -141,3 +150,4 @@ func _expose() -> void:
 		contact_hit_box.damage = config.exposed_collision_damage
 	contact_profile.shove_speed = 0.0
 	armor_broken.emit()
+	_ram_brain.on_exposed()

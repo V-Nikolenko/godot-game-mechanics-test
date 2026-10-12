@@ -1,5 +1,6 @@
-## Intent tests for the Ram Corvette's armour (docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md §2.6.1,
-## §2.6.3 and the t16 row of §4; task plan docs/plans/cmuyk2qq8008xoa2xxoq1frgn/3-plan.md).
+## Intent tests for the Ram Corvette's armour and charge (docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md §2.6.1-
+## §2.6.3 and the t16 / t17 rows of §4; task plans docs/plans/cmuyk2qq8008xoa2xxoq1frgn/3-plan.md (armour) and
+## docs/plans/cmuyk2qqb0091oa2xy7yn9sxa/3-plan.md (the charge, from "t17" down)).
 ##
 ## INTENT, not characterization: the legacy Ram (a narrowed hurtbox mask, "the first missile arms it")
 ## is gone. Three `ArmorPlate`s sit on a full-size hull. Bullets glance off the plates and the hull and
@@ -535,6 +536,7 @@ func test_exposed_contact_hurts_more_and_no_longer_shoves(mode: String = use_par
 	var ram := _world(mode)
 	await _strip(ram)
 	assert_eq(ram.contact_hit_box.damage, 60, "%s: exposed contact deals 60" % mode)
+	(ram.get_node("Brain") as RamCorvetteBrain).enter_phase(RamCorvetteBrain.Phase.CHARGE)  # exposed, it hurts only in CHARGE (t17)
 	var player := _knockback_player(ram.global_position + Vector2(0.0, -30.0))
 	await _frames(3)
 	assert_eq(player.health.current_health, Fixture.PLAYER_MAX_HEALTH - 60, "%s: and lands for 60" % mode)
@@ -573,3 +575,831 @@ func test_on_a_rail_the_armor_contact_stays_armed_and_the_brain_is_idle() -> voi
 		ram._physics_process(1.0 / 60.0)
 	assert_true(ram.contact_profile.is_armed())
 	assert_eq(ram.velocity, Vector2.ZERO, "a suspended brain never moves it")
+
+
+# ── t17: the charge (task plan docs/plans/cmuyk2qqb0091oa2xy7yn9sxa/3-plan.md; epic §2.6.2, §4 t17) ──
+#
+# The Corvette is hand-ticked here (`set_physics_process(false)`, then `_physics_process(DT)` and
+# `position = before + velocity * DT`), the same technique as test_sniper.gd: deterministic, no `Timer`. The
+# player stub moves by its own `velocity` every step. "dual" cases run in both harnesses; the Assault budget is
+# lifted (`engage_seconds`) unless the case is about the budget.
+
+const DT := 1.0 / 60.0
+const Phase := RamCorvetteBrain.Phase
+
+
+func _harness(mode: String):
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	_root = harness.root
+	return harness
+
+
+## A hand-ticked Corvette at `pos` with its budget lifted, the player stub stationary at `player_pos`, facing
+## up. `tweak` runs on the Corvette's private config copy before it enters the tree.
+func _live_ram(harness, pos: Vector2, player_pos: Vector2, tweak: Callable = Callable()) -> RamCorvette:
+	harness.player.global_position = player_pos
+	harness.player.velocity = Vector2.ZERO
+	harness.player.rotation = 0.0
+	var ram := RAM_SCENE.instantiate() as RamCorvette
+	ram.config.engage_seconds = 1000.0
+	(ram.get_node("Brain") as RamCorvetteBrain).rng_seed = 1717
+	if tweak.is_valid():
+		tweak.call(ram)
+	ram.global_position = pos
+	_root.add_child(ram)
+	ram.set_physics_process(false)
+	return ram
+
+
+## Frees a harness mid-test, so the next one's player is the only one `TargetInfo.player()` can find.
+func _drop(harness) -> void:
+	harness.root.queue_free()
+	await get_tree().process_frame
+
+
+func _brain(ram: RamCorvette) -> RamCorvetteBrain:
+	return ram.get_node("Brain") as RamCorvetteBrain
+
+
+func _gone(ram: RamCorvette) -> bool:
+	return not is_instance_valid(ram) or ram.is_queued_for_deletion()
+
+
+## One step: the stub moves, then the Corvette's own tick, then its velocity is integrated.
+func _step(ram: RamCorvette, player: CharacterBody2D) -> void:
+	player.global_position += player.velocity * DT
+	if _gone(ram):
+		return
+	var before := ram.global_position
+	ram._physics_process(DT)
+	ram.global_position = before + ram.velocity * DT
+
+
+## Steps until the brain is in `p` (true) or `limit` seconds pass (false).
+func _run_to(ram: RamCorvette, player: CharacterBody2D, p: int, limit: float) -> bool:
+	var brain := _brain(ram)
+	var t := 0.0
+	while t < limit:
+		if brain.phase == p:
+			return true
+		_step(ram, player)
+		t += DT
+	return brain.phase == p
+
+
+## A rocket-typed HitBox straight into `plate_name`'s classifier: breaks it at once (the plate's own path).
+func _break_plate(ram: RamCorvette, plate_name: StringName) -> void:
+	var hb := HitBox.new()
+	hb.damage_type = HitBox.DamageType.ROCKET
+	hb.damage = 9999
+	add_child_autofree(hb)
+	_plate(ram, plate_name)._on_hurt_box_area_entered(hb)
+
+
+## The player's `predicted_position` the brain uses, from the Corvette at `from` (the brain's own formula,
+## with the shipped numbers - the test's independent copy).
+func _expected_aim(from: Vector2, player: CharacterBody2D, speed: float) -> Vector2:
+	var lead := clampf(from.distance_to(player.global_position) / speed, RAM_CONFIG.lead_min, RAM_CONFIG.lead_max)
+	return player.global_position + player.velocity * lead
+
+
+func _deg(a: Vector2, b: Vector2) -> float:
+	return absf(rad_to_deg(a.angle_to(b)))
+
+
+func test_the_charge_config_is_the_epic_plans() -> void:
+	assert_eq(RAM_CONFIG.cruise_speed, 280.0)
+	assert_eq(RAM_CONFIG.exposed_cruise_speed, 340.0)
+	assert_eq(RAM_CONFIG.acceleration, 500.0)
+	assert_eq(RAM_CONFIG.charge_speed, 620.0)
+	assert_eq(RAM_CONFIG.exposed_charge_speed, 700.0)
+	assert_eq(RAM_CONFIG.engage_range, 420.0)
+	assert_eq(RAM_CONFIG.assault_side_offset, 240.0)
+	assert_eq(RAM_CONFIG.line_up_cap, 0.5)
+	assert_eq(RAM_CONFIG.lead_min, 0.15)
+	assert_eq(RAM_CONFIG.lead_max, 0.6)
+	assert_eq(RAM_CONFIG.wind_up_seconds, 0.65)
+	assert_eq(RAM_CONFIG.windup_track_fraction, 0.6)
+	assert_eq(RAM_CONFIG.overshoot, 220.0)
+	assert_eq(RAM_CONFIG.charge_max_time, 1.45)
+	assert_eq(RAM_CONFIG.wide_turn_rate, 1.4)
+	assert_almost_eq(RAM_CONFIG.wind_up_seconds + RAM_CONFIG.charge_max_time, 2.1, 0.0001,
+			"the Assault deferral bound t21/t22 rely on")
+	assert_lte(RAM_CONFIG.engage_range + RAM_CONFIG.lead_max * 420.0 + RAM_CONFIG.overshoot,
+			RAM_CONFIG.charge_speed * RAM_CONFIG.charge_max_time,
+			"the designed worst case (420 range + a 0.6 s lead on a 420 px/s player + overshoot) fits the cap")
+	assert_lte((maxf(RAM_CONFIG.charge_speed, RAM_CONFIG.exposed_charge_speed) - 30.0) / RAM_CONFIG.braking,
+			RAM_CONFIG.line_up_cap, "the hard brake takes even a full-speed charge down to a crawl inside line_up_cap")
+
+
+# ── t17 1. The charge follows the frozen predicted point ─────────────────────────────────────────
+
+func test_the_charge_follows_the_frozen_predicted_point(mode: String = use_parameters(MODES)) -> void:
+	var h = _harness(mode)
+	var ram := _live_ram(h, Vector2(400.0, 200.0), Vector2(640.0, 560.0))
+	var brain := _brain(ram)
+	h.player.velocity = Vector2(150.0, 0.0)
+	brain.enter_phase(Phase.LINE_UP)
+	var expected := Vector2.INF
+	var t := 0.0
+	while brain.phase != Phase.CHARGE and t < 3.0:
+		var before := ram.global_position
+		_step(ram, h.player)
+		t += DT
+		if brain.aim_frozen and expected == Vector2.INF:
+			expected = _expected_aim(before, h.player, RAM_CONFIG.charge_speed)
+			assert_gt(_deg(h.player.global_position - before, expected - before), 5.0,
+					"sanity: the predicted point is well off where the player is now")
+			h.player.velocity = Vector2(-300.0, 0.0)  # reverse after the freeze
+	assert_eq(brain.phase, Phase.CHARGE, "%s: it charged" % mode)
+	assert_ne(expected, Vector2.INF, "%s: the aim froze first" % mode)
+	_step(ram, h.player)
+	assert_lt(_deg(ram.velocity, expected - brain.charge_origin), 5.0,
+			"%s: the charge points at the predicted point captured at the freeze" % mode)
+	var heading := ram.velocity
+	var ticks := 0
+	while brain.phase == Phase.CHARGE and ticks < 200:
+		assert_lt(_deg(ram.velocity, heading), 0.5, "%s: the line is never re-aimed" % mode)
+		_step(ram, h.player)
+		ticks += 1
+
+
+# ── t17 2. WIND_UP: 0.65 s, a crawl, the glow to 1 ───────────────────────────────────────────────
+
+func test_the_wind_up_crawls_and_glows_for_its_full_length(mode: String = use_parameters(MODES)) -> void:
+	var h = _harness(mode)
+	var ram := _live_ram(h, Vector2(300.0, 100.0), Vector2(640.0, 560.0))
+	var brain := _brain(ram)
+	var light := ram.get_node("StateLight") as StateLight
+	assert_true(_run_to(ram, h.player, Phase.WIND_UP, 6.0), "%s: it reached WIND_UP from a real approach" % mode)
+	var ticks := 0
+	var max_speed := ram.velocity.length()
+	var last_glow := -1.0
+	var rising := true
+	while brain.phase == Phase.WIND_UP and ticks < 200:
+		assert_eq(light.get_state(), StateLight.State.CHARGING, "%s: CHARGING through the wind-up" % mode)
+		if brain.glow < last_glow:
+			rising = false
+		last_glow = brain.glow
+		_step(ram, h.player)
+		ticks += 1
+		if brain.phase == Phase.WIND_UP:
+			max_speed = maxf(max_speed, ram.velocity.length())
+	assert_almost_eq(ticks * DT, RAM_CONFIG.wind_up_seconds, DT + 0.0001, "%s: 0.65 s +- a tick" % mode)
+	assert_lte(max_speed, 30.0, "%s: at most a crawl" % mode)
+	assert_true(rising, "%s: the glow only rises" % mode)
+	assert_gt(last_glow, 0.9, "%s: nearly full at the last wind-up tick" % mode)
+	assert_eq(brain.phase, Phase.CHARGE)
+	assert_eq(brain.glow, 1.0, "%s: full glow in CHARGE" % mode)
+	assert_eq(light.get_state(), StateLight.State.COMMIT, "%s: COMMIT in CHARGE" % mode)
+	for plate_name in PLATE_NAMES:
+		assert_eq(_plate(ram, plate_name).sprite.modulate, ArmorPlate._GLOW_COLOR, "%s: %s glows" % [mode, plate_name])
+
+
+## Review R1-N2: the fastest way into LINE_UP is a capped exposed charge (700 px/s) whose WIDE_TURN ends on its first
+## tick, the player still dead ahead. The wind-up after it is still a crawl.
+func test_a_line_up_straight_out_of_a_full_speed_charge_still_winds_up_at_a_crawl(mode: String = use_parameters(MODES)) -> void:
+	var h = _harness(mode)
+	var ram := _live_ram(h, Vector2(-40.0, 360.0), Vector2(1360.0, 360.0))
+	var brain := _brain(ram)
+	await _strip(ram)
+	brain.enter_phase(Phase.LINE_UP)
+	assert_true(_run_to(ram, h.player, Phase.CHARGE, 3.0))
+	assert_true(_run_to(ram, h.player, Phase.LINE_UP, 3.0), "%s: straight back into LINE_UP" % mode)
+	assert_gt(ram.velocity.length(), 600.0, "%s: sanity: at charge speed as LINE_UP starts" % mode)
+	assert_gt(brain.glow, 0.9, "%s: sanity: the last charge's glow is still up" % mode)
+	# Review R2-N4: from here the glow fades, then the wind-up ramps it from wherever it is - it never snaps down.
+	var biggest_drop := 0.0
+	var t := 0.0
+	while brain.phase == Phase.LINE_UP and t < 1.0:
+		var g := brain.glow
+		_step(ram, h.player)
+		t += DT
+		biggest_drop = maxf(biggest_drop, g - brain.glow)
+	assert_eq(brain.phase, Phase.WIND_UP)
+	assert_lte(biggest_drop, DT / RAM_CONFIG.glow_fade_seconds + 0.0001, "%s: the glow fades, never snaps to 0" % mode)
+	var max_speed := ram.velocity.length()
+	var ticks := 0
+	while brain.phase == Phase.WIND_UP and ticks < 120:
+		_step(ram, h.player)
+		ticks += 1
+		if brain.phase == Phase.WIND_UP:
+			max_speed = maxf(max_speed, ram.velocity.length())
+	assert_lte(max_speed, 30.0, "%s: <= 30 px/s through the wind-up" % mode)
+
+
+# ── t17 3. Overshoot; 4. the boost cap ───────────────────────────────────────────────────────────
+
+func test_the_charge_overshoots_the_point_by_at_least_200_px(mode: String = use_parameters(MODES)) -> void:
+	var h = _harness(mode)
+	var ram := _live_ram(h, Vector2(640.0, 100.0), Vector2(640.0, 560.0))
+	var brain := _brain(ram)
+	brain.enter_phase(Phase.LINE_UP)
+	assert_true(_run_to(ram, h.player, Phase.CHARGE, 3.0))
+	var end := ram.global_position
+	var t := 0.0
+	while brain.phase == Phase.CHARGE and t < 3.0:
+		_step(ram, h.player)
+		t += DT
+		if brain.phase == Phase.CHARGE:
+			end = ram.global_position
+	assert_eq(brain.phase, Phase.WIDE_TURN, "%s: CHARGE ends in WIDE_TURN" % mode)
+	var along := (brain.charge_point - brain.charge_origin).dot(brain.charge_dir)
+	assert_lte(along + RAM_CONFIG.overshoot, RAM_CONFIG.charge_speed * RAM_CONFIG.charge_max_time,
+			"%s: inside the envelope, so the cap never cut this charge" % mode)
+	assert_gte((end - brain.charge_point).dot(brain.charge_dir), 200.0, "%s: >= 200 px past the point" % mode)
+
+
+func test_a_far_aim_point_is_cut_at_charge_max_time(mode: String = use_parameters(MODES)) -> void:
+	var h = _harness(mode)
+	var ram := _live_ram(h, Vector2(-40.0, 360.0), Vector2(1360.0, 360.0))
+	var brain := _brain(ram)
+	var mover := ram.get_node("EnemyMover") as EnemyMover
+	brain.enter_phase(Phase.LINE_UP)
+	assert_true(_run_to(ram, h.player, Phase.CHARGE, 3.0))
+	assert_almost_eq(brain.charge_duration, RAM_CONFIG.charge_max_time, 0.0001,
+			"%s: 1400 px + overshoot would need 2.6 s; the boost is cut" % mode)
+	var boosting := 0
+	var t := 0.0
+	while brain.phase == Phase.CHARGE and t < 4.0:
+		if mover.is_boosting():
+			boosting += 1
+		_step(ram, h.player)
+		t += DT
+	assert_lte(boosting * DT, RAM_CONFIG.charge_max_time + DT + 0.0001, "%s: never longer than charge_max_time" % mode)
+
+
+# ── t17 5. The LINE_UP cap ───────────────────────────────────────────────────────────────────────
+
+func test_line_up_never_outlasts_its_cap(mode: String = use_parameters(MODES)) -> void:
+	var h = _harness(mode)
+	var centre := Vector2(640.0, 360.0)
+	var radius := 300.0
+	# The stub orbits the stationary Corvette at 4 rad/s, faster than its 2.2 rad/s nose, starting under the nose (it
+	# rests pointing down) and running ahead of it: the aim (led ahead of the stub) stays out of the 8 deg window, so
+	# only the cap can end the line-up.
+	var omega := 4.0
+	var angle := PI / 2.0
+	var ram := _live_ram(h, centre, centre + Vector2.RIGHT.rotated(angle) * radius)
+	h.player.velocity = Vector2.RIGHT.rotated(angle + PI / 2.0) * radius * omega
+	var brain := _brain(ram)
+	brain.enter_phase(Phase.LINE_UP)
+	var ticks := 0
+	while brain.phase == Phase.LINE_UP and ticks < 120:
+		angle += omega * DT
+		h.player.global_position = centre + Vector2.RIGHT.rotated(angle) * radius
+		h.player.velocity = Vector2.RIGHT.rotated(angle + PI / 2.0) * radius * omega
+		var before := ram.global_position
+		ram._physics_process(DT)
+		ram.global_position = before + ram.velocity * DT
+		ticks += 1
+	assert_eq(brain.phase, Phase.WIND_UP, "%s: LINE_UP hands over to WIND_UP" % mode)
+	assert_lte(ticks * DT, RAM_CONFIG.line_up_cap + DT + 0.0001, "%s: within line_up_cap + a tick" % mode)
+	assert_gte(ticks * DT, RAM_CONFIG.line_up_cap - DT, "%s: sanity: it was the cap, not the nose, that ended it" % mode)
+
+
+# ── t17 6. A miss and the wide turn ──────────────────────────────────────────────────────────────
+
+func test_a_missed_charge_survives_and_turns_wide(mode: String = use_parameters(MODES)) -> void:
+	var h = _harness(mode)
+	# High in the corridor, so the charge, the slow-down and the turn all stay inside the visible rect, where the
+	# Assault corridor adds nothing to the velocity (review R2-N1).
+	var ram := _live_ram(h, Vector2(640.0, -200.0), Vector2(640.0, 260.0))
+	var brain := _brain(ram)
+	brain.enter_phase(Phase.LINE_UP)
+	var t := 0.0
+	while not brain.aim_frozen and t < 2.0:
+		_step(ram, h.player)
+		t += DT
+	h.player.global_position += Vector2(260.0, 0.0)  # sidestep after the freeze
+	assert_true(_run_to(ram, h.player, Phase.WIDE_TURN, 3.0), "%s: the miss ends in WIDE_TURN" % mode)
+	assert_false(_gone(ram), "%s: a miss never kills it" % mode)
+	assert_eq(ram.health.current_health, 120)
+	var prev := brain.turn_dir
+	var max_step := 0.0
+	# The flown arc: from the first tick at cruise, the velocity heading turns no further than the commanded heading
+	# did, plus the lag it started with (the velocity follows `turn_dir` through the mover's acceleration).
+	var flown := 0.0
+	var commanded := 0.0
+	var lag := -1.0
+	t = 0.0
+	while brain.phase == Phase.WIDE_TURN and t < 6.0:
+		var v_before := ram.velocity
+		var turn_before := brain.turn_dir
+		_step(ram, h.player)
+		t += DT
+		if brain.phase == Phase.WIDE_TURN:
+			max_step = maxf(max_step, absf(prev.angle_to(brain.turn_dir)))
+			prev = brain.turn_dir
+			if lag < 0.0 and absf(v_before.length() - RAM_CONFIG.cruise_speed) < 0.02 * RAM_CONFIG.cruise_speed:
+				lag = absf(v_before.angle_to(turn_before))
+			if lag >= 0.0:
+				flown += absf(v_before.angle_to(ram.velocity))
+				commanded += absf(turn_before.angle_to(brain.turn_dir))
+	assert_gt(max_step, 0.0, "sanity: it turned")
+	assert_lte(max_step, RAM_CONFIG.wide_turn_rate * DT + 0.0001, "%s: at most wide_turn_rate per tick" % mode)
+	assert_gte(lag, 0.0, "sanity: it settled at cruise during the turn")
+	assert_lte(flown, commanded + lag + 0.02, "%s: the flown arc turns no further than commanded (+ its initial lag)" % mode)
+	assert_true(brain.phase == Phase.LINE_UP or brain.phase == Phase.APPROACH, "%s: then goes again" % mode)
+	assert_true(_run_to(ram, h.player, Phase.LINE_UP, 6.0), "%s: and lines up again" % mode)
+
+
+# ── t17 7. Contact by phase ──────────────────────────────────────────────────────────────────────
+
+func test_contact_is_armed_in_every_phase_while_armoured_and_only_in_charge_once_exposed(mode: String = use_parameters(MODES)) -> void:
+	var ram := _world(mode)
+	var brain := _brain(ram)
+	var phases := [Phase.APPROACH, Phase.LINE_UP, Phase.WIND_UP, Phase.CHARGE, Phase.WIDE_TURN, Phase.STAGGER]
+	for p in phases:
+		brain.enter_phase(p)
+		assert_true(ram.contact_profile.is_armed(), "%s armoured: armed in %s" % [mode, Phase.keys()[p]])
+	brain.enter_phase(Phase.APPROACH)
+	await _strip(ram)
+	assert_false(ram.contact_profile.is_armed(), "%s exposed: disarmed outside CHARGE" % mode)
+	phases = [Phase.LINE_UP, Phase.WIND_UP, Phase.CHARGE, Phase.WIDE_TURN, Phase.CHARGE, Phase.STAGGER, Phase.CHARGE, Phase.APPROACH]
+	for p in phases:
+		brain.enter_phase(p)
+		assert_eq(ram.contact_profile.is_armed(), p == Phase.CHARGE, "%s exposed: armed only in CHARGE (%s)" % [mode, Phase.keys()[p]])
+
+
+## Review R1-N1 / R2-N5: the hard brake is on only while it stops to aim; everywhere else the mover's own
+## acceleration governs, so the post-charge slow-down and the wide turn stay wide.
+func test_the_hard_brake_is_on_only_while_it_stops_to_aim() -> void:
+	var ram := _world("open_space")
+	var brain := _brain(ram)
+	var mover := ram.get_node("EnemyMover") as EnemyMover
+	assert_eq(mover.braking, 0.0, "at spawn (APPROACH): the mover's acceleration")
+	for p in [Phase.LINE_UP, Phase.WIND_UP, Phase.CHARGE, Phase.WIDE_TURN, Phase.STAGGER, Phase.APPROACH, Phase.DISENGAGE]:
+		brain.enter_phase(p)
+		var stopping: bool = p == Phase.LINE_UP or p == Phase.WIND_UP or p == Phase.STAGGER
+		assert_eq(mover.braking, RAM_CONFIG.braking if stopping else 0.0, "braking in %s" % Phase.keys()[p])
+
+
+func test_an_exposed_touch_outside_the_charge_does_nothing(mode: String = use_parameters(MODES)) -> void:
+	var ram := _world(mode)
+	await _strip(ram)
+	_brain(ram).enter_phase(Phase.WIDE_TURN)
+	var player := _knockback_player(ram.global_position + Vector2(0.0, -30.0))
+	await _frames(3)
+	assert_eq(player.health.current_health, Fixture.PLAYER_MAX_HEALTH, "%s: no contact damage outside CHARGE" % mode)
+	assert_eq(player.impulses.size(), 0)
+
+
+func test_exposure_mid_charge_keeps_the_contact_armed_until_the_charge_ends(mode: String = use_parameters(MODES)) -> void:
+	var ram := _world(mode)
+	var brain := _brain(ram)
+	brain.enter_phase(Phase.CHARGE)
+	await _strip(ram)
+	assert_true(brain.exposed, "sanity: exposed")
+	assert_eq(brain.phase, Phase.CHARGE, "%s: a plate broken in CHARGE changes nothing" % mode)
+	assert_true(ram.contact_profile.is_armed(), "%s: still armed for the rest of the charge" % mode)
+	brain.enter_phase(Phase.WIDE_TURN)
+	assert_false(ram.contact_profile.is_armed(), "%s: disarmed once it ends" % mode)
+
+
+## Review R1-B1: a rail suspends the brain, and the rail fallback is the ARMOR profile armed for life - stripping
+## the plates must not disarm it through the (never-ticking) brain.
+func test_on_a_rail_a_stripped_corvette_keeps_its_contact(mode: String = use_parameters(MODES)) -> void:
+	var ram := _world(mode)
+	ram.suspend_ai()
+	var changes := _count(_brain(ram).phase_changed)
+	await _strip(ram)
+	assert_false(ram.is_armored(), "sanity: exposed")
+	assert_true(ram.contact_profile.is_armed(), "%s: still armed on its rail" % mode)
+	var player := _knockback_player(ram.global_position + Vector2(0.0, -30.0))
+	await _frames(3)
+	assert_eq(player.health.current_health, Fixture.PLAYER_MAX_HEALTH - 60, "%s: and lands the exposed 60" % mode)
+	assert_eq(player.impulses.size(), 0, "%s: without the armour's shove" % mode)
+	assert_eq(changes[0], 0, "%s: the suspended brain changed no phase" % mode)
+
+
+# ── t17 8. Stagger ───────────────────────────────────────────────────────────────────────────────
+
+func test_a_plate_broken_in_wind_up_staggers_and_cancels_the_charge(mode: String = use_parameters(MODES)) -> void:
+	var h = _harness(mode)
+	var ram := _live_ram(h, Vector2(640.0, 200.0), Vector2(640.0, 560.0))
+	var brain := _brain(ram)
+	brain.enter_phase(Phase.LINE_UP)
+	assert_true(_run_to(ram, h.player, Phase.WIND_UP, 2.0))
+	_break_plate(ram, &"PlateLeft")
+	assert_eq(brain.phase, Phase.STAGGER, "%s: the wind-up is cancelled" % mode)
+	assert_eq(brain.glow, 0.0, "%s: the glow drops" % mode)
+	var changes := _count(brain.phase_changed)
+	var ticks := 0
+	var charged := false
+	while brain.phase == Phase.STAGGER and ticks < 120:
+		_step(ram, h.player)
+		ticks += 1
+		if ticks == 6:
+			_break_plate(ram, &"PlateRight")
+			assert_eq(changes[0], 0, "%s: a plate broken mid-stagger restarts nothing" % mode)
+		charged = charged or brain.phase == Phase.CHARGE
+	assert_false(charged, "%s: no charge out of the stagger" % mode)
+	assert_almost_eq(ticks * DT, RAM_CONFIG.stagger_seconds, DT + 0.0001, "%s: a 0.4 s stagger" % mode)
+	assert_eq(brain.phase, Phase.LINE_UP, "%s: then it lines up again" % mode)
+
+
+func test_a_plate_broken_in_line_up_staggers_too(mode: String = use_parameters(MODES)) -> void:
+	var h = _harness(mode)
+	var ram := _live_ram(h, Vector2(640.0, 200.0), Vector2(640.0, 560.0))
+	var brain := _brain(ram)
+	brain.enter_phase(Phase.LINE_UP)
+	_step(ram, h.player)
+	_break_plate(ram, &"PlateFront")
+	assert_eq(brain.phase, Phase.STAGGER, "%s" % mode)
+
+
+func test_a_plate_broken_mid_charge_does_not_stop_it(mode: String = use_parameters(MODES)) -> void:
+	var h = _harness(mode)
+	var ram := _live_ram(h, Vector2(640.0, 100.0), Vector2(640.0, 560.0))
+	var brain := _brain(ram)
+	brain.enter_phase(Phase.LINE_UP)
+	assert_true(_run_to(ram, h.player, Phase.CHARGE, 3.0))
+	_step(ram, h.player)
+	_break_plate(ram, &"PlateRight")
+	assert_eq(brain.phase, Phase.CHARGE, "%s: the committed charge carries on" % mode)
+	_step(ram, h.player)
+	assert_eq(brain.phase, Phase.CHARGE)
+	assert_almost_eq(ram.velocity.length(), RAM_CONFIG.charge_speed, 0.01)
+
+
+func test_a_stagger_after_the_budget_expired_ends_in_disengage() -> void:
+	var h = _harness("assault")
+	var ram := _live_ram(h, Vector2(640.0, 200.0), Vector2(640.0, 560.0))
+	var brain := _brain(ram)
+	brain.enter_phase(Phase.LINE_UP)
+	assert_true(_run_to(ram, h.player, Phase.WIND_UP, 2.0))
+	brain.budget.seconds = brain.budget.seconds - brain.budget.remaining()  # expires on the next update
+	_step(ram, h.player)
+	assert_eq(brain.phase, Phase.WIND_UP, "the expiry is deferred in WIND_UP")
+	assert_true(brain.disengage_pending)
+	_break_plate(ram, &"PlateLeft")
+	assert_eq(brain.phase, Phase.STAGGER)
+	var t := 0.0
+	while brain.phase == Phase.STAGGER and t < 2.0:
+		_step(ram, h.player)
+		t += DT
+	assert_eq(brain.phase, Phase.DISENGAGE, "the stagger hands over to DISENGAGE, not a new line-up")
+
+
+# ── t17 9. Exposed ───────────────────────────────────────────────────────────────────────────────
+
+func test_an_exposed_corvette_is_faster_and_hits_harder(mode: String = use_parameters(MODES)) -> void:
+	var h = _harness(mode)
+	var ram := _live_ram(h, Vector2(640.0, 200.0), Vector2(640.0, 560.0))
+	var brain := _brain(ram)
+	var mover := ram.get_node("EnemyMover") as EnemyMover
+	await _strip(ram)
+	assert_true(brain.exposed, "%s: the brain was told" % mode)
+	assert_eq(ram.contact_hit_box.damage, 60, "%s: contact 60" % mode)
+	assert_true(_run_to(ram, h.player, Phase.CHARGE, 3.0))
+	_step(ram, h.player)
+	assert_almost_eq(ram.velocity.length(), 700.0, 0.01, "%s: the exposed charge is 700" % mode)
+	brain.enter_phase(Phase.APPROACH)
+	ram.global_position = Vector2(640.0, -100.0)
+	_step(ram, h.player)
+	assert_eq(mover.max_speed, 340.0, "%s: the exposed cruise cap" % mode)
+
+
+## The Corvette's offset from the player's aim line (the line from the player along its facing).
+func _off_aim_line(ram: RamCorvette, player: CharacterBody2D) -> Vector2:
+	var f := Vector2.UP.rotated(player.rotation)
+	var to_me := ram.global_position - player.global_position
+	return to_me - f * to_me.dot(f)
+
+
+## Runs an APPROACH (engage_range shrunk so it stays there) for 0.5 s with the player's nose `facing_deg` off the
+## Corvette. Returns {off_before, off_after, nudged, nudge_away}: the aim-line offsets at the start and end, whether
+## any nudge was offered, and whether every offered nudge pointed away from the aim line.
+func _evasion_run(mode: String, strip: bool, facing_deg: float) -> Dictionary:
+	var h = _harness(mode)
+	var player_pos := Vector2(640.0, 760.0)
+	var start := player_pos + Vector2(0.0, -550.0).rotated(deg_to_rad(10.0))
+	var ram := _live_ram(h, start, player_pos, func(r: RamCorvette) -> void: r.config.engage_range = 50.0)
+	if strip:
+		await _strip(ram)
+	h.player.rotation = Vector2.UP.angle_to(start - player_pos) + deg_to_rad(facing_deg)
+	var off_before := _off_aim_line(ram, h.player)
+	var nudged := false
+	var nudge_away := true
+	for i in 30:
+		var off := _off_aim_line(ram, h.player)
+		_step(ram, h.player)
+		assert_eq(_brain(ram).phase, Phase.APPROACH, "%s: still approaching (tick %d)" % [mode, i])
+		var nudge := _brain(ram).evade_nudge
+		if nudge != Vector2.ZERO:
+			nudged = true
+			nudge_away = nudge_away and nudge.dot(off.normalized()) > 0.0
+	var result := {"off_before": off_before, "off_after": _off_aim_line(ram, h.player), "nudged": nudged, "nudge_away": nudge_away}
+	await _drop(h)
+	return result
+
+
+func test_an_exposed_corvette_jinks_out_of_the_aim_line_only_when_aimed_at(mode: String = use_parameters(MODES)) -> void:
+	var aimed: Dictionary = await _evasion_run(mode, true, 8.0)
+	var away: Dictionary = await _evasion_run(mode, true, 90.0)
+	var armoured: Dictionary = await _evasion_run(mode, false, 8.0)
+	assert_true(aimed["nudged"], "%s: aimed at (8 deg off its nose), exposed: it strafes" % mode)
+	assert_true(aimed["nudge_away"], "%s: every strafe points away from the aim line" % mode)
+	if mode == "open_space":
+		var before: Vector2 = aimed["off_before"]
+		var after: Vector2 = aimed["off_after"]
+		assert_gt(after.length(), before.length() + 20.0, "it ends further from the aim line than it started")
+		assert_gt(after.dot(before), 0.0, "on the same side it started on")
+	assert_false(away["nudged"], "%s: not aimed at: no strafe" % mode)
+	assert_false(armoured["nudged"], "%s: armoured: never" % mode)
+
+
+# ── t17 10. Assault: the diagonal charge ─────────────────────────────────────────────────────────
+
+func _assault_charge_dir(spawn_x: float) -> Vector2:
+	var h = _harness("assault")
+	var ram := _live_ram(h, Vector2(spawn_x, -440.0), Vector2(640.0, 360.0))
+	assert_true(_run_to(ram, h.player, Phase.CHARGE, 6.0), "spawn x %.0f: it charged" % spawn_x)
+	var dir := _brain(ram).charge_dir
+	await _drop(h)
+	return dir
+
+
+func test_in_assault_the_charge_is_diagonal_even_from_straight_above() -> void:
+	var dir: Vector2 = await _assault_charge_dir(640.0)
+	assert_gte(rad_to_deg(absf(dir.angle_to(Vector2.DOWN))), 20.0, "a centred spawn still charges >= 20 deg off vertical")
+	var right: Vector2 = await _assault_charge_dir(740.0)
+	assert_gte(rad_to_deg(absf(right.angle_to(Vector2.DOWN))), 20.0)
+	assert_lt(right.x, 0.0, "a spawn right of the player comes in from the right")
+
+
+## Review R1-N3 / R2-N2: a LINE_UP the gate lets in with just `line_up_cap + ATTACK_GATE_MARGIN` left runs to its cap
+## (the stub orbits faster than the nose turns, as in the cap test) and still becomes a wind-up before the budget
+## expires; 10 ms less and the gate stays shut.
+func test_a_line_up_at_the_edge_of_the_gate_still_winds_up() -> void:
+	for short in [false, true]:
+		var h = _harness("assault")
+		var centre := Vector2(640.0, 360.0)
+		var angle := PI / 2.0
+		var ram := _live_ram(h, centre, centre + Vector2.RIGHT.rotated(angle) * 300.0)
+		var brain := _brain(ram)
+		brain.enter_phase(Phase.APPROACH)  # builds the budget
+		var left := RAM_CONFIG.line_up_cap + RamCorvetteBrain.ATTACK_GATE_MARGIN + (-0.01 if short else 0.000001)
+		brain.budget.seconds = left + DT  # `left` remains after the next tick's update
+		var line_up_ticks := 0
+		var seen := []
+		for i in 240:
+			if _gone(ram):
+				break
+			angle += 4.0 * DT
+			h.player.global_position = centre + Vector2.RIGHT.rotated(angle) * 300.0
+			h.player.velocity = Vector2.RIGHT.rotated(angle + PI / 2.0) * 1200.0
+			var before := ram.global_position
+			ram._physics_process(DT)
+			ram.global_position = before + ram.velocity * DT
+			if not seen.has(brain.phase):
+				seen.append(brain.phase)
+			if brain.phase == Phase.LINE_UP:
+				line_up_ticks += 1
+		if short:
+			assert_false(seen.has(Phase.LINE_UP), "10 ms under the margin: the gate stays shut")
+			assert_true(seen.has(Phase.DISENGAGE), "and it leaves")
+		else:
+			assert_eq(seen.slice(0, 3), [Phase.LINE_UP, Phase.WIND_UP, Phase.CHARGE], "at the margin: line-up, wind-up, charge")
+			assert_gte(line_up_ticks * DT, RAM_CONFIG.line_up_cap - DT, "sanity: the line-up ran to its cap")
+			assert_eq(brain.charges, 1)
+		await _drop(h)
+
+
+# ── t17 11. Assault expiry by state ──────────────────────────────────────────────────────────────
+
+func test_expiry_in_wind_up_defers_to_the_charge_end_then_exits_straight() -> void:
+	var h = _harness("assault")
+	var ram := _live_ram(h, Vector2(640.0, 200.0), Vector2(640.0, 560.0))
+	var brain := _brain(ram)
+	brain.enter_phase(Phase.LINE_UP)
+	assert_true(_run_to(ram, h.player, Phase.WIND_UP, 2.0))
+	brain.budget.seconds = brain.budget.seconds - brain.budget.remaining()
+	var t := 0.0
+	var phases := []
+	var disengaged_at := -1.0
+	while brain.phase != Phase.DISENGAGE and t < 4.0:
+		_step(ram, h.player)
+		t += DT
+		if not phases.has(brain.phase):
+			phases.append(brain.phase)
+	disengaged_at = t
+	assert_eq(phases, [Phase.WIND_UP, Phase.CHARGE, Phase.DISENGAGE], "the charge runs, then it leaves")
+	assert_lte(disengaged_at, RAM_CONFIG.wind_up_seconds + RAM_CONFIG.charge_max_time + DT,
+			"deferred at most wind_up_seconds + charge_max_time")
+	var dir := brain.charge_dir
+	t = 0.0
+	while not _gone(ram) and t < 6.0:
+		_step(ram, h.player)
+		t += DT
+		if not _gone(ram):
+			assert_lt(_deg(ram.velocity, dir), 1.0, "straight on along the charge heading")
+	assert_true(_gone(ram), "and freed once out of the world rect")
+
+
+func test_with_less_budget_than_a_line_up_it_never_lines_up() -> void:
+	var h = _harness("assault")
+	var ram := _live_ram(h, Vector2(640.0, 200.0), Vector2(640.0, 560.0),
+			func(r: RamCorvette) -> void: r.config.engage_seconds = RAM_CONFIG.line_up_cap - 0.05)
+	var brain := _brain(ram)
+	var seen: Array[int] = []
+	var t := 0.0
+	while not _gone(ram) and t < 4.0:
+		_step(ram, h.player)
+		t += DT
+		if not _gone(ram) and not seen.has(brain.phase):
+			seen.append(brain.phase)
+	assert_false(seen.has(Phase.LINE_UP), "in range, but remaining() < line_up_cap: never LINE_UP")
+	assert_true(seen.has(Phase.DISENGAGE), "it just leaves")
+
+
+func test_expiry_on_the_first_line_up_tick_disengages_that_tick() -> void:
+	var h = _harness("assault")
+	var ram := _live_ram(h, Vector2(640.0, 200.0), Vector2(640.0, 560.0))
+	var brain := _brain(ram)
+	brain.enter_phase(Phase.LINE_UP)
+	brain.budget.seconds = brain.budget.seconds - brain.budget.remaining()
+	_step(ram, h.player)
+	assert_eq(brain.phase, Phase.DISENGAGE, "no deferral in LINE_UP")
+	assert_false(brain.disengage_pending)
+
+
+func test_expiry_in_approach_or_wide_turn_disengages_that_tick() -> void:
+	for p in [Phase.APPROACH, Phase.WIDE_TURN]:
+		var h = _harness("assault")
+		var ram := _live_ram(h, Vector2(200.0, 100.0), Vector2(1000.0, 900.0))
+		var brain := _brain(ram)
+		brain.enter_phase(p)
+		brain.budget.seconds = brain.budget.seconds - brain.budget.remaining()
+		_step(ram, h.player)
+		assert_eq(brain.phase, Phase.DISENGAGE, "%s: disengages that tick" % Phase.keys()[p])
+		await _drop(h)
+
+
+# ── t17 12. Open Space: no budget, charge after charge ──────────────────────────────────────────
+
+func test_in_open_space_it_keeps_charging_and_never_leaves() -> void:
+	var h = _harness("open_space")
+	var ram := _live_ram(h, Vector2(300.0, 100.0), Vector2(640.0, 560.0),
+			func(r: RamCorvette) -> void: r.config.engage_seconds = 4.5)
+	var brain := _brain(ram)
+	var left := false
+	var t := 0.0
+	while t < 12.0:
+		_step(ram, h.player)
+		t += DT
+		left = left or brain.phase == Phase.DISENGAGE
+	assert_false(left, "no budget in Open Space")
+	assert_false(_gone(ram))
+	assert_gte(brain.charges, 2, "at least two charges in 12 s (%d)" % brain.charges)
+
+
+# ── t17 13. Attack in budget (epic plan §2.9.4; review N9: harness local) ────────────────────────
+#
+# `EngagementBudget` counts from spawn, so a level-1 ram must reach WIND_UP (after which the charge always
+# follows: expiry there is deferred) before its budget runs out. Every ram offset in the live
+# `Level1Director._build_sections()` is spawned through a real `WaveManager` under a real `ArenaCamera`, rails and
+# delays stripped (t21/t22 take level 1 off rails). The Corvettes are hand-ticked from their `ready` signal.
+
+const DIRECTOR_SCRIPT := preload("res://assault/scenes/levels/edelia/1/level_1_director.gd")
+
+var _budget_rams: Array[RamCorvette] = []
+var _budget_tweak: Callable = Callable()
+
+
+## Every distinct design-unit offset a level-1 ram spawns at (formations expanded).
+func _level1_ram_offsets() -> Array[Vector2]:
+	var d: Node = DIRECTOR_SCRIPT.new()
+	autofree(d)
+	var out: Array[Vector2] = []
+	for s in d._build_sections():
+		for w in (s as LevelSection).waves:
+			for e in (w as WaveResource).entries:
+				var entry: SpawnEntryResource = e
+				if entry.ship_scene == null or entry.ship_scene.resource_path != WaveBuilder.RAM:
+					continue
+				var offsets: Array[Vector2] = [entry.base_offset]
+				if entry.formation != null:
+					offsets = []
+					for slot in entry.formation.compute_slots():
+						offsets.append(entry.base_offset + slot.offset)
+				for o in offsets:
+					if not out.has(o):
+						out.append(o)
+	return out
+
+
+static func _ram_class(offset: Vector2) -> String:
+	var wide := absf(offset.x) >= 100.0
+	if offset.y < 0.0:
+		return "top-wide" if wide else "top"
+	return "bottom-wide" if wide else "bottom"
+
+
+func _on_budget_child(node: Node) -> void:
+	if not node is RamCorvette:
+		return
+	var ram := node as RamCorvette
+	(ram.get_node("Brain") as RamCorvetteBrain).rng_seed = 1700 + _budget_rams.size()
+	if _budget_tweak.is_valid():
+		_budget_tweak.call(ram)
+	ram.ready.connect(func() -> void: ram.set_physics_process(false), CONNECT_ONE_SHOT)
+	_budget_rams.append(ram)
+
+
+## Spawns one ram per offset at t = 0 through a real WaveManager, the player stub at `stub` from the camera
+## centre, and hand-ticks them for `limit` s. Returns one `{offset, wind_up_at, remaining, charges}` per ram
+## (`wind_up_at` -1 when it never wound up).
+func _budget_run(offsets: Array[Vector2], stub: Vector2, limit: float) -> Array[Dictionary]:
+	_budget_rams = []
+	var harness = HARNESS.assault()
+	add_child(harness.root)  # freed at the end of the run: a later run must not see this player
+	_root = harness.root
+	var cam := harness.root.get_node("ArenaCamera") as Camera2D
+	cam.make_current()
+	harness.player.global_position = cam.global_position + stub
+	var container := Node2D.new()
+	container.name = "EnemyContainer"
+	harness.root.add_child(container)
+	container.child_entered_tree.connect(_on_budget_child)
+	var wm := WaveManager.new()
+	wm.enemy_container = container
+	harness.root.add_child(wm)
+	var wave := WaveResource.new()
+	wave.trigger_time = 0.0
+	var entries: Array[SpawnEntryResource] = []
+	for o in offsets:
+		var entry := SpawnEntryResource.new()
+		entry.ship_scene = load(WaveBuilder.RAM)
+		entry.base_offset = o
+		entries.append(entry)
+	wave.entries = entries
+	var waves: Array[WaveResource] = [wave]
+	wm.load_section(waves)
+	var t := 0.0
+	while _budget_rams.size() < offsets.size() and t < 1.0:
+		await get_tree().process_frame
+		t += DT
+	wm.set_process(false)
+	assert_eq(_budget_rams.size(), offsets.size(), "sanity: every ram spawned")
+	var results: Array[Dictionary] = []
+	for i in _budget_rams.size():
+		results.append({"offset": offsets[i], "wind_up_at": -1.0, "remaining": -1.0, "charges": 0, "charge_dir": Vector2.ZERO})
+	t = 0.0
+	while t < limit:
+		t += DT
+		var all_gone := true
+		for i in _budget_rams.size():
+			var ram := _budget_rams[i]
+			if _gone(ram):
+				continue
+			all_gone = false
+			_step(ram, harness.player)
+			if _gone(ram):
+				continue
+			var brain := _brain(ram)
+			if brain.phase == Phase.WIND_UP and results[i]["wind_up_at"] < 0.0:
+				results[i]["wind_up_at"] = t
+				results[i]["remaining"] = brain.budget.remaining()
+			if brain.charges > 0 and results[i]["charges"] == 0:
+				results[i]["charge_dir"] = brain.charge_dir
+			results[i]["charges"] = brain.charges
+		if all_gone:
+			break
+	harness.root.queue_free()
+	await get_tree().process_frame
+	return results
+
+
+func test_every_level1_ram_spawn_class_winds_up_inside_its_budget() -> void:
+	var offsets := _level1_ram_offsets()
+	var classes := {}
+	for o in offsets:
+		classes[_ram_class(o)] = true
+	for c in ["top", "top-wide", "bottom", "bottom-wide"]:
+		assert_true(classes.has(c), "sanity: level 1 spawns a %s ram (%s)" % [c, offsets])
+	for o in offsets:
+		for stub in [Vector2.ZERO, -o.normalized() * 200.0]:
+			var one: Array[Vector2] = [o]
+			var r: Dictionary = (await _budget_run(one, stub, RAM_CONFIG.engage_seconds + 3.0))[0]
+			assert_gt(r["wind_up_at"], 0.0, "%s (%s), stub %s: WIND_UP reached" % [o, _ram_class(o), stub.round()])
+			assert_gt(r["remaining"], 0.0, "%s (%s), stub %s: before its budget expired" % [o, _ram_class(o), stub.round()])
+			var dir: Vector2 = r["charge_dir"]
+			var off_vertical := rad_to_deg(asin(clampf(absf(dir.normalized().x), 0.0, 1.0)))
+			assert_gte(off_vertical, 20.0, "%s (%s), stub %s: the charge is diagonal (%.1f deg)" % [o, _ram_class(o), stub.round(), off_vertical])
+			gut.p("ram %s %-11s stub %s: WIND_UP at %.2f s (%.2f s of budget left), charge %.0f deg off vertical, %d charge(s) per life"
+				% [o, _ram_class(o), stub.round(), r["wind_up_at"], r["remaining"], off_vertical, r["charges"]])
+
+
+## Boundary: Revision 1's 160 px/s cruise on the top-wide class (stub away) never winds up before its budget ends.
+func test_the_attack_in_budget_row_can_fail() -> void:
+	_budget_tweak = func(r: RamCorvette) -> void: r.config.cruise_speed = 160.0
+	var o := Vector2(270.0, -400.0)
+	assert_true(_level1_ram_offsets().has(o), "sanity: a live top-wide offset")
+	var one: Array[Vector2] = [o]
+	var r: Dictionary = (await _budget_run(one, -o.normalized() * 200.0, RAM_CONFIG.engage_seconds + 3.0))[0]
+	_budget_tweak = Callable()
+	assert_lt(r["wind_up_at"], 0.0, "at 160 px/s the top-wide ram runs out of budget first")
+	assert_eq(r["charges"], 0)
