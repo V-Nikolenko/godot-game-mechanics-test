@@ -20,7 +20,7 @@
 | Contact | 50 armoured (`collision_damage`), any phase, with a 260 px/s shove (`armor_shove_speed`); 60 exposed (`exposed_collision_damage`), during CHARGE only, no shove |
 | Speed | `cruise_speed` 280 (exposed 340), `acceleration` 500, `charge_speed` 620 (exposed 700), `exit_speed` 500 (Assault DISENGAGE) |
 | Body | `CircleShape2D` r 34, shared by the body, the root `HurtBox` (default `DefenseProfile`, mask 1121) and `ContactHitBox`; the plates reach 42 px (an 84 px ship) |
-| Sprite | placeholder `ram_ship.png` (`Sprite2D`, `rotation = PI`, scale 2.6); plates are placeholder `Polygon2D`s under each plate's `Sprite` |
+| Sprite | `ram_corvette.png` (84 x 84, nose-down, no plates painted on; `Sprite2D`, no rotation or scale). Each plate's `Sprite` shows `ram_plate_front.png` (front) or `ram_plate_side.png` (right; the left plate sets `flip_h`), tinted by `ArmorPlate.set_glow()`. The old Ram Ship PNGs are deleted |
 | Scene / config | `ram_corvette.tscn` / `ram_corvette_config.tres` (flat `RamCorvetteConfig`) |
 
 ---

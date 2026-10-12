@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://duruaa6hcqqxd"
-path="res://.godot/imported/ram_ship.png-45e60172cf8e6d3d9d374b4052e33ccf.ctex"
+uid="uid://whp5ts3jisdw"
+path="res://.godot/imported/ram_plate_front.png-6a1a1884d42b6b5ead4fb57d83316d0d.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assault/assets/sprites/enemies/ram_ship.png"
-dest_files=["res://.godot/imported/ram_ship.png-45e60172cf8e6d3d9d374b4052e33ccf.ctex"]
+source_file="res://assault/assets/sprites/enemies/ram_plate_front.png"
+dest_files=["res://.godot/imported/ram_plate_front.png-6a1a1884d42b6b5ead4fb57d83316d0d.ctex"]
 
 [params]
 
