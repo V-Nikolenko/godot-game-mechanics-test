@@ -32,6 +32,13 @@ const FIGHTER_CONFIG: FighterConfig = preload(
 const GATLING_CONFIG: GatlingInterceptorConfig = preload(
 		"res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres")
 
+const SNIPER_CONFIG: SniperConfig = preload(
+		"res://assault/scenes/enemies/sniper/sniper_config.tres")
+const BOMBER_CONFIG: BomberConfig = preload(
+		"res://assault/scenes/enemies/bomber/bomber_config.tres")
+const RAM_CONFIG: RamCorvetteConfig = preload(
+		"res://assault/scenes/enemies/ram_corvette/ram_corvette_config.tres")
+
 const DT := 1.0 / 60.0
 const PATROL_SEED := 20260928
 
@@ -59,14 +66,24 @@ func _interactable_points(hub: Node) -> Array[Vector2]:
 	return points
 
 
-func _assert_group_clears(anchor: Vector2, worst_idle_offset: float, perceive_radius: float,
-		points: Array[Vector2], label: String) -> void:
+## Every interactable `anchor` fails to clear by more than `perceive_radius` once the group's worst
+## idle offset is taken off the distance. Empty = the group clears them all.
+func _clearance_violations(anchor: Vector2, worst_idle_offset: float, perceive_radius: float,
+		points: Array[Vector2], label: String) -> Array[String]:
+	var out: Array[String] = []
 	for p: Vector2 in points:
 		var dist := p.distance_to(anchor)
 		var clearance := dist - worst_idle_offset
-		assert_gt(clearance, perceive_radius,
-				"%s anchor %s must clear %s by more than perceive_radius (dist %.1f, clearance %.1f, need > %.1f)"
-				% [label, anchor, p, dist, clearance, perceive_radius])
+		if clearance <= perceive_radius:
+			out.append("%s anchor %s must clear %s by more than perceive_radius (dist %.1f, clearance %.1f, need > %.1f)"
+					% [label, anchor, p, dist, clearance, perceive_radius])
+	return out
+
+
+func _assert_group_clears(anchor: Vector2, worst_idle_offset: float, perceive_radius: float,
+		points: Array[Vector2], label: String) -> void:
+	var violations := _clearance_violations(anchor, worst_idle_offset, perceive_radius, points, label)
+	assert_true(violations.is_empty(), "\n".join(violations))
 
 
 func test_the_walk_actually_found_interactables_and_the_player_spawn() -> void:
@@ -120,14 +137,63 @@ func test_gatling_anchor_clears_every_planet_pickup_and_the_player_spawn() -> vo
 	hub.free()
 
 
-func test_the_four_patrol_anchors_are_well_apart() -> void:
+func _specialist_anchor(hub: Node, bearing_deg: float) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * float(hub.specialist_ring_radius)
+
+
+## Epic plan §2.10 (t20): the Sniper, Bomber and Ram Corvette each clear every mission trigger,
+## pickup and the player's spawn by their own `perceive_radius` plus the idle ring, computed on the
+## real scene. The ring is whatever this sweep accepts.
+func test_sniper_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	_assert_group_clears(_specialist_anchor(hub, float(hub.sniper_anchor_bearing_deg)),
+			SNIPER_CONFIG.idle_radius, SNIPER_CONFIG.perceive_radius,
+			_interactable_points(hub), "Sniper")
+	hub.free()
+
+
+func test_bomber_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	_assert_group_clears(_specialist_anchor(hub, float(hub.bomber_anchor_bearing_deg)),
+			BOMBER_CONFIG.idle_radius, BOMBER_CONFIG.perceive_radius,
+			_interactable_points(hub), "Bomber")
+	hub.free()
+
+
+func test_ram_corvette_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	_assert_group_clears(_specialist_anchor(hub, float(hub.ram_anchor_bearing_deg)),
+			RAM_CONFIG.idle_radius, RAM_CONFIG.perceive_radius,
+			_interactable_points(hub), "Ram Corvette")
+	hub.free()
+
+
+## Boundary (t20): the clearance check can reject. A pickup dropped just inside the sniper's reach
+## is reported; the real scene's points are not.
+func test_a_pickup_moved_inside_the_snipers_reach_fails_the_clearance_check() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var anchor := _specialist_anchor(hub, float(hub.sniper_anchor_bearing_deg))
+	var points := _interactable_points(hub)
+	assert_true(_clearance_violations(anchor, SNIPER_CONFIG.idle_radius, SNIPER_CONFIG.perceive_radius,
+			points, "Sniper").is_empty(), "sanity: the real scene is clear")
+	points.append(anchor + Vector2(SNIPER_CONFIG.perceive_radius, 0.0))
+	assert_eq(_clearance_violations(anchor, SNIPER_CONFIG.idle_radius, SNIPER_CONFIG.perceive_radius,
+			points, "Sniper").size(), 1, "a pickup inside the sniper's reach is caught")
+	hub.free()
+
+
+func test_the_seven_patrol_anchors_are_well_apart() -> void:
 	var hub := HUB_SCENE.instantiate()
 	var anchors: Array[Vector2] = [
 		Vector2.RIGHT.rotated(deg_to_rad(float(hub.swarm_anchor_bearing_deg))) * float(hub.patrol_ring_radius),
 		Vector2.RIGHT.rotated(deg_to_rad(float(hub.razor_anchor_bearing_deg))) * float(hub.patrol_ring_radius),
 		_shooter_anchor(hub, float(hub.fighter_anchor_bearing_deg)),
 		_shooter_anchor(hub, float(hub.gatling_anchor_bearing_deg)),
+		_specialist_anchor(hub, float(hub.sniper_anchor_bearing_deg)),
+		_specialist_anchor(hub, float(hub.bomber_anchor_bearing_deg)),
+		_specialist_anchor(hub, float(hub.ram_anchor_bearing_deg)),
 	]
+	assert_eq(anchors.size(), 7)
 	for i: int in anchors.size():
 		for j: int in range(i + 1, anchors.size()):
 			assert_gt(anchors[i].distance_to(anchors[j]), 1000.0,
@@ -241,6 +307,20 @@ func _shooters(container: Node2D) -> Dictionary:
 	return {"fighters": fighters, "gatlings": gatlings}
 
 
+func _specialists(container: Node2D) -> Dictionary:
+	var snipers: Array[Sniper] = []
+	var bombers: Array[Bomber] = []
+	var rams: Array[RamCorvette] = []
+	for c: Node in container.get_children():
+		if c is Sniper:
+			snipers.append(c)
+		elif c is Bomber:
+			bombers.append(c)
+		elif c is RamCorvette:
+			rams.append(c)
+	return {"snipers": snipers, "bombers": bombers, "rams": rams}
+
+
 func test_spawns_one_swarm_squad_and_one_razor_drone() -> void:
 	var built := _spawn_hub(PATROL_SEED)
 	var container: Node2D = built.container
@@ -253,8 +333,12 @@ func test_spawns_one_swarm_squad_and_one_razor_drone() -> void:
 	var gatlings: Array = shooters.gatlings
 	assert_eq(fighters.size(), 2, "a fighter squad of 2 spawned")
 	assert_eq(gatlings.size(), 2, "a Gatling squad of 2 spawned")
-	assert_eq(container.get_child_count(), swarms.size() + 1 + fighters.size() + gatlings.size(),
-			"nothing but the four groups spawned into EnemyContainer")
+	var specialists := _specialists(container)
+	assert_eq((specialists.snipers as Array).size(), 1, "one Sniper spawned")
+	assert_eq((specialists.bombers as Array).size(), 1, "one Bomber spawned")
+	assert_eq((specialists.rams as Array).size(), 1, "one Ram Corvette spawned")
+	assert_eq(container.get_child_count(), swarms.size() + 1 + fighters.size() + gatlings.size() + 3,
+			"nothing but the seven groups spawned into EnemyContainer")
 
 	var f_squad: SquadController = (fighters[0] as Fighter).squad if not fighters.is_empty() else null
 	var g_squad: SquadController = (gatlings[0] as GatlingInterceptor).squad if not gatlings.is_empty() else null
@@ -323,6 +407,27 @@ func test_shooters_carry_their_groups_shared_patrol_anchor() -> void:
 		assert_eq(g.global_position, g_anchor, "a Gatling spawns on its anchor")
 
 
+func test_specialists_carry_their_patrol_anchor_and_spawn_on_it() -> void:
+	var built := _spawn_hub(PATROL_SEED)
+	var hub: Node2D = built.hub
+	var specialists := _specialists(built.container)
+	assert_eq(float(hub.sniper_anchor_bearing_deg), 135.0)
+	assert_eq(float(hub.bomber_anchor_bearing_deg), 45.0)
+	assert_eq(float(hub.ram_anchor_bearing_deg), 225.0)
+	var sniper: Sniper = (specialists.snipers as Array[Sniper])[0]
+	var bomber: Bomber = (specialists.bombers as Array[Bomber])[0]
+	var ram: RamCorvette = (specialists.rams as Array[RamCorvette])[0]
+	var sniper_anchor := _specialist_anchor(hub, 135.0)
+	var bomber_anchor := _specialist_anchor(hub, 45.0)
+	var ram_anchor := _specialist_anchor(hub, 225.0)
+	assert_eq((sniper.get_node("Brain") as SniperBrain).patrol_anchor, sniper_anchor)
+	assert_eq((bomber.get_node("Brain") as BomberBrain).patrol_anchor, bomber_anchor)
+	assert_eq((ram.get_node("Brain") as RamCorvetteBrain).patrol_anchor, ram_anchor)
+	assert_eq(sniper.global_position, sniper_anchor, "the Sniper spawns on its anchor")
+	assert_eq(bomber.global_position, bomber_anchor, "the Bomber spawns on its anchor")
+	assert_eq(ram.global_position, ram_anchor, "the Ram Corvette spawns on its anchor")
+
+
 func _brain_seeds(container: Node2D) -> Array[int]:
 	var seeds: Array[int] = []
 	for c: Node in container.get_children():
@@ -337,6 +442,21 @@ func test_a_fixed_patrol_seed_reproduces_the_same_brain_seeds() -> void:
 			"a fixed patrol_seed must derive identical per-drone rng seeds every run")
 
 
+## The specialists are appended AFTER the four existing groups' draws (t20): the nine draws the
+## swarm, razor, fighter and Gatling already consumed are exactly what a bare RNG gives, and the
+## specialists take draws 10-12 in sniper, bomber, ram order.
+func test_the_existing_groups_seeds_are_unchanged_by_the_specialists() -> void:
+	var built := _spawn_hub(PATROL_SEED)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = PATROL_SEED
+	var expected: Array[int] = []
+	for i: int in 12:
+		var s := rng.randi()
+		expected.append(s if s != 0 else 1)
+	assert_eq(_brain_seeds(built.container), expected,
+			"children appear in spawn order and take the draws in that order")
+
+
 func test_nobody_perceives_the_player_at_frame_0() -> void:
 	var built := _spawn_hub(PATROL_SEED, -1, _player_spawn)
 	var found := _swarm_and_razor(built.container)
@@ -348,8 +468,21 @@ func test_nobody_perceives_the_player_at_frame_0() -> void:
 	var shooters := _shooters(built.container)
 	all_drones.append_array(shooters.fighters)
 	all_drones.append_array(shooters.gatlings)
+	var specialists := _specialists(built.container)
+	all_drones.append_array(specialists.snipers)
+	all_drones.append_array(specialists.bombers)
+	all_drones.append_array(specialists.rams)
 	assert_gt(all_drones.size(), 1, "sanity: something spawned")
 	_tick_all(all_drones)
+	for sn: Sniper in specialists.snipers:
+		assert_eq((sn.get_node("Brain") as SniperBrain).phase, SniperBrain.Phase.IDLE,
+				"a Sniper must not notice the player on its first tick")
+	for bo: Bomber in specialists.bombers:
+		assert_eq((bo.get_node("Brain") as BomberBrain).phase, BomberBrain.Phase.IDLE,
+				"a Bomber must not notice the player on its first tick")
+	for rc: RamCorvette in specialists.rams:
+		assert_eq((rc.get_node("Brain") as RamCorvetteBrain).phase, RamCorvetteBrain.Phase.IDLE,
+				"a Ram Corvette must not notice the player on its first tick")
 	for f: Fighter in shooters.fighters:
 		assert_eq((f.get_node("Brain") as FighterBrain).phase, FighterBrain.Phase.IDLE,
 				"a fighter must not notice the player on its first tick")
@@ -412,3 +545,19 @@ func test_a_fighter_pulse_and_a_gatling_round_land_in_the_enemy_container() -> v
 	((gatlings[0] as GatlingInterceptor).get_node("Attack") as AttackController).fire_now()
 	var after_stream := container.get_children().filter(func(c: Node) -> bool: return c is EnemyBullet).size()
 	assert_gt(after_stream, after_pulse, "the Gatling's stream round is parented to EnemyContainer")
+
+
+## Plan §2.10: ordnance dropped in the hub lands in `EnemyContainer` (the pool's grandparent) and
+## outlives the bomber that dropped it — there is no world rect in Open Space to free it.
+func test_a_hub_bombers_mine_lands_in_the_enemy_container() -> void:
+	var built := _spawn_hub(PATROL_SEED, -1, _player_spawn)
+	var container: Node2D = built.container
+	var bomber: Bomber = (_specialists(container).bombers as Array[Bomber])[0]
+	var before := container.get_children().filter(func(c: Node) -> bool: return c is EnemyOrdnance).size()
+	var mine := bomber.drop(EnemyOrdnance.Kind.MINE, Vector2.DOWN, 0.0, bomber.global_position)
+	assert_not_null(mine, "the pool handed out a mine")
+	if mine == null:
+		return
+	assert_eq(mine.get_parent(), container, "the mine's parent is EnemyContainer")
+	var after := container.get_children().filter(func(c: Node) -> bool: return c is EnemyOrdnance).size()
+	assert_eq(after, before + 1, "exactly one ordnance joined the container")
