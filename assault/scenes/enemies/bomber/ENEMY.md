@@ -4,7 +4,7 @@
 **Fantasy / threat:** A wide, slow, easy-to-hit target — but ignore it and what it leaves behind catches you. Every piece of ordnance can be shot down.
 
 > **Build state (Phase 4, t10).** The scene, config, pools, rail fallback, Assault exit (t9) and the AI bombing runs
-> (t10) are built. Still to come: the hub idle (t19), its own sprite (t11), level-1 migration off rails (t21).
+> (t10) are built. Still to come: the hub idle (t19), level-1 migration off rails (t21).
 > Plans: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.4; `docs/plans/cmuyk2qpr0089oa2xlih7xvmg/3-plan.md` (t10, with "As built").
 
 ---
@@ -17,7 +17,7 @@
 | Damage | 35 contact (`ContactHitBox`); ordnance blasts come from the config |
 | Speed | `max_speed` 240 transit, `run_speed` 170 for the bombing run |
 | Body | one 96 × 44 `RectangleShape2D`, shared by the body, `HurtBox` and `ContactHitBox` (the wings are shootable) |
-| Sprite | `bomber.png` (placeholder; nose-down) |
+| Sprite | `bomber.png`, 104×56, drawn nose-up in the file (the scene rotates the `Sprite2D` by π so it flies nose-down); dark hull, cool edge light, red spine stripe, visible bomb-bay hatches |
 | Scene / config | `bomber.tscn` / `bomber_config.tres` (flat `BomberConfig`) |
 
 ---
