@@ -399,6 +399,13 @@ func test_bomber_approach_mid_corridor_is_identical_in_both_modes() -> void:
 	var start := Vector2(100.0, 60.0)
 	var open_bomber := _spawn_bomber(open_harness, start)
 	var assault_bomber := _spawn_bomber(assault_harness, start)
+	# Both worlds share one physics space and the two bombers start on the same point: without this their
+	# `move_and_slide()` calls collide and nudge each other's velocity.
+	open_bomber.add_collision_exception_with(assault_bomber)
+	assault_bomber.add_collision_exception_with(open_bomber)
+	# The same inputs include the brain's rng (t10: the angled line's side tie-break draws from it).
+	(open_bomber.get_node("Brain") as BomberBrain).rng.seed = 77
+	(assault_bomber.get_node("Brain") as BomberBrain).rng.seed = 77
 	assert_true((assault_bomber.get_node("EnemyMover") as EnemyMover).constraint is AssaultCorridorConstraint,
 		"sanity: the Assault bomber runs under the corridor")
 	for _i in 30:

@@ -15,7 +15,9 @@ extends ShipConfig
 ## Transit speed (px/s): APPROACH and the Assault exit's mover cap.
 @export var max_speed: float = 240.0
 @export var acceleration: float = 260.0
-## Heading change cap (rad/s): the Dubins turn radius is `max_speed / max_turn_rate` = 150 px.
+## Heading change cap (rad/s). The APPROACH plans its Dubins lead-in with the radius the mover can actually
+## hold, `max_speed / min(max_turn_rate, acceleration / max_speed) x 1.1` (about 244 px): at `acceleration`
+## 260 a 150 px circle at 240 px/s needs more than the mover gives (v^2 / a = 221 px).
 @export var max_turn_rate: float = 1.6
 ## The slow, straight bombing run (px/s): the easy-to-hit window that is the Bomber's identity.
 @export var run_speed: float = 170.0
@@ -34,8 +36,11 @@ extends ShipConfig
 ## Gravity bomb / pursuit aim point: `P + v * lead_factor * min(horizon, d / run_speed)`.
 @export var lead_factor: float = 0.6
 @export var horizon: float = 1.2
-## Mine wall lead: `clamp(t_approach_left + (run_length / 2) / run_speed + mine_arm_delay + wall_margin,
-## 0, mine_horizon)`. The wall's middle mine is armed `wall_margin` seconds before the player arrives.
+## Mine wall lead, undamped, on the bomber's own timeline: `t_wall = min(t_approach_left, approach_cap) + min(c,
+## mine_horizon)`, `c = (run_length / 2) / run_speed + mine_arm_delay + wall_margin + (trigger_radius + arc_depth) / |v|`.
+## The last term measures the margin to the middle mine's trigger EDGE (plan review B1c), so the middle mine is armed
+## `wall_margin` seconds before the player reaches its trigger radius, at every speed. Only `c` is capped: the
+## approach plans to where the wall will be on arrival, so a constant-velocity player's wall stands still.
 @export var mine_horizon: float = 3.0
 @export var wall_margin: float = 0.4
 
@@ -58,8 +63,13 @@ extends ShipConfig
 ## APPROACH re-plans from a fresh prediction this often until RUN entry (s), capped at `approach_cap`.
 @export var replan_interval: float = 0.25
 @export var approach_cap: float = 6.0
-## A gravity bomb is released when the aim point is this far ahead along the run (px).
-@export var gravity_release_lead: float = 80.0
+## A gravity bomb is released when the aim point is this far ahead along the run (px). At least
+## `trigger_radius + gravity_bomb_speed * gravity_bomb_arm_delay` (116), or the bomb arms with a stationary player
+## already inside its radius and goes off past them (asserted in test_bomber.gd).
+@export var gravity_release_lead: float = 120.0
+## A pursuit run passes BESIDE its aim point: the aim point is abeam the line's end, this far to the side (px), so
+## the bomb launched at the midpoint has something to steer at and the bomber never overflies the player.
+@export var pursuit_launch_range: float = 300.0
 @export var mines_per_run_min: int = 3
 @export var max_mines_per_run: int = 5
 @export var mine_spacing: float = 70.0
@@ -84,6 +94,10 @@ extends ShipConfig
 @export_group("Mine")
 ## Ejection speed (px/s), decaying linearly to 0 over the ordnance's own eject time.
 @export var mine_eject_speed: float = 160.0
+## Seconds a mine's ejection decays over (applied to the mine by `Bomber.drop()`, so the brain's rest-point
+## arithmetic and the ordnance share one number). `mine_eject_speed * mine_eject_time / 2` is the run distance past
+## its rest point at which a mine is released.
+@export var mine_eject_time: float = 0.3
 @export var mine_arm_delay: float = 0.5
 ## Warning blink before a triggered mine goes off (s). Short on purpose: a player passing at
 ## `mine_speed_max` must still be inside the blast when it fires, so

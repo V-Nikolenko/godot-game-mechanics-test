@@ -79,6 +79,7 @@ func drop(kind: EnemyOrdnance.Kind, dir: Vector2, speed: float, target_point: Ve
 		EnemyOrdnance.Kind.MINE:
 			o.trigger_radius = config.trigger_radius
 			o.arm_delay = config.mine_arm_delay
+			o.eject_time = config.mine_eject_time
 			o.warning_time = config.mine_warning
 			o.mine_life = config.mine_life
 			o.blast_radius = config.mine_blast_radius

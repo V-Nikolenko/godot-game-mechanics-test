@@ -455,6 +455,17 @@ point of the suite is that a behaviour change is a *visible* change.
   matters (see `unit/test_overheat_component.gd`, `unit/test_camera_shake.gd`). Real frame
   timing makes assertions approximate for no benefit.
 
+- **Real physics frames cost wall clock, and the harness has a ~300 s budget for the whole gate.**
+  An `await get_tree().physics_frame` loop runs at 60 Hz of real time however fast the CPU is, so
+  10 s of game time is 10 s of gate. The AI-Kanban harness gives up on verification at about
+  5:00 and reverts the work with every test green; that is what happened to the Bomber's bombing
+  runs four times. When a test has to step the engine, scale the clock the way
+  `integration/test_level1_fighter_fire_density.gd`, `integration/test_bomber.gd` and
+  `integration/test_enemy_ordnance.gd` do: scale `Engine.time_scale`, `physics_ticks_per_second`
+  and `max_physics_steps_per_frame` together, so the step stays 1/60 game-second, and restore them
+  in `after_each`. Count frames at the **unscaled** tick rate. Check the gate's `real` time
+  (`time bash /agent/verify.sh`) after adding a slow file.
+
 - **GUT fails a test on any unexpected engine error**, including one raised inside a signal
   callback. Connect a callable whose arity matches the signal exactly: `Health.amount_changed`
   and `State.state_transition` each carry one argument, so a **zero-argument** handler raises

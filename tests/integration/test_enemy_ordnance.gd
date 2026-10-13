@@ -8,6 +8,12 @@
 ## enter the container.
 ##
 ## Config values come from the shipped `BomberConfig` (bomber_config.tres), read only, never a typed number.
+##
+## Every case runs sped up `_SPEEDUP`x with the physics step kept at 1/60 game-second (the pattern
+## test_level1_fighter_fire_density.gd established): `Engine.time_scale`, `physics_ticks_per_second` and
+## `max_physics_steps_per_frame` are scaled together in `before_each` and restored in `after_each`. `_seconds()`
+## counts frames at the UNSCALED tick rate, so a wait is still that many game seconds. At 1x this file cost about
+## 50 s of wall clock, which the verification gate cannot spare.
 extends GutTest
 
 const CFG: BomberConfig = preload("res://assault/scenes/enemies/bomber/bomber_config.tres")
@@ -22,14 +28,51 @@ var _blasts: Array[ContactBlast] = []
 var _blast_info: Array[Dictionary] = []
 var _expired: Dictionary = {}
 
+const _SPEEDUP := 8
+var _saved_time_scale: float = 1.0
+var _saved_ticks: int = 60
+var _saved_max_steps: int = 8
+var _clock_scaled: bool = false
+
 
 func before_each() -> void:
+	_scale_clock()
 	_blasts = []
 	_blast_info = []
 	_expired = {}
 	_container = Node2D.new()
 	add_child_autofree(_container)
 	_container.child_entered_tree.connect(_on_container_child)
+
+
+func after_each() -> void:
+	_restore_clock()
+
+
+func _scale_clock() -> void:
+	if _clock_scaled:
+		return
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	_clock_scaled = true
+	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
+	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
+	Engine.time_scale = _saved_time_scale * _SPEEDUP
+
+
+func _restore_clock() -> void:
+	if not _clock_scaled:
+		return
+	_clock_scaled = false
+	Engine.time_scale = _saved_time_scale
+	Engine.physics_ticks_per_second = _saved_ticks
+	Engine.max_physics_steps_per_frame = _saved_max_steps
+
+
+## One physics step in game seconds: unchanged by `_scale_clock()`.
+func _game_step() -> float:
+	return 1.0 / float(_saved_ticks if _clock_scaled else Engine.physics_ticks_per_second)
 
 
 func _on_container_child(node: Node) -> void:
@@ -47,7 +90,7 @@ func _on_container_child(node: Node) -> void:
 # ---------------------------------------------------------------------------------------------
 
 func _seconds(s: float) -> void:
-	await wait_physics_frames(roundi(s * Engine.physics_ticks_per_second))
+	await wait_physics_frames(roundi(s / _game_step()))
 
 
 ## Config-derived exports and the launch, per kind - the dropper's whole job.
@@ -330,7 +373,7 @@ func test_a_pursuit_bomb_hits_a_player_who_holds_still() -> void:
 func test_a_pursuit_bomb_turns_no_faster_than_its_rate_then_freezes_its_heading() -> void:
 	var p := _player(Vector2(0, 500))
 	var o := _drop(EnemyOrdnance.Kind.PURSUIT_BOMB, Vector2.ZERO, Vector2.RIGHT, Vector2(0, 500))
-	var dt := 1.0 / Engine.physics_ticks_per_second
+	var dt := _game_step()
 	var prev := o.heading()
 	var worst_step := 0.0
 	var window_frames := roundi(_cfg.pursuit_steer_window / dt)
@@ -353,7 +396,7 @@ func test_a_player_who_turns_at_full_rate_after_the_window_escapes_a_pursuit_bom
 	var p := _player(Vector2(0, 500))
 	var o := _drop(EnemyOrdnance.Kind.PURSUIT_BOMB, Vector2.ZERO, Vector2.DOWN, Vector2(0, 500))
 	var closest := INF
-	var dt := 1.0 / Engine.physics_ticks_per_second
+	var dt := _game_step()
 	var window_frames := roundi((_cfg.pursuit_steer_window + 0.1) / dt)
 	await wait_physics_frames(window_frames)
 	# Heading is frozen: step sideways at a sustained 300 px/s.

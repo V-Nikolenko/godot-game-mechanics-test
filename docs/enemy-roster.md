@@ -318,7 +318,7 @@ b.wave(50.0, [
 
 **Builder:** `b.bomber()`  
 **Scene:** `bomber.tscn`  
-**Movement:** AI-driven (`BomberBrain` + `EnemyMover`); `.move()` puts it on a rail, where it drops a gravity bomb DOWN every `rail_bomb_interval`. Bomber runs (mines, bombs, pursuit bomb) arrive with Phase 4 t10.  
+**Movement:** AI-driven (`BomberBrain` + `EnemyMover`); `.move()` puts it on a rail, where it drops a gravity bomb DOWN every `rail_bomb_interval`. Off rails it flies bombing runs (Phase 4 t10): a mine wall across where a moving player is heading, a gravity bomb on a slow close player, a pursuit bomb on a far or boosting one, then an escape arc — see `bomber/ENEMY.md`. Level 1 still spawns it on rails until t21.  
 **Shoots:** Yes — gravity bombs, mines, pursuit bombs (`EnemyOrdnance`), shootable.  
 **HP:** Medium–High  
 **Score:** Medium–High
