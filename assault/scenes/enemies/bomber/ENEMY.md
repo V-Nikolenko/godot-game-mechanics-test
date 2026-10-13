@@ -4,7 +4,7 @@
 **Fantasy / threat:** A wide, slow, easy-to-hit target — but ignore it and what it leaves behind catches you. Every piece of ordnance can be shot down.
 
 > **Build state (Phase 4, t10).** The scene, config, pools, rail fallback, Assault exit (t9) and the AI bombing runs
-> (t10) are built. Still to come: the hub idle (t19), level-1 migration off rails (t21).
+> (t10) and the hub idle (t19) are built. Still to come: level-1 migration off rails (t21).
 > Plans: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.4; `docs/plans/cmuyk2qpr0089oa2xlih7xvmg/3-plan.md` (t10, with "As built").
 
 ---
@@ -55,6 +55,17 @@
 - **Death / scoring:** `BaseEnemy` emits `died`, awards `score_value` 80.
 
 ---
+
+## Hub idle (t19)
+
+Open Space only (`budget.active == false` and not `start_engaged`); Assault starts in combat and builds no `AnchorIdle`.
+- `Phase` gains `IDLE`, `NOTICING`, `RETURNING` after `DISENGAGE` (values 5-7). `patrol_anchor` (default: the spawn
+  position), `start_engaged` (test seam), `anchor_idle`.
+- **IDLE** orbits `patrol_anchor` on a ring of `idle_radius` (150) at `idle_speed`; it drops nothing. **NOTICING**
+  (`notice_time` 0.35 s): stands, blinks, faces the player, then APPROACH. **RETURNING**: `arrive` at the anchor, then IDLE.
+- Radii: `perceive_radius` 650, `lose_radius` 1700. The §2.10 inequality is `lose_radius >= max(standoff +
+  escape_speed * escape_time, mine_horizon * mine_speed_max + run_length / 2) + 100` (1600), asserted from the fields.
+- **RETURNING never interrupts a RUN**: it is retried every tick, so a run always finishes and ESCAPE follows it.
 
 ## Spawn notes
 

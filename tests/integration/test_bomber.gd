@@ -23,6 +23,7 @@ const POOLS := {
 
 func _spawn(harness, pos: Vector2) -> Bomber:
 	var bomber := BOMBER_SCENE.instantiate() as Bomber
+	(bomber.get_node("Brain") as BomberBrain).start_engaged = true  # pre-t19: predates the hub idle
 	bomber.global_position = pos
 	harness.root.add_child(bomber)
 	bomber.set_physics_process(false)  # hand-ticked
@@ -64,6 +65,7 @@ func test_the_three_pools_are_root_children_that_let_ordnance_outlive_the_bomber
 
 func test_the_body_is_one_rectangle_shared_by_the_hurtbox_and_the_contact_hitbox() -> void:
 	var bomber := BOMBER_SCENE.instantiate() as Bomber
+	(bomber.get_node("Brain") as BomberBrain).start_engaged = true  # pre-t19: predates the hub idle
 	add_child_autofree(bomber)
 	var body := bomber.get_node("CollisionShape2D") as CollisionShape2D
 	var hurt := bomber.get_node("HurtBox/CollisionShape2D") as CollisionShape2D
@@ -81,6 +83,7 @@ func test_the_body_is_one_rectangle_shared_by_the_hurtbox_and_the_contact_hitbox
 
 func test_the_legacy_timer_physics_loop_and_bomb_scene_are_gone() -> void:
 	var bomber := BOMBER_SCENE.instantiate() as Bomber
+	(bomber.get_node("Brain") as BomberBrain).start_engaged = true  # pre-t19: predates the hub idle
 	add_child_autofree(bomber)
 	for child in bomber.get_children():
 		assert_false(child is Timer, "no Timer child (%s)" % child.name)
@@ -724,6 +727,7 @@ func _physics_wall(mode: String, speed: float, bomber_at: Vector2, turn: bool) -
 	harness.player.velocity = Vector2(speed, 0.0)
 	_give_hurtbox(harness.player, PLAYER_HURT_RADIUS[mode])
 	var bomber := BOMBER_SCENE.instantiate() as Bomber
+	(bomber.get_node("Brain") as BomberBrain).start_engaged = true  # pre-t19: predates the hub idle
 	bomber.global_position = bomber_at
 	harness.root.add_child(bomber)
 	bomber.config.choice_jitter = 0.0
@@ -832,3 +836,165 @@ func test_a_level_1_bomber_attacks_inside_its_budget(
 	assert_lt(run_t, SHIPPED.engage_seconds, "RUN entered before the %.1f s budget expires" % SHIPPED.engage_seconds)
 	gut.p("bomber from (0, -400), stub +%.0f px moving %.0f px/s: RUN after %.2f s of %.1f; runs per life %d; left: %s"
 		% [params[0], params[1], run_t, SHIPPED.engage_seconds, _phase_log.count(BomberBrain.Phase.RUN), left])
+
+
+# ══ t19: hub idle (epic §2.10; task cmuyk2qqh0099oa2xbltzoust) ═══════════════════════════════════════════════════
+#
+# Cold-start helpers: unlike `_spawn()` (which sets `start_engaged = true`, so every case above keeps assuming
+# combat-from-spawn as before this task), these leave the brain to decide for itself - Open Space starts IDLE,
+# Assault starts in combat. The stub player is stationary unless a case moves it.
+
+const FAR_AWAY := Vector2(100000.0, 100000.0)
+const BP := BomberBrain.Phase
+
+
+func _cold_bomber(harness, pos: Vector2, player_pos: Vector2, anchor: Vector2 = Vector2.INF) -> Bomber:
+	harness.player.global_position = player_pos
+	harness.player.velocity = Vector2.ZERO
+	var bomber := BOMBER_SCENE.instantiate() as Bomber
+	bomber.config.choice_jitter = 0.0
+	var brain := bomber.get_node("Brain") as BomberBrain
+	brain.rng_seed = SEED
+	brain.patrol_anchor = anchor
+	bomber.global_position = pos
+	harness.root.add_child(bomber)
+	bomber.set_physics_process(false)
+	bomber.set_process(false)
+	return bomber
+
+
+func _b_calm(p: int) -> bool:
+	return p == BP.IDLE or p == BP.NOTICING or p == BP.RETURNING
+
+
+func test_the_idle_phases_are_appended_so_the_earlier_values_do_not_move() -> void:
+	assert_eq(BP.APPROACH, 0)
+	assert_eq(BP.DISENGAGE, 4)
+	assert_eq(BP.IDLE, 5)
+	assert_eq(BP.NOTICING, 6)
+	assert_eq(BP.RETURNING, 7)
+
+
+## §2.10: lose_radius >= max(standoff + escape_speed * escape_time, mine_horizon * mine_speed_max + run_length / 2)
+## + 100, read from fields.
+func test_the_idle_radii_clear_the_largest_distance_the_bombing_cycle_opens() -> void:
+	var c: BomberConfig = SHIPPED
+	var opened := maxf(c.standoff + c.escape_speed * c.escape_time, c.mine_horizon * c.mine_speed_max + c.run_length * 0.5)
+	assert_gte(c.lose_radius, opened + 100.0, "lose_radius %.0f vs the distance the cycle opens %.0f + 100" % [c.lose_radius, opened])
+	assert_gt(c.lose_radius, c.perceive_radius, "AnchorIdle's hysteresis margin")
+	assert_eq(c.perceive_radius, 650.0)
+	assert_eq(c.lose_radius, 1700.0)
+
+
+func test_open_space_cold_start_begins_idle_and_assault_starts_in_combat() -> void:
+	var h = _world("open_space")
+	var bomber := _cold_bomber(h, Vector2(321.0, -654.0), FAR_AWAY)
+	_tick(bomber, DT)
+	assert_eq(_brain(bomber).phase, BP.IDLE, "Open Space starts on patrol")
+	assert_not_null(_brain(bomber).anchor_idle)
+	assert_eq(_brain(bomber).patrol_anchor, Vector2(321.0, -654.0), "an unset anchor defaults to the spawn position")
+	var a = _world("assault")
+	var bomber2 := _cold_bomber(a, Vector2(640.0, -100.0), Vector2(640.0, 560.0))
+	_tick(bomber2, DT)
+	assert_eq(_brain(bomber2).phase, BP.APPROACH, "Assault always starts in combat")
+	assert_null(_brain(bomber2).anchor_idle, "no AnchorIdle is built in Assault")
+
+
+func test_idle_never_drops_anything_and_stays_on_its_ring() -> void:
+	var h = _world("open_space")
+	var anchor := Vector2(500.0, -400.0)
+	var bomber := _cold_bomber(h, anchor + Vector2(20.0, 0.0), anchor + Vector2(SHIPPED.perceive_radius + SHIPPED.idle_radius + 80.0, 0.0), anchor)
+	var worst := 0.0
+	for _i in int(20.0 / DT):
+		_step(h, bomber)
+		assert_eq(_brain(bomber).phase, BP.IDLE)
+		if _i > int(5.0 / DT):  # the first seconds are the bomber's slow turn onto the ring
+			worst = maxf(worst, bomber.global_position.distance_to(anchor))
+	assert_lte(worst, SHIPPED.idle_radius + 30.0, "worst %.1f px from the anchor once settled" % worst)
+	assert_eq(_ordnance_in(h.root).size(), 0, "nothing was dropped")
+
+
+func test_perceiving_the_player_notices_for_a_beat_then_approaches() -> void:
+	var h = _world("open_space")
+	var bomber := _cold_bomber(h, Vector2(640.0, 0.0), Vector2(640.0, SHIPPED.perceive_radius - 100.0))
+	var seen: Array[int] = []
+	for _i in int(1.0 / DT):
+		_step(h, bomber)
+		if seen.is_empty() or seen[-1] != _brain(bomber).phase:
+			seen.append(_brain(bomber).phase)
+	assert_eq(seen[0], BP.NOTICING, "NOTICING for a beat first")
+	assert_eq(seen[1], BP.APPROACH, "then the fight starts (phases %s)" % [seen])
+	assert_eq(_ordnance_in(h.root).size(), 0, "nothing dropped yet")
+
+
+func test_beyond_lose_radius_it_goes_home_and_can_fight_again() -> void:
+	var h = _world("open_space")
+	var anchor := Vector2.ZERO
+	var bomber := _cold_bomber(h, anchor + Vector2(100.0, 0.0), Vector2(500.0, 0.0), anchor)
+	for _i in int(2.0 / DT):
+		_step(h, bomber)
+		if not _b_calm(_brain(bomber).phase):
+			break
+	assert_eq(_brain(bomber).phase, BP.APPROACH, "it reached combat")
+	bomber.global_position += Vector2(0.0, 700.0)  # well away from home, so there is a way back to walk
+	h.player.global_position = FAR_AWAY
+	var saw_returning := false
+	var home := false
+	for _i in int(60.0 / DT):
+		_step(h, bomber)
+		saw_returning = saw_returning or _brain(bomber).phase == BP.RETURNING
+		if _brain(bomber).phase == BP.IDLE:
+			home = true
+			break
+	assert_true(saw_returning, "it passes through RETURNING on the way home")
+	assert_true(home, "and reaches IDLE")
+	h.player.global_position = bomber.global_position + Vector2(SHIPPED.perceive_radius - 50.0, 0.0)
+	for _i in int(1.0 / DT):
+		_step(h, bomber)
+	assert_false(_b_calm(_brain(bomber).phase), "and fights again")
+
+
+## RETURNING never interrupts a RUN: the player vanishes (beyond lose_radius) during the run, and the run still
+## finishes - ESCAPE follows it, never RETURNING.
+func test_returning_never_interrupts_a_run() -> void:
+	var h = _world("open_space")
+	var bomber := _cold_bomber(h, Vector2(640.0, 100.0), Vector2(640.0, 560.0))
+	assert_true(_until_phase(h, bomber, BP.RUN, 12.0), "it reaches its run")
+	h.player.global_position = FAR_AWAY
+	var seen: Array[int] = [BP.RUN]
+	for _i in int(8.0 / DT):
+		_step(h, bomber)
+		if seen[-1] != _brain(bomber).phase:
+			seen.append(_brain(bomber).phase)
+		if _b_calm(_brain(bomber).phase):
+			break
+	assert_eq(seen[1], BP.ESCAPE, "the run is followed by its escape (phases %s)" % [seen])
+	assert_eq(seen[-1], BP.RETURNING, "and then it goes home (phases %s)" % [seen])
+
+
+## A hub bomber's whole cycle - APPROACH -> RUN -> ESCAPE -> REPOSITION - against a stationary player never reads as
+## losing it: it stays in combat on every tick, and never opens more than lose_radius.
+func test_a_hub_bomber_stays_in_combat_through_a_full_cycle() -> void:
+	var h = _world("open_space")
+	var bomber := _cold_bomber(h, Vector2(640.0, 100.0), Vector2(640.0, 560.0))
+	var visited := {}
+	var in_combat := false
+	var worst := 0.0
+	var runs := 0
+	for _i in int(60.0 / DT):
+		_step(h, bomber)
+		var p: int = _brain(bomber).phase
+		if p == BP.APPROACH:
+			in_combat = true
+		if in_combat:
+			assert_false(_b_calm(p), "combat tick %d is phase %s" % [_i, p])
+			worst = maxf(worst, bomber.global_position.distance_to(h.player.global_position))
+		if not visited.has(p):
+			visited[p] = true
+		runs = _brain(bomber).runs_started
+		if runs >= 2 and p == BP.APPROACH:
+			break
+	assert_gte(runs, 2, "two full cycles ran")
+	for p in [BP.APPROACH, BP.RUN, BP.ESCAPE, BP.REPOSITION]:
+		assert_true(visited.has(p), "phase %s was visited" % p)
+	assert_lt(worst, SHIPPED.lose_radius, "the cycle opened %.0f px against lose_radius %.0f" % [worst, SHIPPED.lose_radius])

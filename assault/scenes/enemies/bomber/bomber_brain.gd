@@ -12,7 +12,13 @@
 ##   REPOSITION [REPOSITION] Open Space: orbits at `standoff` for a moment, then APPROACHes again.
 ##   DISENGAGE  [DISENGAGE]  Assault only: the budget ran out (a running run finishes first), or the one run of
 ##                           this life is over. Release the corridor, curve out of the world rect, free.
-## IDLE / NOTICING / RETURNING (the hub, t19) are appended later so these values do not move.
+##   IDLE       [SEARCH]     Open Space only (t19): a slow ring orbit of `idle_radius` round `patrol_anchor`; it never
+##                           drops anything.
+##   NOTICING   [SEARCH]     a beat (`notice_time`): the light blinks once and it faces the player, then APPROACH.
+##   RETURNING  [REPOSITION] `arrive` back at `patrol_anchor`, then IDLE. Never interrupts a RUN (retried every tick).
+## IDLE / NOTICING / RETURNING are appended after DISENGAGE so the earlier values do not move. Hub idle (epic
+## §2.10): `AnchorIdle` runs ahead of the phase dispatch on the actor-player distance; `lose_radius` is above the
+## distance a run, an escape and a reposition open (`BomberConfig`), so the cycle never reads as losing the player.
 ##
 ## Two leads. The mine wall uses an UNDAMPED lead on the bomber's own timeline — the wall must be armed where the
 ## player will be when they get there — and the Dubins goal is planned to where that wall will be on ARRIVAL (the
@@ -27,7 +33,7 @@
 class_name BomberBrain
 extends EnemyBrain
 
-enum Phase { APPROACH, RUN, ESCAPE, REPOSITION, DISENGAGE }
+enum Phase { APPROACH, RUN, ESCAPE, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING }
 
 ## Emitted on every transition, with the phase entered.
 signal phase_changed(new_phase: int)
@@ -74,6 +80,8 @@ const SIDE_TIE_PX := 1.0
 const ANGLE_STEPS := 4
 ## An anchor moved further than this by the Assault clamp reports `wall_clamped()` (px).
 const CLAMP_EPS := 0.5
+## `idle_phase_offset` is drawn from ±this (rad).
+const MAX_IDLE_PHASE_OFFSET := 0.35
 
 ## Set by `bomber.gd` before the first tick. A fresh default keeps a bare brain steppable.
 var config: BomberConfig = BomberConfig.new()
@@ -94,6 +102,16 @@ var planned_rest_points: Array[Vector2] = []
 var drops_this_run: int = 0
 ## Runs started (RUN entries) this life.
 var runs_started: int = 0
+## The hub idle's ring centre. `Vector2.INF` (unset) means "not set": `_start()` then defaults it to the spawn
+## position.
+var patrol_anchor: Vector2 = Vector2.INF
+## Test seam (t19): a spawned bomber starts already fighting, the only behaviour that existed before the hub idle.
+## Real spawns (`SectorHub`) never set it. Assault ignores it: `EngagementBudget.active` decides there.
+var start_engaged: bool = false
+## Open Space only (`budget.active == false` and not `start_engaged`); null otherwise. Built once, in `_start()`.
+var anchor_idle: AnchorIdle
+## This bomber's offset on the idle ring (rad), drawn from `rng` when the idle starts (never for an engaged bomber).
+var idle_phase_offset: float = 0.0
 ## The angle (deg) the current angled line actually turns off the bearing (`approach_angle` or narrower).
 var approach_angle_used: float = 0.0
 
@@ -140,7 +158,12 @@ func tick(delta: float) -> void:
 	_update_prediction(target, delta)
 	if budget.update(delta) and phase != Phase.DISENGAGE:
 		_request_disengage()
+	if anchor_idle != null:
+		_tick_anchor_idle(delta, target)
 	match phase:
+		Phase.IDLE: _tick_idle()
+		Phase.NOTICING: _tick_noticing(target)
+		Phase.RETURNING: _tick_returning()
 		Phase.APPROACH: _tick_approach(delta, target)
 		Phase.RUN: _tick_run(delta, target)
 		Phase.ESCAPE: _tick_escape(delta, target)
@@ -166,6 +189,9 @@ func enter_phase(p: Phase) -> void:
 			_enter_reposition()
 		Phase.DISENGAGE:
 			_enter_disengage()
+		Phase.NOTICING:
+			_set_light(StateLight.State.OFF)
+			_blink()
 		_:
 			_set_light(StateLight.State.OFF)
 	phase_changed.emit(p)
@@ -173,6 +199,7 @@ func enter_phase(p: Phase) -> void:
 
 ## `BaseEnemy.suspend_ai()`: a rail took the enemy over. The root's rail clock does the bombing.
 func on_suspended() -> void:
+	anchor_idle = null  # a rail owns the motion: no idle
 	_set_light(StateLight.State.OFF)
 
 
@@ -231,6 +258,12 @@ func _start() -> void:
 	if constraint != null and constraint.inner_rect().has_area():
 		_drop_rect = constraint.inner_rect().grow(-config.drop_margin)
 	_enter_approach()
+	if not patrol_anchor.is_finite():
+		patrol_anchor = actor.global_position
+	if not budget.active and not start_engaged:
+		anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time, config.idle_radius)
+		idle_phase_offset = rng.randf_range(-MAX_IDLE_PHASE_OFFSET, MAX_IDLE_PHASE_OFFSET)
+		enter_phase(Phase.IDLE)
 
 
 func _request_disengage() -> void:
@@ -250,6 +283,47 @@ func _update_prediction(target: TargetInfo, delta: float) -> void:
 		return
 	var alpha := 1.0 if config.velocity_smoothing <= 0.0 else 1.0 - exp(-delta / config.velocity_smoothing)
 	_v_bar += (target.velocity - _v_bar) * alpha
+
+
+# ── Hub idle (t19; epic §2.10) ───────────────────────────────────────────────────────────────────
+
+## The meta-state that decides whether the bomber is patrolling, noticing or fighting, run once a tick ahead of the
+## phase dispatch. A RUN is never interrupted: the return is retried every tick until the run is over.
+func _tick_anchor_idle(delta: float, target: TargetInfo) -> void:
+	match anchor_idle.update(delta, actor.global_position, target):
+		AnchorIdle.State.IDLE:
+			if phase != Phase.IDLE and phase != Phase.RUN:
+				enter_phase(Phase.IDLE)
+		AnchorIdle.State.NOTICING:
+			if phase != Phase.NOTICING and phase != Phase.RUN:
+				enter_phase(Phase.NOTICING)
+		AnchorIdle.State.COMBAT:
+			# From NOTICING only: any other phase is already fighting.
+			if phase == Phase.NOTICING:
+				enter_phase(Phase.APPROACH)
+		AnchorIdle.State.RETURNING:
+			if phase != Phase.RETURNING and phase != Phase.RUN:
+				enter_phase(Phase.RETURNING)
+
+
+func _tick_idle() -> void:
+	mover.orbit(patrol_anchor, config.idle_radius, idle_phase_offset + config.idle_speed * _phase_time, config.max_speed)
+
+
+func _tick_noticing(target: TargetInfo) -> void:
+	mover.request_velocity(Vector2.ZERO)
+	if target.has_target:
+		mover.face_toward(target.position)
+
+
+func _tick_returning() -> void:
+	mover.arrive(patrol_anchor, config.max_speed)
+
+
+func _blink() -> void:
+	var light := actor.get_node_or_null("StateLight") as StateLight if actor != null else null
+	if light != null:
+		light.blink_once()
 
 
 # ── APPROACH ─────────────────────────────────────────────────────────────────────────────────────

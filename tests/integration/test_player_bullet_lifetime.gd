@@ -401,6 +401,7 @@ const RAM_SCENE: PackedScene = preload("res://assault/scenes/enemies/ram_corvett
 ## points to local +y, so `PlateFront` is 36 px below the hull centre).
 func _ram_on_the_muzzle() -> RamCorvette:
 	var ram := RAM_SCENE.instantiate() as RamCorvette
+	(ram.get_node("Brain") as RamCorvetteBrain).start_engaged = true  # pre-t19: predates the hub idle
 	_container.add_child(ram)
 	ram.set_physics_process(false)
 	ram.global_position = _muzzle.global_position + Vector2(0.0, -40.0)

@@ -23,6 +23,7 @@ const _SWEEP_SKIP := ["res://addons", "res://.godot", "res://docs"]
 
 func _spawn(harness, pos: Vector2) -> Sniper:
 	var sniper := SNIPER_SCENE.instantiate() as Sniper
+	(sniper.get_node("Brain") as SniperBrain).start_engaged = true  # pre-t19: predates the hub idle
 	sniper.global_position = pos
 	harness.root.add_child(sniper)
 	sniper.set_physics_process(false)  # hand-ticked
@@ -69,6 +70,7 @@ func test_the_rail_pool_is_a_root_child_feeding_the_rail_round() -> void:
 
 func test_the_scene_has_the_plan_s_children_and_no_timer() -> void:
 	var sniper := SNIPER_SCENE.instantiate() as Sniper
+	(sniper.get_node("Brain") as SniperBrain).start_engaged = true  # pre-t19: predates the hub idle
 	add_child_autofree(sniper)
 	assert_true(sniper.get_node("Telegraph") is SniperTelegraph, "the telegraph is the sniper's own Node2D")
 	assert_true(sniper.get_node("Brain") is SniperBrain)
@@ -88,6 +90,7 @@ func test_the_scene_has_the_plan_s_children_and_no_timer() -> void:
 
 func test_the_body_hurtbox_and_contact_hitbox_share_one_shape() -> void:
 	var sniper := SNIPER_SCENE.instantiate() as Sniper
+	(sniper.get_node("Brain") as SniperBrain).start_engaged = true  # pre-t19: predates the hub idle
 	add_child_autofree(sniper)
 	var body := sniper.get_node("CollisionShape2D") as CollisionShape2D
 	var contact := sniper.get_node("ContactHitBox/CollisionShape2D") as CollisionShape2D
@@ -97,6 +100,7 @@ func test_the_body_hurtbox_and_contact_hitbox_share_one_shape() -> void:
 
 func test_the_art_nose_points_up_so_the_muzzle_is_at_the_nose() -> void:
 	var sniper := SNIPER_SCENE.instantiate() as Sniper
+	(sniper.get_node("Brain") as SniperBrain).start_engaged = true  # pre-t19: predates the hub idle
 	add_child_autofree(sniper)
 	assert_almost_eq(sniper.sprite_forward_angle, -PI / 2.0, 0.0001)
 	assert_lt((sniper.get_node("Muzzle") as Marker2D).position.y, 0.0, "the muzzle is up the sprite")
@@ -157,6 +161,7 @@ func test_a_changed_config_value_wins_over_the_scene() -> void:
 	var harness = HARNESS.open_space()
 	add_child_autofree(harness.root)
 	var sniper := SNIPER_SCENE.instantiate() as Sniper
+	(sniper.get_node("Brain") as SniperBrain).start_engaged = true  # pre-t19: predates the hub idle
 	sniper.config.max_health = 77
 	sniper.config.collision_damage = 31
 	sniper.config.score_value = 123
@@ -403,6 +408,7 @@ func _harness(mode: String):
 func _cycle_sniper(harness, pos: Vector2 = Vector2(640.0, 80.0), seed_: int = 4242, decoy: bool = false) -> Sniper:
 	harness.player.global_position = Vector2(640.0, 560.0)
 	var sniper := SNIPER_SCENE.instantiate() as Sniper
+	(sniper.get_node("Brain") as SniperBrain).start_engaged = true  # pre-t19: predates the hub idle
 	(sniper.get_node("Brain") as SniperBrain).rng_seed = seed_
 	sniper.config.engage_seconds = 1000.0
 	sniper.config.decoy_telegraph = decoy
@@ -1274,3 +1280,167 @@ func test_no_relocation_path_passes_through_the_player() -> void:
 			if not c["path_ok"]:
 				refused += 1
 	assert_gt(refused, 0, "sanity: far-side candidates were refused for their path")
+
+
+# ══ t19: hub idle (epic §2.10; task cmuyk2qqh0099oa2xbltzoust) ═══════════════════════════════════════════════════
+#
+# Cold-start helpers: unlike `_spawn()` (which sets `start_engaged = true`, so every case above keeps assuming
+# combat-from-spawn as before this task), these leave the brain to decide for itself - Open Space starts IDLE,
+# Assault starts in combat. The stub player is stationary unless a case moves it.
+
+const FAR_AWAY := Vector2(100000.0, 100000.0)
+const SP := SniperBrain.Phase
+
+
+func _cold_sniper(harness, pos: Vector2, player_pos: Vector2, anchor: Vector2 = Vector2.INF) -> Sniper:
+	harness.player.global_position = player_pos
+	harness.player.velocity = Vector2.ZERO
+	var sniper := SNIPER_SCENE.instantiate() as Sniper
+	var brain := sniper.get_node("Brain") as SniperBrain
+	brain.rng_seed = 4242
+	brain.patrol_anchor = anchor
+	sniper.global_position = pos
+	harness.root.add_child(sniper)
+	sniper.set_physics_process(false)
+	return sniper
+
+
+func _sbrain(sniper: Sniper) -> SniperBrain:
+	return sniper.get_node("Brain") as SniperBrain
+
+
+func _s_calm(p: int) -> bool:
+	return p == SP.IDLE or p == SP.NOTICING or p == SP.RETURNING
+
+
+func test_the_idle_phases_are_appended_so_the_earlier_values_do_not_move() -> void:
+	assert_eq(SP.ENTER, 0)
+	assert_eq(SP.DISENGAGE, 8)
+	assert_eq(SP.IDLE, 9)
+	assert_eq(SP.NOTICING, 10)
+	assert_eq(SP.RETURNING, 11)
+
+
+## §2.10: lose_radius >= preferred_range + range_jitter + 200, read from fields.
+func test_the_idle_radii_clear_the_largest_distance_the_loop_opens() -> void:
+	var c: SniperConfig = SHIPPED
+	assert_gte(c.lose_radius, c.preferred_range + c.range_jitter + 200.0, "lose_radius %.0f" % c.lose_radius)
+	assert_gt(c.lose_radius, c.perceive_radius, "AnchorIdle's hysteresis margin")
+	assert_eq(c.perceive_radius, 700.0)
+	assert_eq(c.lose_radius, 1300.0)
+
+
+func test_open_space_cold_start_begins_idle_and_assault_starts_in_combat() -> void:
+	var h = _harness("open_space")
+	var sniper := _cold_sniper(h, Vector2(321.0, -654.0), FAR_AWAY)
+	_tick(sniper, DT)
+	assert_eq(_sbrain(sniper).phase, SP.IDLE, "Open Space starts on patrol")
+	assert_not_null(_sbrain(sniper).anchor_idle)
+	assert_eq(_sbrain(sniper).patrol_anchor, Vector2(321.0, -654.0), "an unset anchor defaults to the spawn position")
+	var a = _harness("assault")
+	var sniper2 := _cold_sniper(a, Vector2(640.0, -100.0), Vector2(640.0, 560.0))
+	_tick(sniper2, DT)
+	assert_eq(_sbrain(sniper2).phase, SP.ENTER, "Assault always starts in combat")
+	assert_null(_sbrain(sniper2).anchor_idle, "no AnchorIdle is built in Assault")
+
+
+func test_idle_never_aims_or_fires_and_stays_on_its_ring() -> void:
+	var h = _harness("open_space")
+	var anchor := Vector2(500.0, -400.0)
+	var sniper := _cold_sniper(h, anchor + Vector2(20.0, 0.0), anchor + Vector2(SHIPPED.perceive_radius + SHIPPED.idle_radius + 80.0, 0.0), anchor)
+	var worst := 0.0
+	for _i in int(20.0 / DT):
+		_tick(sniper, DT)
+		assert_eq(_sbrain(sniper).phase, SP.IDLE)
+		worst = maxf(worst, sniper.global_position.distance_to(anchor))
+	assert_lte(worst, SHIPPED.idle_radius + 30.0, "worst %.1f px from the anchor" % worst)
+	assert_eq(_sbrain(sniper).shots_fired, 0)
+	assert_eq(_rounds_in(h.root).size(), 0)
+
+
+func test_perceiving_the_player_notices_for_a_beat_then_enters() -> void:
+	var h = _harness("open_space")
+	var sniper := _cold_sniper(h, Vector2(640.0, 0.0), Vector2(640.0, SHIPPED.perceive_radius - 100.0))
+	var seen: Array[int] = []
+	for _i in int(1.0 / DT):
+		_tick(sniper, DT)
+		if seen.is_empty() or seen[-1] != _sbrain(sniper).phase:
+			seen.append(_sbrain(sniper).phase)
+	assert_eq(seen[0], SP.NOTICING, "NOTICING for a beat first")
+	assert_eq(seen[1], SP.ENTER, "then the loop starts (phases %s)" % [seen])
+
+
+func test_beyond_lose_radius_it_goes_home_and_can_fight_again() -> void:
+	var h = _harness("open_space")
+	var anchor := Vector2.ZERO
+	var sniper := _cold_sniper(h, anchor + Vector2(100.0, 0.0), Vector2(400.0, 0.0), anchor)
+	for _i in int(2.0 / DT):
+		_tick(sniper, DT)
+		if not _s_calm(_sbrain(sniper).phase):
+			break
+	assert_false(_s_calm(_sbrain(sniper).phase), "it reached combat")
+	sniper.global_position += Vector2(0.0, 700.0)  # well away from home, so there is a way back to walk
+	h.player.global_position = FAR_AWAY
+	var saw_returning := false
+	var home := false
+	for _i in int(60.0 / DT):
+		_tick(sniper, DT)
+		_recycle_rounds(sniper)
+		saw_returning = saw_returning or _sbrain(sniper).phase == SP.RETURNING
+		if _sbrain(sniper).phase == SP.IDLE:
+			home = true
+			break
+	assert_true(saw_returning, "it passes through RETURNING on the way home")
+	assert_true(home, "and reaches IDLE")
+	h.player.global_position = sniper.global_position + Vector2(SHIPPED.perceive_radius - 50.0, 0.0)
+	for _i in int(1.0 / DT):
+		_tick(sniper, DT)
+	assert_false(_s_calm(_sbrain(sniper).phase), "and fights again")
+
+
+## RETURNING never interrupts an AIM or a LOCK: the player vanishes (beyond lose_radius) mid-aim, and the shot is
+## still delivered before the sniper turns for home.
+func test_returning_never_interrupts_an_aim_or_a_lock() -> void:
+	var h = _harness("open_space")
+	var sniper := _cold_sniper(h, Vector2(640.0, 80.0), Vector2(640.0, 560.0))
+	assert_true(_run_to(sniper, SP.AIM, 12.0), "it settles and aims")
+	h.player.global_position = FAR_AWAY
+	var brain := _sbrain(sniper)
+	var seen: Array[int] = []
+	for _i in int(8.0 / DT):
+		_tick(sniper, DT)
+		if seen.is_empty() or seen[-1] != brain.phase:
+			seen.append(brain.phase)
+		if brain.shots_fired > 0 and _s_calm(brain.phase):
+			break
+	assert_eq(brain.shots_fired, 1, "the locked shot was fired (phases %s)" % [seen])
+	assert_true(seen.has(SP.LOCK), "through the lock (phases %s)" % [seen])
+	assert_eq(seen[-1], SP.RETURNING, "and then it goes home (phases %s)" % [seen])
+	for p in [SP.AIM, SP.LOCK]:
+		assert_ne(seen[seen.find(p) + 1] if seen.find(p) + 1 < seen.size() else -1, SP.RETURNING, "no cut-off %s" % p)
+
+
+## A hub sniper's whole loop - BREAK_CONTACT -> RELOCATE -> SETTLE -> AIM -> LOCK -> FIRE -> BREAK_CONTACT - against
+## a stationary player never reads as losing it: COMBAT on every tick, and the range never reaches lose_radius.
+func test_a_hub_sniper_stays_in_combat_through_a_full_cycle() -> void:
+	var h = _harness("open_space")
+	var sniper := _cold_sniper(h, Vector2(640.0, 80.0), Vector2(640.0, 560.0))
+	var brain := _sbrain(sniper)
+	var visited := {}
+	var in_combat := false
+	var worst := 0.0
+	for _i in int(60.0 / DT):
+		_tick(sniper, DT)
+		_recycle_rounds(sniper)
+		if brain.phase == SP.ENTER:
+			in_combat = true
+		if in_combat:
+			assert_false(_s_calm(brain.phase), "combat tick %d is phase %s" % [_i, brain.phase])
+			worst = maxf(worst, sniper.global_position.distance_to(h.player.global_position))
+		visited[brain.phase] = true
+		if brain.shots_fired >= 3:
+			break
+	assert_gte(brain.shots_fired, 3, "three full cycles ran")
+	for p in [SP.BREAK_CONTACT, SP.RELOCATE, SP.SETTLE, SP.AIM, SP.LOCK]:
+		assert_true(visited.has(p), "phase %s was visited" % p)
+	assert_lt(worst, SHIPPED.lose_radius, "the loop opened %.0f px against lose_radius %.0f" % [worst, SHIPPED.lose_radius])

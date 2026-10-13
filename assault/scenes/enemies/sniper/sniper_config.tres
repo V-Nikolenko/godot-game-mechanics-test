@@ -7,3 +7,5 @@ script = ExtResource("1")
 max_health = 60
 collision_damage = 20
 score_value = 50
+perceive_radius = 700.0
+lose_radius = 1300.0

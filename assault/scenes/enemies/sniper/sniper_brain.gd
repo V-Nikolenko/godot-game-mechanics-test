@@ -24,6 +24,16 @@
 ##   DISENGAGE     [DISENGAGE]   Assault only: the budget ran out. Release the corridor, curve to the nearest
 ##                               edge of the world rect at `exit_speed`, free once outside it. Expiry in AIM or
 ##                               LOCK waits for the shot (or the refusal): at most `aim + lock` late.
+##   IDLE          [SEARCH]      Open Space only (t19): a slow ring orbit of `idle_radius` round `patrol_anchor`. It
+##                               never aims, locks or fires.
+##   NOTICING      [SEARCH]      a beat (`notice_time`): the light blinks once and it faces the player, then ENTER.
+##   RETURNING     [REPOSITION]  `arrive` back at `patrol_anchor`, then IDLE. Never interrupts a DECOY, AIM or LOCK
+##                               (the player's window, and a shot half shown); it is retried every tick instead.
+##
+## Hub idle (epic §2.10): `AnchorIdle` runs ahead of the phase dispatch, on the actor-player distance. The radii
+## are `SniperConfig.perceive_radius` / `lose_radius`; `lose_radius` is above the range the loop opens
+## (`preferred_range + range_jitter + 200`), so BREAK_CONTACT and RELOCATE never read as losing the player.
+## Assault has no `AnchorIdle` and starts in combat.
 ##
 ## Firing points (`choose_firing_point()`) are picked in the PLAYER FRAME: bearings are measured from the
 ## player's smoothed velocity, or its facing while it is slow. See that function for the filters and the
@@ -37,7 +47,8 @@
 class_name SniperBrain
 extends EnemyBrain
 
-enum Phase { ENTER, BREAK_CONTACT, RELOCATE, SETTLE, DECOY, AIM, LOCK, FIRE, DISENGAGE }
+## IDLE, NOTICING and RETURNING (the hub, t19) are appended so the earlier values do not move.
+enum Phase { ENTER, BREAK_CONTACT, RELOCATE, SETTLE, DECOY, AIM, LOCK, FIRE, DISENGAGE, IDLE, NOTICING, RETURNING }
 
 ## Emitted on every transition, with the phase entered.
 signal phase_changed(new_phase: int)
@@ -57,6 +68,8 @@ const SETTLE_CAP := 1.5
 const EDGE_KEEP := 16.0
 ## The barrel's length while folded, as a share of its unfolded length.
 const BARREL_FOLDED := 0.35
+## `idle_phase_offset` is drawn from ±this (rad).
+const MAX_IDLE_PHASE_OFFSET := 0.35
 
 ## Set by `sniper.gd` before the first tick. A fresh default keeps a bare brain steppable.
 var config: SniperConfig = SniperConfig.new()
@@ -95,6 +108,18 @@ var barrel_open: float = 0.0
 var disengage_pending: bool = false
 ## The current decoy's signed bearing offset from the player (rad); 0 until the first decoy.
 var decoy_angle: float = 0.0
+## The hub idle's ring centre. `Vector2.INF` (unset) means "not set": `_start()` then defaults it to the spawn
+## position, so a loose sniper with no owner still patrols somewhere.
+var patrol_anchor: Vector2 = Vector2.INF
+## Test seam (t19): a spawned sniper starts already fighting, the only behaviour that existed before the hub idle.
+## Real spawns (`SectorHub`) never set it. Assault ignores it: `EngagementBudget.active` alone decides
+## combat-from-spawn there.
+var start_engaged: bool = false
+## Open Space only (`budget.active == false` and not `start_engaged`); null otherwise. Built once, in `_start()`.
+var anchor_idle: AnchorIdle
+## This sniper's offset on the idle ring (rad), drawn from `rng` within ±`MAX_IDLE_PHASE_OFFSET` when the idle
+## starts (never for an engaged sniper, so a seeded combat sequence is unchanged).
+var idle_phase_offset: float = 0.0
 
 ## `choose_firing_point()`'s last working, for tests: one Dictionary per candidate
 ## (`point`, `bearing`, `delta`, `tier`, `travel`, `score`, `rect_ok`, `cone_ok`, `path_ok`, `los` - null when no ray was
@@ -132,7 +157,12 @@ func tick(delta: float) -> void:
 	if budget.update(delta) and not _budget_seen:
 		_budget_seen = true
 		_request_disengage()
+	if anchor_idle != null:
+		_tick_anchor_idle(delta)
 	match phase:
+		Phase.IDLE: _tick_idle()
+		Phase.NOTICING: _tick_noticing()
+		Phase.RETURNING: _tick_returning()
 		Phase.ENTER: _tick_enter()
 		Phase.BREAK_CONTACT: _tick_break_contact(delta)
 		Phase.RELOCATE: _tick_relocate()
@@ -161,11 +191,13 @@ func enter_phase(p: Phase) -> void:
 		Phase.AIM: _enter_aim()
 		Phase.LOCK: _enter_lock()
 		Phase.DISENGAGE: _enter_disengage()
+		Phase.NOTICING: _enter_noticing()
 	phase_changed.emit(p)
 
 
 ## `BaseEnemy.suspend_ai()`: a rail took the enemy over. The telegraph's cycle does the shooting.
 func on_suspended() -> void:
+	anchor_idle = null  # a rail owns the motion: no idle
 	_set_light(StateLight.State.OFF)
 	if telegraph != null:
 		telegraph.start_rail_cycle()
@@ -174,6 +206,59 @@ func on_suspended() -> void:
 func _start() -> void:
 	_started = true
 	budget = EngagementBudget.new(config.engage_seconds, get_tree())
+	if not patrol_anchor.is_finite():
+		patrol_anchor = actor.global_position
+	if not budget.active and not start_engaged:
+		anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time, config.idle_radius)
+		idle_phase_offset = rng.randf_range(-MAX_IDLE_PHASE_OFFSET, MAX_IDLE_PHASE_OFFSET)
+		enter_phase(Phase.IDLE)
+
+
+# ── Hub idle (t19; epic §2.10) ───────────────────────────────────────────────────────────────────
+
+## The meta-state that decides whether the sniper is patrolling, noticing or fighting, run once a tick ahead of the
+## phase dispatch. A DECOY, AIM or LOCK is never interrupted: the return is retried every tick until it ends.
+func _tick_anchor_idle(delta: float) -> void:
+	match anchor_idle.update(delta, actor.global_position, _target):
+		AnchorIdle.State.IDLE:
+			if phase != Phase.IDLE and not _is_telegraphing():
+				enter_phase(Phase.IDLE)
+		AnchorIdle.State.NOTICING:
+			if phase != Phase.NOTICING and not _is_telegraphing():
+				enter_phase(Phase.NOTICING)
+		AnchorIdle.State.COMBAT:
+			# From NOTICING only: any other phase is already fighting.
+			if phase == Phase.NOTICING:
+				target_point = Vector2.INF
+				enter_phase(Phase.ENTER)
+		AnchorIdle.State.RETURNING:
+			if phase != Phase.RETURNING and not _is_telegraphing():
+				enter_phase(Phase.RETURNING)
+
+
+## True from the first tick of a decoy to the shot: the stretch the hub idle must not cut short.
+func _is_telegraphing() -> bool:
+	return phase == Phase.DECOY or phase == Phase.AIM or phase == Phase.LOCK or phase == Phase.FIRE
+
+
+func _enter_noticing() -> void:
+	var light := actor.get_node_or_null("StateLight") as StateLight if actor != null else null
+	if light != null:
+		light.blink_once()
+
+
+func _tick_noticing() -> void:
+	mover.request_velocity(Vector2.ZERO)
+	if _target.has_target:
+		mover.face_toward(_target.position)
+
+
+func _tick_returning() -> void:
+	mover.arrive(patrol_anchor, config.relocate_speed)
+
+
+func _tick_idle() -> void:
+	mover.orbit(patrol_anchor, config.idle_radius, idle_phase_offset + config.idle_speed * _phase_time, config.relocate_speed)
 
 
 ## The budget ran out: leave now, unless a shot is already being shown (AIM / LOCK), which is finished first.

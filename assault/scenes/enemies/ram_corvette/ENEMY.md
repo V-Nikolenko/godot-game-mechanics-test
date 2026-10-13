@@ -3,9 +3,9 @@
 **Role:** Heavy charger wearing three breakable armour plates. Bullets glance off it; rockets knock the plates off one at a time, and only then does the hull take damage.
 **Fantasy / threat:** A battering ram you have to *open* before you can kill it. Touching it hurts and shoves you away.
 
-> **Build state (Phase 4, t16 armour + t17 charge).** The armour, the ARMOR contact profile, the predicted-intercept
+> **Build state (Phase 4, t16 armour + t17 charge + t19 hub idle).** The armour, the ARMOR contact profile, the predicted-intercept
 > charge (LINE_UP / WIND_UP / CHARGE / WIDE_TURN), the plate glow, the stagger, the faster exposed hull and the Assault
-> budget rules are built; the real hull and plate sprites are t18, the hub idle t19, level 1 off rails t21/t22.
+> budget rules, the real hull and plate sprites (t18) and the hub idle (t19) are built; level 1 off rails is t21/t22.
 > Plan: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.6; task plans `docs/plans/cmuyk2qq8008xoa2xxoq1frgn/3-plan.md`
 > (armour) and `docs/plans/cmuyk2qqb0091oa2xy7yn9sxa/3-plan.md` (charge).
 
@@ -54,8 +54,8 @@ Signals: `armor_deflected(damage: int)`, `plate_broken(plate_name: StringName)`,
 
 ## Behaviour
 
-- **Brain:** `RamCorvetteBrain`, `Phase { APPROACH, LINE_UP, WIND_UP, CHARGE, WIDE_TURN, DISENGAGE, STAGGER }`
-  (STAGGER appended so t16's values hold; t19's hub phases go after it), `enter_phase()` seam,
+- **Brain:** `RamCorvetteBrain`, `Phase { APPROACH, LINE_UP, WIND_UP, CHARGE, WIDE_TURN, DISENGAGE, STAGGER, IDLE, NOTICING, RETURNING }`
+  (STAGGER appended so t16's values hold; the hub phases go after it), `enter_phase()` seam,
   `phase_changed(new_phase: int)`.
   - **APPROACH** at `cruise_speed` until within `engage_range` (420). Open Space: an intercept 0.5 s ahead. Assault: the
     same intercept point offset `assault_side_offset` (240) beside the player (the side it is on; a centred spawn
@@ -91,6 +91,21 @@ Signals: `armor_deflected(damage: int)`, `plate_broken(plate_name: StringName)`,
 - **Death / scoring:** `BaseEnemy` emits `died`, awards `score_value` 35.
 
 ---
+
+## Hub idle (t19)
+
+Open Space only (`budget.active == false` and not `start_engaged`); Assault starts in combat and builds no `AnchorIdle`.
+- `Phase` gains `IDLE`, `NOTICING`, `RETURNING` after `STAGGER` (values 7-9). `patrol_anchor` (default: the spawn
+  position), `start_engaged` (test seam), `anchor_idle`.
+- **IDLE** orbits `patrol_anchor` on a ring of `idle_radius` (150) at `idle_speed`; it never lines up, winds up or
+  charges (its ARMOR contact stays armed, as at all times). **NOTICING** (`notice_time` 0.35 s): stands, blinks, faces
+  the player, then APPROACH. **RETURNING**: `arrive` at the anchor, then IDLE. Entering any of the three clears the
+  glow, the light and the aim.
+- Radii: `perceive_radius` 600, `lose_radius` 1300. The §2.10 inequality is `lose_radius >= engage_range + overshoot +
+  2 * exposed_cruise_speed / wide_turn_rate + 100` (1226), asserted from the fields.
+- **RETURNING never interrupts WIND_UP or CHARGE**: it is retried every tick. If the player leaves while the Corvette is
+  committed, the retained AnchorIdle state may reach IDLE (the charge carried it back within `idle_radius` of the
+  anchor) and it then settles straight into IDLE without a RETURNING phase; the ring orbit brings it home.
 
 ## Spawn notes
 

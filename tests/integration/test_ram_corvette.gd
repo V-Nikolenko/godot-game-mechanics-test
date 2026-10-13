@@ -43,6 +43,7 @@ func _world(mode: String) -> RamCorvette:
 	_root = harness.root
 	harness.player.global_position = Vector2(80.0, 80.0)  # off every test line
 	var ram := RAM_SCENE.instantiate() as RamCorvette
+	(ram.get_node("Brain") as RamCorvetteBrain).start_engaged = true  # pre-t19: predates the hub idle
 	ram.global_position = RAM_POS
 	_root.add_child(ram)
 	ram.set_physics_process(false)
@@ -602,6 +603,7 @@ func _live_ram(harness, pos: Vector2, player_pos: Vector2, tweak: Callable = Cal
 	harness.player.velocity = Vector2.ZERO
 	harness.player.rotation = 0.0
 	var ram := RAM_SCENE.instantiate() as RamCorvette
+	(ram.get_node("Brain") as RamCorvetteBrain).start_engaged = true  # pre-t19: predates the hub idle
 	ram.config.engage_seconds = 1000.0
 	(ram.get_node("Brain") as RamCorvetteBrain).rng_seed = 1717
 	if tweak.is_valid():
@@ -1403,3 +1405,164 @@ func test_the_attack_in_budget_row_can_fail() -> void:
 	_budget_tweak = Callable()
 	assert_lt(r["wind_up_at"], 0.0, "at 160 px/s the top-wide ram runs out of budget first")
 	assert_eq(r["charges"], 0)
+
+
+# ══ t19: hub idle (epic §2.10; task cmuyk2qqh0099oa2xbltzoust) ═══════════════════════════════════════════════════
+#
+# Cold-start helpers: unlike `_live_ram()` (which sets `start_engaged = true`, so every case above keeps assuming
+# combat-from-spawn as before this task), these leave the brain to decide for itself - Open Space starts IDLE,
+# Assault starts in combat. The stub player is stationary unless a case moves it.
+
+const FAR_AWAY := Vector2(100000.0, 100000.0)
+
+
+func _cold_ram(harness, pos: Vector2, player_pos: Vector2, anchor: Vector2 = Vector2.INF) -> RamCorvette:
+	harness.player.global_position = player_pos
+	harness.player.velocity = Vector2.ZERO
+	var ram := RAM_SCENE.instantiate() as RamCorvette
+	var brain := ram.get_node("Brain") as RamCorvetteBrain
+	brain.rng_seed = 1717
+	brain.patrol_anchor = anchor
+	ram.global_position = pos
+	_root.add_child(ram)
+	ram.set_physics_process(false)
+	return ram
+
+
+func _calm(p: int) -> bool:
+	return p == Phase.IDLE or p == Phase.NOTICING or p == Phase.RETURNING
+
+
+func test_the_idle_phases_are_appended_so_the_earlier_values_do_not_move() -> void:
+	assert_eq(Phase.APPROACH, 0)
+	assert_eq(Phase.STAGGER, 6)
+	assert_eq(Phase.IDLE, 7)
+	assert_eq(Phase.NOTICING, 8)
+	assert_eq(Phase.RETURNING, 9)
+
+
+## §2.10: lose_radius >= engage_range + overshoot + 2 * exposed_cruise_speed / wide_turn_rate + 100, read from fields.
+func test_the_idle_radii_clear_the_largest_distance_the_charge_cycle_opens() -> void:
+	var c: RamCorvetteConfig = RAM_CONFIG
+	var opened := c.engage_range + c.overshoot + 2.0 * c.exposed_cruise_speed / c.wide_turn_rate
+	assert_gte(c.lose_radius, opened + 100.0, "lose_radius %.0f vs the distance the cycle opens %.0f + 100" % [c.lose_radius, opened])
+	assert_gt(c.lose_radius, c.perceive_radius, "AnchorIdle's hysteresis margin")
+	assert_eq(c.perceive_radius, 600.0)
+	assert_eq(c.lose_radius, 1300.0)
+	assert_gte(c.perceive_radius, c.engage_range, "it notices the player before it can line up")
+
+
+func test_open_space_cold_start_begins_idle_and_assault_starts_in_combat() -> void:
+	var h = _harness("open_space")
+	var ram := _cold_ram(h, Vector2(321.0, -654.0), FAR_AWAY)
+	_step(ram, h.player)
+	assert_eq(_brain(ram).phase, Phase.IDLE, "Open Space starts on patrol")
+	assert_not_null(_brain(ram).anchor_idle)
+	assert_eq(_brain(ram).patrol_anchor, Vector2(321.0, -654.0), "an unset anchor defaults to the spawn position")
+	await _drop(h)
+	var a = _harness("assault")
+	var ram2 := _cold_ram(a, Vector2(640.0, -100.0), Vector2(640.0, 560.0))
+	_step(ram2, a.player)
+	assert_eq(_brain(ram2).phase, Phase.APPROACH, "Assault always starts in combat")
+	assert_null(_brain(ram2).anchor_idle, "no AnchorIdle is built in Assault")
+
+
+func test_idle_never_lines_up_winds_up_or_charges_and_stays_on_its_ring() -> void:
+	var h = _harness("open_space")
+	var anchor := Vector2(500.0, -400.0)
+	var ram := _cold_ram(h, anchor + Vector2(20.0, 0.0), anchor + Vector2(RAM_CONFIG.perceive_radius + RAM_CONFIG.idle_radius + 80.0, 0.0), anchor)
+	var worst := 0.0
+	for _i in int(20.0 / DT):
+		_step(ram, h.player)
+		assert_eq(_brain(ram).phase, Phase.IDLE)
+		worst = maxf(worst, ram.global_position.distance_to(anchor))
+	assert_lte(worst, RAM_CONFIG.idle_radius + 30.0, "worst %.1f px from the anchor" % worst)
+	assert_eq(_brain(ram).charges, 0)
+
+
+func test_perceiving_the_player_notices_for_a_beat_then_fights() -> void:
+	var h = _harness("open_space")
+	var ram := _cold_ram(h, Vector2(640.0, 0.0), Vector2(640.0, RAM_CONFIG.perceive_radius - 100.0))
+	var seen: Array[int] = []
+	for _i in int(1.0 / DT):
+		_step(ram, h.player)
+		if seen.is_empty() or seen[-1] != _brain(ram).phase:
+			seen.append(_brain(ram).phase)
+	assert_eq(seen[0], Phase.NOTICING, "NOTICING for a beat first")
+	assert_eq(seen[1], Phase.APPROACH, "then the fight starts (phases %s)" % [seen])
+
+
+func test_beyond_lose_radius_it_goes_home_and_can_fight_again() -> void:
+	var h = _harness("open_space")
+	var anchor := Vector2.ZERO
+	var ram := _cold_ram(h, anchor + Vector2(100.0, 0.0), Vector2(100.0 + RAM_CONFIG.engage_range + 40.0, 0.0), anchor)
+	for _i in int(2.0 / DT):
+		_step(ram, h.player)
+		if not _calm(_brain(ram).phase):
+			break
+	assert_false(_calm(_brain(ram).phase), "it reached combat")
+	assert_false(_brain(ram).phase == Phase.WIND_UP, "and is not yet committed")
+	ram.global_position += Vector2(0.0, 700.0)  # well away from home, so there is a way back to walk
+	h.player.global_position = FAR_AWAY
+	var saw_returning := false
+	var home := false
+	for _i in int(60.0 / DT):
+		_step(ram, h.player)
+		saw_returning = saw_returning or _brain(ram).phase == Phase.RETURNING
+		if _brain(ram).phase == Phase.IDLE:
+			home = true
+			break
+	assert_true(saw_returning, "it passes through RETURNING on the way home")
+	assert_true(home, "and reaches IDLE")
+	h.player.global_position = ram.global_position + Vector2(RAM_CONFIG.perceive_radius - 50.0, 0.0)
+	for _i in int(1.0 / DT):
+		_step(ram, h.player)
+	assert_true(not _calm(_brain(ram).phase), "and fights again")
+
+
+## RETURNING never interrupts a WIND_UP or a CHARGE: the player vanishes (beyond lose_radius) mid wind-up, and the
+## charge is still delivered before the Corvette turns for home.
+func test_returning_never_interrupts_a_wind_up_or_a_charge() -> void:
+	var h = _harness("open_space")
+	var ram := _cold_ram(h, Vector2(640.0, 0.0), Vector2(640.0, 380.0))
+	assert_true(_run_to(ram, h.player, Phase.WIND_UP, 8.0), "it lines up and winds up")
+	h.player.global_position = FAR_AWAY
+	var seen: Array[int] = []
+	for _i in int(8.0 / DT):
+		_step(ram, h.player)
+		if seen.is_empty() or seen[-1] != _brain(ram).phase:
+			seen.append(_brain(ram).phase)
+		if _calm(_brain(ram).phase):
+			break
+	assert_eq(seen[0], Phase.WIND_UP)
+	assert_true(seen.has(Phase.CHARGE), "the charge is delivered (phases %s)" % [seen])
+	for i in seen.size() - 1:
+		assert_false(seen[i] == Phase.WIND_UP and seen[i + 1] == Phase.RETURNING, "no cut-off wind-up")
+	assert_true(seen[-1] == Phase.RETURNING or seen[-1] == Phase.IDLE, "and then it goes home (phases %s)" % [seen])
+
+
+## A hub Corvette's missed charge (a stationary stub is passed through) and WIDE_TURN never read as losing the
+## player: it stays in combat on every tick, and never opens more than lose_radius.
+func test_a_hub_ram_stays_in_combat_through_a_missed_charge_and_the_wide_turn() -> void:
+	var h = _harness("open_space")
+	var ram := _cold_ram(h, Vector2(640.0, 0.0), Vector2(640.0, 380.0))
+	var seen: Array[int] = []
+	var in_combat := false
+	var worst := 0.0
+	var wide_turns := 0
+	for _i in int(40.0 / DT):
+		_step(ram, h.player)
+		var p := _brain(ram).phase
+		if seen.is_empty() or seen[-1] != p:
+			seen.append(p)
+			if p == Phase.WIDE_TURN:
+				wide_turns += 1
+		if p == Phase.APPROACH:
+			in_combat = true
+		if in_combat:
+			assert_false(_calm(p), "combat tick %d is %s" % [_i, p])
+			worst = maxf(worst, ram.global_position.distance_to(h.player.global_position))
+		if wide_turns >= 2 and p == Phase.LINE_UP:
+			break
+	assert_gte(wide_turns, 2, "two missed charges and their wide turns (phases %s)" % [seen])
+	assert_lt(worst, RAM_CONFIG.lose_radius, "the cycle opened %.0f px against lose_radius %.0f" % [worst, RAM_CONFIG.lose_radius])

@@ -3,7 +3,7 @@
 **Role:** Holds a long firing line on the player and fires a single fast rail shot after a telegraph.
 **Fantasy / threat:** A patient sniper. The shot is broadcast by a red line that turns bright when it locks; reading that tell and stepping aside is the whole fight.
 
-> **Build state (Phase 4, t12 shell + t13 cycle).** The scene, config, rail round, aim line, rail fallback, Assault
+> **Build state (Phase 4, t12 shell + t13 cycle + t19 hub idle).** The scene, config, rail round, aim line, rail fallback, Assault
 > exit and the AI relocation cycle (with firing-point selection, the line-of-sight refusal and the rail trail) are
 > built. The decoy (t14, behind `decoy_telegraph`) is built; the art is in (t15: a narrow 48x64 top-down hull `sniper.png` and an 8x42 `sniper_barrel.png` whose length the
 > brain scales). Plans: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.5, §2.8;
@@ -92,6 +92,18 @@ Line of sight is `LineOfSight` (opt-in blockers: group `asteroids` or `blocks_li
 | `barrel_unfold_seconds` / `barrel_fold_seconds` | 0.4 / 0.3 | Barrel animation (s) |
 
 ---
+
+## Hub idle (t19)
+
+Open Space only (`budget.active == false` and not `start_engaged`); Assault starts in combat and builds no `AnchorIdle`.
+- `Phase` gains `IDLE`, `NOTICING`, `RETURNING` after `DISENGAGE` (values 9-11). `patrol_anchor` (default: the spawn
+  position), `start_engaged` (test seam: skip the idle), `anchor_idle`.
+- **IDLE** orbits `patrol_anchor` on a ring of `idle_radius` (150) at `idle_speed`; it never settles, aims or fires.
+  **NOTICING** (`notice_time` 0.35 s): stands, blinks the light once, faces the player, then ENTER. **RETURNING**:
+  `arrive` at the anchor, then IDLE.
+- Radii: `perceive_radius` 700, `lose_radius` 1300. The §2.10 inequality is `lose_radius >= preferred_range +
+  range_jitter + 200` (1200), so BREAK_CONTACT / RELOCATE never read as losing the player (asserted from the fields).
+- **RETURNING never interrupts DECOY, AIM or LOCK**: the return is retried every tick until the shot (or refusal) is done.
 
 ## Spawn notes
 

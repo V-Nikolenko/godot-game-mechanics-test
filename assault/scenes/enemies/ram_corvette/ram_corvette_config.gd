@@ -72,3 +72,17 @@ extends ShipConfig
 @export var evade_range: float = 600.0
 ## ... at this lateral speed (px/s).
 @export var evade_speed: float = 180.0
+
+@export_group("Idle")
+## Open Space hub only (epic §2.10; task cmuyk2qqh0099oa2xbltzoust). The Corvette patrols a slow ring round its
+## `patrol_anchor` until the player comes within `perceive_radius`, and goes home once the player is further than
+## `lose_radius` (px). `lose_radius` sits above the largest actor-player distance its own cycle deliberately opens
+## (`engage_range + overshoot + 2 * exposed_cruise_speed / wide_turn_rate + 100`), so the cycle itself never counts
+## as losing the player.
+@export var perceive_radius: float = 600.0
+@export var lose_radius: float = 1300.0
+## The beat between perceiving the player and fighting (s).
+@export var notice_time: float = 0.35
+## The patrol ring's radius round `patrol_anchor` (px) and its angular speed (rad/s).
+@export var idle_radius: float = 150.0
+@export var idle_speed: float = 0.5

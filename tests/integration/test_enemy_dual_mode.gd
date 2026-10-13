@@ -379,6 +379,7 @@ const BOMBER_SCENE: PackedScene = \
 
 func _spawn_bomber(harness, pos: Vector2) -> Bomber:
 	var entity := BOMBER_SCENE.instantiate() as Bomber
+	(entity.get_node("Brain") as BomberBrain).start_engaged = true  # pre-t19: predates the hub idle
 	entity.global_position = pos
 	harness.root.add_child(entity)
 	entity.set_physics_process(false)  # hand-ticked, same technique as the Razor Drone above
@@ -443,6 +444,7 @@ const SNIPER_SCENE: PackedScene = \
 
 func _spawn_sniper(harness, pos: Vector2) -> Sniper:
 	var entity := SNIPER_SCENE.instantiate() as Sniper
+	(entity.get_node("Brain") as SniperBrain).start_engaged = true  # pre-t19: predates the hub idle
 	entity.global_position = pos
 	harness.root.add_child(entity)
 	entity.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
@@ -492,6 +494,7 @@ const RAM_SCENE: PackedScene = \
 
 func _spawn_ram(harness, pos: Vector2) -> RamCorvette:
 	var entity := RAM_SCENE.instantiate() as RamCorvette
+	(entity.get_node("Brain") as RamCorvetteBrain).start_engaged = true  # pre-t19: predates the hub idle
 	entity.global_position = pos
 	harness.root.add_child(entity)
 	entity.set_physics_process(false)  # hand-ticked, same technique as the Bomber above

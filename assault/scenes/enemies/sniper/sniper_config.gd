@@ -89,6 +89,19 @@ extends ShipConfig
 @export var decoy_offset_min: float = 25.0
 @export var decoy_offset_max: float = 35.0
 
+@export_group("Idle")
+## Open Space hub only (epic §2.10; task cmuyk2qqh0099oa2xbltzoust). The sniper patrols a slow ring round its
+## `patrol_anchor` until the player comes within `perceive_radius`, and goes home once the player is further than
+## `lose_radius` (px). `lose_radius` sits above the largest actor-player distance its own cycle deliberately opens
+## (`preferred_range + range_jitter + 200`), so the cycle itself never counts as losing the player.
+@export var perceive_radius: float = 700.0
+@export var lose_radius: float = 1300.0
+## The beat between perceiving the player and fighting (s).
+@export var notice_time: float = 0.35
+## The patrol ring's radius round `patrol_anchor` (px) and its angular speed (rad/s).
+@export var idle_radius: float = 150.0
+@export var idle_speed: float = 0.5
+
 @export_group("Rail")
 ## While a rail owns the sniper (§2.8): `rail_shot_count` shots, each tracking for `rail_aim_seconds` at
 ## `rail_track_rate` rad/s, then `rail_lock_seconds` frozen, fired at `rail_fallback_speed` for

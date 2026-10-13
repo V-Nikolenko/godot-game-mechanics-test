@@ -38,3 +38,5 @@ exposed_charge_speed = 700.0
 evade_cone_deg = 20.0
 evade_range = 600.0
 evade_speed = 180.0
+perceive_radius = 600.0
+lose_radius = 1300.0

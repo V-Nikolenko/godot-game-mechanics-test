@@ -22,7 +22,14 @@
 ##   STAGGER    [-]          a plate broke during LINE_UP / WIND_UP: the charge is cancelled, the ship
 ##                           stops for `stagger_seconds`, then lines up again (IDEAS §16 "heavy weapons
 ##                           stagger"). A plate broken during CHARGE changes nothing.
-## IDLE / NOTICING / RETURNING (the hub, t19) are appended after STAGGER so these values do not move.
+##   IDLE       [SEARCH]     Open Space only (t19): a slow ring orbit of `idle_radius` round `patrol_anchor`; it never
+##                           lines up, winds up or charges.
+##   NOTICING   [SEARCH]     a beat (`notice_time`): the light blinks once and it faces the player, then APPROACH.
+##   RETURNING  [REPOSITION] `arrive` back at `patrol_anchor`, then IDLE. Never interrupts a WIND_UP or a CHARGE
+##                           (retried every tick).
+## IDLE / NOTICING / RETURNING are appended after STAGGER so these values do not move. Hub idle (epic §2.10):
+## `AnchorIdle` runs ahead of the phase dispatch on the actor-player distance; `lose_radius` is above the distance a
+## charge and its wide turn open (`RamCorvetteConfig`), so the cycle never reads as losing the player.
 ##
 ## Attack gate: LINE_UP is entered only with `budget.remaining() >= line_up_cap` (INF in Open Space), so once
 ## it lines up, WIND_UP starts before the budget expires. Budget expiry by phase: APPROACH / LINE_UP /
@@ -41,7 +48,7 @@
 class_name RamCorvetteBrain
 extends EnemyBrain
 
-enum Phase { APPROACH, LINE_UP, WIND_UP, CHARGE, WIDE_TURN, DISENGAGE, STAGGER }
+enum Phase { APPROACH, LINE_UP, WIND_UP, CHARGE, WIDE_TURN, DISENGAGE, STAGGER, IDLE, NOTICING, RETURNING }
 
 ## Emitted on every transition, with the phase entered.
 signal phase_changed(new_phase: int)
@@ -63,6 +70,8 @@ const TIME_EPS := 0.0001
 ## The attack gate asks for this much budget beyond `line_up_cap` (s): a few ticks of rounding, so a LINE_UP
 ## always reaches WIND_UP before the budget (updated before the phase logic) expires. The Swarm Drone precedent.
 const ATTACK_GATE_MARGIN := 0.05
+## `idle_phase_offset` is drawn from ±this (rad).
+const MAX_IDLE_PHASE_OFFSET := 0.35
 
 ## Set by `ram_corvette.gd` before the first tick. A fresh default keeps a bare brain steppable.
 var config: RamCorvetteConfig = RamCorvetteConfig.new()
@@ -78,6 +87,16 @@ var exposed: bool = false
 var disengage_pending: bool = false
 ## Latched by `on_suspended()`: a rail drives the ship, so plate breaks and exposure change nothing here.
 var suspended: bool = false
+## The hub idle's ring centre. `Vector2.INF` (unset) means "not set": `_start()` then defaults it to the spawn
+## position.
+var patrol_anchor: Vector2 = Vector2.INF
+## Test seam (t19): a spawned Corvette starts already fighting, the only behaviour that existed before the hub idle.
+## Real spawns (`SectorHub`) never set it. Assault ignores it: `EngagementBudget.active` decides there.
+var start_engaged: bool = false
+## Open Space only (`budget.active == false` and not `start_engaged`); null otherwise. Built once, in `_start()`.
+var anchor_idle: AnchorIdle
+## This Corvette's offset on the idle ring (rad), drawn from `rng` when the idle starts (never for an engaged one).
+var idle_phase_offset: float = 0.0
 
 ## Assault approach side: +1 = the player's +x side, -1 = its -x side. 0 until chosen (or in Open Space).
 var side: float = 0.0
@@ -125,7 +144,12 @@ func tick(delta: float) -> void:
 	if budget.update(delta) and not _expiry_seen:
 		_expiry_seen = true
 		_on_budget_expired()
+	if anchor_idle != null:
+		_tick_anchor_idle(delta)
 	match phase:
+		Phase.IDLE: _tick_idle()
+		Phase.NOTICING: _tick_noticing()
+		Phase.RETURNING: _tick_returning()
 		Phase.APPROACH: _tick_approach(delta)
 		Phase.LINE_UP: _tick_line_up(delta)
 		Phase.WIND_UP: _tick_wind_up(delta)
@@ -169,12 +193,18 @@ func enter_phase(p: Phase) -> void:
 			_blink()
 		Phase.DISENGAGE:
 			_enter_disengage()
+		Phase.IDLE, Phase.RETURNING:
+			_enter_calm()
+		Phase.NOTICING:
+			_enter_calm()
+			_blink()
 	phase_changed.emit(p)
 
 
 ## `BaseEnemy.suspend_ai()`: a rail took the enemy over. The ARMOR profile stays armed; nothing to fire.
 func on_suspended() -> void:
 	suspended = true
+	anchor_idle = null  # a rail owns the motion: no idle
 	_set_light(StateLight.State.OFF)
 
 
@@ -215,6 +245,12 @@ func can_attack() -> bool:
 func _start() -> void:
 	_started = true
 	budget = EngagementBudget.new(config.engage_seconds, get_tree())
+	if not patrol_anchor.is_finite():
+		patrol_anchor = actor.global_position
+	if not budget.active and not start_engaged:
+		anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time, config.idle_radius)
+		idle_phase_offset = rng.randf_range(-MAX_IDLE_PHASE_OFFSET, MAX_IDLE_PHASE_OFFSET)
+		enter_phase(Phase.IDLE)
 
 
 func _on_budget_expired() -> void:
@@ -225,6 +261,55 @@ func _on_budget_expired() -> void:
 			disengage_pending = true
 		_:
 			enter_phase(Phase.DISENGAGE)
+
+
+# ── Hub idle (t19; epic §2.10) ────────────────────────────────────────────────────────────────────
+
+## The meta-state that decides whether the Corvette is patrolling, noticing or fighting, run once a tick ahead of the
+## phase dispatch. A WIND_UP or a CHARGE is never interrupted: the return is retried every tick until it has ended.
+func _tick_anchor_idle(delta: float) -> void:
+	var target := TargetInfo.player(get_tree())
+	match anchor_idle.update(delta, actor.global_position, target):
+		AnchorIdle.State.IDLE:
+			if phase != Phase.IDLE and not _is_committed():
+				enter_phase(Phase.IDLE)
+		AnchorIdle.State.NOTICING:
+			if phase != Phase.NOTICING and not _is_committed():
+				enter_phase(Phase.NOTICING)
+		AnchorIdle.State.COMBAT:
+			# From NOTICING only: any other phase is already fighting.
+			if phase == Phase.NOTICING:
+				enter_phase(Phase.APPROACH)
+		AnchorIdle.State.RETURNING:
+			if phase != Phase.RETURNING and not _is_committed():
+				enter_phase(Phase.RETURNING)
+
+
+func _is_committed() -> bool:
+	return phase == Phase.WIND_UP or phase == Phase.CHARGE
+
+
+## IDLE, NOTICING and RETURNING entry: forget the attack in progress - no glow, no light, no aim.
+func _enter_calm() -> void:
+	_set_light(StateLight.State.OFF)
+	_set_glow(0.0)
+	aim_frozen = false
+	mover.max_speed = cruise_speed()
+
+
+func _tick_idle() -> void:
+	mover.orbit(patrol_anchor, config.idle_radius, idle_phase_offset + config.idle_speed * _phase_time, cruise_speed())
+
+
+func _tick_noticing() -> void:
+	mover.request_velocity(Vector2.ZERO)
+	var target := TargetInfo.player(get_tree())
+	if target.has_target:
+		mover.face_toward(target.position)
+
+
+func _tick_returning() -> void:
+	mover.arrive(patrol_anchor, cruise_speed())
 
 
 # ── APPROACH ──────────────────────────────────────────────────────────────────────────────────────

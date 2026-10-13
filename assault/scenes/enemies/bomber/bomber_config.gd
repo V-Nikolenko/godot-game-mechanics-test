@@ -122,6 +122,20 @@ extends ShipConfig
 @export var pursuit_blast_radius: float = 40.0
 @export var pursuit_blast_damage: int = 30
 
+@export_group("Idle")
+## Open Space hub only (epic §2.10; task cmuyk2qqh0099oa2xbltzoust). The bomber patrols a slow ring round its
+## `patrol_anchor` until the player comes within `perceive_radius`, and goes home once the player is further than
+## `lose_radius` (px). `lose_radius` sits above the largest actor-player distance its own cycle deliberately opens
+## (`max(standoff + escape_speed * escape_time, mine_horizon * mine_speed_max + run_length / 2) + 100`), so the
+## cycle itself never counts as losing the player.
+@export var perceive_radius: float = 650.0
+@export var lose_radius: float = 1700.0
+## The beat between perceiving the player and fighting (s).
+@export var notice_time: float = 0.35
+## The patrol ring's radius round `patrol_anchor` (px) and its angular speed (rad/s).
+@export var idle_radius: float = 150.0
+@export var idle_speed: float = 0.5
+
 @export_group("Rail")
 ## While a rail owns the bomber: a gravity bomb DOWN at `rail_bomb_speed` every `rail_bomb_interval`
 ## seconds, today's bomb.

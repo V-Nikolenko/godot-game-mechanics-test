@@ -257,6 +257,11 @@ already decided the fight is on, so the brain starts straight in APPROACH.
 (`squad.set_engaged` / `is_engaged` / `hold_combat`) and returns together once none of them are
 engaged. See swarm_drone/ENEMY.md's "Hub idle" section for the exact radii and timings.
 
+**The Sniper, Bomber and Ram Corvette patrol the same way (Phase 4, t19)** — same `AnchorIdle`, same `start_engaged`
+test seam, radii 700/1300, 650/1700 and 600/1300, each `lose_radius` above the distance its own cycle opens
+(asserted from config fields). `RETURNING` never interrupts the sniper's DECOY/AIM/LOCK, the bomber's RUN or the
+ram's WIND_UP/CHARGE. See each enemy's ENEMY.md "Hub idle" section.
+
 **The Fighter and the Gatling Interceptor are the Phase 3 AI shooters** — see
 [fighter/ENEMY.md](../../../assault/scenes/enemies/fighter/ENEMY.md) and
 [gatling_interceptor/ENEMY.md](../../../assault/scenes/enemies/gatling_interceptor/ENEMY.md). The Fighter
