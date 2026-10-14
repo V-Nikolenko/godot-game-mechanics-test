@@ -1,0 +1,309 @@
+{
+  "tasks": [
+    {
+      "key": "t1",
+      "title": "The test gate has room for this phase: at least 30 s of GUT time freed without weakening any test",
+      "description": "The verification harness kills the gate at about 300 s wall clock and Phase 4 closed at GUT time 256.8 s plus import and boot. Before any Phase 5 test lands, measure per-file GUT time, record the slowest files in tests/README.md (new 'Gate time' heading), add scripts/gate-time.sh, and cut at least 30 s of GUT time using only the means plan section 2.2 allows: the 8x clock for files that await real physics at 1x, computing a hand-ticked simulation that several tests replay identically once in before_all (tests/integration/test_fighter_squad.gd is the heaviest, ~65 s), and dropping per-tick bookkeeping no assertion reads. Never lower a tick count, duration, sample count or start grid an assertion depends on. If 30 s cannot be found that way, stop with Result: ESCALATE and the measurements.",
+      "acceptanceCriteria": "GUT time at least 30 s below the measured 'before' on the same machine; test count unchanged; every test green; scripts/check-test-leaks.sh prints LEAK CHECK PASS; scripts/gate-time.sh prints the 15 slowest test files; tests/README.md has the Gate time section with the before/after numbers.",
+      "type": "chore",
+      "complexity": "medium",
+      "dependsOn": [],
+      "planSections": [
+        "2.2",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t2",
+      "title": "Enemies can carry a directional shield that eats shots from one side, breaks, reboots and regenerates",
+      "description": "Add the HurtBox absorb hook (set_absorber / clear_absorber / has_absorber, signal hit_absorbed(hit_box: HitBox)) to global/components/hurtbox_component.gd, byte-identical without an absorber, and the new EnemyShield component (global/components/enemy_shield.gd): arc width (>= 360 = bubble), capacity, regen delay and refill, break and reboot, capped facing turn, sustain mode with heartbeat and fade, cyan drawing in world angles. Proven on fixtures only (no shipped enemy carries one yet): directional, bubble and local-module (shield on a part's own hurtbox). Records the P-15 decision: DamageReaction is not adopted by BaseEnemy.",
+      "acceptanceCriteria": "Unit rows in tests/unit/test_hitbox_hurtbox.gd and tests/unit/test_enemy_shield.gd and the real-projectile rows in tests/integration/test_enemy_shield_hits.gd from plan section 2.3 pass, including the 54/56 degree arc edge and the 40-capacity two-hit break boundary; a real player bullet from the front is consumed with hull HP unchanged and from behind damages the hull; a beam bypasses the shield; every existing hurtbox test is unchanged; gate green.",
+      "type": "feature",
+      "complexity": "large",
+      "dependsOn": [
+        "t1"
+      ],
+      "planSections": [
+        "2.3",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t3",
+      "title": "Enemies can be repaired without flashing as if hit, and can be towed by an ally without losing control of their own movement",
+      "description": "In assault/scenes/enemies/base_enemy.gd: hit flash and hit burst only when health went down; repair(amount) -> int (HP actually restored); can_be_repaired() (SpaceStation answers false); accept_tow(v) -> bool forwarding to the enemy's own mover as add_nudge (false when suspended, brainless or boosting); ai_mover_max_speed(). No shipped behaviour changes.",
+      "acceptanceCriteria": "The plan section 2.4 rows in tests/integration/test_base_enemy.gd pass (repair amounts, no flash on repair, flash still on a later hit, full-HP repair returns 0, tow refused when suspended or boosting and applied otherwise); test_enemy_mover_single_writer.gd stays green; gate green.",
+      "type": "feature",
+      "complexity": "small",
+      "dependsOn": [],
+      "planSections": [
+        "2.4",
+        "4.1"
+      ],
+      "effort": "medium"
+    },
+    {
+      "key": "t4",
+      "title": "Assault enemies can ask what the camera actually shows right now, not just the whole corridor",
+      "description": "Add ArenaCamera.enemy_view_rect() (screen centre including the offset pan, viewport size / zoom) and EnemyWorld.has_view_rect(tree) / view_rect(tree), duck-typed like the existing cull_rect pair, so nothing under global/ names ArenaCamera.",
+      "acceptanceCriteria": "Rows from plan section 2.5: no provider gives false and Rect2(); a fake assault_arena provider's rect is returned; a real ArenaCamera with offset (0, -300) gives a rect 300 px higher and 1280 x 720 at zoom 1; gate green.",
+      "type": "feature",
+      "complexity": "small",
+      "dependsOn": [],
+      "planSections": [
+        "2.5",
+        "4.1"
+      ],
+      "effort": "medium"
+    },
+    {
+      "key": "t5",
+      "title": "Enemy rockets exist: a fast straight Dumb Rocket and a Pursuit Rocket that steers mildly toward where the player is going, both dodgeable, shootable and dangerous to other enemies",
+      "description": "Build the EnemyRocket family's common contract in assault/scenes/projectiles/enemy_rockets/ (enemy_rocket.gd, enemy_rocket_scenes.gd), the DUMB and PURSUIT scenes, the impact HitBox on layers 32|256 with mask 1|128|512 closed until armed, the shoot-down HurtBox on 512 / mask 64, ContactBlast detonation (player-only), sibling and launcher exclusion, lead-pursuit guidance with a turn cap and a finite window, placeholder look with RocketTrail, the two lifetime rows, and a fixture launcher (tests/helpers/rocket_launcher_fixture.gd). Rocket tuning lives in each rocket scene's exports.",
+      "acceptanceCriteria": "All plan section 2.7 rows in tests/integration/test_enemy_rockets.gd pass in the marked harnesses: convergence on the intercept point with the per-tick turn cap and frozen heading after guidance; straight runner at 420 px/s escapes, perpendicular 700 px/s boost at 150 px escapes, stationary target hit; shoot-down with no blast; player rockets pass through; impact damages an enemy but the blast does not; launcher not hit; siblings survive; a real Ram plate breaks; an asteroid takes the hit; direct hit deals impact + blast; persist-after-owner-death hand-over with no leak. DUMB and PURSUIT lifetime rows in test_enemy_bullet_lifetime.gd pass; gate green and within the epic's time budget.",
+      "type": "feature",
+      "complexity": "large",
+      "dependsOn": [
+        "t1"
+      ],
+      "planSections": [
+        "2.6",
+        "2.7",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t6",
+      "title": "Cluster Rockets split into four small missiles near the player, and Delayed Warheads blow up when the player comes close",
+      "description": "Add cluster_rocket.tscn (splits by distance or split_time into cluster_count unpooled SUBMUNITIONs fanned across cluster_fan_deg toward the predicted point; shot before the split leaves nothing), submunition.tscn, and delayed_warhead.tscn (proximity trigger polled after prox_arm_seconds, blinking warning, large blast, fairness inequality asserted), plus their lifetime rows.",
+      "acceptanceCriteria": "Plan section 2.8 rows pass: split exactly at split_distance (not one tick earlier) and at split_time when far; exactly 4 children fanned over 36 degrees centred on the predicted direction, unpooled and self-freeing; no children when the parent is shot first; split after the launcher is freed still produces children in the container; warhead does not trigger before arming, triggers on the first armed tick with the player already inside, detonates warning_time later; (trigger + blast) / warning >= 420 asserted; a 420 px/s crosser is caught and a 700 px/s boost escapes. Lifetime rows for CLUSTER, SUBMUNITION and WARHEAD pass; gate green.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t5"
+      ],
+      "planSections": [
+        "2.6",
+        "2.7",
+        "2.8",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t7",
+      "title": "A Missile Corvette can be spawned in both modes: it closes to range, carries its four rocket racks, and leaves when its Assault time is up",
+      "description": "Create assault/scenes/enemies/missile_corvette/ (scene with shared body/hurtbox/contact shape, tubes and tube lights, StateLight, mover, brain, four persist-after-owner-death pools sized by EnemyRocketScenes.pool_size_for), flat MissileCorvetteConfig/.tres with every plan section 2.9 field, MissileCorvette.fire(kind, aim_point), a minimal brain (APPROACH + Assault budget + DISENGAGE), the rail fallback (a Dumb rocket DOWN every rail_rocket_interval), WaveBuilder.missile_corvette() / MISSILE_CORVETTE, and the roster rows (contact damage 30, contact geometry, hurtbox geometry, _AUTHORED_CONTACT_MODES COLLISION, a test_enemy_dual_mode.gd case).",
+      "acceptanceCriteria": "Plan section 2.9 rows in tests/integration/test_missile_corvette.gd pass (pool sizes 3/6/3/6 pinned, fire() alternates tubes, rail fallback fires DOWN, Assault budget expiry -> DISENGAGE, rockets persist after the corvette is freed); every roster gate and completeness sweep green; gate green.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t6"
+      ],
+      "planSections": [
+        "2.9",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t8",
+      "title": "The Missile Corvette fights: it circles at medium range, can only launch at a player in front of it, telegraphs, and fires salvos that cover where the player is heading",
+      "description": "Implement MissileCorvetteBrain's HOLD_ARC (orbit with drift and reversals, break contact inside min_range, nose tracking through face_toward), the launch cone, choose_kind(distance, player_speed), TELEGRAPH (StateLight CHARGING, tube glow) and SALVO (BurstClock, StateLight ARMED, never COMMIT) with predicted aim points per kind, and the Assault budget deferral and attack gate.",
+      "acceptanceCriteria": "Every plan section 2.10 row passes in both harnesses where marked: holds range and arcs at least 60 degrees in 10 s; never inside min_range for more than 1 s; reverses orbit in Open Space; no salvo with the player held behind it; salvo of salvo_count at salvo_gap after exactly salvo_telegraph; CHARGING -> ARMED -> OFF and never COMMIT; Dumb aim points on the predicted line at salvo_lead_step spacing; Pursuit chosen for a fleeing player and a Warhead pair 180 px apart for a close one; Assault salvo completes with 1.2 s left and none starts with 1.0 s; the centripetal inequality is asserted from config; single-writer gate green; gate green.",
+      "type": "feature",
+      "complexity": "large",
+      "dependsOn": [
+        "t7"
+      ],
+      "planSections": [
+        "2.10",
+        "2.9",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t9",
+      "title": "The Missile Corvette and its rockets look the part: a wide top-down hull with two glowing launch tubes, and distinct rocket sprites per kind",
+      "description": "Generate with PixelLab under the pixel-art-generation skill (strict top-down) missile_corvette.png (about 96 x 96, nose-down, tubes at local (+-18, 30)) and the rocket sprites (enemy_rocket, enemy_cluster_rocket, enemy_submunition, enemy_warhead); save with scripts/pixellab.sh, look at each, wire them into the scenes in place of the placeholders, keeping node names and types; tube lights stay separate sprites driven by the telegraph.",
+      "acceptanceCriteria": "Each image opened and checked; test_entity_sprite_transparency.gd green (every texture under 90 % opaque); every existing corvette and rocket test green; texture references UID-less; gate green.",
+      "type": "art",
+      "complexity": "medium",
+      "dependsOn": [
+        "t8"
+      ],
+      "planSections": [
+        "2.15",
+        "2.9",
+        "2.6"
+      ]
+    },
+    {
+      "key": "t10",
+      "title": "A Support Ship can be spawned in both modes: unarmed, harmless to touch, hovering near its allies and leaving when its Assault time is up",
+      "description": "Create assault/scenes/enemies/support_ship/ (scene with shared shape, folded Projector sprite, world-space Tether Line2D, mover, brain), flat SupportShipConfig/.tres with every plan section 2.11 field, contact profile NONE, can_be_repaired() false, a minimal brain (hold near the nearest ally, Assault budget -> DISENGAGE), on_suspended() drops the ward and folds the projector, WaveBuilder.support_ship() / SUPPORT_SHIP, and roster rows (contact damage NONE / 0 row, both geometry rosters, _AUTHORED_CONTACT_MODES NONE, a test_enemy_dual_mode.gd case).",
+      "acceptanceCriteria": "Plan section 2.11 rows in tests/integration/test_support_ship.gd pass (0 contact damage in both harnesses, holds near an ally, Assault DISENGAGE on expiry, can_be_repaired false, suspend folds the projector); roster gates and completeness sweeps green; gate green.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t7",
+        "t3"
+      ],
+      "planSections": [
+        "2.11",
+        "2.4",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t11",
+      "title": "The Support Ship shadows the most dangerous ally from behind, dodges the player, switches to another ally the moment its ward dies, and cannot hide above the Assault camera",
+      "description": "Implement ward selection (candidate filter, threat score, claim meta, hold time and switch margin), retarget on ward loss (tree_exiting, death, suspension, range, out of view) on the next tick, SEEK_WARD fallback and the Assault no-ward grace, FOLLOW (soft anchor behind the ward, jink, break-contact evasion, facing the ward), the Assault view clamp and is_supporting(), and the brain state the later tasks use (ward, ward_changed signal, anchor).",
+      "acceptanceCriteria": "Every plan section 2.12 row passes in both harnesses where marked: picks the bomber over the fighter; a badly damaged fighter near the player wins; never another support, a railed enemy or a claimed ward; 1.2x does not take over, 1.4x does after min_ward_seconds; freeing or killing the ward selects a new one on the next tick; no candidate -> SEEK_WARD / DISENGAGE after the grace; sits behind the ward and evades an approaching player; Assault: stays inside the view with the ward 300 px above it and stops supporting; single-writer gate green; gate green.",
+      "type": "feature",
+      "complexity": "large",
+      "dependsOn": [
+        "t10",
+        "t4"
+      ],
+      "planSections": [
+        "2.12",
+        "2.11",
+        "2.5",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t12",
+      "title": "The Support Ship repairs its ward in small pulses and projects a cyan shield arc on the ward's side facing the player, which fades when the support is killed or stunned",
+      "description": "Add the repair pulse (period, fraction, budget, range, optional line of sight, repaired signal, pale-green tether flash), projector unfold, the ProjectedShield (EnemyShield child of the ward in sustain mode, arc 110 / Assault 90, sustained every tick toward the player) and its lapse rules, and the Support + Ram pairing test.",
+      "acceptanceCriteria": "Every plan section 2.13 row passes: +6 HP per 1.5 s on a 100 HP ward, capped at max, no flash, budget stops at 150; none out of beam_range; a can_be_repaired false ward never repaired; one ProjectedShield attached after the unfold, facing the player, 90 degrees in Assault; a real bullet from the player's side is consumed with ward HP unchanged and from behind lands; the shield lapses when the support is freed, EMP-disabled or switches ward; a real Ram Corvette's exposed hull is repaired while live_plate_count() stays 0; gate green.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t11",
+        "t2",
+        "t3"
+      ],
+      "planSections": [
+        "2.13",
+        "2.3",
+        "2.4",
+        "2.11",
+        "2.12",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t13",
+      "title": "A badly hurt ally gets dragged away from the player while the Support Ship puts itself in the line of fire",
+      "description": "Implement ESCORT: trigger at escort_hp_ratio with a per-ward cooldown, tow via ward.accept_tow(away x escort_tow_ratio x ward max speed), the interpose anchor (view-clamped in Assault), suspended evasion, thicker tow tether, and the end rules (release ratio, ward lost, safe distance, max time).",
+      "acceptanceCriteria": "Every plan section 2.14 row passes in both harnesses: no escort at 36 %, escort next tick at 34 % with a nudge pointing away from the player at 1.25x max speed; a ward seeking the player at full speed gains distance during the escort while the control run loses it; support within 40 px of the interpose point within 1.5 s; ends on 50 % HP, 700 px or 4 s and respects the cooldown; a boosting ward refuses the tow; single-writer gate green; gate green.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t12",
+        "t3"
+      ],
+      "planSections": [
+        "2.14",
+        "2.4",
+        "2.11",
+        "2.12",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t14",
+      "title": "The Support Ship looks like a support unit: a slim top-down hull with a dish projector that visibly unfolds while it supports",
+      "description": "Generate with PixelLab under the pixel-art-generation skill (strict top-down) support_ship.png (about 88 x 88, nose-down, distinct non-gunship silhouette) and support_projector.png (anchored to open toward the ward), save with scripts/pixellab.sh, look at each, and wire them in place of the placeholders keeping the Projector / Tether / Sprite2D node names and types.",
+      "acceptanceCriteria": "Each image opened and checked; test_entity_sprite_transparency.gd green; every existing support test green (projector unfold still driven by scale.y); gate green.",
+      "type": "art",
+      "complexity": "medium",
+      "dependsOn": [
+        "t13"
+      ],
+      "planSections": [
+        "2.15",
+        "2.11",
+        "2.13"
+      ]
+    },
+    {
+      "key": "t15",
+      "title": "In Open Space, the Missile Corvette and the Support Ship idle calmly around their patrol point, notice the player, and go home when the player leaves",
+      "description": "Append IDLE / NOTICING / RETURNING to both brains with patrol_anchor, AnchorIdle, idle_phase_offset and the start_engaged seam; add the Idle config group to both configs and .tres (corvette perceive 720 / lose 1500, support 600 / 1300); RETURNING never interrupts the corvette's TELEGRAPH or SALVO; mark every existing Open Space spawn of either enemy start_engaged.",
+      "acceptanceCriteria": "Per enemy: idles on its ring with no player, notices after notice_time inside perceive_radius, returns beyond lose_radius; the lose-radius inequalities from plan section 2.16 asserted from config; a TELEGRAPH in progress completes before RETURNING; every earlier test of both enemies still green; gate green.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t8",
+        "t13"
+      ],
+      "planSections": [
+        "2.16",
+        "2.9",
+        "2.11",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t16",
+      "title": "The Open Space hub patrols a Missile Corvette on its free diagonal and a Support Ship that guards the hub's Ram Corvette",
+      "description": "In open_space/scenes/levels/sector_hub.gd _spawn_patrol(), after the existing 12 rng draws: a Missile Corvette at 315 degrees on a new 1900 px ring (new exports) with draw 13 as its seed, and a Support Ship sharing the Ram Corvette's anchor with draw 14. Extend tests/integration/test_sector_hub_patrol.gd as plan section 2.17 lists.",
+      "acceptanceCriteria": "Clearance rows pass (corvette +417 px, support within the Ram's +308.7 px); eight distinct anchors more than 1000 px apart and the support's anchor equals the ram's; the existing 12 seeds unchanged; container count and frame-0 IDLE list include both; a hub corvette's rocket lands in EnemyContainer; an engaged hub support selects the hub Ram as its ward; gate green.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t15"
+      ],
+      "planSections": [
+        "2.17",
+        "2.16",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t17",
+      "title": "Level 1's Deep Space and Planet Approach sections include Missile Corvettes and Support Ships, without crowding the screen or stalling the level",
+      "description": "Place one corvette and one support (with the rams nearest 26 s) in deep_space and two corvettes (about 40 s and 85 s) and one support (with the ram triple nearest 28 s) in planet_approach, AI-driven with no rail; pin the new rows (EXPECTED_PH5); count both kinds as specialists in the frozen 2.5x gate using measured corridor-wide exits; add the deadline guard and boundary rows; add the attack-in-budget rows through a real WaveManager at 8x. A new row's trigger may move to satisfy the gates; no existing row or existing enemy config may change - escalate instead.",
+      "acceptanceCriteria": "test_level1_specialist_spawns.gd: new pin and the count gate pass in all three sections (planet_approach still at most 7.5 at its 65.7 s peak) with a boundary row that an extra corvette at that peak fails; test_engagement_deadline.gd: no ENEMIES_CLEARED section contains either kind, and a corvette in cloud_descent's last wave computes > 10 s; attack-in-budget rows: every placed corvette reaches TELEGRAPH and fires a salvo before its budget expires, every placed support has a ProjectedShield on a ward before its budget expires; nothing from planet_approach is alive at cloud_descent's last-wave trigger; existing level-1 gates unchanged and green; gate green within the time budget.",
+      "type": "feature",
+      "complexity": "large",
+      "dependsOn": [
+        "t15",
+        "t8",
+        "t13"
+      ],
+      "planSections": [
+        "2.18",
+        "2.9",
+        "2.10",
+        "2.11",
+        "2.13",
+        "4.1"
+      ]
+    },
+    {
+      "key": "t18",
+      "title": "The docs, the roster and the phase record describe the Missile Corvette, the rocket family, enemy shields and the Support Ship as built",
+      "description": "Invoke updating-project-docs: ENEMY.md for both enemies (with the section 2.20 checklist), docs/enemy-roster.md (both enemies, the rocket family, Quick Rules), assault.md, global.md, open_space.md, PROJECT.md conventions, docs/BULLET_POOL.md, CLAUDE.md (shield-consumes-bullet rule, new gates and files), tests/README.md. Close the phase: DECISIONS.md '## Phase 5 - as built (<date>)' and the dossier docs/epics-done/cmufs7elw001pnm2xr3b6fteb/ (PRD, SOURCES, REPORT) with honest known gaps (play-feel not testable headless).",
+      "acceptanceCriteria": "Every listed doc mentions the new classes by their real names and paths; DECISIONS.md has the as-built section with every deviation; the dossier's three files exist; gate green.",
+      "type": "chore",
+      "complexity": "medium",
+      "dependsOn": [
+        "t9",
+        "t14",
+        "t16",
+        "t17"
+      ],
+      "planSections": [
+        "2.19",
+        "2.20",
+        "2.1",
+        "2.0",
+        "6. Requirements coverage",
+        "7. Out of scope"
+      ],
+      "effort": "medium"
+    }
+  ]
+}
