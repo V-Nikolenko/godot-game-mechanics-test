@@ -5,7 +5,7 @@
 
 > **Build state (Phase 4, t16 armour + t17 charge + t19 hub idle).** The armour, the ARMOR contact profile, the predicted-intercept
 > charge (LINE_UP / WIND_UP / CHARGE / WIDE_TURN), the plate glow, the stagger, the faster exposed hull and the Assault
-> budget rules, the real hull and plate sprites (t18) and the hub idle (t19) are built; level 1 off rails is t21/t22.
+> budget rules, the real hull and plate sprites (t18) and the hub idle (t19) are built; level 1 off rails is built for Deep Space and Planet Approach (t21); Cloud Descent is t22.
 > Plan: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.6; task plans `docs/plans/cmuyk2qq8008xoa2xxoq1frgn/3-plan.md`
 > (armour) and `docs/plans/cmuyk2qqb0091oa2xy7yn9sxa/3-plan.md` (charge).
 
@@ -109,8 +109,8 @@ Open Space only (`budget.active == false` and not `start_engaged`); Assault star
 
 ## Spawn notes
 
-- WaveBuilder method: `b.ram()` — see `docs/enemy-roster.md`. Level 1 still spawns it on a rail
-  (`.move(b.straight(...))`) until the migration tasks.
+- WaveBuilder method: `b.ram()` — see `docs/enemy-roster.md`. Level 1 spawns it with no rail in Deep Space and Planet Approach (t21); Cloud Descent still uses a rail
+  (`.move(b.straight(...))`) until t22.
 
 ## Tests
 

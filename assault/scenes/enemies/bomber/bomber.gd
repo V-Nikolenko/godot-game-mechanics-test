@@ -18,7 +18,8 @@ extends BaseEnemy
 ## bomb DOWN every `config.rail_bomb_interval`, today's bomb. It only runs a clock and spawns; nothing
 ## here writes motion.
 ##
-## Spawn with b.bomber().at(x, y); `.move()` is only needed until level 1 leaves its rails.
+## Spawn with b.bomber().at(x, y). Level 1 gives it no `.move()` since t21; a rail still works and runs the
+## fallback above.
 
 @export var config: BomberConfig = load("res://assault/scenes/enemies/bomber/bomber_config.tres")
 

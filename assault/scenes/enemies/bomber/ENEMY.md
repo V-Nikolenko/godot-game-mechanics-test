@@ -4,7 +4,7 @@
 **Fantasy / threat:** A wide, slow, easy-to-hit target — but ignore it and what it leaves behind catches you. Every piece of ordnance can be shot down.
 
 > **Build state (Phase 4, t10).** The scene, config, pools, rail fallback, Assault exit (t9) and the AI bombing runs
-> (t10) and the hub idle (t19) are built. Still to come: level-1 migration off rails (t21).
+> (t10) and the hub idle (t19) are built. Level 1 spawns both its bombers (Planet Approach) off rails since t21.
 > Plans: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.4; `docs/plans/cmuyk2qpr0089oa2xlih7xvmg/3-plan.md` (t10, with "As built").
 
 ---
@@ -69,7 +69,7 @@ Open Space only (`budget.active == false` and not `start_engaged`); Assault star
 
 ## Spawn notes
 
-- WaveBuilder method: `b.bomber()` — see `docs/enemy-roster.md`. Level 1 still spawns it on a rail (`.move(b.straight(...))`).
+- WaveBuilder method: `b.bomber()` — see `docs/enemy-roster.md`. Level 1 gives it no `.move()` since t21; a rail still runs the fallback above.
 
 ## Tests
 

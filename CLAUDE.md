@@ -267,6 +267,13 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   leave along its travel. It exists because the fighter and the Gatling moved to brains and a rail
   now **suspends** the brain: without the rail-fallback weapon (`on_suspended()`, built from `rail_*`
   config fields) a squad that looks dangerous would never fire, with no other gate noticing.
+  `tests/integration/test_level1_specialist_spawns.gd` is a twenty-second, the level-1 **specialist pin
+  and density gate**: it pins all 50 sniper / ram / bomber rows (trigger, offset, delay), and for every
+  section in `MIGRATED_SECTIONS` (deep_space and planet_approach since Phase 4 t21) asserts no line has
+  a rail left and that peak alive specialists stay at most 2.5× the frozen `_LEGACY_PEAK_SPECIALISTS`.
+  Each lifetime is config budget + deferral + a **measured** exit (`tests/helpers/specialist_exit_probe.gd`
+  runs the real scene's curved DISENGAGE over the Ph3 404-start grid), never a straight-line exit.
+  Boundaries: a `.move()` put back and an extra ram triple at the peak each fail.
   The behaviour specs for the two enemies themselves (`test_fighter.gd`, `test_fighter_squad.gd`,
   `test_gatling_interceptor.gd`, `test_gatling_convergence.gd`, plus their cases in
   `test_enemy_dual_mode.gd`) are intent tests that run in both the Assault and Open Space harnesses.
