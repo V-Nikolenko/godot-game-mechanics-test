@@ -1,5 +1,9 @@
 # Assault Combat — Development Plan
 
+> **Historical (the original combat plan).** `bomb.gd` / `bomb.tscn` named below were deleted in Phase 4 (the Bomber now drops
+> `EnemyOrdnance`, see `assault/scenes/enemies/bomber/ENEMY.md`), and the ship names here predate the Enemy rework. For the current
+> roster read [`docs/enemy-roster.md`](../docs/enemy-roster.md).
+
 > **Goal:** Implement the full Assault mission combat system per the Combat Design (Assault) GDD —
 > enemy units, wave spawning, Phase 2 emplacements, and the Assault Carrier boss.
 

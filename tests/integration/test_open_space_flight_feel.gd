@@ -150,3 +150,30 @@ func test_bank_does_not_move_the_guns_or_engines() -> void:
 
 	assert_ne(sprite.skew, 0.0,
 			"the lean must still be non-zero here, or this case proves nothing")
+
+
+# ── apply_knockback (plan cmufs7ele0015nm2xvag3vrwc §2.6.3, X13) ───────────────
+
+## An armour shove adds to the momentum ship's velocity; `damping` bleeds it afterwards.
+func test_apply_knockback_adds_to_velocity() -> void:
+	var ship := _new_ship()
+	ship.velocity = Vector2(100, -50)
+	ship.apply_knockback(Vector2(260, 0))
+	assert_eq(ship.velocity, Vector2(360, -50))
+
+
+## `PlayerBase.apply_knockback_motion` clamps to the Assault bounds (x -100..1380, y -380..1100),
+## so a ship far outside them proves the override never routes through it.
+func test_apply_knockback_does_not_clamp_to_the_assault_bounds() -> void:
+	var ship := _new_ship()
+	ship.position = Vector2(2000, 2000)
+	ship.apply_knockback(Vector2(260, 0))
+	assert_eq(ship.position, Vector2(2000, 2000), "the call itself moves nothing")
+	assert_false(ship.is_knockback_active(), "no Assault-style stored shove is left behind")
+
+
+## The Assault fighter honours the same duck-typed call by the base-class path.
+func test_a_real_player_fighter_given_the_same_impulse_reports_knockback_active() -> void:
+	var fighter := autofree(preload("res://assault/scenes/player/player_fighter.tscn").instantiate()) as PlayerBase
+	fighter.apply_knockback(Vector2(260, 0))
+	assert_true(fighter.is_knockback_active())

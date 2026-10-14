@@ -184,10 +184,10 @@ func _build_squads() -> Array:
 	## `aim_at_player = false` fires `Vector2.DOWN.rotated(ship.rotation)`, so the bullets travel
 	## the squad's own diagonal. That reads as a strafing run and never tracks the player.
 	##
-	## NOT `ram_ship`, which would be the obvious "obstacle" choice: `ram_ship.gd:19` narrows its
-	## HurtBox mask to 33, which excludes the player bullet's layer 64 (`bullet.tscn:44`), so a ram
-	## ship cannot be hit by the primary weapon at all. Two indestructible obstacles per cycle is
-	## not the popcorn role this table is for. `test_station_reinforcements.gd` guards the whole
+	## NOT `ram_corvette`, which would be the obvious "obstacle" choice: its hull deflects every hit
+	## (bullets glance off, not consumed) until rockets have broken all three of its armour plates, so
+	## the primary weapon alone cannot kill one. Two near-indestructible obstacles per cycle is not the
+	## popcorn role this table is for. `test_station_reinforcements.gd` guards the whole
 	## class of mistake for the next person who swaps a ship in here.
 	out.append(b.wave(0.0, [
 		b.fighter().at(-250.0, -290.0).move(b.straight(170.0, 0.5)).shoot_forward().free_after(reinforcement_lifetime),

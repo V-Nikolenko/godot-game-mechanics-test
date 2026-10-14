@@ -1,5 +1,9 @@
 # Enemies — current state (base for the Open Space rework)
 
+> **Historical (pre-rework snapshot).** This file describes the enemies as they were on 2026-09-24. The Ram Ship, Sniper Enemy and
+> Bomber it names are now the Ram Corvette, Sniper and Bomber (Phase 4); for what exists today read each enemy's `ENEMY.md` and
+> [`docs/enemy-roster.md`](../enemy-roster.md).
+
 Everything the game has today on its enemies, gathered from the code so the rework starts from
 facts: movement, shooting, sprites (each PNG was opened and described), stats, states, collision,
 spawning, tests and known issues — plus what Open Space already offers and which Assault-only

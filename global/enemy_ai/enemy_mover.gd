@@ -151,6 +151,10 @@ func evade(threat_pos: Vector2, threat_vel: Vector2, speed: float, lookahead: fl
 	request_velocity(Steering.evade(_pos(), threat_pos, threat_vel, speed, lookahead))
 
 
+func break_contact(threat_pos: Vector2, threat_vel: Vector2, side: float, speed: float) -> void:
+	request_velocity(Steering.break_contact(_pos(), threat_pos, threat_vel, side, speed))
+
+
 func strafe(target_pos: Vector2, side: float, speed: float) -> void:
 	request_velocity(Steering.strafe(_pos(), target_pos, side, speed))
 

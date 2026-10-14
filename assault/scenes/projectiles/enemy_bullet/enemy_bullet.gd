@@ -14,7 +14,7 @@ var _authored_speed: float = 250.0
 var _authored_damage: int = 0
 
 ## Present on every EnemyBullet-derived scene (see enemy_bullet.tscn and
-## enemy_sniper_bullet.tscn); null-checked so a scene that forgot the child fails safe rather than
+## the rounds/ scenes); null-checked so a scene that forgot the child fails safe rather than
 ## erroring on reset(). See global/components/projectile_lifetime.gd for the world-space rules
 ## this used to hardcode (arena bounds matching arena_camera.gd's legacy visible rect).
 @onready var _lifetime: ProjectileLifetime = get_node_or_null("ProjectileLifetime") as ProjectileLifetime

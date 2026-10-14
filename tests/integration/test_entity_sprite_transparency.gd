@@ -27,8 +27,9 @@
 ##
 ## Fully-opaque-pixel fraction < `MAX_OPAQUE_FRACTION` (0.90) per texture. Deliberately loose, not
 ## an art-direction rule: the sprite that is wrong measures 100.00%, and the highest legitimate
-## value in the sweep is `ram_ship.png` at 67.19%, then `assault.png` at 58.03% — 23 points of
-## headroom. This file has no opinion on any sprite between 68% and 90%.
+## value in the sweep is `assault.png` at 58.03%, then `ram_corvette.png` at 55.21% (it was the old 32 px Ram Ship sprite at 67.19%
+## before the Ram Corvette got its own hull) — 32 points of headroom. This file has no opinion on any sprite
+## between 59% and 90%.
 ##
 ## The four-corners-at-alpha-0 assertion is scoped to `station_core.png` **alone, deliberately.
 ## Do not generalise it into the sweep.** Corner alpha measured across the set this walk collects:

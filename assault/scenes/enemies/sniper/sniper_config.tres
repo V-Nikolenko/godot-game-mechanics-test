@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="SniperConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/sniper/sniper_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 60
+collision_damage = 20
+score_value = 50
+perceive_radius = 700.0
+lose_radius = 1300.0

@@ -369,3 +369,182 @@ func test_gatling_disengage_frees_it_in_assault_only(mode: String = use_paramete
 			break
 	assert_eq(freed, mode == "assault",
 		"%s: the Gatling is freed by its budget in Assault and never in Open Space" % mode)
+
+
+# ── The Bomber (Phase 4, t9) ─────────────────────────────────────────────────────────────────────
+
+const BOMBER_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/bomber/bomber.tscn")
+
+
+func _spawn_bomber(harness, pos: Vector2) -> Bomber:
+	var entity := BOMBER_SCENE.instantiate() as Bomber
+	(entity.get_node("Brain") as BomberBrain).start_engaged = true  # pre-t19: predates the hub idle
+	entity.global_position = pos
+	harness.root.add_child(entity)
+	entity.set_physics_process(false)  # hand-ticked, same technique as the Razor Drone above
+	entity.set_process(false)
+	return entity
+
+
+## Mid-corridor the Assault constraint never engages, so the Bomber's APPROACH is the same curve in
+## both modes for the same inputs (P-17: relative to the constraint).
+func test_bomber_approach_mid_corridor_is_identical_in_both_modes() -> void:
+	var open_harness = HARNESS.open_space()
+	var assault_harness = HARNESS.assault()
+	add_child_autofree(open_harness.root)
+	add_child_autofree(assault_harness.root)
+	open_harness.player.global_position = Vector2(640.0, 360.0)
+	assault_harness.player.global_position = Vector2(640.0, 360.0)
+
+	var start := Vector2(100.0, 60.0)
+	var open_bomber := _spawn_bomber(open_harness, start)
+	var assault_bomber := _spawn_bomber(assault_harness, start)
+	# Both worlds share one physics space and the two bombers start on the same point: without this their
+	# `move_and_slide()` calls collide and nudge each other's velocity.
+	open_bomber.add_collision_exception_with(assault_bomber)
+	assault_bomber.add_collision_exception_with(open_bomber)
+	# The same inputs include the brain's rng (t10: the angled line's side tie-break draws from it).
+	(open_bomber.get_node("Brain") as BomberBrain).rng.seed = 77
+	(assault_bomber.get_node("Brain") as BomberBrain).rng.seed = 77
+	assert_true((assault_bomber.get_node("EnemyMover") as EnemyMover).constraint is AssaultCorridorConstraint,
+		"sanity: the Assault bomber runs under the corridor")
+	for _i in 30:
+		_tick(open_bomber, DT)
+		_tick(assault_bomber, DT)
+
+	assert_almost_eq(open_bomber.velocity.x, assault_bomber.velocity.x, 0.001)
+	assert_almost_eq(open_bomber.velocity.y, assault_bomber.velocity.y, 0.001)
+	assert_gt(open_bomber.velocity.length(), 0.0, "sanity: it is moving")
+
+
+## The mode-specific half: the budget frees the Bomber in Assault, and nothing ever forces it out in
+## Open Space.
+func test_bomber_disengage_frees_it_in_assault_only(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 360.0)
+	var bomber := _spawn_bomber(harness, Vector2(640.0, 60.0))
+	bomber.config.engage_seconds = 0.2
+	var freed := false
+	for _i in 1500:
+		_tick(bomber, DT)
+		if bomber.is_queued_for_deletion():
+			freed = true
+			break
+	assert_eq(freed, mode == "assault",
+		"%s: the Bomber is freed by its budget in Assault and never in Open Space" % mode)
+
+
+# ── The Sniper (Phase 4, t12) ────────────────────────────────────────────────────────────────────
+
+const SNIPER_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/sniper/sniper.tscn")
+
+
+func _spawn_sniper(harness, pos: Vector2) -> Sniper:
+	var entity := SNIPER_SCENE.instantiate() as Sniper
+	(entity.get_node("Brain") as SniperBrain).start_engaged = true  # pre-t19: predates the hub idle
+	entity.global_position = pos
+	harness.root.add_child(entity)
+	entity.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	return entity
+
+
+## The mode-neutral half: ENTER closes on the player in both modes and comes to rest, with no fly-in timer
+## to wait out. The mode-specific half (the firing range and the corridor margin) is in `test_sniper.gd`.
+func test_sniper_enter_comes_to_rest_at_its_point_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 560.0)
+	var sniper := _spawn_sniper(harness, Vector2(640.0, 80.0))
+	var brain := sniper.get_node("Brain") as SniperBrain
+	for _i in 480:  # 8 s at most, inside the 9 s Assault budget; it stops at AIM, after it has come to rest
+		_tick(sniper, DT)
+		if brain.phase == SniperBrain.Phase.AIM:
+			break
+	assert_eq(brain.phase, SniperBrain.Phase.AIM, "%s: the sniper aims from its first point" % mode)
+	assert_true(brain.arrived, "%s: the sniper reaches its firing point" % mode)
+	assert_lt(sniper.velocity.length(), 2.0, "%s: and holds still there" % mode)
+	assert_false(sniper.is_queued_for_deletion(), "%s: well inside its budget, it stays" % mode)
+
+
+## The mode-specific half: the budget frees the Sniper in Assault, and nothing ever forces it out in Open Space.
+func test_sniper_disengage_frees_it_in_assault_only(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 360.0)
+	var sniper := _spawn_sniper(harness, Vector2(640.0, 60.0))
+	sniper.config.engage_seconds = 0.2
+	var freed := false
+	for _i in 1500:
+		_tick(sniper, DT)
+		if sniper.is_queued_for_deletion():
+			freed = true
+			break
+	assert_eq(freed, mode == "assault",
+		"%s: the Sniper is freed by its budget in Assault and never in Open Space" % mode)
+
+
+# ── The Ram Corvette (Phase 4, t16) ──────────────────────────────────────────────────────────────
+
+const RAM_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn")
+
+
+func _spawn_ram(harness, pos: Vector2) -> RamCorvette:
+	var entity := RAM_SCENE.instantiate() as RamCorvette
+	(entity.get_node("Brain") as RamCorvetteBrain).start_engaged = true  # pre-t19: predates the hub idle
+	entity.global_position = pos
+	harness.root.add_child(entity)
+	entity.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	return entity
+
+
+## Mid-corridor the Assault constraint never engages, so the Corvette's APPROACH (an intercept; in Assault plus
+## a side offset, zeroed here) is the same curve in both modes for the same inputs (P-17: relative to the constraint).
+func test_ram_corvette_approach_mid_corridor_is_identical_in_both_modes() -> void:
+	var open_harness = HARNESS.open_space()
+	var assault_harness = HARNESS.assault()
+	add_child_autofree(open_harness.root)
+	add_child_autofree(assault_harness.root)
+	open_harness.player.global_position = Vector2(640.0, 360.0)
+	assault_harness.player.global_position = Vector2(640.0, 360.0)
+
+	var start := Vector2(200.0, 120.0)
+	var open_ram := _spawn_ram(open_harness, start)
+	var assault_ram := _spawn_ram(assault_harness, start)
+	# t17: the Assault approach aims beside the player (the diagonal charge); with that offset at 0 it is the
+	# same intercept as Open Space, which is what this case compares (the offset has its own tests). Zeroed on
+	# both: the two worlds share one tree, so the "open" Corvette's AUTO mover can also resolve the Assault
+	# world's corridor.
+	open_ram.config.assault_side_offset = 0.0
+	assault_ram.config.assault_side_offset = 0.0
+	assert_true((assault_ram.get_node("EnemyMover") as EnemyMover).constraint is AssaultCorridorConstraint,
+		"sanity: the Assault Corvette runs under the corridor")
+	for _i in 30:
+		_tick(open_ram, DT)
+		_tick(assault_ram, DT)
+
+	assert_almost_eq(open_ram.velocity.x, assault_ram.velocity.x, 0.001)
+	assert_almost_eq(open_ram.velocity.y, assault_ram.velocity.y, 0.001)
+	assert_gt(open_ram.velocity.length(), 0.0, "sanity: it is moving")
+	assert_gt(open_ram.velocity.dot(Vector2(640.0, 360.0) - start), 0.0, "and it closes on the player")
+
+
+## The mode-specific half: the budget frees the Corvette in Assault, and nothing ever forces it out in
+## Open Space.
+func test_ram_corvette_disengage_frees_it_in_assault_only(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 360.0)
+	var ram := _spawn_ram(harness, Vector2(640.0, 60.0))
+	ram.config.engage_seconds = 0.2
+	var freed := false
+	for _i in 1500:
+		_tick(ram, DT)
+		if ram.is_queued_for_deletion():
+			freed = true
+			break
+	assert_eq(freed, mode == "assault",
+		"%s: the Ram Corvette is freed by its budget in Assault and never in Open Space" % mode)

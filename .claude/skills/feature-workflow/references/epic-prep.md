@@ -146,30 +146,52 @@ paste two reports end to end and call it research.
 
 Two deliverables, and the second matters as much as the first.
 
-**If the prompt has Human Feedback, or the plan directory has a `4-review.md`, read them first.**
-Someone saw a previous version of this plan and sent it back. Address every point explicitly — a
-revision that quietly ignores half the comment gets sent back again, at full cost.
+**If the prompt has a Plan review history (older prompts: Human Feedback), or the plan directory
+has a `4-review.md`, read them first.** Someone saw a previous version of this plan and sent it
+back. Address every point explicitly — a revision that quietly ignores half the comment gets sent
+back again, at full cost.
 
 ### `3-plan.md`
 
 Build on `1-context.md` and `2-research.md`. Do not re-derive them.
 
+**The prompt's *Output contract* decides the plan's structure; this section says what goes in it.**
+The plan is no longer read whole by the agents that build from it: each task's agent is handed
+only the section every task gets and the sections its own task names. So the shape matters:
+
 ```markdown
 # <Epic>
-## Problem
+## Summary for the owner
+At most 20 lines, plain language, no file names or task keys: what changes for the player, what
+gets built, what is left out, the main risks, and every choice you need the owner to make - each
+as a question with the default you took. This is what the owner reads before approving.
+## For every task
+At most 60 lines: the decisions, names, interfaces and conventions every task of the epic must
+follow. Every implementation agent is given this section.
+## 1. Problem
 What the player experiences today and what should change. Player-facing, not code-facing.
-## Design
+## 2. Design
 The chosen approach, and alternatives rejected with reasons. Real files, nodes, signals.
-## Build sequence
+### 2.1 <one part of the design>
+### 2.2 <another>
+## 3. Build sequence
 Ordered steps, each independently testable and each small enough to finish and verify in one
 session. This ordering becomes the task list below, so make it real.
-## Test plan
+## 4. Test plan
 The GUT tests that will prove this works, named, with specific cases - including boundary cases.
-## Risks
-## Out of scope
-## Response to feedback
+## 5. Risks
+## 6. Out of scope
+## 7. Response to feedback
 <only when this is a revision: each point raised, and what changed>
 ```
+
+- **Number every heading after the two opening sections**, and split the design into numbered
+  sub-sections by part (`### 2.3 Enemy ordnance`), not into one long section: tasks point at
+  sections by number.
+- **Make each section readable on its own.** An agent given `2.3` has not seen `2.1`: repeat a
+  name or a number rather than writing "as above".
+- Put the test rows a task needs where that task can be pointed at them - under its design
+  section, or in a numbered sub-section of the test plan - not only in one table for the whole epic.
 
 ### `tasks.json` — the implementation tasks
 
@@ -186,14 +208,22 @@ the tasks on the board (replacing any earlier proposal for this epic that has no
       "acceptanceCriteria": "<optional: checkable conditions>",
       "type": "feature",
       "complexity": "medium",
-      "dependsOn": []
+      "dependsOn": [],
+      "planSections": ["2.1", "2.3"]
     },
-    { "key": "t2", "title": "...", "type": "test", "complexity": "small", "dependsOn": ["t1"] }
+    { "key": "t2", "title": "...", "type": "test", "complexity": "small", "dependsOn": ["t1"], "planSections": ["2.3", "4.2"] }
   ]
 }
 ```
 
-- 1 to 30 tasks. `key` is any short unique label, used only for `dependsOn` inside this file.
+- 1 to 30 tasks. `key` is any short unique label: it is used for `dependsOn` in this file, and it
+  is how the plan, the review and the task's own prompt refer to the task afterwards - use the
+  same keys in `3-plan.md`.
+- `planSections`: **for every task**, the headings of `3-plan.md` it builds from, by number
+  (`"2.3"`) or opening words; a heading brings everything under it; at most 12. This is all of the
+  plan the task's agent is given, besides *For every task* - so list every section it needs (its
+  design, its interfaces, its test rows) and nothing it doesn't. A task with the wrong sections
+  builds from the wrong text; the plan review checks them.
 - `type`: `feature` | `bug` | `refactor` | `test` | `art` | `chore`.
   `complexity`: `small` | `medium` | `large`.
 - `dependsOn` lists other keys in this file; no cycles.
@@ -225,11 +255,18 @@ must come from the subagent.
 Then record its verdict in `review.json` next to `4-review.md`:
 
 ```json
-{ "verdict": "APPROVE", "findings": "<the reviewer's findings, verbatim>" }
+{ "verdict": "APPROVE", "findings": "<the findings, written for the owner - see below>" }
 ```
 
 `verdict` is `APPROVE`, `CHANGES_REQUESTED` or `REJECT` (the reviewer writes `APPROVED` /
 `REJECTED` in `4-review.md`; map them). `findings` is required unless the verdict is `APPROVE`.
+
+**The owner reads `findings` on the board and decides from it**, so it is not the review pasted
+whole. Write it in Markdown, as the prompt's *Output contract* asks: first one short paragraph in
+plain language - what is wrong and what you would do, no task keys or file names (in a later
+round: how many earlier findings are now resolved); a blank line; a table
+`| # | Severity | Problem | Fix | Tasks |` with one row per finding (blocking or minor, a sentence
+each); then each finding's detail under its number. The full evidence stays in `4-review.md`.
 
 **One verdict per run — do not revise the plan yourself.** The harness routes it:
 
@@ -261,6 +298,11 @@ Then record its verdict in `review.json` next to `4-review.md`:
 > - **A complexity assignment is wrong** — system or cross-cutting work marked small, or a trivial
 >   change marked large.
 > - **Dependencies are missing or wrong** — two tasks that will collide, or a chain that stalls.
+> - **A task's `planSections` are wrong.** The agent that builds a task is given only the plan's
+>   `For every task` section and the sections that task lists in `tasks.json` — not the whole plan.
+>   For each task ask: with just those, could it be built? A section it needs but doesn't list, a
+>   heading that doesn't exist, or a section that only makes sense after reading another one is a
+>   finding.
 > - Tests are missing for something that can regress.
 >
 > Write your verdict to `<epic plan directory>/4-review.md`, appending below any earlier round,

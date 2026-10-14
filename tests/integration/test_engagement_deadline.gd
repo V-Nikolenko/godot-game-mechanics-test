@@ -490,3 +490,272 @@ func _disengage_seconds(h: RefCounted, pos: Vector2, velocity: Vector2, cap: flo
 		t += DT
 	fighter.free()
 	return t
+
+
+# ── Ph4 t22: snipers and rams (epic docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md §2.9.3; task plan
+# docs/plans/cmuyk2qqp009loa2xb1k3py8o/3-plan.md) ──────────────────────────────────────────────────────
+#
+# cloud_descent's 9 snipers and 6 rams fight off rails since t22, so each must leave by itself before the 10 s net. Same
+# per-entry form as the fighters (`_deadline_rows`), every term read from the shipped config or MEASURED on the real
+# scene, plus t21's `_TICK_SLACK` (two ticks) on each deferral:
+#
+#   sniper  engage_seconds + aim_seconds + lock_seconds         + measured curved exit (t21's view grid)
+#   ram     engage_seconds + wind_up_seconds + charge_max_time   + max(world diagonal / exit_speed,
+#                                                                       measured curved exit over the CORRIDOR)
+#
+# Sniper: expiry in AIM / LOCK defers to the shot; elsewhere it leaves that tick. Its curved exit over the corridor
+# start set was measured once equal to the view grid's (5.40 s, slowest from the centre) at 8x the cost, and its rows
+# carry about 6 s of slack, so it keeps the view grid.
+# Ram: APPROACH / LINE_UP / WIDE_TURN disengage that tick (LINE_UP never defers); WIND_UP / CHARGE / STAGGER defer to
+# their end — at most wind_up_seconds + charge_max_time. Its curved exit is measured over `corridor_starts()`, not the
+# view grid: it can begin DISENGAGE anywhere in the 1480 x 1480 corridor, and from a corner-tie start outside the view
+# the view grid under-reports it by about 2 s (task review B1). The formula is pessimistic — a curved exit never
+# follows a charge (that exit is straight), only a WIND_UP-then-STAGGER, at most wind_up_seconds + stagger_seconds —
+# so the realisable split is printed beside it for the record, never asserted.
+#
+# The 73.2 s ram is the tight row. It needed BOTH pre-approved levers, in order: shipped (exit 500, engage 4.5)
+# 10.75 s; exit_speed 560: 10.10 s; engage_seconds 4.0: 9.60 s. Each is legal only while the t17 attack-in-budget
+# row (`test_ram_corvette.gd::test_every_level1_ram_spawn_class_winds_up_inside_its_budget`) stays green.
+
+const SpecialistExitProbe := preload("res://tests/helpers/specialist_exit_probe.gd")
+const SNIPER_CONFIG: SniperConfig = preload("res://assault/scenes/enemies/sniper/sniper_config.tres")
+const RAM_CONFIG: RamCorvetteConfig = preload("res://assault/scenes/enemies/ram_corvette/ram_corvette_config.tres")
+const BOMBER_CONFIG: BomberConfig = preload("res://assault/scenes/enemies/bomber/bomber_config.tres")
+const _TICK_SLACK := 2.0 / 60.0
+const _PROBE_CAP := 20.0
+
+## The probes run once per file run (about 1 s for the sniper, 3 s for the ram's corridor set), not once per test.
+var _specialist_exits: Dictionary = {}
+
+
+func _corridor_rect() -> Rect2:
+	return AssaultCorridorConstraint.new().inner_rect()
+
+
+func _world_rect() -> Rect2:
+	var cam := ArenaCamera.new()
+	add_child_autofree(cam)
+	return cam.projectile_world_rect()
+
+
+## `{ "sniper": probe result (view grid), "ram": probe result (corridor), "ram_view": the view grid's figure }`.
+func _exits() -> Dictionary:
+	if not _specialist_exits.is_empty():
+		return _specialist_exits
+	var sniper_speeds: Array[float] = [SNIPER_CONFIG.max_speed, 10.0, 2.0]
+	var ram_speeds: Array[float] = [maxf(RAM_CONFIG.charge_speed, RAM_CONFIG.exposed_charge_speed), 10.0]
+	var corridor := SpecialistExitProbe.corridor_starts(_corridor_rect(), _world_rect())
+	_specialist_exits = {
+		"sniper": SpecialistExitProbe.worst_disengage(self, load(WaveBuilder.SNIPER), SniperBrain.Phase.DISENGAGE,
+			sniper_speeds, _PROBE_CAP),
+		"ram": SpecialistExitProbe.worst_disengage(self, load(WaveBuilder.RAM), RamCorvetteBrain.Phase.DISENGAGE,
+			ram_speeds, _PROBE_CAP, corridor),
+		"ram_view": SpecialistExitProbe.worst_disengage(self, load(WaveBuilder.RAM), RamCorvetteBrain.Phase.DISENGAGE,
+			ram_speeds, _PROBE_CAP),
+	}
+	return _specialist_exits
+
+
+func _sniper_deferral() -> float:
+	return SNIPER_CONFIG.aim_seconds + SNIPER_CONFIG.lock_seconds + _TICK_SLACK
+
+
+func _sniper_tail() -> float:
+	return SNIPER_CONFIG.engage_seconds + _sniper_deferral() + float(_exits()["sniper"]["seconds"]) + MARGIN
+
+
+func _ram_deferral() -> float:
+	return RAM_CONFIG.wind_up_seconds + RAM_CONFIG.charge_max_time + _TICK_SLACK
+
+
+func _ram_straight_exit() -> float:
+	return _world_rect().size.length() / RAM_CONFIG.exit_speed
+
+
+func _ram_curved_exit() -> float:
+	return float(_exits()["ram"]["seconds"])
+
+
+func _ram_tail() -> float:
+	return RAM_CONFIG.engage_seconds + _ram_deferral() + maxf(_ram_straight_exit(), _ram_curved_exit()) + MARGIN
+
+
+## For the record only (header): the pessimistic formula minus the impossible "charge deferral then curved exit".
+func _ram_realisable_tail() -> float:
+	var r := RAM_CONFIG
+	return r.engage_seconds + maxf(_ram_deferral() + _ram_straight_exit(),
+		r.wind_up_seconds + r.stagger_seconds + _TICK_SLACK + _ram_curved_exit()) + MARGIN
+
+
+func _worst(rows: Array[Dictionary]) -> Dictionary:
+	var worst: Dictionary = {}
+	for row in rows:
+		if worst.is_empty() or float(row["computed"]) > float(worst["computed"]):
+			worst = row
+	return worst
+
+
+func test_every_enemies_cleared_sniper_and_ram_entry_clears_the_timeout() -> void:
+	var sniper_tail := _sniper_tail()
+	var ram_tail := _ram_tail()
+	gut.p("sniper tail %.2f = engage %.2f + deferral %.2f + measured exit %.2f (view grid) + margin %.1f"
+		% [sniper_tail, SNIPER_CONFIG.engage_seconds, _sniper_deferral(), _exits()["sniper"]["seconds"], MARGIN])
+	gut.p("ram tail %.2f = engage %.2f + deferral %.2f + max(straight %.2f, measured corridor exit %.2f; view grid %.2f) + margin %.1f; realisable %.2f"
+		% [ram_tail, RAM_CONFIG.engage_seconds, _ram_deferral(), _ram_straight_exit(), _ram_curved_exit(),
+			_exits()["ram_view"]["seconds"], MARGIN, _ram_realisable_tail()])
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		var timeout := section.enemies_cleared_timeout
+		for kind in [[WaveBuilder.SNIPER, "sniper", sniper_tail], [WaveBuilder.RAM, "ram", ram_tail]]:
+			var rows := _deadline_rows(section, kind[0], kind[2])
+			if section.section_name == &"cloud_descent":
+				assert_eq(rows.size(), 9 if kind[1] == "sniper" else 6, "sanity: cloud_descent's %s lines" % kind[1])
+			checked += rows.size()
+			for row in _over(rows):
+				fail_test("%s: %s entering at %.1f s + %.2f s needs %.2f s of the %.1f s timeout"
+					% [section.section_name, kind[1], row["trigger"], row["delay"], row["computed"], timeout])
+			var worst := _worst(rows)
+			if not worst.is_empty():
+				gut.p("%s: worst %s entry %.1f s + %.2f s (%.2f s from the last trigger) computes %.2f s: margin %.2f s of %.1f s"
+					% [section.section_name, kind[1], worst["trigger"], worst["delay"], worst["rel"], worst["computed"],
+						timeout - float(worst["computed"]), timeout])
+				if kind[1] == "ram" and section.section_name == &"cloud_descent":
+					gut.p("cloud_descent: the same ram row with the realisable split computes %.2f s"
+						% (float(worst["rel"]) + _ram_realisable_tail()))
+	assert_eq(checked, 15, "sanity: 9 sniper + 6 ram entries in ENEMIES_CLEARED sections")
+
+
+## Sanity on the corridor start set (task review B1): it covers the corridor, stays inside the world rect, never caps,
+## and finds a ram exit at least as slow as the view grid's — the reason it exists.
+func test_the_corridor_start_set_finds_a_slower_ram_exit_than_the_view_grid() -> void:
+	var world := _world_rect()
+	var corridor := _corridor_rect()
+	var starts := SpecialistExitProbe.corridor_starts(corridor, world)
+	assert_eq(starts.size(), 19 * 19 * 3, "sanity: 80 px over +-720, three headings each")
+	for st in starts:
+		var p: Vector2 = SpecialistExitProbe.MID_VIEW + st[0]
+		if not corridor.has_point(p) or not world.has_point(p):
+			fail_test("corridor start %s lies outside the corridor or the world rect" % p)
+			break
+	var e: Dictionary = _exits()["ram"]
+	var v: Dictionary = _exits()["ram_view"]
+	assert_eq(int(e["capped"]), 0, "no corridor run hit the cap")
+	assert_gte(float(e["seconds"]), float(v["seconds"]), "the corridor set contains the view's worst region")
+	gut.p("ram curved exit: corridor %.2f s over %d runs (%s); view grid %.2f s (%s)"
+		% [e["seconds"], e["runs"], e["start"], v["seconds"], v["start"]])
+
+
+## Boundary (task): a ram added to cloud_descent's 76.0 s wave at delay 1.2 is flagged, and only it.
+func test_a_ram_in_the_last_wave_at_delay_1_2_misses_the_timeout() -> void:
+	var section := _cloud_descent()
+	assert_not_null(section, "sanity: cloud_descent exists")
+	if section == null:
+		return
+	assert_almost_eq(_last_wave(section).trigger_time, 76.0, 0.001, "sanity: the last wave triggers at 76.0 s")
+	var tail := _ram_tail()
+	assert_eq(_over(_deadline_rows(section, WaveBuilder.RAM, tail)).size(), 0, "control: the shipped section passes")
+	_add_to_last_wave(section, load(WaveBuilder.RAM) as PackedScene, 1.2)
+	var over := _over(_deadline_rows(section, WaveBuilder.RAM, tail))
+	assert_eq(over.size(), 1, "the added delay-1.2 ram (and only it) must be flagged")
+	if over.size() == 1:
+		assert_almost_eq(float(over[0]["rel"]), 1.2, 0.001, "it enters 1.2 s after the last trigger")
+		assert_gt(float(over[0]["computed"]), section.enemies_cleared_timeout, "%.2f s must exceed the %.1f s timeout"
+			% [float(over[0]["computed"]), section.enemies_cleared_timeout])
+
+
+## Boundary (epic review finding 2): a ram whose budget is forced to expire on its first LINE_UP tick (the t17 seam,
+## the attack gate bypassed) goes straight to DISENGAGE with no WIND_UP, and is out of the world rect within
+## `engage_seconds` + the corridor-measured curved exit of its spawn. One run per cloud_descent ram spawn, real scene,
+## hand-ticked like the probe, the player stub where the fighter-exit replay puts it.
+func test_a_ram_forced_to_expire_on_its_first_line_up_tick_leaves_within_its_bound() -> void:
+	var section := _cloud_descent()
+	var offsets: Array[Vector2] = []
+	for w in section.waves:
+		for e in (w as WaveResource).entries:
+			var entry: SpawnEntryResource = e
+			if entry.ship_scene != null and entry.ship_scene.resource_path == WaveBuilder.RAM \
+					and not offsets.has(entry.base_offset):
+				offsets.append(entry.base_offset)
+	assert_eq(offsets.size(), 6, "sanity: cloud_descent's 6 ram lines, each from its own offset")
+	var bound := RAM_CONFIG.engage_seconds + _ram_curved_exit() + _TICK_SLACK
+	var h: RefCounted = HARNESS.assault()
+	add_child_autofree(h.root)
+	h.player.global_position = MID_VIEW + Vector2(0.0, 250.0)
+	var scene: PackedScene = load(WaveBuilder.RAM)
+	for o in offsets:
+		var ram := scene.instantiate() as RamCorvette
+		ram.global_position = MID_VIEW + o * ArenaCamera.WORLD_SCALE
+		var brain := ram.get_node("Brain") as RamCorvetteBrain
+		brain.rng_seed = 1
+		h.root.add_child(ram)
+		ram.set_physics_process(false)
+		var t := 0.0
+		var line_up_at := -1.0
+		var disengaged_on_next_tick := false
+		var wound_up := false
+		while t < bound + 5.0 and not ram.is_queued_for_deletion():
+			var before := ram.global_position
+			ram._physics_process(DT)
+			ram.global_position = before + ram.velocity * DT
+			t += DT
+			wound_up = wound_up or brain.phase == RamCorvetteBrain.Phase.WIND_UP
+			if line_up_at >= 0.0 and is_equal_approx(t, line_up_at + DT):
+				disengaged_on_next_tick = brain.phase == RamCorvetteBrain.Phase.DISENGAGE
+			if line_up_at < 0.0 and brain.phase == RamCorvetteBrain.Phase.LINE_UP:
+				line_up_at = t
+				brain.budget.seconds = brain.budget.seconds - brain.budget.remaining()  # expires on the next update
+		var gone := ram.is_queued_for_deletion()
+		assert_gt(line_up_at, 0.0, "%s: reached LINE_UP" % o)
+		assert_false(wound_up, "%s: never wound up" % o)
+		assert_true(disengaged_on_next_tick, "%s: DISENGAGE on the tick after LINE_UP began" % o)
+		assert_true(gone, "%s: left the world rect" % o)
+		assert_lte(t, bound, "%s: out %.2f s after spawn, bound engage %.2f + curved exit %.2f"
+			% [o, t, RAM_CONFIG.engage_seconds, _ram_curved_exit()])
+		gut.p("ram %s: LINE_UP at %.2f s, forced expiry, out of the world at %.2f s (bound %.2f s)" % [o, line_up_at, t, bound])
+		ram.free()
+
+
+## Boundary (task; epic C5): a Bomber can never sit in an ENEMIES_CLEARED section. Its tail is computed WITHOUT an exit
+## term — a lower bound, so a row it flags is flagged by any exit, and no probe is paid for. Deliberate reading of "a
+## bomber in any ENEMIES_CLEARED section fails": asserted in cloud_descent; station_assault's 180 s net is sized for the
+## boss fight and no bomber timing can fail it, so it is reported (the Gatling precedent above), and
+## `test_no_enemies_cleared_section_spawns_a_bomber` covers every section. Its persisted mines would hold the section
+## open longer still. If t21's bomber lever (`engage_seconds` 6.5) is ever applied this row stops flagging and FAILS
+## loudly: re-derive it then.
+func test_a_bomber_in_an_enemies_cleared_last_wave_misses_the_timeout() -> void:
+	var b := BOMBER_CONFIG
+	var tail := b.engage_seconds + b.run_length / b.run_speed + BomberBrain.RUN_STALL_SLACK + _TICK_SLACK + MARGIN
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		_add_to_last_wave(section, load(WaveBuilder.BOMBER) as PackedScene, 0.0)
+		var rows := _deadline_rows(section, WaveBuilder.BOMBER, tail)
+		assert_eq(rows.size(), 1, "%s: sanity: exactly the added Bomber" % section.section_name)
+		if rows.size() != 1:
+			continue
+		var computed: float = rows[0]["computed"]
+		if section.section_name == &"cloud_descent":
+			assert_true(rows[0]["over"], "cloud_descent: the delay-0 Bomber must be flagged")
+			assert_gt(computed, section.enemies_cleared_timeout, "cloud_descent: %.2f s (no exit term) must exceed %.1f s"
+				% [computed, section.enemies_cleared_timeout])
+		else:
+			gut.p("%s: a delay-0 Bomber computes at least %.2f s against its %.1f s net"
+				% [section.section_name, computed, section.enemies_cleared_timeout])
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+
+
+func test_no_enemies_cleared_section_spawns_a_bomber() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.BOMBER), "%s spawns a Bomber in its waves" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")

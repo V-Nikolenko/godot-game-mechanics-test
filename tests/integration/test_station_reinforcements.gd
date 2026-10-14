@@ -37,7 +37,8 @@ const STATION_CONFIG := preload("res://assault/scenes/enemies/space_station/spac
 const Fixture := preload("res://tests/helpers/contact_fixture.gd")
 
 ## The player's primary bullet is `collision_layer = 64` (`bullet.tscn:44`). A HurtBox whose mask
-## excludes that bit cannot be hit by it at all — the `ram_ship` defect review round 1 caught.
+## excludes that bit cannot be hit by it at all — the defect review round 1 caught on the legacy
+## ram, whose mask was narrowed to 33 (the Ram Corvette now keeps the default 1121 and deflects instead).
 const PLAYER_BULLET_LAYER: int = 64
 
 ## Design-unit half-screen. `ArenaCamera` is 1280x720 world at WORLD_SCALE 2.0.
@@ -407,14 +408,15 @@ func test_spawning_a_squad_does_not_touch_the_timer() -> void:
 
 # ── 16. Every squad ship is killable by the primary weapon ────────────────────
 
-## The `ram_ship` class of defect, caught automatically the next time someone swaps a squad ship.
-## The mask must be read IN THE TREE: `hurt_box` is `@onready` (`BaseEnemy.hurt_box`) and the
-## governing value is written by `DefenseProfile.apply_to()`, called from `_ready()` (the default
-## profile's mask folds to 97|1024 = 1121; `ram_ship.gd:19` is the one subclass that narrows it to
-## 33 afterwards).
+## The legacy ram-ship class of defect (a HurtBox mask narrowed to exclude the bullet layer), caught
+## automatically the next time someone swaps a squad ship. The mask must be read IN THE TREE:
+## `hurt_box` is `@onready` (`BaseEnemy.hurt_box`) and the governing value is written by
+## `DefenseProfile.apply_to()`, called from `_ready()` (the default profile's mask folds to
+## 97|1024 = 1121). No shipped enemy narrows it any more: the Ram Corvette keeps 1121 and its armour
+## is a deflection rule (t16), so this is a generic guard.
 ##
-## This iterates the squad table, so the ram case is discriminating but counterfactual today:
-## 1121 & 64 == 64 passes for all three chosen ships, 33 & 64 == 0 would fail.
+## Discriminating but counterfactual today: 1121 & 64 == 64 passes for all three chosen ships; a
+## narrowed mask such as the old ram's 33 (33 & 64 == 0) would fail.
 func test_every_squad_ship_can_be_hit_by_the_players_primary_weapon() -> void:
 	var checked: Dictionary = {}
 	for e in _all_entries():

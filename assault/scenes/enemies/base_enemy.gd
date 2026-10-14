@@ -31,7 +31,8 @@ var _explosion_effect: ExplosionEffect
 
 ## Resolved in `_ready()`: the scene-authored `DefenseProfile` child if there is one, otherwise a
 ## default one (all `accepts_*` true, mask 1121) created on the fly. Exposed so a subclass can
-## call `apply_alternate()` on it, as `RamShip` does.
+## call `apply_alternate()` on it (no shipped enemy does since the Ram Corvette's armour became a
+## deflection rule, t16).
 var defense_profile: DefenseProfile
 
 ## Resolved in `_ready()` the same way: the scene-authored `ContactProfile` child, otherwise a default
@@ -85,7 +86,7 @@ func _ready() -> void:
 	add_child(_explosion_effect)
 
 	# Propagate scoring fields from the subclass `config` property if it exists.
-	# Subclasses (Fighter, RamShip, etc.) declare `@export var config:
+	# Subclasses (Fighter, RamCorvette, etc.) declare `@export var config:
 	# SomeConfig` — Godot exposes that via get(), so we don't need to know the
 	# concrete type here.
 	var cfg: Variant = get("config")
@@ -96,7 +97,7 @@ func _ready() -> void:
 
 ## The one AI tick: the brain decides, then the mover applies it — once per physics frame, on one
 ## clock. Inert without a brain or once `suspend_ai()` has run. A subclass that defines its own
-## `_physics_process` (bomber, gunship, ram, razor drone) replaces this entirely —
+## `_physics_process` (the gunship) replaces this entirely —
 ## GDScript does not chain virtual callbacks — so it keeps its legacy behaviour untouched.
 ## Deliberately never calls `set_physics_process(false)`: that would switch those overrides off too.
 func _physics_process(delta: float) -> void:
@@ -139,7 +140,7 @@ func _resolve_ai() -> void:
 
 
 ## Returns the scene-authored `DefenseProfile` child if there is one, so a scene that places one
-## (e.g. the ram ship) never gets a second, default-flagged profile alongside it.
+## never gets a second, default-flagged profile alongside it.
 func _resolve_defense_profile() -> DefenseProfile:
 	for child in get_children():
 		if child is DefenseProfile:
@@ -160,8 +161,8 @@ func _resolve_contact_profile() -> ContactProfile:
 	return profile
 
 
-## Rotates a child `AnimatedSprite2D` 180° (fighter, ram ship). This is a child-sprite
-## art correction, independent of `sprite_forward_angle`: those two ships' animated art is drawn
+## Rotates a child `AnimatedSprite2D` 180° (the fighter). This is a child-sprite
+## art correction, independent of `sprite_forward_angle`: that ship's animated art is drawn
 ## facing the opposite way from the body's own facing convention, and this rotation is what makes
 ## them agree on screen. It says nothing about the body's own rotation or facing.
 func _rotate_sprite() -> void:
@@ -170,8 +171,8 @@ func _rotate_sprite() -> void:
 		sprite.rotation_degrees = 180.0
 
 ## Virtual damage hook: called whenever this enemy's `HurtBox` reports a hit. The default applies
-## the damage to `health`. A subclass overrides this to change what a hit does — e.g. `RamShip`'s
-## first hit only arms it, and `SpaceStation` deflects every hit while a turret is alive.
+## the damage to `health`. A subclass overrides this to change what a hit does — e.g. `RamCorvette` and
+## `SpaceStation` deflect every hit while a plate / turret is alive.
 func _on_received_damage(damage: int) -> void:
 	health.decrease(damage)
 

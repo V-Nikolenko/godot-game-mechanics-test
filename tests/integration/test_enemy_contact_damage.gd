@@ -9,7 +9,7 @@
 ## The base `ContactHitBox` node authored on every `BaseEnemy` subclass's scene defaults to
 ## `damage = 20` and knows nothing about `config`, which is only read at runtime. So every enemy
 ## that wants its configured `collision_damage` has to re-apply it in `_ready()` afterwards. Most
-## do (`bomber.gd`, `fighter.gd`, `ram_ship.gd`, `space_station.gd`) or author a
+## do (`bomber.gd`, `fighter.gd`, `ram_corvette.gd`, `space_station.gd`) or author a
 ## different default directly on their own scene's node (`razor_drone.tscn`,
 ## `swarm_drone.tscn`, `ally_fighter.tscn` — 30/30/25 — with the script still re-applying where
 ## a config can override it).
@@ -21,10 +21,9 @@
 ##
 ## ── Reading the table ────────────────────────────────────────────────────────────────────────
 ##
-## The two enemies with no `collision_damage` line in their `.tres` (`gatling_interceptor_config.tres`,
-## and `sniper_enemy` which has no config at all) inherit `ShipConfig`'s default of 20
-## (`ship_config.gd:8`), which happens to equal the base helper's hardcoded 20. They are listed
-## anyway: the assertion is still meaningful, and if either default ever moves the mismatch
+## The enemy with no `collision_damage` line in its `.tres` (`gatling_interceptor_config.tres`) inherits `ShipConfig`'s default of 20
+## (`ship_config.gd:8`), which happens to equal the base helper's hardcoded 20. It is listed
+## anyway: the assertion is still meaningful, and if that default ever moves the mismatch
 ## surfaces here rather than in playtesting.
 ##
 ## `bonus_drone` is the one deliberate exception — `bonus_drone.tscn` authors no `ContactHitBox`
@@ -91,9 +90,9 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/fighter/fighter_config.tres",
 	},
 	{
-		"name": "ram_ship",
-		"scene": "res://assault/scenes/enemies/ram_ship/ram_ship.tscn",
-		"config": "res://assault/scenes/enemies/ram_ship/ram_config.tres",
+		"name": "ram_corvette",
+		"scene": "res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn",
+		"config": "res://assault/scenes/enemies/ram_corvette/ram_corvette_config.tres",
 	},
 	{
 		"name": "swarm_drone",
@@ -106,10 +105,9 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/space_station/space_station_config.tres",
 	},
 	{
-		"name": "sniper_enemy",
-		"scene": "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn",
-		"config": "",
-		"expected": 20,
+		"name": "sniper",
+		"scene": "res://assault/scenes/enemies/sniper/sniper.tscn",
+		"config": "res://assault/scenes/enemies/sniper/sniper_config.tres",
 	},
 ]
 

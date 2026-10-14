@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3 uid="uid://cm0uxo6q2vbin"]
+[gd_scene load_steps=19 format=3 uid="uid://cm0uxo6q2vbin"]
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_bm"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/bomber/bomber.gd" id="2_bm"]
@@ -6,6 +6,13 @@
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_bm"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_bm"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_bm"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="7_bm"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/bomber/bomber_brain.gd" id="8_bm"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="9_bm"]
+[ext_resource type="Script" path="res://global/components/bullet_pool.gd" id="10_bm"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_ordnance/gravity_bomb.tscn" id="11_bm"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_ordnance/mine.tscn" id="12_bm"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_ordnance/pursuit_bomb.tscn" id="13_bm"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_bm"]
 resource_local_to_scene = true
@@ -13,8 +20,8 @@ shader = ExtResource("1_bm")
 shader_parameter/enabled = false
 shader_parameter/flash_color = Color(1, 1, 1, 1)
 
-[sub_resource type="CircleShape2D" id="CircleShape2D_bm"]
-radius = 22.0
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_bm"]
+size = Vector2(96, 44)
 
 [sub_resource type="Animation" id="Animation_reset_bm"]
 length = 0.001
@@ -62,7 +69,7 @@ rotation = 3.1415927
 texture = ExtResource("3_bm")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-shape = SubResource("CircleShape2D_bm")
+shape = SubResource("RectangleShape2D_bm")
 
 [node name="HurtBox" type="Area2D" parent="."]
 collision_layer = 512
@@ -71,13 +78,13 @@ script = ExtResource("4_bm")
 metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
-shape = SubResource("CircleShape2D_bm")
+shape = SubResource("RectangleShape2D_bm")
 debug_color = Color(0.7, 0, 0, 0.419608)
 
 [node name="Health" type="Node" parent="."]
 script = ExtResource("5_bm")
-max_health = 250
-current_health = 250
+max_health = 150
+current_health = 150
 metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
 
 [node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
@@ -89,8 +96,37 @@ libraries = {
 collision_layer = 256
 collision_mask = 0
 script = ExtResource("6_bm")
-damage = 20
+damage = 35
 damage_type = 2
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
-shape = SubResource("CircleShape2D_bm")
+shape = SubResource("RectangleShape2D_bm")
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("7_bm")
+constraint_mode = 0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("8_bm")
+
+[node name="StateLight" type="Node2D" parent="."]
+position = Vector2(0, 14)
+script = ExtResource("9_bm")
+
+[node name="GravityBombPool" type="Node" parent="."]
+script = ExtResource("10_bm")
+bullet_scene = ExtResource("11_bm")
+pool_size = 4
+persist_after_owner_death = true
+
+[node name="MinePool" type="Node" parent="."]
+script = ExtResource("10_bm")
+bullet_scene = ExtResource("12_bm")
+pool_size = 10
+persist_after_owner_death = true
+
+[node name="PursuitBombPool" type="Node" parent="."]
+script = ExtResource("10_bm")
+bullet_scene = ExtResource("13_bm")
+pool_size = 4
+persist_after_owner_death = true

@@ -50,13 +50,13 @@
 extends GutTest
 
 ## Top-level directories only — `assault/scenes/enemies/` also holds loose scripts and its
-## subdirectories hold non-entity scenes (`bomber/bomb.tscn`, `fighter/states/`).
+## subdirectories hold non-entity scenes (`fighter/states/`).
 const _ENTITY_DIRS: Array[String] = [
 	"res://assault/scenes/enemies",
 	"res://assault/scenes/allies",
 ]
 
-## Ten entity directories carry a `*config*.tres` today (`sniper_enemy` has none). A sweep that
+## Ten entity directories carry a `*config*.tres` today (`sniper` has none). A sweep that
 ## finds fewer has broken, and a broken sweep passes every assertion below vacuously.
 const _MIN_ENTITIES_WITH_CONFIG: int = 10
 
@@ -80,7 +80,7 @@ class ConfigProbe:
 # ── Sweep ────────────────────────────────────────────────────────────────────
 
 ## `{name, scene, config}` per entity directory that has both `<dir>/<dir>.tscn` and exactly one
-## `*config*.tres`. Directories with no config (`sniper_enemy`) are skipped — they have nothing to
+## `*config*.tres`. Directories with no config (`sniper`) are skipped — they have nothing to
 ## share. A directory with TWO configs is a failure, not a coin toss: the sweep would otherwise
 ## silently pick one and check the wrong resource forever.
 func _sweep() -> Array[Dictionary]:

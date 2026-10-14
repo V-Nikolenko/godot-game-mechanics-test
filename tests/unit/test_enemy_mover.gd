@@ -401,6 +401,14 @@ func test_evade_wrapper() -> void:
 	assert_eq(mover.actor.velocity, expected)
 
 
+func test_break_contact_wrapper() -> void:
+	var mover := _wrapper_rig()
+	var expected := Steering.break_contact(Vector2(100, 200), Vector2(0, 0), Vector2(50, 0), -1.0, 120.0)
+	mover.break_contact(Vector2(0, 0), Vector2(50, 0), -1.0, 120.0)
+	mover.step(DT)
+	assert_eq(mover.actor.velocity, expected)
+
+
 func test_strafe_wrapper() -> void:
 	var mover := _wrapper_rig()
 	var expected := Steering.strafe(Vector2(100, 200), Vector2(100, 0), -1.0, 90.0)

@@ -113,6 +113,8 @@ func aim_direction(from: Vector2, shot_speed: float, accuracy: float) -> Vector2
 	return dir.normalized()
 
 
-## Stub — always agrees with has_target. The real raycast lands in Phase 4 (sniper LOS, IDEAS §28).
-func line_of_sight(_from: Vector2) -> bool:
-	return has_target
+## True when there is a target and no blocker stands between `from` and it (`LineOfSight.clear`).
+## The snapshot holds no world, so the caller supplies the physics space (and its own body's RID in
+## `exclude`). Physics-step only.
+func line_of_sight(from: Vector2, space: PhysicsDirectSpaceState2D, exclude: Array[RID] = []) -> bool:
+	return has_target and LineOfSight.clear(space, from, position, exclude)

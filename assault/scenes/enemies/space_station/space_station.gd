@@ -13,7 +13,7 @@
 ## Extends BaseEnemy like all nine other enemies (BaseEnemy itself composes from
 ## global/components/), which gives the HurtBox->Health wiring, hit flash, HitEffect,
 ## ExplosionEffect, the contact HitBox, `died`, and score_value propagation for free. Refusing
-## damage via a `_on_received_damage` override is a shipped pattern — see ram_ship.gd:27.
+## damage via a `_on_received_damage` override is a shipped pattern — see ram_corvette.gd:27.
 class_name SpaceStation
 extends BaseEnemy
 
@@ -117,7 +117,7 @@ func _ready() -> void:
 			t.health.current_health = config.turret_health
 
 		## The scene-authored ContactHitBox defaults to damage 20 and never reads the config,
-		## so it has to be re-applied here. bomber.gd, fighter.gd, ram_ship.gd and
+		## so it has to be re-applied here. bomber.gd, fighter.gd, ram_corvette.gd and
 		## gunship.gd all do this. tests/integration/test_enemy_contact_damage.gd asserts it for
 		## the whole roster, so an enemy that forgets the re-apply now fails the gate instead of
 		## silently ramming for 20.

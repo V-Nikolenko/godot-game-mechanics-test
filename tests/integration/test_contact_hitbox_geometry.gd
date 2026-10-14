@@ -70,16 +70,16 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/fighter/fighter.tscn",
 	},
 	{
-		"name": "ram_ship",
-		"scene": "res://assault/scenes/enemies/ram_ship/ram_ship.tscn",
+		"name": "ram_corvette",
+		"scene": "res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn",
 	},
 	{
 		"name": "space_station",
 		"scene": "res://assault/scenes/enemies/space_station/space_station.tscn",
 	},
 	{
-		"name": "sniper_enemy",
-		"scene": "res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn",
+		"name": "sniper",
+		"scene": "res://assault/scenes/enemies/sniper/sniper.tscn",
 	},
 	{
 		"name": "swarm_drone",

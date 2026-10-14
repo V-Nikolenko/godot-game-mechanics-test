@@ -26,10 +26,12 @@ global/
 │   ├── temp_health_component.gd   # TempHealth (Node) — drains before Health
 │   ├── hurtbox_component.gd       # HurtBox (Area2D) — receives hits
 │   ├── hitbox_component.gd        # HitBox (Area2D) — deals hits, DamageType enum
+│   ├── armor_query.gd             # ArmorQuery (static) — "does this target refuse my hit?": `deflects_hit(hit_box)` first, else `is_armored()`
+│   ├── armor_plate.gd             # ArmorPlate (Node2D) — breakable armour piece: HurtBox + Health + Sprite; rockets / high-impact shots break it, bullets glance off
 │   ├── shield_component.gd        # Shield (Node) — discrete-charge shield
 │   ├── damage_reaction.gd         # DamageReaction (Node) — generic "take a hit" router
 │   ├── defense_profile.gd         # DefenseProfile (Node) — per-instance HurtBox mask/damage-type data
-│   ├── contact_profile.gd         # ContactProfile (Node) — what touching an enemy does: NONE / COLLISION / RAMMING / EXPLOSIVE
+│   ├── contact_profile.gd         # ContactProfile (Node) — what touching an enemy does: NONE / COLLISION / RAMMING / EXPLOSIVE / ARMOR
 │   ├── contact_blast.gd           # ContactBlast (HitBox) — code-built blast an EXPLOSIVE profile leaves in the owner's parent
 │   ├── state_light.gd             # StateLight (Node2D) — one small red/yellow/white attack-telegraph light
 │   ├── overheat_component.gd      # Overheat (Node) — weapon heat
@@ -49,6 +51,7 @@ global/
 │   ├── movement_constraint.gd # MovementConstraint (RefCounted) — identity filter; mode constraints extend it
 │   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift/spiral/corkscrew/… primitives
 │   ├── target_info.gd         # TargetInfo — player resolver + prediction/intercept snapshot
+│   ├── line_of_sight.gd       # LineOfSight (RefCounted) — opt-in-blocker ray between two points (asteroids / blocks_line_of_sight())
 │   ├── engagement_budget.gd   # EngagementBudget (RefCounted) — Assault-only per-brain exit timer
 │   ├── burst_clock.gd         # BurstClock (RefCounted) — counts down an exact-size, evenly-spaced burst
 │   ├── dubins_path.gd         # DubinsPath (RefCounted) — shortest turn-radius-limited path between two poses
@@ -200,6 +203,35 @@ func _on_hit(damage: int) -> void:
     health.decrease(damage)   # or route through DamageReaction (below)
 ```
 
+
+### Armour that deflects bullets but breaks to rockets — `armor_query.gd`, `armor_plate.gd`
+
+`ArmorQuery.deflects(area, hit_box)` is the one place a player projectile (`bullet.gd`, `homing_missile.gd`,
+`warhead_missile.gd`, each through its kept `_hit_is_deflected` wrapper) asks whether the hurtbox it overlapped
+refused the hit. The hurtbox's parent may answer `deflects_hit(hit_box: HitBox) -> bool` (hit-aware, tried first) or
+the older hit-blind `is_armored() -> bool` (the space station's core, which implements no `deflects_hit` and is
+unchanged). Projectiles do not duck-type either method directly any more.
+
+`ArmorPlate` (a `Node2D`, `HurtBox` layer `ENEMY_HURTBOX` / mask `PLAYER_ROCKETS | PLAYER_HITBOX` with **empty**
+`accepted_damage_types`, plus `Health` and a `Sprite2D` named `Sprite`; built in `_ready()` if the scene omits them) is
+the first reusable breakable part. It never connects `received_damage` (that carries no type): it classifies each
+`HitBox` itself. `breaks_on(hb)` is true for `DamageType.ROCKET` or a projectile answering `is_high_impact()`
+(`Bullet.is_high_impact()` returns `unlimited_pierce`, the player's Sniper Shot); a break applies `hb.damage` to the
+plate's Health, anything else emits `deflected(hit_box)`. `deflects_hit(hb)` = "not alive, or not breakable". The
+projectile's query and the plate's own `area_entered` have no defined order, so both go through one idempotent
+`_resolve(hb)`: the first caller decides and applies damage, later callers read the recorded answer. A rocket is
+therefore consumed by the plate it breaks whichever callback runs first, and a plate already broken consumes nothing
+(the next rocket of a volley flies on to the next plate). Break = hurtbox closed deferred, sprite hidden, an
+`ExplosionEffect`, `broken(plate)`, `queue_free()`. Keep plates under a `Plates` node, never as direct children of the
+entity root (the hurtbox-geometry gate). A target made of parts may also answer `homing_point(from: Vector2) ->
+Vector2`; `homing_missile._fly_to_target` steers at it instead of `global_position`. Gated by
+`tests/integration/test_armor_query.gd` (fixture: `tests/helpers/armored_fixture.gd`).
+
+First shipped user: the **Ram Corvette** (`assault/scenes/enemies/ram_corvette/`, t16) — three plates over a hull whose
+`deflects_hit` / `is_armored()` are true while any plate lives (every projectile passes the hull to reach a plate,
+and `_on_received_damage` deflects the direct emitters), `homing_point` = nearest live plate, exposure deferred one
+step after the last plate breaks. See its `ENEMY.md`; gated by `tests/integration/test_ram_corvette.gd`.
+
 ### CollisionLayers — `global/physics/collision_layers.gd`
 
 `CollisionLayers` (`class_name CollisionLayers extends RefCounted`, constants only) names every
@@ -243,22 +275,24 @@ four true = 1121: `PLAYER_HITBOX | PLAYER_ROCKETS | ENVIRONMENT | HAZARD_CONTACT
 writes `mask()` and `accepted_damage_types` onto a `HurtBox` and remembers it for later.
 
 `apply_alternate()` is a **one-way** switch to a second flag set (`alternate_accepts_*`, same
-defaults) and re-applies to the last `HurtBox` passed to `apply_to()` — exactly the ram ship's
-"armour breaks on the first missile hit and never re-forms" rule, and no more. There is no way
-back to the primary flags once switched.
+defaults) and re-applies to the last `HurtBox` passed to `apply_to()`. It was built for the legacy
+ram ship's "armour breaks on the first missile hit" rule; **no shipped enemy uses it** since the Ram
+Corvette's armour became a deflection rule on a full-size hurtbox (`ArmorPlate`, Phase 4 t16). It is
+kept and unit-tested on a fixture (`tests/unit/test_defense_profile.gd`). There is no way back to the
+primary flags once switched.
 
-`BaseEnemy._ready()` resolves a `DefenseProfile` child by type if the scene authored one (e.g.
-`ram_ship.tscn`, whose profile gives 33 — rockets + environment — with the alternate 97 applied in
-`RamShip._enter_damaged_state()`), otherwise creates a default one on the fly (mask 1121, so no
-scene needs editing) and exposes it as `defense_profile` for a subclass to call `apply_alternate()`
-on. `StationTurret` (a plain `Node2D`, not a `BaseEnemy`) reproduces the default mask by hand
+`BaseEnemy._ready()` resolves a `DefenseProfile` child by type if the scene authored one (no shipped
+scene does today), otherwise creates a default one on the fly (mask 1121, so no scene needs editing)
+and exposes it as `defense_profile`. **Armour is never a narrowed mask**: an armoured enemy keeps the
+default 1121 and refuses damage in `_on_received_damage` (`SpaceStation`, `RamCorvette`; see
+`ArmorPlate` / `ArmorQuery`). `StationTurret` (a plain `Node2D`, not a `BaseEnemy`) reproduces the default mask by hand
 through the same `CollisionLayers` constants rather than using a profile, since it has nothing to
 resolve one for it.
 
 ```gdscript
-# Scene-authored two-state armour (see ram_ship.tscn / ram_ship.gd):
+# A scene-authored profile (no shipped enemy does this today):
 @onready var defense_profile: DefenseProfile = $DefenseProfile   # or BaseEnemy.defense_profile
-func _enter_damaged_state() -> void:
+func _on_some_one_way_event() -> void:
     defense_profile.apply_alternate()   # one-way; re-applies to the HurtBox automatically
 ```
 
@@ -275,10 +309,11 @@ type, otherwise creates a default, exposes it as `contact_profile`, and calls
 | `COLLISION` (default) | **never touched** — every legacy enemy keeps its hitbox exactly as authored | `contact_made(area)` |
 | `RAMMING` | on only while armed | `contact_made(area)` |
 | `EXPLOSIVE` | on only while armed | `contact_made(area)`, then `detonate()` |
+| `ARMOR` | on from `setup()`, armable | `contact_made(area)`; never detonates, never harms its owner; with `shove_speed > 0` also duck-typed `apply_knockback(dir * shove_speed)` on the touched hurtbox's parent (`OpenSpacePlayerShip` adds to `velocity`; `PlayerFighter` uses the base shove) |
 
 - **Damage is always the hitbox's own `damage`** (`config.collision_damage`); "ramming only hurts while
   committed" is full damage while armed and none at rest.
-- `set_armed(bool)` (RAMMING / EXPLOSIVE only; a no-op otherwise) toggles `monitorable` + `monitoring` with
+- `set_armed(bool)` (RAMMING / EXPLOSIVE / ARMOR only; a no-op otherwise) toggles `monitorable` + `monitoring` with
   `set_deferred`, so it is legal from a physics callback. Arming while already overlapping the player registers
   exactly one hit (pinned engine behaviour). `BaseEnemy.suspend_ai()` arms the profile, so a rail-driven enemy hurts
   on contact.
@@ -448,7 +483,7 @@ func tick(delta: float) -> void:
 ```
 
 - **Requests are per step.** `request_velocity()` (or a `Steering` wrapper: `seek`, `arrive`, `orbit`,
-  `intercept`, `retreat_from`, `evade`, `strafe`, `hold_position`, `drift`, `spiral`, `corkscrew`,
+  `intercept`, `retreat_from`, `evade`, `break_contact`, `strafe`, `hold_position`, `drift`, `spiral`, `corkscrew`,
   `formation_slot`) is the one primary request — a second call replaces it; `add_nudge()` adds an
   offered correction (flocking's `separation`/`alignment`/`cohesion`, capped at a fraction of
   `max_speed` — there is no weighted blend of every term into the primary request); `face_toward()`
@@ -515,8 +550,14 @@ scattered `get_nodes_in_group("player")[0]` calls); `TargetInfo.of(node)` snapsh
 is `false` with no target, a non-positive `shot_speed`, or no `t >= 0` solution (the target outruns
 the shot). `aim_direction(from, shot_speed, accuracy)` blends direct aim at `position` (`accuracy
 0.0`) with the intercept point (`1.0`), clamped, falling back to direct aim whenever `intercept`
-fails — this is what `AttackController`'s aimed/gatling patterns call (above). `line_of_sight()` is
-a stub that always agrees with `has_target`; the real raycast is a later phase.
+fails — this is what `AttackController`'s aimed/gatling patterns call (above). `line_of_sight(from, space,
+exclude := [])` is a real raycast: it delegates to `LineOfSight.clear()` (mask `ENVIRONMENT | HAZARD_CONTACT`,
+bodies only; a hit blocks only if the collider is in group `asteroids` or answers `blocks_line_of_sight()`
+== true, every other body is excluded and the ray recast, at most 4 times, then the line counts as clear).
+Physics step only; tests await a physics frame after placing bodies. `Steering.break_contact(pos, threat_pos,
+threat_vel, side, max_speed, lateral_weight := 0.6)` flees the threat with a sideways share that doubles when
+the threat is closing (`EnemyMover.break_contact` wraps it). First users: the Sniper (`SniperBrain` — its
+firing-point choice, SETTLE and LOCK line-of-sight checks, and its BREAK_CONTACT phase).
 
 **`EngagementBudget` (`engagement_budget.gd`, `RefCounted`) is how an Assault AI enemy leaves the
 arena in time for an `ENEMIES_CLEARED` section to advance**, rather than living until killed —
@@ -579,13 +620,15 @@ queue_free` wiring. `expire_now()` is an immediate, explicit trip through the sa
 
 **It arms lazily** — on `reset()`, or on its own first physics tick, whichever comes first, never
 in `_ready()` — because an unpooled projectile positioned at its muzzle only *after* `add_child()`
-(the sniper shot, `sniper_enemy.gd`) is never `reset()`; arming in `_ready()` would record the
+(the player's sniper shot) is never `reset()`; arming in `_ready()` would record the
 wrong origin and never resolve the rect. `EnemyBullet` carries one with derived defaults
 (`max_time = 18 s`, `max_distance = 2400 px`) that reproduce its old hardcoded arena-bounds check
 exactly against every shipped enemy-bullet speed; a new, slower bullet source must be added to
 `tests/integration/test_enemy_bullet_lifetime.gd`'s source list and the defaults re-derived.
-`persist_after_owner_death` is documented only in Phase 1 — a future flag for `BulletPool` to skip
-`cancel_active()` on a flagged projectile.
+`persist_after_owner_death` is built (Ph4) as a `BulletPool` `@export` (default false): with it on,
+the pool's `_exit_tree()` hands in-flight bullets over (recycle callable disconnected, `expired ->
+queue_free` one-shot) instead of `cancel_active()`, which ignores the flag. Pinned by
+`tests/unit/test_bullet_pool.gd`.
 
 ### Shield — `shield_component.gd`, `bubble_shield.tscn`, ordering in `damage_reaction.gd`
 

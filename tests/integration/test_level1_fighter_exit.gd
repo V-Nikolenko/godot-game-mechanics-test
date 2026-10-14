@@ -9,8 +9,9 @@
 ##
 ## `test_engagement_deadline.gd` proves this on paper, per fighter entry. This file runs it: every wave
 ## of cloud_descent from 66.0 s onward (the 66 s and 72 s fighter waves, the 68 s and 76 s drone waves,
-## the 72 s rail ram), through a real `WaveManager`, under a real `ArenaCamera` (corridor and world
-## rect), against a stationary player stub with no hurtbox — nothing can end early by hitting it.
+## the 72 s ram — on AI since Ph4 t22; the snipers and rams have their own whole-section replay in
+## `test_level1_specialist_exit.gd`), through a real `WaveManager`, under a real `ArenaCamera` (corridor
+## and world rect), against a stationary player stub with no hurtbox — nothing can end early by hitting it.
 ## No fighter spawned before 66.0 s can still be alive at 76.0 s: its worst-case life after entry is
 ## ≈ 12.2 s (engage 6.0 + burst deferral 0.8 + the curved-exit bound 5.37, which the deadline test gates
 ## on the real scene), and the latest earlier fighters — the 59.0 s wedge — enter by 59.1 s, so are gone

@@ -221,7 +221,7 @@ convention that enemy stats live in the `.tres` and are applied in `_ready()`.
 It exists because every `BaseEnemy` subclass's `.tscn` authors a `ContactHitBox` node with a
 hardcoded `damage = 20` and no way to read `config` — that only exists at runtime — so every
 enemy that wants its configured `collision_damage` has to re-apply it in `_ready()` off
-`contact_hit_box` — `bomber.gd`, `fighter.gd`, `ram_ship.gd`, `gunship.gd` and
+`contact_hit_box` — `bomber.gd`, `fighter.gd`, `ram_corvette.gd`, `gunship.gd` and
 `space_station.gd` all do this, and `razor_drone.tscn`/`swarm_drone.tscn` author a
 different scene default (30) instead. Miss the re-apply and the `.tres` field is simply dead: it
 parses, the enemy works, and the only symptom is a number nobody can see. The `Gunship` shipped
@@ -231,7 +231,7 @@ and nothing else in the suite could reach it, because no other test reads a HitB
 Three things to know before extending it:
 
 - **The two config-less entries are still assertable.** `interceptor_config.tres` has no
-  `collision_damage` line and `sniper_enemy` has no config at all, so both inherit `ShipConfig`'s
+  `collision_damage` line and `sniper` has no config at all, so both inherit `ShipConfig`'s
   default of 20 (`ship_config.gd:8`) — which happens to equal the scene's hardcoded 20. They
   are listed so that if either value ever moves independently, the mismatch surfaces here.
 - **`bonus_drone` is the one deliberate exception**, asserted from both sides: `bonus_drone.tscn`
@@ -300,7 +300,7 @@ Four things to know before extending it:
 - **The roster has a completeness guard**, which the two older files still lack: a `DirAccess`
   pass over the top level of `assault/scenes/enemies/` and `assault/scenes/allies/` fails if a
   `<dir>/<dir>.tscn` exists that the roster does not list. Top level only — the enemies directory
-  also holds loose scripts, and subdirectories hold non-entity scenes (`bomber/bomb.tscn`).
+  also holds loose scripts, and subdirectories hold non-entity scenes (`fighter/states/`).
 
 The whole **space-station family** — `integration/test_space_station.gd`,
 `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
@@ -454,6 +454,17 @@ point of the suite is that a behaviour change is a *visible* change.
 - **Keep `_process` / `_physics_process` out of the tree and call them by hand** when timing
   matters (see `unit/test_overheat_component.gd`, `unit/test_camera_shake.gd`). Real frame
   timing makes assertions approximate for no benefit.
+
+- **Real physics frames cost wall clock, and the harness has a ~300 s budget for the whole gate.**
+  An `await get_tree().physics_frame` loop runs at 60 Hz of real time however fast the CPU is, so
+  10 s of game time is 10 s of gate. The AI-Kanban harness gives up on verification at about
+  5:00 and reverts the work with every test green; that is what happened to the Bomber's bombing
+  runs four times. When a test has to step the engine, scale the clock the way
+  `integration/test_level1_fighter_fire_density.gd`, `integration/test_bomber.gd` and
+  `integration/test_enemy_ordnance.gd` do: scale `Engine.time_scale`, `physics_ticks_per_second`
+  and `max_physics_steps_per_frame` together, so the step stays 1/60 game-second, and restore them
+  in `after_each`. Count frames at the **unscaled** tick rate. Check the gate's `real` time
+  (`time bash /agent/verify.sh`) after adding a slow file.
 
 - **GUT fails a test on any unexpected engine error**, including one raised inside a signal
   callback. Connect a callable whose arity matches the signal exactly: `Health.amount_changed`
@@ -729,7 +740,8 @@ committed.
 Files: `integration/test_fighter.gd`, `test_fighter_squad.gd`, `test_gatling_interceptor.gd`,
 `test_gatling_convergence.gd`, `test_enemy_rounds.gd`, `test_enemy_bullet_lifetime.gd`,
 `test_wave_builder_formations.gd`, the level-1 files `test_level1_fighter_spawns.gd`,
-`test_level1_fighter_fire_density.gd`, `test_level1_fighter_exit.gd`, `test_engagement_deadline.gd`, plus
+`test_level1_fighter_fire_density.gd`, `test_level1_fighter_exit.gd`, `test_engagement_deadline.gd` (Phase 4 t22 added its
+sniper / ram rows; the Phase 4 replay `test_level1_specialist_exit.gd` uses the same 8x clock traps below), plus
 `unit/test_burst_clock.gd`, `test_dubins_path.gd`, `test_attack_patterns_forward.gd`, and the Gatling/fighter cases in
 `test_enemy_dual_mode.gd` (both harnesses) and `test_sector_hub_patrol.gd`. Unlike the older characterization suite these
 **assert intent**. Four traps they hit:

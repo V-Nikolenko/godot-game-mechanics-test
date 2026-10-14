@@ -42,7 +42,7 @@ const PIERCE_DAMAGE_FACTOR: float = 0.55  ## 45% damage reduction per pierce.
 var pierces_remaining: int = 0
 
 ## Sniper-bullet flags. When unlimited_pierce is true the bullet passes through
-## every regular enemy at full damage, but stops on asteroids and ram-ships.
+## every regular enemy at full damage, but stops on asteroids.
 @export var unlimited_pierce: bool = false
 @export var no_damage_decay: bool = false
 
@@ -93,6 +93,11 @@ func _physics_process(delta: float) -> void:
 func _on_visible_on_screen_notifier_2d_screen_exited() -> void:
 	expired.emit()
 
+## Duck-typed (the `is_armored()` precedent): true for a shot heavy enough to break an
+## `ArmorPlate`. Today that is the player's Sniper Shot, the only `unlimited_pierce` primary.
+func is_high_impact() -> bool:
+	return unlimited_pierce
+
 ## Called deferred after a pierce hit so the HurtBox reads damage at its original
 ## value before we reduce it for the next target.
 func _apply_pierce() -> void:
@@ -108,9 +113,10 @@ func _apply_pierce() -> void:
 func _on_hit_box_area_entered(area: Area2D) -> void:
 	if unlimited_pierce:
 		var parent := area.get_parent()
-		## Asteroids and ram-ships block the sniper bullet without taking damage.
+		## Asteroids block the sniper bullet without taking damage. (The Ram Corvette no longer does:
+		## its armoured hull deflects the shot through, its plates take it, an exposed hull is hurt.)
 		## Zero the HitBox damage first so the HurtBox reads 0 if it fires after us.
-		if parent.is_in_group("asteroids") or parent.is_in_group("ram_ships"):
+		if parent.is_in_group("asteroids"):
 			var hb := get_node_or_null("HitBox") as HitBox
 			if hb:
 				hb.damage = 0
@@ -134,8 +140,9 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 ## True when the hurtbox we just overlapped refused to apply damage (e.g. the space-station core
 ## while any turret still lives). Duck-typed against `is_armored()` rather than a shared base
 ## class or a cached HurtBox flag — same idiom as `is_laser_blocking()` in `beam_behavior.gd`.
-## Safe to query synchronously regardless of physics-signal ordering: `SpaceStation.is_armored()`
-## depends only on live turret count, which a hit against the core itself never changes.
+## Goes through `ArmorQuery`, which prefers a hit-aware `deflects_hit(hit_box)` and falls back to
+## `is_armored()`. Safe to query synchronously regardless of physics-signal ordering:
+## `SpaceStation.is_armored()` depends only on live turret count, which a hit against the core
+## itself never changes, and `ArmorPlate.deflects_hit` resolves each HitBox once, idempotently.
 func _hit_is_deflected(area: Area2D) -> bool:
-	var target := area.get_parent()
-	return target != null and target.has_method("is_armored") and target.is_armored()
+	return ArmorQuery.deflects(area, get_node_or_null("HitBox") as HitBox)

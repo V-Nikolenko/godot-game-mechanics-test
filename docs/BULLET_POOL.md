@@ -176,7 +176,8 @@ If a bullet goes off-screen AND hits something in the same frame, `expired` fire
 
 ### **6. Cancelling In-Flight Bullets** (`cancel_active()`)
 
-`_exit_tree()` is a one-line call to the public **`cancel_active()`**, which frees every in-flight
+`_exit_tree()` calls the public **`cancel_active()`** (unless the pool sets
+`persist_after_owner_death` — it then hands in-flight bullets over instead), which frees every in-flight
 bullet and clears `_active`. A ship can call it directly when it must stop being dangerous
 *before* it leaves the tree.
 
@@ -193,6 +194,33 @@ into the same enemy container the director polls.
 pool is about to be freed anyway) but do not reach for it as a general "clear the screen" tool
 without re-reading this note. Pinned by
 `tests/integration/test_station_gunnery.gd::test_bullet_pool_cancel_active_frees_in_flight_bullets`.
+
+### **7. Outliving the Owner** (`persist_after_owner_death`, Ph4)
+
+Mines and bombs must stay where the Bomber left them, which is the opposite of the rule above. The flag is a
+`BulletPool` `@export` (default `false`, so every round family is unchanged):
+
+- On `_exit_tree()` with the flag on, `_hand_over_active()` runs instead of `cancel_active()`. For every in-flight
+  projectile the pool **disconnects its stored recycle `Callable`**, connects a one-shot `expired -> queue_free`, and
+  drops it from `_active`. From that instant the projectile has exactly one owner, itself, which keeps the
+  "every projectile has exactly one owner" rule intact.
+- A projectile whose `expired` already fired this frame (its deferred recycle is queued) is freed on the spot: nothing
+  would ever emit `expired` for it again.
+- `_recycle()` ignores a projectile the pool no longer owns, so a late `expired` cannot put a handed-over projectile
+  back in the idle list.
+- `cancel_active()` is unchanged and ignores the flag: a ship that must stop being dangerous (the station's death
+  sequence) still frees everything.
+- The projectiles keep ticking in the container, so each one **must carry its own lifetime cap**. The ordnance family
+  (`assault/scenes/projectiles/enemy_ordnance/`: gravity bomb 16 s / 1800 px, pursuit bomb 10 s / 2400 px, mine 10 s
+  with a life of 8 s) has one; a persisting pool of an uncapped projectile would leak it.
+- Consequences for levels: ordnance sits in the enemy container, whose child count is what an `ENEMIES_CLEARED`
+  section polls, so a Bomber must never spawn in one (a boundary row in `test_engagement_deadline.gd`). Ordnance never
+  enters `enemies` or `ScoreTracker`.
+
+The Bomber owns three such pools (`GravityBombPool`, `MinePool`, `PursuitBombPool`, direct root children, sized
+4 / 10 / 4 and gated against `EnemyOrdnanceScenes.pool_size_for()`). Pinned by `tests/unit/test_bullet_pool.gd`,
+`tests/integration/test_enemy_ordnance.gd` and `tests/integration/test_bomber.gd`. The enemy *round* family, the
+Sniper's `rail_round.tscn` included, still vanishes with its shooter.
 
 ## Container Hierarchy
 
@@ -246,9 +274,9 @@ func _ready() -> void:
 
 ### Picking a round (the enemy bullet family, Ph3)
 
-The Fighter and the Gatling Interceptor do not build a pool in code. Their scenes author a `BulletPool` node whose
-`bullet_scene` is one of the four rounds in `assault/scenes/projectiles/enemy_bullet/rounds/`
-(`EnemyRounds.PULSE / SCATTER / GATLING_STREAM / HEAVY_SHELL` — inherited scenes of `enemy_bullet.tscn`, each with its
+The Fighter, the Gatling Interceptor and the Sniper (a `RailPool` of 2, not persistent) do not build a pool in code. Their scenes author a `BulletPool` node whose
+`bullet_scene` is one of the five rounds in `assault/scenes/projectiles/enemy_bullet/rounds/`
+(`EnemyRounds.PULSE / SCATTER / GATLING_STREAM / RAIL / HEAVY_SHELL` — inherited scenes of `enemy_bullet.tscn`, each with its
 own speed, damage, look and `ProjectileLifetime`). Rules the pool relies on:
 
 - **A pool is a direct child of the enemy root**, never of an `AttackController`. `BulletPool._ready()` resolves its
@@ -336,7 +364,7 @@ def _recycle(bullet: Node) -> void:
 		bullet.queue_free()
 ```
 
-**A shooter's in-flight bullets vanish when it dies or leaves**: `BulletPool._exit_tree()` calls `cancel_active()`, so no enemy round outlives its owner (this is legacy behaviour; an owner-bound lifetime, `persist_after_owner_death`, is a Ph5 item). It means an ENEMIES_CLEARED deadline needs no bullet-flight term, and that a leaving fighter's rounds disappear mid-screen.
+**A shooter's in-flight bullets vanish when it dies or leaves**: `BulletPool._exit_tree()` calls `cancel_active()`, so no enemy round outlives its owner (the default; a pool with `persist_after_owner_death = true`, built in Ph4, instead hands its in-flight bullets over so they free themselves on their own `expired`; `cancel_active()` ignores the flag). It means an ENEMIES_CLEARED deadline needs no bullet-flight term, and that a leaving fighter's rounds disappear mid-screen.
 
 If the pool's `_ready()` never fires (ship not added to tree), `_container` remains null and `acquire()` will crash on `bullet.reparent(_container)`. But this shouldn't happen in normal flow since ships are spawned via `WaveManager`, which guarantees `add_child()` before ship's `_ready()`.
 

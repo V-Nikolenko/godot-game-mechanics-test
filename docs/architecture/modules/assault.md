@@ -36,7 +36,8 @@ assault/scenes/
 ├── projectiles/                 Player + enemy ordnance
 │   ├── bullets/bullet.gd        Player bullet — UNPOOLED, frees itself off-screen (pierce, sniper)
 │   ├── enemy_bullet/            EnemyBullet (become_friendly() flips it to a player projectile)
-│   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell .tscn + EnemyRounds
+│   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell / rail_round .tscn + EnemyRounds + RailTrail (the sniper shot's fading trail)
+│   ├── enemy_ordnance/         EnemyOrdnance: gravity_bomb / mine / pursuit_bomb .tscn + EnemyOrdnanceScenes (persistent, shoot-down-able, not in `enemies`)
 │   ├── missiles/                homing/ + warhead/ missiles
 │   └── piercing_beam/           Sustained BEAM weapon projectile
 ├── systems/                     Mission orchestration (non-visual)
@@ -156,7 +157,7 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   subclass's `.tscn` authors a `ContactHitBox` node with `damage = 20`, which knows nothing about
   the subclass's own `.tres`, so a subclass wanting its configured `collision_damage` must
   re-apply it in `_ready()` off `contact_hit_box` (`gunship.gd`, `bomber.gd`,
-  `fighter.gd`, `ram_ship.gd`, `space_station.gd`) or author a different default
+  `fighter.gd`, `ram_corvette.gd` (which also swaps to `exposed_collision_damage` once its plates are gone), `space_station.gd`) or author a different default
   directly on its own scene node (`razor_drone.tscn`, `swarm_drone.tscn` — 30, still
   re-applied from config where one exists). Forgetting leaves the `.tres` value dead with no
   symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
@@ -256,6 +257,26 @@ already decided the fight is on, so the brain starts straight in APPROACH.
 (`squad.set_engaged` / `is_engaged` / `hold_combat`) and returns together once none of them are
 engaged. See swarm_drone/ENEMY.md's "Hub idle" section for the exact radii and timings.
 
+**The Sniper, Bomber and Ram Corvette patrol the same way (Phase 4, t19)** — same `AnchorIdle`, same `start_engaged`
+test seam, radii 700/1300, 650/1700 and 600/1300, each `lose_radius` above the distance its own cycle opens
+(asserted from config fields). `RETURNING` never interrupts the sniper's DECOY/AIM/LOCK, the bomber's RUN or the
+ram's WIND_UP/CHARGE. See each enemy's ENEMY.md "Hub idle" section.
+
+**The Sniper, Bomber and Ram Corvette are the Phase 4 specialists** — see
+[sniper/ENEMY.md](../../../assault/scenes/enemies/sniper/ENEMY.md),
+[bomber/ENEMY.md](../../../assault/scenes/enemies/bomber/ENEMY.md) and
+[ram_corvette/ENEMY.md](../../../assault/scenes/enemies/ram_corvette/ENEMY.md). Each is a brain + flat config like the
+Phase 3 shooters, and each adds one battlefield mechanic: the Sniper relocates to a fresh firing angle, holds dead still
+through its aim and lock, fires a rail round and breaks away (it holds fire when `LineOfSight` finds a rock in the way);
+the Bomber lays persistent `EnemyOrdnance` across the player's predicted track; the Ram Corvette wears three
+`ArmorPlate`s that only rockets (or a Sniper Shot) break, then charges at the predicted point. **In Assault a
+specialist's life is one attack** (sniper `engage_seconds` 9.0, ram 4.0, bomber 8.0), and each has an *attack-in-budget
+row* proving it reaches its attack state from every level-1 spawn class before its budget expires. **All 50 of level 1's
+sniper / ram / bomber spawns are off rails** (26 / 22 / 2) with their trigger, offset and delay unchanged
+(`test_level1_specialist_spawns.gd`); a rail still works and runs each one's rail fallback. **A Bomber must never spawn in
+an `ENEMIES_CLEARED` section** — its persisted ordnance would hold the section open (a boundary row in
+`test_engagement_deadline.gd`). Cloud Descent's 73.2 s ram is the tightest deadline row (9.60 s of 10 s).
+
 **The Fighter and the Gatling Interceptor are the Phase 3 AI shooters** — see
 [fighter/ENEMY.md](../../../assault/scenes/enemies/fighter/ENEMY.md) and
 [gatling_interceptor/ENEMY.md](../../../assault/scenes/enemies/gatling_interceptor/ENEMY.md). The Fighter
@@ -304,10 +325,13 @@ Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.g
   them would be wrong in one of the two modes; `ProjectileLifetime`'s `max_time`/`max_distance`
   rules are what govern an enemy bullet fired in Open Space, with no rect at all. The cost is that
   a shot fired at an enemy that is in the arena but above the visible top now despawns; that band
-  is off-screen and unaimable, so it is accepted. The sniper's unpooled shot
-  (`enemy_sniper_bullet.tscn`, same script) carries its own `ProjectileLifetime` and arms lazily on
-  its first physics tick, since it is positioned at the muzzle only *after* `add_child()` and is
-  never `reset()`.
+  is off-screen and unaimable, so it is accepted. The Sniper's rail round
+  (`enemy_bullet/rounds/rail_round.tscn`, pooled in the sniper's `RailPool`) carries its own
+  `ProjectileLifetime` (4 s / 2400 px) and joins the per-round sweep through `SniperConfig.rail_speed`
+  and `rail_fallback_speed`. Each AI rail shot also leaves a `RailTrail` (`enemy_bullet/rounds/rail_trail.gd`, a
+  code-built `Line2D` in the round's container): it follows the round until the round's `expired` (connected
+  one-shot, because the pool recycles rather than frees it) or until the round is freed without one (owner death),
+  then fades over `trail_fade` on its own clock and frees itself — it owns itself, never the round.
 
   All of the above is pinned by `tests/integration/test_player_bullet_lifetime.gd` and
   `tests/integration/test_enemy_bullet_lifetime.gd`.
@@ -326,6 +350,7 @@ Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.g
   the Gatling fires Gatling Stream, the **Heavy Shell has no consumer yet**; every other enemy keeps the legacy orange
   `enemy_bullet.tscn` until Ph17's audit. `test_enemy_bullet_lifetime.gd` sweeps every round: `max_distance` over the
   slowest speed any shooter fires it at (read from config fields, never typed) must fit `max_time`.
+- `enemy_ordnance/` — **enemy ordnance** (Ph4): `enemy_ordnance.gd` (`EnemyOrdnance`, an `Area2D` with a `Kind` enum), `gravity_bomb.tscn`, `mine.tscn`, `pursuit_bomb.tscn`, and `enemy_ordnance_scenes.gd` (`EnemyOrdnanceScenes`: the scene constants, `scene_for(kind)`, `pool_size_for(kind, cfg)`). Not an `EnemyBullet` and not a `BaseEnemy` (never in `enemies`, no score). `HurtBox` 512/96 + `Health` 1: any player bullet or rocket **defuses** it (a pop, no blast). A `ProximityArea` (mask 128) is polled each tick once armed; set off, it blinks for `warning_time` then detonates via `ContactBlast.spawn` into its parent. Gravity bomb: straight at `launch` speed, 16 s / 1800 px. Mine: ejected for 0.3 s, then stationary, fizzles (no blast) at `mine_life`, 10 s backstop. Pursuit bomb: steers at `turn_rate` for `steer_window`, then freezes its heading and accelerates, 10 s / 2400 px. One accumulated clock, no `Timer`. Pools should set `persist_after_owner_death`. Its speeds are NOT in `_every_shipped_enemy_bullet_speed()`; `test_enemy_bullet_lifetime.gd` has per-kind rows. Behaviour: `tests/integration/test_enemy_ordnance.gd`. The Bomber (`bomber/bomber.gd`, `Bomber.drop()`) takes it from three `persist_after_owner_death` pools; on a rail it drops a gravity bomb DOWN every `rail_bomb_interval`; off rails `BomberBrain` flies bombing runs (t10: mine walls placed by distance on an undamped lead, gravity / pursuit bombs on a damped one — `bomber/ENEMY.md`).
 - `missiles/` — `homing/` and `warhead/` secondary munitions fired by `RocketState`.
 - `piercing_beam/` — the sustained beam projectile for the BEAM weapon behavior.
 
@@ -431,7 +456,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `razor_drone/razor_drone_brain.gd`). Roster: bomber, bonus_drone, razor_drone,
-gunship, gatling_interceptor, fighter, ram_ship, sniper_enemy, swarm_drone. For the
+gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).

@@ -8,7 +8,7 @@
 ##
 ## `_ENEMY_ROOT`'s subdirectories are swept for `<dir>/<dir>.tscn`, and only kept when the
 ## INSTANTIATED root `is BaseEnemy` — not merely "the directory has a scene", which is what
-## excludes `bomber/bomb.tscn` (a HitBox-less projectile, not an enemy) without a hand-written
+## excludes `enemy_ordnance/*.tscn` and similar non-enemy scenes without a hand-written
 ## skip list. Same sweep shape as `test_config_instance_isolation.gd`, checking type instead of
 ## config presence. A new enemy directory is covered automatically the day it lands.
 ##
@@ -17,11 +17,12 @@
 ## own file header), so it cannot satisfy `is BaseEnemy` and has no `died`/`was_killed`/scoring
 ## surface to pin. Only its hurtbox mask is comparable.
 ##
-## ── Why ram_ship and space_station are not in the generic damage/death sweep ─────────────────
+## ── Why ram_corvette and space_station are not in the generic damage/death sweep ─────────────────
 ##
-## `RamShip._on_received_damage()` (`ram_ship.gd:27-31`) does not call `health.decrease()` on its
-## first hit at all — that hit only arms it (mask 33 -> 97) — so a single lethal-sized hit behaves
-## completely differently there than on every other enemy. It gets its own dedicated test.
+## `RamCorvette._on_received_damage()` deflects every hit while any of its three `ArmorPlate`s lives,
+## exactly like the station's core does while a turret lives, so a single lethal-sized hit on a fresh
+## Corvette deals nothing. Its plate-by-plate vulnerability (bullets glance off, each rocket breaks the
+## plate it hits, only then does the hull take damage) is owned by `test_ram_corvette.gd`.
 ##
 ## `SpaceStation` overrides both `_on_received_damage()` (deflects everything while a turret is
 ## alive) and `_on_health_changed()` (holds the wreck in the tree for `death_duration` seconds
@@ -48,27 +49,22 @@ extends GutTest
 
 const _ENEMY_ROOT := "res://assault/scenes/enemies"
 const _STATION_TURRET_SCENE := "res://assault/scenes/enemies/space_station/station_turret.tscn"
-const _RAM_SHIP_SCENE := "res://assault/scenes/enemies/ram_ship/ram_ship.tscn"
 
 ## `DefenseProfile.apply_to()`: `hurt_box.collision_mask = 97 | 1024` (the default profile's mask).
 ## Spelled out rather than computed so a change to that value is what this test is pinned against,
 ## not a copy of the same expression.
 const _DEFAULT_MASK_AFTER_READY := 1121
 
-## `ram_ship.gd:21`, applied after `super._ready()` sets the default above.
-const _RAM_MASK_BEFORE_HIT := 33
-## `ram_ship.gd:45`, applied inside `_enter_damaged_state()` on the first received hit.
-const _RAM_MASK_AFTER_HIT := 97
-
 ## `bomber`, `bonus_drone`, `razor_drone`, `gunship`, `gatling_interceptor`, `swarm_drone`,
-## `fighter`, `ram_ship`, `sniper_enemy`, `space_station`. A sweep that finds fewer has
+## `fighter`, `ram_corvette`, `sniper`, `space_station`. A sweep that finds fewer has
 ## broken, and every assertion below is vacuous on a broken sweep.
 const _MIN_ROSTER_SIZE := 10
 
 ## Enemies whose damage/death flow diverges from the generic BaseEnemy path enough that a shared
 ## loop would either be meaningless (space_station never frees on the lethal frame) or wrong
-## (ram_ship's first hit deals no damage at all). Both get their own dedicated test below.
-const _EXCLUDED_FROM_GENERIC_DAMAGE_FLOW := ["ram_ship", "space_station"]
+## (ram_corvette's hull deflects every hit while a plate lives, like the station's core). Each is
+## owned by its own suite (`test_station_death_sequence.gd`, `test_ram_corvette.gd`).
+const _EXCLUDED_FROM_GENERIC_DAMAGE_FLOW := ["ram_corvette", "space_station"]
 
 
 ## `{name, scene}` per top-level directory under `_ENEMY_ROOT` whose `<dir>/<dir>.tscn` exists and
@@ -117,11 +113,9 @@ func test_hurtbox_mask_after_ready_matches_the_pinned_value() -> void:
 		if entity == null:
 			continue
 		checked += 1
-		# ram_ship is the one enemy whose scene-authored _ready() narrows the mask BaseEnemy
-		# just set — see test_ram_ship_hurtbox_mask_flips_after_its_first_hit below.
-		var expected: int = _RAM_MASK_BEFORE_HIT if entry["name"] == "ram_ship" else _DEFAULT_MASK_AFTER_READY
+		# No enemy narrows the mask any more: the Ram Corvette's armour is a deflection rule (t16).
 		assert_eq(
-			entity.hurt_box.collision_mask, expected,
+			entity.hurt_box.collision_mask, _DEFAULT_MASK_AFTER_READY,
 			"%s: post-_ready() hurtbox mask must equal the pinned value" % entry["name"]
 		)
 	assert_gte(
@@ -130,7 +124,7 @@ func test_hurtbox_mask_after_ready_matches_the_pinned_value() -> void:
 	)
 
 
-## `entity` is typed `Node`/`BaseEnemy` throughout this file, deliberately never `RamShip` or
+## `entity` is typed `Node`/`BaseEnemy` throughout this file, deliberately never `RamCorvette` or
 ## `StationTurret`. Statically referencing either of those two class names from this script — even
 ## in a branch that never runs — makes the GDScript compiler resolve them at script-load time, and
 ## in this suite that leaves `station_turret_destroyed.png` and its `RID`s still allocated at
@@ -151,22 +145,6 @@ func test_station_turret_hurtbox_mask_matches_the_pinned_value() -> void:
 		hurt_box.collision_mask, _DEFAULT_MASK_AFTER_READY,
 		"the station turret's post-_ready() hurtbox mask must equal the pinned value"
 	)
-
-
-func test_ram_ship_hurtbox_mask_flips_after_its_first_hit_and_never_reverts() -> void:
-	var ram := _spawn(_RAM_SHIP_SCENE) as BaseEnemy
-	assert_not_null(ram, "ram_ship.tscn root is not a BaseEnemy")
-	if ram == null:
-		return
-	assert_eq(ram.hurt_box.collision_mask, _RAM_MASK_BEFORE_HIT, "mask before any hit")
-
-	ram.hurt_box.received_damage.emit(9999)
-	assert_eq(ram.hurt_box.collision_mask, _RAM_MASK_AFTER_HIT, "mask after the first received hit")
-
-	# Boundary: a second hit (now processed as ordinary damage, not an arming hit) must not
-	# revert the mask.
-	ram.hurt_box.received_damage.emit(1)
-	assert_eq(ram.hurt_box.collision_mask, _RAM_MASK_AFTER_HIT, "mask must never revert once armed")
 
 
 # ── 2. Damage -> hit flash -> died -> queue_free ──────────────────────────────
@@ -230,41 +208,6 @@ func test_non_lethal_damage_does_not_emit_died() -> void:
 	assert_gte(checked, 1, "roster sweep found no enemy that can take non-lethal damage")
 
 
-func test_ram_ships_first_hit_only_arms_it_and_deals_no_damage() -> void:
-	var ram := _spawn(_RAM_SHIP_SCENE) as BaseEnemy
-	assert_not_null(ram, "ram_ship.tscn root is not a BaseEnemy")
-	if ram == null:
-		return
-	watch_signals(ram)
-	assert_eq(ram.health.max_health, 999, "ram_config.tres is the source of truth for this test")
-
-	ram.hurt_box.received_damage.emit(9999)
-
-	# _enter_damaged_state() (ram_ship.gd:41-49) resets HP to a flat 100/100 as part of arming —
-	# not "no change" — so two ordinary bullets can finish an otherwise 999-HP hull. This is the
-	# damage amount, not health.decrease(), so `amount_changed`/`_on_health_changed` never fire.
-	assert_eq(ram.health.max_health, 100, "arming resets max_health to a flat 100")
-	assert_eq(ram.health.current_health, 100, "arming resets current_health to a flat 100")
-	assert_signal_not_emitted(ram, "died", "the arming hit must not kill the ram ship")
-	assert_false(ram.was_killed)
-	assert_false(ram.is_queued_for_deletion())
-
-
-func test_ram_ship_dies_on_a_lethal_hit_after_being_armed() -> void:
-	var ram := _spawn(_RAM_SHIP_SCENE) as BaseEnemy
-	assert_not_null(ram, "ram_ship.tscn root is not a BaseEnemy")
-	if ram == null:
-		return
-	watch_signals(ram)
-
-	ram.hurt_box.received_damage.emit(9999)  # arms it; _enter_damaged_state() resets HP to 100/100
-	ram.hurt_box.received_damage.emit(ram.health.max_health)  # now ordinary lethal damage
-
-	assert_signal_emit_count(ram, "died", 1, "died must fire exactly once")
-	assert_true(ram.was_killed)
-	assert_true(ram.is_queued_for_deletion())
-
-
 # ── 3. Scoring fields copied from config ──────────────────────────────────────
 
 func test_scoring_fields_are_copied_from_config() -> void:
@@ -276,7 +219,7 @@ func test_scoring_fields_are_copied_from_config() -> void:
 			continue
 		var cfg: Variant = entity.get("config")
 		if not (cfg is ShipConfig):
-			continue  # sniper_enemy has no `config` property at all.
+			continue
 		checked += 1
 		var ship_cfg := cfg as ShipConfig
 		assert_eq(entity.score_value, ship_cfg.score_value, "%s: score_value" % entry["name"])
@@ -287,21 +230,23 @@ func test_scoring_fields_are_copied_from_config() -> void:
 		assert_eq(
 			entity.counts_as_escape, ship_cfg.counts_as_escape, "%s: counts_as_escape" % entry["name"]
 		)
-	assert_gte(checked, _MIN_ROSTER_SIZE - 1, "roster sweep too small (sniper_enemy is the one exception)")
+	assert_gte(checked, _MIN_ROSTER_SIZE, "roster sweep too small")
 
 
-## sniper_enemy has no `config` property, so BaseEnemy's generic copy never runs for it — it
-## hardcodes its score instead (`sniper_enemy.gd:45`). Pinned on its own since the generic sweep
-## above cannot see it.
-func test_sniper_enemy_hardcodes_its_score_value() -> void:
-	var sniper := _spawn("res://assault/scenes/enemies/sniper_enemy/sniper_enemy.tscn")
+## The Sniper takes its score from `SniperConfig` like the rest of the roster (it used to hardcode 50 in
+## `_ready()`, because it had no `config` property). Pinned on its own, against the shipped `.tres`, so the
+## value is the legacy 50 and not whatever a future config default happens to be.
+func test_sniper_score_value_is_copied_from_its_config() -> void:
+	var sniper := _spawn("res://assault/scenes/enemies/sniper/sniper.tscn")
+	assert_true(sniper.get("config") is SniperConfig, "the sniper now has a config property")
+	assert_eq(sniper.get("score_value"), (load("res://assault/scenes/enemies/sniper/sniper_config.tres") as SniperConfig).score_value)
 	assert_eq(sniper.get("score_value"), 50)
 
 
 # ── 4. AnimatedSprite2D 180° flip ─────────────────────────────────────────────
 
 func test_animated_sprite_is_flipped_180_degrees() -> void:
-	for name in ["fighter", "ram_ship"]:
+	for name in ["fighter"]:
 		var entity := _spawn("%s/%s/%s.tscn" % [_ENEMY_ROOT, name, name])
 		var sprite := entity.get_node_or_null("AnimatedSprite2D") as Node2D
 		assert_not_null(sprite, "%s: expected an AnimatedSprite2D child" % name)
@@ -315,7 +260,7 @@ func test_animated_sprite_is_flipped_180_degrees() -> void:
 func test_enemies_without_an_animated_sprite_are_unaffected_by_the_flip() -> void:
 	var checked := 0
 	for entry in _sweep():
-		if entry["name"] in ["fighter", "ram_ship"]:
+		if entry["name"] == "fighter":
 			continue
 		var entity := _spawn(entry["scene"])
 		checked += 1
@@ -323,7 +268,7 @@ func test_enemies_without_an_animated_sprite_are_unaffected_by_the_flip() -> voi
 			entity.get_node_or_null("AnimatedSprite2D"),
 			"%s: expected no AnimatedSprite2D child" % entry["name"]
 		)
-	assert_gte(checked, _MIN_ROSTER_SIZE - 2, "roster sweep too small")
+	assert_gte(checked, _MIN_ROSTER_SIZE - 1, "roster sweep too small")
 
 
 # ── 5. ContactProfile resolution (task cmuj4y8qx006cp52x77tfozc2, INTENT) ─────────────────────────
@@ -334,11 +279,12 @@ func test_enemies_without_an_animated_sprite_are_unaffected_by_the_flip() -> voi
 
 const _CONTACT_FIXTURE := preload("res://tests/helpers/contact_fixture.gd")
 
-## Phase 2 enemies that author their own `ContactProfile` in the scene, with the mode they declare. Every
+## Phase 2+ enemies that author their own `ContactProfile` in the scene, with the mode they declare. Every
 ## other enemy in the sweep is legacy and must resolve the default COLLISION.
 const _AUTHORED_CONTACT_MODES := {
 	"swarm_drone": ContactProfile.Mode.EXPLOSIVE,
 	"razor_drone": ContactProfile.Mode.RAMMING,
+	"ram_corvette": ContactProfile.Mode.ARMOR,
 }
 
 

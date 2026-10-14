@@ -1,0 +1,42 @@
+[gd_resource type="Resource" script_class="RamCorvetteConfig" load_steps=2 format=3 uid="uid://dvrneif71d0rc"]
+
+[ext_resource type="Script" uid="uid://dnag07jm0f7xa" path="res://assault/scenes/enemies/ram_corvette/ram_corvette_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 120
+collision_damage = 50
+score_value = 35
+plate_health = 50
+exposed_collision_damage = 60
+armor_shove_speed = 260.0
+cruise_speed = 280.0
+acceleration = 500.0
+max_turn_rate = 2.2
+engage_seconds = 4.0
+exit_speed = 560.0
+engage_range = 420.0
+assault_side_offset = 240.0
+line_up_cap = 0.5
+line_up_tolerance_deg = 8.0
+lead_min = 0.15
+lead_max = 0.6
+braking = 1600.0
+crawl_speed = 20.0
+wind_up_seconds = 0.65
+windup_track_fraction = 0.6
+windup_track_rate = 0.8
+charge_speed = 620.0
+overshoot = 220.0
+charge_max_time = 1.45
+wide_turn_rate = 1.4
+wide_turn_exit_angle_deg = 30.0
+glow_fade_seconds = 0.3
+stagger_seconds = 0.4
+exposed_cruise_speed = 340.0
+exposed_charge_speed = 700.0
+evade_cone_deg = 20.0
+evade_range = 600.0
+evade_speed = 180.0
+perceive_radius = 600.0
+lose_radius = 1300.0

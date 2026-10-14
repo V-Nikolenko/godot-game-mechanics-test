@@ -31,5 +31,4 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 ## `bullet.gd::_hit_is_deflected` — a rocket gets the same exemption a bullet already has, so it
 ## survives crossing the boss's armoured core instead of detonating on it before reaching a turret.
 func _hit_is_deflected(area: Area2D) -> bool:
-	var target := area.get_parent()
-	return target != null and target.has_method("is_armored") and target.is_armored()
+	return ArmorQuery.deflects(area, get_node_or_null("HitBox") as HitBox)

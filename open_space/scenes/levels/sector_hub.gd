@@ -1,7 +1,7 @@
 # open_space/scenes/levels/sector_hub.gd
 extends Node2D
 
-## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair and a Gatling pair, each
+## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair and a Sniper, a Bomber and a Ram Corvette, each
 ## patrolling its own anchor point, and assigns the planet config.
 ## To change this planet's missions, background, or sprite — edit edelia.tres.
 ## To use a different config, change the path in _configure_planet().
@@ -20,6 +20,10 @@ const RAZOR_DRONE: PackedScene = preload("res://assault/scenes/enemies/razor_dro
 const FIGHTER: PackedScene = preload("res://assault/scenes/enemies/fighter/fighter.tscn")
 const GATLING_INTERCEPTOR: PackedScene = preload("res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn")
 
+const SNIPER: PackedScene = preload("res://assault/scenes/enemies/sniper/sniper.tscn")
+const BOMBER: PackedScene = preload("res://assault/scenes/enemies/bomber/bomber.tscn")
+const RAM_CORVETTE: PackedScene = preload("res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn")
+
 ## Fighters and Gatlings patrol in pairs, a squad of two each (epic plan §2.10).
 const SHOOTER_SQUAD_SIZE := 2
 
@@ -37,6 +41,13 @@ const SHOOTER_SQUAD_SIZE := 2
 @export var fighter_anchor_bearing_deg: float = 180.0
 @export var gatling_anchor_bearing_deg: float = 0.0
 
+## The Sniper, Bomber and Ram Corvette (epic plan §2.10, phase 4) patrol a third, widest ring: their
+## `perceive_radius` is 600-700 px. 315 deg stays free - it is the diagonal closest to the pickup bench.
+@export var specialist_ring_radius: float = 1700.0
+@export var sniper_anchor_bearing_deg: float = 135.0
+@export var bomber_anchor_bearing_deg: float = 45.0
+@export var ram_anchor_bearing_deg: float = 225.0
+
 @onready var enemy_container: Node2D = $EnemyContainer
 
 func _ready() -> void:
@@ -52,12 +63,45 @@ func _spawn_patrol() -> void:
 	_spawn_razor(_anchor(razor_anchor_bearing_deg), rng)
 	_spawn_fighter_squad(_shooter_anchor(fighter_anchor_bearing_deg), rng)
 	_spawn_gatling_squad(_shooter_anchor(gatling_anchor_bearing_deg), rng)
+	# Appended after every existing draw, so the groups above keep their seeds.
+	_spawn_sniper(_specialist_anchor(sniper_anchor_bearing_deg), rng)
+	_spawn_bomber(_specialist_anchor(bomber_anchor_bearing_deg), rng)
+	_spawn_ram_corvette(_specialist_anchor(ram_anchor_bearing_deg), rng)
 
 func _anchor(bearing_deg: float) -> Vector2:
 	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * patrol_ring_radius
 
 func _shooter_anchor(bearing_deg: float) -> Vector2:
 	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * shooter_ring_radius
+
+func _specialist_anchor(bearing_deg: float) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * specialist_ring_radius
+
+## A lone specialist: `patrol_anchor` and the seed are set before `add_child()`, so the brain's `_start()`
+## builds its hub idle around that anchor.
+func _spawn_sniper(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var sniper := SNIPER.instantiate() as Sniper
+	sniper.global_position = anchor
+	var brain := sniper.get_node("Brain") as SniperBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(sniper)
+
+func _spawn_bomber(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var bomber := BOMBER.instantiate() as Bomber
+	bomber.global_position = anchor
+	var brain := bomber.get_node("Brain") as BomberBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(bomber)
+
+func _spawn_ram_corvette(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var ram := RAM_CORVETTE.instantiate() as RamCorvette
+	ram.global_position = anchor
+	var brain := ram.get_node("Brain") as RamCorvetteBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(ram)
 
 ## A fighter pair: one shared `SquadController` and `patrol_anchor`, both set before `add_child()`
 ## (`Fighter._ready()` joins the squad itself). Drawn from `rng` after the drones, so adding the

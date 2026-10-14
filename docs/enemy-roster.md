@@ -126,109 +126,63 @@ b.drone().at(-150, 400)
 
 ---
 
-### `ram` — Ram Ship
+### `ram` — Ram Corvette
 
 **Builder:** `b.ram()`  
-**Scene:** `ram_ship.tscn`  
-**Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
-**Shoots:** No — high collision damage.  
-**HP:** Bullet-proof until hit by a missile, then 100 HP (two bullets)  
-**Score:** Medium
+**Scene:** `ram_corvette.tscn`  
+**Movement:** AI (`RamCorvetteBrain`): approaches at `cruise_speed` (in Assault toward a point beside and above/below the player, so its charge is diagonal), lines up on where the player will be, winds up with its plates glowing (0.65 s, a crawl - the player's window), rams in a straight line 220 px past that point and swings round in a wide 1.4 rad/s turn to go again. A plate broken during its line-up or wind-up staggers it (0.4 s, charge cancelled). Exposed: cruise 340, charge 700, strafes out of the player's aim. In Assault it gets one charge per life and leaves after `engage_seconds` (4.0 s), straight along its charge if the time runs out mid-charge. **Level 1 gives it no rail in any section (t21, t22)**; on a rail its brain is suspended and its ARMOR contact stays armed.  
+**Shoots:** No — contact damage 50 armoured (with a shove), 60 once exposed.  
+**HP:** three armour plates (50 each) over a 120 HP hull. Bullets glance off plates and hull (not consumed); each rocket breaks the plate it hits; a Sniper Shot chips a plate (40) and flies on; only with every plate gone does the hull take damage. One homing volley strips all three plates.  
+**Score:** Medium (35)
 
-**Config fields** (`RamShipConfig`):
+**Config fields** (`RamCorvetteConfig`, flat):
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `movement_speed` | 100.0 | Irrelevant — use `.move()` speed. |
+| `max_health` | 120 | The hull, once exposed. |
+| `plate_health` | 50 | Each of the three plates. |
+| `collision_damage` / `exposed_collision_damage` | 50 / 60 | Contact, armoured / exposed. |
+| `armor_shove_speed` | 260.0 | ARMOR contact shove while armoured; 0 once exposed. |
+| `cruise_speed` / `acceleration` / `max_turn_rate` | 280 / 500 / 2.2 | Mover caps. |
+| `engage_seconds` / `exit_speed` | 4.0 / 560 | Assault budget and exit (4.5 / 500 until t22: both pre-approved levers, for Cloud Descent's ENEMIES_CLEARED deadline). |
+| `engage_range` / `assault_side_offset` | 420 / 240 | LINE_UP range; Assault approach offset (each axis). |
+| `line_up_cap` / `braking` | 0.5 / 1600 | Max line-up; the hard brake used only while it stops to aim. |
+| `wind_up_seconds` / `crawl_speed` | 0.65 / 20 | The telegraph. |
+| `charge_speed` / `exposed_charge_speed` | 620 / 700 | The ram. |
+| `overshoot` / `charge_max_time` | 220 / 1.45 | Past the aim point; hard cap on the boost. |
+| `wide_turn_rate` | 1.4 | rad/s after a charge. |
+| `exposed_cruise_speed` | 340 | Once every plate is gone. |
+| `evade_cone_deg` / `evade_range` / `evade_speed` | 20 / 600 / 180 | Exposed strafe out of the player's aim. |
+| `stagger_seconds` | 0.4 | Charge cancelled by a broken plate. |
 
 **Examples:**
 ```gdscript
-# Classic straight dive
-b.ram().at(0, -400).move(b.straight(280))
+# Spawn it and let it fly its own charges (no .move()) - level 1's shape
+b.ram().at(0, -400)
 
-# Angled pair from the sides
-b.ram().at(-255, -400).move(b.straight(350))
-b.ram().at( 255, -400).move(b.straight(350)).delay(0.5)
+# A pair from the sides, staggered
+b.ram().at(-255, -400)
+b.ram().at( 255, -400).delay(0.5)
 
 # Surprise from below
-b.ram().at(0, 400).move(b.straight(260, PI))
+b.ram().at(0, 400)
+
+# On a rail (legacy shape): the brain is suspended, the ARMOR contact stays armed, nothing else happens
+b.ram().at(0, -400).move(b.straight(280))
 ```
 
 ---
 
-### `sniper` — Sniper Skimmer
+### `sniper` — Sniper (alias `sniper_enemy`)
 
-**Builder:** `b.sniper()`  
-**Scene:** `sniper_skimmer.tscn`  
-**Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
-**Shoots:** Yes — fires once at midpoint of its travel. Always aims at player.  
-**HP:** Low  
-**Score:** Low–Medium
+**Builder:** `b.sniper()` (alias `b.sniper_enemy()`)  
+**Scene:** `sniper.tscn`  
+**Movement:** AI (`SniperBrain`): a relocation cycle — flies to its nearest legal firing point, settles, aims (1.3 s, dim line) and locks (0.5 s, bright line) standing still, fires one rail round (with a fading `RailTrail`), breaks contact, then relocates to a new firing angle at least 45° round the player, never across it; it holds fire when a rock blocks its line of sight. In Assault the firing points stay a margin inside the corridor and a budget expiry in AIM/LOCK waits for the shot. **Level 1 gives it no rail in any section (t21, t22)**; a rail still suspends the brain and `SniperTelegraph` runs the legacy cycle (aim 2.0 s, lock 0.5 s, a 1400 px/s round, 5 shots), starting at spawn. There is no fly-in constant to match any more.  
+**Shoots:** Yes — one rail round per telegraphed shot (`rail_round.tscn`).  
+**Assault exit:** leaves after `engage_seconds` (9.0 s).  
+**HP:** 60 · **Score:** 50  
 
-**Config fields** (`SniperConfig`):
-
-| Field | Default | Notes |
-|-------|---------|-------|
-| `movement_speed` | 130.0 | Irrelevant — use `.move()` speed. |
-
-**Notes:**
-- Fires exactly once during its path — no burst, no repeat.
-- Typically use `.shoot_at_player()` (the default behaviour).
-- Use `.free_after()` when entering from off-screen sides.
-
-**Examples:**
-```gdscript
-# Diagonal skimmer from top-left
-b.sniper().at(-185, -400).move(b.straight(82, PI / 10)).shoot_at_player()
-
-# From off-screen side — must free explicitly
-b.sniper().at(-500, 50).move(b.straight(180, PI / 2)).shoot_at_player().free_after(4.0)
-
-# From below as an ambush
-b.sniper().at(-260, 400).move(b.straight(100, -PI / 2 - PI / 12)).shoot_at_player().free_after(5.5)
-```
-
----
-
-### `sniper_enemy` — Sniper Enemy (hovering)
-
-**Builder:** `b.sniper_enemy()`  
-**Scene:** `sniper_enemy.tscn`  
-**Movement:** Must use a **sequence movement**: fly in → hold → fly out.  
-**Shoots:** Yes — fires `shot_count` aimed sniper shots while hovering.  
-**HP:** Medium  
-**Score:** Medium
-
-**Behaviour phases:**
-1. `APPROACH` — descends into position (nose-down). Duration = first `straight()` step.
-2. `AIM` → `LOCK` → `FIRE` — cycles `shot_count` times. Each cycle: 2.0 s aim + 0.5 s lock.
-3. `IDLE` — `EnemyPathMover`'s exit step (last `straight()`) retreats the ship.
-
-**Key constant:** `FLY_IN_TIME = 2.5 s` — the approach step **must** be exactly 2.5 s duration.  
-**Hold duration formula:** `shot_count × 2.5 s` minimum (5 shots × 2.5 = 13 s → use `hold(13.0)`).
-
-**Exports:**
-
-| Field | Default | Notes |
-|-------|---------|-------|
-| `shot_count` | 5 | Override via `.prop("shot_count", N)`. |
-
-**Examples:**
-```gdscript
-# Standard 5-shot hovering sniper
-b.sniper_enemy().at(-120, -500).move(b.sequence([
-    b.straight(150, 0.0, 2.5),   # fly in (exactly 2.5 s)
-    b.hold(13.0),                 # hover (5 shots × 2.5 s)
-    b.straight(220, PI),          # retreat upward
-]))
-
-# 3-shot variant (holds for 7.5 s)
-b.sniper_enemy().at(120, -500).move(b.sequence([
-    b.straight(150, 0.0, 2.5),
-    b.hold(7.5),
-    b.straight(220, PI),
-])).prop("shot_count", 3)
-```
+See `assault/scenes/enemies/sniper/ENEMY.md`.
 
 ---
 
@@ -367,24 +321,33 @@ b.wave(50.0, [
 
 **Builder:** `b.bomber()`  
 **Scene:** `bomber.tscn`  
-**Movement:** Delegated to `EnemyPathMover`. **Always add `.move()`.**  
-**Shoots:** Yes — drops bombs at `bomb_interval`.  
-**HP:** Medium–High  
-**Score:** Medium–High
+**Movement:** AI-driven (`BomberBrain` + `EnemyMover`); `.move()` puts it on a rail, where it drops a gravity bomb DOWN every `rail_bomb_interval`. Off rails it flies bombing runs (Phase 4 t10): a mine wall across where a moving player is heading, a gravity bomb on a slow close player, a pursuit bomb on a far or boosting one, then an escape arc — see `bomber/ENEMY.md`. Level 1 spawns it off rails since t21.  
+**Shoots:** Yes — gravity bombs, mines, pursuit bombs (`EnemyOrdnance`), shootable.  
+**HP:** 150 (a wide 96 × 44 body: the wings are shootable); every bomb, mine and pursuit bomb it leaves can be shot down  
+**Score:** 80 (ordnance scores nothing)
 
 **Config fields** (`BomberConfig`):
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `movement_speed` | 80.0 | Irrelevant — use `.move()` speed. |
-| `bomb_interval` | 1.2 s | Seconds between bombs. |
+| `max_speed` | 240.0 | Transit speed. |
+| `run_speed` | 170.0 | Bombing-run speed. |
+| `rail_bomb_interval` | 1.2 s | Seconds between bombs while on a rail. |
+
+(Plus the ordnance and prediction fields: read `bomber_config.gd`.)
 
 **Examples:**
 ```gdscript
-# Slow straight dive with escort drones
-b.bomber().at(0, -400).move(b.straight(82)).shoot_at_player()
-b.drone().at(-72, -400).move(b.sine(170, -30)).delay(0.4)
-b.drone().at( 72, -400).move(b.sine(170,  30)).delay(0.4)
+# Spawn it and let it fly its own bombing run (no .move()) - level 1's shape
+b.bomber().at(0, -400)
+
+# With escort drones (the drones are AI too)
+b.bomber().at(0, -400)
+b.drone().at(-72, -400).delay(0.4)
+b.drone().at( 72, -400).delay(0.4)
+
+# On a rail (legacy shape): a gravity bomb straight down every rail_bomb_interval
+b.bomber().at(0, -400).move(b.straight(82))
 ```
 
 ---
@@ -504,9 +467,9 @@ b.drone().formation(b.cluster_formation(3, 30)).at(0, -400)
 
 ## Enemy Rounds (the bullet family, Ph3)
 
-`assault/scenes/projectiles/enemy_bullet/rounds/` holds four **pooled** enemy rounds, each an inherited scene of
+`assault/scenes/projectiles/enemy_bullet/rounds/` holds five **pooled** enemy rounds, each an inherited scene of
 `enemy_bullet.tscn` (so each is an `EnemyBullet` with a `ProjectileLifetime`). `EnemyRounds` (`enemy_rounds.gd`) holds
-the four `PackedScene` constants and `pool_size_for()`. A shooter picks one by giving its `BulletPool.bullet_scene`
+the five `PackedScene` constants and `pool_size_for()`. A shooter picks one by giving its `BulletPool.bullet_scene`
 that scene — there is no per-bullet script and no per-round retuning.
 
 | Round | Constant | Scene speed | Damage | Lifetime (`max_time` / `max_distance`) | Look | Used by |
@@ -514,17 +477,25 @@ that scene — there is no per-bullet script and no per-round retuning.
 | Pulse | `EnemyRounds.PULSE` | 300 | 8 | 8 s / 1400 px | red-pink bolt, 3 px wide | Fighter (AIMED burst) |
 | Scatter | `EnemyRounds.SCATTER` | 420 | 6 | 2 s / 450 px | short pink pellet, 4 px wide, 2 px hitbox | Fighter (FORWARD burst) |
 | Gatling Stream | `EnemyRounds.GATLING_STREAM` | 240 | 4 | 8 s / 1400 px | thin red streak, 2 px wide | Gatling Interceptor |
-| Heavy Shell | `EnemyRounds.HEAVY_SHELL` | 160 | 20 | 12 s / 1800 px | big pale-pink slug with a dark rim | **nobody yet** (first consumer: Ph4 Bomber/Ram or Ph10 Gunship) |
+| Rail | `EnemyRounds.RAIL` | 2200 | 28 | 4 s / 2400 px | white-hot 3 px core with a glow, and a fading `RailTrail` behind it | Sniper (AI shot; its rail fallback fires 1400 px/s for 25) |
+| Heavy Shell | `EnemyRounds.HEAVY_SHELL` | 160 | 20 | 12 s / 1800 px | big pale-pink slug with a dark rim | **nobody yet** (Ph4's Bomber and Ram fire no rounds; first consumer: Ph10 Heavy Gunship) |
 
 - **One pool per round per shooter**, a direct child of the enemy root. Size it with
   `EnemyRounds.pool_size_for(max_burst, round_lifetime, min_burst_period)`; a self-timed rail pattern is a burst of 1
   at its own interval. The shooter's pattern may still override `speed` / `damage` on the acquired bullet;
   `EnemyBullet.reset()` restores the scene's own authored values on reuse.
-- `enemy_bullet.tscn` itself stays the legacy orange bolt, and every other enemy (Gunship, Bomber, Sniper, Ram, the
-  drones' pulse shots) keeps it until the Ph17 audit.
+- `enemy_bullet.tscn` itself stays the legacy orange bolt, and every other shooter (Gunship, the drones' pulse shots)
+  keeps it until the Ph17 audit. The Bomber and the Ram fire no rounds.
 - Each round's `max_distance / slowest speed any shooter fires it at` must fit its `max_time`
   (`test_enemy_bullet_lifetime.gd`), reading the speeds from the shooters' config fields.
 - Tests: `tests/integration/test_enemy_rounds.gd` (shape, reset, lifetimes, the Heavy Shell fixture shooter).
+
+### Enemy ordnance (Ph4)
+
+Not rounds: `assault/scenes/projectiles/enemy_ordnance/` holds the Bomber's gravity bomb, proximity mine and pursuit
+bomb (`EnemyOrdnance`, an `Area2D`; not an `EnemyBullet`, not in `enemies`, never scored). Any player hit defuses one.
+Its pools set `persist_after_owner_death`, so what a Bomber dropped outlives it. See `docs/BULLET_POOL.md` and
+`bomber/ENEMY.md`.
 
 ---
 
@@ -532,10 +503,10 @@ that scene — there is no per-bullet script and no per-round retuning.
 
 | Rule | Detail |
 |------|--------|
-| **Always `.move()` path-following enemies** | `ram`, `sniper`, `sniper_enemy`, `bomber` (the `fighter` and `gatling_interceptor` are AI enemies; `.move()` puts them on a rail) — they have no self-managed movement. |
-| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship`, `fighter`, `gatling_interceptor` — attaching `EnemyPathMover` suspends their AI. `fighter` and `gatling_interceptor` fall back to the legacy weapon on a rail (so the station's reinforcements still fire); everything else in this list goes quiet. |
+| **Always `.move()` path-following enemies** | None left on the AI roster. `ram`, `sniper` / `sniper_enemy` and `bomber` are AI enemies since Phase 4 (level 1 spawns them with no `.move()` in every section, t21 / t22); a rail still works and runs each one's rail fallback (sniper telegraph cycle, bomber rail bombs, ram straight line). |
+| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship`, `fighter`, `gatling_interceptor`, `ram`, `sniper`, `bomber` — attaching `EnemyPathMover` suspends their AI. `fighter`, `gatling_interceptor`, `sniper` and `bomber` fall back to a legacy weapon on a rail (so the station's reinforcements still fire); the ram keeps its ARMOR contact armed; the rest go quiet. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
-| **`sniper_enemy` needs a `sequence()`** | The approach step must be `straight(speed, 0.0, 2.5)` (exactly 2.5 s). Hold step must cover `shot_count × 2.5 s`. |
+| **`sniper_enemy` on a rail** | No fly-in constant any more: a rail suspends the brain and the telegraph cycle starts at spawn. Without `.move()` it runs its AI relocation loop. |
 | **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |
 | **Offsets are design-unit (640×360 space)** | Do NOT multiply by 2. `WaveManager` handles the `WORLD_SCALE` conversion. |
 
@@ -574,8 +545,8 @@ above. Things to know if you edit that table (`station_reinforcements.gd::_build
   A test enforces that.
 - **Every entry needs `.free_after(…)`.** The default `FREE_ON_SCREEN_EXIT` only culls a ship that
   has already been on screen once, so one that never arrives would hold `ENEMIES_CLEARED` open.
-- **A squad ship must be killable by the player's primary weapon.** `ram_ship` is not:
-  `ram_ship.gd` narrows its HurtBox mask to 33, which excludes the bullet's layer 64. A test
-  checks every ship in the table for this.
+- **A squad ship must be killable by the player's primary weapon.** The Ram Corvette is not: its hull
+  deflects every bullet until rockets have broken all three of its plates. A test checks every ship in
+  the table keeps the bullet layer in its HurtBox mask (the legacy ram narrowed it to 33).
 
 Behaviour and constraints: [`space_station/ENEMY.md`](../assault/scenes/enemies/space_station/ENEMY.md).

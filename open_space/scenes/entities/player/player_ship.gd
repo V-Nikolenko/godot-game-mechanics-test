@@ -255,6 +255,14 @@ func _input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 			return  ## Consumed by module.
 
+## Duck-typed shove (ContactProfile ARMOR, `shove_speed`). A momentum ship just takes the impulse
+## and `damping` bleeds it. Deliberately NOT `PlayerBase.apply_knockback()` + `apply_knockback_motion()`,
+## which clamp to the Assault bounds. While EngineBoostModule owns `velocity` the shove is overwritten:
+## a boosting ship rams through.
+func apply_knockback(impulse: Vector2) -> void:
+	velocity += impulse
+
+
 ## Duck-typed entry point for AITargetingModule (and anything else that needs an
 ## instant snap): adopt `angle` as the hull's rotation AND the turn controller's
 ## target, and suppress cursor steering until the player's next real mouse motion —

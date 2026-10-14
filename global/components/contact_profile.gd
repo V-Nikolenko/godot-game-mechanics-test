@@ -7,6 +7,7 @@
 ## | COLLISION | never touched (always on)  | `contact_made` — every legacy enemy, the default |
 ## | RAMMING   | on only while armed        | `contact_made`                                  |
 ## | EXPLOSIVE | on only while armed        | `contact_made`, then `detonate()`               |
+## | ARMOR     | on from `setup()`, armable | `contact_made`; never detonates; optional shove |
 ##
 ## Damage stays whatever the `ContactHitBox` carries (`config.collision_damage`) in every mode, so
 ## `test_enemy_contact_damage.gd` keeps its single rule: "ramming hurts only while committed" is
@@ -16,6 +17,12 @@
 ## `setup()`), so shooting a committed drone point-blank sets its blast off; dying unarmed never
 ## does. The blast is a separate `ContactBlast` in the owner's parent that outlives the owner.
 ##
+## ARMOR (plan cmufs7ele0015nm2xvag3vrwc §2.6.3) is the profile of an armoured hull: armed at `setup()` so
+## touching it hurts at all times, it never detonates and never harms its owner, and `set_armed(false)`
+## closes the hitbox (a Corvette whose plates are gone). With `shove_speed > 0` each armed touch also calls
+## the duck-typed `apply_knockback(dir * shove_speed)` on the touched hurtbox's parent, `dir` pointing
+## owner -> target; a target without the method is skipped.
+##
 ## Arming toggles `monitorable` and `monitoring` with `set_deferred`, so it is legal from a physics
 ## callback. It never reads or writes motion and holds no timer.
 ##
@@ -24,9 +31,10 @@
 class_name ContactProfile
 extends Node
 
-enum Mode { NONE, COLLISION, RAMMING, EXPLOSIVE }
+## ARMOR is appended (value 4) so serialized scene ints do not shift.
+enum Mode { NONE, COLLISION, RAMMING, EXPLOSIVE, ARMOR }
 
-## Emitted once per registered touch (NONE never; RAMMING / EXPLOSIVE only while armed).
+## Emitted once per registered touch (NONE never; RAMMING / EXPLOSIVE / ARMOR only while armed).
 signal contact_made(area: Area2D)
 ## EXPLOSIVE only, at most once, with the global position the blast was spawned at.
 signal detonated(position: Vector2)
@@ -39,6 +47,8 @@ signal detonated(position: Vector2)
 ## EXPLOSIVE only: how many physics frames the blast stays live. At least `ContactBlast.MIN_FRAMES`;
 ## a lower value is clamped in `setup()` with an error.
 @export var blast_frames: int = 3
+## ARMOR only (px/s): impulse handed to the touched target's `apply_knockback()`. 0 disables the shove.
+@export var shove_speed: float = 0.0
 
 var _actor: Node2D = null
 var _hit_box: HitBox = null
@@ -67,9 +77,12 @@ func setup(actor: Node2D, hit_box: HitBox, health: Health) -> void:
 			_apply_enabled(false)
 		Mode.COLLISION:
 			pass  # Never touched: every legacy enemy keeps its hitbox exactly as authored.
+		Mode.ARMOR:
+			_armed = true
+			_apply_enabled(true)
 
 
-## RAMMING / EXPLOSIVE only; a no-op for NONE and COLLISION.
+## RAMMING / EXPLOSIVE / ARMOR only; a no-op for NONE and COLLISION.
 func set_armed(armed: bool) -> void:
 	if not _is_armable():
 		return
@@ -98,7 +111,7 @@ func detonate() -> void:
 
 
 func _is_armable() -> bool:
-	return mode == Mode.RAMMING or mode == Mode.EXPLOSIVE
+	return mode == Mode.RAMMING or mode == Mode.EXPLOSIVE or mode == Mode.ARMOR
 
 
 func _apply_enabled(enabled: bool) -> void:
@@ -117,6 +130,22 @@ func _on_contact(area: Area2D) -> void:
 	contact_made.emit(area)
 	if mode == Mode.EXPLOSIVE:
 		detonate()
+	elif mode == Mode.ARMOR:
+		_shove(area)
+
+
+## ARMOR only. Duck-typed: the touched hurtbox's parent is the target (as for the player's `HurtBox`),
+## and a target that does not expose `apply_knockback` is simply left alone.
+func _shove(area: Area2D) -> void:
+	if shove_speed <= 0.0 or _actor == null or not is_instance_valid(_actor) or area == null:
+		return
+	var target := area.get_parent() as Node2D
+	if target == null or not target.has_method("apply_knockback"):
+		return
+	var dir := target.global_position - _actor.global_position
+	# Dead centre has no direction; push along the owner's facing rather than not at all.
+	dir = dir.normalized() if dir.length_squared() > 0.0001 else Vector2.DOWN.rotated(_actor.global_rotation)
+	target.apply_knockback(dir * shove_speed)
 
 
 func _on_health_changed(current_health: int) -> void:

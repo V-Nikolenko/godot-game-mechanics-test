@@ -14,6 +14,13 @@
 ## `.squad(&"w<n>")` (n = the wave's index in its section) when there are 2–7 of them. The wave
 ## comments below still name each group's legacy path, as a description of where it enters.
 ## Pinned by tests/integration/test_level1_drone_spawns.gd and test_level1_drone_exit.gd.
+##
+## Sniper, ram and bomber lines (`b.sniper()` / `b.sniper_enemy()`, `b.ram()`, `b.bomber()`) carry no `.move()`,
+## `.free_after()` or `shoot_*()` either (Phase 4 t21: Deep Space and Planet Approach; t22: Cloud Descent): each
+## arrives at its `.at()` / `.delay()`, runs its own AI and leaves when its config's `engage_seconds` budget is spent.
+## Pinned, with their density gate, by tests/integration/test_level1_specialist_spawns.gd; Cloud Descent's are also
+## gated per entry against its ENEMIES_CLEARED timeout by test_engagement_deadline.gd and replayed by
+## test_level1_specialist_exit.gd. No Bomber may go into an ENEMIES_CLEARED section (its mines outlive it).
 extends Node
 
 const _MISSION_NUMBER: int = 1
@@ -270,20 +277,10 @@ func _build_section_1() -> LevelSection:
 			b.gatling_interceptor().at( 200, -420).delay(0.4).squad(&"w0g"),
 		]),
 
-		# 0.5 s — sniper pair drops in, fires 5 times, then retreats
-		# Sequence: fly in (2.5 s) → hold 13 s (covers 5 × 2.5 s shoot cycle) → fly out
-		# Sprite faces down during approach; red line appears only once AIM begins.
+		# 0.5 s — sniper pair drops in from high above the top corners and starts its relocate-and-shoot loop
 		b.wave(0.5, [
-			b.sniper_enemy().at(-120, -500).move(b.sequence([
-				b.straight(150, 0.0, 2.5),
-				b.hold(13.0),
-				b.straight(220, PI),
-			])),
-			b.sniper_enemy().at( 120, -500).move(b.sequence([
-				b.straight(150, 0.0, 2.5),
-				b.hold(13.0),
-				b.straight(220, PI),
-			])).delay(0.5),
+			b.sniper_enemy().at(-120, -500),
+			b.sniper_enemy().at( 120, -500).delay(0.5),
 		]),
 
 		# 1.0 s — opening drone pair, fast straight angles into the field
@@ -338,7 +335,7 @@ func _build_section_1() -> LevelSection:
 
 		# 7.5 s — single ram from center as a wake-up
 		b.wave(7.5, [
-			b.ram().at(0, -400).move(b.straight(280)),
+			b.ram().at(0, -400),
 		]),
 
 		# 8.0 s — 5 fighters diagonal + 1 ally + drone screen behind
@@ -358,8 +355,8 @@ func _build_section_1() -> LevelSection:
 
 		# 11.0 s — sniper pair from above corners + drone cover
 		b.wave(11.0, [
-			b.sniper().at(-185, -400).move(b.straight(82, PI / 10)).shoot_at_player(),
-			b.sniper().at( 185, -400).move(b.straight(82, -PI / 10)).shoot_at_player().delay(0.3),
+			b.sniper().at(-185, -400),
+			b.sniper().at( 185, -400).delay(0.3),
 			b.drone().at(   0, -400).delay(0.5),
 		]),
 
@@ -382,7 +379,7 @@ func _build_section_1() -> LevelSection:
 
 		# 15.5 s — surprise ram coming up from the bottom
 		b.wave(15.5, [
-			b.ram().at(0, 400).move(b.straight(260, PI)),
+			b.ram().at(0, 400),
 		]),
 
 		# 16.0 s — line-formation drones across the top
@@ -404,7 +401,7 @@ func _build_section_1() -> LevelSection:
 
 		# 19.5 s — sniper from below right
 		b.wave(19.5, [
-			b.sniper().at(220, 400).move(b.straight(120, -PI / 2 - PI / 10)).shoot_at_player().free_after(5.0),
+			b.sniper().at(220, 400),
 		]),
 
 		# 20.0 s — fighter pair from both upper flanks + drone chasers
@@ -450,8 +447,8 @@ func _build_section_1() -> LevelSection:
 
 		# 26.0 s — 2 ram ships from each flank + drone interlace
 		b.wave(26.0, [
-			b.ram().at(-255, -400).move(b.straight(350)),
-			b.ram().at( 255, -400).move(b.straight(350)).delay(0.5),
+			b.ram().at(-255, -400),
+			b.ram().at( 255, -400).delay(0.5),
 			b.drone().at(   0, -400).delay(0.3),
 		]),
 
@@ -473,11 +470,10 @@ func _build_section_1() -> LevelSection:
 			b.drone().at( 200, -400).delay(0.45).squad(&"w30"),
 		]),
 
-		# 29.0 s — last burst: sniper crossfire + a fighter pair
-		# Snipers use default EXIT_SCREEN so they're only freed once fully off-screen.
+		# 29.0 s — last burst: sniper pair from the top corners + a fighter
 		b.wave(29.0, [
-			b.sniper().at(-260, -400).move(b.straight(90, PI / 7)).shoot_at_player(),
-			b.sniper().at( 260, -400).move(b.straight(90, -PI / 7)).shoot_at_player(),
+			b.sniper().at(-260, -400),
+			b.sniper().at( 260, -400),
 			b.fighter().at(0, -400).delay(0.3),
 		]),
 	]
@@ -607,12 +603,12 @@ func _build_section_2() -> LevelSection:
 		b.wave(13.0, [
 			b.drone().at(-60, -400).squad(&"w4"),
 			b.drone().at( 60, -400).delay(0.25).squad(&"w4"),
-			b.ram().at(  0, -400).move(b.straight(290)).delay(0.6),
+			b.ram().at(  0, -400).delay(0.6),
 		]),
 
 		# 16.0 s — sniper from upper-right + drone column
 		b.wave(16.0, [
-			b.sniper().at(220, -400).move(b.straight(85, -PI / 12)).shoot_at_player().free_after(5.5),
+			b.sniper().at(220, -400),
 			b.drone().at(-80, -400).delay(0.4).squad(&"w5"),
 			b.drone().at(  0, -400).delay(0.5).squad(&"w5"),
 			b.drone().at( 80, -400).delay(0.6).squad(&"w5"),
@@ -631,14 +627,14 @@ func _build_section_2() -> LevelSection:
 
 		# 28.0 s — ram from above (extended with side rams)
 		b.wave(28.0, [
-			b.ram().at(0, -400).move(b.straight(300)),
-			b.ram().at(-220, -400).move(b.straight(310, PI / 10)).delay(0.4),
-			b.ram().at( 220, -400).move(b.straight(310, -PI / 10)).delay(0.4),
+			b.ram().at(0, -400),
+			b.ram().at(-220, -400).delay(0.4),
+			b.ram().at( 220, -400).delay(0.4),
 		]),
 
 		# 32.0 s — sniper from upper-left, drone cover
 		b.wave(32.0, [
-			b.sniper().at(-220, -400).move(b.straight(85, PI / 12)).shoot_at_player().free_after(5.5),
+			b.sniper().at(-220, -400),
 			b.drone().at(120, -400).delay(0.3),
 		]),
 
@@ -665,8 +661,8 @@ func _build_section_2() -> LevelSection:
 
 		# 44.0 s — sniper duo + drone screen (extended)
 		b.wave(44.0, [
-			b.sniper().at(-145, -400).move(b.straight(82, PI / 12)).shoot_at_player(),
-			b.sniper().at( 145, -400).move(b.straight(82, -PI / 12)).shoot_at_player().delay(0.2),
+			b.sniper().at(-145, -400),
+			b.sniper().at( 145, -400).delay(0.2),
 			b.drone().at(0, -400).delay(0.6).squad(&"w13"),
 			b.drone().at(-80, -400).delay(0.8).squad(&"w13"),
 			b.drone().at( 80, -400).delay(0.8).squad(&"w13"),
@@ -691,13 +687,13 @@ func _build_section_2() -> LevelSection:
 
 		# 55.0 s — twin rams from below corners
 		b.wave(55.0, [
-			b.ram().at(-200, 400).move(b.straight(280, PI - 0.3)),
-			b.ram().at( 200, 400).move(b.straight(280, PI + 0.3)).delay(0.3),
+			b.ram().at(-200, 400),
+			b.ram().at( 200, 400).delay(0.3),
 		]),
 
 		# 58.0 s — bomber + escort drones + side fighters entering from off-screen
 		b.wave(58.0, [
-			b.bomber().at(0, -400).move(b.straight(82)).shoot_at_player(),
+			b.bomber().at(0, -400),
 			b.drone().at(-72, -400).delay(0.4).squad(&"w18"),
 			b.drone().at( 72, -400).delay(0.4).squad(&"w18"),
 			b.fighter().at(-500, -30).delay(0.6).squad(&"w18f"),
@@ -712,9 +708,9 @@ func _build_section_2() -> LevelSection:
 
 		# 65.0 s — 2 snipers from top corners (+ ram chaser)
 		b.wave(65.0, [
-			b.sniper().at(-240, -400).move(b.straight(88, PI / 8)).shoot_at_player(),
-			b.sniper().at( 240, -400).move(b.straight(88, -PI / 8)).shoot_at_player(),
-			b.ram().at(0, -400).move(b.straight(310)).delay(0.7),
+			b.sniper().at(-240, -400),
+			b.sniper().at( 240, -400),
+			b.ram().at(0, -400).delay(0.7),
 		]),
 
 		# 68.0 s — drone screen sweep
@@ -735,8 +731,8 @@ func _build_section_2() -> LevelSection:
 		# 75.0 s — 4 drones cluster down center (+ snipers from top corners)
 		b.wave(75.0, [
 			b.drone().formation(b.cluster_formation(4, 50)).at(0, -400),
-			b.sniper().at(-260, -400).move(b.straight(90, PI / 8)).shoot_at_player().free_after(5.5).delay(0.5),
-			b.sniper().at( 260, -400).move(b.straight(90, -PI / 8)).shoot_at_player().free_after(5.5).delay(0.5),
+			b.sniper().at(-260, -400).delay(0.5),
+			b.sniper().at( 260, -400).delay(0.5),
 		]),
 
 		# 78.0 s — fighter pair entering from off-screen sides
@@ -758,15 +754,15 @@ func _build_section_2() -> LevelSection:
 
 		# 88.0 s — dual ram closers from sides (+ middle ram)
 		b.wave(88.0, [
-			b.ram().at(-270, -400).move(b.straight(348, PI / 8)),
-			b.ram().at( 270, -400).move(b.straight(348, -PI / 8)).delay(0.4),
-			b.ram().at(   0, -400).move(b.straight(330)).delay(0.8),
+			b.ram().at(-270, -400),
+			b.ram().at( 270, -400).delay(0.4),
+			b.ram().at(   0, -400).delay(0.8),
 		]),
 
-		# 92.0 s — sniper crossfire from off-screen sides at speed enough to clear screen
+		# 92.0 s — sniper pair entering from off-screen left and right
 		b.wave(92.0, [
-			b.sniper().at(-500, 50).move(b.straight(180, PI / 2)).shoot_at_player(),
-			b.sniper().at( 500, 50).move(b.straight(180, -PI / 2)).shoot_at_player(),
+			b.sniper().at(-500, 50),
+			b.sniper().at( 500, 50),
 		]),
 
 		# 95.0 s — 4 drones, sine weave from right (extended)
@@ -781,7 +777,7 @@ func _build_section_2() -> LevelSection:
 
 		# 98.0 s — second bomber pressure
 		b.wave(98.0, [
-			b.bomber().at(0, -400).move(b.straight(80)).shoot_at_player(),
+			b.bomber().at(0, -400),
 			b.fighter().at(-180, -400).delay(0.4).squad(&"w30f"),
 			b.fighter().at( 180, -400).delay(0.4).squad(&"w30f"),
 		]),
@@ -789,8 +785,8 @@ func _build_section_2() -> LevelSection:
 		# 102.0 s — final fighter wedge into the clouds (+ ram sandwich)
 		b.wave(102.0, [
 			b.fighter().formation(b.wedge_formation(5, 36, 14)).at(0, -400),
-			b.ram().at(-260, -400).move(b.straight(330, PI / 10)).delay(0.3),
-			b.ram().at( 260, -400).move(b.straight(330, -PI / 10)).delay(0.3),
+			b.ram().at(-260, -400).delay(0.3),
+			b.ram().at( 260, -400).delay(0.3),
 		]),
 
 		# 106.0 s — closing drone swarm before clouds
@@ -848,7 +844,7 @@ func _build_section_3() -> LevelSection:
 
 		# 11.0 s — sniper from below-left as ambush
 		b.wave(11.0, [
-			b.sniper().at(-260, 400).move(b.straight(100, -PI / 2 - PI / 12)).shoot_at_player().free_after(5.5),
+			b.sniper().at(-260, 400),
 		]),
 
 		# 14.0 s — 3 fighters entering from the right (+ drone chasers)
@@ -879,18 +875,18 @@ func _build_section_3() -> LevelSection:
 			b.fighter().at( 260, -400).delay(0.3).squad(&"w8f"),
 		]),
 
-		# 28.0 s — ram from below corner (surprise)
+		# 28.0 s — ram pair from the lower corners (surprise)
 		b.wave(28.0, [
-			b.ram().at(-180, 400).move(b.straight(290, PI - 0.2)),
-			b.ram().at( 180, 400).move(b.straight(290, PI + 0.2)).delay(0.4),
+			b.ram().at(-180, 400),
+			b.ram().at( 180, 400).delay(0.4),
 		]),
 
 		# 32.0 s — 2 snipers from sides + 2 from top (+ drone screen)
 		b.wave(32.0, [
-			b.sniper().at(-500,  50).move(b.straight(95, PI / 2)).free_after(4.0).shoot_at_player(),
-			b.sniper().at( 500,  50).move(b.straight(95, -PI / 2)).free_after(4.0).shoot_at_player(),
-			b.sniper().at(-120, -400).move(b.straight(88, PI / 6)).shoot_at_player(),
-			b.sniper().at( 120, -400).move(b.straight(88, -PI / 6)).shoot_at_player(),
+			b.sniper().at(-500,  50),
+			b.sniper().at( 500,  50),
+			b.sniper().at(-120, -400),
+			b.sniper().at( 120, -400),
 			b.drone().at(   0, -400).delay(0.5),
 		]),
 
@@ -903,7 +899,7 @@ func _build_section_3() -> LevelSection:
 		b.wave(38.0, [
 			b.fighter().at(-500, 0).squad(&"w12f"),
 			b.fighter().at( 500, 0).delay(0.3).squad(&"w12f"),
-			b.ram().at(0, -400).move(b.straight(320)).delay(0.6),
+			b.ram().at(0, -400).delay(0.6),
 		]),
 
 		# 42.0 s — 4 fighters from both flanks (+ 2 extras)
@@ -929,14 +925,14 @@ func _build_section_3() -> LevelSection:
 			b.fighter().at(-65, -400).delay(0.8).squad(&"w15f"),
 			b.fighter().at(  0, -400).delay(0.8).squad(&"w15f"),
 			b.fighter().at( 65, -400).delay(0.8).squad(&"w15f"),
-			b.ram().at(-220, -400).move(b.straight(330, PI / 12)).delay(1.5),
-			b.ram().at( 220, -400).move(b.straight(330, -PI / 12)).delay(1.5),
+			b.ram().at(-220, -400).delay(1.5),
+			b.ram().at( 220, -400).delay(1.5),
 		]),
 
-		# 53.0 s — sniper crossfire from sides during gunship fight
+		# 53.0 s — sniper pair entering from the sides during the gunship fight
 		b.wave(53.0, [
-			b.sniper().at(-500,  20).move(b.straight(95, PI / 2)).free_after(5.0).shoot_at_player(),
-			b.sniper().at( 500,  20).move(b.straight(95, -PI / 2)).free_after(5.0).shoot_at_player(),
+			b.sniper().at(-500,  20),
+			b.sniper().at( 500,  20),
 		]),
 
 		# 56.0 s — drones rising from behind (extended)
@@ -957,8 +953,8 @@ func _build_section_3() -> LevelSection:
 		b.wave(62.0, [
 			b.gunship().at(-100, -400).move(b.straight(36)),
 			b.gunship().at( 100, -400).move(b.straight(36)).delay(0.8),
-			b.sniper().at(-225, -400).move(b.straight(82, PI / 10)).shoot_at_player().delay(1.2),
-			b.sniper().at( 225, -400).move(b.straight(82, -PI / 10)).shoot_at_player().delay(1.2),
+			b.sniper().at(-225, -400).delay(1.2),
+			b.sniper().at( 225, -400).delay(1.2),
 			b.drone().at(0, -400).delay(0.5).squad(&"w19"),
 			b.drone().at(-150, -400).delay(0.7).squad(&"w19"),
 			b.drone().at( 150, -400).delay(0.7).squad(&"w19"),
@@ -983,7 +979,7 @@ func _build_section_3() -> LevelSection:
 			b.fighter().formation(b.v_formation(3)).at(0, -400).delay(0.5),
 			b.fighter().at(-500, 100).delay(0.8).squad(&"w22f"),
 			b.fighter().at( 500, 100).delay(0.8).squad(&"w22f"),
-			b.ram().at(0, 400).move(b.straight(300, PI)).delay(1.2),
+			b.ram().at(0, 400).delay(1.2),
 		]),
 
 		# 76.0 s — drone swarm closer
