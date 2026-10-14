@@ -3,11 +3,12 @@
 **Role:** Holds a long firing line on the player and fires a single fast rail shot after a telegraph.
 **Fantasy / threat:** A patient sniper. The shot is broadcast by a red line that turns bright when it locks; reading that tell and stepping aside is the whole fight.
 
-> **Build state (Phase 4, t12 shell + t13 cycle + t19 hub idle).** The scene, config, rail round, aim line, rail fallback, Assault
-> exit and the AI relocation cycle (with firing-point selection, the line-of-sight refusal and the rail trail) are
-> built. The decoy (t14, behind `decoy_telegraph`) is built; the art is in (t15: a narrow 48x64 top-down hull `sniper.png` and an 8x42 `sniper_barrel.png` whose length the
-> brain scales). Plans: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.5, §2.8;
-> `docs/plans/cmuyk2qq0008loa2xqwco8raj/3-plan.md` (the cycle).
+> **Build state (Phase 4, complete).** The scene, config, rail round and trail, aim line, rail fallback, Assault exit, the AI
+> relocation cycle (firing-point choice, line-of-sight refusal), the decoy (t14, behind `decoy_telegraph`, off by default),
+> the art (t15: a narrow 48x64 top-down hull `sniper.png` and an 8x42 `sniper_barrel.png` whose length the brain scales),
+> the hub idle (t19), the hub patrol (t20) and level 1 off rails in every section (t21, t22) are built.
+> Plans: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.5, §2.8; `docs/plans/cmuyk2qq0008loa2xqwco8raj/3-plan.md` (the cycle).
+> Known gaps: see `docs/epics-done/cmufs7ele0015nm2xvag3vrwc/REPORT.md`.
 
 ---
 

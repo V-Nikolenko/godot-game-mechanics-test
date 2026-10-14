@@ -52,17 +52,29 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   itself when it leaves the world. Player bullets are unpooled: spawn them through
   `WeaponBehavior._launch()`, which calls `Bullet.free_when_offscreen()` and connects
   `Bullet.expired -> Bullet.queue_free`. **A default bullet stops on the first hit that actually
-  deals damage — a *deflected* hit does not count.** `bullet.gd::_hit_is_deflected()` checks
-  whether the target reports `is_armored() == true` (duck-typed, no shared interface) and, if so,
-  returns without emitting `expired` or spending a pierce charge. This is load-bearing: the
+  deals damage — a *deflected* hit does not count.** `bullet.gd::_hit_is_deflected()` asks
+  `ArmorQuery.deflects(area, hit_box)` (`global/components/armor_query.gd`), which duck-types the target's
+  `deflects_hit(hit_box: HitBox) -> bool` first (hit-aware) and falls back to `is_armored() == true` (hit-blind; no shared
+  interface) and, if either refuses, returns without emitting `expired` or spending a pierce charge. The homing and
+  warhead rockets ask the same query. This is load-bearing: the
   space-station boss's armoured core spans the whole hull, so a shot aimed at a turret has to
   survive crossing it, and the core's `is_armored()` query is what tells the bullet the crossing
   was a deflection, not a kill — consuming the shot there makes the turrets, and the boss,
   unkillable. `PierceModule` raises the number of *damaging* hits a bullet survives (via
   `Bullet.MAX_PIERCE`) before it stops. Any future entity that needs to deflect a bullet without
-  consuming it must expose its own `is_armored()`-shaped query. Spelled out in
+  consuming it must expose `is_armored()` or `deflects_hit()`. **Breakable armour is parts, not a mask** (Phase 4):
+  the Ram Corvette's three `ArmorPlate`s (`global/components/armor_plate.gd`, under a `Plates` node, never direct
+  children of the root) break on a rocket, or on a projectile that answers the duck-typed **`is_high_impact()`** opt-in
+  (`Bullet.is_high_impact()` is `unlimited_pierce`, the player's Sniper Shot; a later heavy weapon opts in the same way),
+  and glance off everything else. The hull stays a full-size `HurtBox` that deflects while any plate lives; a plate
+  resolves each hit once (`_resolve`), because Godot orders the plate's `area_entered` and the rocket's query
+  undefined. The armour's **shove** on touch is `ContactProfile` mode `ARMOR` with `shove_speed`, which calls the touched
+  ship's duck-typed `apply_knockback(impulse)` (the Open Space ship adds it to `velocity`; never call
+  `apply_knockback_motion()` there, it clamps to the Assault bounds). Persistent enemy ordnance (mines, bombs) outlives
+  its ship through `BulletPool.persist_after_owner_death`, which hands each projectile to its own `expired -> queue_free`
+  — still exactly one owner at every instant. Spelled out in
   `docs/architecture/PROJECT.md` → Conventions; gated by
-  `tests/integration/test_player_bullet_lifetime.gd`.
+  `tests/integration/test_player_bullet_lifetime.gd`, `test_armor_query.gd` and `test_enemy_ordnance.gd`.
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
@@ -284,7 +296,15 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `tests/integration/test_level1_specialist_exit.gd` replays the whole of cloud_descent from 0.0 s with only its 9 snipers
   and 6 rams, through a real `WaveManager` at 8× clock. The container must empty inside the timeout, and every ship
   must leave in DISENGAGE with no `EnemyPathMover`.
-  The behaviour specs for the two enemies themselves (`test_fighter.gd`, `test_fighter_squad.gd`,
+  **Every Phase 4 specialist also has an attack-in-budget row** (`test_sniper.gd`, `test_ram_corvette.gd`,
+  `test_bomber.gd`): from every level-1 spawn class, through a real `WaveManager`, it reaches its attack state (Sniper
+  AIM, Ram WIND_UP, Bomber RUN) before its Assault budget expires, one attack per life. A budget counts from spawn, so a
+  density or deadline lever (ram `exit_speed` / `engage_seconds`) is legal only while those rows stay green. Behaviour
+  specs for the three (`test_sniper.gd`, `test_ram_corvette.gd`, `test_bomber.gd`, `test_enemy_ordnance.gd`, plus their
+  cases in `test_enemy_dual_mode.gd` and `test_sector_hub_patrol.gd`) are intent tests in both harnesses; the
+  primitives under them have `test_armor_query.gd`, `test_line_of_sight.gd`, and the `ContactProfile` ARMOR /
+  `BulletPool.persist_after_owner_death` rows in `tests/unit/`.
+  The Phase 3 behaviour specs for the Fighter and the Gatling (`test_fighter.gd`, `test_fighter_squad.gd`,
   `test_gatling_interceptor.gd`, `test_gatling_convergence.gd`, plus their cases in
   `test_enemy_dual_mode.gd`) are intent tests that run in both the Assault and Open Space harnesses.
   A few characterization files also carry individually-marked intent tests

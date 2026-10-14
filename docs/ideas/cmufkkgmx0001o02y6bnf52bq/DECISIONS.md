@@ -1714,3 +1714,138 @@ Task plan `docs/plans/cmuyk2qqb0091oa2xy7yn9sxa/3-plan.md` (Revision 2, review r
 - **Count gate:** cloud_descent joined `MIGRATED_SECTIONS` (peak 6 at 32.0 s with the final ram config — 7 before the levers — limit 10 = 2.5 x 4); `_RAIL_SECTIONS` is `[]` and `test_extra_rams_at_the_peak_break_the_frozen_constant` was deleted (the Ph3 t17 shape) — `_rail_lifetime()`'s sampling branch is now exercised by nothing.
 - **Real replay:** new `tests/integration/test_level1_specialist_exit.gd` replays the whole section from 0.0 s (epic review N2) with only its snipers and rams, at 8x clock: all 9 + 6 spawn, every one leaves in DISENGAGE with no `EnemyPathMover`, and the container is empty 2.60 s after `waves_complete` (margin 7.40 s; last ram out 2.58 s after it). `test_level1_fighter_exit.gd` (from 66.0 s, the 73.2 s ram now on AI) empties 8.18 s after it (margin 1.82 s). Full gate 1593 tests, GUT time 256.8 s (was ~240 s).
 - **Follow-up (not changed here):** the t21 count gate in `test_level1_specialist_spawns.gd` still uses the view-grid exits, so its ram life under-reports by ~1.7 s (12.98 -> with the new config about 10.2 s view vs 11.9 s corridor); every section's peak has slack against it.
+
+## Phase 4 - as built (2026-10-14)
+
+All 23 build-sequence keys of `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` (**Revision 2**) landed on `agent/auto-dev`:
+t1-t22 plus this t23 (docs). Preparation was research -> plan (Revision 1, round-1 review CHANGES_REQUESTED, 15 findings) ->
+Revision 2 (round-2 review **CHANGES_REQUESTED**: B1 the mine wall cannot hurt a player who holds course, B2 `ArmorPlate`
+depends on physics-callback order, plus N1-N10). The owner started the epic without a re-plan, so B1 and B2 were applied by
+the tasks they named (t4/t6 for B2 and B1b, t9/t10 for B1). Six build tasks (t10, t13, t16, t17, t21, t22) were planned and independently reviewed on their own under `docs/plans/cmuyk2qq…/`, each but t21 CHANGES_REQUESTED at least once
+before APPROVED (t21 was approved first time); t10 took six attempts (the last for the gate's wall-clock cap, see below). `docs/epics-done/cmufs7ele0015nm2xvag3vrwc/`
+holds the dossier (PRD / SOURCES / REPORT). The per-task "built in tX" notes above are the detail; this section is the
+index a later phase should read first. **Where a per-task note and this section differ, this section wins.**
+
+### What was actually built
+
+- **Primitives (all pure or `RefCounted`; none moves a node).** `Steering.break_contact` / `EnemyMover.break_contact`;
+  `LineOfSight` (`global/enemy_ai/line_of_sight.gd`) and a real `TargetInfo.line_of_sight()`; `BulletPool.persist_after_owner_death`
+  (`_hand_over_active()`); `ArmorQuery` and `ArmorPlate` (`global/components/`); `ContactProfile.Mode.ARMOR` with `shove_speed`;
+  `OpenSpacePlayerShip.apply_knockback()`; `Bullet.is_high_impact()`; `ArmorQuery` called from `bullet.gd`, `homing_missile.gd`
+  and `warhead_missile.gd`; the duck-typed `homing_point(from)` read by `homing_missile._fly_to_target`.
+- **Enemy ordnance** (`assault/scenes/projectiles/enemy_ordnance/`): `EnemyOrdnance` (`Kind { GRAVITY_BOMB, MINE, PURSUIT_BOMB }`),
+  three scenes, `EnemyOrdnanceScenes`. Not an `EnemyBullet`, not in `enemies`, never scored; any player hit defuses it.
+- **The Bomber** (`assault/scenes/enemies/bomber/`): `Bomber`, `BomberBrain` (`APPROACH, RUN, ESCAPE, REPOSITION, DISENGAGE`
+  then hub `IDLE, NOTICING, RETURNING`), flat `BomberConfig`, three `persist_after_owner_death` pools (4 / 10 / 4) and
+  `Bomber.drop()`. Old `bomb.gd` / `bomb.tscn` deleted. Rail fallback: a gravity bomb DOWN every 1.2 s.
+- **The Sniper** (`.../sniper/`, a `git mv` of `sniper_enemy/`): `Sniper`, `SniperBrain` (`ENTER, BREAK_CONTACT, RELOCATE,
+  SETTLE, DECOY, AIM, LOCK, FIRE, DISENGAGE`, hub phases 9-11), `SniperTelegraph`, flat `SniperConfig`, a `RailPool` of 2,
+  `rail_round.tscn` (`EnemyRounds.RAIL`) and `RailTrail`. `enemy_sniper_bullet.tscn` and every fly-in constant are gone.
+- **The Ram Corvette** (`.../ram_corvette/`, a `git mv` of `ram_ship/`): `RamCorvette`, `RamCorvetteBrain` (`APPROACH, LINE_UP,
+  WIND_UP, CHARGE, WIDE_TURN, DISENGAGE, STAGGER`, hub phases 7-9), flat `RamCorvetteConfig`, three `ArmorPlate`s under `Plates`,
+  the ARMOR contact profile. Group `ram_ships` and the old layer immunity are gone.
+- **Art.** `bomber.png` (104x56, overwritten in place), `sniper.png` (48x64) + `sniper_barrel.png` (8x42), `ram_corvette.png`
+  (84x84) + `ram_plate_front.png` / `ram_plate_side.png`. `ram_ship.png` / `ram_ship_damaged.png` deleted.
+- **Open Space.** `SectorHub._spawn_patrol()` adds a Sniper (135 deg), a Bomber (45 deg) and a Ram Corvette (225 deg) on a
+  1700 px ring, drawn from the seeded rng after the existing groups' nine draws.
+- **Level 1.** All 50 sniper / ram / bomber lines (26 / 22 / 2) are AI spawns: no `.move()`, `.free_after()` or `.shoot_at_player()`.
+  Triggers, offsets and delays are unchanged and pinned. **Nothing in level 1 flies a rail of these three any more.** Only the
+  station's reinforcements still fly rails (fighters and Gatlings).
+- **Gates added or extended:** `test_level1_specialist_spawns.gd` (pin + count), `test_engagement_deadline.gd` (sniper and ram
+  rows, Bomber boundary), `test_level1_specialist_exit.gd` (real `WaveManager` replay), an attack-in-budget row in each of
+  `test_sniper.gd` / `test_ram_corvette.gd` / `test_bomber.gd`, `test_armor_query.gd`, `test_enemy_ordnance.gd`,
+  `test_line_of_sight.gd`, `test_bullet_pool.gd`, the ARMOR rows of `test_contact_profile.gd`, `test_sector_hub_patrol.gd` (three
+  more clearance rows), and `tests/helpers/specialist_exit_probe.gd`. The gate ends at **1593 tests, GUT time 256.8 s**, with
+  `scripts/check-test-leaks.sh` clean.
+
+### Deviations from `3-plan.md` (every one that a later phase can depend on)
+
+| # | Plan said | What was built | Why / consequence |
+|---|---|---|---|
+| 1 | §2.3 mine warning 0.5 s | **`mine_warning` 0.25 s**, asserted `(trigger_radius + blast) / warning >= mine_speed_max` | Review B1(a): at 0.5 s a player at normal speed is past the blast before it fires. |
+| 2 | §2.4 mine wall lead: bomber-timeline lead, middle mine armed `wall_margin` before the player's trigger edge | Same, plus `(trigger_radius + arc_depth) / |v|` (B1c); the mine arms from `launch()` and the trigger is a **poll** of `get_overlapping_areas()` (B1b) | A player already inside the radius at arm time still sets it off. |
+| 3 | R4.5 "boosting right -> mine chain" | **A boosting player (> 440 px/s) gets a pursuit bomb, never a mine chain** | B1(e): a wall for a boosting player needs a lead longer than `mine_horizon`. Owner question for Ph16. |
+| 4 | §2.4 arrival by the Fighter's fixed-point iteration | Earliest-feasible **scan** (T in 0.1 s steps to `approach_cap`, then 5 bisections) | The iteration diverged from a standing start. Tracked path replaced only when its goal moves > 24 px or the bomber is > 40 px off. |
+| 5 | §2.4 angled line takes the side toward the heading | The side with the **shorter lead-in** (the heading / corridor / rng rule is the tie-break); the angle narrows 35 -> 0 deg to the widest loop-free one; `gravity_release_lead` **120** (was 80) | A bomber within ~880 px of P-hat sat beside the line's start at 35 deg and could only loop (~6.4 s). |
+| 6 | (not planned) | **Line capture**: within 96 px / 45 deg of the line the bomber pursues a point 80 px ahead on it | A re-plan near the line produced a loop. |
+| 7 | §2.2.4 plate damages itself in `area_entered`, `deflects_hit` from live state | One **idempotent `_resolve(hit_box)`** called from both | Review B2: "the breaking rocket is consumed" depended on Godot's undefined callback order. Ph10 keeps this shape. |
+| 8 | §2.6 hull exposed on the last `plate_broken` | **Exposure deferred** to the end of that physics step (`call_deferred("_expose")`); `armor_broken` fires once, one step later | A rocket that breaks the last plate while overlapping the hull must not also land on it. Hang glow / stagger / disarm off `armor_broken`. |
+| 9 | §2.6 `RamCorvetteBrain.Phase` | `STAGGER` **appended** after `DISENGAGE` (value 6) | Keeps t16's values; hub phases 7-9. |
+| 10 | Ram attack gate `remaining() >= line_up_cap` | `>= line_up_cap + ATTACK_GATE_MARGIN` (0.05 s) | The budget updates before the phase logic; a LINE_UP started at exactly 0.5 s left could expire on its last tick. |
+| 11 | WIDE_TURN ends -> LINE_UP | -> LINE_UP only inside `engage_range` and with the gate open, else APPROACH; capped at 4 s | A charge can end ~900 px out; a circling player could hold the turn forever. |
+| 12 | Ram `engage_seconds` 4.5, `exit_speed` 500; first lever `exit_speed` -> 600 | **4.0 and 560** (both pre-approved levers, in order) | Cloud Descent's 73.2 s ram: 10.82 s shipped, 10.10 s at 560, **9.60 s at 4.0 (margin 0.40 s)**. 560 was enough, so 600 was not needed. |
+| 13 | Ram exit measured over the Ph3 view grid | A second start set, **`SpecialistExitProbe.corridor_starts()`** (the whole 1480 x 1480 corridor) | The view grid under-reports the ram's curved exit by ~2 s (5.77 s vs 3.72 s at 560). |
+| 14 | §2.5 ENTER -> BREAK_CONTACT | **ENTER -> SETTLE**; BREAK_CONTACT only after a shot or a refusal | ENTER is the seek to the first firing point; there is nothing to break from. |
+| 15 | BREAK_CONTACT "until 0.9 x range" | At least **`break_min` 1.0 s** | After FIRE the sniper is already at range and the rule would end on its first tick. |
+| 16 | Firing-point filters: Assault inset, forward cone, LOS | **Added the path-clearance filter** (`pass_clearance_ratio` 0.45 x range) and tiers A/B/C (A = `min_bearing_change` + 5 deg slack) | With the epic's weights the separation term always won and the straight RELOCATE flew through the player. |
+| 17 | RELOCATE re-pick after a flat `relocate_cap` 4 s | Per trip: `max(relocate_cap, trip / relocate_speed + 1 s)` | The flat cap re-picked most Open Space trips (1500-1800 px) mid-route. |
+| 18 | LOS checked from the firing point | LOCK re-checks on **two lines** (muzzle -> player and muzzle -> lock point); each refusal counted in `refusals` | A rock can block the locked line without blocking the player. |
+| 19 | `SniperConfig` fields as §2.5 | **+ `rail_fallback_damage` 25** and the t13 fields (`break_min`, `velocity_smoothing`, `frame_speed`, `forward_cone_speed`, `seed_jitter`, `random_candidates`, `max_los_rays`, `pass_clearance_ratio`, `barrel_*_seconds`) | The rail fallback fires the legacy 1400 px/s shot at the legacy damage; the AI round's is 28. |
+| 20 | Decoy line aims at the fake direction | The sniper keeps **facing the player** in DECOY; only the line is rotated (25-35 deg, side by coin flip) | Turning would move the muzzle off the measured bearing; the barrel art was not final. A budget expiry in DECOY disengages at once. |
+| 21 | Sniper Shot breaks a plate in two hits | Confirmed with the mode's 40 damage: **two shots break a 50 HP plate** (the scene's own damage is 50, the weapon mode sets 40) | The mode `.tres` decides the real figure. |
+| 22 | `RamCorvetteConfig.movement_speed` | **Removed** (nothing read it) | `BomberConfig.movement_speed` / `bomb_interval` likewise gone; `rail_bomb_interval` replaces the latter. |
+| 23 | Sniper art nose-down | **Nose-up**, `sprite_forward_angle = -PI / 2`; hull 34 px wide against the ~40 px planned | The scene's muzzle and barrel sit at -Y and the old sprite was also nose-up. |
+| 24 | Ram plates generated | Plates **drawn by script** (hull from PixelLab) | The generated slab came with a painted-on orange strip that fights `set_glow()`'s tint. |
+| 25 | `persist_after_owner_death` in Ph5 | **Built in Ph4** (planned change, X1) | Mines and bombs need it. Ph5 builds owner-distance lifetime on it. |
+| 26 | Heavy Shell first consumer in Ph4 | **Still none** (Ph10) | Neither the Bomber nor the Ram fires a round. |
+| 27 | t21 count gate: view-grid exits for every specialist | Unchanged; the ram's life under-reports by ~1.7 s | See open items. Every section's peak has slack. |
+| 28 | Gate time | Real-physics rows run on an **8x clock** with the step kept at 1/60 game-second | The harness cuts verification at ~300 s; at 1x the t10 rows took the gate to 348 s. |
+
+### Conventions a later phase must keep
+
+(In addition to the "Conventions" list planned above, which all stand.)
+
+- **Armour is parts, not a mask.** An armoured enemy has one full-size `HurtBox`, `is_armored()` / `deflects_hit()`, and
+  `ArmorPlate`s under a group node. Never narrow the hurtbox. Any later armoured entity uses `ArmorQuery`'s two duck types; a
+  heavy player weapon opts in to breaking parts with `is_high_impact()`.
+- **A breakable part resolves each hit once** (`ArmorPlate._resolve`, per HitBox instance id).
+- **Persistent ordnance has its own lifetime cap and never enters `enemies` or `ScoreTracker`.** A Bomber never spawns in an
+  `ENEMIES_CLEARED` section. Ph7's Mine Layer extends `EnemyOrdnance`.
+- **A budgeted specialist proves it attacks (attack-in-budget row)** from every level-1 spawn class through a real
+  `WaveManager`; a density or deadline lever is legal only while those rows stay green.
+- **A telegraphed attack is never cut off by the budget, and a decoy is CHARGING-only.**
+- **A ram's exit gate uses the corridor-wide curved bound**, a sniper's and a bomber's the view-grid bound (measured once equal
+  for the sniper).
+- **A test that awaits real physics scales the clock** (`Engine.time_scale`, `physics_ticks_per_second` and
+  `max_physics_steps_per_frame` together, restored in `after_each`): the gate has a ~300 s wall-clock cap, now at ~257 s.
+- **Rail fallbacks are mandatory** for a shooter or area-denier moved to a brain (the Ph3 rule): sniper cycle, bomber bombs, ram contact.
+
+### Open items - nothing here is decided
+
+- **Thin margin:** the 73.2 s ram row passes by **0.40 s** (9.60 s of 10). Any further ram retune (`acceleration`, `stagger_seconds`,
+  `exit_speed`, `engage_seconds`) must re-run `test_engagement_deadline.gd`. The formula is pessimistic (a realisable split
+  computes 8.55 s, printed not asserted).
+- **Crowding count gate still uses view-grid exits** (`test_level1_specialist_spawns.gd`), so a ram's life is under-reported by
+  ~1.7 s; peaks 6 / 6 / 6 against limits 12.5 / 7.5 / 10 (planet_approach is the 1-ship-margin section).
+- **Sniper aims from where it settled** (review round 2, N2): the later re-pick means a sniper can aim from a point a boosting
+  player has left far behind; nothing checks the range before AIM.
+- **A boosting player gets no mine wall** (deviation 3). Ph16 owns whether that is acceptable.
+- **A `RailTrail` is a child of the `EnemyContainer`**, so it can hold an `ENEMIES_CLEARED` section open up to `trail_fade` (0.4 s)
+  after the last sniper leaves; cloud_descent's sniper rows have 6 s of margin so this is covered.
+- **`LineOfSight` has no shipped blocker beyond asteroids.** The hub has no physics bodies, so the sniper's refusal is proven by
+  fixtures only; Ph6 wrecks and Ph19 heavy ships plug in via `blocks_line_of_sight()`.
+- **The space station has no `homing_point`**, so a rocket deflected by its armoured core still parks there (Ph11).
+- **Two unrelated mine concepts exist** (`assault/scenes/race/track/mine.gd`, group `mines`, and enemy ordnance mines). Not touched.
+- **`DefenseProfile.apply_alternate()` has no shipped user** after Ph4 (tested on `fixture_enemy.tscn`); Ph17 may delete it.
+- **A warhead-friendly Assault ram** (`assault_plate_count` 1) was not built; one homing volley strips all three plates, a frontal
+  warhead volley strips one.
+- **Not play-tested (the gate cannot see it):** whether the sniper's 0.5 s lock reads as a fair window at Assault speed; whether
+  the decoy reads as a bluff and never a lock; whether the mine wall is dodgeable by feel at 150-440 px/s; whether the ram's glow,
+  plate break and charge read; whether the Sniper's barrel unfolding and its art (the barrel covers the hull's red spine panel)
+  look right in motion; whether level 1's density feels right with specialists living their budget plus a curved exit instead of a
+  rail's on-screen time; whether Open Space's noticing / return is calm.
+
+### Handed to later phases
+
+| Item | Phase | Note |
+|---|---|---|
+| Owner-distance lifetime, enemy rockets | Ph5 | Built on `persist_after_owner_death`; the round family still vanishes with its shooter. |
+| Mine variants, minefields, the Mine Layer | Ph7 | Extend `EnemyOrdnance`; reuse the undamped wall-lead rule. |
+| LOS blockers in shipped content | Ph6 / Ph19 | Answer `blocks_line_of_sight()`. |
+| Modular damage beyond three plates, per-plate weapons | Ph10 | Extend or compose `ArmorPlate`. Heavy Shell's first consumer is the Heavy Gunship. |
+| Station `homing_point` | Ph11 | |
+| Squad messages (the sniper marking the player for fighters) | Ph14 | |
+| Difficulty tiers: shorten `aim_seconds`, never `lock_seconds`; the decoy flag; the boosting-player wall | Ph16 | |
+| Deleting `DefenseProfile.apply_alternate()`, recolouring legacy bullets, enemy SFX / VFX | Ph17 | |
+| Taking the station's reinforcements and `level_2_waves.gd` off rails | Ph15 | The rail fallbacks are the contract. |
+| Re-measuring the crowding count gate with corridor-wide exits | any phase retuning specialist lifetimes | |

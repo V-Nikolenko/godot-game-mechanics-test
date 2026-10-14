@@ -3,11 +3,12 @@
 **Role:** Heavy charger wearing three breakable armour plates. Bullets glance off it; rockets knock the plates off one at a time, and only then does the hull take damage.
 **Fantasy / threat:** A battering ram you have to *open* before you can kill it. Touching it hurts and shoves you away.
 
-> **Build state (Phase 4, t16 armour + t17 charge + t19 hub idle).** The armour, the ARMOR contact profile, the predicted-intercept
-> charge (LINE_UP / WIND_UP / CHARGE / WIDE_TURN), the plate glow, the stagger, the faster exposed hull and the Assault
-> budget rules, the real hull and plate sprites (t18) and the hub idle (t19) are built; level 1 spawns it off rails in every section (Deep Space and Planet Approach t21, Cloud Descent t22).
+> **Build state (Phase 4, complete).** The armour and its ARMOR contact profile (t16), the predicted-intercept charge,
+> plate glow, stagger, faster exposed hull and Assault budget rules (t17), the hull and plate sprites (t18), the hub idle
+> (t19), the hub patrol (t20) and level 1 off rails in every section (Deep Space and Planet Approach t21, Cloud Descent t22) are built.
 > Plan: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.6; task plans `docs/plans/cmuyk2qq8008xoa2xxoq1frgn/3-plan.md`
 > (armour) and `docs/plans/cmuyk2qqb0091oa2xy7yn9sxa/3-plan.md` (charge).
+> Known gaps: see `docs/epics-done/cmufs7ele0015nm2xvag3vrwc/REPORT.md`.
 
 ---
 

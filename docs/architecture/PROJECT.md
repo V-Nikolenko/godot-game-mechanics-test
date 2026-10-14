@@ -104,7 +104,7 @@ Detail and APIs: [global.md](modules/global.md).
   `ContactProfile` (`global/components/contact_profile.gd`) is the offensive twin of
   `DefenseProfile`: `NONE` (no hitbox), `COLLISION` (today's always-on hitbox, the default —
   every legacy enemy), `RAMMING` (the hitbox is live only while the brain calls `set_armed(true)`)
-  or `EXPLOSIVE` (RAMMING, plus a `ContactBlast` — a separate `HitBox` re-homed into the *owner's
+  `ARMOR` (Ph4: armed from `setup()`, never detonates and never hurts its owner, with an optional `shove_speed` that hands the touched ship an `apply_knockback(impulse)`) or `EXPLOSIVE` (RAMMING, plus a `ContactBlast` — a separate `HitBox` re-homed into the *owner's
   parent* so it survives the owner's death, following `ExplosionEffect`'s pattern, since a child
   node dies with its parent in the same frame it would need to be detected in). `BaseEnemy.
   suspend_ai()` arms the profile, so a rail-driven rammer still hurts on contact. Recipe:
@@ -124,8 +124,26 @@ Detail and APIs: [global.md](modules/global.md).
   fields** — so level 1 and the station's reinforcements stay armed on a path while level 1 itself no longer uses
   rails for these two. `aim_mode` / `shoot_forward()` / `shoot_at_player()` are rail-only inputs. Ph15 applies the same
   rule to every other shooter it migrates. Recipe: [global.md](modules/global.md) → *Enemy AI*.
+  Ph4 extended the rule to the Sniper (`SniperTelegraph`'s own rail cycle at the legacy timings, never writing
+  rotation), the Bomber (a root `_process` clock dropping gravity bombs straight down) and the Ram Corvette (its ARMOR
+  contact stays armed).
+- **Armour is a deflection rule on a full-size hurtbox, built from breakable parts (Ph4).** An armoured enemy keeps one
+  full-size `HurtBox` and answers `is_armored()` / `deflects_hit(hit_box)`; the breakable parts are `ArmorPlate`s
+  (`global/components/armor_plate.gd`) under a group node (`Plates`), never direct children of the enemy root, so the
+  hurtbox-geometry gate still sees one hurtbox covering the body. A plate breaks on a rocket, or on a projectile that
+  answers `is_high_impact()` (the player's Sniper Shot), and glances off anything else. A mask-based armour is rejected:
+  it silently consumes bullets. Recipe: [global.md](modules/global.md) → *Armour that deflects bullets but breaks to rockets*.
+- **An enemy can break contact and can ask whether a rock is in the way (Ph4).** `Steering.break_contact()` /
+  `EnemyMover.break_contact()` back away from a threat at an angle, and `TargetInfo.line_of_sight()` casts a real ray
+  through `LineOfSight` (`global/enemy_ai/line_of_sight.gd`): only the group `asteroids` or a collider answering
+  `blocks_line_of_sight()` blocks it. Recipe: [global.md](modules/global.md) → *Enemy AI*.
+- **Ordnance outlives its owner without breaking the one-owner rule (Ph4).** `BulletPool.persist_after_owner_death`
+  hands every in-flight projectile over to self-freeing when the owning ship leaves the tree; the Bomber's gravity
+  bombs, mines and pursuit bombs (`assault/scenes/projectiles/enemy_ordnance/`, `EnemyOrdnance`) are the first user.
+  Ordnance is not an `EnemyBullet` and not a `BaseEnemy`: never in `enemies`, never scored, and any player hit defuses
+  it. Detail: [assault.md](modules/assault.md) → *Projectiles & bullet pool*; [BULLET_POOL.md](../BULLET_POOL.md).
 - **An enemy picks a round, it does not retune one bullet (Ph3).** The pooled `EnemyBullet` family —
-  Pulse, Scatter, Gatling Stream, Heavy Shell (`assault/scenes/projectiles/enemy_bullet/rounds/`, `EnemyRounds`) — are
+  Pulse, Scatter, Gatling Stream, Rail (the Sniper's, Ph4), Heavy Shell (`assault/scenes/projectiles/enemy_bullet/rounds/`, `EnemyRounds`) — are
   inherited scenes of `enemy_bullet.tscn`, each with its own `ProjectileLifetime`; `EnemyBullet.reset()` restores the
   scene's authored speed and damage. **One pool per round per shooter, a direct child of the enemy root** (a pool under
   a controller would carry its live bullets with the ship), sized with `EnemyRounds.pool_size_for()` for the AI burst
@@ -230,7 +248,9 @@ Detail and APIs: [global.md](modules/global.md).
   target and, if it returns `true`, the bullet keeps flying at full damage with no pierce charge
   spent. This exists because the space-station boss's armoured core spans the whole hull, so a
   shot aimed at a turret has to survive crossing it undeflected, or the turrets — and the boss —
-  are unkillable. `PierceModule` raises the number of damaging hits a bullet survives before it
+  are unkillable. The Ram Corvette's plates use the hit-aware `deflects_hit()` (rockets and `is_high_impact()`
+  projectiles break a plate, bullets glance off) and `ArmorQuery` is the one place all three player projectiles
+  (bullet, homing rocket, warhead) ask; a later heavy weapon opts in by answering `is_high_impact()`. `PierceModule` raises the number of damaging hits a bullet survives before it
   stops. Player bullets despawn at the *viewport* edge and `EnemyBullet` at the *arena* bound;
   that asymmetry is deliberate, because the player's weapons are also mounted in Open Space, which
   has no `ArenaCamera`. Gated by `tests/integration/test_player_bullet_lifetime.gd`.
@@ -289,8 +309,16 @@ Detail and APIs: [global.md](modules/global.md).
   and `tests/integration/test_collision_layer_names.gd` (every collision layer bit used anywhere
   is named in `project.godot [layer_names]`, and every named layer has a matching
   `CollisionLayers` constant)
+  and the Phase 4 specialist gates (below)
   — plus the space-station family and `tests/integration/test_enemy_mover_single_writer.gd`
   (the AI single-writer rule above).
+  The Phase 4 specialist gates: `test_level1_specialist_spawns.gd` (pins all 50 level-1 sniper / ram / bomber rows and
+  caps the count at 2.5x frozen legacy peaks), `test_engagement_deadline.gd` (the sniper and ram deadline rows, plus a
+  Bomber-in-an-`ENEMIES_CLEARED`-section boundary), `test_level1_specialist_exit.gd` (a real `WaveManager` replay of
+  Cloud Descent) and, in `test_sniper.gd` / `test_ram_corvette.gd` / `test_bomber.gd`, an **attack-in-budget row** per
+  specialist: from every level-1 spawn class it reaches its attack state before its Assault budget expires. The
+  ordnance / armour / line-of-sight primitives are covered by `test_enemy_ordnance.gd`, `test_armor_query.gd`,
+  `test_line_of_sight.gd` and the `ContactProfile` ARMOR rows in `test_contact_profile.gd`.
   A few characterization files also carry a handful of clearly-marked **intent** tests, which say
   so in a comment (e.g. `test_health_component.gd::test_amount_changed_declares_the_int_it_emits`).
   Read [`tests/README.md`](../../tests/README.md) before adding a test — it documents the
@@ -327,7 +355,7 @@ Detail and APIs: [global.md](modules/global.md).
 Each combat entity carries a behaviour doc **beside its scene**, mirroring a common format:
 
 - **Racers:** `assault/scenes/race/racers/<name>/RACER.md` (6 racers)
-- **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (9 wave enemies + the `space_station` mini-boss)
+- **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (the wave enemies + the `space_station` mini-boss)
 - **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (3 hazards)
 - **Race track hazards:** `assault/scenes/race/track/RACE_HAZARDS.md` (walls, asteroids, lasers + the lethal-hazard / AI-avoidance system)
 

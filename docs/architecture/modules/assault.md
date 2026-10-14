@@ -262,6 +262,21 @@ test seam, radii 700/1300, 650/1700 and 600/1300, each `lose_radius` above the d
 (asserted from config fields). `RETURNING` never interrupts the sniper's DECOY/AIM/LOCK, the bomber's RUN or the
 ram's WIND_UP/CHARGE. See each enemy's ENEMY.md "Hub idle" section.
 
+**The Sniper, Bomber and Ram Corvette are the Phase 4 specialists** — see
+[sniper/ENEMY.md](../../../assault/scenes/enemies/sniper/ENEMY.md),
+[bomber/ENEMY.md](../../../assault/scenes/enemies/bomber/ENEMY.md) and
+[ram_corvette/ENEMY.md](../../../assault/scenes/enemies/ram_corvette/ENEMY.md). Each is a brain + flat config like the
+Phase 3 shooters, and each adds one battlefield mechanic: the Sniper relocates to a fresh firing angle, holds dead still
+through its aim and lock, fires a rail round and breaks away (it holds fire when `LineOfSight` finds a rock in the way);
+the Bomber lays persistent `EnemyOrdnance` across the player's predicted track; the Ram Corvette wears three
+`ArmorPlate`s that only rockets (or a Sniper Shot) break, then charges at the predicted point. **In Assault a
+specialist's life is one attack** (sniper `engage_seconds` 9.0, ram 4.0, bomber 8.0), and each has an *attack-in-budget
+row* proving it reaches its attack state from every level-1 spawn class before its budget expires. **All 50 of level 1's
+sniper / ram / bomber spawns are off rails** (26 / 22 / 2) with their trigger, offset and delay unchanged
+(`test_level1_specialist_spawns.gd`); a rail still works and runs each one's rail fallback. **A Bomber must never spawn in
+an `ENEMIES_CLEARED` section** — its persisted ordnance would hold the section open (a boundary row in
+`test_engagement_deadline.gd`). Cloud Descent's 73.2 s ram is the tightest deadline row (9.60 s of 10 s).
+
 **The Fighter and the Gatling Interceptor are the Phase 3 AI shooters** — see
 [fighter/ENEMY.md](../../../assault/scenes/enemies/fighter/ENEMY.md) and
 [gatling_interceptor/ENEMY.md](../../../assault/scenes/enemies/gatling_interceptor/ENEMY.md). The Fighter

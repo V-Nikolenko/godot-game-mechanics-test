@@ -157,15 +157,18 @@ b.drone().at(-150, 400)
 
 **Examples:**
 ```gdscript
-# Classic straight dive
-b.ram().at(0, -400).move(b.straight(280))
+# Spawn it and let it fly its own charges (no .move()) - level 1's shape
+b.ram().at(0, -400)
 
-# Angled pair from the sides
-b.ram().at(-255, -400).move(b.straight(350))
-b.ram().at( 255, -400).move(b.straight(350)).delay(0.5)
+# A pair from the sides, staggered
+b.ram().at(-255, -400)
+b.ram().at( 255, -400).delay(0.5)
 
 # Surprise from below
-b.ram().at(0, 400).move(b.straight(260, PI))
+b.ram().at(0, 400)
+
+# On a rail (legacy shape): the brain is suspended, the ARMOR contact stays armed, nothing else happens
+b.ram().at(0, -400).move(b.straight(280))
 ```
 
 ---
@@ -320,8 +323,8 @@ b.wave(50.0, [
 **Scene:** `bomber.tscn`  
 **Movement:** AI-driven (`BomberBrain` + `EnemyMover`); `.move()` puts it on a rail, where it drops a gravity bomb DOWN every `rail_bomb_interval`. Off rails it flies bombing runs (Phase 4 t10): a mine wall across where a moving player is heading, a gravity bomb on a slow close player, a pursuit bomb on a far or boosting one, then an escape arc — see `bomber/ENEMY.md`. Level 1 spawns it off rails since t21.  
 **Shoots:** Yes — gravity bombs, mines, pursuit bombs (`EnemyOrdnance`), shootable.  
-**HP:** Medium–High  
-**Score:** Medium–High
+**HP:** 150 (a wide 96 × 44 body: the wings are shootable); every bomb, mine and pursuit bomb it leaves can be shot down  
+**Score:** 80 (ordnance scores nothing)
 
 **Config fields** (`BomberConfig`):
 
@@ -335,10 +338,16 @@ b.wave(50.0, [
 
 **Examples:**
 ```gdscript
-# Slow straight dive with escort drones
-b.bomber().at(0, -400).move(b.straight(82)).shoot_at_player()
-b.drone().at(-72, -400).move(b.sine(170, -30)).delay(0.4)
-b.drone().at( 72, -400).move(b.sine(170,  30)).delay(0.4)
+# Spawn it and let it fly its own bombing run (no .move()) - level 1's shape
+b.bomber().at(0, -400)
+
+# With escort drones (the drones are AI too)
+b.bomber().at(0, -400)
+b.drone().at(-72, -400).delay(0.4)
+b.drone().at( 72, -400).delay(0.4)
+
+# On a rail (legacy shape): a gravity bomb straight down every rail_bomb_interval
+b.bomber().at(0, -400).move(b.straight(82))
 ```
 
 ---
@@ -458,9 +467,9 @@ b.drone().formation(b.cluster_formation(3, 30)).at(0, -400)
 
 ## Enemy Rounds (the bullet family, Ph3)
 
-`assault/scenes/projectiles/enemy_bullet/rounds/` holds four **pooled** enemy rounds, each an inherited scene of
+`assault/scenes/projectiles/enemy_bullet/rounds/` holds five **pooled** enemy rounds, each an inherited scene of
 `enemy_bullet.tscn` (so each is an `EnemyBullet` with a `ProjectileLifetime`). `EnemyRounds` (`enemy_rounds.gd`) holds
-the four `PackedScene` constants and `pool_size_for()`. A shooter picks one by giving its `BulletPool.bullet_scene`
+the five `PackedScene` constants and `pool_size_for()`. A shooter picks one by giving its `BulletPool.bullet_scene`
 that scene — there is no per-bullet script and no per-round retuning.
 
 | Round | Constant | Scene speed | Damage | Lifetime (`max_time` / `max_distance`) | Look | Used by |
@@ -468,17 +477,25 @@ that scene — there is no per-bullet script and no per-round retuning.
 | Pulse | `EnemyRounds.PULSE` | 300 | 8 | 8 s / 1400 px | red-pink bolt, 3 px wide | Fighter (AIMED burst) |
 | Scatter | `EnemyRounds.SCATTER` | 420 | 6 | 2 s / 450 px | short pink pellet, 4 px wide, 2 px hitbox | Fighter (FORWARD burst) |
 | Gatling Stream | `EnemyRounds.GATLING_STREAM` | 240 | 4 | 8 s / 1400 px | thin red streak, 2 px wide | Gatling Interceptor |
-| Heavy Shell | `EnemyRounds.HEAVY_SHELL` | 160 | 20 | 12 s / 1800 px | big pale-pink slug with a dark rim | **nobody yet** (first consumer: Ph4 Bomber/Ram or Ph10 Gunship) |
+| Rail | `EnemyRounds.RAIL` | 2200 | 28 | 4 s / 2400 px | white-hot 3 px core with a glow, and a fading `RailTrail` behind it | Sniper (AI shot; its rail fallback fires 1400 px/s for 25) |
+| Heavy Shell | `EnemyRounds.HEAVY_SHELL` | 160 | 20 | 12 s / 1800 px | big pale-pink slug with a dark rim | **nobody yet** (Ph4's Bomber and Ram fire no rounds; first consumer: Ph10 Heavy Gunship) |
 
 - **One pool per round per shooter**, a direct child of the enemy root. Size it with
   `EnemyRounds.pool_size_for(max_burst, round_lifetime, min_burst_period)`; a self-timed rail pattern is a burst of 1
   at its own interval. The shooter's pattern may still override `speed` / `damage` on the acquired bullet;
   `EnemyBullet.reset()` restores the scene's own authored values on reuse.
-- `enemy_bullet.tscn` itself stays the legacy orange bolt, and every other enemy (Gunship, Bomber, Sniper, Ram, the
-  drones' pulse shots) keeps it until the Ph17 audit.
+- `enemy_bullet.tscn` itself stays the legacy orange bolt, and every other shooter (Gunship, the drones' pulse shots)
+  keeps it until the Ph17 audit. The Bomber and the Ram fire no rounds.
 - Each round's `max_distance / slowest speed any shooter fires it at` must fit its `max_time`
   (`test_enemy_bullet_lifetime.gd`), reading the speeds from the shooters' config fields.
 - Tests: `tests/integration/test_enemy_rounds.gd` (shape, reset, lifetimes, the Heavy Shell fixture shooter).
+
+### Enemy ordnance (Ph4)
+
+Not rounds: `assault/scenes/projectiles/enemy_ordnance/` holds the Bomber's gravity bomb, proximity mine and pursuit
+bomb (`EnemyOrdnance`, an `Area2D`; not an `EnemyBullet`, not in `enemies`, never scored). Any player hit defuses one.
+Its pools set `persist_after_owner_death`, so what a Bomber dropped outlives it. See `docs/BULLET_POOL.md` and
+`bomber/ENEMY.md`.
 
 ---
 
@@ -487,7 +504,7 @@ that scene — there is no per-bullet script and no per-round retuning.
 | Rule | Detail |
 |------|--------|
 | **Always `.move()` path-following enemies** | None left on the AI roster. `ram`, `sniper` / `sniper_enemy` and `bomber` are AI enemies since Phase 4 (level 1 spawns them with no `.move()` in every section, t21 / t22); a rail still works and runs each one's rail fallback (sniper telegraph cycle, bomber rail bombs, ram straight line). |
-| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship`, `fighter`, `gatling_interceptor` — attaching `EnemyPathMover` suspends their AI. `fighter` and `gatling_interceptor` fall back to the legacy weapon on a rail (so the station's reinforcements still fire); everything else in this list goes quiet. |
+| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship`, `fighter`, `gatling_interceptor`, `ram`, `sniper`, `bomber` — attaching `EnemyPathMover` suspends their AI. `fighter`, `gatling_interceptor`, `sniper` and `bomber` fall back to a legacy weapon on a rail (so the station's reinforcements still fire); the ram keeps its ARMOR contact armed; the rest go quiet. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` on a rail** | No fly-in constant any more: a rail suspends the brain and the telegraph cycle starts at spawn. Without `.move()` it runs its AI relocation loop. |
 | **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |

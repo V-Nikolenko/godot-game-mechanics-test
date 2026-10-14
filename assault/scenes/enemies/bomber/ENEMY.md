@@ -3,9 +3,11 @@
 **Role:** Drops persistent ordnance (gravity bombs, proximity mines, a pursuit bomb) that forces the player to reposition.
 **Fantasy / threat:** A wide, slow, easy-to-hit target — but ignore it and what it leaves behind catches you. Every piece of ordnance can be shot down.
 
-> **Build state (Phase 4, t10).** The scene, config, pools, rail fallback, Assault exit (t9) and the AI bombing runs
-> (t10) and the hub idle (t19) are built. Level 1 spawns both its bombers (Planet Approach) off rails since t21.
+> **Build state (Phase 4, complete).** Everything the epic planned for the Bomber is built: the scene, config, pools, rail
+> fallback and Assault exit (t9), the AI bombing runs (t10), the wide top-down sprite (t11), the hub idle (t19), the hub
+> patrol (t20) and level 1 off rails in every section (Planet Approach t21; the Bomber is not in the other two).
 > Plans: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.4; `docs/plans/cmuyk2qpr0089oa2xlih7xvmg/3-plan.md` (t10, with "As built").
+> Known gaps: see the epic report, `docs/epics-done/cmufs7ele0015nm2xvag3vrwc/REPORT.md`.
 
 ---
 
