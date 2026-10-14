@@ -22,10 +22,10 @@ extends ShipConfig
 @export var max_turn_rate: float = 2.2
 
 @export_group("Engagement")
-## Assault: seconds before the Corvette disengages.
-@export var engage_seconds: float = 4.5
-## Assault DISENGAGE speed (px/s).
-@export var exit_speed: float = 500.0
+## Assault: seconds before the Corvette disengages. 4.0 since Ph4 t22 (the second pre-approved lever; was 4.5).
+@export var engage_seconds: float = 4.0
+## Assault DISENGAGE speed (px/s). 560 since Ph4 t22 (the first pre-approved lever; was 500).
+@export var exit_speed: float = 560.0
 
 @export_group("Charge")
 ## APPROACH hands over to LINE_UP within this of the player (px).

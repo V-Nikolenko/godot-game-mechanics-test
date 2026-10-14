@@ -130,7 +130,7 @@ b.drone().at(-150, 400)
 
 **Builder:** `b.ram()`  
 **Scene:** `ram_corvette.tscn`  
-**Movement:** AI (`RamCorvetteBrain`): approaches at `cruise_speed` (in Assault toward a point beside and above/below the player, so its charge is diagonal), lines up on where the player will be, winds up with its plates glowing (0.65 s, a crawl - the player's window), rams in a straight line 220 px past that point and swings round in a wide 1.4 rad/s turn to go again. A plate broken during its line-up or wind-up staggers it (0.4 s, charge cancelled). Exposed: cruise 340, charge 700, strafes out of the player's aim. In Assault it gets one charge per life and leaves after `engage_seconds` (4.5 s), straight along its charge if the time runs out mid-charge. **Level 1 gives it no rail in Deep Space and Planet Approach (t21); Cloud Descent keeps a `.move()` rail until t22**; on a rail its brain is suspended and its ARMOR contact stays armed.  
+**Movement:** AI (`RamCorvetteBrain`): approaches at `cruise_speed` (in Assault toward a point beside and above/below the player, so its charge is diagonal), lines up on where the player will be, winds up with its plates glowing (0.65 s, a crawl - the player's window), rams in a straight line 220 px past that point and swings round in a wide 1.4 rad/s turn to go again. A plate broken during its line-up or wind-up staggers it (0.4 s, charge cancelled). Exposed: cruise 340, charge 700, strafes out of the player's aim. In Assault it gets one charge per life and leaves after `engage_seconds` (4.0 s), straight along its charge if the time runs out mid-charge. **Level 1 gives it no rail in any section (t21, t22)**; on a rail its brain is suspended and its ARMOR contact stays armed.  
 **Shoots:** No — contact damage 50 armoured (with a shove), 60 once exposed.  
 **HP:** three armour plates (50 each) over a 120 HP hull. Bullets glance off plates and hull (not consumed); each rocket breaks the plate it hits; a Sniper Shot chips a plate (40) and flies on; only with every plate gone does the hull take damage. One homing volley strips all three plates.  
 **Score:** Medium (35)
@@ -144,7 +144,7 @@ b.drone().at(-150, 400)
 | `collision_damage` / `exposed_collision_damage` | 50 / 60 | Contact, armoured / exposed. |
 | `armor_shove_speed` | 260.0 | ARMOR contact shove while armoured; 0 once exposed. |
 | `cruise_speed` / `acceleration` / `max_turn_rate` | 280 / 500 / 2.2 | Mover caps. |
-| `engage_seconds` / `exit_speed` | 4.5 / 500 | Assault budget and exit. |
+| `engage_seconds` / `exit_speed` | 4.0 / 560 | Assault budget and exit (4.5 / 500 until t22: both pre-approved levers, for Cloud Descent's ENEMIES_CLEARED deadline). |
 | `engage_range` / `assault_side_offset` | 420 / 240 | LINE_UP range; Assault approach offset (each axis). |
 | `line_up_cap` / `braking` | 0.5 / 1600 | Max line-up; the hard brake used only while it stops to aim. |
 | `wind_up_seconds` / `crawl_speed` | 0.65 / 20 | The telegraph. |
@@ -174,7 +174,7 @@ b.ram().at(0, 400).move(b.straight(260, PI))
 
 **Builder:** `b.sniper()` (alias `b.sniper_enemy()`)  
 **Scene:** `sniper.tscn`  
-**Movement:** AI (`SniperBrain`): a relocation cycle — flies to its nearest legal firing point, settles, aims (1.3 s, dim line) and locks (0.5 s, bright line) standing still, fires one rail round (with a fading `RailTrail`), breaks contact, then relocates to a new firing angle at least 45° round the player, never across it; it holds fire when a rock blocks its line of sight. In Assault the firing points stay a margin inside the corridor and a budget expiry in AIM/LOCK waits for the shot. **Level 1 gives it no rail in Deep Space and Planet Approach (t21); Cloud Descent keeps a `.move()` rail until t22**: a rail suspends the brain and `SniperTelegraph` runs the legacy cycle (aim 2.0 s, lock 0.5 s, a 1400 px/s round, 5 shots), starting at spawn. There is no fly-in constant to match any more.  
+**Movement:** AI (`SniperBrain`): a relocation cycle — flies to its nearest legal firing point, settles, aims (1.3 s, dim line) and locks (0.5 s, bright line) standing still, fires one rail round (with a fading `RailTrail`), breaks contact, then relocates to a new firing angle at least 45° round the player, never across it; it holds fire when a rock blocks its line of sight. In Assault the firing points stay a margin inside the corridor and a budget expiry in AIM/LOCK waits for the shot. **Level 1 gives it no rail in any section (t21, t22)**; a rail still suspends the brain and `SniperTelegraph` runs the legacy cycle (aim 2.0 s, lock 0.5 s, a 1400 px/s round, 5 shots), starting at spawn. There is no fly-in constant to match any more.  
 **Shoots:** Yes — one rail round per telegraphed shot (`rail_round.tscn`).  
 **Assault exit:** leaves after `engage_seconds` (9.0 s).  
 **HP:** 60 · **Score:** 50  
@@ -486,7 +486,7 @@ that scene — there is no per-bullet script and no per-round retuning.
 
 | Rule | Detail |
 |------|--------|
-| **Always `.move()` path-following enemies** | None left on the AI roster. `ram`, `sniper` / `sniper_enemy` and `bomber` are AI enemies since Phase 4 (level 1 Deep Space / Planet Approach spawn them with no `.move()`, t21); a rail still works and runs each one's rail fallback (sniper telegraph cycle, bomber rail bombs, ram straight line). |
+| **Always `.move()` path-following enemies** | None left on the AI roster. `ram`, `sniper` / `sniper_enemy` and `bomber` are AI enemies since Phase 4 (level 1 spawns them with no `.move()` in every section, t21 / t22); a rail still works and runs each one's rail fallback (sniper telegraph cycle, bomber rail bombs, ram straight line). |
 | **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship`, `fighter`, `gatling_interceptor` — attaching `EnemyPathMover` suspends their AI. `fighter` and `gatling_interceptor` fall back to the legacy weapon on a rail (so the station's reinforcements still fire); everything else in this list goes quiet. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` on a rail** | No fly-in constant any more: a rail suspends the brain and the telegraph cycle starts at spawn. Without `.move()` it runs its AI relocation loop. |

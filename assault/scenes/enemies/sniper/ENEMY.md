@@ -107,7 +107,7 @@ Open Space only (`budget.active == false` and not `start_engaged`); Assault star
 
 ## Spawn notes
 
-- WaveBuilder method: `b.sniper()` (alias `b.sniper_enemy()`) — see `docs/enemy-roster.md`. Level 1 spawns it with no rail in Deep Space and Planet Approach (t21); Cloud Descent still uses `.move(...)` until t22; the `shot_count` prop is gone (use `SniperConfig.rail_shot_count`).
+- WaveBuilder method: `b.sniper()` (alias `b.sniper_enemy()`) — see `docs/enemy-roster.md`. Level 1 spawns it with no rail in every section (t21; Cloud Descent t22); the `shot_count` prop is gone (use `SniperConfig.rail_shot_count`).
 
 ## Tests
 

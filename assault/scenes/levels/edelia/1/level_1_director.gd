@@ -15,11 +15,12 @@
 ## comments below still name each group's legacy path, as a description of where it enters.
 ## Pinned by tests/integration/test_level1_drone_spawns.gd and test_level1_drone_exit.gd.
 ##
-## Sniper, ram and bomber lines (`b.sniper()` / `b.sniper_enemy()`, `b.ram()`, `b.bomber()`) in Deep Space
-## and Planet Approach carry no `.move()`, `.free_after()` or `shoot_*()` either (Phase 4 t21): each arrives
-## at its `.at()` / `.delay()`, runs its own AI and leaves when its config's `engage_seconds` budget is spent.
-## Cloud Descent's specialists are still on rails until t22. Pinned, with their density gate, by
-## tests/integration/test_level1_specialist_spawns.gd.
+## Sniper, ram and bomber lines (`b.sniper()` / `b.sniper_enemy()`, `b.ram()`, `b.bomber()`) carry no `.move()`,
+## `.free_after()` or `shoot_*()` either (Phase 4 t21: Deep Space and Planet Approach; t22: Cloud Descent): each
+## arrives at its `.at()` / `.delay()`, runs its own AI and leaves when its config's `engage_seconds` budget is spent.
+## Pinned, with their density gate, by tests/integration/test_level1_specialist_spawns.gd; Cloud Descent's are also
+## gated per entry against its ENEMIES_CLEARED timeout by test_engagement_deadline.gd and replayed by
+## test_level1_specialist_exit.gd. No Bomber may go into an ENEMIES_CLEARED section (its mines outlive it).
 extends Node
 
 const _MISSION_NUMBER: int = 1
@@ -843,7 +844,7 @@ func _build_section_3() -> LevelSection:
 
 		# 11.0 s — sniper from below-left as ambush
 		b.wave(11.0, [
-			b.sniper().at(-260, 400).move(b.straight(100, -PI / 2 - PI / 12)).shoot_at_player().free_after(5.5),
+			b.sniper().at(-260, 400),
 		]),
 
 		# 14.0 s — 3 fighters entering from the right (+ drone chasers)
@@ -874,18 +875,18 @@ func _build_section_3() -> LevelSection:
 			b.fighter().at( 260, -400).delay(0.3).squad(&"w8f"),
 		]),
 
-		# 28.0 s — ram from below corner (surprise)
+		# 28.0 s — ram pair from the lower corners (surprise)
 		b.wave(28.0, [
-			b.ram().at(-180, 400).move(b.straight(290, PI - 0.2)),
-			b.ram().at( 180, 400).move(b.straight(290, PI + 0.2)).delay(0.4),
+			b.ram().at(-180, 400),
+			b.ram().at( 180, 400).delay(0.4),
 		]),
 
 		# 32.0 s — 2 snipers from sides + 2 from top (+ drone screen)
 		b.wave(32.0, [
-			b.sniper().at(-500,  50).move(b.straight(95, PI / 2)).free_after(4.0).shoot_at_player(),
-			b.sniper().at( 500,  50).move(b.straight(95, -PI / 2)).free_after(4.0).shoot_at_player(),
-			b.sniper().at(-120, -400).move(b.straight(88, PI / 6)).shoot_at_player(),
-			b.sniper().at( 120, -400).move(b.straight(88, -PI / 6)).shoot_at_player(),
+			b.sniper().at(-500,  50),
+			b.sniper().at( 500,  50),
+			b.sniper().at(-120, -400),
+			b.sniper().at( 120, -400),
 			b.drone().at(   0, -400).delay(0.5),
 		]),
 
@@ -898,7 +899,7 @@ func _build_section_3() -> LevelSection:
 		b.wave(38.0, [
 			b.fighter().at(-500, 0).squad(&"w12f"),
 			b.fighter().at( 500, 0).delay(0.3).squad(&"w12f"),
-			b.ram().at(0, -400).move(b.straight(320)).delay(0.6),
+			b.ram().at(0, -400).delay(0.6),
 		]),
 
 		# 42.0 s — 4 fighters from both flanks (+ 2 extras)
@@ -924,14 +925,14 @@ func _build_section_3() -> LevelSection:
 			b.fighter().at(-65, -400).delay(0.8).squad(&"w15f"),
 			b.fighter().at(  0, -400).delay(0.8).squad(&"w15f"),
 			b.fighter().at( 65, -400).delay(0.8).squad(&"w15f"),
-			b.ram().at(-220, -400).move(b.straight(330, PI / 12)).delay(1.5),
-			b.ram().at( 220, -400).move(b.straight(330, -PI / 12)).delay(1.5),
+			b.ram().at(-220, -400).delay(1.5),
+			b.ram().at( 220, -400).delay(1.5),
 		]),
 
-		# 53.0 s — sniper crossfire from sides during gunship fight
+		# 53.0 s — sniper pair entering from the sides during the gunship fight
 		b.wave(53.0, [
-			b.sniper().at(-500,  20).move(b.straight(95, PI / 2)).free_after(5.0).shoot_at_player(),
-			b.sniper().at( 500,  20).move(b.straight(95, -PI / 2)).free_after(5.0).shoot_at_player(),
+			b.sniper().at(-500,  20),
+			b.sniper().at( 500,  20),
 		]),
 
 		# 56.0 s — drones rising from behind (extended)
@@ -952,8 +953,8 @@ func _build_section_3() -> LevelSection:
 		b.wave(62.0, [
 			b.gunship().at(-100, -400).move(b.straight(36)),
 			b.gunship().at( 100, -400).move(b.straight(36)).delay(0.8),
-			b.sniper().at(-225, -400).move(b.straight(82, PI / 10)).shoot_at_player().delay(1.2),
-			b.sniper().at( 225, -400).move(b.straight(82, -PI / 10)).shoot_at_player().delay(1.2),
+			b.sniper().at(-225, -400).delay(1.2),
+			b.sniper().at( 225, -400).delay(1.2),
 			b.drone().at(0, -400).delay(0.5).squad(&"w19"),
 			b.drone().at(-150, -400).delay(0.7).squad(&"w19"),
 			b.drone().at( 150, -400).delay(0.7).squad(&"w19"),
@@ -978,7 +979,7 @@ func _build_section_3() -> LevelSection:
 			b.fighter().formation(b.v_formation(3)).at(0, -400).delay(0.5),
 			b.fighter().at(-500, 100).delay(0.8).squad(&"w22f"),
 			b.fighter().at( 500, 100).delay(0.8).squad(&"w22f"),
-			b.ram().at(0, 400).move(b.straight(300, PI)).delay(1.2),
+			b.ram().at(0, 400).delay(1.2),
 		]),
 
 		# 76.0 s — drone swarm closer

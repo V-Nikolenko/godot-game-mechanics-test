@@ -740,7 +740,8 @@ committed.
 Files: `integration/test_fighter.gd`, `test_fighter_squad.gd`, `test_gatling_interceptor.gd`,
 `test_gatling_convergence.gd`, `test_enemy_rounds.gd`, `test_enemy_bullet_lifetime.gd`,
 `test_wave_builder_formations.gd`, the level-1 files `test_level1_fighter_spawns.gd`,
-`test_level1_fighter_fire_density.gd`, `test_level1_fighter_exit.gd`, `test_engagement_deadline.gd`, plus
+`test_level1_fighter_fire_density.gd`, `test_level1_fighter_exit.gd`, `test_engagement_deadline.gd` (Phase 4 t22 added its
+sniper / ram rows; the Phase 4 replay `test_level1_specialist_exit.gd` uses the same 8x clock traps below), plus
 `unit/test_burst_clock.gd`, `test_dubins_path.gd`, `test_attack_patterns_forward.gd`, and the Gatling/fighter cases in
 `test_enemy_dual_mode.gd` (both harnesses) and `test_sector_hub_patrol.gd`. Unlike the older characterization suite these
 **assert intent**. Four traps they hit:

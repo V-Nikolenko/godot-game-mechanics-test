@@ -5,7 +5,7 @@
 
 > **Build state (Phase 4, t16 armour + t17 charge + t19 hub idle).** The armour, the ARMOR contact profile, the predicted-intercept
 > charge (LINE_UP / WIND_UP / CHARGE / WIDE_TURN), the plate glow, the stagger, the faster exposed hull and the Assault
-> budget rules, the real hull and plate sprites (t18) and the hub idle (t19) are built; level 1 off rails is built for Deep Space and Planet Approach (t21); Cloud Descent is t22.
+> budget rules, the real hull and plate sprites (t18) and the hub idle (t19) are built; level 1 spawns it off rails in every section (Deep Space and Planet Approach t21, Cloud Descent t22).
 > Plan: `docs/plans/cmufs7ele0015nm2xvag3vrwc/3-plan.md` §2.6; task plans `docs/plans/cmuyk2qq8008xoa2xxoq1frgn/3-plan.md`
 > (armour) and `docs/plans/cmuyk2qqb0091oa2xy7yn9sxa/3-plan.md` (charge).
 
@@ -18,7 +18,7 @@
 | Hull HP | 120 (`max_health`; takes damage only once all three plates are gone) |
 | Plate HP | 50 each (`plate_health`): one rocket of either kind breaks one, two Sniper Shots (40) do |
 | Contact | 50 armoured (`collision_damage`), any phase, with a 260 px/s shove (`armor_shove_speed`); 60 exposed (`exposed_collision_damage`), during CHARGE only, no shove |
-| Speed | `cruise_speed` 280 (exposed 340), `acceleration` 500, `charge_speed` 620 (exposed 700), `exit_speed` 500 (Assault DISENGAGE) |
+| Speed | `cruise_speed` 280 (exposed 340), `acceleration` 500, `charge_speed` 620 (exposed 700), `exit_speed` 560 (Assault DISENGAGE; 500 until t22, raised as a pre-approved lever for Cloud Descent's deadline) |
 | Body | `CircleShape2D` r 34, shared by the body, the root `HurtBox` (default `DefenseProfile`, mask 1121) and `ContactHitBox`; the plates reach 42 px (an 84 px ship) |
 | Sprite | `ram_corvette.png` (84 x 84, nose-down, no plates painted on; `Sprite2D`, no rotation or scale). Each plate's `Sprite` shows `ram_plate_front.png` (front) or `ram_plate_side.png` (right; the left plate sets `flip_h`), tinted by `ArmorPlate.set_glow()`. The old Ram Ship PNGs are deleted |
 | Scene / config | `ram_corvette.tscn` / `ram_corvette_config.tres` (flat `RamCorvetteConfig`) |
@@ -109,8 +109,10 @@ Open Space only (`budget.active == false` and not `start_engaged`); Assault star
 
 ## Spawn notes
 
-- WaveBuilder method: `b.ram()` — see `docs/enemy-roster.md`. Level 1 spawns it with no rail in Deep Space and Planet Approach (t21); Cloud Descent still uses a rail
-  (`.move(b.straight(...))`) until t22.
+- WaveBuilder method: `b.ram()` — see `docs/enemy-roster.md`. Level 1 spawns it with no rail in every section (t21, t22). Cloud Descent's
+  73.2 s ram is the tightest row of its ENEMIES_CLEARED deadline (`test_engagement_deadline.gd`): it took both
+  pre-approved levers, `exit_speed` 500 -> 560 and `engage_seconds` 4.5 -> 4.0 (still one charge per life;
+  latest WIND_UP 3.07 s of 4.0).
 
 ## Tests
 

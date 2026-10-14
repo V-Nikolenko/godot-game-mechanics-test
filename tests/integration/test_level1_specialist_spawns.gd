@@ -251,10 +251,11 @@ func _live_peak(section: LevelSection, cam: ArenaCamera) -> int:
 
 
 ## The sections whose specialists are still on rails, so their frozen constants can still be recomputed from live
-## data. t21 removed deep_space and planet_approach (see `MIGRATED_SECTIONS` below: their count gate divides by the
-## frozen constant instead) and t22 removes cloud_descent (once a section has no rail left there is nothing to
-## recompute the constant FROM).
-const _RAIL_SECTIONS: Array[StringName] = [&"cloud_descent"]
+## data. t21 removed deep_space and planet_approach and t22 removed cloud_descent (see `MIGRATED_SECTIONS` below: their
+## count gate divides by the frozen constant instead; once a section has no rail left there is nothing to recompute the
+## constant FROM), so this is empty — the Ph3 t17 shape. The check re-arms by itself if a section is ever put back on
+## rails. Until then `_rail_lifetime()`'s sampling branch is exercised by nothing (t22 review N7); it stays for that day.
+const _RAIL_SECTIONS: Array[StringName] = []
 
 
 func test_legacy_peak_specialists_match_frozen_constants() -> void:
@@ -276,33 +277,6 @@ func test_legacy_peak_specialists_match_frozen_constants() -> void:
 			"frozen constant for %s is neither live-checked nor gated" % key)
 
 
-## Boundary: the live computation can reject. Extra rams dropped on a rail section's first specialist moment raise
-## that section's peak, so it no longer equals the frozen constant. On cloud_descent since t21: it is the one section
-## still on rails (t22 retires it, and the count gate's boundary below takes over).
-func test_extra_rams_at_the_peak_break_the_frozen_constant() -> void:
-	var cam := ArenaCamera.new()
-	add_child_autofree(cam)
-	var checked := false
-	for section: LevelSection in _build_sections():
-		if section.section_name != &"cloud_descent":
-			continue
-		checked = true
-		var before := _live_peak(section, cam)
-		assert_eq(before, int(_LEGACY_PEAK_SPECIALISTS[&"cloud_descent"]))
-		var trigger := 0.0
-		for row: Dictionary in EXPECTED:
-			if row["section"] == &"cloud_descent":
-				trigger = row["trigger"]
-				break
-		var b := WaveBuilder.new()
-		var extra: Array = []
-		for i in before + 1:
-			extra.append(b.ram().at(0, -400).move(b.straight(300)))
-		section.waves.append(b.wave(trigger, extra))
-		assert_gt(_live_peak(section, cam), before, "an added ram wave must raise the live peak")
-	assert_true(checked, "sanity: level 1 has cloud_descent")
-
-
 ## Boundary for the shared helper: a section with no specialists computes a peak of 0.
 func test_a_section_with_no_specialists_has_zero_peak() -> void:
 	var cam := ArenaCamera.new()
@@ -316,10 +290,11 @@ func test_a_section_with_no_specialists_has_zero_peak() -> void:
 	assert_gt(checked, 0, "sanity: level 1 has a section without specialists")
 
 
-# ── t21: deep_space and planet_approach off rails (docs/plans/cmuyk2qqm009hoa2xyvw88ama/3-plan.md) ────────────────
+# ── t21 / t22: all three sections off rails (docs/plans/cmuyk2qqm009hoa2xyvw88ama/3-plan.md; t22: cloud_descent,
+# docs/plans/cmuyk2qqp009loa2xb1k3py8o/3-plan.md) ────────────────────────────────────────────────────────────────────
 #
-# Their 35 specialist lines lost `.move()`, `.free_after()` and `.shoot_at_player()`; trigger, offset and delay are
-# the pin above, unchanged. Each ship now lives `engage + deferral + exit` from its spawn moment, every term read
+# All 50 specialist lines (35 in t21, cloud_descent's 15 in t22) lost `.move()`, `.free_after()` and
+# `.shoot_at_player()`; trigger, offset and delay are the pin above, unchanged. Each ship now lives `engage + deferral + exit` from its spawn moment, every term read
 # from the shipped config or MEASURED on the real scene (`specialist_exit_probe.gd`) — never a straight-line exit for
 # the sniper or the bomber, whose DISENGAGE curves (epic §2.9.2, the Ph3 open item):
 #   sniper  engage_seconds + aim_seconds + lock_seconds        + measured exit
@@ -328,11 +303,16 @@ func test_a_section_with_no_specialists_has_zero_peak() -> void:
 # Each deferral also gets `_TICK_SLACK` (two 1/60 s ticks): the brains' AIM/LOCK and stall checks have no time
 # epsilon, so the real deferral can run a tick or two over (t21 review N3). A spawn's moment is its wave's EFFECTIVE
 # trigger (the running max in list order — `WaveManager` triggers strictly in order) plus its delay.
+#
+# The exits here are t21's VIEW-grid measurements. For the ram they under-report by about 1.7 s per life: a ram can
+# begin DISENGAGE anywhere in the 1480 x 1480 corridor, and `test_engagement_deadline.gd` measures its cloud_descent
+# rows over `SpecialistExitProbe.corridor_starts()` for that reason (t22 review B1 / N1). Kept here as t21 built it
+# (a follow-up in DECISIONS); every section's peak has slack against it.
 
 const SpecialistExitProbe := preload("res://tests/helpers/specialist_exit_probe.gd")
 
-## The sections t21 took off rails. t22 adds cloud_descent.
-const MIGRATED_SECTIONS: Array[StringName] = [&"deep_space", &"planet_approach"]
+## The sections t21 (deep_space, planet_approach) and t22 (cloud_descent) took off rails: all 50 specialist rows.
+const MIGRATED_SECTIONS: Array[StringName] = [&"deep_space", &"planet_approach", &"cloud_descent"]
 
 ## Epic §2.9.2: peak alive specialists at most this many times the FROZEN `_LEGACY_PEAK_SPECIALISTS`.
 const _COUNT_RATIO := 2.5
@@ -372,7 +352,7 @@ func _count_lines(sections: Array[LevelSection], names: Array[StringName]) -> in
 
 func test_migrated_sections_have_no_rail_left() -> void:
 	var sections := _build_sections()
-	assert_eq(_count_lines(sections, MIGRATED_SECTIONS), 35, "sanity: 11 deep_space + 24 planet_approach lines")
+	assert_eq(_count_lines(sections, MIGRATED_SECTIONS), 50, "sanity: 11 deep_space + 24 planet_approach + 15 cloud_descent lines")
 	var rails := _rail_rows(sections, MIGRATED_SECTIONS)
 	assert_eq(rails, [] as Array[String], "these specialist lines still have .move(), .free_after() or shoot_*()")
 

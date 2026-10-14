@@ -269,11 +269,21 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   config fields) a squad that looks dangerous would never fire, with no other gate noticing.
   `tests/integration/test_level1_specialist_spawns.gd` is a twenty-second, the level-1 **specialist pin
   and density gate**: it pins all 50 sniper / ram / bomber rows (trigger, offset, delay), and for every
-  section in `MIGRATED_SECTIONS` (deep_space and planet_approach since Phase 4 t21) asserts no line has
+  section in `MIGRATED_SECTIONS` (all three since Phase 4 t22: deep_space and planet_approach in t21,
+  cloud_descent in t22) asserts no line has
   a rail left and that peak alive specialists stay at most 2.5× the frozen `_LEGACY_PEAK_SPECIALISTS`.
   Each lifetime is config budget + deferral + a **measured** exit (`tests/helpers/specialist_exit_probe.gd`
   runs the real scene's curved DISENGAGE over the Ph3 404-start grid), never a straight-line exit.
   Boundaries: a `.move()` put back and an extra ram triple at the peak each fail.
+  The sixteenth gate gained **per-entry sniper and ram rows** for cloud_descent in t22 (sniper: engage + aim + lock +
+  measured exit; ram: engage + wind_up + charge_max_time + max(straight, measured)). The ram's curved exit is measured
+  over the probe's second start set, `corridor_starts()`: the whole 1480 × 1480 corridor, because the view-only grid
+  under-reports it by about 2 s. The 73.2 s ram is the tight row (9.60 s of 10, after both pre-approved levers: ram
+  `exit_speed` 560, `engage_seconds` 4.0). Boundaries: a ram at 76.0 + 1.2 s, a ram forced to expire on its first
+  LINE_UP tick, and a Bomber in an ENEMIES_CLEARED section (none may contain one).
+  `tests/integration/test_level1_specialist_exit.gd` replays the whole of cloud_descent from 0.0 s with only its 9 snipers
+  and 6 rams, through a real `WaveManager` at 8× clock. The container must empty inside the timeout, and every ship
+  must leave in DISENGAGE with no `EnemyPathMover`.
   The behaviour specs for the two enemies themselves (`test_fighter.gd`, `test_fighter_squad.gd`,
   `test_gatling_interceptor.gd`, `test_gatling_convergence.gd`, plus their cases in
   `test_enemy_dual_mode.gd`) are intent tests that run in both the Assault and Open Space harnesses.
