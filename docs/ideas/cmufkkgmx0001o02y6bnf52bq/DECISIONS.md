@@ -1962,6 +1962,12 @@ phase's *as built* section, once written, before relying on them. (This section 
 - **Gate time:** `scripts/gate-time.sh` before and after every task; a test that awaits real physics runs on the 8× clock;
   a hand-ticked scenario several tests replay is computed once; over-allotment is fixed by sharing work, never by
   cutting an assertion.
+- **Gate time, t1 as built:** GUT 253.4 s → 176.9 s (−76.5 s; wall 257.5 → 181.0), 1593 tests / 68619 asserts unchanged. 8× clock on
+  `test_level1_fighter_exit`, `test_ram_corvette` (all rows), `test_level1_drone_exit`; `test_level1_fighter_fire_density` 4× → 8×
+  except its 0.1 s wave-schedule row, which stays 4× (one 8× idle frame is ~0.13 s, so the tolerance would otherwise widen).
+  `test_fighter_squad.gd` has nothing to compute once (58.9 of its 64.6 s is one 168-layout sweep, 53.6 s of it the fighters' own
+  ticks), so the saving there is only ~1.7 s; the headroom is 6 s under the 183 s target, so later tasks must watch their allotments.
+  Table in tests/README.md → "Gate time".
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |

@@ -15,7 +15,9 @@
 ## way only the rails-off AI can — which is what keeps this red on a build that re-adds `.move()`.
 ##
 ## Time is game time (summed physics delta), never wall-clock: `WaveManager`'s clock and its delay
-## timers run on game time, and a loaded machine stretches wall-clock against it.
+## timers run on game time, and a loaded machine stretches wall-clock against it. The run is sped up 8x with the
+## physics step kept at 1/60 game-second (`Engine.time_scale`, `physics_ticks_per_second` and
+## `max_physics_steps_per_frame` scaled together, restored in `after_each`) - see tests/README.md -> "Gate time".
 extends GutTest
 
 const HARNESS := preload("res://tests/helpers/enemy_ai_harness.gd")
@@ -24,6 +26,7 @@ const DIRECTOR_SCRIPT := preload("res://assault/scenes/levels/edelia/1/level_1_d
 ## Longer than the wave's largest `delay()` (0.8 s), so every WaveManager spawn timer has fired
 ## before a test returns — an unfired SceneTreeTimer is reported as a leak at process exit.
 const _MIN_RUN_SECONDS := 1.0
+const _SPEEDUP := 8
 
 var _harness: RefCounted
 var _container: Node2D
@@ -35,16 +38,44 @@ var _waves_done: bool = false
 var _exits: Array[Dictionary] = []
 var _recording: bool = false
 
+var _saved_time_scale: float = 1.0
+var _saved_ticks: int = 60
+var _saved_max_steps: int = 8
+var _clock_scaled: bool = false
+
 
 func before_each() -> void:
 	_spawned = 0
 	_waves_done = false
 	_exits = []
 	_recording = true
+	_scale_clock()
 
 
 func after_each() -> void:
 	_recording = false
+	_restore_clock()
+
+
+func _scale_clock() -> void:
+	if _clock_scaled:
+		return
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	_clock_scaled = true
+	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
+	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
+	Engine.time_scale = _saved_time_scale * _SPEEDUP
+
+
+func _restore_clock() -> void:
+	if not _clock_scaled:
+		return
+	_clock_scaled = false
+	Engine.time_scale = _saved_time_scale
+	Engine.physics_ticks_per_second = _saved_ticks
+	Engine.max_physics_steps_per_frame = _saved_max_steps
 
 
 func _cloud_descent() -> LevelSection:

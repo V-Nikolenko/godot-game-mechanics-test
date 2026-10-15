@@ -35,6 +35,33 @@ const PLATE_NAMES: Array[StringName] = [&"PlateFront", &"PlateLeft", &"PlateRigh
 
 var _root: Node2D
 
+## Every row that awaits real physics runs on the 8x clock (tests/README.md -> "Gate time"): the three engine
+## settings are scaled together so a physics tick stays 1/60 game-second, and restored in `after_each`.
+const _SPEEDUP := 8
+var _saved_time_scale: float = 1.0
+var _saved_ticks: int = 60
+var _saved_max_steps: int = 8
+var _clock_scaled: bool = false
+
+
+func before_each() -> void:
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	_clock_scaled = true
+	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
+	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
+	Engine.time_scale = _saved_time_scale * _SPEEDUP
+
+
+func after_each() -> void:
+	if not _clock_scaled:
+		return
+	_clock_scaled = false
+	Engine.time_scale = _saved_time_scale
+	Engine.physics_ticks_per_second = _saved_ticks
+	Engine.max_physics_steps_per_frame = _saved_max_steps
+
 
 ## Builds the world for `mode` and a stationary Corvette in it.
 func _world(mode: String) -> RamCorvette:
