@@ -1850,10 +1850,12 @@ index a later phase should read first. **Where a per-task note and this section 
 | Taking the station's reinforcements and `level_2_waves.gd` off rails | Ph15 | The rail fallbacks are the contract. |
 | Re-measuring the crowding count gate with corridor-wide exits | any phase retuning specialist lifetimes | |
 
-## Phase 5 - Enemy rework, phase 5: Missile Corvette, rockets and the Support/Shield Ship (2026-10-14)
+## Phase 5 - Enemy rework, phase 5: Missile Corvette, rockets and the Support/Shield Ship (2026-10-15)
 
-Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` (Revision 1), with research in `1-context.md` and `2-research.md` in the
-same directory. These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
+Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` (**Revision 2**, answering the round-1 plan review in `4-review.md`),
+with research in `1-context.md` and `2-research.md` in the same directory. These are *planned* decisions; check this
+phase's *as built* section, once written, before relying on them. (This section replaces the Revision 1 section of
+2026-10-14.)
 
 ### Changes to earlier decisions
 - **P-15 closed: `BaseEnemy` does not adopt `DamageReaction`.** It hears `received_damage(damage)` with no hit, so it cannot
@@ -1865,13 +1867,19 @@ same directory. These are *planned* decisions; check this phase's *as built* sec
 - **`BulletPool` container injection is deferred again** (Ph2 → Ph5 → Ph10): every pool here is a direct root child and
   cluster submunitions are unpooled. The first nested launcher (Carrier hangars) owns it.
 - **Enemy friendly fire is decided for rockets only:** a rocket's **impact** hurts enemies, enemy ordnance, Ram plates
-  and asteroids; its **blast** (`ContactBlast`) stays player-only. Blasts and beams in general: still undecided (Ph8).
-- **Enemy rockets break Ram Corvette plates** (plates break on `ROCKET`) — accepted counterplay, pinned by a test
-  (owner question 1, default yes).
+  and asteroids; its **blast** (`ContactBlast`) is the only thing that hurts the player or allies. Blasts and beams in
+  general: still undecided (Ph8).
+- **Enemy rockets wear down Ram Corvette plates** (plates break on `ROCKET`; 50 HP = 3–4 rockets) — accepted counterplay,
+  pinned by a test (owner question 1, default yes).
 - **Rocket tuning lives in each rocket scene's exports, not in the launcher's config** (unlike Ph4, where `BomberConfig`
   carries its ordnance numbers): Ph10's Carrier missile bank and Ph11's fortress launcher will fire the same rockets, and a
   rocket kind should be identical whoever fires it. Ph16 scales a rocket by setting exports before `launch()`.
-- **The `player_rockets` layer (bit 32) is not renamed**, though enemy rockets now sit on it too; the constant's doc says so.
+- **The `player_rockets` layer (bit 32) is not renamed**, though enemy rockets' impact HitBoxes now sit on it (alone); the
+  constant's doc says so.
+- **Gate time is a budgeted resource from this phase on.** Measured at `7916662`: import 4.7 s, boot 1.0 s, GUT 253.3 s
+  against a ~300 s harness wall-clock cap. Phase 5's first task (a dependency of every other) frees ≥ 70 s (GUT ≤ 183 s)
+  without weakening any test and adds `scripts/gate-time.sh`; every later task stays within a per-task allotment (56.5 s
+  total for this epic) and keeps **GUT ≤ 240 s**. Later phases should budget the same way.
 
 ### Names and places later phases build on
 - **`HurtBox` absorb hook** (`global/components/hurtbox_component.gd`): `set_absorber(obj) -> bool` (one slot; false when a
@@ -1879,43 +1887,68 @@ same directory. These are *planned* decisions; check this phase's *as built* sec
   answers duck-typed `absorbs_hit(hit_box: HitBox) -> bool`; on true the hurtbox emits `hit_absorbed` instead of
   `received_damage`. No absorber = byte-identical. **This is the hit-aware damage decision point for shields**; Ph10 module
   shields and Ph11 shield nodes attach here, not by narrowing masks.
-- **`EnemyShield`** (`global/components/enemy_shield.gd`, `Node2D`): `arc_deg` (≥ 360 = bubble), `capacity` (points;
-  a hit subtracts its damage; the breaking hit is absorbed whole), `regen_delay`, `regen_seconds`, `reboot_seconds`,
-  `turn_rate`, `radius`, `sustain_mode` + `heartbeat` + `fade_seconds`; `attach(hurt_box)`, `set_threat_point()`,
-  `sustain(threat_point)`, `absorbs_hit()`, `points()`, `is_up()`, `facing()`; signals `absorbed(hit_box, remaining)`,
-  `broken()`, `restored()`, `lapsed()`. Cyan, drawn in world angles, never writes `rotation`.
+- **`EnemyShield`** (`global/components/enemy_shield.gd`, `Node2D`): `arc_deg` (≥ 360 = bubble; may change while attached),
+  `capacity` (points; a hit subtracts its damage; the breaking hit is absorbed whole), `regen_delay`, `regen_seconds`,
+  `reboot_seconds`, `turn_rate`, `radius`, `sustain_mode` + `heartbeat` + `fade_seconds`; `attach(hurt_box)`,
+  `set_threat_point()`, `sustain(threat_point)`, `absorbs_hit()`, `points()`, `is_up()`, `facing()`; signals
+  `absorbed(hit_box, remaining)`, `broken()`, `restored()`, `lapsed()`. Cyan, drawn in world angles, never writes
+  `rotation`. **It never absorbs while its host answers the hit-blind `is_armored() == true`**, and never calls
+  `deflects_hit()` (an `ArmorPlate`'s resolves and damages the plate).
 - **An absorbed hit consumes the bullet** (it is not a deflection; a pierce charge is spent). **Direct emitters** (beam,
   nova, dash, shield overload, engine boost, laser ray) bypass shields exactly as they bypass plates.
 - **`BaseEnemy`**: hit flash / burst only when health went **down**; `repair(amount) -> int`; `can_be_repaired()` (station:
-  false; Support Ship: false); `accept_tow(v) -> bool` (a nudge on the enemy's own mover; refused when suspended, brainless
-  or boosting); `ai_mover_max_speed()`. A later "pull" or "push" between enemies goes through `accept_tow`, never a
-  velocity write.
-- **`EnemyWorld.has_view_rect(tree)` / `view_rect(tree)`**, backed by `ArenaCamera.enemy_view_rect()` (screen centre incl.
-  offset pan, viewport / zoom): the rect the Assault camera shows **now**, as opposed to the 1480 × 1480 corridor.
+  false; Support Ship: false); `is_ai_driven()` (brain and mover present, not suspended); `accept_tow(v) -> bool` (a nudge
+  on the enemy's own mover; false unless `is_ai_driven()`, not boosting and `brain.accepts_tow()`);
+  `ai_mover_max_speed()`. A later "pull" or "push" between enemies goes through `accept_tow`, never a velocity write.
+- **`EnemyBrain.accepts_tow() -> bool`** (default true): false in every committed or telegraphed phase — Sniper
+  DECOY/AIM/LOCK/FIRE, Ram WIND_UP/CHARGE, Bomber RUN, Fighter RUN_IN, Gatling SPIN_UP/STREAM, Razor
+  WINDUP/DASH/FEINT_WINDUP/FEINT_LUNGE, Swarm WINDUP/BURST, Missile Corvette TELEGRAPH/SALVO. **Every new brain with a
+  telegraphed attack must override it**: a telegraph is never moved by anyone but its own brain.
+- **`EnemyWorld.has_view_rect(tree)` / `view_rect(tree)`**, backed by `ArenaCamera.enemy_view_rect()` (centre
+  `global_position + offset`, size viewport / zoom; never `get_screen_center_position()`, which is stale in hand-ticked
+  tests): the rect the Assault camera shows **now**, as opposed to the 1480 × 1480 corridor.
 - **Rocket family** `assault/scenes/projectiles/enemy_rockets/`: `EnemyRocket extends Area2D`,
   `Kind { DUMB, PURSUIT, CLUSTER, WARHEAD, SUBMUNITION }`, `launch(dir, aim_point, launcher)`, `reset()`, `expired`;
-  `EnemyRocketScenes.scene_for(kind)` / `pool_size_for(kind, cfg)` (`salvo_count × ceil(max_time / salvo_period_min)`).
-  Impact HitBox layer `32 | 256`, mask `1 | 128 | 512`, `ROCKET`, closed until `arm_distance` from launch; shoot-down
-  HurtBox 512 / mask **64 only** (rockets never hit each other; player rockets pass through); direct hit on the player =
-  impact + blast. Guidance = lead pursuit on `TargetInfo.intercept()` capped at `lead_max`, `Steering.turn_toward` at
-  `turn_rate`, finite `guidance_seconds`, then coast. Cluster splits **by distance** (or `split_time`) into unpooled
-  self-freeing submunitions; shot before the split leaves nothing. Warhead uses the Ph4 mine rule
-  `(trigger + blast) / warning ≥ 420`. Not in `enemies`, never scored, per-kind rows in `test_enemy_bullet_lifetime.gd`
-  (never in `_every_shipped_enemy_bullet_speed()`).
+  `EnemyRocketScenes.scene_for(kind)` / `pool_size_for(kind, cfg)` (`count × ceil(max_time / salvo_period_min)`, count =
+  `warhead_salvo_count` for WARHEAD else `salvo_count`).
+  - **Layers:** impact HitBox on layer **32 only**, mask **640** (128 | 512, no environment bit), `ROCKET`; shoot-down
+    HurtBox layer 512, mask **96**, resolved by the rocket's own `area_entered` handler (never `received_damage`),
+    ignoring any `EnemyRocket` HitBox. Blast = `ContactBlast` on 256.
+  - **One player-facing damage source:** the player and allies take only `blast_damage` (direct hit or near miss alike —
+    one hit against the player's 0.5 s i-frames, one shield charge). Enemies, plates, ordnance and asteroids take only
+    `impact_damage`. An armoured hull lets a rocket through (`ArmorQuery.deflects`).
+  - **Shoot-down:** a player bullet or player homing / warhead missile and an enemy rocket destroy each other, no blast.
+    Rockets ignore each other.
+  - **Launch safety:** a launcher answers duck-typed `launch_velocity() -> Vector2` (the rocket inherits its component
+    along the launch direction; on a rail, the observed position delta) and `rocket_clear_radius() -> float`. The rocket
+    arms when clear of the launcher's **current** position by `rocket_clear_radius() + body_radius + arm_clearance`; the
+    rocket alone owns this rule. Invariants: every rocket `cruise_speed ≥ 1.1 ×` its launcher's `max_speed`, `launch_speed
+    > launcher acceleration × boost_seconds`.
+  - **Art is nose-up** (`rotation = heading.angle() + PI / 2`, the player missiles' convention), so `RocketTrail`'s local
+    +Y is the tail. Enemy ship hulls stay nose-down.
+  - Guidance = lead pursuit on `TargetInfo.intercept()` capped at `lead_max`, `Steering.turn_toward` at `turn_rate`,
+    finite `guidance_seconds`, then coast. Cluster splits **by distance** (or `split_time`) into unpooled self-freeing
+    submunitions; shot before the split leaves nothing. Warhead **stops dead on trigger** and uses the Ph4 mine rule
+    `(trigger + blast) / warning ≥ 420`. Lifetime expiry fizzles (no blast). Not in `enemies`, never scored, per-kind rows
+    in `test_enemy_bullet_lifetime.gd` (never in `_every_shipped_enemy_bullet_speed()`).
 - **Missile Corvette** `assault/scenes/enemies/missile_corvette/` (`MissileCorvette`, `MissileCorvetteBrain`,
   `MissileCorvetteConfig`): `Phase { APPROACH, HOLD_ARC, TELEGRAPH, SALVO, DISENGAGE, IDLE, NOTICING, RETURNING }`;
-  `fire(kind, aim_point)`; four persist-after-owner-death pools; launch cone 45°; StateLight CHARGING / ARMED, never
-  COMMIT; rail fallback = a Dumb rocket DOWN every 2.5 s. `WaveBuilder.missile_corvette()`.
+  `fire(kind, aim_point) -> EnemyRocket` (sets no rocket field); `salvo_size(kind)` (3, or 2 Warheads); four
+  persist-after-owner-death pools (3/6/3/4); launch cone 45°; StateLight CHARGING / ARMED, never COMMIT; rail fallback = a
+  Dumb rocket DOWN every 2.5 s. `WaveBuilder.missile_corvette()`.
 - **Support Ship** `assault/scenes/enemies/support_ship/` (`SupportShip`, `SupportShipBrain`, `SupportShipConfig`):
   `Phase { SEEK_WARD, FOLLOW, ESCORT, DISENGAGE, IDLE, NOTICING, RETURNING }`; contact profile `NONE`; ward claim =
   meta `&"support_claim"` on the ward (one support per ward); `ward_changed(new_ward)`; `is_supporting()`; the projected
   shield is an `EnemyShield` child of the ward named `ProjectedShield`, in sustain mode, owned by the ward and lapsing when
-  the support stops feeding it (death, EMP, range, view, switch). `WaveBuilder.support_ship()`.
-- **Ward rules:** candidates are live, unsuspended `BaseEnemy`s in `enemies`, never another support or the station;
-  threat = `score_value × 1/(1 + d_player/600) × (1 + damage fraction)`; hold ≥ 2 s, switch at ≥ 1.3×; a lost ward is
-  replaced on the next tick. Repair: pulses of 6 % max HP every 1.5 s, 150 HP budget per life, hull `Health` only (Ram
-  plates never), supports never repair supports. Escort: at ≤ 35 % HP, tow 1.25 × the ward's max speed away from the
-  player via `accept_tow`, support interposes; ends at 50 %, 700 px, 4 s; 6 s cooldown per ward.
+  the support stops feeding it (death, EMP, range, view, switch); **widened to a 360° bubble during ESCORT**.
+  `WaveBuilder.support_ship()`.
+- **Ward rules:** candidates are live `BaseEnemy`s in `enemies` that are `is_ai_driven()`, `counts_toward_wave_clear` and
+  `score_value ≥ ward_min_score` (20), never another support — so the gunship, station, bonus drone and swarm drones are
+  never wards, and every ward is escort-capable. Threat = `score_value × 1/(1 + d_player/600) × (1 + damage fraction)`;
+  hold ≥ 2 s, switch at ≥ 1.3×; a lost ward is replaced on the next tick. Repair: pulses of 6 % max HP every 1.5 s,
+  150 HP budget per life, hull `Health` only (Ram plates never), supports never repair supports. Escort: at ≤ 35 % HP,
+  tow 1.25 × the ward's max speed away from the player via `accept_tow` (refused during the ward's telegraphs; the
+  support then only interposes), support interposes; ends at 50 %, 700 px, 4 s; 6 s cooldown per ward.
 
 ### Conventions
 - **Assault:** neither enemy goes into an `ENEMIES_CLEARED` section (corvette rockets persist; guard rows for both).
@@ -1926,8 +1959,9 @@ same directory. These are *planned* decisions; check this phase's *as built* sec
   while inside `view_rect().grow(24)`.
 - **Hub:** the corvette takes 315° on a new 1900 px ring (+417 px clearance); the support shares the Ram Corvette's
   anchor; draws 13 and 14 after the existing 12. Radii (perceive / lose): corvette 720 / 1500, support 600 / 1300.
-- **Gate time:** the harness cap is ~300 s wall clock; Phase 5's first task frees ≥ 30 s and adds `scripts/gate-time.sh`;
-  every later task reports its GUT-time delta.
+- **Gate time:** `scripts/gate-time.sh` before and after every task; a test that awaits real physics runs on the 8× clock;
+  a hand-ticked scenario several tests replay is computed once; over-allotment is fixed by sharing work, never by
+  cutting an assertion.
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |
@@ -1935,7 +1969,7 @@ same directory. These are *planned* decisions; check this phase's *as built* sec
 | Rocket warning audio | Ph17 | No enemy SFX pipeline |
 | Flare / decoy reaction | when a player countermeasure exists | No consumer; rockets would retarget through their aim-point function |
 | Hijack Pulse | Ph9 | Scope |
-| Shipped module shields, shield bubbles | Ph10 / Ph11 | `EnemyShield` + the hook are built and fixture-proven |
+| Shipped module shields, fortress shield nodes | Ph10 / Ph11 | `EnemyShield` + the hook are built; module kind fixture-proven; the bubble ships only as the support's escort bubble |
 | Enemy friendly fire from blasts and beams | Ph8 | Only rocket impacts are decided |
 | Owner-distance lifetime | Ph13 (if needed) | See above |
 | `BulletPool` container injection | Ph10 | First nested launcher |
