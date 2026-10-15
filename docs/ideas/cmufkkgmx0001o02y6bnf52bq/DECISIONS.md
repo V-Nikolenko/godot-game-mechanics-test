@@ -1968,6 +1968,17 @@ phase's *as built* section, once written, before relying on them. (This section 
   `test_fighter_squad.gd` has nothing to compute once (58.9 of its 64.6 s is one 168-layout sweep, 53.6 s of it the fighters' own
   ticks), so the saving there is only ~1.7 s; the headroom is 6 s under the 183 s target, so later tasks must watch their allotments.
   Table in tests/README.md → "Gate time".
+- **t2 as built (enemy shields; P-15 closed as planned: `BaseEnemy` does not adopt `DamageReaction`).** Choices t12/t13
+  build on, beyond §2.3: `EnemyShield.face(world_dir)` snaps the facing and the **initial facing is `Vector2.DOWN`**, so a
+  projector calls `face()` toward the player before its first `sustain()` (otherwise the arc needs ~2 s at 1.6 rad/s to
+  swing round in Open Space); `restored()` fires on **every** refill to full, not only after a break; after a break the
+  refill starts straight after `reboot_seconds` with no extra `regen_delay`, and the shield is `is_up()` only once
+  `points()` (floored) is ≥ 1 (about 2 ticks after the reboot at the defaults); a sustained shield **releases the hurtbox
+  slot at the lapse** (the fade is drawing only), so a support can attach a new shield to the same ward during the fade;
+  `HurtBox.set_absorber` also refuses an object without `absorbs_hit`. **Limitation:** a shield does not cover an
+  `ArmorPlate` (the plate damages itself in its own `area_entered`) — Ph10 module shields must go on a plain part's
+  `HurtBox` (proven by the local-module fixture row). **For t12:** at the epic's `shield_capacity` 40 one Standard shot
+  (50) breaks the projected shield, then 4 s of reboot — tune knowingly. Gate time: GUT 177.6 s → 176.9 s (the three files ≈ 1.4 s standalone, of the 3.0 s allotment, within run-to-run noise), 1593 → 1620 tests.
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |

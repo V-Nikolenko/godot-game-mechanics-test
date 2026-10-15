@@ -251,7 +251,9 @@ Detail and APIs: [global.md](modules/global.md).
   are unkillable. The Ram Corvette's plates use the hit-aware `deflects_hit()` (rockets and `is_high_impact()`
   projectiles break a plate, bullets glance off) and `ArmorQuery` is the one place all three player projectiles
   (bullet, homing rocket, warhead) ask; a later heavy weapon opts in by answering `is_high_impact()`. `PierceModule` raises the number of damaging hits a bullet survives before it
-  stops. Player bullets despawn at the *viewport* edge and `EnemyBullet` at the *arena* bound;
+  stops. An **enemy shield** is not a deflection: a hit its `EnemyShield` absorbs (through the `HurtBox` absorber
+  slot, `hit_absorbed` instead of `received_damage`) **consumes** the bullet and the hull takes nothing; direct
+  emitters (beam, nova, dash) bypass it (`global.md` → Enemy shields). Player bullets despawn at the *viewport* edge and `EnemyBullet` at the *arena* bound;
   that asymmetry is deliberate, because the player's weapons are also mounted in Open Space, which
   has no `ArenaCamera`. Gated by `tests/integration/test_player_bullet_lifetime.gd`.
 - **Testing:** **GUT 9.7.1**, vendored in `addons/gut/`, enabled from the

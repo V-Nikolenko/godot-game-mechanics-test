@@ -24,7 +24,8 @@ global/
 ├── components/                # composable child-node behaviours
 │   ├── health_component.gd        # Health (Node)
 │   ├── temp_health_component.gd   # TempHealth (Node) — drains before Health
-│   ├── hurtbox_component.gd       # HurtBox (Area2D) — receives hits
+│   ├── hurtbox_component.gd       # HurtBox (Area2D) — receives hits; one absorber slot (`set_absorber`, `hit_absorbed`)
+│   ├── enemy_shield.gd            # EnemyShield (Node2D) — directional / bubble enemy shield: eats hits in its arc, breaks, reboots, regenerates
 │   ├── hitbox_component.gd        # HitBox (Area2D) — deals hits, DamageType enum
 │   ├── armor_query.gd             # ArmorQuery (static) — "does this target refuse my hit?": `deflects_hit(hit_box)` first, else `is_armored()`
 │   ├── armor_plate.gd             # ArmorPlate (Node2D) — breakable armour piece: HurtBox + Health + Sprite; rockets / high-impact shots break it, bullets glance off
@@ -188,7 +189,7 @@ get_node_or_null("ContactHitBox") as HitBox` (nullable — `bonus_drone` authors
 "contact-harmless" behaviour). `AllyFighter` (not a `BaseEnemy`) does the same under its own
 `_contact_hit_box`.
 
-`HurtBox` (`extends Area2D`) is the *target* side. In `_ready()` it connects `area_entered`; when an overlapping area is a `HitBox` (and passes the optional `accepted_damage_types` filter), it re-emits `received_damage(damage)`. Filtering by type is via the exported `accepted_damage_types: Array[HitBox.DamageType]` (empty = accept all).
+`HurtBox` (`extends Area2D`) is the *target* side. In `_ready()` it connects `area_entered`; when an overlapping area is a `HitBox` (and passes the optional `accepted_damage_types` filter), it re-emits `received_damage(damage)` — unless its absorber took the hit (see *Enemy shields* below). Filtering by type is via the exported `accepted_damage_types: Array[HitBox.DamageType]` (empty = accept all).
 
 Collision wiring: set the `HitBox`'s `collision_layer` to a "damage" layer and leave its mask empty; set the `HurtBox`'s `collision_mask` to scan that same layer. Only `Area2D`↔`Area2D` overlap is detected — `HurtBox` ignores non-`HitBox` areas. The damage path is **HitBox overlaps HurtBox → `HurtBox.received_damage` → your handler (or `DamageReaction`) → Shield/Health**.
 
@@ -231,6 +232,38 @@ First shipped user: the **Ram Corvette** (`assault/scenes/enemies/ram_corvette/`
 `deflects_hit` / `is_armored()` are true while any plate lives (every projectile passes the hull to reach a plate,
 and `_on_received_damage` deflects the direct emitters), `homing_point` = nearest live plate, exposure deferred one
 step after the last plate breaks. See its `ENEMY.md`; gated by `tests/integration/test_ram_corvette.gd`.
+
+### Enemy shields — the `HurtBox` absorb hook and `enemy_shield.gd`
+
+`HurtBox.received_damage(damage)` carries no hit and Godot orders `area_entered` callbacks undefined, so a
+directional shield is decided **inside the hurtbox that owns the hit**, once per hit. `HurtBox` has one absorber slot:
+`set_absorber(obj) -> bool` (false while another live absorber holds it, or for an object without `absorbs_hit`; a
+freed holder's slot is free), `clear_absorber(obj)` (no-op unless `obj` holds it), `has_absorber()`. After the
+`accepted_damage_types` filter, a live absorber answering duck-typed `absorbs_hit(hit_box: HitBox) -> bool` true makes
+the hurtbox emit `hit_absorbed(hit_box)` **instead of** `received_damage`. With no absorber nothing changes (the
+player's hurtbox, every plate, every existing enemy). Direct emitters (beam, nova, dash, shield overload, engine boost,
+laser ray) call `received_damage.emit()` themselves and **bypass** shields, as they bypass plates.
+
+The projectile is not told: the shielded target answers neither `deflects_hit` nor `is_armored` for the shield, so
+`ArmorQuery` reports no deflection and the shot is **consumed** ("the shield eats bullets"; a pierce charge is spent;
+the Sniper Shot passes on as through any target; a player rocket detonates). The player's ram contact hitbox is a
+`HitBox` too, so a shield in its arc absorbs a ram contact.
+
+`EnemyShield` (`Node2D`, a child of what it protects) is the absorber: `attach(hurt_box) -> bool`; the **host** is the
+hurtbox's parent, so a shield on a part's own hurtbox (a local module) protects that part only. Exports (defaults =
+Open Space projected values): `arc_deg` 110 (≥ 360 = bubble; read live, so it can widen while attached), `capacity` 40,
+`regen_delay` 3.0 (restarted by every absorbed hit), `regen_seconds` 1.5 (empty → full, linear), `reboot_seconds` 4.0
+(after a break; then refills from 0 at once), `turn_rate` 1.6 rad/s, `radius` 40, `sustain_mode` / `heartbeat` 0.3 /
+`fade_seconds` 0.3. Methods: `face(world_dir)` (snap; initial facing `Vector2.DOWN`), `set_threat_point(world)` (the
+arc turns toward that bearing at `turn_rate`), `sustain(threat_point)`, `absorbs_hit(hb)`, `points()`, `is_up()`,
+`facing()`. Signals: `absorbed(hit_box, remaining)`, `broken()`, `restored()` (every refill to full), `lapsed()`.
+A hit inside the arc costs its `damage`; **the breaking hit is absorbed whole**. **It never absorbs while its host
+answers the hit-blind `is_armored() == true`** (an armoured Ram lets every shot through to its plates) and never asks
+`deflects_hit` (an `ArmorPlate`'s damages the plate). A sustained shield that misses its heartbeat releases the slot at
+once, fades, then frees. It draws a cyan arc in world angles and never writes `rotation`. **Limitation:** it does not
+cover an `ArmorPlate`, which damages itself in its own `area_entered`. `BaseEnemy` does **not** adopt `DamageReaction`
+(Phase 1 P-15, closed in Phase 5). No shipped enemy carries one yet (the Support Ship, Phase 5 t12/t13). Gated by
+`tests/unit/test_hitbox_hurtbox.gd`, `tests/unit/test_enemy_shield.gd` and `tests/integration/test_enemy_shield_hits.gd`.
 
 ### CollisionLayers — `global/physics/collision_layers.gd`
 
