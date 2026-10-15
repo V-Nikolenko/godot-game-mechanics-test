@@ -551,6 +551,11 @@ func tick(delta: float) -> void:
   drops the constraint for good (a field write, not a motion write — see the Assault exit below).
 - **Single writer:** with a mover present, nothing else writes the body's `velocity`/`rotation` or
   calls `move_and_slide()` — gated by `tests/integration/test_enemy_mover_single_writer.gd`.
+- **Ally hooks (Ph5 t3):** `BaseEnemy.repair(amount) -> int` restores HP silently (hit flash and burst only play when
+  health goes *down*; `can_be_repaired()` is false on the station); `accept_tow(v)` nudges the enemy's own mover only if
+  `is_ai_driven()` (brain + mover, not suspended), not boosting, and `EnemyBrain.accepts_tow()` — false in every committed or
+  telegraphed phase (Sniper DECOY/AIM/LOCK/FIRE, Ram WIND_UP/CHARGE, Bomber RUN, Fighter RUN_IN, Gatling SPIN_UP/STREAM,
+  Razor WINDUP/DASH/FEINT_*, Swarm WINDUP/BURST). Gated in `tests/integration/test_base_enemy.gd` §6.
 - **Rails override it:** `EnemyPathMover._ready()` calls `suspend_ai()` (brain `on_suspended()`, mover
   `halt()`, no more ticks) *in addition to* its unconditional `set_physics_process(false)` and
   `"AIStateMachine"` lookup. A `driven_by_brain` `AttackController` stops with the brain.

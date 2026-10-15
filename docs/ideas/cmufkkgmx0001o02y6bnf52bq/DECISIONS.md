@@ -1979,6 +1979,11 @@ phase's *as built* section, once written, before relying on them. (This section 
   `ArmorPlate` (the plate damages itself in its own `area_entered`) — Ph10 module shields must go on a plain part's
   `HurtBox` (proven by the local-module fixture row). **For t12:** at the epic's `shield_capacity` 40 one Standard shot
   (50) breaks the projected shield, then 4 s of reboot — tune knowingly. Gate time: GUT 177.6 s → 176.9 s (the three files ≈ 1.4 s standalone, of the 3.0 s allotment, within run-to-run noise), 1593 → 1620 tests.
+- **t3 as built (repair and tow hooks, no deviation).** `BaseEnemy.repair(amount) -> int`, `can_be_repaired()` (the station
+  answers false), `is_ai_driven()`, `accept_tow(v) -> bool`, `ai_mover_max_speed()`; `_on_health_changed` flashes and bursts
+  only when health went down (`_last_health`, unset = `max_health`). `EnemyBrain.accepts_tow()` (default true) is overridden in
+  the seven shipped brains, each as a trailing `match phase` at the end of the file; t8 adds the Corvette's (TELEGRAPH, SALVO).
+  The Ram boundary compares a towed run to an untowed twin (not an absolute position): the Ram crawls under its own brain.
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |

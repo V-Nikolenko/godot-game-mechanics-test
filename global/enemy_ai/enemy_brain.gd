@@ -76,3 +76,10 @@ func tick(_delta: float) -> void:
 ## Virtual: the enemy's AI was suspended (a rail took it over). Called once.
 func on_suspended() -> void:
 	pass
+
+
+## Virtual: may an ally move this enemy right now (`BaseEnemy.accept_tow`)? Default true. A brain
+## answers false in every committed or telegraphed phase: each promises the player that the warning
+## they saw is the attack they get, and a tow would move the shot off the line it showed.
+func accepts_tow() -> bool:
+	return true

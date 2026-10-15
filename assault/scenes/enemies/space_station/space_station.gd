@@ -156,6 +156,11 @@ func is_armored() -> bool:
 	return live_turret_count() > 0
 
 
+## The station is a boss with its own damage rules: no ally repairs it.
+func can_be_repaired() -> bool:
+	return false
+
+
 ## Takes the turret argument `StationTurret.destroyed` is declared and emitted with, so a
 ## one-arg handler is the correct shape.
 func _on_turret_destroyed(_turret: StationTurret) -> void:

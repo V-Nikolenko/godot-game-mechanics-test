@@ -825,3 +825,11 @@ func _set_light(state: int) -> void:
 	var light := actor.get_node_or_null("StateLight") as StateLight if actor != null else null
 	if light != null:
 		light.set_state(state)
+
+
+## A committed or telegraphed phase is never moved by an ally (`BaseEnemy.accept_tow`).
+func accepts_tow() -> bool:
+	match phase:
+		Phase.SPIN_UP, Phase.STREAM:
+			return false
+	return true

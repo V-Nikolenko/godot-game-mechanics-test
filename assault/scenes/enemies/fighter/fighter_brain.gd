@@ -1640,3 +1640,11 @@ func _closest_on_horizon(mates: Array[FighterBrain], k: float) -> float:
 			t += GIVE_WAY_SAMPLE
 		out = minf(out, gap if gap < now else INF)
 	return out
+
+
+## A committed or telegraphed phase is never moved by an ally (`BaseEnemy.accept_tow`).
+func accepts_tow() -> bool:
+	match phase:
+		Phase.RUN_IN:
+			return false
+	return true
