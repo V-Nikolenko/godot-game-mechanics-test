@@ -230,3 +230,93 @@ mid-implementation.
   plan's separate `EXPECTED_PH5` pin and the restated 50 + n line count are the right shape.
 - **Task shape:** decomposition, ordering and complexities are reasonable. t2, t5, t8, t11 and t17 are large and get
   their own plans. t7 → t10 is serialised for the shared roster files.
+
+---
+
+# Round 2 (2026-10-15)
+
+VERDICT: APPROVED
+
+Reviewed `3-plan.md` Revision 2 (commit `fba9dd8`, §9 "Response to feedback"), `tasks.json`, `1-context.md`,
+`2-research.md` and the Phase 5 section that commit added to `DECISIONS.md`. I checked each claim against the code at
+`fba9dd8` rather than the plan's own summaries. All 15 round-1 findings are resolved. The fixes match the code, not just
+the wording. I found no new blocking problem.
+
+The eight new findings below are all minor. None needs a re-plan. However, the implementing agents see only `For every task`
+plus each task's `planSections`, not this review. Findings 1–4 should therefore be folded into the named plan sections, or
+into the task descriptions, when the epic is approved. Otherwise each will ship silently.
+
+## Round-1 findings: resolution
+
+| # | Round-1 finding | Status | Evidence (code checked) |
+|---|---|---|---|
+| 1 | Player missiles eaten by enemy rockets | **Resolved** | The player missile and bullet HitBoxes are 32 / 513 and 64 / 513 (`homing_missile.tscn:54-55`, `bullet.tscn:44-45`). The rocket's shoot-down HurtBox is now mask **96**, so it sees both. It is resolved in the rocket's own `area_entered` (`3-plan.md:441-446`), which ignores `EnemyRocket` HitBoxes, so sibling impact boxes on 32 are skipped. Mutual destruction, no blast. The t5 row asserts that **both** expire, so it can no longer pass on the old bug. `homing_missile.gd:51-54` frees itself on a non-deflecting hurtbox, as the plan expects. |
+| 2 | Impact + blast impossible against i-frames; Warhead inverted | **Resolved** | The impact HitBox is on layer 32 only. The player and ally hurtboxes are mask 1281 (`player_ship.tscn:261-262`, `player_fighter.tscn:335-336`, `ally_fighter.tscn:42-43`), which lacks 32, so they never take the impact. Mask 128 still detonates the rocket on them. `ContactBlast` (256, `contact_blast.gd:35-41`) is the one source. The table is re-tuned so blast is the player number; the Warhead deals 30 either way. **Rows run on the real player scenes.** The `blast_radius + 20 → 0` row is sound: the player hurtbox radii are 5 × 2.2 = 11 px (OS) and 5 × 2.7 = 13.5 px (Assault), both < 20. |
+| 3 | Launcher overruns its own rocket | **Resolved** | Launch speed now inherits the launcher's velocity along the launch direction (`launch_velocity()`). On a rail it is the observed position delta: `EnemyPathMover` writes `global_position` in `_physics_process` (`enemy_path_mover.gd:73-84`), so `velocity` is 0 there. Arming is by clearance from the launcher's **current** position. Every `cruise_speed ≥ 231`, and `launch_speed > 240 × boost_seconds` (all four check, `:494`). The HitBox mask also dropped bit 1, so rockets no longer detonate on enemy bodies. A moving-launcher row with a failing control and a railed-corvette HP row are added. Residual edge: new finding 7. |
+| 4 | Tow drags a ward through its telegraph; brainless wards | **Resolved** | `EnemyBrain.accepts_tow()` is overridden in every shipped brain. I confirmed every phase name the plan lists exists in that brain's `enum Phase`, and that each brain has an `enter_phase()` (sniper `:51/:179`, ram `:51/:163`, bomber `:36/:175`, fighter `:60/:303`, gatling `:55/:186`, razor `:57-59/:229`, swarm `:59/:221`). `accept_tow` now requires `is_ai_driven()`, i.e. `_brain` and `_mover` present and not suspended. That matches the early return at `base_enemy.gd:103-108`. The nudge path really is per step: `enemy_mover.gd:190` sums `_primary + _nudge` and caps it; `:222` clears it. The control rows can fail: the sniper's `acceleration` is 520 and `lock_seconds` 0.5 (`sniper_config.gd:15,71`), about 65 px from rest, more than 50; the ram's is 500 over a 0.65 s WIND_UP, about 105 px. |
+| 5 | Gate budget too small, unallocated, import/boot unmeasured, t3/t4 roots | **Resolved** | Import, boot and GUT are measured. There is a per-task allotment table (`:1246-1266`; it sums to 56.5 s and matches `For every task`). The ceiling is 240 s. t1 frees ≥ 70 s, with the slow files and the expected yield of each named. `tasks.json` t2–t5 now depend on t1 and every other task depends on it transitively. Owner question 4 is put up front. The yields are plausible: three files awaiting real physics at 1× (25.6 + 18.6 + 9.4 s; `test_ram_corvette.gd` has 55 awaits and no clock scaling today), plus moving fire-density from 4× to 8×, already about 70 s before `test_fighter_squad.gd`. ESCALATE is the fallback. Residual: new finding 6. |
+| 6 | One rocket cannot break a 50 HP plate | **Resolved** | `ArmorPlate._resolve` applies `hit_box.damage` for ROCKET and breaks only at 0 (`armor_plate.gd:95-100,131-140`). The row is now 50 → 34 with no `plate_broken`, plus a weakened-plate break. The rocket asks `ArmorQuery` on the hull first, and `ram_corvette.gd:88-89` answers true, so the rocket flies through to the plate. Owner question 1 now says "about four". |
+| 7 | `get_screen_center_position()` stale | **Resolved** | The plan now uses `global_position + offset` (the class doc at `arena_camera.gd:4-15`) and `viewport / zoom`, read in the same frame. `ArenaCamera` joins `assault_arena` unconditionally (`arena_camera.gd:78`). `EnemyWorld` is the single duck-typed lookup (`enemy_world.gd:19-50`), so `has_view_rect` / `view_rect` follow an existing pattern exactly. |
+| 8 | Two corvette rows could not pass | **Resolved** | The chase is bounded: 2 s at 200 px/s, closest approach ≥ 228 px, back outside within 3 s. Arcing is measured as cumulative \|Δbearing\|. My estimate: Assault starts at R = 460, the radial escape reaches about 130–150 px/s at accel 240, giving about 270–310 px at t = 2 s. This passes **if the run starts with the drift near 0**. Started at the drift's −80 px extreme, it lands near the 228 bound. The t8 author should pin the seed / start so the drift is near 0, and not loosen the bound. The OS arc row gets 0.22 rad/s × 10 s ≈ 126°, comfortably above 60°. |
+| 9 | Projected shield drains on an armoured Ram | **Resolved** | `absorbs_hit` is false while the host answers `is_armored()` (`ram_corvette.gd:82-83`). It never calls `deflects_hit`, correctly: on a plate that resolves and damages it (`armor_plate.gd:95-100`). The t2 counting-fake row and the t12 real-Ram row both prove this. Residual readability point: new finding 5. |
+| 10 | Trail out of the nose | **Resolved** | Rockets are now nose-up, `rotation = heading.angle() + PI/2`, matching `homing_missile.gd:43-44`. `RocketTrail` emits along local +Y (`rocket_trail.gd:12-13,31-32`). t9 adds a "trail behind the nose" row. |
+| 11 | Threat-weight table incomplete; gunship / bonus drone | **Resolved** | The full table matches every `score_value` in the `*_config.tres` files (gunship 200, bonus 500, station 1000, swarm 10, gatling 75, razor 40, …). `is_ai_driven()` excludes the gunship, station and bonus drone. `counts_toward_wave_clear` (`bonus_drone_config.tres:10` false, propagated at `base_enemy.gd:96-99`) excludes the bonus drone explicitly. `ward_min_score` 20 excludes swarm drones. There is a boundary row with a real gunship and a real bonus drone. |
+| 12 | Warhead moves during its warning | **Resolved** | The Warhead now stops dead on trigger, so the Ph4 mine rule is exact, and a < 0.5 px row checks it. This matches the mine precedent: 30 damage, and a rule built to catch crossers (`mine.tscn:24`, DECISIONS Ph4 B1a). |
+| 13 | Bubble deferred without a covering reason | **Resolved** | The projected arc widens to 360° during ESCORT and reverts afterwards, with a t13 row covering both. R5.30, §6 and §7 have been updated. |
+| 14 | Missing `planSections` | **Resolved** | t15 now lists 2.10 and 2.14; t16 and t17 list 2.12 (t17 also 2.13); every test-adding task lists 4.3. I checked every `planSections` string against the headings: all exist, including "6. Requirements coverage" and "7. Out of scope". For each task, the listed sections are enough to build it. |
+| 15 | Two owners of arming; Warhead salvo count | **Resolved** | The rocket alone owns arming (`arm_clearance` plus the launcher's `rocket_clear_radius()`), and `fire()` sets no rocket field. `warhead_salvo_count` 2 and `salvo_size(kind)` are added. `pool_size_for` gives 3/6/3/4, which I recomputed from the lifetimes. The pools prewarm disabled children, and `CollisionObject2D` removes those from physics (`bullet_pool.gd:66-75`), so idle rockets cannot collide. |
+
+**15 of 15 resolved.** Residual edges of 3, 5 and 9 are filed as new minors 7, 6 and 5.
+
+## New findings (all minor)
+
+### 1. (minor) Ally fighters' contact HitBox on layer 64 silently "shoots down" enemy rockets — t5
+- **Code:** `AllyFighter`'s `ContactHitBox` is on **layer 64** (`assault/scenes/allies/ally_fighter/ally_fighter.tscn:56-58`). The rocket's shoot-down HurtBox masks 96. The plan rule is that "any other `HitBox` defuses the rocket: small pop, **no blast**" (`3-plan.md:445`).
+- **Where it happens:** level 1's deep_space spawns allies (`level_1_director.gd:327, 344, 438-439`, inside `_build_section_1` `:261-483`). That is exactly where t17 places a corvette.
+- **Effect:** a rocket meeting an ally hits two things at once, its impact HitBox reaching the ally's hurtbox (128) and its HurtBox reaching the ally's ContactHitBox (64). Godot orders those two callbacks undefined, so the outcome is a coin flip between a blast and a harmless pop. The plan's "Player, allies … `blast_damage` only" row (`:422`) is false for allies half the time. No test covers allies.
+- **Fix:** the shoot-down handler defuses only on a **projectile** HitBox. Concretely: ignore a `HitBox` whose parent is a `CharacterBody2D` (every contact hitbox's owner), or ignore any area named `ContactHitBox`. Add a t5 row: a real `ally_fighter.tscn` on the rocket's path takes exactly `blast_damage`. Put the rule in §2.6 *Shoot-down*.
+
+### 2. (minor) The Assault halves of the dodge and Warhead-escape rows use stub speeds the Assault player does not have — t5, t6
+- **Plan:** `3-plan.md:535-537` (a 420 px/s straight runner; a 700 px/s perpendicular boost), `:594` ("a 700 px/s boost escapes"), `:609`. All are marked "(both)".
+- **Code:** the base Assault fighter moves at **360 px/s** (`assault/scenes/player/states/move_state.gd:20`) and dashes at 350 (`dash_state.gd:24`). A 700+ px/s escape in Assault exists only with the unlockable engine-boost module (1500 → 500 px/s, invincible; `engine_boost_module.gd:11-13`).
+- **Effect:** with scripted, unconstrained stubs, the Assault rows pass but prove nothing about Assault. A 6 s straight run is also impossible inside the 1480 px corridor. With the base kit a triggered Warhead cannot be escaped in Assault (360 × 0.4 = 144 < 180). That is acceptable under the Ph4 mine precedent, but the plan should say it, not claim the opposite.
+- **Fix:** read each stub's speeds from the real player of that mode (OS `player_ship.gd` `max_speed` / `boost_exit_speed`; Assault `move_state.gd` `move_speed`). In Assault, the PURSUIT dodge row becomes a 360 px/s sidestep. The Warhead row becomes "a stub that never enters `trigger_radius` is never triggered", plus "a boost-module stub escapes". State in §2.8 that the base-kit Assault counterplay is to keep out of the trigger radius or shoot the warhead.
+
+### 3. (minor) In Assault the corvette can telegraph and launch from outside the visible view — t8 (and t17)
+- **Plan:** TELEGRAPH needs only the launch cone and `salvo_period` (`3-plan.md:696-699`). The §43 "Off-screen" answer is "corridor-limited" (`:1092`).
+- **Geometry:** the camera keeps the player near view centre (`arena_camera.gd` follow with deadzone). The view is 720 px tall, so its half-height is 360. An Assault orbit at R = 460 ± 80 therefore puts the corvette above or below the view for roughly 40 % of its bearings. In that case the tube glow is unseen and the rockets enter at cruise speed, which undercuts R5.6 "visible launch". `view_rect()` is built in t4 for exactly this kind of question, but t8 neither depends on t4 nor lists §2.5.
+- **Fix:** in §2.10 item 3, add for Assault: "a TELEGRAPH starts only while the corvette is inside `EnemyWorld.view_rect(tree).grow(−48)`". Add a t8 row with the corvette 100 px above the view and no salvo. Add t4 to t8's `dependsOn` and 2.5 to its `planSections`. t17's attack-in-budget rows then measure with the gate in place.
+
+### 4. (minor) Cluster rockets are effectively unreachable in Assault — t8
+- **Plan:** CLUSTER requires `distance ≥ cluster_min_range` = 700 (`3-plan.md:701`, §2.9 table). The Assault hold radius is `assault_preferred_range + range_drift` ≤ 540, and the distance can grow to 700 only during APPROACH, where no salvo starts.
+- **Effect:** Assault ships only three of the four kinds. That may be acceptable, but it should be a decision, not an accident.
+- **Fix:** either add `assault_cluster_min_range` (e.g. 420–500) with a t8 row that picks CLUSTER in Assault for a crossing stub at that range, or state in §2.10 and DECISIONS that Assault has no Cluster salvos.
+
+### 5. (minor) The projected shield is drawn on an armoured Ram although it absorbs nothing — t2, t12
+- **Plan:** the shield refuses every hit while the host `is_armored()` (`3-plan.md:883-884`), but §2.3 *Drawing* (`:272`) draws the cyan arc by points fraction regardless.
+- **Effect:** the player sees a cyan shield on the Ram while the plates do the deflecting. They will read the plates' glance-off flash as the shield.
+- **Fix:** while the host answers `is_armored()`, draw the arc dormant (dim dashed outline, no flare) or hide it. Add one t2 unit row (`is_drawn_active()` false on an armoured host).
+
+### 6. (minor) Per-task GUT allotments of 0.5–2 s sit below run-to-run noise — every test-adding task
+- **Plan and tasks:** `For every task` and §4.3 set allotments as small as 0.5 s (t4, t9, t14) and 2 s. The acceptance criteria say "GUT delta within N s".
+- **Problem:** whole-suite GUT time on a ~180–240 s run varies by more than that between identical runs. `scripts/gate-time.sh` prints only the 15 slowest files, so a small new file's own cost is invisible.
+- **Fix:** gate-time.sh also prints every file's junit time, or at least those of the files the task changed (`git diff --name-only`). A task's allotment is checked against **its own files'** time. The whole-suite number is used only for the 240 s ceiling.
+
+### 7. (minor) A rail faster than a rocket's cruise speed would still let the corvette overrun its armed rocket — t7
+- **Plan:** the inequality bounds the launcher's **AI** `max_speed` (`3-plan.md:461`). On a rail, launch speed is `launch_speed + rail speed`, and then `move_toward(cruise_speed)`.
+- **Example:** a `straight(300)` rail is 600 px/s, above DUMB's 520 cruise. The rocket decelerates below the ship's speed after arming, and the corvette catches it.
+- **Scope:** nothing places a corvette on a rail today (§2.9), so this is latent.
+- **Fix:** the rocket never decelerates below its inherited along-heading speed plus a margin (`target = max(cruise_speed, inherited × 1.1)`). Alternatively, the rail fallback fires sideways. State it in §2.6.
+
+### 8. (minor) Note for t8: pin the drift phase in the bounded-chase row
+- See round-1 finding 8 above. In Assault the ≥ 228 px bound holds when the run starts with the range drift near 0. Started at −80 px it is marginal.
+- **Fix:** the row seeds the brain (or starts the stub at a drift zero-crossing) so the result is deterministic. It never loosens the bound.
+
+## Checked and fine (no finding)
+- **Layers:** every target that should take rocket impact has a hurtbox on 512 that masks 32: enemy hurtboxes (runtime 1121), plates (`ram_corvette.tscn:123-125`), ordnance (`mine.tscn:29-31`), big and small asteroids (`big_asteroid.tscn:35-37`, `small_asteroid.tscn:37-39`). Mask 128 | 512 detonates on all of them and on the player, with no bit 1. Enemy contact hitboxes are on 256 (`bomber.tscn:95-97`), outside the rocket's shoot-down mask 96. Open Space has no asteroids, so "hits the environment" is Assault-only, which is consistent.
+- **Shield hook:** the bullet decides through `ArmorQuery` (`bullet.gd:125-139`) and the hurtbox decides through its absorber, both per hit and consistent. An absorbed hit is not deflected, so it consumes the bullet and spends a pierce charge. The Sniper Shot path (`bullet.gd:110-121`) still passes on. The beam picks targets from `enemies` (`beam_behavior.gd:87-113`), so rockets are untouched by it, and the plan already defers that question to Ph8.
+- **Repair:** `Health.increase` (`health_component.gd:30-32`) emits through `set_health`. `ContactProfile._on_health_changed` acts only at 0 (`contact_profile.gd:151-153`). The overrides of `_on_health_changed` in shipped enemies are `space_station.gd:197` (calls `super`) and the gunship's own handler (not a ward), so decrease-only flash is safe.
+- **EMP:** `emp_blast_module.gd:59-66` sets the enemy's `process_mode` to DISABLED. That freezes the support's sustain calls, as the plan assumes. Rockets are not in `enemies` and are unaffected.
+- **Hub:** 12 seeded draws today (4 swarm + 1 razor + 2 + 2 + sniper, bomber, ram; `sector_hub.gd:56-69`). The corvette anchor (1343.5, −1343.5) and the Ram anchor (−1202, −1202) are as stated. The nearest other patrol anchor to the Ram's is the Razor's at about 1206 px, beyond `ward_search_radius` 900, so "the support guards the Ram" holds until the player drags a higher-score group over.
+- **Lifetime arithmetic:** I recomputed all five rows (DUMB 3.80, PURSUIT 5.90, CLUSTER 3.55, SUBMUNITION 1.15, WARHEAD 5.76); all are correct.
+- **Task shape:** decomposition, complexities (t2, t5, t8, t11, t17 large), dependencies and the critical path are sound. t7 → t10 is serialised for the roster files. t15 waits for both brains, and t17 for t15. No two parallel-eligible tasks edit the same file.
