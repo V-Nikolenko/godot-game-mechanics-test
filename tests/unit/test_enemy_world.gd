@@ -57,3 +57,35 @@ func test_plain_camera2d_is_not_a_provider() -> void:
 	assert_null(EnemyWorld.arena(get_tree()))
 	assert_false(EnemyWorld.has_projectile_world_rect(get_tree()))
 	assert_eq(EnemyWorld.projectile_world_rect(get_tree()), Rect2())
+
+
+class _FakeArena extends Node:
+	func enemy_view_rect() -> Rect2:
+		return Rect2(1.0, 2.0, 3.0, 4.0)
+
+
+func test_no_provider_means_no_view_rect() -> void:
+	assert_false(EnemyWorld.has_view_rect(get_tree()))
+	assert_eq(EnemyWorld.view_rect(get_tree()), Rect2())
+
+
+func test_fake_provider_view_rect_is_returned() -> void:
+	var fake := _FakeArena.new()
+	fake.add_to_group(EnemyWorld.ARENA_GROUP)
+	add_child_autofree(fake)
+	assert_true(EnemyWorld.has_view_rect(get_tree()))
+	assert_eq(EnemyWorld.view_rect(get_tree()), Rect2(1.0, 2.0, 3.0, 4.0))
+
+
+func test_arena_camera_view_rect_follows_offset_and_zoom_in_the_same_frame() -> void:
+	var cam := ArenaCamera.new()
+	cam.global_position = Vector2(640.0, 360.0)
+	add_child_autofree(cam)
+	var base := EnemyWorld.view_rect(get_tree())
+	cam.offset = Vector2(0.0, -300.0)
+	var rect := EnemyWorld.view_rect(get_tree())
+	assert_eq(rect.get_center(), Vector2(640.0, 60.0))
+	assert_eq(rect.position.y, base.position.y - 300.0)
+	assert_eq(rect.size, Vector2(1280.0, 720.0))
+	cam.zoom = Vector2(0.8, 0.8)
+	assert_eq(EnemyWorld.view_rect(get_tree()).size, Vector2(1600.0, 900.0))
