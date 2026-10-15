@@ -276,6 +276,73 @@ func test_no_ordnance_speed_is_in_the_round_speed_list() -> void:
 
 
 # ---------------------------------------------------------------------------------------------
+# Enemy rockets (docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md §2.6, t5): the straight-line time to
+# cover `max_distance` with zero inheritance (the slowest case) - `boost_seconds` at `launch_speed`,
+# then accelerating at `accel` to `cruise_speed`, then the rest at `cruise_speed` - must fit `max_time`,
+# so the distance cap, not the clock, ends a straight rocket. Every number is the rocket scene's export.
+# ---------------------------------------------------------------------------------------------
+
+func _rocket(kind: EnemyRocket.Kind) -> EnemyRocket:
+	var r: EnemyRocket = EnemyRocketScenes.scene_for(kind).instantiate()
+	add_child_autofree(r)
+	return r
+
+
+## Seconds a straight rocket takes to cover `distance` from a standing launch.
+func _rocket_straight_time(launch: float, cruise: float, boost: float, accel: float, distance: float) -> float:
+	var boost_d := launch * boost
+	if boost_d >= distance:
+		return distance / launch
+	var ramp_t := absf(cruise - launch) / accel if accel > 0.0 else 0.0
+	var ramp_d := (launch + cruise) * 0.5 * ramp_t
+	if boost_d + ramp_d >= distance:
+		# Solve launch*t + 0.5*a*t^2 = rest for the ramp time actually used.
+		var rest := distance - boost_d
+		var t := (-launch + sqrt(launch * launch + 2.0 * accel * rest)) / accel
+		return boost + t
+	return boost + ramp_t + (distance - boost_d - ramp_d) / cruise
+
+
+func _rocket_clears(r: EnemyRocket) -> bool:
+	return _rocket_straight_time(r.launch_speed, r.cruise_speed, r.boost_seconds, r.accel, r.max_distance) \
+			<= r.max_time
+
+
+func test_the_dumb_rocket_clears_its_lifetime_through_boost_ramp_and_cruise() -> void:
+	var r := _rocket(EnemyRocket.Kind.DUMB)
+	var t := _rocket_straight_time(r.launch_speed, r.cruise_speed, r.boost_seconds, r.accel, r.max_distance)
+	assert_almost_eq(t, 3.80, 0.01, "DUMB: 0.25 + 0.42 + 3.13 s to cover 1800 px")
+	assert_true(_rocket_clears(r), "DUMB: %.2f s must fit max_time %.1f" % [t, r.max_time])
+	var lt := r.get_node("ProjectileLifetime") as ProjectileLifetime
+	assert_eq(lt.max_time, r.max_time, "the lifetime child carries the rocket's own max_time")
+	assert_eq(lt.max_distance, r.max_distance, "the lifetime child carries the rocket's own max_distance")
+
+
+func test_the_pursuit_rocket_clears_its_lifetime_through_boost_ramp_and_cruise() -> void:
+	var r := _rocket(EnemyRocket.Kind.PURSUIT)
+	var t := _rocket_straight_time(r.launch_speed, r.cruise_speed, r.boost_seconds, r.accel, r.max_distance)
+	assert_almost_eq(t, 5.90, 0.01, "PURSUIT: 0.35 + 0.53 + 5.02 s to cover 2400 px")
+	assert_true(_rocket_clears(r), "PURSUIT: %.2f s must fit max_time %.1f" % [t, r.max_time])
+	var lt := r.get_node("ProjectileLifetime") as ProjectileLifetime
+	assert_eq(lt.max_time, r.max_time)
+	assert_eq(lt.max_distance, r.max_distance)
+
+
+func test_a_slow_cruising_rocket_fails_its_row() -> void:
+	var r := _rocket(EnemyRocket.Kind.PURSUIT)
+	r.cruise_speed = 380.0
+	assert_false(_rocket_clears(r), "2400 px at a 380 px/s cruise takes ~6.7 s > 6.0 s: the row can reject")
+
+
+func test_no_rocket_speed_is_in_the_round_speed_list() -> void:
+	var speeds := _every_shipped_enemy_bullet_speed()
+	for kind: EnemyRocket.Kind in [EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT]:
+		var r := _rocket(kind)
+		for s: float in [r.launch_speed, r.cruise_speed]:
+			assert_false(speeds.has(s), "%s px/s is a rocket speed; rockets have their own rows" % s)
+
+
+# ---------------------------------------------------------------------------------------------
 # Boundary: x = 1444 lives, x = 1444.1 expires, with the Assault provider. No provider: both live.
 # ---------------------------------------------------------------------------------------------
 

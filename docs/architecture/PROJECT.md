@@ -142,6 +142,12 @@ Detail and APIs: [global.md](modules/global.md).
   bombs, mines and pursuit bombs (`assault/scenes/projectiles/enemy_ordnance/`, `EnemyOrdnance`) are the first user.
   Ordnance is not an `EnemyBullet` and not a `BaseEnemy`: never in `enemies`, never scored, and any player hit defuses
   it. Detail: [assault.md](modules/assault.md) → *Projectiles & bullet pool*; [BULLET_POOL.md](../BULLET_POOL.md).
+- **Enemy rockets hurt enemies by impact and the player by blast only (Ph5).** `EnemyRocket`
+  (`assault/scenes/projectiles/enemy_rockets/`) puts its impact `HitBox` on layer 32 alone, which enemy, ordnance,
+  plate and asteroid hurtboxes see and the player's does not; the `ContactBlast` it leaves is the player's only damage.
+  A rocket arms only once clear of its launcher's current position, inherits the launcher's speed along its heading,
+  and is shot down (no blast) by any player bullet or missile. Tuning lives in each rocket scene's exports. Detail:
+  [assault.md](modules/assault.md) → *Projectiles & bullet pool*.
 - **An enemy picks a round, it does not retune one bullet (Ph3).** The pooled `EnemyBullet` family —
   Pulse, Scatter, Gatling Stream, Rail (the Sniper's, Ph4), Heavy Shell (`assault/scenes/projectiles/enemy_bullet/rounds/`, `EnemyRounds`) — are
   inherited scenes of `enemy_bullet.tscn`, each with its own `ProjectileLifetime`; `EnemyBullet.reset()` restores the

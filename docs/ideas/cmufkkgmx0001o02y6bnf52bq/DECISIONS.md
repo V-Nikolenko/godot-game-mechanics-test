@@ -1984,6 +1984,21 @@ phase's *as built* section, once written, before relying on them. (This section 
   only when health went down (`_last_health`, unset = `max_health`). `EnemyBrain.accepts_tow()` (default true) is overridden in
   the seven shipped brains, each as a trailing `match phase` at the end of the file; t8 adds the Corvette's (TELEGRAPH, SALVO).
   The Ram boundary compares a towed run to an untowed twin (not an absolute position): the Ram crawls under its own brain.
+- **t5 as built (Dumb + Pursuit rockets, `EnemyRocket` contract).** Choices t6–t8 build on, beyond §2.6/§2.7:
+  (1) **no player → no turn**: guidance skips the tick entirely (Ph4's pursuit bomb steers at its stale target point
+  instead; not changed). (2) **`launch()` re-applies** `impact_damage`, both shape radii (`body_radius`, hurtbox
+  `+ 2`) and `max_time` / `max_distance` to the children, so exports set between `acquire()` and `launch()` (Ph16
+  tiers, a test) take effect. (3) **The shoot-down also ignores `CONTACT`-type HitBoxes**: the ally fighter's ram box
+  sits on layer 64, so without this an ally touching a rocket could defuse it (no blast) in an undefined callback
+  order; now the ally detonates it through its 128 hurtbox and takes the blast, as the §2.6 table says. No player
+  projectile is `CONTACT`. (4) **`expired` after a detonation or shoot-down goes out two physics ticks later** (the
+  rocket hidden meanwhile), and `_mark_done()` disables both shapes as well as closing the areas: a `BulletPool`
+  recycles by re-parenting, and `Area2D` re-emits `area_entered` for an overlapping area re-entering the tree until the
+  server has delivered the exit (turning `monitorable` off alone keeps the pair) — recycling at once hit the enemy a
+  second time (968 instead of 984 in the friendly-fire row). A lifetime fizzle still emits at once. A launcher that
+  counts `expired` must allow the 2-tick lag. `EnemyRocket._tick(delta)` is the hand-tick entry (tests turn the
+  rocket's and its `ProjectileLifetime`'s physics process off). Fixture launcher: `tests/helpers/rocket_launcher_fixture.gd`.
+  Gate time: GUT 177.5 → 180.0 s (+2.5 of 6.0), `test_enemy_rockets.gd` 2.3 s / 16 tests.
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |

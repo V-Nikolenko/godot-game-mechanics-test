@@ -304,6 +304,10 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   cases in `test_enemy_dual_mode.gd` and `test_sector_hub_patrol.gd`) are intent tests in both harnesses; the
   primitives under them have `test_armor_query.gd`, `test_line_of_sight.gd`, and the `ContactProfile` ARMOR /
   `BulletPool.persist_after_owner_death` rows in `tests/unit/`.
+  The Phase 5 enemy rockets (`EnemyRocket`, `assault/scenes/projectiles/enemy_rockets/`) have an intent spec,
+  `tests/integration/test_enemy_rockets.gd`: guidance and dodging hand-ticked in both harnesses, and real-physics rows
+  for shoot-down, friendly fire (impact hurts enemies, plates and asteroids; the real player scenes take the blast only)
+  and the pool hand-over.
   The Phase 3 behaviour specs for the Fighter and the Gatling (`test_fighter.gd`, `test_fighter_squad.gd`,
   `test_gatling_interceptor.gd`, `test_gatling_convergence.gd`, plus their cases in
   `test_enemy_dual_mode.gd`) are intent tests that run in both the Assault and Open Space harnesses.
