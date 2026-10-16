@@ -1,7 +1,7 @@
 # open_space/scenes/levels/sector_hub.gd
 extends Node2D
 
-## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair and a Sniper, a Bomber and a Ram Corvette, each
+## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair and a Sniper, a Bomber, a Ram Corvette, a Missile Corvette and a Support Ship, each
 ## patrolling its own anchor point, and assigns the planet config.
 ## To change this planet's missions, background, or sprite — edit edelia.tres.
 ## To use a different config, change the path in _configure_planet().
@@ -23,6 +23,8 @@ const GATLING_INTERCEPTOR: PackedScene = preload("res://assault/scenes/enemies/g
 const SNIPER: PackedScene = preload("res://assault/scenes/enemies/sniper/sniper.tscn")
 const BOMBER: PackedScene = preload("res://assault/scenes/enemies/bomber/bomber.tscn")
 const RAM_CORVETTE: PackedScene = preload("res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn")
+const MISSILE_CORVETTE: PackedScene = preload("res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn")
+const SUPPORT_SHIP: PackedScene = preload("res://assault/scenes/enemies/support_ship/support_ship.tscn")
 
 ## Fighters and Gatlings patrol in pairs, a squad of two each (epic plan §2.10).
 const SHOOTER_SQUAD_SIZE := 2
@@ -48,6 +50,13 @@ const SHOOTER_SQUAD_SIZE := 2
 @export var bomber_anchor_bearing_deg: float = 45.0
 @export var ram_anchor_bearing_deg: float = 225.0
 
+## The Missile Corvette (epic plan §2.17, phase 5) takes the free 315 deg diagonal on a fourth ring: its `perceive_radius`
+## is 720 px, and at 1900 the nearest interactable (the ship-boost pickup, 1287 px away) clears its idle ring plus that
+## by +417 px. The Support Ship has no anchor of its own: it shares the Ram Corvette's, so the two engage together and
+## the support wards the Ram (the Support + Ram combination, §37).
+@export var missile_corvette_ring_radius: float = 1900.0
+@export var missile_corvette_anchor_bearing_deg: float = 315.0
+
 @onready var enemy_container: Node2D = $EnemyContainer
 
 func _ready() -> void:
@@ -67,6 +76,9 @@ func _spawn_patrol() -> void:
 	_spawn_sniper(_specialist_anchor(sniper_anchor_bearing_deg), rng)
 	_spawn_bomber(_specialist_anchor(bomber_anchor_bearing_deg), rng)
 	_spawn_ram_corvette(_specialist_anchor(ram_anchor_bearing_deg), rng)
+	# Phase 5, draws 13 and 14: appended after the twelve above, so every existing seed is unchanged.
+	_spawn_missile_corvette(_missile_corvette_anchor(), rng)
+	_spawn_support_ship(_specialist_anchor(ram_anchor_bearing_deg), rng)
 
 func _anchor(bearing_deg: float) -> Vector2:
 	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * patrol_ring_radius
@@ -76,6 +88,26 @@ func _shooter_anchor(bearing_deg: float) -> Vector2:
 
 func _specialist_anchor(bearing_deg: float) -> Vector2:
 	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * specialist_ring_radius
+
+func _missile_corvette_anchor() -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(missile_corvette_anchor_bearing_deg)) * missile_corvette_ring_radius
+
+func _spawn_missile_corvette(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var corvette := MISSILE_CORVETTE.instantiate() as MissileCorvette
+	corvette.global_position = anchor
+	var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(corvette)
+
+## Shares the Ram Corvette's anchor and its idle/perceive radii, so the Ram's clearance holds for it.
+func _spawn_support_ship(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var support := SUPPORT_SHIP.instantiate() as SupportShip
+	support.global_position = anchor
+	var brain := support.get_node("Brain") as SupportShipBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(support)
 
 ## A lone specialist: `patrol_anchor` and the seed are set before `add_child()`, so the brain's `_start()`
 ## builds its hub idle around that anchor.

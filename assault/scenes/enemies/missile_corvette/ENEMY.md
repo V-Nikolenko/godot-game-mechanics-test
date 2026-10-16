@@ -5,7 +5,7 @@
 
 > **Build state (Phase 5, in progress).** t7 built the **shell** (scene, config, four rocket pools, `fire()`, the launcher
 > answers, the rail fallback); t8 built the **fight** (HOLD_ARC, the launch cone, TELEGRAPH, SALVO, predicted aim points, the
-> Assault gate and deferral). t9 gave it its real hull sprite and the rocket sprites. t15 gave it the **hub idle** (IDLE / NOTICING / RETURNING). Still to come: the hub patrol (t16) and level 1 (t17).
+> Assault gate and deferral). t9 gave it its real hull sprite and the rocket sprites. t15 gave it the **hub idle** (IDLE / NOTICING / RETURNING). t16 put it in the hub (see below). Still to come: level 1 (t17).
 > Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.9–§2.10 (rockets: §2.6–§2.8); t8's own build plan
 > `docs/plans/cmv9szqlq001zqs2x6vi0nlxj/3-plan.md`. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t7 as built", "t8 as built").
 

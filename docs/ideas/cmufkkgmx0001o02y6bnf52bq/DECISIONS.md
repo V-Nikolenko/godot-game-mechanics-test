@@ -2134,6 +2134,7 @@ phase's *as built* section, once written, before relying on them. (This section 
   selection entirely (`tick()` returns after `_tick_support`, which folds the dish). (3) Idle orbits run at the config's `max_speed`; the
   corvette overshoots its ring by ~40 px for the first ~3 s when it starts on the anchor (240 px/s² acceleration), settling at 149 px, so the
   ring row measures after 4 s. (4) Every earlier Open Space spawn in the suite sets `start_engaged` (`# pre-t15`); the real hub spawns are t16.
+- **t16 as built (hub placement).** `sector_hub.gd` `_spawn_patrol()` appends, after the twelve earlier draws: a Missile Corvette at 315 deg on the new `missile_corvette_ring_radius` 1900 ring (`missile_corvette_anchor_bearing_deg`; draw 13; +417 px clearance) and a Support Ship on the Ram Corvette's anchor (draw 14; the Ram's +309 px clearance holds, same 150 / 600 radii). No deviation from the plan. `test_sector_hub_patrol.gd` gains the clearance, eight-anchor, seed, frame-0 IDLE, rocket-in-`EnemyContainer` (8x) and support-wards-Ram rows; its `_spawn_hub` takes `engage_new` to set `start_engaged` on each ship as it enters the container (the brain reads it in `_start()`).
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |

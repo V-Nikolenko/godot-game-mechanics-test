@@ -5,7 +5,7 @@
 
 > **Build state (Phase 5, in progress).** t10 built the **shell** (scene, flat config with every §2.11 field, contact profile NONE,
 > `can_be_repaired()` false, the Assault budget exit); t11 the **ward**: scored choice, claim, retarget, the soft anchor behind
-> the ward with jink and evasion, and the Assault view clamp; t12 the **repair pulse and projected shield**; t13 the **emergency escort**; t15 the **hub idle**. Still to come: the hub patrol (t16) and level 1 (t17).
+> the ward with jink and evasion, and the Assault view clamp; t12 the **repair pulse and projected shield**; t13 the **emergency escort**; t15 the **hub idle**. t16 put it in the hub (see below). Still to come: level 1 (t17).
 > Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.11–§2.15. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t10 as built", "t11 as built", "t12 as built", "t13 as built").
 
 ---
