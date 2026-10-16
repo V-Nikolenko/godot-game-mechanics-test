@@ -40,11 +40,17 @@ static func pool_size_for(kind: EnemyRocket.Kind, cfg) -> int:
 
 ## The `max_time` export a kind's scene authors (the script default when the scene leaves it unset).
 static func max_time_of(kind: EnemyRocket.Kind) -> float:
+	return float(export_of(kind, &"max_time", 4.0))
+
+
+## `property` as `kind`'s scene authors it on its root, read through `PackedScene.get_state()` without instantiating
+## the scene; `fallback` (pass the script default) when the scene leaves it unset or the kind has no scene.
+static func export_of(kind: EnemyRocket.Kind, property: StringName, fallback: Variant) -> Variant:
 	var scene := scene_for(kind)
 	if scene == null:
-		return 0.0
+		return fallback
 	var state := scene.get_state()
 	for i in state.get_node_property_count(0):
-		if state.get_node_property_name(0, i) == &"max_time":
-			return float(state.get_node_property_value(0, i))
-	return 4.0
+		if state.get_node_property_name(0, i) == property:
+			return state.get_node_property_value(0, i)
+	return fallback

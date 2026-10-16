@@ -2030,6 +2030,27 @@ phase's *as built* section, once written, before relying on them. (This section 
   `test_enemy_rockets.gd` reads the launcher numbers from `missile_corvette_config.tres` (`_CORVETTE`), the
   constants are gone. (6) `fire()` counts a refused launch in `rockets_refused`; `BulletPool` logs its usual
   exhaustion warning.
+- **t8 as built (Missile Corvette fight).** Task plan `docs/plans/cmv9szqlq001zqs2x6vi0nlxj/3-plan.md` (review round 2
+  APPROVED). What later phases build on: (1) **`break_contact` side inside an orbit is `-orbit_dir`.** §2.10.2's "side =
+  orbit direction" is read as *the sense the arc turns*: `Steering.break_contact`'s lateral is `away.orthogonal() × side`
+  (−90° for +1) while `Steering.orbit`'s +1 travels +90°, so the literal `+orbit_dir` opposes the orbit (measured on a
+  350 px/s rusher in Assault: closest pass 147 px literal, 250 px with `-orbit_dir`, 200 px with no blend). **Any later
+  brain that blends `break_contact` into an orbit (the Support Ship's dodge, a hub idle) needs the same sign.** The blend
+  is `orbit request + break_contact(max_speed)` in one `request_velocity`, capped by the mover. (2) `choose_kind(distance,
+  player_speed, radial_speed)` takes a **required** third argument (radial = player velocity along corvette→player, > 0
+  away); the 1-in-4 DUMB→PURSUIT swap is drawn outside it, at TELEGRAPH entry. (3) New public surface:
+  `salvo_size(kind)`, `attack_window()` (from config, 1.14 s: the deferral bound and, + `ATTACK_GATE_MARGIN` 0.05, the
+  gate), `in_launch_cone(point, cone_deg)`, `salvo_cooldown` (drawn at the first tick and after each salvo, so the first
+  salvo comes 4–5 s after spawn: one salvo per Assault life at `engage_seconds` 7.0 — t17's attack-in-budget rows start
+  from that), `orbit_dir`, `salvo_kind`, `salvos_fired`, test seam `force_next_kind(kind)`. HOLD_ARC never returns to
+  APPROACH (the orbit anchor follows the player). (4) The Warhead pair's `across` is fixed once per salvo at SALVO entry
+  (velocity perpendicular, or the line-of-sight perpendicular from the hull's centre). (5) The orbit drift starts at 0
+  (sine phase 0 or π), period rng 6–9 s; reversals are an instant flip of the anchor's direction (no REVERSE phase).
+  (6) `MissileCorvette.next_tube_position()` (read-only) and `EnemyRocketScenes.export_of(kind, property, fallback)` (any
+  root export via `PackedScene.get_state()`; `max_time_of` now calls it and returns 4.0, not 0.0, for a kind with no
+  scene). (7) The t7 approach row now asserts the APPROACH → HOLD_ARC hand-over within `range_tolerance` and the held
+  band `R ± (range_drift + range_tolerance)`, not "parked within 25 px". Gate time: GUT 182.9 → 183.3 s (+0.4 of 5.0),
+  `test_missile_corvette.gd` 16 → 37 tests in about 1.1 s; 1687 → 1708 tests.
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |

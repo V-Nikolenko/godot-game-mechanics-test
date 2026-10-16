@@ -104,6 +104,11 @@ func fire(kind: EnemyRocket.Kind, aim_point: Vector2) -> EnemyRocket:
 	return rocket
 
 
+## The global position of the tube the next `fire()` launches from (the brain aims each rocket from it).
+func next_tube_position() -> Vector2:
+	return _tubes[_next_tube].global_position
+
+
 ## Duck-typed launcher question (`EnemyRocket.launch`): how fast the corvette is moving. `velocity` under AI; on a
 ## rail, where `EnemyPathMover` writes the position and `velocity` stays 0, the position change observed over the
 ## last frame.

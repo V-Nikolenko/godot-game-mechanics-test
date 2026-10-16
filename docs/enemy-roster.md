@@ -356,7 +356,7 @@ b.bomber().at(0, -400).move(b.straight(82))
 
 **Builder:** `b.missile_corvette()`  
 **Scene:** `missile_corvette.tscn`  
-**Movement:** AI-driven (`MissileCorvetteBrain` + `EnemyMover`); closes to its held range (620 Open Space / 460 Assault), leaves when its Assault budget (`engage_seconds` 7.0) ends. `.move()` puts it on a rail, where it fires a Dumb rocket DOWN every `rail_rocket_interval`. The salvo fight is Phase 5 t8 — see `missile_corvette/ENEMY.md`.  
+**Movement:** AI-driven (`MissileCorvetteBrain` + `EnemyMover`); closes to its held range (620 Open Space / 460 Assault), then circles the player on a broad, drifting, reversing arc with its nose on them, breaking off sideways inside `min_range` 380. Fires a telegraphed (0.7 s, tubes glow) salvo of 3 rockets (2 Warheads) only at a player inside its 45° nose cone, every 4–5 s, aimed at where the player is heading (kind by distance and motion: Warhead < 420 px, Pursuit at a fleeing player, Cluster at a far crossing one, else Dumb). Leaves when its Assault budget (`engage_seconds` 7.0) ends, after any salvo it has started. `.move()` puts it on a rail, where it fires a Dumb rocket DOWN every `rail_rocket_interval`. See `missile_corvette/ENEMY.md`.  
 **Shoots:** Rockets (`EnemyRocket`: Dumb, Pursuit, Cluster, Delayed Warhead) from four persistent pools; every rocket can be shot down.  
 **HP:** 160 (a 40 px circle); contact damage 30  
 **Score:** 70 (rockets score nothing)

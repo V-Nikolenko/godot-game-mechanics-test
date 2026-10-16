@@ -351,6 +351,7 @@ const _REFUSING_PHASES := {
 	"gatling_interceptor": ["SPIN_UP", "STREAM"],
 	"razor_drone": ["WINDUP", "DASH", "FEINT_WINDUP", "FEINT_LUNGE"],
 	"swarm_drone": ["WINDUP", "BURST"],
+	"missile_corvette": ["TELEGRAPH", "SALVO"],
 }
 
 
