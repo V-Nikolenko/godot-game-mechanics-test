@@ -14,7 +14,15 @@ extends BaseEnemy
 ## is a world-space `Line2D`, hidden; t11-t13 unfold and draw them while it supports. It has no weapon and no pool, so
 ## there is no rail fallback: `on_suspended()` only drops the ward and folds the projector.
 ##
+## t12: the brain drives the dish and the tether through `set_projector_open()` / `show_tether()` / `hide_tether()`; the
+## tether is cyan while it projects, pale green for a moment after a repair pulse and dim when a rock blocks the line.
+##
 ## Spawn with b.support_ship().at(x, y).
+
+## The tether while projecting, flashing after a repair pulse, and the alpha it is drawn at when the line is blocked.
+const TETHER_COLOR := Color(0.4, 0.9, 1.0, 0.8)
+const TETHER_REPAIR_COLOR := Color(0.65, 1.0, 0.65, 1.0)
+const TETHER_DIM_ALPHA := 0.25
 
 @export var config: SupportShipConfig = load("res://assault/scenes/enemies/support_ship/support_ship_config.tres")
 
@@ -54,4 +62,21 @@ func can_be_repaired() -> bool:
 ## Folds the dish instantly and hides the tether: the folded look is `scale.y` 0.
 func fold_projector() -> void:
 	projector.scale.y = 0.0
+	tether.visible = false
+
+
+## Sets the dish's unfold, 0 (folded) to 1 (open), eased out like the Sniper's barrel. A visual pose, not motion.
+func set_projector_open(share: float) -> void:
+	var s := clampf(share, 0.0, 1.0)
+	projector.scale.y = 1.0 - (1.0 - s) * (1.0 - s)
+
+
+## Draws the world-space tether from the projector to `to`.
+func show_tether(to: Vector2, color: Color) -> void:
+	tether.points = PackedVector2Array([projector.global_position, to])
+	tether.default_color = color
+	tether.visible = true
+
+
+func hide_tether() -> void:
 	tether.visible = false

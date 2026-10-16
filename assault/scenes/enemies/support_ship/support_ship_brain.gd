@@ -33,6 +33,8 @@ signal phase_changed(new_phase: int)
 ## Emitted on every change of ward, with the new ward; null when the ward was lost or dropped. A loss followed by a
 ## re-pick emits null, then the new ward.
 signal ward_changed(new_ward: Node)
+## Emitted for every repair pulse that restored HP: the ward and the HP it gained.
+signal repaired(ward: Node, amount: int)
 
 ## DISENGAGE seeks a point this far beyond the chosen edge (px).
 const EXIT_OVERSHOOT := 64.0
@@ -54,6 +56,11 @@ const EVADE_FULL_FRACTION := 0.8
 ## leaves ~154 px/s of radial escape at `evade_speed` 240 against a closing player, slower than a 200 px/s one; 0.3 leaves
 ## ~206 px/s. t11 plan, review round 2.
 const EVADE_LATERAL_WEIGHT := 0.3
+## The tether flashes pale green this long after a repair pulse (s).
+const REPAIR_FLASH_SECONDS := 0.15
+## The shield's radius is the ward's hull radius plus this (px), and the radius used when the hull has no shape.
+const SHIELD_RADIUS_MARGIN := 6.0
+const DEFAULT_HULL_RADIUS := 34.0
 
 ## Set by `support_ship.gd` before the first tick. A fresh default keeps a bare brain steppable.
 var config: SupportShipConfig = SupportShipConfig.new()
@@ -76,12 +83,21 @@ var anchor: Vector2 = Vector2.INF
 var follow_side: float = 1.0
 ## ±1, the jink's current direction across the ward line; redrawn every `jink_period`.
 var jink_sign: float = 1.0
+## 0 = folded, 1 = unfolded: the dish. Rises while supporting over `projector_unfold_seconds`, falls over `projector_fold_seconds`.
+var projector_open: float = 0.0
+## HP restored so far this life, against `repair_budget`.
+var repair_spent: int = 0
+## The shield this support projects on its current ward, or null. The ward owns it (it is the ward's child); this
+## reference only says whether one needs creating. Cleared on a ward change and when the shield lapses.
+var shield: EnemyShield = null
 
 var _started: bool = false
 var _phase_time: float = 0.0
 var _exit_point: Vector2 = Vector2.ZERO
 var _expiry_seen: bool = false
 var _jink_clock: float = 0.0
+var _repair_clock: float = 0.0
+var _repair_flash_left: float = 0.0
 ## Seconds without a ward spent inside the Assault view (the grace clock).
 var _no_ward_time: float = 0.0
 ## The exact callable connected to the ward's `tree_exiting`, so the disconnect is guarded and exact.
@@ -98,6 +114,7 @@ func tick(delta: float) -> void:
 			enter_phase(Phase.DISENGAGE)
 	if phase == Phase.DISENGAGE:
 		_tick_disengage(delta)
+		_tick_support(delta)
 		return
 
 	if ward != null and not _ward_still_valid():
@@ -117,11 +134,13 @@ func tick(delta: float) -> void:
 			if _no_ward_time >= config.no_ward_grace:
 				enter_phase(Phase.DISENGAGE)
 				_tick_disengage(delta)
+				_tick_support(delta)
 				return
 
 	match phase:
 		Phase.SEEK_WARD: _tick_seek_ward()
 		Phase.FOLLOW: _tick_follow(delta)
+	_tick_support(delta)
 
 
 ## Test seam and the one place a transition happens: runs `p`'s entry code, then emits.
@@ -138,6 +157,8 @@ func enter_phase(p: Phase) -> void:
 ## `BaseEnemy.suspend_ai()`: a rail took the enemy over. Drop the ward and fold the dish; there is no weapon.
 func on_suspended() -> void:
 	_set_ward(null)
+	projector_open = 0.0
+	_repair_flash_left = 0.0
 	if actor is SupportShip:
 		(actor as SupportShip).fold_projector()
 
@@ -283,6 +304,8 @@ func _set_ward(new_ward: BaseEnemy) -> void:
 	ward = new_ward
 	ward_held_for = 0.0
 	ward_score = 0.0
+	_repair_clock = 0.0
+	shield = null  # the old ward's shield is no longer sustained: it lapses on its own
 	if new_ward != null:
 		new_ward.set_meta(CLAIM_META, actor.get_instance_id())
 		_ward_exit_cb = _on_ward_tree_exiting.bind(new_ward)
@@ -425,3 +448,117 @@ func _heading() -> Vector2:
 	if actor.velocity.length() > HEADING_MIN_SPEED:
 		return actor.velocity.normalized()
 	return Vector2.RIGHT.rotated(actor.rotation + EnemyMover.sprite_forward_angle_of(actor))
+
+
+# ── Support: the dish, the repair pulse and the projected shield (t12) ──────────────────────────────
+
+## Every tick: while `is_supporting()` the dish unfolds, the tether is drawn, a pulse repairs the ward every
+## `repair_period` and, once the dish is fully open, the ward carries a `ProjectedShield` that this ship sustains.
+## Anything else folds the dish and stops feeding the shield, which then lapses on its own (it belongs to the ward).
+func _tick_support(delta: float) -> void:
+	var ship := actor as SupportShip
+	var supporting := is_supporting()
+	_repair_flash_left = maxf(0.0, _repair_flash_left - delta)
+	if supporting:
+		projector_open = minf(projector_open + delta / maxf(config.projector_unfold_seconds, 0.001), 1.0)
+	else:
+		projector_open = maxf(projector_open - delta / maxf(config.projector_fold_seconds, 0.001), 0.0)
+		_repair_flash_left = 0.0
+	if ship != null:
+		ship.set_projector_open(projector_open)
+		if not supporting:
+			ship.hide_tether()
+	if not supporting:
+		return
+
+	var line_clear := _line_clear()
+	_tick_repair(delta, line_clear)
+	_tick_shield()
+	if ship != null:
+		var color := SupportShip.TETHER_COLOR
+		if _repair_flash_left > 0.0:
+			color = SupportShip.TETHER_REPAIR_COLOR
+		elif not line_clear:
+			color.a = SupportShip.TETHER_DIM_ALPHA
+		ship.show_tether(ward.global_position, color)
+
+
+## No blocker (an asteroid) between the support and its ward. One ray per supporting tick, on the brain's physics tick.
+func _line_clear() -> bool:
+	if not actor.is_inside_tree():
+		return true
+	var exclude: Array[RID] = [actor.get_rid(), ward.get_rid()]
+	return LineOfSight.clear(actor.get_world_2d().direct_space_state, actor.global_position, ward.global_position, exclude)
+
+
+## One pulse per `repair_period` of supporting time: `round(max_health × repair_fraction)` HP (at least 1), never more
+## than the budget left. Plates are never repaired: `repair()` heals the hull `Health` only.
+func _tick_repair(delta: float, line_clear: bool) -> void:
+	_repair_clock += delta
+	if _repair_clock < config.repair_period:
+		return
+	_repair_clock -= config.repair_period
+	var left := config.repair_budget - repair_spent
+	if left <= 0 or not line_clear or not ward.can_be_repaired():
+		return
+	var amount := mini(maxi(1, roundi(float(ward.health.max_health) * config.repair_fraction)), left)
+	var gained := ward.repair(amount)
+	if gained <= 0:
+		return
+	repair_spent += gained
+	_repair_flash_left = REPAIR_FLASH_SECONDS
+	repaired.emit(ward, gained)
+
+
+## Creates the ProjectedShield once the dish is open, then feeds it the player's position every tick.
+func _tick_shield() -> void:
+	if shield != null and not is_instance_valid(shield):
+		shield = null
+	if shield == null:
+		if projector_open < 1.0:
+			return
+		shield = _make_shield()
+		if shield == null:
+			return
+	var target := TargetInfo.player(get_tree())
+	shield.sustain(target.position if target.has_target else ward.global_position + shield.facing() * 100.0)
+
+
+## An `EnemyShield` in sustain mode on the ward's hurtbox, or null when another absorber holds the slot (the projection
+## is skipped and the shield freed).
+func _make_shield() -> EnemyShield:
+	var s := EnemyShield.new()
+	s.name = &"ProjectedShield"
+	s.sustain_mode = true
+	s.arc_deg = config.assault_shield_arc_deg if EnemyWorld.has_view_rect(get_tree()) else config.shield_arc_deg
+	s.capacity = config.shield_capacity
+	s.regen_delay = config.shield_regen_delay
+	s.regen_seconds = config.shield_regen_seconds
+	s.reboot_seconds = config.shield_reboot_seconds
+	s.turn_rate = config.shield_turn_rate
+	s.radius = _hull_radius(ward) + SHIELD_RADIUS_MARGIN
+	if not s.attach(ward.hurt_box):
+		s.free()
+		return null
+	ward.add_child(s, true)
+	var target := TargetInfo.player(get_tree())
+	if target.has_target:
+		s.face(target.position - ward.global_position)
+	s.lapsed.connect(_on_shield_lapsed.bind(s))
+	return s
+
+
+func _on_shield_lapsed(which: EnemyShield) -> void:
+	if which == shield:
+		shield = null
+
+
+## The ward's body radius (its `CollisionShape2D`, circle or otherwise), else `DEFAULT_HULL_RADIUS`.
+func _hull_radius(e: BaseEnemy) -> float:
+	var body := e.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if body == null or body.shape == null:
+		return DEFAULT_HULL_RADIUS
+	var scale_max := maxf(absf(body.global_scale.x), absf(body.global_scale.y))
+	if body.shape is CircleShape2D:
+		return (body.shape as CircleShape2D).radius * scale_max
+	return body.shape.get_rect().size.length() * 0.5 * scale_max

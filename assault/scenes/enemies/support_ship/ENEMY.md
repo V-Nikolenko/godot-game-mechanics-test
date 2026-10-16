@@ -5,9 +5,9 @@
 
 > **Build state (Phase 5, in progress).** t10 built the **shell** (scene, flat config with every §2.11 field, contact profile NONE,
 > `can_be_repaired()` false, the Assault budget exit); t11 the **ward**: scored choice, claim, retarget, the soft anchor behind
-> the ward with jink and evasion, and the Assault view clamp. Still to come: repair and shield (t12), the escort (t13), the real art with the
+> the ward with jink and evasion, and the Assault view clamp; t12 the **repair pulse and projected shield**. Still to come: the escort (t13), the real art with the
 > unfolding projector (t14), the hub idle (t15), the hub patrol (t16) and level 1 (t17).
-> Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.11–§2.15. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t10 as built", "t11 as built").
+> Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.11–§2.15. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t10 as built", "t11 as built", "t12 as built").
 
 ---
 
@@ -53,7 +53,19 @@
   exit). It has no telegraphed attack, so nothing defers the exit. Open Space never expires.
 - **Scene nodes:** `Projector` (`Sprite2D`, `scale.y` 0 = folded; Godot clamps a zero scale to an epsilon), `Tether` (`Line2D`,
   `top_level`, drawn in world space, hidden). No pool, weapon or `StateLight`: its state is the projector and the tether.
-- **Repair:** `can_be_repaired()` is false, so supports never repair each other.
+- **Repair pulse (t12):** while `is_supporting()` (ward within `beam_range` 380, and in Assault both ships in view), every `repair_period` 1.5 s
+  of supporting time it calls `ward.repair(round(max_health × 0.06))` (6 on a 100 HP ward; never flashes, never above max), clamped to the
+  `repair_budget` left (150 HP per life). No pulse when the budget is spent, `LineOfSight` is blocked by an asteroid (tether drawn dim) or
+  the ward `can_be_repaired()` is false. Emits `repaired(ward, amount)`; the tether flashes pale green for 0.15 s. Plates are never
+  repaired (`repair()` heals the hull `Health` only). A support is itself never repairable.
+- **Projection (t12):** supporting unfolds the `Projector` over 0.4 s (`scale.y` 0→1, eased out); once open the brain adds an `EnemyShield`
+  named `ProjectedShield` to the ward (`sustain_mode`, arc 110° or 90° in Assault, capacity 40, radius = hull + 6), attached to the ward's
+  `HurtBox`; skipped if the slot is taken. It `sustain()`s the shield with the player's position every tick, so the arc turns toward the
+  player at `shield_turn_rate`. The ward owns the shield: when the support dies, is EMP-disabled, goes out of range or view, or switches
+  ward, it lapses after `heartbeat` 0.3 s and frees the slot. The dish folds (0.25 s) when it stops supporting; the tether is cyan while
+  projecting.
+- **Support + Ram (t12):** a Ram Corvette is an ordinary ward. While it has plates the shield absorbs nothing (`is_armored()`), so the
+  plate fight is unchanged; once exposed, the arc absorbs the player's frontal fire and pulses refill the hull.
 - **Rails:** `on_suspended()` drops the ward, folds the projector and hides the tether. There is no weapon, so no rail fallback.
 - **Death / scoring:** a normal `BaseEnemy` death; score 60.
 
@@ -80,12 +92,13 @@ Assault group; t11 reads Follow, Ward and the view fields; Repair, Shield and Es
 support_ship/
 ├── ENEMY.md
 ├── support_ship.tscn
-├── support_ship.gd              ← SupportShip: config, can_be_repaired() false, fold_projector()
+├── support_ship.gd              ← SupportShip: config, can_be_repaired() false, projector / tether drivers
 ├── support_ship_brain.gd        ← SupportShipBrain
 └── support_ship_config.gd / .tres
 ```
 
 Tests: `tests/integration/test_support_ship.gd` (structure, config, contact 0 in both harnesses, SEEK_WARD, DISENGAGE, suspend;
+t12: pulse, budget, range, unrepairable ward, blocked line, projection, lapse (freed, EMP, switch), a real bullet, Ram pairing;
 t11: ward choice and its filters, switch hysteresis, retarget on free / kill / rail / range / view, the grace, follow, jink, evasion,
 facing and the Assault view clamp, dual-mode) plus the roster rows in `test_enemy_contact_damage.gd`, `test_contact_hitbox_geometry.gd`, `test_enemy_hurtbox_geometry.gd`,
 `test_base_enemy.gd` and a case in `test_enemy_dual_mode.gd`.

@@ -2092,6 +2092,25 @@ phase's *as built* section, once written, before relying on them. (This section 
   doubled for a closing threat, escapes at ≈ 154 px/s — slower than a 200 px/s player). All judgement, measured in
   `test_support_ship.gd`. (5) The t10 rows that assumed a score-0 fixture ally is held in Assault for > 1.5 s are Open Space
   only now (the SEEK_WARD fallback); `test_enemy_dual_mode.gd`'s support case uses a ward (`score_value = 25`).
+- **t12 as built (Support Ship repair pulse and projected shield).** Choices t13–t17 build on, beyond §2.13: (1) all of it is in
+  `SupportShipBrain._tick_support()`, called at the end of every `tick()` (also on the DISENGAGE paths, where the ward is null, so the
+  dish folds). `is_supporting()` drives everything: the dish (`projector_open` 0..1, rising over `projector_unfold_seconds`, falling
+  over `projector_fold_seconds`; `SupportShip.set_projector_open()` writes `scale.y` eased out), the tether (`show_tether()` /
+  `hide_tether()`; cyan `TETHER_COLOR`, pale green `TETHER_REPAIR_COLOR` for 0.15 s after a pulse, alpha `TETHER_DIM_ALPHA` when
+  `LineOfSight` is blocked), the pulse and the shield. (2) Repair: `_repair_clock` accumulates only while supporting; every
+  `repair_period` one pulse of `max(1, round(max_health × repair_fraction))`, **clamped to the budget left** (so the total is exactly
+  `repair_budget`, never over), skipped when the budget is spent, the line is blocked or `can_be_repaired()` is false. `repaired(ward,
+  amount)` fires only when HP was actually gained (a pulse on a full-HP ward is silent and does not flash). `repair_spent` is public.
+  (3) The shield: `_make_shield()` builds an `EnemyShield` named `ProjectedShield` (`sustain_mode`, arc 110 / Assault 90, config
+  capacity / regen / reboot / turn rate, `radius` = the ward's body `CollisionShape2D` radius + 6, 34 + 6 with no body shape),
+  `attach()`es it **before** `add_child` (false → freed, nothing added; retried next tick), faces it at the player at once, then
+  `sustain(player_position)` every supporting tick. The brain's `shield` is only "one needs creating?" bookkeeping: cleared on a ward
+  change and on the shield's `lapsed`. Nothing frees or detaches a shield explicitly: a support that dies, is EMP-disabled
+  (`process_mode` DISABLED stops the brain tick), leaves range or view, or switches ward simply stops feeding it, and it lapses after
+  `heartbeat` and releases the hurtbox slot (t13: widen `arc_deg` to 360 on `shield`, keep `sustain()`ing it). (4) The armoured-Ram
+  row needs no support-side code: `EnemyShield.absorbs_hit` refuses while the host's `is_armored()`. (5) Test-only: a `BaseEnemy`
+  whose HP is written directly (`health.current_health = x`) has an unset `_last_health`, so its first repair compares against
+  `max_health` and flashes; damage fixtures through `health.decrease()` (`test_support_ship.gd::_repair_world`).
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |

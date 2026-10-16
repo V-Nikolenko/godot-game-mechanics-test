@@ -809,3 +809,469 @@ func test_assault_support_pushed_out_of_view_does_not_support() -> void:
 	assert_false(brain.is_supporting(), "the support is outside view.grow(view_band): no support")
 	cam.offset = Vector2(0.0, sy + SHIPPED.view_band - 1.0)  # 1 px inside the band
 	assert_true(brain.is_supporting(), "boundary: 1 px inside the band, it supports")
+
+
+# ── Repair pulse and projected shield (t12, plan §2.13) ──────────────────────────────────────────
+
+const UNREPAIRABLE: GDScript = preload("res://tests/helpers/fixture_enemy_unrepairable.gd")
+const RAM_SCENE: PackedScene = preload("res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn")
+const BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
+
+const _SPEEDUP: int = 8
+
+var _saved_time_scale: float = 1.0
+var _saved_ticks: int = 60
+var _saved_max_steps: int = 8
+var _clock_fast: bool = false
+
+
+func after_each() -> void:
+	if _clock_fast:
+		Engine.time_scale = _saved_time_scale
+		Engine.physics_ticks_per_second = _saved_ticks
+		Engine.max_physics_steps_per_frame = _saved_max_steps
+		_clock_fast = false
+
+
+## The 8× clock with the step kept at 1/60 game-second; restored in `after_each`.
+func _fast_clock() -> void:
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
+	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
+	Engine.time_scale = _saved_time_scale * _SPEEDUP
+	_clock_fast = true
+
+
+func _frames(n: int) -> void:
+	for _i in n:
+		await get_tree().physics_frame
+
+
+## Ward (640, 360) with `hp` of 100, player (640, 760), support seeded at (700, 260) - a support already in range.
+func _repair_world(harness, hp: int) -> Array:
+	var w := _follow_world(harness)
+	var held: BaseEnemy = w[1]
+	held.health.max_health = 100
+	held.health.current_health = 100
+	if hp < 100:
+		held.health.decrease(100 - hp)  # through the signal, so the ward knows its last HP (a bare write leaves it unset)
+	held.hit_flash_player.stop()  # that damage flashed; only a flash caused by a repair counts
+	return w
+
+
+func _projected(ward: Node) -> EnemyShield:
+	return ward.get_node_or_null("ProjectedShield") as EnemyShield
+
+
+func _hit_at(pos: Vector2, damage: int = 25) -> HitBox:
+	var hb := HitBox.new()
+	hb.damage = damage
+	add_child_autofree(hb)
+	hb.global_position = pos
+	return hb
+
+
+func test_a_pulse_restores_6_hp_per_period_and_never_flashes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	var w := _repair_world(harness, 50)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	var brain := _brain(ship)
+	var pulses := _count(brain.repaired)
+	_ticks(ship, 1)
+	assert_eq(held.health.current_health, 50, "%s: nothing before the first period" % mode)
+	_ticks(ship, 90)  # 1.5 s
+	assert_between(held.health.current_health, 55, 56 + 0, "%s: one pulse of round(100 x 0.06) = 6 (+/- a tick)" % mode)
+	_ticks(ship, 90)
+	assert_between(held.health.current_health, 61, 62, "%s: a second" % mode)
+	assert_between(pulses[0], 1, 2)
+	assert_false(held.hit_flash_player.is_playing(), "%s: a repair never flashes the ward" % mode)
+
+
+func test_repaired_signal_carries_the_ward_and_the_hp_gained() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 50)
+	var ship: SupportShip = w[0]
+	var brain := _brain(ship)
+	var got: Array = []
+	brain.repaired.connect(func(ward: Node, amount: int) -> void: got.append([ward, amount]))
+	_ticks(ship, 95)
+	assert_eq(got.size(), 1)
+	assert_eq(got[0][0], w[1])
+	assert_eq(got[0][1], 6)
+
+
+func test_a_pulse_never_lifts_the_ward_above_max() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 98)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_ticks(ship, 200)
+	assert_eq(held.health.current_health, 100)
+
+
+func test_the_budget_stops_repair_after_150_hp_but_the_shield_goes_on() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 100)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	var brain := _brain(ship)
+	brain.config.repair_budget = 12
+	held.health.current_health = 10
+	_ticks(ship, 60 * 8)  # 5 periods at most
+	assert_eq(held.health.current_health, 22, "exactly the 12 HP budget, not a pulse more")
+	assert_eq(brain.repair_spent, 12)
+	assert_not_null(_projected(held), "projection continues once the budget is spent")
+	# the shipped budget: 25 pulses of 6 HP is the 150
+	assert_eq(SHIPPED.repair_budget, 150)
+	assert_eq(25 * roundi(100 * SHIPPED.repair_fraction), 150)
+
+
+func test_a_ward_out_of_beam_range_is_not_pulsed() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 50)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	var brain := _brain(ship)
+	brain.config.beam_range = 100.0  # the support sits ~155 px off
+	_ticks(ship, 1)
+	ship.global_position = held.global_position + Vector2(0.0, -300.0)
+	for _i in 200:
+		ship.velocity = Vector2.ZERO
+		ship._physics_process(DT)
+		ship.global_position = held.global_position + Vector2(0.0, -300.0)
+	assert_false(brain.is_supporting())
+	assert_eq(held.health.current_health, 50, "out of range: no pulse")
+	assert_false(ship.tether.visible, "and no tether")
+
+
+func test_a_ward_that_cannot_be_repaired_is_never_repaired(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	harness.player.global_position = Vector2(640.0, 760.0)
+	var scene_ward := ALLY_SCENE.instantiate() as BaseEnemy
+	scene_ward.set_script(UNREPAIRABLE)
+	scene_ward.global_position = Vector2(640.0, 360.0)
+	harness.root.add_child(scene_ward)
+	scene_ward.set_physics_process(false)
+	scene_ward.add_to_group("enemies")
+	scene_ward.score_value = 50
+	scene_ward.health.max_health = 100
+	scene_ward.health.current_health = 40
+	var ship := _seeded(harness, Vector2(700.0, 260.0))
+	var brain := _brain(ship)
+	_ticks(ship, 240)
+	assert_eq(brain.ward, scene_ward, "it still wards it")
+	assert_false(scene_ward.can_be_repaired())
+	assert_eq(scene_ward.health.current_health, 40, "%s: never repaired" % mode)
+	assert_eq(brain.repair_spent, 0)
+
+
+func test_a_blocked_line_means_no_pulse_and_a_dim_tether() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 50)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	var rock := StaticBody2D.new()
+	rock.add_to_group(&"asteroids")
+	rock.collision_layer = CollisionLayers.ENVIRONMENT
+	var shape := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 20.0
+	shape.shape = circle
+	rock.add_child(shape)
+	harness.root.add_child(rock)
+	ship.global_position = held.global_position + Vector2(0.0, -150.0)
+	rock.global_position = held.global_position + Vector2(0.0, -75.0)
+	await _frames(2)  # the rock enters the physics world
+	for _i in 120:
+		ship.velocity = Vector2.ZERO
+		ship._physics_process(DT)
+		ship.global_position = held.global_position + Vector2(0.0, -150.0)
+	assert_eq(held.health.current_health, 50, "a rock between them: no pulse")
+	assert_lt(ship.tether.default_color.a, SupportShip.TETHER_COLOR.a, "the tether is drawn dim")
+
+
+func test_each_pulse_flashes_the_tether_pale_green_then_back_to_cyan() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 50)
+	var ship: SupportShip = w[0]
+	_ticks(ship, 30)
+	assert_true(ship.tether.visible, "projecting: the tether is up")
+	assert_eq(ship.tether.default_color, SupportShip.TETHER_COLOR, "cyan while projecting")
+	var saw_flash := false
+	var after_flash_cyan := false
+	for _i in 120:
+		_tick(ship, DT)
+		if ship.tether.default_color == SupportShip.TETHER_REPAIR_COLOR:
+			saw_flash = true
+		elif saw_flash and ship.tether.default_color == SupportShip.TETHER_COLOR:
+			after_flash_cyan = true
+	assert_true(saw_flash, "a pulse flashes the tether")
+	assert_true(after_flash_cyan, "for 0.15 s only")
+
+
+# ── Projection ───────────────────────────────────────────────────────────────────────────────────
+
+func test_after_the_unfold_the_ward_has_one_projected_shield_facing_the_player(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	var w := _repair_world(harness, 100)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_ticks(ship, 10)
+	assert_null(_projected(held), "%s: nothing while the dish is still unfolding" % mode)
+	assert_lt(ship.projector.scale.y, 1.0)
+	_ticks(ship, 40)  # 0.83 s > projector_unfold_seconds 0.4
+	var shield := _projected(held)
+	assert_not_null(shield, "%s: the shield is up after the unfold" % mode)
+	assert_eq(held.get_children().filter(func(c: Node) -> bool: return c is EnemyShield).size(), 1)
+	assert_true(held.hurt_box.has_absorber())
+	assert_true(shield.sustain_mode)
+	assert_almost_eq(ship.projector.scale.y, 1.0, 0.001)
+	assert_eq(shield.arc_deg, 90.0 if mode == "assault" else 110.0, "%s: the arc" % mode)
+	assert_eq(shield.capacity, SHIPPED.shield_capacity)
+	assert_eq(shield.turn_rate, SHIPPED.shield_turn_rate)
+	assert_eq(shield.radius, 34.0 + 6.0 if held.get_node_or_null("CollisionShape2D") else shield.radius)
+	var to_player: Vector2 = (harness.player.global_position - held.global_position).normalized()
+	assert_gt(shield.facing().dot(to_player), 0.99, "%s: facing the player" % mode)
+
+
+func test_the_arc_turns_toward_a_moving_player_at_the_shield_turn_rate() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 100)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_ticks(ship, 50)
+	var shield := _projected(held)
+	harness.player.global_position = Vector2(1200.0, 360.0)  # due east of the ward
+	var before := shield.facing()
+	for _i in 6:
+		_tick(ship, DT)
+		shield._tick(DT)
+	var turned := absf(before.angle_to(shield.facing()))
+	assert_gt(turned, 0.0, "it turns")
+	assert_lte(turned, SHIPPED.shield_turn_rate * DT * 6.0 + 0.001, "no faster than shield_turn_rate")
+
+
+func test_a_foreign_absorber_on_the_ward_skips_the_projection() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 100)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	var other := EnemyShield.new()
+	held.add_child(other)
+	assert_true(other.attach(held.hurt_box))
+	_ticks(ship, 60)
+	assert_null(_projected(held), "the slot is taken: no ProjectedShield")
+	assert_eq(held.get_children().filter(func(c: Node) -> bool: return c is EnemyShield).size(), 1)
+
+
+func test_a_real_bullet_from_the_players_side_is_eaten_and_one_from_the_flank_lands() -> void:
+	_fast_clock()
+	var harness = _harness("open_space")
+	harness.player.global_position = Vector2(640.0, 760.0)
+	var held := _candidate(harness, Vector2(640.0, 360.0), 50)
+	held.health.max_health = 100
+	held.health.current_health = 100
+	var hull := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 20.0
+	hull.shape = circle
+	held.hurt_box.add_child(hull)
+	var ship := _seeded(harness, Vector2(700.0, 260.0))
+	ship.set_physics_process(true)  # real ticks keep the shield sustained
+	await _frames(40)
+	var shield := _projected(held)
+	assert_not_null(shield)
+	var absorbed := _count(held.hurt_box.hit_absorbed)
+	var front: Node2D = BULLET_SCENE.instantiate()
+	harness.root.add_child(front)
+	front.global_position = held.global_position + Vector2(0.0, 110.0)
+	front.rotation = Vector2.UP.angle_to(Vector2.UP)
+	if front.has_signal("expired"):
+		front.expired.connect(front.queue_free)
+	await _frames(20)
+	assert_true(not is_instance_valid(front) or front.is_queued_for_deletion(), "the shield consumed the bullet")
+	assert_eq(held.health.current_health, 100, "ward HP unchanged")
+	assert_eq(absorbed[0], 1)
+	var flank: Node2D = BULLET_SCENE.instantiate()
+	harness.root.add_child(flank)
+	flank.global_position = held.global_position + Vector2(110.0, 0.0)
+	flank.rotation = Vector2.UP.angle_to(Vector2.LEFT)
+	if flank.has_signal("expired"):
+		flank.expired.connect(flank.queue_free)
+	await _frames(20)
+	assert_lt(held.health.current_health, 100, "a shot from the flank lands on the hull")
+
+
+# ── Lapse ────────────────────────────────────────────────────────────────────────────────────────
+
+## Hand-ticks `shield` (it is a child of a ward that nothing frame-steps here) until `done` or `max_s` seconds.
+func _tick_shield_until(shield: EnemyShield, max_s: float, done: Callable) -> float:
+	var t := 0.0
+	while t < max_s and not done.call():
+		shield._tick(DT)
+		t += DT
+	return t
+
+
+func test_freeing_the_support_lapses_the_shield_and_frees_the_slot() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 100)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_ticks(ship, 50)
+	var shield := _projected(held)
+	assert_true(held.hurt_box.has_absorber())
+	ship.free()
+	var t := _tick_shield_until(shield, 2.0, func() -> bool: return not held.hurt_box.has_absorber())
+	assert_lte(t, shield.heartbeat + DT * 2.0, "the slot is free within the heartbeat")
+	t += _tick_shield_until(shield, 2.0, func() -> bool: return shield.is_queued_for_deletion())
+	assert_lte(t, shield.heartbeat + shield.fade_seconds + DT * 3.0, "and the shield frees within heartbeat + fade")
+
+
+func test_an_emp_disabled_support_lets_the_shield_lapse() -> void:
+	_fast_clock()
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 100)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_ticks(ship, 50)
+	var shield := _projected(held)
+	assert_true(held.hurt_box.has_absorber())
+	ship.set_physics_process(true)
+	ship.process_mode = Node.PROCESS_MODE_DISABLED  # EMP
+	var frames := 0
+	while held.hurt_box.has_absorber() and frames < 80:
+		await _frames(1)
+		frames += 1
+	assert_false(held.hurt_box.has_absorber(), "the heartbeat stopped, so the slot is free")
+	assert_lte(float(frames) * DT, shield.heartbeat + DT * 3.0)
+	await _frames(30)
+	assert_true(not is_instance_valid(shield) or shield.is_queued_for_deletion(), "and the shield faded out")
+
+
+func test_switching_ward_lapses_the_old_shield_and_gives_the_new_ward_one() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 100)
+	var ship: SupportShip = w[0]
+	var old_ward: BaseEnemy = w[1]
+	_ticks(ship, 50)
+	var old_shield := _projected(old_ward)
+	assert_not_null(old_shield)
+	var next_ward := _candidate(harness, Vector2(640.0, 330.0), 50)
+	old_ward.queue_free()  # the ward is lost; the brain re-picks on the next tick
+	await get_tree().process_frame
+	for _i in 60:
+		_tick(ship, DT)
+		if is_instance_valid(old_shield):
+			old_shield._tick(DT)
+	assert_eq(_brain(ship).ward, next_ward)
+	assert_not_null(_projected(next_ward), "the new ward gets one")
+	assert_true(next_ward.hurt_box.has_absorber())
+
+
+func test_a_ward_switch_without_a_death_lapses_the_old_shield() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 100)
+	var ship: SupportShip = w[0]
+	var old_ward: BaseEnemy = w[1]
+	var brain := _brain(ship)
+	_ticks(ship, 50)
+	var old_shield := _projected(old_ward)
+	var next_ward := _candidate(harness, Vector2(640.0, 330.0), 500)  # far above the 1.3x margin
+	_ticks(ship, 150)  # past min_ward_seconds
+	assert_eq(brain.ward, next_ward)
+	for _i in 60:
+		old_shield._tick(DT)
+		_tick(ship, DT)
+	assert_false(old_ward.hurt_box.has_absorber(), "the old ward's slot is free")
+	assert_not_null(_projected(next_ward))
+
+
+# ── Support + Ram ────────────────────────────────────────────────────────────────────────────────
+
+const _PLATES: Array[StringName] = [&"PlateFront", &"PlateLeft", &"PlateRight"]
+
+
+## Breaks every live plate through its classifier (a ROCKET hit), then lets the deferred exposure land. The ram is
+## typed `Node` and reached by `call`: a static `RamCorvette` reference leaks at exit (see `test_base_enemy.gd`).
+func _strip_plates(ram: Node) -> void:
+	for plate_name in _PLATES:
+		var plate := ram.get_node_or_null(NodePath("Plates/%s" % plate_name))
+		if plate != null and is_instance_valid(plate) and plate.call(&"is_alive"):
+			var hb := HitBox.new()
+			hb.damage_type = HitBox.DamageType.ROCKET
+			hb.damage = 9999
+			add_child_autofree(hb)
+			plate.call(&"_on_hurt_box_area_entered", hb)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+func _ram_world(harness) -> Array:
+	harness.player.global_position = Vector2(640.0, 760.0)
+	var ram := _real(harness, RAM_SCENE, Vector2(640.0, 360.0))
+	var ship := _seeded(harness, Vector2(700.0, 260.0))
+	return [ship, ram]
+
+
+func test_pulses_heal_an_exposed_rams_hull_and_never_its_plates() -> void:
+	var harness = _harness("open_space")
+	var w := _ram_world(harness)
+	var ship: SupportShip = w[0]
+	var ram: BaseEnemy = w[1]
+	await _strip_plates(ram)
+	assert_eq(ram.call(&"live_plate_count"), 0)
+	var max_hp := ram.health.max_health
+	ram.health.current_health = max_hp - 20
+	_ticks(ship, 200)
+	assert_eq(_brain(ship).ward, ram, "a ram is an ordinary ward")
+	assert_gt(ram.health.current_health, max_hp - 20, "the hull is repaired")
+	assert_eq(ram.call(&"live_plate_count"), 0, "a broken plate stays broken")
+
+
+func test_an_armoured_rams_shield_refuses_until_the_last_plate_breaks() -> void:
+	var harness = _harness("open_space")
+	var w := _ram_world(harness)
+	var ship: SupportShip = w[0]
+	var ram: BaseEnemy = w[1]
+	_ticks(ship, 50)
+	var shield := _projected(ram)
+	assert_not_null(shield, "the shield is attached to an armoured ram too")
+	assert_gt(int(ram.call(&"live_plate_count")), 0)
+	var absorbed := _count(shield.absorbed)
+	var absorbed_at_hull := _count(ram.hurt_box.hit_absorbed)
+	var points := shield.points()
+	var hit := _hit_at(ram.global_position + Vector2(0.0, 80.0))  # the player's side
+	assert_false(shield.absorbs_hit(hit), "armoured: it refuses")
+	ram.hurt_box._on_area_entered(hit)
+	assert_eq(shield.points(), points, "points unchanged")
+	assert_eq(absorbed[0], 0, "no absorbed signal")
+	assert_eq(absorbed_at_hull[0], 0)
+	await _strip_plates(ram)
+	assert_eq(ram.call(&"live_plate_count"), 0)
+	var hit2 := _hit_at(ram.global_position + Vector2(0.0, 80.0))
+	ram.hurt_box._on_area_entered(hit2)
+	assert_eq(absorbed[0], 1, "exposed: the same hit is absorbed")
+	assert_lt(shield.points(), points)
+
+
+func test_projector_folds_when_the_support_stops_supporting() -> void:
+	var harness = _harness("open_space")
+	var w := _repair_world(harness, 100)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_ticks(ship, 50)
+	assert_almost_eq(ship.projector.scale.y, 1.0, 0.001)
+	held.free()
+	_ticks(ship, 30)  # 0.5 s > projector_fold_seconds
+	assert_almost_eq(ship.projector.scale.y, 0.0, 0.001)
+	assert_false(ship.tether.visible)
+
+
+func _count(sig: Signal) -> Array[int]:
+	var n: Array[int] = [0]
+	sig.connect(func(_a = null, _b = null) -> void: n[0] += 1)
+	return n
