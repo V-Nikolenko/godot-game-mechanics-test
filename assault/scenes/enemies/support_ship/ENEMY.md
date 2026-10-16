@@ -19,7 +19,7 @@
 | Damage | none: `ContactProfile` mode NONE, `ContactHitBox` closed and `damage` 0 |
 | Speed | `max_speed` 270, `acceleration` 700, `max_turn_rate` 4.0 |
 | Body | one `CircleShape2D` r 34 shared by the body, `HurtBox` and `ContactHitBox` |
-| Sprite | **placeholder** (`sniper.png`, `Projector` uses `sniper_barrel.png`) until t14; `sprite_forward_angle = PI / 2` |
+| Sprite | `support_ship.png` (88 x 88, nose-down slim hull with a ring emitter mount); `Projector` uses `support_projector.png` (48 x 40 dish, `offset` (0, 20) so its origin is the base and `scale.y` 0 to 1 opens it forward from (0, 6)); `sprite_forward_angle = PI / 2` |
 | Scene / config | `support_ship.tscn` / `support_ship_config.tres` (flat `SupportShipConfig`) |
 | Score | 60 |
 
