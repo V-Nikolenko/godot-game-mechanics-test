@@ -5,9 +5,9 @@
 
 > **Build state (Phase 5, in progress).** t10 built the **shell** (scene, flat config with every §2.11 field, contact profile NONE,
 > `can_be_repaired()` false, the Assault budget exit); t11 the **ward**: scored choice, claim, retarget, the soft anchor behind
-> the ward with jink and evasion, and the Assault view clamp; t12 the **repair pulse and projected shield**. Still to come: the escort (t13), the real art with the
+> the ward with jink and evasion, and the Assault view clamp; t12 the **repair pulse and projected shield**; t13 the **emergency escort**. Still to come: the real art with the
 > unfolding projector (t14), the hub idle (t15), the hub patrol (t16) and level 1 (t17).
-> Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.11–§2.15. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t10 as built", "t11 as built", "t12 as built").
+> Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.11–§2.15. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t10 as built", "t11 as built", "t12 as built", "t13 as built").
 
 ---
 
@@ -28,7 +28,7 @@
 ## Behaviour
 
 - **Brain:** `SupportShipBrain` (`Phase { SEEK_WARD, FOLLOW, ESCORT, DISENGAGE, IDLE, NOTICING, RETURNING }`, append-only; `enter_phase()` seam).
-  It plays SEEK_WARD, FOLLOW and DISENGAGE (ESCORT is t13, IDLE / NOTICING / RETURNING t15).
+  It plays SEEK_WARD, FOLLOW, ESCORT and DISENGAGE (IDLE / NOTICING / RETURNING are t15).
 - **Ward choice (t11):** a candidate is a `BaseEnemy` in group `enemies`, not a `SupportShip`, `is_ai_driven()` (brain + mover,
   not on a rail — so never the Gunship, Bonus Drone or Station), alive and not queued, `counts_toward_wave_clear`, `score_value`
   >= `ward_min_score` 20 (so never a Swarm Drone), within `ward_search_radius` 900, in Assault inside
@@ -66,6 +66,12 @@
   projecting.
 - **Support + Ram (t12):** a Ram Corvette is an ordinary ward. While it has plates the shield absorbs nothing (`is_armored()`), so the
   plate fight is unchanged; once exposed, the arc absorbs the player's frontal fire and pulses refill the hull.
+- **Escort (t13):** in FOLLOW, a ward at or below `escort_hp_ratio` 0.35 of its HP (and past its per-ward `escort_cooldown` 6 s) starts ESCORT.
+  Each tick the support offers `ward.accept_tow(away × 1.25 × the ward's max speed)` — a nudge on the ward's own mover, refused while the
+  ward boosts or its brain is in a telegraphed phase (so a Sniper's LOCK or a Ram's WIND_UP land where they showed; the support then only
+  interposes). It sits on the interpose point 90 px from the ward toward the player (view-clamped in Assault), without jink or evasion,
+  and the ward's `ProjectedShield` becomes a 360° bubble; the tether is drawn 2.5× thick. Ends at 50 % HP, a lost ward, 700 px from the
+  player or 4 s, back to FOLLOW with the shield arc restored; the budget is never deferred by an escort.
 - **Rails:** `on_suspended()` drops the ward, folds the projector and hides the tether. There is no weapon, so no rail fallback.
 - **Death / scoring:** a normal `BaseEnemy` death; score 60.
 

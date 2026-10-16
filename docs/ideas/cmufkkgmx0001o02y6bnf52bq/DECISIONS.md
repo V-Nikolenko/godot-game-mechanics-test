@@ -2110,6 +2110,20 @@ phase's *as built* section, once written, before relying on them. (This section 
   `heartbeat` and releases the hurtbox slot (t13: widen `arc_deg` to 360 on `shield`, keep `sustain()`ing it). (4) The armoured-Ram
   row needs no support-side code: `EnemyShield.absorbs_hit` refuses while the host's `is_armored()`. (5) Test-only: a `BaseEnemy`
   whose HP is written directly (`health.current_health = x`) has an unset `_last_health`, so its first repair compares against
+- **t13 as built (Support Ship emergency escort).** Choices t14–t17 build on, beyond §2.14: (1) ESCORT is entered from FOLLOW inside
+  `tick()` (`_escort_due()`: ward HP fraction <= `escort_hp_ratio`, per-ward cooldown from `_escort_ready_at[ward_id]` read against the
+  brain's accumulated `_clock`) and its first tick runs in the same call, so the tow lands on the tick after the HP drop. (2) Ends in
+  `_tick_escort()` on release ratio (>=), `escort_safe_distance` (>=) or `_phase_time >= escort_max_seconds`, back to FOLLOW; a lost ward
+  leaves ESCORT in `tick()`'s validity branch (retarget as before); DISENGAGE/budget expiry also leaves it. All exits go through
+  `enter_phase()` / `_set_ward()`, which call `_end_escort_effects()` once (starts the ward's cooldown, gives the shield its mode arc).
+  Ward switching is suspended while escorting. (3) The tow is `ward.accept_tow(away * escort_tow_ratio * ward.ai_mover_max_speed())` every
+  tick; its refusal is ignored (the support just interposes). The interpose point is `ward - away * interpose_distance` (toward the
+  player), `_clamp_into_view` in Assault, sought at `distance * ESCORT_GAIN (6)` capped at `max_speed`, no jink, no evasion. (4) The
+  bubble: `_shield_arc()` is 360 during ESCORT, written onto `shield` every supporting tick and in `_make_shield()`; restored by
+  `_end_escort_effects()` even when the support is no longer supporting. (5) `SupportShip.show_tether(to, color, towing)` draws the
+  tow beam at `TOW_WIDTH_FACTOR` (2.5) x the scene width. (6) Test-only: a real Sniper settles beyond `escort_safe_distance` of a
+  far player and, in Assault, above `ward_view_band`, so `test_support_ship.gd::_telegraph_run` lays the sniper row out horizontally and
+  pulls the player to 400 px once LOCK begins.
   `max_health` and flashes; damage fixtures through `health.decrease()` (`test_support_ship.gd::_repair_world`).
 
 ### Deliberately deferred

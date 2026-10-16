@@ -11,7 +11,13 @@
 ##   DISENGAGE  [DISENGAGE]  Assault only: the budget ran out (or the grace did). Release the corridor, curve away toward
 ##                           the nearest corridor edge at `exit_speed`, freed once outside the projectile rect (the
 ##                           Bomber's exit). It has no telegraphed attack, so nothing defers the exit.
-##   ESCORT / IDLE / NOTICING / RETURNING  reserved for t13 and t15.
+##   ESCORT     [SUPPORT]    t13: the ward fell to `escort_hp_ratio` of its health (and its per-ward cooldown has run). Every
+##                           tick the brain offers the ward a tow away from the player (`accept_tow`; a ward that is boosting
+##                           or in a telegraphed phase refuses, and then the escort only interposes), the ship sits on the
+##                           interpose point between ward and player (view-clamped in Assault, no jink, no evasion), and the
+##                           ward's ProjectedShield is a 360° bubble. Ends at `escort_release_ratio` of health, a lost ward,
+##                           `escort_safe_distance` from the player or `escort_max_seconds`; the ward's cooldown starts then.
+##   IDLE / NOTICING / RETURNING  reserved for t15.
 ##
 ## The ward: chosen among candidates (`is_candidate`) by `threat_score`, held at least `min_ward_seconds`, then replaced
 ## only by a candidate scoring `ward_switch_margin` × as much. Claimed through the meta `CLAIM_META` so two supports never
@@ -61,6 +67,11 @@ const REPAIR_FLASH_SECONDS := 0.15
 ## The shield's radius is the ward's hull radius plus this (px), and the radius used when the hull has no shape.
 const SHIELD_RADIUS_MARGIN := 6.0
 const DEFAULT_HULL_RADIUS := 34.0
+## ESCORT's seek speed toward the interpose point is `distance × ESCORT_GAIN`, capped at `max_speed`: stiffer than FOLLOW's
+## spring because the point runs away with the towed ward. Judgement (t13).
+const ESCORT_GAIN := 6.0
+## The shield arc of a bubble (`EnemyShield.arc_deg` >= 360 covers every direction).
+const BUBBLE_ARC_DEG := 360.0
 
 ## Set by `support_ship.gd` before the first tick. A fresh default keeps a bare brain steppable.
 var config: SupportShipConfig = SupportShipConfig.new()
@@ -102,12 +113,20 @@ var _repair_flash_left: float = 0.0
 var _no_ward_time: float = 0.0
 ## The exact callable connected to the ward's `tree_exiting`, so the disconnect is guarded and exact.
 var _ward_exit_cb: Callable = Callable()
+## The accumulated clock the escort cooldowns are read against.
+var _clock: float = 0.0
+## Ward instance id -> `_clock` value before which that ward is not escorted again.
+var _escort_ready_at: Dictionary = {}
+## Instance id of the ward being escorted (0 when none): the escort's side effects (the bubble, the cooldown) are undone
+## exactly once, by `_end_escort_effects()`.
+var _escort_ward_id: int = 0
 
 
 func tick(delta: float) -> void:
 	if not _started:
 		_start()
 	_phase_time += delta
+	_clock += delta
 	if budget.update(delta) and not _expiry_seen:
 		_expiry_seen = true
 		if phase != Phase.DISENGAGE:
@@ -119,13 +138,18 @@ func tick(delta: float) -> void:
 
 	if ward != null and not _ward_still_valid():
 		_set_ward(null)
-	_update_selection()
+		if phase == Phase.ESCORT:
+			enter_phase(Phase.FOLLOW)  # the ward is lost: the escort is over, the retarget below picks the next one
+	if phase != Phase.ESCORT:  # an escort keeps its ward whatever scores higher
+		_update_selection()
 
 	if has_ward():
 		ward_held_for += delta
 		_no_ward_time = 0.0
-		if phase != Phase.FOLLOW:
+		if phase != Phase.FOLLOW and phase != Phase.ESCORT:
 			enter_phase(Phase.FOLLOW)
+		if phase == Phase.FOLLOW and _escort_due():
+			enter_phase(Phase.ESCORT)
 	else:
 		if phase != Phase.SEEK_WARD:
 			enter_phase(Phase.SEEK_WARD)
@@ -140,6 +164,7 @@ func tick(delta: float) -> void:
 	match phase:
 		Phase.SEEK_WARD: _tick_seek_ward()
 		Phase.FOLLOW: _tick_follow(delta)
+		Phase.ESCORT: _tick_escort()
 	_tick_support(delta)
 
 
@@ -147,10 +172,14 @@ func tick(delta: float) -> void:
 func enter_phase(p: Phase) -> void:
 	if not _started:
 		_start()
+	if phase == Phase.ESCORT and p != Phase.ESCORT:
+		_end_escort_effects()
 	phase = p
 	_phase_time = 0.0
 	if p == Phase.DISENGAGE:
 		_enter_disengage()
+	elif p == Phase.ESCORT:
+		_begin_escort()
 	phase_changed.emit(p)
 
 
@@ -295,6 +324,7 @@ func _set_ward(new_ward: BaseEnemy) -> void:
 	var old: BaseEnemy = ward if has_ward() else null
 	if old == new_ward and new_ward != null:
 		return
+	_end_escort_effects()
 	if old != null:
 		if _ward_exit_cb.is_valid() and old.tree_exiting.is_connected(_ward_exit_cb):
 			old.tree_exiting.disconnect(_ward_exit_cb)
@@ -480,7 +510,7 @@ func _tick_support(delta: float) -> void:
 			color = SupportShip.TETHER_REPAIR_COLOR
 		elif not line_clear:
 			color.a = SupportShip.TETHER_DIM_ALPHA
-		ship.show_tether(ward.global_position, color)
+		ship.show_tether(ward.global_position, color, phase == Phase.ESCORT)
 
 
 ## No blocker (an asteroid) between the support and its ward. One ray per supporting tick, on the brain's physics tick.
@@ -520,6 +550,7 @@ func _tick_shield() -> void:
 		shield = _make_shield()
 		if shield == null:
 			return
+	shield.arc_deg = _shield_arc()
 	var target := TargetInfo.player(get_tree())
 	shield.sustain(target.position if target.has_target else ward.global_position + shield.facing() * 100.0)
 
@@ -530,7 +561,7 @@ func _make_shield() -> EnemyShield:
 	var s := EnemyShield.new()
 	s.name = &"ProjectedShield"
 	s.sustain_mode = true
-	s.arc_deg = config.assault_shield_arc_deg if EnemyWorld.has_view_rect(get_tree()) else config.shield_arc_deg
+	s.arc_deg = _shield_arc()
 	s.capacity = config.shield_capacity
 	s.regen_delay = config.shield_regen_delay
 	s.regen_seconds = config.shield_regen_seconds
@@ -562,3 +593,72 @@ func _hull_radius(e: BaseEnemy) -> float:
 	if body.shape is CircleShape2D:
 		return (body.shape as CircleShape2D).radius * scale_max
 	return body.shape.get_rect().size.length() * 0.5 * scale_max
+
+
+# ── Emergency escort (t13) ──────────────────────────────────────────────────────────────────────
+
+## The arc the projected shield has right now: a bubble during an escort, else the mode's arc.
+func _shield_arc() -> float:
+	if phase == Phase.ESCORT:
+		return BUBBLE_ARC_DEG
+	return _normal_arc()
+
+
+func _normal_arc() -> float:
+	return config.assault_shield_arc_deg if EnemyWorld.has_view_rect(get_tree()) else config.shield_arc_deg
+
+
+## FOLLOW's trigger: the ward is at or below `escort_hp_ratio` of its health and its cooldown has run.
+func _escort_due() -> bool:
+	if ward.health == null or ward.health.max_health <= 0:
+		return false
+	if float(ward.health.current_health) / float(ward.health.max_health) > config.escort_hp_ratio:
+		return false
+	return _clock >= float(_escort_ready_at.get(ward.get_instance_id(), 0.0))
+
+
+func _begin_escort() -> void:
+	_escort_ward_id = ward.get_instance_id() if has_ward() else 0
+	if shield != null and is_instance_valid(shield):
+		shield.arc_deg = BUBBLE_ARC_DEG
+
+
+## Undoes the escort's effects once: starts the ward's cooldown and gives its shield the mode's arc back.
+func _end_escort_effects() -> void:
+	if _escort_ward_id == 0:
+		return
+	_escort_ready_at[_escort_ward_id] = _clock + config.escort_cooldown
+	_escort_ward_id = 0
+	if shield != null and is_instance_valid(shield):
+		shield.arc_deg = _normal_arc()
+
+
+## One ESCORT tick: end rules, then the tow offered to the ward (refused while it is boosting or committed to a
+## telegraphed attack, in which case the ship only interposes), then the move to the interpose point.
+func _tick_escort() -> void:
+	var target := TargetInfo.player(get_tree())
+	var ward_pos := ward.global_position
+	var healthy := ward.health != null and ward.health.max_health > 0 \
+			and float(ward.health.current_health) / float(ward.health.max_health) >= config.escort_release_ratio
+	var safe := target.has_target and ward_pos.distance_to(target.position) >= config.escort_safe_distance
+	if healthy or safe or _phase_time >= config.escort_max_seconds:
+		enter_phase(Phase.FOLLOW)
+		_tick_follow(0.0)
+		return
+	if not target.has_target:
+		mover.request_velocity(Vector2.ZERO)
+		mover.face_toward(ward_pos)
+		return
+
+	var away := (ward_pos - target.position).normalized()
+	if away == Vector2.ZERO:
+		away = (actor.global_position - ward_pos).normalized()
+	if away == Vector2.ZERO:
+		away = Vector2.UP
+	ward.accept_tow(away * config.escort_tow_ratio * ward.ai_mover_max_speed())
+
+	anchor = _clamp_into_view(ward_pos - away * config.interpose_distance)
+	var to_anchor := anchor - actor.global_position
+	var speed := minf(config.max_speed, to_anchor.length() * ESCORT_GAIN)
+	mover.request_velocity(to_anchor.normalized() * speed)
+	mover.face_toward(ward_pos)

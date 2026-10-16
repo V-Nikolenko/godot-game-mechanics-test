@@ -1275,3 +1275,351 @@ func _count(sig: Signal) -> Array[int]:
 	var n: Array[int] = [0]
 	sig.connect(func(_a = null, _b = null) -> void: n[0] += 1)
 	return n
+
+
+# ── Emergency escort (t13, plan §2.14) ───────────────────────────────────────────────────────────
+
+const SNIPER_SCENE: PackedScene = preload("res://assault/scenes/enemies/sniper/sniper.tscn")
+
+
+## The brain's phase value by name (`Phase` is the brain's enum).
+func _phase(name: String) -> int:
+	return SupportShipBrain.Phase[name]
+
+
+func _set_hp(e: BaseEnemy, hp: int) -> void:
+	e.health.set_health(hp)
+
+
+func _ward_mover(e: BaseEnemy) -> EnemyMover:
+	return e.get_node("EnemyMover") as EnemyMover
+
+
+## `_repair_world` (ward at 100/100, (640, 360); player (640, 760); support seeded at (700, 260)) with a mover cap on the
+## ward, no repair pulses (they would move the HP the rows set) and no Assault budget.
+func _escort_world(harness) -> Array:
+	var w := _repair_world(harness, 100)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_ward_mover(held).max_speed = 200.0
+	ship.config.repair_budget = 0
+	ship.config.engage_seconds = 1000.0
+	return w
+
+
+func _escort_phase(ship: SupportShip) -> int:
+	return _brain(ship).phase
+
+
+func test_escort_starts_at_34_percent_and_not_at_36(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	var w := _escort_world(harness)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_set_hp(held, 36)
+	_ticks(ship, 10)
+	assert_eq(_escort_phase(ship), _phase("FOLLOW"), "%s: 36 %% is no emergency" % mode)
+	_set_hp(held, 34)
+	_ticks(ship, 1)
+	assert_eq(_escort_phase(ship), _phase("ESCORT"), "%s: 34 %% starts the escort on the next tick" % mode)
+	var nudge: Vector2 = _ward_mover(held)._nudge
+	var away: Vector2 = (held.global_position - harness.player.global_position).normalized()
+	assert_lt(rad_to_deg(absf(nudge.angle_to(away))), 5.0, "%s: the nudge points away from the player" % mode)
+	assert_almost_eq(nudge.length(), 1.25 * 200.0, 0.5, "%s: at 1.25x the ward's max speed" % mode)
+
+
+## Distance gained (+) or lost (-) to the player over 1 s of a ward whose brain seeks the player at full speed.
+func _seek_run(mode: String, with_support: bool) -> float:
+	var harness = _harness(mode)
+	harness.player.global_position = Vector2(640.0, 760.0)
+	var held := _candidate(harness, Vector2(640.0, 360.0), 50)
+	held.health.max_health = 100
+	held.health.current_health = 100
+	_ward_mover(held).max_speed = 200.0
+	(held.get_node("Brain") as Node).set("desired_velocity", Vector2(0.0, 200.0))
+	_set_hp(held, 34)
+	var ship: SupportShip = null
+	if with_support:
+		ship = _seeded(harness, Vector2(700.0, 260.0))
+		ship.config.repair_budget = 0
+		ship.config.engage_seconds = 1000.0
+	var start := held.global_position.distance_to(harness.player.global_position)
+	for _i in 60:
+		if ship != null:
+			_tick(ship, DT)
+		_tick(held, DT)
+	var gained := held.global_position.distance_to(harness.player.global_position) - start
+	harness.root.free()
+	return gained
+
+
+func test_a_ward_seeking_the_player_gains_distance_during_the_escort_and_loses_it_without(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	assert_gt(_seek_run(mode, true), 10.0, "%s: towed away from the player" % mode)
+	assert_lt(_seek_run(mode, false), -100.0, "%s: control: with no support it closes" % mode)
+
+
+func test_the_support_reaches_the_interpose_point_within_1_5_s(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	var w := _escort_world(harness)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_set_hp(held, 30)
+	_ticks(ship, 90)
+	var point: Vector2 = held.global_position + (harness.player.global_position - held.global_position).normalized() * SHIPPED.interpose_distance
+	if mode == "assault":
+		var r := EnemyWorld.view_rect(get_tree()).grow(-SHIPPED.view_margin)
+		point = Vector2(clampf(point.x, r.position.x, r.end.x), clampf(point.y, r.position.y, r.end.y))
+	assert_eq(_escort_phase(ship), _phase("ESCORT"))
+	assert_lt(ship.global_position.distance_to(point), 40.0, "%s: within 40 px of the interpose point" % mode)
+	assert_lt(ship.global_position.distance_to(harness.player.global_position),
+			held.global_position.distance_to(harness.player.global_position), "%s: between the ward and the player" % mode)
+
+
+# ── Telegraphs are not moved ─────────────────────────────────────────────────────────────────────
+
+## A real `scene` ward driven (hand-ticked, with a support beside it) to the first tick of one of `refusing`'s phases; its
+## HP is then set to 30 %. Through those phases every tick the support's escort is checked: the tow is refused (nothing
+## lands on the ward's mover), and the ward's position is recorded. `with_support` false runs the identical ward alone.
+## Returns {reached, escorting, nudged, path, anchor_gap_start, anchor_gap_end, accepted_after, drift}.
+func _telegraph_run(mode: String, scene: PackedScene, ward_pos: Vector2, rng_seed: int, refusing: Array[String],
+		with_support: bool, check_release: bool) -> Dictionary:
+	var harness = _harness(mode)
+	harness.player.global_position = Vector2(300.0, 360.0) if scene == SNIPER_SCENE else Vector2(640.0, 560.0)
+	var ward := scene.instantiate() as BaseEnemy
+	var wbrain: Node = ward.get_node("Brain")
+	wbrain.set("start_engaged", true)
+	wbrain.set("rng_seed", rng_seed)
+	ward.config.engage_seconds = 1000.0
+	ward.global_position = ward_pos
+	harness.root.add_child(ward)
+	ward.set_physics_process(false)
+	var ship: SupportShip = null
+	if with_support:
+		ship = _seeded(harness, ward_pos + Vector2(60.0, -40.0))
+		ship.config.repair_budget = 0
+		ship.config.engage_seconds = 1000.0
+	var phases: Dictionary = (wbrain.get_script() as GDScript).get_script_constant_map()["Phase"]
+	var refusing_ids: Array[int] = []
+	for n in refusing:
+		refusing_ids.append(int(phases[n]))
+	var result := {"reached": false, "escorting": true, "nudged": 0, "path": [] as Array[Vector2],
+			"gap_start": 0.0, "gap_end": 0.0, "accepted_after": false, "drift": 0.0}
+	var t := 0.0
+	while t < 15.0 and int(wbrain.get("phase")) != refusing_ids[0]:
+		if ship != null:
+			_tick(ship, DT)
+		_tick(ward, DT)
+		t += DT
+	if int(wbrain.get("phase")) != refusing_ids[0]:
+		harness.root.free()
+		return result
+	result["reached"] = true
+	# A sniper settles far from the player (past `escort_safe_distance`, which would end the escort at once): bring the
+	# player in once the telegraph has begun. Its lock point is already fixed.
+	var to_player: Vector2 = harness.player.global_position - ward.global_position
+	if to_player.length() > 450.0:
+		harness.player.global_position = ward.global_position + to_player.normalized() * 400.0
+	_set_hp(ward, int(ward.health.max_health * 0.3))
+	var start := ward.global_position
+	var n := 0
+	while int(wbrain.get("phase")) in refusing_ids and n < 600:
+		n += 1
+		if ship != null:
+			_tick(ship, DT)
+			var brain := _brain(ship)
+			result["escorting"] = result["escorting"] and brain.phase == _phase("ESCORT")
+			if _ward_mover(ward)._nudge != Vector2.ZERO:
+				result["nudged"] += 1
+			if n == 1:
+				result["gap_start"] = ship.global_position.distance_to(brain.anchor)
+			result["gap_end"] = ship.global_position.distance_to(brain.anchor)
+		_tick(ward, DT)
+		result["path"].append(ward.global_position - start)
+		result["drift"] = maxf(result["drift"], ward.global_position.distance_to(start))
+	if check_release and ship != null:
+		_tick(ship, DT)
+		result["accepted_after"] = _ward_mover(ward)._nudge != Vector2.ZERO
+	harness.root.free()
+	return result
+
+
+func test_a_locking_sniper_ward_refuses_the_tow_and_the_support_still_interposes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var run := _telegraph_run(mode, SNIPER_SCENE, Vector2(800.0, 360.0), 4242, ["LOCK", "FIRE"], true, true)
+	assert_true(run["reached"], "%s: LOCK was reached" % mode)
+	assert_true(run["escorting"], "%s: ESCORT held through LOCK and FIRE" % mode)
+	assert_eq(run["nudged"], 0, "%s: the tow was refused every tick" % mode)
+	assert_lte(run["drift"], 1.0, "%s: the muzzle stays within 1 px" % mode)
+	assert_lt(run["gap_end"], run["gap_start"], "%s: the support still closes on its interpose point" % mode)
+	assert_true(run["accepted_after"], "%s: the first tick after FIRE the tow is accepted again" % mode)
+
+
+func test_a_winding_up_ram_ward_refuses_the_tow_and_stays_on_its_own_path(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var baseline := _telegraph_run(mode, RAM_SCENE, Vector2(300.0, 100.0), 1717, ["WIND_UP"], false, false)
+	var run := _telegraph_run(mode, RAM_SCENE, Vector2(300.0, 100.0), 1717, ["WIND_UP"], true, false)
+	assert_true(run["reached"] and baseline["reached"], "%s: WIND_UP was reached" % mode)
+	assert_gt((run["path"] as Array).size(), 20, "%s: sanity: a real wind-up" % mode)
+	assert_true(run["escorting"], "%s: ESCORT held through WIND_UP" % mode)
+	assert_eq(run["nudged"], 0, "%s: the tow was refused every tick" % mode)
+	assert_eq((run["path"] as Array).size(), (baseline["path"] as Array).size(), "%s: same length" % mode)
+	var gap := 0.0
+	for i in mini((run["path"] as Array).size(), (baseline["path"] as Array).size()):
+		gap = maxf(gap, (run["path"][i] as Vector2).distance_to(baseline["path"][i]))
+	assert_lte(gap, 1.0, "%s: within 1 px of its own untowed path" % mode)
+	assert_lt(run["gap_end"], run["gap_start"], "%s: the support still closes on its interpose point" % mode)
+
+
+## Control: the same refusal row fails when the ward answers true (a plain fixture brain in a telegraph-less phase).
+func test_a_tow_is_accepted_when_the_ward_brain_allows_it(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	var w := _escort_world(harness)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_set_hp(held, 30)
+	_ticks(ship, 1)
+	assert_ne(_ward_mover(held)._nudge, Vector2.ZERO, "%s: a free ward is towed" % mode)
+
+
+# ── The bubble ───────────────────────────────────────────────────────────────────────────────────
+
+func test_the_escort_widens_the_shield_to_a_bubble_and_restores_it(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	var w := _escort_world(harness)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_ticks(ship, 50)
+	var shield := _projected(held)
+	assert_not_null(shield)
+	var normal_arc := 90.0 if mode == "assault" else 110.0
+	assert_eq(shield.arc_deg, normal_arc)
+	var behind := held.global_position + Vector2(0.0, -80.0)
+	var before := held.health.current_health
+	held.hurt_box._on_area_entered(_hit_at(behind, 5))
+	assert_eq(held.health.current_health, before - 5, "%s: outside the normal arc a hit from behind lands" % mode)
+	_set_hp(held, 34)
+	_ticks(ship, 1)
+	assert_eq(_escort_phase(ship), _phase("ESCORT"))
+	assert_eq(shield.arc_deg, 360.0, "%s: a bubble during the escort" % mode)
+	var absorbed := _count(shield.absorbed)
+	held.hurt_box._on_area_entered(_hit_at(behind, 5))
+	assert_eq(held.health.current_health, 34, "%s: the same hit is now absorbed" % mode)
+	assert_eq(absorbed[0], 1)
+	_set_hp(held, 60)
+	_ticks(ship, 1)
+	assert_eq(_escort_phase(ship), _phase("FOLLOW"))
+	assert_eq(shield.arc_deg, normal_arc, "%s: restored after the escort" % mode)
+	held.hurt_box._on_area_entered(_hit_at(behind, 5))
+	assert_eq(held.health.current_health, 55, "%s: and the same hit lands again" % mode)
+
+
+func test_a_ward_dropped_mid_escort_gets_its_arc_back() -> void:
+	var harness = _harness("open_space")
+	var w := _escort_world(harness)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_ticks(ship, 50)
+	var shield := _projected(held)
+	_set_hp(held, 34)
+	_ticks(ship, 1)
+	assert_eq(shield.arc_deg, 360.0)
+	held.suspend_ai()  # a rail took it: the ward is lost
+	_ticks(ship, 1)
+	assert_ne(_escort_phase(ship), _phase("ESCORT"))
+	assert_eq(shield.arc_deg, SHIPPED.shield_arc_deg, "the dropped ward's shield is back to its arc")
+
+
+# ── The end ──────────────────────────────────────────────────────────────────────────────────────
+
+func test_the_escort_ends_at_50_percent_and_the_cooldown_blocks_a_re_trigger(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	var w := _escort_world(harness)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_set_hp(held, 34)
+	_ticks(ship, 30)
+	assert_eq(_escort_phase(ship), _phase("ESCORT"))
+	_set_hp(held, 49)
+	_ticks(ship, 2)
+	assert_eq(_escort_phase(ship), _phase("ESCORT"), "%s: 49 %% is not yet safe" % mode)
+	_set_hp(held, 50)
+	_ticks(ship, 1)
+	assert_eq(_escort_phase(ship), _phase("FOLLOW"), "%s: 50 %% releases" % mode)
+	_set_hp(held, 34)
+	_ticks(ship, 300)  # 5 s of the 6 s cooldown
+	assert_eq(_escort_phase(ship), _phase("FOLLOW"), "%s: the cooldown holds" % mode)
+	_ticks(ship, 80)
+	assert_eq(_escort_phase(ship), _phase("ESCORT"), "%s: and expires" % mode)
+
+
+func test_the_escort_ends_when_the_ward_is_700_px_from_the_player(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	var w := _escort_world(harness)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_set_hp(held, 34)
+	_ticks(ship, 10)
+	assert_eq(_escort_phase(ship), _phase("ESCORT"))
+	harness.player.global_position = held.global_position + Vector2(0.0, 699.0)
+	_ticks(ship, 2)
+	assert_eq(_escort_phase(ship), _phase("ESCORT"), "%s: 699 px is not safe yet" % mode)
+	harness.player.global_position = held.global_position + Vector2(0.0, 700.0)
+	_ticks(ship, 1)
+	assert_eq(_escort_phase(ship), _phase("FOLLOW"), "%s: 700 px ends it" % mode)
+
+
+func test_the_escort_ends_after_4_s(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	var w := _escort_world(harness)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_set_hp(held, 34)
+	_ticks(ship, 1 + 235)
+	assert_eq(_escort_phase(ship), _phase("ESCORT"), "%s: still escorting at 3.9 s" % mode)
+	_ticks(ship, 10)
+	assert_eq(_escort_phase(ship), _phase("FOLLOW"), "%s: 4 s ends it" % mode)
+
+
+func test_a_boosting_ward_refuses_the_tow_and_the_escort_waits(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	var w := _escort_world(harness)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_ward_mover(held).boost(Vector2.DOWN, 100.0, 100.0)
+	_set_hp(held, 34)
+	for _i in 200:  # 3.3 s
+		_tick(ship, DT)
+		assert_eq(_ward_mover(held)._nudge, Vector2.ZERO, "no nudge on a boosting ward")
+	assert_eq(_escort_phase(ship), _phase("ESCORT"), "%s: the escort persists" % mode)
+	_ward_mover(held)._boost_left = 0.0
+	_ticks(ship, 1)
+	assert_ne(_ward_mover(held)._nudge, Vector2.ZERO, "%s: the tow lands once it stops boosting" % mode)
+	_ticks(ship, 60)
+	assert_eq(_escort_phase(ship), _phase("FOLLOW"), "%s: and the timeout ends it" % mode)
+
+
+func test_the_tow_beam_is_thicker_during_the_escort() -> void:
+	var harness = _harness("open_space")
+	var w := _escort_world(harness)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	_ticks(ship, 50)
+	var normal := ship.tether.width
+	_set_hp(held, 34)
+	_ticks(ship, 1)
+	assert_gt(ship.tether.width, normal, "thicker while towing")
+	_set_hp(held, 60)
+	_ticks(ship, 1)
+	assert_eq(ship.tether.width, normal, "back to normal after")
+
+
+func test_escort_does_not_keep_a_budget_expiry_from_disengaging() -> void:
+	var harness = _harness("assault")
+	var w := _escort_world(harness)
+	var ship: SupportShip = w[0]
+	var held: BaseEnemy = w[1]
+	ship.config.engage_seconds = 0.5
+	_brain(ship).budget = null
+	_brain(ship)._started = false
+	_set_hp(held, 34)
+	_ticks(ship, 60)
+	assert_eq(_escort_phase(ship), _phase("DISENGAGE"), "the budget is not deferred by an escort")
+	assert_eq(_projected(held).arc_deg if _projected(held) != null else 90.0, 90.0)

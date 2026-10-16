@@ -23,6 +23,8 @@ extends BaseEnemy
 const TETHER_COLOR := Color(0.4, 0.9, 1.0, 0.8)
 const TETHER_REPAIR_COLOR := Color(0.65, 1.0, 0.65, 1.0)
 const TETHER_DIM_ALPHA := 0.25
+## The tow beam of an escort is this many times as thick as the support tether.
+const TOW_WIDTH_FACTOR := 2.5
 
 @export var config: SupportShipConfig = load("res://assault/scenes/enemies/support_ship/support_ship_config.tres")
 
@@ -30,6 +32,7 @@ const TETHER_DIM_ALPHA := 0.25
 @onready var _support_mover: EnemyMover = $EnemyMover
 @onready var projector: Sprite2D = $Projector
 @onready var tether: Line2D = $Tether
+@onready var _tether_width: float = tether.width
 
 
 func _ready() -> void:
@@ -71,8 +74,9 @@ func set_projector_open(share: float) -> void:
 	projector.scale.y = 1.0 - (1.0 - s) * (1.0 - s)
 
 
-## Draws the world-space tether from the projector to `to`.
-func show_tether(to: Vector2, color: Color) -> void:
+## Draws the world-space tether from the projector to `to`; `towing` draws the escort's thicker tow beam.
+func show_tether(to: Vector2, color: Color, towing: bool = false) -> void:
+	tether.width = _tether_width * (TOW_WIDTH_FACTOR if towing else 1.0)
 	tether.points = PackedVector2Array([projector.global_position, to])
 	tether.default_color = color
 	tether.visible = true
