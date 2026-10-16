@@ -482,7 +482,8 @@ func _spawn_support_ship(harness, pos: Vector2) -> SupportShip:
 	return entity
 
 
-## Spawns and works in both harnesses: with an ally in the world it closes on it and holds there, unarmed.
+## Spawns and works in both harnesses: with a ward in the world (an AI-driven ally worth >= ward_min_score) it takes up
+## the soft anchor behind it, unarmed (t11).
 func test_support_ship_holds_near_an_ally_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
 	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
 	add_child_autofree(harness.root)
@@ -492,11 +493,15 @@ func test_support_ship_holds_near_an_ally_in_both_modes(mode: String = use_param
 	harness.root.add_child(ally)
 	ally.set_physics_process(false)
 	ally.add_to_group("enemies")
+	ally.score_value = 25  # a ward: AI-driven and >= ward_min_score
 	var support := _spawn_support_ship(harness, Vector2(640.0, 560.0))
 	for _i in 300:
 		_tick(support, DT)
-	assert_almost_eq(support.global_position.distance_to(ally.global_position), SupportShipConfig.new().follow_distance,
-		30.0, "%s: held at follow_distance from the ally" % mode)
+	var brain := support.get_node("Brain") as SupportShipBrain
+	assert_eq(brain.ward, ally, "%s: the ally is its ward" % mode)
+	assert_lt(support.global_position.distance_to(brain.anchor), 60.0, "%s: on the soft anchor" % mode)
+	assert_almost_eq(support.global_position.distance_to(ally.global_position), Vector2(150.0, 40.0).length(),
+		60.0, "%s: held behind the ward" % mode)
 	assert_eq(support.contact_hit_box.damage, 0, "%s: harmless to touch" % mode)
 	assert_false(support.is_queued_for_deletion())
 

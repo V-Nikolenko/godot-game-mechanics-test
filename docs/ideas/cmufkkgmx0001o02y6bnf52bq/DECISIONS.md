@@ -2070,6 +2070,28 @@ phase's *as built* section, once written, before relying on them. (This section 
   first and assign directly (a `set_deferred` queued the same frame is overwritten). (4) Placeholder art: the hull is
   `sniper.png` and the projector `sniper_barrel.png` until t14. (5) `max_turn_rate` 4.0 x `exit_speed` 300 exceeds
   `acceleration` 700, so DISENGAGE curves at `min(max_turn_rate, acceleration / exit_speed)` (2.33 rad/s), as the Bomber's does.
+- **t11 as built (Support Ship ward, follow, retarget, Assault clamp).** Task plan `docs/plans/cmv9szqlz002bqs2x0h47xa3x/3-plan.md`
+  (review round 3 APPROVED). Choices t12–t17 build on, beyond §2.12: (1) `SupportShipBrain._set_ward()` is the **only writer** of
+  `ward`, the claim meta (`CLAIM_META = &"support_claim"`, the claiming support's instance id; a stale id counts as free) and the
+  ward's `tree_exiting` connection (the bound `Callable` is stored and the disconnect guarded). It emits
+  `ward_changed(new_ward: Node)` on every change, so a loss then a re-pick emits `null`, then the new ward. Public state:
+  `ward` (read via `has_ward()`), `ward_score`, `ward_held_for`, `wards_selected`, `anchor` (`Vector2.INF` with no ward),
+  `follow_side`, `jink_sign`, `is_candidate()`, `threat_score()`, `best_candidate()`, `is_supporting()`, `nearest_ally()`.
+  (2) Per tick: validate (drop) → select → phase (ward → FOLLOW, none → SEEK_WARD). A ward lost via `tree_exiting` is replaced on
+  the next tick; one lost via validation (killed = queued, railed, beyond `ward_keep_radius`, out of `view.grow(ward_view_band)`)
+  is replaced on the tick that sees it. (3) **The Assault no-ward grace runs only while the support is inside
+  `view.grow(view_band)`** (supports and allies spawn above the screen; a clock from spawn would send a support home before its
+  allies arrive). SEEK_WARD's hold point (the nearest ally's `follow_distance` point, or with no ally the support's own position)
+  is clamped into `view.grow(−view_margin)` in Assault, so a support always comes into view and the clock always starts; the
+  budget stays the backstop. **t17:** a support's first `is_supporting()` needs a candidate inside `view.grow(ward_view_band)`.
+  (4) FOLLOW is one `request_velocity(seek + jink + evade)`, not `mover.arrive` alone: a full-speed arrive cancels a 60 px/s
+  jink and a 240 px/s escape to a few px. Seek = `Steering.arrive` capped at `min(max_speed, d_anchor × FOLLOW_GAIN)`,
+  `FOLLOW_GAIN` 2.0 /s (a spring near the anchor); jink = `jink_strength` px/s across the ward line, sign redrawn every
+  `jink_period` (≈ ±25 px sway); inside `evade_radius` seek and jink are scaled by `w = clamp((d − 0.8R) / 0.2R, 0, 1)`, their
+  toward-player component removed, and `break_contact(..., evade_speed, EVADE_LATERAL_WEIGHT 0.3)` added (the default 0.6,
+  doubled for a closing threat, escapes at ≈ 154 px/s — slower than a 200 px/s player). All judgement, measured in
+  `test_support_ship.gd`. (5) The t10 rows that assumed a score-0 fixture ally is held in Assault for > 1.5 s are Open Space
+  only now (the SEEK_WARD fallback); `test_enemy_dual_mode.gd`'s support case uses a ward (`score_value = 25`).
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |

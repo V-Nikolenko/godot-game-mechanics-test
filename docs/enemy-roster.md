@@ -374,7 +374,7 @@ b.missile_corvette().at(0, -400)
 
 **Builder:** `b.support_ship()`  
 **Scene:** `support_ship.tscn`  
-**Movement:** AI-driven (`SupportShipBrain` + `EnemyMover`); holds `follow_distance` 150 from the nearest live ally (never another support), drifts in place with none, and leaves when its Assault budget (`engage_seconds` 9.0) ends. Unarmed: no rail fallback. The ward choice, repair, shield and escort are Phase 5 t11–t13 — see `support_ship/ENEMY.md`.  
+**Movement:** AI-driven (`SupportShipBrain` + `EnemyMover`); shadows the highest-threat AI-driven ally worth >= 20 (never a Swarm Drone, Gunship, Bonus Drone or another support) from behind, jinks and evades the player, re-picks a ward the tick its ward dies, and in Assault stays inside the camera view; with no ward it holds near the nearest ally (Assault: leaves after 1.5 s in view without one). Leaves when its Assault budget (`engage_seconds` 9.0) ends. Unarmed: no rail fallback. Repair, shield and escort are Phase 5 t12–t13 — see `support_ship/ENEMY.md`.  
 **Shoots:** Nothing.  
 **HP:** 55 (a 34 px circle); contact damage 0 (`ContactProfile` NONE; it cannot be repaired by another support)  
 **Score:** 60

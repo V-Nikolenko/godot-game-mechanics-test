@@ -278,10 +278,13 @@ sniper / ram / bomber spawns are off rails** (26 / 22 / 2) with their trigger, o
 an `ENEMIES_CLEARED` section** — its persisted ordnance would hold the section open (a boundary row in
 `test_engagement_deadline.gd`). Cloud Descent's 73.2 s ram is the tightest deadline row (9.60 s of 10 s).
 
-**The Support Ship (Phase 5, t10 shell)** — see [support_ship/ENEMY.md](../../../assault/scenes/enemies/support_ship/ENEMY.md). An
+**The Support Ship (Phase 5, t10 shell, t11 ward)** — see [support_ship/ENEMY.md](../../../assault/scenes/enemies/support_ship/ENEMY.md). An
 unarmed brain + flat-config enemy (`SupportShipBrain`, `SupportShipConfig`, contact profile NONE, `can_be_repaired()` false) with a
-folded `Projector` and a hidden world-space `Tether`. The shell holds near the nearest live ally and leaves on its Assault budget; the
-ward, repair, shield and escort behaviours land in t11–t13.
+folded `Projector` and a hidden world-space `Tether`. It picks a ward (the highest-threat AI-driven combatant worth >= 20, claimed
+so two supports never share one), re-picks the next tick when the ward dies or is railed, shadows it on a soft anchor behind it with
+jink and break-contact evasion, and in Assault is clamped into `EnemyWorld.view_rect()` and supports only while on screen
+(`is_supporting()`); it leaves on its Assault budget, or after `no_ward_grace` in view with no ward. Repair, shield and escort land in
+t12–t13.
 
 **The Fighter and the Gatling Interceptor are the Phase 3 AI shooters** — see
 [fighter/ENEMY.md](../../../assault/scenes/enemies/fighter/ENEMY.md) and
