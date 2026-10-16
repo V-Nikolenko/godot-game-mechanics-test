@@ -2051,6 +2051,15 @@ phase's *as built* section, once written, before relying on them. (This section 
   scene). (7) The t7 approach row now asserts the APPROACH → HOLD_ARC hand-over within `range_tolerance` and the held
   band `R ± (range_drift + range_tolerance)`, not "parked within 25 px". Gate time: GUT 182.9 → 183.3 s (+0.4 of 5.0),
   `test_missile_corvette.gd` 16 → 37 tests in about 1.1 s; 1687 → 1708 tests.
+- **t9 as built (Missile Corvette and rocket art).** `missile_corvette.png` is a PixelLab hull (flipped nose-down, baked
+  engine flames removed) with the two launch tubes hand-drawn at the `Tubes/TubeL` / `TubeR` markers (local (±18, 30));
+  the rockets are PixelLab sprites with their baked flames removed and the submunition hand-drawn (6 x 10). Later
+  phases that fire these rockets need nothing: node names are unchanged, plus a new `Sprite2D` on every rocket scene and a
+  `BlinkLight` `Sprite2D` on the warhead. **The look-only `body_color` export is gone** from `EnemyRocket` and its five
+  scenes (the placeholder `_draw()` body went with it); `RocketTrail.offset_behind` is now per scene (12 / 12 / 12 / 5 / 9).
+  PURSUIT shares `enemy_rocket.png` with DUMB and is told apart by a violet `modulate`. Rows: `test_enemy_rockets.gd`
+  (sprite per kind, trail behind the nose for every kind and heading, warhead blink) and `test_missile_corvette.gd`
+  (opaque art at each tube marker).
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |

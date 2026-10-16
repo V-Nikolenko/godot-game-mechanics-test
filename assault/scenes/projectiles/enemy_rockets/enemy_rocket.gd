@@ -87,9 +87,6 @@ enum Kind { DUMB, PURSUIT, CLUSTER, WARHEAD, SUBMUNITION }
 ## From the trigger to the detonation: the rocket is stopped dead and blinking.
 @export var warning_time: float = 0.4
 
-@export_group("Look")
-@export var body_color: Color = Color(0.55, 0.12, 0.1)
-
 ## Properties `reset()` restores. Captured once in `_ready()`.
 const _RESET_PROPS: Array[StringName] = [
 	&"launch_speed", &"cruise_speed", &"boost_seconds", &"accel", &"turn_rate", &"guidance_seconds",
@@ -124,6 +121,7 @@ var _warning_clock: float = 0.0
 @onready var _proximity: Area2D = get_node_or_null("ProximityArea") as Area2D
 @onready var _proximity_shape: CollisionShape2D = get_node_or_null("ProximityArea/CollisionShape2D") as CollisionShape2D
 @onready var _pop: ExplosionEffect = get_node_or_null("Pop") as ExplosionEffect
+@onready var _blink: Sprite2D = get_node_or_null("BlinkLight") as Sprite2D
 
 
 func _ready() -> void:
@@ -138,6 +136,9 @@ func _ready() -> void:
 	_hit_box.area_entered.connect(_on_hit_box_area_entered)
 	_hurt_box.area_entered.connect(_on_hurt_box_area_entered)
 	expired.connect(_on_expired)
+	if _blink != null:
+		_blink.texture = _build_glow_texture()
+	_update_blink()
 	queue_redraw()
 
 
@@ -171,6 +172,7 @@ func reset() -> void:
 	_hurt_shape.set_deferred("disabled", false)
 	_lifetime.set_physics_process(true)
 	_lifetime.reset()
+	_update_blink()
 	queue_redraw()
 
 
@@ -241,6 +243,7 @@ func _tick(delta: float) -> void:
 		_clock += delta
 		if _warning_clock >= warning_time - 1e-6:
 			_detonate()
+		_update_blink()
 		queue_redraw()
 		return
 	if kind == Kind.CLUSTER and _should_split(delta):
@@ -259,6 +262,7 @@ func _tick(delta: float) -> void:
 		_triggered = true
 		_warning_clock = 0.0
 		_speed = 0.0
+	_update_blink()
 	queue_redraw()
 
 
@@ -447,18 +451,33 @@ func _mark_done() -> void:
 	_lifetime.set_physics_process(false)
 
 
-## Placeholder look (t9 swaps in the sprite): a nose-up body along local -Y, fins at the tail.
+## The body is the scene's `Sprite2D` (nose-up art). Only the WARHEAD's warning ring is drawn: the blast radius it is
+## about to fill, faint, while it is stopped and counting down.
 func _draw() -> void:
-	var r := body_radius
-	var body := PackedVector2Array([
-		Vector2(0.0, -r * 1.8), Vector2(r * 0.6, -r * 0.6), Vector2(r * 0.6, r * 1.2),
-		Vector2(-r * 0.6, r * 1.2), Vector2(-r * 0.6, -r * 0.6)])
-	draw_colored_polygon(body, body_color)
-	draw_line(Vector2(-r, r * 1.4), Vector2(r, r * 1.4), body_color.lightened(0.3), 2.0)
-	var tip := Color(1.0, 0.3, 0.15) if _armed else Color(0.6, 0.6, 0.65)
-	draw_circle(Vector2(0.0, -r * 1.2), r * 0.35, tip)
 	if _triggered:
-		# The warning: a 12 Hz blink and the blast ring, faint.
-		if fmod(_warning_clock * 12.0, 1.0) < 0.5:
-			draw_circle(Vector2.ZERO, r * 1.4, Color(1.0, 0.9, 0.3, 0.9))
 		draw_arc(Vector2.ZERO, blast_radius, 0.0, TAU, 40, Color(1.0, 0.3, 0.15, 0.35), 1.5)
+
+
+## The WARHEAD's `BlinkLight`: a dim steady glow in flight, a 12 Hz blink between the trigger and the blast.
+func _update_blink() -> void:
+	if _blink == null:
+		return
+	var alpha := 0.35
+	if _triggered:
+		alpha = 1.0 if fmod(_warning_clock * 12.0, 1.0) < 0.5 else 0.0
+	_blink.modulate = Color(1.0, 0.55, 0.2, alpha)
+
+
+## A soft radial dot, built in code (never scene-authored: the sprite-transparency sweep reads scene textures).
+static func _build_glow_texture() -> Texture2D:
+	var gradient := Gradient.new()
+	gradient.set_color(0, Color.WHITE)
+	gradient.set_color(1, Color(1.0, 1.0, 1.0, 0.0))
+	var texture := GradientTexture2D.new()
+	texture.gradient = gradient
+	texture.fill = GradientTexture2D.FILL_RADIAL
+	texture.fill_from = Vector2(0.5, 0.5)
+	texture.fill_to = Vector2(1.0, 0.5)
+	texture.width = 12
+	texture.height = 12
+	return texture

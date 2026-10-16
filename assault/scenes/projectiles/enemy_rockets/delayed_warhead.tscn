@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/projectiles/enemy_rockets/enemy_rocket.gd" id="1_rkt"]
 [ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="2_rkt"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://global/components/projectile_lifetime.gd" id="4_rkt"]
 [ext_resource type="Script" path="res://global/components/rocket_trail.gd" id="5_rkt"]
 [ext_resource type="Script" path="res://global/components/explosion_effect.gd" id="6_rkt"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/projectiles/enemy_warhead.png" id="8_rkt"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_hit"]
 radius = 7.0
@@ -41,7 +42,6 @@ max_distance = 1300.0
 trigger_radius = 70.0
 prox_arm_seconds = 0.6
 warning_time = 0.4
-body_color = Color(0.3, 0.45, 0.2, 1)
 
 [node name="HitBox" type="Area2D" parent="."]
 collision_layer = 32
@@ -78,7 +78,7 @@ max_distance = 1300.0
 [node name="RocketTrail" type="Node2D" parent="."]
 script = ExtResource("5_rkt")
 amount = 14
-offset_behind = 8.0
+offset_behind = 9.0
 
 [node name="Pop" type="Node2D" parent="."]
 script = ExtResource("6_rkt")
@@ -89,3 +89,9 @@ min_velocity = 30.0
 max_velocity = 120.0
 min_scale = 1.5
 max_scale = 3.0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("8_rkt")
+
+[node name="BlinkLight" type="Sprite2D" parent="."]
+modulate = Color(1, 0.55, 0.2, 0.35)

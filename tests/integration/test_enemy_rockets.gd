@@ -227,6 +227,79 @@ func test_scene_shape_and_layers_match_the_contract() -> void:
 		assert_false("score_value" in r, "a rocket is never scored")
 
 
+# ---------------------------------------------------------------------------------------------
+# Art (t9): every rocket wears its sprite, with the exhaust leaving the tail
+# ---------------------------------------------------------------------------------------------
+
+const _ROCKET_ART := {
+	EnemyRocket.Kind.DUMB: "res://assault/assets/sprites/projectiles/enemy_rocket.png",
+	EnemyRocket.Kind.PURSUIT: "res://assault/assets/sprites/projectiles/enemy_rocket.png",
+	EnemyRocket.Kind.CLUSTER: "res://assault/assets/sprites/projectiles/enemy_cluster_rocket.png",
+	EnemyRocket.Kind.SUBMUNITION: "res://assault/assets/sprites/projectiles/enemy_submunition.png",
+	EnemyRocket.Kind.WARHEAD: "res://assault/assets/sprites/projectiles/enemy_warhead.png",
+}
+
+
+func test_every_rocket_scene_wears_its_sprite_and_keeps_its_trail() -> void:
+	for kind: EnemyRocket.Kind in _ALL_KINDS:
+		var r: EnemyRocket = _scene(kind).instantiate()
+		add_child_autofree(r)
+		var sprite := r.get_node_or_null("Sprite2D") as Sprite2D
+		assert_not_null(sprite, "kind %d: a Sprite2D body" % kind)
+		if sprite != null:
+			assert_not_null(sprite.texture, "kind %d: it has a texture" % kind)
+			assert_eq(sprite.texture.resource_path, _ROCKET_ART[kind], "kind %d: its own art" % kind)
+			assert_eq(sprite.rotation, 0.0, "kind %d: nose-up art is turned by the root only" % kind)
+		assert_not_null(r.get_node_or_null("RocketTrail") as RocketTrail, "kind %d: it keeps its RocketTrail" % kind)
+		assert_eq(r.get_node_or_null("BlinkLight") != null, kind == EnemyRocket.Kind.WARHEAD,
+				"kind %d: only the warhead carries a blink light" % kind)
+
+
+## The exhaust leaves the tail: the trail's emitter sits on the opposite side of the rocket's centre from `heading()`,
+## whichever way it flies (the root's `rotation` turns the nose-up art and the emitter together).
+func test_the_trail_sits_behind_the_nose_for_every_kind_and_heading() -> void:
+	var c := Node2D.new()
+	add_child_autofree(c)
+	var dirs: Array[Vector2] = [Vector2.DOWN, Vector2.UP, Vector2.LEFT, Vector2.RIGHT, Vector2(0.6, -0.8), Vector2(-0.8, -0.6)]
+	for kind: EnemyRocket.Kind in _ALL_KINDS:
+		for dir: Vector2 in dirs:
+			var r := _hand_rocket(c, kind, Vector2(600, 600), dir, Vector2(600, 600) + dir * 400.0)
+			_tick(r)
+			var emitter := r.get_node("RocketTrail").get_child(0) as Node2D
+			var behind := (emitter.global_position - r.global_position).dot(r.heading())
+			assert_lt(behind, -1.0, "kind %d heading %s: the trail emitter is behind the nose (%.1f px along heading)" % [kind, dir, behind])
+			# The sprite's nose is local -Y, so on screen it points along heading().
+			var nose := r.to_global(Vector2(0.0, -1.0)) - r.global_position
+			assert_gt(nose.dot(r.heading()), 0.99, "kind %d heading %s: local -Y is the heading" % [kind, dir])
+			r.queue_free()
+
+
+func test_the_warheads_blink_light_blinks_only_while_stopped_and_counting_down() -> void:
+	var h = _harness("open_space")
+	h.player.global_position = Vector2(640, 390)
+	_stub_hurtbox(h.player, PLAYER_HURT_RADIUS)
+	var r := _hand_rocket(h.root, EnemyRocket.Kind.WARHEAD, Vector2(640, 360), Vector2.RIGHT, Vector2(1500, 360))
+	await wait_physics_frames(2)
+	var light := r.get_node("BlinkLight") as Sprite2D
+	assert_almost_eq(light.modulate.a, 0.35, 0.001, "a dim steady glow in flight")
+	while not r.is_triggered():
+		_tick(r)
+		assert_almost_eq(light.modulate.a, 0.35 if not r.is_triggered() else light.modulate.a, 0.001)
+	var lit := 0
+	var dark := 0
+	for i in 20:
+		if r._done:
+			break
+		_tick(r)
+		if light.modulate.a > 0.9:
+			lit += 1
+		elif light.modulate.a < 0.1:
+			dark += 1
+	assert_gt(lit, 0, "the light is on during the warning")
+	assert_gt(dark, 0, "and off between blinks")
+	await wait_physics_frames(2)
+
+
 func test_config_inequalities_against_the_corvette() -> void:
 	for kind: EnemyRocket.Kind in _SHIP_KINDS:
 		var r: EnemyRocket = _scene(kind).instantiate()

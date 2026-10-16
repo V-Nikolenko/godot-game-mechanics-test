@@ -5,7 +5,7 @@
 
 > **Build state (Phase 5, in progress).** t7 built the **shell** (scene, config, four rocket pools, `fire()`, the launcher
 > answers, the rail fallback); t8 built the **fight** (HOLD_ARC, the launch cone, TELEGRAPH, SALVO, predicted aim points, the
-> Assault gate and deferral). Still to come: the real sprite (t9), the hub idle (t15), the hub patrol (t16) and level 1 (t17).
+> Assault gate and deferral). t9 gave it its real hull sprite and the rocket sprites. Still to come: the hub idle (t15), the hub patrol (t16) and level 1 (t17).
 > Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.9–§2.10 (rockets: §2.6–§2.8); t8's own build plan
 > `docs/plans/cmv9szqlq001zqs2x6vi0nlxj/3-plan.md`. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t7 as built", "t8 as built").
 
@@ -19,7 +19,7 @@
 | Damage | 30 contact (`ContactHitBox`, COLLISION); rockets deal their own impact / blast damage |
 | Speed | `max_speed` 210, `acceleration` 240, `max_turn_rate` 1.2 |
 | Body | one `CircleShape2D` r 40 shared by the body, `HurtBox` and `ContactHitBox` |
-| Sprite | placeholder (`ram_corvette.png`) until t9; nose-down (`sprite_forward_angle = PI / 2`) |
+| Sprite | `missile_corvette.png` (96 x 96, PixelLab hull + hand-drawn launch tubes at the `Tubes/TubeL` / `TubeR` markers; the `TubeLight*` lamps are separate code-glow sprites); nose-down (`sprite_forward_angle = PI / 2`) |
 | Scene / config | `missile_corvette.tscn` / `missile_corvette_config.tres` (flat `MissileCorvetteConfig`) |
 
 ---

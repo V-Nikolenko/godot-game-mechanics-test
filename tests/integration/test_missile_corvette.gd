@@ -109,6 +109,28 @@ func test_the_tubes_sit_at_the_nose() -> void:
 	assert_not_null(corvette.get_node("StateLight"))
 
 
+## t9: the hull art has its two launch tubes where `Tubes/TubeL` / `TubeR` are (an opaque pixel at each muzzle), and the
+## lamps stay separate sprites on those markers.
+func test_the_hull_art_has_a_launch_tube_at_each_tube_marker() -> void:
+	var harness = HARNESS.open_space()
+	add_child_autofree(harness.root)
+	var corvette := _spawn(harness, Vector2.ZERO)
+	var sprite := corvette.get_node("Sprite2D") as Sprite2D
+	assert_eq(sprite.texture.resource_path, "res://assault/assets/sprites/enemies/missile_corvette.png")
+	var image := sprite.texture.get_image()
+	var centre := Vector2(image.get_size()) * 0.5
+	for side in ["L", "R"]:
+		var marker := corvette.get_node("Tubes/Tube" + side) as Marker2D
+		var lamp := corvette.get_node("Tubes/TubeLight" + side) as Sprite2D
+		assert_eq(lamp.position, marker.position, "the lamp sits on its tube")
+		assert_ne(lamp, marker, "separate nodes")
+		var px := Vector2i(centre + marker.position + sprite.offset)
+		assert_gt(image.get_pixelv(px).a, 0.9, "tube %s: the hull art is drawn at the muzzle %s" % [side, px])
+		assert_gt(image.get_pixelv(px - Vector2i(0, 10)).a, 0.9, "tube %s: and along the barrel behind it" % side)
+	# The hull is a wide one: opaque well past the body circle's 40 px on neither side beyond the 96 px canvas.
+	assert_lt(image.get_used_rect().size.x, image.get_width())
+
+
 func test_the_config_is_applied_to_the_nodes_that_use_it() -> void:
 	var harness = HARNESS.open_space()
 	add_child_autofree(harness.root)
