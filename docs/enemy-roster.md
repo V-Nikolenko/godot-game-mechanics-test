@@ -370,6 +370,22 @@ b.missile_corvette().at(0, -400)
 
 ---
 
+### `support_ship` — Support Ship
+
+**Builder:** `b.support_ship()`  
+**Scene:** `support_ship.tscn`  
+**Movement:** AI-driven (`SupportShipBrain` + `EnemyMover`); holds `follow_distance` 150 from the nearest live ally (never another support), drifts in place with none, and leaves when its Assault budget (`engage_seconds` 9.0) ends. Unarmed: no rail fallback. The ward choice, repair, shield and escort are Phase 5 t11–t13 — see `support_ship/ENEMY.md`.  
+**Shoots:** Nothing.  
+**HP:** 55 (a 34 px circle); contact damage 0 (`ContactProfile` NONE; it cannot be repaired by another support)  
+**Score:** 60
+
+**Examples:**
+```gdscript
+b.support_ship().at(0, -400)
+```
+
+---
+
 ### `bonus_drone` — Bonus Drone
 
 **Builder:** `b.bonus_drone()`  

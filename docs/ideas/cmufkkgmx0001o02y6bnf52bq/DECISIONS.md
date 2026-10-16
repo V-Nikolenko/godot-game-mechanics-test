@@ -2060,6 +2060,16 @@ phase's *as built* section, once written, before relying on them. (This section 
   PURSUIT shares `enemy_rocket.png` with DUMB and is told apart by a violet `modulate`. Rows: `test_enemy_rockets.gd`
   (sprite per kind, trail behind the nose for every kind and heading, warhead blink) and `test_missile_corvette.gd`
   (opaque art at each tube marker).
+- **t10 as built (Support Ship shell).** Choices t11–t16 build on, beyond §2.11: (1) the brain ships `Phase`
+  `{ SEEK_WARD, FOLLOW, ESCORT, DISENGAGE, IDLE, NOTICING, RETURNING }` already (append-only) and plays only SEEK_WARD and
+  DISENGAGE; `brain.ward` is the ally it holds (`nearest_ally()`: nearest live `BaseEnemy` in group `enemies`, never a
+  `SupportShip`), which t11 replaces with the scored ward choice. (2) The `Projector` is folded with `scale.y` 0; **Godot
+  clamps a zero node scale to an epsilon (~1e-5)**, so rows compare with a tolerance, not `== 0.0`. `SupportShip.fold_projector()`
+  folds it instantly and hides the tether (the `on_suspended()` path); t12 adds the animated unfold. (3) The contact hitbox is
+  closed by the NONE profile with a *deferred* `monitoring`/`monitorable` write: a test that re-opens it must wait one physics frame
+  first and assign directly (a `set_deferred` queued the same frame is overwritten). (4) Placeholder art: the hull is
+  `sniper.png` and the projector `sniper_barrel.png` until t14. (5) `max_turn_rate` 4.0 x `exit_speed` 300 exceeds
+  `acceleration` 700, so DISENGAGE curves at `min(max_turn_rate, acceleration / exit_speed)` (2.33 rad/s), as the Bomber's does.
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |

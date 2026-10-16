@@ -69,6 +69,11 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/missile_corvette/missile_corvette_config.tres",
 	},
 	{
+		"name": "support_ship",
+		"scene": "res://assault/scenes/enemies/support_ship/support_ship.tscn",
+		"config": "res://assault/scenes/enemies/support_ship/support_ship_config.tres",
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"config": "res://assault/scenes/enemies/bonus_drone/bonus_drone_config.tres",
@@ -188,6 +193,22 @@ func test_bonus_drone_has_no_contact_hitbox_and_a_zero_damage_config() -> void:
 			0,
 			"%s: adds no contact HitBox, so its config must ask for 0 collision damage" % entry["name"]
 		)
+
+
+## The second kind of harmless enemy, asserted from both sides: the Support Ship KEEPS its `ContactHitBox` (so the
+## geometry gates hold) but its `ContactProfile` is NONE and the config asks for 0 — a `NONE` profile, not the Bonus
+## Drone's missing-hitbox exception above.
+func test_support_ship_is_harmless_through_a_none_profile_not_a_missing_hitbox() -> void:
+	for entry in ROSTER:
+		if entry["name"] != "support_ship":
+			continue
+		var enemy := _spawn(entry)
+		assert_not_null(_contact_hitbox(enemy), "support_ship: keeps a contact HitBox")
+		assert_eq(enemy.contact_profile.mode, ContactProfile.Mode.NONE, "support_ship: the profile is NONE")
+		assert_eq(_expected_damage(entry), 0, "support_ship: and its config asks for 0")
+		assert_eq(_contact_hitbox(enemy).damage, 0, "support_ship: so the box carries 0")
+		return
+	fail_test("support_ship is not in the roster")
 
 
 ## The specific regression this file was written for. Kept as its own named test so a failure

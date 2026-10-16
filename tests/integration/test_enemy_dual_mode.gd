@@ -467,6 +467,39 @@ func test_missile_corvette_closes_on_the_player_in_both_modes(mode: String = use
 		"%s: it closed on the player" % mode)
 	assert_false(corvette.is_queued_for_deletion())
 
+# ── The Support Ship (Phase 5, t10) ──────────────────────────────────────────────────────────────
+
+const SUPPORT_SHIP_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/support_ship/support_ship.tscn")
+
+
+func _spawn_support_ship(harness, pos: Vector2) -> SupportShip:
+	var entity := SUPPORT_SHIP_SCENE.instantiate() as SupportShip
+	entity.global_position = pos
+	harness.root.add_child(entity)
+	entity.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	entity.set_process(false)
+	return entity
+
+
+## Spawns and works in both harnesses: with an ally in the world it closes on it and holds there, unarmed.
+func test_support_ship_holds_near_an_ally_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 760.0)
+	var ally := FIXTURE_ENEMY.instantiate() as BaseEnemy
+	ally.global_position = Vector2(640.0, 200.0)
+	harness.root.add_child(ally)
+	ally.set_physics_process(false)
+	ally.add_to_group("enemies")
+	var support := _spawn_support_ship(harness, Vector2(640.0, 560.0))
+	for _i in 300:
+		_tick(support, DT)
+	assert_almost_eq(support.global_position.distance_to(ally.global_position), SupportShipConfig.new().follow_distance,
+		30.0, "%s: held at follow_distance from the ally" % mode)
+	assert_eq(support.contact_hit_box.damage, 0, "%s: harmless to touch" % mode)
+	assert_false(support.is_queued_for_deletion())
+
 # ── The Sniper (Phase 4, t12) ────────────────────────────────────────────────────────────────────
 
 const SNIPER_SCENE: PackedScene = \
