@@ -64,6 +64,11 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/bomber/bomber_config.tres",
 	},
 	{
+		"name": "missile_corvette",
+		"scene": "res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn",
+		"config": "res://assault/scenes/enemies/missile_corvette/missile_corvette_config.tres",
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"config": "res://assault/scenes/enemies/bonus_drone/bonus_drone_config.tres",

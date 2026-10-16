@@ -11,7 +11,7 @@
 ##     `max_physics_steps_per_frame` scaled together, restored in `after_each`; `_seconds()` counts game time).
 ##
 ## Rocket numbers are read from the rocket scenes' exports, never typed. The launcher's numbers come from
-## `missile_corvette_config.tres` once it exists; until t7 they are the plan's constants below.
+## `missile_corvette_config.tres` (since t7).
 extends GutTest
 
 const HARNESS: GDScript = preload("res://tests/helpers/enemy_ai_harness.gd")
@@ -34,12 +34,7 @@ const _SHIP_KINDS: Array[EnemyRocket.Kind] = [
 	EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT, EnemyRocket.Kind.CLUSTER, EnemyRocket.Kind.WARHEAD]
 const DT := 1.0 / 60.0
 
-# until t7: MissileCorvetteConfig max_speed / acceleration / salvo numbers (plan §2.9 table).
-const _CORVETTE_MAX_SPEED := 210.0  # until t7
-const _CORVETTE_ACCEL := 240.0  # until t7
-const _CORVETTE_SALVO_COUNT := 3  # until t7
-const _CORVETTE_WARHEAD_SALVO_COUNT := 2  # until t7
-const _CORVETTE_SALVO_PERIOD_MIN := 4.0  # until t7
+const _CORVETTE: MissileCorvetteConfig = preload("res://assault/scenes/enemies/missile_corvette/missile_corvette_config.tres")  # read only
 
 ## The largest real player hurtbox radius: `player_fighter.tscn`'s 5 px circle at scale 2.7 (the ship's is 5 x 2.2).
 const PLAYER_HURT_RADIUS := 13.5
@@ -236,12 +231,12 @@ func test_config_inequalities_against_the_corvette() -> void:
 	for kind: EnemyRocket.Kind in _SHIP_KINDS:
 		var r: EnemyRocket = _scene(kind).instantiate()
 		add_child_autofree(r)
-		assert_gte(r.cruise_speed, 1.1 * _CORVETTE_MAX_SPEED, "kind %d: a launcher never catches its coasting rocket" % kind)
-		assert_gt(r.launch_speed, _CORVETTE_ACCEL * r.boost_seconds, "kind %d: the launcher cannot out-accelerate the boost" % kind)
+		assert_gte(r.cruise_speed, 1.1 * _CORVETTE.max_speed, "kind %d: a launcher never catches its coasting rocket" % kind)
+		assert_gt(r.launch_speed, _CORVETTE.acceleration * r.boost_seconds, "kind %d: the launcher cannot out-accelerate the boost" % kind)
 		if kind == EnemyRocket.Kind.PURSUIT:
 			assert_gte(r.cruise_speed / r.turn_rate, 250.0, "PURSUIT turn radius")
 	# Boundary: a 200 px/s cruise is caught by the corvette.
-	assert_false(200.0 >= 1.1 * _CORVETTE_MAX_SPEED, "a synthetic 200 px/s cruise fails the first inequality")
+	assert_false(200.0 >= 1.1 * _CORVETTE.max_speed, "a synthetic 200 px/s cruise fails the first inequality")
 
 
 class _CfgStub:
@@ -252,9 +247,9 @@ class _CfgStub:
 
 func test_pool_size_for_every_pooled_kind() -> void:
 	var cfg := _CfgStub.new()
-	cfg.salvo_count = _CORVETTE_SALVO_COUNT
-	cfg.warhead_salvo_count = _CORVETTE_WARHEAD_SALVO_COUNT
-	cfg.salvo_period_min = _CORVETTE_SALVO_PERIOD_MIN
+	cfg.salvo_count = _CORVETTE.salvo_count
+	cfg.warhead_salvo_count = _CORVETTE.warhead_salvo_count
+	cfg.salvo_period_min = _CORVETTE.salvo_period_min
 	assert_eq(EnemyRocketScenes.pool_size_for(EnemyRocket.Kind.DUMB, cfg), 3, "3 x ceil(4.0 / 4.0)")
 	assert_eq(EnemyRocketScenes.pool_size_for(EnemyRocket.Kind.PURSUIT, cfg), 6, "3 x ceil(6.0 / 4.0)")
 	assert_eq(EnemyRocketScenes.pool_size_for(EnemyRocket.Kind.CLUSTER, cfg), 3, "3 x ceil(4.0 / 4.0)")
@@ -449,10 +444,10 @@ func test_a_moving_launcher_never_overruns_its_rocket(mode: String = use_paramet
 	for kind: EnemyRocket.Kind in [EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT]:
 		var launcher: CharacterBody2D = LAUNCHER.build(Vector2(640, 1000))
 		h.root.add_child(launcher)
-		launcher.velocity = Vector2(0, -_CORVETTE_MAX_SPEED)
+		launcher.velocity = Vector2(0, -_CORVETTE.max_speed)
 		var r: EnemyRocket = launcher.fire(kind, Vector2.UP, Vector2(640, -300))
 		_freeze(r)
-		assert_almost_eq(r.speed(), r.launch_speed + _CORVETTE_MAX_SPEED, 1e-4,
+		assert_almost_eq(r.speed(), r.launch_speed + _CORVETTE.max_speed, 1e-4,
 				"%s kind %d: the rocket starts at launch_speed + the launcher's 210 px/s" % [mode, kind])
 		var arm_at := LAUNCHER.CLEAR_RADIUS + r.body_radius + r.arm_clearance
 		var prev := r.global_position.distance_to(launcher.global_position)
@@ -476,7 +471,7 @@ func test_a_moving_launcher_never_overruns_its_rocket(mode: String = use_paramet
 		# Control: the same launcher reporting no velocity overtakes its rocket - the row can fail.
 		var control: CharacterBody2D = LAUNCHER.build(Vector2(300, 1000))
 		h.root.add_child(control)
-		control.velocity = Vector2(0, -_CORVETTE_MAX_SPEED)
+		control.velocity = Vector2(0, -_CORVETTE.max_speed)
 		control.report_velocity = false
 		var rc: EnemyRocket = control.fire(kind, Vector2.UP, Vector2(300, -300))
 		_freeze(rc)

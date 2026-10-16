@@ -285,6 +285,7 @@ const _AUTHORED_CONTACT_MODES := {
 	"swarm_drone": ContactProfile.Mode.EXPLOSIVE,
 	"razor_drone": ContactProfile.Mode.RAMMING,
 	"ram_corvette": ContactProfile.Mode.ARMOR,
+	"missile_corvette": ContactProfile.Mode.COLLISION,
 }
 
 

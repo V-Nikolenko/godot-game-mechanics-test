@@ -311,6 +311,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   self-freeing submunitions, no blast, nothing if shot first, survives a freed launcher) and the Delayed Warhead
   (poll-armed trigger, stops dead, blinks, fairness (trigger + blast) / warning >= 420 and the 420 / 700 px/s crossers);
   their lifetime rows are in `test_enemy_bullet_lifetime.gd`.
+  `tests/integration/test_missile_corvette.gd` (t7) covers the Missile Corvette shell: pool sizes 3 / 6 / 3 / 4 pinned and equal to `pool_size_for`, `fire()` alternating tubes without touching a rocket field, the rail fallback, a real corvette on a 330 px/s rail never hitting itself (8x), `launch_velocity()` observed per physics tick, and the Assault budget exit; the rocket inequality rows in `test_enemy_rockets.gd` now read `missile_corvette_config.tres`.
   The Phase 3 behaviour specs for the Fighter and the Gatling (`test_fighter.gd`, `test_fighter_squad.gd`,
   `test_gatling_interceptor.gd`, `test_gatling_convergence.gd`, plus their cases in
   `test_enemy_dual_mode.gd`) are intent tests that run in both the Assault and Open Space harnesses.

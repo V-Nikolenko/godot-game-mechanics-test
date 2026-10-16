@@ -1,0 +1,35 @@
+[gd_resource type="Resource" script_class="MissileCorvetteConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/missile_corvette/missile_corvette_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 160
+collision_damage = 30
+score_value = 70
+max_speed = 210.0
+acceleration = 240.0
+max_turn_rate = 1.2
+preferred_range = 620.0
+assault_preferred_range = 460.0
+min_range = 380.0
+range_drift = 80.0
+range_tolerance = 120.0
+orbit_angular_speed = 0.22
+reversal_min = 4.0
+reversal_max = 7.0
+launch_cone_deg = 45.0
+salvo_telegraph = 0.7
+salvo_count = 3
+warhead_salvo_count = 2
+salvo_gap = 0.22
+salvo_period_min = 4.0
+salvo_period_max = 5.0
+salvo_lead_step = 0.25
+warhead_offset = 90.0
+warhead_range = 420.0
+cluster_min_range = 700.0
+pursuit_flee_speed = 300.0
+engage_seconds = 7.0
+exit_speed = 280.0
+rail_rocket_interval = 2.5

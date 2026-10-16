@@ -436,6 +436,37 @@ func test_bomber_disengage_frees_it_in_assault_only(mode: String = use_parameter
 		"%s: the Bomber is freed by its budget in Assault and never in Open Space" % mode)
 
 
+
+# ── The Missile Corvette (Phase 5, t7) ───────────────────────────────────────────────────────────
+
+const MISSILE_CORVETTE_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn")
+
+
+func _spawn_missile_corvette(harness, pos: Vector2) -> MissileCorvette:
+	var entity := MISSILE_CORVETTE_SCENE.instantiate() as MissileCorvette
+	(entity.get_node("Brain") as MissileCorvetteBrain).start_engaged = true  # pre-t15: predates the hub idle
+	entity.global_position = pos
+	harness.root.add_child(entity)
+	entity.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	entity.set_process(false)
+	return entity
+
+
+## Spawns and moves in both harnesses: from far away it closes on the player in Open Space and in Assault.
+func test_missile_corvette_closes_on_the_player_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 760.0)
+	var corvette := _spawn_missile_corvette(harness, Vector2(640.0, 60.0))
+	var start_distance := corvette.global_position.distance_to(harness.player.global_position)
+	for _i in 60:
+		_tick(corvette, DT)
+	assert_gt(corvette.velocity.length(), 0.0, "%s: it is moving" % mode)
+	assert_lt(corvette.global_position.distance_to(harness.player.global_position), start_distance,
+		"%s: it closed on the player" % mode)
+	assert_false(corvette.is_queued_for_deletion())
+
 # ── The Sniper (Phase 4, t12) ────────────────────────────────────────────────────────────────────
 
 const SNIPER_SCENE: PackedScene = \

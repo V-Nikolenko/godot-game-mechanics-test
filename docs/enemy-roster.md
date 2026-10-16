@@ -352,6 +352,24 @@ b.bomber().at(0, -400).move(b.straight(82))
 
 ---
 
+### `missile_corvette` — Missile Corvette
+
+**Builder:** `b.missile_corvette()`  
+**Scene:** `missile_corvette.tscn`  
+**Movement:** AI-driven (`MissileCorvetteBrain` + `EnemyMover`); closes to its held range (620 Open Space / 460 Assault), leaves when its Assault budget (`engage_seconds` 7.0) ends. `.move()` puts it on a rail, where it fires a Dumb rocket DOWN every `rail_rocket_interval`. The salvo fight is Phase 5 t8 — see `missile_corvette/ENEMY.md`.  
+**Shoots:** Rockets (`EnemyRocket`: Dumb, Pursuit, Cluster, Delayed Warhead) from four persistent pools; every rocket can be shot down.  
+**HP:** 160 (a 40 px circle); contact damage 30  
+**Score:** 70 (rockets score nothing)
+
+**Config fields** (`MissileCorvetteConfig`): `max_speed` 210, `acceleration` 240, `salvo_count` 3, `warhead_salvo_count` 2, `salvo_period_min` 4.0, `rail_rocket_interval` 2.5 s — the rest in `missile_corvette_config.gd`.
+
+**Examples:**
+```gdscript
+b.missile_corvette().at(0, -400)
+```
+
+---
+
 ### `bonus_drone` — Bonus Drone
 
 **Builder:** `b.bonus_drone()`  

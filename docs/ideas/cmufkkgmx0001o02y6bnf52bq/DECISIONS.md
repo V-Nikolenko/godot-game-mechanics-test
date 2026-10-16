@@ -2015,6 +2015,21 @@ phase's *as built* section, once written, before relying on them. (This section 
   SUBMUNITION is never pooled. The launcher fixture pools CLUSTER and WARHEAD too. (6) The Warhead's 240 px/s cruise
   equals a shipped round speed, so `test_no_rocket_speed_is_in_the_round_speed_list` checks only its launch speed.
   Gate time: GUT 180.0 → 182.1 s (+2.1 of 4.0), `test_enemy_rockets.gd` 5.0 s / 25 tests; 1660 → 1670 tests.
+- **t7 as built (Missile Corvette shell).** Choices t8–t16 build on, beyond §2.9: (1) **`launch_velocity()` on a rail is
+  observed per PHYSICS tick, not in `_process`** (a deviation from §2.9's wording): `MissileCorvette` connects
+  `SceneTree.physics_frame` and reads `(global_position − previous) / get_physics_process_delta_time()`
+  (`_observe_motion(delta)` is the hand-stepping seam). A render frame holds zero or several ticks, so a per-frame
+  reading was 300 instead of 330 px/s on the 8× clock and would read 0 on a 144 Hz frame with no tick; the railed row
+  asserts (0, 330) ± 5. `_process` keeps only the rail fallback clock. (2) `StraightMovement.speed` is in design units
+  (the rail doubles it by `WORLD_SCALE`), so the 330 px/s rail is `straight(165)`. (3) The brain ships `Phase`
+  `{ APPROACH, HOLD_ARC, TELEGRAPH, SALVO, DISENGAGE, IDLE, NOTICING, RETURNING }` already (append-only), plays only
+  APPROACH and DISENGAGE, and has the `start_engaged` seam (unused until t15). `held_range()` is
+  `assault_preferred_range` when the Assault budget is active, else `preferred_range`. `accepts_tow()` already refuses
+  TELEGRAPH / SALVO. (4) The hull sprite is a **placeholder** (`ram_corvette.png`, until t9); the tube lamps
+  (`Tubes/TubeLightL` / `TubeLightR`) take a radial texture built in code, driven by `set_tube_glow(0..1)`. (5)
+  `test_enemy_rockets.gd` reads the launcher numbers from `missile_corvette_config.tres` (`_CORVETTE`), the
+  constants are gone. (6) `fire()` counts a refused launch in `rockets_refused`; `BulletPool` logs its usual
+  exhaustion warning.
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |
