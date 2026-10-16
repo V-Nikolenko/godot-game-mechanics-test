@@ -307,7 +307,10 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   The Phase 5 enemy rockets (`EnemyRocket`, `assault/scenes/projectiles/enemy_rockets/`) have an intent spec,
   `tests/integration/test_enemy_rockets.gd`: guidance and dodging hand-ticked in both harnesses, and real-physics rows
   for shoot-down, friendly fire (impact hurts enemies, plates and asteroids; the real player scenes take the blast only)
-  and the pool hand-over.
+  and the pool hand-over. t6 adds the Cluster split (exactly at `split_distance`, at `split_time`, a 36° fan of 4 unpooled
+  self-freeing submunitions, no blast, nothing if shot first, survives a freed launcher) and the Delayed Warhead
+  (poll-armed trigger, stops dead, blinks, fairness (trigger + blast) / warning >= 420 and the 420 / 700 px/s crossers);
+  their lifetime rows are in `test_enemy_bullet_lifetime.gd`.
   The Phase 3 behaviour specs for the Fighter and the Gatling (`test_fighter.gd`, `test_fighter_squad.gd`,
   `test_gatling_interceptor.gd`, `test_gatling_convergence.gd`, plus their cases in
   `test_enemy_dual_mode.gd`) are intent tests that run in both the Assault and Open Space harnesses.

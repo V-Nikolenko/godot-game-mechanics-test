@@ -26,6 +26,12 @@ const FIGHTER_SCENE: PackedScene = preload("res://assault/scenes/player/player_f
 const SaveSandbox := preload("res://tests/helpers/save_sandbox.gd")
 
 const _MODES := ["open_space", "assault"]
+const _ALL_KINDS: Array[EnemyRocket.Kind] = [
+	EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT, EnemyRocket.Kind.CLUSTER, EnemyRocket.Kind.WARHEAD,
+	EnemyRocket.Kind.SUBMUNITION]
+## The kinds a ship fires (a SUBMUNITION is spawned by its CLUSTER parent, never by a launcher).
+const _SHIP_KINDS: Array[EnemyRocket.Kind] = [
+	EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT, EnemyRocket.Kind.CLUSTER, EnemyRocket.Kind.WARHEAD]
 const DT := 1.0 / 60.0
 
 # until t7: MissileCorvetteConfig max_speed / acceleration / salvo numbers (plan §2.9 table).
@@ -204,7 +210,7 @@ func _hp(node: Node) -> int:
 # ---------------------------------------------------------------------------------------------
 
 func test_scene_shape_and_layers_match_the_contract() -> void:
-	for kind: EnemyRocket.Kind in [EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT]:
+	for kind: EnemyRocket.Kind in _ALL_KINDS:
 		var r: EnemyRocket = _scene(kind).instantiate()
 		add_child_autofree(r)
 		assert_eq(r.kind, kind)
@@ -227,7 +233,7 @@ func test_scene_shape_and_layers_match_the_contract() -> void:
 
 
 func test_config_inequalities_against_the_corvette() -> void:
-	for kind: EnemyRocket.Kind in [EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT]:
+	for kind: EnemyRocket.Kind in _SHIP_KINDS:
 		var r: EnemyRocket = _scene(kind).instantiate()
 		add_child_autofree(r)
 		assert_gte(r.cruise_speed, 1.1 * _CORVETTE_MAX_SPEED, "kind %d: a launcher never catches its coasting rocket" % kind)
@@ -244,13 +250,15 @@ class _CfgStub:
 	var salvo_period_min: float
 
 
-func test_pool_size_for_dumb_and_pursuit() -> void:
+func test_pool_size_for_every_pooled_kind() -> void:
 	var cfg := _CfgStub.new()
 	cfg.salvo_count = _CORVETTE_SALVO_COUNT
 	cfg.warhead_salvo_count = _CORVETTE_WARHEAD_SALVO_COUNT
 	cfg.salvo_period_min = _CORVETTE_SALVO_PERIOD_MIN
 	assert_eq(EnemyRocketScenes.pool_size_for(EnemyRocket.Kind.DUMB, cfg), 3, "3 x ceil(4.0 / 4.0)")
 	assert_eq(EnemyRocketScenes.pool_size_for(EnemyRocket.Kind.PURSUIT, cfg), 6, "3 x ceil(6.0 / 4.0)")
+	assert_eq(EnemyRocketScenes.pool_size_for(EnemyRocket.Kind.CLUSTER, cfg), 3, "3 x ceil(4.0 / 4.0)")
+	assert_eq(EnemyRocketScenes.pool_size_for(EnemyRocket.Kind.WARHEAD, cfg), 4, "2 warheads x ceil(7.0 / 4.0)")
 
 
 func test_reset_restores_exports_and_launch_applies_late_exports() -> void:
@@ -736,3 +744,334 @@ func test_rockets_outlive_their_launcher_and_free_themselves() -> void:
 	assert_false(is_instance_valid(a), "the first rocket freed itself on expiry")
 	assert_false(is_instance_valid(b), "the second rocket freed itself on expiry")
 	assert_eq(_blasts.size(), 0, "expiry is a fizzle")
+
+
+# ===============================================================================================
+# t6: the Cluster Rocket and the Delayed Warhead (plan §2.8)
+# ===============================================================================================
+
+## The live (not queued-for-deletion) submunitions in `parent`.
+func _subs(parent: Node) -> Array[EnemyRocket]:
+	var out: Array[EnemyRocket] = []
+	for n in parent.get_children():
+		var r := n as EnemyRocket
+		if r != null and r.kind == EnemyRocket.Kind.SUBMUNITION and not r.is_queued_for_deletion():
+			out.append(r)
+	return out
+
+
+## A layer-128 area on the player stand-in: the hurtbox a warhead's `ProximityArea` and a rocket's HitBox look for.
+func _stub_hurtbox(player: Node2D, radius: float) -> Area2D:
+	var area := Area2D.new()
+	area.collision_layer = CollisionLayers.PLAYER_HURTBOX
+	area.collision_mask = 0
+	area.add_child(_circle(radius))
+	player.add_child(area)
+	return area
+
+
+## A hand-ticked warhead pinned in place (zero speed): the blast centre is exactly where the trigger fires, so the
+## fairness geometry reads without the rocket's own drift. A stationary rocket never leaves its launch point, so its
+## impact HitBox never opens - the proximity trigger is the only way it goes off.
+func _still_warhead(parent: Node, at: Vector2) -> EnemyRocket:
+	var r: EnemyRocket = _scene(EnemyRocket.Kind.WARHEAD).instantiate()
+	parent.add_child(r)
+	r.global_position = at
+	r.reset()
+	_freeze(r)
+	r.launch_speed = 0.0
+	r.cruise_speed = 0.0
+	r.launch(Vector2.RIGHT, at + Vector2.RIGHT * 400.0, null)
+	return r
+
+
+# --- Cluster: when it splits ------------------------------------------------------------------
+
+func test_the_cluster_rocket_splits_exactly_at_split_distance(mode: String = use_parameters(_MODES)) -> void:
+	var h = _harness(mode)
+	h.player.global_position = Vector2(1100, 360)
+	var probe: EnemyRocket = _scene(EnemyRocket.Kind.CLUSTER).instantiate()
+	var split_d := probe.split_distance
+	probe.free()
+
+	# A natural approach: flying straight at a stationary player, the split tick is the first whose start is in range.
+	var r := _hand_rocket(h.root, EnemyRocket.Kind.CLUSTER, Vector2(600, 360), Vector2.RIGHT, h.player.global_position)
+	var prev_d := INF
+	var split_at := -1.0
+	var ticks := 0
+	while split_at < 0.0 and ticks < 300:
+		var d := r.global_position.distance_to(h.player.global_position)
+		_tick(r)
+		ticks += 1
+		if not _subs(h.root).is_empty():
+			split_at = d
+		else:
+			prev_d = d
+	assert_gt(split_at, 0.0, "%s: it split" % mode)
+	assert_lte(split_at, split_d, "%s: it split once the player was within split_distance" % mode)
+	assert_gt(prev_d, split_d, "%s: one tick earlier it was still out of range and whole" % mode)
+
+	# The boundary, exactly: split_distance + 0.01 does not split; split_distance does - on the same single tick.
+	var out := _hand_rocket(h.root, EnemyRocket.Kind.CLUSTER, h.player.global_position + Vector2(-(split_d + 0.01), 0),
+			Vector2.RIGHT, h.player.global_position)
+	var before := _subs(h.root).size()
+	_tick(out)
+	assert_eq(_subs(h.root).size(), before, "%s: split_distance + 0.01 px is still whole" % mode)
+	var on := _hand_rocket(h.root, EnemyRocket.Kind.CLUSTER, h.player.global_position + Vector2(-split_d, 0),
+			Vector2.RIGHT, h.player.global_position)
+	_tick(on)
+	assert_eq(_subs(h.root).size(), before + on.cluster_count, "%s: exactly split_distance splits on that tick" % mode)
+
+
+func test_the_cluster_rocket_splits_at_split_time_when_the_player_is_far(mode: String = use_parameters(_MODES)) -> void:
+	var h = _harness(mode)
+	h.player.global_position = Vector2(4000, 360)
+	var r := _hand_rocket(h.root, EnemyRocket.Kind.CLUSTER, Vector2(640, 360), Vector2.RIGHT, h.player.global_position)
+	var first := ceili(r.split_time / DT - 1e-4)
+	for i in first - 1:
+		_tick(r)
+	assert_true(_subs(h.root).is_empty(), "%s: one tick before split_time it is still whole" % mode)
+	_tick(r)
+	assert_eq(_subs(h.root).size(), r.cluster_count, "%s: it splits on the tick that reaches split_time" % mode)
+
+
+# --- Cluster: what it splits into ---------------------------------------------------------------
+
+func test_the_split_fans_unpooled_self_freeing_submunitions_and_expires_the_parent_without_a_blast(
+		mode: String = use_parameters(_MODES)) -> void:
+	var h = _harness(mode)
+	h.player.global_position = Vector2(1000, 360)
+	h.player.velocity = Vector2(0, 200)  # the predicted point is below the player's position
+	var r := _hand_rocket(h.root, EnemyRocket.Kind.CLUSTER, Vector2(800, 360), Vector2.RIGHT, h.player.global_position)
+	var count := {"n": 0}
+	r.expired.connect(func() -> void: count["n"] += 1)
+	var split_point := r.global_position
+	_tick(r)
+	var kids := _subs(h.root)
+	assert_eq(kids.size(), 4, "%s: exactly cluster_count children" % mode)
+	assert_eq(r.cluster_count, 4)
+
+	var child_speed := kids[0].launch_speed
+	var travel: float = split_point.distance_to(h.player.global_position) / child_speed
+	var centre: Vector2 = (h.player.global_position + h.player.velocity * travel - split_point).normalized()
+	var angles: Array[float] = []
+	for k in kids:
+		angles.append(rad_to_deg(centre.angle_to(k.heading())))
+		assert_eq(k.global_position, split_point, "%s: every child starts at the split point" % mode)
+		assert_almost_eq(k.speed(), child_speed, 1e-4, "%s: no inherited speed" % mode)
+		assert_false(k.get_parent() is BulletPool, "%s: unpooled" % mode)
+		assert_eq(k.get_parent(), h.root, "%s: in the parent's own container" % mode)
+		assert_true(k.expired.is_connected(k.queue_free), "%s: it frees itself on expiry" % mode)
+		assert_false(k.is_in_group(&"enemies"))
+	assert_almost_eq(angles.max() - angles.min(), r.cluster_fan_deg, 0.5, "%s: fanned across 36 degrees" % mode)
+	assert_almost_eq((angles.max() + angles.min()) * 0.5, 0.0, 1.0, "%s: centred on the predicted direction" % mode)
+	assert_gt(absf(rad_to_deg(Vector2.RIGHT.angle_to(centre))), 2.0, "%s: the prediction differs from the raw bearing" % mode)
+
+	# The parent leaves without a bang, once, however long it is ticked.
+	for i in 6:
+		_tick(r)
+	assert_eq(count["n"], 1, "%s: the parent emitted expired exactly once" % mode)
+	await wait_physics_frames(3)
+	assert_eq(_blasts.size(), 0, "%s: a split spawns no ContactBlast" % mode)
+
+	# Each child frees itself on expiry.
+	for k in kids:
+		k.expired.emit()
+		assert_true(k.is_queued_for_deletion(), "%s: a child that expires frees itself" % mode)
+
+
+func test_a_player_bullet_on_the_cluster_rocket_before_the_split_leaves_nothing() -> void:
+	var c := _real_container()
+	var ends: Array = []
+	_live_rocket(c, EnemyRocket.Kind.CLUSTER, Vector2(300, 300), Vector2.RIGHT, ends)
+	var bullet: Bullet = BULLET_SCENE.instantiate()
+	c.add_child(bullet)
+	bullet.global_position = Vector2(560, 300)
+	bullet.rotation = -PI / 2.0  # forward = LEFT
+	bullet.expired.connect(bullet.queue_free)
+	await _seconds(0.6)
+	assert_eq(ends.size(), 1, "the shot-down parent expired once")
+	assert_true(_subs(c).is_empty(), "no children at the moment of the shoot-down")
+	await _seconds(2.0)
+	assert_true(_subs(c).is_empty(), "nor ever after")
+	assert_eq(_blasts.size(), 0, "a shoot-down never blasts")
+
+
+func test_siblings_do_not_hit_each_other_or_their_parent() -> void:
+	var c := _real_container()
+	var r := _live_rocket(c, EnemyRocket.Kind.CLUSTER, Vector2(300, 300), Vector2.RIGHT)
+	r.split_time = 0.05
+	await _seconds(0.12)
+	var kids := _subs(c)
+	assert_eq(kids.size(), 4, "the split happened")
+	var starts: Array[Vector2] = []
+	for k in kids:
+		starts.append(k.global_position)
+	await _seconds(0.3)
+	var alive := 0
+	for i in kids.size():
+		if is_instance_valid(kids[i]) and not kids[i].is_queued_for_deletion():
+			alive += 1
+			assert_gt(kids[i].global_position.distance_to(starts[i]), 60.0, "child %d is flying on" % i)
+	assert_eq(alive, 4, "all four survive 0.3 s together")
+	assert_eq(_blasts.size(), 0, "no sibling detonated")
+
+
+func test_a_split_after_the_launcher_was_freed_still_produces_the_children() -> void:
+	var c := _real_container()
+	var launcher: CharacterBody2D = LAUNCHER.build(Vector2(200, 300))
+	c.add_child(launcher)
+	var r: EnemyRocket = launcher.fire(EnemyRocket.Kind.CLUSTER, Vector2.RIGHT, Vector2(1200, 300))
+	r.split_time = 0.4
+	launcher.queue_free()
+	await _seconds(0.1)
+	assert_false(is_instance_valid(launcher), "the launcher is gone")
+	assert_true(_subs(c).is_empty(), "not split yet")
+	await _seconds(0.45)
+	assert_eq(_subs(c).size(), 4, "four children in the container, not a pool")
+	for k in _subs(c):
+		assert_false(k.get_parent() is BulletPool)
+	assert_eq(_blasts.size(), 0)
+
+
+# --- Warhead ---------------------------------------------------------------------------------
+
+func test_the_warhead_arms_its_trigger_stops_dead_and_blows_after_the_warning(mode: String = use_parameters(_MODES)) -> void:
+	var h = _harness(mode)
+	h.player.global_position = Vector2(640, 390)  # 30 px beside the launch point: inside the trigger from tick 0
+	_stub_hurtbox(h.player, PLAYER_HURT_RADIUS)
+	var r := _hand_rocket(h.root, EnemyRocket.Kind.WARHEAD, Vector2(640, 360), Vector2.RIGHT, Vector2(1500, 360))
+	await wait_physics_frames(2)  # the physics server reports the overlap before the trigger is live
+
+	var arm_tick := ceili(r.prox_arm_seconds / DT - 1e-4)
+	for i in arm_tick - 1:
+		_tick(r)
+		assert_false(r.is_triggered(), "%s: not before prox_arm_seconds (tick %d), the player is already inside" % [mode, i])
+	_tick(r)
+	assert_true(r.is_triggered(), "%s: it triggers on the first armed tick with the player already inside" % mode)
+	assert_eq(r.speed(), 0.0, "%s: stopped dead" % mode)
+
+	var stop_at := r.global_position
+	var warn_ticks := 0
+	var worst := 0.0
+	while not r._done and warn_ticks < 60:
+		assert_eq(r.speed(), 0.0)
+		_tick(r)
+		warn_ticks += 1
+		worst = maxf(worst, r.global_position.distance_to(stop_at))
+	assert_eq(warn_ticks, roundi(r.warning_time / DT), "%s: it detonates warning_time after the trigger" % mode)
+	assert_lt(worst, 0.5, "%s: it moved < 0.5 px from the trigger to the detonation" % mode)
+
+	await wait_physics_frames(1)
+	var blast: ContactBlast = null
+	for n in h.root.get_children():
+		if n is ContactBlast:
+			blast = n
+	assert_not_null(blast, "%s: the detonation blasts" % mode)
+	if blast != null:
+		assert_eq(blast.damage, 30, "%s: blast damage 30" % mode)
+		assert_eq((blast.get_child(0).shape as CircleShape2D).radius, 110.0, "%s: blast radius 110" % mode)
+		assert_eq(blast.global_position, stop_at)
+
+	# Control: a player outside the trigger never sets it off - the row above can fail.
+	h.player.global_position = Vector2(640, 900)
+	var far := _hand_rocket(h.root, EnemyRocket.Kind.WARHEAD, Vector2(640, 360), Vector2.RIGHT, Vector2(1500, 360))
+	await wait_physics_frames(2)
+	for i in arm_tick + 30:
+		_tick(far)
+	assert_false(far.is_triggered(), "%s: out of range, never triggered" % mode)
+
+
+## Drives a pinned warhead against a stub crossing it dead centre at `v_in`, switching to `v_out` the instant the
+## trigger fires. Returns {ticks: ticks from trigger to detonation, gap: player-to-blast distance at detonation}.
+func _cross_the_warhead(mode: String, v_in: float, v_out: float) -> Dictionary:
+	var h = _harness(mode)
+	var at := Vector2(900, 400)
+	var r := _still_warhead(h.root, at)
+	var edge := r.trigger_radius + PLAYER_HURT_RADIUS
+	h.player.global_position = at + Vector2(-(edge + v_in * r.prox_arm_seconds + 40.0), 0)
+	_stub_hurtbox(h.player, PLAYER_HURT_RADIUS)
+	var v := v_in
+	var since := -1
+	var result := {"ticks": -1, "gap": INF}
+	for i in 200:
+		h.player.global_position += Vector2(v * DT, 0)
+		await wait_physics_frames(1)
+		_tick(r)
+		if since >= 0:
+			since += 1
+		if r.is_triggered() and since < 0:
+			since = 0
+			v = v_out
+		if r._done:
+			result["ticks"] = since
+			result["gap"] = h.player.global_position.distance_to(r.global_position)
+			break
+	await wait_physics_frames(2)  # the deferred ContactBlast lands in the tree and frees itself with the harness
+	return result
+
+
+func test_the_warhead_catches_a_crosser_at_420_and_a_700_boost_escapes(mode: String = use_parameters(_MODES)) -> void:
+	_scale_clock()
+	var probe: EnemyRocket = _scene(EnemyRocket.Kind.WARHEAD).instantiate()
+	var fair := (probe.trigger_radius + probe.blast_radius) / probe.warning_time
+	var blast_r := probe.blast_radius
+	var warn := probe.warning_time
+	probe.free()
+	assert_gte(fair, 420.0, "(trigger + blast) / warning >= the Open Space ship's 420 px/s (%.0f)" % fair)
+	assert_lt((70.0 + 110.0) / 0.5, 420.0, "a synthetic 0.5 s warning fails the same inequality")
+
+	var caught := await _cross_the_warhead(mode, 420.0, 420.0)
+	assert_eq(caught["ticks"], roundi(warn / DT), "%s: detonation warning_time after the trigger" % mode)
+	assert_lt(caught["gap"], blast_r, "%s: a 420 px/s crosser is inside the blast (%.0f px)" % [mode, caught["gap"]])
+	var escaped := await _cross_the_warhead(mode, 420.0, 700.0)
+	assert_gt(escaped["gap"], blast_r, "%s: a 700 px/s boost is outside it (%.0f px)" % [mode, escaped["gap"]])
+
+
+# --- Warhead: the real player scenes ------------------------------------------------------------
+
+func test_a_warhead_costs_the_player_the_blast_alone_by_impact_or_by_proximity(mode: String = use_parameters(_MODES)) -> void:
+	_scale_clock()
+	var h = _harness(mode)
+	h.player.remove_from_group(&"player")
+	h.player.queue_free()
+	var p := Vector2(640, 360)
+	var player: PlayerBase = (SHIP_SCENE if mode == "open_space" else FIGHTER_SCENE).instantiate()
+	h.root.add_child(player)
+	player.global_position = p
+	player.set_physics_process(false)
+	player.set_process(false)
+	player.shield_component.set_all_zero()
+	# Two 30-damage blasts must not kill the 60 HP fighter: a death pauses the tree and hangs every later test.
+	player.health_component.max_health = 500
+	player.health_component.current_health = 500
+	var hurt := player.get_node("HurtBox") as HurtBox
+	var received: Array[int] = []
+	hurt.received_damage.connect(func(damage: int) -> void: received.append(damage))
+	await _seconds(0.1)
+
+	# A direct hit, launched a few px from the player so the impact comes before the 0.6 s proximity arming.
+	var r := _scene(EnemyRocket.Kind.WARHEAD).instantiate() as EnemyRocket
+	h.root.add_child(r)
+	r.global_position = p + Vector2(-45, 0)
+	r.reset()
+	var by_proximity: Array[bool] = []
+	r.expired.connect(func() -> void: by_proximity.append(r.is_triggered()))
+	r.expired.connect(r.queue_free)
+	var blast := r.blast_damage
+	r.launch(Vector2.RIGHT, p, null)
+	await _seconds(0.5)
+	assert_eq(by_proximity, [false] as Array[bool], "%s: the impact came first, not the proximity trigger" % mode)
+	assert_eq(received, [blast] as Array[int], "%s: a direct hit costs the blast's 30 alone" % mode)
+	assert_eq(blast, 30)
+
+	# By proximity: it stops short, blinks, then the blast reaches the player once.
+	await _seconds(0.6)  # past the player's invincibility window
+	var r2 := _scene(EnemyRocket.Kind.WARHEAD).instantiate() as EnemyRocket
+	h.root.add_child(r2)
+	r2.global_position = p + Vector2(-130, 0)
+	r2.reset()
+	r2.expired.connect(r2.queue_free)
+	r2.launch(Vector2.RIGHT, p, null)
+	await _seconds(1.6)
+	assert_eq(received, [blast, blast] as Array[int], "%s: a proximity detonation costs the same 30, once" % mode)

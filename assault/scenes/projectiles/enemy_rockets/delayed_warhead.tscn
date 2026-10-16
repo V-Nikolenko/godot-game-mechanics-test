@@ -1,0 +1,91 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/projectiles/enemy_rockets/enemy_rocket.gd" id="1_rkt"]
+[ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="2_rkt"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="3_rkt"]
+[ext_resource type="Script" path="res://global/components/projectile_lifetime.gd" id="4_rkt"]
+[ext_resource type="Script" path="res://global/components/rocket_trail.gd" id="5_rkt"]
+[ext_resource type="Script" path="res://global/components/explosion_effect.gd" id="6_rkt"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hit"]
+radius = 7.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
+radius = 9.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_prox"]
+radius = 70.0
+
+[node name="DelayedWarhead" type="Area2D"]
+collision_layer = 0
+collision_mask = 0
+monitoring = false
+monitorable = false
+script = ExtResource("1_rkt")
+kind = 3
+launch_speed = 100.0
+cruise_speed = 240.0
+boost_seconds = 0.35
+accel = 300.0
+turn_rate = 0.6
+guidance_seconds = 4.0
+lead_max = 0.8
+impact_damage = 12
+blast_radius = 110.0
+blast_damage = 30
+blast_frames = 3
+arm_clearance = 8.0
+body_radius = 7.0
+max_time = 7.0
+max_distance = 1300.0
+trigger_radius = 70.0
+prox_arm_seconds = 0.6
+warning_time = 0.4
+body_color = Color(0.3, 0.45, 0.2, 1)
+
+[node name="HitBox" type="Area2D" parent="."]
+collision_layer = 32
+collision_mask = 640
+monitoring = false
+monitorable = false
+script = ExtResource("2_rkt")
+damage = 12
+damage_type = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HitBox"]
+shape = SubResource("CircleShape2D_hit")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 96
+script = ExtResource("3_rkt")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_hurt")
+
+[node name="ProximityArea" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 128
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ProximityArea"]
+shape = SubResource("CircleShape2D_prox")
+
+[node name="ProjectileLifetime" type="Node" parent="."]
+script = ExtResource("4_rkt")
+max_time = 7.0
+max_distance = 1300.0
+
+[node name="RocketTrail" type="Node2D" parent="."]
+script = ExtResource("5_rkt")
+amount = 14
+offset_behind = 8.0
+
+[node name="Pop" type="Node2D" parent="."]
+script = ExtResource("6_rkt")
+amount = 10
+lifetime = 0.3
+color = Color(1.0, 0.45, 0.15, 1)
+min_velocity = 30.0
+max_velocity = 120.0
+min_scale = 1.5
+max_scale = 3.0

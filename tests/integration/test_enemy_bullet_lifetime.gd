@@ -328,17 +328,43 @@ func test_the_pursuit_rocket_clears_its_lifetime_through_boost_ramp_and_cruise()
 	assert_eq(lt.max_distance, r.max_distance)
 
 
+func test_the_cluster_submunition_and_warhead_clear_their_lifetimes_through_boost_ramp_and_cruise() -> void:
+	for row: Array in [
+			[EnemyRocket.Kind.CLUSTER, 3.55, "CLUSTER: 0.35 + 0.43 + 2.77 s to cover 1200 px"],
+			[EnemyRocket.Kind.SUBMUNITION, 1.15, "SUBMUNITION: 600 px at 520 px/s, no boost, no ramp"],
+			[EnemyRocket.Kind.WARHEAD, 5.76, "WARHEAD: 0.35 + 0.47 + 4.94 s to cover 1300 px"]]:
+		var r := _rocket(row[0])
+		var t := _rocket_straight_time(r.launch_speed, r.cruise_speed, r.boost_seconds, r.accel, r.max_distance)
+		assert_almost_eq(t, float(row[1]), 0.02, str(row[2]))
+		assert_true(_rocket_clears(r), "%s: %.2f s must fit max_time %.1f" % [row[2], t, r.max_time])
+		var lt := r.get_node("ProjectileLifetime") as ProjectileLifetime
+		assert_eq(lt.max_time, r.max_time, "the lifetime child carries the rocket's own max_time")
+		assert_eq(lt.max_distance, r.max_distance, "the lifetime child carries the rocket's own max_distance")
+
+
 func test_a_slow_cruising_rocket_fails_its_row() -> void:
 	var r := _rocket(EnemyRocket.Kind.PURSUIT)
 	r.cruise_speed = 380.0
 	assert_false(_rocket_clears(r), "2400 px at a 380 px/s cruise takes ~6.7 s > 6.0 s: the row can reject")
 
+	# A submunition that flew 20 px/s slower would outlive its 1.2 s.
+	var sub := _rocket(EnemyRocket.Kind.SUBMUNITION)
+	sub.launch_speed = 480.0
+	sub.cruise_speed = 480.0
+	assert_false(_rocket_clears(sub), "600 px at 480 px/s takes 1.25 s > 1.2 s: the submunition row can reject")
+
 
 func test_no_rocket_speed_is_in_the_round_speed_list() -> void:
 	var speeds := _every_shipped_enemy_bullet_speed()
-	for kind: EnemyRocket.Kind in [EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT]:
+	for kind: EnemyRocket.Kind in [EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT, EnemyRocket.Kind.CLUSTER,
+			EnemyRocket.Kind.SUBMUNITION, EnemyRocket.Kind.WARHEAD]:
 		var r := _rocket(kind)
-		for s: float in [r.launch_speed, r.cruise_speed]:
+		# The Delayed Warhead cruises at 240 px/s, which a round also fires at: a value match proves nothing about
+		# the list, so its cruise is exempt and the launch speed (100) still has to stay out.
+		var checked: Array[float] = [r.launch_speed]
+		if kind != EnemyRocket.Kind.WARHEAD:
+			checked.append(r.cruise_speed)
+		for s: float in checked:
 			assert_false(speeds.has(s), "%s px/s is a rocket speed; rockets have their own rows" % s)
 
 

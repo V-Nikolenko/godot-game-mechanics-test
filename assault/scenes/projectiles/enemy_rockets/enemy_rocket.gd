@@ -69,6 +69,24 @@ enum Kind { DUMB, PURSUIT, CLUSTER, WARHEAD, SUBMUNITION }
 @export var max_time: float = 4.0
 @export var max_distance: float = 1800.0
 
+@export_group("Cluster")
+## CLUSTER: splits when the player is within this many px, or `split_time` s after launch if never that close.
+@export var split_distance: float = 260.0
+@export var split_time: float = 2.0
+@export_range(3, 5) var cluster_count: int = 4
+## Total spread of the children, centred on the direction to the predicted point.
+@export var cluster_fan_deg: float = 36.0
+## What a CLUSTER splits into (unpooled, self-freeing). Set on cluster_rocket.tscn only.
+@export var submunition_scene: PackedScene
+
+@export_group("Proximity")
+## WARHEAD: radius of the `ProximityArea` that notices the player's hurtbox.
+@export var trigger_radius: float = 70.0
+## Seconds after launch before the proximity trigger is live (independent of the launcher clearance).
+@export var prox_arm_seconds: float = 0.6
+## From the trigger to the detonation: the rocket is stopped dead and blinking.
+@export var warning_time: float = 0.4
+
 @export_group("Look")
 @export var body_color: Color = Color(0.55, 0.12, 0.1)
 
@@ -76,7 +94,8 @@ enum Kind { DUMB, PURSUIT, CLUSTER, WARHEAD, SUBMUNITION }
 const _RESET_PROPS: Array[StringName] = [
 	&"launch_speed", &"cruise_speed", &"boost_seconds", &"accel", &"turn_rate", &"guidance_seconds",
 	&"lead_max", &"impact_damage", &"blast_radius", &"blast_damage", &"blast_frames", &"arm_clearance",
-	&"body_radius", &"max_time", &"max_distance",
+	&"body_radius", &"max_time", &"max_distance", &"split_distance", &"split_time", &"cluster_count",
+	&"cluster_fan_deg", &"trigger_radius", &"prox_arm_seconds", &"warning_time",
 ]
 
 var _authored: Dictionary = {}
@@ -93,12 +112,17 @@ var _launcher: Node = null
 var _had_launcher: bool = false
 var _clear_radius: float = 0.0
 var _launch_point: Vector2 = Vector2.ZERO
+## WARHEAD: the proximity trigger has fired; the rocket is stopped and counting `_warning_clock` to its blast.
+var _triggered: bool = false
+var _warning_clock: float = 0.0
 
 @onready var _hit_box: HitBox = $HitBox as HitBox
 @onready var _hit_shape: CollisionShape2D = $HitBox/CollisionShape2D as CollisionShape2D
 @onready var _hurt_box: HurtBox = $HurtBox as HurtBox
 @onready var _hurt_shape: CollisionShape2D = $HurtBox/CollisionShape2D as CollisionShape2D
 @onready var _lifetime: ProjectileLifetime = $ProjectileLifetime as ProjectileLifetime
+@onready var _proximity: Area2D = get_node_or_null("ProximityArea") as Area2D
+@onready var _proximity_shape: CollisionShape2D = get_node_or_null("ProximityArea/CollisionShape2D") as CollisionShape2D
 @onready var _pop: ExplosionEffect = get_node_or_null("Pop") as ExplosionEffect
 
 
@@ -108,6 +132,8 @@ func _ready() -> void:
 	# Scene instances share sub-resources; the radii are set per instance.
 	_hit_shape.shape = _hit_shape.shape.duplicate()
 	_hurt_shape.shape = _hurt_shape.shape.duplicate()
+	if _proximity_shape != null:
+		_proximity_shape.shape = _proximity_shape.shape.duplicate()
 	_apply_exports()
 	_hit_box.area_entered.connect(_on_hit_box_area_entered)
 	_hurt_box.area_entered.connect(_on_hurt_box_area_entered)
@@ -130,9 +156,13 @@ func reset() -> void:
 	_launcher = null
 	_had_launcher = false
 	_clear_radius = 0.0
+	_triggered = false
+	_warning_clock = 0.0
 	modulate = Color.WHITE
 	show()
 	_apply_exports()
+	if _proximity != null:
+		_proximity.set_deferred("monitoring", true)
 	_hit_box.set_deferred("monitoring", false)
 	_hit_box.set_deferred("monitorable", false)
 	_hurt_box.set_deferred("monitoring", true)
@@ -183,7 +213,7 @@ func is_armed() -> bool:
 
 ## True inside the steering window: after the boost, before `boost_seconds + guidance_seconds`.
 func is_guiding() -> bool:
-	return _launched and not _done and turn_rate > 0.0 \
+	return _launched and not _done and not _triggered and turn_rate > 0.0 \
 			and _clock >= boost_seconds and _clock < boost_seconds + guidance_seconds
 
 
@@ -205,6 +235,17 @@ func _tick(delta: float) -> void:
 		return
 	if _done or not _launched:
 		return
+	if _triggered:
+		# Stopped dead: nothing moves until the blast.
+		_warning_clock += delta
+		_clock += delta
+		if _warning_clock >= warning_time - 1e-6:
+			_detonate()
+		queue_redraw()
+		return
+	if kind == Kind.CLUSTER and _should_split(delta):
+		_split()
+		return
 	if is_guiding():
 		_steer(delta)
 	if _clock >= boost_seconds:
@@ -214,7 +255,68 @@ func _tick(delta: float) -> void:
 	_clock += delta
 	if not _armed:
 		_update_arming()
+	if kind == Kind.WARHEAD and _clock >= prox_arm_seconds - 1e-6 and _player_in_range():
+		_triggered = true
+		_warning_clock = 0.0
+		_speed = 0.0
 	queue_redraw()
+
+
+## WARHEAD: a POLL of the proximity overlaps, not an `area_entered`, so a player already inside when the trigger
+## arms still sets it off (the Ph4 B1b rule).
+func _player_in_range() -> bool:
+	if _proximity == null:
+		return false
+	for area in _proximity.get_overlapping_areas():
+		if area.collision_layer & CollisionLayers.PLAYER_HURTBOX:
+			return true
+	return false
+
+
+## True once the proximity trigger has fired and the rocket is counting down to its blast.
+func is_triggered() -> bool:
+	return _triggered
+
+
+## CLUSTER: within `split_distance` of the player, or on the tick that reaches `split_time` since launch.
+func _should_split(delta: float) -> bool:
+	if _clock + delta >= split_time - 1e-6:
+		return true
+	var target := TargetInfo.player(get_tree())
+	return target.has_target and global_position.distance_to(target.position) <= split_distance
+
+
+## CLUSTER: gone, not exploded. `cluster_count` unpooled submunitions go into the container (this rocket's parent),
+## fanned across `cluster_fan_deg` and centred on the predicted point; `expired` follows with no blast.
+func _split() -> void:
+	if _done:
+		return
+	_mark_done()
+	var parent := get_parent()
+	if submunition_scene != null and parent != null:
+		var children: Array[EnemyRocket] = []
+		for i in maxi(cluster_count, 1):
+			children.append(submunition_scene.instantiate() as EnemyRocket)
+		var child_speed := children[0].launch_speed
+		var centre := _heading
+		var target := TargetInfo.player(get_tree())
+		if target.has_target:
+			var predicted := target.predicted_position(
+					global_position.distance_to(target.position) / maxf(child_speed, 1.0))
+			if predicted.distance_to(global_position) > 1e-3:
+				centre = (predicted - global_position).normalized()
+		var n := children.size()
+		for i in n:
+			var child := children[i]
+			var offset_deg := 0.0 if n == 1 else -cluster_fan_deg * 0.5 + cluster_fan_deg * float(i) / float(n - 1)
+			var dir := centre.rotated(deg_to_rad(offset_deg))
+			parent.add_child(child)
+			child.global_position = global_position
+			child.reset()
+			child.expired.connect(child.queue_free)
+			child.launch(dir, global_position + dir * 400.0, null)
+	_pop_here()
+	_end_after_overlaps()
 
 
 ## Lead pursuit with a turn cap: the intercept point, or the player's position `lead_max` ahead when the intercept
@@ -258,6 +360,8 @@ func _apply_exports() -> void:
 	(_hurt_shape.shape as CircleShape2D).radius = body_radius + 2.0
 	_lifetime.max_time = max_time
 	_lifetime.max_distance = max_distance
+	if _proximity_shape != null:
+		(_proximity_shape.shape as CircleShape2D).radius = trigger_radius
 
 
 func _on_hit_box_area_entered(area: Area2D) -> void:
@@ -337,6 +441,8 @@ func _mark_done() -> void:
 	_hurt_box.set_deferred("monitorable", false)
 	_hit_shape.set_deferred("disabled", true)
 	_hurt_shape.set_deferred("disabled", true)
+	if _proximity != null:
+		_proximity.set_deferred("monitoring", false)
 	# Keeps the backstop from emitting a second `expired` in the frame this life ended.
 	_lifetime.set_physics_process(false)
 
@@ -351,3 +457,8 @@ func _draw() -> void:
 	draw_line(Vector2(-r, r * 1.4), Vector2(r, r * 1.4), body_color.lightened(0.3), 2.0)
 	var tip := Color(1.0, 0.3, 0.15) if _armed else Color(0.6, 0.6, 0.65)
 	draw_circle(Vector2(0.0, -r * 1.2), r * 0.35, tip)
+	if _triggered:
+		# The warning: a 12 Hz blink and the blast ring, faint.
+		if fmod(_warning_clock * 12.0, 1.0) < 0.5:
+			draw_circle(Vector2.ZERO, r * 1.4, Color(1.0, 0.9, 0.3, 0.9))
+		draw_arc(Vector2.ZERO, blast_radius, 0.0, TAU, 40, Color(1.0, 0.3, 0.15, 0.35), 1.5)

@@ -1999,6 +1999,22 @@ phase's *as built* section, once written, before relying on them. (This section 
   counts `expired` must allow the 2-tick lag. `EnemyRocket._tick(delta)` is the hand-tick entry (tests turn the
   rocket's and its `ProjectileLifetime`'s physics process off). Fixture launcher: `tests/helpers/rocket_launcher_fixture.gd`.
   Gate time: GUT 177.5 → 180.0 s (+2.5 of 6.0), `test_enemy_rockets.gd` 2.3 s / 16 tests.
+- **t6 as built (Cluster Rocket, Submunition, Delayed Warhead).** Choices later tasks build on, beyond §2.8: (1) all
+  of it lives in `enemy_rocket.gd` (one script, `kind` + exports; no per-kind subclass): `@export_group("Cluster")`
+  (`split_distance` 260, `split_time` 2.0, `cluster_count` 4 in 3–5, `cluster_fan_deg` 36, `submunition_scene`) and
+  `@export_group("Proximity")` (`trigger_radius` 70, `prox_arm_seconds` 0.6, `warning_time` 0.4); `reset()` restores them.
+  (2) **A CLUSTER splits on the tick that *reaches* `split_time`** (`_clock + delta >= split_time`), before moving, so the
+  split point is where the previous tick left it; distance splits when the player is within `split_distance` at the
+  start of a tick (`<=`). (3) The parent's `_split()` is `_mark_done()` + children + pop + the same 2-tick-delayed
+  `expired` as a detonation, with **no `ContactBlast`**; the children are instantiated into the parent's own
+  `get_parent()` (the container), `reset()`, `expired -> queue_free`, `launch(dir, point, null)`. (4) The WARHEAD's trigger
+  is the `ProximityArea` poll (`get_overlapping_areas()`, layer 128) once the clock reaches `prox_arm_seconds`; it stops
+  dead (`_speed = 0`, `is_guiding()` false), `is_triggered()` is public, and it detonates when the warning clock reaches
+  `warning_time`. The trigger sees **any layer-128 hurtbox, allies included** (the Ph4 mine does the same). (5)
+  `EnemyRocketScenes` now maps CLUSTER / WARHEAD / SUBMUNITION; `pool_size_for` is unchanged (CLUSTER 3, WARHEAD 4);
+  SUBMUNITION is never pooled. The launcher fixture pools CLUSTER and WARHEAD too. (6) The Warhead's 240 px/s cruise
+  equals a shipped round speed, so `test_no_rocket_speed_is_in_the_round_speed_list` checks only its launch speed.
+  Gate time: GUT 180.0 → 182.1 s (+2.1 of 4.0), `test_enemy_rockets.gd` 5.0 s / 25 tests; 1660 → 1670 tests.
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |

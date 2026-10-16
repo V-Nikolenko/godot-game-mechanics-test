@@ -49,7 +49,7 @@ func _ready() -> void:
 	add_child(hurt_box)
 	hurt_box.received_damage.connect(func(damage: int) -> void: health.decrease(damage))
 
-	for kind: EnemyRocket.Kind in [EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT]:
+	for kind: EnemyRocket.Kind in [EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT, EnemyRocket.Kind.CLUSTER, EnemyRocket.Kind.WARHEAD]:
 		var pool := BulletPool.new()
 		pool.name = "Pool%d" % kind
 		pool.bullet_scene = EnemyRocketScenes.scene_for(kind)

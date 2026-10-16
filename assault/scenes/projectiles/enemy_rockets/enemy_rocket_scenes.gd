@@ -1,21 +1,31 @@
 ## EnemyRocketScenes - the enemy rocket family's scenes and pool sizing (the `EnemyOrdnanceScenes` shape).
-## See docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md §2.6. CLUSTER, WARHEAD and SUBMUNITION join in t6.
+## See docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md §2.6.
 class_name EnemyRocketScenes
 extends RefCounted
 
 const DUMB: PackedScene = preload("res://assault/scenes/projectiles/enemy_rockets/dumb_rocket.tscn")
 const PURSUIT: PackedScene = preload("res://assault/scenes/projectiles/enemy_rockets/pursuit_rocket.tscn")
+const CLUSTER: PackedScene = preload("res://assault/scenes/projectiles/enemy_rockets/cluster_rocket.tscn")
+const WARHEAD: PackedScene = preload("res://assault/scenes/projectiles/enemy_rockets/delayed_warhead.tscn")
+## Unpooled: only a CLUSTER rocket instantiates it, on its split, and it frees itself on `expired`.
+const SUBMUNITION: PackedScene = preload("res://assault/scenes/projectiles/enemy_rockets/submunition.tscn")
 
 
-## The scene for `kind`, or null for a kind not built yet.
+## The scene for `kind`, or null for an unknown kind.
 static func scene_for(kind: EnemyRocket.Kind) -> PackedScene:
 	match kind:
 		EnemyRocket.Kind.DUMB:
 			return DUMB
 		EnemyRocket.Kind.PURSUIT:
 			return PURSUIT
+		EnemyRocket.Kind.CLUSTER:
+			return CLUSTER
+		EnemyRocket.Kind.WARHEAD:
+			return WARHEAD
+		EnemyRocket.Kind.SUBMUNITION:
+			return SUBMUNITION
 		_:
-			push_error("EnemyRocketScenes: no scene for kind %d yet" % kind)
+			push_error("EnemyRocketScenes: no scene for kind %d" % kind)
 			return null
 
 
