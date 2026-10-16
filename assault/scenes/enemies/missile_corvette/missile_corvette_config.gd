@@ -70,3 +70,16 @@ extends ShipConfig
 @export_group("Rail")
 ## While a rail owns the corvette: a Dumb rocket DOWN every this many seconds.
 @export var rail_rocket_interval: float = 2.5
+
+@export_group("Idle")
+## Open Space hub only (epic §2.16; task t15). The corvette patrols a slow ring round its `patrol_anchor` until the
+## player comes within `perceive_radius`, and goes home once the player is further than `lose_radius` (px).
+## `lose_radius` sits above the largest corvette-player distance its own cycle opens
+## (`preferred_range + range_drift + range_tolerance` = 820), so the cycle itself never counts as losing the player.
+@export var perceive_radius: float = 720.0
+@export var lose_radius: float = 1500.0
+## The beat between perceiving the player and fighting (s).
+@export var notice_time: float = 0.35
+## The patrol ring's radius round `patrol_anchor` (px) and its angular speed (rad/s).
+@export var idle_radius: float = 150.0
+@export var idle_speed: float = 0.5

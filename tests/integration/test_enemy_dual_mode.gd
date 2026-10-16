@@ -475,6 +475,7 @@ const SUPPORT_SHIP_SCENE: PackedScene = \
 
 func _spawn_support_ship(harness, pos: Vector2) -> SupportShip:
 	var entity := SUPPORT_SHIP_SCENE.instantiate() as SupportShip
+	(entity.get_node("Brain") as SupportShipBrain).start_engaged = true  # pre-t15: predates the hub idle
 	entity.global_position = pos
 	harness.root.add_child(entity)
 	entity.set_physics_process(false)  # hand-ticked, same technique as the Bomber above

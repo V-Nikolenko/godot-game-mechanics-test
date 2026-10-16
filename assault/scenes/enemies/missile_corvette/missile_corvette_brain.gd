@@ -19,7 +19,12 @@
 ##   DISENGAGE  [DISENGAGE]  Assault only: the budget ran out. Release the corridor, curve away from the player toward
 ##                           the nearest corridor edge at `exit_speed`, freed once outside the projectile rect (the
 ##                           Bomber's exit). A started TELEGRAPH / SALVO finishes first (<= `attack_window()`).
-##   IDLE / NOTICING / RETURNING  reserved for t15 (the hub idle).
+##   IDLE       [SEARCH]     Open Space only (t15): a slow ring orbit of `idle_radius` round `patrol_anchor`; it never fires.
+##   NOTICING   [SEARCH]     a beat (`notice_time`): it stops and the nose turns to the player, then APPROACH.
+##   RETURNING  [REPOSITION] `arrive` back at `patrol_anchor`, then IDLE. Never interrupts a TELEGRAPH or a SALVO
+##                           (retried every tick). Hub idle (epic §2.16): `AnchorIdle` runs ahead of the phase dispatch on
+##                           the corvette-player distance; `lose_radius` is above `preferred_range + range_drift +
+##                           range_tolerance`, so the corvette's own arc never reads as losing the player.
 ##
 ## Attack gate (Assault): a TELEGRAPH starts only with `budget.remaining() >= attack_window() + ATTACK_GATE_MARGIN`
 ## (INF in Open Space), so a salvo it starts always ends inside its life.
@@ -57,6 +62,8 @@ const DUMB_SWAP_CHANCE := 0.25
 const SALVO_GLOW_FLOOR := 0.35
 ## `EnemyRocket.cruise_speed`'s script default, for a rocket scene that leaves it unset (px/s).
 const ROCKET_CRUISE_DEFAULT := 520.0
+## `idle_phase_offset` is drawn from ±this (rad).
+const MAX_IDLE_PHASE_OFFSET := 0.35
 
 ## Set by `missile_corvette.gd` before the first tick. A fresh default keeps a bare brain steppable.
 var config: MissileCorvetteConfig = MissileCorvetteConfig.new()
@@ -64,8 +71,15 @@ var config: MissileCorvetteConfig = MissileCorvetteConfig.new()
 var budget: EngagementBudget
 
 var phase: Phase = Phase.APPROACH
-## Test seam (the hub idle lands in t15): a spawned corvette starts already fighting. Assault ignores it.
+## Test seam: a spawned corvette starts already fighting, skipping the hub idle. Real hub spawns never set it. Assault
+## ignores it: `EngagementBudget.active` decides there.
 var start_engaged: bool = false
+## The hub idle's ring centre. `Vector2.INF` (unset) means "not set": `_start()` then defaults it to the spawn position.
+var patrol_anchor: Vector2 = Vector2.INF
+## Open Space only (`budget.active == false` and not `start_engaged`); null otherwise. Built once, in `_start()`.
+var anchor_idle: AnchorIdle
+## This corvette's offset on the idle ring (rad), drawn from `rng` when the idle starts (never for an engaged one).
+var idle_phase_offset: float = 0.0
 
 ## ±1: the way round the player the arc goes. Drawn on the first tick, flipped on every reversal.
 var orbit_dir: float = 1.0
@@ -107,7 +121,12 @@ func tick(delta: float) -> void:
 	if budget.update(delta) and not _expiry_seen:
 		_expiry_seen = true
 		_on_budget_expired()
+	if anchor_idle != null:
+		_tick_anchor_idle(delta)
 	match phase:
+		Phase.IDLE: _tick_idle()
+		Phase.NOTICING: _tick_noticing()
+		Phase.RETURNING: _tick_returning()
 		Phase.APPROACH: _tick_approach()
 		Phase.HOLD_ARC: _tick_hold_arc(delta)
 		Phase.TELEGRAPH: _tick_telegraph(delta)
@@ -136,6 +155,8 @@ func enter_phase(p: Phase) -> void:
 			_set_light(StateLight.State.ARMED)
 		Phase.DISENGAGE:
 			_enter_disengage()
+		Phase.IDLE, Phase.NOTICING, Phase.RETURNING:
+			_enter_calm(p)
 		_:
 			_set_light(StateLight.State.OFF)
 			_set_glow(0.0)
@@ -145,6 +166,7 @@ func enter_phase(p: Phase) -> void:
 ## `BaseEnemy.suspend_ai()`: a rail took the enemy over. The root's rail clock fires the fallback rocket.
 func on_suspended() -> void:
 	_burst.stop()
+	anchor_idle = null  # a rail owns the motion: no idle
 	_set_light(StateLight.State.OFF)
 	_set_glow(0.0)
 
@@ -196,13 +218,20 @@ func attack_window() -> float:
 func _start() -> void:
 	_started = true
 	budget = EngagementBudget.new(config.engage_seconds, get_tree())
+	if not patrol_anchor.is_finite():
+		patrol_anchor = actor.global_position
 	orbit_dir = 1.0 if rng.randf() < 0.5 else -1.0
 	salvo_cooldown = rng.randf_range(config.salvo_period_min, config.salvo_period_max)
 	_reversal_left = rng.randf_range(config.reversal_min, config.reversal_max)
 	_drift_period = rng.randf_range(DRIFT_PERIOD_MIN, DRIFT_PERIOD_MAX)
 	_drift_phase = 0.0 if rng.randf() < 0.5 else PI
+	if not budget.active and not start_engaged:
+		anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time, config.idle_radius)
+		idle_phase_offset = rng.randf_range(-MAX_IDLE_PHASE_OFFSET, MAX_IDLE_PHASE_OFFSET)
 	for kind: EnemyRocket.Kind in [EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT, EnemyRocket.Kind.CLUSTER, EnemyRocket.Kind.WARHEAD]:
 		_cruise[kind] = float(EnemyRocketScenes.export_of(kind, &"cruise_speed", ROCKET_CRUISE_DEFAULT))
+	if anchor_idle != null:
+		enter_phase(Phase.IDLE)
 
 
 ## The budget ran out: leave now, unless a salvo is being shown or fired, which finishes first.
@@ -212,6 +241,59 @@ func _on_budget_expired() -> void:
 		return
 	if phase != Phase.DISENGAGE:
 		enter_phase(Phase.DISENGAGE)
+
+
+# ── Hub idle (t15; epic §2.16) ────────────────────────────────────────────────────────────────────
+
+## The meta-state that decides whether the corvette is patrolling, noticing or fighting, run once a tick ahead of the
+## phase dispatch. A TELEGRAPH or a SALVO is never interrupted: the return is retried every tick until it has ended.
+func _tick_anchor_idle(delta: float) -> void:
+	var target := TargetInfo.player(get_tree())
+	match anchor_idle.update(delta, actor.global_position, target):
+		AnchorIdle.State.IDLE:
+			if phase != Phase.IDLE and not _is_committed():
+				enter_phase(Phase.IDLE)
+		AnchorIdle.State.NOTICING:
+			if phase != Phase.NOTICING and not _is_committed():
+				enter_phase(Phase.NOTICING)
+		AnchorIdle.State.COMBAT:
+			# From NOTICING only: any other phase is already fighting.
+			if phase == Phase.NOTICING:
+				enter_phase(Phase.APPROACH)
+		AnchorIdle.State.RETURNING:
+			if phase != Phase.RETURNING and not _is_committed():
+				enter_phase(Phase.RETURNING)
+
+
+func _is_committed() -> bool:
+	return phase == Phase.TELEGRAPH or phase == Phase.SALVO
+
+
+## IDLE, NOTICING and RETURNING entry: forget the attack in progress and the arc, so the next fight starts clean. A
+## corvette that has been calm does not fire the instant it notices the player: the salvo clock restarts on NOTICING.
+func _enter_calm(p: Phase) -> void:
+	_burst.stop()
+	_set_light(StateLight.State.OFF)
+	_set_glow(0.0)
+	_orbit_synced = false
+	_breaking = false
+	if p == Phase.NOTICING:
+		salvo_cooldown = rng.randf_range(config.salvo_period_min, config.salvo_period_max)
+
+
+func _tick_idle() -> void:
+	mover.orbit(patrol_anchor, config.idle_radius, idle_phase_offset + config.idle_speed * _phase_time, config.max_speed)
+
+
+func _tick_noticing() -> void:
+	mover.request_velocity(Vector2.ZERO)
+	var target := TargetInfo.player(get_tree())
+	if target.has_target:
+		mover.face_toward(target.position)
+
+
+func _tick_returning() -> void:
+	mover.arrive(patrol_anchor, config.max_speed)
 
 
 ## The attack gate: a salvo is started only when the budget leaves time to finish it (INF in Open Space).

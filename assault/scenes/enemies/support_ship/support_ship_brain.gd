@@ -17,7 +17,12 @@
 ##                           interpose point between ward and player (view-clamped in Assault, no jink, no evasion), and the
 ##                           ward's ProjectedShield is a 360° bubble. Ends at `escort_release_ratio` of health, a lost ward,
 ##                           `escort_safe_distance` from the player or `escort_max_seconds`; the ward's cooldown starts then.
-##   IDLE / NOTICING / RETURNING  reserved for t15.
+##   IDLE       [SEARCH]     Open Space only (t15): a slow ring orbit of `idle_radius` round `patrol_anchor`; no ward, the dish folded.
+##   NOTICING   [SEARCH]     a beat (`notice_time`): it stops and faces the player, then SEEK_WARD.
+##   RETURNING  [REPOSITION] `arrive` back at `patrol_anchor`, then IDLE. It has no protected phase, so nothing delays it (an
+##                           escort in progress ends and its bubble is undone). Hub idle (epic §2.16): `AnchorIdle` runs ahead of
+##                           the phase dispatch on the support-player distance; `lose_radius` is above `escort_safe_distance +
+##                           follow_distance + interpose_distance`, so its own cycle never reads as losing the player.
 ##
 ## The ward: chosen among candidates (`is_candidate`) by `threat_score`, held at least `min_ward_seconds`, then replaced
 ## only by a candidate scoring `ward_switch_margin` × as much. Claimed through the meta `CLAIM_META` so two supports never
@@ -72,6 +77,8 @@ const DEFAULT_HULL_RADIUS := 34.0
 const ESCORT_GAIN := 6.0
 ## The shield arc of a bubble (`EnemyShield.arc_deg` >= 360 covers every direction).
 const BUBBLE_ARC_DEG := 360.0
+## `idle_phase_offset` is drawn from ±this (rad).
+const MAX_IDLE_PHASE_OFFSET := 0.35
 
 ## Set by `support_ship.gd` before the first tick. A fresh default keeps a bare brain steppable.
 var config: SupportShipConfig = SupportShipConfig.new()
@@ -79,6 +86,15 @@ var config: SupportShipConfig = SupportShipConfig.new()
 var budget: EngagementBudget
 
 var phase: Phase = Phase.SEEK_WARD
+## Test seam: a spawned support starts already working, skipping the hub idle. Real hub spawns never set it. Assault
+## ignores it: `EngagementBudget.active` decides there.
+var start_engaged: bool = false
+## The hub idle's ring centre. `Vector2.INF` (unset) means "not set": `_start()` then defaults it to the spawn position.
+var patrol_anchor: Vector2 = Vector2.INF
+## Open Space only (`budget.active == false` and not `start_engaged`); null otherwise. Built once, in `_start()`.
+var anchor_idle: AnchorIdle
+## This support's offset on the idle ring (rad), drawn from `rng` when the idle starts (never for an engaged one).
+var idle_phase_offset: float = 0.0
 ## The ally being supported, or null. Read it through `has_ward()`; written only by `_set_ward()` (a test may assign it
 ## directly; `_set_ward(null)` tolerates a ward it never claimed or connected).
 var ward: BaseEnemy = null
@@ -136,6 +152,16 @@ func tick(delta: float) -> void:
 		_tick_support(delta)
 		return
 
+	if anchor_idle != null:
+		_tick_anchor_idle(delta)
+	if _is_calm():
+		match phase:
+			Phase.IDLE: _tick_idle()
+			Phase.NOTICING: _tick_noticing()
+			Phase.RETURNING: _tick_returning()
+		_tick_support(delta)
+		return
+
 	if ward != null and not _ward_still_valid():
 		_set_ward(null)
 		if phase == Phase.ESCORT:
@@ -178,6 +204,8 @@ func enter_phase(p: Phase) -> void:
 	_phase_time = 0.0
 	if p == Phase.DISENGAGE:
 		_enter_disengage()
+	elif p == Phase.IDLE or p == Phase.NOTICING or p == Phase.RETURNING:
+		_set_ward(null)
 	elif p == Phase.ESCORT:
 		_begin_escort()
 	phase_changed.emit(p)
@@ -185,6 +213,7 @@ func enter_phase(p: Phase) -> void:
 
 ## `BaseEnemy.suspend_ai()`: a rail took the enemy over. Drop the ward and fold the dish; there is no weapon.
 func on_suspended() -> void:
+	anchor_idle = null  # a rail owns the motion: no idle
 	_set_ward(null)
 	projector_open = 0.0
 	_repair_flash_left = 0.0
@@ -199,6 +228,53 @@ func _exit_tree() -> void:
 func _start() -> void:
 	_started = true
 	budget = EngagementBudget.new(config.engage_seconds, get_tree())
+	if not patrol_anchor.is_finite():
+		patrol_anchor = actor.global_position
+	if not budget.active and not start_engaged:
+		anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time, config.idle_radius)
+		idle_phase_offset = rng.randf_range(-MAX_IDLE_PHASE_OFFSET, MAX_IDLE_PHASE_OFFSET)
+		enter_phase(Phase.IDLE)
+
+
+# ── Hub idle (t15; epic §2.16) ────────────────────────────────────────────────────────────────────
+
+## The meta-state that decides whether the support is patrolling, noticing or working, run once a tick ahead of the phase
+## dispatch. It has no protected phase: every transition is taken at once.
+func _tick_anchor_idle(delta: float) -> void:
+	var target := TargetInfo.player(get_tree())
+	match anchor_idle.update(delta, actor.global_position, target):
+		AnchorIdle.State.IDLE:
+			if phase != Phase.IDLE:
+				enter_phase(Phase.IDLE)
+		AnchorIdle.State.NOTICING:
+			if phase != Phase.NOTICING:
+				enter_phase(Phase.NOTICING)
+		AnchorIdle.State.COMBAT:
+			# From NOTICING only: any other phase is already working.
+			if phase == Phase.NOTICING:
+				enter_phase(Phase.SEEK_WARD)
+		AnchorIdle.State.RETURNING:
+			if phase != Phase.RETURNING:
+				enter_phase(Phase.RETURNING)
+
+
+func _is_calm() -> bool:
+	return phase == Phase.IDLE or phase == Phase.NOTICING or phase == Phase.RETURNING
+
+
+func _tick_idle() -> void:
+	mover.orbit(patrol_anchor, config.idle_radius, idle_phase_offset + config.idle_speed * _phase_time, config.max_speed)
+
+
+func _tick_noticing() -> void:
+	mover.request_velocity(Vector2.ZERO)
+	var target := TargetInfo.player(get_tree())
+	if target.has_target:
+		mover.face_toward(target.position)
+
+
+func _tick_returning() -> void:
+	mover.arrive(patrol_anchor, config.max_speed)
 
 
 # ── The ward ────────────────────────────────────────────────────────────────────────────────────

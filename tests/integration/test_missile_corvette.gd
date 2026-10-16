@@ -1052,3 +1052,207 @@ func test_export_of_reads_a_rocket_scenes_export_without_instantiating_it() -> v
 		assert_eq(EnemyRocketScenes.max_time_of(kind), authored.max_time, "kind %d max_time" % kind)
 	assert_eq(float(EnemyRocketScenes.export_of(EnemyRocket.Kind.DUMB, &"cruise_speed", 0.0)), 520.0)
 	assert_eq(EnemyRocketScenes.export_of(EnemyRocket.Kind.DUMB, &"no_such_export", 7.0), 7.0, "the fallback")
+
+
+# ══ t15: hub idle (docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md §2.16; task cmv9szqmc002rqs2xfz6xg6v0) ═════════════
+#
+# Cold-start helpers: unlike `_seeded()` / `_spawn()` (which set `start_engaged = true`, so every row above keeps
+# assuming combat-from-spawn), these leave the brain to decide for itself - Open Space starts IDLE, Assault starts in
+# combat. The stub player is stationary unless a row moves it.
+
+const FAR_AWAY := Vector2(100000.0, 100000.0)
+const Phase := MissileCorvetteBrain.Phase
+
+
+func _cold(harness, pos: Vector2, player_pos: Vector2, anchor: Vector2 = Vector2.INF) -> MissileCorvette:
+	harness.player.global_position = player_pos
+	harness.player.velocity = Vector2.ZERO
+	var corvette := CORVETTE_SCENE.instantiate() as MissileCorvette
+	var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+	brain.rng_seed = 1717
+	brain.patrol_anchor = anchor
+	corvette.global_position = pos
+	harness.root.add_child(corvette)
+	corvette.set_physics_process(false)
+	corvette.set_process(false)
+	return corvette
+
+
+func _calm(p: int) -> bool:
+	return p == Phase.IDLE or p == Phase.NOTICING or p == Phase.RETURNING
+
+
+func test_the_idle_phases_are_appended_so_the_earlier_values_do_not_move() -> void:
+	assert_eq(Phase.APPROACH, 0)
+	assert_eq(Phase.DISENGAGE, 4)
+	assert_eq(Phase.IDLE, 5)
+	assert_eq(Phase.NOTICING, 6)
+	assert_eq(Phase.RETURNING, 7)
+
+
+## §2.16: lose_radius > preferred_range + range_drift + range_tolerance (620 + 80 + 120 = 820), read from the fields.
+func test_the_idle_radii_clear_the_largest_distance_its_own_cycle_opens() -> void:
+	var c: MissileCorvetteConfig = SHIPPED
+	assert_eq(c.perceive_radius, 720.0)
+	assert_eq(c.lose_radius, 1500.0)
+	assert_eq(c.notice_time, 0.35)
+	assert_eq(c.idle_radius, 150.0)
+	assert_eq(c.idle_speed, 0.5)
+	var opened := c.preferred_range + c.range_drift + c.range_tolerance
+	assert_eq(opened, 820.0)
+	assert_gt(c.lose_radius, opened, "lose_radius %.0f vs the distance the cycle opens %.0f" % [c.lose_radius, opened])
+	assert_gt(c.lose_radius, c.perceive_radius, "AnchorIdle's hysteresis margin")
+	assert_gte(c.perceive_radius, c.preferred_range, "it notices the player before it reaches its held range")
+
+
+func test_open_space_cold_start_begins_idle_and_assault_starts_in_combat() -> void:
+	var h = HARNESS.open_space()
+	add_child_autofree(h.root)
+	var corvette := _cold(h, Vector2(321.0, -654.0), FAR_AWAY)
+	_tick(corvette, DT)
+	var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+	assert_eq(brain.phase, Phase.IDLE, "Open Space starts on patrol")
+	assert_not_null(brain.anchor_idle)
+	assert_eq(brain.patrol_anchor, Vector2(321.0, -654.0), "an unset anchor defaults to the spawn position")
+	_retire_players()
+	var a = HARNESS.assault()
+	add_child_autofree(a.root)
+	var corvette2 := _cold(a, Vector2(640.0, -100.0), Vector2(640.0, 560.0))
+	_tick(corvette2, DT)
+	var brain2 := corvette2.get_node("Brain") as MissileCorvetteBrain
+	assert_eq(brain2.phase, Phase.APPROACH, "Assault always starts in combat")
+	assert_null(brain2.anchor_idle, "no AnchorIdle is built in Assault")
+
+
+func test_start_engaged_skips_the_idle() -> void:
+	var h = HARNESS.open_space()
+	add_child_autofree(h.root)
+	var corvette := _spawn(h, Vector2(100.0, 100.0))
+	h.player.global_position = FAR_AWAY
+	_tick(corvette, DT)
+	var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+	assert_null(brain.anchor_idle)
+	assert_false(_calm(brain.phase), "an engaged corvette never patrols")
+
+
+func test_idle_stays_on_its_ring_and_never_fires() -> void:
+	var h = HARNESS.open_space()
+	add_child_autofree(h.root)
+	var anchor := Vector2(500.0, -400.0)
+	var corvette := _cold(h, anchor + Vector2(20.0, 0.0), FAR_AWAY, anchor)
+	var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+	var worst := 0.0
+	for _i in int(20.0 / DT):
+		_step(corvette, h.player)
+		assert_eq(brain.phase, Phase.IDLE)
+		# the first 4 s are the run-up from the anchor to the ring (it overshoots by ~40 px at 240 px/s²)
+		if _i >= int(4.0 / DT):
+			worst = maxf(worst, corvette.global_position.distance_to(anchor))
+	assert_lte(worst, SHIPPED.idle_radius + 30.0, "worst %.1f px from the anchor once on the ring" % worst)
+	assert_eq(brain.salvos_fired, 0)
+	assert_eq(_rockets_in(h.root).size(), 0)
+
+
+func test_perceiving_the_player_notices_for_a_beat_then_fights() -> void:
+	var h = HARNESS.open_space()
+	add_child_autofree(h.root)
+	var corvette := _cold(h, Vector2(640.0, 0.0), Vector2(640.0, SHIPPED.perceive_radius - 100.0))
+	var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+	var seen: Array[int] = []
+	var noticing_ticks := 0
+	for _i in int(1.0 / DT):
+		_step(corvette, h.player)
+		if brain.phase == Phase.NOTICING:
+			noticing_ticks += 1
+		if seen.is_empty() or seen[-1] != brain.phase:
+			seen.append(brain.phase)
+	assert_eq(seen[0], Phase.NOTICING, "NOTICING for a beat first")
+	assert_false(_calm(seen[1]), "then the fight starts (phases %s)" % [seen])
+	assert_almost_eq(noticing_ticks * DT, SHIPPED.notice_time, 2.0 * DT, "for notice_time")
+
+
+func test_a_player_outside_perceive_radius_is_not_noticed() -> void:
+	var h = HARNESS.open_space()
+	add_child_autofree(h.root)
+	var corvette := _cold(h, Vector2(640.0, 0.0), Vector2(640.0, SHIPPED.perceive_radius + SHIPPED.idle_radius + 100.0))
+	var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+	for _i in int(3.0 / DT):
+		_step(corvette, h.player)
+		assert_eq(brain.phase, Phase.IDLE)
+
+
+func test_beyond_lose_radius_it_goes_home_and_can_fight_again() -> void:
+	var h = HARNESS.open_space()
+	add_child_autofree(h.root)
+	var anchor := Vector2.ZERO
+	var corvette := _cold(h, anchor + Vector2(100.0, 0.0), Vector2(100.0, SHIPPED.preferred_range), anchor)
+	var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+	for _i in int(3.0 / DT):
+		_step(corvette, h.player)
+		if not _calm(brain.phase):
+			break
+	assert_false(_calm(brain.phase), "it reached combat")
+	corvette.global_position += Vector2(0.0, 700.0)  # well away from home, so there is a way back to walk
+	h.player.global_position = FAR_AWAY
+	var saw_returning := false
+	var home := false
+	for _i in int(60.0 / DT):
+		_step(corvette, h.player)
+		saw_returning = saw_returning or brain.phase == Phase.RETURNING
+		if brain.phase == Phase.IDLE:
+			home = true
+			break
+	assert_true(saw_returning, "it passes through RETURNING on the way home")
+	assert_true(home, "and reaches IDLE")
+	h.player.global_position = corvette.global_position + Vector2(SHIPPED.perceive_radius - 50.0, 0.0)
+	for _i in int(1.0 / DT):
+		_step(corvette, h.player)
+	assert_false(_calm(brain.phase), "and fights again")
+
+
+## Hysteresis: a player between perceive_radius and lose_radius never sends a fighting corvette home.
+func test_a_player_between_the_radii_does_not_send_it_home() -> void:
+	var h = HARNESS.open_space()
+	add_child_autofree(h.root)
+	var corvette := _cold(h, Vector2.ZERO, Vector2(0.0, SHIPPED.preferred_range), Vector2.ZERO)
+	var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+	for _i in int(3.0 / DT):
+		_step(corvette, h.player)
+	assert_false(_calm(brain.phase), "sanity: in combat")
+	h.player.global_position = corvette.global_position + Vector2(SHIPPED.lose_radius - 50.0, 0.0)
+	for _i in int(2.0 / DT):
+		h.player.global_position = corvette.global_position + Vector2(SHIPPED.lose_radius - 50.0, 0.0)
+		_step(corvette, h.player)
+		assert_false(brain.phase == Phase.RETURNING, "inside lose_radius it keeps fighting")
+
+
+## RETURNING never interrupts a TELEGRAPH or a SALVO: the player vanishes beyond lose_radius, straight ahead of the
+## nose, and the whole salvo is delivered before the corvette turns for home.
+func test_returning_never_interrupts_a_telegraph_or_a_salvo(started_in: int = use_parameters([Phase.TELEGRAPH, Phase.SALVO])) -> void:
+	var h = HARNESS.open_space()
+	add_child_autofree(h.root)
+	var corvette := _cold(h, Vector2(640.0, 0.0), Vector2(640.0, SHIPPED.preferred_range), Vector2(640.0, 0.0))
+	var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+	for _i in int(3.0 / DT):
+		_step(corvette, h.player)
+	assert_false(_calm(brain.phase), "sanity: in combat")
+	brain.force_next_kind(EnemyRocket.Kind.DUMB)
+	brain.enter_phase(Phase.TELEGRAPH)
+	if started_in == Phase.SALVO:
+		brain.enter_phase(Phase.SALVO)
+	h.player.global_position = corvette.global_position + _nose(corvette) * (SHIPPED.lose_radius + 300.0)
+	var seen: Array[int] = []
+	for _i in int(6.0 / DT):
+		_tick(corvette, DT)
+		h.player.global_position = corvette.global_position + _nose(corvette) * (SHIPPED.lose_radius + 300.0)
+		if seen.is_empty() or seen[-1] != brain.phase:
+			seen.append(brain.phase)
+		if _calm(brain.phase):
+			break
+	assert_true(seen.has(Phase.SALVO), "the salvo is delivered (phases %s)" % [seen])
+	for i in seen.size() - 1:
+		assert_false((seen[i] == Phase.TELEGRAPH or seen[i] == Phase.SALVO) and seen[i + 1] == Phase.RETURNING,
+			"no cut-off attack (phases %s)" % [seen])
+	assert_eq(seen[-1], Phase.RETURNING, "and then it goes home (phases %s)" % [seen])
+	assert_eq(brain.salvos_fired, 1)
+	assert_eq(_rockets_in(h.root).size(), brain.salvo_size(EnemyRocket.Kind.DUMB), "every rocket of the salvo left")

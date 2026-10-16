@@ -38,6 +38,7 @@ const CONFIG_VALUES := {
 
 func _spawn(harness, pos: Vector2) -> SupportShip:
 	var ship := SUPPORT_SCENE.instantiate() as SupportShip
+	(ship.get_node("Brain") as SupportShipBrain).start_engaged = true  # pre-t15: rows assume combat from spawn
 	ship.global_position = pos
 	harness.root.add_child(ship)
 	ship.set_physics_process(false)  # hand-ticked
@@ -1623,3 +1624,179 @@ func test_escort_does_not_keep_a_budget_expiry_from_disengaging() -> void:
 	_ticks(ship, 60)
 	assert_eq(_escort_phase(ship), _phase("DISENGAGE"), "the budget is not deferred by an escort")
 	assert_eq(_projected(held).arc_deg if _projected(held) != null else 90.0, 90.0)
+
+
+# ══ t15: hub idle (docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md §2.16; task cmv9szqmc002rqs2xfz6xg6v0) ═════════════
+#
+# Cold-start helper: unlike `_spawn()` (which sets `start_engaged = true`), this leaves the brain to decide for itself -
+# Open Space starts IDLE, Assault starts in combat. The stub player is stationary unless a row moves it.
+
+const FAR_AWAY := Vector2(100000.0, 100000.0)
+const IdlePhase := SupportShipBrain.Phase
+
+
+func _cold(harness, pos: Vector2, player_pos: Vector2, anchor: Vector2 = Vector2.INF) -> SupportShip:
+	harness.player.global_position = player_pos
+	harness.player.velocity = Vector2.ZERO
+	var ship := SUPPORT_SCENE.instantiate() as SupportShip
+	var brain := _brain(ship)
+	brain.rng.seed = FOLLOW_SEED
+	brain.patrol_anchor = anchor
+	ship.global_position = pos
+	harness.root.add_child(ship)
+	ship.set_physics_process(false)
+	ship.set_process(false)
+	return ship
+
+
+func _calm(p: int) -> bool:
+	return p == IdlePhase.IDLE or p == IdlePhase.NOTICING or p == IdlePhase.RETURNING
+
+
+func test_the_idle_phases_are_appended_so_the_earlier_values_do_not_move() -> void:
+	assert_eq(IdlePhase.SEEK_WARD, 0)
+	assert_eq(IdlePhase.DISENGAGE, 3)
+	assert_eq(IdlePhase.IDLE, 4)
+	assert_eq(IdlePhase.NOTICING, 5)
+	assert_eq(IdlePhase.RETURNING, 6)
+
+
+## §2.16: lose_radius > escort_safe_distance + follow_distance + interpose_distance (700 + 150 + 90 = 940).
+func test_the_idle_radii_clear_the_largest_distance_its_own_cycle_opens() -> void:
+	var c: SupportShipConfig = SHIPPED
+	assert_eq(c.perceive_radius, 600.0)
+	assert_eq(c.lose_radius, 1300.0)
+	assert_eq(c.notice_time, 0.35)
+	assert_eq(c.idle_radius, 150.0)
+	assert_eq(c.idle_speed, 0.5)
+	var opened := c.escort_safe_distance + c.follow_distance + c.interpose_distance
+	assert_eq(opened, 940.0)
+	assert_gt(c.lose_radius, opened, "lose_radius %.0f vs the distance the cycle opens %.0f" % [c.lose_radius, opened])
+	assert_gt(c.lose_radius, c.perceive_radius, "AnchorIdle's hysteresis margin")
+
+
+func test_open_space_cold_start_begins_idle_and_assault_starts_in_combat() -> void:
+	var h = _harness("open_space")
+	var ship := _cold(h, Vector2(321.0, -654.0), FAR_AWAY)
+	_tick(ship, DT)
+	assert_eq(_brain(ship).phase, IdlePhase.IDLE, "Open Space starts on patrol")
+	assert_not_null(_brain(ship).anchor_idle)
+	assert_eq(_brain(ship).patrol_anchor, Vector2(321.0, -654.0), "an unset anchor defaults to the spawn position")
+	for node in get_tree().get_nodes_in_group(&"player"):
+		node.remove_from_group(&"player")
+	var a = _harness("assault")
+	var ship2 := _cold(a, Vector2(640.0, 100.0), Vector2(640.0, 560.0))
+	_tick(ship2, DT)
+	assert_eq(_brain(ship2).phase, IdlePhase.SEEK_WARD, "Assault always starts in combat")
+	assert_null(_brain(ship2).anchor_idle, "no AnchorIdle is built in Assault")
+
+
+func test_start_engaged_skips_the_idle() -> void:
+	var h = _harness("open_space")
+	var ship := _spawn(h, Vector2(100.0, 100.0))
+	h.player.global_position = FAR_AWAY
+	_tick(ship, DT)
+	assert_null(_brain(ship).anchor_idle)
+	assert_false(_calm(_brain(ship).phase), "an engaged support never patrols")
+
+
+func test_idle_stays_on_its_ring_and_picks_no_ward() -> void:
+	var h = _harness("open_space")
+	var anchor := Vector2(500.0, -400.0)
+	_candidate(h, anchor + Vector2(60.0, 0.0), 80)  # a candidate right beside it: patrolling ignores it
+	var ship := _cold(h, anchor + Vector2(20.0, 0.0), FAR_AWAY, anchor)
+	var worst := 0.0
+	for _i in int(20.0 / DT):
+		_tick(ship, DT)
+		assert_eq(_brain(ship).phase, IdlePhase.IDLE)
+		worst = maxf(worst, ship.global_position.distance_to(anchor))
+	assert_lte(worst, SHIPPED.idle_radius + 30.0, "worst %.1f px from the anchor" % worst)
+	assert_false(_brain(ship).has_ward(), "no ward while patrolling")
+
+
+func test_perceiving_the_player_notices_for_a_beat_then_fights() -> void:
+	var h = _harness("open_space")
+	var ship := _cold(h, Vector2(640.0, 0.0), Vector2(640.0, SHIPPED.perceive_radius - 100.0))
+	var seen: Array[int] = []
+	var noticing_ticks := 0
+	for _i in int(1.0 / DT):
+		_tick(ship, DT)
+		if _brain(ship).phase == IdlePhase.NOTICING:
+			noticing_ticks += 1
+		if seen.is_empty() or seen[-1] != _brain(ship).phase:
+			seen.append(_brain(ship).phase)
+	assert_eq(seen[0], IdlePhase.NOTICING, "NOTICING for a beat first")
+	assert_eq(seen[1], IdlePhase.SEEK_WARD, "then it looks for a ward (phases %s)" % [seen])
+	assert_almost_eq(noticing_ticks * DT, SHIPPED.notice_time, 2.0 * DT, "for notice_time")
+
+
+func test_a_player_outside_perceive_radius_is_not_noticed() -> void:
+	var h = _harness("open_space")
+	var ship := _cold(h, Vector2(640.0, 0.0), Vector2(640.0, SHIPPED.perceive_radius + SHIPPED.idle_radius + 100.0))
+	for _i in int(3.0 / DT):
+		_tick(ship, DT)
+		assert_eq(_brain(ship).phase, IdlePhase.IDLE)
+
+
+func test_after_noticing_it_takes_a_ward_beside_it() -> void:
+	var h = _harness("open_space")
+	var ally := _candidate(h, Vector2(700.0, 0.0), 80)
+	var ship := _cold(h, Vector2(640.0, 0.0), Vector2(640.0, SHIPPED.perceive_radius - 100.0))
+	_ticks(ship, int(1.0 / DT))
+	assert_eq(_brain(ship).phase, IdlePhase.FOLLOW)
+	assert_eq(_brain(ship).ward, ally)
+
+
+func test_beyond_lose_radius_it_goes_home_drops_its_ward_and_can_fight_again() -> void:
+	var h = _harness("open_space")
+	var anchor := Vector2.ZERO
+	var ally := _candidate(h, Vector2(200.0, 0.0), 80)
+	var ship := _cold(h, anchor + Vector2(100.0, 0.0), Vector2(100.0, 400.0), anchor)
+	_ticks(ship, int(2.0 / DT))
+	assert_eq(_brain(ship).phase, IdlePhase.FOLLOW, "sanity: in combat with a ward")
+	ship.global_position += Vector2(0.0, 700.0)  # well away from home, so there is a way back to walk
+	ally.global_position += Vector2(0.0, 700.0)
+	h.player.global_position = FAR_AWAY
+	var saw_returning := false
+	var home := false
+	for _i in int(60.0 / DT):
+		_tick(ship, DT)
+		saw_returning = saw_returning or _brain(ship).phase == IdlePhase.RETURNING
+		if _brain(ship).phase == IdlePhase.IDLE:
+			home = true
+			break
+	assert_true(saw_returning, "it passes through RETURNING on the way home")
+	assert_true(home, "and reaches IDLE")
+	assert_false(_brain(ship).has_ward(), "the ward was dropped")
+	assert_almost_eq((ship.get_node("Projector") as Node2D).scale.y, 0.0, 1e-3, "the dish is folded")
+	h.player.global_position = ship.global_position + Vector2(SHIPPED.perceive_radius - 50.0, 0.0)
+	_ticks(ship, int(1.0 / DT))
+	assert_false(_calm(_brain(ship).phase), "and fights again")
+
+
+## Hysteresis: a player between perceive_radius and lose_radius never sends a fighting support home.
+func test_a_player_between_the_radii_does_not_send_it_home() -> void:
+	var h = _harness("open_space")
+	_candidate(h, Vector2(60.0, 0.0), 80)
+	var ship := _cold(h, Vector2.ZERO, Vector2(0.0, 400.0), Vector2.ZERO)
+	_ticks(ship, int(2.0 / DT))
+	assert_false(_calm(_brain(ship).phase), "sanity: in combat")
+	for _i in int(2.0 / DT):
+		h.player.global_position = ship.global_position + Vector2(SHIPPED.lose_radius - 50.0, 0.0)
+		_tick(ship, DT)
+		assert_false(_brain(ship).phase == IdlePhase.RETURNING, "inside lose_radius it keeps fighting")
+
+
+## It has no protected phase: an escort in progress gives way to RETURNING the moment the player is lost.
+func test_returning_interrupts_nothing_not_even_an_escort() -> void:
+	var h = _harness("open_space")
+	var ally := _candidate(h, Vector2(0.0, 0.0), 80)
+	var ship := _cold(h, Vector2(60.0, -40.0), Vector2(0.0, 400.0), Vector2(560.0, -40.0))
+	_ticks(ship, int(1.0 / DT))
+	_set_hp(ally, 3)
+	_ticks(ship, 5)
+	assert_eq(_brain(ship).phase, IdlePhase.ESCORT, "sanity: escorting")
+	h.player.global_position = FAR_AWAY
+	_ticks(ship, 2)
+	assert_eq(_brain(ship).phase, IdlePhase.RETURNING, "no protected phase")
+	assert_false(_brain(ship).has_ward())

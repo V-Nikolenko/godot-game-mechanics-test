@@ -5,8 +5,7 @@
 
 > **Build state (Phase 5, in progress).** t10 built the **shell** (scene, flat config with every §2.11 field, contact profile NONE,
 > `can_be_repaired()` false, the Assault budget exit); t11 the **ward**: scored choice, claim, retarget, the soft anchor behind
-> the ward with jink and evasion, and the Assault view clamp; t12 the **repair pulse and projected shield**; t13 the **emergency escort**. Still to come: the real art with the
-> unfolding projector (t14), the hub idle (t15), the hub patrol (t16) and level 1 (t17).
+> the ward with jink and evasion, and the Assault view clamp; t12 the **repair pulse and projected shield**; t13 the **emergency escort**; t15 the **hub idle**. Still to come: the hub patrol (t16) and level 1 (t17).
 > Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.11–§2.15. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t10 as built", "t11 as built", "t12 as built", "t13 as built").
 
 ---
@@ -28,7 +27,7 @@
 ## Behaviour
 
 - **Brain:** `SupportShipBrain` (`Phase { SEEK_WARD, FOLLOW, ESCORT, DISENGAGE, IDLE, NOTICING, RETURNING }`, append-only; `enter_phase()` seam).
-  It plays SEEK_WARD, FOLLOW, ESCORT and DISENGAGE (IDLE / NOTICING / RETURNING are t15).
+  It plays SEEK_WARD, FOLLOW, ESCORT and DISENGAGE, plus the hub idle (t15, Open Space only): IDLE = a slow `idle_radius` ring orbit round `patrol_anchor` (default: the spawn point) with no ward and the dish folded; NOTICING = stop and face the player for `notice_time`, then SEEK_WARD; RETURNING = `arrive` at the anchor, then IDLE. `AnchorIdle` runs ahead of the phase dispatch on the support-player distance (`perceive_radius` 600, `lose_radius` 1300 > `escort_safe_distance + follow_distance + interpose_distance` = 940). It has no protected phase, so RETURNING interrupts anything, an ESCORT included (the bubble is undone, the ward dropped). `start_engaged` skips the idle (tests; Assault ignores it).
 - **Ward choice (t11):** a candidate is a `BaseEnemy` in group `enemies`, not a `SupportShip`, `is_ai_driven()` (brain + mover,
   not on a rail — so never the Gunship, Bonus Drone or Station), alive and not queued, `counts_toward_wave_clear`, `score_value`
   >= `ward_min_score` 20 (so never a Swarm Drone), within `ward_search_radius` 900, in Assault inside
@@ -82,7 +81,7 @@
 `SupportShipConfig` carries the whole plan §2.11 table in groups: Base (`max_health` 55, `collision_damage` 0, `score_value` 60),
 Movement, Follow, Ward (`ward_min_score` 20, `ward_search_radius` 900, `ward_keep_radius` 1100, `min_ward_seconds` 2.0,
 `ward_switch_margin` 1.3, `no_ward_grace` 1.5), Repair, Shield, Escort and Assault. t10 reads Movement, `follow_distance` and the
-Assault group; t11 reads Follow, Ward and the view fields; Repair, Shield and Escort are read by t12-t13. See `support_ship_config.gd` for the meaning of each.
+Assault group; t11 reads Follow, Ward and the view fields; Repair, Shield and Escort are read by t12-t13. The Idle group (`perceive_radius` 600, `lose_radius` 1300, `notice_time` 0.35, `idle_radius` 150, `idle_speed` 0.5) is read by t15. See `support_ship_config.gd` for the meaning of each.
 
 ---
 

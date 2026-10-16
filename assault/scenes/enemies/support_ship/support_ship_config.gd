@@ -86,3 +86,16 @@ extends ShipConfig
 @export var view_margin: float = 48.0
 @export var view_band: float = 24.0
 @export var ward_view_band: float = 120.0
+
+@export_group("Idle")
+## Open Space hub only (epic §2.16; task t15). The support patrols a slow ring round its `patrol_anchor` until the player
+## comes within `perceive_radius`, and goes home once the player is further than `lose_radius` (px). `lose_radius` sits
+## above the largest distance its own cycle opens (`escort_safe_distance + follow_distance + interpose_distance` = 940),
+## so the cycle itself never counts as losing the player.
+@export var perceive_radius: float = 600.0
+@export var lose_radius: float = 1300.0
+## The beat between perceiving the player and supporting (s).
+@export var notice_time: float = 0.35
+## The patrol ring's radius round `patrol_anchor` (px) and its angular speed (rad/s).
+@export var idle_radius: float = 150.0
+@export var idle_speed: float = 0.5

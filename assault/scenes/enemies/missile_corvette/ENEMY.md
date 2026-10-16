@@ -5,7 +5,7 @@
 
 > **Build state (Phase 5, in progress).** t7 built the **shell** (scene, config, four rocket pools, `fire()`, the launcher
 > answers, the rail fallback); t8 built the **fight** (HOLD_ARC, the launch cone, TELEGRAPH, SALVO, predicted aim points, the
-> Assault gate and deferral). t9 gave it its real hull sprite and the rocket sprites. Still to come: the hub idle (t15), the hub patrol (t16) and level 1 (t17).
+> Assault gate and deferral). t9 gave it its real hull sprite and the rocket sprites. t15 gave it the **hub idle** (IDLE / NOTICING / RETURNING). Still to come: the hub patrol (t16) and level 1 (t17).
 > Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.9–§2.10 (rockets: §2.6–§2.8); t8's own build plan
 > `docs/plans/cmv9szqlq001zqs2x6vi0nlxj/3-plan.md`. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t7 as built", "t8 as built").
 
@@ -29,6 +29,7 @@
 - **Brain:** `MissileCorvetteBrain` (`Phase { APPROACH, HOLD_ARC, TELEGRAPH, SALVO, DISENGAGE, IDLE, NOTICING, RETURNING }`, `enter_phase()` seam,
   `start_engaged` and `force_next_kind(kind)` test seams). The held range `R` (`held_range()`) is `preferred_range` 620 in Open Space and
   `assault_preferred_range` 460 in Assault.
+  - **Hub idle (t15, Open Space only):** `AnchorIdle` runs ahead of the phase dispatch. IDLE = a slow `idle_radius` ring orbit round `patrol_anchor` (default: the spawn point), no salvo; NOTICING = stop and face the player for `notice_time` (the salvo clock restarts), then APPROACH; RETURNING = `arrive` at the anchor then IDLE. RETURNING (and every other idle change) is **never taken during TELEGRAPH or SALVO**, it is retried each tick, so a started salvo always lands. `start_engaged` skips the idle (tests; Assault ignores it and builds no `AnchorIdle`).
   - **APPROACH:** `arrive` at `R` along the line to the player; HOLD_ARC once within `range_tolerance` 120 of it.
   - **HOLD_ARC (broad arcs):** `Steering.orbit` about the player at `R + drift` (drift = `range_drift` 80 × a sine of rng period 6–9 s, starting
     at 0), `orbit_angular_speed` 0.22 rad/s, `orbit_dir` ±1 flipped every rng 4–7 s. Inside `min_range` 380 it adds
@@ -71,6 +72,7 @@
 | `launch_cone_deg`, `salvo_telegraph`, `salvo_count`, `warhead_salvo_count`, `salvo_gap`, `salvo_period_min/max`, `salvo_lead_step`, `warhead_offset`, `warhead_range`, `cluster_min_range`, `pursuit_flee_speed` | 45, 0.7, 3, 2, 0.22, 4.0–5.0, 0.25, 90, 420, 700, 300 | Salvo: cone, telegraph, counts, gap, period, Dumb lead step, Warhead spread and range, Cluster range, Pursuit flee speed; the counts and `salvo_period_min` also size the pools |
 | `engage_seconds` / `exit_speed` | 7.0 / 280 | Assault budget and exit speed |
 | `rail_rocket_interval` | 2.5 s | Rail fallback rate |
+| `perceive_radius` / `lose_radius` / `notice_time` / `idle_radius` / `idle_speed` | 720 / 1500 / 0.35 / 150 / 0.5 | Hub idle (Open Space, t15): notice the player inside 720 px, go home beyond 1500 (> `preferred_range + range_drift + range_tolerance` = 820), the patrol ring |
 
 ---
 

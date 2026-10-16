@@ -2125,6 +2125,15 @@ phase's *as built* section, once written, before relying on them. (This section 
   far player and, in Assault, above `ward_view_band`, so `test_support_ship.gd::_telegraph_run` lays the sniper row out horizontally and
   pulls the player to 400 px once LOCK begins.
   `max_health` and flashes; damage fixtures through `health.decrease()` (`test_support_ship.gd::_repair_world`).
+- **t15 as built (hub idle for the Missile Corvette and the Support Ship).** Both brains follow the Ph4 Ram template (`AnchorIdle` ahead of
+  the phase dispatch, `patrol_anchor` defaulting to the spawn, `idle_phase_offset` from `rng`, `start_engaged`; Assault builds no
+  `AnchorIdle`; `on_suspended()` drops it). Choices later phases build on: (1) Corvette: IDLE / NOTICING / RETURNING are not entered from
+  TELEGRAPH or SALVO (retried each tick); every calm entry resets the arc (`_orbit_synced`, `_breaking`) and stops the burst, and NOTICING
+  redraws `salvo_cooldown`, so a corvette that has idled for a minute does not fire the instant it notices the player. (2) Support: no
+  protected phase; entering any calm phase calls `_set_ward(null)` (which ends an ESCORT's effects once), and the calm phases skip ward
+  selection entirely (`tick()` returns after `_tick_support`, which folds the dish). (3) Idle orbits run at the config's `max_speed`; the
+  corvette overshoots its ring by ~40 px for the first ~3 s when it starts on the anchor (240 px/s² acceleration), settling at 149 px, so the
+  ring row measures after 4 s. (4) Every earlier Open Space spawn in the suite sets `start_engaged` (`# pre-t15`); the real hub spawns are t16.
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |
