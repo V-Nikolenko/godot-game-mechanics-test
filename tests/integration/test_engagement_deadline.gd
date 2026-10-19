@@ -759,3 +759,86 @@ func test_no_enemies_cleared_section_spawns_a_bomber() -> void:
 		checked += 1
 		assert_false(_section_has_scene(section, WaveBuilder.BOMBER), "%s spawns a Bomber in its waves" % section.section_name)
 	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+
+
+# ── Phase 5 t17: the Missile Corvette and the Support Ship stay out of ENEMIES_CLEARED sections ────────────────────
+# (epic plan docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md §2.18; task plan docs/plans/cmv9szqmi002zqs2x3cd8f942/).
+#
+# A corvette's rockets persist after it leaves (`BulletPool.persist_after_owner_death`) and sit in the enemy container,
+# which `LevelDirector._wait_enemies_cleared` waits on, so a corvette in an ENEMIES_CLEARED section holds it open for
+# its whole life plus the last rocket's: `rel + engage_seconds + attack_window() + rocket max life + MARGIN`, before any
+# exit term. Both kinds go only into DURATION sections (deep_space, planet_approach).
+
+const CORVETTE_CONFIG: MissileCorvetteConfig = preload("res://assault/scenes/enemies/missile_corvette/missile_corvette_config.tres")
+
+
+## The longest any corvette rocket (or what it splits into) can stay in the container, read live from the rocket
+## scenes: each launchable kind's `max_time`, and a Cluster's `split_time` plus its submunitions' `max_time`.
+func _rocket_max_life() -> float:
+	var life := 0.0
+	for kind: EnemyRocket.Kind in [EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT, EnemyRocket.Kind.CLUSTER,
+			EnemyRocket.Kind.WARHEAD]:
+		life = maxf(life, EnemyRocketScenes.max_time_of(kind))
+	var split := float(EnemyRocketScenes.export_of(EnemyRocket.Kind.CLUSTER, &"split_time", 0.0))
+	return maxf(life, split + EnemyRocketScenes.max_time_of(EnemyRocket.Kind.SUBMUNITION))
+
+
+## `MissileCorvetteBrain.attack_window()` (salvo_telegraph + (larger salvo − 1) × salvo_gap), from the shipped config.
+func _corvette_deferral() -> float:
+	var c := CORVETTE_CONFIG
+	return c.salvo_telegraph + float(maxi(c.salvo_count, c.warhead_salvo_count) - 1) * c.salvo_gap
+
+
+func test_no_enemies_cleared_section_spawns_a_missile_corvette() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.MISSILE_CORVETTE),
+			"%s spawns a Missile Corvette in its waves" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+
+
+func test_no_enemies_cleared_section_spawns_a_support_ship() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.SUPPORT_SHIP),
+			"%s spawns a Support Ship in its waves" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+
+
+## Boundary for both rows above: the `_section_has_scene` they rest on does see either kind once it is in the last wave.
+func test_a_corvette_or_support_added_to_cloud_descent_is_seen() -> void:
+	for path: String in [WaveBuilder.MISSILE_CORVETTE, WaveBuilder.SUPPORT_SHIP]:
+		var section := _cloud_descent()
+		assert_false(_section_has_scene(section, path), "sanity: cloud_descent has no %s today" % path.get_file())
+		_add_to_last_wave(section, load(path) as PackedScene, 0.0)
+		assert_true(_section_has_scene(section, path), "a %s in cloud_descent's last wave must be seen" % path.get_file())
+
+
+## Boundary (acceptance criterion): a corvette added at delay 0 to cloud_descent's last wave computes more than its
+## 10 s net from the rocket term alone — `rel + engage_seconds + attack_window() + rocket max life + MARGIN`
+## (0 + 7.0 + 1.14 + 7.0 + 0.5 = 15.64 s), no exit term, so any exit only makes it later.
+func test_a_corvette_in_cloud_descents_last_wave_misses_the_timeout_on_the_rocket_term_alone() -> void:
+	assert_almost_eq(_corvette_deferral(), 1.14, 0.001, "sanity: 0.7 + 2 x 0.22")
+	assert_almost_eq(_rocket_max_life(), 7.0, 0.001, "sanity: the Delayed Warhead's 7.0 s is the longest rocket life")
+	var tail := CORVETTE_CONFIG.engage_seconds + _corvette_deferral() + _rocket_max_life() + MARGIN
+	var section := _cloud_descent()
+	_add_to_last_wave(section, load(WaveBuilder.MISSILE_CORVETTE) as PackedScene, 0.0)
+	var rows := _deadline_rows(section, WaveBuilder.MISSILE_CORVETTE, tail)
+	assert_eq(rows.size(), 1, "sanity: exactly the added corvette")
+	if rows.size() != 1:
+		return
+	var computed: float = rows[0]["computed"]
+	gut.p("cloud_descent + corvette at delay 0: %.2f s (rocket term alone) against %.1f s" % [computed,
+		section.enemies_cleared_timeout])
+	assert_almost_eq(computed, 15.64, 0.001, "0 + 7.0 + 1.14 + 7.0 + 0.5")
+	assert_true(rows[0]["over"], "the delay-0 corvette must be flagged")
+	assert_gt(computed, section.enemies_cleared_timeout, "%.2f s must exceed %.1f s" % [computed,
+		section.enemies_cleared_timeout])

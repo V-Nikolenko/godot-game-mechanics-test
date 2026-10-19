@@ -79,7 +79,7 @@ static func corridor_starts(corridor: Rect2, world: Rect2) -> Array:
 ## `start_set` is `starts()` when empty (t21's gates), or e.g. `corridor_starts()`.
 ## `host` is any node in the tree; the harness world is built under it and freed before this returns.
 static func worst_disengage(host: Node, scene: PackedScene, disengage_phase: int, speeds: Array[float],
-		cap: float, start_set: Array = []) -> Dictionary:
+		cap: float, start_set: Array = [], prepare: Callable = Callable()) -> Dictionary:
 	var h: RefCounted = HARNESS.assault()
 	host.add_child(h.root)
 	h.player.global_position = MID_VIEW + Vector2(0.0, 300.0)
@@ -89,7 +89,8 @@ static func worst_disengage(host: Node, scene: PackedScene, disengage_phase: int
 	var capped := 0
 	for start in (start_set if not start_set.is_empty() else starts()):
 		for speed in speeds:
-			var t := disengage_seconds(h.root, scene, disengage_phase, MID_VIEW + start[0], start[1] * speed, cap)
+			var t := disengage_seconds(h.root, scene, disengage_phase, MID_VIEW + start[0], start[1] * speed, cap,
+				prepare)
 			runs += 1
 			if t >= cap:
 				capped += 1
@@ -102,11 +103,13 @@ static func worst_disengage(host: Node, scene: PackedScene, disengage_phase: int
 
 ## Seconds from `enter_phase(disengage_phase)` until the ship queues itself for deletion (or `cap`).
 static func disengage_seconds(root: Node, scene: PackedScene, disengage_phase: int, pos: Vector2,
-		velocity: Vector2, cap: float) -> float:
+		velocity: Vector2, cap: float, prepare: Callable = Callable()) -> float:
 	var ship := scene.instantiate() as BaseEnemy
 	ship.global_position = pos
 	var brain := ship.get_node("Brain")
 	brain.set(&"rng_seed", 1)
+	if prepare.is_valid():
+		prepare.call(ship)
 	root.add_child(ship)
 	ship.set_physics_process(false)
 	ship.velocity = velocity

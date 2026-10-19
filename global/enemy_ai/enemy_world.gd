@@ -49,6 +49,19 @@ static func cull_rect(tree: SceneTree) -> Rect2:
 	return arena(tree).enemy_cull_rect()
 
 
+## True when there is a provider that answers enemy_view_rect().
+static func has_view_rect(tree: SceneTree) -> bool:
+	var provider := arena(tree)
+	return provider != null and provider.has_method("enemy_view_rect")
+
+
+## The rect the Assault camera shows right now, or an empty Rect2() with no provider.
+static func view_rect(tree: SceneTree) -> Rect2:
+	if not has_view_rect(tree):
+		return Rect2()
+	return arena(tree).enemy_view_rect()
+
+
 ## True when there is a provider that answers enemy_movement_constraint(). False for a provider
 ## that predates that method (added in a later task) as well as for no provider at all.
 static func has_movement_constraint(tree: SceneTree) -> bool:

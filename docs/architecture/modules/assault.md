@@ -38,6 +38,7 @@ assault/scenes/
 │   ├── enemy_bullet/            EnemyBullet (become_friendly() flips it to a player projectile)
 │   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell / rail_round .tscn + EnemyRounds + RailTrail (the sniper shot's fading trail)
 │   ├── enemy_ordnance/         EnemyOrdnance: gravity_bomb / mine / pursuit_bomb .tscn + EnemyOrdnanceScenes (persistent, shoot-down-able, not in `enemies`)
+│   ├── enemy_rockets/           EnemyRocket: dumb / pursuit / cluster / submunition / delayed_warhead .tscn + EnemyRocketScenes (Ph5; impact hurts enemies, blast hurts the player)
 │   ├── missiles/                homing/ + warhead/ missiles
 │   └── piercing_beam/           Sustained BEAM weapon projectile
 ├── systems/                     Mission orchestration (non-visual)
@@ -194,7 +195,7 @@ The mode-neutral enemy AI stack (`global/enemy_ai/`, see [global.md](global.md) 
 knows nothing about Assault by name. It finds the mode by duck type, through one group:
 `ArenaCamera` (`systems/arena_camera.gd`) joins `&"assault_arena"` in `_ready()`, **before** its
 early return for a missing `Level1Background` sibling — a bare `ArenaCamera` (e.g. in a test) is
-still a provider. It answers three methods, each with an `EnemyWorld.has_*` companion so "no
+still a provider. It answers four methods, each with an `EnemyWorld.has_*` companion so "no
 provider" and "a legitimately empty `Rect2()`" are never confused:
 
 - **`projectile_world_rect()`** — the corridor's visible rect grown by 64 px: x −164…1444, y
@@ -204,6 +205,10 @@ provider" and "a legitimately empty `Rect2()`" are never confused:
   `EngagementBudget` instead, so nothing in production reads it. It is kept behind `EnemyWorld.cull_rect()`.
 - **`enemy_movement_constraint()`** — a fresh `AssaultCorridorConstraint` instance per call (a
   constraint holds a per-enemy "entered" latch, so `EnemyMover.AUTO` must get its own).
+- **`enemy_view_rect()`** (Phase 5, t4) — what the camera shows *right now*: centre `global_position + offset`, size
+  `viewport size / zoom` (never `get_screen_center_position()`, which the pan limits distort). Read through
+  `EnemyWorld.has_view_rect(tree)` / `EnemyWorld.view_rect(tree)` (see [global.md](./global.md)). The corridor rect is the whole
+  1480 × 1480 pan range and does not stop a support from hiding above the screen; the Support Ship clamps into this one.
 
 **`AssaultCorridorConstraint`** (`systems/assault_corridor_constraint.gd`, extends
 `global/enemy_ai/movement_constraint.gd`'s identity `MovementConstraint`) is the velocity filter
@@ -276,6 +281,31 @@ sniper / ram / bomber spawns are off rails** (26 / 22 / 2) with their trigger, o
 (`test_level1_specialist_spawns.gd`); a rail still works and runs each one's rail fallback. **A Bomber must never spawn in
 an `ENEMIES_CLEARED` section** — its persisted ordnance would hold the section open (a boundary row in
 `test_engagement_deadline.gd`). Cloud Descent's 73.2 s ram is the tightest deadline row (9.60 s of 10 s).
+
+**Level 1 placement of the Phase 5 enemies (t17).** Three Missile Corvettes (deep_space 12.0 s, planet_approach 40.0 s and
+85.0 s) and two Support Ships (with deep_space's 26.0 s ram pair and planet_approach's 28.0 s ram triple), all AI-driven, all
+in DURATION sections, each added inside an existing wave so no other wave's effective trigger moves. Both kinds count as
+specialists in the frozen 2.5x gate (planet_approach peaks at 7 of 7.5, at 98.0 s) with corridor-measured exits, and are
+pinned in `EXPECTED_PH5` (`test_level1_specialist_spawns.gd`, which also checks that nothing from deep_space or
+planet_approach, a corvette's last rocket included, outlives the next `ENEMIES_CLEARED` section's last trigger). **Neither may
+spawn in an `ENEMIES_CLEARED` section**: a corvette's persistent rockets would hold it open (`test_engagement_deadline.gd`).
+The attack-in-budget rows replay only `rel - 1 s .. rel + engage + 2 s` of a section through a real `WaveManager`
+(`tests/helpers/level1_slice_replay.gd`).
+
+**The Missile Corvette (Phase 5, t7 shell, t8 fight, t9 art)** — see [missile_corvette/ENEMY.md](../../../assault/scenes/enemies/missile_corvette/ENEMY.md).
+A brain + flat-config enemy (`MissileCorvetteBrain`, `MissileCorvetteConfig`) that closes to its held range (460 px in Assault), circles the
+player on a broad reversing arc, and, only with the player inside its 45° nose cone, telegraphs (0.7 s) and fires a predicted salvo of
+`EnemyRocket`s from four persistent pools (`MissileCorvette.fire(kind, aim_point)`). A started telegraph or salvo is never cut off by the
+Assault budget (it defers, bounded by `attack_window()`), and `accepts_tow()` is false in both. Rockets are documented under
+*Projectiles & bullet pool* below and in [enemy-roster.md](../../enemy-roster.md).
+
+**The Support Ship (Phase 5, t10 shell, t11 ward, t12 repair and shield, t13 escort)** — see [support_ship/ENEMY.md](../../../assault/scenes/enemies/support_ship/ENEMY.md). An
+unarmed brain + flat-config enemy (`SupportShipBrain`, `SupportShipConfig`, contact profile NONE, `can_be_repaired()` false) with a
+folded `Projector` and a hidden world-space `Tether`. It picks a ward (the highest-threat AI-driven combatant worth >= 20, claimed
+so two supports never share one), re-picks the next tick when the ward dies or is railed, shadows it on a soft anchor behind it with
+jink and break-contact evasion, and in Assault is clamped into `EnemyWorld.view_rect()` and supports only while on screen
+(`is_supporting()`); it leaves on its Assault budget, or after `no_ward_grace` in view with no ward. It repairs its ward in pulses, projects a cyan `ProjectedShield` arc, and when the ward falls to 35 % HP escorts it (ESCORT: a tow away from the player that a telegraphing ward refuses, interposing, a 360° bubble).
+
 
 **The Fighter and the Gatling Interceptor are the Phase 3 AI shooters** — see
 [fighter/ENEMY.md](../../../assault/scenes/enemies/fighter/ENEMY.md) and
@@ -351,6 +381,7 @@ Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.g
   `enemy_bullet.tscn` until Ph17's audit. `test_enemy_bullet_lifetime.gd` sweeps every round: `max_distance` over the
   slowest speed any shooter fires it at (read from config fields, never typed) must fit `max_time`.
 - `enemy_ordnance/` — **enemy ordnance** (Ph4): `enemy_ordnance.gd` (`EnemyOrdnance`, an `Area2D` with a `Kind` enum), `gravity_bomb.tscn`, `mine.tscn`, `pursuit_bomb.tscn`, and `enemy_ordnance_scenes.gd` (`EnemyOrdnanceScenes`: the scene constants, `scene_for(kind)`, `pool_size_for(kind, cfg)`). Not an `EnemyBullet` and not a `BaseEnemy` (never in `enemies`, no score). `HurtBox` 512/96 + `Health` 1: any player bullet or rocket **defuses** it (a pop, no blast). A `ProximityArea` (mask 128) is polled each tick once armed; set off, it blinks for `warning_time` then detonates via `ContactBlast.spawn` into its parent. Gravity bomb: straight at `launch` speed, 16 s / 1800 px. Mine: ejected for 0.3 s, then stationary, fizzles (no blast) at `mine_life`, 10 s backstop. Pursuit bomb: steers at `turn_rate` for `steer_window`, then freezes its heading and accelerates, 10 s / 2400 px. One accumulated clock, no `Timer`. Pools should set `persist_after_owner_death`. Its speeds are NOT in `_every_shipped_enemy_bullet_speed()`; `test_enemy_bullet_lifetime.gd` has per-kind rows. Behaviour: `tests/integration/test_enemy_ordnance.gd`. The Bomber (`bomber/bomber.gd`, `Bomber.drop()`) takes it from three `persist_after_owner_death` pools; on a rail it drops a gravity bomb DOWN every `rail_bomb_interval`; off rails `BomberBrain` flies bombing runs (t10: mine walls placed by distance on an undamped lead, gravity / pursuit bombs on a damped one — `bomber/ENEMY.md`).
+- `enemy_rockets/` — **enemy rockets** (Ph5, t5 + t6): `enemy_rocket.gd` (`EnemyRocket`, an `Area2D`, `enum Kind { DUMB, PURSUIT, CLUSTER, WARHEAD, SUBMUNITION }`), `dumb_rocket.tscn`, `pursuit_rocket.tscn`, `cluster_rocket.tscn`, `submunition.tscn`, `delayed_warhead.tscn`, `enemy_rocket_scenes.gd` (`EnemyRocketScenes.scene_for(kind)`, `pool_size_for(kind, cfg)` = `count × ceil(max_time / cfg.salvo_period_min)`). A sibling of `EnemyOrdnance`; never in `enemies`, never scored. **Tuning lives in each scene's exports** (DUMB 140 → 520 px/s, no steering, 16 / 16, blast r 36, 4.0 s / 1800 px; PURSUIT 120 → 440 px/s, 1.6 rad/s for 3.0 s after a 0.35 s boost, `lead_max` 0.8, 18 / 18, blast r 40, 6.0 s / 2400 px). `launch(dir, aim_point, launcher)`: the launcher's `launch_velocity()` component along `dir` is inherited; the impact `HitBox` (layer 32 only, mask 640, `ROCKET`) opens only once the rocket is `rocket_clear_radius() + body_radius + arm_clearance` from the launcher's **current** position. The impact hurts enemies, ordnance, Ram plates (an armoured hull lets it through via `ArmorQuery`) and asteroids; the player and allies take only the `ContactBlast` (256). Shoot-down `HurtBox` 512 / mask 96, resolved by the rocket's own `area_entered`: a player bullet or missile and the rocket destroy each other with no blast (another rocket's HitBox and a `CONTACT` HitBox are ignored). PURSUIT steers by lead pursuit (`TargetInfo.intercept`, else `predicted_position(lead_max)`) capped by `Steering.turn_toward`; no player → no turn; after the window the heading freezes. **CLUSTER** (120 → 380 px/s, 0.7 rad/s, 16 / 16, 4.0 s / 1200 px) splits when the player is within `split_distance` 260 px or on the tick that reaches `split_time` 2.0 s: it emits `expired` with no blast and spawns `cluster_count` 4 unpooled, self-freeing **SUBMUNITION**s (520 px/s, 8 / 8, blast r 22, 1.2 s / 600 px) into its own container, fanned over `cluster_fan_deg` 36° about the predicted point, launched with `launcher = null`; shot first, it leaves nothing. **WARHEAD** (100 → 240 px/s, 0.6 rad/s, 12 impact / 30 blast, blast r 110, 7.0 s / 1300 px): after `prox_arm_seconds` 0.6 it polls its `ProximityArea` (r 70, mask 128), stops dead on the first hit, blinks 12 Hz for `warning_time` 0.4 and blasts; (trigger + blast) / warning = 450 ≥ 420. Nose-up (`rotation = heading.angle() + PI / 2`) with a `RocketTrail` and a `Sprite2D` body (t9: `enemy_rocket.png` for DUMB and PURSUIT - the latter tinted violet -, `enemy_cluster_rocket.png`, `enemy_submunition.png`, `enemy_warhead.png` with a code-glow `BlinkLight` sprite that glows dim in flight and blinks 12 Hz while the warhead counts down, all in `assault/assets/sprites/projectiles/`; the only `_draw()` left is the warhead's blast-radius ring); `RocketTrail.offset_behind` is per scene, at the tail of its art. Lifetime expiry is a fizzle (pop, no blast); after a detonation or shoot-down `expired` goes out two physics ticks later (see `_end_after_overlaps()`: an immediate pool recycle re-hit the enemy). Behaviour: `tests/integration/test_enemy_rockets.gd` (fixture launcher `tests/helpers/rocket_launcher_fixture.gd`); lifetime rows in `test_enemy_bullet_lifetime.gd`. The **Missile Corvette** (`enemies/missile_corvette/`, Ph5 t7) fires them from four `persist_after_owner_death` pools (3 / 6 / 3 / 4) via `MissileCorvette.fire(kind, aim_point)`, which sets no rocket field and answers `launch_velocity()` / `rocket_clear_radius()` (40); shell and fight (t8: HOLD_ARC broad arc, 45° launch cone, TELEGRAPH / SALVO with predicted aim points per kind) in `tests/integration/test_missile_corvette.gd` — `missile_corvette/ENEMY.md`. `EnemyRocketScenes.export_of(kind, property, fallback)` reads any rocket scene export without instantiating it (the corvette reads `cruise_speed` for its intercepts).
 - `missiles/` — `homing/` and `warhead/` secondary munitions fired by `RocketState`.
 - `piercing_beam/` — the sustained beam projectile for the BEAM weapon behavior.
 
@@ -456,7 +487,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `razor_drone/razor_drone_brain.gd`). Roster: bomber, bonus_drone, razor_drone,
-gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
+missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).

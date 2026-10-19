@@ -436,6 +436,76 @@ func test_bomber_disengage_frees_it_in_assault_only(mode: String = use_parameter
 		"%s: the Bomber is freed by its budget in Assault and never in Open Space" % mode)
 
 
+
+# ── The Missile Corvette (Phase 5, t7) ───────────────────────────────────────────────────────────
+
+const MISSILE_CORVETTE_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn")
+
+
+func _spawn_missile_corvette(harness, pos: Vector2) -> MissileCorvette:
+	var entity := MISSILE_CORVETTE_SCENE.instantiate() as MissileCorvette
+	(entity.get_node("Brain") as MissileCorvetteBrain).start_engaged = true  # pre-t15: predates the hub idle
+	entity.global_position = pos
+	harness.root.add_child(entity)
+	entity.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	entity.set_process(false)
+	return entity
+
+
+## Spawns and moves in both harnesses: from far away it closes on the player in Open Space and in Assault.
+func test_missile_corvette_closes_on_the_player_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 760.0)
+	var corvette := _spawn_missile_corvette(harness, Vector2(640.0, 60.0))
+	var start_distance := corvette.global_position.distance_to(harness.player.global_position)
+	for _i in 60:
+		_tick(corvette, DT)
+	assert_gt(corvette.velocity.length(), 0.0, "%s: it is moving" % mode)
+	assert_lt(corvette.global_position.distance_to(harness.player.global_position), start_distance,
+		"%s: it closed on the player" % mode)
+	assert_false(corvette.is_queued_for_deletion())
+
+# ── The Support Ship (Phase 5, t10) ──────────────────────────────────────────────────────────────
+
+const SUPPORT_SHIP_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/support_ship/support_ship.tscn")
+
+
+func _spawn_support_ship(harness, pos: Vector2) -> SupportShip:
+	var entity := SUPPORT_SHIP_SCENE.instantiate() as SupportShip
+	(entity.get_node("Brain") as SupportShipBrain).start_engaged = true  # pre-t15: predates the hub idle
+	entity.global_position = pos
+	harness.root.add_child(entity)
+	entity.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	entity.set_process(false)
+	return entity
+
+
+## Spawns and works in both harnesses: with a ward in the world (an AI-driven ally worth >= ward_min_score) it takes up
+## the soft anchor behind it, unarmed (t11).
+func test_support_ship_holds_near_an_ally_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 760.0)
+	var ally := FIXTURE_ENEMY.instantiate() as BaseEnemy
+	ally.global_position = Vector2(640.0, 200.0)
+	harness.root.add_child(ally)
+	ally.set_physics_process(false)
+	ally.add_to_group("enemies")
+	ally.score_value = 25  # a ward: AI-driven and >= ward_min_score
+	var support := _spawn_support_ship(harness, Vector2(640.0, 560.0))
+	for _i in 300:
+		_tick(support, DT)
+	var brain := support.get_node("Brain") as SupportShipBrain
+	assert_eq(brain.ward, ally, "%s: the ally is its ward" % mode)
+	assert_lt(support.global_position.distance_to(brain.anchor), 60.0, "%s: on the soft anchor" % mode)
+	assert_almost_eq(support.global_position.distance_to(ally.global_position), Vector2(150.0, 40.0).length(),
+		60.0, "%s: held behind the ward" % mode)
+	assert_eq(support.contact_hit_box.damage, 0, "%s: harmless to touch" % mode)
+	assert_false(support.is_queued_for_deletion())
+
 # ── The Sniper (Phase 4, t12) ────────────────────────────────────────────────────────────────────
 
 const SNIPER_SCENE: PackedScene = \

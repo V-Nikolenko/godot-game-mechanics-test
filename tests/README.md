@@ -411,6 +411,103 @@ see it). It now measures its deadline with `Time.get_ticks_msec()` and creates n
 `integration/test_level_director_polling.gd` test 3 is the regression test for that; it amplifies to
 100 polls because a single stranded timer is one object against the engine's own drift.
 
+## Gate time
+
+The harness kills verification at about **300 s wall clock** for import + boot + GUT together, and up to
+~38 s of that was overhead (harness, import, boot) on the Phase 4 machine. So **GUT time must stay
+≤ 240 s after every task**. [`scripts/gate-time.sh`](../scripts/gate-time.sh) runs the three gate steps exactly as
+`/agent/verify.sh` does and prints each step's wall time, GUT's own `Time`, the test count and the 15 slowest
+files (summed testcase time from `-gjunit_xml_file`). Run it before and after any task that adds a test that
+awaits or loops, and report both numbers.
+
+**Rules (the only ways time is cut — never by lowering a tick count, duration, sample count or start grid, never by
+widening a bound, never by removing an assertion):**
+
+1. **A test that awaits real physics runs on the 8× clock.** `Engine.time_scale`, `physics_ticks_per_second` and
+   `max_physics_steps_per_frame` are scaled together, so a physics tick stays 1/60 game-second; the originals are
+   captured first and restored in `after_each`. Copy the `_scale_clock()` / `_restore_clock()` pair from
+   `integration/test_level1_drone_exit.gd`. Game time is still summed physics delta. One idle frame at 8× is about
+   0.13 game-seconds, so a row that compares against a fixed tolerance tighter than that (a wave's trigger time within
+   0.1 s) stays at a lower multiplier rather than widening the tolerance (`test_waves_trigger_on_the_shipped_schedule`
+   runs at 4×; `test_level1_specialist_exit.gd` instead derives its tolerance from the largest idle delta it saw).
+2. **A hand-ticked loop that replays the same scenario in several tests computes it once** (`before_all`, or a memoised
+   helper keyed by its inputs) and every test asserts on the shared log.
+3. **Drop per-tick bookkeeping no assertion reads.** In a 3000-tick × 168-layout loop a per-tick `get_node()` or an
+   Object-keyed `Dictionary` is measurable.
+
+**Before / after (2026-10-15, dev container, warm import cache, `scripts/gate-time.sh`):**
+
+| | Before (`7916662`) | After | Change |
+|---|---|---|---|
+| import | 4.7 s | 4.7 s | |
+| boot | 0.9 s | 1.0 s | |
+| **GUT `Time`** | **253.4 s** | **176.9 s** | **−76.5 s** (wall 257.5 → 181.0) |
+| tests / scripts / asserts | 1593 / 126 / 68619 | 1593 / 126 / 68619 | unchanged |
+
+| File | Before | After | Means |
+|---|---|---|---|
+| `test_level1_fighter_fire_density.gd` | 60.7 s | 32.3 s | 4× → 8× for the three measured runs; the schedule row stays 4× |
+| `test_level1_fighter_exit.gd` | 25.6 s | 3.3 s | 1× → 8× |
+| `test_ram_corvette.gd` | 18.6 s | 2.7 s | 1× → 8× (all 56 rows; the hand-ticked ones are unaffected) |
+| `test_level1_drone_exit.gd` | 9.3 s | 1.9 s | 1× → 8× |
+| `test_fighter_squad.gd` | 64.6 s | 63.0 s | rule 3 only: see below |
+
+`test_fighter_squad.gd` has nothing to compute once: 58.9 s of its 64.6 s is one test,
+`test_members_never_come_within_two_hull_radii`, which runs 168 *distinct* layouts (2 modes × V3/W5 × 7 players × 6
+offsets), not a replay; the other 16 tests cost 5.7 s together. 53.6 s of the sweep is the fighters' own
+`_physics_process` (186 346 ticks, ~290 µs for a four-fighter tick), which is code under test. Only the loop's
+bookkeeping was trimmed (index arrays and cached `Brain` / pool nodes instead of per-tick `get_node()` and
+Object-keyed dictionaries), which saved ~1.7 s with identical results (worst separation 69.3 / 67.4 px, worst
+distance to the player 109.3 / 121.9 px, 0 / 7 attackers held, as before).
+
+**Measured values the 8× clock moved** (all still inside the asserted bound; no bound was changed; the runs are
+seeded but the idle-frame / physics-tick interleave shifts a spawn by a frame, so these also vary run to run):
+
+| Row | Value | Before (1×/4×) | After (8×) | Asserted bound |
+|---|---|---|---|---|
+| `test_level1_fighter_exit` | container empty after `waves_complete` | 8.18 s (docs: 9.07 s) | 8.15 – 9.15 s over 4 runs | < 10.0 s |
+| `test_level1_fighter_exit` | last fighter left after `waves_complete` | 4.80 s | 4.48 – 4.80 s | < 10.0 s |
+| `test_level1_drone_exit` | last wave cleared | 8.28 s | 8.62 s | < 10.0 s |
+| `fire_density` deep_space | peak shots / 2 s window | 10.00 | 10.00 | ≤ 39.06 |
+| `fire_density` planet_approach | peak shots / 2 s window | 8.50 | 6.50 – 7.00 | ≤ 41.67 |
+| `fire_density` cloud_descent | peak shots / 2 s window | 8.50 | 10.00 | ≤ 18.75 |
+
+**The epic's budget (Enemy rework phase 5, plan §4.3):** the 18 tasks add 56.5 s of GUT time in total, so this task
+had to bring GUT to ≤ 183 s first (176.9 s). Allotments in new GUT seconds: t2 3 · t3 2 · t4 0.5 · t5 6 · t6 4 ·
+t7 3 · t8 5 · t9 0.5 · t10 2 · t11 4 · t12 4 · t13 3 · t14 0.5 · t15 2 · t16 2 · t17 15 · t18 0. A task over its
+allotment first converts rows to hand-ticked form or shares a replay; it never cuts an assertion. A real-physics case
+on the 8× clock costs ≈ 0.25–0.4 s, a hand-ticked dual-mode case ≈ 0.02–0.06 s, a whole-section `WaveManager` replay
+at 8× ≈ 5 s.
+
+**Phase 5 per task (GUT `Time`, `scripts/gate-time.sh`; "-" = the task's report did not record a before / after pair):**
+
+| Task | Allotment | GUT before → after | Note |
+|---|---|---|---|
+| t1 gate room | frees ≥ 70 s | 253.4 → 176.9 s | the table above |
+| t2 enemy shields | 3.0 s | 177.6 → 176.9 s | three files ≈ 1.4 s standalone, inside run noise |
+| t3 repair / tow | 2.0 s | - | |
+| t4 view rect | 0.5 s | - | |
+| t5 Dumb + Pursuit rockets | 6.0 s | 177.5 → 180.0 s | `test_enemy_rockets.gd` 2.3 s |
+| t6 Cluster + Warhead | 4.0 s | 180.0 → 182.1 s | `test_enemy_rockets.gd` 5.0 s / 25 tests |
+| t7 corvette shell | 3.0 s | - | |
+| t8 corvette fight | 5.0 s | 182.9 → 183.3 s | `test_missile_corvette.gd` 37 tests in ~1.1 s |
+| t9 art | 0.5 s | 183.3 → 183.25 s | ~1 s of new rows |
+| t10-t13 Support Ship | 2.0 / 4.0 / 4.0 / 3.0 s | - (183.3 → 184.4 s across the four) | |
+| t14 art | 0.5 s | 184.4 → 185.4 s | no new tests; noise |
+| t15 hub idle | 2.0 s | 185.4 → 185.5 s | |
+| t16 hub placement | 2.0 s | 185.5 → 185.4 s | the patrol file 0.2 → 1.3 s |
+| t17 level 1 placement | 15.0 s | 186.0 → 201.8 s full suite | +12.2 s on the four affected files (the rest is `test_fighter_squad.gd` varying 63-66 s run to run) |
+| t18 docs | 0 s | unchanged | docs only |
+
+Final GUT time is about 198-202 s against the 240 s ceiling; `test_fighter_squad.gd`'s 3 s run-to-run spread makes any single
+before / after delta noisy, so compare the affected files, not the total.
+
+**Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
+`tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition
+and settles every spawn timer before freeing the world), `tests/helpers/fixture_enemy_unrepairable.gd` (`can_be_repaired()` false),
+and `SpecialistExitProbe`'s optional `prepare` callable. A rocket's `expired` goes out two physics ticks after a detonation, so a
+test that counts `expired` or recycles a pool must wait them.
+
 ## These are characterization tests
 
 They pin down what the code does **today**, bugs included. A test that documents surprising

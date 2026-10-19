@@ -33,7 +33,7 @@
 ##
 ## ── Time ─────────────────────────────────────────────────────────────────────────────────────
 ##
-## Game time is summed physics delta, never wall clock. The run is sped up 4x with the physics step
+## Game time is summed physics delta, never wall clock. The run is sped up 8x with the physics step
 ## kept at 1/60 game-second: `Engine.time_scale`, `physics_ticks_per_second` and
 ## `max_physics_steps_per_frame` are scaled together, and the captured originals are restored at the
 ## end of the run AND in `after_each`, so a run that breaks off cannot leak a fast clock into the
@@ -52,12 +52,15 @@ const _GATLING_CONFIG: GatlingInterceptorConfig = \
 
 const _WINDOW := 2.0
 const _RATIO := 1.25
-const _SPEEDUP := 4
+const _SPEEDUP := 8
+## The schedule row keeps its 0.1 s tolerance (`_TRIGGER_TOLERANCE`), and one idle frame at 8x is ~0.13 s: it is
+## only 10 s of game time, so it stays at 4x rather than widening the bound.
+const _SCHEDULE_SPEEDUP := 4
 ## Non-zero: an `rng_seed` of 0 means "randomize".
 const _SEED_BASE := 1601
 ## Run cap past the last spawn's worst-case lifetime: room for the exits to be observed.
 const _TAIL := 5.0
-## How late a wave may trigger against the shipped schedule (idle-frame granularity at 4x).
+## How late a wave may trigger against the shipped schedule (idle-frame granularity at 8x).
 const _TRIGGER_TOLERANCE := 0.1
 
 var _container: Node2D
@@ -80,11 +83,13 @@ var _saved_time_scale: float = 1.0
 var _saved_ticks: int = 60
 var _saved_max_steps: int = 8
 var _clock_scaled: bool = false
+var _speedup: int = _SPEEDUP
 
 
 func before_each() -> void:
 	_t = 0.0
 	_recording = true
+	_speedup = _SPEEDUP
 	_spawned = 0
 	_waves_done = false
 	_shot_times = []
@@ -104,9 +109,9 @@ func _scale_clock() -> void:
 	_saved_ticks = Engine.physics_ticks_per_second
 	_saved_max_steps = Engine.max_physics_steps_per_frame
 	_clock_scaled = true
-	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
-	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
-	Engine.time_scale = _saved_time_scale * _SPEEDUP
+	Engine.physics_ticks_per_second = _saved_ticks * _speedup
+	Engine.max_physics_steps_per_frame = _saved_max_steps * _speedup
+	Engine.time_scale = _saved_time_scale * _speedup
 
 
 func _restore_clock() -> void:
@@ -335,6 +340,7 @@ func test_waves_trigger_on_the_shipped_schedule() -> void:
 	harness.root.add_child(_wave_manager)
 	_wave_manager.wave_triggered.connect(_on_wave_triggered)
 
+	_speedup = _SCHEDULE_SPEEDUP
 	await _start(waves)
 	const RUN := 10.0
 	while _t < RUN:

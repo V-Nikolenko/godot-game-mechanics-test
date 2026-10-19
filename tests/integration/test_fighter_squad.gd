@@ -479,68 +479,86 @@ func _cycle(mode: String, form_name: String, player_pos: Vector2, at: Vector2) -
 	var lead: Fighter = fighters[_index_of_role(fighters, R.LEAD)]
 	var res := {"hull": hull, "sep": INF, "sep_note": "", "near": INF, "breaches": [], "silent_runners": [],
 		"silent_held": 0, "window_seen": false, "lead_runs": 0, "rears": 0, "rears_done": 0}
-	var shots := {}
-	var ran := {}
-	var was_hold := {}
-	var was_phase := {}
-	var attackers: Array[Fighter] = []
+	# Per-fighter state is held in arrays indexed by spawn order, and the nodes the loop reads every tick (brain,
+	# bullet pools) are looked up once: this loop runs ~3000 ticks x 168 layouts, and a per-tick `get_node()` or
+	# Dictionary-keyed-by-Object lookup was the bulk of its cost. Same reads, same order, same values.
+	var n := fighters.size()
+	var brains: Array[FighterBrain] = []
+	var pools: Array[Array] = []
+	var shots: Array[int] = []
+	var ran: Array[bool] = []
+	var was_hold: Array[bool] = []
+	var was_phase: Array[int] = []
+	var attackers: Array[int] = []
 	var lead_runs := 0
 	var rears_done := {}
 	var all_dry := false
-	for f in fighters:
+	for i in n:
+		var f := fighters[i]
 		if squad.role_of(f) == R.REAR:
 			res.rears += 1
-		shots[f] = 0
-		ran[f] = false
-		was_hold[f] = false
-		was_phase[f] = -1
+		brains.append(_brain(f))
+		pools.append([f.get_node("AimedPool"), f.get_node("ForwardPool")])
+		shots.append(0)
+		ran.append(false)
+		was_hold.append(false)
+		was_phase.append(-1)
 	var t := 0.0
 	for _i in int(round(50.0 / DT)):
 		for f in fighters:
 			if _alive(f):
 				_tick(f)
 		t += DT
-		var live: Array[Fighter] = []
-		for f in fighters:
+		var live: Array[int] = []
+		var live_pos := PackedVector2Array()
+		for i in n:
+			var f := fighters[i]
 			if not _alive(f):
 				continue
-			live.append(f)
-			var brain := _brain(f)
-			shots[f] += _take_shots(f)
-			if brain.phase == P.RUN_IN and was_phase[f] != P.RUN_IN:
-				ran[f] = true
-				if not was_hold[f]:
+			live.append(i)
+			var pos := f.global_position
+			live_pos.append(pos)
+			var brain := brains[i]
+			var phase := brain.phase
+			for pool: BulletPool in pools[i]:
+				if not pool._active.is_empty():
+					for bullet in pool._active.duplicate():
+						shots[i] += 1
+						pool._recycle(bullet)
+			if phase == P.RUN_IN and was_phase[i] != P.RUN_IN:
+				ran[i] = true
+				if not was_hold[i]:
 					res.breaches.append("%.2f %s" % [t, R.keys()[squad.role_of(f)]])
 				if f == lead:
 					lead_runs += 1
 					all_dry = all_dry or rears_done.size() >= res.rears
-			if brain.pass_role == R.REAR and was_phase[f] == P.TURN and brain.phase != P.TURN:
+			if brain.pass_role == R.REAR and was_phase[i] == P.TURN and phase != P.TURN:
 				rears_done[f] = true  # the dry pass is over
-			if brain.phase != P.DISENGAGE:
-				res.near = minf(res.near, f.global_position.distance_to(player.global_position))
-			was_hold[f] = brain.is_holding()
-			was_phase[f] = brain.phase
+			if phase != P.DISENGAGE:
+				res.near = minf(res.near, pos.distance_to(player.global_position))
+			was_hold[i] = brain.is_holding()
+			was_phase[i] = phase
 		if squad.attack_window_open and not res.window_seen:
 			res.window_seen = true
-			for f in live:
-				if squad.role_of(f) != R.REAR:
-					attackers.append(f)
+			for i in live:
+				if squad.role_of(fighters[i]) != R.REAR:
+					attackers.append(i)
 		if res.window_seen:
 			for a in live.size():
 				for b in range(a + 1, live.size()):
-					var d := live[a].global_position.distance_to(live[b].global_position)
+					var d := live_pos[a].distance_to(live_pos[b])
 					if d < res.sep:
 						res.sep = d
-						res.sep_note = "%.2f s, %s/%s" % [t, P.keys()[_brain(live[a]).phase], P.keys()[_brain(live[b]).phase]]
+						res.sep_note = "%.2f s, %s/%s" % [t, P.keys()[brains[live[a]].phase], P.keys()[brains[live[b]].phase]]
 		if mode == "open_space" and lead_runs >= 3 and all_dry:
 			break
 		if live.is_empty():
 			break
 	if mode == "assault":
-		for f in attackers:
-			if shots[f] == 0:
-				if ran[f]:
-					res.silent_runners.append(f.name)
+		for i in attackers:
+			if shots[i] == 0:
+				if ran[i]:
+					res.silent_runners.append(fighters[i].name)
 				else:
 					res.silent_held += 1
 	res.lead_runs = lead_runs

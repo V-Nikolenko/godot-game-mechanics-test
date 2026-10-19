@@ -47,6 +47,10 @@ var _brain: EnemyBrain
 var _mover: EnemyMover
 var _ai_suspended: bool = false
 
+## The previous health seen by `_on_health_changed()`; -1 until the first call. Lets the hit feedback
+## tell a hit (health went down) from a repair (it went up).
+var _last_health: int = -1
+
 ## Give this enemy a config resource of its own, at construction and again on tree entry.
 ##
 ## Both hooks are needed, and they close different windows:
@@ -131,6 +135,45 @@ func is_ai_suspended() -> bool:
 	return _ai_suspended
 
 
+## True when a brain and a mover drive this enemy right now: false for every legacy enemy (no brain)
+## and for any enemy a rail has taken over.
+func is_ai_driven() -> bool:
+	return _brain != null and _mover != null and not _ai_suspended
+
+
+## Offers this enemy a push from an ally (the Support Ship's escort). Returns true and nudges the
+## enemy's own mover (the single writer of its motion) only when it is AI-driven, not mid-boost and
+## its brain allows it (`EnemyBrain.accepts_tow()`: a committed or telegraphed attack is never moved
+## by anyone but its own brain). The brain check also matters because `_physics_process` returns
+## before `mover.step()` without a brain, so a nudge accepted there would never be applied.
+func accept_tow(v: Vector2) -> bool:
+	if not is_ai_driven() or _mover.is_boosting() or not _brain.accepts_tow():
+		return false
+	_mover.add_nudge(v)
+	return true
+
+
+## The mover's `max_speed`, or 0 without a mover (the escort sizes its tow from it).
+func ai_mover_max_speed() -> float:
+	return _mover.max_speed if _mover != null else 0.0
+
+
+## Whether an ally may restore this enemy's health. `SpaceStation` answers false.
+func can_be_repaired() -> bool:
+	return true
+
+
+## Restores up to `amount` health and returns the HP actually restored (0 for a non-positive amount,
+## a dead or dying enemy, one that refuses repair, or one already at full health). Never plays the
+## hit flash or burst: `_on_health_changed()` only reacts to health going down.
+func repair(amount: int) -> int:
+	if amount <= 0 or health.current_health <= 0 or is_queued_for_deletion() or not can_be_repaired():
+		return 0
+	var before := health.current_health
+	health.increase(amount)
+	return health.current_health - before
+
+
 func _resolve_ai() -> void:
 	for child in get_children():
 		if _brain == null and child is EnemyBrain:
@@ -177,12 +220,17 @@ func _on_received_damage(damage: int) -> void:
 	health.decrease(damage)
 
 ## Virtual death hook: called on every `health.amount_changed`. The default plays the hit-flash
-## animation on any change, and on reaching 0 sets `was_killed`, emits `died`, plays the explosion
+## animation and hit burst when health went DOWN (a repair is silent), and on reaching 0 sets `was_killed`, emits `died`, plays the explosion
 ## and frees the enemy. A subclass overrides this to change what death does — e.g. `SpaceStation`
 ## holds its wreck in the tree for `death_duration` seconds instead of freeing immediately.
 func _on_health_changed(current: int) -> void:
-	hit_flash_player.play("hit")
-	_hit_effect.burst()
+	# Enemies start full and subclasses write health from config without a signal, so an unset
+	# `_last_health` compares against max_health.
+	var previous := health.max_health if _last_health < 0 else _last_health
+	_last_health = current
+	if current < previous:
+		hit_flash_player.play("hit")
+		_hit_effect.burst()
 	if current == 0:
 		if OS.is_stdout_verbose():
 			print("[Enemy] %s DESPAWNED (died) at position %.0f, %.0f" % [name, global_position.x, global_position.y])

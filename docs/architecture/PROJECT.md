@@ -142,6 +142,24 @@ Detail and APIs: [global.md](modules/global.md).
   bombs, mines and pursuit bombs (`assault/scenes/projectiles/enemy_ordnance/`, `EnemyOrdnance`) are the first user.
   Ordnance is not an `EnemyBullet` and not a `BaseEnemy`: never in `enemies`, never scored, and any player hit defuses
   it. Detail: [assault.md](modules/assault.md) → *Projectiles & bullet pool*; [BULLET_POOL.md](../BULLET_POOL.md).
+- **Enemy rockets hurt enemies by impact and the player by blast only (Ph5).** `EnemyRocket`
+  (`assault/scenes/projectiles/enemy_rockets/`) puts its impact `HitBox` on layer 32 alone, which enemy, ordnance,
+  plate and asteroid hurtboxes see and the player's does not; the `ContactBlast` it leaves is the player's only damage.
+  A rocket arms only once clear of its launcher's current position, inherits the launcher's speed along its heading,
+  and is shot down (no blast) by any player bullet or missile. Tuning lives in each rocket scene's exports. Detail:
+  [assault.md](modules/assault.md) → *Projectiles & bullet pool*.
+  One rocket is one hit against the player: the impact box never reaches the player's layer, so only the blast (layer 256,
+  one hit through the player's 0.5 s i-frames) hurts. A player bullet or missile and a rocket destroy each other, rockets ignore
+  each other, and an armoured hull lets a rocket through (`ArmorQuery`). Persistent rocket pools set
+  `persist_after_owner_death`; cluster submunitions are unpooled and free themselves.
+- **Enemy shields are a temporary resource on a `HurtBox` absorb hook, not a second health bar (Ph5).** `EnemyShield`
+  (`global/components/enemy_shield.gd`) attaches through `HurtBox.set_absorber()`; its arc (360° = bubble), capacity,
+  regeneration, reboot and lifetime are fields. A hit it absorbs emits `hit_absorbed` instead of `received_damage`, and a
+  shielded enemy **consumes** a default player bullet (the shield counts as the hit, unlike a deflection). It never absorbs
+  while its host answers `is_armored()`. Direct emitters (beam, nova, dash, overload, boost) bypass it as they bypass armour
+  plates. `BaseEnemy` does **not** adopt `DamageReaction` (Ph1 P-15, closed in Ph5): `DamageReaction` stays a racer component.
+  Allies act on enemies through `BaseEnemy.repair()` (never flashes) and `accept_tow()` (refused by the target's own brain in
+  committed phases via `EnemyBrain.accepts_tow()`). Detail: [global.md](modules/global.md) → *Enemy shields*.
 - **An enemy picks a round, it does not retune one bullet (Ph3).** The pooled `EnemyBullet` family —
   Pulse, Scatter, Gatling Stream, Rail (the Sniper's, Ph4), Heavy Shell (`assault/scenes/projectiles/enemy_bullet/rounds/`, `EnemyRounds`) — are
   inherited scenes of `enemy_bullet.tscn`, each with its own `ProjectileLifetime`; `EnemyBullet.reset()` restores the
@@ -251,7 +269,9 @@ Detail and APIs: [global.md](modules/global.md).
   are unkillable. The Ram Corvette's plates use the hit-aware `deflects_hit()` (rockets and `is_high_impact()`
   projectiles break a plate, bullets glance off) and `ArmorQuery` is the one place all three player projectiles
   (bullet, homing rocket, warhead) ask; a later heavy weapon opts in by answering `is_high_impact()`. `PierceModule` raises the number of damaging hits a bullet survives before it
-  stops. Player bullets despawn at the *viewport* edge and `EnemyBullet` at the *arena* bound;
+  stops. An **enemy shield** is not a deflection: a hit its `EnemyShield` absorbs (through the `HurtBox` absorber
+  slot, `hit_absorbed` instead of `received_damage`) **consumes** the bullet and the hull takes nothing; direct
+  emitters (beam, nova, dash) bypass it (`global.md` → Enemy shields). Player bullets despawn at the *viewport* edge and `EnemyBullet` at the *arena* bound;
   that asymmetry is deliberate, because the player's weapons are also mounted in Open Space, which
   has no `ArenaCamera`. Gated by `tests/integration/test_player_bullet_lifetime.gd`.
 - **Testing:** **GUT 9.7.1**, vendored in `addons/gut/`, enabled from the

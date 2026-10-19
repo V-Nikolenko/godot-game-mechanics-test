@@ -1850,10 +1850,12 @@ index a later phase should read first. **Where a per-task note and this section 
 | Taking the station's reinforcements and `level_2_waves.gd` off rails | Ph15 | The rail fallbacks are the contract. |
 | Re-measuring the crowding count gate with corridor-wide exits | any phase retuning specialist lifetimes | |
 
-## Phase 5 - Enemy rework, phase 5: Missile Corvette, rockets and the Support/Shield Ship (2026-10-14)
+## Phase 5 - Enemy rework, phase 5: Missile Corvette, rockets and the Support/Shield Ship (2026-10-15)
 
-Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` (Revision 1), with research in `1-context.md` and `2-research.md` in the
-same directory. These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
+Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` (**Revision 2**, answering the round-1 plan review in `4-review.md`),
+with research in `1-context.md` and `2-research.md` in the same directory. These are *planned* decisions; check this
+phase's *as built* section, once written, before relying on them. (This section replaces the Revision 1 section of
+2026-10-14.)
 
 ### Changes to earlier decisions
 - **P-15 closed: `BaseEnemy` does not adopt `DamageReaction`.** It hears `received_damage(damage)` with no hit, so it cannot
@@ -1865,13 +1867,19 @@ same directory. These are *planned* decisions; check this phase's *as built* sec
 - **`BulletPool` container injection is deferred again** (Ph2 → Ph5 → Ph10): every pool here is a direct root child and
   cluster submunitions are unpooled. The first nested launcher (Carrier hangars) owns it.
 - **Enemy friendly fire is decided for rockets only:** a rocket's **impact** hurts enemies, enemy ordnance, Ram plates
-  and asteroids; its **blast** (`ContactBlast`) stays player-only. Blasts and beams in general: still undecided (Ph8).
-- **Enemy rockets break Ram Corvette plates** (plates break on `ROCKET`) — accepted counterplay, pinned by a test
-  (owner question 1, default yes).
+  and asteroids; its **blast** (`ContactBlast`) is the only thing that hurts the player or allies. Blasts and beams in
+  general: still undecided (Ph8).
+- **Enemy rockets wear down Ram Corvette plates** (plates break on `ROCKET`; 50 HP = 3–4 rockets) — accepted counterplay,
+  pinned by a test (owner question 1, default yes).
 - **Rocket tuning lives in each rocket scene's exports, not in the launcher's config** (unlike Ph4, where `BomberConfig`
   carries its ordnance numbers): Ph10's Carrier missile bank and Ph11's fortress launcher will fire the same rockets, and a
   rocket kind should be identical whoever fires it. Ph16 scales a rocket by setting exports before `launch()`.
-- **The `player_rockets` layer (bit 32) is not renamed**, though enemy rockets now sit on it too; the constant's doc says so.
+- **The `player_rockets` layer (bit 32) is not renamed**, though enemy rockets' impact HitBoxes now sit on it (alone); the
+  constant's doc says so.
+- **Gate time is a budgeted resource from this phase on.** Measured at `7916662`: import 4.7 s, boot 1.0 s, GUT 253.3 s
+  against a ~300 s harness wall-clock cap. Phase 5's first task (a dependency of every other) frees ≥ 70 s (GUT ≤ 183 s)
+  without weakening any test and adds `scripts/gate-time.sh`; every later task stays within a per-task allotment (56.5 s
+  total for this epic) and keeps **GUT ≤ 240 s**. Later phases should budget the same way.
 
 ### Names and places later phases build on
 - **`HurtBox` absorb hook** (`global/components/hurtbox_component.gd`): `set_absorber(obj) -> bool` (one slot; false when a
@@ -1879,43 +1887,68 @@ same directory. These are *planned* decisions; check this phase's *as built* sec
   answers duck-typed `absorbs_hit(hit_box: HitBox) -> bool`; on true the hurtbox emits `hit_absorbed` instead of
   `received_damage`. No absorber = byte-identical. **This is the hit-aware damage decision point for shields**; Ph10 module
   shields and Ph11 shield nodes attach here, not by narrowing masks.
-- **`EnemyShield`** (`global/components/enemy_shield.gd`, `Node2D`): `arc_deg` (≥ 360 = bubble), `capacity` (points;
-  a hit subtracts its damage; the breaking hit is absorbed whole), `regen_delay`, `regen_seconds`, `reboot_seconds`,
-  `turn_rate`, `radius`, `sustain_mode` + `heartbeat` + `fade_seconds`; `attach(hurt_box)`, `set_threat_point()`,
-  `sustain(threat_point)`, `absorbs_hit()`, `points()`, `is_up()`, `facing()`; signals `absorbed(hit_box, remaining)`,
-  `broken()`, `restored()`, `lapsed()`. Cyan, drawn in world angles, never writes `rotation`.
+- **`EnemyShield`** (`global/components/enemy_shield.gd`, `Node2D`): `arc_deg` (≥ 360 = bubble; may change while attached),
+  `capacity` (points; a hit subtracts its damage; the breaking hit is absorbed whole), `regen_delay`, `regen_seconds`,
+  `reboot_seconds`, `turn_rate`, `radius`, `sustain_mode` + `heartbeat` + `fade_seconds`; `attach(hurt_box)`,
+  `set_threat_point()`, `sustain(threat_point)`, `absorbs_hit()`, `points()`, `is_up()`, `facing()`; signals
+  `absorbed(hit_box, remaining)`, `broken()`, `restored()`, `lapsed()`. Cyan, drawn in world angles, never writes
+  `rotation`. **It never absorbs while its host answers the hit-blind `is_armored() == true`**, and never calls
+  `deflects_hit()` (an `ArmorPlate`'s resolves and damages the plate).
 - **An absorbed hit consumes the bullet** (it is not a deflection; a pierce charge is spent). **Direct emitters** (beam,
   nova, dash, shield overload, engine boost, laser ray) bypass shields exactly as they bypass plates.
 - **`BaseEnemy`**: hit flash / burst only when health went **down**; `repair(amount) -> int`; `can_be_repaired()` (station:
-  false; Support Ship: false); `accept_tow(v) -> bool` (a nudge on the enemy's own mover; refused when suspended, brainless
-  or boosting); `ai_mover_max_speed()`. A later "pull" or "push" between enemies goes through `accept_tow`, never a
-  velocity write.
-- **`EnemyWorld.has_view_rect(tree)` / `view_rect(tree)`**, backed by `ArenaCamera.enemy_view_rect()` (screen centre incl.
-  offset pan, viewport / zoom): the rect the Assault camera shows **now**, as opposed to the 1480 × 1480 corridor.
+  false; Support Ship: false); `is_ai_driven()` (brain and mover present, not suspended); `accept_tow(v) -> bool` (a nudge
+  on the enemy's own mover; false unless `is_ai_driven()`, not boosting and `brain.accepts_tow()`);
+  `ai_mover_max_speed()`. A later "pull" or "push" between enemies goes through `accept_tow`, never a velocity write.
+- **`EnemyBrain.accepts_tow() -> bool`** (default true): false in every committed or telegraphed phase — Sniper
+  DECOY/AIM/LOCK/FIRE, Ram WIND_UP/CHARGE, Bomber RUN, Fighter RUN_IN, Gatling SPIN_UP/STREAM, Razor
+  WINDUP/DASH/FEINT_WINDUP/FEINT_LUNGE, Swarm WINDUP/BURST, Missile Corvette TELEGRAPH/SALVO. **Every new brain with a
+  telegraphed attack must override it**: a telegraph is never moved by anyone but its own brain.
+- **`EnemyWorld.has_view_rect(tree)` / `view_rect(tree)`**, backed by `ArenaCamera.enemy_view_rect()` (centre
+  `global_position + offset`, size viewport / zoom; never `get_screen_center_position()`, which is stale in hand-ticked
+  tests): the rect the Assault camera shows **now**, as opposed to the 1480 × 1480 corridor.
 - **Rocket family** `assault/scenes/projectiles/enemy_rockets/`: `EnemyRocket extends Area2D`,
   `Kind { DUMB, PURSUIT, CLUSTER, WARHEAD, SUBMUNITION }`, `launch(dir, aim_point, launcher)`, `reset()`, `expired`;
-  `EnemyRocketScenes.scene_for(kind)` / `pool_size_for(kind, cfg)` (`salvo_count × ceil(max_time / salvo_period_min)`).
-  Impact HitBox layer `32 | 256`, mask `1 | 128 | 512`, `ROCKET`, closed until `arm_distance` from launch; shoot-down
-  HurtBox 512 / mask **64 only** (rockets never hit each other; player rockets pass through); direct hit on the player =
-  impact + blast. Guidance = lead pursuit on `TargetInfo.intercept()` capped at `lead_max`, `Steering.turn_toward` at
-  `turn_rate`, finite `guidance_seconds`, then coast. Cluster splits **by distance** (or `split_time`) into unpooled
-  self-freeing submunitions; shot before the split leaves nothing. Warhead uses the Ph4 mine rule
-  `(trigger + blast) / warning ≥ 420`. Not in `enemies`, never scored, per-kind rows in `test_enemy_bullet_lifetime.gd`
-  (never in `_every_shipped_enemy_bullet_speed()`).
+  `EnemyRocketScenes.scene_for(kind)` / `pool_size_for(kind, cfg)` (`count × ceil(max_time / salvo_period_min)`, count =
+  `warhead_salvo_count` for WARHEAD else `salvo_count`).
+  - **Layers:** impact HitBox on layer **32 only**, mask **640** (128 | 512, no environment bit), `ROCKET`; shoot-down
+    HurtBox layer 512, mask **96**, resolved by the rocket's own `area_entered` handler (never `received_damage`),
+    ignoring any `EnemyRocket` HitBox. Blast = `ContactBlast` on 256.
+  - **One player-facing damage source:** the player and allies take only `blast_damage` (direct hit or near miss alike —
+    one hit against the player's 0.5 s i-frames, one shield charge). Enemies, plates, ordnance and asteroids take only
+    `impact_damage`. An armoured hull lets a rocket through (`ArmorQuery.deflects`).
+  - **Shoot-down:** a player bullet or player homing / warhead missile and an enemy rocket destroy each other, no blast.
+    Rockets ignore each other.
+  - **Launch safety:** a launcher answers duck-typed `launch_velocity() -> Vector2` (the rocket inherits its component
+    along the launch direction; on a rail, the observed position delta) and `rocket_clear_radius() -> float`. The rocket
+    arms when clear of the launcher's **current** position by `rocket_clear_radius() + body_radius + arm_clearance`; the
+    rocket alone owns this rule. Invariants: every rocket `cruise_speed ≥ 1.1 ×` its launcher's `max_speed`, `launch_speed
+    > launcher acceleration × boost_seconds`.
+  - **Art is nose-up** (`rotation = heading.angle() + PI / 2`, the player missiles' convention), so `RocketTrail`'s local
+    +Y is the tail. Enemy ship hulls stay nose-down.
+  - Guidance = lead pursuit on `TargetInfo.intercept()` capped at `lead_max`, `Steering.turn_toward` at `turn_rate`,
+    finite `guidance_seconds`, then coast. Cluster splits **by distance** (or `split_time`) into unpooled self-freeing
+    submunitions; shot before the split leaves nothing. Warhead **stops dead on trigger** and uses the Ph4 mine rule
+    `(trigger + blast) / warning ≥ 420`. Lifetime expiry fizzles (no blast). Not in `enemies`, never scored, per-kind rows
+    in `test_enemy_bullet_lifetime.gd` (never in `_every_shipped_enemy_bullet_speed()`).
 - **Missile Corvette** `assault/scenes/enemies/missile_corvette/` (`MissileCorvette`, `MissileCorvetteBrain`,
   `MissileCorvetteConfig`): `Phase { APPROACH, HOLD_ARC, TELEGRAPH, SALVO, DISENGAGE, IDLE, NOTICING, RETURNING }`;
-  `fire(kind, aim_point)`; four persist-after-owner-death pools; launch cone 45°; StateLight CHARGING / ARMED, never
-  COMMIT; rail fallback = a Dumb rocket DOWN every 2.5 s. `WaveBuilder.missile_corvette()`.
+  `fire(kind, aim_point) -> EnemyRocket` (sets no rocket field); `salvo_size(kind)` (3, or 2 Warheads); four
+  persist-after-owner-death pools (3/6/3/4); launch cone 45°; StateLight CHARGING / ARMED, never COMMIT; rail fallback = a
+  Dumb rocket DOWN every 2.5 s. `WaveBuilder.missile_corvette()`.
 - **Support Ship** `assault/scenes/enemies/support_ship/` (`SupportShip`, `SupportShipBrain`, `SupportShipConfig`):
   `Phase { SEEK_WARD, FOLLOW, ESCORT, DISENGAGE, IDLE, NOTICING, RETURNING }`; contact profile `NONE`; ward claim =
   meta `&"support_claim"` on the ward (one support per ward); `ward_changed(new_ward)`; `is_supporting()`; the projected
   shield is an `EnemyShield` child of the ward named `ProjectedShield`, in sustain mode, owned by the ward and lapsing when
-  the support stops feeding it (death, EMP, range, view, switch). `WaveBuilder.support_ship()`.
-- **Ward rules:** candidates are live, unsuspended `BaseEnemy`s in `enemies`, never another support or the station;
-  threat = `score_value × 1/(1 + d_player/600) × (1 + damage fraction)`; hold ≥ 2 s, switch at ≥ 1.3×; a lost ward is
-  replaced on the next tick. Repair: pulses of 6 % max HP every 1.5 s, 150 HP budget per life, hull `Health` only (Ram
-  plates never), supports never repair supports. Escort: at ≤ 35 % HP, tow 1.25 × the ward's max speed away from the
-  player via `accept_tow`, support interposes; ends at 50 %, 700 px, 4 s; 6 s cooldown per ward.
+  the support stops feeding it (death, EMP, range, view, switch); **widened to a 360° bubble during ESCORT**.
+  `WaveBuilder.support_ship()`.
+- **Ward rules:** candidates are live `BaseEnemy`s in `enemies` that are `is_ai_driven()`, `counts_toward_wave_clear` and
+  `score_value ≥ ward_min_score` (20), never another support — so the gunship, station, bonus drone and swarm drones are
+  never wards, and every ward is escort-capable. Threat = `score_value × 1/(1 + d_player/600) × (1 + damage fraction)`;
+  hold ≥ 2 s, switch at ≥ 1.3×; a lost ward is replaced on the next tick. Repair: pulses of 6 % max HP every 1.5 s,
+  150 HP budget per life, hull `Health` only (Ram plates never), supports never repair supports. Escort: at ≤ 35 % HP,
+  tow 1.25 × the ward's max speed away from the player via `accept_tow` (refused during the ward's telegraphs; the
+  support then only interposes), support interposes; ends at 50 %, 700 px, 4 s; 6 s cooldown per ward.
 
 ### Conventions
 - **Assault:** neither enemy goes into an `ENEMIES_CLEARED` section (corvette rockets persist; guard rows for both).
@@ -1926,8 +1959,183 @@ same directory. These are *planned* decisions; check this phase's *as built* sec
   while inside `view_rect().grow(24)`.
 - **Hub:** the corvette takes 315° on a new 1900 px ring (+417 px clearance); the support shares the Ram Corvette's
   anchor; draws 13 and 14 after the existing 12. Radii (perceive / lose): corvette 720 / 1500, support 600 / 1300.
-- **Gate time:** the harness cap is ~300 s wall clock; Phase 5's first task frees ≥ 30 s and adds `scripts/gate-time.sh`;
-  every later task reports its GUT-time delta.
+- **Gate time:** `scripts/gate-time.sh` before and after every task; a test that awaits real physics runs on the 8× clock;
+  a hand-ticked scenario several tests replay is computed once; over-allotment is fixed by sharing work, never by
+  cutting an assertion.
+- **Gate time, t1 as built:** GUT 253.4 s → 176.9 s (−76.5 s; wall 257.5 → 181.0), 1593 tests / 68619 asserts unchanged. 8× clock on
+  `test_level1_fighter_exit`, `test_ram_corvette` (all rows), `test_level1_drone_exit`; `test_level1_fighter_fire_density` 4× → 8×
+  except its 0.1 s wave-schedule row, which stays 4× (one 8× idle frame is ~0.13 s, so the tolerance would otherwise widen).
+  `test_fighter_squad.gd` has nothing to compute once (58.9 of its 64.6 s is one 168-layout sweep, 53.6 s of it the fighters' own
+  ticks), so the saving there is only ~1.7 s; the headroom is 6 s under the 183 s target, so later tasks must watch their allotments.
+  Table in tests/README.md → "Gate time".
+- **t2 as built (enemy shields; P-15 closed as planned: `BaseEnemy` does not adopt `DamageReaction`).** Choices t12/t13
+  build on, beyond §2.3: `EnemyShield.face(world_dir)` snaps the facing and the **initial facing is `Vector2.DOWN`**, so a
+  projector calls `face()` toward the player before its first `sustain()` (otherwise the arc needs ~2 s at 1.6 rad/s to
+  swing round in Open Space); `restored()` fires on **every** refill to full, not only after a break; after a break the
+  refill starts straight after `reboot_seconds` with no extra `regen_delay`, and the shield is `is_up()` only once
+  `points()` (floored) is ≥ 1 (about 2 ticks after the reboot at the defaults); a sustained shield **releases the hurtbox
+  slot at the lapse** (the fade is drawing only), so a support can attach a new shield to the same ward during the fade;
+  `HurtBox.set_absorber` also refuses an object without `absorbs_hit`. **Limitation:** a shield does not cover an
+  `ArmorPlate` (the plate damages itself in its own `area_entered`) — Ph10 module shields must go on a plain part's
+  `HurtBox` (proven by the local-module fixture row). **For t12:** at the epic's `shield_capacity` 40 one Standard shot
+  (50) breaks the projected shield, then 4 s of reboot — tune knowingly. Gate time: GUT 177.6 s → 176.9 s (the three files ≈ 1.4 s standalone, of the 3.0 s allotment, within run-to-run noise), 1593 → 1620 tests.
+- **t3 as built (repair and tow hooks, no deviation).** `BaseEnemy.repair(amount) -> int`, `can_be_repaired()` (the station
+  answers false), `is_ai_driven()`, `accept_tow(v) -> bool`, `ai_mover_max_speed()`; `_on_health_changed` flashes and bursts
+  only when health went down (`_last_health`, unset = `max_health`). `EnemyBrain.accepts_tow()` (default true) is overridden in
+  the seven shipped brains, each as a trailing `match phase` at the end of the file; t8 adds the Corvette's (TELEGRAPH, SALVO).
+  The Ram boundary compares a towed run to an untowed twin (not an absolute position): the Ram crawls under its own brain.
+- **t5 as built (Dumb + Pursuit rockets, `EnemyRocket` contract).** Choices t6–t8 build on, beyond §2.6/§2.7:
+  (1) **no player → no turn**: guidance skips the tick entirely (Ph4's pursuit bomb steers at its stale target point
+  instead; not changed). (2) **`launch()` re-applies** `impact_damage`, both shape radii (`body_radius`, hurtbox
+  `+ 2`) and `max_time` / `max_distance` to the children, so exports set between `acquire()` and `launch()` (Ph16
+  tiers, a test) take effect. (3) **The shoot-down also ignores `CONTACT`-type HitBoxes**: the ally fighter's ram box
+  sits on layer 64, so without this an ally touching a rocket could defuse it (no blast) in an undefined callback
+  order; now the ally detonates it through its 128 hurtbox and takes the blast, as the §2.6 table says. No player
+  projectile is `CONTACT`. (4) **`expired` after a detonation or shoot-down goes out two physics ticks later** (the
+  rocket hidden meanwhile), and `_mark_done()` disables both shapes as well as closing the areas: a `BulletPool`
+  recycles by re-parenting, and `Area2D` re-emits `area_entered` for an overlapping area re-entering the tree until the
+  server has delivered the exit (turning `monitorable` off alone keeps the pair) — recycling at once hit the enemy a
+  second time (968 instead of 984 in the friendly-fire row). A lifetime fizzle still emits at once. A launcher that
+  counts `expired` must allow the 2-tick lag. `EnemyRocket._tick(delta)` is the hand-tick entry (tests turn the
+  rocket's and its `ProjectileLifetime`'s physics process off). Fixture launcher: `tests/helpers/rocket_launcher_fixture.gd`.
+  Gate time: GUT 177.5 → 180.0 s (+2.5 of 6.0), `test_enemy_rockets.gd` 2.3 s / 16 tests.
+- **t6 as built (Cluster Rocket, Submunition, Delayed Warhead).** Choices later tasks build on, beyond §2.8: (1) all
+  of it lives in `enemy_rocket.gd` (one script, `kind` + exports; no per-kind subclass): `@export_group("Cluster")`
+  (`split_distance` 260, `split_time` 2.0, `cluster_count` 4 in 3–5, `cluster_fan_deg` 36, `submunition_scene`) and
+  `@export_group("Proximity")` (`trigger_radius` 70, `prox_arm_seconds` 0.6, `warning_time` 0.4); `reset()` restores them.
+  (2) **A CLUSTER splits on the tick that *reaches* `split_time`** (`_clock + delta >= split_time`), before moving, so the
+  split point is where the previous tick left it; distance splits when the player is within `split_distance` at the
+  start of a tick (`<=`). (3) The parent's `_split()` is `_mark_done()` + children + pop + the same 2-tick-delayed
+  `expired` as a detonation, with **no `ContactBlast`**; the children are instantiated into the parent's own
+  `get_parent()` (the container), `reset()`, `expired -> queue_free`, `launch(dir, point, null)`. (4) The WARHEAD's trigger
+  is the `ProximityArea` poll (`get_overlapping_areas()`, layer 128) once the clock reaches `prox_arm_seconds`; it stops
+  dead (`_speed = 0`, `is_guiding()` false), `is_triggered()` is public, and it detonates when the warning clock reaches
+  `warning_time`. The trigger sees **any layer-128 hurtbox, allies included** (the Ph4 mine does the same). (5)
+  `EnemyRocketScenes` now maps CLUSTER / WARHEAD / SUBMUNITION; `pool_size_for` is unchanged (CLUSTER 3, WARHEAD 4);
+  SUBMUNITION is never pooled. The launcher fixture pools CLUSTER and WARHEAD too. (6) The Warhead's 240 px/s cruise
+  equals a shipped round speed, so `test_no_rocket_speed_is_in_the_round_speed_list` checks only its launch speed.
+  Gate time: GUT 180.0 → 182.1 s (+2.1 of 4.0), `test_enemy_rockets.gd` 5.0 s / 25 tests; 1660 → 1670 tests.
+- **t7 as built (Missile Corvette shell).** Choices t8–t16 build on, beyond §2.9: (1) **`launch_velocity()` on a rail is
+  observed per PHYSICS tick, not in `_process`** (a deviation from §2.9's wording): `MissileCorvette` connects
+  `SceneTree.physics_frame` and reads `(global_position − previous) / get_physics_process_delta_time()`
+  (`_observe_motion(delta)` is the hand-stepping seam). A render frame holds zero or several ticks, so a per-frame
+  reading was 300 instead of 330 px/s on the 8× clock and would read 0 on a 144 Hz frame with no tick; the railed row
+  asserts (0, 330) ± 5. `_process` keeps only the rail fallback clock. (2) `StraightMovement.speed` is in design units
+  (the rail doubles it by `WORLD_SCALE`), so the 330 px/s rail is `straight(165)`. (3) The brain ships `Phase`
+  `{ APPROACH, HOLD_ARC, TELEGRAPH, SALVO, DISENGAGE, IDLE, NOTICING, RETURNING }` already (append-only), plays only
+  APPROACH and DISENGAGE, and has the `start_engaged` seam (unused until t15). `held_range()` is
+  `assault_preferred_range` when the Assault budget is active, else `preferred_range`. `accepts_tow()` already refuses
+  TELEGRAPH / SALVO. (4) The hull sprite is a **placeholder** (`ram_corvette.png`, until t9); the tube lamps
+  (`Tubes/TubeLightL` / `TubeLightR`) take a radial texture built in code, driven by `set_tube_glow(0..1)`. (5)
+  `test_enemy_rockets.gd` reads the launcher numbers from `missile_corvette_config.tres` (`_CORVETTE`), the
+  constants are gone. (6) `fire()` counts a refused launch in `rockets_refused`; `BulletPool` logs its usual
+  exhaustion warning.
+- **t8 as built (Missile Corvette fight).** Task plan `docs/plans/cmv9szqlq001zqs2x6vi0nlxj/3-plan.md` (review round 2
+  APPROVED). What later phases build on: (1) **`break_contact` side inside an orbit is `-orbit_dir`.** §2.10.2's "side =
+  orbit direction" is read as *the sense the arc turns*: `Steering.break_contact`'s lateral is `away.orthogonal() × side`
+  (−90° for +1) while `Steering.orbit`'s +1 travels +90°, so the literal `+orbit_dir` opposes the orbit (measured on a
+  350 px/s rusher in Assault: closest pass 147 px literal, 250 px with `-orbit_dir`, 200 px with no blend). **Any later
+  brain that blends `break_contact` into an orbit (the Support Ship's dodge, a hub idle) needs the same sign.** The blend
+  is `orbit request + break_contact(max_speed)` in one `request_velocity`, capped by the mover. (2) `choose_kind(distance,
+  player_speed, radial_speed)` takes a **required** third argument (radial = player velocity along corvette→player, > 0
+  away); the 1-in-4 DUMB→PURSUIT swap is drawn outside it, at TELEGRAPH entry. (3) New public surface:
+  `salvo_size(kind)`, `attack_window()` (from config, 1.14 s: the deferral bound and, + `ATTACK_GATE_MARGIN` 0.05, the
+  gate), `in_launch_cone(point, cone_deg)`, `salvo_cooldown` (drawn at the first tick and after each salvo, so the first
+  salvo comes 4–5 s after spawn: one salvo per Assault life at `engage_seconds` 7.0 — t17's attack-in-budget rows start
+  from that), `orbit_dir`, `salvo_kind`, `salvos_fired`, test seam `force_next_kind(kind)`. HOLD_ARC never returns to
+  APPROACH (the orbit anchor follows the player). (4) The Warhead pair's `across` is fixed once per salvo at SALVO entry
+  (velocity perpendicular, or the line-of-sight perpendicular from the hull's centre). (5) The orbit drift starts at 0
+  (sine phase 0 or π), period rng 6–9 s; reversals are an instant flip of the anchor's direction (no REVERSE phase).
+  (6) `MissileCorvette.next_tube_position()` (read-only) and `EnemyRocketScenes.export_of(kind, property, fallback)` (any
+  root export via `PackedScene.get_state()`; `max_time_of` now calls it and returns 4.0, not 0.0, for a kind with no
+  scene). (7) The t7 approach row now asserts the APPROACH → HOLD_ARC hand-over within `range_tolerance` and the held
+  band `R ± (range_drift + range_tolerance)`, not "parked within 25 px". Gate time: GUT 182.9 → 183.3 s (+0.4 of 5.0),
+  `test_missile_corvette.gd` 16 → 37 tests in about 1.1 s; 1687 → 1708 tests.
+- **t9 as built (Missile Corvette and rocket art).** `missile_corvette.png` is a PixelLab hull (flipped nose-down, baked
+  engine flames removed) with the two launch tubes hand-drawn at the `Tubes/TubeL` / `TubeR` markers (local (±18, 30));
+  the rockets are PixelLab sprites with their baked flames removed and the submunition hand-drawn (6 x 10). Later
+  phases that fire these rockets need nothing: node names are unchanged, plus a new `Sprite2D` on every rocket scene and a
+  `BlinkLight` `Sprite2D` on the warhead. **The look-only `body_color` export is gone** from `EnemyRocket` and its five
+  scenes (the placeholder `_draw()` body went with it); `RocketTrail.offset_behind` is now per scene (12 / 12 / 12 / 5 / 9).
+  PURSUIT shares `enemy_rocket.png` with DUMB and is told apart by a violet `modulate`. Rows: `test_enemy_rockets.gd`
+  (sprite per kind, trail behind the nose for every kind and heading, warhead blink) and `test_missile_corvette.gd`
+  (opaque art at each tube marker).
+- **t10 as built (Support Ship shell).** Choices t11–t16 build on, beyond §2.11: (1) the brain ships `Phase`
+  `{ SEEK_WARD, FOLLOW, ESCORT, DISENGAGE, IDLE, NOTICING, RETURNING }` already (append-only) and plays only SEEK_WARD and
+  DISENGAGE; `brain.ward` is the ally it holds (`nearest_ally()`: nearest live `BaseEnemy` in group `enemies`, never a
+  `SupportShip`), which t11 replaces with the scored ward choice. (2) The `Projector` is folded with `scale.y` 0; **Godot
+  clamps a zero node scale to an epsilon (~1e-5)**, so rows compare with a tolerance, not `== 0.0`. `SupportShip.fold_projector()`
+  folds it instantly and hides the tether (the `on_suspended()` path); t12 adds the animated unfold. (3) The contact hitbox is
+  closed by the NONE profile with a *deferred* `monitoring`/`monitorable` write: a test that re-opens it must wait one physics frame
+  first and assign directly (a `set_deferred` queued the same frame is overwritten). (4) Placeholder art: the hull is
+  `sniper.png` and the projector `sniper_barrel.png` until t14. (5) `max_turn_rate` 4.0 x `exit_speed` 300 exceeds
+  `acceleration` 700, so DISENGAGE curves at `min(max_turn_rate, acceleration / exit_speed)` (2.33 rad/s), as the Bomber's does.
+- **t11 as built (Support Ship ward, follow, retarget, Assault clamp).** Task plan `docs/plans/cmv9szqlz002bqs2x0h47xa3x/3-plan.md`
+  (review round 3 APPROVED). Choices t12–t17 build on, beyond §2.12: (1) `SupportShipBrain._set_ward()` is the **only writer** of
+  `ward`, the claim meta (`CLAIM_META = &"support_claim"`, the claiming support's instance id; a stale id counts as free) and the
+  ward's `tree_exiting` connection (the bound `Callable` is stored and the disconnect guarded). It emits
+  `ward_changed(new_ward: Node)` on every change, so a loss then a re-pick emits `null`, then the new ward. Public state:
+  `ward` (read via `has_ward()`), `ward_score`, `ward_held_for`, `wards_selected`, `anchor` (`Vector2.INF` with no ward),
+  `follow_side`, `jink_sign`, `is_candidate()`, `threat_score()`, `best_candidate()`, `is_supporting()`, `nearest_ally()`.
+  (2) Per tick: validate (drop) → select → phase (ward → FOLLOW, none → SEEK_WARD). A ward lost via `tree_exiting` is replaced on
+  the next tick; one lost via validation (killed = queued, railed, beyond `ward_keep_radius`, out of `view.grow(ward_view_band)`)
+  is replaced on the tick that sees it. (3) **The Assault no-ward grace runs only while the support is inside
+  `view.grow(view_band)`** (supports and allies spawn above the screen; a clock from spawn would send a support home before its
+  allies arrive). SEEK_WARD's hold point (the nearest ally's `follow_distance` point, or with no ally the support's own position)
+  is clamped into `view.grow(−view_margin)` in Assault, so a support always comes into view and the clock always starts; the
+  budget stays the backstop. **t17:** a support's first `is_supporting()` needs a candidate inside `view.grow(ward_view_band)`.
+  (4) FOLLOW is one `request_velocity(seek + jink + evade)`, not `mover.arrive` alone: a full-speed arrive cancels a 60 px/s
+  jink and a 240 px/s escape to a few px. Seek = `Steering.arrive` capped at `min(max_speed, d_anchor × FOLLOW_GAIN)`,
+  `FOLLOW_GAIN` 2.0 /s (a spring near the anchor); jink = `jink_strength` px/s across the ward line, sign redrawn every
+  `jink_period` (≈ ±25 px sway); inside `evade_radius` seek and jink are scaled by `w = clamp((d − 0.8R) / 0.2R, 0, 1)`, their
+  toward-player component removed, and `break_contact(..., evade_speed, EVADE_LATERAL_WEIGHT 0.3)` added (the default 0.6,
+  doubled for a closing threat, escapes at ≈ 154 px/s — slower than a 200 px/s player). All judgement, measured in
+  `test_support_ship.gd`. (5) The t10 rows that assumed a score-0 fixture ally is held in Assault for > 1.5 s are Open Space
+  only now (the SEEK_WARD fallback); `test_enemy_dual_mode.gd`'s support case uses a ward (`score_value = 25`).
+- **t12 as built (Support Ship repair pulse and projected shield).** Choices t13–t17 build on, beyond §2.13: (1) all of it is in
+  `SupportShipBrain._tick_support()`, called at the end of every `tick()` (also on the DISENGAGE paths, where the ward is null, so the
+  dish folds). `is_supporting()` drives everything: the dish (`projector_open` 0..1, rising over `projector_unfold_seconds`, falling
+  over `projector_fold_seconds`; `SupportShip.set_projector_open()` writes `scale.y` eased out), the tether (`show_tether()` /
+  `hide_tether()`; cyan `TETHER_COLOR`, pale green `TETHER_REPAIR_COLOR` for 0.15 s after a pulse, alpha `TETHER_DIM_ALPHA` when
+  `LineOfSight` is blocked), the pulse and the shield. (2) Repair: `_repair_clock` accumulates only while supporting; every
+  `repair_period` one pulse of `max(1, round(max_health × repair_fraction))`, **clamped to the budget left** (so the total is exactly
+  `repair_budget`, never over), skipped when the budget is spent, the line is blocked or `can_be_repaired()` is false. `repaired(ward,
+  amount)` fires only when HP was actually gained (a pulse on a full-HP ward is silent and does not flash). `repair_spent` is public.
+  (3) The shield: `_make_shield()` builds an `EnemyShield` named `ProjectedShield` (`sustain_mode`, arc 110 / Assault 90, config
+  capacity / regen / reboot / turn rate, `radius` = the ward's body `CollisionShape2D` radius + 6, 34 + 6 with no body shape),
+  `attach()`es it **before** `add_child` (false → freed, nothing added; retried next tick), faces it at the player at once, then
+  `sustain(player_position)` every supporting tick. The brain's `shield` is only "one needs creating?" bookkeeping: cleared on a ward
+  change and on the shield's `lapsed`. Nothing frees or detaches a shield explicitly: a support that dies, is EMP-disabled
+  (`process_mode` DISABLED stops the brain tick), leaves range or view, or switches ward simply stops feeding it, and it lapses after
+  `heartbeat` and releases the hurtbox slot (t13: widen `arc_deg` to 360 on `shield`, keep `sustain()`ing it). (4) The armoured-Ram
+  row needs no support-side code: `EnemyShield.absorbs_hit` refuses while the host's `is_armored()`. (5) Test-only: a `BaseEnemy`
+  whose HP is written directly (`health.current_health = x`) has an unset `_last_health`, so its first repair compares against
+- **t13 as built (Support Ship emergency escort).** Choices t14–t17 build on, beyond §2.14: (1) ESCORT is entered from FOLLOW inside
+  `tick()` (`_escort_due()`: ward HP fraction <= `escort_hp_ratio`, per-ward cooldown from `_escort_ready_at[ward_id]` read against the
+  brain's accumulated `_clock`) and its first tick runs in the same call, so the tow lands on the tick after the HP drop. (2) Ends in
+  `_tick_escort()` on release ratio (>=), `escort_safe_distance` (>=) or `_phase_time >= escort_max_seconds`, back to FOLLOW; a lost ward
+  leaves ESCORT in `tick()`'s validity branch (retarget as before); DISENGAGE/budget expiry also leaves it. All exits go through
+  `enter_phase()` / `_set_ward()`, which call `_end_escort_effects()` once (starts the ward's cooldown, gives the shield its mode arc).
+  Ward switching is suspended while escorting. (3) The tow is `ward.accept_tow(away * escort_tow_ratio * ward.ai_mover_max_speed())` every
+  tick; its refusal is ignored (the support just interposes). The interpose point is `ward - away * interpose_distance` (toward the
+  player), `_clamp_into_view` in Assault, sought at `distance * ESCORT_GAIN (6)` capped at `max_speed`, no jink, no evasion. (4) The
+  bubble: `_shield_arc()` is 360 during ESCORT, written onto `shield` every supporting tick and in `_make_shield()`; restored by
+  `_end_escort_effects()` even when the support is no longer supporting. (5) `SupportShip.show_tether(to, color, towing)` draws the
+  tow beam at `TOW_WIDTH_FACTOR` (2.5) x the scene width. (6) Test-only: a real Sniper settles beyond `escort_safe_distance` of a
+  far player and, in Assault, above `ward_view_band`, so `test_support_ship.gd::_telegraph_run` lays the sniper row out horizontally and
+  pulls the player to 400 px once LOCK begins.
+  `max_health` and flashes; damage fixtures through `health.decrease()` (`test_support_ship.gd::_repair_world`).
+- **t15 as built (hub idle for the Missile Corvette and the Support Ship).** Both brains follow the Ph4 Ram template (`AnchorIdle` ahead of
+  the phase dispatch, `patrol_anchor` defaulting to the spawn, `idle_phase_offset` from `rng`, `start_engaged`; Assault builds no
+  `AnchorIdle`; `on_suspended()` drops it). Choices later phases build on: (1) Corvette: IDLE / NOTICING / RETURNING are not entered from
+  TELEGRAPH or SALVO (retried each tick); every calm entry resets the arc (`_orbit_synced`, `_breaking`) and stops the burst, and NOTICING
+  redraws `salvo_cooldown`, so a corvette that has idled for a minute does not fire the instant it notices the player. (2) Support: no
+  protected phase; entering any calm phase calls `_set_ward(null)` (which ends an ESCORT's effects once), and the calm phases skip ward
+  selection entirely (`tick()` returns after `_tick_support`, which folds the dish). (3) Idle orbits run at the config's `max_speed`; the
+  corvette overshoots its ring by ~40 px for the first ~3 s when it starts on the anchor (240 px/s² acceleration), settling at 149 px, so the
+  ring row measures after 4 s. (4) Every earlier Open Space spawn in the suite sets `start_engaged` (`# pre-t15`); the real hub spawns are t16.
+- **t16 as built (hub placement).** `sector_hub.gd` `_spawn_patrol()` appends, after the twelve earlier draws: a Missile Corvette at 315 deg on the new `missile_corvette_ring_radius` 1900 ring (`missile_corvette_anchor_bearing_deg`; draw 13; +417 px clearance) and a Support Ship on the Ram Corvette's anchor (draw 14; the Ram's +309 px clearance holds, same 150 / 600 radii). No deviation from the plan. `test_sector_hub_patrol.gd` gains the clearance, eight-anchor, seed, frame-0 IDLE, rocket-in-`EnemyContainer` (8x) and support-wards-Ram rows; its `_spawn_hub` takes `engage_new` to set `start_engaged` on each ship as it enters the container (the brain reads it in `_start()`).
+- **t17 as built (level 1 placement).** Five new lines in `level_1_director.gd`, each added inside an existing wave of a DURATION section (no new wave, so no other wave's effective trigger moves): corvettes at deep_space 11.0 + 1.0 s and planet_approach 39.0 + 1.0 / 84.0 + 1.0 s (offset (0, -400)); supports with deep_space's 26.0 s ram at (-255, -460) and planet_approach's 28.0 s ram at (0, -460). **Deviations:** (1) the plan's "65.7 s planet_approach peak" predates the Ph4 t22 ram levers; the measured peak is 6 at 75.5 s before placement and 7 at 98.0 s after, so the extra-corvette boundary inserts at the measured `_peak()["at"]` and asserts the count is 7 (7 + 1 > 7.5). (2) "120 px behind the ram" is read as 120 world px = 60 design units, so the support spawns at world y -920, 116 px outside the 1608 px projectile world rect; harmless (only DISENGAGE frees an AI enemy; it reaches its ram in ~3 s), do not "fix" it. Lives for the count gate: corvette `7.0 + 1.14 + 2 ticks + 8.72 s`, support `9.0 + 4.58 s`, exits over `corridor_starts()` at `[max_speed, 10]` (a 2 px/s speed gave the same worst). `SpecialistExitProbe.worst_disengage()` / `disengage_seconds()` gained an optional trailing `prepare: Callable` run on each instance before `add_child` (the corvette probe zeroes its pools). New test helper `tests/helpers/level1_slice_replay.gd`: replays one window of a section through a real `WaveManager`, stops on a condition, and settles every triggered spawn timer before freeing the world.
 
 ### Deliberately deferred
 | Item | Deferred to | Reason |
@@ -1935,7 +2143,7 @@ same directory. These are *planned* decisions; check this phase's *as built* sec
 | Rocket warning audio | Ph17 | No enemy SFX pipeline |
 | Flare / decoy reaction | when a player countermeasure exists | No consumer; rockets would retarget through their aim-point function |
 | Hijack Pulse | Ph9 | Scope |
-| Shipped module shields, shield bubbles | Ph10 / Ph11 | `EnemyShield` + the hook are built and fixture-proven |
+| Shipped module shields, fortress shield nodes | Ph10 / Ph11 | `EnemyShield` + the hook are built; module kind fixture-proven; the bubble ships only as the support's escort bubble |
 | Enemy friendly fire from blasts and beams | Ph8 | Only rocket impacts are decided |
 | Owner-distance lifetime | Ph13 (if needed) | See above |
 | `BulletPool` container injection | Ph10 | First nested launcher |
@@ -1943,3 +2151,58 @@ same directory. These are *planned* decisions; check this phase's *as built* sec
 | Encounter compositions (Corvette + Fighter, heavy patrol, Carrier + Support) | Ph13 / Ph14 | Made possible here |
 | Difficulty levers (`lead_max`, `turn_rate`, `guidance_seconds`, `salvo_period_*`, `repair_fraction`, `shield_capacity`) | Ph16 | |
 | A `StateLight` cyan state | Ph17 (if wanted) | The support's state is its projector and tether |
+
+## Phase 5 - as built (2026-10-19)
+
+Plan `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` (Revision 2); narrative in `docs/epics-done/cmufs7elw001pnm2xr3b6fteb/REPORT.md`.
+18 tasks (t1-t18); each task's "tN as built" entry in the Phase 5 section above is the detailed record and **wins** over the plan wherever
+they differ. This section is the index of what shipped, every deviation, and what is left.
+
+### What was built
+- **Gate room (t1):** GUT 253.4 s -> 176.9 s by running real-physics rows on the 8x clock and sharing replays; `scripts/gate-time.sh`.
+- **Enemy shields (t2):** `EnemyShield` (`global/components/enemy_shield.gd`) on a `HurtBox` absorber slot (`set_absorber` / `clear_absorber` /
+  `has_absorber`, `hit_absorbed(hit_box)`, duck type `absorbs_hit`). Directional arc, 360 deg bubble, capacity, regeneration, reboot,
+  sustained lifetime; never absorbs while its host is `is_armored()`; a shielded enemy consumes a default bullet.
+- **Ally hooks (t3):** `BaseEnemy.repair()` (never flashes), `can_be_repaired()`, `is_ai_driven()`, `ai_mover_max_speed()`, `accept_tow()`;
+  `EnemyBrain.accepts_tow()` overridden in the seven earlier brains and `MissileCorvetteBrain`; `SupportShipBrain` keeps the base default (true).
+- **View rect (t4):** `ArenaCamera.enemy_view_rect()`, `EnemyWorld.has_view_rect()` / `view_rect()`.
+- **Rockets (t5, t6, t9):** `EnemyRocket` + `EnemyRocketScenes` + five scenes (Dumb, Pursuit, Cluster, Delayed Warhead, Submunition), with art.
+- **Missile Corvette (t7, t8, t9, t15, t16, t17):** `MissileCorvette` / `Brain` / `Config`, `WaveBuilder.missile_corvette()`; hub at 315 deg on a
+  1900 px ring; 3 placements in level 1 (DURATION sections only).
+- **Support Ship (t10-t14, t15, t16, t17):** ward choice and retarget, soft anchor with jink and evasion, Assault view clamp, repair pulse,
+  projected shield (bubble in the escort), emergency escort tow, folding projector art; hub: shares the Ram Corvette's anchor; 2 placements in level 1.
+
+### Deviations from the plan (every one)
+1. **Owner-distance lifetime not built** (S2, planned): handed to Ph13 with `max_distance_from_player`. `BulletPool` container injection deferred
+   again (S3) to the first nested launcher (Ph10 Carrier hangars). `DamageReaction` not adopted (S4); P-15 closed.
+2. **`launch_velocity()` on a rail is observed per physics tick**, not in `_process` (t7; the plan's wording was wrong on the 8x clock).
+3. **The shoot-down also ignores `CONTACT`-type HitBoxes** (t5), so an ally's ram box cannot defuse a rocket; the ally takes the blast instead.
+   **`expired` goes out two physics ticks after a detonation or shoot-down** (t5) because a re-parenting pool re-triggered `area_entered`.
+4. **`break_contact` inside an orbit uses side `-orbit_dir`** (t8), not the plan's `+orbit_dir`; any later brain that blends the two needs the same sign.
+   `choose_kind()` takes a required third argument (radial speed).
+5. **`body_color` export removed** from `EnemyRocket` and its scenes (t9); Pursuit shares `enemy_rocket.png` with Dumb, told apart by a violet
+   `modulate`; sprite sizes follow the generator's proportions, not the plan's exact numbers.
+6. **A shield does not cover an `ArmorPlate`** (t2): the plate resolves its own hit. Ph10 module shields must sit on a plain part's `HurtBox`.
+   At `shield_capacity` 40 one Standard shot (50) breaks a projected shield, then 4 s of reboot; tune knowingly in Ph16.
+7. **The Support Ship's tow is a nudge on the ward's own mover** (`accept_tow`), refused by the ward's own brain in committed phases; a refused
+   tow is ignored and the support only interposes (t13).
+8. **Level 1 (t17):** the plan's "65.7 s planet_approach peak" predated the Ph4 ram levers; the measured peak is 7 at 98.0 s after placement. The
+   support spawns 116 px outside the projectile world rect (the "120 px behind the ram" reading); harmless, do not "fix" it. The Missile Corvette
+   and the Support Ship are kept out of `ENEMIES_CLEARED` sections by a gate row.
+9. **Gate time:** t17 was +15.8 s on the full suite against a 15.0 s allotment, but +12.2 s on the four affected files (`test_fighter_squad.gd`
+   varies 63-66 s between runs). Reports for t3, t4, t7 and t10-t13 did not record a clean before / after pair; the table is in `tests/README.md`.
+10. **Warning audio, flare / decoy reaction, Hijack Pulse** were out of scope as planned (S7, S8, S10); the telegraph is visual.
+
+### Gaps left for later phases
+- **Never play-tested by a human.** Headless tests cannot say whether the 0.7 s salvo telegraph is fair at Assault speed, whether a Pursuit rocket
+  can be out-turned by feel, whether the cyan arc and tether read at a glance, whether the projector unfold is visible in motion, or whether the
+  hub corvette and the level 1 placements feel crowded. Every number was chosen by arithmetic and a seeded hand-tick.
+- **Local-module shield has no shipped consumer** (fixture-proven; Ph10). **Fortress shield nodes** are Ph11.
+- **Friendly fire from blasts and beams is undecided** (Ph8); only rocket impacts hurt enemies. The Delayed Warhead's proximity trigger sees allies too.
+- **No rocket audio and no decoy** (Ph17); a countermeasure would retarget rockets through `EnemyRocket`'s aim-point function.
+- **Support Ship has no state light**; its state is the projector and the tether. The Corvette and Support are absent from `level_2_waves.gd`
+  and the station's reinforcements (Ph15).
+- **Encounter composition** (Corvette + Fighter, Carrier + Support) is mechanically possible but unauthored (Ph13 / Ph14).
+- **Difficulty levers** for Ph16: `EnemyRocket.lead_max`, `turn_rate`, `guidance_seconds`, the corvette's `salvo_period_*`, the support's
+  `repair_fraction` / `shield_capacity`.
+- **Gate time is near its comfortable limit** (about 200 s of 240 s). Phase 6 must watch its allotments; `test_fighter_squad.gd` alone is ~63 s.

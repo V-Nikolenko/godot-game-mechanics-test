@@ -96,6 +96,14 @@ func enemy_cull_rect() -> Rect2:
 	return Rect2(global_position - half, half * 2.0)
 
 
+## The rect this camera shows right now: centre global_position + offset (never
+## get_screen_center_position(), which is cached at the last scroll update and stale in a
+## hand-ticked test), size the viewport's visible size / zoom.
+func enemy_view_rect() -> Rect2:
+	var size : Vector2 = get_viewport().get_visible_rect().size / zoom
+	return Rect2(global_position + offset - size * 0.5, size)
+
+
 ## A fresh AssaultCorridorConstraint (§2.5) — one instance per call, since a constraint holds a
 ## per-enemy "entered" latch (EnemyMover.AUTO resolves this once, in _ready()).
 func enemy_movement_constraint() -> MovementConstraint:

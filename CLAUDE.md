@@ -56,7 +56,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `ArmorQuery.deflects(area, hit_box)` (`global/components/armor_query.gd`), which duck-types the target's
   `deflects_hit(hit_box: HitBox) -> bool` first (hit-aware) and falls back to `is_armored() == true` (hit-blind; no shared
   interface) and, if either refuses, returns without emitting `expired` or spending a pierce charge. The homing and
-  warhead rockets ask the same query. This is load-bearing: the
+  warhead rockets ask the same query. **A shielded enemy consumes the bullet:** an `EnemyShield` (`global/components/enemy_shield.gd`) that absorbs a hit (`HurtBox.set_absorber()` hook, `hit_absorbed` instead of `received_damage`) counts as the hit that stops a default bullet, unlike a deflection; it never absorbs while its host answers `is_armored()`. This is load-bearing: the
   space-station boss's armoured core spans the whole hull, so a shot aimed at a turret has to
   survive crossing it, and the core's `is_armored()` query is what tells the bullet the crossing
   was a deflection, not a kill — consuming the shot there makes the turrets, and the boss,
@@ -287,6 +287,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   Each lifetime is config budget + deferral + a **measured** exit (`tests/helpers/specialist_exit_probe.gd`
   runs the real scene's curved DISENGAGE over the Ph3 404-start grid), never a straight-line exit.
   Boundaries: a `.move()` put back and an extra ram triple at the peak each fail.
+  Phase 5 t17 added a separate `EXPECTED_PH5` pin for level 1's 3 Missile Corvettes and 2 Support Ships (DURATION sections
+  only), counted as specialists in the same frozen 2.5x gate with exits measured once in `before_all()` over
+  `corridor_starts()`. A boundary shows an extra corvette at planet_approach's measured peak (7 at 98.0 s) fails, and a
+  spill-over row shows no specialist (a corvette's last rocket included) outlives the next `ENEMIES_CLEARED` section's last
+  trigger. The corvette / support attack-in-budget rows replay only `rel - 1 s .. rel + engage + 2 s` of a section
+  (`tests/helpers/level1_slice_replay.gd`).
   The sixteenth gate gained **per-entry sniper and ram rows** for cloud_descent in t22 (sniper: engage + aim + lock +
   measured exit; ram: engage + wind_up + charge_max_time + max(straight, measured)). The ram's curved exit is measured
   over the probe's second start set, `corridor_starts()`: the whole 1480 × 1480 corridor, because the view-only grid
@@ -304,6 +310,24 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   cases in `test_enemy_dual_mode.gd` and `test_sector_hub_patrol.gd`) are intent tests in both harnesses; the
   primitives under them have `test_armor_query.gd`, `test_line_of_sight.gd`, and the `ContactProfile` ARMOR /
   `BulletPool.persist_after_owner_death` rows in `tests/unit/`.
+  The Phase 5 enemy rockets (`EnemyRocket`, `assault/scenes/projectiles/enemy_rockets/`) have an intent spec,
+  `tests/integration/test_enemy_rockets.gd`: guidance and dodging hand-ticked in both harnesses, and real-physics rows
+  for shoot-down, friendly fire (impact hurts enemies, plates and asteroids; the real player scenes take the blast only)
+  and the pool hand-over. t6 adds the Cluster split (exactly at `split_distance`, at `split_time`, a 36° fan of 4 unpooled
+  self-freeing submunitions, no blast, nothing if shot first, survives a freed launcher) and the Delayed Warhead
+  (poll-armed trigger, stops dead, blinks, fairness (trigger + blast) / warning >= 420 and the 420 / 700 px/s crossers);
+  their lifetime rows are in `test_enemy_bullet_lifetime.gd`.
+  `tests/integration/test_missile_corvette.gd` (t7) covers the Missile Corvette shell: pool sizes 3 / 6 / 3 / 4 pinned and equal to `pool_size_for`, `fire()` alternating tubes without touching a rocket field, the rail fallback, a real corvette on a 330 px/s rail never hitting itself (8x), `launch_velocity()` observed per physics tick, and the Assault budget exit; the rocket inequality rows in `test_enemy_rockets.gd` now read `missile_corvette_config.tres`. t8 adds the fight, hand-ticked in both harnesses: range held on a broad arc from 1200 px, a 200 px/s rush kept at bay and a 350 px/s one sidestepped by the min-range break-off, orbit reversals, no salvo at a player behind the nose (with an in-front control), salvo shape per kind (3 / 3 / 3 / 2 at `salvo_gap` after `salvo_telegraph`, CHARGING -> ARMED -> OFF, tow refused), Dumb aim points along the predicted path, kind choice and the 1-in-4 swap, the Warhead pair 180 px across the path, the Assault gate at 1.2 / 1.17 / 1.0 s and the deferral bound, the Open Space-only cancel, the tube glow and the turn inequality.
+  `tests/integration/test_support_ship.gd` (t10) covers the Support Ship shell (`assault/scenes/enemies/support_ship/`): one r 34 circle shared by body, hurtbox and contact box, a folded `Projector` and a hidden world-space `Tether`, every plan §2.11 config field, a `ContactProfile` in mode NONE that deals 0 on touch in both harnesses (with a control that an opened box does hurt), `can_be_repaired()` false, holding `follow_distance` from the nearest live ally (never another support), the Assault budget's DISENGAGE, and `suspend_ai()` folding the projector and dropping the ward. t11 adds the ward rows, dual-mode and hand-ticked: the §2.12 filter (bomber over fighter, a hurt fighter by the player wins, never a support, a railed enemy, a claimed ward, a lone swarm drone, a non-combatant, or a real Gunship / Bonus Drone beside a fighter; the 890 / 910 px search edge), 1.2x never / 1.4x after `min_ward_seconds`, a new ward the tick after the old one is freed, killed or railed, the Assault grace (from entering the view), the soft anchor, the jink (control: none), evasion of a 200 px/s stub over four seeds (control: `evade_speed` 0 is caught) and the Assault view clamp with `is_supporting()` read the same frame the camera `offset` pans.
+  The Phase 5 shield, tow and view gates: `tests/unit/test_enemy_shield.gd` (the component: arc, capacity, break, reboot,
+  regeneration, sustain/lapse, the local-module fixture row) and `tests/integration/test_enemy_shield_hits.gd` (real bullets,
+  missiles, rockets and an armoured host against a shielded hurtbox; direct emitters bypass it); `tests/integration/test_base_enemy.gd`
+  §6 (`repair()` never flashes, `accept_tow()` refused unless `is_ai_driven()` and `EnemyBrain.accepts_tow()`) and
+  `tests/unit/test_enemy_world.gd` (`EnemyWorld.view_rect()` / `ArenaCamera.enemy_view_rect()`). The level-1 placement of the two
+  enemies adds `EXPECTED_PH5` and the corvette / support attack-in-budget rows to `test_level1_specialist_spawns.gd`, a replay helper
+  `tests/helpers/level1_slice_replay.gd`, and "no `ENEMIES_CLEARED` section holds a corvette or a support" rows in
+  `test_engagement_deadline.gd`. `scripts/gate-time.sh` times the three gate steps and the slowest test files; every Phase 5 task
+  reported before / after (see `tests/README.md` → *Gate time*), and GUT time must stay <= 240 s.
   The Phase 3 behaviour specs for the Fighter and the Gatling (`test_fighter.gd`, `test_fighter_squad.gd`,
   `test_gatling_interceptor.gd`, `test_gatling_convergence.gd`, plus their cases in
   `test_enemy_dual_mode.gd`) are intent tests that run in both the Assault and Open Space harnesses.

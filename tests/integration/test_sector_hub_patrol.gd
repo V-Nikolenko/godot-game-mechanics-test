@@ -39,10 +39,28 @@ const BOMBER_CONFIG: BomberConfig = preload(
 const RAM_CONFIG: RamCorvetteConfig = preload(
 		"res://assault/scenes/enemies/ram_corvette/ram_corvette_config.tres")
 
+const CORVETTE_CONFIG: MissileCorvetteConfig = preload(
+		"res://assault/scenes/enemies/missile_corvette/missile_corvette_config.tres")
+const SUPPORT_CONFIG: SupportShipConfig = preload(
+		"res://assault/scenes/enemies/support_ship/support_ship_config.tres")
+
 const DT := 1.0 / 60.0
+const _SPEEDUP := 8
 const PATROL_SEED := 20260928
 
 var _player_spawn: Vector2 = Vector2.ZERO
+var _saved_time_scale: float = 1.0
+var _saved_ticks: int = 60
+var _saved_max_steps: int = 8
+var _clock_scaled: bool = false
+
+
+func after_each() -> void:
+	if _clock_scaled:
+		_clock_scaled = false
+		Engine.time_scale = _saved_time_scale
+		Engine.physics_ticks_per_second = _saved_ticks
+		Engine.max_physics_steps_per_frame = _saved_max_steps
 
 
 func before_all() -> void:
@@ -168,6 +186,40 @@ func test_ram_corvette_anchor_clears_every_planet_pickup_and_the_player_spawn() 
 	hub.free()
 
 
+## Epic plan §2.17 (t16): the Missile Corvette's anchor (315 deg on the 1900 ring) clears everything by its own
+## idle ring plus its 720 perceive_radius (+417 px with the nearest interactable at 1287 px).
+func test_missile_corvette_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	assert_eq(float(hub.missile_corvette_ring_radius), 1900.0)
+	assert_eq(float(hub.missile_corvette_anchor_bearing_deg), 315.0)
+	var points := _interactable_points(hub)
+	var anchor := _corvette_anchor(hub)
+	_assert_group_clears(anchor, CORVETTE_CONFIG.idle_radius, CORVETTE_CONFIG.perceive_radius,
+			points, "Missile Corvette")
+	var nearest := INF
+	for p: Vector2 in points:
+		nearest = minf(nearest, p.distance_to(anchor))
+	assert_almost_eq(nearest - CORVETTE_CONFIG.idle_radius - CORVETTE_CONFIG.perceive_radius, 417.0, 2.0,
+			"the plan's +417 px margin")
+	hub.free()
+
+
+## The Support Ship shares the Ram's anchor and has the Ram's idle (150) and perceive (600) radii, so the Ram's
+## clearance holds for it (+308.7 px).
+func test_support_ship_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	assert_eq(SUPPORT_CONFIG.idle_radius, RAM_CONFIG.idle_radius, "same idle ring as the Ram")
+	assert_eq(SUPPORT_CONFIG.perceive_radius, RAM_CONFIG.perceive_radius, "same perceive radius as the Ram")
+	_assert_group_clears(_specialist_anchor(hub, float(hub.ram_anchor_bearing_deg)),
+			SUPPORT_CONFIG.idle_radius, SUPPORT_CONFIG.perceive_radius, _interactable_points(hub), "Support Ship")
+	hub.free()
+
+
+func _corvette_anchor(hub: Node) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(float(hub.missile_corvette_anchor_bearing_deg))) \
+			* float(hub.missile_corvette_ring_radius)
+
+
 ## Boundary (t20): the clearance check can reject. A pickup dropped just inside the sniper's reach
 ## is reported; the real scene's points are not.
 func test_a_pickup_moved_inside_the_snipers_reach_fails_the_clearance_check() -> void:
@@ -182,7 +234,7 @@ func test_a_pickup_moved_inside_the_snipers_reach_fails_the_clearance_check() ->
 	hub.free()
 
 
-func test_the_seven_patrol_anchors_are_well_apart() -> void:
+func test_the_eight_distinct_patrol_anchors_are_well_apart_and_the_support_shares_the_rams() -> void:
 	var hub := HUB_SCENE.instantiate()
 	var anchors: Array[Vector2] = [
 		Vector2.RIGHT.rotated(deg_to_rad(float(hub.swarm_anchor_bearing_deg))) * float(hub.patrol_ring_radius),
@@ -192,13 +244,19 @@ func test_the_seven_patrol_anchors_are_well_apart() -> void:
 		_specialist_anchor(hub, float(hub.sniper_anchor_bearing_deg)),
 		_specialist_anchor(hub, float(hub.bomber_anchor_bearing_deg)),
 		_specialist_anchor(hub, float(hub.ram_anchor_bearing_deg)),
+		_corvette_anchor(hub),
 	]
-	assert_eq(anchors.size(), 7)
+	assert_eq(anchors.size(), 8)
 	for i: int in anchors.size():
 		for j: int in range(i + 1, anchors.size()):
 			assert_gt(anchors[i].distance_to(anchors[j]), 1000.0,
 					"patrol anchors %d and %d must not sit on top of each other" % [i, j])
 	hub.free()
+	var built := _spawn_hub(PATROL_SEED)
+	var extras := _missile_and_support(built.container)
+	assert_eq((extras.support.get_node("Brain") as SupportShipBrain).patrol_anchor, anchors[6],
+			"the support's anchor equals the ram's")
+	assert_eq((extras.corvette.get_node("Brain") as MissileCorvetteBrain).patrol_anchor, anchors[7])
 
 
 # ── No reference to the retired ambient hub drone remains anywhere in the project ──────────────
@@ -255,7 +313,8 @@ func test_no_reference_to_the_retired_ambient_drone_remains_in_gd_tscn_or_tres()
 ## `squad_size`) are set before the node enters the tree, since `_ready()` is what spawns the
 ## patrol. Every spawned drone's automatic physics is switched off immediately so callers can
 ## hand-tick it (tests/README.md: "keep _physics_process out of the tree and call it by hand").
-func _spawn_hub(patrol_seed: int, squad_size: int = -1, player_pos: Vector2 = Vector2.ZERO) -> Dictionary:
+func _spawn_hub(patrol_seed: int, squad_size: int = -1, player_pos: Vector2 = Vector2.ZERO,
+		engage_new: bool = false) -> Dictionary:
 	var h: RefCounted = HARNESS.open_space()
 	h.player.global_position = player_pos
 	var hub := Node2D.new()
@@ -264,6 +323,12 @@ func _spawn_hub(patrol_seed: int, squad_size: int = -1, player_pos: Vector2 = Ve
 	container.name = "EnemyContainer"
 	hub.add_child(container)
 	hub.set("patrol_seed", patrol_seed)
+	if engage_new:
+		# `start_engaged` is read in the brain's `_start()`, so it is set as each ship enters the container.
+		container.child_entered_tree.connect(func(c: Node) -> void:
+			var brain = c.get_node_or_null("Brain")
+			if brain != null and "start_engaged" in brain:
+				brain.start_engaged = true)
 	if squad_size >= 0:
 		hub.set("squad_size", squad_size)
 	h.root.add_child(hub)
@@ -321,6 +386,16 @@ func _specialists(container: Node2D) -> Dictionary:
 	return {"snipers": snipers, "bombers": bombers, "rams": rams}
 
 
+func _missile_and_support(container: Node2D) -> Dictionary:
+	var out := {"corvette": null, "support": null}
+	for c: Node in container.get_children():
+		if c is MissileCorvette:
+			out.corvette = c
+		elif c is SupportShip:
+			out.support = c
+	return out
+
+
 func test_spawns_one_swarm_squad_and_one_razor_drone() -> void:
 	var built := _spawn_hub(PATROL_SEED)
 	var container: Node2D = built.container
@@ -337,8 +412,11 @@ func test_spawns_one_swarm_squad_and_one_razor_drone() -> void:
 	assert_eq((specialists.snipers as Array).size(), 1, "one Sniper spawned")
 	assert_eq((specialists.bombers as Array).size(), 1, "one Bomber spawned")
 	assert_eq((specialists.rams as Array).size(), 1, "one Ram Corvette spawned")
-	assert_eq(container.get_child_count(), swarms.size() + 1 + fighters.size() + gatlings.size() + 3,
-			"nothing but the seven groups spawned into EnemyContainer")
+	var extras := _missile_and_support(container)
+	assert_not_null(extras.corvette, "one Missile Corvette spawned")
+	assert_not_null(extras.support, "one Support Ship spawned")
+	assert_eq(container.get_child_count(), swarms.size() + 1 + fighters.size() + gatlings.size() + 3 + 2,
+			"nothing but the eight groups spawned into EnemyContainer")
 
 	var f_squad: SquadController = (fighters[0] as Fighter).squad if not fighters.is_empty() else null
 	var g_squad: SquadController = (gatlings[0] as GatlingInterceptor).squad if not gatlings.is_empty() else null
@@ -450,11 +528,12 @@ func test_the_existing_groups_seeds_are_unchanged_by_the_specialists() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = PATROL_SEED
 	var expected: Array[int] = []
-	for i: int in 12:
+	for i: int in 14:
 		var s := rng.randi()
 		expected.append(s if s != 0 else 1)
-	assert_eq(_brain_seeds(built.container), expected,
-			"children appear in spawn order and take the draws in that order")
+	var seeds := _brain_seeds(built.container)
+	assert_eq(seeds.slice(0, 12), expected.slice(0, 12), "the existing 12 draws keep their seeds")
+	assert_eq(seeds.slice(12), expected.slice(12), "the corvette takes draw 13 and the support draw 14")
 
 
 func test_nobody_perceives_the_player_at_frame_0() -> void:
@@ -472,8 +551,15 @@ func test_nobody_perceives_the_player_at_frame_0() -> void:
 	all_drones.append_array(specialists.snipers)
 	all_drones.append_array(specialists.bombers)
 	all_drones.append_array(specialists.rams)
+	var extras := _missile_and_support(built.container)
+	all_drones.append(extras.corvette)
+	all_drones.append(extras.support)
 	assert_gt(all_drones.size(), 1, "sanity: something spawned")
 	_tick_all(all_drones)
+	assert_eq((extras.corvette.get_node("Brain") as MissileCorvetteBrain).phase, MissileCorvetteBrain.Phase.IDLE,
+			"a Missile Corvette must not notice the player on its first tick")
+	assert_eq((extras.support.get_node("Brain") as SupportShipBrain).phase, SupportShipBrain.Phase.IDLE,
+			"a Support Ship must not notice the player on its first tick")
 	for sn: Sniper in specialists.snipers:
 		assert_eq((sn.get_node("Brain") as SniperBrain).phase, SniperBrain.Phase.IDLE,
 				"a Sniper must not notice the player on its first tick")
@@ -561,3 +647,58 @@ func test_a_hub_bombers_mine_lands_in_the_enemy_container() -> void:
 	assert_eq(mine.get_parent(), container, "the mine's parent is EnemyContainer")
 	var after := container.get_children().filter(func(c: Node) -> bool: return c is EnemyOrdnance).size()
 	assert_eq(after, before + 1, "exactly one ordnance joined the container")
+
+
+## Plan §2.17: a hub corvette's rocket is parented to `EnemyContainer` (pool -> ship -> container) in real physics at
+## 8x, with the player held in front of its nose so its own cycle fires.
+func test_a_hub_corvettes_rocket_lands_in_the_enemy_container() -> void:
+	var built := _spawn_hub(PATROL_SEED, -1, Vector2.ZERO, true)
+	var container: Node2D = built.container
+	var corvette: MissileCorvette = _missile_and_support(container).corvette
+	assert_not_null(corvette, "sanity: a Missile Corvette spawned")
+	if corvette == null:
+		return
+	(built.h.player as Node2D).global_position = corvette.global_position + Vector2(CORVETTE_CONFIG.preferred_range, 0.0)
+	corvette.set_physics_process(true)
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	_clock_scaled = true
+	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
+	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
+	Engine.time_scale = _saved_time_scale * _SPEEDUP
+	var rocket: EnemyRocket = null
+	var elapsed := 0.0
+	while rocket == null and elapsed < 20.0:
+		await get_tree().physics_frame
+		elapsed += DT  # the step stays 1/60 game-second
+		for c: Node in container.get_children():
+			if c is EnemyRocket:
+				rocket = c
+				break
+	assert_not_null(rocket, "the engaged hub corvette fired within 20 game-seconds")
+	if rocket != null:
+		assert_eq(rocket.get_parent(), container, "the rocket's parent is EnemyContainer")
+
+
+## Plan §2.17 (§37 Support + Ram made possible): the hub Support Ship, engaged beside the hub Ram on the shared anchor,
+## selects the Ram as its ward and is supporting once in `beam_range`.
+func test_an_engaged_hub_support_selects_the_hub_ram_as_its_ward() -> void:
+	var built := _spawn_hub(PATROL_SEED, -1, Vector2.ZERO, true)
+	var extras := _missile_and_support(built.container)
+	var support: SupportShip = extras.support
+	var ram: RamCorvette = (_specialists(built.container).rams as Array[RamCorvette])[0]
+	var brain := support.get_node("Brain") as SupportShipBrain
+	var changes: Array[Node] = []
+	brain.ward_changed.connect(func(w: Node) -> void: changes.append(w))
+	assert_true(ram.is_ai_driven(), "sanity: the hub Ram is AI-driven (a candidate)")
+	_tick(support)
+	assert_eq(changes, [ram] as Array[Node], "ward_changed(ram) fired, once, and for nobody else")
+	assert_eq(brain.ward, ram)
+	assert_eq(brain.phase, SupportShipBrain.Phase.FOLLOW)
+	var guard := 0
+	while not brain.is_supporting() and guard < 600:
+		_tick(support)
+		guard += 1
+	assert_true(brain.is_supporting(), "supporting once within beam_range of the Ram")
+	assert_lte(support.global_position.distance_to(ram.global_position), SUPPORT_CONFIG.beam_range)

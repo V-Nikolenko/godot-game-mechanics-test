@@ -352,6 +352,44 @@ b.bomber().at(0, -400).move(b.straight(82))
 
 ---
 
+### `missile_corvette` — Missile Corvette
+
+**Builder:** `b.missile_corvette()`  
+**Scene:** `missile_corvette.tscn`  
+**Movement:** AI-driven (`MissileCorvetteBrain` + `EnemyMover`); closes to its held range (620 Open Space / 460 Assault), then circles the player on a broad, drifting, reversing arc with its nose on them, breaking off sideways inside `min_range` 380. Fires a telegraphed (0.7 s, tubes glow) salvo of 3 rockets (2 Warheads) only at a player inside its 45° nose cone, every 4–5 s, aimed at where the player is heading (kind by distance and motion: Warhead < 420 px, Pursuit at a fleeing player, Cluster at a far crossing one, else Dumb). Leaves when its Assault budget (`engage_seconds` 7.0) ends, after any salvo it has started. `.move()` puts it on a rail, where it fires a Dumb rocket DOWN every `rail_rocket_interval`. See `missile_corvette/ENEMY.md`.  
+**Shoots:** Rockets (`EnemyRocket`: Dumb, Pursuit, Cluster, Delayed Warhead) from four persistent pools; every rocket can be shot down.  
+**HP:** 160 (a 40 px circle); contact damage 30  
+**Score:** 70 (rockets score nothing)
+
+**Config fields** (`MissileCorvetteConfig`): `max_speed` 210, `acceleration` 240, `salvo_count` 3, `warhead_salvo_count` 2, `salvo_period_min` 4.0, `rail_rocket_interval` 2.5 s — the rest in `missile_corvette_config.gd`.
+
+**Level 1:** deep_space 12.0 s, planet_approach 40.0 s and 85.0 s, AI-driven (no `.move()`). **Never place it in an `ENEMIES_CLEARED` section** — its persistent rockets would hold the section open (`test_engagement_deadline.gd`).
+
+**Examples:**
+```gdscript
+b.missile_corvette().at(0, -400)
+```
+
+---
+
+### `support_ship` — Support Ship
+
+**Builder:** `b.support_ship()`  
+**Scene:** `support_ship.tscn`  
+**Movement:** AI-driven (`SupportShipBrain` + `EnemyMover`); shadows the highest-threat AI-driven ally worth >= 20 (never a Swarm Drone, Gunship, Bonus Drone or another support) from behind, jinks and evades the player, re-picks a ward the tick its ward dies, and in Assault stays inside the camera view; with no ward it holds near the nearest ally (Assault: leaves after 1.5 s in view without one). Leaves when its Assault budget (`engage_seconds` 9.0) ends. Unarmed: no rail fallback. It repairs its ward in pulses (`BaseEnemy.repair()`), projects a cyan `EnemyShield` arc onto it (a 360° bubble during the emergency escort) and tows a badly hurt ward away through `accept_tow()`; see `support_ship/ENEMY.md`.  
+**Shoots:** Nothing.  
+**HP:** 55 (a 34 px circle); contact damage 0 (`ContactProfile` NONE; it cannot be repaired by another support)  
+**Score:** 60
+
+**Level 1:** with deep_space's 26.0 s ram pair and planet_approach's 28.0 s ram triple, 60 units behind the ram (`.at(x, -460)` against the ram's -400), AI-driven. Kept out of `ENEMIES_CLEARED` sections.
+
+**Examples:**
+```gdscript
+b.support_ship().at(0, -400)
+```
+
+---
+
 ### `bonus_drone` — Bonus Drone
 
 **Builder:** `b.bonus_drone()`  
@@ -497,6 +535,34 @@ bomb (`EnemyOrdnance`, an `Area2D`; not an `EnemyBullet`, not in `enemies`, neve
 Its pools set `persist_after_owner_death`, so what a Bomber dropped outlives it. See `docs/BULLET_POOL.md` and
 `bomber/ENEMY.md`.
 
+
+### Enemy rockets (Ph5)
+
+`assault/scenes/projectiles/enemy_rockets/` holds the Missile Corvette's ordnance: `EnemyRocket` (`enemy_rocket.gd`, an
+`Area2D`; one script, `kind` plus exports, no per-kind subclass), `EnemyRocketScenes` (`scene_for(kind)`,
+`pool_size_for(kind, cfg)`, `export_of(kind, property, fallback)`) and five scenes. Not rounds and not in `enemies`; never
+scored. **Tuning lives in each scene's exports.** Art and `rotation` are nose-up.
+
+| Kind | Scene | Speed (launch → cruise) | Steering | Impact / blast | Life |
+|---|---|---|---|---|---|
+| Dumb | `dumb_rocket.tscn` | 140 → 520, accel 900 | none (straight at the aim point) | 16 / 36 px, 16 | 4 s / 1800 px |
+| Pursuit | `pursuit_rocket.tscn` | 120 → 520, accel 600 | `turn_rate` 1.6 rad/s for `guidance_seconds` 3.0 toward the player's predicted path (`lead_max` 0.8 s) | 18 / 40 px, 18 | 6 s / 2400 px |
+| Cluster | `cluster_rocket.tscn` | 120, accel 600 | `turn_rate` 0.7 for 4.0 s; splits within `split_distance` 260 px of the player or at `split_time` 2.0 s into 4 submunitions on a 36° fan, no blast | 16 / 36 px, 16 | 4 s / 1200 px |
+| Delayed Warhead | `delayed_warhead.tscn` | 100, accel 300 | `turn_rate` 0.6 for 4.0 s; a player (or any layer-128 hurtbox) inside `trigger_radius` 70 px after `prox_arm_seconds` 0.6 stops it dead; it blinks and detonates after `warning_time` 0.4 s | 12 / 110 px, 30 | 7 s / 1300 px |
+| Submunition | `submunition.tscn` | 520, no accel | none; unpooled, frees itself | 8 / 22 px, 8 | 1.2 s / 600 px |
+
+- **Collision (no layer renamed):** the impact `HitBox` is on layer 32 only (`CollisionLayers.PLAYER_ROCKETS`; the name predates
+  enemy rockets), mask 128 | 512, closed until the rocket is clear of its launcher (`rocket_clear_radius()`). The shoot-down
+  `HurtBox` is on 512, mask 96. So the **impact** hurts enemies, enemy ordnance, Ram plates and asteroids; the **blast**
+  (`ContactBlast`, layer 256) is the only thing that hurts the player or allies. A player bullet or missile and a rocket destroy
+  each other with no blast; rockets ignore each other; an armoured hull lets a rocket through (`ArmorQuery`).
+- **Launcher contract:** `launch(dir, aim_point, launcher)`; the launcher answers `launch_velocity()` (inherited along `dir`) and
+  `rocket_clear_radius()`. A launcher that counts `expired` must allow the two-tick lag after a detonation or shoot-down.
+- **Pools** are direct root children with `persist_after_owner_death`; submunitions are unpooled and own themselves. See
+  `docs/BULLET_POOL.md` ("Enemy rockets").
+- Tests: `tests/integration/test_enemy_rockets.gd` (both harnesses plus real-physics shoot-down, friendly-fire and pool hand-over
+  rows), `test_enemy_bullet_lifetime.gd` (lifetime rows), `tests/helpers/rocket_launcher_fixture.gd`.
+
 ---
 
 ## Quick Rules
@@ -509,6 +575,9 @@ Its pools set `persist_after_owner_death`, so what a Bomber dropped outlives it.
 | **`sniper_enemy` on a rail** | No fly-in constant any more: a rail suspends the brain and the telegraph cycle starts at spawn. Without `.move()` it runs its AI relocation loop. |
 | **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |
 | **Offsets are design-unit (640×360 space)** | Do NOT multiply by 2. `WaveManager` handles the `WORLD_SCALE` conversion. |
+| **Rockets hurt enemies by impact only** | An `EnemyRocket`'s impact hits enemies, ordnance, Ram plates and asteroids; its blast hurts only the player and allies. Never put a rocket launcher where its own rockets can overlap its hull (`rocket_clear_radius()`). |
+| **Supports never repair supports** | A `SupportShip` is never a ward and `can_be_repaired()` is false; it deals 0 contact damage. |
+| **`missile_corvette` and `support_ship` are DURATION-only** | Never place either in an `ENEMIES_CLEARED` section: rockets persist and hold the section open, and a support has no wave-clear role (`test_engagement_deadline.gd`). |
 
 ---
 

@@ -1,0 +1,81 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/projectiles/enemy_rockets/enemy_rocket.gd" id="1_rkt"]
+[ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="2_rkt"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="3_rkt"]
+[ext_resource type="Script" path="res://global/components/projectile_lifetime.gd" id="4_rkt"]
+[ext_resource type="Script" path="res://global/components/rocket_trail.gd" id="5_rkt"]
+[ext_resource type="Script" path="res://global/components/explosion_effect.gd" id="6_rkt"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/projectiles/enemy_rocket.png" id="8_rkt"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hit"]
+radius = 6.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
+radius = 8.0
+
+[node name="DumbRocket" type="Area2D"]
+collision_layer = 0
+collision_mask = 0
+monitoring = false
+monitorable = false
+script = ExtResource("1_rkt")
+kind = 0
+launch_speed = 140.0
+cruise_speed = 520.0
+boost_seconds = 0.25
+accel = 900.0
+turn_rate = 0.0
+guidance_seconds = 0.0
+lead_max = 0.8
+impact_damage = 16
+blast_radius = 36.0
+blast_damage = 16
+blast_frames = 3
+arm_clearance = 8.0
+body_radius = 6.0
+max_time = 4.0
+max_distance = 1800.0
+
+[node name="HitBox" type="Area2D" parent="."]
+collision_layer = 32
+collision_mask = 640
+monitoring = false
+monitorable = false
+script = ExtResource("2_rkt")
+damage = 16
+damage_type = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HitBox"]
+shape = SubResource("CircleShape2D_hit")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 96
+script = ExtResource("3_rkt")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_hurt")
+
+[node name="ProjectileLifetime" type="Node" parent="."]
+script = ExtResource("4_rkt")
+max_time = 4.0
+max_distance = 1800.0
+
+[node name="RocketTrail" type="Node2D" parent="."]
+script = ExtResource("5_rkt")
+amount = 14
+offset_behind = 12.0
+
+[node name="Pop" type="Node2D" parent="."]
+script = ExtResource("6_rkt")
+amount = 10
+lifetime = 0.3
+color = Color(1.0, 0.45, 0.15, 1)
+min_velocity = 30.0
+max_velocity = 120.0
+min_scale = 1.5
+max_scale = 3.0
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("8_rkt")

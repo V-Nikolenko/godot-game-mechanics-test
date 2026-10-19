@@ -24,7 +24,8 @@ global/
 ├── components/                # composable child-node behaviours
 │   ├── health_component.gd        # Health (Node)
 │   ├── temp_health_component.gd   # TempHealth (Node) — drains before Health
-│   ├── hurtbox_component.gd       # HurtBox (Area2D) — receives hits
+│   ├── hurtbox_component.gd       # HurtBox (Area2D) — receives hits; one absorber slot (`set_absorber`, `hit_absorbed`)
+│   ├── enemy_shield.gd            # EnemyShield (Node2D) — directional / bubble enemy shield: eats hits in its arc, breaks, reboots, regenerates
 │   ├── hitbox_component.gd        # HitBox (Area2D) — deals hits, DamageType enum
 │   ├── armor_query.gd             # ArmorQuery (static) — "does this target refuse my hit?": `deflects_hit(hit_box)` first, else `is_armored()`
 │   ├── armor_plate.gd             # ArmorPlate (Node2D) — breakable armour piece: HurtBox + Health + Sprite; rockets / high-impact shots break it, bullets glance off
@@ -188,7 +189,7 @@ get_node_or_null("ContactHitBox") as HitBox` (nullable — `bonus_drone` authors
 "contact-harmless" behaviour). `AllyFighter` (not a `BaseEnemy`) does the same under its own
 `_contact_hit_box`.
 
-`HurtBox` (`extends Area2D`) is the *target* side. In `_ready()` it connects `area_entered`; when an overlapping area is a `HitBox` (and passes the optional `accepted_damage_types` filter), it re-emits `received_damage(damage)`. Filtering by type is via the exported `accepted_damage_types: Array[HitBox.DamageType]` (empty = accept all).
+`HurtBox` (`extends Area2D`) is the *target* side. In `_ready()` it connects `area_entered`; when an overlapping area is a `HitBox` (and passes the optional `accepted_damage_types` filter), it re-emits `received_damage(damage)` — unless its absorber took the hit (see *Enemy shields* below). Filtering by type is via the exported `accepted_damage_types: Array[HitBox.DamageType]` (empty = accept all).
 
 Collision wiring: set the `HitBox`'s `collision_layer` to a "damage" layer and leave its mask empty; set the `HurtBox`'s `collision_mask` to scan that same layer. Only `Area2D`↔`Area2D` overlap is detected — `HurtBox` ignores non-`HitBox` areas. The damage path is **HitBox overlaps HurtBox → `HurtBox.received_damage` → your handler (or `DamageReaction`) → Shield/Health**.
 
@@ -231,6 +232,38 @@ First shipped user: the **Ram Corvette** (`assault/scenes/enemies/ram_corvette/`
 `deflects_hit` / `is_armored()` are true while any plate lives (every projectile passes the hull to reach a plate,
 and `_on_received_damage` deflects the direct emitters), `homing_point` = nearest live plate, exposure deferred one
 step after the last plate breaks. See its `ENEMY.md`; gated by `tests/integration/test_ram_corvette.gd`.
+
+### Enemy shields — the `HurtBox` absorb hook and `enemy_shield.gd`
+
+`HurtBox.received_damage(damage)` carries no hit and Godot orders `area_entered` callbacks undefined, so a
+directional shield is decided **inside the hurtbox that owns the hit**, once per hit. `HurtBox` has one absorber slot:
+`set_absorber(obj) -> bool` (false while another live absorber holds it, or for an object without `absorbs_hit`; a
+freed holder's slot is free), `clear_absorber(obj)` (no-op unless `obj` holds it), `has_absorber()`. After the
+`accepted_damage_types` filter, a live absorber answering duck-typed `absorbs_hit(hit_box: HitBox) -> bool` true makes
+the hurtbox emit `hit_absorbed(hit_box)` **instead of** `received_damage`. With no absorber nothing changes (the
+player's hurtbox, every plate, every existing enemy). Direct emitters (beam, nova, dash, shield overload, engine boost,
+laser ray) call `received_damage.emit()` themselves and **bypass** shields, as they bypass plates.
+
+The projectile is not told: the shielded target answers neither `deflects_hit` nor `is_armored` for the shield, so
+`ArmorQuery` reports no deflection and the shot is **consumed** ("the shield eats bullets"; a pierce charge is spent;
+the Sniper Shot passes on as through any target; a player rocket detonates). The player's ram contact hitbox is a
+`HitBox` too, so a shield in its arc absorbs a ram contact.
+
+`EnemyShield` (`Node2D`, a child of what it protects) is the absorber: `attach(hurt_box) -> bool`; the **host** is the
+hurtbox's parent, so a shield on a part's own hurtbox (a local module) protects that part only. Exports (defaults =
+Open Space projected values): `arc_deg` 110 (≥ 360 = bubble; read live, so it can widen while attached), `capacity` 40,
+`regen_delay` 3.0 (restarted by every absorbed hit), `regen_seconds` 1.5 (empty → full, linear), `reboot_seconds` 4.0
+(after a break; then refills from 0 at once), `turn_rate` 1.6 rad/s, `radius` 40, `sustain_mode` / `heartbeat` 0.3 /
+`fade_seconds` 0.3. Methods: `face(world_dir)` (snap; initial facing `Vector2.DOWN`), `set_threat_point(world)` (the
+arc turns toward that bearing at `turn_rate`), `sustain(threat_point)`, `absorbs_hit(hb)`, `points()`, `is_up()`,
+`facing()`. Signals: `absorbed(hit_box, remaining)`, `broken()`, `restored()` (every refill to full), `lapsed()`.
+A hit inside the arc costs its `damage`; **the breaking hit is absorbed whole**. **It never absorbs while its host
+answers the hit-blind `is_armored() == true`** (an armoured Ram lets every shot through to its plates) and never asks
+`deflects_hit` (an `ArmorPlate`'s damages the plate). A sustained shield that misses its heartbeat releases the slot at
+once, fades, then frees. It draws a cyan arc in world angles and never writes `rotation`. **Limitation:** it does not
+cover an `ArmorPlate`, which damages itself in its own `area_entered`. `BaseEnemy` does **not** adopt `DamageReaction`
+(Phase 1 P-15, closed in Phase 5). No shipped enemy carries one yet (the Support Ship, Phase 5 t12/t13). Gated by
+`tests/unit/test_hitbox_hurtbox.gd`, `tests/unit/test_enemy_shield.gd` and `tests/integration/test_enemy_shield_hits.gd`.
 
 ### CollisionLayers — `global/physics/collision_layers.gd`
 
@@ -518,6 +551,11 @@ func tick(delta: float) -> void:
   drops the constraint for good (a field write, not a motion write — see the Assault exit below).
 - **Single writer:** with a mover present, nothing else writes the body's `velocity`/`rotation` or
   calls `move_and_slide()` — gated by `tests/integration/test_enemy_mover_single_writer.gd`.
+- **Ally hooks (Ph5 t3):** `BaseEnemy.repair(amount) -> int` restores HP silently (hit flash and burst only play when
+  health goes *down*; `can_be_repaired()` is false on the station); `accept_tow(v)` nudges the enemy's own mover only if
+  `is_ai_driven()` (brain + mover, not suspended), not boosting, and `EnemyBrain.accepts_tow()` — false in every committed or
+  telegraphed phase (Sniper DECOY/AIM/LOCK/FIRE, Ram WIND_UP/CHARGE, Bomber RUN, Fighter RUN_IN, Gatling SPIN_UP/STREAM,
+  Razor WINDUP/DASH/FEINT_*, Swarm WINDUP/BURST). Gated in `tests/integration/test_base_enemy.gd` §6. `BaseEnemy.ai_mover_max_speed() -> float` is the mover cap the Support Ship scales its tow by; the Missile Corvette adds TELEGRAPH / SALVO to the refusing phases.
 - **Rails override it:** `EnemyPathMover._ready()` calls `suspend_ai()` (brain `on_suspended()`, mover
   `halt()`, no more ticks) *in addition to* its unconditional `set_physics_process(false)` and
   `"AIStateMachine"` lookup. A `driven_by_brain` `AttackController` stops with the brain.
@@ -537,10 +575,10 @@ mode provider.** The provider is whatever node has joined group `&"assault_arena
 project-wide that looks that group up, and it does so duck-typed (`has_method`), so nothing under
 `global/` names the Assault-only `ArenaCamera` class. With no provider, the mode is Open Space:
 every `EnemyWorld` getter returns empty/null. `arena(tree)` returns the provider node or `null`;
-`projectile_world_rect(tree)`, `cull_rect(tree)` and `movement_constraint(tree)` each have a
+`projectile_world_rect(tree)`, `cull_rect(tree)`, `movement_constraint(tree)` and `view_rect(tree)` each have a
 `has_*` companion, because an absent result and a legitimately empty `Rect2()` are not
 distinguishable by value alone. `EnemyMover`'s `AUTO` constraint mode and `ProjectileLifetime`
-(below) are its two callers; tests inject a rect/constraint directly instead of building a provider.
+(below) are its two callers; tests inject a rect/constraint directly instead of building a provider. **`view_rect(tree)` (Ph5 t4, with `has_view_rect(tree)`) is what the camera shows right now** (`ArenaCamera.enemy_view_rect()`: centre `global_position + offset`, size `viewport size / zoom`), unlike the 1480 x 1480 corridor rect; only the Support Ship reads it, to stay on screen in Assault.
 
 **`TargetInfo` (`target_info.gd`, `RefCounted`) is the one way new code finds or predicts the
 player** — a snapshot (`position`, `velocity`, `facing`, `has_target`) taken once, so reading it

@@ -74,7 +74,7 @@ open_space/scenes/
   actually leaving the mission-select lane. `tests/integration/test_hub_log_placement.gd` asserts
   the placed count and the catalogue-total match, and exercises one of each end to end.
 
-The script's only logic is `_spawn_patrol()`: in `_ready()` it spawns the ambient patrol described in §3.3 — a Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair, a Sniper, a Bomber and a Ram Corvette, all reused from `assault/scenes/enemies/` — into the `EnemyContainer`.
+The script's only logic is `_spawn_patrol()`: in `_ready()` it spawns the ambient patrol described in §3.3 — a Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair, a Sniper, a Bomber, a Ram Corvette, a Missile Corvette and a Support Ship, all reused from `assault/scenes/enemies/` — into the `EnemyContainer`.
 
 ### 3.2 Player entity — `OpenSpacePlayerShip`
 
@@ -231,7 +231,7 @@ Covered by `tests/unit/test_aim_reticle.gd` (what `set_aim()` stores; state/colo
 
 Covered by `tests/integration/test_open_space_flight_feel.gd`: `_step_bank()` driven directly with injected rotation deltas (zero for no change, saturates at `bank_max_rad`, sign-correct both directions, decays to zero once turning stops), plus two wiring boundaries on a real ship — `rotation` after a bank-driving `_handle_rotation()` call is (within float tolerance) exactly what `ShipTurnController.step()` returned, and `MuzzleLeft`/`MuzzleRight`/`EngineLeft`/`EngineRight` do not move a pixel across frames where the lean is non-zero but mid-decay (fails on a `$SpriteAnchor`-skewing build). **A human still has to fly it** — no headless test can say whether the lean itself reads as a lean or a glitch.
 
-### 3.3 Ambient patrol — Swarm Drone squad, Razor Drone, fighter pair, Gatling pair, Sniper, Bomber, Ram Corvette
+### 3.3 Ambient patrol — Swarm Drone squad, Razor Drone, fighter pair, Gatling pair, Sniper, Bomber, Ram Corvette, Missile Corvette, Support Ship
 
 `SectorHub._spawn_patrol()` (`open_space/scenes/levels/sector_hub.gd`) is the hub's only enemy
 spawn. It reuses the Assault roster's Tier-1 drones directly — `assault/scenes/enemies/
@@ -242,6 +242,8 @@ The `PatrolDrone` this replaced (a straight-line-drift `CharacterBody2D` with no
 The Fighter and Gatling Interceptor (`.../fighter/fighter.tscn`, `.../gatling_interceptor/gatling_interceptor.tscn`) join them as a squad of 2 each (`SHOOTER_SQUAD_SIZE`), on a wider ring: `shooter_ring_radius` (`1500`), `fighter_anchor_bearing_deg` (`180`, left of the hub) and `gatling_anchor_bearing_deg` (`0`, right). Each pair shares one `SquadController` and one `patrol_anchor`, set on the brains before `add_child()`; their rng seeds are drawn from `patrol_seed` after the drones', so the drones' seeds did not move. Measured clearances (distance to the nearest interactable − `idle_radius` − `perceive_radius`): fighter +233 px (`LoreLogFortunaManifest`), Gatling +89 px (`ShipBoostUpPickup`).
 
 The Sniper, Bomber and Ram Corvette (`.../sniper/sniper.tscn`, `.../bomber/bomber.tscn`, `.../ram_corvette/ram_corvette.tscn`) are lone patrols on a third ring: `specialist_ring_radius` (`1700`), `sniper_anchor_bearing_deg` (`135`), `bomber_anchor_bearing_deg` (`45`) and `ram_anchor_bearing_deg` (`225`); 315 deg is left free. Each brain gets its `patrol_anchor` and a seed (draws 10-12, after all earlier groups) before `add_child()`, then idles and notices the player as described in each `ENEMY.md` "Hub idle". Measured clearances: Sniper +145 px (`fortuna_station`), Bomber +253 px (`edelia`), Ram Corvette +309 px (`voeter_k05m`). Bomber ordnance lands in `EnemyContainer`. Pinned in `tests/integration/test_sector_hub_patrol.gd`.
+
+The Missile Corvette (`.../missile_corvette/missile_corvette.tscn`) patrols the free 315 deg diagonal on a fourth ring, `missile_corvette_ring_radius` (`1900`) / `missile_corvette_anchor_bearing_deg` (`315`), with seed draw 13: anchor (1344, -1344), nearest interactable 1287 px (`ShipBoostUpPickup`), clearance 1287 - 150 - 720 = +417 px. The Support Ship (`.../support_ship/support_ship.tscn`) has no anchor of its own: it shares the Ram Corvette's (seed draw 14), and its idle / perceive radii (150 / 600) equal the Ram's, so the Ram's +309 px clearance holds. Once both engage it wards the Ram (Support + Ram). A hub corvette's rockets land in `EnemyContainer`. Pinned in `tests/integration/test_sector_hub_patrol.gd`.
 
 - `@export var patrol_seed`, `squad_size` (`4`), `patrol_ring_radius` (`1300`),
   `swarm_anchor_bearing_deg` (`90`, below the hub) and `razor_anchor_bearing_deg` (`270`, above

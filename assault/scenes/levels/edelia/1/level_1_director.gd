@@ -358,6 +358,7 @@ func _build_section_1() -> LevelSection:
 			b.sniper().at(-185, -400),
 			b.sniper().at( 185, -400).delay(0.3),
 			b.drone().at(   0, -400).delay(0.5),
+			b.missile_corvette().at(0, -400).delay(1.0),  # AI, no rail; never in an ENEMIES_CLEARED section (rockets persist)
 		]),
 
 		# 12.5 s — wedge of drones rushing down the middle
@@ -448,6 +449,7 @@ func _build_section_1() -> LevelSection:
 		# 26.0 s — 2 ram ships from each flank + drone interlace
 		b.wave(26.0, [
 			b.ram().at(-255, -400),
+			b.support_ship().at(-255, -460),  # rides 60 units behind the ram above and wards it
 			b.ram().at( 255, -400).delay(0.5),
 			b.drone().at(   0, -400).delay(0.3),
 		]),
@@ -628,6 +630,7 @@ func _build_section_2() -> LevelSection:
 		# 28.0 s — ram from above (extended with side rams)
 		b.wave(28.0, [
 			b.ram().at(0, -400),
+			b.support_ship().at(0, -460),  # rides 60 units behind the ram above and wards it
 			b.ram().at(-220, -400).delay(0.4),
 			b.ram().at( 220, -400).delay(0.4),
 		]),
@@ -652,6 +655,7 @@ func _build_section_2() -> LevelSection:
 		b.wave(39.0, [
 			b.fighter().at(-500, 50).squad(&"w11f"),
 			b.fighter().at( 500, 50).delay(0.4).squad(&"w11f"),
+			b.missile_corvette().at(0, -400).delay(1.0),  # AI, no rail; never in an ENEMIES_CLEARED section (rockets persist)
 		]),
 
 		# 42.0 s — drone cluster from upper-right
@@ -750,6 +754,7 @@ func _build_section_2() -> LevelSection:
 		# 84.0 s — drone swarm wedge
 		b.wave(84.0, [
 			b.drone().formation(b.wedge_formation(5, 40, 14)).at(0, -400),
+			b.missile_corvette().at(0, -400).delay(1.0),  # AI, no rail; never in an ENEMIES_CLEARED section (rockets persist)
 		]),
 
 		# 88.0 s — dual ram closers from sides (+ middle ram)

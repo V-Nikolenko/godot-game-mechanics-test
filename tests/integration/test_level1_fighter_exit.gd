@@ -27,7 +27,9 @@
 ## (`test_a_rail_driven_fighter_wave_is_rejected`).
 ##
 ## Game time is summed physics delta, never wall clock. Every brain is seeded from its spawn index
-## before its `_ready()`, so this is one seeded scenario.
+## before its `_ready()`, so this is one seeded scenario. The run is sped up 8x with the physics step kept at
+## 1/60 game-second (`Engine.time_scale`, `physics_ticks_per_second` and `max_physics_steps_per_frame` scaled
+## together, restored in `after_each`) - see tests/README.md -> "Gate time".
 extends GutTest
 
 const HARNESS := preload("res://tests/helpers/enemy_ai_harness.gd")
@@ -42,6 +44,7 @@ const _SEED_BASE := 1701
 ## WaveManager spawn timer has fired before a test returns — an unfired SceneTreeTimer is reported as
 ## a leak at process exit.
 const _MIN_RUN_SECONDS := 1.0
+const _SPEEDUP := 8
 
 var _container: Node2D
 var _wave_manager: WaveManager
@@ -58,8 +61,14 @@ var _complete_wm_clock: float = -1.0
 ## object, never on a node, so a late callback during teardown writes into live state.
 var _fighter_exits: Array[Dictionary] = []
 
+var _saved_time_scale: float = 1.0
+var _saved_ticks: int = 60
+var _saved_max_steps: int = 8
+var _clock_scaled: bool = false
+
 
 func before_each() -> void:
+	_scale_clock()
 	_t = 0.0
 	_recording = true
 	_spawned = 0
@@ -71,6 +80,28 @@ func before_each() -> void:
 
 func after_each() -> void:
 	_recording = false
+	_restore_clock()
+
+
+func _scale_clock() -> void:
+	if _clock_scaled:
+		return
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	_clock_scaled = true
+	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
+	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
+	Engine.time_scale = _saved_time_scale * _SPEEDUP
+
+
+func _restore_clock() -> void:
+	if not _clock_scaled:
+		return
+	_clock_scaled = false
+	Engine.time_scale = _saved_time_scale
+	Engine.physics_ticks_per_second = _saved_ticks
+	Engine.max_physics_steps_per_frame = _saved_max_steps
 
 
 func _cloud_descent() -> LevelSection:

@@ -1,0 +1,152 @@
+[gd_scene load_steps=20 format=3]
+
+[ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_mc"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/missile_corvette/missile_corvette.gd" id="2_mc"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/missile_corvette.png" id="3_mc"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_mc"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_mc"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_mc"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="7_mc"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/missile_corvette/missile_corvette_brain.gd" id="8_mc"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="9_mc"]
+[ext_resource type="Script" path="res://global/components/bullet_pool.gd" id="10_mc"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_rockets/dumb_rocket.tscn" id="11_mc"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_rockets/pursuit_rocket.tscn" id="12_mc"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_rockets/cluster_rocket.tscn" id="13_mc"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_rockets/delayed_warhead.tscn" id="14_mc"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_mc"]
+resource_local_to_scene = true
+shader = ExtResource("1_mc")
+shader_parameter/enabled = false
+shader_parameter/flash_color = Color(1, 1, 1, 1)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_mc"]
+radius = 40.0
+
+[sub_resource type="Animation" id="Animation_reset_mc"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
+[sub_resource type="Animation" id="Animation_hit_mc"]
+resource_name = "hit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [true, false]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_mc"]
+_data = {
+&"RESET": SubResource("Animation_reset_mc"),
+&"hit": SubResource("Animation_hit_mc")
+}
+
+[node name="MissileCorvette" type="CharacterBody2D"]
+script = ExtResource("2_mc")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+material = SubResource("ShaderMaterial_mc")
+texture = ExtResource("3_mc")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_mc")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 65
+script = ExtResource("4_mc")
+metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_mc")
+debug_color = Color(0.7, 0, 0, 0.419608)
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("5_mc")
+max_health = 160
+current_health = 160
+metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_mc")
+}
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 0
+script = ExtResource("6_mc")
+damage = 30
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+shape = SubResource("CircleShape2D_mc")
+
+[node name="Tubes" type="Node2D" parent="."]
+
+[node name="TubeL" type="Marker2D" parent="Tubes"]
+position = Vector2(-18, 30)
+
+[node name="TubeR" type="Marker2D" parent="Tubes"]
+position = Vector2(18, 30)
+
+[node name="TubeLightL" type="Sprite2D" parent="Tubes"]
+position = Vector2(-18, 30)
+
+[node name="TubeLightR" type="Sprite2D" parent="Tubes"]
+position = Vector2(18, 30)
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("7_mc")
+constraint_mode = 0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("8_mc")
+
+[node name="StateLight" type="Node2D" parent="."]
+position = Vector2(0, 14)
+script = ExtResource("9_mc")
+
+[node name="DumbPool" type="Node" parent="."]
+script = ExtResource("10_mc")
+bullet_scene = ExtResource("11_mc")
+pool_size = 3
+persist_after_owner_death = true
+
+[node name="PursuitPool" type="Node" parent="."]
+script = ExtResource("10_mc")
+bullet_scene = ExtResource("12_mc")
+pool_size = 6
+persist_after_owner_death = true
+
+[node name="ClusterPool" type="Node" parent="."]
+script = ExtResource("10_mc")
+bullet_scene = ExtResource("13_mc")
+pool_size = 3
+persist_after_owner_death = true
+
+[node name="WarheadPool" type="Node" parent="."]
+script = ExtResource("10_mc")
+bullet_scene = ExtResource("14_mc")
+pool_size = 4
+persist_after_owner_death = true
