@@ -363,6 +363,8 @@ b.bomber().at(0, -400).move(b.straight(82))
 
 **Config fields** (`MissileCorvetteConfig`): `max_speed` 210, `acceleration` 240, `salvo_count` 3, `warhead_salvo_count` 2, `salvo_period_min` 4.0, `rail_rocket_interval` 2.5 s — the rest in `missile_corvette_config.gd`.
 
+**Level 1:** deep_space 12.0 s, planet_approach 40.0 s and 85.0 s, AI-driven (no `.move()`). **Never place it in an `ENEMIES_CLEARED` section** — its persistent rockets would hold the section open (`test_engagement_deadline.gd`).
+
 **Examples:**
 ```gdscript
 b.missile_corvette().at(0, -400)
@@ -378,6 +380,8 @@ b.missile_corvette().at(0, -400)
 **Shoots:** Nothing.  
 **HP:** 55 (a 34 px circle); contact damage 0 (`ContactProfile` NONE; it cannot be repaired by another support)  
 **Score:** 60
+
+**Level 1:** with deep_space's 26.0 s ram pair and planet_approach's 28.0 s ram triple, 60 units behind the ram (`.at(x, -460)` against the ram's -400), AI-driven. Kept out of `ENEMIES_CLEARED` sections.
 
 **Examples:**
 ```gdscript

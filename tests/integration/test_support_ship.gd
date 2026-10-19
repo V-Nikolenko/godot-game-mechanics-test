@@ -1800,3 +1800,77 @@ func test_returning_interrupts_nothing_not_even_an_escort() -> void:
 	_ticks(ship, 2)
 	assert_eq(_brain(ship).phase, IdlePhase.RETURNING, "no protected phase")
 	assert_false(_brain(ship).has_ward())
+
+
+# ── Level 1 attack-in-budget (Phase 5 t17; epic plan §2.18, task plan docs/plans/cmv9szqmi002zqs2x3cd8f942/) ──────────
+#
+# Every support level 1 places has a `ProjectedShield` on a ward (`is_supporting()` true: ward valid, in `beam_range`,
+# both inside the view bands) while its Assault budget still has time left. Each placed spawn replays only
+# `rel - 1 s .. rel + engage_seconds + 2 s` of its own section through a real `WaveManager` at the 8x clock
+# (`tests/helpers/level1_slice_replay.gd`) — the ram it is placed with arrives in the same wave — and stops as soon as
+# the shield is up (or the budget has run out).
+
+const Slice := preload("res://tests/helpers/level1_slice_replay.gd")
+
+
+## Replays `row`'s slice and reports `{ "targets", "active", "supporting_at", "supporting_left", "ward", "expired" }`,
+## times from the support's spawn. `tweak` edits the placed support's private config.
+func _support_slice(row: Dictionary, tweak: Callable = Callable()) -> Dictionary:
+	var from: float = float(row["rel"]) - Slice.PRE_ROLL
+	var to: float = float(row["rel"]) + SHIPPED.engage_seconds + Slice.POST_ROLL
+	var waves := Slice.slice_waves(Slice.section(row["section"]), from, to)
+	var seen := {}
+	var observe := func(ship: BaseEnemy, t: float) -> bool:
+		if ship == null:
+			seen["left"] = true
+			return true
+		if not seen.has("spawn"):
+			seen["spawn"] = t
+		var b := ship.get_node("Brain") as SupportShipBrain
+		if b.budget == null:
+			return false
+		seen["active"] = b.budget.active
+		var left := b.budget.remaining()
+		if left > 0.0 and b.is_supporting() and is_instance_valid(b.shield) and b.shield.name == &"ProjectedShield" \
+				and b.shield.get_parent() == b.ward and b.ward.hurt_box.has_absorber():
+			seen["supporting_at"] = t - float(seen["spawn"])
+			seen["supporting_left"] = left
+			seen["ward"] = b.ward.scene_file_path.get_file()
+			return true
+		if left <= 0.0 or b.phase == SupportShipBrain.Phase.DISENGAGE:
+			seen["expired"] = true
+			return true
+		return false
+	var out: Dictionary = await Slice.new().run(self, waves, to - from, WaveBuilder.SUPPORT_SHIP, observe, tweak)
+	seen["targets"] = out["targets"]
+	return seen
+
+
+func test_every_level1_support_spawn_projects_a_shield_inside_its_budget() -> void:
+	var rows := Slice.placed(WaveBuilder.SUPPORT_SHIP)
+	assert_eq(rows.size(), 2, "sanity: level 1 places two supports")
+	_fast_clock()
+	for row: Dictionary in rows:
+		var label := "%s support at %.1f s" % [row["section"], row["rel"]]
+		var seen := await _support_slice(row)
+		gut.p("%s: %s" % [label, seen])
+		assert_eq(int(seen["targets"]), 1, "%s: exactly one support in its slice" % label)
+		assert_true(bool(seen.get("active", false)), "%s: the Assault budget is live" % label)
+		assert_true(seen.has("supporting_at"), "%s: projects a shield on a ward before its budget expires" % label)
+		assert_gt(float(seen.get("supporting_left", 0.0)), 0.0, "%s: with budget left" % label)
+
+
+## Boundary: the same predicate on the planet_approach spawn with a 2.5 s budget (private config) fails — the support
+## needs about 3 s to reach its ram and unfold — so the row above can fail.
+func test_a_level1_support_with_a_2_5_s_budget_never_shields_in_it() -> void:
+	var rows := Slice.placed(WaveBuilder.SUPPORT_SHIP)
+	assert_eq(rows[1]["section"], &"planet_approach", "sanity: the second placed support is planet_approach's")
+	_fast_clock()
+	var seen := await _support_slice(rows[1], func(ship: Node) -> void:
+		(ship as SupportShip).config.engage_seconds = 2.5)
+	gut.p("planet_approach support, engage 2.5: %s" % [seen])
+	assert_eq(int(seen["targets"]), 1, "sanity: the support spawned once")
+	assert_true(bool(seen.get("active", false)), "sanity: the Assault budget is live")
+	assert_true(seen.has("expired"), "sanity: its budget ran out inside the run")
+	assert_false(seen.has("supporting_at"), "no shield on a ward with budget left")
+	assert_eq(SHIPPED.engage_seconds, 9.0, "the shipped config is untouched")

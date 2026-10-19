@@ -287,6 +287,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   Each lifetime is config budget + deferral + a **measured** exit (`tests/helpers/specialist_exit_probe.gd`
   runs the real scene's curved DISENGAGE over the Ph3 404-start grid), never a straight-line exit.
   Boundaries: a `.move()` put back and an extra ram triple at the peak each fail.
+  Phase 5 t17 added a separate `EXPECTED_PH5` pin for level 1's 3 Missile Corvettes and 2 Support Ships (DURATION sections
+  only), counted as specialists in the same frozen 2.5x gate with exits measured once in `before_all()` over
+  `corridor_starts()`. A boundary shows an extra corvette at planet_approach's measured peak (7 at 98.0 s) fails, and a
+  spill-over row shows no specialist (a corvette's last rocket included) outlives the next `ENEMIES_CLEARED` section's last
+  trigger. The corvette / support attack-in-budget rows replay only `rel - 1 s .. rel + engage + 2 s` of a section
+  (`tests/helpers/level1_slice_replay.gd`).
   The sixteenth gate gained **per-entry sniper and ram rows** for cloud_descent in t22 (sniper: engage + aim + lock +
   measured exit; ram: engage + wind_up + charge_max_time + max(straight, measured)). The ram's curved exit is measured
   over the probe's second start set, `corridor_starts()`: the whole 1480 × 1480 corridor, because the view-only grid

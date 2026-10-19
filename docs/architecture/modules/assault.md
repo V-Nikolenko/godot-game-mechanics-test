@@ -278,6 +278,16 @@ sniper / ram / bomber spawns are off rails** (26 / 22 / 2) with their trigger, o
 an `ENEMIES_CLEARED` section** — its persisted ordnance would hold the section open (a boundary row in
 `test_engagement_deadline.gd`). Cloud Descent's 73.2 s ram is the tightest deadline row (9.60 s of 10 s).
 
+**Level 1 placement of the Phase 5 enemies (t17).** Three Missile Corvettes (deep_space 12.0 s, planet_approach 40.0 s and
+85.0 s) and two Support Ships (with deep_space's 26.0 s ram pair and planet_approach's 28.0 s ram triple), all AI-driven, all
+in DURATION sections, each added inside an existing wave so no other wave's effective trigger moves. Both kinds count as
+specialists in the frozen 2.5x gate (planet_approach peaks at 7 of 7.5, at 98.0 s) with corridor-measured exits, and are
+pinned in `EXPECTED_PH5` (`test_level1_specialist_spawns.gd`, which also checks that nothing from deep_space or
+planet_approach, a corvette's last rocket included, outlives the next `ENEMIES_CLEARED` section's last trigger). **Neither may
+spawn in an `ENEMIES_CLEARED` section**: a corvette's persistent rockets would hold it open (`test_engagement_deadline.gd`).
+The attack-in-budget rows replay only `rel - 1 s .. rel + engage + 2 s` of a section through a real `WaveManager`
+(`tests/helpers/level1_slice_replay.gd`).
+
 **The Support Ship (Phase 5, t10 shell, t11 ward, t12 repair and shield, t13 escort)** — see [support_ship/ENEMY.md](../../../assault/scenes/enemies/support_ship/ENEMY.md). An
 unarmed brain + flat-config enemy (`SupportShipBrain`, `SupportShipConfig`, contact profile NONE, `can_be_repaired()` false) with a
 folded `Projector` and a hidden world-space `Tether`. It picks a ward (the highest-threat AI-driven combatant worth >= 20, claimed

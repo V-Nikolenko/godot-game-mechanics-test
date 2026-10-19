@@ -5,7 +5,7 @@
 
 > **Build state (Phase 5, in progress).** t7 built the **shell** (scene, config, four rocket pools, `fire()`, the launcher
 > answers, the rail fallback); t8 built the **fight** (HOLD_ARC, the launch cone, TELEGRAPH, SALVO, predicted aim points, the
-> Assault gate and deferral). t9 gave it its real hull sprite and the rocket sprites. t15 gave it the **hub idle** (IDLE / NOTICING / RETURNING). t16 put it in the hub (see below). Still to come: level 1 (t17).
+> Assault gate and deferral). t9 gave it its real hull sprite and the rocket sprites. t15 gave it the **hub idle** (IDLE / NOTICING / RETURNING). t16 put it in the hub; t17 placed it in level 1 (see Spawn notes).
 > Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.9–§2.10 (rockets: §2.6–§2.8); t8's own build plan
 > `docs/plans/cmv9szqlq001zqs2x6vi0nlxj/3-plan.md`. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t7 as built", "t8 as built").
 
@@ -78,7 +78,14 @@
 
 ## Spawn notes
 
-- WaveBuilder method: `b.missile_corvette()` (const `MISSILE_CORVETTE`) — see `docs/enemy-roster.md`. Not in any wave yet (t17 for level 1).
+- WaveBuilder method: `b.missile_corvette()` (const `MISSILE_CORVETTE`) — see `docs/enemy-roster.md`.
+- **Level 1 (t17):** three AI spawns with no rail, only in DURATION sections — deep_space at 12.0 s (1.0 s after the
+  11.0 s sniper wave, offset (0, -400)) and planet_approach at 40.0 s and 85.0 s (1.0 s after the 39.0 s and 84.0 s waves).
+  **Never in an `ENEMIES_CLEARED` section:** its rockets persist in the enemy container and hold the section open
+  (`rel + 7.0 + 1.14 + rocket life 7.0 + 0.5` = 15.64 s even at delay 0 in cloud_descent; `test_engagement_deadline.gd`).
+  Its Assault life for the specialist count gate is `engage 7.0 + 1.14 + 2 ticks + 8.72 s` measured over the corridor
+  (`test_level1_specialist_spawns.gd`); every placed spawn telegraphs and fires a salvo with 1.25–2.0 s of budget left
+  (`test_missile_corvette.gd`, replayed through a real `WaveManager`).
 
 ---
 

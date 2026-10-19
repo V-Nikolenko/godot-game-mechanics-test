@@ -1256,3 +1256,80 @@ func test_returning_never_interrupts_a_telegraph_or_a_salvo(started_in: int = us
 	assert_eq(seen[-1], Phase.RETURNING, "and then it goes home (phases %s)" % [seen])
 	assert_eq(brain.salvos_fired, 1)
 	assert_eq(_rockets_in(h.root).size(), brain.salvo_size(EnemyRocket.Kind.DUMB), "every rocket of the salvo left")
+
+
+# ── Level 1 attack-in-budget (Phase 5 t17; epic plan §2.18, task plan docs/plans/cmv9szqmi002zqs2x3cd8f942/) ──────────
+#
+# Every corvette level 1 places reaches TELEGRAPH and fires a salvo while its Assault budget still has time left. Each
+# placed spawn replays only `rel - 1 s .. rel + engage_seconds + 2 s` of its own section through a real `WaveManager`
+# at the 8x clock (`tests/helpers/level1_slice_replay.gd`), among the real traffic of that moment, and stops as soon as
+# the salvo has left (or the budget has run out). A budget counts from the corvette's first tick, so the replayed
+# traffic before the window does not change it.
+
+const Slice := preload("res://tests/helpers/level1_slice_replay.gd")
+
+
+## Replays `row`'s slice and reports `{ "targets", "active", "telegraph_at", "telegraph_left", "salvo_left",
+## "expired" }`, times from the corvette's spawn. `tweak` edits the placed corvette's private config.
+func _corvette_slice(row: Dictionary, tweak: Callable = Callable()) -> Dictionary:
+	var from: float = float(row["rel"]) - Slice.PRE_ROLL
+	var to: float = float(row["rel"]) + SHIPPED.engage_seconds + Slice.POST_ROLL
+	var waves := Slice.slice_waves(Slice.section(row["section"]), from, to)
+	var seen := {}
+	var observe := func(ship: BaseEnemy, t: float) -> bool:
+		if ship == null:
+			seen["left"] = true
+			return true
+		if not seen.has("spawn"):
+			seen["spawn"] = t
+		var b := ship.get_node("Brain") as MissileCorvetteBrain
+		if b.budget == null:
+			return false
+		seen["active"] = b.budget.active
+		var left := b.budget.remaining()
+		if b.phase == Phase.TELEGRAPH and not seen.has("telegraph_at"):
+			seen["telegraph_at"] = t - float(seen["spawn"])
+			seen["telegraph_left"] = left
+		if b.salvos_fired > 0:
+			seen["salvo_left"] = left
+			return true
+		if left <= 0.0 or b.phase == Phase.DISENGAGE:
+			seen["expired"] = true
+			return true
+		return false
+	var out: Dictionary = await Slice.new().run(self, waves, to - from, WaveBuilder.MISSILE_CORVETTE, observe, tweak)
+	seen["targets"] = out["targets"]
+	return seen
+
+
+func test_every_level1_corvette_spawn_telegraphs_and_fires_inside_its_budget() -> void:
+	var rows := Slice.placed(WaveBuilder.MISSILE_CORVETTE)
+	assert_eq(rows.size(), 3, "sanity: level 1 places three corvettes")
+	_scale_clock()
+	for row: Dictionary in rows:
+		var label := "%s corvette at %.1f s" % [row["section"], row["rel"]]
+		var seen := await _corvette_slice(row)
+		gut.p("%s: %s" % [label, seen])
+		assert_eq(int(seen["targets"]), 1, "%s: exactly one corvette in its slice" % label)
+		assert_true(bool(seen.get("active", false)), "%s: the Assault budget is live" % label)
+		assert_true(seen.has("telegraph_at"), "%s: reaches TELEGRAPH" % label)
+		assert_gt(float(seen.get("telegraph_left", 0.0)), 0.0, "%s: TELEGRAPH starts before the budget expires" % label)
+		assert_true(seen.has("salvo_left"), "%s: fires a salvo" % label)
+		assert_gt(float(seen.get("salvo_left", 0.0)), 0.0, "%s: the salvo leaves before the budget expires" % label)
+
+
+## Boundary: the same predicate on the deep_space spawn with a 4.0 s budget (private config) fails — the first salvo is
+## 4-5 s away and the attack gate needs 1.19 s left — so the row above can fail.
+func test_a_level1_corvette_with_a_4_s_budget_never_telegraphs_in_it() -> void:
+	var rows := Slice.placed(WaveBuilder.MISSILE_CORVETTE)
+	assert_eq(rows[0]["section"], &"deep_space", "sanity: the first placed corvette is deep_space's")
+	_scale_clock()
+	var seen := await _corvette_slice(rows[0], func(ship: Node) -> void:
+		(ship as MissileCorvette).config.engage_seconds = 4.0)
+	gut.p("deep_space corvette, engage 4.0: %s" % [seen])
+	assert_eq(int(seen["targets"]), 1, "sanity: the corvette spawned once")
+	assert_true(bool(seen.get("active", false)), "sanity: the Assault budget is live")
+	assert_true(seen.has("expired"), "sanity: its budget ran out inside the run")
+	assert_false(seen.has("telegraph_at") and float(seen["telegraph_left"]) > 0.0, "no TELEGRAPH with budget left")
+	assert_false(seen.has("salvo_left"), "no salvo with budget left")
+	assert_eq(SHIPPED.engage_seconds, 7.0, "the shipped config is untouched")

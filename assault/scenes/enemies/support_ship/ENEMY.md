@@ -5,7 +5,7 @@
 
 > **Build state (Phase 5, in progress).** t10 built the **shell** (scene, flat config with every §2.11 field, contact profile NONE,
 > `can_be_repaired()` false, the Assault budget exit); t11 the **ward**: scored choice, claim, retarget, the soft anchor behind
-> the ward with jink and evasion, and the Assault view clamp; t12 the **repair pulse and projected shield**; t13 the **emergency escort**; t15 the **hub idle**. t16 put it in the hub (see below). Still to come: level 1 (t17).
+> the ward with jink and evasion, and the Assault view clamp; t12 the **repair pulse and projected shield**; t13 the **emergency escort**; t15 the **hub idle**. t16 put it in the hub; t17 placed it in level 1 (see Spawn notes).
 > Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.11–§2.15. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t10 as built", "t11 as built", "t12 as built", "t13 as built").
 
 ---
@@ -87,7 +87,13 @@ Assault group; t11 reads Follow, Ward and the view fields; Repair, Shield and Es
 
 ## Spawn notes
 
-- WaveBuilder method: `b.support_ship()` — see `docs/enemy-roster.md`. Not yet placed in any level (t16, t17).
+- WaveBuilder method: `b.support_ship()` — see `docs/enemy-roster.md`.
+- **Level 1 (t17):** two AI spawns, each in the same wave as a Ram Corvette and 60 design units (120 px) behind it —
+  deep_space 26.0 s at (-255, -460) and planet_approach 28.0 s at (0, -460). That spawn point is 116 px outside the
+  projectile world rect, which is harmless: only DISENGAGE frees an AI enemy, and it reaches its ram in about 3 s. In
+  every placed slice it wards that ram and has a `ProjectedShield` up with 5.5–6.0 s of budget left
+  (`test_support_ship.gd`). Its count-gate life is `engage 9.0 + 4.58 s` measured over the corridor. Kept out of
+  `ENEMIES_CLEARED` sections (`test_engagement_deadline.gd`).
 
 ---
 
