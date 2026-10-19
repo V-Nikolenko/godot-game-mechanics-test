@@ -220,6 +220,7 @@ Mines and bombs must stay where the Bomber left them, which is the opposite of t
 The Bomber owns three such pools (`GravityBombPool`, `MinePool`, `PursuitBombPool`, direct root children, sized
 4 / 10 / 4 and gated against `EnemyOrdnanceScenes.pool_size_for()`). Pinned by `tests/unit/test_bullet_pool.gd`,
 `tests/integration/test_enemy_ordnance.gd` and `tests/integration/test_bomber.gd`. The enemy *round* family, the
+Sniper's `rail_round.tscn` included, still vanishes with its shooter.
 
 ### **8. Enemy rockets** (Ph5)
 
@@ -240,7 +241,6 @@ The Missile Corvette fires `EnemyRocket`s (`assault/scenes/projectiles/enemy_roc
 - The container-injectable `BulletPool` stays deferred (to the first nested launcher, Ph10 Carrier hangars).
 
 Tests: `tests/integration/test_enemy_rockets.gd`, `test_enemy_bullet_lifetime.gd`, fixture `tests/helpers/rocket_launcher_fixture.gd`.
-Sniper's `rail_round.tscn` included, still vanishes with its shooter.
 
 ## Container Hierarchy
 

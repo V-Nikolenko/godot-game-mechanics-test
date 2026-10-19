@@ -2164,7 +2164,7 @@ they differ. This section is the index of what shipped, every deviation, and wha
   `has_absorber`, `hit_absorbed(hit_box)`, duck type `absorbs_hit`). Directional arc, 360 deg bubble, capacity, regeneration, reboot,
   sustained lifetime; never absorbs while its host is `is_armored()`; a shielded enemy consumes a default bullet.
 - **Ally hooks (t3):** `BaseEnemy.repair()` (never flashes), `can_be_repaired()`, `is_ai_driven()`, `ai_mover_max_speed()`, `accept_tow()`;
-  `EnemyBrain.accepts_tow()` overridden in the seven earlier brains and both new ones.
+  `EnemyBrain.accepts_tow()` overridden in the seven earlier brains and `MissileCorvetteBrain`; `SupportShipBrain` keeps the base default (true).
 - **View rect (t4):** `ArenaCamera.enemy_view_rect()`, `EnemyWorld.has_view_rect()` / `view_rect()`.
 - **Rockets (t5, t6, t9):** `EnemyRocket` + `EnemyRocketScenes` + five scenes (Dumb, Pursuit, Cluster, Delayed Warhead, Submunition), with art.
 - **Missile Corvette (t7, t8, t9, t15, t16, t17):** `MissileCorvette` / `Brain` / `Config`, `WaveBuilder.missile_corvette()`; hub at 315 deg on a
