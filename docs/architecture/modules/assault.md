@@ -195,7 +195,7 @@ The mode-neutral enemy AI stack (`global/enemy_ai/`, see [global.md](global.md) 
 knows nothing about Assault by name. It finds the mode by duck type, through one group:
 `ArenaCamera` (`systems/arena_camera.gd`) joins `&"assault_arena"` in `_ready()`, **before** its
 early return for a missing `Level1Background` sibling — a bare `ArenaCamera` (e.g. in a test) is
-still a provider. It answers three methods, each with an `EnemyWorld.has_*` companion so "no
+still a provider. It answers four methods, each with an `EnemyWorld.has_*` companion so "no
 provider" and "a legitimately empty `Rect2()`" are never confused:
 
 - **`projectile_world_rect()`** — the corridor's visible rect grown by 64 px: x −164…1444, y
@@ -205,6 +205,10 @@ provider" and "a legitimately empty `Rect2()`" are never confused:
   `EngagementBudget` instead, so nothing in production reads it. It is kept behind `EnemyWorld.cull_rect()`.
 - **`enemy_movement_constraint()`** — a fresh `AssaultCorridorConstraint` instance per call (a
   constraint holds a per-enemy "entered" latch, so `EnemyMover.AUTO` must get its own).
+- **`enemy_view_rect()`** (Phase 5, t4) — what the camera shows *right now*: centre `global_position + offset`, size
+  `viewport size / zoom` (never `get_screen_center_position()`, which the pan limits distort). Read through
+  `EnemyWorld.has_view_rect(tree)` / `EnemyWorld.view_rect(tree)` (see [global.md](./global.md)). The corridor rect is the whole
+  1480 × 1480 pan range and does not stop a support from hiding above the screen; the Support Ship clamps into this one.
 
 **`AssaultCorridorConstraint`** (`systems/assault_corridor_constraint.gd`, extends
 `global/enemy_ai/movement_constraint.gd`'s identity `MovementConstraint`) is the velocity filter
@@ -287,6 +291,13 @@ planet_approach, a corvette's last rocket included, outlives the next `ENEMIES_C
 spawn in an `ENEMIES_CLEARED` section**: a corvette's persistent rockets would hold it open (`test_engagement_deadline.gd`).
 The attack-in-budget rows replay only `rel - 1 s .. rel + engage + 2 s` of a section through a real `WaveManager`
 (`tests/helpers/level1_slice_replay.gd`).
+
+**The Missile Corvette (Phase 5, t7 shell, t8 fight, t9 art)** — see [missile_corvette/ENEMY.md](../../../assault/scenes/enemies/missile_corvette/ENEMY.md).
+A brain + flat-config enemy (`MissileCorvetteBrain`, `MissileCorvetteConfig`) that closes to its held range (460 px in Assault), circles the
+player on a broad reversing arc, and, only with the player inside its 45° nose cone, telegraphs (0.7 s) and fires a predicted salvo of
+`EnemyRocket`s from four persistent pools (`MissileCorvette.fire(kind, aim_point)`). A started telegraph or salvo is never cut off by the
+Assault budget (it defers, bounded by `attack_window()`), and `accepts_tow()` is false in both. Rockets are documented under
+*Projectiles & bullet pool* below and in [enemy-roster.md](../../enemy-roster.md).
 
 **The Support Ship (Phase 5, t10 shell, t11 ward, t12 repair and shield, t13 escort)** — see [support_ship/ENEMY.md](../../../assault/scenes/enemies/support_ship/ENEMY.md). An
 unarmed brain + flat-config enemy (`SupportShipBrain`, `SupportShipConfig`, contact profile NONE, `can_be_repaired()` false) with a
@@ -476,7 +487,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `razor_drone/razor_drone_brain.gd`). Roster: bomber, bonus_drone, razor_drone,
-gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
+missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).

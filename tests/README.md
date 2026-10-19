@@ -479,6 +479,35 @@ allotment first converts rows to hand-ticked form or shares a replay; it never c
 on the 8× clock costs ≈ 0.25–0.4 s, a hand-ticked dual-mode case ≈ 0.02–0.06 s, a whole-section `WaveManager` replay
 at 8× ≈ 5 s.
 
+**Phase 5 per task (GUT `Time`, `scripts/gate-time.sh`; "-" = the task's report did not record a before / after pair):**
+
+| Task | Allotment | GUT before → after | Note |
+|---|---|---|---|
+| t1 gate room | frees ≥ 70 s | 253.4 → 176.9 s | the table above |
+| t2 enemy shields | 3.0 s | 177.6 → 176.9 s | three files ≈ 1.4 s standalone, inside run noise |
+| t3 repair / tow | 2.0 s | - | |
+| t4 view rect | 0.5 s | - | |
+| t5 Dumb + Pursuit rockets | 6.0 s | 177.5 → 180.0 s | `test_enemy_rockets.gd` 2.3 s |
+| t6 Cluster + Warhead | 4.0 s | 180.0 → 182.1 s | `test_enemy_rockets.gd` 5.0 s / 25 tests |
+| t7 corvette shell | 3.0 s | - | |
+| t8 corvette fight | 5.0 s | 182.9 → 183.3 s | `test_missile_corvette.gd` 37 tests in ~1.1 s |
+| t9 art | 0.5 s | 183.3 → 183.25 s | ~1 s of new rows |
+| t10-t13 Support Ship | 2.0 / 4.0 / 4.0 / 3.0 s | - (183.3 → 184.4 s across the four) | |
+| t14 art | 0.5 s | 184.4 → 185.4 s | no new tests; noise |
+| t15 hub idle | 2.0 s | 185.4 → 185.5 s | |
+| t16 hub placement | 2.0 s | 185.5 → 185.4 s | the patrol file 0.2 → 1.3 s |
+| t17 level 1 placement | 15.0 s | 186.0 → 201.8 s full suite | +12.2 s on the four affected files (the rest is `test_fighter_squad.gd` varying 63-66 s run to run) |
+| t18 docs | 0 s | unchanged | docs only |
+
+Final GUT time is about 198-202 s against the 240 s ceiling; `test_fighter_squad.gd`'s 3 s run-to-run spread makes any single
+before / after delta noisy, so compare the affected files, not the total.
+
+**Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
+`tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition
+and settles every spawn timer before freeing the world), `tests/helpers/fixture_enemy_unrepairable.gd` (`can_be_repaired()` false),
+and `SpecialistExitProbe`'s optional `prepare` callable. A rocket's `expired` goes out two physics ticks after a detonation, so a
+test that counts `expired` or recycles a pool must wait them.
+
 ## These are characterization tests
 
 They pin down what the code does **today**, bugs included. A test that documents surprising

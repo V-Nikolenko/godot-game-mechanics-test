@@ -3,11 +3,11 @@
 **Role:** Holds medium range on broad arcs and fires predicted rocket salvos from two nose tubes (Dumb, Pursuit, Cluster, Delayed Warhead).
 **Fantasy / threat:** A wide, slow gunboat whose threat is its ordnance, not its hull — every rocket can be outrun, out-turned or shot down.
 
-> **Build state (Phase 5, in progress).** t7 built the **shell** (scene, config, four rocket pools, `fire()`, the launcher
-> answers, the rail fallback); t8 built the **fight** (HOLD_ARC, the launch cone, TELEGRAPH, SALVO, predicted aim points, the
-> Assault gate and deferral). t9 gave it its real hull sprite and the rocket sprites. t15 gave it the **hub idle** (IDLE / NOTICING / RETURNING). t16 put it in the hub; t17 placed it in level 1 (see Spawn notes).
-> Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.9–§2.10 (rockets: §2.6–§2.8); t8's own build plan
-> `docs/plans/cmv9szqlq001zqs2x6vi0nlxj/3-plan.md`. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t7 as built", "t8 as built").
+> **Build state (Phase 5, complete).** Shell (t7), fight (t8), art (t9), hub idle (t15), hub placement (t16) and level 1
+> placement (t17) are all built. Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.9–§2.10 (rockets: §2.6–§2.8); t8's own
+> plan `docs/plans/cmv9szqlq001zqs2x6vi0nlxj/3-plan.md`. As built: `docs/epics-done/cmufs7elw001pnm2xr3b6fteb/REPORT.md` and the
+> "Phase 5 - as built" section of `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md`. The rocket family it fires is documented
+> in `docs/enemy-roster.md` ("Enemy rockets (Ph5)").
 
 ---
 
@@ -95,6 +95,31 @@
 missile_corvette/
 ├── ENEMY.md
 ├── missile_corvette.tscn / .gd           MissileCorvette (fire, launch_velocity, rocket_clear_radius, rail fallback)
-├── missile_corvette_brain.gd             MissileCorvetteBrain (APPROACH, HOLD_ARC, TELEGRAPH, SALVO, DISENGAGE)
+├── missile_corvette_brain.gd             MissileCorvetteBrain (APPROACH, HOLD_ARC, TELEGRAPH, SALVO, DISENGAGE, IDLE, NOTICING, RETURNING)
 └── missile_corvette_config.gd / .tres    MissileCorvetteConfig
 ```
+
+Rockets: `assault/scenes/projectiles/enemy_rockets/` (`EnemyRocket`, `EnemyRocketScenes`, five scenes).
+Tests: `tests/integration/test_missile_corvette.gd`, `test_enemy_rockets.gd`, `test_enemy_dual_mode.gd`,
+`test_sector_hub_patrol.gd`, `test_level1_specialist_spawns.gd`, plus the roster rows in `test_enemy_contact_damage.gd`,
+`test_contact_hitbox_geometry.gd`, `test_enemy_hurtbox_geometry.gd` and `test_base_enemy.gd`.
+
+---
+
+## Design checklist (ideas §43)
+
+| Question | Answer |
+|---|---|
+| Silhouette | Wide hull, two forward launch tubes |
+| Preferred distance | 620 px (Assault 460) |
+| Movement signature | Slow broad arcs with reversals |
+| Attack | Telegraphed predicted salvos, four rocket kinds |
+| Player behind it | It cannot launch outside its 45° cone; the nose turns 1.2 rad/s |
+| Player boosts away | Pursuit rockets; it holds range |
+| Off-screen | Rockets need no line of sight; in Assault they are corridor-limited |
+| Retreat / reposition | Breaks contact inside 380 px; Assault DISENGAGE |
+| Telegraph | CHARGING light plus tube glow for 0.7 s |
+| Destroying it changes the encounter | No more rockets (rockets already in flight persist) |
+| Armour / shields | None |
+| Alone / combined | Alone: area denial; with fighters (§37) a path-covering salvo is possible, composition is Ph13/Ph14 |
+| Deterministic tests | Yes (seeded rng, hand-ticked in both harnesses) |

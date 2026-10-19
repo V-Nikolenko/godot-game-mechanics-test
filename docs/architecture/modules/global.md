@@ -555,7 +555,7 @@ func tick(delta: float) -> void:
   health goes *down*; `can_be_repaired()` is false on the station); `accept_tow(v)` nudges the enemy's own mover only if
   `is_ai_driven()` (brain + mover, not suspended), not boosting, and `EnemyBrain.accepts_tow()` — false in every committed or
   telegraphed phase (Sniper DECOY/AIM/LOCK/FIRE, Ram WIND_UP/CHARGE, Bomber RUN, Fighter RUN_IN, Gatling SPIN_UP/STREAM,
-  Razor WINDUP/DASH/FEINT_*, Swarm WINDUP/BURST). Gated in `tests/integration/test_base_enemy.gd` §6.
+  Razor WINDUP/DASH/FEINT_*, Swarm WINDUP/BURST). Gated in `tests/integration/test_base_enemy.gd` §6. `BaseEnemy.ai_mover_max_speed() -> float` is the mover cap the Support Ship scales its tow by; the Missile Corvette adds TELEGRAPH / SALVO to the refusing phases.
 - **Rails override it:** `EnemyPathMover._ready()` calls `suspend_ai()` (brain `on_suspended()`, mover
   `halt()`, no more ticks) *in addition to* its unconditional `set_physics_process(false)` and
   `"AIStateMachine"` lookup. A `driven_by_brain` `AttackController` stops with the brain.
@@ -575,10 +575,10 @@ mode provider.** The provider is whatever node has joined group `&"assault_arena
 project-wide that looks that group up, and it does so duck-typed (`has_method`), so nothing under
 `global/` names the Assault-only `ArenaCamera` class. With no provider, the mode is Open Space:
 every `EnemyWorld` getter returns empty/null. `arena(tree)` returns the provider node or `null`;
-`projectile_world_rect(tree)`, `cull_rect(tree)` and `movement_constraint(tree)` each have a
+`projectile_world_rect(tree)`, `cull_rect(tree)`, `movement_constraint(tree)` and `view_rect(tree)` each have a
 `has_*` companion, because an absent result and a legitimately empty `Rect2()` are not
 distinguishable by value alone. `EnemyMover`'s `AUTO` constraint mode and `ProjectileLifetime`
-(below) are its two callers; tests inject a rect/constraint directly instead of building a provider.
+(below) are its two callers; tests inject a rect/constraint directly instead of building a provider. **`view_rect(tree)` (Ph5 t4, with `has_view_rect(tree)`) is what the camera shows right now** (`ArenaCamera.enemy_view_rect()`: centre `global_position + offset`, size `viewport size / zoom`), unlike the 1480 x 1480 corridor rect; only the Support Ship reads it, to stay on screen in Assault.
 
 **`TargetInfo` (`target_info.gd`, `RefCounted`) is the one way new code finds or predicts the
 player** — a snapshot (`position`, `velocity`, `facing`, `has_target`) taken once, so reading it

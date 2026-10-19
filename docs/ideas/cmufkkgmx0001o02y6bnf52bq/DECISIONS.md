@@ -2151,3 +2151,58 @@ phase's *as built* section, once written, before relying on them. (This section 
 | Encounter compositions (Corvette + Fighter, heavy patrol, Carrier + Support) | Ph13 / Ph14 | Made possible here |
 | Difficulty levers (`lead_max`, `turn_rate`, `guidance_seconds`, `salvo_period_*`, `repair_fraction`, `shield_capacity`) | Ph16 | |
 | A `StateLight` cyan state | Ph17 (if wanted) | The support's state is its projector and tether |
+
+## Phase 5 - as built (2026-10-19)
+
+Plan `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` (Revision 2); narrative in `docs/epics-done/cmufs7elw001pnm2xr3b6fteb/REPORT.md`.
+18 tasks (t1-t18); each task's "tN as built" entry in the Phase 5 section above is the detailed record and **wins** over the plan wherever
+they differ. This section is the index of what shipped, every deviation, and what is left.
+
+### What was built
+- **Gate room (t1):** GUT 253.4 s -> 176.9 s by running real-physics rows on the 8x clock and sharing replays; `scripts/gate-time.sh`.
+- **Enemy shields (t2):** `EnemyShield` (`global/components/enemy_shield.gd`) on a `HurtBox` absorber slot (`set_absorber` / `clear_absorber` /
+  `has_absorber`, `hit_absorbed(hit_box)`, duck type `absorbs_hit`). Directional arc, 360 deg bubble, capacity, regeneration, reboot,
+  sustained lifetime; never absorbs while its host is `is_armored()`; a shielded enemy consumes a default bullet.
+- **Ally hooks (t3):** `BaseEnemy.repair()` (never flashes), `can_be_repaired()`, `is_ai_driven()`, `ai_mover_max_speed()`, `accept_tow()`;
+  `EnemyBrain.accepts_tow()` overridden in the seven earlier brains and both new ones.
+- **View rect (t4):** `ArenaCamera.enemy_view_rect()`, `EnemyWorld.has_view_rect()` / `view_rect()`.
+- **Rockets (t5, t6, t9):** `EnemyRocket` + `EnemyRocketScenes` + five scenes (Dumb, Pursuit, Cluster, Delayed Warhead, Submunition), with art.
+- **Missile Corvette (t7, t8, t9, t15, t16, t17):** `MissileCorvette` / `Brain` / `Config`, `WaveBuilder.missile_corvette()`; hub at 315 deg on a
+  1900 px ring; 3 placements in level 1 (DURATION sections only).
+- **Support Ship (t10-t14, t15, t16, t17):** ward choice and retarget, soft anchor with jink and evasion, Assault view clamp, repair pulse,
+  projected shield (bubble in the escort), emergency escort tow, folding projector art; hub: shares the Ram Corvette's anchor; 2 placements in level 1.
+
+### Deviations from the plan (every one)
+1. **Owner-distance lifetime not built** (S2, planned): handed to Ph13 with `max_distance_from_player`. `BulletPool` container injection deferred
+   again (S3) to the first nested launcher (Ph10 Carrier hangars). `DamageReaction` not adopted (S4); P-15 closed.
+2. **`launch_velocity()` on a rail is observed per physics tick**, not in `_process` (t7; the plan's wording was wrong on the 8x clock).
+3. **The shoot-down also ignores `CONTACT`-type HitBoxes** (t5), so an ally's ram box cannot defuse a rocket; the ally takes the blast instead.
+   **`expired` goes out two physics ticks after a detonation or shoot-down** (t5) because a re-parenting pool re-triggered `area_entered`.
+4. **`break_contact` inside an orbit uses side `-orbit_dir`** (t8), not the plan's `+orbit_dir`; any later brain that blends the two needs the same sign.
+   `choose_kind()` takes a required third argument (radial speed).
+5. **`body_color` export removed** from `EnemyRocket` and its scenes (t9); Pursuit shares `enemy_rocket.png` with Dumb, told apart by a violet
+   `modulate`; sprite sizes follow the generator's proportions, not the plan's exact numbers.
+6. **A shield does not cover an `ArmorPlate`** (t2): the plate resolves its own hit. Ph10 module shields must sit on a plain part's `HurtBox`.
+   At `shield_capacity` 40 one Standard shot (50) breaks a projected shield, then 4 s of reboot; tune knowingly in Ph16.
+7. **The Support Ship's tow is a nudge on the ward's own mover** (`accept_tow`), refused by the ward's own brain in committed phases; a refused
+   tow is ignored and the support only interposes (t13).
+8. **Level 1 (t17):** the plan's "65.7 s planet_approach peak" predated the Ph4 ram levers; the measured peak is 7 at 98.0 s after placement. The
+   support spawns 116 px outside the projectile world rect (the "120 px behind the ram" reading); harmless, do not "fix" it. The Missile Corvette
+   and the Support Ship are kept out of `ENEMIES_CLEARED` sections by a gate row.
+9. **Gate time:** t17 was +15.8 s on the full suite against a 15.0 s allotment, but +12.2 s on the four affected files (`test_fighter_squad.gd`
+   varies 63-66 s between runs). Reports for t3, t4, t7 and t10-t13 did not record a clean before / after pair; the table is in `tests/README.md`.
+10. **Warning audio, flare / decoy reaction, Hijack Pulse** were out of scope as planned (S7, S8, S10); the telegraph is visual.
+
+### Gaps left for later phases
+- **Never play-tested by a human.** Headless tests cannot say whether the 0.7 s salvo telegraph is fair at Assault speed, whether a Pursuit rocket
+  can be out-turned by feel, whether the cyan arc and tether read at a glance, whether the projector unfold is visible in motion, or whether the
+  hub corvette and the level 1 placements feel crowded. Every number was chosen by arithmetic and a seeded hand-tick.
+- **Local-module shield has no shipped consumer** (fixture-proven; Ph10). **Fortress shield nodes** are Ph11.
+- **Friendly fire from blasts and beams is undecided** (Ph8); only rocket impacts hurt enemies. The Delayed Warhead's proximity trigger sees allies too.
+- **No rocket audio and no decoy** (Ph17); a countermeasure would retarget rockets through `EnemyRocket`'s aim-point function.
+- **Support Ship has no state light**; its state is the projector and the tether. The Corvette and Support are absent from `level_2_waves.gd`
+  and the station's reinforcements (Ph15).
+- **Encounter composition** (Corvette + Fighter, Carrier + Support) is mechanically possible but unauthored (Ph13 / Ph14).
+- **Difficulty levers** for Ph16: `EnemyRocket.lead_max`, `turn_rate`, `guidance_seconds`, the corvette's `salvo_period_*`, the support's
+  `repair_fraction` / `shield_capacity`.
+- **Gate time is near its comfortable limit** (about 200 s of 240 s). Phase 6 must watch its allotments; `test_fighter_squad.gd` alone is ~63 s.

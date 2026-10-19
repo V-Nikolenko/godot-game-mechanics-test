@@ -3,10 +3,12 @@
 **Role:** Shadows the most dangerous ally, repairs it, shields its player-facing side, and drags it away when it is badly hurt.
 **Fantasy / threat:** A fragile, evasive hull with a dish projector. It deals no damage itself; it makes the enemies around it harder to kill, so the player has to decide whether to chase it.
 
-> **Build state (Phase 5, in progress).** t10 built the **shell** (scene, flat config with every §2.11 field, contact profile NONE,
-> `can_be_repaired()` false, the Assault budget exit); t11 the **ward**: scored choice, claim, retarget, the soft anchor behind
-> the ward with jink and evasion, and the Assault view clamp; t12 the **repair pulse and projected shield**; t13 the **emergency escort**; t15 the **hub idle**. t16 put it in the hub; t17 placed it in level 1 (see Spawn notes).
-> Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.11–§2.15. Decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("t10 as built", "t11 as built", "t12 as built", "t13 as built").
+> **Build state (Phase 5, complete).** Shell (t10), ward and Assault clamp (t11), repair pulse and projected shield (t12),
+> emergency escort (t13), art (t14), hub idle (t15), hub placement (t16) and level 1 placement (t17) are all built.
+> Plan: `docs/plans/cmufs7elw001pnm2xr3b6fteb/3-plan.md` §2.11–§2.15. As built: `docs/epics-done/cmufs7elw001pnm2xr3b6fteb/REPORT.md`
+> and the "Phase 5 - as built" section of `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md`. The shield it projects is the shared
+> `EnemyShield` (`global/components/enemy_shield.gd`, see `docs/architecture/modules/global.md`); it repairs through
+> `BaseEnemy.repair()` and drags through `BaseEnemy.accept_tow()`.
 
 ---
 
@@ -113,3 +115,23 @@ t12: pulse, budget, range, unrepairable ward, blocked line, projection, lapse (f
 t11: ward choice and its filters, switch hysteresis, retarget on free / kill / rail / range / view, the grace, follow, jink, evasion,
 facing and the Assault view clamp, dual-mode) plus the roster rows in `test_enemy_contact_damage.gd`, `test_contact_hitbox_geometry.gd`, `test_enemy_hurtbox_geometry.gd`,
 `test_base_enemy.gd` and a case in `test_enemy_dual_mode.gd`.
+
+---
+
+## Design checklist (ideas §43)
+
+| Question | Answer |
+|---|---|
+| Silhouette | Slim hull, dish projector |
+| Preferred distance | 150 px behind its ward |
+| Movement signature | Shadowing, jinking, interposing |
+| Attack | None: repair, shield, escort |
+| Player behind it | It evades (break contact) |
+| Player boosts away | It follows its ward, not the player |
+| Off-screen | Assault: clamped into view, no effect outside it |
+| Retreat / reposition | Evade radius 300; DISENGAGE with no ward |
+| Telegraph | Projector unfold plus the cyan tether |
+| Destroying it changes the encounter | Shields lapse, repair stops |
+| Armour / shields | None of its own; it projects one |
+| Alone / combined | Alone: an inert evader; with a Ram (§37) it is the ward's shield and healer |
+| Deterministic tests | Yes (seeded rng, hand-ticked in both harnesses) |
