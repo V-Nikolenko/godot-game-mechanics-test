@@ -2206,3 +2206,70 @@ they differ. This section is the index of what shipped, every deviation, and wha
 - **Difficulty levers** for Ph16: `EnemyRocket.lead_max`, `turn_rate`, `guidance_seconds`, the corvette's `salvo_period_*`, the support's
   `repair_fraction` / `shield_capacity`.
 - **Gate time is near its comfortable limit** (about 200 s of 240 s). Phase 6 must watch its allotments; `test_fighter_squad.gd` alone is ~63 s.
+
+## Phase 6 - Enemy rework, phase 6: hazard perception, gravity wells, anomalies and wreck fields (2026-10-20)
+
+Plan: `docs/plans/cmug23om70001m52wqfwclf3l/3-plan.md`, with research in `1-context.md` and `2-research.md` (scope check
+S1–S14) in the same directory. These are *planned* decisions; check this phase's *as built* section, once written, before
+relying on them.
+
+### Changes to earlier decisions
+- **Collision bit 12 (`area_control`, reserved by the Ph1 roadmap) is not allocated.** Hazard fields are *sampled* by the
+  bodies they act on (a registry query), not detected by `Area2D` overlap, so no physics layer is needed. Ph1's rule "no
+  layer until something uses it" stands; a later phase that needs an overlap-detected area-control body allocates it then.
+- **Context steering is adopted, as a stage inside `EnemyMover`** — the Ph1-named upgrade path — not as weighted blending in
+  the brains and not as repulsion nudges. Ph1's rejection of weighted behaviour blending stays in force; brains still make
+  one request per tick.
+- **The §11.4 Gravity Field moves here from Ph7** (as a gravity-bomb after-effect). Ph7 keeps mines and the Mine Layer.
+- **`EnemyBullet` rounds stop on wrecks** (two-sided cover): their HitBox mask gains 1024, and a hit on bit 1024 expires the
+  round only when the area's owner answers duck-typed `stops_enemy_rounds() == true`. Asteroids do not answer it, so round
+  behaviour against asteroids is unchanged. Any later structure that must stop enemy rounds answers the same method.
+
+### Names and places later phases build on
+- **`global/hazards/`**: `HazardInfo` (`RefCounted` snapshot; fields `position`, `radius`, `pull_force`, `damage_per_second`,
+  `movement_penalty`, `disables_abilities`, `line_of_sight_blocker`, `kind`, `core_radius`, `damage_radius`,
+  `tangential_force`, `avoid_weight`, `velocity`, `source`; methods `falloff(r)`, `accel_at(pos)`, `penalty_at(pos)`,
+  `contains(pos, margin)`), `Hazards` (static registry: `register` / `unregister` / `count()` O(1) / `around(pos, reach)` /
+  `accel_at(pos)` / `penalty_at(pos)` strongest-only capped at `MAX_PENALTY` 0.5 / `container(tree)` / `hurt_box_of(ship)`),
+  `HazardField` (the one `Node2D` script behind every field: exports for radius, core, pull, swirl, penalty, stress,
+  `duration`, a TELEGRAPH → ACTIVE → QUIET cycle; signals `phase_changed(phase: int)`, `stressed(target: Node2D, damage: int)`),
+  `HazardDrift` (pull integrator, `half_life` 0.35 s, `step(accel, resistance, delta)`).
+- **A hazard is any node answering duck-typed `hazard_info() -> HazardInfo`** that registers in `_enter_tree()` and
+  unregisters in `_exit_tree()`. Ph7 mines (`kind = &"mine"`), Ph8 laser walls (`&"laser_wall"`) and Ph9 jammers
+  (`&"jammer"`, the first consumer of `disables_abilities`) join the same registry with no change to the AI.
+- **A hazard never writes a ship's velocity, position or rotation.** Enemies: `EnemyMover` integrates the drift (applies
+  while boosting) and the slow, then the corridor `constraint.filter()` runs **last**. Players: the Open Space ship adds the
+  accel to its own `velocity`; the Assault fighter is displaced by a `HazardDrift` before its states move and clamp.
+  The only direct effect is hull stress, a `HurtBox.received_damage.emit(n)` pulse (bypasses `EnemyShield`).
+- **Per-enemy hazard profile = three flat `ShipConfig` fields** (`@export_group("Hazards")`): `hazard_avoidance` 0..1
+  (a danger threshold in the context stage), `hazard_margin` px (the skim knob), `hazard_resistance` 0..1 (scales pull and
+  slow). Copied onto the mover by `BaseEnemy._ready()`. **A committed attack is `mover.boost()` and ignores avoidance**;
+  there is no separate "ignore hazards" API — later committed runs (Ph8 twin-laser sweep, Ph12 Dreadnought ram) use boost.
+- **Pass-through rule:** with no hazard in reach and zero drift, enemy velocity and rotation are bit-identical to Ph5;
+  `Hazards.count() == 0` costs one compare per step. Later phases must keep the pass-through rows green.
+- **Runtime hazards (wrecks, fragments, fields) live in the node in group `hazard_container`** (`HazardContainer` in
+  level 1 and the hub). No container → nothing spawns and no rng is drawn — this is why every level-1 replay and gate is
+  unchanged. Never in the enemy container (it holds `ENEMIES_CLEARED` open), never in group `enemies`, never scored.
+  Ph13's `EncounterDirector` should own a `HazardContainer` per encounter.
+- **Wreck family** (`assault/scenes/hazards/wreck/`): `Wreck` (`CharacterBody2D` on layer 1, `HurtBox` + `Health`,
+  contact box on 1024, `blocks_line_of_sight()`, `try_claim(node)` / `release(node)` one user at a time, Assault drift
+  60 px/s + `ProjectileLifetime`, Open Space `lifetime` 40 s), `DebrisFragment` (`Area2D`, contact only, not a LOS blocker),
+  `WreckScenes.scene_for(size, explosive)`. Placed derelict structures are `Wreck` scenes with `lifetime` 0.
+  `ShipConfig` gains `wreck_chance`, `wreck_size`, `explosive_wreck_chance`; rolls use the brain's seeded `rng`; caps
+  Open Space 8, Assault 4, oldest evicted. Ph19's capital wrecks reuse `Wreck` / `WreckScenes`.
+- **`EnemyBrain.can_see_player() -> bool`** wraps `TargetInfo.line_of_sight` toward the player; wrecks are the first shipped
+  blockers. `HazardField` also carries `try_claim` / `release` (the Ram's well ticket).
+- **Projectiles opt in to fields** by answering `hazard_pull_scale()` and turning their heading (never their speed):
+  enemy rockets, gravity / pursuit bombs, player homing and warhead missiles. Bullets, rounds, mines and beams fly true, so
+  every lifetime and distance cap still holds.
+- **Gate time:** this phase's allowances total ≈ 29.5 s against ≈ 40 s of headroom (GUT ≤ 240 s). Ph7 starts near
+  230 s and must budget again (or recover time first by the `tests/README.md` rules).
+
+### Deferred
+- Mines (Ph7); laser barriers / walls (Ph8); jammers, EMP zones and any `disables_abilities` consumer (Ph9); capital-ship and
+  boss wrecks, "modules remain as wreckage" (Ph19); carrier escort and hacker positioning tactics (Ph10/18, Ph9).
+- Hazards acting on rail-driven spawns (Ph15), the legacy Gunship (Ph10) and the station (immovable).
+- Placed wells / anomalies in Assault levels (Ph15; level 1 only gets what its enemies leave). Encounter composition around
+  hazards (Ph13/14). Difficulty scaling of hazard values (Ph16). Hazard audio (Ph17).
+- Owner options not built by default: the anomaly's shield / targeting distortions, the Ram's deliberate plate throw
+  (Debris Charge ships passive only), a designed gravity slingshot.
