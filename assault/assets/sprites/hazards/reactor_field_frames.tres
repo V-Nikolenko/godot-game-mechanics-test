@@ -1,0 +1,39 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/hazards/reactor_field.png" id="1_kt24n"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_yi1rv"]
+atlas = ExtResource("1_kt24n")
+region = Rect2(0, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_q1u44"]
+atlas = ExtResource("1_kt24n")
+region = Rect2(96, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_wnre2"]
+atlas = ExtResource("1_kt24n")
+region = Rect2(192, 0, 96, 96)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_drf5l"]
+atlas = ExtResource("1_kt24n")
+region = Rect2(288, 0, 96, 96)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_yi1rv")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_q1u44")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_wnre2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_drf5l")
+}],
+"loop": true,
+"name": &"burn",
+"speed": 8.0
+}]
