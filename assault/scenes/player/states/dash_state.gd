@@ -126,13 +126,14 @@ func process_physics(delta: float):
 	if actor.get("engine_boost_active"):
 		return
 	if !dashing_timer.is_stopped():
-		var velocity := dashing_direction * dash_speed
+		var factor: float = actor.hazard_speed_factor() if actor.has_method("hazard_speed_factor") else 1.0
+		var velocity := dashing_direction * dash_speed * factor
 		if dashing_direction.x != 0:
 			# Side dash: allow vertical steering while rolling
-			velocity.y = Input.get_axis("move_up", "move_down") * move_speed
+			velocity.y = Input.get_axis("move_up", "move_down") * move_speed * factor
 		else:
 			# Forward / backward dash: allow horizontal steering during the surge
-			velocity.x = Input.get_axis("move_left", "move_right") * move_speed
+			velocity.x = Input.get_axis("move_left", "move_right") * move_speed * factor
 		actor.velocity = velocity
 		actor.move_and_slide()
 		## Clamp to world bounds so a fast dash cannot breach the hard limit.

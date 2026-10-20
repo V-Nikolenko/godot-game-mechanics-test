@@ -147,6 +147,14 @@ func apply_knockback_motion(delta: float) -> void:
 	global_position.y = clampf(global_position.y, -380.0, 1100.0)
 	_knockback = _knockback.move_toward(Vector2.ZERO, _KNOCKBACK_DECAY * delta)
 
+## 1 minus the strongest slow at this ship's position (Hazards.penalty_at, capped at Hazards.MAX_PENALTY).
+## 1.0 when no hazard exists. Read, never cached: thrust, speed ceilings and dash / move speed multiply by
+## it where they are read, so the exported values themselves are never written.
+func hazard_speed_factor() -> float:
+	if Hazards.count() == 0:
+		return 1.0
+	return 1.0 - Hazards.penalty_at(global_position)
+
 ## Called when health changes. Override in subclass (call super() first)
 ## to preserve EventBus emission and add mission-specific death handling.
 func _on_health_changed(current: int) -> void:
