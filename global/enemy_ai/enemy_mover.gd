@@ -15,7 +15,9 @@
 ## 1. desired = boost velocity while boosting, else primary + nudges, capped at `max_speed`;
 ## 2. slow: `desired *= 1 - Hazards.penalty_at(pos) * (1 - hazard_resistance)` (boost too; `max_speed`
 ##    itself is never written);
-## 3. avoidance stage (`_avoid()`; a no-op hook until the context-steering task), skipped while boosting;
+## 3. avoidance stage (`_avoid()`, plan §2.4): `Steering.context_avoid()` over `Hazards.around()`, minus
+##    any line-of-sight blocker the actor has claimed (its own cover); skipped while boosting, so every
+##    committed run (`boost()`) flies straight through and can be baited;
 ## 4. accel/braking limits against `own_velocity()` (skipped while boosting);
 ## 5. drift: `HazardDrift` fed `Hazards.accel_at(pos)`, added to `v` **only when non-zero** (adding a
 ##    zero vector turns a -0.0 component into +0.0 and flips `angle()` by 2π) — also while boosting;
@@ -76,6 +78,8 @@ var _boost_left: float = 0.0
 var _constraint_released: bool = false
 var _drift := HazardDrift.new()
 var _last_drift: Vector2 = Vector2.ZERO
+## The avoidance stage's previous heading (its `prev_dir`): cleared whenever the stage does not run.
+var _avoid_prev: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -149,6 +153,7 @@ func halt() -> void:
 	_boost_velocity = Vector2.ZERO
 	_drift.reset()
 	_last_drift = Vector2.ZERO
+	_avoid_prev = Vector2.ZERO
 	if actor != null:
 		actor.velocity = Vector2.ZERO
 
@@ -225,8 +230,10 @@ func step(delta: float) -> void:
 		var factor := 1.0 - Hazards.penalty_at(actor.global_position) * (1.0 - hazard_resistance)
 		if factor < 1.0:
 			desired *= factor
-		if not boosting:
-			desired = _avoid(desired)
+	if hazards_live and not boosting:
+		desired = _avoid(desired)
+	else:
+		_avoid_prev = Vector2.ZERO  # a committed run, or no hazard left: no stale bias when one reappears
 
 	var v := desired
 	if not boosting:
@@ -266,9 +273,27 @@ func step(delta: float) -> void:
 	_clear_requests()
 
 
-## The avoidance stage (context steering, a later task). A pass-through for now.
+## The avoidance stage (plan §2.4): `Steering.context_avoid()` over every hazard in reach. A line-of-sight
+## blocker the actor itself has claimed is dropped — the ship's own cover is its destination, not a danger
+## (the body still collides with it); a well is never dropped, claimed or not. Nothing in reach returns
+## `desired` itself, so a ship with no hazard near flies exactly as before.
 func _avoid(desired: Vector2) -> Vector2:
-	return desired
+	if hazard_avoidance <= 0.0 or desired == Vector2.ZERO:
+		_avoid_prev = Vector2.ZERO
+		return desired
+	var pos := actor.global_position
+	var infos := Hazards.around(pos, hazard_margin + desired.length() * Steering.CONTEXT_LOOKAHEAD)
+	for i in range(infos.size() - 1, -1, -1):
+		var info: HazardInfo = infos[i]
+		if info.line_of_sight_blocker and info.is_claimed_by(actor):
+			infos.remove_at(i)
+	if infos.is_empty():
+		_avoid_prev = Vector2.ZERO
+		return desired
+	var out := Steering.context_avoid(pos, desired, infos, hazard_avoidance, hazard_margin,
+			Steering.CONTEXT_LOOKAHEAD, _avoid_prev)
+	_avoid_prev = out.normalized()
+	return out
 
 
 func _clear_requests() -> void:

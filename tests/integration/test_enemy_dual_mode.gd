@@ -811,3 +811,222 @@ func test_a_well_beyond_the_corridor_never_pulls_an_enemy_past_the_hard_band() -
 		worst = maxf(worst, entity.global_position.x - rect.end.x)
 	assert_gt(worst, 0.0, "sanity: the well did drag it out of the visible rect")
 	assert_lt(worst, probe.hard_band, "but never past the hard band")
+
+
+# ── Hazards: enemies steer round them with their own temperament (Phase 6, t4; plan §2.4) ────────
+
+const FIXTURE_WRECK: GDScript = preload("res://tests/helpers/fixture_wreck.gd")
+const SNIPER_CONFIG: SniperConfig = \
+		preload("res://assault/scenes/enemies/sniper/sniper_config.tres")
+const SWARM_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn")
+
+
+func _fixture_wreck(at: Vector2, radius: float) -> Node2D:
+	var w: Node2D = FIXTURE_WRECK.new()
+	w.info.radius = radius
+	add_child_autofree(w)
+	w.global_position = at
+	return w
+
+
+## A fixture enemy flying `config`'s hazard profile at `speed` with the given limits.
+func _profiled_enemy(harness, pos: Vector2, config: ShipConfig, speed: float, accel: float, brake: float) -> BaseEnemy:
+	var entity := _spawn_orbiter(harness, pos)
+	var mover := entity.get_node("EnemyMover") as EnemyMover
+	mover.hazard_avoidance = config.hazard_avoidance
+	mover.hazard_margin = config.hazard_margin
+	mover.hazard_resistance = config.hazard_resistance
+	mover.max_speed = speed
+	_set_limits(entity, accel, brake)
+	return entity
+
+
+func _spawn_swarm(harness, pos: Vector2) -> SwarmDrone:
+	var drone := SWARM_SCENE.instantiate() as SwarmDrone
+	drone.global_position = pos
+	(drone.get_node("Brain") as SwarmDroneBrain).start_engaged = true  # pre-t8d: predates the hub idle
+	harness.root.add_child(drone)
+	drone.set_physics_process(false)
+	return drone
+
+
+## The ship's own cover is its destination (plan §2.4 "Cover points must be reachable"): with the Sniper's
+## wide 90 px margin a cover point 50 px off a wreck's edge sits deep in the wreck's skirt, so only dropping a
+## wreck the actor itself has claimed lets an `arrive()` settle there. The same wreck claimed by another node
+## is avoided like any hazard: the ship never reaches that point at all.
+func test_a_claimed_wreck_is_ignored_and_the_cover_point_beside_it_is_reachable(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _hazard_world(mode)
+	var at := Vector2(640.0, 360.0)
+	var radius := 60.0
+	var wreck := _fixture_wreck(at, radius)
+	var cover := at + Vector2(radius + 50.0, 0.0)
+	var start := at + Vector2(480.0, 0.0)  # straight out from the cover point: the wreck is dead ahead
+	for claimer in ["self", "other"]:
+		var ship := _profiled_enemy(harness, start, SNIPER_CONFIG, SNIPER_CONFIG.max_speed,
+				SNIPER_CONFIG.acceleration, SNIPER_CONFIG.braking)
+		var brain := _brain(ship)
+		brain.arrive_point = cover
+		brain.arrive_speed = SNIPER_CONFIG.max_speed
+		var holder: Node = ship if claimer == "self" else autofree(Node.new())
+		assert_true(wreck.info.try_claim(holder), "%s: sanity: the claim is taken" % mode)
+		var closest := INF
+		for _i in 300:  # 5 s
+			_tick(ship, DT)
+			closest = minf(closest, ship.global_position.distance_to(at))
+		if claimer == "self":
+			assert_lt(ship.global_position.distance_to(cover), 10.0,
+				"%s: its own cover: settled on the point (%s)" % [mode, ship.global_position])
+		else:
+			assert_gt(closest, radius + 50.0 + 10.0,
+				"%s: another's wreck is avoided: it never gets within 10 px of the cover point's ring (closest %.1f)" % [mode, closest])
+			assert_gt(ship.global_position.distance_to(cover), 10.0, "%s: and never settles on the point" % mode)
+		wreck.info.release(holder)
+		ship.free()
+
+
+## The corridor runs after the stage (plan §2.2 step 6): an enemy with a full-avoidance profile (the Sniper's)
+## flying straight down the right edge meets a pull-free hazard that straddles it, and the way round is out past
+## the edge. In Open Space nothing stops it passing well beyond the corridor's `soft_band`; in Assault the corridor
+## holds it inside that band (its 200 px/s is no more than the corridor's `edge_pressure`). With no stage it would
+## fly straight down, never past the edge at all.
+func test_the_corridor_still_bounds_an_avoiding_enemy(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _hazard_world(mode)
+	var probe := AssaultCorridorConstraint.new()
+	var rect := probe.inner_rect()
+	var speed := probe.edge_pressure
+	var centre := Vector2(rect.end.x - 100.0, rect.get_center().y)  # radius 300: its right edge 200 px past
+	_fixture_well(centre, {"radius": 300.0, "core_radius": 10.0, "pull_force": 0.0})
+	var ship := _profiled_enemy(harness, Vector2(rect.end.x - 20.0, centre.y - 500.0), SNIPER_CONFIG, speed,
+			SNIPER_CONFIG.acceleration, SNIPER_CONFIG.braking)
+	_brain(ship).desired_velocity = Vector2(0.0, speed)  # down the edge, past the hazard
+	var furthest := -INF
+	for _i in 480:  # 8 s
+		_tick(ship, DT)
+		furthest = maxf(furthest, ship.global_position.x - rect.end.x)
+	if mode == "assault":
+		assert_gt(furthest, 0.0, "assault: sanity: the stage did push it past the visible edge")
+		assert_lt(furthest, probe.soft_band, "assault: the corridor holds it inside the soft band (%.1f)" % furthest)
+	else:
+		assert_gt(furthest, probe.soft_band, "open_space: unbounded, it leaves past the band (%.1f)" % furthest)
+
+
+## One real Swarm Drone APPROACH run from (100, 360) toward a player at (1180, 360) past a well at (640, 360);
+## `avoid = false` zeroes its profile's avoidance (the control). Returns the closest approach to the well's edge
+## and where the drone was when APPROACH ended.
+func _swarm_past_a_well(harness, well: HazardField, avoid: bool) -> Dictionary:
+	var drone := _spawn_swarm(harness, Vector2(100.0, 360.0))
+	if not avoid:
+		(drone.get_node("EnemyMover") as EnemyMover).hazard_avoidance = 0.0
+	var brain := _brain(drone) as SwarmDroneBrain
+	var closest := INF
+	for _i in 300:
+		_tick(drone, DT)
+		closest = minf(closest, drone.global_position.distance_to(well.global_position) - well.radius)
+		if brain.phase != SwarmDroneBrain.Phase.APPROACH:
+			break
+	var result := {"closest": closest, "at": drone.global_position}
+	drone.free()
+	return result
+
+
+## A real Swarm Drone (margin 12) flying APPROACH past a well skims its edge: never inside, and closer than the
+## default 60 px margin would have let it. Control: the same run with avoidance 0 flies into it.
+func test_a_swarm_drone_flying_past_a_well_skims_its_edge(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _hazard_world(mode)
+	harness.player.global_position = Vector2(1180.0, 360.0)
+	var well := _fixture_well(Vector2(640.0, 360.0), {"radius": 120.0, "core_radius": 40.0, "pull_force": 200.0})
+	var control := _swarm_past_a_well(harness, well, false)
+	assert_lt(control.closest, 0.0, "%s: control: unavoiding, the drone's path crosses the well" % mode)
+	var run := _swarm_past_a_well(harness, well, true)
+	assert_gt(run.at.x, well.global_position.x + well.radius, "%s: past the well" % mode)
+	assert_gt(run.closest, 0.0, "%s: never inside its radius (closest %.1f)" % [mode, run.closest])
+	assert_lt(run.closest, 60.0, "%s: but skimming, inside the default 60 px margin (%.1f)" % [mode, run.closest])
+
+
+## One real Fighter APPROACH run from (640, -360) toward a player at (640, 360): down, then west along y ~ -168,
+## then round to its pass start (the two modes share the first ~110 ticks; each then curves to its own pass
+## start). Its budget is lifted (a private config copy) so only the approach decides the run. `avoid = false` is
+## the control. Returns the closest approach to the well's edge, the westernmost x before RUN_IN, and whether
+## RUN_IN started.
+func _fighter_past_a_well(harness, well: HazardField, avoid: bool) -> Dictionary:
+	var fighter := _spawn_fighter(harness, Vector2(640.0, -360.0))
+	fighter.config.engage_seconds = 1000.0
+	if not avoid:
+		(fighter.get_node("EnemyMover") as EnemyMover).hazard_avoidance = 0.0
+	var brain := _brain(fighter) as FighterBrain
+	var closest := INF
+	var min_x := INF
+	var reached := false
+	for _i in 600:
+		_tick(fighter, DT)
+		closest = minf(closest, fighter.global_position.distance_to(well.global_position) - well.radius)
+		min_x = minf(min_x, fighter.global_position.x)
+		if brain.phase == FighterBrain.Phase.RUN_IN:
+			reached = true
+			break
+	fighter.free()
+	return {"closest": closest, "min_x": min_x, "reached": reached}
+
+
+## A real Fighter (avoidance 0.8, margin 60) whose APPROACH to its pass start runs through a well on the westward
+## leg goes round it — past it to the west — and still reaches RUN_IN. Control: with avoidance 0 the same approach
+## flies into the well, almost through its centre. (A well on the leg's east half lets the Open Space fighter
+## breach-pass at ~450 px from the player before it ever reaches the well; the `min_x` check rejects that.)
+func test_a_fighter_approaching_through_a_wells_path_goes_round(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _hazard_world(mode)
+	var well := _fixture_well(Vector2(320.0, -168.0), {"radius": 100.0, "core_radius": 30.0, "pull_force": 200.0})
+	var control := _fighter_past_a_well(harness, well, false)
+	assert_lt(control.closest, -50.0, "%s: control: unavoiding, the approach runs deep into the well (%.1f)" % [mode, control.closest])
+	var run := _fighter_past_a_well(harness, well, true)
+	assert_true(run.reached, "%s: the pass still starts" % mode)
+	assert_lt(run.min_x, well.global_position.x - well.radius,
+		"%s: it went past the well before its pass (min x %.1f)" % [mode, run.min_x])
+	assert_gt(run.closest, 0.0, "%s: never inside the well (closest %.1f)" % [mode, run.closest])
+
+
+## One real Swarm Drone BURST from 310 px left of `well_at` at a player 250 px right of it: the burst reaches the
+## well's core. Returns the closest approach to `well_at` during the burst, whether the burst ever left its line,
+## and, from the burst's end to the drone's next committed run (its next `boost()`), how long that took and how
+## far from `well_at` it got.
+func _swarm_burst_across(harness, well_at: Vector2) -> Dictionary:
+	var start := well_at + Vector2(-310.0, 0.0)
+	harness.player.global_position = well_at + Vector2(250.0, 0.0)
+	var drone := _spawn_swarm(harness, start)
+	var mover := drone.get_node("EnemyMover") as EnemyMover
+	var brain := _brain(drone) as SwarmDroneBrain
+	brain.aim = harness.player.global_position
+	brain.enter_phase(SwarmDroneBrain.Phase.BURST)
+	var dir: Vector2 = (harness.player.global_position - start).normalized()
+	var log := {"avoidance": mover.hazard_avoidance, "straight": true, "closest": INF, "held": 0.0, "furthest": 0.0}
+	while mover.is_boosting():
+		_tick(drone, DT)
+		log.straight = log.straight and absf(mover.own_velocity().normalized().cross(dir)) < 0.0001
+		log.closest = minf(log.closest, drone.global_position.distance_to(well_at))
+	while not mover.is_boosting() and log.held < 5.0:
+		_tick(drone, DT)
+		log.held += DT
+		log.furthest = maxf(log.furthest, drone.global_position.distance_to(well_at))
+	drone.free()
+	return log
+
+
+## R6.11 bait: a Swarm Drone's BURST is a `boost()`, so it ignores avoidance and flies straight into a well's
+## core, and the well then holds it. Its own 220 px/s cannot out-fly the drift, so it stays inside the hull-stress
+## radius from the burst's end until it commits again (its next BURST, over a second later: at least two 0.5 s
+## stress pulses). Like the Razor's dash (plan §2.2: "captured at approach speed, escapes by dashing"), only a
+## committed run gets it out. Control: the same burst with no well leaves that radius before its next burst.
+func test_a_swarm_burst_across_a_well_is_captured(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var well_at := Vector2(640.0, 360.0)
+	var harness = _hazard_world(mode)
+	var control := _swarm_burst_across(harness, well_at)  # before the well exists
+	var well := _fixture_well(well_at, {"damage_radius": 150.0})
+	var run := _swarm_burst_across(harness, well_at)
+	assert_gt(run.avoidance, 0.0, "%s: sanity: an avoiding profile" % mode)
+	assert_true(run.straight, "%s: the burst is never steered round the well" % mode)
+	assert_lt(run.closest, well.core_radius, "%s: it reaches the core (closest %.1f)" % [mode, run.closest])
+	assert_gte(run.held, 1.0, "%s: sanity: over a second until its next committed run (%.2f s)" % [mode, run.held])
+	assert_lt(run.furthest, well.damage_radius,
+		"%s: captured: inside the damage radius until it commits again (furthest %.1f)" % [mode, run.furthest])
+	assert_gt(control.furthest, well.damage_radius,
+		"%s: control: with no well the same burst leaves that radius (%.1f)" % [mode, control.furthest])

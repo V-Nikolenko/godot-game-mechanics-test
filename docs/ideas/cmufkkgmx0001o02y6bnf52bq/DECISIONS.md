@@ -2306,3 +2306,27 @@ check this phase's *as built* section, once written, before relying on them.
   blasts (Ph8).
 - Owner options not built by default: the anomaly's shield / targeting distortions, the Ram's deliberate plate throw
   (Debris Charge ships passive only), a designed gravity slingshot.
+
+### Deviations during the build
+- **t4 (context-steering stage), four refinements of plan §2.4, all inside `Steering.context_avoid()`; the signature,
+  constants and mover wiring are as planned** (task plan `docs/plans/cmvg30aa90073qs2xrw74hcvg/3-plan.md`):
+  (1) the inside case uses the outside formula's own limit (skirt 1, cone half-width 90° + one slot) instead of
+  `max(0, cos)`, so every heading within 112.5° of the centre is dangerous and a ship inside always steps outward;
+  (2) the `prev_dir` hysteresis is blended into the *interest used to rank slots*, not into the output direction (an
+  output blend zig-zagged between the two edges of a well straight ahead), and falls back to the brain's own heading when
+  the blend cancels (a reversed request); (3) slots are ranked by the signed cosine, so slots more than 90° off the
+  request do not tie; (4) a **clear way** returns `desired` bit-identical: when the slot(s) bracketing `desired` (one slot
+  when `desired` lies exactly on it) carry the least danger, nothing is touched. The speed floor
+  `CONTEXT_MIN_SPEED_RATIO` 0.35 is as planned.
+- **t4: every `mover.boost()` bypasses avoidance, including the Razor's IDLE_BOOST** (0.4 s, ~60 px along its idle
+  heading), not only attacks; the plan's rule "committed runs are `boost()`; never a separate ignore-hazards API" makes
+  no exception. t17, which places the hub's well, should keep Razor idle orbits clear of a well's radius.
+- **t4: a drifting hazard is led only once it is within `Hazards.around()` reach** (queried at the hazard's *current*
+  centre, reach `hazard_margin + |desired| · 0.6`). For t15's debris (200 px/s, a 120 px lead at 0.6 s) pad the mover's
+  reach by a lead allowance if fragments are seen too late; padding is safe, since an info whose skirt is 0 contributes
+  nothing.
+- **t4: a Swarm Drone BURST across a well is captured only until it commits again.** With the §2.5 well (pull 520, core
+  90, damage radius 150) its next BURST (480 px/s) always carries it out, about 1.2 s later, like the Razor's dash. The
+  dual-mode row asserts that: the burst reaches the core, the drone stays inside `damage_radius` until its next boost
+  (two 0.5 s stress pulses), and with no well the same burst leaves that radius. It does not assert "still inside 2 s
+  later", which no geometry gives with the real brain.
