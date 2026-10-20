@@ -1,4 +1,6 @@
-VERDICT: CHANGES_REQUESTED
+VERDICT: APPROVED
+
+(round 2; round 1 verdict was CHANGES_REQUESTED, kept below)
 
 # Plan review: Enemy rework phase 6 (hazards, wells, anomalies, wrecks), round 1
 
@@ -318,3 +320,169 @@ plan edit, not a redesign.
 - **Reuse.** The plan reuses `ProjectileLifetime`, `LineOfSight`, `ContactProfile._shove`, `StateLight`, `debris_1..6.png`
   and the laser-ray direct-emit precedent instead of reinventing them. A separate `Wreck` class rather than
   `AsteroidBase` is justified, because `AsteroidBase` joins `asteroids` and carries scoring fields.
+
+---
+
+# Plan review: Enemy rework phase 6 (hazards, wells, anomalies, wrecks), round 2
+
+Reviewed revision 2 of `3-plan.md` (§8 response table included), `tasks.json`, `1-context.md`, `2-research.md`, the
+idea's `DECISIONS.md` (the Ph6 planned section is consistent with the plan), and `CLAUDE.md`, against the code at
+`b465af9` on `agent/auto-dev`. Every file:line below was opened.
+
+**Verdict: APPROVED.** Every round-1 blocker's underlying problem is fixed, and the revision makes no architectural
+regressions. What is left is two budget-arithmetic slips (N1, N2), which make the *Assault* half of the Ram's well
+tactic and of the Fighter's cover phase unreachable and their Assault test rows unpassable, plus a handful of smaller
+gaps. Each one is a value or a one-line rule that the building task can fix and verify, and each shows up as a red row
+rather than as silently wrong behaviour. **N1 and N2 should still be applied before t16 / t14 start** (t14 gets its own
+plan and review in any case; t16 does not start until t4, t6, t11 and t15 are done).
+
+## Round-1 resolution
+
+| # | Status | Checked |
+|---|---|---|
+| B1 | **Partly** | The Open Space station `S = P + (P − W)^·300` with a feasibility check, ticket, give-up and an untouched `_choose_side()` fixes the Assault-only hook (`ram_corvette_brain.gd:317-337`: APPROACH really is a plain `intercept` in Open Space). However, the new Assault gate can never pass, and the 0° Open Space row probably runs out of time (N1). |
+| B2 | Resolved | `spawn_into` / `_attach.call_deferred` on the spawned node, defined once in §2.1, follows `contact_blast.gd:34-67` exactly. The explosive blast became a body-free `pulse_damage`. There are three real-physics rows (§4.3), and GUT 9.7.1 fails a test on engine errors (`addons/gut/gut_config.gd:57`, `error_tracker.gd:35`), so those rows can fail. |
+| B3 | Resolved | §2.4 drops a LOS-blocking info that `is_claimed_by(actor)`. The Sniper claims at `_set_target_point()` and the Fighter at COVER entry, both before travelling. Reach-and-hold rows exist with avoidance active. t13 and t14 now list `2.4`. |
+| B4 | Resolved | COVER is a separate appended phase (`fighter_brain.gd:60`, and no `Phase.size()` / `keys()` use), so `_derive_pass()` (`:640-662`), the latch and `_tick_hold` (`:887-944`) are untouched. It covers solo fighters and LEAD only, the sweep stays bit-identical, and t14 is now `large` with its own review. The Assault budget gate is broken separately (N2). |
+| M1 | Resolved | Drift and clamp sit inside `player_fighter._physics_process` after the dialog and knockback returns and the engine-boost branch (`player_fighter.gd:69-100`). `PlayerBase.hazard_speed_factor()` is implemented once (both ships extend `PlayerBase`). Nit N7: dash already clamps. |
+| M2 | Resolved | §2.2 steps 5 and 8 skip a zero drift. The −0.0 row and the 2000 px far-well row were added. |
+| M3 | Resolved | `own_velocity()` is in §2.2. The named gates exist at `ram_corvette_brain.gd:395`, `sniper_brain.gd:477`, `fighter_brain.gd:382/390/737`, `razor_drone_brain.gd:448`. There is a Ram LINE_UP-in-a-well row, and the rule is logged in DECISIONS Ph6. |
+| M4 | Resolved | Hysteresis applies to cover only, with an absolute margin `0.15·w_sep`, plus a no-wreck row. `_travel` re-pick is at `sniper_brain.gd:349-353`. |
+| M5 | Resolved | `pulse_damage` uses centre distance with `≤`. A plated Ram deflects it (`ram_corvette.gd:125-130`). The friendly-fire slice is logged in DECISIONS Ph6. |
+| M6 | Resolved | `source` + `source_clear_radius`. Enemy hurtbox masks really are 1121 at runtime: `DefenseProfile.apply_to()` overwrites the scene masks of 65 / 97 (`base_enemy.gd:79-80`, `defense_profile.gd:38-54`), and no enemy scene authors a profile. |
+| M7 | Resolved | Contact damage is stated to come only from moving wrecks, plus a 0.6 s arming via `monitorable` (the HurtBox is the side that detects: `hurtbox_component.gd:39-49`). See N5 for the same geometry applied to the explosive fuse. |
+| M8 | Resolved | The dependencies t17→t8, t16→t15, and t13/t14/t16→t11 are all present in `tasks.json`. `hazard_field.gd` belongs to t1 only. |
+| M9 | Resolved | The exit guard extends the real 66 s replay in `test_level1_fighter_exit.gd` (header `:1-31`) with a container, chance 1 and mid-corridor kills. Its levers are pre-approved. |
+| M10 | Resolved | All 96 `planSections` entries (27 distinct headings) match a heading by number or opening words (`grep -n '^#' 3-plan.md`). `"2.1 HazardInfo"` avoids prefix-matching 2.10–2.18. |
+| M11 | Resolved | §2.6 and §2.15 rows are marked dual-mode. §4.4 lists every dual-mode row. |
+| M12 | Resolved | Swarm row asserts within 150. Hub debris has `speed` 0. The Assault x-only inheritance and the 30 s cap (≥ 26.8 s crossing) are in place. The beam note goes in `HAZARD.md`. |
+
+**Count: 15 resolved, 1 partly (B1), 0 not resolved.**
+
+## New findings
+
+### N1 (minor, apply before t16). The Ram's Assault well gate is unreachable, and the 4.0 s give-up is too short for the 0° row (t16)
+
+- **Checked:** `ram_corvette_config.tres` (`engage_seconds = 4.0`, `cruise_speed = 280.0`, `acceleration = 500.0`);
+  `engagement_budget.gd:50-53` (`remaining() = seconds − elapsed`); `ram_corvette_brain.gd:137-142` (`budget.update` runs
+  before the dispatch); plan §2.14.
+- **Problem (Assault):** §2.14 takes a ticket in Assault only while `budget.remaining() >= well_setup_max +
+  line_up_cap`, which is 4.0 + 0.5 = 4.5 s. The Ram's whole budget is 4.0 s, so the condition is never true.
+  - The Assault "feasible" row (`charge_dir` within 30° of P→W) cannot pass.
+  - The Assault boundary row passes only vacuously.
+- **Problem (Open Space, 0° row):** with the Ram spawned 900 px from P on the well side and W 350 px from P, the straight
+  line to S passes through the well's centre.
+  - The Ram (threshold 0.5) has to go round a radius of roughly 420–480 px. That is about 1,500–1,650 px of path at
+    280 px/s, which takes about 5.5–6 s, against the 4.0 s give-up.
+  - It sets `_well_refused` and charges from wherever it is, so "each time `charge_dir` within 30°" fails at 0°.
+- **Fix:**
+  - Gate the Assault ticket on what is actually needed:
+    `remaining() >= line_up_cap + ATTACK_GATE_MARGIN + |pos − S| / cruise_speed()`.
+  - Make the give-up distance-based, for example `|pos − S|₀ / cruise_speed() · 1.5 + 1.0 s`, or give it a separate
+    Open Space value (about 8 s).
+  - Alternatively, make the tactic Open Space-only this phase (Assault has no wells until Ph15) and drop the Assault
+    rows. Either way, re-check the 0° row's timing.
+
+### N2 (minor, apply in t14's own plan). Fighter COVER can never start in Assault (t14)
+
+- **Checked:**
+  - `fighter_config.tres:42` (`engage_seconds = 6.0`).
+  - `fighter_brain.gd:279` (`budget.update(delta)`), which runs before the `match phase` at `:285-294`.
+  - Plan §2.12 (`cover_min_budget` 6.0 s).
+- **Problem:** the budget is already below 6.0 on the first tick, so `budget.remaining() >= 6.0` is never true on an
+  APPROACH tick, and COVER is Open Space-only in practice.
+  - The dual-mode row "a solo fighter enters COVER, reaches C and holds" fails in the `assault` harness.
+  - The owner summary's "a lone Fighter … waits behind one" never happens in level 1, which is where the wrecks are.
+- **Fix:** derive `cover_min_budget` from what a cover-then-pass needs (`cover_hold` + lead-in + run, for example
+  4.0 s, cross-checked with `run_budget_slack()`), or declare COVER Open Space-only and drop the Assault rows. State the
+  result in §2.12.
+
+### N3 (minor). Cover claims are released on too few exits (t13, t14)
+
+- **Checked:**
+  - `sniper_brain.gd:325-353` (`_set_target_point`, travel-cap re-pick).
+  - `:51` (RELOCATE, IDLE, RETURNING exist).
+  - `fighter_brain.gd:430-445` (`_tick_anchor_idle` moves any non-bursting phase to IDLE, NOTICING or RETURNING).
+- **Problem:**
+  - The Sniper releases only on BREAK_CONTACT and DISENGAGE. A re-pick or relocation to a different point keeps the old
+    wreck claimed, and so do IDLE and RETURNING in the hub. A second sniper is then refused a wreck nobody is using,
+    until the claimer dies.
+  - The Fighter's §2.12 release list omits the anchor-idle exits from COVER.
+- **Fix:** release the previous claim in `_set_target_point()` whenever the new point is not the same cover. Release it
+  on every exit from COVER, done in `enter_phase()`. Add one row each.
+
+### N4 (minor). The alive cap can retire the hub's placed structures (t11, t18)
+
+- **Checked:** plan §2.9 (the cap counts "the container's children in group `wrecks`") and §2.16 (placed structures are
+  `Wreck` scenes, and the `TacticalSpace` parent is unspecified).
+- **Problem:** if `TacticalSpace` is placed under the `HazardContainer`, the three structures have the lowest sequence
+  numbers. They would be the first retired once five more wrecks exist in the hub.
+- **Fix:** the cap counts only runtime-spawned wrecks (`lifetime > 0`, or a flag set by `spawn_into`). Placed structures
+  are never retired. Add a t18 row.
+
+### N5 (minor). The explosive wreck's touch fuse uses the geometry M7 showed cannot touch (t12)
+
+- **Checked:**
+  - `player_ship.tscn:212-216` (body radius 11, hurtbox radius 5).
+  - Every enemy `ContactHitBox` has mask 0, so hitboxes do not monitor.
+  - Plan §2.10 ("1.0 s after a ship's hurtbox first overlaps its armed contact box").
+- **Problem:**
+  - A ship stopped against a stationary explosive wreck never overlaps the wreck's body-sized contact box. An Open Space
+    explosive wreck from a ship that died at rest can therefore never be touched off.
+  - The plan also does not say what detects the overlap.
+- **Fix:** fuse on a proximity ring, for example body radius + 16 px. Use a polled `get_overlapping_areas()` on a small
+  monitor area (mask 128 | 512) or a centre-distance check against groups `player` / `enemies`. Phrase the row as "a ship
+  stopped against it detonates it 1.0 s later".
+
+### N6 (minor). `pulse_damage` ignores the Assault barrel-roll i-frame, and the "rails are untouched" wording (t1, t6, t12)
+
+- **Checked:** `dash_state.gd:101-104` (a side roll sets `HurtBox.monitoring = false` as its invulnerability),
+  `player_base.gd:106-119`, `hurtbox_component.gd:4`.
+- **Problem:**
+  - A direct `received_damage.emit` bypasses the roll, so hull stress or a wreck blast hits a rolling player.
+  - Each 0.5 s stress pulse also costs one shield charge (`consume_one()`), which should be a stated choice.
+  - "For every task" says rails and legacy enemies are untouched, but `pulse_damage` hits every node in `enemies`.
+- **Fix:**
+  - `pulse_damage` skips a hurtbox whose `monitoring` is false.
+  - State the shield-charge cost in the well's `HAZARD.md`.
+  - Reword the rule to "rails and legacy enemies are never *moved* by a hazard; environmental damage hits them".
+
+### N7 (nit). `dash_state.gd` already clamps (t3)
+
+- **Checked:** `dash_state.gd:137-140`.
+- **Problem:** §2.3 says dash "has none today", but the clamp is already there.
+- **Fix:** none needed. The implementer only applies the speed factor there.
+
+### N8 (nit, for t14's own plan). A LEAD in COVER dissolves the pincer
+
+- **Checked:**
+  - `fighter_brain.gd:925-944`: a FLANK's `_wait_time` runs while `_lead_holding()` is false, and it goes at
+    `flank_wait_max`.
+  - `fighter_config.tres:45` (`flank_wait_max` 2.0).
+- **Problem:** with `cover_hold` 1.2 s plus the travel to C, the hub pair's FLANK goes alone almost every time its LEAD
+  takes cover.
+- **Fix:** either pause the FLANK's wait while its LEAD is in COVER (still bounded by `cover_max`), or record the
+  behaviour as accepted in DECISIONS.
+
+### N9 (nit). t8 complexity, and t16 `planSections`
+
+- **t8:** marked `small`, but it changes four movement models (`EnemyRocket._heading`, `EnemyOrdnance` bombs, and two
+  player missile scripts) and adds a new per-family test file. `medium` is more realistic.
+- **t16:** its "wall of fixture wrecks" give-up row needs §2.8. Either add `2.8`, or let the row use any hazard fixture.
+
+## Other checks that hold
+
+- **Gate time:** the allowances sum to exactly 35.5 s (t1–t19), against the README's "198–202 s at the end of Ph5". The
+  recover-first rule at 232 s is in "For every task".
+- **Context steering and the single-writer gates:** context steering, drift and slow live in `EnemyMover.step()`. Brains
+  only read, so the single-writer gates are unaffected.
+- **Signal declarations:** the new signals are declared with their arguments (`phase_changed(phase: int)`,
+  `stressed(count: int)`).
+- **Collision layers:** no new collision bit is used. `EnemyBullet` gaining 1024 uses an already-named layer.
+- **Enemy rounds and wrecks:** an `EnemyBullet` round expires on any `area_entered` today (`enemy_bullet.gd:44-45`). The
+  duck-typed `stops_enemy_rounds()` filter therefore really is what keeps asteroid behaviour unchanged.
+- **Placement of the death hook:** `_maybe_leave_wreck()` beside `explode()` (`base_enemy.gd:226-240`) is reached by
+  every mover-driven enemy, and `_brain.rng` is per brain. A draw on a dying brain cannot shift any other seeded
+  sequence.
+- **DECISIONS Ph6 (planned):** matches the plan, and lists every change to earlier decisions: bit 12, context steering,
+  Gravity Field moved from Ph7, rounds stopping on wrecks, the friendly-fire slice, and `own_velocity()`.
