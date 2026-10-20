@@ -470,3 +470,229 @@ func test_bare_mover_outside_the_tree_steps_without_crashing() -> void:
 	mover.step(DT)
 	mover.halt()
 	assert_null(mover.actor)
+
+
+# ── Hazards: drift, slow, own_velocity (docs/plans/cmug23om70001m52wqfwclf3l/3-plan.md §2.2) ──
+
+const WELL_PULL := 520.0
+const WELL_CORE := 90.0
+const WELL_RADIUS := 420.0
+
+
+## A fixture gravity well (the real `HazardField` script, no scene) at `at`; freed with the test.
+func _well(at: Vector2, props: Dictionary = {}) -> HazardField:
+	var f := HazardField.new()
+	f.kind = &"gravity_well"
+	f.radius = WELL_RADIUS
+	f.core_radius = WELL_CORE
+	f.pull_force = WELL_PULL
+	for key in props:
+		f.set(key, props[key])
+	add_child_autofree(f)
+	f.global_position = at
+	return f
+
+
+## One hand-integrated step: position follows the velocity the mover wrote, exactly.
+func _advance(mover: EnemyMover, request: Vector2, dt: float = DT_EXACT) -> void:
+	var before := mover.actor.global_position
+	mover.request_velocity(request)
+	mover.step(dt)
+	mover.actor.global_position = before + mover.actor.velocity * dt
+
+
+func _scripted_request(i: int) -> Vector2:
+	return Vector2(200.0 * cos(i * 0.1), 150.0 * sin(i * 0.13))
+
+
+func _configure_kind(m: EnemyMover, kind: String) -> void:
+	if kind == "accel":
+		m.acceleration = 600.0
+		m.braking = 900.0
+		m.max_speed = 250.0
+	elif kind == "assault":
+		m.constraint = AssaultCorridorConstraint.new()
+		m.max_speed = 400.0
+
+
+## `kind`'s mover run for 120 ticks from (640, 360); returns every tick's velocity, rotation and
+## position as bytes (`var_to_bytes` tells -0.0 from +0.0, `==` does not).
+func _record(kind: String, request: Variant = null) -> PackedByteArray:
+	var mover := _rig(func(m: EnemyMover) -> void: _configure_kind(m, kind))
+	mover.actor.global_position = Vector2(640.0, 360.0)
+	if kind == "boost":
+		mover.boost(request if request is Vector2 else Vector2(1.0, 0.3), 400.0, 100.0)
+	var log: Array = []
+	for i in 120:
+		var req: Vector2 = request if request is Vector2 else _scripted_request(i)
+		if kind == "assault":
+			req = Vector2(400.0, 120.0) if request == null else req
+		_advance(mover, req)
+		log.append([mover.actor.velocity, mover.actor.rotation, mover.actor.global_position])
+	return var_to_bytes(log)
+
+
+func test_no_hazard_is_bit_identical_with_a_far_well_for_every_mover_kind() -> void:
+	for kind in ["instant", "accel", "boost", "assault"]:
+		assert_eq(Hazards.count(), 0, "sanity: the registry is empty for the recorded run")
+		var recorded := _record(kind)
+		var well := _well(Vector2(640.0, 360.0 - 2000.0))
+		var with_well := _record(kind)
+		well.free()
+		assert_eq(with_well, recorded, "%s: a well 2000 px away changes nothing, bit for bit" % kind)
+
+
+## The -0.0 case. A plain request already loses its -0.0 to `_primary + _nudge`; a boost keeps it
+## (`dir.normalized() * speed` of -Vector2(200, 0) is (-speed, -0.0)), and adding a zero drift would
+## make it +0.0 and flip the facing by 2π. (`move_and_slide()` rewrites `actor.velocity` to +0.0 either
+## way, so the rotation, which is computed from the mover's own `v`, is what discriminates.)
+func test_negative_zero_request_is_untouched_with_no_hazard_and_with_a_far_well() -> void:
+	var want := -Vector2(200.0, 0.0)
+	for kind in ["instant", "accel", "boost", "assault"]:
+		var recorded := _record(kind, want)
+		var well := _well(Vector2(640.0, 360.0 - 2000.0))
+		var with_well := _record(kind, want)
+		well.free()
+		assert_eq(with_well, recorded, "%s: -0.0 survives a far well" % kind)
+
+	var mover := _rig()
+	mover.boost(want, 300.0, 100.0)
+	_advance(mover, Vector2.ZERO)
+	assert_almost_eq(mover.actor.rotation, -1.5 * PI, 0.00001, "the facing is angle() of (-300, -0.0): -π, not +π")
+	var well2 := _well(Vector2(0.0, -2000.0))
+	var mover2 := _rig()
+	mover2.boost(want, 300.0, 100.0)
+	_advance(mover2, Vector2.ZERO)
+	assert_almost_eq(mover2.actor.rotation, -1.5 * PI, 0.00001)
+	well2.free()
+
+
+func test_a_well_drags_an_idle_mover_inward() -> void:
+	_well(Vector2.ZERO)
+	var mover := _rig()
+	mover.actor.global_position = Vector2(200.0, 0.0)
+	for _i in 30:
+		_advance(mover, Vector2.ZERO)
+	assert_lt(mover.actor.velocity.x, -50.0, "pulled toward the centre (-x)")
+	assert_almost_eq(mover.actor.velocity.y, 0.0, 0.001)
+	assert_lt(mover.actor.global_position.x, 200.0)
+
+
+## Terminal drift is linear in (1 - resistance); over the first quarter second the position has barely
+## moved, so the field is effectively constant.
+func test_resistance_one_half_drifts_about_half_as_fast() -> void:
+	_well(Vector2.ZERO)
+	var speeds: Array[float] = []
+	for res in [0.0, 0.5]:
+		var mover := _rig(func(m: EnemyMover) -> void: m.hazard_resistance = res)
+		mover.actor.global_position = Vector2(300.0, 0.0)
+		for _i in 16:
+			_advance(mover, Vector2.ZERO)
+		speeds.append(mover.actor.velocity.length())
+	assert_gt(speeds[0], 20.0, "sanity: the unresisting mover is pulled")
+	assert_almost_eq(speeds[1] / speeds[0], 0.5, 0.05)
+
+
+func test_full_resistance_feels_no_pull() -> void:
+	_well(Vector2.ZERO)
+	var mover := _rig(func(m: EnemyMover) -> void: m.hazard_resistance = 1.0)
+	mover.actor.global_position = Vector2(200.0, 0.0)
+	for _i in 30:
+		_advance(mover, Vector2.ZERO)
+	assert_eq(mover.actor.velocity, Vector2.ZERO)
+
+
+func test_drift_persists_through_a_boost() -> void:
+	_well(Vector2.ZERO)
+	var mover := _rig()
+	mover.actor.global_position = Vector2(200.0, 0.0)
+	mover.boost(Vector2.RIGHT, 300.0, 100.0)
+	_advance(mover, Vector2.ZERO)
+	assert_lt(mover.actor.velocity.x, 300.0 - 1.0, "the boost is dragged by the well")
+	assert_gt(mover.actor.velocity.x, 0.0, "but it is still a boost")
+	assert_almost_eq(mover.actor.velocity.y, 0.0, 0.001)
+
+
+func test_halt_clears_the_drift() -> void:
+	var well := _well(Vector2.ZERO)
+	var mover := _rig()
+	mover.actor.global_position = Vector2(200.0, 0.0)
+	for _i in 20:
+		_advance(mover, Vector2.ZERO)
+	assert_ne(mover.own_velocity(), mover.actor.velocity, "sanity: a drift is in play")
+	mover.halt()
+	assert_eq(mover.actor.velocity, Vector2.ZERO)
+	assert_eq(mover.own_velocity(), Vector2.ZERO)
+	well.free()
+	_advance(mover, Vector2(100.0, 0.0))
+	assert_eq(mover.actor.velocity, Vector2(100.0, 0.0), "no leftover drift is added once the hazard is gone")
+
+
+func test_own_velocity_equals_actor_velocity_with_no_drift() -> void:
+	var mover := _rig()
+	_advance(mover, Vector2(80.0, -30.0))
+	assert_eq(var_to_bytes(mover.own_velocity()), var_to_bytes(mover.actor.velocity))
+	var bare: EnemyMover = autofree(EnemyMover.new())
+	assert_eq(bare.own_velocity(), Vector2.ZERO, "inert mover: zero, no crash")
+
+
+func test_own_velocity_excludes_the_drift() -> void:
+	_well(Vector2.ZERO)
+	var mover := _rig()
+	mover.actor.global_position = Vector2(200.0, 0.0)
+	for _i in 20:
+		_advance(mover, Vector2(0.0, 50.0))
+	assert_ne(mover.actor.velocity.x, 0.0, "sanity: the actor is being dragged")
+	assert_almost_eq(mover.own_velocity().x, 0.0, 0.001)
+	assert_almost_eq(mover.own_velocity().y, 50.0, 0.001)
+
+
+## `arrive()` reads the ship's own velocity, so a drifting ship still brakes onto its point.
+func test_steering_wrappers_read_own_velocity() -> void:
+	_well(Vector2.ZERO)
+	var mover := _rig(func(m: EnemyMover) -> void: m.acceleration = 600.0)
+	mover.actor.global_position = Vector2(200.0, 0.0)
+	for _i in 20:
+		_advance(mover, Vector2.ZERO)
+	assert_ne(mover._vel(), mover.actor.velocity)
+	assert_eq(mover._vel(), mover.own_velocity())
+
+
+func test_a_slow_field_scales_top_speed_by_the_unresisted_share() -> void:
+	var field := HazardField.new()
+	field.kind = &"gravity_field"
+	field.radius = 500.0
+	field.movement_penalty = 0.4
+	add_child_autofree(field)
+	for res in [0.0, 0.5]:
+		var factor: float = 1.0 - 0.4 * (1.0 - res)
+		var plain := _rig(func(m: EnemyMover) -> void: m.hazard_resistance = res)
+		_advance(plain, Vector2(200.0, 0.0))
+		assert_almost_eq(plain.actor.velocity.x, 200.0 * factor, 0.001, "resistance %s: request scaled" % res)
+		var boosted := _rig(func(m: EnemyMover) -> void: m.hazard_resistance = res)
+		boosted.boost(Vector2.RIGHT, 400.0, 10.0)
+		_advance(boosted, Vector2.ZERO)
+		assert_almost_eq(boosted.actor.velocity.x, 400.0 * factor, 0.001, "resistance %s: boost scaled" % res)
+		assert_eq(boosted.max_speed, 0.0, "max_speed itself is never written")
+
+
+func test_a_corridor_bounds_a_pulled_mover_because_the_filter_runs_last() -> void:
+	var constraint := AssaultCorridorConstraint.new()
+	var rect := constraint.inner_rect()
+	_well(Vector2(rect.end.x + 300.0, rect.get_center().y))
+	var mover := _rig(func(m: EnemyMover) -> void: m.constraint = constraint)
+	mover.actor.global_position = Vector2(rect.end.x - 10.0, rect.get_center().y)
+	var worst := 0.0
+	for _i in 640:
+		_advance(mover, Vector2.ZERO)
+		worst = maxf(worst, mover.actor.global_position.x - rect.end.x)
+	assert_gt(worst, 0.0, "sanity: the well did pull it out of the visible rect")
+	assert_lt(worst, constraint.hard_band, "but never past the corridor's hard band")
+
+
+func test_a_mover_with_no_actor_ignores_hazards() -> void:
+	_well(Vector2.ZERO)
+	var mover: EnemyMover = autofree(EnemyMover.new())
+	mover.request_velocity(Vector2(1.0, 1.0))
+	mover.step(DT)
+	assert_eq(mover.own_velocity(), Vector2.ZERO)

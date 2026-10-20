@@ -379,7 +379,7 @@ func is_holding() -> bool:
 ## window — a run started off S converges on its line at an angle no stagger predicted.
 func is_settled() -> bool:
 	return is_holding() and actor.global_position.distance_to(pass_start) <= STATION_SETTLE_PX \
-			and actor.velocity.length() < config.max_speed * STANDING_START_FRACTION
+			and mover.own_velocity().length() < config.max_speed * STANDING_START_FRACTION
 
 
 ## Braking onto its S: a lead-in slowed to a standing start inside the arrive zone, about to hold. A
@@ -387,7 +387,7 @@ func is_settled() -> bool:
 ## in on a ship it neither slides from nor yields to (round-2 review N5).
 func is_braking_onto_station() -> bool:
 	return not is_holding() and _loiter_time < 0.0 and _waits_for_window() and (phase == Phase.APPROACH or phase == Phase.REPOSITION) \
-			and actor.velocity.length() < config.max_speed * STANDING_START_FRACTION \
+			and mover.own_velocity().length() < config.max_speed * STANDING_START_FRACTION \
 			and actor.global_position.distance_to(pass_start) <= STATION_ARRIVE_PLAN_RADII * _plan_radius()
 
 
@@ -734,7 +734,7 @@ func _steer_run_in(delta: float, target: TargetInfo) -> void:
 	var desired := v_perp + (seek_target - pos).normalized() * along
 	# From (nearly) rest — a squad member leaving its hold — there is no heading to turn from: the
 	# mover's acceleration limit shapes the start, and the run sets off along the line.
-	var heading := desired.normalized() if actor.velocity.length() < config.max_speed * STANDING_START_FRACTION else _heading()
+	var heading := desired.normalized() if mover.own_velocity().length() < config.max_speed * STANDING_START_FRACTION else _heading()
 	var dir := Steering.turn_toward(heading, desired, config.turn_rate, delta)
 	_request(dir * config.max_speed)
 

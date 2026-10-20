@@ -98,6 +98,11 @@ func _ready() -> void:
 		score_value = cfg.score_value
 		counts_toward_wave_clear = cfg.counts_toward_wave_clear
 		counts_as_escape = cfg.counts_as_escape
+		if _mover != null:
+			_mover.hazard_avoidance = cfg.hazard_avoidance
+			_mover.hazard_margin = cfg.hazard_margin
+			_mover.hazard_resistance = cfg.hazard_resistance
+
 
 ## The one AI tick: the brain decides, then the mover applies it — once per physics frame, on one
 ## clock. Inert without a brain or once `suspend_ai()` has run. A subclass that defines its own

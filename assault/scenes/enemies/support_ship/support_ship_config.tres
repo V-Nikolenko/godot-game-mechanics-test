@@ -52,3 +52,6 @@ lose_radius = 1300.0
 notice_time = 0.35
 idle_radius = 150.0
 idle_speed = 0.5
+hazard_avoidance = 1.0
+hazard_margin = 80.0
+hazard_resistance = 0.1

@@ -40,3 +40,6 @@ evade_range = 600.0
 evade_speed = 180.0
 perceive_radius = 600.0
 lose_radius = 1300.0
+hazard_avoidance = 0.5
+hazard_margin = 60.0
+hazard_resistance = 0.5

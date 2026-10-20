@@ -9,3 +9,6 @@ collision_damage = 35
 score_value = 80
 perceive_radius = 650.0
 lose_radius = 1700.0
+hazard_avoidance = 0.6
+hazard_margin = 70.0
+hazard_resistance = 0.4

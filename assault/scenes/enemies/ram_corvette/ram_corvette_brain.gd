@@ -392,7 +392,7 @@ func _tick_line_up(delta: float) -> void:
 		mover.face_toward(actor.global_position + aim_dir * 100.0)
 	var lined_up := aim_dir != Vector2.ZERO \
 			and absf(_nose().angle_to(aim_dir)) <= deg_to_rad(config.line_up_tolerance_deg) \
-			and actor.velocity.length() <= config.crawl_speed
+			and mover.own_velocity().length() <= config.crawl_speed
 	if lined_up or _phase_time >= config.line_up_cap - TIME_EPS:
 		enter_phase(Phase.WIND_UP)
 

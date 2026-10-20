@@ -44,3 +44,6 @@ idle_speed_jitter = 0.2
 perceive_radius = 450.0
 lose_radius = 700.0
 notice_time = 0.35
+hazard_avoidance = 1.0
+hazard_margin = 16.0
+hazard_resistance = 0.0

@@ -474,7 +474,7 @@ func _tick_settle() -> void:
 	mover.request_velocity(Vector2.ZERO)
 	if _target.has_target:
 		mover.face_toward(_target.position)
-	if actor.velocity.length() < config.settle_epsilon:
+	if mover.own_velocity().length() < config.settle_epsilon:
 		if _line_clear():
 			enter_phase(Phase.DECOY if config.decoy_telegraph else Phase.AIM)
 		else:

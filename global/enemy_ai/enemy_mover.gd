@@ -11,15 +11,25 @@
 ## tick replaces the first. `add_nudge()` is an *offered* additive correction on top of it. No
 ## weighted blending of primitives (rejected: cancellation shows as stalls).
 ##
-## `step()`:
+## `step()` (docs/plans/cmug23om70001m52wqfwclf3l/3-plan.md §2.2):
 ## 1. desired = boost velocity while boosting, else primary + nudges, capped at `max_speed`;
-## 2. accel/braking limits (skipped while boosting);
-## 3. `constraint.filter(position, v)` if there is a constraint;
-## 4. `actor.velocity = v; actor.move_and_slide()`;
-## 5. facing — the one rule: `rotation → heading.angle() - sprite_forward_angle`, where heading is
-##    the `face_toward()` direction if requested, else `v`, and `sprite_forward_angle` is read
-##    duck-typed from the actor (default `PI / 2`, nose-down) so nothing here is typed against
-##    `BaseEnemy`.
+## 2. slow: `desired *= 1 - Hazards.penalty_at(pos) * (1 - hazard_resistance)` (boost too; `max_speed`
+##    itself is never written);
+## 3. avoidance stage (`_avoid()`; a no-op hook until the context-steering task), skipped while boosting;
+## 4. accel/braking limits against `own_velocity()` (skipped while boosting);
+## 5. drift: `HazardDrift` fed `Hazards.accel_at(pos)`, added to `v` **only when non-zero** (adding a
+##    zero vector turns a -0.0 component into +0.0 and flips `angle()` by 2π) — also while boosting;
+## 6. `constraint.filter(position, v)` last, so a well never drags an enemy past the corridor's band;
+## 7. `actor.velocity = v; actor.move_and_slide()`;
+## 8. facing — the one rule: `rotation → heading.angle() - sprite_forward_angle`, where heading is
+##    the `face_toward()` direction if requested, else `v - drift` (the ship's own heading; exactly
+##    `v` when there is no drift), and `sprite_forward_angle` is read duck-typed from the actor
+##    (default `PI / 2`, nose-down) so nothing here is typed against `BaseEnemy`.
+##
+## Steps 2, 3 and 5 are skipped outright (one compare) when `Hazards.count() == 0` and the drift is
+## zero, so with no hazard in play velocity and rotation are bit-identical to a mover without them.
+## `own_velocity()` is `actor.velocity` minus the last drift: brains' "am I settled / stopped" gates
+## read it, never raw `actor.velocity`, or a ship inside a field would never read as stopped.
 ##
 ## Every limit uses "0 = off / instant", so an unconfigured mover is a pass-through.
 class_name EnemyMover
@@ -44,6 +54,12 @@ const DEFAULT_SPRITE_FORWARD_ANGLE := PI / 2.0
 ## Cap on the rotation change, rad/s (IDEAS §3.1 `turn_rate`). 0 = off.
 @export var max_turn_rate: float = 0.0
 @export var constraint_mode: ConstraintMode = ConstraintMode.AUTO
+## How strongly the avoidance stage steers round hazards, 0..1 (0 = never). Copied from `ShipConfig`.
+@export_range(0.0, 1.0) var hazard_avoidance: float = 0.0
+## Extra clearance kept from a hazard's edge, px.
+@export var hazard_margin: float = 0.0
+## Share of a hazard's pull and slow the ship shrugs off, 0..1. 0 = full physics.
+@export_range(0.0, 1.0) var hazard_resistance: float = 0.0
 
 ## The body this mover drives: the parent, if it is a `CharacterBody2D`; null otherwise (inert).
 var actor: CharacterBody2D
@@ -58,6 +74,8 @@ var _has_face_point: bool = false
 var _boost_velocity: Vector2 = Vector2.ZERO
 var _boost_left: float = 0.0
 var _constraint_released: bool = false
+var _drift := HazardDrift.new()
+var _last_drift: Vector2 = Vector2.ZERO
 
 
 func _ready() -> void:
@@ -98,6 +116,16 @@ func is_boosting() -> bool:
 	return _boost_left > 0.0
 
 
+## The ship's own velocity: `actor.velocity` minus the drift a hazard added last step. Exactly
+## `actor.velocity` (no arithmetic) when there is no drift. Brains' settled / stopped gates read this.
+func own_velocity() -> Vector2:
+	if actor == null:
+		return Vector2.ZERO
+	if _last_drift == Vector2.ZERO:
+		return actor.velocity
+	return actor.velocity - _last_drift
+
+
 ## Drop the mode's movement rule so a later `step()` passes the brain's request through
 ## unfiltered — the Assault DISENGAGE exit (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.6):
 ## the corridor would otherwise fight an outward request all the way to the world-rect edge. A
@@ -119,6 +147,8 @@ func halt() -> void:
 	_clear_requests()
 	_boost_left = 0.0
 	_boost_velocity = Vector2.ZERO
+	_drift.reset()
+	_last_drift = Vector2.ZERO
 	if actor != null:
 		actor.velocity = Vector2.ZERO
 
@@ -183,26 +213,45 @@ func step(delta: float) -> void:
 		return
 
 	var boosting := is_boosting()
-	var v: Vector2
+	var hazards_live := Hazards.count() > 0 or _drift.velocity != Vector2.ZERO
+	var desired: Vector2
 	if boosting:
-		v = _boost_velocity
+		desired = _boost_velocity
 	else:
-		var desired := _primary + _nudge
+		desired = _primary + _nudge
 		if max_speed > 0.0:
 			desired = desired.limit_length(max_speed)
-		var current := actor.velocity
+	if hazards_live:
+		var factor := 1.0 - Hazards.penalty_at(actor.global_position) * (1.0 - hazard_resistance)
+		if factor < 1.0:
+			desired *= factor
+		if not boosting:
+			desired = _avoid(desired)
+
+	var v := desired
+	if not boosting:
+		var current := own_velocity()
 		var rate := acceleration
 		if braking > 0.0 and desired.length() < current.length():
 			rate = braking
-		v = current.move_toward(desired, rate * delta) if rate > 0.0 else desired
+		if rate > 0.0:
+			v = current.move_toward(desired, rate * delta)
+
+	var d := Vector2.ZERO
+	if hazards_live:
+		d = _drift.step(Hazards.accel_at(actor.global_position), hazard_resistance, delta)
+		if d != Vector2.ZERO:
+			v += d
 
 	if constraint != null:
 		v = constraint.filter(actor.global_position, v)
 
 	actor.velocity = v
 	actor.move_and_slide()
+	_last_drift = d
 
-	var heading := (_face_point - actor.global_position) if _has_face_point else v
+	var own_heading := v if d == Vector2.ZERO else v - d
+	var heading := (_face_point - actor.global_position) if _has_face_point else own_heading
 	if heading.length_squared() > 0.000001:
 		var target := heading.angle() - _sprite_forward_angle()
 		var current_rotation := actor.rotation
@@ -217,6 +266,11 @@ func step(delta: float) -> void:
 	_clear_requests()
 
 
+## The avoidance stage (context steering, a later task). A pass-through for now.
+func _avoid(desired: Vector2) -> Vector2:
+	return desired
+
+
 func _clear_requests() -> void:
 	_primary = Vector2.ZERO
 	_nudge = Vector2.ZERO
@@ -228,7 +282,7 @@ func _pos() -> Vector2:
 
 
 func _vel() -> Vector2:
-	return actor.velocity if actor != null else Vector2.ZERO
+	return own_velocity()
 
 
 func _decel() -> float:
