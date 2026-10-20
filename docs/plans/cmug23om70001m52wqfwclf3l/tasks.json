@@ -3,38 +3,38 @@
     {
       "key": "t1",
       "title": "Hazards exist as one shared, testable description: a registry every ship and enemy can query for pull, slow and danger",
-      "description": "Build `global/hazards/`: `HazardInfo` (the seven IDEAS fields plus kind, core/damage radius, tangential force, avoid weight, velocity, source; falloff/accel/penalty/contains methods), the static `Hazards` registry (register/unregister/count/around/accel_at/penalty_at/container/hurt_box_of, MAX_PENALTY 0.5), `HazardDrift` (exponential-decay drift integrator, half-life 0.35 s) and `HazardField` (the one field node: forces, slow, pulse cycle, duration, hull-stress pulses into ships' hurtboxes). Pure code and unit tests, no scenes or art.",
-      "acceptanceCriteria": "All rows of plan §2.1 Tests pass in `tests/unit/test_hazards.gd` and `tests/unit/test_hazard_field.gd`, including the boundary rows (0 at radius, finite at r = 0, strongest-only and 0.5 cap, no stress at damage_radius + 1, count 0 after free, duck-typed fixture joins). No other file changes behaviour. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
+      "effort": "high",
       "dependsOn": [],
       "planSections": [
-        "2.1"
+        "2.1 HazardInfo",
+        "4.4"
       ],
-      "effort": "high"
+      "description": "Build `global/hazards/`: `HazardInfo` (RefCounted; the seven IDEAS fields plus kind, core_radius, damage_radius, signed tangential_force, avoid_weight, velocity, source, claimer_id; falloff / accel_at / penalty_at / contains; claims try_claim / release / is_claimed_by / is_claimed stored as an instance id so a freed claimer frees the claim), the static `Hazards` registry (register / unregister / count / around / accel_at / penalty_at with MAX_PENALTY 0.5 strongest-only / container / hurt_box_of / pulse_damage by centre distance), `HazardDrift` (decaying drift, half-life 0.35 s) and `HazardField` (the one Node2D field script: exports, pulse cycle TELEGRAPH -> ACTIVE -> QUIET, duration, hull-stress pulses through pulse_damage, phase_changed / stressed signals, deferred `spawn_into(container, at, rot)` with `_attach.call_deferred` on itself, the ContactBlast pattern). No physics layer is allocated (bit 12 stays free). Plan §2.1.",
+      "acceptanceCriteria": "Every row of plan §2.1 Tests passes in `tests/unit/test_hazards.gd` and `tests/unit/test_hazard_field.gd`, including the boundaries: falloff 0 at radius and finite with zero direction at r = 0; around() includes radius + reach and excludes 1 px beyond; strongest-only penalty (0.4 and 0.3 -> 0.4) and cap (0.8 -> 0.5); pulse_damage hits at exactly radius and not at radius + 1; a freed claimer frees the claim; count() is 0 after the node is freed; spawn_into frees itself when the container was freed first; a duck-typed fixture hazard joins around(). `scripts/check-test-leaks.sh` clean; `bash /agent/verify.sh` green; gate time before / after reported (allowance +0.5 s)."
     },
     {
       "key": "t2",
       "title": "Enemies caught in a hazard are really pulled and slowed, by an amount set per ship type, while nothing changes where there is no hazard",
-      "description": "Extend `EnemyMover.step()` with the slow factor, the drift term (applies while boosting, before the Assault corridor filter) and an empty hook for the avoidance stage; add `hazard_avoidance`, `hazard_margin`, `hazard_resistance` to the mover and to `ShipConfig` (group Hazards), copy them in `BaseEnemy._ready()`, and set the nine enemies' `.tres` values from the §2.2 table. `halt()` resets the drift; early-out when the registry is empty.",
-      "acceptanceCriteria": "Plan §2.2 Tests pass: bit-identical velocity and rotation with no hazard and with a far hazard for instant, accel-limited, boosting and constrained movers; Swarm config captured in the core while Fighter config escapes; resistance halves the drift; drift persists through boost; Assault hard band holds; slow scales top speed and boost; rails unaffected. Single-writer and config-isolation gates green. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
+      "effort": "high",
       "dependsOn": [
         "t1"
       ],
       "planSections": [
         "2.2",
-        "2.1",
-        "4"
+        "2.1 HazardInfo",
+        "4.1",
+        "4.4"
       ],
-      "effort": "high"
+      "description": "Extend `global/enemy_ai/enemy_mover.gd` step order: slow factor (boost included) -> no-op hook for the avoidance stage -> accel limit on `own_velocity()` -> drift added only when non-zero (also while boosting) -> corridor filter last -> write; facing from v - drift when drift is non-zero. Add `own_velocity()` (used by `_vel()`), drift reset in `halt()`, the O(1) early-out on `Hazards.count() == 0`. Add `hazard_avoidance` / `hazard_margin` / `hazard_resistance` to the mover and to `ShipConfig` (export group Hazards), copied in `BaseEnemy._ready()`, with the per-enemy values of plan §2.2 in the nine `*_config.tres`. Switch the named brain 'settled / stopped' gates (Ram LINE_UP crawl, Sniper SETTLE, Fighter is_settled / is_braking_onto_station / RUN_IN standing start, Razor feint stop) from `actor.velocity` to `mover.own_velocity()`.",
+      "acceptanceCriteria": "Plan §2.2 Tests pass in `tests/unit/test_enemy_mover.gd` and the new dual-mode rows of `tests/integration/test_enemy_dual_mode.gd`: bit-identical velocity and rotation with no hazard and with a fixture well 2000 px away for instant, accel-limited, boosting and Assault-constrained movers, including the -Vector2(200, 0) (-0.0) case; a Swarm config in the core cannot leave while a Fighter config can; drift persists through boost and halt() clears it; own_velocity() excludes the drift; a real Ram's LINE_UP inside a well ends on its line-up test, not at line_up_cap; the corridor still bounds a pulled enemy; a rail enemy is not moved. Every gate of plan §4.1 green unchanged (single-writer, config isolation, all Ph2-Ph5 rows). `bash /agent/verify.sh` green; gate time before / after and `test_fighter_squad.gd` time reported (allowance +1.5 s)."
     },
     {
       "key": "t3",
       "title": "The player feels the same wells and slow fields: dragged in, thrust weakened, and in Open Space forced to boost out of a well's core",
-      "description": "Open Space ship: `_step_hazards(delta)` in `_handle_thrust()` before `_step_boost()`, plus `hazard_speed_factor()` scaling thrust, reverse, ceiling and boost exit speed. Assault fighter: a `HazardDrift` displacement before its states move and clamp; `PlayerBase.hazard_speed_factor()` used by move and dash states. Rotation never touched.",
-      "acceptanceCriteria": "Plan §2.3 Tests pass in `tests/integration/test_player_hazards.gd`: thrust escapes at 140 px but not 100 px, boost escapes from 100 px, rotation unchanged, slow 0.6x on thrust/boost/move/dash, Assault fighter stays inside its clamp; every existing Open Space and player test unchanged. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
@@ -42,16 +42,18 @@
       ],
       "planSections": [
         "2.3",
-        "2.1"
-      ]
+        "2.1 HazardInfo",
+        "4.4"
+      ],
+      "description": "Open Space ship (`player_ship.gd`): `_step_hazards(delta)` inside `_handle_thrust()` after thrust / damping and before `_step_boost()`, skipped during an engine boost; `hazard_speed_factor()` scales thrust, reverse, the speed ceiling and boost exit speed where read. Assault fighter (`player_fighter.gd`): drift step and clamp inside its own `_physics_process`, after the dialog return (which resets the drift), the knockback return and the engine-boost branch; `dash_state.gd` gains the clamp; `PlayerBase.hazard_speed_factor()` implemented once and used by `move_state.gd` / `dash_state.gd`. ShipTurnController stays the only rotation writer.",
+      "acceptanceCriteria": "Plan §2.3 Tests pass in new `tests/integration/test_player_hazards.gd`: Open Space thrust escapes at 140 px but not at 100 px, boost escapes from 100 px, rotation unchanged; slow 0.6x on thrust and boost exit speed, and on Assault move and dash speed; an idle Assault fighter (only `_physics_process` called) drifts toward a well and stops at the x <= 1380 clamp; no drift during dialog or knockback; every existing `test_open_space_*` and player row unchanged. `bash /agent/verify.sh` green; gate time before / after (allowance +1 s)."
     },
     {
       "key": "t4",
       "title": "Enemies steer round hazards with their own temperament - drones skim the edge, heavy ships keep clear - but charge straight through when committed to an attack",
-      "description": "Add the pure `Steering.context_avoid()` (16-slot interest/danger maps merged by max, profile threshold 1 - avoidance, masking, interpolation, previous-direction blend, minimum speed ratio) and call it from `EnemyMover.step()` at the hook t2 left, skipped while boosting. Every brain gets avoidance without being edited. This is on every enemy's hot path: plan, review and pin the pass-through first.",
-      "acceptanceCriteria": "Plan §2.4 Tests pass in `tests/unit/test_context_avoidance.gd` and the new `test_enemy_dual_mode.gd` rows: unchanged desired with no info or zero danger; target behind a well reached without entering and never below 35 % speed; steers out from inside; margin 12 skims closer than 90; boosting flies through; no 22.5 deg quantisation; real Swarm skims, Fighter goes round, Swarm burst is captured. Every existing Ph2-Ph5 behaviour, budget, deadline and density row green unchanged. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "large",
+      "effort": "xhigh",
       "dependsOn": [
         "t1",
         "t2"
@@ -59,16 +61,16 @@
       "planSections": [
         "2.4",
         "2.2",
-        "2.1",
-        "4"
+        "2.1 HazardInfo",
+        "4.1",
+        "4.4"
       ],
-      "effort": "xhigh"
+      "description": "Add the pure `Steering.context_avoid()` in `global/enemy_ai/steering.gd` (16-slot interest / danger maps merged by max, profile threshold 1 - hazard_avoidance, masking, parabolic interpolation, previous-direction blend, minimum speed ratio 0.35) and call it from `EnemyMover.step()` at t2's hook, skipped while boosting. Infos come from `Hazards.around()`; a line-of-sight-blocking hazard claimed by the mover's own actor is dropped (the ship's own cover is its destination); wells are never skipped. Every mover-driven enemy avoids with its config profile; committed runs (boost) fly straight through and can be baited.",
+      "acceptanceCriteria": "Plan §2.4 Tests pass in new `tests/unit/test_context_avoidance.gd` and dual-mode rows of `test_enemy_dual_mode.gd`: desired unchanged with no info or zero danger; target behind a well reached without entering radius and never below 35 % speed; inside -> first step outward; margin 12 skims closer than margin 90; avoidance 0.5 ignores a tangential pass that 1.0 bends round; boosting flies straight through; heading not quantised to 22.5 deg; a drifting hazard is led; a wreck claimed by the actor is ignored and one claimed by another node is avoided, and an arrive() to radius + 50 from the claimed wreck settles within 10 px (dual-mode); the Assault corridor still bounds the result; real-brain rows (Swarm skims, Fighter goes round, Swarm BURST captured). Every gate of plan §4.1 green unchanged, including the 168-layout squad sweep and every Ph2-Ph5 deadline / density / attack-in-budget row. `bash /agent/verify.sh` green; gate time before / after (allowance +3.5 s)."
     },
     {
       "key": "t5",
       "title": "Gravity wells, anomalies, slow fields and reactor fields each have their own readable strict top-down art",
-      "description": "Generate with PixelLab under the pixel-art-generation skill: animated gravity well swirl, violet/magenta anomaly (dim and lit), translucent gravity-field ring, orange-red reactor field. Save with scripts/pixellab.sh into `assault/assets/sprites/hazards/`, inspect every image, import, build SpriteFrames for animated ones.",
-      "acceptanceCriteria": "Every sprite is strict top-down with a transparent background (passes the transparency rule), opened and checked; sizes as plan §2.17; the report lists each file and how it reads. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "art",
       "complexity": "medium",
       "dependsOn": [],
@@ -78,13 +80,13 @@
         "2.6",
         "2.10",
         "2.15"
-      ]
+      ],
+      "description": "Invoke pixel-art-generation first. Generate with PixelLab: an animated gravity well (accretion swirl, dark core, bright inner ring, ~192 px, 4-8 frames), a violet / magenta energy anomaly with dim and lit states (~160 px, 4-8 frames), a translucent gravity-field ring (~128 px), an orange-red reactor field (~96 px). Strict top-down (`view: \"high top-down\"`, `isometric: false`), transparent background, saved with `./scripts/pixellab.sh` into `assault/assets/sprites/hazards/`, every image opened and checked, imported, SpriteFrames built where animated. The full field radius is drawn in code, so the sprites stay small.",
+      "acceptanceCriteria": "Every sprite strict top-down, transparent (would pass `test_entity_sprite_transparency.gd`), opened and checked; sizes as plan §2.17; the anomaly reads as distinct from the well and is not cyan; the report lists each file and how it reads. `bash /agent/verify.sh` green."
     },
     {
       "key": "t6",
       "title": "A gravity well that drags ships of both sides toward a crushing core, so the player can bait drones into it",
-      "description": "Scene `assault/scenes/hazards/gravity_well/gravity_well.tscn`: HazardField with the §2.5 values, t5 art, a faint radius ring and a strength-scaled glow, HAZARD.md (including the shield and plated-ram stress rules).",
-      "acceptanceCriteria": "Plan §2.5 Tests pass in `tests/integration/test_gravity_well.gd` with real scenes: stress inside 150 px not at 151 px; a real Swarm Drone in the core stays and dies; a real Fighter gets out; the Open Space player needs boost from 100 px; a plated Ram takes no stress; transparency sweep green. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
@@ -94,17 +96,18 @@
       ],
       "planSections": [
         "2.5",
-        "2.1",
+        "2.1 HazardInfo",
         "2.2",
         "2.3",
-        "2.17"
-      ]
+        "2.17",
+        "4.4"
+      ],
+      "description": "Scene `assault/scenes/hazards/gravity_well/gravity_well.tscn`: a `HazardField` with the plan §2.5 values (radius 420, core 90, pull 520 px/s², hull stress 5 every 0.5 s inside 150 px), t5 art, a faint radius ring drawn in `_draw()` and a strength-scaled inner glow, and a `HAZARD.md` (no physics body, no LOS block, stress bypasses enemy shields, a plated Ram deflects it).",
+      "acceptanceCriteria": "Plan §2.5 Tests pass in new `tests/integration/test_gravity_well.gd` with real scenes: stress lands inside 150 px and not at 151 px (centre distance) on a real Swarm Drone and on the player; a real Swarm Drone left in the core stays within 150 px for 3 s and dies to stress (dual-mode); a real Fighter seeking outward from 100 px escapes (dual-mode); the Open Space player cannot thrust out from 100 px but boosts out; a plated Ram takes no stress; transparency sweep green. `bash /agent/verify.sh` green; gate time before / after (allowance +2 s)."
     },
     {
       "key": "t7",
       "title": "An energy anomaly that pulses on a visible rhythm and, while lit, swirls ships and rockets sideways",
-      "description": "Scene `assault/scenes/hazards/energy_anomaly/energy_anomaly.tscn`: HazardField with the pulsed tangential swirl (telegraph 1.0 s, active 2.5 s, quiet 3.0 s, clockwise export), t5 art driven by phase_changed / phase_progress, HAZARD.md.",
-      "acceptanceCriteria": "Plan §2.6 Tests pass in `tests/integration/test_energy_anomaly.gd`: perpendicular displacement that flips with `clockwise`; nothing while QUIET or TELEGRAPH; telegraph precedes active; avoid_weight 0 quiet / 0.7 telegraph; Open Space player swirled; transparency sweep green. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
@@ -114,16 +117,18 @@
       ],
       "planSections": [
         "2.6",
-        "2.1",
+        "2.1 HazardInfo",
+        "2.2",
         "2.3",
-        "2.17"
-      ]
+        "2.17",
+        "4.4"
+      ],
+      "description": "Scene `assault/scenes/hazards/energy_anomaly/energy_anomaly.tscn`: a `HazardField` with the pulsed tangential swirl (radius 300, core 80, tangential_force 260 - an instance swirls the other way with -260; telegraph 1.0 s, active 2.5 s, quiet 3.0 s; avoid_weight 0.7), t5 art driven by `phase_changed` / `phase_progress()` on a presentation script on the sprite only, and a `HAZARD.md`. Does not edit `hazard_field.gd`.",
+      "acceptanceCriteria": "Plan §2.6 Tests pass in new `tests/integration/test_energy_anomaly.gd`: dual-mode, a resistance-0 enemy mover at 150 px is displaced perpendicular to the centre direction during ACTIVE and the side flips with a negative tangential_force; QUIET and TELEGRAPH displace nothing; TELEGRAPH always precedes ACTIVE; avoid_weight 0 while QUIET and 0.7 while TELEGRAPH; the Open Space player is swirled while ACTIVE; transparency sweep green. `bash /agent/verify.sh` green; gate time before / after (allowance +1.5 s)."
     },
     {
       "key": "t8",
       "title": "Rockets, bombs and the player's missiles curve through gravity wells and anomalies, while bullets fly true",
-      "description": "Opt-in `hazard_pull_scale()` and a speed-preserving heading bend in EnemyRocket, EnemyOrdnance gravity and pursuit bombs, and the player's homing and warhead missiles; rounds, bullets and mines untouched.",
-      "acceptanceCriteria": "Plan §2.7 Tests pass in `tests/integration/test_hazard_projectiles.gd`: each opted-in family bends toward a fixture well with speed unchanged; a round and a player bullet do not; bit-identical paths with no hazard; lifetimes still end bent rockets; both bullet lifetime gates unchanged. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "small",
       "dependsOn": [
@@ -131,14 +136,14 @@
       ],
       "planSections": [
         "2.7",
-        "2.1"
-      ]
+        "2.1 HazardInfo"
+      ],
+      "description": "Opt-in `hazard_pull_scale()` and a speed-preserving heading bend (only when `Hazards.count() > 0`) in `EnemyRocket` (all five kinds), `EnemyOrdnance` gravity and pursuit bombs (`enemy_ordnance.gd`; not mines), and the player's homing and warhead missiles. `EnemyBullet` rounds, the player `Bullet`, mines and beams are untouched.",
+      "acceptanceCriteria": "Plan §2.7 Tests pass in new `tests/integration/test_hazard_projectiles.gd`: each opted-in family bends toward a fixture well with speed unchanged; a round and a player bullet do not bend; bit-identical paths with no hazard; a bent rocket still ends by its lifetime. `test_enemy_bullet_lifetime.gd` and `test_player_bullet_lifetime.gd` unchanged. `bash /agent/verify.sh` green; gate time before / after (allowance +1 s)."
     },
     {
       "key": "t9",
       "title": "Wrecks, explosive wrecks and derelict structures have strict top-down art that reads as dead hulls, not live ships",
-      "description": "Generate with PixelLab under the pixel-art-generation skill: faction wrecks small/medium/large (lights off, broken silhouettes), an explosive-wreck glow overlay (2-frame blink), a damaged satellite, an abandoned cargo platform and a broken station module. Save into `assault/assets/sprites/wrecks/` with scripts/pixellab.sh, inspect, import.",
-      "acceptanceCriteria": "Every sprite strict top-down, transparent background, opened and checked; sizes as plan §2.17; none reads as a live enemy (no lit engines or weapon lights). `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "art",
       "complexity": "medium",
       "dependsOn": [],
@@ -146,13 +151,13 @@
         "2.17",
         "2.8",
         "2.10"
-      ]
+      ],
+      "description": "Invoke pixel-art-generation first. Generate with PixelLab: faction wrecks small (~40 px), medium (~72 px), large (~110 px) with broken silhouettes, all lights off and scorch marks; an explosive-wreck orange ordnance glow overlay (2 frames for the fuse blink); a damaged satellite (~96 px), an abandoned cargo platform (~128 px) and a broken station module (~128 px). Strict top-down, transparent background, saved with `./scripts/pixellab.sh` into `assault/assets/sprites/wrecks/`, every image opened and checked, imported. Drifting debris reuses `debris_1..6.png`.",
+      "acceptanceCriteria": "Every sprite strict top-down, transparent, opened and checked; sizes as plan §2.17; none reads as a live enemy (no lit engines or weapon lights); the report lists each file. `bash /agent/verify.sh` green."
     },
     {
       "key": "t10",
       "title": "Wrecks and derelict structures act as real cover: they block movement, sight lines and shots from both sides, and debris drifts as a collision hazard",
-      "description": "Build `assault/scenes/hazards/wreck/`: `Wreck` (layer-1 body, LOS blocker, HurtBox with Health, contact box on 1024, hazard registration, claim/release, per-mode lifetime), small/medium/large wreck scenes, three placed structures, `DebrisFragment` with the drifting-debris scene, `WreckScenes`. Enemy rounds stop on wrecks through the duck-typed `stops_enemy_rounds()` (EnemyBullet mask gains 1024 with a filtered handler), so asteroid behaviour is unchanged.",
-      "acceptanceCriteria": "Plan §2.8 Tests pass in `tests/integration/test_wreck.gd`: LOS blocked by a wreck and not by debris; player bullet, enemy rocket and enemy round stop on a wreck while a round still passes an asteroid; destructible; contact hurts; per-mode lifetime; the Assault clamp-pin row; claims; registry; never in `enemies`. Hurtbox/contact geometry, transparency, layer-name and UID gates green. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
@@ -161,35 +166,40 @@
       ],
       "planSections": [
         "2.8",
-        "2.1",
+        "2.1 HazardInfo",
         "2.17",
-        "4",
-        "5"
-      ]
+        "4.1",
+        "4.4"
+      ],
+      "description": "Build `assault/scenes/hazards/wreck/`: `Wreck` (CharacterBody2D on layer 1, `blocks_line_of_sight()`, HurtBox + Health covering the body, ContactHitBox on 1024 sharing the body shape and armed 0.6 s after entering the tree, hazard registration with claims delegated to its HazardInfo, per-mode lifetime - Open Space 40 s, Assault 60 px/s down with a 30 s cap - and `retire()` that fades), small / medium / large wreck scenes, the three placed structures, `DebrisFragment` (Area2D, contact box, optional source with source_clear_radius) with `debris_drift.tscn`, `WreckScenes.scene_for()`, `spawn_into` / `_attach` / `_enter_tree` on both scripts. Enemy rounds stop on a wreck through the duck-typed `stops_enemy_rounds()` (EnemyBullet mask gains 1024; asteroids unchanged). Each scene has a `HAZARD.md` (including that a wreck blocks the player's beam and cannot be cut by it). Only a moving wreck hurts on contact.",
+      "acceptanceCriteria": "Plan §2.8 Tests pass in new `tests/integration/test_wreck.gd` (8x clock where physics is needed): LOS blocked by a wreck and not by debris; player bullet, enemy rocket and enemy round stop on a wreck while a round still passes an asteroid; a drifting wreck hurts the player and an enemy, a stationary one touched by a moving player does not, and a wreck spawned on the player does not hurt it during its first 0.6 s; Assault drift 60 px/s down and free on leaving the world rect, Open Space free after lifetime; a wreck on the Assault player at the clamp edge never holds them more than 2 frames; retire() unregisters at once and frees after the fade; spawn_into on a freed container leaves no orphan; never in group enemies. Hurtbox-geometry, contact-geometry, transparency, collision-layer and UID gates green with the new scenes in their rosters. `scripts/check-test-leaks.sh` clean; `bash /agent/verify.sh` green; gate time before / after (allowance +3 s)."
     },
     {
       "key": "t11",
       "title": "Destroyed ships sometimes leave a wreck behind, in both modes, without ever holding up a level",
-      "description": "Add `wreck_chance` / `wreck_size` to ShipConfig and the nine enemies' .tres; `BaseEnemy` death hook `_maybe_leave_wreck()` (seeded brain rng, container required, inherited 25 % velocity, cap 4 Assault / 8 Open Space evicting the oldest); add a `HazardContainer` node to level 1 and the sector hub.",
-      "acceptanceCriteria": "Plan §2.9 Tests pass in `tests/integration/test_wreck_spawning.gd` (dual-mode): seeded and repeatable; chance 0 none; no container means no wreck and no rng draw; cap evicts oldest; wreck lives in the hazard container, never the enemy container or `enemies`; an ENEMIES_CLEARED container empties with wrecks alive. Every level-1 replay and gate green unchanged. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
+      "effort": "high",
       "dependsOn": [
         "t2",
+        "t4",
         "t10"
       ],
       "planSections": [
         "2.9",
         "2.8",
-        "2.1",
-        "4"
-      ]
+        "2.1 HazardInfo",
+        "2.4",
+        "4.2",
+        "4.3",
+        "4.4"
+      ],
+      "description": "Add `wreck_chance` / `wreck_size` to ShipConfig (group Hazards) and the plan §2.9 values to the nine enemy `.tres`; `BaseEnemy._maybe_leave_wreck()` on death (container required, else no rng draw; seeded brain rng; 25 % inherited velocity; `wreck.spawn_into()` deferred because a real kill runs inside a bullet's area_entered flush); the alive cap (Assault 4, Open Space 8) enforced when a wreck enters the container, retiring (fading) the oldest; a `HazardContainer` node (group `hazard_container`) in level 1 and the sector hub. Add the level-1 exit guard `test_cloud_descent_clears_in_time_with_wrecks_left_behind` to `test_level1_fighter_exit.gd`, with the pre-approved levers if it fails (Assault wreck avoid_weight 0.3, then halve Assault wreck_chance; never raise enemies_cleared_timeout).",
+      "acceptanceCriteria": "Plan §2.9 Tests pass in new `tests/integration/test_wreck_spawning.gd` (dual-mode): same seed same wrecks over 20 kills; chance 0 none; no container -> no wreck and the brain's next randf() equals the control's; the cap retires the oldest also when two die in one frame; a wreck is a child of the hazard container, never of the enemy container nor in group enemies; an ENEMIES_CLEARED container empties while wrecks remain. Real-physics row (8x clock): a real player Bullet kills a real Swarm Drone inside its flush and exactly one Wreck appears within 3 frames with no engine error. The exit guard passes (at least 2 wrecks, container empty within 10.0 s of waves_complete, Ram leaves in DISENGAGE with no EnemyPathMover). Every other level-1 gate green unchanged. `scripts/check-test-leaks.sh` clean; `bash /agent/verify.sh` green; gate time before / after with the exit-guard time reported separately (allowance +6 s)."
     },
     {
       "key": "t12",
       "title": "Bombers and missile corvettes sometimes leave explosive wrecks that blow up when shot or touched, hurting everyone nearby and leaving a brief reactor fire",
-      "description": "Explosive wreck scene (HP 20, orange state light, 1.0 s fuse on touch), blast reaching player and enemies (radius 110, 25 damage), the reactor-field scene (HazardField, 8 dps in 90 px for 2 s), `explosive_wreck_chance` on ShipConfig (Bomber and Missile Corvette 0.5), WreckScenes returns the explosive scene.",
-      "acceptanceCriteria": "Plan §2.10 Tests pass in the extended `test_wreck.gd`: blast hurts player and enemy at 110 px and neither at 111 px; touch fuse 1.0 s; reactor field stresses then frees; explosive share seeded; transparency sweep green. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
@@ -199,49 +209,60 @@
         "2.10",
         "2.9",
         "2.8",
-        "2.1",
-        "2.17"
-      ]
+        "2.1 HazardInfo",
+        "2.17",
+        "4.3"
+      ],
+      "description": "`wreck_explosive.tscn` (Wreck with explosive = true, HP 20, CHARGING-orange StateLight, 1.0 s fuse after a ship's hurtbox first touches its armed contact box), an idempotent `_detonate()`: blast by centre distance through `Hazards.pulse_damage(tree, pos, 110, 25)` (adds no body), a reactor field via deferred `spawn_into`, then `queue_free()`. `reactor_field.tscn` (HazardField, radius 90, 4 damage every 0.5 s, 2.0 s, no pull). `explosive_wreck_chance` on ShipConfig (Bomber 0.5, Missile Corvette 0.5), drawn from the same rng right after a successful wreck roll; `WreckScenes.scene_for(size, true)` returns the explosive scene. The blast hurts both sides (environmental), which is logged in DECISIONS.",
+      "acceptanceCriteria": "Plan §2.10 Tests pass in the extended `test_wreck.gd`: shot to 0 HP the player and an enemy with centres at 110 px are hurt and neither at 111 px; a plated Ram at 50 px is not damaged; touch detonates after 1.0 s, not before; two detonations in one frame hurt once; one reactor field that stresses for 2.0 s and frees; real-physics row (8x clock): a real player bullet kills an explosive wreck and exactly one reactor field appears with no engine error; explosive share seeded; transparency sweep green. `bash /agent/verify.sh` green; gate time before / after (allowance +2 s)."
     },
     {
       "key": "t13",
       "title": "The Sniper hides behind wrecks to shoot from cover and never fires through one",
-      "description": "`EnemyBrain.can_see_player()`; Sniper `choose_firing_point()` rejects hazard interiors, adds far-side cover candidates with a peek step, a `w_cover` bonus and 15 % re-pick hysteresis; new flat SniperConfig fields. Identical pick when no blocker is in range.",
-      "acceptanceCriteria": "Plan §2.11 Tests pass (extended `test_sniper.gd`, `test_line_of_sight.gd`): can_see_player false behind a wreck, true behind debris; cover point chosen near a wreck with a clear line; same point as the control with none; never inside a well; refuses through a drifting wreck; Missile Corvette still fires; Sniper attack-in-budget rows green. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
+      "effort": "high",
       "dependsOn": [
-        "t10"
+        "t4",
+        "t11"
       ],
       "planSections": [
         "2.11",
+        "2.4",
         "2.8",
-        "2.1"
-      ]
+        "2.1 HazardInfo",
+        "4.1",
+        "4.4"
+      ],
+      "description": "Add `EnemyBrain.can_see_player()`. In `sniper_brain.gd` `choose_firing_point()`, gated on `Hazards.count() > 0`: reject candidates inside a non-blocking hazard; append rng-free far-side cover candidates with the 30 px peek step; a `w_cover` bonus near a blocker; claim the wreck (`try_claim`) when a cover candidate is taken, released on BREAK_CONTACT / DISENGAGE; cover-only re-pick hysteresis with an absolute margin. New flat SniperConfig fields (cover_search_radius, cover_gap, cover_radius, w_cover, cover_hysteresis). With no hazard the pick and every rng draw are identical to today.",
+      "acceptanceCriteria": "Plan §2.11 Tests pass (extended `test_sniper.gd` dual-mode, `test_line_of_sight.gd`): can_see_player false behind a wreck, true behind debris, false without a player; a cover point within cover_radius on the far side with a clear line; with no wreck the same point and the same next randf() as the control; never a point inside a well; a second sniper is refused the claimed wreck; a real sniper reaches its cover point and holds it through SETTLE into AIM with avoidance active; no shot through a wreck drifting across the locked line; hysteresis keeps a cover point and never changes a no-wreck pick; the Missile Corvette still fires past a wreck; Sniper attack-in-budget rows green. `bash /agent/verify.sh` green; gate time before / after (allowance +3 s)."
     },
     {
       "key": "t14",
       "title": "Fighters wait out of sight behind a wreck before swooping in on their pass",
-      "description": "Fighter `_derive_pass()` moves the pass start behind a claimed wreck within `cover_shift_max` (220 px) and holds there while it cannot see the player; one fighter per wreck; identical pass with no wreck.",
-      "acceptanceCriteria": "Plan §2.12 Tests pass (extended `test_fighter.gd`, dual-mode): holds behind the wreck occluded, then passes; two fighters never share one wreck; identical to the control with no wreck; squad sweep, attack-in-budget and deadline rows green. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
-      "complexity": "medium",
+      "complexity": "large",
+      "effort": "xhigh",
       "dependsOn": [
-        "t10",
+        "t4",
+        "t11",
         "t13"
       ],
       "planSections": [
         "2.12",
         "2.11",
+        "2.4",
         "2.8",
-        "2.1"
-      ]
+        "2.1 HazardInfo",
+        "4.1",
+        "4.4"
+      ],
+      "description": "Add a `COVER` phase, appended to the Fighter's `enum Phase` (after RETURNING), entered from APPROACH's first tick for a solo fighter or a squad LEAD when a free wreck within 500 px can be claimed (and, in Assault, at least 6.0 s of budget remain). The fighter arrives at the wreck's far side (`C = W + (W - player)^ * (radius + 40)`, recomputed each tick), faces the player, and leaves for APPROACH after 1.2 s hidden, when the player comes within 300 px, when the wreck goes, or after 5.0 s; claim released on exit; once per RUN_IN. `_derive_pass()`, the RUN_IN latch and the squad hold machinery are not touched: APPROACH derives the pass from wherever the fighter leaves cover. New flat FighterConfig fields (cover_search_radius, cover_gap, cover_hold, cover_break_range, cover_max, cover_min_budget). Large: this task gets its own plan and review before code.",
+      "acceptanceCriteria": "Plan §2.12 Tests pass (extended `test_fighter.gd`, dual-mode): with a wreck between, a solo fighter enters COVER, reaches C and holds within 30 px with avoidance active and can_see_player() false, then RUN_IN starts within cover_max plus its usual lead-in; the player within 300 px breaks cover at once; two solo fighters and one wreck - only one takes cover; a FLANK never enters COVER and the LEAD does; the wreck freed mid-hold -> APPROACH next tick; Assault with less than cover_min_budget -> no COVER; with no wreck the phase sequence and positions are identical to the control over a full pass. The 168-layout squad sweep, fighter pin / density / exit / deadline and attack-in-budget rows green unchanged. `bash /agent/verify.sh` green; gate time before / after (allowance +3 s)."
     },
     {
       "key": "t15",
       "title": "Breaking a Ram Corvette's armour plate sends the plate tumbling off as a dangerous fragment",
-      "description": "`RamCorvette._on_plate_broken` spawns `ram_fragment.tscn` (DebrisFragment with the plate's texture, 200 px/s outward, 3 s life, 12 contact damage) into the hazard container; the plate still breaks exactly as today.",
-      "acceptanceCriteria": "Plan §2.13 Tests pass (extended `test_ram_corvette.gd`): one fragment per broken plate moving away from the hull; plate resolves once; fragment hurts and frees by 3 s; no container means no fragment and every existing ram row unchanged. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
@@ -250,52 +271,62 @@
       "planSections": [
         "2.13",
         "2.8",
-        "2.1"
-      ]
+        "2.1 HazardInfo",
+        "4.3"
+      ],
+      "description": "`RamCorvette._on_plate_broken` captures the plate's position, rotation and texture at once and spawns `ram_fragment.tscn` (a DebrisFragment: 200 px/s outward, decelerating 120 px/s², spinning, 3.0 s life, 12 contact damage, no LOS block) through deferred `spawn_into` into the hazard container (none -> nothing). The fragment's source is its Ram, so its contact box stays disarmed until it is clear of the Ram's hull and it never hits the Ram the third plate just exposed. The plate itself breaks exactly as today.",
+      "acceptanceCriteria": "Plan §2.13 Tests pass (extended `test_ram_corvette.gd`): one fragment per broken plate moving away from the hull; real-physics row (8x clock): a real rocket breaks a plate inside its flush and exactly one fragment appears with no engine error; breaking the third plate exposes the Ram and its own fragment deals it no damage; the armed fragment hurts the player and frees by 3.0 s; no container -> no fragment and every existing ram row unchanged. `bash /agent/verify.sh` green; gate time before / after (allowance +2 s)."
     },
     {
       "key": "t16",
       "title": "A Ram Corvette near a gravity well lines up its charge to shove the player into the well",
-      "description": "Ram `_choose_side()` prefers the side whose charge points player -> well (within 30 deg) when a well is within 600 px of the player and the well's ticket is free; `try_claim`/`release` added to HazardField; new flat RamCorvetteConfig fields. Identical choice with no well.",
-      "acceptanceCriteria": "Plan §2.14 Tests pass (extended `test_ram_corvette.gd`, dual-mode): charge within 30 deg of player -> well; same side as the control with no well; one ram per well; the ARMOR shove moves the player toward the well; Ram attack-in-budget rows and the 73.2 s cloud_descent deadline row green. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
+      "effort": "high",
       "dependsOn": [
         "t4",
-        "t6"
+        "t6",
+        "t11",
+        "t15"
       ],
       "planSections": [
         "2.14",
         "2.4",
         "2.5",
-        "2.1"
-      ]
+        "2.2",
+        "2.1 HazardInfo",
+        "4.1",
+        "4.4"
+      ],
+      "description": "In `ram_corvette_brain.gd` `_tick_approach`, in both modes: when a gravity well lies within 600 px of the player and its ticket is free, claim it and seek the station `S = P + (P - W)^ * 300` (clamped to the corridor in Assault, refused at once if the clamped S misses the 30 deg cone), entering LINE_UP only within engage_range and 90 px of S; LINE_UP / WIND_UP / CHARGE unchanged, so the charge and the ARMOR shove drive the player toward the well. Release on WIDE_TURN, DISENGAGE, STAGGER, the well leaving range or being freed, and after 4.0 s without reaching S (then give up for this approach). No well -> no lookup, no rng draw, `_choose_side()` untouched. New flat RamCorvetteConfig fields (well_use_range, well_standoff, well_station_tolerance, well_cone_deg, well_setup_max); the Ram's ENEMY.md gains the station.",
+      "acceptanceCriteria": "Plan §2.14 Tests pass (extended `test_ram_corvette.gd`, real well scene): Open Space, Ram spawned 900 px away at four bearings from the well side: charge_dir within 30 deg of P -> W each time; with no well the same phase sequence and charge_dir as the control; a second Ram is refused and charges as today; the ARMOR shove moves the player toward the well; the 4.0 s give-up releases the ticket. Assault: a well below the player in the corridor -> charge_dir within 30 deg of P -> W; boundary: the clamped S fails the cone -> ticket refused and the side equals the control's. Ram attack-in-budget rows and the 73.2 s cloud_descent deadline row green. `bash /agent/verify.sh` green; gate time before / after (allowance +3 s)."
     },
     {
       "key": "t17",
       "title": "A Bomber's gravity bomb leaves a short-lived slowing field where it bursts, slowing the player and enemies caught in it",
-      "description": "EnemyOrdnance GRAVITY_BOMB detonation spawns `gravity_field.tscn` (HazardField, radius 150, penalty 0.4, 3.5 s, t5 ring art fading out) into the hazard container.",
-      "acceptanceCriteria": "Plan §2.15 Tests pass (extended `test_enemy_ordnance.gd` / `test_bomber.gd`): one field at the blast point that frees at 3.5 s; mines and pursuit bombs leave none; overlapping fields slow by 0.4 not 0.64; player slowed 0.4, resistance-0.4 enemy 0.24; no container means no field and existing rows unchanged. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
         "t2",
         "t3",
-        "t5"
+        "t5",
+        "t8"
       ],
       "planSections": [
         "2.15",
-        "2.1",
+        "2.1 HazardInfo",
         "2.2",
         "2.3",
-        "2.17"
-      ]
+        "2.7",
+        "2.17",
+        "4.4"
+      ],
+      "description": "`EnemyOrdnance._detonate()` for a GRAVITY_BOMB spawns `assault/scenes/hazards/gravity_field/gravity_field.tscn` (HazardField, radius 150, movement_penalty 0.4, duration 3.5 s, avoid_weight 0.6, no pull or damage, t5 ring art fading over the last 0.5 s) through deferred `spawn_into` into the hazard container (none -> nothing). Runs after t8, which also edits `enemy_ordnance.gd`.",
+      "acceptanceCriteria": "Plan §2.15 Tests pass (extended `test_enemy_ordnance.gd` / `test_bomber.gd`): one field at the blast point that frees at 3.5 s; mines and pursuit bombs leave none; two overlapping fields slow by 0.4, not 0.64; dual-mode: a resistance-0.4 enemy is slowed to 0.76x of its requested speed and the player by 0.4; no container -> no field and existing ordnance rows unchanged. `bash /agent/verify.sh` green; gate time before / after (allowance +1.5 s)."
     },
     {
       "key": "t18",
       "title": "The Open Space hub has one tactical battleground - a well, an anomaly and derelict cover - that the player can lure patrols into",
-      "description": "Add a `TacticalSpace` to `sector_hub.tscn` (scene nodes, no rng draws): well, anomaly, three placed structures as a cover line, a few drifting debris pieces, around bearing 22.5 deg / 3200 px, placed by the clearance rule.",
-      "acceptanceCriteria": "Plan §2.16 Tests pass (extended `test_sector_hub_patrol.gd`): every element clears every patrol group's idle offset + perceive radius by > 100 px and every interactable and the spawn by > 300 px beyond its radius; patrol seeds unchanged; at least one LOS blocker present. `bash /agent/verify.sh` is green; `scripts/gate-time.sh` before/after reported and GUT within the section's allowance and <= 240 s.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
@@ -309,15 +340,16 @@
         "2.6",
         "2.8",
         "2.9"
-      ]
+      ],
+      "description": "Add a `TacticalSpace` to `sector_hub.tscn` as scene nodes (no rng draws, so patrol seeds are unchanged): a gravity well at the centre, an energy anomaly 650-750 px away, the three placed structures as a cover line 450-550 px from the well on the hub side, and 2-3 debris pieces with speed 0 and lifetime 0; candidate centre bearing 22.5 deg on a 3200 px ring, final positions chosen to pass the clearance sweep. Placed structures are solid but harmless while still.",
+      "acceptanceCriteria": "Plan §2.16 Tests pass (extended `test_sector_hub_patrol.gd`): every element clears every patrol group's anchor by hazard radius + worst idle offset + perceive_radius + 100 px, and every MissionTrigger, PickupBase and the player spawn by radius + 300 px; every placed debris piece has speed 0; the space has at least one LOS blocker that refuses a real Sniper a line; every existing hub patrol row green. `bash /agent/verify.sh` green; gate time before / after (allowance +1 s)."
     },
     {
       "key": "t19",
       "title": "The docs, roster and phase record describe hazards, wrecks and the new enemy tactics as built",
-      "description": "Run updating-project-docs (global.md, assault.md, open_space.md, PROJECT.md, CLAUDE.md gates and the round-stops-on-wreck rule, enemy-roster.md, HAZARD.md per hazard, tests/README.md gate-time row); write the dossier `docs/epics-done/cmug23om70001m52wqfwclf3l/` (PRD, SOURCES, REPORT) and append `## Phase 6 - as built` to the idea's DECISIONS.md with every deviation and gap.",
-      "acceptanceCriteria": "Every new class, scene, group and gate is documented; the dossier and as-built section exist and are honest about what is untested by a human. `bash /agent/verify.sh` is green.",
       "type": "chore",
       "complexity": "medium",
+      "effort": "medium",
       "dependsOn": [
         "t1",
         "t2",
@@ -340,13 +372,14 @@
       ],
       "planSections": [
         "2.18",
-        "1",
-        "3",
-        "5",
-        "6",
-        "7"
+        "1. Problem",
+        "3. Build sequence",
+        "5. Risks",
+        "6. Out of scope",
+        "7. Requirements coverage"
       ],
-      "effort": "medium"
+      "description": "Invoke updating-project-docs: `global.md` (global/hazards/), `assault.md` (hazard scenes, wreck family), `open_space.md` (tactical space), `PROJECT.md` conventions (hazards sampled by the body; the mover owns enemy drift; runtime hazards spawned deferred into the HazardContainer), `CLAUDE.md` (the new gates and the round-stops-on-wreck rule beside projectile ownership), `docs/enemy-roster.md` (hazard profile and wreck columns), Fighter / Sniper / Ram `ENEMY.md`, a `HAZARD.md` per hazard, `tests/README.md` gate-time rows. Close the phase: `docs/epics-done/cmug23om70001m52wqfwclf3l/` (PRD.md, SOURCES.md, REPORT.md) and a `## Phase 6 - as built (<date>)` section in `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` listing every deviation and the gaps left.",
+      "acceptanceCriteria": "Every new class, scene, group and gate is documented; the dossier and the as-built section exist and say plainly what no human has play-tested; the final gate time is recorded. `bash /agent/verify.sh` green."
     }
   ]
 }
