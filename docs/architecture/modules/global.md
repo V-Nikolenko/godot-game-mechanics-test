@@ -59,6 +59,7 @@ global/
 │   ├── squad_controller.gd    # SquadController (RefCounted) — event-driven lead/flank/rear role board
 │   ├── anchor_idle.gd         # AnchorIdle (RefCounted) — generic idle-around-an-anchor → combat handover
 │   └── enemy_world.gd         # EnemyWorld — the one lookup of the &"assault_arena" mode provider
+├── hazards/                   # shared hazard description + registry (enemy rework phase 6): HazardInfo, Hazards, HazardField, HazardDrift
 ├── physics/
 │   └── collision_layers.gd    # CollisionLayers — named constants, one per project.godot layer_names entry
 ├── entities/
@@ -642,6 +643,23 @@ the centres are ≤ 4r apart), and a single arc when start and goal share a circ
 attack run's lead-in with it (take the first candidate whose samples are clear of the player, then
 track the samples with `Steering.turn_toward`) — later attack-run enemies (the Ph4 Bomber/Ram
 passes) can plan with it the same way. Tests: `tests/unit/test_dubins_path.gd`.
+
+### Hazards — `global/hazards/` (enemy rework phase 6)
+
+One shared, testable description of a pull, a slow and a danger. **A hazard is any node that answers duck-typed
+`hazard_info() -> HazardInfo`, calls `Hazards.register(self)` in `_enter_tree()` and `Hazards.unregister(self)` in
+`_exit_tree()`.** Hazards are *sampled* by the body they act on; a hazard never writes a ship's velocity, position or
+rotation, and no physics layer is allocated (bit 12 stays free).
+
+| File | Role |
+|---|---|
+| `hazard_info.gd` (`HazardInfo`, `RefCounted`) | The data: `position`, `radius`, `pull_force`, `damage_per_second`, `movement_penalty`, `disables_abilities`, `line_of_sight_blocker`, `kind`, `core_radius`, `damage_radius`, signed `tangential_force` (+ = clockwise), `avoid_weight`, `velocity`, `source`, `claimer_id`. Maths: `falloff(r)` (1 in the core, `core/r` to 0.85 r, linear taper to 0 at `radius`), `accel_at`, `penalty_at`, `contains`. Claims `try_claim` / `release` / `is_claimed_by` / `is_claimed` store an instance id, so a freed claimer frees the claim. |
+| `hazards.gd` (`Hazards`, static) | `register` / `unregister` / `count()` (O(1)) / `around(pos, reach)` / `accel_at` / `penalty_at` (strongest slow only, capped at `MAX_PENALTY` 0.5) / `container(tree)` (first node in group `hazard_container`) / `hurt_box_of(ship)` / `pulse_damage(tree, at, radius, damage)` (a direct `HurtBox.received_damage.emit` on every `enemies` / `player` node whose centre is within `radius`; bypasses `EnemyShield`). |
+| `hazard_drift.gd` (`HazardDrift`) | Decaying drift integrator (half-life 0.35 s) a ship adds to its own motion: `step(accel, resistance, delta)`. |
+| `hazard_field.gd` (`HazardField`, `Node2D`) | The one field script: exports for radius, core, pull, swirl, penalty, stress and `duration`, a TELEGRAPH → ACTIVE → QUIET cycle, hull-stress pulses via `pulse_damage`; signals `phase_changed(phase: int)`, `stressed(count: int)`. Runtime spawns go through `spawn_into(container, at, rot)`, which defers `_attach` on itself (the `ContactBlast` pattern) and frees itself if the container is gone. |
+
+Tests: `tests/unit/test_hazards.gd`, `tests/unit/test_hazard_field.gd`. Add hazard nodes with `add_child_autofree` so the
+static registry is empty after each test. Plan: `docs/plans/cmug23om70001m52wqfwclf3l/3-plan.md` §2.1.
 
 ### ProjectileLifetime — `projectile_lifetime.gd`
 
