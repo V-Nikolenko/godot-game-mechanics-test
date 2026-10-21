@@ -75,6 +75,20 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   — still exactly one owner at every instant. Spelled out in
   `docs/architecture/PROJECT.md` → Conventions; gated by
   `tests/integration/test_player_bullet_lifetime.gd`, `test_armor_query.gd` and `test_enemy_ordnance.gd`.
+  **A wreck is cover for both sides (Phase 6): an enemy round stops on a wreck.** `EnemyBullet`'s HitBox mask includes 1024 and a
+  hit there expires the round only when the area's owner answers duck-typed `stops_enemy_rounds() == true` (only `Wreck` does;
+  asteroids do not, so round behaviour against them is unchanged); the player's Sniper Shot ends on a parent answering
+  `stops_piercing()` and spends its full damage. A runtime hazard (wreck, debris fragment, Gravity Field, reactor field) is
+  spawned deferred through `spawn_into()` into `Hazards.container(tree)` — still exactly one owner, it frees itself.
+  **Hazards are sampled by the body, the mover owns enemy drift, runtime hazards spawn deferred into the `HazardContainer`** —
+  [PROJECT.md](docs/architecture/PROJECT.md) → Conventions. Phase 6 gates: `tests/unit/test_hazards.gd`, `test_hazard_field.gd`,
+  `tests/integration/test_context_avoidance.gd` (pass-through bit-identical with no hazard, avoidance per profile),
+  `test_player_hazards.gd` (pull and slow on both players), `test_wreck.gd` (body, yield, LOS, "no hurtbox larger than its
+  body"), `test_wreck_spawning.gd` (death rolls, caps, no container -> no rng, real-physics deferred spawn),
+  `test_hazard_projectiles.gd` (rockets / bombs / missiles bend, bullets fly true), `test_hazard_art.gd`, the Sniper / Fighter /
+  Ram cover and well rows, and the level-1 exit guard
+  `test_level1_fighter_exit.gd::test_cloud_descent_clears_in_time_with_wrecks_left_behind` (pre-approved levers: Assault wreck
+  `avoid_weight` 0.3, then halving Assault `wreck_chance`; never the timeout).
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it

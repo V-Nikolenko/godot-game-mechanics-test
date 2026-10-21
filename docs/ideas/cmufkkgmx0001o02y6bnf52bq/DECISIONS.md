@@ -2400,3 +2400,46 @@ check this phase's *as built* section, once written, before relying on them.
   - A future encounter that wants Assault cover needs a player off-centre or a wider corridor.
 - **t16 (Ram well station):** the 4.0 s give-up is `well_setup_max` plus the trip to the station at claim time (`RamCorvetteBrain.well_setup_limit`), not a flat 4.0 s: plan §2.14's own bearing-0 row (a Ram 900 px out beyond the well, 1200 px from `S`) cannot arrive in 4 s at 280 px/s. A corridor-clamped `S` closer than `well_station_tolerance` to the player is also refused (a player on the corridor's x edge collapses `S` onto itself, and a zero-length line passes any cone). New brain fields `well_ticket`, `well_station`, `well_refused`; with the shipped `engage_seconds` 4.0 the Assault gate (`remaining >= well_setup_max + line_up_cap`) never opens, so the station is Open Space-only until an Assault encounter gives a well-fighting Ram a longer budget.
 - **t18 (hub tactical space):** `sector_hub.tscn` `TacticalSpace` at well (2956, 1225), anomaly (3656, 1225), structures 500 px hub-side, three still debris pieces; the `Background` ColorRect's right edge is now 4400 (was 1720) so the space is not on the bare clear colour. Later phases that place hub content past x = 1720 need no further change.
+
+## Phase 6 - as built (2026-10-21)
+
+Report: `docs/epics-done/cmug23om70001m52wqfwclf3l/REPORT.md`. Where this section and the planned section above differ, this one wins.
+The planned section's "Deviations during the build" list above is the per-task record; this is its index.
+
+### What was built
+- `global/hazards/` (`HazardInfo`, `Hazards`, `HazardField`, `HazardDrift`); the hazard profile on `ShipConfig` and the drift / slow /
+  context-avoidance stage in `EnemyMover`; pull and slow on both players.
+- Hazards in `assault/scenes/hazards/`: `gravity_well/`, `energy_anomaly/`, `gravity_field/`, `reactor_field/`, `wreck/` (`Wreck`,
+  `DebrisFragment`, `WreckScenes`, derelict structures, drifting debris, the Ram plate fragment), each with a `HAZARD.md`.
+- Wrecks left by deaths in both modes through the `HazardContainer`; explosive wrecks and reactor fields; Gravity Field from gravity bombs;
+  rockets, bombs and player missiles bend in fields.
+- Tactics: Sniper far-side cover, Fighter `COVER` phase (solo / LEAD), Ram well station; `EnemyBrain.can_see_player()`.
+- The hub's `TacticalSpace` (well, anomaly, derelict cover, still debris).
+- Final gate: GUT 216.3 s, 2139 tests, all passing.
+
+### Deviations from the plan (every one)
+All are recorded in detail in "Deviations during the build" above; in short:
+1. Context-steering refinements inside `Steering.context_avoid()` (t4): inside-case limit, hysteresis on slot ranking, signed-cosine
+   ranking, a clear way returns `desired` bit-identical.
+2. Every `mover.boost()` bypasses avoidance, the Razor's idle boost included (t4).
+3. Wreck build choices (t10): one circle per body, the yield rule, debris hurts at any speed, no hurtbox larger than its body (the
+   Sniper's hurtbox scale 1.4505 -> 1.44), cover takes the Sniper Shot's full damage, `enemy_bullet.tscn` mask 1152, and arming a
+   contact box enables its shape.
+4. Sniper cover (t13): four refinements (plain candidates rejected inside a wreck body, one more peek step, peeks spend at most
+   `max_los_rays - 2`, SETTLE waits for the nose while a claimed wreck is held).
+5. Fighter COVER (t14): seven config fields, not six (`cover_min_budget` 5.0, new `cover_pass_reserve` 3.0), four extra entry rules including
+   the **swoop rule**, extra exits, `_enter_calm()` clears `_cover_used`. Level-1 fighters practically never take cover.
+6. Ram well station (t16): the give-up is `well_setup_max` plus the trip, not a flat 4.0 s; short clamped stations are refused; the Assault
+   station never fires with the shipped `engage_seconds` 4.0.
+7. Hub (t18): the `Background` rect's right edge moved from 1720 to 4400.
+8. No deviation from the plan in t1-t3, t5-t9, t11, t12, t15, t17 (t11, t12, t15 note build details only).
+
+### Gaps left for later phases
+- Nothing has been play-tested by a human; every hazard, avoidance and wreck number is a starting value pinned by tests.
+- Level 1 fighters almost never take cover (check at spawn tick); checking at corridor entry is an owner option. Wingman and
+  squad-coordinated cover belong to Ph14.
+- No Assault Ram can use a well station until an encounter gives it a longer budget; Assault levels have no placed hazards (Ph15).
+- `disables_abilities` has no producer (Ph9 jammers); mines (Ph7); laser walls (Ph8); capital / boss wrecks (Ph19); hazard audio (Ph17);
+  the anomaly's shield / targeting variants and a deliberate plate throw remain owner options.
+- Fighter cover legality is checked at entry only (documented, bounded).
+- **Gate time is 216 s of 240 s: Ph7 must start by recovering time** (`tests/README.md` rules), logging it here.
