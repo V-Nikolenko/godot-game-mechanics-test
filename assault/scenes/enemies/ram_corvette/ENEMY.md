@@ -70,6 +70,22 @@ Signals: `armor_deflected(damage: int)`, `plate_broken(plate_name: StringName)`,
     spawns: 28-43° off vertical).
   - **Attack gate:** LINE_UP only with `budget.remaining() >= line_up_cap + ATTACK_GATE_MARGIN` (0.5 + 0.05 s; INF
     in Open Space), so a line-up always becomes a wind-up before the budget expires.
+  - **Well station** (Phase 6 t16, both modes; `well_*` fields of `RamCorvetteConfig`): at the top of APPROACH, with a
+    gravity well registered (`Hazards.count() > 0`) and no ticket, the Ram looks for the nearest `kind == &"gravity_well"`
+    whose centre is within `well_use_range` (600) of the player and claims it (`HazardInfo.try_claim`; one Ram per
+    well). In Assault it only tries while `budget.remaining() >= well_setup_max + line_up_cap` (so with the shipped
+    4.0 s `engage_seconds` it never does there - a lever for a longer budget, not a bug). The station is
+    `S = P + (P - W)^ * well_standoff` (300), corridor-clamped in Assault; a clamped `S` closer than
+    `well_station_tolerance` to P, or off the well's line by more than `well_cone_deg` (30), is refused at once
+    (`well_refused`, ticket released, APPROACH continues as without a well, `_choose_side()` unchanged). With a ticket
+    APPROACH `seek`s `S` (recomputed each tick; the avoidance stage steers round the well) and enters LINE_UP only inside
+    `engage_range` **and** within `well_station_tolerance` (90) of `S`. LINE_UP / WIND_UP / CHARGE are unchanged: the aim
+    now points across the player at the well, and the ARMOR shove (owner -> target) drives the player toward it.
+    The ticket is released on WIDE_TURN (which also clears `well_refused`), STAGGER, DISENGAGE and the hub idle phases,
+    when the well leaves `well_use_range` or is freed, and after `well_setup_limit` in APPROACH without reaching `S`
+    (then `well_refused`). The limit is `well_setup_max` (4.0 s) **plus the trip**: the straight-line distance to `S` at
+    claim time over `cruise_speed`, because a Ram 900 px out on the far side of the well cannot cover its 1200 px
+    detour in 4 s. No well: no lookup, no rng draw, no change (level 1 has none).
   - **LINE_UP** (≤ `line_up_cap` 0.5 s): brakes hard (`braking` 1600, written to the mover only in LINE_UP / WIND_UP
     / STAGGER) and turns its nose onto the aim, P̂ = the player `clamped_lead_time(d, charge speed, 0.15, 0.6)` ahead,
     clamped to the corridor. Ends early once within 8° and at a crawl.

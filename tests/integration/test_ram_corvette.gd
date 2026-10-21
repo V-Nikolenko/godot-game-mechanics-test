@@ -1762,3 +1762,253 @@ func test_an_armed_fragment_hurts_the_player_and_frees_by_three_seconds() -> voi
 		gone = not is_instance_valid(f) or f.is_queued_for_deletion()
 	assert_true(gone, "and it is freed")
 	assert_lte(t, 3.0 + 0.1, "by its 3.0 s life (gone at %.2f s)" % t)
+
+
+# ── The well station: the Ram lines up its charge to shove the player into a gravity well (plan
+#    cmug23om70001m52wqfwclf3l §2.14, t16) ──────────────────────────────────────────────────────
+
+const WELL_SCENE: PackedScene = preload("res://assault/scenes/hazards/gravity_well/gravity_well.tscn")
+const FIXTURE_WRECK := preload("res://tests/helpers/fixture_wreck.gd")
+
+
+## A real, un-ticked gravity well centred at `at` (hand-ticking never reaches its stress clock).
+func _well_at(at: Vector2) -> HazardField:
+	var well := WELL_SCENE.instantiate() as HazardField
+	well.global_position = at
+	_root.add_child(well)
+	well.set_physics_process(false)
+	return well
+
+
+func _wreck_at(at: Vector2, radius: float) -> Node2D:
+	var wreck := FIXTURE_WRECK.new() as Node2D
+	wreck.global_position = at
+	wreck.info.radius = radius
+	add_child_autofree(wreck)
+	return wreck
+
+
+## Steps until the brain has a charge frozen (CHARGE entered) or `limit` seconds pass. The phases visited, in order.
+func _phases_to_charge(ram: RamCorvette, player: CharacterBody2D, limit: float) -> Array[int]:
+	var brain := _brain(ram)
+	var seen: Array[int] = [brain.phase]
+	var t := 0.0
+	while t < limit and brain.phase != Phase.CHARGE:
+		_step(ram, player)
+		t += DT
+		if seen[-1] != brain.phase:
+			seen.append(brain.phase)
+	return seen
+
+
+func test_the_well_station_config_is_the_epic_plans() -> void:
+	assert_eq(RAM_CONFIG.well_use_range, 600.0)
+	assert_eq(RAM_CONFIG.well_standoff, 300.0)
+	assert_eq(RAM_CONFIG.well_station_tolerance, 90.0)
+	assert_eq(RAM_CONFIG.well_cone_deg, 30.0)
+	assert_eq(RAM_CONFIG.well_setup_max, 4.0)
+	assert_lt(RAM_CONFIG.well_standoff, RAM_CONFIG.engage_range, "the station is inside the line-up range")
+	assert_lt(RAM_CONFIG.well_standoff + RAM_CONFIG.well_station_tolerance, RAM_CONFIG.engage_range,
+			"... even at the edge of its tolerance")
+
+
+## Open Space: a well 350 px from a stationary player, a Ram 900 px out at four bearings from the well side.
+func test_the_ram_charges_the_player_toward_the_well_from_every_bearing() -> void:
+	var player_pos := Vector2(1000.0, 1000.0)
+	var toward_well := Vector2.RIGHT
+	for bearing in [0.0, 90.0, 180.0, 270.0]:
+		var h = _harness("open_space")
+		_well_at(player_pos + toward_well * 350.0)
+		var ram := _live_ram(h, player_pos + toward_well.rotated(deg_to_rad(bearing)) * 900.0, player_pos)
+		var brain := _brain(ram)
+		assert_true(_run_to(ram, h.player, Phase.CHARGE, 25.0), "bearing %.0f: it charged" % bearing)
+		assert_lt(_deg(brain.charge_dir, toward_well), 30.0, "bearing %.0f: the charge drives the player into the well" % bearing)
+		assert_true(brain.well_ticket != null and brain.well_ticket.is_claimed_by(ram), "bearing %.0f: it holds the ticket" % bearing)
+		await _drop(h)
+
+
+func test_with_no_well_the_phases_and_the_charge_are_the_controls() -> void:
+	var player_pos := Vector2(1000.0, 1000.0)
+	var runs: Array[Dictionary] = []
+	for with_far_wreck in [false, true]:
+		var h = _harness("open_space")
+		if with_far_wreck:
+			_wreck_at(player_pos + Vector2(0.0, 5000.0), 40.0)  # a hazard is registered, but no well
+		var ram := _live_ram(h, player_pos + Vector2(900.0, 0.0), player_pos)
+		var brain := _brain(ram)
+		var state_before := brain.rng.state
+		var seen := _phases_to_charge(ram, h.player, 25.0)
+		runs.append({"seen": seen, "dir": brain.charge_dir, "state": brain.rng.state - state_before, "ticket": brain.well_ticket})
+		await _drop(h)
+	assert_eq(runs[1]["seen"], runs[0]["seen"], "the same phase sequence")
+	assert_eq(runs[1]["dir"], runs[0]["dir"], "the same charge_dir, bit for bit")
+	assert_eq(runs[1]["state"], 0, "no rng draw")
+	assert_null(runs[1]["ticket"], "no ticket without a well")
+	assert_lt(_deg(runs[0]["dir"], Vector2.LEFT), 5.0, "sanity: the control charges straight at the player")
+
+
+func test_a_second_ram_is_refused_the_ticket_and_charges_as_today() -> void:
+	var player_pos := Vector2(1000.0, 1000.0)
+	var h = _harness("open_space")
+	var well := _well_at(player_pos + Vector2(350.0, 0.0))
+	var first := _live_ram(h, player_pos + Vector2(-900.0, 0.0), player_pos)
+	var second := _live_ram(h, player_pos + Vector2(0.0, 900.0), player_pos)
+	var one := _brain(first)
+	var two := _brain(second)
+	var t := 0.0
+	var origin := Vector2.INF
+	while t < 25.0 and two.phase != Phase.CHARGE:
+		_step(first, h.player)
+		_step(second, h.player)
+		t += DT
+		assert_null(two.well_ticket, "the second Ram never holds the ticket")
+		if two.phase == Phase.WIND_UP and origin == Vector2.INF:
+			origin = second.global_position
+	assert_eq(two.phase, Phase.CHARGE, "the second Ram charged anyway")
+	assert_lt(_deg(two.charge_dir, h.player.global_position - two.charge_origin), 5.0, "... straight at the player, as today")
+	assert_true(one.well_ticket != null and one.well_ticket.is_claimed_by(first), "the first Ram kept the ticket")
+	assert_false(two.well_refused, "a busy well is not a refusal of the geometry")
+	await _drop(h)
+
+
+func test_the_armor_shove_pushes_the_player_toward_the_well() -> void:
+	var player_pos := Vector2(1000.0, 1000.0)
+	var h = _harness("open_space")
+	_well_at(player_pos + Vector2(350.0, 0.0))
+	var ram := _live_ram(h, player_pos + Vector2(-900.0, 0.0), player_pos)
+	var brain := _brain(ram)
+	assert_true(_run_to(ram, h.player, Phase.CHARGE, 25.0))
+	# The charge runs the player over: the touch is a real ARMOR contact on the Ram's own profile.
+	var player := _knockback_player(player_pos)
+	ram.global_position = player_pos - brain.charge_dir * 30.0
+	await _frames(3)
+	assert_eq(player.impulses.size(), 1, "one shove")
+	if player.impulses.size() == 1:
+		assert_lt(_deg(player.impulses[0], Vector2.RIGHT), 30.0, "the shove points at the well")
+	await _drop(h)
+
+
+## The station is made unreachable by a player that slips away faster than the Ram cruises, with its well beside it
+## (a fixture wreck has no body, so a wall of them would not stop a hand-ticked ship).
+func test_the_give_up_releases_the_ticket_and_the_ram_charges_as_today() -> void:
+	var player_pos := Vector2(1000.0, 1000.0)
+	var h = _harness("open_space")
+	var well := _well_at(player_pos + Vector2(350.0, 0.0))
+	var ram := _live_ram(h, player_pos + Vector2(-900.0, 0.0), player_pos)
+	var brain := _brain(ram)
+	h.player.velocity = Vector2(0.0, RAM_CONFIG.cruise_speed + 40.0)
+	_step(ram, h.player)
+	well.global_position += h.player.velocity * DT
+	assert_not_null(brain.well_ticket, "it took the ticket")
+	assert_almost_eq(brain.well_setup_limit, RAM_CONFIG.well_setup_max + 600.0 / RAM_CONFIG.cruise_speed, 0.1,
+			"well_setup_max plus the time the trip to the station takes")
+	var t := DT
+	while t < brain.well_setup_limit - 0.2:
+		_step(ram, h.player)
+		well.global_position += h.player.velocity * DT
+		t += DT
+		assert_ne(brain.phase, Phase.LINE_UP, "the station is unreachable: no line-up at %.2f s" % t)
+	assert_not_null(brain.well_ticket, "still setting up just before the limit")
+	while t < brain.well_setup_limit + 0.3:
+		_step(ram, h.player)
+		well.global_position += h.player.velocity * DT
+		t += DT
+	assert_null(brain.well_ticket, "the give-up released the ticket")
+	assert_true(brain.well_refused, "... and it does not try again this approach")
+	assert_eq(well.hazard_info().claimer_id, 0, "the well is free for another Ram")
+	h.player.velocity = Vector2.ZERO  # the player stops: now it can be caught
+	assert_true(_run_to(ram, h.player, Phase.CHARGE, 15.0), "and it charges as today")
+	assert_lt(_deg(brain.charge_dir, h.player.global_position - brain.charge_origin), 5.0)
+	await _drop(h)
+
+
+func test_the_ticket_is_released_when_the_well_is_freed_or_out_of_range() -> void:
+	var player_pos := Vector2(1000.0, 1000.0)
+	var h = _harness("open_space")
+	var well := _well_at(player_pos + Vector2(350.0, 0.0))
+	var ram := _live_ram(h, player_pos + Vector2(-900.0, 0.0), player_pos)
+	var brain := _brain(ram)
+	_step(ram, h.player)
+	assert_not_null(brain.well_ticket)
+	h.player.global_position = player_pos + Vector2(-400.0, 0.0)  # 750 px from the well now
+	_step(ram, h.player)
+	assert_null(brain.well_ticket, "the well left well_use_range")
+	assert_eq(well.hazard_info().claimer_id, 0)
+	h.player.global_position = player_pos
+	_step(ram, h.player)
+	assert_not_null(brain.well_ticket, "back in range: it takes the well again")
+	well.free()
+	_step(ram, h.player)
+	assert_null(brain.well_ticket, "a freed well drops the ticket")
+	await _drop(h)
+
+
+func test_the_ticket_is_released_on_stagger_wide_turn_and_disengage() -> void:
+	var player_pos := Vector2(1000.0, 1000.0)
+	for p in [Phase.STAGGER, Phase.WIDE_TURN, Phase.DISENGAGE]:
+		var h = _harness("open_space")
+		var well := _well_at(player_pos + Vector2(350.0, 0.0))
+		var ram := _live_ram(h, player_pos + Vector2(-900.0, 0.0), player_pos)
+		var brain := _brain(ram)
+		_step(ram, h.player)
+		assert_not_null(brain.well_ticket)
+		brain.enter_phase(p)
+		assert_null(brain.well_ticket, "phase %d released it" % p)
+		assert_eq(well.hazard_info().claimer_id, 0)
+		await _drop(h)
+
+
+func test_wide_turn_clears_the_give_up() -> void:
+	var h = _harness("open_space")
+	var ram := _live_ram(h, Vector2.ZERO, Vector2(1000.0, 1000.0))
+	var brain := _brain(ram)
+	brain.well_refused = true
+	brain.enter_phase(Phase.WIDE_TURN)
+	assert_false(brain.well_refused)
+	await _drop(h)
+
+
+# Assault: the corridor clamps the station.
+
+func _assault_station_run(player_pos: Vector2, well_pos: Vector2, with_well: bool) -> Dictionary:
+	var h = _harness("assault")
+	if with_well:
+		_well_at(well_pos)
+	var ram := _live_ram(h, Vector2(player_pos.x, player_pos.y - 380.0), player_pos)
+	var brain := _brain(ram)
+	_step(ram, h.player)
+	var out := {"side": brain.side, "vertical": brain.vertical_side, "ticket": brain.well_ticket, "refused": brain.well_refused}
+	if with_well and brain.well_ticket != null:
+		assert_true(_run_to(ram, h.player, Phase.CHARGE, 12.0), "it charged")
+		out["dir"] = brain.charge_dir
+	await _drop(h)
+	return out
+
+
+func test_assault_a_well_below_the_player_sets_up_a_charge_toward_it() -> void:
+	var player_pos := Vector2(640.0, 330.0)
+	var well_pos := player_pos + Vector2(0.0, 350.0)
+	var run: Dictionary = await _assault_station_run(player_pos, well_pos, true)
+	assert_not_null(run["ticket"], "the Ram took the ticket")
+	assert_true(run.has("dir"), "and charged")
+	if run.has("dir"):
+		assert_lt(_deg(run["dir"], well_pos - player_pos), 30.0, "the charge drives the player toward the well")
+
+
+func test_assault_a_station_the_corridor_clamps_off_the_cone_is_refused_at_once() -> void:
+	var probe = _harness("assault")
+	var rect: Rect2 = _brain(_live_ram(probe, Vector2(640.0, -100.0), Vector2(640.0, 330.0)))._corridor()
+	await _drop(probe)
+	assert_true(rect.has_area())
+	# 1. level with a player at the x edge: the clamp collapses the station onto the player.
+	var edge_player := Vector2(rect.end.x, 330.0)
+	var level_well := edge_player - Vector2(350.0, 0.0)
+	# 2. a diagonal well: the clamp swings the station's direction off the cone.
+	var diag_well := edge_player + Vector2(-247.0, 247.0)
+	for well_pos in [level_well, diag_well]:
+		var control: Dictionary = await _assault_station_run(edge_player, well_pos, false)
+		var run: Dictionary = await _assault_station_run(edge_player, well_pos, true)
+		assert_null(run["ticket"], "the clamped station fails the cone: no ticket (well %s)" % well_pos)
+		assert_true(run["refused"], "refused at once")
+		assert_eq(run["side"], control["side"], "the side is the control's")
+		assert_eq(run["vertical"], control["vertical"])

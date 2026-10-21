@@ -86,3 +86,15 @@ extends ShipConfig
 ## The patrol ring's radius round `patrol_anchor` (px) and its angular speed (rad/s).
 @export var idle_radius: float = 150.0
 @export var idle_speed: float = 0.5
+
+@export_group("Well station")
+## Hazard phase 6 (plan cmug23om70001m52wqfwclf3l §2.14): APPROACH claims a gravity well within this of the player (px) ...
+@export var well_use_range: float = 600.0
+## ... and seeks the station this far behind the player, on the line from the well through the player (px) ...
+@export var well_standoff: float = 300.0
+## ... entering LINE_UP only within this of the station (px).
+@export var well_station_tolerance: float = 90.0
+## A station (corridor-clamped in Assault) whose line to the player is off the well's by more than this is refused (deg).
+@export var well_cone_deg: float = 30.0
+## The ticket is given up after this long in APPROACH without reaching the station (s).
+@export var well_setup_max: float = 4.0
