@@ -321,6 +321,11 @@ fighter and Gatling spawns are AI spawns** (no `.move()`, `.free_after()` or `sh
 arrive at the same moments and places as before and then fight inside the corridor and leave on their
 `EngagementBudget`. Their corridor behaviour is the shared `AssaultCorridorConstraint` above — a Fighter's flank
 lanes flip behind the player near the corridor top, a Gatling's first side is the half opposite the player.
+Since Phase 6 t14 a solo Fighter or a squad LEAD can open with a **`COVER` phase**. On APPROACH's first tick it claims
+a wreck on its way in and waits on the wreck's far side from the player, out of sight. It then swoops straight into its
+pass: a solo breaches, a LEAD slides onto its station. It only hides where it can do that (the swoop rule), so Assault
+cover is rare and mostly a hub behaviour. See [fighter/ENEMY.md](../../../assault/scenes/enemies/fighter/ENEMY.md)
+§Cover.
 
 ### Projectiles & bullet pool
 

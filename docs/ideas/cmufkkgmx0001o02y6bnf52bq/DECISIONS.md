@@ -2368,4 +2368,34 @@ check this phase's *as built* section, once written, before relying on them.
   AIM row runs on real physics (8× clock) as well as hand-ticked, because the hand-ticked harness overwrites the
   position after `move_and_slide` and so never feels the wreck's body. New `SniperConfig` fields: `cover_search_radius`
   700, `cover_gap` 50, `cover_radius` 140, `w_cover` 1.0, `cover_hysteresis` 0.15.
+- **t14: the Fighter's COVER phase.** Task plan `docs/plans/cmvg30aba0087qs2xwv86aq35/3-plan.md` (Revisions 1 and 2).
+  `FighterBrain.Phase.COVER` is appended (value 9). Brain state `cover: HazardInfo` (the claimed wreck) and
+  `cover_point`. The pass machinery (`_derive_pass()`, the RUN_IN latch, the squad hold) is untouched;
+  `_derive_pass()` is only *called* from COVER and from the entry check.
+  Deviations from §2.12:
+  1. **Seven** flat `FighterConfig` fields (Cover group), not six: `cover_min_budget` is **5.0** (6.0 can never open,
+     because `budget.update()` runs before the first APPROACH tick, leaving `6.0 − 1/60`). The new
+     `cover_pass_reserve` 3.0 is used trip-aware: COVER ends in Assault once
+     `remaining() <= cover_pass_reserve + |X − S| / max_speed`.
+  2. Four more entry rules:
+     - the wreck is nearer the player than the fighter ("on its way in"), or a hub fighter would fly away from the
+       player to hide and lose it;
+     - in Assault, C lies inside the corridor shrunk by the hull;
+     - **the swoop rule** (`_swoops_from`, Revision 2, found while building): a solo hides only where it breaches out
+       of cover (C inside APPROACH's breach radius less 30 px), and a squad LEAD only where its S is within
+       `2 × plan radius − 30` of C. From anywhere else APPROACH plans a Dubins lead-in from rest with the wreck in the
+       way; the wreck's skirt bends the fighter off that path, and the re-plan from near S loops. Measured over 270
+       layouts: 84/144 Open Space and 81/126 Assault post-cover approaches were 3–6 s late, most Assault ones never
+       attacking. With the rule: 0 of 216 solo and 0 of 112 LEAD covers in Open Space. In Assault, 2 of 184, both
+       fighters starting below the corridor floor, which no level does, and both still attacked;
+     - in Assault a centred player's S is clamped inward, so the solo band is only 300–325 px.
+  3. Extra exits: no player, and no longer the squad's LEAD.
+  4. `_enter_calm()` (IDLE / RETURNING) also clears `_cover_used`, so a hub fighter takes cover once per engagement.
+  5. N8 is accepted: a LEAD in cover leaves its FLANKs to go alone after `flank_wait_max`.
+
+  Consequences:
+  - Level-1 fighters practically never take cover: the check runs on the spawn tick, spawns are outside the corridor,
+    and the Assault swoop band is narrow. The wreck-guard replay counts COVER entries in its print and saw 0 in three
+    runs. Checking at corridor entry instead would make Assault cover common; it is left as an owner option.
+  - A future encounter that wants Assault cover needs a player off-centre or a wider corridor.
 - **t16 (Ram well station):** the 4.0 s give-up is `well_setup_max` plus the trip to the station at claim time (`RamCorvetteBrain.well_setup_limit`), not a flat 4.0 s: plan §2.14's own bearing-0 row (a Ram 900 px out beyond the well, 1200 px from `S`) cannot arrive in 4 s at 280 px/s. A corridor-clamped `S` closer than `well_station_tolerance` to the player is also refused (a player on the corridor's x edge collapses `S` onto itself, and a zero-length line passes any cone). New brain fields `well_ticket`, `well_station`, `well_refused`; with the shipped `engage_seconds` 4.0 the Assault gate (`remaining >= well_setup_max + line_up_cap`) never opens, so the station is Open Space-only until an Assault encounter gives a well-fighting Ram a longer budget.

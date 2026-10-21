@@ -67,6 +67,8 @@ var _hazard_container: Node2D
 var _wrecks_seen: int = 0
 var _wrecks_in_enemy_container: int = 0
 var _killed: Dictionary = {}
+## Fighters seen in COVER (Ph6 t14) at the end of a physics frame, by instance id: a same-tick enter / exit never counts.
+var _covered: Dictionary = {}
 var _ram_exits: Array[Dictionary] = []
 
 var _saved_time_scale: float = 1.0
@@ -89,6 +91,7 @@ func before_each() -> void:
 	_wrecks_seen = 0
 	_wrecks_in_enemy_container = 0
 	_killed = {}
+	_covered = {}
 	_ram_exits = []
 
 
@@ -339,13 +342,18 @@ func test_a_rail_driven_fighter_wave_is_rejected() -> void:
 	assert_gt(fighters, 0, "sanity: the rail fighters spawned and are still in the container")
 
 
-## Every fighter of the replay dies on its first EXTEND entry (mid-corridor, the worst case), once.
+## Every fighter of the replay dies on its first EXTEND entry (mid-corridor, the worst case), once. Also notes every
+## fighter in COVER at the end of the frame (Ph6 t14): how often level-1 fighters find cover, printed, never asserted.
 func _kill_fighters_in_extend() -> void:
 	for child in _container.get_children():
 		var fighter := child as Fighter
-		if fighter == null or _killed.has(fighter.get_instance_id()):
+		if fighter == null:
 			continue
 		var brain := fighter.get_node_or_null("Brain") as FighterBrain
+		if brain != null and brain.phase == FighterBrain.Phase.COVER:
+			_covered[fighter.get_instance_id()] = true
+		if _killed.has(fighter.get_instance_id()):
+			continue
 		if brain != null and brain.phase == FighterBrain.Phase.EXTEND:
 			_killed[fighter.get_instance_id()] = true
 			fighter.health.decrease(fighter.health.current_health)
@@ -389,5 +397,6 @@ func test_cloud_descent_clears_in_time_with_wrecks_left_behind() -> void:
 	for exit in _ram_exits:
 		assert_false(exit["path_mover"], "the Ram left on a rail (EnemyPathMover), not under AI")
 		assert_true(exit["disengage"], "the Ram left in a phase other than DISENGAGE")
-	gut.p("with wrecks: %d wrecks, %d ships; container empty %.2f s after waves_complete (timeout %.1f s)"
-		% [_wrecks_seen, _spawned, cleared_after, timeout])
+	gut.p(("with wrecks: %d wrecks, %d ships, %d fighter(s) took cover; container empty %.2f s after "
+		+ "waves_complete (timeout %.1f s)")
+		% [_wrecks_seen, _spawned, _covered.size(), cleared_after, timeout])

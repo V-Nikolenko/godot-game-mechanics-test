@@ -25,6 +25,20 @@
 ##   IDLE       [SEARCH]     Open Space only (t12): a slow ring orbit round `patrol_anchor`, no shots.
 ##   NOTICING   [SEARCH]     a beat: the light blinks once and the fighter faces the player, then APPROACH.
 ##   RETURNING  [REPOSITION] `arrive` back at `patrol_anchor` (never interrupts a burst), then IDLE.
+##   COVER      [APPROACH]   Phase 6 t14: on APPROACH's first tick a solo fighter or a squad LEAD claims a wreck
+##                           on its way in and waits on its far side from the player, out of sight, then hands
+##                           back to APPROACH, which derives the pass from where it is (see "Cover" below).
+##
+## Cover (task plan docs/plans/cmvg30aba0087qs2xwv86aq35/3-plan.md). Checked once per APPROACH entry, and only
+## with a hazard registered (`Hazards.count() > 0` first, so the no-hazard path is one compare and no rng). The
+## wreck must lie within `cover_search_radius`, nearer the player than the fighter; its cover point
+## `C = W + (W − P)^·(radius + cover_gap)` must be beyond `cover_break_range`, inside the Assault corridor, outside
+## every other hazard, and a point APPROACH goes straight from into the pass (`_swoops_from`: a solo breaches, a LEAD
+## slides onto its S; a Dubins lead-in from rest behind the wreck would loop round it). COVER ends on the first of: no player, no longer LEAD, the wreck gone, the player within
+## `cover_break_range`, `cover_max`, the Assault reserve (`cover_pass_reserve` + the straight trip to S), or
+## `cover_hold` s hidden on C. The claim is released on every exit (`enter_phase`, `on_suspended`); the claimed
+## wreck is skipped by the mover's avoidance, so the fighter can reach C. `_derive_pass()` runs in COVER exactly as
+## in APPROACH (nothing is latched before RUN_IN), so S is known for the reserve; the pass machinery is untouched.
 ##
 ## Hub idle (epic §2.10, X2): `AnchorIdle` on the squad's shared `patrol_anchor`, the Swarm Drone's shape.
 ## Assault (`EngagementBudget.active`) and the `start_engaged` test seam skip it and start in APPROACH.
@@ -56,8 +70,8 @@
 class_name FighterBrain
 extends EnemyBrain
 
-## IDLE, NOTICING and RETURNING are appended (t12) so the earlier values do not move.
-enum Phase { APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING }
+## IDLE, NOTICING and RETURNING are appended (t12), COVER (Ph6 t14), so the earlier values do not move.
+enum Phase { APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING, COVER }
 ## The shape of a pass (epic §2.4.1). The solo alternation uses the flank shapes at `pass_offset`;
 ## squad roles (and the `forced_pass_kind` seam) use FLANK_RIGHT's outer lane. REAR is a squad REAR's
 ## dry pass.
@@ -135,6 +149,10 @@ const GIVE_WAY_SLIDE_SPEED := 180.0
 const GIVE_WAY_STEPS: Array[float] = [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]
 ## Hull radius used when the scene has no readable body circle (px).
 const DEFAULT_HULL_RADIUS := 28.0
+## COVER counts as holding its cover point within this (px).
+const COVER_HOLD_PX := 30.0
+## COVER's arrival latch (the Sniper's `_travel()` shape): settled within this of C, re-seeking beyond twice it (px).
+const COVER_ARRIVE_PX := 10.0
 
 ## Set by `fighter.gd` before the first tick. A fresh default keeps a bare brain steppable.
 var config: FighterConfig = FighterConfig.new()
@@ -249,6 +267,20 @@ var _burst_mode: int = WeaponMode.AIMED
 var _burst_controller: AttackController
 var _disengage_pending: bool = false
 
+# Cover (Ph6 t14).
+## The wreck claimed as cover; null outside COVER. Read-only outside this script.
+var cover: HazardInfo
+## This tick's cover point C. Read-only outside this script.
+var cover_point: Vector2 = Vector2.INF
+## Set on COVER entry; cleared on RUN_IN entry and when the fight ends (IDLE / RETURNING).
+var _cover_used: bool = false
+## True until APPROACH's first tick with a target has run the cover check; set again by every APPROACH entry.
+var _cover_check_pending: bool = true
+## Continuous seconds hidden within `COVER_HOLD_PX` of C.
+var _cover_hold_time: float = 0.0
+## The arrival latch.
+var _cover_settled: bool = false
+
 
 func _ready() -> void:
 	super._ready()
@@ -292,6 +324,7 @@ func tick(delta: float) -> void:
 		Phase.TURN: _tick_turn(delta, target)
 		Phase.REPOSITION: _tick_reposition(delta, target)
 		Phase.DISENGAGE: _tick_disengage(delta)
+		Phase.COVER: _tick_cover(delta, target)
 	if phase == Phase.RUN_IN and was != Phase.RUN_IN:
 		_steer_run_in(delta, target)
 	if _has_request:
@@ -303,6 +336,8 @@ func tick(delta: float) -> void:
 func enter_phase(p: Phase) -> void:
 	if not _started:
 		_start()
+	if phase == Phase.COVER:
+		_release_cover()  # every exit from COVER, in one place (epic review N3)
 	phase = p
 	_phase_time = 0.0
 	match p:
@@ -313,6 +348,10 @@ func enter_phase(p: Phase) -> void:
 			_hold_time = -1.0
 			if p == Phase.REPOSITION and not _path_pts.is_empty():
 				_set_deadline_from_path()
+			if p == Phase.APPROACH:
+				_cover_check_pending = true
+		Phase.COVER:
+			_enter_cover()
 		Phase.RUN_IN:
 			_enter_run_in()
 		Phase.EXTEND:
@@ -332,6 +371,7 @@ func enter_phase(p: Phase) -> void:
 ## config fields (`rail_*`), so the round-lifetime sweep reads the same numbers the rail fires with.
 func on_suspended() -> void:
 	anchor_idle = null  # a rail owns the motion: no idle
+	_release_cover()  # no `enter_phase()` here, so the COVER exit hook never runs
 	_abort_burst()
 	_set_light(StateLight.State.OFF)
 	var squad := _squad()
@@ -460,6 +500,7 @@ func _enter_calm() -> void:
 	_wait_time = 0.0
 	_rear_due = false
 	_answered_window = false
+	_cover_used = false  # the fight is over: the next wake is a new engagement, with its own cover
 	var squad := _squad()
 	if squad != null and squad.role_of(actor) == SquadController.Role.LEAD:
 		squad.attack_window_open = false
@@ -644,6 +685,12 @@ func _tick_approach(delta: float, target: TargetInfo) -> void:
 	if not target.has_target:
 		_request(Vector2.ZERO)
 		return
+	if _cover_check_pending:
+		_cover_check_pending = false
+		if Hazards.count() > 0 and _take_cover(target):
+			enter_phase(Phase.COVER)
+			_tick_cover(delta, target)
+			return
 	_derive_pass(target)
 	var clear := minf(config.standoff_radius, pass_start.distance_to(pass_anchor)) - 1.0
 	if _waits_for_window():
@@ -688,6 +735,153 @@ func _begin_breach_pass(target: TargetInfo) -> void:
 	enter_phase(Phase.RUN_IN)
 
 
+# ── COVER (Ph6 t14; task plan docs/plans/cmvg30aba0087qs2xwv86aq35/3-plan.md) ────────────────────
+
+## The entry rules, cheapest first: claims the first wreck (nearest first) that passes them all. Called only with a
+## hazard registered, on APPROACH's first tick.
+func _take_cover(target: TargetInfo) -> bool:
+	if _cover_used or forced_pass_kind >= 0 or _role() != SquadController.Role.LEAD:
+		return false  # FLANKs and REARs hold their stations (S15); a forced pass is a test seam
+	if budget.active and budget.remaining() < config.cover_min_budget:
+		return false
+	var pos := actor.global_position
+	var to_player := pos.distance_to(target.position)
+	var found := Hazards.around(pos, config.cover_search_radius)
+	if found.is_empty():
+		return false
+	found.sort_custom(func(a: HazardInfo, b: HazardInfo) -> bool:
+		return a.position.distance_squared_to(pos) < b.position.distance_squared_to(pos))
+	_derive_pass(target)  # S, for the swoop rule; APPROACH re-derives the same pass this tick if no cover is taken
+	for info: HazardInfo in found:
+		if info.kind != &"wreck" or not info.line_of_sight_blocker or not _cover_alive(info):
+			continue
+		if (info.source as Node2D).global_position.distance_to(target.position) >= to_player:
+			continue  # not on its way in: hiding there would take it away from the player
+		var c := _cover_point_for(info, target.position)
+		if c.distance_to(target.position) <= config.cover_break_range or not _cover_reachable(c) \
+				or _inside_other_hazard(c, info) or not _swoops_from(c, target):
+			continue
+		if info.try_claim(actor):
+			cover = info
+			return true
+	return false
+
+
+func _enter_cover() -> void:
+	_cover_used = true
+	_cover_hold_time = 0.0
+	_cover_settled = false
+	_clear_path()
+
+
+## Arrives at C and waits there nose-on to the player. The pass is derived first, exactly as APPROACH derives it,
+## because the Assault reserve reads S (review R1).
+func _tick_cover(delta: float, target: TargetInfo) -> void:
+	if not target.has_target:
+		_leave_cover(delta, target)
+		return
+	_derive_pass(target)
+	if _cover_over(target):
+		_leave_cover(delta, target)
+		return
+	var c := _cover_point_for(cover, target.position)
+	cover_point = c
+	seek_target = c
+	var dist := actor.global_position.distance_to(c)
+	# Arrival latches with hysteresis: `Steering.arrive` has no slowing radius at rest, so re-seeking a point the
+	# fighter is already on would chatter round it and leave it with any heading. Settled, it rides the wreck's drift.
+	if dist <= COVER_ARRIVE_PX:
+		_cover_settled = true
+	elif dist > COVER_ARRIVE_PX * 2.0:
+		_cover_settled = false
+	if _cover_settled:
+		mover.request_velocity(cover.velocity)
+	else:
+		mover.arrive(c, config.max_speed)
+	mover.face_toward(target.position)
+	if dist <= COVER_HOLD_PX and not can_see_player():
+		_cover_hold_time += delta
+	else:
+		_cover_hold_time = 0.0
+
+
+## The exits other than "no player", first that holds wins.
+func _cover_over(target: TargetInfo) -> bool:
+	if _role() != SquadController.Role.LEAD:
+		return true  # demoted by a later join
+	if cover == null or not cover.is_claimed_by(actor) or not _cover_alive(cover):
+		return true  # the wreck was freed, or is retiring (which also drops the claim)
+	if not _cover_reachable(_cover_point_for(cover, target.position)):
+		return true
+	var pos := actor.global_position
+	if pos.distance_to(target.position) <= config.cover_break_range:
+		return true
+	if _phase_time >= config.cover_max:
+		return true
+	if budget.active and budget.remaining() <= config.cover_pass_reserve + pos.distance_to(pass_start) / config.max_speed:
+		return true  # the pass from here still has to fit the budget
+	return _cover_hold_time >= config.cover_hold
+
+
+## Back to APPROACH, which derives the pass from where the fighter is, on the same tick: no tick without a request.
+func _leave_cover(delta: float, target: TargetInfo) -> void:
+	enter_phase(Phase.APPROACH)
+	_tick_approach(delta, target)
+
+
+func _release_cover() -> void:
+	if cover != null:
+		cover.release(actor)
+		cover = null
+	_cover_hold_time = 0.0
+	_cover_settled = false
+
+
+## C: on the wreck's far side from the player, `radius + cover_gap` from its centre.
+func _cover_point_for(info: HazardInfo, player_pos: Vector2) -> Vector2:
+	var w := (info.source as Node2D).global_position
+	return w + (w - player_pos).normalized() * (info.radius + config.cover_gap)
+
+
+## The wreck behind [param info] still stands: a live node in the tree, not queued for deletion, not retiring.
+func _cover_alive(info: HazardInfo) -> bool:
+	if info == null or not is_instance_valid(info.source) or not info.source is Node2D:
+		return false
+	var node: Node = info.source
+	if node.is_queued_for_deletion() or not node.is_inside_tree():
+		return false
+	return not (node.has_method(&"is_retiring") and node.call(&"is_retiring"))
+
+
+## True when APPROACH, handed the fighter anywhere it may hold (within `COVER_HOLD_PX` of [param c]), goes straight
+## into its pass with no Dubins lead-in: a solo breaches (inside APPROACH's own breach radius), a squad LEAD slides
+## onto its S as a station (`_fly_to_start`'s direct arrive). From anywhere else it would plan a lead-in from rest
+## with its own wreck in the way, and that wreck's avoidance skirt bends it off the path into a re-planned loop
+## (measured over 270 layouts: 3-6 s late, and in Assault mostly no attack at all).
+func _swoops_from(c: Vector2, target: TargetInfo) -> bool:
+	if _waits_for_window():
+		return c.distance_to(pass_start) <= STATION_ARRIVE_PLAN_RADII * _plan_radius() - COVER_HOLD_PX \
+				and _segment_clears(c, pass_start, target.position, config.reposition_min_radius)
+	var clear := minf(config.standoff_radius, pass_start.distance_to(pass_anchor)) - 1.0
+	return c.distance_to(target.position) < clear - BREACH_MARGIN - COVER_HOLD_PX
+
+
+## Assault: inside the corridor shrunk by the hull (the constraint discards outward motion before the fighter has
+## entered, so a point outside it cannot be reached). Always true in Open Space.
+func _cover_reachable(c: Vector2) -> bool:
+	var rect := _corridor()
+	return not rect.has_area() or rect.grow(-_hull_radius).has_point(c)
+
+
+## Within any other hazard's `radius + hazard_margin` (the Sniper's rule, `SniperBrain._inside_other_hazard()`): a
+## cover point there would be pushed off by that hazard's avoidance skirt.
+func _inside_other_hazard(point: Vector2, own: HazardInfo) -> bool:
+	for info: HazardInfo in Hazards.around(point, config.hazard_margin):
+		if info != own:
+			return true
+	return false
+
+
 # ── RUN_IN ───────────────────────────────────────────────────────────────────────────────────────
 
 func _enter_run_in() -> void:
@@ -703,6 +897,7 @@ func _enter_run_in() -> void:
 	_stagger_left = -1.0
 	_wait_time = 0.0
 	_rear_due = false
+	_cover_used = false  # once per RUN_IN
 	pass_role = _role()
 	var squad := _squad()
 	if squad != null and pass_role == SquadController.Role.LEAD:

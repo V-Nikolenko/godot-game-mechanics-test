@@ -1426,3 +1426,840 @@ func test_the_state_light_sits_on_the_hull() -> void:
 	var img := tex.get_image()
 	var local := sprite.to_local((f.get_node("StateLight") as Node2D).global_position) + Vector2(img.get_size()) * 0.5
 	assert_gt(img.get_pixelv(Vector2i(local)).a, 0.99, "StateLight at texture pixel %s is on opaque hull" % local)
+
+
+# ── Cover (Phase 6 t14; task plan docs/plans/cmvg30aba0087qs2xwv86aq35/3-plan.md) ───────────────────
+#
+# A solo fighter or a squad LEAD slips behind a wreck on its way in, waits there out of the player's sight, then makes
+# its pass from where it is. A real `Wreck` is a solid body on layer 1: a row that needs `can_see_player()` to see it
+# awaits two physics frames after placing it (test_sniper.gd's rule); the body-less fixture serves where only the
+# registry matters (and, having no body, it never hides the player, so a hold on it never completes). Hazard nodes are
+# children of the harness root, so the static registry is empty again after each test.
+
+const _MODES := ["open_space", "assault"]
+const FIXTURE_WRECK := preload("res://tests/helpers/fixture_wreck.gd")
+const WRECK_MEDIUM: PackedScene = preload("res://assault/scenes/hazards/wreck/wreck_medium.tscn")
+## The layout: the player at MID, the wreck between it and the fighter, all on one line. C = MID + (315, 0): beyond
+## `cover_break_range` from the player and inside the swoop radius (a solo breaches straight out of it), 145 px from
+## the fighter, inside the Assault corridor; S (a solo's FLANK_RIGHT pass) is near enough that the Assault reserve
+## leaves room for the hold.
+const COVER_FIGHTER := MID + Vector2(460.0, 0.0)
+const COVER_WRECK := MID + Vector2(250.0, 0.0)
+## `cover_hold` (1.2 s) in ticks.
+const HOLD_TICKS := 72
+## A squad LEAD's layout: above the player on its right, the wreck on its way in, C near the LEAD's FRONTAL S.
+const LEAD_FIGHTER := MID + Vector2(150.0, -600.0)
+const LEAD_WRECK := MID + Vector2(100.0, -330.0)
+
+
+## A real medium wreck (r 25), held still unless `drifting`: its own drift and lifetime clock are off.
+func _real_wreck(h: RefCounted, pos: Vector2, drifting: bool = false) -> Wreck:
+	var wreck := WRECK_MEDIUM.instantiate() as Wreck
+	wreck.set_physics_process(drifting)
+	h.root.add_child(wreck)
+	wreck.global_position = pos
+	return wreck
+
+
+## A body-less, claimable line-of-sight blocker of `radius` at `pos`.
+func _fixture_wreck(h: RefCounted, pos: Vector2, radius: float = 25.0) -> Node2D:
+	var wreck := FIXTURE_WRECK.new() as Node2D
+	wreck.info.radius = radius
+	h.root.add_child(wreck)
+	wreck.global_position = pos
+	return wreck
+
+
+## A non-blocking hazard of `radius` at `pos` (a well stand-in): the fixture with the blocker flag off.
+func _fixture_well(h: RefCounted, pos: Vector2, radius: float) -> Node2D:
+	var well := _fixture_wreck(h, pos, radius)
+	well.info.line_of_sight_blocker = false
+	well.info.kind = &"gravity_well"
+	return well
+
+
+func _info_of(wreck: Node) -> HazardInfo:
+	return wreck.call(&"hazard_info") as HazardInfo
+
+
+## The plan's cover point: on the wreck's far side from `player`, `radius + cover_gap` from its centre.
+func _cover_point(wreck_pos: Vector2, radius: float, player: Vector2) -> Vector2:
+	return wreck_pos + (wreck_pos - player).normalized() * (radius + CONFIG.cover_gap)
+
+
+## A squad member, seeded, joined to `squad` by `fighter.gd._ready()` (roles sort by distance to the player).
+func _member(h: RefCounted, pos: Vector2, squad: SquadController, rng_seed: int, configure: Callable = Callable()) -> Fighter:
+	var f := SCENE.instantiate() as Fighter
+	f.global_position = pos
+	f.squad = squad
+	_brain(f).rng_seed = rng_seed
+	_brain(f).start_engaged = true
+	if configure.is_valid():
+		configure.call(f.config)
+	h.root.add_child(f)
+	f.set_physics_process(false)
+	return f
+
+
+## Frees a harness now: `TargetInfo.player()` reads the first player in the tree, so a case that builds several
+## harnesses drops each before the next.
+func _drop(h: RefCounted) -> void:
+	var root: Node = h.root
+	root.get_parent().remove_child(root)
+	root.free()
+
+
+## Every phase `f` emits from now on, in order.
+func _phase_log(f: Fighter) -> Array:
+	var out: Array = []
+	_brain(f).phase_changed.connect(func(p: int) -> void: out.append(p))
+	return out
+
+
+## The phase emitted right after the first COVER, or -1.
+func _after_cover(phases: Array) -> int:
+	var at := phases.find(P.COVER)
+	return phases[at + 1] if at >= 0 and at + 1 < phases.size() else -1
+
+
+## Puts every shot straight back in its pool (hand-ticked bullets never fly or expire).
+func _recycle(f: Fighter) -> void:
+	for pool_name in ["AimedPool", "ForwardPool"]:
+		var pool := f.get_node(pool_name) as BulletPool
+		for bullet in pool._active.duplicate():
+			pool._recycle(bullet)
+
+
+## Hand-ticks `f`, logging what the brain saw before each tick (`x0`, `v0`, `rot0`, `nose0`, `seen0` =
+## `can_see_player()` there, `before` = the phase) and the state after it. Stops when `stop.call(rec)` is true.
+func _cover_run(f: Fighter, seconds: float, stop: Callable = Callable(), info: HazardInfo = null) -> Array[Dictionary]:
+	var brain := _brain(f)
+	var out: Array[Dictionary] = []
+	for i in int(round(seconds / DT)):
+		var rec := {"i": i, "x0": f.global_position, "v0": f.velocity, "rot0": f.rotation, "nose0": _nose(f),
+			"seen0": brain.can_see_player(), "before": brain.phase}
+		_tick(f)
+		_recycle(f)
+		rec["phase"] = brain.phase
+		rec["x"] = f.global_position
+		rec["bursting"] = brain.is_bursting()
+		rec["slack"] = brain.run_budget_slack()
+		rec["left"] = brain.budget.remaining()
+		rec["start"] = brain.pass_start
+		rec["kind"] = brain.pass_kind
+		rec["claimed"] = info != null and info.is_claimed_by(f)
+		out.append(rec)
+		if f.is_queued_for_deletion() or (stop.is_valid() and stop.call(rec)):
+			break
+	return out
+
+
+## The index of the first tick that started in COVER and ended elsewhere, or -1.
+func _exit_tick(run: Array[Dictionary]) -> int:
+	for i in run.size():
+		if run[i]["before"] == P.COVER and run[i]["phase"] != P.COVER:
+			return i
+	return -1
+
+
+func _first_tick_in(run: Array[Dictionary], phase: int, from: int = 0) -> int:
+	for i in range(from, run.size()):
+		if run[i]["phase"] == phase:
+			return i
+	return -1
+
+
+## True when some tick at or after `from` opened a burst before any DISENGAGE.
+func _bursts_before_disengage(run: Array[Dictionary], from: int) -> bool:
+	for i in range(from, run.size()):
+		if run[i]["phase"] == P.DISENGAGE:
+			return false
+		if run[i]["bursting"]:
+			return true
+	return false
+
+
+func _stop_at_burst(rec: Dictionary) -> bool:
+	return rec["bursting"] or rec["phase"] == P.DISENGAGE
+
+
+func test_cover_is_appended_after_returning() -> void:
+	assert_eq(P.COVER, 9, "COVER is appended")
+	assert_eq([P.APPROACH, P.RUN_IN, P.EXTEND, P.TURN, P.REPOSITION, P.DISENGAGE, P.IDLE, P.NOTICING, P.RETURNING],
+		[0, 1, 2, 3, 4, 5, 6, 7, 8], "no earlier value moved")
+
+
+func test_the_cover_fields_ship_with_a_gate_assault_can_open() -> void:
+	assert_eq(CONFIG.cover_search_radius, 500.0)
+	assert_eq(CONFIG.cover_gap, 40.0)
+	assert_eq(CONFIG.cover_hold, 1.2)
+	assert_eq(CONFIG.cover_break_range, 300.0)
+	assert_eq(CONFIG.cover_max, 5.0)
+	assert_eq(CONFIG.cover_min_budget, 5.0)
+	assert_eq(CONFIG.cover_pass_reserve, 3.0)
+	assert_lt(CONFIG.cover_min_budget, CONFIG.engage_seconds - DT, "epic review N2: the Assault gate opens on the spawn tick")
+	assert_gte(CONFIG.cover_min_budget, CONFIG.cover_pass_reserve + CONFIG.cover_hold,
+		"a cover the gate admits has room for its own hold before the reserve")
+
+
+func test_a_solo_fighter_hides_behind_a_wreck_then_runs_in(mode: String = use_parameters(_MODES)) -> void:
+	var h := _harness(mode)
+	var wreck := _real_wreck(h, COVER_WRECK)
+	await wait_physics_frames(2)
+	var info := wreck.hazard_info()
+	var c := _cover_point(COVER_WRECK, info.radius, MID)
+	var f := _spawn(h, COVER_FIGHTER)
+	_pose(f, Vector2.LEFT)
+	var mover := f.get_node("EnemyMover") as EnemyMover
+	assert_gt(mover.hazard_avoidance, 0.0, "%s: sanity: the avoidance stage is on for the fighter" % mode)
+	var phases := _phase_log(f)
+	var run := _cover_run(f, 8.0, _stop_at_burst, info)
+	assert_eq(run[0]["phase"], P.COVER, "%s: COVER on the first tick" % mode)
+	assert_true(run[0]["claimed"], "%s: the wreck is claimed by the fighter" % mode)
+	var exit := _exit_tick(run)
+	assert_gt(exit, HOLD_TICKS, "%s: it leaves COVER after holding" % mode)
+	if exit <= HOLD_TICKS:
+		return
+	for i in range(exit - HOLD_TICKS, exit):
+		var r: Dictionary = run[i]
+		assert_lte((r["x0"] as Vector2).distance_to(c), FighterBrain.COVER_HOLD_PX,
+			"%s: within 30 px of C on hold tick %d" % [mode, i])
+		assert_false(r["seen0"], "%s: out of the player's sight on hold tick %d" % [mode, i])
+		assert_true(r["claimed"], "%s: still claimed on hold tick %d" % [mode, i])
+	assert_false(run[exit]["claimed"], "%s: the claim is released on the exit tick" % mode)
+	assert_eq(_after_cover(phases), P.APPROACH, "%s: COVER hands to APPROACH" % mode)
+	assert_eq(phases.count(P.COVER), 1, "%s: COVER is entered once" % mode)
+	assert_lte(exit * DT, CONFIG.cover_max, "%s: within cover_max" % mode)
+	if mode == "open_space":
+		# Review M1: the latch leaves it at rest, nose on the player, so its heading out of cover is the nose.
+		var exit_pose: Dictionary = run[exit]
+		assert_lte((exit_pose["v0"] as Vector2).length(), FighterBrain.HEADING_MIN_SPEED, "at rest on the exit tick")
+		var to_player := MID - (exit_pose["x0"] as Vector2)
+		assert_lte(rad_to_deg(absf((exit_pose["nose0"] as Vector2).angle_to(to_player))), CONFIG.nose_cone_deg,
+			"the nose is on the player on the exit tick")
+	var run_in := _first_tick_in(run, P.RUN_IN, exit)
+	assert_gte(run_in, exit, "%s: a RUN_IN follows" % mode)
+	if mode == "assault":
+		assert_true(_bursts_before_disengage(run, exit), "assault: the attack after cover fits the budget")
+	# "Its usual lead-in": a control from the exit pose, with the wreck gone (the registry is static, review n3).
+	var pose: Dictionary = run[exit]
+	f.free()
+	wreck.free()
+	assert_eq(Hazards.count(), 0, "%s: sanity: the control runs with no hazard registered" % mode)
+	var control := _spawn(h, pose["x0"])
+	control.rotation = pose["rot0"]
+	control.velocity = pose["v0"]
+	var lead_in := _cover_run(control, 8.0, func(r: Dictionary) -> bool: return r["phase"] == P.RUN_IN)
+	assert_eq(lead_in[lead_in.size() - 1]["phase"], P.RUN_IN, "%s: sanity: the control runs in" % mode)
+	assert_lte((run_in - exit) * DT, (lead_in.size() - 1) * DT + 0.5,
+		"%s: RUN_IN starts within the usual lead-in from the exit pose" % mode)
+
+
+func test_the_player_within_break_range_breaks_cover_at_once(mode: String = use_parameters(_MODES)) -> void:
+	var h := _harness(mode)
+	var info := _info_of(_fixture_wreck(h, COVER_WRECK))
+	var f := _spawn(h, COVER_FIGHTER)
+	_pose(f, Vector2.LEFT)
+	var brain := _brain(f)
+	var phases := _phase_log(f)
+	for _i in 30:
+		_tick(f)
+	assert_eq(brain.phase, P.COVER, "%s: sanity: in cover" % mode)
+	var toward := (MID - f.global_position).normalized()
+	h.player.global_position = f.global_position + toward * (CONFIG.cover_break_range + 5.0)
+	_tick(f)
+	assert_eq(brain.phase, P.COVER, "%s: 5 px outside cover_break_range it stays" % mode)
+	h.player.global_position = f.global_position + toward * (CONFIG.cover_break_range - 5.0)
+	_tick(f)
+	assert_ne(brain.phase, P.COVER, "%s: 5 px inside, it breaks cover that tick" % mode)
+	assert_eq(_after_cover(phases), P.APPROACH, "%s: to APPROACH" % mode)
+	assert_false(info.is_claimed(), "%s: the claim is free" % mode)
+
+
+func test_two_solo_fighters_and_one_wreck_only_one_takes_cover(mode: String = use_parameters(_MODES)) -> void:
+	var h := _harness(mode)
+	var info := _info_of(_fixture_wreck(h, COVER_WRECK))
+	var a := _spawn(h, COVER_FIGHTER)
+	var b := _spawn(h, COVER_FIGHTER + Vector2(40.0, 60.0))
+	a.add_collision_exception_with(b)
+	b.add_collision_exception_with(a)
+	_pose(a, Vector2.LEFT)
+	_pose(b, Vector2.LEFT)
+	var took := {}
+	var both := false
+	var wrong_claimer := false
+	for _i in 120:
+		_tick(a)
+		_tick(b)
+		_recycle(a)
+		_recycle(b)
+		var n := 0
+		for f: Fighter in [a, b]:
+			if _brain(f).phase == P.COVER:
+				n += 1
+				took[f] = true
+				wrong_claimer = wrong_claimer or not info.is_claimed_by(f)
+		both = both or n > 1
+	assert_false(both, "%s: never both in cover at once" % mode)
+	assert_eq(took.size(), 1, "%s: exactly one fighter ever takes cover" % mode)
+	assert_true(took.has(a), "%s: the first to look claims it" % mode)
+	assert_false(wrong_claimer, "%s: the one in cover is the claimer" % mode)
+
+
+func test_a_flank_never_takes_cover_and_its_lead_does(mode: String = use_parameters(_MODES)) -> void:
+	var h := _harness(mode)
+	var squad := SquadController.new()
+	# The LEAD's FRONTAL S is MID + (160, -480) (the player faces UP, the LEAD is on its right); its C, about
+	# MID + (119, -392), is ~97 px from it, so it slides from cover straight onto its station (the swoop rule).
+	var lead_wreck := _info_of(_fixture_wreck(h, LEAD_WRECK))
+	var flank_wreck := _info_of(_fixture_wreck(h, MID + Vector2(-250.0, -250.0)))
+	var lead := _member(h, LEAD_FIGHTER, squad, SEED)
+	var flank := _member(h, MID + Vector2(-500.0, -500.0), squad, SEED + 1)
+	lead.add_collision_exception_with(flank)
+	flank.add_collision_exception_with(lead)
+	assert_eq(squad.role_of(lead), SquadController.Role.LEAD, "%s: sanity: the nearer member leads" % mode)
+	assert_ne(squad.role_of(flank), SquadController.Role.LEAD, "%s: sanity: the other is a flank" % mode)
+	var flank_phases := _phase_log(flank)
+	var flank_claimed := false
+	_tick(lead)
+	_tick(flank)
+	assert_eq(_brain(lead).phase, P.COVER, "%s: the LEAD takes cover on its first tick" % mode)
+	assert_true(lead_wreck.is_claimed_by(lead), "%s: and claims its wreck" % mode)
+	for _i in 180:
+		_tick(lead)
+		_tick(flank)
+		_recycle(lead)
+		_recycle(flank)
+		flank_claimed = flank_claimed or flank_wreck.is_claimed()
+	assert_false(flank_phases.has(P.COVER), "%s: the FLANK never takes cover" % mode)
+	assert_false(flank_claimed, "%s: its wreck is never claimed" % mode)
+
+
+func test_a_lead_demoted_in_cover_leaves_it_that_tick(mode: String = use_parameters(_MODES)) -> void:
+	var h := _harness(mode)
+	var squad := SquadController.new()
+	var info := _info_of(_fixture_wreck(h, COVER_WRECK))
+	var lead := _member(h, COVER_FIGHTER, squad, SEED)
+	var phases := _phase_log(lead)
+	for _i in 10:
+		_tick(lead)
+	assert_eq(_brain(lead).phase, P.COVER, "%s: sanity: a squad of one leads, and takes cover" % mode)
+	var closer := _member(h, MID + Vector2(-350.0, 0.0), squad, SEED + 1)
+	closer.add_collision_exception_with(lead)
+	lead.add_collision_exception_with(closer)
+	assert_ne(squad.role_of(lead), SquadController.Role.LEAD, "%s: sanity: the closer join took the lead" % mode)
+	_tick(lead)
+	assert_ne(_brain(lead).phase, P.COVER, "%s: demoted, it leaves cover that tick" % mode)
+	assert_eq(_after_cover(phases), P.APPROACH, "%s: to APPROACH" % mode)
+	assert_false(info.is_claimed(), "%s: the claim is released" % mode)
+
+
+func test_a_wreck_freed_mid_hold_sends_it_to_approach_next_tick(mode: String = use_parameters(_MODES)) -> void:
+	var h := _harness(mode)
+	var wreck := _real_wreck(h, COVER_WRECK)
+	await wait_physics_frames(2)
+	var info := wreck.hazard_info()
+	var c := _cover_point(COVER_WRECK, info.radius, MID)
+	var f := _spawn(h, COVER_FIGHTER)
+	_pose(f, Vector2.LEFT)
+	var brain := _brain(f)
+	var phases := _phase_log(f)
+	assert_true(_until(f, 3.0, func() -> bool: return f.global_position.distance_to(c) <= FighterBrain.COVER_HOLD_PX),
+		"%s: sanity: it reaches C" % mode)
+	for _i in 12:
+		_tick(f)
+	assert_eq(brain.phase, P.COVER, "%s: sanity: mid-hold" % mode)
+	wreck.free()
+	_tick(f)
+	assert_ne(brain.phase, P.COVER, "%s: out of cover the next tick" % mode)
+	assert_eq(_after_cover(phases), P.APPROACH, "%s: to APPROACH" % mode)
+	assert_false(info.is_claimed(), "%s: no claim left behind" % mode)
+
+
+func test_a_wreck_retired_mid_hold_sends_it_to_approach_next_tick() -> void:
+	var h := _harness("open_space")
+	var wreck := _real_wreck(h, COVER_WRECK)
+	await wait_physics_frames(2)
+	var info := wreck.hazard_info()
+	var f := _spawn(h, COVER_FIGHTER)
+	_pose(f, Vector2.LEFT)
+	var brain := _brain(f)
+	var phases := _phase_log(f)
+	for _i in 60:
+		_tick(f)
+	assert_eq(brain.phase, P.COVER, "sanity: in cover")
+	assert_true(info.is_claimed_by(f), "sanity: holding the wreck")
+	wreck.retire()
+	_tick(f)
+	assert_ne(brain.phase, P.COVER, "a retiring wreck is no cover: out the next tick")
+	assert_eq(_after_cover(phases), P.APPROACH, "to APPROACH")
+	assert_null(brain.cover, "no cover held")
+
+
+func test_assault_with_less_than_cover_min_budget_takes_no_cover() -> void:
+	for extra: float in [0.5, 1.5]:
+		var h := _harness("assault")
+		var info := _info_of(_fixture_wreck(h, COVER_WRECK))
+		# The fighter's PRIVATE config: the budget left after the first update is cover_min_budget -/+ DT / 2.
+		var f := _spawn(h, COVER_FIGHTER, "", func(cfg: FighterConfig) -> void:
+			cfg.engage_seconds = CONFIG.cover_min_budget + extra * DT)
+		_pose(f, Vector2.LEFT)
+		_tick(f)
+		if extra < 1.0:
+			assert_ne(_brain(f).phase, P.COVER, "%.2f s left (< cover_min_budget): no cover" % _brain(f).budget.remaining())
+			assert_false(info.is_claimed(), "and the wreck stays unclaimed")
+		else:
+			assert_eq(_brain(f).phase, P.COVER, "%.2f s left (>= cover_min_budget): cover" % _brain(f).budget.remaining())
+		_drop(h)
+
+
+func test_with_no_wreck_in_reach_the_pass_is_identical_to_the_control(mode: String = use_parameters(_MODES)) -> void:
+	var runs: Array[Dictionary] = []
+	for far_wreck: bool in [false, true]:
+		var h := _harness(mode)
+		if far_wreck:
+			_fixture_wreck(h, MID + Vector2(5000.0, 0.0))
+		assert_eq(Hazards.count(), 1 if far_wreck else 0, "%s: sanity: registry" % mode)
+		var f := _spawn(h, COVER_FIGHTER + Vector2(200.0, -200.0))
+		_pose(f, Vector2.LEFT)
+		var brain := _brain(f)
+		var phases := _phase_log(f)
+		var ticks: Array = []
+		for _i in int(8.0 / DT):
+			_tick(f)
+			_recycle(f)
+			ticks.append([brain.phase, f.global_position, f.velocity])
+			if brain.phase == P.TURN:
+				break
+		runs.append({"ticks": ticks, "phases": phases.duplicate(), "draw": brain.rng.randf()})
+		_drop(h)
+	assert_true(runs[0]["phases"].has(P.TURN), "%s: sanity: a full pass to the TURN" % mode)
+	assert_false(runs[1]["phases"].has(P.COVER), "%s: no COVER with nothing in reach" % mode)
+	assert_eq(runs[1]["phases"], runs[0]["phases"], "%s: the same phase sequence" % mode)
+	assert_eq(runs[1]["ticks"].size(), runs[0]["ticks"].size(), "%s: the same length" % mode)
+	var first_diff := -1
+	for i in mini(runs[0]["ticks"].size(), runs[1]["ticks"].size()):
+		if runs[0]["ticks"][i] != runs[1]["ticks"][i]:
+			first_diff = i
+			break
+	assert_eq(first_diff, -1, "%s: every tick's phase, position and velocity are identical" % mode)
+	assert_eq(runs[1]["draw"], runs[0]["draw"], "%s: and so is the next rng draw" % mode)
+
+
+## Takes one tick of a fresh Open Space (or Assault) fighter at `fighter_pos` with a fixture wreck at `wreck_pos` after
+## `setup.call(h, f, wreck_info)`; returns whether it took cover. Drops the harness.
+func _takes_cover(mode: String, fighter_pos: Vector2, wreck_pos: Vector2, setup: Callable = Callable()) -> bool:
+	var h := _harness(mode)
+	var info := _info_of(_fixture_wreck(h, wreck_pos))
+	var f := _spawn(h, fighter_pos)
+	_pose(f, (MID - fighter_pos).normalized())
+	if setup.is_valid():
+		setup.call(h, f, info)
+	_tick(f)
+	var took := _brain(f).phase == P.COVER
+	_drop(h)
+	return took
+
+
+func test_a_wreck_that_breaks_a_cover_rule_is_never_taken() -> void:
+	var os := "open_space"
+	assert_true(_takes_cover(os, COVER_FIGHTER, COVER_WRECK), "control: the layout takes cover")
+	# On its way in: the wreck nearer the player than the fighter (352 px out). Off to the side, so both cover points
+	# (412 / 422 px out) stay inside the swoop radius (425 px here) and only this rule decides.
+	var side := Vector2.from_angle(deg_to_rad(30.0))
+	assert_true(_takes_cover(os, MID + Vector2(352.0, 0.0), MID + side * 347.0), "a wreck 347 px out is on the way in")
+	assert_false(_takes_cover(os, MID + Vector2(352.0, 0.0), MID + side * 357.0), "a wreck 357 px out is behind the fighter")
+	# C beyond cover_break_range (C = wreck + 65 px).
+	assert_true(_takes_cover(os, COVER_FIGHTER, MID + Vector2(240.0, 0.0)), "C 305 px from the player")
+	assert_false(_takes_cover(os, COVER_FIGHTER, MID + Vector2(200.0, 0.0)), "C 265 px from the player")
+	# C outside every other hazard's radius + hazard_margin (40 + 60).
+	var c := _cover_point(COVER_WRECK, 25.0, MID)
+	assert_true(_takes_cover(os, COVER_FIGHTER, COVER_WRECK, func(h: RefCounted, _f: Fighter, _i: HazardInfo) -> void:
+		_fixture_well(h, c + Vector2(0.0, 105.0), 40.0)), "a well 105 px from C leaves it reachable")
+	assert_false(_takes_cover(os, COVER_FIGHTER, COVER_WRECK, func(h: RefCounted, _f: Fighter, _i: HazardInfo) -> void:
+		_fixture_well(h, c + Vector2(0.0, 95.0), 40.0)), "a well 95 px from C makes it unreachable")
+	# A wreck someone else holds.
+	assert_false(_takes_cover(os, COVER_FIGHTER, COVER_WRECK, func(h: RefCounted, _f: Fighter, i: HazardInfo) -> void:
+		i.try_claim(h.player)), "a wreck claimed by another node")
+	# The forced-pass test seam.
+	assert_false(_takes_cover(os, COVER_FIGHTER, COVER_WRECK, func(_h: RefCounted, f: Fighter, _i: HazardInfo) -> void:
+		_brain(f).forced_pass_kind = K.FRONTAL), "a FORCED pass kind")
+	# cover_search_radius (500) from the wreck's edge (r 25): the fighter 520 / 530 px from its centre.
+	assert_true(_takes_cover(os, MID + Vector2(770.0, 0.0), COVER_WRECK), "the wreck's edge 495 px away")
+	assert_false(_takes_cover(os, MID + Vector2(780.0, 0.0), COVER_WRECK), "the wreck's edge 505 px away")
+	# Assault: C inside the corridor shrunk by the hull (y >= -351.4). A fighter entering from the top; the player moves
+	# with the wreck, so C is 310 px from it in both cases (inside the swoop radius, ~325 px with S clamped into the
+	# corridor) and only the corridor decides.
+	var near_top := func(player_y: float) -> Callable:
+		return func(h: RefCounted, _f: Fighter, _i: HazardInfo) -> void: h.player.global_position = Vector2(640.0, player_y)
+	assert_true(_takes_cover("assault", Vector2(640.0, -700.0), Vector2(640.0, -280.0), near_top.call(-35.0)),
+		"assault: C at y -345")
+	assert_false(_takes_cover("assault", Vector2(640.0, -700.0), Vector2(640.0, -300.0), near_top.call(-55.0)),
+		"assault: C at y -365")
+
+
+func test_every_exit_from_cover_releases_the_claim(mode: String = use_parameters(_MODES)) -> void:
+	# The mode's own exit: the hub idle loses the player (Open Space), the budget runs out (Assault).
+	var h := _harness(mode)
+	var info := _info_of(_fixture_wreck(h, COVER_WRECK))
+	var f: Fighter
+	if mode == "open_space":
+		f = _idle_spawn(h, COVER_FIGHTER)
+	else:
+		# The fighter's PRIVATE config: a reserve far below zero switches the reserve exit off and the hold and cover_max
+		# are out of reach, so the budget runs out in COVER (with the shipped reserve the reserve exit always comes first).
+		f = _spawn(h, COVER_FIGHTER, "", func(cfg: FighterConfig) -> void:
+			cfg.cover_pass_reserve = -100.0
+			cfg.cover_hold = 100.0
+			cfg.cover_max = 100.0)
+	var brain := _brain(f)
+	var phases := _phase_log(f)
+	assert_true(_until(f, 2.0, func() -> bool: return brain.phase == P.COVER), "%s: sanity: it takes cover" % mode)
+	assert_true(info.is_claimed_by(f), "%s: sanity: claimed" % mode)
+	if mode == "open_space":
+		h.player.global_position = f.global_position + Vector2(-(CONFIG.lose_radius + 50.0), 0.0)
+		_tick(f)
+		assert_eq(brain.phase, P.RETURNING, "open_space: beyond lose_radius it goes home")
+	else:
+		assert_true(_until(f, CONFIG.engage_seconds, func() -> bool: return brain.phase != P.COVER), "assault: sanity")
+		assert_eq(brain.phase, P.DISENGAGE, "assault: the budget ran out in COVER: DISENGAGE that tick")
+	assert_eq(_after_cover(phases), brain.phase, "%s: straight from COVER" % mode)
+	assert_false(info.is_claimed(), "%s: the claim is released" % mode)
+	_drop(h)
+	# A rail takes the fighter over.
+	h = _harness(mode)
+	info = _info_of(_fixture_wreck(h, COVER_WRECK))
+	f = _spawn(h, COVER_FIGHTER)
+	_tick(f)
+	assert_eq(_brain(f).phase, P.COVER, "%s: sanity: in cover" % mode)
+	f.suspend_ai()
+	assert_false(info.is_claimed(), "%s: suspend_ai() releases the claim" % mode)
+	_drop(h)
+	# The player goes away (review m4).
+	h = _harness(mode)
+	info = _info_of(_fixture_wreck(h, COVER_WRECK))
+	f = _spawn(h, COVER_FIGHTER)
+	phases = _phase_log(f)
+	_tick(f)
+	assert_eq(_brain(f).phase, P.COVER, "%s: sanity: in cover" % mode)
+	h.player.remove_from_group(&"player")
+	_tick(f)
+	assert_eq(_brain(f).phase, P.APPROACH, "%s: no player: back to APPROACH the next tick" % mode)
+	assert_eq(_after_cover(phases), P.APPROACH, "%s: emitted" % mode)
+	assert_false(info.is_claimed(), "%s: the claim is released" % mode)
+
+
+func test_assault_cover_leaves_with_the_pass_reserve_and_still_attacks() -> void:
+	var h := _harness("assault")
+	_fixture_wreck(h, COVER_WRECK)
+	# The fighter's PRIVATE config: the hold and cover_max are out of reach, so only the reserve can end COVER.
+	var f := _spawn(h, COVER_FIGHTER, "", func(cfg: FighterConfig) -> void:
+		cfg.cover_hold = 100.0
+		cfg.cover_max = 100.0)
+	_pose(f, Vector2.LEFT)
+	var run := _cover_run(f, CONFIG.engage_seconds + 1.0, _stop_at_burst)
+	var exit := _exit_tick(run)
+	assert_gt(exit, 1, "sanity: it held cover for a while")
+	if exit <= 1:
+		return
+	# The player is still and so is S: the threshold is read with the S the brain derived in COVER the tick before.
+	var s: Vector2 = run[exit - 1]["start"]
+	var before: Dictionary = run[exit - 1]
+	assert_gt(before["left"], CONFIG.cover_pass_reserve + (before["x0"] as Vector2).distance_to(s) / CONFIG.max_speed,
+		"the tick before, the reserve was not yet due")
+	assert_lte(run[exit]["left"], CONFIG.cover_pass_reserve + (run[exit]["x0"] as Vector2).distance_to(s) / CONFIG.max_speed,
+		"COVER ends on the tick the reserve plus the trip to S is reached")
+	var run_in := _first_tick_in(run, P.RUN_IN, exit)
+	assert_gte(run_in, exit, "a RUN_IN follows")
+	if run_in < 0:
+		return
+	assert_gt(run[run_in]["slack"], 0.0, "it starts with the run still fitting the budget")
+	assert_true(_bursts_before_disengage(run, exit), "and a burst opens before the budget expires")
+
+
+func test_an_assault_squad_lead_still_attacks_after_cover() -> void:
+	# Review M2 (a): a LEAD never breaches; it flies to its S and holds there, and `_go()` refuses once the run no
+	# longer fits. Player low on the screen, the LEAD entering from the top, its wreck on the way to its FRONTAL S.
+	var h := _harness("assault")
+	var player := Vector2(640.0, 600.0)
+	h.player.global_position = player
+	var w := Vector2(796.0, 210.0)
+	_fixture_wreck(h, w)
+	var squad := SquadController.new()
+	var hold_off := func(cfg: FighterConfig) -> void:
+		cfg.cover_hold = 100.0
+		cfg.cover_max = 100.0
+	var lead := _member(h, Vector2(900.0, -100.0), squad, SEED, hold_off)
+	var flank := _member(h, Vector2(380.0, -150.0), squad, SEED + 1)
+	lead.add_collision_exception_with(flank)
+	flank.add_collision_exception_with(lead)
+	assert_eq(squad.role_of(lead), SquadController.Role.LEAD, "sanity: the LEAD")
+	var brain := _brain(lead)
+	var phases := _phase_log(lead)
+	var ticks: Array[Dictionary] = []
+	for _i in int((CONFIG.engage_seconds + 1.0) / DT):
+		_tick(lead)
+		_tick(flank)
+		_recycle(lead)
+		_recycle(flank)
+		ticks.append({"phase": brain.phase, "slack": brain.run_budget_slack(), "bursting": brain.is_bursting()})
+		if brain.is_bursting() or brain.phase == P.DISENGAGE:
+			break
+	assert_eq(ticks[0]["phase"], P.COVER, "sanity: the LEAD takes cover")
+	assert_gt(phases.count(P.COVER), 0, "sanity: COVER emitted")
+	var run_in := -1
+	for i in ticks.size():
+		if ticks[i]["phase"] == P.RUN_IN:
+			run_in = i
+			break
+	assert_gt(run_in, 0, "the LEAD runs in after cover")
+	if run_in < 0:
+		return
+	assert_gt(ticks[run_in]["slack"], 0.0, "its RUN_IN starts with the run fitting the budget")
+	assert_true(ticks[ticks.size() - 1]["bursting"], "and a burst opens before DISENGAGE")
+
+
+## The radius a solo at `fighter_pos` would breach from on its first tick (no wreck): APPROACH's own breach radius less
+## the hold's slack, read from the brain's own pass, as `FighterBrain._swoops_from()` reads it.
+func _solo_swoop_radius(mode: String, fighter_pos: Vector2) -> float:
+	var h := _harness(mode)
+	var probe := _spawn(h, fighter_pos)
+	_pose(probe, (MID - fighter_pos).normalized())
+	_tick(probe)
+	var b := _brain(probe)
+	var swoop := minf(CONFIG.standoff_radius, b.pass_start.distance_to(b.pass_anchor)) - 1.0 \
+			- FighterBrain.BREACH_MARGIN - FighterBrain.COVER_HOLD_PX
+	_drop(h)
+	return swoop
+
+
+func _short_cover(cfg: FighterConfig) -> void:
+	cfg.cover_max = 2.5  # the fixture wreck never hides the player, so the hold never ends COVER: cover_max does
+
+
+func test_a_solo_takes_cover_only_where_it_breaches_straight_out_of_it(mode: String = use_parameters(_MODES)) -> void:
+	# Plan Revision 2: from a cover point beyond its breach radius a solo would fly a Dubins lead-in from rest with its own
+	# wreck in the way; the wreck's skirt bends it off that path into a re-planned loop (3-6 s late, in Assault mostly no
+	# attack). So it hides only where it breaches from: C 5 px inside the radius is taken, 5 px outside it is not.
+	var fighter_pos := MID + Vector2(560.0, 0.0)
+	var swoop := _solo_swoop_radius(mode, fighter_pos)
+	assert_between(swoop, CONFIG.cover_break_range + 10.0, CONFIG.cover_search_radius, "%s: sanity: a usable band" % mode)
+	for inside: bool in [true, false]:
+		var c_out := swoop + (-5.0 if inside else 5.0)
+		var h := _harness(mode)
+		var info := _info_of(_fixture_wreck(h, MID + Vector2(c_out - 25.0 - CONFIG.cover_gap, 0.0)))
+		var f := _spawn(h, fighter_pos, "", _short_cover)
+		_pose(f, Vector2.LEFT)
+		var run := _cover_run(f, 4.0, func(r: Dictionary) -> bool: return r["phase"] == P.RUN_IN, info)
+		if inside:
+			assert_eq(run[0]["phase"], P.COVER, "%s: C %.0f px out (inside %.0f): cover" % [mode, c_out, swoop])
+			var exit := _exit_tick(run)
+			assert_gt(exit, 0, "%s: it leaves cover" % mode)
+			if exit > 0:
+				assert_eq(run[exit]["phase"], P.RUN_IN, "%s: straight into its run, the tick it leaves (a breach)" % mode)
+		else:
+			assert_ne(run[0]["phase"], P.COVER, "%s: C %.0f px out (outside %.0f): no cover" % [mode, c_out, swoop])
+			assert_false(info.is_claimed(), "%s: and the wreck stays unclaimed" % mode)
+		_drop(h)
+
+
+## The FRONTAL S of a squad LEAD above the player on its right (the `LEAD_FIGHTER` side), with no wreck anywhere.
+func _lead_start(mode: String) -> Vector2:
+	var h := _harness(mode)
+	var squad := SquadController.new()
+	var lead := _member(h, LEAD_FIGHTER, squad, SEED)
+	_member(h, MID + Vector2(-700.0, -700.0), squad, SEED + 1)
+	_tick(lead)
+	var s := _brain(lead).pass_start
+	_drop(h)
+	return s
+
+
+func test_a_squad_lead_takes_cover_only_where_it_slides_straight_onto_its_station(
+		mode: String = use_parameters(_MODES)) -> void:
+	# Plan Revision 2, the LEAD's half: a LEAD never breaches, it flies to S and holds. It hides only where APPROACH
+	# would slide it straight onto S as a station (`_fly_to_start`'s direct arrive) rather than plan a Dubins lead-in
+	# from rest behind its wreck. C sits on S's line, `d` to its right. S is the LEAD's FRONTAL start, read from a probe
+	# squad with no wreck: MID + (160, -480) in Open Space, its y clamped into the corridor in Assault.
+	var s := _lead_start(mode)
+	var plan_radius := CONFIG.max_speed / CONFIG.turn_rate * FighterBrain.PLAN_RADIUS_FACTOR
+	var limit := FighterBrain.STATION_ARRIVE_PLAN_RADII * plan_radius - FighterBrain.COVER_HOLD_PX
+	for inside: bool in [true, false]:
+		var c := s + Vector2(limit + (-5.0 if inside else 5.0), 0.0)
+		var out := (c - MID).normalized()
+		var h := _harness(mode)
+		var info := _info_of(_fixture_wreck(h, c - out * (25.0 + CONFIG.cover_gap)))
+		var squad := SquadController.new()
+		var lead := _member(h, c + out * 200.0, squad, SEED, _short_cover)
+		var flank := _member(h, MID + Vector2(-700.0, -700.0), squad, SEED + 1)
+		lead.add_collision_exception_with(flank)
+		flank.add_collision_exception_with(lead)
+		_pose(lead, -out)
+		assert_eq(squad.role_of(lead), SquadController.Role.LEAD, "%s: sanity: the LEAD" % mode)
+		var brain := _brain(lead)
+		_tick(lead)
+		_tick(flank)
+		assert_almost_eq(brain.pass_start, s, Vector2(0.5, 0.5), "%s: sanity: its S" % mode)
+		if not inside:
+			assert_ne(brain.phase, P.COVER, "%s: C %.0f px from S (> %.0f): no cover" % [mode, c.distance_to(s), limit])
+			assert_false(info.is_claimed(), "%s: and the wreck stays unclaimed" % mode)
+			_drop(h)
+			continue
+		assert_eq(brain.phase, P.COVER, "%s: C %.0f px from S (< %.0f): cover" % [mode, c.distance_to(s), limit])
+		var exit := -1
+		var at_s := -1
+		for i in int(5.0 / DT):
+			var before := brain.phase
+			_tick(lead)
+			_tick(flank)
+			_recycle(lead)
+			_recycle(flank)
+			if exit < 0 and before == P.COVER and brain.phase != P.COVER:
+				exit = i
+			if exit >= 0 and brain.phase in [P.REPOSITION, P.RUN_IN, P.DISENGAGE]:
+				at_s = i
+				break
+		assert_gt(exit, 0, "%s: it leaves cover" % mode)
+		assert_ne(brain.phase, P.DISENGAGE, "%s: and is not sent home" % mode)
+		assert_between((at_s - exit) * DT, 0.0, 1.5, "%s: it is on its station (or running in) within 1.5 s" % mode)
+		_drop(h)
+
+
+## A lean replay of the build's measurement (plan Revision 2, 270 layouts): every solo that takes cover leaves it
+## straight into its run. Twelve bearings (in Assault, the ones a fighter enters from: above the player), two wreck
+## distances each: C 335 / 395 px out in Open Space, 305 / 315 in Assault (where the corridor clamps S inward, so a
+## centred player's breach radius is ~355 px and the swoop radius ~325).
+func test_every_solo_cover_is_left_straight_into_the_run(mode: String = use_parameters(_MODES)) -> void:
+	var player := MID if mode == "open_space" else Vector2(640.0, 620.0)
+	var taken := 0
+	var late: Array[String] = []
+	for i in 12:
+		var a := deg_to_rad(7.0 + 30.0 * i) if mode == "open_space" else deg_to_rad(187.0 + 15.0 * i)
+		var dir := Vector2.from_angle(a)
+		for wreck_out: float in ([270.0, 330.0] if mode == "open_space" else [240.0, 250.0]):
+			var h := _harness(mode)
+			h.player.global_position = player
+			_fixture_wreck(h, player + dir * wreck_out)
+			var f := _spawn(h, player + dir * 560.0, "", _short_cover)
+			_pose(f, -dir)
+			var run := _cover_run(f, 4.0, func(r: Dictionary) -> bool: return r["phase"] == P.RUN_IN)
+			if run[0]["phase"] == P.COVER:
+				taken += 1
+				var exit := _exit_tick(run)
+				if exit < 0 or run[exit]["phase"] != P.RUN_IN:
+					late.append("bearing %.0f, wreck %.0f px out" % [rad_to_deg(a), wreck_out])
+			_drop(h)
+	assert_gte(taken, 20, "%s: sanity: most layouts take cover" % mode)
+	assert_eq(late, [] as Array[String], "%s: each cover is left straight into RUN_IN, the same tick" % mode)
+
+
+func test_cover_ends_at_cover_max_when_the_hold_cannot_complete() -> void:
+	var h := _harness("open_space")
+	var info := _info_of(_fixture_wreck(h, COVER_WRECK))
+	# The fighter's PRIVATE config: a hold longer than cover_max.
+	var f := _spawn(h, COVER_FIGHTER, "", func(cfg: FighterConfig) -> void: cfg.cover_hold = CONFIG.cover_max + 1.0)
+	_pose(f, Vector2.LEFT)
+	var phases := _phase_log(f)
+	var run := _cover_run(f, CONFIG.cover_max + 0.5, func(r: Dictionary) -> bool: return r["phase"] != P.COVER, info)
+	var exit := _exit_tick(run)
+	var last := int(round(CONFIG.cover_max / DT))
+	assert_eq(run[last - 1]["phase"], P.COVER, "still in cover at cover_max - DT")
+	assert_between(exit, last, last + 1, "out at cover_max (tick %d)" % exit)
+	assert_eq(_after_cover(phases), P.APPROACH, "to APPROACH")
+	assert_false(info.is_claimed(), "the claim is released")
+
+
+func test_cover_is_once_per_run_in_and_once_per_engagement() -> void:
+	var h := _harness("open_space")
+	_fixture_wreck(h, COVER_WRECK)
+	var f := _spawn(h, COVER_FIGHTER)
+	_pose(f, Vector2.LEFT)
+	var brain := _brain(f)
+	_tick(f)
+	assert_eq(brain.phase, P.COVER, "sanity: cover")
+	# (a) Back to APPROACH with no RUN_IN in between (the test seam): no second cover.
+	brain.enter_phase(P.APPROACH)
+	_tick(f)
+	assert_ne(brain.phase, P.COVER, "no second cover before a RUN_IN")
+	# (b) After a RUN_IN it may take cover again. Only the entry is asserted: a forced RUN_IN leaves the pass latched.
+	brain.enter_phase(P.RUN_IN)
+	brain.enter_phase(P.APPROACH)
+	_tick(f)
+	assert_eq(brain.phase, P.COVER, "a RUN_IN clears it")
+	_drop(h)
+	# (c) A hub fighter that took cover and lost the player (no RUN_IN) takes cover again on the next wake.
+	h = _harness("open_space")
+	_fixture_wreck(h, COVER_WRECK)
+	f = _idle_spawn(h, COVER_FIGHTER)
+	brain = _brain(f)
+	var phases := _phase_log(f)
+	assert_true(_until(f, 2.0, func() -> bool: return brain.phase == P.COVER), "sanity: the woken fighter takes cover")
+	h.player.global_position = MID + Vector2(-2000.0, 0.0)
+	assert_true(_until(f, 1.0, func() -> bool: return brain.phase == P.RETURNING), "sanity: it goes home")
+	h.player.global_position = MID
+	assert_true(_until(f, 4.0, func() -> bool: return phases.count(P.COVER) == 2), "it takes cover again on the next wake")
+	var first := phases.find(P.COVER)
+	assert_false(phases.slice(first, phases.rfind(P.COVER)).has(P.RUN_IN), "with no RUN_IN in between")
+
+
+# A live-physics row: the hand-ticked rows above overwrite the position after `move_and_slide`, so none of them feels the
+# wreck's body. Here the fighter runs on the engine's own physics (8x clock) beside the solid wreck it has claimed.
+const _LIVE_SPEEDUP := 8
+var _live_saved := [1.0, 60, 8]
+var _live_scaled := false
+
+
+func after_each() -> void:
+	if _live_scaled:
+		_live_scaled = false
+		Engine.time_scale = _live_saved[0]
+		Engine.physics_ticks_per_second = _live_saved[1]
+		Engine.max_physics_steps_per_frame = _live_saved[2]
+
+
+func test_on_real_physics_the_fighter_hides_beside_the_solid_wreck(mode: String = use_parameters(_MODES)) -> void:
+	var h := _harness(mode)
+	# Assault wrecks drift (60 px/s down, review m6): COVER then ends on the hold or on the corridor rule.
+	var wreck := _real_wreck(h, COVER_WRECK, mode == "assault")
+	await wait_physics_frames(2)
+	var info := wreck.hazard_info()
+	var f := _spawn(h, COVER_FIGHTER)
+	_pose(f, Vector2.LEFT)
+	var phases := _phase_log(f)
+	var hull := _hull(f)
+	var stats := {"min_gap": INF, "held": 0.0, "best_hold": 0.0}
+	# The nodes go in through a dictionary, never as captures: GUT resumes this body inside a `physics_frame` emission,
+	# so the harness can be freed while that emission still owes this (already disconnected) lambda its call.
+	var live := {"f": f, "wreck": wreck}
+	var sample := func() -> void:
+		if not is_instance_valid(live["f"]) or not is_instance_valid(live["wreck"]):
+			return
+		var fighter: Fighter = live["f"]
+		var w: Node2D = live["wreck"]
+		if _brain(fighter).phase != P.COVER:
+			return
+		stats["min_gap"] = minf(stats["min_gap"], fighter.global_position.distance_to(w.global_position))
+		var c := _cover_point(w.global_position, info.radius, MID)
+		if fighter.global_position.distance_to(c) <= FighterBrain.COVER_HOLD_PX and not _brain(fighter).can_see_player():
+			stats["held"] += fighter.get_physics_process_delta_time()
+		else:
+			stats["held"] = 0.0
+		stats["best_hold"] = maxf(stats["best_hold"], stats["held"])
+	get_tree().physics_frame.connect(sample)
+	f.set_physics_process(true)
+	_live_saved = [Engine.time_scale, Engine.physics_ticks_per_second, Engine.max_physics_steps_per_frame]
+	_live_scaled = true
+	Engine.physics_ticks_per_second = _live_saved[1] * _LIVE_SPEEDUP
+	Engine.max_physics_steps_per_frame = _live_saved[2] * _LIVE_SPEEDUP
+	Engine.time_scale = _live_saved[0] * _LIVE_SPEEDUP
+	var frames := 0
+	while _after_cover(phases) < 0 and frames < 60 * 6:  # 6 s of game time (each physics frame is 1/60 s of it)
+		await wait_physics_frames(8)
+		frames += 8
+	get_tree().physics_frame.disconnect(sample)
+	assert_true(phases.has(P.COVER), "%s: it took cover" % mode)
+	assert_eq(_after_cover(phases), P.APPROACH, "%s: and left it for APPROACH" % mode)
+	assert_false(info.is_claimed(), "%s: with the claim released" % mode)
+	assert_gt(stats["min_gap"], info.radius + hull - 2.0, "%s: never inside the wreck's body" % mode)
+	if mode == "open_space":
+		assert_gte(stats["best_hold"], CONFIG.cover_hold - 0.01, "open_space: it held the cover point, hidden, for cover_hold")
