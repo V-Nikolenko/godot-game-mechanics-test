@@ -35,6 +35,8 @@ signal plate_broken(plate_name: StringName)
 ## The last plate broke and the hull is exposed. Emitted once, one step after that plate broke.
 signal armor_broken
 
+const RAM_FRAGMENT: PackedScene = preload("res://assault/scenes/hazards/wreck/ram_fragment.tscn")
+
 @export var config: RamCorvetteConfig = load("res://assault/scenes/enemies/ram_corvette/ram_corvette_config.tres")
 
 var _armored: bool = true
@@ -136,10 +138,38 @@ func _on_plate_deflected(_hit_box: HitBox) -> void:
 
 
 func _on_plate_broken(plate: ArmorPlate) -> void:
+	_throw_fragment(plate)
 	plate_broken.emit(plate.name)
 	_ram_brain.on_plate_broken()
 	if live_plate_count() == 0 and _armored:
 		call_deferred("_expose")
+
+
+## Debris Charge (plan cmug23om70001m52wqfwclf3l §2.13): the broken plate tumbles off outward as a `DebrisFragment`.
+## Position, rotation and look are captured at once (the plate's sprite is still valid at `broken.emit`); the spawn is
+## deferred by `spawn_into`, because a plate breaks inside a rocket's `area_entered` flush. No hazard container, no
+## fragment. `source = self` keeps its contact box disarmed until it is clear of this hull, so it never hits the Ram the
+## third plate exposed.
+func _throw_fragment(plate: ArmorPlate) -> void:
+	var container := Hazards.container(get_tree())
+	if container == null:
+		return
+	var fragment := RAM_FRAGMENT.instantiate() as DebrisFragment
+	var out := plate.global_position - global_position
+	fragment.direction = out.normalized() if out.length_squared() > 0.0 else Vector2.DOWN.rotated(rotation)
+	fragment.source = self
+	var sprite := fragment.get_node("Sprite2D") as Sprite2D
+	if plate.sprite != null:
+		sprite.texture = plate.sprite.texture
+		sprite.flip_h = plate.sprite.flip_h
+	fragment.source_clear_radius = _body_radius() + fragment.contact_radius()
+	fragment.spawn_into(container, plate.global_position, plate.global_rotation)
+
+
+func _body_radius() -> float:
+	var shape := $CollisionShape2D as CollisionShape2D
+	var circle := shape.shape as CircleShape2D if shape != null else null
+	return circle.radius * absf(shape.scale.x) if circle != null else 0.0
 
 
 func _expose() -> void:

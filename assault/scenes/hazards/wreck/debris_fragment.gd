@@ -118,8 +118,10 @@ func hazard_info() -> HazardInfo:
 
 
 func contact_radius() -> float:
-	var circle := _contact_shape.shape as CircleShape2D if _contact_shape != null else null
-	return circle.radius * absf(_contact_shape.scale.x * scale.x) if circle != null else 0.0
+	# Also answers before `_ready()` (the Ram sizes its clear radius on a fresh instance), so no `@onready` here.
+	var shape_node := get_node_or_null("ContactHitBox/CollisionShape2D") as CollisionShape2D
+	var circle := shape_node.shape as CircleShape2D if shape_node != null else null
+	return circle.radius * absf(shape_node.scale.x * scale.x) if circle != null else 0.0
 
 
 func _source_clear() -> bool:

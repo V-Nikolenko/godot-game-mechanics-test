@@ -49,6 +49,12 @@ station's precedent).
 - **Ship modules:** EMP skips it (`_IMMUNE_CLASSES`); engine boost is not on its immune list any more — the hull rule
   deflects the boost while armoured and takes it once exposed.
 
+- **Debris Charge (Phase 6 t15):** each plate that breaks throws off a `DebrisFragment` (`assault/scenes/hazards/wreck/ram_fragment.tscn`:
+  200 px/s outward from the hull, decelerating 120 px/s², spinning, 3.0 s life, contact 12, no LOS block) through
+  `RamCorvette._throw_fragment()` and the deferred `spawn_into` into the `HazardContainer` (none: no fragment). Its
+  `source` is the Ram and `source_clear_radius` the hull radius + the fragment's, so its contact box stays disarmed until
+  it is clear of the hull and never hurts the Ram the third plate exposed. The plate breaks exactly as before.
+
 Signals: `armor_deflected(damage: int)`, `plate_broken(plate_name: StringName)`, `armor_broken`.
 
 ---

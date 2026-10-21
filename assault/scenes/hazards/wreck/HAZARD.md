@@ -16,8 +16,9 @@ drifts into a ship. Drifting debris is the opposite: no cover at all, but it hur
 | `structure_cargo_platform.tscn` | r 55 | 800 | permanent | `structure_cargo_platform.png` (~128 px) |
 | `structure_station_module.tscn` | r 45 | 800 | permanent | `structure_station_module.png` (~128 px) |
 | `debris_drift.tscn` | contact r 12, no body | — | 30 s | `environment/debris_1..6.png` at 0.5 scale |
+| `ram_fragment.tscn` | contact r 10, no body | — | 3 s | the broken Ram plate's own sprite; 200 px/s outward, decel 120, spin 6, contact 12, `source` = the Ram (t15) |
 
-All six wreck and structure scenes run on `wreck.gd` (`Wreck`). The debris scene runs on `debris_fragment.gd`
+All six wreck and structure scenes run on `wreck.gd` (`Wreck`). The debris scenes run on `debris_fragment.gd`
 (`DebrisFragment`). `WreckScenes.scene_for(size, explosive)` (`wreck_scenes.gd`) maps `WreckScenes.Size` to the three
 wreck scenes. Explosive wrecks return `null` until t12. Spawning on death is t11's, and hub placement is t18's.
 

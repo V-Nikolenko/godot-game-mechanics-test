@@ -1593,3 +1593,172 @@ func test_a_hub_ram_stays_in_combat_through_a_missed_charge_and_the_wide_turn() 
 			break
 	assert_gte(wide_turns, 2, "two missed charges and their wide turns (phases %s)" % [seen])
 	assert_lt(worst, RAM_CONFIG.lose_radius, "the cycle opened %.0f px against lose_radius %.0f" % [worst, RAM_CONFIG.lose_radius])
+
+
+# ── Debris Charge: a broken plate flies off as a fragment (plan cmug23om70001m52wqfwclf3l §2.13, t15) ──
+
+const FRAGMENT_SCENE: PackedScene = preload("res://assault/scenes/hazards/wreck/ram_fragment.tscn")
+const SHIP_SCENE: PackedScene = preload("res://open_space/scenes/entities/player/player_ship.tscn")
+const HULL_RADIUS := 34.0
+
+var _frag_box: Node2D = null
+
+
+## The level's hazard container, under the harness root.
+func _frag_container() -> Node2D:
+	_frag_box = Node2D.new()
+	_frag_box.add_to_group(Hazards.CONTAINER_GROUP)
+	_root.add_child(_frag_box)
+	return _frag_box
+
+
+func _fragments(box: Node) -> Array[DebrisFragment]:
+	var out: Array[DebrisFragment] = []
+	for c in box.get_children():
+		if c is DebrisFragment:
+			out.append(c)
+	return out
+
+
+func test_the_fragment_scene_is_the_epic_plans() -> void:
+	var f := FRAGMENT_SCENE.instantiate() as DebrisFragment
+	assert_not_null(f, "the root is a DebrisFragment")
+	add_child_autofree(f)
+	assert_eq(f.speed, 200.0)
+	assert_eq(f.deceleration, 120.0)
+	assert_gt(f.spin, 0.0, "it spins")
+	assert_eq(f.lifetime, 3.0)
+	assert_eq(f.contact_damage, 12)
+	assert_false(f.hazard_info().line_of_sight_blocker, "it never blocks sight")
+	assert_eq(f.hazard_info().kind, &"debris")
+
+
+func test_a_broken_plate_spawns_one_fragment_moving_away_from_the_hull(mode: String = use_parameters(MODES)) -> void:
+	var ram := _world(mode)
+	var box := _frag_container()
+	for plate_name in [&"PlateFront", &"PlateLeft"]:
+		var p := _plate(ram, plate_name)
+		var at := p.global_position
+		var out_dir := (at - ram.global_position).normalized()
+		var before := _fragments(box).size()
+		_break_plate(ram, plate_name)
+		assert_eq(_fragments(box).size(), before, "%s: the spawn is deferred, not inside the break" % mode)
+		await _frames(2)
+		var frags := _fragments(box)
+		assert_eq(frags.size(), before + 1, "%s: %s left exactly one fragment" % [mode, plate_name])
+		var f := frags[-1]
+		assert_lt(f.direction.angle_to(out_dir), 0.01, "%s: thrown straight out from the hull" % mode)
+		assert_eq(f.source, ram, "%s: the Ram is its source" % mode)
+		assert_almost_eq(f.source_clear_radius, HULL_RADIUS + f.contact_radius(), 0.01)
+		assert_gt(f.global_position.distance_to(ram.global_position), at.distance_to(ram.global_position), "%s: moving away" % mode)
+		assert_false(f.is_armed() and f.global_position.distance_to(ram.global_position) < f.source_clear_radius)
+
+
+func test_the_fragment_wears_the_plates_sprite() -> void:
+	var ram := _world("open_space")
+	var box := _frag_container()
+	var tex := _plate(ram, &"PlateFront").sprite.texture
+	_break_plate(ram, &"PlateFront")
+	await _frames(2)
+	var f := _fragments(box)[0]
+	assert_eq((f.get_node("Sprite2D") as Sprite2D).texture, tex)
+	assert_true(is_instance_valid(f), "the fragment exists")
+
+
+func test_a_left_plate_fragment_keeps_its_flip() -> void:
+	var ram := _world("open_space")
+	var box := _frag_container()
+	var flip := _plate(ram, &"PlateLeft").sprite.flip_h
+	_break_plate(ram, &"PlateLeft")
+	await _frames(2)
+	assert_eq((_fragments(box)[0].get_node("Sprite2D") as Sprite2D).flip_h, flip)
+
+
+func test_no_hazard_container_means_no_fragment_and_the_plate_breaks_as_before(mode: String = use_parameters(MODES)) -> void:
+	var ram := _world(mode)
+	var broke := _count(ram.plate_broken)
+	_break_plate(ram, &"PlateFront")
+	await _frames(3)
+	assert_eq(broke[0], 1, "%s: the plate still breaks and reports" % mode)
+	assert_eq(ram.live_plate_count(), 2)
+	var found := 0
+	for c in _root.get_children():
+		if c is DebrisFragment:
+			found += 1
+	assert_eq(found, 0, "%s: nothing was spawned anywhere" % mode)
+
+
+func test_a_real_rocket_breaks_a_plate_and_exactly_one_fragment_appears(mode: String = use_parameters(MODES)) -> void:
+	var ram := _world(mode)
+	var box := _frag_container()
+	await _rocket_plate(ram, &"PlateFront")
+	await _frames(3)
+	assert_false(_alive(ram, &"PlateFront"), "%s: the rocket broke the plate" % mode)
+	assert_eq(_fragments(box).size(), 1, "%s: and one fragment appeared (no engine error)" % mode)
+	assert_eq(ram.live_plate_count(), 2)
+
+
+func test_stripping_the_ram_leaves_three_fragments_and_none_hurts_the_exposed_hull(mode: String = use_parameters(MODES)) -> void:
+	var ram := _world(mode)
+	var box := _frag_container()
+	var hull_hits: Array[int] = []
+	ram.hurt_box.received_damage.connect(func(n: int) -> void: hull_hits.append(n))
+	await _strip(ram)
+	assert_false(ram.is_armored(), "%s: exposed" % mode)
+	await _frames(2)
+	assert_eq(_fragments(box).size(), 3, "%s: one per plate" % mode)
+	# Hurtbox events from the fragments would show up as received_damage with the fragment's 12.
+	await _frames(60)
+	for hit in hull_hits:
+		assert_ne(hit, 12, "%s: no fragment contact reached the Ram" % mode)
+	assert_eq(ram.health.current_health, 120, "%s: the exposed hull is untouched by its own plates" % mode)
+	var armed := 0
+	for f in _fragments(box):
+		if f.is_armed():
+			armed += 1
+	assert_eq(armed, 3, "%s: all three armed once clear of the hull" % mode)
+
+
+## Control: the same fragment with no source does hurt an exposed Ram, so the row above can fail.
+func test_a_sourceless_fragment_does_hurt_an_exposed_ram() -> void:
+	var ram := _world("open_space")
+	var box := _frag_container()
+	await _strip(ram)
+	var f := FRAGMENT_SCENE.instantiate() as DebrisFragment
+	f.direction = Vector2.UP
+	f.speed = 200.0
+	f.deceleration = 0.0
+	f.spawn_into(box, ram.global_position + Vector2(0.0, 120.0), 0.0)
+	await _frames(60)
+	assert_eq(ram.health.current_health, 120 - 12, "a fragment of nobody's hurts the exposed hull")
+
+
+func test_an_armed_fragment_hurts_the_player_and_frees_by_three_seconds() -> void:
+	var ram := _world("open_space")
+	var box := _frag_container()
+	var received: Array[int] = []
+	var player := SHIP_SCENE.instantiate() as PlayerBase
+	_root.add_child(player)
+	player.set_physics_process(false)
+	player.set_process(false)
+	player.shield_component.set_all_zero()
+	(player.get_node("HurtBox") as HurtBox).received_damage.connect(func(n: int) -> void: received.append(n))
+	# The fragment from the front plate flies +y from the Ram; park the player on its path.
+	var front := _plate(ram, &"PlateFront").global_position
+	var dir := (front - ram.global_position).normalized()
+	player.global_position = front + dir * 90.0
+	_break_plate(ram, &"PlateFront")
+	await _frames(2)
+	var f := _fragments(box)[0]
+	var t := 0.0
+	while t < 1.5 and received.is_empty():
+		await get_tree().physics_frame
+		t += DT
+	assert_eq(received, [12], "the armed fragment hurts the player once")
+	var gone := false
+	while t < 3.5 and not gone:
+		await get_tree().physics_frame
+		t += DT
+		gone = not is_instance_valid(f) or f.is_queued_for_deletion()
+	assert_true(gone, "and it is freed")
+	assert_lte(t, 3.0 + 0.1, "by its 3.0 s life (gone at %.2f s)" % t)
