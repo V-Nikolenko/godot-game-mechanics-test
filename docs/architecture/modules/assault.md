@@ -54,7 +54,7 @@ assault/scenes/
 │   ├── level_2_waves.gd         Level 2 wave list
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
-├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray
+├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well
 ├── allies/ally_fighter/         AI escort fighters (group "allies")
 ├── gui/                         HUD, score widgets/popups, weapon selector, game-over, debrief
 └── race/                        Race sub-mode (core/, racers/, track/, ui/)
@@ -479,6 +479,12 @@ etc.). For per-hazard detail, see the source folders under `assault/scenes/hazar
 with `race_hazard`/`loop`, and the space station's `StationLaserPhase` spawns it per volley. Its
 `hit_mask_override` export exists for that second case — see
 [`laser_ray/HAZARD.md`](../../../assault/scenes/hazards/laser_ray/HAZARD.md).
+
+**Gravity Well (Phase 6 t6).** `assault/scenes/hazards/gravity_well/gravity_well.tscn` — a `GravityWell` (`class_name`, extends
+`HazardField`; `gravity_well.gd` adds the `_draw()` radius ring and `glow_strength()`, `gravity_well_glow.gd` draws the inner
+glow) with radius 420, core 90, pull 520, hull stress 5 / 0.5 s inside 150 px, over the t5 `swirl` sprite. No physics body, no
+LOS block; stress bypasses `EnemyShield` and a plated Ram deflects it. See
+[`HAZARD.md`](../../../assault/scenes/hazards/gravity_well/HAZARD.md); tests `tests/integration/test_gravity_well.gd`.
 
 ### Enemies
 
