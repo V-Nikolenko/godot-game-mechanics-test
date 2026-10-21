@@ -1444,3 +1444,298 @@ func test_a_hub_sniper_stays_in_combat_through_a_full_cycle() -> void:
 	for p in [SP.BREAK_CONTACT, SP.RELOCATE, SP.SETTLE, SP.AIM, SP.LOCK]:
 		assert_true(visited.has(p), "phase %s was visited" % p)
 	assert_lt(worst, SHIPPED.lose_radius, "the loop opened %.0f px against lose_radius %.0f" % [worst, SHIPPED.lose_radius])
+
+
+# ── Cover (Phase 6 t13; plan cmug23om70001m52wqfwclf3l §2.11) ───────────────────────────────────────
+# A sniper hides behind a wreck and peeks out to shoot, never fires through one, and with no hazard in play picks
+# exactly as it always did. Dual-mode cases run in both harnesses; a real `Wreck` is a solid body on layer 1, so
+# these rows await a physics frame after placing one (a body added this frame is not in the broadphase yet).
+
+const FIXTURE_WRECK := preload("res://tests/helpers/fixture_wreck.gd")
+const WRECK_MEDIUM: PackedScene = preload("res://assault/scenes/hazards/wreck/wreck_medium.tscn")
+
+
+func _range_of(mode: String) -> float:
+	return SHIPPED.assault_preferred_range if mode == "assault" else SHIPPED.preferred_range
+
+
+## A real medium wreck (r 25), held still: its own drift and lifetime clock are off.
+func _wreck(harness, pos: Vector2) -> Wreck:
+	var wreck := WRECK_MEDIUM.instantiate() as Wreck
+	wreck.set_physics_process(false)
+	harness.root.add_child(wreck)
+	wreck.global_position = pos
+	return wreck
+
+
+## A point `distance_from_range` short of the mode's firing range from the player (640, 560), `deg` off straight up.
+func _spot(mode: String, deg: float, short_of_range: float = 75.0) -> Vector2:
+	return Vector2(640.0, 560.0) + Vector2.UP.rotated(deg_to_rad(deg)) * (_range_of(mode) - short_of_range)
+
+
+## A non-blocking hazard (a well stand-in) of `radius` at `pos`: the fixture's info with the blocker flag off.
+func _well(harness, pos: Vector2, radius: float) -> Node2D:
+	var well := FIXTURE_WRECK.new() as Node2D
+	well.info.line_of_sight_blocker = false
+	well.info.kind = &"gravity_well"
+	well.info.radius = radius
+	harness.root.add_child(well)
+	well.global_position = pos
+	return well
+
+
+func _clear_between(sniper: Sniper, a: Vector2, b: Vector2) -> bool:
+	var exclude: Array[RID] = [sniper.get_rid()]
+	return LineOfSight.clear(sniper.get_world_2d().direct_space_state, a, b, exclude)
+
+
+func test_a_wreck_near_gives_a_cover_point_on_its_far_side_with_a_clear_line(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var sniper := _cycle_sniper(harness)
+	var wreck := _wreck(harness, _spot(mode, 50.0))
+	await wait_physics_frames(2)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	_tick(sniper, DT)
+	var info := wreck.hazard_info()
+	assert_eq(brain.last_cover, info, "%s: the winner is the wreck's cover candidate" % mode)
+	var point := brain.target_point
+	assert_true(point.is_finite(), "%s: a point was chosen" % mode)
+	assert_lte(point.distance_to(wreck.global_position), SHIPPED.cover_radius, "%s: within cover_radius of the wreck" % mode)
+	assert_gt((point - wreck.global_position).dot(wreck.global_position - harness.player.global_position), 0.0,
+		"%s: on the far side from the player" % mode)
+	assert_true(_clear_between(sniper, point, harness.player.global_position), "%s: the peek has a clear line" % mode)
+	assert_true(info.is_claimed_by(sniper), "%s: the wreck is claimed once the point is taken" % mode)
+
+
+func test_with_no_wreck_the_pick_and_the_next_draw_match_the_control(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var control := _cycle_sniper(harness)
+	var control_brain := control.get_node("Brain") as SniperBrain
+	_tick(control, DT)
+	var control_point := control_brain.target_point
+	var control_next := control_brain.rng.randf()
+	# A hazard live but nowhere near: the hazard path runs, finds nothing, and must change nothing.
+	var far := FIXTURE_WRECK.new() as Node2D
+	harness.root.add_child(far)
+	far.global_position = Vector2(9000.0, 9000.0)
+	var sniper := _cycle_sniper(harness)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	_tick(sniper, DT)
+	assert_eq(Hazards.count(), 1, "%s: sanity: a hazard is live" % mode)
+	assert_eq(brain.target_point, control_point, "%s: the same point as with no hazard at all" % mode)
+	assert_null(brain.last_cover, "%s: no cover candidate" % mode)
+	assert_eq(brain.rng.randf(), control_next, "%s: the same next draw" % mode)
+
+
+func test_a_wreck_near_changes_the_point_but_not_how_many_draws_were_made(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var control := _cycle_sniper(harness)
+	var control_brain := control.get_node("Brain") as SniperBrain
+	_tick(control, DT)
+	var control_next := control_brain.rng.randf()
+	var wreck := _wreck(harness, _spot(mode, 50.0))
+	await wait_physics_frames(2)
+	var sniper := _cycle_sniper(harness)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	_tick(sniper, DT)
+	assert_not_null(brain.last_cover, "%s: sanity: the wreck was used" % mode)
+	assert_eq(brain.rng.randf(), control_next, "%s: cover candidates draw no rng" % mode)
+	assert_true(is_instance_valid(wreck))
+
+
+func test_a_candidate_inside_a_well_is_never_chosen(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var control := _cycle_sniper(harness)
+	_tick(control, DT)
+	var control_point := (control.get_node("Brain") as SniperBrain).target_point
+	_well(harness, control_point, 100.0)
+	var sniper := _cycle_sniper(harness)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	_tick(sniper, DT)
+	assert_true(brain.target_point.is_finite(), "%s: another point was found" % mode)
+	assert_ne(brain.target_point, control_point, "%s: not the one inside the well" % mode)
+	assert_gt(brain.target_point.distance_to(control_point), 100.0 + SHIPPED.hazard_margin, "%s: and clear of its margin" % mode)
+	var rejected := 0
+	for c in brain.last_candidates:
+		if (c["point"] as Vector2).distance_to(control_point) <= 100.0 + SHIPPED.hazard_margin:
+			assert_false(c["hazard_ok"], "%s: a candidate in the well's reach is marked" % mode)
+			rejected += 1
+	assert_gt(rejected, 0, "%s: sanity: some candidate was in the well" % mode)
+
+
+func test_a_second_sniper_is_refused_the_claimed_wreck(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var first := _cycle_sniper(harness)
+	var wreck := _wreck(harness, _spot(mode, 50.0))
+	await wait_physics_frames(2)
+	_tick(first, DT)
+	var info := wreck.hazard_info()
+	assert_true(info.is_claimed_by(first), "%s: sanity: the first sniper holds it" % mode)
+	var second := _cycle_sniper(harness, Vector2(700.0, 90.0), 777)
+	var brain := second.get_node("Brain") as SniperBrain
+	_tick(second, DT)
+	assert_null(brain.last_cover, "%s: the claimed wreck offers the second sniper no cover" % mode)
+	assert_true(brain.target_point.is_finite(), "%s: it still picked somewhere" % mode)
+	assert_false(info.is_claimed_by(second), "%s: and holds nothing" % mode)
+	assert_true(info.is_claimed_by(first), "%s: the first still holds it" % mode)
+	first.free()
+	assert_false(info.is_claimed(), "%s: a freed sniper frees its claim" % mode)
+
+
+func test_the_claim_is_released_on_break_contact_and_on_disengage(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var sniper := _cycle_sniper(harness)
+	var wreck := _wreck(harness, _spot(mode, 50.0))
+	await wait_physics_frames(2)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	_tick(sniper, DT)
+	assert_true(wreck.hazard_info().is_claimed_by(sniper), "%s: sanity: claimed" % mode)
+	brain.enter_phase(SniperBrain.Phase.BREAK_CONTACT)
+	assert_false(wreck.hazard_info().is_claimed(), "%s: BREAK_CONTACT releases" % mode)
+	brain.last_cover = wreck.hazard_info()
+	brain.last_cover_point = Vector2(1.0, 2.0)
+	brain._set_target_point(Vector2(1.0, 2.0))
+	assert_true(wreck.hazard_info().is_claimed_by(sniper), "%s: claimed again" % mode)
+	brain.enter_phase(SniperBrain.Phase.DISENGAGE)
+	assert_false(wreck.hazard_info().is_claimed(), "%s: DISENGAGE releases" % mode)
+
+
+func test_a_real_sniper_reaches_its_cover_point_and_holds_it_into_aim(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var sniper := _cycle_sniper(harness)
+	var wreck := _wreck(harness, _spot(mode, 50.0))
+	await wait_physics_frames(2)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	var mover := sniper.get_node("EnemyMover") as EnemyMover
+	assert_gt(mover.hazard_avoidance, 0.0, "%s: sanity: the avoidance stage is on for the sniper" % mode)
+	var settled_slow := false
+	var t := 0.0
+	var reached := false
+	while t < 12.0:
+		_tick(sniper, DT)
+		t += DT
+		_recycle_rounds(sniper)
+		if brain.phase == SniperBrain.Phase.SETTLE and mover.own_velocity().length() < SHIPPED.settle_epsilon:
+			settled_slow = true
+		if brain.phase == SniperBrain.Phase.AIM:
+			reached = true
+			break
+	assert_true(reached, "%s: the sniper reaches AIM" % mode)
+	assert_true(settled_slow or reached, "%s: and was slow enough to settle" % mode)
+	assert_not_null(brain.claimed_cover, "%s: still holding the wreck" % mode)
+	assert_lte(sniper.global_position.distance_to(brain.target_point), SHIPPED.arrive_radius * 2.0, "%s: at its cover point" % mode)
+	assert_lte(sniper.global_position.distance_to(wreck.global_position), SHIPPED.cover_radius + SHIPPED.arrive_radius * 2.0,
+		"%s: beside the wreck" % mode)
+	assert_true(brain.can_see_player(), "%s: and sees the player from there" % mode)
+
+
+func test_no_shot_goes_through_a_wreck_that_drifts_across_the_locked_line(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var sniper := _cycle_sniper(harness)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	assert_true(_run_to(sniper, SniperBrain.Phase.LOCK, 15.0), "%s: LOCK reached" % mode)
+	var muzzle := (sniper.get_node("Muzzle") as Marker2D).global_position
+	var wreck := _wreck(harness, muzzle.lerp(harness.player.global_position, 0.5))
+	await wait_physics_frames(2)
+	var left_to := -1
+	var t := 0.0
+	while t < 2.0:
+		var was_lock := brain.phase == SniperBrain.Phase.LOCK
+		_tick(sniper, DT)
+		t += DT
+		if was_lock and brain.phase != SniperBrain.Phase.LOCK:
+			left_to = brain.phase
+			break
+	assert_eq(brain.shots_fired, 0, "%s: no round" % mode)
+	assert_eq(brain.refusals, 1, "%s: one refusal" % mode)
+	assert_eq(left_to, SniperBrain.Phase.BREAK_CONTACT, "%s: LOCK gives way to BREAK_CONTACT" % mode)
+	assert_true(is_instance_valid(wreck))
+
+
+func test_cover_hysteresis_keeps_a_cover_point_against_a_slightly_better_pick(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var sniper := _cycle_sniper(harness)
+	var wreck := _wreck(harness, _spot(mode, 50.0))
+	await wait_physics_frames(2)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	_tick(sniper, DT)
+	assert_not_null(brain.claimed_cover, "%s: sanity: a cover point is held" % mode)
+	var current := brain._score_of(brain.target_point)
+	var elsewhere := Vector2(5.0, 5.0)
+	brain.last_choice_score = current + SHIPPED.cover_hysteresis * 0.5
+	assert_true(brain._keeps_cover(elsewhere), "%s: a pick better by less than the margin is not taken" % mode)
+	brain.last_choice_score = current + SHIPPED.cover_hysteresis * 2.0
+	assert_false(brain._keeps_cover(elsewhere), "%s: a clearly better pick is" % mode)
+	brain.last_choice_score = current
+	var rock := _asteroid(harness, brain.target_point.lerp(harness.player.global_position, 0.5), 30.0)
+	await wait_physics_frames(2)
+	assert_false(brain._keeps_cover(elsewhere), "%s: a point whose line is blocked is not kept" % mode)
+	rock.free()
+	await wait_physics_frames(2)
+	assert_true(brain._keeps_cover(elsewhere), "%s: control: with the line clear again it is kept" % mode)
+	wreck.free()
+	assert_false(brain._keeps_cover(elsewhere), "%s: a vanished wreck is not kept" % mode)
+
+
+func test_hysteresis_never_changes_a_pick_with_no_wreck(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var picks: Array[Vector2] = []
+	for margin in [0.15, 1000.0]:
+		var sniper := _cycle_sniper(harness)
+		sniper.config.cover_hysteresis = margin
+		var brain := sniper.get_node("Brain") as SniperBrain
+		_tick(sniper, DT)
+		brain._phase_time = 100.0  # the travel cap: a re-pick
+		_tick(sniper, DT)
+		assert_null(brain.claimed_cover, "%s: no cover held" % mode)
+		assert_false(brain._keeps_cover(Vector2(1.0, 1.0)), "%s: nothing to keep" % mode)
+		picks.append(brain.target_point)
+	assert_eq(picks[0], picks[1], "%s: the re-pick is the same whatever the margin" % mode)
+
+
+func test_can_see_player_is_false_without_a_player(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var sniper := _cycle_sniper(harness)
+	var brain := sniper.get_node("Brain") as SniperBrain
+	await wait_physics_frames(2)
+	assert_true(brain.can_see_player(), "%s: control: sees the player over open space" % mode)
+	harness.player.remove_from_group(&"player")
+	assert_false(brain.can_see_player(), "%s: no player, no sight" % mode)
+
+
+# A live-physics row: the hand-ticked rows above overwrite the position after `move_and_slide`, so none of them feels the
+# wreck's body. Here the sniper runs on the engine's own physics (8x clock) and has to get round the solid wreck it has
+# claimed to the far-side point.
+const _LIVE_SPEEDUP := 8
+var _live_saved := [1.0, 60, 8]
+var _live_scaled := false
+
+
+func after_each() -> void:
+	if _live_scaled:
+		_live_scaled = false
+		Engine.time_scale = _live_saved[0]
+		Engine.physics_ticks_per_second = _live_saved[1]
+		Engine.max_physics_steps_per_frame = _live_saved[2]
+
+
+func test_on_real_physics_the_sniper_gets_round_its_wreck_to_the_cover_point(mode: String = use_parameters(_MODES)) -> void:
+	var harness = _harness(mode)
+	var sniper := _cycle_sniper(harness)
+	sniper.set_physics_process(true)
+	var wreck := _wreck(harness, _spot(mode, 50.0))
+	var brain := sniper.get_node("Brain") as SniperBrain
+	await wait_physics_frames(2)
+	_live_saved = [Engine.time_scale, Engine.physics_ticks_per_second, Engine.max_physics_steps_per_frame]
+	_live_scaled = true
+	Engine.physics_ticks_per_second = _live_saved[1] * _LIVE_SPEEDUP
+	Engine.max_physics_steps_per_frame = _live_saved[2] * _LIVE_SPEEDUP
+	Engine.time_scale = _live_saved[0] * _LIVE_SPEEDUP
+	var frames := 0
+	while brain.phase != SniperBrain.Phase.AIM and frames < 60 * _LIVE_SPEEDUP * 14:
+		await wait_physics_frames(8)
+		frames += 8
+	assert_eq(brain.phase, SniperBrain.Phase.AIM, "%s: it settled in cover and is aiming" % mode)
+	assert_not_null(brain.claimed_cover, "%s: holding the wreck" % mode)
+	assert_gt(sniper.global_position.distance_to(wreck.global_position), 25.0, "%s: outside the wreck's body" % mode)
+	assert_eq(brain.refusals, 0, "%s: with no refusal on the way" % mode)

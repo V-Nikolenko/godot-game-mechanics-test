@@ -116,3 +116,64 @@ func test_five_stacked_non_blocking_bodies_terminate_and_return_clear() -> void:
 	for i in 5:
 		_body(CharacterBody2D.new(), Vector2(100.0 + i * 20.0, 0.0))
 	assert_true(await _clear(), "the recast cap is reached and the line counts as clear")
+
+
+# ── EnemyBrain.can_see_player() (Phase 6 t13; plan cmug23om70001m52wqfwclf3l §2.11) ──────────────────
+
+const WRECK_SMALL: PackedScene = preload("res://assault/scenes/hazards/wreck/wreck_small.tscn")
+const DEBRIS: PackedScene = preload("res://assault/scenes/hazards/wreck/debris_drift.tscn")
+
+
+## A brain on a bare `CharacterBody2D` at FROM, with a fake player at TO in group `player`.
+func _watcher(with_player: bool = true) -> EnemyBrain:
+	var body := CharacterBody2D.new()
+	var brain := EnemyBrain.new()
+	body.add_child(brain)
+	add_child_autofree(body)
+	body.global_position = FROM
+	if with_player:
+		var player := Node2D.new()
+		player.add_to_group(&"player")
+		add_child_autofree(player)
+		player.global_position = TO
+	return brain
+
+
+func _hold(node: Node2D, at: Vector2) -> void:
+	node.set_physics_process(false)
+	add_child_autofree(node)
+	node.global_position = at
+
+
+func test_can_see_player_is_true_over_open_space() -> void:
+	var brain := _watcher()
+	await get_tree().physics_frame
+	assert_true(brain.can_see_player())
+
+
+func test_can_see_player_is_false_with_a_wreck_between() -> void:
+	var brain := _watcher()
+	_hold(WRECK_SMALL.instantiate(), Vector2(200.0, 0.0))
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_false(brain.can_see_player())
+
+
+func test_can_see_player_is_true_with_debris_between() -> void:
+	var brain := _watcher()
+	_hold(DEBRIS.instantiate(), Vector2(200.0, 0.0))
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_true(brain.can_see_player())
+
+
+func test_can_see_player_is_false_without_a_player() -> void:
+	var brain := _watcher(false)
+	await get_tree().physics_frame
+	assert_false(brain.can_see_player())
+
+
+func test_can_see_player_is_false_for_a_brain_with_no_body() -> void:
+	var brain := EnemyBrain.new()
+	add_child_autofree(brain)
+	assert_false(brain.can_see_player())

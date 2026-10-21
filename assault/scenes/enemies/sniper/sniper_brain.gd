@@ -70,6 +70,17 @@ const EDGE_KEEP := 16.0
 const BARREL_FOLDED := 0.35
 ## `idle_phase_offset` is drawn from ±this (rad).
 const MAX_IDLE_PHASE_OFFSET := 0.35
+## Cover candidates (plan cmug23om70001m52wqfwclf3l §2.11): the sideways peek step (px) and how many steps at most; the
+## share of `max_los_rays` the peeks may not spend (kept for the plain candidates); and the accepted share of the range.
+const COVER_PEEK_STEP := 30.0
+const COVER_PEEK_STEPS := 4
+const COVER_RESERVED_RAYS := 2
+const COVER_RANGE_MIN := 0.65
+const COVER_RANGE_MAX := 1.35
+## A plain candidate within this of a line-of-sight blocker's radius is inside the blocker (px).
+const BODY_MARGIN := 20.0
+## Cover SETTLE waits for the nose to come within this of the player before it calls the line blocked (rad).
+const TURN_DONE := 0.1
 
 ## Set by `sniper.gd` before the first tick. A fresh default keeps a bare brain steppable.
 var config: SniperConfig = SniperConfig.new()
@@ -127,6 +138,12 @@ var idle_phase_offset: float = 0.0
 var last_candidates: Array[Dictionary] = []
 var last_choice_fallback: bool = false
 var last_los_rays: int = 0
+## The last choice's wreck (null when it was a plain point), its point, and its score; `Vector2.INF` / 0 when none.
+var last_cover: HazardInfo
+var last_cover_point: Vector2 = Vector2.INF
+var last_choice_score: float = 0.0
+## The wreck this sniper has claimed as cover (null = none). Released on BREAK_CONTACT and DISENGAGE.
+var claimed_cover: HazardInfo
 
 var _started: bool = false
 var _phase_time: float = 0.0
@@ -197,6 +214,7 @@ func enter_phase(p: Phase) -> void:
 
 ## `BaseEnemy.suspend_ai()`: a rail took the enemy over. The telegraph's cycle does the shooting.
 func on_suspended() -> void:
+	_release_cover()
 	anchor_idle = null  # a rail owns the motion: no idle
 	_set_light(StateLight.State.OFF)
 	if telegraph != null:
@@ -323,6 +341,7 @@ func _tick_relocate() -> void:
 ## `relocate_speed` plus a second, and never under `relocate_cap` - so a long relocation round the player is not
 ## cut short on every cycle, and a point the player has left behind is still dropped.
 func _set_target_point(point: Vector2) -> void:
+	_update_cover_claim(point)
 	target_point = point
 	_travel_cap = config.relocate_cap
 	if point.is_finite() and config.relocate_speed > 0.0:
@@ -348,9 +367,54 @@ func _travel(next: Phase) -> void:
 	mover.arrive(target_point, config.relocate_speed)
 	if _phase_time >= _travel_cap:
 		var again := choose_firing_point()
-		if again.is_finite():
+		if again.is_finite() and not _keeps_cover(again):
 			_set_target_point(again)
 		_phase_time = 0.0
+
+
+## Claims the wreck behind [param point] when the last choice was a cover candidate there, else drops any claim held:
+## the mover's avoidance skips a wreck its own actor has claimed, so the sniper can reach and hold the point.
+func _update_cover_claim(point: Vector2) -> void:
+	if last_cover != null and point == last_cover_point:
+		if claimed_cover != null and claimed_cover != last_cover:
+			claimed_cover.release(actor)
+		if last_cover.try_claim(actor):
+			claimed_cover = last_cover
+			return
+	_release_cover()
+
+
+func _release_cover() -> void:
+	if claimed_cover != null:
+		claimed_cover.release(actor)
+		claimed_cover = null
+
+
+## Cover-only re-pick hysteresis (plan §2.11 e): when the travel cap forces a re-pick, a claimed cover point whose wreck
+## still exists and whose line to the player is still clear is kept unless [param again] (just chosen; its score is
+## `last_choice_score`) beats the current point's score by more than `cover_hysteresis`. Nothing else is ever kept.
+func _keeps_cover(again: Vector2) -> bool:
+	if claimed_cover == null or not target_point.is_finite() or again == target_point or not _target.has_target:
+		return false
+	var wreck := claimed_cover.source
+	if not is_instance_valid(wreck) or wreck.is_queued_for_deletion() or not claimed_cover.is_claimed_by(actor):
+		return false
+	if not actor.is_inside_tree():
+		return false
+	var exclude: Array[RID] = [actor.get_rid()]
+	if not LineOfSight.clear(actor.get_world_2d().direct_space_state, target_point, _target.position, exclude):
+		return false
+	return last_choice_score <= _score_of(target_point) + config.cover_hysteresis
+
+
+## The score `choose_firing_point()` would give [param point] now (no tier).
+func _score_of(point: Vector2) -> float:
+	var delta := absf(angle_difference(last_bearing, bearing_of(point))) if has_last_bearing else 0.0
+	var score := config.w_sep * clampf(delta / PI, 0.0, 1.0) \
+		- config.w_travel * actor.global_position.distance_to(point) / (2.0 * _preferred_range())
+	if Hazards.count() > 0 and _near_blocker(point):
+		score += config.w_cover
+	return score
 
 
 ## The nearest point on the mode's range ring, on this sniper's side; in Assault inside the corridor's
@@ -395,10 +459,17 @@ func _assault() -> bool:
 ## 4. Score within a tier: `w_sep * clamp(delta / 180) - w_travel * travel / (2 * range)`.
 ## 5. Line of sight from the candidate to the player, in rank order, at most `max_los_rays` rays: the first
 ##    clear one wins.
+##
+## With a hazard registered (Phase 6, `docs/plans/cmug23om70001m52wqfwclf3l/3-plan.md` §2.11): candidates inside a non-blocking
+## hazard or a wreck's body are filtered out; cover candidates (no rng) behind free wrecks are added; `w_cover` is added to
+## the score near a blocker; the winner of a cover candidate is claimed by `_set_target_point()`. No hazard: none of it runs.
 func choose_firing_point() -> Vector2:
 	last_candidates = []
 	last_choice_fallback = false
 	last_los_rays = 0
+	last_cover = null
+	last_cover_point = Vector2.INF
+	last_choice_score = 0.0
 	if not _target.has_target:
 		return Vector2.INF
 	var player_pos := _target.position
@@ -418,47 +489,152 @@ func choose_firing_point() -> Vector2:
 	var tier_a := deg_to_rad(config.min_bearing_change + BEARING_SLACK)
 	var tier_b := deg_to_rad(config.min_bearing_change)
 	var clearance := config.pass_clearance_ratio * range_
+	var hazards_live := Hazards.count() > 0
 	var survivors: Array[Dictionary] = []
 	for b in bearings:
 		var bearing := wrapf(b, -PI, PI)
 		var point := player_pos + frame.rotated(bearing) * (range_ + rng.randf_range(-jitter, jitter))
-		var travel := actor.global_position.distance_to(point)
-		var delta := absf(angle_difference(last_bearing, bearing)) if has_last_bearing else 0.0
-		var tier := 2
-		if has_last_bearing and delta >= tier_a:
-			tier = 0
-		elif has_last_bearing and delta >= tier_b:
-			tier = 1
-		var c := {
-			"point": point, "bearing": bearing, "delta": delta, "tier": tier, "travel": travel,
-			"score": config.w_sep * clampf(delta / PI, 0.0, 1.0) - config.w_travel * travel / (2.0 * range_),
-			"rect_ok": not has_rect or rect.has_point(point),
-			"cone_ok": not cone_on or absf(bearing) >= cone,
-			"path_ok": _path_clears(actor.global_position, point, player_pos, clearance),
-			"los": null,
-		}
+		var c := _candidate(point, bearing, range_, has_rect, rect, cone_on, cone, tier_a, tier_b, clearance, hazards_live)
 		last_candidates.append(c)
-		if c["rect_ok"] and c["cone_ok"] and c["path_ok"]:
+		if _survives(c):
 			survivors.append(c)
+
+	var space := actor.get_world_2d().direct_space_state if actor.is_inside_tree() else null
+	var exclude: Array[RID] = [actor.get_rid()]
+	if hazards_live:
+		for c in _cover_candidates(space, exclude, range_, has_rect, rect, cone_on, cone, tier_a, tier_b, clearance):
+			last_candidates.append(c)
+			if _survives(c):
+				survivors.append(c)
 	survivors.sort_custom(func(x: Dictionary, y: Dictionary) -> bool:
 		if x["tier"] != y["tier"]:
 			return x["tier"] < y["tier"]
 		return x["score"] > y["score"])
 
-	var space := actor.get_world_2d().direct_space_state if actor.is_inside_tree() else null
-	var exclude: Array[RID] = [actor.get_rid()]
 	for c in survivors:
-		if last_los_rays >= config.max_los_rays:
-			break
-		last_los_rays += 1
-		c["los"] = LineOfSight.clear(space, c["point"], player_pos, exclude)
+		var cover: HazardInfo = c["cover"]
+		if cover != null:
+			# Its line was cast while the candidate was built. A wreck another ship claimed since is skipped.
+			if cover.is_claimed() and not cover.is_claimed_by(actor):
+				continue
+		else:
+			if last_los_rays >= config.max_los_rays:
+				break
+			last_los_rays += 1
+			c["los"] = LineOfSight.clear(space, c["point"], player_pos, exclude)
 		if c["los"]:
 			last_choice_fallback = has_last_bearing and c["tier"] == 2
 			if last_choice_fallback and OS.is_stdout_verbose():
 				print("SniperBrain: no candidate %.0f deg from the last bearing; fallback to %.0f deg"
 					% [config.min_bearing_change, rad_to_deg(c["delta"])])
+			last_cover = cover
+			last_cover_point = c["point"]
+			last_choice_score = c["score"]
 			return c["point"]
 	return Vector2.INF
+
+
+## One candidate's working (the dictionary documented on `last_candidates`), plus `hazard_ok` (not inside a
+## non-blocking hazard's reach; always true with no hazard live), `cover` (the wreck's info for a cover candidate,
+## else null) and the `w_cover` bonus in `score` when a blocker is within `cover_radius`.
+func _candidate(point: Vector2, bearing: float, range_: float, has_rect: bool, rect: Rect2, cone_on: bool, cone: float,
+		tier_a: float, tier_b: float, clearance: float, hazards_live: bool) -> Dictionary:
+	var travel := actor.global_position.distance_to(point)
+	var delta := absf(angle_difference(last_bearing, bearing)) if has_last_bearing else 0.0
+	var tier := 2
+	if has_last_bearing and delta >= tier_a:
+		tier = 0
+	elif has_last_bearing and delta >= tier_b:
+		tier = 1
+	var score := config.w_sep * clampf(delta / PI, 0.0, 1.0) - config.w_travel * travel / (2.0 * range_)
+	var hazard_ok := true
+	if hazards_live:
+		if _near_blocker(point):
+			score += config.w_cover
+		for info: HazardInfo in Hazards.around(point, maxf(config.hazard_margin, BODY_MARGIN)):
+			# A blocker is rejected only for its own body (a plain point inside a wreck is unreachable and unblockable).
+			if not info.line_of_sight_blocker or info.contains(point, BODY_MARGIN):
+				hazard_ok = false
+	return {
+		"point": point, "bearing": bearing, "delta": delta, "tier": tier, "travel": travel,
+		"score": score,
+		"rect_ok": not has_rect or rect.has_point(point),
+		"cone_ok": not cone_on or absf(bearing) >= cone,
+		"path_ok": _path_clears(actor.global_position, point, _target.position, clearance),
+		"hazard_ok": hazard_ok,
+		"cover": null,
+		"los": null,
+	}
+
+
+static func _survives(c: Dictionary) -> bool:
+	return c["rect_ok"] and c["cone_ok"] and c["path_ok"] and c["hazard_ok"]
+
+
+## True when a line-of-sight blocker's centre is within `cover_radius` of [param point].
+func _near_blocker(point: Vector2) -> bool:
+	for info: HazardInfo in Hazards.around(point, config.cover_radius):
+		if info.line_of_sight_blocker and info.position.distance_to(point) <= config.cover_radius:
+			return true
+	return false
+
+
+## Cover candidates (plan §2.11 b): for each free (or already ours) line-of-sight blocker within `cover_search_radius`,
+## the point on its far side from the player at `radius + cover_gap`, then "peeked" sideways in `COVER_PEEK_STEP`
+## steps (alternating sides, at most `COVER_PEEK_STEPS`) until the player can be seen. Each ray counts against
+## `max_los_rays`, but the last `COVER_RESERVED_RAYS` are kept for the plain candidates. Draws no rng. A point is kept only
+## within [0.65, 1.35] x range of the player and outside every other hazard's `radius + hazard_margin`.
+func _cover_candidates(space: PhysicsDirectSpaceState2D, exclude: Array[RID], range_: float, has_rect: bool, rect: Rect2,
+		cone_on: bool, cone: float, tier_a: float, tier_b: float, clearance: float) -> Array[Dictionary]:
+	var found: Array[Dictionary] = []
+	var player_pos := _target.position
+	for info: HazardInfo in Hazards.around(actor.global_position, config.cover_search_radius):
+		if not info.line_of_sight_blocker or (info.is_claimed() and not info.is_claimed_by(actor)):
+			continue
+		var away := info.position - player_pos
+		if away.length_squared() < 1.0:
+			continue
+		var dir := away.normalized()
+		var base := info.position + dir * (info.radius + config.cover_gap)
+		var side := dir.orthogonal()
+		for step in COVER_PEEK_STEPS + 1:
+			if last_los_rays >= config.max_los_rays - COVER_RESERVED_RAYS:
+				break
+			# 0, +1, -1, +2, -2 ... times the step.
+			var offset := 0.0 if step == 0 else float((step + 1) >> 1) * COVER_PEEK_STEP * (1.0 if step % 2 == 1 else -1.0)
+			var point := base + side * offset
+			last_los_rays += 1
+			if not LineOfSight.clear(space, point, player_pos, exclude):
+				continue
+			point = _with_peek_margin(space, exclude, point, side * signf(offset), player_pos)
+			var d := point.distance_to(player_pos)
+			if d < COVER_RANGE_MIN * range_ or d > COVER_RANGE_MAX * range_ or _inside_other_hazard(point, info):
+				break  # a farther peek only moves along the same ring: this wreck offers nothing
+			var bearing := wrapf(player_frame().angle_to(point - player_pos), -PI, PI)
+			var c := _candidate(point, bearing, range_, has_rect, rect, cone_on, cone, tier_a, tier_b, clearance, true)
+			c["cover"] = info
+			c["los"] = true
+			found.append(c)
+			break
+	return found
+
+
+## The sniper turns to face the player after it arrives and its muzzle swings out of its body: a point that only just clears
+## the wreck's edge would lose the line mid-turn. One more step along the same side, when a ray can be spared and the
+## farther point is still clear; else the point itself.
+func _with_peek_margin(space: PhysicsDirectSpaceState2D, exclude: Array[RID], point: Vector2, outward: Vector2, player_pos: Vector2) -> Vector2:
+	if outward == Vector2.ZERO or last_los_rays >= config.max_los_rays - COVER_RESERVED_RAYS:
+		return point
+	var farther := point + outward * COVER_PEEK_STEP
+	last_los_rays += 1
+	return farther if LineOfSight.clear(space, farther, player_pos, exclude) else point
+
+
+func _inside_other_hazard(point: Vector2, own: HazardInfo) -> bool:
+	for info: HazardInfo in Hazards.around(point, config.hazard_margin):
+		if info != own:
+			return true
+	return false
 
 
 ## True when the straight path `from`→`to` never comes closer to `player_pos` than `clearance`, or than `from`
@@ -477,11 +653,23 @@ func _tick_settle() -> void:
 	if mover.own_velocity().length() < config.settle_epsilon:
 		if _line_clear():
 			enter_phase(Phase.DECOY if config.decoy_telegraph else Phase.AIM)
+		elif _still_turning_to_player() and _phase_time < SETTLE_CAP:
+			pass  # cover: the muzzle swings out from behind the wreck as the nose comes round; look again next tick
 		else:
 			refusals += 1
 			enter_phase(Phase.BREAK_CONTACT)
 	elif _phase_time >= SETTLE_CAP:
 		enter_phase(Phase.BREAK_CONTACT)
+
+
+## Cover only (it needs a claimed wreck): true while the nose is still more than `TURN_DONE` off the player. A sniper that
+## has stopped beside a wreck reaches that point before it has finished turning, and its muzzle only clears the wreck's
+## edge once it faces the player, so a blocked line is not a refusal yet.
+func _still_turning_to_player() -> bool:
+	if claimed_cover == null or not _target.has_target:
+		return false
+	var nose := Vector2.RIGHT.rotated(actor.rotation + EnemyMover.sprite_forward_angle_of(actor))
+	return absf(nose.angle_to(_target.position - actor.global_position)) > TURN_DONE
 
 
 ## Draws the side and size of this decoy's offset. The sign comes first so the draw order is fixed.
@@ -611,6 +799,7 @@ func _muzzle_pos() -> Vector2:
 ## Fixes the lateral side: the side of the player's line (the player frame through the player) the sniper is
 ## already on, so the break never cuts across the player's nose. On the line itself, the positive side.
 func _enter_break_contact() -> void:
+	_release_cover()
 	_break_side = 1.0
 	_break_time = 0.0
 	_break_failed = false
@@ -709,6 +898,7 @@ func _tick_barrel(delta: float) -> void:
 # ── DISENGAGE (the Fighter's exit) ───────────────────────────────────────────────────────────────
 
 func _enter_disengage() -> void:
+	_release_cover()
 	disengage_pending = false
 	mover.release_constraint()
 	mover.max_speed = config.exit_speed

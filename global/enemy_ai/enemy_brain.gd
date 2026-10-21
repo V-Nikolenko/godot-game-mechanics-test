@@ -83,3 +83,14 @@ func on_suspended() -> void:
 ## they saw is the attack they get, and a tow would move the shot off the line it showed.
 func accepts_tow() -> bool:
 	return true
+
+
+## True when the player exists and no line-of-sight blocker (an asteroid, a wreck) stands between this enemy's body
+## and it (`TargetInfo.line_of_sight`, so a fighter body or a `DebrisFragment` never blocks). False with no player or
+## outside the tree. Physics-step only, like `LineOfSight`: the brain tick is the physics step, so a brain may call it
+## directly. Plan cmug23om70001m52wqfwclf3l §2.11.
+func can_see_player() -> bool:
+	if actor == null or not actor.is_inside_tree():
+		return false
+	var exclude: Array[RID] = [actor.get_rid()]
+	return TargetInfo.player(actor.get_tree()).line_of_sight(actor.global_position, actor.get_world_2d().direct_space_state, exclude)

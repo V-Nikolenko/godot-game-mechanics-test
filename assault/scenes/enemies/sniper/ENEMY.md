@@ -76,6 +76,9 @@ In the **player frame** (the player's smoothed velocity, τ `velocity_smoothing`
 
 Line of sight is `LineOfSight` (opt-in blockers: group `asteroids` or `blocks_line_of_sight()`); a fighter or the player never blocks.
 
+### Cover (Phase 6; only while a hazard is registered)
+With `Hazards.count() > 0` the choice also: rejects a candidate inside a non-blocking hazard (`hazard_margin`) or inside a wreck's body; adds **cover candidates** (no rng) for every free wreck (or one this sniper holds) within `cover_search_radius` 700 — the point on its far side at `radius + cover_gap` 50, peeked sideways in 30 px steps (4 at most, one extra step of margin, rays count against `max_los_rays`, two are kept for plain candidates) until the player is in view, kept within 0.65–1.35 × range of the player and outside every other hazard's `radius + hazard_margin`; and adds `w_cover` to any candidate within `cover_radius` 140 of a blocker. Taking a cover candidate **claims** the wreck (`HazardInfo.try_claim`), so the mover's avoidance skips it and a second sniper picks elsewhere; the claim is released on BREAK_CONTACT, DISENGAGE and when the sniper is freed. SETTLE next to a claimed wreck waits for the nose to finish turning before calling the line blocked. A travel-cap re-pick **keeps** a still-valid cover point (wreck alive, line clear) unless the new best scores more than `cover_hysteresis` 0.15 above it; no other pick is touched. With no hazard registered the pick and every rng draw are unchanged. `EnemyBrain.can_see_player()` is the shared line-of-sight query (false with no player).
+
 ---
 
 ## Config exports (added by t13; the rest are in `sniper_config.gd`)
@@ -91,6 +94,8 @@ Line of sight is `LineOfSight` (opt-in blockers: group `asteroids` or `blocks_li
 | `max_los_rays` | 6 | Ray cap per choice |
 | `pass_clearance_ratio` | 0.45 | Relocation path clearance, as a share of the range |
 | `barrel_unfold_seconds` / `barrel_fold_seconds` | 0.4 / 0.3 | Barrel animation (s) |
+| `cover_search_radius` / `cover_gap` / `cover_radius` | 700 / 50 / 140 | Cover: wreck search reach, gap behind the wreck, "near cover" radius (px) |
+| `w_cover` / `cover_hysteresis` | 1.0 / 0.15 | Score bonus near a blocker; re-pick margin that keeps a cover point |
 
 ---
 
@@ -112,7 +117,7 @@ Open Space only (`budget.active == false` and not `start_engaged`); Assault star
 
 ## Tests
 
-`tests/integration/test_sniper.gd` (the cycle specs run in both harnesses, plus the level-1 attack-in-budget row through a real `WaveManager`); the `Sniper` cases in `test_enemy_dual_mode.gd`; the rail round in `test_enemy_bullet_lifetime.gd`.
+`tests/integration/test_sniper.gd` (cover rows at the end, dual-mode plus one live-physics row; the cycle specs run in both harnesses, plus the level-1 attack-in-budget row through a real `WaveManager`); the `Sniper` cases in `test_enemy_dual_mode.gd`; the rail round in `test_enemy_bullet_lifetime.gd`.
 
 ---
 
