@@ -134,6 +134,10 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/hazards/wreck/wreck_large.tscn",
 	},
 	{
+		"name": "wreck_explosive",
+		"scene": "res://assault/scenes/hazards/wreck/wreck_explosive.tscn",
+	},
+	{
 		"name": "structure_satellite",
 		"scene": "res://assault/scenes/hazards/wreck/structure_satellite.tscn",
 	},

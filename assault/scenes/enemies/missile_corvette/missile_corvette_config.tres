@@ -43,3 +43,4 @@ hazard_margin = 80.0
 hazard_resistance = 0.4
 wreck_chance = 0.5
 wreck_size = 1
+explosive_wreck_chance = 0.5

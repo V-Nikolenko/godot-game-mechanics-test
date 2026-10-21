@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/hazards/reactor_field/reactor_field.gd" id="1_field"]
+[ext_resource type="SpriteFrames" path="res://assault/assets/sprites/hazards/reactor_field_frames.tres" id="2_frames"]
+
+[node name="ReactorField" type="Node2D"]
+script = ExtResource("1_field")
+kind = &"reactor_field"
+radius = 90.0
+core_radius = 20.0
+avoid_weight = 1.0
+damage_radius = 90.0
+stress_damage = 4
+stress_period = 0.5
+duration = 2.0
+
+[node name="Sprite" type="AnimatedSprite2D" parent="."]
+sprite_frames = ExtResource("2_frames")
+animation = &"burn"

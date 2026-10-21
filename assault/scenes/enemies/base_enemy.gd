@@ -266,7 +266,9 @@ func _maybe_leave_wreck() -> void:
 		return
 	if _brain.rng.randf() >= cfg.wreck_chance:
 		return
-	var scene := WreckScenes.scene_for(cfg.wreck_size, false)
+	# The explosive roll follows a successful wreck roll, and is drawn only for ships that can leave one (plan §2.10).
+	var explosive: bool = cfg.explosive_wreck_chance > 0.0 and _brain.rng.randf() < cfg.explosive_wreck_chance
+	var scene := WreckScenes.scene_for(cfg.wreck_size, explosive)
 	if scene == null:
 		return
 	var wreck := scene.instantiate() as Wreck

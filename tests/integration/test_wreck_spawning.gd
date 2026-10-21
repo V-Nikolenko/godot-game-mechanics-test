@@ -300,3 +300,83 @@ func test_a_real_bullet_kill_leaves_exactly_one_wreck() -> void:
 	assert_eq(_wrecks().size(), 1, "exactly one wreck appears within 3 physics frames of the kill")
 	for c in _enemies.get_children():
 		assert_false(c is Wreck, "never in the enemy container")
+
+
+# --- explosive share (plan §2.10) ---------------------------------------------------------------
+
+## The explosive flag of every wreck [param kills] deaths leave, in order.
+func _explosive_run(mode: String, kills: int, explosive_chance: float, seed_value: int) -> Array:
+	_build(mode)
+	var mix: Array = []
+	_hazards.child_entered_tree.connect(func(n: Node) -> void:
+		if n is Wreck:
+			mix.append((n as Wreck).explosive))
+	for i in kills:
+		var d := _drone(Vector2(100.0 + 40.0 * i, 200.0), 1.0, seed_value + i)
+		d.config.explosive_wreck_chance = explosive_chance
+		_kill(d)
+		await _flush()
+	_h.root.queue_free()
+	await get_tree().process_frame
+	return mix
+
+
+func test_the_explosive_share_is_seeded(mode: String = use_parameters(_MODES)) -> void:
+	var first: Array = await _explosive_run(mode, 8, 0.5, 300)
+	var second: Array = await _explosive_run(mode, 8, 0.5, 300)
+	assert_eq(first.size(), 8, "chance 1: every death leaves a wreck")
+	assert_true(first.has(true) and first.has(false), "%s: a mix of both at 50 %%" % mode)
+	assert_eq(first, second, "%s: same seeds, same mix" % mode)
+	assert_ne(first, await _explosive_run(mode, 8, 0.5, 9000), "%s: other seeds, another mix" % mode)
+
+
+func test_the_extremes_of_the_explosive_share(mode: String = use_parameters(_MODES)) -> void:
+	var none: Array = await _explosive_run(mode, 3, 0.0, 5)
+	var all: Array = await _explosive_run(mode, 3, 1.0, 5)
+	assert_false(none.has(true), "%s: chance 0 leaves only inert wrecks" % mode)
+	assert_false(all.has(false), "%s: chance 1 leaves only explosive ones" % mode)
+
+
+func test_the_explosive_roll_is_a_second_draw_only_after_a_wreck_and_only_when_configured(mode: String = use_parameters(_MODES)) -> void:
+	_build(mode)
+	var inert := _drone(Vector2(300.0, 200.0), 1.0, 77)
+	var explosive := _drone(Vector2(400.0, 200.0), 1.0, 77)
+	explosive.config.explosive_wreck_chance = 0.5
+	var none := _drone(Vector2(500.0, 200.0), 0.0, 77)
+	none.config.explosive_wreck_chance = 0.5
+	var control := _drone(Vector2(600.0, 200.0), 1.0, 77)
+	var control_rng: RandomNumberGenerator = (control.get_node("Brain") as EnemyBrain).rng
+	var rngs: Array[RandomNumberGenerator] = []
+	for e in [inert, explosive, none]:
+		rngs.append((e.get_node("Brain") as EnemyBrain).rng)
+		_kill(e)
+	await _flush()
+	control_rng.randf()
+	assert_eq(rngs[0].randf(), control_rng.randf(), "%s: no explosive chance, one draw" % mode)
+	var control2 := _drone(Vector2(700.0, 200.0), 1.0, 77)
+	var rng2: RandomNumberGenerator = (control2.get_node("Brain") as EnemyBrain).rng
+	rng2.randf()
+	rng2.randf()
+	assert_eq(rngs[1].randf(), rng2.randf(), "%s: with one, a second draw follows the wreck roll" % mode)
+	var rng3: RandomNumberGenerator = (_drone(Vector2(800.0, 200.0), 1.0, 77).get_node("Brain") as EnemyBrain).rng
+	assert_eq(rngs[2].randf(), rng3.randf(), "%s: a failed wreck roll never draws the second value" % mode)
+
+
+func test_scene_for_returns_the_explosive_scene_the_spawner_uses(mode: String = use_parameters(_MODES)) -> void:
+	_build(mode)
+	var d := _drone(Vector2(300.0, 200.0), 1.0, 1)
+	d.config.explosive_wreck_chance = 1.0
+	_kill(d)
+	await _flush()
+	var ws := _wrecks()
+	assert_eq(ws.size(), 1)
+	assert_true(ws[0].explosive)
+	assert_eq(ws[0].scene_file_path, WreckScenes.scene_for(0, true).resource_path)
+
+
+func test_only_ordnance_carriers_leave_explosive_wrecks() -> void:
+	for row in _CONFIGS:
+		var cfg := load(row[0]) as ShipConfig
+		var carrier: bool = (row[0] as String).contains("bomber") or (row[0] as String).contains("missile_corvette")
+		assert_almost_eq(cfg.explosive_wreck_chance, 0.5 if carrier else 0.0, 0.0001, "%s explosive_wreck_chance" % row[0])
+	assert_eq(ShipConfig.new().explosive_wreck_chance, 0.0)

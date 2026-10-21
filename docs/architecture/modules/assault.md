@@ -506,7 +506,7 @@ blocks bodies, `LineOfSight` (`blocks_line_of_sight()`), shots into its body-siz
 damage 10) shares the body shape, so only a *drifting* wreck hurts, armed 0.6 s after entering the tree; it yields rather than keep
 pushing into a ship. Assault drift is 60 px/s down until `ProjectileLifetime` (world rect + 30 s) ends it; `retire()` fades it out.
 `DebrisFragment` (`debris_fragment.gd`, an `Area2D`, `debris_drift.tscn`) is a contact-only hazard (damage 8, no cover).
-`WreckScenes.scene_for(size, explosive)` maps the three sizes. See [`HAZARD.md`](../../../assault/scenes/hazards/wreck/HAZARD.md); tests
+`WreckScenes.scene_for(size, explosive)` maps the three sizes (and returns `wreck_explosive.tscn` for any size when explosive). See [`HAZARD.md`](../../../assault/scenes/hazards/wreck/HAZARD.md); tests
 `tests/integration/test_wreck.gd`.
 **Wrecks from deaths (Phase 6 t11).** `ShipConfig` (group Hazards) gains `wreck_chance` / `wreck_size` (0 small, 1 medium, 2 large); the nine
 `*_config.tres` carry the plan §2.9 values (Swarm / Razor 0, Fighter / Gatling 0.2 small, Sniper / Support 0.3 small, Missile Corvette / Ram 0.5
@@ -517,6 +517,7 @@ with no container or chance 0 nothing is drawn. The wreck inherits 25 % of the s
 its container (`Wreck._enforce_cap()`; oldest by a static sequence number is `retire()`d), so two deaths in one frame cannot slip past it. Wrecks never
 enter the enemy container, so `ENEMIES_CLEARED` is unaffected. Tests `tests/integration/test_wreck_spawning.gd`; the live-level guard is
 `test_level1_fighter_exit.gd::test_cloud_descent_clears_in_time_with_wrecks_left_behind`.
+**Explosive wrecks (Phase 6 t12).** `ShipConfig.explosive_wreck_chance` (Bomber, Missile Corvette 0.5; others 0) is a second draw from the same seeded rng, only after a successful wreck roll and only when above 0; `WreckScenes.scene_for(size, true)` then returns `wreck_explosive.tscn` (a `Wreck` with `explosive`, HP 20). It goes off at HP 0 or 1.0 s after a ship's hurtbox overlaps its armed contact box: `Hazards.pulse_damage(110, 25)` by centre distance (both sides; a plated Ram deflects it), then a `ReactorField` (`reactor_field/`, r 90, 4 per 0.5 s for 2.0 s, no pull) through the deferred `spawn_into`. See [`HAZARD.md`](../../../assault/scenes/hazards/wreck/HAZARD.md) and [`reactor_field/HAZARD.md`](../../../assault/scenes/hazards/reactor_field/HAZARD.md); tests `test_wreck.gd`, `test_wreck_spawning.gd`.
 
 ### Enemies
 

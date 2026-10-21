@@ -22,6 +22,8 @@ extends CharacterBody2D
 signal expired
 ## HP reached 0. Emitted once, just before the wreck frees itself (t12 hangs the explosive blast on it).
 signal destroyed(world_position: Vector2)
+## The explosive wreck blew up (HP 0 or its fuse ran out). Emitted once, as it frees itself.
+signal detonated(world_position: Vector2)
 
 const RETIRE_FADE := 0.5
 const GROUP: StringName = &"wrecks"
@@ -30,6 +32,8 @@ const YIELD_DEPTH := 1.5
 ## Alive cap for runtime wrecks per mode; the oldest beyond it retires.
 const CAP_ASSAULT := 4
 const CAP_OPEN_SPACE := 8
+## The fuse light blinks between CHARGING and COMMIT at this period (seconds per state).
+const FUSE_BLINK := 0.1
 
 ## Spawn order across the process; only the order matters.
 static var _next_sequence: int = 0
@@ -50,6 +54,14 @@ static var _next_sequence: int = 0
 ## Stop drifting into a ship body it touches (the clamp-edge rule). Off only in the test that proves the rule matters.
 @export var yield_to_ships: bool = true
 
+## Explosive wrecks (plan §2.10): go off when HP reaches 0, or `fuse` seconds after a ship's hurtbox first overlaps the
+## armed contact box. The blast hurts BOTH sides by centre distance (`Hazards.pulse_damage`), then a reactor field burns.
+@export var explosive: bool = false
+@export var fuse: float = 1.0
+@export var blast_radius: float = 110.0
+@export var blast_damage: int = 25
+@export var reactor_field_scene: PackedScene
+
 ## Set by `spawn_into()`: a runtime wreck, as opposed to a structure placed in a scene (t11's alive cap counts these only).
 var spawned: bool = false
 var _sequence: int = 0
@@ -60,12 +72,17 @@ var _sequence: int = 0
 @onready var _contact: HitBox = $ContactHitBox
 @onready var _contact_shape: CollisionShape2D = $ContactHitBox/CollisionShape2D
 @onready var _lifetime: ProjectileLifetime = $ProjectileLifetime
+@onready var _light: StateLight = get_node_or_null("StateLight") as StateLight
+@onready var _glow: AnimatedSprite2D = get_node_or_null("Glow") as AnimatedSprite2D
 
 var _info := HazardInfo.new()
 var _age: float = 0.0
 var _armed: bool = false
 var _assault: bool = false
 var _retiring: bool = false
+var _fusing: bool = false
+var _fuse_clock: float = 0.0
+var _detonated: bool = false
 var _fade_time: float = 0.0
 var _fade_clock: float = 0.0
 var _dead: bool = false
@@ -135,6 +152,8 @@ func _ready() -> void:
 	add_child(_hit_effect)
 	_explosion = ExplosionEffect.new()
 	add_child(_explosion)
+	if explosive and _light != null:
+		_light.set_state(StateLight.State.CHARGING)
 	_refresh_info(Vector2.ZERO)
 	if spawned:
 		_sequence = _next_sequence
@@ -147,6 +166,10 @@ func _physics_process(delta: float) -> void:
 	if not _armed and not _retiring and _age >= contact_arm_delay:
 		_armed = true
 		_arm_contact()
+	if explosive and _armed and not _retiring and not _detonated:
+		_tick_fuse(delta)
+		if _detonated:
+			return
 	if _retiring:
 		_fade_clock += delta
 		modulate.a = clampf(1.0 - _fade_clock / _fade_time, 0.0, 1.0) if _fade_time > 0.0 else 0.0
@@ -203,6 +226,65 @@ func is_retiring() -> bool:
 
 func is_armed() -> bool:
 	return _armed
+
+
+func is_fusing() -> bool:
+	return _fusing
+
+
+## True once the fuse has run out or HP reached 0.
+func is_detonated() -> bool:
+	return _detonated
+
+
+## Starts the fuse the first tick a ship's hurtbox overlaps the armed contact box, then counts it in accumulated `delta`
+## (no `Timer`). The light blinks while it burns. A retiring wreck never fuses: its boxes are off.
+func _tick_fuse(delta: float) -> void:
+	if not _fusing:
+		if not _ship_touching():
+			return
+		_fusing = true
+		_fuse_clock = 0.0
+		if _glow != null:
+			_glow.play(&"fuse")
+	_fuse_clock += delta
+	if _light != null:
+		var on := int(_fuse_clock / FUSE_BLINK) % 2 == 0
+		_light.set_state(StateLight.State.COMMIT if on else StateLight.State.CHARGING)
+	if _fuse_clock >= fuse:
+		_detonate()
+
+
+## True while some ship (groups `player` / `enemies`) has its hurtbox on the armed contact box.
+func _ship_touching() -> bool:
+	if not is_inside_tree():
+		return false
+	for group in [&"player", &"enemies"]:
+		for ship in get_tree().get_nodes_in_group(group):
+			if _registered(ship as Node2D):
+				return true
+	return false
+
+
+## The blast, in order: damage by centre distance to every ship in range (a direct emit that adds no body, so safe inside
+## a physics flush; a plated Ram deflects it, an `EnemyShield` does not absorb it, asteroids and wrecks are not hit),
+## then a reactor field through the deferred `spawn_into` (none without a `HazardContainer`), then the wreck frees
+## itself. Idempotent: two detonations in one frame hurt once.
+func _detonate() -> void:
+	if _detonated or not is_inside_tree():
+		return
+	_detonated = true
+	_dead = true
+	var at := global_position
+	_explosion.explode()
+	Hazards.pulse_damage(get_tree(), at, blast_radius, blast_damage)
+	var container := Hazards.container(get_tree())
+	if container != null and reactor_field_scene != null:
+		var field := reactor_field_scene.instantiate() as HazardField
+		if field != null:
+			field.spawn_into(container, at)
+	detonated.emit(at)
+	queue_free()
 
 
 ## Alive cap for runtime wrecks (plan §2.9), enforced as each one enters its container so two deaths in one frame cannot
@@ -274,6 +356,10 @@ func _on_health_changed(current: int) -> void:
 	if _dead or _retiring or current > 0:
 		return
 	_dead = true
+	if explosive:
+		destroyed.emit(global_position)
+		_detonate()
+		return
 	_explosion.explode()
 	destroyed.emit(global_position)
 	queue_free()

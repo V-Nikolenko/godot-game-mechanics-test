@@ -16,6 +16,8 @@ const LARGE: PackedScene = preload("res://assault/scenes/hazards/wreck/wreck_lar
 const SATELLITE: PackedScene = preload("res://assault/scenes/hazards/wreck/structure_satellite.tscn")
 const CARGO: PackedScene = preload("res://assault/scenes/hazards/wreck/structure_cargo_platform.tscn")
 const MODULE: PackedScene = preload("res://assault/scenes/hazards/wreck/structure_station_module.tscn")
+const EXPLOSIVE: PackedScene = preload("res://assault/scenes/hazards/wreck/wreck_explosive.tscn")
+const RAM_SCENE: PackedScene = preload("res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn")
 const DEBRIS: PackedScene = preload("res://assault/scenes/hazards/wreck/debris_drift.tscn")
 const BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 const ROUND_SCENE: PackedScene = preload("res://assault/scenes/projectiles/enemy_bullet/rounds/pulse_round.tscn")
@@ -609,7 +611,9 @@ func test_wreck_scenes_scene_for() -> void:
 	assert_eq(WreckScenes.scene_for(WreckScenes.Size.SMALL, false), SMALL)
 	assert_eq(WreckScenes.scene_for(WreckScenes.Size.MEDIUM, false), MEDIUM)
 	assert_eq(WreckScenes.scene_for(WreckScenes.Size.LARGE, false), LARGE)
-	assert_null(WreckScenes.scene_for(WreckScenes.Size.MEDIUM, true), "explosive wrecks are t12's")
+	for size in [WreckScenes.Size.SMALL, WreckScenes.Size.MEDIUM, WreckScenes.Size.LARGE]:
+		assert_eq(WreckScenes.scene_for(size, true), EXPLOSIVE, "an explosive wreck has one scene, whatever the size")
+	assert_null(WreckScenes.scene_for(7, true))
 	assert_null(WreckScenes.scene_for(7, false))
 
 
@@ -769,3 +773,227 @@ func test_assault_cap_ends_in_a_fade_not_a_vanish() -> void:
 	(w.get_node("ProjectileLifetime") as ProjectileLifetime).expire_now()
 	assert_true(w.is_retiring(), "expired -> retire()")
 	assert_false(w.is_queued_for_deletion(), "it fades first")
+
+
+# --- explosive wrecks and reactor fields (plan §2.10) -------------------------------------------
+
+## A hazard container in the tree (group `hazard_container`), as the level scenes have.
+func _hazard_container(parent: Node) -> Node2D:
+	var c := Node2D.new()
+	c.add_to_group(Hazards.CONTAINER_GROUP)
+	parent.add_child(c)
+	return c
+
+
+func _explosive(parent: Node, at: Vector2) -> Wreck:
+	return _wreck(parent, at, EXPLOSIVE)
+
+
+func _fields(c: Node) -> Array[HazardField]:
+	var out: Array[HazardField] = []
+	for n in c.get_children():
+		if n is HazardField and not n.is_queued_for_deletion():
+			out.append(n)
+	return out
+
+
+func test_the_explosive_scene_numbers() -> void:
+	var c := _container()
+	var w := _explosive(c, P)
+	assert_true(w.explosive)
+	assert_eq(_hp(w), 20)
+	assert_true(w.is_in_group(&"wrecks"))
+	assert_false(w.is_in_group(&"enemies"))
+	assert_true(w.blocks_line_of_sight(), "still cover")
+	var light := w.get_node("StateLight") as StateLight
+	assert_eq(light.get_state(), StateLight.State.CHARGING, "the glow of live ordnance")
+	assert_eq(w.fuse, 1.0)
+	assert_eq(w.blast_radius, 110.0)
+	assert_eq(w.blast_damage, 25)
+	var plain := MEDIUM.instantiate() as Wreck
+	assert_false(plain.explosive, "an ordinary wreck is inert")
+	plain.free()
+
+
+func test_the_reactor_field_scene_numbers() -> void:
+	var f := load("res://assault/scenes/hazards/reactor_field/reactor_field.tscn").instantiate() as HazardField
+	add_child_autofree(f)
+	var info := f.hazard_info()
+	assert_eq(info.kind, &"reactor_field")
+	assert_eq(info.radius, 90.0)
+	assert_eq(f.damage_radius, 90.0)
+	assert_eq(f.stress_damage, 4)
+	assert_eq(f.stress_period, 0.5)
+	assert_eq(f.duration, 2.0)
+	assert_eq(info.avoid_weight, 1.0)
+	assert_eq(info.pull_force, 0.0)
+	assert_eq(info.tangential_force, 0.0)
+	assert_eq(info.movement_penalty, 0.0)
+
+
+## Shoots the explosive wreck to 0 HP with a player and a swarm drone [param gap] px (centre to centre) from it.
+## Returns [player hits, enemy hits].
+func _blast_with_gap(mode: String, gap: float) -> Array:
+	var h = _world(mode)
+	var c := _hazard_container(h.root)
+	var player_hits: Array[int] = []
+	var enemy_hits: Array[int] = []
+	_player(h.root, mode, P + Vector2(gap, 0), player_hits)
+	_make_swarm(h.root, P + Vector2(0, gap), enemy_hits)
+	var w := _explosive(c, P)
+	(w.get_node("HurtBox") as HurtBox).received_damage.emit(20)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	return [player_hits, enemy_hits]
+
+
+func test_a_wreck_shot_to_zero_hurts_the_player_and_an_enemy_at_110_px(mode: String = use_parameters(_MODES)) -> void:
+	var r: Array = await _blast_with_gap(mode, 110.0)
+	assert_eq(r[0], [25] as Array[int], "%s: the player's centre is in the blast" % mode)
+	assert_eq(r[1], [25] as Array[int], "%s: and so is the enemy's" % mode)
+
+
+func test_neither_is_hurt_at_111_px(mode: String = use_parameters(_MODES)) -> void:
+	var r: Array = await _blast_with_gap(mode, 111.0)
+	assert_eq(r[0], [] as Array[int], "%s: just outside, the player is spared" % mode)
+	assert_eq(r[1], [] as Array[int], "%s: and so is the enemy" % mode)
+
+
+func test_the_blast_deflects_off_a_plated_ram() -> void:
+	var h = _world("open_space")
+	var c := _hazard_container(h.root)
+	var ram := RAM_SCENE.instantiate() as RamCorvette
+	ram.global_position = P + Vector2(50, 0)
+	h.root.add_child(ram)
+	ram.set_physics_process(false)
+	var hp := ram.health.current_health
+	var w := _explosive(c, P)
+	(w.get_node("HurtBox") as HurtBox).received_damage.emit(20)
+	assert_eq(ram.health.current_health, hp, "the armour deflects the blast")
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+func test_the_blast_spares_other_wrecks() -> void:
+	var h = _world("open_space")
+	var c := _hazard_container(h.root)
+	var other := _wreck(c, P + Vector2(40, 0), MEDIUM)
+	var w := _explosive(c, P)
+	(w.get_node("HurtBox") as HurtBox).received_damage.emit(20)
+	assert_eq(_hp(other), 200, "wrecks do not chain")
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+
+func test_detonating_twice_in_one_frame_hurts_once(mode: String = use_parameters(_MODES)) -> void:
+	var h = _world(mode)
+	var c := _hazard_container(h.root)
+	var received: Array[int] = []
+	_player(h.root, mode, P + Vector2(50, 0), received)
+	var w := _explosive(c, P)
+	var n := [0]
+	w.detonated.connect(func(_at: Vector2) -> void: n[0] += 1)
+	w._detonate()
+	w._detonate()
+	(w.get_node("HurtBox") as HurtBox).received_damage.emit(20)
+	assert_eq(received, [25] as Array[int], "%s: one blast" % mode)
+	assert_eq(n[0], 1)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_eq(_fields(c).size(), 1, "and one reactor field")
+
+
+## An armed explosive wreck at P with nothing on it. Returns [wreck, detonation counter, harness, container].
+func _touch_setup() -> Array:
+	_scale_clock()
+	var h = _world("open_space")
+	var c := _hazard_container(h.root)
+	var w := _explosive(c, P)
+	var n := [0]
+	w.detonated.connect(func(_at: Vector2) -> void: n[0] += 1)
+	await _seconds(0.7)
+	assert_true(w.is_armed())
+	return [w, n, h, c]
+
+
+func test_a_touch_detonates_after_the_fuse_and_not_before() -> void:
+	var r: Array = await _touch_setup()
+	var w: Wreck = r[0]
+	var n: Array = r[1]
+	var received: Array[int] = []
+	_player(r[2].root, "open_space", P, received)
+	await _seconds(0.9)
+	assert_eq(n[0], 0, "0.9 s into the fuse: not yet")
+	assert_true(w.is_fusing())
+	await _seconds(0.3)
+	assert_eq(n[0], 1, "1.2 s in: it went off")
+	assert_true(received.has(25), "and the player standing on it took the blast")
+
+
+func test_no_touch_no_fuse() -> void:
+	var r: Array = await _touch_setup()
+	await _seconds(1.2)
+	assert_false((r[0] as Wreck).is_fusing())
+	assert_eq(r[1][0], 0)
+
+
+func test_a_wreck_that_retires_does_not_blow_up_on_touch() -> void:
+	var r: Array = await _touch_setup()
+	(r[0] as Wreck).retire(0.2)
+	_player(r[2].root, "open_space", P, [] as Array[int])
+	await _seconds(1.2)
+	assert_eq(r[1][0], 0)
+
+
+func test_a_detonation_leaves_one_reactor_field_that_stresses_for_two_seconds_and_frees() -> void:
+	var h = _world("open_space")
+	var c := _hazard_container(h.root)
+	var received: Array[int] = []
+	_player(h.root, "open_space", P + Vector2(60, 0), received)
+	var w := _explosive(c, P)
+	w._detonate()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var fields := _fields(c)
+	assert_eq(fields.size(), 1, "exactly one reactor field")
+	var f := fields[0]
+	assert_eq(f.kind, &"reactor_field")
+	assert_eq(f.global_position, P)
+	assert_true(_gone(w))
+	received.clear()
+	f.set_physics_process(false)
+	var ticks := 0
+	while is_instance_valid(f) and not f.is_queued_for_deletion() and ticks < 200:
+		f._physics_process(D)
+		ticks += 1
+	assert_between(ticks, 119, 121, "it lives 2.0 s")
+	assert_between(received.size(), 3, 4, "a pulse every 0.5 s")
+	for amount in received:
+		assert_eq(amount, 4)
+	await get_tree().process_frame
+	assert_false(is_instance_valid(f), "and frees")
+
+
+func test_no_container_means_no_reactor_field() -> void:
+	var h = _world("open_space")
+	var w := _explosive(h.root, P)
+	w._detonate()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	for n in h.root.get_children():
+		assert_false(n is HazardField, "nothing to put it in, so nothing spawned")
+	assert_true(_gone(w))
+
+
+func test_a_real_bullet_kills_an_explosive_wreck_and_leaves_exactly_one_reactor_field() -> void:
+	_scale_clock()
+	var h = _world("open_space")
+	var c := _hazard_container(h.root)
+	var w := _explosive(c, Vector2(400, 300))
+	var b: Node2D = BULLET_SCENE.instantiate()
+	h.root.add_child(b)
+	b.global_position = Vector2(400, 420)
+	b.expired.connect(b.queue_free)
+	await _frames(40)
+	assert_true(_gone(w), "the shot killed it")
+	assert_eq(_fields(c).size(), 1, "and exactly one reactor field appeared, with no engine error")

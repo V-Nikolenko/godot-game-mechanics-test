@@ -20,7 +20,7 @@ drifts into a ship. Drifting debris is the opposite: no cover at all, but it hur
 
 All six wreck and structure scenes run on `wreck.gd` (`Wreck`). The debris scenes run on `debris_fragment.gd`
 (`DebrisFragment`). `WreckScenes.scene_for(size, explosive)` (`wreck_scenes.gd`) maps `WreckScenes.Size` to the three
-wreck scenes. Explosive wrecks return `null` until t12. Spawning on death is t11's, and hub placement is t18's.
+wreck scenes, and returns `wreck_explosive.tscn` for any size when `explosive` is true. Spawning on death is t11's, and hub placement is t18's.
 
 ## `Wreck` — behaviour
 
@@ -76,9 +76,26 @@ wreck scenes. Explosive wrecks return `null` until t12. Spawning on death is t11
   drops any claim. It sets the body's and both areas' layers to 0, and switches monitoring off (deferred). It then fades
   `modulate.a` to 0 and calls `queue_free()`. A retiring wreck takes no damage and never emits `destroyed`. t11's
   alive cap uses it too (`Wreck._enforce_cap()`, Assault 4 / Open Space 8, oldest first).
-- **HP 0:** `ExplosionEffect`, `destroyed(world_position)` (t12 hangs the explosive blast on it), then `queue_free()`.
+- **HP 0:** `ExplosionEffect`, `destroyed(world_position)`, then `queue_free()`. An explosive wreck detonates instead (below).
 - **Runtime spawns** use `spawn_into(container, at, rot)`. It is deferred, and the wreck frees itself if the container
   is gone. It sets `spawned = true`, so t11's cap counts only runtime wrecks and never retires a placed structure.
+
+## The explosive wreck (t12)
+
+`wreck_explosive.tscn` is a `Wreck` with `explosive = true` (r 25, HP 20, a `StateLight` held at CHARGING, a `Glow`
+overlay). Bombers and Missile Corvettes leave one in half of their wrecks (`ShipConfig.explosive_wreck_chance` 0.5),
+for every wreck size. It is still cover until it goes off.
+
+- **Goes off** when its HP reaches 0 (any shot), or **1.0 s after** a ship's hurtbox first overlaps its armed contact
+  box (the light blinks CHARGING / COMMIT and the glow animates while the fuse burns). A stationary explosive wreck
+  that a ship only bumps never fuses: the hurtbox does not reach the box (see Contact above). A retiring wreck never
+  fuses.
+- **`_detonate()`** is idempotent (`_detonated`) and does, in order: the explosion effect; the blast
+  `Hazards.pulse_damage(tree, position, 110, 25)`, which hurts the player and every enemy whose **centre** is within
+  110 px (**both sides**: environmental blasts hurt everyone), is deflected by a plated Ram, is not absorbed by an
+  `EnemyShield` and does not touch asteroids or other wrecks (no chain); a `ReactorField` through the deferred
+  `spawn_into` (none without a `hazard_container`); the `detonated(world_position)` signal; `queue_free()`.
+  No blast area is created, so it is safe inside a physics callback.
 
 ## `DebrisFragment` — behaviour
 
@@ -100,6 +117,7 @@ wreck/
 ├── HAZARD.md                       ← this file
 ├── wreck.gd                        ← Wreck: cover, contact, yield, lifetime, retire, spawn_into
 ├── wreck_small.tscn / wreck_medium.tscn / wreck_large.tscn
+├── wreck_explosive.tscn            ← explosive wreck (one scene for every size)
 ├── structure_satellite.tscn / structure_cargo_platform.tscn / structure_station_module.tscn
 ├── debris_fragment.gd              ← DebrisFragment
 ├── debris_drift.tscn
