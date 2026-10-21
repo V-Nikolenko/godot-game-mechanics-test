@@ -12,3 +12,5 @@ lose_radius = 1300.0
 hazard_avoidance = 1.0
 hazard_margin = 90.0
 hazard_resistance = 0.1
+wreck_chance = 0.3
+wreck_size = 0

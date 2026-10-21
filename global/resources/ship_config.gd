@@ -26,6 +26,11 @@ extends Resource
 @export var hazard_margin: float = 60.0
 ## Share of a hazard's pull and slow this ship shrugs off, 0..1. Heavy ships resist; drones do not.
 @export_range(0.0, 1.0) var hazard_resistance: float = 0.0
+## Chance (0..1) that this ship leaves a `Wreck` when destroyed. Needs a brain (mover-driven enemies only) and a
+## `HazardContainer` in the level; with neither, no wreck and no rng draw. `BaseEnemy._maybe_leave_wreck()`.
+@export_range(0.0, 1.0) var wreck_chance: float = 0.0
+## Size of that wreck: 0 small, 1 medium, 2 large (`WreckScenes.Size`).
+@export_range(0, 2) var wreck_size: int = 0
 
 
 ## Replace `node`'s `property`-named field with a copy private to that node, if it still holds

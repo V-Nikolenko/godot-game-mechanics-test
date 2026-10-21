@@ -78,6 +78,8 @@ arc_radius = 130.0
 
 [node name="EnemyContainer" type="Node2D" parent="." unique_id=1782392043]
 
+[node name="HazardContainer" type="Node2D" parent="." groups=["hazard_container"]]
+
 [node name="PlayerShip" parent="." unique_id=574725177 instance=ExtResource("2_player")]
 
 [node name="Camera2D" type="Camera2D" parent="PlayerShip" unique_id=300624665]

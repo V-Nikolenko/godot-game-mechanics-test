@@ -42,3 +42,5 @@ idle_speed = 0.6
 hazard_avoidance = 1.0
 hazard_margin = 12.0
 hazard_resistance = 0.0
+wreck_chance = 0.0
+wreck_size = 0

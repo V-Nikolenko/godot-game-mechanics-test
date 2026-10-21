@@ -27,6 +27,12 @@ const RETIRE_FADE := 0.5
 const GROUP: StringName = &"wrecks"
 ## Penetration along the drift (px) at which the wreck holds even when no hit has registered (see `_yield`).
 const YIELD_DEPTH := 1.5
+## Alive cap for runtime wrecks per mode; the oldest beyond it retires.
+const CAP_ASSAULT := 4
+const CAP_OPEN_SPACE := 8
+
+## Spawn order across the process; only the order matters.
+static var _next_sequence: int = 0
 
 ## True for every wreck and structure; `LineOfSight` reads it through `blocks_line_of_sight()`.
 @export var blocks_los: bool = true
@@ -46,6 +52,7 @@ const YIELD_DEPTH := 1.5
 
 ## Set by `spawn_into()`: a runtime wreck, as opposed to a structure placed in a scene (t11's alive cap counts these only).
 var spawned: bool = false
+var _sequence: int = 0
 
 @onready var _body_shape: CollisionShape2D = $CollisionShape2D
 @onready var _health: Health = $Health
@@ -129,6 +136,10 @@ func _ready() -> void:
 	_explosion = ExplosionEffect.new()
 	add_child(_explosion)
 	_refresh_info(Vector2.ZERO)
+	if spawned:
+		_sequence = _next_sequence
+		_next_sequence += 1
+		_enforce_cap()
 
 
 func _physics_process(delta: float) -> void:
@@ -192,6 +203,23 @@ func is_retiring() -> bool:
 
 func is_armed() -> bool:
 	return _armed
+
+
+## Alive cap for runtime wrecks (plan §2.9), enforced as each one enters its container so two deaths in one frame cannot
+## slip past it: over the cap the oldest (lowest sequence number) is `retire()`d, a fade rather than a vanish.
+func _enforce_cap() -> void:
+	var parent := get_parent()
+	if parent == null:
+		return
+	var cap := CAP_ASSAULT if _assault else CAP_OPEN_SPACE
+	var alive: Array[Wreck] = []
+	for c in parent.get_children():
+		var w := c as Wreck
+		if w != null and w.spawned and not w._retiring and not w._dead:
+			alive.append(w)
+	alive.sort_custom(func(a: Wreck, b: Wreck) -> bool: return a._sequence < b._sequence)
+	while alive.size() > cap:
+		alive.pop_front().retire()
 
 
 func hazard_info() -> HazardInfo:

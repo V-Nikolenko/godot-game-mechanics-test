@@ -47,3 +47,5 @@ rail_damage = 4
 hazard_avoidance = 0.8
 hazard_margin = 60.0
 hazard_resistance = 0.15
+wreck_chance = 0.2
+wreck_size = 0

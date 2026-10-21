@@ -22,6 +22,8 @@ script = ExtResource("18_arcam")
 
 [node name="EnemyContainer" type="Node2D" parent="." unique_id=1889017634]
 
+[node name="HazardContainer" type="Node2D" parent="." groups=["hazard_container"]]
+
 [node name="WaveManager" type="Node" parent="." unique_id=1045891202 node_paths=PackedStringArray("enemy_container")]
 script = ExtResource("11_wave")
 enemy_container = NodePath("../EnemyContainer")

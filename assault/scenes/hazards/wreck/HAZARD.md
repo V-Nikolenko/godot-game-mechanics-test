@@ -74,7 +74,7 @@ wreck scenes. Explosive wrecks return `null` until t12. Spawning on death is t11
 - **`retire(fade := 0.5)`** takes the wreck out of play without it vanishing on screen. It unregisters at once and
   drops any claim. It sets the body's and both areas' layers to 0, and switches monitoring off (deferred). It then fades
   `modulate.a` to 0 and calls `queue_free()`. A retiring wreck takes no damage and never emits `destroyed`. t11's
-  alive cap uses it too.
+  alive cap uses it too (`Wreck._enforce_cap()`, Assault 4 / Open Space 8, oldest first).
 - **HP 0:** `ExplosionEffect`, `destroyed(world_position)` (t12 hangs the explosive blast on it), then `queue_free()`.
 - **Runtime spawns** use `spawn_into(container, at, rot)`. It is deferred, and the wreck frees itself if the container
   is gone. It sets `spawned = true`, so t11's cap counts only runtime wrecks and never retires a placed structure.

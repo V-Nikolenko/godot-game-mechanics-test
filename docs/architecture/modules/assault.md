@@ -508,6 +508,15 @@ pushing into a ship. Assault drift is 60 px/s down until `ProjectileLifetime` (w
 `DebrisFragment` (`debris_fragment.gd`, an `Area2D`, `debris_drift.tscn`) is a contact-only hazard (damage 8, no cover).
 `WreckScenes.scene_for(size, explosive)` maps the three sizes. See [`HAZARD.md`](../../../assault/scenes/hazards/wreck/HAZARD.md); tests
 `tests/integration/test_wreck.gd`.
+**Wrecks from deaths (Phase 6 t11).** `ShipConfig` (group Hazards) gains `wreck_chance` / `wreck_size` (0 small, 1 medium, 2 large); the nine
+`*_config.tres` carry the plan §2.9 values (Swarm / Razor 0, Fighter / Gatling 0.2 small, Sniper / Support 0.3 small, Missile Corvette / Ram 0.5
+medium, Bomber 0.6 large). On death `BaseEnemy._maybe_leave_wreck()` (beside the explosion) needs a brain (legacy enemies leave none), a
+`HazardContainer` (group `hazard_container`: now in `level_1.tscn` and `sector_hub.tscn`) and a positive chance, then rolls the **brain's seeded rng**;
+with no container or chance 0 nothing is drawn. The wreck inherits 25 % of the ship's velocity and is attached with the deferred `spawn_into()`
+(a real kill runs inside a bullet's `area_entered` flush). Alive cap: Assault 4, Open Space 8, enforced in `Wreck._ready()` as each runtime wreck enters
+its container (`Wreck._enforce_cap()`; oldest by a static sequence number is `retire()`d), so two deaths in one frame cannot slip past it. Wrecks never
+enter the enemy container, so `ENEMIES_CLEARED` is unaffected. Tests `tests/integration/test_wreck_spawning.gd`; the live-level guard is
+`test_level1_fighter_exit.gd::test_cloud_descent_clears_in_time_with_wrecks_left_behind`.
 
 ### Enemies
 
