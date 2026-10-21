@@ -46,6 +46,23 @@ static func accel_at(pos: Vector2) -> Vector2:
 	return total
 
 
+## A projectile's heading after one tick in the fields: turned toward `heading * speed + accel_at(pos) * scale *
+## delta`, WITHOUT changing the speed the caller then multiplies it by (so every time and distance cap still holds;
+## a distance cap from the origin is only reached later on a curved path). Returns [param heading] itself, bit for
+## bit, when there is no hazard, no scale, no speed or nothing in reach. Plan §2.7: heavy, guided ordnance opts in
+## with `hazard_pull_scale()`; bullets, rounds and mines do not call this.
+static func bend_heading(heading: Vector2, speed: float, pos: Vector2, delta: float, scale: float = 1.0) -> Vector2:
+	if _nodes.is_empty() or scale <= 0.0 or speed <= 0.0:
+		return heading
+	var pull := accel_at(pos)
+	if pull == Vector2.ZERO:
+		return heading
+	var velocity := heading * speed + pull * (scale * delta)
+	if velocity.length_squared() < 1e-6:
+		return heading
+	return velocity.normalized()
+
+
 ## The strongest slow at [param pos], capped at `MAX_PENALTY`. Never stacked.
 static func penalty_at(pos: Vector2) -> float:
 	var strongest := 0.0

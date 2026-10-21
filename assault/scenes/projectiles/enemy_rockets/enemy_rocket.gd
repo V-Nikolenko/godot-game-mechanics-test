@@ -208,6 +208,11 @@ func speed() -> float:
 	return _speed
 
 
+## Heavy, guided ordnance bends in gravity wells and anomalies (`Hazards.bend_heading()`, speed unchanged); 1.0 = fully.
+func hazard_pull_scale() -> float:
+	return 1.0
+
+
 ## True once the impact HitBox has been opened (it is clear of its launcher).
 func is_armed() -> bool:
 	return _armed
@@ -251,6 +256,8 @@ func _tick(delta: float) -> void:
 		return
 	if is_guiding():
 		_steer(delta)
+	if Hazards.count() > 0:
+		_heading = Hazards.bend_heading(_heading, _speed, global_position, delta, hazard_pull_scale())
 	if _clock >= boost_seconds:
 		_speed = move_toward(_speed, cruise_speed, accel * delta)
 	global_position += _heading * _speed * delta

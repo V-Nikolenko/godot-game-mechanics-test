@@ -13,7 +13,17 @@ func _ready() -> void:
 
 func _physics_process(delta: float) -> void:
 	var forward := Vector2.UP.rotated(rotation)
+	if Hazards.count() > 0:
+		var bent := Hazards.bend_heading(forward, speed, global_position, delta, hazard_pull_scale())
+		if bent != forward:
+			forward = bent
+			rotation = bent.angle() + PI / 2
 	global_position += forward * speed * delta
+
+
+## Guided ordnance bends in gravity wells and anomalies (`Hazards.bend_heading()`, speed unchanged).
+func hazard_pull_scale() -> float:
+	return 1.0
 
 
 func _on_visible_on_screen_notifier_2d_screen_exited() -> void:

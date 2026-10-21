@@ -173,6 +173,7 @@ func _physics_process(delta: float) -> void:
 func _move(delta: float) -> void:
 	match kind:
 		Kind.GRAVITY_BOMB:
+			_bend(delta)
 			var step := _heading * _speed * delta
 			global_position += step
 			_travelled += step.length()
@@ -186,7 +187,19 @@ func _move(delta: float) -> void:
 				_speed = _launch_speed
 			else:
 				_speed = move_toward(_speed, final_speed, accel * delta)
+			_bend(delta)
 			global_position += _heading * _speed * delta
+
+
+## Gravity and pursuit bombs bend in gravity wells and anomalies (`Hazards.bend_heading()`, speed unchanged, so
+## `_max_travel` still counts the path length); a mine's eject arithmetic is untouched: 0.0.
+func hazard_pull_scale() -> float:
+	return 0.0 if kind == Kind.MINE else 1.0
+
+
+func _bend(delta: float) -> void:
+	if Hazards.count() > 0:
+		_heading = Hazards.bend_heading(_heading, _speed, global_position, delta, hazard_pull_scale())
 
 
 ## Where a pursuit bomb steers: the player's predicted position, else the point it was aimed at.
