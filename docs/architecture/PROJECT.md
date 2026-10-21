@@ -376,7 +376,7 @@ Each combat entity carries a behaviour doc **beside its scene**, mirroring a com
 
 - **Racers:** `assault/scenes/race/racers/<name>/RACER.md` (6 racers)
 - **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (the wave enemies + the `space_station` mini-boss)
-- **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (4 hazards: big/small asteroid, laser_ray, gravity_well)
+- **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (5 hazards: big/small asteroid, laser_ray, gravity_well, energy_anomaly)
 - **Race track hazards:** `assault/scenes/race/track/RACE_HAZARDS.md` (walls, asteroids, lasers + the lethal-hazard / AI-avoidance system)
 
 Level 1's **finale** phase is still the `ENEMIES_CLEARED` section in

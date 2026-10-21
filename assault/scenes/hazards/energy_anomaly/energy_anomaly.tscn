@@ -1,0 +1,22 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://global/hazards/hazard_field.gd" id="1_field"]
+[ext_resource type="SpriteFrames" path="res://assault/assets/sprites/hazards/energy_anomaly_frames.tres" id="2_frames"]
+[ext_resource type="Script" path="res://assault/scenes/hazards/energy_anomaly/energy_anomaly_sprite.gd" id="3_sprite"]
+
+[node name="EnergyAnomaly" type="Node2D"]
+script = ExtResource("1_field")
+kind = &"anomaly"
+radius = 300.0
+core_radius = 80.0
+tangential_force = 260.0
+avoid_weight = 0.7
+cycle_telegraph = 1.0
+cycle_active = 2.5
+cycle_quiet = 3.0
+
+[node name="Sprite" type="AnimatedSprite2D" parent="."]
+sprite_frames = ExtResource("2_frames")
+animation = &"dim"
+autoplay = "dim"
+script = ExtResource("3_sprite")

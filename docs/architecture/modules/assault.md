@@ -54,7 +54,7 @@ assault/scenes/
 │   ├── level_2_waves.gd         Level 2 wave list
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
-├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well
+├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly
 ├── allies/ally_fighter/         AI escort fighters (group "allies")
 ├── gui/                         HUD, score widgets/popups, weapon selector, game-over, debrief
 └── race/                        Race sub-mode (core/, racers/, track/, ui/)
@@ -485,6 +485,12 @@ with `race_hazard`/`loop`, and the space station's `StationLaserPhase` spawns it
 glow) with radius 420, core 90, pull 520, hull stress 5 / 0.5 s inside 150 px, over the t5 `swirl` sprite. No physics body, no
 LOS block; stress bypasses `EnemyShield` and a plated Ram deflects it. See
 [`HAZARD.md`](../../../assault/scenes/hazards/gravity_well/HAZARD.md); tests `tests/integration/test_gravity_well.gd`.
+
+**Energy Anomaly (Phase 6 t7).** `assault/scenes/hazards/energy_anomaly/energy_anomaly.tscn` — a plain `HazardField` (`kind
+&"anomaly"`) with radius 300, core 80, `tangential_force` 260 (an instance swirls the other way with −260) and the cycle
+TELEGRAPH 1.0 s / ACTIVE 2.5 s / QUIET 3.0 s; `avoid_weight` 0.7, 0 while QUIET. Only ACTIVE swirls. Its sprite carries
+`energy_anomaly_sprite.gd` (`EnergyAnomalySprite`), which follows `phase_changed` / `phase_progress()` for the look. See
+[`HAZARD.md`](../../../assault/scenes/hazards/energy_anomaly/HAZARD.md); tests `tests/integration/test_energy_anomaly.gd`.
 
 ### Enemies
 
