@@ -31,7 +31,7 @@ Where they differ from the plan, "as built" wins.
 ## How it was verified
 
 `bash /agent/verify.sh` was green at every task. New coverage is dual-mode (Open Space and Assault) in `tests/unit/test_hazards.gd`,
-`test_hazard_field.gd` and `tests/integration/test_context_avoidance.gd`, `test_player_hazards.gd`, `test_wreck.gd`,
+`test_hazard_field.gd` and `tests/unit/test_context_avoidance.gd`, `test_player_hazards.gd`, `test_wreck.gd`,
 `test_wreck_spawning.gd`, `test_hazard_projectiles.gd`, `test_hazard_art.gd`, `test_gravity_well.gd`, `test_energy_anomaly.gd` and the
 Sniper / Fighter / Ram / Bomber / ordnance / hub-patrol files; collision rows use real physics on the 8x clock. The level-1 gates are
 unchanged because level 1 has no hazard until a wreck is left, and `test_level1_fighter_exit.gd` replays cloud_descent with wrecks.

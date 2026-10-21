@@ -54,7 +54,7 @@ assault/scenes/
 │   ├── level_2_waves.gd         Level 2 wave list
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
-├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, wreck (wrecks, structures, debris)
+├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck (wrecks, structures, debris)
 ├── allies/ally_fighter/         AI escort fighters (group "allies")
 ├── gui/                         HUD, score widgets/popups, weapon selector, game-over, debrief
 └── race/                        Race sub-mode (core/, racers/, track/, ui/)

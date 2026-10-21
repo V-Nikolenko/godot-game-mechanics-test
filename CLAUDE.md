@@ -82,7 +82,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   spawned deferred through `spawn_into()` into `Hazards.container(tree)` — still exactly one owner, it frees itself.
   **Hazards are sampled by the body, the mover owns enemy drift, runtime hazards spawn deferred into the `HazardContainer`** —
   [PROJECT.md](docs/architecture/PROJECT.md) → Conventions. Phase 6 gates: `tests/unit/test_hazards.gd`, `test_hazard_field.gd`,
-  `tests/integration/test_context_avoidance.gd` (pass-through bit-identical with no hazard, avoidance per profile),
+  `tests/unit/test_context_avoidance.gd` (pass-through bit-identical with no hazard, avoidance per profile),
   `test_player_hazards.gd` (pull and slow on both players), `test_wreck.gd` (body, yield, LOS, "no hurtbox larger than its
   body"), `test_wreck_spawning.gd` (death rolls, caps, no container -> no rng, real-physics deferred spawn),
   `test_hazard_projectiles.gd` (rockets / bombs / missiles bend, bullets fly true), `test_hazard_art.gd`, the Sniper / Fighter /
