@@ -30,8 +30,9 @@
 ##
 ## ── No self-damage, in either direction ──────────────────────────────────────────────────────
 ##
-## `enemy_bullet.tscn`'s HitBox is layer 256 / mask 128 (the player hurtbox only), and the
-## station's core HurtBox mask is `97 | 1024` = 1121, which excludes 256. So the
+## `enemy_bullet.tscn`'s HitBox is layer 256 / mask 1152 (the player hurtbox 128, plus hazard contact 1024 — a
+## 1024 area ends a round only when its owner answers `stops_enemy_rounds()`, i.e. a wreck; the station does not), and
+## the station's core HurtBox mask is `97 | 1024` = 1121, which excludes 256. So the
 ## `hit_mask_override` dance `StationLaserPhase` needs has no analogue here.
 class_name StationGunnery
 extends Node2D

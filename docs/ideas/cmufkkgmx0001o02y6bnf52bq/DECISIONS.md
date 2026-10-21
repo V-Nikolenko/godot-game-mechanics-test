@@ -2330,3 +2330,25 @@ check this phase's *as built* section, once written, before relying on them.
   dual-mode row asserts that: the burst reaches the core, the drone stays inside `damage_radius` until its next boost
   (two 0.5 s stress pulses), and with no well the same burst leaves that radius. It does not assert "still inside 2 s
   later", which no geometry gives with the real brain.
+- **t10: wreck build choices later tasks depend on** (task plan `docs/plans/cmvg30aax007rqs2x14trnuf9/3-plan.md`):
+  - Every wreck and structure body is **one circle**, so `HazardInfo.radius` is the body radius exactly. The radii are
+    small 13, medium 25, large 40, satellite 28, cargo platform 55 and station module 45.
+  - `Wreck.spawned` is true only after `spawn_into()`. t11's alive cap counts and retires only those, never a placed
+    structure.
+  - **The yield:** a drifting wreck stops pushing into a body in groups `player` / `enemies`. It holds once that
+    ship's hurtbox has registered the contact box, or once it is `YIELD_DEPTH` 1.5 px deep along the drift. It then
+    backs off and waits for a clear next step. Ships it was born on are ignored until they separate.
+  - **Debris hurts on touch at any speed.** It has no body to stop the ship first.
+  - The Open Space lifetime runs through `ProjectileLifetime.max_time = 0` (inert), not a processing toggle. The wreck
+    reads its mode once, in `_enter_tree()`.
+  - **Rule: no ship hurtbox is larger than its body.** A still wreck is harmless only because of it. The Sniper's
+    hurtbox scale went 1.4505 → 1.44 to equal its body, and `test_wreck.gd` gates the rule for all 9 mover-driven
+    enemies and both players.
+  - **Cover stops the player's Sniper Shot and takes its full damage.** `Bullet`'s `unlimited_pierce` branch ends on
+    a parent answering duck-typed `stops_piercing()`, without zeroing damage.
+  - Enemy rounds end on a 1024 area only when its owner answers duck-typed `stops_enemy_rounds()`.
+    `enemy_bullet.tscn`'s HitBox mask is now 1152.
+  - **Arming switches the contact shape on as well as `monitorable`.** A hazard contact box that arms must enable its
+    `CollisionShape2D` (born `disabled`), not only flip `monitorable`. Godot never reports an overlap for an area pair
+    it built while the box was unmonitorable, and that pair forms for any hurtbox within the broadphase margin. So a
+    wreck armed a few px from a ship never hurt it. `DebrisFragment` does the same, and t12 / t15 should follow it.

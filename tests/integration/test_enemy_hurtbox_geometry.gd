@@ -120,6 +120,31 @@ const ROSTER: Array[Dictionary] = [
 		"name": "swarm_drone",
 		"scene": "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn",
 	},
+	# Not enemies, but the same cover rule (phase 6 plan §2.8): a wreck or structure is hit wherever it is solid.
+	{
+		"name": "wreck_small",
+		"scene": "res://assault/scenes/hazards/wreck/wreck_small.tscn",
+	},
+	{
+		"name": "wreck_medium",
+		"scene": "res://assault/scenes/hazards/wreck/wreck_medium.tscn",
+	},
+	{
+		"name": "wreck_large",
+		"scene": "res://assault/scenes/hazards/wreck/wreck_large.tscn",
+	},
+	{
+		"name": "structure_satellite",
+		"scene": "res://assault/scenes/hazards/wreck/structure_satellite.tscn",
+	},
+	{
+		"name": "structure_cargo_platform",
+		"scene": "res://assault/scenes/hazards/wreck/structure_cargo_platform.tscn",
+	},
+	{
+		"name": "structure_station_module",
+		"scene": "res://assault/scenes/hazards/wreck/structure_station_module.tscn",
+	},
 ]
 
 

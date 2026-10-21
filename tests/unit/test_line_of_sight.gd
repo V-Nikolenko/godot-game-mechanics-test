@@ -10,7 +10,7 @@ const TO := Vector2(400.0, 0.0)
 
 
 ## A body that opts in through the duck-typed query rather than the `asteroids` group.
-class Wreck extends StaticBody2D:
+class FakeCover extends StaticBody2D:
 	var blocks := true
 
 	func blocks_line_of_sight() -> bool:
@@ -61,12 +61,12 @@ func test_a_plain_character_body_does_not_block() -> void:
 
 
 func test_a_body_answering_blocks_line_of_sight_blocks() -> void:
-	_body(Wreck.new(), Vector2(200.0, 0.0))
+	_body(FakeCover.new(), Vector2(200.0, 0.0))
 	assert_false(await _clear())
 
 
 func test_a_body_answering_false_does_not_block() -> void:
-	var wreck := _body(Wreck.new(), Vector2(200.0, 0.0)) as Wreck
+	var wreck := _body(FakeCover.new(), Vector2(200.0, 0.0)) as FakeCover
 	wreck.blocks = false
 	assert_true(await _clear())
 

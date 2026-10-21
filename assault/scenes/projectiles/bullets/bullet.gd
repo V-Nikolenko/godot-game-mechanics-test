@@ -122,6 +122,11 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 				hb.damage = 0
 			expired.emit()
 			queue_free()
+		## Cover (a wreck answers duck-typed `stops_piercing()`) stops the shot AND takes its full damage: the
+		## damage is not zeroed, so the HurtBox reads it whichever `area_entered` runs first (`queue_free` is deferred).
+		elif parent.has_method(&"stops_piercing") and parent.call(&"stops_piercing") == true:
+			expired.emit()
+			queue_free()
 		## Regular enemies: bullet passes through — do nothing, keep flying.
 		return
 	if _hit_is_deflected(area):

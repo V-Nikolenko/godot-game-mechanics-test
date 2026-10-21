@@ -26,7 +26,7 @@ end_cap_mode = 2
 
 [node name="HitBox" type="Area2D" parent="."]
 collision_layer = 256
-collision_mask = 128
+collision_mask = 1152
 script = ExtResource("2_ebullet")
 damage = 10
 metadata/_custom_type_script = "uid://deqgbl6m44nrj"

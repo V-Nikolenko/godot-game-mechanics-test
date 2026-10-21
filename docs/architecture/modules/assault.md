@@ -54,7 +54,7 @@ assault/scenes/
 │   ├── level_2_waves.gd         Level 2 wave list
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
-├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field
+├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, wreck (wrecks, structures, debris)
 ├── allies/ally_fighter/         AI escort fighters (group "allies")
 ├── gui/                         HUD, score widgets/popups, weapon selector, game-over, debrief
 └── race/                        Race sub-mode (core/, racers/, track/, ui/)
@@ -497,6 +497,17 @@ TELEGRAPH 1.0 s / ACTIVE 2.5 s / QUIET 3.0 s; `avoid_weight` 0.7, 0 while QUIET.
 `duration` 3.5, `avoid_weight` 0.6, no pull or stress. A gravity bomb's `EnemyOrdnance._detonate()` leaves one at the blast point
 through the deferred `spawn_into(Hazards.container(tree), …)` (no container → nothing; mines, pursuit bombs and a defused bomb leave
 none). See [`HAZARD.md`](../../../assault/scenes/hazards/gravity_field/HAZARD.md); tests `tests/integration/test_enemy_ordnance.gd`.
+
+**Wrecks, structures and debris (Phase 6 t10).** `assault/scenes/hazards/wreck/`: `Wreck` (`wreck.gd`, a `CharacterBody2D` on layer 1,
+group `wrecks`) runs `wreck_small` / `wreck_medium` / `wreck_large.tscn` (r 13 / 25 / 40, HP 200, Open Space life 40 s) and the placed
+`structure_satellite` / `structure_cargo_platform` / `structure_station_module.tscn` (HP 800, permanent). A wreck is two-sided cover: it
+blocks bodies, `LineOfSight` (`blocks_line_of_sight()`), shots into its body-sized `HurtBox`, enemy rounds (`stops_enemy_rounds()`;
+`enemy_bullet.tscn` masks 1152), the Sniper Shot (`stops_piercing()`) and the player's beam, which cannot cut it. Its `ContactHitBox` (1024,
+damage 10) shares the body shape, so only a *drifting* wreck hurts, armed 0.6 s after entering the tree; it yields rather than keep
+pushing into a ship. Assault drift is 60 px/s down until `ProjectileLifetime` (world rect + 30 s) ends it; `retire()` fades it out.
+`DebrisFragment` (`debris_fragment.gd`, an `Area2D`, `debris_drift.tscn`) is a contact-only hazard (damage 8, no cover).
+`WreckScenes.scene_for(size, explosive)` maps the three sizes. See [`HAZARD.md`](../../../assault/scenes/hazards/wreck/HAZARD.md); tests
+`tests/integration/test_wreck.gd`.
 
 ### Enemies
 

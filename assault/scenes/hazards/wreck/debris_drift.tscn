@@ -1,0 +1,43 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/hazards/wreck/debris_fragment.gd" id="1_debris"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/environment/debris_1.png" id="2_d1"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/environment/debris_2.png" id="3_d2"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/environment/debris_3.png" id="4_d3"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/environment/debris_4.png" id="5_d4"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/environment/debris_5.png" id="6_d5"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/environment/debris_6.png" id="7_d6"]
+[ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="8_hit"]
+[ext_resource type="Script" path="res://global/components/projectile_lifetime.gd" id="9_life"]
+
+[sub_resource type="CircleShape2D" id="Shape_contact"]
+radius = 12.0
+
+[node name="DebrisDrift" type="Area2D"]
+collision_layer = 0
+collision_mask = 0
+monitoring = false
+monitorable = false
+script = ExtResource("1_debris")
+textures = Array[Texture2D]([ExtResource("2_d1"), ExtResource("3_d2"), ExtResource("4_d3"), ExtResource("5_d4"), ExtResource("6_d5"), ExtResource("7_d6")])
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+scale = Vector2(0.5, 0.5)
+texture = ExtResource("2_d1")
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 1024
+collision_mask = 0
+monitoring = false
+monitorable = false
+script = ExtResource("8_hit")
+damage = 8
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+disabled = true
+shape = SubResource("Shape_contact")
+
+[node name="ProjectileLifetime" type="Node" parent="."]
+script = ExtResource("9_life")
+max_time = 30.0
