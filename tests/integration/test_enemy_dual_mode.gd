@@ -1030,3 +1030,25 @@ func test_a_swarm_burst_across_a_well_is_captured(mode: String = use_parameters(
 		"%s: captured: inside the damage radius until it commits again (furthest %.1f)" % [mode, run.furthest])
 	assert_gt(control.furthest, well.damage_radius,
 		"%s: control: with no well the same burst leaves that radius (%.1f)" % [mode, control.furthest])
+
+
+# ── Hazards: the Bomber's Gravity Field slows an enemy (Phase 6, t17; plan §2.15) ─────────────────
+
+const GRAVITY_FIELD_SCENE: PackedScene = preload("res://assault/scenes/hazards/gravity_field/gravity_field.tscn")
+
+
+## A resistance-0.4 enemy (the Bomber's value) in the shipped Gravity Field moves at 1 - 0.4 * 0.6 = 0.76x of
+## the speed it asked for; outside the radius it is unslowed.
+func test_the_gravity_field_slows_a_bomber_resistance_enemy_to_0_76(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _hazard_world(mode)
+	var centre := Vector2(640.0, 360.0)
+	var field: GravityField = GRAVITY_FIELD_SCENE.instantiate()
+	add_child_autofree(field)
+	field.global_position = centre
+	field.set_physics_process(false)
+	var inside := _fixture_enemy(harness, centre, Vector2(200.0, 0.0), 0.4)
+	_tick(inside, DT)
+	assert_almost_eq(inside.velocity.x, 200.0 * 0.76, 0.001, "%s: 0.4 * (1 - 0.4) slow" % mode)
+	var outside := _fixture_enemy(harness, centre + Vector2(field.radius + 200.0, 0.0), Vector2(200.0, 0.0), 0.4)
+	_tick(outside, DT)
+	assert_almost_eq(outside.velocity.x, 200.0, 0.001, "%s: unslowed beyond the radius" % mode)

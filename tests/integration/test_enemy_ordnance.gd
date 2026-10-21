@@ -569,3 +569,163 @@ func test_the_ordnance_uses_no_timer_node_and_no_create_timer() -> void:
 		assert_ne(text, "", f + " readable")
 		assert_false(text.contains("create_timer"), f + " has no create_timer")
 		assert_false(text.contains("Timer"), f + " mentions no Timer")
+
+
+# ---------------------------------------------------------------------------------------------
+# Phase 6, t17 (plan §2.15): a gravity bomb's burst leaves a short-lived slowing field
+# ---------------------------------------------------------------------------------------------
+
+const GRAVITY_FIELD_SCENE: PackedScene = preload("res://assault/scenes/hazards/gravity_field/gravity_field.tscn")
+const OPEN_SPACE_SHIP: PackedScene = preload("res://open_space/scenes/entities/player/player_ship.tscn")
+const ASSAULT_FIGHTER: PackedScene = preload("res://assault/scenes/player/player_fighter.tscn")
+
+var _hazard_box: Node2D = null
+
+
+## The level's hazard container: group `hazard_container`, where runtime hazards are spawned.
+func _make_hazard_container() -> Node2D:
+	_hazard_box = Node2D.new()
+	_hazard_box.add_to_group(Hazards.CONTAINER_GROUP)
+	add_child_autofree(_hazard_box)
+	return _hazard_box
+
+
+func _fields_in(box: Node) -> Array[GravityField]:
+	var out: Array[GravityField] = []
+	for c in box.get_children():
+		if c is GravityField:
+			out.append(c)
+	return out
+
+
+## Drops a bomb of [param kind] and waits until it has expired; returns where it did.
+func _burst(kind: EnemyOrdnance.Kind, at: Vector2) -> Vector2:
+	var o := _drop(kind, at, Vector2.DOWN, at + Vector2(0, 100))
+	var where := [at]
+	o.expired.connect(func() -> void: where[0] = o.global_position)
+	var guard := 0
+	while _expired[o] == 0 and guard < 600:
+		await wait_physics_frames(1)
+		guard += 1
+	await wait_physics_frames(2)  # the field is attached by a deferred call
+	return where[0]
+
+
+func test_a_gravity_bomb_leaves_one_field_at_the_blast_point() -> void:
+	var box := _make_hazard_container()
+	var where := await _burst(EnemyOrdnance.Kind.GRAVITY_BOMB, Vector2(200, 50))
+	var fields := _fields_in(box)
+	assert_eq(fields.size(), 1, "exactly one field")
+	assert_eq(_blasts.size(), 1, "and the blast it always had")
+	if fields.size() == 1:
+		assert_eq(fields[0].global_position, where, "at the detonation point")
+		assert_eq(fields[0].kind, &"gravity_field")
+		assert_eq(fields[0].radius, 150.0)
+		assert_eq(fields[0].movement_penalty, 0.4)
+		assert_eq(fields[0].duration, 3.5)
+		assert_eq(fields[0].avoid_weight, 0.6)
+		assert_eq(fields[0].pull_force, 0.0, "no pull")
+		assert_eq(fields[0].stress_damage, 0, "no damage")
+		assert_true(Hazards.container(get_tree()) == box and fields[0].get_parent() == box, "in the hazard container")
+
+
+func test_the_field_frees_at_3_5_seconds() -> void:
+	var box := _make_hazard_container()
+	await _burst(EnemyOrdnance.Kind.GRAVITY_BOMB, Vector2(200, 50))
+	var fields := _fields_in(box)
+	assert_eq(fields.size(), 1)
+	if fields.size() != 1:
+		return
+	var f := fields[0]
+	f.set_physics_process(false)  # hand-ticked from here
+	assert_eq(Hazards.count(), 1, "registered while alive")
+	for _i in 34:
+		f._physics_process(0.1)
+	assert_false(f.is_queued_for_deletion(), "alive at 3.4 s")
+	assert_gt(f.fade_alpha(), 0.0, "still faintly visible")
+	for _i in 2:
+		f._physics_process(0.1)
+	assert_true(f.is_queued_for_deletion(), "freed by 3.6 s")
+	assert_eq(f.fade_alpha(), 0.0)
+
+
+func test_the_sprite_fades_over_the_last_half_second_only() -> void:
+	var f: GravityField = GRAVITY_FIELD_SCENE.instantiate()
+	add_child_autofree(f)
+	f.set_physics_process(false)
+	for _i in 29:
+		f._physics_process(0.1)  # 2.9 s
+	assert_eq(f.fade_alpha(), 1.0, "opaque until 3.0 s")
+	assert_eq((f.get_node("Sprite") as Sprite2D).modulate.a, 1.0)
+	for _i in 3:
+		f._physics_process(0.1)  # 3.2 s
+	assert_almost_eq(f.fade_alpha(), 0.6, 0.001)
+	assert_almost_eq((f.get_node("Sprite") as Sprite2D).modulate.a, 0.6, 0.001)
+
+
+func test_mines_and_pursuit_bombs_leave_no_field() -> void:
+	var box := _make_hazard_container()
+	_player(Vector2(0, 20))
+	for kind in [EnemyOrdnance.Kind.MINE, EnemyOrdnance.Kind.PURSUIT_BOMB]:
+		_blasts = []
+		await _burst(kind, Vector2.ZERO)
+		assert_eq(_blasts.size(), 1, "kind %d did blast" % kind)
+		assert_eq(_fields_in(box).size(), 0, "kind %d leaves no field" % kind)
+		assert_eq(Hazards.count(), 0)
+		for n in get_tree().get_nodes_in_group(&"player"):
+			n.remove_from_group(&"player")
+			n.queue_free()
+		await wait_physics_frames(1)
+		_player(Vector2(0, 20))
+
+
+func test_a_shot_down_gravity_bomb_leaves_no_field() -> void:
+	var box := _make_hazard_container()
+	var o := _drop(EnemyOrdnance.Kind.GRAVITY_BOMB, Vector2.ZERO, Vector2.DOWN, Vector2(0, 100))
+	_shot(Vector2.ZERO)
+	await wait_physics_frames(3)
+	assert_eq(_expired[o], 1, "defused")
+	await wait_physics_frames(2)
+	assert_eq(_fields_in(box).size(), 0, "a defuse is not a burst")
+
+
+func test_without_a_hazard_container_no_field_is_made_and_the_blast_is_unchanged() -> void:
+	assert_null(Hazards.container(get_tree()), "sanity: no container")
+	var orphans_before := Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT)
+	await _burst(EnemyOrdnance.Kind.GRAVITY_BOMB, Vector2(200, 50))
+	assert_eq(_blasts.size(), 1, "the blast is as before")
+	assert_eq(Hazards.count(), 0, "no field")
+	for c in _container.get_children():
+		assert_false(c is GravityField, "nothing field-shaped anywhere")
+	assert_eq(Performance.get_monitor(Performance.OBJECT_ORPHAN_NODE_COUNT), orphans_before, "and nothing orphaned")
+
+
+func test_two_overlapping_fields_slow_by_0_4_not_0_64() -> void:
+	var box := _make_hazard_container()
+	var a: GravityField = GRAVITY_FIELD_SCENE.instantiate()
+	var b: GravityField = GRAVITY_FIELD_SCENE.instantiate()
+	box.add_child(a)
+	box.add_child(b)
+	a.global_position = Vector2(0, 0)
+	b.global_position = Vector2(80, 0)
+	assert_almost_eq(Hazards.penalty_at(Vector2(0, 0)), 0.4, 0.0001, "one field")
+	assert_almost_eq(Hazards.penalty_at(Vector2(40, 0)), 0.4, 0.0001, "in both: still 0.4, strongest only")
+	assert_ne(Hazards.penalty_at(Vector2(40, 0)), 1.0 - 0.6 * 0.6, "not stacked multiplicatively")
+	assert_eq(Hazards.penalty_at(Vector2(1000, 0)), 0.0, "none outside")
+
+
+## The player feels 0.4 in both modes: the Open Space ship and the Assault fighter both read it through
+## `hazard_speed_factor()` (plan §2.3), here for a field made by a real burst.
+func test_the_player_is_slowed_by_0_4_in_a_burst_field() -> void:
+	var box := _make_hazard_container()
+	var where := await _burst(EnemyOrdnance.Kind.GRAVITY_BOMB, Vector2(200, 50))
+	assert_eq(_fields_in(box).size(), 1)
+	var ship := OPEN_SPACE_SHIP.instantiate() as OpenSpacePlayerShip
+	var fighter := ASSAULT_FIGHTER.instantiate() as AssaultPlayer
+	for p in [ship, fighter]:
+		add_child_autofree(p)
+		p.set_physics_process(false)
+		p.global_position = where + Vector2(50, 0)
+		assert_almost_eq(p.hazard_speed_factor(), 0.6, 0.0001, "%s: slowed by 0.4" % p.name)
+		p.global_position = where + Vector2(400, 0)
+		assert_eq(p.hazard_speed_factor(), 1.0, "%s: free outside the radius" % p.name)

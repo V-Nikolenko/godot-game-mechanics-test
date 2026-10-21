@@ -54,7 +54,7 @@ assault/scenes/
 │   ├── level_2_waves.gd         Level 2 wave list
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
-├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly
+├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field
 ├── allies/ally_fighter/         AI escort fighters (group "allies")
 ├── gui/                         HUD, score widgets/popups, weapon selector, game-over, debrief
 └── race/                        Race sub-mode (core/, racers/, track/, ui/)
@@ -491,6 +491,12 @@ LOS block; stress bypasses `EnemyShield` and a plated Ram deflects it. See
 TELEGRAPH 1.0 s / ACTIVE 2.5 s / QUIET 3.0 s; `avoid_weight` 0.7, 0 while QUIET. Only ACTIVE swirls. Its sprite carries
 `energy_anomaly_sprite.gd` (`EnergyAnomalySprite`), which follows `phase_changed` / `phase_progress()` for the look. See
 [`HAZARD.md`](../../../assault/scenes/hazards/energy_anomaly/HAZARD.md); tests `tests/integration/test_energy_anomaly.gd`.
+
+**Gravity Field (Phase 6 t17).** `assault/scenes/hazards/gravity_field/gravity_field.tscn` — a `GravityField` (`class_name`, extends
+`HazardField`; `gravity_field.gd` adds the radius ring and the sprite fade over the last 0.5 s): radius 150, `movement_penalty` 0.4,
+`duration` 3.5, `avoid_weight` 0.6, no pull or stress. A gravity bomb's `EnemyOrdnance._detonate()` leaves one at the blast point
+through the deferred `spawn_into(Hazards.container(tree), …)` (no container → nothing; mines, pursuit bombs and a defused bomb leave
+none). See [`HAZARD.md`](../../../assault/scenes/hazards/gravity_field/HAZARD.md); tests `tests/integration/test_enemy_ordnance.gd`.
 
 ### Enemies
 
