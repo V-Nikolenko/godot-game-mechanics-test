@@ -2443,3 +2443,94 @@ All are recorded in detail in "Deviations during the build" above; in short:
   the anomaly's shield / targeting variants and a deliberate plate throw remain owner options.
 - Fighter cover legality is checked at entry only (documented, bounded).
 - **Gate time is 216 s of 240 s: Ph7 must start by recovering time** (`tests/README.md` rules), logging it here.
+
+## Phase 7 - Enemy rework, phase 7: mines, minefields and the Mine Layer (2026-10-22)
+
+Plan: `docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md` (Revision 1). The research stage left no `1-context.md` / `2-research.md`,
+so the plan's §1.1 *Scope check* (S1–S11) is this phase's re-validation against the code. These are *planned* decisions; check this
+phase's *as built* section, once written, before relying on them.
+
+### Changes to earlier decisions
+- **Pooled hazards register on `launch()`, not in `_enter_tree()`** (Ph6's rule). A pooled mine sits idle in the tree inside its `BulletPool`,
+  so it registers when a life starts and unregisters in `_mark_done()` and `_exit_tree()`. Placed (unpooled) mines call `launch()` too.
+  Any later *pooled* hazard follows the same rule.
+- **`EnemyOrdnance`'s MINE logic moves to a subclass**, `EnemyMine`, and the Bomber's `mine.tscn` becomes the PROXIMITY variant (same
+  path and UID, same numbers). The bomb paths stay in `EnemyOrdnance`, byte-identical, behind three virtual hooks (`_move_mine`,
+  `_trigger_seen`, `_on_detonated`).
+- **`mine_life` 0 now means "never fizzles"**. The Bomber always sets 8.0, so it is unaffected. The `ProjectileLifetime` `max_time` is the
+  backstop (0 = inert).
+- **Bomber mines become hazards** that other enemies avoid. Pre-approved lever if a level-1 gate turns red because of it:
+  `registers_hazard = false` on `mine.tscn` only.
+- **Friendly fire, one more slice decided:** *placed* minefields (`hostility = ALL`) are set off by, and blast, both sides through
+  `Hazards.pulse_damage` (Ph6's environmental rule). Every mine an enemy lays (`hostility = PLAYER`) keeps Ph4's rules: player
+  hurtboxes only, `ContactBlast`. The rest of the blast/beam friendly-fire question stays with Ph8.
+- **The race-track mine (`assault/scenes/race/track/mine.gd`, group `mines`) is not reconciled** with the family (deferred to Ph7 by Ph4).
+  Racers are outside the rework, so it stays a race prop.
+- **Already delivered, not rebuilt:** the §16 explosive collision profile (Ph1 assigned it to Ph7; it is `ContactProfile.Mode.EXPLOSIVE`,
+  built in Ph2) and the §11.4 Gravity Field (Ph6).
+
+### Names and places later phases build on
+- **`EnemyMine extends EnemyOrdnance`** (`assault/scenes/projectiles/enemy_ordnance/mines/enemy_mine.gd`).
+  - `enum Variant { PROXIMITY, DRIFTING, HOMING, CHAIN, PULSE, EMP }` (append-only) and `enum Hostility { PLAYER, ALL }`.
+  - Methods: `retire()` (fizzle, no blast), `chain_trigger(delay)`, `hazard_info()` (`kind = &"mine"`, `radius = trigger_radius`,
+    `avoid_weight` 0.5 PLAYER / 0.9 ALL, `velocity` for moving mines), `link_points()` (CHAIN fuse links).
+  - Exports: `registers_hazard`, `shot_detonates` (CHAIN: shot = detonate).
+  - Contract unchanged: `expired` once, `reset()`, `launch(dir, speed, target_point)`. A mine never frees itself, is never in `enemies` and is
+    never scored.
+  - Scenes `mines/<variant>_mine.tscn`, PROXIMITY = `enemy_ordnance/mine.tscn`. `EnemyMineScenes.scene_for()` / `pool_size_for()` /
+    `export_of()`.
+  - **Variant tuning lives in each mine scene's exports** (the Ph5 rocket rule); a dropper overrides only trigger / arm / warning / blast /
+    life (the Ph4 `Bomber.drop()` shape).
+- **Warning rule for every mine:** `(trigger_radius + effect_radius) / warning_time >= 440 + own_speed`, where `effect_radius` is
+  `blast_radius`, `pulse_radius` or `emp_radius`. Asserted from exports.
+- **Chain:** a CHAIN detonation calls `chain_trigger(chain_delay 0.2)` on every live mine within `chain_radius` 150 (centre distance, via
+  `Hazards.around`, kind `&"mine"`). Only CHAIN mines propagate. A chained mine skips its warning.
+- **Player disruption hooks on `PlayerBase`, implemented by both ships:**
+  - `apply_boost_disruption(strength, seconds)`, `boost_efficiency() -> float`, `signal boost_disruption_changed(efficiency: float)`.
+    Strongest and longest win, never stacked. `MIN_BOOST_EFFICIENCY` 0.15. `_step_disruption(delta)` is driven from each ship's physics
+    tick, with no `Timer`.
+  - Efficiency scales the Open Space Shift boost (`_step_boost`), Boost Drive (`engine_boost_module.gd`) and the Assault dash
+    (`dash_state.gd`). Cruise thrust, turning and firing are never touched.
+- **EMP entry point:** `EmpPulse.emit(tree, at, radius, seconds, source) -> int` (`global/components/emp_pulse.gd`, static) calls duck-typed
+  `apply_emp(seconds, source)` on group `player` only.
+  - `PlayerBase.apply_emp(seconds, source)`, `is_emp_disrupted()`, `signal emp_changed(active: bool)`.
+  - **Ph7's stand-in effect is `apply_boost_disruption(1.0, seconds)`.** Ph9 replaces the effect body and extends `EmpPulse` to enemies and
+    seeking weapons, **keeping both signatures**. Ph9's EMP Pulse weapon and its jammers call `EmpPulse.emit`.
+- **`Minefield`** (`assault/scenes/hazards/minefield/`, `HAZARD.md`):
+  - patterns AUTHORED / RING / GRID / SCATTER, flat variant weights, `hostility` ALL by default;
+  - unpooled self-owned mines (`expired -> queue_free`, `mine_life` 0) and a beacon;
+  - drifts down at 60 px/s in Assault (the wreck precedent), still in Open Space.
+  - A later phase places Assault fields (Ph15) or encounter fields (Ph13) with this scene.
+- **Mine Layer** (`assault/scenes/enemies/mine_layer/`): `MineLayer`, `MineLayerBrain`, flat `MineLayerConfig`.
+  - `MineLayerBrain.Phase { APPROACH, LAY, BREAK_OFF, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING }` (append-only).
+  - `MineLayer.drop_mine(variant, rest_point)` is the one configuring call. Per-variant root `BulletPool`s use `persist_after_owner_death`; an
+    exhausted pool falls back to PROXIMITY.
+  - `set_hatch_open(0..1)`, `MineWake` (self-freeing `Line2D`). `WaveBuilder.MINE_LAYER` / `mine_layer()`. COLLISION contact.
+  - Rail fallback: a PROXIMITY mine every `rail_mine_interval` 1.6 s.
+  - `accepts_tow()` false in LAY.
+
+### Conventions
+- **A pass is a line, not a spray:** one ZIGZAG or ARC line of ≤ 6 mines, 120 px apart, laid *across* the player's path.
+  - The lead is the Ph4 undamped wall rule on the layer's own timeline, capped at 3 s.
+  - Passes are 6–9 s apart, and in Open Space no two live pass centres are closer than 380 px.
+  - Live cap: 18 in Open Space, 8 in Assault; the oldest is retired.
+- **Assault:** the pass axis is horizontal, the line is clamped into `view_rect().grow(−(64 + amplitude))`, and there is one pass per life. The budget defers
+  to the end of LAY (≤ 4.45 s). Attack-in-budget rows from every level-1 spawn.
+- **Open Space persistence:** laid mines never fizzle (`mine_life` 0, backstop 240 s) and survive the layer's return home and its death.
+- **Never in an `ENEMIES_CLEARED` section:** the Mine Layer, or anything whose mines persist. Guard rows sit in `test_engagement_deadline.gd`; the spill-over row in
+  `test_level1_specialist_spawns.gd` adds `assault_mine_life`. The Mine Layer counts as a specialist in the frozen 2.5× gate.
+- **Hub:** the Mine Layer is draw 15, on bearing 0° of a 2600 px ring. A placed RING minefield sits at `TacticalSpace` (3300, 560). Radii (perceive / lose):
+  650 / 1500, sized by `lose_radius > standoff_range + break_speed·break_seconds + pass_length/2`.
+- **Level 1:** deep_space 16.0 s wave (from the left) and planet_approach 47.0 s wave (from the right), inside existing waves.
+- **Gate time:** t1 frees ≥ 12 s first (≥ 8 s minimum). Per-task allotments total 28 s (plan §2.15). GUT ≤ 240 s.
+
+### Deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| EMP on enemies, the real EMP player effect, jammers, hijack | Ph9 | Keep the `EmpPulse.emit` / `apply_emp` signatures |
+| Placed minefields in Assault levels | Ph15 | Ph6 rule for placed Assault hazards; the scene already works in Assault |
+| Encounter compositions with a Mine Layer (§19 sniper ambush) | Ph13 / Ph14 | |
+| Mine numbers by difficulty (`mines_per_pass`, `max_live_mines`, `pass_period_*`, `mine_warning`) | Ph16 | |
+| Mine and layer audio | Ph17 | |
+| A Mine Layer scattering mines on death | owner option | The Ph6 deferred-spawn entry is ready |
+| Pulse / EMP mines affecting enemies | Ph9 (if wanted) | Enemy-laid mines never trigger on enemies |
