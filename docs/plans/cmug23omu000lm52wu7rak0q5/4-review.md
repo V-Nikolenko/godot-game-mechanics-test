@@ -292,3 +292,213 @@ With B4 it carries a real contract risk. Mark it `large`, or split the player ho
 - **planSections:** every heading named in `tasks.json` exists in `3-plan.md`. Apart from M5's t6 gap, each task's sections
   carry the numbers and test rows it needs.
 - **Complexities:** t2 and t10 as `large` are right.
+
+---
+
+# Plan review: Enemy rework phase 7 (mines, minefields, Mine Layer), round 2
+
+VERDICT: CHANGES_REQUESTED
+
+I reviewed revision 2 of `3-plan.md` and the regenerated `tasks.json` against the code on `agent/auto-dev` @ `daa32bd`. Only
+docs have changed since round 1, so round 1's GUT measurement (216.4 s, 2139 tests) still stands and I did not re-run the suite.
+I re-ran the numbers myself, using scripts in `/tmp` only:
+- `Steering.context_avoid()` against the new 140 px / weight 1.0 footprint (single mine, 9-mine ring, 6-mine laid line, and an
+  acceleration-limited mover);
+- the pass geometry, plus a pure-pursuit tracking simulation of LAY with the mover's 420 px/s² acceleration limit;
+- the hub clearance, from the real `sector_hub.tscn` positions and the shipped configs, applying `test_sector_hub_patrol.gd`'s formula.
+
+All 13 round-1 findings are resolved. The revision also introduces or exposes two blocking problems:
+- **N1:** LAY has no run-in, so the "sideways" and "stays on its path" rows fail whenever the layer reaches S from the side.
+  This is measured.
+- **N2:** the Mine Layer shell task needs mine scenes that three later tasks create, but it depends only on t2 and is advertised
+  as parallel with them.
+
+Both are plan / `tasks.json` edits, not a redesign. There are also nine minor findings.
+
+## Round-1 findings
+
+| # | Status | Evidence |
+|---|---|---|
+| B1 avoidance | **Resolved** | I reproduced §2.3's table to within 1 px. Single mine, margin 24, 200 px/s: 0.6 → 90 / 99 / 109, 0.8 → 153 / 153 / 156. Ring: 0.8 → 155 / 155 / 159 / 162. Laid line: 0.6 → 63–83, 0.8 → 150–154. With a 400–800 px/s² acceleration limit: 0.8 → ≥ 156. The pure-stage (≥ 85 / ≥ 145), field (≥ 140) and layer (> 100) rows all have margin. The restated promise matches the shipped `hazard_avoidance` values (Fighter / Gatling 0.8; Sniper / Razor / Swarm / Support 1.0; Bomber 0.6; Missile Corvette 0.7; Ram 0.5). |
+| B2 zig-zag | **Resolved as geometry** (but see N1) | Vertices step 100 at ±35: chord √(100² + 70²) = 122.07 at 35.0°. The ARC offsets are 0 / 70.4 / 105.6, with chords 122.3 / 106.0 / 100. Path lengths are 732.4 and 656.6 (simulated). The three rows now agree with each other. |
+| B3 warning rule | **Resolved** | 128 / 0.25 = 512 ≥ 500 (HOMING at 60) and ≥ 475 (DRIFTING). `mine.tscn` goes 0.5 → 0.25, and only `bomber.gd:84` writes `warning_time`. The reset row at `test_enemy_ordnance.gd:431-441` reads the authored value dynamically, so it is unaffected. |
+| B4 Boost Drive tank | **Resolved** | The efficiency check goes into the `if drive != null:` condition before `try_spend_tank()` (`player_ship.gd:405-416`). Because the default branch is that `if`'s `elif`, a refused Drive press cannot fall into it. The default press checks before the meter. `try_activate` keeps a guard for the H path (`player_fighter.gd:137`). The warp is covered. "No tank spent" rows exist for both. |
+| B5 hub clearance | **Resolved** | The anchor is (2402.1, −995.0). Satellite: 1891 − 28 − 810 = 1053. Minefield: 1796 − 280 − 810 = 706. Anchor spacing: Missile Corvette 1114, Gatling 1343. The minefield against Gatling / Bomber / Missile Corvette gives 895 / 1114 / 1580. The well-edge gap is 48.7 px. The layer joins `_patrol_groups()` and `Minefield` joins `_element_radius()`. See N5 for the leash. |
+| M1 gate-time sources | Resolved | §2.17 names the measured 1× files. The production speed-up is a last resort. 12 s is a hard floor with ESCALATE. Allotments total 28.0 s, so the phase ends at 232.4 s. |
+| M2 drop overwrites damage | Resolved | `drop_mine` sets only arm, eject and life. The "PULSE stays 8" row exists. |
+| M3 wall-rule departures | Resolved | Only `c` is capped. The drop uses the "plus" rule (`bomber_brain.gd:754`, `s >= rest_s + eject`). The DECISIONS Phase 7 section was rewritten, and "6–9 s" is marked as superseded. |
+| M4 `_SHIP_SCENES` | Resolved | It is named in §2.11 and in t10. |
+| M5 collisions / handoff | Resolved as asked | The mine tasks are chained t2 → t3 → t4 → t6 → t7 → t8 → t9. The beacon belongs to t9. t6 lists 2.2. **But see N2**: the shell's dependency was not chained. |
+| M6 factual slips | Resolved | Peak 7 at 15.50 s, no UID, `TargetInfo.position`, and the ALL filter checks `get_parent()`. |
+| M7 provenance | Resolved | §2.18 gives an origin for every number. The hub drifters get a seeded direction and a 120 px leash. `placed` lets a lone mine work. |
+| M8 t5 size | Resolved | The player hook (large) is split from the pulse mine (small, t6) and the EMP mine (medium, t7). |
+
+Round 1's "no research artefacts" acceptance still holds. The plan makes no genre claims; §1.1 and §2.18 state that no external
+research was done.
+
+## New findings
+
+### N1 (blocking, t11). LAY starts wherever APPROACH happens to arrive, so "within 40° of ±u" and "within 40 px of the polyline" fail
+
+**What I checked:**
+- §2.12 APPROACH is "seek S at `max_speed`; frozen once within `commit_distance` 200 of S, then LAY".
+- The LAY path starts at S, with only a 50 px lead-in before mine 0.
+- S is "the end nearer the layer". That fixes which side of C the layer is on, but not the direction it arrives from. In Open
+  Space the layer reaches S from wherever REPOSITION left it. In Assault it comes in diagonally from its side spawn.
+
+**Simulation.** Pure pursuit, 60 px look-ahead, 170 px/s, `acceleration` 420. The table shows the maximum velocity angle to u
+during LAY, and the maximum distance from the polyline.
+
+| Arrival at S | ZIGZAG | ARC |
+|---|---|---|
+| along u (aligned) | 29° / 22 px | 33° / 12 px |
+| 45° to u at 240 px/s | **49°** / 19 px | **44°** / 28 px |
+| perpendicular at 240 px/s | **89° / 45–71 px** | **89° / 72–73 px** |
+
+Even after the lead-in, a perpendicular arrival is still at 44–58° from u.
+
+**Rows that fail as written:**
+- §2.12 "Sideways: during LAY … within 40° of ±u";
+- "Stays on its path: … within 40 px of the polyline";
+- t11's acceptance criteria.
+
+The "pure pursuit … never overshoots past the segment angle" claim holds only for an aligned entry.
+
+**Fix:**
+- APPROACH seeks a run-in point `R = S − u·run_in` (starting value 150 px; that is a new config field), then flies R → S along u.
+- LAY (and the rows) begin at S.
+- `t_approach_left` uses `|R − pos| / max_speed + run_in / lay_speed`.
+- With a 150 px run-in I measured ≤ 33° and ≤ 23 px from S onward, even for a perpendicular arrival at R.
+- The stall guard and the level-1 life are unchanged if the run-in stays in APPROACH.
+
+Alternatively, scope both rows to "from mine 1 on" and accept a non-sideways first chord. The run-in is better, because the
+idea asks for a sideways flight.
+
+### N2 (blocking, t10). The shell task needs the HOMING, CHAIN and PULSE scenes but depends only on t2
+
+**What the shell needs:**
+- §2.11 builds `ChainPool`, `PulsePool` and `HomingPool` (the config weights are 0.2 / 0.15 / 0.15). It gates every pool equal to
+  `pool_size_for()`.
+- It asserts "after `drop_mine` … PULSE is 8" and "an exhausted CHAIN pool falls back to PROXIMITY".
+- t10's acceptance criteria repeat both.
+
+**Where those scenes come from:** `homing_mine.tscn` (t3), `chain_mine.tscn` (t4) and `pulse_mine.tscn` (t6).
+
+**The conflict:**
+- `tasks.json` has t10 depending on `["t2"]`.
+- §3 says "t10 with t3–t9" can run side by side.
+- So t10 can start before any of those scenes exist. Its agent would either fail its own rows or create the scenes, colliding
+  with t3, t4 and t6 on `enemy_mine.gd`, `enemy_mine_scenes.gd` and the scene files.
+
+**Fix:** set t10 `dependsOn: ["t6"]` (t6 already pulls in t2–t5 transitively), and change §3 to "t10 with t7–t9". t11's
+`["t10","t6"]` then simplifies to `["t10"]`. The critical path does not change, because t11 already waits for t6.
+
+### N3 (minor, t11). The spread rotation cannot reach 380 px for a standing player, and the "Gradual" row contradicts its own fallback
+
+- **The geometry:** for a standing player C sits at `fence_distance` 320 from P. Rotating C about P by 40° moves it only
+  2·320·sin 20° = 219 px. 380 px needs at least 72.9° (80° gives 411).
+- **The cap makes it worse:** with the cap at 18, three earlier passes are usually alive when a fourth is planned. With
+  candidates restricted to ±40 / ±80° of the layer's bearing, often none is legal, and §2.12 says "the plan proceeds".
+- **The row:** "no two pass centres closer than 380 px while both have live mines" then fails in exactly the hub case (a player
+  loitering). It passes only if the unspecified 60 s scenario uses a fast-moving stub, and then it tests nothing about spread.
+- **Fix:**
+  - Rotate by `2·asin(min(1, (min_pass_separation + 10) / (2·|C − P|)))` per try, alternating sides.
+  - Specify the scenario (a standing stub, plus a stub moving at 220 px/s).
+  - Assert ≥ 380 px only for plans that did not take the fallback, and add a `spread_fallbacks` seam that the standing scenario
+    reports.
+
+### N4 (minor, t2 / t8). `fixture_enemy.tscn`'s `HurtBox` has no `CollisionShape2D`
+
+- `tests/helpers/fixture_enemy.tscn:26-29` is a bare `Area2D` on layer 512. An ALL mine's `ProximityArea` poll
+  (`get_overlapping_areas()`) can therefore never see it.
+- So t2's "an ALL mine is set off by a `fixture_enemy` sitting inside the trigger radius" cannot pass as specified.
+- §2.10 mentions a "fixture hurtbox radius 14", but t2 is not given §2.10.
+- **Fix:** in §2.1, next to the existing `add_to_group("enemies")` note, state that the hostility rows add a 14 px `CircleShape2D`
+  to the fixture's `HurtBox` (the fixture ships without one). The same applies to t8's field rows.
+
+### N5 (minor, t14). `_element_radius()` for `Minefield` ignores the drift leash, and `Minefield` has no `trigger_radius`
+
+- The hub field has `w_drifting` 0.15 and `drift_leash` 120 (§2.15). Its drifters therefore reach 200 + 120 + 80 = 400 px from the
+  field centre, not 280.
+- §2.10's exports also include no `trigger_radius`, so `radius + trigger_radius` will not compile as written.
+- With 400 the clearances are still legal: Mine Layer 586, Gatling 775 (computed).
+- **Fix:** `radius + (drift_leash if w_drifting > 0 else 0) + EnemyMineScenes.export_of(PROXIMITY, &"trigger_radius", 80.0)`.
+
+### N6 (minor, t8). AUTHORED mines run `_ready()` before `Minefield._ready()`
+
+- Godot readies children first. An editor-placed `EnemyMine` under `Mines` therefore runs its `placed` setup (`expired ->
+  queue_free`, backstop 0, the deferred `launch`) before the field sets `placed` and `hostility` on it.
+- §2.1 does that setup in the mine's `_ready()`.
+- **Fix:** say that AUTHORED children must be authored with `placed = true` and the field's hostility (and the field asserts it),
+  or move the mine's placed setup into its deferred launch call so that it sees the field's values.
+
+### N7 (minor, t5). The disrupted Boost Drive and dash drop below cruise, against the plan's own principle
+
+- **Boost Drive:** §2.6 scales the Drive's burst "× efficiency". At 0.4 the burst eases from 600 px/s to `_BOOST_END_SPEED` 500 ×
+  0.4 = **200 px/s**, below the 420 cruise, with thrust locked out (`engine_boost_active`).
+- **Dash:** the disrupted dash is 350 × 0.4 = **140 px/s**, below `DashState.move_speed` 180, under a movement lock.
+- **The contradiction:** the Shift boost deliberately scales only the excess over `max_speed`, and §5 lists "disrupted boost slower
+  than cruise" as a mitigated risk. A disrupted Drive press or dash is now a net slow-down.
+- **Fix:** use the same excess-over-cruise form for both Drive speeds (floored at the ship's `max_speed`) and for the dash (floored
+  at `move_speed`). Otherwise state that the slow-down is deliberate and adjust the rows.
+
+### N8 (minor, t2 / t11). Two rows are ambiguous enough to be built wrong
+
+- **Real-mover row (§2.3):** it does not fix the lateral offset. Head-on passes (0.8 gives 153 ≥ 120 and ≥ 0 + 100). At lateral
+  60 it fails, because 156 < 60 + 100. Specify head-on.
+- **Hazard-aware layer row (§2.12):** "every live mine of its earlier passes, while not in LAY" must exclude the pass the layer is
+  breaking off from during BREAK_OFF. At the end of LAY the centre is ≈ 61 px from mine 5. Also say that tail-drop mines are
+  excluded.
+
+### N9 (minor, t12 / t15). The lose-radius claim, the persistence row and the exit probe
+
+- **The lose-radius claim:** §2.14 says the inequality (1212 < 1500) means "the layer's own cycle never sends it home mid-fight".
+  The APPROACH lead is not in it.
+  - Against a player cruising at 420 px/s, the layer at S at freeze time is about √((420·3.09 + 260)² + 300²) ≈ 1587 px from P.
+  - The layer (240 px/s) cannot get ahead of a player cruising at 420 px/s anyway.
+  - Restate the claim as "for a player at ≤ 220 px/s".
+- **The persistence row:** "flies 1600 px away and the layer returns home" needs the stub moved beyond `lose_radius` *of the layer*
+  (`AnchorIdle._within` is actor-to-target). A layer in REPOSITION orbits and follows the player. Say that the stub is teleported.
+- **The exit probe:** `SpecialistExitProbe.disengage_seconds()` enters DISENGAGE with no planned pass, so §2.12's "continue along u"
+  is undefined there. State the fallback (the current heading, as §2.11's shell says) so that t15's measured exit is the real one.
+
+### N10 (minor, t2). The pre-approved levers cover only "a level-1 gate"
+
+t2's acceptance also requires every `test_bomber.gd` / `test_enemy_ordnance.gd` row to stay green unchanged. Bomber mines become
+140 px hazards that a 0.6 Bomber now avoids, including its own mines when it turns. Extend the two levers (pad 0, then no
+registration, on `mine.tscn` only) to any existing row that turns red because of the registration, reported the same way.
+
+### N11 (minor, t16). The docs task is `small`
+
+t16 has to:
+- run the `updating-project-docs` sweep over about ten docs;
+- write the three-file dossier;
+- write the as-built section;
+- reconcile every deviation recorded by t1–t15.
+
+Phase 6's equivalent (t19) was `medium`. Make t16 `medium`.
+
+## Verified as correct (round 2)
+
+- **`planSections`:** every heading listed in `tasks.json` exists. With the For-every-task section, each task can be built from its
+  own sections, apart from N4's fixture note for t2.
+- **Complexities:** t2, t5 and t11 are large (t11 at `xhigh`). The remaining tasks are fine apart from N11.
+- **Pooled registration:** `BulletPool.acquire()` reparents synchronously before `reset()` and the caller's `launch()`
+  (`bullet_pool.gd:80-94`). Launch-scoped registration therefore survives the reparent, and `_exit_tree` unregistration on recycle
+  is correct.
+- **Open Space lifetimes:** Open Space has no projectile world rect (`ProjectileLifetime` header; `EnemyWorld.projectile_world_rect`).
+  Persistent Open Space mines and the hub field are therefore not culled; only `max_time` applies.
+- **Mines as hazards:**
+  - `Hazards.bend_heading` returns the heading unchanged for a zero pull, so live mines do not disturb rockets or bombs.
+  - `test_enemy_ordnance.gd:674` (`Hazards.count() == 0` after a mine burst) holds, because detonation unregisters.
+  - `test_sector_hub_patrol.gd:547` holds if the field lives under `TacticalSpace`, as planned.
+- **ALL filter:** only the Ram's plate hurtboxes are not direct root children (`ram_corvette.tscn:123,146,170`). All 12 enemy
+  scripts join `enemies` in their own code.
+- **Level 1:**
+  - The 16.0 s and 47.0 s waves exist in DURATION sections. Planet Approach is 110 s.
+  - The station section (the next ENEMIES_CLEARED section) starts after the 30 s asteroid section. The deep-space layer's life plus
+    9 s of mine life ends by about 46 s.
+  - Planet Approach stays at 5–6 specialists plus the layer through about 68 s.
+- **Gate arithmetic:** the allotments sum to 28.0 s; 216.4 − 12 + 28 = 232.4 s ≤ 240. The t1 floor and the ESCALATE path are
+  credible.
+- **Coverage:** the IDEAS §6.3 / §6.9 / §11.4 / §18.6 / §21–23 / §40 coverage is complete, and nothing is dropped without a reason.
