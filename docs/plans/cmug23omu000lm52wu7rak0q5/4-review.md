@@ -502,3 +502,161 @@ Phase 6's equivalent (t19) was `medium`. Make t16 `medium`.
 - **Gate arithmetic:** the allotments sum to 28.0 s; 216.4 − 12 + 28 = 232.4 s ≤ 240. The t1 floor and the ESCALATE path are
   credible.
 - **Coverage:** the IDEAS §6.3 / §6.9 / §11.4 / §18.6 / §21–23 / §40 coverage is complete, and nothing is dropped without a reason.
+
+---
+
+# Plan review: Enemy rework phase 7 (mines, minefields, Mine Layer), round 3
+
+VERDICT: CHANGES_REQUESTED
+
+Reviewed Revision 3 (commit `3bd53b2`) of `3-plan.md`, `tasks.json` and the Phase 7 section of `DECISIONS.md`, against the code on `agent/auto-dev`. An independent
+general-purpose subagent did the review. It re-simulated the geometry in node (`/tmp/rv3/runin.js`, `standing.js`, `moving.js`, `arrival.js`), modelling the mover on
+`global/enemy_ai/enemy_mover.gd:215-247`: velocity is `move_toward(desired, 420·dt)`, `max_speed` 240, and the turn rate limits only the facing. The coordinating agent
+re-derived both blocking findings by hand from 3-plan.md:684-739 and confirmed them. No repo file outside this directory was modified.
+
+## Summary
+
+Revision 3 resolves all 11 round-2 findings, and none of the 13 round-1 findings has come back. The run-in, the spread rotation, the disruption floors, the clearance
+radii and the lose-radius numbers all check out against the code and in simulation.
+
+Two blocking problems remain, both in how the Mine Layer's APPROACH plans and freezes a pass in Open Space. Neither was caught in earlier rounds: the round-2 simulation
+covered LAY tracking from R onward, not whether APPROACH ever freezes.
+- **F1:** against a standing player the plan never freezes.
+- **F2:** against a moving player above about 150 px/s it almost never converges, so the t11 give-up control row cannot pass.
+
+Both are edits to §2.12, §2.18, the owner summary and t11's criteria. Neither needs a redesign. There are also four minor findings.
+
+## Round-2 findings
+
+| # | Status | Evidence |
+|---|---|---|
+| N1 run-in | Resolved (spec gap: F3) | The handover happens within 10–60 px of R, then LAY runs from S. ZIGZAG reaches at most 32.1° / 19.1 px and ARC at most 32.7° / 16.0 px, for aligned, ±perpendicular (300 px, 240 px/s) and 45° arrivals. A U-turn arrival stays within 31° / 31 px. |
+| N2 t10 dependencies | Resolved | t10 `dependsOn ["t6"]`, t11 `["t10"]`, and §3 says "t10 with t7–t9". |
+| N3 spread | Resolved for a standing player (moving player: F4) | θ = 2·asin(390/640) = 75.09°. +2θ is 390 / 618 / 591 px from the centres at ±75.1° / 0°. The fallback fires when no candidate is legal. |
+| N4 fixture shape | Resolved | Stated in *For every task*, §2.1, §2.10, and the t2 and t8 descriptions. |
+| N5 clearance radius | Resolved | 1795.6 − 400 − 810 = 585.6 px. The formula fits `test_sector_hub_patrol.gd:743-780`, and the 400 px radius does not collide with the `e[1] == 420.0` well filter (line 818). |
+| N6 ready order | Resolved | Deferred `_start_if_placed()`, the mask set in `launch()`, and ready-order rows in t2 and t8. Its `mine_life` side is F5. |
+| N7 floors | Resolved | Read from the code: `boost_exit_speed` 700 (`player_ship.gd:18`), `_BOOST_SPEED` 1500 / `_BOOST_END_SPEED` 500 (`engine_boost_module.gd:11-12`), and MoveState 360 / DashState 180 / 350. These give 532, 852 / 452, 816 / 416 and 248. |
+| N8 ambiguous rows | Resolved | The real-mover row is head-on. The "keeps clear" row excludes the current pass, LAY, BREAK_OFF and the tail-drop mines. |
+| N9 lose radius / persistence / probe | Resolved | 1421.5 < 1500. Both rows teleport the stub, and the no-pass DISENGAGE heading is specified. |
+| N10 levers | Resolved | They cover any existing row, checked by re-running it with `registers_hazard = false`. |
+| N11 t16 size | Resolved | t16 is medium. |
+
+**Other checks**
+- **Round-1 B1–B5 and M1–M8:** still resolved. Revision 3 changed none of the measured numbers.
+- **Allotments:** they total 28.5 s, so the phase ends at or below 216.4 − 12 + 28.5 = 232.9 s, under 240 s.
+- **`planSections`:** every task's section numbers map to exactly one heading in 3-plan.md (scripted check). Each task can be built from *For every task* plus its
+  listed sections; F1–F4 all land in §2.12, which t11 already lists.
+
+## New findings
+
+### F1 (blocking, t11). Against a standing player, APPROACH never freezes its plan
+
+**Checked:** 3-plan.md:686 (for |v̄| < 60, f is the unit vector from P toward the layer), :688 (re-planned every tick until frozen), :715 (standing C = P + f·320),
+:729 (frozen within `commit_distance` 200 of R), and :998 (`approach_max_seconds` rationale: "≈ 2.2 s to reach R for a standing player").
+
+**Why the plan can never freeze:**
+- R = P + 320f − 450u, so R always sits 54.6° of bearing away from the layer's own bearing, 552 px from P.
+- Each tick f follows the layer, so as the layer moves toward R, R rotates by the same amount.
+- The layer can get no closer to R than 552·sin 54.6° ≈ 450 px, which never reaches the 200 px freeze distance.
+- The coordinator confirmed this by hand. The subagent's simulation (four initial velocities, 600 px start) never froze in 12 s; the closest approach to R was 450.1 px,
+  and the layer spiralled in to circle the player at about 330 px.
+
+**Consequences:**
+- Every pass against a loitering player runs the full 6 s give-up.
+- During those 6 s the layer circles through the band where its earlier lines lie (210–440 px from P), which endangers the "hazard-aware > 100 px in APPROACH" row.
+- The line rate drops to about one per 20 s, not the summary's 10–14 s.
+- `fence_fallbacks` fires on every standing pass, against §1.3 and §2.12's "only for a layer behind a fast player".
+- §2.18's 2.2 s premise is false.
+
+**Fix:**
+- Latch f (the layer's bearing from P) when APPROACH starts. Keep it until the plan freezes or |v̄| reaches `frame_speed` or above. With f latched, the plan freezes in
+  about 1.5 s.
+- Add a row: a standing stub with the layer starting at the 600 px standoff freezes within 2.5 s, with `fence_fallbacks` 0.
+
+### F2 (blocking, t11 and the owner summary). Against a 220 px/s player the lead almost never converges, so the give-up control row cannot pass
+
+**Checked:** 3-plan.md:711 (`t_approach_left = |R − pos| / max_speed + …`), :714 (C = P + v̄·t_lead + 260f), :736–739 (give-up described as "behind" only), :782 (lead
+row at 220 px/s), :790 (Gradual scenario at 220 px/s), :800–802 (give-up row and its control: layer starting 600 px ahead gives `fence_fallbacks` = 0), and t11's
+acceptance criteria.
+
+**Why it diverges:**
+- R's distance feeds into t_lead, which pushes R further away.
+- Take a 220 px/s player with the layer 600 px ahead. Then x_C ≈ 951 + 0.917·|R − pos|, and |R − pos| ≥ x_C − 600, so a self-consistent R needs |R − pos| ≳ 4.2 km.
+  The coordinator derived this by hand.
+- Phase 4 hit the same thing with the Bomber. DECISIONS.md:1626 says "a plain fixed-point iteration diverged", and `bomber_brain.gd:441-509` uses an earliest-feasible
+  scan capped at `approach_cap` instead. The plan specifies neither.
+
+**Subagent simulation** (re-planned every tick, 420 px/s² acceleration). Time until the plan freezes, for a layer 600 px from the player:
+
+| Player speed (px/s) | Layer ahead | Layer abeam | Layer behind |
+|---|---|---|---|
+| 60 | 1.33 s | 2.15 s | 5.75 s |
+| 100 | 1.53 s | 3.85 s | 8.40 s |
+| 150 | 2.90 s | 8.13 s | 15.05 s |
+| 180 | 5.35 s | 14.17 s | 24.40 s |
+| 200 | 9.28 s | 23.22 s | never (30 s) |
+| 220 | **21.37 s** | never (30 s) | never (30 s) |
+
+**Consequences:**
+- The control row (220 px/s, layer ahead, expects 0 fallbacks) fails, because the 6 s give-up fires first.
+- The lead row ("C > 80 px ahead of a 220 px/s stub when the middle mine arms") only passes with a contrived start that is already frozen.
+- The Gradual 220 px/s scenario is all give-ups, so it never tests the lead.
+- For the owner: against any player above about 150 px/s (Open Space cruise is 420 px/s), the line is laid between the player and the layer, not across their path. The
+  summary does not say this.
+
+**Fix:**
+1. Compute the arrival time with the Phase 4 earliest-feasible scan: T in 0.1 s steps up to a cap, then bisect, where the flight time is
+   |R(T) − pos| / max_speed + run_in / lay_speed. Do not use a fixed point.
+2. When no T within the cap is feasible, go straight to the frozen fence plan. Otherwise, scope the 6 s timer to "no feasible arrival".
+3. Move the lead row and the give-up control row to about 100 px/s with the layer ahead, and keep the give-up row itself at 220 px/s. For the Gradual moving scenario,
+   either run it at 100–120 px/s, or keep 220 px/s and assert that every plan is a fence plan.
+4. State in the owner summary and §5 that a cruising player gets a fence line rather than a line across their path.
+
+### F3 (minor, t11). The handover from "seek R" to the run-in, and what "passes S" means, are not specified
+
+**Checked:** 3-plan.md:728–731 and :785.
+
+**What goes wrong:**
+- If the run-in starts as soon as the plan freezes (up to 200 px from R), a perpendicular arrival from the −n̂ side reaches 39.6° (bound 40°), and a freeze from 600 px
+  reaches 66°.
+- When the layer's projection starts past S (the latched-standing geometry from F1), a "projection ≥ S" test starts LAY immediately, mid-line.
+
+**Fix:** "Seek R until within `path_lookahead` (60 px) of it, then run in. LAY starts when the centre's projection on u *crosses* S from the R side." With this
+handover, every case tried stays within 33° and 31 px.
+
+### F4 (minor, t11). Rotating C for a moving player moves the line off the player's track
+
+**Checked:** 3-plan.md:704–707.
+
+**What goes wrong:** for a moving player u stays `v̄.orthogonal()`, and |C − P| is about 1136 px at freeze, so θ ≈ 19.8°. Rotating C about P by θ moves it about 385 px
+sideways, which is more than the line's 300 px half-length, so the predicted track misses the line by about 85 px.
+
+**Fix:** apply the rotation only to the standing (fence) form, and for a moving player shift C along f instead. Alternatively, state the miss as intended.
+
+### F5 (minor, t2 / t8 / t14). `mine_life` "0 unless authored" leaves placed PROXIMITY mines fizzling after 8 s
+
+**Checked:** 3-plan.md:40 and :189; `enemy_ordnance/mine.tscn`, which authors `mine_life = 8.0` (also the `enemy_ordnance.gd` default); §2.10:594 ("never fizzles", 60 s
+hand-ticked); and the hub field's `w_proximity` 0.4.
+
+**What goes wrong:** read literally, t2 keeps 8 s on every placed PROXIMITY mine. t8's "never fizzles" row then fails, or about 40% of the hub field fizzles 8 s after
+load.
+
+**Fix:** placed mode sets `mine_life` from a new export `placed_life` (default 0), or `Minefield` zeroes `mine_life` on its mines. State which in §2.1.
+
+### F6 (minor, t10 / t15). DISENGAGE must release the corridor constraint
+
+**Checked:** §2.11, §2.12:755, `assault_corridor_constraint.gd` (which pushes a ship back in past `hard_band` 450), and the `specialist_exit_probe.gd` header.
+
+**What goes wrong:** without `mover.release_constraint()`, which the Bomber's DISENGAGE calls, an exit along the current heading is capped by the constraint, and the
+t15 exit probe measures the cap rather than the exit.
+
+**Fix:** add one line to §2.11: "DISENGAGE calls `mover.release_constraint()`, as the Bomber does."
+
+## Checked and fine
+
+- **Gate time:** the t1 floor (with its ESCALATE path) and the per-task allotments are credible.
+- **Spill-over:** the deep_space deadline is 60 s, and the layer at 16 s plus about 15 s of life, its exit and 9 s of mine life fits inside it.
+- **Assault R:** it stays at least 24 px inside the view (174 − 150).
+- **DECISIONS.md:** its Phase 7 section matches Revision 3.
+- **Task chaining:** it matches §3, and no two parallel tasks share a code or test file.
