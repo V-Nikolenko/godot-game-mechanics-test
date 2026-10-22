@@ -2206,3 +2206,331 @@ they differ. This section is the index of what shipped, every deviation, and wha
 - **Difficulty levers** for Ph16: `EnemyRocket.lead_max`, `turn_rate`, `guidance_seconds`, the corvette's `salvo_period_*`, the support's
   `repair_fraction` / `shield_capacity`.
 - **Gate time is near its comfortable limit** (about 200 s of 240 s). Phase 6 must watch its allotments; `test_fighter_squad.gd` alone is ~63 s.
+
+## Phase 6 - Enemy rework, phase 6: hazard perception, gravity wells, anomalies and wreck fields (2026-10-20)
+
+Plan: `docs/plans/cmug23om70001m52wqfwclf3l/3-plan.md` (revision 2, answering the round-1 review in `4-review.md`), with
+research in `1-context.md` and `2-research.md` (scope check S1–S14) in the same directory. These are *planned* decisions;
+check this phase's *as built* section, once written, before relying on them.
+
+### Changes to earlier decisions
+- **Collision bit 12 (`area_control`, reserved by the Ph1 roadmap) is not allocated.** Hazard fields are *sampled* by the
+  bodies they act on (a registry query), not detected by `Area2D` overlap, so no physics layer is needed. Ph1's rule "no
+  layer until something uses it" stands; a later phase that needs an overlap-detected area-control body allocates it then.
+- **Context steering is adopted, as a stage inside `EnemyMover`** — the Ph1-named upgrade path — not as weighted blending in
+  the brains and not as repulsion nudges. Ph1's rejection of weighted behaviour blending stays in force; brains still make
+  one request per tick.
+- **The §11.4 Gravity Field moves here from Ph7** (as a gravity-bomb after-effect). Ph7 keeps mines and the Mine Layer.
+- **`EnemyBullet` rounds stop on wrecks** (two-sided cover): their HitBox mask gains 1024, and a hit on bit 1024 expires the
+  round only when the area's owner answers duck-typed `stops_enemy_rounds() == true`. Asteroids do not answer it, so round
+  behaviour against asteroids is unchanged. Any later structure that must stop enemy rounds answers the same method.
+- **One slice of Ph5's friendly-fire question is decided here: environmental blasts hurt both sides.** An explosive wreck's
+  blast (and hull stress, and a reactor field) damages the player and every enemy by centre distance. Enemy *weapon* blasts
+  (rockets) keep their Ph5 rules; the rest of the friendly-fire question stays with Ph8.
+- **Brains read `EnemyMover.own_velocity()`, not `actor.velocity`, for "am I settled / stopped" gates** (Ram LINE_UP crawl,
+  Sniper SETTLE, Fighter `is_settled` / `is_braking_onto_station` / RUN_IN standing start, Razor feint stop). Inside a
+  field `actor.velocity` includes the hazard drift. Heading and lead reads keep `actor.velocity`. Any later brain gate that
+  asks "has this ship stopped" must use `own_velocity()`.
+
+### Names and places later phases build on
+- **`global/hazards/`**: `HazardInfo` (`RefCounted`, one instance per hazard updated in place; fields `position`, `radius`,
+  `pull_force`, `damage_per_second`, `movement_penalty`, `disables_abilities`, `line_of_sight_blocker`, `kind`,
+  `core_radius`, `damage_radius`, signed `tangential_force` (+ = clockwise; no `clockwise` export), `avoid_weight`,
+  `velocity`, `source`, `claimer_id`; methods `falloff(r)`, `accel_at(pos)`, `penalty_at(pos)`, `contains(pos, margin)`,
+  and **claims** `try_claim(node)` / `release(node)` / `is_claimed_by(node)` / `is_claimed()`, stored as an instance id so a
+  freed claimer frees the claim), `Hazards` (static registry: `register` / `unregister` / `count()` O(1) /
+  `around(pos, reach)` / `accel_at(pos)` / `penalty_at(pos)` strongest-only capped at `MAX_PENALTY` 0.5 /
+  `container(tree)` / `hurt_box_of(ship)` / `pulse_damage(tree, at, radius, damage)`), `HazardField` (the one `Node2D`
+  script behind the well, anomaly, Gravity Field and reactor field: exports for radius, core, pull, swirl, penalty, stress,
+  `duration`, a TELEGRAPH → ACTIVE → QUIET cycle; signals `phase_changed(phase: int)`, `stressed(count: int)`),
+  `HazardDrift` (pull integrator, `half_life` 0.35 s, `step(accel, resistance, delta)`).
+- **A hazard is any node answering duck-typed `hazard_info() -> HazardInfo`** that registers in `_enter_tree()` and
+  unregisters in `_exit_tree()`. Ph7 mines (`kind = &"mine"`), Ph8 laser walls (`&"laser_wall"`) and Ph9 jammers
+  (`&"jammer"`, the first consumer of `disables_abilities`) join the same registry with no change to the AI.
+- **A hazard never writes a ship's velocity, position or rotation.** Enemies: `EnemyMover` step order is desired → slow →
+  context avoidance (skipped while boosting) → accel limit on `own_velocity()` → `+ drift` only when non-zero (applies while
+  boosting) → corridor `constraint.filter()` **last** → write; facing from `v − drift`. Players: the Open Space ship adds the
+  accel to its own `velocity` before its boost ceiling; the Assault fighter applies a `HazardDrift` **and clamps inside its
+  own `_physics_process`** (its states run from `_process`), and `dash_state` gained the clamp. `PlayerBase.hazard_speed_factor()`
+  is the player-side slow. The only direct damage path is `Hazards.pulse_damage` (centre distance, a
+  `HurtBox.received_damage.emit(n)`; bypasses `EnemyShield`; a plated Ram deflects it).
+- **Per-enemy hazard profile = three flat `ShipConfig` fields** (`@export_group("Hazards")`): `hazard_avoidance` 0..1
+  (a danger threshold in the context stage), `hazard_margin` px (the skim knob), `hazard_resistance` 0..1 (scales pull and
+  slow). Copied onto the mover by `BaseEnemy._ready()`. **A committed attack is `mover.boost()` and ignores avoidance**;
+  there is no separate "ignore hazards" API — later committed runs (Ph8 twin-laser sweep, Ph12 Dreadnought ram) use boost.
+- **The avoidance stage skips a line-of-sight-blocking hazard claimed by its own actor** (the ship's cover is its
+  destination). Any later behaviour that parks a ship beside a structure claims it first.
+- **Pass-through rule:** with no hazard in reach and zero drift, enemy velocity and rotation are bit-identical to Ph5
+  (the −0.0 case included: a zero drift is never added); `Hazards.count() == 0` costs one compare per step. Later phases
+  must keep the pass-through rows green.
+- **Runtime hazards are spawned deferred.** A kill or plate break happens inside a bullet's or rocket's `area_entered`
+  flush, where Godot refuses a synchronous physics-body add, so every spawned hazard (`HazardField`, `Wreck`,
+  `DebrisFragment`) has `spawn_into(container, at, rot)`, which stores the transform and calls `_attach.call_deferred` on
+  itself (the `ContactBlast` pattern). Later runtime hazards (Ph7 mines dropped on death, Ph19 wrecks) use the same entry.
+- **Runtime hazards live in the node in group `hazard_container`** (`HazardContainer` in level 1 and the hub). No container
+  → nothing spawns and no rng is drawn — this is why every level-1 replay and gate is unchanged. Never in the enemy
+  container (it holds `ENEMIES_CLEARED` open), never in group `enemies`, never scored. Ph13's `EncounterDirector` should
+  own a `HazardContainer` per encounter. The one gate that runs live level 1 with wrecks is
+  `test_level1_fighter_exit.gd::test_cloud_descent_clears_in_time_with_wrecks_left_behind`; its pre-approved levers are
+  Assault wreck `avoid_weight` 0.3, then halving Assault `wreck_chance` — never raising `enemies_cleared_timeout`.
+- **Wreck family** (`assault/scenes/hazards/wreck/`): `Wreck` (`CharacterBody2D` on layer 1, `HurtBox` + `Health`,
+  contact box on 1024 armed 0.6 s after entering the tree, `blocks_line_of_sight()`, `stops_enemy_rounds()`, claims
+  delegated to its `HazardInfo`, Assault drift 60 px/s down with a 30 s cap, Open Space `lifetime` 40 s, `retire()` fades
+  before freeing), `DebrisFragment` (`Area2D`, contact only, not a LOS blocker, optional `source` it never hits),
+  `WreckScenes.scene_for(size, explosive)`. **Only a moving wreck or fragment hurts on contact**; placed derelict
+  structures are `Wreck` scenes with `lifetime` 0 and are solid but harmless. `ShipConfig` gains `wreck_chance`,
+  `wreck_size`, `explosive_wreck_chance`; rolls use the brain's seeded `rng`; alive caps Open Space 8, Assault 4, enforced on
+  entering the container, oldest retired. A wreck blocks the player's beam and cannot be cut by it. Ph19's capital wrecks
+  reuse `Wreck` / `WreckScenes`.
+- **`EnemyBrain.can_see_player() -> bool`** wraps `TargetInfo.line_of_sight` toward the player; wrecks are the first shipped
+  blockers. The Missile Corvette still fires past a wreck (§28).
+- **Hazards as tools.** Sniper: far-side cover candidates, a `w_cover` score bonus, cover-only re-pick hysteresis, one
+  sniper per wreck. Fighter: a new **`COVER` phase appended to its `enum Phase`**, before APPROACH, for solo fighters and a
+  squad's LEAD only; `_derive_pass()` and the squad hold are untouched (the pass is derived from wherever the fighter leaves
+  cover). Ram: a **well station** `S = P + (P − W)^ · 300` in APPROACH in both modes (clamped to the corridor in Assault and
+  refused when the clamped S misses a 30° cone), one Ram per well via the well's claim; with no well `_choose_side()` and its
+  rng draw are untouched.
+- **Projectiles opt in to fields** by answering `hazard_pull_scale()` and turning their heading (never their speed):
+  enemy rockets, gravity / pursuit bombs, player homing and warhead missiles. Bullets, rounds, mines and beams fly true, so
+  every lifetime and distance cap still holds.
+- **Gate time:** this phase's allowances total ≈ 35.5 s against ≈ 40 s of headroom (GUT ≤ 240 s), so the phase ends near
+  236 s. **Ph7 must start by recovering gate time** by the `tests/README.md` rules before adding rows.
+
+### Deferred
+- Mines (Ph7); laser barriers / walls (Ph8); jammers, EMP zones and any `disables_abilities` consumer (Ph9); capital-ship and
+  boss wrecks, "modules remain as wreckage" (Ph19); carrier escort and hacker positioning tactics (Ph10/18, Ph9).
+- Cover for squad wingmen (FLANK / REAR) and squad-coordinated use of cover (Ph14, squad communication).
+- Hazards acting on rail-driven spawns (Ph15), the legacy Gunship (Ph10) and the station (immovable).
+- Placed wells / anomalies in Assault levels (Ph15; level 1 only gets what its enemies leave). Encounter composition around
+  hazards (Ph13/14). Difficulty scaling of hazard values (Ph16). Hazard audio (Ph17). Friendly fire from enemy weapon
+  blasts (Ph8).
+- Owner options not built by default: the anomaly's shield / targeting distortions, the Ram's deliberate plate throw
+  (Debris Charge ships passive only), a designed gravity slingshot.
+
+### Deviations during the build
+- **t4 (context-steering stage), four refinements of plan §2.4, all inside `Steering.context_avoid()`; the signature,
+  constants and mover wiring are as planned** (task plan `docs/plans/cmvg30aa90073qs2xrw74hcvg/3-plan.md`):
+  (1) the inside case uses the outside formula's own limit (skirt 1, cone half-width 90° + one slot) instead of
+  `max(0, cos)`, so every heading within 112.5° of the centre is dangerous and a ship inside always steps outward;
+  (2) the `prev_dir` hysteresis is blended into the *interest used to rank slots*, not into the output direction (an
+  output blend zig-zagged between the two edges of a well straight ahead), and falls back to the brain's own heading when
+  the blend cancels (a reversed request); (3) slots are ranked by the signed cosine, so slots more than 90° off the
+  request do not tie; (4) a **clear way** returns `desired` bit-identical: when the slot(s) bracketing `desired` (one slot
+  when `desired` lies exactly on it) carry the least danger, nothing is touched. The speed floor
+  `CONTEXT_MIN_SPEED_RATIO` 0.35 is as planned.
+- **t4: every `mover.boost()` bypasses avoidance, including the Razor's IDLE_BOOST** (0.4 s, ~60 px along its idle
+  heading), not only attacks; the plan's rule "committed runs are `boost()`; never a separate ignore-hazards API" makes
+  no exception. t17, which places the hub's well, should keep Razor idle orbits clear of a well's radius.
+- **t4: a drifting hazard is led only once it is within `Hazards.around()` reach** (queried at the hazard's *current*
+  centre, reach `hazard_margin + |desired| · 0.6`). For t15's debris (200 px/s, a 120 px lead at 0.6 s) pad the mover's
+  reach by a lead allowance if fragments are seen too late; padding is safe, since an info whose skirt is 0 contributes
+  nothing.
+- **t4: a Swarm Drone BURST across a well is captured only until it commits again.** With the §2.5 well (pull 520, core
+  90, damage radius 150) its next BURST (480 px/s) always carries it out, about 1.2 s later, like the Razor's dash. The
+  dual-mode row asserts that: the burst reaches the core, the drone stays inside `damage_radius` until its next boost
+  (two 0.5 s stress pulses), and with no well the same burst leaves that radius. It does not assert "still inside 2 s
+  later", which no geometry gives with the real brain.
+- **t10: wreck build choices later tasks depend on** (task plan `docs/plans/cmvg30aax007rqs2x14trnuf9/3-plan.md`):
+  - Every wreck and structure body is **one circle**, so `HazardInfo.radius` is the body radius exactly. The radii are
+    small 13, medium 25, large 40, satellite 28, cargo platform 55 and station module 45.
+  - `Wreck.spawned` is true only after `spawn_into()`. t11's alive cap counts and retires only those, never a placed
+    structure.
+  - **The yield:** a drifting wreck stops pushing into a body in groups `player` / `enemies`. It holds once that
+    ship's hurtbox has registered the contact box, or once it is `YIELD_DEPTH` 1.5 px deep along the drift. It then
+    backs off and waits for a clear next step. Ships it was born on are ignored until they separate.
+  - **Debris hurts on touch at any speed.** It has no body to stop the ship first.
+  - The Open Space lifetime runs through `ProjectileLifetime.max_time = 0` (inert), not a processing toggle. The wreck
+    reads its mode once, in `_enter_tree()`.
+  - **Rule: no ship hurtbox is larger than its body.** A still wreck is harmless only because of it. The Sniper's
+    hurtbox scale went 1.4505 → 1.44 to equal its body, and `test_wreck.gd` gates the rule for all 9 mover-driven
+    enemies and both players.
+  - **Cover stops the player's Sniper Shot and takes its full damage.** `Bullet`'s `unlimited_pierce` branch ends on
+    a parent answering duck-typed `stops_piercing()`, without zeroing damage.
+  - Enemy rounds end on a 1024 area only when its owner answers duck-typed `stops_enemy_rounds()`.
+    `enemy_bullet.tscn`'s HitBox mask is now 1152.
+  - **Arming switches the contact shape on as well as `monitorable`.** A hazard contact box that arms must enable its
+    `CollisionShape2D` (born `disabled`), not only flip `monitorable`. Godot never reports an overlap for an area pair
+    it built while the box was unmonitorable, and that pair forms for any hurtbox within the broadphase margin. So a
+    wreck armed a few px from a ship never hurt it. `DebrisFragment` does the same, and t12 / t15 should follow it.
+- **t11: wrecks from deaths.** No deviation from plan §2.9. Build notes later tasks depend on: the alive cap runs in `Wreck._ready()` (not `_enter_tree`, where the `@onready` hurtbox does not exist yet) and counts only `spawned` wrecks that are not retiring, ordered by a static spawn sequence; `BaseEnemy._maybe_leave_wreck()` checks brain, chance > 0 and container *before* the rng draw, so seeded level-1 gates (which have no `HazardContainer`) are unchanged. Explosive wrecks (t12) go through `WreckScenes.scene_for(size, true)` at the same call site. Enemy explosion effects land in the enemy container as before; wrecks never do.
+- **t15: Ram plate fragments.** No deviation from plan §2.13. `ram_fragment.tscn` is a `DebrisFragment` (speed 200, deceleration 120, spin 6, life 3.0, contact 12) with no sprite texture of its own: `RamCorvette._throw_fragment()` copies the broken plate's texture and `flip_h`. `DebrisFragment.contact_radius()` now reads its shape by path so it answers before `_ready()` (the Ram sizes `source_clear_radius` on a fresh instance). The fragment is never in group `enemies`, so it cannot hold a level open.
+- **t12: explosive wrecks and reactor fields.** No deviation from plan §2.10. Build notes later tasks depend on: `wreck_explosive.tscn` is ONE scene for every size (`WreckScenes.scene_for(size, true)` returns it whatever `size` is; only an unknown size returns null); it is a `Wreck` with `explosive = true`, `fuse` 1.0, `blast_radius` 110, `blast_damage` 25, `reactor_field_scene` (an export), body r 25, HP 20, a `StateLight` held at CHARGING and a `Glow` `AnimatedSprite2D` whose `fuse` animation plays during the fuse. The touch fuse is **polled** (`Wreck._ship_touching()` asks `_registered(ship)` for every ship in groups `player` / `enemies` each tick once armed) and only starts on a hurtbox overlapping the armed contact box, so a stationary explosive wreck that a ship merely bumps (hurtbox never reaches the box) does NOT fuse; a drifting one or a ship that overlaps it does. `_detonate()` is idempotent (`_detonated`) and runs from HP 0 (`destroyed` is emitted first, as for an inert wreck) or the fuse; it emits the new `detonated(world_position)` signal. `ShipConfig.explosive_wreck_chance` (Bomber 0.5, Missile Corvette 0.5, every other config 0) is drawn from the brain's rng only when it is above 0 and only after a successful wreck roll, so every config with 0 keeps its draw order. The reactor field is `reactor_field/reactor_field.tscn` (`ReactorField`, a `HazardField`; ring + burn sprite + 0.5 s fade).
+- **t13: Sniper cover.** Plan §2.11 as written, plus four refinements that later tasks (the Fighter's COVER in t14) can reuse:
+  (1) a **plain** candidate inside a line-of-sight blocker's body (`radius + BODY_MARGIN` 20 px) is rejected like a point
+  in a well, since a ray starting inside a body is not blocked and the ship could not reach it; (2) a cover candidate is
+  pushed **one more peek step** (30 px) past the first clear point when a ray can be spared, because the muzzle sits 45 px
+  from the hull and a point that only just clears the wreck's edge loses the line mid-turn; (3) the peeks may spend at
+  most `max_los_rays − 2` rays, leaving two for the plain candidates; (4) **SETTLE waits for the nose to come round**
+  (`TURN_DONE` 0.1 rad, inside `SETTLE_CAP`) before it calls a blocked line a refusal, **only while it holds a claimed
+  cover wreck**, so a sniper that reaches its cover point mid-turn is not sent away; with no claim SETTLE is as before.
+  The claim is taken in `_set_target_point()` (the choice itself skips a wreck another ship holds) and released on
+  BREAK_CONTACT, DISENGAGE and `on_suspended()`; `SniperBrain.claimed_cover` is the held `HazardInfo`. A hold-through-
+  AIM row runs on real physics (8× clock) as well as hand-ticked, because the hand-ticked harness overwrites the
+  position after `move_and_slide` and so never feels the wreck's body. New `SniperConfig` fields: `cover_search_radius`
+  700, `cover_gap` 50, `cover_radius` 140, `w_cover` 1.0, `cover_hysteresis` 0.15.
+- **t14: the Fighter's COVER phase.** Task plan `docs/plans/cmvg30aba0087qs2xwv86aq35/3-plan.md` (Revisions 1 and 2).
+  `FighterBrain.Phase.COVER` is appended (value 9). Brain state `cover: HazardInfo` (the claimed wreck) and
+  `cover_point`. The pass machinery (`_derive_pass()`, the RUN_IN latch, the squad hold) is untouched;
+  `_derive_pass()` is only *called* from COVER and from the entry check.
+  Deviations from §2.12:
+  1. **Seven** flat `FighterConfig` fields (Cover group), not six: `cover_min_budget` is **5.0** (6.0 can never open,
+     because `budget.update()` runs before the first APPROACH tick, leaving `6.0 − 1/60`). The new
+     `cover_pass_reserve` 3.0 is used trip-aware: COVER ends in Assault once
+     `remaining() <= cover_pass_reserve + |X − S| / max_speed`.
+  2. Four more entry rules:
+     - the wreck is nearer the player than the fighter ("on its way in"), or a hub fighter would fly away from the
+       player to hide and lose it;
+     - in Assault, C lies inside the corridor shrunk by the hull;
+     - **the swoop rule** (`_swoops_from`, Revision 2, found while building): a solo hides only where it breaches out
+       of cover (C inside APPROACH's breach radius less 30 px), and a squad LEAD only where its S is within
+       `2 × plan radius − 30` of C. From anywhere else APPROACH plans a Dubins lead-in from rest with the wreck in the
+       way; the wreck's skirt bends the fighter off that path, and the re-plan from near S loops. Measured over 270
+       layouts: 84/144 Open Space and 81/126 Assault post-cover approaches were 3–6 s late, most Assault ones never
+       attacking. With the rule: 0 of 216 solo and 0 of 112 LEAD covers in Open Space. In Assault, 2 of 184, both
+       fighters starting below the corridor floor, which no level does, and both still attacked;
+     - in Assault a centred player's S is clamped inward, so the solo band is only 300–325 px.
+  3. Extra exits: no player, and no longer the squad's LEAD.
+  4. `_enter_calm()` (IDLE / RETURNING) also clears `_cover_used`, so a hub fighter takes cover once per engagement.
+  5. N8 is accepted: a LEAD in cover leaves its FLANKs to go alone after `flank_wait_max`.
+
+  Consequences:
+  - Level-1 fighters practically never take cover: the check runs on the spawn tick, spawns are outside the corridor,
+    and the Assault swoop band is narrow. The wreck-guard replay counts COVER entries in its print and saw 0 in three
+    runs. Checking at corridor entry instead would make Assault cover common; it is left as an owner option.
+  - A future encounter that wants Assault cover needs a player off-centre or a wider corridor.
+- **t16 (Ram well station):** the 4.0 s give-up is `well_setup_max` plus the trip to the station at claim time (`RamCorvetteBrain.well_setup_limit`), not a flat 4.0 s: plan §2.14's own bearing-0 row (a Ram 900 px out beyond the well, 1200 px from `S`) cannot arrive in 4 s at 280 px/s. A corridor-clamped `S` closer than `well_station_tolerance` to the player is also refused (a player on the corridor's x edge collapses `S` onto itself, and a zero-length line passes any cone). New brain fields `well_ticket`, `well_station`, `well_refused`; with the shipped `engage_seconds` 4.0 the Assault gate (`remaining >= well_setup_max + line_up_cap`) never opens, so the station is Open Space-only until an Assault encounter gives a well-fighting Ram a longer budget.
+- **t18 (hub tactical space):** `sector_hub.tscn` `TacticalSpace` at well (2956, 1225), anomaly (3656, 1225), structures 500 px hub-side, three still debris pieces; the `Background` ColorRect's right edge is now 4400 (was 1720) so the space is not on the bare clear colour. Later phases that place hub content past x = 1720 need no further change.
+
+## Phase 6 - as built (2026-10-21)
+
+Report: `docs/epics-done/cmug23om70001m52wqfwclf3l/REPORT.md`. Where this section and the planned section above differ, this one wins.
+The planned section's "Deviations during the build" list above is the per-task record; this is its index.
+
+### What was built
+- `global/hazards/` (`HazardInfo`, `Hazards`, `HazardField`, `HazardDrift`); the hazard profile on `ShipConfig` and the drift / slow /
+  context-avoidance stage in `EnemyMover`; pull and slow on both players.
+- Hazards in `assault/scenes/hazards/`: `gravity_well/`, `energy_anomaly/`, `gravity_field/`, `reactor_field/`, `wreck/` (`Wreck`,
+  `DebrisFragment`, `WreckScenes`, derelict structures, drifting debris, the Ram plate fragment), each with a `HAZARD.md`.
+- Wrecks left by deaths in both modes through the `HazardContainer`; explosive wrecks and reactor fields; Gravity Field from gravity bombs;
+  rockets, bombs and player missiles bend in fields.
+- Tactics: Sniper far-side cover, Fighter `COVER` phase (solo / LEAD), Ram well station; `EnemyBrain.can_see_player()`.
+- The hub's `TacticalSpace` (well, anomaly, derelict cover, still debris).
+- Final gate: GUT 216.3 s, 2139 tests, all passing.
+
+### Deviations from the plan (every one)
+All are recorded in detail in "Deviations during the build" above; in short:
+1. Context-steering refinements inside `Steering.context_avoid()` (t4): inside-case limit, hysteresis on slot ranking, signed-cosine
+   ranking, a clear way returns `desired` bit-identical.
+2. Every `mover.boost()` bypasses avoidance, the Razor's idle boost included (t4).
+3. Wreck build choices (t10): one circle per body, the yield rule, debris hurts at any speed, no hurtbox larger than its body (the
+   Sniper's hurtbox scale 1.4505 -> 1.44), cover takes the Sniper Shot's full damage, `enemy_bullet.tscn` mask 1152, and arming a
+   contact box enables its shape.
+4. Sniper cover (t13): four refinements (plain candidates rejected inside a wreck body, one more peek step, peeks spend at most
+   `max_los_rays - 2`, SETTLE waits for the nose while a claimed wreck is held).
+5. Fighter COVER (t14): seven config fields, not six (`cover_min_budget` 5.0, new `cover_pass_reserve` 3.0), four extra entry rules including
+   the **swoop rule**, extra exits, `_enter_calm()` clears `_cover_used`. Level-1 fighters practically never take cover.
+6. Ram well station (t16): the give-up is `well_setup_max` plus the trip, not a flat 4.0 s; short clamped stations are refused; the Assault
+   station never fires with the shipped `engage_seconds` 4.0.
+7. Hub (t18): the `Background` rect's right edge moved from 1720 to 4400.
+8. No deviation from the plan in t1-t3, t5-t9, t11, t12, t15, t17 (t11, t12, t15 note build details only).
+
+### Gaps left for later phases
+- Nothing has been play-tested by a human; every hazard, avoidance and wreck number is a starting value pinned by tests.
+- Level 1 fighters almost never take cover (check at spawn tick); checking at corridor entry is an owner option. Wingman and
+  squad-coordinated cover belong to Ph14.
+- No Assault Ram can use a well station until an encounter gives it a longer budget; Assault levels have no placed hazards (Ph15).
+- `disables_abilities` has no producer (Ph9 jammers); mines (Ph7); laser walls (Ph8); capital / boss wrecks (Ph19); hazard audio (Ph17);
+  the anomaly's shield / targeting variants and a deliberate plate throw remain owner options.
+- Fighter cover legality is checked at entry only (documented, bounded).
+- **Gate time is 216 s of 240 s: Ph7 must start by recovering time** (`tests/README.md` rules), logging it here.
+
+## Phase 7 - Enemy rework, phase 7: mines, minefields and the Mine Layer (2026-10-22)
+
+Plan: `docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md` (Revision 1). The research stage left no `1-context.md` / `2-research.md`,
+so the plan's §1.1 *Scope check* (S1–S11) is this phase's re-validation against the code. These are *planned* decisions; check this
+phase's *as built* section, once written, before relying on them.
+
+### Changes to earlier decisions
+- **Pooled hazards register on `launch()`, not in `_enter_tree()`** (Ph6's rule). A pooled mine sits idle in the tree inside its `BulletPool`,
+  so it registers when a life starts and unregisters in `_mark_done()` and `_exit_tree()`. Placed (unpooled) mines call `launch()` too.
+  Any later *pooled* hazard follows the same rule.
+- **`EnemyOrdnance`'s MINE logic moves to a subclass**, `EnemyMine`, and the Bomber's `mine.tscn` becomes the PROXIMITY variant (same
+  path and UID, same numbers). The bomb paths stay in `EnemyOrdnance`, byte-identical, behind three virtual hooks (`_move_mine`,
+  `_trigger_seen`, `_on_detonated`).
+- **`mine_life` 0 now means "never fizzles"**. The Bomber always sets 8.0, so it is unaffected. The `ProjectileLifetime` `max_time` is the
+  backstop (0 = inert).
+- **Bomber mines become hazards** that other enemies avoid. Pre-approved lever if a level-1 gate turns red because of it:
+  `registers_hazard = false` on `mine.tscn` only.
+- **Friendly fire, one more slice decided:** *placed* minefields (`hostility = ALL`) are set off by, and blast, both sides through
+  `Hazards.pulse_damage` (Ph6's environmental rule). Every mine an enemy lays (`hostility = PLAYER`) keeps Ph4's rules: player
+  hurtboxes only, `ContactBlast`. The rest of the blast/beam friendly-fire question stays with Ph8.
+- **The race-track mine (`assault/scenes/race/track/mine.gd`, group `mines`) is not reconciled** with the family (deferred to Ph7 by Ph4).
+  Racers are outside the rework, so it stays a race prop.
+- **Already delivered, not rebuilt:** the §16 explosive collision profile (Ph1 assigned it to Ph7; it is `ContactProfile.Mode.EXPLOSIVE`,
+  built in Ph2) and the §11.4 Gravity Field (Ph6).
+
+### Names and places later phases build on
+- **`EnemyMine extends EnemyOrdnance`** (`assault/scenes/projectiles/enemy_ordnance/mines/enemy_mine.gd`).
+  - `enum Variant { PROXIMITY, DRIFTING, HOMING, CHAIN, PULSE, EMP }` (append-only) and `enum Hostility { PLAYER, ALL }`.
+  - Methods: `retire()` (fizzle, no blast), `chain_trigger(delay)`, `hazard_info()` (`kind = &"mine"`, `radius = trigger_radius`,
+    `avoid_weight` 0.5 PLAYER / 0.9 ALL, `velocity` for moving mines), `link_points()` (CHAIN fuse links).
+  - Exports: `registers_hazard`, `shot_detonates` (CHAIN: shot = detonate).
+  - Contract unchanged: `expired` once, `reset()`, `launch(dir, speed, target_point)`. A mine never frees itself, is never in `enemies` and is
+    never scored.
+  - Scenes `mines/<variant>_mine.tscn`, PROXIMITY = `enemy_ordnance/mine.tscn`. `EnemyMineScenes.scene_for()` / `pool_size_for()` /
+    `export_of()`.
+  - **Variant tuning lives in each mine scene's exports** (the Ph5 rocket rule); a dropper overrides only trigger / arm / warning / blast /
+    life (the Ph4 `Bomber.drop()` shape).
+- **Warning rule for every mine:** `(trigger_radius + effect_radius) / warning_time >= 440 + own_speed`, where `effect_radius` is
+  `blast_radius`, `pulse_radius` or `emp_radius`. Asserted from exports.
+- **Chain:** a CHAIN detonation calls `chain_trigger(chain_delay 0.2)` on every live mine within `chain_radius` 150 (centre distance, via
+  `Hazards.around`, kind `&"mine"`). Only CHAIN mines propagate. A chained mine skips its warning.
+- **Player disruption hooks on `PlayerBase`, implemented by both ships:**
+  - `apply_boost_disruption(strength, seconds)`, `boost_efficiency() -> float`, `signal boost_disruption_changed(efficiency: float)`.
+    Strongest and longest win, never stacked. `MIN_BOOST_EFFICIENCY` 0.15. `_step_disruption(delta)` is driven from each ship's physics
+    tick, with no `Timer`.
+  - Efficiency scales the Open Space Shift boost (`_step_boost`), Boost Drive (`engine_boost_module.gd`) and the Assault dash
+    (`dash_state.gd`). Cruise thrust, turning and firing are never touched.
+- **EMP entry point:** `EmpPulse.emit(tree, at, radius, seconds, source) -> int` (`global/components/emp_pulse.gd`, static) calls duck-typed
+  `apply_emp(seconds, source)` on group `player` only.
+  - `PlayerBase.apply_emp(seconds, source)`, `is_emp_disrupted()`, `signal emp_changed(active: bool)`.
+  - **Ph7's stand-in effect is `apply_boost_disruption(1.0, seconds)`.** Ph9 replaces the effect body and extends `EmpPulse` to enemies and
+    seeking weapons, **keeping both signatures**. Ph9's EMP Pulse weapon and its jammers call `EmpPulse.emit`.
+- **`Minefield`** (`assault/scenes/hazards/minefield/`, `HAZARD.md`):
+  - patterns AUTHORED / RING / GRID / SCATTER, flat variant weights, `hostility` ALL by default;
+  - unpooled self-owned mines (`expired -> queue_free`, `mine_life` 0) and a beacon;
+  - drifts down at 60 px/s in Assault (the wreck precedent), still in Open Space.
+  - A later phase places Assault fields (Ph15) or encounter fields (Ph13) with this scene.
+- **Mine Layer** (`assault/scenes/enemies/mine_layer/`): `MineLayer`, `MineLayerBrain`, flat `MineLayerConfig`.
+  - `MineLayerBrain.Phase { APPROACH, LAY, BREAK_OFF, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING }` (append-only).
+  - `MineLayer.drop_mine(variant, rest_point)` is the one configuring call. Per-variant root `BulletPool`s use `persist_after_owner_death`; an
+    exhausted pool falls back to PROXIMITY.
+  - `set_hatch_open(0..1)`, `MineWake` (self-freeing `Line2D`). `WaveBuilder.MINE_LAYER` / `mine_layer()`. COLLISION contact.
+  - Rail fallback: a PROXIMITY mine every `rail_mine_interval` 1.6 s.
+  - `accepts_tow()` false in LAY.
+
+### Conventions
+- **A pass is a line, not a spray:** one ZIGZAG or ARC line of ≤ 6 mines, 120 px apart, laid *across* the player's path.
+  - The lead is the Ph4 undamped wall rule on the layer's own timeline, capped at 3 s.
+  - Passes are 6–9 s apart, and in Open Space no two live pass centres are closer than 380 px.
+  - Live cap: 18 in Open Space, 8 in Assault; the oldest is retired.
+- **Assault:** the pass axis is horizontal, the line is clamped into `view_rect().grow(−(64 + amplitude))`, and there is one pass per life. The budget defers
+  to the end of LAY (≤ 4.45 s). Attack-in-budget rows from every level-1 spawn.
+- **Open Space persistence:** laid mines never fizzle (`mine_life` 0, backstop 240 s) and survive the layer's return home and its death.
+- **Never in an `ENEMIES_CLEARED` section:** the Mine Layer, or anything whose mines persist. Guard rows sit in `test_engagement_deadline.gd`; the spill-over row in
+  `test_level1_specialist_spawns.gd` adds `assault_mine_life`. The Mine Layer counts as a specialist in the frozen 2.5× gate.
+- **Hub:** the Mine Layer is draw 15, on bearing 0° of a 2600 px ring. A placed RING minefield sits at `TacticalSpace` (3300, 560). Radii (perceive / lose):
+  650 / 1500, sized by `lose_radius > standoff_range + break_speed·break_seconds + pass_length/2`.
+- **Level 1:** deep_space 16.0 s wave (from the left) and planet_approach 47.0 s wave (from the right), inside existing waves.
+- **Gate time:** t1 frees ≥ 12 s first (≥ 8 s minimum). Per-task allotments total 28 s (plan §2.15). GUT ≤ 240 s.
+
+### Deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| EMP on enemies, the real EMP player effect, jammers, hijack | Ph9 | Keep the `EmpPulse.emit` / `apply_emp` signatures |
+| Placed minefields in Assault levels | Ph15 | Ph6 rule for placed Assault hazards; the scene already works in Assault |
+| Encounter compositions with a Mine Layer (§19 sniper ambush) | Ph13 / Ph14 | |
+| Mine numbers by difficulty (`mines_per_pass`, `max_live_mines`, `pass_period_*`, `mine_warning`) | Ph16 | |
+| Mine and layer audio | Ph17 | |
+| A Mine Layer scattering mines on death | owner option | The Ph6 deferred-spawn entry is ready |
+| Pulse / EMP mines affecting enemies | Ph9 (if wanted) | Enemy-laid mines never trigger on enemies |

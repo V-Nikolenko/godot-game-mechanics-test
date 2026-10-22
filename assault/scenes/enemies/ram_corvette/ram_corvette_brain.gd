@@ -36,6 +36,9 @@
 ## WIDE_TURN disengage that tick; WIND_UP / CHARGE / STAGGER set `disengage_pending` and leave when that
 ## phase ends (the deferral is at most `wind_up_seconds + charge_max_time`).
 ##
+## Well station (Phase 6 t16): a gravity well within `well_use_range` of the player gets a ticket and APPROACH seeks
+## `P + (P - W)^ * well_standoff` instead of the plain approach (LINE_UP only at that station); see ENEMY.md.
+##
 ## Exposed (`on_exposed()`, from `RamCorvette._expose` on `armor_broken`): `exposed_cruise_speed` and
 ## `exposed_charge_speed`; the ARMOR contact is disarmed except during CHARGE; in APPROACH and WIDE_TURN it
 ## strafes out of the player's aim line (`evade_nudge`) while aimed at.
@@ -125,6 +128,17 @@ var glow: float = 0.0
 ## The exposed strafe offered to the mover this tick (zero when not evading).
 var evade_nudge: Vector2 = Vector2.ZERO
 
+## The gravity well this Ram holds the ticket on (its `HazardInfo`), or null. One Ram per well.
+var well_ticket: HazardInfo = null
+## APPROACH aims at this (`S` of plan §2.14) while it holds the ticket.
+var well_station: Vector2 = Vector2.ZERO
+## True once the station was refused (cone) or given up (`well_setup_max`); cleared on WIDE_TURN entry.
+var well_refused: bool = false
+
+## `well_setup_max` plus the time the station took to reach at cruise speed when the ticket was taken (s): the
+## 4 s of slack is for the setup, not for a detour that alone outlasts it.
+var well_setup_limit: float = 0.0
+var _well_time: float = 0.0
 var _started: bool = false
 var _phase_time: float = 0.0
 var _life: float = 0.0
@@ -172,6 +186,13 @@ func enter_phase(p: Phase) -> void:
 	# mover's own `acceleration` (0 = same as acceleration).
 	var stopping := p == Phase.LINE_UP or p == Phase.WIND_UP or p == Phase.STAGGER
 	mover.braking = config.braking if stopping else 0.0
+	# The well ticket is held through LINE_UP / WIND_UP / CHARGE (the charge is what uses it) and nowhere else.
+	match p:
+		Phase.WIDE_TURN:
+			release_well()
+			well_refused = false
+		Phase.STAGGER, Phase.DISENGAGE, Phase.IDLE, Phase.NOTICING, Phase.RETURNING:
+			release_well()
 	match p:
 		Phase.APPROACH:
 			_set_light(StateLight.State.OFF)
@@ -321,13 +342,17 @@ func _tick_approach(delta: float) -> void:
 		mover.request_velocity(Vector2.ZERO)
 		return
 	var pos := actor.global_position
-	if pos.distance_to(target.position) <= config.engage_range and can_attack():
+	_tick_well_ticket(target, delta)
+	var at_station := well_ticket == null or pos.distance_to(well_station) <= config.well_station_tolerance
+	if pos.distance_to(target.position) <= config.engage_range and at_station and can_attack():
 		enter_phase(Phase.LINE_UP)
 		_tick_line_up(0.0)
 		return
 	mover.max_speed = cruise_speed()
 	var rect := _corridor()
-	if rect.has_area() and config.assault_side_offset > 0.0:
+	if well_ticket != null:
+		mover.seek(well_station, cruise_speed())
+	elif rect.has_area() and config.assault_side_offset > 0.0:
 		if side == 0.0:
 			_choose_side(target, rect)
 		var offset := Vector2(side, vertical_side) * config.assault_side_offset
@@ -335,6 +360,72 @@ func _tick_approach(delta: float) -> void:
 	else:
 		mover.intercept(target, cruise_speed(), INTERCEPT_LOOKAHEAD)
 	_evade(target)
+
+
+# ── The well station (plan cmug23om70001m52wqfwclf3l §2.14) ───────────────────────────────────────
+
+## Keeps, takes or drops the ticket on a gravity well for this APPROACH tick. With no hazard registered and no ticket
+## it does nothing at all: no lookup, no rng draw.
+func _tick_well_ticket(target: TargetInfo, delta: float) -> void:
+	if well_ticket != null:
+		_well_time += delta
+		var well_node := well_ticket.source
+		if not is_instance_valid(well_node) or not well_node.is_inside_tree() \
+				or not well_ticket.is_claimed_by(actor) \
+				or well_ticket.position.distance_to(target.position) > config.well_use_range:
+			release_well()
+			return
+		if _well_time >= well_setup_limit - TIME_EPS:
+			release_well()
+			well_refused = true
+			return
+		well_station = _well_station_for(target, well_ticket)
+		return
+	if well_refused or Hazards.count() == 0:
+		return
+	if budget != null and budget.remaining() < config.well_setup_max + config.line_up_cap:
+		return
+	var best: HazardInfo = null
+	var best_d := INF
+	for info: HazardInfo in Hazards.around(target.position, config.well_use_range):
+		if info.kind != &"gravity_well":
+			continue
+		var d := info.position.distance_to(target.position)
+		if d <= config.well_use_range and d < best_d and (not info.is_claimed() or info.is_claimed_by(actor)):
+			best = info
+			best_d = d
+	if best == null or not best.try_claim(actor):
+		return
+	var station := _well_station_for(target, best)
+	var push := target.position - best.position
+	var lead := station - target.position
+	if push.length_squared() < 0.0001 or lead.length() < config.well_station_tolerance \
+			or absf(push.angle_to(lead)) > deg_to_rad(config.well_cone_deg):
+		best.release(actor)
+		well_refused = true
+		return
+	well_ticket = best
+	well_station = station
+	_well_time = 0.0
+	well_setup_limit = config.well_setup_max + actor.global_position.distance_to(station) / maxf(cruise_speed(), 1.0)
+
+
+## `S = P + (P - W)^ * well_standoff`, kept inside the corridor in Assault the way `_predicted_aim` is.
+func _well_station_for(target: TargetInfo, well: HazardInfo) -> Vector2:
+	var away := (target.position - well.position).normalized()
+	var s := target.position + away * config.well_standoff
+	var rect := _corridor()
+	if rect.has_area():
+		s = s.clamp(rect.position, rect.end)
+	return s
+
+
+## Gives the ticket back (a no-op without one). The well is free for another Ram at once.
+func release_well() -> void:
+	if well_ticket != null:
+		well_ticket.release(actor)
+	well_ticket = null
+	_well_time = 0.0
 
 
 ## Assault: the side the Corvette is on (review N5's tie-break: the roomier corridor half, then a coin),
@@ -392,7 +483,7 @@ func _tick_line_up(delta: float) -> void:
 		mover.face_toward(actor.global_position + aim_dir * 100.0)
 	var lined_up := aim_dir != Vector2.ZERO \
 			and absf(_nose().angle_to(aim_dir)) <= deg_to_rad(config.line_up_tolerance_deg) \
-			and actor.velocity.length() <= config.crawl_speed
+			and mover.own_velocity().length() <= config.crawl_speed
 	if lined_up or _phase_time >= config.line_up_cap - TIME_EPS:
 		enter_phase(Phase.WIND_UP)
 

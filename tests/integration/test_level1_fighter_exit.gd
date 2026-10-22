@@ -60,6 +60,16 @@ var _complete_wm_clock: float = -1.0
 ## One `{ "phase", "disengage", "path_mover", "at" }` per fighter that left the tree. Held on the test
 ## object, never on a node, so a late callback during teardown writes into live state.
 var _fighter_exits: Array[Dictionary] = []
+## The wreck guard (`test_cloud_descent_clears_in_time_with_wrecks_left_behind`): a `HazardContainer` in the world,
+## every ship rolls a wreck, every fighter dies on its first EXTEND. Zeroed in `before_each`.
+var _wreck_mode: bool = false
+var _hazard_container: Node2D
+var _wrecks_seen: int = 0
+var _wrecks_in_enemy_container: int = 0
+var _killed: Dictionary = {}
+## Fighters seen in COVER (Ph6 t14) at the end of a physics frame, by instance id: a same-tick enter / exit never counts.
+var _covered: Dictionary = {}
+var _ram_exits: Array[Dictionary] = []
 
 var _saved_time_scale: float = 1.0
 var _saved_ticks: int = 60
@@ -76,6 +86,13 @@ func before_each() -> void:
 	_complete_at = -1.0
 	_complete_wm_clock = -1.0
 	_fighter_exits = []
+	_wreck_mode = false
+	_hazard_container = null
+	_wrecks_seen = 0
+	_wrecks_in_enemy_container = 0
+	_killed = {}
+	_covered = {}
+	_ram_exits = []
 
 
 func after_each() -> void:
@@ -169,6 +186,14 @@ func _build_world() -> void:
 	_container.name = "EnemyContainer"
 	harness.root.add_child(_container)
 	_container.child_entered_tree.connect(_on_container_child_entered)
+	if _wreck_mode:
+		_hazard_container = Node2D.new()
+		_hazard_container.name = "HazardContainer"
+		_hazard_container.add_to_group(Hazards.CONTAINER_GROUP)
+		harness.root.add_child(_hazard_container)
+		_hazard_container.child_entered_tree.connect(func(n: Node) -> void:
+			if _recording and n is Wreck:
+				_wrecks_seen += 1)
 
 	_wave_manager = WaveManager.new()
 	_wave_manager.enemy_container = _container
@@ -179,8 +204,12 @@ func _build_world() -> void:
 ## Seeds each ship's brain before its `_ready()` (`child_entered_tree` fires on `add_child`, before
 ## the subtree is ready) and records every fighter's exit.
 func _on_container_child_entered(node: Node) -> void:
+	if _recording and node is Wreck:
+		_wrecks_in_enemy_container += 1
 	if not _recording or not node is BaseEnemy:
 		return
+	if _wreck_mode:
+		(node.get("config") as ShipConfig).wreck_chance = 1.0
 	var brain := node.get_node_or_null("Brain") as EnemyBrain
 	if brain != null:
 		brain.rng_seed = _SEED_BASE + _spawned
@@ -188,6 +217,8 @@ func _on_container_child_entered(node: Node) -> void:
 	if node is Fighter:
 		_fighters_spawned += 1
 		node.tree_exiting.connect(_on_fighter_exiting.bind(node))
+	elif node is RamCorvette:
+		node.tree_exiting.connect(_on_ram_exiting.bind(node))
 
 
 func _on_fighter_exiting(fighter: Node) -> void:
@@ -203,6 +234,18 @@ func _on_fighter_exiting(fighter: Node) -> void:
 		"path_mover": has_path_mover, "at": _t})
 
 
+func _on_ram_exiting(ram: Node) -> void:
+	if not _recording:
+		return
+	var has_path_mover := false
+	for child in ram.get_children():
+		if child is EnemyPathMover:
+			has_path_mover = true
+	var brain := ram.get_node_or_null("Brain") as RamCorvetteBrain
+	var phase: int = brain.phase if brain else -1
+	_ram_exits.append({"disengage": phase == RamCorvetteBrain.Phase.DISENGAGE, "path_mover": has_path_mover, "at": _t})
+
+
 func _on_waves_complete() -> void:
 	if _recording:
 		_complete_at = _t
@@ -211,10 +254,12 @@ func _on_waves_complete() -> void:
 
 ## Advances physics frames until `stop` returns true (checked only after `_MIN_RUN_SECONDS`) or
 ## `_t` reaches `until`.
-func _advance(until: float, stop: Callable) -> void:
+func _advance(until: float, stop: Callable, each_frame: Callable = Callable()) -> void:
 	while _t < until:
 		await get_tree().physics_frame
 		_t += get_physics_process_delta_time()
+		if each_frame.is_valid():
+			each_frame.call()
 		if _t >= _MIN_RUN_SECONDS and stop.call():
 			break
 
@@ -295,3 +340,63 @@ func test_a_rail_driven_fighter_wave_is_rejected() -> void:
 				has_path_mover = true
 		assert_true(has_path_mover, "a .move() fighter must carry an EnemyPathMover, which the main case rejects")
 	assert_gt(fighters, 0, "sanity: the rail fighters spawned and are still in the container")
+
+
+## Every fighter of the replay dies on its first EXTEND entry (mid-corridor, the worst case), once. Also notes every
+## fighter in COVER at the end of the frame (Ph6 t14): how often level-1 fighters find cover, printed, never asserted.
+func _kill_fighters_in_extend() -> void:
+	for child in _container.get_children():
+		var fighter := child as Fighter
+		if fighter == null:
+			continue
+		var brain := fighter.get_node_or_null("Brain") as FighterBrain
+		if brain != null and brain.phase == FighterBrain.Phase.COVER:
+			_covered[fighter.get_instance_id()] = true
+		if _killed.has(fighter.get_instance_id()):
+			continue
+		if brain != null and brain.phase == FighterBrain.Phase.EXTEND:
+			_killed[fighter.get_instance_id()] = true
+			fighter.health.decrease(fighter.health.current_health)
+
+
+## M9 (Ph6 t11, plan §2.9): the same replay with a `HazardContainer` in the world, every ship rolling a wreck
+## (`wreck_chance` 1.0 on each private config) and every fighter killed on its first EXTEND, so small wrecks drift
+## into the drones' and the Ram's paths. Wreck bodies are layer-1 colliders every `move_and_slide()` meets and a wreck is
+## avoidance danger, so this is the one row that runs the live exit path with them. Levers if it ever fails, in order:
+## Assault wreck `avoid_weight` 0.3, then halve the Assault `wreck_chance`; never raise `enemies_cleared_timeout`.
+func test_cloud_descent_clears_in_time_with_wrecks_left_behind() -> void:
+	var section := _cloud_descent()
+	assert_not_null(section, "sanity: level 1 has a cloud_descent section")
+	if section == null:
+		return
+	var waves := _replayed_waves(section)
+	var expected := _expected_counts(waves)
+	var timeout := section.enemies_cleared_timeout
+	var last_trigger := waves[waves.size() - 1].trigger_time
+
+	_wreck_mode = true
+	_build_world()
+	_wave_manager.load_section(waves)
+	await _advance(last_trigger + timeout + 1.0, func() -> bool:
+		if _complete_at < 0.0:
+			return false
+		return _t - _complete_at >= timeout or (_spawned == expected[0] and _container.get_child_count() == 0),
+		_kill_fighters_in_extend)
+	_recording = false
+
+	assert_gt(_complete_at, 0.0, "sanity: waves_complete fired")
+	assert_eq(_spawned, expected[0], "every ship of the replayed waves must have spawned")
+	assert_gte(_wrecks_seen, 2, "at least two wrecks existed during the run")
+	assert_eq(_wrecks_in_enemy_container, 0, "no wreck was ever a child of the enemy container")
+	var cleared_after := _t - _complete_at
+	assert_eq(_container.get_child_count(), 0,
+		"%d node(s) still in the container %.2f s after waves_complete (timeout %.1f s)"
+			% [_container.get_child_count(), cleared_after, timeout])
+	assert_lt(cleared_after, timeout, "the container must empty BEFORE enemies_cleared_timeout")
+	assert_eq(_ram_exits.size(), 1, "the 72 s Ram left the tree once")
+	for exit in _ram_exits:
+		assert_false(exit["path_mover"], "the Ram left on a rail (EnemyPathMover), not under AI")
+		assert_true(exit["disengage"], "the Ram left in a phase other than DISENGAGE")
+	gut.p(("with wrecks: %d wrecks, %d ships, %d fighter(s) took cover; container empty %.2f s after "
+		+ "waves_complete (timeout %.1f s)")
+		% [_wrecks_seen, _spawned, _covered.size(), cleared_after, timeout])

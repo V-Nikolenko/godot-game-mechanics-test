@@ -325,6 +325,7 @@ func _handle_thrust(delta: float) -> void:
 	if engine_boost_active:
 		return
 	var forward: Vector2 = Vector2.UP.rotated(rotation)
+	var factor: float = hazard_speed_factor()
 	var thrust_input: float = 0.0
 	if Input.is_action_pressed("move_up"):
 		thrust_input += 1.0
@@ -332,7 +333,7 @@ func _handle_thrust(delta: float) -> void:
 		thrust_input -= 1.0
 
 	if thrust_input > 0.0:
-		velocity += forward * thrust_acceleration * delta
+		velocity += forward * thrust_acceleration * factor * delta
 		_thruster.set_state(
 				ThrusterEffect.State.BOOST if _boosting
 				else ThrusterEffect.State.THRUST)
@@ -340,7 +341,7 @@ func _handle_thrust(delta: float) -> void:
 				ThrusterEffect.State.BOOST if _boosting
 				else ThrusterEffect.State.THRUST)
 	elif thrust_input < 0.0:
-		velocity -= forward * reverse_acceleration * delta
+		velocity -= forward * reverse_acceleration * factor * delta
 		_thruster.set_state(ThrusterEffect.State.THRUST)
 		_thruster_right.set_state(ThrusterEffect.State.THRUST)
 	else:
@@ -352,6 +353,10 @@ func _handle_thrust(delta: float) -> void:
 				ThrusterEffect.State.BOOST if _boosting
 				else ThrusterEffect.State.IDLE)
 
+	## A well's pull (plan §2.3): after thrust / damping, before the boost so _step_boost()'s ceiling
+	## clamp bounds it. Skipped during an engine boost by the early return at the top.
+	_step_hazards(delta)
+
 	## LAST, and the only Input reads this feature has. Everything the boost does — the
 	## trigger, the sustain, the ceiling, and the speed clamp that used to sit right here —
 	## lives in _step_boost(), which takes both the edge and the level as arguments so a
@@ -362,6 +367,13 @@ func _handle_thrust(delta: float) -> void:
 	## damping branch from fighting a held boost. Reordering the call ahead of the block
 	## would let a no-thrust-input frame damp the boost away underneath it.
 	_step_boost(Input.is_action_just_pressed("boost"), Input.is_action_pressed("boost"), delta)
+
+## Adds the field acceleration at the hull to this ship's own `velocity`. A hazard never writes a
+## ship's velocity, position or rotation: the body samples it. Never touches `rotation`.
+func _step_hazards(delta: float) -> void:
+	if Hazards.count() == 0 or engine_boost_active:
+		return
+	velocity += Hazards.accel_at(global_position) * delta
 
 ## The whole boost model. Pure apart from the flame calls in the trigger/stop branches: no
 ## Input, no Engine singletons, so every test calls it directly with injected edge/level bools.
@@ -410,7 +422,7 @@ func _step_boost(boost_pressed: bool, boost_held: bool, delta: float) -> void:
 			and (_boost_meter == null or _boost_meter.charges >= _boost_meter.min_start_charge):
 		_boosting = true
 		_boost_hold_left = boost_hold_sec
-		velocity = Vector2.UP.rotated(rotation) * boost_exit_speed
+		velocity = Vector2.UP.rotated(rotation) * boost_exit_speed * hazard_speed_factor()
 		_speed_ceiling = boost_exit_speed
 		_play_boost_flame()
 		## FLY-2: the start-frame punch. Falls back to a scale of 1.0 with no rig, so a bare
@@ -434,7 +446,7 @@ func _step_boost(boost_pressed: bool, boost_held: bool, delta: float) -> void:
 		var meter_ok: bool = _boost_meter == null or _boost_meter.drain(_boost_meter.drain_rate * delta)
 		if meter_ok:
 			_speed_ceiling = boost_exit_speed
-			velocity = Vector2.UP.rotated(rotation) * boost_exit_speed
+			velocity = Vector2.UP.rotated(rotation) * boost_exit_speed * hazard_speed_factor()
 		if not meter_ok or (not boost_held and _boost_hold_left <= 0.0):
 			_boosting = false
 			_release_boost_flame()
@@ -449,8 +461,9 @@ func _step_boost(boost_pressed: bool, boost_held: bool, delta: float) -> void:
 				move_toward(_speed_ceiling, max_speed, boost_ceiling_decay * delta),
 				max_speed)
 
-	if velocity.length() > _speed_ceiling:
-		velocity = velocity.normalized() * _speed_ceiling
+	var ceiling: float = _speed_ceiling * hazard_speed_factor()
+	if velocity.length() > ceiling:
+		velocity = velocity.normalized() * ceiling
 
 ## _step_boost()'s one tree touch, following engine_boost_module.gd:15,63-67 — the cyan flame is
 ## the epic's chosen tell for "that was a boost". _handle_thrust()'s branches hold both thrusters

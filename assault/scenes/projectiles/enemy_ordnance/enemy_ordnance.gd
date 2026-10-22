@@ -29,6 +29,9 @@ signal expired
 
 enum Kind { GRAVITY_BOMB, MINE, PURSUIT_BOMB }
 
+## What a gravity bomb leaves where it bursts (plan §2.15).
+const GRAVITY_FIELD_SCENE: PackedScene = preload("res://assault/scenes/hazards/gravity_field/gravity_field.tscn")
+
 @export var kind: Kind = Kind.GRAVITY_BOMB
 
 @export_group("Trigger")
@@ -173,6 +176,7 @@ func _physics_process(delta: float) -> void:
 func _move(delta: float) -> void:
 	match kind:
 		Kind.GRAVITY_BOMB:
+			_bend(delta)
 			var step := _heading * _speed * delta
 			global_position += step
 			_travelled += step.length()
@@ -186,7 +190,19 @@ func _move(delta: float) -> void:
 				_speed = _launch_speed
 			else:
 				_speed = move_toward(_speed, final_speed, accel * delta)
+			_bend(delta)
 			global_position += _heading * _speed * delta
+
+
+## Gravity and pursuit bombs bend in gravity wells and anomalies (`Hazards.bend_heading()`, speed unchanged, so
+## `_max_travel` still counts the path length); a mine's eject arithmetic is untouched: 0.0.
+func hazard_pull_scale() -> float:
+	return 0.0 if kind == Kind.MINE else 1.0
+
+
+func _bend(delta: float) -> void:
+	if Hazards.count() > 0:
+		_heading = Hazards.bend_heading(_heading, _speed, global_position, delta, hazard_pull_scale())
 
 
 ## Where a pursuit bomb steers: the player's predicted position, else the point it was aimed at.
@@ -236,7 +252,19 @@ func _detonate() -> void:
 		return
 	_mark_done()
 	ContactBlast.spawn(get_parent(), global_position, blast_radius, blast_damage, blast_frames)
+	if kind == Kind.GRAVITY_BOMB:
+		_leave_gravity_field()
 	expired.emit()
+
+
+## A short-lived slow field at the blast point, in the hazard container (deferred: this can run inside a
+## physics callback). No container -> nothing is instanced at all.
+func _leave_gravity_field() -> void:
+	var container := Hazards.container(get_tree())
+	if container == null:
+		return
+	var field: HazardField = GRAVITY_FIELD_SCENE.instantiate()
+	field.spawn_into(container, global_position)
 
 
 ## A shot: pop, no blast, end of life.

@@ -24,13 +24,20 @@
 [ext_resource type="PackedScene" uid="uid://bgtlo5mhub0mh" path="res://global/interactables/scenes/info_log_interactable.tscn" id="21_ilog"]
 [ext_resource type="PackedScene" path="res://global/pickups/scenes/ship_boost_up_pickup.tscn" id="22_sbu"]
 
+[ext_resource type="PackedScene" path="res://assault/scenes/hazards/gravity_well/gravity_well.tscn" id="23_well"]
+[ext_resource type="PackedScene" path="res://assault/scenes/hazards/energy_anomaly/energy_anomaly.tscn" id="24_anomaly"]
+[ext_resource type="PackedScene" path="res://assault/scenes/hazards/wreck/structure_satellite.tscn" id="25_sat"]
+[ext_resource type="PackedScene" path="res://assault/scenes/hazards/wreck/structure_cargo_platform.tscn" id="26_cargo"]
+[ext_resource type="PackedScene" path="res://assault/scenes/hazards/wreck/structure_station_module.tscn" id="27_module"]
+[ext_resource type="PackedScene" path="res://assault/scenes/hazards/wreck/debris_drift.tscn" id="28_debris"]
+
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
 
 [node name="Background" type="ColorRect" parent="." unique_id=973267846]
 offset_left = -2280.0
 offset_top = -1791.0
-offset_right = 1720.0
+offset_right = 4400.0
 offset_bottom = 2209.0
 color = Color(0.04, 0.04, 0.08, 1)
 
@@ -77,6 +84,45 @@ arc_offset = Vector2(-5, 4)
 arc_radius = 130.0
 
 [node name="EnemyContainer" type="Node2D" parent="." unique_id=1782392043]
+
+[node name="HazardContainer" type="Node2D" parent="." groups=["hazard_container"]]
+
+[node name="TacticalSpace" type="Node2D" parent="."]
+
+[node name="GravityWell" parent="TacticalSpace" instance=ExtResource("23_well")]
+position = Vector2(2956, 1225)
+
+[node name="EnergyAnomaly" parent="TacticalSpace" instance=ExtResource("24_anomaly")]
+position = Vector2(3656, 1225)
+
+[node name="StructureStationModule" parent="TacticalSpace" instance=ExtResource("27_module")]
+position = Vector2(2457, 1203)
+
+[node name="StructureCargoPlatform" parent="TacticalSpace" instance=ExtResource("26_cargo")]
+position = Vector2(2495, 1033)
+
+[node name="StructureSatellite" parent="TacticalSpace" instance=ExtResource("25_sat")]
+position = Vector2(2588, 887)
+
+[node name="Debris1" parent="TacticalSpace" instance=ExtResource("28_debris")]
+position = Vector2(3250, 1000)
+speed = 0.0
+spin = 0.4
+lifetime = 0.0
+
+[node name="Debris2" parent="TacticalSpace" instance=ExtResource("28_debris")]
+position = Vector2(3180, 1450)
+rotation = 1.2
+speed = 0.0
+spin = -0.3
+lifetime = 0.0
+
+[node name="Debris3" parent="TacticalSpace" instance=ExtResource("28_debris")]
+position = Vector2(3480, 1080)
+rotation = 2.5
+speed = 0.0
+spin = 0.25
+lifetime = 0.0
 
 [node name="PlayerShip" parent="." unique_id=574725177 instance=ExtResource("2_player")]
 

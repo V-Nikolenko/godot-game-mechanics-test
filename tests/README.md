@@ -502,6 +502,35 @@ at 8× ≈ 5 s.
 Final GUT time is about 198-202 s against the 240 s ceiling; `test_fighter_squad.gd`'s 3 s run-to-run spread makes any single
 before / after delta noisy, so compare the affected files, not the total.
 
+**Phase 6 (hazards, wrecks, enemy tactics) per task (GUT `Time`, `scripts/gate-time.sh`; "-" = the task's report recorded no pair).** Plan allotments summed to 35.5 s against ≈ 200 s at the end of Phase 5.
+
+| Task | Allotment | GUT before → after | Note |
+|---|---|---|---|
+| t1 registry / `HazardInfo` / `HazardField` | 0.5 s | - | unit files only |
+| t2 enemy drift, slow, profile | 1.5 s | - | |
+| t3 player hazards | 1.0 s | - | |
+| t4 context avoidance | 3.5 s | - | |
+| t5 field art | 0 | - | |
+| t6 Gravity Well | 2.0 s | - | |
+| t7 Energy Anomaly | 1.5 s | - | |
+| t8 projectiles bend | 1.0 s | - → 199.5 s | |
+| t9 wreck art | 0 | - | |
+| t10 wreck family | 3.0 s | - → 204.0 s | |
+| t11 wrecks from deaths + exit guard | 6.0 s | - | `test_wreck_spawning.gd` 4.4 s |
+| t12 explosive wrecks | 2.0 s | - | |
+| t13 `can_see_player()` + Sniper cover | 3.0 s | 211.7 → 210.5 s | before-run overlapped edits |
+| t14 Fighter COVER | 3.0 s | 214.6 → 216.3 s | the 168-layout sweep unchanged at ≈ 64 s |
+| t15 Debris Charge | 2.0 s | 204.0 → 212.6 s | one file +0.8 s; whole-suite run noise is wider than the allowance |
+| t16 Ram well station | 3.0 s | 214.7 → 215.3 s | |
+| t17 Gravity Field | 1.5 s | 199.5 → 201.1 s | |
+| t18 hub tactical space | 1.0 s | - | |
+| t19 docs | 0 | unchanged | docs only |
+
+**Final (2026-10-21, `scripts/gate-time.sh`):** import 4.5 s, boot 1.2 s, **GUT `Time` 216.3 s** (wall 221.4 s, total 227.1 s), 141
+scripts, 2139 tests, all passing — about 16 s over the Phase 5 close, 24 s under the 240 s ceiling. Slowest: `test_fighter_squad.gd`
+64.2 s, `test_level1_fighter_fire_density.gd` 32.4 s, `test_level1_specialist_exit.gd` 10.1 s, `test_bomber.gd` 8.7 s,
+`test_enemy_ordnance.gd` 7.7 s. **Phase 7 must start by recovering gate time** by the three rules above.
+
 **Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
 `tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition
 and settles every spawn timer before freeing the world), `tests/helpers/fixture_enemy_unrepairable.gd` (`can_be_repaired()` false),

@@ -45,7 +45,7 @@ is 20, the FORWARD rail cadence 12, the aimed rail cadence 7; the Scatter burst 
 
 ## Brain phases (`FighterBrain.Phase`)
 
-`APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING` (the idle phases were appended in t12 so the earlier values did not move). `phase_changed(new_phase: int)`
+`APPROACH, RUN_IN, EXTEND, TURN, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING, COVER` (the idle phases were appended in t12 and COVER in Ph6 t14, so the earlier values did not move). `phase_changed(new_phase: int)`
 fires on every transition; `enter_phase()` is the one transition path.
 
 **A pass** (epic §2.4.1) is a bearing `b` (the side it comes from), a run direction `u = −b` and a lane `l ⟂ u`. It
@@ -82,6 +82,7 @@ entry to EXTEND's end**, the lead time included. Read-only fields for tests and 
   routing with no clear path. After `passes` passes, Open Space loiters at S for `regroup_seconds` (1.5 s) first.
 - **Liveness** — APPROACH and REPOSITION each have a deadline of (the first plan's remaining length / `max_speed`) +
   `reposition_max` (3 s). On it the fighter starts the FRONTAL breach pass from wherever it is.
+- **COVER** (Ph6 t14) — waits behind a wreck before the pass; see §Cover. Entered only from APPROACH's first tick.
 - **DISENGAGE** — Assault only, when the `EngagementBudget` (`engage_seconds`) expires or `passes` passes are done:
   releases the corridor constraint, raises the mover to `exit_speed`, curves toward the nearest edge of the projectile
   world rect and frees itself once outside it. Open Space never disengages. **Deferred** while a telegraph or burst
@@ -157,9 +158,64 @@ otherwise an aimed round every `fire_interval` (0.8 s) at `rail_aimed_speed` (25
 `aim_mode` (spawn props `shoot_forward()` / `shoot_at_player()`, else the config default) is read **only** there; an AI
 fighter ignores it.
 
+## Cover (Phase 6 t14)
+
+Task plan `docs/plans/cmvg30aba0087qs2xwv86aq35/3-plan.md` (epic plan §2.12). A fighter that has a wreck on its way in
+slips behind it, waits there out of the player's sight, then swoops out of cover straight into its pass.
+
+- **Entry.** Checked once, on APPROACH's first tick with a target, and only with a hazard registered
+  (`Hazards.count() > 0` is the first test, so with no hazard the brain does one bool write and one compare and draws
+  no rng). All of these must hold:
+  - **Who:** a solo fighter or a squad LEAD (`_role() == LEAD`; FLANKs and REARs never take cover), no
+    `forced_pass_kind`, and no cover used since its last RUN_IN.
+  - **Budget:** in Assault, `budget.remaining() >= cover_min_budget` (5.0 s; it opens on the spawn tick).
+  - **The wreck:** a `kind == &"wreck"` line-of-sight blocker within `cover_search_radius` (500) of the fighter, not
+    freed or retiring. It must be nearer the player than the fighter is ("on its way in"). Nearest first.
+  - **The cover point** `C = W + (W − P)^·(radius + cover_gap)` (`cover_gap` 40), on the wreck's far side from the
+    player. It must lie farther than `cover_break_range` (300) from the player, inside the Assault corridor shrunk by
+    the hull, and outside every other hazard's `radius + hazard_margin`.
+  - **The swoop rule** (`_swoops_from`): from C, APPROACH must go straight into the pass. A solo must be inside
+    APPROACH's own breach radius less the hold's 30 px, so it breaches out of cover. A squad LEAD's S must be within
+    `2 × plan radius − 30` (≈ 337 px) of C with the line clear of the player, so it slides straight onto its station.
+    From anywhere else the fighter would plan a Dubins lead-in from rest with its own wreck in the way, and the wreck's
+    avoidance skirt bends it off that path into a re-planned loop. That was measured over 270 layouts: 3–6 s late, and
+    in Assault usually no attack at all.
+  - **The claim:** `try_claim(actor)` succeeds (one fighter per wreck).
+- **In COVER**, every tick:
+  - The pass is derived exactly as APPROACH derives it.
+  - C is recomputed, so it stays on the far side as the player moves.
+  - The fighter `arrive`s at C and faces the player. An arrival latch (settled within 10 px, re-seek beyond 20 px)
+    leaves it at rest, nose on the player. While settled it rides the wreck's own drift.
+  - The claimed wreck is skipped by the mover's avoidance (epic §2.4), so the fighter can reach C.
+  - No burst can open, and the light stays OFF.
+- **Exit** to APPROACH (then the same tick's APPROACH, which breaches or slides onto S), on the first of:
+  - no player;
+  - no longer the squad's LEAD (a closer member joined);
+  - the wreck freed or retiring, or C has left the Assault corridor;
+  - the player within `cover_break_range`;
+  - `cover_max` (5.0 s);
+  - in Assault, `remaining() <= cover_pass_reserve (3.0) + |X − S| / max_speed`;
+  - `cover_hold` (1.2 s) held continuously within 30 px of C with `can_see_player()` false.
+
+  Budget expiry in COVER enters DISENGAGE that tick, as in APPROACH. The claim is released on every exit (in
+  `enter_phase()`, and in `on_suspended()`). `_cover_used` is cleared on RUN_IN entry and on IDLE / RETURNING, so a hub
+  fighter takes cover once per engagement.
+- **A squad LEAD in cover** is not holding at S, so its FLANKs go alone after `flank_wait_max`, as for any late LEAD.
+  The LEAD then slides onto S and the squad's normal rules time its run.
+- **Where it shows.** Mainly in Open Space, where the swoop band for a solo is 300–425 px from the player. In Assault
+  the corridor clamps S inward, so a centred player's breach radius is about 355 px and the band only 300–325 px.
+  Add to that the spawn-tick check and wrecks drifting away from the top: level-1 fighters almost never take cover. The
+  wreck-guard replay counted 0 in three runs.
+- **Bait.** Explosive wrecks pass the rules like any other. C is inside their 110 px blast, so a player who shoots the
+  wreck hurts the fighter hiding behind it.
+- **Drifting wrecks.** A settled fighter rides its wreck's drift, so in Assault, and on a moving Open Space death wreck,
+  it leaves cover heading along the drift rather than the nose. That costs at most a turn at the start of the pass.
+
 ## Config
 
-Read the real fields from `fighter_config.gd` (groups: Movement, Geometry, Attack, Tactics, Rail). t8b added
+Read the real fields from `fighter_config.gd` (groups: Movement, Geometry, Attack, Tactics, Cover, Rail). Ph6 t14 added
+the Cover group: `cover_search_radius` 500, `cover_gap` 40, `cover_hold` 1.2, `cover_break_range` 300, `cover_max` 5.0,
+`cover_min_budget` 5.0, `cover_pass_reserve` 3.0. t8b added
 `run_in_max` (4.0) and `regroup_seconds` (1.5) and moved `forward_range` 300 → 325 (the epic's K5 lever: the TURN
 snapshot comes nose-on inside it, so it can be FORWARD). The pin
 `turn_rate × max_speed ≤ acceleration` is asserted in `tests/integration/test_fighter.gd`. t9 reads `rear_standoff_radius`
@@ -222,7 +278,10 @@ silence in Assault, are documented in §Squad.
 
 ## Tests
 
-`tests/integration/test_fighter.gd` (scene, pools, rail fallback, pass geometry, weapons, Assault rules, idle),
+`tests/integration/test_fighter.gd` (scene, pools, rail fallback, pass geometry, weapons, Assault rules, idle, and
+the Ph6 t14 cover rows, dual-mode: hide and run in, break range, one claimer, FLANK / LEAD, wreck freed or retired,
+budget gate, no-wreck identity, each entry rule, the swoop boundaries and a 24-layout swoop sweep, every exit releasing
+the claim, the Assault reserve, `cover_max`, once per RUN_IN / engagement, and a live-physics row on the 8× clock),
 `test_fighter_squad.gd` (roles, window, separation, regroup), `test_enemy_dual_mode.gd` (both harnesses),
 `test_enemy_rounds.gd` / `test_enemy_bullet_lifetime.gd` (the rounds it fires), `tests/unit/test_dubins_path.gd`,
 `test_burst_clock.gd`, and the level-1 gates in §Level 1.

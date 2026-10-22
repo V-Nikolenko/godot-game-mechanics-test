@@ -314,7 +314,7 @@ func test_no_reference_to_the_retired_ambient_drone_remains_in_gd_tscn_or_tres()
 ## patrol. Every spawned drone's automatic physics is switched off immediately so callers can
 ## hand-tick it (tests/README.md: "keep _physics_process out of the tree and call it by hand").
 func _spawn_hub(patrol_seed: int, squad_size: int = -1, player_pos: Vector2 = Vector2.ZERO,
-		engage_new: bool = false) -> Dictionary:
+		engage_new: bool = false, with_space: bool = false) -> Dictionary:
 	var h: RefCounted = HARNESS.open_space()
 	h.player.global_position = player_pos
 	var hub := Node2D.new()
@@ -332,6 +332,11 @@ func _spawn_hub(patrol_seed: int, squad_size: int = -1, player_pos: Vector2 = Ve
 	if squad_size >= 0:
 		hub.set("squad_size", squad_size)
 	h.root.add_child(hub)
+	if with_space:
+		# A copy of the real hub's TacticalSpace, so `Hazards.count() > 0` while the patrol runs.
+		var donor := HUB_SCENE.instantiate()
+		h.root.add_child(donor.get_node("TacticalSpace").duplicate())
+		donor.free()
 	add_child_autofree(h.root)
 	for c: Node in container.get_children():
 		c.set_physics_process(false)
@@ -536,8 +541,10 @@ func test_the_existing_groups_seeds_are_unchanged_by_the_specialists() -> void:
 	assert_eq(seeds.slice(12), expected.slice(12), "the corvette takes draw 13 and the support draw 14")
 
 
-func test_nobody_perceives_the_player_at_frame_0() -> void:
-	var built := _spawn_hub(PATROL_SEED, -1, _player_spawn)
+## Run with and without the tactical space (plan §2.16): its hazards are in the registry for the second case.
+func test_nobody_perceives_the_player_at_frame_0(with_space: bool = use_parameters([false, true])) -> void:
+	var built := _spawn_hub(PATROL_SEED, -1, _player_spawn, false, with_space)
+	assert_eq(Hazards.count() > 0, with_space, "the space is registered exactly when it was added")
 	var found := _swarm_and_razor(built.container)
 	var swarms: Array = found.swarms
 	var all_drones: Array = []
@@ -702,3 +709,201 @@ func test_an_engaged_hub_support_selects_the_hub_ram_as_its_ward() -> void:
 		guard += 1
 	assert_true(brain.is_supporting(), "supporting once within beam_range of the Ram")
 	assert_lte(support.global_position.distance_to(ram.global_position), SUPPORT_CONFIG.beam_range)
+
+
+# ── Phase 6 (plan §2.16, t18): the hub's one tactical space ────────────────────────────────────
+# A well, an anomaly, a cover line of three derelict structures and a few still debris pieces, laid out as scene
+# nodes (no rng draws, so every patrol seed above is unchanged). Every element is checked against every patrol group
+# and every interactable by a sweep on the real scene — the positions are whatever the sweep accepts.
+
+## A patrol group's anchor and the numbers the clearance rule needs: `[anchor, worst idle offset, perceive_radius]`.
+func _patrol_groups(hub: Node) -> Dictionary:
+	var ram_anchor := _specialist_anchor(hub, float(hub.ram_anchor_bearing_deg))
+	return {
+		"Swarm": [Vector2.RIGHT.rotated(deg_to_rad(float(hub.swarm_anchor_bearing_deg))) * float(hub.patrol_ring_radius),
+				SWARM_CONFIG.idle_radius + SWARM_CONFIG.separation_radius, SWARM_CONFIG.perceive_radius],
+		"Razor": [Vector2.RIGHT.rotated(deg_to_rad(float(hub.razor_anchor_bearing_deg))) * float(hub.patrol_ring_radius),
+				RAZOR_CONFIG.idle_radius + RAZOR_CONFIG.idle_radius_jitter, RAZOR_CONFIG.perceive_radius],
+		"Fighter": [_shooter_anchor(hub, float(hub.fighter_anchor_bearing_deg)),
+				FIGHTER_CONFIG.idle_radius, FIGHTER_CONFIG.perceive_radius],
+		"Gatling": [_shooter_anchor(hub, float(hub.gatling_anchor_bearing_deg)),
+				GATLING_CONFIG.idle_radius, GATLING_CONFIG.perceive_radius],
+		"Sniper": [_specialist_anchor(hub, float(hub.sniper_anchor_bearing_deg)),
+				SNIPER_CONFIG.idle_radius, SNIPER_CONFIG.perceive_radius],
+		"Bomber": [_specialist_anchor(hub, float(hub.bomber_anchor_bearing_deg)),
+				BOMBER_CONFIG.idle_radius, BOMBER_CONFIG.perceive_radius],
+		"Ram": [ram_anchor, RAM_CONFIG.idle_radius, RAM_CONFIG.perceive_radius],
+		"Missile Corvette": [_corvette_anchor(hub), CORVETTE_CONFIG.idle_radius, CORVETTE_CONFIG.perceive_radius],
+		"Support": [ram_anchor, SUPPORT_CONFIG.idle_radius, SUPPORT_CONFIG.perceive_radius],
+	}
+
+
+## World radius of one element of the space, read from the un-instantiated-in-tree scene (a `Wreck`'s `@onready` shape
+## is not resolved before it enters the tree, so its body circle is read directly).
+func _element_radius(node: Node) -> float:
+	if node is HazardField:
+		return (node as HazardField).radius
+	if node is DebrisFragment:
+		return (node as DebrisFragment).contact_radius()
+	if node is Wreck:
+		var shape_node := node.get_node("CollisionShape2D") as CollisionShape2D
+		return (shape_node.shape as CircleShape2D).radius * absf(shape_node.scale.x * (node as Node2D).scale.x)
+	return 0.0
+
+
+## `[position, radius, name]` for every element of the space (the space itself sits at the hub origin).
+func _space_elements(hub: Node) -> Array:
+	var space := hub.get_node("TacticalSpace") as Node2D
+	var out: Array = []
+	for child: Node in space.get_children():
+		out.append([space.position + (child as Node2D).position, _element_radius(child), String(child.name)])
+	return out
+
+
+func _space_clearance_violations(hub: Node, elements: Array) -> Array[String]:
+	var out: Array[String] = []
+	var groups := _patrol_groups(hub)
+	for e: Array in elements:
+		for label: String in groups:
+			var g: Array = groups[label]
+			var clearance: float = (g[0] as Vector2).distance_to(e[0]) - float(e[1]) - float(g[1]) - float(g[2])
+			if clearance <= 100.0:
+				out.append("%s anchor does not clear %s by > 100 px past its idle ring + perceive_radius (%.1f)"
+						% [label, e[2], clearance])
+	var points := _interactable_points(hub)
+	for e: Array in elements:
+		for p: Vector2 in points:
+			var clearance: float = p.distance_to(e[0]) - float(e[1])
+			if clearance <= 300.0:
+				out.append("%s is only %.1f px from %s (needs > 300)" % [e[2], clearance, p])
+	return out
+
+
+func test_the_tactical_space_has_the_planned_parts() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var space := hub.get_node("TacticalSpace") as Node2D
+	var wells: Array[Node2D] = []
+	var anomalies: Array[Node2D] = []
+	var structures: Array[Node2D] = []
+	var debris: Array[Node2D] = []
+	for child: Node in space.get_children():
+		if child is HazardField and (child as HazardField).kind == &"gravity_well":
+			wells.append(child)
+		elif child is HazardField and (child as HazardField).kind == &"anomaly":
+			anomalies.append(child)
+		elif child is Wreck:
+			structures.append(child)
+		elif child is DebrisFragment:
+			debris.append(child)
+	assert_eq(wells.size(), 1, "one gravity well")
+	assert_eq(anomalies.size(), 1, "one energy anomaly")
+	assert_eq(structures.size(), 3, "three placed structures")
+	assert_between(debris.size(), 2, 3, "two or three debris pieces")
+	if wells.size() == 1 and anomalies.size() == 1:
+		var well := space.position + wells[0].position
+		assert_between(well.distance_to(space.position + anomalies[0].position), 650.0, 750.0, "anomaly 650-750 px from the well")
+		var toward_hub := (-well).normalized()
+		for s: Node2D in structures:
+			var offset := space.position + s.position - well
+			assert_between(offset.length(), 450.0, 550.0, "%s sits 450-550 px from the well" % s.name)
+			assert_gt(offset.normalized().dot(toward_hub), 0.8, "%s is on the hub side of the well" % s.name)
+	for s: Node2D in structures:
+		assert_eq((s as Wreck).lifetime, 0.0, "%s is permanent" % s.name)
+		assert_eq((s as Wreck).drift_velocity, Vector2.ZERO, "%s does not drift" % s.name)
+	hub.free()
+
+
+func test_the_tactical_space_is_centred_on_the_planned_bearing_and_ring() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var well: Vector2 = _space_elements(hub).filter(func(e: Array) -> bool: return e[1] == 420.0)[0][0]
+	assert_almost_eq(rad_to_deg(well.angle()), 22.5, 1.0, "bearing 22.5 deg")
+	assert_almost_eq(well.length(), 3200.0, 5.0, "on the 3200 px ring")
+	hub.free()
+
+
+func test_every_element_of_the_tactical_space_clears_every_patrol_and_interactable() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var elements := _space_elements(hub)
+	assert_gte(elements.size(), 7, "sanity: the sweep found the whole space")
+	var violations := _space_clearance_violations(hub, elements)
+	assert_true(violations.is_empty(), "\n".join(violations))
+	hub.free()
+
+
+## Boundary: the sweep can reject. A pickup-sized point moved next to the well, and an element pushed onto the
+## Gatling's anchor, are both reported.
+func test_the_space_clearance_sweep_can_reject() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var elements := _space_elements(hub)
+	var gatling: Vector2 = (_patrol_groups(hub)["Gatling"] as Array)[0]
+	elements.append([gatling + Vector2(0.0, 400.0), 420.0, "Planted"])
+	var violations := _space_clearance_violations(hub, elements)
+	assert_gt(violations.size(), 0, "a well planted 400 px from the Gatling's anchor is caught")
+	assert_true(violations.any(func(v: String) -> bool: return v.begins_with("Gatling") and v.contains("Planted")))
+	hub.free()
+
+
+func test_every_placed_debris_piece_has_speed_zero_and_no_lifetime() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var found := 0
+	for child: Node in hub.get_node("TacticalSpace").get_children():
+		if child is DebrisFragment:
+			found += 1
+			assert_eq((child as DebrisFragment).speed, 0.0, "%s must not drift away" % child.name)
+			assert_eq((child as DebrisFragment).lifetime, 0.0, "%s is permanent" % child.name)
+	assert_between(found, 2, 3)
+	hub.free()
+
+
+## The space gives a real Sniper a reason to hide: on each structure, a Sniper on the hub side and the player on the far
+## side are refused a line by the real physics, and a same-side control gets one.
+func test_the_space_has_a_sight_line_blocker_that_refuses_a_real_sniper_a_line() -> void:
+	var h: RefCounted = HARNESS.open_space()
+	add_child_autofree(h.root)
+	var donor := HUB_SCENE.instantiate()
+	var space := donor.get_node("TacticalSpace").duplicate() as Node2D
+	donor.free()
+	h.root.add_child(space)
+	var well := Vector2.ZERO
+	for child: Node in space.get_children():
+		if child is HazardField and (child as HazardField).kind == &"gravity_well":
+			well = (child as Node2D).global_position
+	var sniper := load("res://assault/scenes/enemies/sniper/sniper.tscn").instantiate() as Sniper
+	sniper.set_physics_process(false)
+	h.root.add_child(sniper)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	assert_gt(Hazards.count(), 0, "the space registers its hazards")
+	var blockers := 0
+	for child: Node in space.get_children():
+		if not (child is Wreck):
+			continue
+		blockers += 1
+		var s := child as Wreck
+		var out_dir := (s.global_position - well).normalized()
+		var reach := _element_radius(s) + 80.0
+		sniper.global_position = s.global_position - out_dir * reach
+		h.player.global_position = s.global_position + out_dir * reach
+		assert_false((sniper.get_node("Brain") as EnemyBrain).can_see_player(),
+				"%s stands between the Sniper and the player" % s.name)
+		h.player.global_position = sniper.global_position - out_dir * 300.0
+		assert_true((sniper.get_node("Brain") as EnemyBrain).can_see_player(),
+				"control: the same-side line past %s is clear" % s.name)
+	assert_eq(blockers, 3, "all three structures were exercised")
+
+
+## While the space exists every patrol row stays what it was: the same fourteen seeds and the same composition (the
+## frame-0 row above is parameterised over with / without the space).
+func test_with_the_space_present_the_patrol_seeds_and_composition_are_unchanged() -> void:
+	var built := _spawn_hub(PATROL_SEED, -1, _player_spawn, false, true)
+	assert_gt(Hazards.count(), 0, "sanity: the tactical space is registered")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = PATROL_SEED
+	var expected: Array[int] = []
+	for i: int in 14:
+		var s := rng.randi()
+		expected.append(s if s != 0 else 1)
+	assert_eq(_brain_seeds(built.container), expected, "the space draws nothing from the patrol rng")
+	var found := _swarm_and_razor(built.container)
+	assert_eq((found.swarms as Array).size(), 4)
+	assert_eq(built.container.get_child_count(), 14, "nothing but the eight patrol groups spawned")

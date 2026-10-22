@@ -65,10 +65,14 @@ func move(direction: Vector2) -> void:
 	else:
 		animated_sprite.play(TILT_LEFT_ANIMATION_NAME)
 	
-	actor.velocity = direction * move_speed
+	actor.velocity = direction * move_speed * _hazard_factor()
 	actor.move_and_slide()
 
 	## Hard world bounds: 1480 x 1480 play area centred on the 1280 x 720 screen.
 	## x [-100, 1380]  /  y [-380, 1100]
 	actor.global_position.x = clamp(actor.global_position.x, -100.0, 1380.0)
 	actor.global_position.y = clamp(actor.global_position.y, -380.0, 1100.0)
+
+## The actor's slow from hazards (1.0 when it has none or is not a PlayerBase).
+func _hazard_factor() -> float:
+	return actor.hazard_speed_factor() if actor.has_method("hazard_speed_factor") else 1.0

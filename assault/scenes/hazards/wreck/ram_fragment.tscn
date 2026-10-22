@@ -1,0 +1,39 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/hazards/wreck/debris_fragment.gd" id="1_frag"]
+[ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="2_hit"]
+[ext_resource type="Script" path="res://global/components/projectile_lifetime.gd" id="3_life"]
+
+[sub_resource type="CircleShape2D" id="Shape_contact"]
+radius = 10.0
+
+[node name="RamFragment" type="Area2D"]
+collision_layer = 0
+collision_mask = 0
+monitoring = false
+monitorable = false
+script = ExtResource("1_frag")
+speed = 200.0
+deceleration = 120.0
+spin = 6.0
+lifetime = 3.0
+contact_damage = 12
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 1024
+collision_mask = 0
+monitoring = false
+monitorable = false
+script = ExtResource("2_hit")
+damage = 12
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+disabled = true
+shape = SubResource("Shape_contact")
+
+[node name="ProjectileLifetime" type="Node" parent="."]
+script = ExtResource("3_life")
+max_time = 3.0

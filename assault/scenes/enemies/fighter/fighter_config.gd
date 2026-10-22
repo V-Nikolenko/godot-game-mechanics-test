@@ -97,6 +97,25 @@ extends ShipConfig
 @export var idle_radius: float = 150.0
 @export var idle_speed: float = 0.5
 
+@export_group("Cover")
+## Phase 6 t14 (task plan docs/plans/cmvg30aba0087qs2xwv86aq35/3-plan.md): a solo fighter or a squad LEAD
+## waits behind a wreck on its way in before its pass. A wreck within this of the fighter can be taken (px).
+@export var cover_search_radius: float = 500.0
+## The cover point sits this far beyond the wreck's edge, on its far side from the player (px).
+@export var cover_gap: float = 40.0
+## Continuous seconds hidden on the cover point before it leaves for its pass (s).
+@export var cover_hold: float = 1.2
+## The player this close to the fighter breaks cover at once (px).
+@export var cover_break_range: float = 300.0
+## COVER never lasts longer (s).
+@export var cover_max: float = 5.0
+## Assault: no COVER with less engagement budget than this left (s). Below `engage_seconds − 1/60`, so the
+## gate opens on the spawn tick (epic review N2).
+@export var cover_min_budget: float = 5.0
+## Assault: COVER ends once the budget left is this plus the straight trip to the pass's start (s), so the
+## pass after it still fits.
+@export var cover_pass_reserve: float = 3.0
+
 @export_group("Rail")
 ## The rail fallback (plan §2.8): what a fighter does while an `EnemyPathMover` owns its motion.
 ## Read only by `FighterBrain.on_suspended()`; an AI fighter ignores `aim_mode`.

@@ -1333,3 +1333,23 @@ func test_a_level1_corvette_with_a_4_s_budget_never_telegraphs_in_it() -> void:
 	assert_false(seen.has("telegraph_at") and float(seen["telegraph_left"]) > 0.0, "no TELEGRAPH with budget left")
 	assert_false(seen.has("salvo_left"), "no salvo with budget left")
 	assert_eq(SHIPPED.engage_seconds, 7.0, "the shipped config is untouched")
+
+
+## Plan cmug23om70001m52wqfwclf3l §2.11 / §28: a wreck is cover for a sniper's line, not for a rocket salvo. The Missile
+## Corvette never asks `can_see_player()`, so a wreck standing between it and the player changes nothing about when or how
+## many rockets it launches (a rocket that meets the wreck stops on it in flight, which is the wreck's business).
+func test_a_wreck_between_the_corvette_and_the_player_does_not_stop_the_salvo(mode: String = use_parameters(MODES)) -> void:
+	var harness = _harness(mode)
+	add_child_autofree(harness.root)
+	var corvette := _seeded(harness, Vector2(640.0, 200.0))
+	var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+	harness.player.global_position = corvette.global_position + _nose(corvette) * _range_for(mode)
+	var wreck := load("res://assault/scenes/hazards/wreck/wreck_small.tscn").instantiate() as Wreck
+	wreck.set_physics_process(false)
+	harness.root.add_child(wreck)
+	wreck.global_position = corvette.global_position.lerp(harness.player.global_position, 0.5)
+	await wait_physics_frames(2)
+	assert_false(brain.can_see_player(), "%s: sanity: the wreck blocks the line" % mode)
+	var run := _run_salvo(harness, corvette, EnemyRocket.Kind.DUMB)
+	assert_gte(run.telegraph_tick, 0, "%s: a telegraph started" % mode)
+	assert_eq((run.rockets as Array).size(), brain.salvo_size(EnemyRocket.Kind.DUMB), "%s: the whole salvo launched" % mode)

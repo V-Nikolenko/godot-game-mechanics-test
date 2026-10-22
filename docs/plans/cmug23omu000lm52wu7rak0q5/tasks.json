@@ -1,0 +1,263 @@
+{
+ "tasks": [
+  {
+   "key": "t1",
+   "title": "The test gate has room again for the mine phase: GUT time drops by at least 12 s without weakening a single test",
+   "description": "Phase 6 left GUT at 216.3 s of the 240 s ceiling. Recover time using only the tests/README.md -> Gate time rules: put any row still awaiting real physics at 1x on the 8x clock (check Phase 6's test_wreck*.gd, test_hazard_projectiles.gd, test_player_hazards.gd, and test_bomber.gd), compute shared scenarios once, drop per-tick bookkeeping, or speed up a hot production path with identical behaviour (e.g. the fighter tick that test_fighter_squad.gd's 168-layout sweep spends ~53 s in). Record the before/after table in tests/README.md -> Gate time (a Phase 7 section with the per-task allotments from plan §2.15).",
+   "acceptanceCriteria": "GUT Time (scripts/gate-time.sh) is at least 12 s lower than at the start of the task (target <= 204 s; if only 8-12 s is achievable, report why). Test count and assert count are unchanged. No tick count, duration, sample count or grid is lowered, no bound is widened and no assertion is removed. Every changed row's measured values stay inside their asserted bounds (listed in the report). verify.sh green; check-test-leaks.sh clean.",
+   "type": "chore",
+   "complexity": "medium",
+   "dependsOn": [],
+   "planSections": [
+    "2.15"
+   ]
+  },
+  {
+   "key": "t2",
+   "title": "Mines are one family that enemies steer around: the Bomber's mine becomes the proximity mine, and placed mines can hurt everyone",
+   "description": "Add EnemyMine (assault/scenes/projectiles/enemy_ordnance/mines/enemy_mine.gd) extending EnemyOrdnance with the Variant and Hostility enums, three virtual hooks in EnemyOrdnance (_move_mine, _trigger_seen, _on_detonated; bomb paths byte-identical), mine_life 0 = never fizzles, retire(), launch-scoped HazardInfo registration (kind &\"mine\"), hostility ALL (trigger on enemy hurtboxes whose owner is in group enemies, blast through Hazards.pulse_damage), the registers_hazard export, and EnemyMineScenes (scene_for, pool_size_for, export_of). Switch mine.tscn's script to EnemyMine (variant PROXIMITY, same path/UID). New tests/integration/test_enemy_mines.gd plus per-variant lifetime rows in test_enemy_bullet_lifetime.gd. Report GUT time before/after with scripts/gate-time.sh and stay within this task's allotment in plan §2.15; bash /agent/verify.sh green; scripts/check-test-leaks.sh clean if anything awaits.",
+   "acceptanceCriteria": "Every test row listed in plan §2.1 and §2.2 exists and passes, including: launch-scoped registration (an idle pooled mine is not counted); mine_life 0 survives 30 s; PLAYER vs ALL hostility with the non-ship-512 boundary; retire() gives one expired and no blast; the avoidance row with its registers_hazard=false control; the warning inequality from scene exports plus its synthetic failing case. Every existing test_bomber.gd / test_enemy_ordnance.gd row passes unchanged. If a level-1 gate fails because of Bomber-mine registration, the pre-approved lever (registers_hazard=false on mine.tscn) is applied and reported. Ph6 pass-through rows green.",
+   "type": "feature",
+   "complexity": "large",
+   "dependsOn": [
+    "t1"
+   ],
+   "planSections": [
+    "2.1",
+    "2.2",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t3",
+   "title": "Drifting mines float slowly across space and slow homing mines creep toward the player once they notice them, but can be outrun",
+   "description": "Add the DRIFTING and HOMING variants (mines/drifting_mine.tscn, mines/homing_mine.tscn) to EnemyMine: drift at drift_speed along the launch or drift_direction with a distance cap; homing notices within notice_radius, creeps at home_speed with home_turn_rate, loses the player beyond home_lose_radius, and holds at home_max_distance. HazardInfo.velocity is kept current. Placeholder look until t7. Dual-mode hand-ticked rows in test_enemy_mines.gd. Report GUT time before/after with scripts/gate-time.sh and stay within this task's allotment in plan §2.15; bash /agent/verify.sh green; scripts/check-test-leaks.sh clean if anything awaits.",
+   "acceptanceCriteria": "Plan §2.3 rows pass in both harnesses: drift 35*t +-1 px and fizzle at 1400 px; a zero-direction placed drifter is still; homing does not move before arming, does not move at 270 px and does move at 250 px, loses a 120 px/s retreating player past 380 px, never ends more than 900 px from launch, and stays inside projectile_world_rect in Assault. The warning inequality row covers both variants (with their own speed added).",
+   "type": "feature",
+   "complexity": "medium",
+   "dependsOn": [
+    "t2"
+   ],
+   "planSections": [
+    "2.1",
+    "2.2",
+    "2.3",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t4",
+   "title": "Chain mines set off every mine linked to them in a visible ripple, and shooting one clears the whole linked group",
+   "description": "Add the CHAIN variant (mines/chain_mine.tscn): chain_trigger(delay) on every live EnemyMine within chain_radius via Hazards.around, chain_delay per hop, only CHAIN mines propagate, shot_detonates, and the fuse-link drawing (link_points(), recomputed every 0.5 s). Rows in test_enemy_mines.gd. Report GUT time before/after with scripts/gate-time.sh and stay within this task's allotment in plan §2.15; bash /agent/verify.sh green; scripts/check-test-leaks.sh clean if anything awaits.",
+   "acceptanceCriteria": "Plan §2.4 rows pass in both harnesses: four chain mines 120 px apart detonate at 0/0.2/0.4/0.6 s +-1 tick; a proximity mine 120 px on detonates at 0.8 s and the one beyond it does not; 149 px is reached and 151 px is not; shooting a chain mine (8x real physics) detonates it and its neighbours while shooting a proximity mine still defuses it; every mine emits expired exactly once; a PLAYER chain mine setting off an ALL mine produces pulse_damage; link_points() lists exactly the neighbours.",
+   "type": "feature",
+   "complexity": "medium",
+   "dependsOn": [
+    "t2"
+   ],
+   "planSections": [
+    "2.1",
+    "2.2",
+    "2.4",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t5",
+   "title": "A pulse mine weakens the player's boost (Open Space) and dash (Assault) for 2.5 s, shown on the ship and the boost bar, without touching normal flight",
+   "description": "Add the boost-disruption hook to PlayerBase (apply_boost_disruption, boost_efficiency, boost_disruption_changed, MIN_BOOST_EFFICIENCY 0.15, _step_disruption(delta) driven by both ships' _physics_process). Apply it in OpenSpacePlayerShip._step_boost (start, sustain and ceiling), in engine_boost_module.gd (burst speeds; refuse below the floor) and in assault dash_state.gd (dash speed; refuse below the floor). Add the BoostBar violet tint/flicker and the spark ring on both ships. Add the PULSE variant (mines/pulse_mine.tscn) with _disrupt_players and its violet ring. New tests/integration/test_player_boost_disruption.gd (real players, the test_player_hazards.gd setup), plus pulse rows in test_enemy_mines.gd. Report GUT time before/after with scripts/gate-time.sh and stay within this task's allotment in plan §2.15; bash /agent/verify.sh green; scripts/check-test-leaks.sh clean if anything awaits.",
+   "acceptanceCriteria": "Plan §2.5 rows pass: efficiency 1.0 by default, 0.4 for 2.5 s after (0.6, 2.5), then 1.0; strongest-wins and longest-wins, never stacked; Open Space boost speed = boost_exit_speed*0.4 +-1 with an unchanged drain; strength 0.9 refuses the boost (no velocity write, no drain) and the Assault dash; Boost Drive is scaled; cruise thrust unchanged (control); signal arity correct. A pulse mine disrupts the real player at <170 px and not at 180 px in both harnesses. test_open_space_boost_verb.gd / test_open_space_boost_wiring.gd / test_boost_meter.gd unchanged and green.",
+   "type": "feature",
+   "complexity": "medium",
+   "dependsOn": [
+    "t2"
+   ],
+   "planSections": [
+    "2.1",
+    "2.2",
+    "2.5",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t6",
+   "title": "An EMP mine knocks out the player's boost and dash for 2 s through the EMP hook that phase 9 will finish",
+   "description": "Add EmpPulse (global/components/emp_pulse.gd, static emit(tree, at, radius, seconds, source) -> int, group player only in Ph7), PlayerBase.apply_emp / is_emp_disrupted / emp_changed with the Ph7 stand-in effect apply_boost_disruption(1.0, seconds) marked as Phase 9's to replace, and the EMP variant (mines/emp_mine.tscn, no hull damage, crackle ring). New tests/unit/test_emp_pulse.gd, plus rows in test_player_boost_disruption.gd and test_enemy_mines.gd. Report GUT time before/after with scripts/gate-time.sh and stay within this task's allotment in plan §2.15; bash /agent/verify.sh green; scripts/check-test-leaks.sh clean if anything awaits.",
+   "acceptanceCriteria": "Plan §2.6 rows pass: EmpPulse reaches a stub inside the radius and not at radius+1, returns the count, ignores nodes without apply_emp, and never calls an enemy stub; apply_emp(2.0) gives is_emp_disrupted() and efficiency 0.0 for 2.0 s, with boost and dash refused and emp_changed(true) then (false); an EMP mine reaches the real player in both harnesses with no Health loss.",
+   "type": "feature",
+   "complexity": "small",
+   "dependsOn": [
+    "t5"
+   ],
+   "planSections": [
+    "2.1",
+    "2.5",
+    "2.6",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t7",
+   "title": "Every mine kind has its own readable top-down sprite, so the player can tell proximity, drifting, homing, chain, pulse and EMP mines apart at a glance",
+   "description": "Under the pixel-art-generation skill (strict top-down, isometric false, scripts/pixellab.sh, visual check on each image; generate candidates and refine), make mine_proximity / drifting / homing (+eye) / chain / pulse / emp sprites (24x24) and minefield_beacon.png in assault/assets/sprites/projectiles/mines/. Add a Sprite child to every mine scene, including the Bomber's mine.tscn. _draw() keeps only the state overlay once a texture is set, and body_color is removed from the mine scenes. Wire the beacon texture into the Minefield scene if t8 has landed.",
+   "acceptanceCriteria": "Every mine scene has an opaque Sprite at its centre (a test_enemy_mines.gd row); test_entity_sprite_transparency.gd and test_hazard_art.gd (beacon) pass; the faction palette and one silhouette per variant follow plan §2.7, and the report includes a description of each chosen image; no painted-in glow (lights stay drawn); test_resource_uid_integrity.gd green (no hand-typed UID).",
+   "type": "art",
+   "complexity": "medium",
+   "dependsOn": [
+    "t3",
+    "t4",
+    "t5",
+    "t6"
+   ],
+   "planSections": [
+    "2.1",
+    "2.7",
+    "2.8",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t8",
+   "title": "Minefields can be placed in a level as visible structures with a warning beacon, dangerous to the player and to enemies alike",
+   "description": "Add Minefield (assault/scenes/hazards/minefield/minefield.gd + .tscn + HAZARD.md): AUTHORED / RING / GRID / SCATTER patterns, flat variant weights, hostility ALL by default, unpooled self-owned mines (mine_life 0, inert backstop, expired -> queue_free, launch() to register), a beacon that goes dark, self-free after the last mine, and Assault drift at 60 px/s with a world-rect / 40 s free. Placeholder beacon until t7 if needed. New tests/integration/test_minefield.gd; a registration row in test_hazards.gd. Report GUT time before/after with scripts/gate-time.sh and stay within this task's allotment in plan §2.15; bash /agent/verify.sh green; scripts/check-test-leaks.sh clean if anything awaits.",
+   "acceptanceCriteria": "Plan §2.8 rows pass: ring geometry +-0.5 px, grid spacing, seed-stable scatter, authored positions kept; placed mines are ALL, never fizzle in 60 s and are registered; the field frees after its last mine; in both modes a player stub is set off, an avoidance-0 enemy fixture is set off and damaged, and an avoidance-0.6 fixture routes round with no detonation; in Assault the field drifts 60*t, frees past the world rect, and the mines' HazardInfo follows.",
+   "type": "feature",
+   "complexity": "medium",
+   "dependsOn": [
+    "t4"
+   ],
+   "planSections": [
+    "2.1",
+    "2.8",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t9",
+   "title": "A Mine Layer ship exists in both modes, can be spawned by waves, lays mines from its stern, and still drops mines on a rail",
+   "description": "Add assault/scenes/enemies/mine_layer/ (MineLayer extends BaseEnemy, MineLayerBrain shell with the full Phase enum, flat MineLayerConfig/.tres with the §2.9 fields, ENEMY.md), r 40 body shared by hurtbox and contact box, Dispenser marker, StateLight, EnemyMover, COLLISION contact profile, per-variant persist_after_owner_death pools sized by EnemyMineScenes.pool_size_for, drop_mine(variant, rest_point) with per-mode life and proximity fallback, APPROACH/DISENGAGE only, start_engaged seam, accepts_tow false in LAY, the rail fallback, WaveBuilder.MINE_LAYER + mine_layer(), and the roster-gate entries. Placeholder hull art. New tests/integration/test_mine_layer.gd and a dual-mode case. Report GUT time before/after with scripts/gate-time.sh and stay within this task's allotment in plan §2.15; bash /agent/verify.sh green; scripts/check-test-leaks.sh clean if anything awaits.",
+   "acceptanceCriteria": "Plan §2.9 rows pass: pool sizes equal pool_size_for; drop_mine sets Assault life 9.0 and Open Space life 0 with backstop 240; the eject stops within 4 px; an exhausted chain pool falls back to proximity; mines laid before death still trigger after it; the rail fallback drops every 1.6 s +-1 tick on a real EnemyPathMover. The contact-damage, contact-geometry, hurtbox-geometry, config-isolation and hurtbox<=body gates include and pass the Mine Layer; test_enemy_mover_single_writer.gd green; the dual-mode shell case passes in both harnesses.",
+   "type": "feature",
+   "complexity": "medium",
+   "dependsOn": [
+    "t2"
+   ],
+   "planSections": [
+    "2.1",
+    "2.9",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t10",
+   "title": "The Mine Layer crosses sideways ahead of the player laying curved or zig-zag mine lines one pass at a time, builds danger gradually, and punishes chasers",
+   "description": "Implement MineLayerBrain's combat: player frame and smoothed velocity, plan_pass() with the undamped Ph4 wall-lead rule on the layer timeline, centre/axis/start/end, ZIGZAG/ARC shapes, rest points by spacing with the stacking skip and variant draw (at most one homing per pass), Open Space pass separation, the Assault horizontal axis and view-rect clamp, APPROACH -> LAY (pure pursuit, drops by distance, CHARGING light, stall guard, budget deferral) -> BREAK_OFF -> REPOSITION / DISENGAGE, tail drop, and the FIFO live cap with retire(). Add the §2.10 config fields and test seams. Rows in test_mine_layer.gd and test_enemy_dual_mode.gd, hand-ticked with a scenario shared in before_all. Report GUT time before/after with scripts/gate-time.sh and stay within this task's allotment in plan §2.15; bash /agent/verify.sh green; scripts/check-test-leaks.sh clean if anything awaits.",
+   "acceptanceCriteria": "Every plan §2.10 row passes in both harnesses: zigzag +-70 +-4 px alternation, arc bow toward P <= 130 +-6, spacing 120 +-4, each mine within 4 px of its point, Assault mines inside view_rect().grow(-64) with a horizontal axis; centre ahead of the live 220 px/s player when the middle mine arms, between a standing player and the layer, and frozen against a reversal; LAY velocity within 35 deg of the axis; Open Space passes >= 5 s apart, <= 6 mines, centres >= 380 px apart, live count <= 18 with the 19th retiring the oldest; Assault one pass per life and a pass completing when the budget expires mid-LAY; tail drop within one tick from behind, not again before 2.5 s, and none in front; accepts_tow false in LAY and true in REPOSITION; a second pass's closest approach to live mines > trigger_radius.",
+   "type": "feature",
+   "complexity": "large",
+   "dependsOn": [
+    "t9",
+    "t3",
+    "t4",
+    "t5"
+   ],
+   "planSections": [
+    "2.1",
+    "2.9",
+    "2.10",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t11",
+   "title": "The Mine Layer looks like a mine-laying specialist: its own hull sprite, a dispenser hatch that opens while it lays, and a fading wake that marks its fresh line",
+   "description": "Under the pixel-art-generation skill, make mine_layer.png (about 96 px, strict top-down, nose-down, wide hull with a rear rack, no painted glows; several candidates) and mine_layer_hatch.png. Add MineLayer.set_hatch_open() driven by the brain (open during LAY), and MineWake (mine_layer/mine_wake.gd, a code-built Line2D in the parent container, a point every 12 px, faded and freed on its own clock 2.5 s after LAY). Replace the placeholder hull.",
+   "acceptanceCriteria": "Plan §2.11 rows pass: the hull is opaque at the centre and transparent at the corners; the hatch is closed outside LAY and open in it (epsilon tolerance); the wake has >= 2 points per 24 px, lies within 4 px of the dispenser path, and is freed 2.5 s +-1 tick after LAY ends (no create_timer); the transparency sweep is green; the report describes the chosen images.",
+   "type": "art",
+   "complexity": "medium",
+   "dependsOn": [
+    "t10"
+   ],
+   "planSections": [
+    "2.9",
+    "2.10",
+    "2.11",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t12",
+   "title": "In Open Space the Mine Layer idles calmly at its patrol point, and the minefields it lays stay dangerous after the player leaves and comes back",
+   "description": "Add the hub idle to MineLayerBrain (AnchorIdle, IDLE/NOTICING/RETURNING appended, patrol_anchor, idle_phase_offset, start_engaged, LAY protected from RETURNING, NOTICING redraws the pass period, no laying when calm) and the Idle config group, with the lose_radius inequality. Prove Open Space persistence with the shared hand-ticked scenario. Report GUT time before/after with scripts/gate-time.sh and stay within this task's allotment in plan §2.15; bash /agent/verify.sh green; scripts/check-test-leaks.sh clean if anything awaits.",
+   "acceptanceCriteria": "Plan §2.12 rows pass: the inequality from the config (1272 < 1500); frame-0 IDLE; NOTICING after notice_time inside perceive_radius; RETURNING beyond lose_radius but never during LAY; in the persistence scenario every mine is still at its point and registered 60 s after the player left and the layer went home, and the first one reached sets the player off; the Assault counterpart shows mines gone after assault_mine_life. Earlier Open Space Mine Layer tests set start_engaged.",
+   "type": "feature",
+   "complexity": "medium",
+   "dependsOn": [
+    "t10"
+   ],
+   "planSections": [
+    "2.9",
+    "2.10",
+    "2.12",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t13",
+   "title": "The hub has a Mine Layer on patrol and a marked minefield beside the battleground that the player can lure enemies into",
+   "description": "In open_space/scenes/levels/sector_hub.gd append _spawn_mine_layer after the existing 14 draws (draw 15; mine_layer_ring_radius 2600, mine_layer_anchor_bearing_deg 0), and place TacticalSpace/Minefield at (3300, 560) per plan §2.13 in sector_hub.tscn. Extend test_sector_hub_patrol.gd with the clearance, anchor-spacing, minefield-clearance, seed, container-count, frame-0 IDLE and mine-in-EnemyContainer rows. Measure and report the cost of a hub physics frame with all mines live. Report GUT time before/after with scripts/gate-time.sh and stay within this task's allotment in plan §2.15; bash /agent/verify.sh green; scripts/check-test-leaks.sh clean if anything awaits.",
+   "acceptanceCriteria": "Plan §2.13 rows pass with margins printed; nine patrol anchors are more than 1000 px apart; every earlier seed is unchanged; the minefield clears interactables and the spawn by >= radius + trigger_radius + 400 and each idle ring by >= 200 px; a hub Mine Layer's mine lands in EnemyContainer; the hub frame cost is reported. If a clearance fails, only the Mine Layer / field exports move.",
+   "type": "feature",
+   "complexity": "medium",
+   "dependsOn": [
+    "t12",
+    "t8"
+   ],
+   "planSections": [
+    "2.8",
+    "2.12",
+    "2.13",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t14",
+   "title": "Level 1's Deep Space and Planet Approach each send a Mine Layer across the screen without crowding the level or holding a later section open",
+   "description": "Add b.mine_layer().at(-400, -160) inside deep_space's 16.0 s wave and b.mine_layer().at(400, -160) inside planet_approach's 47.0 s wave (AI, no rail). In test_level1_specialist_spawns.gd add the EXPECTED_PH7 pin, count it as a specialist in the frozen 2.5x gate with a measured corridor exit (before_all), the spill-over row including assault_mine_life, and the extra-layer-at-peak boundary. In test_engagement_deadline.gd add the no-Mine-Layer-in-ENEMIES_CLEARED guard and its boundary. Add attack-in-budget rows via level1_slice_replay.gd at 8x. Report GUT time before/after with scripts/gate-time.sh and stay within this task's allotment in plan §2.15; bash /agent/verify.sh green; scripts/check-test-leaks.sh clean if anything awaits.",
+   "acceptanceCriteria": "Plan §2.14 rows pass: the pin; the 2.5x count gate in deep_space and planet_approach with measured exits; no mine-layer life plus mine life crosses cloud_descent's last trigger; the boundary rows fail as designed; from both spawns the layer reaches LAY before its budget expires, lays >= 4 mines inside view_rect() and does one pass per life. Every existing level-1 pin, replay and exit guard is unchanged and green. A failing gate moves only this task's own line (same section) or escalates.",
+   "type": "feature",
+   "complexity": "medium",
+   "dependsOn": [
+    "t10"
+   ],
+   "planSections": [
+    "2.9",
+    "2.10",
+    "2.14",
+    "2.15"
+   ]
+  },
+  {
+   "key": "t15",
+   "title": "The docs, roster and phase record describe mines, minefields and the Mine Layer as built",
+   "description": "Run the updating-project-docs skill: module docs, PROJECT.md conventions (the mine family, hostility, launch-scoped hazard registration, the boost-disruption and EMP hooks), docs/enemy-roster.md, ENEMY.md / HAZARD.md, CLAUDE.md's gate list and projectile convention, and tests/README.md Gate time. Close the phase: the dossier docs/epics-done/cmug23omu000lm52wu7rak0q5/ (PRD, SOURCES, REPORT) and '## Phase 7 - as built' in docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md.",
+   "acceptanceCriteria": "Every new class, scene, signal and test file of the phase is named in the docs; the as-built section lists every deviation from this plan recorded in the per-task notes, plus the gaps for Ph9/Ph13/Ph15/Ph16/Ph17; the dossier's Known gaps states what was never play-tested; verify.sh green.",
+   "type": "chore",
+   "complexity": "medium",
+   "effort": "medium",
+   "dependsOn": [
+    "t7",
+    "t11",
+    "t13",
+    "t14"
+   ],
+   "planSections": [
+    "2.16",
+    "1.1",
+    "5",
+    "6",
+    "7"
+   ]
+  }
+ ]
+}

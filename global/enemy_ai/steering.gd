@@ -200,3 +200,105 @@ static func break_contact(pos: Vector2, threat_pos: Vector2, threat_vel: Vector2
 	var lateral := away.orthogonal() * (-1.0 if side < 0.0 else 1.0)
 	var weight := lateral_weight * (2.0 if threat_vel.dot(away) > 0.0 else 1.0)
 	return (away + lateral * weight).normalized() * max_speed
+
+
+## Phase 6 addition (docs/plans/cmug23om70001m52wqfwclf3l/3-plan.md §2.4; task plan
+## docs/plans/cmvg30aa90073qs2xrw74hcvg/3-plan.md, which records the four refinements below).
+
+## Headings the context stage chooses among (slot 0 = +x). Between F2's 8 and 32: judgement.
+const CONTEXT_SLOTS := 16
+## Seconds ahead a hazard is led by its `velocity`, and the speed share of the danger skirt (`|desired| · this`).
+const CONTEXT_LOOKAHEAD := 0.6
+## Share of the previous step's heading blended into the interest map (hysteresis, F1).
+const CONTEXT_PREV_BLEND := 0.5
+## The stage never slows a ship below this share of its desired speed: round the edge, never a stall.
+const CONTEXT_MIN_SPEED_RATIO := 0.35
+
+
+## Context steering (Fray, research F1/F2) as one pure function: the brain's `desired` velocity is the
+## interest map, every `HazardInfo` in `infos` writes a danger map, and the result is the heading with the
+## least danger nearest the brain's own. Returns `desired` itself — the same value, bit for bit — when nothing
+## is in the way, so a ship with no hazard near flies exactly as it did before hazards existed.
+##
+## Per hazard, centred `velocity · lookahead` ahead (a drifting hazard is led), at distance `d` with radius `R`:
+## a skirt `clamp(1 − max(0, d − R) / (margin + |desired| · lookahead), 0, 1)` times a cone round the hazard's
+## bearing of half-width `asin(min(1, (R + margin) / d))` widened by one slot, scaled by `avoid_weight`.
+## Inside (`d ≤ R`) that is the full 90° half-plane plus one slot, at skirt 1: every heading within 112.5° of
+## the centre is dangerous and every outward one is not. Maps merge per slot by MAX, never a sum. A slot's
+## danger counts only above `1 − avoidance` (R6.8: a soft profile ignores glancing danger).
+##
+## Then, with `lo` the least danger of any slot: if the two slots either side of `desired` (or the one slot it
+## lies on) carry `lo`, `desired` is returned unchanged. Otherwise every slot above `lo` is masked, the unmasked
+## slot nearest `(1 − CONTEXT_PREV_BLEND) · want + CONTEXT_PREV_BLEND · prev_dir` wins (the side chosen last
+## step keeps winning; the brain's own heading when the two cancel), its heading is refined by parabolic
+## interpolation with its neighbours (at most half a slot; the one-slot widening keeps that outside the tangent),
+## and the speed is `|desired|` times that heading's own interest, floored at `CONTEXT_MIN_SPEED_RATIO`.
+static func context_avoid(pos: Vector2, desired: Vector2, infos: Array, avoidance: float, margin: float,
+		lookahead: float, prev_dir: Vector2) -> Vector2:
+	if infos.is_empty() or desired == Vector2.ZERO or avoidance <= 0.0:
+		return desired
+	var speed := desired.length()
+	var want := desired / speed
+	var slot := TAU / CONTEXT_SLOTS
+	var skirt_reach := margin + speed * lookahead
+	var danger := PackedFloat64Array()
+	danger.resize(CONTEXT_SLOTS)
+	danger.fill(0.0)
+	for info: HazardInfo in infos:
+		if info == null or info.avoid_weight <= 0.0:
+			continue
+		var to := info.position + info.velocity * lookahead - pos
+		var d := to.length()
+		if d < 0.001:
+			continue  # on the centre: no bearing, and every heading leaves it alike
+		var outside := maxf(0.0, d - info.radius)
+		var skirt := 1.0
+		if outside > 0.0:
+			if skirt_reach <= 0.0:
+				continue
+			skirt = 1.0 - outside / skirt_reach
+			if skirt <= 0.0:
+				continue
+		var half_width := asin(minf(1.0, (info.radius + margin) / d)) + slot
+		var bearing := to.angle()
+		for i in CONTEXT_SLOTS:
+			var off := absf(angle_difference(bearing, i * slot))
+			if off < half_width:
+				danger[i] = maxf(danger[i], info.avoid_weight * skirt * (1.0 - off / half_width))
+
+	var threshold := 1.0 - avoidance
+	var lo := INF
+	for i in CONTEXT_SLOTS:
+		danger[i] = maxf(0.0, danger[i] - threshold)
+		lo = minf(lo, danger[i])
+	# Clear way: `desired` lies between two slots that carry the least danger, or on one that does. `angle()` is
+	# a 32-bit float, so an axis-aligned request lands a hair off its slot: within 1e-4 of one it is on it.
+	var at := fposmod(want.angle(), TAU) / slot
+	var on_slot := absf(at - roundf(at)) < 1e-4
+	var below := (roundi(at) if on_slot else int(at)) % CONTEXT_SLOTS
+	var clear := danger[below] <= lo
+	if clear and not on_slot:
+		clear = danger[(below + 1) % CONTEXT_SLOTS] <= lo
+	if clear:
+		return desired
+
+	var aim := want
+	if prev_dir != Vector2.ZERO:
+		var blended := want * (1.0 - CONTEXT_PREV_BLEND) + prev_dir.normalized() * CONTEXT_PREV_BLEND
+		if blended.length_squared() > 1e-6:
+			aim = blended  # a brain that reversed its request cancels the blend: its own heading ranks
+	var score := PackedFloat64Array()
+	score.resize(CONTEXT_SLOTS)
+	var best := -1
+	for i in CONTEXT_SLOTS:
+		score[i] = Vector2.from_angle(i * slot).dot(aim)
+		if danger[i] <= lo and (best < 0 or score[i] > score[best]):
+			best = i
+	var before := score[(best + CONTEXT_SLOTS - 1) % CONTEXT_SLOTS]
+	var after := score[(best + 1) % CONTEXT_SLOTS]
+	var curvature := before - 2.0 * score[best] + after
+	var shift := 0.0
+	if curvature < -1e-9:
+		shift = clampf(0.5 * (before - after) / curvature, -0.5, 0.5)
+	var heading := Vector2.from_angle((best + shift) * slot)
+	return heading * speed * maxf(heading.dot(want), CONTEXT_MIN_SPEED_RATIO)

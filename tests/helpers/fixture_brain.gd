@@ -1,9 +1,10 @@
 ## The fixture enemy's brain (`tests/helpers/fixture_enemy.tscn`), configured by the test.
 ##
 ## Every tick it records itself, requests `desired_velocity` (or `desired_velocity * tick_count`
-## when `ramp` is on, so a test can tell which tick a velocity came from), faces `face_point` when
-## set, and every `decision_interval` seconds of accumulated delta draws one `rng.randf()` into
-## `decisions` — the "decision sequence" a seed must reproduce.
+## when `ramp` is on, so a test can tell which tick a velocity came from) — or, when `arrive_point`
+## is set, `mover.arrive(arrive_point, arrive_speed)` instead — faces `face_point` when set, and every
+## `decision_interval` seconds of accumulated delta draws one `rng.randf()` into `decisions` — the
+## "decision sequence" a seed must reproduce.
 ##
 ## No `class_name`: test-only. The file name ends in `_brain.gd`, so the single-writer sweep
 ## covers it like any real brain.
@@ -12,6 +13,8 @@ extends EnemyBrain
 var desired_velocity: Vector2 = Vector2.ZERO
 var ramp: bool = false
 var face_point: Vector2 = Vector2.INF
+var arrive_point: Vector2 = Vector2.INF
+var arrive_speed: float = 0.0
 var decision_interval: float = 0.25
 
 var tick_count: int = 0
@@ -33,7 +36,10 @@ func tick(delta: float) -> void:
 
 	if mover == null:
 		return
-	mover.request_velocity(desired_velocity * tick_count if ramp else desired_velocity)
+	if arrive_point != Vector2.INF:
+		mover.arrive(arrive_point, arrive_speed)
+	else:
+		mover.request_velocity(desired_velocity * tick_count if ramp else desired_velocity)
 	if face_point != Vector2.INF:
 		mover.face_toward(face_point)
 

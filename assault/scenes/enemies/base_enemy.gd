@@ -3,6 +3,9 @@ extends CharacterBody2D
 
 signal died
 
+## Share of a dying ship's velocity its wreck drifts with.
+const WRECK_INHERIT := 0.25
+
 @onready var health: Health = $Health
 @onready var hurt_box: HurtBox = $HurtBox
 @onready var hit_flash_player: AnimationPlayer = $HitFlashAnimationPlayer
@@ -98,6 +101,11 @@ func _ready() -> void:
 		score_value = cfg.score_value
 		counts_toward_wave_clear = cfg.counts_toward_wave_clear
 		counts_as_escape = cfg.counts_as_escape
+		if _mover != null:
+			_mover.hazard_avoidance = cfg.hazard_avoidance
+			_mover.hazard_margin = cfg.hazard_margin
+			_mover.hazard_resistance = cfg.hazard_resistance
+
 
 ## The one AI tick: the brain decides, then the mover applies it — once per physics frame, on one
 ## clock. Inert without a brain or once `suspend_ai()` has run. A subclass that defines its own
@@ -237,4 +245,32 @@ func _on_health_changed(current: int) -> void:
 		was_killed = true
 		died.emit()
 		_explosion_effect.explode()
+		_maybe_leave_wreck()
 		queue_free()
+
+
+## Maybe leaves a `Wreck` where this ship died (plan §2.9). Only a mover-driven enemy (one with a brain) does, and only
+## when a `HazardContainer` exists AND `config.wreck_chance > 0`: the roll is drawn from the brain's seeded rng after
+## those two checks, so a level without a container (every gate that builds its own world) draws nothing and its seeded
+## runs are unchanged. The wreck inherits 25 % of the ship's velocity and is added through `spawn_into()`, which defers
+## the attach: a real kill runs inside a bullet's `area_entered` flush, where adding a body is refused. Position,
+## rotation and velocity are captured here. Never into the enemy container, never scored.
+func _maybe_leave_wreck() -> void:
+	if _brain == null or not is_inside_tree():
+		return
+	var cfg: Variant = get("config")
+	if not cfg is ShipConfig or cfg.wreck_chance <= 0.0:
+		return
+	var container := Hazards.container(get_tree())
+	if container == null:
+		return
+	if _brain.rng.randf() >= cfg.wreck_chance:
+		return
+	# The explosive roll follows a successful wreck roll, and is drawn only for ships that can leave one (plan §2.10).
+	var explosive: bool = cfg.explosive_wreck_chance > 0.0 and _brain.rng.randf() < cfg.explosive_wreck_chance
+	var scene := WreckScenes.scene_for(cfg.wreck_size, explosive)
+	if scene == null:
+		return
+	var wreck := scene.instantiate() as Wreck
+	wreck.drift_velocity = velocity * WRECK_INHERIT
+	wreck.spawn_into(container, global_position, rotation)

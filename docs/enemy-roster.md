@@ -436,6 +436,32 @@ b.small_asteroid().at(-65, -400).move(b.straight(330)).delay(0.3)
 
 ---
 
+### Hazard profile and wrecks (Phase 6)
+
+Every mover-driven enemy carries three flat `ShipConfig` hazard fields and three wreck fields (`@export_group("Hazards")`).
+Avoidance 0..1 is how readily the mover's context-steering stage steers round a hazard, margin is the skim distance in px,
+resistance 0..1 scales the pull and slow the ship feels. A `boost()` (every committed attack) ignores avoidance. The wreck
+columns are rolled once on death from the brain's seeded `rng`; with no `HazardContainer` nothing spawns. Wreck size:
+0 small, 1 medium, 2 large. Rails, the Gunship and the station are untouched.
+
+| Enemy | avoidance | margin | resistance | wreck chance | wreck size | explosive chance |
+|---|---|---|---|---|---|---|
+| Swarm Drone | 1.0 | 12 | 0.0 | 0 | small | - |
+| Razor Drone | 1.0 | 16 | 0.0 | 0 | small | - |
+| Fighter | 0.8 | 60 | 0.1 | 0.2 | small | - |
+| Gatling Interceptor | 0.8 | 60 | 0.15 | 0.2 | small | - |
+| Bomber | 0.6 | 70 | 0.4 | 0.6 | large | 0.5 |
+| Sniper | 1.0 | 90 | 0.1 | 0.3 | small | - |
+| Ram Corvette | 0.5 | 60 | 0.5 | 0.5 | medium | - |
+| Missile Corvette | 0.7 | 80 | 0.4 | 0.5 | medium | 0.5 |
+| Support Ship | 1.0 | 80 | 0.1 | 0.3 | small | - |
+
+Hazards as tools: the Sniper fires from the far side of a wreck, a solo Fighter or squad LEAD waits behind one (COVER) before a
+pass, and a Ram near a gravity well lines up its charge to shove the player in. Breaking a Ram plate throws a 12-damage
+`DebrisFragment`. See each `ENEMY.md` and `assault/scenes/hazards/*/HAZARD.md`.
+
+---
+
 ## Movement Types
 
 All movements are in design-unit speed (px/s in 640×360 space). `EnemyPathMover` multiplies by `WORLD_SCALE = 2.0` automatically.

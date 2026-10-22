@@ -86,7 +86,7 @@ script = ExtResource("4_se")
 metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
-scale = Vector2(1.4505496, 1.4505496)
+scale = Vector2(1.4400002, 1.4400002)
 shape = SubResource("CircleShape2D_se")
 debug_color = Color(0.7, 0, 0, 0.42)
 

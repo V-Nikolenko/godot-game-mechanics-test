@@ -14,6 +14,9 @@ var warp_module_active: bool = false
 ## Set true by OverclockModule.apply(). Allows firing past overheat.
 var overclock_module_active: bool = false
 
+## The pull of a hazard, as a decaying displacement velocity (never written to `velocity`).
+var _drift := HazardDrift.new()
+
 ## Active module instances — created lazily in _apply_module().
 var _module_pool: Dictionary = {}  # { StringName: ShipModuleBase }
 
@@ -69,6 +72,7 @@ func _setup_effects() -> void:
 func _physics_process(_delta: float) -> void:
 	if DialogPlayer.is_active:
 		velocity = Vector2.ZERO
+		_drift.reset()
 		return
 	## Wall-hit knockback owns movement for its brief duration so held input can't
 	## cancel the shove. move_state also yields while this is active (single mover).
@@ -99,6 +103,17 @@ func _physics_process(_delta: float) -> void:
 		global_position.x = clamp(global_position.x, -100.0, 1380.0)
 		global_position.y = clamp(global_position.y, -380.0, 1100.0)
 		return
+
+	## Hazard pull (plan §2.3). Applied and clamped HERE: the movement states run from the state
+	## machine's _process, and idle_state never clamps. Not during a knockback or an engine boost
+	## (both return above). Skipped entirely with no hazard and no residual drift.
+	if Hazards.count() > 0 or _drift.velocity != Vector2.ZERO:
+		var accel := Hazards.accel_at(global_position) if Hazards.count() > 0 else Vector2.ZERO
+		var d := _drift.step(accel, 0.0, _delta)
+		if d != Vector2.ZERO:
+			move_and_collide(d * _delta)
+			global_position.x = clamp(global_position.x, -100.0, 1380.0)
+			global_position.y = clamp(global_position.y, -380.0, 1100.0)
 
 	# Only drive the state automatically when no external system has locked it.
 	if _thruster_state_override < 0:

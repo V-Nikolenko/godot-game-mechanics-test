@@ -41,8 +41,18 @@ func set_direction(dir: Vector2) -> void:
 func _physics_process(delta: float) -> void:
 	global_position += _direction * speed * delta
 
-func _on_hit_box_area_entered(_area: Area2D) -> void:
+## The HitBox masks the player hurtbox (128) and hazard contact (1024). A hazard-contact area ends the round only when
+## its owner answers duck-typed `stops_enemy_rounds() == true` (a wreck: cover from both sides); an asteroid's contact
+## box does not, so rounds still pass asteroids (plan §2.8, docs/plans/cmug23om70001m52wqfwclf3l/3-plan.md).
+func _on_hit_box_area_entered(area: Area2D) -> void:
+	if area.collision_layer & CollisionLayers.HAZARD_CONTACT and not _stops_rounds(area):
+		return
 	expired.emit()
+
+
+static func _stops_rounds(area: Area2D) -> bool:
+	var host: Node = area.owner if area.owner != null else area.get_parent()
+	return host != null and host.has_method(&"stops_enemy_rounds") and host.call(&"stops_enemy_rounds") == true
 
 ## Reflect-mode flip: reverses this enemy bullet so it becomes a friendly projectile.
 ## Layers/mask are swapped to player-projectile (64) hitting enemy hurt (513).

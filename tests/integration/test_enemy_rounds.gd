@@ -56,7 +56,8 @@ func test_every_round_is_an_enemy_bullet_with_the_tables_values() -> void:
 		var hit_box := bullet.get_node_or_null("HitBox") as HitBox
 		assert_not_null(hit_box, "%s must carry a HitBox" % path)
 		assert_eq(hit_box.collision_layer, CollisionLayers.ENEMY_HITBOX, path)
-		assert_eq(hit_box.collision_mask, CollisionLayers.PLAYER_HURTBOX, path)
+		# Phase 6 t10: rounds also see hazard contact (1024), and end only on an owner answering `stops_enemy_rounds()` (a wreck).
+		assert_eq(hit_box.collision_mask, CollisionLayers.PLAYER_HURTBOX | CollisionLayers.HAZARD_CONTACT, path)
 		assert_eq(hit_box.damage, spec.damage, path)
 
 		var lifetime := bullet.get_node_or_null("ProjectileLifetime") as ProjectileLifetime

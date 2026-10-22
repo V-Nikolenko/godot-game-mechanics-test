@@ -1,0 +1,72 @@
+[gd_resource type="SpriteFrames" format=3]
+
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/hazards/energy_anomaly.png" id="1_o6pmy"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_w4o3p"]
+atlas = ExtResource("1_o6pmy")
+region = Rect2(0, 0, 160, 160)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_73od2"]
+atlas = ExtResource("1_o6pmy")
+region = Rect2(160, 0, 160, 160)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_eksq5"]
+atlas = ExtResource("1_o6pmy")
+region = Rect2(320, 0, 160, 160)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3pype"]
+atlas = ExtResource("1_o6pmy")
+region = Rect2(480, 0, 160, 160)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_wcd1p"]
+atlas = ExtResource("1_o6pmy")
+region = Rect2(640, 0, 160, 160)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_yuagl"]
+atlas = ExtResource("1_o6pmy")
+region = Rect2(800, 0, 160, 160)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_x6mxm"]
+atlas = ExtResource("1_o6pmy")
+region = Rect2(960, 0, 160, 160)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_gx4ja"]
+atlas = ExtResource("1_o6pmy")
+region = Rect2(1120, 0, 160, 160)
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_w4o3p")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_73od2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_eksq5")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_3pype")
+}],
+"loop": true,
+"name": &"dim",
+"speed": 4.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_wcd1p")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_yuagl")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_x6mxm")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_gx4ja")
+}],
+"loop": true,
+"name": &"lit",
+"speed": 10.0
+}]

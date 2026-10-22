@@ -54,7 +54,7 @@ assault/scenes/
 │   ├── level_2_waves.gd         Level 2 wave list
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
-├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray
+├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck (wrecks, structures, debris)
 ├── allies/ally_fighter/         AI escort fighters (group "allies")
 ├── gui/                         HUD, score widgets/popups, weapon selector, game-over, debrief
 └── race/                        Race sub-mode (core/, racers/, track/, ui/)
@@ -321,6 +321,11 @@ fighter and Gatling spawns are AI spawns** (no `.move()`, `.free_after()` or `sh
 arrive at the same moments and places as before and then fight inside the corridor and leave on their
 `EngagementBudget`. Their corridor behaviour is the shared `AssaultCorridorConstraint` above — a Fighter's flank
 lanes flip behind the player near the corridor top, a Gatling's first side is the half opposite the player.
+Since Phase 6 t14 a solo Fighter or a squad LEAD can open with a **`COVER` phase**. On APPROACH's first tick it claims
+a wreck on its way in and waits on the wreck's far side from the player, out of sight. It then swoops straight into its
+pass: a solo breaches, a LEAD slides onto its station. It only hides where it can do that (the swoop rule), so Assault
+cover is rare and mostly a hub behaviour. See [fighter/ENEMY.md](../../../assault/scenes/enemies/fighter/ENEMY.md)
+§Cover.
 
 ### Projectiles & bullet pool
 
@@ -479,6 +484,45 @@ etc.). For per-hazard detail, see the source folders under `assault/scenes/hazar
 with `race_hazard`/`loop`, and the space station's `StationLaserPhase` spawns it per volley. Its
 `hit_mask_override` export exists for that second case — see
 [`laser_ray/HAZARD.md`](../../../assault/scenes/hazards/laser_ray/HAZARD.md).
+
+**Gravity Well (Phase 6 t6).** `assault/scenes/hazards/gravity_well/gravity_well.tscn` — a `GravityWell` (`class_name`, extends
+`HazardField`; `gravity_well.gd` adds the `_draw()` radius ring and `glow_strength()`, `gravity_well_glow.gd` draws the inner
+glow) with radius 420, core 90, pull 520, hull stress 5 / 0.5 s inside 150 px, over the t5 `swirl` sprite. No physics body, no
+LOS block; stress bypasses `EnemyShield` and a plated Ram deflects it. See
+[`HAZARD.md`](../../../assault/scenes/hazards/gravity_well/HAZARD.md); tests `tests/integration/test_gravity_well.gd`.
+
+**Energy Anomaly (Phase 6 t7).** `assault/scenes/hazards/energy_anomaly/energy_anomaly.tscn` — a plain `HazardField` (`kind
+&"anomaly"`) with radius 300, core 80, `tangential_force` 260 (an instance swirls the other way with −260) and the cycle
+TELEGRAPH 1.0 s / ACTIVE 2.5 s / QUIET 3.0 s; `avoid_weight` 0.7, 0 while QUIET. Only ACTIVE swirls. Its sprite carries
+`energy_anomaly_sprite.gd` (`EnergyAnomalySprite`), which follows `phase_changed` / `phase_progress()` for the look. See
+[`HAZARD.md`](../../../assault/scenes/hazards/energy_anomaly/HAZARD.md); tests `tests/integration/test_energy_anomaly.gd`.
+
+**Gravity Field (Phase 6 t17).** `assault/scenes/hazards/gravity_field/gravity_field.tscn` — a `GravityField` (`class_name`, extends
+`HazardField`; `gravity_field.gd` adds the radius ring and the sprite fade over the last 0.5 s): radius 150, `movement_penalty` 0.4,
+`duration` 3.5, `avoid_weight` 0.6, no pull or stress. A gravity bomb's `EnemyOrdnance._detonate()` leaves one at the blast point
+through the deferred `spawn_into(Hazards.container(tree), …)` (no container → nothing; mines, pursuit bombs and a defused bomb leave
+none). See [`HAZARD.md`](../../../assault/scenes/hazards/gravity_field/HAZARD.md); tests `tests/integration/test_enemy_ordnance.gd`.
+
+**Wrecks, structures and debris (Phase 6 t10).** `assault/scenes/hazards/wreck/`: `Wreck` (`wreck.gd`, a `CharacterBody2D` on layer 1,
+group `wrecks`) runs `wreck_small` / `wreck_medium` / `wreck_large.tscn` (r 13 / 25 / 40, HP 200, Open Space life 40 s) and the placed
+`structure_satellite` / `structure_cargo_platform` / `structure_station_module.tscn` (HP 800, permanent). A wreck is two-sided cover: it
+blocks bodies, `LineOfSight` (`blocks_line_of_sight()`), shots into its body-sized `HurtBox`, enemy rounds (`stops_enemy_rounds()`;
+`enemy_bullet.tscn` masks 1152), the Sniper Shot (`stops_piercing()`) and the player's beam, which cannot cut it. Its `ContactHitBox` (1024,
+damage 10) shares the body shape, so only a *drifting* wreck hurts, armed 0.6 s after entering the tree; it yields rather than keep
+pushing into a ship. Assault drift is 60 px/s down until `ProjectileLifetime` (world rect + 30 s) ends it; `retire()` fades it out.
+`DebrisFragment` (`debris_fragment.gd`, an `Area2D`, `debris_drift.tscn`) is a contact-only hazard (damage 8, no cover).
+`WreckScenes.scene_for(size, explosive)` maps the three sizes (and returns `wreck_explosive.tscn` for any size when explosive). See [`HAZARD.md`](../../../assault/scenes/hazards/wreck/HAZARD.md); tests
+`tests/integration/test_wreck.gd`.
+**Wrecks from deaths (Phase 6 t11).** `ShipConfig` (group Hazards) gains `wreck_chance` / `wreck_size` (0 small, 1 medium, 2 large); the nine
+`*_config.tres` carry the plan §2.9 values (Swarm / Razor 0, Fighter / Gatling 0.2 small, Sniper / Support 0.3 small, Missile Corvette / Ram 0.5
+medium, Bomber 0.6 large). On death `BaseEnemy._maybe_leave_wreck()` (beside the explosion) needs a brain (legacy enemies leave none), a
+`HazardContainer` (group `hazard_container`: now in `level_1.tscn` and `sector_hub.tscn`) and a positive chance, then rolls the **brain's seeded rng**;
+with no container or chance 0 nothing is drawn. The wreck inherits 25 % of the ship's velocity and is attached with the deferred `spawn_into()`
+(a real kill runs inside a bullet's `area_entered` flush). Alive cap: Assault 4, Open Space 8, enforced in `Wreck._ready()` as each runtime wreck enters
+its container (`Wreck._enforce_cap()`; oldest by a static sequence number is `retire()`d), so two deaths in one frame cannot slip past it. Wrecks never
+enter the enemy container, so `ENEMIES_CLEARED` is unaffected. Tests `tests/integration/test_wreck_spawning.gd`; the live-level guard is
+`test_level1_fighter_exit.gd::test_cloud_descent_clears_in_time_with_wrecks_left_behind`.
+**Explosive wrecks (Phase 6 t12).** `ShipConfig.explosive_wreck_chance` (Bomber, Missile Corvette 0.5; others 0) is a second draw from the same seeded rng, only after a successful wreck roll and only when above 0; `WreckScenes.scene_for(size, true)` then returns `wreck_explosive.tscn` (a `Wreck` with `explosive`, HP 20). It goes off at HP 0 or 1.0 s after a ship's hurtbox overlaps its armed contact box: `Hazards.pulse_damage(110, 25)` by centre distance (both sides; a plated Ram deflects it), then a `ReactorField` (`reactor_field/`, r 90, 4 per 0.5 s for 2.0 s, no pull) through the deferred `spawn_into`. See [`HAZARD.md`](../../../assault/scenes/hazards/wreck/HAZARD.md) and [`reactor_field/HAZARD.md`](../../../assault/scenes/hazards/reactor_field/HAZARD.md); tests `test_wreck.gd`, `test_wreck_spawning.gd`.
 
 ### Enemies
 

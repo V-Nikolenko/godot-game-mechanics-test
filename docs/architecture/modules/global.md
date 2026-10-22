@@ -50,7 +50,7 @@ global/
 │   ├── enemy_brain.gd         # EnemyBrain (Node) — decides: tick(delta), on_suspended(), seeded rng
 │   ├── enemy_mover.gd         # EnemyMover (Node) — the single writer of an AI enemy's velocity/rotation
 │   ├── movement_constraint.gd # MovementConstraint (RefCounted) — identity filter; mode constraints extend it
-│   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift/spiral/corkscrew/… primitives
+│   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift/spiral/corkscrew/… primitives + context_avoid (hazard avoidance)
 │   ├── target_info.gd         # TargetInfo — player resolver + prediction/intercept snapshot
 │   ├── line_of_sight.gd       # LineOfSight (RefCounted) — opt-in-blocker ray between two points (asteroids / blocks_line_of_sight())
 │   ├── engagement_budget.gd   # EngagementBudget (RefCounted) — Assault-only per-brain exit timer
@@ -59,6 +59,7 @@ global/
 │   ├── squad_controller.gd    # SquadController (RefCounted) — event-driven lead/flank/rear role board
 │   ├── anchor_idle.gd         # AnchorIdle (RefCounted) — generic idle-around-an-anchor → combat handover
 │   └── enemy_world.gd         # EnemyWorld — the one lookup of the &"assault_arena" mode provider
+├── hazards/                   # shared hazard description + registry (enemy rework phase 6): HazardInfo, Hazards, HazardField, HazardDrift
 ├── physics/
 │   └── collision_layers.gd    # CollisionLayers — named constants, one per project.godot layer_names entry
 ├── entities/
@@ -142,7 +143,7 @@ Static-only helper (`RefCounted`, never instantiated) that swaps the OS mouse ar
 > `SquadController` → `test_squad_controller.gd` (+ `tests/integration/test_wave_squads.gd` for how
 > Assault spawns get one), `AnchorIdle` → `test_anchor_idle.gd`, `EngagementBudget` →
 > `test_engagement_budget.gd` (+ `tests/integration/test_engagement_deadline.gd`, the level-timing
-> proof), `BurstClock` → `test_burst_clock.gd`, `DubinsPath` → `test_dubins_path.gd`, `StateLight` → `test_state_light.gd`, `Steering` → `test_steering.gd`,
+> proof), `BurstClock` → `test_burst_clock.gd`, `DubinsPath` → `test_dubins_path.gd`, `StateLight` → `test_state_light.gd`, `Steering` → `test_steering.gd` (+ `test_context_avoidance.gd` for `context_avoid`),
 > `Overheat` → `test_overheat_component.gd`, the state machine → `test_state_machine.gd`, and the
 > whole `PlayerBase` damage chain → `tests/integration/test_player_damage_chain.gd`. The autoloads
 > in §3–4 are covered by `tests/unit/test_<autoload>.gd`. See [`tests/README.md`](../../../tests/README.md).
@@ -595,7 +596,7 @@ bodies only; a hit blocks only if the collider is in group `asteroids` or answer
 Physics step only; tests await a physics frame after placing bodies. `Steering.break_contact(pos, threat_pos,
 threat_vel, side, max_speed, lateral_weight := 0.6)` flees the threat with a sideways share that doubles when
 the threat is closing (`EnemyMover.break_contact` wraps it). First users: the Sniper (`SniperBrain` — its
-firing-point choice, SETTLE and LOCK line-of-sight checks, and its BREAK_CONTACT phase).
+firing-point choice, SETTLE and LOCK line-of-sight checks, and its BREAK_CONTACT phase). `EnemyBrain.can_see_player()` (Phase 6) wraps `TargetInfo.line_of_sight` from the enemy's body to the player: false with no player, false behind a wreck or asteroid, true behind a `DebrisFragment`.
 
 **`EngagementBudget` (`engagement_budget.gd`, `RefCounted`) is how an Assault AI enemy leaves the
 arena in time for an `ENEMIES_CLEARED` section to advance**, rather than living until killed —
@@ -642,6 +643,31 @@ the centres are ≤ 4r apart), and a single arc when start and goal share a circ
 attack run's lead-in with it (take the first candidate whose samples are clear of the player, then
 track the samples with `Steering.turn_toward`) — later attack-run enemies (the Ph4 Bomber/Ram
 passes) can plan with it the same way. Tests: `tests/unit/test_dubins_path.gd`.
+
+### Hazards — `global/hazards/` (enemy rework phase 6)
+
+One shared, testable description of a pull, a slow and a danger. **A hazard is any node that answers duck-typed
+`hazard_info() -> HazardInfo`, calls `Hazards.register(self)` in `_enter_tree()` and `Hazards.unregister(self)` in
+`_exit_tree()`.** Hazards are *sampled* by the body they act on; a hazard never writes a ship's velocity, position or
+rotation, and no physics layer is allocated (bit 12 stays free).
+
+| File | Role |
+|---|---|
+| `hazard_info.gd` (`HazardInfo`, `RefCounted`) | The data: `position`, `radius`, `pull_force`, `damage_per_second`, `movement_penalty`, `disables_abilities`, `line_of_sight_blocker`, `kind`, `core_radius`, `damage_radius`, signed `tangential_force` (+ = clockwise), `avoid_weight`, `velocity`, `source`, `claimer_id`. Maths: `falloff(r)` (1 in the core, `core/r` to 0.85 r, linear taper to 0 at `radius`), `accel_at`, `penalty_at`, `contains`. Claims `try_claim` / `release` / `is_claimed_by` / `is_claimed` store an instance id, so a freed claimer frees the claim. |
+| `hazards.gd` (`Hazards`, static) | `register` / `unregister` / `count()` (O(1)) / `around(pos, reach)` / `accel_at` / `penalty_at` (strongest slow only, capped at `MAX_PENALTY` 0.5) / `container(tree)` (first node in group `hazard_container`) / `hurt_box_of(ship)` / `bend_heading(heading, speed, pos, delta, scale)` (t8, below) / `pulse_damage(tree, at, radius, damage)` (a direct `HurtBox.received_damage.emit` on every `enemies` / `player` node whose centre is within `radius`; bypasses `EnemyShield`). |
+| `hazard_drift.gd` (`HazardDrift`) | Decaying drift integrator (half-life 0.35 s) a ship adds to its own motion: `step(accel, resistance, delta)`. |
+| `hazard_field.gd` (`HazardField`, `Node2D`) | The one field script: exports for radius, core, pull, swirl, penalty, stress and `duration`, a TELEGRAPH → ACTIVE → QUIET cycle, hull-stress pulses via `pulse_damage`; signals `phase_changed(phase: int)`, `stressed(count: int)`. Runtime spawns go through `spawn_into(container, at, rot)`, which defers `_attach` on itself (the `ContactBlast` pattern) and frees itself if the container is gone. |
+
+**Enemies feel hazards through `EnemyMover` (t2).** `step()` order: slow factor (`1 - penalty_at · (1 - hazard_resistance)`, boost included) → avoidance stage (`_avoid()`, t4 below; skipped while boosting) → accel limit on `own_velocity()` → `HazardDrift` added **only when non-zero** (also while boosting) → corridor filter last → write; facing from `v - drift`. `own_velocity()` is `actor.velocity` minus the last drift (exactly `actor.velocity` with none) and is what brains' "settled / stopped" gates read (Ram LINE_UP crawl, Sniper SETTLE, Fighter `is_settled` / `is_braking_onto_station` / RUN_IN standing start, Razor feint stop). `halt()` clears the drift. With `Hazards.count() == 0` and no drift the stage is skipped entirely (bit-identical motion). The three profile fields (`hazard_avoidance`, `hazard_margin`, `hazard_resistance`) live in `ShipConfig` (export group Hazards) and `BaseEnemy._ready()` copies them onto its mover; per-enemy values are in the nine `*_config.tres` (which also carry `wreck_chance` / `wreck_size`, t11). Tests: `tests/unit/test_enemy_mover.gd` (hazard rows) and `tests/integration/test_enemy_dual_mode.gd` (Hazards section).
+
+**Enemies steer round hazards with their own temperament (t4).** `Steering.context_avoid(pos, desired, infos, avoidance, margin, lookahead, prev_dir)` is pure context steering (Fray): 16 heading slots (`CONTEXT_SLOTS`), the brain's request is the interest, and each `HazardInfo` writes a danger cone round its bearing — led by `velocity · CONTEXT_LOOKAHEAD` (0.6 s), a skirt reaching `margin + |desired| · 0.6` past the edge, every heading within 112.5° of the centre once inside — merged per slot by max and counted only above `1 − hazard_avoidance`. A clear way returns `desired` bit-identical; otherwise the least-dangerous slot nearest the request (blended with the previous heading, `CONTEXT_PREV_BLEND` 0.5, so a ship keeps the side it chose) wins, refined by parabolic interpolation, at `|desired| · max(interest, CONTEXT_MIN_SPEED_RATIO 0.35)` — a ship circles the edge, never stalls. `EnemyMover._avoid()` feeds it `Hazards.around(pos, hazard_margin + |desired| · 0.6)` minus any `line_of_sight_blocker` its own actor has claimed (the ship's cover is its destination; wells are never dropped) and keeps `_avoid_prev`, cleared by `halt()`, every boost step and whenever the stage does not run. The margin is the skim knob (Swarm 12 runs along a well's edge, Sniper 90 keeps clear); every `boost()` — Swarm BURST, Razor dash / feint / IDLE_BOOST, Ram CHARGE — flies straight through, so committed runs can be baited into a well. The corridor filter still runs after the stage. Tests: `tests/unit/test_context_avoidance.gd`, the avoidance rows of `tests/unit/test_enemy_mover.gd` and the t4 rows of `tests/integration/test_enemy_dual_mode.gd` (helper `tests/helpers/fixture_wreck.gd`, a duck-typed claimable LOS blocker). Task plan: `docs/plans/cmvg30aa90073qs2xrw74hcvg/3-plan.md`.
+
+**Players feel hazards too (t3).** `PlayerBase.hazard_speed_factor()` = `1 − Hazards.penalty_at(global_position)` (1.0 with `count() == 0`). Open Space: `OpenSpacePlayerShip._step_hazards(delta)` adds `Hazards.accel_at(global_position) · delta` to the ship's own `velocity` inside `_handle_thrust()` after thrust / damping and before `_step_boost()` (so the ceiling clamp bounds a pull; skipped during an engine boost); the factor scales thrust, reverse, the speed ceiling and boost exit speed where they are read, never the exported values, and `rotation` is never touched (thrust 380 px/s² loses to a well inside ~123 px, so the player must boost). Assault: `AssaultPlayer._physics_process` steps a `HazardDrift` and `move_and_collide`s + clamps (x [-100, 1380], y [-380, 1100]) itself, after the dialog return (which also resets the drift), the knockback return and the engine-boost branch, because the movement states run from the state machine's `_process` and `idle_state` never clamps; `move_state` / `dash_state` multiply `move_speed` / `dash_speed` by the factor. Tests: `tests/integration/test_player_hazards.gd`.
+
+**Projectiles in fields (t8).** Heavy, guided ordnance bends; bullets fly true. `Hazards.bend_heading(heading, speed, pos, delta, scale)` turns a heading toward `heading · speed + accel_at(pos) · scale · delta` and returns the same unit vector (so the caller keeps its own speed, and every time / distance cap still holds) — the input itself, bit for bit, with no hazard, a zero scale, zero speed or nothing in reach. A family opts in by answering `hazard_pull_scale() -> float` and calling it only when `Hazards.count() > 0`: all five `EnemyRocket` kinds (`_heading`, after steering), `EnemyOrdnance` gravity and pursuit bombs (a mine answers 0.0 and never calls it, so Ph4's mine arithmetic holds), and the player's `homing_missile` / `WarheadMissile` (own `rotation` writer, so the nose follows). Not opted in: `EnemyBullet` rounds, the player `Bullet`, mines, beams. Tests: `tests/integration/test_hazard_projectiles.gd`.
+
+Tests: `tests/unit/test_hazards.gd`, `tests/unit/test_hazard_field.gd`. Add hazard nodes with `add_child_autofree` so the
+static registry is empty after each test. Plan: `docs/plans/cmug23om70001m52wqfwclf3l/3-plan.md` §2.1.
 
 ### ProjectileLifetime — `projectile_lifetime.gd`
 

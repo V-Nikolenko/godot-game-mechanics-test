@@ -366,6 +366,18 @@ Detail and APIs: [global.md](modules/global.md).
   the MCP calls it it is a silent no-op (it searches `res:///work/repo/`), and pointed at `res://`
   by hand it resaves every scene, deleting all UIDs and all comments. Written up in
   [`tests/README.md`](../../tests/README.md).
+- **Hazards (enemy rework phase 6):** (1) **hazards are sampled by the body** — a hazard node answers duck-typed
+  `hazard_info() -> HazardInfo` and registers in `_enter_tree()` / unregisters in `_exit_tree()` with the static `Hazards`
+  registry (`global/hazards/`); ships query `Hazards.accel_at / penalty_at / around`, no `Area2D` field, collision bit 12
+  stays unallocated, and a hazard never writes a ship's velocity, position or rotation. (2) **The mover owns enemy drift** —
+  `EnemyMover` adds the pull as a decaying `HazardDrift`, applies the slow and the context-steering avoidance stage, and
+  exposes `own_velocity()` (`actor.velocity − drift`); a brain's "am I stopped / settled" gate reads that, never raw
+  `actor.velocity`. A committed attack is `mover.boost()` and ignores avoidance. With no hazard in reach, velocity and rotation
+  are bit-identical to before. (3) **Runtime hazards are spawned deferred into the `HazardContainer`** — wrecks, debris
+  fragments, Gravity Fields and reactor fields call `spawn_into(container, at, rot)` (a `call_deferred` attach, because kills
+  happen inside a physics flush); the container is the node in group `hazard_container` (level 1 and the hub), never the enemy
+  container; no container means nothing spawns and no rng is drawn. Randomness only from the dying enemy's seeded `rng`.
+  Direct hazard damage is `Hazards.pulse_damage`. Details: [global.md](modules/global.md) → Hazards.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---
@@ -376,7 +388,7 @@ Each combat entity carries a behaviour doc **beside its scene**, mirroring a com
 
 - **Racers:** `assault/scenes/race/racers/<name>/RACER.md` (6 racers)
 - **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (the wave enemies + the `space_station` mini-boss)
-- **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (3 hazards)
+- **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (8 hazard folders: big/small asteroid, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck — wrecks, derelict structures and drifting debris)
 - **Race track hazards:** `assault/scenes/race/track/RACE_HAZARDS.md` (walls, asteroids, lasers + the lethal-hazard / AI-avoidance system)
 
 Level 1's **finale** phase is still the `ENEMIES_CLEARED` section in

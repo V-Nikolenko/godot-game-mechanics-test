@@ -63,6 +63,18 @@ extends ShipConfig
 ## ENTER counts as arrived within this of its point (px).
 @export var arrive_radius: float = 12.0
 
+@export_group("Cover")
+## Hazard cover (plan cmug23om70001m52wqfwclf3l §2.11), used only while a hazard is registered. A wreck within
+## `cover_search_radius` of the sniper (px) offers a firing point on its far side from the player, `cover_gap` (px)
+## clear of its edge, shifted sideways until the player can be seen. A candidate within `cover_radius` of a
+## line-of-sight blocker earns `w_cover` (the same size as `w_sep`: partial cover is worth about one bearing change).
+@export var cover_search_radius: float = 700.0
+@export var cover_gap: float = 50.0
+@export var cover_radius: float = 140.0
+@export var w_cover: float = 1.0
+## A relocation keeps a still-valid cover point unless the new best scores more than this above it (absolute score).
+@export var cover_hysteresis: float = 0.15
+
 @export_group("Shot")
 ## AIM tracks the player for this long, at most `aim_track_rate` rad/s (s, rad/s).
 @export var aim_seconds: float = 1.3

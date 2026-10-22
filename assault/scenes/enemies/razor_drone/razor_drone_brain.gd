@@ -445,7 +445,7 @@ func _tick_feint_lunge() -> void:
 
 func _tick_feint_brake(delta: float, target: TargetInfo) -> void:
 	_phase_time += delta
-	if actor.velocity.length() < FEINT_STOP_SPEED or _phase_time >= FEINT_BRAKE_MAX_SECONDS:
+	if mover.own_velocity().length() < FEINT_STOP_SPEED or _phase_time >= FEINT_BRAKE_MAX_SECONDS:
 		_reanchor()
 		# The lunge swept round in the -lunge_side sense; the new orbit continues that sweep.
 		orbit_dir = -lunge_side

@@ -1,0 +1,24 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/hazards/gravity_well/gravity_well.gd" id="1_well"]
+[ext_resource type="SpriteFrames" path="res://assault/assets/sprites/hazards/gravity_well_frames.tres" id="2_frames"]
+[ext_resource type="Script" path="res://assault/scenes/hazards/gravity_well/gravity_well_glow.gd" id="3_glow"]
+
+[node name="GravityWell" type="Node2D"]
+script = ExtResource("1_well")
+kind = &"gravity_well"
+radius = 420.0
+core_radius = 90.0
+pull_force = 520.0
+avoid_weight = 1.0
+damage_radius = 150.0
+stress_damage = 5
+stress_period = 0.5
+
+[node name="Sprite" type="AnimatedSprite2D" parent="."]
+sprite_frames = ExtResource("2_frames")
+animation = &"swirl"
+autoplay = "swirl"
+
+[node name="Glow" type="Node2D" parent="."]
+script = ExtResource("3_glow")

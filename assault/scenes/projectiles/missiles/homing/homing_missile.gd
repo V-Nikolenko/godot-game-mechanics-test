@@ -39,13 +39,25 @@ func _fly_to_target(delta: float) -> void:
 	if locked_target.has_method("homing_point"):
 		aim = locked_target.homing_point(global_position)
 	var direction := (aim - global_position).normalized()
+	if Hazards.count() > 0:
+		direction = Hazards.bend_heading(direction, speed, global_position, delta, hazard_pull_scale())
 	rotation = direction.angle() + PI / 2
 	global_position += direction * speed * delta
 
 
 func _fly_forward(delta: float) -> void:
 	var forward := Vector2.UP.rotated(rotation)
+	if Hazards.count() > 0:
+		var bent := Hazards.bend_heading(forward, speed, global_position, delta, hazard_pull_scale())
+		if bent != forward:
+			forward = bent
+			rotation = bent.angle() + PI / 2
 	global_position += forward * speed * delta
+
+
+## Guided ordnance bends in gravity wells and anomalies (`Hazards.bend_heading()`, speed unchanged).
+func hazard_pull_scale() -> float:
+	return 1.0
 
 
 func _on_hit_box_area_entered(area: Area2D) -> void:
