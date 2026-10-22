@@ -1,6 +1,6 @@
 # Enemy rework, phase 7: mines, minefields and the Mine Layer
 
-Revision 2. It answers plan review round 1 (`4-review.md`); the answers are listed in §1.2.
+Revision 3. Revision 2 answered plan review round 1 (§1.2). This revision answers round 2 (`4-review.md`) and the owner's "changes requested", which carried no comments of its own; the answers are listed in §1.3.
 
 ## Summary for the owner
 
@@ -12,6 +12,7 @@ Revision 2. It answers plan review round 1 (`4-review.md`); the answers are list
 - **Where it appears:** one Mine Layer in the hub's ambient patrol, and one each in level 1's Deep Space and Planet Approach sections. Neither section waits for its enemies to be cleared.
 - **Built:** the mine family, a boost-weakening hook on both player ships, a placeholder EMP hook for phase 9 to finish, the minefield structure, the Mine Layer (AI, art, hub and level placement), and tests in both modes.
 - **Left out:** EMP effects on enemies and the real EMP effect on the player (phase 9). Placed minefields in Assault levels (phase 15; the scene already works there). Mine counts by difficulty (phase 16). Sound (phase 17). The race track's mine stays as it is.
+- **A weakened boost never makes you slower than normal flight:** the Shift boost, the Boost Drive and the dash lose only the part of their speed that is above your normal speed.
 - **Main risks:** (1) The tests are near their 240 s limit (216 s now). The first task must win back 12 s, and every task has a time allowance. (2) Bomber mines become hazards other enemies steer round, which could shift a level-1 timing test. Two fallbacks are already approved. (3) None of this has been play-tested: whether the mine lines can be dodged by feel is a judgement call.
 - **Choices for you (default in brackets):**
   1. Should a *placed* minefield also hurt and be set off by enemies, while mines an enemy lays hurt only you? [Yes]
@@ -36,15 +37,18 @@ Phase 7 of the enemy rework. Read `CLAUDE.md`. Earlier phases' rules (`docs/idea
 - **A mine is a hazard:** `hazard_info()` returns one `HazardInfo` updated in place: `kind = &"mine"`, **`radius = trigger_radius + hazard_pad`** (export `hazard_pad` 60),
   **`avoid_weight` 1.0** for every mine, `velocity` for moving mines, `source = self`, and no pull, slow or LOS block. These numbers were measured (plan §2.3).
   **Pooled hazards register on `launch()`** and unregister in `_mark_done()` and `_exit_tree()`. A mine never writes a ship's velocity, position or rotation.
-- **Placed mines:** `placed = true` (an export) makes a mine self-owned (`expired -> queue_free`, backstop `max_time` 0, `mine_life` 0 unless authored). It
-  launches itself in `_ready()`, so a lone mine dropped in a scene arms, registers and triggers. `Minefield` sets `placed` on every mine it holds.
+- **Placed mines:** `placed = true` (an export) makes a mine self-owned (`expired -> queue_free`, backstop `max_time` 0, `mine_life` 0 unless authored). The setup
+  runs in a **deferred** `_start_if_placed()` queued by `_ready()`, after every `_ready()` of the same add, so a parent `Minefield` has already set `placed`/`hostility`.
+  A lone mine dropped in a scene arms, registers and triggers. Hostility-dependent setup (the `ProximityArea` mask) is applied in `launch()`.
 - **`mine_life` 0 means "never fizzles"**; the `ProjectileLifetime` `max_time` is the backstop (0 = inert). `retire()` = fizzle (fade, no blast, `expired`).
 - **Warning rule:** for every mine scene, `(trigger_radius + effect_radius) / warning_time >= 440 + own_speed`. `effect_radius` is `blast_radius` when
   `blast_damage > 0`, else `emp_radius`. `own_speed` is `home_speed` (HOMING) or `drift_speed` (DRIFTING), else 0. It is read from scene exports, never typed numbers.
 - **Chain:** a CHAIN detonation calls `chain_trigger(chain_delay)` on every live mine whose centre is within `chain_radius` (via `Hazards.around()`, kind `&"mine"`,
   then filtered by centre distance). A chained mine skips its warning. Only CHAIN mines propagate.
 - **Player hooks (on `PlayerBase`, implemented by both ships):** `apply_boost_disruption(strength: float, seconds: float)`, `boost_efficiency() -> float`,
-  `signal boost_disruption_changed(efficiency: float)`, `MIN_BOOST_EFFICIENCY := 0.15`. The strongest strength wins and the longest time wins; they never stack.
+  `signal boost_disruption_changed(efficiency: float)`, `MIN_BOOST_EFFICIENCY := 0.15`, `cruise_speed() -> float`. The strongest strength wins and the longest time wins;
+  they never stack. **A disrupted speed scales only its excess over a floor:** `floor + (speed − floor) × efficiency` (Shift boost and Boost Drive: `cruise_speed()`;
+  dash: `DashState.move_speed`), so a disruption never slows the ship below normal flight.
   **Efficiency is checked before anything is spent:** a refused boost spends no tank and no charge. `apply_emp(seconds: float, source: Node)`, `is_emp_disrupted()`,
   `signal emp_changed(active: bool)`. Ph7's stand-in effect is `apply_boost_disruption(1.0, seconds)`. **`EmpPulse.emit(tree, at, radius, seconds, source) -> int`**
   (`global/components/emp_pulse.gd`, static) is the one EMP entry point, the "same hook" Ph9's EMP Pulse uses. In Ph7 it reaches only group `player`.
@@ -61,6 +65,8 @@ Phase 7 of the enemy rework. Read `CLAUDE.md`. Earlier phases' rules (`docs/idea
   `sprite_forward_angle` (layer art nose-down, the default `PI/2`). `TargetInfo` exposes `.position` / `.velocity`. Signals are declared with their arity. Per-frame prints
   sit behind `OS.is_stdout_verbose()`. Art comes only from PixelLab under the `pixel-art-generation` skill and is saved through `scripts/pixellab.sh`. Never hand-type a
   `uid://`. Every task appends its "built in tN" notes, and any deviation, to the Phase 7 section of `DECISIONS.md`.
+- **Fixture enemy:** `tests/helpers/fixture_enemy.tscn`'s `HurtBox` has no shape and the fixture joins no group. A row that needs a mine to see it adds a 14 px
+  `CircleShape2D` to that `HurtBox` and calls `add_to_group("enemies")` at runtime, before `add_child`. The shared fixture scene is not edited.
 - **Tests:** GUT, written first. Behaviour specs run in both harnesses (`tests/helpers/enemy_ai_harness.gd`); parameterise on a label string. Rows that await real
   physics run on the **8× clock** (`_scale_clock()` / `_restore_clock()` from `test_level1_drone_exit.gd`). A scenario several rows share is computed once. Run
   `scripts/check-test-leaks.sh` after anything that awaits.
@@ -119,6 +125,25 @@ is an earlier phase's, a measurement (§2.3), or a starting value marked as judg
 | M7 unsourced numbers, dead behaviours | §2.18 lists every number's origin. Hub drifting mines get a direction and a 120 px leash. The `placed` export makes a lone mine arm. | §2.4, §2.10, §2.18 |
 | M8 pulse task too big | Split three ways: player hook (large), pulse mine (small) and EMP (medium). | §3 |
 
+### 1.3 Revision 3: answers to plan review round 2 and the owner
+
+The owner's "changes requested" carried no comments of its own, so this revision answers the round-2 findings. The five owner questions stay open, each with its default.
+
+| Finding | Answer | Where |
+|---|---|---|
+| N1 LAY starts wherever APPROACH arrives, so the line comes out crooked | APPROACH now seeks a run-in point `R = S − u·run_in` (150 px, the reviewer's measured value), then follows R → S along the axis at `lay_speed`. LAY and its rows start at S. `t_approach_left` adds `run_in / lay_speed`. A perpendicular-arrival row is added. Measured by the reviewer with the run-in: ≤ 33° and ≤ 23 px. | §2.12 |
+| N2 the shell needs mine scenes from later tasks | t10 depends on t6 (which already follows t3 and t4); t10 runs alongside t7–t9 only; t11 depends on t10 alone. | §3 |
+| N3 a 40° step cannot give 380 px against a standing player; the "Gradual" row contradicts its fallback | Each try rotates C about P by `θ = 2·asin(min(1, (min_pass_separation + 10) / (2·|C − P|)))` (75.1° at 320 px), tries +θ, −θ, +2θ, −2θ. A `spread_fallbacks` seam counts plans that proceeded anyway; the spacing row is asserted only for the others. Two scenarios: a standing stub and a stub moving at 220 px/s. | §2.12 |
+| N4 the fixture enemy's hurtbox has no shape | Rows that need a mine to see the fixture add a 14 px `CircleShape2D` at runtime (and the group). Stated in *For every task*, §2.1 and §2.10. | §2.1, §2.10 |
+| N5 the minefield's clearance radius ignores the drift leash and reads a missing property | `_element_radius()` = `radius + (drift_leash if w_drifting > 0 else 0) + EnemyMineScenes.export_of(PROXIMITY, &"trigger_radius", 80.0)` = 400 for the hub field. Clearances recomputed: Mine Layer 586 px, Gatling 775 px (rule > 100). | §2.15 |
+| N6 hand-placed mines are ready before their field | The placed setup moves to a deferred `_start_if_placed()`; the `ProximityArea` mask is set in `launch()`. Both read `placed`/`hostility` after the field's `_ready()` has set them. A boundary row authors a child with the wrong values. | §2.1, §2.10 |
+| N7 the disrupted Boost Drive and dash drop below cruise | Every disrupted speed is `floor + (speed − floor) × efficiency`: Shift boost and Boost Drive floor at the new `PlayerBase.cruise_speed()` (Open Space `max_speed` 420, Assault `MoveState.move_speed` 360); the dash floors at `DashState.move_speed` 180. Rows rewritten with the new numbers. | §2.6 |
+| N8 two ambiguous rows | The real-mover avoidance row is head-on (lateral 0). The layer's "keeps clear" row excludes the pass it is breaking off from and its tail-drop mines. | §2.3, §2.12 |
+| N9 lose-radius claim, persistence row, exit probe | The claim is restated for a player at ≤ 220 px/s and asserted from the config (1421 < 1500). The persistence row teleports the stub beyond `lose_radius` of the layer. DISENGAGE with no planned pass exits along the current heading, so the probe measures the real exit. | §2.12, §2.14, §2.16 |
+| N10 the levers covered only level-1 gates | They cover any existing row (`test_bomber.gd`, `test_enemy_ordnance.gd`, level 1) that fails because Bomber mines now register as hazards. | §2.1 |
+| N11 the close-out task is small | t16 is medium. | §3 |
+| (found while revising) a layer behind a fast player can never reach R | Open Space only: after `approach_max_seconds` 6.0 s in APPROACH without committing, the pass is re-planned once in the standing-player (fence) form from the layer's current bearing and frozen at once. A `fence_fallbacks` seam and a row pin it. | §2.12 |
+
 ## 2. Design
 
 ### 2.1 The mine family: `EnemyMine`
@@ -156,15 +181,20 @@ Alternative rejected: a component per variant (a `MineBehaviour` child node). Si
     registering in `_enter_tree()` would plant phantom hazards at the pool. This deviates from Ph6's register-in-`_enter_tree()` rule.
   - Unregister in `_mark_done()` and `_exit_tree()` (both idempotent; `Hazards.unregister` tolerates a missing node).
   - `registers_hazard = false` skips registration (the control in tests, and a pre-approved lever, below).
-- **Placed mode (`placed = true`).** In `_ready()` the mine:
+- **Placed mode (`placed = true`).** Every `EnemyMine._ready()` queues `_start_if_placed.call_deferred()`. Deferred calls run after every `_ready()` of the same add, so
+  a parent `Minefield` (whose `_ready()` runs after its children's, Godot's child-first order) has already set `placed` and `hostility` on an editor-placed child.
+  `_start_if_placed()` does nothing unless `placed` is true (so pooled mines are untouched). Otherwise the mine:
   - connects `expired -> queue_free`;
   - sets its `ProjectileLifetime.max_time` to 0 (inert);
   - sets `mine_life` to 0 unless the scene authored a nonzero value;
-  - calls `launch(Vector2.ZERO, 0.0, global_position)` deferred, so it arms after `arm_delay` and registers.
+  - calls `launch(Vector2.ZERO, 0.0, global_position)`, so it arms after `arm_delay` and registers.
 
-  This is how a standalone mine dropped into any scene works ("standalone mines" in the epic). `Minefield` sets `placed = true` on its mines before `add_child`, so there is one path.
+  This is how a standalone mine dropped into any scene works ("standalone mines" in the epic). `Minefield` sets `placed = true` on generated mines before `add_child`
+  and on AUTHORED children in its own `_ready()`; both reach the same deferred path.
+- **Hostility is applied in `launch()`**, never in `_ready()`: `launch()` sets the `ProximityArea` mask from the current `hostility` (128 for PLAYER, `128 | 512` for ALL).
+  So a value set by a parent after the mine's `_ready()` still takes effect, and a pooled mine relaunched with a different hostility is correct.
 - **Hostility ALL:**
-  - The `ProximityArea` mask becomes `128 | 512`. `_trigger_seen()` accepts a layer-128 area, or a layer-512 area whose `get_parent()` is in group `enemies`.
+  - The `ProximityArea` mask becomes `128 | 512` (set in `launch()`). `_trigger_seen()` accepts a layer-128 area, or a layer-512 area whose `get_parent()` is in group `enemies`.
     - That accepts a ship's hull `HurtBox`, which is a direct child of the `BaseEnemy` root.
     - It rejects other mines' hurtboxes (their parent is a mine), rocket shoot-down boxes (their parent is the rocket) and a Ram's plate hurtboxes (`Plates/PlateX/HurtBox`:
       the parent is an `ArmorPlate`, not in `enemies`). The Ram's hull hurtbox still sets it off.
@@ -178,12 +208,13 @@ Alternative rejected: a component per variant (a `MineBehaviour` child node). Si
 is unchanged, because `Bomber.drop()` always sets `warning_time = config.mine_warning` (0.25) and no test reads the authored 0.5. The change makes the scene itself pass the
 warning rule (§2.2). `EnemyOrdnanceScenes.MINE` still points at it. Every `test_bomber.gd` / `test_enemy_ordnance.gd` row stays green unchanged.
 
-**The one behaviour change:** Bomber mines are now hazards, so other enemies steer round them (§2.3). Pre-approved levers, in order, if a level-1 gate turns red *because of*
-the registration:
+**The one behaviour change:** Bomber mines are now hazards, so other enemies steer round them (§2.3), the Bomber included when it turns back across its own line. Pre-approved
+levers, in order, if **any existing row** turns red *because of* the registration (a level-1 gate, or a `test_bomber.gd` / `test_enemy_ordnance.gd` row; check by re-running
+the row with `registers_hazard = false`):
 1. `hazard_pad = 0` on `mine.tscn`;
 2. `registers_hazard = false` on `mine.tscn`.
 
-The task reports which lever, if any, it used. No gate bound moves.
+The task reports which lever, if any, it used, and which row forced it. No gate bound moves and no assertion changes.
 
 **`EnemyMineScenes`** (`mines/enemy_mine_scenes.gd`, RefCounted; the `EnemyRocketScenes` shape):
 - `scene_for(variant) -> PackedScene`.
@@ -207,9 +238,13 @@ The task reports which lever, if any, it used. No gate bound moves.
 - Lifetime boundary: `mine_life = 0` → still live at 30 s (hand-ticked); `mine_life = 8` → fizzles at 8.0 s ± 1 tick (the Ph4 value, unchanged).
 - Placed mode: a bare `placed = true` PROXIMITY mine added to a scene arms after `arm_delay`, is registered, is set off by the player stub (8× real physics) and frees
   itself after its blast (`is_instance_valid` false). A pooled mine never frees itself (control).
+- Ready order (boundary): a parent node whose `_ready()` sets `placed = true` and `hostility = ALL` on a child mine authored with `placed = false` / PLAYER (the
+  AUTHORED-field shape) → after one frame the child is self-owned, registered and its `ProximityArea` mask is `128 | 512`.
 - Hostility:
-  - `BaseEnemy` does not join group `enemies` (every shipped enemy's own `_ready()` does) and `tests/helpers/fixture_enemy.gd` does not either, so these rows
-    `add_to_group("enemies")` on the fixture before `add_child`.
+  - `BaseEnemy` does not join group `enemies` (every shipped enemy's own `_ready()` does) and `tests/helpers/fixture_enemy.gd` does not either. Its `HurtBox`
+    (`fixture_enemy.tscn`, layer 512) also has **no `CollisionShape2D`**, so no `get_overlapping_areas()` poll can see it. These rows therefore add a
+    `CollisionShape2D` with a 14 px `CircleShape2D` to the fixture's `HurtBox` and call `add_to_group("enemies")`, both at runtime before `add_child`. The shared
+    fixture scene is not edited.
   - A PLAYER mine is not set off by a `fixture_enemy` sitting inside the trigger radius (8×).
   - An ALL mine is set off by it, and its blast lowers that enemy's Health and the player stub's.
   - Boundary: an ALL mine is not set off by another mine, a rocket's shoot-down box, or a Ram plate's hurtbox alone (a plate positioned inside the radius with the hull outside).
@@ -303,8 +338,8 @@ gate (levers in §2.1).
   - avoidance 0.6, margin 24, 200 px/s, offsets 0 / 30 / 60 → closest approach ≥ 85 px (measured 90 / 99 / 109), so it is > `trigger_radius`.
   - avoidance 0.8 → ≥ 145 px (measured 152 / 152 / 156).
   - The same runs with `registers_hazard = false` → closest approach equals the offset ± 1 px (the control).
-- **One real-mover row** (8×): a `fixture_enemy` with `hazard_avoidance` 0.8 and `hazard_margin` 24 seeks through a launched mine at 200 px/s → closest approach ≥ 120 px,
-  and ≥ the same run's control + 100 px.
+- **One real-mover row** (8×), **head-on** (lateral offset 0; at lateral 60 the "+ 100" clause would fail, 156 < 160): a `fixture_enemy` with `hazard_avoidance` 0.8 and
+  `hazard_margin` 24 seeks through a launched mine at 200 px/s → closest approach ≥ 120 px, and ≥ the same run's control (`registers_hazard = false`, ≈ 0 px) + 100 px.
 - Rows for fields and for the Mine Layer are in §2.10 and §2.12; they use the numbers above.
 
 ### 2.4 Drifting and homing mines
@@ -375,6 +410,9 @@ its own clock, not every frame, so a player can see which mines are linked befor
 - `boost_efficiency() -> float` = `1 − strength` while active, else 1.0.
 - `signal boost_disruption_changed(efficiency: float)`, emitted on start, on change and at the end.
 - `MIN_BOOST_EFFICIENCY := 0.15`.
+- `cruise_speed() -> float`, virtual, the speed of normal flight a disrupted speed never drops below. `OpenSpacePlayerShip` returns `max_speed` (420). The Assault fighter
+  returns `MovementStateMachine/MoveState`'s `move_speed` (360, not overridden in `player_fighter.tscn`; `assault/scenes/player/states/move_state.gd`). The base returns 0.
+- **The excess rule:** a disrupted speed is `disrupted(speed, floor) = floor + (speed − floor) × boost_efficiency()`, so only the part above normal flight shrinks.
 - `_step_disruption(delta)`: accumulated delta, no `Timer`. It is called from `OpenSpacePlayerShip._physics_process` and the Assault fighter's `_physics_process`, a
   hand-steppable seam like `BoostMeter.step()`.
 
@@ -387,7 +425,7 @@ the comments there state:
    - A refused press spends no tank and does not fall into the default branch: the existing `if drive != null:` structure already prevents that.
    - `can_activate()`'s lockstep comment in `engine_boost_module.gd` is updated: the player-side efficiency guard is the caller's, checked before the spend.
 2. **Default press:** `boost_efficiency() >= MIN_BOOST_EFFICIENCY` joins the start condition before the meter check. A refused press makes no velocity write and no drain.
-3. **Boost speed:** `boost_speed(eff) = max_speed + (boost_exit_speed − max_speed) × eff`, used at the start and in the sustain (× `hazard_speed_factor()` as today).
+3. **Boost speed:** `boost_speed(eff) = max_speed + (boost_exit_speed − max_speed) × eff` (the excess rule with floor `cruise_speed()` = `max_speed`), used at the start and in the sustain (× `hazard_speed_factor()` as today).
    The ceiling becomes `_speed_ceiling = boost_speed(eff)`.
    - A disrupted boost therefore buys a smaller burst but never slows the ship below cruise. At 0.4 it is 420 + 280 × 0.4 = 532 px/s, against 700 undisrupted.
    - The meter's drain is unchanged, so a disrupted boost costs as much and buys less. That is the "efficiency".
@@ -398,12 +436,15 @@ the comments there state:
 **Boost Drive** (`global/ship_modules/engine_boost_module.gd`):
 - `try_activate(player)` refuses when the player duck-types `boost_efficiency()` below the floor. This is the Assault H-key path (`player_fighter.gd::_input`), which
   spends nothing before calling it.
-- Its burst speeds (`_BOOST_SPEED` at the start and the eased re-assert in `tick()`) are × `boost_efficiency()` read at activation. 1500 × 0.4 = 600 px/s is still above cruise.
+- Its burst speeds (`_BOOST_SPEED` 1500 at the start and `_BOOST_END_SPEED` 500, the eased re-assert in `tick()`) follow the excess rule with floor
+  `player.cruise_speed()`, with the efficiency read once at activation. At 0.4 in Open Space: start 420 + 1080 × 0.4 = 852, end 420 + 80 × 0.4 = 452 px/s. In Assault
+  (floor 360): 816 and 416 px/s. Both Drive speeds are above both floors, so the rule never raises a speed.
 - A ship without the hook (`has_method` false) is unchanged.
 
 **Assault dash** (`assault/scenes/player/states/dash_state.gd`):
 - `start_state_transition()`: below the floor the dash, and the warp, are refused the same way the cooldown refuses (owner question 5 covers the warp).
-- `process_physics`: `dash_speed × hazard factor × efficiency`. The roll covers less ground: 350 × 0.4 = 140 px/s.
+- `process_physics`: the roll speed is `move_speed + (dash_speed − move_speed) × efficiency`, then × the hazard factor as today. At 0.4: 180 + 170 × 0.4 = 248 px/s
+  (undisrupted 350), never below the dash's own lateral `move_speed` 180. The lateral steering inside the dash is unchanged.
 - `_execute_warp(dir)`: distance `_WARP_DISTANCE × efficiency` (120 × 0.4 = 48 px).
 
 **Readability:**
@@ -420,11 +461,12 @@ the comments there state:
   - The efficiency drops to 0 mid-boost → the boost ends that tick with no drain on that tick.
 - **Open Space Boost Drive (B4):**
   - With the Drive equipped and strength 0.9, a Shift press spends **no tank** (`charges` and the tank count unchanged), and `engine_boost_active` stays false.
-  - At strength 0.6 the press spends one tank and the burst starts at `_BOOST_SPEED × 0.4` ± 1.
+  - At strength 0.6 the press spends one tank, the burst starts at 852 ± 1 px/s and its eased tail ends at 452 ± 1 px/s, never below `max_speed` 420 (the excess rule).
 - **Assault:**
-  - the dash speed is `dash_speed × 0.4`; at 0.9 the dash is refused;
+  - the dash speed is 248 ± 1 px/s at strength 0.6 (≥ `move_speed` 180); at 0.9 the dash is refused;
   - with the Warp module the blink moves 48 ± 0.5 px at 0.6, and 0 px (refused) at 0.9;
-  - the H-key Boost Drive is refused at 0.9.
+  - the H-key Boost Drive is refused at 0.9, and at 0.6 starts at 816 ± 1 px/s (floor 360);
+  - `cruise_speed()` returns 420 (Open Space) and 360 (Assault).
 - **Controls:** cruise thrust and the cruise ceiling are unchanged while disrupted, in both modes.
 
 ### 2.7 The pulse mine
@@ -524,7 +566,9 @@ never an invisible collider. A single standalone mine needs no field: a `placed 
 - `assault_drift_speed` 60.
 
 **Building the field:**
-- AUTHORED uses the `EnemyMine` children placed in the editor under `Mines`.
+- AUTHORED uses the `EnemyMine` children placed in the editor under `Mines`. Godot readies those children *before* the field, so the field's `_ready()` sets `placed = true`
+  and its `hostility` on each of them, and the mines' own placed setup is deferred to `_start_if_placed()` (§2.1 rule: queued by every mine's `_ready()`, runs after the
+  whole add). A non-`EnemyMine` child under `Mines` is a `push_error` and is ignored.
 - RING / GRID / SCATTER instance mine scenes from `EnemyMineScenes` into `Mines` in `_ready()`. That is load-time, not inside a physics flush. The variant per mine is
   drawn from the weights with the field's rng.
 - A runtime spawn uses `spawn_into(container, at)`, the Ph6 deferred entry.
@@ -545,11 +589,13 @@ with a large hull. The 0.5 Ram grazes it at 68–114 px. A ship with avoidance 0
 **Tests (`tests/integration/test_minefield.gd`, new; dual-mode where marked):**
 - RING with `count` 9 lays 9 mines on a 200 px circle (± 0.5 px). GRID keeps its spacing.
 - SCATTER is seed-stable: the same seed gives the same points, a different seed different ones.
-- AUTHORED keeps the editor positions.
+- AUTHORED keeps the editor positions, and children authored with `placed = false` and PLAYER hostility end up `placed` and ALL after one frame (the ready-order
+  boundary).
 - Every placed mine is ALL and `placed`, never fizzles (60 s hand-ticked) and is registered.
 - Placed DRIFTING mines move, and stay within 120 + 1 px of their placed point over 60 s.
 - The field frees after its last mine.
-- **Both modes, 8× real physics, fixture hurtbox radius 14** (the test adds each `fixture_enemy` to group `enemies`, which the fixture does not join itself):
+- **Both modes, 8× real physics.** `fixture_enemy.tscn`'s `HurtBox` ships with no shape and the fixture joins no group, so the test adds a `CollisionShape2D` with a 14 px
+  `CircleShape2D` to each fixture's `HurtBox` and calls `add_to_group("enemies")`, both at runtime before `add_child` (the shared fixture scene is not edited):
   - a player stub driven through the field is set off by a mine;
   - a `fixture_enemy` with `hazard_avoidance` 0 driven through it is set off and damaged;
   - a `fixture_enemy` with `hazard_avoidance` 0.8 and `hazard_margin` 24, seeking a target straight across the field at 240 px/s from lateral 0 / 100 / 200, sets off no
@@ -643,6 +689,8 @@ to lay, that is one line every ≈ 10–14 s. It never fills the screen.
 - Axis `u = f.orthogonal()`, signed so that S, the start end, is the end nearer the layer. `n̂` = the unit normal of the axis pointing from C toward P (in Assault: toward the
   player's side of the line).
 - `L = pass_length` 600 (both modes). `S = C − u·L/2`, `E = C + u·L/2`.
+- **Run-in point** `R = S − u·run_in` (`run_in` 150): the layer reaches the line's axis at R and flies R → S along u before laying, so it is already sideways at S
+  whatever direction it arrived from.
 - **Rest points**, `n = mines_per_pass` 6, half-wavelength `h = mine_step` 100. Mine k (k = 0..5) sits at axis coordinate `x_k = (k − 2.5)·h` (−250 … +250), offset
   `y_k` along `n̂`:
   - **ZIGZAG** (mines on the vertices): `y_k = +A` for even k and `−A` for odd k, with `A = zigzag_amplitude` 35. Each chord is √(100² + 70²) = 122.1 and runs at
@@ -653,12 +701,14 @@ to lay, that is one line every ≈ 10–14 s. It never fills the screen.
 - **Path:** the polyline S → mine 0 → … → mine 5 → E (a 50 px lead-in and lead-out along the axis). Its length is ≈ 732 for ZIGZAG and ≈ 657 for ARC.
 - **Variants:** one per mine from the flat weights by `rng`, at most one HOMING per pass.
 - **Open Space no-stacking:** a rest point within `trigger_radius + 40` (120) of a live mine is skipped.
-- **Spread (Open Space):** a new C must be ≥ `min_pass_separation` 380 from the centre of every earlier pass that still has a live mine. If not, C is rotated about P in ±40°
-  steps, up to 4 tries. If none is legal the plan proceeds, logged behind `is_stdout_verbose`.
+- **Spread (Open Space):** a new C must be ≥ `min_pass_separation` 380 from the centre of every earlier pass that still has a live mine. The candidates, in order, are C
+  itself, then C rotated about P by +θ, −θ, +2θ, −2θ, with `θ = 2·asin(min(1, (min_pass_separation + 10) / (2·|C − P|)))`: the rotation that moves C by 390 px
+  (75.1° for a standing player, `|C − P|` = 320). S, E, R and the rest points are rebuilt from the chosen C. If no candidate is legal the first one is used,
+  `spread_fallbacks` is incremented, and a verbose-gated line is logged.
 
 **Lead (the Ph4 wall rule, undamped, on the layer's own timeline):**
 - `t_lead = t_approach_left + min(c, lead_horizon)`. Only `c` is capped, as in Ph4 (`DECISIONS.md`, Phase 4 t10).
-  - `t_approach_left = |S − pos| / max_speed`;
+  - `t_approach_left = |R − pos| / max_speed + run_in / lay_speed` (to the run-in point, then the run-in; 150 / 170 = 0.88 s);
   - `c = (L/2) / lay_speed + mine_arm_delay` = 300 / 170 + 0.5 = 2.26 s;
   - `lead_horizon` 3.0.
 - Centre C:
@@ -675,7 +725,18 @@ to lay, that is one line every ≈ 10–14 s. It never fills the screen.
 - The `AssaultCorridorConstraint` still filters the flight.
 
 **Phases:**
-- **APPROACH:** seek S at `max_speed`. The plan is frozen once within `commit_distance` 200 of S, then LAY. In Assault, budget expiry in APPROACH → DISENGAGE.
+- **APPROACH** has two steps, both inside the APPROACH phase (no new enum value):
+  1. **Seek R** at `max_speed`, re-planning every tick. The plan is frozen once the layer is within `commit_distance` 200 of R.
+  2. **Run-in:** pure pursuit along the segment R → S at `lay_speed`, aiming `path_lookahead` 60 px ahead (the LAY rule). When the layer's centre passes S (its
+     projection on u reaches S), the phase becomes LAY.
+
+  Measured by the plan reviewer (pure pursuit, 420 px/s² acceleration, 150 px run-in): from S on, the heading stays ≤ 33° from u and the centre ≤ 23 px from the path,
+  even for an arrival at R perpendicular to u at 240 px/s. Without the run-in that arrival gave 89° and 73 px.
+  - In Assault, budget expiry anywhere in APPROACH (run-in included) → DISENGAGE. R lies inside the view: S is clamped ≥ 174 px inside it, so R is ≥ 24 px inside.
+  - **Approach give-up (Open Space only):** a layer behind a fast player cannot get ahead of it (240 px/s against a 220 px/s player closes at 20 px/s). If APPROACH has
+    lasted `approach_max_seconds` 6.0 s without freezing, the brain re-plans once in the **fence form** (f = the unit vector from P toward the layer, C =
+    P + f·`fence_distance`, the standing-player rule), runs the spread check, and **freezes that plan at once**. `fence_fallbacks` is incremented. The line then lies
+    between the player's position at that moment and the layer: area denial behind a fleeing player, which in Open Space persists for when the player returns.
 - **LAY** (committed; `accepts_tow()` false):
   - Pure pursuit along the polyline, aiming `path_lookahead` 60 px ahead, at `lay_speed`.
   - **Drop timing (the Bomber's "plus" rule, measured at the Dispenser):** mine k is dropped through `drop_mine` once the Dispenser's path coordinate has passed mine k's
@@ -691,7 +752,9 @@ to lay, that is one line every ≈ 10–14 s. It never fills the screen.
 - **BREAK_OFF:** `mover.break_contact(P, v̄, side, break_speed 260)` for `break_seconds` 1.2, with `side` pointing away from the fresh line. Assault: DISENGAGE instead (one
   pass per life).
 - **REPOSITION** (Open Space): orbit P at `standoff_range` 600, direction drawn per pass, for a period drawn from `pass_period_min..max` 5.0–7.0 s. Then APPROACH.
-- **DISENGAGE:** continue along u (sideways, off the far side) at `exit_speed`.
+- **DISENGAGE:** continue along u (sideways, off the far side) at `exit_speed`. **With no planned pass** (a layer put into DISENGAGE directly, as `SpecialistExitProbe` and the
+  shell's own rows do) it exits along its current heading: the velocity direction, or the facing when the velocity is zero. That is the exit
+  `SpecialistExitProbe` measures.
 - **Tail drop (any engaged phase except LAY):** if the player is within `tail_range` 280 and inside the rear `tail_cone_deg` 60° cone, drop one PROXIMITY mine at the Dispenser
   with no eject, at most every `tail_drop_cooldown` 2.5 s. Chasing a Mine Layer is dangerous.
 - **Live cap:** the brain keeps a FIFO of live mines (instance ids; dead ones are pruned). Before a drop at `max_live_mines` (Assault `assault_max_live_mines`) it `retire()`s
@@ -701,11 +764,12 @@ to lay, that is one line every ≈ 10–14 s. It never fills the screen.
 - `velocity_smoothing`, `frame_speed`;
 - `pass_length`, `mine_step`, `mines_per_pass`, `zigzag_amplitude`, `arc_depth`, `arc_chance`;
 - `ahead_distance`, `fence_distance`, `assault_ahead`, `lead_horizon`;
-- `commit_distance`, `path_lookahead`, `min_pass_separation`;
+- `run_in`, `commit_distance`, `path_lookahead`, `min_pass_separation`, `approach_max_seconds`;
 - `break_speed`, `break_seconds`, `standoff_range`, `pass_period_min`, `pass_period_max`;
 - `tail_range`, `tail_cone_deg`, `tail_drop_cooldown`, `view_margin`.
 
-**Test seams:** `pass_centre`, `pass_start`, `pass_end`, `pass_axis`, `pass_normal`, `pass_shape`, `planned_rest_points`, `drops_this_pass`, `passes_started`,
+**Test seams:** `pass_centre`, `pass_start`, `pass_end`, `pass_run_in_point`, `spread_fallbacks`, `fence_fallbacks`, `freeze_plan()` (freezes the current plan,
+for the arrival rows), `pass_axis`, `pass_normal`, `pass_shape`, `planned_rest_points`, `drops_this_pass`, `passes_started`,
 `live_mine_count()`, `smoothed_velocity()`, `plan_pass()`.
 
 **Tests (`test_mine_layer.gd` + cases in `test_enemy_dual_mode.gd`; hand-ticked with `_tick()`; the shared scenario computed once in `before_all`):**
@@ -718,20 +782,33 @@ to lay, that is one line every ≈ 10–14 s. It never fills the screen.
   - For a stub moving at 220 px/s, C is more than `trigger_radius` (80) ahead of the live player's position (projection on v̄) at the moment the middle mine arms.
   - For a standing stub, C is between it and the layer.
   - For a stub reversing at LAY start, the line is still where it was planned (frozen).
-- **Sideways:** during LAY, the layer's velocity is within 40° of ±u. The path's segments are ≤ 35.1°, and pure pursuit cuts corners, never overshoots past the segment angle.
-- **Stays on its path:** during LAY, the layer's centre stays within 40 px of the polyline, also in a scenario with an earlier pass's mines 380 px away.
-- **Gradual (Open Space, 60 s scenario):**
+- **Run-in:** in APPROACH after the freeze the layer heads for R, then follows R → S. LAY starts when its centre passes S, never before. No mine is dropped before LAY.
+- **Sideways (from S on):** during LAY, the layer's velocity is within 40° of ±u. Asserted for an aligned arrival **and for an arrival at R perpendicular to u**: a plan frozen
+  with `freeze_plan()` while the layer sits 300 px from R along n̂ moving toward R at 240 px/s (the case that gave 89° without the run-in; measured ≤ 33° with it).
+- **Stays on its path (from S on):** during LAY, the layer's centre stays within 40 px of the polyline, for the same two arrivals, and also in a scenario with an earlier
+  pass's mines 380 px away.
+- **Gradual (Open Space, two 60 s scenarios, each computed once in `before_all`):** a **standing** stub, and a stub **moving at 220 px/s** on a 700 px-radius circle (so the
+  layer stays in play). In both:
   - the gap from the end of each LAY to the next LAY start is ≥ 6.2 s;
   - each pass drops ≤ 6 mines;
-  - no two pass centres are closer than 380 px while both have live mines;
+  - **for every plan that did not take the spread fallback**, its centre is ≥ 380 px from every earlier pass centre that had a live mine when it was planned (the
+    `spread_fallbacks` count is logged per scenario);
   - the live count never exceeds 18, and the 19th drop retires the oldest (boundary).
+- **Spread, pure `plan_pass()` rows (standing player, layer at 600 px on bearing 0°):**
+  - earlier live centres at bearings 0° and ±75.1° on the 320 px circle → the new C is at +150.2° (the +2θ candidate), ≥ 380 from all three, `spread_fallbacks` unchanged;
+  - earlier live centres at 0°, ±75.1° and ±150.2° → no candidate is legal: the plan uses C itself and `spread_fallbacks` rises by 1 (boundary).
+- **Approach give-up (Open Space):** a layer started engaged 600 px directly behind a stub flying straight away at 220 px/s does not freeze a plan within 6.0 s, then
+  freezes a fence plan (`fence_fallbacks` = 1), reaches LAY, and its C lies on the segment from the stub's position at that moment toward the layer, 320 ± 2 px from the
+  stub. Control: the same stub with the layer starting 600 px ahead of it → `fence_fallbacks` = 0.
 - **Assault:**
   - exactly one pass per life, then DISENGAGE sideways;
   - with the budget expiring mid-LAY, the pass completes (all 6 mines dropped) within the stall guard.
 - **Tail drop:** a stub 200 px behind, in the cone, gets a mine within one tick and no second one before 2.5 s. A stub 200 px *in front* gets none (the control).
 - `accepts_tow()` is false in LAY and true in REPOSITION.
-- **Hazard-aware:** from the 60 s scenario, while the layer is not in LAY, its centre's closest approach to every live mine of its earlier passes is > 100 px. The
-  measured value for avoidance 0.8 against a laid line is ≥ 149 (§2.3). The same scenario with its mines' `registers_hazard = false` is logged as the control, not asserted.
+- **Hazard-aware:** from the standing 60 s scenario, while the layer is in APPROACH (run-in included), REPOSITION or DISENGAGE, its centre's closest approach to every live
+  mine of every pass other than the one currently planned is > 100 px. LAY and BREAK_OFF are excluded (when LAY ends the layer is ≈ 61 px from mine 5 of the line it
+  has just laid, and BREAK_OFF is leaving it), and so are all tail-drop mines. The measured value for avoidance 0.8 against a laid line is ≥ 149 (§2.3). The same scenario with its mines'
+  `registers_hazard = false` is logged as the control, not asserted.
 
 ### 2.13 Mine Layer art, dispenser state and wake trail
 
@@ -771,8 +848,14 @@ Generate several candidates and pick the best (CLAUDE.md's "use PixelLab freely"
 
 **Idle config group:**
 - `perceive_radius` 650, `lose_radius` 1500, `notice_time` 0.35, `idle_radius` 160, `idle_speed` 0.5.
-- **Inequality asserted from the config:** `lose_radius > standoff_range + break_speed × break_seconds + pass_length / 2`, i.e. 600 + 312 + 300 = 1212 < 1500. The layer's
-  own cycle never sends it home mid-fight.
+- **Two inequalities, asserted from the config** (`MineLayerConfig` values, never typed numbers). Together they mean the layer's own cycle never sends it home mid-fight
+  **against a player flying at ≤ 220 px/s**:
+  1. the cycle: `lose_radius > standoff_range + break_speed × break_seconds + pass_length / 2 + run_in`, i.e. 600 + 312 + 300 + 150 = 1362 < 1500;
+  2. the lead, at `v = 220`: `√((v·t_lead + ahead_distance)² + (pass_length / 2 + run_in)²) + commit_distance < lose_radius`, with
+     `t_lead = commit_distance / max_speed + run_in / lay_speed + min((pass_length / 2) / lay_speed + mine_arm_delay, lead_horizon)` = 0.83 + 0.88 + 2.26 = 3.98 s,
+     i.e. √(1135.7² + 450²) + 200 = 1421.6 < 1500.
+- **A faster player is let go on purpose.** A player cruising at full speed (420 px/s) puts R about 1900 px ahead, beyond `lose_radius`, and the layer (240 px/s) could
+  never get ahead of it anyway. Losing that player and returning home is the intended outcome.
 
 **Open Space persistence ("an area the player comes back to stays dangerous"):**
 - Mines laid in Open Space have `mine_life` 0 and a backstop of 240 s.
@@ -782,11 +865,12 @@ Generate several candidates and pick the best (CLAUDE.md's "use PixelLab freely"
 - The inequality row.
 - Frame-0 IDLE.
 - NOTICING after `notice_time` inside `perceive_radius`.
-- RETURNING beyond `lose_radius`, but not during LAY.
+- RETURNING beyond `lose_radius` (the player stub **teleported** 1600 px from the layer, since `AnchorIdle` measures actor-to-target and a layer in REPOSITION follows a
+  player who flies away), but not during LAY.
 - **The persistence row** (hand-ticked, one shared scenario):
   - the layer lays a pass;
-  - the player stub flies 1600 px away and the layer returns home;
-  - 60 s of game time later the player stub flies back through the line;
+  - the player stub is **teleported** 2000 px from the layer (beyond `lose_radius` 1500 of the layer, not of the anchor), and the layer goes RETURNING and reaches home;
+  - 60 s of game time later the player stub is placed 300 px short of the line and driven through it at 220 px/s;
   - every mine is still at its rest point and still registered, and the first one it reaches sets it off.
 - The same row in Assault shows the mines gone after `assault_mine_life` (the mode difference, asserted).
 
@@ -808,11 +892,14 @@ Generate several candidates and pick the best (CLAUDE.md's "use PixelLab freely"
 
 **Clearance (`tests/integration/test_sector_hub_patrol.gd`; the Ph6 rule, `docs/plans/cmug23om70001m52wqfwclf3l/3-plan.md` §2.16):**
 - **`_patrol_groups()` gains `"Mine Layer": [mine_layer_anchor, MINE_LAYER_CONFIG.idle_radius, MINE_LAYER_CONFIG.perceive_radius]`.**
-- **`_element_radius()` gains `if node is Minefield: return radius + trigger_radius`** (the field radius plus its mines' trigger radius, 280), so the existing
-  `_space_clearance_violations()` sweep applies the "> 100 px past every group's idle ring + perceive_radius" rule to the field. It also checks the "> 300 px from every
-  interactable" rule.
-- Computed for this layout (round-2 planning, `node` over the scene's positions and the shipped configs): the worst group-to-element clearance is 410 px (rule: > 100). The
-  Mine Layer anchor clears the satellite by 1891 − 28 − 810 = 1053 px and the minefield by 1796 − 280 − 810 = 706 px.
+- **`_element_radius()` gains a `Minefield` case:**
+  `radius + (drift_leash if w_drifting > 0.0 else 0.0) + EnemyMineScenes.export_of(EnemyMine.Variant.PROXIMITY, &"trigger_radius", 80.0)`.
+  `Minefield` has no `trigger_radius` of its own, so it is read from the proximity mine scene; a placed drifting mine can wander `drift_leash` from its ring point.
+  For the hub field that is 200 + 120 + 80 = **400 px**. The existing `_space_clearance_violations()` sweep then applies the "> 100 px past every group's idle ring +
+  perceive_radius" rule to the field. It also checks the "> 300 px from every interactable" rule.
+- Computed for this layout (revision 3, from the scene's positions and the shipped configs): the minefield clears the Mine Layer group by 1796 − 400 − 810 = **586 px**
+  and the Gatling group by **775 px** (the nearest two; rule > 100). The worst group-to-element clearance in the whole sweep stays 410 px, an existing element. The Mine
+  Layer anchor clears the satellite by 1891 − 28 − 810 = 1053 px.
 - **Mine Layer ring row:** the anchor clears every `MissionTrigger` / `PickupBase` and the player spawn by `idle_radius + perceive_radius`, with the margin printed.
 - **Anchor spacing:** the anchors stay more than 1000 px apart. The Mine Layer's nearest is the Missile Corvette's at (1343, −1343), 1114 px away.
 - The seed row, the container count and the frame-0 IDLE list gain the layer.
@@ -834,7 +921,9 @@ Both are AI spawns: no `.move()`, no `.free_after()`. Never in an `ENEMIES_CLEAR
   - an `EXPECTED_PH7` pin (2 rows) and a row-count sanity check;
   - the Mine Layer counts as a specialist in the frozen 2.5× count gate. Deep Space's peak becomes 8 (it lands on the 7 at 15.50 s) of 12.5; Planet Approach stays ≤ 7.5;
   - its life is `engage_seconds + lay deferral (the stall guard, ≤ 5.67 s) + 2 ticks + measured exit`, the exit from `SpecialistExitProbe.worst_disengage()` over
-    `corridor_starts()` at `[exit_speed, 10]`, measured once in `before_all`;
+    `corridor_starts()` at `[exit_speed, 10]`, measured once in `before_all`. The probe enters DISENGAGE with no planned pass, so the layer exits along its current
+    heading (the brain's no-pass rule: velocity direction, else facing); the measured exit is therefore the real one. The life also covers the run-in, which sits inside
+    the engagement budget (APPROACH);
   - spill-over row: the life plus `assault_mine_life` must end before the next `ENEMIES_CLEARED` section's last trigger. The mines count, as a corvette's rocket life does;
   - boundary: an extra Mine Layer at Planet Approach's measured peak fails the gate.
 - **`test_engagement_deadline.gd`:** a "no `ENEMIES_CLEARED` section contains a Mine Layer" row, plus a boundary row: a Mine Layer added to cloud_descent's last wave computes
@@ -869,13 +958,13 @@ It never lowers a tick count, duration, sample count or grid, never widens a bou
 A **behaviour-identical speed-up of production code is a last resort**, not a fourth rule. Use it only if rules 1–3 fall short, only with bit-identical outputs on every
 existing row, and record it in `tests/README.md` as a rules change.
 
-**Allotments (new GUT seconds; total 28.0 s):**
+**Allotments (new GUT seconds; total 28.5 s):**
 
 | Task | t2 | t3 | t4 | t5 | t6 | t7 | t8 | t9 | t10 | t11 | t12 | t13 | t14 | t15 | t16 |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Allotment (s) | 3.0 | 1.5 | 1.5 | 1.5 | 0.5 | 1.0 | 1.5 | 0.5 | 1.5 | 4.0 | 1.5 | 0.5 | 1.5 | 8.0 | 0 |
+| Allotment (s) | 3.0 | 1.5 | 1.5 | 1.5 | 0.5 | 1.0 | 1.5 | 0.5 | 1.5 | 4.5 | 1.5 | 0.5 | 1.5 | 8.0 | 0 |
 
-So the phase ends ≤ 216.4 − 12 + 28 = 232.4 s.
+t11 has 4.5 s (revision 3: a second 60 s scenario, the arrival rows and the give-up row, all hand-ticked). So the phase ends ≤ 216.4 − 12 + 28.5 = 232.9 s.
 
 **Costs:** a real-physics case at 8× ≈ 0.25–0.4 s, a hand-ticked dual-mode case ≈ 0.02–0.06 s, a slice replay at 8× ≈ 2–5 s.
 
@@ -904,6 +993,10 @@ not play-tested; tune in Ph16/Ph17 if needed).
 | `lay_speed` / `max_speed` / `exit_speed` | 170 / 240 / 300 | Starting value, between the Bomber's run speed and the Missile Corvette's |
 | `ahead_distance` / `fence_distance` / `assault_ahead` | 260 / 320 / 220 | Starting value; the lead row proves ahead > 80 |
 | `lead_horizon` | 3.0 s | Bomber `mine_horizon` |
+| `run_in` | 150 px | Measured by the round-2 plan review: the shortest run-in tried that keeps LAY ≤ 33° / ≤ 23 px from a perpendicular arrival |
+| Spread rotation θ | `2·asin((380 + 10) / (2·|C − P|))`, 75.1° at 320 px | Derived: the chord that moves C 390 px (10 px over `min_pass_separation`) |
+| `approach_max_seconds` | 6.0 s | Starting value: ≈ 2.7 × the ≈ 2.2 s a layer at the 600 px standoff needs to reach R for a standing player (√(280² + 450²) ≈ 530 px at 240 px/s) |
+| Disruption floors | `cruise_speed()` 420 / 360; dash 180 | Existing exports: Open Space `max_speed`, Assault `MoveState.move_speed`, `DashState.move_speed` |
 | `pass_period_min..max`, `break_seconds` | 5–7 s, 1.2 s | Starting value |
 | `max_live_mines` / Assault | 18 / 8 | Starting value (3 passes / 1 pass + tail drops) |
 | Assault mine life | 9.0 s | Bomber 8.0 + 1 s for the longer pass |
@@ -945,15 +1038,16 @@ Tasks that edit the same files are chained, because CLAUDE.md allows no worktree
 | t7 | EMP hook stub + EMP mine | t6 | 2.1, 2.2, 2.6, 2.8, 2.17 |
 | t8 | Minefield structure (placeholder beacon) | t7 | 2.1, 2.3, 2.4, 2.10, 2.17 |
 | t9 | Mine art + minefield beacon art | t8 | 2.1, 2.9, 2.10, 2.17 |
-| t10 | Mine Layer shell | t2 | 2.1, 2.2, 2.11, 2.17 |
-| t11 | Mine Layer passes | t10, t6 | 2.1, 2.3, 2.11, 2.12, 2.17 |
+| t10 | Mine Layer shell (needs the HOMING, CHAIN and PULSE scenes) | t6 | 2.1, 2.2, 2.11, 2.17 |
+| t11 | Mine Layer passes | t10 | 2.1, 2.3, 2.11, 2.12, 2.17 |
 | t12 | Mine Layer hub idle + Open Space persistence | t11 | 2.11, 2.12, 2.14, 2.17 |
 | t13 | Mine Layer art, hatch, wake | t12 | 2.11, 2.12, 2.13, 2.17 |
 | t14 | Hub placement (patrol + minefield) | t12, t8 | 2.10, 2.11, 2.14, 2.15, 2.17 |
 | t15 | Level 1 placement | t13 | 2.11, 2.12, 2.16, 2.17 |
-| t16 | Docs, dossier, as-built | t9, t13, t14, t15 | 1.1, 1.2, 2.18, 2.19, 5, 6, 7 |
+| t16 | Docs, dossier, as-built (medium) | t9, t13, t14, t15 | 1.1, 1.2, 1.3, 2.18, 2.19, 5, 6, 7 |
 
-What can run side by side: t5 with t2–t4, t10 with t3–t9, and t14 with t13. Everything else is serial.
+What can run side by side: t5 with t2–t4, t10 (after t6) with t7–t9, and t14 with t13. Everything else is serial. t10 waits for t6 because its pools and rows use the
+HOMING (t3), CHAIN (t4) and PULSE (t6) scenes; t6 already follows t3 and t4, so t11, which needs t10 only, keeps the same critical path.
 
 ## 4. Test plan
 
@@ -992,6 +1086,10 @@ Each design section carries its own test rows. This index is what the phase adds
 - an ALL mine not set off by non-ship 512 areas;
 - avoidance against the `registers_hazard = false` control;
 - the Assault budget expiring mid-LAY;
+- an arrival at the run-in point perpendicular to the line (LAY still sideways from S on);
+- the spread fallback (no legal candidate) and the Open Space approach give-up (layer behind a 220 px/s player), each with its control;
+- a hand-placed (AUTHORED) mine authored with the wrong `placed` / hostility (the ready-order row);
+- the disruption floors (Boost Drive tail 452 ≥ 420, dash 248 ≥ 180);
 - an extra Mine Layer at the peak;
 - a Mine Layer in an `ENEMIES_CLEARED` section.
 
@@ -1015,7 +1113,9 @@ Each design section carries its own test rows. This index is what the phase adds
 | An ALL mine set off by non-ship 512 areas | The `get_parent()` in `enemies` filter, plus a boundary row |
 | Chain loops or double detonation | `_chained` / `_done` latches; the `expired`-once row |
 | A disrupted press wasting a boost tank | The efficiency check runs before `try_spend_tank()`; "no tank spent" rows for the Shift boost and the Boost Drive |
-| Disrupted boost slower than cruise | The Shift boost scales only its excess over `max_speed` |
+| Disrupted boost slower than cruise | The Shift boost and the Boost Drive scale only their excess over `cruise_speed()`, the dash only its excess over `DashState.move_speed`; rows pin 852 / 452 / 248 px/s |
+| A layer behind a fast player never reaches its run-in point | Open Space approach give-up after 6 s (fence plan, frozen at once); a player above ≈ 220 px/s is let go by `lose_radius` on purpose |
+| A side-on arrival lays a crooked line | The 150 px run-in R → S before LAY; the perpendicular-arrival rows |
 | Mine lines unfair at speed | Warning rule ≥ 440 + own speed for every scene; homing outrunnable at 60 px/s; pulse never touches cruise; none of it play-tested (stated) |
 | The EMP stand-in reads as a bug ("my boost stopped") | Visible blue-white crackle plus a violet boost-bar tint; owner question 2; Ph9 replaces it |
 | Level-1 spill-over: mines persisting into cloud_descent | Placement at 16.0 / 47.0 s; the spill-over row counts `assault_mine_life` |
