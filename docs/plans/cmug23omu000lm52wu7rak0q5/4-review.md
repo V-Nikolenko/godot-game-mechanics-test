@@ -1,4 +1,4 @@
-VERDICT: CHANGES_REQUESTED
+VERDICT: APPROVED
 
 # Plan review: Enemy rework phase 7 (mines, minefields, Mine Layer), round 1
 
@@ -660,3 +660,154 @@ t15 exit probe measures the cap rather than the exit.
 - **Assault R:** it stays at least 24 px inside the view (174 − 150).
 - **DECISIONS.md:** its Phase 7 section matches Revision 3.
 - **Task chaining:** it matches §3, and no two parallel tasks share a code or test file.
+
+---
+
+# Plan review: Enemy rework phase 7 (mines, minefields, Mine Layer), round 4
+
+VERDICT: APPROVED
+
+Reviewed Revision 4 (commit `75f301b`) of `3-plan.md`, `tasks.json` and the Phase 7 section of `DECISIONS.md`, against the code on `agent/auto-dev`
+(`bomber_brain.gd`, `enemy_mover.gd`, `steering.gd`, `enemy_ordnance.gd`, `mine.tscn`, `specialist_exit_probe.gd`). The geometry was re-simulated in node
+(`/tmp/rv4/sim.js`, `circle*.js`, `turn.js`), modelling the mover from `enemy_mover.gd:215-247`: velocity `move_toward(desired, 420·dt)`, `max_speed` 240,
+60 Hz. The sim implements the §2.12 rules as written: the standing latch, the sign rule, the lead scan with the spin-up term, the fence fallback, the
+lost-feasibility guard, the freeze at 200 px, the 60 px handover, the crossing test, and LAY pursuit with the Dispenser "plus" drop rule. No repo file other
+than this one was modified.
+
+## Summary
+
+All six round-3 findings are resolved, and the simulation reproduces every number Revision 4 quotes. Nothing from rounds 1–2 has regressed. Nothing blocking
+remains. The new findings below are all minor, and all are in t11's planning logic, which an implementing agent can handle. The most important is **G1**:
+§2.12 never says how APPROACH steers. Every freeze bound assumes the mover's acceleration limit is the only limit. A Bomber-style turn-limited request fails
+three rows from a layer at rest facing away. One sentence in t11's description fixes it.
+
+## Round-3 findings
+
+| # | Status | Evidence |
+|---|---|---|
+| R1 standing player never freezes | **Resolved** | §2.12:729-734 latches f and the sign at APPROACH start. Sim, standing stub: frozen at 1.67 s from 600 px and 2.52 s from 900 px, at every bearing. R does not move (0 px), and `fence_fallbacks` is 0. Rows at :856-859 and in t11's criteria. |
+| R2 moving-player lead diverges | **Resolved** | §2.12:760-779 uses the Bomber's scan shape (`bomber_brain.gd:475-509`). The spin-up term matches `_flight_time()` for d ≥ d_acc (I re-derived it). Sim at 100 px/s: lead plan frozen at 1.52 s from 600 px ahead and 3.83 s abeam (row bounds 2.5 / 5.0). At 220 px/s, from 600 and 900 px at every bearing, the fence fallback is taken on the first tick. C on the track line. C ahead of the live stub when the middle mine arms: 199 px (mine 2) / 138 px (mine 3), against a bound of > 80. The scan is well-posed: d\|R(T) − pos\|/dT ≤ v < `max_speed`, so ft − T is strictly decreasing, the earliest T is unique, and the scan row's "T − 0.004 infeasible" check is valid. The owner summary (line 8) and §5 state that a cruising player gets a fence line. |
+| R3 handover / "passes S" | **Resolved** | §2.12:800-803. At the handover the projection lies in [−210, −90], so the crossing is always forward. Sim from S on: ≤ 32° from u and ≤ 21 px from the polyline, at every bearing and speed tried. |
+| R4 rotation moves a moving player's line | **Resolved** | Rotation is used only for the fence form (:753-758). The lead form shifts C along f (:772-774). Lead spread row checked: the shifted plan has T ≈ 3.95 s, still feasible, and its C is 550 px from the unshifted C (≥ 380) and on the track. Fence rows checked: +2θ is 390 / 618 / 591 px from the centres at +75.1° / 0° / −75.1°, and with ±2θ also taken, no candidate is legal. |
+| R5 placed mines inherit 8 s | **Resolved** | §2.1:211 sets `mine_life = placed_life` always. `launch()` (`enemy_ordnance.gd:141-150`) does not reset `mine_life`, so a value set before the launch holds. Boundary rows are in §2.1:262 and §2.10:620, and in the t2 / t8 / t14 criteria. |
+| R6 corridor holds an exiting layer | **Resolved** | §2.11:678-680 and §2.12:827. `BomberBrain._enter_disengage()` does call `release_constraint()` and set `max_speed = exit_speed` (`bomber_brain.gd:868-872`). `EnemyMover.constraint_released()` exists (`enemy_mover.gd:144`). Rows are in t10 and t15. |
+
+**Rounds 1–2:** B1–B5, M1–M8 and N1–N11 are still resolved. Revision 4 changed no measured footprint, warning, disruption-floor, clearance or roster
+number. The lose-radius inequality recomputes to 1415.7 < 1500, and the allotments still total 28.5 s (phase ≤ 232.9 s).
+
+## New findings (all minor)
+
+### G1 (minor, t11): APPROACH's steering is unspecified, and the freeze bounds only hold for an un-turn-limited seek
+
+**Checked:** §2.12:799 ("Seek R at `max_speed`"), §1.4:154-156 (the planner's sim "has no turn-rate limit"), `bomber_brain.gd:628-651`. The Bomber requests
+`Steering.turn_toward(_heading(), …, max_turn_rate)`, and `_heading()` is the facing at rest. Other brains use `mover.seek()`; 23 `turn_toward` uses across
+the brains make both shapes likely.
+
+**Problem:** suppose the layer copies the Bomber and turn-limits its request at `max_turn_rate` 2.4 rad/s, starting at rest with a facing that points away
+from R (rows say "at rest" and give no facing; the default nose-down facing is +y). Then it first accelerates the wrong way and loops round. Sim:
+
+| Row | Bound | Worst case, turn-limited |
+|---|---|---|
+| Standing freeze | ≤ 2.5 s | 3.73 s |
+| Lead from ahead | ≤ 2.5 s | 4.67 s |
+| Abeam | lead plan ≤ 5.0 s, `fence_fallbacks` 0 | hits the 6 s backstop |
+
+With `mover.seek()` (straight request, acceleration-limited only), every row passes with the quoted margins.
+
+**Fix:** add to §2.12 / t11: "The seek to R and the run-in request the straight direction (`mover.seek()` / `request_velocity(dir·speed)`, no
+`Steering.turn_toward`); the mover's `acceleration` is the only limit, as in the simulations." Alternatively, give the rows an initial facing toward R.
+
+### G2 (minor, t11): a frozen plan has no timeout in Open Space, so an unreachable R holds the layer in APPROACH indefinitely
+
+**Checked:** §2.12:808-810 (the backstop counts only "without freezing"), :800 (the handover needs the layer within 60 px of R), `steering.gd:228-330`
+(inside a footprint every heading within 112.5° of the centre is danger 1), and §2.3 (avoidance 0.8 keeps ≥ 149 px from a mine). The spread checks only
+centre to centre, and no-stacking checks only rest points.
+
+**Problem:** nothing keeps R, which sits 450 px from its own C, away from an older line's mines. If R lies within about 90 px of a live mine, the layer's
+own avoidance keeps it out of the 60 px handover disc. It then seeks a frozen R until the player leaves `lose_radius`: no line and no backstop. This is
+rare: for a standing player R sits at 552 px from P, outside every fence mine's footprint (≤ 548). For a moving player it is plausible over a long hub
+session with up to 18 live mines. No row exercises it.
+
+**Fix:** either or both of:
+- Bound the frozen seek too: if LAY has not started within `flight_time(R)` at the freeze + `run_in / lay_speed` + 2 s, abandon to REPOSITION (count it in
+  a seam). Do not take the fence fallback, so the standing `fence_fallbacks` 0 rows are unaffected.
+- Treat a candidate whose R or S lies within `trigger_radius + hazard_pad + hazard_margin` (164 px) of a live mine as illegal in the spread check.
+
+Add a pure row: a frozen plan with a live mine 50 px from R leaves APPROACH within the bound.
+
+### G3 (minor, t11): for a turning player R moves with the heading, and the spacing row checks a different C from the one spread chose
+
+**Checked:** §2.12:728 (a moving player's f is re-read every tick), :781-782 (the candidate is chosen on the first plan, and later ticks re-run only the
+scan), :808-810 ("no scenario in this plan should reach" the backstop), and the Gradual row at :879-886 (120 px/s on a 700 px circle; spacing asserted on
+the pass centres).
+
+**Problem:** sim with that scenario's player, the layer starting at the 600 px standoff (8 bearings × 6 circle phases × 3 initial velocities = 144
+starts):
+- 22 of 144 starts hit the 6 s backstop. R travels 1270–1580 px while the layer chases it. Another 4 starts freeze through the lost-feasibility guard on
+  tick 2.
+- Where a lead plan froze normally, C moved a median 165 px and up to 931 px between the candidate choice and the freeze. Legality is checked on the
+  first plan's C, but the row asserts ≥ 380 px on the pass centre. A drifted C can break the row without counting as a `spread_fallback`.
+
+The row is likely to pass in practice, because consecutive centres on that circle are more than 800 px apart. The design gap and the false claim stand
+anyway.
+
+**Fix:**
+- Re-check spread legality on the frozen C. If it is now within 380 px of an earlier live centre, increment `spread_fallbacks`. That makes the row's
+  exemption cover the drift.
+- Restate §2.12:808-810 as "a turning player can reach the backstop", and log `fence_fallbacks` for the moving scenario, as it already does.
+- Optional: re-read f only when v̄ has turned more than 30–45° from the latched f (re-choosing the candidate). The sim gives 22 → 12 → 6 backstops for no
+  re-latch / 30° / 45°.
+
+### G4 (minor, t11): the "19th drop retires the oldest" boundary may never occur inside a 60 s Gradual scenario
+
+**Checked:** §2.12:886 ("in both" scenarios).
+
+**Problem:** a standing cycle runs about 3.9 s to the first LAY, then 3.9–4.3 s of LAY, 1.2 s of BREAK_OFF, 5–7 s of REPOSITION and 3.9–6 s of APPROACH.
+The 19th drop is mine 1 of pass 4, at about 52 s typically and about 60.0 s with the slowest draws. In the moving scenario each backstop (G3) adds 6 s.
+With one or two backstops there are only 18 drops in 60 s, so the boundary is never reached. No-stacking skips make it worse.
+
+**Fix:** keep "the live count never exceeds 18" in both scenarios. Move the boundary to its own hand-ticked row: fill the FIFO with 18 live mines, then
+drop once and assert that the oldest is retired.
+
+### G5 (minor, t11): no hysteresis on `frame_speed`, and the re-latch rule is ambiguous
+
+**Checked:** §2.12:727-731 and :781-782.
+
+**Problem:**
+- Every standing↔moving switch re-latches the frame and re-chooses the candidate. A player whose smoothed speed hovers around 60 px/s (braking to a
+  hover, or drifting) therefore keeps resetting R, and the 6 s backstop is the only exit.
+- After a standing→moving re-latch, it is unclear whether an infeasible scan takes the fence fallback (as a "first plan") or the lost-feasibility guard
+  (because an earlier tick of the same APPROACH had a feasible plan).
+
+**Fix:**
+- Add hysteresis, for example moving at ≥ 60 px/s and standing below 45 px/s, or allow at most one re-latch per APPROACH.
+- Say which rule applies after a re-latch. Suggested: the guard applies only within one frame, and a re-latched frame's first infeasible scan takes the
+  fence fallback.
+
+### G6 (nit, t11 / t16): doc slips
+
+- §1.4:167 says 1414 < 1500, while §2.14:945 and DECISIONS say 1415.8.
+- `DECISIONS.md:2473` is a run-on sentence: "…as Ph4's fixed-point iteration did and the drop fires after…" is missing a full stop and its clause.
+- The §3 table gives t16 no §1.4, but `tasks.json` lists it. `tasks.json` is the right one.
+- §2.12:720 says 100–120 px/s gets a lead plan "from every bearing except behind". The sim gives the fence fallback for 120 px/s with the layer abeam at
+  900 px; only 600 px holds. No row depends on it.
+- The scan row has to rebuild R(T − 0.004) from the formula. A `run_in_point_at(T)` seam beside `flight_time(point)` would keep the test off a copied
+  formula.
+
+## Checked and fine
+
+- **`planSections`:** every listed number (1.1–1.4, 2.1–2.19, 5, 6, 7) is an existing heading. Each task can be built from *For every task* plus its
+  sections:
+  - t10 has the DISENGAGE release in §2.11.
+  - t11's whole planner is in §2.12.
+  - t12 / t15 list §2.12 for the brain they extend.
+- **Dependencies and parallelism:** unchanged from round 3. No two parallel tasks share a file.
+- **t11:** still one large task (`effort` xhigh). It is bigger than in round 3, with two planners, the scan, two guards, about 25 rows and two 60 s
+  scenarios, but it is coherent and still within one session. If it overruns, the natural split is geometry, LAY and Assault on one side and Open Space
+  planning on the other.
+- **Assault R / clamp, spill-over and the level-1 counts:** unchanged and still hold. The deep-space layer at 16 s has about a 6 s heading exit, so it is done
+  with its mines by about 46 s.
+- **Give-up row:** v̄ is seeded from the first sample, the Bomber's shape (`bomber_brain.gd:277-286`). The 220 px/s stub is therefore "moving" on the first
+  tick, and the fence fallback fires on the first planning tick as the row expects.
+- **Lose-radius farthest-point argument (§2.14):** sound. R's offset from the player is v·3.147 + 650 along the heading and 450 to the side.
+- **Gate time:** the t11 allotment of 4.5 s is plausible. Every new row is hand-ticked, and the scan is at most 61 + 5 cheap evaluations a tick.
