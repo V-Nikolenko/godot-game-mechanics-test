@@ -2446,7 +2446,7 @@ All are recorded in detail in "Deviations during the build" above; in short:
 
 ## Phase 7 - Enemy rework, phase 7: mines, minefields and the Mine Layer (2026-10-23)
 
-Plan: `docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md` (Revision 3, answering plan review rounds 1 and 2; the owner's "changes requested" carried no comments). The research stage left no
+Plan: `docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md` (Revision 4, answering plan review rounds 1–3 and the owner's "Fix those issues in your plan"). The research stage left no
 `1-context.md` / `2-research.md`, so the plan's §1.1 *Scope check* (S1–S11) is this phase's re-validation against the code, and §2.18
 gives every number's origin (an earlier phase, a measurement, a derivation, or a *starting value* = judgement, not play-tested). These
 are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
@@ -2467,8 +2467,10 @@ are *planned* decisions; check this phase's *as built* section, once written, be
 - **Friendly fire, one more slice decided:** *placed* mines (`hostility = ALL`) are set off by, and blast, both sides through
   `Hazards.pulse_damage` (Ph6's environmental rule). Every mine an enemy lays (`hostility = PLAYER`) keeps Ph4's rules: player
   hurtboxes only, `ContactBlast`. The rest of the blast/beam friendly-fire question stays with Ph8.
-- **Mine Layer departures from the Ph4 wall rule** (Ph4 t10): the lead is `t_lead = t_approach_left + min(c, lead_horizon 3.0)` (only `c`
-  capped, as in Ph4) and the drop fires after the rest point is passed by the eject lead (the Bomber's "plus"), but the layer places the
+- **Mine Layer departures from the Ph4 wall rule** (Ph4 t10): the arrival time T comes from **the Bomber's earliest-feasible scan**
+  (`BomberBrain._solve_arrival`: 0.1 s steps up to a 6.0 s cap, then 5 bisections), with `t_lead(T) = T + run_in / lay_speed + min(c, lead_horizon 3.0)`
+  (only `c` capped, as in Ph4) and a feasibility test `|R − pos| / max_speed + (max_speed − v0)² / (2·acceleration·max_speed) ≤ T` (a spin-up term for the
+  layer's current speed). Revision 3's self-referencing `t_lead` diverged against a moving player, as Ph4's fixed-point iteration did and the drop fires after the rest point is passed by the eject lead (the Bomber's "plus"), but the layer places the
   pass centre `ahead_distance` 260 px ahead along the player's frame (a distance) instead of adding `wall_margin + (trigger + arc) / |v|` to
   `c` (a time), and it freezes the plan within `commit_distance` 200 of the line's **run-in point** R (150 px before the start S).
 - **The race-track mine (`assault/scenes/race/track/mine.gd`) is not reconciled** with the family (deferred to Ph7 by Ph4). Racers are
@@ -2493,7 +2495,8 @@ are *planned* decisions; check this phase's *as built* section, once written, be
   (80 + 60), `avoid_weight` 1.0 for every mine, `velocity` for moving mines, no pull / slow / LOS block. At this footprint a ship with
   `hazard_avoidance` ≥ 0.8 keeps ≥ 145 px from a mine centre; 0.6–0.7 (Bomber, Missile Corvette) skirts at ≈ 90–110 px; the 0.5 Ram grazes.
   A smaller pad or weight lets a 0.6 ship cut inside the 80 px trigger. Mines do not bend in fields (`hazard_pull_scale()` 0).
-- **Placed mines:** `placed = true` makes a mine self-owned (`expired -> queue_free`, backstop inert, `mine_life` 0 unless authored) and
+- **Placed mines:** `placed = true` makes a mine self-owned (`expired -> queue_free`, backstop inert, and **`mine_life = placed_life` always**, a new
+  export defaulting to 0 = never fizzles, so the 8.0 s `mine.tscn` authors for the Bomber never reaches a placed PROXIMITY mine) and
   launches it, so a lone mine dropped in any scene arms, registers and triggers. **The setup is a deferred `_start_if_placed()` queued by every
   mine's `_ready()`**, and the `ProximityArea` mask is set from `hostility` in `launch()`, because Godot readies children before their parent:
   a `Minefield` sets `placed`/`hostility` on editor-placed children in its own `_ready()`. Any later parent that configures mines relies on this.
@@ -2532,18 +2535,29 @@ are *planned* decisions; check this phase's *as built* section, once written, be
     `hazard_avoidance` 0.8, `hazard_margin` 24.
   - Rail fallback: a PROXIMITY mine every `rail_mine_interval` 1.6 s.
   - `accepts_tow()` false in LAY.
-  - Test seams later phases may reuse: `plan_pass()`, `freeze_plan()`, `spread_fallbacks`, `fence_fallbacks`, `pass_run_in_point`.
+  - **Entering DISENGAGE calls `mover.release_constraint()` and sets `mover.max_speed = exit_speed`** (the Bomber's `_enter_disengage()`), so the Assault
+    corridor never holds an exit in and `SpecialistExitProbe` measures the real exit.
+  - Test seams later phases may reuse: `plan_pass()`, `freeze_plan()`, `pass_form`, `plan_frozen`, `frame_f`, `arrival_time`, `flight_time()`,
+    `spread_fallbacks`, `fence_fallbacks`, `pass_run_in_point`.
 
 ### Conventions
 - **A pass is a line, not a spray:** one line of 6 mines on a 600 px pass laid *across* the player's path. APPROACH seeks the run-in point
-  `R = S − u·run_in` (150 px), then follows R → S along the axis at `lay_speed`; LAY starts at S, so the line is laid sideways whatever direction
-  the layer arrived from. ZIGZAG puts mines on the vertices
+  `R = S − u·run_in` (150 px), hands over to the run-in within `path_lookahead` 60 px of R, follows R → S along the axis at `lay_speed`, and starts LAY
+  when its centre's projection on the axis **crosses** S from the R side, so the line is laid sideways whatever direction the layer arrived from.
+  - **Two plan forms (Open Space).** *Lead* (a moving player, |v̄| ≥ 60, the layer can get ahead of): the line across the predicted path, from the
+    scan above. *Fence* (a standing player, or a moving player with no feasible arrival): `C = P + f·320`, between the player and the layer. Against a
+    player cruising faster than ≈ 120–150 px/s the scan finds no arrival, so a cruising player gets a fence line beside or behind them (stated to the owner).
+  - **A standing player's frame is latched:** `f` (P toward the layer) and the sign of the axis are fixed at APPROACH start (and on a moving → standing
+    switch) until the plan freezes. Re-reading them every tick made R turn with the layer and the plan never froze (plan review round 3).
+  - The plan freezes within `commit_distance` 200 of R, or at once for a fence fallback; a frozen plan is never re-planned. A lead plan that turns
+    infeasible before the freeze is frozen as it stands. ZIGZAG puts mines on the vertices
   (half-wavelength 100, amplitude ±35: chords 122.1 px at 35.0°); ARC bows toward the player (`arc_depth` 110: chords 100–122.3 px, ≤ 35.1°).
   - Open Space: gap from the end of one LAY to the next ≥ `break_seconds + pass_period_min` = 1.2 + 5.0 s (period 5–7 s), so one line every
-    ≈ 10–14 s. Spread: a new centre is ≥ 380 px from every live earlier one, trying C, then C rotated about the player by ±θ, ±2θ with
-    `θ = 2·asin(min(1, 390 / (2·|C − P|)))`; with none legal the plan proceeds (`spread_fallbacks`). (Revision 1's "6–9 s between passes" is superseded.)
-  - Open Space approach give-up: after `approach_max_seconds` 6.0 s without freezing (a layer cannot get ahead of a fast player), one fence-form
-    plan (C between the player and the layer) is frozen at once.
+    ≈ 10–14 s. Spread: a new centre is ≥ 380 px from every live earlier one. Fence form: C, then C rotated about the player by ±θ, ±2θ with
+    `θ = 2·asin(min(1, 390 / (2·|C − P|)))` (the latched frame rotates with it). Lead form: C shifted **along the player's heading** by 0, then 390 px,
+    inside the scan (a rotation would move the line off the predicted track). With none legal the plan proceeds (`spread_fallbacks`). (Revision 1's "6–9 s between passes" is superseded.)
+  - Open Space backstop: after `approach_max_seconds` 6.0 s without freezing, the fence fallback is taken (frozen at once, `fence_fallbacks` + 1). With
+    the latch and the scan it should never fire; rows assert `fence_fallbacks` 0 for a standing player and a 100 px/s player led from ahead.
   - DISENGAGE with no planned pass exits along the current heading (velocity, else facing); that is what `SpecialistExitProbe` measures.
   - Live cap: 18 in Open Space, 8 in Assault; the oldest is `retire()`d.
   - A tail drop (one PROXIMITY mine, ≤ every 2.5 s) punishes a player chasing inside the rear 60° cone within 280 px.
@@ -2556,8 +2570,8 @@ are *planned* decisions; check this phase's *as built* section, once written, be
   minefield sits at `TacticalSpace` (3300, 560). `test_sector_hub_patrol.gd`'s `_patrol_groups()` includes the layer and `_element_radius()`
   includes `Minefield` as `radius + (drift_leash if w_drifting > 0) + the PROXIMITY scene's trigger_radius` (400 px for the hub field), so the Ph6
   clearance sweep covers both. Any later placed field is covered by the same formula. Radii (perceive / lose): 650 / 1500, sized by two config
-  inequalities: the cycle `standoff_range + break_speed·break_seconds + pass_length/2 + run_in` (1362) and the lead against a player at ≤ 220 px/s
-  (1421.6). A faster player is deliberately let go.
+  inequalities: the cycle `standoff_range + break_speed·break_seconds + pass_length/2 + run_in` (1362) and the lead form's farthest point against a player
+  at ≤ 220 px/s, spread shift included (1415.8). A faster player is deliberately let go.
 - **Level 1:** deep_space 16.0 s wave (from the left) and planet_approach 47.0 s wave (from the right), inside existing waves.
 - **Gate time:** t1 must free ≥ 12 s first (a hard floor; else `ESCALATE`), using only `tests/README.md`'s rules (8× clock for the measured 1×
   files, shared scenarios, dropping unread bookkeeping); a production speed-up is a last resort. Per-task allotments total 28.5 s (phase ends ≤ 232.9 s). GUT ≤ 240 s.
