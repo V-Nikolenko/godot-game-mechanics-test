@@ -161,6 +161,7 @@ func _ready() -> void:
 		_boost_bar.top_level = true
 		add_child(_boost_bar)
 		_boost_bar.setup(_boost_meter)
+		boost_disruption_changed.connect(_boost_bar._on_boost_disruption_changed)
 
 	## Connect module state signals for live equip/unequip during gameplay.
 	ShipModuleState.module_equipped.connect(_on_module_equipped)
@@ -200,6 +201,7 @@ func _setup_effects() -> void:
 	engine_right.add_child(_thruster_right)
 
 func _physics_process(delta: float) -> void:
+	_step_disruption(delta)
 	_handle_rotation(delta)
 	_handle_thrust(delta)
 	move_and_slide()
@@ -404,10 +406,12 @@ func _step_boost(boost_pressed: bool, boost_held: bool, delta: float) -> void:
 	## below: can_activate() is checked BEFORE the spend, because try_activate() itself
 	## refuses outright on the module's 2.0 s cooldown while the retrigger floor here is only
 	## boost_hold_sec = 0.35 s — spending first would burn a whole tank on every press in
-	## that window for a `try_activate()` that was always going to return false.
+	## that window for a `try_activate()` that was always going to return false. The boost
+	## disruption floor (Phase 7 §2.6) is checked first for the same reason: a refused press
+	## spends no tank.
 	var drive: ShipModuleBase = _module_pool.get(&"engine_boost", null) as ShipModuleBase
 	if drive != null:
-		if boost_pressed and drive.can_activate() \
+		if boost_pressed and boost_efficiency() >= MIN_BOOST_EFFICIENCY and drive.can_activate() \
 				and (_boost_meter == null or _boost_meter.try_spend_tank()):
 			drive.try_activate(self)
 			## Return immediately (review R2-N4): the module's 1500 px/s frame-one burst
@@ -417,13 +421,15 @@ func _step_boost(boost_pressed: bool, boost_held: bool, delta: float) -> void:
 	## ORDER IS PART OF THE CONTRACT: `not _boosting` and the hold-window floor are both
 	## checked BEFORE anything else (`and` short-circuits left to right), so mashing Shift
 	## while a boost is already running never restarts the minimum-burn timer, and a meter
-	## below min_start_charge refuses outright — no velocity write, no drain.
+	## below min_start_charge refuses outright — no velocity write, no drain. A disrupted boost
+	## below MIN_BOOST_EFFICIENCY is refused the same way, before the meter is consulted.
 	elif boost_pressed and not _boosting and _boost_hold_left <= 0.0 \
+			and boost_efficiency() >= MIN_BOOST_EFFICIENCY \
 			and (_boost_meter == null or _boost_meter.charges >= _boost_meter.min_start_charge):
 		_boosting = true
 		_boost_hold_left = boost_hold_sec
-		velocity = Vector2.UP.rotated(rotation) * boost_exit_speed * hazard_speed_factor()
-		_speed_ceiling = boost_exit_speed
+		velocity = Vector2.UP.rotated(rotation) * _boost_speed() * hazard_speed_factor()
+		_speed_ceiling = _boost_speed()
 		_play_boost_flame()
 		## FLY-2: the start-frame punch. Falls back to a scale of 1.0 with no rig, so a bare
 		## instantiated ship (no OpenSpaceCameraRig child) behaves as it does today.
@@ -443,10 +449,14 @@ func _step_boost(boost_pressed: bool, boost_held: bool, delta: float) -> void:
 		## the hold buy anything at all — _speed_ceiling is a clamp, never a force, so a
 		## ceiling-only sustain would leave the thrust/damping block above free to slow the
 		## ship down while the bar drains underneath it.
-		var meter_ok: bool = _boost_meter == null or _boost_meter.drain(_boost_meter.drain_rate * delta)
+		## A disruption that drops the efficiency below the floor mid-boost stops it on this tick
+		## exactly as an empty meter does: no drain, no velocity write.
+		var disrupted_out: bool = boost_efficiency() < MIN_BOOST_EFFICIENCY
+		var meter_ok: bool = not disrupted_out \
+				and (_boost_meter == null or _boost_meter.drain(_boost_meter.drain_rate * delta))
 		if meter_ok:
-			_speed_ceiling = boost_exit_speed
-			velocity = Vector2.UP.rotated(rotation) * boost_exit_speed * hazard_speed_factor()
+			_speed_ceiling = _boost_speed()
+			velocity = Vector2.UP.rotated(rotation) * _boost_speed() * hazard_speed_factor()
 		if not meter_ok or (not boost_held and _boost_hold_left <= 0.0):
 			_boosting = false
 			_release_boost_flame()
@@ -464,6 +474,14 @@ func _step_boost(boost_pressed: bool, boost_held: bool, delta: float) -> void:
 	var ceiling: float = _speed_ceiling * hazard_speed_factor()
 	if velocity.length() > ceiling:
 		velocity = velocity.normalized() * ceiling
+
+## Normal flight: the speed a disrupted boost never drops below (PlayerBase.disrupted_speed()).
+func cruise_speed() -> float:
+	return max_speed
+
+## The Shift boost's speed under the excess rule: boost_exit_speed undisrupted, 532 px/s at efficiency 0.4.
+func _boost_speed() -> float:
+	return disrupted_speed(boost_exit_speed, cruise_speed())
 
 ## _step_boost()'s one tree touch, following engine_boost_module.gd:15,63-67 — the cyan flame is
 ## the epic's chosen tell for "that was a boost". _handle_thrust()'s branches hold both thrusters

@@ -87,7 +87,10 @@ overheat, the score-multiplier fields, and `EventBus` emission. It adds:
 to the player via exported `actor` / `movement_controller` references.
 - `idle_state.gd`, `move_state.gd` — resting / steered flight.
 - `dash_state.gd` — double-tap barrel-roll (i-frames on side rolls); when the Warp module
-  is active it teleports + deals contact damage instead.
+  is active it teleports + deals contact damage instead. A boost disruption
+  (`PlayerBase.apply_boost_disruption()`, see [global.md](./global.md)) slows the roll to
+  `move_speed + (dash_speed − move_speed) × efficiency` and shortens the blink to
+  `120 px × efficiency`; below `MIN_BOOST_EFFICIENCY` both are refused like the cooldown.
 - `weapon_state.gd` — primary weapon. Loads `WeaponModeResource`s from `weapons/modes/`,
   gates on `UpgradeState` unlocks, dispatches to a `WeaponBehavior`
   (STRAIGHT/LONG/SPREAD/BEAM/SNIPER), accrues heat per shot, and emits

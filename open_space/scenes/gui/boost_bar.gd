@@ -35,10 +35,15 @@ const _BACKING_COLOR          := Color(0.15, 0.15, 0.15, 0.85)
 const _TICK_COLOR             := Color(1.0, 1.0, 1.0, 0.25)
 const _FILL_COLOR_CONTINUOUS  := Color(0.35, 0.9, 1.0)     ## tanks == 1
 const _FILL_COLOR_TANKS       := Color(1.0, 0.65, 0.25)    ## tanks > 1
+## Either tier while a boost disruption weakens the boost (Phase 7 §2.6); the bar also flickers.
+const _FILL_COLOR_DISRUPTED   := Color(0.72, 0.4, 1.0)
 
 var _charges: float = 0.0
 var _max_charges: int = 0
 var _tanks: int = 1
+## The ship's boost efficiency, from PlayerBase.boost_disruption_changed; 1.0 = undisrupted.
+var _efficiency: float = 1.0
+var _flicker_clock: float = 0.0
 
 ## Children `_ready()` before parents, so BoostMeter's initial state already exists by the time
 ## OpenSpacePlayerShip._ready() creates this bar and calls setup() — connecting to
@@ -62,12 +67,29 @@ func _on_tanks_changed(tanks: int) -> void:
 	_tanks = tanks
 	queue_redraw()
 
+## Connected by OpenSpacePlayerShip._ready() to its boost_disruption_changed.
+func _on_boost_disruption_changed(efficiency: float) -> void:
+	_efficiency = efficiency
+	_flicker_clock = 0.0
+	if _efficiency >= 1.0:
+		modulate = Color.WHITE
+	queue_redraw()
+
+## The flicker, only while disrupted: an accumulated clock, no Timer.
+func _process(delta: float) -> void:
+	if _efficiency >= 1.0:
+		return
+	_flicker_clock += delta
+	modulate.a = 0.55 + 0.45 * absf(cos(_flicker_clock * 18.0))
+
 ## Total bar width in px — proportional to capacity, never fixed.
 func _bar_width() -> float:
 	return _UNIT_WIDTH * float(_max_charges)
 
-## The fill colour for the current tier: continuous (one long bar) vs. discrete tanks.
+## The fill colour for the current tier: continuous (one long bar) vs. discrete tanks, or violet while disrupted.
 func _fill_color() -> Color:
+	if _efficiency < 1.0:
+		return _FILL_COLOR_DISRUPTED
 	return _FILL_COLOR_CONTINUOUS if _tanks <= 1 else _FILL_COLOR_TANKS
 
 ## The backing rect for each of the `_tanks` partitions, left to right, spanning `_bar_width()`

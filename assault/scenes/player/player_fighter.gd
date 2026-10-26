@@ -70,6 +70,9 @@ func _setup_effects() -> void:
 	engine_right.add_child(_thruster_right)
 
 func _physics_process(_delta: float) -> void:
+	## The boost disruption's clock (Phase 7 §2.6) runs first, ahead of every early return below, so a
+	## dialog, a knockback or an engine boost never freezes it.
+	_step_disruption(_delta)
 	if DialogPlayer.is_active:
 		velocity = Vector2.ZERO
 		_drift.reset()
@@ -119,6 +122,12 @@ func _physics_process(_delta: float) -> void:
 	if _thruster_state_override < 0:
 		_thruster.set_state(tstate)
 		_thruster_right.set_state(tstate)
+
+## Normal flight: MoveState's move_speed (360), read per call, never cached. A disrupted boost speed
+## never drops below it (PlayerBase.disrupted_speed()).
+func cruise_speed() -> float:
+	var move_state := get_node_or_null("MovementStateMachine/MoveState")
+	return float(move_state.get("move_speed")) if move_state != null else 0.0
 
 ## Duck-typed entry point for AITargetingModule. Assault has no turn controller to
 ## suppress, so this is character-for-character what the module used to write directly

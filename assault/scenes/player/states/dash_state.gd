@@ -45,6 +45,12 @@ func start_state_transition(key_name: String) -> void:
 		return
 	if not STATE_KEY_BINDINGS.has(key_name):
 		return
+	## A boost disruption below PlayerBase.MIN_BOOST_EFFICIENCY refuses the roll and the warp, the
+	## same way the cooldown refuses (Phase 7 plan §2.6).
+	if _boost_efficiency() < PlayerBase.MIN_BOOST_EFFICIENCY:
+		_trace("Dash refused: boost disrupted (efficiency " + str(_boost_efficiency()) + ").")
+		state_transition.emit(transition_state)
+		return
 	## Warp module: teleport instead of barrel-roll.
 	if actor.get("warp_module_active"):
 		_execute_warp(get_dash_direction(key_name))
@@ -58,7 +64,8 @@ func start_state_transition(key_name: String) -> void:
 	state_transition.emit(self)
 
 func _execute_warp(dir: Vector2) -> void:
-	var dest: Vector2 = actor.global_position + dir * _WARP_DISTANCE
+	## A disrupted blink is shorter: 120 px x efficiency (48 px at 0.4).
+	var dest: Vector2 = actor.global_position + dir * _WARP_DISTANCE * _boost_efficiency()
 	_spawn_warp_ghost()
 	actor.global_position = dest
 	## Contact damage at landing point.
@@ -83,6 +90,10 @@ func _spawn_warp_ghost() -> void:
 	var t := ghost.create_tween()
 	t.tween_property(ghost, "modulate:a", 0.0, 0.3)
 	t.tween_callback(ghost.queue_free)
+
+## The actor's boost efficiency (1.0 when it has no disruption hook).
+func _boost_efficiency() -> float:
+	return actor.boost_efficiency() if actor.has_method("boost_efficiency") else 1.0
 
 func get_dash_direction(key_name: String) -> Vector2:
 	match key_name:
@@ -127,7 +138,11 @@ func process_physics(delta: float):
 		return
 	if !dashing_timer.is_stopped():
 		var factor: float = actor.hazard_speed_factor() if actor.has_method("hazard_speed_factor") else 1.0
-		var velocity := dashing_direction * dash_speed * factor
+		## A disrupted roll keeps only part of its excess over the lateral move_speed, so it never
+		## drops below it (248 px/s at efficiency 0.4; dash_speed itself when undisrupted).
+		var speed: float = actor.disrupted_speed(dash_speed, move_speed) \
+				if actor.has_method("disrupted_speed") else dash_speed
+		var velocity := dashing_direction * speed * factor
 		if dashing_direction.x != 0:
 			# Side dash: allow vertical steering while rolling
 			velocity.y = Input.get_axis("move_up", "move_down") * move_speed * factor

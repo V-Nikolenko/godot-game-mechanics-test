@@ -6,6 +6,12 @@
 class_name PlayerBase
 extends CharacterBody2D
 
+## The boost's efficiency changed: a disruption started, got stronger, or ended (1.0).
+signal boost_disruption_changed(efficiency: float)
+
+## Below this efficiency every boost verb (Shift boost, Boost Drive, dash, warp) is refused before anything is spent.
+const MIN_BOOST_EFFICIENCY: float = 0.15
+
 ## Component references — assigned in _setup_components().
 var health_component: Health = null
 var shield_component: Shield = null
@@ -51,6 +57,17 @@ var engine_boost_active: bool = false
 ## it still respects solid walls. World bounds clamped in apply_knockback_motion().
 var _knockback: Vector2 = Vector2.ZERO
 const _KNOCKBACK_DECAY: float = 1200.0  ## px/s² — how fast the impulse bleeds off
+
+## Boost disruption (Phase 7 plan §2.6): the live strength (0 when none) and the seconds left, accumulated delta.
+var _disruption_strength: float = 0.0
+var _disruption_left: float = 0.0
+## Drives the ring's flicker only.
+var _disruption_clock: float = 0.0
+## The violet spark ring shown for the duration. Code-built on the first disruption, no PNG.
+var _disruption_ring: Line2D = null
+const _DISRUPTION_RING_COLOR: Color = Color(0.72, 0.4, 1.0, 1.0)
+const _DISRUPTION_RING_POINTS: int = 24
+const _DISRUPTION_RING_RADII: Vector2 = Vector2(20.0, 23.0)  ## alternating inner / outer: a jagged spark ring
 
 func _ready() -> void:
 	add_to_group("player")
@@ -154,6 +171,70 @@ func hazard_speed_factor() -> float:
 	if Hazards.count() == 0:
 		return 1.0
 	return 1.0 - Hazards.penalty_at(global_position)
+
+## Weakens every boost verb for `seconds`. `strength` is 0..1. The strongest strength and the longest time win; two
+## disruptions never stack. Emits boost_disruption_changed when the efficiency changes (a start or a stronger one).
+func apply_boost_disruption(strength: float, seconds: float) -> void:
+	strength = clampf(strength, 0.0, 1.0)
+	if strength <= 0.0 or seconds <= 0.0:
+		return
+	var before: float = boost_efficiency()
+	_disruption_strength = maxf(_disruption_strength, strength)
+	_disruption_left = maxf(_disruption_left, seconds)
+	_show_disruption_ring(true)
+	if boost_efficiency() != before:
+		boost_disruption_changed.emit(boost_efficiency())
+
+## 1 - the live strength while disrupted, else 1.0. Read where it is used, never cached.
+func boost_efficiency() -> float:
+	if _disruption_left <= 0.0:
+		return 1.0
+	return 1.0 - _disruption_strength
+
+## The speed of normal flight, which a disrupted boost speed never drops below. Overridden by each ship.
+func cruise_speed() -> float:
+	return 0.0
+
+## The excess rule: only the part of `speed` above `floor_speed` shrinks with the efficiency. Returns `speed` itself
+## when undisrupted, so an undisrupted boost is bit-identical to one without the hook.
+func disrupted_speed(speed: float, floor_speed: float) -> float:
+	var eff: float = boost_efficiency()
+	if eff >= 1.0:
+		return speed
+	return floor_speed + (speed - floor_speed) * eff
+
+## The disruption's clock, a hand-steppable seam like BoostMeter.step(). Called from each ship's _physics_process.
+func _step_disruption(delta: float) -> void:
+	if _disruption_left <= 0.0:
+		return
+	_disruption_left -= delta
+	if _disruption_left <= 0.0:
+		_disruption_left = 0.0
+		_disruption_strength = 0.0
+		_show_disruption_ring(false)
+		boost_disruption_changed.emit(1.0)
+		return
+	_disruption_clock += delta
+	if _disruption_ring != null:
+		_disruption_ring.rotation = _disruption_clock * 2.5
+		_disruption_ring.modulate.a = 0.55 + 0.45 * absf(sin(_disruption_clock * 21.0))
+
+func _show_disruption_ring(on: bool) -> void:
+	if _disruption_ring == null:
+		if not on:
+			return
+		_disruption_ring = Line2D.new()
+		_disruption_ring.name = "BoostDisruptionRing"
+		_disruption_ring.closed = true
+		_disruption_ring.width = 1.5
+		_disruption_ring.default_color = _DISRUPTION_RING_COLOR
+		for i in range(_DISRUPTION_RING_POINTS):
+			var r: float = _DISRUPTION_RING_RADII.x if i % 2 == 0 else _DISRUPTION_RING_RADII.y
+			_disruption_ring.add_point(Vector2.RIGHT.rotated(TAU * i / _DISRUPTION_RING_POINTS) * r)
+		add_child(_disruption_ring)
+	_disruption_ring.visible = on
+	_disruption_clock = 0.0
+	_disruption_ring.modulate = Color.WHITE
 
 ## Called when health changes. Override in subclass (call super() first)
 ## to preserve EventBus emission and add mission-specific death handling.

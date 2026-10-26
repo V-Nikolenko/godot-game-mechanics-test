@@ -29,6 +29,10 @@ var _time_left: float = 0.0
 var _cooldown_left: float = 0.0
 var _prev_damage_reduction: float = 0.0
 var _hit_this_boost: Array[Node] = []
+## The burst's start and tail speeds, read once at activation: the exports themselves, or under a boost
+## disruption the excess rule `cruise + (speed - cruise) * efficiency` (PlayerBase.disrupted_speed()).
+var _start_speed: float = 0.0
+var _end_speed: float = 0.0
 ## Locked at activation so velocity stays perfectly straight every frame.
 var _boost_dir: Vector2 = Vector2.ZERO
 ## Animation playing before boost started — restored when boost ends.
@@ -51,7 +55,9 @@ func remove(player: Node) -> void:
 ## try_activate()'s own first two lines, negated, and kept to exactly that expression on
 ## purpose — the caller (OpenSpacePlayerShip._step_boost()) checks this BEFORE spending a
 ## tank, so keeping the two guards in lockstep is what stops a tank being spent on a press
-## try_activate() would have refused anyway.
+## try_activate() would have refused anyway. try_activate()'s third refusal, the player's boost
+## disruption below PlayerBase.MIN_BOOST_EFFICIENCY, is deliberately not here: it is the
+## caller's, and _step_boost() checks it before can_activate() and before the spend.
 func can_activate() -> bool:
 	return not _active and _cooldown_left <= 0.0
 
@@ -61,6 +67,15 @@ func is_open_space_boost_verb() -> bool:
 func try_activate(player: Node) -> bool:
 	if _active or _cooldown_left > 0.0:
 		return false
+	## A boost disruption below the floor refuses the burst (the Assault H path spends nothing first).
+	if player.has_method("boost_efficiency") \
+			and player.boost_efficiency() < PlayerBase.MIN_BOOST_EFFICIENCY:
+		return false
+	_start_speed = _BOOST_SPEED
+	_end_speed = _BOOST_END_SPEED
+	if player.has_method("disrupted_speed"):
+		_start_speed = player.disrupted_speed(_BOOST_SPEED, player.cruise_speed())
+		_end_speed = player.disrupted_speed(_BOOST_END_SPEED, player.cruise_speed())
 	_active = true
 	_time_left = _BOOST_DURATION
 	_hit_this_boost.clear()
@@ -73,7 +88,7 @@ func try_activate(player: Node) -> bool:
 	var actor := player as Node2D
 	if actor:
 		_boost_dir = Vector2.UP.rotated(actor.rotation)
-		player.set("velocity", _boost_dir * _BOOST_SPEED)
+		player.set("velocity", _boost_dir * _start_speed)
 
 	## Tell _handle_thrust() to skip so damping / max_speed-cap don't fight us.
 	player.set("engine_boost_active", true)
@@ -94,7 +109,7 @@ func tick(player: Node, delta: float) -> void:
 		if _boost_dir != Vector2.ZERO:
 			var progress: float = _time_left / _BOOST_DURATION
 			var eased: float = progress * progress
-			var speed: float = lerpf(_BOOST_END_SPEED, _BOOST_SPEED, eased)
+			var speed: float = lerpf(_end_speed, _start_speed, eased)
 			player.set("velocity", _boost_dir * speed)
 		## Force both thrusters to BOOST visuals (overrides movement state machines).
 		var thruster: ThrusterEffect = player.get("_thruster") as ThrusterEffect
