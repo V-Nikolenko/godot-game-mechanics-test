@@ -43,12 +43,45 @@ enum Hostility { PLAYER, ALL }
 ## A placed mine's `mine_life`. 0 = never fizzles.
 @export var placed_life: float = 0.0
 
-const _MINE_RESET_PROPS: Array[StringName] = [&"hostility", &"hazard_pad", &"registers_hazard", &"placed_life"]
+@export_group("Drifting")
+## DRIFTING: px/s along the launch direction (or `drift_direction`), from the end of the eject.
+@export var drift_speed: float = 35.0
+## DRIFTING: the direction a PLACED mine drifts in (a launched mine takes its launch direction). ZERO = still.
+@export var drift_direction: Vector2 = Vector2.ZERO
+## DRIFTING: > 0 ping-pongs within this distance of its start and never fizzles on distance (placed fields).
+@export var drift_leash: float = 0.0
+## DRIFTING with no leash: fizzles once it has travelled this far.
+@export var drift_max_distance: float = 1400.0
+
+@export_group("Homing")
+## HOMING: notices the player inside this radius.
+@export var notice_radius: float = 260.0
+## HOMING: creep speed. Any player faster than this outruns it.
+@export var home_speed: float = 60.0
+@export var home_turn_rate: float = 2.0
+## HOMING: stops creeping when the player is beyond this.
+@export var home_lose_radius: float = 380.0
+## HOMING: holds once this far from its launch point.
+@export var home_max_distance: float = 900.0
+
+const _MINE_RESET_PROPS: Array[StringName] = [
+	&"hostility", &"hazard_pad", &"registers_hazard", &"placed_life",
+	&"drift_speed", &"drift_direction", &"drift_leash", &"drift_max_distance",
+	&"notice_radius", &"home_speed", &"home_turn_rate", &"home_lose_radius", &"home_max_distance",
+]
 
 var _info := HazardInfo.new()
 var _launched: bool = false
 var _registered: bool = false
 var _placed_started: bool = false
+## DRIFTING: the unit drift direction, the distance travelled since the eject, and the signed leash offset.
+var _drift_dir: Vector2 = Vector2.ZERO
+var _drift_travelled: float = 0.0
+var _drift_offset: float = 0.0
+var _drift_sign: float = 1.0
+## HOMING: where it was launched (global), and whether it currently has the player.
+var _home_origin: Vector2 = Vector2.ZERO
+var _noticing: bool = false
 
 
 func _reset_props() -> Array:
@@ -72,6 +105,11 @@ func _exit_tree() -> void:
 func reset() -> void:
 	super()
 	_launched = false
+	_drift_dir = Vector2.ZERO
+	_drift_travelled = 0.0
+	_drift_offset = 0.0
+	_drift_sign = 1.0
+	_noticing = false
 	_unregister()
 
 
@@ -87,6 +125,12 @@ func launch(dir: Vector2, speed: float, target_point: Vector2) -> void:
 	_info.avoid_weight = 1.0
 	_info.velocity = Vector2.ZERO
 	_info.position = global_position
+	_drift_travelled = 0.0
+	_drift_offset = 0.0
+	_drift_sign = 1.0
+	_noticing = false
+	_home_origin = global_position
+	_drift_dir = (dir if dir != Vector2.ZERO else drift_direction).normalized()
 	if _should_register():
 		_register()
 
@@ -102,6 +146,73 @@ func retire() -> void:
 
 func is_fizzling() -> bool:
 	return _fizzling
+
+
+## Motion by variant. DRIFTING and HOMING write `position` only (a hazard, never a ship's velocity), so a moving
+## parent carries them and the Assault corridor needs no physics. Every other variant keeps the eject-then-still rule.
+func _move_mine(delta: float) -> void:
+	super(delta)
+	if _fizzling or _done:
+		_info.velocity = Vector2.ZERO
+		return
+	match variant:
+		Variant.DRIFTING:
+			_drift(delta)
+		Variant.HOMING:
+			_creep(delta)
+
+
+## DRIFTING: `drift_speed` along the direction once the eject is over. Unleashed, it fizzles at `drift_max_distance`;
+## leashed, it ping-pongs within `drift_leash` of where it started and never fizzles on distance.
+func _drift(delta: float) -> void:
+	_info.velocity = Vector2.ZERO
+	if _drift_dir == Vector2.ZERO or _clock <= eject_time:
+		return
+	var live := minf(delta, _clock - eject_time)
+	var step := drift_speed * live
+	if drift_leash > 0.0:
+		var next := _drift_offset + step * _drift_sign
+		if absf(next) > drift_leash:
+			next = clampf(next, -drift_leash, drift_leash)
+			_drift_sign = -_drift_sign
+		_info.velocity = _drift_dir * drift_speed * _drift_sign
+		position += _drift_dir * (next - _drift_offset)
+		_drift_offset = next
+		return
+	step = minf(step, maxf(drift_max_distance - _drift_travelled, 0.0))
+	position += _drift_dir * step
+	_drift_travelled += step
+	_info.velocity = _drift_dir * drift_speed
+	if _drift_travelled >= drift_max_distance:
+		retire()
+
+
+## HOMING: once armed it notices a player within `notice_radius`, creeps toward them at `home_speed` (turning at
+## `home_turn_rate`) until they are past `home_lose_radius`, and holds `home_max_distance` from where it was launched.
+func _creep(delta: float) -> void:
+	_info.velocity = Vector2.ZERO
+	if not is_armed():
+		return
+	var target := TargetInfo.player(get_tree())
+	if not target.has_target:
+		_noticing = false
+		return
+	var gap := global_position.distance_to(target.position)
+	if _noticing and gap > home_lose_radius:
+		_noticing = false
+	elif not _noticing and gap <= notice_radius:
+		_noticing = true
+	if not _noticing:
+		return
+	_heading = Steering.turn_toward(_heading, target.position - global_position, home_turn_rate, delta)
+	var next := global_position + _heading * home_speed * delta
+	var from_origin := next - _home_origin
+	if from_origin.length() > home_max_distance:
+		next = _home_origin + from_origin.normalized() * home_max_distance
+	if global_position.distance_to(_home_origin) >= home_max_distance - 0.001 and from_origin.length() >= home_max_distance:
+		return
+	_info.velocity = (next - global_position) / delta
+	global_position = next
 
 
 func hazard_info() -> HazardInfo:
@@ -167,3 +278,13 @@ func _register() -> void:
 func _unregister() -> void:
 	Hazards.unregister(self)
 	_registered = false
+
+
+## The state overlay on top of `EnemyOrdnance._draw()`. A homing mine shows its placeholder sensor eye (a lens that
+## looks at the player) while it is noticing; the art task replaces it with an `Eye` sprite.
+func _draw() -> void:
+	super()
+	if variant == Variant.HOMING and _noticing and not _done:
+		var target := TargetInfo.player(get_tree())
+		var look := (target.position - global_position).normalized() if target.has_target else _heading
+		draw_circle(look * body_radius * 0.6, body_radius * 0.38, Color(1.0, 0.85, 0.2))

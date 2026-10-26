@@ -753,3 +753,278 @@ func test_a_real_mover_flies_round_a_mine_head_on() -> void:
 	assert_gt(ships[0].global_position.x, 400.0, "sanity: it got past")
 	assert_gte(closest[0], 120.0, "a 0.8 mover keeps >= 120 px from the mine's centre head-on")
 	assert_gte(closest[0], closest[1] + 100.0, "and >= the unregistered control (%.1f px) + 100" % closest[1])
+
+
+# ---------------------------------------------------------------------------------------------
+# Drifting and homing mines (§2.4, task t3). Dual-mode, hand-ticked: both variants move by `position` writes in
+# `_physics_process` alone, so no physics is needed. Numbers come from the scenes, never typed copies.
+# ---------------------------------------------------------------------------------------------
+
+## A hand-ticked [param variant] mine under [param parent] at [param at] (global), not yet launched.
+func _variant_mine(variant: int, parent: Node, at: Vector2, setup: Callable = Callable()) -> EnemyMine:
+	var m := EnemyMineScenes.scene_for(variant).instantiate() as EnemyMine
+	m.process_mode = Node.PROCESS_MODE_DISABLED
+	if setup.is_valid():
+		setup.call(m)
+	parent.add_child(m)
+	m.global_position = at
+	return m
+
+
+func _world(mode: String) -> RefCounted:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	return harness
+
+
+func test_the_drifting_and_homing_scenes_are_built_and_numbered() -> void:
+	var d := EnemyMine.Variant.DRIFTING
+	var h := EnemyMine.Variant.HOMING
+	assert_not_null(EnemyMineScenes.scene_for(d), "drifting_mine.tscn is built")
+	assert_not_null(EnemyMineScenes.scene_for(h), "homing_mine.tscn is built")
+	assert_eq(int(_export(d, &"variant")), d)
+	assert_eq(int(_export(h, &"variant")), h)
+	assert_eq(int(_export(d, &"kind")), EnemyOrdnance.Kind.MINE)
+	assert_eq(int(_export(h, &"kind")), EnemyOrdnance.Kind.MINE)
+	assert_eq(_export(d, &"drift_speed"), 35.0)
+	assert_eq(_export(d, &"drift_max_distance"), 1400.0)
+	assert_eq(_export(d, &"drift_leash"), 0.0)
+	assert_eq(_export(h, &"notice_radius"), 260.0)
+	assert_eq(_export(h, &"home_speed"), 60.0)
+	assert_eq(_export(h, &"home_turn_rate"), 2.0)
+	assert_eq(_export(h, &"home_lose_radius"), 380.0)
+	assert_eq(_export(h, &"home_max_distance"), 900.0)
+
+
+func test_the_warning_rule_covers_drifting_and_homing_with_their_own_speed() -> void:
+	for pair: Array in [[EnemyMine.Variant.DRIFTING, 475.0], [EnemyMine.Variant.HOMING, 500.0]]:
+		var v: int = pair[0]
+		var reach := (_export(v, &"trigger_radius") + _export(v, &"blast_radius")) / _export(v, &"warning_time")
+		assert_gte(reach, 440.0 + _own_speed(v), "%s clears 440 + its own speed" % EnemyMine.Variant.keys()[v])
+		assert_gte(reach, pair[1] as float, "and the plan's %.0f" % pair[1])
+		assert_eq(reach, 512.0, "both authored the shared 80 / 48 / 0.25 numbers")
+
+
+func test_a_drifting_mine_moves_35_t_along_its_launch_direction(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var start := Vector2(-100, 360)
+	var m := _variant_mine(EnemyMine.Variant.DRIFTING, harness.root, start)
+	m.launch(Vector2(1, 1).normalized(), 0.0, start)
+	_tick(m, 15)
+	assert_eq(m.global_position, start, "still ejecting: speed 0, no drift before eject_time (0.3 s)")
+	assert_eq(m.hazard_info().velocity, Vector2.ZERO, "its hazard velocity is zero until it drifts")
+	_tick(m, 165)
+	var t := 180.0 * DT - m.eject_time
+	assert_almost_eq(m.global_position.distance_to(start), 35.0 * t, 1.0, "35 px/s for the time after the eject")
+	assert_almost_eq((m.global_position - start).normalized().dot(Vector2(1, 1).normalized()), 1.0, 0.001,
+			"along the launch direction")
+	assert_almost_eq(m.hazard_info().velocity.length(), 35.0, 0.001, "HazardInfo.velocity is kept current")
+	assert_almost_eq(m.hazard_info().velocity.normalized().dot(Vector2(1, 1).normalized()), 1.0, 0.001)
+	assert_eq(m.hazard_pull_scale(), 0.0, "it does not bend in fields, so its distance cap holds")
+
+
+func test_a_drifting_mine_fizzles_at_1400_px(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var start := Vector2(-100, 360)  # 1400 px to the right stays inside Assault's x -164...1444 rect
+	var m := _variant_mine(EnemyMine.Variant.DRIFTING, harness.root, start)
+	var ends := [0]
+	m.expired.connect(func() -> void: ends[0] += 1)
+	m.launch(Vector2.RIGHT, 0.0, start)
+	var fizzled_at := _tick_until(m, func() -> bool: return m.is_fizzling(), 3000)
+	assert_gt(fizzled_at, 0, "it fizzles by itself")
+	assert_almost_eq(m.global_position.distance_to(start), 1400.0, 1.0, "after 1400 px")
+	assert_false(_registered(m), "a fizzling mine is no hazard")
+	assert_eq(ends[0], 0, "still fading")
+	_tick(m, 30)
+	assert_eq(ends[0], 1, "exactly one expired, no blast")
+	assert_eq(_blasts.size(), 0)
+
+
+func test_a_zero_direction_placed_drifter_is_still(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var start := Vector2(300, 300)
+	var m := _variant_mine(EnemyMine.Variant.DRIFTING, harness.root, start, func(x: EnemyMine) -> void:
+		x.placed = true
+		x.drift_direction = Vector2.ZERO)
+	await wait_process_frames(1)  # the deferred placed setup
+	_tick(m, 600)
+	assert_true(is_instance_valid(m) and _registered(m), "live and registered")
+	assert_eq(m.global_position, start, "no direction, no motion")
+	assert_eq(m.hazard_info().velocity, Vector2.ZERO)
+
+
+func test_a_drift_leash_keeps_a_placed_drifter_within_121_px_for_60_s(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var start := Vector2(300, 300)
+	var m := _variant_mine(EnemyMine.Variant.DRIFTING, harness.root, start, func(x: EnemyMine) -> void:
+		x.placed = true
+		x.drift_direction = Vector2.RIGHT
+		x.drift_leash = 120.0)
+	await wait_process_frames(1)
+	var far := 0.0
+	var reversed := false
+	var last_x := start.x
+	for i in 3600:
+		_tick(m, 1)
+		far = maxf(far, m.global_position.distance_to(start))
+		if m.global_position.x < last_x - 0.001:
+			reversed = true
+		last_x = m.global_position.x
+	assert_lte(far, 121.0, "never beyond the leash + 1 px")
+	assert_gt(far, 100.0, "it did travel the leash")
+	assert_true(reversed, "it ping-pongs")
+	assert_true(is_instance_valid(m) and not m.is_fizzling() and _registered(m), "and stays live")
+	assert_almost_eq(m.global_position.y, start.y, 0.001, "along its direction only")
+
+
+func test_a_leashed_drifter_follows_its_moving_parent() -> void:
+	var field := Node2D.new()
+	_container.add_child(field)
+	var m := _variant_mine(EnemyMine.Variant.DRIFTING, field, Vector2.ZERO, func(x: EnemyMine) -> void:
+		x.placed = true
+		x.drift_direction = Vector2.RIGHT
+		x.drift_leash = 120.0)
+	m.position = Vector2(50, 0)
+	await wait_process_frames(1)
+	field.position = Vector2(0, 500)
+	_tick(m, 60)
+	assert_almost_eq(m.global_position.y, 500.0, 0.001, "position writes are local: the field carries the mine")
+
+
+## The mine under test, a player at [param player_offset] from it, hand-ticked. Launch point (400, 600).
+func _homing(harness: RefCounted, player_offset: Vector2, setup: Callable = Callable()) -> EnemyMine:
+	var at := Vector2(400, 600)
+	var m := _variant_mine(EnemyMine.Variant.HOMING, harness.root, at, setup)
+	m.launch(Vector2.DOWN, 0.0, at)
+	harness.player.global_position = at + player_offset
+	return m
+
+
+func test_a_homing_mine_does_not_move_before_it_is_armed(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var m := _homing(harness, Vector2(200, 0))
+	var start := m.global_position
+	_tick(m, int(m.arm_delay / DT) - 2)
+	assert_false(m.is_armed())
+	assert_eq(m.global_position, start, "armed after arm_delay: no creep before")
+	_tick(m, 40)
+	assert_true(m.is_armed())
+	assert_ne(m.global_position, start, "and then it notices a player 200 px away")
+
+
+func test_a_homing_mine_notices_at_250_px_and_not_at_270(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var far := _homing(harness, Vector2(270, 0))
+	var near := _variant_mine(EnemyMine.Variant.HOMING, harness.root, Vector2(400, 1000))
+	near.launch(Vector2.DOWN, 0.0, near.global_position)
+	var far_start := far.global_position
+	var near_start := near.global_position
+	var player_far: Node2D = harness.player
+	for i in 120:
+		player_far.global_position = far_start + Vector2(270, 0)
+		_tick(far, 1)
+		# The second mine reads the same single player: put it within 250 px of that one only for its own tick.
+		player_far.global_position = near_start + Vector2(250, 0)
+		_tick(near, 1)
+	assert_eq(far.global_position, far_start, "270 px is just outside notice_radius: no motion")
+	assert_gt(near.global_position.x, near_start.x + 10.0, "250 px: it creeps toward the player")
+
+
+func test_a_homing_mine_creeps_at_60_and_reports_its_velocity(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var m := _homing(harness, Vector2(0, 200))  # straight ahead of its launch heading (DOWN)
+	_tick(m, 40)
+	assert_true(m.is_armed())
+	var before := m.global_position
+	_tick(m, 1)
+	assert_almost_eq(m.global_position.distance_to(before), 60.0 * DT, 0.001, "home_speed 60 px/s per tick")
+	assert_almost_eq(m.hazard_info().velocity.length(), 60.0, 0.001, "HazardInfo.velocity is its creep")
+	harness.player.global_position = Vector2(400, 600) + Vector2(0, 2000)
+	_tick(m, 1)
+	assert_eq(m.hazard_info().velocity, Vector2.ZERO, "and zero when it is not creeping")
+
+
+func test_a_homing_mine_turns_at_most_home_turn_rate_toward_the_live_player(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var m := _homing(harness, Vector2(250, 0))  # launched heading DOWN, player to the right
+	_tick(m, 30)
+	var worst := 0.0
+	for i in 120:
+		var before := m.heading()
+		_tick(m, 1)
+		worst = maxf(worst, absf(before.angle_to(m.heading())))
+	assert_lte(worst, m.home_turn_rate * DT + 0.0005, "never faster than 2.0 rad/s")
+	assert_gt(worst, m.home_turn_rate * DT * 0.9, "and it does turn at that rate")
+	var to_player: Vector2 = (harness.player.global_position - m.global_position).normalized()
+	assert_gt(m.heading().dot(to_player), 0.99, "after a second or two it is heading at the player")
+	# The live player: it follows a player that moves.
+	harness.player.global_position = m.global_position + Vector2(-200, 0)
+	_tick(m, 120)
+	assert_lt(m.heading().x, -0.9, "it re-aims at the player's new side")
+
+
+func test_a_homing_mine_loses_a_retreating_player_past_380_px(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var m := _homing(harness, Vector2(250, 0))
+	_tick(m, 30)
+	var lost_at := Vector2.INF
+	for i in 600:
+		harness.player.global_position += Vector2(120.0 * DT, 0)
+		var before := m.global_position
+		_tick(m, 1)
+		var gap := m.global_position.distance_to(harness.player.global_position)
+		if lost_at == Vector2.INF and m.global_position == before and i > 5:
+			lost_at = m.global_position
+			assert_gte(gap, 379.0, "it stops creeping only once the gap passes ~380 px")
+			assert_lte(gap, 385.0)
+	assert_ne(lost_at, Vector2.INF, "it lost the player")
+	assert_eq(m.global_position, lost_at, "and stayed put for the rest of the retreat")
+	# It does not re-notice until the player is within 260 px again (hysteresis): 300 px is inside lose, outside notice.
+	harness.player.global_position = m.global_position + Vector2(300, 0)
+	_tick(m, 60)
+	assert_eq(m.global_position, lost_at, "a lost player at 300 px is not re-noticed")
+	harness.player.global_position = m.global_position + Vector2(250, 0)
+	_tick(m, 60)
+	assert_ne(m.global_position, lost_at, "inside notice_radius it creeps again")
+
+
+func test_a_player_faster_than_60_outruns_a_homing_mine(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var m := _homing(harness, Vector2(250, 0))
+	_tick(m, 30)
+	for i in 900:
+		harness.player.global_position += Vector2(70.0 * DT, 0)
+		_tick(m, 1)
+	assert_gte(m.global_position.distance_to(harness.player.global_position), 250.0, "a 70 px/s player is never caught")
+	assert_false(m.is_warning(), "and never trips it")
+
+
+func test_a_homing_mine_with_no_player_does_not_move(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var m := _homing(harness, Vector2(100, 0))
+	harness.player.remove_from_group(&"player")
+	var start := m.global_position
+	_tick(m, 120)
+	assert_eq(m.global_position, start)
+
+
+func test_a_homing_mine_never_ends_more_than_900_px_from_launch(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var start := Vector2(640, 500)
+	var m := _variant_mine(EnemyMine.Variant.HOMING, harness.root, start)
+	m.launch(Vector2.UP, 0.0, start)
+	var farthest := 0.0
+	var inside := true
+	var rect := EnemyWorld.projectile_world_rect(get_tree())
+	for i in 1500:  # 25 s: past the 15 s it needs to creep 900 px
+		harness.player.global_position = m.global_position + Vector2(0, -200)
+		_tick(m, 1)
+		if not is_instance_valid(m):
+			break
+		farthest = maxf(farthest, m.global_position.distance_to(start))
+		if harness.is_assault and not rect.has_point(m.global_position):
+			inside = false
+	assert_true(is_instance_valid(m) and not m.is_fizzling(), "it holds, it does not expire")
+	assert_lte(farthest, 900.0 + 0.001, "never beyond home_max_distance")
+	assert_gt(farthest, 899.0, "and it did reach the cap")
+	assert_true(inside, "Assault: it holds at its own cap before the corridor's projectile rect (y -444)")

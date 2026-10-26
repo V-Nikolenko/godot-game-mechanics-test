@@ -6,6 +6,8 @@ extends RefCounted
 ## The Bomber's mine IS the PROXIMITY variant: the same path, so the same cached `PackedScene` as
 ## `EnemyOrdnanceScenes.MINE`.
 const PROXIMITY: PackedScene = preload("res://assault/scenes/projectiles/enemy_ordnance/mine.tscn")
+const DRIFTING: PackedScene = preload("res://assault/scenes/projectiles/enemy_ordnance/mines/drifting_mine.tscn")
+const HOMING: PackedScene = preload("res://assault/scenes/projectiles/enemy_ordnance/mines/homing_mine.tscn")
 
 
 ## The scene for [param variant], or null while that variant's scene is not built yet (so a caller can sweep
@@ -14,6 +16,10 @@ static func scene_for(variant: EnemyMine.Variant) -> PackedScene:
 	match variant:
 		EnemyMine.Variant.PROXIMITY:
 			return PROXIMITY
+		EnemyMine.Variant.DRIFTING:
+			return DRIFTING
+		EnemyMine.Variant.HOMING:
+			return HOMING
 	return null
 
 
