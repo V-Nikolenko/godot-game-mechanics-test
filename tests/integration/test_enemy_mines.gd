@@ -1271,3 +1271,154 @@ func _ordnance_shot(at: Vector2, parent: Node) -> HitBox:
 	parent.add_child(hb)
 	hb.global_position = at
 	return hb
+
+
+# ---------------------------------------------------------------------------------------------
+# The pulse mine (plan §2.7): a small blast, a violet ring, and the player's boost weakened
+# ---------------------------------------------------------------------------------------------
+
+const SHIP_SCENE: PackedScene = preload("res://open_space/scenes/entities/player/player_ship.tscn")
+const FIGHTER_SCENE: PackedScene = preload("res://assault/scenes/player/player_fighter.tscn")
+
+
+## The REAL player of [param mode] (`player_ship.tscn` / `player_fighter.tscn`) at [param at] in [param parent], its own
+## physics off so it stays where it is put. Records every hit its `HurtBox` takes in `meta damage`.
+func _real_player(mode: String, at: Vector2, parent: Node) -> PlayerBase:
+	var p := (SHIP_SCENE if mode == "open_space" else FIGHTER_SCENE).instantiate() as PlayerBase
+	parent.add_child(p)
+	p.set_physics_process(false)
+	p.global_position = at
+	p.set_meta(&"damage", 0)
+	var hurt := p.get_node("HurtBox") as HurtBox
+	hurt.received_damage.connect(func(d: int) -> void: p.set_meta(&"damage", int(p.get_meta(&"damage")) + d))
+	return p
+
+
+func test_the_pulse_scene_is_built_and_numbered() -> void:
+	var v := EnemyMine.Variant.PULSE
+	assert_not_null(EnemyMineScenes.scene_for(v), "PULSE has a scene")
+	assert_eq(int(_export(v, &"variant")), v)
+	assert_eq(_export(v, &"pulse_radius"), 170.0)
+	assert_eq(_export(v, &"disrupt_strength"), 0.6)
+	assert_eq(_export(v, &"disrupt_seconds"), 2.5)
+	assert_eq(_export(v, &"blast_damage"), 8.0, "a small blast, not the shared 30")
+	assert_eq(_export(v, &"blast_radius"), 48.0)
+	assert_eq(_export(v, &"trigger_radius"), 80.0)
+	assert_eq(_export(v, &"warning_time"), 0.25)
+	assert_true(_warning_rule(_export(v, &"trigger_radius"), _export(v, &"blast_radius"), _export(v, &"blast_damage"),
+			_export(v, &"emp_radius"), _export(v, &"warning_time"), 0.0),
+			"the warning inequality uses blast_radius (8 damage > 0): 512 >= 440")
+	assert_almost_eq((_export(v, &"trigger_radius") + _export(v, &"blast_radius")) / _export(v, &"warning_time"), 512.0, 0.001)
+
+
+## Hand-ticked: a chained PULSE mine at the origin, two real players of the mode at 150 / 170 / 180 px. `_disrupt_players`
+## is centre distance, `<=` radius.
+func test_a_pulse_detonation_disrupts_inside_170_px_and_not_at_180(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var at := Vector2(400, 300)
+	var near := _real_player(mode, at + Vector2(150, 0), harness.root)
+	var edge := _real_player(mode, at + Vector2(0, 170), harness.root)
+	var far := _real_player(mode, at + Vector2(-180, 0), harness.root)
+	var m := _row_mine(_Row.new(), harness, EnemyMine.Variant.PULSE, at)
+	assert_eq(near.boost_efficiency(), 1.0, "%s: nothing is disrupted before the blast" % mode)
+	m.chain_trigger(0.0)
+	_tick(m, 3)
+	assert_almost_eq(near.boost_efficiency(), 0.4, 0.0001, "%s: 150 px: efficiency 0.4" % mode)
+	assert_almost_eq(edge.boost_efficiency(), 0.4, 0.0001, "%s: exactly 170 px is inside" % mode)
+	assert_eq(far.boost_efficiency(), 1.0, "%s: 180 px is untouched" % mode)
+
+
+func test_a_pulse_disruption_lasts_2_5_s_and_only_a_pulse_mine_applies_it(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var at := Vector2(400, 300)
+	var p := _real_player(mode, at + Vector2(40, 0), harness.root)
+	var control := _row_mine(_Row.new(), harness, EnemyMine.Variant.PROXIMITY, at + Vector2(0, 600))
+	control.global_position = at
+	control.chain_trigger(0.0)
+	_tick(control, 3)
+	assert_eq(p.boost_efficiency(), 1.0, "%s: a proximity blast disrupts nothing" % mode)
+	var m := _row_mine(_Row.new(), harness, EnemyMine.Variant.PULSE, at)
+	m.chain_trigger(0.0)
+	_tick(m, 3)
+	for i in 149:
+		p._step_disruption(DT)
+	assert_almost_eq(p.boost_efficiency(), 0.4, 0.0001, "%s: still disrupted just before 2.5 s" % mode)
+	for i in 3:
+		p._step_disruption(DT)
+	assert_eq(p.boost_efficiency(), 1.0, "%s: over at 2.5 s" % mode)
+
+
+## An ALL pulse mine blasts through `Hazards.pulse_damage`: 8 on the real player's hurtbox, not 30, and it disrupts.
+func test_an_all_pulse_mine_deals_8_and_disrupts(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var at := Vector2(400, 300)
+	var p := _real_player(mode, at + Vector2(20, 0), harness.root)
+	var m := _row_mine(_Row.new(), harness, EnemyMine.Variant.PULSE, at,
+			func(mm: EnemyMine) -> void: mm.hostility = EnemyMine.Hostility.ALL)
+	m.chain_trigger(0.0)
+	_tick(m, 3)
+	assert_eq(int(p.get_meta(&"damage")), 8, "%s: 8 damage, not 30" % mode)
+	assert_almost_eq(p.boost_efficiency(), 0.4, 0.0001, "%s: and the boost is weakened" % mode)
+
+
+func test_a_pulse_mine_without_the_player_hook_or_in_range_reaches_nobody() -> void:
+	var m := _hand_ticked_variant(EnemyMine.Variant.PULSE)
+	var bare := CharacterBody2D.new()
+	bare.add_to_group(&"player")
+	_container.add_child(bare)
+	assert_eq(m._disrupt_players(170.0, 0.6, 2.5), 0, "a player stand-in without apply_boost_disruption is skipped")
+
+
+## Real physics (8x), the real player of each mode standing on a live PULSE mine: it arms, shows the violet effect ring
+## during the warning only, blasts for 8 through the real `ContactBlast` (not 30), weakens the boost to 0.4, and leaves a
+## self-freeing `PulseRing` in the container.
+func test_a_real_pulse_mine_warns_with_a_ring_blasts_for_8_and_disrupts(mode: String = use_parameters(MODES)) -> void:
+	_scale_clock()
+	var harness = _world(mode)
+	harness.root.child_entered_tree.connect(_on_container_child)
+	var at := Vector2(300, 300)
+	var m := EnemyMineScenes.scene_for(EnemyMine.Variant.PULSE).instantiate() as EnemyMine
+	harness.root.add_child(m)
+	m.global_position = at
+	m.expired.connect(m.queue_free)
+	m.launch(Vector2.ZERO, 0.0, at)
+	var p := _real_player(mode, at + Vector2(10, 0), harness.root)
+	var seen := {"mine": m, "ring_before": false, "ring_warning": 0.0}
+	var watch := func() -> void:
+		# Holds the mine in a dictionary: a lambda capturing the mine itself errors once it is freed.
+		var mine: EnemyMine = seen["mine"] if is_instance_valid(seen["mine"]) else null
+		if mine == null:
+			return
+		if mine.is_warning():
+			seen["ring_warning"] = maxf(seen["ring_warning"], mine.effect_ring_radius())
+		elif mine.effect_ring_radius() > 0.0:
+			seen["ring_before"] = true
+	_tick_each_frame(harness.root, watch)
+	await _seconds(1.5)
+	assert_false(is_instance_valid(m), "%s: the mine detonated" % mode)
+	assert_false(seen["ring_before"], "%s: no effect ring outside the warning" % mode)
+	assert_eq(seen["ring_warning"], 170.0, "%s: the violet effect ring shows during the warning" % mode)
+	assert_eq(int(p.get_meta(&"damage")), 8, "%s: the blast deals 8, not 30" % mode)
+	assert_almost_eq(p.boost_efficiency(), 0.4, 0.0001, "%s: the real blast weakened the boost (its physics is off, so it holds)" % mode)
+	assert_eq(_blasts.size(), 1, "%s: one small blast" % mode)
+
+
+## The ring: spawned at the mine's point in its parent on detonation, expanding to 170 px over 0.3 s, then gone.
+func test_a_detonation_leaves_a_self_freeing_violet_ring(mode: String = use_parameters(MODES)) -> void:
+	_scale_clock()
+	var harness = _world(mode)
+	var at := Vector2(500, 300)
+	var m := _row_mine(_Row.new(), harness, EnemyMine.Variant.PULSE, at)
+	m.chain_trigger(0.0)
+	_tick(m, 3)
+	var rings: Array[PulseRing] = []
+	for c in harness.root.get_children():
+		if c is PulseRing:
+			rings.append(c)
+	assert_eq(rings.size(), 1, "%s: exactly one ring" % mode)
+	var ring := rings[0]
+	assert_eq(ring.global_position, at, "%s: at the mine" % mode)
+	assert_eq(ring.max_radius, 170.0)
+	assert_eq(ring.default_color.b > ring.default_color.g, true, "%s: violet" % mode)
+	await _seconds(PulseRing.DURATION + 0.2)
+	assert_false(is_instance_valid(ring), "%s: it frees itself on its own clock" % mode)

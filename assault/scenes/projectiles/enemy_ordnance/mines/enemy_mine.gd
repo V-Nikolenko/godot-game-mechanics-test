@@ -72,6 +72,13 @@ enum Hostility { PLAYER, ALL }
 ## A shot detonates the mine (CHAIN) instead of defusing it.
 @export var shot_detonates: bool = false
 
+@export_group("Pulse")
+## PULSE: a detonation disrupts every player whose centre is within this radius (plan §2.7).
+@export var pulse_radius: float = 170.0
+## PULSE: the boost-disruption strength (efficiency becomes 1 - strength) and its seconds.
+@export var disrupt_strength: float = 0.6
+@export var disrupt_seconds: float = 2.5
+
 ## Seconds between two recomputations of a chain mine's links.
 const LINK_REFRESH := 0.5
 const LINK_COLOR := Color(1.0, 0.55, 0.15, 0.35)
@@ -81,6 +88,7 @@ const _MINE_RESET_PROPS: Array[StringName] = [
 	&"drift_speed", &"drift_direction", &"drift_leash", &"drift_max_distance",
 	&"notice_radius", &"home_speed", &"home_turn_rate", &"home_lose_radius", &"home_max_distance",
 	&"chain_radius", &"chain_delay", &"shot_detonates",
+	&"pulse_radius", &"disrupt_strength", &"disrupt_seconds",
 ]
 
 var _info := HazardInfo.new()
@@ -349,6 +357,30 @@ func _on_detonated() -> void:
 		ContactBlast.spawn(get_parent(), global_position, blast_radius, blast_damage, blast_frames)
 	if variant == Variant.CHAIN:
 		_propagate_chain()
+	elif variant == Variant.PULSE:
+		_disrupt_players(pulse_radius, disrupt_strength, disrupt_seconds)
+		PulseRing.spawn(get_parent(), global_position, pulse_radius)
+
+
+## Calls the duck-typed `apply_boost_disruption(strength, seconds)` on every node in group `player` whose CENTRE is
+## within [param radius] (the `Hazards.pulse_damage()` distance rule). Returns how many it reached. A player without the
+## hook is skipped.
+func _disrupt_players(radius: float, strength: float, seconds: float) -> int:
+	var reached := 0
+	for node in get_tree().get_nodes_in_group(&"player"):
+		var ship := node as Node2D
+		if ship == null or ship.is_queued_for_deletion() or not ship.has_method(&"apply_boost_disruption"):
+			continue
+		if ship.global_position.distance_to(global_position) > radius:
+			continue
+		ship.apply_boost_disruption(strength, seconds)
+		reached += 1
+	return reached
+
+
+## The radius of the violet effect ring the mine shows: `pulse_radius` while a PULSE mine is warning, else 0.
+func effect_ring_radius() -> float:
+	return pulse_radius if variant == Variant.PULSE and _warning and not _done else 0.0
 
 
 func _mark_done() -> void:
@@ -393,6 +425,8 @@ func _draw() -> void:
 		draw_circle(look * body_radius * 0.6, body_radius * 0.38, Color(1.0, 0.85, 0.2))
 	if variant == Variant.CHAIN and not _done and not _fizzling:
 		_draw_links()
+	if effect_ring_radius() > 0.0:
+		draw_arc(Vector2.ZERO, effect_ring_radius(), 0.0, TAU, 48, PulseRing.COLOR, 2.0)
 
 
 ## The "fuse links": a faint dotted line to each neighbour. Where both ends are CHAIN mines only the one with the lower

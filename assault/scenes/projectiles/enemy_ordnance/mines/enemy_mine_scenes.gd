@@ -9,6 +9,7 @@ const PROXIMITY: PackedScene = preload("res://assault/scenes/projectiles/enemy_o
 const DRIFTING: PackedScene = preload("res://assault/scenes/projectiles/enemy_ordnance/mines/drifting_mine.tscn")
 const HOMING: PackedScene = preload("res://assault/scenes/projectiles/enemy_ordnance/mines/homing_mine.tscn")
 const CHAIN: PackedScene = preload("res://assault/scenes/projectiles/enemy_ordnance/mines/chain_mine.tscn")
+const PULSE: PackedScene = preload("res://assault/scenes/projectiles/enemy_ordnance/mines/pulse_mine.tscn")
 
 
 ## The scene for [param variant], or null while that variant's scene is not built yet (so a caller can sweep
@@ -23,6 +24,8 @@ static func scene_for(variant: EnemyMine.Variant) -> PackedScene:
 			return HOMING
 		EnemyMine.Variant.CHAIN:
 			return CHAIN
+		EnemyMine.Variant.PULSE:
+			return PULSE
 	return null
 
 
