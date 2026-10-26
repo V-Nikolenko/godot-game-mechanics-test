@@ -80,6 +80,26 @@ static func corridor_starts(corridor: Rect2, world: Rect2) -> Array:
 ## `host` is any node in the tree; the harness world is built under it and freed before this returns.
 static func worst_disengage(host: Node, scene: PackedScene, disengage_phase: int, speeds: Array[float],
 		cap: float, start_set: Array = [], prepare: Callable = Callable()) -> Dictionary:
+	# Memoised for the whole GUT process (tests/README.md -> "Gate time", rule 2): two files measure the same
+	# ship over the same grid at the same speeds, and the result is a pure function of exactly these inputs
+	# (the run is hand-ticked, seeded, and reads no clock). Keyed by every input, `prepare` included, so a
+	# different start set, speed list, cap or hook never reuses a figure; a copy is returned so a caller
+	# cannot edit the cached one.
+	var key := [scene.resource_path, disengage_phase, speeds, cap,
+		(start_set if not start_set.is_empty() else starts()), prepare].duplicate(true)
+	if _memo.has(key):
+		return (_memo[key] as Dictionary).duplicate()
+	var result := _measure_worst_disengage(host, scene, disengage_phase, speeds, cap, start_set, prepare)
+	_memo[key] = result
+	return result.duplicate()
+
+
+## `worst_disengage()`'s results by input key. Static, so it lives as long as the script resource: one GUT process.
+static var _memo: Dictionary = {}
+
+
+static func _measure_worst_disengage(host: Node, scene: PackedScene, disengage_phase: int, speeds: Array[float],
+		cap: float, start_set: Array, prepare: Callable) -> Dictionary:
 	var h: RefCounted = HARNESS.assault()
 	host.add_child(h.root)
 	h.player.global_position = MID_VIEW + Vector2(0.0, 300.0)

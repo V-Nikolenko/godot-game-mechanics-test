@@ -531,6 +531,44 @@ scripts, 2139 tests, all passing — about 16 s over the Phase 5 close, 24 s und
 64.2 s, `test_level1_fighter_fire_density.gd` 32.4 s, `test_level1_specialist_exit.gd` 10.1 s, `test_bomber.gd` 8.7 s,
 `test_enemy_ordnance.gd` 7.7 s. **Phase 7 must start by recovering gate time** by the three rules above.
 
+**Phase 7 (mines, minefields, the Mine Layer) — t1 gate room (2026-10-26, `scripts/gate-time.sh`).** Phase 6 closed at GUT 216.3 s (re-measured
+216.34 s, 2139 tests, 78348 asserts); t1 had to free ≥ 12 s using only rules 1-3 above, and freed 13.8 s: **GUT `Time` 216.34 → 202.33 s**
+(two full runs: 202.50 / 202.33 s; `scripts/check-test-leaks.sh` 201.98 s, clean). Tests (2139) and asserts (78348) are unchanged; no tick
+count, duration, sample count or grid was lowered, no bound was widened, no assertion was touched, and no production code changed.
+
+| File | Before | After | Means |
+|---|---|---|---|
+| `test_armor_query.gd` | 5.3 s | 1.1 s | rule 1: 1× → 8× for every row (all awaits are physics-frame counts) |
+| `test_station_laser_phase.gd` | 4.9 s | 1.9 s | rule 1: 8× for the awaiting rows; the warning-window row stays 2× and the rotation row 1× (below) |
+| `test_swarm_drone.gd` | 3.9 s | 1.5 s | rule 1: 8× for the six real-physics rows (`_physics_world()` and the FORM row); the hand-ticked rows are unaffected |
+| `test_station_incoming_damage_paths.gd` | 2.7 s | 0.9 s | rule 1: 8× for all nine rows |
+| `test_engagement_deadline.gd` + `test_level1_specialist_spawns.gd` | 19.4 s (pair, one process) | 18.1 s (pair) | rule 2: `SpecialistExitProbe.worst_disengage()` memoised for the GUT process |
+| `test_station_assault_section.gd` | 4.1 s | 4.1 s | **not convertible**, see below |
+
+- **Rows that stay below 8×.** `test_beam_is_not_lethal_during_the_warning_window` samples at `wait_seconds(0.1)` inside a 0.2 s warning, tighter than
+  one idle frame at 8× (≈ 0.13 game-s), so it runs at 2×. `test_station_rotates_only_during_the_laser_phase` computes its expected rate from
+  `Engine.physics_ticks_per_second`, which an 8× clock changes eightfold, so scaling it would have needed a different assertion; it stays 1× (0.7 s).
+- **`test_station_assault_section.gd` cannot take the clock.** `LevelDirector`'s ENEMIES_CLEARED poll and its 0.2 s settle compare
+  `Time.get_ticks_msec()`, i.e. wall clock, so at 8× the test's game-time `wait_seconds()` ends before the director's deadline and the three awaiting rows
+  fail. A test that awaits a `LevelDirector` wait stays at 1×; that is a property of the director, not of this file.
+- **The memo** (`tests/helpers/specialist_exit_probe.gd`) is keyed by scene path, DISENGAGE phase, speed list, cap, start set (the default grid when
+  empty) and the `prepare` callable, and returns a copy. The two files share only the Sniper view-grid figure (their Ram speed lists differ: `[charge, 10]`
+  against `[charge, 10, 2]`), hence the modest saving; the cached figure is the one the measurement produced, bit for bit.
+- **Measured values the 8× clock moved:** none. Every converted row counts physics ticks (`wait_physics_frames`, `_frames(n)`) or waits a game-time
+  `wait_seconds()` whose assertions are `> 0`, equalities or "no damage"; the laser rows' asserted bounds (`probe.hits > 0`, a lethal beam after
+  `wait_seconds(1.0)` of a 0.76-1.06 s window, zero damage to the station over 1.4 s) hold with the idle-frame slack (≤ ≈ 0.13 s). The probe's
+  figures are unchanged, so every `test_engagement_deadline.gd` / `test_level1_specialist_spawns.gd` bound reads the same number as before.
+- One `scripts/gate-time.sh` run of the changed suite printed `GUT LEAKED at exit` once; the next `gate-time.sh`, the `check-test-leaks.sh` run
+  and six repeats of the six changed files together were clean. Treat it as a flake in files this task did not touch until it recurs.
+
+**Per-task allotments for the rest of Phase 7** (plan §2.17; new GUT seconds): t2 3.0 · t3 1.5 · t4 1.5 · t5 1.5 · t6 0.5 · t7 1.0 · t8 1.5 ·
+t9 0.5 · t10 1.5 · t11 4.5 · t12 1.5 · t13 0.5 · t14 1.5 · t15 8.0 · t16 0 = 28.5 s, so the phase ends ≤ 216.4 − 13.8 + 28.5 ≈ 231 s of the
+240 s ceiling. Record each task's before / after pair here.
+
+| Task | Allotment | GUT before → after | Note |
+|---|---|---|---|
+| t1 gate room | frees ≥ 12 s | 216.34 → 202.33 s | the table above |
+
 **Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
 `tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition
 and settles every spawn timer before freeing the world), `tests/helpers/fixture_enemy_unrepairable.gd` (`can_be_repaired()` false),

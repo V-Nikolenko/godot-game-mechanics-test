@@ -2590,3 +2590,9 @@ are *planned* decisions; check this phase's *as built* section, once written, be
 | Mine and layer audio | Ph17 | |
 | A Mine Layer scattering mines on death | owner option | The Ph6 deferred-spawn entry is ready |
 | Pulse / EMP mines affecting enemies | Ph9 (if wanted) | Enemy-laid mines never trigger on enemies |
+
+### Built in t1 (gate room)
+- GUT `Time` 216.34 -> 202.3-202.5 s (two full `scripts/gate-time.sh` runs; `check-test-leaks.sh` 201.98 s, clean), -13.8 s against the 12 s floor. 2139 tests / 78348 asserts unchanged. Only the `tests/README.md` -> Gate time rules were used; no production code changed.
+- 8x clock (`_scale_clock(n)` / `_restore_clock()` + `after_each`): `test_armor_query.gd` (all rows), `test_station_laser_phase.gd`, `test_station_incoming_damage_paths.gd`, `test_swarm_drone.gd` (its real-physics rows). Two rows deliberately do not run at 8x: the laser phase's `0.1 s`-in-a-`0.2 s`-warning row (2x) and `test_station_rotates_only_during_the_laser_phase` (1x: its expected rate is computed from `Engine.physics_ticks_per_second`, which an 8x clock would change).
+- **`test_station_assault_section.gd` cannot take the 8x clock**: `LevelDirector`'s ENEMIES_CLEARED poll and settle compare `Time.get_ticks_msec()` (wall clock), so a scaled clock makes the rows' game-time `wait_seconds()` too short for it (the three awaiting rows went red). It stays 1x, 4.1 s. Any later test that awaits a `LevelDirector` wait must stay 1x for the same reason.
+- `SpecialistExitProbe.worst_disengage()` is memoised for the GUT process, keyed by (scene path, phase, speeds, cap, start set, `prepare`). Only the Sniper view-grid measurement is actually shared between `test_engagement_deadline.gd` and `test_level1_specialist_spawns.gd` (their Ram speed lists differ), so it saves ~1.3 s. Later phases that probe the same ship with the same inputs get the figure for free; a different input list does not reuse it.
