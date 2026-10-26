@@ -79,6 +79,12 @@ enum Hostility { PLAYER, ALL }
 @export var disrupt_strength: float = 0.6
 @export var disrupt_seconds: float = 2.5
 
+@export_group("EMP")
+## EMP: a detonation reaches every player whose centre is within this radius, through `EmpPulse` (plan §2.8). The scene
+## authors `blast_damage` 0, so no `ContactBlast` and no `pulse_damage` follow it.
+@export var emp_radius: float = 190.0
+@export var emp_seconds: float = 2.0
+
 ## Seconds between two recomputations of a chain mine's links.
 const LINK_REFRESH := 0.5
 const LINK_COLOR := Color(1.0, 0.55, 0.15, 0.35)
@@ -89,6 +95,7 @@ const _MINE_RESET_PROPS: Array[StringName] = [
 	&"notice_radius", &"home_speed", &"home_turn_rate", &"home_lose_radius", &"home_max_distance",
 	&"chain_radius", &"chain_delay", &"shot_detonates",
 	&"pulse_radius", &"disrupt_strength", &"disrupt_seconds",
+	&"emp_radius", &"emp_seconds",
 ]
 
 var _info := HazardInfo.new()
@@ -351,15 +358,20 @@ func _trigger_seen() -> bool:
 
 
 func _on_detonated() -> void:
-	if hostility == Hostility.ALL:
-		Hazards.pulse_damage(get_tree(), global_position, blast_radius, blast_damage)
-	else:
-		ContactBlast.spawn(get_parent(), global_position, blast_radius, blast_damage, blast_frames)
+	# A mine that deals no damage (EMP) blasts nothing: no `ContactBlast`, no `pulse_damage`.
+	if blast_damage > 0:
+		if hostility == Hostility.ALL:
+			Hazards.pulse_damage(get_tree(), global_position, blast_radius, blast_damage)
+		else:
+			ContactBlast.spawn(get_parent(), global_position, blast_radius, blast_damage, blast_frames)
 	if variant == Variant.CHAIN:
 		_propagate_chain()
 	elif variant == Variant.PULSE:
 		_disrupt_players(pulse_radius, disrupt_strength, disrupt_seconds)
 		PulseRing.spawn(get_parent(), global_position, pulse_radius)
+	elif variant == Variant.EMP:
+		EmpPulse.emit(get_tree(), global_position, emp_radius, emp_seconds, self)
+		EmpRing.spawn(get_parent(), global_position, emp_radius)
 
 
 ## Calls the duck-typed `apply_boost_disruption(strength, seconds)` on every node in group `player` whose CENTRE is
@@ -378,9 +390,17 @@ func _disrupt_players(radius: float, strength: float, seconds: float) -> int:
 	return reached
 
 
-## The radius of the violet effect ring the mine shows: `pulse_radius` while a PULSE mine is warning, else 0.
+## The radius of the effect ring the mine shows while it is warning: `pulse_radius` (PULSE, violet) or `emp_radius` (EMP,
+## blue-white), else 0.
 func effect_ring_radius() -> float:
-	return pulse_radius if variant == Variant.PULSE and _warning and not _done else 0.0
+	if not _warning or _done:
+		return 0.0
+	match variant:
+		Variant.PULSE:
+			return pulse_radius
+		Variant.EMP:
+			return emp_radius
+	return 0.0
 
 
 func _mark_done() -> void:
@@ -426,7 +446,7 @@ func _draw() -> void:
 	if variant == Variant.CHAIN and not _done and not _fizzling:
 		_draw_links()
 	if effect_ring_radius() > 0.0:
-		draw_arc(Vector2.ZERO, effect_ring_radius(), 0.0, TAU, 48, PulseRing.COLOR, 2.0)
+		draw_arc(Vector2.ZERO, effect_ring_radius(), 0.0, TAU, 48, EmpRing.COLOR if variant == Variant.EMP else PulseRing.COLOR, 2.0)
 
 
 ## The "fuse links": a faint dotted line to each neighbour. Where both ends are CHAIN mines only the one with the lower

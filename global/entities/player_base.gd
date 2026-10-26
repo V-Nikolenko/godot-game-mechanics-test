@@ -9,6 +9,9 @@ extends CharacterBody2D
 ## The boost's efficiency changed: a disruption started, got stronger, or ended (1.0).
 signal boost_disruption_changed(efficiency: float)
 
+## An EMP started (true) or ended (false) on this ship.
+signal emp_changed(active: bool)
+
 ## Below this efficiency every boost verb (Shift boost, Boost Drive, dash, warp) is refused before anything is spent.
 const MIN_BOOST_EFFICIENCY: float = 0.15
 
@@ -61,6 +64,8 @@ const _KNOCKBACK_DECAY: float = 1200.0  ## px/s² — how fast the impulse bleed
 ## Boost disruption (Phase 7 plan §2.6): the live strength (0 when none) and the seconds left, accumulated delta.
 var _disruption_strength: float = 0.0
 var _disruption_left: float = 0.0
+## EMP (Phase 7 plan §2.8): the seconds left of the longest EMP, accumulated delta.
+var _emp_left: float = 0.0
 ## Drives the ring's flicker only.
 var _disruption_clock: float = 0.0
 ## The violet spark ring shown for the duration. Code-built on the first disruption, no PNG.
@@ -203,8 +208,25 @@ func disrupted_speed(speed: float, floor_speed: float) -> float:
 		return speed
 	return floor_speed + (speed - floor_speed) * eff
 
+## An EMP hit (`EmpPulse.emit()`): the longest time wins and `emp_changed(true)` fires on the start. Phase 7's
+## stand-in effect is a full boost disruption (efficiency 0), so the Shift boost, the Boost Drive, the dash and the
+## warp are all refused for the window. PHASE 9 REPLACES THE EFFECT (the stand-in line below), not this signature,
+## `is_emp_disrupted()` or `emp_changed`.
+func apply_emp(seconds: float, _source: Node) -> void:
+	if seconds <= 0.0:
+		return
+	var was_active: bool = is_emp_disrupted()
+	_emp_left = maxf(_emp_left, seconds)
+	apply_boost_disruption(1.0, seconds)  # Phase 7 stand-in, Phase 9's to replace.
+	if not was_active:
+		emp_changed.emit(true)
+
+func is_emp_disrupted() -> bool:
+	return _emp_left > 0.0
+
 ## The disruption's clock, a hand-steppable seam like BoostMeter.step(). Called from each ship's _physics_process.
 func _step_disruption(delta: float) -> void:
+	_step_emp(delta)
 	if _disruption_left <= 0.0:
 		return
 	_disruption_left -= delta
@@ -218,6 +240,14 @@ func _step_disruption(delta: float) -> void:
 	if _disruption_ring != null:
 		_disruption_ring.rotation = _disruption_clock * 2.5
 		_disruption_ring.modulate.a = 0.55 + 0.45 * absf(sin(_disruption_clock * 21.0))
+
+func _step_emp(delta: float) -> void:
+	if _emp_left <= 0.0:
+		return
+	_emp_left -= delta
+	if _emp_left <= 0.0:
+		_emp_left = 0.0
+		emp_changed.emit(false)
 
 func _show_disruption_ring(on: bool) -> void:
 	if _disruption_ring == null:

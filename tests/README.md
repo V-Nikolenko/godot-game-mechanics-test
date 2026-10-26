@@ -573,6 +573,7 @@ t9 0.5 · t10 1.5 · t11 4.5 · t12 1.5 · t13 0.5 · t14 1.5 · t15 8.0 · t16 
 | t3 drifting and homing mines | 1.5 s | 203.91 → 204.08 s (2186 → 2201 tests) | 15 new hand-ticked rows in `test_enemy_mines.gd` (both harnesses), the only awaits are single frame waits for the placed setup; the difference is run noise; `check-test-leaks.sh` clean |
 | t4 chain mines | 1.5 s | 204.93 → 204.31 s (2201 → 2209 tests) | 8 new rows in `test_enemy_mines.gd`, hand-ticked in both harnesses except one 8× real-physics shot row (≈ 0.5 s); the difference is run noise |
 | t6 pulse mine | 0.5 s | 205.10 → 205.74 s (2209 → 2216 tests) | 7 new rows in `test_enemy_mines.gd` (dual-mode, real player of each mode); hand-ticked except two 8× rows (real mine + ring); +0.14 s over the allotment, inside run noise |
+| t7 EMP mine | 1.0 s | 205.31 → 206.16 s (2216 → 2233 tests) | new `test_emp_pulse.gd` (6, unit), 5 new `EMP` rows in `test_player_boost_disruption.gd` (hand-ticked) and 6 in `test_enemy_mines.gd` (hand-ticked except two 8× rows); the "before" was measured on a clean `git archive HEAD` copy (205.31 s), +0.85 s is inside the 1.0 s allotment |
 
 **Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
 `tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition

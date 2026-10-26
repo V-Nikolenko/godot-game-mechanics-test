@@ -432,3 +432,102 @@ func test_open_space_boost_bar_tints_violet_while_disrupted() -> void:
 	_tick(ship, 31)
 	assert_eq(bar._fill_color(), normal, "back to the tier colour after")
 	assert_eq(bar.modulate, Color.WHITE, "and the flicker is cleared")
+
+
+# --- EMP (plan §2.8): the hook Phase 9 finishes; Phase 7's stand-in is a full disruption ------------------------------
+
+
+func test_emp_disrupts_for_its_time_with_efficiency_zero(mode: String = use_parameters(MODES)) -> void:
+	var p := _player(mode)
+	assert_false(p.is_emp_disrupted(), "%s: not disrupted by default" % mode)
+	p.apply_emp(2.0, null)
+	assert_true(p.is_emp_disrupted(), "%s: disrupted" % mode)
+	assert_eq(p.boost_efficiency(), 0.0, "%s: efficiency 0.0" % mode)
+	_tick(p, 119)  # 1.983 s
+	assert_true(p.is_emp_disrupted(), "%s: still disrupted one tick before 2.0 s" % mode)
+	assert_eq(p.boost_efficiency(), 0.0, "%s: and the efficiency with it" % mode)
+	_tick(p, 2)  # 2.017 s: within one tick of 2.0 s
+	assert_false(p.is_emp_disrupted(), "%s: over within a tick of 2.0 s" % mode)
+	assert_eq(p.boost_efficiency(), 1.0, "%s: efficiency back to 1.0" % mode)
+
+
+func test_emp_changed_is_declared_and_fires_true_then_false(mode: String = use_parameters(MODES)) -> void:
+	var p := _player(mode)
+	var args: Array = []
+	for s: Dictionary in p.get_signal_list():
+		if s.name == "emp_changed":
+			args = s.args
+	assert_eq(args.size(), 1, "%s: emp_changed(active: bool) declares one argument" % mode)
+	if args.size() == 1:
+		assert_eq(int(args[0].type), TYPE_BOOL, "%s: and it is a bool" % mode)
+	var got: Array = []
+	p.emp_changed.connect(func(a: bool) -> void: got.append(a))
+	p.apply_emp(1.0, null)
+	p.apply_emp(2.0, null)  # a longer one while active is not a new start
+	p.apply_emp(0.5, null)  # a shorter one changes nothing
+	_tick(p, 90)
+	assert_true(p.is_emp_disrupted(), "%s: the longest time (2.0 s) holds at 1.5 s" % mode)
+	_tick(p, 32)
+	assert_eq(got, [true, false], "%s: true once, then false once" % mode)
+
+
+func test_a_zero_second_emp_does_nothing(mode: String = use_parameters(MODES)) -> void:
+	var p := _player(mode)
+	var got: Array = []
+	p.emp_changed.connect(func(a: bool) -> void: got.append(a))
+	p.apply_emp(0.0, null)
+	assert_false(p.is_emp_disrupted(), "%s" % mode)
+	assert_eq(p.boost_efficiency(), 1.0, "%s" % mode)
+	assert_eq(got.size(), 0, "%s: and announces nothing" % mode)
+
+
+func test_open_space_emp_refuses_boost_and_boost_drive_with_no_tank_spent() -> void:
+	var ship := _ship()
+	ship.velocity = Vector2(0, -200)
+	var before: float = ship._boost_meter.charges
+	ship.apply_emp(2.0, null)
+	ship._step_boost(true, true, D)
+	assert_false(ship._boosting, "the Shift boost is refused under an EMP")
+	assert_eq(ship.velocity, Vector2(0, -200), "no velocity write")
+	assert_eq(ship._boost_meter.charges, before, "no drain")
+
+	_equip_engine_boost()
+	var drive_ship := _ship()
+	var meter := drive_ship._boost_meter
+	var charges: float = meter.charges
+	var tanks: int = meter.tanks
+	drive_ship.apply_emp(2.0, null)
+	drive_ship._step_boost(true, true, D)
+	assert_eq(meter.charges, charges, "a refused Drive press spends no tank")
+	assert_eq(meter.tanks, tanks, "and the tank count is unchanged")
+	assert_false(drive_ship.engine_boost_active, "the Drive did not activate")
+	assert_false(drive_ship._boosting, "and did not fall through into the default boost")
+	for i in 121:
+		drive_ship._step_disruption(D)
+	drive_ship._step_boost(true, true, D)
+	assert_true(drive_ship.engine_boost_active, "control: after the EMP the same press fires the Drive")
+
+
+func test_assault_emp_refuses_dash_warp_and_the_h_key_drive() -> void:
+	var f := _fighter()
+	var machine: StateMachine = f.get_node("MovementStateMachine")
+	var dash: DashState = f.get_node("MovementStateMachine/DashState")
+	f.apply_emp(2.0, null)
+	dash.start_state_transition("move_right")
+	assert_true(dash.dashing_timer.is_stopped(), "the roll did not start")
+	assert_ne(machine.current_state, dash, "the machine is not in DashState")
+
+	var box := Node2D.new()
+	add_child_autofree(box)
+	var w := _fighter(box)
+	WarpModule.new().apply(w)
+	w.apply_emp(2.0, null)
+	var start: Vector2 = w.global_position
+	(w.get_node("MovementStateMachine/DashState") as DashState).start_state_transition("move_right")
+	assert_almost_eq(w.global_position.x - start.x, 0.0, 0.0001, "the warp blink is refused (0 px)")
+
+	_equip_engine_boost()
+	var h := _fighter()
+	h.apply_emp(2.0, null)
+	h._input(_h_press())
+	assert_false(h.engine_boost_active, "the H-key Boost Drive is refused")

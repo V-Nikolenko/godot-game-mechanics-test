@@ -1422,3 +1422,132 @@ func test_a_detonation_leaves_a_self_freeing_violet_ring(mode: String = use_para
 	assert_eq(ring.default_color.b > ring.default_color.g, true, "%s: violet" % mode)
 	await _seconds(PulseRing.DURATION + 0.2)
 	assert_false(is_instance_valid(ring), "%s: it frees itself on its own clock" % mode)
+
+
+# ---------------------------------------------------------------------------------------------
+# The EMP mine (plan §2.8): no damage, an EMP through the one hook, a blue-white crackle ring
+# ---------------------------------------------------------------------------------------------
+
+
+func test_the_emp_scene_is_built_and_numbered_and_passes_the_warning_rule_on_emp_radius() -> void:
+	var v := EnemyMine.Variant.EMP
+	assert_not_null(EnemyMineScenes.scene_for(v), "EMP has a scene")
+	assert_eq(int(_export(v, &"variant")), v)
+	assert_eq(_export(v, &"emp_radius"), 190.0)
+	assert_eq(_export(v, &"emp_seconds"), 2.0)
+	assert_eq(_export(v, &"blast_damage"), 0.0, "no hull damage")
+	assert_eq(_export(v, &"trigger_radius"), 80.0)
+	assert_eq(_export(v, &"warning_time"), 0.25)
+	assert_true(_warning_rule(_export(v, &"trigger_radius"), _export(v, &"blast_radius"), _export(v, &"blast_damage"),
+			_export(v, &"emp_radius"), _export(v, &"warning_time"), 0.0),
+			"blast_damage 0, so emp_radius is the effect radius: (80 + 190) / 0.25 = 1080 >= 440")
+	assert_almost_eq((_export(v, &"trigger_radius") + _export(v, &"emp_radius")) / _export(v, &"warning_time"), 1080.0, 0.001)
+	# Boundary: the rule really reads emp_radius for this scene (a blast_radius-only read gives 512, also passing, so
+	# prove it with a synthetic zero-effect EMP that fails).
+	assert_false(_warning_rule(80.0, 48.0, 0.0, 0.0, 0.25, 0.0), "an EMP with no radius would give 320 < 440")
+
+
+## Hand-ticked: a chained EMP mine, real players of the mode at 150 / 190 / 191 px. Centre distance, `<=` radius; no
+## Health damage on anyone, no blast.
+func test_an_emp_detonation_reaches_inside_190_px_and_deals_no_damage(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	harness.root.child_entered_tree.connect(_on_container_child)
+	var at := Vector2(400, 300)
+	var near := _real_player(mode, at + Vector2(150, 0), harness.root)
+	var edge := _real_player(mode, at + Vector2(0, 190), harness.root)
+	var far := _real_player(mode, at + Vector2(-191, 0), harness.root)
+	var m := _row_mine(_Row.new(), harness, EnemyMine.Variant.EMP, at)
+	assert_false(near.is_emp_disrupted(), "%s: nothing is disrupted before the blast" % mode)
+	m.chain_trigger(0.0)
+	_tick(m, 3)
+	assert_true(near.is_emp_disrupted(), "%s: 150 px: disrupted" % mode)
+	assert_true(edge.is_emp_disrupted(), "%s: exactly 190 px is inside" % mode)
+	assert_false(far.is_emp_disrupted(), "%s: 191 px is untouched" % mode)
+	assert_eq(near.boost_efficiency(), 0.0, "%s: the stand-in effect is a full disruption" % mode)
+	for p in [near, edge, far]:
+		assert_eq(int(p.get_meta(&"damage")), 0, "%s: no Health damage" % mode)
+	assert_eq(_blasts.size(), 0, "%s: no ContactBlast" % mode)
+
+
+func test_an_emp_lasts_2_s_and_a_hostility_all_emp_mine_still_deals_no_damage(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var at := Vector2(400, 300)
+	var p := _real_player(mode, at + Vector2(20, 0), harness.root)
+	var m := _row_mine(_Row.new(), harness, EnemyMine.Variant.EMP, at,
+			func(mm: EnemyMine) -> void: mm.hostility = EnemyMine.Hostility.ALL)
+	m.chain_trigger(0.0)
+	_tick(m, 3)
+	assert_eq(int(p.get_meta(&"damage")), 0, "%s: no pulse_damage either" % mode)
+	for i in 119:
+		p._step_disruption(DT)
+	assert_true(p.is_emp_disrupted(), "%s: still disrupted just before 2.0 s" % mode)
+	for i in 3:
+		p._step_disruption(DT)
+	assert_false(p.is_emp_disrupted(), "%s: over at 2.0 s" % mode)
+
+
+## A PROXIMITY or PULSE detonation never calls the EMP hook (control).
+func test_only_an_emp_mine_applies_an_emp(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var at := Vector2(400, 300)
+	var p := _real_player(mode, at + Vector2(20, 0), harness.root)
+	for v: int in [EnemyMine.Variant.PROXIMITY, EnemyMine.Variant.PULSE]:
+		var m := _row_mine(_Row.new(), harness, v, at)
+		m.chain_trigger(0.0)
+		_tick(m, 3)
+	assert_false(p.is_emp_disrupted(), "%s: neither a proximity nor a pulse blast is an EMP" % mode)
+
+
+## Real physics (8x): the real player standing on a live EMP mine. It arms, shows the blue-white effect ring during the
+## warning only, detonates, disrupts the player and deals no Health damage and spawns no blast.
+func test_a_real_emp_mine_warns_with_a_ring_and_disrupts_without_damage(mode: String = use_parameters(MODES)) -> void:
+	_scale_clock()
+	var harness = _world(mode)
+	harness.root.child_entered_tree.connect(_on_container_child)
+	var at := Vector2(300, 300)
+	var m := EnemyMineScenes.scene_for(EnemyMine.Variant.EMP).instantiate() as EnemyMine
+	harness.root.add_child(m)
+	m.global_position = at
+	m.expired.connect(m.queue_free)
+	m.launch(Vector2.ZERO, 0.0, at)
+	var p := _real_player(mode, at + Vector2(10, 0), harness.root)
+	var seen := {"mine": m, "ring_before": false, "ring_warning": 0.0}
+	var watch := func() -> void:
+		var mine: EnemyMine = seen["mine"] if is_instance_valid(seen["mine"]) else null
+		if mine == null:
+			return
+		if mine.is_warning():
+			seen["ring_warning"] = maxf(seen["ring_warning"], mine.effect_ring_radius())
+		elif mine.effect_ring_radius() > 0.0:
+			seen["ring_before"] = true
+	_tick_each_frame(harness.root, watch)
+	await _seconds(1.5)
+	assert_false(is_instance_valid(m), "%s: the mine detonated" % mode)
+	assert_false(seen["ring_before"], "%s: no effect ring outside the warning" % mode)
+	assert_eq(seen["ring_warning"], 190.0, "%s: the effect ring shows emp_radius during the warning" % mode)
+	assert_true(p.is_emp_disrupted(), "%s: the real mine reached the real player" % mode)
+	assert_eq(int(p.get_meta(&"damage")), 0, "%s: and dealt no Health damage" % mode)
+	assert_eq(_blasts.size(), 0, "%s: no blast" % mode)
+
+
+## The crackle ring: spawned at the mine's point in its parent, 190 px, blue-white, gone after 0.35 s on its own clock.
+func test_an_emp_detonation_leaves_a_self_freeing_blue_white_ring(mode: String = use_parameters(MODES)) -> void:
+	_scale_clock()
+	var harness = _world(mode)
+	var at := Vector2(500, 300)
+	var m := _row_mine(_Row.new(), harness, EnemyMine.Variant.EMP, at)
+	m.chain_trigger(0.0)
+	_tick(m, 3)
+	var rings: Array[EmpRing] = []
+	for c in harness.root.get_children():
+		if c is EmpRing:
+			rings.append(c)
+	assert_eq(rings.size(), 1, "%s: exactly one ring" % mode)
+	var ring := rings[0]
+	assert_eq(ring.global_position, at, "%s: at the mine" % mode)
+	assert_eq(ring.max_radius, 190.0)
+	assert_true(ring.default_color.b > ring.default_color.r and ring.default_color.g > ring.default_color.r,
+			"%s: blue-white" % mode)
+	assert_eq(EmpRing.DURATION, 0.35)
+	await _seconds(EmpRing.DURATION + 0.2)
+	assert_false(is_instance_valid(ring), "%s: it frees itself on its own clock" % mode)
