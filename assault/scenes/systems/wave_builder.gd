@@ -94,6 +94,7 @@ func gunship()        -> SpawnConfig: return SpawnConfig.new(GUNSHIP)
 func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
 func missile_corvette() -> SpawnConfig: return SpawnConfig.new(MISSILE_CORVETTE)
 func support_ship()   -> SpawnConfig: return SpawnConfig.new(SUPPORT_SHIP)
+func mine_layer()     -> SpawnConfig: return SpawnConfig.new(MINE_LAYER)
 func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
 func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
 func small_asteroid() -> SpawnConfig: return SpawnConfig.new(SMALL_ASTEROID)
@@ -259,6 +260,7 @@ const GUNSHIP        := "res://assault/scenes/enemies/gunship/gunship.tscn"
 const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"
 const MISSILE_CORVETTE := "res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn"
 const SUPPORT_SHIP   := "res://assault/scenes/enemies/support_ship/support_ship.tscn"
+const MINE_LAYER     := "res://assault/scenes/enemies/mine_layer/mine_layer.tscn"
 const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
 const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn"
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"

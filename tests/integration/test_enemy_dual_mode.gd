@@ -1052,3 +1052,29 @@ func test_the_gravity_field_slows_a_bomber_resistance_enemy_to_0_76(mode: String
 	var outside := _fixture_enemy(harness, centre + Vector2(field.radius + 200.0, 0.0), Vector2(200.0, 0.0), 0.4)
 	_tick(outside, DT)
 	assert_almost_eq(outside.velocity.x, 200.0, 0.001, "%s: unslowed beyond the radius" % mode)
+
+
+# ── The Mine Layer (Phase 7, t10; plan §2.11) ──────────────────────────────────────────────────────
+
+const MINE_LAYER_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/mine_layer/mine_layer.tscn")
+
+
+## APPROACH closes on the player in both modes, and in Assault the layer stays inside the corridor's soft band.
+func test_mine_layer_approach_closes_on_the_player(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 360.0)
+	var layer := MINE_LAYER_SCENE.instantiate() as MineLayer
+	layer.global_position = Vector2(640.0, 60.0)
+	harness.root.add_child(layer)
+	layer.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	layer.set_process(false)
+	var start := layer.global_position.distance_to(harness.player.global_position)
+	for _i in 60:
+		_tick(layer, DT)
+	var closed := start - layer.global_position.distance_to(harness.player.global_position)
+	assert_gt(closed, 60.0, "%s: one second of APPROACH closes the gap (%.1f px)" % [mode, closed])
+	assert_eq((layer.get_node("Brain") as MineLayerBrain).phase, MineLayerBrain.Phase.APPROACH)
+	if harness.is_assault:
+		assert_true(_soft_band_rect().has_point(layer.global_position), "assault: still inside the corridor")

@@ -1,0 +1,143 @@
+[gd_scene load_steps=21 format=3]
+
+[ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_ml"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/mine_layer/mine_layer.gd" id="2_ml"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/bomber.png" id="3_ml"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_ml"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_ml"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_ml"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="7_ml"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/mine_layer/mine_layer_brain.gd" id="8_ml"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="9_ml"]
+[ext_resource type="Script" path="res://global/components/bullet_pool.gd" id="10_ml"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_ordnance/mine.tscn" id="11_ml"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_ordnance/mines/chain_mine.tscn" id="12_ml"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_ordnance/mines/pulse_mine.tscn" id="13_ml"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_ordnance/mines/homing_mine.tscn" id="14_ml"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_ml"]
+resource_local_to_scene = true
+shader = ExtResource("1_ml")
+shader_parameter/enabled = false
+shader_parameter/flash_color = Color(1, 1, 1, 1)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_ml"]
+radius = 40.0
+
+[sub_resource type="Animation" id="Animation_reset_ml"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
+[sub_resource type="Animation" id="Animation_hit_ml"]
+resource_name = "hit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [true, false]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_ml"]
+_data = {
+&"RESET": SubResource("Animation_reset_ml"),
+&"hit": SubResource("Animation_hit_ml")
+}
+
+[node name="MineLayer" type="CharacterBody2D"]
+script = ExtResource("2_ml")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+material = SubResource("ShaderMaterial_ml")
+rotation = 3.1415927
+scale = Vector2(0.92, 0.92)
+texture = ExtResource("3_ml")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_ml")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 65
+script = ExtResource("4_ml")
+metadata/_custom_type_script = "uid://ba3eox7gg0mqf"
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_ml")
+debug_color = Color(0.7, 0, 0, 0.419608)
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("5_ml")
+max_health = 140
+current_health = 140
+metadata/_custom_type_script = "uid://bmvlejhrl0dfy"
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_ml")
+}
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 0
+script = ExtResource("6_ml")
+damage = 25
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+shape = SubResource("CircleShape2D_ml")
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("7_ml")
+constraint_mode = 0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("8_ml")
+
+[node name="StateLight" type="Node2D" parent="."]
+position = Vector2(0, 14)
+script = ExtResource("9_ml")
+
+[node name="Dispenser" type="Marker2D" parent="."]
+position = Vector2(0, -38)
+
+[node name="ProximityPool" type="Node" parent="."]
+script = ExtResource("10_ml")
+bullet_scene = ExtResource("11_ml")
+pool_size = 20
+persist_after_owner_death = true
+
+[node name="ChainPool" type="Node" parent="."]
+script = ExtResource("10_ml")
+bullet_scene = ExtResource("12_ml")
+pool_size = 6
+persist_after_owner_death = true
+
+[node name="PulsePool" type="Node" parent="."]
+script = ExtResource("10_ml")
+bullet_scene = ExtResource("13_ml")
+pool_size = 5
+persist_after_owner_death = true
+
+[node name="HomingPool" type="Node" parent="."]
+script = ExtResource("10_ml")
+bullet_scene = ExtResource("14_ml")
+pool_size = 5
+persist_after_owner_death = true

@@ -85,6 +85,10 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/support_ship/support_ship.tscn",
 	},
 	{
+		"name": "mine_layer",
+		"scene": "res://assault/scenes/enemies/mine_layer/mine_layer.tscn",
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 	},
