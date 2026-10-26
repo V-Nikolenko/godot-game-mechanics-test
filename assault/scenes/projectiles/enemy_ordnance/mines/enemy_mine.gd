@@ -99,6 +99,10 @@ const _MINE_RESET_PROPS: Array[StringName] = [
 ]
 
 var _info := HazardInfo.new()
+## Velocity the mine's PARENT gives it (a moving `Minefield` carries its mines): added to its own motion in the
+## `HazardInfo`, so the avoidance stage leads a carried mine too. The mine never moves itself by it.
+var carry_velocity: Vector2 = Vector2.ZERO : set = set_carry_velocity
+var _own_velocity: Vector2 = Vector2.ZERO
 var _launched: bool = false
 var _registered: bool = false
 var _placed_started: bool = false
@@ -159,7 +163,7 @@ func launch(dir: Vector2, speed: float, target_point: Vector2) -> void:
 	_info.source = self
 	_info.radius = trigger_radius + hazard_pad
 	_info.avoid_weight = 1.0
-	_info.velocity = Vector2.ZERO
+	_set_velocity(Vector2.ZERO)
 	_info.position = global_position
 	_drift_travelled = 0.0
 	_drift_offset = 0.0
@@ -264,7 +268,7 @@ func _on_health_changed(current_health: int) -> void:
 func _move_mine(delta: float) -> void:
 	super(delta)
 	if _fizzling or _done:
-		_info.velocity = Vector2.ZERO
+		_set_velocity(Vector2.ZERO)
 		return
 	match variant:
 		Variant.DRIFTING:
@@ -276,7 +280,7 @@ func _move_mine(delta: float) -> void:
 ## DRIFTING: `drift_speed` along the direction once the eject is over. Unleashed, it fizzles at `drift_max_distance`;
 ## leashed, it ping-pongs within `drift_leash` of where it started and never fizzles on distance.
 func _drift(delta: float) -> void:
-	_info.velocity = Vector2.ZERO
+	_set_velocity(Vector2.ZERO)
 	if _drift_dir == Vector2.ZERO or _clock <= eject_time:
 		return
 	var live := minf(delta, _clock - eject_time)
@@ -286,14 +290,14 @@ func _drift(delta: float) -> void:
 		if absf(next) > drift_leash:
 			next = clampf(next, -drift_leash, drift_leash)
 			_drift_sign = -_drift_sign
-		_info.velocity = _drift_dir * drift_speed * _drift_sign
+		_set_velocity(_drift_dir * drift_speed * _drift_sign)
 		position += _drift_dir * (next - _drift_offset)
 		_drift_offset = next
 		return
 	step = minf(step, maxf(drift_max_distance - _drift_travelled, 0.0))
 	position += _drift_dir * step
 	_drift_travelled += step
-	_info.velocity = _drift_dir * drift_speed
+	_set_velocity(_drift_dir * drift_speed)
 	if _drift_travelled >= drift_max_distance:
 		retire()
 
@@ -301,7 +305,7 @@ func _drift(delta: float) -> void:
 ## HOMING: once armed it notices a player within `notice_radius`, creeps toward them at `home_speed` (turning at
 ## `home_turn_rate`) until they are past `home_lose_radius`, and holds `home_max_distance` from where it was launched.
 func _creep(delta: float) -> void:
-	_info.velocity = Vector2.ZERO
+	_set_velocity(Vector2.ZERO)
 	if not is_armed():
 		return
 	var target := TargetInfo.player(get_tree())
@@ -322,8 +326,18 @@ func _creep(delta: float) -> void:
 		next = _home_origin + from_origin.normalized() * home_max_distance
 	if global_position.distance_to(_home_origin) >= home_max_distance - 0.001 and from_origin.length() >= home_max_distance:
 		return
-	_info.velocity = (next - global_position) / delta
+	_set_velocity((next - global_position) / delta)
 	global_position = next
+
+
+func set_carry_velocity(value: Vector2) -> void:
+	carry_velocity = value
+	_info.velocity = _own_velocity + value
+
+
+func _set_velocity(own: Vector2) -> void:
+	_own_velocity = own
+	_info.velocity = own + carry_velocity
 
 
 func hazard_info() -> HazardInfo:

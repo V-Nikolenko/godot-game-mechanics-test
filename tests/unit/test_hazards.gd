@@ -347,3 +347,18 @@ func test_reset_clears_the_drift() -> void:
 	d.velocity = Vector2(10, 10)
 	d.reset()
 	assert_eq(d.velocity, Vector2.ZERO)
+
+
+# --- minefield (plan §2.10) ----------------------------------------------------------------------
+
+func test_a_minefield_adds_count_hazards_and_removes_them_when_freed() -> void:
+	var before := Hazards.count()
+	var field := (load("res://assault/scenes/hazards/minefield/minefield.tscn") as PackedScene).instantiate()
+	field.count = 6
+	field.process_mode = Node.PROCESS_MODE_DISABLED
+	add_child(field)
+	await wait_process_frames(1)  # each placed mine registers on its own deferred launch
+	assert_eq(Hazards.count(), before + 6, "one hazard per mine")
+	remove_child(field)
+	field.free()
+	assert_eq(Hazards.count(), before, "and none left once the field is gone")
