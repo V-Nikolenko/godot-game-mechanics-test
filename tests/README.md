@@ -571,6 +571,7 @@ t9 0.5 · t10 1.5 · t11 4.5 · t12 1.5 · t13 0.5 · t14 1.5 · t15 8.0 · t16 
 | t2 mine family (`EnemyMine`) | 3.0 s | 202.8 → 203.8 s (`verify.sh` 204.3 s) | new `test_enemy_mines.gd` ≈ 2.5 s on its own (6 shared 8× scenes, the rest hand-ticked); +26 tests; `check-test-leaks.sh` clean |
 | t5 boost disruption (both players) | 1.5 s | 204.62 → 203.82 s (2165 → 2186 tests) | new `test_player_boost_disruption.gd` ≈ 0.5 s on its own, all hand-ticked, no await; the before/after difference is run noise |
 | t3 drifting and homing mines | 1.5 s | 203.91 → 204.08 s (2186 → 2201 tests) | 15 new hand-ticked rows in `test_enemy_mines.gd` (both harnesses), the only awaits are single frame waits for the placed setup; the difference is run noise; `check-test-leaks.sh` clean |
+| t4 chain mines | 1.5 s | 204.93 → 204.31 s (2201 → 2209 tests) | 8 new rows in `test_enemy_mines.gd`, hand-ticked in both harnesses except one 8× real-physics shot row (≈ 0.5 s); the difference is run noise |
 
 **Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
 `tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition

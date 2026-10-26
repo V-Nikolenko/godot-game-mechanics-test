@@ -1028,3 +1028,246 @@ func test_a_homing_mine_never_ends_more_than_900_px_from_launch(mode: String = u
 	assert_lte(farthest, 900.0 + 0.001, "never beyond home_max_distance")
 	assert_gt(farthest, 899.0, "and it did reach the cap")
 	assert_true(inside, "Assault: it holds at its own cap before the corridor's projectile rect (y -444)")
+
+
+# ---------------------------------------------------------------------------------------------
+# Chain mines and chain propagation (§2.5, task t4). Dual-mode and hand-ticked: the chain is registry-driven
+# (`Hazards.around()`, then centre distance), so only the shot rows need real physics (8x).
+# ---------------------------------------------------------------------------------------------
+
+## A hand-ticked scenario: the mines in it, a tick counter, and when (which tick) and how often each one expired.
+class _Row extends RefCounted:
+	var mines: Array[EnemyMine] = []
+	var ticks: int = 0
+	var at: Dictionary = {}
+	var count: Dictionary = {}
+
+	func watch(m: EnemyMine) -> void:
+		m.expired.connect(_on_expired.bind(m))
+
+	func _on_expired(m: EnemyMine) -> void:
+		count[m] = int(count.get(m, 0)) + 1
+		if not at.has(m):
+			at[m] = ticks
+
+	## Seconds between two mines' first `expired` (the tick the second was set off minus the first's).
+	func gap(a: EnemyMine, b: EnemyMine) -> float:
+		return float(int(at[b]) - int(at[a])) / 60.0
+
+
+## A launched, hand-ticked [param variant] mine at [param at], part of [param row].
+func _row_mine(row: _Row, harness: RefCounted, variant: int, at: Vector2, setup: Callable = Callable()) -> EnemyMine:
+	var m := _variant_mine(variant, harness.root, at, setup)
+	m.launch(Vector2.ZERO, 0.0, at)
+	row.watch(m)
+	row.mines.append(m)
+	return m
+
+
+func _tick_row(row: _Row, ticks: int) -> void:
+	for i in ticks:
+		row.ticks += 1
+		for m in row.mines:
+			_tick(m, 1)
+
+
+func test_the_chain_scene_is_built_and_numbered() -> void:
+	var c := EnemyMine.Variant.CHAIN
+	assert_not_null(EnemyMineScenes.scene_for(c), "chain_mine.tscn is built")
+	assert_eq(int(_export(c, &"variant")), c)
+	assert_eq(int(_export(c, &"kind")), EnemyOrdnance.Kind.MINE)
+	assert_eq(_export(c, &"chain_radius"), 150.0)
+	assert_eq(_export(c, &"chain_delay"), 0.2)
+	assert_eq(_export(c, &"shot_detonates"), 1.0, "a shot chain mine detonates")
+	assert_eq(_export(EnemyMine.Variant.PROXIMITY, &"shot_detonates"), 0.0, "a shot proximity mine still defuses")
+	assert_eq(_export(c, &"trigger_radius"), 80.0)
+	assert_eq(_export(c, &"warning_time"), 0.25)
+	assert_eq(_export(c, &"blast_radius"), 48.0)
+	assert_eq(_export(c, &"blast_damage"), 30.0)
+
+
+## Four chain mines 120 px apart: 0 / 0.2 / 0.4 / 0.6 s. A proximity mine 120 px on is chained at 0.8 s and, not being
+## a chain mine, stops it: the one 120 px beyond never goes. Every mine expires exactly once.
+func test_a_chain_ripples_at_0_2_s_a_hop_and_a_proximity_mine_ends_it(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var row := _Row.new()
+	var chain: Array[EnemyMine] = []
+	for i in 4:
+		chain.append(_row_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(100.0 + 120.0 * i, 300)))
+	var stopper := _row_mine(row, harness, EnemyMine.Variant.PROXIMITY, Vector2(100.0 + 120.0 * 4, 300))
+	var beyond := _row_mine(row, harness, EnemyMine.Variant.PROXIMITY, Vector2(100.0 + 120.0 * 5, 300))
+	chain[0].chain_trigger(0.0)
+	_tick_row(row, 150)
+	for i in 4:
+		assert_true(row.at.has(chain[i]), "%s: chain mine %d detonated" % [mode, i])
+		assert_almost_eq(row.gap(chain[0], chain[i]), 0.2 * i, DT + 1e-6, "%s: chain mine %d at %.1f s" % [mode, i, 0.2 * i])
+	assert_almost_eq(row.gap(chain[0], stopper), 0.8, DT + 1e-6, "%s: the proximity mine 120 px on goes at 0.8 s" % mode)
+	assert_false(row.at.has(beyond), "%s: a non-chain mine propagates nothing" % mode)
+	assert_true(beyond.is_armed() and not beyond.is_warning(), "%s: the one beyond it is untouched" % mode)
+	for m in row.mines:
+		if m != beyond:
+			assert_eq(int(row.count.get(m, 0)), 1, "%s: expired exactly once" % mode)
+	assert_eq(int(row.count.get(beyond, 0)), 0)
+
+
+func test_chain_radius_149_is_reached_and_151_is_not(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var row := _Row.new()
+	var near_a := _row_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(100, 200))
+	var near_b := _row_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(100 + 149, 200))
+	var far_a := _row_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(100, 700))
+	var far_b := _row_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(100 + 151, 700))
+	near_a.chain_trigger(0.0)
+	far_a.chain_trigger(0.0)
+	_tick_row(row, 90)
+	assert_true(row.at.has(near_b), "%s: 149 px is within chain_radius" % mode)
+	assert_false(row.at.has(far_b), "%s: 151 px is not (centre distance, not the 140 px footprint)" % mode)
+	assert_true(row.at.has(far_a), "control: the triggered one itself went")
+
+
+## A chain is physical: no warning, armed or not. A chained mine that already ended is never re-triggered, and a mine
+## already chained keeps its first (here the longer) delay.
+func test_a_chained_mine_skips_its_warning_and_is_never_triggered_twice(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var row := _Row.new()
+	var a := _row_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(100, 300))
+	var b := _row_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(220, 300))
+	assert_false(b.is_armed(), "precondition: not even armed yet (arm_delay %.1f s)" % b.arm_delay)
+	b.chain_trigger(1.0)
+	b.chain_trigger(0.0)  # already chained: ignored
+	a.chain_trigger(0.0)
+	_tick_row(row, 30)
+	assert_true(row.at.has(a))
+	assert_false(row.at.has(b), "%s: b keeps its first delay (1.0 s), not the second call's" % mode)
+	assert_false(b.is_warning(), "no warning of its own")
+	_tick_row(row, 45)
+	assert_almost_eq(row.gap(a, b), 1.0, 3.0 * DT, "%s: and detonates at that delay" % mode)
+	# A done mine: ignored, still exactly one `expired`.
+	a.chain_trigger(0.0)
+	b.chain_trigger(0.0)
+	_tick_row(row, 20)
+	assert_eq(int(row.count[a]), 1)
+	assert_eq(int(row.count[b]), 1)
+	# An unlaunched mine is not chained either.
+	var idle := _variant_mine(EnemyMine.Variant.CHAIN, harness.root, Vector2(900, 300))
+	row.watch(idle)
+	idle.chain_trigger(0.0)
+	_tick(idle, 30)
+	assert_eq(int(row.count.get(idle, 0)), 0, "an idle pooled mine is left alone")
+
+
+func test_a_recycled_chain_mine_is_not_still_chained() -> void:
+	var m := _hand_ticked_variant(EnemyMine.Variant.CHAIN)
+	m.launch(Vector2.ZERO, 0.0, Vector2.ZERO)
+	m.chain_trigger(0.5)
+	m.reset()
+	m.launch(Vector2.ZERO, 0.0, Vector2.ZERO)
+	var ended := [0]
+	m.expired.connect(func() -> void: ended[0] += 1)
+	_tick(m, 120)
+	assert_eq(ended[0], 0, "reset() clears the chain: 2 s later it is still live")
+	assert_true(m.is_armed() and not m.is_warning())
+
+
+func _hand_ticked_variant(variant: int) -> EnemyMine:
+	var m := EnemyMineScenes.scene_for(variant).instantiate() as EnemyMine
+	m.process_mode = Node.PROCESS_MODE_DISABLED
+	_container.add_child(m)
+	return m
+
+
+## A PLAYER chain mine sets off an ALL mine, whose blast is `Hazards.pulse_damage` (hurts enemies) - not the chain
+## mine's own `ContactBlast` (the player only).
+func test_a_player_chain_mine_sets_off_an_all_mine_and_that_hurts_enemies(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var row := _Row.new()
+	var chain := _row_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(100, 300))
+	var all_mine := _row_mine(row, harness, EnemyMine.Variant.PROXIMITY, Vector2(220, 300),
+			func(m: EnemyMine) -> void: m.hostility = EnemyMine.Hostility.ALL)
+	var enemy := _visible_enemy(Vector2(220, 330), harness.root)
+	var health := enemy.get_node("Health") as Health
+	var p := _player(Vector2(220, 270), harness.root)
+	assert_eq(chain.hostility, EnemyMine.Hostility.PLAYER)
+	chain.chain_trigger(0.0)
+	_tick_row(row, 30)
+	assert_true(row.at.has(all_mine), "%s: the ALL mine was chained" % mode)
+	assert_eq(health.current_health, 100 - all_mine.blast_damage, "%s: pulse_damage reached the enemy" % mode)
+	assert_eq(int(p.get_meta(&"damage")), all_mine.blast_damage, "%s: and the player" % mode)
+
+
+## `link_points()` lists exactly the live mines within `chain_radius` (centre distance), refreshed every 0.5 s of the
+## mine's own clock; a mine that is not a chain mine has none.
+func test_link_points_list_exactly_the_neighbours_within_chain_radius(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var row := _Row.new()
+	var a := _row_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(100, 300))
+	var b := _row_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(220, 300))
+	var _far := _row_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(100, 600))
+	assert_eq(a.link_points().size(), 0, "nothing is computed before its first refresh")
+	_tick_row(row, 31)
+	assert_eq(a.link_points(), [b.global_position] as Array[Vector2], "%s: only the mine 120 px away (not the one 300 px away)" % mode)
+	# A mine that appears 140 px away is not listed until the next 0.5 s refresh.
+	var p := _row_mine(row, harness, EnemyMine.Variant.PROXIMITY, Vector2(100, 440))
+	_tick_row(row, 10)
+	assert_eq(a.link_points().size(), 1, "%s: still the old set 0.17 s later" % mode)
+	_tick_row(row, 60)
+	var links := a.link_points()
+	assert_eq(links.size(), 2, "%s: refreshed" % mode)
+	assert_true(links.has(b.global_position) and links.has(p.global_position))
+	assert_eq(p.link_points().size(), 0, "a proximity mine draws no links")
+	# A neighbour that fizzled (retire, no blast, so no ripple) drops out at once, and stays out at the next refresh.
+	b.retire()
+	_tick_row(row, 80)
+	assert_eq(a.link_points(), [p.global_position] as Array[Vector2], "%s: the retired neighbour is gone" % mode)
+
+
+## Real physics (8x): shooting a chain mine detonates it and every neighbour in the ripple; shooting a proximity mine
+## still defuses it (no blast, one `expired`).
+func test_shooting_a_chain_mine_detonates_the_group_and_a_proximity_mine_still_defuses(mode: String = use_parameters(MODES)) -> void:
+	_scale_clock()
+	var harness = _world(mode)
+	harness.root.child_entered_tree.connect(_on_container_child)
+	var row := _Row.new()
+	var chain: Array[EnemyMine] = []
+	for i in 3:
+		chain.append(_live_mine(row, harness, EnemyMine.Variant.CHAIN, Vector2(100.0 + 120.0 * i, 300)))
+	var proximity := _live_mine(row, harness, EnemyMine.Variant.PROXIMITY, Vector2(100, 800))
+	await wait_physics_frames(3)
+	var shot := _ordnance_shot(chain[0].global_position, harness.root)
+	await _seconds(1.0)
+	assert_eq(_blasts.size(), 3, "%s: the shot mine and both neighbours blast" % mode)
+	for m in chain:
+		assert_eq(int(row.count.get(m, 0)), 1, "%s: expired exactly once" % mode)
+	assert_eq(int(row.count.get(proximity, 0)), 0, "control: the proximity mine was not touched")
+	shot.queue_free()
+	var shot2 := _ordnance_shot(proximity.global_position, harness.root)
+	await _seconds(0.5)
+	assert_eq(_blasts.size(), 3, "%s: shooting a proximity mine defuses it: no blast" % mode)
+	assert_eq(int(row.count.get(proximity, 0)), 1, "%s: expired once" % mode)
+	shot2.queue_free()
+
+
+## A launched mine with its own processing on (real physics), part of [param row].
+func _live_mine(row: _Row, harness: RefCounted, variant: int, at: Vector2) -> EnemyMine:
+	var m := EnemyMineScenes.scene_for(variant).instantiate() as EnemyMine
+	harness.root.add_child(m)
+	m.global_position = at
+	m.launch(Vector2.ZERO, 0.0, at)
+	row.watch(m)
+	row.mines.append(m)
+	return m
+
+
+func _ordnance_shot(at: Vector2, parent: Node) -> HitBox:
+	var hb := HitBox.new()
+	hb.collision_layer = CollisionLayers.PLAYER_HITBOX
+	hb.collision_mask = 0
+	hb.damage = 50
+	var shape := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 6.0
+	shape.shape = circle
+	hb.add_child(shape)
+	parent.add_child(hb)
+	hb.global_position = at
+	return hb

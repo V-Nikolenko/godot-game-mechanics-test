@@ -64,10 +64,23 @@ enum Hostility { PLAYER, ALL }
 ## HOMING: holds once this far from its launch point.
 @export var home_max_distance: float = 900.0
 
+@export_group("Chain")
+## CHAIN: a detonation sets off every live mine whose centre is within this radius.
+@export var chain_radius: float = 150.0
+## CHAIN: seconds from a detonation to each chained mine's own (no warning; a chain is physical).
+@export var chain_delay: float = 0.2
+## A shot detonates the mine (CHAIN) instead of defusing it.
+@export var shot_detonates: bool = false
+
+## Seconds between two recomputations of a chain mine's links.
+const LINK_REFRESH := 0.5
+const LINK_COLOR := Color(1.0, 0.55, 0.15, 0.35)
+
 const _MINE_RESET_PROPS: Array[StringName] = [
 	&"hostility", &"hazard_pad", &"registers_hazard", &"placed_life",
 	&"drift_speed", &"drift_direction", &"drift_leash", &"drift_max_distance",
 	&"notice_radius", &"home_speed", &"home_turn_rate", &"home_lose_radius", &"home_max_distance",
+	&"chain_radius", &"chain_delay", &"shot_detonates",
 ]
 
 var _info := HazardInfo.new()
@@ -82,6 +95,13 @@ var _drift_sign: float = 1.0
 ## HOMING: where it was launched (global), and whether it currently has the player.
 var _home_origin: Vector2 = Vector2.ZERO
 var _noticing: bool = false
+## CHAIN: set off by a neighbour (`chain_trigger()`), the seconds it waits, and its own clock for them.
+var _chained: bool = false
+var _chain_wait: float = 0.0
+var _chain_clock: float = 0.0
+## CHAIN: the neighbours it links to, refreshed every `LINK_REFRESH` seconds of its own clock.
+var _link_mines: Array = []
+var _link_clock: float = 0.0
 
 
 func _reset_props() -> Array:
@@ -110,6 +130,7 @@ func reset() -> void:
 	_drift_offset = 0.0
 	_drift_sign = 1.0
 	_noticing = false
+	_clear_chain()
 	_unregister()
 
 
@@ -129,6 +150,7 @@ func launch(dir: Vector2, speed: float, target_point: Vector2) -> void:
 	_drift_offset = 0.0
 	_drift_sign = 1.0
 	_noticing = false
+	_clear_chain()
 	_home_origin = global_position
 	_drift_dir = (dir if dir != Vector2.ZERO else drift_direction).normalized()
 	if _should_register():
@@ -146,6 +168,80 @@ func retire() -> void:
 
 func is_fizzling() -> bool:
 	return _fizzling
+
+
+## Sets this mine off [param delay] seconds (of its own clock) from now. No warning, armed or not: a chain is
+## physical. Ignored once done, fading, not launched, or already chained (the first delay stands).
+func chain_trigger(delay: float) -> void:
+	if _done or _fizzling or _chained or not _launched:
+		return
+	_chained = true
+	_chain_wait = maxf(delay, 0.0)
+	_chain_clock = 0.0
+
+
+func is_chained() -> bool:
+	return _chained
+
+
+## Global positions of the live mines within `chain_radius` of this CHAIN mine, as of its last refresh (every
+## `LINK_REFRESH` s); the "fuse links" it draws. Empty for any other variant.
+func link_points() -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	for m in _link_mines:
+		if is_instance_valid(m) and not m._done and not m._fizzling:
+			out.append(m.global_position)
+	return out
+
+
+## The other live mines whose CENTRE is within `chain_radius`. `Hazards.around()` includes each mine's footprint
+## (trigger + pad), so the centre distance decides. Untyped on purpose: a script that names its own `class_name`
+## (`Array[EnemyMine]`, `as EnemyMine`) is a reference cycle the engine reports as a leak at exit.
+func _chain_neighbours() -> Array:
+	var out: Array = []
+	for info: HazardInfo in Hazards.around(global_position, chain_radius):
+		var other := info.source as EnemyOrdnance
+		if other == null or other == self or not other.has_method(&"chain_trigger") or other._done or other._fizzling:
+			continue
+		if global_position.distance_to(other.global_position) <= chain_radius:
+			out.append(other)
+	return out
+
+
+func _refresh_links() -> void:
+	_link_mines = _chain_neighbours()
+
+
+func _clear_chain() -> void:
+	_chained = false
+	_chain_wait = 0.0
+	_chain_clock = 0.0
+	_link_mines.clear()
+	_link_clock = 0.0
+
+
+## A chained mine ignores its trigger, warning and fizzle: it goes off when its chain delay has run.
+func _update_trigger(delta: float) -> void:
+	if _chained and not _fizzling:
+		_chain_clock += delta
+		if _chain_clock >= _chain_wait:
+			_detonate()
+		return
+	super(delta)
+
+
+## A CHAIN mine's blast sets off every neighbour; any other variant propagates nothing.
+func _propagate_chain() -> void:
+	for other in _chain_neighbours():
+		other.chain_trigger(chain_delay)
+
+
+## A shot detonates a `shot_detonates` mine (CHAIN) instead of defusing it.
+func _on_health_changed(current_health: int) -> void:
+	if current_health <= 0 and shot_detonates and not _fizzling:
+		_detonate()
+		return
+	super(current_health)
 
 
 ## Motion by variant. DRIFTING and HOMING write `position` only (a hazard, never a ship's velocity), so a moving
@@ -222,6 +318,11 @@ func hazard_info() -> HazardInfo:
 
 func _physics_process(delta: float) -> void:
 	super(delta)
+	if variant == Variant.CHAIN and _launched and not _done and not _fizzling:
+		_link_clock += delta
+		if _link_clock >= LINK_REFRESH:
+			_link_clock = 0.0
+			_refresh_links()
 	if not _registered:
 		return
 	if _should_register():
@@ -246,6 +347,8 @@ func _on_detonated() -> void:
 		Hazards.pulse_damage(get_tree(), global_position, blast_radius, blast_damage)
 	else:
 		ContactBlast.spawn(get_parent(), global_position, blast_radius, blast_damage, blast_frames)
+	if variant == Variant.CHAIN:
+		_propagate_chain()
 
 
 func _mark_done() -> void:
@@ -288,3 +391,16 @@ func _draw() -> void:
 		var target := TargetInfo.player(get_tree())
 		var look := (target.position - global_position).normalized() if target.has_target else _heading
 		draw_circle(look * body_radius * 0.6, body_radius * 0.38, Color(1.0, 0.85, 0.2))
+	if variant == Variant.CHAIN and not _done and not _fizzling:
+		_draw_links()
+
+
+## The "fuse links": a faint dotted line to each neighbour. Where both ends are CHAIN mines only the one with the lower
+## instance id draws it, so a shared link is not drawn twice (and does not read brighter than a single one).
+func _draw_links() -> void:
+	for m in _link_mines:
+		if not is_instance_valid(m) or m._done or m._fizzling:
+			continue
+		if m.variant == Variant.CHAIN and m.get_instance_id() < get_instance_id():
+			continue
+		draw_dashed_line(Vector2.ZERO, to_local(m.global_position), LINK_COLOR, 1.0, 4.0)
