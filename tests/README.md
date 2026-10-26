@@ -568,6 +568,7 @@ t9 0.5 · t10 1.5 · t11 4.5 · t12 1.5 · t13 0.5 · t14 1.5 · t15 8.0 · t16 
 | Task | Allotment | GUT before → after | Note |
 |---|---|---|---|
 | t1 gate room | frees ≥ 12 s | 216.34 → 202.33 s | the table above |
+| t2 mine family (`EnemyMine`) | 3.0 s | 202.8 → 203.8 s (`verify.sh` 204.3 s) | new `test_enemy_mines.gd` ≈ 2.5 s on its own (6 shared 8× scenes, the rest hand-ticked); +26 tests; `check-test-leaks.sh` clean |
 
 **Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
 `tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition

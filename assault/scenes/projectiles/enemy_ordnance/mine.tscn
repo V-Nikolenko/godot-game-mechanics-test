@@ -1,6 +1,6 @@
 [gd_scene load_steps=8 format=3]
 
-[ext_resource type="Script" path="res://assault/scenes/projectiles/enemy_ordnance/enemy_ordnance.gd" id="1_ord"]
+[ext_resource type="Script" path="res://assault/scenes/projectiles/enemy_ordnance/mines/enemy_mine.gd" id="1_ord"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_ord"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="3_ord"]
 [ext_resource type="Script" path="res://global/components/projectile_lifetime.gd" id="4_ord"]
@@ -19,7 +19,7 @@ script = ExtResource("1_ord")
 kind = 1
 arm_delay = 0.5
 trigger_radius = 80.0
-warning_time = 0.5
+warning_time = 0.25
 blast_radius = 48.0
 blast_damage = 30
 mine_life = 8.0

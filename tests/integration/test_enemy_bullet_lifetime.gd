@@ -261,6 +261,37 @@ func test_the_mine_is_time_bound_only() -> void:
 	assert_lt(cfg.mine_life, lt.max_time, "the mine fizzles before its backstop")
 
 
+## The mine family (docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md §2.1): one time-only row per built variant scene,
+## read from the scene through `EnemyMineScenes.export_of`. Every scene authors a backstop (`max_time` > 0) that a
+## dropped mine's own `mine_life` fits inside; only placed mode (never a scene) makes the backstop inert.
+func test_every_mine_scene_is_time_bound_only() -> void:
+	var built := 0
+	for v: int in EnemyMine.Variant.values():
+		if EnemyMineScenes.scene_for(v) == null:
+			continue
+		built += 1
+		var label := String(EnemyMine.Variant.keys()[v])
+		var max_time := float(EnemyMineScenes.export_of(v, &"max_time", 0.0, ^"ProjectileLifetime"))
+		var max_distance := float(EnemyMineScenes.export_of(v, &"max_distance", 0.0, ^"ProjectileLifetime"))
+		var mine_life := float(EnemyMineScenes.export_of(v, &"mine_life", 8.0))
+		assert_eq(max_distance, 0.0, label + ": a mine has no distance cap")
+		assert_gt(max_time, 0.0, label + ": the scene authors a backstop")
+		assert_gte(max_time, mine_life, label + ": its own life fits inside the backstop")
+	assert_gt(built, 0, "at least PROXIMITY is built")
+
+
+func test_no_mine_speed_is_in_the_round_speed_list() -> void:
+	var speeds := _every_shipped_enemy_bullet_speed()
+	assert_false(speeds.has(_SHIPPED_BOMBER.mine_eject_speed), "the Bomber's mine eject speed is ordnance, not a round")
+	for v: int in EnemyMine.Variant.values():
+		if EnemyMineScenes.scene_for(v) == null:
+			continue
+		for prop: StringName in [&"drift_speed", &"home_speed"]:
+			var s: Variant = EnemyMineScenes.export_of(v, prop, null)
+			if s != null:
+				assert_false(speeds.has(float(s)), "%s %s is a mine's, not a round's" % [EnemyMine.Variant.keys()[v], prop])
+
+
 func test_a_synthetic_100px_per_s_gravity_bomb_fails_its_row() -> void:
 	var lt := _ordnance_lifetime(EnemyOrdnance.Kind.GRAVITY_BOMB)
 	assert_false(_constant_speed_kind_clears(lt.max_distance, 100.0, lt.max_time),
