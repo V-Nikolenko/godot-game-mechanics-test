@@ -44,6 +44,9 @@ const CORVETTE_CONFIG: MissileCorvetteConfig = preload(
 const SUPPORT_CONFIG: SupportShipConfig = preload(
 		"res://assault/scenes/enemies/support_ship/support_ship_config.tres")
 
+const MINE_LAYER_CONFIG: MineLayerConfig = preload(
+		"res://assault/scenes/enemies/mine_layer/mine_layer_config.tres")
+
 const DT := 1.0 / 60.0
 const _SPEEDUP := 8
 const PATROL_SEED := 20260928
@@ -220,6 +223,32 @@ func _corvette_anchor(hub: Node) -> Vector2:
 			* float(hub.missile_corvette_ring_radius)
 
 
+func _mine_layer_anchor(hub: Node) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(float(hub.mine_layer_anchor_bearing_deg))) \
+			* float(hub.mine_layer_ring_radius)
+
+
+## Epic plan §2.15 (phase 7, t14): the Mine Layer's anchor (-22.5 deg on the 2600 ring, about (2402, -995)) clears every
+## mission trigger, pickup and the player's spawn by its own idle ring plus its 650 perceive_radius, margin printed.
+func test_mine_layer_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	assert_eq(float(hub.mine_layer_ring_radius), 2600.0)
+	assert_eq(float(hub.mine_layer_anchor_bearing_deg), -22.5)
+	var anchor := _mine_layer_anchor(hub)
+	assert_almost_eq(anchor.x, 2402.0, 1.0, "the plan's anchor x")
+	assert_almost_eq(anchor.y, -995.0, 1.0, "the plan's anchor y")
+	var points := _interactable_points(hub)
+	_assert_group_clears(anchor, MINE_LAYER_CONFIG.idle_radius, MINE_LAYER_CONFIG.perceive_radius,
+			points, "Mine Layer")
+	var nearest := INF
+	for p: Vector2 in points:
+		nearest = minf(nearest, p.distance_to(anchor))
+	var margin := nearest - MINE_LAYER_CONFIG.idle_radius - MINE_LAYER_CONFIG.perceive_radius
+	print("Mine Layer ring margin: nearest interactable %.1f px, clears idle + perceive by %.1f px" % [nearest, margin])
+	assert_gt(margin, 0.0)
+	hub.free()
+
+
 ## Boundary (t20): the clearance check can reject. A pickup dropped just inside the sniper's reach
 ## is reported; the real scene's points are not.
 func test_a_pickup_moved_inside_the_snipers_reach_fails_the_clearance_check() -> void:
@@ -234,7 +263,7 @@ func test_a_pickup_moved_inside_the_snipers_reach_fails_the_clearance_check() ->
 	hub.free()
 
 
-func test_the_eight_distinct_patrol_anchors_are_well_apart_and_the_support_shares_the_rams() -> void:
+func test_the_nine_distinct_patrol_anchors_are_well_apart_and_the_support_shares_the_rams() -> void:
 	var hub := HUB_SCENE.instantiate()
 	var anchors: Array[Vector2] = [
 		Vector2.RIGHT.rotated(deg_to_rad(float(hub.swarm_anchor_bearing_deg))) * float(hub.patrol_ring_radius),
@@ -245,8 +274,9 @@ func test_the_eight_distinct_patrol_anchors_are_well_apart_and_the_support_share
 		_specialist_anchor(hub, float(hub.bomber_anchor_bearing_deg)),
 		_specialist_anchor(hub, float(hub.ram_anchor_bearing_deg)),
 		_corvette_anchor(hub),
+		_mine_layer_anchor(hub),
 	]
-	assert_eq(anchors.size(), 8)
+	assert_eq(anchors.size(), 9)
 	for i: int in anchors.size():
 		for j: int in range(i + 1, anchors.size()):
 			assert_gt(anchors[i].distance_to(anchors[j]), 1000.0,
@@ -257,6 +287,8 @@ func test_the_eight_distinct_patrol_anchors_are_well_apart_and_the_support_share
 	assert_eq((extras.support.get_node("Brain") as SupportShipBrain).patrol_anchor, anchors[6],
 			"the support's anchor equals the ram's")
 	assert_eq((extras.corvette.get_node("Brain") as MissileCorvetteBrain).patrol_anchor, anchors[7])
+	assert_eq((_mine_layers(built.container)[0].get_node("Brain") as MineLayerBrain).patrol_anchor, anchors[8])
+	assert_almost_eq(anchors[8].distance_to(anchors[7]), 1114.0, 2.0, "the layer's nearest anchor is the corvette's, 1114 px")
 
 
 # ── No reference to the retired ambient hub drone remains anywhere in the project ──────────────
@@ -401,6 +433,14 @@ func _missile_and_support(container: Node2D) -> Dictionary:
 	return out
 
 
+func _mine_layers(container: Node2D) -> Array[MineLayer]:
+	var out: Array[MineLayer] = []
+	for c: Node in container.get_children():
+		if c is MineLayer:
+			out.append(c)
+	return out
+
+
 func test_spawns_one_swarm_squad_and_one_razor_drone() -> void:
 	var built := _spawn_hub(PATROL_SEED)
 	var container: Node2D = built.container
@@ -420,8 +460,9 @@ func test_spawns_one_swarm_squad_and_one_razor_drone() -> void:
 	var extras := _missile_and_support(container)
 	assert_not_null(extras.corvette, "one Missile Corvette spawned")
 	assert_not_null(extras.support, "one Support Ship spawned")
-	assert_eq(container.get_child_count(), swarms.size() + 1 + fighters.size() + gatlings.size() + 3 + 2,
-			"nothing but the eight groups spawned into EnemyContainer")
+	assert_eq(_mine_layers(container).size(), 1, "one Mine Layer spawned")
+	assert_eq(container.get_child_count(), swarms.size() + 1 + fighters.size() + gatlings.size() + 3 + 2 + 1,
+			"nothing but the nine groups spawned into EnemyContainer")
 
 	var f_squad: SquadController = (fighters[0] as Fighter).squad if not fighters.is_empty() else null
 	var g_squad: SquadController = (gatlings[0] as GatlingInterceptor).squad if not gatlings.is_empty() else null
@@ -511,6 +552,15 @@ func test_specialists_carry_their_patrol_anchor_and_spawn_on_it() -> void:
 	assert_eq(ram.global_position, ram_anchor, "the Ram Corvette spawns on its anchor")
 
 
+func test_the_mine_layer_carries_its_patrol_anchor_and_spawns_on_it() -> void:
+	var built := _spawn_hub(PATROL_SEED)
+	var layers := _mine_layers(built.container)
+	assert_eq(layers.size(), 1)
+	var anchor := _mine_layer_anchor(built.hub)
+	assert_eq((layers[0].get_node("Brain") as MineLayerBrain).patrol_anchor, anchor)
+	assert_eq(layers[0].global_position, anchor, "the Mine Layer spawns on its anchor")
+
+
 func _brain_seeds(container: Node2D) -> Array[int]:
 	var seeds: Array[int] = []
 	for c: Node in container.get_children():
@@ -533,12 +583,13 @@ func test_the_existing_groups_seeds_are_unchanged_by_the_specialists() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = PATROL_SEED
 	var expected: Array[int] = []
-	for i: int in 14:
+	for i: int in 15:
 		var s := rng.randi()
 		expected.append(s if s != 0 else 1)
 	var seeds := _brain_seeds(built.container)
 	assert_eq(seeds.slice(0, 12), expected.slice(0, 12), "the existing 12 draws keep their seeds")
-	assert_eq(seeds.slice(12), expected.slice(12), "the corvette takes draw 13 and the support draw 14")
+	assert_eq(seeds.slice(12, 14), expected.slice(12, 14), "the corvette takes draw 13 and the support draw 14")
+	assert_eq(seeds.slice(14), expected.slice(14), "the Mine Layer takes draw 15, after every earlier seed")
 
 
 ## Run with and without the tactical space (plan §2.16): its hazards are in the registry for the second case.
@@ -561,8 +612,14 @@ func test_nobody_perceives_the_player_at_frame_0(with_space: bool = use_paramete
 	var extras := _missile_and_support(built.container)
 	all_drones.append(extras.corvette)
 	all_drones.append(extras.support)
+	var mine_layers := _mine_layers(built.container)
+	all_drones.append_array(mine_layers)
 	assert_gt(all_drones.size(), 1, "sanity: something spawned")
 	_tick_all(all_drones)
+	assert_eq(mine_layers.size(), 1, "sanity: the Mine Layer spawned")
+	for ml: MineLayer in mine_layers:
+		assert_eq((ml.get_node("Brain") as MineLayerBrain).phase, MineLayerBrain.Phase.IDLE,
+				"a Mine Layer must not notice the player on its first tick")
 	assert_eq((extras.corvette.get_node("Brain") as MissileCorvetteBrain).phase, MissileCorvetteBrain.Phase.IDLE,
 			"a Missile Corvette must not notice the player on its first tick")
 	assert_eq((extras.support.get_node("Brain") as SupportShipBrain).phase, SupportShipBrain.Phase.IDLE,
@@ -656,6 +713,43 @@ func test_a_hub_bombers_mine_lands_in_the_enemy_container() -> void:
 	assert_eq(after, before + 1, "exactly one ordnance joined the container")
 
 
+## Plan §2.15 (t14): a mine the hub's Mine Layer lays lands in `EnemyContainer` (pool -> ship -> container) and stays
+## there in real physics at 8x. The engaged layer is hand-ticked until its own cycle lays one; the container, the
+## persistence rule (no fizzle in Open Space) and registration are then read after real frames.
+func test_a_hub_mine_layers_mine_lands_in_the_enemy_container() -> void:
+	var built := _spawn_hub(PATROL_SEED, -1, Vector2.ZERO, true)
+	var container: Node2D = built.container
+	var layer: MineLayer = _mine_layers(container)[0]
+	(built.h.player as Node2D).global_position = layer.global_position + Vector2(500.0, 0.0)
+	var guard := 0
+	var mine: EnemyMine = null
+	while mine == null and guard < 3000:
+		_tick(layer)
+		for c: Node in container.get_children():
+			if c is EnemyMine:
+				mine = c
+				break
+		guard += 1
+	assert_not_null(mine, "the engaged hub layer laid a mine of its own accord")
+	if mine == null:
+		return
+	assert_eq(mine.get_parent(), container, "the mine's parent is EnemyContainer")
+	assert_eq(mine.mine_life, 0.0, "an Open Space mine never fizzles")
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	_clock_scaled = true
+	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
+	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
+	Engine.time_scale = _saved_time_scale * _SPEEDUP
+	for i: int in 30:
+		await get_tree().physics_frame
+	assert_true(is_instance_valid(mine), "the mine is still live after 30 real physics frames")
+	if is_instance_valid(mine):
+		assert_eq(mine.get_parent(), container, "and still in EnemyContainer")
+		assert_false(mine.is_fizzling())
+
+
 ## Plan §2.17: a hub corvette's rocket is parented to `EnemyContainer` (pool -> ship -> container) in real physics at
 ## 8x, with the player held in front of its nose so its own cycle fires.
 func test_a_hub_corvettes_rocket_lands_in_the_enemy_container() -> void:
@@ -735,12 +829,19 @@ func _patrol_groups(hub: Node) -> Dictionary:
 		"Ram": [ram_anchor, RAM_CONFIG.idle_radius, RAM_CONFIG.perceive_radius],
 		"Missile Corvette": [_corvette_anchor(hub), CORVETTE_CONFIG.idle_radius, CORVETTE_CONFIG.perceive_radius],
 		"Support": [ram_anchor, SUPPORT_CONFIG.idle_radius, SUPPORT_CONFIG.perceive_radius],
+		"Mine Layer": [_mine_layer_anchor(hub), MINE_LAYER_CONFIG.idle_radius, MINE_LAYER_CONFIG.perceive_radius],
 	}
 
 
 ## World radius of one element of the space, read from the un-instantiated-in-tree scene (a `Wreck`'s `@onready` shape
 ## is not resolved before it enters the tree, so its body circle is read directly).
 func _element_radius(node: Node) -> float:
+	if node is Minefield:
+		# `Minefield` has no `trigger_radius` of its own: read it from the proximity mine scene. A placed drifting mine can
+		# wander `drift_leash` from its ring point. The hub field is 200 + 120 + 80 = 400 px.
+		var f := node as Minefield
+		return f.radius + (f.drift_leash if f.w_drifting > 0.0 else 0.0) \
+				+ float(EnemyMineScenes.export_of(EnemyMine.Variant.PROXIMITY, &"trigger_radius", 80.0))
 	if node is HazardField:
 		return (node as HazardField).radius
 	if node is DebrisFragment:
@@ -892,7 +993,7 @@ func test_the_space_has_a_sight_line_blocker_that_refuses_a_real_sniper_a_line()
 	assert_eq(blockers, 3, "all three structures were exercised")
 
 
-## While the space exists every patrol row stays what it was: the same fourteen seeds and the same composition (the
+## While the space exists every patrol row stays what it was: the same fifteen seeds and the same composition (the
 ## frame-0 row above is parameterised over with / without the space).
 func test_with_the_space_present_the_patrol_seeds_and_composition_are_unchanged() -> void:
 	var built := _spawn_hub(PATROL_SEED, -1, _player_spawn, false, true)
@@ -900,10 +1001,105 @@ func test_with_the_space_present_the_patrol_seeds_and_composition_are_unchanged(
 	var rng := RandomNumberGenerator.new()
 	rng.seed = PATROL_SEED
 	var expected: Array[int] = []
-	for i: int in 14:
+	for i: int in 15:
 		var s := rng.randi()
 		expected.append(s if s != 0 else 1)
 	assert_eq(_brain_seeds(built.container), expected, "the space draws nothing from the patrol rng")
 	var found := _swarm_and_razor(built.container)
 	assert_eq((found.swarms as Array).size(), 4)
-	assert_eq(built.container.get_child_count(), 14, "nothing but the eight patrol groups spawned")
+	assert_eq(built.container.get_child_count(), 15, "nothing but the nine patrol groups spawned")
+
+
+# ── Phase 7 (plan §2.15, t14): the Mine Layer's patrol and the placed minefield ────────────────
+
+## The hub's own `TacticalSpace/Minefield`, a copy placed in a bare Open Space world with its processing off, for
+## hand-ticking. Its position is the real one.
+func _hub_field() -> Minefield:
+	var h: RefCounted = HARNESS.open_space()
+	add_child_autofree(h.root)
+	var donor := HUB_SCENE.instantiate()
+	var field := donor.get_node("TacticalSpace/Minefield").duplicate() as Minefield
+	field.position = (donor.get_node("TacticalSpace") as Node2D).position + (donor.get_node("TacticalSpace/Minefield") as Node2D).position
+	donor.free()
+	field.process_mode = Node.PROCESS_MODE_DISABLED
+	h.root.add_child(field)
+	return field
+
+
+func test_the_hub_field_is_the_planned_ring_with_the_planned_weights() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var field := hub.get_node("TacticalSpace/Minefield") as Minefield
+	var space := hub.get_node("TacticalSpace") as Node2D
+	assert_not_null(field, "the hub places a Minefield under TacticalSpace")
+	assert_eq(space.position + field.position, Vector2(3300.0, 560.0), "at (3300, 560)")
+	assert_eq(field.pattern, Minefield.Pattern.RING)
+	assert_eq(field.count, 9)
+	assert_eq(field.radius, 200.0)
+	assert_eq(field.rng_seed, 7, "seed-stable")
+	assert_eq(field.hostility, EnemyMine.Hostility.ALL)
+	assert_eq([field.w_proximity, field.w_chain, field.w_drifting, field.w_emp, field.w_homing, field.w_pulse],
+			[0.4, 0.3, 0.15, 0.15, 0.0, 0.0])
+	assert_almost_eq(_element_radius(field), 400.0, 0.01, "radius 200 + drift leash 120 + proximity trigger 80")
+	hub.free()
+
+
+## The sweep covers the field (it is an element of the space), and the plan's computed clearances hold.
+func test_the_field_clears_the_mine_layer_and_gatling_groups_by_the_planned_margins() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var found := false
+	for e: Array in _space_elements(hub):
+		if e[2] != "Minefield":
+			continue
+		found = true
+		var groups := _patrol_groups(hub)
+		var layer: Array = groups["Mine Layer"]
+		var gatling: Array = groups["Gatling"]
+		var to_layer: float = (layer[0] as Vector2).distance_to(e[0]) - float(e[1]) - float(layer[1]) - float(layer[2])
+		var to_gatling: float = (gatling[0] as Vector2).distance_to(e[0]) - float(e[1]) - float(gatling[1]) - float(gatling[2])
+		print("Minefield clearance: Mine Layer %.1f px, Gatling %.1f px" % [to_layer, to_gatling])
+		assert_almost_eq(to_layer, 586.0, 3.0, "plan: 1796 - 400 - 810")
+		assert_almost_eq(to_gatling, 775.0, 3.0, "plan: Gatling 775 px")
+		assert_eq(float(e[1]), 400.0)
+	assert_true(found, "the sweep's element list includes the Minefield")
+	hub.free()
+
+
+## Boundary: the sweep rejects a field pushed onto the Mine Layer's anchor.
+func test_the_space_clearance_sweep_rejects_a_minefield_on_the_mine_layers_anchor() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var elements := _space_elements(hub)
+	elements.append([_mine_layer_anchor(hub) + Vector2(0.0, 500.0), 400.0, "PlantedField"])
+	var violations := _space_clearance_violations(hub, elements)
+	assert_true(violations.any(func(v: String) -> bool: return v.begins_with("Mine Layer") and v.contains("PlantedField")))
+	hub.free()
+
+
+## Plan §2.15: every hub field mine (PROXIMITY ones built from `mine.tscn` with its authored 8.0 s life included) is
+## still live, placed, ALL and registered 60 s after load. Hand-ticked.
+func test_every_hub_field_mine_is_still_live_60_seconds_after_load() -> void:
+	var field := _hub_field()
+	await wait_process_frames(1)
+	var mines := field.mines()
+	assert_eq(mines.size(), 9, "the ring laid its nine mines")
+	var proximity := 0
+	for m: EnemyMine in mines:
+		if m.variant == EnemyMine.Variant.PROXIMITY:
+			proximity += 1
+	assert_gt(proximity, 0, "the field holds mine.tscn mines (authored life 8.0)")
+	assert_eq(EnemyMineScenes.export_of(EnemyMine.Variant.PROXIMITY, &"mine_life", 0.0), 8.0, "precondition")
+	for i: int in 3600:
+		for m: EnemyMine in mines:
+			m._physics_process(DT)
+		field._physics_process(DT)
+	assert_true(is_instance_valid(field), "the field is still there")
+	for m: EnemyMine in mines:
+		assert_true(is_instance_valid(m), "a field mine freed itself")
+		if not is_instance_valid(m):
+			continue
+		assert_eq(m.hostility, EnemyMine.Hostility.ALL)
+		assert_true(m.placed)
+		assert_false(m.is_fizzling(), "no field mine fizzles")
+		var registered := false
+		for info: HazardInfo in Hazards.around(m.global_position, 1.0):
+			registered = registered or info.source == m
+		assert_true(registered, "still registered as a hazard")

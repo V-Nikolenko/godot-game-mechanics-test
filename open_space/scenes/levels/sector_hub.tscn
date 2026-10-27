@@ -30,6 +30,7 @@
 [ext_resource type="PackedScene" path="res://assault/scenes/hazards/wreck/structure_cargo_platform.tscn" id="26_cargo"]
 [ext_resource type="PackedScene" path="res://assault/scenes/hazards/wreck/structure_station_module.tscn" id="27_module"]
 [ext_resource type="PackedScene" path="res://assault/scenes/hazards/wreck/debris_drift.tscn" id="28_debris"]
+[ext_resource type="PackedScene" path="res://assault/scenes/hazards/minefield/minefield.tscn" id="29_minefield"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
@@ -261,3 +262,15 @@ message = "Sector hub maintenance terminal: all patrol drones nominal. Somebody 
 [node name="InfoLogVoeterWreck" parent="." instance=ExtResource("21_ilog")]
 position = Vector2(-480, -300)
 message = "Salvaged hull plate, drifting near Voeter K05M: scorch pattern doesn't match any registered weapon signature."
+
+[node name="Minefield" parent="TacticalSpace" instance=ExtResource("29_minefield")]
+position = Vector2(3300, 560)
+pattern = 1
+count = 9
+radius = 200.0
+rng_seed = 7
+w_proximity = 0.4
+w_drifting = 0.15
+w_chain = 0.3
+w_emp = 0.15
+hostility = 1

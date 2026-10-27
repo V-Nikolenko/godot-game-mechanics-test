@@ -2754,3 +2754,19 @@ Plan §2.14 as written, with these notes. Tests: `tests/integration/test_mine_la
   The hatch and wake rows read the shared `_natural_pass` scenario, extended with per-tick hatch and dispenser records and a hand-stepped wake; no new scenario was run.
 - **No deviations** from plan §2.13. The plan's "scale tolerance" is 0.01.
 - Gate time: GUT 210.55 -> 209.99 s (2312 -> 2322 tests; allotment 0.5 s); `test_mine_layer.gd` alone 2.90 -> 2.92 s. The "before" is a clean `git archive HEAD` copy.
+
+### Phase 7, built in t14 (hub Mine Layer patrol and the placed minefield) (2026-10-27)
+
+Plan §2.15 as written, no deviations.
+- **Patrol:** `SectorHub._spawn_patrol()` appends `_spawn_mine_layer(_mine_layer_anchor(), rng)` as draw 15 (after the Support Ship's 14). New exports `mine_layer_ring_radius` 2600 and
+  `mine_layer_anchor_bearing_deg` -22.5, anchor (2402.3, -995.1). `patrol_anchor` and the brain's `rng_seed` are set before `add_child()`. Every earlier seed is unchanged.
+- **Field:** `TacticalSpace/Minefield` in `sector_hub.tscn` at (3300, 560): RING, 9 mines, radius 200, `rng_seed` 7, weights proximity 0.4 / chain 0.3 / drifting 0.15 / EMP 0.15, hostility ALL. The
+  `ext_resource` has no `uid` (the scene file mints none by hand).
+- **Clearances (printed by the tests):** the Mine Layer anchor clears the nearest interactable by 1036.3 px past idle + perceive (nearest 1846.3 px); the field (element radius 400 = 200 + 120 drift leash +
+  80 proximity trigger, read from `EnemyMineScenes.export_of`) clears the Mine Layer group by 585.6 px and the Gatling group by 775.1 px; the Mine Layer's nearest anchor is the Missile Corvette's, 1114 px away.
+- **Tests:** `test_sector_hub_patrol.gd` gained the Mine Layer in `_patrol_groups()`, the `Minefield` case in `_element_radius()`, the ring row, the nine-anchor spacing row (renamed from "eight"), the seed row
+  (draw 15), the composition / container-count / frame-0 IDLE rows, a hub-field row, a field-clearance row with a rejecting boundary, a 60 s hub-field liveness row (hand-ticked; all nine mines, the
+  PROXIMITY ones built from `mine.tscn`, still placed / ALL / registered / not fizzling) and "a hub Mine Layer's mine lands in `EnemyContainer`" (the engaged layer is hand-ticked until it lays, then 30
+  real physics frames on the 8x clock).
+- **Hub frame time** (headless `Performance.TIME_PHYSICS_PROCESS + TIME_PROCESS`, 600 frames, full `sector_hub.tscn`): about 7.3 ms mean with the layer and the field live against about 5.5 ms with both
+  removed (two runs), i.e. roughly +1.8 ms of script time per frame for the layer, its idle, nine mines and the extra hazard registrations. No rendering is included.
