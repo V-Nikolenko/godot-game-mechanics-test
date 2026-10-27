@@ -50,3 +50,48 @@ extends ShipConfig
 @export_group("Rail")
 ## While a rail owns the layer: a proximity mine at the dispenser every `rail_mine_interval` seconds.
 @export var rail_mine_interval: float = 1.6
+
+@export_group("Passes")
+## Smoothing (s) of the player's velocity v-bar, and the speed (px/s) at or above which the player is "moving".
+@export var velocity_smoothing: float = 0.5
+@export var frame_speed: float = 60.0
+## One pass: a `pass_length` px line of `mines_per_pass` mines, `mine_step` px apart along the axis.
+@export var pass_length: float = 600.0
+@export var mine_step: float = 100.0
+@export var mines_per_pass: int = 6
+## ZIGZAG puts the mines on the vertices at +-`zigzag_amplitude`; ARC bows them `arc_depth` toward the player.
+@export var zigzag_amplitude: float = 35.0
+@export var arc_depth: float = 110.0
+## Chance a pass is an ARC rather than a ZIGZAG.
+@export var arc_chance: float = 0.5
+## LEAD form: the centre this far ahead of the predicted player (px). FENCE form: this far from the player toward the
+## layer (px). Assault: this far above the player (px).
+@export var ahead_distance: float = 260.0
+@export var fence_distance: float = 320.0
+@export var assault_ahead: float = 220.0
+## LEAD form: the cap on the line's own lead time (s), and the latest arrival the scan tries (s).
+@export var lead_horizon: float = 3.0
+@export var lead_scan_cap: float = 6.0
+## The run-in R is this far before the start S (px); the plan freezes within `commit_distance` of R; the run-in starts
+## within `path_lookahead` of R, which is also how far ahead the run-in and LAY aim (px).
+@export var run_in: float = 150.0
+@export var commit_distance: float = 200.0
+@export var path_lookahead: float = 60.0
+## Open Space spread: a new centre this far (px) from every earlier pass that still has a live mine.
+@export var min_pass_separation: float = 380.0
+## Open Space backstop: an APPROACH this long (s) without a frozen plan takes the fence fallback.
+@export var approach_max_seconds: float = 6.0
+## Open Space BREAK_OFF: `break_speed` (px/s) for `break_seconds`; then REPOSITION at `standoff_range` (px) for a period
+## drawn from `pass_period_min..pass_period_max` (s).
+@export var break_speed: float = 260.0
+@export var break_seconds: float = 1.2
+@export var standoff_range: float = 600.0
+@export var pass_period_min: float = 5.0
+@export var pass_period_max: float = 7.0
+## Tail drop: a player within `tail_range` (px) inside the rear `tail_cone_deg` cone gets a mine, at most every
+## `tail_drop_cooldown` (s).
+@export var tail_range: float = 280.0
+@export var tail_cone_deg: float = 60.0
+@export var tail_drop_cooldown: float = 2.5
+## Assault: every mine stays this far (px) inside `EnemyWorld.view_rect()`.
+@export var view_margin: float = 64.0

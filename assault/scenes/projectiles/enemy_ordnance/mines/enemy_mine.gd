@@ -189,6 +189,11 @@ func is_fizzling() -> bool:
 	return _fizzling
 
 
+## True from `launch()` until the life ends or starts to fade: a recycled pooled mine reads false until its next launch.
+func is_live() -> bool:
+	return _launched and not _done and not _fizzling
+
+
 ## Sets this mine off [param delay] seconds (of its own clock) from now. No warning, armed or not: a chain is
 ## physical. Ignored once done, fading, not launched, or already chained (the first delay stands).
 func chain_trigger(delay: float) -> void:

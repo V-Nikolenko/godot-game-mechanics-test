@@ -2676,3 +2676,39 @@ are *planned* decisions; check this phase's *as built* section, once written, be
 - Chosen from several candidates per sprite (the first chain / drifting / beacon / proximity results were a four-prong cross, a ship-like capsule, a front-view robot-looking buoy and dark-on-dark spikes). The drifting sprite has fins but no visible nozzle.
 - Rows: `test_enemy_mines.gd` (every variant scene has an opaque centre, transparent corners, its own texture and no `body_color`; no two sprites share a silhouette; the homing eye shows only while noticing) and `test_hazard_art.gd` (the beacon: size, opaque centre, transparent corners, scene wiring and blink). `test_entity_sprite_transparency.gd` reaches the mine and minefield scenes through its existing `projectiles` / hazards sweep and stays green.
 - Gate time: GUT 207.49 -> 207.86 s (2272 -> 2277 tests; allotment 0.5 s, +0.36 s). The "before" is a clean `git archive HEAD` copy.
+
+### Built in t11 (Mine Layer passes)
+- `MineLayerBrain` (`mine_layer_brain.gd`) plays the pass AI of plan §2.12: APPROACH (seek R, then the run-in R -> S) -> LAY -> BREAK_OFF -> REPOSITION in Open
+  Space, one pass then DISENGAGE in Assault. Task plan (escalated, independently reviewed, R3 APPROVED): `docs/plans/cmvkb0hdc00uiqs2xhvb2awai/3-plan.md`.
+  Names later tasks build on: `enum Shape { ZIGZAG, ARC }`, **`signal mine_dropped(mine: EnemyMine)`** (every drop the brain makes, pass and tail; t13's wake
+  can read it), consts `ARRIVAL_SCAN_STEP` 0.1 / `ARRIVAL_BISECTIONS` 5 (re-declared, not borrowed from the Bomber), `SPREAD_EXTRA` 10, `REPOSITION_LEAD` 0.4,
+  `NO_STACK_PAD` 40, `CHARGE_TIME` 0.3, `TIE_PX` 1, `STALL_FACTOR` 1.2 / `STALL_SLACK` 0.5, `RUN_IN_STALL_SECONDS` 20; the seams listed in `ENEMY.md`
+  (`pass_form` is `&"lead"`, `&"fence"` or `&"assault"`). `lay_mine(variant, rest)` is the only way the brain lays (it keeps the live FIFO and `retire()`s the
+  oldest at `max_live_mines` / `assault_max_live_mines`); `MineLayer.drop_mine()` is unchanged. `MineLayerConfig` gained `@export_group("Passes")` (the task
+  plan's 27 flat fields, script defaults = §2.12's numbers, `.tres` unchanged).
+- **Addition (`EnemyMine`):** `is_live() -> bool` (`_launched and not _done and not _fizzling`); a recycled pooled mine reads false until its next launch.
+- **Pre-approved lever used (§2.12, the acceleration-limited form of the task plan):** LAY drives the mover through
+  `mover.boost(v.normalized(), v.length(), delta)` with `v = own_velocity().move_toward(aim_dir * lay_speed, acceleration * delta)`, every tick. Forced by
+  `test_mine_layer.gd::test_lay_flies_sideways_and_on_the_path` "earlier pass" (an older ZIGZAG line crossing the new one near its E end): with plain
+  `request_velocity()` avoidance turned the layer **85.5 deg and 178.2 px** off its line; with the lever 32.7 deg / 11.4 px, the same as with no older line.
+  Consequence for later phases: **in LAY the Mine Layer skips the avoidance stage** (hazard slow and drift still apply); it crosses an older line, and a placed
+  `ALL` minefield in its path can set it off (PLAYER mines cannot).
+- **Changed row (premise):** `test_enemy_dual_mode.gd::test_mine_layer_approach_closes_on_the_player` became
+  `test_mine_layer_approach_closes_on_its_run_in_point`: APPROACH now seeks R (450 px beside the line's centre), so from (640, 60) the layer can fly away from a
+  player at (640, 360). It asserts the gap to `pass_run_in_point` closes by > 60 px in 1 s, phase still APPROACH, Assault inside the soft band.
+- **Pinned in the task plan (not in §2.12):** the abandon guard (Open Space: a frozen R not reached is given up to REPOSITION, `abandoned_passes` + 1, after 6 s
+  within `commit_distance` without a run-in, 12 s never within it, or 20 s in the run-in); BREAK_OFF raises `mover.max_speed` to `break_speed` (the mover caps
+  every request at `max_speed`); no-stacking is checked at drop time against every live mine (`Hazards.around()` plus this layer's FIFO), this pass's own exempt;
+  the tail cone is ±30 deg about the stern and DISENGAGE counts as engaged; DISENGAGE after a pass exits along `pass_axis`; an ARC pass's mine 5 always drops at
+  the end (the plus rule would need the centre at 662.6 px of a 656.6 px path). Small addition: the tick a LAY ends also ticks BREAK_OFF / DISENGAGE, so no
+  tick passes with no request.
+- Measured (seed 4242, hand-ticked): standing fence plans freeze on tick 101 (1.68 s) at 0 / 90 / 180 deg; the lead plan 600 px ahead of a 100 px/s stub freezes
+  on tick 92 with C 190 / 133 px ahead of the stub when mines 2 / 3 arm; abeam on tick 232 (3.87 s). 60 s standing scenario: 4 passes, 0 fence / 0 spread
+  fallbacks, 0 abandoned, live peak 18, closest approach to a live mine of an earlier pass outside LAY / BREAK_OFF 151 px. 60 s circling scenario (120 px/s on a
+  700 px circle): 3 passes, 3 fence fallbacks (a 120 px/s player abeam 700 px away is out of the 6 s scan's reach), 1 abandoned pass, 0 spread fallbacks. The
+  task plan's risk that the 4th standing pass "almost always" takes the spread fallback did not show with this seed (a legal rotation was left).
+  Assault (harness, player at (640, 360), layer from (240, 300)): LAY 2.07 -> 5.83 s after spawn (3.77 s for the pass), then DISENGAGE along the axis; freed 7.57 s after spawn. Open Space standing (bearing 0): LAY 3.93 -> 7.70 s.
+- For t12 (hub idle): every t11 row sets `start_engaged = true`; `tick()` does not dispatch IDLE / NOTICING / RETURNING yet. For t13: the StateLight goes
+  CHARGING 0.3 s before each drop and ARMED for the rest of LAY; the hatch and the wake are t13's. For t15: one pass per Assault life; the budget defers to the end
+  of LAY, bounded by the stall guard (<= 5.67 s for ZIGZAG).
+- Gate time: GUT 207.67 -> 209.85 s (2277 -> 2301 tests; allotment 4.5 s, +2.18 s; `test_mine_layer.gd` 0.77 -> 2.09 s on its own). The "before" is a clean `git archive HEAD` copy.

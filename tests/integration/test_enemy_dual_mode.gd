@@ -1060,8 +1060,10 @@ const MINE_LAYER_SCENE: PackedScene = \
 		preload("res://assault/scenes/enemies/mine_layer/mine_layer.tscn")
 
 
-## APPROACH closes on the player in both modes, and in Assault the layer stays inside the corridor's soft band.
-func test_mine_layer_approach_closes_on_the_player(mode: String = use_parameters(["open_space", "assault"])) -> void:
+## APPROACH closes on its run-in point R in both modes, and in Assault the layer stays inside the corridor's soft band.
+## (t10's row asserted the gap to the PLAYER closed; plan §2.12 (t11) makes APPROACH seek R, beside the line's start, so
+## from (640, 60) the layer may fly away from a player at (640, 360). Recorded in DECISIONS, Phase 7, t11.)
+func test_mine_layer_approach_closes_on_its_run_in_point(mode: String = use_parameters(["open_space", "assault"])) -> void:
 	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
 	add_child_autofree(harness.root)
 	harness.player.global_position = Vector2(640.0, 360.0)
@@ -1070,11 +1072,13 @@ func test_mine_layer_approach_closes_on_the_player(mode: String = use_parameters
 	harness.root.add_child(layer)
 	layer.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
 	layer.set_process(false)
-	var start := layer.global_position.distance_to(harness.player.global_position)
+	var brain := layer.get_node("Brain") as MineLayerBrain
+	_tick(layer, DT)  # the first tick plans the pass
+	var start := layer.global_position.distance_to(brain.pass_run_in_point)
 	for _i in 60:
 		_tick(layer, DT)
-	var closed := start - layer.global_position.distance_to(harness.player.global_position)
-	assert_gt(closed, 60.0, "%s: one second of APPROACH closes the gap (%.1f px)" % [mode, closed])
-	assert_eq((layer.get_node("Brain") as MineLayerBrain).phase, MineLayerBrain.Phase.APPROACH)
+	var closed := start - layer.global_position.distance_to(brain.pass_run_in_point)
+	assert_gt(closed, 60.0, "%s: one second of APPROACH closes the gap to R (%.1f px)" % [mode, closed])
+	assert_eq(brain.phase, MineLayerBrain.Phase.APPROACH)
 	if harness.is_assault:
 		assert_true(_soft_band_rect().has_point(layer.global_position), "assault: still inside the corridor")
