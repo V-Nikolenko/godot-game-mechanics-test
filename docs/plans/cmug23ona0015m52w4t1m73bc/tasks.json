@@ -2,9 +2,9 @@
   "tasks": [
     {
       "key": "t1",
-      "title": "The test gate has room again for the energy-weapon phase: GUT time drops by at least 10 s without weakening a single test",
-      "description": "Recover GUT time before Phase 8 adds about 26 s of new rows. Phase 7 closed at GUT 218.44 s (2344 tests) against the 240 s ceiling. Use only the tests/README.md → Gate time rules: the 8× clock on any remaining awaiting 1× file, one shared scenario or memoised probe/replay per file, dropping per-tick bookkeeping no assertion reads. Last lever: a production speed-up of code a slow file exercises (the four-fighter tick behind test_fighter_squad.gd's 168-layout sweep is the obvious candidate), allowed only if every figure the affected files print is bit-identical before and after. No test, assertion, tick count, grid, duration or bound may be cut or widened. Record the before/after table in tests/README.md → Gate time and a 'Phase 8, built in t1' note in DECISIONS.md.",
-      "acceptanceCriteria": "- scripts/gate-time.sh before and after, two after-runs: GUT Time lower by ≥ 10 s (hard floor; if it cannot be reached, end with Result: ESCALATE and the measurements).\n- Test and assert counts unchanged.\n- Any production change is proven bit-identical by the printed figures of the files it affects.\n- scripts/check-test-leaks.sh clean; bash /agent/verify.sh green.",
+      "title": "The test gate has room again for the energy-weapon phase: GUT time drops by at least 15 s without weakening a single test",
+      "description": "Recover GUT time before Phase 8 adds about 33 s of new rows (two corridor exit probes included; plan §2.20). Phase 7 closed at GUT 218.44 s (2344 tests) against the 240 s ceiling. Use only the tests/README.md → Gate time rules: the 8× clock on any remaining awaiting 1× file, one shared scenario or memoised probe/replay per file, dropping per-tick bookkeeping no assertion reads. Last lever: a production speed-up of code a slow file exercises (the four-fighter tick behind test_fighter_squad.gd's 168-layout sweep is the obvious candidate), allowed only if every figure the affected files print is bit-identical before and after. No test, assertion, tick count, grid, duration or bound may be cut or widened. Record the before/after table in tests/README.md → Gate time and a 'Phase 8, built in t1' note in DECISIONS.md.",
+      "acceptanceCriteria": "- scripts/gate-time.sh before and after, two after-runs: GUT Time lower by ≥ 15 s (hard floor, the research's recommendation; if it cannot be reached, end with Result: ESCALATE and the measurements).\n- Test and assert counts unchanged.\n- Any production change is proven bit-identical by the printed figures of the files it affects.\n- scripts/check-test-leaks.sh clean; bash /agent/verify.sh green.",
       "type": "chore",
       "complexity": "medium",
       "dependsOn": [],
@@ -15,8 +15,8 @@
     {
       "key": "t2",
       "title": "Enemy lasers exist as a real weapon: a warning line on the exact path, then a beam that hurts anything on it except the enemies that fired it",
-      "description": "Build the EnemyBeam core in assault/scenes/projectiles/enemy_beams/: class EnemyBeam (Kind BEAM/SWEEP/LANCE/TWIN, Phase OFF/TELEGRAPH/ACTIVE/FADE, owner-driven start/tick/cancel, setup(host, owner_group), emitter geometry along local +X, tips, ignite grace, the drawn telegraph line / core / glow), EnergyHitScan (candidates in player/allies/enemies/asteroids, owner-set exemption, exact hurtbox shapes through Shape2D.collide, swept triangles, direct-emit delivery, per-target rehit), EnemyBeamScenes (scene_for, export_of) and the beam.tscn, sweep_beam.tscn and lance.tscn scenes with the export table of plan §2.1. set_endpoints / set_strained / cover / hazard registration are declared but built by the endpoint-beam task (twin_beam.tscn is not part of this task). Tests first in tests/integration/test_enemy_beams.gd (both harnesses, hand-ticked): the timeline, rehit, swept hit, tips, ±1 px width, exact-shape (Bomber rectangle) rows of §2.1, the victim / owner-set / shield-bypass / plated-Ram / ordnance / scoring rows of §2.2, and the static, sweep and lance fairness rows of §2.3 with their boundary cases. BEAMS.md notes beside the scenes. Gate time: allotment 2 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
-      "acceptanceCriteria": "- Every §2.1 and §2.2 row and the static / sweep / lance §2.3 rows pass in both harnesses; each fairness row has a failing synthetic boundary.\n- No Timer, create_timer or _process clock in the beam; numbers only from scene exports.\n- LaserRay, StationLaserPhase and their tests are untouched.\n- verify.sh green; GUT within allotment.",
+      "description": "Build the EnemyBeam core in assault/scenes/projectiles/enemy_beams/: class EnemyBeam (Kind BEAM/SWEEP/LANCE/TWIN, Phase OFF/TELEGRAPH/ACTIVE/FADE, owner-driven start/tick/cancel, setup(host, owner_group), emitter geometry along local +X, tips, ignite grace, the drawn telegraph line of telegraph_width px (export, 4 shipped, ≥ 3) / core / glow), EnergyHitScan (candidates in player/allies/enemies/asteroids, owner-set exemption, exact hurtbox shapes through Shape2D.collide, swept triangles, direct-emit delivery, per-target rehit at rehit_interval 0.55 s — strictly above the player's 0.5 s invincibility_sec), EnemyBeamScenes (scene_for, export_of) and the beam.tscn, sweep_beam.tscn and lance.tscn scenes with the export table of plan §2.1. set_endpoints / set_strained / cover / hazard registration are declared but built by the endpoint-beam task (twin_beam.tscn is not part of this task). Tests first in tests/integration/test_enemy_beams.gd (both harnesses, hand-ticked): the timeline, rehit, swept hit, tips, ±1 px width, exact-shape (Bomber rectangle) rows of §2.1, the telegraph-width row with its 2 px boundary, the victim / owner-set / shield-bypass / plated-Ram / ordnance / scoring rows of §2.2, the static rehit_interval > invincibility_sec row (read from player_ship.tscn and player_fighter.tscn; a 0.5 s copy fails) and the real-frame player-cadence rows at the 8× clock (4 hits in 2 s, none refused by i-frames), and the static, sweep and lance fairness rows of §2.3 with their boundary cases. BEAMS.md notes beside the scenes. Gate time: allotment 2.0 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "acceptanceCriteria": "- Every §2.1 and §2.2 row and the static / sweep / lance §2.3 rows pass in both harnesses; each fairness row has a failing synthetic boundary.\n- No Timer, create_timer or _process clock in the beam; numbers only from scene exports.\n- LaserRay, StationLaserPhase and their tests are untouched.\n- verify.sh green; GUT within allotment.\n- telegraph_width ≥ 3 on every beam scene and equal to the drawn Line2D width; rehit_interval 0.55 > invincibility_sec on every held beam scene, each with a failing boundary.\n- The real player loses health on every re-hit over 2 s of ACTIVE (no hit refused by i-frames).",
       "type": "feature",
       "complexity": "large",
       "effort": "xhigh",
@@ -32,7 +32,7 @@
     {
       "key": "t3",
       "title": "A Pulse Ring weapon sends an expanding energy ring with gaps you can slip through, hurting anything it crosses except its own group",
-      "description": "Build EnergyRing (not PulseRing, which is Phase 7's visual ring) in assault/scenes/projectiles/enemy_beams/energy_ring.gd + energy_ring.tscn per plan §2.5: owner-ticked TELEGRAPH → EXPANDING → FADE, annulus band 24 px expanding at 360 px/s to 280 px, 2 rotating 45° gaps, once-per-ring hits on a swept interval using EnergyHitScan (owner set, victims and direct-emit damage from §2.2), drawn with draw_arc. Tests first in tests/integration/test_energy_ring.gd (both harnesses, hand-ticked): the §2.5 rows and the two Pulse Ring fairness rows of §2.3 with boundaries; EnemyBeamScenes gains the ring scene if its export_of is shared. Gate time: allotment 1 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "description": "Build EnergyRing (not PulseRing, which is Phase 7's visual ring) in assault/scenes/projectiles/enemy_beams/energy_ring.gd + energy_ring.tscn per plan §2.5: owner-ticked TELEGRAPH → EXPANDING → FADE, annulus band 24 px expanding at 360 px/s to 280 px, 2 rotating 45° gaps, once-per-ring hits on a swept interval using EnergyHitScan (owner set, victims and direct-emit damage from §2.2), drawn with draw_arc. Tests first in tests/integration/test_energy_ring.gd (both harnesses, hand-ticked): the §2.5 rows and the two Pulse Ring fairness rows of §2.3 with boundaries; EnemyBeamScenes (enemy_beam_scenes.gd, plan §2.1) gains the ring scene (scene_for / export_of), so the endpoint-beam task that follows edits it after this one. Gate time: allotment 1.0 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
       "acceptanceCriteria": "- All §2.5 rows and the ring fairness rows pass in both harnesses.\n- A target is never hit twice by one ring; gaps pass; nothing beyond max_radius is hit.\n- verify.sh green; GUT within allotment.",
       "type": "feature",
       "complexity": "medium",
@@ -40,6 +40,7 @@
         "t2"
       ],
       "planSections": [
+        "2.1",
         "2.2",
         "2.3",
         "2.5"
@@ -48,7 +49,7 @@
     {
       "key": "t4",
       "title": "Enemies steer round the ends of a laser wall instead of treating it as a small circle, while every existing hazard behaves exactly as before",
-      "description": "Extend global/hazards/hazard_info.gd with segment_half, exempt_group and closest_point(); make contains()/penalty_at() segment-aware only when segment_half != ZERO; add the segment branch to Steering.context_avoid (closest-point cone, end cones and the bearing span between the ends) without editing the circle loop body; make EnemyMover._avoid drop infos whose exempt_group the actor is in. Plan §2.6. Tests first: tests/unit/test_hazards.gd and tests/unit/test_context_avoidance.gd segment rows (avoidance from 0/45/90° at 1.0/0.8/0.6 with measured closest approach printed, parallel wall bit-identical, a moving wall led, exempt actor bit-identical). Every existing pass-through and circle row must stay green unchanged. Record the measured figures and any use of the pre-approved hazard_pad lever in DECISIONS.md. Gate time: allotment 1.5 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "description": "Extend global/hazards/hazard_info.gd with segment_half, exempt_group and closest_point(); make contains()/penalty_at() segment-aware only when segment_half != ZERO; add the segment branch to Steering.context_avoid (closest-point cone, end cones and the bearing span between the ends) without editing the circle loop body; make EnemyMover._avoid drop infos whose exempt_group the actor is in. Plan §2.6. Tests first: tests/unit/test_hazards.gd and tests/unit/test_context_avoidance.gd segment rows (avoidance from 0/45/90° at 1.0/0.8/0.6 with measured closest approach printed, parallel wall bit-identical, a moving wall led, exempt actor bit-identical). Every existing pass-through and circle row must stay green unchanged. Record the measured figures and any use of the pre-approved hazard_pad lever in DECISIONS.md. Gate time: allotment 1.5 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time. The avoidance bound is closest approach ≥ hit_half_width + 14 = 10 + 14 = 24 px, with the twin beam's hit_half_width 10 and draw_half_width 14 (footprint radius 14 + hazard_pad 24 = 38) as named constants in the unit rows: twin_beam.tscn does not exist yet, and the endpoint-beam task replaces the constants with EnemyBeamScenes.export_of reads.",
       "acceptanceCriteria": "- Segment rows pass; avoidance 1.0 and 0.8 keep closest approach ≥ hit_half_width + 14 px (or the pre-approved pad lever is used and recorded).\n- Every existing hazard, avoidance and pass-through row is unchanged and green; level-1 gates green.\n- verify.sh green; GUT within allotment.",
       "type": "feature",
       "complexity": "large",
@@ -57,18 +58,19 @@
         "t1"
       ],
       "planSections": [
+        "2.1",
         "2.6"
       ]
     },
     {
       "key": "t5",
       "title": "Lasers can run between two moving points, stop at wrecks and asteroids that give cover, and warn other enemies away while lit",
-      "description": "Add the endpoint half of the beam family per plan §2.4: twin_beam.tscn (TWIN kind, endpoints from set_endpoints every tick, held ACTIVE), set_strained (non-lethal flicker), cover clipping on the physics step only (LineOfSight's opt-in blockers; expose LineOfSight.blocks(collider) with identical behaviour; emitter and endpoint shadows), and laser-wall registration (kind &\"laser_wall\", segment HazardInfo with velocity and exempt_group = owner_group) from TELEGRAPH start to FADE start. Cover also applies to the emitter scenes from the core task (blocked_by_cover true). Tests first in test_enemy_beams.gd: endpoint and strain rows (hand-ticked, both harnesses), registration rows, and the real-physics 8× cover rows (wreck stops a beam, wreck shadow between endpoints, asteroid clip, a non-blocking body does not clip). Gate time: allotment 1.5 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "description": "Add the endpoint half of the beam family per plan §2.4: twin_beam.tscn (TWIN kind, endpoints from set_endpoints every tick, held ACTIVE), set_strained (non-lethal flicker), cover clipping on the physics step only (LineOfSight's opt-in blockers; expose LineOfSight.blocks(collider) with identical behaviour; emitter and endpoint shadows), and laser-wall registration (kind &\"laser_wall\", segment HazardInfo with velocity and exempt_group = owner_group) from TELEGRAPH start to FADE start. Cover also applies to the emitter scenes from the core task (blocked_by_cover true). Tests first in test_enemy_beams.gd: endpoint and strain rows (hand-ticked, both harnesses), registration rows, and the real-physics 8× cover rows (wreck stops a beam, wreck shadow between endpoints, asteroid clip, a non-blocking body does not clip). twin_beam.tscn carries telegraph_width 4 and rehit_interval 0.55 and joins the telegraph-width and rehit_interval > invincibility_sec rows of §2.1 / §2.2. Replace the segment-hazard task's named constants (hit_half_width 10, draw_half_width 14) in tests/unit/test_context_avoidance.gd with EnemyBeamScenes.export_of(EnemyBeam.Kind.TWIN, …) reads. enemy_beam_scenes.gd gains twin_beam.tscn after the Pulse Ring task added energy_ring.tscn (this task runs after it). Gate time: allotment 1.5 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
       "acceptanceCriteria": "- §2.4 rows pass; cover rows run on real physics at the 8× clock and fail if the cast is removed.\n- LineOfSight's existing rows are unchanged.\n- check-test-leaks.sh clean; verify.sh green; GUT within allotment.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
-        "t2",
+        "t3",
         "t4"
       ],
       "planSections": [
@@ -81,8 +83,8 @@
     {
       "key": "t6",
       "title": "A stationary defense turret turns to track the player, leads its burst-cannon shots, scans when idle, and in Assault scrolls down the corridor like wreckage",
-      "description": "Build assault/scenes/enemies/defense_turret/ per plan §2.7: DefenseTurret (BaseEnemy, no mover, never rotates, NONE contact with no ContactHitBox, is_laser_blocking() false, group enemies, variant export, MountSlots building mounts and their root-child pools), DefenseTurretBrain (SCAN/NOTICING/ENGAGED/UNPOWERED, perception, view-rect gating in Assault, LOS hold, StateLight), flat DefenseTurretConfig + .tres, the TurretMount script (Variant and Phase enums, setup/tick/scan/power_down/pool_specs, turn-rate-limited own rotation, partial-lead aim, fire cone) with TurretMountScenes, the BURST_CANNON mount scene (Pulse rounds, BurstClock), set_powered / set_turret_group hooks, and global/components/assault_drift.gd (AssaultDrift). WaveBuilder DEFENSE_TURRET + defense_turret(). Placeholder art is allowed (a code-drawn base/head or an existing sprite) until the art task. Add the turret to every roster gate of §2.19, the burst round speed to test_enemy_bullet_lifetime.gd, a dual-mode case and ENEMY.md (including the IDEAS §43 checklist). Tests first in tests/integration/test_defense_turret.gd (the §2.7 rows, both harnesses). Gate time: allotment 1.5 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
-      "acceptanceCriteria": "- §2.7 rows pass in both harnesses (LOS row on real physics 8×).\n- All roster gates of §2.19 include and pass the turret; test_enemy_mover_single_writer.gd unchanged and green.\n- The mount writes only its own rotation; pools are root children and rounds land in the enemy container.\n- verify.sh green; GUT within allotment.",
+      "description": "Build assault/scenes/enemies/defense_turret/ per plan §2.7: DefenseTurret (BaseEnemy, no mover, never rotates, NONE contact with no ContactHitBox, is_laser_blocking() false, group enemies, variant export, MountSlots of TurretMountSlot markers — variant, rest_bearing_deg and turn_rate_override (−1 keeps the mount scene's turn_rate, ≥ 0 is copied onto the runtime-instantiated mount before setup()) — building mounts and their root-child pools), DefenseTurretBrain (SCAN/NOTICING/ENGAGED/UNPOWERED, perception, view-rect gating in Assault, LOS hold, StateLight), flat DefenseTurretConfig + .tres (counts_as_escape = false: a turret drifting off the bottom never breaks the combo), the TurretMount script (Variant and Phase enums, setup/tick/scan/power_down/pool_specs, turn-rate-limited own rotation, partial-lead aim, fire cone) with TurretMountScenes, the BURST_CANNON mount scene (Pulse rounds, BurstClock), set_powered / set_turret_group hooks, and global/components/assault_drift.gd (AssaultDrift). WaveBuilder DEFENSE_TURRET + defense_turret(). Placeholder art is allowed (a code-drawn base/head or an existing sprite) until the art task. Add the turret to every roster gate of §2.19, the burst round speed to test_enemy_bullet_lifetime.gd, a dual-mode case and ENEMY.md (including the IDEAS §43 checklist). Tests first in tests/integration/test_defense_turret.gd (the §2.7 rows, both harnesses). This task opens the chain of tasks that edit the shared roster files (the three ROSTER gates, test_wreck.gd, test_base_enemy.gd, test_enemy_dual_mode.gd, wave_builder.gd); the next one in the chain runs after it. Gate time: allotment 1.5 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "acceptanceCriteria": "- §2.7 rows pass in both harnesses (LOS row on real physics 8×).\n- All roster gates of §2.19 include and pass the turret; test_enemy_mover_single_writer.gd unchanged and green.\n- The mount writes only its own rotation; pools are root children and rounds land in the enemy container.\n- verify.sh green; GUT within allotment.\n- turn_rate_override 1.2 on a slot gives its mount turn_rate 1.2, −1 keeps 2.0; a drifted-out turret does not reset a real ScoreTracker's combo (control: a counts_as_escape fixture does).",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
@@ -96,7 +98,7 @@
     {
       "key": "t7",
       "title": "Turrets can carry a sweeping beam, a beam cannon or a sniper lance, each with a readable warning that never re-aims once shown",
-      "description": "Add the SWEEP_BEAM, BEAM_CANNON and LANCE mount scenes (defense_turret/mounts/) per plan §2.8 on the TurretMount cycle: sweep start bearing on the side the player is moving from and the sweep rate from sweep_beam.tscn's exports (no turn-rate cap during ACTIVE), beam cannon bearing frozen at TELEGRAPH start, lance aim for the first part and COMMIT freeze for commit_seconds, StateLight CHARGING / COMMIT / ARMED. Beams are mount children set up with the turret as host and its owner_group. Tests first in test_defense_turret.gd: the sweep, lance and beam-cannon rows of §2.8 and the power_down rows for each, in both harnesses (R8.24 beam activation and telegraph timing in both modes). Gate time: allotment 1.5 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "description": "Add the SWEEP_BEAM, BEAM_CANNON and LANCE mount scenes (defense_turret/mounts/) per plan §2.8 on the TurretMount cycle: sweep start bearing on the side the player is moving from and the sweep rate from sweep_beam.tscn's exports (no turn-rate cap during ACTIVE), beam cannon bearing frozen at TELEGRAPH start, lance aim for the first part and COMMIT freeze for commit_seconds, StateLight CHARGING / COMMIT / ARMED. Beams are mount children set up with the turret as host and its owner_group. Tests first in test_defense_turret.gd: the sweep, lance and beam-cannon rows of §2.8 and the power_down rows for each, in both harnesses (R8.24 beam activation and telegraph timing in both modes). Runs after the turret shell and before the rocket/ring task: both edit mounts/turret_mount.gd, turret_mount_scenes.gd and test_defense_turret.gd. Gate time: allotment 1.5 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
       "acceptanceCriteria": "- §2.8 sweep / lance / beam-cannon rows and power-down rows pass in both harnesses.\n- A shown telegraph line is the line that fires (moving the stub during TELEGRAPH/COMMIT changes nothing).\n- verify.sh green; GUT within allotment.",
       "type": "feature",
       "complexity": "medium",
@@ -114,13 +116,12 @@
     {
       "key": "t8",
       "title": "Turrets can carry a rocket battery that fires past cover and a short-range pulse ring that forces the player to keep moving around them",
-      "description": "Add the ROCKET_BATTERY mount (Phase 5 DUMB/PURSUIT rockets from root pools with persist_after_owner_death, launcher contract launch_velocity() ZERO and rocket_clear_radius(), salvo of 2 with a 1-in-3 PURSUIT draw from the brain's rng, fires without line of sight) and the PULSE_RING mount (EnergyRing at trigger_range 300) per plan §2.8. Tests first in test_defense_turret.gd: the rocket-battery and pulse-ring rows of §2.8 (rocket rows that need real physics at 8×) and power_down for both, in both harnesses. Gate time: allotment 1.5 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "description": "Add the ROCKET_BATTERY mount (Phase 5 DUMB/PURSUIT rockets from root pools with persist_after_owner_death, launcher contract launch_velocity() ZERO and rocket_clear_radius(), salvo of 2 with a 1-in-3 PURSUIT draw from the brain's rng, fires without line of sight) and the PULSE_RING mount (EnergyRing at trigger_range 300) per plan §2.8. Tests first in test_defense_turret.gd: the rocket-battery and pulse-ring rows of §2.8 (rocket rows that need real physics at 8×) and power_down for both, in both harnesses. Runs after the beam-variant task (shared mount files and test_defense_turret.gd); the Pulse Ring weapon (energy_ring.tscn) already exists from an earlier task. Gate time: allotment 1.5 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
       "acceptanceCriteria": "- §2.8 rocket-battery and pulse-ring rows pass in both harnesses.\n- Rockets persist after the turret dies and never hit their own turret; pool sizes are pinned.\n- verify.sh green; GUT within allotment.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
-        "t3",
-        "t6"
+        "t7"
       ],
       "planSections": [
         "2.5",
@@ -130,13 +131,12 @@
     },
     {
       "key": "t9",
-      "title": "Turrets come in groups with overlapping fire: a shield generator covers every member, and destroying the power source shuts the whole group down at once",
-      "description": "Build assault/scenes/structures/turret_group/ (TurretGroup coordinator, TurretGroupSlot, the assault_pair.tscn preset, and a test-only preset with a shield generator under tests/helpers/; the hub preset is the hub task's), assault/scenes/enemies/power_source/ (PowerSource) and assault/scenes/enemies/shield_generator/ (ShieldGenerator + brain, sustained 360° EnemyShield bubbles via the Support Ship's projected-shield path, cyan tethers) per plan §2.10. Members spawn deferred as siblings in the group's parent, join owner_group, are announced with EventBus.enemy_spawned_orphan; power providers, same-call shutdown via set_powered(false), stagger, coverage rule. Both new enemies join every roster gate (§2.19) with dual-mode cases and ENEMY.md. Tests first in tests/integration/test_turret_group.gd: every §2.10 row in both harnesses (R8.24 power-source shutdown), the absorbed-bullet row on real physics 8×. Gate time: allotment 2 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
-      "acceptanceCriteria": "- §2.10 rows pass in both harnesses; the shutdown happens in the same call as the source's death and never reverses.\n- Group members are ordinary container children (pools resolve to the container); the group is never in enemies or scored.\n- Coverage rule holds for both presets and fails for the boundary preset.\n- Roster gates green; verify.sh green; GUT within allotment.",
+      "title": "Turrets come in groups with overlapping fire, and destroying the group's power source shuts every turret down at once",
+      "description": "Build assault/scenes/structures/turret_group/ (TurretGroup coordinator, TurretGroupSlot, the assault_pair.tscn preset: a BURST_CANNON turret at (−50, 60), a PULSE_RING turret at (50, −60), a power source at (0, 0), coverage_radius 180) and assault/scenes/enemies/power_source/ (PowerSource, flat PowerSourceConfig with counts_as_escape false, amber power lines) per plan §2.10.1–§2.10.4. Members spawn deferred as siblings in the group's parent, join owner_group, are announced with EventBus.enemy_spawned_orphan; power providers (the Ph20 add_power_provider seam), same-call shutdown via set_powered(false), stagger, coverage rule. World-anchored x: in Assault a wave-spawned group removes the camera's horizontal pan from its x in _ready() (world_anchored_x export, through EnemyWorld.view_rect / projectile_world_rect only, never ArenaCamera), so level 1 can place it deterministically between its laser columns. WaveBuilder gains TURRET_GROUP_ASSAULT_PAIR and turret_group(preset_path). PowerSource joins every roster gate (§2.19) with a dual-mode case and ENEMY.md. Tests first in tests/integration/test_turret_group.gd: every §2.10.4 row in both harnesses (R8.24 power-source shutdown, using the beam turrets the earlier tasks built). The shield generator is the next task. Gate time: allotment 1.2 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "acceptanceCriteria": "- §2.10.4 rows pass in both harnesses; the shutdown happens in the same call as the source's death and never reverses.\n- With the view panned +100 px, a group spawned at design x −64 lands at world x 512 and its members at 462 / 512 / 562; with world_anchored_x false it lands 100 px off (boundary); Open Space untouched.\n- Group members are ordinary container children (pools resolve to the container); the group is never in enemies or scored.\n- assault_pair meets the coverage rule; the boundary preset with a turret removed fails it.\n- WaveBuilder.turret_group(TURRET_GROUP_ASSAULT_PAIR) spawned through a real WaveManager yields one group and three members.\n- Roster gates green; verify.sh green; GUT within allotment.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
-        "t7",
         "t8"
       ],
       "planSections": [
@@ -147,18 +147,35 @@
       ]
     },
     {
-      "key": "t10",
-      "title": "Laser fences stand between two emitter posts, either always on or switching on and off; enemies steer round them, and shooting a post drops the fence",
-      "description": "Build assault/scenes/enemies/laser_emitter/ (LaserEmitter post) and assault/scenes/structures/laser_fence/ (LaserFence: two posts, a twin_beam.tscn instance with fence overrides, STATIC / CYCLE modes with phase_offset, collapse on a post's death, set_powered, set_turret_group, AssaultDrift, registered laser-wall hazard, STRUCTURE.md) per plan §2.11. Tests first in tests/integration/test_laser_fence.gd: every §2.11 row in both harnesses (including the avoidance-1.0 fixture passing round an end and the avoidance-0 control being hit), the cover row on real physics 8×. The post joins the roster gates (§2.19). Gate time: allotment 1.5 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
-      "acceptanceCriteria": "- §2.11 rows pass in both harnesses.\n- A post's death collapses the beam within one tick and it never relights.\n- Roster gates green; verify.sh green; GUT within allotment.",
+      "key": "t9s",
+      "title": "A shield generator puts a shield bubble on every member of its turret group until you destroy it or its power source",
+      "description": "Build assault/scenes/enemies/shield_generator/ per plan §2.10.5: ShieldGenerator (BaseEnemy, no mover, NONE contact, no ContactHitBox, is_laser_blocking() false, AssaultDrift, counts_as_escape false), ShieldGeneratorBrain sustaining a 360° EnemyShield bubble on every live BaseEnemy member of its group except itself and except laser-fence posts, through the Support Ship's projected-shield path (sustain_mode, heartbeat lapse), cyan tethers, flat ShieldGeneratorConfig + .tres, ENEMY.md. Add the test-only preset with a generator under tests/helpers/. Tests first in test_turret_group.gd (both harnesses): every powered member but the generator shielded (power source included), a real Standard bullet absorbed and consumed (real physics 8×), lapse on the generator's or the source's death, beams bypass the bubble, the test preset meets the coverage rule. Roster gates (§2.19), a dual-mode case. Gate time: allotment 1.0 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "acceptanceCriteria": "- §2.10.5 rows pass in both harnesses; bubbles lapse within heartbeat + fade after the generator or the power source dies.\n- A Support Ship ward already on a hurtbox is never displaced.\n- Roster gates green; verify.sh green; GUT within allotment.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
-        "t5",
         "t9"
       ],
       "planSections": [
+        "2.7",
+        "2.10",
+        "2.19"
+      ]
+    },
+    {
+      "key": "t10",
+      "title": "Laser fences stand between two emitter posts, either always on or switching on and off; enemies steer round them, and shooting a post drops the fence",
+      "description": "Build assault/scenes/enemies/laser_emitter/ (LaserEmitter post) and assault/scenes/structures/laser_fence/ (LaserFence: two posts, a twin_beam.tscn instance with fence overrides, STATIC / CYCLE modes with phase_offset, collapse on a post's death, set_powered, set_turret_group, AssaultDrift, registered laser-wall hazard, world-anchored x when a wave spawns it, a 1.0 s linger after its last post dies so the posts' explosion particles (spawned under the fence) finish before it frees itself, STRUCTURE.md; LaserEmitterConfig with counts_as_escape false) per plan §2.11. Tests first in tests/integration/test_laser_fence.gd: every §2.11 row in both harnesses (including the avoidance-1.0 fixture passing round an end and the avoidance-0 control being hit), the cover row on real physics 8×. The post joins the roster gates (§2.19). Also add a fence to the shield-generator test preset and the row that its posts carry no EnemyShield (plan §2.10.5: posts are never shielded). Gate time: allotment 1.5 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "acceptanceCriteria": "- §2.11 rows pass in both harnesses.\n- A post's death collapses the beam within one tick and it never relights.\n- Roster gates green; verify.sh green; GUT within allotment.\n- After the second post dies the fence (with the particles under it) still exists 0.6 s later and is gone by 1.1 s, with no hazard registered and no hit in between.\n- A fence in a generator group has no EnemyShield on either post.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t9s"
+      ],
+      "planSections": [
+        "2.1",
         "2.4",
+        "2.6",
         "2.7",
         "2.10",
         "2.11",
@@ -168,12 +185,12 @@
     {
       "key": "t11",
       "title": "A heavy emplacement carries a beam cannon and a burst cannon that aim independently",
-      "description": "Add assault/scenes/enemies/heavy_emplacement/ per plan §2.9: the DefenseTurret root script with two TurretMountSlots (BEAM_CANNON + BURST_CANNON, turn rate 1.2), body r 64, its own heavy_emplacement_config.tres (DefenseTurretConfig: HP 260, score 150), WaveBuilder HEAVY_EMPLACEMENT + heavy_emplacement(), ENEMY.md. Tests first: the §2.9 rows in test_defense_turret.gd (both harnesses) and every roster gate (§2.19). Gate time: allotment 0.5 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "description": "Add assault/scenes/enemies/heavy_emplacement/ per plan §2.9: the DefenseTurret root script with two TurretMountSlots (BEAM_CANNON + BURST_CANNON, each slot's turn_rate_override 1.2), body r 64, its own heavy_emplacement_config.tres (DefenseTurretConfig: HP 260, score 150, counts_as_escape false), WaveBuilder HEAVY_EMPLACEMENT + heavy_emplacement(), ENEMY.md. Tests first: the §2.9 rows in test_defense_turret.gd (both harnesses) and every roster gate (§2.19). Gate time: allotment 0.5 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
       "acceptanceCriteria": "- §2.9 rows pass in both harnesses; its beam never hits its own cannon.\n- Roster gates and config isolation include it; verify.sh green; GUT within allotment.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
-        "t7"
+        "t10"
       ],
       "planSections": [
         "2.7",
@@ -185,13 +202,13 @@
     {
       "key": "t12",
       "title": "Twin-Laser Drones fly to opposite sides of the player and close a laser between them through the player, keeping its length; killing either drone collapses it",
-      "description": "Build assault/scenes/enemies/twin_laser_drone/ per plan §2.12: TwinLaserDrone (small BaseEnemy with EnemyMover, COLLISION contact, lens StateLight), TwinLaserDroneBrain (the full append-only Phase enum; this task plays FORM / TELEGRAPH / ADVANCE / BREAK / WAIT / SOLO / DISENGAGE), the TwinLaserPair rig (bind, owner_group, leader-only phase transitions, slots, latched frame, identical per-drone boosts, strain and collapse, beam on drone A), TwinLaserPairSpawn (wave/hub spawner), flat config + .tres, WaveBuilder TWIN_LASER_PAIR + twin_laser_pair(), ENEMY.md (IDEAS §43 checklist). Attack A in Open Space and the Assault rig (inner_rect clamp, horizontal from above or vertical from the side, one attack per life, DISENGAGE). Tests first in tests/integration/test_twin_laser_drones.gd: every §2.12 row in both harnesses (R8.24 moving wall keeps its length), the wreck row on real physics 8×, the twin fairness row of §2.3 in test_enemy_beams.gd, the tow-table row, roster gates (§2.19) and a dual-mode case. Gate time: allotment 2.5 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "description": "Build assault/scenes/enemies/twin_laser_drone/ per plan §2.12: TwinLaserDrone (small BaseEnemy with EnemyMover, COLLISION contact, lens StateLight), TwinLaserDroneBrain (the full append-only Phase enum; this task plays FORM / TELEGRAPH / ADVANCE / BREAK / WAIT / SOLO / DISENGAGE), the TwinLaserPair rig (bind, owner_group, leader-only phase transitions, slots, latched frame, identical per-drone boosts, strain and collapse, beam on drone A), TwinLaserPairSpawn (wave/hub spawner), flat config + .tres, WaveBuilder TWIN_LASER_PAIR + twin_laser_pair(), ENEMY.md (IDEAS §43 checklist). Attack A in Open Space and the Assault rig (inner_rect clamp, horizontal from above or vertical from the side, one attack per life with the deferral bound of §2.12 — a budget expiring in TELEGRAPH or ADVANCE lets the attack finish — then DISENGAGE). Tests first in tests/integration/test_twin_laser_drones.gd: every §2.12 row in both harnesses (R8.24 moving wall keeps its length), the wreck row on real physics 8×, the twin fairness row of §2.3 in test_enemy_beams.gd, the tow-table row, roster gates (§2.19) and a dual-mode case. Runs after the heavy-emplacement task in the roster-file chain. Gate time: allotment 2.5 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
       "acceptanceCriteria": "- On every TELEGRAPH/ADVANCE tick of Attack A, | |A−B| − L | ≤ length_tolerance in both harnesses against a standing and a 200 px/s stub.\n- Killing either drone ends the beam within one tick; a well or a wreck strains and collapses it (with no-hazard controls).\n- Assault rig stays inside inner_rect(); one attack per life.\n- test_enemy_mover_single_writer.gd green; roster gates green; verify.sh green; GUT within allotment.",
       "type": "feature",
       "complexity": "large",
       "effort": "xhigh",
       "dependsOn": [
-        "t5"
+        "t11"
       ],
       "planSections": [
         "2.1",
@@ -204,7 +221,7 @@
     {
       "key": "t13",
       "title": "A Laser Tender launches a drone pair in a V toward where the player is heading, and the drones line up into a moving laser wall across the escape route",
-      "description": "Build assault/scenes/enemies/laser_tender/ per plan §2.13: LaserTender (BaseEnemy, mover, COLLISION contact, two docking cradles with docked-drone sprites, StateLight), LaserTenderBrain (APPROACH / HOLD / LAUNCH / WAIT / REARM / DISENGAGE; IDLE / NOTICING / RETURNING declared for the idle task), flat config + .tres, the launch_pair(points) seam, Attack B points (predicted path, wall across the heading, V that never crosses), the drones' LAUNCHED phase into FORM → TELEGRAPH → ADVANCE, one live pair, rearm, docking of a lone returning drone, the Assault variant (vertical wall for a strafing player, horizontal otherwise, one launch per life). WaveBuilder LASER_TENDER + laser_tender(). Tests first in tests/integration/test_laser_tender.gd: every §2.13 row in both harnesses, roster gates (§2.19), tow-table row, dual-mode case, ENEMY.md. Gate time: allotment 2 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "description": "Build assault/scenes/enemies/laser_tender/ per plan §2.13: LaserTender (BaseEnemy, mover, COLLISION contact, two docking cradles with docked-drone sprites, StateLight), LaserTenderBrain (APPROACH / HOLD / LAUNCH / WAIT / REARM / DISENGAGE; IDLE / NOTICING / RETURNING declared for the idle task), flat config + .tres, the launch_pair(points) seam, Attack B points (predicted path, wall across the heading, V that never crosses), the drones' LAUNCHED phase into FORM → TELEGRAPH → ADVANCE, one live pair, rearm, docking of a lone returning drone, the Assault variant (vertical wall for a strafing player, horizontal otherwise, one launch per life; a budget expiring during the cradle telegraph lets that launch finish, so a pair is launched no later than spawn + engage_seconds + launch_telegraph). WaveBuilder LASER_TENDER + laser_tender(). Tests first in tests/integration/test_laser_tender.gd: every §2.13 row in both harnesses, roster gates (§2.19), tow-table row, dual-mode case, ENEMY.md. Gate time: allotment 2.0 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
       "acceptanceCriteria": "- §2.13 rows pass in both harnesses, including the Attack B length row on every TELEGRAPH/ADVANCE tick.\n- At most one live pair; the tender is never hit by its pair's beam.\n- Roster gates green; verify.sh green; GUT within allotment.",
       "type": "feature",
       "complexity": "large",
@@ -212,6 +229,7 @@
         "t12"
       ],
       "planSections": [
+        "2.3",
         "2.12",
         "2.13",
         "2.19"
@@ -220,29 +238,28 @@
     {
       "key": "t14",
       "title": "In the hub, drone pairs and Laser Tenders idle calmly at their patrol points and notice the player; in Assault they attack once and leave by a measured exit",
-      "description": "Per plan §2.14: AnchorIdle hub idle for a standalone pair (slow rig orbit, beam off) and for the tender (with its docked pair), NOTICING / RETURNING, launched pairs returning to dock, start_engaged for behaviour rows (update earlier rows that expect combat), the radius inequality rows, and the Assault DISENGAGE exits of the drone and the tender measured with tests/helpers/specialist_exit_probe.gd over corridor_starts() (memoised; prepare the probe so leftover drones or beams cannot disturb later runs, the Ph7 precedent). Tests in test_twin_laser_drones.gd and test_laser_tender.gd. Gate time: allotment 1 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
-      "acceptanceCriteria": "- §2.14 rows pass; idle orbit within idle_radius + 8 px for 30 s with the beam off; notice / lose radii honoured.\n- Measured exits printed and < 10 s; the radius inequalities asserted from config.\n- verify.sh green; GUT within allotment.",
+      "description": "Per plan §2.14: AnchorIdle hub idle for a standalone pair (slow rig orbit, beam off) and for the tender (with its docked pair), NOTICING / RETURNING, launched pairs returning to dock, start_engaged for behaviour rows (update earlier rows that expect combat), the radius inequality rows. Measure the Assault DISENGAGE exits of the drone and the tender with tests/helpers/specialist_exit_probe.gd over corridor_starts(), once each, in before_all() of test_laser_tender.gd, through a new shared helper tests/helpers/ph8_exit_keys.gd (drone_exit() / tender_exit()) that fixes every memo-key input — speeds, cap, start set and the prepare hook as a static function, never a lambda — so the level-1 task's identical calls are memo hits and the probes are paid once per GUT run. Apply Ph7's gate-time rule 3 from the start (the probe world's player stub leaves group player; check that both brains' DISENGAGE reads the player nowhere else first). Tests in test_twin_laser_drones.gd and test_laser_tender.gd. Gate time: allotment 8.5 s of new GUT time = rows 1.0 + drone probe 3.5 + tender probe 4.0 (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after (and each probe's own cost) in the task report and tests/README.md → Gate time. If a probe overruns, check the stub trick took effect, then share a scenario; never shrink the start set.",
+      "acceptanceCriteria": "- §2.14 rows pass; idle orbit within idle_radius + 8 px for 30 s with the beam off; notice / lose radii honoured.\n- Measured exits printed and < 10 s; the radius inequalities asserted from config.\n- ph8_exit_keys.gd is the only place the probe arguments are built; calling it twice in one process measures once.\n- verify.sh green; GUT within allotment (each probe's cost reported).",
       "type": "feature",
-      "complexity": "medium",
+      "complexity": "large",
       "dependsOn": [
         "t13"
       ],
       "planSections": [
         "2.12",
         "2.13",
-        "2.14"
+        "2.14",
+        "2.20"
       ]
     },
     {
       "key": "t15",
       "title": "Turrets, the heavy emplacement, shield generators, power sources and fence posts have their own readable top-down art, with heads that visibly aim and go dark when unpowered",
-      "description": "Invoke the pixel-art-generation skill first. Generate (PixelLab, strict top-down, several candidates each), save via scripts/pixellab.sh, import and look at: the turret base, six turret heads (burst cannon, sweep emitter, rocket pod, ring coil, lance barrel, beam cannon), the heavy emplacement base, the shield generator, the power source and its glow, the laser emitter post (try the orphan laser_wall.png first) per plan §2.15. Wire them into the scenes (heads on the mounts so they rotate; unpowered = head modulate darkened + drooped; power-source glow hidden when the group goes dark), replacing placeholders. Rows: opaque centre / transparent corners per sprite, distinct head silhouettes, the transparency sweep (extend its roots to assault/scenes/structures if a structure draws a texture). Gate time: allotment 0.2 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "description": "Invoke the pixel-art-generation skill first. Generate (PixelLab, strict top-down, several candidates each), save via scripts/pixellab.sh, import and look at: the turret base, six turret heads (burst cannon, sweep emitter, rocket pod, ring coil, lance barrel, beam cannon), the heavy emplacement base, the shield generator, the power source and its glow, the laser emitter post (try the orphan laser_wall.png first) per plan §2.15. Wire them into the scenes (heads on the mounts so they rotate; unpowered = head modulate darkened + drooped; power-source glow hidden when the group goes dark), replacing placeholders. Rows (new tests/integration/test_ph8_sprites.gd): opaque centre / transparent corners per sprite, distinct head silhouettes, the transparency sweep (extend its roots to assault/scenes/structures if a structure draws a texture). Gate time: allotment 0.2 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
       "acceptanceCriteria": "- Every listed sprite exists, was visually checked (strict top-down, nose-down where it has a nose), and is wired into its scene.\n- test_entity_sprite_transparency.gd and the new art rows pass; no hull is recoloured by state.\n- verify.sh green.",
       "type": "art",
       "complexity": "medium",
       "dependsOn": [
-        "t9",
-        "t10",
         "t11"
       ],
       "planSections": [
@@ -256,12 +273,13 @@
     {
       "key": "t16",
       "title": "Twin-Laser Drones and the Laser Tender have their own readable top-down art: a lit lens while the beam is up and cradles that empty after launch",
-      "description": "Invoke the pixel-art-generation skill first. Generate the 28–32 px twin-laser drone, the ≈ 96 px Laser Tender and the ≈ 28 px docked-drone cradle sprite per plan §2.15 (several candidates, scripts/pixellab.sh, imported and looked at in an in-game composite), wire them in (drone lens StateLight, cradles hidden after launch and shown after rearm), replacing placeholders. Rows: opaque centre / transparent corners, cradle visibility follows the tender's state, the transparency sweep. Gate time: allotment 0.2 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "description": "Invoke the pixel-art-generation skill first. Generate the 28–32 px twin-laser drone, the ≈ 96 px Laser Tender and the ≈ 28 px docked-drone cradle sprite per plan §2.15 (several candidates, scripts/pixellab.sh, imported and looked at in an in-game composite), wire them in (drone lens StateLight, cradles hidden after launch and shown after rearm), replacing placeholders. Rows (extend tests/integration/test_ph8_sprites.gd, which the structure art task created): opaque centre / transparent corners, cradle visibility follows the tender's state, the transparency sweep. Gate time: allotment 0.2 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
       "acceptanceCriteria": "- Sprites exist, were visually checked, and are wired in; cradle sprites follow launch and rearm.\n- Transparency sweep and art rows pass; verify.sh green.",
       "type": "art",
       "complexity": "medium",
       "dependsOn": [
-        "t13"
+        "t14",
+        "t15"
       ],
       "planSections": [
         "2.12",
@@ -272,8 +290,8 @@
     {
       "key": "t17",
       "title": "We know whether level 1's laser columns kill AI enemies today, and if they do, enemies now steer round them",
-      "description": "Per plan §2.16: measure with a throw-away script (not a permanent test) how many AI enemies die in level 1's LaserRay columns and LaserWallWave in each section (real WaveManager + the column schedule, 8× clock). Record the counts in DECISIONS.md. If any die: add an opt-in registers_hazard export to LaserRay (default false; race and station unaffected) registering a &\"laser_wall\" segment from warn start to the end of active, turn it on for level 1's columns and LaserWallWave, and add the registration rows; every level-1 gate must stay green unchanged, else the pre-approved lever applies (leave it off in level 1 and hand the finding to Ph15). If none die, change nothing and hand the question to Ph15. Gate time: allotment 0.3 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
-      "acceptanceCriteria": "- The measured counts per section are in DECISIONS.md.\n- If LaserRay changed: default behaviour byte-identical (test_laser_ray_hit_mask.gd, test_station_laser_phase.gd and race tests unchanged and green), registration rows pass, level-1 gates green.\n- verify.sh green.",
+      "description": "Per plan §2.16. (1) Expose level 1's column schedule as data: level_1_director.gd gains static func laser_column_schedule() -> Dictionary and a pure _build_schedules() that _ready() uses, behaviour identical; a cheap row in the new tests/integration/test_level1_laser_columns.gd checks the schedule equals the bound arguments of the director's _spawn_laser_columns callables. (2) Measure, with a kept but manually-run helper (tests/helpers/level1_column_replay.gd, no test_ prefix, plus scripts/measure-level1-columns.sh), how many AI enemies die in level 1's LaserRay columns and LaserWallWave per section and per kind (real WaveManager + the column schedule, 8× clock). Record the pre-placement counts in DECISIONS.md. (3) If any die: add an opt-in registers_hazard export to LaserRay (default false; race and station unaffected) registering a &\"laser_wall\" segment from warn start to the end of active, turn it on for level 1's columns and LaserWallWave, add the registration rows and re-measure; every level-1 gate must stay green unchanged, else the pre-approved lever applies (leave it off in level 1 and hand the finding to Ph15). (4) If none die, change nothing else and hand the question to Ph15. This task runs before the level-1 placement task, which reads laser_column_schedule() and re-runs the measurement with the Ph8 spawns. Gate time: allotment 0.3 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "acceptanceCriteria": "- laser_column_schedule() exists, matches the director's schedule (row green), and the level plays identically.\n- The helper and script exist and run headless; the measured counts per section and kind are in DECISIONS.md.\n- If LaserRay changed: default behaviour byte-identical (test_laser_ray_hit_mask.gd, test_station_laser_phase.gd and race tests unchanged and green), registration rows pass, level-1 gates green.\n- verify.sh green; GUT within allotment.",
       "type": "test",
       "complexity": "medium",
       "dependsOn": [
@@ -287,13 +305,11 @@
     {
       "key": "t18",
       "title": "The hub has a defended derelict site to assault, plus a Laser Tender and a twin-drone pair on patrol, without crowding the player's spawn or the mission planets",
-      "description": "Per plan §2.17: build assault/scenes/structures/turret_group/presets/hub_defense_site.tscn (heavy emplacement, sweep, rocket battery and lance turrets, shield generator, power source, a CYCLE laser fence; coverage_radius 450, passing the group coverage row) and instance it under EnemyContainer near the TacticalSpace derelicts, add the Laser Tender as patrol draw 16 and a standalone TwinLaserPairSpawn as draw 17 (every earlier seed unchanged), extend test_sector_hub_patrol.gd (_patrol_groups, _element_radius cases for TurretGroup and LaserFence, site clearance with a rejecting boundary, no turret perceive radius reaching the spawn or a MissionTrigger, seed / composition / frame-0 IDLE rows) and note the hub frame time with and without the site. Use the pre-approved lever (move the site to its own ring position) if an existing hub row turns red. Gate time: allotment 1.2 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
-      "acceptanceCriteria": "- Hub rows pass, including the new clearance rows with rejecting boundaries; draws 1–15 unchanged.\n- The site spawns powered and shielded members into EnemyContainer.\n- verify.sh green; GUT within allotment.",
+      "description": "Per plan §2.17: build assault/scenes/structures/turret_group/presets/hub_defense_site.tscn (heavy emplacement, sweep, rocket battery and lance turrets, shield generator, power source, a CYCLE laser fence; coverage_radius 450, passing the group coverage row) and instance it under EnemyContainer near the TacticalSpace derelicts (origin ≈ (2520, 1040)); add the Laser Tender as patrol draw 16 and a standalone TwinLaserPairSpawn as draw 17 (every earlier seed unchanged). Extend test_sector_hub_patrol.gd: _patrol_groups() gains both patrols; new sweep A (test_hub_defense_site_reach_clears_spawn_triggers_and_pickups) walks EnemyContainer's TurretGroup / LaserFence children and checks each one's fire reach (max over slots of |offset| + max(perceive_radius, largest mount range); 1360 px for the site) clears the player spawn, every MissionTrigger and every PickupBase; new sweep B (test_hub_patrols_clear_the_defense_site) checks every patrol group, existing and new, keeps its idle ring clear of the site's footprint (|offset| + body radius, + fence half length, + 100 px) — not its fire reach; each sweep has a rejecting boundary. Seed / composition / frame-0 IDLE / site rows (members in EnemyContainer, powered, the five BaseEnemy members shielded, fence posts not) and a hub frame-time note with and without the site. Use the pre-approved lever (move the site origin to a clear point on a 3000 px ring) if an existing hub row turns red, and record it. Gate time: allotment 1.2 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "acceptanceCriteria": "- Hub rows pass, including sweeps A and B with rejecting boundaries; draws 1–15 unchanged.\n- The site spawns powered members into EnemyContainer, shielded except the fence posts.\n- verify.sh green; GUT within allotment.",
       "type": "feature",
-      "complexity": "medium",
+      "complexity": "large",
       "dependsOn": [
-        "t10",
-        "t11",
         "t14"
       ],
       "planSections": [
@@ -311,13 +327,13 @@
     {
       "key": "t19",
       "title": "Level 1 sends a two-turret group and a twin-drone pair through Deep Space and a Laser Tender through Planet Approach without crowding the level or holding a section open",
-      "description": "Per plan §2.18: place b.turret_group(assault_pair) in deep_space's 3.0 s wave, b.twin_laser_pair() in its 20.0 s wave and b.laser_tender() in planet_approach's 62.0 s wave (no new wave, no rail). Extend test_level1_specialist_spawns.gd (EXPECTED_PH8 pin rows, every member / drone / tender counted in the frozen 2.5× gate with computed drift lives or measured exits, spill-over row) and test_engagement_deadline.gd (no ENEMIES_CLEARED section holds a turret group, laser fence, twin pair or tender, with detection and boundary rows), and add attack-in-budget slice replays (16× only for clock-bound rows): pair reaches ADVANCE once, tender reaches LAUNCH and its pair ADVANCE, both turrets fire while in view and every member leaves by the computed drift time. Use the pre-approved levers in order if a row turns red; never move a bound. Gate time: allotment 5 s of new GUT time (plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
-      "acceptanceCriteria": "- deep_space and planet_approach peaks stay within their frozen limits (12.5 / 7.5); no Ph8 spawn in an ENEMIES_CLEARED section; spill-over row green.\n- Attack-in-budget rows pass from every Ph8 level-1 spawn.\n- All existing level-1 gates green; verify.sh green; GUT within allotment.",
+      "description": "Per plan §2.18. Recompute the alive curves through the gate's own code and print them before editing the director. Place, inside existing waves (no new wave, no rail): b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(-64, -220) in deep_space's 3.0 s wave (effective 3.5 s; world-anchored, members at world x 462 / 512 / 562), b.twin_laser_pair().at(-250, -220) in deep_space's 29.0 s wave, and b.laser_tender().at(-300, -200) in planet_approach's 2.0 s wave. Extend test_level1_specialist_spawns.gd: EXPECTED_PH8 pin rows; every member / drone / tender counted in the frozen 2.5× gate with the worst-case drift life (≤ 28.1 s from the highest spawn to projectile_world_rect().end.y at 60 px/s), the drone and tender lives with the deferral and launch-time bounds of §2.12 / §2.13 and the exits from tests/helpers/ph8_exit_keys.gd (memo hits: no new probe); test_ph8_static_members_clear_every_lit_column (every static member vs every column in Level1Director.laser_column_schedule() lit during its life, |x − column| ≥ 28 + body radius; revision 1's (0, −220) fails it); spill-over row. Extend test_engagement_deadline.gd (no ENEMIES_CLEARED section holds a turret group, laser fence, twin pair or tender, with detection and boundary rows). Add attack-in-budget slice replays (16× only for clock-bound rows): the 29.0 s pair reaches ADVANCE once, the tender reaches LAUNCH and its pair ADVANCE, both turrets fire while in view; member departure is checked analytically. Re-run scripts/measure-level1-columns.sh with the Ph8 spawns in and record the counts in DECISIONS.md. Use the pre-approved levers of §2.18 in order if a row turns red (tender then drone engage_seconds 10 → 6 / 8 → 6 while the attack rows stay green; move the pair; drop the ring turret); never move a bound. Gate time: allotment 3.5 s of new GUT time (the allotment line in \"For every task\" and plan §2.20); report scripts/gate-time.sh before/after in the task report and tests/README.md → Gate time.",
+      "acceptanceCriteria": "- deep_space peak ≤ 12.5 (expected 12 at 29.0–31.6 s) and planet_approach ≤ 7.5 (expected ≤ 7 at 28.4–32.0 s; the drones gone by 32.0 s); curves printed.\n- The column-clearance row passes and fails on the revision-1 placement.\n- No Ph8 spawn in an ENEMIES_CLEARED section; spill-over row green.\n- Attack-in-budget rows pass from every Ph8 level-1 spawn.\n- The post-placement column counts are in DECISIONS.md.\n- All existing level-1 gates green; verify.sh green; GUT within allotment.",
       "type": "feature",
-      "complexity": "medium",
+      "complexity": "large",
       "dependsOn": [
-        "t9",
-        "t14"
+        "t14",
+        "t17"
       ],
       "planSections": [
         "2.7",
@@ -325,21 +341,21 @@
         "2.12",
         "2.13",
         "2.14",
-        "2.18"
+        "2.16",
+        "2.18",
+        "2.20"
       ]
     },
     {
       "key": "t20",
       "title": "The docs, roster and phase record describe energy weapons, turrets, structures, twin drones and the Laser Tender as built",
-      "description": "Invoke the updating-project-docs skill and update everything plan §2.22 lists: assault.md, global.md, PROJECT.md conventions (energy-weapon friendly fire and owner set, mount writes only its own rotation, AssaultDrift, no Ph8 structures/drones in ENEMIES_CLEARED), docs/enemy-roster.md, each ENEMY.md / STRUCTURE.md / BEAMS.md, the CLAUDE.md Phase 8 gates paragraph, tests/README.md gate-time summary, the epic dossier docs/epics-done/cmug23ona0015m52w4t1m73bc/ (PRD.md, SOURCES.md, REPORT.md with honest known gaps and the §2.21 starting values) and the '## Phase 8 - as built (<date>)' section of DECISIONS.md (what was built, every deviation, gaps for later phases).",
+      "description": "Invoke the updating-project-docs skill and update everything plan §2.22 lists: assault.md, global.md, PROJECT.md conventions (energy-weapon friendly fire and owner set, mount writes only its own rotation, AssaultDrift, world-anchored x for wave-spawned turret groups and fences, static enemies never count as escapes, no Ph8 structures/drones in ENEMIES_CLEARED), docs/enemy-roster.md, each ENEMY.md / STRUCTURE.md / BEAMS.md, the CLAUDE.md Phase 8 gates paragraph, tests/README.md gate-time summary, the epic dossier docs/epics-done/cmug23ona0015m52w4t1m73bc/ (PRD.md, SOURCES.md, REPORT.md with honest known gaps and the §2.21 starting values) and the '## Phase 8 - as built (<date>)' section of DECISIONS.md (what was built, every deviation, gaps for later phases).",
       "acceptanceCriteria": "- Every doc in §2.22 updated; the dossier's three files exist; DECISIONS.md has the Phase 8 as-built section.\n- No production or test file changed except docs; verify.sh green.",
       "type": "chore",
       "complexity": "medium",
       "effort": "medium",
       "dependsOn": [
-        "t15",
         "t16",
-        "t17",
         "t18",
         "t19"
       ],
@@ -351,7 +367,8 @@
         "4",
         "5",
         "6",
-        "7"
+        "7",
+        "8"
       ]
     }
   ]

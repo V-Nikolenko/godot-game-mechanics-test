@@ -2855,7 +2855,7 @@ decisions above stand except where this section says otherwise; the per-task *Bu
 
 ## Phase 8 - Enemy rework, phase 8: energy weapons, defense turrets and Twin-Laser Drones (2026-10-27)
 
-Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` (revision 1), research in `1-context.md` / `2-research.md` (scope check S1–S16) in the same
+Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` (revision 2, answering the round-1 review `4-review.md`), research in `1-context.md` / `2-research.md` (scope check S1–S16) in the same
 directory. These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
 
 ### Changes to earlier decisions
@@ -2868,7 +2868,9 @@ directory. These are *planned* decisions; check this phase's *as built* section,
   ordnance is never hit. Rocket and mine blast rules (Ph5, Ph7) are unchanged. A kill by an enemy weapon scores for the player (no attribution system).
 - **Enemy beams are direct emitters** (`HurtBox.received_damage.emit`), like every beam in the project: they bypass `EnemyShield` bubbles and
   `ArmorPlate`s; a plated Ram refuses them in its hull rule; the player's i-frames and shield charge apply. Re-hit at most once per `rehit_interval`
-  (≥ 0.5 s) per target, for both sides alike.
+  per target: **0.55 s** on every held beam, strictly above the player's `invincibility_sec` 0.5 (a re-hit on exactly 0.5 s lands on the physics tick before the
+  i-frame `Timer` expires and is refused, so the player would feel 1.0 s); a gate row pins `rehit_interval > invincibility_sec`. Every beam draws its
+  telegraph line `telegraph_width` ≥ 3 px (4 shipped).
 - **The Ph1 roadmap's "telegraphs on `AttackController.fire_now`" is superseded for beams:** a beam owns its TELEGRAPH → ACTIVE → FADE timeline;
   `AttackController` stays the round / rocket driver.
 - **`LineOfSight._blocks` becomes public as `LineOfSight.blocks(collider)`** (same behaviour), so beams clip at the same opt-in blockers.
@@ -2893,16 +2895,21 @@ directory. These are *planned* decisions; check this phase's *as built* section,
   **`TurretMount` is the Ph10/Ph11 seam:** `enum Variant { BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY, PULSE_RING, LANCE, BEAM_CANNON }` (append-only),
   `Phase { SCAN, TRACK, TELEGRAPH, FIRE, COOLDOWN, UNPOWERED }`, `setup(host, pools, owner_group)`, `tick(delta, target, can_fire)`, `scan()`,
   `power_down()`, `pool_specs()`; it writes only its own rotation and never reads its host's type; pools are root children of the host. One mount scene
-  per variant (`TurretMountScenes`). Partial lead `lead_blend` 0.6; beams never re-aim after TELEGRAPH starts. Heavy emplacement =
-  `heavy_emplacement/` with the same scripts and two mount slots (BEAM_CANNON + BURST_CANNON).
-- **Structures:** `PowerSource` (`provides_power()`), `ShieldGenerator` (sustained 360° `EnemyShield` bubbles on every powered group member but itself,
-  the Support Ship's projected-shield path), `LaserEmitter` (fence post) are brainless or brain-only `BaseEnemy`s in `enemies`.
+  per variant (`TurretMountScenes`); a `TurretMountSlot` (`variant`, `rest_bearing_deg`, `turn_rate_override` −1 = keep the mount's) is the authored place a
+  host retunes a runtime-built mount. Partial lead `lead_blend` 0.6; beams never re-aim after TELEGRAPH starts. Heavy emplacement =
+  `heavy_emplacement/` with the same scripts and two mount slots (BEAM_CANNON + BURST_CANNON, `turn_rate_override` 1.2).
+- **Structures:** `PowerSource` (`provides_power()`), `ShieldGenerator` (sustained 360° `EnemyShield` bubbles on every powered `BaseEnemy` group member
+  but itself, the Support Ship's projected-shield path; **never on laser-fence posts**, so shooting a post stays the cheap counterplay), `LaserEmitter` (fence post) are brainless or brain-only `BaseEnemy`s in `enemies`.
   `assault/scenes/structures/`: `TurretGroup` (a **coordinator, not a parent**: spawns members deferred as siblings in its own parent, `owner_group`
   `&"turret_group_<id>"`, `members()`, `is_powered()`, `add_power_provider(node)` — the **Ph20 jammer seam** — `request_telegraph()` stagger 0.3 s,
   coverage rule ≥ 2 mounts in range at `coverage_radius`), `TurretGroupSlot`, presets; `LaserFence` (two posts + a TWIN beam, `Mode { STATIC, CYCLE }`,
-  collapses when a post dies). `set_powered(on)` on every member is the only power coupling; unpowered members go dark, stay destructible and never
+  collapses when a post dies; lingers 1.0 s after its last post so the posts' explosion particles, spawned under it, finish). `set_powered(on)` on every member is the only power coupling; unpowered members go dark, stay destructible and never
   restart in Ph8. Members spawned by a group, fence or pair spawner are announced with `EventBus.enemy_spawned_orphan`; the coordinators set
-  `counts_toward_wave_clear` / `counts_as_escape` false.
+  `counts_toward_wave_clear` / `counts_as_escape` false. The five **static enemies** (turret, heavy emplacement, generator, power source, fence post) set
+  `counts_as_escape = false` in their `.tres` (drifting off the bottom never breaks the combo); drones and tenders keep the default.
+- **World-anchored x (Assault):** a wave-spawned `TurretGroup` or `LaserFence` (export `world_anchored_x`, default true; not a group member) removes the
+  camera's horizontal pan from its x once in `_ready()`, through `EnemyWorld.view_rect()` / `projectile_world_rect()` centres only, so its world x is
+  `640 + 2 · design_x` like level 1's `LaserRay` columns. Every other wave spawn stays camera-relative. Later placed Assault structures (Ph15) should keep it.
 - **`AssaultDrift`** (`global/components/assault_drift.gd`): static things scroll down at 60 px/s in Assault and free below the projectile world rect;
   `velocity()` for carried hazards. Turrets fire only inside `EnemyWorld.view_rect()`.
 - **Twin-Laser Drones** (`assault/scenes/enemies/twin_laser_drone/`): `TwinLaserDrone`, `TwinLaserDroneBrain` (`Phase { FORM, TELEGRAPH, ADVANCE, BREAK,
@@ -2912,16 +2919,31 @@ directory. These are *planned* decisions; check this phase's *as built* section,
 - **Laser Tender** (`assault/scenes/enemies/laser_tender/`): the "controller ship" of IDEAS §6.10, a new roster entry. **`launch_pair(points) ->
   TwinLaserPair` is the Ph10 (Carrier hangars) / Ph11 (fortress bays) seam.** One live pair; rearm 7 s; Attack B places the wall across the player's
   predicted path.
-- **Placement:** hub defense site (`hub_defense_site.tscn` under `EnemyContainer` by the TacticalSpace derelicts), hub draws 16 (tender) and 17 (pair);
-  level 1: `assault_pair` group in deep_space 3.0 s, a twin pair in deep_space 20.0 s, a tender in planet_approach 62.0 s, inside existing waves. Ph8
-  turret members, drones and tenders count as specialists in the frozen 2.5× gate.
+- **Placement:** hub defense site (`hub_defense_site.tscn` under `EnemyContainer` by the TacticalSpace derelicts, origin ≈ (2520, 1040)), hub draws 16
+  (tender) and 17 (pair). Level 1, inside existing waves, each chosen from the alive curve and the column schedule:
+  - deep_space **3.0 s** wave (effective 3.5 s): `turret_group(TURRET_GROUP_ASSAULT_PAIR).at(-64, -220)`; the `assault_pair` preset is a BURST_CANNON turret
+    at (−50, 60), a PULSE_RING turret at (50, −60) and a power source at (0, 0), so the members sit at world x 462 / 512 / 562, clear of every deep_space
+    column (384 and 640 are 78 / 128 / 78 px away; 28 + body radius needed) over a worst-case drift life of 28.1 s. Revision 1's `.at(0, -220)` put the
+    power source on the x = 640 column.
+  - deep_space **29.0 s** wave: a twin pair (12 of 12.5 at 29.0–31.6 s). Revision 1's 20.0 s wave gave 13 at 26.5 s once the group's worst-case life was counted.
+  - planet_approach **2.0 s** wave: a Laser Tender (≤ 7 of 7.5 at 28.4–32.0 s; its drones must be gone by 32.0 s). Revision 1's 62.0 s wave gave 8–9.
+  Ph8 turret members, drones and tenders count as specialists in the frozen 2.5× gate.
+- **Level-1 column schedule as data:** `Level1Director.laser_column_schedule()` (static) is what tests read; `tests/helpers/level1_column_replay.gd` +
+  `scripts/measure-level1-columns.sh` measure column kills on demand (not a GUT test). Any later placement of a static Assault structure in level 1 must
+  clear the columns lit during its life (`test_ph8_static_members_clear_every_lit_column`).
+- **Assault life bounds:** a twin drone's budget expiring in TELEGRAPH / ADVANCE lets the attack finish (`max_advance_seconds` = (max(standoff,
+  assault_wall_lead) + overshoot) / advance_speed = 1.92 s); a tender's budget expiring in the cradle telegraph lets the launch finish, so a pair is launched
+  by spawn + `engage_seconds` + `launch_telegraph`. The drone and tender corridor exits are measured once per GUT run through `tests/helpers/ph8_exit_keys.gd`
+  (one place builds every `SpecialistExitProbe` memo-key input, `prepare` as a static function).
 
 ### Conventions
 - **No turret group, laser fence, twin pair or Laser Tender in an `ENEMIES_CLEARED` section** (guard rows in `test_engagement_deadline.gd`).
 - Every structure / turret root answers `is_laser_blocking() == false`. (Existing layer-1 enemy roots still stop the player's mining beam and are skipped as
   its targets — a follow-up outside this phase.)
 - Assault twin rigs stay inside `constraint.inner_rect()`; drones and tenders get one attack per Assault life and measured exits.
-- Gate time: t1 must free ≥ 10 s (hard floor); allotments total 26.4 s, phase ends ≤ 234.8 s; a production speed-up is allowed only when bit-identical.
+- Gate time: t1 must free ≥ 15 s (hard floor); allotments total 33.1 s including the two corridor exit probes (3.5 + 4.0 s), so the phase ends ≤ 236.5 s;
+  a task that would pass 238 s escalates; a production speed-up is allowed only when bit-identical.
+- Tasks that edit the same files are chained (t6 → … → t14 over the roster gates, t2 → t3 → t5, t17 → t19); the shield generator is its own task (t9s).
 
 ### Deferred
 | Item | Deferred to | Reason |
@@ -2937,3 +2959,5 @@ directory. These are *planned* decisions; check this phase's *as built* section,
 | Heavy Shell consumer | Ph10 | unchanged from Ph4 |
 | Beams shooting down enemy ordnance; re-powering a dark group | owner option / Ph20 | |
 | Level-1 `LaserRay` columns as hazards, if t17's measurement says no or a gate refuses | Ph15 | |
+| A twin pair rotating its lit beam about an anchor point (IDEAS §11.3) | Ph11 | §6.10 defines only Attacks A and B; a spinning endpoint beam is a geometry weapon for Space Fortress 2.0; `EnemyBeam` TWIN already takes endpoints per tick, so only a rig mode is needed. Ph8 ships the same hazard as the SWEEP_BEAM turret |
+| Shield-generator bubbles on laser-fence posts | not planned | decided against (posts stay the cheap counterplay) |
