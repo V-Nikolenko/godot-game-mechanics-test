@@ -63,6 +63,7 @@ func _world(mode: String):
 
 func _spawn(harness, pos: Vector2) -> MineLayer:
 	var layer := LAYER_SCENE.instantiate() as MineLayer
+	(layer.get_node("Brain") as MineLayerBrain).start_engaged = true  # pre-t12 rows: combat from spawn
 	layer.global_position = pos
 	harness.root.add_child(layer)
 	layer.set_physics_process(false)  # hand-ticked
@@ -409,11 +410,11 @@ func _brain(layer: MineLayer) -> MineLayerBrain:
 ## A layer for the pass rows: seeded before `add_child` (`EnemyBrain._ready()` reads `rng_seed`), engaged from the start,
 ## hand-ticked. Every mine its brain lays is recorded in `meta drops` as `{mine, tick, phase, k, landed}` (`k` = its index
 ## in the pass, -1 for a tail drop; `landed` = where it was LAND_TICKS after the drop) and has its own physics switched off.
-func _pass_layer(harness, pos: Vector2, velocity: Vector2 = Vector2.ZERO) -> MineLayer:
+func _pass_layer(harness, pos: Vector2, velocity: Vector2 = Vector2.ZERO, engaged: bool = true) -> MineLayer:
 	var layer := LAYER_SCENE.instantiate() as MineLayer
 	var brain := layer.get_node("Brain") as MineLayerBrain
 	brain.rng_seed = SEED
-	brain.start_engaged = true
+	brain.start_engaged = engaged
 	layer.global_position = pos
 	harness.root.add_child(layer)
 	layer.set_physics_process(false)
@@ -1168,3 +1169,287 @@ func test_lay_never_tail_drops() -> void:
 	assert_eq(brain.tail_drops, tails, "no tail drop during LAY")
 	var drops: Array = layer.get_meta(&"drops")
 	assert_eq(drops.size(), _pass_drops(layer).size(), "only pass mines")
+
+
+# ══ t12: hub idle and Open Space persistence (plan §2.14) ════════════════════════════════════════
+#
+# `_pass_layer(..., engaged = false)` leaves the brain to decide for itself: Open Space starts IDLE, Assault starts in combat.
+# The player stub is stationary unless a row moves it.
+
+const BP := MineLayerBrain.Phase
+const FAR_AWAY := Vector2(100000.0, 100000.0)
+
+
+## A cold (not `start_engaged`) layer at `pos` with the stub at `player_pos`.
+func _cold_layer(harness, pos: Vector2, player_pos: Vector2) -> MineLayer:
+	harness.player.global_position = player_pos
+	harness.player.velocity = Vector2.ZERO
+	return _pass_layer(harness, pos, Vector2.ZERO, false)
+
+
+func _is_calm(p: int) -> bool:
+	return p == BP.IDLE or p == BP.NOTICING or p == BP.RETURNING
+
+
+## §2.14, from the config fields (never typed numbers): the layer's own cycle never sends it home mid-fight against a player
+## flying at <= 220 px/s.
+func test_the_idle_radii_clear_the_cycle_and_the_lead_forms_farthest_point() -> void:
+	var c: MineLayerConfig = SHIPPED
+	assert_eq(c.perceive_radius, 650.0)
+	assert_eq(c.lose_radius, 1500.0)
+	assert_eq(c.notice_time, 0.35)
+	assert_eq(c.idle_radius, 160.0)
+	assert_gt(c.lose_radius, c.perceive_radius, "AnchorIdle's hysteresis margin")
+	var cycle := c.standoff_range + c.break_speed * c.break_seconds + c.pass_length * 0.5 + c.run_in
+	assert_gt(c.lose_radius, cycle, "1. the cycle: %.1f < %.0f" % [cycle, c.lose_radius])
+	var v := 220.0
+	var lead_c := (c.pass_length * 0.5) / c.lay_speed + c.mine_arm_delay
+	var ahead := v * (c.run_in / c.lay_speed + minf(lead_c, c.lead_horizon)) + c.ahead_distance + c.min_pass_separation + MineLayerBrain.SPREAD_EXTRA
+	var farthest := sqrt(ahead * ahead + pow(c.pass_length * 0.5 + c.run_in, 2.0))
+	assert_gt(c.lose_radius, farthest, "2. the lead form's farthest point at 220 px/s: %.1f < %.0f" % [farthest, c.lose_radius])
+	var fence := sqrt(c.fence_distance * c.fence_distance + pow(c.pass_length * 0.5 + c.run_in, 2.0))
+	assert_gt(c.lose_radius, fence, "and a fence line (%.1f)" % fence)
+
+
+func test_open_space_cold_start_begins_idle_and_assault_starts_in_combat() -> void:
+	var h = _world("open_space")
+	var layer := _cold_layer(h, Vector2(321.0, -654.0), FAR_AWAY)
+	_tick(layer, DT)
+	assert_eq(_brain(layer).phase, BP.IDLE, "frame 0: IDLE")
+	assert_not_null(_brain(layer).anchor_idle)
+	assert_eq(_brain(layer).patrol_anchor, Vector2(321.0, -654.0), "an unset anchor defaults to the spawn position")
+	var a = _world("assault")
+	var layer2 := _cold_layer(a, Vector2(640.0, -100.0), Vector2(640.0, 560.0))
+	_tick(layer2, DT)
+	assert_eq(_brain(layer2).phase, BP.APPROACH, "Assault always starts in combat")
+	assert_null(_brain(layer2).anchor_idle, "and builds no AnchorIdle")
+
+
+func test_a_suspended_layer_drops_its_idle() -> void:
+	var h = _world("open_space")
+	var layer := _cold_layer(h, Vector2(300.0, 0.0), FAR_AWAY)
+	_tick(layer, DT)
+	assert_not_null(_brain(layer).anchor_idle)
+	_brain(layer).on_suspended()
+	assert_null(_brain(layer).anchor_idle, "a rail owns the motion")
+
+
+func test_idle_never_lays_or_tail_drops_and_stays_on_its_ring() -> void:
+	var h = _world("open_space")
+	var anchor := Vector2(500.0, -400.0)
+	var layer := _cold_layer(h, anchor + Vector2(20.0, 0.0), anchor + Vector2(SHIPPED.perceive_radius + SHIPPED.idle_radius + 80.0, 0.0))
+	var worst := 0.0
+	for i in _ticks(20.0):
+		_pass_step(layer, h.player, false)
+		assert_eq(_brain(layer).phase, BP.IDLE)
+		if i > _ticks(5.0):  # the first seconds are the slow turn onto the ring
+			worst = maxf(worst, layer.global_position.distance_to(anchor))
+	assert_lte(worst, SHIPPED.idle_radius + 30.0, "worst %.1f px from the anchor once settled" % worst)
+	assert_eq((layer.get_meta(&"drops") as Array).size(), 0, "nothing was laid")
+	assert_eq(_brain(layer).tail_drops, 0)
+
+
+## A stub in the rear cone at frame 0 is inside perceive_radius, so the layer is NOTICING: no tail drop (control: the same
+## stub gets one once the layer is fighting, REPOSITION).
+func test_noticing_never_tail_drops_but_a_fighting_layer_does() -> void:
+	var h = _world("open_space")
+	var layer := _cold_layer(h, Vector2(500.0, 0.0), FAR_AWAY)
+	var brain := _brain(layer)
+	var seen: Array[int] = []
+	for i in _ticks(1.0):
+		var nose := Vector2.RIGHT.rotated(layer.rotation + EnemyMover.sprite_forward_angle_of(layer))
+		h.player.global_position = layer.dispenser.global_position - nose * 200.0
+		_pass_step(layer, h.player, false)
+		if seen.is_empty() or seen[-1] != brain.phase:
+			seen.append(brain.phase)
+		if brain.phase == BP.NOTICING:
+			assert_eq(brain.tail_drops, 0, "no tail drop while NOTICING (tick %d)" % i)
+	assert_eq(seen.slice(0, 2), [BP.NOTICING, BP.REPOSITION], "phases %s" % [seen])
+	assert_gt(brain.tail_drops, 0, "the control: REPOSITION tail-drops a chaser")
+
+
+func test_perceiving_the_player_notices_for_a_beat_then_waits_out_a_fresh_pass_period() -> void:
+	var h = _world("open_space")
+	var layer := _cold_layer(h, Vector2(640.0, 0.0), Vector2(640.0, SHIPPED.perceive_radius - 100.0))
+	var brain := _brain(layer)
+	var seen: Array[int] = []
+	var notice_end := -1
+	for i in _ticks(SHIPPED.notice_time + SHIPPED.pass_period_min - 0.5):
+		_pass_step(layer, h.player, false)
+		if seen.is_empty() or seen[-1] != brain.phase:
+			seen.append(brain.phase)
+			if brain.phase == BP.REPOSITION:
+				notice_end = i
+	assert_eq(seen, [BP.NOTICING, BP.REPOSITION], "NOTICING for a beat, then REPOSITION and nothing else (a pass period is redrawn)")
+	assert_almost_eq(notice_end * DT, SHIPPED.notice_time, 2.0 * DT, "the beat is notice_time")
+	assert_eq(brain.passes_started, 0, "nothing laid yet")
+	assert_eq((layer.get_meta(&"drops") as Array).size(), 0)
+	# And the pass does come: APPROACH, then LAY.
+	var lay := _run_until(layer, h.player, _ticks(25.0), func() -> bool: return brain.phase == BP.LAY)
+	assert_lt(lay, _ticks(25.0), "the layer goes on to lay a line")
+
+
+func test_a_player_outside_perceive_radius_is_not_noticed() -> void:
+	var h = _world("open_space")
+	var layer := _cold_layer(h, Vector2(640.0, 0.0), Vector2(640.0, SHIPPED.perceive_radius + SHIPPED.idle_radius + 80.0))
+	for _i in _ticks(3.0):
+		_pass_step(layer, h.player, false)
+		assert_eq(_brain(layer).phase, BP.IDLE)
+
+
+func test_beyond_lose_radius_it_goes_home_and_can_fight_again() -> void:
+	var h = _world("open_space")
+	var anchor := Vector2(640.0, 0.0)
+	var layer := _cold_layer(h, anchor, anchor + Vector2(0.0, 500.0))
+	var brain := _brain(layer)
+	_run_until(layer, h.player, _ticks(3.0), func() -> bool: return not _is_calm(brain.phase))
+	assert_eq(brain.phase, BP.REPOSITION, "it reached combat")
+	for _i in _ticks(2.0):
+		_pass_step(layer, h.player, false)
+	assert_gt(layer.global_position.distance_to(anchor), 200.0, "sanity: away from home, so there is a way back to walk")
+	h.player.global_position = layer.global_position + Vector2(SHIPPED.lose_radius + 100.0, 0.0)  # teleported
+	var seen_ret := [false]  # a lambda captures a bool by value
+	var home_at := _run_until(layer, h.player, _ticks(40.0), func() -> bool:
+		seen_ret[0] = seen_ret[0] or brain.phase == BP.RETURNING
+		return brain.phase == BP.IDLE)
+	assert_true(seen_ret[0], "it passes through RETURNING on the way home")
+	assert_lt(home_at, _ticks(40.0), "and reaches IDLE")
+	assert_lte(layer.global_position.distance_to(anchor), SHIPPED.idle_radius + 1.0, "within the ring")
+	h.player.global_position = layer.global_position + Vector2(SHIPPED.perceive_radius - 50.0, 0.0)
+	_run_until(layer, h.player, _ticks(1.0), func() -> bool: return false)
+	assert_false(_is_calm(brain.phase), "and fights again (%s)" % brain.phase)
+
+
+## RETURNING never interrupts a LAY: the player vanishes (beyond lose_radius) mid-line, and the line still gets laid; the
+## return follows it.
+func test_returning_never_interrupts_a_lay() -> void:
+	var h = _world("open_space")
+	var layer := _cold_layer(h, Vector2(640.0 + 600.0, 360.0), OS_PLAYER)
+	var brain := _brain(layer)
+	_run_until(layer, h.player, _ticks(40.0), func() -> bool: return brain.phase == BP.LAY)
+	assert_eq(brain.phase, BP.LAY, "it reaches its line")
+	h.player.global_position = layer.global_position + Vector2(SHIPPED.lose_radius + 100.0, 0.0)
+	var seen: Array[int] = [BP.LAY]
+	_run_until(layer, h.player, _ticks(12.0), func() -> bool:
+		if seen[-1] != brain.phase:
+			seen.append(brain.phase)
+		return seen[-1] == BP.RETURNING)
+	assert_eq(seen.slice(0, 2), [BP.LAY, BP.BREAK_OFF], "the line is finished first (phases %s)" % [seen])
+	assert_eq(seen[-1], BP.RETURNING, "and then it goes home (phases %s)" % [seen])
+	assert_eq(brain.drops_this_pass, SHIPPED.mines_per_pass, "all six were laid")
+
+
+## §2.14 "an area the player comes back to stays dangerous", one shared scenario: the layer lays a pass, the stub is
+## teleported 2000 px from the LAYER (beyond lose_radius of it, not of the anchor), the layer goes RETURNING and home, 60 s
+## later every mine is still at its rest point and registered, and a stub placed 300 px short of the line and driven through
+## it at 220 px/s sets off the first mine it reaches (real physics, 8x). Homing is weighted out only so no mine moves toward
+## the returning stub (a homing mine is test_enemy_mines.gd's business).
+func test_open_space_mines_persist_while_the_player_is_away_and_trigger_on_return() -> void:
+	var h = _world("open_space")
+	h.player.global_position = OS_PLAYER
+	var layer := _cold_layer(h, OS_PLAYER + Vector2(600.0, 0.0), OS_PLAYER)
+	var brain := _brain(layer)
+	brain.config.w_homing = 0.0
+	var lay_ticks := _run_until(layer, h.player, _ticks(40.0), func() -> bool: return brain.phase == BP.LAY)
+	assert_lt(lay_ticks, _ticks(40.0), "it lays a pass")
+	_run_until(layer, h.player, _ticks(10.0), func() -> bool: return brain.phase != BP.LAY)
+	var rest: Array[Vector2] = brain.planned_rest_points.duplicate()
+	var centre := brain.pass_centre
+	var normal := brain.pass_normal
+	h.player.global_position = layer.global_position + Vector2(2000.0, 0.0)
+	var seen_ret := [false]  # a lambda captures a bool by value
+	var home_ticks := _run_until(layer, h.player, _ticks(30.0), func() -> bool:
+		seen_ret[0] = seen_ret[0] or brain.phase == BP.RETURNING
+		return brain.phase == BP.IDLE)
+	assert_true(seen_ret[0], "the layer goes RETURNING")
+	assert_lt(home_ticks, _ticks(30.0), "and reaches home (IDLE)")
+	var start := roundi(60.0 / DT)
+	for i in start:
+		_pass_step(layer, h.player, false)
+		if i % YIELD_EVERY == 0:
+			await get_tree().process_frame
+	assert_eq(brain.phase, BP.IDLE, "60 s later it is still on patrol")
+	var drops := _pass_drops(layer)
+	assert_eq(drops.size(), SHIPPED.mines_per_pass, "the pass delivered its six")
+	var mines: Array[EnemyMine] = []
+	for d in drops:
+		var m := d.mine as EnemyMine
+		mines.append(m)
+		assert_true(is_instance_valid(m) and m.is_live(), "a mine is still live")
+		assert_lt(m.global_position.distance_to(d.landed), 0.5, "at its rest point")
+		var registered := false
+		for info: HazardInfo in Hazards.around(m.global_position, 1.0):
+			registered = registered or info.source == m
+		assert_true(registered, "and registered as a hazard")
+	assert_gt(60.0, SHIPPED.assault_mine_life, "sanity: the wait is longer than an Assault mine lives")
+	# The return: 300 px short of the line (its centre), straight at it along its normal, 220 px/s.
+	_scale_clock()
+	var dir := normal
+	var from := centre - dir * 300.0
+	var stub := _player_stub(from, h.root)
+	for m in mines:
+		m.set_physics_process(true)
+	var first_t := INF
+	var first_mine: EnemyMine = null
+	for m in mines:
+		var r := m.trigger_radius + STUB_RADIUS
+		var along := (m.global_position - from).dot(dir)
+		var across := absf((m.global_position - from).cross(dir))
+		if across <= r:
+			var t := (along - sqrt(r * r - across * across)) / 220.0
+			if t < first_t:
+				first_t = t
+				first_mine = m
+	assert_not_null(first_mine, "the drive path reaches a mine")
+	var seen_t := -1.0
+	var triggered: Array[EnemyMine] = []
+	for i in roundi(5.0 * float(_saved_ticks)):
+		await get_tree().physics_frame
+		stub.global_position += dir * 220.0 / float(_saved_ticks)
+		for m in mines:
+			if not is_instance_valid(m) or m.is_warning() or not m.is_live():
+				triggered.append(m)
+		if not triggered.is_empty():
+			seen_t = float(i + 1) / float(_saved_ticks)
+			break
+	assert_gt(triggered.size(), 0, "a mine went off")
+	assert_true(triggered.has(first_mine), "the first mine it reaches is among them")
+	assert_almost_eq(seen_t, first_t, 0.12, "at the time the stub entered its trigger radius")
+	assert_eq(rest.size(), SHIPPED.mines_per_pass)
+
+
+## The Assault counterpart: the same pass's mines are gone after `assault_mine_life` (the mode difference, asserted) and
+## live until then. Each mine's life counts from its own launch, so its age is tracked per mine.
+func test_assault_mines_are_gone_after_assault_mine_life() -> void:
+	var h = _world("assault")
+	var layer := _pass_layer(h, Vector2(240.0, 300.0))
+	var brain := _brain(layer)
+	_run_until(layer, h.player, _ticks(40.0), func() -> bool: return brain.passes_started >= 1 and brain.drops_this_pass >= SHIPPED.mines_per_pass)
+	var now := int(layer.get_meta(&"tick"))
+	var mines: Array[EnemyMine] = []
+	var ages: Array[int] = []
+	for d in _pass_drops(layer):
+		mines.append(d.mine)
+		ages.append(now - int(d.tick))
+	assert_eq(mines.size(), SHIPPED.mines_per_pass)
+	var life_ticks := _ticks(SHIPPED.assault_mine_life)
+	var died_early := 0
+	var lingered := 0
+	for i in life_ticks + _ticks(2.0):
+		for j in mines.size():
+			var m := mines[j]
+			if is_instance_valid(m) and (m.is_live() or m.is_fizzling()):
+				m._physics_process(DT)
+			var age := ages[j] + i + 1
+			var live := is_instance_valid(m) and m.is_live()
+			if age < life_ticks - 2 and not live:
+				died_early += 1
+			if age > life_ticks + _ticks(0.5) and live:
+				lingered += 1
+	assert_eq(died_early, 0, "every mine is live until its life ends")
+	assert_eq(lingered, 0, "and none outlives assault_mine_life (+ the fade)")
+	for m in mines:
+		assert_false(is_instance_valid(m) and m.is_live(), "gone")
+		if is_instance_valid(m):
+			for info: HazardInfo in Hazards.around(m.global_position, 1.0):
+				assert_ne(info.source, m, "and unregistered")

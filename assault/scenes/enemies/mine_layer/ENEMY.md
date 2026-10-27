@@ -3,9 +3,10 @@
 **Role:** Flies sideways across an encounter laying mines from its stern, so the player has to remember where the unsafe regions are.
 **Fantasy / threat:** A slow, easy-to-hit hull whose threat is what it leaves behind. Enemies steer round its mines too (Phase 6 hazard perception).
 
-> **Build state (Phase 7, t11: passes).** Built: the scene, config, per-variant persistent pools, `drop_mine()`, the rail fallback, the
-> `WaveBuilder` entry (t10) and the pass AI — APPROACH / LAY / BREAK_OFF / REPOSITION / DISENGAGE, the live-mine cap and the tail drop (t11).
-> **Not built yet:** the Open Space idle, the hull art, the hatch and the wake trail, the hub and level 1 placement. Plan:
+> **Build state (Phase 7, t12: hub idle).** Built: the scene, config, per-variant persistent pools, `drop_mine()`, the rail fallback, the
+> `WaveBuilder` entry (t10), the pass AI — APPROACH / LAY / BREAK_OFF / REPOSITION / DISENGAGE, the live-mine cap and the tail drop (t11) — and the
+> Open Space hub idle (IDLE / NOTICING / RETURNING) with its persistence rules (t12).
+> **Not built yet:** the hull art, the hatch and the wake trail, the hub and level 1 placement. Plan:
 > `docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md` §2.11–§2.12; t11's own plan `docs/plans/cmvkb0hdc00uiqs2xhvb2awai/3-plan.md`.
 
 ---
@@ -61,11 +62,20 @@
 - **DISENGAGE** (Assault: after its one pass, or when `engage_seconds` 9 runs out; an expiry mid-LAY waits for the LAY to finish): `mover.release_constraint()` and
   `mover.max_speed = exit_speed`, as the Bomber does, so the corridor never holds an exiting layer in. After a pass it leaves along the line's axis (off the far
   end); with no pass laid, along its heading on entry. Freed outside the world rect.
+- **Hub idle (Open Space, t12).** `AnchorIdle` runs ahead of the phase dispatch (as the Bomber's): `patrol_anchor` (default the spawn), `idle_phase_offset` from `rng`,
+  `perceive_radius` 650 · `lose_radius` 1500 · `notice_time` 0.35 · `idle_radius` 160 · `idle_speed` 0.5. **IDLE** is a slow ring round the anchor and never lays or
+  tail-drops; **NOTICING** blinks the light, faces the player for `notice_time`, then goes to **REPOSITION** (not straight to APPROACH), whose wait is drawn afresh from
+  `pass_period_min..max` — a layer that idled for a minute does not lay the instant it notices; **RETURNING** `arrive`s home (within `idle_radius`) and reaches IDLE. A **LAY is
+  never interrupted** (the return is retried every tick, so a line already begun is finished first), nor a DISENGAGE. `start_engaged` and Assault (`EngagementBudget.active`) build no
+  `AnchorIdle`; `on_suspended()` drops it. `lose_radius` clears the layer's own cycle (600 + 260 × 1.2 + 300 + 150 = 1362) and the lead form's farthest point against a 220 px/s
+  player (1415.8); a faster player is let go on purpose.
+- **Persistence (Open Space).** Mines have `mine_life` 0 and a 240 s backstop; RETURNING does not touch them and a layer's death hands them over, so an area the player
+  comes back to is still dangerous (Assault: gone after `assault_mine_life` 9 s).
 - **Test seams:** `pass_centre` / `pass_start` / `pass_end` / `pass_run_in_point` / `pass_axis` / `pass_normal` / `pass_shape` / `pass_form`
   (`&"lead"`, `&"fence"`, `&"assault"`), `plan_frozen`, `frame_f`, `arrival_time`, `planned_rest_points`, `planned_variants`, `drops_this_pass`,
   `skipped_this_pass`, `passes_started`, `tail_drops`, `run_in_active`, `spread_fallbacks`, `fence_fallbacks`, `abandoned_passes`, `pass_spread_fallback`;
   `plan_pass(p, v_bar, earlier)`, `freeze_plan()`, `flight_time(point)`, `lead_run_in_point(p, v_bar, t)`, `lay_mine(variant, rest)`, `live_mines()`,
-  `live_mine_count()`, `live_pass_centres()`, `smoothed_velocity()`, `path_points()`; `signal mine_dropped(mine: EnemyMine)` for every drop.
+  `live_mine_count()`, `live_pass_centres()`, `smoothed_velocity()`, `path_points()`; `signal mine_dropped(mine: EnemyMine)` for every drop; t12 adds `patrol_anchor`, `anchor_idle`, `idle_phase_offset`.
 
 ## Mines
 
@@ -83,7 +93,7 @@
 
 `tests/integration/test_mine_layer.gd` (shell rows, t10; the "Passes" section, t11: geometry, the lead / fence / fallback / guard / spread planner rows,
 the run-in crossing, LAY on its path for aligned, perpendicular and older-line arrivals, two seeded 60 s Open Space scenarios (gradual passes, clear of
-older lines), the live cap, Assault's one pass and its budget deferral, the tail drop); the Mine Layer is in the rosters of
+older lines), the live cap, Assault's one pass and its budget deferral, the tail drop; t12: the idle radii inequalities, frame-0 IDLE, NOTICING, RETURNING (and not during LAY), the persistence scenario, Assault's expiry); the Mine Layer is in the rosters of
 `test_enemy_contact_damage.gd`, `test_contact_hitbox_geometry.gd`, `test_enemy_hurtbox_geometry.gd` and `test_wreck.gd` (`_SHIP_SCENES`);
 `test_config_instance_isolation.gd` finds it by its directory sweep; `test_enemy_dual_mode.gd` has the APPROACH case (it closes on its run-in point).
 

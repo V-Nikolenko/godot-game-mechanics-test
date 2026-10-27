@@ -13,7 +13,12 @@
 ##   DISENGAGE  [DISENGAGE]  Assault: the budget ran out (a LAY finishes first) or the one pass of this life is laid. Release the
 ##                           corridor and leave at `exit_speed` along the line's axis (no pass laid: the heading on entry, which
 ##                           `SpecialistExitProbe` measures); free once outside the world rect.
-##   IDLE / NOTICING / RETURNING   Open Space hub idle (t12).
+##   IDLE       [SEARCH]     Open Space hub (t12): a slow ring of `idle_radius` round `patrol_anchor`. It never lays and never
+##                           tail-drops.
+##   NOTICING   [SEARCH]     a beat (`notice_time`): the light blinks once and it faces the player; then REPOSITION, whose period
+##                           is freshly drawn (a layer that idled for a minute does not lay the instant it notices).
+##   RETURNING  [REPOSITION] `arrive` back at `patrol_anchor`, then IDLE. Never interrupts a LAY (retried every tick). It leaves
+##                           the mines it laid alone: in Open Space they persist.
 ## The enum is declared in full and append-only.
 ##
 ## Where a line goes (§2.12). Open Space: a moving player (smoothed |v-bar| >= `frame_speed`) gets a LEAD line across the
@@ -57,12 +62,21 @@ const STALL_FACTOR := 1.2
 const STALL_SLACK := 0.5
 ## Open Space: a run-in still short of S this long after the freeze is given up (s; see `_abandon_due`).
 const RUN_IN_STALL_SECONDS := 20.0
+## `idle_phase_offset` is drawn from +-this (rad).
+const MAX_IDLE_PHASE_OFFSET := 0.35
 
 var config: MineLayerConfig = MineLayerConfig.new()
 var budget: EngagementBudget
 var phase: Phase = Phase.APPROACH
-## Test seam, read by the hub idle task: start in the fight instead of patrolling.
+## Test seam (t12): a spawned layer starts already fighting. Real Open Space spawns never set it. Assault ignores it:
+## `EngagementBudget.active` decides there.
 var start_engaged: bool = false
+## The hub idle's ring centre. `Vector2.INF` (unset) means "not set": `_setup()` then defaults it to the spawn position.
+var patrol_anchor: Vector2 = Vector2.INF
+## Open Space only (`budget.active == false` and not `start_engaged`); null otherwise. Built once, in `_setup()`.
+var anchor_idle: AnchorIdle
+## This layer's offset on the idle ring (rad), drawn from `rng` when the idle starts (never for an engaged layer).
+var idle_phase_offset: float = 0.0
 
 # ── The current pass (read-only seams) ───────────────────────────────────────────────────────────
 var pass_centre: Vector2 = Vector2.ZERO
@@ -137,14 +151,22 @@ var _tail_clock: float = 0.0
 func tick(delta: float) -> void:
 	if not _started:
 		_setup()
-		_enter_approach()
+		if anchor_idle != null:
+			enter_phase(Phase.IDLE)
+		else:
+			_enter_approach()
 	_phase_time += delta
 	var target := TargetInfo.player(get_tree())
 	_update_prediction(target, delta)
 	if budget.update(delta) and phase != Phase.DISENGAGE:
 		_request_disengage()
+	if anchor_idle != null:
+		_tick_anchor_idle(delta, target)
 	_tick_tail(delta, target)
 	match phase:
+		Phase.IDLE: _tick_idle()
+		Phase.NOTICING: _tick_noticing(target)
+		Phase.RETURNING: _tick_returning()
 		Phase.APPROACH: _tick_approach(delta, target)
 		Phase.LAY: _tick_lay(delta)
 		Phase.BREAK_OFF: _tick_break_off(delta, target)
@@ -173,13 +195,19 @@ func enter_phase(p: Phase) -> void:
 			_enter_reposition()
 		Phase.DISENGAGE:
 			_enter_disengage()
+		Phase.NOTICING:
+			_set_light(StateLight.State.OFF)
+			mover.max_speed = config.max_speed
+			_blink()
 		_:
 			_set_light(StateLight.State.OFF)
+			mover.max_speed = config.max_speed  # IDLE / RETURNING: BREAK_OFF's break_speed cap does not carry over
 	phase_changed.emit(p)
 
 
 ## `BaseEnemy.suspend_ai()`: a rail took the layer over. The root's rail clock does the laying.
 func on_suspended() -> void:
+	anchor_idle = null  # a rail owns the motion: no idle
 	_set_light(StateLight.State.OFF)
 
 
@@ -309,12 +337,60 @@ func lay_mine(variant: int, rest_point: Vector2) -> EnemyMine:
 	return mine
 
 
+# ── Hub idle (t12; plan §2.14) ───────────────────────────────────────────────────────────────────
+
+## The meta-state that decides whether the layer is patrolling, noticing or fighting, run once a tick ahead of the phase
+## dispatch. A LAY is never interrupted (the return is retried every tick until the line is laid), and a DISENGAGE is already
+## leaving. NOTICING hands over to REPOSITION, not APPROACH: `_enter_reposition()` draws a fresh `pass_period_min..max` wait.
+func _tick_anchor_idle(delta: float, target: TargetInfo) -> void:
+	var busy := phase == Phase.LAY or phase == Phase.DISENGAGE
+	match anchor_idle.update(delta, actor.global_position, target):
+		AnchorIdle.State.IDLE:
+			if phase != Phase.IDLE and not busy:
+				enter_phase(Phase.IDLE)
+		AnchorIdle.State.NOTICING:
+			if phase != Phase.NOTICING and not busy:
+				enter_phase(Phase.NOTICING)
+		AnchorIdle.State.COMBAT:
+			# From NOTICING only: any other phase is already fighting.
+			if phase == Phase.NOTICING:
+				enter_phase(Phase.REPOSITION)
+		AnchorIdle.State.RETURNING:
+			if phase != Phase.RETURNING and not busy:
+				enter_phase(Phase.RETURNING)
+
+
+func _tick_idle() -> void:
+	mover.orbit(patrol_anchor, config.idle_radius, idle_phase_offset + config.idle_speed * _phase_time, config.max_speed)
+
+
+func _tick_noticing(target: TargetInfo) -> void:
+	mover.request_velocity(Vector2.ZERO)
+	if target.has_target:
+		mover.face_toward(target.position)
+
+
+func _tick_returning() -> void:
+	mover.arrive(patrol_anchor, config.max_speed)
+
+
+func _blink() -> void:
+	var light := actor.get_node_or_null("StateLight") as StateLight if actor != null else null
+	if light != null:
+		light.blink_once()
+
+
 # ── Setup and prediction ─────────────────────────────────────────────────────────────────────────
 
 func _setup() -> void:
 	_started = true
 	budget = EngagementBudget.new(config.engage_seconds, get_tree())
 	_tail_clock = config.tail_drop_cooldown  # the first chase drop is immediate
+	if not patrol_anchor.is_finite():
+		patrol_anchor = actor.global_position
+	if not budget.active and not start_engaged:
+		anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time, config.idle_radius)
+		idle_phase_offset = rng.randf_range(-MAX_IDLE_PHASE_OFFSET, MAX_IDLE_PHASE_OFFSET)
 
 
 func _is_assault() -> bool:

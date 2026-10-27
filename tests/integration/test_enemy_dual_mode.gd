@@ -1073,6 +1073,7 @@ func test_mine_layer_approach_closes_on_its_run_in_point(mode: String = use_para
 	layer.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
 	layer.set_process(false)
 	var brain := layer.get_node("Brain") as MineLayerBrain
+	brain.start_engaged = true  # pre-t12: predates the hub idle
 	_tick(layer, DT)  # the first tick plans the pass
 	var start := layer.global_position.distance_to(brain.pass_run_in_point)
 	for _i in 60:

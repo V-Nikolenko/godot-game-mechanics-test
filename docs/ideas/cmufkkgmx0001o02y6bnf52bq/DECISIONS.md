@@ -2712,3 +2712,29 @@ are *planned* decisions; check this phase's *as built* section, once written, be
   CHARGING 0.3 s before each drop and ARMED for the rest of LAY; the hatch and the wake are t13's. For t15: one pass per Assault life; the budget defers to the end
   of LAY, bounded by the stall guard (<= 5.67 s for ZIGZAG).
 - Gate time: GUT 207.67 -> 209.85 s (2277 -> 2301 tests; allotment 4.5 s, +2.18 s; `test_mine_layer.gd` 0.77 -> 2.09 s on its own). The "before" is a clean `git archive HEAD` copy.
+
+### Phase 7, built in t12 (Mine Layer hub idle and Open Space persistence) (2026-10-27)
+
+Plan §2.14 as written, with these notes. Tests: `tests/integration/test_mine_layer.gd` (the "t12" section at the end).
+
+- **`MineLayerBrain` gained the Bomber's hub idle:** `patrol_anchor` (`Vector2.INF` = the spawn), `anchor_idle: AnchorIdle` (built in `_setup()` when `not budget.active and
+  not start_engaged`; `on_suspended()` drops it), `idle_phase_offset` (from `rng`, +-`MAX_IDLE_PHASE_OFFSET` 0.35), `_tick_anchor_idle()` ahead of the tail drop and the phase
+  dispatch. `Phase` is unchanged (IDLE / NOTICING / RETURNING were already declared). `MineLayerConfig` gained `@export_group("Idle")`: `perceive_radius` 650, `lose_radius` 1500,
+  `notice_time` 0.35, `idle_radius` 160 (also AnchorIdle's `home_radius`), `idle_speed` 0.5; `.tres` unchanged.
+- **NOTICING hands over to REPOSITION, not APPROACH.** §2.14 says NOTICING "redraws the pass period, so a layer that idled for a minute does not lay the instant it notices": the
+  pass period is REPOSITION's `pass_period_min..max` wait, and `_enter_reposition()` already draws it afresh, so the layer orbits the player at `standoff_range` for 5-7 s first.
+  (§2.14's inequality-1 prose mentions APPROACH starting "from NOTICING inside `perceive_radius`"; with REPOSITION first the start is at most 650 px away either way, so
+  inequality 1 and the 1415.8 figure are unaffected.) Row: `test_perceiving_the_player_notices_for_a_beat_then_waits_out_a_fresh_pass_period`.
+- **Not interrupted by an idle transition:** LAY (the spec) **and DISENGAGE** (already leaving; Open Space reaches it only through a test seam). Every other engaged phase goes
+  RETURNING when `AnchorIdle` says so. Entering IDLE / NOTICING / RETURNING restores `mover.max_speed = max_speed` (BREAK_OFF raises it to `break_speed`).
+- **Existing rows:** the pre-t12 rows that spawn a layer in Open Space and expect combat now set `start_engaged = true` (`_spawn` and `_pass_layer`'s default in
+  `test_mine_layer.gd`; the dual-mode APPROACH row). `_pass_layer(..., engaged = false)` is the cold start.
+- **Persistence needed no production change:** `drop_mine()` already gives Open Space mines `mine_life` 0 and a 240 s backstop, and RETURNING never touches mines. The row
+  `test_open_space_mines_persist_while_the_player_is_away_and_trigger_on_return` proves it: a pass, the stub teleported 2000 px from the layer, RETURNING and home, 60 s of game
+  time, every mine at its rest point (< 0.5 px) and registered, then a stub placed 300 px short of the line and driven through it at 220 px/s (8x real physics) sets off the first mine
+  it reaches (within 0.12 s of the geometric entry time). Homing is weighted out of that one scenario (`config.w_homing = 0` on the layer's private copy) so no mine creeps toward the
+  returning stub. The Assault counterpart (`test_assault_mines_are_gone_after_assault_mine_life`) shows each mine live until its `assault_mine_life` of 9 s and gone, unregistered, after.
+- For t13 (hub placement): a hub layer needs `patrol_anchor` only if it should not patrol where it spawns; its pools hand its mines over on death as in Assault. A pickup or
+  trigger placed within `perceive_radius + idle_radius` (810 px) of the layer's anchor will wake it, as the Bomber's hub sweep already assumes.
+- Gate time: GUT 211.66 -> 210.04 s (2301 -> 2312 tests; allotment 1.5 s). The "before" is a clean `git archive HEAD` copy. `test_mine_layer.gd` alone went 2.09 -> 2.87 s
+  (+0.8 s); the whole-suite difference is run noise.

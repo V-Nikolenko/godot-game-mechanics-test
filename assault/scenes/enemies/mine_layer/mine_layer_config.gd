@@ -47,6 +47,19 @@ extends ShipConfig
 ## Assault: seconds before the layer disengages.
 @export var engage_seconds: float = 9.0
 
+@export_group("Idle")
+## Open Space hub only (plan §2.14). The layer patrols a slow ring round its `patrol_anchor` until the player comes within
+## `perceive_radius`, and goes home once the player is further than `lose_radius` (px). `lose_radius` clears both the
+## layer's own cycle (standoff + break + half a line + run-in = 1362) and the lead form's farthest point against a player
+## at 220 px/s (1415.8): test_mine_layer.gd asserts both from these fields.
+@export var perceive_radius: float = 650.0
+@export var lose_radius: float = 1500.0
+## The beat between perceiving the player and fighting (s).
+@export var notice_time: float = 0.35
+## The patrol ring's radius round `patrol_anchor` (px) and its angular speed (rad/s).
+@export var idle_radius: float = 160.0
+@export var idle_speed: float = 0.5
+
 @export_group("Rail")
 ## While a rail owns the layer: a proximity mine at the dispenser every `rail_mine_interval` seconds.
 @export var rail_mine_interval: float = 1.6
