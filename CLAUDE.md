@@ -70,7 +70,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   resolves each hit once (`_resolve`), because Godot orders the plate's `area_entered` and the rocket's query
   undefined. The armour's **shove** on touch is `ContactProfile` mode `ARMOR` with `shove_speed`, which calls the touched
   ship's duck-typed `apply_knockback(impulse)` (the Open Space ship adds it to `velocity`; never call
-  `apply_knockback_motion()` there, it clamps to the Assault bounds). Persistent enemy ordnance (mines, bombs) outlives
+  `apply_knockback_motion()` there, it clamps to the Assault bounds). Persistent enemy ordnance (mines, bombs; the Mine Layer's `EnemyMine`s too) outlives
   its ship through `BulletPool.persist_after_owner_death`, which hands each projectile to its own `expired -> queue_free`
   — still exactly one owner at every instant. Spelled out in
   `docs/architecture/PROJECT.md` → Conventions; gated by
@@ -89,6 +89,20 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   Ram cover and well rows, and the level-1 exit guard
   `test_level1_fighter_exit.gd::test_cloud_descent_clears_in_time_with_wrecks_left_behind` (pre-approved levers: Assault wreck
   `avoid_weight` 0.3, then halving Assault `wreck_chance`; never the timeout).
+  **Mines are one family, `EnemyMine extends EnemyOrdnance` (Phase 7)** — `enemy_ordnance/mines/enemy_mine.gd`, `Variant { PROXIMITY, DRIFTING, HOMING, CHAIN, PULSE, EMP }`
+  (append-only; PROXIMITY is the Bomber's `mine.tscn`, same path). A mine **registers as a `&"mine"` hazard on `launch()`, not in `_enter_tree()`** (a pooled mine idles in its
+  pool) with the measured footprint `trigger_radius + hazard_pad` 60 at `avoid_weight` 1.0; its `Hostility` is `PLAYER` for every mine an enemy lays (layer-128 hurtboxes,
+  `ContactBlast`) or `ALL` for a *placed* mine (also set off by a layer-512 area whose parent is in group `enemies`, blasting through `Hazards.pulse_damage`); `placed = true`
+  makes it self-owned (`mine_life = placed_life`, 0 = never fizzles) through a **deferred** `_start_if_placed()`. A pulse mine's `PlayerBase.apply_boost_disruption()` scales only the
+  **excess** over `cruise_speed()` and is checked before a tank is spent; an EMP mine goes through the one `EmpPulse.emit()` hook, whose Ph7 player effect is a stand-in Ph9 replaces
+  without changing a signature. **The Mine Layer's mines persist, so neither it nor anything dropping persistent mines goes in an `ENEMIES_CLEARED` section.** Never name
+  `EnemyMine` inside `enemy_mine.gd` (a self-reference leaks at exit and fails the gate with every test green). [PROJECT.md](docs/architecture/PROJECT.md) → Conventions →
+  *Mines, minefields and the Mine Layer*. Phase 7 gates: `tests/integration/test_enemy_mines.gd` (each variant's trigger, scene numbers, the warning rule read from scene exports,
+  chain ripple, pulse / EMP application, sprites; both harnesses), `test_minefield.gd` (patterns, seeds, the ready-order boundary, 60 s no-fizzle, Assault drift, avoidance at
+  8x), `test_mine_layer.gd` (passes and trail placement, the planner's lead / fence forms, hub idle, persistence, hatch, `MineWake`, level-1 slice replays),
+  `test_player_boost_disruption.gd` (both ships: efficiency, the excess rule, refused boosts spend nothing, EMP), `tests/unit/test_emp_pulse.gd`, and the Mine Layer rows of
+  `test_level1_specialist_spawns.gd` (`EXPECTED_PH7`, peaks 8 / 7 against the frozen 2.5x gate), `test_engagement_deadline.gd` and `test_sector_hub_patrol.gd`
+  (pre-approved levers on `mine.tscn`, in order: `hazard_pad = 0`, then `registers_hazard = false`; neither was needed).
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
@@ -257,6 +271,8 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   Phase 3 shooters joined it: the hub also patrols a fighter pair and a Gatling pair, and the same
   sweep now also asserts each of those groups clears its own ring (the Gatling's margin is only
   +88.7 px, so a pickup added closer than that fails it).
+  Phase 7 added the Mine Layer to `_patrol_groups()` and the hub `Minefield` to `_element_radius()` (`radius` + the drift leash + the PROXIMITY trigger = 400 px), so a later placed
+  field or patrol is covered by the same sweep (Mine Layer +585.6 px from the field, Gatling +775.1 px).
   `tests/integration/test_enemy_bullet_lifetime.gd` is an eighteenth, the **round lifetime sweep**,
   and `tests/integration/test_enemy_rounds.gd` its companion over the bullet family (Pulse, Scatter,
   Gatling Stream, Heavy Shell under `assault/scenes/projectiles/enemy_bullet/rounds/`): for every

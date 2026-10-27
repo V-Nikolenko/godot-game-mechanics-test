@@ -3,7 +3,7 @@
 **Role / threat:** area denial the player has to remember. A `Minefield` (`minefield.tscn`, `Minefield extends Node2D`) holds
 `EnemyMine`s as `placed` mines (self-owned, hostility **ALL** by default, so they hurt and are set off by enemies as well as
 the player) and marks itself with a blinking warning-buoy beacon. Plan §2.10 (`docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md`).
-No level-1 placement: Phase 15 places Assault hazards; the hub placement is a later task.
+Placed in the hub (`TacticalSpace/Minefield`, see Placement below); no Assault level places one yet — Phase 15 places Assault hazards.
 
 ## Nodes
 
@@ -49,3 +49,13 @@ flies straight in: that is the lure. Mines are never in group `enemies` and neve
 `tests/integration/test_minefield.gd` (pattern geometry, seeds, weights, AUTHORED ready-order boundary, 60 s no-fizzle,
 drifting leash, beacon, spawn, Assault drift / world-rect / 40 s, and both modes at 8x real physics) and a registry row in
 `tests/unit/test_hazards.gd`.
+
+## Placement
+
+- **Hub:** `sector_hub.tscn` → `TacticalSpace/Minefield` at (3300, 560): RING, 9 mines on a 200 px circle, `rng_seed` 7, weights proximity 0.4 / chain 0.3 / drifting 0.15 /
+  EMP 0.15, hostility ALL, beside the battleground so the player can lure enemies in. Its `ext_resource` carries no hand-typed `uid`. `test_sector_hub_patrol.gd` includes
+  `Minefield` in `_element_radius()` as `radius + (drift_leash if w_drifting > 0) + the PROXIMITY trigger_radius` (200 + 120 + 80 = 400), so the Phase 6 clearance sweep covers it
+  (field to the Mine Layer group 585.6 px, to the Gatling group 775.1 px; a row shows the sweep rejects a field planted on the layer's anchor), and a 60 s hand-ticked row keeps
+  all nine mines placed, ALL, registered and un-fizzled — including the `mine.tscn` ones that author an 8 s life for the Bomber.
+- **Assault levels:** none (Phase 15). The scene already works in the Assault harness (drift, world-rect cleanup, the 40 s cap) and is proven there.
+- **Mine count and hub cost:** about +1.8 ms of script time per frame on the full hub for the Mine Layer, its idle, nine mines and their registrations (headless, no rendering, approximate).

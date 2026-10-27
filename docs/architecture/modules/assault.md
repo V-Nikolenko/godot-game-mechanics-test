@@ -37,7 +37,7 @@ assault/scenes/
 │   ├── bullets/bullet.gd        Player bullet — UNPOOLED, frees itself off-screen (pierce, sniper)
 │   ├── enemy_bullet/            EnemyBullet (become_friendly() flips it to a player projectile)
 │   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell / rail_round .tscn + EnemyRounds + RailTrail (the sniper shot's fading trail)
-│   ├── enemy_ordnance/         EnemyOrdnance: gravity_bomb / mine / pursuit_bomb .tscn + EnemyOrdnanceScenes (persistent, shoot-down-able, not in `enemies`)
+│   ├── enemy_ordnance/         EnemyOrdnance: gravity_bomb / mine / pursuit_bomb .tscn + EnemyOrdnanceScenes (persistent, shoot-down-able, not in `enemies`); mines/ = the Ph7 EnemyMine family (6 variant scenes, EnemyMineScenes, PulseRing, EmpRing)
 │   ├── enemy_rockets/           EnemyRocket: dumb / pursuit / cluster / submunition / delayed_warhead .tscn + EnemyRocketScenes (Ph5; impact hurts enemies, blast hurts the player)
 │   ├── missiles/                homing/ + warhead/ missiles
 │   └── piercing_beam/           Sustained BEAM weapon projectile
@@ -54,7 +54,7 @@ assault/scenes/
 │   ├── level_2_waves.gd         Level 2 wave list
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
-├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck (wrecks, structures, debris)
+├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck (wrecks, structures, debris), minefield (Ph7 placed mines + beacon)
 ├── allies/ally_fighter/         AI escort fighters (group "allies")
 ├── gui/                         HUD, score widgets/popups, weapon selector, game-over, debrief
 └── race/                        Race sub-mode (core/, racers/, track/, ui/)
@@ -398,6 +398,57 @@ player, whose bullets are unpooled) to
 recycle bullet instances rather than allocate per shot — see the linked doc for the
 pool/`AttackController`/`AttackPattern` flow.
 
+#### Mines and the Mine Layer (Phase 7)
+
+Source: `assault/scenes/projectiles/enemy_ordnance/mines/`, `assault/scenes/enemies/mine_layer/`, `assault/scenes/hazards/minefield/`.
+Conventions: [PROJECT.md](../PROJECT.md) → *Mines, minefields and the Mine Layer*.
+
+- **The family.** `EnemyMine extends EnemyOrdnance` (`mines/enemy_mine.gd`), `enum Variant { PROXIMITY, DRIFTING, HOMING, CHAIN, PULSE, EMP }`
+  (append-only), `enum Hostility { PLAYER, ALL }`. Scenes `mines/<variant>_mine.tscn`; PROXIMITY is the Bomber's `enemy_ordnance/mine.tscn`
+  (its script is `EnemyMine`, `warning_time` 0.25). `EnemyMineScenes` (`mines/enemy_mine_scenes.gd`): `scene_for(variant)` (null for an unbuilt
+  variant), `pool_size_for(variant, cfg)` (reads `w_proximity` ... `w_emp` duck-typed) and `export_of(variant, property, fallback, node_path)` (scene
+  exports through `PackedScene.get_state()`, no instance). `EnemyOrdnance` keeps the bomb paths and exposes `_reset_props()`, `_move_mine()`,
+  `_trigger_seen()` and `_on_detonated()` for the subclass. Shared numbers: trigger 80, arm 0.5 s, warning 0.25 s, blast 48 / damage 30.
+- **Variants.**
+
+  | Variant | Scene | What it does | Own numbers |
+  |---|---|---|---|
+  | PROXIMITY | `enemy_ordnance/mine.tscn` | arms, warns, blasts | the shared ones |
+  | DRIFTING | `mines/drifting_mine.tscn` | creeps along a direction; a leash makes a placed one ping-pong | `drift_speed` 35, `drift_max_distance` 1400, `drift_leash` |
+  | HOMING | `mines/homing_mine.tscn` | notices the player within `notice_radius`, creeps toward them, lost beyond `home_lose_radius`; an `Eye` sprite shows while noticing | `home_speed` 60, 260 / 380, `home_max_distance` 900 |
+  | CHAIN | `mines/chain_mine.tscn` | sets off every live mine within `chain_radius` after `chain_delay`; a shot detonates it (`shot_detonates`); dashed fuse links to neighbours | 150 / 0.2 s |
+  | PULSE | `mines/pulse_mine.tscn` | small blast (8) + `apply_boost_disruption` on players within `pulse_radius`; violet `PulseRing` | 170, strength 0.6, 2.5 s |
+  | EMP | `mines/emp_mine.tscn` | no blast; `EmpPulse.emit` within `emp_radius`; blue-white `EmpRing` | 190, 2.0 s |
+
+  Warning rule for every scene (asserted from exports): `(trigger_radius + effect_radius) / warning_time >= 440 + own_speed`.
+- **Registration and footprint.** A mine is a `HazardInfo` (`kind = &"mine"`, `radius = trigger_radius + hazard_pad` 60, `avoid_weight` 1.0) that
+  registers on `launch()`, unregisters in `_mark_done()` / `_exit_tree()` / `retire()` / the tick a natural fizzle starts, and re-registers after a
+  `reparent()`. `carry_velocity` (set by a moving `Minefield`) is added to the reported velocity only. `is_live()`, `is_fizzling()`, `is_chained()`.
+- **Placed mines** (`placed = true`): self-owned, no backstop (`use_world_rect` off too, so a mine authored above the Assault corridor does not
+  expire on its first tick), `mine_life = placed_life` (0). A deferred `_start_if_placed()` runs it after the parent's `_ready()`.
+- **`Minefield`** (`hazards/minefield/`, [HAZARD.md](../../../assault/scenes/hazards/minefield/HAZARD.md)): AUTHORED / RING / GRID / SCATTER patterns, seeded
+  weights, `hostility` ALL, a beacon sprite, drifts down at 60 px/s in Assault. Placed in the hub (`sector_hub.tscn`), not in an Assault level (Ph15).
+- **Mine Layer** (`enemies/mine_layer/`, [ENEMY.md](../../../assault/scenes/enemies/mine_layer/ENEMY.md)): `MineLayer extends BaseEnemy` (r 40 body, 96 px hull,
+  contact COLLISION, HP 140), `MineLayerBrain` (`Phase { APPROACH, LAY, BREAK_OFF, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING }`), flat
+  `MineLayerConfig`. `drop_mine(variant, rest_point)` is the only call that configures a mine (arm delay, eject time and life only); per-variant root pools
+  (`ProximityPool` 20 / `ChainPool` 6 / `PulsePool` 5 / `HomingPool` 5) use `persist_after_owner_death`. `WaveBuilder.MINE_LAYER` / `mine_layer()`.
+  - **A pass.** APPROACH flies to a run-in point 150 px before the line start, follows it at `lay_speed`, and LAY starts as it crosses the start;
+    6 mines on a ZIGZAG (vertices, +-35 px) or ARC (depth 110) line, 600 px long, laid across the player's path. Open Space plans the line as a *lead*
+    (a moving player the layer can get ahead of, by the Bomber's earliest-feasible scan) or a *fence* (a standing or fast player), freezes it within
+    `commit_distance` 200 of the run-in point, and spreads successive lines >= 380 px apart; passes are 5-7 s apart plus a 1.2 s break-off (one line
+    per ~10-14 s). Assault flies horizontally, clamps into `view_rect().grow(-174)`, lays one pass per life, defers its budget to the end of LAY and
+    leaves with `release_constraint()`. Live-mine cap 18 / 8 (the oldest is `retire()`d). A tail drop punishes a chaser in the rear 60° cone.
+  - **Hub idle.** In Open Space it idles on `AnchorIdle` at its patrol point, notices a player within 650 px, waits a fresh pass period, and goes home
+    beyond 1500 px. Laid mines never fizzle (240 s backstop) and survive the layer's return and death: the area stays dangerous.
+  - **Art.** `mine_layer.png` hull, a `Hatch` that opens during LAY (`set_hatch_open()`), a `MineWake` `Line2D` in the enemy container that follows the
+    dispenser and fades over 2.5 s. Rail fallback: a PROXIMITY mine every 1.6 s.
+  - **Level 1.** `b.mine_layer().at(-400, -160)` in deep_space's 16.0 s wave and `at(400, -160)` in planet_approach's 47.0 s wave. They count as
+    specialists in the frozen 2.5x gate (peaks 8 of 12.5 and 7 of 7.5), pinned in `EXPECTED_PH7`; the exit is measured at 7.53 s over 2166 starts;
+    mines add `assault_mine_life` 9 s to the spill-over row. Never in an `ENEMIES_CLEARED` section.
+- **Tests.** `test_enemy_mines.gd` (every variant: trigger, warning rule, art, chain ripple, pulse / EMP application, real-physics rows, both harnesses),
+  `test_minefield.gd`, `test_mine_layer.gd` (passes, trail placement, hub idle, persistence, art, level-1 slice replays), `test_emp_pulse.gd`,
+  `test_player_boost_disruption.gd`, `test_level1_specialist_spawns.gd` (`EXPECTED_PH7`), `test_engagement_deadline.gd`, `test_sector_hub_patrol.gd`.
+
 ### Scoring
 
 Source: `assault/scenes/systems/score_tracker/score_tracker.gd`.
@@ -527,6 +578,11 @@ enter the enemy container, so `ENEMIES_CLEARED` is unaffected. Tests `tests/inte
 `test_level1_fighter_exit.gd::test_cloud_descent_clears_in_time_with_wrecks_left_behind`.
 **Explosive wrecks (Phase 6 t12).** `ShipConfig.explosive_wreck_chance` (Bomber, Missile Corvette 0.5; others 0) is a second draw from the same seeded rng, only after a successful wreck roll and only when above 0; `WreckScenes.scene_for(size, true)` then returns `wreck_explosive.tscn` (a `Wreck` with `explosive`, HP 20). It goes off at HP 0 or 1.0 s after a ship's hurtbox overlaps its armed contact box: `Hazards.pulse_damage(110, 25)` by centre distance (both sides; a plated Ram deflects it), then a `ReactorField` (`reactor_field/`, r 90, 4 per 0.5 s for 2.0 s, no pull) through the deferred `spawn_into`. See [`HAZARD.md`](../../../assault/scenes/hazards/wreck/HAZARD.md) and [`reactor_field/HAZARD.md`](../../../assault/scenes/hazards/reactor_field/HAZARD.md); tests `test_wreck.gd`, `test_wreck_spawning.gd`.
 
+
+**Minefields (Phase 7 t8).** `assault/scenes/hazards/minefield/` places `EnemyMine`s (hostility ALL, `placed`) as a visible structure with a warning
+beacon; unlike a wreck, mines do not come from a death roll and are placed in the scene, not in `HazardContainer`. Mines register as `&"mine"` hazards, so
+the Ph6 avoidance routes ships round them. See [`HAZARD.md`](../../../assault/scenes/hazards/minefield/HAZARD.md) and *Mines and the Mine Layer* above.
+
 ### Enemies
 
 Source: `assault/scenes/enemies/`.
@@ -534,7 +590,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `razor_drone/razor_drone_brain.gd`). Roster: bomber, bonus_drone, razor_drone,
-missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
+mine_layer (`MineLayerBrain`, six-mine lines across the player's path, Ph7), missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).

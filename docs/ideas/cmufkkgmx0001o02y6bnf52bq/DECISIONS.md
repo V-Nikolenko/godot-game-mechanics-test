@@ -2796,3 +2796,59 @@ Plan §2.15 as written, no deviations.
     5.1 -> 4.2 s. Every other row of the file stays on the 8x clock.
   - **Tried and dropped:** `test_station_assault_section.gd` on the 8x clock. `wait_seconds()` follows the physics clock but the `LevelDirector`'s `SceneTreeTimer` poll follows the process clock, which diverges under
     scaling, so two of its rows failed; the file stays at 1x.
+
+## Phase 7 - as built (2026-10-27)
+
+Epic `cmug23omu000lm52wu7rak0q5`; plan `docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md` (Revision 4); dossier `docs/epics-done/cmug23omu000lm52wu7rak0q5/REPORT.md`. The planned
+decisions above stand except where this section says otherwise; the per-task *Built in tN* notes above hold the measured figures. 2344 GUT tests, GUT 218.44 s.
+
+### What was built (names later phases build on)
+- **Mine family.** `EnemyMine extends EnemyOrdnance` (`assault/scenes/projectiles/enemy_ordnance/mines/enemy_mine.gd`), `Variant { PROXIMITY, DRIFTING, HOMING, CHAIN, PULSE, EMP }`
+  (append-only), `Hostility { PLAYER, ALL }`; scenes `mines/<variant>_mine.tscn`, PROXIMITY = `enemy_ordnance/mine.tscn` (same path, no UID, `warning_time` 0.25); `EnemyMineScenes`
+  (`scene_for` / `pool_size_for` / `export_of(variant, property, fallback, node_path)`); `PulseRing`, `EmpRing`. `EnemyOrdnance` gained `_reset_props()`, `_move_mine()`, `_trigger_seen()`,
+  `_on_detonated()`; bomb paths unchanged. Notes: `mines/MINES.md`.
+- **Hazard behaviour.** `&"mine"` hazard, `radius = trigger_radius + hazard_pad` 60, `avoid_weight` 1.0, registered on `launch()` (pooled-hazard rule), `carry_velocity` for moving parents,
+  `is_live()` / `is_fizzling()` / `is_chained()`. No pre-approved lever (`hazard_pad = 0`, `registers_hazard = false`) was needed: every level-1 gate, `test_bomber.gd` and `test_enemy_ordnance.gd`
+  row stayed green with Bomber mines registered.
+- **Placed mines / Minefield.** `placed`, `placed_life`, deferred `_start_if_placed()`; `Minefield` (`hazards/minefield/`) with AUTHORED / RING / GRID / SCATTER, seeded weights, beacon
+  (`minefield_beacon.png`), 60 px/s Assault drift. Hub: `TacticalSpace/Minefield` (3300, 560), RING 9, seed 7.
+- **Player hooks.** `PlayerBase`: `apply_boost_disruption`, `boost_efficiency`, `boost_disruption_changed(efficiency: float)`, `MIN_BOOST_EFFICIENCY` 0.15, `cruise_speed()`,
+  `disrupted_speed(speed, floor)` (the excess rule — **use it for any later speed debuff**), `apply_emp`, `is_emp_disrupted`, `emp_changed(active: bool)`. `EmpPulse.emit(tree, at, radius,
+  seconds, source) -> int` (`global/components/emp_pulse.gd`). Efficiency is checked before a tank or charge is spent.
+- **Mine Layer.** `assault/scenes/enemies/mine_layer/`: `MineLayer`, `MineLayerBrain` (`Phase { APPROACH, LAY, BREAK_OFF, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING }`, `signal
+  mine_dropped(mine: EnemyMine)`), flat `MineLayerConfig`, `MineWake`, hull and hatch art; `WaveBuilder.MINE_LAYER` / `mine_layer()`. Test seams: `plan_pass()`, `freeze_plan()`, `pass_form`,
+  `plan_frozen`, `frame_f`, `arrival_time`, `flight_time()`, `spread_fallbacks`, `fence_fallbacks`, `abandoned_passes`, `pass_run_in_point`, `lay_mine()`, `live_mines()`.
+- **Placement.** Hub: draw 15, bearing −22.5° on a 2600 px ring. Level 1: deep_space 16.0 s (`at(-400, -160)`), planet_approach 47.0 s (`at(400, -160)`), inside existing waves;
+  `EXPECTED_PH7` in `test_level1_specialist_spawns.gd` (peaks 8 of 12.5 and 7 of 7.5; layer exit 7.53 s measured over 2166 starts).
+- **Gate time.** t1 recovered 13.8 s (216.34 → 202.3 s); the phase ended at **218.44 s** (2344 tests), 21.6 s under the ceiling. `SpecialistExitProbe.worst_disengage()` is memoised per input set.
+
+### Deviations from the plan (and why)
+- **`EnemyMine.carry_velocity`** (t8, additive): a drifting `Minefield` sets it so the avoidance stage leads a carried mine; without it fixtures got to 131–139 px from a mine centre in Assault against
+  the planned ≥ 155. Anything else that moves a parent of mines should set it too.
+- **A placed mine also sets `use_world_rect = false`** (t2): in Assault a mine authored above the corridor otherwise expired on its first tick. A placed mine has no backstop of any kind.
+- **Eject maths** (t10): launch speed `2d / (eject_time − 1/physics_ticks)`, not the Bomber's `2d / eject_time`, so a mine stops within 4 px at any distance.
+- **`ContactHitBox` is layer 256 / mask 0** (t10), the COLLISION idiom, not "mask 128" as the plan said.
+- **LAY skips the avoidance stage** (t11, the pre-approved lever): driven by `mover.boost()` with an acceleration-limited velocity, because avoidance turned a layer 85.5° / 178 px off its line
+  near an older line (32.7° / 11 px with the lever). Consequence: the layer crosses an older line and a placed ALL field in its path could set it off.
+- **NOTICING hands over to REPOSITION, not APPROACH** (t12), so the pass period is redrawn and a layer that idled for a minute does not lay the instant it notices. LAY and DISENGAGE are never
+  interrupted by the idle return.
+- **Task-plan pins not in §2.12** (t11): the abandon guard (6 s / 12 s / 20 s), BREAK_OFF raises `mover.max_speed` to `break_speed`, no-stacking against every live mine, tail cone ±30°.
+- **Wake and hatch** (t13): `MineWake` fades from transparent (oldest) to dark red (newest); the hatch `scale.y` has a 0.001 floor, tests use a 0.01 tolerance. The wake is not forced behind the ships.
+- **Level-1 slice replays run on a 16× clock** (t15), a departure from `tests/README.md`'s 8× convention, confined to three clock-bound rows; `test_station_assault_section.gd` cannot take a scaled clock.
+- **Probe preparation** (t15): the layer's exit-probe instances skip pool prewarming, set `tail_range = 0` and the probe's player stub leaves group `player`; the figure is unchanged (7.53 s).
+- **Trap, not deviation:** `enemy_mine.gd` must not name its own `class_name` (a self-reference leaks at exit and fails `verify.sh` with every test green).
+- **Placement decisions kept:** the race-track mine is not merged; the §16 explosive profile and §11.4 Gravity Field were already built (Ph2, Ph6).
+
+### Gaps left for later phases
+| Gap | Phase |
+|---|---|
+| EMP on enemies and seeking weapons; the real EMP player effect (replace the one line in `PlayerBase.apply_emp`, keep `EmpPulse.emit` / `apply_emp` / `is_emp_disrupted` / `emp_changed`); jammers; hijack pulse | Ph9 |
+| Pulse / EMP mines affecting enemies | Ph9, if wanted |
+| Placed minefields in Assault levels (the scene already works in the Assault harness) | Ph15 |
+| Encounter compositions with a Mine Layer (sniper ambush, §19) and squad use of minefields | Ph13 / Ph14 |
+| Mine numbers by difficulty (`mines_per_pass`, `max_live_mines`, `assault_max_live_mines`, `pass_period_*`, scene `warning_time`) | Ph16 |
+| Mine and layer audio; readability pass over the mine sprites at in-game size; the "no nozzle" drifting sprite | Ph17 |
+| A Mine Layer scattering mines on death (the Ph6 deferred-spawn entry is ready) | owner option |
+| Play-testing every *starting value* (plan §2.18): density of lines, homing fairness, EMP stand-in readability | Ph16 / Ph17 |
+| Two unidentified one-off red tests in `gate-time.sh` / `verify.sh` runs (names not captured), one `GUT LEAKED at exit` | any task that sees it again: capture the test name |
+| Every pooled hazard must register on `launch()`; every new enemy that placed mines must see must join group `enemies` in its own `_ready()` | all later phases adding mines, turrets or pooled hazards |

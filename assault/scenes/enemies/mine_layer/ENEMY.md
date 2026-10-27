@@ -3,12 +3,11 @@
 **Role:** Flies sideways across an encounter laying mines from its stern, so the player has to remember where the unsafe regions are.
 **Fantasy / threat:** A slow, easy-to-hit hull whose threat is what it leaves behind. Enemies steer round its mines too (Phase 6 hazard perception).
 
-> **Build state (Phase 7, t12: hub idle).** Built: the scene, config, per-variant persistent pools, `drop_mine()`, the rail fallback, the
-> `WaveBuilder` entry (t10), the pass AI — APPROACH / LAY / BREAK_OFF / REPOSITION / DISENGAGE, the live-mine cap and the tail drop (t11) — and the
-> Open Space hub idle (IDLE / NOTICING / RETURNING) with its persistence rules (t12).
-> Also built (t13): the hull art, the dispenser hatch and the `MineWake` trail (see **Art, hatch and wake** below).
-> **Not built yet:** the hub and level 1 placement. Plan:
-> `docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md` §2.11–§2.12; t11's own plan `docs/plans/cmvkb0hdc00uiqs2xhvb2awai/3-plan.md`.
+> **Build state (Phase 7, complete).** Built: the scene, config, per-variant persistent pools, `drop_mine()`, the rail fallback, the `WaveBuilder` entry, the pass AI
+> (APPROACH / LAY / BREAK_OFF / REPOSITION / DISENGAGE, the live-mine cap and the tail drop), the Open Space hub idle (IDLE / NOTICING / RETURNING) with its
+> persistence rules, the hull art, the dispenser hatch and the `MineWake` trail (see **Art, hatch and wake** below), the hub patrol and the level-1 placement
+> (see **Placement** below). Plan: `docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md` §2.11–§2.16; t11's own plan `docs/plans/cmvkb0hdc00uiqs2xhvb2awai/3-plan.md`.
+> The mine family itself is documented in `assault/scenes/projectiles/enemy_ordnance/mines/MINES.md`.
 
 ---
 
@@ -104,6 +103,19 @@
   Leaving LAY calls `finish()`; it then fades `modulate.a` over `wake_fade` 2.5 s on its own clock and frees itself (`RailTrail`'s precedent: no `Timer`, no
   `create_timer`). It outlives a dead layer: a freed Dispenser ends the following by itself.
 
+## Placement
+
+- **Level 1:** `b.mine_layer().at(-400, -160)` inside deep_space's existing 16.0 s wave (enters from the left) and `b.mine_layer().at(400, -160)` inside planet_approach's
+  existing 47.0 s wave (from the right). AI spawns (no `.move()` / `.free_after()`), no new wave, so no other wave's effective trigger moved. Neither section is
+  `ENEMIES_CLEARED`. Pinned in `EXPECTED_PH7` (`test_level1_specialist_spawns.gd`): the layer counts as a specialist in the frozen 2.5× gate (deep_space peaks at **8** of
+  12.5, planet_approach at **7** of 7.5), its life is `engage_seconds` + the ZIGZAG stall guard 5.67 s + a tick slack + the **measured** corridor exit **7.53 s** (the
+  exit probe, 2166 starts, 0 capped, with the probe player stub out of group `player` and `tail_range` 0), and its mines add `assault_mine_life` 9 s to the spill-over row
+  (nothing outlives the next `ENEMIES_CLEARED` section's last trigger: deep_space's last is gone 47.2 s into its section, planet_approach's 116.4 s). From both spawns
+  the layer reaches LAY with 6.3 s of budget left, lays 6 mines, all inside `view_rect()` (`test_mine_layer.gd` slice replays, 16× clock); a 2.0 s budget reaches no LAY.
+- **Hub:** one Mine Layer patrols `SectorHub` on a 2600 px ring at bearing −22.5° (anchor ≈ (2402, −995)), seed draw 15 (earlier seeds unchanged), idle 160 / perceive
+  650 / lose 1500; its mines land in `EnemyContainer`. A placed RING `Minefield` (9 mines, radius 200, seed 7, hostility ALL) sits beside the battleground at (3300, 560),
+  so the player can lure enemies into it. Clearances (printed by `test_sector_hub_patrol.gd`): field to Mine Layer group 585.6 px, to the Gatling group 775.1 px.
+
 ## Gates
 
 `tests/integration/test_mine_layer.gd` (shell rows, t10; the "Passes" section, t11: geometry, the lead / fence / fallback / guard / spread planner rows,
@@ -113,3 +125,5 @@ older lines), the live cap, Assault's one pass and its budget deferral, the tail
 `test_config_instance_isolation.gd` finds it by its directory sweep; `test_enemy_dual_mode.gd` has the APPROACH case (it closes on its run-in point).
 
 Spawn with `b.mine_layer().at(x, y)`. No Mine Layer (or anything else dropping persistent mines) goes in an `ENEMIES_CLEARED` section.
+Level 1 and the hub: `test_level1_specialist_spawns.gd` (`EXPECTED_PH7`), `test_engagement_deadline.gd` (no `ENEMIES_CLEARED` section holds a Mine Layer, with a boundary row),
+`test_sector_hub_patrol.gd` (patrol group, seed draw 15, clearance sweep including the field).

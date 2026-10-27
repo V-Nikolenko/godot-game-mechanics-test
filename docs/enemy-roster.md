@@ -390,6 +390,30 @@ b.support_ship().at(0, -400)
 
 ---
 
+### `mine_layer` — Mine Layer
+
+**Builder:** `b.mine_layer()`  
+**Scene:** `mine_layer.tscn`  
+**Movement:** AI-driven (`MineLayerBrain` + `EnemyMover`). Open Space: idles at its patrol point, then, once it notices the player, orbits at 600 px and flies **passes** — it closes on a run-in point, then crosses the player's path sideways at `lay_speed` 170, laying one line of 6 mines (ZIGZAG or ARC, 600 px) from its stern, breaks off and repositions; one line every ~10-14 s. Assault: the same logic clamped to the corridor, **one pass per life** along the horizontal axis, then it leaves. `.move()` puts it on a rail, where it drops a PROXIMITY mine every `rail_mine_interval` 1.6 s.  
+**Shoots:** No guns. Mines (`EnemyMine`: proximity 50 %, chain 20 %, pulse 15 %, homing 15 % by default; drifting and EMP weight 0) from four persistent pools; a player bullet defuses a mine (a chain mine detonates).  
+**HP:** 140 (an r 40 circle, ~96 px hull); contact damage 25 (COLLISION)  
+**Score:** 60 (mines score nothing)
+
+**Config fields** (`MineLayerConfig`): `max_speed` 240, `lay_speed` 170, `exit_speed` 300, `mines_per_pass` 6, `pass_length` 600, `mine_step` 100, `max_live_mines` 18 / `assault_max_live_mines` 8, `assault_mine_life` 9.0 s, `open_space_mine_life` 0 (never fizzles) with a 240 s backstop, `engage_seconds` 9.0, `pass_period_min`/`max` 5-7 s, `perceive_radius` 650 / `lose_radius` 1500, `rail_mine_interval` 1.6, mine weights `w_*` — the rest in `mine_layer_config.gd`. `.tres` wins over the scene.
+
+**Level 1:** deep_space 16.0 s (from the left) and planet_approach 47.0 s (from the right), AI-driven (no `.move()`). **Never place it in an `ENEMIES_CLEARED` section** — its persistent mines would hold the section open (`test_engagement_deadline.gd`). **Hub:** one patrols a 2600 px ring at bearing −22.5°. Counts as a specialist in the frozen 2.5× density gate (`EXPECTED_PH7`).
+
+**Examples:**
+```gdscript
+# Spawn it and let it fly its own pass (no .move()) - level 1's shape
+b.mine_layer().at(-400, -160)
+
+# On a rail (legacy shape): a proximity mine every rail_mine_interval
+b.mine_layer().at(0, -400).move(b.straight(82))
+```
+
+---
+
 ### `bonus_drone` — Bonus Drone
 
 **Builder:** `b.bonus_drone()`  
@@ -561,6 +585,10 @@ bomb (`EnemyOrdnance`, an `Area2D`; not an `EnemyBullet`, not in `enemies`, neve
 Its pools set `persist_after_owner_death`, so what a Bomber dropped outlives it. See `docs/BULLET_POOL.md` and
 `bomber/ENEMY.md`.
 
+The proximity mine is the first of the Ph7 **mine family** (`EnemyMine`, `mines/`): PROXIMITY (this one), DRIFTING, HOMING, CHAIN, PULSE (boost
+disruption) and EMP, laid by the Mine Layer (`mine_layer/ENEMY.md`) or placed in a `Minefield` (`hazards/minefield/HAZARD.md`). Every mine registers as a
+`&"mine"` hazard, so enemies steer round it. Detail: [assault.md](architecture/modules/assault.md) → *Mines and the Mine Layer*.
+
 
 ### Enemy rockets (Ph5)
 
@@ -604,6 +632,7 @@ scored. **Tuning lives in each scene's exports.** Art and `rotation` are nose-up
 | **Rockets hurt enemies by impact only** | An `EnemyRocket`'s impact hits enemies, ordnance, Ram plates and asteroids; its blast hurts only the player and allies. Never put a rocket launcher where its own rockets can overlap its hull (`rocket_clear_radius()`). |
 | **Supports never repair supports** | A `SupportShip` is never a ward and `can_be_repaired()` is false; it deals 0 contact damage. |
 | **`missile_corvette` and `support_ship` are DURATION-only** | Never place either in an `ENEMIES_CLEARED` section: rockets persist and hold the section open, and a support has no wave-clear role (`test_engagement_deadline.gd`). |
+| **`mine_layer` (and anything that drops persistent mines) is DURATION-only** | Never place it in an `ENEMIES_CLEARED` section: mines outlive the layer (`assault_mine_life` 9 s) and the layer itself defers its budget to the end of a pass. A mine is never in `enemies` and never scored. |
 
 ---
 

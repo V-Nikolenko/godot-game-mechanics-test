@@ -139,7 +139,7 @@ Detail and APIs: [global.md](modules/global.md).
   `blocks_line_of_sight()` blocks it. Recipe: [global.md](modules/global.md) → *Enemy AI*.
 - **Ordnance outlives its owner without breaking the one-owner rule (Ph4).** `BulletPool.persist_after_owner_death`
   hands every in-flight projectile over to self-freeing when the owning ship leaves the tree; the Bomber's gravity
-  bombs, mines and pursuit bombs (`assault/scenes/projectiles/enemy_ordnance/`, `EnemyOrdnance`) are the first user.
+  bombs, mines and pursuit bombs (`assault/scenes/projectiles/enemy_ordnance/`, `EnemyOrdnance`) are the first user; the Mine Layer (Ph7) is the second, its mines being `EnemyMine` (see *Mines, minefields and the Mine Layer* below).
   Ordnance is not an `EnemyBullet` and not a `BaseEnemy`: never in `enemies`, never scored, and any player hit defuses
   it. Detail: [assault.md](modules/assault.md) → *Projectiles & bullet pool*; [BULLET_POOL.md](../BULLET_POOL.md).
 - **Enemy rockets hurt enemies by impact and the player by blast only (Ph5).** `EnemyRocket`
@@ -367,7 +367,7 @@ Detail and APIs: [global.md](modules/global.md).
   by hand it resaves every scene, deleting all UIDs and all comments. Written up in
   [`tests/README.md`](../../tests/README.md).
 - **Hazards (enemy rework phase 6):** (1) **hazards are sampled by the body** — a hazard node answers duck-typed
-  `hazard_info() -> HazardInfo` and registers in `_enter_tree()` / unregisters in `_exit_tree()` with the static `Hazards`
+  `hazard_info() -> HazardInfo` and registers in `_enter_tree()` / unregisters in `_exit_tree()` (a *pooled* hazard, i.e. a mine, registers on `launch()` instead) with the static `Hazards`
   registry (`global/hazards/`); ships query `Hazards.accel_at / penalty_at / around`, no `Area2D` field, collision bit 12
   stays unallocated, and a hazard never writes a ship's velocity, position or rotation. (2) **The mover owns enemy drift** —
   `EnemyMover` adds the pull as a decaying `HazardDrift`, applies the slow and the context-steering avoidance stage, and
@@ -378,6 +378,47 @@ Detail and APIs: [global.md](modules/global.md).
   happen inside a physics flush); the container is the node in group `hazard_container` (level 1 and the hub), never the enemy
   container; no container means nothing spawns and no rng is drawn. Randomness only from the dying enemy's seeded `rng`.
   Direct hazard damage is `Hazards.pulse_damage`. Details: [global.md](modules/global.md) → Hazards.
+- **Mines, minefields and the Mine Layer (enemy rework phase 7):**
+  1. **Mines are one family.** `EnemyMine extends EnemyOrdnance` (`assault/scenes/projectiles/enemy_ordnance/mines/enemy_mine.gd`),
+     `enum Variant { PROXIMITY, DRIFTING, HOMING, CHAIN, PULSE, EMP }` (append-only). One scene per variant under `mines/`;
+     PROXIMITY **is** the Bomber's `enemy_ordnance/mine.tscn` (same path, no UID). Variant numbers (trigger, warning, blast,
+     effect) live in the scene; a dropper overrides only `arm_delay`, `eject_time` and the life. `EnemyMineScenes` reads scene
+     exports without instancing, so gates never type a number. Warning rule for every scene:
+     `(trigger_radius + effect_radius) / warning_time >= 440 + own_speed`. A mine is never in `enemies`, never scored, and a pooled
+     mine never frees itself. `mine_life` 0 means "never fizzles".
+  2. **Hostility.** `Hostility.PLAYER` (every mine an enemy lays) is set off by player hurtboxes only and blasts through
+     `ContactBlast`. `Hostility.ALL` (placed mines) is also set off by a layer-512 area whose `get_parent()` is in group `enemies`
+     and blasts through `Hazards.pulse_damage` (Ph6's rule that environmental blasts hurt both sides). `BaseEnemy` does not join
+     `enemies`: a new enemy that placed mines must see joins it in its own `_ready()`.
+  3. **A pooled hazard registers on `launch()`, not in `_enter_tree()`.** A mine sits idle in its `BulletPool`; it registers when a
+     life starts and unregisters in `_mark_done()` and `_exit_tree()` (a fading mine is no hazard). Any later pooled hazard follows
+     this. A mine never writes a ship's velocity, position or rotation.
+  4. **The measured footprint.** `HazardInfo.kind = &"mine"`, `radius = trigger_radius + hazard_pad` (80 + 60), `avoid_weight` 1.0
+     for every mine, `velocity` for moving mines (plus `carry_velocity`, set by a drifting parent), no pull, slow or LOS block.
+     Measured with `Steering.context_avoid`: `hazard_avoidance` >= 0.8 keeps a ship >= 145 px from a mine centre, 0.6-0.7 skirts at
+     90-110 px, 0.5 grazes. A smaller pad or weight lets a 0.6 ship cut inside the trigger.
+  5. **Placed mines.** `placed = true` makes a mine self-owned (`expired -> queue_free`, no `ProjectileLifetime` backstop, `mine_life =
+     placed_life`, default 0). The setup is a deferred `_start_if_placed()` queued by `_ready()`, and the `ProximityArea` mask is set
+     from `hostility` in `launch()`, because Godot readies children before their parent: a `Minefield` configures its children in its
+     own `_ready()`. A lone mine dropped in any scene arms, registers and triggers.
+  6. **Chain.** A CHAIN detonation calls `chain_trigger(chain_delay)` on every live mine whose centre is within `chain_radius` (via
+     `Hazards.around`, kind `&"mine"`); a chained mine skips its warning; only CHAIN mines propagate. **`enemy_mine.gd` must not name
+     its own `class_name`** (`as EnemyMine`, `Array[EnemyMine]`): the self-reference leaks at exit and fails `verify.sh` with every test green.
+  7. **Boost disruption and EMP are player hooks, applied by duck type.** `PlayerBase.apply_boost_disruption(strength, seconds)`
+     (strongest and longest win, never stacked; `boost_efficiency()`, `boost_disruption_changed(efficiency: float)`,
+     `MIN_BOOST_EFFICIENCY` 0.15). A disrupted speed scales only its **excess** over a floor: `PlayerBase.disrupted_speed(speed,
+     floor)` = `floor + (speed - floor) * efficiency`, so a disruption never slows the ship below normal flight; efficiency is checked
+     **before** a tank or charge is spent. `EmpPulse.emit(tree, at, radius, seconds, source) -> int` (`global/components/emp_pulse.gd`)
+     is the one EMP entry point (Ph7: group `player` only); `PlayerBase.apply_emp()` is a stand-in that calls
+     `apply_boost_disruption(1.0, seconds)`. **Phase 9 replaces that effect line and extends the target set, keeping both signatures.**
+  8. **The Mine Layer** (`assault/scenes/enemies/mine_layer/`) lays one line of 6 mines per pass across the player's path, never a
+     spray, and builds unsafe regions gradually (one line per ~10-14 s in Open Space, one per Assault life). Its mines live in the enemy
+     container through `BulletPool.persist_after_owner_death`, and in Open Space they never fizzle, so an area the player leaves and
+     returns to is still dangerous. **Nothing that drops persistent mines goes in an `ENEMIES_CLEARED` section** (guard rows in
+     `test_engagement_deadline.gd`). In LAY the layer skips the avoidance stage (it drives `mover.boost()`); entering DISENGAGE calls
+     `mover.release_constraint()` so the Assault corridor never holds an exit in.
+  Details: [assault.md](modules/assault.md) → *Mines and the Mine Layer*, [global.md](modules/global.md) → *Boost disruption* / *EMP*,
+  `assault/scenes/enemies/mine_layer/ENEMY.md`, `assault/scenes/hazards/minefield/HAZARD.md`.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---
@@ -388,7 +429,7 @@ Each combat entity carries a behaviour doc **beside its scene**, mirroring a com
 
 - **Racers:** `assault/scenes/race/racers/<name>/RACER.md` (6 racers)
 - **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (the wave enemies + the `space_station` mini-boss)
-- **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (8 hazard folders: big/small asteroid, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck — wrecks, derelict structures and drifting debris)
+- **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (9 hazard folders: big/small asteroid, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck — wrecks, derelict structures and drifting debris — and minefield)
 - **Race track hazards:** `assault/scenes/race/track/RACE_HAZARDS.md` (walls, asteroids, lasers + the lethal-hazard / AI-avoidance system)
 
 Level 1's **finale** phase is still the `ENEMIES_CLEARED` section in
