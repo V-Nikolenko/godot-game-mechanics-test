@@ -23,16 +23,24 @@ extends BaseEnemy
 
 @export var config: MineLayerConfig = load("res://assault/scenes/enemies/mine_layer/mine_layer_config.tres")
 
+## Smallest fraction of the closed `scale.y` an open hatch keeps (a zero scale is not a valid transform).
+const HATCH_MIN_SCALE := 0.001
+
 var _rail_clock: float = 0.0
+var _hatch_open: float = 0.0
+var _hatch_base_y: float = 1.0
 
 @onready var _layer_brain: MineLayerBrain = $Brain
 @onready var _layer_mover: EnemyMover = $EnemyMover
 @onready var dispenser: Marker2D = $Dispenser
+@onready var _hatch: Sprite2D = $Hatch
 
 
 func _ready() -> void:
 	super._ready()
 	add_to_group("enemies")
+	_hatch_base_y = _hatch.scale.y
+	set_hatch_open(0.0)
 	if config:
 		_apply_config(config)
 
@@ -105,3 +113,15 @@ func _acquire(variant: EnemyMine.Variant, at: Vector2) -> EnemyMine:
 func _pool_for(variant: EnemyMine.Variant) -> BulletPool:
 	var key := String(EnemyMine.Variant.keys()[variant]).capitalize() + "Pool"
 	return get_node_or_null(key) as BulletPool
+
+
+## The dispenser hatch (plan §2.13): `open` 0 is closed over the rack, 1 is open. The hatch is a plate over the rack
+## whose `scale.y` collapses toward 0 as it opens, floored at `HATCH_MIN_SCALE` because Godot rejects a zero scale.
+## The brain eases `open` between 0 and 1 over `config.hatch_seconds`; tests read `hatch_open()` or `scale.y` with a tolerance.
+func set_hatch_open(open: float) -> void:
+	_hatch_open = clampf(open, 0.0, 1.0)
+	_hatch.scale.y = _hatch_base_y * maxf(1.0 - _hatch_open, HATCH_MIN_SCALE)
+
+
+func hatch_open() -> float:
+	return _hatch_open

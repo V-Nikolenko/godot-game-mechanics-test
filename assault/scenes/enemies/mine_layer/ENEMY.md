@@ -6,7 +6,8 @@
 > **Build state (Phase 7, t12: hub idle).** Built: the scene, config, per-variant persistent pools, `drop_mine()`, the rail fallback, the
 > `WaveBuilder` entry (t10), the pass AI — APPROACH / LAY / BREAK_OFF / REPOSITION / DISENGAGE, the live-mine cap and the tail drop (t11) — and the
 > Open Space hub idle (IDLE / NOTICING / RETURNING) with its persistence rules (t12).
-> **Not built yet:** the hull art, the hatch and the wake trail, the hub and level 1 placement. Plan:
+> Also built (t13): the hull art, the dispenser hatch and the `MineWake` trail (see **Art, hatch and wake** below).
+> **Not built yet:** the hub and level 1 placement. Plan:
 > `docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md` §2.11–§2.12; t11's own plan `docs/plans/cmvkb0hdc00uiqs2xhvb2awai/3-plan.md`.
 
 ---
@@ -19,7 +20,7 @@
 | Damage | 25 contact (`ContactHitBox`, COLLISION); mines deal their own blast |
 | Speed | `max_speed` 240, `acceleration` 420, `max_turn_rate` 2.4, `lay_speed` 170, `exit_speed` 300 |
 | Body | one `CircleShape2D` r 40 shared by the body, `HurtBox` and `ContactHitBox` |
-| Sprite | placeholder: `bomber.png` scaled 0.92, nose-down (the scene rotates the `Sprite2D` by π); replaced by the art task |
+| Sprite | `mine_layer.png` (96 × 96, PixelLab `create_map_object`, strict top-down, nose-down, no rotation: a wide shield-shaped dark hull, red edge stripe, a full-width rear mine rack) + `mine_layer_hatch.png` over the rack |
 | Scene / config | `mine_layer.tscn` / `mine_layer_config.tres` (flat `MineLayerConfig`) |
 | Hazards | `hazard_avoidance` 0.8, `hazard_margin` 24, `hazard_resistance` 0.2; leaves a medium wreck 35 % of the time |
 
@@ -89,11 +90,25 @@
 - `MineLayer._ready()` joins group `enemies` (`BaseEnemy` does not; placed `ALL` mines look for that group).
 - **Rail fallback:** while an `EnemyPathMover` owns it, a PROXIMITY mine drops at the dispenser every `rail_mine_interval` 1.6 s (speed 0, Assault life).
 
+## Art, hatch and wake
+
+- **Hull:** `assault/assets/sprites/enemies/mine_layer.png`, 96 × 96, PixelLab `create_map_object` (`view: "high top-down"`), nose-down so the `Sprite2D` has no
+  rotation (`sprite_forward_angle` stays the default `PI/2`). A wide shield-shaped dark hull with a red edge stripe and a full-width rack across the stern (top of the
+  image), where the `Dispenser` sits. No painted glow or flame. Picked from four candidates (a narrow dart, a pointed arrow, a manta shape and this one); the others
+  read as a fighter or came back nose-up.
+- **Hatch:** `Hatch` (`Sprite2D`, `mine_layer_hatch.png`) at local (0, −34) over the rack, scaled (0.92, 0.55). `MineLayer.set_hatch_open(0..1)` sets its `scale.y` to
+  `closed × max(1 − open, 0.001)` (a zero scale is not a valid transform, so tests compare with a tolerance); `hatch_open()` reads the value back. The brain eases it
+  toward 1 during LAY and toward 0 otherwise over `hatch_seconds` 0.25 (`_ease_hatch()`, at the end of every `tick()`). A railed layer never opens it.
+- **Wake:** `MineWake` (`mine_wake.gd`, a code-built `Line2D`, no texture) is added to the layer's parent container when LAY starts (`brain.wake`). It appends the
+  Dispenser's global position every 12 px (several points when one tick covers more, so a 24 px stretch always has two), width 3, dark red to transparent, alpha 0.45.
+  Leaving LAY calls `finish()`; it then fades `modulate.a` over `wake_fade` 2.5 s on its own clock and frees itself (`RailTrail`'s precedent: no `Timer`, no
+  `create_timer`). It outlives a dead layer: a freed Dispenser ends the following by itself.
+
 ## Gates
 
 `tests/integration/test_mine_layer.gd` (shell rows, t10; the "Passes" section, t11: geometry, the lead / fence / fallback / guard / spread planner rows,
 the run-in crossing, LAY on its path for aligned, perpendicular and older-line arrivals, two seeded 60 s Open Space scenarios (gradual passes, clear of
-older lines), the live cap, Assault's one pass and its budget deferral, the tail drop; t12: the idle radii inequalities, frame-0 IDLE, NOTICING, RETURNING (and not during LAY), the persistence scenario, Assault's expiry); the Mine Layer is in the rosters of
+older lines), the live cap, Assault's one pass and its budget deferral, the tail drop; t13: the hull's opacity, the hatch closed outside LAY / open in it / eased over 0.25 s, the wake's spacing, path offset, fade and self-free in both modes; t12: the idle radii inequalities, frame-0 IDLE, NOTICING, RETURNING (and not during LAY), the persistence scenario, Assault's expiry); the Mine Layer is in the rosters of
 `test_enemy_contact_damage.gd`, `test_contact_hitbox_geometry.gd`, `test_enemy_hurtbox_geometry.gd` and `test_wreck.gd` (`_SHIP_SCENES`);
 `test_config_instance_isolation.gd` finds it by its directory sweep; `test_enemy_dual_mode.gd` has the APPROACH case (it closes on its run-in point).
 

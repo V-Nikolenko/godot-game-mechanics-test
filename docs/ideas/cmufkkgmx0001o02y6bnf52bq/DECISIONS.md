@@ -2738,3 +2738,19 @@ Plan §2.14 as written, with these notes. Tests: `tests/integration/test_mine_la
   trigger placed within `perceive_radius + idle_radius` (810 px) of the layer's anchor will wake it, as the Bomber's hub sweep already assumes.
 - Gate time: GUT 211.66 -> 210.04 s (2301 -> 2312 tests; allotment 1.5 s). The "before" is a clean `git archive HEAD` copy. `test_mine_layer.gd` alone went 2.09 -> 2.87 s
   (+0.8 s); the whole-suite difference is run noise.
+
+### Phase 7, built in t13 (Mine Layer hull art, dispenser hatch and wake) (2026-10-27)
+
+- **Art:** `assault/assets/sprites/enemies/mine_layer.png` (96 × 96) and `mine_layer_hatch.png` (64 × 32), both PixelLab `create_map_object`, `view: "high top-down"`,
+  saved through `scripts/pixellab.sh`, imported and looked at at 6× and in an in-game composite (strict top-down, no side face, nose-down, transparent corners). Four hull
+  candidates and two hatch candidates were generated. The chosen hull is a wide shield with a full-width stern rack; two others came back nose-up or too narrow.
+  The `Sprite2D` lost its π rotation and 0.92 scale (the bomber placeholder was nose-up); the hull draws at 1.0.
+- **Hatch:** a `Hatch` `Sprite2D` at (0, −34), scale (0.92, 0.55). `MineLayer.set_hatch_open(open)` / `hatch_open()`; `scale.y = closed × max(1 − open, 0.001)`. The brain
+  eases it in `tick()` (`_ease_hatch`) over the new config field `hatch_seconds` 0.25. **Config fields added** (group "Art"): `hatch_seconds` 0.25, `wake_fade` 2.5.
+- **Wake:** `MineWake` (`mine_wake.gd`), `class_name MineWake extends Line2D`. `MineWake.spawn(dispenser, fade)`, `step(delta)`, `finish()`, `global_points()`, `SPACING` 12.
+  The brain keeps it in `brain.wake` (null before the first LAY) and calls `finish()` from `enter_phase()` for any phase but LAY. It is a child of the layer's *parent*
+  (the enemy container), so it survives the layer. Points are interpolated at exactly 12 px along each tick's straight run, so the "two points per 24 px" bound holds at any speed.
+- **Tests:** `test_mine_layer.gd` gained 10 tests, 16 rows in both modes (hull opacity, hatch scale and ease, wake spacing / path offset (worst 0.32 px) / fade / self-free / dead layer / container).
+  The hatch and wake rows read the shared `_natural_pass` scenario, extended with per-tick hatch and dispenser records and a hand-stepped wake; no new scenario was run.
+- **No deviations** from plan §2.13. The plan's "scale tolerance" is 0.01.
+- Gate time: GUT 210.55 -> 209.99 s (2312 -> 2322 tests; allotment 0.5 s); `test_mine_layer.gd` alone 2.90 -> 2.92 s. The "before" is a clean `git archive HEAD` copy.

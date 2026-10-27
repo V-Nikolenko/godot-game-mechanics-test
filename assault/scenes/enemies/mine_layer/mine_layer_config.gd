@@ -108,3 +108,9 @@ extends ShipConfig
 @export var tail_drop_cooldown: float = 2.5
 ## Assault: every mine stays this far (px) inside `EnemyWorld.view_rect()`.
 @export var view_margin: float = 64.0
+
+@export_group("Art")
+## The dispenser hatch eases between closed and open over this long (s).
+@export var hatch_seconds: float = 0.25
+## The wake behind a laid line fades over this long (s) once LAY ends.
+@export var wake_fade: float = 2.5

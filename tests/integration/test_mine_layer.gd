@@ -553,6 +553,19 @@ func test_arc_rest_points_follow_the_formula_on_the_players_side(mode: String = 
 			assert_between(gap, 98.0, 125.0, "%s: spacing %d" % [mode, k])
 
 
+## One wake tick: step it (its own physics is off), keep a copy of its points, count the fade ticks and note when it frees.
+func _step_wake(wake: MineWake, out: Dictionary) -> void:
+	if wake == null or out.wake_freed:
+		return
+	wake.step(DT)
+	out.wake_points = wake.global_points().duplicate()
+	if not wake.following:
+		out.fade_steps += 1
+		if out.fade_steps == _ticks(1.25):
+			out.alpha_mid = wake.modulate.a
+	if wake.is_queued_for_deletion():
+		out.wake_freed = true
+
 # ── Natural passes (shared) ──────────────────────────────────────────────────────────────────────
 
 ## One natural pass per mode, from a layer at rest: Open Space against a standing stub 600 px away (bearing 0), Assault
@@ -567,7 +580,10 @@ func _natural_pass(mode: String) -> Dictionary:
 	var out := {"seen": [], "phase": [], "run_in": [], "frozen": [], "r": [], "s": [], "u": [], "vel": [],
 			"released": [], "budget_left": [], "lay_start": -1, "lay_end": -1, "lays": 0, "freed": false,
 			"rest": [], "path": PackedVector2Array(), "axis": Vector2.ZERO, "view": EnemyWorld.view_rect(get_tree()),
-			"stall": 0.0, "drops": [], "player": harness.player.global_position}
+			"stall": 0.0, "drops": [], "player": harness.player.global_position,
+			"hatch": [], "hatch_y": [], "disp": [], "wake_points": PackedVector2Array(), "fade_steps": 0, "wake_freed": false,
+			"alpha_mid": -1.0, "hatch_base": (layer.get_node("Hatch") as Node2D).scale.y}
+	var wake: MineWake = null
 	var last_phase: int = brain.phase
 	var budget_ticks := _ticks(40.0)
 	for i in budget_ticks:
@@ -585,6 +601,13 @@ func _natural_pass(mode: String) -> Dictionary:
 		out.vel.append(layer.velocity)
 		out.released.append((layer.get_node("EnemyMover") as EnemyMover).constraint_released())
 		out.budget_left.append(brain.budget.remaining())
+		out.hatch.append(layer.hatch_open())
+		out.hatch_y.append((layer.get_node("Hatch") as Node2D).scale.y)
+		out.disp.append(layer.dispenser.global_position)
+		if brain.wake != null and brain.wake != wake:
+			wake = brain.wake
+			wake.set_physics_process(false)  # hand-stepped, in lock step with the layer
+		_step_wake(wake, out)
 		if brain.phase == MineLayerBrain.Phase.LAY and last_phase != MineLayerBrain.Phase.LAY:
 			out.lays += 1
 			out.lay_start = i
@@ -597,6 +620,11 @@ func _natural_pass(mode: String) -> Dictionary:
 		last_phase = brain.phase
 		if mode == "open_space" and out.lay_end >= 0 and i >= out.lay_end + LAND_TICKS + 1:
 			break
+	# The wake outlives the layer and the run: keep stepping it alone until it frees itself.
+	var spare := _ticks(4.0)
+	while wake != null and spare > 0 and not out.wake_freed:
+		spare -= 1
+		_step_wake(wake, out)
 	for d in layer.get_meta(&"drops"):
 		out.drops.append({"tick": d.tick - 1, "k": d.k, "landed": d.get("landed", Vector2.INF), "variant": (d.mine as EnemyMine).variant})
 	gut.p("natural %s pass: LAY %.2f -> %.2f s, %s after %.2f s" % [mode, (out.lay_start + 1) * DT, (out.lay_end + 1) * DT,
@@ -1453,3 +1481,163 @@ func test_assault_mines_are_gone_after_assault_mine_life() -> void:
 		if is_instance_valid(m):
 			for info: HazardInfo in Hazards.around(m.global_position, 1.0):
 				assert_ne(info.source, m, "and unregistered")
+
+
+# ── Art, hatch and wake (task t13; plan §2.13) ───────────────────────────────────────────────────
+#
+# The hatch and wake rows read the shared natural pass (`_natural_pass`), which records the hatch per tick and steps the
+# wake in lock step with the layer; no extra scenario is run.
+
+## `Hatch.scale.y` is compared with a tolerance: an open hatch keeps `HATCH_MIN_SCALE` of its closed height.
+const HATCH_TOL := 0.01
+
+
+func test_the_hull_is_opaque_at_the_centre_and_transparent_at_the_corners() -> void:
+	var layer := LAYER_SCENE.instantiate() as MineLayer
+	var tex := (layer.get_node("Sprite2D") as Sprite2D).texture
+	layer.free()
+	assert_not_null(tex, "the layer draws a texture")
+	assert_eq(tex.resource_path, "res://assault/assets/sprites/enemies/mine_layer.png", "its own hull, not the Bomber's placeholder")
+	var img := tex.get_image()
+	img.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	assert_between(w, 80, 112, "size class 80-112 px, wide")
+	assert_between(h, 80, 112, "size class 80-112 px, tall")
+	assert_gt(img.get_pixel(w / 2, h / 2).a, 0.99, "opaque at the centre")
+	for corner: Vector2i in [Vector2i(0, 0), Vector2i(w - 1, 0), Vector2i(0, h - 1), Vector2i(w - 1, h - 1)]:
+		assert_eq(img.get_pixel(corner.x, corner.y).a, 0.0, "transparent at corner %s" % corner)
+
+
+func test_the_hatch_sprite_is_its_own_texture_over_the_rack() -> void:
+	var layer := LAYER_SCENE.instantiate() as MineLayer
+	var hatch := layer.get_node("Hatch") as Sprite2D
+	assert_eq(hatch.texture.resource_path, "res://assault/assets/sprites/enemies/mine_layer_hatch.png")
+	assert_lt(hatch.position.y, 0.0, "over the stern rack (the Dispenser is at -y)")
+	assert_between(layer.get_node("Dispenser").position.y, hatch.position.y - 10.0, hatch.position.y + 10.0, "the Dispenser sits under the hatch")
+	layer.free()
+
+
+func test_set_hatch_open_scales_y_from_closed_to_a_floor_and_clamps() -> void:
+	var harness = _world("open_space")
+	var layer := _spawn(harness, Vector2(900.0, 360.0))
+	var hatch := layer.get_node("Hatch") as Node2D
+	var closed := hatch.scale.y
+	assert_eq(layer.hatch_open(), 0.0, "closed on spawn")
+	layer.set_hatch_open(0.5)
+	assert_almost_eq(hatch.scale.y, closed * 0.5, HATCH_TOL, "half open is half the height")
+	layer.set_hatch_open(1.0)
+	assert_between(hatch.scale.y, 0.0, HATCH_TOL, "fully open collapses to the epsilon, never a zero scale")
+	assert_gt(hatch.scale.y, 0.0, "but a zero scale is not a valid transform")
+	layer.set_hatch_open(7.0)
+	assert_eq(layer.hatch_open(), 1.0, "clamped high")
+	layer.set_hatch_open(-3.0)
+	assert_almost_eq(hatch.scale.y, closed, 0.0001, "clamped low is closed")
+
+
+func test_the_hatch_is_closed_outside_lay_and_open_during_it(mode: String = use_parameters(MODES)) -> void:
+	var run := _natural_pass(mode)
+	assert_eq(run.lays, 1, "the scenario laid a pass")
+	var base: float = run.hatch_base
+	var start: int = run.lay_start
+	var end: int = run.lay_end
+	assert_gt(end, start, "LAY ended")
+	for i in start:
+		assert_eq(run.hatch[i], 0.0, "tick %d (before LAY): closed" % i)
+		assert_almost_eq(run.hatch_y[i], base, 0.0001, "tick %d: scale.y closed" % i)
+	var settled := start + _ticks(0.25) + 1
+	for i in range(settled, end):  # tick `end` is the one that left LAY: its hatch has begun to close
+		assert_eq(run.hatch[i], 1.0, "tick %d (LAY): open" % i)
+		assert_between(run.hatch_y[i], 0.0, HATCH_TOL, "tick %d: scale.y collapsed within tolerance" % i)
+	var after := end + _ticks(0.25) + 2
+	assert_lt(after, run.hatch.size(), "the run went on long enough to see it close")
+	for i in range(after, run.hatch.size()):
+		assert_eq(run.hatch[i], 0.0, "tick %d (after LAY): closed again" % i)
+		assert_almost_eq(run.hatch_y[i], base, 0.0001, "tick %d: scale.y closed again" % i)
+
+
+func test_the_hatch_eases_over_a_quarter_second(mode: String = use_parameters(MODES)) -> void:
+	var run := _natural_pass(mode)
+	var start: int = run.lay_start
+	var seconds := (_brain_config()).hatch_seconds
+	assert_almost_eq(seconds, 0.25, 0.0001, "the ease is 0.25 s")
+	# The brain's tick that enters LAY already eases once, so tick `start + k` has opened k + 1 ticks.
+	var half := _ticks(seconds / 2.0)
+	assert_almost_eq(float(run.hatch[start + half - 1]), float(half) * DT / seconds, 0.001, "linear: half way after half the time")
+	assert_lt(float(run.hatch[start + _ticks(seconds) - 2]), 1.0, "not yet open a tick early")
+	assert_eq(float(run.hatch[start + _ticks(seconds)]), 1.0, "open after the ease")
+	var end: int = run.lay_end
+	assert_gt(float(run.hatch[end + 3]), 0.0, "closing takes time too")
+	assert_lt(float(run.hatch[end + 3]), 1.0, "and has begun")
+
+
+func _brain_config() -> MineLayerConfig:
+	return SHIPPED
+
+
+func test_the_wake_has_two_points_per_24_px_and_lies_on_the_dispenser_path(mode: String = use_parameters(MODES)) -> void:
+	var run := _natural_pass(mode)
+	var pts: PackedVector2Array = run.wake_points
+	assert_gt(pts.size(), 10, "the wake has a body")
+	var length := 0.0
+	for i in pts.size() - 1:
+		var gap := pts[i].distance_to(pts[i + 1])
+		length += gap
+		assert_between(gap, MineWake.SPACING - 0.5, MineWake.SPACING + 0.5, "points are %d px apart (segment %d)" % [int(MineWake.SPACING), i])
+	assert_gte(float(pts.size() - 1), floorf(length / 24.0) * 2.0, "at least two points per 24 px laid")
+	var path := PackedVector2Array(run.disp)
+	var worst := 0.0
+	for p in pts:
+		worst = maxf(worst, _dist_to_polyline(p, path))
+	assert_lte(worst, 4.0, "every wake point lies within 4 px of the dispenser's path (worst %.2f)" % worst)
+	gut.p("%s wake: %d points over %.0f px, worst offset %.2f px" % [mode, pts.size(), length, worst])
+
+
+func test_the_wake_spans_the_laid_line(mode: String = use_parameters(MODES)) -> void:
+	var run := _natural_pass(mode)
+	var pts: PackedVector2Array = run.wake_points
+	var laid := 0.0
+	var disp: Array = run.disp
+	for i in range(run.lay_start, run.lay_end):
+		laid += (disp[i] as Vector2).distance_to(disp[i + 1])
+	var length := 0.0
+	for i in pts.size() - 1:
+		length += pts[i].distance_to(pts[i + 1])
+	assert_almost_eq(length, laid, MineWake.SPACING + 4.0, "the wake is as long as the dispenser's LAY path")
+
+
+func test_the_wake_fades_over_2_5_s_and_frees_itself_one_tick_either_way(mode: String = use_parameters(MODES)) -> void:
+	var run := _natural_pass(mode)
+	assert_true(run.wake_freed, "the wake freed itself")
+	var fade := SHIPPED.wake_fade
+	assert_almost_eq(fade, 2.5, 0.0001, "wake_fade is 2.5 s")
+	assert_almost_eq(float(run.fade_steps) * DT, fade, DT * 1.01, "freed %.2f s after LAY ended, 2.5 s +- 1 tick" % (run.fade_steps * DT))
+	assert_almost_eq(float(run.alpha_mid), 0.5, 0.02, "half faded half way through")
+
+
+func test_a_wake_outlives_its_dead_layer_and_still_frees_itself() -> void:
+	var harness = _world("open_space")
+	var layer := _spawn(harness, Vector2(900.0, 360.0))
+	var wake := MineWake.spawn(layer.dispenser, 2.5)
+	wake.set_physics_process(false)
+	for i in 5:
+		layer.global_position += Vector2(3.0, 0.0)
+		wake.step(DT)
+	layer.free()
+	var ticks := 0
+	while not wake.is_queued_for_deletion() and ticks < 400:
+		wake.step(DT)
+		ticks += 1
+	assert_true(wake.is_queued_for_deletion(), "a dead layer ends the following, then the fade frees the wake")
+	assert_almost_eq(float(ticks) * DT, 2.5, DT * 1.01)
+
+
+func test_the_wake_lives_in_the_layers_parent_container(mode: String = use_parameters(MODES)) -> void:
+	var harness = _world(mode)
+	var layer := _pass_layer(harness, OS_PLAYER + Vector2(600.0, 0.0) if mode == "open_space" else Vector2(240.0, 300.0))
+	var brain := _brain(layer)
+	assert_null(brain.wake, "no wake before LAY")
+	_run_until(layer, harness.player, _ticks(20.0), func() -> bool: return brain.phase == MineLayerBrain.Phase.LAY)
+	assert_not_null(brain.wake, "LAY starts a wake")
+	assert_eq(brain.wake.get_parent(), layer.get_parent(), "in the layer's parent container, not under the layer")
+	assert_true(brain.wake is Line2D)

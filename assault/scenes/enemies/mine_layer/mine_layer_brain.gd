@@ -110,6 +110,8 @@ var spread_fallbacks: int = 0
 var fence_fallbacks: int = 0
 ## Open Space: frozen passes given up because R could not be reached (the abandon guard).
 var abandoned_passes: int = 0
+## The wake of the line being laid (or fading after it); null before the first LAY. It owns and frees itself.
+var wake: MineWake
 
 var _started: bool = false
 var _phase_time: float = 0.0
@@ -172,6 +174,7 @@ func tick(delta: float) -> void:
 		Phase.BREAK_OFF: _tick_break_off(delta, target)
 		Phase.REPOSITION: _tick_reposition(delta, target)
 		Phase.DISENGAGE: _tick_disengage()
+	_ease_hatch(delta)
 
 
 ## Test seam and the one place a transition happens: runs `p`'s entry code, then emits.
@@ -180,6 +183,8 @@ func enter_phase(p: Phase) -> void:
 		_setup()
 	phase = p
 	_phase_time = 0.0
+	if p != Phase.LAY:
+		_end_wake()
 	match p:
 		Phase.APPROACH:
 			_set_light(StateLight.State.OFF)
@@ -713,6 +718,9 @@ func _abandon_due(pos: Vector2) -> bool:
 
 func _enter_lay() -> void:
 	passes_started += 1
+	_end_wake()
+	var dispenser := actor.get_node_or_null("Dispenser") as Node2D
+	wake = MineWake.spawn(dispenser, config.wake_fade) if dispenser != null else null
 	drops_this_pass = 0
 	skipped_this_pass = 0
 	_next_mine = 0
@@ -977,3 +985,18 @@ func _set_light(state: int) -> void:
 func _set_light_once(state: int) -> void:
 	if state != _light_state:
 		_set_light(state)
+
+
+## The hatch is open for the whole of LAY and closed otherwise, easing over `hatch_seconds` (plan §2.13).
+func _ease_hatch(delta: float) -> void:
+	var layer := actor as MineLayer
+	if layer == null:
+		return
+	var target := 1.0 if phase == Phase.LAY else 0.0
+	layer.set_hatch_open(move_toward(layer.hatch_open(), target, delta / maxf(config.hatch_seconds, 0.001)))
+
+
+## LAY is over: the wake stops following the Dispenser and fades out on its own clock.
+func _end_wake() -> void:
+	if wake != null and is_instance_valid(wake):
+		wake.finish()
