@@ -2852,3 +2852,88 @@ decisions above stand except where this section says otherwise; the per-task *Bu
 | Play-testing every *starting value* (plan §2.18): density of lines, homing fairness, EMP stand-in readability | Ph16 / Ph17 |
 | Two unidentified one-off red tests in `gate-time.sh` / `verify.sh` runs (names not captured), one `GUT LEAKED at exit` | any task that sees it again: capture the test name |
 | Every pooled hazard must register on `launch()`; every new enemy that placed mines must see must join group `enemies` in its own `_ready()` | all later phases adding mines, turrets or pooled hazards |
+
+## Phase 8 - Enemy rework, phase 8: energy weapons, defense turrets and Twin-Laser Drones (2026-10-27)
+
+Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` (revision 1), research in `1-context.md` / `2-research.md` (scope check S1–S16) in the same
+directory. These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
+
+### Changes to earlier decisions
+- **Ph6's "laser walls join the registry with no change to the AI" is amended:** the registry is unchanged, but `HazardInfo` gains segment geometry
+  (`segment_half: Vector2`, ZERO = circle) and `exempt_group: StringName`, `Steering.context_avoid` gains a segment branch (closest-point cone, end cones,
+  the bearing span between the ends) and `EnemyMover._avoid` drops an info whose `exempt_group` the actor is in. The circle code paths are untouched, so
+  every Ph6/Ph7 avoidance and pass-through result stays bit-identical.
+- **Friendly fire from energy weapons is decided** (the half Ph5–Ph7 left open): every beam, sweep, lance, twin beam, laser fence and Pulse Ring hurts
+  every target in groups `player`, `allies`, `enemies`, `asteroids` except its **owner set** (the host and every node in its `owner_group`). Enemy
+  ordnance is never hit. Rocket and mine blast rules (Ph5, Ph7) are unchanged. A kill by an enemy weapon scores for the player (no attribution system).
+- **Enemy beams are direct emitters** (`HurtBox.received_damage.emit`), like every beam in the project: they bypass `EnemyShield` bubbles and
+  `ArmorPlate`s; a plated Ram refuses them in its hull rule; the player's i-frames and shield charge apply. Re-hit at most once per `rehit_interval`
+  (≥ 0.5 s) per target, for both sides alike.
+- **The Ph1 roadmap's "telegraphs on `AttackController.fire_now`" is superseded for beams:** a beam owns its TELEGRAPH → ACTIVE → FADE timeline;
+  `AttackController` stays the round / rocket driver.
+- **`LineOfSight._blocks` becomes public as `LineOfSight.blocks(collider)`** (same behaviour), so beams clip at the same opt-in blockers.
+- The station's laser phase and hull sweep are **not** migrated (byte-identical); Ph11 moves them onto `EnemyBeam`.
+
+### Names and places later phases build on
+- **`assault/scenes/projectiles/enemy_beams/`:** `EnemyBeam extends Node2D` (`enum Kind { BEAM, SWEEP, LANCE, TWIN }`, `enum Phase { OFF, TELEGRAPH,
+  ACTIVE, FADE }`, append-only; `setup(host, owner_group)`, `start(telegraph_override, active_override)`, `tick(delta)`, `cancel()`, `set_endpoints(a, b)`,
+  `set_strained(on)`, `phase()`, `is_lethal()`, `is_committed()`, `hit_segments()`, `hazard_info()`; signals `phase_changed(phase: int)`,
+  `target_hit(target: Node2D, damage: int)`); emitter beams point along local +X; `EnergyRing` (the Pulse Ring; `PulseRing` stays Ph7's visual ring);
+  `EnergyHitScan` (static: `candidates`, `is_exempt`, `hits_band` via `Shape2D.collide` on exact hurtbox shapes, `bounding_radius`, `deliver`);
+  `EnemyBeamScenes` (`scene_for`, `export_of`). Scenes `beam.tscn`, `sweep_beam.tscn`, `lance.tscn`, `twin_beam.tscn`, `energy_ring.tscn`.
+- **Weapon tuning lives in the weapon scene exports** (the Ph5/Ph7 rule) — including the sweep's `sweep_arc_deg` / `sweep_rate`. Owner-driven clock: no
+  `Timer`, no `_process` clock (`self_tick` only for scene-placed props). Cover rays only on the physics step.
+- **Laser-wall hazard:** `kind = &"laser_wall"`, registered from TELEGRAPH start to FADE start, `radius = draw_half_width + hazard_pad` (24),
+  `velocity` = midpoint motion (leads a moving wall), `exempt_group` = the beam's owner group. `avoid_weight` 1.0 for fences, 0.5 for the twin wall.
+- **Fairness rules** (gate rows reading scene exports): static beams `telegraph ≥ 0.25 + (hit_half_width + r_player) / 360`; sweeps `sweep_rate ·
+  length ≤ 360`; lances `commit ≥ 0.5` and `telegraph − commit ≥ 0.25`; moving walls `advance_speed < 360` and `L/2 / 360 + 0.25 ≤ telegraph +
+  standoff / advance_speed`; rings `gap arc at max_radius/2 ≥ 3 · r_player`. A later difficulty tier (Ph16) must stay inside them.
+- **Defense turret** (`assault/scenes/enemies/defense_turret/`): `DefenseTurret extends BaseEnemy`, **no mover**, never rotates its root, NONE contact
+  and no ContactHitBox, `is_laser_blocking()` false; `DefenseTurretBrain` (`Phase { SCAN, NOTICING, ENGAGED, UNPOWERED }`); flat `DefenseTurretConfig`.
+  **`TurretMount` is the Ph10/Ph11 seam:** `enum Variant { BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY, PULSE_RING, LANCE, BEAM_CANNON }` (append-only),
+  `Phase { SCAN, TRACK, TELEGRAPH, FIRE, COOLDOWN, UNPOWERED }`, `setup(host, pools, owner_group)`, `tick(delta, target, can_fire)`, `scan()`,
+  `power_down()`, `pool_specs()`; it writes only its own rotation and never reads its host's type; pools are root children of the host. One mount scene
+  per variant (`TurretMountScenes`). Partial lead `lead_blend` 0.6; beams never re-aim after TELEGRAPH starts. Heavy emplacement =
+  `heavy_emplacement/` with the same scripts and two mount slots (BEAM_CANNON + BURST_CANNON).
+- **Structures:** `PowerSource` (`provides_power()`), `ShieldGenerator` (sustained 360° `EnemyShield` bubbles on every powered group member but itself,
+  the Support Ship's projected-shield path), `LaserEmitter` (fence post) are brainless or brain-only `BaseEnemy`s in `enemies`.
+  `assault/scenes/structures/`: `TurretGroup` (a **coordinator, not a parent**: spawns members deferred as siblings in its own parent, `owner_group`
+  `&"turret_group_<id>"`, `members()`, `is_powered()`, `add_power_provider(node)` — the **Ph20 jammer seam** — `request_telegraph()` stagger 0.3 s,
+  coverage rule ≥ 2 mounts in range at `coverage_radius`), `TurretGroupSlot`, presets; `LaserFence` (two posts + a TWIN beam, `Mode { STATIC, CYCLE }`,
+  collapses when a post dies). `set_powered(on)` on every member is the only power coupling; unpowered members go dark, stay destructible and never
+  restart in Ph8. Members spawned by a group, fence or pair spawner are announced with `EventBus.enemy_spawned_orphan`; the coordinators set
+  `counts_toward_wave_clear` / `counts_as_escape` false.
+- **`AssaultDrift`** (`global/components/assault_drift.gd`): static things scroll down at 60 px/s in Assault and free below the projectile world rect;
+  `velocity()` for carried hazards. Turrets fire only inside `EnemyWorld.view_rect()`.
+- **Twin-Laser Drones** (`assault/scenes/enemies/twin_laser_drone/`): `TwinLaserDrone`, `TwinLaserDroneBrain` (`Phase { FORM, TELEGRAPH, ADVANCE, BREAK,
+  WAIT, SOLO, DISENGAGE, LAUNCHED, IDLE, NOTICING, RETURNING }`), **`TwinLaserPair`** (RefCounted rig: `bind(a, b, controller)`, `owner_group`
+  `&"twin_pair_<id>"`, leader-only phase transitions, latched frame, identical per-drone `mover.boost()` advances, strain → collapse when
+  `| |A−B| − L | > length_tolerance` for `strain_seconds`), `TwinLaserPairSpawn`. The beam is a child of drone A. Killing either drone ends the beam.
+- **Laser Tender** (`assault/scenes/enemies/laser_tender/`): the "controller ship" of IDEAS §6.10, a new roster entry. **`launch_pair(points) ->
+  TwinLaserPair` is the Ph10 (Carrier hangars) / Ph11 (fortress bays) seam.** One live pair; rearm 7 s; Attack B places the wall across the player's
+  predicted path.
+- **Placement:** hub defense site (`hub_defense_site.tscn` under `EnemyContainer` by the TacticalSpace derelicts), hub draws 16 (tender) and 17 (pair);
+  level 1: `assault_pair` group in deep_space 3.0 s, a twin pair in deep_space 20.0 s, a tender in planet_approach 62.0 s, inside existing waves. Ph8
+  turret members, drones and tenders count as specialists in the frozen 2.5× gate.
+
+### Conventions
+- **No turret group, laser fence, twin pair or Laser Tender in an `ENEMIES_CLEARED` section** (guard rows in `test_engagement_deadline.gd`).
+- Every structure / turret root answers `is_laser_blocking() == false`. (Existing layer-1 enemy roots still stop the player's mining beam and are skipped as
+  its targets — a follow-up outside this phase.)
+- Assault twin rigs stay inside `constraint.inner_rect()`; drones and tenders get one attack per Assault life and measured exits.
+- Gate time: t1 must free ≥ 10 s (hard floor); allotments total 26.4 s, phase ends ≤ 234.8 s; a production speed-up is allowed only when bit-identical.
+
+### Deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| Turrets mounted on large ships, stations and bosses | Ph10 / Ph11 | `TurretMount` is the seam |
+| Station laser phase / hull sweep on `EnemyBeam` | Ph11 | Station byte-identical here |
+| Jammer-linked turret groups; `disables_abilities` | Ph9 / Ph20 | `add_power_provider()` / `set_powered()` |
+| Placed Assault structures beyond level 1's three spawns | Ph15 | Ph6 rule |
+| Encounters around defense sites; squad use of beams; re-pairing lone drones | Ph13 / Ph14 | |
+| Telegraph / lead / cadence by difficulty; decoy lance telegraph | Ph16 | must stay inside the fairness rules |
+| Beam and turret audio | Ph17 | |
+| Destroyed turrets left as wreckage (`wreck_chance` 0 here) | Ph19 | |
+| Heavy Shell consumer | Ph10 | unchanged from Ph4 |
+| Beams shooting down enemy ordnance; re-powering a dark group | owner option / Ph20 | |
+| Level-1 `LaserRay` columns as hazards, if t17's measurement says no or a gate refuses | Ph15 | |
