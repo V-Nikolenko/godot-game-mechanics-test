@@ -1,14 +1,12 @@
-## The warning beacon of a `Minefield`: an amber blink (the `StateLight` look) that marks the field as a placed
-## structure and goes dark with the last mine. Until the art task, a code-drawn placeholder: it draws itself only
-## while it has no `Sprite` child with a texture, so the PNG swaps in without a code change.
+## The warning beacon of a `Minefield`: a buoy sprite (`minefield_beacon.png`, the scene's `Sprite` child) that blinks
+## like a `StateLight` and marks the field as a placed structure. It goes dark (the sprite is hidden) with the field's
+## last mine. The blink is the sprite's alpha, never painted into the art.
 class_name MinefieldBeacon
 extends Node2D
 
-const AMBER := Color(1.0, 0.65, 0.1)
 const BLINK_PERIOD := 1.0
-const RADIUS := 7.0
 
-## False once the field's last mine is gone: nothing is drawn (a sprite is hidden) and the blink stops.
+## False once the field's last mine is gone: the sprite is hidden and the blink stops.
 var lit: bool = true : set = set_lit
 
 var _clock: float = 0.0
@@ -16,10 +14,7 @@ var _clock: float = 0.0
 
 func set_lit(value: bool) -> void:
 	lit = value
-	var sprite := get_node_or_null("Sprite") as Sprite2D
-	if sprite != null:
-		sprite.visible = value
-	queue_redraw()
+	_apply()
 
 
 ## 1.0 on the bright half of the blink, 0.35 on the dim half, 0 when dark.
@@ -33,17 +28,12 @@ func _process(delta: float) -> void:
 	if not lit:
 		return
 	_clock += delta
-	queue_redraw()
+	_apply()
 
 
-func _draw() -> void:
+func _apply() -> void:
 	var sprite := get_node_or_null("Sprite") as Sprite2D
-	if sprite != null and sprite.texture != null:
-		sprite.modulate.a = blink_alpha()
+	if sprite == null:
 		return
-	var a := blink_alpha()
-	if a <= 0.0:
-		return
-	var c := Color(AMBER, a)
-	draw_circle(Vector2.ZERO, RADIUS * 0.5, c)
-	draw_arc(Vector2.ZERO, RADIUS, 0.0, TAU, 24, Color(AMBER, a * 0.7), 1.5)
+	sprite.visible = lit
+	sprite.modulate.a = blink_alpha()

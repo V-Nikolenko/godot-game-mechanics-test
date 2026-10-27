@@ -1551,3 +1551,83 @@ func test_an_emp_detonation_leaves_a_self_freeing_blue_white_ring(mode: String =
 	assert_eq(EmpRing.DURATION, 0.35)
 	await _seconds(EmpRing.DURATION + 0.2)
 	assert_false(is_instance_valid(ring), "%s: it frees itself on its own clock" % mode)
+
+
+# ---------------------------------------------------------------------------------------------
+# Art (t9): every variant wears its own top-down sprite; the state lights are drawn on top
+# ---------------------------------------------------------------------------------------------
+
+const _MINE_ART_DIR := "res://assault/assets/sprites/projectiles/mines/"
+const _MINE_ART := {
+	EnemyMine.Variant.PROXIMITY: "mine_proximity.png",
+	EnemyMine.Variant.DRIFTING: "mine_drifting.png",
+	EnemyMine.Variant.HOMING: "mine_homing.png",
+	EnemyMine.Variant.CHAIN: "mine_chain.png",
+	EnemyMine.Variant.PULSE: "mine_pulse.png",
+	EnemyMine.Variant.EMP: "mine_emp.png",
+}
+
+
+## Every variant scene has its own `Sprite` (`Sprite2D`) at its centre with an opaque pixel under the middle, a transparent
+## corner (no painted-in card) and a body that is no longer the `body_color` circle; no two variants share a texture
+## (one silhouette per variant). The Bomber's mine is the PROXIMITY one.
+func test_every_variant_scene_wears_its_own_opaque_sprite_at_its_centre(variant: int = use_parameters(_MINE_ART.keys())) -> void:
+	var mine: EnemyMine = EnemyMineScenes.scene_for(variant).instantiate()
+	add_child_autofree(mine)
+	mine.process_mode = Node.PROCESS_MODE_DISABLED
+	var sprite := mine.get_node_or_null("Sprite") as Sprite2D
+	assert_not_null(sprite, "variant %d: a Sprite2D named Sprite" % variant)
+	if sprite == null:
+		return
+	assert_eq(sprite.position, Vector2.ZERO, "variant %d: at the mine's centre" % variant)
+	assert_true(sprite.show_behind_parent, "variant %d: the state lights are drawn on top of the sprite" % variant)
+	assert_not_null(sprite.texture, "variant %d: it has a texture" % variant)
+	assert_eq(sprite.texture.resource_path, _MINE_ART_DIR + _MINE_ART[variant], "variant %d: its own art" % variant)
+	var img := sprite.texture.get_image()
+	assert_eq(img.get_size(), Vector2i(24, 24), "variant %d: 24 x 24" % variant)
+	assert_gt(img.get_pixel(12, 12).a, 0.99, "variant %d: opaque at the centre" % variant)
+	assert_eq(img.get_pixel(0, 0).a, 0.0, "variant %d: transparent corner" % variant)
+	assert_eq(img.get_pixel(23, 23).a, 0.0, "variant %d: transparent corner" % variant)
+	assert_eq(EnemyMineScenes.export_of(variant, &"body_color", null), null, "variant %d: body_color is gone from the scene" % variant)
+
+
+func test_no_two_variants_share_a_texture() -> void:
+	var paths := {}
+	var masks: Array = []
+	for variant: int in _MINE_ART:
+		var path: String = _MINE_ART_DIR + _MINE_ART[variant]
+		assert_false(paths.has(path), "%s is used once" % path)
+		paths[path] = true
+		var img := (load(path) as Texture2D).get_image()
+		# A silhouette per variant: no two sprites have the same alpha mask.
+		var mask := PackedByteArray()
+		for y in img.get_height():
+			for x in img.get_width():
+				mask.append(1 if img.get_pixel(x, y).a > 0.5 else 0)
+		for other: PackedByteArray in masks:
+			assert_ne(mask, other, "%s has its own silhouette" % path)
+		masks.append(mask)
+
+
+## The homing mine's `Eye` sprite is hidden until the mine is noticing, sits toward the player, and is hidden again when it
+## stops; every other variant has none.
+func test_the_homing_eye_shows_only_while_noticing() -> void:
+	var mine: EnemyMine = EnemyMineScenes.scene_for(EnemyMine.Variant.HOMING).instantiate()
+	add_child_autofree(mine)
+	mine.process_mode = Node.PROCESS_MODE_DISABLED
+	var eye := mine.get_node("Eye") as Sprite2D
+	assert_eq(eye.texture.resource_path, _MINE_ART_DIR + "mine_homing_eye.png")
+	assert_false(eye.visible, "hidden while idle")
+	mine._noticing = true
+	mine._update_eye()
+	assert_true(eye.visible, "shown while noticing")
+	mine._noticing = false
+	mine._update_eye()
+	assert_false(eye.visible, "hidden again")
+	for variant: int in _MINE_ART:
+		if variant == EnemyMine.Variant.HOMING:
+			continue
+		var other: EnemyMine = EnemyMineScenes.scene_for(variant).instantiate()
+		add_child_autofree(other)
+		other.process_mode = Node.PROCESS_MODE_DISABLED
+		assert_null(other.get_node_or_null("Eye"), "variant %d has no eye" % variant)

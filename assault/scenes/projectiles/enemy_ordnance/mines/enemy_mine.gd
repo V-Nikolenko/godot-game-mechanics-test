@@ -449,18 +449,31 @@ func _unregister() -> void:
 	_registered = false
 
 
-## The state overlay on top of `EnemyOrdnance._draw()`. A homing mine shows its placeholder sensor eye (a lens that
-## looks at the player) while it is noticing; the art task replaces it with an `Eye` sprite.
+## The state overlay on top of `EnemyOrdnance._draw()` (the body is the scene's `Sprite`). A homing mine shows its `Eye`
+## sprite (a lens that looks at the player) while it is noticing.
 func _draw() -> void:
 	super()
-	if variant == Variant.HOMING and _noticing and not _done:
-		var target := TargetInfo.player(get_tree())
-		var look := (target.position - global_position).normalized() if target.has_target else _heading
-		draw_circle(look * body_radius * 0.6, body_radius * 0.38, Color(1.0, 0.85, 0.2))
+	_update_eye()
 	if variant == Variant.CHAIN and not _done and not _fizzling:
 		_draw_links()
 	if effect_ring_radius() > 0.0:
 		draw_arc(Vector2.ZERO, effect_ring_radius(), 0.0, TAU, 48, EmpRing.COLOR if variant == Variant.EMP else PulseRing.COLOR, 2.0)
+
+
+## HOMING: shows the `Eye` sprite, nudged toward the player, only while the mine is noticing and live.
+func _update_eye() -> void:
+	var eye := get_node_or_null("Eye") as Sprite2D
+	if eye == null:
+		return
+	var seeing: bool = variant == Variant.HOMING and _noticing and not _done
+	eye.visible = seeing
+	if not seeing:
+		return
+	var target := TargetInfo.player(get_tree())
+	var look := (target.position - global_position).normalized() if target.has_target else _heading
+	eye.position = look * body_radius * 0.4
+	if _sprite != null:
+		eye.modulate.a = _sprite.modulate.a
 
 
 ## The "fuse links": a faint dotted line to each neighbour. Where both ends are CHAIN mines only the one with the lower

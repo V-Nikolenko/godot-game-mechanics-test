@@ -89,3 +89,42 @@ func test_anomaly_is_violet_not_cyan() -> void:
 				bad += 1
 	assert_gt(seen, 1000, "anomaly has coloured pixels")
 	assert_lt(float(bad) / float(seen), 0.02, "anomaly stays violet / magenta")
+
+
+# ---------------------------------------------------------------------------------------------
+# The minefield beacon (Phase 7, t9)
+# ---------------------------------------------------------------------------------------------
+
+const BEACON := "res://assault/assets/sprites/projectiles/mines/minefield_beacon.png"
+
+
+func test_the_beacon_is_opaque_at_its_centre_and_transparent_at_its_corners() -> void:
+	var tex := load(BEACON) as Texture2D
+	assert_not_null(tex, "minefield_beacon.png loads")
+	var img := tex.get_image()
+	assert_eq(img.get_size(), Vector2i(32, 32), "a 32 x 32 buoy")
+	var opaque := 0
+	for y in img.get_height():
+		for x in img.get_width():
+			if img.get_pixel(x, y).a > 0.99:
+				opaque += 1
+	assert_lt(float(opaque) / float(img.get_width() * img.get_height()), OPAQUE_LIMIT, "the beacon is not a painted-in card")
+	assert_gt(img.get_pixel(16, 16).a, 0.99, "opaque at the centre")
+	for corner in [Vector2i(0, 0), Vector2i(31, 0), Vector2i(0, 31), Vector2i(31, 31)]:
+		assert_eq(img.get_pixel(corner.x, corner.y).a, 0.0, "corner %s is transparent" % corner)
+
+
+func test_the_minefield_beacon_uses_the_art_and_blinks_it() -> void:
+	var field: Minefield = load("res://assault/scenes/hazards/minefield/minefield.tscn").instantiate()
+	add_child_autofree(field)
+	var beacon := field.get_node("Beacon") as MinefieldBeacon
+	var sprite := beacon.get_node_or_null("Sprite") as Sprite2D
+	assert_not_null(sprite, "the beacon has a Sprite")
+	assert_eq(sprite.texture.resource_path, BEACON, "it wears minefield_beacon.png")
+	beacon._process(0.1)
+	assert_true(sprite.visible)
+	assert_eq(sprite.modulate.a, 1.0, "bright half of the blink")
+	beacon._process(0.5)
+	assert_almost_eq(sprite.modulate.a, 0.35, 0.001, "dim half of the blink")
+	beacon.lit = false
+	assert_false(sprite.visible, "dark with the last mine")

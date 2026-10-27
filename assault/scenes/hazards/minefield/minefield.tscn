@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/hazards/minefield/minefield.gd" id="1_field"]
 [ext_resource type="Script" path="res://assault/scenes/hazards/minefield/minefield_beacon.gd" id="2_beacon"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/projectiles/mines/minefield_beacon.png" id="3_art"]
 
 [node name="Minefield" type="Node2D"]
 script = ExtResource("1_field")
@@ -10,3 +11,6 @@ script = ExtResource("1_field")
 
 [node name="Beacon" type="Node2D" parent="."]
 script = ExtResource("2_beacon")
+
+[node name="Sprite" type="Sprite2D" parent="Beacon"]
+texture = ExtResource("3_art")

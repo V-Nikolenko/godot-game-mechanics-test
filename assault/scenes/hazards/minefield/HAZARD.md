@@ -2,7 +2,7 @@
 
 **Role / threat:** area denial the player has to remember. A `Minefield` (`minefield.tscn`, `Minefield extends Node2D`) holds
 `EnemyMine`s as `placed` mines (self-owned, hostility **ALL** by default, so they hurt and are set off by enemies as well as
-the player) and marks itself with an amber blinking beacon. Plan §2.10 (`docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md`).
+the player) and marks itself with a blinking warning-buoy beacon. Plan §2.10 (`docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md`).
 No level-1 placement: Phase 15 places Assault hazards; the hub placement is a later task.
 
 ## Nodes
@@ -10,7 +10,7 @@ No level-1 placement: Phase 15 places Assault hazards; the hub placement is a la
 | Node | Role |
 |---|---|
 | `Mines` (`Node2D`) | Parent of every mine. AUTHORED fields have their `EnemyMine` children here. |
-| `Beacon` (`MinefieldBeacon`) | Amber blink, code-drawn until the art task adds a `Sprite` child with a texture (then it draws nothing itself and the sprite blinks). Goes dark with the last mine. |
+| `Beacon` (`MinefieldBeacon`) | The `minefield_beacon.png` buoy (a `Sprite` child) blinking at 1 Hz (alpha 1.0 / 0.35, never painted in); hidden when the last mine is gone. |
 
 ## Exports
 

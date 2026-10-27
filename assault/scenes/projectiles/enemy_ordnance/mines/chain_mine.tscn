@@ -1,10 +1,11 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/projectiles/enemy_ordnance/mines/enemy_mine.gd" id="1_ord"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_ord"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="3_ord"]
 [ext_resource type="Script" path="res://global/components/projectile_lifetime.gd" id="4_ord"]
 [ext_resource type="Script" path="res://global/components/explosion_effect.gd" id="5_ord"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/projectiles/mines/mine_chain.png" id="6_art"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_hurt"]
 radius = 11.0
@@ -27,8 +28,7 @@ warning_time = 0.25
 blast_radius = 48.0
 blast_damage = 30
 mine_life = 30.0
-body_radius = 8.0
-body_color = Color(0.45, 0.22, 0.05, 1)
+body_radius = 11.0
 
 [node name="HurtBox" type="Area2D" parent="."]
 collision_layer = 512
@@ -64,3 +64,7 @@ min_velocity = 30.0
 max_velocity = 110.0
 min_scale = 1.5
 max_scale = 3.0
+
+[node name="Sprite" type="Sprite2D" parent="."]
+show_behind_parent = true
+texture = ExtResource("6_art")
