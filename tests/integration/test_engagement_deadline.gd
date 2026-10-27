@@ -842,3 +842,55 @@ func test_a_corvette_in_cloud_descents_last_wave_misses_the_timeout_on_the_rocke
 	assert_true(rows[0]["over"], "the delay-0 corvette must be flagged")
 	assert_gt(computed, section.enemies_cleared_timeout, "%.2f s must exceed %.1f s" % [computed,
 		section.enemies_cleared_timeout])
+
+
+# ── Phase 7 t15: the Mine Layer stays out of ENEMIES_CLEARED sections ──────────────────────────────────────────────
+# (epic plan docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md §2.16).
+#
+# A Mine Layer's mines persist after it leaves (`BulletPool.persist_after_owner_death`) and sit in the enemy container,
+# which `LevelDirector._wait_enemies_cleared` waits on, so a layer in an ENEMIES_CLEARED section holds it open for its
+# whole life plus its mines': `rel + engage_seconds + assault_mine_life + MARGIN`, before LAY's stall guard and any
+# exit term (both omitted: a lower bound, so any real figure only makes it later). Level 1 places its two layers in
+# DURATION sections (deep_space, planet_approach).
+
+const MINE_LAYER_CONFIG: MineLayerConfig = preload("res://assault/scenes/enemies/mine_layer/mine_layer_config.tres")
+
+
+func test_no_enemies_cleared_section_spawns_a_mine_layer() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.MINE_LAYER),
+			"%s spawns a Mine Layer in its waves" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+
+
+## Boundary for the row above: the `_section_has_scene` it rests on does see a layer once it is in the last wave.
+func test_a_mine_layer_added_to_cloud_descent_is_seen() -> void:
+	var section := _cloud_descent()
+	assert_false(_section_has_scene(section, WaveBuilder.MINE_LAYER), "sanity: cloud_descent has no Mine Layer today")
+	_add_to_last_wave(section, load(WaveBuilder.MINE_LAYER) as PackedScene, 0.0)
+	assert_true(_section_has_scene(section, WaveBuilder.MINE_LAYER), "a Mine Layer in cloud_descent's last wave must be seen")
+
+
+## Boundary (acceptance criterion): a layer added at delay 0 to cloud_descent's last wave computes more than its 10 s net
+## from the engagement budget and the mine life alone (0 + 9.0 + 9.0 + 0.5 = 18.5 s).
+func test_a_mine_layer_in_cloud_descents_last_wave_misses_the_timeout() -> void:
+	var c := MINE_LAYER_CONFIG
+	var tail := c.engage_seconds + c.assault_mine_life + MARGIN
+	var section := _cloud_descent()
+	_add_to_last_wave(section, load(WaveBuilder.MINE_LAYER) as PackedScene, 0.0)
+	var rows := _deadline_rows(section, WaveBuilder.MINE_LAYER, tail)
+	assert_eq(rows.size(), 1, "sanity: exactly the added Mine Layer")
+	if rows.size() != 1:
+		return
+	var computed: float = rows[0]["computed"]
+	gut.p("cloud_descent + Mine Layer at delay 0: %.2f s (budget + mine life) against %.1f s" % [computed,
+		section.enemies_cleared_timeout])
+	assert_almost_eq(computed, c.engage_seconds + c.assault_mine_life + MARGIN, 0.001, "0 + engage + mine life + margin")
+	assert_true(rows[0]["over"], "the delay-0 Mine Layer must be flagged")
+	assert_gt(computed, section.enemies_cleared_timeout, "%.2f s must exceed %.1f s" % [computed,
+		section.enemies_cleared_timeout])

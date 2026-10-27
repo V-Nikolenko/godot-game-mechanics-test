@@ -1641,3 +1641,97 @@ func test_the_wake_lives_in_the_layers_parent_container(mode: String = use_param
 	assert_not_null(brain.wake, "LAY starts a wake")
 	assert_eq(brain.wake.get_parent(), layer.get_parent(), "in the layer's parent container, not under the layer")
 	assert_true(brain.wake is Line2D)
+
+
+# ── Level 1 attack-in-budget (Phase 7 t15; epic plan §2.16) ──────────────────────────────────────
+#
+# Each Mine Layer level 1 places reaches LAY while its Assault budget still has time left, lays at least four mines
+# inside the view, and does one pass per life. Each placed spawn replays `rel - 1 s .. rel + engage_seconds + 7 s` of its
+# own section through a real `WaveManager` at the 8x clock (`tests/helpers/level1_slice_replay.gd`), among the real
+# traffic of that moment, and stops half a second after the layer enters DISENGAGE (its mines have landed by then).
+
+const Slice := preload("res://tests/helpers/level1_slice_replay.gd")
+const SLICE_POST_ROLL := 7.0
+const SLICE_SETTLE := 0.5
+const MIN_LEVEL1_MINES := 4
+
+
+## Replays `row`'s slice and reports `{ "targets", "active", "lay_left", "lays", "passes", "mines", "in_view",
+## "disengaged" }`. `tweak` edits the placed layer's private config.
+func _layer_slice(row: Dictionary, tweak: Callable = Callable()) -> Dictionary:
+	var from: float = float(row["rel"]) - Slice.PRE_ROLL
+	var to: float = float(row["rel"]) + SHIPPED.engage_seconds + SLICE_POST_ROLL
+	var waves := Slice.slice_waves(Slice.section(row["section"]), from, to)
+	var seen := {"lays": 0, "mines": [], "disengaged": false}
+	var last_phase := [-1]
+	var disengage_at := [-1.0]
+	var hook := func(ship: Node) -> void:
+		if tweak.is_valid():
+			tweak.call(ship)
+		if not seen.has("hooked"):
+			seen["hooked"] = true
+			(ship.get_node("Brain") as MineLayerBrain).mine_dropped.connect(func(m: EnemyMine) -> void:
+				(seen["mines"] as Array).append(m))
+	var observe := func(ship: BaseEnemy, t: float) -> bool:
+		if ship == null:
+			return true
+		var b := ship.get_node("Brain") as MineLayerBrain
+		if b.budget == null:
+			return false
+		seen["active"] = b.budget.active
+		if b.phase != last_phase[0]:
+			last_phase[0] = b.phase
+			if b.phase == MineLayerBrain.Phase.LAY:
+				seen["lays"] = int(seen["lays"]) + 1
+				seen["lay_left"] = b.budget.remaining()
+			if b.phase == MineLayerBrain.Phase.DISENGAGE:
+				seen["disengaged"] = true
+				disengage_at[0] = t
+		seen["passes"] = b.passes_started
+		if disengage_at[0] >= 0.0 and t >= disengage_at[0] + SLICE_SETTLE:
+			var view := EnemyWorld.view_rect(ship.get_tree())
+			var inside := 0
+			for m: EnemyMine in (seen["mines"] as Array):
+				if is_instance_valid(m) and view.has_point(m.global_position):
+					inside += 1
+			seen["in_view"] = inside
+			return true
+		return false
+	var out: Dictionary = await Slice.new().run(self, waves, to - from, WaveBuilder.MINE_LAYER, observe, hook)
+	seen["targets"] = out["targets"]
+	return seen
+
+
+func test_every_level1_mine_layer_spawn_lays_inside_its_budget_one_pass_per_life() -> void:
+	var rows := Slice.placed(WaveBuilder.MINE_LAYER)
+	assert_eq(rows.size(), 2, "sanity: level 1 places two Mine Layers")
+	_scale_clock()
+	for row: Dictionary in rows:
+		var label := "%s Mine Layer at %.1f s" % [row["section"], row["rel"]]
+		var seen := await _layer_slice(row)
+		gut.p("%s: lay_left %s, %d mines, %s in view, passes %s" % [label, seen.get("lay_left"),
+			(seen["mines"] as Array).size(), seen.get("in_view"), seen.get("passes")])
+		assert_eq(int(seen["targets"]), 1, "%s: exactly one layer in its slice" % label)
+		assert_true(bool(seen.get("active", false)), "%s: the Assault budget is live" % label)
+		assert_eq(int(seen["lays"]), 1, "%s: reaches LAY, once" % label)
+		assert_gt(float(seen.get("lay_left", 0.0)), 0.0, "%s: LAY starts before the budget expires" % label)
+		assert_gte(int(seen.get("in_view", 0)), MIN_LEVEL1_MINES, "%s: lays at least four mines inside the view" % label)
+		assert_eq(int(seen.get("passes", 0)), 1, "%s: one pass per life" % label)
+		assert_true(bool(seen["disengaged"]), "%s: leaves after its pass" % label)
+
+
+## Boundary: the same predicate on the deep_space spawn with a 2.0 s budget (private config) fails — the run-in alone
+## takes longer, so APPROACH expires into DISENGAGE and no line is laid — so the row above can fail.
+func test_a_level1_mine_layer_with_a_2_s_budget_never_reaches_lay() -> void:
+	var rows := Slice.placed(WaveBuilder.MINE_LAYER)
+	assert_eq(rows[0]["section"], &"deep_space", "sanity: the first placed layer is deep_space's")
+	_scale_clock()
+	var seen := await _layer_slice(rows[0], func(ship: Node) -> void:
+		(ship as MineLayer).config.engage_seconds = 2.0)
+	gut.p("deep_space Mine Layer, engage 2.0: %s lays, %d mines" % [seen["lays"], (seen["mines"] as Array).size()])
+	assert_eq(int(seen["targets"]), 1, "sanity: the layer spawned once")
+	assert_true(bool(seen.get("active", false)), "sanity: the Assault budget is live")
+	assert_true(bool(seen["disengaged"]), "sanity: its budget ran out inside the run")
+	assert_eq(int(seen["lays"]), 0, "no LAY with a 2 s budget")
+	assert_eq((seen["mines"] as Array).size(), 0, "no line laid")
+	assert_eq(SHIPPED.engage_seconds, 9.0, "the shipped config is untouched")

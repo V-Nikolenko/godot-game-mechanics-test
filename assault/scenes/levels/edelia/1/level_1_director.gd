@@ -21,6 +21,10 @@
 ## Pinned, with their density gate, by tests/integration/test_level1_specialist_spawns.gd; Cloud Descent's are also
 ## gated per entry against its ENEMIES_CLEARED timeout by test_engagement_deadline.gd and replayed by
 ## test_level1_specialist_exit.gd. No Bomber may go into an ENEMIES_CLEARED section (its mines outlive it).
+##
+## The Mine Layer lines (`b.mine_layer()`, Phase 7 t15: Deep Space 16.0 s from the left, Planet Approach 47.0 s from the right) follow the
+## same rule: AI spawns inside existing waves, pinned as `EXPECTED_PH7` and counted as specialists in the same density gate. No Mine Layer
+## may go into an ENEMIES_CLEARED section (its mines outlive it); test_engagement_deadline.gd gates that.
 extends Node
 
 const _MISSION_NUMBER: int = 1
@@ -386,6 +390,7 @@ func _build_section_1() -> LevelSection:
 		# 16.0 s — line-formation drones across the top
 		b.wave(16.0, [
 			b.drone().formation(b.line_formation(4, 60)).at(0, -400),
+			b.mine_layer().at(-400, -160),  # AI, no rail; enters from the left; never in an ENEMIES_CLEARED section (mines persist)
 		]),
 
 		# 17.0 s — 4 drone cluster center + side fighter
@@ -675,6 +680,7 @@ func _build_section_2() -> LevelSection:
 		# 47.0 s — fighter finisher entering from off-screen right
 		b.wave(47.0, [
 			b.fighter().at(500, -30),
+			b.mine_layer().at(400, -160),  # AI, no rail; enters from the right; never in an ENEMIES_CLEARED section (mines persist)
 		]),
 
 		# 50.0 s — 5 fighters V formation down the middle (+ flanking drones)

@@ -422,6 +422,7 @@ func _ai_lives() -> Dictionary:
 			"note": "max(straight %.2f, measured curved %.2f)" % [ram_straight, ram_curved]},
 	}
 	out.merge(_ph5_lives())
+	out.merge(_ph7_lives())
 	for path: String in out:
 		var k: Dictionary = out[path]
 		k["life"] = float(k["engage"]) + float(k["deferral"]) + float(k["exit"])
@@ -579,6 +580,9 @@ func before_all() -> void:
 		_SUPPORT_SHIP: SpecialistExitProbe.worst_disengage(self, load(_SUPPORT_SHIP), SupportShipBrain.Phase.DISENGAGE,
 			support_speeds, _PROBE_CAP, corridor),
 	}
+	var layer_speeds: Array[float] = [_LAYER_CONFIG.exit_speed, 10.0]
+	_ph7_exit = SpecialistExitProbe.worst_disengage(self, load(_MINE_LAYER), MineLayerBrain.Phase.DISENGAGE,
+		layer_speeds, _PROBE_CAP, corridor, _layer_probe_prepare)
 
 
 ## A corvette never fires in DISENGAGE, so its probe instances skip prewarming 16 rockets each (2166 runs).
@@ -588,8 +592,19 @@ func _empty_pools(ship: Node) -> void:
 			(child as BulletPool).pool_size = 0
 
 
+## The layer's probe instances skip prewarming every pool (as the corvette's do) and switch the tail drop off (`tail_range` 0 on
+## the private config copy). The probe reuses one world for 2166 runs and a mine outlives its layer, so a tail mine left by
+## one run would sit in the way of every later one and the figure would measure that litter, not the exit; a mine dropped
+## behind an exiting layer is outside its avoidance cone and never changes its exit (checked by hand: 3 s with and without).
+func _layer_probe_prepare(ship: Node) -> void:
+	_empty_pools(ship)
+	(ship as MineLayer).config.tail_range = 0.0
+
+
 func _name_of(path: String) -> String:
-	return _KIND_NAMES[path] if _KIND_NAMES.has(path) else _PH5_KIND_NAMES[path]
+	if _KIND_NAMES.has(path):
+		return _KIND_NAMES[path]
+	return _PH5_KIND_NAMES[path] if _PH5_KIND_NAMES.has(path) else _PH7_KIND_NAMES[path]
 
 
 func _ph5_lives() -> Dictionary:
@@ -759,6 +774,200 @@ func test_an_extra_corvette_at_the_peak_fails_the_count_gate() -> void:
 	assert_gt(float(after["count"]), limit, "the count gate must reject this")
 
 
+# ── Phase 7 t15: the Mine Layer joins level 1 (epic plan docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md §2.16) ─────────
+#
+# Two lines, each inside an existing wave of a DURATION section, AI-driven with no rail: deep_space's 16.0 s wave
+# (entering from the left) and planet_approach's 47.0 s wave (from the right). They are pinned in `EXPECTED_PH7`,
+# separately from the frozen 50-row `EXPECTED` and from `EXPECTED_PH5`.
+#
+# The layer COUNTS AS A SPECIALIST in the 2.5x gate (`_ai_lives()` merges it in); the frozen `_LEGACY_PEAK_SPECIALISTS`
+# is unchanged. Its life, every term read from the shipped config or measured:
+#   engage_seconds + LAY's stall guard (the longest pass: ZIGZAG) + _TICK_SLACK + measured exit
+# The exit is `SpecialistExitProbe.worst_disengage()` over `corridor_starts()` at [exit_speed, 10], with no planned
+# pass: the layer leaves along its current heading, and entering DISENGAGE releases the corridor constraint (as the
+# Bomber's does), so the probe measures the real exit and not the `AssaultCorridorConstraint`'s hard band. The life
+# also covers the run-in, which sits inside the engagement budget (APPROACH). Its mines outlive it by
+# `assault_mine_life` (the spill-over rows below add that term, as a corvette's rocket life).
+
+const _MINE_LAYER := WaveBuilder.MINE_LAYER
+const _PH7_KIND_NAMES := {_MINE_LAYER: "MINE_LAYER"}
+const _LAYER_CONFIG: MineLayerConfig = preload("res://assault/scenes/enemies/mine_layer/mine_layer_config.tres")
+
+const EXPECTED_PH7: Array[Dictionary] = [
+	{"section": &"deep_space", "kind": "MINE_LAYER", "trigger": 16.00, "offset": Vector2(-400.0, -160.0), "delay": 0.00},
+	{"section": &"planet_approach", "kind": "MINE_LAYER", "trigger": 47.00, "offset": Vector2(400.0, -160.0), "delay": 0.00},
+]
+
+## The layer's corridor-start DISENGAGE probe, filled once in `before_all()`.
+var _ph7_exit: Dictionary = {}
+
+
+## The longest LAY can run: `MineLayerBrain`'s stall guard on the ZIGZAG path (S -> mine 0 -> ... -> mine 5 -> E), read
+## from the shipped config. The ARC path is shorter.
+func _lay_stall_guard() -> float:
+	var c := _LAYER_CONFIG
+	var lead := c.pass_length * 0.5 - float(c.mines_per_pass - 1) * 0.5 * c.mine_step
+	var chord := Vector2(c.mine_step, 2.0 * c.zigzag_amplitude).length()
+	var path := 2.0 * Vector2(lead, c.zigzag_amplitude).length() + float(c.mines_per_pass - 1) * chord
+	return path * MineLayerBrain.STALL_FACTOR / c.lay_speed + MineLayerBrain.STALL_SLACK
+
+
+func _ph7_lives() -> Dictionary:
+	return {
+		_MINE_LAYER: {"engage": _LAYER_CONFIG.engage_seconds, "deferral": _lay_stall_guard() + _TICK_SLACK,
+			"exit": float(_ph7_exit["seconds"]), "note": "measured corridor exit, no planned pass"},
+	}
+
+
+func _actual_ph7_spawns(sections: Array[LevelSection]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+				if not _PH7_KIND_NAMES.has(path):
+					continue
+				assert_null(entry.formation, "no Phase 7 line uses a formation; the pin has no formation column")
+				out.append({"section": section.section_name, "kind": _PH7_KIND_NAMES[path],
+					"trigger": wave.trigger_time, "offset": entry.base_offset, "delay": entry.spawn_delay})
+	return out
+
+
+func test_pinned_phase7_spawns_match_todays_data() -> void:
+	var actual := _actual_ph7_spawns(_build_sections())
+	assert_eq(actual.size(), EXPECTED_PH7.size(), "the number of Mine Layer entries changed")
+	assert_eq(actual, EXPECTED_PH7, "a Mine Layer spawn's section, trigger, offset or delay changed")
+
+
+## 2 rows, one in deep_space (from the left) and one in planet_approach (from the right), none in an ENEMIES_CLEARED
+## section (`test_engagement_deadline.gd` says why), and each shares its wave with other traffic (no new wave).
+func test_the_phase7_pin_itself_is_internally_consistent() -> void:
+	var by_section: Dictionary = {}
+	for row: Dictionary in EXPECTED_PH7:
+		by_section[row["section"]] = int(by_section.get(row["section"], 0)) + 1
+		assert_eq(row["kind"], "MINE_LAYER")
+	assert_eq(EXPECTED_PH7.size(), 2)
+	assert_eq(int(by_section.get(&"deep_space", 0)), 1, "deep_space Phase 7 row count changed")
+	assert_eq(int(by_section.get(&"planet_approach", 0)), 1, "planet_approach Phase 7 row count changed")
+	assert_eq(by_section.size(), 2, "Mine Layers spawn only in deep_space and planet_approach")
+	assert_lt((EXPECTED_PH7[0]["offset"] as Vector2).x, 0.0, "deep_space's layer enters from the left")
+	assert_gt((EXPECTED_PH7[1]["offset"] as Vector2).x, 0.0, "planet_approach's layer enters from the right")
+
+
+## Each layer rides inside an existing wave (another ship in the same wave), so no wave's effective trigger moved.
+func test_each_level1_mine_layer_shares_an_existing_wave() -> void:
+	var checked := 0
+	for section: LevelSection in _build_sections():
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if entry.ship_scene == null or entry.ship_scene.resource_path != _MINE_LAYER:
+					continue
+				checked += 1
+				assert_gt(wave.entries.size(), 1, "%s @ %.1f s: the layer joins a wave that already existed" % [
+					section.section_name, wave.trigger_time])
+	assert_eq(checked, 2, "sanity: both layers were checked")
+
+
+## Boundary: a Phase 7 line's delay changed in memory must not match the pin (fresh sections; nothing shared mutated).
+func test_a_phase7_lines_delay_changed_fails_the_pin() -> void:
+	var sections := _build_sections()
+	var mutated := false
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if not mutated and entry.ship_scene and entry.ship_scene.resource_path == _MINE_LAYER:
+					entry.spawn_delay += 1.0
+					mutated = true
+	assert_true(mutated, "sanity: level 1 has a Mine Layer line to mutate")
+	assert_ne(_actual_ph7_spawns(sections), EXPECTED_PH7, "a Mine Layer line with a changed delay must not match the pin")
+
+
+## The layer lines have no rail (`.move()`, `.free_after()` or `.shoot_*()`); 50 + 5 + 2 specialist lines in all.
+func test_phase7_lines_have_no_rail() -> void:
+	var sections := _build_sections()
+	var ph7 := 0
+	for row: Dictionary in _actual_ph7_spawns(sections):
+		if MIGRATED_SECTIONS.has(row["section"]):
+			ph7 += 1
+	assert_eq(ph7, 2, "both Mine Layer lines are in a migrated section")
+	assert_eq(_rail_rows(sections, MIGRATED_SECTIONS, _PH7_KIND_NAMES), [] as Array[String],
+		"these Mine Layer lines have .move(), .free_after() or shoot_*()")
+
+
+## Boundary: a layer line given `.move()` is reported by the same check, and only that line.
+func test_a_phase7_line_given_move_fails_the_no_rail_check() -> void:
+	var sections := _build_sections()
+	var mutated := false
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if not mutated and entry.ship_scene and entry.ship_scene.resource_path == _MINE_LAYER:
+					entry.movement = StraightMovement.new()
+					mutated = true
+	assert_true(mutated, "sanity: level 1 has a Mine Layer line to mutate")
+	assert_eq(_rail_rows(sections, MIGRATED_SECTIONS, _PH7_KIND_NAMES).size(), 1,
+		"a Mine Layer line with .move() must be reported")
+
+
+## LAY's stall guard is the plan's 5.67 s (ZIGZAG), so the life below defers by the worst case, not a typed number.
+func test_the_lay_deferral_is_the_zigzag_stall_guard() -> void:
+	assert_almost_eq(_lay_stall_guard(), 5.67, 0.02, "732 px * 1.2 / 170 + 0.5")
+
+
+## Sanity boundary on the corridor probe (the Phase 5 shape), plus the row the plan names: the probed layer is released
+## from the corridor in DISENGAGE, so the figure is the real exit and not the constraint's cap.
+func test_phase7_measured_exit_is_real_and_the_corridor_is_released() -> void:
+	var rect := _world_rect()
+	var floor_distance := minf(rect.size.x, rect.size.y) / 2.0
+	var corridor := SpecialistExitProbe.corridor_starts(AssaultCorridorConstraint.new().inner_rect(), rect)
+	var e: Dictionary = _ph7_exit
+	gut.p("MINE_LAYER: slowest corridor DISENGAGE %.2f s over %d runs (%s)" % [e["seconds"], e["runs"], e["start"]])
+	assert_eq(int(e["runs"]), corridor.size() * 2, "every corridor start x speed ran")
+	assert_eq(int(e["capped"]), 0, "a probe run never left the world")
+	assert_gte(float(e["seconds"]), floor_distance / _LAYER_CONFIG.exit_speed,
+		"the slowest exit is at least the centre's straight run to its edge")
+	var h: RefCounted = SpecialistExitProbe.HARNESS.assault()
+	add_child_autofree(h.root)
+	var layer := (load(_MINE_LAYER) as PackedScene).instantiate() as MineLayer
+	layer.global_position = SpecialistExitProbe.MID_VIEW
+	h.root.add_child(layer)
+	layer.set_physics_process(false)
+	(layer.get_node("Brain") as MineLayerBrain).enter_phase(MineLayerBrain.Phase.DISENGAGE)
+	var mover := layer.get_node("EnemyMover") as EnemyMover
+	assert_true(mover.constraint_released(), "DISENGAGE releases the corridor, as the probe's layer does")
+	assert_eq(mover.max_speed, _LAYER_CONFIG.exit_speed, "and exits at exit_speed")
+
+
+## Boundary (acceptance criterion): an extra Mine Layer at planet_approach's measured peak fails the count gate.
+## The gate counts the layer: planet_approach's own layer (47 s) does not move the peak (7 at 98.0 s), and a second one
+## at that moment takes it to 8 > 7.5; deep_space stays under its 12.5.
+func test_an_extra_mine_layer_at_the_peak_fails_the_count_gate() -> void:
+	var lives := _ai_lives()
+	var section := _section(_build_sections(), &"planet_approach")
+	assert_not_null(section, "sanity: level 1 has planet_approach")
+	if section == null:
+		return
+	var limit := _COUNT_RATIO * int(_LEGACY_PEAK_SPECIALISTS[&"planet_approach"])
+	var before := _peak(_ai_intervals(section, lives))
+	assert_eq(int(before["count"]), 7, "sanity: planet_approach peaks at 7 alive, one under its 7.5 limit")
+	var at: float = before["at"]
+	var index := section.waves.size()
+	for i in section.waves.size():
+		if section.waves[i].trigger_time > at:
+			index = i
+			break
+	var b := WaveBuilder.new()
+	section.waves.insert(index, b.wave(at, [b.mine_layer().at(400, -160)]))
+	var effective := -INF
+	for i in index + 1:
+		effective = maxf(effective, section.waves[i].trigger_time)
+	assert_almost_eq(effective, at, 0.0001, "sanity: the inserted wave sits in list order")
+	var after := _peak(_ai_intervals(section, lives))
+	gut.p("planet_approach + mine layer at %.2f s: peak %d -> %d (limit %.1f)" % [at, before["count"], after["count"], limit])
+	assert_eq(int(after["count"]), int(before["count"]) + 1, "the layer adds exactly one ship at the peak")
+	assert_gt(float(after["count"]), limit, "the count gate must reject this")
+
+
 # ── Spill-over (§2.18) ────────────────────────────────────────────────────────────────────────────────────────────
 #
 # `LevelDirector` loads a section's waves the moment the section starts (`transition_in_duration` is the background's
@@ -794,11 +1003,19 @@ func _next_cleared_deadline(sections: Array[LevelSection], index: int) -> float:
 	return INF
 
 
-## The intervals (plus a corvette's rocket life) still alive at `deadline`, as readable strings.
+## How long a kind's ordnance outlives it in the container: a corvette's rockets, a Mine Layer's mines (their Assault
+## `assault_mine_life`, counted as a rocket life is). Nothing else persists.
+func _ordnance_tail(kind: String, rocket_life: float) -> float:
+	if kind == "MISSILE_CORVETTE":
+		return rocket_life
+	return _LAYER_CONFIG.assault_mine_life if kind == "MINE_LAYER" else 0.0
+
+
+## The intervals (plus a corvette's rocket life, a layer's mine life) still alive at `deadline`, as readable strings.
 func _spills(intervals: Array[Dictionary], deadline: float, rocket_life: float) -> Array[String]:
 	var out: Array[String] = []
 	for a: Dictionary in intervals:
-		var end: float = float(a["end"]) + (rocket_life if a["kind"] == "MISSILE_CORVETTE" else 0.0)
+		var end: float = float(a["end"]) + _ordnance_tail(a["kind"], rocket_life)
 		if end >= deadline:
 			out.append("%s spawned %.2f s, gone %.2f s >= %.2f s" % [a["kind"], a["start"], end, deadline])
 	return out
@@ -820,7 +1037,7 @@ func test_no_specialist_outlives_the_next_enemies_cleared_sections_last_trigger(
 		var intervals := _ai_intervals(section, lives)
 		var latest := 0.0
 		for a: Dictionary in intervals:
-			latest = maxf(latest, float(a["end"]) + (rocket_life if a["kind"] == "MISSILE_CORVETTE" else 0.0))
+			latest = maxf(latest, float(a["end"]) + _ordnance_tail(a["kind"], rocket_life))
 		gut.p("%s: last specialist (or rocket) gone %.2f s after the section starts; next ENEMIES_CLEARED last trigger at %.2f s"
 			% [section.section_name, latest, deadline])
 		assert_lt(deadline, INF, "sanity: an ENEMIES_CLEARED section follows %s" % section.section_name)
@@ -843,3 +1060,18 @@ func test_a_corvette_whose_rockets_cross_the_deadline_is_flagged() -> void:
 	var early: Array[Dictionary] = [{"start": 0.0, "end": deadline - rocket_life - 1.0, "kind": "MISSILE_CORVETTE"}]
 	assert_eq(_spills(late, deadline, rocket_life).size(), 1, "a corvette whose rockets outlive the deadline is flagged")
 	assert_eq(_spills(early, deadline, rocket_life).size(), 0, "one whose rockets are gone in time is not")
+
+
+## Boundary: a synthetic Mine Layer that has itself left by 1 s before the deadline is still flagged once its mines'
+## `assault_mine_life` is added, and one whose mines are gone in time is not — the predicate counts the mine term.
+func test_a_mine_layer_whose_mines_cross_the_deadline_is_flagged() -> void:
+	var rocket_life := _rocket_max_life()
+	var sections := _build_sections()
+	var index := sections.find(_section(sections, &"planet_approach"))
+	var deadline := _next_cleared_deadline(sections, index)
+	var mine_life := _LAYER_CONFIG.assault_mine_life
+	assert_gt(mine_life, 1.0, "sanity: the shipped Assault mine life is real")
+	var late: Array[Dictionary] = [{"start": 0.0, "end": deadline - 1.0, "kind": "MINE_LAYER"}]
+	var early: Array[Dictionary] = [{"start": 0.0, "end": deadline - mine_life - 1.0, "kind": "MINE_LAYER"}]
+	assert_eq(_spills(late, deadline, rocket_life).size(), 1, "a layer whose mines outlive the deadline is flagged")
+	assert_eq(_spills(early, deadline, rocket_life).size(), 0, "one whose mines are gone in time is not")

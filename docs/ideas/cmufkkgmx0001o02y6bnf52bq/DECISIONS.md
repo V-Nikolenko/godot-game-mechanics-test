@@ -2770,3 +2770,22 @@ Plan §2.15 as written, no deviations.
   real physics frames on the 8x clock).
 - **Hub frame time** (headless `Performance.TIME_PHYSICS_PROCESS + TIME_PROCESS`, 600 frames, full `sector_hub.tscn`): about 7.3 ms mean with the layer and the field live against about 5.5 ms with both
   removed (two runs), i.e. roughly +1.8 ms of script time per frame for the layer, its idle, nine mines and the extra hazard registrations. No rendering is included.
+
+### Phase 7, built in t15 (level 1 Mine Layers) (2026-10-27)
+
+- **Placement:** `b.mine_layer().at(-400, -160)` inside `deep_space`'s existing 16.0 s wave and `b.mine_layer().at(400, -160)` inside `planet_approach`'s existing 47.0 s wave
+  (`level_1_director.gd`). AI spawns, no `.move()` / `.free_after()`, no new wave, so no other wave's effective trigger moved. None is in an ENEMIES_CLEARED section.
+- **Gates:** `test_level1_specialist_spawns.gd` gained `EXPECTED_PH7` (2 rows) with its row-count, shared-wave, delay and no-rail rows; the layer is merged into `_ai_lives()` as a specialist
+  (life = `engage_seconds` + the ZIGZAG stall guard 5.67 s + `_TICK_SLACK` + the measured corridor exit **7.53 s**, from `SpecialistExitProbe` at `[exit_speed, 10]` over 2166 runs); `_spills()` adds
+  `assault_mine_life` for a layer (`_ordnance_tail`). Peaks: deep_space **8** (limit 12.5), planet_approach **7** (limit 7.5); an extra layer at planet_approach's peak (98.0 s) takes it to 8 and fails.
+  Spill-over: deep_space's last specialist or mine is gone 47.2 s into its section, planet_approach's 116.4 s, against ENEMIES_CLEARED last triggers at 60.0 s and 186.0 s.
+  `test_engagement_deadline.gd` gained "no ENEMIES_CLEARED section spawns a Mine Layer", a detection row and a boundary (a layer at delay 0 in cloud_descent computes 18.5 s of a 10 s timeout).
+  `test_mine_layer.gd` gained the attack-in-budget slice replays (8x): from both spawns the layer reaches LAY with 6.3 s of budget left, lays 6 mines, all 6 inside `view_rect()`, one pass per life;
+  a 2.0 s budget reaches no LAY.
+- **Probe preparation (deviation from "plain probe"):** the layer's probe instances skip pool prewarming and set `config.tail_range = 0`. The probe reuses one world for 2166 runs and mines persist after
+  their layer (`persist_after_owner_death`), so tail mines left by one run sit in the way of the next and the first attempt measured 20 s (capped) instead of the real exit; a tail mine behind an
+  exiting layer does not change its exit (3 s with and without in a single run). The probed layer reports `constraint_released()` and `max_speed == exit_speed` (asserted).
+- **No offset or wave had to move.** No deviation from plan §2.16.
+- Gate time: GUT 210.86 -> 220.65 s (2329 -> 2344 tests; allotment 8.0 s, used about 9.7 s): `test_level1_specialist_spawns.gd` alone 13.3 -> 20.7 s (+7.4 s, nearly all the layer's 2166-run exit probe
+  in `before_all`: 2166 instantiations and about 650k hand-ticks) and `test_mine_layer.gd` 2.9 -> 5.2 s (+2.3 s, two slice replays and one boundary replay). The probe grid is the plan's, so it was
+  not cut; 1.7 s over the task's allotment, 19.4 s under the 240 s ceiling.
