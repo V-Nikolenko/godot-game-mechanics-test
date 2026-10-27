@@ -592,13 +592,21 @@ func _empty_pools(ship: Node) -> void:
 			(child as BulletPool).pool_size = 0
 
 
-## The layer's probe instances skip prewarming every pool (as the corvette's do) and switch the tail drop off (`tail_range` 0 on
-## the private config copy). The probe reuses one world for 2166 runs and a mine outlives its layer, so a tail mine left by
+## The layer's probe instances skip prewarming every pool (as the corvette's do) and switch the tail drop off (`tail_range` 0
+## on the private config copy). The probe reuses one world for 2166 runs and a mine outlives its layer, so a tail mine left by
 ## one run would sit in the way of every later one and the figure would measure that litter, not the exit; a mine dropped
 ## behind an exiting layer is outside its avoidance cone and never changes its exit (checked by hand: 3 s with and without).
+##
+## The probe world's player stub also leaves group `player` (rule 3, tests/README.md -> Gate time): DISENGAGE reads the player
+## in exactly two places, the tail drop (off above) and the v-bar update (read only by the planner, which a layer in
+## DISENGAGE never runs again), so with no target the per-tick `TargetInfo.player()` finds nobody and the prediction and tail
+## checks return at their first line, and the exit is bit-identical (7.53 s over 2166 runs, 0 capped, before and after).
+## The stub belongs to the probe's own world, which `worst_disengage()` frees before it returns.
 func _layer_probe_prepare(ship: Node) -> void:
 	_empty_pools(ship)
 	(ship as MineLayer).config.tail_range = 0.0
+	for player in get_tree().get_nodes_in_group(&"player"):
+		player.remove_from_group(&"player")
 
 
 func _name_of(path: String) -> String:

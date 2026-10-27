@@ -23,6 +23,9 @@ const POOLS := {
 const STUB_RADIUS := 12.0
 
 const _SPEEDUP := 8
+## The level-1 slice replays run twice as fast: they assert on seconds of budget and counts of mines, not on a tolerance under
+## one idle frame (0.27 game-s at 16x), and they are the file's only clock-bound cost (tests/README.md -> Gate time, t15).
+const _SLICE_SPEEDUP := 16
 var _saved_time_scale: float = 1.0
 var _saved_ticks: int = 60
 var _saved_max_steps: int = 8
@@ -33,16 +36,16 @@ func after_each() -> void:
 	_restore_clock()
 
 
-func _scale_clock() -> void:
+func _scale_clock(speedup: int = _SPEEDUP) -> void:
 	if _clock_scaled:
 		return
 	_saved_time_scale = Engine.time_scale
 	_saved_ticks = Engine.physics_ticks_per_second
 	_saved_max_steps = Engine.max_physics_steps_per_frame
 	_clock_scaled = true
-	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
-	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
-	Engine.time_scale = _saved_time_scale * _SPEEDUP
+	Engine.physics_ticks_per_second = _saved_ticks * speedup
+	Engine.max_physics_steps_per_frame = _saved_max_steps * speedup
+	Engine.time_scale = _saved_time_scale * speedup
 
 
 func _restore_clock() -> void:
@@ -1705,7 +1708,7 @@ func _layer_slice(row: Dictionary, tweak: Callable = Callable()) -> Dictionary:
 func test_every_level1_mine_layer_spawn_lays_inside_its_budget_one_pass_per_life() -> void:
 	var rows := Slice.placed(WaveBuilder.MINE_LAYER)
 	assert_eq(rows.size(), 2, "sanity: level 1 places two Mine Layers")
-	_scale_clock()
+	_scale_clock(_SLICE_SPEEDUP)
 	for row: Dictionary in rows:
 		var label := "%s Mine Layer at %.1f s" % [row["section"], row["rel"]]
 		var seen := await _layer_slice(row)
@@ -1725,7 +1728,7 @@ func test_every_level1_mine_layer_spawn_lays_inside_its_budget_one_pass_per_life
 func test_a_level1_mine_layer_with_a_2_s_budget_never_reaches_lay() -> void:
 	var rows := Slice.placed(WaveBuilder.MINE_LAYER)
 	assert_eq(rows[0]["section"], &"deep_space", "sanity: the first placed layer is deep_space's")
-	_scale_clock()
+	_scale_clock(_SLICE_SPEEDUP)
 	var seen := await _layer_slice(rows[0], func(ship: Node) -> void:
 		(ship as MineLayer).config.engage_seconds = 2.0)
 	gut.p("deep_space Mine Layer, engage 2.0: %s lays, %d mines" % [seen["lays"], (seen["mines"] as Array).size()])

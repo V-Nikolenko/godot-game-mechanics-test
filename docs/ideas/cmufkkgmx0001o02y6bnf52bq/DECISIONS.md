@@ -2780,12 +2780,19 @@ Plan §2.15 as written, no deviations.
   `assault_mine_life` for a layer (`_ordnance_tail`). Peaks: deep_space **8** (limit 12.5), planet_approach **7** (limit 7.5); an extra layer at planet_approach's peak (98.0 s) takes it to 8 and fails.
   Spill-over: deep_space's last specialist or mine is gone 47.2 s into its section, planet_approach's 116.4 s, against ENEMIES_CLEARED last triggers at 60.0 s and 186.0 s.
   `test_engagement_deadline.gd` gained "no ENEMIES_CLEARED section spawns a Mine Layer", a detection row and a boundary (a layer at delay 0 in cloud_descent computes 18.5 s of a 10 s timeout).
-  `test_mine_layer.gd` gained the attack-in-budget slice replays (8x): from both spawns the layer reaches LAY with 6.3 s of budget left, lays 6 mines, all 6 inside `view_rect()`, one pass per life;
+  `test_mine_layer.gd` gained the attack-in-budget slice replays (16x, see Gate time below): from both spawns the layer reaches LAY with 6.3 s of budget left, lays 6 mines, all 6 inside `view_rect()`, one pass per life;
   a 2.0 s budget reaches no LAY.
-- **Probe preparation (deviation from "plain probe"):** the layer's probe instances skip pool prewarming and set `config.tail_range = 0`. The probe reuses one world for 2166 runs and mines persist after
+- **Probe preparation (deviation from "plain probe"):** the layer's probe instances skip pool prewarming, set `config.tail_range = 0` and drop the probe world's player stub from group `player` (rule 3, below). The probe reuses one world for 2166 runs and mines persist after
   their layer (`persist_after_owner_death`), so tail mines left by one run sit in the way of the next and the first attempt measured 20 s (capped) instead of the real exit; a tail mine behind an
   exiting layer does not change its exit (3 s with and without in a single run). The probed layer reports `constraint_released()` and `max_speed == exit_speed` (asserted).
 - **No offset or wave had to move.** No deviation from plan §2.16.
-- Gate time: GUT 210.86 -> 220.65 s (2329 -> 2344 tests; allotment 8.0 s, used about 9.7 s): `test_level1_specialist_spawns.gd` alone 13.3 -> 20.7 s (+7.4 s, nearly all the layer's 2166-run exit probe
-  in `before_all`: 2166 instantiations and about 650k hand-ticks) and `test_mine_layer.gd` 2.9 -> 5.2 s (+2.3 s, two slice replays and one boundary replay). The probe grid is the plan's, so it was
-  not cut; 1.7 s over the task's allotment, 19.4 s under the 240 s ceiling.
+- Gate time: GUT 210.86 -> 218.44 s (2329 -> 2344 tests; allotment 8.0 s, used 7.6 s). The first attempt measured 220.65 s (1.7 s over) and the review sent it back; the recovery used the
+  `tests/README.md` -> Gate time rules, with no grid, tick count, speed list or assertion cut:
+  - **Rule 3, the layer's exit probe** (`_layer_probe_prepare`): the probe world's player stub leaves group `player`, so `TargetInfo.player()` finds nobody and the brain's per-tick prediction and tail
+    check return at their first line. DISENGAGE reads the player nowhere else, so the exit is bit-identical: **7.53 s over 2166 runs, 0 capped, `constraint_released()` true** before and after. Measured in
+    isolation the probe went 7.6 -> 6.7 s.
+  - **Slice replays at 16x** (`test_mine_layer.gd`, `_SLICE_SPEEDUP`): the two level-1 replays and the 2 s-budget boundary are clock-bound (1.05 s at 8x, 0.63 s at 16x for the same 8.2 game-s), assert seconds of
+    budget and counts of mines rather than a tolerance under one idle frame (0.27 game-s at 16x), and print the same figures as at 8x (lay_left 6.3 s, 6 mines, 6 in view, 1 pass). The file's testcase time went
+    5.1 -> 4.2 s. Every other row of the file stays on the 8x clock.
+  - **Tried and dropped:** `test_station_assault_section.gd` on the 8x clock. `wait_seconds()` follows the physics clock but the `LevelDirector`'s `SceneTreeTimer` poll follows the process clock, which diverges under
+    scaling, so two of its rows failed; the file stays at 1x.
