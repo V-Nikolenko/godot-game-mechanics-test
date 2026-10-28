@@ -419,6 +419,28 @@ Detail and APIs: [global.md](modules/global.md).
      `mover.release_constraint()` so the Assault corridor never holds an exit in.
   Details: [assault.md](modules/assault.md) → *Mines and the Mine Layer*, [global.md](modules/global.md) → *Boost disruption* / *EMP*,
   `assault/scenes/enemies/mine_layer/ENEMY.md`, `assault/scenes/hazards/minefield/HAZARD.md`.
+- **Enemy energy weapons (enemy rework phase 8, built from t2):**
+  1. **One beam family, owner-driven.** `EnemyBeam extends Node2D` (`assault/scenes/projectiles/enemy_beams/enemy_beam.gd`,
+     `enum Kind { BEAM, SWEEP, LANCE, TWIN }`, `enum Phase { OFF, TELEGRAPH, ACTIVE, FADE }`, both append-only) is a weapon
+     component an owner holds: `setup(host, owner_group)`, `start()`, `tick(delta)` on the owner's physics tick, `cancel()`. **`tick()`
+     is its only clock** — no `Timer`, `create_timer` or `_process` (`self_tick` exists for scene-placed props only). Emitter beams
+     point along the node's **local +X**; the owner rotates the beam's parent, never the beam. `LaserRay` and the station's beam are
+     not part of the family (Ph11 migrates the station).
+  2. **Tuning lives in the beam scenes** (`beam.tscn`, `sweep_beam.tscn`, `lance.tscn`; `twin_beam.tscn` and the Pulse Ring later),
+     read through `EnemyBeamScenes.export_of()` — the Ph5/Ph7 rule, so a beam is identical whoever fires it and gates never type
+     a number.
+  3. **Friendly fire:** a beam hurts every node in `player`, `allies`, `enemies` and `asteroids` whose hurtbox **shape** meets it
+     (`EnergyHitScan`, `Shape2D.collide`, exact for any shape, plus the triangles swept since the last tick), **except its owner
+     set** (the host and every node in its `owner_group`). Enemy ordnance is never hit. Damage is a **direct emit**, so it bypasses
+     `EnemyShield`, `ArmorPlate`s and `accepted_damage_types`; a plated Ram refuses it in its hull rule; the player's i-frames and
+     shield apply. A beam kill scores like any kill.
+  4. **Fairness is gated.** At most one hit per target per `rehit_interval` (0.55 s on every held beam: strictly above the player's
+     0.5 s i-frames, because a re-hit on exactly 0.5 s lands before the idle-frame i-frame `Timer` expires); every beam draws a
+     ≥ 3 px telegraph line on its path; static beams telegraph ≥ `0.25 + (hit_half_width + r_player) / 360` s, a sweep's tip never
+     outruns 360 px/s, a lance commits ≥ 0.5 s with ≥ 0.25 s of uncommitted warning first. A later difficulty tier must stay
+     inside them. Real-frame rows that race the player's i-frame `Timer` run at a **4×** clock, not 8×.
+  Details: `assault/scenes/projectiles/enemy_beams/BEAMS.md`, [assault.md](modules/assault.md) → *Enemy energy weapons*;
+  gates in `tests/integration/test_enemy_beams.gd`.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---

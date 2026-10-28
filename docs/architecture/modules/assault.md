@@ -39,6 +39,7 @@ assault/scenes/
 │   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell / rail_round .tscn + EnemyRounds + RailTrail (the sniper shot's fading trail)
 │   ├── enemy_ordnance/         EnemyOrdnance: gravity_bomb / mine / pursuit_bomb .tscn + EnemyOrdnanceScenes (persistent, shoot-down-able, not in `enemies`); mines/ = the Ph7 EnemyMine family (6 variant scenes, EnemyMineScenes, PulseRing, EmpRing)
 │   ├── enemy_rockets/           EnemyRocket: dumb / pursuit / cluster / submunition / delayed_warhead .tscn + EnemyRocketScenes (Ph5; impact hurts enemies, blast hurts the player)
+│   ├── enemy_beams/             EnemyBeam: beam / sweep_beam / lance .tscn + EnergyHitScan + EnemyBeamScenes (Ph8; owner-ticked lasers that hurt everything on the line but their owner set)
 │   ├── missiles/                homing/ + warhead/ missiles
 │   └── piercing_beam/           Sustained BEAM weapon projectile
 ├── systems/                     Mission orchestration (non-visual)
@@ -448,6 +449,31 @@ Conventions: [PROJECT.md](../PROJECT.md) → *Mines, minefields and the Mine Lay
 - **Tests.** `test_enemy_mines.gd` (every variant: trigger, warning rule, art, chain ripple, pulse / EMP application, real-physics rows, both harnesses),
   `test_minefield.gd`, `test_mine_layer.gd` (passes, trail placement, hub idle, persistence, art, level-1 slice replays), `test_emp_pulse.gd`,
   `test_player_boost_disruption.gd`, `test_level1_specialist_spawns.gd` (`EXPECTED_PH7`), `test_engagement_deadline.gd`, `test_sector_hub_patrol.gd`.
+
+#### Enemy energy weapons (Phase 8)
+
+Source: `assault/scenes/projectiles/enemy_beams/` (notes: `BEAMS.md` there). Built in t2; later Phase 8 tasks add the Pulse Ring (`EnergyRing`), the
+endpoint beam (`twin_beam.tscn`, cover, strain, laser-wall registration) and the owners (turret mounts, fences, twin drones).
+
+- **`EnemyBeam`** (`enemy_beam.gd`, `extends Node2D`): `enum Kind { BEAM, SWEEP, LANCE, TWIN }`, `enum Phase { OFF, TELEGRAPH, ACTIVE, FADE }` (append-only);
+  signals `phase_changed(phase: int)`, `target_hit(target: Node2D, damage: int)`. The owner calls `setup(host, owner_group)`, `start(telegraph_override,
+  active_override)` (only from OFF / FADE; negative = the export, active 0 = held), `tick(delta)` on its physics tick (the beam's only clock) and
+  `cancel()` (TELEGRAPH → OFF, ACTIVE → FADE). Lethal only in ACTIVE after `ignite_grace` and while not strained. Emitter kinds run `length` px along
+  the node's local +X from its `global_position`; the hit segment stops `tip_grace_px` short of the free tip. Three code-built `top_level` `Line2D`
+  children: `Telegraph` (`telegraph_width` px, yellow, white while `is_committed()`), `Glow` (red, `2 * draw_half_width`), `Core` (`hit_half_width`).
+  `set_endpoints()`, `set_strained()` and `hazard_info()` are declared for the endpoint-beam task.
+- **`EnergyHitScan`** (static): victims = groups `player`, `allies`, `enemies`, `asteroids` minus the owner set (`is_exempt`); `hits_band()` is
+  `Shape2D.collide` against every enabled hurtbox `CollisionShape2D` at its global transform; `bounding_radius()` feeds the broad phase;
+  `deliver()` is a direct `received_damage.emit` through `Hazards.hurt_box_of`. Each lethal tick tests the band and the triangles swept since the
+  previous lethal tick; one hit per target per `rehit_interval` (instance id, cleared by `start()`).
+- **`EnemyBeamScenes`**: `scene_for(kind)` (null for a kind not built yet), `export_of(kind, property, fallback)`, `export_of_scene(scene, …)` (the
+  same read on any beam scene, used by the gates' synthetic boundary copies).
+- **Scenes** (every value authored): `beam.tscn` 0.9 s telegraph / 1.2 s active / 700 px / hit 12 / 10 dmg every 0.55 s; `sweep_beam.tscn` 0.9 / 2.0 / 400
+  px / hit 10, `sweep_arc_deg` 100 at `sweep_rate` 0.8727 rad/s (read by the mount); `lance.tscn` 1.0 s telegraph with a 0.5 s commit / 0.2 s active /
+  1100 px / hit 8 / 24 dmg once (`rehit_interval = inf`). All: `telegraph_width` 4, `tip_grace_px` 24.
+- **Tests.** `tests/integration/test_enemy_beams.gd` (hand-ticked in both harnesses: timeline, cancel, exact re-hit cadence, telegraph width, swept
+  hit, tips, ±1 px width, the Bomber-rectangle row, victims, owner set, plated Ram, shield bypass, ordnance, scoring; static `rehit_interval` and
+  fairness rows with synthetic boundaries; the real-player cadence rows on real physics at a 4× clock).
 
 ### Scoring
 

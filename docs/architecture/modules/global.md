@@ -243,7 +243,7 @@ directional shield is decided **inside the hurtbox that owns the hit**, once per
 freed holder's slot is free), `clear_absorber(obj)` (no-op unless `obj` holds it), `has_absorber()`. After the
 `accepted_damage_types` filter, a live absorber answering duck-typed `absorbs_hit(hit_box: HitBox) -> bool` true makes
 the hurtbox emit `hit_absorbed(hit_box)` **instead of** `received_damage`. With no absorber nothing changes (the
-player's hurtbox, every plate, every existing enemy). Direct emitters (beam, nova, dash, shield overload, engine boost,
+player's hurtbox, every plate, every existing enemy). Direct emitters (beam, nova, dash, shield overload, engine boost, enemy beams,
 laser ray) call `received_damage.emit()` themselves and **bypass** shields, as they bypass plates.
 
 The projectile is not told: the shielded target answers neither `deflects_hit` nor `is_armored` for the shield, so

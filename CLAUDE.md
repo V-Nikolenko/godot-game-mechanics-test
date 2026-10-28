@@ -103,6 +103,14 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `test_player_boost_disruption.gd` (both ships: efficiency, the excess rule, refused boosts spend nothing, EMP), `tests/unit/test_emp_pulse.gd`, and the Mine Layer rows of
   `test_level1_specialist_spawns.gd` (`EXPECTED_PH7`, peaks 8 / 7 against the frozen 2.5x gate), `test_engagement_deadline.gd` and `test_sector_hub_patrol.gd`
   (pre-approved levers on `mine.tscn`, in order: `hazard_pad = 0`, then `registers_hazard = false`; neither was needed).
+  **Enemy lasers are one owner-ticked family, `EnemyBeam` (Phase 8)** — `assault/scenes/projectiles/enemy_beams/`, `Kind { BEAM, SWEEP, LANCE, TWIN }`,
+  `Phase { OFF, TELEGRAPH, ACTIVE, FADE }` (append-only). The owner calls `setup(host, owner_group)`, `start()`, `tick(delta)` on its physics tick and `cancel()`;
+  **`tick()` is the beam's only clock** (no `Timer`, `create_timer` or `_process`). An emitter beam points along its node's **local +X** (the owner rotates the parent).
+  Tuning lives in `beam.tscn` / `sweep_beam.tscn` / `lance.tscn`, read through `EnemyBeamScenes.export_of()`. A beam hurts every `player` / `allies` / `enemies` /
+  `asteroids` node whose hurtbox **shape** meets it (`EnergyHitScan`, `Shape2D.collide`, swept between ticks) **except its owner set**, never ordnance, by a direct
+  emit (bypasses `EnemyShield` and plates). `rehit_interval` 0.55 > the player's 0.5 s i-frames; telegraph line ≥ 3 px; static / sweep / lance fairness inequalities —
+  [BEAMS.md](assault/scenes/projectiles/enemy_beams/BEAMS.md). Gate: `tests/integration/test_enemy_beams.gd` (its real-player cadence rows run at **4×**, not 8×: at 8×
+  one headless idle frame outlasts the 0.05 s i-frame margin and refuses re-hits).
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
