@@ -427,7 +427,8 @@ Detail and APIs: [global.md](modules/global.md).
      component an owner holds: `setup(host, owner_group)`, `start()`, `tick(delta)` on the owner's physics tick, `cancel()`. **`tick()`
      is its only clock** — no `Timer`, `create_timer` or `_process` (`self_tick` exists for scene-placed props only). Emitter beams
      point along the node's **local +X**; the owner rotates the beam's parent, never the beam. `LaserRay` and the station's beam are
-     not part of the family (Ph11 migrates the station).
+     not part of the family (Ph11 migrates the station). The old `LaserRay` has one opt-in, `registers_hazard` (Ph8 t17; level 1's columns and
+     `LaserWallWave` set it): a `&"laser_wall"` segment from `start()` to the end of active, so enemies steer round a column it kills them in.
   2. **Tuning lives in the beam scenes** (`beam.tscn`, `sweep_beam.tscn`, `lance.tscn`, `twin_beam.tscn`; the Pulse Ring below),
      read through `EnemyBeamScenes.export_of()` — the Ph5/Ph7 rule, so a beam is identical whoever fires it and gates never type
      a number.

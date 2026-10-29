@@ -58,33 +58,8 @@ func _ready() -> void:
 
 	# Per-section bonus drone + skill challenge schedules (section-relative time).
 	# Wave manager handles enemy spawns from wave lists; everything else
-	# (bonus drones, skill challenges) is scheduled here so it stays decoupled.
-	_section_schedules = {
-		&"deep_space": [
-			{"time": 10.0, "callable": _trigger_skill_challenge_asteroid_corridor},
-			{"time": 15.0, "callable": _spawn_bonus_drone_left_to_right},
-			{"time":  6.0, "callable": _spawn_laser_columns.bind([128, 640, 1152])},
-			{"time": 14.0, "callable": _spawn_laser_columns.bind([384, 896])},
-			{"time": 22.0, "callable": _spawn_laser_columns.bind([256, 640, 1024])},
-		],
-		&"planet_approach": [
-			{"time": 40.0, "callable": _spawn_bonus_drone_right_to_left},
-			{"time": 70.0, "callable": _trigger_skill_challenge_bullet_weave},
-			{"time": 90.0, "callable": _spawn_bonus_drone_left_to_right},
-			{"time": 10.0, "callable": _spawn_laser_columns.bind([200, 600, 1000])},
-			{"time": 25.0, "callable": _spawn_laser_columns.bind([400, 800])},
-			{"time": 38.0, "callable": _spawn_laser_columns.bind([128, 384, 640, 896, 1152])},
-			{"time": 55.0, "callable": _spawn_laser_columns.bind([300, 700, 1100])},
-			{"time": 78.0, "callable": _spawn_laser_columns.bind([150, 550, 950])},
-			{"time": 98.0, "callable": _spawn_laser_columns.bind([450, 850])},
-		],
-		&"cloud_descent": [
-			{"time": 25.0, "callable": _spawn_bonus_drone_right_to_left},
-			{"time":  8.0, "callable": _spawn_laser_columns.bind([256, 768])},
-			{"time": 18.0, "callable": _spawn_laser_columns.bind([128, 512, 896])},
-			{"time": 34.0, "callable": _spawn_laser_columns.bind([384, 768, 1152])},
-		],
-	}
+	# (bonus drones, skill challenges, laser columns) is scheduled here so it stays decoupled.
+	_section_schedules = _build_schedules()
 
 	director.section_started.connect(_on_section_started)
 	director.level_complete.connect(_on_level_complete)
@@ -92,6 +67,59 @@ func _ready() -> void:
 	if score_tracker:
 		score_tracker.start_tracking()
 	director.start()
+
+
+## Level 1's laser-column schedule as data: `{ section_name: [ { "time": float, "columns": Array[int] }, … ] }` —
+## section-relative seconds and world-x columns (the camera keeps x pinned, so a column is a fixed screen column).
+## `_build_schedules()` binds `_spawn_laser_columns` to exactly these rows, so a test or a measurement reads the
+## schedule without instantiating a director (Phase 8 t17).
+static func laser_column_schedule() -> Dictionary:
+	return {
+		&"deep_space": [
+			{"time":  6.0, "columns": [128, 640, 1152]},
+			{"time": 14.0, "columns": [384, 896]},
+			{"time": 22.0, "columns": [256, 640, 1024]},
+		],
+		&"planet_approach": [
+			{"time": 10.0, "columns": [200, 600, 1000]},
+			{"time": 25.0, "columns": [400, 800]},
+			{"time": 38.0, "columns": [128, 384, 640, 896, 1152]},
+			{"time": 55.0, "columns": [300, 700, 1100]},
+			{"time": 78.0, "columns": [150, 550, 950]},
+			{"time": 98.0, "columns": [450, 850]},
+		],
+		&"cloud_descent": [
+			{"time":  8.0, "columns": [256, 768]},
+			{"time": 18.0, "columns": [128, 512, 896]},
+			{"time": 34.0, "columns": [384, 768, 1152]},
+		],
+	}
+
+
+## The per-section event lists `_process` drains: bonus drones and skill challenges, then one
+## `_spawn_laser_columns` event per row of `laser_column_schedule()`. Pure (touches no tree), so a director built
+## off-tree can be asked for it.
+func _build_schedules() -> Dictionary:
+	var out: Dictionary = {
+		&"deep_space": [
+			{"time": 10.0, "callable": _trigger_skill_challenge_asteroid_corridor},
+			{"time": 15.0, "callable": _spawn_bonus_drone_left_to_right},
+		],
+		&"planet_approach": [
+			{"time": 40.0, "callable": _spawn_bonus_drone_right_to_left},
+			{"time": 70.0, "callable": _trigger_skill_challenge_bullet_weave},
+			{"time": 90.0, "callable": _spawn_bonus_drone_left_to_right},
+		],
+		&"cloud_descent": [
+			{"time": 25.0, "callable": _spawn_bonus_drone_right_to_left},
+		],
+	}
+	var columns: Dictionary = laser_column_schedule()
+	for section_name: StringName in columns:
+		for row: Dictionary in columns[section_name]:
+			(out[section_name] as Array).append(
+				{"time": row["time"], "callable": _spawn_laser_columns.bind(row["columns"])})
+	return out
 
 
 func _process(delta: float) -> void:
@@ -180,6 +208,7 @@ func _spawn_laser_columns(columns: Array, warn: float = 3.0, active: float = 4.0
 		laser.auto_start      = false
 		laser.warn_duration   = warn
 		laser.active_duration = active
+		laser.registers_hazard = true
 		level.add_child(laser)
 		laser.global_position = Vector2(float(col), -380.0)
 		laser.start()

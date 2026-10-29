@@ -3086,3 +3086,32 @@ directory. These are *planned* decisions; check this phase's *as built* section,
 - **One tick in the light for beams (for t7):** a beam mount's `_telegraph_done()` reads `beam.phase() == ACTIVE`, set by `_weapon_tick` after the cycle step, so the mount
   enters FIRE one tick after the beam turns lethal (the light shows CHARGING for that tick). Harmless; t7 may re-check `_telegraph_done()` after `_weapon_tick`.
 - **Placeholder art:** code-drawn base (root `_draw`) and head + barrel (mount `_draw`), dimmed by `UNPOWERED_TINT` once powered down; t15 replaces them.
+
+### Phase 8, built in t17 (level 1's laser columns: schedule as data, measurement, `registers_hazard`) (2026-10-29)
+- **Built as §2.16 says.** `Level1Director.laser_column_schedule()` (static, `{section: [{"time", "columns"}]}`, the 34 columns of 12 rows) and a pure `_build_schedules()` that
+  `_ready()` calls (drones and skill challenges first, then one `_spawn_laser_columns.bind(columns)` event per schedule row: the list is the one the level had). Row:
+  `tests/integration/test_level1_laser_columns.gd` (the schedule equals the bound arguments read back off an off-tree director). **For Ph15 / the placement task:** read the
+  columns from `laser_column_schedule()`; the static `LaserWallWave` is not in it (it lights at level start, x 0..672, warn 3 s + active 4 s).
+- **Measurement helper (manual, not a test):** `scripts/measure-level1-columns.sh [section …]` → `tests/helpers/level1_column_replay.gd` (a `SceneTree` launcher; it must not
+  name anything touching an autoload, which does not exist yet when a `-s` script compiles) → `level1_column_replay_worker.gd` (the replay). Each section through a real
+  `WaveManager` in the Assault harness at 8x, the director's own `_spawn_laser_columns()` at the schedule's times, `deep_space` also lights `laser_wall.tscn` at t = 0.
+  ~31 s for all three. Output: `RESULT <section> <source> <kind> spawned= exposed= killed=` (exposed = the ship's origin was inside a lit ray's hit rect at least once;
+  killed = `died` fired there; `died` fires again while a ray keeps hitting a dying ship, so kills are counted once per ship). **Counts vary by one or two between runs**
+  (8x frame timing, ships steered by their own avoidance), so read them as a range; the figures below are from two or three runs each.
+- **Pre-placement counts (before `registers_hazard`; Ph8 t17 start): AI enemies killed by a lit `LaserRay`** (spawned over the section in brackets):
+  - `deep_space`, columns: fighter 2–4 (of 34), missile_corvette 1 (of 1), swarm_drone 9–10 (of 54); ram_corvette 3–4 exposed, 0 killed (its hull rule refuses the hit).
+  - `deep_space`, `LaserWallWave`: fighter 5 (of 34), razor_drone 1 (of 2), sniper 1 (of 7), swarm_drone 6 (of 54); ram_corvette 1 exposed, 0 killed.
+  - `planet_approach`, columns: fighter 2 (of 41), missile_corvette 1 (of 2), swarm_drone 7–9 (of 62); ram_corvette 8 exposed, 0 killed.
+  - `cloud_descent`, columns: 0–2 (fighter 1, swarm_drone 1 when it happens; 0 in some runs).
+  - Totals killed: `deep_space` 26–35, `planet_approach` 10–12, `cloud_descent` 0–2. **So they do kill AI enemies** and nothing avoided them (case 3 of §2.16).
+- **`LaserRay.registers_hazard := false`** (opt-in): one `&"laser_wall"` segment `HazardInfo` over the hit strip's long axis, `radius` = 28 + `_HAZARD_PAD` 24 = 52, `avoid_weight`
+  1.0, no `exempt_group`, registered from `start()` (the warning line) to the start of the dissolve, and on `_exit_tree()`. `hazard_info()` refreshes the info in place from the
+  ray's transform. `_spawn_laser_columns()` sets it, and so do all 12 rays in `laser_wall.tscn` (a per-instance property; nothing else instances that scene). Race and station rays
+  never set it; `test_laser_ray_hit_mask.gd`, `test_station_laser_phase.gd` and the race rows are unchanged and green.
+- **Post-placement counts (with `registers_hazard` on, same helper, two runs):** `deep_space` columns: fighter 0–1, missile_corvette 1, swarm_drone 8; `LaserWallWave`: fighter 5,
+  gatling_interceptor 1, razor_drone 1, swarm_drone 6 (the wave lights at t = 0 and some ships are already inside it when it warns, or arrive through it); `planet_approach`:
+  missile_corvette 1, swarm_drone 4; `cloud_descent` 0. Totals killed: `deep_space` 22–23 (was 26–35), `planet_approach` 5 (was 10–12), `cloud_descent` 0 (was 0–2); fighters
+  and the other ships that used to die in columns now mostly steer round, the swarm drones (low `hazard_avoidance`) and the missile corvette (it holds its range and turns slowly) still
+  die. Not zero: Ph15's corridor-constrained AI is the place for a full answer. Every level-1 gate (specialist / drone / fighter pins, density, exits, engagement deadline) is green unchanged;
+  the pre-approved lever (leave it off in level 1) was **not** needed.
+- **GUT time:** 202.028 → 202.175 s (+0.15 s of the 0.3 s allotment; 2427 → 2438 tests).

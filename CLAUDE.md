@@ -117,6 +117,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   **The Pulse Ring is `EnergyRing`** (`enemy_beams/energy_ring.tscn`, `EnemyBeamScenes.ring_scene()` / `ring_export()`; `class_name PulseRing` stays Ph7's visual): owner-ticked
   TELEGRAPH -> EXPANDING -> FADE, a 24 px band at 360 px/s whose outer edge stops at `max_radius` 280, two 45 degree gaps turning at 30 degrees/s, each target hit once per ring over
   the swept interval. Gate: `tests/integration/test_energy_ring.gd`.
+  **Level 1's laser columns (Phase 8 t17):** `Level1Director.laser_column_schedule()` is the column schedule as data (`_build_schedules()` binds `_spawn_laser_columns` to it); they killed AI enemies, so `LaserRay` gained the opt-in `registers_hazard` (default false; race and station unaffected), set by the director's columns and all 12 rays of `laser_wall.tscn`. Gate `tests/integration/test_level1_laser_columns.gd`; re-measure with `scripts/measure-level1-columns.sh` (manual, `tests/helpers/level1_column_replay.gd`).
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
