@@ -435,6 +435,23 @@ b.defense_turret().at(200, -100).prop("variant", TurretMount.Variant.BURST_CANNO
 
 ---
 
+### `heavy_emplacement` — Heavy Emplacement (Phase 8)
+
+**Builder:** `b.heavy_emplacement()`  
+**Scene:** `heavy_emplacement.tscn` (the `DefenseTurret` root and brain, its own `heavy_emplacement_config.tres`)  
+**Movement:** None, like the turret; an `AssaultDrift` scrolls it down at 60 px/s in Assault.  
+**Shoots:** two mounts that aim independently, each slot retuned to 1.2 rad/s: a BEAM_CANNON at (0, -30) (0.9 s telegraph on a frozen bearing, 1.2 s lit) and a BURST_CANNON at (0, 34) (4 Pulse rounds, partial lead). Its beam never hurts its own hull or owner group.  
+**HP:** 260 (an r 64 circle); contact damage 0  
+**Score:** 150 (`counts_as_escape` false)
+
+**Not placed in level 1 or the hub yet.** **Never place it in an `ENEMIES_CLEARED` section.** See [ENEMY.md](../assault/scenes/enemies/heavy_emplacement/ENEMY.md).
+
+```gdscript
+b.heavy_emplacement().at(0, -120)
+```
+
+---
+
 ### `turret_group` — Turret group (with its power source)
 
 **Builder:** `b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR)` (any preset path under `assault/scenes/structures/turret_group/presets/`)  

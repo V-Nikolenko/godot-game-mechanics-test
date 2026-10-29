@@ -1346,3 +1346,184 @@ func test_power_down_cancels_a_ring_telegraph_or_fades_an_expanding_ring_and_nev
 		assert_eq(ring.phase(), EnergyRing.Phase.OFF, "%s: never restarts" % label)
 		assert_false(ring.is_lethal())
 		h.root.free()
+
+
+# ── 19. The heavy emplacement (Phase 8 t11; plan §2.9) ──────────────────────────────────────────────────────────────
+#
+# The same `DefenseTurret` root and brain on its own scene and config, with two slots: a BEAM_CANNON at (0, -30) and a BURST_CANNON at (0, 34),
+# each slot retuning its mount to 1.2 rad/s. Hand-ticked in both harnesses like the rows above.
+
+const HEAVY_SCENE: PackedScene = preload("res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn")
+const HEAVY_CONFIG: DefenseTurretConfig = preload("res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement_config.tres")  # read only
+
+
+func _heavy(h, engaged: bool = true, seed_value: int = 4242) -> DefenseTurret:
+	var t := HEAVY_SCENE.instantiate() as DefenseTurret
+	var brain := t.get_node("Brain") as DefenseTurretBrain
+	brain.start_engaged = engaged
+	brain.rng_seed = seed_value
+	t.position = T
+	h.root.add_child(t)
+	t.set_physics_process(false)
+	(t.get_node("AssaultDrift") as AssaultDrift).set_physics_process(false)
+	return t
+
+
+func _heavy_beam(t: DefenseTurret) -> BeamTurretMount:
+	return t.mounts()[0] as BeamTurretMount
+
+
+func _heavy_burst(t: DefenseTurret) -> BurstCannonMount:
+	return t.mounts()[1] as BurstCannonMount
+
+
+func test_the_heavy_emplacement_is_a_turret_with_two_mounts_on_a_64_px_body(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var t := _heavy(h, false)
+	assert_eq(t.get_script(), load("res://assault/scenes/enemies/defense_turret/defense_turret.gd"), "%s: the same root script as the standard turret" % mode)
+	assert_eq(t.mounts().size(), 2, "%s: two mounts" % mode)
+	assert_true(t.mounts()[0] is BeamTurretMount and t.mounts()[1] is BurstCannonMount, "%s: beam cannon then burst cannon" % mode)
+	var beam_slot := t.get_node("MountSlots").get_child(0) as TurretMountSlot
+	var burst_slot := t.get_node("MountSlots").get_child(1) as TurretMountSlot
+	assert_eq(beam_slot.variant, TurretMount.Variant.BEAM_CANNON)
+	assert_eq(burst_slot.variant, TurretMount.Variant.BURST_CANNON)
+	assert_eq(beam_slot.position, Vector2(0.0, -30.0), "%s: beam cannon at (0, -30)" % mode)
+	assert_eq(burst_slot.position, Vector2(0.0, 34.0), "%s: burst cannon at (0, 34)" % mode)
+	assert_eq(t.mounts()[0].get_parent(), beam_slot)
+	assert_eq(t.mounts()[1].get_parent(), burst_slot)
+	var body := (t.get_node("CollisionShape2D") as CollisionShape2D).shape as CircleShape2D
+	var hurt := (t.get_node("HurtBox/CollisionShape2D") as CollisionShape2D).shape as CircleShape2D
+	assert_eq(body.radius, 64.0, "%s: body r 64" % mode)
+	assert_same(hurt, body, "%s: one shape shared by body and hurtbox" % mode)
+	assert_null(t.get_node_or_null("ContactHitBox"), "%s: no contact hitbox" % mode)
+	assert_eq(t.rotation, 0.0)
+	assert_false(t.is_ai_driven(), "%s: no mover" % mode)
+	assert_false(t.is_laser_blocking())
+	assert_eq(t.owner_group(), t.mounts()[0].owner_group(), "%s: the mounts share the turret's owner group" % mode)
+	assert_eq(t.mounts()[0].owner_group(), t.mounts()[1].owner_group())
+	assert_eq(t.rocket_clear_radius(), 64.0 + DefenseTurret.ROCKET_CLEARANCE, "%s: a rocket clears the 64 px hull, not the standard 28" % mode)
+	assert_not_null(t.get_node_or_null("PulsePool_1"), "%s: the burst cannon's pool is a root child named for its slot index" % mode)
+
+
+func test_each_heavy_mount_reads_a_turn_rate_of_1_2_and_the_standard_turret_keeps_its_own(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var t := _heavy(h, false)
+	assert_eq(_heavy_beam(t).turn_rate, 1.2, "%s: beam cannon" % mode)
+	assert_eq(_heavy_burst(t).turn_rate, 1.2, "%s: burst cannon" % mode)
+	var standard := _turret(h)
+	assert_eq(_mount(standard).turn_rate, 2.0, "%s: a standard turret's mount is untouched" % mode)
+
+
+func test_hp_score_and_escape_flag_come_from_the_heavy_emplacements_own_config(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var t := _heavy(h, false)
+	assert_eq(HEAVY_CONFIG.max_health, 260)
+	assert_eq(HEAVY_CONFIG.score_value, 150)
+	assert_false(HEAVY_CONFIG.counts_as_escape)
+	assert_eq(HEAVY_CONFIG.collision_damage, 0)
+	assert_eq(t.health.max_health, 260, "%s: HP from the .tres" % mode)
+	assert_eq(t.health.current_health, 260)
+	assert_eq(t.score_value, 150, "%s: score from the .tres" % mode)
+	assert_false(t.counts_as_escape, "%s: never an escape" % mode)
+	assert_ne(t.config, SHIPPED, "%s: not the standard turret's config" % mode)
+	assert_ne(t.config, HEAVY_CONFIG, "%s: a private copy of its own" % mode)
+	assert_eq(t.config.max_health, HEAVY_CONFIG.max_health)
+
+
+func test_the_two_heavy_mounts_aim_independently(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 300.0)
+	var t := _heavy(h)
+	var beam := _heavy_beam(t)
+	var burst := _heavy_burst(t)
+	var clock := [0.0]
+	assert_true(_run_until(t, clock, 300, func() -> bool: return beam.phase() == TurretMount.Phase.TELEGRAPH), "%s: the beam cannon telegraphs" % mode)
+	var beam_frozen := beam.rotation
+	var burst_before := burst.rotation
+	h.player.global_position = T + Vector2(450.0, 150.0)
+	var worst_beam := 0.0
+	var worst_burst := 0.0
+	var prev_beam := beam.rotation
+	var prev_burst := burst.rotation
+	for i in 20:
+		t._physics_process(DT)
+		worst_beam = maxf(worst_beam, absf(angle_difference(prev_beam, beam.rotation)))
+		worst_burst = maxf(worst_burst, absf(angle_difference(prev_burst, burst.rotation)))
+		prev_beam = beam.rotation
+		prev_burst = burst.rotation
+	assert_eq(beam.phase(), TurretMount.Phase.TELEGRAPH, "%s: still in its warning" % mode)
+	assert_eq(beam.rotation, beam_frozen, "%s: the beam cannon holds the bearing it showed" % mode)
+	assert_gt(absf(angle_difference(burst_before, burst.rotation)), 0.1, "%s: while the burst cannon follows the player" % mode)
+	assert_lte(worst_burst, 1.2 * DT + 1e-6, "%s: at no more than its 1.2 rad/s" % mode)
+	assert_lte(worst_beam, 1.2 * DT + 1e-6)
+	# Each aims from its own pivot: their aim points are not one shared value.
+	assert_ne(beam.aim_point(), burst.aim_point(), "%s: separate aim points" % mode)
+
+
+func test_both_heavy_weapons_fire_in_one_engagement(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 300.0)
+	var t := _heavy(h)
+	var beam := _heavy_beam(t)
+	var burst := _heavy_burst(t)
+	var clock := [0.0]
+	var rounds: Array = []
+	_record(burst, clock, rounds)
+	var lit := [false]
+	beam.beam().phase_changed.connect(func(p: int) -> void:
+		if p == EnemyBeam.Phase.ACTIVE:
+			lit[0] = true)
+	_run_until(t, clock, 600, func() -> bool: return lit[0] and rounds.size() >= 1)
+	assert_true(lit[0], "%s: the beam cannon's beam went ACTIVE" % mode)
+	assert_gt(rounds.size(), 0, "%s: the burst cannon fired" % mode)
+	assert_ne(_light(t).get_state(), StateLight.State.OFF, "%s: one light shows the engagement" % mode)
+
+
+func test_the_heavy_beam_never_hits_its_own_cannon_or_hull(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 300.0)
+	var t := _heavy(h)
+	var beam := _heavy_beam(t)
+	var clock := [0.0]
+	assert_true(_run_until(t, clock, 300, func() -> bool: return beam.phase() == TurretMount.Phase.TELEGRAPH), "%s: telegraphs" % mode)
+	var hits := _hit_log(beam)
+	var dir := Vector2.from_angle(beam.beam().global_rotation)
+	var foe := _victim(h, beam.global_position + dir * 300.0)
+	# The burst cannon's own mount shares the owner group; a mate in that group stands on the line too.
+	var mate := _victim(h, beam.global_position + dir * 200.0)
+	mate.add_to_group(t.owner_group())
+	_run_until(t, clock, 120, func() -> bool: return beam.beam().phase() == EnemyBeam.Phase.FADE)
+	assert_gt(_hits_on(hits, foe), 0, "%s: control: an outsider on the line is hit" % mode)
+	assert_eq(_hits_on(hits, t), 0, "%s: the emplacement is not hit by its own beam" % mode)
+	assert_eq(_hits_on(hits, mate), 0, "%s: nor anything in its owner group" % mode)
+	assert_eq(t.health.current_health, 260, "%s: no damage taken" % mode)
+
+
+func test_power_down_reaches_both_heavy_mounts(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 300.0)
+	var t := _heavy(h)
+	var beam := _heavy_beam(t)
+	var burst := _heavy_burst(t)
+	var clock := [0.0]
+	assert_true(_run_until(t, clock, 300, func() -> bool: return beam.phase() == TurretMount.Phase.TELEGRAPH), "%s: telegraphs" % mode)
+	var hits := _hit_log(beam)
+	var outsider := _victim(h, beam.global_position + Vector2.from_angle(beam.beam().global_rotation) * 300.0)
+	t.set_powered(false)
+	assert_eq(beam.phase(), TurretMount.Phase.UNPOWERED, "%s: beam cannon down" % mode)
+	assert_eq(burst.phase(), TurretMount.Phase.UNPOWERED, "%s: burst cannon down" % mode)
+	assert_eq(_light(t).get_state(), StateLight.State.OFF)
+	for i in 300:
+		t._physics_process(DT)
+	assert_eq(_hits_on(hits, outsider), 0, "%s: the cancelled telegraph never hurt" % mode)
+	assert_eq(beam.beam().phase(), EnemyBeam.Phase.OFF)
+	var rest := deg_to_rad(burst.rest_bearing_deg)
+	assert_almost_eq(angle_difference(burst.rotation, rest), 0.0, deg_to_rad(0.5), "%s: both droop to rest" % mode)
+	assert_almost_eq(angle_difference(beam.rotation, deg_to_rad(beam.rest_bearing_deg)), 0.0, deg_to_rad(0.5))
+
+
+func test_assault_wave_builder_spawns_the_heavy_emplacement() -> void:
+	var b := WaveBuilder.new()
+	var w := b.wave(0.0, [b.heavy_emplacement().at(0.0, -100.0)])
+	assert_eq(w.entries[0].ship_scene.resource_path, WaveBuilder.HEAVY_EMPLACEMENT)
+	assert_eq(WaveBuilder.HEAVY_EMPLACEMENT, "res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn")

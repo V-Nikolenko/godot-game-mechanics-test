@@ -3200,3 +3200,13 @@ directory. These are *planned* decisions; check this phase's *as built* section,
 - Hand-ticked AI rows put the fixture at `before + velocity * DT` after each `_physics_process`: `move_and_slide()` outside a physics frame integrates over the frame's delta, not 1/60.
 - Roster gates: `laser_emitter` joined the three rosters, `test_wreck.gd`, `test_base_enemy.gd` (`_MIN_ROSTER_SIZE` 17) and `test_enemy_dual_mode.gd`; `test_engagement_deadline.gd` gained a "no fence in an
   `ENEMIES_CLEARED` section" guard row.
+
+### Phase 8, built in t11 (heavy emplacement) (2026-10-30)
+- **Built as §2.9 says:** `assault/scenes/enemies/heavy_emplacement/` (`heavy_emplacement.tscn` on the `DefenseTurret` root script and brain, `heavy_emplacement_config.tres` as a
+  `DefenseTurretConfig` with HP 260 / score 150 / `counts_as_escape` false, `ENEMY.md`); `WaveBuilder.HEAVY_EMPLACEMENT` / `heavy_emplacement()`. The scene's `config` export points at its own `.tres`.
+- **One small shell change:** `DefenseTurret.body_radius()` reads the scene's body circle, and `rocket_clear_radius()` / the placeholder base disc use it (28 -> 28 + 4 on the standard turret, unchanged;
+  64 + 4 on the heavy one). `BODY_RADIUS` stays as the fallback.
+- **Slots are named `BeamSlot` (index 0) and `BurstSlot` (index 1)**; `mounts()[0]` is the beam cannon and `[1]` the burst cannon. A wave's `.prop("variant", ...)` would override slot 0 (the beam cannon),
+  so nothing should set it on a heavy emplacement. The burst cannon's pool is `PulsePool_1`.
+- Roster gates: `heavy_emplacement` joined the three rosters, `test_wreck.gd`, `test_base_enemy.gd` (`_MIN_ROSTER_SIZE` 18; the mover-less-structure tow row loops it too) and `test_enemy_dual_mode.gd`.
+  Its behaviour rows are `test_defense_turret.gd` §19.

@@ -6,8 +6,7 @@ consumer of the Phase 8 weapon mounts.
 and you can out-strafe its partial lead.
 
 > **Build state (Phase 8, t8).** Shell, `TurretMount` cycle, all six mounts (BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY, PULSE_RING, LANCE, BEAM_CANNON) and `AssaultDrift` are
-> built, and so are turret groups and the power source (t9, `assault/scenes/structures/turret_group/`). Still to come in Phase 8: the shield
-> generator (t9s), the heavy emplacement (t11), the art (t15) and placement in the hub and level 1 (t18, t19). Mounting on large ships is
+> built, and so are turret groups and the power source (t9, `assault/scenes/structures/turret_group/`). The shield generator (t9s) and the heavy emplacement (t11, [`heavy_emplacement/`](../heavy_emplacement/ENEMY.md)) are built too. Still to come in Phase 8: the art (t15) and placement in the hub and level 1 (t18, t19). Mounting on large ships is
 > Phase 10. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.7; the task plan is `docs/plans/cmvqw0vnb017rqs2xsyursu5d/3-plan.md`.
 
 ---

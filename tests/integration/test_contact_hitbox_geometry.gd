@@ -81,6 +81,11 @@ const ROSTER: Array[Dictionary] = [
 		"no_hitbox": true,
 	},
 	{
+		"name": "heavy_emplacement",
+		"scene": "res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn",
+		"no_hitbox": true,
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"no_hitbox": true,

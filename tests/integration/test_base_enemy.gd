@@ -57,9 +57,9 @@ const _DEFAULT_MASK_AFTER_READY := 1121
 
 ## `bomber`, `bonus_drone`, `razor_drone`, `gunship`, `gatling_interceptor`, `swarm_drone`,
 ## `fighter`, `ram_corvette`, `sniper`, `space_station`, `missile_corvette`, `support_ship`, `mine_layer`,
-## `defense_turret`, `power_source`, `shield_generator`, `laser_emitter`. A sweep that finds fewer has broken, and every assertion below is vacuous on a
+## `defense_turret`, `power_source`, `shield_generator`, `laser_emitter`, `heavy_emplacement`. A sweep that finds fewer has broken, and every assertion below is vacuous on a
 ## broken sweep.
-const _MIN_ROSTER_SIZE := 17
+const _MIN_ROSTER_SIZE := 18
 
 ## Enemies whose damage/death flow diverges from the generic BaseEnemy path enough that a shared
 ## loop would either be meaningless (space_station never frees on the lethal frame) or wrong
@@ -292,6 +292,7 @@ const _AUTHORED_CONTACT_MODES := {
 	"power_source": ContactProfile.Mode.NONE,
 	"shield_generator": ContactProfile.Mode.NONE,
 	"laser_emitter": ContactProfile.Mode.NONE,
+	"heavy_emplacement": ContactProfile.Mode.NONE,
 }
 
 
@@ -522,11 +523,11 @@ func test_each_brain_refuses_a_tow_in_exactly_its_committed_phases() -> void:
 		h.root.queue_free()
 
 
-## The mover-less structures with a brain (Phase 8: the defense turret, the shield generator) have no mover, so they have no accepting phase and cannot
+## The mover-less structures with a brain (Phase 8: the defense turret, the heavy emplacement, the shield generator) have no mover, so they have no accepting phase and cannot
 ## join `_REFUSING_PHASES` (that table needs one): their brain and root refuse a tow in every phase. Reached by node path and the
 ## script's constant map, never by class name (the leak note above `_hurt_box`).
 func test_a_mover_less_structure_brain_refuses_a_tow_in_every_phase() -> void:
-	for dir in ["defense_turret", "shield_generator"]:
+	for dir in ["defense_turret", "heavy_emplacement", "shield_generator"]:
 		var h = _HARNESS.open_space()
 		add_child_autofree(h.root)
 		var enemy := load("%s/%s/%s.tscn" % [_ENEMY_ROOT, dir, dir]).instantiate() as BaseEnemy

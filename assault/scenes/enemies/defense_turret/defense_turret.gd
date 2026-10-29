@@ -112,9 +112,16 @@ func launch_velocity() -> Vector2:
 	return Vector2.ZERO
 
 
-## Duck-typed launcher question: the body radius + 4, so a rocket arms only once clear of the hull and never hits its own turret.
+## Duck-typed launcher question: the body radius + 4, so a rocket arms only once clear of the hull and never hits its own turret. The radius is the
+## scene's own body circle (28 standard, 64 on the heavy emplacement).
 func rocket_clear_radius() -> float:
-	return BODY_RADIUS + ROCKET_CLEARANCE
+	return body_radius() + ROCKET_CLEARANCE
+
+
+## The body circle's radius, read from the scene so the heavy emplacement (r 64) shares this script.
+func body_radius() -> float:
+	var shape := ($CollisionShape2D as CollisionShape2D).shape as CircleShape2D
+	return shape.radius if shape != null else BODY_RADIUS
 
 
 func _resolve_owner_group() -> StringName:
@@ -160,5 +167,6 @@ func _build_mounts() -> void:
 
 ## Placeholder art (the art task replaces it): the base plate the head turns on.
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, BASE_RADIUS, BASE_COLOR)
-	draw_arc(Vector2.ZERO, BASE_RADIUS, 0.0, TAU, 32, RIM_COLOR, 3.0)
+	var base := body_radius() + (BASE_RADIUS - BODY_RADIUS)
+	draw_circle(Vector2.ZERO, base, BASE_COLOR)
+	draw_arc(Vector2.ZERO, base, 0.0, TAU, 32, RIM_COLOR, 3.0)

@@ -1248,3 +1248,36 @@ func test_laser_emitter_is_a_static_post_and_its_death_drops_the_fence_in_both_m
 	assert_true(fence.is_lit(), "%s: lit" % mode)
 	post.hurt_box.received_damage.emit(10000)
 	assert_false(fence.is_lit(), "%s: the beam is down in the same call" % mode)
+
+# ── The Heavy Emplacement (Phase 8, t11; plan §2.9) ──────────────────────────────────────────────────────────────────
+
+const HEAVY_EMPLACEMENT_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn")
+
+
+## The same heavy emplacement engages in both modes with both its cannons, drifts only in Assault, never rotates its root and never counts as an escape.
+func test_heavy_emplacement_aims_both_cannons_in_both_modes_and_drifts_only_in_assault(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 600.0)
+	var turret := HEAVY_EMPLACEMENT_SCENE.instantiate() as DefenseTurret
+	turret.global_position = Vector2(640.0, 300.0)
+	harness.root.add_child(turret)
+	turret.set_physics_process(false)  # hand-ticked, same technique as the turret above
+	var drift := turret.get_node("AssaultDrift") as AssaultDrift
+	drift.set_physics_process(false)
+	var y0 := turret.global_position.y
+	for _i in 120:
+		drift.step(DT)
+		_tick(turret, DT)
+	var brain := turret.get_node("Brain") as DefenseTurretBrain
+	assert_eq(brain.phase, DefenseTurretBrain.Phase.ENGAGED, "%s: engaged" % mode)
+	assert_eq(turret.mounts().size(), 2, "%s: two cannons" % mode)
+	for mount in turret.mounts():
+		assert_ne(mount.phase(), TurretMount.Phase.SCAN, "%s: the mount is on the player" % mode)
+		assert_lt(mount.aim_error(), deg_to_rad(4.0), "%s: and aimed at it" % mode)
+	assert_eq(turret.rotation, 0.0, "%s: the root never rotates" % mode)
+	assert_false(turret.accept_tow(Vector2(50.0, 0.0)), "%s: no mover, no tow" % mode)
+	assert_false(turret.counts_as_escape, "%s: drifting out never costs the combo" % mode)
+	var expected_drift := turret.config.assault_drift_speed * 120.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(turret.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
