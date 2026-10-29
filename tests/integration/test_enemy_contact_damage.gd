@@ -91,6 +91,12 @@ const ROSTER: Array[Dictionary] = [
 		"no_hitbox": true,
 	},
 	{
+		"name": "shield_generator",
+		"scene": "res://assault/scenes/enemies/shield_generator/shield_generator.tscn",
+		"config": "res://assault/scenes/enemies/shield_generator/shield_generator_config.tres",
+		"no_hitbox": true,
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"config": "res://assault/scenes/enemies/bonus_drone/bonus_drone_config.tres",

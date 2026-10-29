@@ -458,6 +458,11 @@ Detail and APIs: [global.md](modules/global.md).
      never in `enemies` and never scored. `set_powered(false)` on every member is the only power coupling: the last provider's (a `PowerSource`'s) `died` darkens the
      whole group in the same call, for good (`add_power_provider()` is the Ph20 seam). In Assault a wave-spawned group's x is **world-anchored** (`world_anchored_x`, the
      camera's horizontal pan removed in `_ready()` through `EnemyWorld`). Gate `tests/integration/test_turret_group.gd`.
+  8. **A shield generator is a group member that bubbles the others (t9s).** `ShieldGenerator` (`assault/scenes/enemies/shield_generator/`, no mover, a brain) keeps a
+     360° `EnemyShield` in sustain mode on every other live `BaseEnemy` member of its group (the power source included; never itself, never a member answering
+     `is_fence_post()`), through the Support Ship's projected-shield path; a hurtbox whose absorber slot is already taken (a ward) is skipped, never displaced. No power
+     (`set_powered(false)`) or no generator means no `sustain()`, so every bubble lapses after its heartbeat. Beams are direct emitters and bypass the bubbles. Gate
+     `tests/integration/test_turret_group.gd` §13 on the test-only preset `tests/helpers/shielded_site.tscn`.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---

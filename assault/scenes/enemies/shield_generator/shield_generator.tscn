@@ -1,0 +1,83 @@
+[gd_scene load_steps=11 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/shield_generator/shield_generator.gd" id="1_sg"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_sg"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="3_sg"]
+[ext_resource type="Script" path="res://global/components/contact_profile.gd" id="4_sg"]
+[ext_resource type="Script" path="res://global/components/assault_drift.gd" id="5_sg"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/shield_generator/shield_generator_brain.gd" id="6_sg"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_sg"]
+radius = 30.0
+
+[sub_resource type="Animation" id="Animation_reset_sg"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:self_modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="Animation" id="Animation_hit_sg"]
+resource_name = "hit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:self_modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Color(2.5, 2.5, 2.5, 1), Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_sg"]
+_data = {
+&"RESET": SubResource("Animation_reset_sg"),
+&"hit": SubResource("Animation_hit_sg")
+}
+
+[node name="ShieldGenerator" type="CharacterBody2D"]
+script = ExtResource("1_sg")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_sg")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 65
+script = ExtResource("2_sg")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_sg")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("3_sg")
+max_health = 120
+current_health = 120
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_sg")
+}
+
+[node name="ContactProfile" type="Node" parent="."]
+script = ExtResource("4_sg")
+mode = 0
+
+[node name="AssaultDrift" type="Node" parent="."]
+script = ExtResource("5_sg")
+speed = 60.0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("6_sg")

@@ -3169,3 +3169,16 @@ directory. These are *planned* decisions; check this phase's *as built* section,
 - **Gate rows:** `tests/integration/test_turret_group.gd` (13 tests, both harnesses where mode matters), the power-source case in `test_enemy_dual_mode.gd`,
   `power_source` in the four hand rosters and `test_base_enemy.gd` (`_MIN_ROSTER_SIZE` 15, `_AUTHORED_CONTACT_MODES` NONE), and the guard
   `test_engagement_deadline.gd::test_no_enemies_cleared_section_spawns_a_turret_group` (any scene under `structures/turret_group/`; vacuous until t19).
+
+### Phase 8, built in t9s (the shield generator) (2026-10-29)
+- **Built as §2.10.5 says:** `assault/scenes/enemies/shield_generator/` (`ShieldGenerator`, `ShieldGeneratorBrain`, flat `ShieldGeneratorConfig` + `.tres` with `counts_as_escape = false`,
+  `ENEMY.md`). Test-only preset `tests/helpers/shielded_site.tscn` (= `assault_pair` plus a generator at (0, 120)); gate rows `test_turret_group.gd` §13.
+- **Names later tasks build on:** the bubble is an `EnemyShield` named `GeneratorShield`; `ShieldGenerator.tethers()` (refreshed `Line2D`s), `set_powered()` / `is_powered()` /
+  `set_turret_group()` / `turret_group()` / `owner_group()` as on the power source; `ShieldGeneratorConfig` fields `shield_capacity` 50, `shield_regen_delay` 3.0,
+  `shield_regen_seconds` 2.0, `shield_reboot_seconds` 5.0, `shield_radius_margin` 8.0. Heartbeat 0.3 s and fade 0.3 s stay `EnemyShield`'s own defaults.
+- **Fence posts are skipped by a duck-typed `is_fence_post() -> bool` (the laser-fence task, t10, must answer it on `LaserEmitter`).** The plan says "except laser-fence posts"
+  but the emitter does not exist yet; a `LaserFence` itself is not a `BaseEnemy`, so it is skipped by type. Test fixture: `tests/helpers/fixture_fence_post.tscn`.
+- **A hurtbox whose absorber slot is held is skipped without creating a shield** (`has_absorber()` check first) and retried every tick, so a Support Ship ward is never displaced and
+  the generator takes the slot once it frees. The reverse also holds: the Support Ship's own `_make_shield` skips a ward already bubbled by a generator (existing behaviour of `attach`).
+- `test_base_enemy.gd`: `test_a_mover_less_turret_brain_refuses_a_tow_in_every_phase` became `test_a_mover_less_structure_brain_refuses_a_tow_in_every_phase` and covers the turret and the
+  generator; `_MIN_ROSTER_SIZE` 16.

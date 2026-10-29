@@ -15,6 +15,11 @@ const TURRET: PackedScene = preload("res://assault/scenes/enemies/defense_turret
 const SOURCE: PackedScene = preload("res://assault/scenes/enemies/power_source/power_source.tscn")
 const SOURCE_CONFIG: PowerSourceConfig = preload("res://assault/scenes/enemies/power_source/power_source_config.tres")  # read only
 const FIXTURE_ENEMY: PackedScene = preload("res://tests/helpers/fixture_enemy.tscn")
+const FIXTURE_FENCE_POST: PackedScene = preload("res://tests/helpers/fixture_fence_post.tscn")
+const GENERATOR: PackedScene = preload("res://assault/scenes/enemies/shield_generator/shield_generator.tscn")
+const GENERATOR_CONFIG: ShieldGeneratorConfig = preload("res://assault/scenes/enemies/shield_generator/shield_generator_config.tres")  # read only
+const SHIELDED_SITE: PackedScene = preload("res://tests/helpers/shielded_site.tscn")
+const BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 const MOUNT_SCRIPT: Script = preload("res://assault/scenes/enemies/defense_turret/mounts/turret_mount.gd")
 const BURST_SCRIPT: Script = preload("res://assault/scenes/enemies/defense_turret/mounts/burst_cannon_mount.gd")
 const RING_MOUNT_SCRIPT: Script = preload("res://assault/scenes/enemies/defense_turret/mounts/pulse_ring_mount.gd")
@@ -622,3 +627,293 @@ func test_open_space_a_slot_sets_its_members_variant_and_rest_bearing() -> void:
 	var bare := TurretGroupSlot.new()
 	assert_true(is_nan(bare.rest_bearing_deg), "the slot default is NAN")
 	bare.free()
+
+
+# ── 13. The shield generator (plan §2.10.5; Phase 8 t9s) ─────────────────────────────────────────────────────────────
+# The test-only preset `tests/helpers/shielded_site.tscn` is `assault_pair` plus a generator. Hand-ticked rows drive the generator (and tick each
+# bubble itself with `_tick`); the bullet row runs on real physics at 8x.
+
+const _SPEEDUP := 8
+
+var _clock_saved := false
+var _saved_time_scale := 1.0
+var _saved_ticks := 60
+var _saved_max_steps := 8
+
+
+func after_each() -> void:
+	_restore_clock()
+
+
+func _scale_clock() -> void:
+	if _clock_saved:
+		return
+	_clock_saved = true
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
+	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
+	Engine.time_scale = _saved_time_scale * _SPEEDUP
+
+
+func _restore_clock() -> void:
+	if not _clock_saved:
+		return
+	_clock_saved = false
+	Engine.time_scale = _saved_time_scale
+	Engine.physics_ticks_per_second = _saved_ticks
+	Engine.max_physics_steps_per_frame = _saved_max_steps
+
+
+func _generator_of(members: Array) -> ShieldGenerator:
+	for m in members:
+		if m is ShieldGenerator:
+			return m
+	return null
+
+
+func _shield_of(m: Node) -> EnemyShield:
+	for c in m.get_children():
+		if c is EnemyShield:
+			return c
+	return null
+
+
+## The site in the harness, ticked off, the generator ready to be driven: `[group, members, generator]`.
+func _site(h) -> Array:
+	var g := SHIELDED_SITE.instantiate() as TurretGroup
+	var members := _spawn(h, g)
+	return [g, members, _generator_of(members)]
+
+
+## One generator tick, then every live bubble's own tick (their physics tick would double up on a real frame, and no frame passes here).
+func _gen_step(g: TurretGroup, members: Array, gen: ShieldGenerator, n: int = 1) -> void:
+	for i in n:
+		_step(g, [gen])
+		for m in members:
+			if is_instance_valid(m):
+				var s := _shield_of(m)
+				if s != null and not s.is_queued_for_deletion():
+					s._tick(DT)
+
+
+func _is_consumed(node: Variant) -> bool:
+	return not is_instance_valid(node) or node.is_queued_for_deletion()
+
+
+func test_a_generator_sustains_a_bubble_on_every_powered_member_but_itself(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var site := _site(h)
+	var g: TurretGroup = site[0]
+	var members: Array = site[1]
+	var gen: ShieldGenerator = site[2]
+	assert_not_null(gen, "%s: the preset spawns a generator" % mode)
+	assert_eq(members.size(), 4)
+	assert_false(gen.is_laser_blocking(), "%s: the mining beam burns it, it is no wall" % mode)
+	assert_false(gen.counts_as_escape, "%s: drifting out never costs the combo" % mode)
+	assert_false(gen.accept_tow(Vector2(50.0, 0.0)), "%s: no mover, no tow" % mode)
+	_gen_step(g, members, gen)
+	var shielded := 0
+	for m in members:
+		if m == gen:
+			assert_null(_shield_of(m), "%s: the generator does not shield itself" % mode)
+			assert_false(gen.hurt_box.has_absorber())
+			continue
+		var s := _shield_of(m)
+		assert_not_null(s, "%s: %s carries a bubble" % [mode, m.name])
+		if s == null:
+			continue
+		shielded += 1
+		assert_true(s.is_up(), "%s: %s's bubble is up" % [mode, m.name])
+		assert_true((m as BaseEnemy).hurt_box.has_absorber(), "%s: and sits in the hurtbox's absorber slot" % mode)
+		assert_true(s.sustain_mode)
+		assert_gte(s.arc_deg, 360.0, "%s: a full bubble" % mode)
+		assert_eq(s.capacity, GENERATOR_CONFIG.shield_capacity)
+		assert_eq(s.regen_delay, GENERATOR_CONFIG.shield_regen_delay)
+		assert_eq(s.regen_seconds, GENERATOR_CONFIG.shield_regen_seconds)
+		assert_eq(s.reboot_seconds, GENERATOR_CONFIG.shield_reboot_seconds)
+		var r: float = DefenseTurret.BODY_RADIUS if m is DefenseTurret else PowerSource.BODY_RADIUS
+		assert_eq(s.radius, r + GENERATOR_CONFIG.shield_radius_margin, "%s: the member's body radius plus the margin" % mode)
+	assert_eq(shielded, 3, "%s: both turrets and the power source" % mode)
+
+	var tethers := gen.tethers()
+	assert_eq(tethers.size(), 3, "%s: one cyan tether per shielded member" % mode)
+	for line in tethers:
+		assert_true(line.top_level)
+		assert_eq(line.default_color, SupportShip.TETHER_COLOR, "%s: the Support Ship's tether colour" % mode)
+		assert_almost_eq(line.points[0].distance_to(gen.global_position), 0.0, 0.01)
+	_kill(members[0])
+	assert_eq(gen.tethers().size(), 2, "%s: a dead member loses its tether" % mode)
+
+
+func test_a_ward_already_on_a_hurtbox_is_never_displaced(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var site := _site(h)
+	var g: TurretGroup = site[0]
+	var members: Array = site[1]
+	var gen: ShieldGenerator = site[2]
+	var turret := members[0] as DefenseTurret
+	var ward := EnemyShield.new()
+	turret.add_child(ward)
+	assert_true(ward.attach(turret.hurt_box), "sanity: the ward takes the slot first")
+	_gen_step(g, members, gen, 30)
+	var shields := turret.get_children().filter(func(c: Node) -> bool: return c is EnemyShield)
+	assert_eq(shields, [ward], "%s: the generator adds nothing beside a ward" % mode)
+	assert_true(ward.is_up())
+	assert_eq(gen.tethers().size(), 2, "%s: and tethers only what it shields" % mode)
+	assert_not_null(_shield_of(members[1]), "%s: the other members are shielded as usual" % mode)
+	ward.free()
+	_gen_step(g, members, gen, 2)
+	assert_not_null(_shield_of(turret), "%s: once the slot is free the generator takes it" % mode)
+	assert_true(turret.hurt_box.has_absorber())
+
+
+func test_a_lone_generator_and_a_fence_post_get_no_bubble(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var lone := GENERATOR.instantiate() as ShieldGenerator
+	h.root.add_child(lone)
+	lone.global_position = G
+	lone.set_physics_process(false)
+	var bystander := _victim(h, G + Vector2(80.0, 0.0))
+	for i in 30:
+		lone._physics_process(DT)
+	assert_eq(h.root.find_children("*", "EnemyShield", true, false).size(), 0, "%s: a lone generator shields nothing" % mode)
+	assert_eq(lone.tethers().size(), 0)
+	assert_false(bystander.hurt_box.has_absorber())
+
+	var group := _group_of([[GENERATOR, -1, Vector2.ZERO], [TURRET, BURST, Vector2(-120.0, 0.0)], [FIXTURE_FENCE_POST, -1, Vector2(120.0, 0.0)]])
+	var members := _spawn(h, group, G + Vector2(0.0, 150.0))
+	var gen := _generator_of(members)
+	_gen_step(group, members, gen, 3)
+	assert_not_null(_shield_of(members[1]), "%s: the turret is shielded" % mode)
+	assert_null(_shield_of(members[2]), "%s: a fence post never is" % mode)
+	assert_eq(gen.tethers().size(), 1)
+
+
+func test_a_real_standard_bullet_is_absorbed_and_consumed(mode: String = use_parameters(MODES)) -> void:
+	_scale_clock()
+	var h = _world(mode)
+	var site := _site(h)
+	var members: Array = site[1]
+	var gen: ShieldGenerator = site[2]
+	var turret := members[0] as DefenseTurret
+	gen.set_physics_process(true)
+	(site[0] as TurretGroup).set_physics_process(true)  # the turrets stay quiet (their tick is off); the generator runs on the real clock
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var shield := _shield_of(turret)
+	assert_not_null(shield, "%s: the bubble is up" % mode)
+	var absorbed := [0]
+	turret.hurt_box.hit_absorbed.connect(func(_hb = null) -> void: absorbed[0] += 1)
+	var hp := turret.health.current_health
+	var bullet: Node2D = BULLET_SCENE.instantiate()
+	h.root.add_child(bullet)
+	bullet.global_position = turret.global_position + Vector2(-110.0, 0.0)
+	bullet.rotation = Vector2.UP.angle_to(Vector2.RIGHT)
+	if bullet.has_signal("expired"):
+		bullet.expired.connect(bullet.queue_free)
+	for i in 30:
+		await get_tree().physics_frame
+	assert_true(_is_consumed(bullet), "%s: the bubble eats the bullet" % mode)
+	assert_eq(absorbed[0], 1, "%s: one absorbed hit" % mode)
+	assert_eq(turret.health.current_health, hp, "%s: the hull heard nothing" % mode)
+	if shield != null:
+		assert_lt(shield.points(), GENERATOR_CONFIG.shield_capacity, "%s: the bubble paid the bullet's damage" % mode)
+	_restore_clock()
+
+
+func test_killing_the_generator_lapses_every_bubble_within_heartbeat_plus_fade(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var site := _site(h)
+	var g: TurretGroup = site[0]
+	var members: Array = site[1]
+	var gen: ShieldGenerator = site[2]
+	_gen_step(g, members, gen)
+	var bubbles: Array[EnemyShield] = []
+	var hurt_boxes: Array[HurtBox] = []
+	for m in members:
+		if m != gen:
+			bubbles.append(_shield_of(m))
+			hurt_boxes.append((m as BaseEnemy).hurt_box)
+	assert_eq(bubbles.size(), 3)
+	var heartbeat: float = bubbles[0].heartbeat
+	var fade: float = bubbles[0].fade_seconds
+	_kill(gen)
+	_gen_step(g, members, gen, int(heartbeat / DT) - 3)
+	for b in bubbles:
+		assert_true(b.is_up(), "%s: still up inside the heartbeat" % mode)
+	_gen_step(g, members, gen, 6)
+	for hb in hurt_boxes:
+		assert_false(hb.has_absorber(), "%s: the slot is released just after the heartbeat" % mode)
+	_gen_step(g, members, gen, int(fade / DT) + 3)
+	for b in bubbles:
+		assert_true(_is_consumed(b), "%s: and the bubble is gone after the fade" % mode)
+
+
+func test_killing_the_power_source_lapses_every_bubble_too(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var site := _site(h)
+	var g: TurretGroup = site[0]
+	var members: Array = site[1]
+	var gen: ShieldGenerator = site[2]
+	var source := _source_of(members)
+	_gen_step(g, members, gen)
+	assert_eq(gen.tethers().size(), 3)
+	var turrets: Array = members.filter(func(m: Node) -> bool: return m is DefenseTurret)
+	var bubbles: Array[EnemyShield] = []
+	for t in turrets:
+		bubbles.append(_shield_of(t))
+	var heartbeat: float = bubbles[0].heartbeat
+	var fade: float = bubbles[0].fade_seconds
+	_kill(source)
+	assert_false(gen.is_powered(), "%s: the generator is unpowered in the same call" % mode)
+	assert_eq(gen.tethers().size(), 0, "%s: the tethers go at once" % mode)
+	_gen_step(g, members, gen, int((heartbeat + fade) / DT) + 6)
+	for i in turrets.size():
+		assert_false(turrets[i].hurt_box.has_absorber(), "%s: turret %d lost its bubble" % [mode, i])
+		assert_true(_is_consumed(bubbles[i]))
+	assert_false(gen.hurt_box.has_absorber())
+	assert_true(is_instance_valid(gen) and not gen.is_queued_for_deletion(), "%s: the generator itself lives, dark" % mode)
+
+
+func test_a_beam_ignores_the_bubble(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var site := _site(h)
+	var g: TurretGroup = site[0]
+	var members: Array = site[1]
+	var gen: ShieldGenerator = site[2]
+	var turret := members[0] as DefenseTurret
+	_gen_step(g, members, gen)
+	var shield := _shield_of(turret)
+	assert_true(shield.is_up())
+	var beam := EnemyBeamScenes.scene_for(EnemyBeam.Kind.BEAM).instantiate() as EnemyBeam
+	h.root.add_child(beam)
+	beam.global_position = turret.global_position + Vector2(-300.0, 0.0)
+	beam.global_rotation = 0.0
+	beam.setup(null, &"")
+	var hits: Array = []
+	beam.target_hit.connect(func(target: Node2D, _dmg: int) -> void: hits.append(target))
+	beam.start()
+	for i in 240:
+		beam.tick(DT)
+		if hits.has(turret):
+			break
+	assert_true(hits.has(turret), "%s: the beam hurt the shielded turret" % mode)
+	assert_lt(turret.health.current_health, turret.health.max_health, "%s: the hull took the damage" % mode)
+	assert_eq(shield.points(), GENERATOR_CONFIG.shield_capacity, "%s: the bubble paid nothing" % mode)
+	assert_true(shield.is_up())
+
+
+func test_the_test_preset_with_a_generator_meets_the_coverage_rule() -> void:
+	var site := SHIELDED_SITE.instantiate() as TurretGroup
+	var generators := site.get_children().filter(func(c: Node) -> bool:
+		return c is TurretGroupSlot and c.member_scene != null and c.member_scene.resource_path == GENERATOR.resource_path)
+	assert_eq(generators.size(), 1, "sanity: the preset has its generator")
+	assert_eq(site.coverage_holes().size(), 0, "every point at coverage_radius is reached by >= coverage_min mounts")
+	assert_eq(site.mount_reaches().size(), 2, "the generator adds no mount")
+	site.free()
+	var short := SHIELDED_SITE.instantiate() as TurretGroup
+	short.get_node("RingTurret").free()
+	assert_gt(short.coverage_holes().size(), 0, "boundary: without a turret the preset fails")
+	short.free()

@@ -1162,3 +1162,55 @@ func test_power_source_powers_its_group_in_both_modes_and_drifts_only_in_assault
 	source.hurt_box.received_damage.emit(10000)
 	assert_false(group.is_powered(), "%s: dark" % mode)
 	assert_eq(turret.mounts()[0].phase(), TurretMount.Phase.UNPOWERED, "%s: the turret is down in the same call" % mode)
+
+# ── The Shield Generator (Phase 8, t9s; plan §2.10.5) ────────────────────────────────────────────────────────────────
+
+const SHIELD_GENERATOR_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/shield_generator/shield_generator.tscn")
+
+
+## The same generator shields its group's turret in both modes and drifts only in Assault; it is an ordinary enemy (group `enemies`), never a wall for the
+## mining beam, refuses a tow (no mover), never counts as an escape and never shields itself. Killing the power source stops the projection in the same call.
+func test_shield_generator_shields_its_group_in_both_modes_and_drifts_only_in_assault(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 600.0)
+	var group := TurretGroup.new()
+	for spec: Array in [[DEFENSE_TURRET_SCENE, Vector2(-100.0, 0.0)], [SHIELD_GENERATOR_SCENE, Vector2(100.0, 0.0)], [POWER_SOURCE_SCENE, Vector2(0.0, -100.0)]]:
+		var slot := TurretGroupSlot.new()
+		slot.member_scene = spec[0]
+		slot.position = spec[1]
+		group.add_child(slot)
+	group.position = Vector2(640.0, 300.0)
+	harness.root.add_child(group)
+	group.spawn_members()
+	group.set_physics_process(false)
+	var turret := group.members()[0] as DefenseTurret
+	var generator := group.members()[1] as ShieldGenerator
+	var source := group.members()[2] as PowerSource
+	for m: BaseEnemy in [turret, generator, source]:
+		m.set_physics_process(false)  # hand-ticked, same technique as the turret above
+		(m.get_node("AssaultDrift") as AssaultDrift).set_physics_process(false)
+	assert_true(generator.is_in_group(&"enemies"), "%s: an ordinary enemy" % mode)
+	assert_false(generator.is_laser_blocking(), "%s: a target for the mining beam, not a wall" % mode)
+	assert_false(generator.accept_tow(Vector2(50.0, 0.0)), "%s: no mover, no tow" % mode)
+	assert_false(generator.counts_as_escape, "%s: drifting out never costs the combo" % mode)
+	var drift := generator.get_node("AssaultDrift") as AssaultDrift
+	var y0 := generator.global_position.y
+	for _i in 60:
+		drift.step(DT)
+		group.tick(DT)
+		generator._physics_process(DT)
+	var expected_drift := generator.config.assault_drift_speed * 60.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(generator.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
+	for m: BaseEnemy in [turret, source]:
+		var bubble: EnemyShield = null
+		for c in m.get_children():
+			if c is EnemyShield:
+				bubble = c
+		assert_not_null(bubble, "%s: %s is shielded" % [mode, m.name])
+		assert_true(bubble.is_up() if bubble != null else false)
+	assert_eq(generator.hurt_box.has_absorber(), false, "%s: never itself" % mode)
+	source.hurt_box.received_damage.emit(10000)
+	assert_false(generator.is_powered(), "%s: unpowered in the same call" % mode)
+	assert_eq(generator.tethers().size(), 0, "%s: no tether once dark" % mode)

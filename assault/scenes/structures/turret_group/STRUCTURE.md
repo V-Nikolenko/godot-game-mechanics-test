@@ -5,8 +5,9 @@ crossfire stays readable, and shuts every turret down the moment the power sourc
 **Fantasy / threat:** A defended position: guns whose lanes cross, wired to a reactor. Fight through the crossfire, or find the lane to the reactor
 and switch the whole position off.
 
-> **Build state (Phase 8, t9).** `TurretGroup`, `TurretGroupSlot`, the `assault_pair` preset and `WaveBuilder.turret_group()`. Next: the shield generator
-> and its test preset (t9s), the hub site preset (t18), level-1 placement (t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10; task plan
+> **Build state (Phase 8, t9 + t9s).** `TurretGroup`, `TurretGroupSlot`, the `assault_pair` preset and `WaveBuilder.turret_group()`; the shield generator
+> (t9s, [ENEMY.md](../../enemies/shield_generator/ENEMY.md)) is a member that wraps the others in bubbles. Next: the hub site preset (t18), level-1 placement
+> (t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10; task plan
 > `docs/plans/cmvqw0vnl0183qs2xbphzonu7/3-plan.md`.
 
 ---
