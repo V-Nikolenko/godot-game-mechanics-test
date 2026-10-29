@@ -50,7 +50,6 @@ The Pulse Ring is `energy_ring.gd` / `energy_ring.tscn` (`EnergyRing`, see below
 | `telegraph_width` | 4 | 4 | 4 | 4 |
 | `blocked_by_cover` / `registers_hazard` | true / false | true / false | true / false | true / true |
 | `avoid_weight` / `hazard_pad` | – | – | – | 0.5 / 24 (a fence post pair sets 1.0) |
-& true / true |
 
 Tests and owners read these through `EnemyBeamScenes.export_of(kind, property, fallback)` (fallback: the script default), never as typed numbers.
 

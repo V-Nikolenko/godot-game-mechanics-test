@@ -173,6 +173,13 @@ func _victim(h, at: Vector2, hp: int = FIXTURE_HP, shape: CollisionShape2D = nul
 	return e
 
 
+## A real physics body on the fixture's root (layer 1, which `LineOfSight.BLOCK_MASK` sees): the fixture scene has none, so
+## without this a ray could never meet it and "a non-blocking body does not clip" would be vacuous.
+func _with_body(e: BaseEnemy, radius: float = 14.0) -> BaseEnemy:
+	e.add_child(_circle(radius))
+	return e
+
+
 func _hp(node: Node) -> int:
 	return (node.get_node("Health") as Health).current_health
 
@@ -1006,22 +1013,33 @@ func test_a_wreck_stops_an_emitter_beam() -> void:
 	var behind := _victim(h, EMITTER + Vector2(450.0, 0.0))
 	# Control: the same line with no wreck on it, a fixture body in front of the far fixture.
 	var ctrl_origin := EMITTER + Vector2(0.0, 200.0)
-	var ctrl_front := _victim(h, ctrl_origin + Vector2(150.0, 0.0))
+	var ctrl_front := _with_body(_victim(h, ctrl_origin + Vector2(150.0, 0.0)))
 	var ctrl_behind := _victim(h, ctrl_origin + Vector2(450.0, 0.0))
+	# Boundary: the same body in group `asteroids` IS a blocker, so the control row can fail.
+	var rock_origin := EMITTER + Vector2(0.0, -200.0)
+	var rock_body := _with_body(_victim(h, rock_origin + Vector2(150.0, 0.0)))
+	rock_body.add_to_group(&"asteroids")
+	var rock_behind := _victim(h, rock_origin + Vector2(450.0, 0.0))
 	var b := _beam(h, kind)
 	var c := _beam(h, kind, null, &"", null, ctrl_origin)
+	var r := _beam(h, kind, null, &"", null, rock_origin)
 	var hits := _hits(b)
 	var ctrl_hits := _hits(c)
+	var rock_hits := _hits(r)
 	await wait_physics_frames(3)
-	_drive(h, [[b], [c]])
+	_drive(h, [[b], [c], [r]])
 	b.start(0.0)
 	c.start(0.0)
+	r.start(0.0)
 	await wait_physics_frames(_lit_frames())
-	assert_true(b.is_lethal() and c.is_lethal(), "both beams are lit")
+	assert_true(b.is_lethal() and c.is_lethal() and r.is_lethal(), "all beams are lit")
 	assert_eq(_hits_on(hits, front), 1, "a fixture in front of the wreck is hit")
 	assert_eq(_hits_on(hits, behind), 0, "a fixture behind the wreck is not")
 	assert_eq(_hits_on(ctrl_hits, ctrl_front), 1, "control: a fixture BODY on the line does not clip it (it is not a blocker)")
 	assert_eq(_hits_on(ctrl_hits, ctrl_behind), 1, "control: with no wreck the far fixture is hit")
+	var free_tip: float = c.global_position.x + float(_export(kind, &"length")) - float(_export(kind, &"tip_grace_px"))
+	assert_almost_eq(c.hit_segments()[0][1].x, free_tip, 0.5, "control: the lethal part reaches the free tip past the body")
+	assert_eq(_hits_on(rock_hits, rock_behind), 0, "boundary: a body in group asteroids clips the beam, so the fixture behind it is not hit")
 	var surface := wreck.global_position.x - wreck.body_radius()
 	var segments := b.hit_segments()
 	assert_eq(segments.size(), 1, "one lethal part")
