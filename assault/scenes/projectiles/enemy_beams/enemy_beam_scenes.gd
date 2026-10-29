@@ -7,11 +7,13 @@ extends RefCounted
 const BEAM: PackedScene = preload("res://assault/scenes/projectiles/enemy_beams/beam.tscn")
 const SWEEP: PackedScene = preload("res://assault/scenes/projectiles/enemy_beams/sweep_beam.tscn")
 const LANCE: PackedScene = preload("res://assault/scenes/projectiles/enemy_beams/lance.tscn")
+## The endpoint beam (`set_endpoints()` every tick): the twin pair's and the laser fence's.
+const TWIN: PackedScene = preload("res://assault/scenes/projectiles/enemy_beams/twin_beam.tscn")
 ## The Pulse Ring (`EnergyRing`; not an `EnemyBeam.Kind`: that enum is append-only and the ring is its own class).
 const RING: PackedScene = preload("res://assault/scenes/projectiles/enemy_beams/energy_ring.tscn")
 
 
-## The scene for [param kind], or null with no error while that kind's scene is not built yet (TWIN: the endpoint-beam task), so a
+## The scene for [param kind], or null with no error for a kind that has no scene, so a
 ## caller can sweep "every built kind".
 static func scene_for(kind: EnemyBeam.Kind) -> PackedScene:
 	match kind:
@@ -21,6 +23,8 @@ static func scene_for(kind: EnemyBeam.Kind) -> PackedScene:
 			return SWEEP
 		EnemyBeam.Kind.LANCE:
 			return LANCE
+		EnemyBeam.Kind.TWIN:
+			return TWIN
 	return null
 
 

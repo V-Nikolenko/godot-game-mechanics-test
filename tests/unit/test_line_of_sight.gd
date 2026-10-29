@@ -118,6 +118,32 @@ func test_five_stacked_non_blocking_bodies_terminate_and_return_clear() -> void:
 	assert_true(await _clear(), "the recast cap is reached and the line counts as clear")
 
 
+
+# ── blocks() and first_blocker() (Phase 8 t5; the energy beams' cover clip reads the same rule) ──────────
+
+func test_blocks_is_the_opt_in_rule_clear_uses() -> void:
+	assert_false(LineOfSight.blocks(null), "null blocks nothing")
+	assert_true(LineOfSight.blocks(_rock(Vector2.ZERO)), "an asteroid blocks")
+	var cover := _body(FakeCover.new(), Vector2.ZERO) as FakeCover
+	assert_true(LineOfSight.blocks(cover), "a body answering blocks_line_of_sight() == true blocks")
+	cover.blocks = false
+	assert_false(LineOfSight.blocks(cover), "one answering false does not")
+	assert_false(LineOfSight.blocks(_body(CharacterBody2D.new(), Vector2.ZERO)), "a plain body does not")
+
+
+func test_first_blocker_answers_the_hit_past_a_non_blocker_and_nothing_when_clear() -> void:
+	_body(CharacterBody2D.new(), Vector2(100.0, 0.0))
+	var rock := _rock(Vector2(250.0, 0.0))
+	await get_tree().physics_frame
+	var space := get_tree().root.world_2d.direct_space_state
+	var hit := LineOfSight.first_blocker(space, FROM, TO)
+	assert_false(hit.is_empty(), "the rock is found past the fighter stand-in")
+	assert_eq(hit.get("collider"), rock, "the collider is the rock")
+	assert_almost_eq((hit.get("position") as Vector2).x, 240.0, 1.0, "on the rock's near face (a default 10 px circle)")
+	assert_true(LineOfSight.first_blocker(space, FROM, Vector2(0.0, 400.0)).is_empty(), "an empty line answers an empty hit")
+	var excluded := LineOfSight.first_blocker(space, FROM, TO, [rock.get_rid()] as Array[RID])
+	assert_true(excluded.is_empty(), "an excluded rid is clear")
+
 # ── EnemyBrain.can_see_player() (Phase 6 t13; plan cmug23om70001m52wqfwclf3l §2.11) ──────────────────
 
 const WRECK_SMALL: PackedScene = preload("res://assault/scenes/hazards/wreck/wreck_small.tscn")

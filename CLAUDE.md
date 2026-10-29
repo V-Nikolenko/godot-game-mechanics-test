@@ -108,11 +108,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   **Enemy lasers are one owner-ticked family, `EnemyBeam` (Phase 8)** — `assault/scenes/projectiles/enemy_beams/`, `Kind { BEAM, SWEEP, LANCE, TWIN }`,
   `Phase { OFF, TELEGRAPH, ACTIVE, FADE }` (append-only). The owner calls `setup(host, owner_group)`, `start()`, `tick(delta)` on its physics tick and `cancel()`;
   **`tick()` is the beam's only clock** (no `Timer`, `create_timer` or `_process`). An emitter beam points along its node's **local +X** (the owner rotates the parent).
-  Tuning lives in `beam.tscn` / `sweep_beam.tscn` / `lance.tscn`, read through `EnemyBeamScenes.export_of()`. A beam hurts every `player` / `allies` / `enemies` /
+  Tuning lives in `beam.tscn` / `sweep_beam.tscn` / `lance.tscn` / `twin_beam.tscn`, read through `EnemyBeamScenes.export_of()`. A beam hurts every `player` / `allies` / `enemies` /
   `asteroids` node whose hurtbox **shape** meets it (`EnergyHitScan`, `Shape2D.collide`, swept between ticks) **except its owner set**, never ordnance, by a direct
   emit (bypasses `EnemyShield` and plates). `rehit_interval` 0.55 > the player's 0.5 s i-frames; telegraph line ≥ 3 px; static / sweep / lance fairness inequalities —
   [BEAMS.md](assault/scenes/projectiles/enemy_beams/BEAMS.md). Gate: `tests/integration/test_enemy_beams.gd` (its real-player cadence rows run at **4×**, not 8×: at 8×
   one headless idle frame outlasts the 0.05 s i-frame margin and refuses re-hits).
+  **Endpoint half (t5):** `twin_beam.tscn` takes `set_endpoints(a, b)` every tick; cover clips a beam through `LineOfSight.first_blocker()` **only on the physics step** (a hand-ticked beam never casts; cover rows run on real physics at 8×) and an endpoint beam leaves a safe shadow behind a blocker; `set_strained(true)` = non-lethal flicker; a `registers_hazard` beam is a `&"laser_wall"` segment `HazardInfo` from TELEGRAPH start to FADE start (full `a..b`, `exempt_group` = its owner group).
   **The Pulse Ring is `EnergyRing`** (`enemy_beams/energy_ring.tscn`, `EnemyBeamScenes.ring_scene()` / `ring_export()`; `class_name PulseRing` stays Ph7's visual): owner-ticked
   TELEGRAPH -> EXPANDING -> FADE, a 24 px band at 360 px/s whose outer edge stops at `max_radius` 280, two 45 degree gaps turning at 30 degrees/s, each target hit once per ring over
   the swept interval. Gate: `tests/integration/test_energy_ring.gd`.

@@ -2,7 +2,7 @@
 
 **Role:** a shared enemy laser weapon. A thin warning line appears on the exact path, then a beam hurts everything on that line except the
 ships that fired it. It is a weapon component, not an enemy: an owner (a turret mount, later a drone pair, a fence, a hull) holds it and drives
-its clock. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.1–§2.3 (built in t2); decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md`
+its clock. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.1–§2.4 (core built in t2, endpoint beam / cover / laser-wall registration in t5); decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md`
 → Phase 8.
 
 `LaserRay` (`assault/scenes/hazards/laser_ray/`, level 1, the race and the station) and the station's `StationLaserPhase` are **not** part of this family
@@ -15,14 +15,14 @@ enemy_beams/
 ├── BEAMS.md                ← this file
 ├── enemy_beam.gd           EnemyBeam extends Node2D (Kind BEAM / SWEEP / LANCE / TWIN, Phase OFF / TELEGRAPH / ACTIVE / FADE)
 ├── energy_hit_scan.gd      EnergyHitScan: candidates / is_exempt / hits_band / bounding_radius / deliver (static)
-├── enemy_beam_scenes.gd    EnemyBeamScenes: scene_for / export_of / export_of_scene
+├── enemy_beam_scenes.gd    EnemyBeamScenes: scene_for / export_of / export_of_scene / ring_scene / ring_export
 ├── beam.tscn               BEAM   (beam cannon)
 ├── sweep_beam.tscn         SWEEP  (the mount rotates it at sweep_rate over sweep_arc_deg)
-└── lance.tscn              LANCE  (sniper lance: long telegraph, locked commit window, one hit)
+├── lance.tscn              LANCE  (sniper lance: long telegraph, locked commit window, one hit)
+└── twin_beam.tscn          TWIN   (endpoint beam: set_endpoints(a, b) every tick, held ACTIVE, registers a laser wall)
 ```
 
-Later tasks add `twin_beam.tscn` (TWIN, endpoints; with cover clipping, the strain flicker and laser-wall registration) and the Pulse Ring
-(`energy_ring.gd` / `energy_ring.tscn`, `EnergyRing`; Ph7's `PulseRing` is a different, visual-only ring).
+The Pulse Ring is `energy_ring.gd` / `energy_ring.tscn` (`EnergyRing`, see below; Ph7's `PulseRing` is a different, visual-only ring).
 
 ## The owner contract
 
@@ -33,23 +33,24 @@ Later tasks add `twin_beam.tscn` (TWIN, endpoints; with cover clipping, the stra
   `_physics_process` call it, for scene-placed props only.
 - `cancel()`: TELEGRAPH → OFF at once (it never hurt), ACTIVE → FADE.
 - Signals: `phase_changed(phase: int)` once per change, `target_hit(target: Node2D, damage: int)` per delivered hit.
-- Queries: `phase()`, `is_lethal()`, `is_committed()` (the Lance's last `commit_seconds` of TELEGRAPH), `hit_segments()`, `hazard_info()` (null until
-  the endpoint-beam task).
+- Queries: `phase()`, `is_lethal()`, `is_committed()` (the Lance's last `commit_seconds` of TELEGRAPH), `hit_segments()` (the lethal parts after tips and cover), `hazard_info()` (the laser-wall info while a `registers_hazard` beam is
+  registered, null otherwise).
 - An emitter beam points along its **local +X** from its own `global_position`. The owner rotates the beam's **parent**, never the beam. The beam
   owns no `StateLight`; the host sets its light from `phase_changed` / `is_committed()` (TELEGRAPH = CHARGING, commit = COMMIT, ACTIVE = ARMED).
 
 ## Exports (one scene per kind; every value authored in the `.tscn`)
 
-| Export | `beam.tscn` | `sweep_beam.tscn` | `lance.tscn` |
-|---|---|---|---|
-| `telegraph_seconds` / `commit_seconds` | 0.9 / 0 | 0.9 / 0 | 1.0 / 0.5 |
-| `active_seconds` / `fade_seconds` / `ignite_grace` | 1.2 / 0.15 / 0.1 | 2.0 / 0.15 / 0.1 | 0.2 / 0.1 / 0 |
-| `length` / `tip_grace_px` | 700 / 24 | 400 / 24 | 1100 / 24 |
-| `hit_half_width` / `draw_half_width` | 12 / 16 | 10 / 14 | 8 / 10 |
-| `damage` / `rehit_interval` | 10 / 0.55 | 10 / 0.55 | 24 / inf (once per shot) |
-| `telegraph_width` | 4 | 4 | 4 |
-| `sweep_arc_deg` / `sweep_rate` | – | 100 / 0.8727 rad/s | – |
-| `blocked_by_cover` / `registers_hazard` | true / false | true / false | true / false |
+| Export | `beam.tscn` | `sweep_beam.tscn` | `lance.tscn` | `twin_beam.tscn` |
+|---|---|---|---|---|
+| `telegraph_seconds` / `commit_seconds` | 0.9 / 0 | 0.9 / 0 | 1.0 / 0.5 | 0.8 / 0 |
+| `active_seconds` / `fade_seconds` / `ignite_grace` | 1.2 / 0.15 / 0.1 | 2.0 / 0.15 / 0.1 | 0.2 / 0.1 / 0 | 0 (held) / 0.15 / 0.1 |
+| `length` / `tip_grace_px` | 700 / 24 | 400 / 24 | 1100 / 24 | (endpoints) / 0 |
+| `hit_half_width` / `draw_half_width` | 12 / 16 | 10 / 14 | 8 / 10 | 10 / 14 |
+| `damage` / `rehit_interval` | 10 / 0.55 | 10 / 0.55 | 24 / inf (once per shot) | 12 / 0.55 |
+| `telegraph_width` | 4 | 4 | 4 | 4 |
+| `blocked_by_cover` / `registers_hazard` | true / false | true / false | true / false | true / true |
+| `avoid_weight` / `hazard_pad` | – | – | – | 0.5 / 24 (a fence post pair sets 1.0) |
+& true / true |
 
 Tests and owners read these through `EnemyBeamScenes.export_of(kind, property, fallback)` (fallback: the script default), never as typed numbers.
 
@@ -74,6 +75,25 @@ Tests and owners read these through `EnemyBeamScenes.export_of(kind, property, f
 - **Drawing:** `Telegraph` (`telegraph_width` px, ≥ 3; yellow, white while committed), `Glow` (red, `2 * draw_half_width`) and `Core` (white-hot,
   `hit_half_width`) are code-built `top_level` `Line2D`s in global space, not anti-aliased, no PNG; the glow and core ease in over `ignite_grace` and
   out over `fade_seconds`.
+
+## Endpoint beams, cover, strain and the laser wall (t5)
+
+- **Endpoint beam (TWIN).** `set_endpoints(a, b)` every tick before `tick()`; the drawn and the hit segment is `a`..`b`, `length` is ignored and
+  `tip_grace_px` is 0 (the endpoints are the owner's own drones or posts). Held: `active_seconds` 0 lasts until `cancel()`.
+- **Cover.** With `blocked_by_cover`, and **only when `Engine.is_in_physics_frame()`**, the beam casts through `LineOfSight.first_blocker()` (the
+  same opt-in blockers and recast-past-non-blockers loop as `clear()`; `LineOfSight.blocks(collider)` is the public rule): groups `asteroids`, or a
+  collider answering `blocks_line_of_sight()` (wrecks). The host's body is excluded. An emitter beam ends at the first blocker (no tip grace there); an
+  endpoint beam casts `a -> b` and `b -> a` and is drawn and lethal on `a..hit_a` and `hit_b..b` only: the shadow between is safe. A hit part
+  reaches `COVER_BITE_PX` (2) into the blocker so a blocker that is also a target (an asteroid, whose hurtbox is its body) is still hit; the drawn
+  beam stops on the surface. A hand-ticked beam is not on the physics step and never casts, so hand-ticked rows are deterministic; cover rows run on
+  real physics at the 8× clock. A second set of `Telegraph2` / `Glow2` / `Core2` lines draws the far part of a split beam. The laser-wall hazard
+  below always spans the full `a..b` (avoidance does not know about cover).
+- **Strain.** `set_strained(true)` makes the beam non-lethal (no phase change, `hit_segments()` empty) and flickers glow and core between full and
+  0.25 alpha at 15 Hz from the beam's own clock. The twin rig decides strain and collapse.
+- **Laser wall.** A `registers_hazard` beam is in `Hazards` from TELEGRAPH start to FADE start (not after `cancel()`, OFF or `_exit_tree()`): one
+  `HazardInfo` updated in place every tick, `kind = &"laser_wall"`, `position` the midpoint, `segment_half = (b - a) / 2`, `radius = draw_half_width +
+  hazard_pad`, `avoid_weight`, `velocity` the midpoint's motion per second over the last tick (the avoidance stage leads a moving wall),
+  `source = self`, `exempt_group` the owner group; no pull, slow or LOS block.
 
 ## Fairness rules (gate rows reading the scene exports and both player scenes)
 

@@ -24,6 +24,8 @@ const ALLY_SCENE: PackedScene = preload("res://assault/scenes/allies/ally_fighte
 const RAM_SCENE: PackedScene = preload("res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn")
 const ASTEROID_SCENE: PackedScene = preload("res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn")
 const DUMB_ROCKET: PackedScene = preload("res://assault/scenes/projectiles/enemy_rockets/dumb_rocket.tscn")
+const WRECK_MEDIUM: PackedScene = preload("res://assault/scenes/hazards/wreck/wreck_medium.tscn")
+const WRECK_LARGE: PackedScene = preload("res://assault/scenes/hazards/wreck/wreck_large.tscn")
 const BEAM_SCRIPT: GDScript = preload("res://assault/scenes/projectiles/enemy_beams/enemy_beam.gd")
 
 const MODES := ["open_space", "assault"]
@@ -38,6 +40,11 @@ const CADENCE_SECONDS := 2.0
 const CADENCE_SPEEDUP := 4
 const EMITTER := Vector2(200.0, 300.0)
 const OWNER_GROUP := &"beam_test_owner_group"
+## The cover rows' clock: real physics, the step kept at 1/60 game-second (`test_level1_drone_exit.gd`'s `_scale_clock()`).
+const COVER_SPEEDUP := 8
+## A twin beam's test endpoints.
+const WALL_A := Vector2(100.0, 300.0)
+const WALL_B := Vector2(900.0, 300.0)
 ## Every export of the §2.1 table.
 const TABLE: Array[StringName] = [
 	&"telegraph_seconds", &"commit_seconds", &"active_seconds", &"fade_seconds", &"ignite_grace", &"length", &"hit_half_width",
@@ -95,7 +102,7 @@ func _world(mode: String):
 	return h
 
 
-## Every kind whose scene is built (TWIN joins with the endpoint-beam task).
+## Every kind whose scene is built.
 func _built_kinds() -> Array[int]:
 	var out: Array[int] = []
 	for kind: int in EnemyBeam.Kind.values():
@@ -392,6 +399,10 @@ func test_telegraph_width_is_at_least_3_and_drawn(mode: String = use_parameters(
 		var width := float(_export(kind, &"telegraph_width"))
 		assert_true(_telegraph_width_ok(EnemyBeamScenes.scene_for(kind)), "%s: kind %d telegraph_width %.1f >= 3" % [mode, kind, width])
 		var b := _beam(h, kind, null, &"", null, EMITTER, 0.3)
+		var reach := float(_export(kind, &"length"))
+		if kind == EnemyBeam.Kind.TWIN:
+			reach = 600.0
+			b.set_endpoints(EMITTER, EMITTER + Vector2.RIGHT.rotated(0.3) * reach)
 		b.start()
 		_tick(b, 1)
 		var line := b.get_node("Telegraph") as Line2D
@@ -401,10 +412,13 @@ func test_telegraph_width_is_at_least_3_and_drawn(mode: String = use_parameters(
 		assert_eq(line.points.size(), 2, "%s: one straight line" % mode)
 		if line.points.size() == 2:
 			assert_almost_eq(line.points[0], EMITTER, Vector2(0.01, 0.01), "%s: kind %d telegraph starts at the emitter" % [mode, kind])
-			assert_almost_eq(line.points[1], EMITTER + dir * float(_export(kind, &"length")), Vector2(0.01, 0.01),
+			assert_almost_eq(line.points[1], EMITTER + dir * reach, Vector2(0.01, 0.01),
 					"%s: kind %d telegraph runs the whole path, along local +X" % [mode, kind])
 		assert_false((b.get_node("Core") as Line2D).visible, "%s: no core while telegraphing" % mode)
-		_tick(b, _ticks(float(_export(kind, &"telegraph_seconds"))) + _ticks(float(_export(kind, &"ignite_grace"))))
+		for i in _ticks(float(_export(kind, &"telegraph_seconds"))) + _ticks(float(_export(kind, &"ignite_grace"))):
+			if kind == EnemyBeam.Kind.TWIN:
+				b.set_endpoints(EMITTER, EMITTER + Vector2.RIGHT.rotated(0.3) * reach)
+			b.tick(DT)
 		assert_false(line.visible, "%s: kind %d telegraph hidden once lit" % [mode, kind])
 		assert_true((b.get_node("Core") as Line2D).visible and (b.get_node("Glow") as Line2D).visible, "%s: kind %d core and glow lit" % [mode, kind])
 		assert_gt((b.get_node("Glow") as Line2D).width, (b.get_node("Core") as Line2D).width, "%s: the glow is wider than the core" % mode)
@@ -518,8 +532,15 @@ func test_export_table_read_through_export_of() -> void:
 		for property in TABLE:
 			assert_eq(_export(kind, property), inst.get(property), "kind %d: export_of(%s) is the scene's value" % [kind, property])
 		inst.free()
-	assert_null(EnemyBeamScenes.scene_for(EnemyBeam.Kind.TWIN), "twin_beam.tscn is the endpoint-beam task's")
-	assert_eq(EnemyBeamScenes.export_of(EnemyBeam.Kind.TWIN, &"damage", -7), -7, "an unbuilt kind answers the fallback")
+	assert_true(_built_kinds().has(EnemyBeam.Kind.TWIN), "twin_beam.tscn is built")
+	assert_eq(EnemyBeamScenes.scene_for(EnemyBeam.Kind.TWIN).resource_path, "res://assault/scenes/projectiles/enemy_beams/twin_beam.tscn")
+	var twin := EnemyBeam.Kind.TWIN
+	assert_eq(_export(twin, &"active_seconds"), 0.0, "the twin beam is held until cancel()")
+	assert_true(bool(_export(twin, &"registers_hazard")) and bool(_export(twin, &"blocked_by_cover")), "it registers a wall and is stopped by cover")
+	assert_eq(_export(twin, &"telegraph_width"), 4.0, "twin telegraph_width 4")
+	assert_eq(_export(twin, &"rehit_interval"), 0.55, "twin rehit_interval 0.55")
+	assert_eq(_export(twin, &"tip_grace_px"), 0.0, "the endpoints are the owner set: no tip grace")
+	assert_false(bool(_export(EnemyBeam.Kind.BEAM, &"registers_hazard")), "the emitter beams register no wall")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -781,3 +802,288 @@ func test_fairness_lance_commit_and_reaction() -> void:
 			"lance: commit %.2f >= %.2f and telegraph - commit %.2f >= R" % [commit, REACTABLE_FLOOR, telegraph - commit])
 	assert_false(_lance_fair(_synthetic(kind, {&"commit_seconds": REACTABLE_FLOOR - 0.05})), "boundary: a 0.45 s commit fails")
 	assert_false(_lance_fair(_synthetic(kind, {&"telegraph_seconds": commit + R - 0.05})), "boundary: 0.2 s of uncommitted telegraph fails")
+
+
+# ---------------------------------------------------------------------------------------------
+# §2.4 endpoint beams, strain, laser-wall registration (hand-ticked, both harnesses)
+# ---------------------------------------------------------------------------------------------
+
+## Sets [param a] / [param c] as the twin beam's endpoints, starts it and ticks it to its first lethal tick, re-setting the endpoints each tick.
+func _ignite_twin(b: EnemyBeam, a: Vector2, c: Vector2) -> void:
+	var kind := EnemyBeam.Kind.TWIN
+	b.set_endpoints(a, c)
+	b.start()
+	for i in _ticks(float(_export(kind, &"telegraph_seconds"))) + _ticks(float(_export(kind, &"ignite_grace"))):
+		b.set_endpoints(a, c)
+		b.tick(DT)
+	assert_true(b.is_lethal(), "precondition: the twin beam is lethal after telegraph + ignite grace")
+
+
+func test_endpoint_segment_follows_set_endpoints_each_tick(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var kind := EnemyBeam.Kind.TWIN
+	var b := _beam(h, kind, null, OWNER_GROUP)
+	var victim := _victim(h, Vector2(500.0, 300.0))
+	var member := _victim(h, Vector2(300.0, 300.0))
+	member.add_to_group(OWNER_GROUP)
+	var hits := _hits(b)
+	_ignite_twin(b, Vector2(100.0, 200.0), Vector2(900.0, 200.0))
+	assert_eq(_hits_on(hits, victim), 0, "%s: a fixture 100 px off the segment is not hit" % mode)
+	b.set_endpoints(Vector2(100.0, 300.0), Vector2(900.0, 300.0))
+	b.tick(DT)
+	assert_eq(_hits_on(hits, victim), 1, "%s: the segment moved onto it: hit on the next tick" % mode)
+	assert_eq(_hits_on(hits, member), 0, "%s: a member of the owner group on the segment is never hit" % mode)
+	var core := b.get_node("Core") as Line2D
+	assert_eq(core.points, PackedVector2Array([Vector2(100.0, 300.0), Vector2(900.0, 300.0)]), "%s: the drawn core runs endpoint to endpoint" % mode)
+	var hit_segments := b.hit_segments()
+	assert_eq(hit_segments.size(), 1, "%s: one lethal part with nothing in the way" % mode)
+	assert_eq(hit_segments[0], PackedVector2Array([Vector2(100.0, 300.0), Vector2(900.0, 300.0)]), "%s: no tip grace on a twin beam" % mode)
+	# Held: nothing ends an active_seconds 0 beam but cancel().
+	for i in 300:
+		b.set_endpoints(Vector2(100.0, 300.0), Vector2(900.0, 300.0))
+		b.tick(DT)
+	assert_eq(b.phase(), EnemyBeam.Phase.ACTIVE, "%s: still lit 5 s later" % mode)
+	b.cancel()
+	assert_eq(b.phase(), EnemyBeam.Phase.FADE, "%s: cancel() fades it" % mode)
+	# The segment follows the endpoints in the other direction too: moved away, it stops hurting.
+	var b2 := _beam(h, kind, null, OWNER_GROUP)
+	var hits2 := _hits(b2)
+	_ignite_twin(b2, Vector2(100.0, 300.0), Vector2(900.0, 300.0))
+	assert_eq(_hits_on(hits2, victim), 1, "%s: a second beam hits the same fixture" % mode)
+	b2.set_endpoints(Vector2(100.0, 100.0), Vector2(900.0, 100.0))
+	for i in 60:
+		b2.tick(DT)
+	assert_eq(_hits_on(hits2, victim), 1, "%s: moved off the fixture, it stops hitting it" % mode)
+
+
+func test_strained_twin_beam_never_hits_and_flickers(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var b := _beam(h, EnemyBeam.Kind.TWIN)
+	var victim := _victim(h, Vector2(500.0, 300.0))
+	var hits := _hits(b)
+	b.set_strained(true)
+	_ignite_twin_strained(b)
+	assert_eq(b.phase(), EnemyBeam.Phase.ACTIVE, "%s: strain leaves the phase alone" % mode)
+	assert_false(b.is_lethal(), "%s: a strained beam is not lethal" % mode)
+	assert_true(b.hit_segments().is_empty(), "%s: and reports no lethal part" % mode)
+	var alphas: Array[float] = []
+	for i in 12:
+		b.set_endpoints(WALL_A, WALL_B)
+		b.tick(DT)
+		alphas.append((b.get_node("Core") as Line2D).modulate.a)
+	assert_eq(_hits_on(hits, victim), 0, "%s: a fixture on a strained beam for 1.2 s is never hit" % mode)
+	assert_lt(alphas.min(), alphas.max(), "%s: the strained beam flickers (%s)" % [mode, alphas])
+	assert_lt(alphas.min(), 1.0, "%s: dimmer than a steady beam" % mode)
+	b.set_strained(false)
+	b.set_endpoints(WALL_A, WALL_B)
+	b.tick(DT)
+	assert_true(b.is_lethal(), "%s: released, it is lethal again" % mode)
+	assert_eq(_hits_on(hits, victim), 1, "%s: and hits at once" % mode)
+	assert_eq((b.get_node("Core") as Line2D).modulate.a, 1.0, "%s: steady again" % mode)
+
+
+func _ignite_twin_strained(b: EnemyBeam) -> void:
+	b.set_endpoints(WALL_A, WALL_B)
+	b.start()
+	for i in _ticks(float(_export(EnemyBeam.Kind.TWIN, &"telegraph_seconds"))) + _ticks(float(_export(EnemyBeam.Kind.TWIN, &"ignite_grace"))):
+		b.set_endpoints(WALL_A, WALL_B)
+		b.tick(DT)
+
+
+func test_laser_wall_registration_follows_the_lit_phases(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var kind := EnemyBeam.Kind.TWIN
+	var base := Hazards.count()
+	var b := _beam(h, kind, null, OWNER_GROUP)
+	var a := Vector2(100.0, 300.0)
+	var c := Vector2(500.0, 380.0)
+	assert_null(b.hazard_info(), "%s: nothing to register before start()" % mode)
+	assert_eq(Hazards.count(), base, "%s: not registered while OFF" % mode)
+	b.set_endpoints(a, c)
+	b.start()
+	assert_eq(Hazards.count(), base + 1, "%s: registered from the start of TELEGRAPH" % mode)
+	var info := b.hazard_info()
+	assert_not_null(info, "%s: and answers its info" % mode)
+	assert_eq(info.kind, &"laser_wall", "%s: kind" % mode)
+	assert_eq(info.position, (a + c) * 0.5, "%s: position is the segment midpoint" % mode)
+	assert_eq(info.segment_half, (c - a) * 0.5, "%s: segment_half is half the segment" % mode)
+	assert_eq(info.radius, float(_export(kind, &"draw_half_width")) + float(_export(kind, &"hazard_pad")), "%s: radius = draw_half_width + hazard_pad" % mode)
+	assert_eq(info.avoid_weight, float(_export(kind, &"avoid_weight")), "%s: avoid_weight is the scene's" % mode)
+	assert_eq(info.exempt_group, OWNER_GROUP, "%s: the owner group never avoids its own wall" % mode)
+	assert_eq(info.source, b, "%s: source" % mode)
+	assert_eq(info.velocity, Vector2.ZERO, "%s: a still wall" % mode)
+	assert_eq(info.pull_force, 0.0, "%s: no pull" % mode)
+	assert_eq(info.movement_penalty, 0.0, "%s: no slow" % mode)
+	assert_false(info.line_of_sight_blocker, "%s: no LOS block" % mode)
+	# Lit and moving: the info is updated in place and carries the midpoint's motion per second.
+	var step := Vector2(4.0, 0.0)
+	for i in _ticks(float(_export(kind, &"telegraph_seconds"))) + 3:
+		a += step
+		c += step
+		b.set_endpoints(a, c)
+		b.tick(DT)
+	assert_eq(b.phase(), EnemyBeam.Phase.ACTIVE, "%s: lit" % mode)
+	assert_eq(Hazards.count(), base + 1, "%s: still registered while ACTIVE" % mode)
+	assert_same(b.hazard_info(), info, "%s: one info, updated in place" % mode)
+	assert_eq(info.position, (a + c) * 0.5, "%s: the midpoint follows the endpoints" % mode)
+	assert_almost_eq(info.velocity, step / DT, Vector2(0.01, 0.01), "%s: velocity is the midpoint's motion per second" % mode)
+	b.cancel()
+	assert_eq(b.phase(), EnemyBeam.Phase.FADE, "%s: FADE" % mode)
+	assert_eq(Hazards.count(), base, "%s: unregistered at the start of FADE" % mode)
+	# A restart registers again; cancelling in TELEGRAPH unregisters (no damage was ever possible).
+	b.start()
+	assert_eq(Hazards.count(), base + 1, "%s: restarted: registered" % mode)
+	b.cancel()
+	assert_eq(b.phase(), EnemyBeam.Phase.OFF, "%s: OFF" % mode)
+	assert_eq(Hazards.count(), base, "%s: unregistered on cancel() in TELEGRAPH" % mode)
+	# A beam that runs its whole timeline unregisters when FADE begins, not when it ends.
+	b.start(0.0, 0.2)
+	b.tick(DT)
+	assert_eq(Hazards.count(), base + 1, "%s: registered while lit" % mode)
+	_tick(b, _ticks(0.2))
+	assert_eq(b.phase(), EnemyBeam.Phase.FADE, "%s: the timed beam faded" % mode)
+	assert_eq(Hazards.count(), base, "%s: unregistered as FADE begins" % mode)
+	# Freeing a registered beam unregisters it.
+	b.start()
+	assert_eq(Hazards.count(), base + 1, "%s: registered again" % mode)
+	b.free()
+	assert_eq(Hazards.count(), base, "%s: unregistered on free" % mode)
+
+
+func test_emitter_beams_register_no_wall(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var base := Hazards.count()
+	for kind in [EnemyBeam.Kind.BEAM, EnemyBeam.Kind.SWEEP, EnemyBeam.Kind.LANCE]:
+		var b := _beam(h, kind)
+		b.start()
+		_tick(b, 3)
+		assert_eq(Hazards.count(), base, "%s: kind %d registers nothing" % [mode, kind])
+		assert_null(b.hazard_info(), "%s: kind %d has no hazard info" % [mode, kind])
+
+
+func test_twin_beam_joins_the_telegraph_and_rehit_rows() -> void:
+	var windows: Array[float] = _player_terms().windows
+	var scene := EnemyBeamScenes.scene_for(EnemyBeam.Kind.TWIN)
+	assert_true(_telegraph_width_ok(scene), "twin telegraph_width >= 3")
+	assert_true(_rehit_clears(scene, windows), "twin rehit_interval > every player i-frame window %s" % [windows])
+	assert_false(_telegraph_width_ok(_synthetic(EnemyBeam.Kind.TWIN, {&"telegraph_width": 2.0})), "boundary: a 2 px twin telegraph fails")
+	assert_false(_rehit_clears(_synthetic(EnemyBeam.Kind.TWIN, {&"rehit_interval": 0.5}), windows), "boundary: a 0.5 s twin re-hit fails")
+
+
+# ---------------------------------------------------------------------------------------------
+# §2.4 cover: real physics at the 8x clock (a cast runs only on the physics step)
+# ---------------------------------------------------------------------------------------------
+
+func _wreck(h, scene: PackedScene, at: Vector2) -> Wreck:
+	var w := scene.instantiate() as Wreck
+	w.assault_drift = 0.0
+	h.root.add_child(w)
+	w.global_position = at
+	return w
+
+
+## Ticks every beam in [param beams] from a `_Ticker` on the physics step, each with its own endpoints when it has some.
+func _drive(h, beams: Array) -> void:
+	_tick_each_frame(h.root, func(delta: float) -> void:
+		for entry: Array in beams:
+			var b := entry[0] as EnemyBeam
+			if entry.size() > 2:
+				b.set_endpoints(entry[1], entry[2])
+			b.tick(delta))
+
+
+## Frames for a beam started with a 0 s telegraph to be lethal and land a first hit, plus a margin.
+func _lit_frames() -> int:
+	return _ticks(float(_export(EnemyBeam.Kind.BEAM, &"ignite_grace"))) + 8
+
+
+func test_a_wreck_stops_an_emitter_beam() -> void:
+	_scale_clock(COVER_SPEEDUP)
+	var h = _world("open_space")
+	var kind := EnemyBeam.Kind.BEAM
+	var wreck := _wreck(h, WRECK_MEDIUM, EMITTER + Vector2(300.0, 0.0))
+	var front := _victim(h, EMITTER + Vector2(150.0, 0.0))
+	var behind := _victim(h, EMITTER + Vector2(450.0, 0.0))
+	# Control: the same line with no wreck on it, a fixture body in front of the far fixture.
+	var ctrl_origin := EMITTER + Vector2(0.0, 200.0)
+	var ctrl_front := _victim(h, ctrl_origin + Vector2(150.0, 0.0))
+	var ctrl_behind := _victim(h, ctrl_origin + Vector2(450.0, 0.0))
+	var b := _beam(h, kind)
+	var c := _beam(h, kind, null, &"", null, ctrl_origin)
+	var hits := _hits(b)
+	var ctrl_hits := _hits(c)
+	await wait_physics_frames(3)
+	_drive(h, [[b], [c]])
+	b.start(0.0)
+	c.start(0.0)
+	await wait_physics_frames(_lit_frames())
+	assert_true(b.is_lethal() and c.is_lethal(), "both beams are lit")
+	assert_eq(_hits_on(hits, front), 1, "a fixture in front of the wreck is hit")
+	assert_eq(_hits_on(hits, behind), 0, "a fixture behind the wreck is not")
+	assert_eq(_hits_on(ctrl_hits, ctrl_front), 1, "control: a fixture BODY on the line does not clip it (it is not a blocker)")
+	assert_eq(_hits_on(ctrl_hits, ctrl_behind), 1, "control: with no wreck the far fixture is hit")
+	var surface := wreck.global_position.x - wreck.body_radius()
+	var segments := b.hit_segments()
+	assert_eq(segments.size(), 1, "one lethal part")
+	assert_almost_eq(segments[0][1].x, surface + EnemyBeam.COVER_BITE_PX, 0.5, "the lethal part ends on the wreck's surface (less its bite)")
+	assert_almost_eq((b.get_node("Core") as Line2D).points[1].x, surface, 1.5, "and so does the drawn core")
+	assert_lt(b.hit_segments()[0][1].distance_to(b.global_position), c.hit_segments()[0][1].distance_to(c.global_position), "shorter than the free beam")
+
+
+func test_a_wreck_between_twin_endpoints_leaves_a_safe_shadow() -> void:
+	_scale_clock(COVER_SPEEDUP)
+	var h = _world("open_space")
+	var wreck := _wreck(h, WRECK_LARGE, Vector2(500.0, 300.0))
+	var near_a := _victim(h, Vector2(300.0, 300.0))
+	var shadow := _victim(h, Vector2(500.0, 300.0))
+	var near_b := _victim(h, Vector2(700.0, 300.0))
+	var b := _beam(h, EnemyBeam.Kind.TWIN)
+	var hits := _hits(b)
+	await wait_physics_frames(3)
+	_drive(h, [[b, WALL_A, WALL_B]])
+	b.start(0.0)
+	await wait_physics_frames(_lit_frames())
+	assert_true(b.is_lethal(), "the twin beam is lit")
+	assert_eq(_hits_on(hits, near_a), 1, "the part on the A side hurts")
+	assert_eq(_hits_on(hits, near_b), 1, "the part on the B side hurts")
+	assert_eq(_hits_on(hits, shadow), 0, "the shadow between is safe")
+	var segments := b.hit_segments()
+	assert_eq(segments.size(), 2, "two lethal parts")
+	var radius := wreck.body_radius()
+	assert_almost_eq(segments[0][1].x, 500.0 - radius + EnemyBeam.COVER_BITE_PX, 0.5, "the A part ends on the near face")
+	assert_almost_eq(segments[1][0].x, 500.0 + radius - EnemyBeam.COVER_BITE_PX, 0.5, "the B part starts on the far face")
+	assert_eq(segments[0][0], WALL_A, "from endpoint A")
+	assert_eq(segments[1][1], WALL_B, "to endpoint B")
+	assert_not_null(b.hazard_info(), "the laser-wall hazard still spans the whole endpoint pair")
+	assert_eq(b.hazard_info().segment_half, (WALL_B - WALL_A) * 0.5, "the hazard is the full segment")
+
+
+func test_an_asteroid_clips_a_beam() -> void:
+	_scale_clock(COVER_SPEEDUP)
+	var h = _world("open_space")
+	var rock := ASTEROID_SCENE.instantiate() as Node2D
+	h.root.add_child(rock)
+	rock.global_position = EMITTER + Vector2(300.0, 0.0)
+	var behind := _victim(h, EMITTER + Vector2(560.0, 0.0))
+	var b := _beam(h, EnemyBeam.Kind.BEAM)
+	var hits := _hits(b)
+	await wait_physics_frames(3)
+	_drive(h, [[b]])
+	b.start(0.0)
+	await wait_physics_frames(_lit_frames())
+	assert_true(b.is_lethal(), "the beam is lit")
+	assert_eq(_hits_on(hits, rock), 1, "the asteroid is a target, as before")
+	assert_eq(_hits_on(hits, behind), 0, "and it also stops the beam: nothing behind it is hit")
+	assert_lt(b.hit_segments()[0][1].x, rock.global_position.x, "the lethal part ends before the asteroid's centre")
+
+
+func test_a_hand_ticked_beam_never_casts() -> void:
+	var h = _world("open_space")
+	var wreck := _wreck(h, WRECK_MEDIUM, EMITTER + Vector2(300.0, 0.0))
+	var behind := _victim(h, EMITTER + Vector2(450.0, 0.0))
+	var b := _beam(h, EnemyBeam.Kind.BEAM)
+	var hits := _hits(b)
+	_ignite(b, EnemyBeam.Kind.BEAM)
+	assert_false(Engine.is_in_physics_frame(), "precondition: a test body runs off the physics step")
+	assert_true(is_instance_valid(wreck))
+	assert_eq(_hits_on(hits, behind), 1, "off the physics step the beam does not clip: hand-ticked rows are deterministic")

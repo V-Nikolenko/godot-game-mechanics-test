@@ -53,7 +53,7 @@ global/
 │   ├── movement_constraint.gd # MovementConstraint (RefCounted) — identity filter; mode constraints extend it
 │   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift/spiral/corkscrew/… primitives + context_avoid (hazard avoidance)
 │   ├── target_info.gd         # TargetInfo — player resolver + prediction/intercept snapshot
-│   ├── line_of_sight.gd       # LineOfSight (RefCounted) — opt-in-blocker ray between two points (asteroids / blocks_line_of_sight())
+│   ├── line_of_sight.gd       # LineOfSight (RefCounted) — opt-in-blocker ray between two points (asteroids / blocks_line_of_sight()): clear() / first_blocker() / blocks()
 │   ├── engagement_budget.gd   # EngagementBudget (RefCounted) — Assault-only per-brain exit timer
 │   ├── burst_clock.gd         # BurstClock (RefCounted) — counts down an exact-size, evenly-spaced burst
 │   ├── dubins_path.gd         # DubinsPath (RefCounted) — shortest turn-radius-limited path between two poses

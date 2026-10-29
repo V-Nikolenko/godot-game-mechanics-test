@@ -428,7 +428,7 @@ Detail and APIs: [global.md](modules/global.md).
      is its only clock** — no `Timer`, `create_timer` or `_process` (`self_tick` exists for scene-placed props only). Emitter beams
      point along the node's **local +X**; the owner rotates the beam's parent, never the beam. `LaserRay` and the station's beam are
      not part of the family (Ph11 migrates the station).
-  2. **Tuning lives in the beam scenes** (`beam.tscn`, `sweep_beam.tscn`, `lance.tscn`; `twin_beam.tscn` and the Pulse Ring later),
+  2. **Tuning lives in the beam scenes** (`beam.tscn`, `sweep_beam.tscn`, `lance.tscn`, `twin_beam.tscn`; the Pulse Ring below),
      read through `EnemyBeamScenes.export_of()` — the Ph5/Ph7 rule, so a beam is identical whoever fires it and gates never type
      a number.
   3. **Friendly fire:** a beam hurts every node in `player`, `allies`, `enemies` and `asteroids` whose hurtbox **shape** meets it

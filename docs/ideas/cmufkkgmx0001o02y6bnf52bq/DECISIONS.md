@@ -3055,3 +3055,15 @@ directory. These are *planned* decisions; check this phase's *as built* section,
   steered; with its pair's wall plus a circle in the way the exempt actor is steered exactly as by the circle alone.
 - **Gate time:** `scripts/gate-time.sh` GUT `Time` **201.007 → 201.896 s (+0.89 s of the 1.5 s allotment)**, 2381 → 2397 tests (6 + 8 + 2 new rows). Nothing awaits, so
   `scripts/check-test-leaks.sh` was not needed (plan step 5).
+
+### Phase 8, built in t5 (endpoint beam, cover, strain, laser-wall registration) (2026-10-29)
+- **Built as planned (§2.4):** `twin_beam.tscn` (TWIN: telegraph 0.8, held ACTIVE, `hit_half_width` 10 / `draw_half_width` 14, `tip_grace_px` 0, damage 12, `rehit_interval` 0.55, `telegraph_width` 4,
+  `registers_hazard` true, `avoid_weight` 0.5, `hazard_pad` 24; `length` 0 = ignored) and `EnemyBeamScenes.scene_for(TWIN)`. `set_endpoints` every tick; `set_strained` = non-lethal 15 Hz flicker (alpha 0.25 / 1);
+  `LineOfSight.blocks(collider)` is public (behaviour identical, `clear()` unchanged) and the shared recast loop is `LineOfSight.first_blocker(space, from, to, exclude) -> Dictionary` (`clear()` = its `is_empty()`);
+  cover casts only when `Engine.is_in_physics_frame()`; laser-wall registration from TELEGRAPH start to FADE start through the in-place `hazard_info()`.
+  `test_context_avoidance.gd`'s segment rows now read `hit_half_width`, `draw_half_width`, `hazard_pad` and `avoid_weight` through `EnemyBeamScenes.export_of(TWIN, …)` (instance `var`s, not `const`).
+- **Deviations, all internal:** (1) **a hit part reaches `EnemyBeam.COVER_BITE_PX` (2 px) into the blocker it ends on** (the drawn beam stops on the surface): an asteroid's hurtbox is its body, so a beam ending exactly on the surface
+  would never damage the rock that stops it, while the plan says a beam hurts asteroids. (2) **A tip that ends on a blocker gets no tip grace** (only a free tip does). (3) `hit_segments()` returns the lethal parts (0, 1 or, for a TWIN behind a blocker, 2);
+  a beam split by cover draws its far part on a second `Telegraph2` / `Glow2` / `Core2` set of `Line2D`s. (4) The registered wall always spans the full `a..b`: avoidance does not know about cover.
+- **For the twin-pair and fence tasks:** a `registers_hazard` beam must be a *child of its owner* and freed with it (it unregisters in `_exit_tree`); the owner's own hull must not be a `LineOfSight` blocker (the host's body RID is excluded
+  from the casts, a different body is not); the fence overrides `avoid_weight` to 1.0 on its beam instance.

@@ -266,13 +266,19 @@ func test_prev_dir_keeps_the_side_it_chose() -> void:
 # ── Segments: a laser wall (Phase 8, docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md §2.6) ─────────────────────
 # Task plan docs/plans/cmvqw0vn4017jqs2xzwshmrwt/3-plan.md, which records how the span between the ends is widened.
 
-## The twin beam's numbers (epic plan §2.1 / §2.4). `twin_beam.tscn` does not exist yet: the endpoint-beam task (t5), which
-## creates it, replaces these four with `EnemyBeamScenes.export_of(EnemyBeam.Kind.TWIN, …)` reads.
-const TWIN_HIT_HALF_WIDTH := 10.0
-const TWIN_DRAW_HALF_WIDTH := 14.0
-const TWIN_HAZARD_PAD := 24.0
-const TWIN_AVOID_WEIGHT := 0.5
-## The fixture victim's 14 px hurtbox: a ship whose centre stays `TWIN_HIT_HALF_WIDTH + SHIP_RADIUS` from the hit segment
+## The twin beam's numbers (epic plan §2.1 / §2.4), read from `twin_beam.tscn` through `EnemyBeamScenes.export_of` (never typed).
+var twin_hit_half_width: float = _twin(&"hit_half_width")
+var twin_draw_half_width: float = _twin(&"draw_half_width")
+var twin_hazard_pad: float = _twin(&"hazard_pad")
+var twin_avoid_weight: float = _twin(&"avoid_weight")
+
+
+## `twin_beam.tscn`'s authored [param property]; NAN when the scene does not author it (every comparison then fails loudly).
+static func _twin(property: StringName) -> float:
+	return float(EnemyBeamScenes.export_of(EnemyBeam.Kind.TWIN, property, NAN))
+
+
+## The fixture victim's 14 px hurtbox: a ship whose centre stays `twin_hit_half_width + SHIP_RADIUS` from the hit segment
 ## keeps its hull out of the hit band.
 const SHIP_RADIUS := 14.0
 ## A 420 px wall.
@@ -287,7 +293,7 @@ const WALL_MARGINS := [12.0, 60.0]
 
 ## The twin wall's footprint (§2.4: `draw_half_width + hazard_pad`, `avoid_weight`) from `at - half` to `at + half`.
 func _wall(at: Vector2, half: Vector2, velocity: Vector2 = Vector2.ZERO) -> HazardInfo:
-	var i := _info(at, TWIN_DRAW_HALF_WIDTH + TWIN_HAZARD_PAD, TWIN_AVOID_WEIGHT, velocity)
+	var i := _info(at, twin_draw_half_width + twin_hazard_pad, twin_avoid_weight, velocity)
 	i.segment_half = half
 	return i
 
@@ -350,7 +356,7 @@ func _run_at_wall(start: Vector2, target: Vector2, wall: HazardInfo, avoidance: 
 ## band (24 px); 0.6 has no bound (§2.6), and its figures are printed with the rest. At 45° (closest point 141 px) and at
 ## margin 60 (skirt reach 38 + 180 = 218 px) the run starts inside the skirt, so its "first bend" is the start itself.
 func test_a_wall_across_the_path_is_avoided_round_an_end() -> void:
-	var bound := TWIN_HIT_HALF_WIDTH + SHIP_RADIUS
+	var bound := twin_hit_half_width + SHIP_RADIUS
 	for phi in [0.0, 45.0, 90.0]:
 		var wall := _approach_wall(phi)
 		for avoidance in [1.0, 0.8, 0.6]:
@@ -548,7 +554,7 @@ func test_a_wall_and_a_circle_merge_by_max_in_either_order() -> void:
 func test_roster_profiles_meet_a_twin_wall() -> void:
 	for profile in ["swarm_drone", "sniper", "fighter", "gatling_interceptor", "mine_layer", "bomber"]:
 		var config: Resource = load("res://assault/scenes/enemies/%s/%s_config.tres" % [profile, profile])
-		var weights := [TWIN_AVOID_WEIGHT, 1.0] if profile == "bomber" else [TWIN_AVOID_WEIGHT]
+		var weights := [twin_avoid_weight, 1.0] if profile == "bomber" else [twin_avoid_weight]
 		for weight in weights:
 			for phi in [0.0, 45.0, 90.0]:
 				var wall := _approach_wall(phi)

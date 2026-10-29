@@ -39,7 +39,7 @@ assault/scenes/
 │   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell / rail_round .tscn + EnemyRounds + RailTrail (the sniper shot's fading trail)
 │   ├── enemy_ordnance/         EnemyOrdnance: gravity_bomb / mine / pursuit_bomb .tscn + EnemyOrdnanceScenes (persistent, shoot-down-able, not in `enemies`); mines/ = the Ph7 EnemyMine family (6 variant scenes, EnemyMineScenes, PulseRing, EmpRing)
 │   ├── enemy_rockets/           EnemyRocket: dumb / pursuit / cluster / submunition / delayed_warhead .tscn + EnemyRocketScenes (Ph5; impact hurts enemies, blast hurts the player)
-│   ├── enemy_beams/             EnemyBeam: beam / sweep_beam / lance .tscn + EnergyRing (energy_ring.tscn, the Pulse Ring) + EnergyHitScan + EnemyBeamScenes (Ph8; owner-ticked lasers that hurt everything on the line but their owner set)
+│   ├── enemy_beams/             EnemyBeam: beam / sweep_beam / lance / twin_beam .tscn + EnergyRing (energy_ring.tscn, the Pulse Ring) + EnergyHitScan + EnemyBeamScenes (Ph8; owner-ticked lasers that hurt everything on the line but their owner set)
 │   ├── missiles/                homing/ + warhead/ missiles
 │   └── piercing_beam/           Sustained BEAM weapon projectile
 ├── systems/                     Mission orchestration (non-visual)
@@ -461,12 +461,12 @@ endpoint beam (`twin_beam.tscn`, cover, strain, laser-wall registration) and the
   `cancel()` (TELEGRAPH → OFF, ACTIVE → FADE). Lethal only in ACTIVE after `ignite_grace` and while not strained. Emitter kinds run `length` px along
   the node's local +X from its `global_position`; the hit segment stops `tip_grace_px` short of the free tip. Three code-built `top_level` `Line2D`
   children: `Telegraph` (`telegraph_width` px, yellow, white while `is_committed()`), `Glow` (red, `2 * draw_half_width`), `Core` (`hit_half_width`).
-  `set_endpoints()`, `set_strained()` and `hazard_info()` are declared for the endpoint-beam task.
+  **Endpoint beam (t5):** `twin_beam.tscn` (TWIN) takes `set_endpoints(a, b)` every tick, held ACTIVE (`active_seconds` 0). **Cover:** with `blocked_by_cover`, on the physics step only, a ray through `LineOfSight.first_blocker()` clips the beam at asteroids / wrecks (an endpoint beam leaves a safe shadow between its two lit parts; a second `Telegraph2`/`Glow2`/`Core2` set draws the far part). **Strain:** `set_strained(true)` = non-lethal 15 Hz flicker. **Laser wall:** a `registers_hazard` beam is a `&"laser_wall"` segment `HazardInfo` (`exempt_group` = its owner group, `velocity` = midpoint motion) from TELEGRAPH start to FADE start; `hazard_info()` answers null otherwise.
 - **`EnergyHitScan`** (static): victims = groups `player`, `allies`, `enemies`, `asteroids` minus the owner set (`is_exempt`); `hits_band()` is
   `Shape2D.collide` against every enabled hurtbox `CollisionShape2D` at its global transform; `bounding_radius()` feeds the broad phase;
   `deliver()` is a direct `received_damage.emit` through `Hazards.hurt_box_of`. Each lethal tick tests the band and the triangles swept since the
   previous lethal tick; one hit per target per `rehit_interval` (instance id, cleared by `start()`).
-- **`EnemyBeamScenes`**: `scene_for(kind)` (null for a kind not built yet), `export_of(kind, property, fallback)`, `export_of_scene(scene, …)` (the
+- **`EnemyBeamScenes`**: `scene_for(kind)` (null for a kind with no scene), `export_of(kind, property, fallback)`, `export_of_scene(scene, …)` (the
   same read on any beam scene, used by the gates' synthetic boundary copies).
 - **`EnergyRing`** (`energy_ring.gd`, `extends Node2D`; not `PulseRing`, Ph7's visual ring): `enum Phase { OFF, TELEGRAPH, EXPANDING, FADE }`, same owner-ticked clock and
   signals as a beam, `start(gap_start_deg)` (the owner draws it from its `rng`). A 24 px band grows at 360 px/s, its outer edge capped at `max_radius` 280, with 2 gaps of 45 degrees
