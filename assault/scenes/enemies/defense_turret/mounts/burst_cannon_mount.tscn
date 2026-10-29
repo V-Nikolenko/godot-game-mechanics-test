@@ -1,0 +1,22 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/mounts/burst_cannon_mount.gd" id="1_bcm"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_bullet/rounds/pulse_round.tscn" id="2_bcm"]
+
+[node name="BurstCannonMount" type="Node2D"]
+script = ExtResource("1_bcm")
+charge_seconds = 0.4
+burst_count = 4
+burst_gap = 0.12
+round_speed = 300.0
+round_scene = ExtResource("2_bcm")
+turn_rate = 2.0
+fire_range = 700.0
+lead_blend = 0.6
+fire_cone_deg = 8.0
+scan_arc_deg = 90.0
+scan_speed = 0.4
+cooldown_seconds = 2.2
+
+[node name="Muzzle" type="Marker2D" parent="."]
+position = Vector2(28, 0)

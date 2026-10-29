@@ -3067,3 +3067,22 @@ directory. These are *planned* decisions; check this phase's *as built* section,
   a beam split by cover draws its far part on a second `Telegraph2` / `Glow2` / `Core2` set of `Line2D`s. (4) The registered wall always spans the full `a..b`: avoidance does not know about cover.
 - **For the twin-pair and fence tasks:** a `registers_hazard` beam must be a *child of its owner* and freed with it (it unregisters in `_exit_tree`); the owner's own hull must not be a `LineOfSight` blocker (the host's body RID is excluded
   from the casts, a different body is not); the fence overrides `avoid_weight` to 1.0 on its beam instance.
+
+### Phase 8, built in t6 (Stationary Defense Turret shell, `TurretMount`, burst cannon, `AssaultDrift`) (2026-10-29)
+- **Built as §2.7 says:** `assault/scenes/enemies/defense_turret/` (`DefenseTurret`, `DefenseTurretBrain`, `DefenseTurretConfig` + `.tres` with `counts_as_escape = false`,
+  `TurretMountSlot`, `mounts/turret_mount.gd`, `mounts/turret_mount_scenes.gd`, `mounts/burst_cannon_mount.gd/.tscn`), `global/components/assault_drift.gd`,
+  `WaveBuilder.DEFENSE_TURRET` / `defense_turret()`. Task plan `docs/plans/cmvqw0vnb017rqs2xsyursu5d/3-plan.md` (rev 3, APPROVED round 3).
+- **`range` → `fire_range`** on `TurretMount` (a `range` export shadows the built-in `range()`). t9 and §2.10's coverage rule read `fire_range`.
+- **The cycle lives in the `TurretMount` base; a variant is a subclass** with its own script + scene that overrides hooks: `_aim_point_for`, `_shot_speed`, `_tracks(phase, clock)`,
+  `_wants_telegraph(target, can_fire)`, `_telegraph_seconds`, `_telegraph_done` (a beam answers from its own phase), `_on_telegraph_start`, `_fire_tick(delta, can_fire) -> bool`,
+  `_weapon_tick(delta)` (called once per `tick()` / `scan()` in **every** phase, UNPOWERED included, so a fading beam finishes), `_stop_weapon`, `pool_specs`. Extra public API
+  beyond §2.7: `aim_point()`, `owner_group()`, `cooldown_left()`, `fires_past_cover()`, `is_committed()`, `var rng` (the host assigns its brain's), `var telegraph_gate: Callable`
+  (asked last on TRACK → TELEGRAPH; t8's `TurretGroup` stagger binds here, the mount never reads its host's type), `signal round_fired(projectile: Node2D)`.
+- **The cooldown is its own clock**: it counts in every phase (SCAN included) and any exit from FIRE except `power_down()` sets it, so a flickering perception never fires faster
+  than charge + burst + cooldown (the pool size's premise). Clock comparisons carry `TurretMount.CLOCK_EPS` 1e-6 (24 ticks reach 0.4 s).
+- **Light reading:** ARMED in TRACK / FIRE **and COOLDOWN** with `can_fire` (§2.7 lists FIRE / TRACK); without it the light would drop out for 2.2 s between bursts.
+- **Tow row:** the turret has no accepting phase, so it is a separate row `test_base_enemy.gd::test_a_mover_less_turret_brain_refuses_a_tow_in_every_phase`, not a
+  `_REFUSING_PHASES` entry (that table needs an accepting phase).
+- **One tick in the light for beams (for t7):** a beam mount's `_telegraph_done()` reads `beam.phase() == ACTIVE`, set by `_weapon_tick` after the cycle step, so the mount
+  enters FIRE one tick after the beam turns lethal (the light shows CHARGING for that tick). Harmless; t7 may re-check `_telegraph_done()` after `_weapon_tick`.
+- **Placeholder art:** code-drawn base (root `_draw`) and head + barrel (mount `_draw`), dimmed by `UNPOWERED_TINT` once powered down; t15 replaces them.

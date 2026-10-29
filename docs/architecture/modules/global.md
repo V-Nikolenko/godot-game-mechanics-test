@@ -36,6 +36,7 @@ global/
 │   ├── contact_profile.gd         # ContactProfile (Node) — what touching an enemy does: NONE / COLLISION / RAMMING / EXPLOSIVE / ARMOR
 │   ├── contact_blast.gd           # ContactBlast (HitBox) — code-built blast an EXPLOSIVE profile leaves in the owner's parent
 │   ├── state_light.gd             # StateLight (Node2D) — one small red/yellow/white attack-telegraph light
+│   ├── assault_drift.gd           # AssaultDrift (Node) — Ph8: static structures scroll down with the Assault corridor and free below the world; no-op in Open Space
 │   ├── overheat_component.gd      # Overheat (Node) — weapon heat
 │   ├── attack_controller.gd       # AttackController (Node) — drives an AttackPatternResource
 │   ├── projectile_lifetime.gd     # ProjectileLifetime (Node) — world-space projectile expiry

@@ -64,6 +64,14 @@ func _gatling_speeds() -> Dictionary:
 	return {"stream": cfg.round_speed, "rail_stream": cfg.rail_stream_speed}
 
 
+## The speed the defense turret's burst-cannon mount fires Pulse rounds at (Phase 8 t6): the mount scene's
+## `round_speed` export, read through `TurretMountScenes.export_of` with the script default as the fallback.
+func _turret_burst_speed() -> float:
+	var fallback: Variant = (load("res://assault/scenes/enemies/defense_turret/mounts/burst_cannon_mount.gd") as Script) \
+			.get_property_default_value(&"round_speed")
+	return float(TurretMountScenes.export_of(TurretMount.Variant.BURST_CANNON, &"round_speed", fallback))
+
+
 ## One array, per the plan: add a new, slower bullet source here and the defaults must be
 ## re-derived (`3-plan.md` §2.9).
 func _every_shipped_enemy_bullet_speed() -> Array[float]:
@@ -118,6 +126,9 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 	# The Sniper's rail shots, by far the fastest, but enumerated for completeness (config fields).
 	for s in _sniper_speeds().values():
 		speeds.append(s as float)
+
+	# The defense turret's burst cannon (Phase 8): a mount scene export, read without instantiating it.
+	speeds.append(_turret_burst_speed())
 
 	return speeds
 
@@ -176,7 +187,7 @@ func test_every_round_clears_its_own_lifetime_at_its_slowest_fired_speed() -> vo
 	var ss := _sniper_speeds()
 	var entries: Array[Dictionary] = [
 		{"scene": EnemyRounds.PULSE, "floor": _ROUNDS_RANGE_FLOOR_PX,
-			"speeds": [fs["aimed"], fs["rail_aimed"], fs["rail_forward"]]},
+			"speeds": [fs["aimed"], fs["rail_aimed"], fs["rail_forward"], _turret_burst_speed()]},
 		{"scene": EnemyRounds.GATLING_STREAM, "floor": _ROUNDS_RANGE_FLOOR_PX,
 			"speeds": [gs["stream"], gs["rail_stream"]]},
 		{"scene": EnemyRounds.RAIL, "floor": _ROUNDS_RANGE_FLOOR_PX,

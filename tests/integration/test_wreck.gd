@@ -43,6 +43,7 @@ const _SHIP_SCENES := [
 	"res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn",
 	"res://assault/scenes/enemies/support_ship/support_ship.tscn",
 	"res://assault/scenes/enemies/mine_layer/mine_layer.tscn",
+	"res://assault/scenes/enemies/defense_turret/defense_turret.tscn",
 ]
 const D := 1.0 / 60.0
 const P := Vector2(640.0, 360.0)

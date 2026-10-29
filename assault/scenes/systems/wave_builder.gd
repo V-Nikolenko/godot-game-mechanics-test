@@ -95,6 +95,8 @@ func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
 func missile_corvette() -> SpawnConfig: return SpawnConfig.new(MISSILE_CORVETTE)
 func support_ship()   -> SpawnConfig: return SpawnConfig.new(SUPPORT_SHIP)
 func mine_layer()     -> SpawnConfig: return SpawnConfig.new(MINE_LAYER)
+## A Stationary Defense Turret (Phase 8): `.prop("variant", TurretMount.Variant.X)` picks its weapon (applied before `add_child`).
+func defense_turret() -> SpawnConfig: return SpawnConfig.new(DEFENSE_TURRET)
 func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
 func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
 func small_asteroid() -> SpawnConfig: return SpawnConfig.new(SMALL_ASTEROID)
@@ -261,6 +263,7 @@ const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"
 const MISSILE_CORVETTE := "res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn"
 const SUPPORT_SHIP   := "res://assault/scenes/enemies/support_ship/support_ship.tscn"
 const MINE_LAYER     := "res://assault/scenes/enemies/mine_layer/mine_layer.tscn"
+const DEFENSE_TURRET := "res://assault/scenes/enemies/defense_turret/defense_turret.tscn"
 const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
 const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn"
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"

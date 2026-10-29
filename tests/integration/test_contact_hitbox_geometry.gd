@@ -61,6 +61,11 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/mine_layer/mine_layer.tscn",
 	},
 	{
+		"name": "defense_turret",
+		"scene": "res://assault/scenes/enemies/defense_turret/defense_turret.tscn",
+		"no_hitbox": true,
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"no_hitbox": true,

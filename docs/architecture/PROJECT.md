@@ -446,6 +446,12 @@ Detail and APIs: [global.md](modules/global.md).
   5. **The Pulse Ring is the same family, not a beam kind.** `EnergyRing` (`energy_ring.tscn`, via `EnemyBeamScenes.ring_scene()`) is owner-ticked like a beam: a 0.8 s
      warning circle, then a 24 px band grows at 360 px/s to `max_radius` 280 (its outer edge never passes it) with two rotating 45 degree gaps; each target is hit once per
      ring, by the swept interval, by the same owner set and direct emit. Not `PulseRing` (Ph7's visual). Gate: `tests/integration/test_energy_ring.gd`.
+  6. **Turret mounts are the aiming seam (t6).** Everything that aims and fires on a turret is a `TurretMount` (`assault/scenes/enemies/defense_turret/mounts/`),
+     built at runtime from a host's `TurretMountSlot` markers, one scene per `Variant` (`TurretMountScenes`). A mount **writes only its own `rotation`**, never reads its
+     host's type (Ph10 bolts the same mounts onto ships), keeps its tuning in its scene's exports, and gets its pools as **root children of the host**
+     (`pool_specs()`), so rounds land in the enemy container. Static structures (the `DefenseTurret` first) have no mover, never rotate their root, and scroll with
+     the Assault corridor through `AssaultDrift` (`global/components/assault_drift.gd`), firing only inside `EnemyWorld.view_rect()`; their `.tres` sets
+     `counts_as_escape = false`. Details: [assault.md](modules/assault.md) → *Stationary Defense Turret and the turret mount*; gate `tests/integration/test_defense_turret.gd`.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---

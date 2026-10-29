@@ -479,6 +479,31 @@ endpoint beam (`twin_beam.tscn`, cover, strain, laser-wall registration) and the
   hit, tips, ±1 px width, the Bomber-rectangle row, victims, owner set, plated Ram, shield bypass, ordnance, scoring; static `rehit_interval` and
   fairness rows with synthetic boundaries; the real-player cadence rows on real physics at a 4× clock).
 
+#### Stationary Defense Turret and the turret mount (Phase 8)
+
+Source: `assault/scenes/enemies/defense_turret/` ([ENEMY.md](../../../assault/scenes/enemies/defense_turret/ENEMY.md)), `global/components/assault_drift.gd`.
+Built in t6; later Phase 8 tasks add the other mount variants, `TurretGroup` / power source / shield generator and the heavy emplacement.
+
+- **`DefenseTurret extends BaseEnemy`**: no `EnemyMover` (never AI-driven, refuses tows), the root never rotates, `ContactProfile` NONE with no `ContactHitBox`,
+  `is_laser_blocking()` false, HP 90, `counts_as_escape` false. `MountSlots` holds `TurretMountSlot` markers (`variant`, `rest_bearing_deg`, `turn_rate_override`:
+  −1 keeps the mount's `turn_rate`); `_ready()` instantiates `TurretMountScenes.scene_for(variant)` under each slot, builds its `pool_specs()` as **root-child**
+  `BulletPool`s (`<name>_<slot index>`, so rounds land in the enemy container) and calls `mount.setup(self, pools, owner_group)`. `set_powered(false)` powers every
+  mount down for good; `set_turret_group(group)` (before `add_child`) joins the group's `owner_group`, else the turret's own `&"turret_<id>"`.
+- **`DefenseTurretBrain`** (`Phase { SCAN, NOTICING, ENGAGED, UNPOWERED }`): Open Space perceives within `perceive_radius` 900 (kept to `lose_radius` 1100),
+  Assault only while the turret's centre is inside `EnemyWorld.view_rect()`; ENGAGED gives each mount `can_fire = can_see_player() or fires_past_cover()`; owns the
+  `StateLight`.
+- **`TurretMount extends Node2D`** (`mounts/turret_mount.gd`; the Ph10 seam, never reads its host's type): `enum Variant { BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY,
+  PULSE_RING, LANCE, BEAM_CANNON }`, `enum Phase { SCAN, TRACK, TELEGRAPH, FIRE, COOLDOWN, UNPOWERED }` (both append-only), signals `phase_changed(phase: int)` and
+  `round_fired(projectile: Node2D)`. Writes only its own `rotation` (turn-rate limited, local to its parent). Partial lead `P.lerp(intercept, lead_blend)`, fires only
+  inside `fire_cone_deg / 2`, a cooldown clock that survives perception flicker, and an optional `telegraph_gate: Callable` (a group's stagger). A variant is a
+  subclass overriding hooks (`_aim_point_for`, `_shot_speed`, `_tracks`, `_wants_telegraph`, `_telegraph_seconds`, `_telegraph_done`, `_on_telegraph_start`,
+  `_fire_tick`, `_weapon_tick`, `_stop_weapon`, `pool_specs`); tuning lives in its scene's exports, read by gates through `TurretMountScenes.export_of()`.
+- **`BurstCannonMount`** (`mounts/burst_cannon_mount.tscn`): 0.4 s charge, 4 Pulse rounds 0.12 s apart at 300 px/s, 2.2 s cooldown, `PulsePool` of 12.
+- **`AssaultDrift`** (global component): in Assault moves its parent down `speed` px/s and frees it below the projectile world rect; nothing in Open Space.
+- **Tests.** `tests/integration/test_defense_turret.gd` (both harnesses; the cover / mining-beam row on real physics at 8×), the turret case of
+  `test_enemy_dual_mode.gd`, `test_base_enemy.gd::test_a_mover_less_turret_brain_refuses_a_tow_in_every_phase`, the burst speed in
+  `test_enemy_bullet_lifetime.gd`, and the roster gates.
+
 ### Scoring
 
 Source: `assault/scenes/systems/score_tracker/score_tracker.gd`.
@@ -620,7 +645,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `razor_drone/razor_drone_brain.gd`). Roster: bomber, bonus_drone, razor_drone,
-mine_layer (`MineLayerBrain`, six-mine lines across the player's path, Ph7), missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
+mine_layer (`MineLayerBrain`, six-mine lines across the player's path, Ph7), defense_turret (`DefenseTurretBrain`, no mover, a static gun whose runtime-built `TurretMount` aims and fires, Ph8), missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).

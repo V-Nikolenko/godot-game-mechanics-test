@@ -414,6 +414,27 @@ b.mine_layer().at(0, -400).move(b.straight(82))
 
 ---
 
+### `defense_turret` — Stationary Defense Turret
+
+**Builder:** `b.defense_turret()`  
+**Scene:** `defense_turret.tscn`  
+**Movement:** None: no `EnemyMover`, and the root never rotates. Its weapon mount turns its head (2.0 rad/s), scans a 90° arc when idle, notices the player (Open Space: within 900 px, lost beyond 1100; Assault: once its centre is inside the view) and tracks them. In Assault an `AssaultDrift` child scrolls it down at 60 px/s like wreckage and frees it below the world; it never counts as an escape.  
+**Shoots:** The weapon is its mount (`TurretMount`), picked with `.prop("variant", TurretMount.Variant.X)`. Built so far: BURST_CANNON, a 0.4 s charge then 4 Pulse rounds (8 dmg, 300 px/s) 0.12 s apart with a 0.6 partial lead, then 2.2 s cooldown. It holds fire without line of sight (a wreck or asteroid between) and never fires from off-screen. The other variants arrive later in Phase 8.  
+**HP:** 90 (an r 28 circle); contact damage 0 (`ContactProfile` NONE, no `ContactHitBox`)  
+**Score:** 60 (`counts_as_escape` false)
+
+**Config fields** (`DefenseTurretConfig`): `perceive_radius` 900, `lose_radius` 1100, `notice_time` 0.3, `assault_drift_speed` 60. Weapon tuning lives in the mount scene (`defense_turret/mounts/burst_cannon_mount.tscn`), never in the config.
+
+**Not placed in level 1 or the hub yet.** **Never place it in an `ENEMIES_CLEARED` section** (persistent fire).
+
+**Examples:**
+```gdscript
+b.defense_turret().at(-200, -100)
+b.defense_turret().at(200, -100).prop("variant", TurretMount.Variant.BURST_CANNON)
+```
+
+---
+
 ### `bonus_drone` — Bonus Drone
 
 **Builder:** `b.bonus_drone()`  

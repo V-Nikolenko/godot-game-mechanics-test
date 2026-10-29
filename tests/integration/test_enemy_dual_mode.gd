@@ -1083,3 +1083,35 @@ func test_mine_layer_approach_closes_on_its_run_in_point(mode: String = use_para
 	assert_eq(brain.phase, MineLayerBrain.Phase.APPROACH)
 	if harness.is_assault:
 		assert_true(_soft_band_rect().has_point(layer.global_position), "assault: still inside the corridor")
+
+# ── The Stationary Defense Turret (Phase 8, t6; plan §2.7) ─────────────────────────────────────────
+
+const DEFENSE_TURRET_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/defense_turret/defense_turret.tscn")
+
+
+## The same turret engages in both modes (Open Space: the player inside `perceive_radius`; Assault: the turret inside the view) and swings
+## its mount onto the player; only in Assault does its `AssaultDrift` scroll it down, by `assault_drift_speed` per second. The root never rotates.
+func test_defense_turret_engages_in_both_modes_and_drifts_only_in_assault(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 600.0)
+	var turret := DEFENSE_TURRET_SCENE.instantiate() as DefenseTurret
+	turret.global_position = Vector2(640.0, 300.0)
+	harness.root.add_child(turret)
+	turret.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	var drift := turret.get_node("AssaultDrift") as AssaultDrift
+	drift.set_physics_process(false)
+	var y0 := turret.global_position.y
+	for _i in 60:
+		drift.step(DT)
+		_tick(turret, DT)
+	var brain := turret.get_node("Brain") as DefenseTurretBrain
+	var mount := turret.mounts()[0]
+	assert_eq(brain.phase, DefenseTurretBrain.Phase.ENGAGED, "%s: noticed, then engaged" % mode)
+	assert_ne(mount.phase(), TurretMount.Phase.SCAN, "%s: the mount is on the player" % mode)
+	assert_lt(mount.aim_error(), deg_to_rad(4.0), "%s: and aimed at it" % mode)
+	assert_eq(turret.rotation, 0.0, "%s: the root never rotates" % mode)
+	var expected_drift := turret.config.assault_drift_speed * 60.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(turret.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
+	assert_false(turret.is_queued_for_deletion())

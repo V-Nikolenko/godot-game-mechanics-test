@@ -56,9 +56,10 @@ const _STATION_TURRET_SCENE := "res://assault/scenes/enemies/space_station/stati
 const _DEFAULT_MASK_AFTER_READY := 1121
 
 ## `bomber`, `bonus_drone`, `razor_drone`, `gunship`, `gatling_interceptor`, `swarm_drone`,
-## `fighter`, `ram_corvette`, `sniper`, `space_station`. A sweep that finds fewer has
-## broken, and every assertion below is vacuous on a broken sweep.
-const _MIN_ROSTER_SIZE := 10
+## `fighter`, `ram_corvette`, `sniper`, `space_station`, `missile_corvette`, `support_ship`, `mine_layer`,
+## `defense_turret`. A sweep that finds fewer has broken, and every assertion below is vacuous on a
+## broken sweep.
+const _MIN_ROSTER_SIZE := 14
 
 ## Enemies whose damage/death flow diverges from the generic BaseEnemy path enough that a shared
 ## loop would either be meaningless (space_station never frees on the lethal frame) or wrong
@@ -287,6 +288,7 @@ const _AUTHORED_CONTACT_MODES := {
 	"ram_corvette": ContactProfile.Mode.ARMOR,
 	"missile_corvette": ContactProfile.Mode.COLLISION,
 	"support_ship": ContactProfile.Mode.NONE,
+	"defense_turret": ContactProfile.Mode.NONE,
 }
 
 
@@ -515,6 +517,24 @@ func test_each_brain_refuses_a_tow_in_exactly_its_committed_phases() -> void:
 			brain.phase = phases[phase_name]
 			assert_true(brain.accepts_tow(), "%s %s accepts a tow" % [dir, phase_name])
 		h.root.queue_free()
+
+
+## The defense turret (Phase 8) has no mover, so it has no accepting phase and cannot join `_REFUSING_PHASES`
+## (that table needs one): its brain and its root refuse a tow in every phase. Reached by node path and the
+## script's constant map, never by class name (the leak note above `_hurt_box`).
+func test_a_mover_less_turret_brain_refuses_a_tow_in_every_phase() -> void:
+	var h = _HARNESS.open_space()
+	add_child_autofree(h.root)
+	var turret := load("%s/defense_turret/defense_turret.tscn" % _ENEMY_ROOT).instantiate() as BaseEnemy
+	h.root.add_child(turret)
+	turret.set_physics_process(false)
+	var brain: EnemyBrain = turret.get_node("Brain")
+	var phases: Dictionary = (brain.get_script() as GDScript).get_script_constant_map()["Phase"]
+	assert_gt(phases.size(), 0, "the turret brain declares its phases")
+	for phase_name in phases:
+		brain.phase = phases[phase_name]
+		assert_false(brain.accepts_tow(), "defense_turret %s: the brain refuses a tow" % phase_name)
+		assert_false(turret.accept_tow(Vector2(50.0, 0.0)), "defense_turret %s: the turret refuses too" % phase_name)
 
 
 # ── telegraph is not moved (boundary) ─────────────────────────────────────────────────────────────

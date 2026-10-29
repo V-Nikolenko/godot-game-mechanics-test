@@ -1,0 +1,96 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/defense_turret.gd" id="1_dt"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_dt"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="3_dt"]
+[ext_resource type="Script" path="res://global/components/contact_profile.gd" id="4_dt"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/defense_turret_brain.gd" id="5_dt"]
+[ext_resource type="Script" path="res://global/components/assault_drift.gd" id="6_dt"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/turret_mount_slot.gd" id="7_dt"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="8_dt"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_dt"]
+radius = 28.0
+
+[sub_resource type="Animation" id="Animation_reset_dt"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:self_modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="Animation" id="Animation_hit_dt"]
+resource_name = "hit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:self_modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Color(2.5, 2.5, 2.5, 1), Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_dt"]
+_data = {
+&"RESET": SubResource("Animation_reset_dt"),
+&"hit": SubResource("Animation_hit_dt")
+}
+
+[node name="DefenseTurret" type="CharacterBody2D"]
+script = ExtResource("1_dt")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_dt")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 65
+script = ExtResource("2_dt")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_dt")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("3_dt")
+max_health = 90
+current_health = 90
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_dt")
+}
+
+[node name="ContactProfile" type="Node" parent="."]
+script = ExtResource("4_dt")
+mode = 0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("5_dt")
+
+[node name="AssaultDrift" type="Node" parent="."]
+script = ExtResource("6_dt")
+speed = 60.0
+
+[node name="MountSlots" type="Node2D" parent="."]
+
+[node name="Slot0" type="Marker2D" parent="MountSlots"]
+script = ExtResource("7_dt")
+variant = 0
+rest_bearing_deg = 90.0
+turn_rate_override = -1.0
+
+[node name="StateLight" type="Node2D" parent="."]
+script = ExtResource("8_dt")
