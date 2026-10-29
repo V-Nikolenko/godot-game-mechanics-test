@@ -21,6 +21,10 @@
 class_name DefenseTurret
 extends BaseEnemy
 
+## The body / hurtbox circle's radius (the scene's shared `CircleShape2D`; a row pins it).
+const BODY_RADIUS := 28.0
+## Px past the body a rocket's launcher clear radius adds.
+const ROCKET_CLEARANCE := 4.0
 const BASE_RADIUS := 30.0
 const BASE_COLOR := Color(0.2, 0.22, 0.26, 1.0)
 const RIM_COLOR := Color(0.5, 0.55, 0.62, 1.0)
@@ -97,6 +101,16 @@ func mounts() -> Array[TurretMount]:
 ## The player's mining beam passes over a turret root and burns it (it is a target, not a wall).
 func is_laser_blocking() -> bool:
 	return false
+
+
+## Duck-typed launcher question (`EnemyRocket.launch`, the rocket battery): a static host adds nothing to a rocket's speed.
+func launch_velocity() -> Vector2:
+	return Vector2.ZERO
+
+
+## Duck-typed launcher question: the body radius + 4, so a rocket arms only once clear of the hull and never hits its own turret.
+func rocket_clear_radius() -> float:
+	return BODY_RADIUS + ROCKET_CLEARANCE
 
 
 func _resolve_owner_group() -> StringName:

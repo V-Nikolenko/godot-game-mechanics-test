@@ -5,8 +5,8 @@ consumer of the Phase 8 weapon mounts.
 **Fantasy / threat:** A fixed gun covering a lane. The danger is where its fire lanes cross, not the gun chasing you: you can see it turning
 and you can out-strafe its partial lead.
 
-> **Build state (Phase 8, t7).** Shell, `TurretMount` cycle, the BURST_CANNON, SWEEP_BEAM, LANCE and BEAM_CANNON mounts and `AssaultDrift` are
-> built. Still to come in Phase 8: the rocket battery and pulse ring (t8), `TurretGroup` and the power source (t8), the shield
+> **Build state (Phase 8, t8).** Shell, `TurretMount` cycle, all six mounts (BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY, PULSE_RING, LANCE, BEAM_CANNON) and `AssaultDrift` are
+> built. Still to come in Phase 8: `TurretGroup` and the power source (t9), the shield
 > generator (t9s), the heavy emplacement (t11), the art (t15) and placement in the hub and level 1 (t18, t19). Mounting on large ships is
 > Phase 10. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.7; the task plan is `docs/plans/cmvqw0vnb017rqs2xsyursu5d/3-plan.md`.
 
@@ -82,6 +82,16 @@ and you can out-strafe its partial lead.
     turret; a still player draws `s` from the brain's rng once per shot), shows the line there, then ACTIVE turns the mount `s * sweep_rate` (0.8727 rad/s, 100° in 2.0 s)
     toward and through the player. **No turn-rate cap during ACTIVE** - the sweep rate is the weapon's, read from the beam scene.
   - `power_down()` cancels a telegraph (never lethal) or fades a lit beam within the tick; it never restarts. The light: CHARGING in TELEGRAPH, COMMIT beats CHARGING in a lance's commit, ARMED while lit.
+- **ROCKET_BATTERY** (`mounts/rocket_battery_mount.gd`, `rocket_battery_mount.tscn`). TRACK -> 0.5 s tube glow (light CHARGING, a lamp swells at the muzzle) -> a salvo of 2 Phase 5
+  `EnemyRocket`s 0.35 s apart (`BurstClock`) -> 5.5 s cooldown; range 900. Each rocket is PURSUIT with probability 1/3 (`pick_kind()`, one draw from the brain's rng), else DUMB, launched along
+  the barrel with the mount's predicted aim point. **Fires without line of sight** (`fires_past_cover()`, the Missile Corvette rule); never from off-screen in Assault. Two pools,
+  `DumbPool_0` / `PursuitPool_0`, root children of the turret with `persist_after_owner_death` (a rocket outlives its turret and frees itself on `expired`), each
+  `EnemyRocketScenes.pool_size_for()` over a stand-in (`salvo_count`, period = glow + salvo + cooldown) = 2. The turret answers the launcher contract: `launch_velocity()` ZERO and
+  `rocket_clear_radius()` = body radius 28 + 4, so a rocket opens its impact box only once clear and never hits its own turret.
+- **PULSE_RING** (`mounts/pulse_ring_mount.gd`, `pulse_ring_mount.tscn`). Idle until the player is within `trigger_range` 300 of the mount, then one `EnergyRing` (a mount child centred on the
+  mount, owner-ticked from `_pre_tick`, gaps from the rng): 0.8 s TELEGRAPH, expansion to 280, FADE, then 3.5 s cooldown counted from the end of the expansion. The mount does not aim
+  (`_tracks()` false, `fire_cone` ignored) and, like every non-rocket mount, holds fire without line of sight. The ring never hurts the turret or its group. `power_down()` cancels a
+  telegraph and fades an expanding band.
 - **Assault.** `AssaultDrift` moves it down 60 px/s and frees it below `EnemyWorld.projectile_world_rect()`. It does nothing in Open Space.
 - **Death / scoring:** standard `BaseEnemy` death, score 60, `wreck_chance` 0 (destroyed structures as wreckage is Phase 19).
 
@@ -99,7 +109,7 @@ and you can out-strafe its partial lead.
 
 Weapon tuning is **not** in the config. It lives in the mount scenes' exports (`turn_rate`, `fire_range`, `lead_blend`, `fire_cone_deg`,
 `scan_arc_deg`, `scan_speed`, `cooldown_seconds`, plus the burst's `charge_seconds`, `burst_count`, `burst_gap`, `round_speed`,
-`round_scene`), so a mount behaves the same on any host (Phase 10). Gates read them through `TurretMountScenes.export_of()`.
+`round_scene`; the rocket battery's `charge_seconds`, `salvo_count`, `salvo_gap`, `pursuit_chance`; the pulse ring's `trigger_range`, `ring_scene`), so a mount behaves the same on any host (Phase 10). Gates read them through `TurretMountScenes.export_of()`.
 
 ---
 
@@ -124,6 +134,8 @@ defense_turret/
     ├── turret_mount_scenes.gd            TurretMountScenes (scene_for, export_of)
     ├── beam_turret_mount.gd              BeamTurretMount (lance + beam cannon; the beam child, freeze rule)
     ├── sweep_beam_mount.gd               SweepBeamMount (start-bearing aim, sweep rotation)
+    ├── rocket_battery_mount.gd / .tscn   RocketBatteryMount (salvo of 2, root pools, fires past cover)
+    ├── pulse_ring_mount.gd / .tscn       PulseRingMount (EnergyRing child, trigger_range)
     ├── sweep_beam_mount.tscn / lance_mount.tscn / beam_cannon_mount.tscn
     └── burst_cannon_mount.gd / .tscn     BurstCannonMount
 ```

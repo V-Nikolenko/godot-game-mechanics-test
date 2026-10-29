@@ -1014,3 +1014,335 @@ func test_power_down_cancels_a_telegraph_or_fades_a_lit_beam_and_never_restarts(
 			assert_eq(b.phase(), EnemyBeam.Phase.OFF, "%s: never restarts" % label)
 			assert_false(b.is_lethal())
 			h.root.free()
+
+
+# ── 18. Rocket battery and pulse ring mounts (Phase 8 t8) ───────────────────────────────────────────────────────────
+#
+# Hand-ticked in both harnesses unless the name says real physics (8x clock). Mount numbers come from the mount scenes, rocket numbers from the
+# rocket scenes (`EnemyRocketScenes.export_of`), ring numbers from `energy_ring.tscn` (`EnemyBeamScenes.export_of_scene`). A rocket never moves in a
+# hand-ticked row (the scene tree runs no physics frame), so a row that fires many salvos recycles each rocket with `expired`, as the pool would.
+
+const ROCKET := TurretMount.Variant.ROCKET_BATTERY
+const RING := TurretMount.Variant.PULSE_RING
+const RING_SCENE: PackedScene = preload("res://assault/scenes/projectiles/enemy_beams/energy_ring.tscn")
+const RING_SCRIPT: Script = preload("res://assault/scenes/projectiles/enemy_beams/energy_ring.gd")
+const ROCKET_SCRIPT: Script = preload("res://assault/scenes/projectiles/enemy_rockets/enemy_rocket.gd")
+
+
+func _rocket_mount(t: DefenseTurret) -> RocketBatteryMount:
+	return t.mounts()[0] as RocketBatteryMount
+
+
+func _ring_mount(t: DefenseTurret) -> PulseRingMount:
+	return t.mounts()[0] as PulseRingMount
+
+
+## A ring export as `energy_ring.tscn` authors it.
+func _rx(property: StringName) -> Variant:
+	return EnemyBeamScenes.export_of_scene(RING_SCENE, property, RING_SCRIPT.get_property_default_value(property))
+
+
+## A rocket export as the kind's scene authors it.
+func _kx(kind: EnemyRocket.Kind, property: StringName) -> Variant:
+	return EnemyRocketScenes.export_of(kind, property, ROCKET_SCRIPT.get_property_default_value(property))
+
+
+## Every rocket the mount launches as {t, rocket}; `clock` is the caller's one-element time cell.
+func _rocket_log(m: TurretMount, clock: Array) -> Array:
+	var log: Array = []
+	m.round_fired.connect(func(projectile: Node2D) -> void: log.append({"t": clock[0], "rocket": projectile}))
+	return log
+
+
+func test_the_rocket_battery_builds_two_persisting_root_pools_sized_for_a_worst_case_salvo(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var t := _beam_turret(h, ROCKET)
+	var m := _rocket_mount(t)
+	assert_not_null(m, "%s: the slot holds a rocket battery" % mode)
+	assert_true(m.fires_past_cover(), "%s: curving ordnance fires without line of sight" % mode)
+	assert_false(m.is_committed())
+	var count: int = _mx(ROCKET, &"salvo_count")
+	var period: float = float(_mx(ROCKET, &"charge_seconds")) + (count - 1) * float(_mx(ROCKET, &"salvo_gap")) + float(_mx(ROCKET, &"cooldown_seconds"))
+	assert_eq(count, 2, "%s: a salvo of 2" % mode)
+	var specs := m.pool_specs()
+	assert_eq(specs.size(), 2, "%s: a Dumb and a Pursuit pool" % mode)
+	var kinds := {&"DumbPool": EnemyRocket.Kind.DUMB, &"PursuitPool": EnemyRocket.Kind.PURSUIT}
+	for spec in specs:
+		var kind: EnemyRocket.Kind = kinds[spec["name"]]
+		assert_true(spec["persist"], "%s: %s persists after its turret" % [mode, spec["name"]])
+		assert_eq(spec["scene"], EnemyRocketScenes.scene_for(kind), "%s: %s holds its kind's scene" % [mode, spec["name"]])
+		var stand_in := {"salvo_count": count, "warhead_salvo_count": 0, "salvo_period_min": period}
+		assert_eq(spec["size"], EnemyRocketScenes.pool_size_for(kind, stand_in), "%s: %s is sized by pool_size_for" % [mode, spec["name"]])
+		assert_gte(spec["size"], count, "%s: a whole salvo of one kind fits" % mode)
+		# Worst live count: a salvo's rockets, plus the previous salvo's while still flying (zero extra here: a rocket's max_time < the period).
+		var worst := count * int(ceil(float(_kx(kind, &"max_time")) / period))
+		assert_eq(spec["size"], worst, "%s: %s is pinned to the worst-case live count" % [mode, spec["name"]])
+		var pool := t.get_node("%s_0" % spec["name"]) as BulletPool
+		assert_not_null(pool, "%s: %s is a root child of the turret" % [mode, spec["name"]])
+		assert_true(pool.persist_after_owner_death, "%s: persist_after_owner_death" % mode)
+		assert_eq(pool.pool_size, spec["size"])
+
+
+func test_the_turret_answers_the_rocket_launcher_contract(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var t := _beam_turret(h, ROCKET)
+	var body := t.get_node("CollisionShape2D") as CollisionShape2D
+	assert_eq(t.launch_velocity(), Vector2.ZERO, "%s: a static host adds nothing to a rocket's speed" % mode)
+	assert_almost_eq(t.rocket_clear_radius(), (body.shape as CircleShape2D).radius + 4.0, 1e-4, "%s: clear radius = body radius + 4" % mode)
+
+
+func test_a_salvo_of_two_after_the_tube_glow_then_the_cooldown(mode: String = use_parameters(MODES)) -> void:
+	var charge: float = _mx(ROCKET, &"charge_seconds")
+	var gap: float = _mx(ROCKET, &"salvo_gap")
+	var cooldown: float = _mx(ROCKET, &"cooldown_seconds")
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 500.0)
+	var t := _beam_turret(h, ROCKET)
+	var m := _rocket_mount(t)
+	var clock := [0.0]
+	var log := _rocket_log(m, clock)
+	var started := [NAN]
+	m.phase_changed.connect(func(p: int) -> void:
+		if p == TurretMount.Phase.TELEGRAPH and is_nan(started[0]):
+			started[0] = clock[0])
+	var light_in_glow := [-1]
+	var first_salvo := _run_until(t, clock, 600, func() -> bool:
+		if m.phase() == TurretMount.Phase.TELEGRAPH:
+			light_in_glow[0] = _light(t).get_state()
+		return log.size() >= 2)
+	assert_true(first_salvo, "%s: a salvo leaves" % mode)
+	assert_eq(light_in_glow[0], StateLight.State.CHARGING, "%s: light CHARGING through the tube glow" % mode)
+	assert_eq(log.size(), 2, "%s: exactly two rockets" % mode)
+	assert_almost_eq(float(log[0]["t"]) - float(started[0]), charge, 2.0 * DT, "%s: the first leaves when the glow ends" % mode)
+	assert_almost_eq(float(log[1]["t"]) - float(log[0]["t"]), gap, 2.0 * DT, "%s: the second %s s later" % [mode, gap])
+	for entry in log:
+		var rocket := entry["rocket"] as EnemyRocket
+		assert_almost_eq(rocket.global_position.distance_to(m.muzzle_position()), 0.0, 1e-3, "%s: from the muzzle" % mode)
+		assert_lt(rad_to_deg(absf(angle_difference(rocket.heading().angle(), m.global_rotation))), 1.0, "%s: along the barrel" % mode)
+	for entry in log:
+		(entry["rocket"] as EnemyRocket).expired.emit()  # a flown-out rocket goes back to its pool on the next idle frame
+	await get_tree().process_frame
+	# Nothing more until the cooldown is out.
+	for i in int((cooldown - 0.5) / DT):
+		clock[0] += DT
+		t._physics_process(DT)
+	assert_eq(log.size(), 2, "%s: no third rocket during the cooldown" % mode)
+	_run_until(t, clock, 300, func() -> bool: return log.size() >= 3)
+	assert_eq(log.size(), 3, "%s: the next salvo follows" % mode)
+	assert_gte(float(log[2]["t"]) - float(log[1]["t"]), cooldown + charge - DT, "%s: after cooldown + glow" % mode)
+
+
+func test_the_rocket_kind_is_pursuit_one_time_in_three_from_the_seeded_rng(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var t := _beam_turret(h, ROCKET, Callable(), 99)
+	var m := _rocket_mount(t)
+	var counts := {EnemyRocket.Kind.DUMB: 0, EnemyRocket.Kind.PURSUIT: 0}
+	for i in 60:  # 30 salvos of two
+		counts[m.pick_kind()] += 1
+	var p := 1.0 / 3.0
+	var sigma := sqrt(60.0 * p * (1.0 - p))
+	assert_between(float(counts[EnemyRocket.Kind.PURSUIT]), 60.0 * p - 4.0 * sigma, 60.0 * p + 4.0 * sigma, "%s: Pursuit about a third of rockets" % mode)
+	assert_gt(int(counts[EnemyRocket.Kind.DUMB]), 0, "%s: and Dumb the rest" % mode)
+	# Real salvos launch a rocket out of the pool of the kind drawn.
+	h.player.global_position = T + Vector2(0.0, 500.0)
+	var clock := [0.0]
+	var log := _rocket_log(m, clock)
+	_run_until(t, clock, 600, func() -> bool: return log.size() >= 2)
+	for entry in log:
+		assert_true((entry["rocket"] as EnemyRocket).kind in [EnemyRocket.Kind.DUMB, EnemyRocket.Kind.PURSUIT], "%s: a Dumb or Pursuit rocket" % mode)
+
+
+func test_the_battery_fires_with_a_wreck_between_real_physics(mode: String = use_parameters(MODES)) -> void:
+	_scale_clock()
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 400.0)
+	var wreck := WRECK_MEDIUM.instantiate() as Wreck
+	wreck.set_physics_process(false)
+	h.root.add_child(wreck)
+	wreck.global_position = T + Vector2(0.0, 200.0)
+	await get_tree().physics_frame
+	await get_tree().physics_frame
+	var t := TURRET_SCENE.instantiate() as DefenseTurret
+	t.variant = ROCKET
+	(t.get_node("Brain") as DefenseTurretBrain).start_engaged = true
+	t.position = T
+	h.root.add_child(t)
+	var fired: Array = []
+	_rocket_mount(t).round_fired.connect(func(p: Node2D) -> void: fired.append(p))
+	var fires: bool = await _physics_frames_until(240, func() -> bool: return not fired.is_empty())
+	assert_true(fires, "%s: a rocket battery fires past the wreck within 4 s" % mode)
+	assert_true(is_instance_valid(wreck), "%s: the wreck was still between them" % mode)
+
+
+func test_rockets_persist_after_the_turret_dies_and_never_hit_it_real_physics(mode: String = use_parameters(MODES)) -> void:
+	_scale_clock()
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 500.0)
+	var t := TURRET_SCENE.instantiate() as DefenseTurret
+	t.variant = ROCKET
+	(t.get_node("Brain") as DefenseTurretBrain).start_engaged = true
+	t.position = T
+	h.root.add_child(t)
+	var m := _rocket_mount(t)
+	var fired: Array = []
+	var armed_at_launch: Array = []
+	m.round_fired.connect(func(p: Node2D) -> void:
+		fired.append(p)
+		armed_at_launch.append((p as EnemyRocket).is_armed()))
+	var launched: bool = await _physics_frames_until(300, func() -> bool: return fired.size() >= 2)
+	assert_true(launched, "%s: a salvo leaves" % mode)
+	var rocket := fired[0] as EnemyRocket
+	assert_false(armed_at_launch[0], "%s: a rocket is not armed on the muzzle (its host is in the way)" % mode)
+	var max_hp := t.health.max_health
+	var armed: bool = await _physics_frames_until(120, func() -> bool: return rocket.is_armed())
+	assert_true(armed, "%s: it arms once clear of the hull" % mode)
+	assert_eq(t.health.current_health, max_hp, "%s: it never hit its own turret" % mode)
+	var pos_at_death := rocket.global_position
+	t.free()
+	await _physics_frames_until(30, func() -> bool: return false)
+	assert_true(is_instance_valid(rocket) and rocket.is_inside_tree(), "%s: the rocket outlives its turret" % mode)
+	assert_ne(rocket.global_position, pos_at_death, "%s: and keeps flying" % mode)
+	# Its own `expired` now frees it (the pool handed it over): still exactly one owner.
+	var rocket_id := rocket.get_instance_id()
+	rocket.expired.emit()
+	var freed: bool = await _physics_frames_until(10, func() -> bool: return not is_instance_valid(instance_from_id(rocket_id)))
+	assert_true(freed, "%s: and is freed on expiry" % mode)
+
+
+func test_power_down_stops_a_rocket_battery_mid_glow_or_mid_salvo_and_never_restarts(mode: String = use_parameters(MODES)) -> void:
+	for mid_salvo in [false, true]:
+		var label := "%s %s" % [mode, "mid-salvo" if mid_salvo else "mid-glow"]
+		var h = _world(mode)
+		h.player.global_position = T + Vector2(0.0, 500.0)
+		var t := _beam_turret(h, ROCKET)
+		var m := _rocket_mount(t)
+		var clock := [0.0]
+		var log := _rocket_log(m, clock)
+		if mid_salvo:
+			assert_true(_run_until(t, clock, 300, func() -> bool: return log.size() == 1), "%s: the first rocket leaves" % label)
+		else:
+			assert_true(_run_until(t, clock, 300, func() -> bool: return m.phase() == TurretMount.Phase.TELEGRAPH), "%s: the glow starts" % label)
+		var first := log.size()
+		var in_flight: Array = log.map(func(e: Dictionary) -> Node: return e["rocket"])
+		t.set_powered(false)
+		assert_eq(m.phase(), TurretMount.Phase.UNPOWERED, "%s: UNPOWERED" % label)
+		assert_eq(_light(t).get_state(), StateLight.State.OFF, "%s: light OFF" % label)
+		for i in 900:
+			t._physics_process(DT)
+		assert_eq(log.size(), first, "%s: no further rocket, ever" % label)
+		for rocket in in_flight:
+			assert_true(is_instance_valid(rocket), "%s: a rocket already out is unaffected" % label)
+		h.root.free()
+
+
+func test_the_pulse_ring_builds_a_mount_child_ring_set_up_for_the_turret_group(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var t := _beam_turret(h, RING)
+	var m := _ring_mount(t)
+	assert_not_null(m, "%s: the slot holds a pulse ring mount" % mode)
+	var ring := m.ring()
+	assert_eq(ring.get_parent(), m, "%s: the ring is a mount child" % mode)
+	assert_eq(m.pool_specs().size(), 0, "%s: a ring mount builds no pools" % mode)
+	assert_eq(float(_mx(RING, &"trigger_range")), 300.0, "%s: trigger range 300" % mode)
+	assert_eq(ring.telegraph_seconds, float(_rx(&"telegraph_seconds")), "%s: the ring scene's own telegraph" % mode)
+	assert_false(m.fires_past_cover(), "%s: holds fire without line of sight" % mode)
+	assert_eq(m.owner_group(), t.owner_group())
+	assert_eq(ring.global_position, m.global_position, "%s: centred on the mount, not the muzzle" % mode)
+
+
+func test_no_ring_with_the_player_at_301_px_a_ring_at_299_and_a_cooldown_between(mode: String = use_parameters(MODES)) -> void:
+	var trigger: float = _mx(RING, &"trigger_range")
+	var cooldown: float = _mx(RING, &"cooldown_seconds")
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(trigger + 1.0, 0.0)
+	var t := _beam_turret(h, RING)
+	var m := _ring_mount(t)
+	var clock := [0.0]
+	var times: Array = []
+	var phases := {}
+	m.ring().phase_changed.connect(func(p: int) -> void:
+		if p == EnergyRing.Phase.TELEGRAPH:
+			times.append(clock[0])
+		if p == EnergyRing.Phase.FADE:
+			phases[times.size()] = clock[0])
+	for i in 240:
+		clock[0] += DT
+		t._physics_process(DT)
+	assert_eq(m.ring().phase(), EnergyRing.Phase.OFF, "%s: nothing at 301 px" % mode)
+	assert_eq(times.size(), 0)
+	h.player.global_position = T + Vector2(trigger - 1.0, 0.0)
+	var light_in_telegraph := [-1]
+	_run_until(t, clock, 120, func() -> bool:
+		if m.ring().phase() == EnergyRing.Phase.TELEGRAPH:
+			light_in_telegraph[0] = _light(t).get_state()
+		return times.size() >= 1 and m.ring().phase() == EnergyRing.Phase.EXPANDING)
+	assert_eq(times.size(), 1, "%s: a ring at 299 px" % mode)
+	assert_eq(light_in_telegraph[0], StateLight.State.CHARGING, "%s: light CHARGING during the telegraph" % mode)
+	assert_eq(m.phase(), TurretMount.Phase.FIRE, "%s: FIRE while the band expands" % mode)
+	_run_until(t, clock, 600, func() -> bool: return times.size() >= 2)
+	assert_eq(times.size(), 2, "%s: and again after the cooldown" % mode)
+	assert_almost_eq(float(times[1]) - float(phases[1]), cooldown, 2.0 * DT, "%s: the cooldown counts from the end of the expansion" % mode)
+	assert_almost_eq(float(phases[1]) - float(times[0]), float(_rx(&"telegraph_seconds")) + float(_rx(&"max_radius")) / float(_rx(&"ring_speed")) - float(_rx(&"band")) * 0.5 / float(_rx(&"ring_speed")), 3.0 * DT, "%s: telegraph then expansion" % mode)
+
+
+func test_a_ring_hurts_outsiders_on_its_path_once_and_never_its_own_group(mode: String = use_parameters(MODES)) -> void:
+	var damage: int = _rx(&"damage")
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 250.0)
+	var t := _beam_turret(h, RING)
+	var m := _ring_mount(t)
+	# Four outsiders round the ring: the two gaps are 180 degrees apart and 45 wide, so at least two of the four are outside both.
+	var foes: Array = []
+	for angle in [0.0, 90.0, 180.0, 270.0]:
+		foes.append(_victim(h, T + Vector2.from_angle(deg_to_rad(angle)) * 150.0))
+	var mates: Array = []
+	for angle in [45.0, 135.0, 225.0, 315.0]:
+		var mate := _victim(h, T + Vector2.from_angle(deg_to_rad(angle)) * 150.0)
+		mate.add_to_group(t.owner_group())
+		mates.append(mate)
+	var record: Array = []
+	m.ring().target_hit.connect(func(target: Node2D, dmg: int) -> void: record.append([target, dmg]))
+	var clock := [0.0]
+	_run_until(t, clock, 400, func() -> bool: return m.ring().phase() == EnergyRing.Phase.FADE)
+	for mate in mates:
+		assert_eq(_hits_on(record, mate), 0, "%s: a member of the turret's group is never hit" % mode)
+	assert_eq(t.health.current_health, t.health.max_health, "%s: nor the turret itself" % mode)
+	var total := 0
+	for foe in foes:
+		var n := _hits_on(record, foe)
+		assert_lte(n, 1, "%s: never twice" % mode)
+		total += n
+	assert_gte(total, 2, "%s: the ring hurt the outsiders outside its gaps" % mode)
+	for entry: Array in record:
+		assert_eq(entry[1], damage, "%s: for the ring's damage" % mode)
+
+
+func test_power_down_cancels_a_ring_telegraph_or_fades_an_expanding_ring_and_never_restarts(mode: String = use_parameters(MODES)) -> void:
+	for expanding in [false, true]:
+		var label := "%s %s" % [mode, "EXPANDING" if expanding else "TELEGRAPH"]
+		var h = _world(mode)
+		h.player.global_position = T + Vector2(100.0, 0.0)
+		var t := _beam_turret(h, RING)
+		var m := _ring_mount(t)
+		var ring := m.ring()
+		var foes: Array = []
+		for angle in [0.0, 90.0, 180.0, 270.0]:
+			foes.append(_victim(h, T + Vector2.from_angle(deg_to_rad(angle)) * 200.0))
+		var record: Array = []
+		ring.target_hit.connect(func(target: Node2D, _dmg: int) -> void: record.append(target))
+		var clock := [0.0]
+		var want: int = EnergyRing.Phase.EXPANDING if expanding else EnergyRing.Phase.TELEGRAPH
+		assert_true(_run_until(t, clock, 300, func() -> bool: return ring.phase() == want), "%s: reaches the phase" % label)
+		var before := record.size()
+		t.set_powered(false)
+		assert_eq(ring.phase(), EnergyRing.Phase.FADE if expanding else EnergyRing.Phase.OFF, "%s: stopped at once" % label)
+		assert_eq(m.phase(), TurretMount.Phase.UNPOWERED, "%s: UNPOWERED" % label)
+		assert_eq(_light(t).get_state(), StateLight.State.OFF, "%s: light OFF" % label)
+		for i in 600:
+			t._physics_process(DT)
+		assert_eq(record.size(), before, "%s: no hit after power-down" % label)
+		if not expanding:
+			assert_eq(before, 0, "%s: a cancelled telegraph never hurt" % label)
+		assert_eq(ring.phase(), EnergyRing.Phase.OFF, "%s: never restarts" % label)
+		assert_false(ring.is_lethal())
+		h.root.free()

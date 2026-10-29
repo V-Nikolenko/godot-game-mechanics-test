@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/mounts/pulse_ring_mount.gd" id="1_prm"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_beams/energy_ring.tscn" id="2_prm"]
+
+[node name="PulseRingMount" type="Node2D"]
+script = ExtResource("1_prm")
+trigger_range = 300.0
+ring_scene = ExtResource("2_prm")
+turn_rate = 2.0
+fire_range = 300.0
+lead_blend = 0.6
+fire_cone_deg = 8.0
+scan_arc_deg = 90.0
+scan_speed = 0.4
+cooldown_seconds = 3.5

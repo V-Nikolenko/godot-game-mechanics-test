@@ -1,0 +1,20 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/mounts/rocket_battery_mount.gd" id="1_rbm"]
+
+[node name="RocketBatteryMount" type="Node2D"]
+script = ExtResource("1_rbm")
+charge_seconds = 0.5
+salvo_count = 2
+salvo_gap = 0.35
+pursuit_chance = 0.3333333
+turn_rate = 2.0
+fire_range = 900.0
+lead_blend = 0.6
+fire_cone_deg = 8.0
+scan_arc_deg = 90.0
+scan_speed = 0.4
+cooldown_seconds = 5.5
+
+[node name="Muzzle" type="Marker2D" parent="."]
+position = Vector2(28, 0)

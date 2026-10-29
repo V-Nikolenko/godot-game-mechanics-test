@@ -3131,3 +3131,18 @@ directory. These are *planned* decisions; check this phase's *as built* section,
   at each telegraph start). ACTIVE rotation (`s * sweep_rate * dt`, no turn-rate cap) is applied in `_pre_tick` before the beam ticks, so the hit scan and the drawing see it.
 - **Brain light:** COMMIT now beats CHARGING (a lance's mount is in TELEGRAPH during its commit, so with t6's order COMMIT could never show). No t6 row depended on the old order.
 - A lit beam is not cut by a dropped `can_fire` (a committed shot runs out); a perception loss (`scan()`) or `power_down()` still cancels it.
+
+### Phase 8, built in t8 (turret rocket battery and pulse ring mounts) (2026-10-29)
+- **Built as §2.8 says:** `mounts/rocket_battery_mount.gd` (`RocketBatteryMount`) on `rocket_battery_mount.tscn` and `mounts/pulse_ring_mount.gd` (`PulseRingMount`) on
+  `pulse_ring_mount.tscn`; `TurretMountScenes.scene_for()` now answers all six variants (no variant is null any more).
+- **Rocket battery:** glow 0.5 s (TELEGRAPH, light CHARGING) -> salvo of 2 at 0.35 s from a `BurstClock` -> cooldown 5.5 s, range 900, `fires_past_cover()` true. Two root pools
+  (`DumbPool_0`, `PursuitPool_0`) with `persist_after_owner_death`, sized by `EnemyRocketScenes.pool_size_for()` over a **Dictionary stand-in** (`salvo_count`,
+  `warhead_salvo_count` 0, `salvo_period_min` = glow + salvo + cooldown 6.35 s): 2 each (a whole salvo of one kind; both `max_time`s, 4.0 / 6.0 s, are under the 6.35 s period, so no earlier salvo is still in flight), so no `pool_size` export was needed. `pick_kind()` is the public one-draw seam for the 1-in-3 PURSUIT choice. A rocket leaves along the
+  barrel with `_aim_point` as its aim point; **no per-rocket cone check** (unlike the burst cannon's rounds): the salvo's cone was satisfied when TELEGRAPH began and a PURSUIT rocket steers anyway.
+- **Launcher contract on `DefenseTurret`:** `launch_velocity()` ZERO, `rocket_clear_radius()` = `BODY_RADIUS` 28 + `ROCKET_CLEARANCE` 4 (new consts; a row ties them to the scene's body shape's role).
+  The mount hands the rocket `_host` and never reads its type.
+- **Pulse ring:** the ring is a mount child at the mount's origin (centred on the mount, not the muzzle), owner-ticked from `_pre_tick` (the t7 hook), `start(rng.randf_range(0, 360))`.
+  `_tracks()` false and the cone ignored; `trigger_range` 300 measured from the mount's pivot to the player. FIRE lasts while the band expands; the cooldown (3.5 s) counts from the
+  end of the expansion. **It holds fire without line of sight** (the base rule; plan §2.8 does not mark the ring as past-cover) - a ring is not blocked by cover, so a Ph9/Ph20
+  follow-up may want `fires_past_cover()` true for it.
+- Gate rows were written for both harnesses in `test_defense_turret.gd` §18; the 30-salvo kind distribution reads `pick_kind()` directly (a hand-ticked row cannot recycle rockets: `BulletPool._recycle` is deferred).
