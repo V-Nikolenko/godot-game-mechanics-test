@@ -76,6 +76,11 @@ const ROSTER: Array[Dictionary] = [
 		"no_hitbox": true,
 	},
 	{
+		"name": "laser_emitter",
+		"scene": "res://assault/scenes/enemies/laser_emitter/laser_emitter.tscn",
+		"no_hitbox": true,
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"no_hitbox": true,

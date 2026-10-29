@@ -46,6 +46,7 @@ const _SHIP_SCENES := [
 	"res://assault/scenes/enemies/defense_turret/defense_turret.tscn",
 	"res://assault/scenes/enemies/power_source/power_source.tscn",
 	"res://assault/scenes/enemies/shield_generator/shield_generator.tscn",
+	"res://assault/scenes/enemies/laser_emitter/laser_emitter.tscn",
 ]
 const D := 1.0 / 60.0
 const P := Vector2(640.0, 360.0)

@@ -3182,3 +3182,21 @@ directory. These are *planned* decisions; check this phase's *as built* section,
   the generator takes the slot once it frees. The reverse also holds: the Support Ship's own `_make_shield` skips a ward already bubbled by a generator (existing behaviour of `attach`).
 - `test_base_enemy.gd`: `test_a_mover_less_turret_brain_refuses_a_tow_in_every_phase` became `test_a_mover_less_structure_brain_refuses_a_tow_in_every_phase` and covers the turret and the
   generator; `_MIN_ROSTER_SIZE` 16.
+
+### Phase 8, built in t10 (laser fences) (2026-10-30)
+- **Built as §2.11 says:** `assault/scenes/enemies/laser_emitter/` (`LaserEmitter`, flat `LaserEmitterConfig` + `.tres`, `counts_as_escape = false`, `ENEMY.md`) and
+  `assault/scenes/structures/laser_fence/` (`LaserFence`, `laser_fence.tscn`, `STRUCTURE.md`); gate `tests/integration/test_laser_fence.gd`; `WaveBuilder.LASER_FENCE` / `laser_fence()`.
+- **Names later tasks build on:** `LaserFence.Mode { STATIC, CYCLE }` (append-only), `step(delta)`, `beam()`, `post_a()` / `post_b()` / `posts()`, `is_lit()`, `is_collapsed()`, `collapsed` /
+  `powered_off` signals, `cycle_period()`, `set_powered()`, `set_turret_group()`, `owner_group`; `LaserEmitter.is_fence_post()` (answers the duck-typed question t9s's generator asks) and
+  `state_light()`. Exports `off_seconds` 2.5, `on_seconds` 3.0, `phase_offset`, `linger_seconds` 1.0, `world_anchored_x`, `drift_speed` 60.
+- **CYCLE period is `off + telegraph + on`** (6.4 s): the beam's 0.15 s FADE runs inside the next OFF, so `off_seconds` is the dark gap *between the end of the lit part and the next warning* only
+  approximately (2.5 s minus the fade). A `phase_offset` that lands in the warning starts it with the *rest* of the telegraph (a shorter warning), in the lit part it starts lit.
+- **The fence keeps ticking its beam through the linger** (until the beam is OFF, endpoints frozen at the posts' last positions) instead of stopping at once, so no half-faded glow is left drawn
+  for a second; the beam is never lethal then (the collapse already cancelled it) and its hazard is unregistered by the same cancel.
+- **The fence collapses on the post's `died` (emitted before the explosion), and on `tree_exiting` as a fallback** - not only on tree exit, which would be a frame late.
+- **Hazard velocity** in Assault is overwritten with `AssaultDrift.velocity()` after each beam tick (exactly `(0, 60)` from the first tick); Open Space leaves the beam's own midpoint motion (zero).
+- **The test preset `tests/helpers/shielded_site.tscn` now has a fence slot** at (0, 220). The fence is not a `BaseEnemy`, so `test_turret_group.gd`'s `_site()` filters it out of `members`
+  (§13 rows are about the four that are); the fence's own rows are in `test_laser_fence.gd`.
+- Hand-ticked AI rows put the fixture at `before + velocity * DT` after each `_physics_process`: `move_and_slide()` outside a physics frame integrates over the frame's delta, not 1/60.
+- Roster gates: `laser_emitter` joined the three rosters, `test_wreck.gd`, `test_base_enemy.gd` (`_MIN_ROSTER_SIZE` 17) and `test_enemy_dual_mode.gd`; `test_engagement_deadline.gd` gained a "no fence in an
+  `ENEMIES_CLEARED` section" guard row.

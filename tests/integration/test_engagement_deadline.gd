@@ -918,3 +918,18 @@ func test_a_mine_layer_in_cloud_descents_last_wave_misses_the_timeout() -> void:
 	assert_true(rows[0]["over"], "the delay-0 Mine Layer must be flagged")
 	assert_gt(computed, section.enemies_cleared_timeout, "%.2f s must exceed %.1f s" % [computed,
 		section.enemies_cleared_timeout])
+
+
+## Phase 8 t10: a laser fence is persistent fire too (a held wall, posts that outlive the wave), so none may sit in an ENEMIES_CLEARED section.
+func test_no_enemies_cleared_section_spawns_a_laser_fence() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.LASER_FENCE), "%s spawns a laser fence" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+	var probe := _cloud_descent()
+	_add_to_last_wave(probe, load(WaveBuilder.LASER_FENCE) as PackedScene, 0.0)
+	assert_true(_section_has_scene(probe, WaveBuilder.LASER_FENCE), "boundary: a fence in cloud_descent's last wave is seen")

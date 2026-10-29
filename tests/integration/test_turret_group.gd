@@ -683,7 +683,8 @@ func _shield_of(m: Node) -> EnemyShield:
 ## The site in the harness, ticked off, the generator ready to be driven: `[group, members, generator]`.
 func _site(h) -> Array:
 	var g := SHIELDED_SITE.instantiate() as TurretGroup
-	var members := _spawn(h, g)
+	var members: Array = _spawn(h, g)
+	members = members.filter(func(m: Node) -> bool: return not m is LaserFence)  # the preset's fence is not a BaseEnemy (test_laser_fence.gd covers it)
 	return [g, members, _generator_of(members)]
 
 

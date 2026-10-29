@@ -1214,3 +1214,37 @@ func test_shield_generator_shields_its_group_in_both_modes_and_drifts_only_in_as
 	source.hurt_box.received_damage.emit(10000)
 	assert_false(generator.is_powered(), "%s: unpowered in the same call" % mode)
 	assert_eq(generator.tethers().size(), 0, "%s: no tether once dark" % mode)
+
+# ── The Laser Emitter (Phase 8, t10; plan §2.11) ─────────────────────────────────────────────────────────────────────
+
+const LASER_FENCE_SCENE: PackedScene = \
+		preload("res://assault/scenes/structures/laser_fence/laser_fence.tscn")
+
+
+## The same fence post is an ordinary static enemy in both modes (group `enemies`, never a wall for the mining beam, no mover so no tow, never an escape);
+## its fence carries it down in Assault only (the fence's `AssaultDrift`, the post has none) and shooting it drops the beam in the same call.
+func test_laser_emitter_is_a_static_post_and_its_death_drops_the_fence_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 600.0)
+	var fence := LASER_FENCE_SCENE.instantiate() as LaserFence
+	fence.position = Vector2(640.0, 300.0)
+	harness.root.add_child(fence)
+	fence.set_physics_process(false)  # hand-ticked, same technique as the turret above
+	var drift := fence.get_node("AssaultDrift") as AssaultDrift
+	drift.set_physics_process(false)
+	var post := fence.post_a()
+	assert_true(post.is_in_group(&"enemies"), "%s: an ordinary enemy" % mode)
+	assert_null(post.get_node_or_null("AssaultDrift"), "%s: the fence carries it, not the post" % mode)
+	assert_false(post.is_laser_blocking(), "%s: a target for the mining beam, not a wall" % mode)
+	assert_false(post.accept_tow(Vector2(50.0, 0.0)), "%s: no mover, no tow" % mode)
+	assert_false(post.counts_as_escape, "%s: drifting out never costs the combo" % mode)
+	var y0 := post.global_position.y
+	for _i in 60:
+		drift.step(DT)
+		fence.step(DT)
+	var expected_drift := fence.drift_speed * 60.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(post.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
+	assert_true(fence.is_lit(), "%s: lit" % mode)
+	post.hurt_box.received_damage.emit(10000)
+	assert_false(fence.is_lit(), "%s: the beam is down in the same call" % mode)

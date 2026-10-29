@@ -1,0 +1,24 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/structures/laser_fence/laser_fence.gd" id="1_lf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/laser_emitter/laser_emitter.tscn" id="2_lf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_beams/twin_beam.tscn" id="3_lf"]
+[ext_resource type="Script" path="res://global/components/assault_drift.gd" id="4_lf"]
+
+[node name="LaserFence" type="Node2D"]
+script = ExtResource("1_lf")
+
+[node name="PostA" parent="." instance=ExtResource("2_lf")]
+position = Vector2(-150, 0)
+
+[node name="PostB" parent="." instance=ExtResource("2_lf")]
+position = Vector2(150, 0)
+
+[node name="Beam" parent="." instance=ExtResource("3_lf")]
+damage = 12
+avoid_weight = 1.0
+registers_hazard = true
+
+[node name="AssaultDrift" type="Node" parent="."]
+script = ExtResource("4_lf")
+speed = 60.0

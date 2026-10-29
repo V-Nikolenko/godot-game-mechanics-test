@@ -101,6 +101,10 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/shield_generator/shield_generator.tscn",
 	},
 	{
+		"name": "laser_emitter",
+		"scene": "res://assault/scenes/enemies/laser_emitter/laser_emitter.tscn",
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 	},

@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/structures/turret_group/turret_group.gd" id="1_ss"]
 [ext_resource type="Script" path="res://assault/scenes/structures/turret_group/turret_group_slot.gd" id="2_ss"]
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/defense_turret/defense_turret.tscn" id="3_ss"]
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/power_source/power_source.tscn" id="4_ss"]
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/shield_generator/shield_generator.tscn" id="5_ss"]
+[ext_resource type="PackedScene" path="res://assault/scenes/structures/laser_fence/laser_fence.tscn" id="6_ss"]
 
 [node name="ShieldedSite" type="Node2D"]
 script = ExtResource("1_ss")
@@ -30,3 +31,8 @@ member_scene = ExtResource("4_ss")
 position = Vector2(0, 120)
 script = ExtResource("2_ss")
 member_scene = ExtResource("5_ss")
+
+[node name="LaserFence" type="Marker2D" parent="."]
+position = Vector2(0, 220)
+script = ExtResource("2_ss")
+member_scene = ExtResource("6_ss")

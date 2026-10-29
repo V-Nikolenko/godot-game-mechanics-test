@@ -452,6 +452,11 @@ b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(-64, -220)
 
 ---
 
+### Laser fence (Phase 8)
+**Builder:** `b.laser_fence()` (`.prop("mode", LaserFence.Mode.CYCLE)` for a temporary barrier; `phase_offset`, `off_seconds`, `on_seconds` the same way)  
+**Scene:** `assault/scenes/structures/laser_fence/laser_fence.tscn`: two `LaserEmitter` posts (HP 140, score 40, `counts_as_escape` false) 300 px apart and a laser wall between them (12 damage, 0.9 s warning line first). In Assault its **x is world-anchored** like a turret group's.  
+**Counterplay:** shoot a post and the whole fence drops for good (it lingers one second so the explosions finish); AI enemies with hazard avoidance steer round the ends, ones without fly into it. A shield generator never shields a post. **Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Not placed in level 1 or the hub yet.
+
 ### `bonus_drone` — Bonus Drone
 
 **Builder:** `b.bonus_drone()`  
