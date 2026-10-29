@@ -16,12 +16,13 @@
 ## - COOLDOWN: aim and turn; TRACK once `_cooldown_left` runs out.
 ## - UNPOWERED: `power_down()`; the mount eases to `rest_bearing_deg` (the droop) and never leaves it in this phase.
 ##
-## Tick order, each `tick()` / `scan()`: the cooldown counts down, the phase clock counts up, the phase step runs (aim and turn first), then
-## `_weapon_tick(delta)` - once per call in EVERY phase, UNPOWERED included, so an owner-ticked beam or ring finishes its fade.
+## Tick order, each `tick()` / `scan()`: `_pre_tick(delta)` (an owner-ticked beam advances before the phase step reads its phase), the cooldown
+## counts down, the phase clock counts up, the phase step runs (aim and turn first), then `_weapon_tick(delta)` - once per call in EVERY phase,
+## UNPOWERED included, so an owner-ticked beam or ring finishes its fade.
 ## The cooldown is its own clock: it counts in every phase, SCAN included, and is set by any exit from FIRE except `power_down()`, so a
 ## turret whose perception flickers never fires faster than its exports.
 ##
-## HOOKS (subclass surface): `_aim_point_for`, `_shot_speed`, `_tracks`, `_wants_telegraph`, `_telegraph_seconds`, `_telegraph_done`,
+## HOOKS (subclass surface): `_pre_tick`, `_aim_point_for`, `_shot_speed`, `_tracks`, `_wants_telegraph`, `_telegraph_seconds`, `_telegraph_done`,
 ## `_on_telegraph_start`, `_fire_tick`, `_weapon_tick`, `_stop_weapon`, `pool_specs`, `fires_past_cover`, `is_committed`.
 class_name TurretMount
 extends Node2D
@@ -98,6 +99,7 @@ func tick(delta: float, target: TargetInfo, can_fire: bool) -> void:
 	if target == null or not target.has_target:
 		scan(delta)
 		return
+	_pre_tick(delta)
 	_count_clocks(delta)
 	match _phase:
 		Phase.UNPOWERED:
@@ -130,6 +132,7 @@ func tick(delta: float, target: TargetInfo, can_fire: bool) -> void:
 ## One idle tick: any live weapon stops (a FIRE cut here still starts the cooldown), the phase becomes SCAN and the mount follows its sweep.
 ## An unpowered mount only droops.
 func scan(delta: float) -> void:
+	_pre_tick(delta)
 	_count_clocks(delta)
 	if _phase == Phase.UNPOWERED:
 		_droop(delta)
@@ -199,6 +202,11 @@ func is_committed() -> bool:
 
 
 # --- hooks -------------------------------------------------------------------------------------------------------------------------------------
+
+## Before the cooldown and the phase clock count, once per `tick()` / `scan()`: a weapon that owns a clock the phase step reads (a beam) advances here.
+func _pre_tick(_delta: float) -> void:
+	pass
+
 
 ## Where to aim at `target`. Projectile variants: `lead_blend` of the way from the target to its intercept (the plain position when that fails).
 func _aim_point_for(target: TargetInfo) -> Vector2:

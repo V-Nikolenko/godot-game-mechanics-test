@@ -4,14 +4,23 @@ class_name TurretMountScenes
 extends RefCounted
 
 const BURST_CANNON: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/burst_cannon_mount.tscn")
+const SWEEP_BEAM: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/sweep_beam_mount.tscn")
+const LANCE: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/lance_mount.tscn")
+const BEAM_CANNON: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/beam_cannon_mount.tscn")
 
 
-## The mount scene for [param variant], or null with no error while that variant is not built yet (the other variants arrive in later tasks),
+## The mount scene for [param variant], or null with no error while that variant is not built yet (the rocket battery and pulse ring arrive in t8),
 ## so a caller can sweep "every built variant".
 static func scene_for(variant: int) -> PackedScene:
 	match variant:
 		TurretMount.Variant.BURST_CANNON:
 			return BURST_CANNON
+		TurretMount.Variant.SWEEP_BEAM:
+			return SWEEP_BEAM
+		TurretMount.Variant.LANCE:
+			return LANCE
+		TurretMount.Variant.BEAM_CANNON:
+			return BEAM_CANNON
 	return null
 
 

@@ -15,6 +15,8 @@ const BURST_SCRIPT: Script = preload("res://assault/scenes/enemies/defense_turre
 const FIXTURE_ENEMY: PackedScene = preload("res://tests/helpers/fixture_enemy.tscn")
 const FIXTURE_MOUNT: GDScript = preload("res://tests/helpers/fixture_turret_mount.gd")
 const WRECK_MEDIUM: PackedScene = preload("res://assault/scenes/hazards/wreck/wreck_medium.tscn")
+const MOUNT_SCRIPT: Script = preload("res://assault/scenes/enemies/defense_turret/mounts/turret_mount.gd")
+const BEAM_SCRIPT: Script = preload("res://assault/scenes/projectiles/enemy_beams/enemy_beam.gd")
 const LASER_MODE: WeaponModeResource = preload("res://assault/scenes/player/weapons/modes/mining_laser.tres")
 
 const MODES := ["open_space", "assault"]
@@ -663,3 +665,352 @@ func test_open_space_every_phase_ticks_the_weapon_once_and_telegraph_done_decide
 	assert_eq(total, calls, "exactly one _weapon_tick per tick() / scan() call")
 	for p in TurretMount.Phase.values():
 		assert_true(counts.has(p), "_weapon_tick ran in %s" % TurretMount.Phase.keys()[p])
+
+
+# ── 17. Beam mounts (Phase 8 t7): sweep, lance, beam cannon ─────────────────────────────────────────────────────────
+#
+# Hand-ticked in both harnesses. Every number is read from the mount scene or the beam scene it fires (`_mx` / `_bx`); the only typed
+# numbers are the test stub's distance and velocity. Hits are read from the mount's own beam (`target_hit`) on `fixture_enemy.tscn`
+# victims with a 14 px hurtbox, so the player stub (no hurtbox) is never a target.
+
+const SWEEP := TurretMount.Variant.SWEEP_BEAM
+const LANCE := TurretMount.Variant.LANCE
+const CANNON := TurretMount.Variant.BEAM_CANNON
+const BEAM_VARIANTS := [SWEEP, LANCE, CANNON]
+const BEAM_KIND := {SWEEP: EnemyBeam.Kind.SWEEP, LANCE: EnemyBeam.Kind.LANCE, CANNON: EnemyBeam.Kind.BEAM}
+
+
+## A mount export as the variant's scene authors it.
+func _mx(variant: int, property: StringName) -> Variant:
+	return TurretMountScenes.export_of(variant, property, MOUNT_SCRIPT.get_property_default_value(property))
+
+
+## A beam export as the variant's beam scene authors it.
+func _bx(variant: int, property: StringName) -> Variant:
+	return EnemyBeamScenes.export_of(BEAM_KIND[variant], property, BEAM_SCRIPT.get_property_default_value(property))
+
+
+func _beam_turret(h, variant: int, prepare: Callable = Callable(), seed_value: int = 4242) -> DefenseTurret:
+	return _turret(h, T, true, seed_value, func(t: DefenseTurret) -> void:
+		t.variant = variant
+		if prepare.is_valid():
+			prepare.call(t))
+
+
+func _beam_mount(t: DefenseTurret) -> BeamTurretMount:
+	return t.mounts()[0] as BeamTurretMount
+
+
+func _circle(radius: float) -> CollisionShape2D:
+	var cs := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = radius
+	cs.shape = circle
+	return cs
+
+
+func _victim(h, at: Vector2) -> BaseEnemy:
+	var e := FIXTURE_ENEMY.instantiate() as BaseEnemy
+	e.get_node("HurtBox").add_child(_circle(14.0))
+	e.add_to_group(&"enemies")
+	h.root.add_child(e)
+	e.global_position = at
+	return e
+
+
+## Every `target_hit` of the mount's beam as [target, damage].
+func _hit_log(m: BeamTurretMount) -> Array:
+	var record: Array = []
+	m.beam().target_hit.connect(func(target: Node2D, damage: int) -> void: record.append([target, damage]))
+	return record
+
+
+func _hits_on(record: Array, target: Node) -> int:
+	var n := 0
+	for entry: Array in record:
+		if entry[0] == target:
+			n += 1
+	return n
+
+
+## The lead point of a beam aim: the stub's position plus its velocity over the beam's telegraph, `lead_blend` of the way.
+func _beam_lead(variant: int, p: Vector2, v: Vector2) -> Vector2:
+	return p + v * float(_bx(variant, &"telegraph_seconds")) * float(_mx(variant, &"lead_blend"))
+
+
+func test_every_beam_variant_builds_with_a_mount_child_beam_of_its_own_scene(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	for variant in BEAM_VARIANTS:
+		assert_not_null(TurretMountScenes.scene_for(variant), "%s: variant %d has a scene" % [mode, variant])
+		var t := _beam_turret(h, variant)
+		var m := _beam_mount(t)
+		assert_not_null(m, "%s: the slot holds a beam mount" % mode)
+		var b := m.beam()
+		assert_eq(b.get_parent(), m, "%s: the beam is a mount child" % mode)
+		assert_eq(b.kind, BEAM_KIND[variant], "%s: of the variant's own kind" % mode)
+		assert_eq(b.length, float(_bx(variant, &"length")), "%s: the weapon scene's length" % mode)
+		assert_eq(b.telegraph_seconds, float(_bx(variant, &"telegraph_seconds")))
+		assert_eq(m.fire_range, float(_mx(variant, &"fire_range")))
+		assert_eq(m.pool_specs().size(), 0, "%s: a beam mount builds no pools" % mode)
+		assert_eq(b.global_position, m.muzzle_position(), "%s: the beam starts at the muzzle" % mode)
+		assert_false(m.is_committed(), "%s: nothing committed at rest" % mode)
+		assert_false(m.fires_past_cover(), "%s: a beam holds fire without line of sight" % mode)
+
+
+func test_the_sweep_telegraph_line_sits_at_the_start_bearing_on_the_side_the_player_comes_from(mode: String = use_parameters(MODES)) -> void:
+	var half_arc := deg_to_rad(float(_bx(SWEEP, &"sweep_arc_deg"))) * 0.5
+	var half_cone := deg_to_rad(float(_mx(SWEEP, &"fire_cone_deg"))) * 0.5
+	for s in [1.0, -1.0]:
+		var h = _world(mode)
+		h.player.global_position = T + Vector2(0.0, 250.0)
+		h.player.velocity = Vector2(-100.0 * s, 0.0)  # about the turret a stub below it moving -x is turning positively (clockwise)
+		var t := _beam_turret(h, SWEEP)
+		var m := _beam_mount(t)
+		var clock := [0.0]
+		assert_true(_run_until(t, clock, 240, func() -> bool: return m.phase() == TurretMount.Phase.TELEGRAPH),
+				"%s s=%d: the mount reaches the start bearing and telegraphs" % [mode, s])
+		var lead := _beam_lead(SWEEP, h.player.global_position, h.player.velocity)
+		var aim := (lead - m.global_position).angle()
+		var expected: float = aim - s * half_arc
+		var line := m.beam().global_rotation
+		assert_lt(absf(angle_difference(line, expected)), half_cone + 0.01, "%s s=%d: the line is at aim - s * arc/2" % [mode, s])
+		assert_eq(m.beam().phase(), EnemyBeam.Phase.TELEGRAPH, "%s: the beam shows its warning" % mode)
+		assert_eq(_light(t).get_state(), StateLight.State.CHARGING, "%s: light CHARGING" % mode)
+		# Moving the stub changes nothing: the shown line is the line that fires.
+		h.player.global_position += Vector2(150.0 * s, 40.0)
+		for i in 20:
+			t._physics_process(DT)
+		assert_eq(m.beam().global_rotation, line, "%s s=%d: the line does not re-aim during TELEGRAPH" % [mode, s])
+		h.root.free()
+
+
+func test_the_sweep_turns_its_arc_at_the_sweep_rate_through_the_aim_bearing_and_hits_a_stub_there(mode: String = use_parameters(MODES)) -> void:
+	var arc := deg_to_rad(float(_bx(SWEEP, &"sweep_arc_deg")))
+	var rate: float = _bx(SWEEP, &"sweep_rate")
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 250.0)
+	h.player.velocity = Vector2(-100.0, 0.0)  # s = +1
+	var t := _beam_turret(h, SWEEP)
+	var m := _beam_mount(t)
+	var aim := (_beam_lead(SWEEP, h.player.global_position, h.player.velocity) - m.global_position).angle()
+	var victim := _victim(h, m.global_position + Vector2.from_angle(aim) * 220.0)
+	var hits := _hit_log(m)
+	var clock := [0.0]
+	var times := {}
+	m.beam().phase_changed.connect(func(p: int) -> void: times[p] = clock[0])
+	var first_active := [NAN]
+	var worst_step := [0.0]
+	var prev := [m.rotation]
+	var light_in_active := [-1]
+	for i in 600:
+		clock[0] += DT
+		t._physics_process(DT)
+		if m.beam().phase() == EnemyBeam.Phase.ACTIVE:
+			if is_nan(first_active[0]):
+				first_active[0] = prev[0]
+			worst_step[0] = maxf(worst_step[0], absf(angle_difference(prev[0], m.rotation)))
+			light_in_active[0] = _light(t).get_state()
+		prev[0] = m.rotation
+		if times.has(EnemyBeam.Phase.FADE):
+			break
+	assert_true(times.has(EnemyBeam.Phase.FADE), "%s: the sweep ran its course" % mode)
+	assert_almost_eq(times[EnemyBeam.Phase.ACTIVE] - times[EnemyBeam.Phase.TELEGRAPH], float(_bx(SWEEP, &"telegraph_seconds")), DT + 1e-6,
+			"%s: TELEGRAPH lasts telegraph_seconds" % mode)
+	assert_almost_eq(times[EnemyBeam.Phase.FADE] - times[EnemyBeam.Phase.ACTIVE], float(_bx(SWEEP, &"active_seconds")), DT + 1e-6,
+			"%s: ACTIVE lasts active_seconds" % mode)
+	assert_almost_eq(angle_difference(first_active[0], m.rotation), arc, rate * DT * 2.0, "%s: ACTIVE turns the whole arc toward the player" % mode)
+	assert_almost_eq(worst_step[0], rate * DT, 1e-4, "%s: a step is sweep_rate * dt" % mode)
+	assert_gt(_hits_on(hits, victim), 0, "%s: a stub standing at the aim bearing is hit" % mode)
+	assert_eq(light_in_active[0], StateLight.State.ARMED, "%s: light ARMED while lit" % mode)
+
+
+func test_the_mount_turn_rate_cap_does_not_apply_during_the_sweep(mode: String = use_parameters(MODES)) -> void:
+	var rate: float = _bx(SWEEP, &"sweep_rate")
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 250.0)
+	h.player.velocity = Vector2(-100.0, 0.0)
+	var slow := rate * 0.3
+	var t := _beam_turret(h, SWEEP, func(tt: DefenseTurret) -> void:
+		(tt.get_node("MountSlots/Slot0") as TurretMountSlot).turn_rate_override = slow)
+	var m := _beam_mount(t)
+	assert_almost_eq(m.turn_rate, slow, 1e-6, "sanity: the mount is slower than the sweep")
+	var half_arc := deg_to_rad(float(_bx(SWEEP, &"sweep_arc_deg"))) * 0.5
+	var aim := (_beam_lead(SWEEP, h.player.global_position, h.player.velocity) - m.global_position).angle()
+	m.rotation = aim - half_arc  # already on the start bearing
+	var clock := [0.0]
+	assert_true(_run_until(t, clock, 600, func() -> bool: return m.beam().phase() == EnemyBeam.Phase.ACTIVE), "%s: reaches ACTIVE" % mode)
+	var prev := m.rotation
+	var worst := 0.0
+	for i in 40:
+		t._physics_process(DT)
+		worst = maxf(worst, absf(angle_difference(prev, m.rotation)))
+		prev = m.rotation
+	assert_gt(worst, slow * DT * 2.0, "%s: the sweep turns faster than turn_rate allows" % mode)
+
+
+func test_a_still_player_draws_the_sweep_side_from_the_rng(mode: String = use_parameters(MODES)) -> void:
+	var half_arc := deg_to_rad(float(_bx(SWEEP, &"sweep_arc_deg"))) * 0.5
+	var sides := {}
+	for seed_value in [1, 2, 3, 4, 5, 6]:
+		var h = _world(mode)
+		h.player.global_position = T + Vector2(0.0, 250.0)
+		var t := _beam_turret(h, SWEEP, Callable(), seed_value)
+		var m := _beam_mount(t)
+		var clock := [0.0]
+		assert_true(_run_until(t, clock, 300, func() -> bool: return m.phase() == TurretMount.Phase.TELEGRAPH), "%s: telegraphs" % mode)
+		var off := angle_difference((h.player.global_position - m.global_position).angle(), m.beam().global_rotation)
+		assert_almost_eq(absf(off), half_arc, deg_to_rad(5.0), "%s: still offset by half the arc" % mode)
+		sides[signf(off)] = true
+		h.root.free()
+	assert_eq(sides.size(), 2, "%s: both sides occur across seeds" % mode)
+
+
+func test_the_lance_tracks_then_freezes_for_commit_and_hits_once_for_its_damage(mode: String = use_parameters(MODES)) -> void:
+	var commit: float = _bx(LANCE, &"commit_seconds")
+	var telegraph: float = _bx(LANCE, &"telegraph_seconds")
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 500.0)
+	var t := _beam_turret(h, LANCE)
+	var m := _beam_mount(t)
+	var clock := [0.0]
+	assert_true(_run_until(t, clock, 240, func() -> bool: return m.phase() == TurretMount.Phase.TELEGRAPH), "%s: telegraphs" % mode)
+	var b := m.beam()
+	var started := [clock[0]]
+	var victim := _victim(h, m.global_position + Vector2.from_angle(m.global_rotation) * 300.0)
+	var hits := _hit_log(m)
+	var damages: Array = []
+	b.target_hit.connect(func(_target: Node2D, damage: int) -> void: damages.append(damage))
+	# Tracking: the stub steps aside and the aim follows.
+	var before := m.rotation
+	h.player.global_position += Vector2(60.0, 0.0)
+	for i in 6:
+		clock[0] += DT
+		t._physics_process(DT)
+	assert_ne(m.rotation, before, "%s: the aim tracks before COMMIT" % mode)
+	assert_false(m.is_committed(), "%s: not yet committed" % mode)
+	assert_eq(_light(t).get_state(), StateLight.State.CHARGING, "%s: light CHARGING" % mode)
+	var seen_commit := false
+	var light_at_commit := -1
+	for i in 120:
+		clock[0] += DT
+		t._physics_process(DT)
+		if m.is_committed():
+			seen_commit = true
+			light_at_commit = _light(t).get_state()
+			break
+	assert_true(seen_commit, "%s: the lance commits" % mode)
+	assert_eq(light_at_commit, StateLight.State.COMMIT, "%s: light COMMIT" % mode)
+	assert_almost_eq(clock[0] - float(started[0]), telegraph - commit, 2.0 * DT, "%s: COMMIT is the last commit_seconds" % mode)
+	var frozen_rot := m.rotation
+	victim.global_position = m.global_position + Vector2.from_angle(b.global_rotation) * 300.0
+	h.player.global_position += Vector2(260.0, 0.0)  # a stub that moves during COMMIT changes nothing
+	var saw_armed := false
+	for i in 90:
+		t._physics_process(DT)
+		if b.phase() == EnemyBeam.Phase.TELEGRAPH or b.phase() == EnemyBeam.Phase.ACTIVE:
+			assert_eq(m.rotation, frozen_rot, "%s: frozen through COMMIT and the shot" % mode)
+		if b.phase() == EnemyBeam.Phase.ACTIVE and _light(t).get_state() == StateLight.State.ARMED:
+			saw_armed = true
+	assert_true(saw_armed, "%s: light ARMED while the lance is lit" % mode)
+	assert_eq(_hits_on(hits, victim), 1, "%s: one hit, however long it is held" % mode)
+	assert_eq(damages, [int(_bx(LANCE, &"damage"))], "%s: for the lance's damage" % mode)
+
+
+func test_the_beam_cannon_freezes_its_bearing_at_telegraph_start_and_a_step_aside_dodges_it(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 300.0)
+	var t := _beam_turret(h, CANNON)
+	var m := _beam_mount(t)
+	var clock := [0.0]
+	var times := {}
+	m.beam().phase_changed.connect(func(p: int) -> void: times[p] = clock[0])
+	assert_true(_run_until(t, clock, 240, func() -> bool: return m.phase() == TurretMount.Phase.TELEGRAPH), "%s: telegraphs" % mode)
+	var b := m.beam()
+	var frozen := b.global_rotation
+	var frozen_aim := m.aim_point()
+	var on_line := _victim(h, m.global_position + Vector2.from_angle(frozen) * 350.0)
+	var stepped_to := _victim(h, m.global_position + Vector2.from_angle(frozen + deg_to_rad(25.0)) * 350.0)
+	var hits := _hit_log(m)
+	h.player.global_position += Vector2(200.0, 0.0)  # the stub steps out during TELEGRAPH
+	var armed_seen := false
+	var lethal_ticks := 0
+	var moved := false
+	for i in 200:
+		clock[0] += DT
+		t._physics_process(DT)
+		if b.phase() == EnemyBeam.Phase.TELEGRAPH:
+			assert_eq(_hits_on(hits, on_line), 0, "%s: no hit during TELEGRAPH" % mode)
+			assert_eq(m.aim_point(), frozen_aim, "%s: the aim point is frozen too" % mode)
+		if b.phase() == EnemyBeam.Phase.TELEGRAPH or b.phase() == EnemyBeam.Phase.ACTIVE:
+			moved = moved or b.global_rotation != frozen
+		if b.is_lethal():
+			lethal_ticks += 1
+		if b.phase() == EnemyBeam.Phase.ACTIVE and _light(t).get_state() == StateLight.State.ARMED:
+			armed_seen = true
+		if times.has(EnemyBeam.Phase.OFF):
+			break
+	assert_false(moved, "%s: the bearing never changes while the shot is out" % mode)
+	assert_true(armed_seen, "%s: light ARMED while lit" % mode)
+	assert_gt(_hits_on(hits, on_line), 0, "%s: the shown line is the line that fires" % mode)
+	assert_eq(_hits_on(hits, stepped_to), 0, "%s: where the stub stepped to is not hit" % mode)
+	assert_almost_eq(times[EnemyBeam.Phase.ACTIVE] - times[EnemyBeam.Phase.TELEGRAPH], float(_bx(CANNON, &"telegraph_seconds")), DT + 1e-6,
+			"%s: TELEGRAPH lasts telegraph_seconds" % mode)
+	assert_almost_eq(float(lethal_ticks) * DT, float(_bx(CANNON, &"active_seconds")) - float(_bx(CANNON, &"ignite_grace")), 2.0 * DT,
+			"%s: lethal for the active window less the ignite grace" % mode)
+	assert_gt(m.cooldown_left(), 0.0, "%s: the cooldown is running" % mode)
+
+
+func test_a_beam_never_burns_its_owner_group_and_dies_with_its_turret(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	h.player.global_position = T + Vector2(0.0, 300.0)
+	var t := _beam_turret(h, CANNON)
+	var m := _beam_mount(t)
+	var clock := [0.0]
+	assert_true(_run_until(t, clock, 240, func() -> bool: return m.phase() == TurretMount.Phase.TELEGRAPH), "%s: telegraphs" % mode)
+	var dir := Vector2.from_angle(m.beam().global_rotation)
+	var mate := _victim(h, m.global_position + dir * 300.0)
+	mate.add_to_group(t.owner_group())
+	var foe := _victim(h, m.global_position + dir * 360.0)
+	var hits := _hit_log(m)
+	_run_until(t, clock, 120, func() -> bool: return m.beam().phase() == EnemyBeam.Phase.FADE)
+	assert_gt(_hits_on(hits, foe), 0, "%s: control: an outsider on the line is hit" % mode)
+	assert_eq(_hits_on(hits, mate), 0, "%s: a member of the turret's owner group is not" % mode)
+	var b := m.beam()
+	t.free()
+	assert_false(is_instance_valid(b), "%s: the beam goes with its turret" % mode)
+
+
+func test_power_down_cancels_a_telegraph_or_fades_a_lit_beam_and_never_restarts(mode: String = use_parameters(MODES)) -> void:
+	for variant in BEAM_VARIANTS:
+		for lit in [false, true]:
+			var label := "%s %d %s" % [mode, variant, "ACTIVE" if lit else "TELEGRAPH"]
+			var h = _world(mode)
+			h.player.global_position = T + Vector2(0.0, 250.0)
+			h.player.velocity = Vector2(-60.0, 0.0)
+			var t := _beam_turret(h, variant)
+			var m := _beam_mount(t)
+			var b := m.beam()
+			var clock := [0.0]
+			assert_true(_run_until(t, clock, 300, func() -> bool: return b.phase() == EnemyBeam.Phase.TELEGRAPH), "%s: telegraphs" % label)
+			var victim := _victim(h, m.global_position + Vector2.from_angle(b.global_rotation) * 150.0)
+			var hits := _hit_log(m)
+			if lit:
+				assert_true(_run_until(t, clock, 300, func() -> bool: return b.is_lethal()), "%s: lethal" % label)
+			else:
+				_run_until(t, clock, 5, func() -> bool: return false)
+			var hit_before := _hits_on(hits, victim)
+			t.set_powered(false)
+			if lit:
+				assert_eq(b.phase(), EnemyBeam.Phase.FADE, "%s: a lit beam fades at once" % label)
+			else:
+				assert_eq(b.phase(), EnemyBeam.Phase.OFF, "%s: a telegraph is cancelled at once" % label)
+			assert_eq(m.phase(), TurretMount.Phase.UNPOWERED, "%s: UNPOWERED" % label)
+			assert_eq(_light(t).get_state(), StateLight.State.OFF, "%s: light OFF" % label)
+			for i in 400:
+				t._physics_process(DT)
+			assert_eq(_hits_on(hits, victim), hit_before, "%s: no hit after power-down" % label)
+			if not lit:
+				assert_eq(hit_before, 0, "%s: a cancelled telegraph never hurt" % label)
+			assert_eq(b.phase(), EnemyBeam.Phase.OFF, "%s: never restarts" % label)
+			assert_false(b.is_lethal())
+			h.root.free()

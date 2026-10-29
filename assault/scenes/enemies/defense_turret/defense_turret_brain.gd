@@ -9,7 +9,7 @@
 ##   physics step, so a hand-ticked row (no physics frame) counts the line as clear.
 ## - SCAN / NOTICING: every mount `scan(delta)`. UNPOWERED (`power_down()`, never left in this phase): every mount `tick(…, false)`, which droops.
 ##
-## The brain owns the host's `StateLight`: CHARGING while any mount is in TELEGRAPH, COMMIT while one `is_committed()`, ARMED while one is in
+## The brain owns the host's `StateLight`: CHARGING while any mount is in TELEGRAPH, COMMIT while one `is_committed()` (a lance in the last `commit_seconds` of its TELEGRAPH, which beats CHARGING), ARMED while one is in
 ## TRACK / FIRE / COOLDOWN with its `can_fire`, OFF otherwise. It writes the light only when the wanted state differs, so the NOTICING blink is
 ## never cut short. A tow is always refused (moot: no mover).
 class_name DefenseTurretBrain
@@ -135,10 +135,10 @@ func _update_light() -> void:
 				committed = true
 			if _can_fire.get(mount, false) and p in [TurretMount.Phase.TRACK, TurretMount.Phase.FIRE, TurretMount.Phase.COOLDOWN]:
 				armed = true
-		if charging:
-			want = StateLight.State.CHARGING
-		elif committed:
+		if committed:
 			want = StateLight.State.COMMIT
+		elif charging:
+			want = StateLight.State.CHARGING
 		elif armed:
 			want = StateLight.State.ARMED
 	if _light.get_state() != want:

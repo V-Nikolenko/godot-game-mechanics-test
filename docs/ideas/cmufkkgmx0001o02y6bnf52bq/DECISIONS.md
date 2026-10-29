@@ -3115,3 +3115,19 @@ directory. These are *planned* decisions; check this phase's *as built* section,
   die. Not zero: Ph15's corridor-constrained AI is the place for a full answer. Every level-1 gate (specialist / drone / fighter pins, density, exits, engagement deadline) is green unchanged;
   the pre-approved lever (leave it off in level 1) was **not** needed.
 - **GUT time:** 202.028 → 202.175 s (+0.15 s of the 0.3 s allotment; 2427 → 2438 tests).
+
+### Phase 8, built in t7 (turret beam mounts: sweep, lance, beam cannon) (2026-10-29)
+- **Built as §2.8 says:** `mounts/beam_turret_mount.gd` (`BeamTurretMount extends TurretMount`: the lance and the beam cannon are this script on `lance_mount.tscn` /
+  `beam_cannon_mount.tscn`), `mounts/sweep_beam_mount.gd` (`SweepBeamMount`) on `sweep_beam_mount.tscn`; `TurretMountScenes.scene_for()` answers the three variants. The
+  beam is a **mount child** at the muzzle (`beam()` accessor), `setup(host, owner_group)` in the mount's `setup()`. Mount exports are the base's (`fire_range` 400 / 1100 / 700,
+  `cooldown_seconds` 3.5 / 4.0 / 3.0) plus `beam_scene` and a placeholder `barrel_color`; no pools.
+- **New hook `TurretMount._pre_tick(delta)`** (the t6 note "t7 may re-check `_telegraph_done()` after `_weapon_tick`" resolved a different way): a beam mount ticks its beam
+  from `_pre_tick`, *before* the cooldown, the clock and the phase step, so `_telegraph_done()` = `beam.phase() != TELEGRAPH` sees this tick's phase and the mount enters FIRE
+  (and the light turns ARMED) on the very tick the beam ignites - no one-tick CHARGING lag. `_weapon_tick` is unused by beam mounts. t8's rocket / ring mounts may use either hook.
+- **Freeze rule (`_is_frozen()`):** FIRE always; TELEGRAPH once `phase_clock >= telegraph_seconds - lock` where `lock` = the beam's `commit_seconds` if > 0 (the lance's 0.5 s) else
+  the whole TELEGRAPH (cannon, sweep). While frozen the mount neither turns nor re-computes `_aim_point`.
+- **Sweep:** the TRACK aim point is the lead point rotated by `-s * sweep_arc_deg / 2` about the pivot, so the mount aligns to the start bearing and the ordinary fire cone applies
+  to it. `s` = sign of `r x v / |r|^2` (r from the mount to the player) when |omega| >= `SweepBeamMount.STILL_ANGULAR_SPEED` 0.05 rad/s, else a side drawn from `rng` once per shot (redrawn
+  at each telegraph start). ACTIVE rotation (`s * sweep_rate * dt`, no turn-rate cap) is applied in `_pre_tick` before the beam ticks, so the hit scan and the drawing see it.
+- **Brain light:** COMMIT now beats CHARGING (a lance's mount is in TELEGRAPH during its commit, so with t6's order COMMIT could never show). No t6 row depended on the old order.
+- A lit beam is not cut by a dropped `can_fire` (a committed shot runs out); a perception loss (`scan()`) or `power_down()` still cancels it.

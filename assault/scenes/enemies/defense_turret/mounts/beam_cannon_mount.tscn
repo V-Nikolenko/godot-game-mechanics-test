@@ -1,0 +1,19 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/mounts/beam_turret_mount.gd" id="1_m"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_beams/beam.tscn" id="2_m"]
+
+[node name="BeamCannonMount" type="Node2D"]
+script = ExtResource("1_m")
+beam_scene = ExtResource("2_m")
+barrel_color = Color(1, 0.3, 0.3, 1)
+turn_rate = 2.0
+fire_range = 700.0
+lead_blend = 0.6
+fire_cone_deg = 8.0
+scan_arc_deg = 90.0
+scan_speed = 0.4
+cooldown_seconds = 3.0
+
+[node name="Muzzle" type="Marker2D" parent="."]
+position = Vector2(28, 0)

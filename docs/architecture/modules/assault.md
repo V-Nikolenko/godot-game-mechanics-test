@@ -497,8 +497,9 @@ Built in t6; later Phase 8 tasks add the other mount variants, `TurretGroup` / p
   `round_fired(projectile: Node2D)`. Writes only its own `rotation` (turn-rate limited, local to its parent). Partial lead `P.lerp(intercept, lead_blend)`, fires only
   inside `fire_cone_deg / 2`, a cooldown clock that survives perception flicker, and an optional `telegraph_gate: Callable` (a group's stagger). A variant is a
   subclass overriding hooks (`_aim_point_for`, `_shot_speed`, `_tracks`, `_wants_telegraph`, `_telegraph_seconds`, `_telegraph_done`, `_on_telegraph_start`,
-  `_fire_tick`, `_weapon_tick`, `_stop_weapon`, `pool_specs`); tuning lives in its scene's exports, read by gates through `TurretMountScenes.export_of()`.
+  `_fire_tick`, `_pre_tick`, `_weapon_tick`, `_stop_weapon`, `pool_specs`); tuning lives in its scene's exports, read by gates through `TurretMountScenes.export_of()`.
 - **`BurstCannonMount`** (`mounts/burst_cannon_mount.tscn`): 0.4 s charge, 4 Pulse rounds 0.12 s apart at 300 px/s, 2.2 s cooldown, `PulsePool` of 12.
+- **Beam mounts (t7)** (`BeamTurretMount` in `mounts/beam_turret_mount.gd`, scenes `lance_mount` / `beam_cannon_mount`; `SweepBeamMount` on `sweep_beam_mount`): each owns one `EnemyBeam` as a mount child at the muzzle (host = the turret, owner group = the turret's), ticked from `_pre_tick` before the phase step. The aim freezes when TELEGRAPH starts (the lance: at its last `commit_seconds`), so the shown line is the line that fires; the sweep aims at the start bearing `aim - s * 50` degrees and turns `s * sweep_rate` through ACTIVE with no turn-rate cap. Ranges 400 / 1100 / 700; `power_down()` cancels a telegraph or fades a lit beam.
 - **`AssaultDrift`** (global component): in Assault moves its parent down `speed` px/s and frees it below the projectile world rect; nothing in Open Space.
 - **Tests.** `tests/integration/test_defense_turret.gd` (both harnesses; the cover / mining-beam row on real physics at 8×), the turret case of
   `test_enemy_dual_mode.gd`, `test_base_enemy.gd::test_a_mover_less_turret_brain_refuses_a_tow_in_every_phase`, the burst speed in

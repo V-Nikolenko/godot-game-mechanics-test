@@ -5,8 +5,8 @@ consumer of the Phase 8 weapon mounts.
 **Fantasy / threat:** A fixed gun covering a lane. The danger is where its fire lanes cross, not the gun chasing you: you can see it turning
 and you can out-strafe its partial lead.
 
-> **Build state (Phase 8, t6).** Shell, `TurretMount` cycle, the BURST_CANNON mount and `AssaultDrift` are built. Still to come in Phase 8:
-> the sweep / beam cannon / lance mounts (t7), the rocket battery and pulse ring (t8), `TurretGroup` and the power source (t8), the shield
+> **Build state (Phase 8, t7).** Shell, `TurretMount` cycle, the BURST_CANNON, SWEEP_BEAM, LANCE and BEAM_CANNON mounts and `AssaultDrift` are
+> built. Still to come in Phase 8: the rocket battery and pulse ring (t8), `TurretGroup` and the power source (t8), the shield
 > generator (t9s), the heavy emplacement (t11), the art (t15) and placement in the hub and level 1 (t18, t19). Mounting on large ships is
 > Phase 10. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.7; the task plan is `docs/plans/cmvqw0vnb017rqs2xsyursu5d/3-plan.md`.
 
@@ -71,6 +71,17 @@ and you can out-strafe its partial lead.
   - `cooldown_seconds` 2.2.
   - A due round outside the cone is held (`shots_held`), never fired wide.
   - Pool `PulsePool_0`: size `EnemyRounds.pool_size_for(4, 8 s, 2.96 s)` = 12.
+- **Beam mounts** (`mounts/beam_turret_mount.gd`, `sweep_beam_mount.gd`; scenes `sweep_beam_mount`, `lance_mount`, `beam_cannon_mount`). Each fires one `EnemyBeam`
+  that is a **mount child at the muzzle**, set up with the turret as host and its owner group (a turret group never burns its own members; killing the turret
+  frees the beam). The mount ticks the beam from `_pre_tick`, **before** the phase step, so the mount and the host's light change on the beam's own tick.
+  **The shown line is the line that fires:** the mount stops turning (and its aim point freezes) when TELEGRAPH starts, or - the lance - at the last
+  `commit_seconds`. Aim is `P + v * telegraph_seconds * lead_blend`; no fire without line of sight.
+  - **BEAM_CANNON** - `beam.tscn`, range 700, cooldown 3.0: bearing frozen at TELEGRAPH start; 0.9 s warning, 1.2 s lit.
+  - **LANCE** - `lance.tscn`, range 1100, cooldown 4.0: tracks for the first 0.5 s of its 1.0 s TELEGRAPH, frozen for the last 0.5 s (light COMMIT, white line), then one 24-damage hit.
+  - **SWEEP_BEAM** - `sweep_beam.tscn`, range 400, cooldown 3.5: the mount aims at the **start bearing** `aim - s * 50`° (`s` = sign of the player's angular velocity about the
+    turret; a still player draws `s` from the brain's rng once per shot), shows the line there, then ACTIVE turns the mount `s * sweep_rate` (0.8727 rad/s, 100° in 2.0 s)
+    toward and through the player. **No turn-rate cap during ACTIVE** - the sweep rate is the weapon's, read from the beam scene.
+  - `power_down()` cancels a telegraph (never lethal) or fades a lit beam within the tick; it never restarts. The light: CHARGING in TELEGRAPH, COMMIT beats CHARGING in a lance's commit, ARMED while lit.
 - **Assault.** `AssaultDrift` moves it down 60 px/s and frees it below `EnemyWorld.projectile_world_rect()`. It does nothing in Open Space.
 - **Death / scoring:** standard `BaseEnemy` death, score 60, `wreck_chance` 0 (destroyed structures as wreckage is Phase 19).
 
@@ -111,6 +122,9 @@ defense_turret/
 └── mounts/
     ├── turret_mount.gd                   TurretMount (Variant, Phase, the cycle and its hooks)
     ├── turret_mount_scenes.gd            TurretMountScenes (scene_for, export_of)
+    ├── beam_turret_mount.gd              BeamTurretMount (lance + beam cannon; the beam child, freeze rule)
+    ├── sweep_beam_mount.gd               SweepBeamMount (start-bearing aim, sweep rotation)
+    ├── sweep_beam_mount.tscn / lance_mount.tscn / beam_cannon_mount.tscn
     └── burst_cannon_mount.gd / .tscn     BurstCannonMount
 ```
 
