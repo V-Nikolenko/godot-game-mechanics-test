@@ -441,6 +441,9 @@ Detail and APIs: [global.md](modules/global.md).
      inside them. Real-frame rows that race the player's i-frame `Timer` run at a **4×** clock, not 8×.
   Details: `assault/scenes/projectiles/enemy_beams/BEAMS.md`, [assault.md](modules/assault.md) → *Enemy energy weapons*;
   gates in `tests/integration/test_enemy_beams.gd`.
+  5. **The Pulse Ring is the same family, not a beam kind.** `EnergyRing` (`energy_ring.tscn`, via `EnemyBeamScenes.ring_scene()`) is owner-ticked like a beam: a 0.8 s
+     warning circle, then a 24 px band grows at 360 px/s to `max_radius` 280 (its outer edge never passes it) with two rotating 45 degree gaps; each target is hit once per
+     ring, by the swept interval, by the same owner set and direct emit. Not `PulseRing` (Ph7's visual). Gate: `tests/integration/test_energy_ring.gd`.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---

@@ -91,3 +91,22 @@ A later difficulty tier (Ph16) must stay inside them.
 `tests/integration/test_enemy_beams.gd` — the timeline, cancel, re-hit cadence (exact, hand-ticked), telegraph width and colour, swept hit, tips,
 ±1 px width, the Bomber-rectangle exact-shape row, the export table, victims, the owner set, the plated Ram, shield bypass, ordnance, scoring, the
 static `rehit_interval` row, the real-frame player cadence rows (4× clock) and the fairness rows, each with its synthetic boundary.
+
+## Pulse Ring (`EnergyRing`, t3)
+
+`energy_ring.gd` + `energy_ring.tscn`; **not** `PulseRing` (Ph7's visual mine ring) and not an `EnemyBeam.Kind` (that enum is append-only; the ring is its own class,
+reached through `EnemyBeamScenes.ring_scene()` / `ring_export(property, fallback)`). Same clock rule as a beam: the owner calls `setup(host, owner_group)`, `start(gap_start_deg)`,
+`tick(delta)` and `cancel()`; no `Timer`, no `_process`. `Phase { OFF, TELEGRAPH, EXPANDING, FADE }` (append-only), signals `phase_changed(phase: int)` and
+`target_hit(target: Node2D, damage: int)`.
+
+- **Timeline:** TELEGRAPH 0.8 s (faint 4 px circle at the ring's reach, drawn with the gaps' current bearings, plus a growing charge glow at the centre) -> EXPANDING
+  (band grows at `ring_speed` 360 px/s) -> FADE 0.15 s. Only EXPANDING is lethal.
+- **Band:** `band` 24 px thick, `gap_count` 2 gaps of `gap_deg` 45 degrees, turning at `gap_spin_deg` 30 degrees/s from `start()`, first gap at the `gap_start_deg` the owner draws
+  from its brain `rng` (0 if omitted). The band's **outer edge never passes `max_radius` (280 px)**, so `radius()` (the band's centre) tops out at `max_radius - band / 2` = 268,
+  and the outer edge still reaches 280 in `max_radius / ring_speed` = 0.78 s. Nothing whose hurtbox starts beyond `max_radius` is ever hit.
+- **Hit rule:** once per ring (table cleared by `start()`), on the first scan where the target's centre distance `d` is in `[r_prev - band/2 - R_t, r + band/2 + R_t]`
+  (`R_t` = `EnergyHitScan.bounding_radius`) and its bearing from the centre is not inside a gap. A fast tick therefore cannot skip a target. The centre is the node's position
+  at `start()`; moving the node afterwards moves nothing. Owner set, victims and the direct-emit damage (12) are `EnergyHitScan`'s, as for a beam.
+- **Counterplay:** stay outside `max_radius`, or pass through a gap (the gap arc at half reach is >= 3 player radii; gated).
+- **Drawing:** a child `Visual` `Node2D` (`top_level`, world origin) paints `draw_arc`s in global coordinates; not anti-aliased.
+- **Tests:** `tests/integration/test_energy_ring.gd` (hand-ticked, both harnesses) plus the two §2.3 Pulse Ring fairness rows, each with a synthetic boundary.

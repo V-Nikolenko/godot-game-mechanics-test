@@ -7,6 +7,8 @@ extends RefCounted
 const BEAM: PackedScene = preload("res://assault/scenes/projectiles/enemy_beams/beam.tscn")
 const SWEEP: PackedScene = preload("res://assault/scenes/projectiles/enemy_beams/sweep_beam.tscn")
 const LANCE: PackedScene = preload("res://assault/scenes/projectiles/enemy_beams/lance.tscn")
+## The Pulse Ring (`EnergyRing`; not an `EnemyBeam.Kind`: that enum is append-only and the ring is its own class).
+const RING: PackedScene = preload("res://assault/scenes/projectiles/enemy_beams/energy_ring.tscn")
 
 
 ## The scene for [param kind], or null with no error while that kind's scene is not built yet (TWIN: the endpoint-beam task), so a
@@ -20,6 +22,16 @@ static func scene_for(kind: EnemyBeam.Kind) -> PackedScene:
 		EnemyBeam.Kind.LANCE:
 			return LANCE
 	return null
+
+
+## The Pulse Ring's scene.
+static func ring_scene() -> PackedScene:
+	return RING
+
+
+## `export_of` for the Pulse Ring's scene.
+static func ring_export(property: StringName, fallback: Variant, node_path: NodePath = ^".") -> Variant:
+	return export_of_scene(RING, property, fallback, node_path)
 
 
 ## `property` as [param kind]'s scene authors it on the node at [param node_path] (the root by default), read through

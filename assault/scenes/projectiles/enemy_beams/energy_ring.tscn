@@ -1,0 +1,16 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/projectiles/enemy_beams/energy_ring.gd" id="1_ring"]
+
+[node name="EnergyRing" type="Node2D"]
+script = ExtResource("1_ring")
+telegraph_seconds = 0.8
+fade_seconds = 0.15
+ring_speed = 360.0
+max_radius = 280.0
+band = 24.0
+gap_count = 2
+gap_deg = 45.0
+gap_spin_deg = 30.0
+damage = 12
+telegraph_width = 4.0

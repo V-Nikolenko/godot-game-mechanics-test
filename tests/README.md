@@ -606,6 +606,7 @@ before / after pair here.
 | Task | Allotment | GUT before → after | Note |
 |---|---|---|---|
 | t2 `EnemyBeam` core | 2.0 s | 200.30 → 200.83 s (2344 → 2366 tests) | new `test_enemy_beams.gd`, 22 tests ≈ 1.5 s on its own: hand-ticked in both harnesses except the two real-player cadence rows, which run on real physics at a **4×** clock (≈ 2.1 s of game time each). Not 8×: the player's 0.5 s i-frame `Timer` runs on idle frames, and a headless idle frame (~6.9 ms real) at 8× spans more than the 0.05 s margin to the beam's 0.55 s re-hit, so 8× refused about one re-hit in 27 in the plan review's probe; 4× refused none (6 / 6 runs green, 4 hits / 4 losses each). `check-test-leaks.sh` clean |
+| t3 `EnergyRing` (Pulse Ring) | 1.0 s | 200.83 → 201.39 s (2366 → 2381 tests; `scripts/gate-time.sh` GUT `Time`, wall 207.0 s) | new `test_energy_ring.gd`, 15 tests in 0.43 s on its own: all hand-ticked, no real-frame row (a ring hits each target once, so there is no i-frame cadence to race). +0.56 s against the 1.0 s allotment; the before figure is t2's recorded after (nothing but docs landed between them). `check-test-leaks.sh` clean |
 
 **Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
 `tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition

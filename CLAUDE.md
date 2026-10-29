@@ -111,6 +111,9 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   emit (bypasses `EnemyShield` and plates). `rehit_interval` 0.55 > the player's 0.5 s i-frames; telegraph line ≥ 3 px; static / sweep / lance fairness inequalities —
   [BEAMS.md](assault/scenes/projectiles/enemy_beams/BEAMS.md). Gate: `tests/integration/test_enemy_beams.gd` (its real-player cadence rows run at **4×**, not 8×: at 8×
   one headless idle frame outlasts the 0.05 s i-frame margin and refuses re-hits).
+  **The Pulse Ring is `EnergyRing`** (`enemy_beams/energy_ring.tscn`, `EnemyBeamScenes.ring_scene()` / `ring_export()`; `class_name PulseRing` stays Ph7's visual): owner-ticked
+  TELEGRAPH -> EXPANDING -> FADE, a 24 px band at 360 px/s whose outer edge stops at `max_radius` 280, two 45 degree gaps turning at 30 degrees/s, each target hit once per ring over
+  the swept interval. Gate: `tests/integration/test_energy_ring.gd`.
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it

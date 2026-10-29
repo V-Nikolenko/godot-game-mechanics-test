@@ -39,7 +39,7 @@ assault/scenes/
 │   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell / rail_round .tscn + EnemyRounds + RailTrail (the sniper shot's fading trail)
 │   ├── enemy_ordnance/         EnemyOrdnance: gravity_bomb / mine / pursuit_bomb .tscn + EnemyOrdnanceScenes (persistent, shoot-down-able, not in `enemies`); mines/ = the Ph7 EnemyMine family (6 variant scenes, EnemyMineScenes, PulseRing, EmpRing)
 │   ├── enemy_rockets/           EnemyRocket: dumb / pursuit / cluster / submunition / delayed_warhead .tscn + EnemyRocketScenes (Ph5; impact hurts enemies, blast hurts the player)
-│   ├── enemy_beams/             EnemyBeam: beam / sweep_beam / lance .tscn + EnergyHitScan + EnemyBeamScenes (Ph8; owner-ticked lasers that hurt everything on the line but their owner set)
+│   ├── enemy_beams/             EnemyBeam: beam / sweep_beam / lance .tscn + EnergyRing (energy_ring.tscn, the Pulse Ring) + EnergyHitScan + EnemyBeamScenes (Ph8; owner-ticked lasers that hurt everything on the line but their owner set)
 │   ├── missiles/                homing/ + warhead/ missiles
 │   └── piercing_beam/           Sustained BEAM weapon projectile
 ├── systems/                     Mission orchestration (non-visual)
@@ -452,7 +452,7 @@ Conventions: [PROJECT.md](../PROJECT.md) → *Mines, minefields and the Mine Lay
 
 #### Enemy energy weapons (Phase 8)
 
-Source: `assault/scenes/projectiles/enemy_beams/` (notes: `BEAMS.md` there). Built in t2; later Phase 8 tasks add the Pulse Ring (`EnergyRing`), the
+Source: `assault/scenes/projectiles/enemy_beams/` (notes: `BEAMS.md` there). Built in t2 (beams) and t3 (the Pulse Ring); later Phase 8 tasks add the
 endpoint beam (`twin_beam.tscn`, cover, strain, laser-wall registration) and the owners (turret mounts, fences, twin drones).
 
 - **`EnemyBeam`** (`enemy_beam.gd`, `extends Node2D`): `enum Kind { BEAM, SWEEP, LANCE, TWIN }`, `enum Phase { OFF, TELEGRAPH, ACTIVE, FADE }` (append-only);
@@ -468,6 +468,10 @@ endpoint beam (`twin_beam.tscn`, cover, strain, laser-wall registration) and the
   previous lethal tick; one hit per target per `rehit_interval` (instance id, cleared by `start()`).
 - **`EnemyBeamScenes`**: `scene_for(kind)` (null for a kind not built yet), `export_of(kind, property, fallback)`, `export_of_scene(scene, …)` (the
   same read on any beam scene, used by the gates' synthetic boundary copies).
+- **`EnergyRing`** (`energy_ring.gd`, `extends Node2D`; not `PulseRing`, Ph7's visual ring): `enum Phase { OFF, TELEGRAPH, EXPANDING, FADE }`, same owner-ticked clock and
+  signals as a beam, `start(gap_start_deg)` (the owner draws it from its `rng`). A 24 px band grows at 360 px/s, its outer edge capped at `max_radius` 280, with 2 gaps of 45 degrees
+  turning at 30 degrees/s; a target is hit once per ring when its centre distance falls in the swept interval and its bearing is outside a gap (12 damage, `EnergyHitScan`'s owner set,
+  victims and direct emit). Centre fixed at `start()`. Scene via `EnemyBeamScenes.ring_scene()` / `ring_export()`. Gate: `tests/integration/test_energy_ring.gd`.
 - **Scenes** (every value authored): `beam.tscn` 0.9 s telegraph / 1.2 s active / 700 px / hit 12 / 10 dmg every 0.55 s; `sweep_beam.tscn` 0.9 / 2.0 / 400
   px / hit 10, `sweep_arc_deg` 100 at `sweep_rate` 0.8727 rad/s (read by the mount); `lance.tscn` 1.0 s telegraph with a 0.5 s commit / 0.2 s active /
   1100 px / hit 8 / 24 dmg once (`rehit_interval = inf`). All: `telegraph_width` 4, `tip_grace_px` 24.

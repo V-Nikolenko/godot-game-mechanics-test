@@ -2997,3 +2997,18 @@ directory. These are *planned* decisions; check this phase's *as built* section,
   The hand-ticked cadence is exact: 4 hits in 2.0 s held (last tick included), 33 ticks apart.
 - **Notes recorded in `BEAMS.md`:** the direct emit also bypasses `HurtBox.accepted_damage_types` (a beam cuts a big asteroid that takes only ROCKET from player fire, like
   `BeamBehavior` and `LaserRay`), and the shape test does not read `HurtBox.monitoring`, so the player's barrel-roll does not dodge a beam (it never dodged `LaserRay`).
+
+### Phase 8, built in t3 (the Pulse Ring, `EnergyRing`) (2026-10-29)
+- **Built as planned (§2.5):** `assault/scenes/projectiles/enemy_beams/energy_ring.gd` (`EnergyRing`, `Phase { OFF, TELEGRAPH, EXPANDING, FADE }`, `setup` / `start(gap_start_deg)` /
+  `tick` / `cancel`, `phase()` / `is_lethal()` / `radius()` / `ring_centre()` / `gap_center_deg(i)` / `in_gap(bearing)`, signals `phase_changed(phase: int)` and
+  `target_hit(target: Node2D, damage: int)`), `energy_ring.tscn` (every §2.5 value authored: 0.8 s / 360 px/s / 280 px / band 24 / 2 gaps of 45 deg / 30 deg/s / damage 12 / fade 0.15 /
+  `telegraph_width` 4). `EnemyBeamScenes` gained `ring_scene()` and `ring_export(property, fallback, node_path)` (the ring is not an `EnemyBeam.Kind`; the enum stays append-only,
+  so the endpoint-beam task adds `twin_beam.tscn` to `scene_for` without touching the ring). Gate: `tests/integration/test_energy_ring.gd` (15 tests, both harnesses).
+- **Interpretation — the band's outer edge is capped at `max_radius`.** §2.5 gives the hit interval as `r + band/2 + R_t` *and* the row "a fixture at `max_radius + R_t + 1` is never
+  hit"; both hold only if `r` stops at `max_radius - band/2` (268 px), otherwise the band's outer edge (292) plus `R_t` would reach it. So `radius()` (the band's centre) tops out
+  at 268 and the outer edge reaches 280 in 0.78 s as planned. A later owner or a heavy-emplacement variant that wants a longer reach raises `max_radius`, not `ring_speed`.
+- **Gap spin runs from `start()`, not from EXPANDING:** the telegraph circle shows the gaps turning, so the player sees where they will be; a still-gap test sets `gap_spin_deg = 0`.
+  `start()` while TELEGRAPH or EXPANDING is ignored (as `EnemyBeam.start()`), `gap_start_deg` defaults to NAN = 0; the owner passes `brain.rng.randf() * 360.0`.
+- **Drawing:** a child `Visual` `Node2D` (`top_level`, at the world origin) rather than `top_level` on the ring node itself, so the ring node can stay a normal child of its mount
+  or host and `start()` reads its global position as the centre. The ring node has no physics or idle processing.
+- **Not built (later tasks):** the "charge glow on the host" is a small circle at the ring centre drawn by the ring; the host's `StateLight` is the owner's (the mount sets it from `phase_changed`).
