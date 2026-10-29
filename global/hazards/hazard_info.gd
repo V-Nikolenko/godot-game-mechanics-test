@@ -25,7 +25,8 @@ var movement_penalty: float = 0.0
 var disables_abilities: bool = false
 ## Mirrors the body's `blocks_line_of_sight()`.
 var line_of_sight_blocker: bool = false
-## &"gravity_well", &"anomaly", &"gravity_field", &"reactor_field", &"wreck" or &"debris".
+## &"gravity_well", &"anomaly", &"gravity_field", &"reactor_field", &"wreck", &"debris", &"mine" or &"laser_wall"
+## (Phase 8: a segment, see `segment_half`).
 var kind: StringName = &""
 ## Softening radius: the pull is constant inside it.
 var core_radius: float = 0.0
@@ -42,6 +43,13 @@ var velocity: Vector2 = Vector2.ZERO
 var source: Node = null
 ## Instance id of the claimer, 0 = free. An id, not a reference: a freed claimer frees the claim.
 var claimer_id: int = 0
+## Phase 8 (docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md §2.6): half a straight wall, from `position` to one end.
+## The footprint is then every point within `radius` of the segment `position ± segment_half`; `Vector2.ZERO` is a
+## circle (every Phase 6/7 hazard). For walls longer than `2 * radius` only: a shorter one is a circle (from inside
+## both end discs the avoidance stage's span between the ends covers every heading).
+var segment_half: Vector2 = Vector2.ZERO
+## An actor in this Godot group drops the info in its avoidance stage (a twin pair's own beam). `&""` = no one.
+var exempt_group: StringName = &""
 
 
 ## 0..1 strength of the field at distance [param r] from the centre.
@@ -73,14 +81,26 @@ func accel_at(pos: Vector2) -> Vector2:
 	return (-outward * pull_force + clockwise * tangential_force) * f
 
 
-## `movement_penalty` inside `radius`, 0 outside.
+## `movement_penalty` inside `radius`, 0 outside (of the segment, for a wall).
 func penalty_at(pos: Vector2) -> float:
+	if segment_half != Vector2.ZERO:
+		return movement_penalty if pos.distance_to(closest_point(pos)) <= radius else 0.0
 	return movement_penalty if pos.distance_to(position) <= radius else 0.0
 
 
-## True when [param pos] is within `radius + margin` of the centre.
+## True when [param pos] is within `radius + margin` of the centre (of the segment, for a wall).
 func contains(pos: Vector2, margin: float = 0.0) -> bool:
+	if segment_half != Vector2.ZERO:
+		return pos.distance_to(closest_point(pos)) <= radius + margin
 	return pos.distance_to(position) <= radius + margin
+
+
+## The footprint's centre nearest [param pos]: `position` for a circle, the clamped projection of [param pos] on
+## `position ± segment_half` for a wall.
+func closest_point(pos: Vector2) -> Vector2:
+	if segment_half == Vector2.ZERO:
+		return position
+	return Geometry2D.get_closest_point_to_segment(pos, position - segment_half, position + segment_half)
 
 
 ## Takes the claim. Succeeds when free, when [param node] already holds it, and when the holder was freed.

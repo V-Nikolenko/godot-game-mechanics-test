@@ -3012,3 +3012,46 @@ directory. These are *planned* decisions; check this phase's *as built* section,
 - **Drawing:** a child `Visual` `Node2D` (`top_level`, at the world origin) rather than `top_level` on the ring node itself, so the ring node can stay a normal child of its mount
   or host and `start()` reads its global position as the centre. The ring node has no physics or idle processing.
 - **Not built (later tasks):** the "charge glow on the host" is a small circle at the ring centre drawn by the ring; the host's `StateLight` is the owner's (the mount sets it from `phase_changed`).
+
+### Phase 8, built in t4 (segment hazards: walls in `HazardInfo` and `context_avoid`) (2026-10-29)
+- **Built as planned (§2.6):** `HazardInfo.segment_half` (ZERO = circle), `exempt_group`, `closest_point(pos)`; `contains` / `penalty_at` measure to the closest point only
+  when `segment_half != ZERO` (the circle line follows unchanged, so `Hazards.around()` finds a wall by its closest point with no registry change); `falloff` / `accel_at`
+  untouched (a wall has no pull; a row pins `accel_at` ZERO). `Steering.context_avoid` gains one branch before the circle body (not edited) that max-merges
+  `Steering._segment_danger()`; `EnemyMover._avoid` drops an info whose `exempt_group` the actor is in, beside the own-claim drop. **A segment info is for walls longer
+  than `2 · radius`**: from inside both end discs the span covers every heading (review R2-7; unreachable in Phase 8 — the twin beam is 420 ± 16 px, a fence ≈ 300 px).
+  Task plan and its two-round review (APPROVED): `docs/plans/cmvqw0vn4017jqs2xzwshmrwt/`.
+- **Readings §2.6 left open (the task plan records the measurements):** (1) **each cone uses its own skirt** — an end is avoided exactly as a `radius` circle there; read
+  as the closest point's skirt on all three cones, a ship flying alongside a wall's middle is bent by the far end's cone; (2) **the span is widened**, not §2.6's literal
+  arc between the end bearings: by each end's footprint tangent `asin(radius / |end|)` with the capsule's true extent where one end's disc overhangs the other's bearing
+  (`lower = min(−ta, D − tb)`, `upper = max(ta, D + tb)` from the first end's bearing), and by a further half slot each side when the request, **or the request blended with
+  `prev_dir`** (the tail's own aim, review R2-3), lies on it — the refinement moves a pick up to half a slot back toward the aim, the reason the circle cone carries
+  `+ slot`. The literal arc points the output into the wall (review B1: 56.25° against an end at 62.4°) and keeps only 19.7 px at 0.8 end-on. Arc edges are inclusive
+  within `SEGMENT_ARC_TOLERANCE` 1e-5 rad (deviation: `Vector2.angle()` is 32-bit, which put a request exactly tangent to an end cap a hair outside the arc).
+- **Measured** (`gut.p`, 420 px wall, twin footprint radius 38 = `draw_half_width` 14 + `hazard_pad` 24, weight 0.5, 200 px/s at 600 px/s², closest approach of the
+  centre to the hit segment, bound `hit_half_width` 10 + 14 = 24 px): φ 0° / 45° / 90° at margin 12 → 1.0: 57.9 / 60.9 / 67.7; 0.8: 38.8 / 40.4 / 41.7; 0.6: 30.0 / 39.1 /
+  31.1. Margin 60 → 1.0: 107.9 / 105.0 / 104.5; 0.8: 40.7 / 44.7 / 56.3; 0.6: 38.5 / 40.0 / 38.9. Every run bends, its first bent heading points past an end, none crosses
+  (gated at 0.6 too, review R2-6) and all arrive (4.3–8.6 s). **The pre-approved `hazard_pad` 48 lever was not needed**: t5 authors `twin_beam.tscn` with `hazard_pad` 24.
+  The unit rows carry `TWIN_HIT_HALF_WIDTH` 10, `TWIN_DRAW_HALF_WIDTH` 14, `TWIN_HAZARD_PAD` 24, `TWIN_AVOID_WEIGHT` 0.5 as named constants; **t5 replaces the four with
+  `EnemyBeamScenes.export_of(EnemyBeam.Kind.TWIN, …)` reads** once the scene exists (`tests/unit/test_context_avoidance.gd`, segment section).
+- **Roster, printed not gated** (each profile's own `*_config.tres` speed / accel / margin / avoidance, weight-0.5 wall, φ 0° / 45° / 90°): Swarm 59.1 / 62.1 / 70.2,
+  Sniper 100.2 / 90.4 / 102.9, Fighter 47.8 / 54.3 / 61.9, Gatling 43.8 / 51.1 / 60.6, Mine Layer 39.3 / 44.9 / 46.0 px. **The Bomber (0.6, 240 px/s, 260 px/s², margin
+  70) skims a weight-0.5 wall: head-on it crosses the line (0.1 px), 24.0 / 11.4 px at 45° / 90°**; against a weight-1.0 wall (t10's fence) it keeps 46.2 / 55.1 / 56.7 px.
+  The review's closed loop (moving targets) has 0.6 crossing a weight-0.5 wall in 3.5–5 % of runs. Input for t10 (fence weight 1.0) and t12–t13 (twin wall 0.5): a 0.6
+  profile meeting a twin wall is not guaranteed to avoid it.
+- **Off-slot passes (review R2-4):** a slot-aligned request along a wall leaves it bit-identical wherever two end circles alone would (150 px beside a 420 px wall, every
+  level, margins 12 / 60 / 90); an off-slot request is nudged away from the wall by a fraction of a slot at most — 0.054° worst over 2400 requests along the wall turned to
+  8° and 15°, speed unchanged. The review measured larger nudges for closer or longer walls (150 px beside 800 px: 3.25°; 100 px beside 420 px: 5.25°; 60 px: 9.0°),
+  always away from the wall, speed ≥ 0.98. t10 / t17 walls may be longer than 420 px.
+- **Inside the footprint:** every request steps outward and keeps ≥ 35 % speed (1.0 / 0.8 / 0.6, margins 12 / 60). Beside the wall and on its axis past an end, never
+  near-tangent (worst outward share 0.195). **Diagonally round an end cap at 0.8 / 0.6 a request a degree or two past tangent goes through (share 0.031, still outward)** —
+  the wall there is its end's circle, whose cone tail is under the threshold; a weight-0.5 circle at the same spot steps inward. Exactly on the line with both ends out of
+  reach the wall writes nothing (the circle's centre skip; measure zero).
+- **Consumers a laser wall reaches once t5 registers one** (`kind = &"laser_wall"`, no LOS block): Fighter `_inside_other_hazard()`, Sniper `_candidate` (any non-LOS-blocker
+  in reach makes a cover point not `hazard_ok`, `sniper_brain.gd`) and Sniper `_inside_other_hazard`. All three are segment-aware through `contains` (the intended reading);
+  no behaviour changed in t4 (no producer yet).
+- **The registry query is unled** (pre-existing for circles): `EnemyMover._avoid` asks `Hazards.around()` at the wall's current closest point and the stage then leads it, so
+  a wall closing at 240 px/s is found no earlier than a static one. t5 / t12 should test moving walls through a real mover, not only the pure function.
+- **Exempt row lives in `tests/unit/test_enemy_mover.gd`** (the drop is `_avoid`'s and needs the registry and an actor): own pair bit-identical, another pair and no group
+  steered; with its pair's wall plus a circle in the way the exempt actor is steered exactly as by the circle alone.
+- **Gate time:** `scripts/gate-time.sh` GUT `Time` **201.007 → 201.896 s (+0.89 s of the 1.5 s allotment)**, 2381 → 2397 tests (6 + 8 + 2 new rows). Nothing awaits, so
+  `scripts/check-test-leaks.sh` was not needed (plan step 5).

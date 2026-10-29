@@ -261,3 +261,301 @@ func test_prev_dir_keeps_the_side_it_chose() -> void:
 		side = s
 	assert_gt(log.reached, 30, "sanity: a run long enough to dither in, and it arrives")
 	assert_lte(flips, 1, "no step-to-step dither between the two edges")
+
+
+# ── Segments: a laser wall (Phase 8, docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md §2.6) ─────────────────────
+# Task plan docs/plans/cmvqw0vn4017jqs2xzwshmrwt/3-plan.md, which records how the span between the ends is widened.
+
+## The twin beam's numbers (epic plan §2.1 / §2.4). `twin_beam.tscn` does not exist yet: the endpoint-beam task (t5), which
+## creates it, replaces these four with `EnemyBeamScenes.export_of(EnemyBeam.Kind.TWIN, …)` reads.
+const TWIN_HIT_HALF_WIDTH := 10.0
+const TWIN_DRAW_HALF_WIDTH := 14.0
+const TWIN_HAZARD_PAD := 24.0
+const TWIN_AVOID_WEIGHT := 0.5
+## The fixture victim's 14 px hurtbox: a ship whose centre stays `TWIN_HIT_HALF_WIDTH + SHIP_RADIUS` from the hit segment
+## keeps its hull out of the hit band.
+const SHIP_RADIUS := 14.0
+## A 420 px wall.
+const WALL_HALF := 210.0
+const RUN_SPEED := 200.0
+## The integrated runs' accel limit: the Swarm Drone's and the Gatling's. Not the roster's lowest (Mine Layer 420, Sniper
+## 520, Bomber 260): `test_roster_profiles_meet_a_twin_wall` flies every profile at its own numbers.
+const RUN_ACCEL := 600.0
+## The tightest margin in the roster (the Swarm Drone's) and this file's default (the Fighter's).
+const WALL_MARGINS := [12.0, 60.0]
+
+
+## The twin wall's footprint (§2.4: `draw_half_width + hazard_pad`, `avoid_weight`) from `at - half` to `at + half`.
+func _wall(at: Vector2, half: Vector2, velocity: Vector2 = Vector2.ZERO) -> HazardInfo:
+	var i := _info(at, TWIN_DRAW_HALF_WIDTH + TWIN_HAZARD_PAD, TWIN_AVOID_WEIGHT, velocity)
+	i.segment_half = half
+	return i
+
+
+## The §2.6 approach geometry: the path runs +x from the origin and meets a 420 px wall 200 px ahead, `phi` being the
+## angle between the path and the wall's normal. At 0° and 45° the path crosses the wall's midpoint; at 90° the wall lies
+## on the path from 200 to 620 px (end-on).
+func _approach_wall(phi: float) -> HazardInfo:
+	if phi == 90.0:
+		return _wall(Vector2(200.0 + WALL_HALF, 0.0), Vector2(WALL_HALF, 0.0))
+	return _wall(Vector2(200.0, 0.0), Vector2(0.0, WALL_HALF).rotated(deg_to_rad(phi)))
+
+
+## Distance from `p` to the wall's hit segment (the twin beam's `tip_grace_px` is 0: the drawn segment itself).
+func _to_wall(p: Vector2, wall: HazardInfo) -> float:
+	return p.distance_to(Geometry2D.get_closest_point_to_segment(p, wall.position - wall.segment_half,
+			wall.position + wall.segment_half))
+
+
+## True when a ray from `pos` along `out` (a non-zero heading) never meets the wall's hit segment.
+func _misses(pos: Vector2, out: Vector2, wall: HazardInfo) -> bool:
+	return out != Vector2.ZERO and Geometry2D.segment_intersects_segment(pos, pos + out.normalized() * 4000.0,
+			wall.position - wall.segment_half, wall.position + wall.segment_half) == null
+
+
+## Seeks `target` at `speed` from `start`, already flying at full speed toward it, through an accel-limited mover: the
+## velocity moves toward each step's output at `accel`, and the output's direction is the next step's `prev_dir` (as
+## `EnemyMover._avoid` keeps it). Returns the closest approach to the hit segment, whether a step crossed it, how far off
+## the line the first bent output was and whether its heading pointed past an end, and the arrival time (-1 if none).
+func _run_at_wall(start: Vector2, target: Vector2, wall: HazardInfo, avoidance: float, margin: float,
+		speed: float = RUN_SPEED, accel: float = RUN_ACCEL, seconds: float = 12.0) -> Dictionary:
+	var a := wall.position - wall.segment_half
+	var b := wall.position + wall.segment_half
+	var pos := start
+	var vel := (target - start).normalized() * speed
+	var prev := Vector2.ZERO
+	var run := {"closest": INF, "crossed": false, "bent_at": -1.0, "past_an_end": false, "arrived": -1.0}
+	for step in int(seconds / DT):
+		if pos.distance_to(target) < 6.0:
+			run.arrived = step * DT
+			break
+		var desired := (target - pos).normalized() * speed
+		var out := _avoid(pos, desired, [wall], avoidance, margin, prev)
+		if run.bent_at < 0.0 and var_to_bytes(out) != var_to_bytes(desired):
+			run.bent_at = _to_wall(pos, wall)
+			run.past_an_end = _misses(pos, out, wall)
+		prev = out.normalized()
+		vel = vel.move_toward(out, accel * DT)
+		var next := pos + vel * DT
+		if Geometry2D.segment_intersects_segment(pos, next, a, b) != null:
+			run.crossed = true
+		pos = next
+		run.closest = minf(run.closest, _to_wall(pos, wall))
+	return run
+
+
+## §2.6: a 420 px wall across the path, 200 px ahead, is avoided from approach bearings 0°, 45° and 90° at avoidance
+## 1.0 / 0.8 / 0.6 and margins 12 / 60. Every run bends, its first bent heading points past an end, no step crosses the
+## line and every run arrives at the target 820 px down the path. At 1.0 and 0.8 a 14 px hull never touches the 10 px hit
+## band (24 px); 0.6 has no bound (§2.6), and its figures are printed with the rest. At 45° (closest point 141 px) and at
+## margin 60 (skirt reach 38 + 180 = 218 px) the run starts inside the skirt, so its "first bend" is the start itself.
+func test_a_wall_across_the_path_is_avoided_round_an_end() -> void:
+	var bound := TWIN_HIT_HALF_WIDTH + SHIP_RADIUS
+	for phi in [0.0, 45.0, 90.0]:
+		var wall := _approach_wall(phi)
+		for avoidance in [1.0, 0.8, 0.6]:
+			for margin in WALL_MARGINS:
+				var run := _run_at_wall(Vector2.ZERO, Vector2(820.0, 0.0), wall, avoidance, margin)
+				var label := "%d°, avoidance %.1f, margin %d" % [phi, avoidance, margin]
+				gut.p("segment avoidance %s: closest %.1f px, first bend %.1f px off the line, arrived %.2f s"
+						% [label, run.closest, run.bent_at, run.arrived])
+				assert_gt(run.bent_at, 0.0, "%s: the stage bends the run" % label)
+				assert_true(run.past_an_end, "%s: its first bent heading points past an end" % label)
+				assert_false(run.crossed, "%s: never crosses the line" % label)
+				assert_gt(run.arrived, 0.0, "%s: arrives round the end" % label)
+				if avoidance >= 0.8:
+					assert_gte(run.closest, bound, "%s: the hull stays out of the hit band (%.1f px)" % [label, run.closest])
+
+
+## Review B1 / R2-2, from a standing start with no `prev_dir`: the first output's ray misses the hit segment. A span with
+## no widening returns 56.25° against an end bearing of 62.4° here, and hits. The offset wall's near end is past 195 px, so
+## its footprint tangent is under half a slot: a span widened by the tangent alone returns -56.25° and hits it at y -246.9.
+func test_a_first_bend_points_past_an_end_from_a_static_start() -> void:
+	for radius in [38.0, 62.0]:
+		for avoidance in [1.0, 0.8]:
+			for dir in [1.0, -1.0]:
+				var wall := _wall(Vector2(110.0 * dir, 0.0), Vector2(0.0, WALL_HALF))
+				wall.radius = radius
+				var out := _avoid(Vector2.ZERO, Vector2(200.0 * dir, 0.0), [wall], avoidance, 12.0)
+				assert_true(_misses(Vector2.ZERO, out, wall), "ends (%d, ±210), radius %d, avoidance %.1f: past an end (%.2f°)"
+						% [110.0 * dir, radius, avoidance, rad_to_deg(out.angle())])
+	var offset := _wall(Vector2(165.0, -60.0), Vector2(0.0, WALL_HALF))  # ends (165, -270) and (165, 150)
+	var out := _avoid(Vector2.ZERO, Vector2(200.0, 0.0), [offset], 1.0, 12.0)
+	assert_true(_misses(Vector2.ZERO, out, offset), "the offset wall: past an end (%.2f°)" % rad_to_deg(out.angle()))
+
+
+## Review R2-3: the half slot also applies when the request blended with `prev_dir` (the tail's own aim) lies on the wall,
+## not only the request. A ship asking to pass under the far end of a long, slanted wall (its request misses the wall but
+## is inside the end's margin) after a heading up into it: the blend pulls the refined pick half a slot back toward the
+## wall, so without the widening the output is -11.25°, whose ray hits the wall. With it, the output clears it.
+func test_a_previous_heading_into_the_wall_cannot_pull_the_output_onto_it() -> void:
+	var wall := _wall(Vector2(240.0, -140.0), Vector2(400.0, 30.0))  # (-160, -170) .. (640, -110)
+	var desired := Vector2.from_angle(deg_to_rad(-2.0)) * RUN_SPEED
+	var prev := Vector2.from_angle(deg_to_rad(-56.0))
+	assert_true(_misses(Vector2.ZERO, desired, wall), "sanity: the request itself passes the wall")
+	assert_false(_misses(Vector2.ZERO, prev, wall), "sanity: the last heading points into it")
+	var out := _avoid(Vector2.ZERO, desired, [wall], 1.0, 60.0, prev)
+	assert_ne(var_to_bytes(out), var_to_bytes(desired), "sanity: the stage acts (the far end's margin)")
+	assert_true(_misses(Vector2.ZERO, out, wall), "the output clears the wall (%.2f°)" % rad_to_deg(out.angle()))
+
+
+## Review M3 / R2-5, in the shape of `test_inside_the_first_step_points_outward`: from inside the footprint every request —
+## every slot heading, 0.1 rad off each, and straight at the wall — steps outward and keeps moving. Beside the middle, beside
+## an end, 0.5 px off the line and on the wall's axis past an end, never near-tangent (outward share > 0.1). Diagonally
+## round an end cap at 0.8 / 0.6 the wall acts as its end's 38 px circle, whose cone tail past 90° is under the threshold, so
+## a request a few degrees past tangent goes through: still outward, its share printed (a weight-0.5 circle there steps
+## inward). Exactly on the line and exactly on an end there is no outward: the output is finite and keeps moving.
+func test_a_ship_inside_the_footprint_steps_outward() -> void:
+	var wall := _wall(Vector2.ZERO, Vector2(WALL_HALF, 0.0))  # (-210, 0) .. (210, 0)
+	var worst := INF
+	for pos in [Vector2(0.0, 20.0), Vector2(-40.0, -30.0), Vector2(190.0, 30.0), Vector2(-195.0, -12.0),
+			Vector2(60.0, 0.5), Vector2(230.0, 0.0), Vector2(-240.0, 0.0), Vector2(225.0, -15.0)]:
+		worst = minf(worst, _worst_outward_share(wall, pos))
+	var worst_cap := INF
+	for pos in [Vector2(-236.0, 20.0), Vector2(215.0, 30.0)]:
+		worst_cap = minf(worst_cap, _worst_outward_share(wall, pos))
+	gut.p("segment inside: worst outward share %.3f, diagonally round an end cap %.3f" % [worst, worst_cap])
+	assert_gt(worst, 0.1, "never a near-tangent step: worst outward share %.3f" % worst)
+	for pos in [Vector2(50.0, 0.0), Vector2(210.0, 0.0), Vector2(-210.0, 0.0)]:
+		for avoidance in [1.0, 0.8, 0.6]:
+			for k in Steering.CONTEXT_SLOTS:
+				var out := _avoid(pos, Vector2.from_angle(k * SLOT) * RUN_SPEED, [wall], avoidance, 12.0)
+				assert_true(out.is_finite(), "on the wall at %s: a finite output (%s)" % [pos, out])
+				assert_gte(out.length(), RUN_SPEED * Steering.CONTEXT_MIN_SPEED_RATIO - 0.0001, "and keeps moving")
+
+
+## Every request from `pos` (inside the wall's footprint) at 1.0 / 0.8 / 0.6 and both margins steps outward and keeps
+## moving; returns the least outward share.
+func _worst_outward_share(wall: HazardInfo, pos: Vector2) -> float:
+	var away := (pos - wall.closest_point(pos)).normalized()
+	var headings: Array = [-away]
+	for k in Steering.CONTEXT_SLOTS:
+		headings.append(Vector2.from_angle(k * SLOT + 0.1))
+		headings.append(Vector2.from_angle(k * SLOT))
+	var worst := INF
+	for avoidance in [1.0, 0.8, 0.6]:
+		for margin in WALL_MARGINS:
+			for h in headings:
+				var out := _avoid(pos, (h as Vector2) * RUN_SPEED, [wall], avoidance, margin)
+				var outward := out.normalized().dot(away)
+				worst = minf(worst, outward)
+				assert_gt(outward, 0.0, "inside at %s, avoidance %.1f, margin %d, heading %s: steps outward (got %s)"
+						% [pos, avoidance, margin, h, out])
+				assert_gte(out.length(), RUN_SPEED * Steering.CONTEXT_MIN_SPEED_RATIO - 0.0001, "and keeps moving")
+	return worst
+
+
+## §2.6: a wall alongside the path is not in the way. Level with its midpoint, 150 px beside it, every profile's request
+## along it comes back bit-identical. Along a whole pass, from 360 px before the midpoint to 360 px past it, the wall leaves
+## a request alone wherever two footprint circles at its ends alone would: its closest-point cone and its span never reach a
+## heading along it. (An end is avoided exactly as a 38 px circle there: a 1.0 ship with a wide margin bends a little passing
+## one, as past any hazard.) Review R2-4: a request between two slots is nudged off the wall by a fraction of a slot at most,
+## so the same pass along the wall turned to 8° and 15° keeps its heading within 0.5° and its speed within 1 %.
+func test_a_wall_beside_the_path_adds_nothing_its_ends_do_not() -> void:
+	var wall := _wall(Vector2(0.0, 150.0), Vector2(WALL_HALF, 0.0))
+	var ends := [_info(wall.position - wall.segment_half, wall.radius, wall.avoid_weight),
+			_info(wall.position + wall.segment_half, wall.radius, wall.avoid_weight)]
+	var checked := 0
+	var bent: Array = []
+	for avoidance in [1.0, 0.8, 0.6]:
+		for margin in [12.0, 60.0, 90.0]:
+			for dir in [1.0, -1.0]:
+				var desired := Vector2(RUN_SPEED * dir, 0.0)
+				assert_eq(var_to_bytes(_avoid(Vector2.ZERO, desired, [wall], avoidance, margin)), var_to_bytes(desired),
+						"level with the midpoint, avoidance %.1f, margin %d, %s: bit-identical" % [avoidance, margin, desired])
+				for x in range(-360, 361, 10):
+					var pos := Vector2(x, 0.0)
+					if var_to_bytes(_avoid(pos, desired, ends, avoidance, margin)) != var_to_bytes(desired):
+						continue
+					checked += 1
+					if var_to_bytes(_avoid(pos, desired, [wall], avoidance, margin)) != var_to_bytes(desired):
+						bent.append("x %d, avoidance %.1f, margin %d, %s" % [x, avoidance, margin, desired])
+	assert_eq(bent, [], "the wall bends nothing its ends leave alone")
+	assert_gt(checked, 1000, "sanity: the sweep compared %d requests" % checked)
+
+	var worst_turn := 0.0
+	var worst_speed := INF
+	var off_slot := 0
+	for turn in [deg_to_rad(8.0), deg_to_rad(15.0)]:
+		var tilted := _wall(wall.position.rotated(turn), wall.segment_half.rotated(turn))
+		var tilted_ends := [_info(tilted.position - tilted.segment_half, tilted.radius, tilted.avoid_weight),
+				_info(tilted.position + tilted.segment_half, tilted.radius, tilted.avoid_weight)]
+		for avoidance in [1.0, 0.8, 0.6]:
+			for margin in [12.0, 60.0, 90.0]:
+				for dir in [1.0, -1.0]:
+					var desired := Vector2(RUN_SPEED * dir, 0.0).rotated(turn)
+					for x in range(-360, 361, 10):
+						var pos := Vector2(x, 0.0).rotated(turn)
+						if var_to_bytes(_avoid(pos, desired, tilted_ends, avoidance, margin)) != var_to_bytes(desired):
+							continue
+						off_slot += 1
+						var out := _avoid(pos, desired, [tilted], avoidance, margin)
+						worst_turn = maxf(worst_turn, absf(angle_difference(desired.angle(), out.angle())))
+						worst_speed = minf(worst_speed, out.length() / RUN_SPEED)
+	gut.p("segment beside, off-slot: %d requests, worst turn %.3f°, worst speed %.4f" % [off_slot, rad_to_deg(worst_turn),
+			worst_speed])
+	assert_gt(off_slot, 1000, "sanity: the off-slot sweep compared %d requests" % off_slot)
+	assert_lt(rad_to_deg(worst_turn), 0.5, "off-slot along the wall: within 0.5° of the request")
+	assert_gte(worst_speed, 0.99, "and within 1 % of its speed")
+
+	# Controls, so the rows above can fail: a circle holding the whole wall walls the path off, and so does the wall turned
+	# across the path (review R2-8: midpoint (150, 0), so the ship is not on its line).
+	var desired := Vector2(RUN_SPEED, 0.0)
+	var disc := _info(wall.position, WALL_HALF + wall.radius, wall.avoid_weight)
+	assert_ne(var_to_bytes(_avoid(Vector2.ZERO, desired, [disc])), var_to_bytes(desired), "control: a circle round the wall")
+	var across := _wall(Vector2(150.0, 0.0), Vector2(0.0, WALL_HALF))
+	assert_ne(var_to_bytes(_avoid(Vector2.ZERO, desired, [across], 1.0, 60.0)), var_to_bytes(desired),
+			"control: the wall turned across the path")
+
+
+## §2.6: a moving wall is led, both ends. Across the path 300 px out (its footprint 262 px off, beyond the 180 px skirt while
+## still), closing at 240 px/s it is led 144 px into reach; leaving, it is not. Sliding along its own axis, an end 250 px off
+## the path is led 144 px across it — led along the wall's axis, not only across it; sliding the other way it is not.
+func test_a_moving_wall_is_led() -> void:
+	var desired := Vector2(RUN_SPEED, 0.0)
+	var across := Vector2(0.0, WALL_HALF)
+	var still := _avoid(Vector2.ZERO, desired, [_wall(Vector2(300.0, 0.0), across)])
+	var closing := _avoid(Vector2.ZERO, desired, [_wall(Vector2(300.0, 0.0), across, Vector2(-240.0, 0.0))])
+	var leaving := _avoid(Vector2.ZERO, desired, [_wall(Vector2(300.0, 0.0), across, Vector2(240.0, 0.0))])
+	assert_eq(var_to_bytes(still), var_to_bytes(desired), "still and beyond the skirt: untouched")
+	assert_eq(var_to_bytes(leaving), var_to_bytes(desired), "moving away: untouched")
+	assert_ne(var_to_bytes(closing), var_to_bytes(desired), "closing at 240 px/s: avoided (%s)" % closing)
+	var side := Vector2(150.0, -200.0 - WALL_HALF)  # an end at (150, -200), 250 px off
+	var parked := _avoid(Vector2.ZERO, desired, [_wall(side, across)])
+	var sliding_in := _avoid(Vector2.ZERO, desired, [_wall(side, across, Vector2(0.0, 240.0))])
+	var sliding_out := _avoid(Vector2.ZERO, desired, [_wall(side, across, Vector2(0.0, -240.0))])
+	assert_eq(var_to_bytes(parked), var_to_bytes(desired), "an end beyond the skirt: untouched")
+	assert_eq(var_to_bytes(sliding_out), var_to_bytes(desired), "sliding away: untouched")
+	assert_ne(var_to_bytes(sliding_in), var_to_bytes(desired), "sliding its end into the path: avoided (%s)" % sliding_in)
+
+
+## Review m1: a wall's danger merges with a circle's by MAX, slot by slot, like any two hazards. With both in the way, the
+## order of the infos changes nothing, and the pair answers differently from either alone (an overwrite fails one of them):
+## the wall alone is rounded at its upper end, where the circle sits, so the pair is rounded at the lower one.
+func test_a_wall_and_a_circle_merge_by_max_in_either_order() -> void:
+	var desired := Vector2(RUN_SPEED, 0.0)
+	var wall := _wall(Vector2(200.0, 0.0), Vector2(0.0, WALL_HALF))
+	var circle := _info(Vector2(120.0, -130.0), 50.0)
+	var both := _avoid(Vector2.ZERO, desired, [circle, wall])
+	assert_eq(var_to_bytes(_avoid(Vector2.ZERO, desired, [wall, circle])), var_to_bytes(both), "either order: the same bytes")
+	assert_ne(var_to_bytes(both), var_to_bytes(_avoid(Vector2.ZERO, desired, [wall])), "the circle counts (%s)" % both)
+	assert_ne(var_to_bytes(both), var_to_bytes(_avoid(Vector2.ZERO, desired, [circle])), "the wall counts (%s)" % both)
+
+
+## Review M1, printed, not gated: the three approach runs for six real profiles at their own `max_speed`, `acceleration`,
+## `hazard_margin` and `hazard_avoidance`, read from each `*_config.tres` (never written). The Bomber (0.6) also meets a
+## weight-1.0 wall (the laser fence's, t10). Every run ends with finite figures; the rest is recorded in DECISIONS.
+func test_roster_profiles_meet_a_twin_wall() -> void:
+	for profile in ["swarm_drone", "sniper", "fighter", "gatling_interceptor", "mine_layer", "bomber"]:
+		var config: Resource = load("res://assault/scenes/enemies/%s/%s_config.tres" % [profile, profile])
+		var weights := [TWIN_AVOID_WEIGHT, 1.0] if profile == "bomber" else [TWIN_AVOID_WEIGHT]
+		for weight in weights:
+			for phi in [0.0, 45.0, 90.0]:
+				var wall := _approach_wall(phi)
+				wall.avoid_weight = weight
+				var run := _run_at_wall(Vector2.ZERO, Vector2(820.0, 0.0), wall, config.hazard_avoidance,
+						config.hazard_margin, config.max_speed, config.acceleration)
+				gut.p("segment roster %s (%.0f px/s, %.0f px/s², margin %.0f, avoidance %.1f), wall weight %.1f, %d°: closest %.1f px, crossed %s, arrived %.2f s"
+						% [profile, config.max_speed, config.acceleration, config.hazard_margin, config.hazard_avoidance,
+						weight, phi, run.closest, run.crossed, run.arrived])
+				assert_true(is_finite(run.closest), "%s, %d°: the run ends with a finite closest approach" % [profile, phi])

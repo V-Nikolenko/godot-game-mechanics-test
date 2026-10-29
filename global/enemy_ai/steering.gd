@@ -233,6 +233,8 @@ const CONTEXT_MIN_SPEED_RATIO := 0.35
 ## step keeps winning; the brain's own heading when the two cancel), its heading is refined by parabolic
 ## interpolation with its neighbours (at most half a slot; the one-slot widening keeps that outside the tangent),
 ## and the speed is `|desired|` times that heading's own interest, floored at `CONTEXT_MIN_SPEED_RATIO`.
+##
+## A wall (`info.segment_half != Vector2.ZERO`, Phase 8) writes `_segment_danger()` instead of the circle cone.
 static func context_avoid(pos: Vector2, desired: Vector2, infos: Array, avoidance: float, margin: float,
 		lookahead: float, prev_dir: Vector2) -> Vector2:
 	if infos.is_empty() or desired == Vector2.ZERO or avoidance <= 0.0:
@@ -246,6 +248,11 @@ static func context_avoid(pos: Vector2, desired: Vector2, infos: Array, avoidanc
 	danger.fill(0.0)
 	for info: HazardInfo in infos:
 		if info == null or info.avoid_weight <= 0.0:
+			continue
+		if info.segment_half != Vector2.ZERO:  # a wall (Phase 8 §2.6): its own map, merged by MAX like any hazard's
+			var wall := _segment_danger(pos, want, prev_dir, info, margin, lookahead, skirt_reach, slot)
+			for i in CONTEXT_SLOTS:
+				danger[i] = maxf(danger[i], wall[i])
 			continue
 		var to := info.position + info.velocity * lookahead - pos
 		var d := to.length()
@@ -302,3 +309,91 @@ static func context_avoid(pos: Vector2, desired: Vector2, infos: Array, avoidanc
 		shift = clampf(0.5 * (before - after) / curvature, -0.5, 0.5)
 	var heading := Vector2.from_angle((best + shift) * slot)
 	return heading * speed * maxf(heading.dot(want), CONTEXT_MIN_SPEED_RATIO)
+
+
+## Phase 8 addition (docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md §2.6; task plan
+## docs/plans/cmvqw0vn4017jqs2xzwshmrwt/3-plan.md, which records why the span is widened).
+
+## Radians a wall's span arc is widened by before any test against it, so its edges are inclusive whatever the 32-bit
+## rounding of `Vector2.angle()` (float32 π is 8.7e-8 rad past π): a request exactly tangent to an end is on the arc.
+const SEGMENT_ARC_TOLERANCE := 1e-5
+
+## The danger map a wall writes (`info.segment_half != Vector2.ZERO`): the footprint is every point within `radius` of
+## the segment, both ends led by `velocity · lookahead` as a circle's centre is. With `c` the led segment's point nearest
+## the ship, the wall writes nothing unless `c` is inside the skirt (`context_avoid`'s formula); then
+## - three circle cones, each the circle formula with its own distance and its own skirt, at `c` and at both ends (so an
+##   end is avoided exactly as a circle of `radius` there, and a wall alongside the path adds nothing its ends do not);
+## - and the span, flat at `avoid_weight · skirt(c)`: every heading whose ray meets the footprint, i.e. the shorter arc
+##   between the ends' bearings widened at each side by the capsule's own tangent (`asin(radius / |end|)`, taking an
+##   end's disc that overhangs the other end's bearing into account). When the request, or the request blended with
+##   `prev_dir` as the shared tail blends it, lies on that arc, it is widened by a further half slot each side: the tail's
+##   parabolic refinement moves a pick up to half a slot back toward the aim, and the circle cone's one-slot widening
+##   exists for the same reason.
+## A point closer than 0.001 px (the ship on the line or on an end) has no bearing: its cone is skipped, and so is the span.
+static func _segment_danger(pos: Vector2, want: Vector2, prev_dir: Vector2, info: HazardInfo, margin: float,
+		lookahead: float, skirt_reach: float, slot: float) -> PackedFloat64Array:
+	var danger := PackedFloat64Array()
+	danger.resize(CONTEXT_SLOTS)
+	danger.fill(0.0)
+	var lead := info.position + info.velocity * lookahead - pos
+	var a := lead - info.segment_half
+	var b := lead + info.segment_half
+	var c := Geometry2D.get_closest_point_to_segment(Vector2.ZERO, a, b)
+	var skirt_c := _wall_skirt(c.length(), info.radius, skirt_reach)
+	if skirt_c <= 0.0:
+		return danger  # every point of the wall is at least as far as `c`
+	for p: Vector2 in [c, a, b]:
+		var d := p.length()
+		if d < 0.001:
+			continue
+		var skirt := _wall_skirt(d, info.radius, skirt_reach)
+		if skirt <= 0.0:
+			continue
+		var half_width := asin(minf(1.0, (info.radius + margin) / d)) + slot
+		var bearing := p.angle()
+		for i in CONTEXT_SLOTS:
+			var off := absf(angle_difference(bearing, i * slot))
+			if off < half_width:
+				danger[i] = maxf(danger[i], info.avoid_weight * skirt * (1.0 - off / half_width))
+
+	var da := a.length()
+	var db := b.length()
+	if c.length() < 0.001 or da < 0.001 or db < 0.001:
+		return danger
+	var alpha := a.angle()
+	var ta := asin(minf(1.0, info.radius / da))
+	var tb := asin(minf(1.0, info.radius / db))
+	var spread := angle_difference(alpha, b.angle())
+	if spread < 0.0:  # walk from the end whose bearing comes first, so the arc runs forward
+		alpha = b.angle()
+		spread = -spread
+		var swap := ta
+		ta = tb
+		tb = swap
+	var lower := minf(-ta, spread - tb)
+	var start := alpha + lower - SEGMENT_ARC_TOLERANCE
+	var length := maxf(ta, spread + tb) - lower + 2.0 * SEGMENT_ARC_TOLERANCE
+	var aim := want
+	if prev_dir != Vector2.ZERO:
+		var blended := want * (1.0 - CONTEXT_PREV_BLEND) + prev_dir.normalized() * CONTEXT_PREV_BLEND
+		if blended.length_squared() > 1e-6:
+			aim = blended
+	if fposmod(want.angle() - start, TAU) <= length or fposmod(aim.angle() - start, TAU) <= length:
+		start -= 0.5 * slot
+		length += slot
+	var weight := info.avoid_weight * skirt_c
+	for i in CONTEXT_SLOTS:
+		if fposmod(i * slot - start, TAU) <= length:
+			danger[i] = maxf(danger[i], weight)
+	return danger
+
+
+## `context_avoid`'s skirt for one point of a wall at distance [param d]: 1 inside [param radius], falling to 0 at
+## `skirt_reach` beyond it, and 0 when there is no reach.
+static func _wall_skirt(d: float, radius: float, skirt_reach: float) -> float:
+	var outside := maxf(0.0, d - radius)
+	if outside <= 0.0:
+		return 1.0
+	if skirt_reach <= 0.0:
+		return 0.0
+	return maxf(0.0, 1.0 - outside / skirt_reach)

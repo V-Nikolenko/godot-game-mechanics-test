@@ -81,7 +81,9 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `stops_piercing()` and spends its full damage. A runtime hazard (wreck, debris fragment, Gravity Field, reactor field) is
   spawned deferred through `spawn_into()` into `Hazards.container(tree)` — still exactly one owner, it frees itself.
   **Hazards are sampled by the body, the mover owns enemy drift, runtime hazards spawn deferred into the `HazardContainer`** —
-  [PROJECT.md](docs/architecture/PROJECT.md) → Conventions. Phase 6 gates: `tests/unit/test_hazards.gd`, `test_hazard_field.gd`,
+  [PROJECT.md](docs/architecture/PROJECT.md) → Conventions. **A laser wall is a segment hazard (Phase 8):** `HazardInfo.segment_half` (ZERO = circle,
+  every earlier hazard, bit-identical) and `exempt_group` (its own pair ignores it); gated by the segment rows of `test_hazards.gd`,
+  `test_context_avoidance.gd` and `test_enemy_mover.gd`. Phase 6 gates: `tests/unit/test_hazards.gd`, `test_hazard_field.gd`,
   `tests/unit/test_context_avoidance.gd` (pass-through bit-identical with no hazard, avoidance per profile),
   `test_player_hazards.gd` (pull and slow on both players), `test_wreck.gd` (body, yield, LOS, "no hurtbox larger than its
   body"), `test_wreck_spawning.gd` (death rolls, caps, no container -> no rng, real-physics deferred spawn),

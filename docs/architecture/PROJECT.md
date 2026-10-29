@@ -369,7 +369,9 @@ Detail and APIs: [global.md](modules/global.md).
 - **Hazards (enemy rework phase 6):** (1) **hazards are sampled by the body** — a hazard node answers duck-typed
   `hazard_info() -> HazardInfo` and registers in `_enter_tree()` / unregisters in `_exit_tree()` (a *pooled* hazard, i.e. a mine, registers on `launch()` instead) with the static `Hazards`
   registry (`global/hazards/`); ships query `Hazards.accel_at / penalty_at / around`, no `Area2D` field, collision bit 12
-  stays unallocated, and a hazard never writes a ship's velocity, position or rotation. (2) **The mover owns enemy drift** —
+  stays unallocated, and a hazard never writes a ship's velocity, position or rotation. A **wall is a segment** (Phase 8):
+  `HazardInfo.segment_half != ZERO` makes `contains` / `penalty_at` / `around` measure to `closest_point()` and `context_avoid` steer round its
+  ends; `exempt_group` lets an actor in that group (a twin pair) ignore its own wall. With no segment hazard every result is bit-identical. (2) **The mover owns enemy drift** —
   `EnemyMover` adds the pull as a decaying `HazardDrift`, applies the slow and the context-steering avoidance stage, and
   exposes `own_velocity()` (`actor.velocity − drift`); a brain's "am I stopped / settled" gate reads that, never raw
   `actor.velocity`. A committed attack is `mover.boost()` and ignores avoidance. With no hazard in reach, velocity and rotation

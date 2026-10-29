@@ -26,7 +26,8 @@ static func count() -> int:
 	return _nodes.size()
 
 
-## Every info with `pos.distance_to(info.position) <= info.radius + reach`. Allocates.
+## Every info within `info.radius + reach` of [param pos], measured to the info's `closest_point(pos)` (its centre, or
+## the nearest point of a wall). Allocates.
 static func around(pos: Vector2, reach: float) -> Array:
 	var found: Array = []
 	for node in _nodes:

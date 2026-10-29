@@ -362,3 +362,76 @@ func test_a_minefield_adds_count_hazards_and_removes_them_when_freed() -> void:
 	remove_child(field)
 	field.free()
 	assert_eq(Hazards.count(), before, "and none left once the field is gone")
+
+
+# --- segments (Phase 8, docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md §2.6) ------------------------
+
+## A wall from `at - half` to `at + half`, footprint `radius` (the twin beam's 14 + 24 px).
+func _segment(at: Vector2, half: Vector2, radius: float = 38.0) -> HazardInfo:
+	var i := HazardInfo.new()
+	i.position = at
+	i.segment_half = half
+	i.radius = radius
+	return i
+
+
+func test_a_new_info_is_a_circle_and_exempts_no_one() -> void:
+	var i := _info()
+	i.position = Vector2(30.0, -20.0)
+	assert_eq(i.segment_half, Vector2.ZERO, "every existing hazard is a circle")
+	assert_eq(i.exempt_group, &"", "and exempts no one")
+	for p in [Vector2.ZERO, Vector2(500.0, 7.0), Vector2(30.0, -20.0)]:
+		assert_eq(i.closest_point(p), i.position, "a circle's closest point is its centre (%s)" % p)
+
+
+func test_segment_closest_point_beside_the_middle_beyond_an_end_and_on_the_line() -> void:
+	var s := _segment(Vector2(100.0, 50.0), Vector2(200.0, 0.0))
+	assert_eq(s.closest_point(Vector2(150.0, 120.0)), Vector2(150.0, 50.0), "beside: the foot of the perpendicular")
+	assert_eq(s.closest_point(Vector2(400.0, 80.0)), Vector2(300.0, 50.0), "beyond the +end: that end")
+	assert_eq(s.closest_point(Vector2(-150.0, 50.0)), Vector2(-100.0, 50.0), "beyond the -end, on the line: that end")
+	assert_eq(s.closest_point(Vector2(120.0, 50.0)), Vector2(120.0, 50.0), "on the segment: the point itself")
+
+
+func test_segment_contains_measures_to_the_closest_point_and_honours_the_margin() -> void:
+	var s := _segment(Vector2(100.0, 50.0), Vector2(200.0, 0.0))  # (-100, 50) .. (300, 50)
+	assert_true(s.contains(Vector2(150.0, 88.0)), "38 px beside the middle: in")
+	assert_false(s.contains(Vector2(150.0, 89.0)), "39 px: out")
+	assert_true(s.contains(Vector2(150.0, 118.0), 30.0), "margin 30: 68 px in")
+	assert_false(s.contains(Vector2(150.0, 119.0), 30.0), "69 px out")
+	assert_true(s.contains(Vector2(338.0, 50.0)), "38 px beyond an end, along the line: in")
+	assert_false(s.contains(Vector2(339.0, 50.0)), "39 px: out")
+	assert_true(s.contains(Vector2(290.0, 80.0)), "190 px from the midpoint but 30 px from the wall: in (not a circle)")
+	assert_false(s.contains(Vector2(100.0, 150.0)), "100 px straight off the midpoint: out")
+
+
+func test_segment_penalty_at_uses_the_closest_point() -> void:
+	var s := _segment(Vector2.ZERO, Vector2(0.0, 200.0))  # (0, -200) .. (0, 200)
+	s.movement_penalty = 0.3
+	assert_eq(s.penalty_at(Vector2(38.0, 190.0)), 0.3, "38 px beside, near an end: slowed")
+	assert_eq(s.penalty_at(Vector2(39.0, 190.0)), 0.0, "39 px: not")
+	assert_eq(s.penalty_at(Vector2(0.0, -238.0)), 0.3, "38 px beyond the other end: slowed")
+	assert_eq(s.penalty_at(Vector2(0.0, -239.0)), 0.0)
+
+
+func test_around_finds_a_segment_by_its_closest_point() -> void:
+	var h := _hazard(Vector2.ZERO, 38.0)
+	h.info.segment_half = Vector2(300.0, 0.0)  # (-300, 0) .. (300, 0)
+	assert_eq(Hazards.around(Vector2(250.0, 100.0), 62.0).size(), 1, "beside: radius + reach from the wall")
+	assert_eq(Hazards.around(Vector2(250.0, 101.0), 62.0).size(), 0, "1 px beyond")
+	assert_eq(Hazards.around(Vector2(340.0, 0.0), 2.0).size(), 1, "beyond an end, along the line: radius + reach")
+	assert_eq(Hazards.around(Vector2(341.0, 0.0), 2.0).size(), 0, "1 px beyond")
+	var long := _hazard(Vector2(2000.0, -500.0), 38.0)
+	long.info.segment_half = Vector2(0.0, 500.0)  # (2000, -1000) .. (2000, 0): its midpoint is 650 px off the query
+	var found := Hazards.around(Vector2(2000.0, 150.0), 120.0)
+	assert_eq(found.size(), 1, "a long wall whose end is in reach is found though its midpoint is not")
+	assert_eq(found[0], long.info)
+
+
+func test_a_segment_with_no_pull_has_no_accel_and_no_slow() -> void:
+	var h := _hazard(Vector2(50.0, 50.0), 38.0)
+	h.info.core_radius = 0.0
+	h.info.segment_half = Vector2(0.0, 200.0)
+	for p in [Vector2(60.0, 50.0), Vector2(50.0, 120.0), Vector2(50.0, 50.0), Vector2(80.0, 240.0)]:
+		assert_eq(h.info.accel_at(p), Vector2.ZERO, "no pull at %s" % p)
+		assert_eq(Hazards.accel_at(p), Vector2.ZERO, "and none through the registry")
+		assert_eq(Hazards.penalty_at(p), 0.0, "and no slow")
