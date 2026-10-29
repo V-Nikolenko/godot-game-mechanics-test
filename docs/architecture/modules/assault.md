@@ -56,6 +56,7 @@ assault/scenes/
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
 ├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck (wrecks, structures, debris), minefield (Ph7 placed mines + beacon)
+├── structures/                  Ph8 coordinators that are not enemies: turret_group/ (TurretGroup, TurretGroupSlot, presets/assault_pair.tscn)
 ├── allies/ally_fighter/         AI escort fighters (group "allies")
 ├── gui/                         HUD, score widgets/popups, weapon selector, game-over, debrief
 └── race/                        Race sub-mode (core/, racers/, track/, ui/)
@@ -482,7 +483,7 @@ endpoint beam (`twin_beam.tscn`, cover, strain, laser-wall registration) and the
 #### Stationary Defense Turret and the turret mount (Phase 8)
 
 Source: `assault/scenes/enemies/defense_turret/` ([ENEMY.md](../../../assault/scenes/enemies/defense_turret/ENEMY.md)), `global/components/assault_drift.gd`.
-Built in t6; later Phase 8 tasks add the other mount variants, `TurretGroup` / power source / shield generator and the heavy emplacement.
+Built in t6 (shell, burst cannon), t7 / t8 (the other mounts) and t9 (`TurretGroup`, power source); later Phase 8 tasks add the shield generator and the heavy emplacement.
 
 - **`DefenseTurret extends BaseEnemy`**: no `EnemyMover` (never AI-driven, refuses tows), the root never rotates, `ContactProfile` NONE with no `ContactHitBox`,
   `is_laser_blocking()` false, HP 90, `counts_as_escape` false. `MountSlots` holds `TurretMountSlot` markers (`variant`, `rest_bearing_deg`, `turn_rate_override`:
@@ -501,10 +502,12 @@ Built in t6; later Phase 8 tasks add the other mount variants, `TurretGroup` / p
 - **`BurstCannonMount`** (`mounts/burst_cannon_mount.tscn`): 0.4 s charge, 4 Pulse rounds 0.12 s apart at 300 px/s, 2.2 s cooldown, `PulsePool` of 12.
 - **Beam mounts (t7)** (`BeamTurretMount` in `mounts/beam_turret_mount.gd`, scenes `lance_mount` / `beam_cannon_mount`; `SweepBeamMount` on `sweep_beam_mount`): each owns one `EnemyBeam` as a mount child at the muzzle (host = the turret, owner group = the turret's), ticked from `_pre_tick` before the phase step. The aim freezes when TELEGRAPH starts (the lance: at its last `commit_seconds`), so the shown line is the line that fires; the sweep aims at the start bearing `aim - s * 50` degrees and turns `s * sweep_rate` through ACTIVE with no turn-rate cap. Ranges 400 / 1100 / 700; `power_down()` cancels a telegraph or fades a lit beam.
 - **Rocket battery and pulse ring (t8)** (`RocketBatteryMount` / `PulseRingMount`, scenes `rocket_battery_mount` / `pulse_ring_mount`): the battery fires a salvo of 2 Phase 5 rockets (Pursuit with probability 1/3 from the brain's rng, else Dumb) from two root `BulletPool`s with `persist_after_owner_death`, **past cover** (`fires_past_cover()`); the turret answers `launch_velocity()` ZERO and `rocket_clear_radius()` body radius + 4. The ring mount owns one `EnergyRing` child (owner-ticked from `_pre_tick`) and starts it with the player within `trigger_range` 300; it does not aim. Both `power_down()` cleanly (no further rocket; ring cancelled / faded).
+- **Turret groups and the power source (t9)** (`assault/scenes/structures/turret_group/` [STRUCTURE.md](../../../assault/scenes/structures/turret_group/STRUCTURE.md), `assault/scenes/enemies/power_source/` [ENEMY.md](../../../assault/scenes/enemies/power_source/ENEMY.md)): `TurretGroup` is a **coordinator, not a parent** (never in `enemies`, never scored): a deferred `spawn_members()` instantiates each `TurretGroupSlot`'s member (`variant`, `rest_bearing_deg` -> the turret's `rest_bearing_override`, `set_turret_group()`, all before `add_child`) as a **sibling in the enemy container**, joins it to `owner_group` and announces it with `EventBus.enemy_spawned_orphan`; it frees itself after its last member. In Assault a wave-spawned group subtracts the camera's horizontal pan from x in `_ready()` (`world_anchored_x`, through `EnemyWorld` only), so `.at(x, y)` lands at world `640 + 2·x`. `PowerSource` (HP 150, r 34, no brain, `provides_power()`, amber `Line2D`s to its powered turrets) is a provider; on the last provider's `died` the group calls `set_powered(false)` on every member **in the same call** and emits `power_changed(false)`; never reversed (`add_power_provider()` is the Ph20 seam). `request_telegraph()` (each mount's `telegraph_gate`) staggers TELEGRAPH starts by 0.3 s; `coverage_holes()` checks the coverage rule (`TurretMountScenes.reach_of()`: `fire_range`, or a ring's `trigger_range`). Preset `assault_pair.tscn`; `WaveBuilder.turret_group(TURRET_GROUP_ASSAULT_PAIR)`.
 - **`AssaultDrift`** (global component): in Assault moves its parent down `speed` px/s and frees it below the projectile world rect; nothing in Open Space.
 - **Tests.** `tests/integration/test_defense_turret.gd` (both harnesses; the cover / mining-beam row on real physics at 8×), the turret case of
   `test_enemy_dual_mode.gd`, `test_base_enemy.gd::test_a_mover_less_turret_brain_refuses_a_tow_in_every_phase`, the burst speed in
-  `test_enemy_bullet_lifetime.gd`, and the roster gates.
+  `test_enemy_bullet_lifetime.gd`, and the roster gates. Groups: `tests/integration/test_turret_group.gd` (both harnesses; R8.24 power-source shutdown) and the power
+  source's case in `test_enemy_dual_mode.gd`.
 
 ### Scoring
 

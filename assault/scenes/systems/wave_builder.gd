@@ -97,6 +97,9 @@ func support_ship()   -> SpawnConfig: return SpawnConfig.new(SUPPORT_SHIP)
 func mine_layer()     -> SpawnConfig: return SpawnConfig.new(MINE_LAYER)
 ## A Stationary Defense Turret (Phase 8): `.prop("variant", TurretMount.Variant.X)` picks its weapon (applied before `add_child`).
 func defense_turret() -> SpawnConfig: return SpawnConfig.new(DEFENSE_TURRET)
+## A turret group preset (Phase 8, plan §2.10): a coordinator that spawns its members (turrets, a power source) as siblings in the container. In
+## Assault its x is world-anchored (`TurretGroup.world_anchored_x`): `.at(x, y)` lands at world x `640 + 2·x` whatever the camera's pan.
+func turret_group(preset_path: String) -> SpawnConfig: return SpawnConfig.new(preset_path)
 func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
 func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
 func small_asteroid() -> SpawnConfig: return SpawnConfig.new(SMALL_ASTEROID)
@@ -264,6 +267,7 @@ const MISSILE_CORVETTE := "res://assault/scenes/enemies/missile_corvette/missile
 const SUPPORT_SHIP   := "res://assault/scenes/enemies/support_ship/support_ship.tscn"
 const MINE_LAYER     := "res://assault/scenes/enemies/mine_layer/mine_layer.tscn"
 const DEFENSE_TURRET := "res://assault/scenes/enemies/defense_turret/defense_turret.tscn"
+const TURRET_GROUP_ASSAULT_PAIR := "res://assault/scenes/structures/turret_group/presets/assault_pair.tscn"
 const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
 const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn"
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"

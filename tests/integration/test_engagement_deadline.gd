@@ -813,6 +813,30 @@ func test_no_enemies_cleared_section_spawns_a_support_ship() -> void:
 	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
 
 
+## Phase 8 (plan "For every task"): a turret group keeps firing, and its rocket batteries' rockets persist, so none may sit in an
+## ENEMIES_CLEARED section, whose `LevelDirector` poll waits on the container. Vacuous until level 1 places one (t19); it is the guard.
+func test_no_enemies_cleared_section_spawns_a_turret_group() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		for w in section.waves:
+			for e in (w as WaveResource).entries:
+				var entry: SpawnEntryResource = e
+				var path := entry.ship_scene.resource_path if entry.ship_scene != null else ""
+				assert_false(path.begins_with(_TURRET_GROUP_DIR), "%s spawns a turret group (%s)" % [section.section_name, path])
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+	var probe := _cloud_descent()
+	_add_to_last_wave(probe, load(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR) as PackedScene, 0.0)
+	assert_true(_section_has_scene(probe, WaveBuilder.TURRET_GROUP_ASSAULT_PAIR), "boundary: a group in cloud_descent's last wave is seen")
+	assert_true(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR.begins_with(_TURRET_GROUP_DIR), "boundary: and its path is under the swept directory")
+
+
+const _TURRET_GROUP_DIR := "res://assault/scenes/structures/turret_group/"
+
+
 ## Boundary for both rows above: the `_section_has_scene` they rest on does see either kind once it is in the last wave.
 func test_a_corvette_or_support_added_to_cloud_descent_is_seen() -> void:
 	for path: String in [WaveBuilder.MISSILE_CORVETTE, WaveBuilder.SUPPORT_SHIP]:

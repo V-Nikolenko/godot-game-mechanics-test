@@ -453,6 +453,11 @@ Detail and APIs: [global.md](modules/global.md).
      (`pool_specs()`), so rounds land in the enemy container. Static structures (the `DefenseTurret` first) have no mover, never rotate their root, and scroll with
      the Assault corridor through `AssaultDrift` (`global/components/assault_drift.gd`), firing only inside `EnemyWorld.view_rect()`; their `.tres` sets
      `counts_as_escape = false`. Details: [assault.md](modules/assault.md) → *Stationary Defense Turret and the turret mount*; gate `tests/integration/test_defense_turret.gd`.
+  7. **Turret groups are coordinators, not parents (t9).** `TurretGroup` (`assault/scenes/structures/turret_group/`; structures that are not enemies live in
+     `assault/scenes/structures/`) spawns its members deferred as siblings in the enemy container, joins them to its `owner_group` and announces them as orphans; it is
+     never in `enemies` and never scored. `set_powered(false)` on every member is the only power coupling: the last provider's (a `PowerSource`'s) `died` darkens the
+     whole group in the same call, for good (`add_power_provider()` is the Ph20 seam). In Assault a wave-spawned group's x is **world-anchored** (`world_anchored_x`, the
+     camera's horizontal pan removed in `_ready()` through `EnemyWorld`). Gate `tests/integration/test_turret_group.gd`.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---
@@ -464,6 +469,7 @@ Each combat entity carries a behaviour doc **beside its scene**, mirroring a com
 - **Racers:** `assault/scenes/race/racers/<name>/RACER.md` (6 racers)
 - **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (the wave enemies + the `space_station` mini-boss)
 - **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (9 hazard folders: big/small asteroid, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck — wrecks, derelict structures and drifting debris — and minefield)
+- **Assault structures:** `assault/scenes/structures/<name>/STRUCTURE.md` (Ph8: turret_group)
 - **Race track hazards:** `assault/scenes/race/track/RACE_HAZARDS.md` (walls, asteroids, lasers + the lethal-hazard / AI-avoidance system)
 
 Level 1's **finale** phase is still the `ENEMIES_CLEARED` section in

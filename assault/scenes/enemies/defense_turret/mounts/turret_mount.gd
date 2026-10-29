@@ -196,6 +196,12 @@ func fires_past_cover() -> bool:
 	return false
 
 
+## How far this mount can hurt from its pivot, px: the coverage rule of a `TurretGroup` (plan §2.10.1) counts a point covered when it is within
+## this. A gun's is its `fire_range`; a variant that triggers on distance instead (the pulse ring) answers its own.
+func reach() -> float:
+	return fire_range
+
+
 ## True while a committed shot cannot be dodged by waiting (the lance's COMMIT, t7): the host lights COMMIT.
 func is_committed() -> bool:
 	return false

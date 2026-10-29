@@ -435,6 +435,22 @@ b.defense_turret().at(200, -100).prop("variant", TurretMount.Variant.BURST_CANNO
 
 ---
 
+### `turret_group` — Turret group (with its power source)
+
+**Builder:** `b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR)` (any preset path under `assault/scenes/structures/turret_group/presets/`)  
+**Scene:** a preset, e.g. `assault_pair.tscn`: a BURST_CANNON turret at (−50, 60), a PULSE_RING turret at (50, −60) and a power source at (0, 0) (design px ×2 = world)  
+**What it is:** a coordinator, not an enemy (never scored, never in `enemies`). It spawns its members next to it in the container (each an ordinary, scored enemy) and frees itself after the last. In Assault its **x is world-anchored**: `.at(x, y)` lands at world x `640 + 2·x` however the player has panned the view (so `.at(-64, -220)` puts the members at 462 / 512 / 562, between level 1's laser columns); y is camera-relative as usual.  
+**Power source** (`power_source.tscn`, member only): HP 150, score 80, `counts_as_escape` false, no weapon; amber lines run from it to each turret. **Killing it shuts every turret of the group down at once, for good**; the dark turrets can still be destroyed for score.  
+**Stagger:** the group's turrets start their warnings at least 0.3 s apart.
+
+**Never place it in an `ENEMIES_CLEARED` section** (persistent fire; guarded by `test_engagement_deadline.gd`). Not placed in level 1 or the hub yet.
+
+```gdscript
+b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(-64, -220)
+```
+
+---
+
 ### `bonus_drone` — Bonus Drone
 
 **Builder:** `b.bonus_drone()`  

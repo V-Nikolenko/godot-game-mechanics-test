@@ -40,6 +40,11 @@ func setup(host: Node2D, pools: Dictionary, owner_group: StringName) -> void:
 	_ring.setup(host, owner_group)
 
 
+## The coverage reach is the trigger distance (the ring reaches farther, but only fires with the player this close).
+func reach() -> float:
+	return trigger_range
+
+
 ## The mount's ring (a child), for hosts and rows that watch its phase and hits.
 func ring() -> EnergyRing:
 	return _ring

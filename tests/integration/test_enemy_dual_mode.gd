@@ -1115,3 +1115,50 @@ func test_defense_turret_engages_in_both_modes_and_drifts_only_in_assault(mode: 
 	var expected_drift := turret.config.assault_drift_speed * 60.0 * DT if harness.is_assault else 0.0
 	assert_almost_eq(turret.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
 	assert_false(turret.is_queued_for_deletion())
+
+# ── The Power Source (Phase 8, t9; plan §2.10.2) ─────────────────────────────────────────────────────────────────────
+
+const POWER_SOURCE_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/power_source/power_source.tscn")
+
+
+## The same power source powers its turret group in both modes and drifts only in Assault (by `assault_drift_speed` per second); it is an ordinary
+## enemy (group `enemies`), never a wall for the mining beam, refuses a tow (no mover) and never counts as an escape. Killing it darkens its turret
+## in both modes, in the same call.
+func test_power_source_powers_its_group_in_both_modes_and_drifts_only_in_assault(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 600.0)
+	var group := TurretGroup.new()
+	for spec: Array in [[DEFENSE_TURRET_SCENE, Vector2(-100.0, 0.0)], [POWER_SOURCE_SCENE, Vector2(100.0, 0.0)]]:
+		var slot := TurretGroupSlot.new()
+		slot.member_scene = spec[0]
+		slot.position = spec[1]
+		group.add_child(slot)
+	group.position = Vector2(640.0, 300.0)
+	harness.root.add_child(group)
+	group.spawn_members()
+	group.set_physics_process(false)
+	var turret := group.members()[0] as DefenseTurret
+	var source := group.members()[1] as PowerSource
+	for m: BaseEnemy in [turret, source]:
+		m.set_physics_process(false)  # hand-ticked, same technique as the turret above
+		(m.get_node("AssaultDrift") as AssaultDrift).set_physics_process(false)
+	assert_true(source.is_in_group(&"enemies"), "%s: an ordinary enemy" % mode)
+	assert_true(source.provides_power())
+	assert_false(source.is_laser_blocking(), "%s: a target for the mining beam, not a wall" % mode)
+	assert_false(source.accept_tow(Vector2(50.0, 0.0)), "%s: no mover, no tow" % mode)
+	assert_false(source.counts_as_escape, "%s: drifting out never costs the combo" % mode)
+	var drift := source.get_node("AssaultDrift") as AssaultDrift
+	var y0 := source.global_position.y
+	for _i in 60:
+		drift.step(DT)
+		group.tick(DT)
+		_tick(turret, DT)
+	var expected_drift := source.config.assault_drift_speed * 60.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(source.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
+	assert_true(group.is_powered())
+	assert_ne(turret.mounts()[0].phase(), TurretMount.Phase.UNPOWERED, "%s: powered while the source lives" % mode)
+	source.hurt_box.received_damage.emit(10000)
+	assert_false(group.is_powered(), "%s: dark" % mode)
+	assert_eq(turret.mounts()[0].phase(), TurretMount.Phase.UNPOWERED, "%s: the turret is down in the same call" % mode)

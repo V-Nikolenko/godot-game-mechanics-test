@@ -15,7 +15,8 @@
 ##
 ## Power: `set_powered(false)` powers every mount down for good (a later `set_powered(true)` is ignored in this phase; Ph20 may lift that).
 ## Groups: `set_turret_group(group)`, before `add_child`, joins the group's `owner_group`; without one the turret is its own owner group
-## `&"turret_<instance id>"`, so its mounts share one exempt set.
+## `&"turret_<instance id>"`, so its mounts share one exempt set. A group that answers `request_telegraph(member)` (a `TurretGroup`, t9) becomes every
+## mount's `telegraph_gate`, so the group staggers its members' telegraph starts; a lone turret is never held.
 ##
 ## Spawn with `b.defense_turret().at(x, y)`; `.prop("variant", TurretMount.Variant.X)` picks the first slot's weapon.
 class_name DefenseTurret
@@ -32,6 +33,9 @@ const RIM_COLOR := Color(0.5, 0.55, 0.62, 1.0)
 @export var config: DefenseTurretConfig = load("res://assault/scenes/enemies/defense_turret/defense_turret_config.tres")
 ## When >= 0, the first mount slot's variant (a `TurretMount.Variant`); one property a wave or a group slot can set.
 @export var variant: int = -1
+## When not NAN, the first mount slot's `rest_bearing_deg` (degrees). Not an export: a `TurretGroupSlot` or a wave's `.prop()` sets it before
+## `add_child`, as with `variant`.
+var rest_bearing_override: float = NAN
 
 var _powered: bool = true
 var _turret_group: Object = null
@@ -134,10 +138,12 @@ func _build_mounts() -> void:
 			push_warning("DefenseTurret: mount variant %d is not built yet; slot %s stays empty" % [wanted, slot.name])
 			continue
 		var mount := scene.instantiate() as TurretMount
-		mount.rest_bearing_deg = slot.rest_bearing_deg
+		mount.rest_bearing_deg = rest_bearing_override if index == 0 and not is_nan(rest_bearing_override) else slot.rest_bearing_deg
 		if slot.turn_rate_override >= 0.0:
 			mount.turn_rate = slot.turn_rate_override
 		mount.rng = _turret_brain.rng
+		if _turret_group != null and is_instance_valid(_turret_group) and _turret_group.has_method("request_telegraph"):
+			mount.telegraph_gate = Callable(_turret_group, "request_telegraph").bind(self)
 		slot.add_child(mount)
 		var pools := {}
 		for spec in mount.pool_specs():

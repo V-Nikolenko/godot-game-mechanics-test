@@ -6,7 +6,7 @@ consumer of the Phase 8 weapon mounts.
 and you can out-strafe its partial lead.
 
 > **Build state (Phase 8, t8).** Shell, `TurretMount` cycle, all six mounts (BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY, PULSE_RING, LANCE, BEAM_CANNON) and `AssaultDrift` are
-> built. Still to come in Phase 8: `TurretGroup` and the power source (t9), the shield
+> built, and so are turret groups and the power source (t9, `assault/scenes/structures/turret_group/`). Still to come in Phase 8: the shield
 > generator (t9s), the heavy emplacement (t11), the art (t15) and placement in the hub and level 1 (t18, t19). Mounting on large ships is
 > Phase 10. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.7; the task plan is `docs/plans/cmvqw0vnb017rqs2xsyursu5d/3-plan.md`.
 
@@ -47,6 +47,9 @@ and you can out-strafe its partial lead.
   - rounds already in flight live on in their pool;
   - the head eases to `rest_bearing_deg` and stays there ("droop").
   - Re-powering is ignored in this phase.
+- **Groups (t9).** A `TurretGroup` spawns turrets from `TurretGroupSlot`s: the slot's `variant` and `rest_bearing_deg` (-> `rest_bearing_override`, the first
+  slot's scan centre) are set before `add_child`, the turret joins the group's owner group, and its mounts' `telegraph_gate` becomes the group's
+  `request_telegraph()` (TELEGRAPH starts at least 0.3 s apart across the group). The group's power source dying calls `set_powered(false)`.
 - **Brain (`DefenseTurretBrain`, `Phase { SCAN, NOTICING, ENGAGED, UNPOWERED }`).** It runs one tick per physics frame through
   `BaseEnemy._physics_process`.
   - Perception in Open Space: the player within `perceive_radius` 900 px, kept until beyond `lose_radius` 1100.

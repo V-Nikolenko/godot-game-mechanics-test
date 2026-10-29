@@ -34,3 +34,15 @@ static func scene_for(variant: int) -> PackedScene:
 ## scene; [param fallback] (pass the script default) when the scene leaves it unset or the variant has no scene.
 static func export_of(variant: int, property: StringName, fallback: Variant, node_path: NodePath = ^".") -> Variant:
 	return EnemyBeamScenes.export_of_scene(scene_for(variant), property, fallback, node_path)
+
+
+## [param variant]'s `TurretMount.reach()` as its mount scene authors it (a `TurretGroup`'s coverage rule, plan §2.10.1); 0.0 for an unbuilt variant.
+## The scene is instantiated off-tree, read and freed, so a subclass's own `reach()` answers.
+static func reach_of(variant: int) -> float:
+	var scene := scene_for(variant)
+	if scene == null:
+		return 0.0
+	var mount := scene.instantiate() as TurretMount
+	var reach := mount.reach()
+	mount.free()
+	return reach

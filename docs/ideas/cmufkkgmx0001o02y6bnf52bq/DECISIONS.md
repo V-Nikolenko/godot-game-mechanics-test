@@ -3146,3 +3146,26 @@ directory. These are *planned* decisions; check this phase's *as built* section,
   end of the expansion. **It holds fire without line of sight** (the base rule; plan §2.8 does not mark the ring as past-cover) - a ring is not blocked by cover, so a Ph9/Ph20
   follow-up may want `fires_past_cover()` true for it.
 - Gate rows were written for both harnesses in `test_defense_turret.gd` §18; the 30-salvo kind distribution reads `pick_kind()` directly (a hand-ticked row cannot recycle rockets: `BulletPool._recycle` is deferred).
+
+### Phase 8, built in t9 (turret groups and the power source) (2026-10-29)
+- **Built as §2.10.1–§2.10.4 say:** `assault/scenes/structures/turret_group/` (`TurretGroup`, `TurretGroupSlot`, `presets/assault_pair.tscn`, `STRUCTURE.md`),
+  `assault/scenes/enemies/power_source/` (`PowerSource`, flat `PowerSourceConfig` + `.tres` with `counts_as_escape = false`, `ENEMY.md`),
+  `WaveBuilder.TURRET_GROUP_ASSAULT_PAIR` / `turret_group(preset_path)`. Task plan `docs/plans/cmvqw0vnl0183qs2xbphzonu7/3-plan.md` (rev 2, APPROVED round 2).
+- **Names beyond §2.10 later tasks build on:**
+  - `TurretGroup.spawn_members()` is **public and idempotent**; `_ready()` defers it (production path), hand-ticked tests call it directly.
+  - **The stagger clock is the group's:** `TurretGroup.tick(delta)` (from its `_physics_process`; a hand-ticked row ticks the group, then its members).
+    `DefenseTurret._build_mounts()` binds `mount.telegraph_gate = Callable(group, "request_telegraph").bind(turret)` when its group has that method.
+  - **Coverage:** `coverage_points()` (local to the origin), `mount_reaches()` (`{position, reach}` read off-tree from the slots' member scenes'
+    `MountSlots`), `coverage_holes()` (empty = the rule holds). Reach is the new `TurretMount.reach()` (`fire_range`; `PulseRingMount` answers
+    `trigger_range`), read through the new `TurretMountScenes.reach_of(variant)`. The heavy emplacement (t11) needs nothing more.
+  - **`TurretGroupSlot.rest_bearing_deg` defaults to NAN** (keep the member's own) and is copied onto the new `DefenseTurret.rest_bearing_override`
+    (a plain var, not an export; first mount slot only, mirroring `variant`).
+  - **"Not itself spawned by a group"** is implemented by the spawner: any member with a `world_anchored_x` property (a nested group, t10's `LaserFence`)
+    is spawned with it false, because a slot position is already a world position.
+  - **A provider that leaves without dying** (drifted out below the projectile world rect) is only forgotten; it never darkens the group (only `died`
+    does, §2.10.1). Its turrets are 60 px from it and leave with it.
+  - `PowerSource.power_lines()` (refreshed, returns the `Line2D`s), `set_turret_group()` / `turret_group()` / `owner_group()` as on the turret; alone its
+    owner group is `&"power_source_<id>"`. No `StateLight`, no brain.
+- **Gate rows:** `tests/integration/test_turret_group.gd` (13 tests, both harnesses where mode matters), the power-source case in `test_enemy_dual_mode.gd`,
+  `power_source` in the four hand rosters and `test_base_enemy.gd` (`_MIN_ROSTER_SIZE` 15, `_AUTHORED_CONTACT_MODES` NONE), and the guard
+  `test_engagement_deadline.gd::test_no_enemies_cleared_section_spawns_a_turret_group` (any scene under `structures/turret_group/`; vacuous until t19).

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="PowerSourceConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/power_source/power_source_config.gd" id="1_psc"]
+
+[resource]
+script = ExtResource("1_psc")
+max_health = 150
+collision_damage = 0
+score_value = 80
+counts_toward_wave_clear = true
+counts_as_escape = false
+hazard_avoidance = 0.0
+hazard_margin = 0.0
+hazard_resistance = 0.0
+wreck_chance = 0.0
+assault_drift_speed = 60.0
