@@ -106,6 +106,9 @@ func turret_group(preset_path: String) -> SpawnConfig: return SpawnConfig.new(pr
 ## temporary barrier (`phase_offset`, `off_seconds`, `on_seconds` the same way). In Assault its x is world-anchored like a turret group's: `.at(x, y)` lands
 ## at world x `640 + 2·x`.
 func laser_fence() -> SpawnConfig: return SpawnConfig.new(LASER_FENCE)
+## A Twin-Laser Drone pair (Phase 8, plan §2.12): a `TwinLaserPairSpawn` that spawns two drones -/+ `rig_length / 2` along its x, binds them and frees
+## itself. `.at(x, y)` is the pair's midpoint, camera-relative like every ship spawn. Never in an ENEMIES_CLEARED section (test_engagement_deadline.gd).
+func twin_laser_pair() -> SpawnConfig: return SpawnConfig.new(TWIN_LASER_PAIR)
 
 func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
 func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
@@ -277,6 +280,7 @@ const DEFENSE_TURRET := "res://assault/scenes/enemies/defense_turret/defense_tur
 const HEAVY_EMPLACEMENT := "res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn"
 const TURRET_GROUP_ASSAULT_PAIR := "res://assault/scenes/structures/turret_group/presets/assault_pair.tscn"
 const LASER_FENCE    := "res://assault/scenes/structures/laser_fence/laser_fence.tscn"
+const TWIN_LASER_PAIR := "res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn"
 const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
 const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn"
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"

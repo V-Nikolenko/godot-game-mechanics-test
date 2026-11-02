@@ -474,6 +474,18 @@ b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(-64, -220)
 **Scene:** `assault/scenes/structures/laser_fence/laser_fence.tscn`: two `LaserEmitter` posts (HP 140, score 40, `counts_as_escape` false) 300 px apart and a laser wall between them (12 damage, 0.9 s warning line first). In Assault its **x is world-anchored** like a turret group's.  
 **Counterplay:** shoot a post and the whole fence drops for good (it lingers one second so the explosions finish); AI enemies with hazard avoidance steer round the ends, ones without fly into it. A shield generator never shields a post. **Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Not placed in level 1 or the hub yet.
 
+### `twin_laser_pair` — Twin-Laser Drones (Phase 8)
+**Builder:** `b.twin_laser_pair()`; `.at(x, y)` is the pair's midpoint, camera-relative like every ship spawn  
+**Scene:** `assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn` (`TwinLaserPairSpawn`, not an enemy, never scored): it spawns two `twin_laser_drone.tscn` drones 420 px apart along its x, binds them into a `TwinLaserPair` rig and frees itself  
+**Drone:** HP 30 (r 13), contact 8 (COLLISION), score 30 each, `max_speed` 300; the beam between them is `twin_beam.tscn` (12 per hit, re-hit 0.55 s, 0.8 s warning line)  
+**Attack A:** the drones fly to opposite sides of the player 260 px off, show the line for 0.8 s (lenses yellow), then fly the whole line through where the player was and 200 px past at 240 px/s, keeping its length. Open Space: again every 4–6 s. Assault: one attack inside the corridor (a horizontal line from above, or a vertical one from the side when the player is near the top), then they leave.  
+**Counterplay:** reach an end (the wall is slower than the player); kill either drone and the line drops at once; a gravity well or a wreck that pulls or stops one drone strains the line and collapses it; the line hurts other enemies too.  
+**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Not placed in level 1 or the hub yet. The Laser Tender's launch (Attack B) comes in a later task. See [ENEMY.md](../assault/scenes/enemies/twin_laser_drone/ENEMY.md).
+
+```gdscript
+b.twin_laser_pair().at(0, -120)
+```
+
 ### `bonus_drone` — Bonus Drone
 
 **Builder:** `b.bonus_drone()`  

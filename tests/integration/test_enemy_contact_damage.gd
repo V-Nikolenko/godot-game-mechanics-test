@@ -109,6 +109,11 @@ const ROSTER: Array[Dictionary] = [
 		"no_hitbox": true,
 	},
 	{
+		"name": "twin_laser_drone",
+		"scene": "res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone.tscn",
+		"config": "res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone_config.tres",
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"config": "res://assault/scenes/enemies/bonus_drone/bonus_drone_config.tres",

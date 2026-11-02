@@ -811,6 +811,40 @@ func test_fairness_lance_commit_and_reaction() -> void:
 	assert_false(_lance_fair(_synthetic(kind, {&"telegraph_seconds": commit + R - 0.05})), "boundary: 0.2 s of uncommitted telegraph fails")
 
 
+## The twin / moving-wall rows (§2.3, F6), the rig's terms from [param cfg] (`twin_laser_drone_config.tres`), the beam's from [param scene]:
+## `slower` = the wall is slower than the player; `reach_end` = the player reaches an end of the line before the wall arrives.
+func _twin_fair(cfg: TwinLaserDroneConfig, scene: PackedScene, terms: Dictionary) -> Dictionary:
+	var v_c := float(terms.v_c)
+	var telegraph := float(_export_of_scene(scene, &"telegraph_seconds"))
+	return {
+		"slower": cfg.advance_speed < v_c,
+		"reach_end": (cfg.rig_length * 0.5) / v_c + R <= telegraph + cfg.standoff / cfg.advance_speed + 1e-9,
+		"static": _static_fair(scene, terms),
+	}
+
+
+func test_fairness_twin_moving_wall_lets_the_player_reach_an_end() -> void:
+	var cfg: TwinLaserDroneConfig = load("res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone_config.tres")  # read only
+	var terms := _player_terms()
+	var kind := EnemyBeam.Kind.TWIN
+	var scene := EnemyBeamScenes.scene_for(kind)
+	var telegraph := float(_export(kind, &"telegraph_seconds"))
+	var fair := _twin_fair(cfg, scene, terms)
+	assert_true(fair["slower"], "advance_speed %.0f px/s < v_c %.1f px/s" % [cfg.advance_speed, terms.v_c])
+	assert_true(fair["reach_end"], "(L/2)/v_c + R = %.3f s <= telegraph + standoff/advance_speed = %.3f s" % [
+			cfg.rig_length * 0.5 / float(terms.v_c) + R, telegraph + cfg.standoff / cfg.advance_speed])
+	assert_true(fair["static"], "the twin before it moves: telegraph %.2f s >= R + (hit_half_width + r_p) / v_c" % telegraph)
+	var fast := cfg.duplicate() as TwinLaserDroneConfig
+	fast.advance_speed = float(terms.v_c)
+	assert_false(_twin_fair(fast, scene, terms)["slower"], "boundary: a wall as fast as the player fails")
+	var close := cfg.duplicate() as TwinLaserDroneConfig
+	close.standoff = 0.0
+	assert_false(_twin_fair(close, scene, terms)["reach_end"], "boundary: a wall formed on the player fails")
+	var bound := R + (float(_export(kind, &"hit_half_width")) + float(terms.r_p)) / float(terms.v_c)
+	assert_false(_twin_fair(cfg, _synthetic(kind, {&"telegraph_seconds": bound - 0.01}), terms)["static"],
+			"boundary: a twin telegraph 0.01 s under the static bound fails")
+
+
 # ---------------------------------------------------------------------------------------------
 # §2.4 endpoint beams, strain, laser-wall registration (hand-ticked, both harnesses)
 # ---------------------------------------------------------------------------------------------

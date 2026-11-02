@@ -933,3 +933,21 @@ func test_no_enemies_cleared_section_spawns_a_laser_fence() -> void:
 	var probe := _cloud_descent()
 	_add_to_last_wave(probe, load(WaveBuilder.LASER_FENCE) as PackedScene, 0.0)
 	assert_true(_section_has_scene(probe, WaveBuilder.LASER_FENCE), "boundary: a fence in cloud_descent's last wave is seen")
+
+
+## Phase 8 t12: a Twin-Laser Drone pair (plan §2.12) attacks with a held wall and, in Assault, leaves only after its one attack, so neither its
+## spawner nor a bare drone may sit in an ENEMIES_CLEARED section (the "For every task" rule: no twin pair in one).
+func test_no_enemies_cleared_section_spawns_a_twin_laser_pair() -> void:
+	const DRONE_PATH := "res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone.tscn"
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.TWIN_LASER_PAIR), "%s spawns a twin-laser pair" % section.section_name)
+		assert_false(_section_has_scene(section, DRONE_PATH), "%s spawns a twin-laser drone" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+	var probe := _cloud_descent()
+	_add_to_last_wave(probe, load(WaveBuilder.TWIN_LASER_PAIR) as PackedScene, 0.0)
+	assert_true(_section_has_scene(probe, WaveBuilder.TWIN_LASER_PAIR), "boundary: a pair in cloud_descent's last wave is seen")

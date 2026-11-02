@@ -1,0 +1,99 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone.gd" id="1_tld"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_tld"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="3_tld"]
+[ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="4_tld"]
+[ext_resource type="Script" path="res://global/components/contact_profile.gd" id="5_tld"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="6_tld"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone_brain.gd" id="7_tld"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="8_tld"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_tld"]
+radius = 13.0
+
+[sub_resource type="Animation" id="Animation_reset_tld"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:self_modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="Animation" id="Animation_hit_tld"]
+resource_name = "hit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath(".:self_modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Color(2.5, 2.5, 2.5, 1), Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_tld"]
+_data = {
+&"RESET": SubResource("Animation_reset_tld"),
+&"hit": SubResource("Animation_hit_tld")
+}
+
+[node name="TwinLaserDrone" type="CharacterBody2D"]
+script = ExtResource("1_tld")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_tld")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 65
+script = ExtResource("2_tld")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_tld")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("3_tld")
+max_health = 30
+current_health = 30
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_tld")
+}
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 0
+script = ExtResource("4_tld")
+damage = 8
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+shape = SubResource("CircleShape2D_tld")
+
+[node name="ContactProfile" type="Node" parent="."]
+script = ExtResource("5_tld")
+mode = 1
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("6_tld")
+constraint_mode = 0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("7_tld")
+
+[node name="StateLight" type="Node2D" parent="."]
+position = Vector2(0, 6)
+script = ExtResource("8_tld")

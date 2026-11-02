@@ -3210,3 +3210,36 @@ directory. These are *planned* decisions; check this phase's *as built* section,
   so nothing should set it on a heavy emplacement. The burst cannon's pool is `PulsePool_1`.
 - Roster gates: `heavy_emplacement` joined the three rosters, `test_wreck.gd`, `test_base_enemy.gd` (`_MIN_ROSTER_SIZE` 18; the mover-less-structure tow row loops it too) and `test_enemy_dual_mode.gd`.
   Its behaviour rows are `test_defense_turret.gd` §19.
+
+### Phase 8, built in t12 (Twin-Laser Drones, the `TwinLaserPair` rig, Attack A) (2026-11-02)
+- **Built as §2.12 says:** `assault/scenes/enemies/twin_laser_drone/` (`twin_laser_drone.tscn` / `.gd` `TwinLaserDrone`, `twin_laser_drone_brain.gd` `TwinLaserDroneBrain`, `twin_laser_pair.gd`
+  `TwinLaserPair` (RefCounted), `twin_laser_pair_spawn.tscn` / `.gd` `TwinLaserPairSpawn`, flat `TwinLaserDroneConfig` + `.tres` at the §2.12 starting values, `ENEMY.md` with the IDEAS §43
+  checklist); `WaveBuilder.TWIN_LASER_PAIR` / `twin_laser_pair()`. Task plan `docs/plans/cmvqw0vnw018jqs2x5k4l6ahb/3-plan.md`.
+- **Rig enum gains WAIT, appended:** `TwinLaserPair.Phase { FORM, TELEGRAPH, ADVANCE, BREAK, COLLAPSED, WAIT }`. WAIT (Open Space's pause between attacks) is a rig phase so both drones
+  re-FORM on the same tick off one clock. The rig also has `signal phase_changed(new_phase: int)` and `signal collapsed(intact: bool)` (true = a strain collapse with both drones alive,
+  false = the pair broke for good: a death, `tree_exiting`, `release()` or a rail).
+- **Seams t13 / t14 build on:** `TwinLaserPair.bind(a, b, controller = null)` (the controller joins `owner_group`), `controller`, `leader()`, `is_intact()`, `is_broken()`, `is_committed()`,
+  `partner_of()`, `side_of()`, `slot_of()`, `separation_error()`, `advance_dir()`, `release(drone)` (a drone leaves the rig for good: DISENGAGE, a rail), `advances_started`, `collapses`,
+  `latched_player`, `player_velocity`; brain `enter_phase()` (works on a lone drone), `start_engaged` (no effect yet), `patrol_anchor` (defaults to the spawn point), `phase_time()`.
+  LAUNCHED / IDLE / NOTICING / RETURNING request zero velocity until t13 / t14 give them motion; SOLO in Open Space `arrive`s at a live controller, else at `patrol_anchor`.
+- **ADVANCE boost is renewed every tick for one step** (`mover.boost(-n, advance_speed, delta)`), not once for `advance_left`: a kill, a collapse or the advance's end stops it on the very
+  next step, and the rig's `advance_left` stays the one clock. TELEGRAPH -> ADVANCE reads the beam's own phase (the beam is the authority on its telegraph), so the advance starts one tick
+  into ACTIVE, inside `ignite_grace`.
+- **Assault, one attack per life, made precise:** a drone DISENGAGEs once `advances_started > 0` or the budget expired, never while the rig is in TELEGRAPH / ADVANCE. So a strain
+  collapse *during* ADVANCE ends the life's attack (both DISENGAGE, `collapsed(true)` then `collapsed(false)` in the same tick); a collapse in TELEGRAPH (no advance yet) BREAKs and re-FORMs.
+  The DISENGAGE start bound checked by a row is `engage_seconds + telegraph_seconds + (standoff + overshoot) / advance_speed + 2 ticks` (t14 adds the measured exit and
+  `assault_wall_lead` for Attack B).
+- **Assault frames:** `TwinLaserPair.assault_frame(p, rect, length, standoff, overshoot, prev_vertical, prev_side, hysteresis)` (static, pure) plans on the leader's
+  `constraint.inner_rect()` grown by `-slot_tolerance`, with `hysteresis = slot_tolerance` on both the horizontal/vertical switch and the side; the overshoot is clamped to the room past
+  the player, and the centre is clamped along u only (the line still covers the player). `{}` (no fit) -> BREAK.
+- **Every FORM's first Open Space frame takes the player's bearing outright** (task-plan review N1): after an advance the drones sit `overshoot` past the player, so
+  turning the old normal 180° at `FRAME_TURN_RATE` would swing the slots faster than `max_speed` (measured: the re-FORM took 2.53 s of a 3.0 s `form_timeout`, 1.08 s with the
+  fix). Later FORM frames still turn at most 90°/s (§2.12). The rig marks a dead / exited / released drone in its own `_gone` set, because `died` fires before `queue_free()`.
+- **Tow table:** `twin_laser_drone` refuses in TELEGRAPH, ADVANCE and LAUNCHED; the table's "unlisted phase" fallback became APPROACH -> ENTER -> FORM (the drone has neither of the first two).
+- **Test technique (t13 / t14 should reuse it):** a hand-ticked drone needs its body `collision_mask = 0`. With no physics step between hand ticks the broadphase keeps every body at its
+  spawn point, so `move_and_slide()` stopped drone A on drone B's stale spawn position (found as an Assault-only "never telegraphs" failure). Only the real-physics wreck row keeps the mask.
+- Roster gates: `twin_laser_drone` joined the three rosters, `test_wreck.gd`, `test_base_enemy.gd` (`_MIN_ROSTER_SIZE` 19, authored COLLISION, the tow table) and `test_enemy_dual_mode.gd`
+  (a form-and-telegraph case, the hazard-profile row 0.6 / 16 / 0.1); `test_engagement_deadline.gd` guards ENEMIES_CLEARED sections against the spawner and a bare drone.
+- **The rig is outside the single-writer gate's receivers** (`actor.` / `body.` / `self.`): `twin_laser_pair.gd` and `twin_laser_pair_spawn.gd` hold the drones as `drone_a` / `drone_b` /
+  `drone`. `test_twin_laser_drones.gd::test_the_rig_and_the_spawner_write_no_motion` sweeps both with the gate's own `_PROPS` / `_ASSIGN` / `_CALLS` through any receiver
+  (`test_enemy_mover_single_writer.gd`'s `_code_only()` / `_hits()` are now `static` for that). Any new non-brain file that holds a drone (t13's Laser Tender launch code) joins that sweep.

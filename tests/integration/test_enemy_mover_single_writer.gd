@@ -60,7 +60,7 @@ func before_all() -> void:
 
 ## `line` reduced to code: any `#` comment removed and the contents of string literals blanked,
 ## so neither a doc comment nor a log message quoting a forbidden line counts as a write.
-func _code_only(line: String) -> String:
+static func _code_only(line: String) -> String:
 	var out := ""
 	var quote := ""
 	var i := 0
@@ -87,8 +87,9 @@ func _code_only(line: String) -> String:
 	return out
 
 
-## The offending lines of `source` under `patterns`, as "line N: text".
-func _hits(source: String, patterns: Array[RegEx]) -> Array[String]:
+## The offending lines of `source` under `patterns`, as "line N: text". Static (with `_code_only`) so
+## `test_twin_laser_drones.gd` sweeps the twin rig with the same matchers through any receiver.
+static func _hits(source: String, patterns: Array[RegEx]) -> Array[String]:
 	var found: Array[String] = []
 	var lines := source.split("\n")
 	for n in lines.size():

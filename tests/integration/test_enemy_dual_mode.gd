@@ -639,6 +639,7 @@ const HAZARD_PROFILES := [
 	["bomber", 0.6, 70.0, 0.4],
 	["missile_corvette", 0.7, 80.0, 0.4],
 	["ram_corvette", 0.5, 60.0, 0.5],
+	["twin_laser_drone", 0.6, 16.0, 0.1],
 ]
 
 
@@ -1281,3 +1282,51 @@ func test_heavy_emplacement_aims_both_cannons_in_both_modes_and_drifts_only_in_a
 	assert_false(turret.counts_as_escape, "%s: drifting out never costs the combo" % mode)
 	var expected_drift := turret.config.assault_drift_speed * 120.0 * DT if harness.is_assault else 0.0
 	assert_almost_eq(turret.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
+
+# ── Twin-Laser Drones (Phase 8, t12; plan §2.12) ────────────────────────────────────────────────────────────────────
+
+const TWIN_PAIR_SPAWN_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn")
+
+
+## The same spawned pair forms on the player and telegraphs in both modes: both lenses CHARGING, the beam registered as a `laser_wall` segment
+## hazard its own pair is exempt from, and in Assault both drones inside the corridor's `inner_rect()`.
+func test_twin_laser_drones_form_and_telegraph_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	var p := Vector2(640.0, 360.0)
+	harness.player.global_position = p
+	var spawn := TWIN_PAIR_SPAWN_SCENE.instantiate() as TwinLaserPairSpawn
+	spawn.rng_seed = 3
+	spawn.position = p + Vector2(-80.0, -300.0)  # off its slots: FORM has to fly
+	harness.root.add_child(spawn)
+	var rig := spawn.spawn_pair()
+	var drones: Array[TwinLaserDrone] = [rig.drone_a as TwinLaserDrone, rig.drone_b as TwinLaserDrone]
+	for d in drones:
+		d.set_physics_process(false)  # hand-ticked
+		d.collision_mask = 0  # no physics step between hand ticks: the broadphase would keep each body at its spawn point
+	var ticks := 0
+	while rig.phase != TwinLaserPair.Phase.TELEGRAPH and ticks < 240:
+		for d in drones:
+			_tick(d, DT)
+		ticks += 1
+	assert_eq(rig.phase, TwinLaserPair.Phase.TELEGRAPH, "%s: the pair formed and telegraphs (%d ticks)" % [mode, ticks])
+	for d in drones:
+		assert_eq((d.get_node("Brain") as TwinLaserDroneBrain).phase, TwinLaserDroneBrain.Phase.TELEGRAPH, "%s: each brain mirrors it" % mode)
+		assert_eq(d.state_light().get_state(), StateLight.State.CHARGING, "%s: the lens is CHARGING" % mode)
+		assert_false(d.accept_tow(Vector2(50.0, 0.0)), "%s: a telegraphing drone refuses a tow" % mode)
+	var info := rig.beam.hazard_info()
+	assert_not_null(info, "%s: the beam is registered while it warns" % mode)
+	if info != null:
+		assert_eq(info.kind, &"laser_wall", "%s: as a laser wall" % mode)
+		assert_eq(info.exempt_group, rig.owner_group, "%s: exempting its own pair" % mode)
+		# A ticks the beam before B moves, so B's end lags by at most one tick of B's motion.
+		assert_almost_eq(info.segment_half.length(), drones[0].global_position.distance_to(drones[1].global_position) * 0.5,
+				drones[1].config.max_speed * DT, "%s: spanning A..B" % mode)
+		assert_true(Hazards.around(info.position, 1.0).has(info), "%s: in the registry" % mode)
+	if harness.is_assault:
+		var rect := (drones[0].get_node("EnemyMover") as EnemyMover).constraint.inner_rect()
+		for d in drones:
+			assert_true(rect.has_point(d.global_position), "%s: inside inner_rect()" % mode)
+	else:
+		assert_null((drones[0].get_node("EnemyMover") as EnemyMover).constraint, "%s: no corridor in Open Space" % mode)

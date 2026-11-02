@@ -5,6 +5,13 @@ not redesign them; it fixes what they leave open (the rig's tick protocol, the p
 WAIT and SOLO motion, file layout, scene layout, test geometry). Where it says "§2.x", the epic plan wins. Context: `1-context.md`.
 Baseline: `scripts/gate-time.sh` GUT `Time` **204.634 s**, 2518 tests (measured at the start of this task, `4772ffc`).
 
+**Revised after review round 1 (`4-review.md`):** B1 the ADVANCE boost is a one-step boost renewed each tick (brain §6) and rows 7–9 assert the
+survivors' motion on the next tick; B2 row 5's moving cases spawn off their slots and assert the latch happens while the drones move; B3 row 17 reads
+its geometry at the collapse against the derived strain lag, and row 17b is its real-physics no-wreck control. N1 every FORM's first frame takes
+`n_target` outright (row 15 checks the re-FORM); N2 the rig's own `_gone` / `_broken` flags; N3 row 4b; N4 the lens in row 5; N5 row 18 reads at
+the orphan emission; N6 row 11b; N7 row 16's latch-tick case; N8 docs. Also from building: hand-ticked drones clear their body `collision_mask`
+(test plan preamble), and in Assault a strain collapse during ADVANCE ends the life's attack (brain §5).
+
 ## Problem
 
 Today the only enemy lasers in the game are fixed: turret beams, fences, the station. Nothing moves a laser *at* the player. After this task, two small
@@ -82,8 +89,11 @@ that agree). Logged in `DECISIONS.md` as the one addition to the rig enum.
   (if any) to it, instantiates `EnemyBeamScenes.scene_for(TWIN)` as `TwinBeam`, `a.add_child(beam)`, `beam.setup(a, owner_group)`, sets each drone's
   `Brain.pair` (duck-typed), connects each drone's `died` and `tree_exiting` (one-shot) to `_on_drone_gone(drone)` (the `LaserFence` shape), and
   records the starting endpoints. Works on drones in or out of the tree.
-- `leader()`: `drone_a` while it is live (valid, not queued for deletion, not released), else `drone_b`.
-- `is_intact()`: both drones valid, not queued for deletion, not released, and not `is_ai_suspended()`.
+- **`_gone`** (the rig's own flag, a set of instance ids; review N2): a drone is put in it by `_on_drone_gone` (its `died` or `tree_exiting`) and by
+  `release()`. `died` is emitted *before* `queue_free()` (`base_enemy.gd`), so "queued for deletion" alone is not yet true inside the death hook; the
+  rig reads `_gone` first. `_broken` (the pair broke for good) is the second flag.
+- `leader()`: `drone_a` while it is live (valid, not queued for deletion, not in `_gone`), else `drone_b`.
+- `is_intact()`: not `_broken`, both drones live as above, and neither `is_ai_suspended()`.
 - `partner_of(d)`, `side_of(d)` (−1 for A, +1 for B), `slot_of(d) = centre + side_of(d) · u · L/2` (A at −u; the drone's own position before the first
   frame), `separation_error() = | |A − B| − L |` (INF unless both are valid), `advance_dir() = −n`, `phase_time()`.
 - `release(d)`: the drone leaves the rig for good (DISENGAGE, a rail): the pair breaks (below). If `d` owns the beam and is suspended, the beam is
@@ -115,8 +125,10 @@ that agree). Logged in `DECISIONS.md` as the one addition to the rig enum.
   cancelled beam always fades out to OFF.
 
 **The frame.**
-- **Open Space** (FORM only): `n_target = (mid(A, B) − P).normalized()` (the current `n` if that is zero); the first frame takes it outright, later
-  frames turn `n` toward it by at most `FRAME_TURN_RATE · delta`. `centre = P + n · standoff`; `u = ±n.orthogonal()`, with the sign that puts A
+- **Open Space** (FORM only): `n_target = (mid(A, B) − P).normalized()` (the current `n` if that is zero); the first frame **of every FORM** (the
+  first ever, and every re-FORM from BREAK or WAIT; review N1) takes it outright and re-derives the `u` sign from the drones' positions, later frames
+  turn `n` toward it by at most `FRAME_TURN_RATE · delta`. (After an advance the drones sit `overshoot` past the player, so the old `n` points the
+  wrong way; turning it 180° at 90°/s would swing the slots at ≈ 525 px/s, faster than `max_speed`.) `centre = P + n · standoff`; `u = ±n.orthogonal()`, with the sign that puts A
   on the −u side, i.e. `sign((B − A) · n.orthogonal())`, **kept from the previous frame unless** `(B − A) · u < 0` **and**
   `|(B − A) · n.orthogonal()| > slot_tolerance` (hysteresis: two drones nearly in line along n never swap slots back and forth). The advance is
   `standoff + overshoot` = 460 px, i.e. 1.917 s at 240 px/s.
@@ -148,13 +160,18 @@ Each `tick(delta)`:
 4. `pair.tick(delta, actor)` (a no-op unless this drone leads).
 5. No pair, or not intact → Assault: DISENGAGE; Open Space: SOLO.
    Intact → **Assault rule**: if `budget.active` and the rig is not in TELEGRAPH / ADVANCE and (`expired` or `pair.advances_started > 0`) →
-   DISENGAGE (**one ADVANCE per life; a budget that expires in TELEGRAPH or ADVANCE lets that attack finish**). Otherwise mirror the rig:
+   DISENGAGE (**one ADVANCE per life; a budget that expires in TELEGRAPH or ADVANCE lets that attack finish**). So a strain collapse *during*
+   ADVANCE ends the life's attack in Assault (both DISENGAGE on the collapse tick: `collapsed(true)` then `collapsed(false)`), while a collapse in
+   TELEGRAPH (no advance yet) BREAKs and re-FORMs. Otherwise mirror the rig:
    FORM/TELEGRAPH/ADVANCE/BREAK/WAIT → the same; COLLAPSED (intact) → BREAK.
 6. Motion for the phase (requests only):
    - FORM: `mover.arrive(pair.slot_of(actor), max_speed)` + `mover.add_nudge(pair.player_velocity)` (the feed-forward), `face_toward(partner)`.
    - TELEGRAPH: `arrive(slot)` on the latched frame, `face_toward(partner)`.
-   - ADVANCE: `mover.boost(pair.advance_dir(), advance_speed, pair.advance_left)` every tick — identical on both drones (boost skips avoidance
-     and accel, keeps the well's drift and the corridor) — `face_toward(partner)`.
+   - ADVANCE: `mover.boost(pair.advance_dir(), advance_speed, delta)` every tick — **a one-step boost renewed each tick** (review B1:
+     `EnemyMover.boost()` ignores every request for its whole duration and cannot be cancelled, so a boost for `advance_left` would keep a survivor
+     flying along −n for up to ≈ 1.4 s after a kill or a collapse); the rig's `advance_left` is the one clock. Identical on both drones (boost skips
+     avoidance and accel, keeps the well's drift and the corridor) — `face_toward(partner)`. Leaving ADVANCE for any reason, the next step is
+     un-boosted.
    - BREAK: `request_velocity(u · side_of(actor) · break_speed)` (A along −u, B along +u).
    - WAIT: `arrive(_hold_point)` (where BREAK left it, latched on entry), `face_toward(partner)`.
    - SOLO (Open Space): `arrive(controller if live else patrol_anchor, max_speed)` (t13 adds docking, t14 the idle).
@@ -213,10 +230,13 @@ from A's config), seeds their brains (`rng_seed`, `rng_seed + 1` when non-zero),
 
 `tests/integration/test_twin_laser_drones.gd` — INTENT. Hand-ticked in both harnesses (`use_parameters(MODES)` over label strings) unless marked:
 each tick calls `A._physics_process(DT)` then `B._physics_process(DT)` and integrates `position = before + velocity · DT` (the Mine Layer helper),
-then moves the stub. The stub is the harness player given a `HurtBox` with a 14 px circle (so the beam can hit it) and a test-set velocity.
-Numbers come from `twin_laser_drone_config.tres` (preloaded, read only) and `EnemyBeamScenes.export_of(TWIN, …)`. Geometry: player P = (640, 360);
-the spawner at `P + (0, −standoff)` with rotation 0, so the drones start on their slots (n = UP, u = +x, A on the left) and the first TELEGRAPH comes
-within a tick or two — FORM convergence is exercised by the moving stub and the Assault side case instead.
+then moves the stub. **A hand-ticked drone's body `collision_mask` is cleared**: with no physics step between hand ticks the broadphase keeps every
+body at its spawn point, so `move_and_slide()` would stop drone A on drone B's stale spawn position (found while building: an Assault-only "never
+telegraphs"); body contact is exercised only by the real-physics rows. The stub is the harness player given a `HurtBox` with a 14 px circle (so the
+beam can hit it) and a test-set velocity. Numbers come from `twin_laser_drone_config.tres` (preloaded, read only) and `EnemyBeamScenes.export_of(TWIN, …)`.
+Geometry: player P = (640, 360); the spawner at `P + (0, −standoff)` with rotation 0, so the drones start on their slots (n = UP, u = +x, A on the left)
+and the first TELEGRAPH comes within a tick or two. FORM convergence is exercised by the moving-stub cases (spawned 120 px off their slots, review B2),
+the Assault side case and the dual-mode case.
 
 Structure (Open Space, no ticking):
 1. `test_the_drone_is_one_r13_circle_shared_by_body_hurtbox_and_contact_box_with_a_mover_brain_and_lens` — the same `Shape2D` object on all three,
@@ -229,41 +249,63 @@ Structure (Open Space, no ticking):
    `±L/2` along its rotated x; both in `owner_group` and `enemies`; the beam is A's child, kind TWIN, host A, same owner group; two
    `enemy_spawned_orphan` emissions; brains seeded `s` / `s + 1`; spawner queued for deletion; its scoring flags false; a second `spawn_pair()` call
    spawns nothing (idempotent).
+4b. `test_the_rig_and_the_spawner_write_no_motion` (review N3) — a source sweep of `twin_laser_pair.gd` and `twin_laser_pair_spawn.gd` for a
+   `velocity` / `rotation` write (`=`, `+=`, `-=`, `*=`) or a `move_and_slide(` through **any** receiver (the single-writer gate only sweeps `actor.` /
+   `body.` / `self.` receivers, and these files hold the drones as `drone_a` / `drone_b` / `drone`); a synthetic line `drone_b.velocity = Vector2.ZERO`
+   matches (boundary). The spawner's one `drone.position = …` before `add_child` is placement, not motion. *As built (review round 2, 1):* the
+   matcher is the single-writer gate's own (`_PROPS` / `_ASSIGN` / `_CALLS` and its `_hits()`, made `static` so this file reuses them, comments and
+   strings blanked) behind an any-identifier receiver `\b\w+\.`, plus `move_and_(slide|collide)(`; five synthetic writes match and four reads /
+   placements / comments (`player_velocity = target.velocity …`, `normal.rotated(…)`, `drone.position = at`, a commented write) do not.
 
 Attack A (R8.24 "moving wall keeps its length"):
 5. `test_attack_a_keeps_its_length_on_every_telegraph_and_advance_tick(case)` — cases `open_space:0`, `open_space:200`, `assault:0`, `assault:200`
-   (stub standing, or crossing at 200 px/s along +x). Runs FORM → TELEGRAPH → ADVANCE → BREAK. Asserts on **every** TELEGRAPH and ADVANCE tick
-   `separation_error() ≤ length_tolerance` (the worst printed) and `strained == false`; the frame (`centre`, `axis`, `normal`) is identical on every
-   TELEGRAPH / ADVANCE tick; ADVANCE lasts `(standoff + overshoot) / advance_speed` ± 1 tick; the beam is lethal on every ADVANCE tick from
-   `ignite_grace` on; the standing stub is hit **exactly once**, the crossing one at most once, and no two hits on one target are closer than
-   `rehit_interval`. Boundary inside the row: with a 200 px/s stub the FORM frame did move (`centre` changed by > 100 px before the latch).
+   (stub standing, or crossing at 200 px/s along +x), spawned **120 px off its slots along −u** so FORM has to fly. Runs FORM → TELEGRAPH → ADVANCE →
+   BREAK. Asserts on **every** TELEGRAPH and ADVANCE tick `separation_error() ≤ length_tolerance` (the worst printed) and `strained == false`; the
+   frame (`centre`, `axis`, `normal`) is identical on every TELEGRAPH / ADVANCE tick; ADVANCE lasts `(standoff + overshoot) / advance_speed` ± 1 tick;
+   the beam is lethal on every ADVANCE tick from `ignite_grace` on; on every tick of the run both lenses show the beam's state (CHARGING while it
+   telegraphs, ARMED while it is ACTIVE, OFF otherwise — review N4); the standing stub is hit **exactly once**, the crossing one at most once, and no two
+   hits on one target are closer than `rehit_interval`. Boundaries inside the 200 px/s cases (review B2): the FORM frame did move (`centre` changed by
+   > 100 px before the latch) and both drones' own speed on the latch tick is ≥ 100 px/s (the latch happens while they move, so the overshoot risk is
+   exercised and measured by the length check on every TELEGRAPH tick).
 6. `test_a_stub_moving_during_telegraph_does_not_move_the_line_and_the_advance_crosses_the_latched_point(mode)` — the stub stands until TELEGRAPH,
    then runs 300 px/s along +x. The frame never changes; the drones' midpoint stays within `slot_tolerance` of the latched centre through TELEGRAPH;
    during ADVANCE the signed distance from `latched_player` to the line A–B changes sign while its projection on u lies inside the segment; the
    (moved) stub is never hit.
 7. `test_killing_drone_a_mid_advance_ends_the_beam_at_once_and_frees_it_with_a(mode)` — kill A (lethal `received_damage`) on the 30th ADVANCE tick:
    `beam.is_lethal()` false **before any further tick**; rig COLLAPSED, `collapsed(false)` once; after one process frame the beam is freed; B is the
-   leader, enters SOLO (Open Space) / DISENGAGE (Assault) on its next tick and in 2.0 s of ticks nothing is hit and nothing relights.
+   leader, enters SOLO (Open Space) / DISENGAGE (Assault) on its next tick, and on that tick (review B1) B's mover is **not boosting** and its own
+   velocity has turned toward its new request (SOLO: the change points at `patrol_anchor`; DISENGAGE: speed along −n above `advance_speed`, heading
+   for `exit_speed`); in 2.0 s of ticks nothing is hit and nothing relights.
 8. `test_killing_drone_b_mid_advance_makes_a_cancel_the_beam_and_never_relight_it(mode)` — kill B the same way: not lethal before any tick; A goes
-   SOLO / DISENGAGE; over 2.0 s A's ticks fade the beam to OFF, it is never lethal again, `start()` is never called again (phase never TELEGRAPH).
+   SOLO / DISENGAGE with the same motion checks as row 7; over 2.0 s A's ticks fade the beam to OFF, it is never lethal again, `start()` is never
+   called again (phase never TELEGRAPH), and A's lens ends OFF.
 9. `test_a_well_beside_drone_bs_path_strains_the_beam_and_it_collapses_after_strain_seconds(mode)` — a `HazardField` gravity well (radius 420, core
-   90, pull 520, the dual-mode fixture's numbers) placed before the spawn at `B_slot + u · 340 − n · 300`: 453 px from B's slot (outside its reach
-   + margin, so FORM and TELEGRAPH are unaffected), 340 px beside B's path, ≥ 720 px from A's path. Asserts: the first strained tick is in ADVANCE;
-   the beam is never lethal while strained; COLLAPSED arrives `strain_seconds` after the first strained tick (± 1 tick) with both drones alive and
-   `collapsed(true)`; the next phase is BREAK; B's lateral displacement from its path > `length_tolerance`. **Control in the same row:** the same
-   spawn without the well runs the whole ADVANCE unstrained. (If the pre-placed well turns out to disturb FORM, the well is added at the latch
-   instead — the row's claim is the strain during the boost.)
+   90, pull 520, the dual-mode fixture's numbers) placed before the spawn at `B_slot + u · 340 − n · 300`: 453 px from B's slot (outside its reach,
+   so FORM and TELEGRAPH are unaffected), 340 px beside B's path, ≥ 720 px from A's path. Asserts: the first strained tick is in ADVANCE; the beam is
+   never lethal while strained; the collapse (`collapsed(true)`) arrives `strain_seconds` after the first strained tick (± 1 tick) with both drones
+   alive; B's lateral displacement from its path > `length_tolerance / 2`. Then, on the next tick: Open Space — the rig is in BREAK and both movers
+   are **not boosting**, B's own velocity has gained a +u component (its break side) and lost speed along −n (review B1); Assault — the collapse
+   ended the life's one attack: `collapsed(false)` follows in the same tick and both brains are in DISENGAGE. **Control in the same row:** the same
+   spawn without the well runs the whole ADVANCE to BREAK with no strained tick and no `collapsed(true)` (each world is freed out of the tree before
+   the next, so the control never sees the well).
 10. `test_the_beam_hurts_an_enemy_on_its_line_but_never_its_drones_or_controller(mode)` — two drones bound by hand with
     `TwinLaserPair.bind(a, b, controller)`, a fixture controller and a fixture victim both in the advance path (P − u·100 and P + u·100): the victim
     loses HP, the controller none, A and B none; the controller is in `owner_group`.
 11. `test_only_the_leaders_tick_advances_the_rig` — Open Space: ticking only B leaves `phase` and `phase_time()` unchanged while A lives; ticking A
     advances them; after A dies B is `leader()`.
+11a. `test_inside_the_death_hook_the_rig_already_counts_the_drone_gone` (review N2) — a handler connected to A's `died` after the rig's own sees
+    A not yet queued for deletion, yet `leader() == B` and `is_intact() == false`: the rig reads its own `_gone` flag. The only row that pins N2 (row 11
+    reads `leader()` after `received_damage.emit()` returns, when `queue_free()` has already run).
+11b. `test_a_rail_taking_over_a_drone_breaks_the_pair(mode)` (review N6) — in TELEGRAPH, `A.suspend_ai()`: the pair is broken (`collapsed(false)`)
+    and after one process frame the beam is freed and no `laser_wall` hazard of the pair is registered; a second pair, `B.suspend_ai()` in TELEGRAPH:
+    the beam goes OFF at once (a TELEGRAPH cancel), is never lethal over 1 s of A's ticks, and A goes SOLO / DISENGAGE.
 
 Assault (the Assault harness; the Open Space counterpart where marked):
 12. `test_assault_frame_planner_clamps_switches_sides_and_refuses` — pure `assault_frame()` calls on the inset `inner_rect()`: centre player →
     horizontal, `n = UP`; player 30 px from the left edge → centre clamped to `rect.x + L/2`, |p − centre| along u ≤ L/2; player 106 px below the
     top → vertical toward the roomier side; room below 50 px → advance = standoff + 50; hysteresis: a previous vertical frame stays vertical at
-    `standoff + 10` of room and switches at `standoff + slot_tolerance + 1`; a 300 × 300 rect → `{}`.
+    `standoff + 10` of room and switches at `standoff + slot_tolerance + 1`; the side is kept within `hysteresis` and switched past it; a 300 × 300
+    rect → `{}`, and a 500 × 500 rect with room for neither shape → `{}`.
 13. `test_assault_rig_stays_inside_inner_rect_with_the_player_by_a_side_edge` — P = (−40, 360), the spawn 300 px right of the clamped slots so FORM
     has to travel: on every TELEGRAPH / ADVANCE tick both drones are inside `inner_rect()` and `separation_error() ≤ length_tolerance`; the line
     still crosses the stub (hit once).
@@ -272,22 +314,39 @@ Assault (the Assault harness; the Open Space counterpart where marked):
     −x; the stub is hit once.
 15. `test_one_advance_per_assault_life_then_disengage_but_open_space_repeats(mode)` — Assault: after the ADVANCE both drones DISENGAGE with
     `constraint_released()`, `advances_started` stays 1, no second TELEGRAPH, and both are freed outside `projectile_world_rect()` within 5 s.
-    Open Space: BREAK, then WAIT for a period in `[attack_period_min, attack_period_max]`, then FORM and a second TELEGRAPH (`advances_started` 2).
-16. `test_assault_budget_expiring_in_telegraph_lets_the_attack_finish_then_disengages` — both drones' `engage_seconds` set (on their private
-    configs, before the first tick) to expire 0.3 s into TELEGRAPH: the ADVANCE still runs in full and hits the stub, then DISENGAGE, starting no
-    later than `engage_seconds + telegraph_seconds + (standoff + overshoot) / advance_speed + _TICK_SLACK` (2/60 s) after spawn.
-    Boundary in the same row: a pair spawned 600 px off its slots with `engage_seconds` 0.2 never TELEGRAPHs and DISENGAGEs at 0.2 s (± 1 tick).
+    Open Space: BREAK, then WAIT for a period in `[attack_period_min, attack_period_max]`, then FORM and a second TELEGRAPH (`advances_started` 2)
+    that starts within `form_timeout` of the re-FORM with no BREAK in between, on a frame on the drones' side (`n · (mid(A, B) − P) > 0` at the
+    latch; review N1).
+16. `test_assault_budget_expiring_in_telegraph_lets_the_attack_finish_then_disengages(case)` — cases `latch` (the budget expires on the latch tick,
+    the worst case of review N7: 47 + 1 + 115 = 163 ticks to DISENGAGE against a 2.75 s bound) and `mid_telegraph` (0.3 s into TELEGRAPH); both
+    drones' `engage_seconds` set on their private configs before the first tick: the ADVANCE still runs in full and hits the stub, then DISENGAGE,
+    starting no later than `engage_seconds + telegraph_seconds + (standoff + overshoot) / advance_speed + _TICK_SLACK` (2/60 s) after spawn.
+16b. `test_assault_a_pair_whose_budget_expires_in_form_disengages_without_telegraphing` (boundary) — a pair spawned 600 px off its slots with
+    `engage_seconds` 0.2 never TELEGRAPHs and DISENGAGEs at 0.2 s (± 1 tick).
+16c. `test_a_pair_that_cannot_reach_its_slots_breaks_at_form_timeout_without_a_beam(mode)` (review round 2, 3a) — a pair spawned 600 px off its
+    slots with both movers' `max_speed` 10: BREAK at `form_timeout` (± 1 tick), the beam never started (OFF, no TELEGRAPH), both brains BREAK; after
+    `break_seconds` WAIT (Open Space) or FORM again (Assault); `advances_started` 0, the pair intact.
+16d. `test_a_strain_collapse_in_telegraph_breaks_and_re_forms_without_spending_the_attack(mode)` (review round 2, 3b) — after the latch, B is held
+    150 px off its slot along n after every tick: `collapsed(true)` once, `strain_seconds` (± 2 ticks) after the strain began, with the beam OFF (a
+    TELEGRAPH cancel); `advances_started` 0; both brains BREAK (never DISENGAGE / SOLO); then WAIT (Open Space) or FORM (Assault), and in Assault
+    the owed attack re-forms (TELEGRAPH) with the corridor still held.
 
 Real physics (8× clock, `_scale_clock()` / `_restore_clock()`):
 17. `test_a_wreck_in_front_of_drone_b_stops_it_and_the_beam_strains_and_collapses(mode)` — real physics in both harnesses, standing stub; when
-    the rig enters TELEGRAPH the test adds `wreck_large.tscn` (`assault_drift` 0) at `B + advance_dir · (body_radius + 60)`; B's boosted body stops /
-    slides on it, the rig strains and reaches COLLAPSED with both drones alive (`collapsed(true)`); control: A advanced > 200 px meanwhile. Polled by
-    `await wait_physics_frames(1)` with an early exit; capped at 6 s of game time.
+    the rig enters TELEGRAPH the test adds `wreck_large.tscn` (`assault_drift` 0) at `B + advance_dir · (body_radius + 60)`; B's boosted body stops on
+    it, the rig strains and reaches `collapsed(true)` with both drones alive (Assault: then `collapsed(false)`, the one attack is over). Read **at
+    the collapse** (in the `collapsed` handler, review B3): B's progress along −n ≤ `60 − wreck.body_radius() + 2` (the gap to the wreck; it stopped
+    short), and A's progress minus B's ≥ `sqrt((L + tol)² − L²)` (≈ 117 px: the lag at which `| |A − B| − L |` first exceeds `length_tolerance`)
+    and ≤ that + `advance_speed · (strain_seconds + 2 ticks)` (review round 2, 5: the collapse timing pinned on real physics too).
+    Polled by `await wait_physics_frames(4)` with an early exit; capped at 6 s of game time.
+17b. `test_with_no_wreck_the_same_real_physics_attack_runs_to_its_end_unstrained(mode)` — **the wreck row's no-hazard control** (review B3): the same
+    real-physics spawn with no wreck reaches BREAK with no `collapsed(true)`; a `_Sampler` child (added after the drones, so it runs last each physics
+    frame) checks `separation_error() ≤ length_tolerance` on every TELEGRAPH / ADVANCE physics frame (R8.24 under the engine's own tick order).
 
 Through a real `WaveManager` (Assault):
 18. `test_assault_wave_builder_spawns_a_bound_pair_through_a_real_wave_manager` — `b.wave(0.0, [b.twin_laser_pair().at(0, -100)])`:
-    `WaveBuilder.TWIN_LASER_PAIR` is the spawner path; after a few frames the container holds exactly two `TwinLaserDrone`s sharing one pair, no
-    spawner left, and the drones' midpoint is `cam + 2 · (0, −100)`.
+    `WaveBuilder.TWIN_LASER_PAIR` is the spawner path; after a few frames the container holds exactly two `TwinLaserDrone`s sharing one pair and no
+    spawner; the drones' midpoint **read on their `enemy_spawned_orphan` emissions** (before any AI tick, review N5) is `cam + 2 · (0, −100)`.
 
 `tests/integration/test_enemy_beams.gd`:
 19. `test_fairness_twin_moving_wall_lets_the_player_reach_an_end` — from `twin_laser_drone_config.tres` (`advance_speed`, `rig_length`, `standoff`),
@@ -310,9 +369,10 @@ Shared files (the §2.19 chain):
 - Automatic sweeps (no edit): config isolation, generic lethal flow and mask 1121, transparency, single writer, signal arity, load integrity,
   UID integrity.
 
-Gate time: 2.5 s allotted. Estimate: ~16 hand-ticked scenario runs of 3–12 s of game time (≈ 0.03–0.09 s each) ≈ 1.0 s, the wreck row
-≈ 0.3–0.4 s per mode, the wave row ≈ 0.1 s, roster / fairness rows ≈ 0.1 s → ≈ 2.0 s. Over budget → share scenarios (rows 5, 6 and 13 can share a
-run), never cut an assertion.
+Gate time: 2.5 s allotted. Estimate: ~18 hand-ticked scenario runs of 3–12 s of game time (≈ 0.03–0.09 s each) ≈ 1.0 s, the wreck row
+and its no-wreck control ≈ 0.3 s per mode each (row 17b runs the whole attack), the wave row ≈ 0.1 s, roster / fairness rows ≈ 0.1 s → ≈ 2.4 s
+(review round 2, 4). *Measured:* the file runs in ≈ 2.0 s on its own, and `scripts/gate-time.sh` went 204.634 → 206.423 s (+1.8 s, 2518 → 2546 tests). Over budget →
+share scenarios (rows 5, 6 and 13 can share a run) or the 16× clock, never cut a mode or an assertion.
 
 ## Risks
 
@@ -322,7 +382,10 @@ run), never cut an assertion.
 - **Tick order in production**: A is added first and leads; a reversed order costs ≤ 4 px (§2.12).
 - **The well row's geometry** depends on `HazardField`'s falloff; the numbers above are a first placement and the row prints the displacement.
 - **The wreck row** depends on a ship body stopping on a wreck; `test_wreck.gd` already gates that for every ship scene, the drone included.
+- **Docs (review N8):** `ENEMY.md` carries the IDEAS §43 design checklist (R8.25); `CLAUDE.md`'s Phase 8 gates paragraph gains the twin pair.
 - **Self-reference leak** in `twin_laser_pair.gd` (the `enemy_mine.gd` trap): checked with `scripts/check-test-leaks.sh`.
+- **A lambda on the rig's own signal that captures the rig** is a RefCounted cycle and leaks at exit (hit while building: the wreck row's
+  `phase_changed` handler); test handlers on rig signals capture a `weakref(rig)` or the drones (Nodes), never the rig.
 - **Gate time**: 2.5 s; measured before and after.
 
 ## Out of scope
