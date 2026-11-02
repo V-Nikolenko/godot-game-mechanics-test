@@ -16,12 +16,8 @@ extends BaseEnemy
 const BODY_RADIUS := 34.0
 const LINE_WIDTH := 3.0
 const LINE_COLOR := Color(1.0, 0.7, 0.2, 0.85)
-const HOUSING_RADIUS := 36.0
-const HOUSING_COLOR := Color(0.2, 0.2, 0.24, 1.0)
-const RIM_COLOR := Color(0.55, 0.5, 0.4, 1.0)
-const CORE_RADIUS := 16.0
-const CORE_COLOR := Color(1.0, 0.72, 0.25, 1.0)
-const GLOW_COLOR := Color(1.0, 0.6, 0.15, 0.35)
+const CORE_RADIUS := 18.0
+const CORE_OFF_COLOR := Color(0.16, 0.14, 0.16, 1.0)
 
 @export var config: PowerSourceConfig = load("res://assault/scenes/enemies/power_source/power_source_config.tres")
 
@@ -29,6 +25,7 @@ var _turret_group: Object = null
 var _owner_group: StringName = &""
 ## Member -> its `Line2D`.
 var _lines: Dictionary = {}
+var _lit: bool = true
 
 @onready var _drift: AssaultDrift = $AssaultDrift
 
@@ -44,7 +41,6 @@ func _ready() -> void:
 	add_to_group(_owner_group)
 	if _turret_group != null and _turret_group.has_signal("power_changed"):
 		_turret_group.connect("power_changed", _on_power_changed)
-	queue_redraw()
 
 
 func _process(_delta: float) -> void:
@@ -121,13 +117,19 @@ func _refresh_lines() -> void:
 		line.set_point_position(1, member.global_position)
 
 
-func _on_power_changed(_powered: bool) -> void:
+func _on_power_changed(powered: bool) -> void:
+	_set_glow(powered)
 	_refresh_lines()
 
 
-## Placeholder art (the art task replaces it): a dark reactor housing with an amber core glow.
+## The reactor glow (an additive child sprite) shows only while the group is powered; the hull is never tinted. A dark cap covers the baked core.
+func _set_glow(on: bool) -> void:
+	_lit = on
+	$Glow.visible = on
+	queue_redraw()
+
+
+## Under `Sprite2D` (behind-parent) and `Glow`: a dark core cap, drawn only once the group went dark.
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, HOUSING_RADIUS, HOUSING_COLOR)
-	draw_arc(Vector2.ZERO, HOUSING_RADIUS, 0.0, TAU, 32, RIM_COLOR, 3.0)
-	draw_circle(Vector2.ZERO, CORE_RADIUS + 6.0, GLOW_COLOR)
-	draw_circle(Vector2.ZERO, CORE_RADIUS, CORE_COLOR)
+	if not _lit:
+		draw_circle(Vector2.ZERO, CORE_RADIUS, CORE_OFF_COLOR)

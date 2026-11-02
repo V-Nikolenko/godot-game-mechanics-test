@@ -16,9 +16,6 @@
 class_name PulseRingMount
 extends TurretMount
 
-const HEAD_RADIUS := 13.0
-const HEAD_COLOR := Color(0.36, 0.4, 0.46, 1.0)
-const EMITTER_COLOR := Color(1.0, 0.85, 0.3, 1.0)
 
 ## The ring starts only with the player this close to the mount's pivot, px.
 @export var trigger_range: float = 300.0
@@ -32,7 +29,6 @@ func _ready() -> void:
 		_ring = ring_scene.instantiate() as EnergyRing
 		_ring.name = "Ring"
 		add_child(_ring)
-	queue_redraw()
 
 
 func setup(host: Node2D, pools: Dictionary, owner_group: StringName) -> void:
@@ -85,9 +81,3 @@ func _fire_tick(_delta: float, _can_fire: bool) -> bool:
 
 func _stop_weapon() -> void:
 	_ring.cancel()
-
-
-## Placeholder art (the art task replaces it): a head disc with an emitter ring.
-func _draw() -> void:
-	draw_circle(Vector2.ZERO, HEAD_RADIUS, HEAD_COLOR)
-	draw_arc(Vector2.ZERO, HEAD_RADIUS * 0.6, 0.0, TAU, 20, EMITTER_COLOR, 3.0)

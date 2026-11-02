@@ -6,7 +6,7 @@ consumer of the Phase 8 weapon mounts.
 and you can out-strafe its partial lead.
 
 > **Build state (Phase 8, t8).** Shell, `TurretMount` cycle, all six mounts (BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY, PULSE_RING, LANCE, BEAM_CANNON) and `AssaultDrift` are
-> built, and so are turret groups and the power source (t9, `assault/scenes/structures/turret_group/`). The shield generator (t9s) and the heavy emplacement (t11, [`heavy_emplacement/`](../heavy_emplacement/ENEMY.md)) are built too. Still to come in Phase 8: the art (t15) and placement in the hub and level 1 (t18, t19). Mounting on large ships is
+> built, and so are turret groups and the power source (t9, `assault/scenes/structures/turret_group/`). The shield generator (t9s) and the heavy emplacement (t11, [`heavy_emplacement/`](../heavy_emplacement/ENEMY.md)) are built too. The art is built too (t15). Still to come in Phase 8: placement in the hub and level 1 (t18, t19). Mounting on large ships is
 > Phase 10. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.7; the task plan is `docs/plans/cmvqw0vnb017rqs2xsyursu5d/3-plan.md`.
 
 ---
@@ -19,7 +19,7 @@ and you can out-strafe its partial lead.
 | Damage | 0 contact: `ContactProfile` NONE and **no `ContactHitBox`** (the Bonus Drone precedent). Each burst-cannon round deals 8, the Pulse round's own damage |
 | Speed | none: it has no `EnemyMover`. In Assault an `AssaultDrift` child scrolls it down at `assault_drift_speed` 60 px/s |
 | Body | one `CircleShape2D` r 28 shared by the body (layer 1) and the `HurtBox` (layer 512, mask 65) |
-| Sprite | placeholder, code-drawn: a base disc (r 30) on the root and a head disc plus barrel on the mount. The art task (t15) replaces it |
+| Sprite | `defense_turret_base.png` (64 px, a `Base` Sprite2D on the root) and one head per mount variant, `turret_head_<variant>.png` (a `Head` Sprite2D on the mount scene, rotated -90° so nose-down art points along the mount's +X, behind-parent so the rocket muzzle lamp draws over it). Unpowered = the mount's `modulate` darkens (the head only) and it droops to rest; the base is never tinted. The hit flash animates `Base:self_modulate` |
 | Scene / config | `defense_turret.tscn` / `defense_turret_config.tres` (flat `DefenseTurretConfig`) |
 | Score | 60; **`counts_as_escape` false**, so a turret that drifts off the bottom never breaks the combo |
 
@@ -153,7 +153,7 @@ Tests: `tests/integration/test_defense_turret.gd` (both harnesses), the turret c
 
 | Question | Answer |
 |---|---|
-| Silhouette | Round base with a turning head and barrel; the art task (t15) gives it its own sprite |
+| Silhouette | Round base with a turning head and barrel; its own top-down sprites (t15): a base plate and one distinct head per weapon |
 | Preferred distance | Fires inside `fire_range` 700 px; it does not move, so the player picks the distance |
 | Movement signature | None: the head turns at 2.0 rad/s and scans 90° when idle |
 | Attack | Charged 4-round burst with partial lead (0.6) |

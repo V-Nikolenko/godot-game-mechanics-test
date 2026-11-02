@@ -5,7 +5,7 @@ beam between two of them. Shooting one drops the whole fence.
 **Fantasy / threat:** A pylon with a red lens. The wall between two pylons is lethal, but each pylon is a cheap target: the answer to a fence is the
 post, not the gap.
 
-> **Build state (Phase 8, t10).** Built with `LaserFence`. The art task (t15) replaces the code-drawn placeholder; the hub site (t18) and level 1 (t19)
+> **Build state (Phase 8, t10).** Built with `LaserFence`; art built in t15. The hub site (t18) and level 1 (t19)
 > place fences. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.11.
 
 ---
@@ -18,7 +18,7 @@ post, not the gap.
 | Damage | 0: `ContactProfile` NONE and **no `ContactHitBox`** (the power source / turret precedent) |
 | Speed | none: no brain, no `EnemyMover`, no `AssaultDrift` of its own — the fence's `AssaultDrift` carries both posts in Assault |
 | Body | one `CircleShape2D` r 18 shared by the body (layer 1) and the `HurtBox` (layer 512, mask 65) |
-| Sprite | placeholder, code-drawn: a dark post disc with a red lens. The art task (t15) replaces it |
+| Sprite | `laser_emitter.png` (40 px post with a red lens, `Sprite2D`); its state light is the `StateLight`. The orphan `laser_wall.png` was rejected (a shield dome, not a post) |
 | Scene / config | `laser_emitter.tscn` / `laser_emitter_config.tres` (flat `LaserEmitterConfig`, no extra fields) |
 | Score | 40; **`counts_as_escape` false**, so a post that drifts off the bottom never breaks the combo |
 

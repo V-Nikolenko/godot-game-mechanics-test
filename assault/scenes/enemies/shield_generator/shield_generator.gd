@@ -13,11 +13,8 @@ extends BaseEnemy
 
 ## The body / hurtbox circle's radius (the scene's shared `CircleShape2D`).
 const BODY_RADIUS := 30.0
-const DISH_COLOR := Color(0.2, 0.24, 0.3, 1.0)
-const RIM_COLOR := Color(0.45, 0.65, 0.75, 1.0)
-const CORE_RADIUS := 12.0
-const CORE_COLOR := Color(0.45, 0.95, 1.0, 1.0)
-const GLOW_COLOR := Color(0.35, 0.9, 1.0, 0.3)
+const LENS_RADIUS := 13.0
+const LENS_OFF_COLOR := Color(0.1, 0.12, 0.16, 1.0)
 
 @export var config: ShieldGeneratorConfig = load("res://assault/scenes/enemies/shield_generator/shield_generator_config.tres")
 
@@ -54,6 +51,7 @@ func set_powered(on: bool) -> void:
 	if on or not _powered:
 		return
 	_powered = false
+	queue_redraw()
 	if is_node_ready():
 		_gen_brain.power_down()
 
@@ -96,9 +94,7 @@ func _resolve_owner_group() -> StringName:
 	return StringName("shield_generator_%d" % get_instance_id())
 
 
-## Placeholder art (the art task replaces it): a dish disc with a cyan emitter core.
+## The dish lens (baked into `Sprite2D`, which draws behind this node) goes dark under a cap once the generator is unpowered; the hull is never tinted.
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, BODY_RADIUS, DISH_COLOR)
-	draw_arc(Vector2.ZERO, BODY_RADIUS, 0.0, TAU, 32, RIM_COLOR, 3.0)
-	draw_circle(Vector2.ZERO, CORE_RADIUS + 5.0, GLOW_COLOR)
-	draw_circle(Vector2.ZERO, CORE_RADIUS, CORE_COLOR)
+	if not _powered:
+		draw_circle(Vector2.ZERO, LENS_RADIUS, LENS_OFF_COLOR)

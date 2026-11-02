@@ -16,10 +16,6 @@ extends TurretMount
 const POOL_NAME := &"PulsePool"
 ## Fallback for a round scene that does not author its `ProjectileLifetime.max_time` (the `enemy_bullet.tscn` default).
 const DEFAULT_ROUND_MAX_TIME := 18.0
-const HEAD_RADIUS := 13.0
-const BARREL_WIDTH := 6.0
-const HEAD_COLOR := Color(0.36, 0.4, 0.46, 1.0)
-const BARREL_COLOR := Color(0.62, 0.66, 0.72, 1.0)
 
 ## TELEGRAPH: the charge before the burst, s.
 @export var charge_seconds: float = 0.4
@@ -49,10 +45,6 @@ func pool_specs() -> Array[Dictionary]:
 		"persist": false,
 	}]
 	return specs
-
-
-func _ready() -> void:
-	queue_redraw()
 
 
 func _shot_speed() -> float:
@@ -95,10 +87,3 @@ func _shoot() -> void:
 	projectile.speed = round_speed
 	projectile.set_direction(Vector2.RIGHT.rotated(global_rotation))
 	round_fired.emit(projectile)
-
-
-## Placeholder art (the art task replaces it): a head disc and a barrel along +X to the muzzle.
-func _draw() -> void:
-	var tip := _muzzle.position.x if _muzzle != null else HEAD_RADIUS * 2.0
-	draw_rect(Rect2(0.0, -BARREL_WIDTH * 0.5, tip, BARREL_WIDTH), BARREL_COLOR)
-	draw_circle(Vector2.ZERO, HEAD_RADIUS, HEAD_COLOR)

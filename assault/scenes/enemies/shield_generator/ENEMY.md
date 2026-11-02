@@ -5,8 +5,8 @@
 **Fantasy / threat:** A dish tethered to its guns by cyan lines. It is no threat in itself; it makes the position harder to crack. Shoot the dish
 (or the reactor behind it) and the bubbles fade within a moment; a beam never cared about them.
 
-> **Build state (Phase 8, t9s).** Built on `TurretGroup` (`assault/scenes/structures/turret_group/`). The art task (t15) replaces the code-drawn
-> placeholder; the hub site (t18) places one. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10.5. Test-only preset with a generator:
+> **Build state (Phase 8, t9s).** Built on `TurretGroup` (`assault/scenes/structures/turret_group/`).
+> Art built in t15 (see the Sprite row); the hub site (t18) places one. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10.5. Test-only preset with a generator:
 > `tests/helpers/shielded_site.tscn`.
 
 ---
@@ -19,7 +19,7 @@
 | Damage | 0: `ContactProfile` NONE and **no `ContactHitBox`** (the turret / power-source precedent) |
 | Speed | none: no mover. In Assault an `AssaultDrift` child scrolls it down at `assault_drift_speed` 60 px/s |
 | Body | one `CircleShape2D` r 30 shared by the body (layer 1) and the `HurtBox` (layer 512, mask 65) |
-| Sprite | placeholder, code-drawn: a dish disc with a cyan core. The art task (t15) replaces it |
+| Sprite | `shield_generator.png` (72 px cyan dish, `Sprite2D`, behind-parent); unpowered, a dark cap is drawn over its lens. The hull is never tinted |
 | Scene / config | `shield_generator.tscn` / `shield_generator_config.tres` (flat `ShieldGeneratorConfig`) |
 | Score | 80; **`counts_as_escape` false**, so a generator that drifts off the bottom never breaks the combo |
 

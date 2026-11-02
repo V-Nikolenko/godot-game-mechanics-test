@@ -5,8 +5,8 @@ and harmless at once, for good.
 **Fantasy / threat:** A reactor tied to its guns by amber power lines. It is no threat in itself; the threat is the crossing fire of the turrets
 around it. You get through by finding a lane to the reactor.
 
-> **Build state (Phase 8, t9).** Built with `TurretGroup` (`assault/scenes/structures/turret_group/`). The art task (t15) replaces the code-drawn
-> placeholder; the hub site (t18) and level 1 (t19) place groups. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10.2; task plan
+> **Build state (Phase 8, t9).** Built with `TurretGroup` (`assault/scenes/structures/turret_group/`).
+> Art built in t15 (top-down sprites, see the Sprite row); the hub site (t18) and level 1 (t19) place groups. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10.2; task plan
 > `docs/plans/cmvqw0vnl0183qs2xbphzonu7/3-plan.md`.
 
 ---
@@ -19,7 +19,7 @@ around it. You get through by finding a lane to the reactor.
 | Damage | 0: `ContactProfile` NONE and **no `ContactHitBox`** (the Bonus Drone / turret precedent) |
 | Speed | none: no brain, no `EnemyMover`. In Assault an `AssaultDrift` child scrolls it down at `assault_drift_speed` 60 px/s |
 | Body | one `CircleShape2D` r 34 shared by the body (layer 1) and the `HurtBox` (layer 512, mask 65) |
-| Sprite | placeholder, code-drawn: a dark housing disc (r 36) with an amber core. The art task (t15) replaces it |
+| Sprite | `power_source.png` (80 px reactor housing, `Sprite2D`, behind-parent) plus `power_source_glow.png` (the `Glow` child: additive, hidden when its group goes dark, on which a dark core cap is drawn over the baked core). The hull is never tinted |
 | Scene / config | `power_source.tscn` / `power_source_config.tres` (flat `PowerSourceConfig`) |
 | Score | 80; **`counts_as_escape` false**, so a source that drifts off the bottom never breaks the combo |
 

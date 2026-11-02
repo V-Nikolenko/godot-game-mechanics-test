@@ -5,7 +5,7 @@ own, so a player who dodges the beam's frozen line is still being tracked by the
 **Fantasy / threat:** A fortress gun. The beam is the slow, readable one (it shows its line and never re-aims); the burst keeps leading you. At 1.2 rad/s each
 head is slow to swing, so the answer is to break the angle, not to outrun the gun.
 
-> **Build state (Phase 8, t11).** Built on the t6–t8 turret shell. The art task (t15) replaces the code-drawn placeholder; the hub site (t18) and level 1 (t19)
+> **Build state (Phase 8, t11).** Built on the t6–t8 turret shell; art built in t15. The hub site (t18) and level 1 (t19)
 > place it. Mounting on large ships is Phase 10. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.9.
 
 ---
@@ -18,7 +18,7 @@ head is slow to swing, so the answer is to break the angle, not to outrun the gu
 | Damage | 0 contact: `ContactProfile` NONE and **no `ContactHitBox`**. Beam 1.2 s lit and burst rounds (8 each) are the mounts' own numbers |
 | Speed | none: no `EnemyMover`. In Assault an `AssaultDrift` child scrolls it down at `assault_drift_speed` 60 px/s |
 | Body | one `CircleShape2D` r 64 shared by the body (layer 1) and the `HurtBox` (layer 512, mask 65) |
-| Sprite | placeholder, code-drawn: a base disc on the root and a head disc plus barrel on each mount. The art task (t15) replaces it |
+| Sprite | `heavy_emplacement_base.png` (144 px octagonal deck with two sockets; `Base` Sprite2D) plus the turret heads, reused: the beam cannon head at (0, -30) and the burst cannon head at (0, 34). Both go dark and droop when unpowered; the base is never tinted |
 | Scene / config | `heavy_emplacement.tscn` / `heavy_emplacement_config.tres` (a `DefenseTurretConfig`; the scene's `config` export points at it) |
 | Score | 150; **`counts_as_escape` false** |
 

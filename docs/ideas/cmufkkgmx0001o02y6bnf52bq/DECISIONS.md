@@ -3243,3 +3243,19 @@ directory. These are *planned* decisions; check this phase's *as built* section,
 - **The rig is outside the single-writer gate's receivers** (`actor.` / `body.` / `self.`): `twin_laser_pair.gd` and `twin_laser_pair_spawn.gd` hold the drones as `drone_a` / `drone_b` /
   `drone`. `test_twin_laser_drones.gd::test_the_rig_and_the_spawner_write_no_motion` sweeps both with the gate's own `_PROPS` / `_ASSIGN` / `_CALLS` through any receiver
   (`test_enemy_mover_single_writer.gd`'s `_code_only()` / `_hits()` are now `static` for that). Any new non-brain file that holds a drone (t13's Laser Tender launch code) joins that sweep.
+
+### Phase 8, built in t15 (structure art) (2026-11-02)
+- **Art (PixelLab `create_map_object`, `view: "high top-down"`, several candidates each, looked at at 4–6× and in a composite):** `assault/assets/sprites/enemies/` gained `defense_turret_base.png` (64),
+  `turret_head_{burst_cannon,sweep_beam,rocket_battery,pulse_ring,lance,beam_cannon}.png` (48 / 64 / 48 / 48 / 64 / 48x56, nose-down), `heavy_emplacement_base.png` (144, two sockets at y -33 / +30 so the
+  two mounts sit in them), `shield_generator.png` (72), `power_source.png` (80) + `power_source_glow.png` (the orb, 51 px opaque), `laser_emitter.png` (40). Rejected: the orphan `laser_wall.png`
+  (a shield dome 92x84, not a post), a 3/4-looking power source, and rocket heads that were olive or tilted 45 degrees.
+- **Heads live on the mount scenes, not the host:** each `mounts/*_mount.tscn` has a `Head` `Sprite2D` (`centered = false`, `offset = -pivot`, `rotation = -PI/2` so nose-down art points along the
+  mount's +X, `show_behind_parent` so the rocket's TELEGRAPH muzzle lamp draws over it). The mount's existing `power_down()` `modulate` therefore darkens the head only, and the droop is the mount's rotation.
+  The code-drawn head discs / barrels (`_draw`, `HEAD_*`, `BARREL_*`, `barrel_color` exports on the beam mounts) are **deleted**; only the rocket's muzzle lamp is still code-drawn. The lance's `Muzzle`
+  moved from x 28 to 46 (its barrel is longer); other muzzles stayed at 28 (a row checks each head's tip is within 6 px of its `Muzzle`).
+- **Host sprites:** `Base` (`Sprite2D`) on the turret and heavy emplacement; `Sprite2D` on the shield generator, power source (both `show_behind_parent`) and laser emitter. The hit-flash animation
+  tracks now animate `Base:self_modulate` / `Sprite2D:self_modulate` (they animated the root's `self_modulate`, which tints nothing once the root stops drawing). Hull colour is never changed by state.
+- **Lights that the baked art can't turn off are covered by code:** the generator draws a dark cap over its lens once `set_powered(false)` (root `_draw`, which runs over the behind-parent sprite);
+  the power source hides its additive `Glow` child on its group's `power_changed(false)` and draws a dark core cap; the emitter keeps its baked red lens and the fence's `StateLight`.
+- **Transparency sweep roots unchanged:** no scene under `assault/scenes/structures` draws a texture (a group and a fence are coordinators over enemy members), so `SCOPE_ROOTS` needed no new entry.
+- Gate: `tests/integration/test_ph8_sprites.gd` (the Twin-Laser Drone and Laser Tender art task extends it).

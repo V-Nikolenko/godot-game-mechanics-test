@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/enemies/shield_generator/shield_generator.gd" id="1_sg"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_sg"]
@@ -6,6 +6,7 @@
 [ext_resource type="Script" path="res://global/components/contact_profile.gd" id="4_sg"]
 [ext_resource type="Script" path="res://global/components/assault_drift.gd" id="5_sg"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/shield_generator/shield_generator_brain.gd" id="6_sg"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/shield_generator.png" id="sprite_tex"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_sg"]
 radius = 30.0
@@ -15,7 +16,7 @@ length = 0.001
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath(".:self_modulate")
+tracks/0/path = NodePath("Sprite2D:self_modulate")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -31,7 +32,7 @@ length = 0.2
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath(".:self_modulate")
+tracks/0/path = NodePath("Sprite2D:self_modulate")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -81,3 +82,7 @@ speed = 60.0
 
 [node name="Brain" type="Node" parent="."]
 script = ExtResource("6_sg")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+show_behind_parent = true
+texture = ExtResource("sprite_tex")

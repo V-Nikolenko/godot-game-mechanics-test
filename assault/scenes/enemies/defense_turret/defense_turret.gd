@@ -26,9 +26,6 @@ extends BaseEnemy
 const BODY_RADIUS := 28.0
 ## Px past the body a rocket's launcher clear radius adds.
 const ROCKET_CLEARANCE := 4.0
-const BASE_RADIUS := 30.0
-const BASE_COLOR := Color(0.2, 0.22, 0.26, 1.0)
-const RIM_COLOR := Color(0.5, 0.55, 0.62, 1.0)
 
 @export var config: DefenseTurretConfig = load("res://assault/scenes/enemies/defense_turret/defense_turret_config.tres")
 ## When >= 0, the first mount slot's variant (a `TurretMount.Variant`); one property a wave or a group slot can set.
@@ -58,7 +55,6 @@ func _ready() -> void:
 	_turret_brain.bind_mounts(_mounts)
 	if not _powered:
 		_turret_brain.power_down()
-	queue_redraw()
 
 
 func _apply_config(cfg: DefenseTurretConfig) -> void:
@@ -163,10 +159,3 @@ func _build_mounts() -> void:
 			pools[spec["name"]] = pool
 		mount.setup(self, pools, _owner_group)
 		_mounts.append(mount)
-
-
-## Placeholder art (the art task replaces it): the base plate the head turns on.
-func _draw() -> void:
-	var base := body_radius() + (BASE_RADIUS - BODY_RADIUS)
-	draw_circle(Vector2.ZERO, base, BASE_COLOR)
-	draw_arc(Vector2.ZERO, base, 0.0, TAU, 32, RIM_COLOR, 3.0)

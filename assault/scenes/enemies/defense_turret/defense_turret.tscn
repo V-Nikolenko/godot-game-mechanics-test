@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/defense_turret.gd" id="1_dt"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_dt"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://global/components/assault_drift.gd" id="6_dt"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/turret_mount_slot.gd" id="7_dt"]
 [ext_resource type="Script" path="res://global/components/state_light.gd" id="8_dt"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/defense_turret_base.png" id="base_tex"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_dt"]
 radius = 28.0
@@ -17,7 +18,7 @@ length = 0.001
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath(".:self_modulate")
+tracks/0/path = NodePath("Base:self_modulate")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -33,7 +34,7 @@ length = 0.2
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath(".:self_modulate")
+tracks/0/path = NodePath("Base:self_modulate")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -83,6 +84,9 @@ script = ExtResource("5_dt")
 [node name="AssaultDrift" type="Node" parent="."]
 script = ExtResource("6_dt")
 speed = 60.0
+
+[node name="Base" type="Sprite2D" parent="."]
+texture = ExtResource("base_tex")
 
 [node name="MountSlots" type="Node2D" parent="."]
 

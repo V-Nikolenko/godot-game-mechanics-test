@@ -1,10 +1,11 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/enemies/laser_emitter/laser_emitter.gd" id="1_le"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_le"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="3_le"]
 [ext_resource type="Script" path="res://global/components/contact_profile.gd" id="4_le"]
 [ext_resource type="Script" path="res://global/components/state_light.gd" id="5_le"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/laser_emitter.png" id="sprite_tex"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_le"]
 radius = 18.0
@@ -14,7 +15,7 @@ length = 0.001
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath(".:self_modulate")
+tracks/0/path = NodePath("Sprite2D:self_modulate")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -30,7 +31,7 @@ length = 0.2
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath(".:self_modulate")
+tracks/0/path = NodePath("Sprite2D:self_modulate")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -77,3 +78,6 @@ mode = 0
 [node name="StateLight" type="Node2D" parent="."]
 position = Vector2(0, -24)
 script = ExtResource("5_le")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("sprite_tex")

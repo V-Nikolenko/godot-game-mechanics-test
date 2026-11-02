@@ -19,14 +19,8 @@
 class_name BeamTurretMount
 extends TurretMount
 
-const HEAD_RADIUS := 13.0
-const BARREL_WIDTH := 6.0
-const HEAD_COLOR := Color(0.36, 0.4, 0.46, 1.0)
-
 ## The weapon: an `EnemyBeam` scene (`beam.tscn`, `sweep_beam.tscn` or `lance.tscn`).
 @export var beam_scene: PackedScene
-## Placeholder art (the art task replaces it): the barrel's colour tells the variants apart.
-@export var barrel_color: Color = Color(0.62, 0.66, 0.72, 1.0)
 
 var _beam: EnemyBeam
 
@@ -37,7 +31,6 @@ func _ready() -> void:
 		_beam.name = "Beam"
 		_beam.position = _muzzle.position if _muzzle != null else Vector2.ZERO
 		add_child(_beam)
-	queue_redraw()
 
 
 func setup(host: Node2D, pools: Dictionary, owner_group: StringName) -> void:
@@ -112,10 +105,3 @@ func _is_frozen() -> bool:
 		Phase.TELEGRAPH:
 			return _beam.phase() != EnemyBeam.Phase.TELEGRAPH or _phase_clock + CLOCK_EPS >= _beam.telegraph_seconds - _lock_seconds()
 	return false
-
-
-## Placeholder art: a head disc and a barrel along +X to the muzzle.
-func _draw() -> void:
-	var tip := _muzzle.position.x if _muzzle != null else HEAD_RADIUS * 2.0
-	draw_rect(Rect2(0.0, -BARREL_WIDTH * 0.5, tip, BARREL_WIDTH), barrel_color)
-	draw_circle(Vector2.ZERO, HEAD_RADIUS, HEAD_COLOR)

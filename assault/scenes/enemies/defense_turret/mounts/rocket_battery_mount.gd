@@ -22,10 +22,6 @@ extends TurretMount
 
 const DUMB_POOL := &"DumbPool"
 const PURSUIT_POOL := &"PursuitPool"
-const HEAD_RADIUS := 13.0
-const BARREL_WIDTH := 8.0
-const HEAD_COLOR := Color(0.36, 0.4, 0.46, 1.0)
-const BARREL_COLOR := Color(0.78, 0.5, 0.3, 1.0)
 const GLOW_COLOR := Color(1.0, 0.45, 0.2, 0.85)
 
 ## TELEGRAPH: the tube glow before the salvo, s.
@@ -122,10 +118,7 @@ func _launch_one() -> void:
 	round_fired.emit(rocket)
 
 
-## Placeholder art (the art task replaces it): a head disc, a stubby barrel and a muzzle lamp that glows through TELEGRAPH.
+## The muzzle lamp glows through TELEGRAPH (a code-drawn light; the head is the `Head` sprite).
 func _draw() -> void:
-	var tip := _muzzle.position.x if _muzzle != null else HEAD_RADIUS * 2.0
-	draw_rect(Rect2(0.0, -BARREL_WIDTH * 0.5, tip, BARREL_WIDTH), BARREL_COLOR)
-	draw_circle(Vector2.ZERO, HEAD_RADIUS, HEAD_COLOR)
 	if _phase == Phase.TELEGRAPH:
-		draw_circle(Vector2(tip, 0.0), 7.0, GLOW_COLOR)
+		draw_circle(Vector2(_muzzle.position.x if _muzzle != null else 28.0, 0.0), 7.0, GLOW_COLOR)

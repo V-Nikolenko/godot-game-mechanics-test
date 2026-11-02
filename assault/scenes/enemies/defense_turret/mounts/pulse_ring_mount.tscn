@@ -1,7 +1,8 @@
-[gd_scene load_steps=3 format=3]
+[gd_scene load_steps=4 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/mounts/pulse_ring_mount.gd" id="1_prm"]
 [ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_beams/energy_ring.tscn" id="2_prm"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/turret_head_pulse_ring.png" id="head_tex"]
 
 [node name="PulseRingMount" type="Node2D"]
 script = ExtResource("1_prm")
@@ -14,3 +15,10 @@ fire_cone_deg = 8.0
 scan_arc_deg = 90.0
 scan_speed = 0.4
 cooldown_seconds = 3.5
+
+[node name="Head" type="Sprite2D" parent="."]
+show_behind_parent = true
+rotation = -1.5707964
+texture = ExtResource("head_tex")
+centered = false
+offset = Vector2(-24, -24)
