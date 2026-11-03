@@ -114,6 +114,11 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone_config.tres",
 	},
 	{
+		"name": "laser_tender",
+		"scene": "res://assault/scenes/enemies/laser_tender/laser_tender.tscn",
+		"config": "res://assault/scenes/enemies/laser_tender/laser_tender_config.tres",
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"config": "res://assault/scenes/enemies/bonus_drone/bonus_drone_config.tres",

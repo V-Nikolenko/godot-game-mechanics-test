@@ -16,8 +16,17 @@ tender leaves a finished rig's owner group.
 
 **Revised after review round 2:** R2-B1 row 5 checks the `L` separation on the latch tick (a capped leg ends short of its point at the end of
 LAUNCHED); R2-B2 row 13b's point-rule boundary is read only before the stub's first reversal, with the stub starting at the left edge; R2-N1 gate trims
-named; R2-N2 `dock()` text; R2-N3 the top-hugging-player case noted; R2-N4 noted. **Not yet re-reviewed:** round 2 was the last round this run may
-spend (feature-workflow: at most two rounds), so a round-3 check of these two row fixes is the next run's first step.
+named; R2-N2 `dock()` text; R2-N3 the top-hugging-player case noted; R2-N4 noted.
+
+**Revised after review round 3 (owner-authorised):** R2-B1 confirmed fixed; row 5's capped-leg clause is read on the LAUNCHED → FORM tick. R2-B2:
+row 13b pins the tender's spawn at (1000, −200) and states the expected band time (≈ 3.0 s), reversal (≈ 3.97 s) and closest approach (≈ 111 px).
+
+**As built (2026-11-03):** one change from this plan. A boost keeps its speed, so a drone boosting onto its point and then FORMing overshot
+its slot by ≈ 90 px and strained the wall at the latch. LAUNCHED motion now boosts on every tick that starts before the leg's boost time (the
+partial last step lands it), then stops dead on the next tick (a zero-speed boost); the rig leaves LAUNCHED `LAUNCH_SETTLE_TICKS` 2 ticks after
+the longer boost (not on the tick the boost time is reached). A capped leg is therefore read on the last LAUNCHED tick (exactly 728 px), not
+the LAUNCHED → FORM tick. Logged in `DECISIONS.md`. Rows 4 and 5 are one parameterised test (they share each launch); rows 7, 8, 9, 12 and 13
+read memoised recordings.
 
 ## Problem
 
@@ -229,7 +238,8 @@ Launch (both modes unless marked):
    segments cradle → point do not intersect; the angle between `launch_dir_of(A)` and `launch_dir_of(B)` is > 0° and < 160° (diverging, never
    anti-parallel); after 0.3 s each drone's displacement is within 5° of its launch direction (a straight leg); on the latch tick (the first TELEGRAPH tick) the drones are
    `rig_length` ± `length_tolerance` apart; each drone is within `slot_tolerance` of its point by `launch_seconds_of(it)` + 1 tick (or, when capped,
-   has flown `launch_speed · launch_max_seconds` ± one tick's travel). Broadside cases also: the angle is > 20° (§2.13's V). End-on cases print the
+   has flown `launch_speed · launch_max_seconds` ± one tick's travel, **measured on the LAUNCHED → FORM tick** (≈ 727.7 px), not a tick later, where
+   the deceleration leaves < 1 px of margin; review round 3). Broadside cases also: the angle is > 20° (§2.13's V). End-on cases print the
    angle (the logged geometric limit). Row 4 shares these launches.
 6. `test_open_space_points_lie_on_the_predicted_path_across_the_heading(case)` (Open Space; cases `moving`, `standing`) — moving: a 200 px/s stub along
    +x; the latched wall's centre (rig `centre` at TELEGRAPH) is within 30 px of the stub's path line, ahead of the launch position, and `axis` is ⟂ the
@@ -268,11 +278,12 @@ Assault:
     stub along `−n` is what the advance closes; `still` → `axis` horizontal, centre y = `P.y − standoff`, `normal` = UP. In every case, on every tick
     from launch to the end of ADVANCE both drones are inside `inner_rect()`; the tender launched from inside the view's upper band
     (`y ≤ view.y + assault_hold_depth + HOLD_REACH`).
-13b. `test_assault_tender_from_above_reaches_its_band_and_launches_against_a_strafing_player` — hand-ticked, the tender spawned 200 px above the view
-    (as `WaveBuilder` places it), the stub starting at the inset rect's left edge and strafing at 360 px/s +x, reversing at the edges: it reaches HOLD
-    and launches within `engage_seconds`. Boundary inside the row (review R2-B2), read only in the window before the stub's first reversal (≈ 4 s of
-    straight strafing): the tender reaches the band (and HOLD) in that window while never being within `HOLD_REACH` of the moving hold *point*, so the
-    rejected point rule would not have fired there.
+13b. `test_assault_tender_from_above_reaches_its_band_and_launches_against_a_strafing_player` — hand-ticked, the tender spawned **at (1000, −200)**
+    (200 px above the view, ahead of the stub's run; review round 3), the stub starting at the inset rect's left edge (x −76) and strafing at 360 px/s
+    +x, reversing at the edges: it reaches HOLD and launches within `engage_seconds`. Boundary inside the row (review R2-B2), read only in the window
+    before the stub's first reversal (at ≈ 3.97 s): the tender reaches the band (and HOLD) in that window (expected ≈ 3.0 s) while never being within
+    `HOLD_REACH` of the moving hold *point* (closest approach expected ≈ 111 px), so the rejected point rule would not have fired there. The row prints
+    the band time, the reversal time and the closest approach, so a geometry slip reads differently from a code bug.
 14. `test_assault_one_launch_per_life_then_disengage` — after the launch the tender is in DISENGAGE with `constraint_released()`, `launches()` stays 1, and
     it is freed outside `projectile_world_rect()` within 5 s; the pair's drones DISENGAGE after their one ADVANCE (t12's rule, sampled once).
 15. `test_assault_budget_expiring_in_the_cradle_telegraph_lets_the_launch_finish(case)` — cases `mid_telegraph` (budget expires 0.3 s into LAUNCH) and

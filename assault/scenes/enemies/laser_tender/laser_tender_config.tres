@@ -1,0 +1,39 @@
+[gd_resource type="Resource" script_class="LaserTenderConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/laser_tender/laser_tender_config.gd" id="1_ltc"]
+
+[resource]
+script = ExtResource("1_ltc")
+max_health = 160
+collision_damage = 15
+score_value = 120
+counts_toward_wave_clear = true
+counts_as_escape = true
+hazard_avoidance = 0.8
+hazard_margin = 24.0
+hazard_resistance = 0.3
+wreck_chance = 0.35
+wreck_size = 1
+explosive_wreck_chance = 0.0
+max_speed = 200.0
+acceleration = 400.0
+preferred_range = 650.0
+range_tolerance = 80.0
+arc_rate = 0.12
+launch_telegraph = 0.6
+launch_speed = 520.0
+launch_max_seconds = 1.4
+lead_time_max = 1.5
+standing_lead = 120.0
+rearm_seconds = 7.0
+assault_wall_lead = 180.0
+strafe_speed_min = 60.0
+assault_hold_depth = 140.0
+dock_radius = 72.0
+perceive_radius = 700.0
+lose_radius = 1600.0
+notice_time = 0.35
+idle_radius = 160.0
+idle_speed = 0.5
+engage_seconds = 10.0
+exit_speed = 380.0

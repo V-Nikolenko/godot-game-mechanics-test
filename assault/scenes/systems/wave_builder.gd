@@ -109,6 +109,10 @@ func laser_fence() -> SpawnConfig: return SpawnConfig.new(LASER_FENCE)
 ## A Twin-Laser Drone pair (Phase 8, plan §2.12): a `TwinLaserPairSpawn` that spawns two drones -/+ `rig_length / 2` along its x, binds them and frees
 ## itself. `.at(x, y)` is the pair's midpoint, camera-relative like every ship spawn. Never in an ENEMIES_CLEARED section (test_engagement_deadline.gd).
 func twin_laser_pair() -> SpawnConfig: return SpawnConfig.new(TWIN_LASER_PAIR)
+## A Laser Tender (Phase 8, plan §2.13): holds at range (Assault: the upper band of the corridor) and launches its two docked Twin-Laser Drones in a V
+## toward the player's escape route, where they line up into a moving laser wall. One launch per Assault life. Never in an ENEMIES_CLEARED section
+## (test_engagement_deadline.gd).
+func laser_tender() -> SpawnConfig: return SpawnConfig.new(LASER_TENDER)
 
 func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
 func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
@@ -281,6 +285,7 @@ const HEAVY_EMPLACEMENT := "res://assault/scenes/enemies/heavy_emplacement/heavy
 const TURRET_GROUP_ASSAULT_PAIR := "res://assault/scenes/structures/turret_group/presets/assault_pair.tscn"
 const LASER_FENCE    := "res://assault/scenes/structures/laser_fence/laser_fence.tscn"
 const TWIN_LASER_PAIR := "res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn"
+const LASER_TENDER   := "res://assault/scenes/enemies/laser_tender/laser_tender.tscn"
 const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
 const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn"
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"

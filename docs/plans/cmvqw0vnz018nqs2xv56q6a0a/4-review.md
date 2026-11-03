@@ -206,3 +206,89 @@ but say so in ENEMY.md or DECISIONS.
 
 **R2-N4. N10 only covers the previous rig.** The owner-group cleanup is checked only for the previous rig, at the next launch. A rig that still had a
 live drone then keeps the tender in its group for good. This is harmless; a one-line note is enough.
+
+## Round 3 (owner-authorised, scope: R2-B1 and R2-B2 only)
+
+VERDICT: CHANGES_REQUESTED
+
+I checked only rows 5 and 13b of `3-plan.md` (lines 226-233 and 273-277), the progress note at lines 17-20, and the code they depend on. R2-B1 is
+correctly fixed. R2-B2 is fixed in kind, but the new window assertion holds only for an unstated range of tender spawn x, and its margin is much
+thinner than the "≈ 4 s" in the row suggests. A one-line pin closes it.
+
+### R2-B1: fixed
+
+- **The assertion holds by construction.** `twin_laser_pair.gd:254-258` enters TELEGRAPH only when both drones are within `slot_tolerance` of
+  `slot_of()` *and* `separation_error() <= config.length_tolerance`. That check runs on the leader's tick, immediately before `_enter(TELEGRAPH)`.
+  - On a launched frame, `slot_of(A)` = `centre − axis·L/2` = `point_a` and `slot_of(B)` = `point_b`, because every Attack B point pair is exactly
+    `L` apart (plan lines 165-170).
+  - So the rig cannot reach a TELEGRAPH tick unless the drones were `L ± length_tolerance` apart on the tick that latched.
+- **Reading it after the step is also safe.** If the row reads separation after the full hand-tick step, both drones have moved one more tick. They
+  are `arrive`-ing at their own slots (`twin_laser_drone_brain.gd:151`), so the error does not grow.
+  - t12 already reads it this way (`test_twin_laser_drones.gd:217-218`, with `max_err` including the first TELEGRAPH tick), and that check is green.
+- **`open_space:crossing` latches in time.** The capped drone is about 190 px short of its slot when LAUNCHED ends at 1.4 s. It then arrives at
+  `max_speed` 300 / `acceleration` 900 well inside `form_timeout` 3.0 (`twin_laser_drone_config.tres:16-25`).
+- **The new capped-leg clause (line 231-232) passes, but only just.**
+  - The rig leaves LAUNCHED on the tick where `phase_time` reaches 1.4. On that tick the drone mirrors FORM and does not boost, so it gets 83 boosted
+    ticks (719.3 px).
+  - It then decelerates from 520 by 15 px/s per tick (`enemy_mover.gd:240-246`, no `braking`). At "`launch_seconds_of` + 1 tick" it has flown
+    about 735.9 px.
+  - That is 7.9 px from 728, against a tolerance of one tick's travel (8.67 px): a margin of about 0.8 px.
+  - **Non-blocking:** measure the capped leg on the LAUNCHED → FORM tick (727.7 px), or allow two ticks' travel.
+
+### R2-B2: the window is sound only for a tender spawned near or right of the view centre
+
+I simulated the tender's APPROACH motion headless, using the real `Steering.arrive` plus `move_toward` at the tender's `max_speed` 200 and
+`acceleration` 400, at DT 1/60.
+- **Hold point:** `(clamp(P.x, −20, 1300), min(140, P.y − 120))`, from `inner_rect()` = (−100, −380, 1480, 1480).
+- **Stub:** starts at the inset rect's left edge (x −76) and strafes +x at 360 px/s.
+- **Tender:** spawned at y −200.
+
+Results:
+- **Stub timing:** it reverses at 3.97 s. The hold point stops at x 1300 from 3.82 s.
+- **The tender is slow to reach the band.** It arrives at |y − 140| ≤ 24 inside the view at 3.02 s for spawn x 1000, 3.38 s for x 640, 3.55 s
+  for x 560 and 4.02 s for x 400.
+  - It is slow because, while it chases a point that outruns it, its velocity points mostly along x. It drops at only about 90-130 px/s.
+  - Spawned above the stub (x −76, a natural reading of "from above, against the player"), it reaches the band at 5.33 s, after the reversal.
+- **Consequence:** for any spawn x below about 410, the row's "the tender reaches the band (and HOLD) in that window" fails on a correct build. That
+  is the failure class R2-B2 was meant to remove.
+  - At the likely reading (x 640, WaveBuilder's `.at(0, …)` column with the hand-ticked camera offset 0; `wave_manager.gd:194`), the margin is
+    0.59 s, not "≈ 4 s".
+  - That margin is set by the tender's speed and acceleration, so later tuning can erase it.
+- **The rest of the fix is sound.**
+  - **Before the reversal:** the tender's closest approach to the moving hold point is 111-170 px at every spawn x I tried, far outside
+    `HOLD_REACH` 24. The "never within `HOLD_REACH`" half is robust.
+  - **After the reversal:** the closest approach falls to 3-18 px. This confirms round 2's concern and shows the window exclusion is needed.
+  - **The boundary can still fail on a broken build:** under the rejected point rule the tender never HOLDs before the reversal, so the in-window
+    "reaches HOLD" assertion fails.
+  - **The main assertion holds:** with the reversing stub, HOLD and launch happen within `engage_seconds` (launch ≤ 5.93 s at every spawn x).
+
+**Fix (one line in row 13b, plan line 273-274):**
+- Pin the spawn, for example at `(640, −200)` (view centre, 200 px above the view), or ahead of the stub's run at `(1000, −200)`, which gives about
+  0.95 s of margin.
+- State the expected numbers so an implementer can tell a geometry slip from a code bug: band and HOLD at about 3.4 s (or 3.0 s), first reversal
+  at about 3.97 s, and closest approach to the point before the reversal of about 137 px (or 111 px).
+- Replace "≈ 4 s of straight strafing" with the real window (the 3.97 s reversal).
+
+Nothing else in rows 5 and 13b, or in the progress note, contradicts the rest of the plan.
+
+## Round 3b (confirmation of the round-3 fix)
+
+VERDICT: APPROVED
+
+I checked only the round-3 edits in `3-plan.md`.
+
+- **Line 21: the new "Revised after review round 3" note.** It matches what was changed.
+- **Row 5, lines 233-235.** The capped-leg clause is now measured on the LAUNCHED → FORM tick, at about 727.7 px. That is 0.3 px from 728,
+  against one tick's travel of 8.67 px. This removes the 0.8 px margin from round 3. The latch-tick `L ± length_tolerance` assertion is unchanged
+  and still holds by construction.
+- **Row 13b, lines 274-279.** It matches my simulation for a spawn at x 1000.
+  - Spawn: `(1000, −200)`, which is 200 px above the view (view top y 0) and ahead of the stub's run.
+  - Stub: starts at x −76 and strafes at 360 px/s.
+  - Band and HOLD: about 3.0 s (simulated 3.02 s, at tender x ≈ 804, inside the view).
+  - First reversal: about 3.97 s, so about 0.95 s of margin.
+  - Closest approach to the hold point before the reversal: about 111 px, far outside `HOLD_REACH` 24.
+  - "≈ 4 s" is gone. The printed diagnostics are a good addition.
+  - The boundary still fails under the point rule, and the main assertion (launch within `engage_seconds`) still holds.
+  - The hold y is 140 for any stub y ≥ 260, so the row's unstated stub y (the Assault default of 600) does not change these numbers.
+
+No contradiction with the rest of the plan.

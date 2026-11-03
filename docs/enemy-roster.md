@@ -480,10 +480,21 @@ b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(-64, -220)
 **Drone:** HP 30 (r 13), contact 8 (COLLISION), score 30 each, `max_speed` 300; the beam between them is `twin_beam.tscn` (12 per hit, re-hit 0.55 s, 0.8 s warning line)  
 **Attack A:** the drones fly to opposite sides of the player 260 px off, show the line for 0.8 s (lenses yellow), then fly the whole line through where the player was and 200 px past at 240 px/s, keeping its length. Open Space: again every 4–6 s. Assault: one attack inside the corridor (a horizontal line from above, or a vertical one from the side when the player is near the top), then they leave.  
 **Counterplay:** reach an end (the wall is slower than the player); kill either drone and the line drops at once; a gravity well or a wreck that pulls or stops one drone strains the line and collapses it; the line hurts other enemies too.  
-**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Not placed in level 1 or the hub yet. The Laser Tender's launch (Attack B) comes in a later task. See [ENEMY.md](../assault/scenes/enemies/twin_laser_drone/ENEMY.md).
+**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Not placed in level 1 or the hub yet. A Laser Tender (`b.laser_tender()`, below) launches its own pair. See [ENEMY.md](../assault/scenes/enemies/twin_laser_drone/ENEMY.md).
 
 ```gdscript
 b.twin_laser_pair().at(0, -120)
+```
+
+### `laser_tender` — Laser Tender (Phase 8)
+**Builder:** `b.laser_tender()`; `.at(x, y)` camera-relative like every ship spawn (spawn it above the view: it flies down into the upper band)  
+**Scene:** `assault/scenes/enemies/laser_tender/laser_tender.tscn` (`LaserTender`): HP 160 (r 40), contact 15 (COLLISION), score 120, `max_speed` 200, no gun, two Twin-Laser Drones docked in visible cradles  
+**Attack B:** its cradles glow yellow for 0.6 s, then it launches both drones in a V toward two points either side of where the player is going; they land as a 420 px wall across that route, warn for 0.8 s and advance through it. Open Space: one live pair at a time, a 7 s rearm after both drones are gone, a lone survivor flies home and docks. Assault: it holds in the upper band of the screen and launches **once** (a vertical wall 180 px ahead of a strafing player, a horizontal one 260 px above a still one), then leaves; a pair is launched no later than spawn + 10.0 + 0.6 s.  
+**Counterplay:** change direction when the cradles glow; go round an end; kill a drone to drop the wall; kill the tender to stop the walls.  
+**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Not placed in level 1 or the hub yet. See [ENEMY.md](../assault/scenes/enemies/laser_tender/ENEMY.md).
+
+```gdscript
+b.laser_tender().at(0, -230)  # 100 px above the view
 ```
 
 ### `bonus_drone` — Bonus Drone

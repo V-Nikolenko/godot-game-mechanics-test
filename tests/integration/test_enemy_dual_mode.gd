@@ -640,6 +640,7 @@ const HAZARD_PROFILES := [
 	["missile_corvette", 0.7, 80.0, 0.4],
 	["ram_corvette", 0.5, 60.0, 0.5],
 	["twin_laser_drone", 0.6, 16.0, 0.1],
+	["laser_tender", 0.8, 24.0, 0.3],
 ]
 
 
@@ -1330,3 +1331,44 @@ func test_twin_laser_drones_form_and_telegraph_in_both_modes(mode: String = use_
 			assert_true(rect.has_point(d.global_position), "%s: inside inner_rect()" % mode)
 	else:
 		assert_null((drones[0].get_node("EnemyMover") as EnemyMover).constraint, "%s: no corridor in Open Space" % mode)
+
+# ── Laser Tender (Phase 8, t13; plan §2.13) ─────────────────────────────────────────────────────────────────────────────────
+
+const LASER_TENDER_SCENE: PackedScene = preload("res://assault/scenes/enemies/laser_tender/laser_tender.tscn")
+
+
+## The same tender, spawned where it holds (Open Space: `preferred_range` above the player; Assault: its band's hold point), starts LAUNCH on its
+## first tick with the cradle light CHARGING, then launches two drones in LAUNCHED, bound with the tender in their owner group, its cradles empty.
+func test_laser_tender_launches_a_pair_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	var p := Vector2(640.0, 360.0) if mode == "open_space" else Vector2(640.0, 600.0)
+	harness.player.global_position = p
+	var tender := LASER_TENDER_SCENE.instantiate() as LaserTender
+	tender.position = p + Vector2(0.0, -tender.config.preferred_range) if mode == "open_space" else Vector2(640.0, 140.0)
+	harness.root.add_child(tender)
+	tender.set_physics_process(false)  # hand-ticked
+	tender.collision_mask = 0
+	var brain := tender.brain()
+	_tick(tender, DT)
+	assert_eq(brain.phase, LaserTenderBrain.Phase.LAUNCH, "%s: LAUNCH on the first tick" % mode)
+	assert_eq(tender.state_light().get_state(), StateLight.State.CHARGING, "%s: the cradle light is CHARGING" % mode)
+	var ticks := 1
+	while tender.launches() == 0 and ticks < 120:
+		_tick(tender, DT)
+		ticks += 1
+	assert_eq(tender.launches(), 1, "%s: launched after %d ticks" % [mode, ticks])
+	var rig := tender.pair()
+	assert_not_null(rig, "%s: a rig" % mode)
+	if rig == null:
+		return
+	for d: Node2D in [rig.drone_a, rig.drone_b]:
+		d.set_physics_process(false)
+		(d as CharacterBody2D).collision_mask = 0
+		_tick(d as BaseEnemy, DT)
+		assert_eq((d.get_node("Brain") as TwinLaserDroneBrain).phase, TwinLaserDroneBrain.Phase.LAUNCHED, "%s: the drone is LAUNCHED" % mode)
+		assert_true(d.is_in_group(rig.owner_group), "%s: in the owner group" % mode)
+	assert_true(tender.is_in_group(rig.owner_group), "%s: with the tender" % mode)
+	assert_eq(tender.docked_count(), 0, "%s: cradles empty" % mode)
+	assert_eq(brain.phase, LaserTenderBrain.Phase.WAIT if mode == "open_space" else LaserTenderBrain.Phase.DISENGAGE,
+			"%s: WAIT (Open Space) or DISENGAGE after its one Assault launch" % mode)

@@ -7,8 +7,8 @@ warning line, then fly the whole line through where the player was and past it (
 > **Build state (Phase 8, t12).** Built: the drone scene and shell, the flat config, the `TwinLaserPair` rig (bind, owner group, leader-only phase clock,
 > slots, latched frame, identical per-drone boosts, strain and collapse, the beam on drone A), `TwinLaserDroneBrain` (the full append-only `Phase` enum; FORM /
 > TELEGRAPH / ADVANCE / BREAK / WAIT / SOLO / DISENGAGE played), Attack A in Open Space, the Assault rig (corridor-planned frames, one attack per life with the
-> deferral bound), the `TwinLaserPairSpawn` spawner and `WaveBuilder.twin_laser_pair()`. **Not yet:** Attack B and the Laser Tender's launch / docking (t13: the
-> `LAUNCHED` phase and the `controller` slot are declared and hold still), the hub idle (`IDLE` / `NOTICING` / `RETURNING`, t14) and the measured Assault exit (t14),
+> deferral bound), the `TwinLaserPairSpawn` spawner and `WaveBuilder.twin_laser_pair()`. **Attack B (t13):** the rig's `LAUNCHED` phase (appended) and the fixed launched
+> frame, played when a Laser Tender launches a pair (`../laser_tender/ENEMY.md`); a SOLO drone with a live tender flies home and docks. **Not yet:** the hub idle (`IDLE` / `NOTICING` / `RETURNING`, t14) and the measured Assault exit (t14),
 > the art (t16: the hull is a code-drawn placeholder), hub and level-1 placement (t18 / t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.12;
 > task plan `docs/plans/cmvqw0vnw018jqs2x5k4l6ahb/3-plan.md`. The beam itself is `twin_beam.tscn` (`assault/scenes/projectiles/enemy_beams/BEAMS.md`).
 
@@ -67,8 +67,19 @@ and ticks it, so a cancelled beam always fades out.
   strained continuously for `strain_seconds` → COLLAPSED (`collapsed(true)`), then the survivors BREAK and re-FORM. Back inside the tolerance sooner → unstrained.
 - **Kill one drone** — its `died` (or `tree_exiting`) breaks the pair for good **in the same call**: the beam is cancelled at once (A's death frees it with A; B's
   death leaves A to fade it), `collapsed(false)`. The survivor is **SOLO**: it can never relight the beam. Open Space: it `arrive`s at the controller if one is live,
-  else at `patrol_anchor` (default its spawn point; t13 docks it, t14 idles it). Assault: DISENGAGE.
+  else at `patrol_anchor` (default its spawn point; t14 idles it). A tender takes it back (`LaserTender.dock()`) once it is within `dock_radius`. Assault: DISENGAGE.
 - **Rails** — `on_suspended()` releases the drone from the rig (the pair breaks; a suspended drone A frees the beam, since nobody would tick its fade).
+
+## Attack B: launched by a Laser Tender (t13)
+
+`LaserTender.launch_pair(points)` binds the pair with the tender as `controller` and calls `TwinLaserPair.launch(point_a, point_b, speed, max_seconds)`:
+- **LAUNCHED** (rig `Phase.LAUNCHED`, brain `Phase.LAUNCHED`; refuses a tow): each drone boosts straight from its cradle toward its own point at `launch_speed`
+  for `min(|Q - start| / launch_speed, launch_max_seconds)`, renewed one step per tick; the last, partial step lands it on the point, the next tick stops it
+  dead (a zero-speed boost: a boost keeps its speed), and the rig leaves LAUNCHED `LAUNCH_SETTLE_TICKS` 2 ticks after the longer boost. No strain check.
+- **Fixed frame** (`frame_fixed`): `centre = mid(points)`, `u` from A's point to B's, `n` signed toward the line from the player. FORM keeps the frame (no
+  player feed-forward); at the latch `n` is re-signed toward the latched player and the advance is `min((centre - P) · n, standoff) + overshoot` (Assault:
+  also capped by the room in `inner_rect()` inset by `slot_tolerance`), so every advance is at most 1.92 s. `frame_fixed` is cleared on BREAK / COLLAPSED:
+  the pair then runs ordinary Attack A cycles.
 
 ## Assault (R8.18)
 

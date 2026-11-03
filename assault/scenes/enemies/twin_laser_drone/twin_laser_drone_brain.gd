@@ -10,7 +10,9 @@
 ##   SOLO       [PANIC]      no partner: it cannot attack. Open Space: back to the controller (t13 docks it) or `patrol_anchor` (t14 idles there).
 ##   DISENGAGE  [DISENGAGE]  Assault: the one attack of this life is over, the budget ran out, or the partner is gone. Release the corridor and
 ##                           leave along -n (no frame: the heading) at `exit_speed`; free once outside the projectile world rect.
-##   LAUNCHED, IDLE, NOTICING, RETURNING: declared for t13 (Attack B's launch) and t14 (the hub idle); they hold still until then.
+##   LAUNCHED   [POSITION]   t13 (Attack B): a straight boost from the Laser Tender's cradle to this drone's launch point (the V), then FORM on
+##                           the fixed launched frame (no player feed-forward). Refuses a tow.
+##   IDLE, NOTICING, RETURNING: declared for t14 (the hub idle); they hold still until then.
 ##
 ## The rig (`TwinLaserPair`) owns the phase clock: the leader's tick advances it and each brain mirrors the rig phase (COLLAPSED with both drones
 ## alive mirrors as BREAK). **Assault: one attack per life.** Once an ADVANCE has started, or the `EngagementBudget` runs out, the drone disengages,
@@ -135,6 +137,8 @@ func _mirror(rig_phase: int) -> Phase:
 			return Phase.BREAK
 		TwinLaserPair.Phase.WAIT:
 			return Phase.WAIT
+		TwinLaserPair.Phase.LAUNCHED:
+			return Phase.LAUNCHED
 	return Phase.FORM
 
 
@@ -145,8 +149,11 @@ func _move(delta: float) -> void:
 	match phase:
 		Phase.FORM:
 			mover.arrive(pair.slot_of(actor), config.max_speed)
-			mover.add_nudge(pair.player_velocity)
+			if not pair.frame_fixed:
+				mover.add_nudge(pair.player_velocity)  # a launched frame does not follow the player: no feed-forward
 			_face(partner)
+		Phase.LAUNCHED:
+			_move_launched(delta, partner)
 		Phase.TELEGRAPH:
 			mover.arrive(pair.slot_of(actor), config.max_speed)
 			_face(partner)
@@ -165,7 +172,28 @@ func _move(delta: float) -> void:
 				home = pair.controller.global_position
 			mover.arrive(home, config.max_speed)
 		_:
-			mover.request_velocity(Vector2.ZERO)  # LAUNCHED / IDLE / NOTICING / RETURNING: t13 / t14 give them motion
+			mover.request_velocity(Vector2.ZERO)  # IDLE / NOTICING / RETURNING: t14 gives them motion
+
+
+## LAUNCHED (§2.13): a straight boost from the cradle along the launch direction at `launch_speed`, one step renewed per tick (the ADVANCE rule),
+## slowed on the last step so it lands on its point; facing its flight, so the V reads. The next tick it stops dead (a zero-speed boost: a
+## boost keeps its speed, which `arrive` could only brake at `acceleration`, overshooting the slot). After that (the shorter leg waiting for the
+## longer one, or a capped leg short of its point) it `arrive`s at its point, facing the partner.
+func _move_launched(delta: float, partner: Node2D) -> void:
+	var point := pair.launch_point_of(actor)
+	var dir := pair.launch_dir_of(actor)
+	var secs := pair.launch_seconds_of(actor) - TwinLaserPair.EPS
+	var started := pair.phase_time() - delta  # rig time is already advanced by this tick: when this tick began
+	if delta > 0.0 and started < secs:
+		# A tick that starts before the boost time ends boosts, so the last, partial step lands on the point and a capped leg flies exactly
+		# `launch_speed * launch_max_seconds`.
+		var s := clampf((point - actor.global_position).dot(dir) / delta, 0.0, pair.launch_speed)
+		mover.boost(dir, s, delta)
+	elif delta > 0.0 and started - delta < secs:
+		mover.boost(dir, 0.0, delta)  # the stop tick
+	else:
+		mover.arrive(point, config.max_speed)
+		_face(partner)
 
 
 func _face(partner: Node2D) -> void:

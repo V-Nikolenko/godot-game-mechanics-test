@@ -18,6 +18,10 @@ const BEAM_SCRIPT: Script = preload("res://assault/scenes/projectiles/enemy_beam
 const SINGLE_WRITER: GDScript = preload("res://tests/integration/test_enemy_mover_single_writer.gd")
 const RIG_SCRIPT_PATH := "res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair.gd"
 const SPAWN_SCRIPT_PATH := "res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.gd"
+## t13: the Laser Tender holds launched drones too (t12 DECISIONS: any new non-brain file that holds a drone joins the no-motion sweep; review N6 adds its
+## brain, which the single-writer gate sweeps only through `actor.` / `body.` / `self.`).
+const TENDER_SCRIPT_PATH := "res://assault/scenes/enemies/laser_tender/laser_tender.gd"
+const TENDER_BRAIN_SCRIPT_PATH := "res://assault/scenes/enemies/laser_tender/laser_tender_brain.gd"
 
 const MODES := ["open_space", "assault"]
 const DT := 1.0 / 60.0
@@ -326,7 +330,7 @@ func test_the_shipped_config_wins_over_the_scene() -> void:
 func test_the_phase_enums_are_declared_in_full_and_in_order() -> void:
 	assert_eq(TwinLaserDroneBrain.Phase.keys(), ["FORM", "TELEGRAPH", "ADVANCE", "BREAK", "WAIT", "SOLO", "DISENGAGE", "LAUNCHED", "IDLE",
 			"NOTICING", "RETURNING"])
-	assert_eq(TwinLaserPair.Phase.keys(), ["FORM", "TELEGRAPH", "ADVANCE", "BREAK", "COLLAPSED", "WAIT"])
+	assert_eq(TwinLaserPair.Phase.keys(), ["FORM", "TELEGRAPH", "ADVANCE", "BREAK", "COLLAPSED", "WAIT", "LAUNCHED"])
 
 
 func test_the_spawner_places_two_drones_half_a_rig_length_along_its_local_x_binds_them_and_frees_itself(
@@ -377,7 +381,7 @@ func test_the_rig_and_the_spawner_write_no_motion() -> void:
 		RegEx.create_from_string("\\b\\w+\\." + SINGLE_WRITER._CALLS),
 		RegEx.create_from_string("\\bmove_and_(slide|collide)\\s*\\("),
 	]
-	for path: String in [RIG_SCRIPT_PATH, SPAWN_SCRIPT_PATH]:
+	for path: String in [RIG_SCRIPT_PATH, SPAWN_SCRIPT_PATH, TENDER_SCRIPT_PATH, TENDER_BRAIN_SCRIPT_PATH]:
 		var source := FileAccess.get_file_as_string(path)
 		assert_gt(source.length(), 0, "read %s" % path)
 		var found: Array = SINGLE_WRITER._hits(source, patterns)

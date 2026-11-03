@@ -18,13 +18,19 @@
 ## **One owner.** The beam is a child of drone A, `setup(A, owner_group)`; A's brain feeds it its endpoints and ticks it (`tick_beam`) in every phase,
 ## so a cancelled beam fades out. Both drones (and a controller, if bound with one) join `owner_group`, so the beam never hurts them.
 ##
+## **Attack B (t13).** A launcher (the Laser Tender, `LaserTender.launch_pair()`) calls `launch(point_a, point_b, speed, max_seconds)` right after
+## `bind()`: LAUNCHED, each drone boosting from its cradle to its own point (the two diverging legs are the V); then the frame is **fixed** on the
+## points (`frame_fixed`: FORM keeps it instead of following the player), its normal re-signed at the latch toward the line from the player and its
+## advance capped at `standoff + overshoot` (and, in Assault, by the corridor's room). After that BREAK the pair runs ordinary Attack A cycles.
+##
 ## The file names its own class only in `bind()`, a static factory on a RefCounted (the `TargetInfo` precedent); `scripts/check-test-leaks.sh`
 ## proves it does not leak. It never names the drone or brain classes: a drone's brain is reached as its `Brain` child, duck-typed.
 class_name TwinLaserPair
 extends RefCounted
 
-## Append-only. §2.12's five, plus WAIT (Open Space's pause between attacks: both drones re-FORM on the same tick, so it is a rig phase).
-enum Phase { FORM, TELEGRAPH, ADVANCE, BREAK, COLLAPSED, WAIT }
+## Append-only. §2.12's five, plus WAIT (Open Space's pause between attacks: both drones re-FORM on the same tick, so it is a rig phase) and
+## LAUNCHED (t13: a Laser Tender's launch, each drone boosting from its cradle to its point; then FORM on the fixed launched frame).
+enum Phase { FORM, TELEGRAPH, ADVANCE, BREAK, COLLAPSED, WAIT, LAUNCHED }
 
 signal phase_changed(new_phase: int)
 ## Emitted once per collapse: [param intact] true for a strain collapse with both drones alive (they BREAK and re-FORM), false when the pair broke
@@ -35,6 +41,8 @@ signal collapsed(intact: bool)
 const FRAME_TURN_RATE := PI / 2.0
 ## Slack on summed tick deltas (as `EnemyBeam`).
 const EPS := 1e-6
+## LAUNCHED ends this many ticks past the longer leg's boost time: the tick of its last (partial) boost step, then its stop tick.
+const LAUNCH_SETTLE_TICKS := 2.0
 
 var drone_a: Node2D
 var drone_b: Node2D
@@ -70,6 +78,11 @@ var strained: bool = false
 var strain_time: float = 0.0
 ## WAIT's length, drawn from the leader's brain rng on entry.
 var wait_seconds: float = 0.0
+## True for a launched (Attack B) frame: FORM keeps it instead of re-deriving it from the player. Cleared on BREAK / COLLAPSED, so the next FORM
+## is an ordinary Attack A frame.
+var frame_fixed: bool = false
+## LAUNCHED: each drone's boost speed (px/s).
+var launch_speed: float = 0.0
 
 var _phase_time: float = 0.0
 var _axis_sign: float = 1.0
@@ -81,6 +94,10 @@ var _gone: Dictionary = {}
 var _fresh_frame: bool = true
 var _last_a: Vector2 = Vector2.ZERO
 var _last_b: Vector2 = Vector2.ZERO
+## LAUNCHED, per drone (index 0 = A, 1 = B): the point, the unit direction from the start, the boost time.
+var _launch_point: Array[Vector2] = [Vector2.ZERO, Vector2.ZERO]
+var _launch_dir: Array[Vector2] = [Vector2.ZERO, Vector2.ZERO]
+var _launch_seconds: Array[float] = [0.0, 0.0]
 
 
 ## Binds [param a] and [param b] (and [param p_controller], if any) into a new rig: the owner group, the beam on A, each brain's `pair`, the death
@@ -177,6 +194,94 @@ func phase_time() -> float:
 	return _phase_time
 
 
+## LAUNCHED queries: [param d]'s point, unit launch direction and boost time (§2.13: `min(|Q - start| / launch_speed, max_seconds)`).
+func launch_point_of(d: Object) -> Vector2:
+	return _launch_point[_index_of(d)]
+
+
+func launch_dir_of(d: Object) -> Vector2:
+	return _launch_dir[_index_of(d)]
+
+
+func launch_seconds_of(d: Object) -> float:
+	return _launch_seconds[_index_of(d)]
+
+
+# ── Attack B: the launch (t13) ───────────────────────────────────────────────────────────────────────────────────────
+
+## Puts the pair in LAUNCHED: drone A boosts from where it is toward [param point_a], B toward [param point_b], at [param speed] for
+## `min(|point - start| / speed, max_seconds)`. The leader's tick leaves LAUNCHED at the longer of the two and fixes the frame on the points
+## (A's slot is `point_a`), then FORMs on it. Called by the launcher (`LaserTender.launch_pair()`) right after `bind()`.
+func launch(point_a: Vector2, point_b: Vector2, speed: float, max_seconds: float) -> void:
+	launch_speed = speed
+	var points: Array[Vector2] = [point_a, point_b]
+	var drones: Array[Node2D] = [drone_a, drone_b]
+	for i in 2:
+		var start := drones[i].global_position if drones[i].is_inside_tree() else drones[i].position
+		var to := points[i] - start
+		_launch_point[i] = points[i]
+		_launch_dir[i] = to.normalized()
+		_launch_seconds[i] = minf(to.length() / speed, max_seconds) if speed > 0.0 else 0.0
+	has_frame = false
+	frame_fixed = false
+	_enter(Phase.LAUNCHED)
+
+
+## The launched frame (§2.13): centre on the two points' midpoint, u from A's point to B's, n = u's orthogonal signed toward the line from the
+## player (within 1 px of the line: +1).
+func _fix_launched_frame(p: Vector2, has_target: bool) -> void:
+	centre = (_launch_point[0] + _launch_point[1]) * 0.5
+	var ab := _launch_point[1] - _launch_point[0]
+	axis = ab.normalized() if ab.length_squared() > EPS else Vector2.RIGHT
+	_axis_sign = 1.0
+	normal = axis.orthogonal()
+	if has_target:
+		_sign_normal_toward_line(p, 1.0)
+	vertical = absf(axis.x) < 0.5
+	assault_side = signf(normal.x) if vertical else 0.0
+	has_frame = true
+	frame_fixed = true
+
+
+## n = ±u.orthogonal(), signed so the player at [param p] is on the -n side (the line advances at it); within 1 px of the line it keeps
+## [param keep] (the sign it had).
+func _sign_normal_toward_line(p: Vector2, keep: float) -> void:
+	var ortho := axis.orthogonal()
+	var d := (centre - p).dot(ortho)
+	var s := keep
+	if absf(d) > 1.0:
+		s = 1.0 if d > 0.0 else -1.0
+	normal = ortho * s
+
+
+## The advance of a launched wall, fixed at the latch: the distance to the latched player along -n, capped at `standoff` (so every advance is at most
+## `(standoff + overshoot) / advance_speed`, the §2.12 `max_advance_seconds`), plus `overshoot`; in Assault also capped by the room the centre has
+## along -n inside `rect` (the corridor's `inner_rect()` inset by `slot_tolerance`).
+func _launched_advance(p: Vector2, rect: Rect2) -> float:
+	var dist := minf(maxf((centre - p).dot(normal), 0.0), config.standoff) + config.overshoot
+	if rect.has_area():
+		dist = minf(dist, _room_along(centre, -normal, rect.grow(-config.slot_tolerance)))
+	return dist
+
+
+## How far [param from] can move along the unit [param dir] and stay inside [param rect] (0 when it is outside already).
+static func _room_along(from: Vector2, dir: Vector2, rect: Rect2) -> float:
+	var room := INF
+	if dir.x > EPS:
+		room = minf(room, (rect.end.x - from.x) / dir.x)
+	elif dir.x < -EPS:
+		room = minf(room, (rect.position.x - from.x) / dir.x)
+	if dir.y > EPS:
+		room = minf(room, (rect.end.y - from.y) / dir.y)
+	elif dir.y < -EPS:
+		room = minf(room, (rect.position.y - from.y) / dir.y)
+	return maxf(room, 0.0) if room != INF else 0.0
+
+
+func _index_of(d: Object) -> int:
+	return 1 if d == drone_b else 0
+
+
 # ── The rig clock (leader only) ──────────────────────────────────────────────────────────────────────────────────────
 
 ## One rig tick. A no-op unless [param caller] is the leader.
@@ -213,6 +318,14 @@ func tick(delta: float, caller: Node2D) -> void:
 				_enter(Phase.FORM)
 		Phase.COLLAPSED:
 			_enter(Phase.BREAK)  # a strain collapse: the survivors break and re-form
+		Phase.LAUNCHED:
+			# No strain check: the two legs differ in length, so the drones are not L apart until they land. Each leg boosts on every tick that
+			# starts before its boost time ends (the last, partial step lands it on its point), stops dead on the next (a boost keeps its speed, and
+			# FORM could only brake at the drone's acceleration, overshooting the slot), and the rig leaves LAUNCHED on the tick after the longer
+			# leg's stop: `LAUNCH_SETTLE_TICKS` ticks past the longer boost time.
+			if _phase_time - LAUNCH_SETTLE_TICKS * delta + EPS >= maxf(_launch_seconds[0], _launch_seconds[1]):
+				_fix_launched_frame(target.position, target.has_target)
+				_enter(Phase.FORM)
 
 
 ## Drone A's beam step: its endpoints (B's last position once B is gone), its strain, its clock. Called by A's brain at the end of every tick, in
@@ -245,7 +358,9 @@ func _tick_form(delta: float, target: TargetInfo, caller: Node2D) -> void:
 	if not target.has_target:
 		return
 	var rect := _corridor_rect(caller)
-	if rect.has_area():
+	if frame_fixed:
+		pass  # a launched frame stays where it landed (across the escape route); it never follows the player
+	elif rect.has_area():
 		if not _assault_frame(target.position, rect):
 			_enter(Phase.BREAK)
 			return
@@ -255,6 +370,9 @@ func _tick_form(delta: float, target: TargetInfo, caller: Node2D) -> void:
 	if drone_a.global_position.distance_to(slot_of(drone_a)) <= tol and drone_b.global_position.distance_to(slot_of(drone_b)) <= tol \
 			and separation_error() <= config.length_tolerance:
 		latched_player = target.position
+		if frame_fixed:
+			_sign_normal_toward_line(target.position, signf(normal.dot(axis.orthogonal())))
+			advance_distance = _launched_advance(target.position, rect)
 		_enter(Phase.TELEGRAPH)
 	elif _phase_time + EPS >= config.form_timeout:
 		_enter(Phase.BREAK)
@@ -340,6 +458,7 @@ func _enter(next: int) -> void:
 			if is_instance_valid(beam):
 				beam.start()
 		Phase.BREAK, Phase.COLLAPSED:
+			frame_fixed = false
 			if is_instance_valid(beam):
 				beam.cancel()
 		Phase.WAIT:

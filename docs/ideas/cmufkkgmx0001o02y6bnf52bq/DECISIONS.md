@@ -3259,3 +3259,35 @@ directory. These are *planned* decisions; check this phase's *as built* section,
   the power source hides its additive `Glow` child on its group's `power_changed(false)` and draws a dark core cap; the emitter keeps its baked red lens and the fence's `StateLight`.
 - **Transparency sweep roots unchanged:** no scene under `assault/scenes/structures` draws a texture (a group and a fence are coordinators over enemy members), so `SCOPE_ROOTS` needed no new entry.
 - Gate: `tests/integration/test_ph8_sprites.gd` (the Twin-Laser Drone and Laser Tender art task extends it).
+
+### Phase 8, built in t13 (the Laser Tender and Attack B: a V-launch into a moving wall) (2026-11-03)
+- **Built as §2.13 says:** `assault/scenes/enemies/laser_tender/` (`laser_tender.tscn` / `.gd` `LaserTender`, `laser_tender_brain.gd` `LaserTenderBrain`, flat `LaserTenderConfig` + `.tres` at the
+  §2.13 starting values, `ENEMY.md` with the IDEAS §43 checklist); `WaveBuilder.LASER_TENDER` / `laser_tender()`. Task plan `docs/plans/cmvqw0vnz018nqs2xv56q6a0a/3-plan.md` (review: three
+  rounds, the third owner-authorised, then a one-line confirmation, `4-review.md`).
+- **The seam:** `LaserTender.launch_pair(points: PackedVector2Array) -> TwinLaserPair` (points[0] for `CradleL`'s drone A; the caller orders them), plus `dock(drone)`, `rearm_cradles()`,
+  `launched_drones()`, `docked_count()`, `launches()`, `pair()`, `cradles()`. `LaserTenderBrain` has `signal launched(pair: TwinLaserPair)` and pure statics `lead_time()`, `open_space_points()`,
+  `assault_points()`, `order_for_cradles()` (Ph10 / Ph11 callers can plan with them). Brain seams for t14: `start_engaged`, `patrol_anchor`, `enter_phase()`; IDLE / NOTICING / RETURNING hold still.
+- **Deviation: `launch_pair()` adds the drones synchronously**, not deferred (§2.13's wording). Its only caller is the brain's physics-step tick, where adding bodies is legal, and hand-ticked
+  rows see the drones at once. Calling rule (in the doc comment): physics step or idle code, never a physics callback; a Ph10 / Ph11 caller inside `area_entered` must `call_deferred` it.
+- **Rig enum gains LAUNCHED, appended:** `TwinLaserPair.Phase { FORM, TELEGRAPH, ADVANCE, BREAK, COLLAPSED, WAIT, LAUNCHED }`; `TwinLaserPair.launch(point_a, point_b, speed, max_seconds)`,
+  `launch_point_of / launch_dir_of / launch_seconds_of`, `launch_speed`, `frame_fixed`. The launched frame is **fixed** (FORM keeps it, the drone drops the player feed-forward); `n` =
+  `u.orthogonal()` signed toward the line from the player (not §2.13's literal `(centre - P).normalized()`, which is askew once the player moves), re-signed at the latch.
+- **Deviation: the launched advance is capped at `standoff`:** `min((centre - P) · n, standoff) + overshoot` (Assault: also capped by the room in `inner_rect()` inset by `slot_tolerance`),
+  not §2.13's `|P - centre| + overshoot`, so every advance stays within §2.12's `max_advance_seconds` 1.92 s in both modes.
+- **Found while building: a boost keeps its speed.** A drone that boosts onto its point at 520 px/s and then FORMs can only brake at its `acceleration` (900), so it overshot its slot by
+  ≈ 90 px and strained the wall at the latch. So each leg boosts on every tick that starts before its boost time ends (the last, partial step lands it), **stops dead on the next tick**
+  (a zero-speed boost), and the rig leaves LAUNCHED `TwinLaserPair.LAUNCH_SETTLE_TICKS` (2) ticks after the longer boost. A capped leg flies exactly `launch_speed · launch_max_seconds`
+  (728 px) and is read on the last LAUNCHED tick. Anyone adding another "boost to a point" should copy the stop tick.
+- **Logged consequences (plan review):** an end-on wall (a player crossing the tender's bearing; the Assault strafe case) opens the V only ≈ 12°–18° (measured 11.7° / 18.2°), so the 20°
+  V is asserted on broadside geometries (38°–87° measured) and "diverging, never crossing" everywhere. §2.13's prediction horizon covers the flight, not FORM or the 0.8 s telegraph, so a
+  player holding a constant velocity is already past the wall when it lights and it chases from behind (row 13 `cross`: `n = -x`); one who turns back or slows meets it.
+- **Assault hold band:** APPROACH -> HOLD on the band (y within `HOLD_REACH` 24 of the hold point's, inside the view), not the point (a hold point tracking a 360 px/s strafer is never
+  caught). The hold point is `(clamp(P.x), view.top + assault_hold_depth)` capped `2R + 40` px above the player; a player hugging the top can therefore hold the launch off until the
+  budget ends (the §2.13 "budget before LAUNCH" case, accepted). Measured from (1000, -200) against a 360 px/s strafer: band at 3.03 s, closest approach to the point 111 px, launch 3.63 s.
+- **Config fields added** (each a number §2.13 states or implies): `standing_lead` 120, `strafe_speed_min` 60, `range_tolerance` 80, `arc_rate` 0.12, `dock_radius` 72,
+  `assault_hold_depth` 140. Brain constants `HOLD_REACH` 24, `HOLD_CLEARANCE` 40, `STANDING_SPEED` 20.
+- **Docking** covers every drone the tender launched (any rig), Open Space only (no `ScoreTracker` there, so a docked drone is never an escape). The tender leaves a previous rig's owner group
+  at the next launch once all its drones are gone; a rig with a live drone then keeps it in the group (harmless).
+- Roster gates: `laser_tender` joined the three rosters, `test_wreck.gd`, `test_base_enemy.gd` (`_MIN_ROSTER_SIZE` 20, authored COLLISION, the tow table: LAUNCH) and `test_enemy_dual_mode.gd`
+  (a launch case, the hazard-profile row 0.8 / 24 / 0.3); `test_engagement_deadline.gd` guards ENEMIES_CLEARED sections against it; `test_twin_laser_drones.gd`'s no-motion sweep covers
+  `laser_tender.gd` and `laser_tender_brain.gd`, and its rig enum pin gained LAUNCHED. Gate: `tests/integration/test_laser_tender.gd` (17 tests).

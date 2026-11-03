@@ -951,3 +951,19 @@ func test_no_enemies_cleared_section_spawns_a_twin_laser_pair() -> void:
 	var probe := _cloud_descent()
 	_add_to_last_wave(probe, load(WaveBuilder.TWIN_LASER_PAIR) as PackedScene, 0.0)
 	assert_true(_section_has_scene(probe, WaveBuilder.TWIN_LASER_PAIR), "boundary: a pair in cloud_descent's last wave is seen")
+
+
+## Phase 8 t13: a Laser Tender (plan §2.13) launches a twin-laser pair that attacks with a held wall, so it may not sit in an ENEMIES_CLEARED section
+## (the "For every task" rule: no twin pair or Laser Tender in one).
+func test_no_enemies_cleared_section_spawns_a_laser_tender() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.LASER_TENDER), "%s spawns a Laser Tender" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+	var probe := _cloud_descent()
+	_add_to_last_wave(probe, load(WaveBuilder.LASER_TENDER) as PackedScene, 0.0)
+	assert_true(_section_has_scene(probe, WaveBuilder.LASER_TENDER), "boundary: a tender in cloud_descent's last wave is seen")
