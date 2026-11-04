@@ -1,0 +1,12 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://assault/scenes/structures/laser_fence/laser_fence.tscn" id="1_hb"]
+
+[node name="HubBarrier" instance=ExtResource("1_hb")]
+mode = 1
+
+[node name="PostA" parent="." index="0"]
+position = Vector2(33, -146)
+
+[node name="PostB" parent="." index="1"]
+position = Vector2(-33, 146)

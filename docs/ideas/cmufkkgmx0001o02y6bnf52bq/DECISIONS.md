@@ -3339,3 +3339,32 @@ Task plan `docs/plans/cmvqw0vo2018rqs2xxd8m1llu/3-plan.md` (round 3 `VERDICT: AP
   animate `Sprite2D:self_modulate`. Cradle visibility is unchanged (`LaserTender._set_docked`: hidden at `launch_pair`, shown at `rearm_cradles`).
 - Gate: `tests/integration/test_ph8_sprites.gd` extended (art rows for both scenes and the cradle sprite, lens / StateLight placement, cradles on the bays, cradle visibility on launch and rearm in
   both harnesses). `test_entity_sprite_transparency.gd` sweeps the new textures through its existing roots (opaque: tender 51 %, drone 29 %, cradle 38 %).
+
+### Phase 8, built in t18 (hub placement: the defended derelict site, the Laser Tender and a twin-drone pair) (2026-11-04)
+- **Patrol draws.** `SectorHub._spawn_patrol()` appends the Laser Tender as **draw 16** (`laser_tender_ring_radius` 2600 / `laser_tender_anchor_bearing_deg` 112.5, anchor
+  ≈ (−995, 2402)) and a standalone `TwinLaserPairSpawn` as **draw 17** (`twin_pair_ring_radius` 2600 / `twin_pair_anchor_bearing_deg` −157.5, anchor ≈ (−2402, −995)): the
+  draw is the spawner's `rng_seed`, so drone A gets draw 17 and drone B draw 17 + 1. Draws 1–15 are unchanged. The hub calls `spawn_pair()` right after `add_child()`, so the
+  pair exists on frame 0 like every other patrol; **the spawner stays a queued-for-deletion `EnemyContainer` child until the frame ends**, so a row that counts the
+  container counts live children, and `_brain_seeds()` skips nodes with no `Brain`. Nearest anchors: Sniper / Ram, 1218 px. Clearances past idle + perceive: tender
+  +1104 px, pair +1109 px (the pair's worst idle offset is `rig_length / 2` = 210: the drones spawn either side of the anchor).
+- **The site.** `assault/scenes/structures/turret_group/presets/hub_defense_site.tscn` (a `TurretGroup`, `coverage_radius` 450) is a scene child of `sector_hub.tscn`'s
+  `EnemyContainer` at (2520, 1040), so its seven members spawn deferred into `EnemyContainer`. It draws nothing from the patrol rng.
+  - **Deviation: two offsets moved** off plan §2.17's starting values, which overlapped the derelicts: the heavy emplacement (0, 0) → **(180, 20)** (at (0, 0) its r 64 body
+    sat inside the cargo platform, −93 px gap, so its rounds would spawn inside a wreck that stops enemy rounds), the power source (120, −120) → **(200, −120)** (touching
+    the satellite). Both now sit behind the wreck line on the well side, inside the Gravity Well's 420 px pull (≈ 305 / 386 px from its centre) but outside its 150 px
+    `damage_radius`; static members have no mover, and a row pins the `damage_radius` clearance. The lance (0, −260) is kept, so the site's reach is the plan's 1360 px.
+  - **Deviation: the barrier is an inherited scene,** `assault/scenes/structures/laser_fence/hub_barrier.tscn` (`mode` CYCLE, `PostA` (33, −146), `PostB` (−33, 146): 299.4 px
+    apart along the wreck line), at slot (44, 98), ~90 px behind the module–cargo gap. `TurretGroupSlot` chooses only a member scene (no mode, no rotation) and
+    copying a slot's rotation was rejected (a turret root must never rotate). It lives in `laser_fence/`, not `presets/`: the coverage row loads every preset as a `TurretGroup`.
+  - **Deviation: no `rng_seed` export on the group** (§2.17 named one). `TurretGroup` has no rng and the site, a scene node, draws nothing from the patrol rng, which is what
+    the sentence was for; members' brains randomize their own rng as every turret does.
+- **Sweeps** in `test_sector_hub_patrol.gd`, over every `TurretGroup` / `LaserFence` child of `EnemyContainer` (so a later placed site is covered):
+  **A** reach = max over slots of |offset| + max(`perceive_radius`, mount reach via `TurretGroup.mount_reaches()`) (a fence: half post separation + the beam's
+  `draw_half_width` + `hazard_pad`): 1360 px; the spawn, every `MissionTrigger` and every `PickupBase` clear it by > 300 px (+543.8 px, the Edelia survey log).
+  **B** footprint = max over slots of |offset| + body radius (a fence: + half length + post radius) + 100 px = 416.4 px; every patrol's idle ring clears it (tightest the
+  Bomber, +761.4 px). Boundaries: a `MissionTrigger` 1000 px from the origin fails A; a patrol anchored on the origin fails B. The pre-approved lever (move the site to a
+  3000 px ring point) was **not needed**: no existing hub row turned red.
+- **Frame time** (one-off headless run of the whole `sector_hub.tscn`, `patrol_seed` 20260928, 600 frames after 60 warm-up, `TIME_PHYSICS_PROCESS + TIME_PROCESS`, one
+  process per case, 3 runs each): **with the site 8.39 / 9.21 / 9.57 ms (mean 9.06), without it 7.82 / 8.24 / 7.77 ms (mean 7.94)**: about +1.1 ms for seven members and a
+  CYCLE fence on the dummy renderer. Not a GUT row (epic review M3).
+- **Gate time:** GUT 211.993 → 211.414 s (2601 → 2613 tests, `scripts/gate-time.sh`); `test_sector_hub_patrol.gd` 1.59 → 1.64 s on its own. Allotment 1.2 s.

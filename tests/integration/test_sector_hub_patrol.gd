@@ -263,7 +263,7 @@ func test_a_pickup_moved_inside_the_snipers_reach_fails_the_clearance_check() ->
 	hub.free()
 
 
-func test_the_nine_distinct_patrol_anchors_are_well_apart_and_the_support_shares_the_rams() -> void:
+func test_the_eleven_distinct_patrol_anchors_are_well_apart_and_the_support_shares_the_rams() -> void:
 	var hub := HUB_SCENE.instantiate()
 	var anchors: Array[Vector2] = [
 		Vector2.RIGHT.rotated(deg_to_rad(float(hub.swarm_anchor_bearing_deg))) * float(hub.patrol_ring_radius),
@@ -275,8 +275,10 @@ func test_the_nine_distinct_patrol_anchors_are_well_apart_and_the_support_shares
 		_specialist_anchor(hub, float(hub.ram_anchor_bearing_deg)),
 		_corvette_anchor(hub),
 		_mine_layer_anchor(hub),
+		_tender_anchor(hub),
+		_twin_anchor(hub),
 	]
-	assert_eq(anchors.size(), 9)
+	assert_eq(anchors.size(), 11)
 	for i: int in anchors.size():
 		for j: int in range(i + 1, anchors.size()):
 			assert_gt(anchors[i].distance_to(anchors[j]), 1000.0,
@@ -289,6 +291,11 @@ func test_the_nine_distinct_patrol_anchors_are_well_apart_and_the_support_shares
 	assert_eq((extras.corvette.get_node("Brain") as MissileCorvetteBrain).patrol_anchor, anchors[7])
 	assert_eq((_mine_layers(built.container)[0].get_node("Brain") as MineLayerBrain).patrol_anchor, anchors[8])
 	assert_almost_eq(anchors[8].distance_to(anchors[7]), 1114.0, 2.0, "the layer's nearest anchor is the corvette's, 1114 px")
+	assert_eq((_laser_tenders(built.container)[0].get_node("Brain") as LaserTenderBrain).patrol_anchor, anchors[9])
+	for d: TwinLaserDrone in _twin_drones(built.container):
+		assert_eq((d.get_node("Brain") as TwinLaserDroneBrain).patrol_anchor, anchors[10], "both drones share the pair's anchor")
+	assert_almost_eq(anchors[9].distance_to(anchors[4]), 1218.0, 2.0, "the tender's nearest anchor is the Sniper's, 1218 px")
+	assert_almost_eq(anchors[10].distance_to(anchors[6]), 1218.0, 2.0, "the pair's nearest anchor is the Ram's, 1218 px")
 
 
 # ── No reference to the retired ambient hub drone remains anywhere in the project ──────────────
@@ -461,8 +468,11 @@ func test_spawns_one_swarm_squad_and_one_razor_drone() -> void:
 	assert_not_null(extras.corvette, "one Missile Corvette spawned")
 	assert_not_null(extras.support, "one Support Ship spawned")
 	assert_eq(_mine_layers(container).size(), 1, "one Mine Layer spawned")
-	assert_eq(container.get_child_count(), swarms.size() + 1 + fighters.size() + gatlings.size() + 3 + 2 + 1,
-			"nothing but the nine groups spawned into EnemyContainer")
+	assert_eq(_laser_tenders(container).size(), 1, "one Laser Tender spawned")
+	assert_eq(_twin_drones(container).size(), 2, "one Twin-Laser Drone pair spawned")
+	# The twin pair's spawner is still a child, queued for deletion, until the frame ends: count the live children.
+	assert_eq(_live_children(container).size(), swarms.size() + 1 + fighters.size() + gatlings.size() + 3 + 2 + 1 + 1 + 2,
+			"nothing but the eleven groups spawned into EnemyContainer")
 
 	var f_squad: SquadController = (fighters[0] as Fighter).squad if not fighters.is_empty() else null
 	var g_squad: SquadController = (gatlings[0] as GatlingInterceptor).squad if not gatlings.is_empty() else null
@@ -564,7 +574,9 @@ func test_the_mine_layer_carries_its_patrol_anchor_and_spawns_on_it() -> void:
 func _brain_seeds(container: Node2D) -> Array[int]:
 	var seeds: Array[int] = []
 	for c: Node in container.get_children():
-		seeds.append(int((c.get_node("Brain") as EnemyBrain).rng_seed))
+		var brain := c.get_node_or_null("Brain") as EnemyBrain
+		if brain != null:  # the twin pair's spawner has none (it is queued for deletion once the pair is out)
+			seeds.append(int(brain.rng_seed))
 	return seeds
 
 
@@ -580,16 +592,32 @@ func test_a_fixed_patrol_seed_reproduces_the_same_brain_seeds() -> void:
 ## specialists take draws 10-12 in sniper, bomber, ram order.
 func test_the_existing_groups_seeds_are_unchanged_by_the_specialists() -> void:
 	var built := _spawn_hub(PATROL_SEED)
-	var rng := RandomNumberGenerator.new()
-	rng.seed = PATROL_SEED
-	var expected: Array[int] = []
-	for i: int in 15:
-		var s := rng.randi()
-		expected.append(s if s != 0 else 1)
+	var expected := _expected_seeds()
 	var seeds := _brain_seeds(built.container)
 	assert_eq(seeds.slice(0, 12), expected.slice(0, 12), "the existing 12 draws keep their seeds")
 	assert_eq(seeds.slice(12, 14), expected.slice(12, 14), "the corvette takes draw 13 and the support draw 14")
-	assert_eq(seeds.slice(14), expected.slice(14), "the Mine Layer takes draw 15, after every earlier seed")
+	assert_eq(seeds.slice(14, 15), expected.slice(14, 15), "the Mine Layer takes draw 15, after every earlier seed")
+	# Phase 8 (t18): the Laser Tender takes draw 16; the twin pair's spawner draw 17, which seeds drone A, and drone B draw 17 + 1.
+	assert_eq(seeds.slice(15), expected.slice(15), "the tender takes draw 16, drone A draw 17 and drone B draw 17 + 1")
+	var tenders := _laser_tenders(built.container)
+	var drones := _twin_drones(built.container)
+	if tenders.size() == 1 and drones.size() == 2:
+		assert_eq((tenders[0].get_node("Brain") as EnemyBrain).rng_seed, expected[15], "draw 16 is the tender's")
+		assert_eq((drones[0].get_node("Brain") as EnemyBrain).rng_seed, expected[16], "draw 17 is drone A's")
+		assert_eq((drones[1].get_node("Brain") as EnemyBrain).rng_seed, expected[16] + 1, "drone B's is draw 17 + 1")
+
+
+## The seeds a bare RNG on `PATROL_SEED` gives the seventeen draws, plus drone B's (draw 17 + 1) last: the order `_brain_seeds()` reads them
+## in (the tender, then drones A and B after the queued spawner).
+func _expected_seeds() -> Array[int]:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = PATROL_SEED
+	var expected: Array[int] = []
+	for i: int in 17:
+		var s := rng.randi()
+		expected.append(s if s != 0 else 1)
+	expected.append(expected[16] + 1)
+	return expected
 
 
 ## Run with and without the tactical space (plan §2.16): its hazards are in the registry for the second case.
@@ -614,9 +642,21 @@ func test_nobody_perceives_the_player_at_frame_0(with_space: bool = use_paramete
 	all_drones.append(extras.support)
 	var mine_layers := _mine_layers(built.container)
 	all_drones.append_array(mine_layers)
+	var tenders := _laser_tenders(built.container)
+	var twins := _twin_drones(built.container)
+	all_drones.append_array(tenders)
+	all_drones.append_array(twins)  # container order: drone A, the pair's leader, ticks first
 	assert_gt(all_drones.size(), 1, "sanity: something spawned")
 	_tick_all(all_drones)
 	assert_eq(mine_layers.size(), 1, "sanity: the Mine Layer spawned")
+	assert_eq(tenders.size(), 1, "sanity: the Laser Tender spawned")
+	assert_eq(twins.size(), 2, "sanity: the twin pair spawned")
+	for lt: LaserTender in tenders:
+		assert_eq((lt.get_node("Brain") as LaserTenderBrain).phase, LaserTenderBrain.Phase.IDLE,
+				"a Laser Tender must not notice the player on its first tick")
+	for td: TwinLaserDrone in twins:
+		assert_eq((td.get_node("Brain") as TwinLaserDroneBrain).phase, TwinLaserDroneBrain.Phase.IDLE,
+				"a Twin-Laser Drone must not notice the player on its first tick")
 	for ml: MineLayer in mine_layers:
 		assert_eq((ml.get_node("Brain") as MineLayerBrain).phase, MineLayerBrain.Phase.IDLE,
 				"a Mine Layer must not notice the player on its first tick")
@@ -830,6 +870,8 @@ func _patrol_groups(hub: Node) -> Dictionary:
 		"Missile Corvette": [_corvette_anchor(hub), CORVETTE_CONFIG.idle_radius, CORVETTE_CONFIG.perceive_radius],
 		"Support": [ram_anchor, SUPPORT_CONFIG.idle_radius, SUPPORT_CONFIG.perceive_radius],
 		"Mine Layer": [_mine_layer_anchor(hub), MINE_LAYER_CONFIG.idle_radius, MINE_LAYER_CONFIG.perceive_radius],
+		"Laser Tender": [_tender_anchor(hub), TENDER_CONFIG.idle_radius, TENDER_CONFIG.perceive_radius],
+		"Twin Pair": [_twin_anchor(hub), _twin_idle_offset(), TWIN_CONFIG.perceive_radius],
 	}
 
 
@@ -998,16 +1040,10 @@ func test_the_space_has_a_sight_line_blocker_that_refuses_a_real_sniper_a_line()
 func test_with_the_space_present_the_patrol_seeds_and_composition_are_unchanged() -> void:
 	var built := _spawn_hub(PATROL_SEED, -1, _player_spawn, false, true)
 	assert_gt(Hazards.count(), 0, "sanity: the tactical space is registered")
-	var rng := RandomNumberGenerator.new()
-	rng.seed = PATROL_SEED
-	var expected: Array[int] = []
-	for i: int in 15:
-		var s := rng.randi()
-		expected.append(s if s != 0 else 1)
-	assert_eq(_brain_seeds(built.container), expected, "the space draws nothing from the patrol rng")
+	assert_eq(_brain_seeds(built.container), _expected_seeds(), "the space draws nothing from the patrol rng")
 	var found := _swarm_and_razor(built.container)
 	assert_eq((found.swarms as Array).size(), 4)
-	assert_eq(built.container.get_child_count(), 15, "nothing but the nine patrol groups spawned")
+	assert_eq(_live_children(built.container).size(), 18, "nothing but the eleven patrol groups spawned")
 
 
 # ── Phase 7 (plan §2.15, t14): the Mine Layer's patrol and the placed minefield ────────────────
@@ -1103,3 +1139,493 @@ func test_every_hub_field_mine_is_still_live_60_seconds_after_load() -> void:
 		for info: HazardInfo in Hazards.around(m.global_position, 1.0):
 			registered = registered or info.source == m
 		assert_true(registered, "still registered as a hazard")
+
+
+# ── Phase 8 (plan §2.17, t18): a Laser Tender, a twin-drone pair and the defended derelict site ────────────────────────
+# Draws 16 and 17 are appended after the Mine Layer, so every earlier seed is unchanged. The site is a scene node under
+# `EnemyContainer` (a `TurretGroup` preset): it draws nothing from the patrol rng, and `_spawn_hub()`'s bare script never
+# places it, so every spawn row above sees only the patrol. Sweep A keeps the site's fire reach off the player's safe
+# places; sweep B keeps every patrol's idle ring off the site's structures.
+
+const TENDER_CONFIG: LaserTenderConfig = preload("res://assault/scenes/enemies/laser_tender/laser_tender_config.tres")
+const TWIN_CONFIG: TwinLaserDroneConfig = preload(
+		"res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone_config.tres")
+const SITE_SCENE_PATH := "res://assault/scenes/structures/turret_group/presets/hub_defense_site.tscn"
+const GENERATOR_SCENE_PATH := "res://assault/scenes/enemies/shield_generator/shield_generator.tscn"
+const POWER_SCENE_PATH := "res://assault/scenes/enemies/power_source/power_source.tscn"
+const TURRET_SCENE_PATH := "res://assault/scenes/enemies/defense_turret/defense_turret.tscn"
+const HEAVY_SCENE_PATH := "res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn"
+## Sweep A's margin: the interactable margin the TacticalSpace sweep uses (`_space_clearance_violations`).
+const SITE_POINT_MARGIN := 300.0
+## Sweep B's margin past the site's footprint (plan §2.17).
+const SITE_FOOTPRINT_MARGIN := 100.0
+## Smallest gap between two site bodies, or a site body and a derelict, px.
+const SITE_BODY_GAP := 30.0
+
+
+func _tender_anchor(hub: Node) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(float(hub.laser_tender_anchor_bearing_deg))) * float(hub.laser_tender_ring_radius)
+
+
+func _twin_anchor(hub: Node) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(float(hub.twin_pair_anchor_bearing_deg))) * float(hub.twin_pair_ring_radius)
+
+
+## A twin pair's worst idle offset: the drones spawn `rig_length / 2` either side of the anchor, then circle it at `idle_radius`
+## within `slot_tolerance`.
+func _twin_idle_offset() -> float:
+	return maxf(TWIN_CONFIG.idle_radius + TWIN_CONFIG.slot_tolerance, TWIN_CONFIG.rig_length * 0.5)
+
+
+func _laser_tenders(container: Node2D) -> Array[LaserTender]:
+	var out: Array[LaserTender] = []
+	for c: Node in container.get_children():
+		if c is LaserTender:
+			out.append(c)
+	return out
+
+
+func _twin_drones(container: Node2D) -> Array[TwinLaserDrone]:
+	var out: Array[TwinLaserDrone] = []
+	for c: Node in container.get_children():
+		if c is TwinLaserDrone:
+			out.append(c)
+	return out
+
+
+func _live_children(container: Node2D) -> Array[Node]:
+	return container.get_children().filter(func(c: Node) -> bool: return not c.is_queued_for_deletion())
+
+
+func _nearest_margin(anchor: Vector2, idle: float, perceive: float, points: Array[Vector2]) -> float:
+	var nearest := INF
+	for p: Vector2 in points:
+		nearest = minf(nearest, p.distance_to(anchor))
+	return nearest - idle - perceive
+
+
+func test_laser_tender_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	assert_eq(float(hub.laser_tender_ring_radius), 2600.0)
+	assert_eq(float(hub.laser_tender_anchor_bearing_deg), 112.5)
+	var anchor := _tender_anchor(hub)
+	var points := _interactable_points(hub)
+	_assert_group_clears(anchor, TENDER_CONFIG.idle_radius, TENDER_CONFIG.perceive_radius, points, "Laser Tender")
+	print("Laser Tender ring margin: %.1f px" % _nearest_margin(anchor, TENDER_CONFIG.idle_radius, TENDER_CONFIG.perceive_radius, points))
+	hub.free()
+
+
+func test_twin_pair_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	assert_eq(float(hub.twin_pair_ring_radius), 2600.0)
+	assert_eq(float(hub.twin_pair_anchor_bearing_deg), -157.5)
+	var anchor := _twin_anchor(hub)
+	var points := _interactable_points(hub)
+	_assert_group_clears(anchor, _twin_idle_offset(), TWIN_CONFIG.perceive_radius, points, "Twin Pair")
+	print("Twin pair ring margin: %.1f px" % _nearest_margin(anchor, _twin_idle_offset(), TWIN_CONFIG.perceive_radius, points))
+	hub.free()
+
+
+func test_the_tender_and_the_pair_spawn_bound_on_their_anchors() -> void:
+	var built := _spawn_hub(PATROL_SEED)
+	var container: Node2D = built.container
+	var tenders := _laser_tenders(container)
+	var drones := _twin_drones(container)
+	assert_eq(tenders.size(), 1, "one Laser Tender")
+	assert_eq(drones.size(), 2, "two Twin-Laser Drones")
+	if tenders.size() != 1 or drones.size() != 2:
+		return
+	var tender_anchor := _tender_anchor(built.hub)
+	var twin_anchor := _twin_anchor(built.hub)
+	assert_eq((tenders[0].get_node("Brain") as LaserTenderBrain).patrol_anchor, tender_anchor)
+	assert_eq(tenders[0].global_position, tender_anchor, "the tender spawns on its anchor")
+	var rig := drones[0].pair()
+	assert_not_null(rig, "the drones are bound")
+	assert_eq(drones[1].pair(), rig, "as one TwinLaserPair")
+	assert_null(rig.controller if rig != null else null, "a standalone pair: no tender controls it")
+	for d: TwinLaserDrone in drones:
+		assert_eq((d.get_node("Brain") as TwinLaserDroneBrain).patrol_anchor, twin_anchor, "both drones share the pair's anchor")
+	assert_almost_eq(drones[0].global_position.distance_to(drones[1].global_position), TWIN_CONFIG.rig_length, 0.01,
+			"spawned rig_length apart, centred on the anchor")
+	assert_almost_eq((drones[0].global_position + drones[1].global_position) * 0.5, twin_anchor, Vector2(0.01, 0.01))
+	assert_eq(_live_children(container).size(), 15 + 3, "the fifteen draws before, the tender and the two drones")
+
+
+# ── The defended derelict site ─────────────────────────────────────────────────────────────────────────────────────
+
+## Every `TurretGroup` and `LaserFence` child of the hub's `EnemyContainer` (the site sweeps' subjects).
+func _hub_sites(hub: Node) -> Array[Node2D]:
+	var out: Array[Node2D] = []
+	for c: Node in hub.get_node("EnemyContainer").get_children():
+		if c is TurretGroup or c is LaserFence:
+			out.append(c)
+	return out
+
+
+## The body circle radius of an off-tree member root (its root `CollisionShape2D`, times the node scales).
+func _body_radius(root: Node) -> float:
+	var shape_node := root.get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if shape_node == null or not (shape_node.shape is CircleShape2D):
+		return 0.0
+	return (shape_node.shape as CircleShape2D).radius * absf(shape_node.scale.x * (root as Node2D).scale.x)
+
+
+## A fence's posts' separation and post body radius, read off-tree.
+func _fence_geometry(fence: LaserFence) -> Dictionary:
+	var a := fence.get_node("PostA") as Node2D
+	var b := fence.get_node("PostB") as Node2D
+	return {"a": a.position, "b": b.position, "half": a.position.distance_to(b.position) * 0.5, "post_radius": _body_radius(a)}
+
+
+## A fence's fire reach from its own origin: half its post separation + the beam's drawn half width + its hazard pad (plan §2.17).
+func _fence_reach(fence: LaserFence) -> float:
+	var beam := fence.get_node("Beam")
+	return float(_fence_geometry(fence)["half"]) + float(beam.get(&"draw_half_width")) + float(beam.get(&"hazard_pad"))
+
+
+## The reach of one member root from its own origin that is not a mount's: a fence's beam, else the config's `perceive_radius` (0 for the
+## generator, the source and the posts: their configs have none). Mount reaches come from `TurretGroup.mount_reaches()`.
+func _member_reach(root: Node) -> float:
+	if root is LaserFence:
+		return _fence_reach(root as LaserFence)
+	var cfg: Variant = root.get(&"config")
+	if cfg is Resource and &"perceive_radius" in cfg:
+		return float(cfg.get(&"perceive_radius"))
+	return 0.0
+
+
+## The site's structural extent of one member root from its own origin: body radius, or for a fence its half length + a post's radius.
+func _member_extent(root: Node) -> float:
+	if root is LaserFence:
+		var geo := _fence_geometry(root as LaserFence)
+		return float(geo["half"]) + float(geo["post_radius"])
+	return _body_radius(root)
+
+
+## `[origin, reach, footprint, label]` for one site: a group's reach is the max over its slots of |offset| + max(the member's
+## `perceive_radius`, its mounts' reach) (the mounts read through `TurretGroup.mount_reaches()`, which honours a slot's `variant`, measured
+## from each mount); its footprint the max over its slots of |offset| + the member's extent, + `SITE_FOOTPRINT_MARGIN`. A standalone fence is
+## one slot at 0.
+func _site_extent(site: Node2D) -> Array:
+	var reach := 0.0
+	var footprint := 0.0
+	if site is LaserFence:
+		reach = _fence_reach(site as LaserFence)
+		footprint = _member_extent(site)
+	else:
+		for child: Node in site.get_children():
+			var slot := child as TurretGroupSlot
+			if slot == null or slot.member_scene == null:
+				continue
+			var root := slot.member_scene.instantiate()
+			reach = maxf(reach, slot.position.length() + _member_reach(root))
+			footprint = maxf(footprint, slot.position.length() + _member_extent(root))
+			root.free()
+		for m: Dictionary in (site as TurretGroup).mount_reaches():
+			reach = maxf(reach, (m["position"] as Vector2).length() + float(m["reach"]))
+	return [site.position, reach, footprint + SITE_FOOTPRINT_MARGIN, String(site.name)]
+
+
+## Sweep A: every interactable a site's fire reach does not clear by more than `SITE_POINT_MARGIN`.
+func _site_reach_violations(hub: Node) -> Array[String]:
+	var out: Array[String] = []
+	var points := _interactable_points(hub)
+	for site: Node2D in _hub_sites(hub):
+		var e := _site_extent(site)
+		for p: Vector2 in points:
+			var clearance: float = p.distance_to(e[0]) - float(e[1])
+			if clearance <= SITE_POINT_MARGIN:
+				out.append("%s's fire reach (%.0f px) is only %.1f px from %s (needs > %.0f)" % [e[3], e[1], clearance, p, SITE_POINT_MARGIN])
+	return out
+
+
+## Sweep B: every patrol group whose idle ring does not clear a site's footprint.
+func _site_footprint_violations(hub: Node, groups: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	for site: Node2D in _hub_sites(hub):
+		var e := _site_extent(site)
+		for label: String in groups:
+			var g: Array = groups[label]
+			var clearance: float = (g[0] as Vector2).distance_to(e[0]) - float(g[1])
+			if clearance <= float(e[2]):
+				out.append("%s's idle ring reaches within %.1f px of %s (footprint %.1f)" % [label, clearance, e[3], e[2]])
+	return out
+
+
+func test_hub_defense_site_reach_clears_spawn_triggers_and_pickups() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var sites := _hub_sites(hub)
+	assert_gte(sites.size(), 1, "sanity: the sweep found the site")
+	for site: Node2D in sites:
+		var e := _site_extent(site)
+		var nearest := INF
+		for p: Vector2 in _interactable_points(hub):
+			nearest = minf(nearest, p.distance_to(e[0]) - float(e[1]))
+		print("%s: fire reach %.1f px, nearest interactable clears it by %.1f px" % [e[3], e[1], nearest])
+	var site := sites[0] as TurretGroup
+	if site != null:
+		var lance := site.get_node("LanceTurret") as TurretGroupSlot
+		assert_almost_eq(float(_site_extent(site)[1]), lance.position.length() + TurretMountScenes.reach_of(TurretMount.Variant.LANCE), 0.01,
+				"the lance turret sets the site's reach")
+		assert_almost_eq(float(_site_extent(site)[1]), 1360.0, 0.5, "the plan's 1360 px (260 + 1100)")
+	var violations := _site_reach_violations(hub)
+	assert_true(violations.is_empty(), "\n".join(violations))
+	hub.free()
+
+
+## Boundary: sweep A can reject. A real `MissionTrigger` placed 1000 px from the site origin, inside its reach, is reported.
+func test_a_mission_trigger_inside_the_sites_reach_fails_sweep_a() -> void:
+	var hub := HUB_SCENE.instantiate()
+	assert_true(_site_reach_violations(hub).is_empty(), "sanity: the real scene is clear")
+	var site := _hub_sites(hub)[0]
+	var trigger := MissionTrigger.new()
+	trigger.name = "PlantedTrigger"
+	trigger.position = site.position + Vector2(-1000.0, 0.0)
+	hub.add_child(trigger)
+	var violations := _site_reach_violations(hub)
+	assert_eq(violations.size(), 1, "the planted trigger, and nothing else, is caught")
+	hub.free()
+
+
+func test_hub_patrols_clear_the_defense_site() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var groups := _patrol_groups(hub)
+	assert_eq(groups.size(), 12, "every patrol group, the tender and the pair included")
+	var sites := _hub_sites(hub)
+	assert_gte(sites.size(), 1, "sanity: the sweep found the site")
+	for site: Node2D in sites:
+		var e := _site_extent(site)
+		assert_lt(float(e[2]), 500.0, "%s's footprint (%.1f px) is the plan's ~400 px, not its fire reach" % [e[3], e[2]])
+		var tightest := INF
+		var who := ""
+		for label: String in groups:
+			var g: Array = groups[label]
+			var c: float = (g[0] as Vector2).distance_to(e[0]) - float(g[1]) - float(e[2])
+			if c < tightest:
+				tightest = c
+				who = label
+		print("%s: footprint %.1f px; tightest patrol %s clears it by %.1f px" % [e[3], e[2], who, tightest])
+	var violations := _site_footprint_violations(hub, groups)
+	assert_true(violations.is_empty(), "\n".join(violations))
+	hub.free()
+
+
+## Boundary: sweep B can reject. A patrol anchored on the site origin is reported.
+func test_a_patrol_anchored_on_the_site_fails_sweep_b() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var groups := _patrol_groups(hub)
+	assert_true(_site_footprint_violations(hub, groups).is_empty(), "sanity: the real scene is clear")
+	var site := _hub_sites(hub)[0]
+	groups["Planted"] = [site.position, 150.0, 600.0]
+	var violations := _site_footprint_violations(hub, groups)
+	assert_eq(violations.size(), 1)
+	assert_true(violations.any(func(v: String) -> bool: return v.begins_with("Planted")))
+	hub.free()
+
+
+func test_the_hub_places_the_defense_site_under_the_enemy_container() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var groups := (hub.get_node("EnemyContainer").get_children() as Array).filter(func(c: Node) -> bool: return c is TurretGroup)
+	assert_eq(groups.size(), 1, "exactly one turret group in the hub")
+	if groups.size() == 1:
+		var site := groups[0] as TurretGroup
+		assert_eq(site.scene_file_path, SITE_SCENE_PATH)
+		assert_eq(site.position, Vector2(2520.0, 1040.0), "guarding the TacticalSpace derelicts (plan §2.17)")
+		assert_eq(site.coverage_radius, 450.0)
+		assert_eq(site.coverage_holes().size(), 0, "it meets the coverage rule at 450 px")
+	hub.free()
+
+
+## The preset's slots, read off-tree: the heavy emplacement, a sweep / rocket / lance turret, a generator, a power source and a CYCLE
+## laser fence whose posts are about 300 px apart.
+func test_the_site_preset_has_the_planned_members() -> void:
+	var site := (load(SITE_SCENE_PATH) as PackedScene).instantiate() as TurretGroup
+	var scenes: Dictionary = {}
+	var turret_variants: Array[int] = []
+	var fences: Array[LaserFence] = []
+	for child: Node in site.get_children():
+		var slot := child as TurretGroupSlot
+		if slot == null:
+			continue
+		var path := slot.member_scene.resource_path
+		scenes[path] = int(scenes.get(path, 0)) + 1
+		if path == TURRET_SCENE_PATH:
+			turret_variants.append(slot.variant)
+		var root := slot.member_scene.instantiate()
+		if root is LaserFence:
+			fences.append(root)
+		else:
+			root.free()
+	turret_variants.sort()
+	assert_eq(int(scenes.get(HEAVY_SCENE_PATH, 0)), 1, "one heavy emplacement")
+	assert_eq(turret_variants, [int(TurretMount.Variant.SWEEP_BEAM), int(TurretMount.Variant.ROCKET_BATTERY), int(TurretMount.Variant.LANCE)],
+			"a sweep, a rocket battery and a lance turret")
+	assert_eq(int(scenes.get(GENERATOR_SCENE_PATH, 0)), 1, "one shield generator")
+	assert_eq(int(scenes.get(POWER_SCENE_PATH, 0)), 1, "one power source")
+	assert_eq(fences.size(), 1, "one laser fence")
+	for f: LaserFence in fences:
+		assert_eq(f.mode, LaserFence.Mode.CYCLE, "a temporary barrier")
+		assert_almost_eq(float(_fence_geometry(f)["half"]) * 2.0, 300.0, 2.0, "posts about 300 px apart")
+		f.free()
+	assert_eq(site.get_child_count(), 7)
+	site.free()
+
+
+## The site's bodies in hub coordinates: `[centre, radius, name]` for every member (both fence posts), plus the barrier segment.
+func _site_bodies(site: TurretGroup) -> Dictionary:
+	var bodies: Array = []
+	var segment: Array = []
+	for child: Node in site.get_children():
+		var slot := child as TurretGroupSlot
+		if slot == null:
+			continue
+		var root := slot.member_scene.instantiate()
+		var at := site.position + slot.position
+		if root is LaserFence:
+			var geo := _fence_geometry(root as LaserFence)
+			bodies.append([at + (geo["a"] as Vector2), float(geo["post_radius"]), "%s/PostA" % slot.name])
+			bodies.append([at + (geo["b"] as Vector2), float(geo["post_radius"]), "%s/PostB" % slot.name])
+			segment = [at + (geo["a"] as Vector2), at + (geo["b"] as Vector2), float(root.get_node("Beam").get(&"draw_half_width"))]
+		else:
+			bodies.append([at, _body_radius(root), String(slot.name)])
+		root.free()
+	return {"bodies": bodies, "segment": segment}
+
+
+func _derelicts(hub: Node) -> Array:
+	return _space_elements(hub).filter(func(e: Array) -> bool:
+		return hub.get_node("TacticalSpace").get_node(NodePath(e[2])) is Wreck)
+
+
+## Every pair of site bodies and derelicts too close together, and every body the barrier's drawn beam would touch.
+func _site_geometry_violations(hub: Node, site: TurretGroup) -> Array[String]:
+	var out: Array[String] = []
+	var found := _site_bodies(site)
+	var bodies: Array = found.bodies
+	var derelicts := _derelicts(hub)
+	var all: Array = bodies + derelicts
+	for i: int in all.size():
+		for j: int in range(i + 1, all.size()):
+			if i >= bodies.size():
+				continue  # two derelicts: TacticalSpace's own business
+			var gap: float = (all[i][0] as Vector2).distance_to(all[j][0]) - float(all[i][1]) - float(all[j][1])
+			if gap < SITE_BODY_GAP:
+				out.append("%s and %s are %.1f px apart (need >= %.0f)" % [all[i][2], all[j][2], gap, SITE_BODY_GAP])
+	# The moved members sit inside the gravity well's pull (harmless: no mover), but never under its stress pulse.
+	var space := hub.get_node("TacticalSpace") as Node2D
+	for child: Node in space.get_children():
+		if child is HazardField and (child as HazardField).kind == &"gravity_well":
+			var well := space.position + (child as Node2D).position
+			var damage_radius := float(child.get(&"damage_radius"))
+			for b: Array in bodies:
+				var gap: float = (b[0] as Vector2).distance_to(well) - float(b[1]) - damage_radius
+				if gap <= 0.0:
+					out.append("%s is inside the gravity well's damage_radius (%.1f px)" % [b[2], gap])
+	var seg: Array = found.segment
+	if not seg.is_empty():
+		for e: Array in all:
+			if String(e[2]).contains("/Post"):
+				continue
+			var p := Geometry2D.get_closest_point_to_segment(e[0], seg[0], seg[1])
+			var gap: float = p.distance_to(e[0]) - float(e[1])
+			if gap <= float(seg[2]):
+				out.append("the barrier passes %.1f px from %s (need > %.0f)" % [gap, e[2], seg[2]])
+	return out
+
+
+func test_the_site_bodies_clear_each_other_and_the_derelicts() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var site := _hub_sites(hub)[0] as TurretGroup
+	assert_eq(_derelicts(hub).size(), 3, "sanity: the three derelicts")
+	var violations := _site_geometry_violations(hub, site)
+	assert_true(violations.is_empty(), "\n".join(violations))
+	hub.free()
+
+
+## Boundary: the plan's first offset for the heavy emplacement, the site origin, sits inside the cargo platform and is reported.
+func test_a_heavy_emplacement_on_the_site_origin_fails_the_geometry_check() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var site := _hub_sites(hub)[0] as TurretGroup
+	(site.get_node("HeavyEmplacement") as Node2D).position = Vector2.ZERO
+	var violations := _site_geometry_violations(hub, site)
+	assert_true(violations.any(func(v: String) -> bool: return v.begins_with("HeavyEmplacement and StructureCargoPlatform")),
+			"\n".join(violations))
+	hub.free()
+
+
+## The site spawned into an Open Space container (the hub's `EnemyContainer` stand-in), ticks off: `[group, members, container]`.
+func _spawn_site() -> Array:
+	var h: RefCounted = HARNESS.open_space()
+	add_child_autofree(h.root)
+	var container := Node2D.new()
+	container.name = "EnemyContainer"
+	h.root.add_child(container)
+	var site := (load(SITE_SCENE_PATH) as PackedScene).instantiate() as TurretGroup
+	site.position = Vector2(2520.0, 1040.0)
+	container.add_child(site)
+	site.spawn_members()
+	site.set_physics_process(false)
+	var members := site.members()
+	for m: Node2D in members:
+		m.set_physics_process(false)
+	return [site, members, container]
+
+
+func _enemy_shield_of(m: Node) -> EnemyShield:
+	for c: Node in m.get_children():
+		if c is EnemyShield:
+			return c
+	return null
+
+
+func test_the_site_spawns_powered_members_into_the_container_shielded_except_the_fence_posts() -> void:
+	var spawned := _spawn_site()
+	var site: TurretGroup = spawned[0]
+	var members: Array = spawned[1]
+	var container: Node2D = spawned[2]
+	assert_eq(members.size(), 7, "every slot spawned")
+	assert_true(site.is_powered(), "the group is powered")
+	var generator: ShieldGenerator = null
+	var fence: LaserFence = null
+	for m: Node2D in members:
+		assert_eq(m.get_parent(), container, "%s is a sibling of the group in EnemyContainer" % m.name)
+		if m.has_method("is_powered"):
+			assert_true(bool(m.call("is_powered")), "%s is powered" % m.name)
+		if m is LaserFence:
+			fence = m
+			for post: LaserEmitter in (m as LaserFence).posts():
+				assert_true(post.is_in_group(site.owner_group), "fence post %s is in the group's owner set" % post.name)
+		else:
+			assert_true(m.is_in_group(site.owner_group), "%s is in the group's owner set" % m.name)
+			assert_true(m.is_in_group("enemies"), "%s is an enemy" % m.name)
+		if m is ShieldGenerator:
+			generator = m
+		if m is PowerSource:
+			assert_true((m as PowerSource).provides_power(), "the source powers the group")
+	assert_not_null(generator, "the site has a generator")
+	assert_not_null(fence, "the site has a laser fence")
+	if generator == null or fence == null:
+		return
+	# One generator tick, then each bubble's own tick (the `test_turret_group.gd` `_gen_step` shape).
+	site.tick(DT)
+	generator._physics_process(DT)
+	for m: Node2D in members:
+		var s := _enemy_shield_of(m)
+		if s != null:
+			s._tick(DT)
+	var shielded := 0
+	for m: Node2D in members:
+		if m is LaserFence or m == generator:
+			continue
+		var s := _enemy_shield_of(m)
+		assert_not_null(s, "%s carries a bubble" % m.name)
+		if s != null:
+			shielded += 1
+			assert_true(s.is_up(), "%s's bubble is up" % m.name)
+			assert_true((m as BaseEnemy).hurt_box.has_absorber(), "%s's bubble sits in its hurtbox's absorber slot" % m.name)
+	assert_eq(shielded, 5, "the heavy emplacement, three turrets and the power source")
+	assert_null(_enemy_shield_of(generator), "the generator does not shield itself")
+	for post: LaserEmitter in fence.posts():
+		assert_null(_enemy_shield_of(post), "fence post %s is never shielded" % post.name)
+		assert_false(post.hurt_box.has_absorber(), "and holds no absorber")
+	assert_eq(generator.tethers().size(), 5, "one tether per shielded member")

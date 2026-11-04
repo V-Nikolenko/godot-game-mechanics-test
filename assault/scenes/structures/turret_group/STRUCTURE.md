@@ -5,9 +5,9 @@ crossfire stays readable, and shuts every turret down the moment the power sourc
 **Fantasy / threat:** A defended position: guns whose lanes cross, wired to a reactor. Fight through the crossfire, or find the lane to the reactor
 and switch the whole position off.
 
-> **Build state (Phase 8, t9 + t9s).** `TurretGroup`, `TurretGroupSlot`, the `assault_pair` preset and `WaveBuilder.turret_group()`; the shield generator
-> (t9s, [ENEMY.md](../../enemies/shield_generator/ENEMY.md)) is a member that wraps the others in bubbles. Next: the hub site preset (t18), level-1 placement
-> (t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10; task plan
+> **Build state (Phase 8, t9 + t9s + t18).** `TurretGroup`, `TurretGroupSlot`, the `assault_pair` preset and `WaveBuilder.turret_group()`; the shield generator
+> (t9s, [ENEMY.md](../../enemies/shield_generator/ENEMY.md)) is a member that wraps the others in bubbles; the hub's defended derelict site, `hub_defense_site.tscn`
+> (t18, placed under `sector_hub.tscn`'s `EnemyContainer`). Next: level-1 placement (t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10; task plan
 > `docs/plans/cmvqw0vnl0183qs2xbphzonu7/3-plan.md`.
 
 ---
@@ -54,9 +54,17 @@ and switch the whole position off.
 | Preset | Members | coverage_radius |
 |---|---|---|
 | `assault_pair.tscn` | BURST_CANNON turret at (−50, 60), PULSE_RING turret at (50, −60), power source at (0, 0) | 180 |
+| `hub_defense_site.tscn` | heavy emplacement at (180, 20), SWEEP_BEAM turret at (−240, 160), ROCKET_BATTERY turret at (240, 160), LANCE turret at (0, −260), shield generator at (−120, −120), power source at (200, −120), `laser_fence/hub_barrier.tscn` (a CYCLE fence) at (44, 98) | 450 |
 
 `assault_pair` is a diagonal stagger so its three members (x spread 100 px) fit in one gap between level 1's laser columns: `.at(-64, -220)` puts them
 at world x 462 / 512 / 562.
+
+`hub_defense_site` guards the Open Space hub's TacticalSpace derelicts from (2520, 1040) (plan §2.17; task plan `docs/plans/cmvqw0voe0197qs2xrgvobaky/3-plan.md`). Four
+shooters and every structure rule once: the generator bubbles the five `BaseEnemy` members other than itself, never the barrier's posts, and the source
+sits behind the wreck line, so the player flanks or slips a gap to switch the site off. The heavy emplacement and the power source sit off the plan's
+(0, 0) and (120, −120), which overlap the cargo platform and the satellite. Its fire reach (the lance: 260 + 1100 = 1360 px) and its footprint
+(416 px) are swept against the hub's safe places and patrols in `test_sector_hub_patrol.gd`. Only `TurretGroup` scenes may live in `presets/`: the
+coverage row loads every file there as one, which is why the barrier lives in `laser_fence/`.
 
 ## Spawn notes
 
@@ -76,5 +84,6 @@ turret_group/
 ├── turret_group.gd
 ├── turret_group_slot.gd
 └── presets/
-    └── assault_pair.tscn
+    ├── assault_pair.tscn
+    └── hub_defense_site.tscn
 ```

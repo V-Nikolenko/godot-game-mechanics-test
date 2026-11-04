@@ -31,6 +31,7 @@
 [ext_resource type="PackedScene" path="res://assault/scenes/hazards/wreck/structure_station_module.tscn" id="27_module"]
 [ext_resource type="PackedScene" path="res://assault/scenes/hazards/wreck/debris_drift.tscn" id="28_debris"]
 [ext_resource type="PackedScene" path="res://assault/scenes/hazards/minefield/minefield.tscn" id="29_minefield"]
+[ext_resource type="PackedScene" path="res://assault/scenes/structures/turret_group/presets/hub_defense_site.tscn" id="30_site"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
@@ -85,6 +86,9 @@ arc_offset = Vector2(-5, 4)
 arc_radius = 130.0
 
 [node name="EnemyContainer" type="Node2D" parent="." unique_id=1782392043]
+
+[node name="HubDefenseSite" parent="EnemyContainer" instance=ExtResource("30_site")]
+position = Vector2(2520, 1040)
 
 [node name="HazardContainer" type="Node2D" parent="." groups=["hazard_container"]]
 

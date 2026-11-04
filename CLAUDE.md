@@ -292,6 +292,10 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   +88.7 px, so a pickup added closer than that fails it).
   Phase 7 added the Mine Layer to `_patrol_groups()` and the hub `Minefield` to `_element_radius()` (`radius` + the drift leash + the PROXIMITY trigger = 400 px), so a later placed
   field or patrol is covered by the same sweep (Mine Layer +585.6 px from the field, Gatling +775.1 px).
+  Phase 8 (t18) added the Laser Tender (draw 16) and a twin pair (draw 17, a `TwinLaserPairSpawn` that stays a *queued* `EnemyContainer` child for the
+  frame: count live children) to `_patrol_groups()`, and the defended derelict site `EnemyContainer/HubDefenseSite` (`hub_defense_site.tscn`) with two
+  sweeps over every `TurretGroup` / `LaserFence` child of `EnemyContainer`: **A**, its fire reach (1360 px) clears the spawn, triggers and pickups by
+  more than 300 px; **B**, every patrol's idle ring clears its footprint (416 px). A later placed site or patrol is covered by both.
   `tests/integration/test_enemy_bullet_lifetime.gd` is an eighteenth, the **round lifetime sweep**,
   and `tests/integration/test_enemy_rounds.gd` its companion over the bullet family (Pulse, Scatter,
   Gatling Stream, Heavy Shell under `assault/scenes/projectiles/enemy_bullet/rounds/`): for every
