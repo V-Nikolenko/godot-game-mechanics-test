@@ -97,9 +97,13 @@ static func worst_disengage(host: Node, scene: PackedScene, disengage_phase: int
 ## `worst_disengage()`'s results by input key. Static, so it lives as long as the script resource: one GUT process.
 static var _memo: Dictionary = {}
 
+## How many probes actually ran (memo misses) in this process: read only by `test_laser_tender.gd`'s memo row (t14).
+static var measured: int = 0
+
 
 static func _measure_worst_disengage(host: Node, scene: PackedScene, disengage_phase: int, speeds: Array[float],
 		cap: float, start_set: Array, prepare: Callable) -> Dictionary:
+	measured += 1
 	var h: RefCounted = HARNESS.assault()
 	host.add_child(h.root)
 	h.player.global_position = MID_VIEW + Vector2(0.0, 300.0)

@@ -8,8 +8,8 @@ warning line, then fly the whole line through where the player was and past it (
 > slots, latched frame, identical per-drone boosts, strain and collapse, the beam on drone A), `TwinLaserDroneBrain` (the full append-only `Phase` enum; FORM /
 > TELEGRAPH / ADVANCE / BREAK / WAIT / SOLO / DISENGAGE played), Attack A in Open Space, the Assault rig (corridor-planned frames, one attack per life with the
 > deferral bound), the `TwinLaserPairSpawn` spawner and `WaveBuilder.twin_laser_pair()`. **Attack B (t13):** the rig's `LAUNCHED` phase (appended) and the fixed launched
-> frame, played when a Laser Tender launches a pair (`../laser_tender/ENEMY.md`); a SOLO drone with a live tender flies home and docks. **Not yet:** the hub idle (`IDLE` / `NOTICING` / `RETURNING`, t14) and the measured Assault exit (t14),
-> the art (t16: the hull is a code-drawn placeholder), hub and level-1 placement (t18 / t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.12;
+> frame, played when a Laser Tender launches a pair (`../laser_tender/ENEMY.md`); a SOLO drone with a live tender flies home and docks. **Hub idle and measured exit (t14):** the rig's `IDLE` phase (appended),
+> the brains' IDLE / NOTICING / RETURNING, a recalled launched pair docking, and the Assault exit measured over `corridor_starts()` (below). **Not yet:** the art (t16: the hull is a code-drawn placeholder), hub and level-1 placement (t18 / t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.12;
 > task plan `docs/plans/cmvqw0vnw018jqs2x5k4l6ahb/3-plan.md`. The beam itself is `twin_beam.tscn` (`assault/scenes/projectiles/enemy_beams/BEAMS.md`).
 
 ---
@@ -67,7 +67,7 @@ and ticks it, so a cancelled beam always fades out.
   strained continuously for `strain_seconds` → COLLAPSED (`collapsed(true)`), then the survivors BREAK and re-FORM. Back inside the tolerance sooner → unstrained.
 - **Kill one drone** — its `died` (or `tree_exiting`) breaks the pair for good **in the same call**: the beam is cancelled at once (A's death frees it with A; B's
   death leaves A to fade it), `collapsed(false)`. The survivor is **SOLO**: it can never relight the beam. Open Space: it `arrive`s at the controller if one is live,
-  else at `patrol_anchor` (default its spawn point; t14 idles it). A tender takes it back (`LaserTender.dock()`) once it is within `dock_radius`. Assault: DISENGAGE.
+  else it circles `patrol_anchor` alone on its `idle_radius` ring (t14). A tender takes it back (`LaserTender.dock()`) once it is within `dock_radius`. Assault: DISENGAGE.
 - **Rails** — `on_suspended()` releases the drone from the rig (the pair breaks; a suspended drone A frees the beam, since nobody would tick its fade).
 
 ## Attack B: launched by a Laser Tender (t13)
@@ -81,6 +81,24 @@ and ticks it, so a cancelled beam always fades out.
   also capped by the room in `inner_rect()` inset by `slot_tolerance`), so every advance is at most 1.92 s. `frame_fixed` is cleared on BREAK / COLLAPSED:
   the pair then runs ordinary Attack A cycles.
 
+## Hub idle (t14; plan §2.14)
+
+Open Space only, and only when the brain is not `start_engaged` (the Ph7 convention: behaviour rows set it to fight at once). Each brain of a standalone pair
+(no controller) builds an `AnchorIdle` (config group "Idle": `perceive_radius` 650, `lose_radius` 1500, `notice_time` 0.35; `home_radius` = `idle_radius` +
+`slot_tolerance`) round its `patrol_anchor`, which `TwinLaserPairSpawn` sets to its own position for both drones; **only the leader of an intact pair updates
+it**, once a tick before the rig's tick (one clock).
+- **IDLE** (rig `TwinLaserPair.Phase.IDLE`, appended): no frame, no strain, beam OFF. Both drones `orbit` the rig's `idle_anchor` at `idle_radius` 140 on
+  opposite points (`idle_slot_angle()`: B at `idle_angle`, A at `+ PI`), the ring turning at `idle_speed` 0.5 rad/s.
+- **NOTICING:** the leader within `perceive_radius` of the player: both drones stop, face it and blink their lens once (`StateLight.blink_once()`); after
+  `notice_time` the rig `engage()`s -> FORM.
+- **RETURNING:** the player past `lose_radius`: `stand_down(anchor)` (beam cancelled, frame unfixed), **never in a busy phase** (`is_busy()`: TELEGRAPH,
+  ADVANCE, BREAK, COLLAPSED, LAUNCHED), so an attack already shown runs to the end of its BREAK first; the drones fly back to their ring points, then IDLE.
+- **A launched pair** (a Laser Tender's) builds no `AnchorIdle`: its leader reads the controller's duck-typed `recalls_drones()` (true while the tender idles)
+  and stands the rig down at the tender; both brains are RETURNING and `arrive` at it, and the tender docks them. A dead tender (or `recalls_drones()` false)
+  re-engages the rig. A lone drone with no live controller circles its own anchor (SOLO).
+- **The radius inequality** (asserted from config): the cycle's farthest drone–player distance `standoff + overshoot + L/2 + break_speed · break_seconds` =
+  260 + 200 + 210 + 312 = 982 ≤ `lose_radius` 1500, so a pair mid-attack never loses its player.
+
 ## Assault (R8.18)
 
 - **Frames are planned inside the corridor**, never clamped drone by drone: `TwinLaserPair.assault_frame(p, rect, …)` (pure) plans on the leader's
@@ -92,7 +110,11 @@ and ticks it, so a cancelled beam always fades out.
   (finished or collapsed), or the budget runs out, both drones DISENGAGE — **except in TELEGRAPH or ADVANCE**: a budget expiring there lets the attack finish
   (deferral bound: DISENGAGE starts no later than `engage_seconds + telegraph_seconds + max_advance_seconds + 2 ticks` after spawn).
 - **DISENGAGE:** `pair.release()`, `mover.release_constraint()`, `mover.max_speed = exit_speed`, exit along −n (the way the line was going; with no frame, the heading);
-  freed outside `EnemyWorld.projectile_world_rect()` (strict compares). One drone disengaging breaks the pair, so the other follows on its own tick.
+  freed outside `EnemyWorld.projectile_world_rect()` (strict compares). One drone disengaging breaks the pair, so the other follows on its own tick. DISENGAGE
+  reads the player nowhere.
+- **Measured exit (t14):** `tests/helpers/ph8_exit_keys.gd::drone_exit()` runs `SpecialistExitProbe.worst_disengage()` over `corridor_starts()` (1083 runs at
+  10 px/s): worst **5.37 s** (from (−720, −720) heading down-right), plus `drone_reversal_seconds()` 0.463 s for a framed drone carrying `max_speed` against its
+  exit = **5.83 s** (`drone_exit_bound()`), under 10 s.
 
 ## Spawning
 
@@ -141,6 +163,9 @@ the wreck row on real physics at 8× (read at the collapse) and its no-wreck con
 drone is in the rosters of `test_enemy_hurtbox_geometry.gd`, `test_contact_hitbox_geometry.gd`, `test_enemy_contact_damage.gd` and `test_wreck.gd`
 (`_SHIP_SCENES`); `test_base_enemy.gd` (roster 19, authored COLLISION, the tow table: TELEGRAPH / ADVANCE / LAUNCHED); `test_enemy_dual_mode.gd`
 (`test_twin_laser_drones_form_and_telegraph_in_both_modes`, the hazard-profile row); `test_engagement_deadline.gd` (no `ENEMIES_CLEARED` section holds a pair).
+Hub idle (t14, `test_twin_laser_drones.gd`): the Idle config and the radius inequality (with a failing boundary), idle vs Assault vs `start_engaged`, a 30 s
+orbit within `idle_radius + 8` with the beam OFF, notice at 649 / not at 651, RETURNING beyond 1500 (not at 1499), an attack in ADVANCE finishing before the
+stand-down, a lone drone circling its anchor. The measured exit is `test_laser_tender.gd`'s (printed and < 10 s, memoised once, the stub trick, the reversal term).
 
 ## Files
 

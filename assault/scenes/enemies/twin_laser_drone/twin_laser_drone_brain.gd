@@ -12,7 +12,18 @@
 ##                           leave along -n (no frame: the heading) at `exit_speed`; free once outside the projectile world rect.
 ##   LAUNCHED   [POSITION]   t13 (Attack B): a straight boost from the Laser Tender's cradle to this drone's launch point (the V), then FORM on
 ##                           the fixed launched frame (no player feed-forward). Refuses a tow.
-##   IDLE, NOTICING, RETURNING: declared for t14 (the hub idle); they hold still until then.
+##   IDLE       [IDLE]       t14 (§2.14), Open Space only: the rig is IDLE; both drones circle `idle_anchor` at `idle_radius`, opposite each other,
+##                           the beam OFF (`mover.orbit` to its own moving ring point).
+##   NOTICING   [NOTICING]   the leader's `AnchorIdle` saw the player: both drones stop, face it and blink their lens once; after `notice_time` FORM.
+##   RETURNING  [RETURNING]  the player passed `lose_radius`: the rig stood down (once any attack and its BREAK ended) and the drones fly back to their
+##                           ring points. A launched pair (with a controller) is RETURNING while its tender recalls it: it flies to the tender, which
+##                           docks it.
+##
+## **The hub idle (t14).** A standalone Open Space pair that is not `start_engaged` builds an `AnchorIdle` (config group "Idle") in each brain, but
+## only the **leader of an intact, uncontrolled pair** updates it, once per tick before the rig's tick (the rig's single clock): IDLE / RETURNING
+## stand the rig down (`TwinLaserPair.stand_down()`; never a busy phase), NOTICING is mirrored while the rig is IDLE, COMBAT engages it. The leader of
+## a launched pair instead reads its controller's duck-typed `recalls_drones()` (never naming the tender's class): true stands the rig down at the
+## controller, false (or a dead controller) engages it again. A lone drone in Open Space with no live controller circles its own anchor.
 ##
 ## The rig (`TwinLaserPair`) owns the phase clock: the leader's tick advances it and each brain mirrors the rig phase (COLLAPSED with both drones
 ## alive mirrors as BREAK). **Assault: one attack per life.** Once an ADVANCE has started, or the `EngagementBudget` runs out, the drone disengages,
@@ -36,16 +47,21 @@ var config: TwinLaserDroneConfig = TwinLaserDroneConfig.new()
 var pair: TwinLaserPair
 var phase: Phase = Phase.FORM
 var budget: EngagementBudget
-## Test seam (t14 gives it its meaning: a hub spawn idles unless engaged). Nothing idles yet, so it changes nothing in t12.
+## True skips the hub idle (no `AnchorIdle`): the pair fights at once (behaviour rows; the Ph7 convention).
 var start_engaged: bool = false
-## Where a lone drone returns to in Open Space. `Vector2.INF` (unset) defaults to the spawn position on the first tick.
+## The hub pair's patrol point (`TwinLaserPairSpawn` sets both drones' to its own position), where a lone drone circles in Open Space. `Vector2.INF`
+## (unset) defaults to the spawn position on the first tick.
 var patrol_anchor: Vector2 = Vector2.INF
+## The hub idle's notice / lose handover (§2.14); null in Assault, when `start_engaged`, and for a launched drone. Only the leader's is updated.
+var anchor_idle: AnchorIdle
 
 var _started: bool = false
 var _phase_time: float = 0.0
 var _exit_dir: Vector2 = Vector2.DOWN
 var _hold_point: Vector2 = Vector2.ZERO
 var _light_state: int = -1
+## SOLO in Open Space with no live controller: the angle of its point on its own idle ring.
+var _solo_angle: float = 0.0
 
 
 func tick(delta: float) -> void:
@@ -55,6 +71,13 @@ func tick(delta: float) -> void:
 	var expired := budget.update(delta)
 	if phase != Phase.DISENGAGE:
 		if pair != null:
+			if pair.is_intact() and pair.leader() == actor:
+				# A hub pair (an `AnchorIdle`, built only without a controller) runs the idle; any other pair asks its controller. A freed
+				# controller compares `== null`, so the branch is keyed on the `AnchorIdle`, never on `controller`.
+				if anchor_idle != null:
+					_tick_anchor_idle(delta)
+				else:
+					_tick_recall()
 			pair.tick(delta, actor)
 		_decide(expired)
 	if phase == Phase.DISENGAGE:
@@ -77,7 +100,14 @@ func enter_phase(p: Phase) -> void:
 			_hold_point = actor.global_position
 		Phase.DISENGAGE:
 			_enter_disengage()
+		Phase.SOLO:
+			if patrol_anchor.is_finite():
+				_solo_angle = (actor.global_position - patrol_anchor).angle()
 	_update_light()
+	if p == Phase.NOTICING:
+		var light := actor.get_node_or_null("StateLight") as StateLight
+		if light != null:
+			light.blink_once()
 	phase_changed.emit(p)
 
 
@@ -105,6 +135,43 @@ func _setup() -> void:
 	budget = EngagementBudget.new(config.engage_seconds, get_tree())
 	if not patrol_anchor.is_finite():
 		patrol_anchor = actor.global_position
+	if not budget.active and not start_engaged and (pair == null or pair.controller == null):
+		# `home_radius` is the ring plus `slot_tolerance`: the leader returns to a point on the ring, not to the anchor.
+		anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time,
+				config.idle_radius + config.slot_tolerance)
+
+
+## The leader of an intact, uncontrolled pair (§2.14), once a tick before the rig's tick. A busy rig (an attack shown, its BREAK) is never stood
+## down; a rig still fighting when the player comes back keeps fighting.
+func _tick_anchor_idle(delta: float) -> void:
+	var state := anchor_idle.update(delta, actor.global_position, TargetInfo.player(get_tree()))
+	match state:
+		AnchorIdle.State.IDLE, AnchorIdle.State.RETURNING:
+			pair.idle_state = state
+			if pair.phase != TwinLaserPair.Phase.IDLE and not pair.is_busy():
+				pair.stand_down(patrol_anchor)
+		AnchorIdle.State.NOTICING:
+			if pair.phase == TwinLaserPair.Phase.IDLE:
+				pair.idle_state = state
+		AnchorIdle.State.COMBAT:
+			if pair.phase == TwinLaserPair.Phase.IDLE:
+				pair.engage()
+
+
+## The leader of an intact, launched pair: its controller recalls it (duck-typed `recalls_drones()`, the `is_armored()` precedent) -> stand down at
+## the controller (the brains mirror RETURNING and fly to it; it docks them). Not recalled, or the controller gone -> fight again.
+func _tick_recall() -> void:
+	var recalled := _controller_live() and pair.controller.has_method(&"recalls_drones") and bool(pair.controller.call(&"recalls_drones"))
+	if recalled:
+		if pair.phase != TwinLaserPair.Phase.IDLE and not pair.is_busy():
+			pair.stand_down(pair.controller.global_position)
+	elif pair.phase == TwinLaserPair.Phase.IDLE:
+		pair.engage()
+
+
+## The pair's controller (the tender) is valid and not queued for deletion.
+func _controller_live() -> bool:
+	return pair != null and pair.controller != null and is_instance_valid(pair.controller) and not pair.controller.is_queued_for_deletion()
 
 
 func _is_assault() -> bool:
@@ -139,6 +206,15 @@ func _mirror(rig_phase: int) -> Phase:
 			return Phase.WAIT
 		TwinLaserPair.Phase.LAUNCHED:
 			return Phase.LAUNCHED
+		TwinLaserPair.Phase.IDLE:
+			if anchor_idle == null:
+				return Phase.RETURNING  # a launched pair, recalled to its tender (only a hub pair builds an `AnchorIdle`)
+			match pair.idle_state:
+				AnchorIdle.State.NOTICING:
+					return Phase.NOTICING
+				AnchorIdle.State.RETURNING:
+					return Phase.RETURNING
+			return Phase.IDLE
 	return Phase.FORM
 
 
@@ -167,12 +243,26 @@ func _move(delta: float) -> void:
 			mover.arrive(_hold_point, config.max_speed)
 			_face(partner)
 		Phase.SOLO:
-			var home := patrol_anchor
-			if pair != null and pair.controller != null and is_instance_valid(pair.controller) and not pair.controller.is_queued_for_deletion():
-				home = pair.controller.global_position
-			mover.arrive(home, config.max_speed)
-		_:
-			mover.request_velocity(Vector2.ZERO)  # IDLE / NOTICING / RETURNING: t14 gives them motion
+			if _controller_live():
+				mover.arrive(pair.controller.global_position, config.max_speed)  # home to dock
+			else:
+				# Nowhere to dock: it circles its own anchor alone (from far away the ring point lies on the line to the anchor).
+				_solo_angle += config.idle_speed * delta
+				mover.orbit(patrol_anchor, config.idle_radius, _solo_angle, config.max_speed)
+		Phase.IDLE:
+			mover.orbit(pair.idle_anchor, config.idle_radius, pair.idle_slot_angle(actor), config.max_speed)
+		Phase.RETURNING:
+			if anchor_idle != null:
+				mover.orbit(pair.idle_anchor, config.idle_radius, pair.idle_slot_angle(actor), config.max_speed)
+			elif _controller_live():
+				mover.arrive(pair.controller.global_position, config.max_speed)
+			else:
+				mover.request_velocity(Vector2.ZERO)  # its tender is gone: the leader engages again this tick
+		Phase.NOTICING:
+			mover.request_velocity(Vector2.ZERO)
+			var target := TargetInfo.player(get_tree())
+			if target.has_target:
+				mover.face_toward(target.position)
 
 
 ## LAUNCHED (§2.13): a straight boost from the cradle along the launch direction at `launch_speed`, one step renewed per tick (the ADVANCE rule),

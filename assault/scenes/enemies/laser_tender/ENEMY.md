@@ -9,8 +9,8 @@ tender itself is a priority target because killing it ends the supply of walls.
 > **Build state (Phase 8, t13).** Built: the scene and shell, the flat config, `LaserTenderBrain` (the full append-only `Phase` enum; APPROACH / HOLD /
 > LAUNCH / WAIT / REARM / DISENGAGE played), the `launch_pair(points)` seam, the Attack B points (Open Space prediction, Assault vertical / horizontal
 > walls), the rig's LAUNCHED phase and fixed launched frame, one live pair, rearm, docking of a lone returning drone, the Assault variant (one launch per
-> life, the cradle-telegraph deferral), `WaveBuilder.laser_tender()`. **Not yet:** the hub idle (`IDLE` / `NOTICING` / `RETURNING`, t14) and the
-> measured Assault exit (t14), the art (t16: the hull and the docked drones are code-drawn / textureless placeholders), hub and level-1 placement (t18 /
+> life, the cradle-telegraph deferral), `WaveBuilder.laser_tender()`. **Hub idle and measured exit (t14):** IDLE / NOTICING / RETURNING, the recall of
+> a launched pair, the one rearm clock, and the Assault exit measured over `corridor_starts()` (below). **Not yet:** the art (t16: the hull and the docked drones are code-drawn / textureless placeholders), hub and level-1 placement (t18 /
 > t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.13; task plan `docs/plans/cmvqw0vnz018nqs2xv56q6a0a/3-plan.md`. The drones and the rig
 > are `../twin_laser_drone/` ([ENEMY.md](../twin_laser_drone/ENEMY.md)).
 
@@ -45,7 +45,20 @@ Every value is a plan §2.21 *starting value* (judgement, not play-tested).
   then `launch_pair(attack_b_points())`. Refuses a tow (`accepts_tow()` false only here).
 - **WAIT** while its pair is intact; then **REARM** for `rearm_seconds` 7.0 with empty cradles; then `rearm_cradles()` and HOLD again. **At most one live pair.**
 - **Docking** (Open Space, every phase but DISENGAGE): a drone it launched (any rig) whose brain is SOLO (its partner died; t12 sends it to its live
-  controller) within `dock_radius` 72 is taken back with `dock()`: freed without dying, one cradle refilled.
+  controller) or RETURNING (recalled, t14) within `dock_radius` 72 is taken back with `dock()`: freed without dying, one cradle refilled.
+
+### Hub idle (t14; plan §2.14)
+
+Open Space, not `start_engaged`: an `AnchorIdle` round `patrol_anchor` (config group "Idle": `perceive_radius` 700, `lose_radius` 1600, `notice_time` 0.35;
+`home_radius` = `idle_radius` 160) runs ahead of the transitions each tick (the Mine Layer's shape); it never interrupts LAUNCH or DISENGAGE.
+- **IDLE:** `orbit` of the anchor at `idle_radius` at `idle_speed` 0.5 rad/s with its pair docked; it never launches.
+- **NOTICING:** stop, face the player, blink the cradle light once; after `notice_time` -> APPROACH.
+- **RETURNING:** past `lose_radius`: `arrive` at the anchor, then IDLE. `LaserTender.recalls_drones()` is true in all three idle phases, so a launched pair
+  stands down (once its attack and BREAK end) and flies back to dock.
+- **One rearm clock:** zeroed while the cradles are full or a pair lives; it runs in REARM and in the idle phases (where it refills the cradles at
+  `rearm_seconds`), carrying REARM's time into the idle and back. APPROACH / HOLD with empty cradles goes to WAIT while a pair lives, else to REARM seeded
+  with that clock, so a re-engaged empty tender is never stuck in HOLD.
+- **The radius inequality** (asserted from config): `preferred_range + launch_speed · launch_max_seconds` = 650 + 728 = 1378 ≤ `lose_radius` 1600.
 
 ### `launch_pair(points: PackedVector2Array) -> TwinLaserPair` (the Ph10 / Ph11 seam)
 
@@ -88,7 +101,9 @@ callback, where a caller must `call_deferred` it. Null with fewer than two point
 - **One launch per life**, only from inside the view. After it, or once `engage_seconds` 10.0 runs out before LAUNCH starts, DISENGAGE:
   `release_constraint()`, `max_speed = exit_speed`, straight out toward the nearest edge of the projectile world rect, freed once strictly outside it.
 - **Launch-time bound:** a budget that expires during the cradle telegraph lets that launch finish, so a pair is launched no later than
-  `spawn + engage_seconds + launch_telegraph + _TICK_SLACK`. The tender's life is at most that plus its exit (t14 measures the exit).
+  `spawn + engage_seconds + launch_telegraph + _TICK_SLACK`. The tender's life is at most that plus its exit.
+- **Measured exit (t14):** `tests/helpers/ph8_exit_keys.gd::tender_exit()` runs `SpecialistExitProbe.worst_disengage()` over `corridor_starts()` at
+  `[exit_speed, 10]` (2166 runs): worst **3.82 s** (from (−80, 0) heading right at 380 px/s), under 10 s. DISENGAGE reads the player nowhere.
 - A player hugging the top of the corridor can push the hold point above the view and so hold off the launch until the budget ends (the §2.13 "budget
   runs out before LAUNCH" case, accepted).
 - The pair does its one attack and DISENGAGEs (t12's rule; every advance is at most `(standoff + overshoot) / advance_speed` = 1.92 s).
@@ -143,6 +158,11 @@ the launch on real physics at 8× (collision exceptions, straight legs); the `Wa
 `test_contact_hitbox_geometry.gd`, `test_enemy_contact_damage.gd`, `test_wreck.gd`; `test_base_enemy.gd` (roster 20, authored COLLISION, the tow table: LAUNCH);
 `test_enemy_dual_mode.gd` (`test_laser_tender_launches_a_pair_in_both_modes`, the hazard-profile row); `test_engagement_deadline.gd`; the no-motion source sweep
 in `test_twin_laser_drones.gd` covers `laser_tender.gd` and `laser_tender_brain.gd`.
+t14 (same file): the Idle config and the radius inequality (with a failing boundary), idle vs Assault vs `start_engaged` with the docked pair, a 30 s orbit
+within `idle_radius + 8` without a launch, notice at 699 / not at 701, home beyond 1600 (not at 1599), a launched pair recalled and docked, the rearm clock
+across idle and re-engagement, a recalled pair whose tender dies re-engaging; and the measured exits (printed and < 10 s; `ph8_exit_keys.gd` measures once per
+process, with a source sweep that no other test builds a Ph8 probe call; the player-stub trick leaves the exit unchanged; the drone's reversal term bounds a
+framed exit).
 
 ## Files
 

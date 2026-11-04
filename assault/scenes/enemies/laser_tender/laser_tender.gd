@@ -85,6 +85,12 @@ func pair() -> TwinLaserPair:
 	return _pair
 
 
+## True while the brain idles (IDLE, NOTICING or RETURNING; t14): a launched pair reads it (duck-typed, from the drone brain's side) and flies
+## back to dock.
+func recalls_drones() -> bool:
+	return _tender_brain != null and LaserTenderBrain._is_idle_phase(_tender_brain.phase)
+
+
 ## How many pairs this tender has launched.
 func launches() -> int:
 	return _launches

@@ -134,15 +134,17 @@ func _hp(node: Node) -> int:
 
 
 ## A pair spawned through `TwinLaserPairSpawn.spawn_pair()`: midpoint [param at], axis along [param rot]. Hand-ticked unless [param real].
-func _pair(h, at: Vector2, rot: float = 0.0, rng_seed: int = 7, real: bool = false) -> TwinLaserPair:
+## [param engaged] sets `start_engaged` on both brains (t14: an Open Space pair otherwise idles at its anchor; every Attack A row fights at once).
+func _pair(h, at: Vector2, rot: float = 0.0, rng_seed: int = 7, real: bool = false, engaged: bool = true) -> TwinLaserPair:
 	var s := SPAWN.instantiate() as TwinLaserPairSpawn
 	s.rng_seed = rng_seed
 	s.position = at
 	s.rotation = rot
 	h.root.add_child(s)
 	var rig := s.spawn_pair()
-	if not real:
-		for d: Node2D in [rig.drone_a, rig.drone_b]:
+	for d: Node2D in [rig.drone_a, rig.drone_b]:
+		_brain(d).start_engaged = engaged
+		if not real:
 			_hand_ticked(d)
 	return rig
 
@@ -330,7 +332,7 @@ func test_the_shipped_config_wins_over_the_scene() -> void:
 func test_the_phase_enums_are_declared_in_full_and_in_order() -> void:
 	assert_eq(TwinLaserDroneBrain.Phase.keys(), ["FORM", "TELEGRAPH", "ADVANCE", "BREAK", "WAIT", "SOLO", "DISENGAGE", "LAUNCHED", "IDLE",
 			"NOTICING", "RETURNING"])
-	assert_eq(TwinLaserPair.Phase.keys(), ["FORM", "TELEGRAPH", "ADVANCE", "BREAK", "COLLAPSED", "WAIT", "LAUNCHED"])
+	assert_eq(TwinLaserPair.Phase.keys(), ["FORM", "TELEGRAPH", "ADVANCE", "BREAK", "COLLAPSED", "WAIT", "LAUNCHED", "IDLE"])
 
 
 func test_the_spawner_places_two_drones_half_a_rig_length_along_its_local_x_binds_them_and_frees_itself(
@@ -1046,3 +1048,217 @@ func test_assault_wave_builder_spawns_a_bound_pair_through_a_real_wave_manager()
 		var mid := ((at_spawn[0] as Vector2) + (at_spawn[1] as Vector2)) * 0.5
 		assert_almost_eq(mid, cam.global_position + Vector2(0.0, -100.0) * ArenaCamera.WORLD_SCALE, Vector2.ONE * 0.01,
 				"the midpoint is camera-relative design space")
+
+
+# ── Hub idle (t14; plan §2.14): Open Space only ─────────────────────────────────────────────────────────────────────
+
+const ANCHOR := Vector2(640.0, 360.0)
+const IDLE_SLACK := 8.0
+const RIG_IDLE := TwinLaserPair.Phase.IDLE
+
+
+## The attack cycle's farthest drone-player distance (§2.14, the Ph4 inequality): the line forms `standoff` from the player, overshoots it by
+## `overshoot`, a drone sits `L / 2` along the line, then BREAKs `break_speed * break_seconds` further out.
+static func _pair_cycle_reach(cfg: TwinLaserDroneConfig) -> float:
+	return cfg.standoff + cfg.overshoot + cfg.rig_length * 0.5 + cfg.break_speed * cfg.break_seconds
+
+
+static func _pair_radii_ok(cfg: TwinLaserDroneConfig) -> bool:
+	return cfg.perceive_radius < cfg.lose_radius and _pair_cycle_reach(cfg) <= cfg.lose_radius
+
+
+## An Open Space pair left to idle (not engaged) with its spawner at [param at], the player 2000 px away, settled onto its ring for 3 s.
+func _idle_pair(h, at: Vector2 = ANCHOR, settle: bool = true) -> TwinLaserPair:
+	h.player.global_position = at + Vector2(2000.0, 0.0)
+	var rig := _pair(h, at, 0.0, 7, false, false)
+	if settle:
+		_run(rig, h, _ticks(3.0), func() -> bool: return false)
+	return rig
+
+
+func _lens_blinking(d: Node) -> bool:
+	return (d as TwinLaserDrone).state_light().modulate.is_equal_approx(Color(Color.YELLOW, StateLight.MAX_ALPHA))
+
+
+## Puts the player [param distance] px from the leader along +x (before the tick, so the leader's `AnchorIdle` reads exactly that) and steps.
+func _step_with_player_at(rig: TwinLaserPair, h, distance: float) -> void:
+	h.player.global_position = rig.leader().global_position + Vector2(distance, 0.0)
+	_step(rig, h)
+
+
+## From a settled idle: notice the player 600 px off and run to the first FORM tick.
+func _engage_by_notice(rig: TwinLaserPair, h) -> bool:
+	_step_with_player_at(rig, h, CONFIG.perceive_radius - 50.0)
+	return _run(rig, h, _ticks(1.0), func() -> bool: return rig.phase == FORM)
+
+
+func test_the_idle_config_and_the_cycle_radius_inequality() -> void:
+	assert_eq([CONFIG.perceive_radius, CONFIG.lose_radius, CONFIG.notice_time, CONFIG.idle_radius, CONFIG.idle_speed], [650.0, 1500.0, 0.35, 140.0, 0.5])
+	var reach := _pair_cycle_reach(CONFIG)
+	gut.p("pair cycle reach %.1f px <= lose_radius %.1f px" % [reach, CONFIG.lose_radius])
+	assert_almost_eq(reach, 982.0, 1e-3, "260 + 200 + 210 + 312")
+	assert_true(_pair_radii_ok(CONFIG), "perceive < lose and the cycle's reach <= lose")
+	var bad := CONFIG.duplicate() as TwinLaserDroneConfig
+	bad.lose_radius = reach - 1.0
+	assert_false(_pair_radii_ok(bad), "boundary: lose_radius one px short of the cycle's reach fails")
+
+
+func test_an_open_space_pair_starts_idle_and_an_assault_or_engaged_pair_does_not(
+		case: String = use_parameters(["open_space_cold", "assault", "open_space_engaged"])) -> void:
+	var mode := "assault" if case == "assault" else "open_space"
+	var h = _world(mode)
+	var at := P + Vector2(-120.0, -CONFIG.standoff)
+	if case == "open_space_cold":
+		h.player.global_position = at + Vector2(2000.0, 0.0)
+	var rig := _pair(h, at, 0.0, 7, false, case == "open_space_engaged")
+	for d: Node2D in [rig.drone_a, rig.drone_b]:
+		assert_eq(_brain(d).patrol_anchor, at, "%s: both drones share the spawner's position as their anchor" % case)
+	_step(rig, h)
+	var lead := _brain(rig.drone_a)
+	if case == "open_space_cold":
+		assert_eq(rig.phase, RIG_IDLE, "a cold hub pair stands down to IDLE on its first tick")
+		assert_not_null(lead.anchor_idle, "the leader's AnchorIdle")
+		for d: Node2D in [rig.drone_a, rig.drone_b]:
+			assert_eq(_brain(d).phase, TwinLaserDroneBrain.Phase.IDLE, "both brains IDLE")
+			assert_eq((d as TwinLaserDrone).state_light().get_state(), StateLight.State.OFF, "lens off")
+		assert_eq(rig.beam.phase(), EnemyBeam.Phase.OFF, "the beam is OFF")
+	else:
+		assert_null(lead.anchor_idle, "%s: no AnchorIdle" % case)
+		assert_eq(rig.phase, FORM, "%s: the rig forms at once" % case)
+
+
+func test_the_idle_rig_orbits_its_anchor_within_idle_radius_for_30_s_with_the_beam_off() -> void:
+	var h = _world("open_space")
+	var rig := _idle_pair(h)
+	var worst := 0.0
+	var worst_opposite := 0.0
+	var swept := 0.0
+	var last := (rig.drone_b.global_position - ANCHOR).angle()
+	var bad_phase := 0
+	var lit := 0
+	for i in _ticks(30.0):
+		_step(rig, h)
+		for d: Node2D in [rig.drone_a, rig.drone_b]:
+			worst = maxf(worst, d.global_position.distance_to(ANCHOR))
+			if _brain(d).phase != TwinLaserDroneBrain.Phase.IDLE:
+				bad_phase += 1
+		var oa := rig.drone_a.global_position - ANCHOR
+		var ob := rig.drone_b.global_position - ANCHOR
+		worst_opposite = maxf(worst_opposite, absf(180.0 - rad_to_deg(absf(oa.angle_to(ob)))))
+		var now := ob.angle()
+		swept += wrapf(now - last, -PI, PI)
+		last = now
+		if rig.beam.phase() != EnemyBeam.Phase.OFF or _wall_registered(rig.owner_group):
+			lit += 1
+	gut.p("30 s idle: farthest %.1f px from the anchor (ring %.0f + %.0f), opposite within %.1f deg, swept %.2f rad" %
+			[worst, CONFIG.idle_radius, IDLE_SLACK, worst_opposite, swept])
+	assert_lte(worst, CONFIG.idle_radius + IDLE_SLACK, "both drones within idle_radius + 8 for 30 s")
+	assert_lte(worst_opposite, 10.0, "opposite each other on the ring")
+	assert_eq(bad_phase, 0, "IDLE throughout (never NOTICING)")
+	assert_eq(rig.phase, RIG_IDLE)
+	assert_eq(lit, 0, "the beam OFF and no laser_wall registered")
+	var expected := CONFIG.idle_speed * 30.0
+	assert_almost_eq(absf(swept), expected, expected * 0.1, "the rig turns at idle_speed")
+
+
+func test_the_pair_notices_at_perceive_radius(case: String = use_parameters(["inside", "outside"])) -> void:
+	var h = _world("open_space")
+	var rig := _idle_pair(h)
+	var dist := CONFIG.perceive_radius + (-1.0 if case == "inside" else 1.0)
+	_step_with_player_at(rig, h, dist)
+	if case == "outside":
+		var noticed := 0
+		for i in 60:
+			_step_with_player_at(rig, h, dist)
+			if rig.phase != RIG_IDLE or rig.idle_state != AnchorIdle.State.IDLE:
+				noticed += 1
+		assert_eq(noticed, 0, "never NOTICING at perceive_radius + 1, rig IDLE")
+		return
+	assert_eq(rig.idle_state, AnchorIdle.State.NOTICING, "NOTICING on that tick")
+	assert_eq(rig.phase, RIG_IDLE, "the rig still idles (no attack yet)")
+	for d: Node2D in [rig.drone_a, rig.drone_b]:
+		assert_eq(_brain(d).phase, TwinLaserDroneBrain.Phase.NOTICING, "both brains NOTICING")
+		assert_true(_lens_blinking(d), "both lenses blink")
+	var noticed_at := _t
+	var speeds := [0.0]
+	assert_true(_run(rig, h, _ticks(1.0), func() -> bool:
+		if rig.phase != FORM:
+			speeds[0] = maxf((rig.drone_a.get_node("EnemyMover") as EnemyMover).own_velocity().length(),
+					(rig.drone_b.get_node("EnemyMover") as EnemyMover).own_velocity().length())
+		return rig.phase == FORM), "then FORM")
+	gut.p("noticed at %.3f s, FORM at %.3f s (notice_time %.2f s); speed just before FORM %.2f px/s" % [noticed_at, _t, CONFIG.notice_time, speeds[0]])
+	assert_almost_eq(_t - noticed_at, CONFIG.notice_time, 2.0 * DT + 1e-6, "FORM after notice_time")
+	assert_lt(speeds[0], 1.0, "the drones stopped while noticing")
+
+
+func test_beyond_lose_radius_the_pair_goes_home_and_idles(case: String = use_parameters(["beyond", "inside"])) -> void:
+	var h = _world("open_space")
+	var rig := _idle_pair(h)
+	assert_true(_engage_by_notice(rig, h), "engaged (FORM)")
+	# Out toward the player, well off the ring, still in FORM (not busy), so going home is a real flight.
+	var away := CONFIG.idle_radius + 120.0
+	assert_true(_run(rig, h, _ticks(2.0), func() -> bool: return rig.leader().global_position.distance_to(ANCHOR) > away), "off the ring")
+	assert_eq(rig.phase, FORM, "still forming")
+	var dist := CONFIG.lose_radius + (1.0 if case == "beyond" else -1.0)
+	h.player.global_position = rig.leader().global_position + Vector2(dist, 0.0)
+	_step(rig, h)
+	if case == "inside":
+		var idled := 0
+		for i in 30:
+			_step(rig, h)
+			if rig.phase == RIG_IDLE:
+				idled += 1
+		assert_eq(idled, 0, "at lose_radius - 1 the pair keeps fighting")
+		return
+	assert_eq(rig.phase, RIG_IDLE, "the rig stands down on the next tick")
+	assert_eq(rig.beam.phase(), EnemyBeam.Phase.OFF, "beam OFF")
+	for d: Node2D in [rig.drone_a, rig.drone_b]:
+		assert_eq(_brain(d).phase, TwinLaserDroneBrain.Phase.RETURNING, "both brains RETURNING")
+	var t0 := _t
+	var home := _run(rig, h, _ticks(6.0), func() -> bool:
+		for d: Node2D in [rig.drone_a, rig.drone_b]:
+			if _brain(d).phase != TwinLaserDroneBrain.Phase.IDLE or d.global_position.distance_to(ANCHOR) > CONFIG.idle_radius + IDLE_SLACK:
+				return false
+		return true)
+	gut.p("home and IDLE %.2f s after the stand-down" % (_t - t0))
+	assert_true(home, "within 6 s both drones are back on the ring and IDLE")
+
+
+func test_a_pair_whose_player_leaves_mid_advance_finishes_the_attack_first() -> void:
+	var h = _world("open_space")
+	var rig := _idle_pair(h)
+	assert_true(_engage_by_notice(rig, h), "engaged (FORM)")
+	assert_true(_run(rig, h, _ticks(4.0), func() -> bool: return rig.phase == ADVANCE), "advancing")
+	h.player.global_position = rig.leader().global_position + Vector2(CONFIG.lose_radius + 1.0, 0.0)
+	var seq: Array = [rig.phase]
+	var ticks := {}
+	var returning_in_attack := [0]
+	_run(rig, h, _ticks(6.0), func() -> bool:
+		if rig.phase != seq.back():
+			seq.append(rig.phase)
+		ticks[rig.phase] = int(ticks.get(rig.phase, 0)) + 1
+		if (rig.phase == ADVANCE or rig.phase == BREAK) and _brain(rig.drone_a).phase == TwinLaserDroneBrain.Phase.RETURNING:
+			returning_in_attack[0] += 1
+		return rig.phase == RIG_IDLE)
+	gut.p("phases after the player left mid-advance: %s, ticks %s" % [seq, ticks])
+	assert_true(seq == [ADVANCE, BREAK, RIG_IDLE] or seq == [ADVANCE, BREAK, WAIT, RIG_IDLE], "ADVANCE -> BREAK (-> one WAIT tick) -> IDLE: %s" % [seq])
+	assert_lte(int(ticks.get(WAIT, 0)), 1, "at most one WAIT tick")
+	assert_gte(int(ticks.get(BREAK, 0)), _ticks(CONFIG.break_seconds) - 1, "BREAK ran its full length")
+	assert_eq(returning_in_attack[0], 0, "the brains fight on until the attack ends")
+
+
+func test_a_lone_drone_in_open_space_circles_its_anchor() -> void:
+	var h = _world("open_space")
+	var rig := _idle_pair(h)
+	var a := rig.drone_a
+	rig.drone_b.hurt_box.received_damage.emit(LETHAL)
+	_step(rig, h)
+	assert_eq(_brain(a).phase, TwinLaserDroneBrain.Phase.SOLO, "A goes SOLO")
+	_run(rig, h, _ticks(4.0), func() -> bool: return false)
+	var worst := 0.0
+	for i in _ticks(5.0):
+		_step(rig, h)
+		worst = maxf(worst, a.global_position.distance_to(ANCHOR))
+	gut.p("lone drone: farthest %.1f px from the anchor over 5 s" % worst)
+	assert_lte(worst, CONFIG.idle_radius + IDLE_SLACK, "it circles its anchor alone")
+	assert_true(not is_instance_valid(rig.beam) or rig.beam.phase() == EnemyBeam.Phase.OFF, "no beam")

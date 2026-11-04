@@ -1304,6 +1304,7 @@ func test_twin_laser_drones_form_and_telegraph_in_both_modes(mode: String = use_
 	var rig := spawn.spawn_pair()
 	var drones: Array[TwinLaserDrone] = [rig.drone_a as TwinLaserDrone, rig.drone_b as TwinLaserDrone]
 	for d in drones:
+		(d.get_node("Brain") as TwinLaserDroneBrain).start_engaged = true  # pre-t14: predates the hub idle
 		d.set_physics_process(false)  # hand-ticked
 		d.collision_mask = 0  # no physics step between hand ticks: the broadphase would keep each body at its spawn point
 	var ticks := 0
@@ -1350,6 +1351,7 @@ func test_laser_tender_launches_a_pair_in_both_modes(mode: String = use_paramete
 	tender.set_physics_process(false)  # hand-ticked
 	tender.collision_mask = 0
 	var brain := tender.brain()
+	brain.start_engaged = true  # pre-t14: predates the hub idle
 	_tick(tender, DT)
 	assert_eq(brain.phase, LaserTenderBrain.Phase.LAUNCH, "%s: LAUNCH on the first tick" % mode)
 	assert_eq(tender.state_light().get_state(), StateLight.State.CHARGING, "%s: the cradle light is CHARGING" % mode)

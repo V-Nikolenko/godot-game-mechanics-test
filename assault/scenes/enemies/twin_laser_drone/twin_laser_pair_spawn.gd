@@ -4,7 +4,8 @@
 ## On `_ready()` it defers `spawn_pair()` (public and idempotent, so a hand-ticked test calls it directly; the `TurretGroup.spawn_members()`
 ## precedent): two drones from `drone_scene`, added as siblings in its own parent (A first, so A leads on real physics) at -/+ `rig_length / 2` along
 ## its local X, their brains seeded `rng_seed` / `rng_seed + 1` (when non-zero), bound with `TwinLaserPair.bind()` and announced with
-## `EventBus.enemy_spawned_orphan`. Then it frees itself. Never in `enemies`, never scored.
+## `EventBus.enemy_spawned_orphan`. Then it frees itself. Never in `enemies`, never scored. Both brains get its own position as their `patrol_anchor`
+## (t14): a hub layout places the spawner at the pair's patrol point.
 class_name TwinLaserPairSpawn
 extends Node2D
 
@@ -46,6 +47,8 @@ func spawn_pair() -> TwinLaserPair:
 		var brain := drone.get_node_or_null("Brain") as EnemyBrain
 		if brain != null and rng_seed != 0:
 			brain.rng_seed = rng_seed + i
+		if brain != null:
+			brain.set(&"patrol_anchor", global_position)  # t14: the pair shares one hub anchor, the spawner's position (the pair's midpoint)
 		parent.add_child(drone)
 	_pair = TwinLaserPair.bind(a, b)
 	for drone in drones:

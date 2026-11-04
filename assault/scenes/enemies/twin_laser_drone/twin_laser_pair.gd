@@ -29,8 +29,9 @@ class_name TwinLaserPair
 extends RefCounted
 
 ## Append-only. §2.12's five, plus WAIT (Open Space's pause between attacks: both drones re-FORM on the same tick, so it is a rig phase) and
-## LAUNCHED (t13: a Laser Tender's launch, each drone boosting from its cradle to its point; then FORM on the fixed launched frame).
-enum Phase { FORM, TELEGRAPH, ADVANCE, BREAK, COLLAPSED, WAIT, LAUNCHED }
+## LAUNCHED (t13: a Laser Tender's launch, each drone boosting from its cradle to its point; then FORM on the fixed launched frame) and
+## IDLE (t14: the hub idle, no attack, beam OFF; both drones circle `idle_anchor` opposite each other; `stand_down()` / `engage()`).
+enum Phase { FORM, TELEGRAPH, ADVANCE, BREAK, COLLAPSED, WAIT, LAUNCHED, IDLE }
 
 signal phase_changed(new_phase: int)
 ## Emitted once per collapse: [param intact] true for a strain collapse with both drones alive (they BREAK and re-FORM), false when the pair broke
@@ -83,6 +84,12 @@ var wait_seconds: float = 0.0
 var frame_fixed: bool = false
 ## LAUNCHED: each drone's boost speed (px/s).
 var launch_speed: float = 0.0
+
+## The hub idle (t14; §2.14), written by the leader's brain (which owns the `AnchorIdle`) and read by both brains:
+## the ring's centre, the angle of drone B's point on it (A sits opposite), and which `AnchorIdle.State` the brains mirror while the rig is IDLE.
+var idle_anchor: Vector2 = Vector2.ZERO
+var idle_angle: float = 0.0
+var idle_state: int = AnchorIdle.State.IDLE
 
 var _phase_time: float = 0.0
 var _axis_sign: float = 1.0
@@ -159,6 +166,38 @@ func is_broken() -> bool:
 ## TELEGRAPH or ADVANCE: the shown line is the line that fires, so nothing interrupts it.
 func is_committed() -> bool:
 	return phase == Phase.TELEGRAPH or phase == Phase.ADVANCE
+
+
+## TELEGRAPH, ADVANCE, BREAK, COLLAPSED or LAUNCHED (t14): an attack that has been shown, its BREAK, or a launch, is never cut short by a stand-down.
+func is_busy() -> bool:
+	return is_committed() or phase == Phase.BREAK or phase == Phase.COLLAPSED or phase == Phase.LAUNCHED
+
+
+## The angle of [param d]'s point on the idle ring: `idle_angle` for B, opposite (`+ PI`) for A.
+func idle_slot_angle(d: Object) -> float:
+	return idle_angle + (PI if d == drone_a else 0.0)
+
+
+# ── The hub idle (t14) ───────────────────────────────────────────────────────────────────────────────────────────────
+
+## The pair stops fighting and idles round [param anchor] (a hub pair's patrol point, or a recalling tender's position): from any phase that is
+## neither busy nor IDLE. The beam is cancelled (a no-op when OFF), the frame is no longer fixed, and each drone keeps its side of the ring.
+func stand_down(anchor: Vector2) -> void:
+	if phase == Phase.IDLE or is_busy() or _broken:
+		return
+	if is_instance_valid(beam):
+		beam.cancel()
+	frame_fixed = false
+	idle_anchor = anchor
+	if is_instance_valid(drone_a) and is_instance_valid(drone_b):
+		idle_angle = (drone_b.global_position - drone_a.global_position).angle()
+	_enter(Phase.IDLE)
+
+
+## From IDLE: FORM (its first frame takes the drones' bearing outright).
+func engage() -> void:
+	if phase == Phase.IDLE and not _broken:
+		_enter(Phase.FORM)
 
 
 func partner_of(d: Object) -> Node2D:
@@ -326,6 +365,8 @@ func tick(delta: float, caller: Node2D) -> void:
 			if _phase_time - LAUNCH_SETTLE_TICKS * delta + EPS >= maxf(_launch_seconds[0], _launch_seconds[1]):
 				_fix_launched_frame(target.position, target.has_target)
 				_enter(Phase.FORM)
+		Phase.IDLE:
+			idle_angle += config.idle_speed * delta  # no frame, no strain, no beam: only the ring turns
 
 
 ## Drone A's beam step: its endpoints (B's last position once B is gone), its strain, its clock. Called by A's brain at the end of every tick, in

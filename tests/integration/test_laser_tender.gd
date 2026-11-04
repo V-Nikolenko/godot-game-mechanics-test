@@ -153,9 +153,11 @@ func _drone_brain(d: Node) -> TwinLaserDroneBrain:
 
 
 ## A tender at [param at], hand-ticked unless [param real]. Every drone it launches joins `_drones` (and, hand-ticked, gets its mask cleared).
-func _tender(h, at: Vector2, real: bool = false, rng_seed: int = 11) -> LaserTender:
+## [param engaged] sets `start_engaged` (t14: an Open Space tender otherwise idles at its anchor; every Attack B row fights at once).
+func _tender(h, at: Vector2, real: bool = false, rng_seed: int = 11, engaged: bool = true) -> LaserTender:
 	var t := TENDER.instantiate() as LaserTender
 	(t.get_node("Brain") as EnemyBrain).rng_seed = rng_seed
+	_tender_brain(t).start_engaged = engaged
 	t.position = at
 	h.root.add_child(t)
 	if not real:
@@ -463,7 +465,7 @@ func test_the_shipped_config_wins_over_the_scene() -> void:
 
 func test_the_phase_enums_are_declared_in_full_and_in_order() -> void:
 	assert_eq(LaserTenderBrain.Phase.keys(), ["APPROACH", "HOLD", "LAUNCH", "WAIT", "REARM", "DISENGAGE", "IDLE", "NOTICING", "RETURNING"])
-	assert_eq(TwinLaserPair.Phase.keys(), ["FORM", "TELEGRAPH", "ADVANCE", "BREAK", "COLLAPSED", "WAIT", "LAUNCHED"])
+	assert_eq(TwinLaserPair.Phase.keys(), ["FORM", "TELEGRAPH", "ADVANCE", "BREAK", "COLLAPSED", "WAIT", "LAUNCHED", "IDLE"])
 
 
 # ── Launch (rows 4 and 5 share one launch per case) ─────────────────────────────────────────────────────────────────
@@ -880,3 +882,449 @@ func test_assault_wave_builder_spawns_a_laser_tender_through_a_real_wave_manager
 	if at_spawn.size() == 1:
 		assert_almost_eq(at_spawn[0] as Vector2, cam.global_position + Vector2(0.0, -100.0) * ArenaCamera.WORLD_SCALE, Vector2.ONE * 0.01,
 				"camera-relative design space")
+
+
+# ── Hub idle (t14; plan §2.14): Open Space only ─────────────────────────────────────────────────────────────────────
+
+const T_ANCHOR := Vector2(640.0, 360.0)
+const IDLE_SLACK := 8.0
+
+
+## The tender's farthest actor-player distance over its cycle (§2.14, the Ph4 inequality): it holds `preferred_range` off and its drones fly up to
+## `launch_speed * launch_max_seconds` from it.
+static func _tender_cycle_reach(cfg: LaserTenderConfig) -> float:
+	return cfg.preferred_range + cfg.launch_speed * cfg.launch_max_seconds
+
+
+static func _tender_radii_ok(cfg: LaserTenderConfig) -> bool:
+	return cfg.perceive_radius < cfg.lose_radius and _tender_cycle_reach(cfg) <= cfg.lose_radius
+
+
+## An Open Space tender left to idle (not engaged) at `T_ANCHOR`, the player 2500 px away, run for [param settle] s.
+func _idle_tender(h, settle: float = 1.0) -> LaserTender:
+	h.player.global_position = T_ANCHOR + Vector2(2500.0, 0.0)
+	var t := _tender(h, T_ANCHOR, false, 11, false)
+	if settle > 0.0:
+		_run(h, t, _ticks(settle), func() -> bool: return false)
+	return t
+
+
+## Puts the player [param distance] px from the tender along +x (before the tick, so its `AnchorIdle` reads exactly that) and steps.
+func _step_with_player_at(h, t: Node2D, distance: float) -> void:
+	h.player.global_position = t.global_position + Vector2(distance, 0.0)
+	_step(h, t)
+
+
+## From an idle tender: the player at `preferred_range` (noticed), then (while it notices, which reads no distance) at [param then_at] px, and run
+## until it has engaged. At `preferred_range` it engages straight into HOLD and LAUNCH; at 1300 px it APPROACHes.
+func _engage(h, t: LaserTender, then_at: float = CONFIG.preferred_range) -> bool:
+	_step_with_player_at(h, t, CONFIG.preferred_range)
+	h.player.global_position = t.global_position + Vector2(then_at, 0.0)
+	return _run(h, t, _ticks(1.0), func() -> bool: return _tender_brain(t).phase != LaserTenderBrain.Phase.NOTICING)
+
+
+## An engaged hub tender whose pair has launched and reached its first FORM tick; returns the rig.
+func _launched_and_forming(h, t: LaserTender) -> TwinLaserPair:
+	assert_true(_engage(h, t), "engaged")
+	assert_true(_run(h, t, _ticks(4.0), func() -> bool: return t.pair() != null and t.pair().phase == TwinLaserPair.Phase.FORM), "launched, FORM")
+	return t.pair()
+
+
+func _light_blinking(t: LaserTender) -> bool:
+	return t.state_light().modulate.is_equal_approx(Color(Color.YELLOW, StateLight.MAX_ALPHA))
+
+
+func test_the_idle_config_and_the_cycle_radius_inequality() -> void:
+	assert_eq([CONFIG.perceive_radius, CONFIG.lose_radius, CONFIG.notice_time, CONFIG.idle_radius, CONFIG.idle_speed], [700.0, 1600.0, 0.35, 160.0, 0.5])
+	var reach := _tender_cycle_reach(CONFIG)
+	gut.p("tender cycle reach %.1f px <= lose_radius %.1f px" % [reach, CONFIG.lose_radius])
+	assert_almost_eq(reach, 1378.0, 1e-3, "650 + 520 * 1.4")
+	assert_true(_tender_radii_ok(CONFIG), "perceive < lose and the cycle's reach <= lose")
+	var bad := CONFIG.duplicate() as LaserTenderConfig
+	bad.lose_radius = 1377.0
+	assert_false(_tender_radii_ok(bad), "boundary: lose_radius 1377 fails")
+
+
+func test_an_open_space_tender_starts_idle_with_its_docked_pair(
+		case: String = use_parameters(["open_space_cold", "assault", "open_space_engaged"])) -> void:
+	var mode := "assault" if case == "assault" else "open_space"
+	var h = _world(mode, _p_of(mode))
+	var at := T_ANCHOR
+	if mode == "assault":
+		at = _spawn_point(h, mode) + Vector2(0.0, -300.0)  # above its band: APPROACH
+	else:
+		h.player.global_position = T_ANCHOR + Vector2(2500.0, 0.0)
+	var t := _tender(h, at, false, 11, case == "open_space_engaged")
+	_step(h, t)
+	var brain := _tender_brain(t)
+	if case == "open_space_cold":
+		assert_eq(brain.phase, LaserTenderBrain.Phase.IDLE, "a cold hub tender idles")
+		assert_not_null(brain.anchor_idle, "its AnchorIdle")
+		assert_eq(t.docked_count(), 2, "with its pair docked")
+		for c: Marker2D in t.cradles():
+			assert_true((c.get_node("DockedDrone") as CanvasItem).visible, "%s shows its docked drone" % c.name)
+		assert_eq(t.state_light().get_state(), StateLight.State.OFF, "cradle light off")
+		assert_true(t.recalls_drones(), "an idling tender recalls its drones")
+	else:
+		assert_null(brain.anchor_idle, "%s: no AnchorIdle" % case)
+		assert_eq(brain.phase, LaserTenderBrain.Phase.APPROACH, "%s: APPROACH at once" % case)
+		assert_false(t.recalls_drones(), "%s: fighting, it recalls nothing" % case)
+
+
+func test_the_idle_tender_orbits_within_idle_radius_for_30_s_without_launching() -> void:
+	var h = _world("open_space", T_ANCHOR)
+	var t := _idle_tender(h, 0.0)
+	var brain := _tender_brain(t)
+	var worst := 0.0
+	var bad_phase := 0
+	for i in _ticks(30.0):
+		_step(h, t)
+		worst = maxf(worst, t.global_position.distance_to(T_ANCHOR))
+		if brain.phase != LaserTenderBrain.Phase.IDLE:
+			bad_phase += 1
+	gut.p("30 s idle: farthest %.1f px from the anchor (ring %.0f + %.0f)" % [worst, CONFIG.idle_radius, IDLE_SLACK])
+	assert_lte(worst, CONFIG.idle_radius + IDLE_SLACK, "within idle_radius + 8 for 30 s")
+	assert_gt(worst, CONFIG.idle_radius - IDLE_SLACK, "and out on the ring, not parked at the anchor")
+	assert_eq(bad_phase, 0, "IDLE throughout (never NOTICING)")
+	assert_eq(t.launches(), 0, "no launch")
+	assert_eq(t.docked_count(), 2, "its pair docked")
+
+
+func test_the_tender_notices_at_perceive_radius(case: String = use_parameters(["inside", "outside"])) -> void:
+	var h = _world("open_space", T_ANCHOR)
+	var t := _idle_tender(h)
+	var brain := _tender_brain(t)
+	var dist := CONFIG.perceive_radius + (-1.0 if case == "inside" else 1.0)
+	var approach_at := [-1.0]
+	brain.phase_changed.connect(func(p: int) -> void:
+		if p == LaserTenderBrain.Phase.APPROACH and approach_at[0] < 0.0:
+			approach_at[0] = _t)
+	_step_with_player_at(h, t, dist)
+	if case == "outside":
+		var noticed := 0
+		for i in 60:
+			_step_with_player_at(h, t, dist)
+			if brain.phase != LaserTenderBrain.Phase.IDLE:
+				noticed += 1
+		assert_eq(noticed, 0, "never NOTICING at perceive_radius + 1")
+		return
+	assert_eq(brain.phase, LaserTenderBrain.Phase.NOTICING, "NOTICING on that tick")
+	assert_true(_light_blinking(t), "the cradle light blinks")
+	var noticed_at := _t
+	var speed := [0.0]
+	var faced := [false]
+	assert_true(_run(h, t, _ticks(1.0), func() -> bool:
+		if brain.phase == LaserTenderBrain.Phase.NOTICING:
+			speed[0] = (t.get_node("EnemyMover") as EnemyMover).own_velocity().length()
+			var nose := Vector2.RIGHT.rotated(t.rotation + t.sprite_forward_angle)
+			faced[0] = nose.angle_to(h.player.global_position - t.global_position) < 0.1
+		return approach_at[0] >= 0.0), "then APPROACH")
+	gut.p("noticed at %.3f s, APPROACH at %.3f s (notice_time %.2f s); speed at the end of NOTICING %.2f px/s" %
+			[noticed_at, approach_at[0], CONFIG.notice_time, speed[0]])
+	assert_almost_eq(approach_at[0] - noticed_at, CONFIG.notice_time, 2.0 * DT + 1e-6, "APPROACH after notice_time")
+	assert_lt(speed[0], 1.0, "it stopped while noticing")
+	assert_true(faced[0], "facing the player")
+
+
+func test_beyond_lose_radius_the_tender_goes_home(case: String = use_parameters(["beyond", "inside"])) -> void:
+	var h = _world("open_space", T_ANCHOR)
+	var t := _idle_tender(h)
+	var brain := _tender_brain(t)
+	# Engaged against a player 1300 px off (inside lose_radius, outside its hold range) and pulled toward it for 2 s, so going home is a real flight.
+	assert_true(_engage(h, t, 1300.0), "engaged")
+	_run(h, t, _ticks(2.0), func() -> bool: return false)
+	assert_eq(brain.phase, LaserTenderBrain.Phase.APPROACH, "still approaching")
+	var dist := CONFIG.lose_radius + (1.0 if case == "beyond" else -1.0)
+	h.player.global_position = t.global_position + Vector2(dist, 0.0)
+	_step(h, t)
+	if case == "inside":
+		var gone_home := 0
+		for i in 30:
+			_step(h, t)
+			if brain.phase == LaserTenderBrain.Phase.RETURNING or brain.phase == LaserTenderBrain.Phase.IDLE:
+				gone_home += 1
+		assert_eq(gone_home, 0, "at lose_radius - 1 it never goes home")
+		return
+	assert_eq(brain.phase, LaserTenderBrain.Phase.RETURNING, "RETURNING on the next tick")
+	var from := t.global_position.distance_to(T_ANCHOR)
+	var t0 := _t
+	assert_true(_run(h, t, _ticks(8.0), func() -> bool: return brain.phase == LaserTenderBrain.Phase.IDLE), "then IDLE")
+	gut.p("home from %.0f px in %.2f s" % [from, _t - t0])
+	assert_lte(t.global_position.distance_to(T_ANCHOR), CONFIG.idle_radius, "within idle_radius of the anchor")
+
+
+func test_a_launched_pair_flies_back_and_docks_when_the_tender_goes_home() -> void:
+	var h = _world("open_space", T_ANCHOR)
+	var t := _idle_tender(h)
+	var brain := _tender_brain(t)
+	var rig := _launched_and_forming(h, t)
+	var died := [0]
+	for d: Node in [rig.drone_a, rig.drone_b]:
+		d.connect(&"died", func() -> void: died[0] += 1)
+	var beam := rig.beam
+	h.player.global_position = t.global_position + Vector2(CONFIG.lose_radius + 1.0, 0.0)
+	_step(h, t)
+	assert_eq(brain.phase, LaserTenderBrain.Phase.RETURNING, "the tender goes home")
+	assert_true(t.recalls_drones(), "and recalls its pair")
+	assert_eq(rig.phase, TwinLaserPair.Phase.IDLE, "the pair (FORM, not busy) stands down on its leader's tick")
+	for d: Node in [rig.drone_a, rig.drone_b]:
+		assert_eq(_drone_brain(d).phase, TwinLaserDroneBrain.Phase.RETURNING, "both drone brains RETURNING")
+	var lethal := [0]
+	var t0 := _t
+	var docked := _run(h, t, _ticks(8.0), func() -> bool:
+		if is_instance_valid(beam) and beam.is_lethal():
+			lethal[0] += 1
+		return t.docked_count() == 2)
+	gut.p("both drones docked %.2f s after the recall" % (_t - t0))
+	assert_true(docked, "within 8 s both drones docked")
+	assert_eq(died[0], 0, "neither died: they docked")
+	assert_eq(lethal[0], 0, "the beam never lethal after the recall")
+	assert_eq(t.launched_drones().size(), 0, "none left out")
+
+
+func test_a_tender_that_lost_its_pair_rearms_while_idle_and_on_re_engaging(case: String = use_parameters(["idle", "hold"])) -> void:
+	var h = _world("open_space", T_ANCHOR)
+	var t := _idle_tender(h)
+	var brain := _tender_brain(t)
+	assert_true(_engage(h, t), "engaged")
+	assert_true(_run(h, t, _ticks(2.0), func() -> bool: return brain.phase == LaserTenderBrain.Phase.WAIT), "launched, WAIT")
+	_run(h, t, _ticks(1.0), func() -> bool: return false)
+	assert_eq(brain.phase, LaserTenderBrain.Phase.WAIT, "WAIT while the pair lives")
+	for d: Variant in _drones:
+		if _live(d):
+			_kill(d)
+	var died_at := _t
+	_run(h, t, _ticks(2.0), func() -> bool: return false)  # real time in REARM (review round 3 N16)
+	assert_eq(brain.phase, LaserTenderBrain.Phase.REARM, "REARM")
+	assert_eq(t.docked_count(), 0, "cradles empty")
+	h.player.global_position = t.global_position + Vector2(CONFIG.lose_radius + 1.0, 0.0)
+	_step(h, t)
+	assert_eq(brain.phase, LaserTenderBrain.Phase.RETURNING, "the player left mid-REARM: it goes home")
+	if case == "hold":
+		_run(h, t, _ticks(2.0), func() -> bool: return false)  # real time in the idle phases
+		assert_eq(t.docked_count(), 0, "still empty")
+		h.player.global_position = t.global_position + Vector2(CONFIG.preferred_range, 0.0)
+	var full_at := [-1.0]
+	var phase_at_full := [-1]
+	_run(h, t, _ticks(CONFIG.rearm_seconds), func() -> bool:
+		if t.docked_count() == 2:
+			full_at[0] = _t
+			phase_at_full[0] = brain.phase
+		return full_at[0] >= 0.0)
+	gut.p("%s: pair died at %.3f s, cradles full at %.3f s (%.3f s later; rearm_seconds %.1f), phase then %s" %
+			[case, died_at, full_at[0], full_at[0] - died_at, CONFIG.rearm_seconds, LaserTenderBrain.Phase.keys()[phase_at_full[0]]])
+	assert_gte(full_at[0] - died_at, CONFIG.rearm_seconds - DT - 1e-6, "never earlier than rearm_seconds (a tick at the seam)")
+	assert_lte(full_at[0] - died_at, CONFIG.rearm_seconds + 2.0 * DT + 1e-6, "and no later than two ticks past it")
+	if case == "idle":
+		assert_true(LaserTenderBrain._is_idle_phase(phase_at_full[0]), "refilled while idling")
+		return
+	assert_true(_run(h, t, _ticks(CONFIG.launch_telegraph + 1.0), func() -> bool: return t.launches() == 2), "re-engaged, it launches again")
+
+
+func test_a_recalled_pair_whose_tender_dies_re_engages() -> void:
+	var h = _world("open_space", T_ANCHOR)
+	var t := _idle_tender(h)
+	var rig := _launched_and_forming(h, t)
+	h.player.global_position = t.global_position + Vector2(CONFIG.lose_radius + 1.0, 0.0)
+	_step(h, t)
+	assert_eq(rig.phase, TwinLaserPair.Phase.IDLE, "recalled")
+	_kill(t)
+	await get_tree().process_frame
+	assert_false(is_instance_valid(t), "the tender is gone (a freed controller compares == null)")
+	_step(h, null)  # the drones only: the tender is freed
+	assert_eq(rig.phase, TwinLaserPair.Phase.FORM, "the leader engages again on its next tick")
+	for d: Node in [rig.drone_a, rig.drone_b]:
+		assert_eq(_drone_brain(d).phase, TwinLaserDroneBrain.Phase.FORM, "both brains fight again")
+	_run(h, null, 60, func() -> bool: return false)
+	assert_true(_live(rig.drone_a) and _live(rig.drone_b), "60 ticks on, both still flying")
+	assert_ne(rig.phase, TwinLaserPair.Phase.IDLE, "never back to the recall")
+
+
+# ── Assault lives: the measured exits (t14; plan §2.14, task plan §C) ───────────────────────────────────────────────
+
+const PH8_EXITS: GDScript = preload("res://tests/helpers/ph8_exit_keys.gd")
+const PROBE: GDScript = preload("res://tests/helpers/specialist_exit_probe.gd")
+const DRONE: PackedScene = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone.tscn")
+const SPAWN: PackedScene = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn")
+const BOMBER: PackedScene = preload("res://assault/scenes/enemies/bomber/bomber.tscn")
+const SINGLE_WRITER: GDScript = preload("res://tests/integration/test_enemy_mover_single_writer.gd")
+const _EXIT_KEYS_PATH := "res://tests/helpers/ph8_exit_keys.gd"
+## A Ph8 probe call built anywhere but `ph8_exit_keys.gd` names one of these (inside its own argument list). The scene paths are not needles: string
+## contents are blanked before matching (review round 3 N15).
+const _PH8_PROBE_NEEDLES: Array[String] = ["TwinLaserDroneBrain", "LaserTenderBrain"]
+const _WORST_EXIT := 10.0
+
+## The two corridor exits, measured once in `before_all()` (or memo hits, if `test_level1_specialist_spawns.gd` ran first), and each probe's wall cost.
+var _drone_exit: Dictionary = {}
+var _tender_exit: Dictionary = {}
+var _drone_probe_s: float = 0.0
+var _tender_probe_s: float = 0.0
+
+
+func before_all() -> void:
+	var t0 := Time.get_ticks_usec()
+	_drone_exit = PH8_EXITS.drone_exit(self)
+	var t1 := Time.get_ticks_usec()
+	_tender_exit = PH8_EXITS.tender_exit(self)
+	var t2 := Time.get_ticks_usec()
+	_drone_probe_s = float(t1 - t0) / 1e6
+	_tender_probe_s = float(t2 - t1) / 1e6
+
+
+## A `prepare` hook with no effect, for the memo boundary (a static function: one Callable on every reference).
+static func _noop_prepare(_ship: Node) -> void:
+	pass
+
+
+func test_the_measured_assault_exits_are_printed_and_under_10_s() -> void:
+	var reversal: float = PH8_EXITS.drone_reversal_seconds()
+	gut.p("drone exit: worst %.2f s from %s, %d runs, %d capped (probe %.2f s wall); + reversal %.3f s = %.2f s" % [_drone_exit["seconds"],
+			_drone_exit["start"], _drone_exit["runs"], _drone_exit["capped"], _drone_probe_s, reversal, float(_drone_exit["seconds"]) + reversal])
+	gut.p("tender exit: worst %.2f s from %s, %d runs, %d capped (probe %.2f s wall)" % [_tender_exit["seconds"], _tender_exit["start"],
+			_tender_exit["runs"], _tender_exit["capped"], _tender_probe_s])
+	assert_eq(int(_drone_exit["runs"]), 1083, "the drone: every corridor start at 10 px/s")
+	assert_eq(int(_tender_exit["runs"]), 2166, "the tender: every corridor start at exit_speed and 10 px/s")
+	assert_eq(int(_drone_exit["capped"]), 0, "no drone run hit the cap")
+	assert_eq(int(_tender_exit["capped"]), 0, "no tender run hit the cap")
+	assert_gt(float(_drone_exit["seconds"]), 0.0)
+	assert_lt(float(_drone_exit["seconds"]) + reversal, _WORST_EXIT, "the drone's exit bound is under 10 s")
+	assert_almost_eq(PH8_EXITS.drone_exit_bound(self), float(_drone_exit["seconds"]) + reversal, 1e-9, "drone_exit_bound() is that sum")
+	assert_lt(float(_tender_exit["seconds"]), _WORST_EXIT, "the tender's exit is under 10 s")
+
+
+func test_the_exit_keys_are_built_once_and_measured_once() -> void:
+	var before: int = PROBE.measured
+	assert_eq(PH8_EXITS.drone_exit(self), _drone_exit, "the same drone figure")
+	assert_eq(PH8_EXITS.tender_exit(self), _tender_exit, "the same tender figure")
+	assert_eq(PROBE.measured, before, "a second call is a memo hit: nothing measured")
+	var hook_a: Callable = PH8_EXITS.prepare_probe
+	var hook_b: Callable = PH8_EXITS.prepare_probe
+	assert_true(hook_a == hook_b and hook_a.hash() == hook_b.hash(), "the static hook is one Callable on every reference")
+	# Boundary (on the Bomber, so the source sweep below never reads this file as a Ph8 probe): fresh lambdas miss the memo, a static hook hits it.
+	var one_start: Array = [[Vector2(0.0, 40.0), Vector2.DOWN]]
+	var speeds: Array[float] = [10.0]
+	var n0: int = PROBE.measured
+	for i in 2:
+		PROBE.worst_disengage(self, BOMBER, BomberBrain.Phase.DISENGAGE, speeds, PH8_EXITS.CAP, one_start, func(_s: Node) -> void: pass)
+	assert_eq(PROBE.measured - n0, 2, "boundary: a fresh lambda each time measures twice")
+	var n1: int = PROBE.measured
+	for i in 2:
+		PROBE.worst_disengage(self, BOMBER, BomberBrain.Phase.DISENGAGE, speeds, PH8_EXITS.CAP, one_start, _noop_prepare)
+	assert_eq(PROBE.measured - n1, 1, "one static Callable measures once")
+	# The source sweep: no test builds a Ph8 probe call by hand.
+	var calls := 0
+	var flagged: Array = []
+	for path: String in _test_scripts("res://tests"):
+		if path == _EXIT_KEYS_PATH:
+			continue
+		var found := _ph8_probe_calls(FileAccess.get_file_as_string(path))
+		calls += int(found["calls"])
+		for args: String in found["flagged"]:
+			flagged.append("%s: %s" % [path, args.strip_edges()])
+	gut.p("source sweep: %d worst_disengage( calls read" % calls)
+	assert_gte(calls, 10, "the sweep reads the known calls (level 1's, the probe's own declaration, this file's boundary)")
+	assert_eq(flagged, [], "no worst_disengage( call outside ph8_exit_keys.gd names a Ph8 brain")
+	var synthetic := "\n".join(PackedStringArray([
+		"# a hand-built Ph8 probe, two lines",
+		"var r := SpecialistExitProbe.worst_disengage(self, load(DRONE_PATH),",
+		"\tTwinLaserDroneBrain.Phase.DISENGAGE, speeds, 20.0, corridor, hook)",
+	]))
+	assert_eq((_ph8_probe_calls(synthetic)["flagged"] as Array).size(), 1, "boundary: the sweep fires on a hand-built drone probe")
+
+
+## Every `.gd` under [param dir], recursively.
+func _test_scripts(dir: String) -> Array[String]:
+	var out: Array[String] = []
+	for f in DirAccess.get_files_at(dir):
+		if f.ends_with(".gd"):
+			out.append(dir.path_join(f))
+	for d in DirAccess.get_directories_at(dir):
+		out.append_array(_test_scripts(dir.path_join(d)))
+	return out
+
+
+## `{calls, flagged}` over [param source]: each line stripped of comments and string contents (`_code_only()`, one line at a time: it tracks no
+## quote across lines), joined, then each `worst_disengage(` call's argument text, up to its matching `)`, checked for a Ph8 brain.
+static func _ph8_probe_calls(source: String) -> Dictionary:
+	var lines := PackedStringArray()
+	for line in source.split("\n"):
+		lines.append(SINGLE_WRITER._code_only(line))
+	var code := "\n".join(lines)
+	var calls := 0
+	var flagged: Array = []
+	var at := code.find("worst_disengage(")
+	while at >= 0:
+		calls += 1
+		var open := at + "worst_disengage".length()
+		var depth := 0
+		var close := code.length()
+		for i in range(open, code.length()):
+			if code[i] == "(":
+				depth += 1
+			elif code[i] == ")":
+				depth -= 1
+				if depth == 0:
+					close = i
+					break
+		var args := code.substr(open, close - open + 1)
+		for needle in _PH8_PROBE_NEEDLES:
+			if args.contains(needle):
+				flagged.append(args)
+				break
+		at = code.find("worst_disengage(", close)
+	return {"calls": calls, "flagged": flagged}
+
+
+func test_the_stub_trick_leaves_the_exit_unchanged() -> void:
+	var cases := [
+		[DRONE, TwinLaserDroneBrain.Phase.DISENGAGE, Vector2(-720.0, -720.0), Vector2(1.0, 1.0).normalized() * 10.0],
+		[TENDER, LaserTenderBrain.Phase.DISENGAGE, Vector2(-80.0, 0.0), Vector2.RIGHT * CONFIG.exit_speed],
+	]
+	for c: Array in cases:
+		var h = HARNESS.assault()
+		add_child_autofree(h.root)
+		h.player.global_position = PROBE.MID_VIEW + Vector2(0.0, 300.0)  # the probe world's stub
+		var at: Vector2 = PROBE.MID_VIEW + (c[2] as Vector2)
+		var plain: float = PROBE.disengage_seconds(h.root, c[0], c[1], at, c[3], PH8_EXITS.CAP)
+		assert_true(h.player.is_in_group(&"player"), "precondition: without the hook the stub is a player")
+		var hooked: float = PROBE.disengage_seconds(h.root, c[0], c[1], at, c[3], PH8_EXITS.CAP, PH8_EXITS.prepare_probe)
+		gut.p("%s: %.4f s without the hook, %.4f s with it" % [(c[0] as PackedScene).resource_path.get_file(), plain, hooked])
+		assert_false(h.player.is_in_group(&"player"), "the hook took the stub out of group player")
+		assert_eq(hooked, plain, "bit-identical exit")
+
+
+## Task plan review N2: a framed drone entering DISENGAGE at `max_speed` against its exit (`-n`) costs more than the probe's 10 px/s start along it,
+## and at most `drone_reversal_seconds()` (+ one tick) more. A real bound pair, its frame set to n = UP (exit DOWN), drone A near the top moving UP
+## at `max_speed`; B killed, A hand-ticked with the probe's own loop until it frees itself.
+func test_a_framed_drone_exit_against_its_velocity_costs_at_most_the_reversal_term() -> void:
+	var h = _world("assault", P_ASSAULT)
+	h.player.global_position = PROBE.MID_VIEW + Vector2(0.0, 300.0)
+	var start: Vector2 = PROBE.MID_VIEW + Vector2(0.0, -300.0)
+	# The reference first, while the world holds no other drone body: a hand-ticked body's broadphase entry stays where it spawned (t12), and A
+	# spawns on `start`, so a later reference run there would `move_and_slide()` into it.
+	var lone: float = PROBE.disengage_seconds(h.root, DRONE, TwinLaserDroneBrain.Phase.DISENGAGE, start, Vector2.DOWN * PH8_EXITS.SLOW_START,
+			PH8_EXITS.CAP)
+	var s := SPAWN.instantiate() as TwinLaserPairSpawn
+	s.position = start + Vector2(DRONE_CONFIG.rig_length * 0.5, 0.0)  # A (at -L/2) lands on `start`
+	h.root.add_child(s)
+	var rig := s.spawn_pair()
+	var a := rig.drone_a as TwinLaserDrone
+	for d: Node2D in [rig.drone_a, rig.drone_b]:
+		d.set_physics_process(false)
+		(d as CharacterBody2D).collision_mask = 0
+	rig.normal = Vector2.UP
+	rig.has_frame = true
+	a.global_position = start
+	a.velocity = Vector2.UP * DRONE_CONFIG.max_speed
+	_kill(rig.drone_b)
+	var framed := 0.0
+	while framed < PH8_EXITS.CAP and not a.is_queued_for_deletion():
+		var before := a.global_position
+		a._physics_process(DT)
+		a.global_position = before + a.velocity * DT
+		framed += DT
+	assert_eq(_drone_brain(a).phase, TwinLaserDroneBrain.Phase.DISENGAGE, "A disengaged")
+	var term: float = PH8_EXITS.drone_reversal_seconds()
+	gut.p("framed exit against its velocity %.4f s, lone 10 px/s exit %.4f s: +%.4f s (term %.4f s + one tick)" % [framed, lone, framed - lone, term])
+	assert_gt(framed - lone, 0.0, "the reversal is real")
+	assert_lte(framed - lone, term + DT + 1e-6, "and the term bounds it")

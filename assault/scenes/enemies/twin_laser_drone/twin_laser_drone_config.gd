@@ -41,3 +41,15 @@ extends ShipConfig
 @export var engage_seconds: float = 8.0
 ## DISENGAGE speed (px/s).
 @export var exit_speed: float = 420.0
+
+@export_group("Idle")
+## Open Space hub idle (§2.14; t14): a standalone pair circles its patrol anchor until the leader is within `perceive_radius` of the player,
+## blinks for `notice_time` (NOTICING), then fights; past `lose_radius` it goes home. `lose_radius` must clear the attack cycle's farthest
+## drone-player distance (`standoff + overshoot + rig_length / 2 + break_speed * break_seconds` = 982 px; asserted from config).
+@export var perceive_radius: float = 650.0
+@export var lose_radius: float = 1500.0
+@export var notice_time: float = 0.35
+## The idle ring's radius about the anchor (px); the two drones sit opposite each other on it, beam OFF.
+@export var idle_radius: float = 140.0
+## How fast the idle rig turns on its ring (rad/s) [judgement: the Laser Tender's figure].
+@export var idle_speed: float = 0.5

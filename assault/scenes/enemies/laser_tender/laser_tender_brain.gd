@@ -15,11 +15,19 @@
 ##   DISENGAGE  [DISENGAGE]  Assault: after the one launch of this life, or once the budget runs out before LAUNCH. Release the corridor, leave
 ##                           toward the nearest edge of the projectile world rect at `exit_speed`, free once strictly outside it. A budget that runs
 ##                           out during LAUNCH lets that launch finish first.
-##   IDLE, NOTICING, RETURNING: declared for t14 (the hub idle); they hold still until then.
+##   IDLE       [IDLE]       t14 (§2.14), Open Space only: circles `patrol_anchor` at `idle_radius` (`idle_speed`), its pair docked.
+##   NOTICING   [NOTICING]   its `AnchorIdle` saw the player: stops, faces it, blinks the cradle light once; after `notice_time` -> APPROACH.
+##   RETURNING  [RETURNING]  the player passed `lose_radius` (never in LAUNCH): `arrive` at `patrol_anchor`, then IDLE.
 ##
 ## **At most one live pair:** LAUNCH needs both cradles full and no intact rig of this tender. **Docking** (Open Space, every phase but DISENGAGE): a
-## drone this tender launched whose brain is SOLO (its rig broke; it heads for its live controller) within `dock_radius` is taken back
-## (`LaserTender.dock()`).
+## drone this tender launched whose brain is SOLO (its rig broke; it heads for its live controller) or RETURNING (recalled: `LaserTender.
+## recalls_drones()` is true in the three idle phases) within `dock_radius` is taken back (`LaserTender.dock()`).
+##
+## **The hub idle (t14).** Open Space, not `start_engaged`: an `AnchorIdle` (config group "Idle") runs ahead of `_decide()` (busy: LAUNCH,
+## DISENGAGE), the Mine Layer's shape. The cradles across a hub cycle keep **one rearm clock**: `_rearm_elapsed` is zeroed on every tick the
+## cradles are full or a pair lives, advances only in the idle phases (where it refills the cradles at `rearm_seconds`), is never reset by a phase
+## change, carries REARM's time into an idle phase and back into REARM. APPROACH or HOLD with empty cradles (a tender re-engaged after losing its
+## pair while idling) goes to WAIT while a pair lives, else to REARM seeded with that clock, so HOLD with empty cradles is never a dead end.
 ##
 ## Requests only (single-writer gate): `request_velocity` and its wrappers, `face_toward`, `max_speed` and `release_constraint()` on DISENGAGE.
 class_name LaserTenderBrain
@@ -45,7 +53,7 @@ const HEADING_MIN_SPEED := 1.0
 var config: LaserTenderConfig = LaserTenderConfig.new()
 var phase: Phase = Phase.APPROACH
 var budget: EngagementBudget
-## Test seam (t14 gives it its meaning: a hub spawn idles unless engaged). Nothing idles yet, so it changes nothing in t13.
+## True skips the hub idle (no `AnchorIdle`): the tender fights at once (behaviour rows; the Ph7 convention).
 var start_engaged: bool = false
 ## Where the tender idles in the hub (t14). `Vector2.INF` (unset) defaults to the spawn position on the first tick.
 var patrol_anchor: Vector2 = Vector2.INF
@@ -60,11 +68,19 @@ var _arc_angle: float = 0.0
 var _arc_dir: float = 1.0
 var _exit_dir: Vector2 = Vector2.UP
 var _light_state: int = -1
+## The hub idle's notice / lose handover (§2.14); null in Assault and when `start_engaged`.
+var anchor_idle: AnchorIdle
+## IDLE: the angle of the tender's point on its ring.
+var _idle_angle: float = 0.0
+## The one rearm clock across a hub cycle (s; see the header).
+var _rearm_elapsed: float = 0.0
 
 
 func tick(delta: float) -> void:
 	if not _started:
 		_setup()
+		if anchor_idle != null:
+			enter_phase(Phase.IDLE)
 	_phase_time += delta
 	var expired := budget.update(delta)
 	if expired and phase != Phase.DISENGAGE:
@@ -79,6 +95,10 @@ func tick(delta: float) -> void:
 	if not budget.active:
 		_dock_returning()
 	var target := TargetInfo.player(get_tree())
+	if anchor_idle != null:
+		_tick_anchor_idle(delta, target)
+	if not budget.active:
+		_tick_rearm_clock(delta)
 	_decide(target)
 	if phase == Phase.DISENGAGE:
 		_tick_disengage()
@@ -91,9 +111,13 @@ func tick(delta: float) -> void:
 func enter_phase(p: Phase) -> void:
 	if not _started:
 		_setup()
+	if phase == Phase.REARM and _is_idle_phase(p):
+		_rearm_elapsed = _phase_time  # REARM's progress carries into the idle (read before it is zeroed below)
 	phase = p
 	_phase_time = 0.0
 	match p:
+		Phase.IDLE:
+			_idle_angle = (actor.global_position - patrol_anchor).angle()
 		Phase.HOLD:
 			var target := TargetInfo.player(get_tree())
 			if target.has_target:
@@ -101,11 +125,16 @@ func enter_phase(p: Phase) -> void:
 		Phase.DISENGAGE:
 			_enter_disengage()
 	_update_light()
+	if p == Phase.NOTICING:
+		var light := actor.get_node_or_null("StateLight") as StateLight
+		if light != null:
+			light.blink_once()
 	phase_changed.emit(p)
 
 
 ## `BaseEnemy.suspend_ai()`: a rail took the tender over. The light goes out.
 func on_suspended() -> void:
+	anchor_idle = null  # a rail owns the motion: no idle
 	_set_light(StateLight.State.OFF)
 
 
@@ -197,6 +226,9 @@ func _setup() -> void:
 	if not patrol_anchor.is_finite():
 		patrol_anchor = actor.global_position
 	_arc_dir = 1.0 if rng.randf() < 0.5 else -1.0
+	if not budget.active and not start_engaged:
+		# `home_radius` = `idle_radius` (the Mine Layer's): it returns to the anchor point itself, then circles it.
+		anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time, config.idle_radius)
 	var tender := _tender()
 	if tender != null and tender.drone_scene != null:
 		var probe := tender.drone_scene.instantiate()
@@ -212,6 +244,15 @@ func _tender() -> LaserTender:
 
 ## Transitions, in an order that lets one tick cascade (APPROACH -> HOLD -> LAUNCH; REARM -> HOLD -> LAUNCH).
 func _decide(target: TargetInfo) -> void:
+	# Open Space, re-engaged with empty cradles (its pair died or docked away while it idled): wait out a live pair, else REARM carrying the one
+	# rearm clock. Ahead of the REARM check, so a seeded REARM that is already due cascades into HOLD -> LAUNCH on this tick.
+	if not budget.active and (phase == Phase.APPROACH or phase == Phase.HOLD) and _tender().docked_count() < 2:
+		if _pair_lives():
+			enter_phase(Phase.WAIT)
+		else:
+			enter_phase(Phase.REARM)
+			_phase_time = _rearm_elapsed  # seeded after enter_phase(), which zeroes it
+			_rearm_elapsed = 0.0
 	if phase == Phase.APPROACH and _in_hold(target):
 		enter_phase(Phase.HOLD)
 	if phase == Phase.REARM and _phase_time + EPS >= config.rearm_seconds:
@@ -223,6 +264,43 @@ func _decide(target: TargetInfo) -> void:
 		_launch()
 	elif phase == Phase.WAIT and not _pair_lives():
 		enter_phase(Phase.REARM)
+
+
+## The hub idle (§2.14), once a tick ahead of `_decide()`: the Mine Layer's shape. A LAUNCH (its telegraph shown) is never interrupted and a
+## DISENGAGE is already leaving; COMBAT hands over from NOTICING only (any other phase is already fighting).
+func _tick_anchor_idle(delta: float, target: TargetInfo) -> void:
+	var busy := phase == Phase.LAUNCH or phase == Phase.DISENGAGE
+	match anchor_idle.update(delta, actor.global_position, target):
+		AnchorIdle.State.IDLE:
+			if phase != Phase.IDLE and not busy:
+				enter_phase(Phase.IDLE)
+		AnchorIdle.State.NOTICING:
+			if phase != Phase.NOTICING and not busy:
+				enter_phase(Phase.NOTICING)
+		AnchorIdle.State.COMBAT:
+			if phase == Phase.NOTICING:
+				enter_phase(Phase.APPROACH)
+		AnchorIdle.State.RETURNING:
+			if phase != Phase.RETURNING and not busy:
+				enter_phase(Phase.RETURNING)
+
+
+## The one rearm clock (Open Space, every tick; header): zeroed while the cradles are full or a pair lives, advanced only in the idle phases,
+## where it refills the cradles at `rearm_seconds` (so an idling tender carries its docked pair) and is consumed.
+func _tick_rearm_clock(delta: float) -> void:
+	if _tender().docked_count() == 2 or _pair_lives():
+		_rearm_elapsed = 0.0
+		return
+	if not _is_idle_phase(phase):
+		return
+	_rearm_elapsed += delta
+	if _rearm_elapsed + EPS >= config.rearm_seconds:
+		_tender().rearm_cradles()
+		_rearm_elapsed = 0.0
+
+
+static func _is_idle_phase(p: int) -> bool:
+	return p == Phase.IDLE or p == Phase.NOTICING or p == Phase.RETURNING
 
 
 func _in_hold(target: TargetInfo) -> bool:
@@ -266,8 +344,10 @@ func _dock_returning() -> void:
 	var tender := _tender()
 	for d in tender.launched_drones():
 		var drone_brain := d.get_node_or_null("Brain") as TwinLaserDroneBrain
-		if drone_brain != null and drone_brain.phase == TwinLaserDroneBrain.Phase.SOLO \
-				and d.global_position.distance_to(actor.global_position) <= config.dock_radius:
+		if drone_brain == null or d.global_position.distance_to(actor.global_position) > config.dock_radius:
+			continue
+		# SOLO: its rig broke and it heads home; RETURNING: recalled while this tender idles (t14).
+		if drone_brain.phase == TwinLaserDroneBrain.Phase.SOLO or drone_brain.phase == TwinLaserDroneBrain.Phase.RETURNING:
 			tender.dock(d)
 
 
@@ -296,6 +376,20 @@ func _hold_point(p: Vector2) -> Vector2:
 # ── Motion (requests only) ───────────────────────────────────────────────────────────────────────────────────────────
 
 func _move(delta: float, target: TargetInfo) -> void:
+	# The idle family needs no player: it runs before the no-target return.
+	match phase:
+		Phase.IDLE:
+			_idle_angle += config.idle_speed * delta
+			mover.orbit(patrol_anchor, config.idle_radius, _idle_angle, config.max_speed)
+			return
+		Phase.RETURNING:
+			mover.arrive(patrol_anchor, config.max_speed)
+			return
+		Phase.NOTICING:
+			mover.request_velocity(Vector2.ZERO)
+			if target.has_target:
+				mover.face_toward(target.position)
+			return
 	if not target.has_target:
 		mover.request_velocity(Vector2.ZERO)
 		return
@@ -317,7 +411,7 @@ func _move(delta: float, target: TargetInfo) -> void:
 				mover.orbit(p, config.preferred_range, _arc_angle, config.max_speed)
 			mover.face_toward(p)
 		_:
-			mover.request_velocity(Vector2.ZERO)  # IDLE / NOTICING / RETURNING: t14 gives them motion
+			mover.request_velocity(Vector2.ZERO)  # DISENGAGE is moved by `_tick_disengage()`
 
 
 func _enter_disengage() -> void:

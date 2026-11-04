@@ -3291,3 +3291,38 @@ directory. These are *planned* decisions; check this phase's *as built* section,
 - Roster gates: `laser_tender` joined the three rosters, `test_wreck.gd`, `test_base_enemy.gd` (`_MIN_ROSTER_SIZE` 20, authored COLLISION, the tow table: LAUNCH) and `test_enemy_dual_mode.gd`
   (a launch case, the hazard-profile row 0.8 / 24 / 0.3); `test_engagement_deadline.gd` guards ENEMIES_CLEARED sections against it; `test_twin_laser_drones.gd`'s no-motion sweep covers
   `laser_tender.gd` and `laser_tender_brain.gd`, and its rig enum pin gained LAUNCHED. Gate: `tests/integration/test_laser_tender.gd` (17 tests).
+
+### Phase 8, built in t14 (Twin-Laser Drones and the Laser Tender: hub idle and measured Assault exits) (2026-11-04)
+
+Task plan `docs/plans/cmvqw0vo2018rqs2xxd8m1llu/3-plan.md` (round 3 `VERDICT: APPROVED`, a third round allowed by the owner on 2026-11-03).
+- **Hub idle, the pair.** `TwinLaserDroneConfig` gains group "Idle" (`perceive_radius` 650, `lose_radius` 1500, `notice_time` 0.35, `idle_radius` 140, `idle_speed` 0.5,
+  the last a judgement value: the tender's figure). Each brain of a standalone Open Space pair (not `start_engaged`, no controller) builds an `AnchorIdle` with
+  `home_radius = idle_radius + slot_tolerance`, but **only the leader of an intact pair updates it**, before the rig's tick. The rig gains
+  `TwinLaserPair.Phase.IDLE` (appended after LAUNCHED), `stand_down(anchor)` / `engage()`, `is_busy()` (TELEGRAPH, ADVANCE, BREAK, COLLAPSED, LAUNCHED: a stand-down
+  waits for those to end) and `idle_slot_angle()`; the brains mirror IDLE / NOTICING / RETURNING from `pair.idle_state`. `TwinLaserPairSpawn` sets both drones'
+  `patrol_anchor` to its own position.
+- **Hub/launched split keyed on `anchor_idle`, not `controller`:** a freed controller compares `== null`, so a launched pair whose tender died would otherwise be
+  read as a hub pair. Only a hub pair builds an `AnchorIdle`; a launched pair's leader reads the controller's duck-typed `recalls_drones()` (the `is_armored()`
+  precedent; the drone brain never names `LaserTender`) and stands the rig down at the tender (brains RETURNING, `arrive` at it, the tender docks them); a dead
+  tender re-engages the rig. A lone Open Space drone with no live controller circles its own anchor (SOLO), instead of t12's `arrive` at the anchor.
+- **Hub idle, the tender.** `AnchorIdle` with `home_radius = idle_radius` (the Mine Layer's), ahead of `_decide()`, never interrupting LAUNCH / DISENGAGE; IDLE orbits,
+  NOTICING blinks the cradle light and faces the player -> APPROACH, RETURNING `arrive`s home. `LaserTender.recalls_drones()` is true in the three idle phases; docking
+  now also takes a RETURNING drone. **One rearm clock** (`_rearm_elapsed`): zeroed while the cradles are full or a pair lives, advanced only in idle phases (refilling at
+  `rearm_seconds`), carried from REARM into an idle phase and back. **The unarmed rule:** Open Space APPROACH / HOLD with empty cradles -> WAIT while a pair lives, else
+  REARM seeded with that clock (so HOLD with empty cradles is never a dead end). Round 1's "stay" case (holding REARM while a lone drone is still flying home) is dropped:
+  it docks during REARM and REARM still completes (review N12).
+- **`start_engaged`** now means what t12/t13 declared: true skips the idle. Every earlier behaviour row (`_pair()`, `_tender()`, the two `test_enemy_dual_mode.gd`
+  cases) sets it.
+- **Measured exits (for t19).** `tests/helpers/ph8_exit_keys.gd` (no `class_name`, preload it) is the only place the probe arguments are built: `drone_exit(host)`,
+  `tender_exit(host)`, `drone_exit_bound(host)`, `drone_reversal_seconds()`, `corridor_starts(host)`, `CAP` 20 and the static `prepare_probe` hook. **t19 must call
+  these, never `worst_disengage()` by hand** (a source sweep in `test_laser_tender.gd` fails a hand-built Ph8 probe call). `SpecialistExitProbe` gains
+  `static var measured` (memo misses), read only by the memo row.
+  - **Deviation: the drone probe runs speeds `[10]` only, not `[exit_speed]`** (review N1): frameless, its DISENGAGE exits along its own heading, so an `exit_speed`
+    start flies the same path ahead of the 10 px/s one. A framed drone carrying `max_speed` against its exit is covered by `drone_reversal_seconds()` (kinematic,
+    from config: 0.463 s); **the drone's exit bound is `drone_exit_bound()` = 5.37 + 0.463 = 5.83 s**, and row C4 ties the term to the real mover (+0.4667 s measured,
+    within the term plus one tick). The term is slack (framed Assault exits are axis-aligned) and kept as a conservative bound. The tender runs `[exit_speed, 10]`.
+  - Results: drone worst 5.37 s from (−720, −720) heading (0.707, 0.707) at 10 px/s, 1083 runs, 0 capped; tender worst 3.82 s from (−80, 0) heading (1, 0) at 380 px/s,
+    2166 runs, 0 capped. Both under 10 s.
+  - **Gate-time rule 3 applied from the start:** `prepare_probe` strips group `player` (neither brain reads the player in DISENGAGE, checked; row C3 pins that the
+    trick leaves the exit bit-identical) and sets a tender's `drone_scene = null` so its `_setup()` skips the probe drone on each run (the actual saving).
+  - Probe costs: drone 1.39 s, tender 1.95 s wall (budgets 3.5 / 4.0 s).

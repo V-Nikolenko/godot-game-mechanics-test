@@ -266,3 +266,107 @@ IDLE" instead.
 **N12** — The plan dropped the round-1 "a lone drone on its way home → stay". The unarmed rule now REARMs whenever no pair lives. That is simpler and
 has no dead end: the lone drone docks during REARM, `dock()` clamps the count at 2 (`laser_tender.gd:148`), and REARM still completes. Fine, but say
 so in DECISIONS, since it differs from round 1's text.
+
+## Round 3
+
+VERDICT: APPROVED
+
+Scope: B2 and B3 from round 2, and whether the Revision 2 edits added anything new. I read `3-plan.md` Revision 2 (lines 74–87 and 186–192)
+against `laser_tender_brain.gd`, `laser_tender.gd`, `global/enemy_ai/anchor_idle.gd`, the three test files and the probe. I also ran the C2 sweep as a
+headless prototype (`/tmp/r3/sweep.gd`: `_code_only()` per line, then cross-line paren matching over `res://tests`). **B2 and B3 are fixed.** Nothing
+in Revision 2 creates a dead end or makes a row fail on correct code. Three implementation traps in C2's wording and one sensitivity gap in B7 follow
+as non-blocking notes N13–N16. The implementer should apply them as written. None of them needs another plan round.
+
+### B2: fixed (plan lines 76–87, row B7)
+
+How the code orders a tick: `_phase_time += delta` (`laser_tender_brain.gd:68`), then `_dock_returning()` (`:80`), then (planned)
+`_tick_anchor_idle`, then `_decide` (`:82`). `enter_phase` zeroes `_phase_time` (`:95`). REARM completes in `_decide` (`:217–219`), and WAIT
+moves to REARM only in `_decide` (`:224–225`). The rule is now **independent of where the `_rearm_elapsed` update sits in the tick**:
+- its reset depends only on `docked_count() == 2` or `_pair_lives()`, never on the phase;
+- it advances only in idle phases;
+- it is consumed only by `rearm_cradles()` or by the REARM seed.
+
+I traced each placement (before `_tick_anchor_idle`, between it and `_decide`, and after `_decide`):
+- **"idle"** (pair killed in WAIT, then the player is moved past 1600 mid-REARM):
+  - While the pair lives in WAIT, the clock is reset every tick, so no stale count survives. That closes the round-2 stale-value case. A tender
+    that leaves WAIT for RETURNING on the tick its pair dies starts from 0.
+  - At the teleport, AnchorIdle goes COMBAT → RETURNING (`anchor_idle.gd:62–64`). REARM is not busy, so the tender enters RETURNING, seeded with
+    REARM's `_phase_time`, which already includes this tick's delta.
+  - If the advance runs after `_tick_anchor_idle`, this tick is counted twice. The fill is then at most one tick early. Measured from a kill between
+    ticks, that is exactly 7.0 s, not earlier, so "never earlier" and ± 2 ticks both hold. Any other placement fills at 7.0 s + 1 tick.
+  - No drone survives to dock, so the reset never fires spuriously.
+- **"hold"** (the player comes back while the tender is RETURNING or IDLE):
+  - The tender goes RETURNING/IDLE → NOTICING (`anchor_idle.gd:66–67`, `:55–57`) → COMBAT → APPROACH, and the unarmed rule enters REARM on the
+    same tick, before `_decide`'s REARM check.
+  - The clock was neither reset (docked 0, no live pair) nor consumed before the seed, so the carried value arrives intact in every placement. At
+    worst this tick's delta is dropped once: `_phase_time += delta` ran in NOTICING, then `enter_phase` zeroed it.
+  - The net seam error is in [−1, +1] ticks, inside ± 2. REARM → HOLD → LAUNCH then cascades (`:217–221`). Off the physics frame the line-of-sight
+    check is skipped (`:242`).
+- Other paths I checked:
+  - **Recall with one drone killed on the way home:** the clock runs from the break, and the survivor docks via `dock()`, which clamps at 2
+    (`laser_tender.gd:148`).
+  - **The idle threshold fires during NOTICING:** the cradles are full, so APPROACH takes no unarmed rule.
+  - **REARM → idle → REARM round trip:** the value is preserved.
+
+  None loses or duplicates more than one tick.
+
+### B3: fixed (plan lines 186–192)
+
+The per-call rule reads every current call as clean and still fires on a Ph8 call. The prototype found 12 `worst_disengage(` calls:
+- `test_level1_specialist_spawns.gd:389, 391, 393, 578, 580, 584`;
+- `test_engagement_deadline.gd:549, 551, 553`;
+- `specialist_exit_probe.gd:81, 92, 101`. The definitions match too, because `_measure_worst_disengage(` contains the needle as a substring. Their
+  parameter lists are clean.
+
+None is flagged. Two more sources read clean:
+- `test_laser_tender.gd`'s existing phase literals (`:714`, `:730`, `:745`) sit outside any call, so they are not read.
+- C3/C4's `disengage_seconds(` does not contain `worst_disengage(`.
+
+C2's Bomber boundary (`BomberBrain.Phase.DISENGAGE`, a static or lambda `prepare`) names no needle. A multi-line synthetic positive that names
+`TwinLaserDroneBrain` is flagged (1/1).
+
+Is `_code_only()` workable? Yes, with the caveats below. It is `static func _code_only(line: String) -> String`
+(`test_enemy_mover_single_writer.gd:63–87`) and is reachable through `preload` (precedent: `test_twin_laser_drones.gd:18`). It does two things:
+- It removes a `#` comment. Doc comments that quote `worst_disengage(` (`test_level1_specialist_spawns.gd:604, 794`, `specialist_exit_probe.gd:97`)
+  are dropped.
+- It **blanks the contents of string literals**. This helps in two ways:
+  - the synthetic positive, held in a string literal in `test_laser_tender.gd`, does not flag its own file;
+  - a `(` or `)` inside a string cannot unbalance the matcher.
+
+### Non-blocking (apply when implementing C2 / B7)
+
+- **N13 — `_code_only()` takes one line.**
+  - Apply it to each line, then join the lines with `"\n"` before matching the closing parenthesis. Real calls span two lines
+    (`test_level1_specialist_spawns.gd:389–390`, `:578–579`).
+  - Passed a whole file, `_code_only()` returns everything before the first `#`. The prototype got **length 0** for
+    `test_level1_specialist_spawns.gd`, so the sweep passes vacuously, and a single-line synthetic positive still fires.
+  - So C2 must also assert that the sweep **found** calls: at least the 9 in `test_level1_specialist_spawns.gd` and `test_engagement_deadline.gd`,
+    plus this file's Bomber boundary.
+  - Write the synthetic positive across lines (with `\n` escapes), with the class name on the second line and a leading `##` line, so it proves
+    the per-line strip and the cross-line match.
+- **N14 — never write the synthetic positive as a `"""` block.** `_code_only()` keeps no quote state across lines, so the lines inside a
+  triple-quoted string are read as code. The prototype flags such a file (1/1), so `test_laser_tender.gd` would fail on correct code. Use a `"..."`
+  literal with `\n` escapes, or a concatenation of single-line literals.
+- **N15 — the two `.tscn` needles can never match.** The scene path always sits inside a string literal, which `_code_only()` blanks. The
+  prototype's path-only call (`load(".../laser_tender.tscn")`, phase `5`) is **not** flagged.
+  - The sweep's real teeth are the two class names. That is enough for the intended case, a hand-built probe call that names the brain's DISENGAGE
+    phase.
+  - The plan's line 190 should not claim the path needles do anything. Either drop them, or match the path against the call's raw text with
+    comments stripped but strings kept. Do the latter only for the argument span, so the synthetic literal elsewhere in the file still stays out.
+  - Logging it in DECISIONS is enough.
+- **N16 — make B7 sensitive to a lost seed.** Two placements are wrong code that ± 2 ticks would only catch late or not at all:
+  - the REARM → idle seed read after `enter_phase()` (it would read 0, because `:95` zeroes it before any `match` arm). Read REARM's
+    `_phase_time` **before** calling `enter_phase()`, mirroring line 81's "after" for the REARM seed;
+  - the idle → REARM seed lost.
+
+  So "idle" should move the player away well into REARM (e.g. ≥ 2 s after the death), and "hold" should spend ≥ 1 s in the idle phases before
+  the player returns. A dropped value then lands far outside ± 2 ticks. In "hold", return the player at least `notice_time` + a few ticks before the
+  fill, so that the fill happens in REARM, not during NOTICING.
+
+### Did Revision 2 introduce anything new?
+
+No dead end and no contradiction:
+- **Placing the unarmed rule at the top of `_decide()`** (line 85) only pre-empts `:215`'s APPROACH → HOLD when cradles are short. A live pair
+  goes to WAIT, and `:224` keeps it there while the pair lives. No pair goes to REARM, which can cascade to HOLD → LAUNCH.
+- **Line 83's "± a tick"** matches B7's ± 2 ticks and "never earlier" (traced above).
+- **N11's B5 wording and N12's DECISIONS entry** change no other row.
