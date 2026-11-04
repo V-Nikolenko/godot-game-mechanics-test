@@ -18,6 +18,8 @@ const HEAVY_SCENE: PackedScene = preload("res://assault/scenes/enemies/heavy_emp
 const POWER_SCENE: PackedScene = preload("res://assault/scenes/enemies/power_source/power_source.tscn")
 const GENERATOR_SCENE: PackedScene = preload("res://assault/scenes/enemies/shield_generator/shield_generator.tscn")
 const EMITTER_SCENE: PackedScene = preload("res://assault/scenes/enemies/laser_emitter/laser_emitter.tscn")
+const DRONE_SCENE: PackedScene = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone.tscn")
+const TENDER_SCENE: PackedScene = preload("res://assault/scenes/enemies/laser_tender/laser_tender.tscn")
 
 ## Mount variant -> its head texture. One entry per `TurretMount.Variant`.
 const HEADS := {
@@ -36,6 +38,8 @@ const HOSTS := {
 	"generator": ["Sprite2D", "shield_generator.png", Vector2i(72, 72)],
 	"power": ["Sprite2D", "power_source.png", Vector2i(80, 80)],
 	"emitter": ["Sprite2D", "laser_emitter.png", Vector2i(40, 40)],
+	"drone": ["Sprite2D", "twin_laser_drone.png", Vector2i(32, 32)],
+	"tender": ["Sprite2D", "laser_tender.png", Vector2i(96, 96)],
 }
 
 ## Two heads differ when their alpha masks, laid on one canvas, disagree on at least this fraction of the pixels either covers.
@@ -58,6 +62,10 @@ func _host_scene(key: String) -> PackedScene:
 			return GENERATOR_SCENE
 		"power":
 			return POWER_SCENE
+		"drone":
+			return DRONE_SCENE
+		"tender":
+			return TENDER_SCENE
 	return EMITTER_SCENE
 
 
@@ -263,3 +271,114 @@ func test_the_generator_and_emitter_hulls_are_never_tinted_by_state() -> void:
 	post.set_physics_process(false)
 	h.root.add_child(post)
 	assert_eq((post.get_node("Sprite2D") as Sprite2D).modulate, Color.WHITE)
+
+
+# ── t16: the Twin-Laser Drone, the Laser Tender and its docked-drone cradle sprite ───────────────────────────────────────────────────────────────
+
+const CRADLE_ART := "laser_tender_cradle_drone.png"
+## The two lens pixels of `twin_laser_drone.png` the `StateLight` lights, as texture coordinates (a 2 x 2 block) and as an offset from the centre.
+const LENS_PIXELS: Array[Vector2i] = [Vector2i(15, 25), Vector2i(16, 25), Vector2i(15, 26), Vector2i(16, 26)]
+
+
+func test_the_drone_and_tender_art_is_at_least_as_big_as_its_body_circle() -> void:
+	# The drone's art is a 22 px hull inside its r 13 circle (the wings are the width); the tender spans its r 40 body.
+	for key in ["drone", "tender"]:
+		var host := _host_scene(key).instantiate()
+		var shape := (host.get_node("CollisionShape2D") as CollisionShape2D).shape as CircleShape2D
+		var sprite := host.get_node("Sprite2D") as Sprite2D
+		var used := _image(sprite.texture.resource_path).get_used_rect()
+		assert_gte(float(used.size.x) * 0.5, shape.radius - 3.0, "%s: the art spans the %s px body" % [key, shape.radius])
+		assert_lte(float(used.size.x) * 0.5, shape.radius + 10.0, "%s: and does not dwarf it" % key)
+		host.free()
+
+
+func test_the_drone_lens_is_baked_dark_and_the_state_light_sits_on_it() -> void:
+	# State is a light, never a recoloured hull: the baked lens is unlit and the StateLight (red while the beam is up) is what lights it.
+	var drone := DRONE_SCENE.instantiate()
+	var img := _image(ART_DIR + "twin_laser_drone.png")
+	var sum := Vector2.ZERO
+	for p in LENS_PIXELS:
+		var c := img.get_pixel(p.x, p.y)
+		assert_gt(c.a, 0.99, "the lens pixel %s is part of the hull" % p)
+		assert_lt(c.v, 0.3, "the lens pixel %s is dark in the texture" % p)
+		sum += Vector2(p) + Vector2(0.5, 0.5)
+	var lens := sum / float(LENS_PIXELS.size()) - Vector2(img.get_size()) * 0.5
+	var light := drone.get_node("StateLight") as Node2D
+	assert_almost_eq(light.position.x, lens.x, 1.0, "the StateLight is on the lens (x)")
+	assert_almost_eq(light.position.y, lens.y, 1.0, "the StateLight is on the lens (y)")
+	assert_eq((drone.get_node("Sprite2D") as Sprite2D).modulate, Color.WHITE, "no hull recolouring")
+	drone.free()
+
+
+func test_the_lens_lights_while_the_beam_is_up() -> void:
+	var h = _world()
+	var d := DRONE_SCENE.instantiate() as TwinLaserDrone
+	d.set_physics_process(false)
+	h.root.add_child(d)
+	var brain := d.brain()
+	brain.start_engaged = true
+	assert_eq(d.state_light().get_state(), StateLight.State.OFF, "unlit before anything is shown")
+	brain._set_light(StateLight.State.ARMED)
+	assert_eq(d.state_light().get_state(), StateLight.State.ARMED, "the lens lights red (ARMED) through the StateLight")
+	var lit := d.state_light().modulate
+	assert_gt(lit.a, 0.2, "the lit lens is visible")
+	assert_gt(lit.r, lit.b, "and red")
+
+
+func test_the_cradle_sprite_is_the_docked_drone_and_card_free() -> void:
+	var img := _image(ART_DIR + CRADLE_ART)
+	assert_eq(img.get_size(), Vector2i(28, 28), "a 28 px docked drone")
+	assert_gt(_alpha(img, 14, 14), 0.99, "opaque at the centre")
+	_assert_card_free(img, "cradle drone")
+	var h = _world()
+	var tender := TENDER_SCENE.instantiate() as LaserTender
+	tender.set_physics_process(false)
+	h.root.add_child(tender)
+	var bays := tender.cradles()
+	assert_eq(bays.size(), 2)
+	for c: Marker2D in bays:
+		var docked := c.get_node_or_null("DockedDrone") as Sprite2D
+		assert_not_null(docked, "%s holds a DockedDrone sprite" % c.name)
+		if docked != null:
+			assert_eq(docked.texture.resource_path, ART_DIR + CRADLE_ART, "%s: the docked-drone art" % c.name)
+			assert_eq(docked.position, Vector2.ZERO, "%s: centred on its cradle" % c.name)
+	assert_eq(bays[0].position, Vector2(-bays[1].position.x, bays[1].position.y), "the cradles mirror each other")
+
+
+func test_the_cradles_sit_in_the_hull_bays() -> void:
+	# The bays are the two round pits of laser_tender.png: dark floor, a ring around it. Each cradle marker lands on the dark floor, so a launched
+	# (hidden) docked drone leaves a visibly empty bay.
+	var img := _image(ART_DIR + "laser_tender.png")
+	var h = _world()
+	var tender := TENDER_SCENE.instantiate() as LaserTender
+	tender.set_physics_process(false)
+	h.root.add_child(tender)
+	for c: Marker2D in tender.cradles():
+		var p := Vector2i(c.position + Vector2(img.get_size()) * 0.5)
+		assert_gt(img.get_pixelv(p).a, 0.99, "%s: on the hull" % c.name)
+		var mean := 0.0
+		for dy in range(-2, 3):
+			for dx in range(-2, 3):
+				mean += img.get_pixel(p.x + dx, p.y + dy).v / 25.0
+		assert_lt(mean, 0.3, "%s: on the dark floor of a bay (mean value %.2f)" % [c.name, mean])
+
+
+func test_cradle_visibility_follows_launch_and_rearm(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var h = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(h.root)
+	var t := TENDER_SCENE.instantiate() as LaserTender
+	t.set_physics_process(false)
+	t.collision_mask = 0
+	h.root.add_child(t)
+	var l := t.get_node("CradleL/DockedDrone") as CanvasItem
+	var r := t.get_node("CradleR/DockedDrone") as CanvasItem
+	assert_true(l.visible and r.visible, "%s: both docked drones show on a fresh tender" % mode)
+	var rig := t.launch_pair(PackedVector2Array([Vector2(-200, 300), Vector2(200, 300)]))
+	assert_not_null(rig, "%s: the launch happened" % mode)
+	assert_false(l.visible, "%s: the left cradle is empty after launch" % mode)
+	assert_false(r.visible, "%s: the right cradle is empty after launch" % mode)
+	t.rearm_cradles()
+	assert_true(l.visible and r.visible, "%s: both cradles show a drone again after rearm" % mode)
+	for d: Variant in [rig.drone_a, rig.drone_b]:
+		if is_instance_valid(d):
+			(d as Node).set_physics_process(false)

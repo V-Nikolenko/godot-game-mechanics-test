@@ -5,19 +5,13 @@
 ## A `LaserTenderBrain` decides and an `EnemyMover` moves it, through `BaseEnemy`'s shared tick, so this script defines no `_physics_process` and
 ## writes no motion (`test_twin_laser_drones.gd` sweeps it through any receiver: it places drones, it never moves them). One `CircleShape2D` r 40 is
 ## shared by the body, the `HurtBox` and the `ContactHitBox` (COLLISION). No gun. `CradleL` / `CradleR` (`Marker2D`) each hold a `DockedDrone`
-## (a textureless placeholder the art task replaces) shown while that cradle holds a drone. The `StateLight` between them is the cradle light.
+## (a `Sprite2D`, `laser_tender_cradle_drone.png`) shown while that cradle holds a drone and hidden once it launches; the empty bay is part of the hull art. The `StateLight` between them is the cradle light.
 ##
 ## `_ready()` copies the config onto every node that uses it (the `.tres` wins over the scene) and joins group `enemies`.
 ##
 ## Spawn with b.laser_tender().at(x, y).
 class_name LaserTender
 extends BaseEnemy
-
-## Placeholder art (the art task replaces it): a dark disc with a rim and two cradle notches.
-const HULL_COLOR := Color(0.18, 0.19, 0.24, 1.0)
-const RIM_COLOR := Color(0.5, 0.36, 0.3, 1.0)
-const NOTCH_COLOR := Color(0.08, 0.08, 0.1, 1.0)
-const NOTCH_RADIUS := 13.0
 
 @export var config: LaserTenderConfig = load("res://assault/scenes/enemies/laser_tender/laser_tender_config.tres")
 ## What `launch_pair()` instantiates. A Ph10 / Ph11 caller may swap it; the brain plans with this scene's own drone tuning.
@@ -41,7 +35,6 @@ func _ready() -> void:
 	if config:
 		_apply_config(config)
 	_set_docked(2)
-	queue_redraw()
 
 
 func _apply_config(cfg: LaserTenderConfig) -> void:
@@ -187,12 +180,3 @@ func _leave_finished_rig() -> void:
 			gone = false
 	if gone and _pair.owner_group != &"" and is_in_group(_pair.owner_group):
 		remove_from_group(_pair.owner_group)
-
-
-func _draw() -> void:
-	var r := body_radius()
-	draw_circle(Vector2.ZERO, r, HULL_COLOR)
-	draw_arc(Vector2.ZERO, r, 0.0, TAU, 32, RIM_COLOR, 2.0)
-	for m: Marker2D in [_cradle_l, _cradle_r]:
-		if m != null:
-			draw_circle(m.position, NOTCH_RADIUS, NOTCH_COLOR)

@@ -3326,3 +3326,16 @@ Task plan `docs/plans/cmvqw0vo2018rqs2xxd8m1llu/3-plan.md` (round 3 `VERDICT: AP
   - **Gate-time rule 3 applied from the start:** `prepare_probe` strips group `player` (neither brain reads the player in DISENGAGE, checked; row C3 pins that the
     trick leaves the exit bit-identical) and sets a tender's `drone_scene = null` so its `_setup()` skips the probe drone on each run (the actual saving).
   - Probe costs: drone 1.39 s, tender 1.95 s wall (budgets 3.5 / 4.0 s).
+
+### Phase 8, built in t16 (Twin-Laser Drone, Laser Tender and cradle art) (2026-11-04)
+- **Art (PixelLab `create_map_object`, `view: "high top-down"`, 5 drone / 5 tender / 2 cradle candidates, looked at at 3-6x and in a composite):** `assault/assets/sprites/enemies/` gained
+  `twin_laser_drone.png` (32 canvas, 22 px hull, nose-down), `laser_tender.png` (96, a shield hull whose two round bays are baked in) and `laser_tender_cradle_drone.png` (28 px, the drone's own pixels
+  cropped, so the docked drone is the flying drone). Rejected: tilted / 3/4 drones, a drone that was one big lit red eye, tenders with engines at the nose or no bays.
+- **Lens:** the generated drone had a lit red lens; its four lens pixels are repainted dark in the file, so the `StateLight` (moved from (0, 6) to (0, 10), on the lens) is the only thing that lights it
+  (state by light, never by recolouring a hull). The pointed end of the hull is the rear; the lens faces the partner.
+- **Deviation, cradle positions:** `CradleL` / `CradleR` moved from (-+30, 10) to (-+24, -15) to sit on the hull art's two bays (plan §2.13 placed them before the art existed). Nothing else reads
+  the numbers: drones are spawned at `cradles()[i].global_position`.
+- **Placeholders deleted:** `_draw()` and the colour consts of `TwinLaserDrone` and `LaserTender`; `DockedDrone` is a `Sprite2D` (was a `Polygon2D`) under the same node path. The hit-flash tracks
+  animate `Sprite2D:self_modulate`. Cradle visibility is unchanged (`LaserTender._set_docked`: hidden at `launch_pair`, shown at `rearm_cradles`).
+- Gate: `tests/integration/test_ph8_sprites.gd` extended (art rows for both scenes and the cradle sprite, lens / StateLight placement, cradles on the bays, cradle visibility on launch and rearm in
+  both harnesses). `test_entity_sprite_transparency.gd` sweeps the new textures through its existing roots (opaque: tender 51 %, drone 29 %, cradle 38 %).

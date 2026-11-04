@@ -10,7 +10,7 @@ tender itself is a priority target because killing it ends the supply of walls.
 > LAUNCH / WAIT / REARM / DISENGAGE played), the `launch_pair(points)` seam, the Attack B points (Open Space prediction, Assault vertical / horizontal
 > walls), the rig's LAUNCHED phase and fixed launched frame, one live pair, rearm, docking of a lone returning drone, the Assault variant (one launch per
 > life, the cradle-telegraph deferral), `WaveBuilder.laser_tender()`. **Hub idle and measured exit (t14):** IDLE / NOTICING / RETURNING, the recall of
-> a launched pair, the one rearm clock, and the Assault exit measured over `corridor_starts()` (below). **Not yet:** the art (t16: the hull and the docked drones are code-drawn / textureless placeholders), hub and level-1 placement (t18 /
+> a launched pair, the one rearm clock, and the Assault exit measured over `corridor_starts()` (below). **Art:** done in t16 (`laser_tender.png`, `laser_tender_cradle_drone.png`). **Not yet:** hub and level-1 placement (t18 /
 > t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.13; task plan `docs/plans/cmvqw0vnz018nqs2xv56q6a0a/3-plan.md`. The drones and the rig
 > are `../twin_laser_drone/` ([ENEMY.md](../twin_laser_drone/ENEMY.md)).
 
@@ -24,9 +24,9 @@ tender itself is a priority target because killing it ends the supply of walls.
 | Damage | 15 contact (`ContactHitBox`, `ContactProfile` COLLISION). No gun: the damage is its pair's beam (`twin_beam.tscn`) |
 | Speed | `max_speed` 200, `acceleration` 400; DISENGAGE `exit_speed` 380 |
 | Body | one `CircleShape2D` r 40 shared by the body (layer 1 / mask 1), the `HurtBox` (512 / 65) and the `ContactHitBox` (256 / 0) |
-| Cradles | `CradleL` (-30, 10) and `CradleR` (30, 10), `Marker2D`s, each with a `DockedDrone` (`Polygon2D`, r 11, textureless) shown while that cradle holds a drone |
+| Cradles | `CradleL` (-24, -15) and `CradleR` (24, -15), `Marker2D`s on the two round bays of the hull art, each with a `DockedDrone` (`Sprite2D`, `laser_tender_cradle_drone.png`, 28 px) shown while that cradle holds a drone and hidden after launch, so the bay reads empty (the bay is baked into the hull) |
 | Light | `StateLight` at (0, 10), between the cradles: CHARGING through the 0.6 s cradle telegraph (LAUNCH), OFF otherwise |
-| Sprite | placeholder, code-drawn in `_draw()` (dark r 40 disc, rim, two cradle notches); hit flash animates `.:self_modulate`. t16 replaces it |
+| Sprite | `Sprite2D` `laser_tender.png` (96 px, a nose-down shield hull with two round empty bays); hit flash animates `Sprite2D:self_modulate` |
 | Scene / config | `laser_tender.tscn` / `laser_tender_config.tres` (flat `LaserTenderConfig`) |
 | Hazards | `hazard_avoidance` 0.8, `hazard_margin` 24, `hazard_resistance` 0.3; `wreck_chance` 0.35, `wreck_size` 1 (medium, the Mine Layer's); score 120; `counts_as_escape` true |
 
@@ -128,7 +128,7 @@ callback, where a caller must `call_deferred` it. Null with fewer than two point
 
 | Question | Answer |
 |---|---|
-| Unique silhouette | A broad r 40 disc with two drones visibly docked side by side (final art t16) |
+| Unique silhouette | A broad shield-shaped hull with two drones visibly docked in round bays |
 | Preferred distance | `preferred_range` 650 (Open Space); the upper band of the screen (Assault) |
 | Movement signature | Slow, broad arc at range; never closes in |
 | How it attacks | It launches its drones as a wall across the player's escape route |
@@ -140,7 +140,7 @@ callback, where a caller must `call_deferred` it. Null with fewer than two point
 | Destroying it changes the encounter | No more pairs; a surviving pair keeps attacking with Attack A |
 | Open Space without camera coordinates | Yes (both harnesses) |
 | Assault, constrained | Yes: a hold band, corridor-clamped walls, one launch per life |
-| Sprite communicates state | Docked drones visible / hidden per cradle; the cradle light; art t16 |
+| Sprite communicates state | Docked drones visible / hidden per cradle; the cradle light |
 | Armour / shields / weak points | None; 160 HP |
 | Works alone | It needs its drones; with none docked it only waits / rearms |
 | Better combined | Yes: the wall herds the player into other enemies' fire |

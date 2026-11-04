@@ -422,8 +422,9 @@ func test_the_tender_is_one_r40_circle_shared_by_body_hurtbox_and_contact_box_wi
 	var cradles := t.cradles()
 	assert_eq(cradles.size(), 2)
 	assert_eq(cradles[0].name, &"CradleL")
-	assert_eq(cradles[0].position, Vector2(-30.0, 10.0))
-	assert_eq(cradles[1].position, Vector2(30.0, 10.0))
+	# t16: the cradles sit on the two bays baked into laser_tender.png (the plan's (-+30, 10) predates the art; test_ph8_sprites.gd checks they land on the pits).
+	assert_eq(cradles[0].position, Vector2(-24.0, -15.0))
+	assert_eq(cradles[1].position, Vector2(24.0, -15.0))
 	for c in cradles:
 		var docked := c.get_node("DockedDrone") as CanvasItem
 		assert_not_null(docked, "%s holds a docked-drone visual" % c.name)

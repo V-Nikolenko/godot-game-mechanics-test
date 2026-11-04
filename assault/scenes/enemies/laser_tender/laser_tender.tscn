@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/enemies/laser_tender/laser_tender.gd" id="1_lt"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_lt"]
@@ -8,6 +8,8 @@
 [ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="6_lt"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/laser_tender/laser_tender_brain.gd" id="7_lt"]
 [ext_resource type="Script" path="res://global/components/state_light.gd" id="8_lt"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/laser_tender.png" id="9_lt"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/laser_tender_cradle_drone.png" id="10_lt"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_lt"]
 radius = 40.0
@@ -17,7 +19,7 @@ length = 0.001
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath(".:self_modulate")
+tracks/0/path = NodePath("Sprite2D:self_modulate")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -33,7 +35,7 @@ length = 0.2
 tracks/0/type = "value"
 tracks/0/imported = false
 tracks/0/enabled = true
-tracks/0/path = NodePath(".:self_modulate")
+tracks/0/path = NodePath("Sprite2D:self_modulate")
 tracks/0/interp = 1
 tracks/0/loop_wrap = true
 tracks/0/keys = {
@@ -51,6 +53,9 @@ _data = {
 
 [node name="LaserTender" type="CharacterBody2D"]
 script = ExtResource("1_lt")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("9_lt")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_lt")
@@ -99,15 +104,13 @@ position = Vector2(0, 10)
 script = ExtResource("8_lt")
 
 [node name="CradleL" type="Marker2D" parent="."]
-position = Vector2(-30, 10)
+position = Vector2(-24, -15)
 
-[node name="DockedDrone" type="Polygon2D" parent="CradleL"]
-color = Color(0.32, 0.3, 0.36, 1)
-polygon = PackedVector2Array(11, 0, 9.53, 5.5, 5.5, 9.53, 0, 11, -5.5, 9.53, -9.53, 5.5, -11, 0, -9.53, -5.5, -5.5, -9.53, 0, -11, 5.5, -9.53, 9.53, -5.5)
+[node name="DockedDrone" type="Sprite2D" parent="CradleL"]
+texture = ExtResource("10_lt")
 
 [node name="CradleR" type="Marker2D" parent="."]
-position = Vector2(30, 10)
+position = Vector2(24, -15)
 
-[node name="DockedDrone" type="Polygon2D" parent="CradleR"]
-color = Color(0.32, 0.3, 0.36, 1)
-polygon = PackedVector2Array(11, 0, 9.53, 5.5, 5.5, 9.53, 0, 11, -5.5, 9.53, -9.53, 5.5, -11, 0, -9.53, -5.5, -5.5, -9.53, 0, -11, 5.5, -9.53, 9.53, -5.5)
+[node name="DockedDrone" type="Sprite2D" parent="CradleR"]
+texture = ExtResource("10_lt")

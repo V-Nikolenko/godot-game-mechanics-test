@@ -9,7 +9,7 @@ warning line, then fly the whole line through where the player was and past it (
 > TELEGRAPH / ADVANCE / BREAK / WAIT / SOLO / DISENGAGE played), Attack A in Open Space, the Assault rig (corridor-planned frames, one attack per life with the
 > deferral bound), the `TwinLaserPairSpawn` spawner and `WaveBuilder.twin_laser_pair()`. **Attack B (t13):** the rig's `LAUNCHED` phase (appended) and the fixed launched
 > frame, played when a Laser Tender launches a pair (`../laser_tender/ENEMY.md`); a SOLO drone with a live tender flies home and docks. **Hub idle and measured exit (t14):** the rig's `IDLE` phase (appended),
-> the brains' IDLE / NOTICING / RETURNING, a recalled launched pair docking, and the Assault exit measured over `corridor_starts()` (below). **Not yet:** the art (t16: the hull is a code-drawn placeholder), hub and level-1 placement (t18 / t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.12;
+> the brains' IDLE / NOTICING / RETURNING, a recalled launched pair docking, and the Assault exit measured over `corridor_starts()` (below). **Art:** done in t16 (`twin_laser_drone.png`). **Not yet:** hub and level-1 placement (t18 / t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.12;
 > task plan `docs/plans/cmvqw0vnw018jqs2x5k4l6ahb/3-plan.md`. The beam itself is `twin_beam.tscn` (`assault/scenes/projectiles/enemy_beams/BEAMS.md`).
 
 ---
@@ -23,7 +23,7 @@ warning line, then fly the whole line through where the player was and past it (
 | Speed | `max_speed` 300, `acceleration` 900; ADVANCE `advance_speed` 240 (a boost); BREAK `break_speed` 260; DISENGAGE `exit_speed` 420 |
 | Body | one `CircleShape2D` r 13 shared by the body (layer 1 / mask 1, so it stops on a wreck), the `HurtBox` and the `ContactHitBox` |
 | Lens | `StateLight` at (0, 6), forward of the nose-down hull: CHARGING while the beam warns, ARMED while it burns, OFF otherwise |
-| Sprite | placeholder, code-drawn in `_draw()` (dark r 13 disc, rim, lens dot); hit flash animates `.:self_modulate`. t16 replaces it |
+| Sprite | `Sprite2D` `twin_laser_drone.png` (32 px canvas, 22 px hull, nose-down, a *dark* baked lens at (0, 10)); the `StateLight` sits on the lens and lights it red while the beam is up; hit flash animates `Sprite2D:self_modulate`. State never recolours the hull |
 | Scene / config | `twin_laser_drone.tscn` / `twin_laser_drone_config.tres` (flat `TwinLaserDroneConfig`) |
 | Hazards | `hazard_avoidance` 0.6, `hazard_margin` 16, `hazard_resistance` 0.1 (they are the well-bait); `wreck_chance` 0; score 30; `counts_as_escape` true |
 | Rig (group "Rig") | `rig_length` L 420, `length_tolerance` 16, `strain_seconds` 0.15, `standoff` 260, `overshoot` 200, `slot_tolerance` 24, `form_timeout` 3.0, `break_seconds` 1.2, `attack_period_min..max` 4.0..6.0 (Open Space) |
@@ -136,7 +136,7 @@ Spawn with `b.twin_laser_pair().at(x, y)` (the pair's midpoint, camera-relative)
 
 | Question | Answer |
 |---|---|
-| Unique silhouette | Two small identical discs always 420 px apart with a line between them; never seen alone while attacking (final art t16) |
+| Unique silhouette | Two small identical discs always 420 px apart with a line between them; never seen alone while attacking |
 | Preferred distance | The line forms `standoff` 260 px from the player |
 | Movement signature | Paired, mirrored: both slide into slots on either side of the player, then advance in lock-step |
 | How it attacks | A held twin beam swept through the player's latched position |
@@ -148,7 +148,7 @@ Spawn with `b.twin_laser_pair().at(x, y)` (the pair's midpoint, camera-relative)
 | Destroying it changes the encounter | Killing either drone deletes the whole wall; the survivor is harmless (SOLO) |
 | Open Space without camera coordinates | Yes (both harnesses) |
 | Assault, constrained | Yes: corridor-planned frames, horizontal from above or vertical from the side |
-| Sprite communicates state | The lens light (CHARGING / ARMED / OFF); art t16 |
+| Sprite communicates state | The lens light (CHARGING / ARMED / OFF); the baked lens is dark, the `StateLight` is the light |
 | Armour / shields / weak points | None: fragility is the counterplay |
 | Works alone | No, by design: a lone drone is SOLO and cannot attack |
 | Better combined | Yes: the line herds the player into other enemies' fire, and its friendly fire punishes enemies caught on it; t13's tender launches pairs |
