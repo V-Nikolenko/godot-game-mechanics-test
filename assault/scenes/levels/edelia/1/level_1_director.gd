@@ -25,6 +25,14 @@
 ## The Mine Layer lines (`b.mine_layer()`, Phase 7 t15: Deep Space 16.0 s from the left, Planet Approach 47.0 s from the right) follow the
 ## same rule: AI spawns inside existing waves, pinned as `EXPECTED_PH7` and counted as specialists in the same density gate. No Mine Layer
 ## may go into an ENEMIES_CLEARED section (its mines outlive it); test_engagement_deadline.gd gates that.
+##
+## The Phase 8 lines (t19: `b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR)` in Deep Space's 3.0 s wave, `b.twin_laser_pair()` in its
+## 29.0 s wave, `b.laser_tender()` in Planet Approach's 2.0 s wave) follow it too: inside existing waves, no rail, pinned as `EXPECTED_PH8`
+## and every member / drone / tender counted in the same density gate. The group is world-anchored, so its members sit at world x 718 / 768 /
+## 818, clear of every laser column lit while they drift and of the LaserWallWave lit at level start over x 0–672
+## (`test_ph8_static_members_clear_every_lit_column`); none of the three may go into an
+## ENEMIES_CLEARED section (persistent fire, a held wall); test_engagement_deadline.gd gates that and test_level1_ph8_attacks.gd replays
+## each attack inside its budget.
 extends Node
 
 const _MISSION_NUMBER: int = 1
@@ -345,6 +353,9 @@ func _build_section_1() -> LevelSection:
 			b.drone().at(120, -400).squad(&"w6"),
 			b.drone().at(180, -400).delay(0.25).squad(&"w6"),
 			b.drone().at(240, -400).delay(0.5).squad(&"w6"),
+			# Phase 8 t19: a two-turret group with its power source, drifting down between the LaserWallWave's right
+			# edge (x 672) / the 640 column and the 896 column (world-anchored: members at world x 718 / 768 / 818).
+			b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(64, -220),
 		]),
 
 		# 4.0 s — pair of drones from edges (sine weave) + cluster center
@@ -511,6 +522,7 @@ func _build_section_1() -> LevelSection:
 			b.sniper().at(-260, -400),
 			b.sniper().at( 260, -400),
 			b.fighter().at(0, -400).delay(0.3),
+			b.twin_laser_pair().at(-250, -220),  # Phase 8 t19: one closing-laser attack, then out
 		]),
 	]
 	s.waves.assign(raw_waves)
@@ -617,6 +629,7 @@ func _build_section_2() -> LevelSection:
 		b.wave(2.0, [
 			b.drone().at(-180, -400).squad(&"w0"),
 			b.drone().at( 180, -400).delay(0.2).squad(&"w0"),
+			b.laser_tender().at(-300, -200),  # Phase 8 t19: launches one twin pair into a moving wall, then leaves
 		]),
 
 		# 5.0 s — 3 fighters from the left flank (+ drone screen)

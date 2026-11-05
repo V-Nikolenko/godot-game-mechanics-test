@@ -113,7 +113,7 @@ callback, where a caller must `call_deferred` it. Null with fewer than two point
 ## Spawning
 
 - `b.laser_tender().at(x, y)` (`WaveBuilder.LASER_TENDER`), camera-relative like every ship spawn. See [`docs/enemy-roster.md`](../../../../docs/enemy-roster.md).
-- **Never in an `ENEMIES_CLEARED` section** (`test_engagement_deadline.gd`). In the hub it is patrol draw 16 (`laser_tender_ring_radius` 2600, `laser_tender_anchor_bearing_deg` 112.5, anchor about (-995, 2402); `test_sector_hub_patrol.gd`). Not placed in level 1 yet (t19).
+- **Never in an `ENEMIES_CLEARED` section** (`test_engagement_deadline.gd`). In the hub it is patrol draw 16 (`laser_tender_ring_radius` 2600, `laser_tender_anchor_bearing_deg` 112.5, anchor about (-995, 2402); `test_sector_hub_patrol.gd`). **Level 1 (t19):** one line, `b.laser_tender().at(-300, -200)` in Planet Approach's 2.0 s wave (a DURATION section, beside the opening drone screen; no rail). It launches its pair once and leaves; the replay `test_level1_ph8_attacks.gd` shows LAUNCH with 7.0 s of its budget left and the launched pair reaching ADVANCE with 7.6 s of the drones' budget left. Its life (`engage_seconds` + `launch_telegraph` + slack + the measured 3.82 s exit = 14.45 s) and its two drones' (up to 27.2 s after the tender spawns) count in the frozen 2.5x density gate of `test_level1_specialist_spawns.gd` (`EXPECTED_PH8`): Planet Approach still peaks at 7 (limit 7.5), first at 28.4 s.
 
 ---
 

@@ -56,8 +56,13 @@ and switch the whole position off.
 | `assault_pair.tscn` | BURST_CANNON turret at (−50, 60), PULSE_RING turret at (50, −60), power source at (0, 0) | 180 |
 | `hub_defense_site.tscn` | heavy emplacement at (180, 20), SWEEP_BEAM turret at (−240, 160), ROCKET_BATTERY turret at (240, 160), LANCE turret at (0, −260), shield generator at (−120, −120), power source at (200, −120), `laser_fence/hub_barrier.tscn` (a CYCLE fence) at (44, 98) | 450 |
 
-`assault_pair` is a diagonal stagger so its three members (x spread 100 px) fit in one gap between level 1's laser columns: `.at(-64, -220)` puts them
-at world x 462 / 512 / 562.
+`assault_pair` is a diagonal stagger so its three members (x spread 100 px) fit in one gap between level 1's laser columns. **Level 1 (t19)** places it with
+`b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(64, -220)` in Deep Space's 3.0 s wave (effective 3.5 s), which, world-anchored, puts them
+at world x 718 / 768 / 818: 78 px from the 640 and 896 columns for the turrets (need 28 + 28), 128 px for the power source (need 28 + 34), and
+clear of the level-start `LaserWallWave` (x 0–672, lethal while the group spawns). The plan's `.at(-64, -220)` (462 / 512 / 562) cleared every scheduled column
+but sat inside that wall, where `scripts/measure-level1-columns.sh` saw both turrets die; `test_ph8_static_members_clear_every_lit_column` reads the wall
+too, and has boundaries for both the plan's x and revision 1's `(0, −220)`. The members drift out by 29.7–31.7 s (no rocket battery, so no ordnance tail);
+`test_level1_ph8_attacks.gd` shows both turrets fire while in view.
 
 `hub_defense_site` guards the Open Space hub's TacticalSpace derelicts from (2520, 1040) (plan §2.17; task plan `docs/plans/cmvqw0voe0197qs2xrgvobaky/3-plan.md`). Four
 shooters and every structure rule once: the generator bubbles the five `BaseEnemy` members other than itself, never the barrier's posts, and the source

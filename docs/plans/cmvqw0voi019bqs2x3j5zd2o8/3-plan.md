@@ -22,6 +22,12 @@ laser columns (a power source standing in a column dies and darkens its group se
 
 The director's header comment gains a Phase 8 paragraph (the Mine Layer paragraph's shape). No other line or wave changes.
 
+**As built (deviation, found in step 7):** the group line ships as `.at(64, -220)` (members at world x 718 / 768 / 818), the plan's −64 mirrored about the 640
+column. At −64 `scripts/measure-level1-columns.sh` showed both turrets killed by level 1's static `LaserWallWave` (`level_1.tscn`, twelve rays over x 0–672, lit
+at level start and lethal while the group spawns; t17 had flagged that it is not in `laser_column_schedule()`), and the power source sits in it too (the worker
+does not count a brainless ship). The column row (§C.3) now also reads the wall's rays for the first section, and a boundary pins that −64 fails on the wall.
+Timing, curves and every life are unchanged (only x moved).
+
 ### B. Lives (all in `test_level1_specialist_spawns.gd`, every term read from a scene, a config, code or the memoised probes)
 
 - **Turret-group member** (per slot of the placed preset, instanced off-tree): `_TICK_SLACK` (the deferred spawn) + `(world.end.y − y_spawn) / config.assault_drift_speed`,

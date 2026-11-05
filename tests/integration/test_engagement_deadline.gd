@@ -814,7 +814,7 @@ func test_no_enemies_cleared_section_spawns_a_support_ship() -> void:
 
 
 ## Phase 8 (plan "For every task"): a turret group keeps firing, and its rocket batteries' rockets persist, so none may sit in an
-## ENEMIES_CLEARED section, whose `LevelDirector` poll waits on the container. Vacuous until level 1 places one (t19); it is the guard.
+## ENEMIES_CLEARED section, whose `LevelDirector` poll waits on the container. Level 1 places one in deep_space since t19 (the non-vacuity row below sees it).
 func test_no_enemies_cleared_section_spawns_a_turret_group() -> void:
 	var checked := 0
 	for s in _sections():
@@ -967,3 +967,109 @@ func test_no_enemies_cleared_section_spawns_a_laser_tender() -> void:
 	var probe := _cloud_descent()
 	_add_to_last_wave(probe, load(WaveBuilder.LASER_TENDER) as PackedScene, 0.0)
 	assert_true(_section_has_scene(probe, WaveBuilder.LASER_TENDER), "boundary: a tender in cloud_descent's last wave is seen")
+
+
+# ── Phase 8 t19: level 1 places a turret group, a twin pair and a Laser Tender, in DURATION sections only ───────────
+# (epic plan docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md §2.18; task plan docs/plans/cmvqw0voi019bqs2x3j5zd2o8/3-plan.md §D).
+#
+# The four "no ENEMIES_CLEARED section spawns a …" rows above rest on `_section_has_scene()` / the turret-group directory
+# sweep. The non-vacuity row shows that detection sees the three real level-1 lines (so the guards are not green only
+# because nothing is placed), and the three boundaries show each Ph8 line in cloud_descent's last wave at delay 0 would
+# hold the section open past its timeout on a LOWER BOUND of its life (no exit term), through `_deadline_rows()`:
+#   tender      engage_seconds + launch_telegraph + MARGIN                (a LAUNCH shown when the budget expires finishes)
+#   twin pair   engage_seconds + twin telegraph + max_advance + MARGIN    (plan §2.12's deferral bound)
+#   group       its shortest member's drift life from the LOWEST view, at level 1's own design offset for the line
+
+const TWIN_DRONE_CONFIG: TwinLaserDroneConfig = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone_config.tres")
+const LASER_TENDER_CONFIG: LaserTenderConfig = preload("res://assault/scenes/enemies/laser_tender/laser_tender_config.tres")
+const _CAMERA_SHAKE := preload("res://global/systems/camera_shake.gd")
+
+
+## Non-vacuity: each Ph8 line level 1 places is seen by the detection the guards use, once, in a DURATION section.
+func test_level1s_phase8_lines_are_seen_and_sit_in_duration_sections_only() -> void:
+	var seen := {"group": 0, "pair": 0, "tender": 0}
+	for s in _sections():
+		var section: LevelSection = s
+		var group := false
+		for w in section.waves:
+			for e in (w as WaveResource).entries:
+				var entry: SpawnEntryResource = e
+				if entry.ship_scene != null and entry.ship_scene.resource_path.begins_with(_TURRET_GROUP_DIR):
+					group = true
+					seen["group"] += 1
+		var pair := _section_has_scene(section, WaveBuilder.TWIN_LASER_PAIR)
+		var tender := _section_has_scene(section, WaveBuilder.LASER_TENDER)
+		if pair:
+			seen["pair"] += 1
+		if tender:
+			seen["tender"] += 1
+		if group or pair or tender:
+			assert_eq(section.end_condition, LevelSection.EndCondition.DURATION,
+				"%s holds a Phase 8 line and is not a DURATION section" % section.section_name)
+	gut.p("level 1 Phase 8 lines seen: %s" % [seen])
+	assert_eq(seen, {"group": 1, "pair": 1, "tender": 1}, "the detection sees level 1's turret group, twin pair and tender")
+
+
+func _ph8_boundary(scene_path: String, tail: float, note: String, offset := Vector2.ZERO) -> void:
+	var section := _cloud_descent()
+	_add_to_last_wave(section, load(scene_path) as PackedScene, 0.0)
+	var entries := _last_wave(section).entries
+	(entries[entries.size() - 1] as SpawnEntryResource).base_offset = offset
+	var rows := _deadline_rows(section, scene_path, tail)
+	assert_eq(rows.size(), 1, "sanity: exactly the added %s" % note)
+	if rows.size() != 1:
+		return
+	var computed: float = rows[0]["computed"]
+	gut.p("cloud_descent + %s at delay 0: %.2f s against %.1f s" % [note, computed, section.enemies_cleared_timeout])
+	assert_almost_eq(computed, tail, 0.001, "rel 0 + the %s's life bound" % note)
+	assert_true(rows[0]["over"], "the delay-0 %s must be flagged" % note)
+
+
+## Boundary: a tender in cloud_descent's last wave (10.0 + 0.6 + 0.5 = 11.1 s on today's config).
+func test_a_laser_tender_in_cloud_descents_last_wave_misses_the_timeout() -> void:
+	var t := LASER_TENDER_CONFIG
+	_ph8_boundary(WaveBuilder.LASER_TENDER, t.engage_seconds + t.launch_telegraph + MARGIN, "Laser Tender")
+
+
+## Boundary: a twin pair in cloud_descent's last wave (8.0 + 0.8 + 1.92 + 0.5 = 11.22 s on today's config).
+func test_a_twin_laser_pair_in_cloud_descents_last_wave_misses_the_timeout() -> void:
+	var d := TWIN_DRONE_CONFIG
+	var telegraph := float(EnemyBeamScenes.export_of(EnemyBeam.Kind.TWIN, &"telegraph_seconds", 0.0))
+	var max_advance := (maxf(d.standoff, LASER_TENDER_CONFIG.assault_wall_lead) + d.overshoot) / d.advance_speed
+	assert_gt(telegraph, 0.0, "sanity: twin_beam.tscn's telegraph was read")
+	_ph8_boundary(WaveBuilder.TWIN_LASER_PAIR, d.engage_seconds + telegraph + max_advance + MARGIN, "twin-laser pair")
+
+
+## Boundary: an `assault_pair` group in cloud_descent's last wave at level 1's own design offset for it. Its members
+## leave only by drifting out (60 px/s), so the shortest member life, spawned with the view at its LOWEST (shake
+## included), is a lower bound on how long it holds the section open.
+func test_a_turret_group_in_cloud_descents_last_wave_misses_the_timeout() -> void:
+	var offset := Vector2.INF
+	for s in _sections():
+		for w in (s as LevelSection).waves:
+			for e in (w as WaveResource).entries:
+				var entry: SpawnEntryResource = e
+				if entry.ship_scene != null and entry.ship_scene.resource_path == WaveBuilder.TURRET_GROUP_ASSAULT_PAIR:
+					offset = entry.base_offset
+	assert_ne(offset, Vector2.INF, "sanity: level 1 places an assault_pair group")
+	if offset == Vector2.INF:
+		return
+	var cam := ArenaCamera.new()
+	add_child_autofree(cam)
+	var world := cam.projectile_world_rect()
+	var lowest_view_centre := world.get_center().y + ArenaCamera.V_LIMIT + _CAMERA_SHAKE._MAX_OFFSET
+	var shortest := INF
+	var preset := (load(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR) as PackedScene).instantiate()
+	for child in preset.get_children():
+		var slot := child as TurretGroupSlot
+		if slot == null or slot.member_scene == null:
+			continue
+		var member := slot.member_scene.instantiate()
+		var y := lowest_view_centre + offset.y * ArenaCamera.WORLD_SCALE + slot.position.y
+		shortest = minf(shortest, (world.end.y - y) / float(member.get(&"config").assault_drift_speed))
+		member.free()
+	preset.free()
+	assert_lt(shortest, INF, "sanity: the preset has members")
+	_ph8_boundary(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR, shortest + MARGIN, "assault_pair turret group", offset)
+	var section := _cloud_descent()
+	assert_gt(shortest, section.enemies_cleared_timeout, "the shortest member's drift alone outlasts the timeout")

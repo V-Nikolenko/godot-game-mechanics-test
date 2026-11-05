@@ -3368,3 +3368,35 @@ Task plan `docs/plans/cmvqw0vo2018rqs2xxd8m1llu/3-plan.md` (round 3 `VERDICT: AP
   process per case, 3 runs each): **with the site 8.39 / 9.21 / 9.57 ms (mean 9.06), without it 7.82 / 8.24 / 7.77 ms (mean 7.94)**: about +1.1 ms for seven members and a
   CYCLE fence on the dummy renderer. Not a GUT row (epic review M3).
 - **Gate time:** GUT 211.993 → 211.414 s (2601 → 2613 tests, `scripts/gate-time.sh`); `test_sector_hub_patrol.gd` 1.59 → 1.64 s on its own. Allotment 1.2 s.
+
+### Phase 8, built in t19 (level 1 placement: a turret group and a twin pair in Deep Space, a Laser Tender in Planet Approach) (2026-11-06)
+- **Three lines, inside existing waves, no rail** (`level_1_director.gd`, header paragraph added): `b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(64, -220)` in
+  deep_space's 3.0 s wave (effective 3.5 s), `b.twin_laser_pair().at(-250, -220)` in deep_space's 29.0 s wave, `b.laser_tender().at(-300, -200)` in planet_approach's 2.0 s wave.
+- **Deviation: the group's x is +64, not §2.18's −64** (the plan's placement mirrored about the 640 column: members at world x **718 / 768 / 818**, the same 78 px / 128 px
+  margins to the 640 and 896 columns, 18 px clear of the wall edge). At −64, `scripts/measure-level1-columns.sh` showed `deep_space wall_wave defense_turret spawned=2 killed=2`:
+  the static `LaserWallWave` (`level_1.tscn`, twelve rays over x 0–672, lit at level start and lethal while the group spawns at 3.5 s; t17 noted it is not in
+  `laser_column_schedule()`) killed both turrets in every run, and the power source at 512 sits in it too (the worker counts only ships with a `Brain`). Timing, every life and
+  the alive curves are unchanged. `test_ph8_static_members_clear_every_lit_column` now also reads the wall's rays (from `level_1.tscn`'s `SceneState` and `laser_wall.tscn`)
+  as a t = 0 row of the first section (60 member × column pairs), and `test_the_plans_minus_64_placement_fails_on_the_wall_wave` pins the finding; revision 1's `(0, −220)`
+  still fails on the 640 column. **For later placement tasks:** a static thing in deep_space must clear the wall wave as well as the schedule.
+- **Lives** (`test_level1_specialist_spawns.gd`, `_ph8_lives()` / `_ph8_intervals()`, every term read; exits from `ph8_exit_keys.gd`, memo hits): drone 16.58 s (8 + 0.8 + 1.92
+  + slack + 5.83), tender 14.45 s (10 + 0.6 + slack + 3.82), a tender's drone up to 27.21 s after the tender spawns; members 26.23 / 27.23 / 28.23 s (burst / source / ring,
+  from the highest view, shake included). `EXPECTED_PH8` pins the three lines; the no-rail and changed-delay boundaries cover them.
+- **Alive curves** (the gate's own `_ai_intervals()`, printed by `test_ph8_alive_curves_are_printed`): **before** deep_space peak 8 at 16.0 s, planet_approach 7 at 98.0 s,
+  cloud_descent 6 at 32.0 s; **after** deep_space **12 at 29.0 s** (limit 12.5; 29.00:12, 29.73:11 as the burst turret leaves, 30.73:10, 31.73:9), planet_approach **7 at
+  28.4 s** (limit 7.5; the tender's drones gone by 29.21 s; 7 again at 98.0 s), cloud_descent unchanged. No lever was needed.
+- **Spill-over:** the last Ph8 ship is gone 45.58 s into deep_space and 29.21 s into planet_approach (next ENEMIES_CLEARED last trigger 60.0 / 186.0 s); no mount of the
+  placed group has a `persist` pool (a ROCKET_BATTERY's do: the boundary).
+- **Deadline guards** (`test_engagement_deadline.gd`): a non-vacuity row (the detection sees level 1's group, pair and tender, each in a DURATION section) and life
+  boundaries in cloud_descent's last wave at delay 0 — tender 11.1 s, pair 11.22 s, the group's shortest member drift (at the line's own offset, lowest view) — each past 10 s.
+- **Attack replays** (`tests/integration/test_level1_ph8_attacks.gd`, 16×, `level1_slice_replay.gd`; no director in the slice, so no columns or wall): both turrets enter
+  `TurretMount.Phase.FIRE` in view (read from `phase_changed`: a ring enters and leaves FIRE in one tick); the 29.0 s pair's drones each ADVANCE once (TELEGRAPH with 6.08 s of
+  budget left), then DISENGAGE; the tender LAUNCHes once with 7.02 s left and its pair reaches ADVANCE with 7.57 s of drone budget left. Boundaries: a 1.0 s drone budget never
+  advances, a 0.5 s tender budget never launches.
+- **Column counts after placement** (`scripts/measure-level1-columns.sh`, one run; t17's after figures were deep_space 22–23 / planet_approach 5 / cloud_descent 0):
+  - `deep_space`: columns fighter 1, missile_corvette 1, swarm_drone 5 (ram_corvette 2 exposed, 0 killed); `LaserWallWave` fighter 5, gatling_interceptor 1, razor_drone 1,
+    swarm_drone 6 (ram 1 exposed, 0 killed). **Total 20.** No defense_turret, twin_laser_drone or laser_tender exposed. (At −64: total 24, including the 2 turrets.)
+  - `planet_approach`: missile_corvette 1, swarm_drone 4 (ram 2 exposed, 0 killed). **Total 5**; no laser_tender or twin_laser_drone exposed.
+  - `cloud_descent`: swarm_drone 1. **Total 1** (run-to-run noise, t17 saw 0–2 before `registers_hazard`).
+  - The replay world now holds shooters (twin beam, pulse ring, burst rounds), so a friendly-fire death inside a lit ray could be counted as a column kill; none was obvious.
+- **Gate time:** GUT 211.256 → 212.399 s (+1.14 s of the 3.5 s allotment; 2613 → 2634 tests; `scripts/gate-time.sh`, before on a clean `git archive HEAD` copy).

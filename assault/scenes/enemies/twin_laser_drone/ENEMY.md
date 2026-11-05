@@ -123,6 +123,11 @@ it**, once a tick before the rig's tick (one clock).
 seeded `rng_seed` / `rng_seed + 1` when non-zero, bound with `TwinLaserPair.bind()`, announced with `EventBus.enemy_spawned_orphan`, then it frees itself.
 Spawn with `b.twin_laser_pair().at(x, y)` (the pair's midpoint, camera-relative). **Never in an `ENEMIES_CLEARED` section** (`test_engagement_deadline.gd`).
 
+**Level 1 (t19):** one pair, `b.twin_laser_pair().at(-250, -220)` in Deep Space's 29.0 s wave (beside the sniper pair and the fighter; no rail). Each drone's
+life, `engage_seconds` 8 + the twin beam's `telegraph_seconds` 0.8 + `max_advance` 1.92 + slack + `drone_exit_bound()` 5.83 = 16.58 s, counts in the frozen 2.5x
+density gate (`test_level1_specialist_spawns.gd`, `EXPECTED_PH8`): Deep Space peaks at 12 at 29.0 s (limit 12.5). `test_level1_ph8_attacks.gd` replays the slice at
+16x: each drone enters ADVANCE exactly once (TELEGRAPH with 6.1 s of budget left), then both DISENGAGE; with a 1.0 s budget they never advance.
+
 ## Counterplay (IDEAS §6.10)
 
 - **Move round an end:** the wall is slower than the player (240 < 360 px/s) and the player can reach an end before it arrives — the §2.3 twin row in
