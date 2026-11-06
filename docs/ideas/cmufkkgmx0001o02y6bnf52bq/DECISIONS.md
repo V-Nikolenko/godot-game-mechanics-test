@@ -3400,3 +3400,35 @@ Task plan `docs/plans/cmvqw0vo2018rqs2xxd8m1llu/3-plan.md` (round 3 `VERDICT: AP
   - `cloud_descent`: swarm_drone 1. **Total 1** (run-to-run noise, t17 saw 0–2 before `registers_hazard`).
   - The replay world now holds shooters (twin beam, pulse ring, burst rounds), so a friendly-fire death inside a lit ray could be counted as a column kill; none was obvious.
 - **Gate time:** GUT 211.256 → 212.399 s (+1.14 s of the 3.5 s allotment; 2613 → 2634 tests; `scripts/gate-time.sh`, before on a clean `git archive HEAD` copy).
+
+## Phase 8 - as built (2026-11-06)
+
+Epic `cmug23ona0015m52w4t1m73bc`; plan `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` (revision 2); dossier `docs/epics-done/cmug23ona0015m52w4t1m73bc/REPORT.md`. The planned decisions
+above stand except where this section says otherwise; the per-task *Phase 8, built in tN* notes hold the measured figures. 2634 GUT tests, GUT 212.4 s.
+
+### What was built (names later phases build on)
+- **Energy weapons** (`assault/scenes/projectiles/enemy_beams/`): `EnemyBeam` (`Kind { BEAM, SWEEP, LANCE, TWIN }`, `Phase { OFF, TELEGRAPH, ACTIVE, FADE }`, owner-ticked), `EnergyRing`, `EnergyHitScan`,
+  `EnemyBeamScenes`; friendly fire with an owner set, direct emit, `rehit_interval` 0.55 s. Notes: `BEAMS.md`.
+- **Hazards:** `HazardInfo.segment_half` / `exempt_group`; `&"laser_wall"` registered by lit twin beams and fences; level 1's columns opt in with `LaserRay.registers_hazard` (t17 measured that they killed AI enemies).
+- **Turrets:** `DefenseTurret` / `HeavyEmplacement` (one script set, two configs), `DefenseTurretBrain`, `TurretMount` (six variants incl. appended `BEAM_CANNON`), `TurretMountSlot.turn_rate_override`,
+  `AssaultDrift` (`global/components/`). Structures: `TurretGroup` (coordinator), `PowerSource`, `ShieldGenerator`, `LaserEmitter` + `LaserFence`. `WaveBuilder.turret_group()`, `laser_fence()`, `twin_laser_pair()`, `laser_tender()`.
+- **Drones:** `TwinLaserDrone`, `TwinLaserPair` (RefCounted rig, `Phase` incl. appended `LAUNCHED` and `IDLE`), `TwinLaserPairSpawn`, `LaserTender` (`launch_pair(points)` is the Ph10 / Ph11 seam).
+- **Placement:** hub defended derelict site + tender (draw 16) + pair (draw 17) patrols; level 1 turret group + pair in deep_space, tender in planet_approach (`EXPECTED_PH8`).
+- **Rules recorded in PROJECT.md → Conventions (items 4–13):** owner-set friendly fire, mount writes only its own rotation, `AssaultDrift`, world-anchored x, static enemies never escape, no Ph8 structure / drone /
+  tender in `ENEMIES_CLEARED`.
+
+### Deviations from the plan
+- **Level-1 turret group at `.at(64, -220)`, not −64** (t19): the level-start `LaserWallWave` (x 0–672) killed it at −64; it is not in `laser_column_schedule()`. Static things in deep_space must clear both.
+- **Real-player cadence rows run at 4×, not 8×** (t2); the swept-hit row turns the beam 0.2 rad per tick, not 40 px (t2).
+- **Cover beams bite 2 px (`COVER_BITE_PX`) into the blocker they end on** (t5); segment arc tolerance `SEGMENT_ARC_TOLERANCE` 1e-5 rad (t4).
+- **`launch_pair()` adds drones synchronously**, and the launched advance is capped at `standoff` (t13).
+- **The drone exit probe runs speeds `[10]` only** (t14, review N1).
+- **Cradle positions moved** to (∓24, −15) to sit on the art's bays (t16).
+- **Hub:** heavy emplacement (0, 0) → (180, 20) and power source → (200, −120); the barrier is the inherited `hub_barrier.tscn`; no `rng_seed` export on `TurretGroup` (t18).
+- **Gate time:** the plan forecast ≤ 236.5 s; the phase ended at 212.4 s.
+
+### Gaps left for later phases
+- Turrets on ships / bosses (Ph10 / Ph11); the station's lasers and an endpoint-rig beam rotating about an anchor on `EnemyBeam` (Ph11); jammer-linked groups through `add_power_provider()` / `set_powered()` (Ph9 / Ph20).
+- Placed Assault corridor layouts for turrets (Ph15), difficulty tiers inside the fairness bounds (Ph16), beam / turret audio (Ph17), turret wreckage (Ph19), encounter compositions around the site (Ph13 / Ph14).
+- The player's mining beam still stops at every layer-1 enemy root (S13). No kill attribution for enemy-weapon kills. Nothing was play-tested; all §2.21 starting values are judgement.
+- The level-1 column measurement counts only ships with a brain, so brainless structures never appear in it.
