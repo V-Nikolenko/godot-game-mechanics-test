@@ -10,8 +10,7 @@ tender itself is a priority target because killing it ends the supply of walls.
 > LAUNCH / WAIT / REARM / DISENGAGE played), the `launch_pair(points)` seam, the Attack B points (Open Space prediction, Assault vertical / horizontal
 > walls), the rig's LAUNCHED phase and fixed launched frame, one live pair, rearm, docking of a lone returning drone, the Assault variant (one launch per
 > life, the cradle-telegraph deferral), `WaveBuilder.laser_tender()`. **Hub idle and measured exit (t14):** IDLE / NOTICING / RETURNING, the recall of
-> a launched pair, the one rearm clock, and the Assault exit measured over `corridor_starts()` (below). **Art:** done in t16 (`laser_tender.png`, `laser_tender_cradle_drone.png`). **Hub placement (t18):** draw 16 of `SectorHub._spawn_patrol()`, anchor 112.5 deg on the 2600 ring. **Not yet:** level-1 placement (
-> t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.13; task plan `docs/plans/cmvqw0vnz018nqs2xv56q6a0a/3-plan.md`. The drones and the rig
+> a launched pair, the one rearm clock, and the Assault exit measured over `corridor_starts()` (below). **Art:** done in t16 (`laser_tender.png`, `laser_tender_cradle_drone.png`). **Hub placement (t18):** draw 16 of `SectorHub._spawn_patrol()`, anchor 112.5 deg on the 2600 ring. **Level 1 (t19):** `b.laser_tender().at(-300, -200)` in Planet Approach's 2.0 s wave. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.13; task plan `docs/plans/cmvqw0vnz018nqs2xv56q6a0a/3-plan.md`. The drones and the rig
 > are `../twin_laser_drone/` ([ENEMY.md](../twin_laser_drone/ENEMY.md)).
 
 ---

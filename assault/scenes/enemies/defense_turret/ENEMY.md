@@ -118,7 +118,7 @@ Weapon tuning is **not** in the config. It lives in the mount scenes' exports (`
 ## Spawn notes
 
 - WaveBuilder method: `b.defense_turret()` (const `DEFENSE_TURRET`); `.prop("variant", TurretMount.Variant.BURST_CANNON)` picks the weapon.
-- **Never in an `ENEMIES_CLEARED` section** (persistent fire; the phase rule). It is not placed in level 1 or the hub yet (t18, t19).
+- **Never in an `ENEMIES_CLEARED` section** (persistent fire; the phase rule). Placed (t18, t19): level 1's `assault_pair` group (Deep Space 3.0 s wave, `.at(64, -220)`) and the hub `HubDefenseSite` (sweep, rocket and lance turrets).
 
 ---
 

@@ -5,8 +5,7 @@ beam between two of them. Shooting one drops the whole fence.
 **Fantasy / threat:** A pylon with a red lens. The wall between two pylons is lethal, but each pylon is a cheap target: the answer to a fence is the
 post, not the gap.
 
-> **Build state (Phase 8, t10).** Built with `LaserFence`; art built in t15. The hub site (t18) and level 1 (t19)
-> place fences. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.11.
+> **Build state (Phase 8, t10).** Built with `LaserFence`; art built in t15. The hub site (t18) places a fence (`hub_barrier.tscn`); level 1 (t19) places none. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.11.
 
 ---
 

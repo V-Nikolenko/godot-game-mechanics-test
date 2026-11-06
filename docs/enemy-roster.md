@@ -425,7 +425,7 @@ b.mine_layer().at(0, -400).move(b.straight(82))
 
 **Config fields** (`DefenseTurretConfig`): `perceive_radius` 900, `lose_radius` 1100, `notice_time` 0.3, `assault_drift_speed` 60. Weapon tuning lives in the mount scene (`defense_turret/mounts/burst_cannon_mount.tscn`), never in the config.
 
-**Not placed in level 1 or the hub yet.** **Never place it in an `ENEMIES_CLEARED` section** (persistent fire).
+**Placed:** in level 1 as a member of Deep Space's `assault_pair` group (3.0 s wave); in the hub as the sweep, rocket and lance turrets of the hub's `HubDefenseSite` (`presets/hub_defense_site.tscn`, a child of `EnemyContainer`). **Never place it in an `ENEMIES_CLEARED` section** (persistent fire).
 
 **Examples:**
 ```gdscript
@@ -444,7 +444,7 @@ b.defense_turret().at(200, -100).prop("variant", TurretMount.Variant.BURST_CANNO
 **HP:** 260 (an r 64 circle); contact damage 0  
 **Score:** 150 (`counts_as_escape` false)
 
-**Not placed in level 1 or the hub yet.** **Never place it in an `ENEMIES_CLEARED` section.** See [ENEMY.md](../assault/scenes/enemies/heavy_emplacement/ENEMY.md).
+**Placed:** in the hub, the centrepiece of the hub's `HubDefenseSite` (`presets/hub_defense_site.tscn`, a child of `EnemyContainer`); not in level 1. **Never place it in an `ENEMIES_CLEARED` section.** See [ENEMY.md](../assault/scenes/enemies/heavy_emplacement/ENEMY.md).
 
 ```gdscript
 b.heavy_emplacement().at(0, -120)
@@ -456,15 +456,15 @@ b.heavy_emplacement().at(0, -120)
 
 **Builder:** `b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR)` (any preset path under `assault/scenes/structures/turret_group/presets/`)  
 **Scene:** a preset, e.g. `assault_pair.tscn`: a BURST_CANNON turret at (−50, 60), a PULSE_RING turret at (50, −60) and a power source at (0, 0) (design px ×2 = world)  
-**What it is:** a coordinator, not an enemy (never scored, never in `enemies`). It spawns its members next to it in the container (each an ordinary, scored enemy) and frees itself after the last. In Assault its **x is world-anchored**: `.at(x, y)` lands at world x `640 + 2·x` however the player has panned the view (so `.at(-64, -220)` puts the members at 462 / 512 / 562, between level 1's laser columns); y is camera-relative as usual.  
+**What it is:** a coordinator, not an enemy (never scored, never in `enemies`). It spawns its members next to it in the container (each an ordinary, scored enemy) and frees itself after the last. In Assault its **x is world-anchored**: `.at(x, y)` lands at world x `640 + 2·x` however the player has panned the view (so `.at(64, -220)` puts the members at 718 / 768 / 818, between level 1's laser columns and clear of the level-start `LaserWallWave`, x 0–672, which kills a group at `.at(-64, -220)`; a static placement in deep_space must clear both); y is camera-relative as usual.  
 **Power source** (`power_source.tscn`, member only): HP 150, score 80, `counts_as_escape` false, no weapon; amber lines run from it to each turret. **Killing it shuts every turret of the group down at once, for good**; the dark turrets can still be destroyed for score.  
-**Shield generator** (`shield_generator.tscn`, member only; none of the shipped presets has one yet, the hub site will): HP 120, score 80, `counts_as_escape` false; while powered it keeps a 360° bubble (50 points, absorbs bullets and rockets, never beams) on every other member including the power source, never on a fence post, never displacing a Support Ship ward; cyan tethers show who is covered. Killing it, or the power source, drops every bubble within about 0.6 s.  
+**Shield generator** (`shield_generator.tscn`, member only; the hub's `hub_defense_site.tscn` carries one): HP 120, score 80, `counts_as_escape` false; while powered it keeps a 360° bubble (50 points, absorbs bullets and rockets, never beams) on every other member including the power source, never on a fence post, never displacing a Support Ship ward; cyan tethers show who is covered. Killing it, or the power source, drops every bubble within about 0.6 s.  
 **Stagger:** the group's turrets start their warnings at least 0.3 s apart.
 
-**Never place it in an `ENEMIES_CLEARED` section** (persistent fire; guarded by `test_engagement_deadline.gd`). Not placed in level 1 or the hub yet.
+**Never place it in an `ENEMIES_CLEARED` section** (persistent fire; guarded by `test_engagement_deadline.gd`). Placed: level 1's Deep Space 3.0 s wave (`assault_pair`) and the hub's defense site.
 
 ```gdscript
-b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(-64, -220)
+b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(64, -220)
 ```
 
 ---
@@ -472,7 +472,7 @@ b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(-64, -220)
 ### Laser fence (Phase 8)
 **Builder:** `b.laser_fence()` (`.prop("mode", LaserFence.Mode.CYCLE)` for a temporary barrier; `phase_offset`, `off_seconds`, `on_seconds` the same way)  
 **Scene:** `assault/scenes/structures/laser_fence/laser_fence.tscn`: two `LaserEmitter` posts (HP 140, score 40, `counts_as_escape` false) 300 px apart and a laser wall between them (12 damage, 0.9 s warning line first). In Assault its **x is world-anchored** like a turret group's.  
-**Counterplay:** shoot a post and the whole fence drops for good (it lingers one second so the explosions finish); AI enemies with hazard avoidance steer round the ends, ones without fly into it. A shield generator never shields a post. **Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Not placed in level 1 or the hub yet.
+**Counterplay:** shoot a post and the whole fence drops for good (it lingers one second so the explosions finish); AI enemies with hazard avoidance steer round the ends, ones without fly into it. A shield generator never shields a post. **Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Placed in the hub only (`hub_barrier.tscn`, a CYCLE fence in the defense site); not in level 1.
 
 ### `twin_laser_pair` — Twin-Laser Drones (Phase 8)
 **Builder:** `b.twin_laser_pair()`; `.at(x, y)` is the pair's midpoint, camera-relative like every ship spawn  
@@ -480,7 +480,7 @@ b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(-64, -220)
 **Drone:** HP 30 (r 13), contact 8 (COLLISION), score 30 each, `max_speed` 300; the beam between them is `twin_beam.tscn` (12 per hit, re-hit 0.55 s, 0.8 s warning line)  
 **Attack A:** the drones fly to opposite sides of the player 260 px off, show the line for 0.8 s (lenses yellow), then fly the whole line through where the player was and 200 px past at 240 px/s, keeping its length. Open Space: again every 4–6 s. Assault: one attack inside the corridor (a horizontal line from above, or a vertical one from the side when the player is near the top), then they leave.  
 **Counterplay:** reach an end (the wall is slower than the player); kill either drone and the line drops at once; a gravity well or a wreck that pulls or stops one drone strains the line and collapses it; the line hurts other enemies too.  
-**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Not placed in level 1 or the hub yet. A Laser Tender (`b.laser_tender()`, below) launches its own pair. See [ENEMY.md](../assault/scenes/enemies/twin_laser_drone/ENEMY.md).
+**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Placed: level 1 sends one pair in Deep Space's 29.0 s wave (`b.twin_laser_pair().at(-250, -220)`); the hub patrols one (draw 17). A Laser Tender (`b.laser_tender()`, below) launches its own pair. See [ENEMY.md](../assault/scenes/enemies/twin_laser_drone/ENEMY.md).
 
 ```gdscript
 b.twin_laser_pair().at(0, -120)
@@ -491,7 +491,7 @@ b.twin_laser_pair().at(0, -120)
 **Scene:** `assault/scenes/enemies/laser_tender/laser_tender.tscn` (`LaserTender`): HP 160 (r 40), contact 15 (COLLISION), score 120, `max_speed` 200, no gun, two Twin-Laser Drones docked in visible cradles  
 **Attack B:** its cradles glow yellow for 0.6 s, then it launches both drones in a V toward two points either side of where the player is going; they land as a 420 px wall across that route, warn for 0.8 s and advance through it. Open Space: one live pair at a time, a 7 s rearm after both drones are gone, a lone survivor flies home and docks. Assault: it holds in the upper band of the screen and launches **once** (a vertical wall 180 px ahead of a strafing player, a horizontal one 260 px above a still one), then leaves; a pair is launched no later than spawn + 10.0 + 0.6 s.  
 **Counterplay:** change direction when the cradles glow; go round an end; kill a drone to drop the wall; kill the tender to stop the walls.  
-**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Not placed in level 1 or the hub yet. See [ENEMY.md](../assault/scenes/enemies/laser_tender/ENEMY.md).
+**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Placed: level 1 sends one in Planet Approach's 2.0 s wave (`b.laser_tender().at(-300, -200)`); the hub patrols one (draw 16). See [ENEMY.md](../assault/scenes/enemies/laser_tender/ENEMY.md).
 
 ```gdscript
 b.laser_tender().at(0, -230)  # 100 px above the view

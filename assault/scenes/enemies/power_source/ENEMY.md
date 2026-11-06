@@ -6,7 +6,7 @@ and harmless at once, for good.
 around it. You get through by finding a lane to the reactor.
 
 > **Build state (Phase 8, t9).** Built with `TurretGroup` (`assault/scenes/structures/turret_group/`).
-> Art built in t15 (top-down sprites, see the Sprite row); the hub site (t18) and level 1 (t19) place groups. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10.2; task plan
+> Art built in t15 (top-down sprites, see the Sprite row); the hub site (t18) and level 1 (t19, `assault_pair`) place groups. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10.2; task plan
 > `docs/plans/cmvqw0vnl0183qs2xbphzonu7/3-plan.md`.
 
 ---

@@ -46,8 +46,7 @@ head is slow to swing, so the answer is to break the angle, not to outrun the gu
 b.heavy_emplacement().at(0, -120)
 ```
 
-A turret group slot can use `heavy_emplacement.tscn` as a `member_scene`. **Never place it in an `ENEMIES_CLEARED` section** (persistent fire). Not placed in
-level 1 or the hub yet (t18, t19).
+A turret group slot can use `heavy_emplacement.tscn` as a `member_scene`. **Never place it in an `ENEMIES_CLEARED` section** (persistent fire). Placed (t18) in the hub `HubDefenseSite` (slot at (180, 20)); not in level 1.
 
 ## Tests
 

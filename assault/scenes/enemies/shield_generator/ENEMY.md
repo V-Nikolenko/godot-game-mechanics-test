@@ -6,7 +6,7 @@
 (or the reactor behind it) and the bubbles fade within a moment; a beam never cared about them.
 
 > **Build state (Phase 8, t9s).** Built on `TurretGroup` (`assault/scenes/structures/turret_group/`).
-> Art built in t15 (see the Sprite row); the hub site (t18) places one. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10.5. Test-only preset with a generator:
+> Art built in t15 (see the Sprite row); the hub site (t18) places one (`hub_defense_site.tscn`). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10.5. Test-only preset with a generator:
 > `tests/helpers/shielded_site.tscn`.
 
 ---
@@ -65,8 +65,7 @@
 
 ## Spawn notes
 
-- Not spawned on its own: it is a member of a turret group preset (`TurretGroupSlot.member_scene`). The hub site (t18) will place one; the only preset
-  with a generator today is the test-only `tests/helpers/shielded_site.tscn`.
+- Not spawned on its own: it is a member of a turret group preset (`TurretGroupSlot.member_scene`). The hub site (t18) places one in `hub_defense_site.tscn`; the other preset with a generator is the test-only `tests/helpers/shielded_site.tscn`.
 - **Never in an `ENEMIES_CLEARED` section** (its group fires persistently).
 - Gate: `tests/integration/test_turret_group.gd` §13 (both harnesses; the bullet row on real physics at 8×), the generator case in
   `test_enemy_dual_mode.gd`, and the roster files (plan §2.19).
