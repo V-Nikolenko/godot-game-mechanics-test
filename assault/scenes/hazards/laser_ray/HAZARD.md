@@ -56,6 +56,14 @@ Pinned by `tests/integration/test_laser_ray_hit_mask.gd`, which exists mainly to
 
 ---
 
+## `registers_hazard` — an opt-in "steer round me" for level 1's columns (Phase 8, t17)
+
+`@export var registers_hazard := false` (default off: the race gauntlet and the station are byte-identical). When on, the ray is in `Hazards` as one `&"laser_wall"` segment `HazardInfo` (`hazard_info()`: centre and `segment_half` of the hit strip's long axis, `radius` = half the 56 px strip + 24 = 52, `avoid_weight` 1.0, `source` = the ray) from **`start()`** — the warning line — until **`_begin_dissolve()`** (end of active), and not after `_exit_tree()`. A looping ray registers again on each pulse. Enemy steering (`Steering.context_avoid`'s segment branch) therefore routes round a column before and while it is lit.
+
+Level 1 sets it on every column `Level1Director._spawn_laser_columns()` lights and on all 12 rays of `laser_wall.tscn` (the `LaserWallWave`). They kill AI enemies (mask `128 | 256 | 512`); the pre- and post-placement counts are in `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` ("Phase 8, built in t17"). The schedule is data: `Level1Director.laser_column_schedule()`. Re-measure with `scripts/measure-level1-columns.sh` (manual, not part of the gate). Gate rows: `tests/integration/test_level1_laser_columns.gd`.
+
+---
+
 ## Files
 
 ```

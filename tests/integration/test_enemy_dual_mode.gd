@@ -639,6 +639,8 @@ const HAZARD_PROFILES := [
 	["bomber", 0.6, 70.0, 0.4],
 	["missile_corvette", 0.7, 80.0, 0.4],
 	["ram_corvette", 0.5, 60.0, 0.5],
+	["twin_laser_drone", 0.6, 16.0, 0.1],
+	["laser_tender", 0.8, 24.0, 0.3],
 ]
 
 
@@ -1052,3 +1054,323 @@ func test_the_gravity_field_slows_a_bomber_resistance_enemy_to_0_76(mode: String
 	var outside := _fixture_enemy(harness, centre + Vector2(field.radius + 200.0, 0.0), Vector2(200.0, 0.0), 0.4)
 	_tick(outside, DT)
 	assert_almost_eq(outside.velocity.x, 200.0, 0.001, "%s: unslowed beyond the radius" % mode)
+
+
+# ── The Mine Layer (Phase 7, t10; plan §2.11) ──────────────────────────────────────────────────────
+
+const MINE_LAYER_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/mine_layer/mine_layer.tscn")
+
+
+## APPROACH closes on its run-in point R in both modes, and in Assault the layer stays inside the corridor's soft band.
+## (t10's row asserted the gap to the PLAYER closed; plan §2.12 (t11) makes APPROACH seek R, beside the line's start, so
+## from (640, 60) the layer may fly away from a player at (640, 360). Recorded in DECISIONS, Phase 7, t11.)
+func test_mine_layer_approach_closes_on_its_run_in_point(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 360.0)
+	var layer := MINE_LAYER_SCENE.instantiate() as MineLayer
+	layer.global_position = Vector2(640.0, 60.0)
+	harness.root.add_child(layer)
+	layer.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	layer.set_process(false)
+	var brain := layer.get_node("Brain") as MineLayerBrain
+	brain.start_engaged = true  # pre-t12: predates the hub idle
+	_tick(layer, DT)  # the first tick plans the pass
+	var start := layer.global_position.distance_to(brain.pass_run_in_point)
+	for _i in 60:
+		_tick(layer, DT)
+	var closed := start - layer.global_position.distance_to(brain.pass_run_in_point)
+	assert_gt(closed, 60.0, "%s: one second of APPROACH closes the gap to R (%.1f px)" % [mode, closed])
+	assert_eq(brain.phase, MineLayerBrain.Phase.APPROACH)
+	if harness.is_assault:
+		assert_true(_soft_band_rect().has_point(layer.global_position), "assault: still inside the corridor")
+
+# ── The Stationary Defense Turret (Phase 8, t6; plan §2.7) ─────────────────────────────────────────
+
+const DEFENSE_TURRET_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/defense_turret/defense_turret.tscn")
+
+
+## The same turret engages in both modes (Open Space: the player inside `perceive_radius`; Assault: the turret inside the view) and swings
+## its mount onto the player; only in Assault does its `AssaultDrift` scroll it down, by `assault_drift_speed` per second. The root never rotates.
+func test_defense_turret_engages_in_both_modes_and_drifts_only_in_assault(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 600.0)
+	var turret := DEFENSE_TURRET_SCENE.instantiate() as DefenseTurret
+	turret.global_position = Vector2(640.0, 300.0)
+	harness.root.add_child(turret)
+	turret.set_physics_process(false)  # hand-ticked, same technique as the Bomber above
+	var drift := turret.get_node("AssaultDrift") as AssaultDrift
+	drift.set_physics_process(false)
+	var y0 := turret.global_position.y
+	for _i in 60:
+		drift.step(DT)
+		_tick(turret, DT)
+	var brain := turret.get_node("Brain") as DefenseTurretBrain
+	var mount := turret.mounts()[0]
+	assert_eq(brain.phase, DefenseTurretBrain.Phase.ENGAGED, "%s: noticed, then engaged" % mode)
+	assert_ne(mount.phase(), TurretMount.Phase.SCAN, "%s: the mount is on the player" % mode)
+	assert_lt(mount.aim_error(), deg_to_rad(4.0), "%s: and aimed at it" % mode)
+	assert_eq(turret.rotation, 0.0, "%s: the root never rotates" % mode)
+	var expected_drift := turret.config.assault_drift_speed * 60.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(turret.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
+	assert_false(turret.is_queued_for_deletion())
+
+# ── The Power Source (Phase 8, t9; plan §2.10.2) ─────────────────────────────────────────────────────────────────────
+
+const POWER_SOURCE_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/power_source/power_source.tscn")
+
+
+## The same power source powers its turret group in both modes and drifts only in Assault (by `assault_drift_speed` per second); it is an ordinary
+## enemy (group `enemies`), never a wall for the mining beam, refuses a tow (no mover) and never counts as an escape. Killing it darkens its turret
+## in both modes, in the same call.
+func test_power_source_powers_its_group_in_both_modes_and_drifts_only_in_assault(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 600.0)
+	var group := TurretGroup.new()
+	for spec: Array in [[DEFENSE_TURRET_SCENE, Vector2(-100.0, 0.0)], [POWER_SOURCE_SCENE, Vector2(100.0, 0.0)]]:
+		var slot := TurretGroupSlot.new()
+		slot.member_scene = spec[0]
+		slot.position = spec[1]
+		group.add_child(slot)
+	group.position = Vector2(640.0, 300.0)
+	harness.root.add_child(group)
+	group.spawn_members()
+	group.set_physics_process(false)
+	var turret := group.members()[0] as DefenseTurret
+	var source := group.members()[1] as PowerSource
+	for m: BaseEnemy in [turret, source]:
+		m.set_physics_process(false)  # hand-ticked, same technique as the turret above
+		(m.get_node("AssaultDrift") as AssaultDrift).set_physics_process(false)
+	assert_true(source.is_in_group(&"enemies"), "%s: an ordinary enemy" % mode)
+	assert_true(source.provides_power())
+	assert_false(source.is_laser_blocking(), "%s: a target for the mining beam, not a wall" % mode)
+	assert_false(source.accept_tow(Vector2(50.0, 0.0)), "%s: no mover, no tow" % mode)
+	assert_false(source.counts_as_escape, "%s: drifting out never costs the combo" % mode)
+	var drift := source.get_node("AssaultDrift") as AssaultDrift
+	var y0 := source.global_position.y
+	for _i in 60:
+		drift.step(DT)
+		group.tick(DT)
+		_tick(turret, DT)
+	var expected_drift := source.config.assault_drift_speed * 60.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(source.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
+	assert_true(group.is_powered())
+	assert_ne(turret.mounts()[0].phase(), TurretMount.Phase.UNPOWERED, "%s: powered while the source lives" % mode)
+	source.hurt_box.received_damage.emit(10000)
+	assert_false(group.is_powered(), "%s: dark" % mode)
+	assert_eq(turret.mounts()[0].phase(), TurretMount.Phase.UNPOWERED, "%s: the turret is down in the same call" % mode)
+
+# ── The Shield Generator (Phase 8, t9s; plan §2.10.5) ────────────────────────────────────────────────────────────────
+
+const SHIELD_GENERATOR_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/shield_generator/shield_generator.tscn")
+
+
+## The same generator shields its group's turret in both modes and drifts only in Assault; it is an ordinary enemy (group `enemies`), never a wall for the
+## mining beam, refuses a tow (no mover), never counts as an escape and never shields itself. Killing the power source stops the projection in the same call.
+func test_shield_generator_shields_its_group_in_both_modes_and_drifts_only_in_assault(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 600.0)
+	var group := TurretGroup.new()
+	for spec: Array in [[DEFENSE_TURRET_SCENE, Vector2(-100.0, 0.0)], [SHIELD_GENERATOR_SCENE, Vector2(100.0, 0.0)], [POWER_SOURCE_SCENE, Vector2(0.0, -100.0)]]:
+		var slot := TurretGroupSlot.new()
+		slot.member_scene = spec[0]
+		slot.position = spec[1]
+		group.add_child(slot)
+	group.position = Vector2(640.0, 300.0)
+	harness.root.add_child(group)
+	group.spawn_members()
+	group.set_physics_process(false)
+	var turret := group.members()[0] as DefenseTurret
+	var generator := group.members()[1] as ShieldGenerator
+	var source := group.members()[2] as PowerSource
+	for m: BaseEnemy in [turret, generator, source]:
+		m.set_physics_process(false)  # hand-ticked, same technique as the turret above
+		(m.get_node("AssaultDrift") as AssaultDrift).set_physics_process(false)
+	assert_true(generator.is_in_group(&"enemies"), "%s: an ordinary enemy" % mode)
+	assert_false(generator.is_laser_blocking(), "%s: a target for the mining beam, not a wall" % mode)
+	assert_false(generator.accept_tow(Vector2(50.0, 0.0)), "%s: no mover, no tow" % mode)
+	assert_false(generator.counts_as_escape, "%s: drifting out never costs the combo" % mode)
+	var drift := generator.get_node("AssaultDrift") as AssaultDrift
+	var y0 := generator.global_position.y
+	for _i in 60:
+		drift.step(DT)
+		group.tick(DT)
+		generator._physics_process(DT)
+	var expected_drift := generator.config.assault_drift_speed * 60.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(generator.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
+	for m: BaseEnemy in [turret, source]:
+		var bubble: EnemyShield = null
+		for c in m.get_children():
+			if c is EnemyShield:
+				bubble = c
+		assert_not_null(bubble, "%s: %s is shielded" % [mode, m.name])
+		assert_true(bubble.is_up() if bubble != null else false)
+	assert_eq(generator.hurt_box.has_absorber(), false, "%s: never itself" % mode)
+	source.hurt_box.received_damage.emit(10000)
+	assert_false(generator.is_powered(), "%s: unpowered in the same call" % mode)
+	assert_eq(generator.tethers().size(), 0, "%s: no tether once dark" % mode)
+
+# ── The Laser Emitter (Phase 8, t10; plan §2.11) ─────────────────────────────────────────────────────────────────────
+
+const LASER_FENCE_SCENE: PackedScene = \
+		preload("res://assault/scenes/structures/laser_fence/laser_fence.tscn")
+
+
+## The same fence post is an ordinary static enemy in both modes (group `enemies`, never a wall for the mining beam, no mover so no tow, never an escape);
+## its fence carries it down in Assault only (the fence's `AssaultDrift`, the post has none) and shooting it drops the beam in the same call.
+func test_laser_emitter_is_a_static_post_and_its_death_drops_the_fence_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 600.0)
+	var fence := LASER_FENCE_SCENE.instantiate() as LaserFence
+	fence.position = Vector2(640.0, 300.0)
+	harness.root.add_child(fence)
+	fence.set_physics_process(false)  # hand-ticked, same technique as the turret above
+	var drift := fence.get_node("AssaultDrift") as AssaultDrift
+	drift.set_physics_process(false)
+	var post := fence.post_a()
+	assert_true(post.is_in_group(&"enemies"), "%s: an ordinary enemy" % mode)
+	assert_null(post.get_node_or_null("AssaultDrift"), "%s: the fence carries it, not the post" % mode)
+	assert_false(post.is_laser_blocking(), "%s: a target for the mining beam, not a wall" % mode)
+	assert_false(post.accept_tow(Vector2(50.0, 0.0)), "%s: no mover, no tow" % mode)
+	assert_false(post.counts_as_escape, "%s: drifting out never costs the combo" % mode)
+	var y0 := post.global_position.y
+	for _i in 60:
+		drift.step(DT)
+		fence.step(DT)
+	var expected_drift := fence.drift_speed * 60.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(post.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
+	assert_true(fence.is_lit(), "%s: lit" % mode)
+	post.hurt_box.received_damage.emit(10000)
+	assert_false(fence.is_lit(), "%s: the beam is down in the same call" % mode)
+
+# ── The Heavy Emplacement (Phase 8, t11; plan §2.9) ──────────────────────────────────────────────────────────────────
+
+const HEAVY_EMPLACEMENT_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn")
+
+
+## The same heavy emplacement engages in both modes with both its cannons, drifts only in Assault, never rotates its root and never counts as an escape.
+func test_heavy_emplacement_aims_both_cannons_in_both_modes_and_drifts_only_in_assault(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 600.0)
+	var turret := HEAVY_EMPLACEMENT_SCENE.instantiate() as DefenseTurret
+	turret.global_position = Vector2(640.0, 300.0)
+	harness.root.add_child(turret)
+	turret.set_physics_process(false)  # hand-ticked, same technique as the turret above
+	var drift := turret.get_node("AssaultDrift") as AssaultDrift
+	drift.set_physics_process(false)
+	var y0 := turret.global_position.y
+	for _i in 120:
+		drift.step(DT)
+		_tick(turret, DT)
+	var brain := turret.get_node("Brain") as DefenseTurretBrain
+	assert_eq(brain.phase, DefenseTurretBrain.Phase.ENGAGED, "%s: engaged" % mode)
+	assert_eq(turret.mounts().size(), 2, "%s: two cannons" % mode)
+	for mount in turret.mounts():
+		assert_ne(mount.phase(), TurretMount.Phase.SCAN, "%s: the mount is on the player" % mode)
+		assert_lt(mount.aim_error(), deg_to_rad(4.0), "%s: and aimed at it" % mode)
+	assert_eq(turret.rotation, 0.0, "%s: the root never rotates" % mode)
+	assert_false(turret.accept_tow(Vector2(50.0, 0.0)), "%s: no mover, no tow" % mode)
+	assert_false(turret.counts_as_escape, "%s: drifting out never costs the combo" % mode)
+	var expected_drift := turret.config.assault_drift_speed * 120.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(turret.global_position.y - y0, expected_drift, 0.01, "%s: drift" % mode)
+
+# ── Twin-Laser Drones (Phase 8, t12; plan §2.12) ────────────────────────────────────────────────────────────────────
+
+const TWIN_PAIR_SPAWN_SCENE: PackedScene = \
+		preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn")
+
+
+## The same spawned pair forms on the player and telegraphs in both modes: both lenses CHARGING, the beam registered as a `laser_wall` segment
+## hazard its own pair is exempt from, and in Assault both drones inside the corridor's `inner_rect()`.
+func test_twin_laser_drones_form_and_telegraph_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	var p := Vector2(640.0, 360.0)
+	harness.player.global_position = p
+	var spawn := TWIN_PAIR_SPAWN_SCENE.instantiate() as TwinLaserPairSpawn
+	spawn.rng_seed = 3
+	spawn.position = p + Vector2(-80.0, -300.0)  # off its slots: FORM has to fly
+	harness.root.add_child(spawn)
+	var rig := spawn.spawn_pair()
+	var drones: Array[TwinLaserDrone] = [rig.drone_a as TwinLaserDrone, rig.drone_b as TwinLaserDrone]
+	for d in drones:
+		(d.get_node("Brain") as TwinLaserDroneBrain).start_engaged = true  # pre-t14: predates the hub idle
+		d.set_physics_process(false)  # hand-ticked
+		d.collision_mask = 0  # no physics step between hand ticks: the broadphase would keep each body at its spawn point
+	var ticks := 0
+	while rig.phase != TwinLaserPair.Phase.TELEGRAPH and ticks < 240:
+		for d in drones:
+			_tick(d, DT)
+		ticks += 1
+	assert_eq(rig.phase, TwinLaserPair.Phase.TELEGRAPH, "%s: the pair formed and telegraphs (%d ticks)" % [mode, ticks])
+	for d in drones:
+		assert_eq((d.get_node("Brain") as TwinLaserDroneBrain).phase, TwinLaserDroneBrain.Phase.TELEGRAPH, "%s: each brain mirrors it" % mode)
+		assert_eq(d.state_light().get_state(), StateLight.State.CHARGING, "%s: the lens is CHARGING" % mode)
+		assert_false(d.accept_tow(Vector2(50.0, 0.0)), "%s: a telegraphing drone refuses a tow" % mode)
+	var info := rig.beam.hazard_info()
+	assert_not_null(info, "%s: the beam is registered while it warns" % mode)
+	if info != null:
+		assert_eq(info.kind, &"laser_wall", "%s: as a laser wall" % mode)
+		assert_eq(info.exempt_group, rig.owner_group, "%s: exempting its own pair" % mode)
+		# A ticks the beam before B moves, so B's end lags by at most one tick of B's motion.
+		assert_almost_eq(info.segment_half.length(), drones[0].global_position.distance_to(drones[1].global_position) * 0.5,
+				drones[1].config.max_speed * DT, "%s: spanning A..B" % mode)
+		assert_true(Hazards.around(info.position, 1.0).has(info), "%s: in the registry" % mode)
+	if harness.is_assault:
+		var rect := (drones[0].get_node("EnemyMover") as EnemyMover).constraint.inner_rect()
+		for d in drones:
+			assert_true(rect.has_point(d.global_position), "%s: inside inner_rect()" % mode)
+	else:
+		assert_null((drones[0].get_node("EnemyMover") as EnemyMover).constraint, "%s: no corridor in Open Space" % mode)
+
+# ── Laser Tender (Phase 8, t13; plan §2.13) ─────────────────────────────────────────────────────────────────────────────────
+
+const LASER_TENDER_SCENE: PackedScene = preload("res://assault/scenes/enemies/laser_tender/laser_tender.tscn")
+
+
+## The same tender, spawned where it holds (Open Space: `preferred_range` above the player; Assault: its band's hold point), starts LAUNCH on its
+## first tick with the cradle light CHARGING, then launches two drones in LAUNCHED, bound with the tender in their owner group, its cradles empty.
+func test_laser_tender_launches_a_pair_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	var p := Vector2(640.0, 360.0) if mode == "open_space" else Vector2(640.0, 600.0)
+	harness.player.global_position = p
+	var tender := LASER_TENDER_SCENE.instantiate() as LaserTender
+	tender.position = p + Vector2(0.0, -tender.config.preferred_range) if mode == "open_space" else Vector2(640.0, 140.0)
+	harness.root.add_child(tender)
+	tender.set_physics_process(false)  # hand-ticked
+	tender.collision_mask = 0
+	var brain := tender.brain()
+	brain.start_engaged = true  # pre-t14: predates the hub idle
+	_tick(tender, DT)
+	assert_eq(brain.phase, LaserTenderBrain.Phase.LAUNCH, "%s: LAUNCH on the first tick" % mode)
+	assert_eq(tender.state_light().get_state(), StateLight.State.CHARGING, "%s: the cradle light is CHARGING" % mode)
+	var ticks := 1
+	while tender.launches() == 0 and ticks < 120:
+		_tick(tender, DT)
+		ticks += 1
+	assert_eq(tender.launches(), 1, "%s: launched after %d ticks" % [mode, ticks])
+	var rig := tender.pair()
+	assert_not_null(rig, "%s: a rig" % mode)
+	if rig == null:
+		return
+	for d: Node2D in [rig.drone_a, rig.drone_b]:
+		d.set_physics_process(false)
+		(d as CharacterBody2D).collision_mask = 0
+		_tick(d as BaseEnemy, DT)
+		assert_eq((d.get_node("Brain") as TwinLaserDroneBrain).phase, TwinLaserDroneBrain.Phase.LAUNCHED, "%s: the drone is LAUNCHED" % mode)
+		assert_true(d.is_in_group(rig.owner_group), "%s: in the owner group" % mode)
+	assert_true(tender.is_in_group(rig.owner_group), "%s: with the tender" % mode)
+	assert_eq(tender.docked_count(), 0, "%s: cradles empty" % mode)
+	assert_eq(brain.phase, LaserTenderBrain.Phase.WAIT if mode == "open_space" else LaserTenderBrain.Phase.DISENGAGE,
+			"%s: WAIT (Open Space) or DISENGAGE after its one Assault launch" % mode)

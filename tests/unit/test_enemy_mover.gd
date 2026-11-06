@@ -797,6 +797,80 @@ func test_a_los_blocker_claimed_by_the_actor_is_dropped_and_nothing_else_is() ->
 	assert_ne(holder.actor.velocity, request, "a well is never dropped, claimed or not")
 
 
+## A registered laser wall (Phase 8 §2.6), duck-typed: an `EnemyBeam`'s own registration is the endpoint-beam task's.
+class FixtureWall extends Node2D:
+	var info := HazardInfo.new()
+
+	func hazard_info() -> HazardInfo:
+		info.position = global_position
+		return info
+
+	func _enter_tree() -> void:
+		Hazards.register(self)
+
+	func _exit_tree() -> void:
+		Hazards.unregister(self)
+
+
+## A 1000 px twin-beam footprint (radius 38, weight 0.5) across the path 150 px ahead, from (150, -880) to (150, 120):
+## its midpoint is 409 px off the origin, beyond a circle's reach, so only its closest point puts it in `around()`.
+func _laser_wall(exempt: StringName) -> FixtureWall:
+	var wall := FixtureWall.new()
+	wall.info.kind = &"laser_wall"
+	wall.info.radius = 38.0
+	wall.info.avoid_weight = 0.5
+	wall.info.segment_half = Vector2(0.0, 500.0)
+	wall.info.exempt_group = exempt
+	add_child_autofree(wall)
+	wall.global_position = Vector2(150.0, -380.0)
+	return wall
+
+
+## Phase 8 §2.6: a wall's own pair never avoids it. An actor in its `exempt_group` gets the request back bit for bit; an
+## actor in another group, or in none, is steered round it (found through the closest point).
+func test_an_actor_in_the_exempt_group_ignores_the_wall_and_every_other_actor_avoids_it() -> void:
+	var wall := _laser_wall(&"pair_a")
+	var request := Vector2(300.0, 0.0)
+	assert_gt(wall.global_position.length(), wall.info.radius + 60.0 + request.length() * Steering.CONTEXT_LOOKAHEAD,
+			"sanity: the midpoint is beyond the avoidance stage's reach")
+
+	var own := _rig(_avoider)
+	own.actor.add_to_group(&"pair_a")
+	_advance(own, request)
+	assert_eq(var_to_bytes(own.actor.velocity), var_to_bytes(request), "its own pair's wall: not avoided, bit for bit")
+
+	var other := _rig(_avoider)
+	other.actor.add_to_group(&"pair_b")
+	_advance(other, request)
+	assert_ne(other.actor.velocity, request, "another pair's wall: avoided")
+
+	var loner := _rig(_avoider)
+	_advance(loner, request)
+	assert_ne(loner.actor.velocity, request, "in no group: avoided")
+
+
+## The exempt drop takes that wall and nothing else (the own-claim row's "and nothing else is"): with its pair's wall and
+## a circle obstacle both in the way, the exempt actor is steered exactly as by the circle alone, while an actor outside
+## the pair is steered by both (the control that makes the bit-identity able to fail).
+func test_the_exempt_drop_drops_only_the_exempt_wall() -> void:
+	var request := Vector2(300.0, 0.0)
+	var wall := _laser_wall(&"pair_a")
+	_obstacle(Vector2(120.0, 40.0), 50.0)
+	var own := _rig(_avoider)
+	own.actor.add_to_group(&"pair_a")
+	_advance(own, request)
+	var outsider := _rig(_avoider)
+	_advance(outsider, request)
+	wall.free()
+	var circle_only := _rig(_avoider)
+	circle_only.actor.add_to_group(&"pair_a")
+	_advance(circle_only, request)
+	assert_ne(circle_only.actor.velocity, request, "sanity: the circle alone steers")
+	assert_eq(var_to_bytes(own.actor.velocity), var_to_bytes(circle_only.actor.velocity),
+			"its pair's wall dropped, the circle kept: exactly as by the circle alone")
+	assert_ne(outsider.actor.velocity, circle_only.actor.velocity, "control: outside the pair the wall still counts")
+
+
 ## The corridor runs after the stage: one step of a constrained mover equals a fresh (entered) corridor's
 ## `filter()` of the same mover's unconstrained velocity.
 func test_the_corridor_filters_after_the_stage() -> void:

@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="DefenseTurretConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/defense_turret_config.gd" id="1_dtc"]
+
+[resource]
+script = ExtResource("1_dtc")
+max_health = 90
+collision_damage = 0
+score_value = 60
+counts_toward_wave_clear = true
+counts_as_escape = false
+hazard_avoidance = 0.0
+hazard_margin = 0.0
+hazard_resistance = 0.0
+wreck_chance = 0.0
+perceive_radius = 900.0
+lose_radius = 1100.0
+notice_time = 0.3
+assault_drift_speed = 60.0

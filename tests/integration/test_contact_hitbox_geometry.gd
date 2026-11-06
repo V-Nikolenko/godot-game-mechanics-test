@@ -57,6 +57,43 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/support_ship/support_ship.tscn",
 	},
 	{
+		"name": "mine_layer",
+		"scene": "res://assault/scenes/enemies/mine_layer/mine_layer.tscn",
+	},
+	{
+		"name": "defense_turret",
+		"scene": "res://assault/scenes/enemies/defense_turret/defense_turret.tscn",
+		"no_hitbox": true,
+	},
+	{
+		"name": "power_source",
+		"scene": "res://assault/scenes/enemies/power_source/power_source.tscn",
+		"no_hitbox": true,
+	},
+	{
+		"name": "shield_generator",
+		"scene": "res://assault/scenes/enemies/shield_generator/shield_generator.tscn",
+		"no_hitbox": true,
+	},
+	{
+		"name": "laser_emitter",
+		"scene": "res://assault/scenes/enemies/laser_emitter/laser_emitter.tscn",
+		"no_hitbox": true,
+	},
+	{
+		"name": "heavy_emplacement",
+		"scene": "res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn",
+		"no_hitbox": true,
+	},
+	{
+		"name": "twin_laser_drone",
+		"scene": "res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone.tscn",
+	},
+	{
+		"name": "laser_tender",
+		"scene": "res://assault/scenes/enemies/laser_tender/laser_tender.tscn",
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"no_hitbox": true,

@@ -126,7 +126,7 @@ is a solo fighter (every rule below is gated on two or more members). Gated by `
 - **Separation (≥ 2 × hull radius, 57.2 px).** `flank_stagger` (0.4 s) delays a run that would reach the crossing with
   a mate's run within that time, and a parallel same-way run trails by `flank_stagger × max_speed`. A holding member
   slides off a moving mate's planned track (`predicted_position(t)`); a member on a lead-in slows along its own track,
-  and slides aside when no speed keeps clear of a mate on a pass. RUN_IN, EXTEND, TURN and DISENGAGE never give way.
+  and slides aside when no speed keeps clear of a mate on a pass. RUN_IN, EXTEND, TURN and DISENGAGE never give way. `FighterBrain.predicted_track(times, scale)` is the batch form of `predicted_position` the give-way samples with (value for value the same).
   Measured 0 overlaps over a full cycle on 168 V3/W5 layouts; **after a member dies** the recomputed roles can still
   bring two fighters together (not asserted; see the task plan's §Risks).
 - **Assault budget.** Holds are bounded by the `EngagementBudget`: a member never starts a run that would not reach its

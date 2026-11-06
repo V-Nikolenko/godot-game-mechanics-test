@@ -55,7 +55,7 @@ const GRAVITY_FIELD_SCENE: PackedScene = preload("res://assault/scenes/hazards/g
 @export_group("Mine")
 ## Seconds the launch velocity decays to zero over; the mine is stationary afterwards.
 @export var eject_time: float = 0.3
-## Seconds after launch before the mine fizzles (no blast).
+## Seconds after launch before the mine fizzles (no blast). 0 = never (the `ProjectileLifetime` backstop still applies).
 @export var mine_life: float = 8.0
 ## Seconds the fizzle fade takes before `expired`.
 @export var fizzle_time: float = 0.3
@@ -101,10 +101,16 @@ var _done: bool = false
 @onready var _proximity_shape: CollisionShape2D = $ProximityArea/CollisionShape2D as CollisionShape2D
 @onready var _lifetime: ProjectileLifetime = get_node_or_null("ProjectileLifetime") as ProjectileLifetime
 @onready var _pop: ExplosionEffect = get_node_or_null("Pop") as ExplosionEffect
+@onready var _sprite: Sprite2D = get_node_or_null("Sprite") as Sprite2D
+
+
+## The properties `reset()` restores. A subclass appends its own exports.
+func _reset_props() -> Array:
+	return _RESET_PROPS
 
 
 func _ready() -> void:
-	for prop in _RESET_PROPS:
+	for prop in _reset_props():
 		_authored[prop] = get(prop)
 	# Scene instances share sub-resources; the trigger radius is set per instance.
 	_proximity_shape.shape = _proximity_shape.shape.duplicate()
@@ -116,7 +122,7 @@ func _ready() -> void:
 
 ## Restores the authored exports and a fresh, unlaunched state. Called by `BulletPool.acquire()`.
 func reset() -> void:
-	for prop in _RESET_PROPS:
+	for prop in _reset_props():
 		set(prop, _authored[prop])
 	_heading = Vector2.DOWN
 	_launch_speed = 0.0
@@ -181,9 +187,7 @@ func _move(delta: float) -> void:
 			global_position += step
 			_travelled += step.length()
 		Kind.MINE:
-			if _clock < eject_time:
-				var decay := 1.0 - _clock / eject_time
-				global_position += _heading * _launch_speed * decay * delta
+			_move_mine(delta)
 		Kind.PURSUIT_BOMB:
 			if _clock < steer_window:
 				_heading = Steering.turn_toward(_heading, _aim_point() - global_position, turn_rate, delta)
@@ -192,6 +196,14 @@ func _move(delta: float) -> void:
 				_speed = move_toward(_speed, final_speed, accel * delta)
 			_bend(delta)
 			global_position += _heading * _speed * delta
+
+
+## A mine's motion (a mine hook; `EnemyMine` adds the moving variants): the launch velocity decays to zero over
+## `eject_time`, then it stays put.
+func _move_mine(delta: float) -> void:
+	if _clock < eject_time:
+		var decay := 1.0 - _clock / eject_time
+		global_position += _heading * _launch_speed * decay * delta
 
 
 ## Gravity and pursuit bombs bend in gravity wells and anomalies (`Hazards.bend_heading()`, speed unchanged, so
@@ -226,12 +238,12 @@ func _update_trigger(delta: float) -> void:
 	if kind == Kind.GRAVITY_BOMB and _travelled >= _max_travel:
 		_detonate()
 		return
-	if kind == Kind.MINE and _clock >= mine_life:
+	if kind == Kind.MINE and mine_life > 0.0 and _clock >= mine_life:
 		_fizzling = true
 		return
 	if _clock < arm_delay:
 		return
-	if _player_in_range():
+	if _trigger_seen():
 		if warning_time <= 0.0:
 			_detonate()
 		else:
@@ -239,7 +251,8 @@ func _update_trigger(delta: float) -> void:
 			_warning_clock = 0.0
 
 
-func _player_in_range() -> bool:
+## The trigger poll (a mine hook; `EnemyMine` widens it for hostility ALL): any player hurtbox in the radius.
+func _trigger_seen() -> bool:
 	for area in _proximity.get_overlapping_areas():
 		if area.collision_layer & CollisionLayers.PLAYER_HURTBOX:
 			return true
@@ -251,10 +264,16 @@ func _detonate() -> void:
 	if _done:
 		return
 	_mark_done()
+	_on_detonated()
+	expired.emit()
+
+
+## What a detonation leaves (a mine hook; `EnemyMine` blasts by hostility): a `ContactBlast` into the parent, and a
+## gravity bomb's slow field.
+func _on_detonated() -> void:
 	ContactBlast.spawn(get_parent(), global_position, blast_radius, blast_damage, blast_frames)
 	if kind == Kind.GRAVITY_BOMB:
 		_leave_gravity_field()
-	expired.emit()
 
 
 ## A short-lived slow field at the blast point, in the hazard container (deferred: this can run inside a
@@ -277,7 +296,7 @@ func _defuse() -> void:
 	expired.emit()
 
 
-## A mine that outlived `mine_life`: faded out, no blast.
+## A mine that outlived `mine_life` (0 = never) or was retired: faded out, no blast.
 func _finish() -> void:
 	if _done:
 		return
@@ -314,7 +333,9 @@ func _mark_done() -> void:
 
 
 func _draw() -> void:
-	draw_circle(Vector2.ZERO, body_radius, body_color)
+	# The body circle stands in for art: a `Sprite` child with a texture draws the body instead.
+	if _sprite == null or _sprite.texture == null:
+		draw_circle(Vector2.ZERO, body_radius, body_color)
 	if kind == Kind.PURSUIT_BOMB:
 		draw_line(Vector2.ZERO, _heading * body_radius * 1.7, Color(1.0, 0.55, 0.2), 3.0)
 	var lit := _clock >= arm_delay and not _done

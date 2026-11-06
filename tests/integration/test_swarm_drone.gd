@@ -357,10 +357,47 @@ func test_a_miss_gets_exactly_one_more_pass(mode: String = use_parameters(["open
 
 # ── Real physics: contact, CLOSE_IN, blast ───────────────────────────────────────────────────────
 
+
+# ── Gate time: scaled clock (tests/README.md -> "Gate time", rule 1) ───────────────────────────
+# `Engine.time_scale`, `physics_ticks_per_second` and `max_physics_steps_per_frame` scale together,
+# so a physics tick stays 1/60 game-second. A row opts in with `_scale_clock(n)`; one that compares
+# against a rate computed from `Engine.physics_ticks_per_second`, or that waits a sub-idle-frame
+# `wait_seconds()`, runs at a lower multiplier (or none) instead of loosening its tolerance.
+var _saved_time_scale: float = 1.0
+var _saved_ticks: int = 60
+var _saved_max_steps: int = 8
+var _clock_scaled: bool = false
+
+
+func after_each() -> void:
+	_restore_clock()
+
+
+func _scale_clock(speedup: int = 8) -> void:
+	if _clock_scaled:
+		return
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	_clock_scaled = true
+	Engine.physics_ticks_per_second = _saved_ticks * speedup
+	Engine.max_physics_steps_per_frame = _saved_max_steps * speedup
+	Engine.time_scale = _saved_time_scale * speedup
+
+
+func _restore_clock() -> void:
+	if not _clock_scaled:
+		return
+	_clock_scaled = false
+	Engine.time_scale = _saved_time_scale
+	Engine.physics_ticks_per_second = _saved_ticks
+	Engine.max_physics_steps_per_frame = _saved_max_steps
+
 func _physics_world() -> Node2D:
 	var c := Node2D.new()
 	c.position = Vector2(120, 80)
 	add_child_autofree(c)
+	_scale_clock()
 	return c
 
 
@@ -903,6 +940,7 @@ func test_a_lead_demoted_during_windup_opens_no_window() -> void:
 # ── Real physics: no contact damage in FORM ──────────────────────────────────────────────────────
 
 func test_no_contact_damage_while_in_form(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	_scale_clock()
 	var world := Node2D.new()
 	add_child_autofree(world)
 	if mode == "assault":

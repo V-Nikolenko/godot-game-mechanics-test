@@ -53,7 +53,43 @@ func before_each() -> void:
 	add_child_autofree(_container)
 	_station = STATION_SCENE.instantiate() as SpaceStation
 	_container.add_child(_station)
+	_scale_clock()
 
+
+# ── Gate time: scaled clock (tests/README.md -> "Gate time", rule 1) ───────────────────────────
+# `Engine.time_scale`, `physics_ticks_per_second` and `max_physics_steps_per_frame` scale together,
+# so a physics tick stays 1/60 game-second. A row opts in with `_scale_clock(n)`; one that compares
+# against a rate computed from `Engine.physics_ticks_per_second`, or that waits a sub-idle-frame
+# `wait_seconds()`, runs at a lower multiplier (or none) instead of loosening its tolerance.
+var _saved_time_scale: float = 1.0
+var _saved_ticks: int = 60
+var _saved_max_steps: int = 8
+var _clock_scaled: bool = false
+
+
+func after_each() -> void:
+	_restore_clock()
+
+
+func _scale_clock(speedup: int = 8) -> void:
+	if _clock_scaled:
+		return
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	_clock_scaled = true
+	Engine.physics_ticks_per_second = _saved_ticks * speedup
+	Engine.max_physics_steps_per_frame = _saved_max_steps * speedup
+	Engine.time_scale = _saved_time_scale * speedup
+
+
+func _restore_clock() -> void:
+	if not _clock_scaled:
+		return
+	_clock_scaled = false
+	Engine.time_scale = _saved_time_scale
+	Engine.physics_ticks_per_second = _saved_ticks
+	Engine.max_physics_steps_per_frame = _saved_max_steps
 
 func _turrets() -> Array:
 	return _station.get_node("Turrets").get_children()

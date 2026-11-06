@@ -16,7 +16,8 @@
 ## 2. slow: `desired *= 1 - Hazards.penalty_at(pos) * (1 - hazard_resistance)` (boost too; `max_speed`
 ##    itself is never written);
 ## 3. avoidance stage (`_avoid()`, plan §2.4): `Steering.context_avoid()` over `Hazards.around()`, minus
-##    any line-of-sight blocker the actor has claimed (its own cover); skipped while boosting, so every
+##    any line-of-sight blocker the actor has claimed (its own cover) and any hazard whose `exempt_group` the
+##    actor is in (its own pair's beam, Phase 8 §2.6); skipped while boosting, so every
 ##    committed run (`boost()`) flies straight through and can be baited;
 ## 4. accel/braking limits against `own_velocity()` (skipped while boosting);
 ## 5. drift: `HazardDrift` fed `Hazards.accel_at(pos)`, added to `v` **only when non-zero** (adding a
@@ -275,7 +276,8 @@ func step(delta: float) -> void:
 
 ## The avoidance stage (plan §2.4): `Steering.context_avoid()` over every hazard in reach. A line-of-sight
 ## blocker the actor itself has claimed is dropped — the ship's own cover is its destination, not a danger
-## (the body still collides with it); a well is never dropped, claimed or not. Nothing in reach returns
+## (the body still collides with it); a well is never dropped, claimed or not. A hazard whose `exempt_group` the actor
+## is in is dropped too (Phase 8 §2.6: a twin pair never avoids its own beam). Nothing in reach returns
 ## `desired` itself, so a ship with no hazard near flies exactly as before.
 func _avoid(desired: Vector2) -> Vector2:
 	if hazard_avoidance <= 0.0 or desired == Vector2.ZERO:
@@ -287,6 +289,8 @@ func _avoid(desired: Vector2) -> Vector2:
 		var info: HazardInfo = infos[i]
 		if info.line_of_sight_blocker and info.is_claimed_by(actor):
 			infos.remove_at(i)
+		elif info.exempt_group != &"" and actor.is_in_group(info.exempt_group):
+			infos.remove_at(i)  # e.g. its own pair's beam (Phase 8 §2.6)
 	if infos.is_empty():
 		_avoid_prev = Vector2.ZERO
 		return desired

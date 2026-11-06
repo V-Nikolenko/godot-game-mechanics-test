@@ -37,8 +37,9 @@ assault/scenes/
 │   ├── bullets/bullet.gd        Player bullet — UNPOOLED, frees itself off-screen (pierce, sniper)
 │   ├── enemy_bullet/            EnemyBullet (become_friendly() flips it to a player projectile)
 │   │   └── rounds/              The pooled enemy round family: pulse_round / scatter_round / gatling_stream_round / heavy_shell / rail_round .tscn + EnemyRounds + RailTrail (the sniper shot's fading trail)
-│   ├── enemy_ordnance/         EnemyOrdnance: gravity_bomb / mine / pursuit_bomb .tscn + EnemyOrdnanceScenes (persistent, shoot-down-able, not in `enemies`)
+│   ├── enemy_ordnance/         EnemyOrdnance: gravity_bomb / mine / pursuit_bomb .tscn + EnemyOrdnanceScenes (persistent, shoot-down-able, not in `enemies`); mines/ = the Ph7 EnemyMine family (6 variant scenes, EnemyMineScenes, PulseRing, EmpRing)
 │   ├── enemy_rockets/           EnemyRocket: dumb / pursuit / cluster / submunition / delayed_warhead .tscn + EnemyRocketScenes (Ph5; impact hurts enemies, blast hurts the player)
+│   ├── enemy_beams/             EnemyBeam: beam / sweep_beam / lance / twin_beam .tscn + EnergyRing (energy_ring.tscn, the Pulse Ring) + EnergyHitScan + EnemyBeamScenes (Ph8; owner-ticked lasers that hurt everything on the line but their owner set)
 │   ├── missiles/                homing/ + warhead/ missiles
 │   └── piercing_beam/           Sustained BEAM weapon projectile
 ├── systems/                     Mission orchestration (non-visual)
@@ -54,7 +55,8 @@ assault/scenes/
 │   ├── level_2_waves.gd         Level 2 wave list
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
-├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck (wrecks, structures, debris)
+├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck (wrecks, structures, debris), minefield (Ph7 placed mines + beacon)
+├── structures/                  Ph8 coordinators that are not enemies: turret_group/ (TurretGroup, TurretGroupSlot, presets/assault_pair.tscn, presets/hub_defense_site.tscn)
 ├── allies/ally_fighter/         AI escort fighters (group "allies")
 ├── gui/                         HUD, score widgets/popups, weapon selector, game-over, debrief
 └── race/                        Race sub-mode (core/, racers/, track/, ui/)
@@ -87,7 +89,10 @@ overheat, the score-multiplier fields, and `EventBus` emission. It adds:
 to the player via exported `actor` / `movement_controller` references.
 - `idle_state.gd`, `move_state.gd` — resting / steered flight.
 - `dash_state.gd` — double-tap barrel-roll (i-frames on side rolls); when the Warp module
-  is active it teleports + deals contact damage instead.
+  is active it teleports + deals contact damage instead. A boost disruption
+  (`PlayerBase.apply_boost_disruption()`, see [global.md](./global.md)) slows the roll to
+  `move_speed + (dash_speed − move_speed) × efficiency` and shortens the blink to
+  `120 px × efficiency`; below `MIN_BOOST_EFFICIENCY` both are refused like the cooldown.
 - `weapon_state.gd` — primary weapon. Loads `WeaponModeResource`s from `weapons/modes/`,
   gates on `UpgradeState` unlocks, dispatches to a `WeaponBehavior`
   (STRAIGHT/LONG/SPREAD/BEAM/SNIPER), accrues heat per shot, and emits
@@ -395,6 +400,121 @@ player, whose bullets are unpooled) to
 recycle bullet instances rather than allocate per shot — see the linked doc for the
 pool/`AttackController`/`AttackPattern` flow.
 
+#### Mines and the Mine Layer (Phase 7)
+
+Source: `assault/scenes/projectiles/enemy_ordnance/mines/`, `assault/scenes/enemies/mine_layer/`, `assault/scenes/hazards/minefield/`.
+Conventions: [PROJECT.md](../PROJECT.md) → *Mines, minefields and the Mine Layer*.
+
+- **The family.** `EnemyMine extends EnemyOrdnance` (`mines/enemy_mine.gd`), `enum Variant { PROXIMITY, DRIFTING, HOMING, CHAIN, PULSE, EMP }`
+  (append-only), `enum Hostility { PLAYER, ALL }`. Scenes `mines/<variant>_mine.tscn`; PROXIMITY is the Bomber's `enemy_ordnance/mine.tscn`
+  (its script is `EnemyMine`, `warning_time` 0.25). `EnemyMineScenes` (`mines/enemy_mine_scenes.gd`): `scene_for(variant)` (null for an unbuilt
+  variant), `pool_size_for(variant, cfg)` (reads `w_proximity` ... `w_emp` duck-typed) and `export_of(variant, property, fallback, node_path)` (scene
+  exports through `PackedScene.get_state()`, no instance). `EnemyOrdnance` keeps the bomb paths and exposes `_reset_props()`, `_move_mine()`,
+  `_trigger_seen()` and `_on_detonated()` for the subclass. Shared numbers: trigger 80, arm 0.5 s, warning 0.25 s, blast 48 / damage 30.
+- **Variants.**
+
+  | Variant | Scene | What it does | Own numbers |
+  |---|---|---|---|
+  | PROXIMITY | `enemy_ordnance/mine.tscn` | arms, warns, blasts | the shared ones |
+  | DRIFTING | `mines/drifting_mine.tscn` | creeps along a direction; a leash makes a placed one ping-pong | `drift_speed` 35, `drift_max_distance` 1400, `drift_leash` |
+  | HOMING | `mines/homing_mine.tscn` | notices the player within `notice_radius`, creeps toward them, lost beyond `home_lose_radius`; an `Eye` sprite shows while noticing | `home_speed` 60, 260 / 380, `home_max_distance` 900 |
+  | CHAIN | `mines/chain_mine.tscn` | sets off every live mine within `chain_radius` after `chain_delay`; a shot detonates it (`shot_detonates`); dashed fuse links to neighbours | 150 / 0.2 s |
+  | PULSE | `mines/pulse_mine.tscn` | small blast (8) + `apply_boost_disruption` on players within `pulse_radius`; violet `PulseRing` | 170, strength 0.6, 2.5 s |
+  | EMP | `mines/emp_mine.tscn` | no blast; `EmpPulse.emit` within `emp_radius`; blue-white `EmpRing` | 190, 2.0 s |
+
+  Warning rule for every scene (asserted from exports): `(trigger_radius + effect_radius) / warning_time >= 440 + own_speed`.
+- **Registration and footprint.** A mine is a `HazardInfo` (`kind = &"mine"`, `radius = trigger_radius + hazard_pad` 60, `avoid_weight` 1.0) that
+  registers on `launch()`, unregisters in `_mark_done()` / `_exit_tree()` / `retire()` / the tick a natural fizzle starts, and re-registers after a
+  `reparent()`. `carry_velocity` (set by a moving `Minefield`) is added to the reported velocity only. `is_live()`, `is_fizzling()`, `is_chained()`.
+- **Placed mines** (`placed = true`): self-owned, no backstop (`use_world_rect` off too, so a mine authored above the Assault corridor does not
+  expire on its first tick), `mine_life = placed_life` (0). A deferred `_start_if_placed()` runs it after the parent's `_ready()`.
+- **`Minefield`** (`hazards/minefield/`, [HAZARD.md](../../../assault/scenes/hazards/minefield/HAZARD.md)): AUTHORED / RING / GRID / SCATTER patterns, seeded
+  weights, `hostility` ALL, a beacon sprite, drifts down at 60 px/s in Assault. Placed in the hub (`sector_hub.tscn`), not in an Assault level (Ph15).
+- **Mine Layer** (`enemies/mine_layer/`, [ENEMY.md](../../../assault/scenes/enemies/mine_layer/ENEMY.md)): `MineLayer extends BaseEnemy` (r 40 body, 96 px hull,
+  contact COLLISION, HP 140), `MineLayerBrain` (`Phase { APPROACH, LAY, BREAK_OFF, REPOSITION, DISENGAGE, IDLE, NOTICING, RETURNING }`), flat
+  `MineLayerConfig`. `drop_mine(variant, rest_point)` is the only call that configures a mine (arm delay, eject time and life only); per-variant root pools
+  (`ProximityPool` 20 / `ChainPool` 6 / `PulsePool` 5 / `HomingPool` 5) use `persist_after_owner_death`. `WaveBuilder.MINE_LAYER` / `mine_layer()`.
+  - **A pass.** APPROACH flies to a run-in point 150 px before the line start, follows it at `lay_speed`, and LAY starts as it crosses the start;
+    6 mines on a ZIGZAG (vertices, +-35 px) or ARC (depth 110) line, 600 px long, laid across the player's path. Open Space plans the line as a *lead*
+    (a moving player the layer can get ahead of, by the Bomber's earliest-feasible scan) or a *fence* (a standing or fast player), freezes it within
+    `commit_distance` 200 of the run-in point, and spreads successive lines >= 380 px apart; passes are 5-7 s apart plus a 1.2 s break-off (one line
+    per ~10-14 s). Assault flies horizontally, clamps into `view_rect().grow(-174)`, lays one pass per life, defers its budget to the end of LAY and
+    leaves with `release_constraint()`. Live-mine cap 18 / 8 (the oldest is `retire()`d). A tail drop punishes a chaser in the rear 60° cone.
+  - **Hub idle.** In Open Space it idles on `AnchorIdle` at its patrol point, notices a player within 650 px, waits a fresh pass period, and goes home
+    beyond 1500 px. Laid mines never fizzle (240 s backstop) and survive the layer's return and death: the area stays dangerous.
+  - **Art.** `mine_layer.png` hull, a `Hatch` that opens during LAY (`set_hatch_open()`), a `MineWake` `Line2D` in the enemy container that follows the
+    dispenser and fades over 2.5 s. Rail fallback: a PROXIMITY mine every 1.6 s.
+  - **Level 1.** `b.mine_layer().at(-400, -160)` in deep_space's 16.0 s wave and `at(400, -160)` in planet_approach's 47.0 s wave. They count as
+    specialists in the frozen 2.5x gate (peaks 8 of 12.5 and 7 of 7.5), pinned in `EXPECTED_PH7`; the exit is measured at 7.53 s over 2166 starts;
+    mines add `assault_mine_life` 9 s to the spill-over row. Never in an `ENEMIES_CLEARED` section.
+- **Tests.** `test_enemy_mines.gd` (every variant: trigger, warning rule, art, chain ripple, pulse / EMP application, real-physics rows, both harnesses),
+  `test_minefield.gd`, `test_mine_layer.gd` (passes, trail placement, hub idle, persistence, art, level-1 slice replays), `test_emp_pulse.gd`,
+  `test_player_boost_disruption.gd`, `test_level1_specialist_spawns.gd` (`EXPECTED_PH7`), `test_engagement_deadline.gd`, `test_sector_hub_patrol.gd`.
+
+#### Enemy energy weapons (Phase 8)
+
+Source: `assault/scenes/projectiles/enemy_beams/` (notes: `BEAMS.md` there). Built in t2 (beams) and t3 (the Pulse Ring); later Phase 8 tasks add the
+endpoint beam (`twin_beam.tscn`, cover, strain, laser-wall registration) and the owners (turret mounts, fences, twin drones).
+
+- **`EnemyBeam`** (`enemy_beam.gd`, `extends Node2D`): `enum Kind { BEAM, SWEEP, LANCE, TWIN }`, `enum Phase { OFF, TELEGRAPH, ACTIVE, FADE }` (append-only);
+  signals `phase_changed(phase: int)`, `target_hit(target: Node2D, damage: int)`. The owner calls `setup(host, owner_group)`, `start(telegraph_override,
+  active_override)` (only from OFF / FADE; negative = the export, active 0 = held), `tick(delta)` on its physics tick (the beam's only clock) and
+  `cancel()` (TELEGRAPH → OFF, ACTIVE → FADE). Lethal only in ACTIVE after `ignite_grace` and while not strained. Emitter kinds run `length` px along
+  the node's local +X from its `global_position`; the hit segment stops `tip_grace_px` short of the free tip. Three code-built `top_level` `Line2D`
+  children: `Telegraph` (`telegraph_width` px, yellow, white while `is_committed()`), `Glow` (red, `2 * draw_half_width`), `Core` (`hit_half_width`).
+  **Endpoint beam (t5):** `twin_beam.tscn` (TWIN) takes `set_endpoints(a, b)` every tick, held ACTIVE (`active_seconds` 0). **Cover:** with `blocked_by_cover`, on the physics step only, a ray through `LineOfSight.first_blocker()` clips the beam at asteroids / wrecks (an endpoint beam leaves a safe shadow between its two lit parts; a second `Telegraph2`/`Glow2`/`Core2` set draws the far part). **Strain:** `set_strained(true)` = non-lethal 15 Hz flicker. **Laser wall:** a `registers_hazard` beam is a `&"laser_wall"` segment `HazardInfo` (`exempt_group` = its owner group, `velocity` = midpoint motion) from TELEGRAPH start to FADE start; `hazard_info()` answers null otherwise.
+- **`EnergyHitScan`** (static): victims = groups `player`, `allies`, `enemies`, `asteroids` minus the owner set (`is_exempt`); `hits_band()` is
+  `Shape2D.collide` against every enabled hurtbox `CollisionShape2D` at its global transform; `bounding_radius()` feeds the broad phase;
+  `deliver()` is a direct `received_damage.emit` through `Hazards.hurt_box_of`. Each lethal tick tests the band and the triangles swept since the
+  previous lethal tick; one hit per target per `rehit_interval` (instance id, cleared by `start()`).
+- **`EnemyBeamScenes`**: `scene_for(kind)` (null for a kind with no scene), `export_of(kind, property, fallback)`, `export_of_scene(scene, …)` (the
+  same read on any beam scene, used by the gates' synthetic boundary copies).
+- **`EnergyRing`** (`energy_ring.gd`, `extends Node2D`; not `PulseRing`, Ph7's visual ring): `enum Phase { OFF, TELEGRAPH, EXPANDING, FADE }`, same owner-ticked clock and
+  signals as a beam, `start(gap_start_deg)` (the owner draws it from its `rng`). A 24 px band grows at 360 px/s, its outer edge capped at `max_radius` 280, with 2 gaps of 45 degrees
+  turning at 30 degrees/s; a target is hit once per ring when its centre distance falls in the swept interval and its bearing is outside a gap (12 damage, `EnergyHitScan`'s owner set,
+  victims and direct emit). Centre fixed at `start()`. Scene via `EnemyBeamScenes.ring_scene()` / `ring_export()`. Gate: `tests/integration/test_energy_ring.gd`.
+- **Scenes** (every value authored): `beam.tscn` 0.9 s telegraph / 1.2 s active / 700 px / hit 12 / 10 dmg every 0.55 s; `sweep_beam.tscn` 0.9 / 2.0 / 400
+  px / hit 10, `sweep_arc_deg` 100 at `sweep_rate` 0.8727 rad/s (read by the mount); `lance.tscn` 1.0 s telegraph with a 0.5 s commit / 0.2 s active /
+  1100 px / hit 8 / 24 dmg once (`rehit_interval = inf`). All: `telegraph_width` 4, `tip_grace_px` 24.
+- **Tests.** `tests/integration/test_enemy_beams.gd` (hand-ticked in both harnesses: timeline, cancel, exact re-hit cadence, telegraph width, swept
+  hit, tips, ±1 px width, the Bomber-rectangle row, victims, owner set, plated Ram, shield bypass, ordnance, scoring; static `rehit_interval` and
+  fairness rows with synthetic boundaries; the real-player cadence rows on real physics at a 4× clock).
+
+#### Stationary Defense Turret and the turret mount (Phase 8)
+
+Source: `assault/scenes/enemies/defense_turret/` ([ENEMY.md](../../../assault/scenes/enemies/defense_turret/ENEMY.md)), `global/components/assault_drift.gd`.
+Built in t6 (shell, burst cannon), t7 / t8 (the other mounts) and t9 (`TurretGroup`, power source); later Phase 8 tasks add the shield generator and the heavy emplacement.
+
+- **`DefenseTurret extends BaseEnemy`**: no `EnemyMover` (never AI-driven, refuses tows), the root never rotates, `ContactProfile` NONE with no `ContactHitBox`,
+  `is_laser_blocking()` false, HP 90, `counts_as_escape` false. `MountSlots` holds `TurretMountSlot` markers (`variant`, `rest_bearing_deg`, `turn_rate_override`:
+  −1 keeps the mount's `turn_rate`); `_ready()` instantiates `TurretMountScenes.scene_for(variant)` under each slot, builds its `pool_specs()` as **root-child**
+  `BulletPool`s (`<name>_<slot index>`, so rounds land in the enemy container) and calls `mount.setup(self, pools, owner_group)`. `set_powered(false)` powers every
+  mount down for good; `set_turret_group(group)` (before `add_child`) joins the group's `owner_group`, else the turret's own `&"turret_<id>"`.
+- **`DefenseTurretBrain`** (`Phase { SCAN, NOTICING, ENGAGED, UNPOWERED }`): Open Space perceives within `perceive_radius` 900 (kept to `lose_radius` 1100),
+  Assault only while the turret's centre is inside `EnemyWorld.view_rect()`; ENGAGED gives each mount `can_fire = can_see_player() or fires_past_cover()`; owns the
+  `StateLight`.
+- **`TurretMount extends Node2D`** (`mounts/turret_mount.gd`; the Ph10 seam, never reads its host's type): `enum Variant { BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY,
+  PULSE_RING, LANCE, BEAM_CANNON }`, `enum Phase { SCAN, TRACK, TELEGRAPH, FIRE, COOLDOWN, UNPOWERED }` (both append-only), signals `phase_changed(phase: int)` and
+  `round_fired(projectile: Node2D)`. Writes only its own `rotation` (turn-rate limited, local to its parent). Partial lead `P.lerp(intercept, lead_blend)`, fires only
+  inside `fire_cone_deg / 2`, a cooldown clock that survives perception flicker, and an optional `telegraph_gate: Callable` (a group's stagger). A variant is a
+  subclass overriding hooks (`_aim_point_for`, `_shot_speed`, `_tracks`, `_wants_telegraph`, `_telegraph_seconds`, `_telegraph_done`, `_on_telegraph_start`,
+  `_fire_tick`, `_pre_tick`, `_weapon_tick`, `_stop_weapon`, `pool_specs`); tuning lives in its scene's exports, read by gates through `TurretMountScenes.export_of()`.
+- **Art (t15):** each mount scene carries a `Head` `Sprite2D` (`assault/assets/sprites/enemies/turret_head_<variant>.png`, rotated -90° so nose-down art points along the mount's +X, behind-parent); the host draws `Base` (`defense_turret_base.png` 64 px, `heavy_emplacement_base.png` 144 px). Unpowered = the mount's `modulate` darkens (head only) and it droops; no hull is ever tinted. The generator, power source (`Glow` child hidden when its group goes dark) and laser emitter wear `shield_generator.png` / `power_source.png` / `laser_emitter.png`. Gate: `tests/integration/test_ph8_sprites.gd`.
+- **`BurstCannonMount`** (`mounts/burst_cannon_mount.tscn`): 0.4 s charge, 4 Pulse rounds 0.12 s apart at 300 px/s, 2.2 s cooldown, `PulsePool` of 12.
+- **Beam mounts (t7)** (`BeamTurretMount` in `mounts/beam_turret_mount.gd`, scenes `lance_mount` / `beam_cannon_mount`; `SweepBeamMount` on `sweep_beam_mount`): each owns one `EnemyBeam` as a mount child at the muzzle (host = the turret, owner group = the turret's), ticked from `_pre_tick` before the phase step. The aim freezes when TELEGRAPH starts (the lance: at its last `commit_seconds`), so the shown line is the line that fires; the sweep aims at the start bearing `aim - s * 50` degrees and turns `s * sweep_rate` through ACTIVE with no turn-rate cap. Ranges 400 / 1100 / 700; `power_down()` cancels a telegraph or fades a lit beam.
+- **Rocket battery and pulse ring (t8)** (`RocketBatteryMount` / `PulseRingMount`, scenes `rocket_battery_mount` / `pulse_ring_mount`): the battery fires a salvo of 2 Phase 5 rockets (Pursuit with probability 1/3 from the brain's rng, else Dumb) from two root `BulletPool`s with `persist_after_owner_death`, **past cover** (`fires_past_cover()`); the turret answers `launch_velocity()` ZERO and `rocket_clear_radius()` body radius + 4. The ring mount owns one `EnergyRing` child (owner-ticked from `_pre_tick`) and starts it with the player within `trigger_range` 300; it does not aim. Both `power_down()` cleanly (no further rocket; ring cancelled / faded).
+- **Turret groups and the power source (t9)** (`assault/scenes/structures/turret_group/` [STRUCTURE.md](../../../assault/scenes/structures/turret_group/STRUCTURE.md), `assault/scenes/enemies/power_source/` [ENEMY.md](../../../assault/scenes/enemies/power_source/ENEMY.md)): `TurretGroup` is a **coordinator, not a parent** (never in `enemies`, never scored): a deferred `spawn_members()` instantiates each `TurretGroupSlot`'s member (`variant`, `rest_bearing_deg` -> the turret's `rest_bearing_override`, `set_turret_group()`, all before `add_child`) as a **sibling in the enemy container**, joins it to `owner_group` and announces it with `EventBus.enemy_spawned_orphan`; it frees itself after its last member. In Assault a wave-spawned group subtracts the camera's horizontal pan from x in `_ready()` (`world_anchored_x`, through `EnemyWorld` only), so `.at(x, y)` lands at world `640 + 2·x`. `PowerSource` (HP 150, r 34, no brain, `provides_power()`, amber `Line2D`s to its powered turrets) is a provider; on the last provider's `died` the group calls `set_powered(false)` on every member **in the same call** and emits `power_changed(false)`; never reversed (`add_power_provider()` is the Ph20 seam). `request_telegraph()` (each mount's `telegraph_gate`) staggers TELEGRAPH starts by 0.3 s; `coverage_holes()` checks the coverage rule (`TurretMountScenes.reach_of()`: `fire_range`, or a ring's `trigger_range`). Presets `assault_pair.tscn` (level 1) and `hub_defense_site.tscn` (t18: the Open Space hub's defended derelict site, with `laser_fence/hub_barrier.tscn`, an inherited CYCLE fence; [open_space.md](open_space.md) §3.3); `WaveBuilder.turret_group(TURRET_GROUP_ASSAULT_PAIR)`.
+- **Shield generator (t9s)** (`assault/scenes/enemies/shield_generator/` [ENEMY.md](../../../assault/scenes/enemies/shield_generator/ENEMY.md)): `ShieldGenerator` (no mover, `ShieldGeneratorBrain`, flat `ShieldGeneratorConfig`, `AssaultDrift`, `counts_as_escape` false) sustains a 360° `EnemyShield` (`GeneratorShield`, capacity 50, radius = body + 8) on every other live `BaseEnemy` member of its `TurretGroup`, skipping itself, a member answering `is_fence_post()`, and any hurtbox whose absorber slot is held (a Support Ship ward is never displaced). It stops `sustain()` when it dies or `set_powered(false)` reaches it, so every bubble lapses within heartbeat + fade (0.6 s). Beams bypass bubbles. Cyan tethers (`tethers()`). Test preset `tests/helpers/shielded_site.tscn`; gate `test_turret_group.gd` §13.
+- **Heavy emplacement (t11)** (`assault/scenes/enemies/heavy_emplacement/` [ENEMY.md](../../../assault/scenes/enemies/heavy_emplacement/ENEMY.md)): the `DefenseTurret` root and brain on a second scene with its own `DefenseTurretConfig` (HP 260, score 150, `counts_as_escape` false), body r 64 and two `TurretMountSlot`s - a `BEAM_CANNON` at (0, -30) and a `BURST_CANNON` at (0, 34), each with `turn_rate_override` 1.2 - so the two heads aim independently and share one owner group (the beam never burns its own hull). `WaveBuilder.HEAVY_EMPLACEMENT` / `heavy_emplacement()`
+- **Laser fence (t10)** (`assault/scenes/structures/laser_fence/` [STRUCTURE.md](../../../assault/scenes/structures/laser_fence/STRUCTURE.md), `assault/scenes/enemies/laser_emitter/` [ENEMY.md](../../../assault/scenes/enemies/laser_emitter/ENEMY.md)): `LaserFence` (a `Node2D`, not an enemy) holds `PostA` / `PostB` (`LaserEmitter`, HP 140, score 40, r 18, no mover, `counts_as_escape` false, `is_fence_post()`), a `twin_beam.tscn` beam with fence overrides (damage 12, `avoid_weight` 1.0, registers a `&"laser_wall"` hazard) it ticks from `step(delta)`, and an `AssaultDrift`. `STATIC` / `CYCLE` modes (`off_seconds` 2.5, `on_seconds` 3.0, `phase_offset`), `set_powered()`, `set_turret_group()`, a post's death collapses the beam for good and the fence frees itself `linger_seconds` 1.0 after the last post. Gate `tests/integration/test_laser_fence.gd`, the post's case in `test_enemy_dual_mode.gd`, and the fence slot of `tests/helpers/shielded_site.tscn`.
+- **Twin-Laser Drones (t12)** (`assault/scenes/enemies/twin_laser_drone/` [ENEMY.md](../../../assault/scenes/enemies/twin_laser_drone/ENEMY.md)): `TwinLaserDrone` (a small `BaseEnemy`, r 13 shared by body / hurtbox / contact box, `EnemyMover`, COLLISION contact, lens `StateLight`), `TwinLaserDroneBrain` (`Phase { FORM, TELEGRAPH, ADVANCE, BREAK, WAIT, SOLO, DISENGAGE, LAUNCHED, IDLE, NOTICING, RETURNING }`, append-only; LAUNCHED is t13's, IDLE / NOTICING / RETURNING t14's hub idle), flat `TwinLaserDroneConfig`. The rig `TwinLaserPair` (a `RefCounted` both brains hold) binds two drones (and a controller) into `owner_group` `&"twin_pair_<id>"`, owns one `twin_beam.tscn` as a child of drone A (`setup(A, owner_group)`), and runs the one phase clock in the leader's tick (`tick(delta, caller)`: A while it lives, else B); `tick_beam()` (A only) feeds the endpoints and strain. Attack A: FORM on slots `centre ∓ u·L/2` round the player, TELEGRAPH on a latched frame, ADVANCE as identical per-drone `mover.boost(−n, …)`, BREAK, WAIT (Open Space); a separation error past `length_tolerance` for `strain_seconds` collapses the beam, and a drone's death breaks the pair in the same call. Assault: `TwinLaserPair.assault_frame()` plans inside `inner_rect()` inset by `slot_tolerance`, one attack per life with the TELEGRAPH / ADVANCE deferral, then DISENGAGE. `TwinLaserPairSpawn` (deferred, idempotent `spawn_pair()`, `EventBus.enemy_spawned_orphan`) and `WaveBuilder.TWIN_LASER_PAIR` / `twin_laser_pair()`. **Hub idle (t14):** a standalone Open Space pair (not `start_engaged`) idles through an `AnchorIdle` updated only by its leader: rig `TwinLaserPair.Phase.IDLE` (appended; `stand_down(anchor)` / `engage()`, never in a busy phase, `idle_slot_angle()` puts the drones opposite on the `idle_radius` 140 ring), NOTICING (lens blink) -> FORM, RETURNING past `lose_radius` 1500; a launched pair reads its controller's duck-typed `recalls_drones()` and flies back to dock. Measured Assault exit 5.37 s + 0.463 s reversal (`tests/helpers/ph8_exit_keys.gd`). Gate `tests/integration/test_twin_laser_drones.gd`, the twin row of `test_enemy_beams.gd`, the dual-mode case.
+- **Laser Tender (t13)** (`assault/scenes/enemies/laser_tender/` [ENEMY.md](../../../assault/scenes/enemies/laser_tender/ENEMY.md)): `LaserTender` (a `BaseEnemy`, r 40 shared by body / hurtbox / contact box, `EnemyMover`, COLLISION contact, no gun, `CradleL` / `CradleR` `Marker2D`s with `DockedDrone` visuals, the cradle `StateLight`), `LaserTenderBrain` (`Phase { APPROACH, HOLD, LAUNCH, WAIT, REARM, DISENGAGE, IDLE, NOTICING, RETURNING }`, append-only; IDLE / NOTICING / RETURNING are t14's hub idle), flat `LaserTenderConfig`. `launch_pair(points) -> TwinLaserPair` (the Ph10 / Ph11 seam: two drones at the cradles, synchronous, mutual collision exceptions, `TwinLaserPair.bind(a, b, self)`, `rig.launch(...)`, `EventBus.enemy_spawned_orphan`), `dock(drone)`, `rearm_cradles()`. Attack B points: `LaserTenderBrain.open_space_points()` / `assault_points()` / `order_for_cradles()` (pure statics). The rig gained `TwinLaserPair.Phase.LAUNCHED` (appended), `launch()`, `frame_fixed` and `LAUNCH_SETTLE_TICKS`; the drone brain plays LAUNCHED. One live pair, 7 s rearm, docking of a lone SOLO drone (Open Space); Assault: the upper hold band, one launch per life with the cradle-telegraph deferral, then DISENGAGE. **Hub idle (t14):** an `AnchorIdle` round `patrol_anchor` (700 / 1600 / 0.35 s, `idle_radius` 160) with its pair docked; NOTICING -> APPROACH; RETURNING; `LaserTender.recalls_drones()` (true in the idle phases) recalls a launched pair to dock; one rearm clock across idle and REARM. Measured Assault exit 3.82 s (`tests/helpers/ph8_exit_keys.gd`). `WaveBuilder.LASER_TENDER` / `laser_tender()`. Gate `tests/integration/test_laser_tender.gd`, the dual-mode case.
+- **`AssaultDrift`** (global component): in Assault moves its parent down `speed` px/s and frees it below the projectile world rect; nothing in Open Space.
+- **Tests.** `tests/integration/test_defense_turret.gd` (both harnesses; the cover / mining-beam row on real physics at 8×), the turret case of
+  `test_enemy_dual_mode.gd`, `test_base_enemy.gd::test_a_mover_less_structure_brain_refuses_a_tow_in_every_phase`, the burst speed in
+  `test_enemy_bullet_lifetime.gd`, and the roster gates. Groups: `tests/integration/test_turret_group.gd` (both harnesses; R8.24 power-source shutdown) and the power
+  source's case in `test_enemy_dual_mode.gd`.
+
 ### Scoring
 
 Source: `assault/scenes/systems/score_tracker/score_tracker.gd`.
@@ -524,6 +644,11 @@ enter the enemy container, so `ENEMIES_CLEARED` is unaffected. Tests `tests/inte
 `test_level1_fighter_exit.gd::test_cloud_descent_clears_in_time_with_wrecks_left_behind`.
 **Explosive wrecks (Phase 6 t12).** `ShipConfig.explosive_wreck_chance` (Bomber, Missile Corvette 0.5; others 0) is a second draw from the same seeded rng, only after a successful wreck roll and only when above 0; `WreckScenes.scene_for(size, true)` then returns `wreck_explosive.tscn` (a `Wreck` with `explosive`, HP 20). It goes off at HP 0 or 1.0 s after a ship's hurtbox overlaps its armed contact box: `Hazards.pulse_damage(110, 25)` by centre distance (both sides; a plated Ram deflects it), then a `ReactorField` (`reactor_field/`, r 90, 4 per 0.5 s for 2.0 s, no pull) through the deferred `spawn_into`. See [`HAZARD.md`](../../../assault/scenes/hazards/wreck/HAZARD.md) and [`reactor_field/HAZARD.md`](../../../assault/scenes/hazards/reactor_field/HAZARD.md); tests `test_wreck.gd`, `test_wreck_spawning.gd`.
 
+
+**Minefields (Phase 7 t8).** `assault/scenes/hazards/minefield/` places `EnemyMine`s (hostility ALL, `placed`) as a visible structure with a warning
+beacon; unlike a wreck, mines do not come from a death roll and are placed in the scene, not in `HazardContainer`. Mines register as `&"mine"` hazards, so
+the Ph6 avoidance routes ships round them. See [`HAZARD.md`](../../../assault/scenes/hazards/minefield/HAZARD.md) and *Mines and the Mine Layer* above.
+
 ### Enemies
 
 Source: `assault/scenes/enemies/`.
@@ -531,7 +656,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `razor_drone/razor_drone_brain.gd`). Roster: bomber, bonus_drone, razor_drone,
-missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
+mine_layer (`MineLayerBrain`, six-mine lines across the player's path, Ph7), defense_turret (`DefenseTurretBrain`, no mover, a static gun whose runtime-built `TurretMount` aims and fires, Ph8), missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).

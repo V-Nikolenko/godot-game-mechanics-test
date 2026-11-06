@@ -1,0 +1,116 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/laser_tender/laser_tender.gd" id="1_lt"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_lt"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="3_lt"]
+[ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="4_lt"]
+[ext_resource type="Script" path="res://global/components/contact_profile.gd" id="5_lt"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="6_lt"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/laser_tender/laser_tender_brain.gd" id="7_lt"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="8_lt"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/laser_tender.png" id="9_lt"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/laser_tender_cradle_drone.png" id="10_lt"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_lt"]
+radius = 40.0
+
+[sub_resource type="Animation" id="Animation_reset_lt"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:self_modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="Animation" id="Animation_hit_lt"]
+resource_name = "hit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:self_modulate")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 0,
+"values": [Color(2.5, 2.5, 2.5, 1), Color(1, 1, 1, 1)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_lt"]
+_data = {
+&"RESET": SubResource("Animation_reset_lt"),
+&"hit": SubResource("Animation_hit_lt")
+}
+
+[node name="LaserTender" type="CharacterBody2D"]
+script = ExtResource("1_lt")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+texture = ExtResource("9_lt")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_lt")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 65
+script = ExtResource("2_lt")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_lt")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("3_lt")
+max_health = 160
+current_health = 160
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_lt")
+}
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 0
+script = ExtResource("4_lt")
+damage = 15
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+shape = SubResource("CircleShape2D_lt")
+
+[node name="ContactProfile" type="Node" parent="."]
+script = ExtResource("5_lt")
+mode = 1
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("6_lt")
+constraint_mode = 0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("7_lt")
+
+[node name="StateLight" type="Node2D" parent="."]
+position = Vector2(0, 10)
+script = ExtResource("8_lt")
+
+[node name="CradleL" type="Marker2D" parent="."]
+position = Vector2(-24, -15)
+
+[node name="DockedDrone" type="Sprite2D" parent="CradleL"]
+texture = ExtResource("10_lt")
+
+[node name="CradleR" type="Marker2D" parent="."]
+position = Vector2(24, -15)
+
+[node name="DockedDrone" type="Sprite2D" parent="CradleR"]
+texture = ExtResource("10_lt")

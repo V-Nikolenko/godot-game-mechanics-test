@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="MineLayerConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/mine_layer/mine_layer_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 140
+collision_damage = 25
+score_value = 60
+hazard_avoidance = 0.8
+hazard_margin = 24.0
+hazard_resistance = 0.2
+wreck_chance = 0.35
+wreck_size = 1
+explosive_wreck_chance = 0.0

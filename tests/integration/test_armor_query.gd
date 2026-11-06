@@ -20,12 +20,47 @@ const ArmoredHomingFixture := preload("res://tests/helpers/armored_homing_fixtur
 
 const ORIGIN := Vector2(400.0, 300.0)
 
+const _SPEEDUP := 8
+
 var _container: Node2D
+var _saved_time_scale: float = 1.0
+var _saved_ticks: int = 60
+var _saved_max_steps: int = 8
+var _clock_scaled: bool = false
 
 
 func before_each() -> void:
 	_container = Node2D.new()
 	add_child_autofree(_container)
+	_scale_clock()
+
+
+func after_each() -> void:
+	_restore_clock()
+
+
+## 8x clock (tests/README.md -> "Gate time"): `Engine.time_scale`, `physics_ticks_per_second` and
+## `max_physics_steps_per_frame` scale together, so a physics tick stays 1/60 game-second and every
+## `_frames(n)` below is still n ticks of game time.
+func _scale_clock() -> void:
+	if _clock_scaled:
+		return
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	_clock_scaled = true
+	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
+	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
+	Engine.time_scale = _saved_time_scale * _SPEEDUP
+
+
+func _restore_clock() -> void:
+	if not _clock_scaled:
+		return
+	_clock_scaled = false
+	Engine.time_scale = _saved_time_scale
+	Engine.physics_ticks_per_second = _saved_ticks
+	Engine.max_physics_steps_per_frame = _saved_max_steps
 
 
 func _fixture(script: GDScript = ArmoredFixture) -> Node2D:

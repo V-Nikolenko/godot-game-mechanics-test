@@ -422,13 +422,16 @@ func _ai_lives() -> Dictionary:
 			"note": "max(straight %.2f, measured curved %.2f)" % [ram_straight, ram_curved]},
 	}
 	out.merge(_ph5_lives())
+	out.merge(_ph7_lives())
 	for path: String in out:
 		var k: Dictionary = out[path]
 		k["life"] = float(k["engage"]) + float(k["deferral"]) + float(k["exit"])
 	return out
 
 
-## One `{ "start", "end", "kind" }` per specialist the section spawns, from its EFFECTIVE trigger (header).
+## One `{ "start", "end", "kind" }` per specialist the section spawns, from its EFFECTIVE trigger (header). The Phase 8
+## ships (turret-group members, twin drones, the tender and its drones) are appended by `_ph8_intervals()`, so every
+## peak, boundary and spill-over row below counts them.
 func _ai_intervals(section: LevelSection, lives: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
 	var effective := -INF
@@ -440,6 +443,7 @@ func _ai_intervals(section: LevelSection, lives: Dictionary) -> Array[Dictionary
 				continue
 			var t: float = effective + entry.spawn_delay
 			out.append({"start": t, "end": t + float(lives[path]["life"]), "kind": _name_of(path)})
+	out.append_array(_ph8_intervals(section))
 	return out
 
 
@@ -579,6 +583,9 @@ func before_all() -> void:
 		_SUPPORT_SHIP: SpecialistExitProbe.worst_disengage(self, load(_SUPPORT_SHIP), SupportShipBrain.Phase.DISENGAGE,
 			support_speeds, _PROBE_CAP, corridor),
 	}
+	var layer_speeds: Array[float] = [_LAYER_CONFIG.exit_speed, 10.0]
+	_ph7_exit = SpecialistExitProbe.worst_disengage(self, load(_MINE_LAYER), MineLayerBrain.Phase.DISENGAGE,
+		layer_speeds, _PROBE_CAP, corridor, _layer_probe_prepare)
 
 
 ## A corvette never fires in DISENGAGE, so its probe instances skip prewarming 16 rockets each (2166 runs).
@@ -588,8 +595,27 @@ func _empty_pools(ship: Node) -> void:
 			(child as BulletPool).pool_size = 0
 
 
+## The layer's probe instances skip prewarming every pool (as the corvette's do) and switch the tail drop off (`tail_range` 0
+## on the private config copy). The probe reuses one world for 2166 runs and a mine outlives its layer, so a tail mine left by
+## one run would sit in the way of every later one and the figure would measure that litter, not the exit; a mine dropped
+## behind an exiting layer is outside its avoidance cone and never changes its exit (checked by hand: 3 s with and without).
+##
+## The probe world's player stub also leaves group `player` (rule 3, tests/README.md -> Gate time): DISENGAGE reads the player
+## in exactly two places, the tail drop (off above) and the v-bar update (read only by the planner, which a layer in
+## DISENGAGE never runs again), so with no target the per-tick `TargetInfo.player()` finds nobody and the prediction and tail
+## checks return at their first line, and the exit is bit-identical (7.53 s over 2166 runs, 0 capped, before and after).
+## The stub belongs to the probe's own world, which `worst_disengage()` frees before it returns.
+func _layer_probe_prepare(ship: Node) -> void:
+	_empty_pools(ship)
+	(ship as MineLayer).config.tail_range = 0.0
+	for player in get_tree().get_nodes_in_group(&"player"):
+		player.remove_from_group(&"player")
+
+
 func _name_of(path: String) -> String:
-	return _KIND_NAMES[path] if _KIND_NAMES.has(path) else _PH5_KIND_NAMES[path]
+	if _KIND_NAMES.has(path):
+		return _KIND_NAMES[path]
+	return _PH5_KIND_NAMES[path] if _PH5_KIND_NAMES.has(path) else _PH7_KIND_NAMES[path]
 
 
 func _ph5_lives() -> Dictionary:
@@ -759,6 +785,621 @@ func test_an_extra_corvette_at_the_peak_fails_the_count_gate() -> void:
 	assert_gt(float(after["count"]), limit, "the count gate must reject this")
 
 
+# ── Phase 7 t15: the Mine Layer joins level 1 (epic plan docs/plans/cmug23omu000lm52wu7rak0q5/3-plan.md §2.16) ─────────
+#
+# Two lines, each inside an existing wave of a DURATION section, AI-driven with no rail: deep_space's 16.0 s wave
+# (entering from the left) and planet_approach's 47.0 s wave (from the right). They are pinned in `EXPECTED_PH7`,
+# separately from the frozen 50-row `EXPECTED` and from `EXPECTED_PH5`.
+#
+# The layer COUNTS AS A SPECIALIST in the 2.5x gate (`_ai_lives()` merges it in); the frozen `_LEGACY_PEAK_SPECIALISTS`
+# is unchanged. Its life, every term read from the shipped config or measured:
+#   engage_seconds + LAY's stall guard (the longest pass: ZIGZAG) + _TICK_SLACK + measured exit
+# The exit is `SpecialistExitProbe.worst_disengage()` over `corridor_starts()` at [exit_speed, 10], with no planned
+# pass: the layer leaves along its current heading, and entering DISENGAGE releases the corridor constraint (as the
+# Bomber's does), so the probe measures the real exit and not the `AssaultCorridorConstraint`'s hard band. The life
+# also covers the run-in, which sits inside the engagement budget (APPROACH). Its mines outlive it by
+# `assault_mine_life` (the spill-over rows below add that term, as a corvette's rocket life).
+
+const _MINE_LAYER := WaveBuilder.MINE_LAYER
+const _PH7_KIND_NAMES := {_MINE_LAYER: "MINE_LAYER"}
+const _LAYER_CONFIG: MineLayerConfig = preload("res://assault/scenes/enemies/mine_layer/mine_layer_config.tres")
+
+const EXPECTED_PH7: Array[Dictionary] = [
+	{"section": &"deep_space", "kind": "MINE_LAYER", "trigger": 16.00, "offset": Vector2(-400.0, -160.0), "delay": 0.00},
+	{"section": &"planet_approach", "kind": "MINE_LAYER", "trigger": 47.00, "offset": Vector2(400.0, -160.0), "delay": 0.00},
+]
+
+## The layer's corridor-start DISENGAGE probe, filled once in `before_all()`.
+var _ph7_exit: Dictionary = {}
+
+
+## The longest LAY can run: `MineLayerBrain`'s stall guard on the ZIGZAG path (S -> mine 0 -> ... -> mine 5 -> E), read
+## from the shipped config. The ARC path is shorter.
+func _lay_stall_guard() -> float:
+	var c := _LAYER_CONFIG
+	var lead := c.pass_length * 0.5 - float(c.mines_per_pass - 1) * 0.5 * c.mine_step
+	var chord := Vector2(c.mine_step, 2.0 * c.zigzag_amplitude).length()
+	var path := 2.0 * Vector2(lead, c.zigzag_amplitude).length() + float(c.mines_per_pass - 1) * chord
+	return path * MineLayerBrain.STALL_FACTOR / c.lay_speed + MineLayerBrain.STALL_SLACK
+
+
+func _ph7_lives() -> Dictionary:
+	return {
+		_MINE_LAYER: {"engage": _LAYER_CONFIG.engage_seconds, "deferral": _lay_stall_guard() + _TICK_SLACK,
+			"exit": float(_ph7_exit["seconds"]), "note": "measured corridor exit, no planned pass"},
+	}
+
+
+func _actual_ph7_spawns(sections: Array[LevelSection]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+				if not _PH7_KIND_NAMES.has(path):
+					continue
+				assert_null(entry.formation, "no Phase 7 line uses a formation; the pin has no formation column")
+				out.append({"section": section.section_name, "kind": _PH7_KIND_NAMES[path],
+					"trigger": wave.trigger_time, "offset": entry.base_offset, "delay": entry.spawn_delay})
+	return out
+
+
+func test_pinned_phase7_spawns_match_todays_data() -> void:
+	var actual := _actual_ph7_spawns(_build_sections())
+	assert_eq(actual.size(), EXPECTED_PH7.size(), "the number of Mine Layer entries changed")
+	assert_eq(actual, EXPECTED_PH7, "a Mine Layer spawn's section, trigger, offset or delay changed")
+
+
+## 2 rows, one in deep_space (from the left) and one in planet_approach (from the right), none in an ENEMIES_CLEARED
+## section (`test_engagement_deadline.gd` says why), and each shares its wave with other traffic (no new wave).
+func test_the_phase7_pin_itself_is_internally_consistent() -> void:
+	var by_section: Dictionary = {}
+	for row: Dictionary in EXPECTED_PH7:
+		by_section[row["section"]] = int(by_section.get(row["section"], 0)) + 1
+		assert_eq(row["kind"], "MINE_LAYER")
+	assert_eq(EXPECTED_PH7.size(), 2)
+	assert_eq(int(by_section.get(&"deep_space", 0)), 1, "deep_space Phase 7 row count changed")
+	assert_eq(int(by_section.get(&"planet_approach", 0)), 1, "planet_approach Phase 7 row count changed")
+	assert_eq(by_section.size(), 2, "Mine Layers spawn only in deep_space and planet_approach")
+	assert_lt((EXPECTED_PH7[0]["offset"] as Vector2).x, 0.0, "deep_space's layer enters from the left")
+	assert_gt((EXPECTED_PH7[1]["offset"] as Vector2).x, 0.0, "planet_approach's layer enters from the right")
+
+
+## Each layer rides inside an existing wave (another ship in the same wave), so no wave's effective trigger moved.
+func test_each_level1_mine_layer_shares_an_existing_wave() -> void:
+	var checked := 0
+	for section: LevelSection in _build_sections():
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if entry.ship_scene == null or entry.ship_scene.resource_path != _MINE_LAYER:
+					continue
+				checked += 1
+				assert_gt(wave.entries.size(), 1, "%s @ %.1f s: the layer joins a wave that already existed" % [
+					section.section_name, wave.trigger_time])
+	assert_eq(checked, 2, "sanity: both layers were checked")
+
+
+## Boundary: a Phase 7 line's delay changed in memory must not match the pin (fresh sections; nothing shared mutated).
+func test_a_phase7_lines_delay_changed_fails_the_pin() -> void:
+	var sections := _build_sections()
+	var mutated := false
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if not mutated and entry.ship_scene and entry.ship_scene.resource_path == _MINE_LAYER:
+					entry.spawn_delay += 1.0
+					mutated = true
+	assert_true(mutated, "sanity: level 1 has a Mine Layer line to mutate")
+	assert_ne(_actual_ph7_spawns(sections), EXPECTED_PH7, "a Mine Layer line with a changed delay must not match the pin")
+
+
+## The layer lines have no rail (`.move()`, `.free_after()` or `.shoot_*()`); 50 + 5 + 2 specialist lines in all.
+func test_phase7_lines_have_no_rail() -> void:
+	var sections := _build_sections()
+	var ph7 := 0
+	for row: Dictionary in _actual_ph7_spawns(sections):
+		if MIGRATED_SECTIONS.has(row["section"]):
+			ph7 += 1
+	assert_eq(ph7, 2, "both Mine Layer lines are in a migrated section")
+	assert_eq(_rail_rows(sections, MIGRATED_SECTIONS, _PH7_KIND_NAMES), [] as Array[String],
+		"these Mine Layer lines have .move(), .free_after() or shoot_*()")
+
+
+## Boundary: a layer line given `.move()` is reported by the same check, and only that line.
+func test_a_phase7_line_given_move_fails_the_no_rail_check() -> void:
+	var sections := _build_sections()
+	var mutated := false
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if not mutated and entry.ship_scene and entry.ship_scene.resource_path == _MINE_LAYER:
+					entry.movement = StraightMovement.new()
+					mutated = true
+	assert_true(mutated, "sanity: level 1 has a Mine Layer line to mutate")
+	assert_eq(_rail_rows(sections, MIGRATED_SECTIONS, _PH7_KIND_NAMES).size(), 1,
+		"a Mine Layer line with .move() must be reported")
+
+
+## LAY's stall guard is the plan's 5.67 s (ZIGZAG), so the life below defers by the worst case, not a typed number.
+func test_the_lay_deferral_is_the_zigzag_stall_guard() -> void:
+	assert_almost_eq(_lay_stall_guard(), 5.67, 0.02, "732 px * 1.2 / 170 + 0.5")
+
+
+## Sanity boundary on the corridor probe (the Phase 5 shape), plus the row the plan names: the probed layer is released
+## from the corridor in DISENGAGE, so the figure is the real exit and not the constraint's cap.
+func test_phase7_measured_exit_is_real_and_the_corridor_is_released() -> void:
+	var rect := _world_rect()
+	var floor_distance := minf(rect.size.x, rect.size.y) / 2.0
+	var corridor := SpecialistExitProbe.corridor_starts(AssaultCorridorConstraint.new().inner_rect(), rect)
+	var e: Dictionary = _ph7_exit
+	gut.p("MINE_LAYER: slowest corridor DISENGAGE %.2f s over %d runs (%s)" % [e["seconds"], e["runs"], e["start"]])
+	assert_eq(int(e["runs"]), corridor.size() * 2, "every corridor start x speed ran")
+	assert_eq(int(e["capped"]), 0, "a probe run never left the world")
+	assert_gte(float(e["seconds"]), floor_distance / _LAYER_CONFIG.exit_speed,
+		"the slowest exit is at least the centre's straight run to its edge")
+	var h: RefCounted = SpecialistExitProbe.HARNESS.assault()
+	add_child_autofree(h.root)
+	var layer := (load(_MINE_LAYER) as PackedScene).instantiate() as MineLayer
+	layer.global_position = SpecialistExitProbe.MID_VIEW
+	h.root.add_child(layer)
+	layer.set_physics_process(false)
+	(layer.get_node("Brain") as MineLayerBrain).enter_phase(MineLayerBrain.Phase.DISENGAGE)
+	var mover := layer.get_node("EnemyMover") as EnemyMover
+	assert_true(mover.constraint_released(), "DISENGAGE releases the corridor, as the probe's layer does")
+	assert_eq(mover.max_speed, _LAYER_CONFIG.exit_speed, "and exits at exit_speed")
+
+
+## Boundary (acceptance criterion): an extra Mine Layer at planet_approach's measured peak fails the count gate.
+## The gate counts the layer: planet_approach's own layer (47 s) does not move the peak (7 at 98.0 s), and a second one
+## at that moment takes it to 8 > 7.5; deep_space stays under its 12.5.
+func test_an_extra_mine_layer_at_the_peak_fails_the_count_gate() -> void:
+	var lives := _ai_lives()
+	var section := _section(_build_sections(), &"planet_approach")
+	assert_not_null(section, "sanity: level 1 has planet_approach")
+	if section == null:
+		return
+	var limit := _COUNT_RATIO * int(_LEGACY_PEAK_SPECIALISTS[&"planet_approach"])
+	var before := _peak(_ai_intervals(section, lives))
+	assert_eq(int(before["count"]), 7, "sanity: planet_approach peaks at 7 alive, one under its 7.5 limit")
+	var at: float = before["at"]
+	var index := section.waves.size()
+	for i in section.waves.size():
+		if section.waves[i].trigger_time > at:
+			index = i
+			break
+	var b := WaveBuilder.new()
+	section.waves.insert(index, b.wave(at, [b.mine_layer().at(400, -160)]))
+	var effective := -INF
+	for i in index + 1:
+		effective = maxf(effective, section.waves[i].trigger_time)
+	assert_almost_eq(effective, at, 0.0001, "sanity: the inserted wave sits in list order")
+	var after := _peak(_ai_intervals(section, lives))
+	gut.p("planet_approach + mine layer at %.2f s: peak %d -> %d (limit %.1f)" % [at, before["count"], after["count"], limit])
+	assert_eq(int(after["count"]), int(before["count"]) + 1, "the layer adds exactly one ship at the peak")
+	assert_gt(float(after["count"]), limit, "the count gate must reject this")
+
+
+# ── Phase 8 t19: a turret group, a twin pair and a Laser Tender join level 1 (epic plan
+# docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md §2.18; task plan docs/plans/cmvqw0voi019bqs2x3j5zd2o8/3-plan.md) ──────
+#
+# Three lines, each inside an existing wave of a DURATION section, with no rail: `b.turret_group(TURRET_GROUP_ASSAULT_PAIR)
+# .at(64, -220)` in deep_space's 3.0 s wave (effective 3.5 s, the wave-order quirk), `b.twin_laser_pair().at(-250, -220)` in
+# deep_space's 29.0 s wave and `b.laser_tender().at(-300, -200)` in planet_approach's 2.0 s wave. Pinned in `EXPECTED_PH8`.
+# The group's x is the plan's (-64) mirrored about the 640 column: at -64 the level-start `LaserWallWave` (x 0-672, lethal
+# while the group spawns) killed every member in `scripts/measure-level1-columns.sh`; the column row now reads that wall too.
+#
+# Each line expands to several ships, so `_ai_lives()` (keyed per scene) does not hold them: `_ph8_intervals()` appends one
+# interval per SHIP to `_ai_intervals()`, and the frozen 2.5x gate, every peak boundary and the spill-over rows count them.
+# Every term is read from a scene, a config, code or the memoised Ph8 probes (`ph8_exit_keys.gd`, never a hand-built call):
+#   turret-group member  _TICK_SLACK (the deferred spawn) + (world.end.y - y_spawn) / config.assault_drift_speed, where
+#                        y_spawn = world centre y - ArenaCamera.V_LIMIT - CameraShake._MAX_OFFSET + design y * WORLD_SCALE
+#                        + slot y: the view at its highest, shake included, so the longest drift any run can see
+#   twin drone (x2)      engage_seconds + twin telegraph_seconds + max_advance + _TICK_SLACK + drone_exit_bound(), where
+#                        max_advance = (max(standoff, tender assault_wall_lead) + overshoot) / advance_speed (plan §2.12)
+#   tender               engage_seconds + launch_telegraph + _TICK_SLACK + tender_exit() (a LAUNCH shown at expiry finishes)
+#   tender drone (x2)    from the tender's spawn (the earliest launch) to the latest launch (spawn + engage_seconds +
+#                        launch_telegraph + _TICK_SLACK) plus a drone life (a launched drone's budget counts from its launch)
+# No Ph8 ship leaves ordnance behind: the group's mounts' pools are `persist == false` (checked in the spill-over section),
+# the Pulse Ring is a mount child and the twin beam a child of drone A, so `_ordnance_tail()` is 0 for every Ph8 kind.
+
+const PH8_EXITS := preload("res://tests/helpers/ph8_exit_keys.gd")
+const _CAMERA_SHAKE := preload("res://global/systems/camera_shake.gd")
+const _TURRET_GROUP_DIR := "res://assault/scenes/structures/turret_group/"
+const _TWIN_PAIR := WaveBuilder.TWIN_LASER_PAIR
+const _LASER_TENDER := WaveBuilder.LASER_TENDER
+const _PH8_KIND_NAMES := {WaveBuilder.TURRET_GROUP_ASSAULT_PAIR: "TURRET_GROUP_ASSAULT_PAIR", _TWIN_PAIR: "TWIN_LASER_PAIR",
+	_LASER_TENDER: "LASER_TENDER", WaveBuilder.LASER_FENCE: "LASER_FENCE"}
+## The `kind` of each Ph8 interval `_ph8_intervals()` builds.
+const _PH8_INTERVAL_KINDS: Array[String] = ["TURRET_MEMBER", "TWIN_DRONE", "LASER_TENDER", "TENDER_DRONE"]
+const _DRONE_CONFIG: TwinLaserDroneConfig = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone_config.tres")
+const _TENDER_CONFIG: LaserTenderConfig = preload("res://assault/scenes/enemies/laser_tender/laser_tender_config.tres")
+
+const EXPECTED_PH8: Array[Dictionary] = [
+	{"section": &"deep_space", "kind": "TURRET_GROUP_ASSAULT_PAIR", "trigger": 3.00, "offset": Vector2(64.0, -220.0), "delay": 0.00},
+	{"section": &"deep_space", "kind": "TWIN_LASER_PAIR", "trigger": 29.00, "offset": Vector2(-250.0, -220.0), "delay": 0.00},
+	{"section": &"planet_approach", "kind": "LASER_TENDER", "trigger": 2.00, "offset": Vector2(-300.0, -200.0), "delay": 0.00},
+]
+
+## `_ph8_lives()`'s figures and `_group_members()`'s per-preset rows, built once per file run (the probes are memo hits
+## once `test_laser_tender.gd` has run; alone, this file pays for them once).
+var _ph8_cache: Dictionary = {}
+var _group_cache: Dictionary = {}
+
+
+## `{ "telegraph", "max_advance", "drone_exit", "tender_exit", "drone", "launch_latest", "tender", "world" }`.
+func _ph8_lives() -> Dictionary:
+	if not _ph8_cache.is_empty():
+		return _ph8_cache
+	var d := _DRONE_CONFIG
+	var t := _TENDER_CONFIG
+	var telegraph := float(EnemyBeamScenes.export_of(EnemyBeam.Kind.TWIN, &"telegraph_seconds", 0.0))
+	var max_advance := (maxf(d.standoff, t.assault_wall_lead) + d.overshoot) / d.advance_speed
+	var drone_exit: float = PH8_EXITS.drone_exit_bound(self)
+	var tender_exit := float(PH8_EXITS.tender_exit(self)["seconds"])
+	var launch_latest := t.engage_seconds + t.launch_telegraph + _TICK_SLACK
+	_ph8_cache = {
+		"telegraph": telegraph, "max_advance": max_advance, "drone_exit": drone_exit, "tender_exit": tender_exit,
+		"drone": d.engage_seconds + telegraph + max_advance + _TICK_SLACK + drone_exit,
+		"launch_latest": launch_latest, "tender": launch_latest + tender_exit, "world": _world_rect(),
+	}
+	return _ph8_cache
+
+
+## One `{ "name", "slot", "radius", "speed", "variants" }` per member slot of the preset at `path`, read from the off-tree
+## preset and member scenes: the slot's local position, the member body circle's radius (scale applied), its config's
+## `assault_drift_speed`, and the variant of each of its turret mounts (the slot override on the first, as
+## `TurretGroup.mount_reaches()` reads them).
+func _group_members(path: String) -> Array:
+	if _group_cache.has(path):
+		return _group_cache[path]
+	var out: Array = []
+	var preset := (load(path) as PackedScene).instantiate()
+	for child in preset.get_children():
+		var slot := child as TurretGroupSlot
+		if slot == null or slot.member_scene == null:
+			continue
+		var member := slot.member_scene.instantiate()
+		var body := member.get_node("CollisionShape2D") as CollisionShape2D
+		var radius := (body.shape as CircleShape2D).radius * maxf(absf(body.scale.x), absf(body.scale.y))
+		var variants: Array[int] = []
+		var mount_slots := member.get_node_or_null("MountSlots")
+		if mount_slots != null:
+			for marker in mount_slots.get_children():
+				if marker is TurretMountSlot:
+					var first := variants.is_empty()
+					variants.append(slot.variant if first and slot.variant >= 0 else int((marker as TurretMountSlot).variant))
+		out.append({"name": String(slot.name), "slot": slot.position, "radius": radius,
+			"speed": float(member.get(&"config").assault_drift_speed), "variants": variants})
+		member.free()
+	preset.free()
+	_group_cache[path] = out
+	return out
+
+
+## A turret-group member's worst-case Assault life from its line's spawn moment (see the section header).
+func _member_life(design_y: float, member: Dictionary) -> float:
+	var world: Rect2 = _ph8_lives()["world"]
+	var highest_view_centre: float = world.get_center().y - ArenaCamera.V_LIMIT - _CAMERA_SHAKE._MAX_OFFSET
+	var y_spawn: float = highest_view_centre + design_y * ArenaCamera.WORLD_SCALE + (member["slot"] as Vector2).y
+	return _TICK_SLACK + (world.end.y - y_spawn) / float(member["speed"])
+
+
+func _is_turret_group(path: String) -> bool:
+	return path.begins_with(_TURRET_GROUP_DIR)
+
+
+## One `{ "start", "end", "kind" }` per ship the section's Ph8 lines spawn (see the section header).
+func _ph8_intervals(section: LevelSection) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var effective := -INF
+	for wave: WaveResource in section.waves:
+		effective = maxf(effective, wave.trigger_time)
+		for entry: SpawnEntryResource in wave.entries:
+			var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+			var t: float = effective + entry.spawn_delay
+			if _is_turret_group(path):
+				for m: Dictionary in _group_members(path):
+					out.append({"start": t, "end": t + _member_life(entry.base_offset.y, m), "kind": "TURRET_MEMBER"})
+			elif path == _TWIN_PAIR:
+				var lives := _ph8_lives()
+				for i in 2:
+					out.append({"start": t, "end": t + float(lives["drone"]), "kind": "TWIN_DRONE"})
+			elif path == _LASER_TENDER:
+				var lives := _ph8_lives()
+				out.append({"start": t, "end": t + float(lives["tender"]), "kind": "LASER_TENDER"})
+				for i in 2:
+					out.append({"start": t, "end": t + float(lives["launch_latest"]) + float(lives["drone"]),
+						"kind": "TENDER_DRONE"})
+	return out
+
+
+func _actual_ph8_spawns(sections: Array[LevelSection]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+				if not _PH8_KIND_NAMES.has(path) and not _is_turret_group(path):
+					continue
+				assert_null(entry.formation, "no Phase 8 line uses a formation; the pin has no formation column")
+				out.append({"section": section.section_name, "kind": _PH8_KIND_NAMES.get(path, path.get_file()),
+					"trigger": wave.trigger_time, "offset": entry.base_offset, "delay": entry.spawn_delay})
+	return out
+
+
+func test_pinned_phase8_spawns_match_todays_data() -> void:
+	var actual := _actual_ph8_spawns(_build_sections())
+	assert_eq(actual.size(), EXPECTED_PH8.size(), "the number of turret group / twin pair / tender / fence entries changed")
+	assert_eq(actual, EXPECTED_PH8, "a Phase 8 spawn's section, trigger, offset or delay changed")
+
+
+## 3 rows: the group and the pair in deep_space, the tender in planet_approach, none in an ENEMIES_CLEARED section
+## (`test_engagement_deadline.gd` says why), and each shares its wave with other traffic (no new wave, no moved trigger).
+func test_the_phase8_pin_itself_is_internally_consistent() -> void:
+	var by_section: Dictionary = {}
+	var by_kind: Dictionary = {}
+	for row: Dictionary in EXPECTED_PH8:
+		by_section[row["section"]] = int(by_section.get(row["section"], 0)) + 1
+		by_kind[row["kind"]] = int(by_kind.get(row["kind"], 0)) + 1
+	assert_eq(EXPECTED_PH8.size(), 3)
+	assert_eq(int(by_section.get(&"deep_space", 0)), 2, "deep_space Phase 8 row count changed")
+	assert_eq(int(by_section.get(&"planet_approach", 0)), 1, "planet_approach Phase 8 row count changed")
+	assert_eq(by_section.size(), 2, "Phase 8 lines spawn only in deep_space and planet_approach")
+	for kind: String in ["TURRET_GROUP_ASSAULT_PAIR", "TWIN_LASER_PAIR", "LASER_TENDER"]:
+		assert_eq(int(by_kind.get(kind, 0)), 1, "one %s line" % kind)
+	var checked := 0
+	for section: LevelSection in _build_sections():
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+				if not _PH8_KIND_NAMES.has(path) and not _is_turret_group(path):
+					continue
+				checked += 1
+				assert_eq(section.end_condition, LevelSection.EndCondition.DURATION, "%s is a DURATION section"
+					% section.section_name)
+				assert_gt(wave.entries.size(), 1, "%s @ %.1f s: the Phase 8 line joins a wave that already existed" % [
+					section.section_name, wave.trigger_time])
+	assert_eq(checked, 3, "sanity: all three Phase 8 lines were checked")
+
+
+## Boundary: a Phase 8 line's delay changed in memory must not match the pin (fresh sections; nothing shared mutated).
+func test_a_phase8_lines_delay_changed_fails_the_pin() -> void:
+	for path: String in [WaveBuilder.TURRET_GROUP_ASSAULT_PAIR, _TWIN_PAIR, _LASER_TENDER]:
+		var sections := _build_sections()
+		var mutated := false
+		for section: LevelSection in sections:
+			for wave: WaveResource in section.waves:
+				for entry: SpawnEntryResource in wave.entries:
+					if not mutated and entry.ship_scene and entry.ship_scene.resource_path == path:
+						entry.spawn_delay += 1.0
+						mutated = true
+		assert_true(mutated, "sanity: level 1 has a %s line to mutate" % _PH8_KIND_NAMES[path])
+		assert_ne(_actual_ph8_spawns(sections), EXPECTED_PH8, "a %s line with a changed delay must not match the pin"
+			% _PH8_KIND_NAMES[path])
+
+
+## No Phase 8 line has a rail (`.move()`, `.free_after()` or `.shoot_*()`).
+func test_phase8_lines_have_no_rail() -> void:
+	var sections := _build_sections()
+	assert_eq(_actual_ph8_spawns(sections).size(), 3, "sanity: three Phase 8 lines")
+	assert_eq(_rail_rows(sections, MIGRATED_SECTIONS, _PH8_KIND_NAMES), [] as Array[String],
+		"these Phase 8 lines have .move(), .free_after() or shoot_*()")
+
+
+## Boundary: each Phase 8 line given `.move()` is reported by the same check, and only that line.
+func test_a_phase8_line_given_move_fails_the_no_rail_check() -> void:
+	for path: String in [WaveBuilder.TURRET_GROUP_ASSAULT_PAIR, _TWIN_PAIR, _LASER_TENDER]:
+		var sections := _build_sections()
+		var mutated := false
+		for section: LevelSection in sections:
+			for wave: WaveResource in section.waves:
+				for entry: SpawnEntryResource in wave.entries:
+					if not mutated and entry.ship_scene and entry.ship_scene.resource_path == path:
+						entry.movement = StraightMovement.new()
+						mutated = true
+		assert_true(mutated, "sanity: level 1 has a %s line to mutate" % _PH8_KIND_NAMES[path])
+		assert_eq(_rail_rows(sections, MIGRATED_SECTIONS, _PH8_KIND_NAMES).size(), 1,
+			"a %s line with .move() must be reported" % _PH8_KIND_NAMES[path])
+
+
+## The four Ph8 lives, printed, with the plan's figures as sanity (each term is read, never typed: these only catch a
+## silently changed config or a probe that measured nothing). Members: the ring turret (slot y -60) drifts longest.
+func test_phase8_lives_are_the_plans_figures() -> void:
+	var lives := _ph8_lives()
+	gut.p("Ph8 lives: drone %.2f s (engage %.2f + telegraph %.2f + max_advance %.2f + slack + exit bound %.2f); tender %.2f s (latest launch %.2f + exit %.2f); tender drone up to %.2f s after the tender's spawn"
+		% [lives["drone"], _DRONE_CONFIG.engage_seconds, lives["telegraph"], lives["max_advance"], lives["drone_exit"],
+		lives["tender"], lives["launch_latest"], lives["tender_exit"], float(lives["launch_latest"]) + float(lives["drone"])])
+	assert_almost_eq(float(lives["max_advance"]), 1.92, 0.01, "(max(260, 180) + 200) / 240")
+	assert_gt(float(lives["drone_exit"]), 0.0, "sanity: the drone exit bound was measured")
+	assert_gt(float(lives["tender_exit"]), 0.0, "sanity: the tender exit was measured")
+	assert_gt(float(lives["telegraph"]), 0.0, "sanity: the twin beam's telegraph was read from twin_beam.tscn")
+	var members := _group_members(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR)
+	assert_eq(members.size(), 3, "sanity: assault_pair has three members")
+	for m: Dictionary in members:
+		gut.p("assault_pair %s (slot %s, r %.0f): drift life %.2f s from a -220 design-y spawn" % [m["name"], m["slot"],
+			m["radius"], _member_life(-220.0, m)])
+		assert_gt(float(m["speed"]), 0.0, "%s drifts" % m["name"])
+		assert_lte(_member_life(-220.0, m), 28.2 + _TICK_SLACK + 0.01, "%s: the plan's <= 28.2 s drift life" % m["name"])
+
+
+func _curve_text(intervals: Array[Dictionary]) -> String:
+	var times: Array[float] = []
+	for a: Dictionary in intervals:
+		for key: String in ["start", "end"]:
+			if not times.has(float(a[key])):
+				times.append(float(a[key]))
+	times.sort()
+	var parts: PackedStringArray = []
+	var last := -1
+	for t in times:
+		var alive := 0
+		var ph8 := 0
+		for a: Dictionary in intervals:
+			if float(a["start"]) <= t and t < float(a["end"]):
+				alive += 1
+				if _PH8_INTERVAL_KINDS.has(a["kind"]):
+					ph8 += 1
+		if alive != last:
+			parts.append("%.2f:%d%s" % [t, alive, " (ph8 %d)" % ph8 if ph8 > 0 else ""])
+			last = alive
+	return ", ".join(parts)
+
+
+## The alive curves (the acceptance criteria's "curves printed"): every change of the alive count in each migrated
+## section, Ph8 ships marked; the Ph8 intervals exist (3 members + 2 drones in deep_space, the tender + 2 drones in
+## planet_approach) and the peak stays within the frozen 2.5x (the gate above, restated where the curve is printed).
+func test_ph8_alive_curves_are_printed() -> void:
+	var lives := _ai_lives()
+	var expected_ph8 := {&"deep_space": 5, &"planet_approach": 3, &"cloud_descent": 0}
+	for section: LevelSection in _build_sections():
+		if not MIGRATED_SECTIONS.has(section.section_name):
+			continue
+		var intervals := _ai_intervals(section, lives)
+		var ph8 := intervals.filter(func(a: Dictionary) -> bool: return _PH8_INTERVAL_KINDS.has(a["kind"]))
+		var peak := _peak(intervals)
+		var limit := _COUNT_RATIO * int(_LEGACY_PEAK_SPECIALISTS[section.section_name])
+		gut.p("%s alive curve (peak %d at %.2f s, limit %.1f): %s" % [section.section_name, peak["count"], peak["at"], limit,
+			_curve_text(intervals)])
+		assert_eq(ph8.size(), int(expected_ph8[section.section_name]), "%s: Phase 8 ships counted" % section.section_name)
+		assert_lte(float(peak["count"]), limit, "%s: peak alive within %.1fx legacy" % [section.section_name, _COUNT_RATIO])
+
+
+const _LEVEL_SCENE := "res://assault/scenes/levels/edelia/1/level_1.tscn"
+
+
+## Level 1's static `LaserWallWave` as one schedule row for the FIRST section (it is placed in `level_1.tscn`, not in
+## `laser_column_schedule()`, and lights at level start: lethal from its warning's end for its `active_duration`, all
+## inside deep_space while a member drifts): `{ "time": 0.0, "columns": [world x of each ray], "source": "wall" }`, read
+## from the level scene's state (never instantiated) and the wall scene's rays. Cached.
+func _wall_wave_row() -> Dictionary:
+	if _group_cache.has(&"wall"):
+		return _group_cache[&"wall"]
+	var state := (load(_LEVEL_SCENE) as PackedScene).get_state()
+	var origin := Vector2.INF
+	var wall_scene: PackedScene = null
+	for i in state.get_node_count():
+		if state.get_node_name(i) != &"LaserWallWave":
+			continue
+		wall_scene = state.get_node_instance(i)
+		for p in state.get_node_property_count(i):
+			if state.get_node_property_name(i, p) == &"position":
+				origin = state.get_node_property_value(i, p)
+	assert_not_null(wall_scene, "sanity: level_1.tscn places a LaserWallWave")
+	assert_true(origin.is_finite(), "sanity: the LaserWallWave has a position")
+	var columns: Array[int] = []
+	if wall_scene != null and origin.is_finite():
+		var wall := wall_scene.instantiate()
+		for ray in wall.get_children():
+			if ray is LaserRay:
+				assert_almost_eq((ray as Node2D).rotation, 0.0, 0.0001, "sanity: a vertical wall ray")
+				columns.append(roundi(origin.x + (ray as Node2D).position.x))
+		wall.free()
+	var row := {"time": 0.0, "columns": columns, "source": "wall"}
+	_group_cache[&"wall"] = row
+	return row
+
+
+## Every static member of every turret-group line against every column of `Level1Director.laser_column_schedule()` in
+## its section that starts before the member is gone (no end filter: the beam turns lethal only after its charge-up, so
+## any column lit before the member leaves may still be lit while it lives). A member is at world x `world centre x +
+## design x * WORLD_SCALE + slot x` (world-anchored, `TurretGroup._ready()`), and survives only at `|x - column| >=
+## LaserRay._BEAM_WIDTH / 2 + body radius`. The first section also gets `_wall_wave_row()` (the level-start wall).
+## Returns `{ "checked", "conflicts" }`.
+func _column_conflicts(sections: Array[LevelSection]) -> Dictionary:
+	var schedule: Dictionary = load(_DIRECTOR_SCRIPT).laser_column_schedule()
+	var world: Rect2 = _ph8_lives()["world"]
+	var half := LaserRay._BEAM_WIDTH * 0.5
+	var checked := 0
+	var conflicts: Array[String] = []
+	for section: LevelSection in sections:
+		var rows: Array = (schedule.get(section.section_name, []) as Array).duplicate()
+		if section == sections[0]:
+			rows.append(_wall_wave_row())
+		var effective := -INF
+		for wave: WaveResource in section.waves:
+			effective = maxf(effective, wave.trigger_time)
+			for entry: SpawnEntryResource in wave.entries:
+				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+				if not _is_turret_group(path):
+					continue
+				var t: float = effective + entry.spawn_delay
+				for m: Dictionary in _group_members(path):
+					var x: float = world.get_center().x + entry.base_offset.x * ArenaCamera.WORLD_SCALE + (m["slot"] as Vector2).x
+					var end := t + _member_life(entry.base_offset.y, m)
+					var need: float = half + float(m["radius"])
+					for row: Dictionary in rows:
+						if float(row["time"]) >= end:
+							continue
+						for col in row["columns"]:
+							checked += 1
+							if absf(x - float(col)) < need:
+								conflicts.append("%s %s at x %.0f (alive %.2f-%.2f s) vs the %.1f s %s at %d: %.0f < %.0f px" % [
+									section.section_name, m["name"], x, t, end, row["time"], row.get("source", "column"), col,
+									absf(x - float(col)), need])
+	return {"checked": checked, "conflicts": conflicts}
+
+
+func test_ph8_static_members_clear_every_lit_column() -> void:
+	var sections := _build_sections()
+	for section: LevelSection in sections:
+		assert_false(_section_has_path(section, WaveBuilder.LASER_FENCE),
+			"%s places a laser fence; this row covers group members only" % section.section_name)
+	var result := _column_conflicts(sections)
+	gut.p("column clearance: %d member x column pairs checked" % result["checked"])
+	var wall_rays: int = (_wall_wave_row()["columns"] as Array).size()
+	assert_eq(wall_rays, 12, "sanity: the LaserWallWave has twelve rays")
+	assert_eq(int(result["checked"]), 3 * (8 + wall_rays),
+		"sanity: three members x (deep_space's eight columns + the wall's rays), all lit before they leave")
+	assert_eq(result["conflicts"], [] as Array[String], "these static members sit in a lit laser column")
+
+
+## Boundary (t19's own finding): the epic plan's `.at(-64, -220)` clears every scheduled column but puts all three members
+## inside the level-start LaserWallWave (x 0-672), where `scripts/measure-level1-columns.sh` saw both turrets die.
+func test_the_plans_minus_64_placement_fails_on_the_wall_wave() -> void:
+	var sections := _build_sections()
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if entry.ship_scene and entry.ship_scene.resource_path == WaveBuilder.TURRET_GROUP_ASSAULT_PAIR:
+					entry.base_offset = Vector2(-64.0, -220.0)
+	var result := _column_conflicts(sections)
+	gut.p("plan placement (-64, -220): %s" % [result["conflicts"]])
+	var wall_hits := (result["conflicts"] as Array).filter(func(c: String) -> bool: return c.contains(" wall at "))
+	var column_hits := (result["conflicts"] as Array).filter(func(c: String) -> bool: return c.contains(" column at "))
+	assert_eq(column_hits.size(), 0, "the plan's placement does clear every scheduled column")
+	for member: String in ["BurstTurret", "RingTurret", "PowerSource"]:
+		assert_true(wall_hits.any(func(c: String) -> bool: return c.contains(member)), "%s is inside the wall wave" % member)
+
+
+## Boundary (acceptance criterion): revision 1's `.at(0, -220)` puts the power source on deep_space's 640 column.
+func test_revision_1_group_placement_fails_the_column_row() -> void:
+	var sections := _build_sections()
+	var moved := false
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if entry.ship_scene and entry.ship_scene.resource_path == WaveBuilder.TURRET_GROUP_ASSAULT_PAIR:
+					entry.base_offset = Vector2(0.0, -220.0)
+					moved = true
+	assert_true(moved, "sanity: level 1 has a turret-group line to move")
+	var result := _column_conflicts(sections)
+	gut.p("revision 1 placement: %s" % [result["conflicts"]])
+	assert_gt((result["conflicts"] as Array).size(), 0, "the revision-1 placement must fail the column row")
+	var hits_power_source := false
+	for c: String in result["conflicts"]:
+		if c.contains("PowerSource") and c.contains("column at 640"):
+			hits_power_source = true
+	assert_true(hits_power_source, "the power source on the 640 column is the conflict")
+
+
+func _section_has_path(section: LevelSection, path: String) -> bool:
+	for wave: WaveResource in section.waves:
+		for entry: SpawnEntryResource in wave.entries:
+			if entry.ship_scene and entry.ship_scene.resource_path == path:
+				return true
+	return false
+
+
 # ── Spill-over (§2.18) ────────────────────────────────────────────────────────────────────────────────────────────
 #
 # `LevelDirector` loads a section's waves the moment the section starts (`transition_in_duration` is the background's
@@ -794,11 +1435,19 @@ func _next_cleared_deadline(sections: Array[LevelSection], index: int) -> float:
 	return INF
 
 
-## The intervals (plus a corvette's rocket life) still alive at `deadline`, as readable strings.
+## How long a kind's ordnance outlives it in the container: a corvette's rockets, a Mine Layer's mines (their Assault
+## `assault_mine_life`, counted as a rocket life is). Nothing else persists.
+func _ordnance_tail(kind: String, rocket_life: float) -> float:
+	if kind == "MISSILE_CORVETTE":
+		return rocket_life
+	return _LAYER_CONFIG.assault_mine_life if kind == "MINE_LAYER" else 0.0
+
+
+## The intervals (plus a corvette's rocket life, a layer's mine life) still alive at `deadline`, as readable strings.
 func _spills(intervals: Array[Dictionary], deadline: float, rocket_life: float) -> Array[String]:
 	var out: Array[String] = []
 	for a: Dictionary in intervals:
-		var end: float = float(a["end"]) + (rocket_life if a["kind"] == "MISSILE_CORVETTE" else 0.0)
+		var end: float = float(a["end"]) + _ordnance_tail(a["kind"], rocket_life)
 		if end >= deadline:
 			out.append("%s spawned %.2f s, gone %.2f s >= %.2f s" % [a["kind"], a["start"], end, deadline])
 	return out
@@ -820,7 +1469,7 @@ func test_no_specialist_outlives_the_next_enemies_cleared_sections_last_trigger(
 		var intervals := _ai_intervals(section, lives)
 		var latest := 0.0
 		for a: Dictionary in intervals:
-			latest = maxf(latest, float(a["end"]) + (rocket_life if a["kind"] == "MISSILE_CORVETTE" else 0.0))
+			latest = maxf(latest, float(a["end"]) + _ordnance_tail(a["kind"], rocket_life))
 		gut.p("%s: last specialist (or rocket) gone %.2f s after the section starts; next ENEMIES_CLEARED last trigger at %.2f s"
 			% [section.section_name, latest, deadline])
 		assert_lt(deadline, INF, "sanity: an ENEMIES_CLEARED section follows %s" % section.section_name)
@@ -843,3 +1492,81 @@ func test_a_corvette_whose_rockets_cross_the_deadline_is_flagged() -> void:
 	var early: Array[Dictionary] = [{"start": 0.0, "end": deadline - rocket_life - 1.0, "kind": "MISSILE_CORVETTE"}]
 	assert_eq(_spills(late, deadline, rocket_life).size(), 1, "a corvette whose rockets outlive the deadline is flagged")
 	assert_eq(_spills(early, deadline, rocket_life).size(), 0, "one whose rockets are gone in time is not")
+
+
+## Boundary: a synthetic Mine Layer that has itself left by 1 s before the deadline is still flagged once its mines'
+## `assault_mine_life` is added, and one whose mines are gone in time is not — the predicate counts the mine term.
+func test_a_mine_layer_whose_mines_cross_the_deadline_is_flagged() -> void:
+	var rocket_life := _rocket_max_life()
+	var sections := _build_sections()
+	var index := sections.find(_section(sections, &"planet_approach"))
+	var deadline := _next_cleared_deadline(sections, index)
+	var mine_life := _LAYER_CONFIG.assault_mine_life
+	assert_gt(mine_life, 1.0, "sanity: the shipped Assault mine life is real")
+	var late: Array[Dictionary] = [{"start": 0.0, "end": deadline - 1.0, "kind": "MINE_LAYER"}]
+	var early: Array[Dictionary] = [{"start": 0.0, "end": deadline - mine_life - 1.0, "kind": "MINE_LAYER"}]
+	assert_eq(_spills(late, deadline, rocket_life).size(), 1, "a layer whose mines outlive the deadline is flagged")
+	assert_eq(_spills(early, deadline, rocket_life).size(), 0, "one whose mines are gone in time is not")
+
+
+## The pools of the turret mounts `variants` build (`TurretMount.pool_specs()`, read off-tree from each variant's mount
+## scene) whose ordnance outlives its owner, as "variant: pool" strings.
+func _persisting_pools(variants: Array[int]) -> Array[String]:
+	var out: Array[String] = []
+	for v in variants:
+		var scene := TurretMountScenes.scene_for(v)
+		if scene == null:
+			continue
+		var mount := scene.instantiate() as TurretMount
+		for spec: Dictionary in mount.pool_specs():
+			if bool(spec.get("persist", false)):
+				out.append("%s: %s" % [TurretMount.Variant.keys()[v], spec.get("name", "?")])
+		mount.free()
+	return out
+
+
+## Phase 8 t19: no Ph8 ship leaves ordnance in the container (every mount of every placed group has `persist == false`
+## pools; the ring is a mount child, the twin beam a child of drone A), so the predicate above needs no Ph8 tail term; and
+## the Ph8 ships' own latest ends, printed, clear the next ENEMIES_CLEARED section's last trigger.
+func test_ph8_ships_leave_no_ordnance_and_clear_the_next_cleared_section() -> void:
+	var sections := _build_sections()
+	var groups := 0
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+				if not _is_turret_group(path):
+					continue
+				groups += 1
+				for m: Dictionary in _group_members(path):
+					assert_gt((m["variants"] as Array).size() + (1 if m["name"] == "PowerSource" else 0), 0,
+						"sanity: %s has a mount (or is the power source)" % m["name"])
+					assert_eq(_persisting_pools(m["variants"]), [] as Array[String],
+						"%s's mounts leave ordnance behind" % m["name"])
+	assert_eq(groups, 1, "sanity: level 1 places one turret group")
+	var checked := 0
+	for i in sections.size():
+		var section := sections[i]
+		if not [&"deep_space", &"planet_approach"].has(section.section_name):
+			continue
+		checked += 1
+		var deadline := _next_cleared_deadline(sections, i)
+		var latest := 0.0
+		for a: Dictionary in _ph8_intervals(section):
+			latest = maxf(latest, float(a["end"]))
+			assert_eq(_ordnance_tail(a["kind"], 0.0), 0.0, "%s carries no ordnance tail" % a["kind"])
+		gut.p("%s: last Phase 8 ship gone %.2f s after the section starts; next ENEMIES_CLEARED last trigger at %.2f s"
+			% [section.section_name, latest, deadline])
+		assert_gt(latest, 0.0, "sanity: %s has Phase 8 ships" % section.section_name)
+		assert_lt(latest, deadline, "%s: a Phase 8 ship outlives the next ENEMIES_CLEARED section's last trigger"
+			% section.section_name)
+	assert_eq(checked, 2, "sanity: deep_space and planet_approach were checked")
+
+
+## Boundary for the persist check: a ROCKET_BATTERY mount's rocket pools do persist (`persist_after_owner_death`), so a
+## group carrying one would need a rocket tail here, and the check above would say so.
+func test_a_rocket_battery_mounts_pools_persist() -> void:
+	var variants: Array[int] = [TurretMount.Variant.ROCKET_BATTERY]
+	var persisting := _persisting_pools(variants)
+	gut.p("ROCKET_BATTERY persisting pools: %s" % [persisting])
+	assert_gt(persisting.size(), 0, "a rocket battery's pools persist after its turret dies")

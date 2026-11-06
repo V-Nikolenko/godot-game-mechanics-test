@@ -147,6 +147,11 @@ const GIVE_WAY_HORIZON := 1.5
 const GIVE_WAY_SAMPLE := 0.1
 const GIVE_WAY_SLIDE_SPEED := 180.0
 const GIVE_WAY_STEPS: Array[float] = [1.0, 0.8, 0.6, 0.4, 0.2, 0.0]
+## The give-way sample times, accumulated exactly as the loops over them always did (`t += GIVE_WAY_SAMPLE`,
+## so 1.4000000000000001 and not 14 * 0.1): `_slide_aside()` runs to the horizon plus a hair, `_closest_on_horizon()`
+## to the horizon itself. Built once; every row of them is a double, as the loop variable was.
+static var _SLIDE_TIMES := _sample_times(GIVE_WAY_HORIZON + 0.0001)
+static var _HORIZON_TIMES := _sample_times(GIVE_WAY_HORIZON)
 ## Hull radius used when the scene has no readable body circle (px).
 const DEFAULT_HULL_RADIUS := 28.0
 ## COVER counts as holding its cover point within this (px).
@@ -1458,6 +1463,52 @@ func predicted_position(t: float) -> Vector2:
 	return pos + step
 
 
+## `predicted_position(t * scale)` for every `t` in `times`, value for value: the branch the fighter is in
+## and everything else that does not depend on `t` is decided once instead of once per sample. The give-way
+## samples a mate's track 15 times, and its own at each of up to six speeds, every tick.
+func predicted_track(times: PackedFloat64Array, scale: float = 1.0) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	out.resize(times.size())
+	var pos := actor.global_position
+	if is_holding() or _loiter_time >= 0.0:
+		out.fill(pos)
+		return out
+	var tracking := phase == Phase.APPROACH or phase == Phase.REPOSITION or (phase == Phase.TURN and _turn_step == 1)
+	if tracking and not _path_pts.is_empty():
+		var speed := config.max_speed
+		var last := _path_pts.size() - 1
+		for i in times.size():
+			var t := times[i] * scale
+			out[i] = _path_pts[mini(_path_idx + int(t * speed / TRACK_SAMPLE_PX), last)]
+		return out
+	var v := actor.velocity
+	if phase == Phase.TURN and _turn_step == 0 and config.turn_rate > 0.0:
+		var omega := _turn_sign * config.turn_rate
+		var v0 := v.rotated(-PI / 2.0)
+		for i in times.size():
+			var t := times[i] * scale
+			out[i] = pos + (v.rotated(omega * t - PI / 2.0) - v0) / omega
+		return out
+	var stops := _waits_for_window() and (phase == Phase.APPROACH or phase == Phase.REPOSITION)
+	var to_station_length := (pass_start - pos).length() if stops else 0.0
+	for i in times.size():
+		var step := v * (times[i] * scale)
+		if stops and step.length() > to_station_length:
+			out[i] = pass_start
+		else:
+			out[i] = pos + step
+	return out
+
+
+static func _sample_times(limit: float) -> PackedFloat64Array:
+	var out := PackedFloat64Array()
+	var t := GIVE_WAY_SAMPLE
+	while t <= limit:
+		out.append(t)
+		t += GIVE_WAY_SAMPLE
+	return out
+
+
 ## This fighter's routing priority in its squad: a lower number goes first and ignores those after
 ## it. LEAD, FLANK_LEFT, FLANK_RIGHT, then the REARs in `rear_index` order; -1 off the board (a
 ## disengaging fighter), which everyone routes round.
@@ -1760,16 +1811,15 @@ func _slide_aside(mates: Array[FighterBrain]) -> bool:
 		var best_q := Vector2.ZERO
 		var best_dir := Vector2.ZERO
 		var prev := mate.predicted_position(0.0)
-		var t := GIVE_WAY_SAMPLE
-		while t <= GIVE_WAY_HORIZON + 0.0001:
-			var q := mate.predicted_position(t)
-			var d := Geometry2D.get_closest_point_to_segment(pos, prev, q).distance_to(pos)
+		var track := mate.predicted_track(_SLIDE_TIMES)
+		for q in track:
+			var closest := Geometry2D.get_closest_point_to_segment(pos, prev, q)
+			var d := closest.distance_to(pos)
 			if d < best_d and q != prev:
 				best_d = d
-				best_q = Geometry2D.get_closest_point_to_segment(pos, prev, q)
+				best_q = closest
 				best_dir = (q - prev).normalized()
 			prev = q
-			t += GIVE_WAY_SAMPLE
 		if best_d >= clear or best_dir == Vector2.ZERO:
 			continue
 		var side := best_dir.orthogonal()
@@ -1802,10 +1852,13 @@ func _slow_for_mates(delta: float) -> void:
 			yield_to.append(mate)
 	if yield_to.is_empty():
 		return
+	var theirs: Array[PackedVector2Array] = []
+	for mate in yield_to:
+		theirs.append(mate.predicted_track(_HORIZON_TIMES))  # the same at every speed below
 	var best_k := 1.0
 	var best_gap := -INF
 	for k in GIVE_WAY_STEPS:
-		var gap := _closest_on_horizon(yield_to, k)
+		var gap := _closest_on_horizon(yield_to, theirs, k)
 		if gap >= clear:
 			best_k = k
 			best_gap = gap
@@ -1823,16 +1876,16 @@ func _slow_for_mates(delta: float) -> void:
 ## The closest this fighter comes to any of `mates` over the horizon if it flies its own plan at `k`
 ## of its speed (px), but never less than how close they are now (a give-way only has to stop it
 ## closing in).
-func _closest_on_horizon(mates: Array[FighterBrain], k: float) -> float:
+func _closest_on_horizon(mates: Array[FighterBrain], their_tracks: Array[PackedVector2Array], k: float) -> float:
 	var pos := actor.global_position
 	var out := INF
-	for mate in mates:
-		var now := pos.distance_to(mate.actor.global_position)
+	var mine := predicted_track(_HORIZON_TIMES, k)
+	for m in mates.size():
+		var now := pos.distance_to(mates[m].actor.global_position)
 		var gap := INF
-		var t := GIVE_WAY_SAMPLE
-		while t <= GIVE_WAY_HORIZON:
-			gap = minf(gap, predicted_position(t * k).distance_to(mate.predicted_position(t)))
-			t += GIVE_WAY_SAMPLE
+		var theirs := their_tracks[m]
+		for i in mine.size():
+			gap = minf(gap, mine[i].distance_to(theirs[i]))
 		out = minf(out, gap if gap < now else INF)
 	return out
 

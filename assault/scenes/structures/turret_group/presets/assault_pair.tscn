@@ -1,0 +1,26 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/structures/turret_group/turret_group.gd" id="1_ap"]
+[ext_resource type="Script" path="res://assault/scenes/structures/turret_group/turret_group_slot.gd" id="2_ap"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/defense_turret/defense_turret.tscn" id="3_ap"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/power_source/power_source.tscn" id="4_ap"]
+
+[node name="AssaultPair" type="Node2D"]
+script = ExtResource("1_ap")
+coverage_radius = 180.0
+
+[node name="BurstTurret" type="Marker2D" parent="."]
+position = Vector2(-50, 60)
+script = ExtResource("2_ap")
+member_scene = ExtResource("3_ap")
+variant = 0
+
+[node name="RingTurret" type="Marker2D" parent="."]
+position = Vector2(50, -60)
+script = ExtResource("2_ap")
+member_scene = ExtResource("3_ap")
+variant = 3
+
+[node name="PowerSource" type="Marker2D" parent="."]
+script = ExtResource("2_ap")
+member_scene = ExtResource("4_ap")

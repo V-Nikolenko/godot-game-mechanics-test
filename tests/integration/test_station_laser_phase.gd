@@ -48,6 +48,42 @@ func before_each() -> void:
 	_station = _spawn_station()
 
 
+# ── Gate time: scaled clock (tests/README.md -> "Gate time", rule 1) ───────────────────────────
+# `Engine.time_scale`, `physics_ticks_per_second` and `max_physics_steps_per_frame` scale together,
+# so a physics tick stays 1/60 game-second. A row opts in with `_scale_clock(n)`; one that compares
+# against a rate computed from `Engine.physics_ticks_per_second`, or that waits a sub-idle-frame
+# `wait_seconds()`, runs at a lower multiplier (or none) instead of loosening its tolerance.
+var _saved_time_scale: float = 1.0
+var _saved_ticks: int = 60
+var _saved_max_steps: int = 8
+var _clock_scaled: bool = false
+
+
+func after_each() -> void:
+	_restore_clock()
+
+
+func _scale_clock(speedup: int = 8) -> void:
+	if _clock_scaled:
+		return
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	_clock_scaled = true
+	Engine.physics_ticks_per_second = _saved_ticks * speedup
+	Engine.max_physics_steps_per_frame = _saved_max_steps * speedup
+	Engine.time_scale = _saved_time_scale * speedup
+
+
+func _restore_clock() -> void:
+	if not _clock_scaled:
+		return
+	_clock_scaled = false
+	Engine.time_scale = _saved_time_scale
+	Engine.physics_ticks_per_second = _saved_ticks
+	Engine.max_physics_steps_per_frame = _saved_max_steps
+
+
 func _spawn_station() -> SpaceStation:
 	var station := STATION_SCENE.instantiate() as SpaceStation
 	_container.add_child(station)
@@ -131,6 +167,7 @@ func test_phase_does_not_start_while_any_turret_lives() -> void:
 	_use_fast_timings(0.5)
 	for i in 3:
 		_kill_turret(i)
+	_scale_clock()
 	await wait_physics_frames(30)
 	assert_false(_phase().is_active(), "phase must not start while a turret still lives")
 	assert_eq(_phase().live_beams().size(), 0, "no beams may spawn while the station is armoured")
@@ -142,6 +179,7 @@ func test_phase_starts_when_last_turret_dies() -> void:
 	_use_fast_timings()
 	_kill_all_turrets()
 	assert_true(_phase().is_active(), "phase must start when the last turret dies")
+	_scale_clock()
 	await wait_physics_frames(2)
 	assert_eq(_phase().live_beams().size(), _phase().beam_count,
 		"the first volley spawns exactly beam_count beams, no more")
@@ -155,6 +193,8 @@ func test_beam_is_not_lethal_during_the_warning_window() -> void:
 	_use_fast_timings()
 	var probe := _add_player_probe()
 	_kill_all_turrets()
+	## 2x, not 8x: the 0.1 s sample sits inside a 0.2 s warning, tighter than one idle frame at 8x.
+	_scale_clock(2)
 	await wait_physics_frames(2)
 	var beam := _phase().live_beams()[0]
 	## Sample at half the warning window, comfortably away from the boundary.
@@ -168,6 +208,7 @@ func test_beam_is_not_lethal_during_the_warning_window() -> void:
 func test_beam_damages_the_player_during_the_active_window() -> void:
 	_use_fast_timings()
 	var probe := _add_player_probe()
+	_scale_clock()
 	_kill_all_turrets()
 	## warn (0.2) + the ~0.56 s laser_increase charge-up, plus margin.
 	await wait_seconds(1.0)
@@ -244,6 +285,7 @@ func test_beam_does_not_damage_the_station_that_fires_it() -> void:
 		"layer 512 is the station's own core HurtBox — the beam must not see it")
 
 	## warn 0.2 + ~0.56 charge, then well over 0.5 s of fully lethal beam.
+	_scale_clock()
 	await wait_seconds(1.4)
 	assert_true(is_instance_valid(_station), "the station must not have killed itself")
 	assert_eq(_station.health.current_health, _station.health.max_health,
@@ -346,6 +388,7 @@ func test_beams_stop_and_do_not_outlive_the_station() -> void:
 	_station.death_duration = 0.0
 
 	_kill_all_turrets()
+	_scale_clock()
 	await wait_seconds(1.0)
 	var beams := p.live_beams()
 	assert_gt(beams.size(), 0, "there must be a live beam, or this proves nothing")

@@ -1,0 +1,36 @@
+[gd_resource type="Resource" script_class="TwinLaserDroneConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone_config.gd" id="1_tldc"]
+
+[resource]
+script = ExtResource("1_tldc")
+max_health = 30
+collision_damage = 8
+score_value = 30
+counts_toward_wave_clear = true
+counts_as_escape = true
+hazard_avoidance = 0.6
+hazard_margin = 16.0
+hazard_resistance = 0.1
+wreck_chance = 0.0
+max_speed = 300.0
+acceleration = 900.0
+rig_length = 420.0
+length_tolerance = 16.0
+strain_seconds = 0.15
+advance_speed = 240.0
+standoff = 260.0
+overshoot = 200.0
+slot_tolerance = 24.0
+form_timeout = 3.0
+break_seconds = 1.2
+break_speed = 260.0
+attack_period_min = 4.0
+attack_period_max = 6.0
+engage_seconds = 8.0
+exit_speed = 420.0
+perceive_radius = 650.0
+lose_radius = 1500.0
+notice_time = 0.35
+idle_radius = 140.0
+idle_speed = 0.5

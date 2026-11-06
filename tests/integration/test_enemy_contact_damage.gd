@@ -74,6 +74,51 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/support_ship/support_ship_config.tres",
 	},
 	{
+		"name": "mine_layer",
+		"scene": "res://assault/scenes/enemies/mine_layer/mine_layer.tscn",
+		"config": "res://assault/scenes/enemies/mine_layer/mine_layer_config.tres",
+	},
+	{
+		"name": "defense_turret",
+		"scene": "res://assault/scenes/enemies/defense_turret/defense_turret.tscn",
+		"config": "res://assault/scenes/enemies/defense_turret/defense_turret_config.tres",
+		"no_hitbox": true,
+	},
+	{
+		"name": "power_source",
+		"scene": "res://assault/scenes/enemies/power_source/power_source.tscn",
+		"config": "res://assault/scenes/enemies/power_source/power_source_config.tres",
+		"no_hitbox": true,
+	},
+	{
+		"name": "shield_generator",
+		"scene": "res://assault/scenes/enemies/shield_generator/shield_generator.tscn",
+		"config": "res://assault/scenes/enemies/shield_generator/shield_generator_config.tres",
+		"no_hitbox": true,
+	},
+	{
+		"name": "laser_emitter",
+		"scene": "res://assault/scenes/enemies/laser_emitter/laser_emitter.tscn",
+		"config": "res://assault/scenes/enemies/laser_emitter/laser_emitter_config.tres",
+		"no_hitbox": true,
+	},
+	{
+		"name": "heavy_emplacement",
+		"scene": "res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn",
+		"config": "res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement_config.tres",
+		"no_hitbox": true,
+	},
+	{
+		"name": "twin_laser_drone",
+		"scene": "res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone.tscn",
+		"config": "res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone_config.tres",
+	},
+	{
+		"name": "laser_tender",
+		"scene": "res://assault/scenes/enemies/laser_tender/laser_tender.tscn",
+		"config": "res://assault/scenes/enemies/laser_tender/laser_tender_config.tres",
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"config": "res://assault/scenes/enemies/bonus_drone/bonus_drone_config.tres",

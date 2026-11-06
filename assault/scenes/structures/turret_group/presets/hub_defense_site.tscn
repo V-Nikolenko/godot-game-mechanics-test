@@ -1,0 +1,51 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/structures/turret_group/turret_group.gd" id="1_hds"]
+[ext_resource type="Script" path="res://assault/scenes/structures/turret_group/turret_group_slot.gd" id="2_hds"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn" id="3_hds"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/defense_turret/defense_turret.tscn" id="4_hds"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/shield_generator/shield_generator.tscn" id="5_hds"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/power_source/power_source.tscn" id="6_hds"]
+[ext_resource type="PackedScene" path="res://assault/scenes/structures/laser_fence/hub_barrier.tscn" id="7_hds"]
+
+[node name="HubDefenseSite" type="Node2D"]
+script = ExtResource("1_hds")
+coverage_radius = 450.0
+
+[node name="HeavyEmplacement" type="Marker2D" parent="."]
+position = Vector2(180, 20)
+script = ExtResource("2_hds")
+member_scene = ExtResource("3_hds")
+
+[node name="SweepTurret" type="Marker2D" parent="."]
+position = Vector2(-240, 160)
+script = ExtResource("2_hds")
+member_scene = ExtResource("4_hds")
+variant = 1
+
+[node name="RocketTurret" type="Marker2D" parent="."]
+position = Vector2(240, 160)
+script = ExtResource("2_hds")
+member_scene = ExtResource("4_hds")
+variant = 2
+
+[node name="LanceTurret" type="Marker2D" parent="."]
+position = Vector2(0, -260)
+script = ExtResource("2_hds")
+member_scene = ExtResource("4_hds")
+variant = 4
+
+[node name="ShieldGenerator" type="Marker2D" parent="."]
+position = Vector2(-120, -120)
+script = ExtResource("2_hds")
+member_scene = ExtResource("5_hds")
+
+[node name="PowerSource" type="Marker2D" parent="."]
+position = Vector2(200, -120)
+script = ExtResource("2_hds")
+member_scene = ExtResource("6_hds")
+
+[node name="Barrier" type="Marker2D" parent="."]
+position = Vector2(44, 98)
+script = ExtResource("2_hds")
+member_scene = ExtResource("7_hds")

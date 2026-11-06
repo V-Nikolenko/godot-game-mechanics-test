@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="ShieldGeneratorConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/shield_generator/shield_generator_config.gd" id="1_sgc"]
+
+[resource]
+script = ExtResource("1_sgc")
+max_health = 120
+collision_damage = 0
+score_value = 80
+counts_toward_wave_clear = true
+counts_as_escape = false
+hazard_avoidance = 0.0
+hazard_margin = 0.0
+hazard_resistance = 0.0
+wreck_chance = 0.0
+shield_capacity = 50
+shield_regen_delay = 3.0
+shield_regen_seconds = 2.0
+shield_reboot_seconds = 5.0
+shield_radius_margin = 8.0
+assault_drift_speed = 60.0

@@ -70,7 +70,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   resolves each hit once (`_resolve`), because Godot orders the plate's `area_entered` and the rocket's query
   undefined. The armour's **shove** on touch is `ContactProfile` mode `ARMOR` with `shove_speed`, which calls the touched
   ship's duck-typed `apply_knockback(impulse)` (the Open Space ship adds it to `velocity`; never call
-  `apply_knockback_motion()` there, it clamps to the Assault bounds). Persistent enemy ordnance (mines, bombs) outlives
+  `apply_knockback_motion()` there, it clamps to the Assault bounds). Persistent enemy ordnance (mines, bombs; the Mine Layer's `EnemyMine`s too) outlives
   its ship through `BulletPool.persist_after_owner_death`, which hands each projectile to its own `expired -> queue_free`
   — still exactly one owner at every instant. Spelled out in
   `docs/architecture/PROJECT.md` → Conventions; gated by
@@ -81,7 +81,9 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `stops_piercing()` and spends its full damage. A runtime hazard (wreck, debris fragment, Gravity Field, reactor field) is
   spawned deferred through `spawn_into()` into `Hazards.container(tree)` — still exactly one owner, it frees itself.
   **Hazards are sampled by the body, the mover owns enemy drift, runtime hazards spawn deferred into the `HazardContainer`** —
-  [PROJECT.md](docs/architecture/PROJECT.md) → Conventions. Phase 6 gates: `tests/unit/test_hazards.gd`, `test_hazard_field.gd`,
+  [PROJECT.md](docs/architecture/PROJECT.md) → Conventions. **A laser wall is a segment hazard (Phase 8):** `HazardInfo.segment_half` (ZERO = circle,
+  every earlier hazard, bit-identical) and `exempt_group` (its own pair ignores it); gated by the segment rows of `test_hazards.gd`,
+  `test_context_avoidance.gd` and `test_enemy_mover.gd`. Phase 6 gates: `tests/unit/test_hazards.gd`, `test_hazard_field.gd`,
   `tests/unit/test_context_avoidance.gd` (pass-through bit-identical with no hazard, avoidance per profile),
   `test_player_hazards.gd` (pull and slow on both players), `test_wreck.gd` (body, yield, LOS, "no hurtbox larger than its
   body"), `test_wreck_spawning.gd` (death rolls, caps, no container -> no rng, real-physics deferred spawn),
@@ -89,6 +91,41 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   Ram cover and well rows, and the level-1 exit guard
   `test_level1_fighter_exit.gd::test_cloud_descent_clears_in_time_with_wrecks_left_behind` (pre-approved levers: Assault wreck
   `avoid_weight` 0.3, then halving Assault `wreck_chance`; never the timeout).
+  **Mines are one family, `EnemyMine extends EnemyOrdnance` (Phase 7)** — `enemy_ordnance/mines/enemy_mine.gd`, `Variant { PROXIMITY, DRIFTING, HOMING, CHAIN, PULSE, EMP }`
+  (append-only; PROXIMITY is the Bomber's `mine.tscn`, same path). A mine **registers as a `&"mine"` hazard on `launch()`, not in `_enter_tree()`** (a pooled mine idles in its
+  pool) with the measured footprint `trigger_radius + hazard_pad` 60 at `avoid_weight` 1.0; its `Hostility` is `PLAYER` for every mine an enemy lays (layer-128 hurtboxes,
+  `ContactBlast`) or `ALL` for a *placed* mine (also set off by a layer-512 area whose parent is in group `enemies`, blasting through `Hazards.pulse_damage`); `placed = true`
+  makes it self-owned (`mine_life = placed_life`, 0 = never fizzles) through a **deferred** `_start_if_placed()`. A pulse mine's `PlayerBase.apply_boost_disruption()` scales only the
+  **excess** over `cruise_speed()` and is checked before a tank is spent; an EMP mine goes through the one `EmpPulse.emit()` hook, whose Ph7 player effect is a stand-in Ph9 replaces
+  without changing a signature. **The Mine Layer's mines persist, so neither it nor anything dropping persistent mines goes in an `ENEMIES_CLEARED` section.** Never name
+  `EnemyMine` inside `enemy_mine.gd` (a self-reference leaks at exit and fails the gate with every test green). [PROJECT.md](docs/architecture/PROJECT.md) → Conventions →
+  *Mines, minefields and the Mine Layer*. Phase 7 gates: `tests/integration/test_enemy_mines.gd` (each variant's trigger, scene numbers, the warning rule read from scene exports,
+  chain ripple, pulse / EMP application, sprites; both harnesses), `test_minefield.gd` (patterns, seeds, the ready-order boundary, 60 s no-fizzle, Assault drift, avoidance at
+  8x), `test_mine_layer.gd` (passes and trail placement, the planner's lead / fence forms, hub idle, persistence, hatch, `MineWake`, level-1 slice replays),
+  `test_player_boost_disruption.gd` (both ships: efficiency, the excess rule, refused boosts spend nothing, EMP), `tests/unit/test_emp_pulse.gd`, and the Mine Layer rows of
+  `test_level1_specialist_spawns.gd` (`EXPECTED_PH7`, peaks 8 / 7 against the frozen 2.5x gate), `test_engagement_deadline.gd` and `test_sector_hub_patrol.gd`
+  (pre-approved levers on `mine.tscn`, in order: `hazard_pad = 0`, then `registers_hazard = false`; neither was needed).
+  **Enemy lasers are one owner-ticked family, `EnemyBeam` (Phase 8)** — `assault/scenes/projectiles/enemy_beams/`, `Kind { BEAM, SWEEP, LANCE, TWIN }`,
+  `Phase { OFF, TELEGRAPH, ACTIVE, FADE }` (append-only). The owner calls `setup(host, owner_group)`, `start()`, `tick(delta)` on its physics tick and `cancel()`;
+  **`tick()` is the beam's only clock** (no `Timer`, `create_timer` or `_process`). An emitter beam points along its node's **local +X** (the owner rotates the parent).
+  Tuning lives in `beam.tscn` / `sweep_beam.tscn` / `lance.tscn` / `twin_beam.tscn`, read through `EnemyBeamScenes.export_of()`. A beam hurts every `player` / `allies` / `enemies` /
+  `asteroids` node whose hurtbox **shape** meets it (`EnergyHitScan`, `Shape2D.collide`, swept between ticks) **except its owner set**, never ordnance, by a direct
+  emit (bypasses `EnemyShield` and plates). `rehit_interval` 0.55 > the player's 0.5 s i-frames; telegraph line ≥ 3 px; static / sweep / lance fairness inequalities —
+  [BEAMS.md](assault/scenes/projectiles/enemy_beams/BEAMS.md). Gate: `tests/integration/test_enemy_beams.gd` (its real-player cadence rows run at **4×**, not 8×: at 8×
+  one headless idle frame outlasts the 0.05 s i-frame margin and refuses re-hits).
+  **Endpoint half (t5):** `twin_beam.tscn` takes `set_endpoints(a, b)` every tick; cover clips a beam through `LineOfSight.first_blocker()` **only on the physics step** (a hand-ticked beam never casts; cover rows run on real physics at 8×) and an endpoint beam leaves a safe shadow behind a blocker; `set_strained(true)` = non-lethal flicker; a `registers_hazard` beam is a `&"laser_wall"` segment `HazardInfo` from TELEGRAPH start to FADE start (full `a..b`, `exempt_group` = its owner group).
+  **The Pulse Ring is `EnergyRing`** (`enemy_beams/energy_ring.tscn`, `EnemyBeamScenes.ring_scene()` / `ring_export()`; `class_name PulseRing` stays Ph7's visual): owner-ticked
+  TELEGRAPH -> EXPANDING -> FADE, a 24 px band at 360 px/s whose outer edge stops at `max_radius` 280, two 45 degree gaps turning at 30 degrees/s, each target hit once per ring over
+  the swept interval. Gate: `tests/integration/test_energy_ring.gd`.
+  **Level 1's laser columns (Phase 8 t17):** `Level1Director.laser_column_schedule()` is the column schedule as data (`_build_schedules()` binds `_spawn_laser_columns` to it); they killed AI enemies, so `LaserRay` gained the opt-in `registers_hazard` (default false; race and station unaffected), set by the director's columns and all 12 rays of `laser_wall.tscn`. Gate `tests/integration/test_level1_laser_columns.gd`; re-measure with `scripts/measure-level1-columns.sh` (manual, `tests/helpers/level1_column_replay.gd`).
+  **Turret groups (Phase 8 t9) are coordinators, not parents:** `TurretGroup` (`assault/scenes/structures/turret_group/`, never in `enemies`, never scored) spawns its members deferred as siblings in the enemy container (announced with `EventBus.enemy_spawned_orphan`); a `PowerSource`'s `died` darkens every member through `set_powered(false)` in the same call, for good; a wave-spawned group's Assault x is world-anchored (`world_anchored_x`, via `EnemyWorld` only). Gate `tests/integration/test_turret_group.gd`. **A `ShieldGenerator` (t9s) is a member that sustains a 360 degree `EnemyShield` bubble on the others** (never itself, never a fence post, never displacing a ward already in the absorber slot); no `sustain()` after its death or the group going dark, so bubbles lapse; beams bypass them. **A `LaserFence` (t10) is two `LaserEmitter` posts and one twin-beam `EnemyBeam`** (`assault/scenes/structures/laser_fence/`, `assault/scenes/enemies/laser_emitter/`; the fence is not an enemy, the posts are, and answer `is_fence_post()`): `Mode { STATIC, CYCLE }`, ticked by its own `step(delta)`, registers a `&"laser_wall"` hazard while warning or lit, collapses for good on a post's `died` and lingers `linger_seconds` 1.0 so the posts' explosion particles (spawned under the fence) finish; a wave-spawned fence is world-anchored like a group. Gate `tests/integration/test_laser_fence.gd`.
+  **Twin-Laser Drones (t12) are two drones, one rig, one clock:** `TwinLaserPair` (`assault/scenes/enemies/twin_laser_drone/`, a `RefCounted` both brains hold) owns the `twin_beam.tscn` as a child of drone A and advances its phase only in the leader's tick (A while it lives); a separation error past `length_tolerance` for `strain_seconds` collapses the beam, a drone's death breaks the pair in the same call; Assault frames are planned inside `inner_rect()` and allow one attack per life. Spawn with `WaveBuilder.twin_laser_pair()`, never in an `ENEMIES_CLEARED` section. A hand-ticked drone test clears the body `collision_mask` (the broadphase is stale between hand ticks). Gate `tests/integration/test_twin_laser_drones.gd`.
+  **A Laser Tender (t13) launches its pair in a V into a moving wall (Attack B):** `LaserTender.launch_pair(points)` (`assault/scenes/enemies/laser_tender/`, the Ph10 / Ph11 seam) adds the two drones **synchronously** (physics step or idle code only, never a physics callback), binds them with the tender in the owner group and puts the rig in `TwinLaserPair.Phase.LAUNCHED` (appended): a straight boost to each point, a stop tick, then FORM on a fixed frame. One live pair, rearm, docking; Assault: one launch per life from the upper band. Spawn with `WaveBuilder.laser_tender()`, never in an `ENEMIES_CLEARED` section. Gate `tests/integration/test_laser_tender.gd`.
+  **Hub idle and measured exits (t14):** a hub pair and the tender idle through `AnchorIdle` (the pair's ticked by its leader only, rig `TwinLaserPair.Phase.IDLE` appended; `start_engaged` skips it; a stand-down never cuts a busy rig phase; the tender's duck-typed `recalls_drones()` docks a launched pair). Their Assault exits are measured once per GUT run: **build those probe calls only through `tests/helpers/ph8_exit_keys.gd`** (`drone_exit()` / `tender_exit()`, static `prepare_probe`, never a lambda: the memo keys on the Callable); a source sweep in `test_laser_tender.gd` fails a hand-built one.
+  **Level 1 (t19)** places an `assault_pair` turret group (`.at(64, -220)`, deep_space 3.0 s: world x 718 / 768 / 818, clear of every scheduled column *and* the
+  level-start `LaserWallWave`, x 0–672, which the plan's −64 sat in), a twin pair (deep_space 29.0 s) and a tender (planet_approach 2.0 s), pinned as `EXPECTED_PH8` and
+  counted per ship in the frozen 2.5× gate of `test_level1_specialist_spawns.gd` (with `test_ph8_static_members_clear_every_lit_column`); attacks replayed at 16× in
+  `test_level1_ph8_attacks.gd`.
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it
@@ -257,6 +294,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   Phase 3 shooters joined it: the hub also patrols a fighter pair and a Gatling pair, and the same
   sweep now also asserts each of those groups clears its own ring (the Gatling's margin is only
   +88.7 px, so a pickup added closer than that fails it).
+  Phase 7 added the Mine Layer to `_patrol_groups()` and the hub `Minefield` to `_element_radius()` (`radius` + the drift leash + the PROXIMITY trigger = 400 px), so a later placed
+  field or patrol is covered by the same sweep (Mine Layer +585.6 px from the field, Gatling +775.1 px).
+  Phase 8 (t18) added the Laser Tender (draw 16) and a twin pair (draw 17, a `TwinLaserPairSpawn` that stays a *queued* `EnemyContainer` child for the
+  frame: count live children) to `_patrol_groups()`, and the defended derelict site `EnemyContainer/HubDefenseSite` (`hub_defense_site.tscn`) with two
+  sweeps over every `TurretGroup` / `LaserFence` child of `EnemyContainer`: **A**, its fire reach (1360 px) clears the spawn, triggers and pickups by
+  more than 300 px; **B**, every patrol's idle ring clears its footprint (416 px). A later placed site or patrol is covered by both.
   `tests/integration/test_enemy_bullet_lifetime.gd` is an eighteenth, the **round lifetime sweep**,
   and `tests/integration/test_enemy_rounds.gd` its companion over the bullet family (Pulse, Scatter,
   Gatling Stream, Heavy Shell under `assault/scenes/projectiles/enemy_bullet/rounds/`): for every

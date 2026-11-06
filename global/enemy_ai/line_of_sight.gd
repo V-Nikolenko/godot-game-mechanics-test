@@ -21,8 +21,15 @@ const MAX_RECASTS := 4
 ## True when no blocker stands on the segment `from`→`to`. `exclude` (e.g. the caster's own body)
 ## is never modified.
 static func clear(space: PhysicsDirectSpaceState2D, from: Vector2, to: Vector2, exclude: Array[RID] = []) -> bool:
+	return first_blocker(space, from, to, exclude).is_empty()
+
+
+## The first blocker on the segment `from`→`to` as the ray's hit dictionary (`position`, `collider`, ...), or an empty
+## dictionary when the line is clear (or `space` is null, or the recast cap was reached). The one loop `clear()` and the energy
+## beams' cover clip share. `exclude` is never modified.
+static func first_blocker(space: PhysicsDirectSpaceState2D, from: Vector2, to: Vector2, exclude: Array[RID] = []) -> Dictionary:
 	if space == null:
-		return true
+		return {}
 	var query := PhysicsRayQueryParameters2D.create(from, to, BLOCK_MASK)
 	query.collide_with_areas = false
 	query.collide_with_bodies = true
@@ -31,17 +38,19 @@ static func clear(space: PhysicsDirectSpaceState2D, from: Vector2, to: Vector2, 
 		query.exclude = skipped
 		var hit := space.intersect_ray(query)
 		if hit.is_empty():
-			return true
+			return {}
 		var collider: Object = hit.get("collider")
-		if _blocks(collider):
-			return false
+		if blocks(collider):
+			return hit
 		skipped.append(hit.rid)
 	if OS.is_stdout_verbose():
 		print("LineOfSight: recast cap reached between %s and %s; counting the line as clear" % [from, to])
-	return true
+	return {}
 
 
-static func _blocks(collider: Object) -> bool:
+## True when [param collider] opts in as a sight-line blocker: in group `asteroids`, or answering
+## `blocks_line_of_sight() == true`.
+static func blocks(collider: Object) -> bool:
 	if collider == null:
 		return false
 	if collider is Node and (collider as Node).is_in_group(BLOCKER_GROUP):

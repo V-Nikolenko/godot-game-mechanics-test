@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="LaserEmitterConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/laser_emitter/laser_emitter_config.gd" id="1_lec"]
+
+[resource]
+script = ExtResource("1_lec")
+max_health = 140
+collision_damage = 0
+score_value = 40
+counts_toward_wave_clear = true
+counts_as_escape = false
+hazard_avoidance = 0.0
+hazard_margin = 0.0
+hazard_resistance = 0.0
+wreck_chance = 0.0

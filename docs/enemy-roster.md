@@ -390,6 +390,113 @@ b.support_ship().at(0, -400)
 
 ---
 
+### `mine_layer` — Mine Layer
+
+**Builder:** `b.mine_layer()`  
+**Scene:** `mine_layer.tscn`  
+**Movement:** AI-driven (`MineLayerBrain` + `EnemyMover`). Open Space: idles at its patrol point, then, once it notices the player, orbits at 600 px and flies **passes** — it closes on a run-in point, then crosses the player's path sideways at `lay_speed` 170, laying one line of 6 mines (ZIGZAG or ARC, 600 px) from its stern, breaks off and repositions; one line every ~10-14 s. Assault: the same logic clamped to the corridor, **one pass per life** along the horizontal axis, then it leaves. `.move()` puts it on a rail, where it drops a PROXIMITY mine every `rail_mine_interval` 1.6 s.  
+**Shoots:** No guns. Mines (`EnemyMine`: proximity 50 %, chain 20 %, pulse 15 %, homing 15 % by default; drifting and EMP weight 0) from four persistent pools; a player bullet defuses a mine (a chain mine detonates).  
+**HP:** 140 (an r 40 circle, ~96 px hull); contact damage 25 (COLLISION)  
+**Score:** 60 (mines score nothing)
+
+**Config fields** (`MineLayerConfig`): `max_speed` 240, `lay_speed` 170, `exit_speed` 300, `mines_per_pass` 6, `pass_length` 600, `mine_step` 100, `max_live_mines` 18 / `assault_max_live_mines` 8, `assault_mine_life` 9.0 s, `open_space_mine_life` 0 (never fizzles) with a 240 s backstop, `engage_seconds` 9.0, `pass_period_min`/`max` 5-7 s, `perceive_radius` 650 / `lose_radius` 1500, `rail_mine_interval` 1.6, mine weights `w_*` — the rest in `mine_layer_config.gd`. `.tres` wins over the scene.
+
+**Level 1:** deep_space 16.0 s (from the left) and planet_approach 47.0 s (from the right), AI-driven (no `.move()`). **Never place it in an `ENEMIES_CLEARED` section** — its persistent mines would hold the section open (`test_engagement_deadline.gd`). **Hub:** one patrols a 2600 px ring at bearing −22.5°. Counts as a specialist in the frozen 2.5× density gate (`EXPECTED_PH7`).
+
+**Examples:**
+```gdscript
+# Spawn it and let it fly its own pass (no .move()) - level 1's shape
+b.mine_layer().at(-400, -160)
+
+# On a rail (legacy shape): a proximity mine every rail_mine_interval
+b.mine_layer().at(0, -400).move(b.straight(82))
+```
+
+---
+
+### `defense_turret` — Stationary Defense Turret
+
+**Builder:** `b.defense_turret()`  
+**Scene:** `defense_turret.tscn`  
+**Movement:** None: no `EnemyMover`, and the root never rotates. Its weapon mount turns its head (2.0 rad/s), scans a 90° arc when idle, notices the player (Open Space: within 900 px, lost beyond 1100; Assault: once its centre is inside the view) and tracks them. In Assault an `AssaultDrift` child scrolls it down at 60 px/s like wreckage and frees it below the world; it never counts as an escape.  
+**Shoots:** The weapon is its mount (`TurretMount`), picked with `.prop("variant", TurretMount.Variant.X)`. Built so far: BURST_CANNON (variant 0), a 0.4 s charge then 4 Pulse rounds (8 dmg, 300 px/s) 0.12 s apart with a 0.6 partial lead, then 2.2 s cooldown. It holds fire without line of sight (a wreck or asteroid between) and never fires from off-screen. SWEEP_BEAM (a 0.9 s line at the start bearing on the side the player is moving from, then a 2.0 s sweep of 100 degrees; range 400), LANCE (1.0 s warning, aim locked for the last 0.5 s, one 24-damage hit; range 1100) and BEAM_CANNON (0.9 s warning on a bearing frozen when it appears, 1.2 s lit; range 700) fire `EnemyBeam`s that hurt everything on their line except the turret and its group. ROCKET_BATTERY (variant 2: a 0.5 s tube glow, then a salvo of 2 rockets 0.35 s apart, each Pursuit one time in three and otherwise Dumb; range 900; **fires without line of sight**; 5.5 s cooldown; the rockets outlive the turret) and PULSE_RING (variant 3: idle until the player is within 300 px, then a 0.8 s warning and an expanding energy ring with two gaps out to 280 px, 3.5 s cooldown; it hurts everything it crosses except the turret and its group) complete the set.  
+**HP:** 90 (an r 28 circle); contact damage 0 (`ContactProfile` NONE, no `ContactHitBox`)  
+**Score:** 60 (`counts_as_escape` false)
+
+**Config fields** (`DefenseTurretConfig`): `perceive_radius` 900, `lose_radius` 1100, `notice_time` 0.3, `assault_drift_speed` 60. Weapon tuning lives in the mount scene (`defense_turret/mounts/burst_cannon_mount.tscn`), never in the config.
+
+**Placed:** in level 1 as a member of Deep Space's `assault_pair` group (3.0 s wave); in the hub as the sweep, rocket and lance turrets of the hub's `HubDefenseSite` (`presets/hub_defense_site.tscn`, a child of `EnemyContainer`). **Never place it in an `ENEMIES_CLEARED` section** (persistent fire).
+
+**Examples:**
+```gdscript
+b.defense_turret().at(-200, -100)
+b.defense_turret().at(200, -100).prop("variant", TurretMount.Variant.BURST_CANNON)
+```
+
+---
+
+### `heavy_emplacement` — Heavy Emplacement (Phase 8)
+
+**Builder:** `b.heavy_emplacement()`  
+**Scene:** `heavy_emplacement.tscn` (the `DefenseTurret` root and brain, its own `heavy_emplacement_config.tres`)  
+**Movement:** None, like the turret; an `AssaultDrift` scrolls it down at 60 px/s in Assault.  
+**Shoots:** two mounts that aim independently, each slot retuned to 1.2 rad/s: a BEAM_CANNON at (0, -30) (0.9 s telegraph on a frozen bearing, 1.2 s lit) and a BURST_CANNON at (0, 34) (4 Pulse rounds, partial lead). Its beam never hurts its own hull or owner group.  
+**HP:** 260 (an r 64 circle); contact damage 0  
+**Score:** 150 (`counts_as_escape` false)
+
+**Placed:** in the hub, the centrepiece of the hub's `HubDefenseSite` (`presets/hub_defense_site.tscn`, a child of `EnemyContainer`); not in level 1. **Never place it in an `ENEMIES_CLEARED` section.** See [ENEMY.md](../assault/scenes/enemies/heavy_emplacement/ENEMY.md).
+
+```gdscript
+b.heavy_emplacement().at(0, -120)
+```
+
+---
+
+### `turret_group` — Turret group (with its power source)
+
+**Builder:** `b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR)` (any preset path under `assault/scenes/structures/turret_group/presets/`)  
+**Scene:** a preset, e.g. `assault_pair.tscn`: a BURST_CANNON turret at (−50, 60), a PULSE_RING turret at (50, −60) and a power source at (0, 0) (design px ×2 = world)  
+**What it is:** a coordinator, not an enemy (never scored, never in `enemies`). It spawns its members next to it in the container (each an ordinary, scored enemy) and frees itself after the last. In Assault its **x is world-anchored**: `.at(x, y)` lands at world x `640 + 2·x` however the player has panned the view (so `.at(64, -220)` puts the members at 718 / 768 / 818, between level 1's laser columns and clear of the level-start `LaserWallWave`, x 0–672, which kills a group at `.at(-64, -220)`; a static placement in deep_space must clear both); y is camera-relative as usual.  
+**Power source** (`power_source.tscn`, member only): HP 150, score 80, `counts_as_escape` false, no weapon; amber lines run from it to each turret. **Killing it shuts every turret of the group down at once, for good**; the dark turrets can still be destroyed for score.  
+**Shield generator** (`shield_generator.tscn`, member only; the hub's `hub_defense_site.tscn` carries one): HP 120, score 80, `counts_as_escape` false; while powered it keeps a 360° bubble (50 points, absorbs bullets and rockets, never beams) on every other member including the power source, never on a fence post, never displacing a Support Ship ward; cyan tethers show who is covered. Killing it, or the power source, drops every bubble within about 0.6 s.  
+**Stagger:** the group's turrets start their warnings at least 0.3 s apart.
+
+**Never place it in an `ENEMIES_CLEARED` section** (persistent fire; guarded by `test_engagement_deadline.gd`). Placed: level 1's Deep Space 3.0 s wave (`assault_pair`) and the hub's defense site.
+
+```gdscript
+b.turret_group(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR).at(64, -220)
+```
+
+---
+
+### Laser fence (Phase 8)
+**Builder:** `b.laser_fence()` (`.prop("mode", LaserFence.Mode.CYCLE)` for a temporary barrier; `phase_offset`, `off_seconds`, `on_seconds` the same way)  
+**Scene:** `assault/scenes/structures/laser_fence/laser_fence.tscn`: two `LaserEmitter` posts (HP 140, score 40, `counts_as_escape` false) 300 px apart and a laser wall between them (12 damage, 0.9 s warning line first). In Assault its **x is world-anchored** like a turret group's.  
+**Counterplay:** shoot a post and the whole fence drops for good (it lingers one second so the explosions finish); AI enemies with hazard avoidance steer round the ends, ones without fly into it. A shield generator never shields a post. **Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Placed in the hub only (`hub_barrier.tscn`, a CYCLE fence in the defense site); not in level 1.
+
+### `twin_laser_pair` — Twin-Laser Drones (Phase 8)
+**Builder:** `b.twin_laser_pair()`; `.at(x, y)` is the pair's midpoint, camera-relative like every ship spawn  
+**Scene:** `assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn` (`TwinLaserPairSpawn`, not an enemy, never scored): it spawns two `twin_laser_drone.tscn` drones 420 px apart along its x, binds them into a `TwinLaserPair` rig and frees itself  
+**Drone:** HP 30 (r 13), contact 8 (COLLISION), score 30 each, `max_speed` 300; the beam between them is `twin_beam.tscn` (12 per hit, re-hit 0.55 s, 0.8 s warning line)  
+**Attack A:** the drones fly to opposite sides of the player 260 px off, show the line for 0.8 s (lenses yellow), then fly the whole line through where the player was and 200 px past at 240 px/s, keeping its length. Open Space: again every 4–6 s. Assault: one attack inside the corridor (a horizontal line from above, or a vertical one from the side when the player is near the top), then they leave.  
+**Counterplay:** reach an end (the wall is slower than the player); kill either drone and the line drops at once; a gravity well or a wreck that pulls or stops one drone strains the line and collapses it; the line hurts other enemies too.  
+**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Placed: level 1 sends one pair in Deep Space's 29.0 s wave (`b.twin_laser_pair().at(-250, -220)`); the hub patrols one (draw 17). A Laser Tender (`b.laser_tender()`, below) launches its own pair. See [ENEMY.md](../assault/scenes/enemies/twin_laser_drone/ENEMY.md).
+
+```gdscript
+b.twin_laser_pair().at(0, -120)
+```
+
+### `laser_tender` — Laser Tender (Phase 8)
+**Builder:** `b.laser_tender()`; `.at(x, y)` camera-relative like every ship spawn (spawn it above the view: it flies down into the upper band)  
+**Scene:** `assault/scenes/enemies/laser_tender/laser_tender.tscn` (`LaserTender`): HP 160 (r 40), contact 15 (COLLISION), score 120, `max_speed` 200, no gun, two Twin-Laser Drones docked in visible cradles  
+**Attack B:** its cradles glow yellow for 0.6 s, then it launches both drones in a V toward two points either side of where the player is going; they land as a 420 px wall across that route, warn for 0.8 s and advance through it. Open Space: one live pair at a time, a 7 s rearm after both drones are gone, a lone survivor flies home and docks. Assault: it holds in the upper band of the screen and launches **once** (a vertical wall 180 px ahead of a strafing player, a horizontal one 260 px above a still one), then leaves; a pair is launched no later than spawn + 10.0 + 0.6 s.  
+**Counterplay:** change direction when the cradles glow; go round an end; kill a drone to drop the wall; kill the tender to stop the walls.  
+**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). Placed: level 1 sends one in Planet Approach's 2.0 s wave (`b.laser_tender().at(-300, -200)`); the hub patrols one (draw 16). See [ENEMY.md](../assault/scenes/enemies/laser_tender/ENEMY.md).
+
+```gdscript
+b.laser_tender().at(0, -230)  # 100 px above the view
+```
+
 ### `bonus_drone` — Bonus Drone
 
 **Builder:** `b.bonus_drone()`  
@@ -561,6 +668,10 @@ bomb (`EnemyOrdnance`, an `Area2D`; not an `EnemyBullet`, not in `enemies`, neve
 Its pools set `persist_after_owner_death`, so what a Bomber dropped outlives it. See `docs/BULLET_POOL.md` and
 `bomber/ENEMY.md`.
 
+The proximity mine is the first of the Ph7 **mine family** (`EnemyMine`, `mines/`): PROXIMITY (this one), DRIFTING, HOMING, CHAIN, PULSE (boost
+disruption) and EMP, laid by the Mine Layer (`mine_layer/ENEMY.md`) or placed in a `Minefield` (`hazards/minefield/HAZARD.md`). Every mine registers as a
+`&"mine"` hazard, so enemies steer round it. Detail: [assault.md](architecture/modules/assault.md) → *Mines and the Mine Layer*.
+
 
 ### Enemy rockets (Ph5)
 
@@ -604,6 +715,7 @@ scored. **Tuning lives in each scene's exports.** Art and `rotation` are nose-up
 | **Rockets hurt enemies by impact only** | An `EnemyRocket`'s impact hits enemies, ordnance, Ram plates and asteroids; its blast hurts only the player and allies. Never put a rocket launcher where its own rockets can overlap its hull (`rocket_clear_radius()`). |
 | **Supports never repair supports** | A `SupportShip` is never a ward and `can_be_repaired()` is false; it deals 0 contact damage. |
 | **`missile_corvette` and `support_ship` are DURATION-only** | Never place either in an `ENEMIES_CLEARED` section: rockets persist and hold the section open, and a support has no wave-clear role (`test_engagement_deadline.gd`). |
+| **`mine_layer` (and anything that drops persistent mines) is DURATION-only** | Never place it in an `ENEMIES_CLEARED` section: mines outlive the layer (`assault_mine_life` 9 s) and the layer itself defers its budget to the end of a pass. A mine is never in `enemies` and never scored. |
 
 ---
 

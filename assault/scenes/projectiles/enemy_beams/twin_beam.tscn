@@ -1,0 +1,25 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/projectiles/enemy_beams/enemy_beam.gd" id="1_beam"]
+
+[node name="TwinBeam" type="Node2D"]
+script = ExtResource("1_beam")
+kind = 3
+telegraph_seconds = 0.8
+commit_seconds = 0.0
+active_seconds = 0.0
+fade_seconds = 0.15
+ignite_grace = 0.1
+length = 0.0
+hit_half_width = 10.0
+draw_half_width = 14.0
+tip_grace_px = 0.0
+telegraph_width = 4.0
+damage = 12
+rehit_interval = 0.55
+sweep_arc_deg = 0.0
+sweep_rate = 0.0
+blocked_by_cover = true
+registers_hazard = true
+avoid_weight = 0.5
+hazard_pad = 24.0

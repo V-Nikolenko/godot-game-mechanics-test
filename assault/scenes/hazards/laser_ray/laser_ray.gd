@@ -61,6 +61,12 @@ extends Node2D
 ## then left disabled to avoid the assault HurtBox/game-over damage path.
 @export var race_hazard: bool = false
 
+## Opt-in (default false: the race gauntlet and the station are unchanged). When true the ray is in `Hazards` as one
+## `&"laser_wall"` segment `HazardInfo` from `start()` (the warning line) to the beginning of the dissolve (end of active),
+## so enemy steering avoids the lane before it is lit and while it is. Level 1's columns and its `LaserWallWave` set it:
+## they kill AI enemies (docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md, "Phase 8, built in t17").
+@export var registers_hazard: bool = false
+
 ## ── Constants ────────────────────────────────────────────────────────────────
 
 ## Size of one tile in pixels (square sprite-sheet cell).
@@ -77,6 +83,9 @@ const _KILL_DAMAGE: int = 9999
 ##   256 = enemy HurtBox set in code (razor_drone)
 ##   512 = enemy_hurtbox (layer 10) used by most enemies and asteroids in .tscn
 const _HIT_MASK: int = 128 | 256 | 512
+
+## Extra radius (px) around the lit strip's half width that a registered hazard keeps clear (plan §2.4's laser-wall footprint).
+const _HAZARD_PAD: float = 24.0
 
 ## Animations that must play once and emit animation_finished (NOT loop).
 const _ONESHOT_ANIMS: Array[StringName] = [
@@ -101,6 +110,10 @@ var _segments:        Array[AnimatedSprite2D] = []
 ## or shield charges). Fires every 0.1 s — fast enough that shields deplete
 ## quickly, slow enough to avoid spam.
 var _continuous_timer: Timer = null
+
+## The registered laser-wall footprint, refreshed in place by `hazard_info()`; null until `start()` of an opted-in ray.
+var _hazard: HazardInfo = null
+var _hazard_registered: bool = false
 
 ## ── Lifecycle ────────────────────────────────────────────────────────────────
 
@@ -127,6 +140,9 @@ func _ready() -> void:
 
 	if auto_start:
 		start()
+
+func _exit_tree() -> void:
+	_sync_hazard(false)
 
 ## Build the beam: reuse the BeamSprite template as segment 0, then clone the
 ## remaining tiles so they all share the same SpriteFrames and stay frame-synced.
@@ -165,6 +181,7 @@ func _build_collision() -> void:
 ## Kick off the laser sequence from the outside if auto_start is false.
 func start() -> void:
 	_phase = _Phase.INIT
+	_sync_hazard(true)
 	_play_all(&"laser_init")
 	## Hold the warning line for warn_duration, then charge up. With warn_duration
 	## <= 0 we advance the moment the init frame finishes (see _on_animation_finished).
@@ -232,6 +249,7 @@ func _begin_dissolve() -> void:
 	if _phase != _Phase.IDLE:
 		return
 	_phase = _Phase.DISSOLVE
+	_sync_hazard(false)
 	_continuous_timer.stop()
 	_hit_zone.monitoring  = false
 	_hit_zone.monitorable = false
@@ -304,3 +322,31 @@ func danger_rect() -> Rect2:
 		mn = mn.min(c)
 		mx = mx.max(c)
 	return Rect2(mn, mx - mn)
+
+## ── Laser-wall hazard (only meaningful when registers_hazard = true) ───────────────────────────────
+
+## The hit strip's long axis as a `&"laser_wall"` `HazardInfo` while the ray is registered (warn start to the end of
+## active); null otherwise. Refreshed in place from the ray's current transform, so a ray that is moved stays true.
+func hazard_info() -> HazardInfo:
+	if not _hazard_registered:
+		return null
+	var half := Vector2.DOWN.rotated(global_rotation) * (_TILE * float(segment_count) * 0.5)
+	_hazard.position = global_position + half
+	_hazard.segment_half = half
+	return _hazard
+
+func _sync_hazard(want: bool) -> void:
+	want = want and registers_hazard and is_inside_tree()
+	if want == _hazard_registered:
+		return
+	_hazard_registered = want
+	if want:
+		if _hazard == null:
+			_hazard = HazardInfo.new()
+			_hazard.kind = &"laser_wall"
+			_hazard.radius = _BEAM_WIDTH * 0.5 + _HAZARD_PAD
+			_hazard.avoid_weight = 1.0
+			_hazard.source = self
+		Hazards.register(self)
+	else:
+		Hazards.unregister(self)

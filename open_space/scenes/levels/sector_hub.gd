@@ -1,8 +1,9 @@
 # open_space/scenes/levels/sector_hub.gd
 extends Node2D
 
-## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair and a Sniper, a Bomber, a Ram Corvette, a Missile Corvette and a Support Ship, each
-## patrolling its own anchor point, and assigns the planet config.
+## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair and a Sniper, a Bomber, a Ram Corvette, a Missile Corvette, a Support Ship, a Mine Layer, a Laser Tender
+## and a Twin-Laser Drone pair, each patrolling its own anchor point, and assigns the planet config. The defended derelict site by the
+## TacticalSpace is a scene node under `EnemyContainer` (a `TurretGroup` preset), not part of the patrol.
 ## To change this planet's missions, background, or sprite — edit edelia.tres.
 ## To use a different config, change the path in _configure_planet().
 ##
@@ -25,6 +26,9 @@ const BOMBER: PackedScene = preload("res://assault/scenes/enemies/bomber/bomber.
 const RAM_CORVETTE: PackedScene = preload("res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn")
 const MISSILE_CORVETTE: PackedScene = preload("res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn")
 const SUPPORT_SHIP: PackedScene = preload("res://assault/scenes/enemies/support_ship/support_ship.tscn")
+const MINE_LAYER: PackedScene = preload("res://assault/scenes/enemies/mine_layer/mine_layer.tscn")
+const LASER_TENDER: PackedScene = preload("res://assault/scenes/enemies/laser_tender/laser_tender.tscn")
+const TWIN_LASER_PAIR_SPAWN: PackedScene = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn")
 
 ## Fighters and Gatlings patrol in pairs, a squad of two each (epic plan §2.10).
 const SHOOTER_SQUAD_SIZE := 2
@@ -57,6 +61,19 @@ const SHOOTER_SQUAD_SIZE := 2
 @export var missile_corvette_ring_radius: float = 1900.0
 @export var missile_corvette_anchor_bearing_deg: float = 315.0
 
+## The Mine Layer (epic plan §2.15, phase 7) takes a fifth ring: -22.5 deg on 2600 puts its anchor at about (2402, -995),
+## north of the Gatling and east of the Missile Corvette, well away from the TacticalSpace (and its Minefield).
+@export var mine_layer_ring_radius: float = 2600.0
+@export var mine_layer_anchor_bearing_deg: float = -22.5
+
+## The Laser Tender and a standalone Twin-Laser Drone pair (epic plan §2.17, phase 8) share the 2600 ring with the Mine Layer: 112.5 deg puts the
+## tender at about (-995, 2402) and -157.5 deg the pair at about (-2402, -995), each > 1000 px from every other anchor. The defended derelict site
+## is a scene node under `EnemyContainer` (`hub_defense_site.tscn`), not a draw.
+@export var laser_tender_ring_radius: float = 2600.0
+@export var laser_tender_anchor_bearing_deg: float = 112.5
+@export var twin_pair_ring_radius: float = 2600.0
+@export var twin_pair_anchor_bearing_deg: float = -157.5
+
 @onready var enemy_container: Node2D = $EnemyContainer
 
 func _ready() -> void:
@@ -79,6 +96,14 @@ func _spawn_patrol() -> void:
 	# Phase 5, draws 13 and 14: appended after the twelve above, so every existing seed is unchanged.
 	_spawn_missile_corvette(_missile_corvette_anchor(), rng)
 	_spawn_support_ship(_specialist_anchor(ram_anchor_bearing_deg), rng)
+	# Phase 7, draw 15: appended after the fourteen above, so every earlier seed is unchanged.
+	_spawn_mine_layer(_mine_layer_anchor(), rng)
+	# Phase 8, draws 16 and 17: appended after the fifteen above, so every earlier seed is unchanged.
+	_spawn_laser_tender(_ring_anchor(laser_tender_ring_radius, laser_tender_anchor_bearing_deg), rng)
+	_spawn_twin_laser_pair(_ring_anchor(twin_pair_ring_radius, twin_pair_anchor_bearing_deg), rng)
+
+func _ring_anchor(radius: float, bearing_deg: float) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * radius
 
 func _anchor(bearing_deg: float) -> Vector2:
 	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * patrol_ring_radius
@@ -91,6 +116,37 @@ func _specialist_anchor(bearing_deg: float) -> Vector2:
 
 func _missile_corvette_anchor() -> Vector2:
 	return Vector2.RIGHT.rotated(deg_to_rad(missile_corvette_anchor_bearing_deg)) * missile_corvette_ring_radius
+
+func _mine_layer_anchor() -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(mine_layer_anchor_bearing_deg)) * mine_layer_ring_radius
+
+## `patrol_anchor` and the seed are set before `add_child()`, so the brain's `_start()` builds its hub idle around the
+## anchor. Its mines are dropped into `EnemyContainer` (the pool's grandparent) and persist there.
+func _spawn_mine_layer(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var layer := MINE_LAYER.instantiate() as MineLayer
+	layer.global_position = anchor
+	var brain := layer.get_node("Brain") as MineLayerBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(layer)
+
+## Draw 16. The tender's pair is built at launch (it docks none at spawn), so it is one ship here.
+func _spawn_laser_tender(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var tender := LASER_TENDER.instantiate() as LaserTender
+	tender.global_position = anchor
+	var brain := tender.get_node("Brain") as LaserTenderBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(tender)
+
+## Draw 17, on the spawner: drone A takes it and drone B it + 1, and both share the spawner's position as `patrol_anchor`. `spawn_pair()` is called
+## at once (its own deferred call is then a no-op), so the pair exists on frame 0 like every other patrol; the spawner frees itself.
+func _spawn_twin_laser_pair(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var spawner := TWIN_LASER_PAIR_SPAWN.instantiate() as TwinLaserPairSpawn
+	spawner.global_position = anchor
+	spawner.rng_seed = _next_seed(rng)
+	enemy_container.add_child(spawner)
+	spawner.spawn_pair()
 
 func _spawn_missile_corvette(anchor: Vector2, rng: RandomNumberGenerator) -> void:
 	var corvette := MISSILE_CORVETTE.instantiate() as MissileCorvette
