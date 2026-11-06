@@ -3433,9 +3433,9 @@ above stand except where this section says otherwise; the per-task *Phase 8, bui
 - The player's mining beam still stops at every layer-1 enemy root (S13). No kill attribution for enemy-weapon kills. Nothing was play-tested; all §2.21 starting values are judgement.
 - The level-1 column measurement counts only ships with a brain, so brainless structures never appear in it.
 
-## Phase 9 - Enemy rework, phase 9: electronic warfare - Jamming Structure, Hacker Frigate and EMP (2026-11-06)
+## Phase 9 - Enemy rework, phase 9: electronic warfare - Jamming Structure, Hacker Frigate and EMP (2026-11-07)
 
-Plan: `docs/plans/cmug23onr001pm52w9swwophy/3-plan.md` (revision 2, answering the AI plan review `4-review.md`: 2 blocking + 14 minor findings, all addressed in its §8), research in `1-context.md` / `2-research.md` (scope check S1–S18, findings F1–F12) in the same directory.
+Plan: `docs/plans/cmug23onr001pm52w9swwophy/3-plan.md` (revision 3: revision 2 answered round 1 of the AI plan review `4-review.md`, 2 blocking + 14 minor; revision 3 answers round 2, 1 blocking + 9 minor, and the owner's return of revision 2; all in its §8), research in `1-context.md` / `2-research.md` (scope check S1–S18, findings F1–F12) in the same directory.
 These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
 
 ### Changes to earlier decisions
@@ -3467,11 +3467,12 @@ These are *planned* decisions; check this phase's *as built* section, once writt
 - **Hijacked rocket rules:** turn-limited (1.6 rad/s), 380 px/s, 2.5 s then fizzle; hurts the player only by `ContactBlast` (18, r 40, armed after 0.25 s and 60 px), full damage
   to enemies (the lure), shoot-down HurtBox 512/64 only while hijacked, fizzles when its source is freed. No new collision bit. **Its HitBox (mask 513, which includes 512) ignores
   any area whose parent is a `homing_missile`** (the `EnemyRocket` self-guard), so a player rocket never hits its own HurtBox or another player rocket; only primary fire shoots a
-  hijacked rocket down. One `_finish(blasted)` end of life, which the `ProjectileLifetime` expiry also goes through (so `retarget_ended` always fires). The rocket draws its own
+  hijacked rocket down. `warhead_missile.gd` carries the same guard (its HitBox is also mask 513). One `_finish(blasted)` end of life, which the `ProjectileLifetime` expiry also goes through (so `retarget_ended` always fires). The rocket draws its own
   0.3 s tether; the dart is recycled on the claim tick.
 - **Lock clocks:** every lock / EMP / suppress clock is `x -= delta`, over at `x <= 1e-6` (float drift otherwise ends a 1.5 s lock on tick 91). Later timed effects use the same rule.
 - **Enemy EMP hook:** `BaseEnemy.answers_emp() -> bool` (default `is_ai_driven()`; the one routing question for every EMP source), `apply_emp(seconds, source)` /
-  `is_emp_disrupted()`; for brain-driven ships the brain tick is skipped, the mover still steps, the hurtbox is untouched; `EnemyBrain.on_emp_started()` virtual (twin drones
+  `is_emp_disrupted()`; for brain-driven ships the brain tick is skipped, the mover still steps, the hurtbox is untouched; `suspend_ai()` clears a live window (a railed ship's
+  `_physics_process` returns early, so its clock would otherwise stop for good); `EnemyBrain.on_emp_started()` virtual (twin drones
   collapse their pair, the tender cancels a launch telegraph). `JammingStructure` overrides `answers_emp()` true and answers by `HazardField.suppress(seconds)` (field quiet,
   tower shootable, cycle keeps running). Other structures and legacy enemies answer false. A later structure with its own EMP answer overrides the same pair. `EnemyRocket` joins
   `&"enemy_seeking_ordnance"` while it steers and answers `jam_guidance()`.
@@ -3482,31 +3483,40 @@ These are *planned* decisions; check this phase's *as built* section, once writt
   (`EmpZone extends Node2D` with a child `HazardField` `&"emp_zone"`, avoid 0.6, one `TARGET_ALL` emit per cycle on its `phase_changed`; composition, never a
   `HazardField` subclass). `HazardField` gains `suppress(seconds)`. `WaveBuilder.jammer(variant)`, `WaveBuilder.hacker_frigate()`.
 - **Hacker movement:** HOLD_ARC with asymmetric 0.18 / 0.30 rad/s arcs; inside the player's nose cone (± 30°) or route cone (± 25°, player > 80 px/s) the orbit is forced toward
-  the nearer edge at 0.30 rad/s (216 px/s at 720 px, under `max_speed` 230): it slides out of a nose that stops, it does not out-turn a tracking player. BREAK_OFF inside 420 px is a
+  the nearer edge at 0.30 rad/s (216 px/s at 720 px, under `max_speed` 230): it slides out of a nose that stops, it does not out-turn a tracking player. **`acceleration` is 700
+  px/s²** (the Support Ship's), because the escape usually has to stop a wrong-way orbit first (at 260 that takes 0.83 s and the Hacker leaves the cone later than with no rule at
+  all). Rows: exit through the near edge within 2.2 s (720 px), 1.9 s (520 px), 1.8 s (route), set from a simulation of the mover rule with ≈ 0.5 s margin; controls with the cone
+  off are still inside at the bound. A later retune of `acceleration`, `max_speed` or `cone_escape_speed` must keep those rows green. BREAK_OFF inside 420 px is a
   committed `mover.boost` at 360 px/s with `break_lateral_weight` 0.25 (radial ≈ 322 px/s; `break_contact` doubles the lateral share against a closing threat), ≤ 3.0 s, 1.0 s
   rearm; Assault uses the view-clamped request instead. Every behaviour row has a control that switches the behaviour off and must fail the same bound.
-- **Hacker pulse:** TELEGRAPH 0.9 s (damage cancels it) → PULSE 1.6 s claiming up to 3 eligible rockets within 650 px with LOS (in flight and newly launched); cooldown 6–8 s;
+- **Hacker pulse:** TELEGRAPH 0.9 s (damage cancels it), started only with the player within **`pulse_trigger_range` 870** (= held range 720 + drift 90 + 60, so the range drift
+  never gates the pulse) → PULSE 1.6 s claiming up to 3 eligible rockets within **`hijack_range` 650 of the Hacker** (the rocket-claim reach, not a player gate) with LOS (in flight
+  and newly launched), darts launched from the hull centre; cooldown 6–8 s;
   **1 pulse per Assault life** (a second cannot fit in the 9 s budget, so 1 is the only cap that binds); Assault view clamp + `EngagementBudget` 9 s + measured exit
   (`tests/helpers/ph9_exit_keys.gd`). The dart lives 1.6 s / 1400 px at 900 px/s; a rocket receding at full range can outrun it, by design. LOS is the Ph6 rule (only asteroids
-  and wrecks block; enemy bodies do not). The Disruptor hook is `pulse_lock_seconds`, applied at **PULSE end** (a lock during PULSE would refuse the launches it hijacks).
+  and wrecks block; enemy bodies do not). The Disruptor hook is `pulse_lock_seconds`, applied at **PULSE end** to a player within `pulse_trigger_range` with LOS (a lock during PULSE would refuse the launches it hijacks);
+  the field and the call are built with the pulse (0.0 in the base config), the Disruptor only sets 1.5.
 - **Audio seam:** `EventBus.player_ability_lock_changed(locked: bool)`, `EventBus.player_ordnance_hijacked(rocket: Node2D, source: Node)`. Ph17 connects sound to them.
 - **HUD:** `MissionHud` JAMMED chip (fill = `ability_lock_fill()`) and a lock glyph over the special-weapon icon; ship-side `AbilityLockStatic` overlay. Colours: amber-white =
   jammed / hacked, blue-white = EMP; never cyan (shield) or violet (boost disruption).
 
 ### Placement
-- Hub: draw 18 = Hacker on the 2600 ring at 67.5° (draws 1–17 unchanged); a sector jammer beside the Ph8 `HubDefenseSite` (placement only, not power-linked); a pulsed jammer and an
-  EMP zone in `TacticalSpace`. **Jammers (all variants) live under `EnemyContainer`, never in `TacticalSpace`** (the Ph6 TacticalSpace sweep reads a `BaseEnemy` as radius 0); new
+- Hub: draw 18 = Hacker on the 2600 ring at 67.5° (draws 1–17 unchanged); a sector jammer beside the Ph8 `HubDefenseSite` (placement only, not power-linked) and a pulsed jammer,
+  both under `EnemyContainer`; an EMP zone in `TacticalSpace`. **Jammers (all variants) live under `EnemyContainer`, never in `TacticalSpace`** (the Ph6 TacticalSpace sweep reads a `BaseEnemy` as radius 0); new
   sweep C in `test_sector_hub_patrol.gd`: every jammer keeps `field_radius + 300` px clear of the spawn, triggers and pickups. The EMP zone is covered by the Ph6 TacticalSpace sweep
   (`_element_radius()` knows `EmpZone`); the Hacker joins `_patrol_groups()`.
 - Level 1: one local jammer and one Hacker, both in **planet_approach**, pinned as `EXPECTED_PH9`, under four hard constraints: count ≤ 7 of 7.5 throughout, both lives end before the
   98.0 s peak, the two lives never overlap, the jammer clears every column lit during its life. Ordered pre-approved options: A Hacker in 40–53 s then jammer in 55–70 s (default);
   B jammer first; C jammer at y −120; D Hacker at the side band. None fits → the task escalates; never a frozen-constant change, a per-level retune, or deep_space. The EMP-zone /
-  placed-EMP-mine guards scan level scenes and scripts by path, because neither is spawned through `WaveBuilder`.
+  placed-EMP-mine / EMP-laying-`Minefield` guards scan level scenes and scripts (and `wave_builder.gd` for `w_emp`), because none of them is spawned through `WaveBuilder`; a
+  `Minefield` with `w_emp > 0` makes placed EMP mines that reach enemies at runtime.
 
 ### Conventions
 - **No jammer (any variant), Hacker, Disruptor or EMP zone in an `ENEMIES_CLEARED` section; no sector jammer or EMP zone in any Assault section** (guard rows in
   `test_engagement_deadline.gd`). Never place a Hacker inside or next to a jammer (a jammed player cannot launch, so the hijack would be moot).
 - Do not stack EW on the player: one lock, longest wins, no additions.
+- The player's EMP Blast is an H ability, so it switches a jammer off only from outside the field (inside, the press is refused like every ability); its reach is scene-wide.
+- Keeping a test rocket alive for a long time: hover it on a hurtbox-less static `Node2D` target (a straight rocket leaves the Assault rect by 4.55 s and hits 2400 px at 4.8 s).
 - Gate time: GUT 212.4 s at the Ph8 close; allotments total 22.6 s, so the phase ends ≤ 235.0 s; a task that would pass 238 s escalates.
 - Task chains over shared files: `player_base.gd` t1 → t2 → t5; `homing_missile.gd` t3 → t4 → t5; `enemy_rocket.gd` t5 → t7; `base_enemy.gd` / `emp_blast_module.gd` t5 → t6 → t7;
   `hazard_field.gd` t1 → t7; `test_sector_hub_patrol.gd` t11 → t13; roster gates t7 → t8 → t9 → t10.
