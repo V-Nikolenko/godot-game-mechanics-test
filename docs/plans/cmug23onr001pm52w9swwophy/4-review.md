@@ -374,3 +374,114 @@ nothing. The minor findings below are wrong or knife-edge numbers and small cont
   rosters t7→t10). Complexities and efforts are sensible (t10 small is right once M8 is settled). Each task's `planSections` holds what it needs.
 - **Gate time:** allotments sum to 22.6 s, and 212.4 + 22.6 = 235.0 s ≤ 238 s, matching `tests/README.md:629`.
 - **Hub:** anchor (995, 2402) checked, and the Hacker-vs-sector-jammer distance holds.
+
+---
+
+# Round 3
+
+VERDICT: APPROVED
+
+Review of `3-plan.md` revision 3 (its §8.2 answers round 2), `tasks.json`, `1-context.md`, `2-research.md` and the DECISIONS.md Phase 9 section, checked against the code on
+`agent/auto-dev` @ `3a20d00`. I re-simulated the cone-escape rows with the mover's exact rule in a throwaway script: 1/60 ticks, `Steering.orbit` with the anchor correction
+`clamp(4·dist, 60, 230)`, `limit_length(max_speed)`, `current.move_toward(desired, acceleration·delta)` (`enemy_mover.gd:225-247`, no `braking`), the `MissileCorvetteBrain`
+`_orbit_angle` pattern (`missile_corvette_brain.gd:367-396`), a 2.0 s warm-up and a ±10° snap. Every `planSections` heading in `tasks.json` exists (`grep -n '^#' 3-plan.md`).
+
+**Verdict in short.** All ten round-2 findings are resolved. B1 is fixed in substance. At 700 px/s² the "nearer edge" escape works, and the Open Space nose row's worst case is
+1.70 s, exactly the plan's figure, against a 2.2 s bound. The Assault worst case is 1.63 s against 1.9 s. At 260 px/s² the main row fails as claimed (2.90 s / 2.02 s). The cone-off
+controls fail their bounds. The leftover problems are test-fixture geometry inside the t8 rows plus three small contract or setup gaps. The worst is N1: as written, the Assault
+re-snap in the 0.18 rad/s near-way case leaves the view, so the row's own "clamp never binds" assertion is red. A builder can fix it in place, and the cases still meet the
+acceptance criteria. Round 2 graded unreachable rows like this (M2) as minor, so every finding here is minor. Apply N1 and N2 to the plan text before t8 starts if possible.
+
+## Round-2 findings
+
+| # | Sev. (r2) | Status | Evidence |
+|---|---|---|---|
+| B1 | blocking | **resolved** | `acceleration` 700 (`:460-463`, `:496`; it is the Support Ship's value, `support_ship_config.tres:11`). My simulation of the stated procedure at 700 px/s², exit times in s: nose at 720 px, 0.18 near / 0.18 far / 0.30 far = 1.27 / 1.55 / **1.70**, all through the near edge, bound 2.2. Nose at 520 px = 1.27 / 1.55 / **1.63**, bound 1.9. Wrong-way time 0.18–0.30 s, bound 0.5. Controls with the cone off exit the far way at 3.88 / 2.33 s, which is 40°/ω, so they are still inside at 2.2 s and at 1.9 s. At 260 px/s² the 0.30 far case takes 2.90 s at 720 px and 2.02 s at 520 px, so it fails, as claimed. The 0.25 s monotonic clause is gone. The re-snap and the route row have fixture problems (N1, N2), but the mover rule and the bounds are sound. |
+| M1 | minor | resolved | `pulse_trigger_range` 870 gates TELEGRAPH and the Disruptor lock (`:538-548`, `:569-571`). `hijack_range` 650 is the rocket reach only. The cadence row has a 650 control, and the cap boundary row pins `range_drift` 0 (`:600-602`). The new ±1 px rows need a stated fixture (N4). |
+| M2 | minor | resolved | `:225-230`. The hover on a hurtbox-less `Node2D` works: `homing_missile.gd:39-49` is direct pursuit with an instant turn, so it oscillates within one 8.3 px step. The 2400 px row is Open Space only, and t4 reuses the hover (`:296`). |
+| M3 | minor | resolved | The `warhead_missile.gd` guard is in For every task (`:51`), §2.5 (`:268-270`) and t4, with a real-physics row that fails without it (`:295`). |
+| M4 | minor | resolved | Three rows (`:413-418`): from outside through the real seam, refused inside, and a direct call documented as bypassing the seam. The rule is stated in the summary (`:17`), §2.8 (`:386-387`) and R9.9. |
+| M5 | minor | resolved | 650 px start, dart launched from the hull centre (`:559-560`). Discretised, the cap trips on tick 94 with a gap of at least 23 px, more than 16. |
+| M6 | minor | resolved | DECISIONS.md Phase 9 → *Placement* now puts both jammers under `EnemyContainer` and the EMP zone in `TacticalSpace`. |
+| M7 | minor | resolved | `:724-730`. Today `w_emp` appears only in `minefield.gd`, `mine_layer_*` and `sector_hub.tscn:279`, not in `wave_builder.gd` or under `assault/scenes/levels/`, so the new scan starts green and its boundary rows can fail. |
+| M8 | minor | resolved | t9 owns the field and the PULSE-end call, and t10 only adds the scene, config and rows (`:569-573`, t9 / t10 descriptions). |
+| M9 | minor | resolved | `suspend_ai()` clears the window (`:329-330`), with a row that fails on the clock-in-brain-branch build (`:346-347`). `base_enemy.gd:115-117` confirms the early return. |
+
+**10 of 10 resolved.**
+
+## New findings
+
+### N1. The Assault re-snap pushes the Hacker out of the view in the 0.18 rad/s near-way case
+- **Severity:** minor (fix in place; the row is red as literally written)
+- **Task:** t8
+- **Evidence:** `3-plan.md:516` ("re-snapped 3.5 s after its first exit … exits again within the same bound", applied to both ranges) and `:518-520`. The plan says "every
+  position it reaches in the row (≤ 75° from straight up at 520 px) is inside `view_rect().grow(-60)`: the view clamp never binds (asserted each tick)". The t8 acceptance
+  criteria repeat "again after a re-snap 3.5 s later" with "view clamp never binding". `arena_camera.gd:102-104` gives a 1280 × 720 view.
+- **Problem:** In the near-way case the warm-up carries the Hacker 20.6° from straight up. The near edge is 20° further the same way, so it exits at about 41°. It then keeps
+  going the same way (reversals held) for 3.5 s at 0.18 rad/s (+36°), and the near-way re-snap exits 20° further still. Simulated, the body reaches 96° from straight up and the
+  anchor 100°. The player sits 100 px above the bottom, so at 96° the Hacker is below the player and 17 px outside `grow(-60)`. The clamp binds, the per-tick assertion fails, and
+  the clamped target changes the motion. The 0.18 far case reaches 82°, which is still in view but outside the stated 75° envelope. A run takes 8.0–8.4 s, close to the 9.0 s
+  `engage_seconds`. A slower GUT exit inside the allowed bounds (2.0 + 1.9 + 3.5 + 1.9 = 9.3 s) would hit DISENGAGE mid-row.
+- **Fix:** In Assault, re-snap **1.0 s** after the first exit (simulated maxima: body 70.5° and anchor 74.5° in the near case, 39° / 32° in the far cases, never closer than 40 px
+  to the inset edge), or run the re-snap in Open Space only. In both cases set `engage_seconds` ≥ 30 on the test instance. Correct the "≤ 75°" sentence and the t8 acceptance
+  criteria to match.
+
+### N2. The route-row warm-up is ambiguous; on the natural reading the 0.30 rad/s case has no steady orbit and its margins are 3–4 ticks
+- **Severity:** minor
+- **Task:** t8
+- **Evidence:** `3-plan.md:507-511` (warm-up: "2.0 s of ticks with the cone axis pointing away from the Hacker"; for the route row that axis is the player's velocity), `:521-523`
+  (bound 1.8 s, simulated worst 1.33 s, controls 3.55 / 2.23 s), `:466-470`.
+- **Problem:** The natural reading has the player moving at 100 px/s away from the Hacker during the warm-up. A 0.30 rad/s orbit around that player needs √(216² + 100²) ≈ 238 px/s
+  > `max_speed` 230, so no steady orbit exists. The target angle runs ahead of the body by 8° after 2.0 s and 19° after 4.0 s, and the result depends on the warm-up length.
+  Simulated for the 0.30 far case: main exit 1.60 s (bound 1.8), control exit **1.85 s** (still inside at 1.8 s by 3 ticks), wrong-way time 0.43–0.45 s (bound 0.5). With a 3.0 s
+  warm-up both the main row and the control fail. The plan's own numbers come from a different reading: with the player **still** during the warm-up and moving only from the snap, I
+  get 1.33 s main (the plan's value), 2.00 s control and 0.28–0.30 s wrong-way. Separately, every control figure in the table is about 0.24 s too high. A steady orbit covers the 40°
+  to the far edge in 40°/ω = 3.88 s (0.18) or 2.33 s (0.30), not 4.12 / 2.57. So the nose control's real margin at 720 px is 0.13 s, not 0.37 s. That is still deterministic and
+  still fails the bound.
+- **Fix:** In the route row, the player is stationary during the 2.0 s warm-up (route cone inactive below 80 px/s) and starts moving at 100 px/s along the snapped axis on the
+  snap tick. Correct the control column to 3.88 / 2.33 s (nose) and 3.32 / 2.00 s (route), so the builder compares GUT against the right numbers.
+
+### N3. Nothing ends a jammer's `EmpStatic` overlay and `is_emp_disrupted()`
+- **Severity:** minor
+- **Task:** t7 (contract from t5)
+- **Evidence:** `3-plan.md:380-381` (the jammer's `apply_emp` "shows the blue-white `EmpStatic` overlay built by t5; `is_emp_disrupted()` is true for the window"), `:325`
+  (the EMP window is counted in `BaseEnemy._physics_process`). `base_enemy.gd:115-117`: `if _ai_suspended or _brain == null: return`, and a jammer has no brain.
+- **Problem:** This is the same kind of bug as M9. Any EMP clock or overlay hide that t5 places in `_physics_process` never runs for a brainless jammer, so after one EMP Blast the
+  overlay and `is_emp_disrupted()` stay on for good while the field re-lights after 5 s. No row checks the end of the jammer's window, only the field's.
+- **Fix:** Derive the jammer's state from its field. Add `HazardField.is_suppressed()`, have `JammingStructure.is_emp_disrupted()` return it, and make the overlay's `visible`
+  follow it (polled in the jammer's own process). Add to the t7 EMP rows: 5.0 s (±1 tick) after the Blast, `is_emp_disrupted()` is false and the overlay is hidden.
+
+### N4. The ±1 px range rows need a stated way to hold the distance
+- **Severity:** minor
+- **Tasks:** t9, t10
+- **Evidence:** `3-plan.md:589-590` (no TELEGRAPH at 871 px, TELEGRAPH at 869 px; a rocket at 649 px claimed, one at 651 px not), `:620` (Disruptor: a player beyond 870 px at PULSE end).
+  `:544` (the Hacker keeps orbiting in TELEGRAPH / PULSE).
+- **Problem:** A Hacker 871 px from the player heads for its 720 px orbit and is inside 870 px within about 4 ticks at 700 px/s². During the 1.6 s PULSE it moves up to about 370 px,
+  and an unguided rocket moves 8.3 px per tick. Unless the fixture holds the distance, the 871 / 651 "never" halves turn into "not yet", and the 869 / 649 halves depend on tick order.
+- **Fix:** State the fixture. Before every brain tick, re-place the stub player (with `velocity` zero, so the route cone stays off) and a `speed` 0 rocket at exactly that
+  distance from the Hacker's current position. Alternatively, set `first_pulse_delay` so the cooldown expires on the measured tick and assert only on that tick. Use the same
+  fixture for the Disruptor's "beyond 870 px at PULSE end" row.
+
+### N5. The t14 title says the jammer comes first; the default option A sends the Hacker first
+- **Severity:** minor
+- **Task:** t14
+- **Evidence:** `tasks.json:234` ("sends one small jammer and, after it has gone, one Hacker Frigate"), against `3-plan.md:712` (A: the Hacker in a 40–53 s wave, then the jammer)
+  and the t14 description.
+- **Fix:** Make the title order-neutral ("… one small jammer and one Hacker Frigate whose lives never overlap …").
+
+## Checked and fine (round 3)
+
+- **700 px/s² does not break the other rows.** BREAK_OFF uses `mover.boost`, which skips the acceleration step (`enemy_mover.gd:240`), so the rusher row is unchanged. In the
+  `min_range` 0 control the Hacker is still capped at 230 px/s against a 300 px/s rusher. Higher acceleration only tightens the range-hold, reversal, hub-idle and Assault-clamp rows.
+  Every exit is measured, not computed. The hub clearance sweeps use rings and radii, not acceleration.
+- **Assault geometry of the first exit:** with the 2.0 s warm-up from straight up, every first exit stays within about 45° of straight up (anchor included) and at least 40 px inside `grow(-60)`. Only the
+  re-snap (N1) leaves the view.
+- **Pulse numbers:** the earliest second Assault TELEGRAPH is at 10.5 s, past the 9.0 s budget. The cap boundary config (0.5 / 1.0 s) gives about 5 pulses in 20 s in Open Space,
+  so the "≥ 3" control holds. The cadence row's 650 control holds at 720 px with `range_drift` 0.
+- **`HazardField`:** `phase_changed` fires only on a phase edge (`hazard_field.gd:93-98`), so the EMP zone emits once per TELEGRAPH → ACTIVE. `avoid_weight` is non-zero outside
+  QUIET (`:181`). A `suppress()` mask on `disables_abilities` in `_refresh_info()` fits the existing structure.
+- **DECISIONS.md Phase 9** matches revision 3: acceleration 700, the 870 / 650 split, the warhead guard, the outside-the-field EMP Blast rule, the `Minefield` scan and placement.
+- **Tasks:** dependencies still follow the file chains in For every task (`:81-84`). t4 reaches t1 through t2. t14 depends on t7, t9 and t11, and t15 on t6, t12, t13 and t14.
+  Complexities and efforts are sensible (t1, t4, t9 large / xhigh; t10 small). No task carries a `model` field, the same as every other epic's `tasks.json`, so the harness default
+  applies. Each task's `planSections` holds what it needs, and every heading exists.
+- **Gate time:** 22.6 s of allotments, 235.0 s projected, with the 238 s escalation rule unchanged.
