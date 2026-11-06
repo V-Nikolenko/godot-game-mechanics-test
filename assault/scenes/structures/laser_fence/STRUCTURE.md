@@ -7,7 +7,7 @@ ends; the player flies round them or shoots a post, which drops the whole fence.
 > **Build state (Phase 8, t10 + t18).** `LaserFence`, `laser_fence.tscn`, [`LaserEmitter`](../../enemies/laser_emitter/ENEMY.md); `hub_barrier.tscn` (t18), an inherited
 > `CYCLE` fence with its posts at ±(33, −146) (299 px apart, along the hub derelicts' wreck line), the hub defense site's barrier. A `TurretGroupSlot` can
 > only pick a member scene, so a fence with another mode or orientation is an inherited scene; the fence reads its endpoints from the posts' global
-> positions every tick, so a rotated pair needs no code. Next: level 1 (t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.11.
+> positions every tick, so a rotated pair needs no code. Level 1 (t19) places no fence. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.11.
 
 ---
 

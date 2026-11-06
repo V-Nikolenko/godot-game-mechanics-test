@@ -5,9 +5,9 @@ crossfire stays readable, and shuts every turret down the moment the power sourc
 **Fantasy / threat:** A defended position: guns whose lanes cross, wired to a reactor. Fight through the crossfire, or find the lane to the reactor
 and switch the whole position off.
 
-> **Build state (Phase 8, t9 + t9s + t18).** `TurretGroup`, `TurretGroupSlot`, the `assault_pair` preset and `WaveBuilder.turret_group()`; the shield generator
+> **Build state (Phase 8, t9 + t9s + t18 + t19).** `TurretGroup`, `TurretGroupSlot`, the `assault_pair` preset and `WaveBuilder.turret_group()`; the shield generator
 > (t9s, [ENEMY.md](../../enemies/shield_generator/ENEMY.md)) is a member that wraps the others in bubbles; the hub's defended derelict site, `hub_defense_site.tscn`
-> (t18, placed under `sector_hub.tscn`'s `EnemyContainer`). Next: level-1 placement (t19). Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10; task plan
+> (t18, placed under `sector_hub.tscn`'s `EnemyContainer`). Level 1 (t19) places the `assault_pair` group `.at(64, -220)` in Deep Space's 3.0 s wave. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.10; task plan
 > `docs/plans/cmvqw0vnl0183qs2xbphzonu7/3-plan.md`.
 
 ---

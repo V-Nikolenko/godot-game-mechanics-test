@@ -5,8 +5,8 @@ own, so a player who dodges the beam's frozen line is still being tracked by the
 **Fantasy / threat:** A fortress gun. The beam is the slow, readable one (it shows its line and never re-aims); the burst keeps leading you. At 1.2 rad/s each
 head is slow to swing, so the answer is to break the angle, not to outrun the gun.
 
-> **Build state (Phase 8, t11).** Built on the t6–t8 turret shell; art built in t15. The hub site (t18) and level 1 (t19)
-> place it. Mounting on large ships is Phase 10. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.9.
+> **Build state (Phase 8, t11).** Built on the t6–t8 turret shell; art built in t15. Only the hub site (t18) places it; level 1
+> does not. Mounting on large ships is Phase 10. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.9.
 
 ---
 
