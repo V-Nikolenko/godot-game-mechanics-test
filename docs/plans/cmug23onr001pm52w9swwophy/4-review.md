@@ -204,3 +204,173 @@ are left in.
   planet_approach column lit in a 55–81 s jammer life.
 - **Research:** it has tradeoff tables for every part, and the sources it cites are used for what they are cited for. Audio is deferred to Ph17 as an owner choice with a
   seam, and jammer-linked groups go to Ph20 per the roadmap. Both are listed with reasons.
+
+---
+
+# Round 2
+
+VERDICT: CHANGES_REQUESTED
+
+Review of `3-plan.md` revision 2 (its §8 answers round 1), `tasks.json`, `1-context.md`, `2-research.md` and the DECISIONS.md Phase 9 section, checked against the code on
+`agent/auto-dev` @ `e181792`. The headings in `tasks.json` `planSections` all exist (`grep -n '^#' 3-plan.md`). Every component the plan names exists with the API it uses:
+`AssaultDrift` (60 px/s), `StateLight`, `AnchorIdle`, `EngagementBudget`, `LineOfSight.clear`, `ContactBlast.spawn`, `EmpRing.spawn`, `BulletPool`, `Steering.turn_toward` /
+`break_contact` / `orbit`, `EnemyMover.boost` / `halt`, `HazardField.phase_changed` / `phase()` / `phase_progress()`, `_section_has_scene()`,
+`test_ph8_static_members_clear_every_lit_column`, `ph8_exit_keys.gd`.
+
+**Verdict in short.** Fifteen of the sixteen round-1 findings are resolved in the text and in the code they depend on. The self-hit guard, the 1e-6 clock, `HazardField.suppress`,
+the composed `EmpZone`, the level-1 constraints and options, and the dependency fixes are all correct. One blocker remains, in the same t8 rows round 1 blocked on. The restated
+nose-cone and route-cone rows ignore the Hacker's own acceleration (260 px/s²). When the Hacker is orbiting toward the far edge, which is exactly the case the penalty exists for
+and the case the row's own control is built around, it cannot reverse and leave inside the bound. At these numbers the "nearer edge" rule also gets it out *later* than doing
+nothing. The minor findings below are wrong or knife-edge numbers and small contract gaps.
+
+## Round-1 findings
+
+| # | Sev. (r1) | Status | Evidence |
+|---|---|---|---|
+| 1 | blocking | **resolved** | §2.5 / For every task: `if _done or area.get_parent() is homing_missile: return` before `ArmorQuery`. It is the exact `enemy_rocket.gd:381` shape (same `Area2D` base, a self-named `class_name` that is leak-free in the `EnemyRocket` precedent). Real-physics salvo rows at 2 / 10 / 30 ticks fail without it. The warhead side is still open (new M3). |
+| 2 | blocking | **partly** | `break_speed` is fixed: `mover.boost` ignores `max_speed` (`enemy_mover.gd:224-229`), and `break_contact` doubles 0.25 → 0.5 (`steering.gd:201`), so radial ≈ 360/√1.25 = 322 px/s > 300. The rusher row (d_min ≈ 415 > 360) and its `min_range` 0 control (≈ 218 px < 340) both work. The route row now has a control. **The nose and route escape bounds are still unreachable** in the reversal case (new B1). |
+| 3 | minor | resolved | `_tick_clock` with `<= 1e-6`. Checked in doubles: 1.5 − 90/60 = 3.3e-16, 2.0 − 120/60 = 2.1e-15, 0.75 − 45/60 = −6.2e-16, 5.0 − 300/60 = 1.3e-14, all ≤ 1e-6. The boundary row fails without the epsilon. |
+| 4 | minor | resolved | Dart `max_time` 1.6 ≥ 1400/900 = 1.556. Receding-rocket limit stated, with a row (knife-edge, M5). Tether moved to the rocket; `BulletPool._recycle` hides and disables the dart, so this was needed. |
+| 5 | minor | resolved | Cap 1 with the 10.5 s > 9.0 s arithmetic. The boundary row can fail (cap 2 → exactly 2). Its Open Space half is seed-dependent (M1). |
+| 6 | minor | resolved | `answers_emp()` routes both EMP sources. The jammer's `apply_emp` → `HazardField.suppress`, and `_refresh_info` masks only `disables_abilities`, so the cycle keeps running (`hazard_field.gd:87-107`). A real press inside the field is refused, though (M4). |
+| 7 | minor | resolved | `EmpZone extends Node2D` + child `HazardField`. `phase_changed` fires once per TELEGRAPH → ACTIVE edge (`hazard_field.gd:93-98`). `_element_radius()` is taught `EmpZone` first (`test_sector_hub_patrol.gd:880-894`). |
+| 8 | minor | resolved | Observable assertions with `Hazards.count() == 0`. |
+| 9 | minor | resolved | One `_finish(blasted)`. t3 wires `expired → _on_expired()`, and t4 turns it into `if not _done: _finish(false)`. `ProjectileLifetime` emits the host's `expired` duck-typed (`projectile_lifetime.gd:9-12`). Row added (but see M2 on how to fly a rocket for 5 s). |
+| 10 | minor | resolved | §2.17 hard constraints 1–4, ordered options A–D, then `Result: ESCALATE`, never a frozen constant. Jammer life ≈ (1164 + 440) / 60 = 26.7 s from y −220, and C (y −120) is 3.3 s shorter, as stated. |
+| 11 | minor | resolved | Pulsed jammer under `EnemyContainer`, sweep C, a "no jammer in TacticalSpace" row, the Hacker in `_patrol_groups()`. The anchor (995, 2402) is 2045 px from the site centre, ≥ 1520. DECISIONS.md still contradicts it in one line (M6). |
+| 12 | minor | resolved | §2.10 says the pulse fields are t9's. |
+| 13 | minor | resolved | t14 `dependsOn` includes t11. The source-scan guards each have a failing boundary. One runtime EMP path is uncovered (M7). |
+| 14 | minor | resolved | §6 row (Ph19 / Ph14 with reason), plus a pin row (fixture enemy does not block, wreck does). |
+| 15 | minor | resolved | Lock at PULSE end. A row shows a mid-PULSE salvo is still claimed. |
+| 16 | minor | resolved | For every task (*Conventions kept*), §2.6 *Callers*, t5 description. `Hostility` is declared on `EnemyOrdnance` (`enemy_ordnance.gd:29`), so the unqualified form compiles. |
+
+**15 resolved, 1 partly resolved.**
+
+## New findings
+
+### B1. The nose-cone and route-cone escape rows cannot pass when the Hacker must reverse, and at 260 px/s² the "nearer edge" rule is slower than no rule
+- **Severity:** blocking
+- **Task:** t8
+- **Evidence:** `3-plan.md:435-442` (penalty), `:458` (`force_orbit_direction`: "the penalty still overrides it inside a cone"), `:472-478` (rows), `:461` (`acceleration` 260, no
+  `braking`). `enemy_mover.gd:239-246`: a non-boost velocity changes at most `acceleration · delta` per tick, and `braking` applies only when `|desired| < |current|`, which is not
+  the case in a reversal toward a 230 px/s request. `steering.gd:41-45` (`orbit`: seek an anchor at `clamp(4·dist, 60, max_speed)`). `missile_corvette_brain.gd:383-384`.
+- **Problem:** The plan's "honest physics" (`:439-442`) counts tangential speed and forgets acceleration. A Hacker orbiting toward the **far** edge at 0.30 rad/s (216 px/s at
+  720 px) needs 216/260 = 0.83 s just to stop, drifting about 7° further the wrong way. It then has to cover about 27° from rest. Simulated with the mover's exact rule (1/60 ticks,
+  anchor clamp, 260 px/s², 230 px/s):
+
+  | Range | Prior motion (far way) | Exit through near edge (penalty) | Exit through far edge (no penalty, keeps going) | Row bound |
+  |---|---|---|---|---|
+  | 720 | 0.18 rad/s | 2.15 s (wrong-way 0.50 s) | 3.88 s | 1.76 s |
+  | 720 | 0.30 rad/s | **2.72 s** (wrong-way 0.83 s) | **2.33 s** | 1.76 s |
+  | 520 (Assault) | 0.30 rad/s | 2.02 s (wrong-way 0.60 s) | — | 1.76 s |
+  | route row, 720, player 100 px/s | 0.18 / 0.30 | 1.80 / 2.32 s | — | 1.67 s |
+
+  Only a Hacker that starts at rest or already moves the near way passes (1.17–1.27 s). The matched main row (cone on, far direction forced, the mirror of the control) is therefore
+  red on any implementation. The "net movement toward −30° over every 0.25 s window after the first 0.25 s" clause is red for 0.5–0.83 s of wrong-way drift. Even an unforced
+  run is seed-flaky: reversals stay live between the four snaps, and roughly 1.3 s of outside time accumulates per 2.5 s cycle against a 3–6 s reversal clock, so a later snap
+  often finds the Hacker moving the far way. A matching-time edge escape needs `acceleration` ≈ 900 px/s² (simulated 1.63 s). That is a 3.5× retune of a frigate that the builder
+  would have to make blind under the "keep starting values unless a row forces a change" rule, which is the round-1 problem again. Worse, in the 0.30 rad/s case the penalty makes
+  the Hacker leave the nose **later** (2.72 s) than the unpenalised orbit (2.33 s), so "always slides the short way" is the wrong rule at this acceleration.
+- **Fix (plan text):**
+  1. Choose the escape direction by **time to exit** given the current tangential velocity (or: "keep the current direction if already moving at ≥ `cone_escape_speed`·R toward
+     either edge; otherwise the nearer edge"), or raise `acceleration` and state the new value.
+  2. Restate both rows with an explicit initial state: steady orbit, a stated direction, reversals held off in the main row as in the control. Assert the **edge** of exit (sign)
+     with a sim-derived time bound that includes the stop (for example ≤ 3.0 s at 720 px and ≤ 2.3 s at 520 px under the current numbers). Space the snaps beyond that bound
+     (≥ 3.5 s, not 2.5 s). Drop the 0.25 s monotonic clause, or start it after `v/acceleration` + 0.25 s.
+  3. Keep the control: penalty off, the same initial state, exits through the other edge, or is still inside at the bound.
+
+### M1. The TELEGRAPH (and Disruptor) gate "player within 650 px" sits inside the Open Space held band 720 ± 90
+- **Severity:** minor
+- **Tasks:** t9, t10
+- **Evidence:** `3-plan.md:493-494` (TELEGRAPH needs "the player is within `hijack_range` 650"), `:519-520` (Disruptor lock needs the same at PULSE end), `:431` (radius = 720 ±
+  90). `missile_corvette_brain.gd:378` (`held_range() + range_drift * sin(...)`, period 6–9 s, `:53-54`). `2-research.md:295` intended 650 as a **rocket** reach ("inside the held
+  range, so a rocket fired at the Hacker itself is claimable"), not a player gate.
+- **Problem:** At 720 + 90·sin, the player is within 650 for only about 22 % of each 6–9 s drift period (about 1.3–2 s per trough). Open Space pulses phase-lock to the inward
+  troughs. Rockets launched at the player (630–810 px from the Hacker) are mostly out of reach at launch, which weakens "newly launched" (R9.13) in the hub. The Disruptor's
+  PULSE-end lock, 2.5 s after a trough start, usually finds the player beyond 650. The t9 boundary row "the same config in Open Space sees at least 3 [pulses in 20 s]" gets 2 or 3
+  troughs in 20 s depending on `_drift_phase`, so it is seed-dependent with the default ranges.
+- **Fix:** Give TELEGRAPH and the Disruptor lock their own `pulse_trigger_range` (≥ `preferred_range + range_drift` + margin, for example 870), and keep `hijack_range` 650 for the
+  rocket claim (the research intent). Alternatively lower the Open Space `preferred_range` so that `preferred_range + range_drift ≤ 650`. Either way, have the boundary row's test
+  config pin `range_drift = 0`.
+
+### M2. Two t3 Assault lifetime rows are unreachable, and t4's "flown 5.0 s" row needs the same setup
+- **Severity:** minor
+- **Tasks:** t3, t4
+- **Evidence:** `3-plan.md:224` ("one flying in-rect with no target expires at `max_time` 6.0; one at 2400 px from its origin expires", Assault harness), `:288` ("a rocket that has
+  flown 5.0 s, then claimed"). The projectile world rect is x −164…1444, y −444…1164 (round 1), i.e. 1608 × 1608 with a 2274 px diagonal. `homing_missile.gd:44-52`: no target
+  means straight flight at 500 px/s.
+- **Problem:** A rocket with no target leaves the Assault rect within 4.55 s, so it can never reach 6.0 s. No displacement inside the rect reaches 2400 px, so that rule never trips
+  in Assault. In Open Space a straight rocket hits 2400 px at 4.8 s, so it cannot "fly 5.0 s" either.
+- **Fix:** Run the 6.0 s row (and t4's 5.0 s pre-flight) on a hurtbox-less `Node2D` target that the rocket circles or overshoots, so displacement stays small. Run the 2400 px row in
+  Open Space. Assert only the rect expiry in Assault.
+
+### M3. A player warhead is consumed by a hijacked homing rocket, contradicting "player rockets never hit each other"
+- **Severity:** minor
+- **Task:** t4
+- **Evidence:** `warhead_missile.tscn:59-61` (HitBox layer 32 / mask 513), `warhead_missile.gd:33-36` (`queue_free()` unless deflected). `3-plan.md:263` ("a player rocket never hits
+  another player rocket, hijacked or not"). The hijacked HurtBox is layer 512 / mask 64.
+- **Problem:** Only `homing_missile.gd` gets the guard. A warhead salvo crossing a hijacked rocket frees itself on the rocket's HurtBox, while the hijacked rocket lives (its mask
+  does not include 32). That happens near the player, which is exactly where turned rockets fly.
+- **Fix:** Put the same `area.get_parent() is homing_missile` early return in `warhead_missile.gd::_on_hit_box_area_entered`, add a row (a warhead through a hijacked rocket: both
+  alive), or record the exception in §6.
+
+### M4. The jammer's EMP row presses EMP Blast from inside the field, where H is locked
+- **Severity:** minor
+- **Task:** t7 (and the owner summary, `:16`)
+- **Evidence:** `3-plan.md:399` ("a real ship inside the local jammer, the player's `EMPBlastModule` activated"), `:33-34` (every H `try_activate()` is locked).
+- **Problem:** Through the real seam that press is refused, so the row passes only by calling `try_activate()` directly. In play, EMP Blast can switch a jammer off only from
+  outside its field (its reach is scene-wide, so that works), but the plan never says so.
+- **Fix:** Say the row calls `EMPBlastModule.try_activate(player)` directly or fires from outside the field, add one row that an H press inside the field is refused, and state the
+  "from outside" rule in R9.9 and the summary.
+
+### M5. The receding-rocket row has a 1.8 px margin
+- **Severity:** minor
+- **Task:** t9
+- **Evidence:** `3-plan.md:531` (a rocket 640 px away receding at 500 px/s is never claimed), `:526` (`claim_radius` 16, 1400 px cap). `projectile_lifetime.gd:73-78` (the distance
+  rule is checked once per tick, after the host moved).
+- **Problem:** The 1400 px cap trips at 1.556 s, when the gap is 640 − 400·1.556 = 17.8 px, only 1.8 px over the claim radius. A dart spawned from the dish a few px toward the
+  rocket, or a one-tick eligibility lag, flips the result.
+- **Fix:** Use the 650 px reach (gap 27.8 px) and spawn the dart at the hull centre, or state the spawn point and the margin in the row.
+
+### M6. DECISIONS.md still puts the pulsed jammer in `TacticalSpace`
+- **Severity:** minor
+- **Task:** t13
+- **Evidence:** `DECISIONS.md` Phase 9 → *Placement*, first bullet: "a pulsed jammer and an EMP zone in `TacticalSpace`". The next sentence of the same bullet, and `3-plan.md:624-626`,
+  say jammers live under `EnemyContainer`, never in `TacticalSpace`.
+- **Fix:** Correct the DECISIONS line. "For every task" tells builders that DECISIONS rules stand.
+
+### M7. The Assault EMP guard misses runtime EMP mines from a `Minefield`
+- **Severity:** minor
+- **Task:** t14
+- **Evidence:** `3-plan.md:662-666` (scan for `emp_zone.tscn` / `EmpZone` / instanced `emp_mine.tscn`). `minefield.gd:46` (`w_emp`), `sector_hub.tscn:279` (`w_emp = 0.15`). A placed
+  field's mines are `Hostility.ALL`, so they become `TARGET_ALL` in t5.
+- **Problem:** A `Minefield` with `w_emp > 0` in an Assault level creates enemy-reaching EMP mines at runtime without any `emp_mine.tscn` text in the level.
+- **Fix:** Add "no `Minefield` with `w_emp > 0` in a level scene or script" to the source scan, with a boundary row.
+
+### M8. Who builds the Disruptor hook is stated two ways
+- **Severity:** minor
+- **Tasks:** t9, t10
+- **Evidence:** `3-plan.md:519` ("Disruptor hook (filled by t10)"), against `tasks.json` t9 ("Add the pulse config fields and the Disruptor hook (… applied at PULSE end)").
+- **Fix:** Pick one. Suggested: t9 adds the field (0) and the PULSE-end call, and t10 adds the scene, config and rows. Both tasks list §2.11, so either works once it is said.
+
+### M9. An enemy railed while EMP'd keeps its EMP state forever
+- **Severity:** minor
+- **Task:** t5
+- **Evidence:** `base_enemy.gd:115-120` (`_physics_process` returns at once when `_ai_suspended or _brain == null`). `3-plan.md:314-320` (the EMP window counts down there).
+- **Problem:** If `suspend_ai()` runs during the window (`EnemyPathMover`), the clock stops, and `EmpStatic` and `is_emp_disrupted()` stay on for good.
+- **Fix:** Clear the EMP state in `suspend_ai()`, or tick the EMP clock before the early return. Add a row.
+
+## Checked and fine (round 2)
+
+- **Rusher arithmetic:** BREAK_OFF from about 1.0–1.2 s, the 3.0 s cap ends near the 4.0 s stop, d_min ≈ 415 px. The `min_range` 0 control reaches about 218 px.
+- **Dart:** pure pursuit at 900 px/s cannot tunnel. Head-on closing is 23.3 px per tick, so some tick samples within 11.7 px < 16. A rocket fired *at* the Hacker and claimed at
+  about 420 px turns on a 240–310 px radius and passes at about 310 px, so it does not hit its claimer by accident. 180° at 1.6 rad/s takes 1.96 s < 2.5 s.
+- **Pool:** a `BulletPool` root child of the Hacker resolves the enemy container (`bullet_pool.gd:60-64`), and `BaseEnemy` frees on death at once (`base_enemy.gd:246-249`), so the
+  darts are cancelled with the Hacker.
+- **Collisions:** the player HurtBox mask is 1281 (no 32), so a hijacked rocket body never deals 100. An unhijacked rocket's HitBox still hits `EnemyRocket` HurtBoxes (512 / 96),
+  so `test_enemy_rockets.gd` stays green.
+- **Beam brains:** only `twin_laser_drone_brain.gd` and `laser_tender_brain.gd` reference `EnemyBeam` / `TwinLaserPair`, so the sweep row has exactly the two overrides to require.
+- **Tasks:** dependencies match the file chains (`player_base` t1→t2→t5, `homing_missile` t3→t4→t5, `enemy_rocket` / `base_enemy` / `emp_blast` t5→t6→t7, hub test t11→t13,
+  rosters t7→t10). Complexities and efforts are sensible (t10 small is right once M8 is settled). Each task's `planSections` holds what it needs.
+- **Gate time:** allotments sum to 22.6 s, and 212.4 + 22.6 = 235.0 s ≤ 238 s, matching `tests/README.md:629`.
+- **Hub:** anchor (995, 2402) checked, and the Hacker-vs-sector-jammer distance holds.
