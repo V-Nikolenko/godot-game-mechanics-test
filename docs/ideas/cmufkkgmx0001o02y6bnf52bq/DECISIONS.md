@@ -3435,7 +3435,7 @@ above stand except where this section says otherwise; the per-task *Phase 8, bui
 
 ## Phase 9 - Enemy rework, phase 9: electronic warfare - Jamming Structure, Hacker Frigate and EMP (2026-11-06)
 
-Plan: `docs/plans/cmug23onr001pm52w9swwophy/3-plan.md` (revision 1), research in `1-context.md` / `2-research.md` (scope check S1–S18, findings F1–F12) in the same directory.
+Plan: `docs/plans/cmug23onr001pm52w9swwophy/3-plan.md` (revision 2, answering the AI plan review `4-review.md`: 2 blocking + 14 minor findings, all addressed in its §8), research in `1-context.md` / `2-research.md` (scope check S1–S18, findings F1–F12) in the same directory.
 These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
 
 ### Changes to earlier decisions
@@ -3447,8 +3447,9 @@ These are *planned* decisions; check this phase's *as built* section, once writt
   `stabilise_seconds`; `HazardField` gains exports `disables_abilities` / `stabilise_seconds` (defaults keep every Ph6–Ph8 field bit-identical); `Hazards.jammer_at(pos)`.
 - **Research said an enemy EMP keeps its Assault `EngagementBudget` running; the plan freezes it instead** (the brain is not ticked while EMP'd; 12 brains own private budgets).
   Bounded by the 5 s EMP Blast; no Ph9 EMP source that reaches enemies is placed in any Assault level.
-- The player's `EMPBlastModule` (if the owner keeps choice 2) calls the new enemy hook on brain-driven ships (they stay shootable); legacy / brainless enemies keep the old
-  process-disable stun.
+- The player's `EMPBlastModule` (if the owner keeps choice 2) routes by the duck-typed `answers_emp()`: brain-driven ships and jammers get the tangible `apply_emp` (they stay
+  shootable); every other legacy / brainless enemy keeps the old process-disable stun. A process-disabled jammer would drop out of physics while its field kept jamming, so
+  jammers must never take the old path.
 - The player's homing missile loses its hard-coded Assault box for a `ProjectileLifetime` (6 s / 2400 px / world rect), so it works anywhere in Open Space.
 
 ### Names and places later phases build on
@@ -3464,33 +3465,52 @@ These are *planned* decisions; check this phase's *as built* section, once writt
   `can_be_retargeted()`, `retarget(target, seconds, source) -> bool` (`seconds < 0` = the rocket's own `hijack_seconds`), `is_retargeted()`, `jam_guidance(source)`, signals
   `retargeted(source: Node)` / `retarget_ended()`. Only `homing_missile` implements it; warheads are never eligible. A later player seeker must join the group to be hijackable.
 - **Hijacked rocket rules:** turn-limited (1.6 rad/s), 380 px/s, 2.5 s then fizzle; hurts the player only by `ContactBlast` (18, r 40, armed after 0.25 s and 60 px), full damage
-  to enemies (the lure), shoot-down HurtBox 512/64 only while hijacked, fizzles when its source is freed. No new collision bit.
-- **Enemy EMP hook:** `BaseEnemy.apply_emp(seconds, source)` / `is_emp_disrupted()` for brain-driven, unsuspended ships; brain tick skipped, mover still steps, hurtbox untouched;
-  `EnemyBrain.on_emp_started()` virtual (twin drones collapse their pair, the tender cancels a launch telegraph). Structures and legacy enemies ignore it. `EnemyRocket` joins
+  to enemies (the lure), shoot-down HurtBox 512/64 only while hijacked, fizzles when its source is freed. No new collision bit. **Its HitBox (mask 513, which includes 512) ignores
+  any area whose parent is a `homing_missile`** (the `EnemyRocket` self-guard), so a player rocket never hits its own HurtBox or another player rocket; only primary fire shoots a
+  hijacked rocket down. One `_finish(blasted)` end of life, which the `ProjectileLifetime` expiry also goes through (so `retarget_ended` always fires). The rocket draws its own
+  0.3 s tether; the dart is recycled on the claim tick.
+- **Lock clocks:** every lock / EMP / suppress clock is `x -= delta`, over at `x <= 1e-6` (float drift otherwise ends a 1.5 s lock on tick 91). Later timed effects use the same rule.
+- **Enemy EMP hook:** `BaseEnemy.answers_emp() -> bool` (default `is_ai_driven()`; the one routing question for every EMP source), `apply_emp(seconds, source)` /
+  `is_emp_disrupted()`; for brain-driven ships the brain tick is skipped, the mover still steps, the hurtbox is untouched; `EnemyBrain.on_emp_started()` virtual (twin drones
+  collapse their pair, the tender cancels a launch telegraph). `JammingStructure` overrides `answers_emp()` true and answers by `HazardField.suppress(seconds)` (field quiet,
+  tower shootable, cycle keeps running). Other structures and legacy enemies answer false. A later structure with its own EMP answer overrides the same pair. `EnemyRocket` joins
   `&"enemy_seeking_ordnance"` while it steers and answers `jam_guidance()`.
 - **New enemies / hazards:** `assault/scenes/enemies/jamming_structure/` (`JammingStructure`, `JammingStructureConfig`, `JammerFieldArt`; a static `BaseEnemy` with a child
   `HazardField`), `sector_jammer/`, `pulsed_jammer/` (scene + config, shared scripts); `hacker_frigate/` (`HackerFrigate`, `HackerFrigateBrain` with `Phase { HOLD_ARC, TELEGRAPH,
   PULSE, BREAK_OFF, DISENGAGE, IDLE, NOTICING, RETURNING }` append-only, `HackerFrigateConfig`), `hacker_disruptor/` (same scripts, `pulse_lock_seconds` 1.5, **not placed**);
   `assault/scenes/projectiles/hijack_pulse/` (`HijackPulse`, a pooled non-damaging dart with no collision areas, claims by distance); `assault/scenes/hazards/emp_zone/`
-  (`EmpZone extends HazardField`, `&"emp_zone"`, avoid 0.6, one `TARGET_ALL` emit per cycle). `WaveBuilder.jammer(variant)`, `WaveBuilder.hacker_frigate()`.
+  (`EmpZone extends Node2D` with a child `HazardField` `&"emp_zone"`, avoid 0.6, one `TARGET_ALL` emit per cycle on its `phase_changed`; composition, never a
+  `HazardField` subclass). `HazardField` gains `suppress(seconds)`. `WaveBuilder.jammer(variant)`, `WaveBuilder.hacker_frigate()`.
+- **Hacker movement:** HOLD_ARC with asymmetric 0.18 / 0.30 rad/s arcs; inside the player's nose cone (± 30°) or route cone (± 25°, player > 80 px/s) the orbit is forced toward
+  the nearer edge at 0.30 rad/s (216 px/s at 720 px, under `max_speed` 230): it slides out of a nose that stops, it does not out-turn a tracking player. BREAK_OFF inside 420 px is a
+  committed `mover.boost` at 360 px/s with `break_lateral_weight` 0.25 (radial ≈ 322 px/s; `break_contact` doubles the lateral share against a closing threat), ≤ 3.0 s, 1.0 s
+  rearm; Assault uses the view-clamped request instead. Every behaviour row has a control that switches the behaviour off and must fail the same bound.
 - **Hacker pulse:** TELEGRAPH 0.9 s (damage cancels it) → PULSE 1.6 s claiming up to 3 eligible rockets within 650 px with LOS (in flight and newly launched); cooldown 6–8 s;
-  2 pulses per Assault life; Assault view clamp + `EngagementBudget` 9 s + measured exit (`tests/helpers/ph9_exit_keys.gd`). The Disruptor hook is `pulse_lock_seconds`.
+  **1 pulse per Assault life** (a second cannot fit in the 9 s budget, so 1 is the only cap that binds); Assault view clamp + `EngagementBudget` 9 s + measured exit
+  (`tests/helpers/ph9_exit_keys.gd`). The dart lives 1.6 s / 1400 px at 900 px/s; a rocket receding at full range can outrun it, by design. LOS is the Ph6 rule (only asteroids
+  and wrecks block; enemy bodies do not). The Disruptor hook is `pulse_lock_seconds`, applied at **PULSE end** (a lock during PULSE would refuse the launches it hijacks).
 - **Audio seam:** `EventBus.player_ability_lock_changed(locked: bool)`, `EventBus.player_ordnance_hijacked(rocket: Node2D, source: Node)`. Ph17 connects sound to them.
 - **HUD:** `MissionHud` JAMMED chip (fill = `ability_lock_fill()`) and a lock glyph over the special-weapon icon; ship-side `AbilityLockStatic` overlay. Colours: amber-white =
   jammed / hacked, blue-white = EMP; never cyan (shield) or violet (boost disruption).
 
 ### Placement
 - Hub: draw 18 = Hacker on the 2600 ring at 67.5° (draws 1–17 unchanged); a sector jammer beside the Ph8 `HubDefenseSite` (placement only, not power-linked); a pulsed jammer and an
-  EMP zone in `TacticalSpace`; new sweep C in `test_sector_hub_patrol.gd`: every jammer / EMP zone keeps `radius + 300` px clear of the spawn, triggers and pickups.
-- Level 1: one local jammer and, after it has drifted out, one Hacker, both in **planet_approach** off its peaks (≤ 7 of 7.5), pinned as `EXPECTED_PH9`; the jammer is world-anchored
-  and clears every column lit during its life.
+  EMP zone in `TacticalSpace`. **Jammers (all variants) live under `EnemyContainer`, never in `TacticalSpace`** (the Ph6 TacticalSpace sweep reads a `BaseEnemy` as radius 0); new
+  sweep C in `test_sector_hub_patrol.gd`: every jammer keeps `field_radius + 300` px clear of the spawn, triggers and pickups. The EMP zone is covered by the Ph6 TacticalSpace sweep
+  (`_element_radius()` knows `EmpZone`); the Hacker joins `_patrol_groups()`.
+- Level 1: one local jammer and one Hacker, both in **planet_approach**, pinned as `EXPECTED_PH9`, under four hard constraints: count ≤ 7 of 7.5 throughout, both lives end before the
+  98.0 s peak, the two lives never overlap, the jammer clears every column lit during its life. Ordered pre-approved options: A Hacker in 40–53 s then jammer in 55–70 s (default);
+  B jammer first; C jammer at y −120; D Hacker at the side band. None fits → the task escalates; never a frozen-constant change, a per-level retune, or deep_space. The EMP-zone /
+  placed-EMP-mine guards scan level scenes and scripts by path, because neither is spawned through `WaveBuilder`.
 
 ### Conventions
 - **No jammer (any variant), Hacker, Disruptor or EMP zone in an `ENEMIES_CLEARED` section; no sector jammer or EMP zone in any Assault section** (guard rows in
   `test_engagement_deadline.gd`). Never place a Hacker inside or next to a jammer (a jammed player cannot launch, so the hijack would be moot).
 - Do not stack EW on the player: one lock, longest wins, no additions.
-- Gate time: GUT 212.4 s at the Ph8 close; allotments total 22.4 s, so the phase ends ≤ 235 s; a task that would pass 238 s escalates.
-- Task chains over shared files: `player_base.gd` t1 → t2 → t5; `homing_missile.gd` t3 → t4 → t5; `enemy_rocket.gd` t5 → t7; roster gates t7 → t8 → t9 → t10.
+- Gate time: GUT 212.4 s at the Ph8 close; allotments total 22.6 s, so the phase ends ≤ 235.0 s; a task that would pass 238 s escalates.
+- Task chains over shared files: `player_base.gd` t1 → t2 → t5; `homing_missile.gd` t3 → t4 → t5; `enemy_rocket.gd` t5 → t7; `base_enemy.gd` / `emp_blast_module.gd` t5 → t6 → t7;
+  `hazard_field.gd` t1 → t7; `test_sector_hub_patrol.gd` t11 → t13; roster gates t7 → t8 → t9 → t10.
+- `enemy_mine.gd` never names `EnemyMine` (no `as` / `is EnemyMine`; the self-reference leaks at exit).
 
 ### Deferred
 | Item | Deferred to | Reason |
@@ -3500,7 +3520,9 @@ These are *planned* decisions; check this phase's *as built* section, once writt
 | Disruptor placement; EW numbers by difficulty | Ph13 / Ph16 | encounters, tiers |
 | Lock / hijack / EMP audio | Ph17 | seams built here |
 | Ship-mounted EMP weapon (Carrier anti-approach pulse) | Ph10 / Ph18 | first user; `EmpPulse` ready |
-| EMP on structures and legacy enemies (gunship, bonus drone, station) | Ph10 / Ph11 | reworked there |
+| EMP on structures and legacy enemies (gunship, bonus drone, station, Ph8 turrets / fences) | Ph10 / Ph11 | reworked there; Ph9 jammers are the one structure that already answers EMP |
+| Enemy bodies blocking line of sight (IDEAS §6.4 "force the hacker behind other enemies") | Ph19 (heavy hulls), maybe Ph14 | Ph6 LOS rule kept; pinned by a Ph9 row |
+| Player rockets shooting down a hijacked rocket | rejected | salvo-mates fly 7 px apart; primary fire is the shoot-down tool |
 | Module / cooldown HUD | Ph17 | readability pass |
 | Jammers / EMP zones in Assault layouts beyond level 1 | Ph15 | Ph6 rule |
 | Jammer wreckage | Ph19 | |
