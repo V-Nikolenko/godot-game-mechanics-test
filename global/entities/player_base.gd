@@ -12,8 +12,18 @@ signal boost_disruption_changed(efficiency: float)
 ## An EMP started (true) or ended (false) on this ship.
 signal emp_changed(active: bool)
 
+## The ability lock (Phase 9) started (true) or ended (false). Edges only, never on a refresh.
+signal ability_lock_changed(locked: bool)
+
+## An H or K press arrived while the abilities were locked, and was refused with nothing spent.
+signal ability_press_refused()
+
 ## Below this efficiency every boost verb (Shift boost, Boost Drive, dash, warp) is refused before anything is spent.
 const MIN_BOOST_EFFICIENCY: float = 0.15
+
+## Every ability-lock clock is over at or below this (float drift: 90 steps of 1/60 from 1.5 leave a positive residual),
+## so a lock of `s` seconds at 60 Hz ends on tick `round(s * 60)` exactly.
+const LOCK_CLOCK_EPSILON: float = 1e-6
 
 ## Component references — assigned in _setup_components().
 var health_component: Health = null
@@ -73,6 +83,18 @@ var _disruption_ring: Line2D = null
 const _DISRUPTION_RING_COLOR: Color = Color(0.72, 0.4, 1.0, 1.0)
 const _DISRUPTION_RING_POINTS: int = 24
 const _DISRUPTION_RING_RADII: Vector2 = Vector2(20.0, 23.0)  ## alternating inner / outer: a jagged spark ring
+
+## Ability lock (Phase 9 plan §2.1). Sampled inside a lit jammer field on the last lock tick.
+var _in_field: bool = false
+## That field's `stabilise_seconds` (the largest of the fields containing the ship).
+var _field_stabilise: float = 0.0
+## The stabilisation delay left after leaving a field, and its full length (for the fill).
+var _stabilise_left: float = 0.0
+var _stabilise_total: float = 0.0
+## The longest timed lock's seconds left (EMP, Disruptor). Ends with no stabilisation delay.
+var _timed_left: float = 0.0
+## The state last announced by ability_lock_changed.
+var _lock_reported: bool = false
 
 func _ready() -> void:
 	add_to_group("player")
@@ -224,8 +246,71 @@ func apply_emp(seconds: float, _source: Node) -> void:
 func is_emp_disrupted() -> bool:
 	return _emp_left > 0.0
 
+## Locks the H abilities and the K rockets for `seconds` (EMP, Disruptor). The longest wins and two never add; it
+## ends with no stabilisation delay. `seconds <= 0` is a no-op. `_source` is kept for the callers' signature.
+func apply_ability_lock(seconds: float, _source: Node) -> void:
+	if seconds <= 0.0:
+		return
+	_timed_left = maxf(_timed_left, seconds)
+	_report_lock()
+
+## True inside a lit jammer field, during the stabilisation delay after one, and while a timed lock runs. Never
+## gates movement, the Shift boost, dash, warp, primary fire, `switch_weapon` or module cooldowns.
+func abilities_locked() -> bool:
+	return _in_field or _stabilise_left > 0.0 or _timed_left > 0.0
+
+## 1.0 while in a field or a timed lock runs, the stabilisation fraction left while only stabilising, 0.0 unlocked.
+func ability_lock_fill() -> float:
+	if _in_field or _timed_left > 0.0:
+		return 1.0
+	if _stabilise_left > 0.0 and _stabilise_total > 0.0:
+		return _stabilise_left / _stabilise_total
+	return 0.0
+
+## The one check every H / K seam makes before spending anything: true when unlocked, otherwise
+## `ability_press_refused` and false.
+func allow_ability_press() -> bool:
+	if not abilities_locked():
+		return true
+	ability_press_refused.emit()
+	return false
+
+## `x - delta`, or 0.0 once it is at or below LOCK_CLOCK_EPSILON (the Phase 9 clock rule).
+static func _tick_clock(x: float, delta: float) -> float:
+	x -= delta
+	return 0.0 if x <= LOCK_CLOCK_EPSILON else x
+
+## The ability lock's clock: samples the jammer field at the ship (the body samples hazards; nothing writes it) and
+## counts the stabilisation delay and the timed lock down. With no hazard and no lock it is one early return.
+func _step_ability_lock(delta: float) -> void:
+	if Hazards.count() == 0 and not abilities_locked():
+		return
+	var info := Hazards.jammer_at(global_position)
+	if info != null:
+		_in_field = true
+		_stabilise_left = 0.0
+		_stabilise_total = 0.0
+		_field_stabilise = info.stabilise_seconds
+	elif _in_field:
+		## The exit tick (left the field, it went dark or it was freed): the delay starts here, with no decrement.
+		_in_field = false
+		_stabilise_left = _field_stabilise
+		_stabilise_total = _field_stabilise
+	else:
+		_stabilise_left = _tick_clock(_stabilise_left, delta)
+	_timed_left = _tick_clock(_timed_left, delta)
+	_report_lock()
+
+## Emits ability_lock_changed on an edge only.
+func _report_lock() -> void:
+	var now: bool = abilities_locked()
+	if now != _lock_reported:
+		_lock_reported = now
+		ability_lock_changed.emit(now)
+
 ## The disruption's clock, a hand-steppable seam like BoostMeter.step(). Called from each ship's _physics_process.
 func _step_disruption(delta: float) -> void:
+	_step_ability_lock(delta)
 	_step_emp(delta)
 	if _disruption_left <= 0.0:
 		return

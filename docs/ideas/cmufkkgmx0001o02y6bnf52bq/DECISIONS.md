@@ -3537,3 +3537,33 @@ These are *planned* decisions; check this phase's *as built* section, once writt
 | Jammers / EMP zones in Assault layouts beyond level 1 | Ph15 | Ph6 rule |
 | Jammer wreckage | Ph19 | |
 | Shield "hacked" drain (`Shield.set_hacked`) | rejected | drains every charge at once, not brief |
+
+### Phase 9, built in t1 (the player-side ability lock: H abilities and K rockets, jammer fields, timed locks) (2026-11-07)
+- **Built as §2.1 says, no interface deviation.** `PlayerBase` (`global/entities/player_base.gd`): `signal ability_lock_changed(locked: bool)`,
+  `signal ability_press_refused()`, `apply_ability_lock(seconds, source)`, `abilities_locked()`, `ability_lock_fill()`, `allow_ability_press()`,
+  `_step_ability_lock(delta)` (first line of `_step_disruption()`), `static func _tick_clock(x, delta)` with `const LOCK_CLOCK_EPSILON = 1e-6`, private state
+  `_in_field` / `_field_stabilise` / `_stabilise_left` / `_stabilise_total` / `_timed_left` / `_lock_reported`. `HazardInfo.stabilise_seconds`; `HazardField`
+  exports `disables_abilities` (written as `disables_abilities and active`) and `stabilise_seconds`; `Hazards.jammer_at(pos)`. Seams: `OpenSpacePlayerShip._input`,
+  `AssaultPlayer._input` (after the dialog return), `RocketState._on_action` (`special_weapon`, inside `cooldown_timer.is_stopped()`, duck-typed `has_method`).
+  `WeaponState` untouched.
+- **Choices §2.1 left open, fixed here (t2 / t5 build on them):** `_report_lock()` is the one edge emitter, called from the step and from
+  `apply_ability_lock()`, so a timed lock announces `true` **at the call** (as `apply_emp` does) and a field on the first tick sampled inside. t2 adds
+  `EventBus.player_ability_lock_changed` inside `_report_lock()`. The `source` argument is unused in t1. A field whose `stabilise_seconds` is 0 unlocks on
+  the exit tick itself.
+- **A locked H press is consumed even when nothing could use it** (no module, or only the Open Space Boost Drive, which H never fires): handled and refused.
+  Unlocked, such a press is still not handled (unchanged). A press during an Assault dialog returns before the lock check: ignored, not refused.
+- **Test reading (review finding 5):** the "primary fire / movement never affected" rows compare against a control ship that sees the **same registered
+  field out of reach** (1200 px away, or moved 5000 px away before its tick), not against "no field", so both runs take identical `Hazards.count() > 0` paths
+  and only the lock can differ. The `count() == 0` path has its own row (`test_no_hazard_leaves_every_lock_observable_untouched`).
+- **Test trap for later tasks:** `CharacterBody2D.move_and_slide()` called off a physics frame (hand-ticked from idle code) moves by the *real frame delta*, so
+  a hand-ticked row may compare two ships moved in the same frame but must not assert a distance (an early draft of the movement row flaked 4 / 20 on that).
+  Assert the velocity the verb sets instead (it uses the fixed D).
+- Gate time: GUT 213.362 → 213.655 s (2634 → 2667 tests), +0.29 s of the 2.0 s allotment (`tests/README.md` → Gate time, Phase 9 table).
+- **Gate repair (attempt 3): an intermittent leak in a Phase 8 test helper, not in the lock.** Attempt 2's gate failed with all 2667 tests green on
+  `GATE FAIL: the GUT run leaked objects at exit` (`25 resources still in use` = exactly `swarm_drone.tscn`); it recurred in about one full run in three.
+  Source: `tests/helpers/level1_slice_replay.gd` freed its `WaveManager` after `_pending + 0.1` s of *physics* time, but `_spawn_with_delay()` timers run on
+  *idle* time (≈ 0.3 game s per idle frame at 16×), so `test_level1_ph8_attacks.gd::test_both_level1_turrets_fire_while_in_view` sometimes freed it with a
+  delayed Swarm Drone spawn still waiting and the stranded `SceneTreeTimer` held the scene to exit. Fixed in the helper only: it now waits until
+  `spawn_count()` of every triggered wave has arrived through `WaveManager.enemy_spawned` (cap 5 s, then `push_error`). `wave_manager.gd` unchanged.
+  Control 4 / 15 leaks before, 0 / 30 after (`tests/README.md` → *The third half*). Later replays through the helper inherit the fix; a new helper that
+  frees a `WaveManager` early must count arrivals the same way.

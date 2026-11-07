@@ -473,6 +473,19 @@ Detail and APIs: [global.md](modules/global.md).
      `ENEMIES_CLEARED` section** (persistent fire, persistent rockets, a pair that outlives being killed); guard rows in `test_engagement_deadline.gd`. (d) A static thing placed in
      deep_space must clear the level-start `LaserWallWave` as well as `Level1Director.laser_column_schedule()`. (e) Energy weapons hurt everything on the line except their owner set
      (item 4 above); a kill scores like any kill.
+- **Electronic warfare (enemy rework phase 9, built from t1):**
+  1. **The ability lock is a player hook, sampled by the body (t1).** `PlayerBase` locks the **H abilities and the K rockets only**:
+     `abilities_locked()` is true inside a lit jammer field (`Hazards.jammer_at(global_position)`, a `HazardInfo` with `disables_abilities`),
+     for that field's `stabilise_seconds` after the exit tick, and while a timed `apply_ability_lock(seconds, source)` runs (longest wins, never
+     added, no stabilisation after it). Signals `ability_lock_changed(locked: bool)` (edges only) and `ability_press_refused()`;
+     `ability_lock_fill()` for a HUD. It is checked in exactly three seams, each through `allow_ability_press()`: both ships' `_input` H
+     loops (a locked press is refused, consumed, and spends nothing) and `RocketState._on_action` for `special_weapon` (after the cooldown
+     check, before the launch). **Never locked:** thrust, turn, Shift boost and the Open Space Boost Drive on Shift, dash, warp, primary fire
+     (`WeaponState` is not touched), `switch_weapon`, passive modules, effects already running, module `tick()` (cooldowns keep counting).
+     **Clock rule:** every lock clock is `x -= delta`, over at `x <= 1e-6` (`PlayerBase._tick_clock`), so a lock of `s` seconds at 1/60 ends on
+     tick `round(s · 60)`. A jammer is a `HazardField` with `disables_abilities` (written into its info **only while ACTIVE**, so a pulsed field's
+     TELEGRAPH / QUIET count as outside) and `stabilise_seconds`. Gate `tests/integration/test_player_ability_lock.gd` (both real player scenes).
+  Details: [global.md](modules/global.md) → *Ability lock*.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---

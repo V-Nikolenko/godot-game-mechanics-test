@@ -215,3 +215,23 @@ func test_spawn_into_is_safe_inside_a_physics_callback() -> void:
 	await get_tree().physics_frame
 	await get_tree().physics_frame
 	assert_eq(f.get_parent(), container)
+
+
+# --- Phase 9: the jammer exports (docs/plans/cmug23onr001pm52w9swwophy/3-plan.md §2.1) ----------------
+
+func test_disables_abilities_is_written_only_while_active_and_stabilise_always() -> void:
+	var plain := _field()
+	assert_false(plain.disables_abilities, "default: false")
+	assert_eq(plain.stabilise_seconds, 0.0, "default: 0.0")
+	assert_false(plain.hazard_info().disables_abilities, "a default field never disables abilities")
+	assert_eq(plain.hazard_info().stabilise_seconds, 0.0)
+	var f := _field({kind = &"jammer", disables_abilities = true, stabilise_seconds = 0.75,
+		cycle_telegraph = 1.0, cycle_active = 1.0, cycle_quiet = 1.0})
+	var i := f.hazard_info()
+	assert_eq([f.phase(), i.disables_abilities, i.stabilise_seconds], [HazardField.Phase.TELEGRAPH, false, 0.75])
+	_tick(f, 1.0)
+	assert_eq([f.phase(), i.disables_abilities, i.stabilise_seconds], [HazardField.Phase.ACTIVE, true, 0.75])
+	_tick(f, 1.0)
+	assert_eq([f.phase(), i.disables_abilities, i.stabilise_seconds], [HazardField.Phase.QUIET, false, 0.75])
+	assert_true(_field({disables_abilities = true}).hazard_info().disables_abilities,
+			"a field with no cycle is always ACTIVE, so always lit")

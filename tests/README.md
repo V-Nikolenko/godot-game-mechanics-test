@@ -630,9 +630,16 @@ before / after pair here.
 ceiling and 24 s under the plan's 236.5 s forecast: the planned allotments summed to 33.1 s and the phase used 12.4 s of net growth on top of t1's recovery. The largest additions were the two
 memoised corridor exit probes inside t14 (≈ 4.5 s together); every later consumer hits the memo through `tests/helpers/ph8_exit_keys.gd`. Run-to-run noise is about ±1 s. **Phase 9 starts with about 27 s of headroom.**
 
+**Phase 9 per-task allotments** (plan §2.18; new GUT seconds): t1 2.0 · t2 0.5 · t3 0.8 · t4 2.5 · t5 2.0 · t6 0.5 · t7 2.7 · t8 4.0 · t9 2.5 · t10 0.6 · t11 0.8 · t12 0.2 ·
+t13 1.0 · t14 2.5 · t15 0 = 22.6 s; the phase ends ≤ 235.0 s, and a task that would pass 238 s escalates. Record each task's before / after pair here.
+
+| Task | Allotment | GUT before → after | Note |
+|---|---|---|---|
+| t1 player ability lock | 2.0 s | 213.362 → 213.655 s (2634 → 2667 tests; `scripts/gate-time.sh` GUT `Time`, wall 219.8 → 220.2 s; the before measured on a clean `git archive HEAD` copy of 9735b05) | new `test_player_ability_lock.gd`, 27 test functions ≈ 0.85 s on its own: hand-ticked on both real player scenes (≈ 90 ships), H presses through `Viewport.push_input()`, two lockstep rows that await one idle frame; plus 5 `jammer_at` rows in `test_hazards.gd` and 1 in `test_hazard_field.gd`. +0.29 s by the gate figure (inside run noise). No leak lines (`gate-time.sh` exited 0) — but the leak was intermittent: the harness gate then failed on it, and attempt 3 fixed `level1_slice_replay.gd` (*The third half*, below); `verify.sh` after the fix: GUT 213.164 s, 2667 tests, GATE PASS |
+
 **Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
 `tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition
-and settles every spawn timer before freeing the world), `tests/helpers/fixture_enemy_unrepairable.gd` (`can_be_repaired()` false),
+and waits until every spawn of a triggered wave has arrived before freeing the world; see *The third half* below), `tests/helpers/fixture_enemy_unrepairable.gd` (`can_be_repaired()` false),
 and `SpecialistExitProbe`'s optional `prepare` callable. A rocket's `expired` goes out two physics ticks after a detonation, so a
 test that counts `expired` or recycles a pool must wait them.
 
@@ -856,18 +863,41 @@ shared.
 headless `--import`, and predates this suite. Verified against a stashed working tree: baseline
 and current both emit exactly one. Do not go hunting for it in the tests.
 
+### The third half — never free a `WaveManager` before its delayed spawns have arrived (Phase 9 t1)
+
+`tests/helpers/level1_slice_replay.gd` stops a replay as soon as the caller's claim holds and then
+waited `_pending + 0.1` s of **physics** time before freeing the world. A `_spawn_with_delay()`
+timer runs on **idle** time, and at the 16× clock one idle frame is ≈ 0.3 game s, so about one run
+in four freed the `WaveManager` with a delayed spawn still waiting; the stranded timer kept that
+ship's scene alive to process exit. `test_level1_ph8_attacks.gd::test_both_level1_turrets_fire_while_in_view`
+stops right after deep_space's 5.5 s wave (two Swarm Drones at +0.5 / +0.7 s), so the gate failed
+intermittently on `25 resources still in use at exit` (exactly `swarm_drone.tscn`) with every test
+green. The helper now **counts** instead of timing: `spawn_count()` of each triggered wave against
+`WaveManager.enemy_spawned`, with a 5 s cap that ends in a `push_error`. Control: 4 / 15 runs leaked
+with the old settle under three parallel runs, 0 / 30 with the new one.
+
+How it was found, for the next intermittent leak: `--verbose` hid it (eight verbose suites, no leak,
+probably because verbose output slows the frames), so the per-test GUT orphan counts and a verbose
+run were no help. What worked: (1) match the exit signature by deliberately leaking candidate scenes
+in a throw-away `extends SceneTree` script (`25 resources`, one `Shape2D`, one texture, one shader
+was `swarm_drone.tscn` and nothing else); (2) a throw-away `GutHookScript` passed with
+`-gpre_run_script` that prints that scene's `get_reference_count()` after every test, in non-verbose
+full runs; the first test after which a leaking run's count stays one higher than a clean run's is
+the source; (3) loop that test alone until it leaks under `--verbose` to name the holder
+(`SceneTreeTimer`). Delete the hook afterwards.
+
 ### Checking for leaks: `scripts/check-test-leaks.sh`
 
-The gate cannot catch any of the above. Godot prints the leak lines *after* the main loop is gone,
-so they arrive after GUT has already set the process exit code, and they match none of
-`/agent/verify.sh`'s `FATAL` patterns. `scripts/check-test-leaks.sh` runs the suite with the gate's
+Godot prints the leak lines *after* the main loop is gone, so they arrive after GUT has already
+set the process exit code, and they match none of `/agent/verify.sh`'s `FATAL` patterns. (The gate
+has since gained the same grep in step 3 — `GATE FAIL: the GUT run leaked objects at exit` — so a
+leak now fails the gate even with every test green; an *intermittent* one fails it some of the time.) `scripts/check-test-leaks.sh` runs the suite with the gate's
 exact arguments and additionally greps the output for
 `ObjectDB instances leaked|resources still in use|Resource still in use`, exiting 1 on a hit. Run
 it after touching anything that awaits.
 
-It is a separate script rather than an edit to the gate because **`/agent` is mounted read-only**
-inside the dev container — the agent cannot change `verify.sh`. Folding it in is a one-line
-addition to step 3 and is worth doing; until then the script is the check.
+It was written as a separate script because **`/agent` is mounted read-only** inside the dev
+container — the agent cannot change `verify.sh`. It is still the quicker check while iterating.
 
 To find out *what* leaked, re-run with `--verbose`:
 

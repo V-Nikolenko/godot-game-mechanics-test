@@ -74,6 +74,19 @@ static func penalty_at(pos: Vector2) -> float:
 	return minf(strongest, MAX_PENALTY)
 
 
+## The lit jammer field containing [param pos] (`disables_abilities`), the one with the largest `stabilise_seconds` when
+## several overlap (the first on a tie), or null. No allocation. Phase 9: the player's ability lock samples this.
+static func jammer_at(pos: Vector2) -> HazardInfo:
+	var found: HazardInfo = null
+	for node in _nodes:
+		var info := _info(node)
+		if info == null or not info.disables_abilities or not info.contains(pos):
+			continue
+		if found == null or info.stabilise_seconds > found.stabilise_seconds:
+			found = info
+	return found
+
+
 ## The first node in group `hazard_container`, or null.
 static func container(tree: SceneTree) -> Node2D:
 	if tree == null:

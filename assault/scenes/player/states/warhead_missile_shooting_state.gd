@@ -41,6 +41,10 @@ func _on_action(key_name: String) -> void:
 		weapon_changed.emit(get_current_icon())
 		EventBus.player_rocket_changed.emit(get_current_icon())
 	elif key_name == "special_weapon" and cooldown_timer.is_stopped():
+		## Jammed (Phase 9 ability lock): refused before anything is launched or the cooldown starts. Checked after the
+		## cooldown, so a press during it is no refusal. Duck-typed: an actor without the lock is never locked.
+		if actor.has_method(&"allow_ability_press") and not actor.allow_ability_press():
+			return
 		_launch()
 		cooldown_timer.start()
 

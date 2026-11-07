@@ -36,6 +36,11 @@ signal stressed(count: int)
 @export var cycle_telegraph: float = 0.0
 @export var cycle_active: float = 0.0
 @export var cycle_quiet: float = 0.0
+## Phase 9 jammer: locks the player's H abilities and K rockets inside `radius`, only while ACTIVE (a pulsed field's
+## TELEGRAPH and QUIET count as outside). Sampled by the player through `Hazards.jammer_at()`.
+@export var disables_abilities: bool = false
+## Seconds the lock outlasts leaving the field (or the field going dark).
+@export var stabilise_seconds: float = 0.0
 
 var _info := HazardInfo.new()
 var _phase: int = Phase.ACTIVE
@@ -178,3 +183,5 @@ func _refresh_info() -> void:
 	_info.movement_penalty = movement_penalty if active else 0.0
 	_info.avoid_weight = avoid_weight if _phase != Phase.QUIET else 0.0
 	_info.damage_per_second = float(stress_damage) / stress_period if active and _stress_enabled() else 0.0
+	_info.disables_abilities = disables_abilities and active
+	_info.stabilise_seconds = stabilise_seconds

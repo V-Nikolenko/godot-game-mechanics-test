@@ -14,6 +14,11 @@
 ## The CALLER owns the 8x clock (scale it before `run()`, restore it in `after_each`); `run()` lets three idle frames
 ## pass before `load_section()` so a catch-up burst cannot land on wave 0, stops as soon as the caller's condition
 ## holds, and then steps on until every triggered spawn timer has fired (an unfired `SceneTreeTimer` is a leak).
+## "Fired" is counted, not timed: every spawn of a triggered wave must have arrived through `WaveManager.enemy_spawned`
+## before the world is freed. A spawn timer runs on idle time and `t` sums physics time; at the 16x clock one idle frame
+## is ~0.3 game s, so a physics-time margin alone sometimes freed the `WaveManager` with a delayed spawn still waiting,
+## and the stranded timer kept that ship's scene alive to process exit (Phase 9 t1: the intermittent
+## `test_level1_ph8_attacks.gd` "resources still in use at exit" leak that failed the gate with every test green).
 ##
 ## No `class_name`: test-only. `preload` it.
 extends RefCounted
@@ -28,8 +33,11 @@ const POST_ROLL := 2.0
 const PLAYER_OFFSET := Vector2(0.0, 250.0)
 ## Non-zero: an `rng_seed` of 0 means "randomize".
 const SEED_BASE := 5171
-## Run this long past the last spawn of a triggered wave so its timer has certainly fired.
+## Run at least this long past the last spawn of a triggered wave (physics time; the arrival count below is the real
+## condition).
 const SPAWN_SETTLE := 0.1
+## Give up this long past the last spawn of a triggered wave with spawns still missing, and report it (game seconds).
+const SETTLE_CAP := 5.0
 
 var _target_path: String = ""
 var _target: BaseEnemy = null
@@ -38,6 +46,9 @@ var _pending: float = 0.0
 var _waves: Array[WaveResource] = []
 var _targets_spawned: int = 0
 var _spawned: int = 0
+## Spawns the triggered waves will make (formation slots expanded), and how many `WaveManager` has made so far.
+var _scheduled: int = 0
+var _arrived: int = 0
 
 
 ## A freshly built section (each call builds new resources; nothing shipped is shared or mutated).
@@ -106,15 +117,28 @@ static func last_spawn(waves: Array[WaveResource]) -> float:
 	return latest
 
 
+## How many ships `waves` make through `WaveManager`: one per formation slot, one per plain entry, none for an entry
+## with no scene (`_spawn_ship()` returns before spawning it).
+static func spawn_count(waves: Array[WaveResource]) -> int:
+	var n := 0
+	for wave in waves:
+		for e in wave.entries:
+			var entry: SpawnEntryResource = e
+			if entry.ship_scene == null:
+				continue
+			n += entry.formation.compute_slots().size() if entry.formation != null else 1
+	return n
+
+
 ## Replays `waves` for up to `length` game seconds (summed physics delta) in a fresh Assault world under `host`, and
 ## calls `observe.call(ship, t) -> bool` on every physics frame once the first ship of `target_path` has spawned
 ## (`ship` is null once it has left the tree; `t` is slice time). The replay STOPS on the first frame `observe`
 ## returns true, or at `length`. `tweak.call(ship)`, when valid, runs on each ship of `target_path` as it enters the
 ## tree: after `_enter_tree()`'s `ShipConfig.privatise()` and before any `_ready()`, so it may edit that ship's PRIVATE
 ## config (never the shared `.tres`). Before returning, the `WaveManager` is switched off and the world keeps
-## stepping until every spawn timer of an already-triggered wave has fired (an unfired `SceneTreeTimer` is a leak),
-## then the world is freed. Returns `{ "targets": ships of `target_path` spawned, "spawned": all ships, "t": slice
-## time at the stop, "stopped": whether `observe` returned true }`.
+## stepping until every spawn of an already-triggered wave has arrived (an unfired `SceneTreeTimer` is a leak; past
+## `SETTLE_CAP` it gives up with a `push_error`), then the world is freed. Returns `{ "targets": ships of `target_path`
+## spawned, "spawned": all ships, "t": slice time at the stop, "stopped": whether `observe` returned true }`.
 func run(host: Node, waves: Array[WaveResource], length: float, target_path: String, observe: Callable,
 		tweak: Callable = Callable()) -> Dictionary:
 	_target_path = target_path
@@ -123,6 +147,8 @@ func run(host: Node, waves: Array[WaveResource], length: float, target_path: Str
 	_targets_spawned = 0
 	_spawned = 0
 	_pending = 0.0
+	_scheduled = 0
+	_arrived = 0
 	_waves = waves
 	var harness: RefCounted = HARNESS.assault()
 	host.add_child(harness.root)
@@ -137,6 +163,7 @@ func run(host: Node, waves: Array[WaveResource], length: float, target_path: Str
 	wm.enemy_container = container
 	harness.root.add_child(wm)
 	wm.wave_triggered.connect(_on_wave_triggered)
+	wm.enemy_spawned.connect(_on_wave_spawn)
 
 	for i in 3:
 		await host.get_tree().process_frame
@@ -151,19 +178,29 @@ func run(host: Node, waves: Array[WaveResource], length: float, target_path: Str
 			stopped = bool(observe.call(ship, t))
 	var stop_t := t
 	wm.set_process(false)
-	while t < _pending + SPAWN_SETTLE:
+	while (t < _pending + SPAWN_SETTLE or _arrived < _scheduled) and t < _pending + SETTLE_CAP:
 		await host.get_tree().physics_frame
 		t += host.get_physics_process_delta_time()
+	if _arrived < _scheduled:
+		push_error("level1_slice_replay: %d of %d triggered spawns never arrived; freeing the WaveManager leaks their timers"
+				% [_scheduled - _arrived, _scheduled])
 	container.child_entered_tree.disconnect(_on_child_entered)
 	harness.root.queue_free()
 	await host.get_tree().process_frame
 	return {"targets": _targets_spawned, "spawned": _spawned, "t": stop_t, "stopped": stopped}
 
 
-## The latest spawn moment of any triggered wave, so `run()` knows how long its spawn timers still need.
+## The latest spawn moment of any triggered wave, so `run()` knows how long its spawn timers still need, and how many
+## ships it still owes.
 func _on_wave_triggered(wave_index: int) -> void:
 	var one: Array[WaveResource] = [_waves[wave_index]]
 	_pending = maxf(_pending, last_spawn(one))
+	_scheduled += spawn_count(one)
+
+
+## One ship out of a `WaveManager` spawn (immediate or after its delay timer).
+func _on_wave_spawn(_enemy: Node, _wave_index: int) -> void:
+	_arrived += 1
 
 
 ## Seeds every ship's brain before its `_ready()` (`child_entered_tree` fires on `add_child`, after `_enter_tree()`

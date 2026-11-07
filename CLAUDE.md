@@ -126,6 +126,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   level-start `LaserWallWave`, x 0–672, which the plan's −64 sat in), a twin pair (deep_space 29.0 s) and a tender (planet_approach 2.0 s), pinned as `EXPECTED_PH8` and
   counted per ship in the frozen 2.5× gate of `test_level1_specialist_spawns.gd` (with `test_ph8_static_members_clear_every_lit_column`); attacks replayed at 16× in
   `test_level1_ph8_attacks.gd`.
+  **The ability lock (Phase 9 t1) locks H abilities and K rockets only, and is read in exactly three seams** — both ships' `_input` H loops and
+  `RocketState._on_action` (`special_weapon`, after the cooldown check) — each through `PlayerBase.allow_ability_press()`; a refused press spends nothing.
+  Movement, Shift boost, dash, warp, primary fire (`WeaponState` never reads it), `switch_weapon` and module `tick()` are never locked. Sources: a lit jammer
+  `HazardField` (`disables_abilities`, true only while ACTIVE; `Hazards.jammer_at()`, then `stabilise_seconds` after the exit tick) or a timed
+  `apply_ability_lock(seconds, source)` (longest wins). Every lock clock is `x -= delta`, over at `x <= 1e-6`. Gate `tests/integration/test_player_ability_lock.gd`
+  ([PROJECT.md](docs/architecture/PROJECT.md) → Conventions → *Electronic warfare*).
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`
   (this is step 3 of `/agent/verify.sh`). The suite is almost entirely **characterization**: it

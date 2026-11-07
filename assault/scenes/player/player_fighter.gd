@@ -141,6 +141,10 @@ func _input(event: InputEvent) -> void:
 		return
 	if DialogPlayer.is_active:
 		return
+	## Jammed (Phase 9 ability lock): the press is refused and consumed, and no module spends anything.
+	if not allow_ability_press():
+		get_viewport().set_input_as_handled()
+		return
 	for id: StringName in _module_pool.keys():
 		var mod: ShipModuleBase = _module_pool[id]
 		if mod.try_activate(self):
