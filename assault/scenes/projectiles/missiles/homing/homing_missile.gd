@@ -1,13 +1,9 @@
 class_name homing_missile
 extends Area2D
 
-## Arena bounds matching arena_camera.gd — same constants as EnemyBullet.
-## x ∈ [-100, 1380], y ∈ [-380, 1100] plus a 64 px margin.
-const _ARENA_MARGIN : float = 64.0
-const _ARENA_LEFT   : float = -100.0  - _ARENA_MARGIN
-const _ARENA_RIGHT  : float = 1380.0  + _ARENA_MARGIN
-const _ARENA_TOP    : float = -380.0  - _ARENA_MARGIN
-const _ARENA_BOTTOM : float = 1100.0  + _ARENA_MARGIN
+## Emitted once by the `ProjectileLifetime` child when a time, distance or world-rect rule trips (Assault
+## world rect, 6 s, 2400 px). Wired to `_on_expired()`, the one place a lifetime ends the rocket.
+signal expired
 
 @export var speed: float = 500.0
 @export var locked_target: Node
@@ -18,6 +14,7 @@ const _ARENA_BOTTOM : float = 1100.0  + _ARENA_MARGIN
 func _ready() -> void:
 	animated_sprite.play("default")
 	add_child(RocketTrail.new())
+	expired.connect(_on_expired)
 
 
 func _physics_process(delta: float) -> void:
@@ -25,11 +22,6 @@ func _physics_process(delta: float) -> void:
 		_fly_to_target(delta)
 	else:
 		_fly_forward(delta)
-
-	var p := global_position
-	if p.x < _ARENA_LEFT or p.x > _ARENA_RIGHT \
-			or p.y < _ARENA_TOP or p.y > _ARENA_BOTTOM:
-		queue_free()
 
 
 func _fly_to_target(delta: float) -> void:
@@ -53,6 +45,11 @@ func _fly_forward(delta: float) -> void:
 			forward = bent
 			rotation = bent.angle() + PI / 2
 	global_position += forward * speed * delta
+
+
+## The `ProjectileLifetime` expired: the rocket leaves the world, no blast.
+func _on_expired() -> void:
+	queue_free()
 
 
 ## Guided ordnance bends in gravity wells and anomalies (`Hazards.bend_heading()`, speed unchanged).

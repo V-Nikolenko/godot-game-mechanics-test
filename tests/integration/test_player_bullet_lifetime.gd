@@ -469,3 +469,20 @@ func test_an_unlimited_pierce_bullet_is_not_stopped_by_an_armoured_ram_corvette(
 	assert_false(ram.is_in_group("ram_ships"), "the group the old rule keyed on is gone")
 	assert_eq(hb.damage, damage_before, "the HitBox is not zeroed")
 	assert_false(bullet.is_queued_for_deletion(), "an armoured Corvette does not stop a Sniper Shot")
+
+
+## Every player rocket scene frees itself on its own — exactly one owner, nobody else frees it. The
+## homing rocket through its `ProjectileLifetime` (`expired -> _on_expired -> queue_free`), the warhead
+## through its screen notifier (docs/plans/cmug23onr001pm52w9swwophy/3-plan.md §2.4).
+func test_every_player_rocket_scene_frees_itself() -> void:
+	var homing := load("res://assault/scenes/projectiles/missiles/homing/homing_missile.tscn").instantiate() as Node2D
+	_container.add_child(homing)
+	assert_true(homing.has_signal("expired"), "the homing rocket declares expired")
+	homing.expired.emit()
+	assert_true(homing.is_queued_for_deletion(), "expired frees the homing rocket")
+
+	var warhead := load("res://assault/scenes/projectiles/missiles/warhead/warhead_missile.tscn").instantiate() as Node2D
+	_container.add_child(warhead)
+	var notifier := warhead.get_node("VisibleOnScreenNotifier2D") as VisibleOnScreenNotifier2D
+	notifier.screen_exited.emit()
+	assert_true(warhead.is_queued_for_deletion(), "leaving the screen frees the warhead rocket")

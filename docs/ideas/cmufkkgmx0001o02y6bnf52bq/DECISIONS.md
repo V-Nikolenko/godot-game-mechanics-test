@@ -3567,3 +3567,13 @@ These are *planned* decisions; check this phase's *as built* section, once writt
   `spawn_count()` of every triggered wave has arrived through `WaveManager.enemy_spawned` (cap 5 s, then `push_error`). `wave_manager.gd` unchanged.
   Control 4 / 15 leaks before, 0 / 30 after (`tests/README.md` → *The third half*). Later replays through the helper inherit the fix; a new helper that
   frees a `WaveManager` early must count arrivals the same way.
+
+### Phase 9, built in t3 (homing rocket lifetime) (2026-11-07)
+- **Built as §2.4 says, no interface deviation.** `homing_missile.gd` lost the `_ARENA_*` constants and the box check; it declares `signal expired`, has a `ProjectileLifetime` child in
+  `homing_missile.tscn` (`max_time` 6.0, `max_distance` 2400, `use_world_rect` true) and connects `expired -> _on_expired()` in `_ready()`. `_on_expired()` is only `queue_free()`; **t4 ends a live
+  hijack in it before the free.** In Assault the rect is `EnemyWorld.projectile_world_rect()` (the box the constants hard-coded); in Open Space the rect rule is a no-op, so a rocket launched far
+  from the origin now lives (it died on its first tick before). Nothing else about the rocket changed.
+- **The shared "keep a rocket alive" setup** is a hurtbox-less static `Node2D` 300 px away: the rocket reaches it and hovers within ~10 px until `max_time` (expiry at tick 360 +-1, both harnesses).
+  `tests/integration/test_homing_missile_lifetime.gd` hand-ticks the rocket then its `ProjectileLifetime`; t4's lifetime row reuses the setup. The lifetime arms on its first tick, so the 2400 px
+  rule fires one tick after 288 ticks of travel (Open Space, no target).
+- Ownership row added to `test_player_bullet_lifetime.gd` (homing: `expired -> queue_free`; warhead: screen notifier).
