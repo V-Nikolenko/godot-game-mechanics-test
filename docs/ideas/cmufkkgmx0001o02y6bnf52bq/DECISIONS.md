@@ -3590,3 +3590,31 @@ These are *planned* decisions; check this phase's *as built* section, once writt
   freed), because the Open Space hub ship can arrive after the HUD's one awaited frame. With no player the chip and glyph are hidden and nothing is logged.
 - `EventBus.player_ordnance_hijacked(rocket: Node2D, source: Node)` is declared; nothing emits it until t4. No audio player anywhere.
 - Test trap: a mode loop that creates a second player without freeing the first leaves the first one (and its jammer) in the `player` group, so the HUD tracks the wrong ship.
+
+### Phase 9, built in t4 (the seeking-ordnance retarget hook and the hijacked homing rocket) (2026-11-08)
+- **Built as §2.5 says.** `SeekingOrdnance` (`global/components/seeking_ordnance.gd`: `GROUP` `&"player_seeking_ordnance"`, `eligible(tree, at, reach)` nearest first, ties by
+  instance id). `homing_missile` joins the group in `_ready()` and answers `can_be_retargeted()`, `retarget(target, seconds, source)` (`seconds < 0` = its own `hijack_seconds`),
+  `is_retargeted()`, `jam_guidance(source)`, `is_tether_visible()`; signals `retargeted(source: Node)` and `retarget_ended()`; it emits `EventBus.player_ordnance_hijacked(self, source)`
+  once per successful claim. All hijack tuning is exported on `homing_missile.tscn` (`hijack_speed` 380, `hijack_turn_rate` 1.6, `hijack_seconds` 2.5, `hijack_ease_seconds` 0.5,
+  `hijack_blast_damage` 18, `hijack_blast_radius` 40, `hijack_blast_frames` 3, `hijack_trigger_radius` 30, `hijack_arm_seconds` 0.25, `hijack_arm_clearance` 60, `tether_seconds` 0.3),
+  plus a `HurtBox` (512 / 64, r 7, closed until hijacked) and an amber `Pop`. `RocketTrail` gained `set_colors(birth, death)` and `birth_color()`.
+- **A rocket is claimed at most once** (`can_be_retargeted()` latches false on the first claim, not only while hijacked). **A claim with a null `source` has no source to lose**: it is
+  accepted and lasts its window (§2.5's "source not valid -> fizzle" applies only to a source that existed). A freed **target** (the player) leaves the rocket flying straight to its fizzle.
+- **Deviation: `_finish()` frees at the end of the frame, not two physics ticks later.** §2.5 asked for `EnemyRocket`'s two-tick delay and for t3's rows to stay green; t3's rows time the
+  free (`test_homing_missile_lifetime.gd` tick 360, `test_player_bullet_lifetime.gd` `is_queued_for_deletion()` right after `expired`). The delay exists only for a pooled rocket; this one
+  is never pooled. The areas are still closed deferred and `_done` latches first. Every end emits `expired` once (through the lifetime's own latch); only a hijack's end pops and emits
+  `retarget_ended`, so an unhijacked rocket's ends are observably unchanged.
+- **The self-hit guard compares script identity** (`node.get_script() == get_script()`) instead of `is homing_missile`, so `homing_missile.gd` does not name its own `class_name`. This is a
+  precaution, **not a known leak**: `enemy_mine.gd`'s self-reference leaked, but `enemy_rocket.gd` names `EnemyRocket` freely with a leak-free gate, so there is no general rule against it.
+  `warhead_missile.gd` uses `area.get_parent() is homing_missile` (a cross-reference). **Decision: a player rocket never hits another player rocket**, hijacked or not.
+- **Things besides primary fire that end a hijacked rocket (accepted):** a `LaserRay` on its default `_HIT_MASK` (128 | 256 | 512: level 1's laser columns, every ray of `laser_wall.tscn`)
+  kills any HurtBox it meets, so a lit column destroys a hijacked rocket; so does a reflected `EnemyBullet` (layer 64), the ally fighter's CONTACT ram box (64) and an `EnemyRocket`
+  (both end). The station laser phase overrides the mask and does not.
+- **For t8 (the Hacker):** the rockets are children of `RocketState`, so a rocket freed with its player (any parent free) never reaches `_finish()` and emits no `retarget_ended`;
+  a claimer counting its claims must also check `is_instance_valid`. Beam primaries (`mining_laser`, targets by group) can never shoot a hijacked rocket down (a t9 fairness note).
+  `retarget()` opens the HurtBox deferred, so a test asserting it must await a frame.
+- **Measured engine behaviour (Godot 4.6), for anyone writing a guard row:** an `Area2D` that turns `monitorable` while it already overlaps another area forms **no pair** with it, even
+  after 140 ticks of flight together; the pair forms only for an area monitorable when it enters the tree, or for one that moves in later. So a claimed rocket would not meet its own
+  HitBox or its salvo-mates' on the claim tick (the task plan's "it frees itself on the claim tick" was wrong). The guard still matters for anything that enters afterwards: the
+  real-physics falsifier is the crossing row (a fresh homing and warhead salvo flown through a hijacked rocket), and the salvo row also hands the HitBox callbacks the claimed HurtBox
+  directly. Both guards, both arming rules, the `seconds` argument, `jam_guidance()` and the jammer check were each proved by a mutation run that fails a row.

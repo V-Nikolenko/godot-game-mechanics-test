@@ -31,6 +31,10 @@ func _on_visible_on_screen_notifier_2d_screen_exited() -> void:
 
 
 func _on_hit_box_area_entered(area: Area2D) -> void:
+	# A player rocket never hits another player rocket: a hijacked homing rocket's shoot-down HurtBox (512) is in this
+	# HitBox's mask, and only primary fire may shoot it down (Phase 9 §2.5).
+	if area.get_parent() is homing_missile:
+		return
 	if _hit_is_deflected(area):
 		return
 	queue_free()

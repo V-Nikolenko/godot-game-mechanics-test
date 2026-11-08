@@ -486,7 +486,16 @@ Detail and APIs: [global.md](modules/global.md).
      tick `round(s · 60)`. A jammer is a `HazardField` with `disables_abilities` (written into its info **only while ACTIVE**, so a pulsed field's
      TELEGRAPH / QUIET count as outside) and `stabilise_seconds`. Gate `tests/integration/test_player_ability_lock.gd` (both real player scenes).
      **Tells (t2):** `AbilityLockStatic` on the ship, `JammedChip` + `LockGlyph` built by `MissionHud` (both HUD scenes), and the audio seam `EventBus.player_ability_lock_changed(locked)` (once per edge; `player_ordnance_hijacked(rocket, source)` declared for t4). No audio player. Gate `tests/integration/test_player_ability_lock_tells.gd`.
-  Details: [global.md](modules/global.md) → *Ability lock*.
+  2. **Seeking ordnance can be retargeted (t4); a player rocket never hits another player rocket.** The contract is duck-typed (the `is_armored()` precedent): a
+     player seeker joins `SeekingOrdnance.GROUP` (`global/components/seeking_ordnance.gd`; `SeekingOrdnance.eligible(tree, at, reach)` nearest first) and answers
+     `can_be_retargeted()`, `retarget(target, seconds, source)` (`seconds < 0` = the rocket's own `hijack_seconds`), `is_retargeted()`, `jam_guidance(source)`, signals
+     `retargeted(source: Node)` / `retarget_ended()`. Only `homing_missile` implements it (a `WarheadMissile` is never eligible); a rocket is claimed at most once, never
+     inside a lit jammer. A **hijacked** rocket turns at `hijack_turn_rate` 1.6 rad/s toward its new target, eases 500 → 380 px/s, fizzles after 2.5 s or at once when its
+     source is freed, hurts the player **only through a `ContactBlast`** (18, r 40) once armed (0.25 s **and** once ≥ 60 px from the target), keeps its full 100 on enemies
+     (the lure), and is shot down by one player bullet (`HurtBox` 512 / 64, open only while hijacked). Its HitBox and the warhead's ignore any area whose parent is a
+     `homing_missile`. Every end goes through `_finish()` (the lifetime expiry too), so `retarget_ended` always fires for a hijack. Inside a lit jammer field every seeker
+     flies straight. Tuning on `homing_missile.tscn`. Gate `tests/integration/test_seeking_ordnance.gd`.
+  Details: [global.md](modules/global.md) → *Ability lock* and *Seeking ordnance*.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---
