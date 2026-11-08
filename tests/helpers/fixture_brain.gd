@@ -20,6 +20,8 @@ var decision_interval: float = 0.25
 var tick_count: int = 0
 var tick_log: Array[float] = []
 var suspended_count: int = 0
+## `on_emp_started()` calls (Phase 9 t5: one per EMP start, never on a refresh).
+var emp_started_count: int = 0
 var decisions: Array[float] = []
 
 var _decision_clock: float = 0.0
@@ -46,3 +48,7 @@ func tick(delta: float) -> void:
 
 func on_suspended() -> void:
 	suspended_count += 1
+
+
+func on_emp_started() -> void:
+	emp_started_count += 1

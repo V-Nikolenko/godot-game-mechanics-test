@@ -831,3 +831,36 @@ func test_no_hazard_leaves_every_lock_observable_untouched(mode: String = use_pa
 	assert_eq(rs.get_child_count(), children + 3, "%s: a K press launches" % mode)
 	assert_eq(refusals, [], "%s: ability_press_refused never emitted" % mode)
 	assert_eq(Hazards.count(), 0, "%s: still no hazard" % mode)
+
+
+# --- EMP (plan §2.6, t5): an EMP is a timed ability lock as well as a full boost disruption --------------------------
+
+
+func test_an_emp_locks_abilities_for_exactly_120_ticks_with_no_stabilisation(mode: String = use_parameters(MODES)) -> void:
+	var p := _player(mode)
+	var got := _lock_log(p)
+	var emp: Array = []
+	p.emp_changed.connect(func(a: bool) -> void: emp.append(a))
+	p.apply_emp(2.0, null)
+	assert_eq(got, [true], "%s: locked on the EMP call" % mode)
+	assert_eq(emp, [true], "%s: emp_changed(true) once" % mode)
+	var all_locked := true
+	var all_full := true
+	var refused_at_60 := true
+	for i in range(1, 120):
+		_tick(p, 1)
+		all_locked = all_locked and p.abilities_locked()
+		all_full = all_full and p.ability_lock_fill() == 1.0
+		if i == 60:
+			refused_at_60 = not p.allow_ability_press()
+	assert_true(all_locked, "%s: locked after ticks 1 .. 119" % mode)
+	assert_true(all_full, "%s: fill 1.0 throughout (a timed lock, no stabilisation fraction)" % mode)
+	assert_true(refused_at_60, "%s: an H / K press at 1.0 s is refused" % mode)
+	assert_eq(p.boost_efficiency(), 0.0, "%s: and the boost is still fully disrupted" % mode)
+	_tick(p, 1)
+	assert_false(p.abilities_locked(), "%s: unlocked after tick 120 exactly (2.0 s, the 1e-6 rule)" % mode)
+	assert_eq(p.ability_lock_fill(), 0.0, "%s: and no stabilisation delay follows" % mode)
+	assert_eq(got, [true, false], "%s: one edge each way" % mode)
+	_tick(p, 1)  # the Ph7 EMP clock (`<= 0.0`) ends a tick later; unchanged
+	assert_false(p.is_emp_disrupted(), "%s" % mode)
+	assert_eq(emp, [true, false], "%s: emp_changed fires once each way" % mode)

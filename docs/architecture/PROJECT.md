@@ -411,8 +411,8 @@ Detail and APIs: [global.md](modules/global.md).
      `MIN_BOOST_EFFICIENCY` 0.15). A disrupted speed scales only its **excess** over a floor: `PlayerBase.disrupted_speed(speed,
      floor)` = `floor + (speed - floor) * efficiency`, so a disruption never slows the ship below normal flight; efficiency is checked
      **before** a tank or charge is spent. `EmpPulse.emit(tree, at, radius, seconds, source) -> int` (`global/components/emp_pulse.gd`)
-     is the one EMP entry point (Ph7: group `player` only); `PlayerBase.apply_emp()` is a stand-in that calls
-     `apply_boost_disruption(1.0, seconds)`. **Phase 9 replaces that effect line and extends the target set, keeping both signatures.**
+     is the one EMP entry point; Phase 9 (t5) gave it a trailing `targets` bitmask (default `TARGET_PLAYER`, so Ph7 calls are
+     unchanged) and made `PlayerBase.apply_emp()` a full boost disruption **plus** a timed ability lock (see *Electronic warfare*).
   8. **The Mine Layer** (`assault/scenes/enemies/mine_layer/`) lays one line of 6 mines per pass across the player's path, never a
      spray, and builds unsafe regions gradually (one line per ~10-14 s in Open Space, one per Assault life). Its mines live in the enemy
      container through `BulletPool.persist_after_owner_death`, and in Open Space they never fizzle, so an area the player leaves and
@@ -495,7 +495,20 @@ Detail and APIs: [global.md](modules/global.md).
      (the lure), and is shot down by one player bullet (`HurtBox` 512 / 64, open only while hijacked). Its HitBox and the warhead's ignore any area whose parent is a
      `homing_missile`. Every end goes through `_finish()` (the lifetime expiry too), so `retarget_ended` always fires for a hijack. Inside a lit jammer field every seeker
      flies straight. Tuning on `homing_missile.tscn`. Gate `tests/integration/test_seeking_ordnance.gd`.
-  Details: [global.md](modules/global.md) → *Ability lock* and *Seeking ordnance*.
+  3. **EMP disrupts systems, never the hull, and is routed by `answers_emp()` (t5).** `EmpPulse.emit(tree, at, radius, seconds, source,
+     targets := TARGET_PLAYER) -> int` (`TARGET_PLAYER` 1, `TARGET_ENEMIES` 2, `TARGET_SEEKERS` 4, `TARGET_ALL` 7; one centre-distance `<=` rule; returns ships
+     reached, seekers never counted). **Player:** `apply_emp()` = `apply_boost_disruption(1.0, s)` + `apply_ability_lock(s, source)` (the lock ends on tick
+     `round(s · 60)`, no stabilisation). **Enemies:** `BaseEnemy.answers_emp()` (default `is_ai_driven()`) is the one routing question every EMP source asks; an
+     answering enemy's `apply_emp(seconds, source)` (longest wins) calls `mover.halt()` then `EnemyBrain.on_emp_started()` once, shows a code-built blue-white
+     `EmpStatic` (`global/components/emp_static.gd`), and for the window `_physics_process` skips `brain.tick()` (no fire, no decision, the Assault budget frozen)
+     while the mover still steps; hurtbox, body and health are untouched, so **an EMP'd enemy can be shot**. The clock (`<= 1e-6` rule) runs ahead of the no-brain
+     return, so a brainless override still ends; `suspend_ai()` clears a live window. `TwinLaserDroneBrain.on_emp_started()` releases the pair (drone A's beam is
+     freed), `LaserTenderBrain.on_emp_started()` drops a launch telegraph; any beam brain of a mover-driven ship must override it (sweep row). **Seekers:**
+     `TARGET_SEEKERS` calls `jam_guidance(source)` on `SeekingOrdnance.GROUP` and `SeekingOrdnance.ENEMY_GROUP` (`&"enemy_seeking_ordnance"`: an `EnemyRocket` with
+     `turn_rate > 0` from `launch()` to `_mark_done()` / `reset()`; jammed = `is_guiding()` false for the rest of its life). **The EMP mine** passes
+     `TARGET_PLAYER | TARGET_SEEKERS` when enemy-laid and `TARGET_ALL` when placed (`Hostility.ALL`). Gates `tests/unit/test_emp_pulse.gd`,
+     `tests/integration/test_enemy_emp.gd` (both harnesses), the EMP rows of `test_player_ability_lock.gd` / `test_player_boost_disruption.gd`.
+  Details: [global.md](modules/global.md) → *Ability lock*, *Seeking ordnance* and *EMP hook*.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---

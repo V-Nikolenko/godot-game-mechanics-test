@@ -383,14 +383,15 @@ func tick_beam(delta: float, caller: Node2D) -> void:
 	beam.tick(delta)
 
 
-## [param d] leaves the rig for good (DISENGAGE, a rail): the pair breaks. A suspended drone A frees the beam (nobody would tick its fade).
+## [param d] leaves the rig for good (DISENGAGE, a rail, an EMP): the pair breaks. A suspended or EMP-disrupted drone A frees the beam
+## (nobody would tick its fade: the beam is ticked only from its leader's brain tick, which neither runs).
 func release(d: Object) -> void:
 	if not is_instance_valid(d):
 		return
 	_gone[d.get_instance_id()] = true
 	if not _broken:
 		_break_for_good()
-	if d == drone_a and _suspended(d) and is_instance_valid(beam):
+	if d == drone_a and (_suspended(d) or _emp_disrupted(d)) and is_instance_valid(beam):
 		beam.queue_free()
 		beam = null
 
@@ -552,6 +553,10 @@ func _present(d: Variant) -> bool:
 
 func _suspended(d: Object) -> bool:
 	return d.has_method(&"is_ai_suspended") and bool(d.call(&"is_ai_suspended"))
+
+
+func _emp_disrupted(d: Object) -> bool:
+	return d.has_method(&"is_emp_disrupted") and bool(d.call(&"is_emp_disrupted"))
 
 
 ## The leader's corridor rect: its mover's constraint `inner_rect()` while one is held; an empty rect in Open Space.

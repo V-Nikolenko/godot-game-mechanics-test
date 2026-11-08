@@ -10,6 +10,9 @@ class_name SeekingOrdnance
 extends RefCounted
 
 const GROUP := &"player_seeking_ordnance"
+## An enemy seeking rocket (`EnemyRocket` with `turn_rate > 0`) is in this group from `launch()` until its life ends; it
+## answers only `jam_guidance(source: Node) -> void` (EMP, `EmpPulse.TARGET_SEEKERS`). Never claimable.
+const ENEMY_GROUP := &"enemy_seeking_ordnance"
 
 
 ## Every member of `GROUP` within [param reach] of [param at] (centre distance, inclusive) whose

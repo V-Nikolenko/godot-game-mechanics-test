@@ -138,6 +138,15 @@ func on_suspended() -> void:
 	_set_light(StateLight.State.OFF)
 
 
+## `BaseEnemy.apply_emp()`: an EMP cancels a launch telegraph in progress (its tick is skipped for the window, so a
+## shown telegraph would otherwise hang and then launch late). Back to HOLD, or DISENGAGE when the spent budget had
+## already promised that launch as the last act; after the window a launch needs a full telegraph again. A pair already
+## launched is two drones with their own EMP answer.
+func on_emp_started() -> void:
+	if phase == Phase.LAUNCH:
+		enter_phase(Phase.DISENGAGE if _leave_after_launch else Phase.HOLD)
+
+
 ## The cradle telegraph is never moved by an ally (`BaseEnemy.accept_tow`).
 func accepts_tow() -> bool:
 	return phase != Phase.LAUNCH

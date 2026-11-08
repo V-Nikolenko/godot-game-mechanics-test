@@ -118,6 +118,15 @@ func on_suspended() -> void:
 	_set_light(StateLight.State.OFF)
 
 
+## `BaseEnemy.apply_emp()`: an EMP breaks the pair (the call a rail makes), so no lit beam is left frozen while this
+## drone's tick is skipped; drone A's beam is freed with the release (`TwinLaserPair.release`). After the window the
+## drone carries on alone (Assault DISENGAGE, Open Space SOLO).
+func on_emp_started() -> void:
+	if pair != null:
+		pair.release(actor)
+	_set_light(StateLight.State.OFF)
+
+
 ## A telegraphed or committed phase is never moved by an ally (`BaseEnemy.accept_tow`).
 func accepts_tow() -> bool:
 	return phase != Phase.TELEGRAPH and phase != Phase.ADVANCE and phase != Phase.LAUNCHED

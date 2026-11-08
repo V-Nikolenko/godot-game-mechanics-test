@@ -50,6 +50,12 @@ var _brain: EnemyBrain
 var _mover: EnemyMover
 var _ai_suspended: bool = false
 
+## The EMP window (Phase 9 §2.6): seconds left of the longest EMP, counted down with the `<= EMP_CLOCK_EPSILON` rule in
+## `_physics_process`, and the blue-white overlay shown exactly while it runs (built on the first EMP).
+const EMP_CLOCK_EPSILON := 1e-6
+var _emp_left: float = 0.0
+var _emp_static: EmpStatic
+
 ## The previous health seen by `_on_health_changed()`; -1 until the first call. Lets the hit feedback
 ## tell a hit (health went down) from a repair (it went up).
 var _last_health: int = -1
@@ -112,8 +118,21 @@ func _ready() -> void:
 ## `_physics_process` (the gunship) replaces this entirely —
 ## GDScript does not chain virtual callbacks — so it keeps its legacy behaviour untouched.
 ## Deliberately never calls `set_physics_process(false)`: that would switch those overrides off too.
+##
+## An EMP window (`apply_emp`) is counted here FIRST, ahead of the no-brain return, so an enemy that answers EMP without a
+## brain (a structure's `answers_emp()` override) still comes out of it. While it runs the brain is not ticked and the
+## mover still steps (hazard drift and the corridor keep working; nothing requests a velocity). The brain ticks again on
+## the tick the window ends.
 func _physics_process(delta: float) -> void:
-	if _ai_suspended or _brain == null:
+	if _ai_suspended:
+		return
+	if _emp_left > 0.0:
+		_step_emp(delta)
+		if _emp_left > 0.0:
+			if _brain != null and _mover != null:
+				_mover.step(delta)
+			return
+	if _brain == null:
 		return
 	_brain.tick(delta)
 	if _mover != null:
@@ -122,13 +141,15 @@ func _physics_process(delta: float) -> void:
 
 ## Hands the enemy over to something else (a rail — `EnemyPathMover` calls this): the brain gets
 ## `on_suspended()` once, the mover halts (it zeroes velocity, so the mover stays velocity's only
-## writer), and the tick above never runs again. Idempotent. Timer-driven fire (`AttackController`
+## writer), and the tick above never runs again. A live EMP window ends on this call. Idempotent. Timer-driven fire (`AttackController`
 ## on `_process`) is not touched, so a rail-driven ship keeps shooting as it always has; a
 ## `driven_by_brain` controller stops with its brain.
 func suspend_ai() -> void:
 	if _ai_suspended:
 		return
 	_ai_suspended = true
+	# The tick above returns at once from now on, so a live EMP window would never count down: end it here.
+	_clear_emp()
 	# A rail drives this enemy from now on, so it hurts on contact the way a rail enemy always has:
 	# a no-op for COLLISION (every legacy enemy), and it arms RAMMING / EXPLOSIVE.
 	if contact_profile != null:
@@ -141,6 +162,70 @@ func suspend_ai() -> void:
 
 func is_ai_suspended() -> bool:
 	return _ai_suspended
+
+
+## The routing question every EMP source asks (`EmpPulse` `TARGET_ENEMIES`, the player's EMP Blast): does an EMP do
+## anything to this enemy? Default: `is_ai_driven()` (a brain and a mover, not on a rail). A subclass with its own
+## tangible EMP answer (a jammer) overrides it; every other structure, legacy enemy and railed ship answers false.
+func answers_emp() -> bool:
+	return is_ai_driven()
+
+
+## An EMP hit (Phase 9 §2.6): nothing unless `answers_emp()`. The longest window wins. On a start the mover halts (a
+## committed dash or charge ends; the ship stops dead), the brain hears `on_emp_started()` once and the `EmpStatic`
+## overlay shows; for the window the brain is not ticked (no fire, no decision, the Assault budget frozen). The hurtbox,
+## body and health are never touched: an EMP'd enemy can be shot.
+func apply_emp(seconds: float, _source: Node) -> void:
+	if seconds <= 0.0 or not answers_emp():
+		return
+	var starting := _emp_left <= 0.0
+	_emp_left = maxf(_emp_left, seconds)
+	if not starting:
+		return
+	_show_emp_static(true)
+	if _mover != null:
+		_mover.halt()
+	if _brain != null:
+		_brain.on_emp_started()
+
+
+## True while an EMP window runs.
+func is_emp_disrupted() -> bool:
+	return _emp_left > 0.0
+
+
+## One tick of the EMP window (`x -= delta`, over at `x <= EMP_CLOCK_EPSILON`, the Phase 9 clock rule).
+func _step_emp(delta: float) -> void:
+	_emp_left -= delta
+	if _emp_left <= EMP_CLOCK_EPSILON:
+		_clear_emp()
+	elif _emp_static != null:
+		_emp_static.step(delta)
+
+
+## Ends a window now: clock and overlay.
+func _clear_emp() -> void:
+	_emp_left = 0.0
+	_show_emp_static(false)
+
+
+func _show_emp_static(on: bool) -> void:
+	if _emp_static == null:
+		if not on:
+			return
+		_emp_static = EmpStatic.new(_emp_static_radius())
+		add_child(_emp_static)
+	_emp_static.visible = on
+	if on:
+		_emp_static.restart()
+
+
+## The body's circle radius (times its node scale) plus 8 px, or 24 px for a body that is not one circle.
+func _emp_static_radius() -> float:
+	var body := get_node_or_null("CollisionShape2D") as CollisionShape2D
+	if body != null and body.shape is CircleShape2D:
+		return (body.shape as CircleShape2D).radius * absf(body.scale.x) + 8.0
+	return 24.0
 
 
 ## True when a brain and a mover drive this enemy right now: false for every legacy enemy (no brain)

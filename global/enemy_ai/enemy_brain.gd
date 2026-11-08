@@ -16,6 +16,7 @@
 ##   `tests/integration/test_enemy_mover_single_writer.gd`.
 ## - **Fire:** through `attack` (an `AttackController` with `driven_by_brain = true` is ticked by
 ##   the brain via `attack.tick(delta)`; `fire_now()` for telegraphed shots).
+## - **EMP:** `on_emp_started()` runs once per EMP window (`BaseEnemy.apply_emp`); `tick()` is skipped for the window.
 ## - **Suspension:** `on_suspended()` runs once when a rail (`EnemyPathMover`) takes the enemy
 ##   over via `BaseEnemy.suspend_ai()`; `tick()` is never called again after it.
 ##
@@ -75,6 +76,14 @@ func tick(_delta: float) -> void:
 
 ## Virtual: the enemy's AI was suspended (a rail took it over). Called once.
 func on_suspended() -> void:
+	pass
+
+
+## Virtual: an EMP window started on this enemy (`BaseEnemy.apply_emp`, Phase 9 §2.6). Called once per start (never on a
+## refresh), after `mover.halt()`; `tick()` is then not called until the window ends, and resumes from the state it was
+## in. A brain that owns something time-critical a skipped tick would freeze (a lit beam, a shown launch telegraph) ends
+## it here. Default: nothing.
+func on_emp_started() -> void:
 	pass
 
 

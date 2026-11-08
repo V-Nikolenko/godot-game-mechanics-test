@@ -42,6 +42,7 @@ Every value is a plan §2.21 *starting value* (judgement, not play-tested).
   (`mover.orbit`, `arc_rate` 0.12 rad/s, direction from the brain's rng). Assault: see below.
 - **LAUNCH** (needs both cradles full, no live pair of its own, line of sight on the physics step): the cradle light CHARGING for `launch_telegraph` 0.6 s,
   then `launch_pair(attack_b_points())`. Refuses a tow (`accepts_tow()` false only here).
+- **EMP (Phase 9 t5):** `on_emp_started()` drops a LAUNCH in progress (the cradle light leaves CHARGING on the call): back to HOLD, or DISENGAGE when a spent Assault budget had made that launch its last act. The brain is not ticked for the window; afterwards a launch needs the full `launch_telegraph` again. A pair already launched is two drones with their own EMP answer.
 - **WAIT** while its pair is intact; then **REARM** for `rearm_seconds` 7.0 with empty cradles; then `rearm_cradles()` and HOLD again. **At most one live pair.**
 - **Docking** (Open Space, every phase but DISENGAGE): a drone it launched (any rig) whose brain is SOLO (its partner died; t12 sends it to its live
   controller) or RETURNING (recalled, t14) within `dock_radius` 72 is taken back with `dock()`: freed without dying, one cradle refilled.

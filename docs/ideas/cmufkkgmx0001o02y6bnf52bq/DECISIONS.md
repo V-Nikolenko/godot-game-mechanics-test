@@ -3618,3 +3618,29 @@ These are *planned* decisions; check this phase's *as built* section, once writt
   HitBox or its salvo-mates' on the claim tick (the task plan's "it frees itself on the claim tick" was wrong). The guard still matters for anything that enters afterwards: the
   real-physics falsifier is the crossing row (a fresh homing and warhead salvo flown through a hijacked rocket), and the salvo row also hands the HitBox callbacks the claimed HurtBox
   directly. Both guards, both arming rules, the `seconds` argument, `jam_guidance()` and the jammer check were each proved by a mutation run that fails a row.
+
+### Phase 9, built in t5 (EMP: the real player effect, `EmpPulse` targets, the enemy hook and seekers) (2026-11-08)
+Task plan `docs/plans/cmw5k4yjv00a6qs2xvkf73b18/3-plan.md` (review round 1 CHANGES_REQUESTED, round 2 APPROVED).
+- **`EmpPulse.emit(tree, at, radius, seconds, source, targets := TARGET_PLAYER) -> int`** as planned (`TARGET_PLAYER` 1, `TARGET_ENEMIES` 2, `TARGET_SEEKERS` 4,
+  `TARGET_ALL` 7). The player loop is byte for byte the Ph7 one; the Ph7 row "never touches group `enemies`" still holds for the default set and was left as written.
+  The enemy-seeker group name lives on **`SeekingOrdnance.ENEMY_GROUP`** (`&"enemy_seeking_ordnance"`), not on `EmpPulse` (one home for both seeker groups).
+- **Player:** `apply_emp()` = `apply_boost_disruption(1.0, s)` + `apply_ability_lock(s, source)`. `_emp_left` / `emp_changed` keep the Ph7 `<= 0.0` clock, so
+  `is_emp_disrupted()` ends one tick after the lock (tick 121 vs 120 for 2.0 s); every Ph7 row is unchanged.
+- **`BaseEnemy`:** `answers_emp()` / `apply_emp()` / `is_emp_disrupted()`, `EMP_CLOCK_EPSILON` 1e-6. On a start: `mover.halt()` **then** `_brain.on_emp_started()` (halt
+  clears requests, so the hook's own requests survive), then the overlay. **Deviation (review finding 2):** the window is counted in `_physics_process` *ahead of* the
+  no-brain return (the order is `_ai_suspended` → EMP window → `_brain == null` → tick), so a brainless subclass that overrides `answers_emp()` true (t7's jammer) still comes
+  out of the base window; the mover steps during the window only when both a brain and a mover exist. The brain ticks again **on** the tick the window ends (2.0 s: skipped on
+  ticks 1..119, ticked on 120). `halt()` stops the ship dead (and ends a committed `boost()`); it does not coast, so "coasts to a stop" in §2.6 reads "stops, then drifts
+  only with hazards".
+- **`EmpStatic`** is `global/components/emp_static.gd` (`Node2D`, `_init(radius)`, node name `EmpStatic`, z 1): 16-point jagged ring, body circle radius × scale + 8 (24 for
+  a non-circle body), `Color(0.7, 0.85, 1.0)`, seed 17, re-jitter 0.08 s, alpha `0.55 + 0.45·|sin(21t)|`. For t7: a jammer that overrides `is_emp_disrupted()` from its
+  field can reuse `EmpStatic.new(r)` and drive `visible` / `step()` from its own process.
+- **`TwinLaserPair.release(d)`** now frees drone A's beam when A is suspended **or EMP-disrupted** (the beam is ticked only from A's brain tick, which an EMP skips; without
+  this a cancelled beam would sit in FADE for the window). `TwinLaserDroneBrain.on_emp_started()` = the `on_suspended()` body.
+- **`LaserTenderBrain.on_emp_started()`:** LAUNCH → HOLD, or → DISENGAGE when `_leave_after_launch` (a spent Assault budget had promised that launch as its last act).
+- **`EnemyRocket`:** joins `SeekingOrdnance.ENEMY_GROUP` in `launch()` when `turn_rate > 0` (after `_apply_exports()`), leaves in `_mark_done()` and `reset()`; `_jammed`
+  (cleared in `reset()` and `launch()`) makes `is_guiding()` false. A Cluster's submunitions join too when their scene steers (they free themselves).
+- **`EnemyMine` EMP:** `TARGET_PLAYER | TARGET_SEEKERS` enemy-laid, `TARGET_ALL` placed, compared through the unqualified `Hostility.ALL` (no `EnemyMine` token added).
+  The hub `Minefield`'s EMP mines therefore stun enemies near them now.
+- **Test fixture:** `tests/helpers/fixture_brain.gd` gained `emp_started_count`; `fixture_enemy.tscn` answers EMP (brain + mover). A brainless answering fixture is built
+  in-test by freeing the fixture's `Brain` and `set_script()` to a subclass overriding `answers_emp()`.

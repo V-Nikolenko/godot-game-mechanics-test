@@ -232,16 +232,17 @@ func disrupted_speed(speed: float, floor_speed: float) -> float:
 		return speed
 	return floor_speed + (speed - floor_speed) * eff
 
-## An EMP hit (`EmpPulse.emit()`): the longest time wins and `emp_changed(true)` fires on the start. Phase 7's
-## stand-in effect is a full boost disruption (efficiency 0), so the Shift boost, the Boost Drive, the dash and the
-## warp are all refused for the window. PHASE 9 REPLACES THE EFFECT (the stand-in line below), not this signature,
-## `is_emp_disrupted()` or `emp_changed`.
-func apply_emp(seconds: float, _source: Node) -> void:
+## An EMP hit (`EmpPulse.emit()`): the longest time wins and `emp_changed(true)` fires on the start. The effect (Phase 9
+## §2.6, replacing Phase 7's stand-in) is a full boost disruption (efficiency 0: the Shift boost, the Boost Drive, the
+## dash and the warp are refused) plus a timed ability lock (`apply_ability_lock`: H abilities and K rockets refused,
+## ending with no stabilisation delay). Movement and primary fire are never touched.
+func apply_emp(seconds: float, source: Node) -> void:
 	if seconds <= 0.0:
 		return
 	var was_active: bool = is_emp_disrupted()
 	_emp_left = maxf(_emp_left, seconds)
-	apply_boost_disruption(1.0, seconds)  # Phase 7 stand-in, Phase 9's to replace.
+	apply_boost_disruption(1.0, seconds)
+	apply_ability_lock(seconds, source)
 	if not was_active:
 		emp_changed.emit(true)
 

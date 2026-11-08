@@ -80,7 +80,8 @@ enum Hostility { PLAYER, ALL }
 @export var disrupt_seconds: float = 2.5
 
 @export_group("EMP")
-## EMP: a detonation reaches every player whose centre is within this radius, through `EmpPulse` (plan §2.8). The scene
+## EMP: a detonation reaches every player whose centre is within this radius, through `EmpPulse` (plan §2.8), and jams
+## the seekers in it; a placed (`Hostility.ALL`) mine also reaches every enemy that `answers_emp()` (Phase 9). The scene
 ## authors `blast_damage` 0, so no `ContactBlast` and no `pulse_damage` follow it.
 @export var emp_radius: float = 190.0
 @export var emp_seconds: float = 2.0
@@ -389,7 +390,10 @@ func _on_detonated() -> void:
 		_disrupt_players(pulse_radius, disrupt_strength, disrupt_seconds)
 		PulseRing.spawn(get_parent(), global_position, pulse_radius)
 	elif variant == Variant.EMP:
-		EmpPulse.emit(get_tree(), global_position, emp_radius, emp_seconds, self)
+		# Phase 9 §2.6: an enemy-laid mine never stuns enemies; a placed (`ALL`) one reaches everyone. Seekers on both.
+		var targets: int = EmpPulse.TARGET_ALL if hostility == Hostility.ALL \
+				else EmpPulse.TARGET_PLAYER | EmpPulse.TARGET_SEEKERS
+		EmpPulse.emit(get_tree(), global_position, emp_radius, emp_seconds, self, targets)
 		EmpRing.spawn(get_parent(), global_position, emp_radius)
 
 
