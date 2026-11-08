@@ -40,6 +40,10 @@ func try_activate(player: Node) -> bool:
 	for e: Node in enemies:
 		if _is_immune(e):
 			continue
+		if e.has_method(&"answers_emp") and e.call(&"answers_emp"):
+			## Tangible EMP (Phase 9 §2.7): the ship stays in physics and can be shot.
+			e.call(&"apply_emp", _STUN_DURATION, player)
+			continue
 		_stun_enemy(e, player)
 	return true
 

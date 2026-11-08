@@ -3644,3 +3644,8 @@ Task plan `docs/plans/cmw5k4yjv00a6qs2xvkf73b18/3-plan.md` (review round 1 CHANG
   The hub `Minefield`'s EMP mines therefore stun enemies near them now.
 - **Test fixture:** `tests/helpers/fixture_brain.gd` gained `emp_started_count`; `fixture_enemy.tscn` answers EMP (brain + mover). A brainless answering fixture is built
   in-test by freeing the fixture's `Brain` and `set_script()` to a subclass overriding `answers_emp()`.
+
+### Phase 9, built in t6 (the player's EMP Blast re-routed) (2026-11-08)
+
+- `EMPBlastModule.try_activate()` asks each non-immune enemy the duck-typed `answers_emp()`: true -> `apply_emp(5.0, player)` (tangible, shootable); otherwise the unchanged
+  `PROCESS_MODE_DISABLED` + timer path. Cooldown 15 s, visual, scene-wide reach and the immune list (RamCorvette) are unchanged. No deviation. Gate: `test_emp_blast_module.gd`.
