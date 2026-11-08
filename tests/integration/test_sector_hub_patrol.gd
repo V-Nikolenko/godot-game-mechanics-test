@@ -884,6 +884,9 @@ func _element_radius(node: Node) -> float:
 		var f := node as Minefield
 		return f.radius + (f.drift_leash if f.w_drifting > 0.0 else 0.0) \
 				+ float(EnemyMineScenes.export_of(EnemyMine.Variant.PROXIMITY, &"trigger_radius", 80.0))
+	if node is EmpZone:
+		# A `Node2D` parent of a `HazardField`: without this branch the sweep would read a placed zone as radius 0.
+		return (node as EmpZone).radius()
 	if node is HazardField:
 		return (node as HazardField).radius
 	if node is DebrisFragment:

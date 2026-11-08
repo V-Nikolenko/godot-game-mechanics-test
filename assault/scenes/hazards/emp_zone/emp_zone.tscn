@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/hazards/emp_zone/emp_zone.gd" id="1_zone"]
+[ext_resource type="Script" path="res://global/hazards/hazard_field.gd" id="2_field"]
+[ext_resource type="Script" path="res://assault/scenes/hazards/emp_zone/emp_zone_art.gd" id="3_art"]
+
+[node name="EmpZone" type="Node2D"]
+script = ExtResource("1_zone")
+
+[node name="Field" type="Node2D" parent="."]
+script = ExtResource("2_field")
+kind = &"emp_zone"
+radius = 260.0
+core_radius = 0.0
+avoid_weight = 0.6
+cycle_telegraph = 1.0
+cycle_active = 0.25
+cycle_quiet = 4.75
+
+[node name="Art" type="Node2D" parent="Field"]
+script = ExtResource("3_art")

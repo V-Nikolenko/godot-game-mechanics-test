@@ -55,7 +55,7 @@ assault/scenes/
 │   ├── level_2_waves.gd         Level 2 wave list
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
-├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck (wrecks, structures, debris), minefield (Ph7 placed mines + beacon)
+├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, emp_zone (Ph9 neutral EMP pulse area), wreck (wrecks, structures, debris), minefield (Ph7 placed mines + beacon)
 ├── structures/                  Ph8 coordinators that are not enemies: turret_group/ (TurretGroup, TurretGroupSlot, presets/assault_pair.tscn, presets/hub_defense_site.tscn)
 ├── allies/ally_fighter/         AI escort fighters (group "allies")
 ├── gui/                         HUD, score widgets/popups, weapon selector, game-over, debrief
@@ -622,6 +622,12 @@ TELEGRAPH 1.0 s / ACTIVE 2.5 s / QUIET 3.0 s; `avoid_weight` 0.7, 0 while QUIET.
 `duration` 3.5, `avoid_weight` 0.6, no pull or stress. A gravity bomb's `EnemyOrdnance._detonate()` leaves one at the blast point
 through the deferred `spawn_into(Hazards.container(tree), …)` (no container → nothing; mines, pursuit bombs and a defused bomb leave
 none). See [`HAZARD.md`](../../../assault/scenes/hazards/gravity_field/HAZARD.md); tests `tests/integration/test_enemy_ordnance.gd`.
+
+**EMP Zone (Phase 9 t11).** `assault/scenes/hazards/emp_zone/emp_zone.tscn` — `EmpZone` (`Node2D`, `emp_seconds` 2.0) composing a child `Field`
+`HazardField` (kind `&"emp_zone"`, radius 260, `avoid_weight` 0.6, cycle 1.0 / 0.25 / 4.75; never a `HazardField` subclass) and a code-drawn
+`EmpZoneArt` (arming ring shrinking to 0.6 · radius, `EmpRing` on the pulse). On each TELEGRAPH → ACTIVE edge it makes one
+`EmpPulse.emit(..., TARGET_ALL)`: the player, every enemy that answers EMP, and seekers. Scene-placed only (hub `TacticalSpace`, t13); no
+Assault level holds one in Phase 9. See [`HAZARD.md`](../../../assault/scenes/hazards/emp_zone/HAZARD.md); tests `tests/integration/test_emp_zone.gd`.
 
 **Wrecks, structures and debris (Phase 6 t10).** `assault/scenes/hazards/wreck/`: `Wreck` (`wreck.gd`, a `CharacterBody2D` on layer 1,
 group `wrecks`) runs `wreck_small` / `wreck_medium` / `wreck_large.tscn` (r 13 / 25 / 40, HP 200, Open Space life 40 s) and the placed

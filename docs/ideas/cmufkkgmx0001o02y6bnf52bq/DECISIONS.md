@@ -3649,3 +3649,12 @@ Task plan `docs/plans/cmw5k4yjv00a6qs2xvkf73b18/3-plan.md` (review round 1 CHANG
 
 - `EMPBlastModule.try_activate()` asks each non-immune enemy the duck-typed `answers_emp()`: true -> `apply_emp(5.0, player)` (tangible, shootable); otherwise the unchanged
   `PROCESS_MODE_DISABLED` + timer path. Cooldown 15 s, visual, scene-wide reach and the immune list (RamCorvette) are unchanged. No deviation. Gate: `test_emp_blast_module.gd`.
+
+### Phase 9, built in t11 (the EMP zone) (2026-11-09)
+
+- **`EmpZone`** is `assault/scenes/hazards/emp_zone/emp_zone.gd` (`Node2D`, `field()`, `radius()`, `emp_seconds` 2.0) over a child `Field` (`HazardField`, kind `emp_zone`, radius 260, `avoid_weight` 0.6,
+  cycle 1.0 / 0.25 / 4.75) and `Field/Art` (`EmpZoneArt`, `emp_zone_art.gd`, code-drawn; spawns an `EmpRing` on the ACTIVE edge). One `EmpPulse.emit(..., TARGET_ALL)` per TELEGRAPH → ACTIVE edge.
+  No deviation. The centre beacon sprite is left to t12 (the art task); the "a jammer the zone reaches goes quiet" row waits for `JammingStructure` (t7) and is not in `test_emp_zone.gd` yet.
+- `test_sector_hub_patrol.gd::_element_radius()` checks `EmpZone` before `HazardField` (`radius()` = 260); t13 places the zone in the hub and must keep it > 300 px from spawn / pickups through that sweep.
+- Test note: a `HazardField` publishes its `HazardInfo` only on its tick, so a hand-ticked field needs one `_physics_process(DT)` after an export is changed before `Hazards` sees it. The fixture enemy
+  is not in group `enemies`; EMP-zone enemy rows use a real `Fighter`.
