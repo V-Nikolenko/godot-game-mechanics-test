@@ -89,6 +89,7 @@ func test_emp_window_is_five_seconds() -> void:
 
 func test_legacy_enemy_is_still_process_disabled_for_five_seconds() -> void:
 	_scale_clock()
+	Engine.time_scale = _saved_scale * 40.0  ## only the module's SceneTreeTimer runs here; no physics
 	var h := _world()
 	var g := GUNSHIP.instantiate() as BaseEnemy
 	h.root.add_child(g)
