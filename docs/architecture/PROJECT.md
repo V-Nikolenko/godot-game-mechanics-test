@@ -485,6 +485,7 @@ Detail and APIs: [global.md](modules/global.md).
      **Clock rule:** every lock clock is `x -= delta`, over at `x <= 1e-6` (`PlayerBase._tick_clock`), so a lock of `s` seconds at 1/60 ends on
      tick `round(s · 60)`. A jammer is a `HazardField` with `disables_abilities` (written into its info **only while ACTIVE**, so a pulsed field's
      TELEGRAPH / QUIET count as outside) and `stabilise_seconds`. Gate `tests/integration/test_player_ability_lock.gd` (both real player scenes).
+     **Tells (t2):** `AbilityLockStatic` on the ship, `JammedChip` + `LockGlyph` built by `MissionHud` (both HUD scenes), and the audio seam `EventBus.player_ability_lock_changed(locked)` (once per edge; `player_ordnance_hijacked(rocket, source)` declared for t4). No audio player. Gate `tests/integration/test_player_ability_lock_tells.gd`.
   Details: [global.md](modules/global.md) → *Ability lock*.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 

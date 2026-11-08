@@ -35,6 +35,14 @@ signal ability_activated(id: StringName, damage_mult: float, fire_rate_mult: flo
 ## Emitted when an ability is deactivated / deselected.
 signal ability_deselected
 
+## The player's H abilities and K rockets were locked (true) or unlocked (false): once per edge, from PlayerBase.
+## An audio seam: nothing connects to it yet (Phase 17).
+signal player_ability_lock_changed(locked: bool)
+
+## A homing rocket of the player's was taken over by a Hacker (emitted by the rocket's `retarget()`).
+## An audio seam: nothing connects to it yet (Phase 17).
+signal player_ordnance_hijacked(rocket: Node2D, source: Node)
+
 # ── Mission events ────────────────────────────────────────────────────────────
 
 ## Emitted when a new wave starts in an assault mission.

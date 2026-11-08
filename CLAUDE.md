@@ -131,6 +131,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   Movement, Shift boost, dash, warp, primary fire (`WeaponState` never reads it), `switch_weapon` and module `tick()` are never locked. Sources: a lit jammer
   `HazardField` (`disables_abilities`, true only while ACTIVE; `Hazards.jammer_at()`, then `stabilise_seconds` after the exit tick) or a timed
   `apply_ability_lock(seconds, source)` (longest wins). Every lock clock is `x -= delta`, over at `x <= 1e-6`. Gate `tests/integration/test_player_ability_lock.gd`
+  **Its tells (t2):** `PlayerBase._report_lock()` also shows `AbilityLockStatic` (code-built overlay) and emits `EventBus.player_ability_lock_changed(locked)`; `MissionHud` builds `JammedChip` and `LockGlyph` for both HUD scenes. Gate `tests/integration/test_player_ability_lock_tells.gd`.
   ([PROJECT.md](docs/architecture/PROJECT.md) → Conventions → *Electronic warfare*).
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`

@@ -95,6 +95,8 @@ var _stabilise_total: float = 0.0
 var _timed_left: float = 0.0
 ## The state last announced by ability_lock_changed.
 var _lock_reported: bool = false
+## The amber static shown while locked (Phase 9 plan §2.3). Code-built on the first lock, no scene, no PNG.
+var _lock_overlay: AbilityLockStatic = null
 
 func _ready() -> void:
 	add_to_group("player")
@@ -272,6 +274,8 @@ func ability_lock_fill() -> float:
 func allow_ability_press() -> bool:
 	if not abilities_locked():
 		return true
+	if _lock_overlay != null:
+		_lock_overlay.flash()
 	ability_press_refused.emit()
 	return false
 
@@ -300,13 +304,28 @@ func _step_ability_lock(delta: float) -> void:
 		_stabilise_left = _tick_clock(_stabilise_left, delta)
 	_timed_left = _tick_clock(_timed_left, delta)
 	_report_lock()
+	if _lock_overlay != null and _lock_overlay.visible:
+		_lock_overlay.step(delta, ability_lock_fill())
 
-## Emits ability_lock_changed on an edge only.
+## Emits ability_lock_changed (and EventBus.player_ability_lock_changed, the audio seam) on an edge only, and shows or
+## hides the static overlay with it: visible exactly while `abilities_locked()`.
 func _report_lock() -> void:
 	var now: bool = abilities_locked()
 	if now != _lock_reported:
 		_lock_reported = now
+		_show_lock_overlay(now)
 		ability_lock_changed.emit(now)
+		EventBus.player_ability_lock_changed.emit(now)
+
+func _show_lock_overlay(on: bool) -> void:
+	if _lock_overlay == null:
+		if not on:
+			return
+		_lock_overlay = AbilityLockStatic.new()
+		add_child(_lock_overlay)
+	_lock_overlay.visible = on
+	if on:
+		_lock_overlay.set_fill(ability_lock_fill())
 
 ## The disruption's clock, a hand-steppable seam like BoostMeter.step(). Called from each ship's _physics_process.
 func _step_disruption(delta: float) -> void:

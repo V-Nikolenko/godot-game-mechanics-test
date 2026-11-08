@@ -3577,3 +3577,16 @@ These are *planned* decisions; check this phase's *as built* section, once writt
   `tests/integration/test_homing_missile_lifetime.gd` hand-ticks the rocket then its `ProjectileLifetime`; t4's lifetime row reuses the setup. The lifetime arms on its first tick, so the 2400 px
   rule fires one tick after 288 ticks of travel (Open Space, no target).
 - Ownership row added to `test_player_bullet_lifetime.gd` (homing: `expired -> queue_free`; warhead: screen notifier).
+
+### Phase 9, built in t2 (the lock tells: ship overlay, HUD chip and glyph, audio seam) (2026-11-08)
+- **Built as §2.3 says, no interface deviation.** `AbilityLockStatic` (`global/entities/ability_lock_static.gd`, `class_name`, a `Node2D` code-built by `PlayerBase._show_lock_overlay()` on the first lock):
+  `set_fill()`, `step(delta, fill)`, `flash()`, `arcs()`; alpha is `0.3 + 0.6 * fill` (one formula, 0.9 held), 1.0 for `FLASH_SECONDS` 0.15 after a refusal.
+  `JammedChip` (`global/ui/jammed_chip.gd`, `BAR_WIDTH` 52, `show_lock(fill)`, `clear()`, `flash()`, `is_flashing()`, tint on `modulate`) and `LockGlyph` (`global/ui/lock_glyph.gd`)
+  are built in code by `MissionHud._build_lock_tells()` (not authored in the two HUD `.tscn`s, so one script change serves both). The chip is a child of the HUD at
+  `JammedChip`; the glyph is `WeaponContainer/LockGlyph`.
+- **`PlayerBase._report_lock()` is the one place the overlay is shown / hidden and `EventBus.player_ability_lock_changed` is emitted**, so a timed lock shows the overlay at the call
+  and a field on the first tick sampled inside, and both hide on the unlock tick. The overlay's jitter and alpha tick inside `_step_ability_lock()` only while visible.
+- **`MissionHud` looks the player up lazily in `_process`** (first `player`-group node answering `abilities_locked`, refusals connected once, re-looked-up when the cached one is
+  freed), because the Open Space hub ship can arrive after the HUD's one awaited frame. With no player the chip and glyph are hidden and nothing is logged.
+- `EventBus.player_ordnance_hijacked(rocket: Node2D, source: Node)` is declared; nothing emits it until t4. No audio player anywhere.
+- Test trap: a mode loop that creates a second player without freeing the first leaves the first one (and its jammer) in the `player` group, so the HUD tracks the wrong ship.
