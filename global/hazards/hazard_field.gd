@@ -50,6 +50,8 @@ var _stress_clock: float = 0.0
 var _pending_transform: bool = false
 var _at: Vector2 = Vector2.ZERO
 var _rot: float = 0.0
+## Phase 9 t7: seconds left of a `suppress()` window (an EMP on a jammer). The `<= 1e-6` clock rule.
+var _suppressed_left: float = 0.0
 
 
 ## Adds the field to [param container] at the next message flush, at global position [param at] and
@@ -94,6 +96,10 @@ func _physics_process(delta: float) -> void:
 	if duration > 0.0 and _age >= duration:
 		queue_free()
 		return
+	if _suppressed_left > 0.0:
+		_suppressed_left -= delta
+		if _suppressed_left <= 1e-6:
+			_suppressed_left = 0.0
 	if _cycles():
 		_cycle_clock = fposmod(_cycle_clock + delta, _cycle_length())
 		var next := _phase_at(_cycle_clock)
@@ -113,6 +119,28 @@ func _physics_process(delta: float) -> void:
 
 func phase() -> int:
 	return _phase
+
+
+## Phase 9 t7 (the jammer's EMP answer): for [param seconds] the info reports `disables_abilities` false, refreshed on this call so the
+## player's next tick already sees it. The longest window wins; `seconds <= 0` is a no-op. Only `disables_abilities` changes: the cycle
+## clock keeps running underneath, and forces, slow, avoidance and stress are untouched.
+func suppress(seconds: float) -> void:
+	if seconds <= 0.0:
+		return
+	_suppressed_left = maxf(_suppressed_left, seconds)
+	_refresh_info()
+
+
+func is_suppressed() -> bool:
+	return _suppressed_left > 0.0
+
+
+## Restarts the cycle from 0 and refreshes the info: what `_enter_tree()` does, for an owner that wrote the radius or the cycle after the
+## field entered the tree (the jammer applies its config in its `_ready()`).
+func restart_cycle() -> void:
+	_cycle_clock = 0.0
+	_phase = _phase_at(0.0)
+	_refresh_info()
 
 
 ## 0..1 through the current phase, for art. 0 when the field has no cycle.
@@ -183,5 +211,5 @@ func _refresh_info() -> void:
 	_info.movement_penalty = movement_penalty if active else 0.0
 	_info.avoid_weight = avoid_weight if _phase != Phase.QUIET else 0.0
 	_info.damage_per_second = float(stress_damage) / stress_period if active and _stress_enabled() else 0.0
-	_info.disables_abilities = disables_abilities and active
+	_info.disables_abilities = disables_abilities and active and _suppressed_left <= 0.0
 	_info.stabilise_seconds = stabilise_seconds

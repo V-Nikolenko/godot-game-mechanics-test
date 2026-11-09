@@ -3658,3 +3658,19 @@ Task plan `docs/plans/cmw5k4yjv00a6qs2xvkf73b18/3-plan.md` (review round 1 CHANG
 - `test_sector_hub_patrol.gd::_element_radius()` checks `EmpZone` before `HazardField` (`radius()` = 260); t13 places the zone in the hub and must keep it > 300 px from spawn / pickups through that sweep.
 - Test note: a `HazardField` publishes its `HazardInfo` only on its tick, so a hand-ticked field needs one `_physics_process(DT)` after an export is changed before `Hazards` sees it. The fixture enemy
   is not in group `enemies`; EMP-zone enemy rows use a real `Fighter`.
+
+### Phase 9, built in t7 (the Jamming Structure) (2026-11-09)
+
+- **`JammingStructure`** (`assault/scenes/enemies/jamming_structure/jamming_structure.gd`, `class_name JammingStructure extends BaseEnemy`) with `JammingStructureConfig`
+  (flat: `assault_drift_speed`, `field_radius`, `stabilise_seconds`, `cycle_telegraph` / `cycle_active` / `cycle_quiet`) and `JammerFieldArt` (child `Field/Art`). Three
+  scenes, each its own copy (not inherited; the sector body circle is r 42): `jamming_structure.tscn` (does **not** author `config`, so `BaseEnemy._init()`'s private copy is
+  what a test may write before `add_child`), `sector_jammer/sector_jammer.tscn` and `pulsed_jammer/pulsed_jammer.tscn` (author their own `.tres`). Placeholder `Polygon2D`
+  hull `Hull` and dish `Emitter` until t12; the hit flash animates `Hull:self_modulate`. Accessor `field() -> HazardField`.
+- **`HazardField`** gained `suppress(seconds)` / `is_suppressed()` (only `disables_abilities` is affected; the cycle clock runs underneath) and `restart_cycle()` (the jammer
+  writes its config onto the field in `_ready()`, after the field registered in `_enter_tree()`, then restarts the cycle).
+- **Deviation (plan Revision 1, review option a):** `SniperBrain._candidate()` / `_inside_other_hazard()` and `FighterBrain._inside_other_hazard()` skip a `&"jammer"` info
+  (`const JAMMER_KIND` in each brain), so a jammer field never spoils a firing or cover point (avoid weight 0 = their own ground). No earlier hazard has that kind.
+  Known gap: nothing keeps a sniper's firing point off a jammer's body (turrets and emplacements share it).
+- `EnemyRocket._in_lit_jammer()` gates only `_steer()`; a Cluster's split still aims at its predicted point inside a field. `MissileCorvetteBrain._roll_kind()` downgrades
+  after the 1-in-4 swap (rng sequence unchanged). `WaveBuilder.jammer(variant)` `push_error`s on an unknown variant and returns the local jammer.
+- The deferred t11 row "a jammer the zone reaches goes quiet" is in `test_emp_zone.gd` (centre at exactly 260 px, the `<=` edge; twin at 261 px).

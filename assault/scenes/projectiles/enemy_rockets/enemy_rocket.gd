@@ -243,6 +243,12 @@ func _leave_seeker_group() -> void:
 		remove_from_group(SeekingOrdnance.ENEMY_GROUP)
 
 
+## Phase 9 t7 (§2.9): a seeker inside a lit jammer field keeps its heading (`_steer()` skipped; `is_guiding()` and the
+## flight clock are unchanged, so it steers again once out). Behind `Hazards.count() > 0`: with no hazard, the Ph5 path.
+func _in_lit_jammer() -> bool:
+	return Hazards.count() > 0 and Hazards.jammer_at(global_position) != null
+
+
 ## The point the rocket is steering at: the launch aim until guidance replaces it.
 func aim_point() -> Vector2:
 	return _aim
@@ -273,7 +279,7 @@ func _tick(delta: float) -> void:
 	if kind == Kind.CLUSTER and _should_split(delta):
 		_split()
 		return
-	if is_guiding():
+	if is_guiding() and not _in_lit_jammer():
 		_steer(delta)
 	if Hazards.count() > 0:
 		_heading = Hazards.bend_heading(_heading, _speed, global_position, delta, hazard_pull_scale())

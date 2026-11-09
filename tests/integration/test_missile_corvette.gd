@@ -1353,3 +1353,66 @@ func test_a_wreck_between_the_corvette_and_the_player_does_not_stop_the_salvo(mo
 	var run := _run_salvo(harness, corvette, EnemyRocket.Kind.DUMB)
 	assert_gte(run.telegraph_tick, 0, "%s: a telegraph started" % mode)
 	assert_eq((run.rockets as Array).size(), brain.salvo_size(EnemyRocket.Kind.DUMB), "%s: the whole salvo launched" % mode)
+
+
+# ── Phase 9 t7: a player inside a lit jammer field draws Dumb salvos (plan §2.9) ────────────────────────────────────
+
+## A lit jammer field (radius 240, the local jammer's) centred at [param at], parented to [param parent].
+func _jammer_field(parent: Node, at: Vector2) -> HazardField:
+	var f := HazardField.new()
+	f.kind = &"jammer"
+	f.radius = 240.0
+	f.avoid_weight = 0.0
+	f.disables_abilities = true
+	f.stabilise_seconds = 0.75
+	f.position = at
+	parent.add_child(f)
+	return f
+
+
+## The 200-roll loop of `test_one_dumb_choice_in_four_becomes_a_pursuit_salvo`, with a lit jammer field on the player: every
+## Pursuit (the 1-in-4 swap's and a natural one, at a fleeing player) and every Cluster roll becomes Dumb; a Warhead roll is
+## untouched. Control: the same field 600 px from the player changes nothing. `force_next_kind()` still wins inside.
+func test_a_player_inside_a_jammer_field_turns_pursuit_and_cluster_rolls_dumb() -> void:
+	var cases := [
+		{"label": "dumb", "offset": 600.0, "velocity": Vector2.ZERO},
+		{"label": "pursuit", "offset": 600.0, "velocity": Vector2(0.0, 350.0)},
+		{"label": "warhead", "offset": 300.0, "velocity": Vector2.ZERO},
+		{"label": "cluster", "offset": 800.0, "velocity": Vector2(250.0, 0.0)},
+	]
+	for inside: bool in [true, false]:
+		for c: Dictionary in cases:
+			_retire_players()
+			var harness = HARNESS.open_space()
+			add_child_autofree(harness.root)
+			var corvette := _seeded(harness, Vector2(640.0, 0.0))
+			var brain := corvette.get_node("Brain") as MissileCorvetteBrain
+			harness.player.global_position = corvette.global_position + Vector2(0.0, c.offset)
+			harness.player.velocity = c.velocity
+			_jammer_field(harness.root, harness.player.global_position + (Vector2.ZERO if inside else Vector2(600.0, 0.0)))
+			assert_eq(Hazards.jammer_at(harness.player.global_position) != null, inside, "sanity: the player is inside: %s" % inside)
+			var counts := {}
+			for _i in 200:
+				brain.enter_phase(MissileCorvetteBrain.Phase.TELEGRAPH)
+				counts[brain.salvo_kind] = int(counts.get(brain.salvo_kind, 0)) + 1
+			var tag := "%s, %s" % [c.label, "inside" if inside else "control"]
+			match c.label:
+				"dumb":
+					if inside:
+						assert_eq(int(counts.get(EnemyRocket.Kind.DUMB, 0)), 200, "%s: every swap's Pursuit is downgraded" % tag)
+					else:
+						var share := float(counts.get(EnemyRocket.Kind.PURSUIT, 0)) / 200.0
+						assert_between(share, 0.15, 0.35, "%s: the swap still runs (Pursuit share %.2f)" % [tag, share])
+				"pursuit":
+					var want := EnemyRocket.Kind.DUMB if inside else EnemyRocket.Kind.PURSUIT
+					assert_eq(int(counts.get(want, 0)), 200, "%s: a fleeing player" % tag)
+				"warhead":
+					assert_eq(int(counts.get(EnemyRocket.Kind.WARHEAD, 0)), 200, "%s: a Warhead roll is never downgraded" % tag)
+				"cluster":
+					var want := EnemyRocket.Kind.DUMB if inside else EnemyRocket.Kind.CLUSTER
+					assert_eq(int(counts.get(want, 0)), 200, "%s" % tag)
+			if inside and c.label == "cluster":
+				brain.force_next_kind(EnemyRocket.Kind.PURSUIT)
+				brain.enter_phase(MissileCorvetteBrain.Phase.TELEGRAPH)
+				assert_eq(brain.salvo_kind, EnemyRocket.Kind.PURSUIT, "force_next_kind still wins inside a field")
+			harness.root.free()

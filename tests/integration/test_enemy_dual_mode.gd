@@ -1374,3 +1374,39 @@ func test_laser_tender_launches_a_pair_in_both_modes(mode: String = use_paramete
 	assert_eq(tender.docked_count(), 0, "%s: cradles empty" % mode)
 	assert_eq(brain.phase, LaserTenderBrain.Phase.WAIT if mode == "open_space" else LaserTenderBrain.Phase.DISENGAGE,
 			"%s: WAIT (Open Space) or DISENGAGE after its one Assault launch" % mode)
+
+# ── The Jamming Structures (Phase 9, t7; plan §2.8) ──────────────────────────────────────────────────────────────────
+
+const JAMMER_SCENES := {
+	"local": preload("res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn"),
+	"sector": preload("res://assault/scenes/enemies/sector_jammer/sector_jammer.tscn"),
+	"pulsed": preload("res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer.tscn"),
+}
+
+
+## Each jammer is the same static structure in both modes: an ordinary enemy whose field is found by `Hazards.jammer_at` at its
+## centre once lit, never a wall for the mining beam, no tow, never an escape; only in Assault does its `AssaultDrift` scroll it.
+func test_jammers_lock_in_both_modes_and_drift_only_in_assault(case: String = use_parameters(
+		["local/open_space", "local/assault", "sector/open_space", "sector/assault", "pulsed/open_space", "pulsed/assault"])) -> void:
+	var variant := case.get_slice("/", 0)
+	var mode := case.get_slice("/", 1)
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 2000.0)
+	var j := (JAMMER_SCENES[variant] as PackedScene).instantiate() as JammingStructure
+	j.position = Vector2(640.0, 300.0)
+	harness.root.add_child(j)
+	j.set_physics_process(false)
+	j.field().set_physics_process(false)
+	var drift := j.get_node("AssaultDrift") as AssaultDrift
+	drift.set_physics_process(false)
+	assert_true(j.is_in_group(&"enemies"), "%s: an ordinary enemy" % case)
+	assert_false(j.is_laser_blocking(), "%s: a target for the mining beam" % case)
+	assert_false(j.accept_tow(Vector2(50.0, 0.0)), "%s: no mover, no tow" % case)
+	assert_false(j.counts_as_escape, "%s" % case)
+	for i in 60:
+		drift.step(DT)
+		j.field()._physics_process(DT)
+	var expected_drift := j.config.assault_drift_speed * 60.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(j.global_position.y - 300.0, expected_drift, 0.01, "%s: drift" % case)
+	assert_not_null(Hazards.jammer_at(j.global_position), "%s: lit after 1.0 s (the pulsed one too)" % case)

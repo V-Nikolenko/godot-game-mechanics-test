@@ -268,3 +268,41 @@ func test_freeing_the_zone_unregisters_its_field() -> void:
 	assert_eq(Hazards.count(), before + 1)
 	z.free()
 	assert_eq(Hazards.count(), before, "the field unregisters in _exit_tree")
+
+
+# ── A jammer in the zone (Phase 9 t7: deferred here by t11) ─────────────────────────────────────────────────────────
+
+const JAMMER: PackedScene = preload("res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn")
+
+
+func _hand_jammer(parent: Node, at: Vector2) -> JammingStructure:
+	var j := JAMMER.instantiate() as JammingStructure
+	j.position = at
+	parent.add_child(j)
+	j.set_physics_process(false)
+	j.set_process(false)
+	j.field().set_physics_process(false)
+	(j.get_node("AssaultDrift") as AssaultDrift).set_physics_process(false)
+	return j
+
+
+## The zone's pulse switches a jammer whose centre is on its 260 px edge off for the pulse's 2.0 s (`answers_emp()` true,
+## `HazardField.suppress`); a jammer 1 px further out stays lit.
+func test_a_jammer_inside_the_zone_goes_quiet_for_the_pulse(mode: String = use_parameters(MODES)) -> void:
+	var h := _world(mode)
+	var z := _zone(h.root)
+	var near := _hand_jammer(h.root, MID + Vector2(260.0, 0.0))
+	var far := _hand_jammer(h.root, MID + Vector2(-261.0, 0.0))
+	_fire(z)
+	assert_true(near.is_emp_disrupted(), "%s: the edge jammer is EMP'd" % mode)
+	assert_false(near.field().hazard_info().disables_abilities, "%s: and quiet on the ACTIVE edge" % mode)
+	assert_false(far.is_emp_disrupted(), "%s: 1 px outside is not" % mode)
+	for i in 119:
+		near._physics_process(DT)
+		near.field()._physics_process(DT)
+	assert_false(near.field().hazard_info().disables_abilities, "%s: quiet after 119 ticks" % mode)
+	assert_true(far.field().hazard_info().disables_abilities, "%s: the far one stays lit" % mode)
+	near._physics_process(DT)
+	near.field()._physics_process(DT)
+	assert_true(near.field().hazard_info().disables_abilities, "%s: lit again after 120 ticks (2.0 s)" % mode)
+	assert_false(near.is_emp_disrupted(), "%s" % mode)

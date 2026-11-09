@@ -410,6 +410,11 @@ func _roll_kind() -> EnemyRocket.Kind:
 	var kind := choose_kind(line.length(), target.velocity.length(), radial)
 	if kind == EnemyRocket.Kind.DUMB and rng.randf() < DUMB_SWAP_CHANCE:
 		kind = EnemyRocket.Kind.PURSUIT
+	# Phase 9 t7 (§2.9): a seeker only flies straight inside its own side's jammer field, so a player standing in one draws a Dumb
+	# salvo. After the swap, so the rng sequence is unchanged; the forced branch above still wins.
+	if (kind == EnemyRocket.Kind.PURSUIT or kind == EnemyRocket.Kind.CLUSTER) and Hazards.count() > 0 \
+			and Hazards.jammer_at(target.position) != null:
+		kind = EnemyRocket.Kind.DUMB
 	return kind
 
 

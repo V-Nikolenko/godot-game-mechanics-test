@@ -1073,3 +1073,37 @@ func test_a_turret_group_in_cloud_descents_last_wave_misses_the_timeout() -> voi
 	_ph8_boundary(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR, shortest + MARGIN, "assault_pair turret group", offset)
 	var section := _cloud_descent()
 	assert_gt(shortest, section.enemies_cleared_timeout, "the shortest member's drift alone outlasts the timeout")
+
+
+# ── Phase 9 t7: the Jamming Structures (epic plan docs/plans/cmug23onr001pm52w9swwophy/3-plan.md §2.8) ───────────────
+
+## A jammer only drifts out of Assault at 60 px/s and never leaves Open Space, so none of the three may sit in an ENEMIES_CLEARED
+## section (the "For every task" rule: no jammer, Hacker or EMP zone in one).
+func test_no_enemies_cleared_section_spawns_a_jammer() -> void:
+	var paths := [WaveBuilder.JAMMER, WaveBuilder.SECTOR_JAMMER, WaveBuilder.PULSED_JAMMER]
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		for path: String in paths:
+			assert_false(_section_has_scene(section, path), "%s spawns %s" % [section.section_name, path.get_file()])
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+	for path: String in paths:
+		var probe := _cloud_descent()
+		_add_to_last_wave(probe, load(path) as PackedScene, 0.0)
+		assert_true(_section_has_scene(probe, path), "boundary: %s in cloud_descent's last wave is seen" % path.get_file())
+
+
+## The sector jammer (r 640, half the view) is Open Space only: no level-1 section of any end condition spawns one.
+func test_no_assault_section_spawns_a_sector_jammer() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.SECTOR_JAMMER), "%s spawns a sector jammer" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has sections")
+	var probe := _cloud_descent()
+	_add_to_last_wave(probe, load(WaveBuilder.SECTOR_JAMMER) as PackedScene, 0.0)
+	assert_true(_section_has_scene(probe, WaveBuilder.SECTOR_JAMMER), "boundary: a sector jammer in a wave is seen")

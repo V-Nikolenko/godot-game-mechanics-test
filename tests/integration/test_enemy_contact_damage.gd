@@ -119,6 +119,24 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/laser_tender/laser_tender_config.tres",
 	},
 	{
+		"name": "jamming_structure",
+		"scene": "res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn",
+		"config": "res://assault/scenes/enemies/jamming_structure/jamming_structure_config.tres",
+		"no_hitbox": true,
+	},
+	{
+		"name": "sector_jammer",
+		"scene": "res://assault/scenes/enemies/sector_jammer/sector_jammer.tscn",
+		"config": "res://assault/scenes/enemies/sector_jammer/sector_jammer_config.tres",
+		"no_hitbox": true,
+	},
+	{
+		"name": "pulsed_jammer",
+		"scene": "res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer.tscn",
+		"config": "res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer_config.tres",
+		"no_hitbox": true,
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"config": "res://assault/scenes/enemies/bonus_drone/bonus_drone_config.tres",

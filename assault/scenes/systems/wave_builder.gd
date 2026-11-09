@@ -113,6 +113,19 @@ func twin_laser_pair() -> SpawnConfig: return SpawnConfig.new(TWIN_LASER_PAIR)
 ## toward the player's escape route, where they line up into a moving laser wall. One launch per Assault life. Never in an ENEMIES_CLEARED section
 ## (test_engagement_deadline.gd).
 func laser_tender() -> SpawnConfig: return SpawnConfig.new(LASER_TENDER)
+## A jamming tower (Phase 9, plan §2.8): a static structure whose field locks the player's H abilities and K rockets. `variant` is `&"local"`
+## (default), `&"pulsed"` (0.8 / 3.0 / 2.5 s on / off) or `&"sector"` (r 640, Open Space only: never in an Assault wave). In Assault its x is
+## world-anchored like a turret group's: `.at(x, y)` lands at world x `640 + 2·x`. Never in an ENEMIES_CLEARED section (test_engagement_deadline.gd).
+func jammer(variant: StringName = &"local") -> SpawnConfig:
+	match variant:
+		&"local":
+			return SpawnConfig.new(JAMMER)
+		&"sector":
+			return SpawnConfig.new(SECTOR_JAMMER)
+		&"pulsed":
+			return SpawnConfig.new(PULSED_JAMMER)
+	push_error("WaveBuilder.jammer: unknown variant %s, using the local jammer" % variant)
+	return SpawnConfig.new(JAMMER)
 
 func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
 func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
@@ -286,6 +299,9 @@ const TURRET_GROUP_ASSAULT_PAIR := "res://assault/scenes/structures/turret_group
 const LASER_FENCE    := "res://assault/scenes/structures/laser_fence/laser_fence.tscn"
 const TWIN_LASER_PAIR := "res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn"
 const LASER_TENDER   := "res://assault/scenes/enemies/laser_tender/laser_tender.tscn"
+const JAMMER         := "res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn"
+const SECTOR_JAMMER  := "res://assault/scenes/enemies/sector_jammer/sector_jammer.tscn"
+const PULSED_JAMMER  := "res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer.tscn"
 const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
 const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn"
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"

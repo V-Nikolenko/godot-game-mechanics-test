@@ -497,6 +497,17 @@ b.twin_laser_pair().at(0, -120)
 b.laser_tender().at(0, -230)  # 100 px above the view
 ```
 
+### `jammer` — Jamming Structure (Phase 9)
+**Builder:** `b.jammer()` (local), `b.jammer(&"pulsed")`, `b.jammer(&"sector")` (Open Space only: never in an Assault wave); `.at(x, y)` is **world-anchored** in Assault (`640 + 2·x`, like a turret group)  
+**Scenes:** `jamming_structure/jamming_structure.tscn` (HP 140, field r 240, always on, 0.75 s), `pulsed_jammer/pulsed_jammer.tscn` (HP 160, r 300, 0.8 / 3.0 / 2.5 s cycle, 0.75 s), `sector_jammer/sector_jammer.tscn` (HP 260, r 640, always on, 1.25 s); score 60 / 80 / 120  
+**Movement:** none (static structure); drifts down at 60 px/s in Assault and frees below the world rect. **Shoots:** no; contact damage 0.  
+**Effect:** inside a lit field the player's H abilities and K rockets are refused (movement, boost, dash and the main gun never are), lifting `stabilise_seconds` after the player leaves or the field goes dark. Enemy ships ignore the field; seeking rockets fly straight in it; a Missile Corvette fires Dumb salvos at a player inside one. An EMP (the player's EMP Blast, from outside the field) switches the field off for its window; the tower stays shootable.  
+**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). See [ENEMY.md](../assault/scenes/enemies/jamming_structure/ENEMY.md).
+
+```gdscript
+b.jammer(&"pulsed").at(-120, -200)  # world x 400 whatever the camera pan
+```
+
 ### `bonus_drone` — Bonus Drone
 
 **Builder:** `b.bonus_drone()`  

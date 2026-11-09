@@ -509,6 +509,7 @@ Detail and APIs: [global.md](modules/global.md).
      `TARGET_PLAYER | TARGET_SEEKERS` when enemy-laid and `TARGET_ALL` when placed (`Hostility.ALL`). Gates `tests/unit/test_emp_pulse.gd`,
      `tests/integration/test_enemy_emp.gd` (both harnesses), the EMP rows of `test_player_ability_lock.gd` / `test_player_boost_disruption.gd`.
   **The EMP zone (t11)** is a placed `EmpZone` (`assault/scenes/hazards/emp_zone/`, a `Node2D` composing a cycled `HazardField`) that makes one `EmpPulse.emit(..., TARGET_ALL)` per cycle; see [assault.md](modules/assault.md) → *EMP Zone*.
+  **The Jamming Structure (t7)** is three static towers (`assault/scenes/enemies/jamming_structure/`, `sector_jammer/`, `pulsed_jammer/`; one `JammingStructure` script) whose child `HazardField` (kind `&"jammer"`, `avoid_weight` 0) is the lock's field; its EMP answer is `HazardField.suppress(seconds)` (field quiet, tower shootable), enemy seekers fly straight inside a lit field and the Missile Corvette fires Dumb at a player in one; see [assault.md](modules/assault.md) → *Jamming Structure*.
   Details: [global.md](modules/global.md) → *Ability lock*, *Seeking ordnance* and *EMP hook*.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 

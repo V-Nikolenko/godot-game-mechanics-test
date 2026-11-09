@@ -57,9 +57,9 @@ const _DEFAULT_MASK_AFTER_READY := 1121
 
 ## `bomber`, `bonus_drone`, `razor_drone`, `gunship`, `gatling_interceptor`, `swarm_drone`,
 ## `fighter`, `ram_corvette`, `sniper`, `space_station`, `missile_corvette`, `support_ship`, `mine_layer`,
-## `defense_turret`, `power_source`, `shield_generator`, `laser_emitter`, `heavy_emplacement`, `twin_laser_drone`, `laser_tender`. A sweep that finds fewer has broken, and every assertion below is vacuous on a
+## `defense_turret`, `power_source`, `shield_generator`, `laser_emitter`, `heavy_emplacement`, `twin_laser_drone`, `laser_tender`, `jamming_structure`, `sector_jammer`, `pulsed_jammer`. A sweep that finds fewer has broken, and every assertion below is vacuous on a
 ## broken sweep.
-const _MIN_ROSTER_SIZE := 20
+const _MIN_ROSTER_SIZE := 23
 
 ## Enemies whose damage/death flow diverges from the generic BaseEnemy path enough that a shared
 ## loop would either be meaningless (space_station never frees on the lethal frame) or wrong
@@ -295,6 +295,9 @@ const _AUTHORED_CONTACT_MODES := {
 	"heavy_emplacement": ContactProfile.Mode.NONE,
 	"twin_laser_drone": ContactProfile.Mode.COLLISION,
 	"laser_tender": ContactProfile.Mode.COLLISION,
+	"jamming_structure": ContactProfile.Mode.NONE,
+	"sector_jammer": ContactProfile.Mode.NONE,
+	"pulsed_jammer": ContactProfile.Mode.NONE,
 }
 
 

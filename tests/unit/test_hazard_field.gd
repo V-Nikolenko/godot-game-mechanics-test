@@ -235,3 +235,59 @@ func test_disables_abilities_is_written_only_while_active_and_stabilise_always()
 	assert_eq([f.phase(), i.disables_abilities, i.stabilise_seconds], [HazardField.Phase.QUIET, false, 0.75])
 	assert_true(_field({disables_abilities = true}).hazard_info().disables_abilities,
 			"a field with no cycle is always ACTIVE, so always lit")
+
+
+# --- Phase 9 t7: `suppress()`, the jammer's EMP answer (docs/plans/cmug23onr001pm52w9swwophy/3-plan.md §2.8) -----------
+
+func _step_60(f: HazardField, ticks: int) -> void:
+	for i in ticks:
+		f._physics_process(1.0 / 60.0)
+
+
+func test_suppress_quiets_disables_abilities_for_the_window_and_the_longest_wins() -> void:
+	var f := _field({kind = &"jammer", disables_abilities = true, stabilise_seconds = 0.75})
+	var i := f.hazard_info()
+	assert_true(i.disables_abilities, "precondition: lit")
+	f.suppress(0.0)
+	assert_false(f.is_suppressed(), "suppress(0) is a no-op")
+	f.suppress(-1.0)
+	assert_true(i.disables_abilities, "and so is a negative window")
+	f.suppress(1.0)
+	assert_true(f.is_suppressed())
+	assert_false(i.disables_abilities, "quiet on the call itself")
+	assert_eq(i.stabilise_seconds, 0.75, "the stabilisation is untouched")
+	_step_60(f, 30)
+	f.suppress(0.25)
+	_step_60(f, 29)
+	assert_false(i.disables_abilities, "a shorter second window does not cut the first (tick 59)")
+	_step_60(f, 1)
+	assert_true(i.disables_abilities, "lit after tick 60 (1.0 s, the 1e-6 clock rule)")
+	assert_false(f.is_suppressed())
+
+
+## Boundary: suppression touches only `disables_abilities`, so a field that never disables abilities reads identically.
+func test_suppress_leaves_every_other_info_field_alone() -> void:
+	var props := {kind = &"gravity_well", radius = 300.0, core_radius = 40.0, pull_force = 200.0, tangential_force = 30.0,
+		movement_penalty = 0.3, avoid_weight = 0.8, damage_radius = 60.0, stress_damage = 5, stress_period = 1.0}
+	var a := _field(props)
+	var b := _field(props)
+	b.suppress(2.0)
+	_tick(a, 0.5)
+	_tick(b, 0.5)
+	var ia := a.hazard_info()
+	var ib := b.hazard_info()
+	for key in ["kind", "radius", "core_radius", "pull_force", "tangential_force", "movement_penalty", "avoid_weight",
+			"damage_radius", "damage_per_second", "disables_abilities", "stabilise_seconds"]:
+		assert_eq(ib.get(key), ia.get(key), key)
+	assert_eq(b.phase(), a.phase())
+
+
+func test_restart_cycle_rereads_the_cycle_from_zero() -> void:
+	var f := _field({kind = &"jammer", disables_abilities = true})
+	assert_eq(f.phase(), HazardField.Phase.ACTIVE, "no cycle: always on")
+	f.cycle_telegraph = 0.8
+	f.cycle_active = 3.0
+	f.cycle_quiet = 2.5
+	f.restart_cycle()
+	assert_eq(f.phase(), HazardField.Phase.TELEGRAPH, "a cycle written after the field entered the tree starts in TELEGRAPH")
+	assert_false(f.hazard_info().disables_abilities, "and is unlit at once")
