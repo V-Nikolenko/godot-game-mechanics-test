@@ -26,8 +26,7 @@ player, enemies and seeking rockets alike. It is not an enemy and hurts nothing.
 - **Look (`EmpZoneArt`, code-drawn).** QUIET a dim 1 px ring at `radius`; TELEGRAPH a ring contracting from `radius` to 0.6 · `radius`
   with brightening alpha (the arm time is the counterplay: leave before it closes); ACTIVE an `EmpRing` expanding from the centre.
   The centre beacon is a `Beacon` `Sprite2D` on the zone root (`assault/assets/sprites/hazards/emp_zone_beacon.png`, 32 x 32, neutral grey / blue-white; t12, gate `test_ph9_sprites.gd`); the rings stay code-drawn.
-- **Scene-placed only.** Never spawned at runtime, and never in an Assault level in Phase 9. The hub placement is t13; until then
-  the hub sweep (`test_sector_hub_patrol.gd::_element_radius()`) already reads an `EmpZone` as 260, not as a zero-radius node.
+- **Scene-placed only.** Never spawned at runtime, and never in an Assault level in Phase 9. The hub places one `EmpZone` in `TacticalSpace` at (3100, 2300) (t13): the Ph6 sweep reads it as radius 260 through `test_sector_hub_patrol.gd::_element_radius()`, and it keeps ≥ 500 px (edge to edge) from both jammer fields.
 
 ## Tests
 

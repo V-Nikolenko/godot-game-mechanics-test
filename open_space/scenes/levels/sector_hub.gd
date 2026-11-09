@@ -1,8 +1,8 @@
 # open_space/scenes/levels/sector_hub.gd
 extends Node2D
 
-## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair and a Sniper, a Bomber, a Ram Corvette, a Missile Corvette, a Support Ship, a Mine Layer, a Laser Tender
-## and a Twin-Laser Drone pair, each patrolling its own anchor point, and assigns the planet config. The defended derelict site by the
+## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair and a Sniper, a Bomber, a Ram Corvette, a Missile Corvette, a Support Ship, a Mine Layer, a Laser Tender,
+## a Twin-Laser Drone pair and a Hacker Frigate, each patrolling its own anchor point, and assigns the planet config. The defended derelict site by the
 ## TacticalSpace is a scene node under `EnemyContainer` (a `TurretGroup` preset), not part of the patrol.
 ## To change this planet's missions, background, or sprite — edit edelia.tres.
 ## To use a different config, change the path in _configure_planet().
@@ -29,6 +29,7 @@ const SUPPORT_SHIP: PackedScene = preload("res://assault/scenes/enemies/support_
 const MINE_LAYER: PackedScene = preload("res://assault/scenes/enemies/mine_layer/mine_layer.tscn")
 const LASER_TENDER: PackedScene = preload("res://assault/scenes/enemies/laser_tender/laser_tender.tscn")
 const TWIN_LASER_PAIR_SPAWN: PackedScene = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn")
+const HACKER_FRIGATE: PackedScene = preload("res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn")
 
 ## Fighters and Gatlings patrol in pairs, a squad of two each (epic plan §2.10).
 const SHOOTER_SQUAD_SIZE := 2
@@ -74,6 +75,12 @@ const SHOOTER_SQUAD_SIZE := 2
 @export var twin_pair_ring_radius: float = 2600.0
 @export var twin_pair_anchor_bearing_deg: float = -157.5
 
+## The Hacker Frigate (epic plan §2.16, phase 9) takes draw 18 on the same 2600 ring at 67.5 deg, about (995, 2402): -22.5, 112.5 and -157.5 are taken. Its anchor sits
+## ~1900 px from the sector jammer (~2045 from the site), beyond `idle_radius` 160 + `preferred_range` 720 + the sector jammer's `field_radius` 640 = 1520. The sector jammer beside
+## `HubDefenseSite` and the pulsed jammer are scene nodes under `EnemyContainer`, the EMP zone one under `TacticalSpace`: none of them is a draw.
+@export var hacker_ring_radius: float = 2600.0
+@export var hacker_anchor_bearing_deg: float = 67.5
+
 @onready var enemy_container: Node2D = $EnemyContainer
 
 func _ready() -> void:
@@ -101,6 +108,8 @@ func _spawn_patrol() -> void:
 	# Phase 8, draws 16 and 17: appended after the fifteen above, so every earlier seed is unchanged.
 	_spawn_laser_tender(_ring_anchor(laser_tender_ring_radius, laser_tender_anchor_bearing_deg), rng)
 	_spawn_twin_laser_pair(_ring_anchor(twin_pair_ring_radius, twin_pair_anchor_bearing_deg), rng)
+	# Phase 9, draw 18: appended after the seventeen above, so every earlier seed is unchanged.
+	_spawn_hacker_frigate(_ring_anchor(hacker_ring_radius, hacker_anchor_bearing_deg), rng)
 
 func _ring_anchor(radius: float, bearing_deg: float) -> Vector2:
 	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * radius
@@ -147,6 +156,15 @@ func _spawn_twin_laser_pair(anchor: Vector2, rng: RandomNumberGenerator) -> void
 	spawner.rng_seed = _next_seed(rng)
 	enemy_container.add_child(spawner)
 	spawner.spawn_pair()
+
+## Draw 18. `patrol_anchor` and the seed are set before `add_child()`, so the brain's `_start()` builds its hub idle around the anchor.
+func _spawn_hacker_frigate(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var hacker := HACKER_FRIGATE.instantiate() as HackerFrigate
+	hacker.global_position = anchor
+	var brain := hacker.get_node("Brain") as HackerFrigateBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(hacker)
 
 func _spawn_missile_corvette(anchor: Vector2, rng: RandomNumberGenerator) -> void:
 	var corvette := MISSILE_CORVETTE.instantiate() as MissileCorvette

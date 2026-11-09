@@ -312,6 +312,9 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   frame: count live children) to `_patrol_groups()`, and the defended derelict site `EnemyContainer/HubDefenseSite` (`hub_defense_site.tscn`) with two
   sweeps over every `TurretGroup` / `LaserFence` child of `EnemyContainer`: **A**, its fire reach (1360 px) clears the spawn, triggers and pickups by
   more than 300 px; **B**, every patrol's idle ring clears its footprint (416 px). A later placed site or patrol is covered by both.
+  Phase 9 (t13) added the Hacker Frigate (draw 18, 2600 ring at 67.5 degrees) to `_patrol_groups()` and **sweep C**: every `JammingStructure` child of `EnemyContainer` (the hub's
+  `SectorJammer` beside the site and its `PulsedJammer`; a jammer belongs there, never in `TacticalSpace`, where `_element_radius()` would read it as 0) keeps its `Field.radius` + 300 px
+  clear of the spawn, triggers and pickups. The hub `EmpZone` in `TacticalSpace` is read as radius 260 and covered by the Ph6 sweep.
   `tests/integration/test_enemy_bullet_lifetime.gd` is an eighteenth, the **round lifetime sweep**,
   and `tests/integration/test_enemy_rounds.gd` its companion over the bullet family (Pulse, Scatter,
   Gatling Stream, Heavy Shell under `assault/scenes/projectiles/enemy_bullet/rounds/`): for every

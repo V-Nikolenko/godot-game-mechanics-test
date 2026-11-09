@@ -79,6 +79,7 @@ Open Space, not `start_engaged`: an `AnchorIdle` round `patrol_anchor` (`perceiv
 - **IDLE:** a ring of `idle_radius` 160 round the anchor, lopsided like its arc: `idle_speed` 0.45 rad/s the ccw way, 0.45 · 0.18 / 0.30 = 0.27 the cw way.
 - **NOTICING:** stop, face the player; after `notice_time` -> HOLD_ARC.
 - **RETURNING:** beyond `lose_radius`: `arrive` at the anchor, then IDLE.
+- **Placed (t13):** the sector hub draws one Hacker (draw 18) on the 2600 ring at 67.5 degrees, anchor about (995, 2402), clear of every trigger, pickup and the spawn by +1081 px past idle + perceive and ≥ 1520 px from the sector jammer (`idle_radius` + `preferred_range` + `field_radius`); see `open_space.md` → *Electronic warfare in the hub*.
 
 ### The Hijack Pulse (§2.11, t9)
 

@@ -47,6 +47,9 @@ const SUPPORT_CONFIG: SupportShipConfig = preload(
 const MINE_LAYER_CONFIG: MineLayerConfig = preload(
 		"res://assault/scenes/enemies/mine_layer/mine_layer_config.tres")
 
+const HACKER_CONFIG: HackerFrigateConfig = preload(
+		"res://assault/scenes/enemies/hacker_frigate/hacker_frigate_config.tres")
+
 const DT := 1.0 / 60.0
 const _SPEEDUP := 8
 const PATROL_SEED := 20260928
@@ -471,8 +474,8 @@ func test_spawns_one_swarm_squad_and_one_razor_drone() -> void:
 	assert_eq(_laser_tenders(container).size(), 1, "one Laser Tender spawned")
 	assert_eq(_twin_drones(container).size(), 2, "one Twin-Laser Drone pair spawned")
 	# The twin pair's spawner is still a child, queued for deletion, until the frame ends: count the live children.
-	assert_eq(_live_children(container).size(), swarms.size() + 1 + fighters.size() + gatlings.size() + 3 + 2 + 1 + 1 + 2,
-			"nothing but the eleven groups spawned into EnemyContainer")
+	assert_eq(_live_children(container).size(), swarms.size() + 1 + fighters.size() + gatlings.size() + 3 + 2 + 1 + 1 + 2 + 1,
+			"nothing but the twelve groups spawned into EnemyContainer")
 
 	var f_squad: SquadController = (fighters[0] as Fighter).squad if not fighters.is_empty() else null
 	var g_squad: SquadController = (gatlings[0] as GatlingInterceptor).squad if not gatlings.is_empty() else null
@@ -598,7 +601,10 @@ func test_the_existing_groups_seeds_are_unchanged_by_the_specialists() -> void:
 	assert_eq(seeds.slice(12, 14), expected.slice(12, 14), "the corvette takes draw 13 and the support draw 14")
 	assert_eq(seeds.slice(14, 15), expected.slice(14, 15), "the Mine Layer takes draw 15, after every earlier seed")
 	# Phase 8 (t18): the Laser Tender takes draw 16; the twin pair's spawner draw 17, which seeds drone A, and drone B draw 17 + 1.
-	assert_eq(seeds.slice(15), expected.slice(15), "the tender takes draw 16, drone A draw 17 and drone B draw 17 + 1")
+	assert_eq(seeds.slice(15, 18), expected.slice(15, 18), "the tender takes draw 16, drone A draw 17 and drone B draw 17 + 1")
+	# Phase 9 (t13): the Hacker Frigate takes draw 18, after every earlier seed; it is the last brain in the container.
+	assert_eq(seeds.slice(18), expected.slice(18), "the Hacker takes draw 18, after every earlier seed")
+	assert_eq(seeds.size(), 19, "nineteen brains: the 17 draws, drone B and the Hacker")
 	var tenders := _laser_tenders(built.container)
 	var drones := _twin_drones(built.container)
 	if tenders.size() == 1 and drones.size() == 2:
@@ -607,16 +613,18 @@ func test_the_existing_groups_seeds_are_unchanged_by_the_specialists() -> void:
 		assert_eq((drones[1].get_node("Brain") as EnemyBrain).rng_seed, expected[16] + 1, "drone B's is draw 17 + 1")
 
 
-## The seeds a bare RNG on `PATROL_SEED` gives the seventeen draws, plus drone B's (draw 17 + 1) last: the order `_brain_seeds()` reads them
-## in (the tender, then drones A and B after the queued spawner).
+## The seeds a bare RNG on `PATROL_SEED` gives the eighteen draws, with drone B's (draw 17 + 1) after draw 17 and draw 18 last: the order `_brain_seeds()` reads them
+## in (the tender, then drones A and B after the queued spawner, then the Hacker).
 func _expected_seeds() -> Array[int]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = PATROL_SEED
-	var expected: Array[int] = []
-	for i: int in 17:
+	var draws: Array[int] = []
+	for i: int in 18:
 		var s := rng.randi()
-		expected.append(s if s != 0 else 1)
-	expected.append(expected[16] + 1)
+		draws.append(s if s != 0 else 1)
+	var expected: Array[int] = draws.slice(0, 17)
+	expected.append(draws[16] + 1)
+	expected.append(draws[17])
 	return expected
 
 
@@ -872,6 +880,7 @@ func _patrol_groups(hub: Node) -> Dictionary:
 		"Mine Layer": [_mine_layer_anchor(hub), MINE_LAYER_CONFIG.idle_radius, MINE_LAYER_CONFIG.perceive_radius],
 		"Laser Tender": [_tender_anchor(hub), TENDER_CONFIG.idle_radius, TENDER_CONFIG.perceive_radius],
 		"Twin Pair": [_twin_anchor(hub), _twin_idle_offset(), TWIN_CONFIG.perceive_radius],
+		"Hacker": [_hacker_anchor(hub), HACKER_CONFIG.idle_radius, HACKER_CONFIG.perceive_radius],
 	}
 
 
@@ -1046,7 +1055,7 @@ func test_with_the_space_present_the_patrol_seeds_and_composition_are_unchanged(
 	assert_eq(_brain_seeds(built.container), _expected_seeds(), "the space draws nothing from the patrol rng")
 	var found := _swarm_and_razor(built.container)
 	assert_eq((found.swarms as Array).size(), 4)
-	assert_eq(_live_children(built.container).size(), 18, "nothing but the eleven patrol groups spawned")
+	assert_eq(_live_children(built.container).size(), 19, "nothing but the twelve patrol groups spawned")
 
 
 # ── Phase 7 (plan §2.15, t14): the Mine Layer's patrol and the placed minefield ────────────────
@@ -1251,7 +1260,7 @@ func test_the_tender_and_the_pair_spawn_bound_on_their_anchors() -> void:
 	assert_almost_eq(drones[0].global_position.distance_to(drones[1].global_position), TWIN_CONFIG.rig_length, 0.01,
 			"spawned rig_length apart, centred on the anchor")
 	assert_almost_eq((drones[0].global_position + drones[1].global_position) * 0.5, twin_anchor, Vector2(0.01, 0.01))
-	assert_eq(_live_children(container).size(), 15 + 3, "the fifteen draws before, the tender and the two drones")
+	assert_eq(_live_children(container).size(), 15 + 3 + 1, "the fifteen draws before, the tender, the two drones and the Hacker")
 
 
 # ── The defended derelict site ─────────────────────────────────────────────────────────────────────────────────────
@@ -1393,7 +1402,7 @@ func test_a_mission_trigger_inside_the_sites_reach_fails_sweep_a() -> void:
 func test_hub_patrols_clear_the_defense_site() -> void:
 	var hub := HUB_SCENE.instantiate()
 	var groups := _patrol_groups(hub)
-	assert_eq(groups.size(), 12, "every patrol group, the tender and the pair included")
+	assert_eq(groups.size(), 13, "every patrol group, the tender, the pair and the Hacker included")
 	var sites := _hub_sites(hub)
 	assert_gte(sites.size(), 1, "sanity: the sweep found the site")
 	for site: Node2D in sites:
@@ -1632,3 +1641,181 @@ func test_the_site_spawns_powered_members_into_the_container_shielded_except_the
 		assert_null(_enemy_shield_of(post), "fence post %s is never shielded" % post.name)
 		assert_false(post.hurt_box.has_absorber(), "and holds no absorber")
 	assert_eq(generator.tethers().size(), 5, "one tether per shielded member")
+
+
+# ── Phase 9 (plan §2.16, t13): the Hacker, the sector and pulsed jammers and the EMP zone ──────────────────────────────
+#
+# Draw 18 is the Hacker on the 2600 ring at 67.5 deg; the Hacker is one more `_patrol_groups()` entry, so every sweep above covers it. The
+# sector jammer stands beside `HubDefenseSite` and the pulsed jammer beside the Ph6 / Ph7 hazards, both under `EnemyContainer` like every
+# enemy (a jammer in `TacticalSpace` would read as radius 0 to the sweep). Sweep C keeps every jammer's field, plus a margin, off the spawn,
+# the triggers and the pickups: the player is never jammed while arriving or dwelling at a planet.
+
+## Sweep C's margin past a jammer's field, px (the interactable margin of the TacticalSpace sweep).
+const JAMMER_POINT_MARGIN := 300.0
+## The EMP zone keeps this edge-to-edge distance from each jammer field.
+const ZONE_JAMMER_GAP := 500.0
+
+
+func _hacker_anchor(hub: Node) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(float(hub.hacker_anchor_bearing_deg))) * float(hub.hacker_ring_radius)
+
+
+## `[position, field radius, name]` of every `JammingStructure` child of the hub's `EnemyContainer` (any variant); the field radius
+## is read from its `Field` child, whose scene value a row of `test_jamming_structure.gd` pins to the config.
+func _hub_jammers(hub: Node) -> Array:
+	var container := hub.get_node("EnemyContainer") as Node2D
+	var out: Array = []
+	for child: Node in container.get_children():
+		if child is JammingStructure:
+			out.append([container.position + (child as Node2D).position, (child.get_node("Field") as HazardField).radius,
+					String(child.name)])
+	return out
+
+
+## Sweep C: every jammer keeps `field_radius + JAMMER_POINT_MARGIN` clear of every interactable point.
+func _jammer_clearance_violations(hub: Node, jammers: Array) -> Array[String]:
+	var out: Array[String] = []
+	for j: Array in jammers:
+		for p: Vector2 in _interactable_points(hub):
+			var clearance: float = p.distance_to(j[0]) - float(j[1])
+			if clearance <= JAMMER_POINT_MARGIN:
+				out.append("jammer %s field is only %.1f px from %s (needs > %.0f)" % [j[2], clearance, p, JAMMER_POINT_MARGIN])
+	return out
+
+
+func test_the_hacker_takes_draw_18_on_the_2600_ring_at_67_5_degrees() -> void:
+	var hub := HUB_SCENE.instantiate()
+	assert_eq(float(hub.hacker_ring_radius), 2600.0)
+	assert_eq(float(hub.hacker_anchor_bearing_deg), 67.5)
+	var anchor := _hacker_anchor(hub)
+	assert_almost_eq(anchor.x, 995.0, 1.0, "the plan's anchor x")
+	assert_almost_eq(anchor.y, 2402.0, 1.0, "the plan's anchor y")
+	hub.free()
+	var built := _spawn_hub(PATROL_SEED)
+	var hackers: Array[HackerFrigate] = []
+	for c: Node in built.container.get_children():
+		if c is HackerFrigate:
+			hackers.append(c)
+	assert_eq(hackers.size(), 1, "one Hacker Frigate")
+	if hackers.size() != 1:
+		return
+	var brain := hackers[0].get_node("Brain") as HackerFrigateBrain
+	assert_eq(brain.patrol_anchor, _hacker_anchor(built.hub), "it carries its patrol anchor")
+	assert_eq(hackers[0].global_position, _hacker_anchor(built.hub), "and spawns on it")
+	assert_eq(brain.rng_seed, _expected_seeds()[18], "it takes draw 18")
+	assert_false(brain.start_engaged, "it idles on patrol")
+
+
+func test_hacker_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var anchor := _hacker_anchor(hub)
+	var points := _interactable_points(hub)
+	_assert_group_clears(anchor, HACKER_CONFIG.idle_radius, HACKER_CONFIG.perceive_radius, points, "Hacker")
+	print("Hacker ring margin: %.1f px" % _nearest_margin(anchor, HACKER_CONFIG.idle_radius, HACKER_CONFIG.perceive_radius, points))
+	hub.free()
+
+
+func test_the_hacker_anchor_is_well_apart_from_every_other_patrol_anchor() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var hacker := _hacker_anchor(hub)
+	var groups := _patrol_groups(hub)
+	for label: String in groups:
+		if label == "Hacker":
+			continue
+		assert_gt((groups[label][0] as Vector2).distance_to(hacker), 1000.0, "the Hacker's anchor is clear of %s's" % label)
+	hub.free()
+
+
+func test_the_hub_places_a_sector_jammer_and_a_pulsed_jammer_under_the_enemy_container() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var jammers := _hub_jammers(hub)
+	assert_eq(jammers.size(), 2, "a sector jammer and a pulsed jammer")
+	var by_name := {}
+	for j: Array in jammers:
+		by_name[j[2]] = j
+	assert_true(by_name.has("SectorJammer") and by_name.has("PulsedJammer"), "both variants are placed: %s" % [by_name.keys()])
+	if by_name.has("SectorJammer"):
+		assert_eq(float(by_name["SectorJammer"][1]), 640.0, "the sector jammer's field radius is 640")
+	if by_name.has("PulsedJammer"):
+		assert_eq(float(by_name["PulsedJammer"][1]), 300.0, "the pulsed jammer's field radius is 300")
+		var field := hub.get_node("EnemyContainer/PulsedJammer/Field") as HazardField
+		assert_gt(field.cycle_active, 0.0, "the pulsed jammer cycles")
+	hub.free()
+
+
+## Sweep C: no jammer's field comes within `JAMMER_POINT_MARGIN` of the spawn, a trigger or a pickup.
+func test_every_hub_jammer_keeps_its_field_and_a_margin_clear_of_the_spawn_triggers_and_pickups() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var jammers := _hub_jammers(hub)
+	assert_gt(jammers.size(), 0, "sanity: sweep C found the jammers")
+	var violations := _jammer_clearance_violations(hub, jammers)
+	assert_true(violations.is_empty(), "\n".join(violations))
+	hub.free()
+
+
+## Boundary: sweep C can reject. A synthetic jammer moved inside the margin of the player's spawn is reported (the real ones are not).
+func test_a_jammer_moved_inside_the_margin_fails_sweep_c() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var jammers := _hub_jammers(hub)
+	assert_true(_jammer_clearance_violations(hub, jammers).is_empty(), "sanity: the real scene is clear")
+	jammers.append([_player_spawn + Vector2(240.0 + JAMMER_POINT_MARGIN, 0.0), 240.0, "Planted"])
+	var violations := _jammer_clearance_violations(hub, jammers)
+	assert_gt(violations.size(), 0, "a local jammer whose field edge is only 300 px from the spawn is caught")
+	assert_true(violations.all(func(v: String) -> bool: return v.contains("Planted")), "and only the planted one")
+	hub.free()
+
+
+## A jammer placed in `TacticalSpace` would read as radius 0 to the radius-aware sweeps there, and dodge them.
+func test_no_jamming_structure_sits_in_the_tactical_space() -> void:
+	var hub := HUB_SCENE.instantiate()
+	for child: Node in hub.get_node("TacticalSpace").get_children():
+		assert_false(child is JammingStructure, "%s is a jammer: place it under EnemyContainer, where sweep C reads it" % child.name)
+	hub.free()
+
+
+func test_the_hub_places_an_emp_zone_in_the_tactical_space_and_the_sweep_reads_its_radius() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var zones: Array = _space_elements(hub).filter(func(e: Array) -> bool: return e[2] == "EmpZone")
+	assert_eq(zones.size(), 1, "one EMP zone")
+	if zones.size() == 1:
+		assert_eq(float(zones[0][1]), 260.0, "the Ph6 sweep reads the zone's radius, not 0")
+	hub.free()
+
+
+## The EMP zone is edge to edge `ZONE_JAMMER_GAP` from both jammer fields (a lit field would otherwise sit on the pulse it cannot survive).
+func test_the_emp_zone_keeps_its_distance_from_both_jammer_fields() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var zone: Array = _space_elements(hub).filter(func(e: Array) -> bool: return e[2] == "EmpZone")[0]
+	for j: Array in _hub_jammers(hub):
+		var gap: float = (zone[0] as Vector2).distance_to(j[0]) - float(zone[1]) - float(j[1])
+		assert_gte(gap, ZONE_JAMMER_GAP, "the zone is %.1f px from the %s's field (needs >= %.0f)" % [gap, j[2], ZONE_JAMMER_GAP])
+	hub.free()
+
+
+## The Hacker stays out of both jammer fields while it holds range: its idle ring, its held range and the field radius do not overlap.
+func test_the_hacker_anchor_clears_both_jammers() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var anchor := _hacker_anchor(hub)
+	for j: Array in _hub_jammers(hub):
+		var need := HACKER_CONFIG.idle_radius + HACKER_CONFIG.preferred_range + float(j[1])
+		var dist := anchor.distance_to(j[0])
+		assert_gte(dist, need, "the Hacker's anchor is %.1f px from the %s (needs >= %.1f)" % [dist, j[2], need])
+	hub.free()
+
+
+## The sector jammer's field covers the site's turrets (R9.7): at least two of its defence turrets stand inside it.
+func test_the_sector_jammer_field_covers_at_least_two_site_turrets() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var jammer := hub.get_node("EnemyContainer/SectorJammer") as Node2D
+	var radius := (jammer.get_node("Field") as HazardField).radius
+	var site := hub.get_node("EnemyContainer/HubDefenseSite") as Node2D
+	var covered := 0
+	var turrets := 0
+	for slot: Node in site.get_children():
+		if slot is Marker2D and "member_scene" in slot and (slot.member_scene as PackedScene).resource_path == TURRET_SCENE_PATH:
+			turrets += 1
+			if (site.position + (slot as Node2D).position).distance_to(jammer.position) <= radius:
+				covered += 1
+	assert_gte(turrets, 2, "sanity: the walk found the site's turret slots")
+	assert_gte(covered, 2, "the sector jammer's r %.0f field covers %d of %d site turrets" % [radius, covered, turrets])
+	hub.free()
