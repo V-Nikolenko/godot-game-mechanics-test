@@ -134,8 +134,13 @@ func test_the_player_at_the_edge_is_emp_d_and_one_pixel_outside_is_not(mode: Str
 	for i in 119:
 		p._step_disruption(DT)
 	assert_true(p.abilities_locked(), "%s: still locked after 119 ticks" % mode)
+	assert_eq(p.boost_efficiency(), 0.0, "%s: boost still refused after 119 ticks" % mode)
+	assert_true(p.is_emp_disrupted(), "%s: still EMP'd after 119 ticks" % mode)
 	p._step_disruption(DT)
 	assert_false(p.abilities_locked(), "%s: unlocked after 120 ticks (2.0 s)" % mode)
+	p._step_disruption(DT)  # the boost and EMP clocks may end one tick later (float drift, Ph9 t5 DECISIONS)
+	assert_eq(p.boost_efficiency(), 1.0, "%s: boost back by tick 121" % mode)
+	assert_false(p.is_emp_disrupted(), "%s: EMP over by tick 121" % mode)
 
 
 # ── Enemies and seekers ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -161,27 +166,39 @@ func test_an_enemy_inside_is_emp_d_and_still_shootable(mode: String = use_parame
 	assert_eq(died, [true], "%s: it was killed while EMP'd (it stays tangible)" % mode)
 
 
+## A rocket ticked once toward its target (guided: it turns onto it). The target then MOVES: a guided rocket follows, a
+## jammed one keeps its heading. The rocket outside the radius is the control that proves the moved target would have turned it.
+func _guided_rocket(h: RefCounted, at: Vector2, target: Node2D) -> homing_missile:
+	var r: homing_missile = HOMING_SCENE.instantiate()
+	r.locked_target = target
+	h.root.add_child(r)
+	r.global_position = at
+	r.rotation = 0.0
+	r.set_physics_process(false)
+	(r.get_node("ProjectileLifetime") as ProjectileLifetime).set_physics_process(false)
+	r._physics_process(DT)
+	return r
+
+
 func test_a_player_homing_rocket_inside_loses_guidance(mode: String = use_parameters(MODES)) -> void:
 	var h := _world(mode)
 	var z := _zone(h.root)
 	var target := Node2D.new()
 	h.root.add_child(target)
 	target.global_position = MID + Vector2(1500.0, 0.0)
-	var r: homing_missile = HOMING_SCENE.instantiate()
-	r.locked_target = target
-	h.root.add_child(r)
-	r.global_position = MID + Vector2(0.0, 100.0)
-	r.rotation = 0.0
-	r.set_physics_process(false)
-	(r.get_node("ProjectileLifetime") as ProjectileLifetime).set_physics_process(false)
-	r._physics_process(DT)
+	var inside := _guided_rocket(h, MID + Vector2(0.0, 100.0), target)
+	var outside := _guided_rocket(h, MID + Vector2(0.0, 400.0), target)
 	_fire(z)
-	var heading := r.rotation
-	var kept := true
+	assert_null(inside.locked_target, "%s: the pulse dropped the lock" % mode)
+	assert_eq(outside.locked_target, target, "%s: control: a rocket outside the radius keeps its lock" % mode)
+	var inside_heading := inside.rotation
+	var outside_heading := outside.rotation
+	target.global_position = MID + Vector2(0.0, -1500.0)  # a guided rocket would swing round to this
 	for i in 30:
-		r._physics_process(DT)
-		kept = kept and absf(angle_difference(r.rotation, heading)) < 1e-5
-	assert_true(kept, "%s: it flies straight after the pulse" % mode)
+		inside._physics_process(DT)
+		outside._physics_process(DT)
+	assert_lt(absf(angle_difference(inside.rotation, inside_heading)), 1e-5, "%s: the jammed rocket flies straight" % mode)
+	assert_gt(absf(angle_difference(outside.rotation, outside_heading)), 0.5, "%s: control: the outside rocket follows the moved target" % mode)
 
 
 # ── The cycle ───────────────────────────────────────────────────────────────────────────────────────────────────────
