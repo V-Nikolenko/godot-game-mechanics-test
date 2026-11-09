@@ -4,7 +4,9 @@
 ## Hand-ticked at 1/60 (`_tick`: `_physics_process(dt)`, then the position integrated from the velocity, the corvette tests' shape); the test
 ## moves the harness player itself. `_spawn()` writes `engage_seconds = 1000` and then the row's own config fields onto the instance's private
 ## config before `add_child` (the budget is live in the Assault harness and would end every long row at 9 s); only the Assault-life rows put
-## the shipped 9.0 back. Every behaviour row has a control that switches the behaviour off and fails the same bound.
+## the shipped 9.0 back. It also writes `first_pulse_delay = 1000` (t9): these are movement rows, so the Hijack Pulse stays off in them; the
+## Assault-life rows put the shipped 2.0 back, and `test_hijack_pulse.gd` covers the arc through TELEGRAPH and PULSE. Every behaviour row has a
+## control that switches the behaviour off and fails the same bound.
 ##
 ## Assault placement (every Assault row but the life rows): the player at (640, 620), centred 100 px above the view's bottom edge, facing UP,
 ## the hull started on its 520 ring at the bearing the row names (0° = straight above). The ring fits inside the clamp rect up to ≈ 93° from
@@ -69,6 +71,7 @@ func _spawn(h, pos: Vector2, props: Dictionary = {}, seed: int = 1, engaged: boo
 	brain.start_engaged = engaged
 	brain.rng_seed = seed
 	hacker.config.engage_seconds = 1000.0
+	hacker.config.first_pulse_delay = 1000.0  # movement rows: the pulse (t9) stays off unless a row puts it back
 	for key in props:
 		hacker.config.set(key, props[key])
 	hacker.global_position = pos
@@ -566,7 +569,7 @@ func _life(props: Dictionary) -> Dictionary:
 	var h = _world("assault")
 	h.player.global_position = Vector2(640.0, 360.0)  # the 520 ring pokes out of the view top and bottom: the clamp binds
 	var inner := _view_inner(h)
-	var all_props := {"engage_seconds": 9.0}
+	var all_props := {"engage_seconds": 9.0, "first_pulse_delay": SHIPPED.first_pulse_delay}  # the real life, its pulse included
 	all_props.merge(props, true)
 	var hacker := _spawn(h, Vector2(1100.0, 140.0), all_props)
 	var brain := _brain(hacker)
@@ -733,9 +736,11 @@ func test_open_space_cold_start_idles_and_assault_starts_in_combat() -> void:
 	assert_null(_brain(cold).anchor_idle)
 
 
-# ── TELEGRAPH / PULSE stubs, suspension ─────────────────────────────────────────────────────────
+# ── TELEGRAPH / PULSE tow refusal, suspension ───────────────────────────────────────────────────
 
-func test_the_attack_phases_are_stubs_that_refuse_a_tow(mode: String = use_parameters(MODES)) -> void:
+## The telegraphed phases refuse a tow and HOLD_ARC accepts one (the pulse itself, its cadence and its gates: `test_hijack_pulse.gd`). With
+## the pulse off (`first_pulse_delay` 1000) HOLD_ARC never enters them.
+func test_the_attack_phases_refuse_a_tow(mode: String = use_parameters(MODES)) -> void:
 	var h = _world(mode)
 	var hacker := _spawn(h, _on_ring(h.player.global_position, 520.0 if h.is_assault else 720.0, 0.0))
 	var brain := _brain(hacker)
@@ -745,15 +750,16 @@ func test_the_attack_phases_are_stubs_that_refuse_a_tow(mode: String = use_param
 		brain.enter_phase(p)
 		assert_false(brain.accepts_tow(), "%s: %s refuses a tow" % [mode, p])
 		_tick(hacker)
-		assert_eq(brain.phase, Phase.HOLD_ARC, "%s: back to HOLD_ARC on its first tick" % mode)
+		assert_eq(brain.phase, p, "%s: %s runs on (it is no stub)" % [mode, p])
+	brain.enter_phase(Phase.HOLD_ARC)
 	assert_true(brain.accepts_tow(), "%s: HOLD_ARC accepts one" % mode)
 	seen.clear()
 	for _i in int(10.0 / DT):
 		_step(hacker, h.player)
-	assert_false(seen.has(Phase.TELEGRAPH) or seen.has(Phase.PULSE), "%s: never entered from HOLD_ARC in t8 (%s)" % [mode, seen])
+	assert_false(seen.has(Phase.TELEGRAPH) or seen.has(Phase.PULSE), "%s: never entered with the pulse off (%s)" % [mode, seen])
 
 
-## A budget that expires while a TELEGRAPH is up goes straight to DISENGAGE, never through HOLD_ARC (the deferral t9's real telegraph uses).
+## A budget that expires while a TELEGRAPH is up goes straight to DISENGAGE, never through HOLD_ARC (the cancel t9's real telegraph uses).
 func test_a_budget_expiring_in_telegraph_goes_straight_to_disengage() -> void:
 	var h = _world("assault")
 	var hacker := _spawn(h, _on_ring(h.player.global_position, 520.0, 0.0), {"engage_seconds": 0.5})

@@ -3702,3 +3702,54 @@ Task plan `docs/plans/cmw5k4yjv00a6qs2xvkf73b18/3-plan.md` (review round 1 CHANG
   `test_engagement_deadline.gd`.
 - Test note: a row that builds a second harness world must take the first out of the tree (`test_hacker_frigate.gd::_world()`): its stub player stays in group `player`
   and `TargetInfo.player()` reads the first it finds.
+
+### Phase 9, built in t9 (the Hijack Pulse: TELEGRAPH, PULSE and the control dart) (2026-11-09)
+
+- **Built:** `HijackPulse` (`assault/scenes/projectiles/hijack_pulse/hijack_pulse.gd` / `.tscn`, `extends Node2D`): no `Area2D` or shape anywhere, `signal expired` (no
+  arguments, only through its `ProjectileLifetime`'s latch), `reset()`, `launch(rocket, source)` (placed at the source's hull centre, lifetime re-armed there), `is_flying()`,
+  `rocket()`, `source()`; exports `speed` 900, `claim_radius` 16; lifetime `max_time` 1.6 / `max_distance` 1400 / world rect. It homes exactly on its rocket and, within
+  16 px (inclusive), calls `rocket.retarget(players[0] of group player, -1.0, source)`, then expires on the same tick; a freed / out-of-tree / refusing rocket or a freed
+  source ends it unclaimed. `hacker_frigate.tscn` gains `DartPool` (`BulletPool`, `pool_size` 4, no `persist_after_owner_death`). Task plan
+  `docs/plans/cmw5k4yk700amqs2xuk3t1oge/` (review round 1 CHANGES_REQUESTED, round 2 APPROVED).
+- **`HackerFrigateConfig` pulse group** (flat): `pulse_trigger_range` 870, `hijack_range` 650, `max_claims_per_pulse` 3, `pulse_telegraph` 0.9, `pulse_seconds` 1.6,
+  `pulse_period_min` / `max` 6.0 / 8.0, `first_pulse_delay` 2.0, `assault_pulses_per_life` 1, `pulse_lock_seconds` 0.0.
+- **`HackerFrigate`:** `dart_pool()`, `fire_dart(rocket) -> HijackPulse` (null when the pool is exhausted), **`lock_player_abilities(seconds)`** (duck-typed
+  `apply_ability_lock(seconds, self)` on `players[0]`, `has_method`-guarded: the Disruptor hook's one call site lives on the ship, so the brain never reads group `player`),
+  the tell `set_dish_open(f)` (`Dish.scale` 0.6 -> 1.0), `show_charge(f)` (6 yellow dashes r 60 -> 40), `show_pulse(t)` (a ripple from the dish every 0.4 s, 12 -> 92 px),
+  `clear_tell()`, and read-only `dish_open()`, `tell_kind()` (`&""` / `&"charge"` / `&"pulse"`), `charge_ring_radius()`, `ripple_count()` (`floor(t / 0.4 + 1e-6) + 1` in
+  PULSE, else 0). `_ready()` folds the dish and calls `brain.watch_health(health)`.
+- **`HackerFrigateBrain`:** read-only `pulse_cooldown`, `pulses_fired`, `telegraphs`, `telegraph_cancels`, `darts_fired`, `claims_this_pulse`, `live_darts()`;
+  `watch_health(h)`; `on_emp_started()`. The cooldown counts down in every phase (`first_pulse_delay` at the start and on NOTICING). `_want_pulse(target)` (after the arc's
+  request, never on a BREAK_OFF-entry tick): cooldown out, no budget expiry, Assault `pulses_fired < assault_pulses_per_life`, player `<= pulse_trigger_range`, and
+  `not Engine.is_in_physics_frame() or can_see_player()` (the tender precedent). TELEGRAPH and PULSE keep running `_arc_motion`; PULSE is entered on TELEGRAPH's last tick
+  and the first dart pass runs on that tick; darts go out on PULSE ticks 0..95. A budget expiring in TELEGRAPH cancels it (straight to DISENGAGE); in PULSE the window
+  finishes, the hook still fires, then DISENGAGE on the end tick (its `_tick_disengage` runs that tick, the t8 stub's shape).
+- **Small additions (logged, no later-phase impact):** a HOLD_ARC entered from TELEGRAPH / PULSE keeps `_orbit_angle` (no re-sync: the arc never stopped, and a re-sync
+  jumps the anchor back ≈ 0.045 rad, which the arc-rate row would read); BREAK_OFF comes on the first HOLD_ARC tick **after** the PULSE-end tick (review R6: `_end_pulse()`
+  does not run a HOLD_ARC tick); any phase other than TELEGRAPH / PULSE folds the dish and clears the tell in `enter_phase()`, and `on_suspended()` folds it too.
+- **Deviation D1 — the cap counts darts.** `claims_this_pulse` counts darts launched; a dart that misses (rocket freed, out-run, jammed) still used its slot, so six eligible
+  rockets give exactly three darts. A rocket whose dart missed may be darted again later in the same PULSE while the cap allows.
+- **Deviation D2 — EMP ends a TELEGRAPH or a PULSE.** `on_emp_started()` cancels a TELEGRAPH (`telegraph_cancels` +1) and ends a PULSE **without** the lock hook, each with
+  a fresh cooldown (frozen for the EMP window, since the brain is not ticked). Darts already flying finish. **t10's Disruptor rows inherit this.**
+- **Deviation D3 — the LOS rows use a real `wreck_medium.tscn`.** `tests/helpers/fixture_wreck.gd` has no body, so `LineOfSight`'s bodies-only ray can never meet it.
+  **Handed to t10:** §2.12's "behind a `fixture_wreck` at PULSE end is not locked" row must use the real wreck on real physics. Test note: switch a wreck's physics off
+  **after** `add_child` (READY switches a script's `_physics_process` back on) and switch its `ProjectileLifetime` off too: the Assault wreck otherwise drifts down 60 px/s
+  and slides off the sight line within a second. `test_sniper.gd::_wreck()` turns it off before `add_child` (a no-op; harmless in its short rows).
+- **Deviation D4 — the fairness geometry** (§2.11 left it open): P = Open Space (0, 0) / Assault (640, 560), rockets from P + (-7 / 0 / 7, -450) flying +y at P + (0, 400),
+  the Hacker at P + (300, -450) in PULSE from tick 0. Measured (hand): claims on ticks 26-27 (0.43-0.45 s), the still player blasted by all three on tick 54 (0.90 s);
+  moving player (Open Space +x 420 px/s then +y at 0.6 s; Assault +x 360 then -y) never blasted, closest 234.6-238.0 px (Open Space) and 149.5-161.2 px (Assault). Real
+  physics at 8x: the three rockets end on the same tick, the HurtBox logs [18, 18, 18], HP 50 -> 32 (the i-frames refuse the 2nd and 3rd): **one blast, 18, pinned.**
+- **The measured limit (review B1) — owner question in the t9 report.** With t4's hijack tuning a salvo a still player fires at the Hacker is claimed heading away and fizzles:
+  closest approach 235.5-241.3 px (Open Space) and 161.1-166.5 px (Assault), 0 blasts (row 6). A rocket claimed heading back at the player from ≥ 225 px is blasted (the
+  row-6 control: player re-placed 300 px ahead of the first claimed rocket, 3 blasts in both modes). Whether to retune `hijack_turn_rate` / `hijack_seconds` /
+  `hijack_speed` is the owner's call; nothing was retuned.
+- **Pre-run numbers.** Row 4 (in flight) **moved its start points** to the hull's level and 30 / 60 px beyond it: the plan's "250 / 280 / 310 px nearer the player" put the
+  Assault claims 250-310 px from the player, inside two hijacked turn radii (380 / 1.6 = 238 px), and those rockets circled it (heading error never under 55°, closest
+  161-205 px). Moved: claims on ticks 91-92 (PULSE tick 84), heading error 0°, all three blast in both modes, closest before the blast 30.3-35.2 px. Row 5 (receding):
+  the dart expires on tick 94 (clock 1.5667 s), 23.33 px short (closest 30.0 px). Row 10 (cadence, Open Space, `range_drift` 0): TELEGRAPH on ticks 120 and 693, PULSE
+  ends 270 and 843 (interval 7.05 s). Row 23 (the arc through the window): bearing rate 0.1793 / 0.1800 rad/s (Open Space, HOLD_ARC / window) and 0.1790 / 0.1800
+  (Assault), nose worst 0.04°; the cone snap on TELEGRAPH entry leaves the nose cone through the near edge in 1.55 s (PULSE ends at 2.5 s). Mutation checks (not shipped):
+  `_arc_motion` removed from TELEGRAPH / PULSE fails row 23 (rate 0.006, nose 14°, no cone exit); both LOS checks removed fails both LOS rows.
+- **t8 rows:** `test_hacker_frigate.gd::_spawn()` writes `first_pulse_delay = 1000` (movement rows), `_life()` puts the shipped 2.0 back; the stub row became
+  `test_the_attack_phases_refuse_a_tow`. The dual-mode closes-to-range row writes `first_pulse_delay = 1000`. **A later task that runs a Hacker in a long movement row must
+  switch the pulse off the same way, or expect it.**

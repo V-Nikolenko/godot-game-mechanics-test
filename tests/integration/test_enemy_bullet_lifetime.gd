@@ -219,6 +219,20 @@ func test_a_synthetic_100px_per_s_round_fails_the_sweep() -> void:
 			"a round this slow would time out before it reaches its own max_distance")
 
 
+## The Hacker Frigate's control dart (Phase 9 t9, plan §2.11): a `HijackPulse` is no `EnemyBullet` (no collision areas, it claims by
+## distance) and has one speed, its scene's, so it is its own row: 1400 / 900 = 1.56 s <= 1.6 s. Boundary: the same caps at 870 px/s fail
+## (1.609 s).
+func test_the_hijack_pulse_dart_clears_its_lifetime() -> void:
+	var dart := (load("res://assault/scenes/projectiles/hijack_pulse/hijack_pulse.tscn") as PackedScene).instantiate() as HijackPulse
+	add_child_autofree(dart)
+	var lifetime := dart.get_node("ProjectileLifetime") as ProjectileLifetime
+	assert_true(_round_clears_its_lifetime(lifetime.max_distance, dart.speed, lifetime.max_time),
+			"the dart reaches its %.0f px cap (%.3f s at %.0f px/s) inside max_time %.1f s" % [lifetime.max_distance,
+			lifetime.max_distance / dart.speed, dart.speed, lifetime.max_time])
+	assert_false(_round_clears_its_lifetime(lifetime.max_distance, 870.0, lifetime.max_time),
+			"boundary: the same caps at 870 px/s would time out first (1.609 s)")
+
+
 # ---------------------------------------------------------------------------------------------
 # Enemy ordnance (3-plan.md of cmufs7ele0015nm2xvag3vrwc §2.3, task t6): a separate family with its
 # own explicit caps, so it gets per-KIND rows instead of joining the round sweep above. Its speeds

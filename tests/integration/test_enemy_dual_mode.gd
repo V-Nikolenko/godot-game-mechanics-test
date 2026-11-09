@@ -1429,6 +1429,7 @@ func test_hacker_frigate_closes_to_its_held_range_in_both_modes(mode: String = u
 	hacker.config.engage_seconds = 1000.0
 	hacker.config.nose_cone_deg = 0.0
 	hacker.config.range_drift = 0.0
+	hacker.config.first_pulse_delay = 1000.0  # a movement row: the pulse (t9) stays off
 	hacker.global_position = Vector2(640.0, -240.0)  # 860 px above the player
 	harness.root.add_child(hacker)
 	hacker.set_physics_process(false)

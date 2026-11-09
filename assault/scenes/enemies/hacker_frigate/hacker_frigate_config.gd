@@ -4,7 +4,7 @@
 ##
 ## Flat by design (test_config_instance_isolation.gd): every field is a plain number, so the shallow `ShipConfig.privatise()` copy is
 ## complete. The values are [judgement] starting defaults (§2.19), tunable in the `.tres`. The brain reads the cone fields every tick, so a
-## test may switch a cone on after a warm-up. The pulse fields arrive with TELEGRAPH / PULSE (t9).
+## test may switch a cone on after a warm-up. The pulse group is t9's (§2.11; task plan docs/plans/cmw5k4yk700amqs2xuk3t1oge/3-plan.md).
 class_name HackerFrigateConfig
 extends ShipConfig
 
@@ -75,3 +75,27 @@ extends ShipConfig
 ## The patrol ring's radius (px) and angular speed (rad/s; the cw arc runs at `idle_speed · orbit_speed_cw / orbit_speed_ccw`).
 @export var idle_radius: float = 160.0
 @export var idle_speed: float = 0.45
+
+@export_group("Pulse")
+## The player must be within this distance (inclusive) to start a TELEGRAPH, and for the PULSE-end lock. `preferred_range + range_drift + 60`:
+## the whole held band of both modes is inside it, so the cooldown sets the cadence, not the drift.
+@export var pulse_trigger_range: float = 870.0
+## The rocket-claim reach round the hull (`SeekingOrdnance.eligible`, inclusive). Rockets only; the player is gated by `pulse_trigger_range`.
+@export var hijack_range: float = 650.0
+## Darts per PULSE (a dart that misses still used its slot).
+@export var max_claims_per_pulse: int = 3
+## The charge (s): yellow light, the dish unfolding, a ring of dashes closing in. Any damage cancels it.
+@export var pulse_telegraph: float = 0.9
+## The window (s) in which darts go out, at rockets in flight and at rockets launched during it.
+@export var pulse_seconds: float = 1.6
+## The cooldown after a PULSE or a cancelled TELEGRAPH (s), drawn from the brain's rng.
+@export var pulse_period_min: float = 6.0
+@export var pulse_period_max: float = 8.0
+## The cooldown at the start, and again on NOTICING (s).
+@export var first_pulse_delay: float = 2.0
+## Assault: PULSE entries per life. 1 is the only value that can bind: the earliest second TELEGRAPH (2.0 + 0.9 + 1.6 + 6.0 = 10.5 s) is
+## past `engage_seconds` 9.0.
+@export var assault_pulses_per_life: int = 1
+## The Disruptor hook (t10): at PULSE end, with the player within `pulse_trigger_range` and in sight, lock its abilities this long (s).
+## 0 = never (the base Hacker).
+@export var pulse_lock_seconds: float = 0.0

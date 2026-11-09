@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/enemies/hacker_frigate/hacker_frigate.gd" id="1_hf"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_hf"]
@@ -8,6 +8,8 @@
 [ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="6_hf"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/hacker_frigate/hacker_frigate_brain.gd" id="7_hf"]
 [ext_resource type="Script" path="res://global/components/state_light.gd" id="8_hf"]
+[ext_resource type="Script" path="res://global/components/bullet_pool.gd" id="9_hf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/hijack_pulse/hijack_pulse.tscn" id="10_hf"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_hf"]
 radius = 40.0
@@ -108,3 +110,8 @@ polygon = PackedVector2Array(-12, 0, -8, -8, 0, -12, 8, -8, 12, 0, 8, 8, 0, 12, 
 
 [node name="StateLight" type="Node2D" parent="Dish"]
 script = ExtResource("8_hf")
+
+[node name="DartPool" type="Node" parent="."]
+script = ExtResource("9_hf")
+bullet_scene = ExtResource("10_hf")
+pool_size = 4

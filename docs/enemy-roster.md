@@ -511,7 +511,7 @@ b.jammer(&"pulsed").at(-120, -200)  # world x 400 whatever the camera pan
 ### `hacker_frigate` — Hacker Frigate (Phase 9)
 **Builder:** `b.hacker_frigate()`; `.at(x, y)` camera-relative like every ship spawn  
 **Scene:** `hacker_frigate/hacker_frigate.tscn` (HP 120, contact 15, score 90)  
-**Movement:** AI (`HackerFrigateBrain` + `EnemyMover`, no `.move()`): orbits the player at 720 px (Assault 520) on a lopsided 0.18 / 0.30 rad/s arc, slides out of the player's nose and flight-line cones, breaks off when the player comes inside 420 px. Assault: stays on screen for 9 s, then leaves (measured exit ≤ 5.67 s). **Shoots:** not yet (the Hijack Pulse is t9).  
+**Movement:** AI (`HackerFrigateBrain` + `EnemyMover`, no `.move()`): orbits the player at 720 px (Assault 520) on a lopsided 0.18 / 0.30 rad/s arc, slides out of the player's nose and flight-line cones, breaks off when the player comes inside 420 px. Assault: stays on screen for 9 s, then leaves (measured exit ≤ 5.67 s). **Shoots:** no gun. Its **Hijack Pulse** (a 0.9 s charge any hit cancels, then a 1.6 s window every 6–8 s) sends up to 3 control darts at the player's homing rockets within 650 px and turns them back on the player; one pulse per Assault life.  
 **Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). See [ENEMY.md](../assault/scenes/enemies/hacker_frigate/ENEMY.md).
 
 ```gdscript
