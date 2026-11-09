@@ -8,7 +8,7 @@ half your kit gone. Enemy ships fly through its field as if it were empty space,
 EMP Blast, which switches the field off for 5 s (from inside the press is refused like every H press).
 
 > **Build state (Phase 9, t7).** Three variants share these scripts: `jamming_structure/` (local), `sector_jammer/` and `pulsed_jammer/` (each a
-> scene and a config only, the `heavy_emplacement/` precedent). **Placeholder visuals** (code `Polygon2D` hull and dish) until the art task (t12).
+> scene and a config only, the `heavy_emplacement/` precedent). **Art (t12):** `Hull` is a `Sprite2D` per variant (`jamming_structure.png` a triangular 3-emitter tower, `pulsed_jammer.png` a disc with a crown of vanes, `sector_jammer.png` a 4-boom star; 64 / 64 / 96 px), the amber lens is baked in and the `StateLight` sits on it; the field ring stays code-drawn. Gate `tests/integration/test_ph9_sprites.gd`.
 > Not placed in the hub or level 1 yet (t13 / t14). Plan: `docs/plans/cmug23onr001pm52w9swwophy/3-plan.md` §2.8 / §2.9; task plan
 > `docs/plans/cmw5k4yk100aeqs2xwrdu7hwz/3-plan.md`.
 

@@ -7,7 +7,7 @@
 ##
 ## A `HackerFrigateBrain` decides and an `EnemyMover` moves it, through `BaseEnemy`'s shared tick, so this script defines no
 ## `_physics_process` and writes no motion. One `CircleShape2D` r 40 is shared by the body, the `HurtBox` and the `ContactHitBox` (COLLISION,
-## 15). `Hull` is a placeholder `Polygon2D` until the art task (t12; the hit flash animates its `self_modulate`); `Dish` is the antenna part
+## 15). `Hull` is a `Sprite2D` (`hacker_frigate.png`, t12; the hit flash animates its `self_modulate`); `Dish` is the antenna part
 ## that unfolds in TELEGRAPH, with the `StateLight` on it (IDEAS §21: a state shows on a part, never a recoloured hull). The charge ring and
 ## the ripples are code-drawn here, above the hull (`Hull` is `show_behind_parent`) and under the dish. `DartPool` is the darts' `BulletPool`.
 ##
@@ -68,7 +68,7 @@ func brain() -> HackerFrigateBrain:
 	return _hacker_brain
 
 
-## The antenna part (t9 unfolds it, t12 draws it).
+## The antenna part (t9 unfolds it, t12 draws it: `Dish/Antenna`).
 func dish() -> Node2D:
 	return _dish
 

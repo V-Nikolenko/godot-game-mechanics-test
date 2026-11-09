@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=14 format=3]
 
 [ext_resource type="Script" path="res://assault/scenes/enemies/jamming_structure/jamming_structure.gd" id="1_js"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="2_js"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" path="res://global/components/state_light.gd" id="6_js"]
 [ext_resource type="Script" path="res://global/hazards/hazard_field.gd" id="8_js"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/jamming_structure/jammer_field_art.gd" id="9_js"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/jamming_structure.png" id="tex_js"]
 
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_js"]
@@ -83,14 +84,9 @@ mode = 0
 script = ExtResource("5_js")
 speed = 60.0
 
-[node name="Hull" type="Polygon2D" parent="."]
+[node name="Hull" type="Sprite2D" parent="."]
 show_behind_parent = true
-color = Color(0.22, 0.2, 0.26, 1)
-polygon = PackedVector2Array(24.2, 14.0, 0.0, 28.0, -24.2, 14.0, -24.2, -14.0, -0.0, -28.0, 24.2, -14.0)
-
-[node name="Emitter" type="Polygon2D" parent="."]
-color = Color(0.55, 0.48, 0.38, 1)
-polygon = PackedVector2Array(-10, 0, -7, -7, 0, -10, 7, -7, 10, 0, 7, 7, 0, 10, -7, 7)
+texture = ExtResource("tex_js")
 
 [node name="StateLight" type="Node2D" parent="."]
 script = ExtResource("6_js")

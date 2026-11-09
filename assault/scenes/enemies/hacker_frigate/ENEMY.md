@@ -9,8 +9,7 @@ claimed rockets fizzle), lure a claimed rocket into another enemy, or chase it d
 
 > **Build state (Phase 9, t9).** Built: the scene and shell, the flat config, `HackerFrigateBrain` (the full append-only `Phase` enum, every phase
 > played), the Hijack Pulse (TELEGRAPH, PULSE, the `HijackPulse` dart, the Disruptor hook with `pulse_lock_seconds` 0 here),
-> `WaveBuilder.hacker_frigate()`, the measured Assault exit (`tests/helpers/ph9_exit_keys.gd`). **Disruptor (t10):** `assault/scenes/enemies/hacker_disruptor/` reuses these scripts with `pulse_lock_seconds` 1.5 (lock at PULSE end), 130 HP, score 110; not placed. **Not yet:** the Disruptor accent art
-> , the art (t12; the hull is a placeholder `Polygon2D`), hub and level placement (t13 / t14). Plan:
+> `WaveBuilder.hacker_frigate()`, the measured Assault exit (`tests/helpers/ph9_exit_keys.gd`). **Disruptor (t10):** `assault/scenes/enemies/hacker_disruptor/` reuses these scripts with `pulse_lock_seconds` 1.5 (lock at PULSE end), 130 HP, score 110; not placed. **Art (t12):** `Hull` is `hacker_frigate.png` (96 x 96, nose-down), `Dish/Antenna` is `hacker_dish.png` (32 x 32) and the Disruptor alone wears an `Accent` fin (`hacker_disruptor_fin.png`, 32 x 32); gate `tests/integration/test_ph9_sprites.gd`. **Not yet:** hub and level placement (t13 / t14). Plan:
 > `docs/plans/cmug23onr001pm52w9swwophy/3-plan.md` §2.10, §2.11; task plans `docs/plans/cmw5k4yk400aiqs2xujalkqzf/3-plan.md` (t8) and
 > `docs/plans/cmw5k4yk700amqs2xuk3t1oge/3-plan.md` (t9).
 
@@ -24,10 +23,10 @@ claimed rockets fizzle), lure a claimed rocket into another enemy, or chase it d
 | Damage | 15 contact (`ContactHitBox`, `ContactProfile` COLLISION). No gun: its weapon is the Hijack Pulse, which deals no damage itself |
 | Speed | `max_speed` 230, `acceleration` 700 (the Support Ship's), `max_turn_rate` 1.4; break-off burst 360 (Open Space); DISENGAGE `exit_speed` 300 |
 | Body | one `CircleShape2D` r 40 shared by the body (layer 1 / mask 1), the `HurtBox` (512 / 65) and the `ContactHitBox` (256 / 0) |
-| Dish | `Dish` (`Node2D` at (0, -14)) with a placeholder `Antenna` `Polygon2D`: folded at scale 0.6, it unfolds to 1.0 through TELEGRAPH and stays open in PULSE (t12 draws it) |
+| Dish | `Dish` (`Node2D` at (0, -8)) with an `Antenna` `Sprite2D` (`hacker_dish.png`, 32 x 32): folded at scale 0.6, it unfolds to 1.0 through TELEGRAPH and stays open in PULSE; the `StateLight` is its child |
 | Light | `Dish/StateLight`: CHARGING (yellow) in TELEGRAPH, COMMIT (white) in PULSE, OFF otherwise |
 | Darts | `DartPool` (`BulletPool`, `pool_size` 4, no `persist_after_owner_death`) of `HijackPulse` (`assault/scenes/projectiles/hijack_pulse/`) |
-| Hull | `Hull` placeholder `Polygon2D` (~88 × 90 px, nose-down wedge) until t12; the hit flash animates `Hull:self_modulate` |
+| Hull | `Hull` `Sprite2D` (`hacker_frigate.png`, 96 x 96, nose-down, narrow: about 36 px wide); the Disruptor adds an `Accent` fin sprite at (14, -6) turned 90 degrees; the hit flash animates `Hull:self_modulate` |
 | Scene / config | `hacker_frigate.tscn` / `hacker_frigate_config.tres` (flat `HackerFrigateConfig`) |
 | Hazards | `hazard_avoidance` 0.7, `hazard_margin` 80, `hazard_resistance` 0.4 (the corvette's); `wreck_chance` 0.4, `wreck_size` 1; score 90 |
 
