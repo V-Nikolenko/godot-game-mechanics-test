@@ -1,0 +1,43 @@
+[gd_resource type="Resource" script_class="HackerFrigateConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/hacker_frigate/hacker_frigate_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 120
+collision_damage = 15
+score_value = 90
+max_speed = 230.0
+acceleration = 700.0
+max_turn_rate = 1.4
+preferred_range = 720.0
+assault_preferred_range = 520.0
+range_drift = 90.0
+min_range = 420.0
+orbit_speed_cw = 0.18
+orbit_speed_ccw = 0.3
+reversal_min = 3.0
+reversal_max = 6.0
+nose_cone_deg = 30.0
+route_cone_deg = 25.0
+route_min_speed = 80.0
+cone_escape_speed = 0.3
+break_speed = 360.0
+break_lateral_weight = 0.25
+break_burst_seconds = 0.8
+break_exit_margin = 120.0
+break_max_seconds = 3.0
+break_rearm_seconds = 1.0
+view_margin = 60.0
+engage_seconds = 9.0
+exit_speed = 300.0
+perceive_radius = 760.0
+lose_radius = 1600.0
+notice_time = 0.35
+idle_radius = 160.0
+idle_speed = 0.45
+hazard_avoidance = 0.7
+hazard_margin = 80.0
+hazard_resistance = 0.4
+wreck_chance = 0.4
+wreck_size = 1

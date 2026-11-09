@@ -641,6 +641,7 @@ const HAZARD_PROFILES := [
 	["ram_corvette", 0.5, 60.0, 0.5],
 	["twin_laser_drone", 0.6, 16.0, 0.1],
 	["laser_tender", 0.8, 24.0, 0.3],
+	["hacker_frigate", 0.7, 80.0, 0.4],
 ]
 
 
@@ -1410,3 +1411,31 @@ func test_jammers_lock_in_both_modes_and_drift_only_in_assault(case: String = us
 	var expected_drift := j.config.assault_drift_speed * 60.0 * DT if harness.is_assault else 0.0
 	assert_almost_eq(j.global_position.y - 300.0, expected_drift, 0.01, "%s: drift" % case)
 	assert_not_null(Hazards.jammer_at(j.global_position), "%s: lit after 1.0 s (the pulsed one too)" % case)
+
+# ── The Hacker Frigate (Phase 9, t8; plan §2.10) ─────────────────────────────────────────────────────────────────────
+
+const HACKER_SCENE: PackedScene = preload("res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn")
+
+
+## The same scene in both modes: it closes from far away to its held range (720 Open Space, 520 Assault) on its arc, nose on the player.
+func test_hacker_frigate_closes_to_its_held_range_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 620.0)
+	var hacker := HACKER_SCENE.instantiate() as HackerFrigate
+	var brain := hacker.get_node("Brain") as HackerFrigateBrain
+	brain.start_engaged = true
+	brain.rng_seed = 9
+	hacker.config.engage_seconds = 1000.0
+	hacker.config.nose_cone_deg = 0.0
+	hacker.config.range_drift = 0.0
+	hacker.global_position = Vector2(640.0, -240.0)  # 860 px above the player
+	harness.root.add_child(hacker)
+	hacker.set_physics_process(false)
+	for _i in 240:
+		_tick(hacker, DT)
+	var d := hacker.global_position.distance_to(harness.player.global_position)
+	assert_almost_eq(d, brain.held_range(), 40.0, "%s: on its held range" % mode)
+	assert_eq(brain.held_range(), 520.0 if harness.is_assault else 720.0, "%s: the mode's range" % mode)
+	assert_eq(brain.phase, HackerFrigateBrain.Phase.HOLD_ARC, "%s: holding the arc" % mode)
+	assert_true(hacker.is_in_group(&"enemies"), "%s" % mode)

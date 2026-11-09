@@ -94,6 +94,10 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/laser_tender/laser_tender.tscn",
 	},
 	{
+		"name": "hacker_frigate",
+		"scene": "res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn",
+	},
+	{
 		"name": "jamming_structure",
 		"scene": "res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn",
 		"no_hitbox": true,

@@ -57,9 +57,9 @@ const _DEFAULT_MASK_AFTER_READY := 1121
 
 ## `bomber`, `bonus_drone`, `razor_drone`, `gunship`, `gatling_interceptor`, `swarm_drone`,
 ## `fighter`, `ram_corvette`, `sniper`, `space_station`, `missile_corvette`, `support_ship`, `mine_layer`,
-## `defense_turret`, `power_source`, `shield_generator`, `laser_emitter`, `heavy_emplacement`, `twin_laser_drone`, `laser_tender`, `jamming_structure`, `sector_jammer`, `pulsed_jammer`. A sweep that finds fewer has broken, and every assertion below is vacuous on a
+## `defense_turret`, `power_source`, `shield_generator`, `laser_emitter`, `heavy_emplacement`, `twin_laser_drone`, `laser_tender`, `jamming_structure`, `sector_jammer`, `pulsed_jammer`, `hacker_frigate`. A sweep that finds fewer has broken, and every assertion below is vacuous on a
 ## broken sweep.
-const _MIN_ROSTER_SIZE := 23
+const _MIN_ROSTER_SIZE := 24
 
 ## Enemies whose damage/death flow diverges from the generic BaseEnemy path enough that a shared
 ## loop would either be meaningless (space_station never frees on the lethal frame) or wrong
@@ -298,6 +298,7 @@ const _AUTHORED_CONTACT_MODES := {
 	"jamming_structure": ContactProfile.Mode.NONE,
 	"sector_jammer": ContactProfile.Mode.NONE,
 	"pulsed_jammer": ContactProfile.Mode.NONE,
+	"hacker_frigate": ContactProfile.Mode.COLLISION,
 }
 
 
@@ -366,6 +367,7 @@ const _REFUSING_PHASES := {
 	"missile_corvette": ["TELEGRAPH", "SALVO"],
 	"twin_laser_drone": ["TELEGRAPH", "ADVANCE", "LAUNCHED"],
 	"laser_tender": ["LAUNCH"],
+	"hacker_frigate": ["TELEGRAPH", "PULSE"],
 }
 
 
@@ -519,7 +521,7 @@ func test_each_brain_refuses_a_tow_in_exactly_its_committed_phases() -> void:
 			assert_false(brain.accepts_tow(), "%s %s refuses a tow" % [dir, phase_name])
 			assert_false(enemy.accept_tow(Vector2(50.0, 0.0)), "%s %s: the enemy refuses too" % [dir, phase_name])
 		# One unlisted phase through the real entry code, then every other by setting the field.
-		var unlisted_name: String = "APPROACH" if phases.has("APPROACH") else ("ENTER" if phases.has("ENTER") else "FORM")
+		var unlisted_name: String = "APPROACH" if phases.has("APPROACH") else ("ENTER" if phases.has("ENTER") else ("FORM" if phases.has("FORM") else "HOLD_ARC"))
 		brain.enter_phase(phases[unlisted_name])
 		assert_true(brain.accepts_tow(), "%s %s accepts a tow" % [dir, unlisted_name])
 		for phase_name in phases:

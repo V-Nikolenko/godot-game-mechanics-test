@@ -119,6 +119,11 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/laser_tender/laser_tender_config.tres",
 	},
 	{
+		"name": "hacker_frigate",
+		"scene": "res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn",
+		"config": "res://assault/scenes/enemies/hacker_frigate/hacker_frigate_config.tres",
+	},
+	{
 		"name": "jamming_structure",
 		"scene": "res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn",
 		"config": "res://assault/scenes/enemies/jamming_structure/jamming_structure_config.tres",

@@ -3674,3 +3674,31 @@ Task plan `docs/plans/cmw5k4yjv00a6qs2xvkf73b18/3-plan.md` (review round 1 CHANG
 - `EnemyRocket._in_lit_jammer()` gates only `_steer()`; a Cluster's split still aims at its predicted point inside a field. `MissileCorvetteBrain._roll_kind()` downgrades
   after the 1-in-4 swap (rng sequence unchanged). `WaveBuilder.jammer(variant)` `push_error`s on an unknown variant and returns the local jammer.
 - The deferred t11 row "a jammer the zone reaches goes quiet" is in `test_emp_zone.gd` (centre at exactly 260 px, the `<=` edge; twin at 261 px).
+
+### Phase 9, built in t8 (the Hacker Frigate: shell and movement) (2026-11-09)
+
+- **`HackerFrigate`** (`assault/scenes/enemies/hacker_frigate/hacker_frigate.gd`, `extends BaseEnemy`), **`HackerFrigateBrain`** (`Phase { HOLD_ARC, TELEGRAPH,
+  PULSE, BREAK_OFF, DISENGAGE, IDLE, NOTICING, RETURNING }`, append-only, `phase_changed(new_phase: int)`) and flat **`HackerFrigateConfig`**; `WaveBuilder.HACKER_FRIGATE` /
+  `hacker_frigate()`. TELEGRAPH / PULSE are stubs (straight back to HOLD_ARC, or DISENGAGE when the budget expired meanwhile: the corvette's `_disengage_pending`) and
+  `_want_pulse()` returns false: **t9 fills both and adds the pulse config fields.** Task plan `docs/plans/cmw5k4yk400aiqs2xujalkqzf/` (review round 2 APPROVED).
+- **Scene:** placeholder `Hull` `Polygon2D` (no `Sprite2D` until t12, the jammer precedent; the hit flash animates `Hull:self_modulate`), a `Dish` `Node2D` (with a placeholder
+  `Antenna` polygon) carrying the **`StateLight` at `Dish/StateLight`** (accessor `state_light()`; `dish()` for t9's unfold). `ContactProfile` authored COLLISION.
+- **Orbit sign convention:** `orbit_dir` +1 grows `_orbit_angle` (clockwise on screen) and runs at `orbit_speed_cw` 0.18; -1 at `orbit_speed_ccw` 0.30. Inside a cone the
+  direction is `signf(facing.angle_to(offset))` (nearer edge; on the axis the current one). No resync of `_orbit_angle` on a forced flip (not needed: every bound met).
+- **Small additions to §2.10 (logged):** `break_exit_margin` 120 (the "min_range + 120" as a config field); `VIEW_CLAMP_PAD` 8 px — the clamp rect is
+  `view_rect().grow(-(view_margin + 8))`, because `Steering.orbit`'s 60 px/s floor wobbles a parked body ±2.6 px and the rows assert the hull inside `grow(-60)`; Assault
+  BREAK_OFF requests `Steering.orbit(pos, clamp(pos + dir · max_speed · 1.0 s), 0, 0, max_speed)`; the first break-off move is made on the entry tick; the idle ring is
+  lopsided as `idle_speed · orbit_speed(dir) / orbit_speed_ccw` (0.45 ccw, 0.27 cw); NOTICING -> HOLD_ARC (there is no APPROACH; the orbit correction closes the range).
+- **Measured cone exits (GUT, s; first snap / re-snap):** nose at 720: 0.18 far 1.55 / 1.70, 0.30 far 1.70 / 1.55, 0.18 near 1.27 / 1.27 (bound 2.2); nose at 520
+  (Assault): 1.55 / 1.63, 1.63 / 1.55, 1.27 / 1.27 (bound 1.9); route (100 px/s player): 1.25 / 1.18, 1.60 / 1.10, 0.88 / 1.03 (bound 1.8). Far-way time ≤ 0.43 s (bound 0.5).
+  Controls (cone 0) exit at nose 3.88 / 2.33 s and route 3.27 / **1.85 s** — the route 0.30 rad/s control clears its 1.8 s bound by only 0.05 s, and the route 0.30 far-way
+  time (0.43 s) is the closest main margin: a later change to `acceleration`, `max_speed` or the cone speeds should re-read those two first. Bounds kept as planned.
+- **Break-off:** a 300 px/s rusher gets to 419.1 px (BREAK_OFF the tick after the first reading inside 420; first-burst radial 322.0 px/s); a 420 px/s chase: 3.0 s
+  BREAK_OFF, the next exactly 1.0 s after.
+- **Assault exit:** worst 5.67 s over `corridor_starts()` at [230, 10] px/s (2166 runs, 0 capped; ≈ 3.2 s of probe wall time), built only by
+  `tests/helpers/ph9_exit_keys.gd::hacker_exit()` (static `prepare_probe`, memoised; `test_hacker_frigate.gd` sweeps for a hand-built call). t14's level rows use it.
+- Roster: contact damage (15), contact-hitbox and hurtbox geometry, `test_base_enemy.gd` (`_MIN_ROSTER_SIZE` 24, COLLISION, tow table `["TELEGRAPH", "PULSE"]`, the
+  unlisted-phase fallback now ends in `HOLD_ARC`), `test_enemy_dual_mode.gd` (hazard profile 0.7 / 80 / 0.4 and a closes-to-range row), and an ENEMIES_CLEARED guard row in
+  `test_engagement_deadline.gd`.
+- Test note: a row that builds a second harness world must take the first out of the tree (`test_hacker_frigate.gd::_world()`): its stub player stays in group `player`
+  and `TargetInfo.player()` reads the first it finds.
