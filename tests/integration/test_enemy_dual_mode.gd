@@ -642,6 +642,7 @@ const HAZARD_PROFILES := [
 	["twin_laser_drone", 0.6, 16.0, 0.1],
 	["laser_tender", 0.8, 24.0, 0.3],
 	["hacker_frigate", 0.7, 80.0, 0.4],
+	["hacker_disruptor", 0.7, 80.0, 0.4],
 ]
 
 
@@ -1440,3 +1441,27 @@ func test_hacker_frigate_closes_to_its_held_range_in_both_modes(mode: String = u
 	assert_eq(brain.held_range(), 520.0 if harness.is_assault else 720.0, "%s: the mode's range" % mode)
 	assert_eq(brain.phase, HackerFrigateBrain.Phase.HOLD_ARC, "%s: holding the arc" % mode)
 	assert_true(hacker.is_in_group(&"enemies"), "%s" % mode)
+
+
+## The Disruptor (Phase 9, t10) is the Hacker's scripts on its own scene and config: the same closing move to its held range in both modes.
+func test_hacker_disruptor_closes_to_its_held_range_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 620.0)
+	var hacker := (load("res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn") as PackedScene).instantiate() as HackerFrigate
+	var brain := hacker.get_node("Brain") as HackerFrigateBrain
+	brain.start_engaged = true
+	brain.rng_seed = 9
+	ShipConfig.privatise(hacker)
+	hacker.config.engage_seconds = 1000.0
+	hacker.config.nose_cone_deg = 0.0
+	hacker.config.range_drift = 0.0
+	hacker.config.first_pulse_delay = 1000.0
+	hacker.global_position = Vector2(640.0, -240.0)
+	harness.root.add_child(hacker)
+	hacker.set_physics_process(false)
+	for _i in 240:
+		_tick(hacker, DT)
+	var d := hacker.global_position.distance_to(harness.player.global_position)
+	assert_almost_eq(d, brain.held_range(), 40.0, "%s: on its held range" % mode)
+	assert_eq(hacker.config.pulse_lock_seconds, 1.5, "%s: it is the Disruptor" % mode)

@@ -17,6 +17,8 @@ extends GutTest
 
 const HARNESS: GDScript = preload("res://tests/helpers/enemy_ai_harness.gd")
 const SCENE: PackedScene = preload("res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn")
+const DISRUPTOR_SCENE: PackedScene = preload("res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn")
+const DISRUPTOR_SHIPPED: HackerFrigateConfig = preload("res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor_config.tres")  # read only
 const SHIPPED: HackerFrigateConfig = preload("res://assault/scenes/enemies/hacker_frigate/hacker_frigate_config.tres")  # read only
 const DART_SCENE: PackedScene = preload("res://assault/scenes/projectiles/hijack_pulse/hijack_pulse.tscn")
 const HOMING_SCENE: PackedScene = preload("res://assault/scenes/projectiles/missiles/homing/homing_missile.tscn")
@@ -47,6 +49,8 @@ var _clock_scaled: bool = false
 var _sandbox := SaveSandbox.new()
 var _roots: Array[Node] = []
 var _blasts: Array[Vector2] = []
+## The scene `_spawn_into` builds: the base Hacker unless a Disruptor row says otherwise.
+var _scene: PackedScene = SCENE
 
 
 ## A per-physics-tick observer for the real-physics rows: counts ticks and runs `on_tick` (added last, so it sees the tick's result).
@@ -75,6 +79,7 @@ func after_all() -> void:
 
 func before_each() -> void:
 	_blasts = []
+	_scene = SCENE
 	get_tree().node_added.connect(_on_node_added)
 
 
@@ -140,10 +145,11 @@ func _spawn(h, pos: Vector2, props: Dictionary = {}, seed: int = 1, hand: bool =
 
 
 func _spawn_into(parent: Node, pos: Vector2, props: Dictionary = {}, seed: int = 1, hand: bool = true) -> HackerFrigate:
-	var hacker := SCENE.instantiate() as HackerFrigate
+	var hacker := _scene.instantiate() as HackerFrigate
 	var brain := hacker.get_node("Brain") as HackerFrigateBrain
 	brain.start_engaged = true
 	brain.rng_seed = seed
+	ShipConfig.privatise(hacker)  # a scene-set config is shared until `_enter_tree()`
 	hacker.config.engage_seconds = 1000.0
 	for key in props:
 		hacker.config.set(key, props[key])
@@ -757,6 +763,7 @@ func _newly(mode: String, variant: String) -> Dictionary:
 	var pulse_end := -1
 	var late: Array = []
 	var darts_at_late := -1
+	var early_lock := false
 	for i in range(1, 60 * 6):
 		if i == 85:
 			for r in _salvo(p, 1):
@@ -770,6 +777,7 @@ func _newly(mode: String, variant: String) -> Dictionary:
 			rockets.append_array(late)
 			darts_at_late = brain.darts_fired
 		_tick(hacker, rockets)
+		early_lock = early_lock or (p.abilities_locked() and brain.phase in [Phase.TELEGRAPH, Phase.PULSE])
 		if pulse_end < 0 and brain.pulses_fired == 1 and brain.phase != Phase.PULSE:
 			pulse_end = i
 		for k in mini(rockets.size(), 3):
@@ -779,7 +787,7 @@ func _newly(mode: String, variant: String) -> Dictionary:
 			break
 	await get_tree().process_frame
 	return {"darts": brain.darts_fired, "claims": claims[0], "blasts": _blasts.size() - blasts0, "closest": closest, "pulse_end": pulse_end,
-		"darts_at_late": darts_at_late, "late": late.size()}
+		"darts_at_late": darts_at_late, "late": late.size(), "early_lock": early_lock}
 
 
 func test_a_salvo_launched_during_pulse_is_claimed_and_a_still_player_is_not_blasted(mode: String = use_parameters(MODES)) -> void:
@@ -1485,3 +1493,141 @@ func test_a_still_player_loses_one_18_point_blast_on_real_physics(mode: String =
 	for d in received:
 		assert_eq(d, 18, "%s: only hijack_blast_damage, never 100" % mode)
 	assert_eq(hp0 - p.health_component.current_health, 18, "%s: one blast's 18 HP (pinned), well under 3 x 18" % mode)
+
+
+# ── 23. The Disruptor variant (t10; plan §2.12) ──────────────────────────────────────────────────
+
+func test_the_disruptor_is_the_hacker_with_a_1_5_s_pulse_lock_and_a_sturdier_hull() -> void:
+	var c := DISRUPTOR_SHIPPED
+	assert_eq([c.max_health, c.score_value, c.pulse_lock_seconds], [130, 110, 1.5], "the Disruptor's own numbers")
+	assert_eq([SHIPPED.max_health, SHIPPED.score_value, SHIPPED.pulse_lock_seconds], [120, 90, 0.0], "the base Hacker's, unchanged")
+	for field in ["pulse_trigger_range", "hijack_range", "max_claims_per_pulse", "pulse_telegraph", "pulse_seconds", "preferred_range",
+			"engage_seconds", "max_speed", "collision_damage"]:
+		assert_eq(c.get(field), SHIPPED.get(field), "%s is the Hacker's" % field)
+	var d := DISRUPTOR_SCENE.instantiate() as HackerFrigate
+	add_child_autofree(d)
+	d.set_physics_process(false)
+	assert_true(d is HackerFrigate and d.brain() is HackerFrigateBrain, "the Hacker scripts")
+	assert_ne(d.config, DISRUPTOR_SHIPPED, "a private copy of its config")
+	assert_eq(d.config.pulse_lock_seconds, 1.5)
+
+
+## A Disruptor on its shipped config (only the pulse is made immediate); the player locked or not at the PULSE -> HOLD_ARC tick.
+func _disruptor_run(mode: String, end_at: float = 0.0) -> Dictionary:
+	_scene = DISRUPTOR_SCENE
+	var h = _world(mode)
+	var p := _real_player(h, mode, h.player.global_position)
+	var hacker := _spawn(h, _above(h), {"first_pulse_delay": 0.0})
+	var brain := _brain(hacker)
+	var early := false
+	var on_end := false
+	var ended := false
+	for i in 200:
+		if brain.phase == Phase.PULSE and brain._phase_time >= SHIPPED.pulse_seconds - DT - 1e-6 and end_at > 0.0:
+			p.global_position = hacker.global_position + Vector2(0.0, end_at)
+		var before := brain.phase
+		_tick(hacker, [], true)
+		if before == Phase.PULSE and brain.phase == Phase.HOLD_ARC:
+			on_end = p.abilities_locked()
+			ended = true
+			break
+		early = early or p.abilities_locked()
+	return {"early": early, "on_end": on_end, "ended": ended, "p": p}
+
+
+func test_the_disruptor_locks_on_the_pulse_end_tick_for_exactly_90_ticks(mode: String = use_parameters(MODES)) -> void:
+	var run := _disruptor_run(mode)
+	var p: PlayerBase = run["p"]
+	assert_true(run["ended"], "%s: precondition: the pulse ended" % mode)
+	assert_false(run["early"], "%s: not locked through TELEGRAPH and PULSE" % mode)
+	assert_true(run["on_end"], "%s: locked on the PULSE -> HOLD_ARC tick (a player at the held range, inside 870, with LOS)" % mode)
+	assert_eq(p.ability_lock_fill(), 1.0, "%s: held" % mode)
+	for _i in 89:
+		p._step_disruption(DT)
+	assert_true(p.abilities_locked(), "%s: still locked after 89 ticks" % mode)
+	p._step_disruption(DT)
+	assert_false(p.abilities_locked(), "%s: free after exactly 90 ticks" % mode)
+	assert_eq(p.ability_lock_fill(), 0.0, "%s: no stabilisation tail" % mode)
+	assert_true(p.allow_ability_press(), "%s: presses are accepted again" % mode)
+
+
+func test_the_disruptor_does_not_lock_a_player_beyond_870_px(mode: String = use_parameters(MODES)) -> void:
+	var far := _disruptor_run(mode, 871.0)
+	assert_true(far["ended"])
+	assert_false(far["on_end"], "%s: 871 px away at the PULSE end: not locked" % mode)
+	var near := _disruptor_run(mode, 869.0)
+	assert_true(near["ended"])
+	assert_true(near["on_end"], "%s control: 869 px away: locked" % mode)
+
+
+func test_the_base_hacker_never_locks_through_a_whole_pulse(mode: String = use_parameters(MODES)) -> void:
+	var run := _hook_run(mode, SHIPPED.pulse_lock_seconds)
+	assert_true(run["ended"], "%s: precondition" % mode)
+	assert_false(run["early"] or run["on_end"], "%s: the base Hacker never locks" % mode)
+	var p: PlayerBase = run["p"]
+	for _i in 10:
+		p._step_disruption(DT)
+	assert_false(p.abilities_locked(), "%s: nor just after" % mode)
+
+
+## A salvo 0.5 s into PULSE is claimed (three darts) and the player is never locked while it runs: the lock would have refused the launch.
+func test_a_disruptor_still_hijacks_a_salvo_launched_into_its_pulse(mode: String = use_parameters(MODES)) -> void:
+	_scene = DISRUPTOR_SCENE
+	var run: Dictionary = await _newly(mode, "still")
+	assert_eq(run["darts"], 3, "%s: three darts" % mode)
+	assert_eq(run["claims"], 3, "%s: the newly launched salvo is claimed" % mode)
+	assert_false(run["early_lock"], "%s: no lock during TELEGRAPH or PULSE" % mode)
+
+
+## (real physics) A wreck that comes between the Disruptor and the player during PULSE hides the player at its end: no lock. Control: no wreck, lock.
+func _wreck_end_run(mode: String, with_wreck: bool) -> Dictionary:
+	_scale_clock()
+	_scene = DISRUPTOR_SCENE
+	var h = _world(mode)
+	var hull := _above(h)
+	var p := _real_player(h, mode, h.player.global_position)
+	await _frames(2)
+	var hacker := _spawn(h, hull, {"max_speed": PARKED, "first_pulse_delay": 0.1}, 1, false)
+	var brain := _brain(hacker)
+	var ticker := _Ticker.new()
+	h.root.add_child(ticker)
+	var locks := [0]
+	p.ability_lock_changed.connect(func(l: bool) -> void:
+		if l:
+			locks[0] += 1)
+	await _wait_until(func() -> bool: return brain.phase == Phase.PULSE, 120)
+	assert_eq(brain.phase, Phase.PULSE, "%s: precondition: PULSE reached" % mode)
+	if with_wreck:
+		var wreck := _wreck(h, (hull + p.global_position) / 2.0)
+		wreck.set_physics_process(true)
+	await _wait_until(func() -> bool: return brain.pulses_fired >= 1 and brain.phase != Phase.PULSE, 200)
+	await _frames(1)
+	return {"locks": locks[0], "locked": p.abilities_locked(), "ended": brain.phase != Phase.PULSE}
+
+
+func test_a_wreck_between_them_at_the_pulse_end_prevents_the_lock(mode: String = use_parameters(MODES)) -> void:
+	var covered: Dictionary = await _wreck_end_run(mode, true)
+	assert_true(covered["ended"], "%s: the pulse ended" % mode)
+	assert_eq(covered["locks"], 0, "%s: behind a wreck: never locked" % mode)
+	_restore_clock()
+	var open: Dictionary = await _wreck_end_run(mode, false)
+	assert_true(open["ended"])
+	assert_gte(open["locks"], 1, "%s control: no wreck: locked" % mode)
+
+
+## Primary fire is not a lockable action: while the Disruptor's lock holds, the weapon still fires.
+func test_primary_fire_still_fires_during_the_disruptors_lock(mode: String = use_parameters(MODES)) -> void:
+	var run := _disruptor_run(mode)
+	var p: PlayerBase = run["p"]
+	assert_true(p.abilities_locked(), "%s: precondition: locked" % mode)
+	var ws := p.get_node("AttackStateMachine/WeaponState") as WeaponState
+	var shots := [0]
+	ws.child_entered_tree.connect(func(n: Node) -> void:
+		if n is Bullet:
+			shots[0] += 1)
+	Input.action_press("shoot")
+	for _i in 30:
+		ws._physics_process(DT)
+	Input.action_release("shoot")
+	assert_gt(shots[0], 0, "%s: the gun fired through the lock" % mode)
+	assert_true(p.abilities_locked(), "%s: still locked" % mode)

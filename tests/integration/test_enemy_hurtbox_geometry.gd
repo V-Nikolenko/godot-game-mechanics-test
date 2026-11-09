@@ -121,6 +121,10 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn",
 	},
 	{
+		"name": "hacker_disruptor",
+		"scene": "res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn",
+	},
+	{
 		"name": "jamming_structure",
 		"scene": "res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn",
 	},

@@ -9,8 +9,8 @@ claimed rockets fizzle), lure a claimed rocket into another enemy, or chase it d
 
 > **Build state (Phase 9, t9).** Built: the scene and shell, the flat config, `HackerFrigateBrain` (the full append-only `Phase` enum, every phase
 > played), the Hijack Pulse (TELEGRAPH, PULSE, the `HijackPulse` dart, the Disruptor hook with `pulse_lock_seconds` 0 here),
-> `WaveBuilder.hacker_frigate()`, the measured Assault exit (`tests/helpers/ph9_exit_keys.gd`). **Not yet:** the Disruptor variant's scene and config
-> (t10), the art (t12; the hull is a placeholder `Polygon2D`), hub and level placement (t13 / t14). Plan:
+> `WaveBuilder.hacker_frigate()`, the measured Assault exit (`tests/helpers/ph9_exit_keys.gd`). **Disruptor (t10):** `assault/scenes/enemies/hacker_disruptor/` reuses these scripts with `pulse_lock_seconds` 1.5 (lock at PULSE end), 130 HP, score 110; not placed. **Not yet:** the Disruptor accent art
+> , the art (t12; the hull is a placeholder `Polygon2D`), hub and level placement (t13 / t14). Plan:
 > `docs/plans/cmug23onr001pm52w9swwophy/3-plan.md` §2.10, §2.11; task plans `docs/plans/cmw5k4yk400aiqs2xujalkqzf/3-plan.md` (t8) and
 > `docs/plans/cmw5k4yk700amqs2xuk3t1oge/3-plan.md` (t9).
 

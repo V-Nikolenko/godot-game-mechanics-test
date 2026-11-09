@@ -299,6 +299,7 @@ const _AUTHORED_CONTACT_MODES := {
 	"sector_jammer": ContactProfile.Mode.NONE,
 	"pulsed_jammer": ContactProfile.Mode.NONE,
 	"hacker_frigate": ContactProfile.Mode.COLLISION,
+	"hacker_disruptor": ContactProfile.Mode.COLLISION,
 }
 
 
@@ -368,6 +369,7 @@ const _REFUSING_PHASES := {
 	"twin_laser_drone": ["TELEGRAPH", "ADVANCE", "LAUNCHED"],
 	"laser_tender": ["LAUNCH"],
 	"hacker_frigate": ["TELEGRAPH", "PULSE"],
+	"hacker_disruptor": ["TELEGRAPH", "PULSE"],
 }
 
 
