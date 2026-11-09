@@ -3772,3 +3772,32 @@ Task plan `docs/plans/cmw5k4yjv00a6qs2xvkf73b18/3-plan.md` (review round 1 CHANG
   for `emp_zone.tscn` / `EmpZone`, `emp_mine` / `EMP_MINE`, a `.tscn` `w_emp = v` with v ≠ 0, `w_emp` in a `.gd`, `sector_jammer` / `SECTOR_JAMMER` / `jammer(&"sector")`;
   each with failing synthetic boundaries. Replays (`test_level1_ph9_attacks.gd`, 16×): the Hacker reaches PULSE once with 6.1 s budget left and 3 rockets in flight,
   **2 claims in each of 5 runs**, so `claims >= 1` is asserted; a parked real fighter is locked 4.9 s after the jammer spawns, a control at x 1240 never is.
+
+## Phase 9 - as built (2026-11-10)
+
+Epic `cmug23onr001pm52w9swwophy`; plan `docs/plans/cmug23onr001pm52w9swwophy/3-plan.md` (revision 3); dossier `docs/epics-done/cmug23onr001pm52w9swwophy/REPORT.md`. The planned decisions above stand
+except where this section says otherwise; the per-task *Phase 9, built in tN* notes hold the measured figures. 2888 GUT tests, GUT about 225 s.
+
+### What was built (names later phases build on)
+- **Player hooks:** the ability lock on `PlayerBase` (H abilities and K rockets only; `apply_ability_lock`, `abilities_locked`, `ability_lock_fill`, `allow_ability_press`; seams in both ships' `_input` and
+  `RocketState._on_action`); `Hazards.jammer_at`, `HazardInfo.stabilise_seconds`, `HazardField.suppress()`; `SeekingOrdnance` retarget contract, implemented only by `homing_missile`; EventBus seams
+  `player_ability_lock_changed` and `player_ordnance_hijacked`; tells `AbilityLockStatic`, `JammedChip`, `LockGlyph`.
+- **EMP:** `EmpPulse.emit(..., targets)` bitmask; `BaseEnemy.answers_emp()` / `apply_emp()` / `is_emp_disrupted()`; the player's EMP Blast routes by `answers_emp()`; `EmpZone` (composed over a `HazardField`).
+- **Enemies:** `JammingStructure` (+ `sector_jammer/`, `pulsed_jammer/`, `JammerFieldArt`); `HackerFrigate` + `HackerFrigateBrain` + `HackerFrigateConfig`; `hacker_disruptor/` (not placed); `HijackPulse`.
+  `WaveBuilder.jammer(variant)` and `hacker_frigate()`.
+- **Placement:** hub Hacker patrol (draw 18), sector jammer beside the defended site, pulsed jammer, EMP zone; level 1 planet_approach one Hacker (42.0 s) and one local jammer (62.0 s), `EXPECTED_PH9`.
+
+### Deviations from the plan
+- **An EMP'd enemy's Assault `EngagementBudget` is frozen** for the window (research said it keeps running; 12 brains own private budgets) — bounded by the 5 s EMP Blast, with a guard that no Assault level holds an EMP source.
+- **`_finish()` on a hijacked rocket frees at the end of the frame**, not two physics ticks later (t4); the window is counted ahead of the no-brain return in `BaseEnemy` (t5).
+- **Hacker `acceleration` 700 px/s²** (the Support Ship's) instead of 260, because the cone escape has to stop a wrong-way orbit first (round-2 review B1).
+- **The dart cap counts darts launched** (t9 D1); **an EMP ends a TELEGRAPH or PULSE without the Disruptor lock** (D2); LOS rows use a real wreck (D3); the in-flight claim rows moved their start points (D4).
+- **Sniper / Fighter spot selectors skip `&"jammer"` infos** (t7, review option a).
+- **Level 1 used option A** (Hacker 42.0 s, jammer 62.0 s); B–D were not needed; no frozen constant changed.
+- **Gate time:** forecast ≤ 235.0 s; the phase ended at about 225 s.
+
+### Gaps left for later phases
+- **Hijack tuning:** a still player who fires at the Hacker loses the salvo but is never blasted (t9 measured; owner's call whether to retune `hijack_turn_rate` / `hijack_seconds` / `hijack_speed`).
+- Audio for lock, hijack and EMP (Ph17); Hacker squad tactics and marking (Ph14); Disruptor placement and difficulty numbers (Ph13 / Ph16); ship-mounted EMP (Ph10 / Ph18); EMP on structures and legacy enemies
+  (Ph10 / Ph11); enemy ships blocking LOS (Ph19 / Ph14); jammer-linked turret groups through `TurretGroup.add_power_provider()` (Ph20); placed jammers / EMP zones in Assault corridor layouts (Ph15); a module / cooldown HUD (Ph17).
+- Nothing was play-tested; all §2.19 starting values are judgement.

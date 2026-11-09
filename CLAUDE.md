@@ -141,6 +141,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   alive 62.00–89.23 s, clear of every lit column), pinned as `EXPECTED_PH9` and counted in the frozen 2.5× gate (peak stays 7 of 7.5); replayed at 16× in
   `test_level1_ph9_attacks.gd`. `test_engagement_deadline.gd` keeps the Disruptor out of `ENEMIES_CLEARED` and scans every Assault level source for an EMP zone, an EMP mine,
   a non-zero `w_emp` or a sector jammer.
+  **Phase 9 gates not named above:** `tests/integration/test_homing_missile_lifetime.gd` (the player homing missile's `ProjectileLifetime` replaces the Assault-only box, so it
+  flies anywhere in Open Space and still expires in Assault), `test_emp_blast_module.gd` (the player's EMP Blast routes by `answers_emp()`: brain-driven ships and jammers stay
+  tangible, legacy enemies keep the process-disable stun), `test_emp_zone.gd` (`EmpZone` arm / pulse cycle, `TARGET_ALL`, composed child `HazardField`), `test_ph9_sprites.gd`
+  (the Hacker, Disruptor fin, dish, three jammer towers and EMP beacon art load and are not opaque cards), plus `test_jamming_structure.gd`, `test_hacker_frigate.gd`,
+  `test_hijack_pulse.gd`, `test_seeking_ordnance.gd`, `test_enemy_emp.gd` and the lock gates above. **Scenes:** `jamming_structure/` (+ `JammerFieldArt`), `sector_jammer/`,
+  `pulsed_jammer/`, `hacker_frigate/`, `hacker_disruptor/` (not placed), `hijack_pulse/`, `hazards/emp_zone/`; builders `WaveBuilder.jammer()` / `hacker_frigate()`.
   ([PROJECT.md](docs/architecture/PROJECT.md) → Conventions → *Electronic warfare*).
 - **Tests are GUT, in `tests/`** — run them headless with
   `godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests -ginclude_subdirs -gexit`

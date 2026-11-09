@@ -166,3 +166,11 @@ per Assault life, EMP, fairness on both real player scenes and the arc through t
 Roster gates: `test_enemy_contact_damage.gd`, `test_contact_hitbox_geometry.gd`, `test_enemy_hurtbox_geometry.gd`,
 `test_base_enemy.gd` (tow table: TELEGRAPH / PULSE refuse), `test_enemy_dual_mode.gd` (hazard profile, closes to its range in both modes),
 `test_engagement_deadline.gd` (no ENEMIES_CLEARED section), plus the automatic sweeps.
+
+## Design checklist (IDEAS §6.4, recorded at the Phase 9 close)
+
+- **Approach from behind / rushing it:** inside `min_range` (420 px) the brain commits a `mover.boost` BREAK_OFF at 360 px/s, which beats a 300 px/s rusher radially and loses to the 420 px/s player cruise.
+- **Boosting away:** the player outrunning it just leaves the held 720 px (Assault 520 px) band; the Hacker follows at `max_speed` 230 and never pulses beyond `pulse_trigger_range` 870.
+- **Off-screen / out of sight:** the pulse needs line of sight (`can_see_player()`, physics step only); an asteroid or wreck between the two blocks it, an enemy ship does not (Ph19 / Ph14).
+- **Counterplay:** kill it, hit it while it charges (cancels the TELEGRAPH), hold K rockets during the pulse, shoot a hijacked rocket down with primary fire, or lure it into another enemy.
+- **Known limit:** a still player who fires at it loses the salvo but is not hit (measured in t9; hijack tuning left to the owner).
