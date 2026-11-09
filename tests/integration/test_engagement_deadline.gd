@@ -1123,3 +1123,173 @@ func test_no_enemies_cleared_section_spawns_a_hacker() -> void:
 	var probe := _cloud_descent()
 	_add_to_last_wave(probe, load(WaveBuilder.HACKER_FRIGATE) as PackedScene, 0.0)
 	assert_true(_section_has_scene(probe, WaveBuilder.HACKER_FRIGATE), "boundary: a Hacker in cloud_descent's last wave is seen")
+
+
+# ── Phase 9 t14: the level-1 placement guards (epic plan docs/plans/cmug23onr001pm52w9swwophy/3-plan.md §2.17; task plan
+# docs/plans/cmw5k4ykj00b6qs2xt4pm0wjg/3-plan.md) ──────────────────────────────────────────────────────────────────────
+#
+# Level 1 now places a Hacker and a local jammer in planet_approach (`test_level1_specialist_spawns.gd`, `EXPECTED_PH9`). The rows
+# above already keep jammers and the Hacker out of ENEMIES_CLEARED sections; these add the Disruptor, and keep the EMP zone, a placed
+# EMP mine and an EMP-laying Minefield out of every Assault level (Ph9 places none there), both in the built waves and in the sources a
+# later edit would touch, each with a failing synthetic boundary.
+
+const HACKER_DISRUPTOR := "res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn"
+const EMP_ZONE := "res://assault/scenes/hazards/emp_zone/emp_zone.tscn"
+const EMP_MINE := "res://assault/scenes/projectiles/enemy_ordnance/mines/emp_mine.tscn"
+const MINEFIELD := "res://assault/scenes/hazards/minefield/minefield.tscn"
+const LEVELS_DIR := "res://assault/scenes/levels/"
+const WAVE_BUILDER_SOURCE := "res://assault/scenes/systems/wave_builder.gd"
+## An Assault wave source authored through `WaveBuilder` outside the levels directory.
+const STATION_REINFORCEMENTS_SOURCE := "res://assault/scenes/enemies/space_station/station_reinforcements.gd"
+
+
+## A Disruptor is a Hacker (9 s budget, a measured exit, a lock at PULSE end), so it may not sit in an ENEMIES_CLEARED section either.
+func test_no_enemies_cleared_section_spawns_a_disruptor() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, HACKER_DISRUPTOR), "%s spawns a Disruptor" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+	var probe := _cloud_descent()
+	_add_to_last_wave(probe, load(HACKER_DISRUPTOR) as PackedScene, 0.0)
+	assert_true(_section_has_scene(probe, HACKER_DISRUPTOR), "boundary: a Disruptor in cloud_descent's last wave is seen")
+
+
+## No section of any end condition spawns an EMP zone or an EMP mine as a wave entry (Ph9 places neither in Assault).
+func test_no_section_spawns_an_emp_zone_or_an_emp_mine() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		checked += 1
+		for path: String in [EMP_ZONE, EMP_MINE]:
+			assert_false(_section_has_scene(section, path), "%s spawns %s" % [section.section_name, path.get_file()])
+	assert_gt(checked, 0, "sanity: level 1 has sections")
+	for path: String in [EMP_ZONE, EMP_MINE]:
+		var probe := _cloud_descent()
+		_add_to_last_wave(probe, load(path) as PackedScene, 0.0)
+		assert_true(_section_has_scene(probe, path), "boundary: %s in a wave is seen" % path.get_file())
+
+
+## Every Minefield wave entry of `section` with a non-zero `initial_props["w_emp"]`, as readable strings.
+func _emp_minefield_entries(section: LevelSection) -> Array[String]:
+	var out: Array[String] = []
+	for w in section.waves:
+		var wave: WaveResource = w
+		for e in wave.entries:
+			var entry: SpawnEntryResource = e
+			if entry.ship_scene == null or entry.ship_scene.resource_path != MINEFIELD:
+				continue
+			var w_emp := float(entry.initial_props.get("w_emp", 0.0))
+			if w_emp != 0.0:
+				out.append("%s @ %.1f s: a minefield with w_emp %.2f" % [section.section_name, wave.trigger_time, w_emp])
+	return out
+
+
+## A copy of the section's last wave with one extra Minefield entry whose `initial_props` are `props`.
+func _add_minefield_to_last_wave(section: LevelSection, props: Dictionary) -> void:
+	_add_to_last_wave(section, load(MINEFIELD) as PackedScene, 0.0)
+	var last := _last_wave(section)
+	(last.entries[last.entries.size() - 1] as SpawnEntryResource).initial_props = props
+
+
+func test_no_section_spawns_an_emp_laying_minefield() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		checked += 1
+		assert_eq(_emp_minefield_entries(section), [] as Array[String], "%s lays EMP mines" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has sections")
+	var emp := _cloud_descent()
+	_add_minefield_to_last_wave(emp, {"w_emp": 0.15})
+	assert_eq(_emp_minefield_entries(emp).size(), 1, "boundary: a minefield entry with w_emp 0.15 is flagged")
+	var plain := _cloud_descent()
+	_add_minefield_to_last_wave(plain, {"w_emp": 0.0})
+	assert_eq(_emp_minefield_entries(plain).size(), 0, "boundary: a minefield entry with w_emp 0.0 is not")
+
+
+## `{ path: text }` of every `.tscn` / `.gd` under `res://assault/scenes/levels/` (recursive), the space station's reinforcement waves and
+## `wave_builder.gd`, read from disk.
+func _assault_level_sources() -> Dictionary:
+	var out: Dictionary = {}
+	var dirs: Array[String] = [LEVELS_DIR]
+	while not dirs.is_empty():
+		var dir_path: String = dirs.pop_back()
+		var dir := DirAccess.open(dir_path)
+		if dir == null:
+			continue
+		for sub in dir.get_directories():
+			dirs.append(dir_path.path_join(sub))
+		for file in dir.get_files():
+			if file.ends_with(".tscn") or file.ends_with(".gd"):
+				out[dir_path.path_join(file)] = FileAccess.get_file_as_string(dir_path.path_join(file))
+	for path: String in [STATION_REINFORCEMENTS_SOURCE, WAVE_BUILDER_SOURCE]:
+		out[path] = FileAccess.get_file_as_string(path)
+	return out
+
+
+## Pure: the EMP and sector-jammer placements in `files` (`{ path: text }`), as readable strings. `wave_builder.gd` defines every path
+## constant, so it is read for `w_emp` only (a builder helper that lays EMP mines); every other file is a level source and is flagged for
+## an EMP zone (`emp_zone.tscn` / `EmpZone`), an EMP mine (`emp_mine` / `EMP_MINE`), an EMP-laying Minefield (a `.tscn` line `w_emp = v`
+## with v != 0, or `w_emp` anywhere in a `.gd`) or a sector jammer (`sector_jammer`, `SECTOR_JAMMER` or a `jammer(&"sector")` call).
+func _level_source_violations(files: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var w_emp_line := RegEx.create_from_string("(?m)^\\s*w_emp\\s*=\\s*([-+0-9.eE]+)")
+	var sector_call := RegEx.create_from_string("jammer\\(\\s*&?\"sector\"")
+	for path: String in files:
+		var text: String = files[path]
+		if path.ends_with("wave_builder.gd"):
+			if text.contains("w_emp"):
+				out.append("%s: names w_emp" % path)
+			continue
+		for needle: String in ["emp_zone.tscn", "EmpZone", "emp_mine", "EMP_MINE", "sector_jammer", "SECTOR_JAMMER"]:
+			if text.contains(needle):
+				out.append("%s: %s" % [path, needle])
+		if sector_call.search(text) != null:
+			out.append("%s: a jammer(&\"sector\") call" % path)
+		if path.ends_with(".tscn"):
+			for m in w_emp_line.search_all(text):
+				if float(m.get_string(1)) != 0.0:
+					out.append("%s: w_emp = %s" % [path, m.get_string(1)])
+		elif text.contains("w_emp"):
+			out.append("%s: names w_emp" % path)
+	return out
+
+
+func test_no_assault_level_source_places_emp_or_a_sector_jammer() -> void:
+	var files := _assault_level_sources()
+	var level_files := files.keys().filter(func(p: String) -> bool: return p.begins_with(LEVELS_DIR))
+	gut.p("scanned %d Assault level sources (+ station reinforcements, wave_builder.gd)" % level_files.size())
+	assert_gte(level_files.size(), 7, "sanity: the scan read the level directory")
+	assert_true(files.has(STATION_REINFORCEMENTS_SOURCE) and (files[STATION_REINFORCEMENTS_SOURCE] as String).length() > 0,
+		"sanity: the station reinforcement waves were read")
+	assert_true((files[WAVE_BUILDER_SOURCE] as String).contains("SECTOR_JAMMER"),
+		"sanity: wave_builder.gd was read (it defines SECTOR_JAMMER, which is why it is read for w_emp only)")
+	assert_eq(_level_source_violations(files), [] as Array[String], "an Assault level places EMP or a sector jammer")
+
+
+## Boundaries: each synthetic source the scan must reject, and the near misses it must pass.
+func test_synthetic_level_sources_with_emp_or_a_sector_jammer_fail_the_scan() -> void:
+	var lvl := LEVELS_DIR + "synthetic/"
+	var rejected := {
+		"a .tscn with w_emp = 0.15": {lvl + "a.tscn": "[node name=\"Minefield\" parent=\".\"]\nw_emp = 0.15\n"},
+		"a .tscn instancing emp_mine.tscn": {lvl + "b.tscn": "[ext_resource type=\"PackedScene\" path=\"%s\" id=\"1\"]\n" % EMP_MINE},
+		"a .gd naming EmpZone": {lvl + "c.gd": "var zone := EmpZone.new()\n"},
+		"a .gd naming w_emp": {lvl + "d.gd": "b.minefield().prop(\"w_emp\", 0.0)\n"},
+		"a wave_builder.gd naming w_emp": {WAVE_BUILDER_SOURCE: "func emp_field() -> SpawnConfig: return minefield().prop(\"w_emp\", 1.0)\n"},
+		"a .gd naming SECTOR_JAMMER": {lvl + "e.gd": "b.spawn(WaveBuilder.SECTOR_JAMMER)\n"},
+		"a .gd calling jammer(&\"sector\")": {lvl + "f.gd": "b.jammer(&\"sector\").at(0, -220)\n"},
+		"a .gd naming EMP_MINE": {lvl + "g.gd": "var s := EnemyMineScenes.EMP_MINE\n"},
+		"station reinforcements naming emp_zone.tscn": {STATION_REINFORCEMENTS_SOURCE: "load(\"%s\")\n" % EMP_ZONE},
+	}
+	for label: String in rejected:
+		assert_gt(_level_source_violations(rejected[label]).size(), 0, "boundary: %s fails the scan" % label)
+	var passed := {
+		"a .tscn with w_emp = 0.0": {lvl + "h.tscn": "[node name=\"Minefield\" parent=\".\"]\nw_emp = 0.0\n"},
+		"a .gd calling jammer(&\"pulsed\")": {lvl + "i.gd": "b.jammer(&\"pulsed\").at(0, -220)\n"},
+		"wave_builder.gd defining SECTOR_JAMMER": {WAVE_BUILDER_SOURCE: "const SECTOR_JAMMER := \"res://x.tscn\"\n"},
+	}
+	for label: String in passed:
+		assert_eq(_level_source_violations(passed[label]), [] as Array[String], "boundary: %s passes the scan" % label)

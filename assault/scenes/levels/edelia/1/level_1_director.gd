@@ -33,6 +33,14 @@
 ## (`test_ph8_static_members_clear_every_lit_column`); none of the three may go into an
 ## ENEMIES_CLEARED section (persistent fire, a held wall); test_engagement_deadline.gd gates that and test_level1_ph8_attacks.gd replays
 ## each attack inside its budget.
+##
+## The Phase 9 lines (t14: `b.hacker_frigate()` in Planet Approach's 42.0 s wave, `b.jammer()` (local) in its 62.0 s wave) follow it too:
+## inside existing waves, no rail, pinned as `EXPECTED_PH9` and counted in the same density gate. Their lives never overlap (the Hacker is
+## gone at 58.3 s, the jammer arrives at 62.0 s: a jammed player cannot launch, so a hijack would have nothing to take), both end before
+## the section's 98.0 s peak, and the world-anchored jammer drifts at x 480, clear of every column lit while it lives
+## (`test_ph8_static_members_clear_every_lit_column`). No jammer, Hacker, Disruptor or EMP zone may go into an ENEMIES_CLEARED section,
+## and no sector jammer, EMP zone, placed EMP mine or EMP-laying Minefield into any Assault level (test_engagement_deadline.gd);
+## test_level1_ph9_attacks.gd replays the Hacker's pulse and the jammer's lock.
 extends Node
 
 const _MISSION_NUMBER: int = 1
@@ -708,6 +716,7 @@ func _build_section_2() -> LevelSection:
 		# 42.0 s — drone cluster from upper-right
 		b.wave(42.0, [
 			b.drone().formation(b.cluster_formation(3, 32)).at(140, -400),
+			b.hacker_frigate().at(-400, -180),  # Phase 9 t14: enters from the left; gone (58.3 s) before the jammer arrives; never in an ENEMIES_CLEARED section
 		]),
 
 		# 44.0 s — sniper duo + drone screen (extended)
@@ -756,6 +765,7 @@ func _build_section_2() -> LevelSection:
 		b.wave(62.0, [
 			b.drone().at(-150, -400).squad(&"w19"),
 			b.drone().at( 150, -400).delay(0.3).squad(&"w19"),
+			b.jammer().at(-80, -220),  # Phase 9 t14: world-anchored at x 480, clear of every column lit while it drifts; lives never overlap the Hacker's
 		]),
 
 		# 65.0 s — 2 snipers from top corners (+ ram chaser)

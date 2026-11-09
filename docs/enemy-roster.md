@@ -502,6 +502,7 @@ b.laser_tender().at(0, -230)  # 100 px above the view
 **Scenes:** `jamming_structure/jamming_structure.tscn` (HP 140, field r 240, always on, 0.75 s), `pulsed_jammer/pulsed_jammer.tscn` (HP 160, r 300, 0.8 / 3.0 / 2.5 s cycle, 0.75 s), `sector_jammer/sector_jammer.tscn` (HP 260, r 640, always on, 1.25 s); score 60 / 80 / 120  
 **Movement:** none (static structure); drifts down at 60 px/s in Assault and frees below the world rect. **Shoots:** no; contact damage 0.  
 **Effect:** inside a lit field the player's H abilities and K rockets are refused (movement, boost, dash and the main gun never are), lifting `stabilise_seconds` after the player leaves or the field goes dark. Enemy ships ignore the field; seeking rockets fly straight in it; a Missile Corvette fires Dumb salvos at a player inside one. An EMP (the player's EMP Blast, from outside the field) switches the field off for its window; the tower stays shootable.  
+**Level 1:** one local jammer in Planet Approach's 62.0 s wave at world x 480, after the Hacker has gone (`EXPECTED_PH9`).  
 **Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). See [ENEMY.md](../assault/scenes/enemies/jamming_structure/ENEMY.md).
 
 ```gdscript
@@ -513,7 +514,8 @@ b.jammer(&"pulsed").at(-120, -200)  # world x 400 whatever the camera pan
 **Scene:** `hacker_frigate/hacker_frigate.tscn` (HP 120, contact 15, score 90)  
 **Movement:** AI (`HackerFrigateBrain` + `EnemyMover`, no `.move()`): orbits the player at 720 px (Assault 520) on a lopsided 0.18 / 0.30 rad/s arc, slides out of the player's nose and flight-line cones, breaks off when the player comes inside 420 px. Assault: stays on screen for 9 s, then leaves (measured exit ≤ 5.67 s). **Shoots:** no gun. Its **Hijack Pulse** (a 0.9 s charge any hit cancels, then a 1.6 s window every 6–8 s) sends up to 3 control darts at the player's homing rockets within 650 px and turns them back on the player; one pulse per Assault life.  
 **Hub:** one Hacker patrols the sector hub (draw 18, 2600 ring at 67.5 degrees); a sector jammer guards the derelict site, a pulsed jammer sits near the hazards and an EMP zone in the tactical space (see `open_space.md`).  
-**Never place it in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). See [ENEMY.md](../assault/scenes/enemies/hacker_frigate/ENEMY.md).
+**Level 1:** one Hacker in Planet Approach's 42.0 s wave, entering from the left (`EXPECTED_PH9`).  
+**Never place it (or the Disruptor) in an `ENEMIES_CLEARED` section** (guarded by `test_engagement_deadline.gd`). See [ENEMY.md](../assault/scenes/enemies/hacker_frigate/ENEMY.md).
 
 ```gdscript
 b.hacker_frigate().at(-200, -230)  # 100 px above the view
