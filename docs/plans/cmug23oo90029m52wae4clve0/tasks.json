@@ -2,22 +2,20 @@
   "tasks": [
     {
       "key": "t1",
-      "title": "The test gate gets back at least 10 seconds of headroom so the heavy-ship phase fits under its time ceiling",
-      "description": "Gate room before any Phase 10 code lands (plan §2.15). GUT was about 225 s at the Phase 9 close against the 240 s ceiling; this phase needs about 20 s. Profile with scripts/gate-time.sh (15 slowest files), then recover time only by the tests/README.md rules: real-physics rows on the 8x clock, replays computed once and shared (before_all / memo keyed by inputs), per-tick bookkeeping no assertion reads dropped, or a production speed-up that is bit-identical (the Phase 8 t1 FighterBrain.tick precedent). Never lower a tick count, duration, sample count or start grid, widen a bound or remove an assertion. Record before / after and the Phase 10 per-task allotments in tests/README.md -> Gate time. Touches test files and possibly hot production code paths only for bit-identical speed-ups.",
-      "acceptanceCriteria": "- scripts/gate-time.sh GUT Time is at least 10 s lower than the measured before figure (two runs reported), with the same test count and every test passing.\n- scripts/check-test-leaks.sh is clean.\n- tests/README.md has the before / after row and the Phase 10 allotment line (t2 1.5, t3 0.8, t4 2.0, t5 2.5, t6 2.0, t7 2.0, t8 2.5, t9 0.3, t10 0.8, t11 3.5, t12 2.5, t13 0).\n- If 10 s cannot be found without breaking a rule, the run ends with Result: ESCALATE and the profile.",
+      "title": "The test gate gets back at least 12 seconds of headroom so the heavy-ship phase fits under its time ceiling",
       "type": "chore",
       "complexity": "medium",
       "effort": "xhigh",
       "dependsOn": [],
       "planSections": [
         "2.15"
-      ]
+      ],
+      "description": "Gate room before any Phase 10 code lands (plan §2.15). GUT was about 225 s at the Phase 9 close against the 240 s ceiling; this phase's allotments total 21.5 s. Profile with scripts/gate-time.sh (15 slowest files, two runs), then recover time only by the tests/README.md rules: real-physics rows on the 8x clock, replays computed once and shared (before_all / memo keyed by inputs), per-tick bookkeeping no assertion reads dropped, or a bit-identical production speed-up (the Phase 8 t1 FighterBrain.tick precedent). Never lower a tick count, duration, sample count or start grid, widen a bound or remove an assertion. Record before / after (two runs each) and the Phase 10 allotments and noise rule in tests/README.md -> Gate time.",
+      "acceptanceCriteria": "- Mean of two scripts/gate-time.sh GUT Time runs is at least 12 s below the mean of two before runs (target 15 s), with the same test count and every test passing.\n- scripts/check-test-leaks.sh is clean.\n- tests/README.md has the before / after rows, the Phase 10 allotment line (t2 2.0, t3 0.8, t4 3.5, t5 2.5, t6 2.0, t7 1.8, t8 2.2, t9 0.4, t10 0.8, t11 3.0, t12 2.5, t13 0) and the noise rule (two-run mean; escalate past 237 s or past 1.5x a task's own allotment).\n- If 12 s cannot be found without breaking a rule, the run ends with Result: ESCALATE and the profile."
     },
     {
       "key": "t2",
       "title": "Large enemies can be built from destructible parts that each take their own damage, can be armoured or shielded, and stay on the hull as dark wreckage when destroyed",
-      "description": "Build the reusable part framework (plan §2.1, §2.2): global/components/enemy_module.gd (EnemyModule: Role enum, exports, the cached deflect decision, damage only through HurtBox.received_damage so a local EnemyShield works, killing shot consumed under both callback orders, destruction leaves wreckage in the tree with wreck texture and closed hurtbox, mounts powered down, signals with arity) and global/components/modular_hull.gd (ModularHull: collects Modules/*, hull_share forwarding to the host Health, module_destroyed / module_damaged, queries; build_mounts() is added in t3). The player's beam (assault/scenes/player/weapons/behaviors/beam_behavior.gd) and plasma nova (global/ship_modules/plasma_nova_module.gd) add group enemy_parts to their targets. A fixture host tests/helpers/fixture_modular_host.tscn proves it in both harnesses. No shipped enemy uses it yet.",
-      "acceptanceCriteria": "- tests/integration/test_enemy_module.gd covers every §2.1 / §2.2 row (consume / deflect / type filter, killing shot under both orders, wreckage stays and passes later bullets, indestructible part, hull_share forwarding, local shield on a module hurtbox, beam and nova reach parts, enemy beam and LaserRay kill a part, destroyed_count, signals once).\n- Every existing beam / nova / station / plate test is unchanged and green.\n- Gate time within the 1.5 s allotment, row added to tests/README.md; DECISIONS.md gets the t2 notes.",
       "type": "feature",
       "complexity": "large",
       "effort": "xhigh",
@@ -29,13 +27,13 @@
         "2.1",
         "2.2",
         "2.15"
-      ]
+      ],
+      "description": "Build the reusable part framework (plan §2.1, §2.2 without build_mounts): global/components/enemy_module.gd (EnemyModule: Role / VisualState enums, exports, own DefenseProfile applied to its HurtBox, max_health 0 skips Health, the cached deflect decision, damage only through HurtBox.received_damage so a local EnemyShield works and a non-vulnerable part ignores direct emitters, killing shot consumed under both callback orders, wreckage stays with the wreck texture / tint on the Sprite child and a closed hurtbox, HomingPoint marker, signals with arity) and global/components/modular_hull.gd (ModularHull: collects Modules/*, hull_share forwarding, module_destroyed / module_damaged, queries). The player's beam (assault/scenes/player/weapons/behaviors/beam_behavior.gd) and plasma nova (global/ship_modules/plasma_nova_module.gd, map-wide) add group enemy_parts to their targets; enemy energy weapons (EnergyHitScan) stay unchanged and never reach parts. Fixture host tests/helpers/fixture_modular_host.tscn (armoured root, modules Open / Locked / Laser). No shipped enemy uses it yet.",
+      "acceptanceCriteria": "- tests/integration/test_enemy_module.gd covers the §2.1 rows and the §2.2 t2 rows: consume / deflect / type filter, killing shot under both orders, wreckage stays (and keeps its tint under a beam), indestructible part, hull_share forwarding, per-module DefenseProfile applied, local shield on a module hurtbox, beam and nova damage an open part and leave a locked part unchanged, nova reaches every live part on the map, a LaserRay kills an open part and spares a locked one, an EnergyRing and an EnemyBeam leave every part unchanged, destroyed_count / live / signals once.\n- Mount rows (build_mounts, unique pool names, mounts powered down) are NOT in this task (t3).\n- Every existing beam / nova / station / plate / EnemyShield test is unchanged and green.\n- Gate time: own files within 2.0 s, row added to tests/README.md; DECISIONS.md gets the t2 notes."
     },
     {
       "key": "t3",
       "title": "Turrets can be mounted on ships with limited firing arcs, and a new heavy cannon fires the Heavy Shell for the first time",
-      "description": "Plan §2.3: extract TurretMountBuilder (assault/scenes/enemies/defense_turret/mounts/turret_mount_builder.gd) from DefenseTurret._build_mounts() with no behaviour change; add TurretMount.traverse_deg (default 360, bit-identical) and TurretMountSlot.traverse_deg_override; append Variant.HEAVY_CANNON (heavy_cannon_mount.tscn on BurstCannonMount, round_scene EnemyRounds.HEAVY_SHELL) to TurretMount / TurretMountScenes; add ModularHull.build_mounts() and EnemyModule.attach_mount() so module mounts are built with pools as host root children and powered down when their module dies. The round lifetime sweep learns the heavy cannon's round speed.",
-      "acceptanceCriteria": "- tests/integration/test_turret_mount_traverse.gd: arc clamp over 600 ticks, no round fired outside the arc, a 360 mount's 10 s trace equals the recorded pre-change trace, builder parity for DefenseTurret and the heavy emplacement, HEAVY_CANNON fires two Heavy Shells at 220 px/s after 0.7 s.\n- Every Phase 8 turret, heavy emplacement, turret group and laser fence test is green unchanged; mount variant sweeps include HEAVY_CANNON.\n- A module-attached mount is UNPOWERED after its module is destroyed (row in test_enemy_module.gd).\n- Gate time within 0.8 s; DECISIONS.md t3 notes.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
@@ -47,13 +45,13 @@
         "2.2",
         "2.3",
         "2.15"
-      ]
+      ],
+      "description": "Plan §2.3 and the §2.2 t3 part: extract TurretMountBuilder (assault/scenes/enemies/defense_turret/mounts/turret_mount_builder.gd) from DefenseTurret._build_mounts() with no behaviour change; add TurretMount.traverse_deg (default 360, bit-identical) and TurretMountSlot.traverse_deg_override, with limited mounts working in offsets from rest and turning linearly along the arc (never the shortest way through the blocked sector); append Variant.HEAVY_CANNON (heavy_cannon_mount.tscn on BurstCannonMount, round_scene EnemyRounds.HEAVY_SHELL) to TurretMount / TurretMountScenes; add ModularHull.build_mounts() (returns the next running pool index) and EnemyModule.attach_mount() so module mounts are built with pools as host root children and powered down when their module dies. The round lifetime sweep learns the heavy cannon's round speed.",
+      "acceptanceCriteria": "- tests/integration/test_turret_mount_traverse.gd: 120 degree arc clamp over 600 ticks, no round fired outside the arc, a 300 degree mount stays within +-150 degrees of rest on every tick while the target circles through its blocked sector, a 360 mount's 10 s trace equals the recorded pre-change trace, builder parity for DefenseTurret and the heavy emplacement, HEAVY_CANNON fires two Heavy Shells at 220 px/s after 0.7 s.\n- test_enemy_module.gd t3 rows: unique pool names over 3 modules x 2 slots plus a continuing hull index; a module's mounts are UNPOWERED from its destroy call and never fire in 60 s.\n- Every Phase 8 turret, heavy emplacement, turret group and laser fence test is green unchanged; mount variant sweeps include HEAVY_CANNON.\n- Gate time within 0.8 s; DECISIONS.md t3 notes."
     },
     {
       "key": "t4",
       "title": "The Heavy Gunship stops parking at the top of the screen: it keeps its distance, turns a battery side-on, sweeps wide arcs, boosts away when rushed, and shows its other side when a battery dies",
-      "description": "Plan §2.4 and §2.11: git mv assault/scenes/enemies/gunship -> heavy_gunship; HeavyGunship (BaseEnemy) + HeavyGunshipBrain + EnemyMover + ModularHull with six EnemyModules (two batteries, nose cannon, rear missiles, two vents) and their mounts; flat HeavyGunshipConfig (old fields deleted); APPROACH / BROADSIDE / BREAK_AWAY, hub idle through AnchorIdle, Assault corridor + EngagementBudget 14 s + DISENGAGE + attack gate; no camera hold-y, no x-only tracking, no off-the-top retreat. WaveBuilder.heavy_gunship() replaces gunship(). The corridor exit is measured through new tests/helpers/ph10_exit_keys.gd. Move every legacy-subject row off the gunship (§2.4.6), flip the Support Ship ward row, rename roster entries. VENT and EMERGENCY are stubs here (t5). Placeholder art may be kept until t9.",
-      "acceptanceCriteria": "- tests/integration/test_heavy_gunship.gd rows of §2.4.5 green in both harnesses, including the broadside angle, the side swap when a battery dies (module death changes movement), nose-to-player with both batteries dead, break-away, the Assault never-parks row and the budget exit.\n- Roster gates (contact damage 30, contact / hurtbox geometry, config isolation, base enemy, dual mode, single writer, signal arity) green with heavy_gunship; legacy rows moved to the Bonus Drone as §2.4.6 says.\n- No file references gunship/gunship.tscn or WaveBuilder.GUNSHIP; level_1_director.gd calls b.heavy_gunship() in place of b.gunship() with every row otherwise unchanged (the rails stay until t11 removes them).\n- Gate time within 2.0 s; DECISIONS.md t4 notes.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
@@ -69,13 +67,13 @@
         "2.11",
         "2.15",
         "2.16"
-      ]
+      ],
+      "description": "Plan §2.4 and §2.11: git mv assault/scenes/enemies/gunship -> heavy_gunship; HeavyGunship (BaseEnemy) with a RECTANGLE body / root hurtbox / contact box, HeavyGunshipBrain, EnemyMover, ModularHull with six EnemyModules (two batteries, nose cannon, rear missiles, two vents) whose hurtboxes are flush with the hull edges (the flush-edge rule) and carry HomingPoint markers; mounts via build_mounts; flat HeavyGunshipConfig (old fields deleted, explicit hazard profile 1.0 / 90 / 0.6); APPROACH / BROADSIDE / BREAK_AWAY, hub idle through AnchorIdle, Assault corridor + EngagementBudget 9.0 s + DISENGAGE exit (300 px/s, 240 px/s2 written onto the mover) + attack gate; no camera hold-y, no x-only tracking, no off-the-top retreat. WaveBuilder.heavy_gunship() / HEAVY_GUNSHIP replace gunship() / GUNSHIP and every caller moves: level_1_director.gd's four rows (rails kept until t11), level_2_waves.gd:34 (rail kept) and test_station_reinforcements.gd:363. The corridor exit is measured once through new tests/helpers/ph10_exit_keys.gd. Move every legacy-subject row off the gunship (§2.4.6), flip the Support Ship ward row, rename roster entries. VENT and EMERGENCY are stubs here (t5). Placeholder art may be kept until t9.",
+      "acceptanceCriteria": "- tests/integration/test_heavy_gunship.gd rows of §2.4.5 green in both harnesses: the flush-edge static row, every part reachable by a real bullet from its exposed edge (part and hull each damaged once) and a homing rocket steering into BatteryPort, range keeping, the broadside angle, the side swap when a battery dies (module death changes movement), nose-to-player with both batteries dead, break-away, the Assault never-parks row, the attack gate and the budget exit.\n- Roster gates (contact damage 30, contact / hurtbox geometry, config isolation, base enemy, dual mode incl. the HAZARD_PROFILES row, single writer, signal arity) green with heavy_gunship; legacy rows moved to the Bonus Drone as §2.4.6 says.\n- No file references gunship/gunship.tscn, WaveBuilder.GUNSHIP or gunship(); level_2.tscn still loads (project-load gate green); test_station_reinforcements.gd asserts HEAVY_GUNSHIP.\n- Every level-1 gate and replay green, including test_level1_ph8_attacks.gd (its deep_space 3.0 s slice now replays the AI 3.5 s heavy), the fire-density schedule row, the specialist and drone gates.\n- Gate time within 3.5 s (the exit probe memoised); DECISIONS.md t4 notes with the measured exit."
     },
     {
       "key": "t5",
       "title": "The Heavy Gunship fights in phases: it overheats and has to vent through glowing weak points, then boosts away firing rear missiles while staying in the fight, and a destroyed gun never fires again",
-      "description": "Plan §2.5 and §2.9: hull phases CONTROLLED / OVERHEAT / EMERGENCY from the root Health (one-way); heat per burst and the 2.2 s VENT (all mounts hold fire, vents vulnerable and orange, hull_share 1.0 doubles damage); EMERGENCY boosts every 5 s and opens the rear Missiles mount at a pursuer behind it, never despawning on health in Open Space; the shipped local-module EnemyShield on the nose cannon (120 degree frontal arc, tracks the nose); battery / cannon / missiles loss removes that attack for good. State lights per §2.9.",
-      "acceptanceCriteria": "- test_heavy_gunship.gd phase rows of §2.5 green in both harnesses: band thresholds and one-way entry, no round during VENT, vents vulnerable only while venting (2x hull damage open, no vent damage closed), emergency boosts and rear missiles only in their window at a pursuer, alive and in the encounter 60 s after EMERGENCY in Open Space, a destroyed battery / missile pod never fires again, the cannon shield absorbs frontal and not flank shots, Heavy Shells at 220 px/s.\n- Gate time within 2.5 s; DECISIONS.md t5 notes.",
       "type": "feature",
       "complexity": "large",
       "effort": "xhigh",
@@ -83,6 +81,7 @@
         "t4"
       ],
       "planSections": [
+        "1.3",
         "2.1",
         "2.2",
         "2.4",
@@ -90,13 +89,13 @@
         "2.9",
         "2.15",
         "2.16"
-      ]
+      ],
+      "description": "Plan §2.5 and §2.9: hull phases CONTROLLED / OVERHEAT / EMERGENCY from the root Health (one-way); heat per finished burst and the 2.2 s VENT (guns ticked with can_fire = mount.is_committed() so a started burst finishes and none starts; vents vulnerable and orange; an open vent doubles hull damage through hull_share 1.0, a closed one deflects); EMERGENCY boosts every 5 s and opens the rear Missiles mount at a pursuer behind it, never despawning on health in Open Space; in Assault the Missiles mount is open only while the budget runs (closed at DISENGAGE; rockets persist only up to their scene max_time); the shipped local-module EnemyShield on the nose cannon (120 degree frontal arc, tracks the nose, protects only the cannon's own HP); battery / cannon / missiles loss removes that attack for good. Own-rocket self-hits are accepted and measured; if a row shows one, add the launcher exemption to enemy_rocket.gd and log it. State lights per §2.9.",
+      "acceptanceCriteria": "- test_heavy_gunship.gd phase rows of §2.5 green in both harnesses: band thresholds and one-way entry; a burst in progress at VENT start finishes, then no round until VENT ends; vents vulnerable only while venting (real bullets: 2x hull damage open, 1x and no vent damage closed; the beam and a nova against a closed vent deal and forward nothing); emergency boosts and rear missiles only in their window at a pursuer; alive and in the encounter 60 s after EMERGENCY in Open Space with no self-hit from its own rockets; in Assault no rocket after the budget expires; a destroyed battery / missile pod never fires again; the cannon shield absorbs frontal and not flank shots and the hull still takes the frontal hit; Heavy Shells at 220 px/s.\n- DECISIONS.md t5 notes record the Assault missile closure as the bounded exception to the persistent-ordnance rule.\n- Gate time within 2.5 s."
     },
     {
       "key": "t6",
       "title": "A Carrier appears: an armoured hull with separate engines, guns, hangars and core; losing engines makes it turn slowly and list, and its core opens only after three parts die",
-      "description": "Plan §2.6 and §2.11: assault/scenes/enemies/carrier/ (Carrier, CarrierBrain, flat CarrierConfig, ENEMY.md), seven EnemyModules under Modules, ModularHull, armoured hull (deflects_hit / is_armored true, refuses damage, homing_point to the nearest live part), core exposure after core_exposure_count (3) outer parts, death through the Core module, ARMOR contact with shove, accepts_ward() false honoured by SupportShipBrain's ward filter. Movement: Open Space SCREEN band with leash and broadside facing, CRUISE idle, engine-loss turn / speed factors and list; Assault CROSS at a constant 70 px/s nose-down with engine-limited lateral sway, world_anchored_x, freed below the projectile rect. WaveBuilder.carrier(). Weapons and hangars come in t7 / t8 (empty slots here).",
-      "acceptanceCriteria": "- tests/integration/test_carrier.gd rows of §2.6.4 green in both harnesses: hull refuses bullets, beam and nova; core deflects with 0-2 parts destroyed (three combinations) and takes damage from the frame after the third; core death kills the carrier; engine loss slows turning (>= 1.8x / >= 5x) and lists; Assault sway caps 40 / 20 / 4 px/s; SCREEN band and leash; four wrecks stay until death and the silhouette changes; constant crossing speed, never rotated, freed below the rect; ARMOR shove and 15 contact damage.\n- Roster gates green with carrier; support never wards it.\n- Gate time within 2.0 s; DECISIONS.md t6 notes.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
@@ -109,37 +108,40 @@
         "2.2",
         "2.3",
         "2.6",
+        "2.9",
         "2.11",
         "2.15",
         "2.16"
-      ]
+      ],
+      "description": "Plan §2.6 and §2.11: assault/scenes/enemies/carrier/ (Carrier, CarrierBrain, flat CarrierConfig with an explicit hazard profile 0.5 / 120 / 1.0 and module_x_extent 100, ENEMY.md), seven EnemyModules under Modules within x +-100 px of the centre, ModularHull, armoured hull (deflects_hit / is_armored true, refuses damage, armor_deflected signal, homing_point to the nearest live vulnerable part), core exposure after core_exposure_count (3) outer parts, death through the Core module, ARMOR contact with shove, accepts_ward() false honoured by SupportShipBrain's ward filter. Movement: Open Space SCREEN band with leash and broadside facing, CRUISE idle, PANIC retreat clamped by the leash, engine-loss turn / speed factors and list; Assault CROSS at a constant 90 px/s nose-down with mover avoidance 0, assault_max_speed 110, sway 30 px/s x engine factor leashed to +-30 px of the anchored spawn x, an EMP that keeps the crossing (on_emp_started boost for the window read through a new BaseEnemy.emp_seconds_left()), world_anchored_x, freed below the projectile rect. WaveBuilder.carrier() / CARRIER. Weapons and hangars come in t7 / t8 (empty slots here).",
+      "acceptanceCriteria": "- tests/integration/test_carrier.gd rows of §2.6.4 green in both harnesses: module x extent; hull refuses bullets, beam and nova; core refuses bullets, the beam and a nova with 0-2 parts destroyed (three combinations) and takes all three from the frame after the third; a closed hangar refuses bullets, beam and nova; core death kills the carrier; engine loss slows turning (>= 1.8x / >= 5x) and lists; Assault sway caps 30 / 15 / 3 px/s; SCREEN band, leash and PANIC within the leash; four wrecks stay until death and the silhouette changes; Assault CROSS at 90 +-1 px/s through engines lost, PANIC, a slow field and a 5 s EMP; x within spawn +-30 px with the player held at each view edge; never rotated; freed below the rect; ARMOR shove and 15 contact damage.\n- Roster gates green with carrier, incl. the HAZARD_PROFILES row; support never wards it.\n- Gate time within 2.0 s; DECISIONS.md t6 notes."
     },
     {
       "key": "t7",
       "title": "The Carrier fights back with side batteries, a bow heavy cannon, a missile bank and a pulse ring against hull-huggers; a lost battery leaves its side safe, and it panics when its core is exposed",
-      "description": "Plan §2.7: GunPort / GunStarboard BURST_CANNON mounts with a 150 degree traverse on their own side (a dead battery leaves its side safe), hull mounts HullMounts/Bow (HEAVY_CANNON) and HullMounts/Dorsal (ROCKET_BATTERY, beyond 450 px) built through TurretMountBuilder, carrier_pulse_ring.tscn (inherited EnergyRing, r 420) owned and ticked by CarrierBrain when the player is within 340 px, exempting the carrier's owner group; PANIC on core exposure (pulse cooldown halved, battery cooldown x0.7, Open Space retreat, lights). Mounts fire only inside the view in Assault.",
-      "acceptanceCriteria": "- test_carrier.gd weapon rows of §2.7 green in both harnesses: no battery round into the dead battery's half-plane over 20 s (with a control), bow cannon only inside 70 degrees, missiles only beyond 450 px, pulse start and cooldown, ring fairness rule for carrier_pulse_ring.tscn, PANIC entry and effects.\n- Gate time within 2.0 s; DECISIONS.md t7 notes.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
         "t6"
       ],
       "planSections": [
+        "1.3",
         "2.1",
         "2.2",
         "2.3",
         "2.6",
         "2.7",
+        "2.8",
         "2.9",
         "2.15",
         "2.16"
-      ]
+      ],
+      "description": "Plan §2.7: GunPort / GunStarboard BURST_CANNON mounts with a 150 degree traverse on their own side (a dead battery leaves its side safe), hull mounts HullMounts/Bow (HEAVY_CANNON) and HullMounts/Dorsal (ROCKET_BATTERY, beyond 450 px) built through TurretMountBuilder after ModularHull.build_mounts() with the running pool index, carrier_pulse_ring.tscn (inherited EnergyRing, r 420) owned and ticked by CarrierBrain when the player is within 340 px, exempting the carrier's owner group and never reaching parts (EnergyHitScan unchanged; friendly fire on other enemies kept, owner choice 8), cancelled on death; PANIC on core exposure (emergency deployment hook for t8, pulse cooldown halved, battery cooldown x0.7, Open Space leash-clamped retreat, lights). Mounts fire only inside the view in Assault.",
+      "acceptanceCriteria": "- test_carrier.gd weapon rows of §2.7 green in both harnesses: with GunPort destroyed and the player stub re-placed every tick on the carrier's port side, no battery round into the port half-plane over 20 s (control with both guns is hit); bow cannon only inside 70 degrees; missiles only beyond 450 px; pulse start and cooldown; ring fairness rule for carrier_pulse_ring.tscn; the ring never damages its own carrier's hull or parts, hurts an outside fixture enemy and passes a launched child; PANIC entry and effects within the leash.\n- Gate time within 1.8 s; DECISIONS.md t7 notes."
     },
     {
       "key": "t8",
       "title": "The Carrier opens its hangar doors and launches drones and fighters; a hangar can be hit only while open, a destroyed one never launches again, and a panicking carrier empties the rest",
-      "description": "Plan §2.8: carrier_hangars.gd (CarrierHangars RefCounted held by CarrierBrain) driving the two HANGAR modules: CLOSED -> OPENING (0.8 s, vulnerable) -> LAUNCH -> OPEN (2.0 s) -> CLOSED; Open Space period 9 s with caps 3 per hangar / 6 per carrier, Assault one launch per hangar at 3.0 / 7.0 s after entering the view, swarm drones only in Assault; children spawned synchronously as siblings at the hangar mouth (start_engaged, seeded rng, one SquadController per payload kind, carrier owner group, collision exception, outward boost) and announced with EventBus.enemy_spawned_orphan; emergency deployment on PANIC; door art states (placeholders until t9).",
-      "acceptanceCriteria": "- tests/integration/test_carrier_hangars.gd rows of §2.8 green in both harnesses: door telegraph before launch, vulnerability only from OPENING to the end of OPEN, period and caps over 60 s, a destroyed hangar stops launching (one and both), destroyed mid-OPENING launches nothing, Assault one launch per hangar and <= 4 children, emergency deployment, children are siblings announced once, in the owner group (the ring passes them) and outlive the carrier.\n- Gate time within 2.5 s; DECISIONS.md t8 notes.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
@@ -147,6 +149,7 @@
       ],
       "planSections": [
         "1.1",
+        "1.3",
         "2.1",
         "2.6",
         "2.7",
@@ -154,13 +157,13 @@
         "2.9",
         "2.15",
         "2.16"
-      ]
+      ],
+      "description": "Plan §2.8: carrier_hangars.gd (CarrierHangars RefCounted held by CarrierBrain) driving the two HANGAR modules: CLOSED -> OPENING (0.8 s, vulnerable) -> LAUNCH -> OPEN (2.0 s) -> CLOSED; Open Space period 9 s with caps 3 per hangar / 6 per carrier, Assault one launch per hangar (port 3.0 s after entering the view, starboard 7.0 s), swarm drones only in Assault; children spawned synchronously as siblings at the hangar mouth (start_engaged, seeded rng, one SquadController per payload kind, carrier owner group, collision exception, outward boost) and announced with EventBus.enemy_spawned_orphan; emergency deployment on PANIC from live hangars only; door art states (placeholders until t9).",
+      "acceptanceCriteria": "- tests/integration/test_carrier_hangars.gd rows of §2.8 green: door telegraph before launch; vulnerability only from OPENING to the end of OPEN; Open Space period and caps over 60 s; a destroyed hangar stops launching in Open Space (one and both; mid-OPENING launches nothing); Assault: port destroyed at 2.0 s -> no 3.0 s launch, starboard still at 7.0 s, 2 children; both destroyed before 3.0 s -> none; undisturbed -> exactly one launch per hangar, 4 children; emergency deployment from both live hangars, only the starboard when the port is destroyed, nothing from an already-launched Assault hangar; children are siblings announced once, in the owner group (the ring passes them) and outlive the carrier.\n- Gate time within 2.2 s; DECISIONS.md t8 notes."
     },
     {
       "key": "t9",
       "title": "The Heavy Gunship and the Carrier have readable top-down art built from parts whose broken versions stay on the hull, so the ships visibly come apart as you destroy them",
-      "description": "Plan §2.9 and §2.10: invoke the pixel-art-generation skill first; generate the hulls (with empty part sockets) and every part's intact / wreck sprite, the hangar's closed / open / wreck doors and the core's plated / exposed / wreck states; save only with ./scripts/pixellab.sh, open and check each one, strip backgrounds with ./scripts/strip-sprite-bg.sh if needed; wire them into heavy_gunship.tscn and carrier.tscn (module intact_texture / wreck_texture, hangar and core state textures); delete the old heave_gunship.png / heavy_gunship_non_shielded.png / .pdn.",
-      "acceptanceCriteria": "- tests/integration/test_ph10_sprites.gd rows of §2.10 green; test_entity_sprite_transparency.gd green with every new texture.\n- Every image was opened and checked (strict top-down, faction palette, no opaque card); the report lists each asset with its final size.\n- Gate time within 0.3 s; DECISIONS.md t9 notes.",
       "type": "art",
       "complexity": "medium",
       "dependsOn": [
@@ -175,13 +178,13 @@
         "2.9",
         "2.10",
         "2.15"
-      ]
+      ],
+      "description": "Plan §2.9 and §2.10: invoke the pixel-art-generation skill first; generate the hulls (with empty part sockets on the authored geometry) and every part's intact / wreck sprite, the hangar's closed / open / wreck doors and the core's plated / exposed / wreck states; save only with ./scripts/pixellab.sh, open and check each one, strip backgrounds with ./scripts/strip-sprite-bg.sh if needed; wire them into heavy_gunship.tscn and carrier.tscn (module intact_texture / wreck_texture, hangar and core state textures); delete the old heave_gunship.png / heavy_gunship_non_shielded.png / .pdn. Geometry is frozen: no collision shape, hurtbox, module position, HomingPoint or body size changes (the flush-edge rule and the level-1 lane / column measurements depend on them). Widen test_entity_sprite_transparency.gd's _collect_textures() to every Texture2D-valued node property (fallback per §2.10 if it flags a pre-Phase-10 non-entity texture).",
+      "acceptanceCriteria": "- tests/integration/test_ph10_sprites.gd rows of §2.10 green, including every module, door and core export texture <= 90% opaque.\n- test_entity_sprite_transparency.gd walks Texture2D-valued exports (or the recorded fallback) and is green with every new texture.\n- The flush-edge static row of test_heavy_gunship.gd and the carrier module_x_extent row pass unchanged; git diff shows no change to any CollisionShape2D, shape resource, module position or HomingPoint.\n- Every image was opened and checked (strict top-down, faction palette, no opaque card); the report lists each asset with its final size.\n- Gate time within 0.4 s; DECISIONS.md t9 notes."
     },
     {
       "key": "t10",
       "title": "A Heavy Gunship and a Carrier patrol the Open Space hub, far from the spawn, the planets and the pickups, and the carrier launches its escorts once you engage it",
-      "description": "Plan §2.14: open_space/scenes/levels/sector_hub.gd / .tscn appended draws 19 (Heavy Gunship, 2600 ring, 157.5 degrees) and 20 (Carrier, 3400 ring, -112.5 degrees), exports like the Hacker's, patrol_anchor and rng_seed before add_child; tests/integration/test_sector_hub_patrol.gd _patrol_groups() entries, _expected_seeds() to 20 draws, composition rows, every existing sweep green; pre-approved levers if a sweep fails (free 2600 bearings 22.5 / -67.5 for the gunship, ring 3200-3800 for the carrier).",
-      "acceptanceCriteria": "- test_sector_hub_patrol.gd: draws 1-18 unchanged, draws 19-20 composition, both groups clear the spawn, triggers and pickups, sweeps (TacticalSpace, minefield, A / B, C) green, anchors > 1000 px apart, an unengaged hub carrier launches nothing in 30 s.\n- Gate time within 0.8 s; DECISIONS.md t10 notes.",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
@@ -195,32 +198,34 @@
         "2.8",
         "2.14",
         "2.15"
-      ]
+      ],
+      "description": "Plan §2.14: open_space/scenes/levels/sector_hub.gd / .tscn appended draws 19 (Heavy Gunship, 2600 ring, 157.5 degrees) and 20 (Carrier, 3400 ring, -112.5 degrees), exports like the Hacker's, patrol_anchor and rng_seed before add_child; tests/integration/test_sector_hub_patrol.gd _patrol_groups() entries (the carrier's footprint includes its 900 px leash), _expected_seeds() to 20 draws, composition rows, every existing sweep green; pre-approved levers if a sweep fails: the gunship to -67.5 degrees on the 2600 ring (22.5 is unusable), the carrier's ring radius within 3200-3800.",
+      "acceptanceCriteria": "- test_sector_hub_patrol.gd: draws 1-18 unchanged, draws 19-20 composition, both groups clear the spawn, triggers and pickups, sweeps (TacticalSpace, minefield, A / B, C) green, anchors > 1000 px apart.\n- An unengaged hub carrier launches nothing in 30 s; control: with the player inside its perceive radius it notices and launches within notice_time + door_open_seconds + one launch_period, children in EnemyContainer.\n- Gate time within 0.8 s; DECISIONS.md t10 notes."
     },
     {
       "key": "t11",
-      "title": "Level 1's four gunships become Heavy Gunships that really fight (the Cloud Descent three never fired), steer around the laser columns and leave in time for each section to end",
-      "description": "Plan §2.12: in assault/scenes/levels/edelia/1/level_1_director.gd switch the deep_space 3.5 s row and the cloud_descent 50.0 / 62.0 s rows to b.heavy_gunship() with the same triggers, offsets and delays and no rails (owner choice 2: all three). New tests/integration/test_level1_heavy_spawns.gd: the EXPECTED_PH10_GUNSHIPS pin with mutation boundaries, _LEGACY_PEAK_HEAVIES computed from the pre-change rails and frozen, the heavy count gate; test_engagement_deadline.gd per-entry cloud_descent rows (budget 14 + attack window + measured exit <= 86.0 s) with a 72.0 s boundary and the deep_space life before 30.0 s; 16x slice replays showing no part or hull killed by a lit column and a battery FIRE inside each budget; ordered levers (hazard_margin up to 110, deep_space offset +-160, assault_preferred_range 480), else ESCALATE.",
-      "acceptanceCriteria": "- test_level1_heavy_spawns.gd, test_engagement_deadline.gd and every existing level-1 gate (specialist, fighter, fire density incl. the wave-order schedule row, drone) green.\n- Column replays: zero parts or hulls killed; attack-in-budget rows green.\n- Any lever used is recorded with the measured figures in DECISIONS.md.\n- Gate time within 3.5 s.",
+      "title": "Level 1's four gunships become Heavy Gunships that really fight (the Cloud Descent three never fired), survive the opening laser wall and columns, and leave in time for each section to end",
       "type": "feature",
       "complexity": "large",
+      "effort": "xhigh",
       "dependsOn": [
         "t5"
       ],
       "planSections": [
         "1.1",
+        "1.3",
         "2.4",
         "2.5",
         "2.12",
         "2.15",
         "2.16"
-      ]
+      ],
+      "description": "Plan §2.12: in assault/scenes/levels/edelia/1/level_1_director.gd remove the cloud_descent rails (50.0 / 62.0 / 62.8 s rows become b.heavy_gunship() with the same triggers, offsets and delays; owner choice 2: all three) and hoist COLUMN_WARN_SECONDS 3.0 / COLUMN_ACTIVE_SECONDS 4.0 as _spawn_laser_columns' defaults (behaviour-identical). Extend tests/helpers/level1_slice_replay.gd with opt-in light_lasers (default off) that calls the director's real _spawn_laser_columns on the slice timeline and places the level_1.tscn LaserWallWave for deep_space, reporting hull and module deaths under lit rays. New tests/integration/test_level1_heavy_spawns.gd: the EXPECTED_PH10_GUNSHIPS pin with mutation boundaries, _LEGACY_PEAK_HEAVIES computed from the pre-change rails and frozen, the heavy count gate with a one-extra-at-the-peak boundary, the spill-over row, the lit replay of the deep_space heavy (only it meets lasers) with a kill-detection boundary, attack-in-budget replays and a measured, ungated heavy fire-density report. test_engagement_deadline.gd per-entry cloud_descent rows with the exit term and the rocket term (max over the Missiles mount's pool scenes), config-derived boundaries and the missiles-left-open rocket boundary. Ordered levers: lit replay (hazard_margin up to 110, deep_space offset .at(160, -500) only, assault_preferred_range 480, orbit speed halved); deadline (exit 360 / 320, then engage_seconds to 7.0) each legal only while attack-in-budget stays green; else ESCALATE.",
+      "acceptanceCriteria": "- test_level1_heavy_spawns.gd, test_engagement_deadline.gd and every existing level-1 gate and replay (specialist, fighter, fire density incl. the wave-order schedule row, drone, Ph8 and Ph9 attacks) green.\n- Lit replay: zero heavy parts or hulls killed by the wall or a column; the kill-detection boundary detects a kill; every existing replay call (light_lasers off) unchanged.\n- Deadline rows pass for all three cloud_descent heavies on both terms; both config-derived boundaries and the rocket boundary behave as specified.\n- Any lever used, the measured exit and the heavy fire-density figures are recorded in DECISIONS.md.\n- Gate time within 3.0 s."
     },
     {
       "key": "t12",
       "title": "A Carrier crosses Planet Approach slowly as a moving battlefield between two laser-column volleys, launching its drones without crowding the section",
-      "description": "Plan §2.13: place one Carrier in planet_approach by the ordered options (A: new 59.0 s wave, world-anchored x clear of the columns lit during its life; B: inside the 62.0 s wave; C: crossing speed 85), measured, never in an ENEMIES_CLEARED section. Pin EXPECTED_PH10_CARRIER in test_level1_heavy_spawns.gd; the column window row with a 50.0 s boundary; its <= 4 swarm drones counted as intervals in test_level1_drone_spawns.gd's gate (all-drones <= 2.5x, attack-capable <= 2.0x the frozen peaks); the guard row in test_engagement_deadline.gd (no carrier.tscn in ENEMIES_CLEARED, synthetic boundary); a 16x replay where both hangars launch and a battery fires before it leaves. None fits -> ESCALATE with the timeline; never change a frozen constant.",
-      "acceptanceCriteria": "- The chosen option and its measured life, x span and peaks are in DECISIONS.md.\n- test_level1_heavy_spawns.gd, test_level1_drone_spawns.gd, test_level1_specialist_spawns.gd, test_engagement_deadline.gd and the fire-density schedule row green.\n- Gate time within 2.5 s.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
@@ -229,18 +234,21 @@
       ],
       "planSections": [
         "1.1",
+        "1.3",
         "2.6",
+        "2.7",
         "2.8",
         "2.12",
         "2.13",
-        "2.15"
-      ]
+        "2.15",
+        "2.16"
+      ],
+      "description": "Plan §2.13: place one Carrier in planet_approach by the ordered options (A: inside the 65.0 s wave at .at(55, -260), world x 750; B: .at(-145, -260), world x 350; C: inside the 88.0 s wave at .at(5, -260)), measured, never in an ENEMIES_CLEARED section. Lit windows from Level1Director.COLUMN_WARN_SECONDS / COLUMN_ACTIVE_SECONDS plus the laser's increase / dissolve animation lengths, with a real-laser sanity row; per-column overlap in a new _carrier_column_conflicts() (not the existing _column_conflicts()); the carrier's swept x = spawn x +- (sway leash 30 + module_x_extent 100). Pin EXPECTED_PH10_CARRIER in test_level1_heavy_spawns.gd; lit 16x replay over its window; its <= 4 swarm drones counted as intervals in test_level1_drone_spawns.gd (lever assault_launch_count 2 -> 1); carrier and children gone before 110 s; the guard row in test_engagement_deadline.gd; an attack-in-budget replay where both hangars launch and a mount fires. Ring friendly fire on the jammer is accepted (owner choice 8) but test_level1_ph9_attacks.gd must stay green (else option B). None fits -> ESCALATE with the timeline; never change a frozen constant.",
+      "acceptanceCriteria": "- The chosen option and its measured worst life, x span, overlapping lit windows and peaks are in DECISIONS.md.\n- _carrier_column_conflicts() reports no conflict; both boundaries (the 58.0 s wave, world x 550) are flagged; the lit replay kills no carrier module.\n- test_level1_heavy_spawns.gd, test_level1_drone_spawns.gd, test_level1_specialist_spawns.gd, test_engagement_deadline.gd, test_level1_ph8_attacks.gd, test_level1_ph9_attacks.gd and the fire-density schedule row green.\n- Gate time within 2.5 s."
     },
     {
       "key": "t13",
       "title": "The docs, enemy roster and phase record describe modular enemies, the Heavy Gunship and the Carrier as built",
-      "description": "Plan §2.17: invoke the updating-project-docs skill: PROJECT.md Conventions (Modular enemies item), global.md (EnemyModule, ModularHull), assault.md (heavy gunship, carrier, mount builder / traverse / HEAVY_CANNON), open_space.md (hub draws 19-20), docs/enemy-roster.md (Heavy Gunship replaces Gunship incl. every never-.move() line, Carrier, heavy_gunship() / carrier(), Heavy Shell consumer), each ENEMY.md, CLAUDE.md's gate list. Write docs/epics-done/cmug23oo90029m52wae4clve0/ (PRD.md, SOURCES.md with the §1.2 sources, REPORT.md) and append '## Phase 10 - as built (<date>)' to the idea's DECISIONS.md, with every deviation and the gaps left for Ph13-Ph19.",
-      "acceptanceCriteria": "- Docs updated; dossier written; DECISIONS.md as-built section appended (nothing earlier rewritten).\n- bash /agent/verify.sh green.",
       "type": "chore",
       "complexity": "medium",
       "effort": "medium",
@@ -257,8 +265,11 @@
         "3",
         "5",
         "6",
-        "7"
-      ]
+        "7",
+        "8"
+      ],
+      "description": "Plan §2.17: invoke the updating-project-docs skill: PROJECT.md Conventions (Modular enemies item incl. the two hull rules, the flush-edge rule, enemy energy weapons not reaching parts, the heavy rocket term in deadlines), global.md (EnemyModule, ModularHull), assault.md (heavy gunship, carrier, mount builder / traverse / HEAVY_CANNON, the lit slice replay), open_space.md (hub draws 19-20), docs/enemy-roster.md (Heavy Gunship replaces Gunship incl. every never-.move() line, Carrier, heavy_gunship() / carrier(), Heavy Shell consumer), each ENEMY.md, CLAUDE.md's gate list. Write docs/epics-done/cmug23oo90029m52wae4clve0/ (PRD.md, SOURCES.md with the §1.2 sources, REPORT.md) and append '## Phase 10 - as built (<date>)' to the idea's DECISIONS.md, with every deviation and the gaps left for Ph11-Ph19 (incl. structure EMP to Ph11, enemy beams vs parts to Ph18 / Ph19).",
+      "acceptanceCriteria": "- Docs updated; dossier written; DECISIONS.md as-built section appended (nothing earlier rewritten).\n- bash /agent/verify.sh green."
     }
   ]
 }
