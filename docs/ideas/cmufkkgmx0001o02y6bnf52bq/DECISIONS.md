@@ -3801,3 +3801,76 @@ except where this section says otherwise; the per-task *Phase 9, built in tN* no
 - Audio for lock, hijack and EMP (Ph17); Hacker squad tactics and marking (Ph14); Disruptor placement and difficulty numbers (Ph13 / Ph16); ship-mounted EMP (Ph10 / Ph18); EMP on structures and legacy enemies
   (Ph10 / Ph11); enemy ships blocking LOS (Ph19 / Ph14); jammer-linked turret groups through `TurretGroup.add_power_provider()` (Ph20); placed jammers / EMP zones in Assault corridor layouts (Ph15); a module / cooldown HUD (Ph17).
 - Nothing was play-tested; all §2.19 starting values are judgement.
+
+## Phase 10 - Enemy rework, phase 10: modular damage, Heavy Gunship and Carrier (2026-11-10)
+
+Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` (revision 1). **The research stage left no `1-context.md` / `2-research.md`**; the plan carries the scope check
+(§1.1), research findings with sources (§1.2) and code facts (§1.3) itself. These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
+
+### Changes to earlier decisions
+- **Ph4's "Ph10 modular damage should extend or compose `ArmorPlate`" is changed:** the new part, `EnemyModule`, keeps the plate's *resolve-once* deflect decision (cached
+  per HitBox instance id) but takes damage only through its `HurtBox.received_damage`, after the type filter and the absorber slot, so a local `EnemyShield` covers it (Ph5
+  deviation 6: a shield can never cover an `ArmorPlate`), and it stays in the tree as wreckage instead of being freed. `ArmorPlate` stays the Ram's plate, unchanged.
+- **Killing-shot rule for parts:** a module destroyed this physics frame still *consumes* the shot that killed it (an `ArmorPlate` broken this frame consumes nothing). Callback
+  order between the bullet's and the hurtbox's `area_entered` must not matter; a row forces both orders.
+- **Player direct emitters reach parts:** `beam_behavior.gd` and `plasma_nova_module.gd` also target group `&"enemy_parts"`. Station turrets and Ram plates are not in that group
+  (unchanged; the station is Ph11's).
+- **`BulletPool` container injection is deferred again** (Ph2 → Ph5 → Ph10 → when a pool must live below a moving part): mounts on parts still build their pools as
+  **host root children** through `TurretMountBuilder`, so the container is the host's parent.
+- **The legacy Gunship is retired** (`git mv gunship/ heavy_gunship/`, `WaveBuilder.GUNSHIP` / `gunship()` removed). Tests that used it as the legacy, non-brain subject
+  (EMP, EMP Blast process-disable, not-AI-driven, tow) move to the Bonus Drone. "EMP on legacy enemies (gunship)" (Ph9 deferral) is closed: both heavies are brain-driven and
+  answer EMP through `answers_emp()`.
+- **The Support Ship may ward the Heavy Gunship** (it is AI-driven and outscores a fighter; owner choice 7 default). It never wards a host answering duck-typed
+  `accepts_ward() == false` (the Carrier: its armoured hull would stop any shield absorbing).
+
+### Names and places later phases build on
+- **`EnemyModule`** (`global/components/enemy_module.gd`, `Node2D`, group `&"enemy_parts"`): `enum Role { WEAPON, ENGINE, HANGAR, CORE, WEAK_POINT }` (append-only),
+  `enum VisualState { INTACT, DAMAGED, WRECK }`; exports `module_id`, `role`, `max_health` (0 = indestructible), `starts_vulnerable`, `hull_share`, `intact_texture`,
+  `wreck_texture`, `damaged_ratio`; API `is_destroyed()`, `is_vulnerable()`, `set_vulnerable(on)`, `deflects_hit(hit_box)`, `destroy()`, `mounts()`, `attach_mount(mount)`,
+  `visual_state()`; signals `damaged(module: EnemyModule, amount: int)`, `destroyed(module: EnemyModule)`, `deflected(module: EnemyModule)`, `vulnerability_changed(module:
+  EnemyModule, vulnerable: bool)`. Scene shape: `Sprite`, `HurtBox` (layer 512), `Health`, optional `DefenseProfile` (per-module mask and `accepted_damage_types`), optional
+  `MountSlots`, optional `Light`. Parts live under a `Modules` group node, never as direct children of the enemy root. **Destroyed = wreckage that stays** (hurtbox off,
+  wreck texture, mounts UNPOWERED, out of `enemy_parts`, freed only with its host); it is **visual only** — LOS-blocking / physical wreckage is Ph19.
+- **Weak point** = an `EnemyModule` with `role` WEAK_POINT, usually `max_health` 0 and `hull_share` > 0, vulnerable only in a state the player can see (the Gunship's orange
+  vents while venting). A "core" = role CORE, `starts_vulnerable` false until the host's exposure rule fires.
+- **`ModularHull`** (`global/components/modular_hull.gd`, `Node` child of the host root): `build_mounts(host, rng, owner_group, telegraph_gate)`, `hull_share` forwarding to
+  the host `Health`, `module_destroyed(module)` / `module_damaged(module, amount)`, `module(id)`, `modules()`, `live(role)`, `destroyed_count(roles)`, `mounts_of(id)`.
+  **It is the seam Ph18 replaces the consequence driver behind** (today the consequences live in `HeavyGunshipBrain` / `CarrierBrain`, listening to these signals).
+- **Two hull rules on one framework** (Ph11 / Ph12 must pick one per boss): *vulnerable hull* (Heavy Gunship: the root `Health` is the phase bar; a hit on a part also
+  lands on the hull) and *armoured hull* (Carrier: `deflects_hit` / `is_armored` true, damage refused; death = the CORE module's death via `health.set_health(0)`). Every
+  modular host answers `is_laser_blocking() == false`, `launch_velocity()`, `rocket_clear_radius()` and `homing_point(from)` (nearest live vulnerable part).
+- **`TurretMount`:** `traverse_deg` (default 360, bit-identical) + `TurretMountSlot.traverse_deg_override`: a mount never aims or fires outside `rest ± traverse/2` — how a
+  host makes "one side safe". Appended `Variant.HEAVY_CANNON` (`heavy_cannon_mount.tscn`, `BurstCannonMount` + `EnemyRounds.HEAVY_SHELL`, 220 px/s): **the Heavy Shell's
+  first consumer.** **`TurretMountBuilder.build(...)`** (static) is the one place mounts and their pools are built (`DefenseTurret` uses it too).
+- **Heavy Gunship** (`assault/scenes/enemies/heavy_gunship/`): `HeavyGunship`, `HeavyGunshipBrain` (`Phase { APPROACH, BROADSIDE, BREAK_AWAY, VENT, EMERGENCY, DISENGAGE,
+  IDLE, NOTICING, RETURNING }`, append-only), flat `HeavyGunshipConfig`; six parts (two broadside BURST_CANNON batteries, a HEAVY_CANNON nose with a 120° local
+  `EnemyShield` — the first shipped local-module shield — a rear ROCKET_BATTERY, two vents); hull bands 0.6 / 0.3 (one-way); Assault `engage_seconds` 14. No camera hold-y,
+  no x-only tracking, no off-the-top retreat; low health never despawns it. `WaveBuilder.heavy_gunship()`.
+- **Carrier** (`assault/scenes/enemies/carrier/`): `Carrier`, `CarrierBrain` (`Phase { CRUISE, SCREEN, PANIC, CROSS, IDLE, NOTICING, RETURNING }`, append-only),
+  `CarrierHangars` (RefCounted), flat `CarrierConfig`, `carrier_pulse_ring.tscn` (an inherited `EnergyRing`, r 420); parts EnginePort / EngineStarboard, GunPort /
+  GunStarboard (BURST_CANNON, traverse 150° to their own side), HangarPort / HangarStarboard (vulnerable only while their doors are open), Core (exposed after
+  `core_exposure_count` 3 outer parts → PANIC); hull mounts Bow (HEAVY_CANNON) and Dorsal (ROCKET_BATTERY). Assault: CROSS at a constant 70 px/s, nose-down, no budget,
+  `world_anchored_x`, freed below the projectile rect, **never in an `ENEMIES_CLEARED` section**. Hangar children are siblings announced with
+  `EventBus.enemy_spawned_orphan`, in the carrier's owner group, never docked; Assault: one launch per hangar per life, swarm drones only. `WaveBuilder.carrier()`.
+- **Assault exit probes** for Ph10 enemies are built only through `tests/helpers/ph10_exit_keys.gd` (static `prepare_probe`; the Ph8 / Ph9 memo rule).
+- **Level 1:** the four gunship rows (deep_space 3.5 s, cloud_descent 50.0 / 62.0 / 62.8 s) become AI Heavy Gunships, rails removed; `test_level1_heavy_spawns.gd` freezes
+  `_LEGACY_PEAK_HEAVIES` from the pre-change rails and caps heavies at 1.0× of it; cloud_descent heavies have per-entry deadline rows. One Carrier crosses planet_approach in the
+  55 → 78 s column gap (measured; options in plan §2.13). **Any later static or slow heavy placed in level 1 must clear the column schedule for its whole life.**
+- **Hub:** draw 19 Heavy Gunship (2600 ring, 157.5°), draw 20 Carrier (3400 ring, −112.5°).
+
+### Conventions
+- A large enemy's state shows on its parts and lights, never by recolouring the hull: orange vents, yellow charging / doors opening, red flashing core in PANIC, dark wrecks.
+- A part that can be locked (core, hangar, vent) shows it: plating closed / doors closed / vent closed, a white ping on a deflected hit.
+- Gate time: GUT ≈ 225 s at the Ph9 close; **Ph10's t1 must free ≥ 10 s** before anything lands; allotments 20.4 s; the phase ends ≤ 236 s; a task past 238 s escalates.
+
+### Deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| Carrier hangar launches and Gunship battery-loss phases on the shared boss machinery; geometry weapons | Ph18 | Ph1 roadmap; `ModularHull` is the seam |
+| Ship-mounted EMP (the carrier pulse as an ability-locking EMP) | Ph18 | owner choice 5 default |
+| Destroyed parts as LOS-blocking wreckage, capital wrecks on death (`wreck_chance` 0), heavy hazard resistance | Ph19 | |
+| Station turrets / core onto `EnemyModule`, `homing_point` on the station | Ph11 | the station stays byte-identical |
+| Encounter compositions with heavies; leash / cleanup of a hub carrier's children | Ph13 / Ph14 | caps bound the children |
+| Per-part score, a part HUD, heavy audio | Ph17 | |
+| Level 2 gunship rows | Ph15 | level unreferenced |
+| Difficulty scaling of heavies | Ph16 | |
