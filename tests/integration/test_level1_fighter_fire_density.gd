@@ -33,7 +33,7 @@
 ##
 ## ── Time ─────────────────────────────────────────────────────────────────────────────────────
 ##
-## Game time is summed physics delta, never wall clock. The run is sped up 8x with the physics step
+## Game time is summed physics delta, never wall clock. The run is sped up `_SPEEDUP`x (16x) with the physics step
 ## kept at 1/60 game-second: `Engine.time_scale`, `physics_ticks_per_second` and
 ## `max_physics_steps_per_frame` are scaled together, and the captured originals are restored at the
 ## end of the run AND in `after_each`, so a run that breaks off cannot leak a fast clock into the
@@ -52,8 +52,8 @@ const _GATLING_CONFIG: GatlingInterceptorConfig = \
 
 const _WINDOW := 2.0
 const _RATIO := 1.25
-const _SPEEDUP := 8
-## The schedule row keeps its 0.1 s tolerance (`_TRIGGER_TOLERANCE`), and one idle frame at 8x is ~0.13 s: it is
+const _SPEEDUP := 16
+## The schedule row keeps its 0.1 s tolerance (`_TRIGGER_TOLERANCE`), and one idle frame at 8x is ~0.13 s and at 16x more: it is
 ## only 10 s of game time, so it stays at 4x rather than widening the bound.
 const _SCHEDULE_SPEEDUP := 4
 ## Non-zero: an `rng_seed` of 0 means "randomize".

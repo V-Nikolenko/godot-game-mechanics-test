@@ -664,7 +664,7 @@ func test_a_gravity_bomb_released_at_the_lead_can_hurt_a_stationary_player() -> 
 # in `after_each`. At 1x these rows cost about a minute of wall clock, which the verification gate cannot spare.
 
 const PLAYER_HURT_RADIUS := {"open_space": 5.0, "assault": 13.5}
-const _SPEEDUP := 8
+const _SPEEDUP := 16
 
 var _blasts: int = 0
 var _phase_log: Array[int] = []

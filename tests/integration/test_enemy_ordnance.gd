@@ -28,7 +28,7 @@ var _blasts: Array[ContactBlast] = []
 var _blast_info: Array[Dictionary] = []
 var _expired: Dictionary = {}
 
-const _SPEEDUP := 8
+const _SPEEDUP := 16
 var _saved_time_scale: float = 1.0
 var _saved_ticks: int = 60
 var _saved_max_steps: int = 8

@@ -35,9 +35,9 @@ const PLATE_NAMES: Array[StringName] = [&"PlateFront", &"PlateLeft", &"PlateRigh
 
 var _root: Node2D
 
-## Every row that awaits real physics runs on the 8x clock (tests/README.md -> "Gate time"): the three engine
+## Every row that awaits real physics runs on the 16x clock (tests/README.md -> "Gate time"): the three engine
 ## settings are scaled together so a physics tick stays 1/60 game-second, and restored in `after_each`.
-const _SPEEDUP := 8
+const _SPEEDUP := 16
 var _saved_time_scale: float = 1.0
 var _saved_ticks: int = 60
 var _saved_max_steps: int = 8
