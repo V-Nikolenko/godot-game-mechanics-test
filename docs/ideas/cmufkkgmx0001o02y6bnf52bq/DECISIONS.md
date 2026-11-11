@@ -3907,3 +3907,32 @@ Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` (revision 2, after a roun
 - **Rejected lever:** `application/run/low_processor_mode_sleep_usec` (or an `override.cfg`) = 0 would drop the idle-frame sleep from 6.84 ms to 0.02 ms and recover far more, but it changes the number of physics ticks between two idle frames in every test that awaits a `process_frame`; that is a behaviour change, not a rule 1 speed-up, so it was not taken. **Later tasks that add a real-physics row** use the 8× clock by default and may take 16× only after checking wall against CPU and the row's fixed tolerances.
 - **Robustness evidence:** the seven files ran 25 rounds alone (246 tests, all green, 40.2 – 40.5 s) and 3 rounds against twelve busy loops (all green, 44 – 47 s); eight plain full-suite runs and the two `gate-time.sh` runs were green. One earlier `gate-time.sh` run (GUT 192.1 s) reported `1 failing` with its log lost; it did not recur in the next ten full runs. A task that sees a red run should keep the log (plain GUT `> log`) before touching a clock.
 - **Where the rest of the time is** (for a later recovery): `test_fighter_squad.gd` 45 s; ≈ 23 s outside any testcase in `before_all()` probes (`test_level1_specialist_spawns.gd` ≈ 13.6 s, `test_hacker_frigate.gd` ≈ 3.4 s, `test_laser_tender.gd` ≈ 3.3 s), each probe run ≈ 0.5 – 0.9 ms of instantiate / add / free plus ≈ 7 – 11 µs per hand-ticked step. Allotments (t2 2.0 · t3 0.8 · t4 3.5 · t5 2.5 · t6 2.0 · t7 1.8 · t8 2.2 · t9 0.4 · t10 0.8 · t11 3.0 · t12 2.5 · t13 0 = 21.5 s) and the noise rule (two-run mean; escalate past 237 s or past 1.5× a task's own allotment) are recorded in `tests/README.md`.
+
+### Phase 10, built in t2 (EnemyModule and ModularHull) (2026-11-11)
+- **Built as §2.1 / §2.2 describe** (task plan `docs/plans/cmwafsrau009zqs2yc1rli3sj/3-plan.md`, reviewed twice, APPROVED in round 2): `global/components/enemy_module.gd`
+  (`EnemyModule`), `global/components/modular_hull.gd` (`ModularHull`, without `build_mounts`, which is t3's), `beam_behavior.gd` and `plasma_nova_module.gd` also target
+  group `&"enemy_parts"`, `EnergyHitScan` untouched. Fixture `tests/helpers/fixture_modular_host.tscn` (+ `.gd`, no `class_name`): an armoured `BaseEnemy` root (deflects,
+  `is_armored`, refuses all root damage, `is_laser_blocking()` false, body on layer 1) and parts `Open` (`&"open"`, WEAPON, (−80, 0), wreck texture, `HomingPoint`, `StateLight`),
+  `Locked` (`&"locked"`, CORE, (0, 0), not vulnerable, tint path) and `Laser` (`&"laser"`, ENGINE, (80, 0), a `DefenseProfile` accepting LASER, no authored `Health`). Gate
+  `tests/integration/test_enemy_module.gd` (17 test functions, two of them in both harnesses).
+- **Choices §2.1 left open (later tasks rely on them):**
+  - `deflected` fires **once per refused hit, from whichever filter refused it**: the vulnerability check in the `received_damage` handler, or the hurtbox's own type filter
+    (seen in the part's `area_entered`, because a filtered hit never reaches `received_damage`). An absorbed hit fires neither.
+  - **Direct emitters skip the type filter as well as the absorber**, so a part that accepts only some damage types is still hurt by the nova, the beam and a `LaserRay`
+    while it is vulnerable. Only `set_vulnerable(false)` keeps them off a part (§2.1 says this is the only guard; a type-filtered part is not one).
+  - **`EnemyModule.is_armored()` = locked or wrecked** (review M6). `ArmorQuery` asks `deflects_hit` first, so projectiles never see it; `EnemyShield` reads it, so a shield on a
+    locked part absorbs nothing instead of spending points on a bullet the part lets through. A Ph10 heavy that shields a lockable part gets this for free.
+  - **DAMAGED reuses `LowHealthSmoke`** (review B1): a part with `max_health > 0` gets a child `Sparks` (`threshold = damaged_ratio`), and `visual_state()` uses the smoke's
+    exact comparison (`float(current) / max <= damaged_ratio`). An indestructible part has neither sparks nor DAMAGED.
+  - `damaged(module, amount)` carries the **incoming** damage (not the health lost), so an indestructible weak point reports and forwards every hit; an overkill shot
+    forwards its whole amount × `hull_share`. **A lit `LaserRay` (9999) on a part with `hull_share > 0` forwards 9999 × share to the host** — t11 / t12 count this as a host kill.
+  - Signal order for one hit is `damaged` → (hull forwarding) `module_damaged` → `destroyed` → `module_destroyed`, all in the same call; listeners connected after the host
+    is in the tree hear the hull's re-emit first (Godot calls callbacks in connection order). Never make the hull's forwarding deferred.
+  - Without a `DefenseProfile` the part writes mask 1120 (§2.1) and leaves its hurtbox's authored `accepted_damage_types` alone (none = all). `max_health` defaults to 100. A
+    `Health` is created when the scene authors none; an authored one is overwritten from `max_health`. `destroy()` also works on a locked or an indestructible part
+    (a scripted kill) and leaves `Health` as it was. `ModularHull` collects **direct** children of `Modules` only (review M1); the part's host is `Modules`' parent.
+- **Deviation (wording only):** §2.1's beam row says "`BeamBehavior` on a real Assault player"; the row drives a real `BeamBehavior` through the `BeamDriver` used by
+  `test_ram_corvette.gd`, `test_defense_turret.gd` and `test_station_incoming_damage_paths.gd` (the code under test is `BeamBehavior.tick()`; a player scene adds input, a
+  weapon state and a HUD and nothing that reaches a part).
+- **Self-reference:** `EnemyModule` names its own class in its signals (the `ArmorPlate` / `StationTurret` precedent); the leak check is clean, so the `enemy_mine.gd` trap
+  does not apply here.

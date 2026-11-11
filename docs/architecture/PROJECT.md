@@ -160,6 +160,14 @@ Detail and APIs: [global.md](modules/global.md).
   plates. `BaseEnemy` does **not** adopt `DamageReaction` (Ph1 P-15, closed in Ph5): `DamageReaction` stays a racer component.
   Allies act on enemies through `BaseEnemy.repair()` (never flashes) and `accept_tow()` (refused by the target's own brain in
   committed phases via `EnemyBrain.accepts_tow()`). Detail: [global.md](modules/global.md) → *Enemy shields*.
+- **A large enemy is built from destructible parts that stay as wreckage (Ph10).** Each part is an `EnemyModule`
+  (`global/components/enemy_module.gd`, group `enemy_parts`) under the host's `Modules` node, with its own `HurtBox`, `Health`,
+  optional `DefenseProfile` and local `EnemyShield`; `ModularHull` (`global/components/modular_hull.gd`) collects them, forwards
+  `hull_share` to the host and re-emits their signals. A part takes damage only through its `received_damage`; a locked part
+  ignores every damage (the only guard against the beam, the nova and a `LaserRay`); a part killed this physics frame still
+  consumes its killing shot; a destroyed part leaves `enemy_parts`, closes its hurtbox and stays on the hull with its wreck sprite.
+  The player's beam and nova reach parts; enemy energy weapons do not. Recipe: [global.md](modules/global.md) → *Destructible
+  parts of a large enemy*.
 - **An enemy picks a round, it does not retune one bullet (Ph3).** The pooled `EnemyBullet` family —
   Pulse, Scatter, Gatling Stream, Rail (the Sniper's, Ph4), Heavy Shell (`assault/scenes/projectiles/enemy_bullet/rounds/`, `EnemyRounds`) — are
   inherited scenes of `enemy_bullet.tscn`, each with its own `ProjectileLifetime`; `EnemyBullet.reset()` restores the

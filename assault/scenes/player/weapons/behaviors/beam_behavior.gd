@@ -70,10 +70,12 @@ func tick(state: Node, mode: WeaponModeResource, muzzles: Array[Marker2D], delta
 			blocker_point = hit.get("position", to)
 			blocker_collider = coll
 
-	## Targets = enemies + asteroids (mining laser damages both).
+	## Targets = enemies + asteroids (mining laser damages both), plus every live part of a modular enemy (`EnemyModule`, group
+	## `enemy_parts`): a locked part refuses the burn itself, and its heat tint lands on the part node.
 	var all_targets: Array = []
 	all_targets.append_array(actor.get_tree().get_nodes_in_group("enemies"))
 	all_targets.append_array(actor.get_tree().get_nodes_in_group("asteroids"))
+	all_targets.append_array(actor.get_tree().get_nodes_in_group("enemy_parts"))
 
 	var seg_dir: Vector2 = blocker_point - ref_pos
 	var seg_len: float = seg_dir.length()

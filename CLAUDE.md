@@ -75,6 +75,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   — still exactly one owner at every instant. Spelled out in
   `docs/architecture/PROJECT.md` → Conventions; gated by
   `tests/integration/test_player_bullet_lifetime.gd`, `test_armor_query.gd` and `test_enemy_ordnance.gd`.
+  **A large enemy is built from destructible parts (Phase 10 t2):** each part is an `EnemyModule` (`global/components/enemy_module.gd`, group
+  `enemy_parts`) under the host's `Modules` node, with a `ModularHull` (`modular_hull.gd`) beside it forwarding `hull_share` and re-emitting part signals. A part takes
+  damage only through its own `HurtBox.received_damage` (so a local `EnemyShield` covers it); a locked part ignores every damage (the only guard against the beam, the nova
+  and a `LaserRay`); a part killed this physics frame still consumes its killing shot; a destroyed part stays on the hull as wreckage (out of `enemy_parts`, hurtbox
+  closed, wreck sprite; the wreck tint goes on its `Sprite` child because the beam tints the part node). The player's beam and nova target `enemy_parts`; enemy energy
+  weapons (`EnergyHitScan`) never do. Gate `tests/integration/test_enemy_module.gd` ([global.md](docs/architecture/modules/global.md) → *Destructible parts*).
   **A wreck is cover for both sides (Phase 6): an enemy round stops on a wreck.** `EnemyBullet`'s HitBox mask includes 1024 and a
   hit there expires the round only when the area's owner answers duck-typed `stops_enemy_rounds() == true` (only `Wreck` does;
   asteroids do not, so round behaviour against them is unchanged); the player's Sniper Shot ends on a parent answering

@@ -30,9 +30,11 @@ func try_activate(player: Node) -> bool:
 		return false
 	_cooldown_left = _COOLDOWN
 
-	## Damage all enemies.
-	var enemies := player.get_tree().get_nodes_in_group("enemies")
-	for e: Node in enemies:
+	## Damage all enemies, and every live part of a modular enemy (`EnemyModule`, group `enemy_parts`): map-wide, like the
+	## enemies. A locked part refuses it itself.
+	var targets := player.get_tree().get_nodes_in_group("enemies")
+	targets.append_array(player.get_tree().get_nodes_in_group("enemy_parts"))
+	for e: Node in targets:
 		var n := e as Node2D
 		if n == null:
 			continue

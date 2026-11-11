@@ -1,0 +1,141 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/helpers/fixture_modular_host.gd" id="1_fmh"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="2_fmh"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="3_fmh"]
+[ext_resource type="Script" path="res://global/components/enemy_module.gd" id="4_fmh"]
+[ext_resource type="Script" path="res://global/components/modular_hull.gd" id="5_fmh"]
+[ext_resource type="Script" path="res://global/components/defense_profile.gd" id="6_fmh"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="7_fmh"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/station_turret.png" id="8_fmh"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/station_turret_destroyed.png" id="9_fmh"]
+
+[sub_resource type="Animation" id="Animation_reset_fmh"]
+length = 0.001
+
+[sub_resource type="Animation" id="Animation_hit_fmh"]
+resource_name = "hit"
+length = 0.2
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_fmh"]
+_data = {
+&"RESET": SubResource("Animation_reset_fmh"),
+&"hit": SubResource("Animation_hit_fmh")
+}
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(240, 60)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hull"]
+size = Vector2(240, 60)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_open"]
+radius = 12.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_locked"]
+radius = 12.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_laser"]
+radius = 12.0
+
+[node name="FixtureModularHost" type="CharacterBody2D" groups=["enemies"]]
+motion_mode = 1
+script = ExtResource("1_fmh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_body")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 1121
+script = ExtResource("3_fmh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("RectangleShape2D_hull")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_fmh")
+max_health = 1000
+current_health = 1000
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries/ = SubResource("AnimationLibrary_fmh")
+
+[node name="Modules" type="Node2D" parent="."]
+
+[node name="Open" type="Node2D" parent="Modules"]
+position = Vector2(-80, 0)
+script = ExtResource("4_fmh")
+module_id = &"open"
+max_health = 100
+intact_texture = ExtResource("8_fmh")
+wreck_texture = ExtResource("9_fmh")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/Open"]
+
+[node name="HurtBox" type="Area2D" parent="Modules/Open"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_fmh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/Open/HurtBox"]
+shape = SubResource("CircleShape2D_open")
+
+[node name="Health" type="Node" parent="Modules/Open"]
+script = ExtResource("2_fmh")
+max_health = 10
+current_health = 10
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/Open"]
+position = Vector2(0, 12)
+
+[node name="Light" type="Node2D" parent="Modules/Open"]
+script = ExtResource("7_fmh")
+
+[node name="Locked" type="Node2D" parent="Modules"]
+script = ExtResource("4_fmh")
+module_id = &"locked"
+role = 3
+max_health = 100
+starts_vulnerable = false
+intact_texture = ExtResource("8_fmh")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/Locked"]
+
+[node name="HurtBox" type="Area2D" parent="Modules/Locked"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_fmh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/Locked/HurtBox"]
+shape = SubResource("CircleShape2D_locked")
+
+[node name="Health" type="Node" parent="Modules/Locked"]
+script = ExtResource("2_fmh")
+max_health = 100
+current_health = 100
+
+[node name="Laser" type="Node2D" parent="Modules"]
+position = Vector2(80, 0)
+script = ExtResource("4_fmh")
+module_id = &"laser"
+role = 1
+max_health = 100
+intact_texture = ExtResource("8_fmh")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/Laser"]
+
+[node name="HurtBox" type="Area2D" parent="Modules/Laser"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_fmh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/Laser/HurtBox"]
+shape = SubResource("CircleShape2D_laser")
+
+[node name="DefenseProfile" type="Node" parent="Modules/Laser"]
+script = ExtResource("6_fmh")
+accepted_damage_types = Array[int]([0])
+
+[node name="ModularHull" type="Node" parent="."]
+script = ExtResource("5_fmh")

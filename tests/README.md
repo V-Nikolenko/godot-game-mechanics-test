@@ -684,6 +684,7 @@ t13 1.0 · t14 2.5 · t15 0 = 22.6 s; the phase ends ≤ 235.0 s, and a task tha
 | Task | Allotment | GUT before → after | Note |
 |---|---|---|---|
 | t1 gate room | frees ≥ 12 s (target 15) | 224.70 → 192.10 s (two-run means; 2888 tests unchanged) | the tables above: −32.6 s, rule 1 at 16× on seven paced files |
+| t2 `EnemyModule` / `ModularHull`, beam and nova reach parts | 2.0 s | 190.39 → 193.17 s (two-run means: 192.226 / 188.557 before, on a clean `git archive HEAD` copy; 193.373 / 192.968 after; 2888 → 2905 tests, 102034 → 102218 asserts; both after-runs green and leak-free) | new `test_enemy_module.gd`, 17 test functions (two in both harnesses), **0.89 s summed testcase time** (1.32 s GUT `Time` alone): seven real-physics rows at the 8× clock (bullets, a warhead, two beam drivers for 2.25 s, two lit `LaserRay`s), the rest hand-driven with no await. The +2.8 s whole-suite delta is mostly run noise (the two before-runs differ by 3.7 s); the file's own time is inside the allotment. Fixture `tests/helpers/fixture_modular_host.tscn` |
 
 **Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
 `tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition

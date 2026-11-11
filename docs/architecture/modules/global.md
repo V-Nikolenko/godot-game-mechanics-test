@@ -29,6 +29,8 @@ global/
 │   ├── hitbox_component.gd        # HitBox (Area2D) — deals hits, DamageType enum
 │   ├── armor_query.gd             # ArmorQuery (static) — "does this target refuse my hit?": `deflects_hit(hit_box)` first, else `is_armored()`
 │   ├── armor_plate.gd             # ArmorPlate (Node2D) — breakable armour piece: HurtBox + Health + Sprite; rockets / high-impact shots break it, bullets glance off
+│   ├── enemy_module.gd            # EnemyModule (Node2D) — Ph10: one destructible part of a large enemy (own HurtBox / Health / DefenseProfile, lockable, local-shield-able); a destroyed part stays as wreckage
+│   ├── modular_hull.gd            # ModularHull (Node) — Ph10: collects a host's `Modules/*`, forwards `hull_share` to the host Health, re-emits part signals, queries
 │   ├── emp_pulse.gd               # EmpPulse (static) — the one EMP entry point, `emit(tree, at, radius, seconds, source, targets := TARGET_PLAYER) -> int`; player / enemies (`answers_emp()`) / seekers (`jam_guidance`)
 │   ├── emp_static.gd              # EmpStatic (Node2D) — Ph9 t5: code-built blue-white jagged ring BaseEnemy shows while `is_emp_disrupted()`
 │   ├── shield_component.gd        # Shield (Node) — discrete-charge shield
@@ -269,6 +271,57 @@ once, fades, then frees. It draws a cyan arc in world angles and never writes `r
 cover an `ArmorPlate`, which damages itself in its own `area_entered`. `BaseEnemy` does **not** adopt `DamageReaction`
 (Phase 1 P-15, closed in Phase 5). No shipped enemy carries one yet (the Support Ship, Phase 5 t12/t13). Gated by
 `tests/unit/test_hitbox_hurtbox.gd`, `tests/unit/test_enemy_shield.gd` and `tests/integration/test_enemy_shield_hits.gd`.
+A shield **can** cover an `EnemyModule` (next section): a part takes damage through its own `received_damage`, after the absorber.
+
+### Destructible parts of a large enemy — `enemy_module.gd`, `modular_hull.gd` (enemy rework phase 10)
+
+A large enemy (the Ph10 Heavy Gunship and Carrier, the Ph11 / Ph12 bosses) is a host plus parts. Each part is an
+`EnemyModule` (`Node2D`, group `&"enemy_parts"`) under a `Modules` `Node2D` of the host — never a direct child of the enemy root
+(the hurtbox-geometry gate) — and the host carries one `ModularHull` (`Node`, named `ModularHull`) beside it:
+
+```
+MyHeavy (BaseEnemy)
+├── HurtBox, Health, …           the hull (its own rule: vulnerable, or armoured = deflects_hit / is_armored true)
+├── Modules (Node2D)
+│   └── BatteryPort (EnemyModule)  module_id &"battery_port", role WEAPON, max_health, hull_share, intact / wreck texture
+│       ├── Sprite (Sprite2D)      the wreck texture (or WRECK_TINT) goes here, never on the part node (the beam tints that)
+│       ├── HurtBox (HurtBox)      one shape; the part writes layer 512 and, without a DefenseProfile, mask 1120
+│       ├── Health                 written from max_health (created if absent; never read when max_health is 0)
+│       ├── DefenseProfile         optional: applied to THIS hurtbox by the part (BaseEnemy applies only the root's)
+│       ├── MountSlots             optional TurretMountSlots (built by ModularHull.build_mounts(), t3)
+│       ├── HomingPoint (Marker2D) optional: homing_point()
+│       └── Light                  optional StateLight: OFF on destruction
+└── ModularHull (Node)
+```
+
+- **Exports:** `module_id`, `role` (`enum Role { WEAPON, ENGINE, HANGAR, CORE, WEAK_POINT }`, append-only), `max_health` (default 100;
+  **0 = indestructible**: damage is still reported and forwarded, never destroyed), `starts_vulnerable` (true), `hull_share` (0),
+  `intact_texture`, `wreck_texture` (null → intact + `WRECK_TINT` `Color(0.35, 0.35, 0.4)` on `Sprite`), `damaged_ratio` (0.5).
+- **API:** `is_destroyed()`, `is_vulnerable()`, `set_vulnerable(on)` (no-op on a wreck; defer it from inside a physics callback),
+  `deflects_hit(hit_box)`, `is_armored()` (locked or wrecked), `destroy()`, `mounts()`, `attach_mount(mount)`,
+  `visual_state()` (`enum VisualState { INTACT, DAMAGED, WRECK }`), `homing_point()`; vars `sprite`, `hurt_box`, `health`,
+  `defense_profile`. Signals `damaged(module, amount)`, `destroyed(module)`, `deflected(module)`, `vulnerability_changed(module, vulnerable)`.
+- **The hit rule.** A projectile asks `deflects_hit` through `ArmorQuery`; one cached decision per HitBox (the `ArmorPlate` shape):
+  deflect for a wreck from an earlier physics frame, a locked part or a refused damage type, else consume — so the **killing shot
+  is consumed** under either callback order. Damage comes **only** through the part's `HurtBox.received_damage` (after its type
+  filter and absorber, so a local `EnemyShield` works). A locked part ignores every damage and emits `deflected` (white ping): the
+  only guard against the direct emitters (beam, nova, level `LaserRay`), which skip both hurtbox filters — a LASER-only part is
+  still hurt by the nova. `deflected` fires once per refused hit (the vulnerability check, or the type filter via the part's own
+  `area_entered`). `is_armored()` is read only by `EnemyShield`, so a shield on a locked part absorbs nothing.
+- **Destruction = wreckage that stays:** once; out of `enemy_parts`; hurtbox `monitoring` / `monitorable` / shapes off (deferred);
+  mounts `power_down()`; wreck sprite; light off; `Sparks` stop; an `ExplosionEffect` into the **host's parent**; `destroyed`. The node
+  stays until its host is freed. It blocks nothing (LOS wreckage is Ph19).
+- **DAMAGED** reuses `LowHealthSmoke` (a child `Sparks` at `threshold = damaged_ratio`), so the look and `visual_state()` share one rule.
+- **`ModularHull`** collects the direct `EnemyModule` children of `Modules` (tree order), forwards `roundi(amount × hull_share)` to
+  the host's `Health` child in the same call as the hit, re-emits `module_damaged(module, amount)` / `module_destroyed(module)`,
+  and answers `modules()`, `module(id)`, `live(role)`, `destroyed_count(roles)` (empty = any role), `mounts_of(id)`. It holds no
+  gameplay rule of any heavy (the Ph18 seam).
+- **Who reaches a part:** player bullets and rockets (through the host's geometry rule), the player's mining beam and Plasma Nova
+  (both also target group `enemy_parts`; the nova map-wide) and a level `LaserRay` (layer 512, 9999). **Enemy energy weapons do
+  not** (`EnergyHitScan.VICTIM_GROUPS` has no `enemy_parts`). The station's turrets and the Ram's plates are not parts.
+
+Gated by `tests/integration/test_enemy_module.gd` (fixture `tests/helpers/fixture_modular_host.tscn`: an armoured root and parts
+`Open` / `Locked` / `Laser`).
 
 ### CollisionLayers — `global/physics/collision_layers.gd`
 
