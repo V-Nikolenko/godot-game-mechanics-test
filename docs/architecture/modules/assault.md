@@ -495,8 +495,8 @@ Built in t6 (shell, burst cannon), t7 / t8 (the other mounts) and t9 (`TurretGro
   Assault only while the turret's centre is inside `EnemyWorld.view_rect()`; ENGAGED gives each mount `can_fire = can_see_player() or fires_past_cover()`; owns the
   `StateLight`.
 - **`TurretMount extends Node2D`** (`mounts/turret_mount.gd`; the Ph10 seam, never reads its host's type): `enum Variant { BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY,
-  PULSE_RING, LANCE, BEAM_CANNON }`, `enum Phase { SCAN, TRACK, TELEGRAPH, FIRE, COOLDOWN, UNPOWERED }` (both append-only), signals `phase_changed(phase: int)` and
-  `round_fired(projectile: Node2D)`. Writes only its own `rotation` (turn-rate limited, local to its parent). Partial lead `P.lerp(intercept, lead_blend)`, fires only
+  PULSE_RING, LANCE, BEAM_CANNON, HEAVY_CANNON }`, `enum Phase { SCAN, TRACK, TELEGRAPH, FIRE, COOLDOWN, UNPOWERED }` (both append-only), signals `phase_changed(phase: int)` and
+  `round_fired(projectile: Node2D)`. Writes only its own `rotation` (turn-rate limited, local to its parent). `traverse_deg` (default 360; a slot's `traverse_deg_override` replaces it) limits the arc it aims, scans and fires in, turning along the arc and never through the blocked sector. `TurretMountBuilder.build()` builds mount + pools for `DefenseTurret` and `ModularHull.build_mounts()`. Partial lead `P.lerp(intercept, lead_blend)`, fires only
   inside `fire_cone_deg / 2`, a cooldown clock that survives perception flicker, and an optional `telegraph_gate: Callable` (a group's stagger). A variant is a
   subclass overriding hooks (`_aim_point_for`, `_shot_speed`, `_tracks`, `_wants_telegraph`, `_telegraph_seconds`, `_telegraph_done`, `_on_telegraph_start`,
   `_fire_tick`, `_pre_tick`, `_weapon_tick`, `_stop_weapon`, `pool_specs`); tuning lives in its scene's exports, read by gates through `TurretMountScenes.export_of()`.

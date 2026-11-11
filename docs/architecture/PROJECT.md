@@ -456,7 +456,7 @@ Detail and APIs: [global.md](modules/global.md).
      warning circle, then a 24 px band grows at 360 px/s to `max_radius` 280 (its outer edge never passes it) with two rotating 45 degree gaps; each target is hit once per
      ring, by the swept interval, by the same owner set and direct emit. Not `PulseRing` (Ph7's visual). Gate: `tests/integration/test_energy_ring.gd`.
   6. **Turret mounts are the aiming seam (t6).** Everything that aims and fires on a turret is a `TurretMount` (`assault/scenes/enemies/defense_turret/mounts/`),
-     built at runtime from a host's `TurretMountSlot` markers, one scene per `Variant` (`TurretMountScenes`). A mount **writes only its own `rotation`**, never reads its
+     built at runtime from a host's `TurretMountSlot` markers by `TurretMountBuilder.build()`, one scene per `Variant` (`TurretMountScenes`; `HEAVY_CANNON` added in Ph10 t3), with an optional `traverse_deg` arc limit (360 = none). A mount **writes only its own `rotation`**, never reads its
      host's type (Ph10 bolts the same mounts onto ships), keeps its tuning in its scene's exports, and gets its pools as **root children of the host**
      (`pool_specs()`), so rounds land in the enemy container. Static structures (the `DefenseTurret` first) have no mover, never rotate their root, and scroll with
      the Assault corridor through `AssaultDrift` (`global/components/assault_drift.gd`), firing only inside `EnemyWorld.view_rect()`; their `.tres` sets

@@ -7,6 +7,9 @@
 ## part means (an attack gone, slower turning, an exposed core) is the host's, so a later phase can swap the consequence driver behind
 ## this seam (Ph18).
 ##
+## `build_mounts()` (t3) builds every part's `TurretMountSlot`s through `TurretMountBuilder` with one running pool index across the host and
+## attaches each mount to its part, so a part that dies powers its guns down for good.
+##
 ## Tests: tests/integration/test_enemy_module.gd.
 class_name ModularHull
 extends Node
@@ -66,6 +69,29 @@ func destroyed_count(roles: Array = []) -> int:
 		if part.is_destroyed() and (roles.is_empty() or roles.has(part.role)):
 			n += 1
 	return n
+
+
+## Builds the mounts of every part's `MountSlots` (a part without one is skipped), in module order then slot order. Each goes through
+## `TurretMountBuilder.build()` with a running pool index starting at [param first_index] (a host with hull-mounted slots passes the count it
+## already used, so pool names stay unique) and is handed to `EnemyModule.attach_mount()`. Pools are root children of [param host], so their
+## container is the host's parent. Returns the next free index. A slot whose variant has no scene is skipped and takes no index.
+func build_mounts(host: Node2D, rng: RandomNumberGenerator, owner_group: StringName, telegraph_gate: Callable = Callable(),
+		first_index: int = 0) -> int:
+	var index := first_index
+	for part in _modules:
+		var slots := part.get_node_or_null(^"MountSlots")
+		if slots == null:
+			continue
+		for child in slots.get_children():
+			var slot := child as TurretMountSlot
+			if slot == null:
+				continue
+			var mount := TurretMountBuilder.build(host, slot, index, rng, owner_group, telegraph_gate)
+			if mount == null:
+				continue
+			part.attach_mount(mount)
+			index += 1
+	return index
 
 
 ## The mounts attached to the part with [param id]; empty when there is no such part.

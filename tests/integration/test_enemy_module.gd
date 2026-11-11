@@ -8,7 +8,7 @@
 ##
 ## Projectile, beam and laser-ray rows run on real physics at the 8x clock (`_scale_clock()` / `_restore_clock()`, the
 ## `test_level1_drone_exit.gd` pair: the step stays 1/60 game-second). The host never moves in a t2 row, so those rows run in one world;
-## the direct-emitter rows that need no physics (nova, enemy energy weapons) run in both harnesses. Mount rows (`build_mounts`, unique
+## the direct-emitter rows that need no physics (nova, enemy energy weapons) run in both harnesses. The mount rows (`build_mounts`, unique
 ## pool names, mounts powered down) are t3's.
 extends GutTest
 
@@ -620,3 +620,113 @@ func test_homing_point_is_the_marker_else_the_part_centre() -> void:
 	assert_eq(open.homing_point(), Vector2(500.0 - 80.0, 212.0))
 	assert_eq(locked.homing_point(), locked.global_position, "no marker: the part's centre")
 	assert_eq(locked.homing_point(), Vector2(500.0, 200.0))
+
+
+# ---------------------------------------------------------------------------------------------
+# t3: `ModularHull.build_mounts()` and a part's mounts (plan §2.2, task docs/plans/cmwafsray00a3qs2ych7m2wy7)
+# ---------------------------------------------------------------------------------------------
+
+const MOUNT_PART_IDS: Array[StringName] = [&"open", &"locked", &"laser"]
+
+
+## Gives each of the fixture's three parts a `MountSlots` node with two default (burst cannon) slots, resting straight down.
+func _add_slots(host: Node) -> void:
+	for part_name in ["Open", "Locked", "Laser"]:
+		var holder := Node2D.new()
+		holder.name = "MountSlots"
+		_part(host, part_name).add_child(holder)
+		for i in 2:
+			var slot := TurretMountSlot.new()
+			slot.name = "Slot%d" % i
+			slot.position = Vector2(-6.0 + 12.0 * i, 0.0)
+			slot.rest_bearing_deg = 90.0
+			holder.add_child(slot)
+
+
+func _rng(seed_value: int = 11) -> RandomNumberGenerator:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = seed_value
+	return rng
+
+
+func _pool_names(host: Node) -> Array[String]:
+	var names: Array[String] = []
+	for child in host.get_children():
+		if child is BulletPool:
+			names.append(String(child.name))
+	return names
+
+
+func test_build_mounts_names_every_pool_uniquely_and_continues_a_hull_index() -> void:
+	var host := _host()
+	_add_slots(host)
+	var hull := _hull(host)
+	var next := hull.build_mounts(host, _rng(), &"fixture_owner", Callable(), 5)
+	assert_eq(next, 11, "3 parts x 2 slots from index 5: the next free index is 11")
+	var names := _pool_names(host)
+	assert_eq(names.size(), 6, "one burst-cannon pool per mount")
+	for i in 6:
+		assert_true(names.has("PulsePool_%d" % (5 + i)), "PulsePool_%d" % (5 + i))
+	var unique := {}
+	for n in names:
+		unique[n] = true
+	assert_eq(unique.size(), names.size(), "no two pools share a name")
+	for child in host.get_children():
+		if child is BulletPool:
+			assert_eq(child.get_parent(), host, "pools are root children of the host")
+	for id in MOUNT_PART_IDS:
+		var mounts := hull.mounts_of(id)
+		assert_eq(mounts.size(), 2, "%s: both slots built a mount" % id)
+		for m in mounts:
+			assert_eq(m.owner_group(), &"fixture_owner", "%s: setup() ran with the owner group" % id)
+			assert_eq(m.get_parent().get_parent().get_parent(), _part(host, String(id).capitalize()), "%s: the mount sits under its own part's slot" % id)
+
+
+func test_build_mounts_starts_at_zero_by_default_and_skips_parts_without_slots() -> void:
+	var host := _host()
+	var hull := _hull(host)
+	assert_eq(hull.build_mounts(host, _rng(), &"fixture_owner"), 0, "no MountSlots anywhere: nothing built, the index is unchanged")
+	assert_eq(_pool_names(host).size(), 0)
+	_add_slots(host)
+	assert_eq(hull.build_mounts(host, _rng(), &"fixture_owner"), 6, "the default first index is 0")
+	assert_true(_pool_names(host).has("PulsePool_0"))
+	assert_true(_pool_names(host).has("PulsePool_5"))
+
+
+func test_a_destroyed_modules_mounts_are_unpowered_from_the_destroy_call_and_never_fire_in_60_seconds() -> void:
+	var host := _host()
+	_add_slots(host)
+	var hull := _hull(host)
+	hull.build_mounts(host, _rng(), &"fixture_owner")
+	var counts := {}
+	for id in MOUNT_PART_IDS:
+		counts[id] = 0
+		for m in hull.mounts_of(id):
+			m.round_fired.connect(func(_p: Node2D) -> void: counts[id] += 1)
+	for m in hull.mounts_of(&"open"):
+		assert_ne(m.phase(), TurretMount.Phase.UNPOWERED, "armed before the part dies")
+	_part(host, "Open").destroy()
+	for m in hull.mounts_of(&"open"):
+		assert_eq(m.phase(), TurretMount.Phase.UNPOWERED, "UNPOWERED in the destroy call itself")
+	var target := TargetInfo.new()
+	target.has_target = true
+	target.position = host.global_position + Vector2(0.0, 300.0)
+	for i in 3600:
+		for id in MOUNT_PART_IDS:
+			for m in hull.mounts_of(id):
+				m.tick(DT, target, true)
+	assert_eq(counts[&"open"], 0, "the wreck's guns never fire in 60 s with the player in range")
+	assert_gt(counts[&"locked"], 0, "control: a live part's guns do")
+	assert_gt(counts[&"laser"], 0, "control: the other live part's guns do")
+	for m in hull.mounts_of(&"open"):
+		assert_eq(m.phase(), TurretMount.Phase.UNPOWERED, "still unpowered")
+
+
+func test_a_mount_attached_to_an_already_destroyed_part_is_unpowered_at_once() -> void:
+	var host := _host()
+	_add_slots(host)
+	_part(host, "Laser").destroy()
+	var hull := _hull(host)
+	hull.build_mounts(host, _rng(), &"fixture_owner")
+	for m in hull.mounts_of(&"laser"):
+		assert_eq(m.phase(), TurretMount.Phase.UNPOWERED, "built after the part died: powered down on attach")

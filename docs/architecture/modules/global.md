@@ -314,7 +314,9 @@ MyHeavy (BaseEnemy)
 - **DAMAGED** reuses `LowHealthSmoke` (a child `Sparks` at `threshold = damaged_ratio`), so the look and `visual_state()` share one rule.
 - **`ModularHull`** collects the direct `EnemyModule` children of `Modules` (tree order), forwards `roundi(amount × hull_share)` to
   the host's `Health` child in the same call as the hit, re-emits `module_damaged(module, amount)` / `module_destroyed(module)`,
-  and answers `modules()`, `module(id)`, `live(role)`, `destroyed_count(roles)` (empty = any role), `mounts_of(id)`. It holds no
+  and answers `modules()`, `module(id)`, `live(role)`, `destroyed_count(roles)` (empty = any role), `mounts_of(id)`. `build_mounts(host, rng, owner_group,
+  telegraph_gate := Callable(), first_index := 0) -> int` (t3) builds every part's `MountSlots` through `TurretMountBuilder` with one running pool index (pools are
+  host root children named `<spec>_<index>`), `attach_mount()`s each so it powers down with its part, and returns the next free index. It holds no
   gameplay rule of any heavy (the Ph18 seam).
 - **Who reaches a part:** player bullets and rockets (through the host's geometry rule), the player's mining beam and Plasma Nova
   (both also target group `enemy_parts`; the nova map-wide) and a level `LaserRay` (layer 512, 9999). **Enemy energy weapons do
