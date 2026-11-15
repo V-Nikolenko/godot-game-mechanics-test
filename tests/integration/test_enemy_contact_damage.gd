@@ -158,9 +158,9 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/razor_drone/razor_drone_config.tres",
 	},
 	{
-		"name": "gunship",
-		"scene": "res://assault/scenes/enemies/gunship/gunship.tscn",
-		"config": "res://assault/scenes/enemies/gunship/gunship_config.tres",
+		"name": "heavy_gunship",
+		"scene": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn",
+		"config": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.tres",
 	},
 	{
 		"name": "gatling_interceptor",
@@ -285,14 +285,15 @@ func test_support_ship_is_harmless_through_a_none_profile_not_a_missing_hitbox()
 
 
 ## The specific regression this file was written for. Kept as its own named test so a failure
-## reads as "the gunship stopped using its config" rather than as one line of a roster sweep.
-func test_gunship_rams_for_its_configured_collision_damage() -> void:
+## reads as "the gunship stopped using its config" rather than as one line of a roster sweep. The Heavy Gunship (Phase 10 t4) is the
+## legacy Gunship rewritten in place and keeps its 30.
+func test_heavy_gunship_rams_for_its_configured_collision_damage() -> void:
 	var entry: Dictionary = {}
 	for e in ROSTER:
-		if e["name"] == "gunship":
+		if e["name"] == "heavy_gunship":
 			entry = e
-	var cfg := load(entry["config"]) as GunshipConfig
-	assert_eq(cfg.collision_damage, 30, "gunship_config.tres is the source of truth for this test")
+	var cfg := load(entry["config"]) as HeavyGunshipConfig
+	assert_eq(cfg.collision_damage, 30, "heavy_gunship_config.tres is the source of truth for this test")
 	assert_ne(
 		cfg.collision_damage,
 		SHIP_CONFIG_DEFAULT_DAMAGE,
@@ -300,7 +301,7 @@ func test_gunship_rams_for_its_configured_collision_damage() -> void:
 	)
 	var gunship := _spawn(entry)
 	var hb := _contact_hitbox(gunship)
-	assert_not_null(hb, "gunship: has no contact HitBox as a direct child")
+	assert_not_null(hb, "heavy_gunship: has no contact HitBox as a direct child")
 	if hb != null:
 		assert_eq(hb.damage, cfg.collision_damage)
 

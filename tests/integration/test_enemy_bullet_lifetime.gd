@@ -105,11 +105,6 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 	for s in _gatling_speeds().values():
 		speeds.append(s as float)
 
-	# gunship_config.tres.
-	var gunship_cfg: GunshipConfig = \
-			load("res://assault/scenes/enemies/gunship/gunship_config.tres")
-	speeds.append(gunship_cfg.bullet_speed)
-
 	# EnemyBullet's own default `speed`.
 	var default_bullet: EnemyBullet = ENEMY_BULLET_SCENE.instantiate()
 	speeds.append(default_bullet.speed)

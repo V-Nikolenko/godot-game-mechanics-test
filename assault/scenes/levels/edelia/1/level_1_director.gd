@@ -344,9 +344,9 @@ func _build_section_1() -> LevelSection:
 			b.razor_drone().at( 160, -420).delay(0.35),
 		]),
 
-		# 3.5 s — gunship test; self-managed AI, no .move() needed
+		# 3.5 s — Heavy Gunship (Phase 10 t4): brain-driven, no .move()
 		b.wave(3.5, [
-			b.gunship().at(0, -500),
+			b.heavy_gunship().at(0, -500),
 		]),
 
 		# 2.0 s — V of 5 fighters from the top (+ side drone screen from above)
@@ -984,7 +984,7 @@ func _build_section_3() -> LevelSection:
 
 		# 50.0 s — gunship + 3 covering fighters (+ ram chaser)
 		b.wave(50.0, [
-			b.gunship().at(  0, -400).move(b.straight(42)),
+			b.heavy_gunship().at(  0, -400).move(b.straight(42)),
 			b.fighter().at(-65, -400).delay(0.8).squad(&"w15f"),
 			b.fighter().at(  0, -400).delay(0.8).squad(&"w15f"),
 			b.fighter().at( 65, -400).delay(0.8).squad(&"w15f"),
@@ -1014,8 +1014,8 @@ func _build_section_3() -> LevelSection:
 
 		# 62.0 s — second gunship wave with snipers (+ drone screen)
 		b.wave(62.0, [
-			b.gunship().at(-100, -400).move(b.straight(36)),
-			b.gunship().at( 100, -400).move(b.straight(36)).delay(0.8),
+			b.heavy_gunship().at(-100, -400).move(b.straight(36)),
+			b.heavy_gunship().at( 100, -400).move(b.straight(36)).delay(0.8),
 			b.sniper().at(-225, -400).delay(1.2),
 			b.sniper().at( 225, -400).delay(1.2),
 			b.drone().at(0, -400).delay(0.5).squad(&"w19"),

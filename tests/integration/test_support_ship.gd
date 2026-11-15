@@ -315,7 +315,7 @@ func test_wave_builder_spawns_it_through_the_shipped_scene() -> void:
 const FIGHTER_SCENE: PackedScene = preload("res://assault/scenes/enemies/fighter/fighter.tscn")
 const BOMBER_SCENE: PackedScene = preload("res://assault/scenes/enemies/bomber/bomber.tscn")
 const SWARM_SCENE: PackedScene = preload("res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn")
-const GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/gunship/gunship.tscn")
+const HEAVY_GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")
 const BONUS_DRONE_SCENE: PackedScene = preload("res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn")
 const FOLLOW_SEED := 424242
 
@@ -441,20 +441,23 @@ func test_a_lone_swarm_drone_is_no_ward(mode: String = use_parameters(["open_spa
 	assert_lt(ship.global_position.distance_to(drone.global_position), 205.0, "%s: holding near it, not leaving" % mode)
 
 
-func test_gunship_and_bonus_drone_beside_a_fighter_choose_the_fighter(mode: String = use_parameters(["open_space", "assault"])) -> void:
+## Phase 10 t4 flipped the gunship half of this row (owner choice 7): the Heavy Gunship is AI-driven and outscores a fighter, so it is a legal
+## ward and the one chosen (the support shields its hull and interposes; the tow is refused by its brain). The bonus drone stays no candidate.
+func test_heavy_gunship_beside_a_fighter_and_a_bonus_drone_is_the_ward(mode: String = use_parameters(["open_space", "assault"])) -> void:
 	var harness = _harness(mode)
 	harness.player.global_position = Vector2(640.0, 700.0)
-	var gunship := _real(harness, GUNSHIP_SCENE, Vector2(440.0, 300.0))
+	var gunship := _real(harness, HEAVY_GUNSHIP_SCENE, Vector2(440.0, 300.0))
 	var bonus := _real(harness, BONUS_DRONE_SCENE, Vector2(840.0, 300.0))
 	var fighter := _real(harness, FIGHTER_SCENE, Vector2(640.0, 200.0))
 	var ship := _spawn(harness, Vector2(640.0, 420.0))
-	# Both outscore the fighter on raw score_value, so a filter that fell back to it would pick one of them.
+	# Both outscore the fighter on raw score_value: the heavy wins on threat, the bonus drone never qualifies.
 	assert_gt(gunship.score_value, fighter.score_value)
 	assert_gt(bonus.score_value, fighter.score_value)
 	_tick(ship, DT)
-	assert_false(_brain(ship).is_candidate(gunship), "%s: the gunship is not AI-driven" % mode)
+	assert_true(_brain(ship).is_candidate(gunship), "%s: the heavy gunship is a legal ward" % mode)
+	assert_true(_brain(ship).is_candidate(fighter), "%s: so is the fighter" % mode)
 	assert_false(_brain(ship).is_candidate(bonus), "%s: the bonus drone is no combatant" % mode)
-	assert_eq(_brain(ship).ward, fighter, "%s: the fighter" % mode)
+	assert_eq(_brain(ship).ward, gunship, "%s: the heavy gunship, the higher threat" % mode)
 
 
 ## The Bonus Drone has no brain, so the row above holds even without the `counts_toward_wave_clear` clause; this one

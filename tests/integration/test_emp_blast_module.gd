@@ -5,7 +5,7 @@ extends GutTest
 
 const HARNESS: GDScript = preload("res://tests/helpers/enemy_ai_harness.gd")
 const FIGHTER: PackedScene = preload("res://assault/scenes/enemies/fighter/fighter.tscn")
-const GUNSHIP: PackedScene = preload("res://assault/scenes/enemies/gunship/gunship.tscn")
+const BONUS_DRONE: PackedScene = preload("res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn")  # the legacy (no-brain) subject since Phase 10 t4
 const FIXTURE_ENEMY: PackedScene = preload("res://tests/helpers/fixture_enemy.tscn")
 const BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 const DT := 1.0 / 60.0
@@ -91,9 +91,9 @@ func test_legacy_enemy_is_still_process_disabled_for_five_seconds() -> void:
 	_scale_clock()
 	Engine.time_scale = _saved_scale * 40.0  ## only the module's SceneTreeTimer runs here; no physics
 	var h := _world()
-	var g := GUNSHIP.instantiate() as BaseEnemy
+	var g := BONUS_DRONE.instantiate() as BaseEnemy
 	h.root.add_child(g)
-	assert_false(g.answers_emp(), "the legacy Gunship does not answer")
+	assert_false(g.answers_emp(), "the legacy Bonus Drone does not answer")
 	EMPBlastModule.new().try_activate(h.player)
 	assert_eq(g.process_mode, Node.PROCESS_MODE_DISABLED, "disabled")
 	await get_tree().create_timer(5.2).timeout

@@ -126,8 +126,8 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/razor_drone/razor_drone.tscn",
 	},
 	{
-		"name": "gunship",
-		"scene": "res://assault/scenes/enemies/gunship/gunship.tscn",
+		"name": "heavy_gunship",
+		"scene": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn",
 	},
 	{
 		"name": "gatling_interceptor",

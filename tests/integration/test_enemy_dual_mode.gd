@@ -643,6 +643,7 @@ const HAZARD_PROFILES := [
 	["laser_tender", 0.8, 24.0, 0.3],
 	["hacker_frigate", 0.7, 80.0, 0.4],
 	["hacker_disruptor", 0.7, 80.0, 0.4],
+	["heavy_gunship", 1.0, 90.0, 0.6],
 ]
 
 
@@ -1441,6 +1442,33 @@ func test_hacker_frigate_closes_to_its_held_range_in_both_modes(mode: String = u
 	assert_eq(brain.held_range(), 520.0 if harness.is_assault else 720.0, "%s: the mode's range" % mode)
 	assert_eq(brain.phase, HackerFrigateBrain.Phase.HOLD_ARC, "%s: holding the arc" % mode)
 	assert_true(hacker.is_in_group(&"enemies"), "%s" % mode)
+
+
+const HEAVY_GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")
+
+
+## The Heavy Gunship (Phase 10 t4) in both modes: it closes from far away to its held range (560 Open Space, 420 Assault) and turns to its
+## broadside arc.
+func test_heavy_gunship_closes_to_its_held_range_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 620.0)
+	var gunship := HEAVY_GUNSHIP_SCENE.instantiate() as HeavyGunship
+	var brain := gunship.get_node("Brain") as HeavyGunshipBrain
+	brain.start_engaged = true
+	brain.rng_seed = 9
+	gunship.config.engage_seconds = 1000.0
+	gunship.config.range_drift = 0.0
+	gunship.global_position = Vector2(640.0, -240.0)  # 860 px above the player
+	harness.root.add_child(gunship)
+	gunship.set_physics_process(false)
+	for _i in 420:
+		_tick(gunship, DT)
+	var d := gunship.global_position.distance_to(harness.player.global_position)
+	assert_almost_eq(d, brain.held_range(), 60.0, "%s: on its held range" % mode)
+	assert_eq(brain.held_range(), 420.0 if harness.is_assault else 560.0, "%s: the mode's range" % mode)
+	assert_eq(brain.phase, HeavyGunshipBrain.Phase.BROADSIDE, "%s: on its broadside arc" % mode)
+	assert_true(gunship.is_in_group(&"enemies"), "%s" % mode)
 
 
 ## The Disruptor (Phase 9, t10) is the Hacker's scripts on its own scene and config: the same closing move to its held range in both modes.

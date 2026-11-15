@@ -56,7 +56,8 @@ extends GutTest
 ##
 ## It is load-bearing from the first line, not a patch applied after a red run: three of the
 ## eleven entries fail a bare `Rect2.encloses()`, two of them by ~1e-5 px of float noise
-## (gunship: body 83.079 px vs hurtbox 82.405 px is the only real one).
+## (the legacy gunship: body 83.079 px vs hurtbox 82.405 px was the only real one; the Heavy Gunship, Phase 10 t4, shares one rectangle).
+## Still load-bearing for the float-noise pair.
 const _TOLERANCE_PX: float = 1.0
 
 ## The proposal this file exists to reject, verbatim from the backlog item.
@@ -145,8 +146,8 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/razor_drone/razor_drone.tscn",
 	},
 	{
-		"name": "gunship",
-		"scene": "res://assault/scenes/enemies/gunship/gunship.tscn",
+		"name": "heavy_gunship",
+		"scene": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn",
 	},
 	{
 		"name": "gatling_interceptor",

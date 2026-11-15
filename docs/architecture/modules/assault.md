@@ -162,7 +162,7 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   **Contact damage is the one stat the base scene does not wire up for you:** every `BaseEnemy`
   subclass's `.tscn` authors a `ContactHitBox` node with `damage = 20`, which knows nothing about
   the subclass's own `.tres`, so a subclass wanting its configured `collision_damage` must
-  re-apply it in `_ready()` off `contact_hit_box` (`gunship.gd`, `bomber.gd`,
+  re-apply it in `_ready()` off `contact_hit_box` (`heavy_gunship.gd`, `bomber.gd`,
   `fighter.gd`, `ram_corvette.gd` (which also swaps to `exposed_collision_damage` once its plates are gone), `space_station.gd`) or author a different default
   directly on its own scene node (`razor_drone.tscn`, `swarm_drone.tscn` — 30, still
   re-applied from config where one exists). Forgetting leaves the `.tres` value dead with no
@@ -573,7 +573,7 @@ booting the level — every `_build_*` body touches only `LevelSection.new()`, `
 `level_1_director.gd`'s `_build_section_3()` ("cloud_descent") plus its section schedule.
 Instead of a single boss node, the phase is an **`ENEMIES_CLEARED` section**: it opens with
 a 5-ship ally escort arrowhead, then escalates through fighter sweeps, sniper crossfire,
-ram surprises, and two **gunship waves** (the heaviest enemies in the roster) interleaved
+ram surprises, and two **Heavy Gunship waves** (the heaviest enemies in the roster) interleaved
 with drone screens. Because the section ends on `ENEMIES_CLEARED` (not a timer), the level
 will not complete until the player has destroyed/cleared every remaining enemy — the
 director's `_wait_enemies_cleared()` polls the enemy container before advancing.
@@ -666,7 +666,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `razor_drone/razor_drone_brain.gd`). Roster: bomber, bonus_drone, razor_drone,
-mine_layer (`MineLayerBrain`, six-mine lines across the player's path, Ph7), defense_turret (`DefenseTurretBrain`, no mover, a static gun whose runtime-built `TurretMount` aims and fires, Ph8), missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
+mine_layer (`MineLayerBrain`, six-mine lines across the player's path, Ph7), defense_turret (`DefenseTurretBrain`, no mover, a static gun whose runtime-built `TurretMount` aims and fires, Ph8), missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), heavy_gunship (`HeavyGunshipBrain`, a modular gun platform: six `EnemyModule` parts on a `ModularHull`, broadside arcs and break-away boosts, Ph10; [`ENEMY.md`](../../../assault/scenes/enemies/heavy_gunship/ENEMY.md)), gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).

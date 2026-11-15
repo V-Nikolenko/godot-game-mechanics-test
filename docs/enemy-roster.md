@@ -264,55 +264,28 @@ b.razor_drone().at( 160, -420).delay(0.35)
 
 ---
 
-### `gunship` — Heavy Gunship
+### `heavy_gunship` — Heavy Gunship
 
-**Builder:** `b.gunship()`  
-**Scene:** `gunship.tscn`  
-**Movement:** ⚠️ **Self-managed AI. Do NOT add `.move()`.** Adding `.move()` disables `_physics_process` and breaks the AI entirely.  
-**Shoots:** Yes — dual-barrel burst fire aimed at the player.  
-**HP:** High (200)  
-**Score:** High
+**Builder:** `b.heavy_gunship()` (const `WaveBuilder.HEAVY_GUNSHIP`; the old `b.gunship()` / `GUNSHIP` are gone since Phase 10 t4)  
+**Scene:** `heavy_gunship/heavy_gunship.tscn` — see [`ENEMY.md`](../assault/scenes/enemies/heavy_gunship/ENEMY.md)  
+**Movement:** Brain-driven (`HeavyGunshipBrain` + `EnemyMover`). **Do not add `.move()`** — a rail suspends the brain (the hull rides it and fires
+nothing). Level 1's three Cloud Descent rows and Level 2's row still carry their old rails until Phase 10 t11 takes them off.  
+**Shoots:** Yes — a burst battery on each flank (Pulse rounds, 160° arcs), a nose heavy cannon (Heavy Shells, 70° arc) and rear missiles (closed until t5).  
+**HP:** 700 hull (the phase bar) + six parts: two batteries 160, cannon 200, missiles 140, two indestructible vents  
+**Score:** 300
 
-**Behaviour phases:**
-1. `ENTER` — drops straight down at `entry_speed` until `hold_y`.
-2. `HOLD` — sits at fixed Y, tracks player horizontally, fires bursts. Sprite swaps at 50% HP.
-3. `RETREAT` — flies straight up at `entry_speed × 1.5` when HP ≤ `retreat_hp_ratio`.
+**Behaviour:** APPROACH to its held range (560 px Open Space, 420 px Assault), then BROADSIDE: it orbits the player turning a live battery side-on,
+reversing every 5–8 s; when that battery dies it swings the other side round, with no battery left it points the cannon at you. A player inside
+260 px gets one BREAK_AWAY boost (360 px/s, 0.7 s; rearm 3 s). It never parks at the top of the screen and never leaves because it is hurt.
 
-**`hold_y` formula:**  
-`hold_y = cam.global_position.y - viewport_size.y * 0.5 + hold_y_offset`  
-Default: `hold_y_offset = 55` → sits 55 px below the top screen edge in world space.
+**Assault:** inside the corridor, its arc held within ±70° of straight above the player; an `EngagementBudget` of 9.0 s, then a curved DISENGAGE
+exit (300 px/s) measured by `tests/helpers/ph10_exit_keys.gd`. A telegraph that would outlive the budget is refused, and it never opens fire from
+outside the view. **Never place it in an `ENEMIES_CLEARED` section without a deadline row** (t11 adds them).
 
-**Config fields** (`GunshipConfig`):
-
-| Field | Default | Notes |
-|-------|---------|-------|
-| `burst_interval` | 1.0 s | Seconds between burst pairs. |
-| `burst_gap` | 0.12 s | Delay between left and right shot in a burst. |
-| `bullet_damage` | 15 | Per-bullet. |
-| `bullet_speed` | 260.0 | px/s. |
-| `entry_speed` | 60.0 | px/s descent and retreat. |
-| `hold_y_offset` | 55.0 | px below viewport top where it holds. |
-| `track_speed` | 70.0 | Max horizontal tracking speed. |
-| `track_player` | true | Enable horizontal tracking during HOLD. |
-| `retreat_hp_ratio` | 0.3 | HP fraction (0–1) that triggers RETREAT. |
-
-**⚠️ Important:** The gunship descends to `hold_y` on its own. Its spawn Y should be above the visible screen (`y < -360` in design units / `y < -720` in world units after HD scale). Typical spawn: `at(0, -400)`.
-
-**Examples:**
+**Example:**
 ```gdscript
-# Single gunship
-b.gunship().at(0, -500)
-
-# Two gunships staggered
-b.gunship().at(-100, -400)
-b.gunship().at( 100, -400).delay(0.8)
-
-# Gunship with covering fighters — fighters use .move(), gunship does NOT
-b.wave(50.0, [
-    b.gunship().at(0, -400),
-    b.fighter().at(-65, -400).move(b.arc(L, 145, 4.5)).delay(0.8).free_after(5.0),
-    b.fighter().at( 65, -400).move(b.arc(R, 145, 4.5)).delay(0.8).free_after(5.0),
-])
+# Brain-driven — just .at(), no .move()
+b.heavy_gunship().at(0, -500)
 ```
 
 ---
@@ -731,7 +704,7 @@ scored. **Tuning lives in each scene's exports.** Art and `rotation` are nose-up
 | Rule | Detail |
 |------|--------|
 | **Always `.move()` path-following enemies** | None left on the AI roster. `ram`, `sniper` / `sniper_enemy` and `bomber` are AI enemies since Phase 4 (level 1 spawns them with no `.move()` in every section, t21 / t22); a rail still works and runs each one's rail fallback (sniper telegraph cycle, bomber rail bombs, ram straight line). |
-| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `gunship`, `fighter`, `gatling_interceptor`, `ram`, `sniper`, `bomber` — attaching `EnemyPathMover` suspends their AI. `fighter`, `gatling_interceptor`, `sniper` and `bomber` fall back to a legacy weapon on a rail (so the station's reinforcements still fire); the ram keeps its ARMOR contact armed; the rest go quiet. |
+| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `heavy_gunship`, `fighter`, `gatling_interceptor`, `ram`, `sniper`, `bomber` — attaching `EnemyPathMover` suspends their AI. `fighter`, `gatling_interceptor`, `sniper` and `bomber` fall back to a legacy weapon on a rail (so the station's reinforcements still fire); the ram keeps its ARMOR contact armed; the rest go quiet. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` on a rail** | No fly-in constant any more: a rail suspends the brain and the telegraph cycle starts at spawn. Without `.move()` it runs its AI relocation loop. |
 | **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |
@@ -771,8 +744,8 @@ from either side, two `swarm_drone` from below, two `fighter` with `.shoot_forwa
 above. Things to know if you edit that table (`station_reinforcements.gd::_build_squads()`):
 
 - It uses this file's own vocabulary — `b.gatling_interceptor().at(…).move(b.straight(…)).free_after(…)` —
-  so the rules below apply unchanged. In particular **`gunship` and `razor_drone` must never
-  go in it**: both are self-managed AI, and `EnemyPathMover` silently disables the AI they need.
+  so the rules below apply unchanged. In particular **`heavy_gunship` and `razor_drone` must never
+  go in it**: both are brain-driven AI, and `EnemyPathMover` silently disables the AI they need.
   A test enforces that.
 - **Every entry needs `.free_after(…)`.** The default `FREE_ON_SCREEN_EXIT` only culls a ship that
   has already been on screen once, so one that never arrives would hold `ENEMIES_CLEARED` open.

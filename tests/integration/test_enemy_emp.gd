@@ -15,7 +15,7 @@ extends GutTest
 
 const HARNESS: GDScript = preload("res://tests/helpers/enemy_ai_harness.gd")
 const FIGHTER: PackedScene = preload("res://assault/scenes/enemies/fighter/fighter.tscn")
-const GUNSHIP: PackedScene = preload("res://assault/scenes/enemies/gunship/gunship.tscn")
+const BONUS_DRONE: PackedScene = preload("res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn")  # the legacy (no-brain) subject since Phase 10 t4
 const SHIELD_GENERATOR: PackedScene = preload("res://assault/scenes/enemies/shield_generator/shield_generator.tscn")
 const FIXTURE_ENEMY: PackedScene = preload("res://tests/helpers/fixture_enemy.tscn")
 const PAIR_SPAWN: PackedScene = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn")
@@ -138,10 +138,10 @@ func test_answers_emp_follows_is_ai_driven(mode: String = use_parameters(MODES))
 	var f := _fighter(h)
 	assert_true(f.answers_emp(), "%s: an AI Fighter answers" % mode)
 	assert_true(_fixture(h).answers_emp(), "%s: the fixture enemy (brain + mover) answers" % mode)
-	var gun := GUNSHIP.instantiate() as BaseEnemy
-	h.root.add_child(gun)
-	gun.set_physics_process(false)
-	assert_false(gun.answers_emp(), "%s: a legacy Gunship (no brain) does not" % mode)
+	var legacy := BONUS_DRONE.instantiate() as BaseEnemy
+	h.root.add_child(legacy)
+	legacy.set_physics_process(false)
+	assert_false(legacy.answers_emp(), "%s: a legacy Bonus Drone (no brain) does not" % mode)
 	var gen := SHIELD_GENERATOR.instantiate() as BaseEnemy
 	h.root.add_child(gen)
 	gen.set_physics_process(false)
@@ -153,15 +153,15 @@ func test_answers_emp_follows_is_ai_driven(mode: String = use_parameters(MODES))
 
 func test_a_non_answering_enemy_ignores_apply_emp(mode: String = use_parameters(MODES)) -> void:
 	var h := _world(mode)
-	var gun := GUNSHIP.instantiate() as BaseEnemy
-	h.root.add_child(gun)
-	gun.set_physics_process(false)
+	var legacy := BONUS_DRONE.instantiate() as BaseEnemy
+	h.root.add_child(legacy)
+	legacy.set_physics_process(false)
 	var gen := SHIELD_GENERATOR.instantiate() as BaseEnemy
 	h.root.add_child(gen)
 	gen.set_physics_process(false)
 	var railed := _fighter(h)
 	railed.suspend_ai()
-	for e: BaseEnemy in [gun, gen, railed]:
+	for e: BaseEnemy in [legacy, gen, railed]:
 		var hp := e.health.current_health
 		e.apply_emp(2.0, null)
 		assert_false(e.is_emp_disrupted(), "%s: %s is not disrupted" % [mode, e.name])

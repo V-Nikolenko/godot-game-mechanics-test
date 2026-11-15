@@ -21,7 +21,7 @@ extends GutTest
 const _RACER_DIR := "res://assault/scenes/race/racers"
 const RACE_WALL_SCENE: PackedScene = preload("res://assault/scenes/race/track/race_wall.tscn")
 const STATION_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_station/space_station.tscn")
-const GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/gunship/gunship.tscn")
+const GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")
 
 ## Six racers today. A sweep that finds fewer has broken, and a broken sweep passes every
 ## assertion below vacuously.

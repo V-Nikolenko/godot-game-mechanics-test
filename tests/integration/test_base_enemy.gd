@@ -55,7 +55,7 @@ const _STATION_TURRET_SCENE := "res://assault/scenes/enemies/space_station/stati
 ## not a copy of the same expression.
 const _DEFAULT_MASK_AFTER_READY := 1121
 
-## `bomber`, `bonus_drone`, `razor_drone`, `gunship`, `gatling_interceptor`, `swarm_drone`,
+## `bomber`, `bonus_drone`, `razor_drone`, `heavy_gunship`, `gatling_interceptor`, `swarm_drone`,
 ## `fighter`, `ram_corvette`, `sniper`, `space_station`, `missile_corvette`, `support_ship`, `mine_layer`,
 ## `defense_turret`, `power_source`, `shield_generator`, `laser_emitter`, `heavy_emplacement`, `twin_laser_drone`, `laser_tender`, `jamming_structure`, `sector_jammer`, `pulsed_jammer`, `hacker_frigate`. A sweep that finds fewer has broken, and every assertion below is vacuous on a
 ## broken sweep.
@@ -499,7 +499,7 @@ func test_the_mover_max_speed_is_reported_and_zero_without_a_mover() -> void:
 
 
 func test_legacy_enemies_are_not_ai_driven() -> void:
-	for dir in ["gunship", "bonus_drone"]:
+	for dir in ["bonus_drone"]:  # the Gunship left this row in Phase 10 t4: the Heavy Gunship has a brain and a mover
 		var enemy := _spawn("%s/%s/%s.tscn" % [_ENEMY_ROOT, dir, dir]) as BaseEnemy
 		assert_false(enemy.is_ai_driven(), "%s has no brain" % dir)
 		assert_false(enemy.accept_tow(Vector2(100.0, 0.0)), "%s refuses a tow" % dir)
@@ -534,11 +534,12 @@ func test_each_brain_refuses_a_tow_in_exactly_its_committed_phases() -> void:
 		h.root.queue_free()
 
 
-## The mover-less structures with a brain (Phase 8: the defense turret, the heavy emplacement, the shield generator) have no mover, so they have no accepting phase and cannot
-## join `_REFUSING_PHASES` (that table needs one): their brain and root refuse a tow in every phase. Reached by node path and the
+## The every-phase refusers. The mover-less structures with a brain (Phase 8: the defense turret, the heavy emplacement, the shield generator) have
+## no mover, so they have no accepting phase and cannot join `_REFUSING_PHASES` (that table needs one); the Heavy Gunship (Phase 10 t4) has a
+## mover but a heavy hull is never towed. Their brain and root refuse a tow in every phase. Reached by node path and the
 ## script's constant map, never by class name (the leak note above `_hurt_box`).
-func test_a_mover_less_structure_brain_refuses_a_tow_in_every_phase() -> void:
-	for dir in ["defense_turret", "heavy_emplacement", "shield_generator"]:
+func test_every_phase_refusers_refuse_a_tow_in_every_phase() -> void:
+	for dir in ["defense_turret", "heavy_emplacement", "shield_generator", "heavy_gunship"]:
 		var h = _HARNESS.open_space()
 		add_child_autofree(h.root)
 		var enemy := load("%s/%s/%s.tscn" % [_ENEMY_ROOT, dir, dir]).instantiate() as BaseEnemy

@@ -90,7 +90,8 @@ func sniper()         -> SpawnConfig: return SpawnConfig.new(SNIPER)
 func sniper_enemy()   -> SpawnConfig: return SpawnConfig.new(SNIPER_ENEMY)
 func gatling_interceptor() -> SpawnConfig: return SpawnConfig.new(GATLING_INTERCEPTOR)
 func razor_drone()    -> SpawnConfig: return SpawnConfig.new(RAZOR_DRONE)
-func gunship()        -> SpawnConfig: return SpawnConfig.new(GUNSHIP)
+## The Heavy Gunship (Phase 10): a modular gun platform with its own brain and mover. Never give it a `.move()` (t11 takes level 1's rails off).
+func heavy_gunship()  -> SpawnConfig: return SpawnConfig.new(HEAVY_GUNSHIP)
 func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
 func missile_corvette() -> SpawnConfig: return SpawnConfig.new(MISSILE_CORVETTE)
 func support_ship()   -> SpawnConfig: return SpawnConfig.new(SUPPORT_SHIP)
@@ -291,7 +292,7 @@ const SNIPER         := "res://assault/scenes/enemies/sniper/sniper.tscn"
 const SNIPER_ENEMY   := SNIPER  ## Alias kept so existing b.sniper_enemy() calls still compile.
 const GATLING_INTERCEPTOR := "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn"
 const RAZOR_DRONE    := "res://assault/scenes/enemies/razor_drone/razor_drone.tscn"
-const GUNSHIP        := "res://assault/scenes/enemies/gunship/gunship.tscn"
+const HEAVY_GUNSHIP  := "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn"
 const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"
 const MISSILE_CORVETTE := "res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn"
 const SUPPORT_SHIP   := "res://assault/scenes/enemies/support_ship/support_ship.tscn"

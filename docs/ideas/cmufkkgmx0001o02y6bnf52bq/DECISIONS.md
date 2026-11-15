@@ -3946,3 +3946,51 @@ Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` (revision 2, after a roun
   - **`HEAVY_CANNON` head art** (`turret_head_heavy_cannon.png`, 64 x 64, pivot (32, 32), muzzle (26, 0)) was needed because `test_ph8_sprites.gd` sweeps one head per variant (`HEADS.size() == Variant.size()`); the row now lists it. Generated with PixelLab `create_map_object`, high top-down, checked at 6x. t9 may replace the art in place.
   - `test_enemy_bullet_lifetime.gd`: the Heavy Shell row reads the heavy cannon's `round_speed` (220): 1800 / 220 = 8.2 s <= 12 s; the speed also joins `_every_shipped_enemy_bullet_speed()` (>= 150, so the derived defaults are unchanged).
 - **Gate time:** the t3 rows cost 0.42 s (new file) plus about 0.0 s in `test_enemy_module.gd`; two-run mean 192.94 s against t2's 193.17 s.
+
+### Phase 10, built in t4 (Heavy Gunship shell, movement and Assault life) (2026-11-15)
+- **Built as §2.4 / §2.11 describe** (task plan `docs/plans/cmwafsrb100a7qs2yvre9y1o2/3-plan.md`, reviewed twice, APPROVED in round 2): `git mv assault/scenes/enemies/gunship
+  assault/scenes/enemies/heavy_gunship` with `HeavyGunship` (`heavy_gunship.gd`, `BaseEnemy`), `HeavyGunshipBrain` (`heavy_gunship_brain.gd`), flat `HeavyGunshipConfig`
+  (every legacy field deleted) and a rewritten `ENEMY.md`. `WaveBuilder.heavy_gunship()` / `HEAVY_GUNSHIP` replace `gunship()` / `GUNSHIP`; callers moved: level 1's four rows
+  (rails kept until t11), `level_2_waves.gd`'s live row (rail kept) and its commented rows, `test_station_reinforcements.gd`. Gate `tests/integration/test_heavy_gunship.gd`
+  (27 test functions, most in both harnesses); exit key `tests/helpers/ph10_exit_keys.gd` (`heavy_gunship_exit()`, static `prepare_probe`, `corridor_starts()`).
+- **Geometry (t9 may not change any of it):** hull 112 × 144 centred on the origin, nose = local +y, so **port = local +x**. Parts (centre, size, exposed edge): `BatteryPort`
+  (40, 10) 32 × 40 on x = 56; `BatteryStarboard` (−40, 10) mirrored; `Cannon` (0, 60) 32 × 24 on y = 72; `Missiles` (0, −60) 40 × 24 on y = −72; `VentPort` / `VentStarboard`
+  (±48, −34) 16 × 24 on x = ±56. Every outer side is **exactly** on the hull coordinate (the row checks 0.01 px), `HomingPoint` = the exposed-edge midpoint. Bare flank for the
+  control shot: x = ±56, y 30..72 and y −22..−10. Mounts: batteries BURST_CANNON rest 0° / 180° traverse 160; cannon HEAVY_CANNON rest 90° traverse 70; missiles
+  ROCKET_BATTERY rest 270° traverse 360 (its `can_fire` is false until t5). `rocket_clear_radius()` = half-diagonal + 4 ≈ 95.2.
+- **Deviations (later tasks rely on them):**
+  - **Body layer / mask stay 1 / 1** (the other mover-driven enemies' default), not §2.4.1's "layer ENEMY_HITBOX": a body on layer 256 would be seen by every mask that looks
+    for enemy hitboxes. The root `HurtBox` is layer 512, mask 1121; parts 512 / 1120; the contact box 256 / 0.
+  - `braking` 360 (config, written onto the mover) so the 140 px/s hull can stop on its range after a 360 px/s break-away; §2.16 lists no braking.
+  - `ORBIT_MAX_LEAD` 0.35 rad: the arc angle never leads the hull's own bearing from the player by more than this, so a moving player cannot drag the orbit anchor away from a
+    140 px/s hull. After a break-away the arc re-syncs to the hull's bearing (the corvette's re-sync after its break-off).
+  - Two Assault numbers §2.16 does not list (judgement): `assault_orbit_angular_speed` 0.26 rad/s and `assault_arc_half_deg` 70 (the arc stays within ±70° of straight above
+    the player and reverses at its ends). §2.12 lever (4), "the heavy's Assault orbit speed halved", is this export. The M5 apex-band reversal rule was **not needed**: the
+    never-parks row is green on seeds 1, 2 and 3.
+  - DISENGAGE is a fast path at the top of `tick()`: no player read, no mount tick, light OFF since entry (the probe went 5.9 → 4.0 s).
+  - Row 5's "circling player" is the player strafing round the heavy at 200 px/s (in Assault sweeping back and forth along that arc inside the view), not a player jinking on a
+    300 px circle of its own: a 120 px/s² hull cannot follow a 200 px/s jink, which alone moves the range by the circle's radius. The hub-idle row ticks 4 s more than planned.
+  - EMP (review M3): `on_emp_started()` `scan(0.0)`s every mount and turns the light OFF; a railed heavy (`suspend_ai()`) ticks no mount. In Assault no mount may fire while the
+    hull is outside `EnemyWorld.view_rect()` (review M4).
+- **Owner choice 3 (a part hit is also a hull hit) holds for projectiles only** (review N7): the flush-edge rule makes a bullet or rocket through a part's edge hit both, but
+  the player's beam and nova emit on the part's `HurtBox` directly, and a root `EnemyShield` absorbs on the root only, so neither wears the hull through a part. Only the vents
+  forward (`hull_share` 1.0).
+- **Legacy rows moved (§2.4.6):** the Bonus Drone is now the legacy (no-brain) subject in `test_base_enemy.gd`, `test_enemy_emp.gd` and `test_emp_blast_module.gd`; the
+  Heavy Gunship joins `test_base_enemy.gd`'s every-phase tow-refusal row; `test_support_ship.gd`'s row flipped (owner choice 7: the Heavy Gunship is a legal ward and is chosen
+  over a fighter; the bonus drone stays no candidate); `test_enemy_bullet_lifetime.gd` no longer reads the deleted `bullet_speed` (the derived defaults are unchanged);
+  `test_enemy_dual_mode.gd` has a `heavy_gunship` `HAZARD_PROFILES` row (1.0 / 90 / 0.6) and a closes-to-range row in both modes; the roster gates, config isolation and
+  explosion placement use the new path.
+- **Measured (for t11):** the corridor exit is **9.03 s** worst (from the corridor centre heading +x at 10 px/s; 2166 runs, 0 capped), so engage 9.0 + attack window 1.05 +
+  exit 9.03 + margin 0.5 = 19.58 s < `CLOUD_DESCENT_WINDOW` 23.2 s (3.62 s spare; t11 replaces the constant with the live `_deadline_rows` figure). **View grid:** the same 9.03 s worst over `PROBE.starts()` (404 runs, 0 capped, 0.69 s), so only `corridor_starts()` ships (§2.4.3 / review M7).
+  **Any change to an exit lever (`exit_speed`, `exit_acceleration`, `max_turn_rate`) re-runs the view-grid comparison** before the corridor-only set stands. The deep_space
+  3.5 s heavy (real spawn point (640, −640), the replays' player stub) fires its first battery at **6.12 s** of its 9.0 s budget.
+- **Gate time: over the task's own line, absorbed by t1's surplus (judgement, logged here).** GUT `Time` 193.51 s on a clean `git archive HEAD` copy → 200.00 / 200.29 s
+  (two `scripts/gate-time.sh` runs, mean 200.15; 2923 → 2951 tests, both runs green): **+6.6 s against the 3.5 s allotment** (1.5× line 5.25 s). `test_heavy_gunship.gd` costs
+  ≈ 6.4 s in the suite: the memoised exit probe 3.96 s in `before_all()` (2166 runs at ≈ 0.6 ms of instantiate / add / free plus ≈ 7.6 µs per hand-ticked step, in line
+  with Ph9's Hacker probe at 3.2 s; under review M1's 5.25 s probe trigger) and ≈ 2.4 s of rows. Levers taken: 16× on the two real-physics rows (they wait a count of physics
+  frames), the probe-call sweep parses only files that contain `worst_disengage(`, the stripped `Modules` and the DISENGAGE fast path in the probe. No tick count, start set,
+  speed or assertion was cut. The overrun was not escalated because t1 freed 32.6 s against its 12 s floor: the phase now projects to 200.15 + the 15.2 s still allotted to t5–t13 ≈ 215.4 s
+  against the plan's 234.5 s and the 240 s ceiling. **t11 reads the same memo** (no second probe).
+- **One red full run seen, not reproduced (likely the flake t1 lost the log of):** `test_jamming_structure.gd::test_a_fighters_path_through_a_jammer_field_is_unchanged`
+  failed once in five full runs on this tree (both harnesses: the fighter's path with the jammer present was 716 / 462 px off the control), then passed alone six times,
+  in sequence with the files before it and in the next two full runs. t4 touches nothing the Fighter, the jammer or `Hazards` reads. Not fixed here (a follow-up).

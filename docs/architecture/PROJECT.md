@@ -167,7 +167,10 @@ Detail and APIs: [global.md](modules/global.md).
   ignores every damage (the only guard against the beam, the nova and a `LaserRay`); a part killed this physics frame still
   consumes its killing shot; a destroyed part leaves `enemy_parts`, closes its hurtbox and stays on the hull with its wreck sprite.
   The player's beam and nova reach parts; enemy energy weapons do not. Recipe: [global.md](modules/global.md) → *Destructible
-  parts of a large enemy*.
+  parts of a large enemy*. **On a vulnerable hull (the Heavy Gunship, Ph10 t4) every part a projectile must reach obeys the
+  flush-edge rule:** its rectangle hurtbox's outer side lies exactly on the host's rectangle hurtbox, so a shot through that edge
+  overlaps part and hull in the same physics step and both take it; a part buried inside the outline could never be hit
+  ([ENEMY.md](../../assault/scenes/enemies/heavy_gunship/ENEMY.md), gate `test_heavy_gunship.gd`).
 - **An enemy picks a round, it does not retune one bullet (Ph3).** The pooled `EnemyBullet` family —
   Pulse, Scatter, Gatling Stream, Rail (the Sniper's, Ph4), Heavy Shell (`assault/scenes/projectiles/enemy_bullet/rounds/`, `EnemyRounds`) — are
   inherited scenes of `enemy_bullet.tscn`, each with its own `ProjectileLifetime`; `EnemyBullet.reset()` restores the
