@@ -1,0 +1,1137 @@
+diff --git a/assault/scenes/enemies/base_enemy.gd b/assault/scenes/enemies/base_enemy.gd
+index 5f41961..afbc2ea 100755
+--- a/assault/scenes/enemies/base_enemy.gd
++++ b/assault/scenes/enemies/base_enemy.gd
+@@ -194,6 +194,12 @@ func is_emp_disrupted() -> bool:
+ 	return _emp_left > 0.0
+ 
+ 
++## Seconds left of the running EMP window (0 outside one). Read-only: already set when `apply_emp` calls `brain.on_emp_started()`, so a brain can commit a
++## move for exactly the window (the Carrier's crossing, Phase 10 t6).
++func emp_seconds_left() -> float:
++	return _emp_left
++
++
+ ## One tick of the EMP window (`x -= delta`, over at `x <= EMP_CLOCK_EPSILON`, the Phase 9 clock rule).
+ func _step_emp(delta: float) -> void:
+ 	_emp_left -= delta
+diff --git a/assault/scenes/enemies/carrier/carrier.gd b/assault/scenes/enemies/carrier/carrier.gd
+new file mode 100755
+index 0000000..cf22c32
+--- /dev/null
++++ b/assault/scenes/enemies/carrier/carrier.gd
+@@ -0,0 +1,210 @@
++class_name Carrier
++extends BaseEnemy
++
++## The Carrier (docs/plans/cmug23oo90029m52wae4clve0/3-plan.md §2.6; Phase 10 t6, task plan docs/plans/cmwafsrb700afqs2yd3qqvvrb/3-plan.md): a capital
++## ship that does not chase the player, it controls space. A `CarrierBrain` decides and an `EnemyMover` moves it through `BaseEnemy`'s shared tick.
++##
++## THE HULL IS ARMOUR. `deflects_hit()` / `is_armored()` answer true always, so every player projectile crossing the 176 x 280 hull overlaps it without
++## being consumed and reaches whichever part it meets; `_on_received_damage` refuses every hit (white flash, `armor_deflected`), so bullets, rockets,
++## the beam, the nova and a level laser never lower the hull `Health`. THE PARTS are seven `EnemyModule`s under `Modules` with a `ModularHull` beside them:
++## two engines aft, two gun batteries amidships, two hangars (locked: t8 opens them with the doors) and the core (locked). Every part's hurtbox lies within
++## `config.module_x_extent` of the centre in x (level 1's lane maths, §2.13).
++##
++## THE CORE opens when `core_exposure_count` (3) outer parts (engines, guns, hangars) are wrecks: `set_vulnerable(true)` deferred (the third kill lands in a
++## physics flush, so the next physics frame sees an open core), its plating art opens and the brain panics on its next tick. Until then a hit on the
++## core pings and does nothing, against bullets, rockets, the beam and the nova alike (the part's own lock). THE CORE'S DEATH IS THE CARRIER'S: it sets
++## the hull `Health` to 0, the normal `BaseEnemy` death, and every wreck goes with the hull.
++##
++## ASSAULT. A crossing, not a budget: the brain holds a constant 90 px/s straight down that an EMP does not stop (`apply_emp` re-commits it when a window
++## grows); this root frees the hull once its top edge is below the projectile world rect. That check lives here, not in the brain, because the brain is
++## not ticked during an EMP window: the Assault life stays fixed by spawn y and speed. A wave spawn is world-anchored in x (the `TurretGroup` rule).
++##
++## Nose-down art (`sprite_forward_angle` PI/2): the nose is local +y, port (the hull's left) is local +x, the stern local -y.
++## Root body layer 0 / mask 0 (the station's rule, t6 D1): it ploughs through, and the player can fly onto the hull; the ARMOR contact (15 and a 220 px/s
++## shove) lands on entry.
++##
++## Spawn with `b.carrier().at(x, y)`. Gated by `tests/integration/test_carrier.gd`.
++
++## Every hit the armoured hull refused, with its damage.
++signal armor_deflected(damage: int)
++## Once, when the third outer part dies and the core opens.
++signal core_exposed
++
++@export var config: CarrierConfig = load("res://assault/scenes/enemies/carrier/carrier_config.tres")
++## A wave spawn lands at a camera-relative point; this removes the camera's pan from x once in `_ready()` (the `TurretGroup` rule), so `.at(x, y)` lands at
++## world x `640 + 2·x`. No effect without an Assault view rect.
++@export var world_anchored_x: bool = true
++## The core's opened plating, shown on the core `Sprite` from the frame after exposure (t9 draws the real one).
++@export var core_open_texture: Texture2D
++
++## A rocket arms this far beyond the hull's half-diagonal (px), so it never hits its own hull.
++const ROCKET_CLEARANCE := 4.0
++const CORE := &"core"
++## The outer parts whose wrecks count toward the core's exposure.
++const OUTER_ROLES: Array = [EnemyModule.Role.ENGINE, EnemyModule.Role.WEAPON, EnemyModule.Role.HANGAR]
++
++var _owner_group: StringName = &""
++var _core_exposed: bool = false
++
++@onready var _carrier_brain: CarrierBrain = $Brain
++@onready var _carrier_mover: EnemyMover = $EnemyMover
++@onready var _hull: ModularHull = $ModularHull
++
++
++func _ready() -> void:
++	super._ready()
++	add_to_group("enemies")
++	_owner_group = StringName("carrier_%d" % get_instance_id())
++	add_to_group(_owner_group)
++	if config:
++		_apply_config(config)
++	var tree := get_tree()
++	if world_anchored_x and EnemyWorld.has_view_rect(tree) and EnemyWorld.has_projectile_world_rect(tree):
++		global_position.x -= EnemyWorld.view_rect(tree).get_center().x - EnemyWorld.projectile_world_rect(tree).get_center().x
++	_hull.module_destroyed.connect(_on_module_destroyed)
++	var core := core_module()
++	if core != null:
++		core.destroyed.connect(_on_core_destroyed)
++	_carrier_brain.bind_hull(_hull)
++
++
++## `BaseEnemy`'s tick, then the Assault free-below check (here, so an EMP window cannot skip it).
++func _physics_process(delta: float) -> void:
++	super._physics_process(delta)
++	if is_queued_for_deletion() or not _carrier_brain.assault:
++		return
++	var tree := get_tree()
++	if not EnemyWorld.has_projectile_world_rect(tree):
++		return
++	if global_position.y - body_size().y * 0.5 > EnemyWorld.projectile_world_rect(tree).end.y:
++		if OS.is_stdout_verbose():
++			print("[Carrier] %s left the corridor at y %.0f" % [name, global_position.y])
++		queue_free()
++
++
++func _apply_config(cfg: CarrierConfig) -> void:
++	health.max_health = cfg.max_health
++	health.current_health = cfg.max_health
++	score_value = cfg.score_value
++	## The scene-authored ContactHitBox never reads the config; pinned for the whole roster by test_enemy_contact_damage.gd.
++	if contact_hit_box:
++		contact_hit_box.damage = cfg.collision_damage
++	_carrier_mover.max_speed = cfg.max_speed
++	_carrier_mover.acceleration = cfg.acceleration
++	_carrier_mover.braking = cfg.braking
++	_carrier_mover.max_turn_rate = cfg.max_turn_rate
++	_carrier_brain.config = cfg
++
++
++## A second EMP inside a running window only extends it (`BaseEnemy.apply_emp` tells the brain about a window's start alone): the brain re-commits its
++## crossing for the longer window, or the boost would run out and stop the hull (acceleration 0 in Assault) for the rest of it.
++func apply_emp(seconds: float, source: Node) -> void:
++	var before := emp_seconds_left()
++	super.apply_emp(seconds, source)
++	if before > 0.0 and emp_seconds_left() > before:
++		_carrier_brain.on_emp_refreshed()
++
++
++## The parts' coordinator.
++func modular_hull() -> ModularHull:
++	return _hull if _hull != null else get_node("ModularHull") as ModularHull
++
++
++## The CORE part.
++func core_module() -> EnemyModule:
++	return modular_hull().module(CORE)
++
++
++## True from the moment the third outer part died (the core's lock lifts one physics frame later).
++func is_core_exposed() -> bool:
++	return _core_exposed
++
++
++## The group every carrier weapon exempts (this hull and, from t8, its launched children).
++func owner_group() -> StringName:
++	return _owner_group
++
++
++## The body rectangle's size (px).
++func body_size() -> Vector2:
++	var shape := ($CollisionShape2D as CollisionShape2D).shape as RectangleShape2D
++	return shape.size if shape != null else Vector2.ZERO
++
++
++## The hull is armour: no player projectile is ever consumed by it (it flies on to the parts).
++func deflects_hit(_hit_box: HitBox) -> bool:
++	return true
++
++
++func is_armored() -> bool:
++	return true
++
++
++## The player's mining beam passes over the hull and burns the parts it crosses.
++func is_laser_blocking() -> bool:
++	return false
++
++
++func can_be_repaired() -> bool:
++	return false
++
++
++## Duck-typed, read by `SupportShipBrain.is_candidate()` (owner choice 7): a shield on an armoured hull would never absorb.
++func accepts_ward() -> bool:
++	return false
++
++
++## Duck-typed launcher question (a rocket mount, t7): the hull's own velocity.
++func launch_velocity() -> Vector2:
++	return velocity
++
++
++## Duck-typed launcher question: the hull's half-diagonal + 4, so a rocket arms only once clear of the whole rectangle.
++func rocket_clear_radius() -> float:
++	return body_size().length() * 0.5 + ROCKET_CLEARANCE
++
++
++## Where a player homing rocket coming from [param from] steers: the nearest live vulnerable part's `homing_point()` (its centre), else the hull centre.
++func homing_point(from: Vector2) -> Vector2:
++	var best := global_position
++	var best_d := INF
++	for part in modular_hull().modules():
++		if part.is_destroyed() or not part.is_vulnerable():
++			continue
++		var p := part.homing_point()
++		var d := from.distance_squared_to(p)
++		if d < best_d:
++			best_d = d
++			best = p
++	return best
++
++
++## Armour: every hit is refused with a flash; the hull `Health` moves only when the core dies.
++func _on_received_damage(damage: int) -> void:
++	armor_deflected.emit(damage)
++	hit_flash_player.play("hit")
++
++
++func _on_module_destroyed(_part: EnemyModule) -> void:
++	if _core_exposed or config == null:
++		return
++	if _hull.destroyed_count(OUTER_ROLES) < config.core_exposure_count:
++		return
++	_core_exposed = true
++	var core := core_module()
++	if core != null:
++		core.call_deferred(&"set_vulnerable", true)
++	_open_core_plating.call_deferred()
++	core_exposed.emit()
++
++
++func _open_core_plating() -> void:
++	var core := core_module()
++	if core == null or core.is_destroyed() or core.sprite == null or core_open_texture == null:
++		return
++	core.sprite.texture = core_open_texture
++
++
++func _on_core_destroyed(_part: EnemyModule) -> void:
++	if health.current_health > 0:
++		health.set_health(0)
+diff --git a/assault/scenes/enemies/carrier/carrier.tscn b/assault/scenes/enemies/carrier/carrier.tscn
+new file mode 100755
+index 0000000..a78a5ec
+--- /dev/null
++++ b/assault/scenes/enemies/carrier/carrier.tscn
+@@ -0,0 +1,302 @@
++[gd_scene format=3]
++
++[ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_cv"]
++[ext_resource type="Script" path="res://assault/scenes/enemies/carrier/carrier.gd" id="2_cv"]
++[ext_resource type="Texture2D" uid="uid://dkimdnfmfcosy" path="res://assault/assets/sprites/enemies/station_core.png" id="3_cv"]
++[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_cv"]
++[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_cv"]
++[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_cv"]
++[ext_resource type="Script" path="res://assault/scenes/enemies/carrier/carrier_brain.gd" id="7_cv"]
++[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="8_cv"]
++[ext_resource type="Script" path="res://global/components/modular_hull.gd" id="9_cv"]
++[ext_resource type="Script" path="res://global/components/enemy_module.gd" id="10_cv"]
++[ext_resource type="Script" path="res://global/components/state_light.gd" id="11_cv"]
++[ext_resource type="Script" path="res://global/components/contact_profile.gd" id="12_cv"]
++[ext_resource type="Script" path="res://assault/scenes/enemies/carrier/carrier_engine_plume.gd" id="13_cv"]
++[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/station_turret.png" id="20_cv"]
++[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/station_turret_destroyed.png" id="21_cv"]
++[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/power_source_glow.png" id="22_cv"]
++
++[sub_resource type="ShaderMaterial" id="ShaderMaterial_cv"]
++resource_local_to_scene = true
++shader = ExtResource("1_cv")
++shader_parameter/enabled = false
++shader_parameter/flash_color = Color(1, 1, 1, 1)
++
++[sub_resource type="RectangleShape2D" id="RectangleShape2D_hull"]
++size = Vector2(176, 280)
++
++[sub_resource type="RectangleShape2D" id="RectangleShape2D_part"]
++size = Vector2(48, 48)
++
++[sub_resource type="RectangleShape2D" id="RectangleShape2D_hangar"]
++size = Vector2(64, 56)
++
++[sub_resource type="RectangleShape2D" id="RectangleShape2D_core"]
++size = Vector2(56, 56)
++
++[sub_resource type="Animation" id="Animation_reset_cv"]
++length = 0.001
++tracks/0/type = "value"
++tracks/0/imported = false
++tracks/0/enabled = true
++tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
++tracks/0/interp = 1
++tracks/0/loop_wrap = true
++tracks/0/keys = {
++"times": PackedFloat32Array(0),
++"transitions": PackedFloat32Array(1),
++"update": 1,
++"values": [false]
++}
++
++[sub_resource type="Animation" id="Animation_hit_cv"]
++resource_name = "hit"
++length = 0.2
++tracks/0/type = "value"
++tracks/0/imported = false
++tracks/0/enabled = true
++tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
++tracks/0/interp = 1
++tracks/0/loop_wrap = true
++tracks/0/keys = {
++"times": PackedFloat32Array(0, 0.2),
++"transitions": PackedFloat32Array(1, 1),
++"update": 1,
++"values": [true, false]
++}
++
++[sub_resource type="AnimationLibrary" id="AnimationLibrary_cv"]
++_data = {
++&"RESET": SubResource("Animation_reset_cv"),
++&"hit": SubResource("Animation_hit_cv")
++}
++
++[node name="Carrier" type="CharacterBody2D"]
++collision_layer = 0
++collision_mask = 0
++script = ExtResource("2_cv")
++core_open_texture = ExtResource("22_cv")
++
++[node name="Sprite2D" type="Sprite2D" parent="."]
++material = SubResource("ShaderMaterial_cv")
++scale = Vector2(0.75, 1.125)
++texture = ExtResource("3_cv")
++
++[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
++shape = SubResource("RectangleShape2D_hull")
++
++[node name="HurtBox" type="Area2D" parent="."]
++collision_layer = 512
++collision_mask = 1121
++script = ExtResource("4_cv")
++
++[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
++shape = SubResource("RectangleShape2D_hull")
++debug_color = Color(0.7, 0, 0, 0.419608)
++
++[node name="Health" type="Node" parent="."]
++script = ExtResource("5_cv")
++max_health = 600
++current_health = 600
++
++[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
++libraries/ = SubResource("AnimationLibrary_cv")
++
++[node name="ContactHitBox" type="Area2D" parent="."]
++collision_layer = 256
++collision_mask = 128
++script = ExtResource("6_cv")
++damage = 15
++damage_type = 2
++
++[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
++shape = SubResource("RectangleShape2D_hull")
++
++[node name="ContactProfile" type="Node" parent="."]
++script = ExtResource("12_cv")
++mode = 4
++shove_speed = 220.0
++
++[node name="EnemyMover" type="Node" parent="."]
++script = ExtResource("8_cv")
++constraint_mode = 1
++
++[node name="Brain" type="Node" parent="."]
++script = ExtResource("7_cv")
++
++[node name="StateLight" type="Node2D" parent="."]
++script = ExtResource("11_cv")
++
++[node name="HullMounts" type="Node2D" parent="."]
++
++[node name="Modules" type="Node2D" parent="."]
++
++[node name="EnginePort" type="Node2D" parent="Modules"]
++position = Vector2(56, -116)
++script = ExtResource("10_cv")
++module_id = &"engine_port"
++role = 1
++max_health = 180
++starts_vulnerable = true
++intact_texture = ExtResource("20_cv")
++wreck_texture = ExtResource("21_cv")
++
++[node name="Sprite" type="Sprite2D" parent="Modules/EnginePort"]
++scale = Vector2(0.75, 0.75)
++texture = ExtResource("20_cv")
++
++[node name="HurtBox" type="Area2D" parent="Modules/EnginePort"]
++collision_layer = 512
++collision_mask = 1120
++script = ExtResource("4_cv")
++
++[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/EnginePort/HurtBox"]
++shape = SubResource("RectangleShape2D_part")
++
++[node name="Light" type="Node2D" parent="Modules/EnginePort"]
++position = Vector2(0, -24)
++script = ExtResource("13_cv")
++
++[node name="EngineStarboard" type="Node2D" parent="Modules"]
++position = Vector2(-56, -116)
++script = ExtResource("10_cv")
++module_id = &"engine_starboard"
++role = 1
++max_health = 180
++starts_vulnerable = true
++intact_texture = ExtResource("20_cv")
++wreck_texture = ExtResource("21_cv")
++
++[node name="Sprite" type="Sprite2D" parent="Modules/EngineStarboard"]
++scale = Vector2(0.75, 0.75)
++texture = ExtResource("20_cv")
++
++[node name="HurtBox" type="Area2D" parent="Modules/EngineStarboard"]
++collision_layer = 512
++collision_mask = 1120
++script = ExtResource("4_cv")
++
++[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/EngineStarboard/HurtBox"]
++shape = SubResource("RectangleShape2D_part")
++
++[node name="Light" type="Node2D" parent="Modules/EngineStarboard"]
++position = Vector2(0, -24)
++script = ExtResource("13_cv")
++
++[node name="GunPort" type="Node2D" parent="Modules"]
++position = Vector2(64, 40)
++script = ExtResource("10_cv")
++module_id = &"gun_port"
++role = 0
++max_health = 160
++starts_vulnerable = true
++intact_texture = ExtResource("20_cv")
++wreck_texture = ExtResource("21_cv")
++
++[node name="Sprite" type="Sprite2D" parent="Modules/GunPort"]
++scale = Vector2(0.75, 0.75)
++texture = ExtResource("20_cv")
++
++[node name="HurtBox" type="Area2D" parent="Modules/GunPort"]
++collision_layer = 512
++collision_mask = 1120
++script = ExtResource("4_cv")
++
++[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/GunPort/HurtBox"]
++shape = SubResource("RectangleShape2D_part")
++
++[node name="MountSlots" type="Node2D" parent="Modules/GunPort"]
++
++[node name="GunStarboard" type="Node2D" parent="Modules"]
++position = Vector2(-64, 40)
++script = ExtResource("10_cv")
++module_id = &"gun_starboard"
++role = 0
++max_health = 160
++starts_vulnerable = true
++intact_texture = ExtResource("20_cv")
++wreck_texture = ExtResource("21_cv")
++
++[node name="Sprite" type="Sprite2D" parent="Modules/GunStarboard"]
++scale = Vector2(0.75, 0.75)
++texture = ExtResource("20_cv")
++
++[node name="HurtBox" type="Area2D" parent="Modules/GunStarboard"]
++collision_layer = 512
++collision_mask = 1120
++script = ExtResource("4_cv")
++
++[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/GunStarboard/HurtBox"]
++shape = SubResource("RectangleShape2D_part")
++
++[node name="MountSlots" type="Node2D" parent="Modules/GunStarboard"]
++
++[node name="HangarPort" type="Node2D" parent="Modules"]
++position = Vector2(60, -56)
++script = ExtResource("10_cv")
++module_id = &"hangar_port"
++role = 2
++max_health = 220
++starts_vulnerable = false
++intact_texture = ExtResource("20_cv")
++wreck_texture = ExtResource("21_cv")
++
++[node name="Sprite" type="Sprite2D" parent="Modules/HangarPort"]
++scale = Vector2(0.875, 0.875)
++texture = ExtResource("20_cv")
++
++[node name="HurtBox" type="Area2D" parent="Modules/HangarPort"]
++collision_layer = 512
++collision_mask = 1120
++script = ExtResource("4_cv")
++
++[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/HangarPort/HurtBox"]
++shape = SubResource("RectangleShape2D_hangar")
++
++[node name="HangarStarboard" type="Node2D" parent="Modules"]
++position = Vector2(-60, -56)
++script = ExtResource("10_cv")
++module_id = &"hangar_starboard"
++role = 2
++max_health = 220
++starts_vulnerable = false
++intact_texture = ExtResource("20_cv")
++wreck_texture = ExtResource("21_cv")
++
++[node name="Sprite" type="Sprite2D" parent="Modules/HangarStarboard"]
++scale = Vector2(0.875, 0.875)
++texture = ExtResource("20_cv")
++
++[node name="HurtBox" type="Area2D" parent="Modules/HangarStarboard"]
++collision_layer = 512
++collision_mask = 1120
++script = ExtResource("4_cv")
++
++[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/HangarStarboard/HurtBox"]
++shape = SubResource("RectangleShape2D_hangar")
++
++[node name="Core" type="Node2D" parent="Modules"]
++position = Vector2(0, 0)
++script = ExtResource("10_cv")
++module_id = &"core"
++role = 3
++max_health = 600
++starts_vulnerable = false
++intact_texture = ExtResource("20_cv")
++wreck_texture = ExtResource("21_cv")
++
++[node name="Sprite" type="Sprite2D" parent="Modules/Core"]
++scale = Vector2(0.875, 0.875)
++texture = ExtResource("20_cv")
++
++[node name="HurtBox" type="Area2D" parent="Modules/Core"]
++collision_layer = 512
++collision_mask = 1120
++script = ExtResource("4_cv")
++
++[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/Core/HurtBox"]
++shape = SubResource("RectangleShape2D_core")
++
++[node name="ModularHull" type="Node" parent="."]
++script = ExtResource("9_cv")
+diff --git a/assault/scenes/enemies/carrier/carrier_brain.gd b/assault/scenes/enemies/carrier/carrier_brain.gd
+new file mode 100755
+index 0000000..9ee6097
+--- /dev/null
++++ b/assault/scenes/enemies/carrier/carrier_brain.gd
+@@ -0,0 +1,402 @@
++## The Carrier's brain (docs/plans/cmug23oo90029m52wae4clve0/3-plan.md §2.6.3; Phase 10 t6, task plan docs/plans/cmwafsrb700afqs2yd3qqvvrb/3-plan.md).
++## "A carrier does not chase the player; it controls space" (IDEAS §6.11). Movement only in t6: weapons (t7) and hangars (t8) hang off this brain later.
++##
++## Phases (append-only):
++##   CRUISE     Open Space hub idle: a slow orbit round `patrol_anchor` (`AnchorIdle`), until the player comes within `perceive_radius`.
++##   SCREEN     Open Space, engaged: hold the player in the `screen_range_min .. screen_range_max` band (close only from beyond it, open only from inside
++##              it), never more than `leash_radius` from the anchor; a live battery side turned to the player.
++##   PANIC      the core is exposed. Open Space: back away to the far side of the anchor from the player, on the leash circle (the leash wins). Assault:
++##              the crossing, unchanged. Entered on the tick after exposure, from any phase, for good.
++##   CROSS      Assault: a constant `assault_cross_speed` straight down, nose-down and never rotated, swaying at most `assault_sway_leash` px either side
++##              of its spawn x to keep the player in a live battery's arc. The root frees it below the projectile rect.
++##   IDLE       Open Space, engaged, no player in the tree: stop (t6 D4).
++##   NOTICING / RETURNING  the hub idle's beat before SCREEN and its way home.
++##
++## MODULE DEATH CHANGES MOVEMENT. With one engine lost the turn rate halves (`one_engine_turn`) and the Open Space speed drops (`one_engine_speed`), and the
++## hull LISTS: while it holds a heading it sags toward the dead side at `list_rate` until it is `list_hold_deg` off, then turns back at the scaled rate
++## (t6 D3). With both lost: `no_engine_turn` / `no_engine_speed`, no list (the thrust is gone on both sides alike). The mover limits are keyed by the
++## MODE, never the phase: in Assault the crossing's limits (`assault_max_speed`, acceleration / braking 0, avoidance 0) hold in every phase.
++##
++## EMP. Open Space keeps the Phase 9 halt. In Assault `on_emp_started()` / `on_emp_refreshed()` commit `mover.boost(DOWN, assault_cross_speed, window)`,
++## so the hull keeps descending while the brain (weapons, hangars) is frozen.
++##
++## Requests only (single-writer gate): `arrive`, `orbit`, `request_velocity`, `face_toward`, `boost`, and limit writes on the mover.
++class_name CarrierBrain
++extends EnemyBrain
++
++## Append-only.
++enum Phase { CRUISE, SCREEN, PANIC, CROSS, IDLE, NOTICING, RETURNING }
++
++## Emitted on every transition, with the phase entered.
++signal phase_changed(new_phase: int)
++
++const GUN_PORT := &"gun_port"
++const GUN_STARBOARD := &"gun_starboard"
++const ENGINE_PORT := &"engine_port"
++const ENGINE_STARBOARD := &"engine_starboard"
++## How far ahead of the hull the facing point is placed (px): only its direction matters.
++const FACE_REACH := 100.0
++## The list's correction ends once the heading is this close to the wanted one (rad).
++const LIST_SETTLED := 0.01
++## Half the side batteries' 150 degree traverse (§2.7); t7 reads it from the battery slot instead. The sway aims a margin inside it.
++const SWAY_ARC_HALF_DEG := 75.0
++const SWAY_ARC_MARGIN_DEG := 10.0
++## The sway's proportional gain (1/s): `gain · dt` < 1, so x approaches its target without overshoot.
++const SWAY_GAIN := 4.0
++## `idle_phase_offset` is drawn from ±this (rad).
++const MAX_IDLE_PHASE_OFFSET := 0.35
++
++## Set by `carrier.gd` before the first tick. A fresh default keeps a bare brain steppable.
++var config: CarrierConfig = CarrierConfig.new()
++var phase: Phase = Phase.CRUISE
++## Test seam: an Open Space carrier starts screening, skipping the hub idle. Assault ignores it.
++var start_engaged: bool = false
++## The leash and idle centre. `Vector2.INF` (unset): `_start()` defaults it to the spawn position.
++var patrol_anchor: Vector2 = Vector2.INF
++## True in Assault (an arena exists), fixed in `_start()`; read by the root.
++var assault: bool = false
++## Open Space hub idle only; null otherwise.
++var anchor_idle: AnchorIdle
++var idle_phase_offset: float = 0.0
++## Live ENGINE parts, counted from the hull's `module_destroyed`.
++var engines_alive: int = 2
++
++var _hull: ModularHull
++var _started: bool = false
++var _phase_time: float = 0.0
++## Assault: the spawn x the sway is leashed to (after the root's world anchoring).
++var _anchor_x: float = 0.0
++## The list's correction flag (one engine lost).
++var _correcting: bool = false
++## Which engine died when exactly one is lost: +1 / -1 rotation sign toward the dead side, 0 otherwise.
++var _list_sign: float = 0.0
++var _engine_port_dead: bool = false
++var _engine_starboard_dead: bool = false
++
++
++## Hands the brain its parts (called by the root in `_ready()`).
++func bind_hull(hull: ModularHull) -> void:
++	_hull = hull
++	_engine_port_dead = _part_dead(ENGINE_PORT)
++	_engine_starboard_dead = _part_dead(ENGINE_STARBOARD)
++	_recount_engines()
++	if not hull.module_destroyed.is_connected(_on_module_destroyed):
++		hull.module_destroyed.connect(_on_module_destroyed)
++
++
++func tick(delta: float) -> void:
++	if not _started:
++		_start()
++	_phase_time += delta
++	if phase != Phase.PANIC and _core_exposed():
++		enter_phase(Phase.PANIC)
++	if assault:
++		_tick_cross()
++		return
++	var target := TargetInfo.player(get_tree())
++	if anchor_idle != null and phase != Phase.PANIC:
++		_tick_anchor_idle(delta, target)
++	match phase:
++		Phase.CRUISE: _tick_cruise()
++		Phase.NOTICING: _tick_noticing(target)
++		Phase.RETURNING: _tick_returning()
++		Phase.SCREEN, Phase.IDLE: _tick_screen(delta, target)
++		Phase.PANIC: _tick_panic(delta, target)
++
++
++## Test seam and the one place a transition happens.
++func enter_phase(p: Phase) -> void:
++	if not _started:
++		_start()
++	phase = p
++	_phase_time = 0.0
++	if p == Phase.PANIC:
++		anchor_idle = null
++	phase_changed.emit(p)
++
++
++## Open Space: the Phase 9 halt (nothing to do). Assault: the crossing goes on for the whole window.
++func on_emp_started() -> void:
++	_boost_through_emp()
++
++
++## `Carrier.apply_emp()`: a later EMP extended the running window.
++func on_emp_refreshed() -> void:
++	_boost_through_emp()
++
++
++func on_suspended() -> void:
++	anchor_idle = null
++
++
++## A capital ship is never towed, in any phase.
++func accepts_tow() -> bool:
++	return false
++
++
++## True while the hull is in a panic (the core exposed).
++func is_panicking() -> bool:
++	return phase == Phase.PANIC
++
++
++## 1 / `one_engine_turn` / `no_engine_turn` with 2 / 1 / 0 engines.
++func turn_factor() -> float:
++	return [config.no_engine_turn, config.one_engine_turn, 1.0][clampi(engines_alive, 0, 2)]
++
++
++## 1 / `one_engine_speed` / `no_engine_speed` (Open Space only).
++func speed_factor() -> float:
++	return [config.no_engine_speed, config.one_engine_speed, 1.0][clampi(engines_alive, 0, 2)]
++
++
++## 1 / `one_engine_sway` / `no_engine_sway` (Assault).
++func sway_factor() -> float:
++	return [config.no_engine_sway, config.one_engine_sway, 1.0][clampi(engines_alive, 0, 2)]
++
++
++## The rotation sign toward the dead engine's side with exactly one lost, else 0. Port (local +x) dead: the nose yaws toward +x, rotation decreasing.
++func list_sign() -> float:
++	return _list_sign
++
++
++## Assault: the sway's leash centre.
++func anchor_x() -> float:
++	return _anchor_x
++
++
++## The unit direction the nose should point along with the player along unit [param bearing] (hull -> player): the nearer live battery side turned
++## to it (port is the nose turned -90 degrees: it faces `bearing` when the nose is `bearing` turned +90 degrees, the Gunship's mapping); a tie picks
++## port; no live battery: the bow to the player.
++func desired_nose(bearing: Vector2) -> Vector2:
++	var nose := Vector2.DOWN.rotated(actor.rotation)
++	var best := bearing
++	var best_err := INF
++	if _part_live(GUN_PORT):
++		best = bearing.rotated(PI / 2.0)
++		best_err = absf(nose.angle_to(best))
++	if _part_live(GUN_STARBOARD):
++		var starboard := bearing.rotated(-PI / 2.0)
++		if absf(nose.angle_to(starboard)) < best_err:
++			best = starboard
++	return best
++
++
++func _start() -> void:
++	_started = true
++	assault = EnemyWorld.arena(get_tree()) != null
++	if not patrol_anchor.is_finite():
++		patrol_anchor = actor.global_position
++	_apply_limits()
++	if assault:
++		_anchor_x = actor.global_position.x
++		phase = Phase.CROSS
++		phase_changed.emit(phase)
++		return
++	if start_engaged:
++		enter_phase(Phase.SCREEN)
++		return
++	anchor_idle = AnchorIdle.new(patrol_anchor, config.perceive_radius, config.lose_radius, config.notice_time, config.idle_radius)
++	idle_phase_offset = rng.randf_range(-MAX_IDLE_PHASE_OFFSET, MAX_IDLE_PHASE_OFFSET)
++	enter_phase(Phase.CRUISE)
++
++
++## The mover limits, keyed by the mode: Assault holds the crossing's in every phase; Open Space scales the speed with the engines. The turn rate always
++## follows the engines.
++func _apply_limits() -> void:
++	if mover == null:
++		return
++	mover.max_turn_rate = config.max_turn_rate * turn_factor()
++	if assault:
++		mover.max_speed = config.assault_max_speed
++		mover.acceleration = 0.0
++		mover.braking = 0.0
++		mover.hazard_avoidance = 0.0
++	else:
++		mover.max_speed = config.max_speed * speed_factor()
++
++
++func _on_module_destroyed(part: EnemyModule) -> void:
++	if part.role != EnemyModule.Role.ENGINE:
++		return
++	if part.module_id == ENGINE_PORT:
++		_engine_port_dead = true
++	elif part.module_id == ENGINE_STARBOARD:
++		_engine_starboard_dead = true
++	_recount_engines()
++	if _started:
++		_apply_limits()
++
++
++func _recount_engines() -> void:
++	engines_alive = (0 if _engine_port_dead else 1) + (0 if _engine_starboard_dead else 1)
++	if engines_alive == 1:
++		_list_sign = -1.0 if _engine_port_dead else 1.0
++	else:
++		_list_sign = 0.0
++	_correcting = false
++
++
++func _core_exposed() -> bool:
++	return actor != null and actor.has_method(&"is_core_exposed") and actor.is_core_exposed()
++
++
++func _part_live(id: StringName) -> bool:
++	if _hull == null:
++		return false
++	var part := _hull.module(id)
++	return part != null and not part.is_destroyed()
++
++
++func _part_dead(id: StringName) -> bool:
++	if _hull == null:
++		return false
++	var part := _hull.module(id)
++	return part != null and part.is_destroyed()
++
++
++func _boost_through_emp() -> void:
++	if not _started or not assault or mover == null or actor == null:
++		return
++	var left: float = actor.emp_seconds_left() if actor.has_method(&"emp_seconds_left") else 0.0
++	if left > 0.0:
++		mover.boost(Vector2.DOWN, config.assault_cross_speed, left)
++
++
++# ── Open Space ──────────────────────────────────────────────────────────────────────────────────
++
++func _tick_anchor_idle(delta: float, target: TargetInfo) -> void:
++	match anchor_idle.update(delta, actor.global_position, target):
++		AnchorIdle.State.IDLE:
++			if phase != Phase.CRUISE:
++				enter_phase(Phase.CRUISE)
++		AnchorIdle.State.NOTICING:
++			if phase != Phase.NOTICING:
++				enter_phase(Phase.NOTICING)
++		AnchorIdle.State.COMBAT:
++			if phase != Phase.SCREEN and phase != Phase.IDLE:
++				enter_phase(Phase.SCREEN)
++		AnchorIdle.State.RETURNING:
++			if phase != Phase.RETURNING:
++				enter_phase(Phase.RETURNING)
++
++
++func _tick_cruise() -> void:
++	mover.orbit(patrol_anchor, config.idle_radius, idle_phase_offset + config.idle_speed * _phase_time, mover.max_speed)
++
++
++func _tick_noticing(target: TargetInfo) -> void:
++	mover.request_velocity(Vector2.ZERO)
++	if target.has_target:
++		mover.face_toward(target.position)
++
++
++func _tick_returning() -> void:
++	mover.arrive(patrol_anchor, mover.max_speed)
++
++
++func _tick_screen(delta: float, target: TargetInfo) -> void:
++	if not target.has_target:
++		if phase != Phase.IDLE:
++			enter_phase(Phase.IDLE)
++		mover.request_velocity(Vector2.ZERO)
++		return
++	if phase == Phase.IDLE:
++		enter_phase(Phase.SCREEN)
++	var pos := actor.global_position
++	var away := pos - target.position
++	var d := away.length()
++	var outside_leash := pos.distance_to(patrol_anchor) > config.leash_radius
++	if d < config.screen_range_min or d > config.screen_range_max or outside_leash:
++		if d < 1.0:
++			away = Vector2.UP
++		var mid := (config.screen_range_min + config.screen_range_max) * 0.5
++		mover.arrive(_leashed(target.position + away.normalized() * mid), mover.max_speed)
++	else:
++		mover.request_velocity(Vector2.ZERO)
++	_face_broadside(delta, target)
++
++
++## The far side of the anchor from the player, on the leash circle: the leash wins over the retreat.
++func _tick_panic(delta: float, target: TargetInfo) -> void:
++	if not target.has_target:
++		mover.request_velocity(Vector2.ZERO)
++		return
++	var from_player := patrol_anchor - target.position
++	if from_player.length_squared() < 1.0:
++		from_player = actor.global_position - patrol_anchor
++	if from_player.length_squared() < 1.0:
++		from_player = Vector2.UP
++	mover.arrive(patrol_anchor + from_player.normalized() * config.leash_radius, mover.max_speed)
++	_face_broadside(delta, target)
++
++
++## [param p] clamped into the leash disc round the anchor.
++func _leashed(p: Vector2) -> Vector2:
++	return patrol_anchor + (p - patrol_anchor).limit_length(config.leash_radius)
++
++
++func _face_broadside(delta: float, target: TargetInfo) -> void:
++	var to_player := target.position - actor.global_position
++	if to_player.length_squared() < 1e-6:
++		return
++	_face(delta, desired_nose(to_player.normalized()))
++
++
++## The one facing call outside the crossing. With exactly one engine lost the hull lists (header): it sags toward the dead side while within
++## `list_hold_deg` of the wanted heading, and turns back at the scaled rate once past it.
++func _face(delta: float, desired_dir: Vector2) -> void:
++	var pos := actor.global_position
++	if _list_sign == 0.0:
++		mover.face_toward(pos + desired_dir * FACE_REACH)
++		return
++	var desired_rot := desired_dir.angle() - EnemyMover.sprite_forward_angle_of(actor)
++	var err := absf(angle_difference(actor.rotation, desired_rot))
++	if err > deg_to_rad(config.list_hold_deg):
++		_correcting = true
++	elif err <= LIST_SETTLED:
++		_correcting = false
++	if _correcting:
++		mover.face_toward(pos + desired_dir * FACE_REACH)
++		return
++	var sag_rot := actor.rotation + _list_sign * config.list_rate * delta
++	mover.face_toward(pos + Vector2.RIGHT.rotated(sag_rot + EnemyMover.sprite_forward_angle_of(actor)) * FACE_REACH)
++
++
++# ── Assault ─────────────────────────────────────────────────────────────────────────────────────
++
++func _tick_cross() -> void:
++	var pos := actor.global_position
++	var target := TargetInfo.player(get_tree())
++	var tx := _sway_target_x(pos, target)
++	var cap := config.assault_sway_speed * sway_factor()
++	var vx := clampf((tx - pos.x) * SWAY_GAIN, -cap, cap)
++	mover.request_velocity(Vector2(vx, config.assault_cross_speed))
++	mover.face_toward(pos + Vector2.DOWN * FACE_REACH)
++
++
++## The x the sway steers to (header): hold while the player is already inside a live battery's arc (a margin inside it), else the x that puts the
++## player on the nearer live battery's arc line, else the spawn x; always inside the leash.
++func _sway_target_x(pos: Vector2, target: TargetInfo) -> float:
++	var tx := _anchor_x
++	if target.has_target:
++		var half := deg_to_rad(SWAY_ARC_HALF_DEG - SWAY_ARC_MARGIN_DEG)
++		var to_player := target.position - pos
++		var port := _part_live(GUN_PORT)
++		var starboard := _part_live(GUN_STARBOARD)
++		# At rotation 0 port (local +x) faces world +x, starboard world -x.
++		var covered := (port and absf(Vector2.RIGHT.angle_to(to_player)) <= half) \
++				or (starboard and absf(Vector2.LEFT.angle_to(to_player)) <= half)
++		if covered:
++			tx = pos.x
++		elif port or starboard:
++			var reach := absf(to_player.y) / tan(half)
++			var best := INF
++			if port:
++				var px := target.position.x - reach
++				best = px
++			if starboard:
++				var sx := target.position.x + reach
++				if not port or absf(sx - pos.x) < absf(best - pos.x):
++					best = sx
++			tx = best
++	return clampf(tx, _anchor_x - config.assault_sway_leash, _anchor_x + config.assault_sway_leash)
+diff --git a/assault/scenes/enemies/carrier/carrier_config.gd b/assault/scenes/enemies/carrier/carrier_config.gd
+new file mode 100755
+index 0000000..24c6a06
+--- /dev/null
++++ b/assault/scenes/enemies/carrier/carrier_config.gd
+@@ -0,0 +1,66 @@
++## CarrierConfig - tuning for the Carrier (docs/plans/cmug23oo90029m52wae4clve0/3-plan.md §2.6, §2.16; Phase 10 t6, task plan
++## docs/plans/cmwafsrb700afqs2yd3qqvvrb/3-plan.md). Extends ShipConfig (max_health = the armoured hull's bar, which only the core's death empties;
++## collision_damage = the ARMOR touch; score_value; the explicit hazard profile 0.5 / 120 / 1.0: a capital ship shrugs off pull and slow).
++##
++## Flat by design (test_config_instance_isolation.gd): every field is a plain number, so the shallow `ShipConfig.privatise()` copy is complete.
++## Starting values [judgement] (§2.16) unless marked. The parts' HP live in the scene (each `EnemyModule.max_health`); weapons (t7) and hangars (t8)
++## add their own groups.
++class_name CarrierConfig
++extends ShipConfig
++
++@export_group("Movement")
++## Open Space cruise cap (px/s) with both engines.
++@export var max_speed: float = 70.0
++@export var acceleration: float = 40.0
++@export var braking: float = 40.0
++## Heading change cap (rad/s) with both engines: a 90 degree turn takes about 4.5 s.
++@export var max_turn_rate: float = 0.35
++
++@export_group("Engines")
++## Turn-rate factors with one / no engine left (module death changes movement).
++@export var one_engine_turn: float = 0.5
++@export var no_engine_turn: float = 0.15
++## Open Space speed factors with one / no engine left.
++@export var one_engine_speed: float = 0.8
++@export var no_engine_speed: float = 0.4
++## With exactly one engine lost the hull sags toward the dead side at this rate (rad/s) while it holds a heading ...
++@export var list_rate: float = 0.06
++## ... until it is this far off (degrees), then it turns back (the list's deadband, t6 D3).
++@export var list_hold_deg: float = 10.0
++
++@export_group("Screen")
++## Open Space: the band it holds the player in (px). It closes only from beyond the band and opens only from inside it.
++@export var screen_range_min: float = 600.0
++@export var screen_range_max: float = 950.0
++## It never strays further than this from `patrol_anchor` (px), in SCREEN and in PANIC alike.
++@export var leash_radius: float = 900.0
++
++@export_group("Core")
++## The core opens (becomes vulnerable, PANIC) once this many outer parts (engines, guns, hangars) are wrecks. Owner choice 1.
++@export var core_exposure_count: int = 3
++
++@export_group("Assault")
++## The constant crossing speed, straight down (px/s): engines, panic, hazards and EMP never change it.
++@export var assault_cross_speed: float = 90.0
++## The mover's cap in Assault (px/s): above the hypotenuse of the crossing and the sway, so it never slows the descent.
++@export var assault_max_speed: float = 110.0
++## The lateral sway that keeps the player in a live battery's arc (px/s), times 1 / `one_engine_sway` / `no_engine_sway` with 2 / 1 / 0 engines ...
++@export var assault_sway_speed: float = 30.0
++@export var one_engine_sway: float = 0.5
++@export var no_engine_sway: float = 0.1
++## ... leashed to this far either side of the spawn x (px): the level-1 column lanes are narrow (§2.13).
++@export var assault_sway_leash: float = 30.0
++
++@export_group("Geometry")
++## Every part's hurtbox stays within this far of the hull centre in x (px). Level 1's lane maths (§2.13) depend on it; pinned by test_carrier.gd.
++@export var module_x_extent: float = 100.0
++
++@export_group("Idle")
++## Open Space hub only: a slow orbit round `patrol_anchor` until the player comes within `perceive_radius`; home again beyond `lose_radius` (px).
++@export var perceive_radius: float = 1100.0
++@export var lose_radius: float = 1800.0
++## The beat between perceiving the player and screening (s).
++@export var notice_time: float = 0.6
++## The idle orbit's radius (px) and angular speed (rad/s).
++@export var idle_radius: float = 220.0
++@export var idle_speed: float = 0.12
+diff --git a/assault/scenes/enemies/carrier/carrier_config.tres b/assault/scenes/enemies/carrier/carrier_config.tres
+new file mode 100755
+index 0000000..09911c2
+--- /dev/null
++++ b/assault/scenes/enemies/carrier/carrier_config.tres
+@@ -0,0 +1,40 @@
++[gd_resource type="Resource" script_class="CarrierConfig" format=3]
++
++[ext_resource type="Script" path="res://assault/scenes/enemies/carrier/carrier_config.gd" id="1"]
++
++[resource]
++script = ExtResource("1")
++max_health = 600
++collision_damage = 15
++score_value = 600
++counts_as_escape = true
++hazard_avoidance = 0.5
++hazard_margin = 120.0
++hazard_resistance = 1.0
++wreck_chance = 0.0
++max_speed = 70.0
++acceleration = 40.0
++braking = 40.0
++max_turn_rate = 0.35
++one_engine_turn = 0.5
++no_engine_turn = 0.15
++one_engine_speed = 0.8
++no_engine_speed = 0.4
++list_rate = 0.06
++list_hold_deg = 10.0
++screen_range_min = 600.0
++screen_range_max = 950.0
++leash_radius = 900.0
++core_exposure_count = 3
++assault_cross_speed = 90.0
++assault_max_speed = 110.0
++assault_sway_speed = 30.0
++one_engine_sway = 0.5
++no_engine_sway = 0.1
++assault_sway_leash = 30.0
++module_x_extent = 100.0
++perceive_radius = 1100.0
++lose_radius = 1800.0
++notice_time = 0.6
++idle_radius = 220.0
++idle_speed = 0.12
+diff --git a/assault/scenes/enemies/carrier/carrier_engine_plume.gd b/assault/scenes/enemies/carrier/carrier_engine_plume.gd
+new file mode 100755
+index 0000000..95fe7a8
+--- /dev/null
++++ b/assault/scenes/enemies/carrier/carrier_engine_plume.gd
+@@ -0,0 +1,27 @@
++## CarrierEnginePlume - the code-drawn exhaust of one Carrier engine (Phase 10 §2.6.3 / §2.9, t6). It is the engine part's `Light` child, so
++## `EnemyModule.destroy()` hides it: the plume goes out with the engine. Points along local −y (the stern of the nose-down hull). Visual only.
++class_name CarrierEnginePlume
++extends Node2D
++
++## Flame length (px) and half-width at the nozzle (px).
++@export var length: float = 34.0
++@export var half_width: float = 12.0
++@export var color: Color = Color(0.45, 0.75, 1.0, 0.85)
++## Flicker period (s) and depth (share of `length`).
++@export var flicker_period: float = 0.12
++@export var flicker_depth: float = 0.2
++
++var _clock: float = 0.0
++
++
++func _process(delta: float) -> void:
++	_clock += delta
++	queue_redraw()
++
++
++func _draw() -> void:
++	var f := 1.0 - flicker_depth * 0.5 * (1.0 + sin(TAU * _clock / maxf(flicker_period, 0.01)))
++	var tip := Vector2(0.0, -length * f)
++	draw_colored_polygon(PackedVector2Array([Vector2(-half_width, 0.0), Vector2(half_width, 0.0), tip]), color)
++	var core := Color(1.0, 1.0, 1.0, color.a)
++	draw_colored_polygon(PackedVector2Array([Vector2(-half_width * 0.4, 0.0), Vector2(half_width * 0.4, 0.0), tip * 0.5]), core)
+diff --git a/assault/scenes/enemies/support_ship/support_ship_brain.gd b/assault/scenes/enemies/support_ship/support_ship_brain.gd
+index 7263c0f..31f32c0 100755
+--- a/assault/scenes/enemies/support_ship/support_ship_brain.gd
++++ b/assault/scenes/enemies/support_ship/support_ship_brain.gd
+@@ -289,6 +289,9 @@ func has_ward() -> bool:
+ func is_candidate(e: BaseEnemy) -> bool:
+ 	if e == null or not is_instance_valid(e) or e == actor or e is SupportShip:
+ 		return false
++	# A hull that answers `accepts_ward() == false` (the Carrier: a shield on an armoured hull would never absorb) is never a ward.
++	if e.has_method(&"accepts_ward") and not e.accepts_ward():
++		return false
+ 	if not e.is_ai_driven() or e.is_queued_for_deletion() or e.health == null or e.health.current_health <= 0:
+ 		return false
+ 	if not e.counts_toward_wave_clear or e.score_value < config.ward_min_score:
+diff --git a/assault/scenes/systems/wave_builder.gd b/assault/scenes/systems/wave_builder.gd
+index 19fd485..1c80e64 100755
+--- a/assault/scenes/systems/wave_builder.gd
++++ b/assault/scenes/systems/wave_builder.gd
+@@ -92,6 +92,10 @@ func gatling_interceptor() -> SpawnConfig: return SpawnConfig.new(GATLING_INTERC
+ func razor_drone()    -> SpawnConfig: return SpawnConfig.new(RAZOR_DRONE)
+ ## The Heavy Gunship (Phase 10): a modular gun platform with its own brain and mover. Never give it a `.move()` (t11 takes level 1's rails off).
+ func heavy_gunship()  -> SpawnConfig: return SpawnConfig.new(HEAVY_GUNSHIP)
++## The Carrier (Phase 10): an armoured capital ship built from parts. In Assault it crosses the corridor top to bottom at a constant 90 px/s (its life
++## is fixed by spawn y and speed; an EMP does not stop it) and its x is world-anchored like a turret group's: `.at(x, y)` lands at world x `640 + 2·x`.
++## Never in an ENEMIES_CLEARED section (test_engagement_deadline.gd). Never give it a `.move()`.
++func carrier()        -> SpawnConfig: return SpawnConfig.new(CARRIER)
+ func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
+ func missile_corvette() -> SpawnConfig: return SpawnConfig.new(MISSILE_CORVETTE)
+ func support_ship()   -> SpawnConfig: return SpawnConfig.new(SUPPORT_SHIP)
+@@ -293,6 +297,7 @@ const SNIPER_ENEMY   := SNIPER  ## Alias kept so existing b.sniper_enemy() calls
+ const GATLING_INTERCEPTOR := "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn"
+ const RAZOR_DRONE    := "res://assault/scenes/enemies/razor_drone/razor_drone.tscn"
+ const HEAVY_GUNSHIP  := "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn"
++const CARRIER        := "res://assault/scenes/enemies/carrier/carrier.tscn"
+ const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"
+ const MISSILE_CORVETTE := "res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn"
+ const SUPPORT_SHIP   := "res://assault/scenes/enemies/support_ship/support_ship.tscn"
