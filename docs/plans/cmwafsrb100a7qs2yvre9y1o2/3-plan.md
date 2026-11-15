@@ -127,6 +127,9 @@ The static `prepare_probe(ship)` does two things:
 - It drops every `player` from its group (the Ph9 rule; DISENGAGE never reads the player).
 - It frees every module's `MountSlots` before the ship enters the tree, so no mount or pool is built. Mounts never write motion, so the exit is
   bit-identical; a row pins one start with and without the hook.
+- **As built (review M1, then the round-1 gate-time fix):** it frees the whole `Modules` node, and also the hull `Sprite2D`, `ContactHitBox`,
+  `StateLight` and body `CollisionShape2D`; the brain caches the exit rect and turn rate on DISENGAGE entry. A row pins two starts with and
+  without the hook; all 2166 runs were compared once (DECISIONS t4).
 
 `corridor_starts(host)` is built exactly as `ph9_exit_keys.gd` builds it. The plan names both the view grid and `corridor_starts()`. The
 corridor set covers the view grid's area, and each of its positions includes the heading straight away from its exit edge. I will measure the

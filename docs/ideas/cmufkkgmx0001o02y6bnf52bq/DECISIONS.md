@@ -3994,3 +3994,18 @@ Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` (revision 2, after a roun
 - **One red full run seen, not reproduced (likely the flake t1 lost the log of):** `test_jamming_structure.gd::test_a_fighters_path_through_a_jammer_field_is_unchanged`
   failed once in five full runs on this tree (both harnesses: the fighter's path with the jammer present was 716 / 462 px off the control), then passed alone six times,
   in sequence with the files before it and in the next two full runs. t4 touches nothing the Fighter, the jammer or `Hazards` reads. Not fixed here (a follow-up).
+- **Gate time, round 2 (review round 1: the task must stay under its own 1.5× line, 5.25 s, not lean on t1's surplus).** The bullet above is
+  superseded: `test_heavy_gunship.gd` now costs **4.69 s** in the suite (probe 3.96 → 2.92 s, rows 2.17 → 1.77 s), ≈ 5.0 s with the roster /
+  legacy moves; the whole suite went 200.15 → 198.20 s (two `scripts/gate-time.sh` runs, 198.52 / 197.88; a third full run 198.18), so
+  the task as a whole is 193.51 → 198.20 = **+4.7 s**. What changed:
+  - `HeavyGunshipBrain` caches `_exit_rect` (`EnemyWorld.projectile_world_rect()`) and `_exit_turn_rate` on DISENGAGE entry instead of
+    looking them up every step (the `ArenaCamera` rect is pinned, so game behaviour is unchanged), and `tick()` returns before the budget
+    and break-rearm clocks once in DISENGAGE (neither is read there; `budget.remaining()` freezes at the exit). If a later phase needs the
+    budget to keep counting through the exit, move that branch back below `budget.update()` (+0.13 s of probe).
+  - `prepare_probe` also frees the hull `Sprite2D`, `ContactHitBox`, `StateLight` and body `CollisionShape2D` (`_PROBE_STRIP`). All 2166
+    run times were compared identical before / after both changes (worst still 9.03 s); the hook row now pins two starts, the worst one included.
+  - Rows: the still-player range case, the broadside share and the keep-side control share one 20 s run per mode
+    (`test_against_a_still_player_it_holds_its_range_turns_a_battery_side_on_and_keeps_that_side`; the keep-side check now spans 20 s instead
+    of 16); `test_it_holds_its_range_against_a_circling_player` keeps the circling case. The bullet and homing rows wait until each shot is
+    spent, then 2 frames, with the old fixed waits (20 / 60 frames) as caps. 27 → 26 test functions; no assertion, tick count, start set or
+    speed was cut.

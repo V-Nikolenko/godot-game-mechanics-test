@@ -48,14 +48,23 @@ static func corridor_starts(host: Node) -> Array:
 ##    nobody. DISENGAGE never reads the player.
 ## 2. The whole `Modules` node is freed, so the hull has no parts, no mounts and no pools (six parts, four mounts and their round pools per run
 ##    otherwise; `ModularHull._ready()` returns cleanly without it). DISENGAGE reads no part and a mount never writes the hull's motion.
-## So the exit is bit-identical (`test_heavy_gunship.gd` pins one start with and without this hook). A caller that runs it with its own harness
-## player present loses that player's targeting.
+## 3. The hull `Sprite2D`, the `ContactHitBox`, the `StateLight` and the body `CollisionShape2D` are freed too (t4 review round 1: per-run
+##    setup is a third of the probe). DISENGAGE draws nothing, touches nothing and turns its light off on entry; the harness world has no
+##    environment body, and the probe overwrites the position `move_and_slide()` produced (`before + velocity * DT`), so a shapeless body
+##    moves the same. `BaseEnemy` reads `ContactHitBox` with `get_node_or_null` and the brain the light the same way.
+## So the exit is bit-identical (`test_heavy_gunship.gd` pins two starts with and without this hook; all 2166 runs were compared once when
+## step 3 landed, t4 DECISIONS). A caller that runs it with its own harness player present loses that player's targeting.
 static func prepare_probe(ship: Node) -> void:
 	var tree := Engine.get_main_loop() as SceneTree
 	if tree != null:
 		for player in tree.get_nodes_in_group(&"player"):
 			player.remove_from_group(&"player")
-	var modules := ship.get_node_or_null(^"Modules")
-	if modules != null:
-		ship.remove_child(modules)
-		modules.free()
+	for path in _PROBE_STRIP:
+		var node := ship.get_node_or_null(path)
+		if node != null:
+			ship.remove_child(node)
+			node.free()
+
+
+## What `prepare_probe` frees from each probe instance (see there).
+const _PROBE_STRIP: Array[NodePath] = [^"Modules", ^"Sprite2D", ^"ContactHitBox", ^"StateLight", ^"CollisionShape2D"]

@@ -185,6 +185,17 @@ func _frames(n: int) -> void:
 		await get_tree().physics_frame
 
 
+## Physics frames until [param p] is spent (freed or queued for deletion), then [param after] more so a second hit in the next step would still
+## be counted; at most [param cap] frames before that (a projectile that is never spent waits the whole cap, the old fixed wait). t4 review
+## round 1: a fixed 20-frame wait per shot was most of the projectile rows' time.
+func _until_spent(p: Node, cap: int, after: int = 2) -> void:
+	for _i in cap:
+		if not is_instance_valid(p) or p.is_queued_for_deletion():
+			break
+		await get_tree().physics_frame
+	await _frames(after)
+
+
 ## A real projectile launched at [param target] from `SHOT` px away along [param from_dir], nose toward it (player projectiles fly along
 ## `Vector2.UP.rotated(rotation)`). Its flight ends the way `WeaponBehavior._launch()` ends it: `expired -> queue_free`.
 func _fire(parent: Node, scene: PackedScene, target: Vector2, from_dir: Vector2) -> Node2D:
@@ -341,7 +352,7 @@ func test_a_bullet_through_each_exposed_edge_hits_that_part_and_the_hull(mode: S
 	var pings := _count(vent.deflected)
 	var hp := g.health.current_health
 	var b0 := _fire(h.root, BULLET_SCENE, vent.homing_point(), Vector2.RIGHT)
-	await _frames(20)
+	await _until_spent(b0, 20)
 	assert_false(is_instance_valid(b0) and not b0.is_queued_for_deletion(), "%s: the hull consumed the shot" % mode)
 	assert_eq(hp - g.health.current_health, damage, "%s: a closed vent: the hull once" % mode)
 	assert_eq(pings[0], 1, "%s: the closed vent pinged once" % mode)
@@ -350,8 +361,8 @@ func test_a_bullet_through_each_exposed_edge_hits_that_part_and_the_hull(mode: S
 	var dmg_counts := {}
 	for part in g.modular_hull().modules():
 		dmg_counts[part.module_id] = _count(part.damaged)
-	_fire(h.root, BULLET_SCENE, g.to_global(Vector2(56.0, 51.0)), Vector2.RIGHT)
-	await _frames(20)
+	var b1 := _fire(h.root, BULLET_SCENE, g.to_global(Vector2(56.0, 51.0)), Vector2.RIGHT)
+	await _until_spent(b1, 20)
 	assert_eq(hp - g.health.current_health, damage, "%s: a bare flank shot hurts the hull once" % mode)
 	for id in dmg_counts:
 		assert_eq((dmg_counts[id] as Array[int])[0], 0, "%s: and no part (%s)" % [mode, id])
@@ -364,7 +375,7 @@ func test_a_bullet_through_each_exposed_edge_hits_that_part_and_the_hull(mode: S
 		var hp_before := g.health.current_health
 		var hits := _count(part.damaged)
 		var b := _fire(h.root, BULLET_SCENE, part.homing_point(), normal)
-		await _frames(20)
+		await _until_spent(b, 20)
 		assert_false(is_instance_valid(b) and not b.is_queued_for_deletion(), "%s: %s consumed the shot" % [mode, part.module_id])
 		assert_eq(hits[0], 1, "%s: %s took the shot exactly once" % [mode, part.module_id])
 		var expected := roundi(float(damage) * (1.0 + part.hull_share))
@@ -390,7 +401,7 @@ func test_a_homing_rocket_from_the_port_side_steers_into_the_port_battery(mode: 
 	rocket.rotation = Vector2.UP.angle_to(Vector2.LEFT)
 	var damage := (rocket.get_node("HitBox") as HitBox).damage
 	var hp := g.health.current_health
-	await _frames(60)
+	await _until_spent(rocket, 60)
 	assert_eq(hits[0], 1, "%s: the rocket hit the port battery" % mode)
 	assert_eq(battery.health.current_health, battery.max_health - damage, "%s: for its damage" % mode)
 	assert_eq(hp - g.health.current_health, damage, "%s: and the hull took the same shot once" % mode)
@@ -398,62 +409,87 @@ func test_a_homing_rocket_from_the_port_side_steers_into_the_port_battery(mode: 
 
 # ── Range, broadside and the side swap ───────────────────────────────────────────────────────────
 
-## `held_range() ± (range_drift + range_tolerance)` from the first tick inside it to the end of 20 s, against a still player and against one
-## circling the heavy at 200 px/s (strafing round it, the way a player works a broadside hull; in Assault it sweeps back and forth along that
-## arc inside the view). Not a player jinking on a circle of its own: a 120 px/s^2 hull cannot follow a 200 px/s jink, which alone moves the
-## range by the circle's radius (the task plan's 300 px circle; t4 DECISIONS).
-func test_it_holds_its_range(case: String = use_parameters(["open_space_still", "open_space_circling", "assault_still", "assault_circling"])) -> void:
-	var mode := "open_space" if case.begins_with("open_space") else "assault"
-	var circling := case.ends_with("circling")
+## `held_range() ± (range_drift + range_tolerance)` from the first tick inside it to the end of 20 s, against one circling the heavy at 200
+## px/s (strafing round it, the way a player works a broadside hull; in Assault it sweeps back and forth along that arc inside the view). Not a
+## player jinking on a circle of its own: a 120 px/s^2 hull cannot follow a 200 px/s jink, which alone moves the range by the circle's radius
+## (the task plan's 300 px circle; t4 DECISIONS). The still-player case is the first scenario of
+## `test_against_a_still_player_it_holds_its_range_turns_a_battery_side_on_and_keeps_that_side` (t4 review round 1: one run per mode).
+func test_it_holds_its_range_against_a_circling_player(mode: String = use_parameters(MODES)) -> void:
 	var h = _world(mode)
 	var centre: Vector2 = h.player.global_position
 	var held := SHIPPED.assault_preferred_range if h.is_assault else SHIPPED.preferred_range
 	var g := _spawn(h, centre + Vector2(0.0, -held - 150.0))
-	var band := Vector2(held - SHIPPED.range_drift - SHIPPED.range_tolerance, held + SHIPPED.range_drift + SHIPPED.range_tolerance)
+	var band := _range_band(held)
 	var first := -1
 	var worst := Vector2(INF, -INF)
 	var sense := 1.0
 	for i in int(20.0 / DT):
-		if circling:
-			var px: float = h.player.global_position.x
-			if h.is_assault and (px > STRAFE_X.y or px < STRAFE_X.x):
-				sense = -1.0 if px > STRAFE_X.y else 1.0
-			var rel: Vector2 = h.player.global_position - g.global_position
-			h.player.velocity = rel.orthogonal().normalized() * 200.0 * sense
-			h.player.global_position += h.player.velocity * DT
+		var px: float = h.player.global_position.x
+		if h.is_assault and (px > STRAFE_X.y or px < STRAFE_X.x):
+			sense = -1.0 if px > STRAFE_X.y else 1.0
+		var rel: Vector2 = h.player.global_position - g.global_position
+		h.player.velocity = rel.orthogonal().normalized() * 200.0 * sense
+		h.player.global_position += h.player.velocity * DT
 		_tick(g)
 		var d := g.global_position.distance_to(h.player.global_position)
 		if first < 0 and d >= band.x and d <= band.y:
 			first = i
 		if first >= 0:
 			worst = Vector2(minf(worst.x, d), maxf(worst.y, d))
+	_assert_range(mode + "_circling", first, worst, band)
+
+
+func _range_band(held: float) -> Vector2:
+	return Vector2(held - SHIPPED.range_drift - SHIPPED.range_tolerance, held + SHIPPED.range_drift + SHIPPED.range_tolerance)
+
+
+func _assert_range(case: String, first: int, worst: Vector2, band: Vector2) -> void:
 	assert_gte(first, 0, "%s: it reached the band" % case)
 	assert_gte(worst.x, band.x, "%s: never closer than %.0f (worst %.1f)" % [case, band.x, worst.x])
 	assert_lte(worst.y, band.y, "%s: never further than %.0f (worst %.1f)" % [case, band.y, worst.y])
 
 
-## Share of BROADSIDE ticks over 20 s whose nose is 90 ± 20 degrees off the bearing to a still player (Assault: the shipped arc, clamp and
-## corridor, the player low in the view).
-func _broadside_share(mode: String, turn_rate: float) -> float:
+## 20 s against a still player (Assault: the shipped arc, clamp and corridor, the player low in the view), from 150 px beyond the held range:
+## `{first, worst, band}` for the range, `share` = the share of BROADSIDE ticks whose nose is 90 ± 20 degrees off the bearing to the player, and
+## `sides` = every chosen battery side in order.
+func _still_player_run(mode: String, turn_rate: float) -> Dictionary:
 	var h = _world(mode)
 	var held := SHIPPED.assault_preferred_range if h.is_assault else SHIPPED.preferred_range
-	var g := _spawn(h, (h.player.global_position as Vector2) + Vector2(0.0, -held), {"max_turn_rate": turn_rate})
+	var g := _spawn(h, (h.player.global_position as Vector2) + Vector2(0.0, -held - 150.0), {"max_turn_rate": turn_rate})
+	var brain := _brain(g)
+	var band := _range_band(held)
+	var first := -1
+	var worst := Vector2(INF, -INF)
 	var inside := 0
 	var total := 0
-	for _i in int(20.0 / DT):
+	var sides: Array[int] = []
+	for i in int(20.0 / DT):
 		_tick(g)
-		if _brain(g).phase != Phase.BROADSIDE:
+		var d := g.global_position.distance_to(h.player.global_position)
+		if first < 0 and d >= band.x and d <= band.y:
+			first = i
+		if first >= 0:
+			worst = Vector2(minf(worst.x, d), maxf(worst.y, d))
+		if brain.side != HeavyGunshipBrain.SIDE_NONE and (sides.is_empty() or sides[-1] != brain.side):
+			sides.append(brain.side)
+		if brain.phase != Phase.BROADSIDE:
 			continue
 		total += 1
 		if absf(_deg_to_player(g, h.player, _nose(g)) - 90.0) <= FACING_TOL:
 			inside += 1
-	return float(inside) / float(total) if total > 0 else 0.0
+	return {"first": first, "worst": worst, "band": band, "share": float(inside) / float(total) if total > 0 else 0.0, "sides": sides}
 
 
-func test_it_turns_a_battery_side_on_to_the_player(mode: String = use_parameters(MODES)) -> void:
-	var share := _broadside_share(mode, SHIPPED.max_turn_rate)
+## Three rows over one scenario per mode (t4 review round 1: they used to tick 20 + 20 + 16 s each): the range is held, a battery side is
+## turned to the player, and with both batteries alive the chosen side never changes (the control for the swap below). The facing control: a
+## hull that can hardly turn misses the band.
+func test_against_a_still_player_it_holds_its_range_turns_a_battery_side_on_and_keeps_that_side(mode: String = use_parameters(MODES)) -> void:
+	var run := _still_player_run(mode, SHIPPED.max_turn_rate)
+	_assert_range(mode + "_still", int(run["first"]), run["worst"], run["band"])
+	var share: float = run["share"]
 	assert_gte(share, 0.8, mode + ": the nose is 90 ± 20 degrees off the bearing for %.0f %% of BROADSIDE" % (share * 100.0))
-	var control := _broadside_share(mode, 0.05)
+	assert_eq((run["sides"] as Array).size(), 1, "%s: one side all along (%s)" % [mode, run["sides"]])
+	var control: float = _still_player_run(mode, 0.05)["share"]
 	assert_lt(control, 0.8, mode + ": control: a hull that can hardly turn misses the band (%.0f %%)" % (control * 100.0))
 
 
@@ -496,20 +532,6 @@ func test_a_dead_battery_turns_the_other_side_then_the_nose_then_away(mode: Stri
 	r = _settle(g, h.player, 8.0, nose_away)
 	assert_between(float(r["seconds"]), 0.0, 5.0, "%s: missiles only: the nose turns away" % mode)
 	assert_true(r["held"], "%s: and stays" % mode)
-
-
-## Control for the swap: with both batteries alive the chosen side never changes over the same 16 s.
-func test_with_both_batteries_alive_it_keeps_its_side(mode: String = use_parameters(MODES)) -> void:
-	var h = _world(mode)
-	var held := SHIPPED.assault_preferred_range if h.is_assault else SHIPPED.preferred_range
-	var g := _spawn(h, h.player.global_position + Vector2(0.0, -held))
-	var brain := _brain(g)
-	var sides: Array[int] = []
-	for _i in int(16.0 / DT):
-		_tick(g)
-		if brain.side != HeavyGunshipBrain.SIDE_NONE and (sides.is_empty() or sides[-1] != brain.side):
-			sides.append(brain.side)
-	assert_eq(sides.size(), 1, "%s: one side all along (%s)" % [mode, sides])
 
 
 # ── Break-away ───────────────────────────────────────────────────────────────────────────────────
@@ -735,13 +757,16 @@ func test_the_exit_key_is_built_once_and_the_hook_changes_nothing() -> void:
 	var h = HARNESS.assault()
 	add_child_autofree(h.root)
 	h.player.global_position = PROBE.MID_VIEW + Vector2(0.0, 300.0)
-	var at: Vector2 = PROBE.MID_VIEW + Vector2(-720.0, -720.0)
-	var v := Vector2(1.0, 1.0).normalized() * SHIPPED.break_speed
-	var plain: float = PROBE.disengage_seconds(h.root, SCENE, Phase.DISENGAGE, at, v, PH10.CAP)
-	assert_true(h.player.is_in_group(&"player"), "precondition: without the hook the stub is a player")
-	var hooked: float = PROBE.disengage_seconds(h.root, SCENE, Phase.DISENGAGE, at, v, PH10.CAP, PH10.prepare_probe)
-	assert_false(h.player.is_in_group(&"player"), "the hook took the stub out of group player")
-	assert_eq(hooked, plain, "bit-identical exit with the mounts stripped")
+	# A corner start at break_speed, and the worst start (the view centre heading right at 10 px/s).
+	var starts := [[PROBE.MID_VIEW + Vector2(-720.0, -720.0), Vector2(1.0, 1.0).normalized() * SHIPPED.break_speed],
+			[PROBE.MID_VIEW, Vector2.RIGHT * PH10.SLOW_START]]
+	for s: Array in starts:
+		h.player.add_to_group(&"player")
+		var plain: float = PROBE.disengage_seconds(h.root, SCENE, Phase.DISENGAGE, s[0], s[1], PH10.CAP)
+		assert_true(h.player.is_in_group(&"player"), "precondition: without the hook the stub is a player")
+		var hooked: float = PROBE.disengage_seconds(h.root, SCENE, Phase.DISENGAGE, s[0], s[1], PH10.CAP, PH10.prepare_probe)
+		assert_false(h.player.is_in_group(&"player"), "the hook took the stub out of group player")
+		assert_eq(hooked, plain, "bit-identical exit from %s with the parts, sprite, contact box, light and body shape stripped" % [s[0]])
 
 
 ## No test builds a Ph10 probe call by hand: every `worst_disengage(` naming `HeavyGunshipBrain` lives in `ph10_exit_keys.gd`.

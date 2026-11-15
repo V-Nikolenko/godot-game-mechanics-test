@@ -96,6 +96,11 @@ var _hull: ModularHull
 var _started: bool = false
 var _phase_time: float = 0.0
 var _exit_point: Vector2 = Vector2.ZERO
+## The projectile world rect DISENGAGE leaves, read once on entry: `ArenaCamera.projectile_world_rect()` is pinned (a constant), so a per-tick
+## lookup (two group searches) would only cost the exit probe time.
+var _exit_rect: Rect2 = Rect2()
+## DISENGAGE's turn rate (rad/s), also fixed on entry: `max_turn_rate` capped by what the exit acceleration can follow.
+var _exit_turn_rate: float = 0.0
 var _expiry_seen: bool = false
 var _disengage_pending: bool = false
 var _orbit_angle: float = 0.0
@@ -119,6 +124,12 @@ func bind_mounts(hull: ModularHull) -> void:
 
 
 func tick(delta: float) -> void:
+	# The exit reads no player, ticks no mount, shows no light (OFF since entry) and no longer needs the budget or the break rearm: the short
+	# path keeps the exit probe cheap. A DISENGAGE entered later in this tick takes the branch below once.
+	if phase == Phase.DISENGAGE and _started:
+		_phase_time += delta
+		_tick_disengage(delta)
+		return
 	if not _started:
 		_start()
 	_phase_time += delta
@@ -130,7 +141,6 @@ func tick(delta: float) -> void:
 		_disengage_pending = false
 		enter_phase(Phase.DISENGAGE)
 	if phase == Phase.DISENGAGE:
-		# The exit reads no player, ticks no mount and shows no light (OFF since entry): the short path keeps the exit probe cheap.
 		_tick_disengage(delta)
 		return
 	if anchor_idle != null:
@@ -458,7 +468,11 @@ func _enter_disengage() -> void:
 	mover.release_constraint()
 	mover.max_speed = config.exit_speed
 	mover.acceleration = config.exit_acceleration
-	var rect := EnemyWorld.projectile_world_rect(get_tree())
+	_exit_rect = EnemyWorld.projectile_world_rect(get_tree())
+	_exit_turn_rate = config.max_turn_rate
+	if config.exit_speed > 0.0:
+		_exit_turn_rate = minf(_exit_turn_rate, config.exit_acceleration / config.exit_speed)
+	var rect := _exit_rect
 	var pos := actor.global_position
 	var to_left := pos.x - rect.position.x
 	var to_right := rect.end.x - pos.x
@@ -477,15 +491,12 @@ func _enter_disengage() -> void:
 
 ## Strict `<` / `>` against the rect's edges (the corvette's). The curve's rate is capped by what the exit acceleration can follow.
 func _tick_disengage(delta: float) -> void:
-	var rect := EnemyWorld.projectile_world_rect(get_tree())
+	var rect := _exit_rect
 	var pos := actor.global_position
 	if pos.x < rect.position.x or pos.x > rect.end.x or pos.y < rect.position.y or pos.y > rect.end.y:
 		actor.queue_free()
 		return
-	var rate := config.max_turn_rate
-	if config.exit_speed > 0.0:
-		rate = minf(rate, config.exit_acceleration / config.exit_speed)
-	var dir := Steering.turn_toward(_heading(), _exit_point - pos, rate, delta)
+	var dir := Steering.turn_toward(_heading(), _exit_point - pos, _exit_turn_rate, delta)
 	mover.request_velocity(dir * config.exit_speed)
 
 
