@@ -1,4 +1,4 @@
-## CarrierHangarDoors - the code-drawn doors of one Carrier hangar (Phase 10 §2.8 / §2.9, t8; placeholders until t9 draws the art). Two leaves
+## CarrierHangarDoors - the code-drawn doors of one Carrier hangar (Phase 10 §2.8 / §2.9, t8; placeholders; with an `open_texture` (t9) the doors are the open hangar art crossfading over the closed sprite). Two leaves
 ## that slide apart along the hangar's long axis (local y) as `open_amount` goes 0 -> 1; `broken` draws them torn and hanging open (the wreck).
 ## `CarrierHangars` writes both; the node redraws only when one changes. Visual only: no collision, no clock of its own.
 class_name CarrierHangarDoors
@@ -10,6 +10,9 @@ extends Node2D
 @export var seam_color: Color = Color(0.85, 0.75, 0.25)
 @export var bay_color: Color = Color(0.05, 0.06, 0.1)
 @export var broken_color: Color = Color(0.22, 0.2, 0.22)
+## The hangar with its doors open (t9 art). The module `Sprite` is the closed art and `wreck_texture` the wreck, so this is the third door state: drawn centred over the
+## closed art with alpha = `open_amount`, and nothing on a wreck. Null keeps the code-drawn placeholder. A mirrored (starboard) hangar mirrors this node with `scale.x` -1.
+@export var open_texture: Texture2D
 
 ## 0 = shut, 1 = fully open.
 var open_amount: float = 0.0:
@@ -26,7 +29,16 @@ var broken: bool = false:
 			queue_redraw()
 
 
+## True while the open art is showing: textured, not a wreck and at least partly open.
+func uses_art_open() -> bool:
+	return open_texture != null and not broken and open_amount > 0.0
+
+
 func _draw() -> void:
+	if open_texture != null:
+		if uses_art_open():
+			draw_texture(open_texture, -open_texture.get_size() * 0.5, Color(1.0, 1.0, 1.0, open_amount))
+		return
 	var half := size * 0.5
 	draw_rect(Rect2(-half, size), bay_color)
 	var leaf_h := half.y * (1.0 - open_amount)

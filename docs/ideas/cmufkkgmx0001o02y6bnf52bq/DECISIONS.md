@@ -4179,3 +4179,31 @@ Task plan `docs/plans/cmwafsrbc00anqs2y9y0ovll4/` (review: round 1 and round 2 C
 - **Gate time:** GUT 203.53 s (two `scripts/gate-time.sh` runs on a clean `git archive HEAD` copy, 203.347 / 203.72) → 205.51 s (205.419 / 205.605; 2997 →
   3005 tests, 106593 asserts; both green, `check-test-leaks.sh` clean, gate output ≈ 418 KB): **+1.98 s** against the 2.2 s allotment. Own files:
   `test_carrier_hangars.gd` summed testcase time ≈ 1.76 s; `test_carrier.gd` 2.74 → 2.88 s.
+
+### Phase 10, built in t9 (Heavy Gunship and Carrier art) (2026-11-16)
+- **Built as §2.9 / §2.10 describe.** 19 sprites in `assault/assets/sprites/enemies/heavy_gunship/` (hull 112 × 144; battery, cannon, missiles intact + wreck; vent) and
+  `.../carrier/` (hull 192 × 288; engine, gun intact + wreck; hangar closed / open / wreck 64 × 56; core plated / exposed / wreck 64 × 64), wired into
+  `heavy_gunship.tscn` and `carrier.tscn`. Every part `Sprite` is at scale 1 (natural size; the stand-in scales are gone) and the Gunship hull `Sprite2D` is no longer
+  rotated (the art is drawn nose-down). The old `heave_gunship.png`, `heavy_gunship_non_shielded.png` and `.pdn` (and their `.import` files) are deleted.
+- **How the art was made (deviation from the "PixelLab object tool" default):** every sprite is **hand-drawn through the PixelLab workbench** (`pixelart_workbench draw`
+  recipes: polygons, rects, circles, pixels, one palette), not generated. Reason, measured: `create_map_object` at `high top-down` gave 32 px parts with a visible side face
+  (3/4) and a 112 × 144 hull that filled 100 × 126 of its canvas with windows where the batteries sit and no empty sockets, and a generated sprite cannot be made flush with
+  an exact hurtbox edge. A drawn sprite is strictly top-down by construction, exactly as large as its hurtbox, and the set shares one palette (ink / navy / maroon /
+  cool blue; wrecks are charred greys with ember pixels). Each image was checked at 3-6x over a dark ground, assembled on its hull at in-game layout (intact and wrecked).
+- **Every part texture is ≤ 90 % opaque** (§2.10 row) by silhouette, not by transparency tricks: chamfered corners, protruding tubes with gaps, an inset housing, hull notches
+  (measured 62 % – 87 %, corners all transparent). The vent keeps its outer edge on the hull coordinate with 1 px chamfered corners.
+- **Hangar doors = three textures, no new node:** `intact_texture` is the closed hangar, `wreck_texture` the wreck, and the new `CarrierHangarDoors.open_texture` export the open
+  bay, drawn over the closed art with alpha `open_amount` (`uses_art_open()` is true while textured, not broken and `open_amount > 0`); a wreck draws nothing (its wreck texture
+  carries it). With no `open_texture` the t8 code-drawn leaves remain (the node's own contract is unchanged; `CarrierHangars` writes the same two fields as before).
+  The starboard hangar mirrors with `Sprite.flip_h` and `Doors.scale.x` −1, so the bay opens to its own flank. **Core:** `intact_texture` plated, `Carrier.core_open_texture`
+  (now `core_exposed.png`) on exposure, `wreck_texture` the crater. The Gunship's starboard battery and vent mirror the port art with `flip_h` too. The vents have no wreck
+  (indestructible, `max_health` 0).
+- **Transparency walk widened, no fallback needed:** `test_entity_sprite_transparency.gd::_collect_textures()` now registers every `Texture2D`-valued property of every node in
+  each in-scope scene (instanced nodes' overrides included) and a new row proves the export-only textures are reached. The wider walk flagged **no** pre-Phase-10 texture, so §2.10's
+  fallback (a separate check inside `test_ph10_sprites.gd`) was not taken; `test_ph10_sprites.gd` still measures every Phase 10 texture itself (size, corners, 15 % < opaque < 90 %).
+- **Geometry untouched:** `git diff` of the two `.tscn` files shows no `CollisionShape2D`, shape resource, module position, `HomingPoint` or body size change; the flush-edge
+  row of `test_heavy_gunship.gd` and the `module_x_extent` row of `test_carrier.gd` pass unchanged. t11 / t12 measure against the same shapes.
+- **Seams for later tasks:** the Carrier's engine `Light` (`CarrierEnginePlume`, (0, −24)) sits on the engine art's nozzle edge; the part `Light`s stay at the part centres. The
+  Gunship's `Missiles` tube mouths face the aft edge and the cannon muzzle the nose edge, matching their `HomingPoint`s (exposed-edge midpoints).
+- **Tests:** `tests/integration/test_ph10_sprites.gd` (11 functions: every texture's size / corners / opacity, the old art gone, hull wiring and body cover, every part wired
+  (natural size, hurtbox-sized, mirrored on the starboard side), destruction swaps to the wreck on both ships, three door states, the open art's switch, three core states).

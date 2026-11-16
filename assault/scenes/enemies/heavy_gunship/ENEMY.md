@@ -7,7 +7,7 @@ ship turns its other side to you. The parts sit on the hull's edges, so you aim 
 and vent through two glowing weak points. Hurt it more and it panics, boosting away and firing rear missiles at whoever chases it.
 
 Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` §2.4 (Phase 10 t4) and §2.5 / §2.9 (t5); task plans `docs/plans/cmwafsrb100a7qs2yvre9y1o2/3-plan.md`
-(t4) and `docs/plans/cmwafsrb400abqs2yt38khcyu/3-plan.md` (t5). The multi-part art arrives in t9; level 1's rails come off in t11.
+(t4) and `docs/plans/cmwafsrb400abqs2yt38khcyu/3-plan.md` (t5). The multi-part art is in (t9, below); level 1's rails come off in t11.
 
 ---
 
@@ -99,6 +99,24 @@ Support Ship's repair cannot undo one): **CONTROLLED** at 60 % and above, **OVER
   in progress stays open (and orange) through it and resumes its clock after. **A rail** (`.move()`) suspends the brain: it rides and does not
   fire, and an open VENT closes at once.
 - **Never towed** (`accepts_tow()` false). It answers EMP (AI-driven). Its own rockets have never hit it (measured over 60 s of EMERGENCY).
+
+## Art (t9, §2.10)
+
+All sprites are drawn top-down (nose down, no side faces) in the faction palette: dark navy hull, maroon / red trim, a cool blue edge light. Source:
+`assault/assets/sprites/enemies/heavy_gunship/`, authored at natural size (every `Sprite` has scale 1; nothing is multiplied). The hull has **empty sockets**
+where the parts sit, so a wreck reads as damage to a part, never a hole in the art.
+
+| Texture | Size | Used by |
+|---|---|---|
+| `hull.png` | 112 × 144 | root `Sprite2D` (rotation 0: the art is drawn nose-down), chamfered nose and aft corners, flank notches |
+| `battery.png` / `battery_wreck.png` | 32 × 40 | `BatteryPort` (outer side = right edge); `BatteryStarboard` uses the same pair with `Sprite.flip_h` |
+| `cannon.png` / `cannon_wreck.png` | 32 × 24 | `Cannon` (muzzle on the bottom = nose edge) |
+| `missiles.png` / `missiles_wreck.png` | 40 × 24 | `Missiles` (four tube mouths on the top = aft edge) |
+| `vent.png` | 16 × 24 | `VentPort` / `VentStarboard` (flip_h); a grille, the orange glow is the code-drawn `Light`; never destroyed, so no wreck |
+
+Every part texture is exactly its hurtbox's size and its outer side is the exposed edge (flush-edge rule); the art never changed a shape, a part position or a
+`HomingPoint`. The mount head, the cannon shield and every glow stay code-drawn. Each texture is ≤ 90 % fully opaque (a silhouette, not a card):
+`tests/integration/test_ph10_sprites.gd`. The pre-Phase-10 `heave_gunship.png` / `heavy_gunship_non_shielded.png` / `.pdn` are deleted.
 
 ## Lights
 

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://jrm80jg6n40"
-path="res://.godot/imported/heave_gunship.png-4cb2932264edd39f6daf1d50d80deef5.ctex"
+uid="uid://cp2xscecuq7j7"
+path="res://.godot/imported/engine.png-326ff5ddbf2b97a2057397e990bbd143.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assault/assets/sprites/enemies/heave_gunship.png"
-dest_files=["res://.godot/imported/heave_gunship.png-4cb2932264edd39f6daf1d50d80deef5.ctex"]
+source_file="res://assault/assets/sprites/enemies/carrier/engine.png"
+dest_files=["res://.godot/imported/engine.png-326ff5ddbf2b97a2057397e990bbd143.ctex"]
 
 [params]
 

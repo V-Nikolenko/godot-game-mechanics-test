@@ -2,7 +2,7 @@
 
 [ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_cv"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/carrier/carrier.gd" id="2_cv"]
-[ext_resource type="Texture2D" uid="uid://dkimdnfmfcosy" path="res://assault/assets/sprites/enemies/station_core.png" id="3_cv"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/carrier/hull.png" id="3_cv"]
 [ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_cv"]
 [ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_cv"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_cv"]
@@ -13,9 +13,16 @@
 [ext_resource type="Script" path="res://global/components/state_light.gd" id="11_cv"]
 [ext_resource type="Script" path="res://global/components/contact_profile.gd" id="12_cv"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/carrier/carrier_engine_plume.gd" id="13_cv"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/station_turret.png" id="20_cv"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/station_turret_destroyed.png" id="21_cv"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/power_source_glow.png" id="22_cv"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/carrier/engine.png" id="30_cv"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/carrier/engine_wreck.png" id="31_cv"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/carrier/gun.png" id="32_cv"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/carrier/gun_wreck.png" id="33_cv"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/carrier/hangar_closed.png" id="34_cv"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/carrier/hangar_open.png" id="35_cv"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/carrier/hangar_wreck.png" id="36_cv"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/carrier/core_plated.png" id="37_cv"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/carrier/core_exposed.png" id="38_cv"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/carrier/core_wreck.png" id="39_cv"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/turret_mount_slot.gd" id="23_cv"]
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/carrier/carrier_pulse_ring.tscn" id="24_cv"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/carrier/carrier_hangar_doors.gd" id="25_cv"]
@@ -79,11 +86,10 @@ _data = {
 collision_layer = 0
 collision_mask = 0
 script = ExtResource("2_cv")
-core_open_texture = ExtResource("22_cv")
+core_open_texture = ExtResource("38_cv")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 material = SubResource("ShaderMaterial_cv")
-scale = Vector2(0.75, 1.125)
 texture = ExtResource("3_cv")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
@@ -157,12 +163,11 @@ module_id = &"engine_port"
 role = 1
 max_health = 180
 starts_vulnerable = true
-intact_texture = ExtResource("20_cv")
-wreck_texture = ExtResource("21_cv")
+intact_texture = ExtResource("30_cv")
+wreck_texture = ExtResource("31_cv")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/EnginePort"]
-scale = Vector2(0.75, 0.75)
-texture = ExtResource("20_cv")
+texture = ExtResource("30_cv")
 
 [node name="HurtBox" type="Area2D" parent="Modules/EnginePort"]
 collision_layer = 512
@@ -183,12 +188,11 @@ module_id = &"engine_starboard"
 role = 1
 max_health = 180
 starts_vulnerable = true
-intact_texture = ExtResource("20_cv")
-wreck_texture = ExtResource("21_cv")
+intact_texture = ExtResource("30_cv")
+wreck_texture = ExtResource("31_cv")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/EngineStarboard"]
-scale = Vector2(0.75, 0.75)
-texture = ExtResource("20_cv")
+texture = ExtResource("30_cv")
 
 [node name="HurtBox" type="Area2D" parent="Modules/EngineStarboard"]
 collision_layer = 512
@@ -209,12 +213,11 @@ module_id = &"gun_port"
 role = 0
 max_health = 160
 starts_vulnerable = true
-intact_texture = ExtResource("20_cv")
-wreck_texture = ExtResource("21_cv")
+intact_texture = ExtResource("32_cv")
+wreck_texture = ExtResource("33_cv")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/GunPort"]
-scale = Vector2(0.75, 0.75)
-texture = ExtResource("20_cv")
+texture = ExtResource("32_cv")
 
 [node name="HurtBox" type="Area2D" parent="Modules/GunPort"]
 collision_layer = 512
@@ -238,12 +241,11 @@ module_id = &"gun_starboard"
 role = 0
 max_health = 160
 starts_vulnerable = true
-intact_texture = ExtResource("20_cv")
-wreck_texture = ExtResource("21_cv")
+intact_texture = ExtResource("32_cv")
+wreck_texture = ExtResource("33_cv")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/GunStarboard"]
-scale = Vector2(0.75, 0.75)
-texture = ExtResource("20_cv")
+texture = ExtResource("32_cv")
 
 [node name="HurtBox" type="Area2D" parent="Modules/GunStarboard"]
 collision_layer = 512
@@ -267,12 +269,11 @@ module_id = &"hangar_port"
 role = 2
 max_health = 220
 starts_vulnerable = false
-intact_texture = ExtResource("20_cv")
-wreck_texture = ExtResource("21_cv")
+intact_texture = ExtResource("34_cv")
+wreck_texture = ExtResource("36_cv")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/HangarPort"]
-scale = Vector2(0.875, 0.875)
-texture = ExtResource("20_cv")
+texture = ExtResource("34_cv")
 
 [node name="HurtBox" type="Area2D" parent="Modules/HangarPort"]
 collision_layer = 512
@@ -284,6 +285,7 @@ shape = SubResource("RectangleShape2D_hangar")
 
 [node name="Doors" type="Node2D" parent="Modules/HangarPort"]
 script = ExtResource("25_cv")
+open_texture = ExtResource("35_cv")
 
 [node name="Light" type="Node2D" parent="Modules/HangarPort"]
 position = Vector2(0, -24)
@@ -300,12 +302,12 @@ module_id = &"hangar_starboard"
 role = 2
 max_health = 220
 starts_vulnerable = false
-intact_texture = ExtResource("20_cv")
-wreck_texture = ExtResource("21_cv")
+intact_texture = ExtResource("34_cv")
+wreck_texture = ExtResource("36_cv")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/HangarStarboard"]
-scale = Vector2(0.875, 0.875)
-texture = ExtResource("20_cv")
+flip_h = true
+texture = ExtResource("34_cv")
 
 [node name="HurtBox" type="Area2D" parent="Modules/HangarStarboard"]
 collision_layer = 512
@@ -316,7 +318,9 @@ script = ExtResource("4_cv")
 shape = SubResource("RectangleShape2D_hangar")
 
 [node name="Doors" type="Node2D" parent="Modules/HangarStarboard"]
+scale = Vector2(-1, 1)
 script = ExtResource("25_cv")
+open_texture = ExtResource("35_cv")
 
 [node name="Light" type="Node2D" parent="Modules/HangarStarboard"]
 position = Vector2(0, -24)
@@ -333,12 +337,11 @@ module_id = &"core"
 role = 3
 max_health = 600
 starts_vulnerable = false
-intact_texture = ExtResource("20_cv")
-wreck_texture = ExtResource("21_cv")
+intact_texture = ExtResource("37_cv")
+wreck_texture = ExtResource("39_cv")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/Core"]
-scale = Vector2(0.875, 0.875)
-texture = ExtResource("20_cv")
+texture = ExtResource("37_cv")
 
 [node name="HurtBox" type="Area2D" parent="Modules/Core"]
 collision_layer = 512

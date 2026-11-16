@@ -7,8 +7,8 @@ which opens only after three outer parts are wrecks. Losing engines makes it tur
 ship visibly comes apart.
 
 Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` §2.6 (Phase 10 t6) and §2.7 (t7, weapons); task plans `docs/plans/cmwafsrb700afqs2yd3qqvvrb/`
-(t6), `docs/plans/cmwafsrb900ajqs2yb5jcl5ij/` (t7) and `docs/plans/cmwafsrbc00anqs2y9y0ovll4/` (t8, hangars, §2.8). The real multi-part art arrives
-in t9 (the textures here are stand-ins); hub placement in t10; level 1 in t12.
+(t6), `docs/plans/cmwafsrb900ajqs2yb5jcl5ij/` (t7) and `docs/plans/cmwafsrbc00anqs2y9y0ovll4/` (t8, hangars, §2.8). The multi-part art is in
+(t9, see Art below); hub placement in t10; level 1 in t12.
 
 ---
 
@@ -107,10 +107,30 @@ cools down or the band expands, else OFF; in PANIC it strobes (0.25 s, ARMED / O
 expanding band is cancelled and its fade finished on the spot, since the brain is not ticked through the window), lights OFF. **Death** ends the
 ring in the same call (`died` → `cancel_pulse()`).
 
+## Art (t9, §2.10)
+
+Top-down, nose-down, no side faces; faction palette (dark navy hull, maroon / red trim, cool blue edge lights). Source:
+`assault/assets/sprites/enemies/carrier/`, natural size (every `Sprite` has scale 1). The hull has empty sockets for every part, the bow cannon housing and
+the dorsal missile bank, so a wreck reads as damage to a part.
+
+| Texture | Size | Used by |
+|---|---|---|
+| `hull.png` | 192 × 288 | root `Sprite2D` (covers the 176 × 280 body); chamfered stern, flank notches, tapering bow |
+| `engine.png` / `engine_wreck.png` | 48 × 48 | `EnginePort` / `EngineStarboard` (nozzle on the stern edge, where the code-drawn plume starts) |
+| `gun.png` / `gun_wreck.png` | 48 × 48 | `GunPort` / `GunStarboard` (octagonal housing; the turret head is code-drawn) |
+| `hangar_closed.png` | 64 × 56 | `HangarPort` / `HangarStarboard` `intact_texture`: two door leaves shut on a seam. The starboard module has `Sprite.flip_h` |
+| `hangar_open.png` | 64 × 56 | `Doors.open_texture`: the bay open, leaves retracted, launch slot on the outer flank. Drawn over the closed art with alpha = `open_amount`; the starboard `Doors` has `scale.x` −1 |
+| `hangar_wreck.png` | 64 × 56 | `wreck_texture`: torn, skewed doors hanging open over a burnt bay |
+| `core_plated.png` / `core_exposed.png` / `core_wreck.png` | 64 × 64 | `Core` `intact_texture`; `Carrier.core_open_texture` (the plating peeled open on a glowing reactor); `wreck_texture` |
+
+So a hangar has three door states (closed / open / wreck) and the core three plating states (plated / exposed / wreck), all as textures. Every part texture is
+≤ 90 % fully opaque and has transparent corners: `tests/integration/test_ph10_sprites.gd`, and `test_entity_sprite_transparency.gd` (widened in t9 to every
+`Texture2D`-valued node property, so module, door and core exports are measured too). No shape, part position or `HomingPoint` changed.
+
 ## Hangars (t8, §2.8)
 
 `CarrierHangars` (`carrier_hangars.gd`, a `RefCounted` built by the root, held and ticked by the brain after the weapons) drives the two HANGAR
-parts. Each hangar module carries `Doors` (`CarrierHangarDoors`, code-drawn placeholder leaves; t9 draws the art), `Light` (a `StateLight`) and
+parts. Each hangar module carries `Doors` (`CarrierHangarDoors`: its `open_texture` is the open-bay art over the closed hangar sprite; code-drawn leaves when it is null), `Light` (a `StateLight`) and
 `Mouth` (a `Marker2D` 48 px outboard: hull x ±108).
 
 **The door cycle** (`CarrierHangars.Door { CLOSED, OPENING, LAUNCH, OPEN }`, append-only): CLOSED → OPENING (`door_open_seconds` 0.8: the doors slide
@@ -155,7 +175,7 @@ carrier/
 ├── carrier_engine_plume.gd     (CarrierEnginePlume: the code-drawn engine flame, each engine's Light)
 ├── carrier_pulse_ring.tscn     (the anti-approach ring: an inherited energy_ring.tscn, exports only)
 ├── carrier_hangars.gd          (CarrierHangars: doors, launches, caps, emergency deployment)
-├── carrier_hangar_doors.gd     (CarrierHangarDoors: the code-drawn placeholder doors)
+├── carrier_hangar_doors.gd     (CarrierHangarDoors: the doors, the open-bay art crossfaded over the closed sprite)
 └── carrier_config.gd / .tres   (CarrierConfig)
 ```
 

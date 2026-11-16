@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c0cwccej5f54n"
-path="res://.godot/imported/heavy_gunship_non_shielded.png-52f924e88e74521cce2b5f79d3631c36.ctex"
+uid="uid://d0dnc7smk2vap"
+path="res://.godot/imported/core_plated.png-87732fce97c93300e7e002b2c836cfab.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assault/assets/sprites/enemies/heavy_gunship_non_shielded.png"
-dest_files=["res://.godot/imported/heavy_gunship_non_shielded.png-52f924e88e74521cce2b5f79d3631c36.ctex"]
+source_file="res://assault/assets/sprites/enemies/carrier/core_plated.png"
+dest_files=["res://.godot/imported/core_plated.png-87732fce97c93300e7e002b2c836cfab.ctex"]
 
 [params]
 

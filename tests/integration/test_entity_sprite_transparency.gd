@@ -51,6 +51,10 @@
 ##   * `AnimatedSprite2D` → `sprite_frames`, every animation x every frame
 ##   * either, yielding an `AtlasTexture` → its `.atlas`, measured over the **whole sheet** rather
 ##     than the region. Simpler, and a painted sheet background is a whole-sheet property.
+##   * (Phase 10 t9) any other node's `Texture2D`-valued property: an `EnemyModule`'s `intact_texture` /
+##     `wreck_texture`, a hangar doors' `open_texture`, `Carrier.core_open_texture`. None is a stored
+##     `Sprite2D.texture`, so before t9 the wreck, open-door and exposed-core art was never measured.
+##     The wider walk flagged no pre-Phase-10 texture, so the plan's fallback was not needed.
 ##
 ## Instanced sub-scenes are not recursed into, and that is structurally enforced rather than
 ## merely intended: `SceneState.get_node_type()` returns `""` for an instanced node, so the walk
@@ -151,12 +155,12 @@ func _collect_scenes(dir_path: String) -> void:
 func _collect_textures(state: SceneState) -> void:
 	for i in range(state.get_node_count()):
 		var type := state.get_node_type(i)
-		if type != "Sprite2D" and type != "AnimatedSprite2D":
-			continue
 		for p in range(state.get_node_property_count(i)):
 			var prop_name := state.get_node_property_name(i, p)
 			var value: Variant = state.get_node_property_value(i, p)
-			if type == "Sprite2D" and prop_name == "texture":
+			# Phase 10 t9: every Texture2D-valued property, not only `Sprite2D.texture`, because an `EnemyModule`'s `intact_texture` / `wreck_texture`, a hangar's
+			# `open_texture` and the Carrier's `core_open_texture` are exports a Sprite2D-only walk never sees. Instanced nodes (type "") contribute their overrides.
+			if value is Texture2D:
 				_register(value)
 			elif type == "AnimatedSprite2D" and prop_name == "sprite_frames":
 				_register_frames(value)
@@ -337,3 +341,21 @@ func test_the_walk_found_the_entity_scenes() -> void:
 			+ "nothing — fix the walk, do not lower the floor."
 		)
 	)
+
+
+## Phase 10 t9 widened the walk to every Texture2D-valued node property. These textures are held only in exports (`EnemyModule.intact_texture` / `wreck_texture`, the hangar
+## doors' `open_texture`, `Carrier.core_open_texture`), never in a stored `Sprite2D.texture`, so a `Sprite2D`-only walk misses them: the wreck art, the open-doors art and
+## the exposed core are the three that prove the widening, and the sweep above measures them.
+func test_the_walk_reaches_textures_held_only_in_exports() -> void:
+	var art := "res://assault/assets/sprites/enemies/"
+	for rel: String in [
+		"heavy_gunship/battery_wreck.png",
+		"heavy_gunship/cannon_wreck.png",
+		"heavy_gunship/missiles_wreck.png",
+		"carrier/engine_wreck.png",
+		"carrier/hangar_open.png",
+		"carrier/hangar_wreck.png",
+		"carrier/core_exposed.png",
+		"carrier/core_wreck.png",
+	]:
+		assert_true(_textures.has(art + rel), "%s is not reached by the texture walk (an export-only texture)" % rel)
