@@ -19,6 +19,12 @@ extends BaseEnemy
 ## grows); this root frees the hull once its top edge is below the projectile world rect. That check lives here, not in the brain, because the brain is
 ## not ticked during an EMP window: the Assault life stays fixed by spawn y and speed. A wave spawn is world-anchored in x (the `TurretGroup` rule).
 ##
+## WEAPONS (t7, §2.7; task plan docs/plans/cmwafsrb900ajqs2yb5jcl5ij/3-plan.md). Each gun part carries a BURST_CANNON with a 150 degree traverse
+## centred on its own side, so a dead battery leaves that side safe; `HullMounts/Bow` is a HEAVY_CANNON (70 degrees, forward) and `HullMounts/Dorsal`
+## a PURSUIT-only rocket bank (`missile_cooldown`), hull systems that fall silent only with the carrier. `AntiApproachRing` (`carrier_pulse_ring.tscn`,
+## r 420) is the pulse against hull-huggers; it exempts this hull and its owner group (launched children, t8) and, like every enemy energy weapon,
+## never reaches a part. The brain ticks all of them; `died` ends the ring at once.
+##
 ## Nose-down art (`sprite_forward_angle` PI/2): the nose is local +y, port (the hull's left) is local +x, the stern local -y.
 ## Root body layer 0 / mask 0 (the station's rule, t6 D1): it ploughs through, and the player can fly onto the hull; the ARMOR contact (15 and a 220 px/s
 ## shove) lands on entry.
@@ -40,6 +46,8 @@ signal core_exposed
 ## A rocket arms this far beyond the hull's half-diagonal (px), so it never hits its own hull.
 const ROCKET_CLEARANCE := 4.0
 const CORE := &"core"
+const BOW_SLOT := &"Bow"
+const DORSAL_SLOT := &"Dorsal"
 ## The outer parts whose wrecks count toward the core's exposure.
 const OUTER_ROLES: Array = [EnemyModule.Role.ENGINE, EnemyModule.Role.WEAPON, EnemyModule.Role.HANGAR]
 
@@ -49,6 +57,7 @@ var _core_exposed: bool = false
 @onready var _carrier_brain: CarrierBrain = $Brain
 @onready var _carrier_mover: EnemyMover = $EnemyMover
 @onready var _hull: ModularHull = $ModularHull
+@onready var _ring: EnergyRing = $AntiApproachRing
 
 
 func _ready() -> void:
@@ -66,6 +75,7 @@ func _ready() -> void:
 	if core != null:
 		core.destroyed.connect(_on_core_destroyed)
 	_carrier_brain.bind_hull(_hull)
+	_build_weapons()
 
 
 ## `BaseEnemy`'s tick, then the Assault free-below check (here, so an EMP window cannot skip it).
@@ -80,6 +90,30 @@ func _physics_process(delta: float) -> void:
 		if OS.is_stdout_verbose():
 			print("[Carrier] %s left the corridor at y %.0f" % [name, global_position.y])
 		queue_free()
+
+
+## The weapons (t7): the side batteries' module slots through `ModularHull.build_mounts()`, then each `HullMounts` slot through the same builder
+## with the running pool index; the missile bank takes this host's cooldown and PURSUIT share; the ring is bound to the owner group and ends with the hull.
+func _build_weapons() -> void:
+	var rng := _carrier_brain.rng
+	var index := _hull.build_mounts(self, rng, _owner_group)
+	var bow: TurretMount = null
+	var bank: TurretMount = null
+	for slot in get_node("HullMounts").get_children():
+		if not slot is TurretMountSlot:
+			continue
+		var mount := TurretMountBuilder.build(self, slot as TurretMountSlot, index, rng, _owner_group)
+		index += 1
+		if slot.name == BOW_SLOT:
+			bow = mount
+		elif slot.name == DORSAL_SLOT:
+			bank = mount
+	if bank != null and config != null:
+		bank.cooldown_seconds = config.missile_cooldown
+		bank.set(&"pursuit_chance", config.missile_pursuit_chance)
+	_ring.setup(self, _owner_group)
+	died.connect(_carrier_brain.cancel_pulse)
+	_carrier_brain.bind_weapons(bow, bank, _ring)
 
 
 func _apply_config(cfg: CarrierConfig) -> void:
@@ -118,6 +152,29 @@ func core_module() -> EnemyModule:
 ## True from the moment the third outer part died (the core's lock lifts one physics frame later).
 func is_core_exposed() -> bool:
 	return _core_exposed
+
+
+## The two side batteries' mounts, port first (a wreck's mount stays listed, UNPOWERED).
+func battery_mounts() -> Array[TurretMount]:
+	var out: Array[TurretMount] = []
+	out.append_array(modular_hull().mounts_of(CarrierBrain.GUN_PORT))
+	out.append_array(modular_hull().mounts_of(CarrierBrain.GUN_STARBOARD))
+	return out
+
+
+## The bow heavy cannon (a hull system: silent only when the carrier dies).
+func bow_mount() -> TurretMount:
+	return _carrier_brain.bow_mount()
+
+
+## The dorsal missile bank (a hull system).
+func missile_mount() -> TurretMount:
+	return _carrier_brain.missile_mount()
+
+
+## The anti-approach pulse ring, owned and ticked by the brain.
+func pulse_ring() -> EnergyRing:
+	return _ring
 
 
 ## The group every carrier weapon exempts (this hull and, from t8, its launched children).

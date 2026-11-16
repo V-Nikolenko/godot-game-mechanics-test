@@ -1,5 +1,6 @@
 ## The Carrier's shell: armoured hull, seven parts, core exposure, death through the core and movement in both modes (docs/plans/cmug23oo90029m52wae4clve0/
-## 3-plan.md §2.6; Phase 10 t6, task plan docs/plans/cmwafsrb700afqs2yd3qqvvrb/3-plan.md, whose row numbers the section headers follow). Intent tests.
+## 3-plan.md §2.6, §2.7; Phase 10 t6, task plan docs/plans/cmwafsrb700afqs2yd3qqvvrb/3-plan.md, whose row numbers the section headers follow; t7 weapons, task
+## plan docs/plans/cmwafsrb900ajqs2yb5jcl5ij/3-plan.md, rows W1-W9). Intent tests.
 ##
 ## A. The projectile / beam / nova rows run on real physics at the 16x clock (`_scale_clock()`: ticks per second are scaled, the step stays 1/60 s) with
 ##    every carrier's physics off (no brain, no mover), so a shot meets the authored geometry exactly and the mode cannot change a result. They share
@@ -461,6 +462,8 @@ func test_the_config_the_builder_and_the_phase_order() -> void:
 		"screen_range_min": 600.0, "screen_range_max": 950.0, "leash_radius": 900.0, "core_exposure_count": 3, "assault_cross_speed": 90.0,
 		"assault_max_speed": 110.0, "assault_sway_speed": 30.0, "one_engine_sway": 0.5, "no_engine_sway": 0.1, "assault_sway_leash": 30.0,
 		"module_x_extent": 100.0, "perceive_radius": 1100.0, "lose_radius": 1800.0, "notice_time": 0.6, "idle_radius": 220.0, "idle_speed": 0.12,
+		"pulse_trigger_range": 340.0, "pulse_cooldown": 5.0, "missile_min_range": 450.0, "missile_cooldown": 7.0, "missile_pursuit_chance": 1.0,
+		"panic_pulse_factor": 0.5, "panic_battery_factor": 0.7,
 	}
 	for key in expected:
 		assert_eq(SHIPPED.get(key), expected[key], "carrier_config.tres %s" % key)
@@ -832,3 +835,430 @@ func test_it_frees_below_the_projectile_rect_even_inside_an_emp() -> void:
 	assert_eq(freed[a], first_past, "freed on the first tick its top edge is below the rect, not one before")
 	assert_true(b.is_emp_disrupted(), "sanity: the second one was inside its EMP window when freed")
 	assert_eq(freed[b], freed[a], "an EMP window never delays the free")
+
+
+# ── Weapons (t7, §2.7; task plan docs/plans/cmwafsrb900ajqs2yb5jcl5ij/3-plan.md) ─────────────────────────────────────────────────────────
+#
+# Every row pins the hull (it writes the row's position, and where it says so its rotation, back after each tick) and re-places the player relative
+# to it: unpinned, an Open Space carrier backs out of a close player and an Assault one descends out of the view, so no cooldown could be observed.
+# Distances come from the shipped `.tres`. A control stops at its first evidence.
+
+const FIXTURE_ENEMY: PackedScene = preload("res://tests/helpers/fixture_enemy.tscn")
+const RING_SCENE: PackedScene = preload("res://assault/scenes/enemies/carrier/carrier_pulse_ring.tscn")
+const RingPhase := EnergyRing.Phase
+const MountPhase := TurretMount.Phase
+## Where a pinned weapons row holds the hull: inside the Assault view (the camera's view is y 0 .. 720), and the Open Space origin.
+const ASSAULT_PIN := Vector2(640.0, 260.0)
+const OPEN_SPACE_PIN := Vector2.ZERO
+## The reaction time the ring's warning must cover (`test_energy_ring.gd`'s R).
+const REACTION := 0.25
+const VICTIM_RADIUS := 14.0
+const VICTIM_HP := 1000
+## The bow cannon's arc (§2.7), typed here on purpose: a row that read it off the mount would follow a widened arc.
+const BOW_ARC_DEG := 70.0
+
+
+func _pin_at(h) -> Vector2:
+	return ASSAULT_PIN if h.is_assault else OPEN_SPACE_PIN
+
+
+## A hand-ticked carrier pinned at [param at] (spawned there).
+func _armed(h, at: Vector2) -> Carrier:
+	return _spawn(h, at)
+
+
+## One tick, then the hull written back to [param at] (and to [param rot] unless NAN).
+func _tick_pinned(c: Carrier, at: Vector2, rot: float = NAN) -> void:
+	_tick(c)
+	c.global_position = at
+	if not is_nan(rot):
+		c.rotation = rot
+
+
+func _all_mounts(c: Carrier) -> Array[TurretMount]:
+	var out: Array[TurretMount] = []
+	out.append_array(c.battery_mounts())
+	out.append(c.bow_mount())
+	out.append(c.missile_mount())
+	return out
+
+
+func _any_mount_in(c: Carrier, p: int) -> bool:
+	for mount in _all_mounts(c):
+		if mount.phase() == p:
+			return true
+	return false
+
+
+## Every launch of [param mount]: [projectile, muzzle, global direction, the player's position then].
+func _launch_log(h, mount: TurretMount) -> Array:
+	var log: Array = []
+	mount.round_fired.connect(func(p: Node2D) -> void:
+		log.append([p, mount.muzzle_position(), Vector2.RIGHT.rotated(mount.global_rotation), h.player.global_position]))
+	return log
+
+
+## Tick indices on which [param ring] entered TELEGRAPH, read through [param clock] (the row's tick counter, `[0]`).
+func _ring_starts(ring: EnergyRing, clock: Array[int]) -> Array[int]:
+	var starts: Array[int] = []
+	ring.phase_changed.connect(func(p: int) -> void:
+		if p == RingPhase.TELEGRAPH:
+			starts.append(clock[0]))
+	return starts
+
+
+func _hull_light(c: Carrier) -> StateLight:
+	return c.get_node("StateLight") as StateLight
+
+
+func _core_light(c: Carrier) -> StateLight:
+	return c.get_node("Modules/Core/Light") as StateLight
+
+
+func _expose_core(c: Carrier) -> void:
+	for part_name in ["EnginePort", "HangarPort", "HangarStarboard"]:
+		_part(c, part_name).destroy()
+
+
+## W1. Module death disables an attack: with `GunPort` dead and the player re-placed every tick 400 px off the carrier's CURRENT port side, no battery
+## round is fired in 20 s and no round of any mount leaves toward the port half-plane. Control: both guns alive, the port battery puts a round on the player.
+func test_a_dead_port_battery_leaves_the_port_side_safe(mode: String = use_parameters(MODES)) -> void:
+	for port_dead in [true, false]:
+		var h = _world(mode)
+		var at := _pin_at(h)
+		var c := _armed(h, at)
+		if port_dead:
+			_part(c, "GunPort").destroy()
+		var logs := {}
+		for mount in _all_mounts(c):
+			logs[mount] = _launch_log(h, mount)
+		var port_log: Array = logs[c.modular_hull().mounts_of(CarrierBrain.GUN_PORT)[0]]
+		var on_target := false
+		for i in int(20.0 / DT):
+			h.player.global_position = c.global_position + _port(c) * 400.0
+			_tick_pinned(c, at)
+			if not port_dead:
+				for rec in port_log:
+					var to_player: Vector2 = rec[3] - rec[1]
+					var along: float = to_player.dot(rec[2])
+					if along > 0.0 and absf(to_player.cross(rec[2])) <= 24.0:
+						on_target = true
+				if on_target:
+					break
+		if port_dead:
+			var battery_rounds := 0
+			for mount in c.battery_mounts():
+				battery_rounds += (logs[mount] as Array).size()
+			assert_eq(battery_rounds, 0, "%s: no battery round with the port gun dead and the player on the port side" % mode)
+			for mount in logs:
+				for rec in logs[mount]:
+					var local: Vector2 = (rec[2] as Vector2).rotated(-c.rotation)
+					assert_lte(local.x, 1e-3, "%s: no round leaves toward the port half-plane" % mode)
+		else:
+			assert_true(on_target, "%s: control: the live port battery puts a round on the player" % mode)
+
+
+## W2. The bow heavy cannon fires only inside its 70 degree arc, bearings and range measured from its own pivot: 0 and 30 degrees fire, 40 and -40 do not
+## (30 / 40 straddle the 35 degree edge). Every Heavy Shell leaves within 35 degrees + half the fire cone of the nose.
+func test_the_bow_cannon_fires_only_inside_its_70_degree_arc(mode: String = use_parameters(MODES)) -> void:
+	for bearing in [0.0, 30.0, 40.0, -40.0]:
+		var h = _world(mode)
+		var at := _pin_at(h)
+		var c := _armed(h, at)
+		var bow := c.bow_mount()
+		var log := _launch_log(h, bow)
+		assert_eq(bow.traverse_deg, BOW_ARC_DEG, "%s: the bow mount has the §2.7 70 degree arc" % mode)
+		var half_arc := BOW_ARC_DEG * 0.5
+		var pivot := bow.global_position
+		for i in int(4.0 / DT):
+			h.player.global_position = pivot + Vector2.DOWN.rotated(deg_to_rad(bearing)) * 600.0
+			_tick_pinned(c, at, 0.0)
+			if not log.is_empty() and absf(bearing) < half_arc:
+				break
+		if absf(bearing) < half_arc:
+			assert_gt(log.size(), 0, "%s: the bow fires at a player %.0f degrees off the nose" % [mode, bearing])
+		else:
+			assert_eq(log.size(), 0, "%s: the bow never fires at a player %.0f degrees off the nose" % [mode, bearing])
+		for rec in log:
+			assert_true((rec[0] as Node).scene_file_path.ends_with("heavy_shell.tscn"), "%s: the bow fires Heavy Shells" % mode)
+			var off := rad_to_deg(absf(Vector2.DOWN.angle_to(rec[2])))
+			assert_lte(off, half_arc + bow.fire_cone_deg * 0.5 + 0.01, "%s: a shell leaves inside the arc (%.1f degrees)" % [mode, off])
+
+
+## W3. The missile bank fires only at a player beyond `missile_min_range` (10 px either side), PURSUIT rockets only, at the configured cooldown.
+func test_the_missile_bank_fires_only_beyond_its_min_range(mode: String = use_parameters(MODES)) -> void:
+	assert_gt(SHIPPED.missile_min_range - 10.0, SHIPPED.pulse_trigger_range, "precondition: the inside case does not trigger the pulse")
+	for dist in [SHIPPED.missile_min_range - 10.0, SHIPPED.missile_min_range + 10.0]:
+		var h = _world(mode)
+		var at := _pin_at(h)
+		var c := _armed(h, at)
+		var bank := c.missile_mount()
+		assert_eq(bank.cooldown_seconds, SHIPPED.missile_cooldown, "%s: the bank's cooldown is the config's" % mode)
+		assert_eq(bank.get(&"pursuit_chance"), SHIPPED.missile_pursuit_chance, "%s: and so is its pursuit chance" % mode)
+		var log := _launch_log(h, bank)
+		for i in int(8.0 / DT):
+			h.player.global_position = at + Vector2.DOWN * dist
+			_tick_pinned(c, at, 0.0)
+			if not log.is_empty():
+				break
+		if dist < SHIPPED.missile_min_range:
+			assert_eq(log.size(), 0, "%s: no rocket at a player %.0f px off" % [mode, dist])
+		else:
+			assert_gt(log.size(), 0, "%s: rockets at a player %.0f px off" % [mode, dist])
+		for rec in log:
+			assert_eq((rec[0] as EnemyRocket).kind, EnemyRocket.Kind.PURSUIT, "%s: a PURSUIT rocket" % mode)
+			assert_gt((rec[3] as Vector2).distance_to(at), SHIPPED.missile_min_range, "%s: launched only beyond the min range" % mode)
+
+
+## W4. The pulse starts on the tick the player comes strictly inside `pulse_trigger_range` (not 10 px outside it), restarts exactly `pulse_cooldown` after
+## its start and never earlier, starts again on re-entry once the cooldown has run, and in PANIC every `pulse_cooldown * panic_pulse_factor`. The hull light
+## reads CHARGING through every ring telegraph, the PANIC strobe included.
+func test_the_pulse_starts_on_approach_and_respects_its_cooldown(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var at := _pin_at(h)
+	var c := _armed(h, at)
+	var ring := c.pulse_ring()
+	var light := _hull_light(c)
+	var clock: Array[int] = [0]
+	var starts := _ring_starts(ring, clock)
+	# Astern: no gun arc reaches it and it is inside the bank's min range, so only the ring can light CHARGING.
+	var outside := at + Vector2.UP * (SHIPPED.pulse_trigger_range + 10.0)
+	var inside := at + Vector2.UP * (SHIPPED.pulse_trigger_range - 10.0)
+	var cooldown_ticks := ceili(SHIPPED.pulse_cooldown / DT - 1e-3)
+	var panic_ticks := ceili(SHIPPED.pulse_cooldown * SHIPPED.panic_pulse_factor / DT - 1e-3)
+	var step := func(where: Vector2) -> void:
+		h.player.global_position = where
+		_tick_pinned(c, at, 0.0)
+		if ring.phase() == RingPhase.TELEGRAPH:
+			assert_eq(light.get_state(), StateLight.State.CHARGING, "%s: CHARGING through the telegraph (tick %d)" % [mode, clock[0]])
+		clock[0] += 1
+	for i in 60:
+		step.call(outside)
+	assert_eq(starts.size(), 0, "%s: 10 px outside the trigger range: no ring" % mode)
+	step.call(inside)
+	assert_eq(starts, [60] as Array[int], "%s: the ring starts on the tick the player comes inside" % mode)
+	while clock[0] < 60 + cooldown_ticks + 10:
+		step.call(inside)
+	assert_eq(starts.size(), 2, "%s: one restart in the cooldown window" % mode)
+	if starts.size() < 2:
+		return
+	assert_eq(starts[1] - starts[0], cooldown_ticks, "%s: the restart comes exactly one cooldown after the start" % mode)
+	var back := starts[1] + cooldown_ticks + 20
+	while clock[0] < back:
+		step.call(outside if clock[0] >= starts[1] + 30 else inside)
+	assert_eq(starts.size(), 2, "%s: out of range: no ring" % mode)
+	step.call(inside)
+	assert_eq(starts[-1], back, "%s: the ring starts on re-entry once the cooldown has run" % mode)
+	_expose_core(c)
+	var first_panic := -1
+	var guard := clock[0] + cooldown_ticks + panic_ticks * 2
+	while clock[0] < guard:
+		step.call(inside)
+		if _brain(c).phase == Phase.PANIC and first_panic < 0:
+			first_panic = starts.size()
+	assert_gt(first_panic, -1, "%s: precondition: PANIC" % mode)
+	assert_gte(starts.size(), first_panic + 2, "%s: two rings in PANIC" % mode)
+	if starts.size() >= first_panic + 2:
+		assert_eq(starts[-1] - starts[-2], panic_ticks, "%s: PANIC halves the pulse cooldown" % mode)
+
+
+## W5. The ring's fairness rule (Ph8) and the §2.7 numbers, read from an instance (an inherited scene's base exports resolve only there).
+func test_the_carrier_pulse_ring_is_fair() -> void:
+	var ring := RING_SCENE.instantiate() as EnergyRing
+	var r_p := _player_r_p()
+	assert_gt(r_p, 0.0, "precondition: the player hurtbox has a radius")
+	var expected := {"max_radius": 420.0, "telegraph_seconds": 1.0, "ring_speed": 360.0, "band": 24.0, "gap_count": 2, "gap_deg": 50.0, "damage": 14}
+	for key in expected:
+		assert_eq(ring.get(key), expected[key], "carrier_pulse_ring.tscn %s" % key)
+	assert_true(_gap_is_wide_enough(ring, r_p), "the gap arc at max_radius / 2 is >= 3 * r_p")
+	assert_gte(ring.telegraph_seconds, REACTION, "the ring warns for at least the reaction time")
+	ring.gap_deg = 15.0
+	assert_false(_gap_is_wide_enough(ring, r_p), "boundary: a 15 degree gap fails the rule")
+	ring.free()
+
+
+func _gap_is_wide_enough(ring: EnergyRing, r_p: float) -> bool:
+	return deg_to_rad(ring.gap_deg) * ring.max_radius * 0.5 >= 3.0 * r_p
+
+
+## `r_p`: the larger of the two player hurtboxes' circumscribed radius (the `test_energy_ring.gd` method).
+func _player_r_p() -> float:
+	var r_p := 0.0
+	for scene: PackedScene in [FIGHTER_SCENE, SHIP_SCENE]:
+		var p := scene.instantiate() as PlayerBase
+		var hurt := p.get_node("HurtBox") as Node2D
+		for child in hurt.get_children():
+			var cs := child as CollisionShape2D
+			if cs == null or cs.disabled or cs.shape == null:
+				continue
+			var xf := hurt.transform * cs.transform
+			var rect := cs.shape.get_rect()
+			var far := 0.0
+			for corner: Vector2 in [rect.position, rect.position + Vector2(rect.size.x, 0.0), rect.position + Vector2(0.0, rect.size.y), rect.end]:
+				far = maxf(far, corner.length())
+			var s := maxf(absf(xf.get_scale().x), absf(xf.get_scale().y))
+			r_p = maxf(r_p, xf.origin.length() + far * s)
+		p.free()
+	return r_p
+
+
+## A ring victim: `fixture_enemy.tscn` with a 14 px circle on its `HurtBox`, in group `enemies` (and in [param group] when set).
+func _victim(h, at: Vector2, group: StringName = &"") -> BaseEnemy:
+	var e := FIXTURE_ENEMY.instantiate() as BaseEnemy
+	var cs := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = VICTIM_RADIUS
+	cs.shape = circle
+	e.get_node("HurtBox").add_child(cs)
+	e.add_to_group(&"enemies")
+	if group != &"":
+		e.add_to_group(group)
+	var health := e.get_node("Health") as Health
+	health.max_health = VICTIM_HP
+	health.current_health = VICTIM_HP
+	h.root.add_child(e)
+	e.set_physics_process(false)
+	e.global_position = at
+	return e
+
+
+## W6. The ring never reaches its own carrier (hull exempt, parts never targets) or a launched child (owner group), and does hurt an outside enemy.
+func test_the_ring_spares_its_own_carrier_and_its_children_but_not_other_enemies(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var at := _pin_at(h)
+	var c := _armed(h, at)
+	for part in c.modular_hull().modules():
+		part.set_vulnerable(true)
+	var hp := {}
+	for part in c.modular_hull().modules():
+		hp[part] = _hp(part)
+	var hull_hp := c.health.current_health
+	var refused := _count(c.armor_deflected)
+	var outsiders: Array[BaseEnemy] = []
+	var children: Array[BaseEnemy] = []
+	for bearing in [0.0, 120.0, 240.0]:
+		var dir := Vector2.from_angle(deg_to_rad(bearing))
+		outsiders.append(_victim(h, at + dir * 300.0))
+		children.append(_victim(h, at + dir * 320.0, c.owner_group()))
+	var ring := c.pulse_ring()
+	var started := false
+	for i in int(4.0 / DT):
+		h.player.global_position = at + Vector2.DOWN * (SHIPPED.pulse_trigger_range - 10.0)
+		_tick_pinned(c, at, 0.0)
+		started = started or ring.phase() != RingPhase.OFF
+		if started and ring.phase() == RingPhase.OFF:
+			break
+	assert_true(started, "%s: precondition: one ring ran" % mode)
+	for part in hp:
+		assert_eq(_hp(part), hp[part], "%s: the ring leaves %s alone" % [mode, part.module_id])
+	assert_eq(c.health.current_health, hull_hp, "%s: and the hull" % mode)
+	assert_eq(refused[0], 0, "%s: the hull is exempt, not refused" % mode)
+	for child in children:
+		assert_eq((child.get_node("Health") as Health).current_health, VICTIM_HP, "%s: a launched child is passed" % mode)
+	var hit := 0
+	for e in outsiders:
+		if (e.get_node("Health") as Health).current_health == VICTIM_HP - c.pulse_ring().damage:
+			hit += 1
+	assert_gte(hit, 2, "%s: the outside enemies are hurt (two gaps can cover at most one of three)" % mode)
+
+
+## W7. PANIC on the tick after the third outer loss: battery cooldown x panic_battery_factor (bow and bank unchanged), the core light flashes; Open Space:
+## it backs away from the player inside its leash.
+func test_panic_entry_and_effects(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var at := Vector2(640.0, 200.0) if h.is_assault else Vector2(0.0, -500.0)
+	var c := _spawn(h, at)
+	var anchor := c.global_position
+	for i in 6:
+		_tick(c)
+	var before := {}
+	for mount in _all_mounts(c):
+		before[mount] = mount.cooldown_seconds
+	assert_eq(_core_light(c).get_state(), StateLight.State.OFF, "%s: the core light is dark before the panic" % mode)
+	_expose_core(c)
+	assert_ne(_brain(c).phase, Phase.PANIC, "%s: not in the same call" % mode)
+	var d0 := c.global_position.distance_to(h.player.global_position)
+	_tick(c)
+	assert_eq(_brain(c).phase, Phase.PANIC, "%s: PANIC on the next tick" % mode)
+	for mount in c.battery_mounts():
+		assert_almost_eq(mount.cooldown_seconds, before[mount] * SHIPPED.panic_battery_factor, 1e-4, "%s: a battery cools down faster" % mode)
+	assert_eq(c.bow_mount().cooldown_seconds, before[c.bow_mount()], "%s: the bow keeps its cooldown" % mode)
+	assert_eq(c.missile_mount().cooldown_seconds, before[c.missile_mount()], "%s: the bank keeps its cooldown" % mode)
+	var seen := {}
+	var hull_seen := {}
+	var furthest := 0.0
+	for i in int((10.0 if not h.is_assault else 1.0) / DT):
+		_tick(c)
+		if h.is_assault:
+			c.global_position = at
+		seen[_core_light(c).get_state()] = true
+		hull_seen[_hull_light(c).get_state()] = true
+		furthest = maxf(furthest, c.global_position.distance_to(anchor))
+	assert_true(seen.has(StateLight.State.ARMED) and seen.has(StateLight.State.OFF), "%s: the core light flashes red (%s)" % [mode, seen.keys()])
+	assert_true(hull_seen.has(StateLight.State.OFF) and hull_seen.size() >= 2, "%s: the hull light strobes (%s)" % [mode, hull_seen.keys()])
+	if not h.is_assault:
+		assert_gt(c.global_position.distance_to(h.player.global_position), d0 + 50.0, "open_space: it backs away from the player")
+		assert_lte(furthest, SHIPPED.leash_radius + 50.0, "open_space: inside its leash")
+
+
+## W8. The turret rule in Assault: a hull held above the view never telegraphs a mount or starts a ring, the player inside every range; control: inside it does.
+func test_in_assault_no_mount_or_pulse_fires_from_outside_the_view() -> void:
+	for y in [-200.0, 260.0]:
+		var h = _world("assault")
+		var at := Vector2(640.0, y)
+		var c := _armed(h, at)
+		var telegraphed := false
+		var ringed := false
+		for i in int(3.0 / DT):
+			h.player.global_position = at + Vector2.DOWN * (SHIPPED.pulse_trigger_range - 10.0)
+			_tick_pinned(c, at, 0.0)
+			telegraphed = telegraphed or _any_mount_in(c, MountPhase.TELEGRAPH)
+			ringed = ringed or c.pulse_ring().phase() != RingPhase.OFF
+			if telegraphed and ringed:
+				break
+		if y < 0.0:
+			assert_false(telegraphed, "above the view: no mount telegraphs")
+			assert_false(ringed, "above the view: no ring")
+		else:
+			assert_true(telegraphed and ringed, "control: inside the view both do")
+
+
+## Ticks a pinned carrier with the player inside the trigger range until its ring reaches [param p].
+func _ring_to(h, c: Carrier, at: Vector2, p: int) -> void:
+	for i in int(3.0 / DT):
+		h.player.global_position = at + Vector2.DOWN * (SHIPPED.pulse_trigger_range - 10.0)
+		_tick_pinned(c, at, 0.0)
+		if c.pulse_ring().phase() == p:
+			return
+
+
+## W9. An EMP (in TELEGRAPH and in EXPANDING), a rail and the carrier's death each end the ring at once; the EMP also drops every mount telegraph and the light.
+func test_an_emp_a_rail_or_death_ends_the_ring_at_once(mode: String = use_parameters(MODES)) -> void:
+	for ending in ["emp_telegraph", "emp_expanding", "rail", "death"]:
+		var h = _world(mode)
+		var at := _pin_at(h)
+		var c := _armed(h, at)
+		var ring := c.pulse_ring()
+		var wanted: int = RingPhase.EXPANDING if ending in ["emp_expanding", "death"] else RingPhase.TELEGRAPH
+		_ring_to(h, c, at, wanted)
+		assert_eq(ring.phase(), wanted, "%s %s: precondition" % [mode, ending])
+		match ending:
+			"emp_telegraph", "emp_expanding":
+				c.apply_emp(2.0, null)
+				assert_eq(ring.phase(), RingPhase.OFF, "%s %s: the ring is gone" % [mode, ending])
+				assert_false(_any_mount_in(c, MountPhase.TELEGRAPH), "%s %s: no mount telegraph survives" % [mode, ending])
+				assert_eq(_hull_light(c).get_state(), StateLight.State.OFF, "%s %s: the light is off" % [mode, ending])
+			"rail":
+				var rounds: Array[int] = [0]
+				for mount in _all_mounts(c):
+					mount.round_fired.connect(func(_p: Node2D) -> void: rounds[0] += 1)
+				c.suspend_ai()
+				assert_eq(ring.phase(), RingPhase.OFF, "%s rail: the ring is gone" % mode)
+				for i in int(3.0 / DT):
+					_tick_pinned(c, at, 0.0)
+				assert_eq(rounds[0], 0, "%s rail: a railed carrier fires nothing" % mode)
+			"death":
+				_core(c).destroy()
+				assert_true(c.is_queued_for_deletion(), "%s death: precondition: the carrier died" % mode)
+				assert_eq(ring.phase(), RingPhase.OFF, "%s death: the ring is gone in the same call" % mode)
+				assert_false(ring.is_lethal(), "%s death: and not lethal" % mode)

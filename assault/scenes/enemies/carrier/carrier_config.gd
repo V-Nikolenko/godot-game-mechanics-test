@@ -3,7 +3,8 @@
 ## collision_damage = the ARMOR touch; score_value; the explicit hazard profile 0.5 / 120 / 1.0: a capital ship shrugs off pull and slow).
 ##
 ## Flat by design (test_config_instance_isolation.gd): every field is a plain number, so the shallow `ShipConfig.privatise()` copy is complete.
-## Starting values [judgement] (§2.16) unless marked. The parts' HP live in the scene (each `EnemyModule.max_health`); weapons (t7) and hangars (t8)
+## Starting values [judgement] (§2.16) unless marked. The parts' HP live in the scene (each `EnemyModule.max_health`); weapons (t7: mount and ring
+## tuning lives in their scenes, these are the host's own numbers) and hangars (t8)
 ## add their own groups.
 class_name CarrierConfig
 extends ShipConfig
@@ -64,3 +65,21 @@ extends ShipConfig
 ## The idle orbit's radius (px) and angular speed (rad/s).
 @export var idle_radius: float = 220.0
 @export var idle_speed: float = 0.12
+
+@export_group("Weapons")
+## The anti-approach pulse (`carrier_pulse_ring.tscn`) starts when the player is strictly closer than this to the hull centre (px) ...
+@export var pulse_trigger_range: float = 340.0
+## ... and no sooner than this after the previous ring's start (s).
+@export var pulse_cooldown: float = 5.0
+## The dorsal missile bank fires only at a player farther than this from the hull centre (px): rockets punish standing off, the pulse punishes hugging.
+@export var missile_min_range: float = 450.0
+## Written onto the bank's mount when it is built (s; the rocket battery scene's own is 5.5) ...
+@export var missile_cooldown: float = 7.0
+## ... with this share of PURSUIT rockets (1 = PURSUIT only).
+@export var missile_pursuit_chance: float = 1.0
+
+@export_group("Panic")
+## In PANIC the pulse cooldown is multiplied by this ...
+@export var panic_pulse_factor: float = 0.5
+## ... and each side battery's `cooldown_seconds` by this (the bow and the bank keep theirs).
+@export var panic_battery_factor: float = 0.7

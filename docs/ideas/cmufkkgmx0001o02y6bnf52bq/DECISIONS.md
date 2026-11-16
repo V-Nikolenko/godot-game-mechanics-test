@@ -4045,3 +4045,33 @@ spawn row per mode in `test_enemy_dual_mode.gd`, support-ward rows with a willin
   that delta is ≈ 2 s, the sweep reaches the jammer tower's body (layer 1) and the slide bends the jammer run 500–715 px off the control. Reproduced on demand
   (time scale 16 for one frame before the row: 701 / 508 px, the gate's 715 / 524). Fix: the row clears the fighter's body `collision_mask` (the hand-ticked
   drone precedent); every assertion, including the avoid-weight positive control, is unchanged and green under the forced long frame.
+
+### Phase 10, built in t7 (Carrier weapons: side batteries, bow cannon, missile bank, anti-approach pulse, PANIC) (2026-11-16)
+
+Task plan `docs/plans/cmwafsrb900ajqs2yb5jcl5ij/` (review round 2 APPROVED).
+- **Mounts:** `Modules/GunPort|GunStarboard/MountSlots/Slot0` (BURST_CANNON, rest 0° / 180°, `traverse_deg_override` 150), `HullMounts/Bow` (0, 116: HEAVY_CANNON,
+  rest 90°, traverse 70) and `HullMounts/Dorsal` (0, 64: ROCKET_BATTERY, rest 90°, 360). `Carrier._build_weapons()` runs `ModularHull.build_mounts()` then
+  `TurretMountBuilder.build()` over `HullMounts` with the returned index (pools `PulsePool_0/1/2`, `DumbPool_3` / `PursuitPool_3`). Queries t8+ read:
+  `Carrier.battery_mounts()`, `bow_mount()`, `missile_mount()`, `pulse_ring()`; `CarrierBrain.bind_weapons(bow, bank, ring)`, `cancel_pulse()`.
+- **Deviation (weapon tuning in the host config):** the bank's 7.0 s cooldown and PURSUIT-only kind are `CarrierConfig.missile_cooldown` / `missile_pursuit_chance`,
+  written onto the built mount by the root (no new mount variant / scene for two numbers one host uses). New config groups `Weapons` (`pulse_trigger_range` 340,
+  `pulse_cooldown` 5.0, `missile_min_range` 450, `missile_cooldown` 7.0, `missile_pursuit_chance` 1.0) and `Panic` (`panic_pulse_factor` 0.5, `panic_battery_factor` 0.7).
+- **The ring** is `AntiApproachRing` (not `PulseRing`, the Ph7 class), an instance of `assault/scenes/enemies/carrier/carrier_pulse_ring.tscn` (inherited
+  `energy_ring.tscn`, exports only: 420 / 1.0 / 360 / 24 / 2 × 50° / 14), a root child at the hull centre, `setup(carrier, owner_group)`. The brain ticks it first in
+  `_tick_weapons()`, then may start it: player distance to the hull centre strictly `<` 340, `_pulse_left <= 1e-6`, ring OFF or FADE; the cooldown counts from each
+  `start()`. Not the Ph8 `PulseRingMount` (fixed ring scene, cooldown from the expansion's end, trigger from the mount pivot).
+- **can_fire:** guns `in_view and (LOS or fires_past_cover())` (LOS only on the physics step), bank also `dist > missile_min_range`; Open Space fights in SCREEN / PANIC
+  only (other phases `scan()`); Assault in every phase; nothing fires and no pulse starts with the hull centre outside `EnemyWorld.view_rect()`.
+- **PANIC entry (once):** battery mounts' `cooldown_seconds` × 0.7 (bow and bank unchanged); `_pulse_left = min(left, 2.5)` and later starts use 2.5 s;
+  `CarrierBrain._emergency_deploy()` is the **t8 hook** (a no-op in t7). Burst pool still big enough at the 2.30 s PANIC period: the Pulse round expires by
+  `max_distance` 1400 / 300 = 4.67 s, so 4 × ceil(4.67 / 2.30) = 12 = the pool sized at 2.2 s from `max_time` 8.
+- **EMP / rail / death end the ring at once** (`_silence_weapons()` / `_kill_ring()`): every mount `scan(0.0)`, `ring.cancel()` and, from FADE, `ring.tick(fade_seconds)` to
+  OFF (the brain is not ticked through an EMP window, so a live ring would hang frozen). Lights OFF. `died` → `cancel_pulse()`.
+- **Lights:** hull `StateLight` CHARGING while a mount or the ring telegraphs, ARMED while a mount tracks / fires / cools down or the band expands; PANIC strobes it
+  (0.25 s, ARMED / OFF; a telegraph is never hidden). New `Modules/Core/Light` (`StateLight`, scale 3) flashes red on the same strobe in PANIC.
+- **Sway arc:** `_battery_half_deg()` reads a live battery mount's `traverse_deg / 2` (75, unchanged); the t6 constant is the fallback.
+- **Test notes:** rows W1–W9 in `test_carrier.gd`, hand-ticked, both harnesses; every weapons row pins the hull (and re-places the player relative to it). The bow arc
+  is a typed 70° constant in the test, not read off the mount (a row that read it followed a widened arc in a mutation check). Hand-ticked pools never recycle, so the
+  longer t6 movement rows now print `BulletPool` "Pool exhausted" warnings (harmless; the gate's FATAL regex does not match them).
+- **Gate time:** GUT 200.20 s (two runs, 200.505 / 199.885) → 201.29 s (201.379 / 201.193; 2967 → 2976 tests): **+1.1 s** against the 1.8 s allotment.
+  `test_carrier.gd` alone 1.3 → 3.0 s (new rows ≈ 0.75 s; the t6 rows now tick the carrier's mounts).

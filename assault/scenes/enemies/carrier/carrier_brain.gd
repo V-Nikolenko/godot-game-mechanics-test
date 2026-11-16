@@ -1,5 +1,11 @@
 ## The Carrier's brain (docs/plans/cmug23oo90029m52wae4clve0/3-plan.md §2.6.3; Phase 10 t6, task plan docs/plans/cmwafsrb700afqs2yd3qqvvrb/3-plan.md).
-## "A carrier does not chase the player; it controls space" (IDEAS §6.11). Movement only in t6: weapons (t7) and hangars (t8) hang off this brain later.
+## "A carrier does not chase the player; it controls space" (IDEAS §6.11). Hangars (t8) hang off this brain later.
+##
+## WEAPONS (t7, §2.7; task plan docs/plans/cmwafsrb900ajqs2yb5jcl5ij/3-plan.md). Every tick, after the movement: the side batteries and the bow cannon
+## (each limited by its own traverse: a dead battery leaves its side safe), the missile bank (only beyond `missile_min_range`) and the anti-approach
+## ring this brain owns and ticks (`pulse_trigger_range`, `pulse_cooldown` from each start). In Assault nothing fires with the hull centre outside the
+## view. PANIC entry multiplies the battery cooldowns by `panic_battery_factor`, the pulse cooldown by `panic_pulse_factor`, and calls the t8
+## emergency-deployment hook; the hull light strobes and the core light flashes red. An EMP or a rail silences every weapon at once (the ring ends).
 ##
 ## Phases (append-only):
 ##   CRUISE     Open Space hub idle: a slow orbit round `patrol_anchor` (`AnchorIdle`), until the player comes within `perceive_radius`.
@@ -38,13 +44,18 @@ const ENGINE_STARBOARD := &"engine_starboard"
 const FACE_REACH := 100.0
 ## The list's correction ends once the heading is this close to the wanted one (rad).
 const LIST_SETTLED := 0.01
-## Half the side batteries' 150 degree traverse (§2.7); t7 reads it from the battery slot instead. The sway aims a margin inside it.
+## Half the side batteries' 150 degree traverse (§2.7): the fallback of `_battery_half_deg()`, which reads a live battery mount (t7). The sway aims a
+## margin inside it.
 const SWAY_ARC_HALF_DEG := 75.0
 const SWAY_ARC_MARGIN_DEG := 10.0
 ## The sway's proportional gain (1/s): `gain · dt` < 1, so x approaches its target without overshoot.
 const SWAY_GAIN := 4.0
 ## `idle_phase_offset` is drawn from ±this (rad).
 const MAX_IDLE_PHASE_OFFSET := 0.35
+## PANIC strobe period of the hull and core lights (s): lit for the first half, dark for the second.
+const PANIC_STROBE := 0.25
+## The project clock rule: a countdown is over at <= this.
+const CLOCK_EPS := 1e-6
 
 ## Set by `carrier.gd` before the first tick. A fresh default keeps a bare brain steppable.
 var config: CarrierConfig = CarrierConfig.new()
@@ -72,6 +83,15 @@ var _correcting: bool = false
 var _list_sign: float = 0.0
 var _engine_port_dead: bool = false
 var _engine_starboard_dead: bool = false
+## Weapons (t7), handed over by the root in `bind_weapons()`.
+var _bow: TurretMount
+var _bank: TurretMount
+var _ring: EnergyRing
+## Seconds until the pulse may start again; counts down every tick from the last `start()`.
+var _pulse_left: float = 0.0
+var _panic_applied: bool = false
+var _light: StateLight
+var _core_light: StateLight
 
 
 ## Hands the brain its parts (called by the root in `_ready()`).
@@ -90,18 +110,19 @@ func tick(delta: float) -> void:
 	_phase_time += delta
 	if phase != Phase.PANIC and _core_exposed():
 		enter_phase(Phase.PANIC)
-	if assault:
-		_tick_cross()
-		return
 	var target := TargetInfo.player(get_tree())
-	if anchor_idle != null and phase != Phase.PANIC:
-		_tick_anchor_idle(delta, target)
-	match phase:
-		Phase.CRUISE: _tick_cruise()
-		Phase.NOTICING: _tick_noticing(target)
-		Phase.RETURNING: _tick_returning()
-		Phase.SCREEN, Phase.IDLE: _tick_screen(delta, target)
-		Phase.PANIC: _tick_panic(delta, target)
+	if assault:
+		_tick_cross(target)
+	else:
+		if anchor_idle != null and phase != Phase.PANIC:
+			_tick_anchor_idle(delta, target)
+		match phase:
+			Phase.CRUISE: _tick_cruise()
+			Phase.NOTICING: _tick_noticing(target)
+			Phase.RETURNING: _tick_returning()
+			Phase.SCREEN, Phase.IDLE: _tick_screen(delta, target)
+			Phase.PANIC: _tick_panic(delta, target)
+	_tick_weapons(delta, target)
 
 
 ## Test seam and the one place a transition happens.
@@ -112,11 +133,14 @@ func enter_phase(p: Phase) -> void:
 	_phase_time = 0.0
 	if p == Phase.PANIC:
 		anchor_idle = null
+		_on_panic_entered()
 	phase_changed.emit(p)
 
 
-## Open Space: the Phase 9 halt (nothing to do). Assault: the crossing goes on for the whole window.
+## Every weapon goes quiet at once (a shown telegraph never lands, the ring ends: the brain is not ticked for the window, so a live ring would hang
+## frozen); then Open Space keeps the Phase 9 halt and Assault the crossing for the whole window.
 func on_emp_started() -> void:
+	_silence_weapons()
 	_boost_through_emp()
 
 
@@ -127,6 +151,7 @@ func on_emp_refreshed() -> void:
 
 func on_suspended() -> void:
 	anchor_idle = null
+	_silence_weapons()
 
 
 ## A capital ship is never towed, in any phase.
@@ -364,9 +389,8 @@ func _face(delta: float, desired_dir: Vector2) -> void:
 
 # ── Assault ─────────────────────────────────────────────────────────────────────────────────────
 
-func _tick_cross() -> void:
+func _tick_cross(target: TargetInfo) -> void:
 	var pos := actor.global_position
-	var target := TargetInfo.player(get_tree())
 	var tx := _sway_target_x(pos, target)
 	var cap := config.assault_sway_speed * sway_factor()
 	var vx := clampf((tx - pos.x) * SWAY_GAIN, -cap, cap)
@@ -379,7 +403,7 @@ func _tick_cross() -> void:
 func _sway_target_x(pos: Vector2, target: TargetInfo) -> float:
 	var tx := _anchor_x
 	if target.has_target:
-		var half := deg_to_rad(SWAY_ARC_HALF_DEG - SWAY_ARC_MARGIN_DEG)
+		var half := deg_to_rad(_battery_half_deg() - SWAY_ARC_MARGIN_DEG)
 		var to_player := target.position - pos
 		var port := _part_live(GUN_PORT)
 		var starboard := _part_live(GUN_STARBOARD)
@@ -400,3 +424,168 @@ func _sway_target_x(pos: Vector2, target: TargetInfo) -> float:
 					best = sx
 			tx = best
 	return clampf(tx, _anchor_x - config.assault_sway_leash, _anchor_x + config.assault_sway_leash)
+
+
+# ── Weapons (t7) ────────────────────────────────────────────────────────────────────────────────
+
+## Hands the brain its hull systems (the root, once every mount is built): the bow cannon, the missile bank and the anti-approach ring. The side
+## batteries are read from the hull (`mounts_of`), so a wreck's UNPOWERED mount stays in the list and keeps drooping.
+func bind_weapons(bow: TurretMount, bank: TurretMount, ring: EnergyRing) -> void:
+	_bow = bow
+	_bank = bank
+	_ring = ring
+	if actor != null:
+		_light = actor.get_node_or_null(^"StateLight") as StateLight
+	var core := _hull.module(&"core") if _hull != null else null
+	if core != null:
+		_core_light = core.get_node_or_null(^"Light") as StateLight
+
+
+func bow_mount() -> TurretMount:
+	return _bow
+
+
+func missile_mount() -> TurretMount:
+	return _bank
+
+
+## `died` (the root): the ring ends in the same call.
+func cancel_pulse() -> void:
+	_kill_ring()
+
+
+## The two side batteries' mounts, port first.
+func battery_mounts() -> Array[TurretMount]:
+	var out: Array[TurretMount] = []
+	if _hull != null:
+		out.append_array(_hull.mounts_of(GUN_PORT))
+		out.append_array(_hull.mounts_of(GUN_STARBOARD))
+	return out
+
+
+func _mounts() -> Array[TurretMount]:
+	var out := battery_mounts()
+	if _bow != null:
+		out.append(_bow)
+	if _bank != null:
+		out.append(_bank)
+	return out
+
+
+## Every mount is ticked with `can_fire = in view and (line of sight or fires past cover)` (the turret rule: never fire from outside the Assault view;
+## line of sight only on the physics step, so a hand-ticked row counts it clear). The traverse refuses an off-arc target by itself, so a dead battery's
+## side stays safe. The bank also needs the player beyond `missile_min_range`. Outside a fight every mount scans. The ring is ticked first, so a ring
+## that ended this tick may start again in the same tick and its telegraph lasts its full length.
+func _tick_weapons(delta: float, target: TargetInfo) -> void:
+	_pulse_left -= delta
+	if _ring != null:
+		_ring.tick(delta)
+	var fighting := target.has_target and (assault or phase == Phase.SCREEN or phase == Phase.PANIC)
+	if not fighting:
+		for mount in _mounts():
+			mount.scan(delta)
+	else:
+		var sees := true
+		if Engine.is_in_physics_frame():
+			sees = can_see_player()
+		var tree := get_tree()
+		var in_view := not EnemyWorld.has_view_rect(tree) or EnemyWorld.view_rect(tree).has_point(actor.global_position)
+		var dist := actor.global_position.distance_to(target.position)
+		for mount in battery_mounts():
+			mount.tick(delta, target, in_view and (sees or mount.fires_past_cover()))
+		if _bow != null:
+			_bow.tick(delta, target, in_view and (sees or _bow.fires_past_cover()))
+		if _bank != null:
+			_bank.tick(delta, target, in_view and dist > config.missile_min_range and (sees or _bank.fires_past_cover()))
+		if in_view:
+			_try_pulse(dist)
+	_update_lights()
+
+
+## The anti-approach pulse: with the player strictly inside `pulse_trigger_range` of the hull centre, the cooldown run and no ring in TELEGRAPH or
+## EXPANDING, one ring from the hull centre, its gaps from the brain's rng. The cooldown counts from this start (halved in PANIC).
+func _try_pulse(dist: float) -> void:
+	if _ring == null or _pulse_left > CLOCK_EPS or dist >= config.pulse_trigger_range:
+		return
+	var p := _ring.phase()
+	if p == EnergyRing.Phase.TELEGRAPH or p == EnergyRing.Phase.EXPANDING:
+		return
+	_ring.start(rng.randf_range(0.0, 360.0))
+	_pulse_left = config.pulse_cooldown * (config.panic_pulse_factor if phase == Phase.PANIC else 1.0)
+
+
+## PANIC entry, once: the batteries cool down faster, the pulse recharges twice as fast, the hangars deploy (t8).
+func _on_panic_entered() -> void:
+	if _panic_applied:
+		return
+	_panic_applied = true
+	for mount in battery_mounts():
+		mount.cooldown_seconds *= config.panic_battery_factor
+	_pulse_left = minf(_pulse_left, config.pulse_cooldown * config.panic_pulse_factor)
+	_emergency_deploy()
+
+
+## Emergency deployment (§2.8): every live hangar that may still launch goes straight to LAUNCH, once. The t8 hook: hangars do not exist yet.
+func _emergency_deploy() -> void:
+	pass
+
+
+## An EMP or a rail: every mount scans (a telegraph never lands; a FIRE cut here still starts its cooldown), the ring ends, the lights go out.
+func _silence_weapons() -> void:
+	for mount in _mounts():
+		mount.scan(0.0)
+	_kill_ring()
+	_set_light(StateLight.State.OFF)
+	if _core_light != null:
+		_core_light.set_state(StateLight.State.OFF)
+
+
+## Ends the ring at once: a telegraph goes OFF, an expanding band is cancelled into FADE and the fade is finished on the spot (nothing ticks it after).
+func _kill_ring() -> void:
+	if _ring == null or not is_instance_valid(_ring):
+		return
+	_ring.cancel()
+	if _ring.phase() == EnergyRing.Phase.FADE:
+		_ring.tick(_ring.fade_seconds)
+
+
+## The hull light: CHARGING while a mount or the ring telegraphs, ARMED while one tracks, fires or cools down or the band expands, else OFF. In PANIC
+## it strobes (ARMED / OFF), and a telegraph is never hidden by the strobe. The core light flashes red on the same strobe in PANIC.
+func _update_lights() -> void:
+	var charging := false
+	var armed := false
+	if _ring != null:
+		charging = _ring.phase() == EnergyRing.Phase.TELEGRAPH
+		armed = _ring.phase() == EnergyRing.Phase.EXPANDING
+	for mount in _mounts():
+		match mount.phase():
+			TurretMount.Phase.TELEGRAPH:
+				charging = true
+			TurretMount.Phase.TRACK, TurretMount.Phase.FIRE, TurretMount.Phase.COOLDOWN:
+				armed = true
+	var want: int = StateLight.State.OFF
+	var strobe_on := fmod(_phase_time, PANIC_STROBE) < PANIC_STROBE * 0.5
+	if charging:
+		want = StateLight.State.CHARGING
+	elif phase == Phase.PANIC:
+		want = StateLight.State.ARMED if strobe_on else StateLight.State.OFF
+	elif armed:
+		want = StateLight.State.ARMED
+	_set_light(want)
+	if _core_light != null:
+		var core_want: int = StateLight.State.ARMED if phase == Phase.PANIC and strobe_on else StateLight.State.OFF
+		if _core_light.get_state() != core_want:
+			_core_light.set_state(core_want)
+
+
+func _set_light(state: int) -> void:
+	if _light != null and _light.get_state() != state:
+		_light.set_state(state)
+
+
+## Half a live battery's traverse (degrees): the sway's arc. The t6 constant is the fallback with no live battery mount.
+func _battery_half_deg() -> float:
+	for mount in battery_mounts():
+		if mount.phase() != TurretMount.Phase.UNPOWERED:
+			return mount.traverse_deg * 0.5
+	return SWAY_ARC_HALF_DEG

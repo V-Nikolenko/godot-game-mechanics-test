@@ -297,7 +297,10 @@ b.heavy_gunship().at(0, -500)
 **Movement:** Brain-driven (`CarrierBrain` + `EnemyMover`). **Do not add `.move()`.** Open Space: holds the player 600–950 px away with a gun side
 turned to them, never more than 900 px from its anchor; loses turn rate and speed (and lists) as its engines die. Assault: crosses the corridor top to
 bottom at a constant 90 px/s that engines, PANIC, slow fields and an EMP never change, swaying at most ±30 px round its spawn x.  
-**Shoots:** Not yet — its batteries, bow cannon, missile bank and pulse ring arrive in t7, its hangar launches in t8.  
+**Shoots:** (t7) two side BURST_CANNON batteries, each covering only its own side (150°: a dead battery leaves that side safe); a bow HEAVY_CANNON
+(Heavy Shells, 70° forward); a dorsal PURSUIT-only missile bank at a player beyond 450 px (cooldown 7 s; its rockets persist); and an anti-approach
+pulse ring (r 420, two 50° gaps, 14 damage) when the player comes within 340 px, every 5 s. PANIC: battery cooldown × 0.7, pulse every 2.5 s. In
+Assault nothing fires from outside the view. Hangar launches arrive in t8.  
 **HP:** an armoured hull nothing hurts + seven parts: two engines 180, two gun batteries 160, two hangars 220 (locked), core 600 (locked until three
 outer parts are wrecks). **The core's death is the carrier's.**  
 **Score:** 600
