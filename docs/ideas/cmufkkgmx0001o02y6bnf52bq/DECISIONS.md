@@ -4009,3 +4009,39 @@ Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` (revision 2, after a roun
     of 16); `test_it_holds_its_range_against_a_circling_player` keeps the circling case. The bullet and homing rows wait until each shot is
     spent, then 2 frames, with the old fixed waits (20 / 60 frames) as caps. 27 → 26 test functions; no assertion, tick count, start set or
     speed was cut.
+
+### Phase 10, built in t6 (Carrier shell: armoured hull, parts, core exposure, movement) (2026-11-16)
+Task plan `docs/plans/cmwafsrb700afqs2yd3qqvvrb/3-plan.md` (review round 3: APPROVED). Files: `assault/scenes/enemies/carrier/` (`Carrier`, `CarrierBrain`,
+`CarrierEnginePlume`, flat `CarrierConfig`, `ENEMY.md`); `BaseEnemy.emp_seconds_left()`; `WaveBuilder.carrier()` / `CARRIER`;
+`SupportShipBrain.is_candidate()` skips a candidate answering `accepts_ward() == false`. Gate `tests/integration/test_carrier.gd` (13 functions) plus the roster
+rows (contact damage, contact hitbox geometry, hurtbox geometry, `test_base_enemy.gd` exclusions / tow / `_MIN_ROSTER_SIZE`, `HAZARD_PROFILES` 0.5 / 120 / 1.0 and one
+spawn row per mode in `test_enemy_dual_mode.gd`, support-ward rows with a willing fixture `tests/helpers/fixture_enemy_ward_willing.gd`, and the "no Carrier in an
+`ENEMIES_CLEARED` section" guard with its boundary in `test_engagement_deadline.gd`).
+- **D1 Root body `collision_layer` 0 / mask 0** (the station's rule; §2.6.1 also names ENEMY_HITBOX, but the station it points to is layer 0). The player can fly
+  onto the hull: the ARMOR contact (15 and one 220 px/s shove) lands **on entry only**; hugging the hull is what t7's anti-approach pulse punishes.
+- **D2 Hull `Health` 600** (= the core's HP, `config.max_health`): every hit is refused (`armor_deflected(damage)`, white flash); only the core's death sets it to 0.
+- **D3 The list is a hold-deadband sag**, not a bias added to every request: with exactly one engine lost, while it holds a heading the hull sags toward the dead side
+  at `list_rate` 0.06 rad/s until `list_hold_deg` 10° (new config field) off, then turns back at the scaled rate.
+- **D4 `Phase.IDLE`** = Open Space engaged with no player in the tree.
+- **D5 CROSS writes the mover's `acceleration` / `braking` 0** (instant crossing speed) as well as `max_speed` 110 and `hazard_avoidance` 0. The mover limits are keyed by
+  the mode (`CarrierBrain.assault`), never by the phase, so PANIC with both engines lost keeps 90 px/s in Assault.
+- **D6 Named config fields** for §2.6.3's numbers: `one_engine_speed` 0.8, `no_engine_speed` 0.4, `one_engine_sway` 0.5, `no_engine_sway` 0.1, `idle_speed` 0.12 rad/s,
+  `braking` 40.
+- **D7 Stand-in art until t9:** hull `station_core.png` scaled to 192 × 288, parts `station_turret.png` / `station_turret_destroyed.png`, the opened core
+  `power_source_glow.png` (`Carrier.core_open_texture` export). t9 replaces textures only (never shapes, part positions or `HomingPoint`s).
+- **EMP keeps the crossing:** `on_emp_started()` in CROSS commits `mover.boost(DOWN, 90, emp_seconds_left())`; because `BaseEnemy.apply_emp` tells the brain only about a
+  window's start, `Carrier.apply_emp()` calls the new `CarrierBrain.on_emp_refreshed()` when a second EMP extends a running window (re-commits the boost). Open Space keeps
+  the Ph9 halt.
+- **The free-below check lives on the root** (`Carrier._physics_process` after `super`), not in the brain, because the brain is not ticked during an EMP window.
+- **Part layout (t7 / t8 / t9 / t12 read it):** port = local +x (nose-down art). Engines (±56, −116) 48 × 48; guns (±64, 40) 48 × 48 with empty `MountSlots` (t7);
+  hangars (±60, −56) 64 × 56, locked (t8 opens them); core (0, 0) 56 × 56. Every part hurtbox within x ±100 (`module_x_extent`). Engine `Light` = `CarrierEnginePlume`.
+- **Assault sway target** keeps the player inside a live battery's arc using a 65° half-arc (75° − 10° margin); t7 reads the real arc from the slot.
+- **Test notes:** the real-physics rows run once (not per harness) at 16× with every carrier's physics off (the t2 precedent); the free-below row (17) ticks inside real
+  physics frames at 16×, because a hand-ticked `move_and_slide()` outside a physics frame moves by the idle delta. The same-frame core-death row (R2-4) records the core
+  `Sprite`'s textures through `texture_changed` (the carrier frees in the core's destroy call).
+- **Gate time:** GUT 198.50 s → 199.68 s (two `scripts/gate-time.sh` runs, 199.99 / 199.37; 2967 tests, both green): **+1.2 s** against the 2.0 s allotment.
+- **Gate repair (t6 attempt 5): the `test_jamming_structure.gd` fighter-path flake (logged in t4) is fixed.** Root cause: `_fighter_path()` hand-ticks the Fighter
+  from idle code, so `move_and_slide()` sweeps by the *process* delta, which is time-scaled; when the row runs in the frame after a 16×-clock row restored its clock,
+  that delta is ≈ 2 s, the sweep reaches the jammer tower's body (layer 1) and the slide bends the jammer run 500–715 px off the control. Reproduced on demand
+  (time scale 16 for one frame before the row: 701 / 508 px, the gate's 715 / 524). Fix: the row clears the fighter's body `collision_mask` (the hand-ticked
+  drone precedent); every assertion, including the avoid-weight positive control, is unchanged and green under the forced long frame.

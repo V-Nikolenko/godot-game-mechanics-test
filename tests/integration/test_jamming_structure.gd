@@ -337,6 +337,9 @@ func _fighter_path(h: RefCounted) -> Array:
 	(f.get_node("Brain") as FighterBrain).rng_seed = 7  # the same draws in every run
 	h.root.add_child(f)
 	f.set_physics_process(false)
+	# Hand-ticked off a physics frame, `move_and_slide()` sweeps by the real frame delta (time-scaled: up to 2 s after a row on the 16x
+	# clock), which can drag the hull into the tower body and slide it off the path (the flake t4 logged). The row is about the field.
+	f.collision_mask = 0
 	f.config.engage_seconds = 1000.0
 	var path: Array = []
 	for i in 240:

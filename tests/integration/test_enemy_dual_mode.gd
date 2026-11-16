@@ -644,6 +644,7 @@ const HAZARD_PROFILES := [
 	["hacker_frigate", 0.7, 80.0, 0.4],
 	["hacker_disruptor", 0.7, 80.0, 0.4],
 	["heavy_gunship", 1.0, 90.0, 0.6],
+	["carrier", 0.5, 120.0, 1.0],
 ]
 
 
@@ -1469,6 +1470,36 @@ func test_heavy_gunship_closes_to_its_held_range_in_both_modes(mode: String = us
 	assert_eq(brain.held_range(), 420.0 if harness.is_assault else 560.0, "%s: the mode's range" % mode)
 	assert_eq(brain.phase, HeavyGunshipBrain.Phase.BROADSIDE, "%s: on its broadside arc" % mode)
 	assert_true(gunship.is_in_group(&"enemies"), "%s" % mode)
+
+
+const CARRIER_SCENE: PackedScene = preload("res://assault/scenes/enemies/carrier/carrier.tscn")
+
+
+## The Carrier (Phase 10 t6) in both modes: engaged in Open Space it SCREENs (a still player inside its band is never closed on); in Assault it
+## CROSSes, 90 px straight down in 1 s, with the mover's hazard avoidance written to 0 (config 0.5).
+func test_carrier_screens_in_open_space_and_crosses_in_assault(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 620.0)
+	var carrier := CARRIER_SCENE.instantiate() as Carrier
+	var brain := carrier.get_node("Brain") as CarrierBrain
+	brain.start_engaged = true
+	carrier.global_position = Vector2(640.0, -140.0)  # 760 px above the player: inside the 600..950 band
+	harness.root.add_child(carrier)
+	carrier.set_physics_process(false)
+	var y0 := carrier.global_position.y
+	for _i in 60:
+		_tick(carrier, DT)
+	var mover := carrier.get_node("EnemyMover") as EnemyMover
+	if harness.is_assault:
+		assert_eq(brain.phase, CarrierBrain.Phase.CROSS, "assault: crossing")
+		assert_almost_eq(carrier.global_position.y - y0, 90.0, 0.5, "assault: 90 px down in 1 s")
+		assert_eq(mover.hazard_avoidance, 0.0, "assault: no avoidance while crossing")
+	else:
+		assert_eq(brain.phase, CarrierBrain.Phase.SCREEN, "open_space: screening")
+		assert_lt(absf(carrier.global_position.y - y0), 1.0, "open_space: a player inside the band is never closed on")
+		assert_eq(mover.hazard_avoidance, 0.5, "open_space: the config's avoidance")
+	assert_true(carrier.is_in_group(&"enemies"), "%s" % mode)
 
 
 ## The Disruptor (Phase 9, t10) is the Hacker's scripts on its own scene and config: the same closing move to its held range in both modes.

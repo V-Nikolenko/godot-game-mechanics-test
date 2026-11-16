@@ -170,7 +170,12 @@ Detail and APIs: [global.md](modules/global.md).
   parts of a large enemy*. **On a vulnerable hull (the Heavy Gunship, Ph10 t4) every part a projectile must reach obeys the
   flush-edge rule:** its rectangle hurtbox's outer side lies exactly on the host's rectangle hurtbox, so a shot through that edge
   overlaps part and hull in the same physics step and both take it; a part buried inside the outline could never be hit
-  ([ENEMY.md](../../assault/scenes/enemies/heavy_gunship/ENEMY.md), gate `test_heavy_gunship.gd`).
+  ([ENEMY.md](../../assault/scenes/enemies/heavy_gunship/ENEMY.md), gate `test_heavy_gunship.gd`). **On an armoured hull (the
+  Carrier, Ph10 t6) the root answers `deflects_hit()` / `is_armored()` true and refuses every damage (`armor_deflected`), so
+  every player projectile crosses it to whichever part it meets; the core opens only after `core_exposure_count` outer parts
+  are wrecks, and its death is the host's** ([ENEMY.md](../../assault/scenes/enemies/carrier/ENEMY.md), gate `test_carrier.gd`).
+  A hull answering duck-typed `accepts_ward() == false` is never a Support Ship's ward; `BaseEnemy.emp_seconds_left()` lets a
+  brain commit a move for exactly an EMP window.
 - **An enemy picks a round, it does not retune one bullet (Ph3).** The pooled `EnemyBullet` family —
   Pulse, Scatter, Gatling Stream, Rail (the Sniper's, Ph4), Heavy Shell (`assault/scenes/projectiles/enemy_bullet/rounds/`, `EnemyRounds`) — are
   inherited scenes of `enemy_bullet.tscn`, each with its own `ProjectileLifetime`; `EnemyBullet.reset()` restores the

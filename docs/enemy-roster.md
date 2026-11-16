@@ -290,6 +290,30 @@ b.heavy_gunship().at(0, -500)
 
 ---
 
+### `carrier` — Carrier
+
+**Builder:** `b.carrier()` (const `WaveBuilder.CARRIER`, Phase 10 t6)  
+**Scene:** `carrier/carrier.tscn` — see [`ENEMY.md`](../assault/scenes/enemies/carrier/ENEMY.md)  
+**Movement:** Brain-driven (`CarrierBrain` + `EnemyMover`). **Do not add `.move()`.** Open Space: holds the player 600–950 px away with a gun side
+turned to them, never more than 900 px from its anchor; loses turn rate and speed (and lists) as its engines die. Assault: crosses the corridor top to
+bottom at a constant 90 px/s that engines, PANIC, slow fields and an EMP never change, swaying at most ±30 px round its spawn x.  
+**Shoots:** Not yet — its batteries, bow cannon, missile bank and pulse ring arrive in t7, its hangar launches in t8.  
+**HP:** an armoured hull nothing hurts + seven parts: two engines 180, two gun batteries 160, two hangars 220 (locked), core 600 (locked until three
+outer parts are wrecks). **The core's death is the carrier's.**  
+**Score:** 600
+
+**Assault:** no budget and no DISENGAGE: its life is the crossing (≈ 20.6 s from design y −260), then it frees itself below the projectile rect.
+A wave spawn is **world-anchored in x**: `.at(x, y)` lands at world x `640 + 2·x` whatever the camera's pan. **Never in an `ENEMIES_CLEARED`
+section** (guard row in `test_engagement_deadline.gd`). A Support Ship never wards it (`accepts_ward()` false).
+
+**Example:**
+```gdscript
+# Brain-driven — just .at(), no .move()
+b.carrier().at(0, -260)
+```
+
+---
+
 ### `bomber` — Bomber
 
 **Builder:** `b.bomber()`  
@@ -704,7 +728,7 @@ scored. **Tuning lives in each scene's exports.** Art and `rotation` are nose-up
 | Rule | Detail |
 |------|--------|
 | **Always `.move()` path-following enemies** | None left on the AI roster. `ram`, `sniper` / `sniper_enemy` and `bomber` are AI enemies since Phase 4 (level 1 spawns them with no `.move()` in every section, t21 / t22); a rail still works and runs each one's rail fallback (sniper telegraph cycle, bomber rail bombs, ram straight line). |
-| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `heavy_gunship`, `fighter`, `gatling_interceptor`, `ram`, `sniper`, `bomber` — attaching `EnemyPathMover` suspends their AI. `fighter`, `gatling_interceptor`, `sniper` and `bomber` fall back to a legacy weapon on a rail (so the station's reinforcements still fire); the ram keeps its ARMOR contact armed; the rest go quiet. |
+| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `heavy_gunship`, `carrier`, `fighter`, `gatling_interceptor`, `ram`, `sniper`, `bomber` — attaching `EnemyPathMover` suspends their AI. `fighter`, `gatling_interceptor`, `sniper` and `bomber` fall back to a legacy weapon on a rail (so the station's reinforcements still fire); the ram keeps its ARMOR contact armed; the rest go quiet. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` on a rail** | No fly-in constant any more: a rail suspends the brain and the telegraph cycle starts at spawn. Without `.move()` it runs its AI relocation loop. |
 | **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |

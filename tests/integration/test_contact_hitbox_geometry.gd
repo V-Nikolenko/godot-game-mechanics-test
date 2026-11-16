@@ -130,6 +130,10 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn",
 	},
 	{
+		"name": "carrier",
+		"scene": "res://assault/scenes/enemies/carrier/carrier.tscn",
+	},
+	{
 		"name": "gatling_interceptor",
 		"scene": "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn",
 	},

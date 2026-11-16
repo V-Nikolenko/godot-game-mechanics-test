@@ -194,6 +194,12 @@ func is_emp_disrupted() -> bool:
 	return _emp_left > 0.0
 
 
+## Seconds left of the running EMP window (0 outside one). Read-only: already set when `apply_emp` calls `brain.on_emp_started()`, so a brain can commit a
+## move for exactly the window (the Carrier's crossing, Phase 10 t6).
+func emp_seconds_left() -> float:
+	return _emp_left
+
+
 ## One tick of the EMP window (`x -= delta`, over at `x <= EMP_CLOCK_EPSILON`, the Phase 9 clock rule).
 func _step_emp(delta: float) -> void:
 	_emp_left -= delta

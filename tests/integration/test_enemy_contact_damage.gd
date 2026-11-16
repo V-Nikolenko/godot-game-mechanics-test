@@ -163,6 +163,11 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.tres",
 	},
 	{
+		"name": "carrier",
+		"scene": "res://assault/scenes/enemies/carrier/carrier.tscn",
+		"config": "res://assault/scenes/enemies/carrier/carrier_config.tres",
+	},
+	{
 		"name": "gatling_interceptor",
 		"scene": "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn",
 		"config": "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres",
@@ -304,6 +309,22 @@ func test_heavy_gunship_rams_for_its_configured_collision_damage() -> void:
 	assert_not_null(hb, "heavy_gunship: has no contact HitBox as a direct child")
 	if hb != null:
 		assert_eq(hb.damage, cfg.collision_damage)
+
+
+## The Carrier (Phase 10 t6): its ARMOR touch deals the 15 its config declares, never the scene's default.
+func test_carrier_touches_for_its_configured_collision_damage() -> void:
+	var entry: Dictionary = {}
+	for e in ROSTER:
+		if e["name"] == "carrier":
+			entry = e
+	var cfg := load(entry["config"]) as CarrierConfig
+	assert_eq(cfg.collision_damage, 15, "carrier_config.tres is the source of truth for this test")
+	var carrier := _spawn(entry)
+	var hb := _contact_hitbox(carrier)
+	assert_not_null(hb, "carrier: has no contact HitBox as a direct child")
+	if hb != null:
+		assert_eq(hb.damage, cfg.collision_damage)
+	assert_eq(carrier.contact_profile.mode, ContactProfile.Mode.ARMOR, "carrier: the touch is an armoured shove")
 
 
 # ── Completeness guard ────────────────────────────────────────────────────────

@@ -289,6 +289,9 @@ func has_ward() -> bool:
 func is_candidate(e: BaseEnemy) -> bool:
 	if e == null or not is_instance_valid(e) or e == actor or e is SupportShip:
 		return false
+	# A hull that answers `accepts_ward() == false` (the Carrier: a shield on an armoured hull would never absorb) is never a ward.
+	if e.has_method(&"accepts_ward") and not e.accepts_ward():
+		return false
 	if not e.is_ai_driven() or e.is_queued_for_deletion() or e.health == null or e.health.current_health <= 0:
 		return false
 	if not e.counts_toward_wave_clear or e.score_value < config.ward_min_score:

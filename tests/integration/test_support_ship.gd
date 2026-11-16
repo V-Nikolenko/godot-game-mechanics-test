@@ -460,6 +460,35 @@ func test_heavy_gunship_beside_a_fighter_and_a_bonus_drone_is_the_ward(mode: Str
 	assert_eq(_brain(ship).ward, gunship, "%s: the heavy gunship, the higher threat" % mode)
 
 
+const CARRIER_SCENE: PackedScene = preload("res://assault/scenes/enemies/carrier/carrier.tscn")
+const WARD_WILLING: GDScript = preload("res://tests/helpers/fixture_enemy_ward_willing.gd")
+
+
+## Phase 10 t6 (owner choice 7): the Carrier answers `accepts_ward() == false` (a shield on its armoured hull would never absorb), so beside a
+## fighter it is no candidate however it outscores it, and the fighter is the ward. Control: a fixture answering `accepts_ward() == true` is
+## still a candidate and, outscoring the fighter, the ward — the filter reads the answer, not the method's presence.
+func test_a_carrier_is_never_a_ward(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = _harness(mode)
+	harness.player.global_position = Vector2(640.0, 700.0)
+	var carrier := _real(harness, CARRIER_SCENE, Vector2(340.0, 300.0))
+	var fighter := _real(harness, FIGHTER_SCENE, Vector2(640.0, 200.0))
+	var ship := _spawn(harness, Vector2(640.0, 420.0))
+	assert_gt(carrier.score_value, fighter.score_value, "sanity: the carrier outscores the fighter")
+	assert_false(carrier.accepts_ward(), "the carrier refuses a ward")
+	_tick(ship, DT)
+	assert_false(_brain(ship).is_candidate(carrier), "%s: the carrier is no candidate" % mode)
+	assert_eq(_brain(ship).ward, fighter, "%s: the fighter is the ward" % mode)
+
+	var willing := ALLY_SCENE.instantiate() as BaseEnemy
+	willing.set_script(WARD_WILLING)
+	willing.global_position = Vector2(840.0, 300.0)
+	harness.root.add_child(willing)
+	willing.set_physics_process(false)
+	willing.add_to_group("enemies")
+	willing.score_value = fighter.score_value + 100
+	assert_true(_brain(ship).is_candidate(willing), "%s: control: accepts_ward() true is still a candidate" % mode)
+
+
 ## The Bonus Drone has no brain, so the row above holds even without the `counts_toward_wave_clear` clause; this one
 ## cannot.
 func test_a_non_combatant_is_never_a_ward(mode: String = use_parameters(["open_space", "assault"])) -> void:

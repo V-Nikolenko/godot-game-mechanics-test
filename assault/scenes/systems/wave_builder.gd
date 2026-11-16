@@ -92,6 +92,10 @@ func gatling_interceptor() -> SpawnConfig: return SpawnConfig.new(GATLING_INTERC
 func razor_drone()    -> SpawnConfig: return SpawnConfig.new(RAZOR_DRONE)
 ## The Heavy Gunship (Phase 10): a modular gun platform with its own brain and mover. Never give it a `.move()` (t11 takes level 1's rails off).
 func heavy_gunship()  -> SpawnConfig: return SpawnConfig.new(HEAVY_GUNSHIP)
+## The Carrier (Phase 10): an armoured capital ship built from parts. In Assault it crosses the corridor top to bottom at a constant 90 px/s (its life
+## is fixed by spawn y and speed; an EMP does not stop it) and its x is world-anchored like a turret group's: `.at(x, y)` lands at world x `640 + 2·x`.
+## Never in an ENEMIES_CLEARED section (test_engagement_deadline.gd). Never give it a `.move()`.
+func carrier()        -> SpawnConfig: return SpawnConfig.new(CARRIER)
 func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
 func missile_corvette() -> SpawnConfig: return SpawnConfig.new(MISSILE_CORVETTE)
 func support_ship()   -> SpawnConfig: return SpawnConfig.new(SUPPORT_SHIP)
@@ -293,6 +297,7 @@ const SNIPER_ENEMY   := SNIPER  ## Alias kept so existing b.sniper_enemy() calls
 const GATLING_INTERCEPTOR := "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn"
 const RAZOR_DRONE    := "res://assault/scenes/enemies/razor_drone/razor_drone.tscn"
 const HEAVY_GUNSHIP  := "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn"
+const CARRIER        := "res://assault/scenes/enemies/carrier/carrier.tscn"
 const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"
 const MISSILE_CORVETTE := "res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn"
 const SUPPORT_SHIP   := "res://assault/scenes/enemies/support_ship/support_ship.tscn"

@@ -969,6 +969,22 @@ func test_no_enemies_cleared_section_spawns_a_laser_tender() -> void:
 	assert_true(_section_has_scene(probe, WaveBuilder.LASER_TENDER), "boundary: a tender in cloud_descent's last wave is seen")
 
 
+## Phase 10 t6: a Carrier has no budget and no exit; its Assault life is a constant-speed crossing an EMP does not stop (≈ 20.6 s worst case), so
+## it may not sit in an ENEMIES_CLEARED section (the "For every task" rule: no Carrier in one).
+func test_no_enemies_cleared_section_spawns_a_carrier() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.CARRIER), "%s spawns a Carrier" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+	var probe := _cloud_descent()
+	_add_to_last_wave(probe, load(WaveBuilder.CARRIER) as PackedScene, 0.0)
+	assert_true(_section_has_scene(probe, WaveBuilder.CARRIER), "boundary: a carrier in cloud_descent's last wave is seen")
+
+
 # ── Phase 8 t19: level 1 places a turret group, a twin pair and a Laser Tender, in DURATION sections only ───────────
 # (epic plan docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md §2.18; task plan docs/plans/cmvqw0voi019bqs2x3j5zd2o8/3-plan.md §D).
 #
