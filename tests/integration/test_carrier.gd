@@ -46,6 +46,8 @@ const BEAM_FRAMES := 120
 ## Half the 176 x 280 body.
 const HULL_HALF_HEIGHT := 140.0
 const _SPEEDUP := 16  # tests/README.md -> Gate time rule 1: the A rows wait a count of physics frames, never seconds
+## `first_launch_delay` on a row's private config: no scheduled launch inside any row (s).
+const HANGARS_QUIET := 1.0e6
 
 var _roots: Array[Node] = []
 var _saved_time_scale: float = 1.0
@@ -95,10 +97,16 @@ func _world(mode: String):
 	return h
 
 
-## A hand-ticked carrier. [param props] are written on its private config copy before it enters the tree.
+## A hand-ticked carrier. [param props] are written on its private config copy before it enters the tree. Its hangars keep their doors shut
+## (`first_launch_delay` HANGARS_QUIET) and launch nothing (both launch counts 0, so a PANIC row's emergency deployment puts out no ship) unless
+## [param props] says otherwise: these rows are about the hull, its movement and its weapons, the hangars have their own file
+## (`test_carrier_hangars.gd`), and a launch instantiates two ships (Phase 10 t8, the gate-time rule).
 func _spawn(h, pos: Vector2, props: Dictionary = {}, engaged: bool = true) -> Carrier:
 	var c := SCENE.instantiate() as Carrier
 	(c.get_node("Brain") as CarrierBrain).start_engaged = engaged
+	c.config.first_launch_delay = HANGARS_QUIET
+	c.config.launch_count = 0
+	c.config.assault_launch_count = 0
 	for key in props:
 		c.config.set(key, props[key])
 	c.global_position = pos

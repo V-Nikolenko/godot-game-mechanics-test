@@ -1,5 +1,6 @@
 ## The Carrier's brain (docs/plans/cmug23oo90029m52wae4clve0/3-plan.md §2.6.3; Phase 10 t6, task plan docs/plans/cmwafsrb700afqs2yd3qqvvrb/3-plan.md).
-## "A carrier does not chase the player; it controls space" (IDEAS §6.11). Hangars (t8) hang off this brain later.
+## "A carrier does not chase the player; it controls space" (IDEAS §6.11). HANGARS (t8, §2.8): the brain ticks its `CarrierHangars` after the weapons
+## (the schedule runs in Assault from the hull centre's first tick in the view, in Open Space while fighting) and PANIC entry deploys every live one.
 ##
 ## WEAPONS (t7, §2.7; task plan docs/plans/cmwafsrb900ajqs2yb5jcl5ij/3-plan.md). Every tick, after the movement: the side batteries and the bow cannon
 ## (each limited by its own traverse: a dead battery leaves its side safe), the missile bank (only beyond `missile_min_range`) and the anti-approach
@@ -92,6 +93,10 @@ var _pulse_left: float = 0.0
 var _panic_applied: bool = false
 var _light: StateLight
 var _core_light: StateLight
+## The hangars (t8), handed over by the root in `bind_hangars()`.
+var _hangars: CarrierHangars
+## Assault: true from the hull centre's first tick inside the view (the hangar schedule's clock runs from then).
+var _view_entered: bool = false
 
 
 ## Hands the brain its parts (called by the root in `_ready()`).
@@ -123,6 +128,7 @@ func tick(delta: float) -> void:
 			Phase.SCREEN, Phase.IDLE: _tick_screen(delta, target)
 			Phase.PANIC: _tick_panic(delta, target)
 	_tick_weapons(delta, target)
+	_tick_hangars(delta, target)
 
 
 ## Test seam and the one place a transition happens.
@@ -209,6 +215,8 @@ func desired_nose(bearing: Vector2) -> Vector2:
 func _start() -> void:
 	_started = true
 	assault = EnemyWorld.arena(get_tree()) != null
+	if _hangars != null:
+		_hangars.assault = assault
 	if not patrol_anchor.is_finite():
 		patrol_anchor = actor.global_position
 	_apply_limits()
@@ -525,9 +533,10 @@ func _on_panic_entered() -> void:
 	_emergency_deploy()
 
 
-## Emergency deployment (§2.8): every live hangar that may still launch goes straight to LAUNCH, once. The t8 hook: hangars do not exist yet.
+## Emergency deployment (§2.8): every live hangar that may still launch goes straight to LAUNCH, once (`CarrierHangars.emergency_deploy()`).
 func _emergency_deploy() -> void:
-	pass
+	if _hangars != null:
+		_hangars.emergency_deploy()
 
 
 ## An EMP or a rail: every mount scans (a telegraph never lands; a FIRE cut here still starts its cooldown), the ring ends, the lights go out.
@@ -589,3 +598,32 @@ func _battery_half_deg() -> float:
 		if mount.phase() != TurretMount.Phase.UNPOWERED:
 			return mount.traverse_deg * 0.5
 	return SWAY_ARC_HALF_DEG
+
+
+# ── Hangars (t8) ────────────────────────────────────────────────────────────────────────────────
+
+## Hands the brain its hangars (the root, in `_ready()`).
+func bind_hangars(hangars: CarrierHangars) -> void:
+	_hangars = hangars
+	if _started:
+		_hangars.assault = assault
+
+
+func hangars() -> CarrierHangars:
+	return _hangars
+
+
+## The hangar schedule runs in Assault from the hull centre's first tick inside the view (latched), in Open Space while it fights (SCREEN or PANIC
+## with a player). A door cycle already under way runs on either way (`CarrierHangars.tick`).
+func _tick_hangars(delta: float, target: TargetInfo) -> void:
+	if _hangars == null:
+		return
+	var active := false
+	if assault:
+		if not _view_entered:
+			var tree := get_tree()
+			_view_entered = EnemyWorld.has_view_rect(tree) and EnemyWorld.view_rect(tree).has_point(actor.global_position)
+		active = _view_entered
+	else:
+		active = target.has_target and (phase == Phase.SCREEN or phase == Phase.PANIC)
+	_hangars.tick(delta, active)

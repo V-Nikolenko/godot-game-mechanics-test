@@ -7,7 +7,7 @@ extends BaseEnemy
 ## THE HULL IS ARMOUR. `deflects_hit()` / `is_armored()` answer true always, so every player projectile crossing the 176 x 280 hull overlaps it without
 ## being consumed and reaches whichever part it meets; `_on_received_damage` refuses every hit (white flash, `armor_deflected`), so bullets, rockets,
 ## the beam, the nova and a level laser never lower the hull `Health`. THE PARTS are seven `EnemyModule`s under `Modules` with a `ModularHull` beside them:
-## two engines aft, two gun batteries amidships, two hangars (locked: t8 opens them with the doors) and the core (locked). Every part's hurtbox lies within
+## two engines aft, two gun batteries amidships, two hangars (locked: open, and hittable, only while their doors are, t8) and the core (locked). Every part's hurtbox lies within
 ## `config.module_x_extent` of the centre in x (level 1's lane maths, §2.13).
 ##
 ## THE CORE opens when `core_exposure_count` (3) outer parts (engines, guns, hangars) are wrecks: `set_vulnerable(true)` deferred (the third kill lands in a
@@ -24,6 +24,11 @@ extends BaseEnemy
 ## a PURSUIT-only rocket bank (`missile_cooldown`), hull systems that fall silent only with the carrier. `AntiApproachRing` (`carrier_pulse_ring.tscn`,
 ## r 420) is the pulse against hull-huggers; it exempts this hull and its owner group (launched children, t8) and, like every enemy energy weapon,
 ## never reaches a part. The brain ticks all of them; `died` ends the ring at once.
+##
+## HANGARS (t8, §2.8; task plan docs/plans/cmwafsrbc00anqs2y9y0ovll4/3-plan.md). `CarrierHangars` drives the two HANGAR parts: doors open (yellow light,
+## the part hittable) `door_open_seconds` before each launch; children come out of each `Mouth` as siblings of this hull, in its owner group, and
+## outlive it. Open Space: every `launch_period` under the caps; Assault: once per hangar, 3.0 / 7.0 s after the centre enters the view. A destroyed
+## hangar never launches again; PANIC empties every live one at once.
 ##
 ## Nose-down art (`sprite_forward_angle` PI/2): the nose is local +y, port (the hull's left) is local +x, the stern local -y.
 ## Root body layer 0 / mask 0 (the station's rule, t6 D1): it ploughs through, and the player can fly onto the hull; the ARMOR contact (15 and a 220 px/s
@@ -76,6 +81,7 @@ func _ready() -> void:
 		core.destroyed.connect(_on_core_destroyed)
 	_carrier_brain.bind_hull(_hull)
 	_build_weapons()
+	_build_hangars()
 
 
 ## `BaseEnemy`'s tick, then the Assault free-below check (here, so an EMP window cannot skip it).
@@ -114,6 +120,11 @@ func _build_weapons() -> void:
 	_ring.setup(self, _owner_group)
 	died.connect(_carrier_brain.cancel_pulse)
 	_carrier_brain.bind_weapons(bow, bank, _ring)
+
+
+## The hangars (t8, §2.8): one `CarrierHangars` over the two HANGAR parts, launching into this hull's parent with its owner group, ticked by the brain.
+func _build_hangars() -> void:
+	_carrier_brain.bind_hangars(CarrierHangars.new(self, _hull, config if config != null else CarrierConfig.new(), _carrier_brain.rng, _owner_group))
 
 
 func _apply_config(cfg: CarrierConfig) -> void:
@@ -170,6 +181,11 @@ func bow_mount() -> TurretMount:
 ## The dorsal missile bank (a hull system).
 func missile_mount() -> TurretMount:
 	return _carrier_brain.missile_mount()
+
+
+## The hangars: doors, launches, caps and emergency deployment (t8).
+func hangars() -> CarrierHangars:
+	return _carrier_brain.hangars()
 
 
 ## The anti-approach pulse ring, owned and ticked by the brain.

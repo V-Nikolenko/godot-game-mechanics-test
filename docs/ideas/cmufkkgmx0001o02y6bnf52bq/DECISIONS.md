@@ -4146,3 +4146,36 @@ in), `heavy_gunship.gd` (cannon shield set-up), `heavy_gunship.tscn` (`Modules/C
 - **Gate time:** GUT 201.29 s (the t7 close, same tree as this task's start) → 203.36 / 202.89 s (two `scripts/gate-time.sh` runs, mean 203.12; 2976 → 2996
   tests, 106295 asserts; both green, no leak lines): **+1.83 s** against the 2.5 s allotment. `test_heavy_gunship.gd` 26 → 45 functions, summed testcase
   time in the suite ≈ 1.8 → 3.4 s (the exit probe in `before_all()` unchanged); the two long scenarios run once per harness (`_heat_run`, `_emergency_run`).
+
+### Phase 10, built in t8 (Carrier hangars: doors, launches, caps, emergency deployment) (2026-11-16)
+
+Task plan `docs/plans/cmwafsrbc00anqs2y9y0ovll4/` (review: round 1 and round 2 CHANGES_REQUESTED, all in the test plan; the round-2 fix check APPROVED).
+- **Files:** `assault/scenes/enemies/carrier/carrier_hangars.gd` (`CarrierHangars extends RefCounted`; `enum Door { CLOSED, OPENING, LAUNCH, OPEN }`
+  append-only; signals `door_changed(module_id: StringName, door: int)`, `launched(module_id: StringName, children: Array)`; queries `door(id)`,
+  `launches(id)`, `children_of(id)`, `live_count()`, `clock()`, `hangar_ids()`; `tick(delta, active)`, `emergency_deploy()`, test hook `force_open(id)`)
+  and `carrier_hangar_doors.gd` (`CarrierHangarDoors`, code-drawn placeholder: `open_amount`, `broken`). Built by `Carrier._build_hangars()` (it knows the
+  owner group), held by `CarrierBrain.bind_hangars()` / `hangars()`, ticked after the weapons; `Carrier.hangars()`. `_emergency_deploy()` (t7's hook) calls it.
+- **Scene:** each hangar module gains `Doors`, `Light` (`StateLight`, (0, −24), scale 2) and `Mouth` (`Marker2D`, (±48, 0): hull x ±108). No shape, module
+  position or `HomingPoint` moved.
+- **Deviation (one first-launch schedule for both modes):** §2.8 names `assault_first_launch`; the config has `first_launch_delay` 3.0 and
+  `starboard_launch_delay` 4.0, used in **both** modes: Assault from the hull centre's first tick in the view, Open Space from engaging (the schedule clock
+  runs only while SCREEN / PANIC with a player). §2.8 gave Open Space only the 9 s period; opening both hangars on the engage tick would leave no closed window.
+  Then Open Space repeats per hangar every `launch_period` from its previous OPENING.
+- **Caps:** a hangar opens only with room (`min(hangar_live_cap − own live, carrier_live_cap − all live) > 0`); a hangar at its cap keeps its doors shut
+  (its due launch waits); the count at LAUNCH is `min(launch_count, room)`. Live = valid and not queued for deletion (the `LaserTender._prune` rule).
+- **Spawning:** synchronous from the brain tick, `load()`ed payload paths (flat `String`s in the config), children at the `Mouth` 28 px apart along the hull
+  axis; brain `rng_seed` from the carrier brain's rng and `start_engaged` true where the brain has them; one `SquadController` per payload scene path,
+  held by `CarrierHangars` (so in Assault both hangars' drones share one squad); collision exceptions both ways; `parent.add_child`, then the owner group,
+  then `EnemyMover.boost(outward, 300, 0.4)` right after `add_child` (equivalent to "on its first tick": neither payload brain boosts or halts at start),
+  then `EventBus.enemy_spawned_orphan` once. No `patrol_anchor` is written (engaged children never idle).
+- **Wreck / emergency:** a destroyed hangar's bay is dead for good (no tick, no launch; doors broken and open; the module turns its light OFF). Emergency
+  deployment launches each live bay that may still launch from any door state (Open Space room > 0, Assault not launched), then OPEN (hittable) for
+  `door_hold_seconds`; an Assault bay caught mid-OPENING launches on the PANIC tick and not again. An EMP freezes the hangars with the brain.
+- **Tests:** `tests/integration/test_carrier_hangars.gd` (H1–H7 + the config pin; H2 on real physics at 16× with `launch_count` 0 and `first_launch_delay`
+  1.0 on its private config; H7 picks the ring's gap start so no child or control sits in a gap and asserts it). **`test_carrier.gd::_spawn` now keeps
+  the hangars quiet** (`first_launch_delay` 1e6, `launch_count` / `assault_launch_count` 0 on each row's private config): those rows test the hull,
+  movement and weapons, and a launch instantiates two ships (it cost +0.4 s). Mutation checks: no caps, dead bays launching, an Assault hangar
+  relaunching, no owner group, doors that do not unlock, no emergency deployment: each fails at least one row.
+- **Gate time:** GUT 203.53 s (two `scripts/gate-time.sh` runs on a clean `git archive HEAD` copy, 203.347 / 203.72) → 205.51 s (205.419 / 205.605; 2997 →
+  3005 tests, 106593 asserts; both green, `check-test-leaks.sh` clean, gate output ≈ 418 KB): **+1.98 s** against the 2.2 s allotment. Own files:
+  `test_carrier_hangars.gd` summed testcase time ≈ 1.76 s; `test_carrier.gd` 2.74 → 2.88 s.

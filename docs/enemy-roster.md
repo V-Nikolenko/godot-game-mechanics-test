@@ -300,8 +300,12 @@ bottom at a constant 90 px/s that engines, PANIC, slow fields and an EMP never c
 **Shoots:** (t7) two side BURST_CANNON batteries, each covering only its own side (150°: a dead battery leaves that side safe); a bow HEAVY_CANNON
 (Heavy Shells, 70° forward); a dorsal PURSUIT-only missile bank at a player beyond 450 px (cooldown 7 s; its rockets persist); and an anti-approach
 pulse ring (r 420, two 50° gaps, 14 damage) when the player comes within 340 px, every 5 s. PANIC: battery cooldown × 0.7, pulse every 2.5 s. In
-Assault nothing fires from outside the view. Hangar launches arrive in t8.  
-**HP:** an armoured hull nothing hurts + seven parts: two engines 180, two gun batteries 160, two hangars 220 (locked), core 600 (locked until three
+Assault nothing fires from outside the view.  
+**Launches:** (t8) two hangars whose doors open (yellow light, the hangar hittable) 0.8 s before each launch. Open Space: port swarm drones and
+starboard fighters, 2 per launch, first at 3.0 / 7.0 s after engaging and then every 9 s, never more than 3 live per hangar or 6 per carrier.
+Assault: 2 swarm drones from each hangar, once, 3.0 / 7.0 s after the carrier enters the view (4 in all). A destroyed hangar never launches again;
+PANIC empties every live hangar at once. Children are announced siblings in its owner group and outlive it.  
+**HP:** an armoured hull nothing hurts + seven parts: two engines 180, two gun batteries 160, two hangars 220 (hittable only while open), core 600 (locked until three
 outer parts are wrecks). **The core's death is the carrier's.**  
 **Score:** 600
 

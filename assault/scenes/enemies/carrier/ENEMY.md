@@ -7,8 +7,8 @@ which opens only after three outer parts are wrecks. Losing engines makes it tur
 ship visibly comes apart.
 
 Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` §2.6 (Phase 10 t6) and §2.7 (t7, weapons); task plans `docs/plans/cmwafsrb700afqs2yd3qqvvrb/`
-(t6) and `docs/plans/cmwafsrb900ajqs2yb5jcl5ij/` (t7). The hangar doors and launches arrive in t8; the real multi-part art in
-t9 (the textures here are stand-ins); hub placement in t10; level 1 in t12.
+(t6), `docs/plans/cmwafsrb900ajqs2yb5jcl5ij/` (t7) and `docs/plans/cmwafsrbc00anqs2y9y0ovll4/` (t8, hangars, §2.8). The real multi-part art arrives
+in t9 (the textures here are stand-ins); hub placement in t10; level 1 in t12.
 
 ---
 
@@ -34,7 +34,7 @@ centre (`module_x_extent`; level 1's lane maths relies on it). No two part hurtb
 |---|---|---|---|---|---|
 | `EnginePort` / `EngineStarboard` | `engine_port` / `engine_starboard` | ENGINE | 180 | (±56, −116), 48 × 48 | open; `Light` = `CarrierEnginePlume` (code-drawn, goes out with the engine) |
 | `GunPort` / `GunStarboard` | `gun_port` / `gun_starboard` | WEAPON | 160 | (±64, 40), 48 × 48 | open; one BURST_CANNON each (`MountSlots/Slot0`, rest 0° / 180°, traverse 150° to its own side) |
-| `HangarPort` / `HangarStarboard` | `hangar_port` / `hangar_starboard` | HANGAR | 220 | (±60, −56), 64 × 56 | locked (t8 opens them with the doors) |
+| `HangarPort` / `HangarStarboard` | `hangar_port` / `hangar_starboard` | HANGAR | 220 | (±60, −56), 64 × 56 | locked: hittable only while its doors are open (t8, below) |
 | `Core` | `core` | CORE | 600 | (0, 0), 56 × 56 | locked until exposure |
 
 **The armoured hull.** `deflects_hit()` and `is_armored()` always answer true, so every player projectile crossing the hull overlaps it without
@@ -92,12 +92,12 @@ Pools are root children built by `ModularHull.build_mounts()` (module slots: `Pu
 `HullMounts` with the running index (`PulsePool_2`, `DumbPool_3` / `PursuitPool_3`).
 
 **The ring's victims** are `EnergyHitScan`'s: the player, allies, and enemies and asteroids **outside** the carrier's owner group
-(`owner_group()`, which t8's launched children join, so it passes them). It never reaches a part (enemy energy weapons never target
+(`owner_group()`, which the launched children join, so it passes them). It never reaches a part (enemy energy weapons never target
 `enemy_parts`), so it cannot hurt its own hull or parts; it **does** hurt another enemy it sweeps (Ph8 friendly fire, owner choice 8).
 
 **PANIC** (core exposed), on entry, once: each side battery's `cooldown_seconds` × `panic_battery_factor` 0.7 (2.2 → 1.54 s; the bow and the bank
-keep theirs), the pulse cooldown × `panic_pulse_factor` 0.5 (2.5 s; a ring lasts 2.32 s), and the t8 emergency-deployment hook
-(`_emergency_deploy()`, a no-op until the hangars exist). Assault: the crossing is unchanged.
+keep theirs), the pulse cooldown × `panic_pulse_factor` 0.5 (2.5 s; a ring lasts 2.32 s), and the emergency deployment
+(every live hangar that may still launch empties at once, below). Assault: the crossing is unchanged.
 
 **Lights (§2.9):** the hull `StateLight` is CHARGING (yellow) while any mount or the ring telegraphs, ARMED (red) while a mount tracks, fires or
 cools down or the band expands, else OFF; in PANIC it strobes (0.25 s, ARMED / OFF) but never hides a telegraph. `Modules/Core/Light` (a
@@ -106,6 +106,38 @@ cools down or the band expands, else OFF; in PANIC it strobes (0.25 s, ARMED / O
 **An EMP or a rail** silences everything at once: every mount `scan(0.0)` (a telegraph never lands), the ring ends (a telegraph goes OFF, an
 expanding band is cancelled and its fade finished on the spot, since the brain is not ticked through the window), lights OFF. **Death** ends the
 ring in the same call (`died` → `cancel_pulse()`).
+
+## Hangars (t8, §2.8)
+
+`CarrierHangars` (`carrier_hangars.gd`, a `RefCounted` built by the root, held and ticked by the brain after the weapons) drives the two HANGAR
+parts. Each hangar module carries `Doors` (`CarrierHangarDoors`, code-drawn placeholder leaves; t9 draws the art), `Light` (a `StateLight`) and
+`Mouth` (a `Marker2D` 48 px outboard: hull x ±108).
+
+**The door cycle** (`CarrierHangars.Door { CLOSED, OPENING, LAUNCH, OPEN }`, append-only): CLOSED → OPENING (`door_open_seconds` 0.8: the doors slide
+apart, the light turns CHARGING yellow and **the hangar becomes hittable**, owner choice 4) → LAUNCH (the children come out, inside one tick) →
+OPEN (`door_hold_seconds` 2.0, still hittable) → CLOSED (sealed, light OFF). A shot at a closed hangar flies on and pings it.
+
+| | Open Space | Assault |
+|---|---|---|
+| Schedule clock | runs while fighting (SCREEN / PANIC with a player) | runs from the hull centre's first tick inside the view |
+| First OPENING | port at `first_launch_delay` 3.0 s, starboard `starboard_launch_delay` 4.0 s later (7.0 s) | the same |
+| Then | each hangar every `launch_period` 9.0 s from its previous OPENING, **only with room**: fewer than `hangar_live_cap` 3 live children of its own and `carrier_live_cap` 6 of the carrier. A hangar at its cap keeps its doors shut until a child is gone | **one launch per hangar per life** |
+| Payload | `launch_count` 2 (clamped to the room): port `hangar_port_scene` swarm drones, starboard `hangar_starboard_scene` fighters | `assault_launch_count` 2 swarm drones (`assault_hangar_scene`) from each: 4 in all |
+
+**Children** are spawned synchronously from the brain's tick (the `LaserTender.launch_pair()` rule) at the hangar's `Mouth`, 28 px apart along the
+hull axis: brain `rng_seed` from the carrier brain's rng, `start_engaged` true, one `SquadController` per payload scene (held by the hangars), a
+collision exception both ways, added as a **sibling** of the carrier, put in its owner group (the pulse ring passes them), pushed outward by
+`mover.boost(outward, launch_boost_speed 300, launch_boost_seconds 0.4)` and announced once with `EventBus.enemy_spawned_orphan`. They keep their
+own config (score, escape flag, Assault budget), never dock, and **outlive the carrier**. "Live" = valid and not queued for deletion.
+
+**A destroyed hangar never launches again:** its cycle stops where it was, its doors hang open and broken, its light stays OFF. Killed
+mid-OPENING, nothing comes out.
+
+**Emergency deployment** (PANIC entry, once): every live hangar that may still launch (Open Space: room under the caps; Assault: not launched yet)
+launches at once from whatever door state it is in, without the telegraph, then holds OPEN (hittable). A wrecked hangar, or an Assault hangar
+that already launched, deploys nothing; one caught mid-OPENING launches now and not again.
+
+An EMP freezes the hangars with the brain (an open door stays open and hittable through the window).
 
 ## Spawn notes
 
@@ -122,7 +154,9 @@ carrier/
 ├── carrier_brain.gd            (CarrierBrain)
 ├── carrier_engine_plume.gd     (CarrierEnginePlume: the code-drawn engine flame, each engine's Light)
 ├── carrier_pulse_ring.tscn     (the anti-approach ring: an inherited energy_ring.tscn, exports only)
+├── carrier_hangars.gd          (CarrierHangars: doors, launches, caps, emergency deployment)
+├── carrier_hangar_doors.gd     (CarrierHangarDoors: the code-drawn placeholder doors)
 └── carrier_config.gd / .tres   (CarrierConfig)
 ```
 
-Gate: `tests/integration/test_carrier.gd`.
+Gates: `tests/integration/test_carrier.gd`, `tests/integration/test_carrier_hangars.gd` (the hangars).

@@ -18,6 +18,7 @@
 [ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/power_source_glow.png" id="22_cv"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/turret_mount_slot.gd" id="23_cv"]
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/carrier/carrier_pulse_ring.tscn" id="24_cv"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/carrier/carrier_hangar_doors.gd" id="25_cv"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_cv"]
 resource_local_to_scene = true
@@ -281,6 +282,17 @@ script = ExtResource("4_cv")
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/HangarPort/HurtBox"]
 shape = SubResource("RectangleShape2D_hangar")
 
+[node name="Doors" type="Node2D" parent="Modules/HangarPort"]
+script = ExtResource("25_cv")
+
+[node name="Light" type="Node2D" parent="Modules/HangarPort"]
+position = Vector2(0, -24)
+scale = Vector2(2, 2)
+script = ExtResource("11_cv")
+
+[node name="Mouth" type="Marker2D" parent="Modules/HangarPort"]
+position = Vector2(48, 0)
+
 [node name="HangarStarboard" type="Node2D" parent="Modules"]
 position = Vector2(-60, -56)
 script = ExtResource("10_cv")
@@ -302,6 +314,17 @@ script = ExtResource("4_cv")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/HangarStarboard/HurtBox"]
 shape = SubResource("RectangleShape2D_hangar")
+
+[node name="Doors" type="Node2D" parent="Modules/HangarStarboard"]
+script = ExtResource("25_cv")
+
+[node name="Light" type="Node2D" parent="Modules/HangarStarboard"]
+position = Vector2(0, -24)
+scale = Vector2(2, 2)
+script = ExtResource("11_cv")
+
+[node name="Mouth" type="Marker2D" parent="Modules/HangarStarboard"]
+position = Vector2(-48, 0)
 
 [node name="Core" type="Node2D" parent="Modules"]
 position = Vector2(0, 0)

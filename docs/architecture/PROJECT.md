@@ -180,7 +180,9 @@ Detail and APIs: [global.md](modules/global.md).
   every player projectile crosses it to whichever part it meets; the core opens only after `core_exposure_count` outer parts
   are wrecks, and its death is the host's; its guns (t7) are module-mounted BURST_CANNONs whose 150° traverse keeps each on its own
   side, plus hull-mounted `HullMounts/*` slots built by `TurretMountBuilder` after `ModularHull.build_mounts()` with the returned
-  running index, and its brain owns and ticks an `EnergyRing` (`carrier_pulse_ring.tscn`) exempting its owner group** ([ENEMY.md](../../assault/scenes/enemies/carrier/ENEMY.md), gate `test_carrier.gd`).
+  running index, and its brain owns and ticks an `EnergyRing` (`carrier_pulse_ring.tscn`) exempting its owner group; a HANGAR part (t8) is hittable only while its doors are open, and a `CarrierHangars`
+  launches its children synchronously from the brain tick as announced siblings in the owner group (the `LaserTender.launch_pair()` rule) that
+  outlive the carrier; a wrecked hangar never launches again and PANIC empties every live one at once** ([ENEMY.md](../../assault/scenes/enemies/carrier/ENEMY.md), gates `test_carrier.gd`, `test_carrier_hangars.gd`).
   A hull answering duck-typed `accepts_ward() == false` is never a Support Ship's ward; `BaseEnemy.emp_seconds_left()` lets a
   brain commit a move for exactly an EMP window.
 - **An enemy picks a round, it does not retune one bullet (Ph3).** The pooled `EnemyBullet` family —
