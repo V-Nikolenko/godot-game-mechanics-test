@@ -4,7 +4,8 @@
 ## Flat by design (test_config_instance_isolation.gd): every field is a plain number, so the shallow `ShipConfig.privatise()` copy is complete.
 ## The values are [judgement] starting values (§2.16) except the Assault budget and exit, which are derived from the Cloud Descent deadline
 ## (§2.4.3). The parts' HP and the guns' tuning live in the scene: each `EnemyModule`'s `max_health`, each mount scene's exports and each
-## `TurretMountSlot`'s `traverse_deg_override`. The Phases and Defense groups (overheat, vent, emergency, cannon shield) arrive with t5.
+## `TurretMountSlot`'s `traverse_deg_override`. The Phases and Defense groups (overheat, vent, emergency, cannon shield) are t5's (task plan
+## docs/plans/cmwafsrb400abqs2yt38khcyu/3-plan.md), all §2.16 starting values.
 class_name HeavyGunshipConfig
 extends ShipConfig
 
@@ -46,6 +47,35 @@ extends ShipConfig
 @export var break_speed: float = 360.0
 @export var break_seconds: float = 0.7
 @export var break_rearm: float = 3.0
+
+@export_group("Phases")
+## The hull phase is read off the root `Health` fraction: CONTROLLED at or above `overheat_ratio`, OVERHEAT at or above `emergency_ratio`,
+## EMERGENCY below. Entering a band is one way (a repair never steps back).
+@export var overheat_ratio: float = 0.6
+@export var emergency_ratio: float = 0.3
+## OVERHEAT: each gun burst adds 1 heat when it ends; at `heat_limit` the hull VENTs for `vent_seconds` (both vents open: vulnerable and
+## orange), its `max_speed` scaled by `vent_speed_factor`.
+@export var heat_limit: int = 4
+@export var vent_seconds: float = 2.2
+@export var vent_speed_factor: float = 0.6
+## EMERGENCY: a committed boost away (`emergency_boost_speed` px/s for `emergency_boost_seconds` s) every `emergency_period` s; from each
+## boost's end the rear Missiles mount may fire for `missile_window` s at a player inside the rear `missile_rear_arc_deg`.
+@export var emergency_period: float = 5.0
+@export var emergency_boost_speed: float = 420.0
+@export var emergency_boost_seconds: float = 0.9
+@export var missile_window: float = 2.0
+@export var missile_rear_arc_deg: float = 200.0
+## EMERGENCY's held range: `emergency_range` in Open Space (px), `assault_preferred_range` + `emergency_assault_extra` in Assault.
+@export var emergency_range: float = 800.0
+@export var emergency_assault_extra: float = 120.0
+
+@export_group("Defense")
+## The nose cannon's local `EnemyShield` (Ph5), written onto `Modules/Cannon/Shield`: a frontal arc that protects the cannon's own HP only.
+@export var shield_arc_deg: float = 120.0
+@export var shield_capacity: int = 60
+@export var shield_regen_delay: float = 2.0
+@export var shield_regen_seconds: float = 4.0
+@export var shield_reboot_seconds: float = 5.0
 
 @export_group("Engagement")
 ## Assault: seconds before the gunship disengages. Derived from the Cloud Descent deadline (§2.4.3).

@@ -38,7 +38,7 @@ global/
 │   ├── defense_profile.gd         # DefenseProfile (Node) — per-instance HurtBox mask/damage-type data
 │   ├── contact_profile.gd         # ContactProfile (Node) — what touching an enemy does: NONE / COLLISION / RAMMING / EXPLOSIVE / ARMOR
 │   ├── contact_blast.gd           # ContactBlast (HitBox) — code-built blast an EXPLOSIVE profile leaves in the owner's parent
-│   ├── state_light.gd             # StateLight (Node2D) — one small red/yellow/white attack-telegraph light
+│   ├── state_light.gd             # StateLight (Node2D) — one small red/yellow/white/orange attack-telegraph light
 │   ├── assault_drift.gd           # AssaultDrift (Node) — Ph8: static structures scroll down with the Assault corridor and free below the world; no-op in Open Space
 │   ├── overheat_component.gd      # Overheat (Node) — weapon heat
 │   ├── attack_controller.gd       # AttackController (Node) — drives an AttackPatternResource
@@ -290,7 +290,9 @@ MyHeavy (BaseEnemy)
 │       ├── DefenseProfile         optional: applied to THIS hurtbox by the part (BaseEnemy applies only the root's)
 │       ├── MountSlots             optional TurretMountSlots (built by ModularHull.build_mounts(), t3)
 │       ├── HomingPoint (Marker2D) optional: homing_point()
-│       └── Light                  optional StateLight: OFF on destruction
+│       ├── Light                  optional StateLight: OFF on destruction (the host's brain drives it while the part lives)
+│       └── Shield                 optional EnemyShield the HOST attach()es to this part's HurtBox: it covers this part only
+│                                  (the Heavy Gunship's cannon, Ph10 t5; the host frees it on module_destroyed)
 └── ModularHull (Node)
 ```
 
@@ -512,7 +514,8 @@ var state := anchor_idle.update(delta, actor.global_position, TargetInfo.player(
 
 `StateLight` (`class_name StateLight extends Node2D`) is the **one small light** an enemy shows
 to telegraph its own attack intent (IDEAS §21.1 — one gameplay light per state, never a recoloured
-hull): `set_state(OFF | ARMED | CHARGING | COMMIT)` maps to invisible / red / yellow / white, and
+hull): `set_state(OFF | ARMED | CHARGING | COMMIT | VENTING)` maps to invisible / red / yellow / white / orange
+(`VENTING_COLOR`, appended in Phase 10 t5 for the Heavy Gunship's open vents; the enum is append-only), and
 `blink_once()` flashes CHARGING for `BLINK_SECONDS` then restores whatever state was active
 before the call (used for a NOTICING beat, which is not a threat level of its own). Its texture is
 a radial `GradientTexture2D` **built in code in `_ready()`**, 8×8 px, white fading to alpha 0 at
@@ -784,7 +787,9 @@ exactly against every shipped enemy-bullet speed; a new, slower bullet source mu
 `persist_after_owner_death` is built (Ph4) as a `BulletPool` `@export` (default false): with it on,
 the pool's `_exit_tree()` hands in-flight bullets over (recycle callable disconnected, `expired ->
 queue_free` one-shot) instead of `cancel_active()`, which ignores the flag. Pinned by
-`tests/unit/test_bullet_pool.gd`.
+`tests/unit/test_bullet_pool.gd`. An empty pool's `acquire()` returns null on every call but warns
+("Pool exhausted") only the first time that pool runs dry, and again only under `--verbose` (Ph10 t5:
+a refused shooter asks every tick, and the repeats overflowed the harness's 1 MiB gate output).
 
 ### Shield — `shield_component.gd`, `bubble_shield.tscn`, ordering in `damage_reaction.gd`
 

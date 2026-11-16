@@ -113,3 +113,59 @@ revisions do not hold against the code as written.** Both need only sentence-lev
 - **Row 20 and EMP-in-VENT marked (D) (finding 7).** Both are in. The Open Space half of row 20 is buildable as written: an EMP `scan()` from TELEGRAPH
   sets no cooldown (`turret_mount.gd:145-150`), and the frozen emergency clock leaves the window open after the EMP.
 - **Pod cadence (finding 8).** Recorded.
+
+## Round 3
+VERDICT: APPROVED
+
+Re-read the whole of `3-plan.md` (with "Review round 2 — what changed") and `1-context.md`, then checked the revised text against the code. Since the plan was
+written, t6 / t7 landed. That added `BaseEnemy.emp_seconds_left()` and the Carrier as a new rocket launcher, and changed nothing the gunship plan reads. The
+`draft-brain.diff` in this directory (not part of the reviewed design) was also read: it is consistent with the plan (the exit hook in `enter_phase()`, `CLOCK_EPS`, the window
+and the missiles gate, `scan(0.0)` on DISENGAGE). No scratch probe was needed: every number below is derived from the code. The owner's decision on Assault
+emergency geometry is not re-raised.
+
+**Round-2 findings: all three resolved in the text and consistent with the code.**
+- **R2-1 (launcher guard).** It holds against the code:
+  - `_update_arming()` and the `_armed` latch are untouched (`enemy_rocket.gd:291-292, 372-388`), so
+    `test_enemy_rockets.gd:514-542` keeps reading `is_armed() == (d >= arm_at)`.
+  - The look-ahead uses the closing speed only, `max(0, −rel_pos·rel_vel/|rel_pos|)`, with `rel_vel` = `_heading·_speed − launch_velocity()`. That is zero while
+    the rocket recedes, so on the way out the guard is the arming radius.
+  - The margin is right. `rocket_clear_radius()` = 91.21 + 4 (`heavy_gunship.gd:87-88`), so the guard at rest is 109.21. A HitBox of r 6 can touch the
+    rectangle only from 97.21. That leaves 12 px, against the ≤ 7 px a 420 px/s hull can move between the rocket's check and the physics step.
+  - A triggered WARHEAD is correctly excluded: it returns at `:270-278`.
+  - The scope ("`_had_launcher` and live") matches `_update_arming()`'s own liveness test (`:375-378`).
+  - The closed state relies on the same `monitorable = false` semantics that today's launch-inside-the-hull already depends on (`reset()` `:171-172`).
+- **R2-2 (Assault view).** The camera is fixed (`enemy_ai_harness.gd:52-56`) and the boost runs on time, not position (`enemy_mover.gd:115-121, 273`). So
+  holding the hull's position keeps the turret rule true and leaves the cadence and the window intact. `_spawn()` writes `engage_seconds = 1000`
+  (`test_heavy_gunship.gd:107-118`), so the 50 s Assault emergency run is not cut at 9 s.
+  - **16b's timeline isolates the `can_fire` budget clause.**
+    - The brain's boost runs E−1.3 → E−0.4, so the window opens at E−0.4 and the 0.5 s TELEGRAPH spans E−0.4 → E+0.1.
+    - The row's 1 px/s boost (E−0.3 → E+0.7) makes `_is_committed()` true at expiry (`heavy_gunship_brain.gd:293-300`). Expiry is therefore pending
+      (`:137-142`) and EMERGENCY keeps ticking.
+    - `_expiry_seen` is set before the dispatch, so `can_fire` drops and the TELEGRAPH falls back to TRACK (`turret_mount.gd:117-121`). There is no FIRE,
+      and DISENGAGE has not run yet.
+    - The new precondition (TELEGRAPH on the tick before expiry) holds with 0.1 s to spare.
+  - **R = 1.3 gated** refuses only on the gate's budget clause: 0.4 < 0.9 while the window still has 2.0 s.
+- **R2-3 (row 12 direction).** `Steering.break_contact()` returns `(away + w·lateral).normalized()` with lateral ⊥ away (`steering.gd:192-202`). So
+  `emergency_boost_dir · (hull − player) > 0` holds for any correct call and fails a swapped-argument one. Displacement is now checked in Open Space only,
+  and the Risks line is updated (3-plan.md:273-275).
+
+**Also checked and correct:**
+- **Row 6's wording is safe.** At hull-local 67.5° the starboard battery never bears (its arc is 180° ± 80°). A cannon burst already in FIRE when the port's
+  first round leaves ends first: 0.35 s against 0.36 s (`heavy_cannon_mount.tscn`, `burst_cannon_mount.tscn`). So "then no round from any mount" is exact.
+- **The Missiles mount can aim at a beam-on player.** Its slot is 360° (`heavy_gunship.tscn`, `Missiles/MountSlots/Slot0`). It tracks with `can_fire` false
+  (`turret_mount.gd:275-282`), so it is already aimed when the window opens.
+- **Row 20(b)'s control is buildable.** An EMP `scan()` from TELEGRAPH sets no cooldown (`:145-150`). The emergency clock freezes with the brain
+  (`base_enemy.gd:126-139`).
+- **CONTROLLED and the exit probe stay bit-identical.** The Shield and the Lights sit under the stripped `Modules`, and the StateLight is stripped too
+  (`ph10_exit_keys.gd:70-73`).
+- **Roster and sweep gates are unaffected.** No new texture, no new collision layer, no HurtBox, UID-less `ext_resource`s, signals declared with arity, and
+  `max_speed` writes are allowed by the single-writer sweep.
+
+**Findings (all minor; fold them in during the build, no further round needed):**
+
+| # | Sev. | Problem (file:line checked) | Change |
+|---|---|---|---|
+| R3-1 | minor | **No row crosses VENT → EMERGENCY.** The exit hook (3-plan.md:35-36) is exercised by VENT → BROADSIDE (rows 3, 8) and by the rail (row 20(a)), which the draft closes directly, not through the hook. Nothing covers the one transition epic §2.5 calls out: "Venting stops in EMERGENCY (the vents stay closed)" (`cmug23oo90029m52wae4clve0/3-plan.md:411-412`). A hook that only fires on the clock exit would leave the vents doubling damage for the rest of the fight, against the AC "vents vulnerable only while venting". | Add one assertion, to row 7 or row 20: in VENT, `health` cut to ≤ 209. On the next tick: phase EMERGENCY, both vents `is_vulnerable()` false, vent lights OFF, `mover.max_speed` 140. |
+| R3-2 | minor | **The guard has scope and side effects the plan does not record (if row 15 adds it).** (a) The Carrier, built after this plan, is a third launcher: its Dorsal PURSUIT bank goes through `TurretMountBuilder` with the Carrier root as host, and it answers `launch_velocity()` / `rocket_clear_radius()` (`carrier.gd:215-221`). 3-plan.md:101 lists only the corvette and the turret battery. (b) Closing `monitoring` also stops a rocket from detonating on a **player** inside the launcher's guard radius. The HitBox's mask 128 is what detects the player (`enemy_rocket.gd:17-21, 403-410`), and a reopen while already overlapping forms no pair. So a player hugging the hull (corvette ≈ 54 px, gunship ≈ 109 px from centre) is passed through by a returning rocket. Today that rocket would blast the player. | In the DECISIONS line, name the Carrier and state (b) as an accepted, player-facing consequence. `test_carrier.gd` stays in the step-6 run, which the full gate already covers. |
+| R3-3 | minor | **EMERGENCY's arc breaks the t4 arc-speed invariant.** t4 pins `orbit_angular_speed·(range + drift) < max_speed` for both modes (`test_heavy_gunship.gd:284-285`). At EMERGENCY's held ranges the products are 0.16 × 890 = 142.4 px/s (Open Space) and 0.26 × 630 = 163.8 px/s (Assault), both above 140. The arc anchor then outruns the hull, and only `ORBIT_MAX_LEAD` bounds the lag (`heavy_gunship_brain.gd:410-428`). That is harmless for a retreat that also boosts every 5 s, but it is not stated. | One sentence beside "Reach in EMERGENCY" and in the DECISIONS t5 notes, so a later task does not "fix" it into a lower `emergency_range`. Alternatively, scale the arc speed in EMERGENCY. |
+| R3-4 | minor (wording) | 3-plan.md:90 says "the first opening happens on today's tick for every rocket of every launcher". That is true for every rocket not being closed on at its arming tick. A launcher that boosts along the rocket's heading after launch makes the closing speed positive on that tick, and the guard keeps the HitBox shut. `is_armed()` is unaffected, and this is exactly the self-hit case. | Qualify the clause. |

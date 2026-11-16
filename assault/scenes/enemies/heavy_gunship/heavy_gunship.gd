@@ -1,13 +1,15 @@
 class_name HeavyGunship
 extends BaseEnemy
 
-## The Heavy Gunship (docs/plans/cmug23oo90029m52wae4clve0/3-plan.md §2.4; Phase 10 t4, task plan docs/plans/cmwafsrb100a7qs2yvre9y1o2/3-plan.md):
-## a mobile gun platform built from parts. A `HeavyGunshipBrain` decides and an `EnemyMover` moves it, through `BaseEnemy`'s shared tick, so this
-## script defines no `_physics_process`, reads no camera and never parks.
+## The Heavy Gunship (docs/plans/cmug23oo90029m52wae4clve0/3-plan.md §2.4, §2.5; Phase 10 t4 and t5, task plans
+## docs/plans/cmwafsrb100a7qs2yvre9y1o2/3-plan.md and docs/plans/cmwafsrb400abqs2yt38khcyu/3-plan.md): a mobile gun platform built from parts. A
+## `HeavyGunshipBrain` decides and an `EnemyMover` moves it, through `BaseEnemy`'s shared tick, so this script defines no `_physics_process`, reads no
+## camera and never parks.
 ##
-## THE HULL is vulnerable: the root `Health` is the phase bar (t5), and the body, the root `HurtBox` and the `ContactHitBox` share one 112 x 144
-## `RectangleShape2D`. THE PARTS are six `EnemyModule`s under `Modules` with a `ModularHull` beside them: two side batteries, the nose cannon,
-## the rear missiles and two weak-point vents (indestructible, locked until t5's VENT, `hull_share` 1.0). **The flush-edge rule:** every part's
+## THE HULL is vulnerable: the root `Health` is the phase bar (the brain's `HullPhase`), and the body, the root `HurtBox` and the `ContactHitBox`
+## share one 112 x 144 `RectangleShape2D`. THE PARTS are six `EnemyModule`s under `Modules` with a `ModularHull` beside them: two side batteries, the
+## nose cannon (with a frontal shield of its own), the rear missiles and two weak-point vents (indestructible, open only in the brain's VENT,
+## `hull_share` 1.0: an open vent doubles a hit). Each part carries a `Light` the brain drives. **The flush-edge rule:** every part's
 ## hurtbox is a rectangle whose outer side lies exactly on the hull rectangle's side (its exposed edge), so a shot entering the outline through
 ## that edge overlaps the part and the hull in the same physics step and both take it (a part hit is also a hull hit, owner choice 3); a shot
 ## entering elsewhere hits only the hull. Each part's `HomingPoint` is its exposed-edge midpoint, and `homing_point()` steers a player rocket there.
@@ -16,7 +18,8 @@ extends BaseEnemy
 ## Nose-down art (`sprite_forward_angle` PI/2): the nose is local +y, so port (the hull's left) is local +x.
 ##
 ## MOUNTS. `_ready()` builds the parts' mounts through `ModularHull.build_mounts()` (pools as root children, so rounds land in the container),
-## each gated by the brain's `attack_gate`, and hands the hull to the brain. The host answers the duck-typed launcher questions a rocket mount asks.
+## each gated by the brain's `attack_gate`, sets up the cannon's local `EnemyShield` (t5) and hands the hull to the brain. The host answers the
+## duck-typed launcher questions a rocket mount asks.
 ##
 ## Spawn with `b.heavy_gunship().at(x, y)`.
 
@@ -40,7 +43,37 @@ func _ready() -> void:
 	if config:
 		_apply_config(config)
 	_hull.build_mounts(self, _gunship_brain.rng, _owner_group, _gunship_brain.attack_gate)
+	_setup_cannon_shield()
 	_gunship_brain.bind_mounts(_hull)
+
+
+## The nose cannon's local `EnemyShield` (t5): the config's numbers, the cannon hurtbox's absorber slot, facing the nose (the brain keeps it
+## there). Freed with the cannon, so a wreck draws no arc. Looked up with `get_node_or_null`: the exit probe strips `Modules`.
+func _setup_cannon_shield() -> void:
+	var cannon := _hull.module(HeavyGunshipBrain.CANNON)
+	if cannon == null:
+		return
+	var shield := cannon.get_node_or_null(^"Shield") as EnemyShield
+	if shield == null or cannon.hurt_box == null:
+		return
+	if config:
+		shield.arc_deg = config.shield_arc_deg
+		shield.capacity = config.shield_capacity
+		shield.regen_delay = config.shield_regen_delay
+		shield.regen_seconds = config.shield_regen_seconds
+		shield.reboot_seconds = config.shield_reboot_seconds
+	shield.attach(cannon.hurt_box)
+	shield.face(Vector2.RIGHT.rotated(rotation + sprite_forward_angle))
+	_hull.module_destroyed.connect(_on_module_destroyed)
+
+
+## A destroyed cannon takes its shield with it (`EnemyShield._exit_tree()` releases the absorber slot).
+func _on_module_destroyed(part: EnemyModule) -> void:
+	if part.module_id != HeavyGunshipBrain.CANNON:
+		return
+	var shield := part.get_node_or_null(^"Shield")
+	if shield != null and not shield.is_queued_for_deletion():
+		shield.queue_free()
 
 
 func _apply_config(cfg: HeavyGunshipConfig) -> void:

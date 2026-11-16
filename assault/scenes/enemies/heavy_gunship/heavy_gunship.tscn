@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://global/components/enemy_module.gd" id="10_gs"]
 [ext_resource type="Script" path="res://global/components/state_light.gd" id="11_gs"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/turret_mount_slot.gd" id="12_gs"]
+[ext_resource type="Script" path="res://global/components/enemy_shield.gd" id="13_gs"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_gs"]
 resource_local_to_scene = true
@@ -147,6 +148,9 @@ traverse_deg_override = 160.0
 [node name="HomingPoint" type="Marker2D" parent="Modules/BatteryPort"]
 position = Vector2(16, 0)
 
+[node name="Light" type="Node2D" parent="Modules/BatteryPort"]
+script = ExtResource("11_gs")
+
 [node name="BatteryStarboard" type="Node2D" parent="Modules"]
 position = Vector2(-40, 10)
 script = ExtResource("10_gs")
@@ -172,6 +176,9 @@ traverse_deg_override = 160.0
 
 [node name="HomingPoint" type="Marker2D" parent="Modules/BatteryStarboard"]
 position = Vector2(-16, 0)
+
+[node name="Light" type="Node2D" parent="Modules/BatteryStarboard"]
+script = ExtResource("11_gs")
 
 [node name="Cannon" type="Node2D" parent="Modules"]
 position = Vector2(0, 60)
@@ -200,6 +207,13 @@ traverse_deg_override = 70.0
 [node name="HomingPoint" type="Marker2D" parent="Modules/Cannon"]
 position = Vector2(0, 12)
 
+[node name="Light" type="Node2D" parent="Modules/Cannon"]
+script = ExtResource("11_gs")
+
+[node name="Shield" type="Node2D" parent="Modules/Cannon"]
+script = ExtResource("13_gs")
+radius = 26.0
+
 [node name="Missiles" type="Node2D" parent="Modules"]
 position = Vector2(0, -60)
 script = ExtResource("10_gs")
@@ -227,6 +241,9 @@ traverse_deg_override = 360.0
 [node name="HomingPoint" type="Marker2D" parent="Modules/Missiles"]
 position = Vector2(0, -12)
 
+[node name="Light" type="Node2D" parent="Modules/Missiles"]
+script = ExtResource("11_gs")
+
 [node name="VentPort" type="Node2D" parent="Modules"]
 position = Vector2(48, -34)
 script = ExtResource("10_gs")
@@ -249,6 +266,9 @@ shape = SubResource("RectangleShape2D_vent")
 [node name="HomingPoint" type="Marker2D" parent="Modules/VentPort"]
 position = Vector2(8, 0)
 
+[node name="Light" type="Node2D" parent="Modules/VentPort"]
+script = ExtResource("11_gs")
+
 [node name="VentStarboard" type="Node2D" parent="Modules"]
 position = Vector2(-48, -34)
 script = ExtResource("10_gs")
@@ -270,6 +290,9 @@ shape = SubResource("RectangleShape2D_vent")
 
 [node name="HomingPoint" type="Marker2D" parent="Modules/VentStarboard"]
 position = Vector2(-8, 0)
+
+[node name="Light" type="Node2D" parent="Modules/VentStarboard"]
+script = ExtResource("11_gs")
 
 [node name="ModularHull" type="Node" parent="."]
 script = ExtResource("9_gs")

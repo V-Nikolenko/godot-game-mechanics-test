@@ -4075,3 +4075,74 @@ Task plan `docs/plans/cmwafsrb900ajqs2yb5jcl5ij/` (review round 2 APPROVED).
   longer t6 movement rows now print `BulletPool` "Pool exhausted" warnings (harmless; the gate's FATAL regex does not match them).
 - **Gate time:** GUT 200.20 s (two runs, 200.505 / 199.885) → 201.29 s (201.379 / 201.193; 2967 → 2976 tests): **+1.1 s** against the 1.8 s allotment.
   `test_carrier.gd` alone 1.3 → 3.0 s (new rows ≈ 0.75 s; the t6 rows now tick the carrier's mounts).
+
+### Phase 10, built in t5 (Heavy Gunship phases: overheat-and-vent, weak points, emergency, rear missiles, cannon shield) (2026-11-16)
+Task plan `docs/plans/cmwafsrb400abqs2yt38khcyu/3-plan.md` (review round 3: APPROVED, after two CHANGES_REQUESTED rounds and the owner's third-round
+decision). Files: `heavy_gunship_brain.gd` (`HullPhase { CONTROLLED, OVERHEAT, EMERGENCY }`, `hull_phase_changed(hull_phase: int)`, VENT / EMERGENCY filled
+in), `heavy_gunship.gd` (cannon shield set-up), `heavy_gunship.tscn` (`Modules/Cannon/Shield`, a `Light` `StateLight` on every part),
+`heavy_gunship_config.gd` / `.tres` (groups Phases and Defense, 17 fields, §2.16 values), `StateLight.State.VENTING` (appended, orange). Gate rows in
+`tests/integration/test_heavy_gunship.gd` ("Phases (t5)") and `tests/unit/test_state_light.gd::test_venting_is_orange`.
+- **Hull phases** read the root `Health` once a tick (CONTROLLED ≥ 0.6 > OVERHEAT ≥ 0.3 > EMERGENCY, 1e-6 slack, so 420 / 700 is CONTROLLED and 210 / 700
+  OVERHEAT), one way (`max`); in EMERGENCY any fight phase (APPROACH / BROADSIDE / BREAK_AWAY / VENT) becomes `Phase.EMERGENCY`; the hub idle and DISENGAGE are
+  unchanged. Public state later tasks read: `hull_phase`, `heat`, `vents_opened`, `emergency_boosts`, `emergency_boost_dir`, `salvo_window()`,
+  `missile_gate_open()`, `is_missile_window_open()`.
+- **Heat** = a gun mount (batteries, cannon) entering COOLDOWN while OVERHEAT and fighting; the 4th enters VENT on that tick. **VENT** 2.2 s: vents
+  `set_vulnerable(true)`, `max_speed` × 0.6, lights VENTING; leaving VENT for any phase closes them and restores `max_speed` (an exit hook in `enter_phase()`).
+- **(D) VENT fire rule:** each gun mount gets `can_fire = <normal> and mount.phase() == FIRE`, not §2.5's literal `mount.is_committed()` (false for every
+  projectile mount: it is the lance's COMMIT light, so the literal rule cuts the burst it means to keep). Same intent: a started burst finishes, a charge
+  is cancelled, none starts.
+- **(D) The Missiles mount has its own `telegraph_gate`** (`missile_gate_open()`): EMERGENCY, the window with ≥ `salvo_window()` (0.85 s, read off the
+  mount) + 0.05 s left and, in Assault, the budget too. Its `can_fire`: EMERGENCY ∧ window (0.9–2.9 s after a boost) ∧ the player ≥ 80° off the nose
+  (rear 200°) ∧ the hull in the Assault view ∧ (Assault) the budget not expired and no DISENGAGE pending. No line of sight (it fires past cover).
+- **Assault rear-missile closure: the bounded exception to "persistent ordnance stays out of `ENEMIES_CLEARED` sections"** (Ph4 / Ph5 / Ph7). The pod's
+  rockets persist (`persist: true` pools), so in Assault the pod is open only while the `EngagementBudget` runs: its gate and its `can_fire` both ask the
+  budget, and `_enter_disengage()` `scan(0.0)`s it. Every rocket leaves before the budget ends and lives at most the longest `max_time` of the pod's pool
+  scenes (PURSUIT 6.0 s, read from the scenes), so a Heavy Gunship's rockets are bounded by `engage_seconds + rocket max_time`. **t11 must add that rocket
+  term to every heavy's deadline row** (`test_engagement_deadline.gd`, the corvette rocket boundary is the pattern).
+- **(D) Reach in EMERGENCY.** Open Space holds 800 px ± 90 (beyond the batteries' ≈ 770 px broadside reach) and a boost carries the hull past the pod's 900 px:
+  the batteries and the pod reach a **pursuer**, not a player who stays back (the "aggressive retreat"). In Assault an emergency boost (≈ 380 px) usually
+  carries the hull out of the fixed view, and the turret rule closes every mount there, so the pod rarely completes a salvo and the batteries pause after a
+  boost (the owner accepted this on 2026-11-16: fewer persistent rockets help Assault sections end on time; the full behaviour shows in Open Space).
+- **(D) The EMERGENCY arc outruns the hull (review round 3, R3-3):** at the emergency hold the arc anchor moves at 0.16 × 890 ≈ 142 px/s (Open Space) and
+  0.26 × 630 ≈ 164 px/s (Assault) against `max_speed` 140, breaking the t4 invariant `arc speed × (range + drift) < max_speed` that the config row pins
+  for CONTROLLED. `ORBIT_MAX_LEAD` (0.35 rad) bounds the lag, and the hull boosts every 5 s anyway. Accepted; **do not "fix" it by lowering
+  `emergency_range`** (that would bring the hull back inside the batteries' reach of a player who stays back, the opposite of the retreat).
+- **Venting stops in EMERGENCY (R3-1):** a hull cut into EMERGENCY mid-VENT closes both vents through `enter_phase()`'s exit hook on its next tick and never
+  vents again (`test_emergency_closes_an_open_vent_for_good`).
+- **(D) The pod fires after every other boost:** its own `cooldown_seconds` 5.5 (`rocket_battery_mount.tscn`) outlasts `emergency_period` 5.0. One salvo per
+  two boosts is the shipped cadence; no row asks for one per window.
+- **(D) EMP in VENT:** the brain is not ticked through an EMP window, so a VENT in progress keeps its vents open (and orange) for the window and resumes its
+  2.2 s clock after it: up to ≈ 7.2 s of weak point under the player's 5 s EMP Blast (the hull cannot cool while stunned). A rail (`on_suspended()`) closes
+  a VENT at once. `on_emp_started()` turns the hull and weapon-part lights OFF (the vents' stay true to their state).
+- **Cannon shield:** `Modules/Cannon/Shield` (`EnemyShield`, radius 26) gets the config's arc 120 / capacity 60 / regen delay 2.0 / regen 4.0 / reboot 5.0,
+  the cannon hurtbox's absorber slot and the nose (the brain `face()`s it every tick but DISENGAGE); freed on the cannon's `module_destroyed`.
+  **(D) Corner leak accepted:** the shield decides by the bearing from the cannon's centre to the HitBox as Godot reports it, one step past the nose edge,
+  so a frontal shot near the 32 px edge's corners can read up to ≈ 83° off the nose and pass the 60° half-arc (≈ a third of evenly spread frontal shots);
+  a centre-line shot is always absorbed. A plain round cannot reach the cannon from the flank (spent on the bare flank); the Sniper Shot can (row 10).
+- **(D) t4 gate change:** `test_a_bullet_through_each_exposed_edge_hits_that_part_and_the_hull` frees `Modules/Cannon/Shield` before its cannon shot (the
+  shield would eat that centre-line frontal round); the shielded frontal hit is `test_the_cannon_shield_eats_frontal_shots_and_never_covers_the_hull`.
+- **Lights (§2.9):** each part's `Light` (at its centre; t9 may move it): a vent VENTING while the phase is VENT, a weapon part CHARGING while its mount
+  telegraphs, a wreck's stays OFF (`EnemyModule.destroy()`). The hull `StateLight` keeps t4's mapping in VENT and EMERGENCY too, reading the pod in EMERGENCY.
+- **Own rockets: measured, no self-hit, so `enemy_rocket.gd` is untouched (no launcher guard).** `test_in_open_space_it_stays_in_the_fight_60_s_into_emergency_and_never_hits_itself`
+  (a 300 px/s pursuer holding 250 px, rockets hand-ticked with the hull): 12 rockets in 60 s, no tick with an open rocket HitBox overlapping the hull's
+  root rectangle; the closest an open rocket came to the hull centre was 109.3 px (the arming radius is 95.2 + 6 + 8 = 109.2). Should a later row show a
+  self-hit, the fix designed in the task plan (§ Own rockets: a rocket-side launcher guard closing an armed HitBox near its live launcher) applies.
+- **Test note (any hand-ticked row with a boost):** `_tick()` calls the mover outside a physics frame, so `move_and_slide()` moves the hull by the last
+  **idle** frame's delta before the mover reads its facing (the brain's face point is only `FACE_REACH` 100 px ahead of the pre-move hull), so a boost seen
+  through a long idle delta swings the hull off its broadside. The t5 rows with boosts start with `await _fresh_idle_delta()`, which scales
+  `Engine.time_scale` by 1e-6 and awaits one frame (`after_each` thaws it), so the idle delta is ≈ 0 on any machine. **Its first version only waited up to
+  5 frames for one ≤ 1/60 s** and so depended on the machine's speed: a forced 0.14 s idle delta (the engine's ceiling, about `max_physics_steps_per_frame`
+  × 1/60) fails 6 rear-missile / EMERGENCY rows of that version. The frozen version passes all 45 functions with a 300 ms frame injected before every
+  test. Such rows must await no physics frame (none comes while frozen). (Run 6 took this for the cause of the harness failures; it was not, see the next note.)
+- **(D) Gate output is capped at 1 MiB, and `BulletPool` now warns once per pool.** The harness gate failed on runs 3, 5 and 6 with every local gate green
+  because the AI-Kanban worker runs the gate through Node `child_process.exec` (`/repo/apps/worker/src/shell-command-runner.ts`) with no `maxBuffer`, so
+  its default 1 MiB (1048576 bytes) applies: a gate that prints more is killed near the end and recorded as `Verification failed` with no log. The t7
+  close printed 876593 bytes, this task's tree 1058270. 607 of the suite's 711 warnings were `[BulletPool] Pool exhausted` with an 8-line backtrace each
+  (≈ 700 KB): a hand-ticked shooter never lets its rounds fly, so its pool runs dry and warned on every refused tick (`test_enemy_module.gd` 272,
+  `test_heavy_gunship.gd` 217, `test_carrier.gd` 76). `BulletPool.acquire()` now warns the first time a pool runs dry and again only under
+  `--verbose` (the per-frame print rule); every refusal still returns null and the shooters' own refusal counters are unchanged. Gate
+  `tests/unit/test_bullet_pool.gd::test_an_exhausted_pool_warns_once_and_keeps_refusing`. `scripts/gate-time.sh` prints the byte count; **every later
+  task keeps the gate output well under 1 MiB** (tests/README.md → Gate time → *Gate output*).
+- **Gate time:** GUT 201.29 s (the t7 close, same tree as this task's start) → 203.36 / 202.89 s (two `scripts/gate-time.sh` runs, mean 203.12; 2976 → 2996
+  tests, 106295 asserts; both green, no leak lines): **+1.83 s** against the 2.5 s allotment. `test_heavy_gunship.gd` 26 → 45 functions, summed testcase
+  time in the suite ≈ 1.8 → 3.4 s (the exit probe in `before_all()` unchanged); the two long scenarios run once per harness (`_heat_run`, `_emergency_run`).

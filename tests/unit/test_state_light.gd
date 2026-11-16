@@ -35,7 +35,7 @@ func test_modulate_alpha_never_exceeds_cap_in_any_state() -> void:
 	## Color stores components as float32, so a modulate.a built from the float64 constant
 	## 0.85 comes back as 0.85000002384186 - an epsilon that accounts for storage, not headroom.
 	var epsilon := 0.0001
-	for s in [StateLight.State.OFF, StateLight.State.ARMED, StateLight.State.CHARGING, StateLight.State.COMMIT]:
+	for s in [StateLight.State.OFF, StateLight.State.ARMED, StateLight.State.CHARGING, StateLight.State.COMMIT, StateLight.State.VENTING]:
 		_light.set_state(s)
 		assert_true(_light.modulate.a <= StateLight.MAX_ALPHA + epsilon, "state %d" % s)
 
@@ -75,3 +75,12 @@ func test_generated_texture_corner_pixel_is_fully_transparent() -> void:
 	assert_eq(image.get_pixel(0, 0).a, 0.0)
 	assert_eq(image.get_width(), StateLight.TEXTURE_SIZE)
 	assert_eq(image.get_height(), StateLight.TEXTURE_SIZE)
+
+
+## Phase 10 t5 (§2.9 "orange venting"): appended, so every earlier state keeps its value.
+func test_venting_is_orange() -> void:
+	assert_eq(StateLight.State.VENTING, 4, "VENTING is appended")
+	_light.set_state(StateLight.State.VENTING)
+	assert_eq(_light.get_state(), StateLight.State.VENTING)
+	assert_eq(_light.modulate, Color(StateLight.VENTING_COLOR, StateLight.MAX_ALPHA))
+	assert_eq(StateLight.VENTING_COLOR, Color(1.0, 0.55, 0.1), "orange, not the yellow of CHARGING")

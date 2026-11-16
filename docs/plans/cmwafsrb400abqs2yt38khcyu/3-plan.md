@@ -301,3 +301,27 @@ CLAUDE.md line and DECISIONS (t13); enemy beams on parts (Ph18 / 19); ship-mount
   and assert it; 16b's boost is 1 px/s and it gains the precondition "Missiles still in TELEGRAPH on the tick before expiry".
 - R2-3: row 12 asserts the commanded boost direction (`emergency_boost_dir`) in both harnesses and the displacement in Open Space only; the Risks line
   is updated.
+
+## Review round 3 (APPROVED) and as built (2026-11-16)
+- **R3-1** is in: `test_emergency_closes_an_open_vent_for_good` (both harnesses) cuts the bar to 209 mid-VENT and asserts EMERGENCY on the next tick, both
+  vents closed and dark, `max_speed` 140, and no vent reopened over 12 s of firing. A mutation that runs the exit hook on the clock exit only fails it.
+- **R3-2 / R3-4 do not apply:** row 15 measured **no self-hit** (12 rockets in 60 s, no open rocket HitBox ever overlapped the hull rectangle; the closest
+  open rocket was 109.3 px from the hull centre, the arming radius 109.2), so the launcher guard was not built and `enemy_rocket.gd` is untouched
+  (row 22 not written). The guard design above stays the recorded fallback; R3-2's two points (the Carrier as a third launcher, the player-hugging
+  pass-through) are added to it in DECISIONS should it ever be built.
+- **R3-3** is recorded in the brain's header, ENEMY.md and DECISIONS (the EMERGENCY arc anchor outruns the 140 px/s hull; `ORBIT_MAX_LEAD` bounds it).
+- **Test harness finding (not a design change):** `_tick()` runs the mover outside a physics frame, so `move_and_slide()` moves the hull by the last
+  *idle* frame's delta before the mover reads its facing. After a 16× row restores its clock (or as a run's first test) that delta is large, and a boost
+  then swings the hull off its broadside (first scratch run: the Assault pod never telegraphed, the chase launched 0 rockets). Every row with a boost
+  whose facing matters starts with `await _fresh_idle_delta()`. The memoised runs are computed after that await in their first caller. **Run 6:** the
+  helper first waited up to 5 frames for an idle delta ≤ 1/60 s, which left the rows to the machine (a forced 0.14 s delta fails 6 of them; the harness
+  gate failed twice on that version); it now scales `Engine.time_scale` by 1e-6 until `after_each` thaws it, so the delta is ≈ 0 on any machine.
+- Mutation checks run once (each red on the intended row only): the literal `is_committed()` VENT rule (row 6), the missile gate's budget clause
+  (row 16), the `can_fire` expiry clause (16b), two-way bands (7), vents never opened (3, 8, 9), heat in CONTROLLED (1), no rear arc (13's control),
+  no DISENGAGE `scan(0.0)` (16), the exit hook on the clock only (R3-1 row).
+- The root frees the shield on `ModularHull.module_destroyed` (its `_on_module_destroyed`); `bind_mounts()` caches each part's `Light` and mounts;
+  `StateLight.VENTING_COLOR` is `Color(1.0, 0.55, 0.1)`.
+- **Run 7: the harness failures (runs 3, 5, 6) were the gate's output size, not a test.** The AI-Kanban worker runs the gate through Node
+  `child_process.exec` with the default 1 MiB `maxBuffer`; this tree printed 1058270 bytes, mostly `[BulletPool] Pool exhausted` warnings with
+  backtraces from hand-ticked shooters (607 in the suite, 217 from this file). `BulletPool.acquire()` now warns once per pool (repeats only under
+  `--verbose`); gate output 413983 bytes. Recorded in DECISIONS (t5) and tests/README.md → Gate time → *Gate output*. No row changed.

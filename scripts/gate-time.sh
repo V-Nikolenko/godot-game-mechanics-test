@@ -33,6 +33,9 @@ printf 'boot    %6s s\n' "$(secs "$t1" "$t2")"
 printf 'GUT     %6s s wall   (GUT reports: %s)\n' "$(secs "$t2" "$t3")" \
   "$(grep -E '^[[:space:]]*Time' "$TMP/gut.log" | tail -1 | sed 's/^[[:space:]]*//')"
 printf 'total   %6s s\n' "$(secs "$t0" "$t3")"
+# The AI-Kanban harness reads the gate's output through Node's exec, whose default maxBuffer is 1 MiB: a gate that prints more is
+# killed with every test green (tests/README.md -> Gate time -> "Gate output").
+printf 'output  %7d bytes of the harness'"'"'s 1048576\n' "$(cat "$TMP/import.log" "$TMP/boot.log" "$TMP/gut.log" | wc -c)"
 grep -E '^[[:space:]]*(Scripts|Tests|Passing Tests|Failing Tests|Risky/Pending|Asserts)[[:space:]]' "$TMP/gut.log" \
   | sed 's/^[[:space:]]*/  /'
 

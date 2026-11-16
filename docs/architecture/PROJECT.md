@@ -170,7 +170,12 @@ Detail and APIs: [global.md](modules/global.md).
   parts of a large enemy*. **On a vulnerable hull (the Heavy Gunship, Ph10 t4) every part a projectile must reach obeys the
   flush-edge rule:** its rectangle hurtbox's outer side lies exactly on the host's rectangle hurtbox, so a shot through that edge
   overlaps part and hull in the same physics step and both take it; a part buried inside the outline could never be hit
-  ([ENEMY.md](../../assault/scenes/enemies/heavy_gunship/ENEMY.md), gate `test_heavy_gunship.gd`). **On an armoured hull (the
+  ([ENEMY.md](../../assault/scenes/enemies/heavy_gunship/ENEMY.md), gate `test_heavy_gunship.gd`). Its root `Health` is a one-way
+  phase bar (t5: CONTROLLED / OVERHEAT / EMERGENCY); its weak points are indestructible `hull_share` 1.0 vents a brain opens
+  with `set_vulnerable()`, so an open vent doubles a hit and a closed one deflects; a local `EnemyShield` on a part's own hurtbox
+  covers that part only. **In Assault a pod of persistent rockets fires only while the `EngagementBudget` runs** (its gate and
+  `can_fire` ask the budget, DISENGAGE `scan(0.0)`s it): the bounded exception to "persistent ordnance stays out of
+  `ENEMIES_CLEARED` sections", bounded by `engage_seconds` + the rocket scene's `max_time`. **On an armoured hull (the
   Carrier, Ph10 t6) the root answers `deflects_hit()` / `is_armored()` true and refuses every damage (`armor_deflected`), so
   every player projectile crosses it to whichever part it meets; the core opens only after `core_exposure_count` outer parts
   are wrecks, and its death is the host's; its guns (t7) are module-mounted BURST_CANNONs whose 150° traverse keeps each on its own
@@ -212,8 +217,9 @@ Detail and APIs: [global.md](modules/global.md).
   acceleration` so the mover can keep up. Recipe: [global.md](modules/global.md) → *Enemy AI*.
 - **An enemy telegraphs its own attack state with one small light, never a recoloured hull.**
   `StateLight` (`global/components/state_light.gd`) is OFF / ARMED (red) / CHARGING (yellow) /
-  COMMIT (white); COMMIT is reserved for a real, committed attack, so a feint or a fake can only
-  ever show CHARGING. Its texture is a radial gradient built in code, never scene-authored, so it
+  COMMIT (white) / VENTING (orange, appended in Ph10 t5: a hull cooling with its weak points open);
+  COMMIT is reserved for a real, committed attack, so a feint or a fake can only
+  ever show CHARGING. A large enemy's parts each carry their own (`Modules/<Part>/Light`). Its texture is a radial gradient built in code, never scene-authored, so it
   never trips the sprite-transparency gate below. Recipe: [global.md](modules/global.md) →
   *StateLight*.
 - **Brains tick on physics, on one clock, with no `Timer` nodes.** `BaseEnemy._physics_process`

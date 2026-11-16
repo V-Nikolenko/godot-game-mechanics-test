@@ -1,9 +1,10 @@
 ## The Heavy Gunship's shell, parts, movement and Assault life (docs/plans/cmug23oo90029m52wae4clve0/3-plan.md §2.4; Phase 10 t4, task plan
-## docs/plans/cmwafsrb100a7qs2yvre9y1o2/3-plan.md). Intent tests, both harnesses unless a row says otherwise.
+## docs/plans/cmwafsrb100a7qs2yvre9y1o2/3-plan.md), and its hull phases, VENT, EMERGENCY, rear missiles and cannon shield (§2.5 / §2.9; t5, task
+## plan docs/plans/cmwafsrb400abqs2yt38khcyu/3-plan.md, section "Phases (t5)" below). Intent tests, both harnesses unless a row says otherwise.
 ##
 ## Hand-ticked at 1/60 (`_tick`: `_physics_process(dt)`, then the position integrated from the velocity, the corvette tests' shape); the test
 ## moves the harness player itself. `_spawn()` writes `engage_seconds = 1000` (the budget is live in the Assault harness and would end every
-## long row at 9 s); only the Assault-life rows put the shipped 9.0 back. The projectile rows run on real physics at the 8x clock with the hull
+## long row at 9 s); only the Assault-life rows put the shipped 9.0 back. The projectile rows run on real physics at the 16x clock with the hull
 ## held still (`set_physics_process(false)`: no brain, no mover), so a shot meets the authored geometry exactly.
 ##
 ## Frame: the art is nose-down, so the nose is local +y and port (the hull's left) is local +x; `_nose()` / `_port()` read them off the rotation.
@@ -18,6 +19,7 @@ const SCENE: PackedScene = preload("res://assault/scenes/enemies/heavy_gunship/h
 const SHIPPED: HeavyGunshipConfig = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.tres")  # read only
 const BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 const HOMING_SCENE: PackedScene = preload("res://assault/scenes/projectiles/missiles/homing/homing_missile.tscn")
+const LASER_MODE: WeaponModeResource = preload("res://assault/scenes/player/weapons/modes/mining_laser.tres")
 const Phase := HeavyGunshipBrain.Phase
 
 const DT := 1.0 / 60.0
@@ -55,6 +57,7 @@ const MOUNTS := {
 	&"missiles": [TurretMount.Variant.ROCKET_BATTERY, 360.0, 270.0],
 }
 const _SPEEDUP := 16  # rule 1: the two real-physics rows wait a count of physics frames, never seconds (tests/README.md -> Gate time)
+const _FROZEN_TIME_SCALE := 1e-6  # `_fresh_idle_delta()`: the clock while a hand-ticked boost row runs
 
 var _exit: Dictionary = {}
 var _probe_s: float = 0.0
@@ -63,6 +66,8 @@ var _saved_time_scale: float = 1.0
 var _saved_ticks: int = 60
 var _saved_max_steps: int = 8
 var _clock_scaled: bool = false
+var _idle_frozen: bool = false
+var _saved_idle_time_scale: float = 1.0
 
 
 func before_all() -> void:
@@ -72,6 +77,7 @@ func before_all() -> void:
 
 
 func after_each() -> void:
+	_thaw_idle_clock()
 	_restore_clock()
 	_roots.clear()
 
@@ -287,11 +293,19 @@ func test_the_config_is_applied_and_carries_the_plan_values() -> void:
 	assert_gt(c.lose_radius, c.perceive_radius, "AnchorIdle's hysteresis margin")
 	assert_almost_eq(_brain(g).attack_window(), 1.05, 1e-6, "the heavy cannon's 0.7 s charge + 0.35 s gap")
 	assert_lte(c.break_seconds, _brain(g).attack_window(), "a break-away never defers DISENGAGE past the attack window")
+	assert_eq([c.overheat_ratio, c.emergency_ratio, c.heat_limit, c.vent_seconds, c.vent_speed_factor, c.emergency_period, c.emergency_boost_speed,
+			c.emergency_boost_seconds, c.missile_window, c.missile_rear_arc_deg, c.emergency_range, c.emergency_assault_extra, c.shield_arc_deg,
+			c.shield_capacity, c.shield_regen_delay, c.shield_regen_seconds, c.shield_reboot_seconds], T5_CONFIG, "the t5 Phases / Defense values (§2.16)")
+	assert_lte(c.emergency_boost_seconds, c.emergency_period, "one emergency boost ends before the next is due")
+	assert_lt(c.emergency_ratio, c.overheat_ratio, "the bands are ordered")
+	assert_almost_eq(_brain(g).salvo_window(), 0.85, 1e-6, "the rear salvo: 0.5 s glow + 0.35 s gap (read off the mount)")
 
 
 func test_the_phase_enum_is_append_only_and_the_builder_spawns_it() -> void:
 	assert_eq([Phase.APPROACH, Phase.BROADSIDE, Phase.BREAK_AWAY, Phase.VENT, Phase.EMERGENCY, Phase.DISENGAGE, Phase.IDLE, Phase.NOTICING,
 			Phase.RETURNING], [0, 1, 2, 3, 4, 5, 6, 7, 8])
+	assert_eq([HeavyGunshipBrain.HullPhase.CONTROLLED, HeavyGunshipBrain.HullPhase.OVERHEAT, HeavyGunshipBrain.HullPhase.EMERGENCY], [0, 1, 2],
+			"HullPhase is append-only too")
 	assert_eq(WaveBuilder.HEAVY_GUNSHIP, "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")
 	assert_eq(WaveBuilder.new().heavy_gunship()._scene, WaveBuilder.HEAVY_GUNSHIP)
 	assert_true(ResourceLoader.exists(WaveBuilder.HEAVY_GUNSHIP))
@@ -370,6 +384,9 @@ func test_a_bullet_through_each_exposed_edge_hits_that_part_and_the_hull(mode: S
 	for part in g.modular_hull().modules():
 		if part.role == EnemyModule.Role.WEAK_POINT:
 			part.set_vulnerable(true)  # opened for the row (t5's VENT)
+		var shield := part.get_node_or_null("Shield")
+		if shield != null:
+			shield.free()  # t5's frontal cannon shield would eat this shot; it releases the absorber slot on exit (its own row is t5's)
 		var edge := _exposed_edge(hull_rect, _local_rect(g, part.get_node("HurtBox/CollisionShape2D")))
 		var normal: Vector2 = (edge["normal"] as Vector2).rotated(g.rotation)
 		var hp_before := g.health.current_health
@@ -856,7 +873,7 @@ func test_the_port_battery_fires_at_a_player_off_its_beam_and_the_rear_missiles_
 		if first_port < 0.0 and (counts[&"battery_port"] as Array[int])[0] > 0:
 			first_port = i * DT
 	assert_between(first_port, 0.0, 4.0, "the port battery fires within 4 s (first round at %.2f s)" % first_port)
-	assert_eq((counts[&"missiles"] as Array[int])[0], 0, "the rear missiles stay closed until t5")
+	assert_eq((counts[&"missiles"] as Array[int])[0], 0, "the rear missiles stay closed outside EMERGENCY")
 
 
 # ── Hub idle ─────────────────────────────────────────────────────────────────────────────────────
@@ -1012,3 +1029,886 @@ func test_the_deep_space_heavy_fires_a_battery_inside_its_budget() -> void:
 		t[0] += DT
 	gut.p("deep_space heavy from %s: first battery FIRE at %.2f s of a %.1f s budget" % [spawn, fired[0], SHIPPED.engage_seconds])
 	assert_between(fired[0], 0.0, SHIPPED.engage_seconds, "a battery fires inside the budget")
+
+
+# ── Phases (t5): hull bands, heat and VENT, weak points, EMERGENCY, rear missiles, the cannon shield ─────────────────────────────
+# Task plan docs/plans/cmwafsrb400abqs2yt38khcyu/3-plan.md (rows numbered as there). Long hand-ticked scenarios run once per harness and are
+# shared by several rows (`_heat_run`, `_emergency_run`; tests/README.md -> Gate time rule 2: plain data only).
+
+## The t5 config fields' §2.16 values, in the order `test_the_config_is_applied_and_carries_the_plan_values` reads them.
+const T5_CONFIG := [0.6, 0.3, 4, 2.2, 0.6, 5.0, 420.0, 0.9, 2.0, 200.0, 800.0, 120.0, 120.0, 60, 2.0, 4.0, 5.0]
+## The heat run's player: still, at this hull-local bearing (degrees; 0 = port, 90 = the nose) and distance.
+const HEAT_BEARING_DEG := 67.5
+const HEAT_RANGE := 420.0
+## The emergency run's player distance (px): inside the batteries' ≈ 770 px and the pod's 900 px reach.
+const PURSUIT_RANGE := 450.0
+
+var _heat_runs: Dictionary = {}
+var _emergency_runs: Dictionary = {}
+
+
+## Where the hand-ticked phase rows hold the hull: the Open Space origin, or a point inside the Assault view.
+func _held_at(h) -> Vector2:
+	return Vector2(560.0, 200.0) if h.is_assault else Vector2.ZERO
+
+
+## One tick with the hull held: position, rotation and velocity written back.
+func _held_tick(g: HeavyGunship, at: Vector2, rot: float) -> void:
+	_tick(g)
+	g.global_position = at
+	g.rotation = rot
+	g.velocity = Vector2.ZERO
+
+
+## A hand-ticked `move_and_slide()` (outside a physics frame) moves the hull by the last IDLE frame's delta. `_tick` overwrites the position,
+## but the mover turns the hull toward its face point from the moved position, so a boost seen through a long idle delta swings the hull off its
+## broadside. Every row with a boost whose facing matters starts here: the engine clock is slowed to `_FROZEN_TIME_SCALE` (restored by
+## `after_each`) and one frame awaited, so the idle delta is ≈ 0 however long the machine's frames are. Waiting for a short frame instead (the
+## first version: up to 5 frames until one was ≤ 1/60 s) left the rows to the machine's speed: a 0.14 s idle delta, the engine's ceiling,
+## failed 6 rear-missile rows. The rows that call this await no physics frame afterwards (frozen, none would come).
+func _fresh_idle_delta() -> void:
+	if not _idle_frozen:
+		_idle_frozen = true
+		_saved_idle_time_scale = Engine.time_scale
+		Engine.time_scale = _saved_idle_time_scale * _FROZEN_TIME_SCALE
+	await get_tree().process_frame
+
+
+func _thaw_idle_clock() -> void:
+	if not _idle_frozen:
+		return
+	_idle_frozen = false
+	Engine.time_scale = _saved_idle_time_scale
+
+
+## Every mount's phase entries and rounds, stamped with `tick[0]` (the caller advances it): `phases` [tick, id, phase], `rounds` [tick, id,
+## scene path, speed].
+func _phase_log(g: HeavyGunship) -> Dictionary:
+	var log := {"tick": [0], "phases": [], "rounds": []}
+	var tick: Array = log["tick"]
+	var phases: Array = log["phases"]
+	var rounds: Array = log["rounds"]
+	for part in g.modular_hull().modules():
+		var id := part.module_id
+		for mount in part.mounts():
+			mount.phase_changed.connect(func(p: int) -> void: phases.append([tick[0], id, p]))
+			mount.round_fired.connect(func(r: Node2D) -> void: rounds.append([tick[0], id, r.scene_file_path, r.get(&"speed")]))
+	return log
+
+
+func _is_gun(id: StringName) -> bool:
+	return id in HeavyGunshipBrain.GUN_PARTS
+
+
+## [phase, hull_phase, heat, vent_port open, vent_starboard open, max_speed, hull light, 6 part lights (tree order), 4 mount phases (tree order)].
+func _snapshot(g: HeavyGunship, brain: HeavyGunshipBrain, mover: EnemyMover) -> Array:
+	var row: Array = [brain.phase, brain.hull_phase, brain.heat, _part(g, &"vent_port").is_vulnerable(),
+			_part(g, &"vent_starboard").is_vulnerable(), mover.max_speed, _light(g)]
+	for part in g.modular_hull().modules():
+		row.append((part.get_node("Light") as StateLight).get_state())
+	for part in g.modular_hull().modules():
+		for mount in part.mounts():
+			row.append(mount.phase())
+	return row
+
+
+## The heat run (rows 1-5, memo per mode). The hull held at `_held_at()` with rotation 0, the player still at hull-local bearing 67.5 degrees
+## 420 px out, so the port battery (±80 about +x) and the cannon (55 - 125) both bear. Phase A at full health until 4 gun bursts have ended
+## (cap 15 s); then the bar is set to 400 (57 %, OVERHEAT); phase B until 3.5 s after the first VENT ends (cap 24 s).
+func _heat_run(mode: String) -> Dictionary:
+	if _heat_runs.has(mode):
+		return _heat_runs[mode]
+	var h = _world(mode)
+	var at := _held_at(h)
+	h.player.global_position = at + Vector2.RIGHT.rotated(deg_to_rad(HEAT_BEARING_DEG)) * HEAT_RANGE
+	var g := _spawn(h, at)
+	var brain := _brain(g)
+	var mover := g.get_node("EnemyMover") as EnemyMover
+	var log := _phase_log(g)
+	var tick: Array = log["tick"]
+	var snaps: Array = []
+	var b_start := -1
+	var vent_in := -1
+	var vent_out := -1
+	var a_cap := int(round(15.0 / DT))
+	var b_cap := int(round(24.0 / DT))
+	var i := 0
+	while true:
+		if b_start < 0:
+			var ends := (log["phases"] as Array).filter(func(e: Array) -> bool: return _is_gun(e[1]) and e[2] == TurretMount.Phase.COOLDOWN)
+			if ends.size() >= 4 or i >= a_cap:
+				b_start = i
+				g.health.set_health(400)
+		elif i - b_start >= b_cap or (vent_out >= 0 and i - vent_out >= int(round(3.5 / DT))):
+			break
+		tick[0] = i
+		_held_tick(g, at, 0.0)
+		var row := _snapshot(g, brain, mover)
+		snaps.append(row)
+		if vent_in < 0 and row[0] == Phase.VENT:
+			vent_in = i
+		elif vent_in >= 0 and vent_out < 0 and row[0] != Phase.VENT:
+			vent_out = i
+		i += 1
+	var run := {"b_start": b_start, "vent_in": vent_in, "vent_out": vent_out, "snaps": snaps, "phases": log["phases"], "rounds": log["rounds"]}
+	_heat_runs[mode] = run
+	return run
+
+
+## Burst ends (a gun mount entering COOLDOWN) as ticks, from [param from] on.
+func _burst_end_ticks(run: Dictionary, from: int) -> Array:
+	var out: Array = []
+	for e in run["phases"]:
+		if e[0] >= from and _is_gun(e[1]) and e[2] == TurretMount.Phase.COOLDOWN:
+			out.append(e[0])
+	return out
+
+
+func test_heat_builds_only_in_overheat_and_the_fourth_burst_vents(mode: String = use_parameters(MODES)) -> void:
+	var run := _heat_run(mode)
+	var b_start: int = run["b_start"]
+	var snaps: Array = run["snaps"]
+	assert_gte(_burst_end_ticks(run, 0).filter(func(t: int) -> bool: return t < b_start).size(), 4,
+			"%s: phase A: 4 gun bursts ended at full health" % mode)
+	for k in b_start:
+		var row: Array = snaps[k]
+		if row[1] != HeavyGunshipBrain.HullPhase.CONTROLLED or row[2] != 0 or row[0] == Phase.VENT:
+			fail_test("%s: tick %d of phase A: hull phase %d, heat %d, phase %d" % [mode, k, row[1], row[2], row[0]])
+			return
+	assert_eq((snaps[b_start] as Array)[1], HeavyGunshipBrain.HullPhase.OVERHEAT, "%s: 400 / 700 reads OVERHEAT on the next tick" % mode)
+	var ends := _burst_end_ticks(run, b_start)
+	assert_gte(ends.size(), 4, "%s: phase B: 4 bursts ended in OVERHEAT" % mode)
+	var vent_in: int = run["vent_in"]
+	var vent_out: int = run["vent_out"]
+	assert_gte(vent_in, 0, "%s: it vented" % mode)
+	if ends.size() < 4 or vent_in < 0:
+		return
+	assert_eq(vent_in, ends[3], "%s: VENT on the tick of the 4th burst end in OVERHEAT (tick %d)" % [mode, ends[3]])
+	assert_eq((snaps[vent_in] as Array)[2], 0, "%s: heat back to 0 on VENT entry" % mode)
+	assert_gt(vent_out, vent_in, "%s: VENT ended" % mode)
+	assert_almost_eq(float(vent_out - vent_in) * DT, SHIPPED.vent_seconds, DT + 1e-6, "%s: VENT lasts vent_seconds" % mode)
+
+
+func test_venting_starts_no_burst_and_fires_again_after(mode: String = use_parameters(MODES)) -> void:
+	var run := _heat_run(mode)
+	var vent_in: int = run["vent_in"]
+	var vent_out: int = run["vent_out"]
+	assert_gt(vent_out, vent_in, "%s: precondition: a whole VENT" % mode)
+	if vent_out <= vent_in or vent_in < 0:
+		return
+	# The bursts already firing at VENT entry: their mounts' FIRE ends.
+	var entry: Array = (run["snaps"] as Array)[vent_in]
+	var firing: Array[int] = []
+	for k in 4:
+		if entry[13 + k] == TurretMount.Phase.FIRE:
+			firing.append(k)
+	var mount_ids: Array = []
+	for row in PARTS:
+		if MOUNTS.has(row[0]):
+			mount_ids.append(row[0])
+	var settled := vent_in
+	for e in run["phases"]:
+		if e[0] > vent_in and e[2] == TurretMount.Phase.COOLDOWN and mount_ids.find(e[1]) in firing:
+			settled = maxi(settled, e[0])
+	for e in run["phases"]:
+		if e[0] > vent_in and e[0] < vent_out:
+			assert_false(e[2] == TurretMount.Phase.TELEGRAPH or e[2] == TurretMount.Phase.FIRE,
+					"%s: no TELEGRAPH / FIRE entry while venting (%s at tick %d)" % [mode, e[1], e[0]])
+	for r in run["rounds"]:
+		if r[0] > settled and r[0] < vent_out:
+			fail_test("%s: a round from %s at tick %d, after the started bursts ended (%d) and before VENT ended (%d)" % [mode, r[1], r[0], settled, vent_out])
+		elif r[0] > vent_in and r[0] <= settled:
+			assert_true(mount_ids.find(r[1]) in firing, "%s: only a burst already firing at VENT entry fires on (%s)" % [mode, r[1]])
+	var again := (run["phases"] as Array).filter(func(e: Array) -> bool:
+		return e[0] >= vent_out and e[0] <= vent_out + int(round(3.5 / DT)) and _is_gun(e[1]) and e[2] == TurretMount.Phase.TELEGRAPH)
+	assert_gt(again.size(), 0, "%s: control: a gun telegraphs again within 3.5 s of VENT's end" % mode)
+
+
+func test_the_vents_open_glow_and_slow_the_hull_only_while_venting(mode: String = use_parameters(MODES)) -> void:
+	var run := _heat_run(mode)
+	var bad := ""
+	var venting := 0
+	for k in (run["snaps"] as Array).size():
+		var row: Array = run["snaps"][k]
+		var vent: bool = row[0] == Phase.VENT
+		venting += 1 if vent else 0
+		var light_want := StateLight.State.VENTING if vent else StateLight.State.OFF
+		if row[3] != vent or row[4] != vent or row[7 + 4] != light_want or row[7 + 5] != light_want:
+			bad = "tick %d: phase %d, vents open %s / %s, lights %d / %d" % [k, row[0], row[3], row[4], row[11], row[12]]
+			break
+		var speed: float = SHIPPED.max_speed * (SHIPPED.vent_speed_factor if vent else 1.0)
+		if not is_equal_approx(row[5], speed):
+			bad = "tick %d: max_speed %.2f, want %.2f" % [k, row[5], speed]
+			break
+	assert_eq(bad, "", "%s: the vents are open, orange and the hull slowed exactly while it vents" % mode)
+	assert_gt(venting, 0, "%s: precondition: it vented" % mode)
+	assert_almost_eq(SHIPPED.max_speed * SHIPPED.vent_speed_factor, 84.0, 1e-6)
+
+
+func test_a_gun_parts_light_is_yellow_exactly_while_its_mount_charges(mode: String = use_parameters(MODES)) -> void:
+	var run := _heat_run(mode)
+	var bad := ""
+	var charging := 0
+	for k in (run["snaps"] as Array).size():
+		var row: Array = run["snaps"][k]
+		# Weapon parts 0..3 own mounts 0..3 (tree order).
+		var hull_want := StateLight.State.OFF
+		for m in 4:
+			var mp: int = row[13 + m]
+			var want := StateLight.State.CHARGING if mp == TurretMount.Phase.TELEGRAPH else StateLight.State.OFF
+			charging += 1 if want == StateLight.State.CHARGING else 0
+			if row[7 + m] != want:
+				bad = "tick %d: part %d light %d, mount phase %d" % [k, m, row[7 + m], mp]
+			if m < 3:  # the hull light reads the guns outside EMERGENCY
+				if mp == TurretMount.Phase.TELEGRAPH:
+					hull_want = StateLight.State.CHARGING
+				elif hull_want != StateLight.State.CHARGING and mp in [TurretMount.Phase.TRACK, TurretMount.Phase.FIRE, TurretMount.Phase.COOLDOWN]:
+					hull_want = StateLight.State.ARMED
+		if bad == "" and row[6] != hull_want:
+			bad = "tick %d: hull light %d, want %d" % [k, row[6], hull_want]
+		if bad != "":
+			break
+	assert_eq(bad, "", "%s: each weapon part's light is CHARGING exactly while its mount telegraphs; the hull light keeps t4's mapping" % mode)
+	assert_gt(charging, 0, "%s: precondition: a mount telegraphed" % mode)
+
+
+func test_the_cannon_fires_heavy_shells_at_220_px_s(mode: String = use_parameters(MODES)) -> void:
+	var run := _heat_run(mode)
+	var shells := (run["rounds"] as Array).filter(func(r: Array) -> bool: return r[1] == HeavyGunshipBrain.CANNON)
+	assert_gt(shells.size(), 0, "%s: the cannon fired" % mode)
+	for r in shells:
+		assert_eq(r[2], EnemyRounds.HEAVY_SHELL.resource_path, "%s: a Heavy Shell" % mode)
+		assert_almost_eq(float(r[3]), 220.0, 1e-3, "%s: at 220 px/s" % mode)
+
+
+## Row 6: VENT forced while the port battery is firing its first burst.
+func test_a_burst_firing_when_vent_starts_finishes_all_its_rounds(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var at := _held_at(h)
+	h.player.global_position = at + Vector2.RIGHT.rotated(deg_to_rad(HEAT_BEARING_DEG)) * HEAT_RANGE
+	var g := _spawn(h, at)
+	var brain := _brain(g)
+	var log := _phase_log(g)
+	var tick: Array = log["tick"]
+	var port: TurretMount = g.modular_hull().mounts_of(HeavyGunshipBrain.BATTERY_PORT)[0]
+	var i := 0
+	while i < int(6.0 / DT) and (log["rounds"] as Array).filter(func(r: Array) -> bool: return r[1] == HeavyGunshipBrain.BATTERY_PORT).is_empty():
+		tick[0] = i
+		_held_tick(g, at, 0.0)
+		i += 1
+	var first := i - 1
+	assert_eq(port.phase(), TurretMount.Phase.FIRE, "%s: precondition: the port battery is firing its first burst" % mode)
+	var telegraphing: Array[TurretMount] = []
+	for part in g.modular_hull().modules():
+		for mount in part.mounts():
+			if mount.phase() == TurretMount.Phase.TELEGRAPH:
+				telegraphing.append(mount)
+	var tel_rounds: Array[int] = [0]
+	for mount in telegraphing:
+		mount.round_fired.connect(func(_r: Node2D) -> void: tel_rounds[0] += 1)
+	brain.enter_phase(Phase.VENT)
+	var forced := i
+	tick[0] = i
+	_held_tick(g, at, 0.0)
+	i += 1
+	for mount in telegraphing:
+		assert_eq(mount.phase(), TurretMount.Phase.TRACK, "%s: a charge in progress at VENT entry is cancelled" % mode)
+	while brain.phase == Phase.VENT and i < forced + int(3.0 / DT):
+		tick[0] = i
+		_held_tick(g, at, 0.0)
+		i += 1
+	assert_ne(brain.phase, Phase.VENT, "%s: VENT ended" % mode)
+	var vent_out := i - 1
+	var port_rounds := (log["rounds"] as Array).filter(func(r: Array) -> bool: return r[1] == HeavyGunshipBrain.BATTERY_PORT and r[0] <= vent_out)
+	assert_eq(port_rounds.size(), port.get(&"burst_count"), "%s: the started burst fired all its rounds" % mode)
+	var port_end := -1
+	for e in log["phases"]:
+		if e[0] >= first and e[1] == HeavyGunshipBrain.BATTERY_PORT and e[2] == TurretMount.Phase.COOLDOWN:
+			port_end = e[0]
+			break
+	var burst_s := (float(port.get(&"burst_count")) - 1.0) * float(port.get(&"burst_gap"))
+	assert_almost_eq(float(port_end - first) * DT, burst_s, DT + 1e-6, "%s: its FIRE ended on the burst clock" % mode)
+	for e in log["phases"]:
+		if e[0] >= forced and e[0] < vent_out:
+			assert_false(e[2] == TurretMount.Phase.TELEGRAPH or e[2] == TurretMount.Phase.FIRE,
+					"%s: nothing starts while venting (%s at tick %d)" % [mode, e[1], e[0]])
+	for r in log["rounds"]:
+		if r[0] > port_end and r[0] < vent_out:
+			fail_test("%s: a round from %s at tick %d during VENT" % [mode, r[1], r[0]])
+	assert_eq(tel_rounds[0], 0, "%s: the cancelled charge fired nothing" % mode)
+
+
+## Row 7.
+func test_hull_bands_are_read_off_the_bar_and_never_step_back(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var g := _spawn(h, _held_at(h))
+	var brain := _brain(g)
+	var bands: Array = []
+	brain.hull_phase_changed.connect(func(p: int) -> void: bands.append(p))
+	var C := HeavyGunshipBrain.HullPhase.CONTROLLED
+	var O := HeavyGunshipBrain.HullPhase.OVERHEAT
+	var E := HeavyGunshipBrain.HullPhase.EMERGENCY
+	for row in [[427, C], [420, C], [419, O], [413, O], [210, O], [209, E], [203, E]]:
+		g.health.set_health(row[0])
+		_tick(g)
+		assert_eq(brain.hull_phase, row[1], "%s: %d / 700 reads band %d" % [mode, row[0], row[1]])
+	assert_eq(g.repair(490 - 203), 490 - 203, "%s: precondition: a Support Ship's repair lands" % mode)
+	_tick(g)
+	assert_eq(brain.hull_phase, E, "%s: 490 / 700 after a repair: still EMERGENCY (one way)" % mode)
+	assert_eq(brain.phase, Phase.EMERGENCY, "%s: and the brain still fights in EMERGENCY" % mode)
+	assert_eq(bands, [O, E], "%s: one signal per band entered" % mode)
+	var g2 := _spawn(h, _held_at(h) + Vector2(300.0, 0.0))
+	var bands2: Array = []
+	_brain(g2).hull_phase_changed.connect(func(p: int) -> void: bands2.append(p))
+	_tick(g2)
+	g2.health.set_health(100)
+	_tick(g2)
+	_tick(g2)
+	assert_eq(bands2, [E], "%s: 700 -> 100 in one hit enters EMERGENCY with one signal" % mode)
+
+
+## Row 8 (real physics, 16x, the hull still): a bullet through `VentPort`'s edge.
+func test_a_shot_into_a_vent_hurts_the_hull_twice_only_while_it_vents(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var g := _spawn(h, TARGET_AT)
+	var brain := _brain(g)
+	_scale_clock()
+	await _frames(2)
+	var vent := _part(g, &"vent_port")
+	var hits := _count(vent.damaged)
+	var pings := _count(vent.deflected)
+	var probe := BULLET_SCENE.instantiate() as Node
+	var damage := (probe.get_node("HitBox") as HitBox).damage
+	probe.free()
+	var normal := Vector2.RIGHT.rotated(g.rotation)
+	var cases := [["closed", false, damage, 0, 1], ["open", true, 2 * damage, 1, 1], ["closed again", false, damage, 1, 2]]
+	for c in cases:
+		if c[1]:
+			brain.enter_phase(Phase.VENT)
+		elif brain.phase == Phase.VENT:
+			brain.enter_phase(Phase.BROADSIDE)
+		assert_eq(vent.is_vulnerable(), c[1], "%s: precondition: the vent is %s" % [mode, c[0]])
+		var hp := g.health.current_health
+		var b := _fire(h.root, BULLET_SCENE, vent.homing_point(), normal)
+		await _until_spent(b, 20)
+		assert_false(is_instance_valid(b) and not b.is_queued_for_deletion(), "%s: %s: the shot was consumed" % [mode, c[0]])
+		assert_eq(hp - g.health.current_health, c[2], "%s: %s vent: the hull loses %d" % [mode, c[0], c[2]])
+		assert_eq(hits[0], c[3], "%s: %s vent: damaged count" % [mode, c[0]])
+		assert_eq(pings[0], c[4], "%s: %s vent: deflected count" % [mode, c[0]])
+
+
+## A beam rig: `BeamBehavior.tick()` reads only `state.actor`, the actor's rotation and the world.
+class BeamRig extends Node2D:
+	var actor: Node2D
+
+
+## Row 9: `BeamBehavior.tick()` called by hand along the vents' line (hull-local y -34, from the port side), then one nova.
+func test_the_beam_and_the_nova_never_reach_a_closed_vent(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var at := _held_at(h)
+	var g := _spawn(h, at)
+	var brain := _brain(g)
+	var rig := BeamRig.new()
+	rig.actor = rig
+	h.root.add_child(rig)
+	rig.global_position = at + Vector2(300.0, -34.0)
+	rig.rotation = -PI / 2.0  # `Vector2.UP.rotated(rotation)` = -x: across the hull, port to starboard
+	var muzzle := Marker2D.new()
+	rig.add_child(muzzle)
+	var muzzles: Array[Marker2D] = [muzzle]
+	var behavior := BeamBehavior.new()
+	var vents := [_part(g, &"vent_port"), _part(g, &"vent_starboard")]
+	var pings := [_count(vents[0].deflected), _count(vents[1].deflected)]
+	var hits := [_count(vents[0].damaged), _count(vents[1].damaged)]
+	var hp := g.health.current_health
+	for _i in int(2.0 / DT):
+		behavior.tick(rig, LASER_MODE, muzzles, DT)
+	assert_gt(pings[0][0], 0, "%s: the beam pings the closed port vent" % mode)
+	assert_gt(pings[1][0], 0, "%s: and the starboard one" % mode)
+	assert_eq([hits[0][0], hits[1][0]], [0, 0], "%s: no damage reaches a closed vent" % mode)
+	assert_eq(g.health.current_health, hp, "%s: and nothing is forwarded to the hull" % mode)
+	# One nova: the hull's own hit, the four weapon parts', and a ping from each closed vent.
+	var part_hp := {}
+	for part in g.modular_hull().modules():
+		if part.health != null:
+			part_hp[part.module_id] = part.health.current_health
+	var pinged := [pings[0][0], pings[1][0]]
+	var before := get_tree().root.get_children()
+	assert_true(PlasmaNovaModule.new().try_activate(h.player), "%s: the nova fires" % mode)
+	for child in get_tree().root.get_children():
+		if child not in before:
+			child.free()  # the nova's full-screen flash layer and its tween
+	assert_eq(hp - g.health.current_health, 50, "%s: the nova hurts the hull by its own hit only" % mode)
+	assert_eq([pings[0][0] - pinged[0], pings[1][0] - pinged[1]], [1, 1], "%s: each closed vent pinged once" % mode)
+	assert_eq([hits[0][0], hits[1][0]], [0, 0], "%s: and took nothing" % mode)
+	for id in part_hp:
+		assert_eq(part_hp[id] - _part(g, id).health.current_health, 50, "%s: %s took the nova" % [mode, id])
+	# Control: an open vent burns and forwards.
+	brain.enter_phase(Phase.VENT)
+	hp = g.health.current_health
+	for _i in int(0.5 / DT):
+		behavior.tick(rig, LASER_MODE, muzzles, DT)
+	assert_gt(hits[0][0] + hits[1][0], 0, "%s: control: the beam burns an open vent" % mode)
+	assert_lt(g.health.current_health, hp, "%s: control: and the hull drops through it" % mode)
+
+
+## Row 10 (real physics, 16x, the hull still), in order. The cannon's centre is hull-local (0, 60); its exposed edge is the nose edge (y 72).
+func test_the_cannon_shield_eats_frontal_shots_and_never_covers_the_hull(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var g := _spawn(h, TARGET_AT)
+	_scale_clock()
+	await _frames(2)
+	var cannon := _part(g, &"cannon")
+	var shield := cannon.get_node("Shield") as EnemyShield
+	var probe := BULLET_SCENE.instantiate() as Node
+	var damage := (probe.get_node("HitBox") as HitBox).damage
+	probe.free()
+	var broken := _count(shield.broken)
+	var side := g.to_global(Vector2(56.0, 60.0))
+	var port := Vector2.RIGHT.rotated(g.rotation)
+	var nose := Vector2.DOWN.rotated(g.rotation)
+	# A Sniper Shot from port at the cannon's level crosses the hull and meets the cannon 90 degrees off the nose.
+	var hp := g.health.current_health
+	var sniper := _fire(h.root, BULLET_SCENE, side, port)
+	sniper.set(&"unlimited_pierce", true)
+	await _frames(20)
+	assert_true(is_instance_valid(sniper) and not sniper.is_queued_for_deletion(), "%s: the Sniper Shot pierced through" % mode)
+	if is_instance_valid(sniper):
+		sniper.free()
+	assert_eq(hp - g.health.current_health, damage, "%s: sniper: the hull took it" % mode)
+	assert_eq(cannon.health.current_health, cannon.max_health - damage, "%s: sniper: the flank shot passed the arc and hurt the cannon" % mode)
+	assert_eq(shield.points(), shield.capacity, "%s: sniper: the shield spent nothing" % mode)
+	# Frontal bullets into the nose edge, on the centre line.
+	var expect := [[cannon.max_health - damage, shield.capacity - damage, 0], [cannon.max_health - damage, 0, 1],
+			[cannon.max_health - 2 * damage, 0, 1]]
+	for k in expect.size():
+		hp = g.health.current_health
+		var b := _fire(h.root, BULLET_SCENE, cannon.homing_point(), nose)
+		await _until_spent(b, 20)
+		assert_false(is_instance_valid(b) and not b.is_queued_for_deletion(), "%s: frontal %d: consumed" % [mode, k + 1])
+		assert_eq(hp - g.health.current_health, damage, "%s: frontal %d: the hull still takes the hit" % [mode, k + 1])
+		var row: Array = expect[k]
+		assert_eq(cannon.health.current_health, row[0], "%s: frontal %d: cannon HP" % [mode, k + 1])
+		assert_eq(shield.points(), row[1], "%s: frontal %d: shield points" % [mode, k + 1])
+		assert_eq(broken[0], row[2], "%s: frontal %d: broken" % [mode, k + 1])
+	# A plain round from port at the cannon's level is spent on the bare flank.
+	hp = g.health.current_health
+	var cannon_hp := cannon.health.current_health
+	var plain := _fire(h.root, BULLET_SCENE, side, port)
+	await _until_spent(plain, 20)
+	assert_eq(hp - g.health.current_health, damage, "%s: plain flank: the hull" % mode)
+	assert_eq(cannon.health.current_health, cannon_hp, "%s: plain flank: never the cannon" % mode)
+
+
+## Row 11.
+func test_the_cannon_shield_takes_its_config_follows_the_nose_and_goes_with_the_cannon(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var g := _spawn(h, _held_at(h))
+	var cannon := _part(g, &"cannon")
+	var shield := cannon.get_node_or_null("Shield") as EnemyShield
+	assert_not_null(shield, "%s: the cannon carries a shield" % mode)
+	if shield == null:
+		return
+	var c := g.config
+	assert_eq([shield.arc_deg, shield.capacity, shield.regen_delay, shield.regen_seconds, shield.reboot_seconds],
+			[c.shield_arc_deg, c.shield_capacity, c.shield_regen_delay, c.shield_regen_seconds, c.shield_reboot_seconds], "%s: config values" % mode)
+	assert_eq(shield.radius, 26.0, "%s: the cannon's half-diagonal + 6" % mode)
+	assert_same(cannon.hurt_box.get(&"_absorber"), shield, "%s: it holds the cannon hurtbox's absorber slot" % mode)
+	assert_false(g.health.get_parent() == null)
+	assert_null(g.hurt_box.get(&"_absorber"), "%s: never the hull's" % mode)
+	g.rotation = 2.0
+	_tick(g)
+	assert_lte(rad_to_deg(absf(shield.facing().angle_to(_nose(g)))), 1.0, "%s: one tick later it faces the nose" % mode)
+	cannon.destroy()
+	assert_true(not is_instance_valid(shield) or shield.is_queued_for_deletion(), "%s: the shield goes with the cannon" % mode)
+
+
+## The emergency run (rows 12-14, memo per mode). HP 200 from spawn; the player 450 px off the starboard beam. 0-20 s a pursuer: re-placed
+## every tick 450 px from the hull on its current bearing. At 20 s `BatteryStarboard` and `Missiles` are destroyed; 20-50 s the player is
+## re-placed every tick on the starboard beam (hull-local -x). In Assault the hull's position is held inside the view (rotation the mover's).
+func _emergency_run(mode: String) -> Dictionary:
+	if _emergency_runs.has(mode):
+		return _emergency_runs[mode]
+	var h = _world(mode)
+	var at := Vector2(640.0, 300.0) if h.is_assault else Vector2.ZERO
+	h.player.global_position = at + Vector2(-PURSUIT_RANGE, 0.0)
+	var g := _spawn(h, at)
+	g.health.set_health(200)
+	var brain := _brain(g)
+	var mover := g.get_node("EnemyMover") as EnemyMover
+	var log := _phase_log(g)
+	var tick: Array = log["tick"]
+	var off_nose: Array = []  # [tick, id, kind (phase or -1 = round), degrees off the nose]
+	for id in [HeavyGunshipBrain.MISSILES, HeavyGunshipBrain.BATTERY_STARBOARD]:
+		for mount in g.modular_hull().mounts_of(id):
+			mount.phase_changed.connect(func(p: int) -> void: off_nose.append([tick[0], id, p, _deg_to_player(g, h.player, _nose(g))]))
+			mount.round_fired.connect(func(_r: Node2D) -> void: off_nose.append([tick[0], id, -1, _deg_to_player(g, h.player, _nose(g))]))
+	var boosts: Array = []  # [tick, hull at start, player at start, commanded dir, hull at end]
+	var boosting := false
+	var in_view := true
+	var lights_after: Array = []  # [starboard light, missiles light, starboard mount phase, missiles mount phase] per tick after 20 s
+	var loss := int(round(20.0 / DT))
+	for i in int(round(50.0 / DT)):
+		tick[0] = i
+		if i == loss:
+			_part(g, &"battery_starboard").destroy()
+			_part(g, &"missiles").destroy()
+		if i < loss:
+			var off: Vector2 = h.player.global_position - g.global_position
+			h.player.global_position = g.global_position + off.normalized() * PURSUIT_RANGE
+		else:
+			h.player.global_position = g.global_position - _port(g) * PURSUIT_RANGE
+		var start := g.global_position
+		var player_at: Vector2 = h.player.global_position
+		_tick(g)
+		if h.is_assault:
+			g.global_position = at
+			in_view = in_view and EnemyWorld.view_rect(get_tree()).has_point(g.global_position)
+		if mover.is_boosting() and not boosting:
+			boosts.append([i, start, player_at, brain.emergency_boost_dir, Vector2.INF])
+		elif boosting and not mover.is_boosting():
+			(boosts[-1] as Array)[4] = g.global_position
+		boosting = mover.is_boosting()
+		if i >= loss:
+			lights_after.append([(_part(g, &"battery_starboard").get_node("Light") as StateLight).get_state(),
+					(_part(g, &"missiles").get_node("Light") as StateLight).get_state(),
+					g.modular_hull().mounts_of(HeavyGunshipBrain.BATTERY_STARBOARD)[0].phase(),
+					g.modular_hull().mounts_of(HeavyGunshipBrain.MISSILES)[0].phase()])
+	var run := {"boosts": boosts, "phases": log["phases"], "rounds": log["rounds"], "off_nose": off_nose, "in_view": in_view,
+			"lights_after": lights_after, "loss": loss, "phase_end": brain.phase}
+	_emergency_runs[mode] = run
+	return run
+
+
+func test_emergency_boosts_away_every_5_s(mode: String = use_parameters(MODES)) -> void:
+	await _fresh_idle_delta()
+	var run := _emergency_run(mode)
+	assert_true(run["in_view"], "%s: precondition: the hull stayed inside the view" % mode)
+	var boosts: Array = run["boosts"]
+	var period := int(round(SHIPPED.emergency_period / DT))
+	assert_eq(boosts.size(), 10, "%s: 10 boosts in 50 s, through the losses (%s)" % [mode, boosts.map(func(b: Array) -> float: return b[0] * DT)])
+	for k in mini(boosts.size(), 10):
+		var b: Array = boosts[k]
+		assert_almost_eq(int(b[0]), k * period, 1, "%s: boost %d at %.2f s" % [mode, k, b[0] * DT])
+		var away: Vector2 = (b[1] as Vector2) - (b[2] as Vector2)
+		assert_gt((b[3] as Vector2).dot(away), 0.0, "%s: boost %d is commanded away from the player" % [mode, k])
+		if mode == "open_space" and int(b[0]) < int(run["loss"]):
+			assert_true((b[4] as Vector2).is_finite(), "%s: boost %d ended" % [mode, k])
+			assert_gt(((b[4] as Vector2) - (b[1] as Vector2)).dot(away), 0.0, "%s: boost %d moved the hull away" % [mode, k])
+
+
+## Missiles events relative to the latest boost: [ticks since it, degrees off the nose].
+func _missile_events(run: Dictionary, until: int) -> Array:
+	var out: Array = []
+	for e in run["off_nose"]:
+		if e[1] != HeavyGunshipBrain.MISSILES or e[0] >= until:
+			continue
+		if e[2] != -1 and e[2] != TurretMount.Phase.TELEGRAPH and e[2] != TurretMount.Phase.FIRE:
+			continue
+		var since := -1
+		for b in run["boosts"]:
+			if int(b[0]) <= int(e[0]):
+				since = int(e[0]) - int(b[0])
+		out.append([since, e[3], e[2]])
+	return out
+
+
+func test_the_rear_missiles_fire_only_in_their_window_at_a_player_behind(mode: String = use_parameters(MODES)) -> void:
+	await _fresh_idle_delta()
+	var run := _emergency_run(mode)
+	var events := _missile_events(run, int(run["loss"]))
+	assert_gt(events.filter(func(e: Array) -> bool: return e[2] == -1).size(), 0, "%s: at least one rocket before 20 s" % mode)
+	var lo := SHIPPED.emergency_boost_seconds
+	var hi := SHIPPED.emergency_boost_seconds + SHIPPED.missile_window
+	var rear := 180.0 - SHIPPED.missile_rear_arc_deg * 0.5
+	for e in events:
+		assert_between(float(e[0]) * DT, lo - 1e-6, hi - DT + 1e-6, "%s: a Missiles event (%d) inside its window after a boost" % [mode, e[2]])
+		assert_gte(float(e[1]), rear - 1e-3, "%s: with the player behind (%.1f degrees off the nose)" % [mode, e[1]])
+	# Front control: the player re-placed every tick on the nose.
+	var h = _world(mode)
+	var at := Vector2(640.0, 300.0) if h.is_assault else Vector2.ZERO
+	var g := _spawn(h, at)
+	g.health.set_health(200)
+	var mover := g.get_node("EnemyMover") as EnemyMover
+	var telegraphs := [0]
+	g.modular_hull().mounts_of(HeavyGunshipBrain.MISSILES)[0].phase_changed.connect(func(p: int) -> void:
+		if p == TurretMount.Phase.TELEGRAPH:
+			telegraphs[0] += 1)
+	var boosts := 0
+	var boosting := false
+	for _i in int(8.0 / DT):
+		h.player.global_position = g.global_position + _nose(g) * PURSUIT_RANGE
+		_tick(g)
+		if h.is_assault:
+			g.global_position = at
+		if mover.is_boosting() and not boosting:
+			boosts += 1
+		boosting = mover.is_boosting()
+	assert_gte(boosts, 2, "%s: control run: it boosted" % mode)
+	assert_eq(telegraphs[0], 0, "%s: a player on the nose never opens the rear pod" % mode)
+
+
+func test_a_destroyed_battery_or_missile_pod_never_fires_again(mode: String = use_parameters(MODES)) -> void:
+	await _fresh_idle_delta()
+	var run := _emergency_run(mode)
+	var loss: int = run["loss"]
+	for id in [HeavyGunshipBrain.BATTERY_STARBOARD, HeavyGunshipBrain.MISSILES]:
+		var before := (run["phases"] as Array).filter(func(e: Array) -> bool: return e[1] == id and e[0] < loss and e[2] == TurretMount.Phase.FIRE)
+		assert_gt(before.size(), 0, "%s: control: %s fired before its loss" % [mode, id])
+		var after := (run["phases"] as Array).filter(func(e: Array) -> bool:
+			return e[1] == id and e[0] >= loss and (e[2] == TurretMount.Phase.TELEGRAPH or e[2] == TurretMount.Phase.FIRE))
+		assert_eq(after.size(), 0, "%s: %s never telegraphs or fires again" % [mode, id])
+		var rounds := (run["rounds"] as Array).filter(func(r: Array) -> bool: return r[1] == id and r[0] >= loss)
+		assert_eq(rounds.size(), 0, "%s: and launches nothing" % [mode])
+	var bad := (run["lights_after"] as Array).filter(func(row: Array) -> bool:
+		return row[0] != StateLight.State.OFF or row[1] != StateLight.State.OFF \
+				or row[2] != TurretMount.Phase.UNPOWERED or row[3] != TurretMount.Phase.UNPOWERED)
+	assert_eq(bad.size(), 0, "%s: for 30 s both mounts UNPOWERED and both part lights OFF" % mode)
+	assert_eq((run["lights_after"] as Array).size(), int(round(30.0 / DT)), "%s: 30 s watched" % mode)
+
+
+## Row 15 (Open Space only). The gunship's rockets are hand-ticked with it (their own physics and their lifetime's off, re-applied on every launch:
+## a pool's `reset()` turns the lifetime back on); a tick on which one expired is followed by one awaited frame so the pool's deferred recycle runs.
+## A self-hit is an OPEN rocket HitBox whose shape overlaps the hull's root hurtbox shape (every part lies inside it): the overlap the physics
+## step would report, on the same 1/60 steps (review round 1, finding 2).
+func test_in_open_space_it_stays_in_the_fight_60_s_into_emergency_and_never_hits_itself() -> void:
+	await _fresh_idle_delta()
+	var h = _world("open_space")
+	var g := _spawn(h, Vector2(0.0, -PURSUIT_RANGE))
+	g.health.set_health(200)
+	var brain := _brain(g)
+	var hull_shape := g.get_node("HurtBox/CollisionShape2D") as CollisionShape2D
+	var rockets: Array[EnemyRocket] = []
+	var launched := [0]
+	var expired := [false]
+	for mount in g.modular_hull().mounts_of(HeavyGunshipBrain.MISSILES):
+		mount.round_fired.connect(func(r: Node2D) -> void:
+			var rocket := r as EnemyRocket
+			launched[0] += 1
+			rocket.set_physics_process(false)
+			rocket.get_node("ProjectileLifetime").set_physics_process(false)
+			if not rockets.has(rocket):
+				rockets.append(rocket)
+				rocket.expired.connect(func() -> void: expired[0] = true))
+	var part_hits: Array = []
+	for part in g.modular_hull().modules():
+		part_hits.append(_count(part.damaged))
+	var hp := g.health.current_health
+	var overlaps := 0
+	var closest := INF
+	var farthest := 0.0
+	for _i in int(60.0 / DT):
+		var to_hull: Vector2 = g.global_position - h.player.global_position
+		var d := to_hull.length()
+		h.player.velocity = to_hull / d * minf(300.0, (d - 250.0) / DT) if d > 250.0 else Vector2.ZERO
+		_step(g, h.player)
+		farthest = maxf(farthest, g.global_position.distance_to(h.player.global_position))
+		expired[0] = false
+		for rocket in rockets:
+			if not is_instance_valid(rocket) or not rocket.get(&"_launched") or rocket.get(&"_done"):
+				continue
+			rocket._tick(DT)
+			rocket.get_node("ProjectileLifetime")._physics_process(DT)
+			if rocket.is_armed() and not rocket.get(&"_done"):
+				var hit_shape := rocket.get_node("HitBox/CollisionShape2D") as CollisionShape2D
+				closest = minf(closest, rocket.global_position.distance_to(g.global_position))
+				if hit_shape.shape.collide(hit_shape.global_transform, hull_shape.shape, hull_shape.global_transform):
+					overlaps += 1
+		if expired[0]:
+			await get_tree().process_frame
+	gut.p("open-space emergency chase: %d rockets launched, an open rocket came within %.1f px of the hull centre" % [launched[0], closest])
+	assert_true(is_instance_valid(g) and not g.is_queued_for_deletion(), "it is still alive")
+	assert_eq(brain.phase, Phase.EMERGENCY, "still in EMERGENCY after 60 s")
+	assert_lt(farthest, SHIPPED.lose_radius, "never further than lose_radius from its pursuer (%.0f px)" % farthest)
+	assert_gte(launched[0], 4, "it fired its rear missiles")
+	assert_eq(overlaps, 0, "no open rocket ever overlapped its own hull")
+	assert_eq(g.health.current_health, hp, "its hull took nothing")
+	for k in part_hits.size():
+		assert_eq((part_hits[k] as Array)[0], 0, "part %d took nothing" % k)
+
+
+## One Assault closure run (rows 16 / 16b): the hull held at (900, 300) with its starboard to the still player at (450, 300) and HP 200 from
+## spawn, so EMERGENCY starts on the first tick with [param r] s of budget left. `bypass` drops the Missiles mount's own gate; `defer_at` (s) starts
+## a 1.0 s, 1 px/s `mover.boost` there, which defers the expiry. Every Missiles phase entry and rocket is logged as [t, kind (phase, -1 = rocket),
+## budget left, expiry seen, brain phase].
+func _closure_run(r: float, bypass: bool, defer_at: float = -1.0) -> Dictionary:
+	var h = _world("assault")
+	var at := Vector2(900.0, 300.0)
+	h.player.global_position = Vector2(450.0, 300.0)
+	var g := _spawn(h, at, {"engage_seconds": r})
+	g.health.set_health(200)
+	var brain := _brain(g)
+	var mover := g.get_node("EnemyMover") as EnemyMover
+	var pod: TurretMount = g.modular_hull().mounts_of(HeavyGunshipBrain.MISSILES)[0]
+	if bypass:
+		pod.telegraph_gate = Callable()
+	var t := [0.0]
+	var log: Array = []
+	pod.phase_changed.connect(func(p: int) -> void: log.append([t[0], p, brain.budget.remaining(), brain.budget.remaining() <= 0.0, brain.phase]))
+	pod.round_fired.connect(func(_r: Node2D) -> void: log.append([t[0], -1, brain.budget.remaining(), brain.budget.remaining() <= 0.0, brain.phase]))
+	var in_view := true
+	var expiry_tick := -1
+	var before_expiry: int = TurretMount.Phase.SCAN
+	var phase_at_expiry := -1
+	var scan_after_disengage := true
+	var disengaged := false
+	var deferred := false
+	var n := int(round((r + 2.5) / DT))
+	for i in n:
+		t[0] = (i + 1) * DT
+		if defer_at >= 0.0 and not deferred and t[0] >= defer_at - 1e-6:
+			deferred = true
+			mover.boost(Vector2.RIGHT, 1.0, 1.0)
+		var pod_before := pod.phase()
+		_tick(g)
+		g.global_position = at
+		in_view = in_view and EnemyWorld.view_rect(get_tree()).has_point(g.global_position)
+		if expiry_tick < 0 and brain.budget.remaining() <= 0.0:
+			expiry_tick = i
+			before_expiry = pod_before
+			phase_at_expiry = brain.phase
+		disengaged = disengaged or brain.phase == Phase.DISENGAGE
+		if disengaged and pod.phase() != TurretMount.Phase.SCAN:
+			scan_after_disengage = false
+	return {"log": log, "in_view": in_view, "expiry_tick": expiry_tick, "pod_before_expiry": before_expiry, "phase_at_expiry": phase_at_expiry,
+			"disengaged": disengaged, "scan_after_disengage": scan_after_disengage}
+
+
+func _pod_events(run: Dictionary, kind: int) -> Array:
+	return (run["log"] as Array).filter(func(e: Array) -> bool: return e[1] == kind)
+
+
+func test_in_assault_the_rear_missiles_close_with_the_budget() -> void:
+	await _fresh_idle_delta()
+	var margin := HeavyGunshipBrain.ATTACK_GATE_MARGIN
+	for r in [3.5, 1.0, 1.3]:
+		var run := _closure_run(r, false)
+		assert_true(run["in_view"], "R %.1f: precondition: the hull stayed in the view" % r)
+		var rockets := _pod_events(run, -1)
+		if r == 3.5:
+			assert_gt(rockets.size(), 0, "R 3.5: a salvo inside the budget")
+			for e in rockets:
+				assert_gte(float(e[2]), margin - 1e-6, "R 3.5: a rocket left with %.2f s of budget" % e[2])
+		else:
+			assert_eq(rockets.size(), 0, "R %.1f: no salvo fits" % r)
+		if r == 1.3:
+			assert_eq(_pod_events(run, TurretMount.Phase.TELEGRAPH).size(), 0, "R 1.3: the window opens with 0.4 s left and the gate refuses")
+		for e in run["log"]:
+			if e[3]:
+				assert_false(e[1] == -1 or e[1] == TurretMount.Phase.TELEGRAPH or e[1] == TurretMount.Phase.FIRE,
+						"R %.1f: nothing from the pod after the budget expired (%s)" % [r, e])
+		assert_true(run["disengaged"], "R %.1f: it disengaged" % r)
+		assert_true(run["scan_after_disengage"], "R %.1f: the pod is in SCAN from DISENGAGE on" % r)
+	var control := _closure_run(1.3, true)
+	assert_true(control["in_view"], "control: precondition: in view")
+	assert_gt(_pod_events(control, TurretMount.Phase.TELEGRAPH).size(), 0, "control: without its gate the pod telegraphs with 0.4 s left")
+
+
+func test_a_deferred_expiry_cuts_a_rear_salvo_at_the_budget() -> void:
+	await _fresh_idle_delta()
+	var run := _closure_run(1.3, true, 1.0)
+	assert_true(run["in_view"], "precondition: the hull stayed in the view")
+	var telegraphs := _pod_events(run, TurretMount.Phase.TELEGRAPH)
+	assert_gt(telegraphs.size(), 0, "precondition: the pod telegraphed")
+	if not telegraphs.is_empty():
+		assert_false(telegraphs[0][3], "precondition: before the expiry")
+	assert_eq(run["pod_before_expiry"], TurretMount.Phase.TELEGRAPH, "precondition: still charging on the tick before the expiry")
+	assert_eq(run["phase_at_expiry"], Phase.EMERGENCY, "precondition: the expiry is deferred (still EMERGENCY on that tick)")
+	assert_eq(_pod_events(run, TurretMount.Phase.FIRE).size(), 0, "no rear FIRE at or after the expiry")
+	assert_eq(_pod_events(run, -1).size(), 0, "and no rocket")
+
+
+## Review round 3, R3-1 (epic §2.5 "venting stops in EMERGENCY"): a hull cut into EMERGENCY while it vents closes its vents through the exit hook
+## on its next tick, and never opens them again however many bursts end.
+func test_emergency_closes_an_open_vent_for_good(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var at := _held_at(h)
+	h.player.global_position = at + Vector2.RIGHT.rotated(deg_to_rad(HEAT_BEARING_DEG)) * HEAT_RANGE
+	var g := _spawn(h, at)
+	var brain := _brain(g)
+	var mover := g.get_node("EnemyMover") as EnemyMover
+	_held_tick(g, at, 0.0)
+	brain.enter_phase(Phase.VENT)
+	_held_tick(g, at, 0.0)
+	assert_true(_part(g, &"vent_port").is_vulnerable(), "%s: precondition: venting" % mode)
+	g.health.set_health(209)
+	_held_tick(g, at, 0.0)
+	assert_eq(brain.phase, Phase.EMERGENCY, "%s: 209 / 700 mid-VENT: EMERGENCY on the next tick" % mode)
+	var vents := [_part(g, &"vent_port"), _part(g, &"vent_starboard")]
+	var opened := [0]
+	for vent in vents:
+		assert_false(vent.is_vulnerable(), "%s: %s closed" % [mode, vent.module_id])
+		assert_eq((vent.get_node("Light") as StateLight).get_state(), StateLight.State.OFF, "%s: %s light OFF" % [mode, vent.module_id])
+		vent.vulnerability_changed.connect(func(_m: EnemyModule, on: bool) -> void:
+			if on:
+				opened[0] += 1)
+	assert_eq(mover.max_speed, SHIPPED.max_speed, "%s: the vent's slow is lifted" % mode)
+	var ends := [0]
+	for mount in g.modular_hull().mounts_of(HeavyGunshipBrain.BATTERY_PORT):
+		mount.phase_changed.connect(func(p: int) -> void:
+			if p == TurretMount.Phase.COOLDOWN:
+				ends[0] += 1)
+	for _i in int(12.0 / DT):
+		_held_tick(g, at, 0.0)
+	assert_gte(ends[0], 2, "%s: control: the port battery kept firing bursts" % mode)
+	assert_eq(opened[0], 0, "%s: and no vent opened again" % mode)
+	assert_eq(brain.heat, 0, "%s: no heat in EMERGENCY" % mode)
+
+
+## Row 20 (a): a rail mid-VENT closes it; (b) an EMP cuts a rear salvo being charged, and the pod charges again after the window.
+func test_a_rail_closes_a_vent_and_an_emp_cuts_a_rear_salvo(mode: String = use_parameters(MODES)) -> void:
+	await _fresh_idle_delta()
+	var h = _world(mode)
+	var at := _held_at(h)
+	h.player.global_position = at + Vector2.RIGHT.rotated(deg_to_rad(HEAT_BEARING_DEG)) * HEAT_RANGE
+	var g := _spawn(h, at)
+	var brain := _brain(g)
+	var mover := g.get_node("EnemyMover") as EnemyMover
+	_held_tick(g, at, 0.0)
+	brain.enter_phase(Phase.VENT)
+	_held_tick(g, at, 0.0)
+	assert_eq((_part(g, &"vent_port").get_node("Light") as StateLight).get_state(), StateLight.State.VENTING, "%s: precondition: venting" % mode)
+	g.suspend_ai()
+	for id in [&"vent_port", &"vent_starboard"]:
+		assert_false(_part(g, id).is_vulnerable(), "%s: a rail locks %s again" % [mode, id])
+	for part in g.modular_hull().modules():
+		assert_eq((part.get_node("Light") as StateLight).get_state(), StateLight.State.OFF, "%s: %s light OFF" % [mode, part.module_id])
+	assert_eq(_light(g), StateLight.State.OFF, "%s: hull light OFF" % mode)
+	assert_eq(mover.max_speed, SHIPPED.max_speed, "%s: the vent's slow is lifted" % mode)
+	# (b) EMERGENCY, the player behind (off the starboard beam), the pod charging.
+	h = _world(mode)
+	var at2 := Vector2(900.0, 300.0) if h.is_assault else Vector2.ZERO
+	h.player.global_position = at2 + Vector2(-PURSUIT_RANGE, 0.0)
+	g = _spawn(h, at2)
+	g.health.set_health(200)
+	brain = _brain(g)
+	var pod: TurretMount = g.modular_hull().mounts_of(HeavyGunshipBrain.MISSILES)[0]
+	var guard := 0
+	while pod.phase() != TurretMount.Phase.TELEGRAPH and guard < int(3.0 / DT):
+		_tick(g)
+		if h.is_assault:
+			g.global_position = at2
+		guard += 1
+	assert_eq(pod.phase(), TurretMount.Phase.TELEGRAPH, "%s: precondition: the rear pod is charging" % mode)
+	var rockets := [0]
+	pod.round_fired.connect(func(_r: Node2D) -> void: rockets[0] += 1)
+	var telegraphs := [0]
+	pod.phase_changed.connect(func(p: int) -> void:
+		if p == TurretMount.Phase.TELEGRAPH:
+			telegraphs[0] += 1)
+	g.apply_emp(2.0, null)
+	assert_eq(pod.phase(), TurretMount.Phase.SCAN, "%s: the EMP cut the charge" % mode)
+	assert_eq(_light(g), StateLight.State.OFF, "%s: hull light OFF" % mode)
+	for part in g.modular_hull().modules():
+		if part.role == EnemyModule.Role.WEAPON:
+			assert_eq((part.get_node("Light") as StateLight).get_state(), StateLight.State.OFF, "%s: %s light OFF" % [mode, part.module_id])
+	for _i in int(2.0 / DT):
+		_tick(g)
+		if h.is_assault:
+			g.global_position = at2
+	assert_eq(rockets[0], 0, "%s: no rocket in the window" % mode)
+	for _i in int(1.5 / DT):
+		_tick(g)
+		if h.is_assault:
+			g.global_position = at2
+	assert_gt(telegraphs[0], 0, "%s: control: the pod charges again after the window" % mode)
