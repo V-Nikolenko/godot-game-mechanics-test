@@ -4207,3 +4207,18 @@ Task plan `docs/plans/cmwafsrbc00anqs2y9y0ovll4/` (review: round 1 and round 2 C
   Gunship's `Missiles` tube mouths face the aft edge and the cannon muzzle the nose edge, matching their `HomingPoint`s (exposed-edge midpoints).
 - **Tests:** `tests/integration/test_ph10_sprites.gd` (11 functions: every texture's size / corners / opacity, the old art gone, hull wiring and body cover, every part wired
   (natural size, hurtbox-sized, mirrored on the starboard side), destruction swaps to the wreck on both ships, three door states, the open art's switch, three core states).
+
+### Phase 10, built in t10 (hub placement: a Heavy Gunship and a Carrier) (2026-11-17)
+- **Built as §2.14 describes, no deviation, no lever pulled.** `sector_hub.gd` appends draw 19 (`_spawn_heavy_gunship`, exports `heavy_gunship_ring_radius` 2600 /
+  `heavy_gunship_anchor_bearing_deg` 157.5, anchor about (-2402, 995)) and draw 20 (`_spawn_carrier`, `carrier_ring_radius` 3400 / `carrier_anchor_bearing_deg`
+  -112.5, anchor about (-1301, -3141)) after the Hacker; `patrol_anchor` and `rng_seed` are set before `add_child()`, `start_engaged` stays false. They are the last two
+  brains in `EnemyContainer`. No `.tscn` change (the hub scene places no enemy; the draws are code).
+- **Test seams:** `test_sector_hub_patrol.gd::_patrol_groups()` gains `"Heavy Gunship"` (idle 180, perceive 900) and `"Carrier"` (footprint `idle_radius` 220 +
+  `leash_radius` 900 = 1120, perceive 1100); every sweep (spawn / triggers / pickups, TacticalSpace, minefield, A / B, C, anchors > 1000 px) covers them and passed on
+  the planned positions: the Carrier clears the nearest interactable by +597.7 px past footprint + perceive. `_expected_seeds()` is 20 draws (21 brains: drone B and
+  the pair's spawner as before); the old live-children counts (19) are 21 now. The pre-approved levers (gunship to -67.5 degrees; carrier ring 3200-3800) were not needed.
+- **Hub carrier rows:** hand-ticked for 30 s with the player 3000 px away it stays in CRUISE, launches nothing and adds no child; the control (player at 0.7 x
+  `perceive_radius`) notices and its first launch comes within `notice_time` + `door_open_seconds` + one `launch_period` (in practice about 0.6 s notice + `first_launch_delay`
+  3.0 s, t8's schedule), the escorts being siblings of the carrier in `EnemyContainer` and in its owner group.
+- **Gate time:** one `scripts/gate-time.sh` run, GUT 206.18 s (wall 213.9 s; 3017 → 3023 tests, 106973 asserts; green; output ≈ 427 KB) against the t9 close's 205.26 s:
+  about +0.9 s, inside the 0.8 s allotment plus run noise (±1–3 s); the hub file is 69 tests in ≈ 2.1 s. The before figure is t9's, not re-measured; a second run was not made.

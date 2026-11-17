@@ -142,4 +142,6 @@ heavy_gunship/
 └── heavy_gunship_config.gd / .tres (HeavyGunshipConfig)
 ```
 
+Hub (t10): the sector hub places one on draw 19, the 2600 ring at 157.5 degrees (anchor about (-2402, 995); -67.5 is the pre-approved fallback, 22.5 is about 120 px from the site and the sector jammer), idling on `AnchorIdle`.
+
 Gate: `tests/integration/test_heavy_gunship.gd`.

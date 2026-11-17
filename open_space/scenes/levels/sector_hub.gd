@@ -2,7 +2,7 @@
 extends Node2D
 
 ## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair and a Sniper, a Bomber, a Ram Corvette, a Missile Corvette, a Support Ship, a Mine Layer, a Laser Tender,
-## a Twin-Laser Drone pair and a Hacker Frigate, each patrolling its own anchor point, and assigns the planet config. The defended derelict site by the
+## a Twin-Laser Drone pair, a Hacker Frigate, a Heavy Gunship and a Carrier, each patrolling its own anchor point, and assigns the planet config. The defended derelict site by the
 ## TacticalSpace is a scene node under `EnemyContainer` (a `TurretGroup` preset), not part of the patrol.
 ## To change this planet's missions, background, or sprite — edit edelia.tres.
 ## To use a different config, change the path in _configure_planet().
@@ -30,6 +30,8 @@ const MINE_LAYER: PackedScene = preload("res://assault/scenes/enemies/mine_layer
 const LASER_TENDER: PackedScene = preload("res://assault/scenes/enemies/laser_tender/laser_tender.tscn")
 const TWIN_LASER_PAIR_SPAWN: PackedScene = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn")
 const HACKER_FRIGATE: PackedScene = preload("res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn")
+const HEAVY_GUNSHIP: PackedScene = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")
+const CARRIER: PackedScene = preload("res://assault/scenes/enemies/carrier/carrier.tscn")
 
 ## Fighters and Gatlings patrol in pairs, a squad of two each (epic plan §2.10).
 const SHOOTER_SQUAD_SIZE := 2
@@ -81,6 +83,13 @@ const SHOOTER_SQUAD_SIZE := 2
 @export var hacker_ring_radius: float = 2600.0
 @export var hacker_anchor_bearing_deg: float = 67.5
 
+## The Heavy Gunship (epic plan §2.14, phase 10) takes draw 19 on the 2600 ring at 157.5 deg, about (-2402, 995); 22.5 deg is unusable (~120 px from `HubDefenseSite` and the sector jammer), -67.5 is the
+## pre-approved fallback. The Carrier takes draw 20 on a 3400 ring at -112.5 deg, about (-1301, -3141): its SCREEN / PANIC leash (900 px) is part of its footprint, and 3200-3800 is the pre-approved range.
+@export var heavy_gunship_ring_radius: float = 2600.0
+@export var heavy_gunship_anchor_bearing_deg: float = 157.5
+@export var carrier_ring_radius: float = 3400.0
+@export var carrier_anchor_bearing_deg: float = -112.5
+
 @onready var enemy_container: Node2D = $EnemyContainer
 
 func _ready() -> void:
@@ -110,6 +119,9 @@ func _spawn_patrol() -> void:
 	_spawn_twin_laser_pair(_ring_anchor(twin_pair_ring_radius, twin_pair_anchor_bearing_deg), rng)
 	# Phase 9, draw 18: appended after the seventeen above, so every earlier seed is unchanged.
 	_spawn_hacker_frigate(_ring_anchor(hacker_ring_radius, hacker_anchor_bearing_deg), rng)
+	# Phase 10, draws 19 and 20: appended after the eighteen above, so every earlier seed is unchanged.
+	_spawn_heavy_gunship(_ring_anchor(heavy_gunship_ring_radius, heavy_gunship_anchor_bearing_deg), rng)
+	_spawn_carrier(_ring_anchor(carrier_ring_radius, carrier_anchor_bearing_deg), rng)
 
 func _ring_anchor(radius: float, bearing_deg: float) -> Vector2:
 	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * radius
@@ -165,6 +177,24 @@ func _spawn_hacker_frigate(anchor: Vector2, rng: RandomNumberGenerator) -> void:
 	brain.rng_seed = _next_seed(rng)
 	brain.patrol_anchor = anchor
 	enemy_container.add_child(hacker)
+
+## Draw 19. `patrol_anchor` and the seed are set before `add_child()`, so the brain's `_start()` builds its hub idle around the anchor.
+func _spawn_heavy_gunship(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var heavy := HEAVY_GUNSHIP.instantiate() as HeavyGunship
+	heavy.global_position = anchor
+	var brain := heavy.get_node("Brain") as HeavyGunshipBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(heavy)
+
+## Draw 20. Same wiring; its escorts launch as siblings in `EnemyContainer` once it engages.
+func _spawn_carrier(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var carrier := CARRIER.instantiate() as Carrier
+	carrier.global_position = anchor
+	var brain := carrier.get_node("Brain") as CarrierBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(carrier)
 
 func _spawn_missile_corvette(anchor: Vector2, rng: RandomNumberGenerator) -> void:
 	var corvette := MISSILE_CORVETTE.instantiate() as MissileCorvette

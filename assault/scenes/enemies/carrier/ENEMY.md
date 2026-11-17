@@ -8,7 +8,7 @@ ship visibly comes apart.
 
 Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` §2.6 (Phase 10 t6) and §2.7 (t7, weapons); task plans `docs/plans/cmwafsrb700afqs2yd3qqvvrb/`
 (t6), `docs/plans/cmwafsrb900ajqs2yb5jcl5ij/` (t7) and `docs/plans/cmwafsrbc00anqs2y9y0ovll4/` (t8, hangars, §2.8). The multi-part art is in
-(t9, see Art below); hub placement in t10; level 1 in t12.
+(t9, see Art below); hub placement in t10 (draw 20, 3400 ring at -112.5 degrees, anchor about (-1301, -3141), footprint = `idle_radius` + `leash_radius`; unengaged it launches nothing, engaged its escorts land in `EnemyContainer`); level 1 in t12.
 
 ---
 

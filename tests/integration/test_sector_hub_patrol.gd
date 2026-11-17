@@ -50,6 +50,11 @@ const MINE_LAYER_CONFIG: MineLayerConfig = preload(
 const HACKER_CONFIG: HackerFrigateConfig = preload(
 		"res://assault/scenes/enemies/hacker_frigate/hacker_frigate_config.tres")
 
+const HEAVY_CONFIG: HeavyGunshipConfig = preload(
+		"res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.tres")
+const CARRIER_CONFIG: CarrierConfig = preload(
+		"res://assault/scenes/enemies/carrier/carrier_config.tres")
+
 const DT := 1.0 / 60.0
 const _SPEEDUP := 8
 const PATROL_SEED := 20260928
@@ -474,8 +479,8 @@ func test_spawns_one_swarm_squad_and_one_razor_drone() -> void:
 	assert_eq(_laser_tenders(container).size(), 1, "one Laser Tender spawned")
 	assert_eq(_twin_drones(container).size(), 2, "one Twin-Laser Drone pair spawned")
 	# The twin pair's spawner is still a child, queued for deletion, until the frame ends: count the live children.
-	assert_eq(_live_children(container).size(), swarms.size() + 1 + fighters.size() + gatlings.size() + 3 + 2 + 1 + 1 + 2 + 1,
-			"nothing but the twelve groups spawned into EnemyContainer")
+	assert_eq(_live_children(container).size(), swarms.size() + 1 + fighters.size() + gatlings.size() + 3 + 2 + 1 + 1 + 2 + 1 + 2,
+			"nothing but the fourteen groups spawned into EnemyContainer (the Heavy Gunship and the Carrier last)")
 
 	var f_squad: SquadController = (fighters[0] as Fighter).squad if not fighters.is_empty() else null
 	var g_squad: SquadController = (gatlings[0] as GatlingInterceptor).squad if not gatlings.is_empty() else null
@@ -604,7 +609,9 @@ func test_the_existing_groups_seeds_are_unchanged_by_the_specialists() -> void:
 	assert_eq(seeds.slice(15, 18), expected.slice(15, 18), "the tender takes draw 16, drone A draw 17 and drone B draw 17 + 1")
 	# Phase 9 (t13): the Hacker Frigate takes draw 18, after every earlier seed; it is the last brain in the container.
 	assert_eq(seeds.slice(18), expected.slice(18), "the Hacker takes draw 18, after every earlier seed")
-	assert_eq(seeds.size(), 19, "nineteen brains: the 17 draws, drone B and the Hacker")
+	# Phase 10 (t10): the Heavy Gunship takes draw 19 and the Carrier draw 20, the last two brains in the container.
+	assert_eq(seeds.slice(19), expected.slice(19), "the Heavy Gunship takes draw 19 and the Carrier draw 20, after every earlier seed")
+	assert_eq(seeds.size(), 21, "twenty-one brains: the 17 draws, drone B, the Hacker, the Heavy Gunship and the Carrier")
 	var tenders := _laser_tenders(built.container)
 	var drones := _twin_drones(built.container)
 	if tenders.size() == 1 and drones.size() == 2:
@@ -613,18 +620,20 @@ func test_the_existing_groups_seeds_are_unchanged_by_the_specialists() -> void:
 		assert_eq((drones[1].get_node("Brain") as EnemyBrain).rng_seed, expected[16] + 1, "drone B's is draw 17 + 1")
 
 
-## The seeds a bare RNG on `PATROL_SEED` gives the eighteen draws, with drone B's (draw 17 + 1) after draw 17 and draw 18 last: the order `_brain_seeds()` reads them
-## in (the tender, then drones A and B after the queued spawner, then the Hacker).
+## The seeds a bare RNG on `PATROL_SEED` gives the twenty draws, with drone B's (draw 17 + 1) after draw 17 and draws 18-20 last: the order `_brain_seeds()` reads them
+## in (the tender, then drones A and B after the queued spawner, then the Hacker, the Heavy Gunship and the Carrier).
 func _expected_seeds() -> Array[int]:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = PATROL_SEED
 	var draws: Array[int] = []
-	for i: int in 18:
+	for i: int in 20:
 		var s := rng.randi()
 		draws.append(s if s != 0 else 1)
 	var expected: Array[int] = draws.slice(0, 17)
 	expected.append(draws[16] + 1)
 	expected.append(draws[17])
+	expected.append(draws[18])
+	expected.append(draws[19])
 	return expected
 
 
@@ -881,6 +890,9 @@ func _patrol_groups(hub: Node) -> Dictionary:
 		"Laser Tender": [_tender_anchor(hub), TENDER_CONFIG.idle_radius, TENDER_CONFIG.perceive_radius],
 		"Twin Pair": [_twin_anchor(hub), _twin_idle_offset(), TWIN_CONFIG.perceive_radius],
 		"Hacker": [_hacker_anchor(hub), HACKER_CONFIG.idle_radius, HACKER_CONFIG.perceive_radius],
+		"Heavy Gunship": [_heavy_anchor(hub), HEAVY_CONFIG.idle_radius, HEAVY_CONFIG.perceive_radius],
+		# The carrier's SCREEN / PANIC leash is part of its footprint: it can sit `leash_radius` from the anchor while holding the player off.
+		"Carrier": [_carrier_anchor(hub), CARRIER_CONFIG.idle_radius + CARRIER_CONFIG.leash_radius, CARRIER_CONFIG.perceive_radius],
 	}
 
 
@@ -1055,7 +1067,7 @@ func test_with_the_space_present_the_patrol_seeds_and_composition_are_unchanged(
 	assert_eq(_brain_seeds(built.container), _expected_seeds(), "the space draws nothing from the patrol rng")
 	var found := _swarm_and_razor(built.container)
 	assert_eq((found.swarms as Array).size(), 4)
-	assert_eq(_live_children(built.container).size(), 19, "nothing but the twelve patrol groups spawned")
+	assert_eq(_live_children(built.container).size(), 21, "nothing but the fourteen patrol groups spawned (the Heavy Gunship and the Carrier last)")
 
 
 # ── Phase 7 (plan §2.15, t14): the Mine Layer's patrol and the placed minefield ────────────────
@@ -1260,7 +1272,7 @@ func test_the_tender_and_the_pair_spawn_bound_on_their_anchors() -> void:
 	assert_almost_eq(drones[0].global_position.distance_to(drones[1].global_position), TWIN_CONFIG.rig_length, 0.01,
 			"spawned rig_length apart, centred on the anchor")
 	assert_almost_eq((drones[0].global_position + drones[1].global_position) * 0.5, twin_anchor, Vector2(0.01, 0.01))
-	assert_eq(_live_children(container).size(), 15 + 3 + 1, "the fifteen draws before, the tender, the two drones and the Hacker")
+	assert_eq(_live_children(container).size(), 15 + 3 + 1 + 2, "the fifteen draws before, the tender, the two drones, the Hacker, the Heavy Gunship and the Carrier")
 
 
 # ── The defended derelict site ─────────────────────────────────────────────────────────────────────────────────────
@@ -1402,7 +1414,7 @@ func test_a_mission_trigger_inside_the_sites_reach_fails_sweep_a() -> void:
 func test_hub_patrols_clear_the_defense_site() -> void:
 	var hub := HUB_SCENE.instantiate()
 	var groups := _patrol_groups(hub)
-	assert_eq(groups.size(), 13, "every patrol group, the tender, the pair and the Hacker included")
+	assert_eq(groups.size(), 15, "every patrol group, the tender, the pair, the Hacker, the Heavy Gunship and the Carrier included")
 	var sites := _hub_sites(hub)
 	assert_gte(sites.size(), 1, "sanity: the sweep found the site")
 	for site: Node2D in sites:
@@ -1819,3 +1831,139 @@ func test_the_sector_jammer_field_covers_at_least_two_site_turrets() -> void:
 	assert_gte(turrets, 2, "sanity: the walk found the site's turret slots")
 	assert_gte(covered, 2, "the sector jammer's r %.0f field covers %d of %d site turrets" % [radius, covered, turrets])
 	hub.free()
+
+
+# ── Phase 10 (plan §2.14, t10): a Heavy Gunship and a Carrier patrol the hub ────────────────────────────────────────────────
+#
+# Draw 19 is the Heavy Gunship on the 2600 ring at 157.5 deg, draw 20 the Carrier on a 3400 ring at -112.5 deg. Both are `_patrol_groups()` entries (the
+# carrier's footprint includes its 900 px leash), so the spawn / trigger / pickup rows, the TacticalSpace, minefield, A / B and C sweeps above cover them.
+# Pre-approved levers if a sweep fails: the gunship to -67.5 deg on the 2600 ring (22.5 is unusable), the carrier's ring radius within 3200-3800.
+
+
+func _heavy_anchor(hub: Node) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(float(hub.heavy_gunship_anchor_bearing_deg))) * float(hub.heavy_gunship_ring_radius)
+
+
+func _carrier_anchor(hub: Node) -> Vector2:
+	return Vector2.RIGHT.rotated(deg_to_rad(float(hub.carrier_anchor_bearing_deg))) * float(hub.carrier_ring_radius)
+
+
+func _heavy_gunships(container: Node2D) -> Array[HeavyGunship]:
+	var out: Array[HeavyGunship] = []
+	for c: Node in container.get_children():
+		if c is HeavyGunship:
+			out.append(c)
+	return out
+
+
+func _carriers(container: Node2D) -> Array[Carrier]:
+	var out: Array[Carrier] = []
+	for c: Node in container.get_children():
+		if c is Carrier:
+			out.append(c)
+	return out
+
+
+func test_the_heavy_gunship_and_the_carrier_take_draws_19_and_20_on_their_rings() -> void:
+	var hub := HUB_SCENE.instantiate()
+	assert_eq(float(hub.heavy_gunship_ring_radius), 2600.0)
+	assert_eq(float(hub.heavy_gunship_anchor_bearing_deg), 157.5)
+	assert_eq(float(hub.carrier_ring_radius), 3400.0)
+	assert_eq(float(hub.carrier_anchor_bearing_deg), -112.5)
+	var heavy := _heavy_anchor(hub)
+	assert_almost_eq(heavy.x, -2402.0, 1.0, "the plan's gunship anchor x")
+	assert_almost_eq(heavy.y, 995.0, 1.0, "the plan's gunship anchor y")
+	var carrier := _carrier_anchor(hub)
+	assert_almost_eq(carrier.x, -1301.0, 1.0, "the plan's carrier anchor x")
+	assert_almost_eq(carrier.y, -3141.0, 1.0, "the plan's carrier anchor y")
+	hub.free()
+	var built := _spawn_hub(PATROL_SEED)
+	var heavies := _heavy_gunships(built.container)
+	var carriers := _carriers(built.container)
+	assert_eq(heavies.size(), 1, "one Heavy Gunship")
+	assert_eq(carriers.size(), 1, "one Carrier")
+	if heavies.size() != 1 or carriers.size() != 1:
+		return
+	var expected := _expected_seeds()
+	var heavy_brain := heavies[0].get_node("Brain") as HeavyGunshipBrain
+	var carrier_brain := carriers[0].get_node("Brain") as CarrierBrain
+	assert_eq(heavy_brain.patrol_anchor, _heavy_anchor(built.hub), "the gunship carries its patrol anchor")
+	assert_eq(heavies[0].global_position, _heavy_anchor(built.hub), "and spawns on it")
+	assert_eq(heavy_brain.rng_seed, expected[19], "it takes draw 19")
+	assert_false(heavy_brain.start_engaged, "it idles on patrol")
+	assert_eq(carrier_brain.patrol_anchor, _carrier_anchor(built.hub), "the carrier carries its patrol anchor")
+	assert_eq(carriers[0].global_position, _carrier_anchor(built.hub), "and spawns on it")
+	assert_eq(carrier_brain.rng_seed, expected[20], "it takes draw 20")
+	assert_false(carrier_brain.start_engaged, "it idles on patrol")
+
+
+func test_heavy_gunship_anchor_clears_every_planet_pickup_and_the_player_spawn() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var points := _interactable_points(hub)
+	_assert_group_clears(_heavy_anchor(hub), HEAVY_CONFIG.idle_radius, HEAVY_CONFIG.perceive_radius, points, "Heavy Gunship")
+	hub.free()
+
+
+func test_carrier_anchor_clears_every_planet_pickup_and_the_player_spawn_with_its_leash() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var points := _interactable_points(hub)
+	var footprint := CARRIER_CONFIG.idle_radius + CARRIER_CONFIG.leash_radius
+	assert_gt(footprint, 1000.0, "sanity: the leash is part of the footprint")
+	_assert_group_clears(_carrier_anchor(hub), footprint, CARRIER_CONFIG.perceive_radius, points, "Carrier")
+	print("Carrier ring margin: %.1f px" % _nearest_margin(_carrier_anchor(hub), footprint, CARRIER_CONFIG.perceive_radius, points))
+	hub.free()
+
+
+func test_the_heavy_gunship_and_the_carrier_are_well_apart_from_every_other_patrol_anchor() -> void:
+	var hub := HUB_SCENE.instantiate()
+	var groups := _patrol_groups(hub)
+	for mine: String in ["Heavy Gunship", "Carrier"]:
+		var anchor: Vector2 = groups[mine][0]
+		for label: String in groups:
+			if label == mine:
+				continue
+			assert_gt((groups[label][0] as Vector2).distance_to(anchor), 1000.0, "%s's anchor is clear of %s's" % [mine, label])
+	hub.free()
+
+
+## Hand-ticks the hub's carrier with the player at `anchor + player_offset` until its first launch or `seconds`. The log holds every launch and the time of the first.
+func _hub_carrier_run(player_offset: Vector2, seconds: float) -> Dictionary:
+	var built := _spawn_hub(PATROL_SEED)
+	var carrier := _carriers(built.container)[0]
+	built.h.player.global_position = _carrier_anchor(built.hub) + player_offset
+	var log := {"launches": [], "first_at": -1.0, "built": built, "carrier": carrier}
+	var clock := [0.0]
+	carrier.hangars().launched.connect(func(id: StringName, out: Array) -> void:
+		log.launches.append([id, out.size()])
+		if log.first_at < 0.0:
+			log.first_at = clock[0])
+	for i: int in int(round(seconds / DT)):
+		clock[0] = float(i + 1) * DT
+		_tick(carrier)
+		if log.first_at >= 0.0:
+			break
+	return log
+
+
+func test_an_unengaged_hub_carrier_launches_nothing_in_30_seconds() -> void:
+	var run := _hub_carrier_run(Vector2(3000.0, 0.0), 30.0)
+	assert_eq(run.launches.size(), 0, "nothing launched with the player 3000 px away")
+	var carrier: Carrier = run.carrier
+	assert_eq((carrier.get_node("Brain") as CarrierBrain).phase, CarrierBrain.Phase.CRUISE, "still idling")
+	assert_eq(_live_children(run.built.container).size(), 21, "no escort joined the container")
+
+
+## The control: the player inside the 1100 px perceive radius. It notices, then launches within `notice_time` + `door_open_seconds` + one `launch_period`.
+func test_a_hub_carrier_with_the_player_inside_its_perceive_radius_launches_into_the_enemy_container() -> void:
+	var run := _hub_carrier_run(Vector2(CARRIER_CONFIG.perceive_radius * 0.7, 0.0), 30.0)
+	var limit := CARRIER_CONFIG.notice_time + CARRIER_CONFIG.door_open_seconds + CARRIER_CONFIG.launch_period
+	assert_gte(run.first_at, 0.0, "a launch happened")
+	assert_lte(run.first_at, limit + 0.1, "within notice_time + door_open_seconds + one launch_period (%.1f s)" % limit)
+	var container: Node2D = run.built.container
+	var carrier: Carrier = run.carrier
+	assert_eq(carrier.get_parent(), container)
+	var escorts := 0
+	for c: Node in container.get_children():
+		if c != carrier and c.is_in_group(carrier.owner_group()):
+			escorts += 1
+	assert_gt(escorts, 0, "the escorts are children of the EnemyContainer, in the carrier's owner group")
