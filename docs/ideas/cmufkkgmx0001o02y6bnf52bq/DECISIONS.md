@@ -4318,3 +4318,35 @@ Task plan `docs/plans/cmwafsrbl00b3qs2y1xuez7c5/` (review round 2: APPROVED).
   launch windows, drone intervals), shared by the heavy and drone gates.
 - **Gate time:** GUT two-run mean 211.51 s (at `7aba280`) → 210.34 s (213.311 / 207.359; 3062 tests): −1.2 s is noise; the task's own file
   `test_level1_heavy_spawns.gd` grew 4.7 → 6.7 s summed testcase time (+2.0 s of the 2.5 s allotment). `check-test-leaks.sh` clean.
+
+## Phase 10 - as built (2026-11-18)
+
+Dossier: `docs/epics-done/cmug23oo90029m52wae4clve0/` (PRD, SOURCES, REPORT). Per-task details are in the *Phase 10, built in tN* sections above; this section is the summary later phases should read.
+
+### What was built
+- **`EnemyModule` / `ModularHull`** (`global/components/`), group `enemy_parts`, wreckage that stays, a locked part ignoring every damage, the killing shot consumed; the player's beam and nova reach parts.
+- **`TurretMountBuilder`**, mount `traverse_deg` (along the arc), `Variant.HEAVY_CANNON` firing the Heavy Shell (its first consumer).
+- **Heavy Gunship** (`heavy_gunship/`, replaces the legacy Gunship; `WaveBuilder.heavy_gunship()` / `HEAVY_GUNSHIP`) with six edge-flush parts, hull phases, vents, a rear pod open in Assault only while its budget runs, a shielded nose cannon.
+- **Carrier** (`carrier/`, `WaveBuilder.carrier()` / `CARRIER`): armoured hull, seven parts, core exposure after 3 outer wrecks, side batteries, bow cannon, missile bank, pulse ring, hangars, PANIC.
+- **19 hand-drawn sprites**, hub draws 19 / 20, level 1's four Heavy Gunships and one Carrier (planet_approach 65.0 s, world x 750), the lit-laser slice replay (`light_lasers`, `player_offset`).
+
+### Deviations from the plan (all logged in the per-task notes)
+- Ph4's "extend `ArmorPlate`" changed to a new `EnemyModule` (damage through `received_damage`, wreckage kept).
+- VENT fire rule `can_fire = normal ∧ phase() == FIRE` instead of `is_committed()` (t5); the Missiles mount has its own `telegraph_gate`.
+- `heavy_gunship.tscn` root `collision_mask` is 0 (owner choice, t11); one first-launch schedule for both modes in `CarrierConfig` (t8).
+- Art hand-drawn through the PixelLab workbench rather than the object tool (t9).
+- Level-1 replays run at a 16-step cap; t11's GUT overrun (+4.9 s against 3.0 s) was owner-accepted; the Carrier replay parks the stub high (`player_offset`) so the check is not vacuous (t12).
+- Gate output is capped at 1 MiB and `BulletPool` warns once per pool (t5).
+
+### Gaps left for later phases
+| Item | Phase |
+|---|---|
+| Hangar launches / battery-loss phases on the shared boss machinery; geometry weapons; ship-mounted EMP | Ph18 |
+| **Enemy beams (`EnemyBeam`, `EnergyRing`) vs parts** (needs an owner-of-part exemption in `EnergyHitScan`) | Ph18 / Ph19 |
+| LOS-blocking and capital wrecks, heavy mass rules | Ph19 |
+| **EMP on structures** (bonus drone, station, Ph8 turrets / fences), station onto `EnemyModule` | Ph11 |
+| Encounter compositions, hub carrier child cleanup | Ph13 / Ph14 |
+| Per-part score, part HUD, audio | Ph17 |
+| Difficulty scaling | Ph16 |
+| Level 2 beyond the builder rename | Ph15 |
+| Untested: Carrier bow cannon and missile bank in level 1; drones against lit columns; play feel of Cloud Descent's three firing gunships | later / owner |

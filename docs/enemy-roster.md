@@ -380,7 +380,7 @@ b.missile_corvette().at(0, -400)
 
 **Builder:** `b.support_ship()`  
 **Scene:** `support_ship.tscn`  
-**Movement:** AI-driven (`SupportShipBrain` + `EnemyMover`); shadows the highest-threat AI-driven ally worth >= 20 (never a Swarm Drone, Gunship, Bonus Drone or another support) from behind, jinks and evades the player, re-picks a ward the tick its ward dies, and in Assault stays inside the camera view; with no ward it holds near the nearest ally (Assault: leaves after 1.5 s in view without one). Leaves when its Assault budget (`engage_seconds` 9.0) ends. Unarmed: no rail fallback. It repairs its ward in pulses (`BaseEnemy.repair()`), projects a cyan `EnemyShield` arc onto it (a 360° bubble during the emergency escort) and tows a badly hurt ward away through `accept_tow()`; see `support_ship/ENEMY.md`.  
+**Movement:** AI-driven (`SupportShipBrain` + `EnemyMover`); shadows the highest-threat AI-driven ally worth >= 20 (never a Swarm Drone, Bonus Drone, a Carrier or another support; the Heavy Gunship may be warded) from behind, jinks and evades the player, re-picks a ward the tick its ward dies, and in Assault stays inside the camera view; with no ward it holds near the nearest ally (Assault: leaves after 1.5 s in view without one). Leaves when its Assault budget (`engage_seconds` 9.0) ends. Unarmed: no rail fallback. It repairs its ward in pulses (`BaseEnemy.repair()`), projects a cyan `EnemyShield` arc onto it (a 360° bubble during the emergency escort) and tows a badly hurt ward away through `accept_tow()`; see `support_ship/ENEMY.md`.  
 **Shoots:** Nothing.  
 **HP:** 55 (a 34 px circle); contact damage 0 (`ContactProfile` NONE; it cannot be repaired by another support)  
 **Score:** 60
@@ -577,7 +577,7 @@ Every mover-driven enemy carries three flat `ShipConfig` hazard fields and three
 Avoidance 0..1 is how readily the mover's context-steering stage steers round a hazard, margin is the skim distance in px,
 resistance 0..1 scales the pull and slow the ship feels. A `boost()` (every committed attack) ignores avoidance. The wreck
 columns are rolled once on death from the brain's seeded `rng`; with no `HazardContainer` nothing spawns. Wreck size:
-0 small, 1 medium, 2 large. Rails, the Gunship and the station are untouched.
+0 small, 1 medium, 2 large. Rails and the station are untouched (the heavies avoid hazards through their own profiles).
 
 | Enemy | avoidance | margin | resistance | wreck chance | wreck size | explosive chance |
 |---|---|---|---|---|---|---|
@@ -677,13 +677,13 @@ that scene — there is no per-bullet script and no per-round retuning.
 | Scatter | `EnemyRounds.SCATTER` | 420 | 6 | 2 s / 450 px | short pink pellet, 4 px wide, 2 px hitbox | Fighter (FORWARD burst) |
 | Gatling Stream | `EnemyRounds.GATLING_STREAM` | 240 | 4 | 8 s / 1400 px | thin red streak, 2 px wide | Gatling Interceptor |
 | Rail | `EnemyRounds.RAIL` | 2200 | 28 | 4 s / 2400 px | white-hot 3 px core with a glow, and a fading `RailTrail` behind it | Sniper (AI shot; its rail fallback fires 1400 px/s for 25) |
-| Heavy Shell | `EnemyRounds.HEAVY_SHELL` | 160 | 20 | 12 s / 1800 px | big pale-pink slug with a dark rim | **nobody yet** (Ph4's Bomber and Ram fire no rounds; first consumer: Ph10 Heavy Gunship) |
+| Heavy Shell | `EnemyRounds.HEAVY_SHELL` | 160 | 20 | 12 s / 1800 px | big pale-pink slug with a dark rim | `HEAVY_CANNON` mounts: the Heavy Gunship's nose cannon and the Carrier's bow cannon (Ph10) |
 
 - **One pool per round per shooter**, a direct child of the enemy root. Size it with
   `EnemyRounds.pool_size_for(max_burst, round_lifetime, min_burst_period)`; a self-timed rail pattern is a burst of 1
   at its own interval. The shooter's pattern may still override `speed` / `damage` on the acquired bullet;
   `EnemyBullet.reset()` restores the scene's own authored values on reuse.
-- `enemy_bullet.tscn` itself stays the legacy orange bolt, and every other shooter (Gunship, the drones' pulse shots)
+- `enemy_bullet.tscn` itself stays the legacy orange bolt, and every other shooter (the drones' pulse shots)
   keeps it until the Ph17 audit. The Bomber and the Ram fire no rounds.
 - Each round's `max_distance / slowest speed any shooter fires it at` must fit its `max_time`
   (`test_enemy_bullet_lifetime.gd`), reading the speeds from the shooters' config fields.
@@ -738,7 +738,7 @@ scored. **Tuning lives in each scene's exports.** Art and `rotation` are nose-up
 | **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `heavy_gunship`, `carrier`, `fighter`, `gatling_interceptor`, `ram`, `sniper`, `bomber` — attaching `EnemyPathMover` suspends their AI. `fighter`, `gatling_interceptor`, `sniper` and `bomber` fall back to a legacy weapon on a rail (so the station's reinforcements still fire); the ram keeps its ARMOR contact armed; the rest go quiet. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` on a rail** | No fly-in constant any more: a rail suspends the brain and the telegraph cycle starts at spawn. Without `.move()` it runs its AI relocation loop. |
-| **Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top. |
+| **Heavy Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top (level 1: `.at(0, -500)` / `.at(160, -500)`, never `-160`, which is inside the level-start laser wall). A Carrier uses `y` about `-260` (world-anchored x) and never goes in an `ENEMIES_CLEARED` section. |
 | **Offsets are design-unit (640×360 space)** | Do NOT multiply by 2. `WaveManager` handles the `WORLD_SCALE` conversion. |
 | **Rockets hurt enemies by impact only** | An `EnemyRocket`'s impact hits enemies, ordnance, Ram plates and asteroids; its blast hurts only the player and allies. Never put a rocket launcher where its own rockets can overlap its hull (`rocket_clear_radius()`). |
 | **Supports never repair supports** | A `SupportShip` is never a ward and `can_be_repaired()` is false; it deals 0 contact damage. |
