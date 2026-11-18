@@ -55,6 +55,10 @@ const LEVEL_SCENE_PATH := "res://assault/scenes/levels/edelia/1/level_1.tscn"
 ## A ray relit at a slice start keeps at least this lethal span, else it is not relit (`warm_start()`).
 const MIN_ACTIVE := 0.25
 
+## Where the stationary player stub sits, from the camera centre (default `PLAYER_OFFSET`). Phase 10 t12's Carrier replay puts it high, so the
+## camera pans to its highest view and the carrier spawns where its worst-case life assumes; every other caller keeps the default.
+var player_offset := PLAYER_OFFSET
+
 ## Light `lit_section`'s real lasers on the slice timeline (header). Set on the instance before `run()`.
 var light_lasers := false
 ## Whose column schedule (and, for deep_space, the level-start wall).
@@ -281,7 +285,7 @@ func run(host: Node, waves: Array[WaveResource], length: float, target_path: Str
 	host.add_child(harness.root)
 	var cam := harness.root.get_node("ArenaCamera") as Camera2D
 	cam.make_current()
-	harness.player.global_position = cam.global_position + PLAYER_OFFSET
+	harness.player.global_position = cam.global_position + player_offset
 	var container := Node2D.new()
 	container.name = "EnemyContainer"
 	harness.root.add_child(container)

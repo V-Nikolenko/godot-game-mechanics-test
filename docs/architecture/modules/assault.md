@@ -297,7 +297,8 @@ spawn in an `ENEMIES_CLEARED` section**: a corvette's persistent rockets would h
 The attack-in-budget rows replay only `rel - 1 s .. rel + engage + 2 s` of a section through a real `WaveManager`
 (`tests/helpers/level1_slice_replay.gd`). Since Phase 10 t11 that helper can also light the section's real lasers (opt-in
 `light_lasers`: the level-start `LaserWallWave` and the director's own `_spawn_laser_columns()` on an idle clock, a row carried
-over the slice start relit by `warm_start()`) and report every death of its target ships covered by a lethal ray.
+over the slice start relit by `warm_start()`) and report every death of its target ships covered by a lethal ray. Phase 10 t12 adds an opt-in
+`player_offset` (default `PLAYER_OFFSET`): the Carrier replay parks the stub high so the camera pans to its highest view, the carrier's worst case.
 
 **The Missile Corvette (Phase 5, t7 shell, t8 fight, t9 art)** — see [missile_corvette/ENEMY.md](../../../assault/scenes/enemies/missile_corvette/ENEMY.md).
 A brain + flat-config enemy (`MissileCorvetteBrain`, `MissileCorvetteConfig`) that closes to its held range (460 px in Assault), circles the
@@ -568,7 +569,8 @@ booting the level — every `_build_*` body touches only `LevelSection.new()`, `
 1. `deep_space` — 30 s timed, fighters/drones.
 2. `asteroid_belt` — 30 s timed asteroid gauntlet (no enemies).
 3. `station_assault` — the **space-station mini-boss**, `ENEMIES_CLEARED` (see below).
-4. `planet_approach` — 110 s cinematic with light harassment.
+4. `planet_approach` — 110 s cinematic with light harassment; since Phase 10 t12 a Carrier crosses it at 65.0 s (world x 750, between
+   two laser-column volleys; `test_level1_heavy_spawns.gd`).
 5. `cloud_descent` — the **boss-phase / climax** section.
 
 **Boss-phase logic (there is no discrete boss entity).** The climax is encoded entirely in

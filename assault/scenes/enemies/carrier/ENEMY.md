@@ -164,6 +164,10 @@ An EMP freezes the hangars with the brain (an open door stays open and hittable 
 - `b.carrier().at(x, y)`. In Assault a wave spawn is **world-anchored in x** (`world_anchored_x`, the turret-group rule), so `.at(x, y)` lands at
   world x `640 + 2·x` whatever the camera's pan. Never give it a `.move()`.
 - **Never in an `ENEMIES_CLEARED` section** (`test_engagement_deadline.gd`).
+- **Level 1 (Phase 10 t12):** one Carrier in Planet Approach's 65.0 s wave at `.at(55, -260)` (world x 750). Worst life 20.61 s (from the highest
+  view at 90 px/s), parts sweeping x 620–880; the only column set lit while it lives is the 78.0 s one (x 150 / 550 / 950), 70 px outside the sweep.
+  Its two hangars launch 2 swarm drones each (counted in level 1's drone gate). Pinned, lane-checked and replayed lit by
+  `tests/integration/test_level1_heavy_spawns.gd`; its numbers live in `tests/helpers/level1_carrier_timeline.gd`.
 
 ## Files
 
@@ -179,4 +183,4 @@ carrier/
 └── carrier_config.gd / .tres   (CarrierConfig)
 ```
 
-Gates: `tests/integration/test_carrier.gd`, `tests/integration/test_carrier_hangars.gd` (the hangars).
+Gates: `tests/integration/test_carrier.gd`, `tests/integration/test_carrier_hangars.gd` (the hangars), `tests/integration/test_level1_heavy_spawns.gd` (level 1).

@@ -4283,3 +4283,38 @@ Task plan `docs/plans/cmwafsrbi00azqs2yuwzayuk3/3-plan.md` (revision 5, review r
   station and now the Heavy Gunship): whether every top-down enemy body should be `MOTION_MODE_FLOATING` is a project-wide question for the owner. The heavies
   fire late in their Assault life (the first battery burst comes 4.5–6.3 s into the 9 s budget, after the approach to the held range), so each fires one
   or two bursts per life in level 1.
+
+### Phase 10, built in t12 (level 1's Carrier crosses Planet Approach) (2026-11-18)
+
+Task plan `docs/plans/cmwafsrbl00b3qs2y1xuez7c5/` (review round 2: APPROVED).
+- **Option A** of §2.13, as ordered: `b.carrier().at(55, -260)` appended to planet_approach's **65.0 s** wave (no new wave, so no effective trigger, wave index
+  or fire-density schedule row moves). World x **750** (world-anchored). B and C were not needed.
+- **Worst life 20.61 s** (`TICK_SLACK + (world.end.y + 140 − y_spawn) / 90`, spawned from the highest view, shake included: y −548): alive 65.00 – 85.61 s.
+  **Swept x 620 – 880** (750 ± (sway leash 30 + `module_x_extent` 100)). A column conflicts when closer than the sweep + `_BEAM_WIDTH` (186 px from x).
+- **Lit windows** (`lit_seconds()` 8.4 s = warn 3.0 + increase 0.56 + active 4.0 + dissolve 0.84): 55.0 s set lit until 63.40 s (before the spawn), **78.0 s set
+  (x 150 / 550 / 950) overlaps**, 98.0 s set starts after 85.61 s. 550 and 950 are 200 px from x: 70 px outside the sweep, 14 px beyond the 186 px rule.
+  `_carrier_column_conflicts()` (new, `test_level1_heavy_spawns.gd`) reports no conflict; its boundaries flag the line in the 58.0 s wave (the 55.0 s set's
+  x 700 column, 50 px) and at `.at(-45, -260)` (world x 550, on the 78.0 s set's column).
+- **Lit replay** (planet_approach from 64.0 s, 16× clock capped at 16 steps, columns lit): no part or hull died; anchor x 750.0, largest sway **30.00 px**
+  (it parks on its leash, toward the stub); smallest gap to a lethal 78.0 s strip **54.0 px = the computed floor** (200 − 30 − 88 − 28; review N1: the
+  floor is met exactly, so the row has a 0.5 px float tolerance) and ≥ `_HAZARD_PAD`; lived **20.50 s** (worst 20.61; no shake); every 78.0 s column lethal
+  81.63 – 85.35 s, inside its 78.00 – 86.40 window, none lethal at the stop (86.43 s); largest idle frame 0.283 s.
+- **(D) the stub is parked high** (opt-in `level1_slice_replay.gd::player_offset`, default `PLAYER_OFFSET`; here `(0, −(V_LIMIT + deadzone.y + 50))`), not
+  at §2.13's "usual place": there the camera offset is +220, the carrier spawns at y 60 and is gone ≈ 78.8 s, before the 78.0 s set turns lethal (81.56 s),
+  so the laser check would be vacuous. High, the camera pans to −`V_LIMIT` and the carrier crosses from the worst-case view.
+- **Attack in budget** (same replay, no part damaged, so no PANIC, asserted): port hangar launched 2 swarm drones at 70.58 s, starboard 2 at 74.58 s (windows
+  ≥ 68.80 / 72.80 s, ≤ 85.61 s); **fire record (measured, ungated): 8 rounds, all side-battery, peak 4 in any 2 s window**; the bow cannon and the missile
+  bank did not fire at the high stub in this replay.
+- **Drones (C3, `test_level1_drone_spawns.gd`):** the carrier's 4 drones are one squad of intervals `[65.0, 65.0 + 20.61 + drone life]` (they start at the
+  carrier's spawn: PANIC's `emergency_deploy()` launches with no schedule or view check; review round 1, finding 1). planet_approach: capable **9 of 12**
+  (was 7), all **13 of 15** (was 9). Lever `assault_launch_count` 2 → 1 **not needed**. Boundary: `k` = 1 more carrier at the all-drones peak (75.0 s)
+  computes 17 > 15. `swarm_lifetimes()` moved from the test into `level1_drone_concurrency.gd` (one formula for both files).
+- **Gone before the section ends:** hull and last rocket (missile bank PURSUIT `max_time` 6.0 s) by 91.61 s, its drones by 93.89 s, against 110.0 s
+  (planet_approach's end; no ENEMIES_CLEARED section follows before it). Boundary: the line in the 95.0 s wave spills (121.61 s).
+- **Guard:** `test_no_enemies_cleared_section_spawns_a_carrier` gains its non-vacuity line (level 1 places exactly one carrier, in a DURATION section).
+- **`test_level1_ph9_attacks.gd`** stays green unchanged: its jammer slice (61.0 s →) now spawns the carrier at slice 4.0 s; the parked player is locked at slice
+  5.90 s as before. No ring friendly fire on the jammer was needed to decide (owner choice 8 stands).
+- No frozen constant changed; no carrier tuning changed. New helper `tests/helpers/level1_carrier_timeline.gd` (lines, worst life, swept width, rocket life,
+  launch windows, drone intervals), shared by the heavy and drone gates.
+- **Gate time:** GUT two-run mean 211.51 s (at `7aba280`) → 210.34 s (213.311 / 207.359; 3062 tests): −1.2 s is noise; the task's own file
+  `test_level1_heavy_spawns.gd` grew 4.7 → 6.7 s summed testcase time (+2.0 s of the 2.5 s allotment). `check-test-leaks.sh` clean.

@@ -19,6 +19,8 @@
 ##                      wall's 644 ray) and x 1152 (the 6.0 s set's column) with avoidance off, so each must be reported dead under a lit ray.
 ##   carried over       deep_space from 11.0 s, no ships: the 6.0 s row relit mid-way (warn 0, active 1.8) must be lethal until its real end.
 ##   cloud_descent      50.0 - 1.0 s to 62.8 + engage + 2.0 s, lasers off (none is lit there), all three heavies.
+##   carrier lit        planet_approach from the Carrier's spawn - 1.0 s with its columns lit and the stub parked high (the carrier crosses from
+##                      the highest view), stopped once it is gone and the 78.0 s set's lit window has ended (Phase 10 t12, the section at the end).
 ## Every lit run caps `Engine.max_physics_steps_per_frame` at `LIT_MAX_STEPS` (the deep_space slice is CPU-bound at 16x; uncapped its idle
 ## frames reach 2.13 game s and every laser edge reads late: README rule 1).
 extends GutTest
@@ -27,6 +29,9 @@ const REPLAY: GDScript = preload("res://tests/helpers/level1_slice_replay.gd")
 const PH10_EXITS: GDScript = preload("res://tests/helpers/ph10_exit_keys.gd")
 const HARNESS: GDScript = preload("res://tests/helpers/enemy_ai_harness.gd")
 const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.gd")
+const CarrierTimeline := preload("res://tests/helpers/level1_carrier_timeline.gd")
+const SWARM_CONFIG: SwarmDroneConfig = preload("res://assault/scenes/enemies/swarm_drone/swarm_drone_config.tres")  # read only
+const RAZOR_CONFIG: RazorDroneConfig = preload("res://assault/scenes/enemies/razor_drone/razor_drone_config.tres")  # read only
 const DIRECTOR_SCRIPT: GDScript = preload("res://assault/scenes/levels/edelia/1/level_1_director.gd")
 const SHIPPED: HeavyGunshipConfig = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.tres")  # read only
 const HEAVY := WaveBuilder.HEAVY_GUNSHIP
@@ -868,6 +873,17 @@ func test_heavy_fire_density_is_measured() -> void:
 		gut.p("%s heavies: %d gun rounds, %d rockets, peak %.0f gun rounds in any %.0f s window" % [key, all_rounds.size(), rockets,
 			DroneConcurrency.peak_window_rate(all_rounds, FIRE_WINDOW) * FIRE_WINDOW, FIRE_WINDOW])
 	assert_gt(total, 0, "rounds were counted")
+	# The planet_approach Carrier (t12): its rounds per mount kind and the peak in any window, from the lit carrier replay.
+	var carrier := await _carrier_run()
+	if carrier.is_empty():
+		return
+	var by_kind := {}
+	var times: Array[float] = []
+	for r: Array in carrier["rec"]["rounds"]:
+		by_kind[r[0]] = int(by_kind.get(r[0], 0)) + 1
+		times.append(float(r[1]))
+	gut.p("planet_approach carrier: %d rounds %s, peak %.0f in any %.0f s window" % [times.size(), by_kind,
+		DroneConcurrency.peak_window_rate(times, FIRE_WINDOW) * FIRE_WINDOW, FIRE_WINDOW])
 
 
 ## The helper's default path lights nothing; the lit deep_space run saw the wall's 12 rays and the 6.0 s row's three.
@@ -886,3 +902,388 @@ func test_a_replay_with_lasers_off_lights_nothing() -> void:
 	assert_eq(lit.filter(func(r: Dictionary) -> bool: return r["source"] == "wall").size(), 12, "the wall's twelve rays")
 	assert_eq(lit.filter(func(r: Dictionary) -> bool: return r["source"] == "column" and is_equal_approx(float(r["row_time"]), 6.0)).size(), 3,
 		"the 6.0 s row's three columns")
+
+
+# ── The Carrier (Phase 10 t12) ───────────────────────────────────────────────────────────────────────────────────────
+# Epic plan §2.13, task plan docs/plans/cmwafsrbl00b3qs2y1xuez7c5/3-plan.md §3. One Carrier crosses planet_approach in its 65.0 s wave at
+# `.at(55, -260)` (option A: world x 750). Its numbers come from `level1_carrier_timeline.gd`: a fixed worst life (the highest view, shake
+# included, at the constant crossing speed) and a swept x of world x ± (sway leash + module x extent). A laser column kills any part it touches
+# (9999 on layer 512), so every lit window it shares a moment with must keep its column a beam's width clear of that sweep.
+
+## The carrier line of level 1: section, effective trigger, offset, delay.
+const EXPECTED_PH10_CARRIER: Array[Dictionary] = [
+	{"section": &"planet_approach", "trigger": 65.0, "offset": Vector2(55.0, -260.0), "delay": 0.0},
+]
+## The high stub sits this far (px) beyond what the camera's vertical clamp needs, so the view pans to its highest.
+const HIGH_STUB_MARGIN := 50.0
+## Float tolerance (px) on the measured sway and the measured laser gap (the sway parks on its leash, so the gap meets its floor exactly).
+const SWAY_EPS := 0.5
+
+var _carrier: Dictionary = {}
+
+
+## `EXPECTED_PH10_CARRIER`'s shape of `CarrierTimeline.lines()` over `sections` (for mutated sections).
+func _carrier_pin_rows(sections: Array[LevelSection]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for section in sections:
+		for line in CarrierTimeline.lines(section):
+			out.append({"section": section.section_name, "trigger": line["trigger"], "offset": line["offset"], "delay": line["delay"]})
+	return out
+
+
+## Every Carrier entry of `sections` (rail / exit / formation checks and the boundaries' edits).
+func _carrier_entries(sections: Array[LevelSection]) -> Array[SpawnEntryResource]:
+	var out: Array[SpawnEntryResource] = []
+	for section in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if entry.ship_scene != null and entry.ship_scene.resource_path == CarrierTimeline.CARRIER:
+					out.append(entry)
+	return out
+
+
+## Moves `section`'s Carrier entry into its wave triggering at `trigger` (which must exist), optionally with a new offset.
+func _move_carrier(section: LevelSection, trigger: float, offset: Variant = null) -> void:
+	var moved: SpawnEntryResource = null
+	for wave: WaveResource in section.waves:
+		var kept: Array[SpawnEntryResource] = []
+		for entry: SpawnEntryResource in wave.entries:
+			if entry.ship_scene != null and entry.ship_scene.resource_path == CarrierTimeline.CARRIER:
+				moved = entry
+			else:
+				kept.append(entry)
+		wave.entries = kept
+	assert_not_null(moved, "sanity: the section holds a Carrier")
+	if moved == null:
+		return
+	var copy := moved.duplicate() as SpawnEntryResource
+	if offset != null:
+		copy.base_offset = offset
+	for wave: WaveResource in section.waves:
+		if is_equal_approx(wave.trigger_time, trigger):
+			var entries: Array[SpawnEntryResource] = []
+			entries.assign(wave.entries)
+			entries.append(copy)
+			wave.entries = entries
+			return
+	fail_test("sanity: no wave triggers at %.1f s" % trigger)
+
+
+## `{ "x": [world x of each wall ray], "from", "to" }`: the level-start `LaserWallWave`, lit from 0.0 s for its rays' warning + charge-up +
+## lethal span + dissolve (the first section only).
+func _wall_window() -> Dictionary:
+	var place: Dictionary = REPLAY.wall_placement()
+	var wall := (place["scene"] as PackedScene).instantiate()
+	var timing: Dictionary = REPLAY.ray_timing()
+	var xs: Array = []
+	var end := 0.0
+	for child in wall.get_children():
+		var ray := child as LaserRay
+		if ray == null:
+			continue
+		xs.append((place["position"] as Vector2).x + ray.position.x)
+		end = maxf(end, ray.warn_duration + float(timing["increase"]) + ray.active_duration + float(timing["dissolve"]))
+	wall.free()
+	return {"x": xs, "from": 0.0, "to": end}
+
+
+## For each Carrier line of `sections`: every lit window of its section (each `laser_column_schedule()` row's `[t, t + lit_seconds()]`, plus the
+## wall for the first section) that overlaps its worst life, and every column of such a window closer than the parts' sweep plus a beam's
+## width: half the beam reaches toward the sweep, and a second half-beam is the margin (task plan §1). Not `test_level1_specialist_spawns.gd`'s
+## `_column_conflicts()`: that one checks a static x against every row starting before a life ends; a carrier sweeps, and a row lit and dark
+## before it spawns is no conflict. Returns `{ "checked": lines, "overlapping": ["<section> <row time>"], "conflicts": [...], "rows": [...] }`.
+func _carrier_column_conflicts(sections: Array[LevelSection]) -> Dictionary:
+	var schedule: Dictionary = DIRECTOR_SCRIPT.laser_column_schedule()
+	var reach := CarrierTimeline.swept_half_width() + LaserRay._BEAM_WIDTH
+	var out := {"checked": 0, "overlapping": [] as Array[String], "conflicts": [] as Array[String], "rows": [] as Array[String]}
+	for i in sections.size():
+		var section := sections[i]
+		var windows: Array[Dictionary] = []
+		for row: Dictionary in schedule.get(section.section_name, []):
+			windows.append({"label": "%s %.1f" % [section.section_name, row["time"]], "from": float(row["time"]),
+				"to": float(row["time"]) + REPLAY.lit_seconds(), "x": row["columns"]})
+		if i == 0:
+			var wall := _wall_window()
+			wall["label"] = "%s wall" % section.section_name
+			windows.append(wall)
+		for line in CarrierTimeline.lines(section):
+			out["checked"] = int(out["checked"]) + 1
+			var start: float = line["spawn"]
+			var end := start + CarrierTimeline.worst_life((line["offset"] as Vector2).y)
+			var x := CarrierTimeline.world_x((line["offset"] as Vector2).x)
+			for w in windows:
+				var lit := start < float(w["to"]) and end > float(w["from"])
+				(out["rows"] as Array[String]).append("%s lit %.2f-%.2f vs carrier %.2f-%.2f: %s" % [w["label"], w["from"], w["to"], start, end,
+					"overlaps" if lit else "apart"])
+				if not lit:
+					continue
+				(out["overlapping"] as Array[String]).append(w["label"])
+				for col in w["x"]:
+					var gap := absf(x - float(col))
+					if gap < reach:
+						(out["conflicts"] as Array[String]).append("%s: column x %.0f is %.0f px from the carrier's x %.0f (< %.0f)" % [
+							w["label"], float(col), gap, x, reach])
+	return out
+
+
+func test_the_carrier_line_is_pinned() -> void:
+	var placed: Array[Dictionary] = REPLAY.placed(CarrierTimeline.CARRIER)
+	var rows: Array[Dictionary] = []
+	for p in placed:
+		rows.append({"section": p["section"], "trigger": p["trigger"], "offset": p["offset"], "delay": p["delay"]})
+	assert_eq(rows, EXPECTED_PH10_CARRIER, "the Carrier line's section, trigger, offset or delay changed")
+	var sections := _build_sections()
+	assert_eq(_carrier_pin_rows(sections), EXPECTED_PH10_CARRIER, "the timeline helper reads the same line")
+	for entry in _carrier_entries(sections):
+		assert_null(entry.movement, "the carrier rides no rail (a rail suspends its brain)")
+		assert_null(entry.formation, "the carrier is a single ship")
+		assert_eq(entry.exit_mode, EnemyPathMover.ExitMode.FREE_ON_SCREEN_EXIT)
+	assert_almost_eq(CarrierTimeline.world_x(55.0), 750.0, 0.001, "sanity: .at(55, ...) is world x 750")
+
+
+## Boundary: a moved offset fails the pin.
+func test_a_moved_carrier_line_fails_the_pin() -> void:
+	var sections := _build_sections()
+	var entries := _carrier_entries(sections)
+	assert_eq(entries.size(), 1, "sanity: one carrier line")
+	if entries.size() != 1:
+		return
+	entries[0].base_offset = Vector2(-145.0, -260.0)
+	assert_ne(_carrier_pin_rows(sections), EXPECTED_PH10_CARRIER, "a carrier at option B's offset must not match the pin")
+
+
+func test_the_carrier_clears_every_lit_column() -> void:
+	var r := _carrier_column_conflicts(_build_sections())
+	for line in r["rows"]:
+		gut.p(line)
+	var placed: Array[Dictionary] = REPLAY.placed(CarrierTimeline.CARRIER)
+	assert_eq(placed.size(), 1, "sanity: one carrier placed")
+	if placed.size() != 1:
+		return
+	var life := CarrierTimeline.worst_life((EXPECTED_PH10_CARRIER[0]["offset"] as Vector2).y)
+	gut.p("carrier: spawn %.2f s, worst life %.2f s (gone by %.2f s), x %.0f, parts sweep %.0f-%.0f, a column needs %.0f px from x" % [
+		placed[0]["rel"], life, float(placed[0]["rel"]) + life, CarrierTimeline.world_x(55.0),
+		CarrierTimeline.world_x(55.0) - CarrierTimeline.swept_half_width(), CarrierTimeline.world_x(55.0) + CarrierTimeline.swept_half_width(),
+		CarrierTimeline.swept_half_width() + LaserRay._BEAM_WIDTH])
+	assert_eq(int(r["checked"]), 1, "the one carrier line was checked")
+	assert_eq(r["conflicts"], [] as Array[String], "no lit column comes within the carrier's sweep plus a beam's width")
+	assert_eq(r["overlapping"], ["planet_approach 78.0"] as Array[String],
+		"only the 78.0 s set is lit while it lives (the 55.0 s set is dark before it spawns, the 98.0 s set lit after it is gone)")
+
+
+## Boundary: the same line in the 58.0 s wave lives while the 55.0 s set is lit, and that set's x 700 column is inside the sweep.
+func test_a_carrier_at_the_58_s_wave_is_flagged() -> void:
+	var sections := _build_sections()
+	_move_carrier(_section(sections, &"planet_approach"), 58.0)
+	var r := _carrier_column_conflicts(sections)
+	gut.p("carrier at 58.0 s: %s" % [r["conflicts"]])
+	assert_true((r["conflicts"] as Array).any(func(c: String) -> bool: return c.begins_with("planet_approach 55.0: column x 700")),
+		"the 55.0 s set's x 700 column is flagged")
+
+
+## Boundary: option A at `.at(-45, -260)`, world x 550, sits on the 78.0 s set's x 550 column.
+func test_a_carrier_at_world_x_550_is_flagged() -> void:
+	assert_almost_eq(CarrierTimeline.world_x(-45.0), 550.0, 0.001, "sanity")
+	var sections := _build_sections()
+	_move_carrier(_section(sections, &"planet_approach"), 65.0, Vector2(-45.0, -260.0))
+	var r := _carrier_column_conflicts(sections)
+	gut.p("carrier at world x 550: %s" % [r["conflicts"]])
+	assert_true((r["conflicts"] as Array).any(func(c: String) -> bool: return c.begins_with("planet_approach 78.0: column x 550")),
+		"the 78.0 s set's x 550 column is flagged")
+
+
+## Every DURATION section's carrier: `{ "carrier": spawn + worst life + its longest rocket (they persist), "children": the last drone interval's
+## end }`, each against `min(section end, the next ENEMIES_CLEARED section's last trigger)`. Returns the over-deadline lines.
+func _carrier_spills(sections: Array[LevelSection]) -> Array[String]:
+	var lifetimes := DroneConcurrency.swarm_lifetimes(CarrierTimeline.world_rect(), SWARM_CONFIG, RAZOR_CONFIG)
+	var out: Array[String] = []
+	for i in sections.size():
+		var section := sections[i]
+		if section.end_condition != LevelSection.EndCondition.DURATION:
+			continue
+		var deadline := minf(section.duration, _next_cleared_deadline(sections, i))
+		var children := -INF
+		for iv in CarrierTimeline.drone_intervals(section, lifetimes):
+			children = maxf(children, float(iv["end"]))
+		for line in CarrierTimeline.lines(section):
+			var end: float = float(line["spawn"]) + CarrierTimeline.worst_life((line["offset"] as Vector2).y) + CarrierTimeline.rocket_max_life()
+			gut.p("%s carrier at %.1f s: hull and rockets gone by %.2f s, its drones by %.2f s (limit %.2f s)" % [section.section_name,
+				line["spawn"], end, children, deadline])
+			if end >= deadline:
+				out.append("%s carrier at %.1f s: rockets until %.2f s >= %.2f s" % [section.section_name, line["spawn"], end, deadline])
+			if children >= deadline:
+				out.append("%s carrier at %.1f s: drones until %.2f s >= %.2f s" % [section.section_name, line["spawn"], children, deadline])
+	return out
+
+
+func test_the_carrier_and_its_children_are_gone_before_the_section_ends() -> void:
+	var sections := _build_sections()
+	assert_eq(_carrier_entries(sections).size(), 1, "sanity: one carrier line")
+	assert_eq(_carrier_spills(sections), [] as Array[String])
+
+
+## Boundary: the same carrier in the 95.0 s wave is still crossing when planet_approach ends.
+func test_a_carrier_at_95_s_spills_over() -> void:
+	var sections := _build_sections()
+	_move_carrier(_section(sections, &"planet_approach"), 95.0)
+	var spills := _carrier_spills(sections)
+	assert_gt(spills.size(), 0, "the 95.0 s carrier is flagged")
+	if spills.size() > 0:
+		assert_true(spills[0].begins_with("planet_approach carrier at 95.0"))
+
+
+## The latest lit window the placed carrier shares a moment with (section s): the replay must run past its end.
+func _carrier_lit_row() -> float:
+	var latest := -1.0
+	for label: String in _carrier_column_conflicts(_build_sections())["overlapping"]:
+		latest = maxf(latest, label.get_slice(" ", 1).to_float())
+	return latest
+
+
+## planet_approach from the carrier's spawn - `PRE_ROLL`, lit, the stub at the view's highest (task plan §3: at the usual stub place the camera
+## offset is +220, the carrier spawns 600 px lower and is gone before the 78.0 s set turns lethal, so the laser check would be vacuous). Stops once
+## the carrier is gone and the latest lit window it shared has ended. One scenario: the laser check, the attack row and the fire record. Run once.
+func _carrier_run() -> Dictionary:
+	if not _carrier.is_empty():
+		return _carrier
+	var placed: Array[Dictionary] = REPLAY.placed(CarrierTimeline.CARRIER)
+	assert_eq(placed.size(), 1, "sanity: one carrier placed")
+	if placed.size() != 1:
+		return {}
+	var row: Dictionary = placed[0]
+	var from := float(row["rel"]) - REPLAY.PRE_ROLL
+	var life := CarrierTimeline.worst_life((row["offset"] as Vector2).y)
+	var lit_row := _carrier_lit_row()
+	var stop_after: float = lit_row + REPLAY.lit_seconds() + TICK
+	var length := REPLAY.PRE_ROLL + life + 2.0
+	assert_lt(stop_after - from, length, "sanity: the cap is past the lit window's end")
+	var section: LevelSection = REPLAY.section(row["section"])
+	var waves: Array[WaveResource] = REPLAY.slice_waves(section, from, section.duration)
+	var replay = REPLAY.new()
+	replay.light_lasers = true
+	replay.lit_section = row["section"]
+	replay.lit_from = from
+	var cam := ArenaCamera.new()
+	replay.player_offset = Vector2(0.0, -(ArenaCamera.V_LIMIT + cam.deadzone_half_size.y + HIGH_STUB_MARGIN))
+	cam.free()
+	var rec := {"spawn": -1.0, "gone": -1.0, "killed": false, "launches": [], "rounds": [], "max_sway": 0.0, "anchor": NAN, "panic": false,
+		"carriers": 0}
+	var clock := [from]
+	var tweak := func(ship: Node) -> void:
+		rec["carriers"] = int(rec["carriers"]) + 1
+		if float(rec["spawn"]) >= 0.0:
+			return
+		rec["spawn"] = replay.slice_time() + from
+		(ship as BaseEnemy).died.connect(func() -> void: rec["killed"] = true)
+		ship.tree_exiting.connect(func() -> void:
+			if ship.is_queued_for_deletion():
+				rec["gone"] = clock[0])
+		ship.ready.connect(func() -> void:
+			var c := ship as Carrier
+			c.hangars().launched.connect(func(id: StringName, children: Array) -> void:
+				(rec["launches"] as Array).append({"id": id, "t": clock[0], "n": children.size()}))
+			var kinds: Array = []
+			for m in c.battery_mounts():
+				kinds.append(["battery", m])
+			kinds.append(["bow", c.bow_mount()])
+			kinds.append(["bank", c.missile_mount()])
+			for pair in kinds:
+				(pair[1] as TurretMount).round_fired.connect(func(_projectile: Node2D) -> void:
+					(rec["rounds"] as Array).append([pair[0], clock[0]])), CONNECT_ONE_SHOT)
+	var observe := func(ship: BaseEnemy, t: float) -> bool:
+		clock[0] = t + from
+		if ship != null:
+			var brain := ship.get_node(^"Brain") as CarrierBrain
+			if brain.phase == CarrierBrain.Phase.CROSS:
+				rec["anchor"] = brain.anchor_x()
+				rec["max_sway"] = maxf(float(rec["max_sway"]), absf(ship.global_position.x - brain.anchor_x()))
+			if brain.is_panicking() or (ship as Carrier).is_core_exposed():
+				rec["panic"] = true
+		return ship == null and float(clock[0]) >= stop_after
+	_scale_clock(LIT_MAX_STEPS)
+	var out: Dictionary = await replay.run(self, waves, length, CarrierTimeline.CARRIER, observe, tweak)
+	_restore_clock()
+	_carrier = {"out": out, "rec": rec, "from": from, "stop": float(out["t"]) + from, "life": life, "row": row, "lit_row": lit_row}
+	return _carrier
+
+
+func test_no_carrier_part_dies_under_a_lit_laser() -> void:
+	var run := await _carrier_run()
+	if run.is_empty():
+		return
+	var out: Dictionary = run["out"]
+	var rec: Dictionary = run["rec"]
+	var row: Dictionary = run["row"]
+	var clearance: Dictionary = (out["clearance"] as Dictionary).get(0, {"lethal": INF, "warning": INF})
+	# The floor: the nearest column of the lit window, less the sway leash, the hull hurtbox's half-width and half the beam.
+	var x := CarrierTimeline.world_x((row["offset"] as Vector2).x)
+	var nearest := INF
+	for r: Dictionary in DIRECTOR_SCRIPT.laser_column_schedule()[row["section"]]:
+		if is_equal_approx(float(r["time"]), float(run["lit_row"])):
+			for col in r["columns"]:
+				nearest = minf(nearest, absf(x - float(col)))
+	var floor_px := nearest - CarrierTimeline.SHIPPED.assault_sway_leash - CarrierTimeline.hurt_half_width() - LaserRay._BEAM_WIDTH * 0.5
+	var lived := float(rec["gone"]) - float(rec["spawn"])
+	gut.p("carrier lit: spawn %.2f s, gone %.2f s (lived %.2f s, worst %.2f s), anchor x %.1f, largest sway %.2f px, clearance lethal %.1f px (floor %.1f), warning %.1f px, stop %.2f s, deaths %s" % [
+		rec["spawn"], rec["gone"], lived, run["life"], rec["anchor"], rec["max_sway"], clearance["lethal"], floor_px, clearance["warning"],
+		run["stop"], out["deaths"]])
+	assert_eq(int(rec["carriers"]), 1, "the slice spawned its one carrier")
+	assert_eq((out["deaths"] as Array).size(), 0, "no carrier part or hull died (under a laser or otherwise)")
+	assert_false(rec["killed"], "the carrier was not killed")
+	assert_lt(float(clearance["lethal"]), INF, "the carrier shared a height with a lethal strip of the 78.0 s set: the check is not vacuous")
+	assert_gte(float(clearance["lethal"]), floor_px - SWAY_EPS, "its hull kept the computed gap from every lethal strip at its height")
+	assert_gte(float(clearance["lethal"]), LaserRay._HAZARD_PAD, "and at least the laser's hazard pad")
+	assert_almost_eq(float(rec["anchor"]), x, SWAY_EPS, "its sway is leashed round its world-anchored spawn x")
+	assert_lte(float(rec["max_sway"]), CarrierTimeline.SHIPPED.assault_sway_leash + SWAY_EPS, "it never swayed past its leash")
+	assert_between(lived, float(run["life"]) - 0.5, float(run["life"]) + TICK,
+		"it crossed from the highest view: the worst-case life the static rows assume")
+	_assert_idle_capped(out, "carrier lit")
+	var checked := _check_ray_edges(run, "carrier lit")
+	assert_true(checked.has("column %.1f onset" % float(run["lit_row"])), "the 78.0 s set's onset was checked on the level's time")
+
+
+## The real-laser sanity row: every column of the 78.0 s set really was lethal, its last lethal tick lies inside the lit window the static rows
+## use, and nothing is lethal at the stop, so the window is a true upper bound.
+func test_the_replayed_column_lit_window_is_an_upper_bound() -> void:
+	var run := await _carrier_run()
+	if run.is_empty():
+		return
+	var lit_row: float = run["lit_row"]
+	var rows: Array = (run["out"]["lit"] as Array).filter(func(r: Dictionary) -> bool:
+		return r["source"] == "column" and is_equal_approx(float(r["row_time"]), lit_row))
+	var expected: int = 0
+	for r: Dictionary in DIRECTOR_SCRIPT.laser_column_schedule()[run["row"]["section"]]:
+		if is_equal_approx(float(r["time"]), lit_row):
+			expected = (r["columns"] as Array).size()
+	assert_eq(rows.size(), expected, "every column of the %.1f s set was lit" % lit_row)
+	for r: Dictionary in rows:
+		gut.p("column %.1f x %.0f: lethal %.3f-%.3f s (window %.2f-%.2f)" % [lit_row, r["x"], r["from"], r["to"], lit_row,
+			lit_row + REPLAY.lit_seconds()])
+		assert_gte(float(r["from"]), lit_row, "x %.0f: lethal only inside its window" % float(r["x"]))
+		assert_lt(float(r["to"]), lit_row + REPLAY.lit_seconds(), "x %.0f: its last lethal tick is inside its lit window" % float(r["x"]))
+	assert_eq(int(run["out"]["lethal_at_stop"]), 0, "no ray is lethal at the stop, after the window")
+
+
+## Attack in budget: both hangars launch exactly once with their Assault payload, each inside its window (no part is damaged here, so no PANIC
+## and no emergency deployment: asserted), and a mount fires, all before the carrier leaves.
+func test_the_carrier_launches_both_hangars_and_fires_before_it_leaves() -> void:
+	var run := await _carrier_run()
+	if run.is_empty():
+		return
+	var rec: Dictionary = run["rec"]
+	var row: Dictionary = run["row"]
+	var launches: Array = rec["launches"]
+	gut.p("carrier launches %s; %d rounds; gone %.2f s" % [launches, (rec["rounds"] as Array).size(), rec["gone"]])
+	assert_false(rec["panic"], "no PANIC in this replay (no part was damaged)")
+	var windows := CarrierTimeline.launch_windows(float(row["rel"]), (row["offset"] as Vector2).y)
+	for w: Dictionary in windows:
+		var mine := launches.filter(func(l: Dictionary) -> bool: return l["id"] == w["id"])
+		assert_eq(mine.size(), 1, "%s launched exactly once" % w["id"])
+		for l: Dictionary in mine:
+			assert_eq(int(l["n"]), int(w["count"]), "%s launched its Assault payload" % w["id"])
+			assert_between(float(l["t"]), float(w["earliest"]) - TICK, float(w["latest"]), "%s launched inside its window" % w["id"])
+			assert_lt(float(l["t"]), float(rec["gone"]), "%s launched before the carrier left" % w["id"])
+	var rounds: Array = rec["rounds"]
+	assert_gt(rounds.size(), 0, "a mount fired")
+	for r: Array in rounds:
+		assert_lt(float(r[1]), float(rec["gone"]), "every round left before the carrier did")

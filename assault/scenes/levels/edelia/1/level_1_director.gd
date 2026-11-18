@@ -50,6 +50,13 @@
 ## dark before 50 s) and every heavy's first battery shot inside its budget; the Cloud Descent three are gated against the 10 s
 ## ENEMIES_CLEARED net, exit and last rocket, by test_engagement_deadline.gd. The Deep Space offset keeps the heavy out of the wall's strip
 ## at spawn (at (0, -500) it spawned 32 px into it).
+##
+## The Carrier line (Phase 10 t12: `b.carrier().at(55, -260)` in Planet Approach's 65.0 s wave, option A of epic plan §2.13) carries no rail:
+## it crosses straight down at its constant speed, world-anchored at x 750 and swaying at most 30 px, so its parts sweep x 620–880 and it is
+## gone by 85.61 s at worst. That puts it between the 55.0 s column set (dark at 63.4 s) and the 98.0 s one, and the 78.0 s set it shares
+## (x 150 / 550 / 950) stays 70 px outside its sweep. Its four swarm drones count in the drone gate (`test_level1_drone_spawns.gd`). Pinned,
+## lane-checked and replayed with the real lasers lit by tests/integration/test_level1_heavy_spawns.gd; never in an ENEMIES_CLEARED section
+## (test_engagement_deadline.gd).
 extends Node
 
 const _MISSION_NUMBER: int = 1
@@ -781,11 +788,12 @@ func _build_section_2() -> LevelSection:
 			b.jammer().at(-80, -220),  # Phase 9 t14: world-anchored at x 480, clear of every column lit while it drifts; lives never overlap the Hacker's
 		]),
 
-		# 65.0 s — 2 snipers from top corners (+ ram chaser)
+		# 65.0 s — 2 snipers from top corners (+ ram chaser, + the Carrier crossing)
 		b.wave(65.0, [
 			b.sniper().at(-240, -400),
 			b.sniper().at( 240, -400),
 			b.ram().at(0, -400).delay(0.7),
+			b.carrier().at(55, -260),  # Phase 10 t12: crosses at world x 750 between the 55.0 s and 98.0 s column sets, clear of the 78.0 s set
 		]),
 
 		# 68.0 s — drone screen sweep

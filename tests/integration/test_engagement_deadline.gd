@@ -21,6 +21,7 @@ extends GutTest
 
 const DIRECTOR_SCRIPT := preload("res://assault/scenes/levels/edelia/1/level_1_director.gd")
 const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.gd")
+const _SLICE_REPLAY: GDScript = preload("res://tests/helpers/level1_slice_replay.gd")
 
 const SWARM_CONFIG: SwarmDroneConfig = preload("res://assault/scenes/enemies/swarm_drone/swarm_drone_config.tres")
 const RAZOR_CONFIG: RazorDroneConfig = preload("res://assault/scenes/enemies/razor_drone/razor_drone_config.tres")
@@ -983,6 +984,13 @@ func test_no_enemies_cleared_section_spawns_a_carrier() -> void:
 	var probe := _cloud_descent()
 	_add_to_last_wave(probe, load(WaveBuilder.CARRIER) as PackedScene, 0.0)
 	assert_true(_section_has_scene(probe, WaveBuilder.CARRIER), "boundary: a carrier in cloud_descent's last wave is seen")
+	# Non-vacuity (Phase 10 t12): level 1 really places one Carrier (planet_approach's 65.0 s wave), so the guard above sees a real line.
+	var placed: Array[Dictionary] = _SLICE_REPLAY.placed(WaveBuilder.CARRIER)
+	assert_eq(placed.size(), 1, "level 1 places exactly one Carrier")
+	for p in placed:
+		for s in _sections():
+			if (s as LevelSection).section_name == p["section"]:
+				assert_eq((s as LevelSection).end_condition, LevelSection.EndCondition.DURATION, "the Carrier sits in a DURATION section (%s)" % p["section"])
 
 
 # ── Phase 8 t19: level 1 places a turret group, a twin pair and a Laser Tender, in DURATION sections only ───────────
