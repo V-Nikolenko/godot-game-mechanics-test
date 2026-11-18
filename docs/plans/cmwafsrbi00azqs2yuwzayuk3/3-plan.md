@@ -438,3 +438,10 @@ follow-up for the owner, not this task.
 - *R5-3:* Q2's alternative is a logged deviation with its own stop, the task's files over 6.0 s or the two-run mean past 237 s (Risks, Q2).
 - *Nit:* step 9's whole gate covers the three heavy files the step-3a list omits (`test_explosion_effect_placement.gd`, `test_ph10_sprites.gd`,
   `test_entity_sprite_transparency.gd`; none reads the body mask).
+
+## As built (2026-11-18)
+The owner answered Q1 = option M and Q2 = accept the overrun (stop at the task's files over 9.0 s or the two-run suite mean past 237 s). Built as revision 5 with
+those answers; no lever beyond lever 2 and no deadline lever was used. Two build-level details the plan did not name: the helper's `run()` drops its `tweak`
+before returning (a tweak that captures its own replay, to read the new `slice_time()`, otherwise forms a RefCounted cycle that leaks at exit), and the
+"gone" time of a replayed heavy is recorded only when the ship queues itself for deletion (its exit or its death), never when the world is freed at the stop.
+Measured figures, the ten-run record and the gate time are in `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` → "Phase 10, built in t11".

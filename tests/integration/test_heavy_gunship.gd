@@ -35,9 +35,6 @@ const FLUSH_EPS := 0.01
 const FACING_TOL := 20.0
 ## The x band an Assault strafing player stays in (the view's 1280 px less a margin).
 const STRAFE_X := Vector2(200.0, 1080.0)
-## The Cloud Descent window the budget is derived from (§2.12 / §2.4.3: the 62.0 + 0.8 s heavy at rel −13.2 s of a 10 s timeout). t11 replaces
-## it with the live `test_engagement_deadline.gd::_deadline_rows` figure.
-const CLOUD_DESCENT_WINDOW := 23.2
 ## `test_engagement_deadline.gd`'s MARGIN.
 const DEADLINE_MARGIN := 0.5
 ## (id, role, max_health, starts_vulnerable, hull_share) in tree order.
@@ -309,6 +306,65 @@ func test_the_phase_enum_is_append_only_and_the_builder_spawns_it() -> void:
 	assert_eq(WaveBuilder.HEAVY_GUNSHIP, "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")
 	assert_eq(WaveBuilder.new().heavy_gunship()._scene, WaveBuilder.HEAVY_GUNSHIP)
 	assert_true(ResourceLoader.exists(WaveBuilder.HEAVY_GUNSHIP))
+
+
+# ── The body passes through (t11, the owner's option M: task plan docs/plans/cmwafsrbi00azqs2yuwzayuk3/3-plan.md §5a) ───────────────
+# The hull's `CharacterBody2D` has `collision_mask` 0, the Carrier's and the station's rule: a grounded body that slid off another ship took that
+# ship's velocity as a platform's and was thrown into level 1's laser wall. Its layer is unchanged (other ships still bump into it), and its
+# hurtbox, contact box and hazard avoidance are areas and the mover, untouched.
+
+func test_the_shipped_hull_body_collides_with_nothing() -> void:
+	var state := SCENE.get_state()
+	var mask: Variant = null
+	for p in state.get_node_property_count(0):
+		if state.get_node_property_name(0, p) == &"collision_mask":
+			mask = state.get_node_property_value(0, p)
+	assert_eq(mask, 0, "heavy_gunship.tscn's root authors collision_mask = 0")
+	var g := SCENE.instantiate() as HeavyGunship
+	assert_eq(g.collision_mask, 0)
+	assert_eq(g.collision_layer, 1, "its layer is as shipped: other bodies still meet it")
+	g.free()
+
+
+## Real physics: a heavy driven by `move_and_slide()` through a layer-1 static box ends beyond it with no slide collision; a control body with
+## the same shape and mask 1, driven the same way, is stopped on it (so the row can fail).
+func test_a_heavy_moved_by_move_and_slide_passes_through_a_layer_1_body() -> void:
+	var h = _world("assault")
+	var box := StaticBody2D.new()
+	box.collision_layer = 1
+	box.collision_mask = 0
+	var box_shape := CollisionShape2D.new()
+	var rect := RectangleShape2D.new()
+	rect.size = Vector2(1000.0, 40.0)
+	box_shape.shape = rect
+	box.add_child(box_shape)
+	box.global_position = TARGET_AT
+	h.root.add_child(box)
+	var g := _spawn(h, TARGET_AT + Vector2(-200.0, -200.0))
+	var control := CharacterBody2D.new()
+	control.collision_layer = 0
+	control.collision_mask = 1
+	var control_shape := CollisionShape2D.new()
+	control_shape.shape = (g.get_node(^"CollisionShape2D") as CollisionShape2D).shape
+	control.add_child(control_shape)
+	control.global_position = TARGET_AT + Vector2(200.0, -200.0)
+	h.root.add_child(control)
+	for _i in 2:
+		await get_tree().physics_frame  # the box enters the broadphase
+	var heavy_hits := 0
+	var control_hits := 0
+	for _i in 120:
+		g.velocity = Vector2(0.0, 240.0)
+		g.move_and_slide()
+		heavy_hits += g.get_slide_collision_count()
+		control.velocity = Vector2(0.0, 240.0)
+		control.move_and_slide()
+		control_hits += control.get_slide_collision_count()
+	var box_bottom := TARGET_AT.y + rect.size.y * 0.5
+	assert_eq(heavy_hits, 0, "the heavy's body meets nothing")
+	assert_gt(g.global_position.y, box_bottom + 72.0, "the heavy is past the box (y %.1f)" % g.global_position.y)
+	assert_gt(control_hits, 0, "control: a mask-1 body is stopped by the box")
+	assert_lt(control.global_position.y, TARGET_AT.y, "control: it stays on the box's near side (y %.1f)" % control.global_position.y)
 
 
 # ── The flush-edge rule (§2.4.1, review N2) ──────────────────────────────────────────────────────
@@ -753,8 +809,24 @@ func test_the_measured_assault_exit_is_printed_and_bounded() -> void:
 	assert_gt(float(_exit["seconds"]), 0.0)
 	# Review M8, §2.4.3 / §2.16: the budget was derived from the Cloud Descent window, so the measured exit must fit it.
 	var window := engage_life_window()
-	assert_lt(window, CLOUD_DESCENT_WINDOW, "engage %.1f + attack window + exit %.2f + margin %.1f = %.2f s < %.1f s (margin %.2f s)" % [SHIPPED.engage_seconds,
-			float(_exit["seconds"]), DEADLINE_MARGIN, window, CLOUD_DESCENT_WINDOW, CLOUD_DESCENT_WINDOW - window])
+	var limit := cloud_descent_window()
+	assert_almost_eq(limit, 23.2, 0.0001, "sanity: the 62.0 + 0.8 s heavy sits 13.2 s before cloud_descent's 76.0 s last trigger, 10 s net")
+	assert_lt(window, limit, "engage %.1f + attack window + exit %.2f + margin %.1f = %.2f s < %.1f s (margin %.2f s)" % [SHIPPED.engage_seconds,
+			float(_exit["seconds"]), DEADLINE_MARGIN, window, limit, limit - window])
+
+
+## The Cloud Descent window the budget is derived from (§2.12 / §2.4.3), read live since t11: cloud_descent's last effective trigger + its
+## `enemies_cleared_timeout` - the latest cloud_descent heavy spawn (`level1_slice_replay.gd`'s `section()` / `placed()`).
+func cloud_descent_window() -> float:
+	var section: LevelSection = REPLAY.section(&"cloud_descent")
+	var last := -INF
+	for w in section.waves:
+		last = maxf(last, (w as WaveResource).trigger_time)
+	var latest := -INF
+	for row: Dictionary in REPLAY.placed(WaveBuilder.HEAVY_GUNSHIP):
+		if row["section"] == &"cloud_descent":
+			latest = maxf(latest, float(row["rel"]))
+	return last + section.enemies_cleared_timeout - latest
 
 
 ## `engage_seconds + attack_window() + measured exit + MARGIN` at full strength (the heavy cannon's 1.05 s window).

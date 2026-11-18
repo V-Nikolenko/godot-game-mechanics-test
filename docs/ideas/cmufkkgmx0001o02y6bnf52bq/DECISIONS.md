@@ -4222,3 +4222,64 @@ Task plan `docs/plans/cmwafsrbc00anqs2y9y0ovll4/` (review: round 1 and round 2 C
   3.0 s, t8's schedule), the escorts being siblings of the carrier in `EnemyContainer` and in its owner group.
 - **Gate time:** one `scripts/gate-time.sh` run, GUT 206.18 s (wall 213.9 s; 3017 → 3023 tests, 106973 asserts; green; output ≈ 427 KB) against the t9 close's 205.26 s:
   about +0.9 s, inside the 0.8 s allotment plus run noise (±1–3 s); the hub file is 69 tests in ≈ 2.1 s. The before figure is t9's, not re-measured; a second run was not made.
+
+### Phase 10, built in t11 (level 1's four Heavy Gunships off rails, lit replays, Cloud Descent deadline rows) (2026-11-18)
+Task plan `docs/plans/cmwafsrbi00azqs2yuwzayuk3/3-plan.md` (revision 5, review round 6 APPROVED); the owner answered its two questions on 2026-11-18
+(Q1 option M, Q2 accept the gate-time overrun).
+- **Director (§2.12):** the Cloud Descent 50.0 s and 62.0 s pair lose `.move(b.straight(42 / 36))` (same triggers, offsets, delays; owner choice 2: all three),
+  so they fight and leave by themselves; `COLUMN_WARN_SECONDS` 3.0 / `COLUMN_ACTIVE_SECONDS` 4.0 are `_spawn_laser_columns()`'s defaults (behaviour-identical,
+  `test_level1_laser_columns.gd` green). The deep_space 3.5 s heavy is `.at(160, -500)` (pre-approved lever 2: world x 960).
+- **Deviation (D), owner option M: `heavy_gunship.tscn`'s root `collision_mask` is 0** (the Carrier's and the station's rule), a departure from §2.4.1's body
+  spec ("mask ENVIRONMENT"; the "layer ENEMY_HITBOX" half was never applied and stays layer 1 as shipped) and from §2.12's lever list. Cause (measured, task plan
+  §5a): the heavy's root is a GROUNDED `CharacterBody2D`; on its APPROACH it lands on Snipers and Fighters of the deep_space waves (a floor contact), takes the ship
+  as a platform and, sliding off, adds its velocity (Godot's `platform_on_leave` default), so it is thrown sideways into the wall's lane (x 0–672, lethal until
+  7.56 s). No lever touches that: at the shipped offset it spawned 32 px inside the wall's strip and died every run; with lever 2 alone 8 of 12 / 7 of 9 runs
+  lost it; levers 1, 1 + 3 + 4 lost it in every run; `MOTION_MODE_FLOATING` alone fell under the clearance floor or never fired in some runs; the hull-term
+  footprint (revision 4's option A) never fired (0 of 37). With the mask at 0 (plus lever 2) 36 of 36 measured runs survived and fired inside the budget.
+  Trade-off the owner accepted: no Heavy Gunship body (level 1, the hub, level 2's railed one) stops on ships, asteroids or wrecks any more; it still steers
+  round hazards through `EnemyMover`, other ships (mask 1) still meet its layer-1 body, and its hurtbox and contact box (areas) are unchanged. Levers 1, 3 and 4
+  and both deadline levers were **not used**. Rows: `test_heavy_gunship.gd::test_the_shipped_hull_body_collides_with_nothing` and
+  `test_a_heavy_moved_by_move_and_slide_passes_through_a_layer_1_body` (a mask-1 control is stopped by the same box).
+- **Lit slice replay (§2.12; t12 seam):** `tests/helpers/level1_slice_replay.gd` gains the opt-in `light_lasers` / `lit_section` / `lit_from` (default off: every
+  existing caller runs its old path), `deaths` (`{ship, what, t, covered, source}`, readable during the run), `slice_time()`, and statics `ray_timing()` (init 0.2 /
+  increase 0.56 / dissolve 0.84 s from `laser_ray.tscn`'s `SpriteFrames`), `lit_seconds()` (8.4 s, the definition t12 reuses), `column_lethal_offset()` (3.56 s),
+  `warm_start(elapsed, warn, active)` (`MIN_ACTIVE` 0.25), `wall_placement()` and `hurt_aabb()`. `run()` adds `deaths`, `lit` (per ray: source, x, row time, first
+  / last lethal tick, `max_idle`, lit warn / active), `max_idle`, `lethal_at_stop` and `clearance` on a lit run. The columns fire on an idle clock started at the load
+  frame's delta (`Level1Director._process`'s semantics); the deep_space wall is added at the `load_section()` moment. **`run()` now drops its tweak at the end:**
+  a tweak that captures its own replay (to read `slice_time()`) made a RefCounted cycle that leaked at exit.
+- **(D) the step cap:** every lit replay runs with `Engine.max_physics_steps_per_frame` 16 (time scale and tick rate x 16). Uncapped, the CPU-bound deep_space
+  slice reaches 2.13 game s idle frames and every laser edge reads late; capped, the largest idle frame is 0.279–0.282 s (deep_space and boundary
+  runs; 0.122–0.130 s carried over), never above 17 ticks (0.283 s) by construction, so on a slower machine too the per-edge guard
+  (`2·d + 2·TICK < 1.25 s`) holds. README rule 1 records it.
+- **(D) one deep_space scenario** is the heavy's lit check, its attack-in-budget row and its fire record (§2.12 lists them separately); from section 0.0 s, so the
+  wall is the level's own (no shift). The kill-detection boundary holds **two** heavies (x 640 in the wall's 644 ray, x 1152 on the 6.0 s set's column) in one
+  run from 2.5 s (the wall relit with a 0.5 s warning): wall death at 3.67 s, column death at 9.62–9.93 s, every run.
+- **(D) deadline boundary (a):** §2.12's "a heavy added to the last wave at delay `10.0 − tail ± 0.05`" is a negative delay (tail 19.58 s), so it is built as the
+  fighter's config-derived row: a one-heavy wave inserted in list order at `limit ± 0.05`, `limit` = 76.0 + 10.0 − tail = **66.42 s** (between the 66.0 and 68.0
+  waves); +0.05 computes 10.05 s (flagged), −0.05 passes. **Boundary (b), the rocket term (N5):** the same −0.05 heavy passes with the pod closed at the budget and
+  is flagged with it open through the exit (open tail = engage + window + exit + rocket + margin = 25.58 s). Both are derived from the config and the measured exit.
+- **Measured figures.** Heavy Gunship corridor exit **9.03 s** (2166 runs, 0 capped, unchanged since t4; its first measurement now happens in
+  `test_engagement_deadline.gd`'s `before_all()`, the first file to call it, so `test_heavy_gunship.gd`'s probe print reads ≈ 0 s). Heavy life = 9.0 + 1.05 + 9.03 =
+  19.08 s. Legacy rails (frozen `_LEGACY_PEAK_HEAVIES` deep_space 1, cloud_descent 3): the 50.0 s rail lived 14.78 s, the 62.0 / 62.8 s rails 17.24 s, the deep_space
+  gunship (no rail) never left. Cloud Descent deadline: worst row the 62.0 + 0.8 s heavy, exit term **6.38 s** of 10 (rocket term 2.30 s: max rocket life 6.0 s,
+  PURSUIT); the shipped 62.8 s heavy with its pod left open would compute 12.38 s.
+- **Lit deep_space replay, ten consecutive green runs of the file on the final tree** (plus three earlier): no part or hull of the heavy died, under a laser or
+  otherwise; smallest horizontal gap to a lethal strip at its height **37.7–56.9 px** (floor `LaserRay._HAZARD_PAD` 24); to a still-warning strip 0–10 px (printed
+  only); BROADSIDE at 8.03–8.25 s, first battery FIRE at 9.07–9.28 s (section time) with 3.33–3.35 s of budget left, DISENGAGE 12.42–12.62 s, gone 15.72–15.95 s
+  (3.3 s after DISENGAGE, against the 9.03 s worst-case exit). The carried-over row (from 11.0 s, the 6.0 s set relit warn 0 / active 1.8) is lethal 11.77–11.82 →
+  13.53–13.57 s against the level's 11.76 → 13.56 s.
+- **Attack in budget (Cloud Descent replay, lasers off, all three heavies in traffic):** first battery FIRE 56.28–56.32 s (2.70 s left), 66.38–66.48 s (4.53 s
+  left), 67.17–67.30 s (4.52 s left); every heavy in BROADSIDE when it fires.
+- **Heavy fire density (measured, ungated; §2.12):** deep_space: 4 gun rounds (one battery burst), 0 rockets, peak 4 in any 2 s window; cloud_descent: 20 gun rounds
+  (4 / 8 / 8), 0 rockets, peak 8 in any 2 s window. Identical in all ten runs. No heavy reaches EMERGENCY untouched, so no rocket flies in these replays.
+- **`test_heavy_gunship.gd`:** `CLOUD_DESCENT_WINDOW` 23.2 is replaced by the live `cloud_descent_window()` (last effective trigger + timeout − the latest Cloud
+  Descent heavy spawn; 23.2 s today); the row's assertion is unchanged.
+- **(D) gate time, owner-accepted overrun (Q2):** two `scripts/gate-time.sh` runs, GUT 210.872 / 210.504 s (mean **210.69 s**) against 205.627 / 205.940 s
+  (mean 205.78 s) at `8df0d59`: **+4.9 s** against the 3.0 s allotment and the 4.5 s (1.5×) line, under the owner's stop (9.0 s of the task's files, 237 s
+  two-run mean). 3023 → 3051 tests, output ≈ 426 KB of the 1 MiB cap, `check-test-leaks.sh` clean. `test_level1_heavy_spawns.gd` is 4.6 – 4.7 s of summed
+  testcase time; the exit probe moved (outside testcases) from `test_heavy_gunship.gd` to `test_engagement_deadline.gd`. The phase is now ≈ 210.7 s + t12's
+  2.5 s against §2.15's 234.5 s budget and the 240 s ceiling (the README's "phase ends ≤ 213.6 s" estimate is passed by about 0.4 s after t12).
+- **Follow-ups (not built):** the same platform-velocity launch can hit any AI enemy whose root body is GROUNDED with mask 1 (every one but the Carrier, the
+  station and now the Heavy Gunship): whether every top-down enemy body should be `MOTION_MODE_FLOATING` is a project-wide question for the owner. The heavies
+  fire late in their Assault life (the first battery burst comes 4.5–6.3 s into the 9 s budget, after the approach to the held range), so each fires one
+  or two bursts per life in level 1.

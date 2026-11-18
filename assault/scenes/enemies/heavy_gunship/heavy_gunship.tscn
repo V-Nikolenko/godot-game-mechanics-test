@@ -80,6 +80,7 @@ _data = {
 }
 
 [node name="HeavyGunship" type="CharacterBody2D"]
+collision_mask = 0
 script = ExtResource("2_gs")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]

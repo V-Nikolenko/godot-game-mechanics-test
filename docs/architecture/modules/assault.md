@@ -295,7 +295,9 @@ pinned in `EXPECTED_PH5` (`test_level1_specialist_spawns.gd`, which also checks 
 planet_approach, a corvette's last rocket included, outlives the next `ENEMIES_CLEARED` section's last trigger). **Neither may
 spawn in an `ENEMIES_CLEARED` section**: a corvette's persistent rockets would hold it open (`test_engagement_deadline.gd`).
 The attack-in-budget rows replay only `rel - 1 s .. rel + engage + 2 s` of a section through a real `WaveManager`
-(`tests/helpers/level1_slice_replay.gd`).
+(`tests/helpers/level1_slice_replay.gd`). Since Phase 10 t11 that helper can also light the section's real lasers (opt-in
+`light_lasers`: the level-start `LaserWallWave` and the director's own `_spawn_laser_columns()` on an idle clock, a row carried
+over the slice start relit by `warm_start()`) and report every death of its target ships covered by a lethal ray.
 
 **The Missile Corvette (Phase 5, t7 shell, t8 fight, t9 art)** — see [missile_corvette/ENEMY.md](../../../assault/scenes/enemies/missile_corvette/ENEMY.md).
 A brain + flat-config enemy (`MissileCorvetteBrain`, `MissileCorvetteConfig`) that closes to its held range (460 px in Assault), circles the
@@ -573,7 +575,9 @@ booting the level — every `_build_*` body touches only `LevelSection.new()`, `
 `level_1_director.gd`'s `_build_section_3()` ("cloud_descent") plus its section schedule.
 Instead of a single boss node, the phase is an **`ENEMIES_CLEARED` section**: it opens with
 a 5-ship ally escort arrowhead, then escalates through fighter sweeps, sniper crossfire,
-ram surprises, and two **Heavy Gunship waves** (the heaviest enemies in the roster) interleaved
+ram surprises, and two **Heavy Gunship waves** (the heaviest enemies in the roster; off rails
+since Phase 10 t11, so each fights and leaves by itself inside the 10 s net, its last rocket
+included: `test_level1_heavy_spawns.gd`, `test_engagement_deadline.gd`) interleaved
 with drone screens. Because the section ends on `ENEMIES_CLEARED` (not a timer), the level
 will not complete until the player has destroyed/cleared every remaining enemy — the
 director's `_wait_enemies_cleared()` polls the enemy container before advancing.

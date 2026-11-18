@@ -7,7 +7,7 @@ ship turns its other side to you. The parts sit on the hull's edges, so you aim 
 and vent through two glowing weak points. Hurt it more and it panics, boosting away and firing rear missiles at whoever chases it.
 
 Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` §2.4 (Phase 10 t4) and §2.5 / §2.9 (t5); task plans `docs/plans/cmwafsrb100a7qs2yvre9y1o2/3-plan.md`
-(t4) and `docs/plans/cmwafsrb400abqs2yt38khcyu/3-plan.md` (t5). The multi-part art is in (t9, below); level 1's rails come off in t11.
+(t4) and `docs/plans/cmwafsrb400abqs2yt38khcyu/3-plan.md` (t5); level 1's placement `docs/plans/cmwafsrbi00azqs2yuwzayuk3/3-plan.md` (t11). The multi-part art is in (t9, below).
 
 ---
 
@@ -18,7 +18,7 @@ Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` §2.4 (Phase 10 t4) and �
 | Hull HP | 700 (the phase bar; `config.max_health`) |
 | Contact | 30 (`ContactProfile` COLLISION) |
 | Score | 300 |
-| Body | one 112 × 144 `RectangleShape2D` shared by the body, the root `HurtBox` and the `ContactHitBox` |
+| Body | one 112 × 144 `RectangleShape2D` shared by the body, the root `HurtBox` and the `ContactHitBox`; the body has `collision_mask` 0 (t11: it meets no body, as the Carrier; layer 1 as shipped) |
 | Speed | `max_speed` 140 (84 while venting), `acceleration` 120, `max_turn_rate` 0.9 rad/s; break-away boost 360 px/s for 0.7 s; emergency boost 420 px/s for 0.9 s |
 | Hazards | avoidance 1.0, margin 90, resistance 0.6 |
 | Scene / config | `heavy_gunship.tscn`, `heavy_gunship_config.tres` (`HeavyGunshipConfig`, flat) |
@@ -130,7 +130,14 @@ Every part texture is exactly its hurtbox's size and its outer side is the expos
 
 ## Spawn notes
 
-- `b.heavy_gunship().at(x, y)`; spawn above the screen in Assault. Level 1 still rides rails on the three Cloud Descent rows until t11.
+- `b.heavy_gunship().at(x, y)`; spawn above the screen in Assault, never with `.move()` (a rail suspends the brain: it rides and never fires).
+- **Level 1 (t11):** Deep Space 3.5 s at `.at(160, -500)` (at (0, -500) it spawned 32 px inside the level-start `LaserWallWave` strip and died when
+  it lit), Cloud Descent 50.0 s at `(0, -400)` and the 62.0 s pair at `(∓100, -400)` (the second `.delay(0.8)`), all AI. The Cloud Descent three must be
+  gone, last rocket included, inside the 10 s ENEMIES_CLEARED net (`test_engagement_deadline.gd`: worst 6.38 s); only the Deep Space one meets
+  lasers, replayed lit in `test_level1_heavy_spawns.gd` (no part or hull lost; 37.7–56.9 px from every lit strip over ten runs).
+- **Why the body mask is 0 (t11):** a `CharacterBody2D` in GROUNDED mode takes a ship it lands on as a platform and, sliding off, adds that ship's
+  velocity: in Deep Space a Sniper or Fighter threw the heavy sideways into the wall's lit strip in 8 of 12 runs. It still steers round hazards
+  (`EnemyMover`), and its hurtbox and contact box are areas, unchanged.
 
 ## Files
 
@@ -144,4 +151,4 @@ heavy_gunship/
 
 Hub (t10): the sector hub places one on draw 19, the 2600 ring at 157.5 degrees (anchor about (-2402, 995); -67.5 is the pre-approved fallback, 22.5 is about 120 px from the site and the sector jammer), idling on `AnchorIdle`.
 
-Gate: `tests/integration/test_heavy_gunship.gd`.
+Gates: `tests/integration/test_heavy_gunship.gd`; level 1 `tests/integration/test_level1_heavy_spawns.gd` and the heavy rows of `test_engagement_deadline.gd`.
