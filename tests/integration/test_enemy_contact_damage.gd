@@ -119,6 +119,34 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/laser_tender/laser_tender_config.tres",
 	},
 	{
+		"name": "hacker_frigate",
+		"scene": "res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn",
+		"config": "res://assault/scenes/enemies/hacker_frigate/hacker_frigate_config.tres",
+	},
+	{
+		"name": "hacker_disruptor",
+		"scene": "res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn",
+		"config": "res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor_config.tres",
+	},
+	{
+		"name": "jamming_structure",
+		"scene": "res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn",
+		"config": "res://assault/scenes/enemies/jamming_structure/jamming_structure_config.tres",
+		"no_hitbox": true,
+	},
+	{
+		"name": "sector_jammer",
+		"scene": "res://assault/scenes/enemies/sector_jammer/sector_jammer.tscn",
+		"config": "res://assault/scenes/enemies/sector_jammer/sector_jammer_config.tres",
+		"no_hitbox": true,
+	},
+	{
+		"name": "pulsed_jammer",
+		"scene": "res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer.tscn",
+		"config": "res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer_config.tres",
+		"no_hitbox": true,
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"config": "res://assault/scenes/enemies/bonus_drone/bonus_drone_config.tres",
@@ -130,9 +158,14 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/razor_drone/razor_drone_config.tres",
 	},
 	{
-		"name": "gunship",
-		"scene": "res://assault/scenes/enemies/gunship/gunship.tscn",
-		"config": "res://assault/scenes/enemies/gunship/gunship_config.tres",
+		"name": "heavy_gunship",
+		"scene": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn",
+		"config": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.tres",
+	},
+	{
+		"name": "carrier",
+		"scene": "res://assault/scenes/enemies/carrier/carrier.tscn",
+		"config": "res://assault/scenes/enemies/carrier/carrier_config.tres",
 	},
 	{
 		"name": "gatling_interceptor",
@@ -257,14 +290,15 @@ func test_support_ship_is_harmless_through_a_none_profile_not_a_missing_hitbox()
 
 
 ## The specific regression this file was written for. Kept as its own named test so a failure
-## reads as "the gunship stopped using its config" rather than as one line of a roster sweep.
-func test_gunship_rams_for_its_configured_collision_damage() -> void:
+## reads as "the gunship stopped using its config" rather than as one line of a roster sweep. The Heavy Gunship (Phase 10 t4) is the
+## legacy Gunship rewritten in place and keeps its 30.
+func test_heavy_gunship_rams_for_its_configured_collision_damage() -> void:
 	var entry: Dictionary = {}
 	for e in ROSTER:
-		if e["name"] == "gunship":
+		if e["name"] == "heavy_gunship":
 			entry = e
-	var cfg := load(entry["config"]) as GunshipConfig
-	assert_eq(cfg.collision_damage, 30, "gunship_config.tres is the source of truth for this test")
+	var cfg := load(entry["config"]) as HeavyGunshipConfig
+	assert_eq(cfg.collision_damage, 30, "heavy_gunship_config.tres is the source of truth for this test")
 	assert_ne(
 		cfg.collision_damage,
 		SHIP_CONFIG_DEFAULT_DAMAGE,
@@ -272,9 +306,25 @@ func test_gunship_rams_for_its_configured_collision_damage() -> void:
 	)
 	var gunship := _spawn(entry)
 	var hb := _contact_hitbox(gunship)
-	assert_not_null(hb, "gunship: has no contact HitBox as a direct child")
+	assert_not_null(hb, "heavy_gunship: has no contact HitBox as a direct child")
 	if hb != null:
 		assert_eq(hb.damage, cfg.collision_damage)
+
+
+## The Carrier (Phase 10 t6): its ARMOR touch deals the 15 its config declares, never the scene's default.
+func test_carrier_touches_for_its_configured_collision_damage() -> void:
+	var entry: Dictionary = {}
+	for e in ROSTER:
+		if e["name"] == "carrier":
+			entry = e
+	var cfg := load(entry["config"]) as CarrierConfig
+	assert_eq(cfg.collision_damage, 15, "carrier_config.tres is the source of truth for this test")
+	var carrier := _spawn(entry)
+	var hb := _contact_hitbox(carrier)
+	assert_not_null(hb, "carrier: has no contact HitBox as a direct child")
+	if hb != null:
+		assert_eq(hb.damage, cfg.collision_damage)
+	assert_eq(carrier.contact_profile.mode, ContactProfile.Mode.ARMOR, "carrier: the touch is an armoured shove")
 
 
 # ── Completeness guard ────────────────────────────────────────────────────────

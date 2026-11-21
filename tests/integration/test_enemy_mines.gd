@@ -9,7 +9,7 @@
 ##
 ## Numbers come from the scenes (`EnemyMineScenes.export_of`) or the live mine, never typed copies.
 ## Hand-ticked rows disable the mine's processing and call `_physics_process` on it and its
-## `ProjectileLifetime` at a fixed 1/60 s. Real-physics rows run on the 8x clock (the
+## `ProjectileLifetime` at a fixed 1/60 s. Real-physics rows run on the 16x clock (the
 ## test_enemy_ordnance.gd pattern); every scenario several rows share is run once.
 extends GutTest
 
@@ -28,7 +28,7 @@ const FIXTURE_HURT_RADIUS := 14.0
 var _container: Node2D
 var _blasts: Array[Node] = []
 
-const _SPEEDUP := 8
+const _SPEEDUP := 16
 var _saved_time_scale: float = 1.0
 var _saved_ticks: int = 60
 var _saved_max_steps: int = 8
@@ -648,7 +648,7 @@ func test_the_warning_rule_can_reject() -> void:
 			_export(p, &"warning_time"), 60.0), "control: at 60 px/s it passes, 512 >= 500")
 
 
-## Dual-mode, real physics (8x): a stub crossing the trigger at 220 px/s takes the blast; one that stops at
+## Dual-mode, real physics (16x): a stub crossing the trigger at 220 px/s takes the blast; one that stops at
 ## `trigger_radius + 30` does not. Both cases share one run, 1500 px apart.
 func test_a_crossing_player_takes_the_blast_and_a_stopping_one_does_not(mode: String = use_parameters(MODES)) -> void:
 	_scale_clock()
@@ -724,7 +724,7 @@ func test_without_registration_the_same_runs_fly_straight() -> void:
 			assert_almost_eq(_fly_past(mine, lateral, av), lateral, 1.0, "control: av %s lateral %d" % [av, lateral])
 
 
-## The real mover, head-on (8x): a fixture enemy with avoidance 0.8 / margin 24 flies (-500, 0) -> (+500, 0) at
+## The real mover, head-on (16x): a fixture enemy with avoidance 0.8 / margin 24 flies (-500, 0) -> (+500, 0) at
 ## 200 px/s through a launched mine; its control flies through an unregistered one 2000 px below, in the same run.
 func test_a_real_mover_flies_round_a_mine_head_on() -> void:
 	_scale_clock()
@@ -1032,7 +1032,7 @@ func test_a_homing_mine_never_ends_more_than_900_px_from_launch(mode: String = u
 
 # ---------------------------------------------------------------------------------------------
 # Chain mines and chain propagation (§2.5, task t4). Dual-mode and hand-ticked: the chain is registry-driven
-# (`Hazards.around()`, then centre distance), so only the shot rows need real physics (8x).
+# (`Hazards.around()`, then centre distance), so only the shot rows need real physics (16x).
 # ---------------------------------------------------------------------------------------------
 
 ## A hand-ticked scenario: the mines in it, a tick counter, and when (which tick) and how often each one expired.
@@ -1221,7 +1221,7 @@ func test_link_points_list_exactly_the_neighbours_within_chain_radius(mode: Stri
 	assert_eq(a.link_points(), [p.global_position] as Array[Vector2], "%s: the retired neighbour is gone" % mode)
 
 
-## Real physics (8x): shooting a chain mine detonates it and every neighbour in the ripple; shooting a proximity mine
+## Real physics (16x): shooting a chain mine detonates it and every neighbour in the ripple; shooting a proximity mine
 ## still defuses it (no blast, one `expired`).
 func test_shooting_a_chain_mine_detonates_the_group_and_a_proximity_mine_still_defuses(mode: String = use_parameters(MODES)) -> void:
 	_scale_clock()
@@ -1369,7 +1369,7 @@ func test_a_pulse_mine_without_the_player_hook_or_in_range_reaches_nobody() -> v
 	assert_eq(m._disrupt_players(170.0, 0.6, 2.5), 0, "a player stand-in without apply_boost_disruption is skipped")
 
 
-## Real physics (8x), the real player of each mode standing on a live PULSE mine: it arms, shows the violet effect ring
+## Real physics (16x), the real player of each mode standing on a live PULSE mine: it arms, shows the violet effect ring
 ## during the warning only, blasts for 8 through the real `ContactBlast` (not 30), weakens the boost to 0.4, and leaves a
 ## self-freeing `PulseRing` in the container.
 func test_a_real_pulse_mine_warns_with_a_ring_blasts_for_8_and_disrupts(mode: String = use_parameters(MODES)) -> void:
@@ -1498,7 +1498,7 @@ func test_only_an_emp_mine_applies_an_emp(mode: String = use_parameters(MODES)) 
 	assert_false(p.is_emp_disrupted(), "%s: neither a proximity nor a pulse blast is an EMP" % mode)
 
 
-## Real physics (8x): the real player standing on a live EMP mine. It arms, shows the blue-white effect ring during the
+## Real physics (16x): the real player standing on a live EMP mine. It arms, shows the blue-white effect ring during the
 ## warning only, detonates, disrupts the player and deals no Health damage and spawns no blast.
 func test_a_real_emp_mine_warns_with_a_ring_and_disrupts_without_damage(mode: String = use_parameters(MODES)) -> void:
 	_scale_clock()

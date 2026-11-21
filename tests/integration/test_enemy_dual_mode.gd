@@ -641,6 +641,10 @@ const HAZARD_PROFILES := [
 	["ram_corvette", 0.5, 60.0, 0.5],
 	["twin_laser_drone", 0.6, 16.0, 0.1],
 	["laser_tender", 0.8, 24.0, 0.3],
+	["hacker_frigate", 0.7, 80.0, 0.4],
+	["hacker_disruptor", 0.7, 80.0, 0.4],
+	["heavy_gunship", 1.0, 90.0, 0.6],
+	["carrier", 0.5, 120.0, 1.0],
 ]
 
 
@@ -1374,3 +1378,149 @@ func test_laser_tender_launches_a_pair_in_both_modes(mode: String = use_paramete
 	assert_eq(tender.docked_count(), 0, "%s: cradles empty" % mode)
 	assert_eq(brain.phase, LaserTenderBrain.Phase.WAIT if mode == "open_space" else LaserTenderBrain.Phase.DISENGAGE,
 			"%s: WAIT (Open Space) or DISENGAGE after its one Assault launch" % mode)
+
+# ── The Jamming Structures (Phase 9, t7; plan §2.8) ──────────────────────────────────────────────────────────────────
+
+const JAMMER_SCENES := {
+	"local": preload("res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn"),
+	"sector": preload("res://assault/scenes/enemies/sector_jammer/sector_jammer.tscn"),
+	"pulsed": preload("res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer.tscn"),
+}
+
+
+## Each jammer is the same static structure in both modes: an ordinary enemy whose field is found by `Hazards.jammer_at` at its
+## centre once lit, never a wall for the mining beam, no tow, never an escape; only in Assault does its `AssaultDrift` scroll it.
+func test_jammers_lock_in_both_modes_and_drift_only_in_assault(case: String = use_parameters(
+		["local/open_space", "local/assault", "sector/open_space", "sector/assault", "pulsed/open_space", "pulsed/assault"])) -> void:
+	var variant := case.get_slice("/", 0)
+	var mode := case.get_slice("/", 1)
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 2000.0)
+	var j := (JAMMER_SCENES[variant] as PackedScene).instantiate() as JammingStructure
+	j.position = Vector2(640.0, 300.0)
+	harness.root.add_child(j)
+	j.set_physics_process(false)
+	j.field().set_physics_process(false)
+	var drift := j.get_node("AssaultDrift") as AssaultDrift
+	drift.set_physics_process(false)
+	assert_true(j.is_in_group(&"enemies"), "%s: an ordinary enemy" % case)
+	assert_false(j.is_laser_blocking(), "%s: a target for the mining beam" % case)
+	assert_false(j.accept_tow(Vector2(50.0, 0.0)), "%s: no mover, no tow" % case)
+	assert_false(j.counts_as_escape, "%s" % case)
+	for i in 60:
+		drift.step(DT)
+		j.field()._physics_process(DT)
+	var expected_drift := j.config.assault_drift_speed * 60.0 * DT if harness.is_assault else 0.0
+	assert_almost_eq(j.global_position.y - 300.0, expected_drift, 0.01, "%s: drift" % case)
+	assert_not_null(Hazards.jammer_at(j.global_position), "%s: lit after 1.0 s (the pulsed one too)" % case)
+
+# ── The Hacker Frigate (Phase 9, t8; plan §2.10) ─────────────────────────────────────────────────────────────────────
+
+const HACKER_SCENE: PackedScene = preload("res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn")
+
+
+## The same scene in both modes: it closes from far away to its held range (720 Open Space, 520 Assault) on its arc, nose on the player.
+func test_hacker_frigate_closes_to_its_held_range_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 620.0)
+	var hacker := HACKER_SCENE.instantiate() as HackerFrigate
+	var brain := hacker.get_node("Brain") as HackerFrigateBrain
+	brain.start_engaged = true
+	brain.rng_seed = 9
+	hacker.config.engage_seconds = 1000.0
+	hacker.config.nose_cone_deg = 0.0
+	hacker.config.range_drift = 0.0
+	hacker.config.first_pulse_delay = 1000.0  # a movement row: the pulse (t9) stays off
+	hacker.global_position = Vector2(640.0, -240.0)  # 860 px above the player
+	harness.root.add_child(hacker)
+	hacker.set_physics_process(false)
+	for _i in 240:
+		_tick(hacker, DT)
+	var d := hacker.global_position.distance_to(harness.player.global_position)
+	assert_almost_eq(d, brain.held_range(), 40.0, "%s: on its held range" % mode)
+	assert_eq(brain.held_range(), 520.0 if harness.is_assault else 720.0, "%s: the mode's range" % mode)
+	assert_eq(brain.phase, HackerFrigateBrain.Phase.HOLD_ARC, "%s: holding the arc" % mode)
+	assert_true(hacker.is_in_group(&"enemies"), "%s" % mode)
+
+
+const HEAVY_GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")
+
+
+## The Heavy Gunship (Phase 10 t4) in both modes: it closes from far away to its held range (560 Open Space, 420 Assault) and turns to its
+## broadside arc.
+func test_heavy_gunship_closes_to_its_held_range_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 620.0)
+	var gunship := HEAVY_GUNSHIP_SCENE.instantiate() as HeavyGunship
+	var brain := gunship.get_node("Brain") as HeavyGunshipBrain
+	brain.start_engaged = true
+	brain.rng_seed = 9
+	gunship.config.engage_seconds = 1000.0
+	gunship.config.range_drift = 0.0
+	gunship.global_position = Vector2(640.0, -240.0)  # 860 px above the player
+	harness.root.add_child(gunship)
+	gunship.set_physics_process(false)
+	for _i in 420:
+		_tick(gunship, DT)
+	var d := gunship.global_position.distance_to(harness.player.global_position)
+	assert_almost_eq(d, brain.held_range(), 60.0, "%s: on its held range" % mode)
+	assert_eq(brain.held_range(), 420.0 if harness.is_assault else 560.0, "%s: the mode's range" % mode)
+	assert_eq(brain.phase, HeavyGunshipBrain.Phase.BROADSIDE, "%s: on its broadside arc" % mode)
+	assert_true(gunship.is_in_group(&"enemies"), "%s" % mode)
+
+
+const CARRIER_SCENE: PackedScene = preload("res://assault/scenes/enemies/carrier/carrier.tscn")
+
+
+## The Carrier (Phase 10 t6) in both modes: engaged in Open Space it SCREENs (a still player inside its band is never closed on); in Assault it
+## CROSSes, 90 px straight down in 1 s, with the mover's hazard avoidance written to 0 (config 0.5).
+func test_carrier_screens_in_open_space_and_crosses_in_assault(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 620.0)
+	var carrier := CARRIER_SCENE.instantiate() as Carrier
+	var brain := carrier.get_node("Brain") as CarrierBrain
+	brain.start_engaged = true
+	carrier.global_position = Vector2(640.0, -140.0)  # 760 px above the player: inside the 600..950 band
+	harness.root.add_child(carrier)
+	carrier.set_physics_process(false)
+	var y0 := carrier.global_position.y
+	for _i in 60:
+		_tick(carrier, DT)
+	var mover := carrier.get_node("EnemyMover") as EnemyMover
+	if harness.is_assault:
+		assert_eq(brain.phase, CarrierBrain.Phase.CROSS, "assault: crossing")
+		assert_almost_eq(carrier.global_position.y - y0, 90.0, 0.5, "assault: 90 px down in 1 s")
+		assert_eq(mover.hazard_avoidance, 0.0, "assault: no avoidance while crossing")
+	else:
+		assert_eq(brain.phase, CarrierBrain.Phase.SCREEN, "open_space: screening")
+		assert_lt(absf(carrier.global_position.y - y0), 1.0, "open_space: a player inside the band is never closed on")
+		assert_eq(mover.hazard_avoidance, 0.5, "open_space: the config's avoidance")
+	assert_true(carrier.is_in_group(&"enemies"), "%s" % mode)
+
+
+## The Disruptor (Phase 9, t10) is the Hacker's scripts on its own scene and config: the same closing move to its held range in both modes.
+func test_hacker_disruptor_closes_to_its_held_range_in_both_modes(mode: String = use_parameters(["open_space", "assault"])) -> void:
+	var harness = HARNESS.open_space() if mode == "open_space" else HARNESS.assault()
+	add_child_autofree(harness.root)
+	harness.player.global_position = Vector2(640.0, 620.0)
+	var hacker := (load("res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn") as PackedScene).instantiate() as HackerFrigate
+	var brain := hacker.get_node("Brain") as HackerFrigateBrain
+	brain.start_engaged = true
+	brain.rng_seed = 9
+	ShipConfig.privatise(hacker)
+	hacker.config.engage_seconds = 1000.0
+	hacker.config.nose_cone_deg = 0.0
+	hacker.config.range_drift = 0.0
+	hacker.config.first_pulse_delay = 1000.0
+	hacker.global_position = Vector2(640.0, -240.0)
+	harness.root.add_child(hacker)
+	hacker.set_physics_process(false)
+	for _i in 240:
+		_tick(hacker, DT)
+	var d := hacker.global_position.distance_to(harness.player.global_position)
+	assert_almost_eq(d, brain.held_range(), 40.0, "%s: on its held range" % mode)
+	assert_eq(hacker.config.pulse_lock_seconds, 1.5, "%s: it is the Disruptor" % mode)

@@ -21,12 +21,15 @@ var pull_force: float = 0.0
 var damage_per_second: float = 0.0
 ## 0..1 slow inside `radius`.
 var movement_penalty: float = 0.0
-## Carried for Phase 9; no producer or consumer in Phase 6.
+## True while a jammer field is lit (Phase 9: `HazardField.disables_abilities`, written only while ACTIVE). The
+## player samples it through `Hazards.jammer_at()`; it locks the H abilities and the K rockets, nothing else.
 var disables_abilities: bool = false
+## Phase 9: seconds the player stays locked after leaving this field (or after it stops disabling abilities).
+var stabilise_seconds: float = 0.0
 ## Mirrors the body's `blocks_line_of_sight()`.
 var line_of_sight_blocker: bool = false
-## &"gravity_well", &"anomaly", &"gravity_field", &"reactor_field", &"wreck", &"debris", &"mine" or &"laser_wall"
-## (Phase 8: a segment, see `segment_half`).
+## &"gravity_well", &"anomaly", &"gravity_field", &"reactor_field", &"wreck", &"debris", &"mine", &"laser_wall"
+## (Phase 8: a segment, see `segment_half`) or &"jammer" (Phase 9).
 var kind: StringName = &""
 ## Softening radius: the pull is constant inside it.
 var core_radius: float = 0.0

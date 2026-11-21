@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="JammingStructureConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/jamming_structure/jamming_structure_config.gd" id="1_jsc"]
+
+[resource]
+script = ExtResource("1_jsc")
+max_health = 260
+collision_damage = 0
+score_value = 120
+counts_toward_wave_clear = true
+counts_as_escape = false
+hazard_avoidance = 0.0
+hazard_margin = 0.0
+hazard_resistance = 0.0
+wreck_chance = 0.0
+assault_drift_speed = 60.0
+field_radius = 640.0
+stabilise_seconds = 1.25
+cycle_telegraph = 0.0
+cycle_active = 0.0
+cycle_quiet = 0.0

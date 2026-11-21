@@ -245,6 +245,10 @@ func _input(event: InputEvent) -> void:
 	## _input fires before _unhandled_input — modules get first pick of H-key.
 	if not event.is_action_pressed("use_ability"):
 		return
+	## Jammed (Phase 9 ability lock): the press is refused and consumed, and no module spends anything.
+	if not allow_ability_press():
+		get_viewport().set_input_as_handled()
+		return
 	for id: StringName in _module_pool.keys():
 		var mod: ShipModuleBase = _module_pool[id]
 		## Boost Drive is fired from Shift in open space (it spends a boost tank there —

@@ -160,6 +160,31 @@ Detail and APIs: [global.md](modules/global.md).
   plates. `BaseEnemy` does **not** adopt `DamageReaction` (Ph1 P-15, closed in Ph5): `DamageReaction` stays a racer component.
   Allies act on enemies through `BaseEnemy.repair()` (never flashes) and `accept_tow()` (refused by the target's own brain in
   committed phases via `EnemyBrain.accepts_tow()`). Detail: [global.md](modules/global.md) → *Enemy shields*.
+- **A large enemy is built from destructible parts that stay as wreckage (Ph10).** Each part is an `EnemyModule`
+  (`global/components/enemy_module.gd`, group `enemy_parts`) under the host's `Modules` node, with its own `HurtBox`, `Health`,
+  optional `DefenseProfile` and local `EnemyShield`; `ModularHull` (`global/components/modular_hull.gd`) collects them, forwards
+  `hull_share` to the host and re-emits their signals. A part takes damage only through its `received_damage`; a locked part
+  ignores every damage (the only guard against the beam, the nova and a `LaserRay`); a part killed this physics frame still
+  consumes its killing shot; a destroyed part leaves `enemy_parts`, closes its hurtbox and stays on the hull with its wreck sprite.
+  The player's beam and nova reach parts; enemy energy weapons do not. Recipe: [global.md](modules/global.md) → *Destructible
+  parts of a large enemy*. **On a vulnerable hull (the Heavy Gunship, Ph10 t4) every part a projectile must reach obeys the
+  flush-edge rule:** its rectangle hurtbox's outer side lies exactly on the host's rectangle hurtbox, so a shot through that edge
+  overlaps part and hull in the same physics step and both take it; a part buried inside the outline could never be hit
+  ([ENEMY.md](../../assault/scenes/enemies/heavy_gunship/ENEMY.md), gate `test_heavy_gunship.gd`). Its root `Health` is a one-way
+  phase bar (t5: CONTROLLED / OVERHEAT / EMERGENCY); its weak points are indestructible `hull_share` 1.0 vents a brain opens
+  with `set_vulnerable()`, so an open vent doubles a hit and a closed one deflects; a local `EnemyShield` on a part's own hurtbox
+  covers that part only. **In Assault a pod of persistent rockets fires only while the `EngagementBudget` runs** (its gate and
+  `can_fire` ask the budget, DISENGAGE `scan(0.0)`s it): the bounded exception to "persistent ordnance stays out of
+  `ENEMIES_CLEARED` sections", bounded by `engage_seconds` + the rocket scene's `max_time`. **On an armoured hull (the
+  Carrier, Ph10 t6) the root answers `deflects_hit()` / `is_armored()` true and refuses every damage (`armor_deflected`), so
+  every player projectile crosses it to whichever part it meets; the core opens only after `core_exposure_count` outer parts
+  are wrecks, and its death is the host's; its guns (t7) are module-mounted BURST_CANNONs whose 150° traverse keeps each on its own
+  side, plus hull-mounted `HullMounts/*` slots built by `TurretMountBuilder` after `ModularHull.build_mounts()` with the returned
+  running index, and its brain owns and ticks an `EnergyRing` (`carrier_pulse_ring.tscn`) exempting its owner group; a HANGAR part (t8) is hittable only while its doors are open, and a `CarrierHangars`
+  launches its children synchronously from the brain tick as announced siblings in the owner group (the `LaserTender.launch_pair()` rule) that
+  outlive the carrier; a wrecked hangar never launches again and PANIC empties every live one at once** ([ENEMY.md](../../assault/scenes/enemies/carrier/ENEMY.md), gates `test_carrier.gd`, `test_carrier_hangars.gd`).
+  A hull answering duck-typed `accepts_ward() == false` is never a Support Ship's ward; `BaseEnemy.emp_seconds_left()` lets a
+  brain commit a move for exactly an EMP window.
 - **An enemy picks a round, it does not retune one bullet (Ph3).** The pooled `EnemyBullet` family —
   Pulse, Scatter, Gatling Stream, Rail (the Sniper's, Ph4), Heavy Shell (`assault/scenes/projectiles/enemy_bullet/rounds/`, `EnemyRounds`) — are
   inherited scenes of `enemy_bullet.tscn`, each with its own `ProjectileLifetime`; `EnemyBullet.reset()` restores the
@@ -194,8 +219,9 @@ Detail and APIs: [global.md](modules/global.md).
   acceleration` so the mover can keep up. Recipe: [global.md](modules/global.md) → *Enemy AI*.
 - **An enemy telegraphs its own attack state with one small light, never a recoloured hull.**
   `StateLight` (`global/components/state_light.gd`) is OFF / ARMED (red) / CHARGING (yellow) /
-  COMMIT (white); COMMIT is reserved for a real, committed attack, so a feint or a fake can only
-  ever show CHARGING. Its texture is a radial gradient built in code, never scene-authored, so it
+  COMMIT (white) / VENTING (orange, appended in Ph10 t5: a hull cooling with its weak points open);
+  COMMIT is reserved for a real, committed attack, so a feint or a fake can only
+  ever show CHARGING. A large enemy's parts each carry their own (`Modules/<Part>/Light`). Its texture is a radial gradient built in code, never scene-authored, so it
   never trips the sprite-transparency gate below. Recipe: [global.md](modules/global.md) →
   *StateLight*.
 - **Brains tick on physics, on one clock, with no `Timer` nodes.** `BaseEnemy._physics_process`
@@ -411,8 +437,8 @@ Detail and APIs: [global.md](modules/global.md).
      `MIN_BOOST_EFFICIENCY` 0.15). A disrupted speed scales only its **excess** over a floor: `PlayerBase.disrupted_speed(speed,
      floor)` = `floor + (speed - floor) * efficiency`, so a disruption never slows the ship below normal flight; efficiency is checked
      **before** a tank or charge is spent. `EmpPulse.emit(tree, at, radius, seconds, source) -> int` (`global/components/emp_pulse.gd`)
-     is the one EMP entry point (Ph7: group `player` only); `PlayerBase.apply_emp()` is a stand-in that calls
-     `apply_boost_disruption(1.0, seconds)`. **Phase 9 replaces that effect line and extends the target set, keeping both signatures.**
+     is the one EMP entry point; Phase 9 (t5) gave it a trailing `targets` bitmask (default `TARGET_PLAYER`, so Ph7 calls are
+     unchanged) and made `PlayerBase.apply_emp()` a full boost disruption **plus** a timed ability lock (see *Electronic warfare*).
   8. **The Mine Layer** (`assault/scenes/enemies/mine_layer/`) lays one line of 6 mines per pass across the player's path, never a
      spray, and builds unsafe regions gradually (one line per ~10-14 s in Open Space, one per Assault life). Its mines live in the enemy
      container through `BulletPool.persist_after_owner_death`, and in Open Space they never fizzle, so an area the player leaves and
@@ -448,7 +474,7 @@ Detail and APIs: [global.md](modules/global.md).
      warning circle, then a 24 px band grows at 360 px/s to `max_radius` 280 (its outer edge never passes it) with two rotating 45 degree gaps; each target is hit once per
      ring, by the swept interval, by the same owner set and direct emit. Not `PulseRing` (Ph7's visual). Gate: `tests/integration/test_energy_ring.gd`.
   6. **Turret mounts are the aiming seam (t6).** Everything that aims and fires on a turret is a `TurretMount` (`assault/scenes/enemies/defense_turret/mounts/`),
-     built at runtime from a host's `TurretMountSlot` markers, one scene per `Variant` (`TurretMountScenes`). A mount **writes only its own `rotation`**, never reads its
+     built at runtime from a host's `TurretMountSlot` markers by `TurretMountBuilder.build()`, one scene per `Variant` (`TurretMountScenes`; `HEAVY_CANNON` added in Ph10 t3), with an optional `traverse_deg` arc limit (360 = none). A mount **writes only its own `rotation`**, never reads its
      host's type (Ph10 bolts the same mounts onto ships), keeps its tuning in its scene's exports, and gets its pools as **root children of the host**
      (`pool_specs()`), so rounds land in the enemy container. Static structures (the `DefenseTurret` first) have no mover, never rotate their root, and scroll with
      the Assault corridor through `AssaultDrift` (`global/components/assault_drift.gd`), firing only inside `EnemyWorld.view_rect()`; their `.tres` sets
@@ -473,6 +499,46 @@ Detail and APIs: [global.md](modules/global.md).
      `ENEMIES_CLEARED` section** (persistent fire, persistent rockets, a pair that outlives being killed); guard rows in `test_engagement_deadline.gd`. (d) A static thing placed in
      deep_space must clear the level-start `LaserWallWave` as well as `Level1Director.laser_column_schedule()`. (e) Energy weapons hurt everything on the line except their owner set
      (item 4 above); a kill scores like any kill.
+- **Electronic warfare (enemy rework phase 9, built from t1):**
+  1. **The ability lock is a player hook, sampled by the body (t1).** `PlayerBase` locks the **H abilities and the K rockets only**:
+     `abilities_locked()` is true inside a lit jammer field (`Hazards.jammer_at(global_position)`, a `HazardInfo` with `disables_abilities`),
+     for that field's `stabilise_seconds` after the exit tick, and while a timed `apply_ability_lock(seconds, source)` runs (longest wins, never
+     added, no stabilisation after it). Signals `ability_lock_changed(locked: bool)` (edges only) and `ability_press_refused()`;
+     `ability_lock_fill()` for a HUD. It is checked in exactly three seams, each through `allow_ability_press()`: both ships' `_input` H
+     loops (a locked press is refused, consumed, and spends nothing) and `RocketState._on_action` for `special_weapon` (after the cooldown
+     check, before the launch). **Never locked:** thrust, turn, Shift boost and the Open Space Boost Drive on Shift, dash, warp, primary fire
+     (`WeaponState` is not touched), `switch_weapon`, passive modules, effects already running, module `tick()` (cooldowns keep counting).
+     **Clock rule:** every lock clock is `x -= delta`, over at `x <= 1e-6` (`PlayerBase._tick_clock`), so a lock of `s` seconds at 1/60 ends on
+     tick `round(s · 60)`. A jammer is a `HazardField` with `disables_abilities` (written into its info **only while ACTIVE**, so a pulsed field's
+     TELEGRAPH / QUIET count as outside) and `stabilise_seconds`. Gate `tests/integration/test_player_ability_lock.gd` (both real player scenes).
+     **Tells (t2):** `AbilityLockStatic` on the ship, `JammedChip` + `LockGlyph` built by `MissionHud` (both HUD scenes), and the audio seam `EventBus.player_ability_lock_changed(locked)` (once per edge; `player_ordnance_hijacked(rocket, source)` declared for t4). No audio player. Gate `tests/integration/test_player_ability_lock_tells.gd`.
+  2. **Seeking ordnance can be retargeted (t4); a player rocket never hits another player rocket.** The contract is duck-typed (the `is_armored()` precedent): a
+     player seeker joins `SeekingOrdnance.GROUP` (`global/components/seeking_ordnance.gd`; `SeekingOrdnance.eligible(tree, at, reach)` nearest first) and answers
+     `can_be_retargeted()`, `retarget(target, seconds, source)` (`seconds < 0` = the rocket's own `hijack_seconds`), `is_retargeted()`, `jam_guidance(source)`, signals
+     `retargeted(source: Node)` / `retarget_ended()`. Only `homing_missile` implements it (a `WarheadMissile` is never eligible); a rocket is claimed at most once, never
+     inside a lit jammer. A **hijacked** rocket turns at `hijack_turn_rate` 1.6 rad/s toward its new target, eases 500 → 380 px/s, fizzles after 2.5 s or at once when its
+     source is freed, hurts the player **only through a `ContactBlast`** (18, r 40) once armed (0.25 s **and** once ≥ 60 px from the target), keeps its full 100 on enemies
+     (the lure), and is shot down by one player bullet (`HurtBox` 512 / 64, open only while hijacked). Its HitBox and the warhead's ignore any area whose parent is a
+     `homing_missile`. Every end goes through `_finish()` (the lifetime expiry too), so `retarget_ended` always fires for a hijack. Inside a lit jammer field every seeker
+     flies straight. Tuning on `homing_missile.tscn`. Gate `tests/integration/test_seeking_ordnance.gd`.
+  3. **EMP disrupts systems, never the hull, and is routed by `answers_emp()` (t5).** `EmpPulse.emit(tree, at, radius, seconds, source,
+     targets := TARGET_PLAYER) -> int` (`TARGET_PLAYER` 1, `TARGET_ENEMIES` 2, `TARGET_SEEKERS` 4, `TARGET_ALL` 7; one centre-distance `<=` rule; returns ships
+     reached, seekers never counted). **Player:** `apply_emp()` = `apply_boost_disruption(1.0, s)` + `apply_ability_lock(s, source)` (the lock ends on tick
+     `round(s · 60)`, no stabilisation). **Enemies:** `BaseEnemy.answers_emp()` (default `is_ai_driven()`) is the one routing question every EMP source asks; an
+     answering enemy's `apply_emp(seconds, source)` (longest wins) calls `mover.halt()` then `EnemyBrain.on_emp_started()` once, shows a code-built blue-white
+     `EmpStatic` (`global/components/emp_static.gd`), and for the window `_physics_process` skips `brain.tick()` (no fire, no decision, the Assault budget frozen)
+     while the mover still steps; hurtbox, body and health are untouched, so **an EMP'd enemy can be shot**. The clock (`<= 1e-6` rule) runs ahead of the no-brain
+     return, so a brainless override still ends; `suspend_ai()` clears a live window. `TwinLaserDroneBrain.on_emp_started()` releases the pair (drone A's beam is
+     freed), `LaserTenderBrain.on_emp_started()` drops a launch telegraph; any beam brain of a mover-driven ship must override it (sweep row). **Seekers:**
+     `TARGET_SEEKERS` calls `jam_guidance(source)` on `SeekingOrdnance.GROUP` and `SeekingOrdnance.ENEMY_GROUP` (`&"enemy_seeking_ordnance"`: an `EnemyRocket` with
+     `turn_rate > 0` from `launch()` to `_mark_done()` / `reset()`; jammed = `is_guiding()` false for the rest of its life). **The EMP mine** passes
+     `TARGET_PLAYER | TARGET_SEEKERS` when enemy-laid and `TARGET_ALL` when placed (`Hostility.ALL`). Gates `tests/unit/test_emp_pulse.gd`,
+     `tests/integration/test_enemy_emp.gd` (both harnesses), the EMP rows of `test_player_ability_lock.gd` / `test_player_boost_disruption.gd`.
+  **The EMP zone (t11)** is a placed `EmpZone` (`assault/scenes/hazards/emp_zone/`, a `Node2D` composing a cycled `HazardField`) that makes one `EmpPulse.emit(..., TARGET_ALL)` per cycle; see [assault.md](modules/assault.md) → *EMP Zone*.
+  **The Jamming Structure (t7)** is three static towers (`assault/scenes/enemies/jamming_structure/`, `sector_jammer/`, `pulsed_jammer/`; one `JammingStructure` script) whose child `HazardField` (kind `&"jammer"`, `avoid_weight` 0) is the lock's field; its EMP answer is `HazardField.suppress(seconds)` (field quiet, tower shootable), enemy seekers fly straight inside a lit field and the Missile Corvette fires Dumb at a player in one; see [assault.md](modules/assault.md) → *Jamming Structure*.
+  **The Hacker Frigate (t8)** (`assault/scenes/enemies/hacker_frigate/`) holds medium-long range on a lopsided arc (0.18 / 0.30 rad/s), slides out of the player's nose and route cones toward the nearer edge, breaks off with committed boosts when rushed (Open Space) or a view-clamped request (Assault), stays inside `view_rect().grow(-60)` for a 9 s Assault budget and idles round an anchor in the hub. **Its Hijack Pulse (t9):** a TELEGRAPH any damage cancels, then a PULSE in which `HijackPulse` control darts (`assault/scenes/projectiles/hijack_pulse/`, no collision areas, pooled with no `persist_after_owner_death`) fly from its hull centre to up to 3 eligible player homing rockets within 650 px and in sight (Ph6 LOS: enemy bodies never block) and hand them to the player through the t4 retarget contract; the player must be within `pulse_trigger_range` 870 and in sight; one pulse per Assault life; the Disruptor hook (`pulse_lock_seconds`, 0 on the base ship) locks abilities at PULSE end through `HackerFrigate.lock_player_abilities()`. Measured: a salvo a still player fires at it is claimed heading away and never blasts that player. Its measured exit is built only in `tests/helpers/ph9_exit_keys.gd`; see [assault.md](modules/assault.md) → *Hacker Frigate*.
+  **Level 1 (t14)** places one Hacker (planet_approach 42.0 s) and, after it has gone, one local jammer (62.0 s, world x 480), pinned as `EXPECTED_PH9` in the frozen 2.5× gate of `test_level1_specialist_spawns.gd` (lives never overlap, both end before the 98.0 s peak, the jammer clears every lit column), replayed in `test_level1_ph9_attacks.gd`; `test_engagement_deadline.gd` keeps every EMP source and the sector jammer out of Assault levels (a source scan).
+  Details: [global.md](modules/global.md) → *Ability lock*, *Seeking ordnance* and *EMP hook*.
 - **Git:** **never commit — the user handles all git.** Work on `main` unless asked.
 
 ---

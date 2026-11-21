@@ -28,7 +28,7 @@ class_name TurretMount
 extends Node2D
 
 ## Append-only.
-enum Variant { BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY, PULSE_RING, LANCE, BEAM_CANNON }
+enum Variant { BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY, PULSE_RING, LANCE, BEAM_CANNON, HEAVY_CANNON }
 ## Append-only.
 enum Phase { SCAN, TRACK, TELEGRAPH, FIRE, COOLDOWN, UNPOWERED }
 
@@ -57,6 +57,9 @@ signal round_fired(projectile: Node2D)
 @export var cooldown_seconds: float = 2.2
 ## Scan centre and droop target, degrees, Godot convention (0 = +X, 90 = down), local to the mount's parent. The host copies its slot's here.
 @export var rest_bearing_deg: float = 90.0
+## Full width of the arc the mount may aim, scan and fire in, degrees, centred on `rest_bearing_deg` (360 = unlimited; Phase 10 t3). A host slot's
+## `traverse_deg_override` (>= 0) replaces it before `setup()`. Below 360 the mount works in offsets from rest and turns along the arc.
+@export var traverse_deg: float = 360.0
 
 ## The scan's start offset is drawn from this; the host assigns its brain's rng before `setup()`. Null = a randomised one of the mount's own.
 var rng: RandomNumberGenerator
@@ -95,12 +98,14 @@ func setup(host: Node2D, pools: Dictionary, owner_group: StringName) -> void:
 
 ## One tick with a target snapshot. `can_fire` is the host's say (line of sight, power); the mount adds range, cone, cooldown and its gate.
 ## With no target this is `scan(delta)`.
-func tick(delta: float, target: TargetInfo, can_fire: bool) -> void:
+func tick(delta: float, target: TargetInfo, host_can_fire: bool) -> void:
 	if target == null or not target.has_target:
 		scan(delta)
 		return
 	_pre_tick(delta)
 	_count_clocks(delta)
+	# Outside its arc a limited mount behaves as if the host had withdrawn `can_fire` (a no-op at 360).
+	var can_fire := host_can_fire and _target_in_arc(target)
 	match _phase:
 		Phase.UNPOWERED:
 			_droop(delta)
@@ -313,7 +318,16 @@ func _droop(delta: float) -> void:
 
 ## The one write: this node's own `rotation`, at most `turn_rate · delta` toward `desired` (local to the parent).
 func _turn_toward(desired: float, delta: float) -> void:
-	rotation = rotate_toward(rotation, desired, turn_rate * delta)
+	if _unlimited():
+		rotation = rotate_toward(rotation, desired, turn_rate * delta)
+		return
+	# Limited: work in offsets from rest, clamp the wanted offset into the arc and move along it, never through the blocked sector
+	# (`rotate_toward` takes the shortest way, which crosses it for any arc wider than 180 degrees).
+	var rest := _rest()
+	var half := _traverse_half()
+	var wanted := clampf(wrapf(desired - rest, -PI, PI), -half, half)
+	var current := clampf(wrapf(rotation - rest, -PI, PI), -half, half)
+	rotation = rest + move_toward(current, wanted, turn_rate * delta)
 
 
 func _enter(new_phase: int) -> void:
@@ -329,7 +343,25 @@ func _rest() -> float:
 
 
 func _scan_half() -> float:
-	return deg_to_rad(scan_arc_deg) * 0.5
+	return deg_to_rad(scan_arc_deg) * 0.5 if _unlimited() else minf(deg_to_rad(scan_arc_deg) * 0.5, _traverse_half())
+
+
+## Half the traverse arc, rad (PI at 360).
+func _traverse_half() -> float:
+	return minf(deg_to_rad(traverse_deg) * 0.5, PI)
+
+
+## True when the mount has no arc limit (every Phase 8 mount): every arc code path is skipped.
+func _unlimited() -> bool:
+	return traverse_deg >= 360.0
+
+
+## Whether [param target]'s bearing from the pivot lies inside the arc about the rest bearing.
+func _target_in_arc(target: TargetInfo) -> bool:
+	if _unlimited():
+		return true
+	var bearing := (target.position - global_position).angle() - _parent_rotation()
+	return absf(wrapf(bearing - _rest(), -PI, PI)) <= _traverse_half() + 1e-6
 
 
 func _parent_rotation() -> float:

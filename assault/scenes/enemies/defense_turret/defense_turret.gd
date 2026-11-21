@@ -129,33 +129,18 @@ func _resolve_owner_group() -> StringName:
 
 
 func _build_mounts() -> void:
+	var gate := Callable()
+	if _turret_group != null and is_instance_valid(_turret_group) and _turret_group.has_method("request_telegraph"):
+		gate = Callable(_turret_group, "request_telegraph").bind(self)
 	var index := -1
 	for child in _slots.get_children():
 		var slot := child as TurretMountSlot
 		if slot == null:
 			continue
 		index += 1
-		var wanted: int = variant if index == 0 and variant >= 0 else int(slot.variant)
-		var scene := TurretMountScenes.scene_for(wanted)
-		if scene == null:
-			push_warning("DefenseTurret: mount variant %d is not built yet; slot %s stays empty" % [wanted, slot.name])
-			continue
-		var mount := scene.instantiate() as TurretMount
-		mount.rest_bearing_deg = rest_bearing_override if index == 0 and not is_nan(rest_bearing_override) else slot.rest_bearing_deg
-		if slot.turn_rate_override >= 0.0:
-			mount.turn_rate = slot.turn_rate_override
-		mount.rng = _turret_brain.rng
-		if _turret_group != null and is_instance_valid(_turret_group) and _turret_group.has_method("request_telegraph"):
-			mount.telegraph_gate = Callable(_turret_group, "request_telegraph").bind(self)
-		slot.add_child(mount)
-		var pools := {}
-		for spec in mount.pool_specs():
-			var pool := BulletPool.new()
-			pool.name = "%s_%d" % [spec["name"], index]
-			pool.bullet_scene = spec["scene"]
-			pool.pool_size = spec["size"]
-			pool.persist_after_owner_death = spec["persist"]
-			add_child(pool)
-			pools[spec["name"]] = pool
-		mount.setup(self, pools, _owner_group)
-		_mounts.append(mount)
+		var first := index == 0
+		var mount := TurretMountBuilder.build(self, slot, index, _turret_brain.rng, _owner_group, gate,
+				variant if first and variant >= 0 else -1,
+				rest_bearing_override if first else NAN)
+		if mount != null:
+			_mounts.append(mount)

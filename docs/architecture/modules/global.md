@@ -29,13 +29,16 @@ global/
 │   ├── hitbox_component.gd        # HitBox (Area2D) — deals hits, DamageType enum
 │   ├── armor_query.gd             # ArmorQuery (static) — "does this target refuse my hit?": `deflects_hit(hit_box)` first, else `is_armored()`
 │   ├── armor_plate.gd             # ArmorPlate (Node2D) — breakable armour piece: HurtBox + Health + Sprite; rockets / high-impact shots break it, bullets glance off
-│   ├── emp_pulse.gd               # EmpPulse (static) — Ph7: the one EMP entry point, `emit(tree, at, radius, seconds, source) -> int`; calls duck-typed `apply_emp()` on group `player` (Ph9 widens the targets)
+│   ├── enemy_module.gd            # EnemyModule (Node2D) — Ph10: one destructible part of a large enemy (own HurtBox / Health / DefenseProfile, lockable, local-shield-able); a destroyed part stays as wreckage
+│   ├── modular_hull.gd            # ModularHull (Node) — Ph10: collects a host's `Modules/*`, forwards `hull_share` to the host Health, re-emits part signals, queries
+│   ├── emp_pulse.gd               # EmpPulse (static) — the one EMP entry point, `emit(tree, at, radius, seconds, source, targets := TARGET_PLAYER) -> int`; player / enemies (`answers_emp()`) / seekers (`jam_guidance`)
+│   ├── emp_static.gd              # EmpStatic (Node2D) — Ph9 t5: code-built blue-white jagged ring BaseEnemy shows while `is_emp_disrupted()`
 │   ├── shield_component.gd        # Shield (Node) — discrete-charge shield
 │   ├── damage_reaction.gd         # DamageReaction (Node) — generic "take a hit" router
 │   ├── defense_profile.gd         # DefenseProfile (Node) — per-instance HurtBox mask/damage-type data
 │   ├── contact_profile.gd         # ContactProfile (Node) — what touching an enemy does: NONE / COLLISION / RAMMING / EXPLOSIVE / ARMOR
 │   ├── contact_blast.gd           # ContactBlast (HitBox) — code-built blast an EXPLOSIVE profile leaves in the owner's parent
-│   ├── state_light.gd             # StateLight (Node2D) — one small red/yellow/white attack-telegraph light
+│   ├── state_light.gd             # StateLight (Node2D) — one small red/yellow/white/orange attack-telegraph light
 │   ├── assault_drift.gd           # AssaultDrift (Node) — Ph8: static structures scroll down with the Assault corridor and free below the world; no-op in Open Space
 │   ├── overheat_component.gd      # Overheat (Node) — weapon heat
 │   ├── attack_controller.gd       # AttackController (Node) — drives an AttackPatternResource
@@ -46,10 +49,11 @@ global/
 │   ├── hit_effect.gd              # HitEffect — per-hit particle burst
 │   ├── explosion_effect.gd        # ExplosionEffect — death burst
 │   ├── thruster_effect.gd         # ThrusterEffect — engine flame
-│   ├── rocket_trail.gd            # RocketTrail — missile trail
+│   ├── rocket_trail.gd            # RocketTrail — missile trail (set_colors() / birth_color())
+│   ├── seeking_ordnance.gd        # SeekingOrdnance (RefCounted) — the retarget contract's group + eligible(); ENEMY_GROUP for enemy seekers (Phase 9)
 │   └── low_health_smoke.gd        # LowHealthSmoke — smoke below an HP threshold
 ├── enemy_ai/                  # mode-neutral enemy AI stack (enemy rework phase 1, squads/idle phase 2)
-│   ├── enemy_brain.gd         # EnemyBrain (Node) — decides: tick(delta), on_suspended(), seeded rng
+│   ├── enemy_brain.gd         # EnemyBrain (Node) — decides: tick(delta), on_suspended(), on_emp_started(), seeded rng
 │   ├── enemy_mover.gd         # EnemyMover (Node) — the single writer of an AI enemy's velocity/rotation
 │   ├── movement_constraint.gd # MovementConstraint (RefCounted) — identity filter; mode constraints extend it
 │   ├── steering.gd            # Steering — pure seek/arrive/orbit/intercept/evade/strafe/hold/drift/spiral/corkscrew/… primitives + context_avoid (hazard avoidance)
@@ -267,6 +271,61 @@ once, fades, then frees. It draws a cyan arc in world angles and never writes `r
 cover an `ArmorPlate`, which damages itself in its own `area_entered`. `BaseEnemy` does **not** adopt `DamageReaction`
 (Phase 1 P-15, closed in Phase 5). No shipped enemy carries one yet (the Support Ship, Phase 5 t12/t13). Gated by
 `tests/unit/test_hitbox_hurtbox.gd`, `tests/unit/test_enemy_shield.gd` and `tests/integration/test_enemy_shield_hits.gd`.
+A shield **can** cover an `EnemyModule` (next section): a part takes damage through its own `received_damage`, after the absorber.
+
+### Destructible parts of a large enemy — `enemy_module.gd`, `modular_hull.gd` (enemy rework phase 10)
+
+A large enemy (the Ph10 Heavy Gunship and Carrier, the Ph11 / Ph12 bosses) is a host plus parts. Each part is an
+`EnemyModule` (`Node2D`, group `&"enemy_parts"`) under a `Modules` `Node2D` of the host — never a direct child of the enemy root
+(the hurtbox-geometry gate) — and the host carries one `ModularHull` (`Node`, named `ModularHull`) beside it:
+
+```
+MyHeavy (BaseEnemy)
+├── HurtBox, Health, …           the hull (its own rule: vulnerable, or armoured = deflects_hit / is_armored true)
+├── Modules (Node2D)
+│   └── BatteryPort (EnemyModule)  module_id &"battery_port", role WEAPON, max_health, hull_share, intact / wreck texture
+│       ├── Sprite (Sprite2D)      the wreck texture (or WRECK_TINT) goes here, never on the part node (the beam tints that)
+│       ├── HurtBox (HurtBox)      one shape; the part writes layer 512 and, without a DefenseProfile, mask 1120
+│       ├── Health                 written from max_health (created if absent; never read when max_health is 0)
+│       ├── DefenseProfile         optional: applied to THIS hurtbox by the part (BaseEnemy applies only the root's)
+│       ├── MountSlots             optional TurretMountSlots (built by ModularHull.build_mounts(), t3)
+│       ├── HomingPoint (Marker2D) optional: homing_point()
+│       ├── Light                  optional StateLight: OFF on destruction (the host's brain drives it while the part lives)
+│       └── Shield                 optional EnemyShield the HOST attach()es to this part's HurtBox: it covers this part only
+│                                  (the Heavy Gunship's cannon, Ph10 t5; the host frees it on module_destroyed)
+└── ModularHull (Node)
+```
+
+- **Exports:** `module_id`, `role` (`enum Role { WEAPON, ENGINE, HANGAR, CORE, WEAK_POINT }`, append-only), `max_health` (default 100;
+  **0 = indestructible**: damage is still reported and forwarded, never destroyed), `starts_vulnerable` (true), `hull_share` (0),
+  `intact_texture`, `wreck_texture` (null → intact + `WRECK_TINT` `Color(0.35, 0.35, 0.4)` on `Sprite`), `damaged_ratio` (0.5).
+- **API:** `is_destroyed()`, `is_vulnerable()`, `set_vulnerable(on)` (no-op on a wreck; defer it from inside a physics callback),
+  `deflects_hit(hit_box)`, `is_armored()` (locked or wrecked), `destroy()`, `mounts()`, `attach_mount(mount)`,
+  `visual_state()` (`enum VisualState { INTACT, DAMAGED, WRECK }`), `homing_point()`; vars `sprite`, `hurt_box`, `health`,
+  `defense_profile`. Signals `damaged(module, amount)`, `destroyed(module)`, `deflected(module)`, `vulnerability_changed(module, vulnerable)`.
+- **The hit rule.** A projectile asks `deflects_hit` through `ArmorQuery`; one cached decision per HitBox (the `ArmorPlate` shape):
+  deflect for a wreck from an earlier physics frame, a locked part or a refused damage type, else consume — so the **killing shot
+  is consumed** under either callback order. Damage comes **only** through the part's `HurtBox.received_damage` (after its type
+  filter and absorber, so a local `EnemyShield` works). A locked part ignores every damage and emits `deflected` (white ping): the
+  only guard against the direct emitters (beam, nova, level `LaserRay`), which skip both hurtbox filters — a LASER-only part is
+  still hurt by the nova. `deflected` fires once per refused hit (the vulnerability check, or the type filter via the part's own
+  `area_entered`). `is_armored()` is read only by `EnemyShield`, so a shield on a locked part absorbs nothing.
+- **Destruction = wreckage that stays:** once; out of `enemy_parts`; hurtbox `monitoring` / `monitorable` / shapes off (deferred);
+  mounts `power_down()`; wreck sprite; light off; `Sparks` stop; an `ExplosionEffect` into the **host's parent**; `destroyed`. The node
+  stays until its host is freed. It blocks nothing (LOS wreckage is Ph19).
+- **DAMAGED** reuses `LowHealthSmoke` (a child `Sparks` at `threshold = damaged_ratio`), so the look and `visual_state()` share one rule.
+- **`ModularHull`** collects the direct `EnemyModule` children of `Modules` (tree order), forwards `roundi(amount × hull_share)` to
+  the host's `Health` child in the same call as the hit, re-emits `module_damaged(module, amount)` / `module_destroyed(module)`,
+  and answers `modules()`, `module(id)`, `live(role)`, `destroyed_count(roles)` (empty = any role), `mounts_of(id)`. `build_mounts(host, rng, owner_group,
+  telegraph_gate := Callable(), first_index := 0) -> int` (t3) builds every part's `MountSlots` through `TurretMountBuilder` with one running pool index (pools are
+  host root children named `<spec>_<index>`), `attach_mount()`s each so it powers down with its part, and returns the next free index. It holds no
+  gameplay rule of any heavy (the Ph18 seam).
+- **Who reaches a part:** player bullets and rockets (through the host's geometry rule), the player's mining beam and Plasma Nova
+  (both also target group `enemy_parts`; the nova map-wide) and a level `LaserRay` (layer 512, 9999). **Enemy energy weapons do
+  not** (`EnergyHitScan.VICTIM_GROUPS` has no `enemy_parts`). The station's turrets and the Ram's plates are not parts.
+
+Gated by `tests/integration/test_enemy_module.gd` (fixture `tests/helpers/fixture_modular_host.tscn`: an armoured root and parts
+`Open` / `Locked` / `Laser`).
 
 ### CollisionLayers — `global/physics/collision_layers.gd`
 
@@ -455,7 +514,8 @@ var state := anchor_idle.update(delta, actor.global_position, TargetInfo.player(
 
 `StateLight` (`class_name StateLight extends Node2D`) is the **one small light** an enemy shows
 to telegraph its own attack intent (IDEAS §21.1 — one gameplay light per state, never a recoloured
-hull): `set_state(OFF | ARMED | CHARGING | COMMIT)` maps to invisible / red / yellow / white, and
+hull): `set_state(OFF | ARMED | CHARGING | COMMIT | VENTING)` maps to invisible / red / yellow / white / orange
+(`VENTING_COLOR`, appended in Phase 10 t5 for the Heavy Gunship's open vents; the enum is append-only), and
 `blink_once()` flashes CHARGING for `BLINK_SECONDS` then restores whatever state was active
 before the call (used for a NOTICING beat, which is not a threat level of its own). Its texture is
 a radial `GradientTexture2D` **built in code in `_ready()`**, 8×8 px, white fading to alpha 0 at
@@ -656,10 +716,10 @@ rotation, and no physics layer is allocated (bit 12 stays free).
 
 | File | Role |
 |---|---|
-| `hazard_info.gd` (`HazardInfo`, `RefCounted`) | The data: `position`, `radius`, `pull_force`, `damage_per_second`, `movement_penalty`, `disables_abilities`, `line_of_sight_blocker`, `kind`, `core_radius`, `damage_radius`, signed `tangential_force` (+ = clockwise), `avoid_weight`, `velocity`, `source`, `claimer_id`, and (Phase 8) `segment_half` (a wall: the footprint is every point within `radius` of `position ± segment_half`; ZERO = a circle, every Ph6/Ph7 hazard; only for walls longer than `2 · radius`) and `exempt_group` (an actor in that group drops the info in its avoidance stage: a twin pair's own beam). Maths: `falloff(r)` (1 in the core, `core/r` to 0.85 r, linear taper to 0 at `radius`), `accel_at`, `penalty_at`, `contains`, `closest_point(pos)` (`position` for a circle, the clamped projection for a wall; `contains` / `penalty_at` / `Hazards.around` measure to it only when `segment_half != ZERO`, so every circle result is the old expression; `falloff` / `accel_at` stay centre-based, a wall has no pull). Claims `try_claim` / `release` / `is_claimed_by` / `is_claimed` store an instance id, so a freed claimer frees the claim. |
-| `hazards.gd` (`Hazards`, static) | `register` / `unregister` / `count()` (O(1)) / `around(pos, reach)` / `accel_at` / `penalty_at` (strongest slow only, capped at `MAX_PENALTY` 0.5) / `container(tree)` (first node in group `hazard_container`) / `hurt_box_of(ship)` / `bend_heading(heading, speed, pos, delta, scale)` (t8, below) / `pulse_damage(tree, at, radius, damage)` (a direct `HurtBox.received_damage.emit` on every `enemies` / `player` node whose centre is within `radius`; bypasses `EnemyShield`). |
+| `hazard_info.gd` (`HazardInfo`, `RefCounted`) | The data: `position`, `radius`, `pull_force`, `damage_per_second`, `movement_penalty`, `disables_abilities` (Ph9: true while a jammer field is lit), `stabilise_seconds` (Ph9: the lock's delay after leaving it), `line_of_sight_blocker`, `kind`, `core_radius`, `damage_radius`, signed `tangential_force` (+ = clockwise), `avoid_weight`, `velocity`, `source`, `claimer_id`, and (Phase 8) `segment_half` (a wall: the footprint is every point within `radius` of `position ± segment_half`; ZERO = a circle, every Ph6/Ph7 hazard; only for walls longer than `2 · radius`) and `exempt_group` (an actor in that group drops the info in its avoidance stage: a twin pair's own beam). Maths: `falloff(r)` (1 in the core, `core/r` to 0.85 r, linear taper to 0 at `radius`), `accel_at`, `penalty_at`, `contains`, `closest_point(pos)` (`position` for a circle, the clamped projection for a wall; `contains` / `penalty_at` / `Hazards.around` measure to it only when `segment_half != ZERO`, so every circle result is the old expression; `falloff` / `accel_at` stay centre-based, a wall has no pull). Claims `try_claim` / `release` / `is_claimed_by` / `is_claimed` store an instance id, so a freed claimer frees the claim. |
+| `hazards.gd` (`Hazards`, static) | `register` / `unregister` / `count()` (O(1)) / `around(pos, reach)` / `accel_at` / `penalty_at` (strongest slow only, capped at `MAX_PENALTY` 0.5) / `container(tree)` (first node in group `hazard_container`) / `hurt_box_of(ship)` / `bend_heading(heading, speed, pos, delta, scale)` (t8, below) / `pulse_damage(tree, at, radius, damage)` (a direct `HurtBox.received_damage.emit` on every `enemies` / `player` node whose centre is within `radius`; bypasses `EnemyShield`) / `jammer_at(pos)` (Ph9: the containing info with `disables_abilities` and the largest `stabilise_seconds`, else null; no allocation). |
 | `hazard_drift.gd` (`HazardDrift`) | Decaying drift integrator (half-life 0.35 s) a ship adds to its own motion: `step(accel, resistance, delta)`. |
-| `hazard_field.gd` (`HazardField`, `Node2D`) | The one field script: exports for radius, core, pull, swirl, penalty, stress and `duration`, a TELEGRAPH → ACTIVE → QUIET cycle, hull-stress pulses via `pulse_damage`; signals `phase_changed(phase: int)`, `stressed(count: int)`. Runtime spawns go through `spawn_into(container, at, rot)`, which defers `_attach` on itself (the `ContactBlast` pattern) and frees itself if the container is gone. |
+| `hazard_field.gd` (`HazardField`, `Node2D`) | The one field script: exports for radius, core, pull, swirl, penalty, stress and `duration`, a TELEGRAPH → ACTIVE → QUIET cycle, hull-stress pulses via `pulse_damage`; signals `phase_changed(phase: int)`, `stressed(count: int)`. Ph9 jammer exports `disables_abilities` (written into the info only while ACTIVE) and `stabilise_seconds`; both default off, so every earlier field is unchanged. Ph9 t7: `suppress(seconds)` (the jammer's EMP answer: `disables_abilities` reads false for the window, longest wins, `<= 1e-6` clock; the cycle keeps running), `is_suppressed()`, and `restart_cycle()` (what `_enter_tree()` does, for an owner that writes radius or cycle after the field entered the tree). Runtime spawns go through `spawn_into(container, at, rot)`, which defers `_attach` on itself (the `ContactBlast` pattern) and frees itself if the container is gone. |
 
 **Enemies feel hazards through `EnemyMover` (t2).** `step()` order: slow factor (`1 - penalty_at · (1 - hazard_resistance)`, boost included) → avoidance stage (`_avoid()`, t4 below; skipped while boosting) → accel limit on `own_velocity()` → `HazardDrift` added **only when non-zero** (also while boosting) → corridor filter last → write; facing from `v - drift`. `own_velocity()` is `actor.velocity` minus the last drift (exactly `actor.velocity` with none) and is what brains' "settled / stopped" gates read (Ram LINE_UP crawl, Sniper SETTLE, Fighter `is_settled` / `is_braking_onto_station` / RUN_IN standing start, Razor feint stop). `halt()` clears the drift. With `Hazards.count() == 0` and no drift the stage is skipped entirely (bit-identical motion). The three profile fields (`hazard_avoidance`, `hazard_margin`, `hazard_resistance`) live in `ShipConfig` (export group Hazards) and `BaseEnemy._ready()` copies them onto its mover; per-enemy values are in the nine `*_config.tres` (which also carry `wreck_chance` / `wreck_size`, t11). Tests: `tests/unit/test_enemy_mover.gd` (hazard rows) and `tests/integration/test_enemy_dual_mode.gd` (Hazards section).
 
@@ -671,7 +731,33 @@ rotation, and no physics layer is allocated (bit 12 stays free).
 
 **Boost disruption (Phase 7 t5).** `PlayerBase.apply_boost_disruption(strength: float, seconds: float)` weakens every boost verb on both ships; the strongest strength and the longest time win and never stack. `boost_efficiency()` is `1 − strength` while it lasts (1.0 otherwise), `signal boost_disruption_changed(efficiency: float)` fires on start, on a stronger re-apply and at the end (1.0), and `MIN_BOOST_EFFICIENCY` (0.15) is the floor below which a verb is refused **before anything is spent**. A disrupted speed scales only its excess over a floor — `disrupted_speed(speed, floor_speed)` = `floor + (speed − floor) × efficiency`, and exactly `speed` when undisrupted — with the floor `cruise_speed()` (virtual: Open Space `max_speed` 420, Assault `MovementStateMachine/MoveState.move_speed` 360, base 0) for the Shift boost (`OpenSpacePlayerShip._boost_speed()`, 532 px/s at 0.4) and Boost Drive (`EngineBoostModule`, speeds read once at activation: 852 / 452 in Open Space, 816 / 416 in Assault; `try_activate()` refuses below the floor), and the dash's own lateral `move_speed` 180 for the roll (248 px/s at 0.4); the Warp blink is `120 px × efficiency` and both are refused below the floor. The clock is `_step_disruption(delta)` (accumulated delta), called first in both ships' `_physics_process`, ahead of the Assault dialog / knockback / engine-boost returns. Tells: a code-built violet `Line2D` spark ring (`BoostDisruptionRing`, child of the ship) and, in Open Space, `BoostBar` tinting violet (`_FILL_COLOR_DISRUPTED`) and flickering. Cruise, thrust, turning and firing are never touched. Tests: `tests/integration/test_player_boost_disruption.gd`.
 
-**EMP hook (Phase 7 t7).** `EmpPulse.emit(tree, at, radius, seconds, source) -> int` (`global/components/emp_pulse.gd`, `RefCounted`, static) is the one EMP entry point and the "same hook" Phase 9's EMP Pulse uses. It calls duck-typed `apply_emp(seconds, source)` on every node of group `player` whose centre is within `radius` (`<=`, the `Hazards.pulse_damage` rule), skips a node without the method, never touches group `enemies` in Ph7, returns the count, and returns 0 for `seconds <= 0`. `PlayerBase` adds `apply_emp(seconds, source)`, `is_emp_disrupted()` and `signal emp_changed(active: bool)` (true on a start only, false once at the end). **The Ph7 effect is a stand-in: one line, `apply_boost_disruption(1.0, seconds)`, which Ph9 replaces without changing a signature, `is_emp_disrupted()` or `emp_changed`.** `is_emp_disrupted()` ends at the EMP's own time even if a longer pulse-mine disruption still runs, so `boost_efficiency()` can stay 0 a little longer. Callers today: `EnemyMine` (EMP variant). Tests: `tests/unit/test_emp_pulse.gd`, `tests/integration/test_player_boost_disruption.gd`.
+**EMP hook (Phase 7 t7; Phase 9 t5 below replaces the effect).** `EmpPulse.emit(tree, at, radius, seconds, source) -> int` (`global/components/emp_pulse.gd`, `RefCounted`, static) is the one EMP entry point and the "same hook" Phase 9's EMP Pulse uses. It calls duck-typed `apply_emp(seconds, source)` on every node of group `player` whose centre is within `radius` (`<=`, the `Hazards.pulse_damage` rule), skips a node without the method, never touches group `enemies` in Ph7, returns the count, and returns 0 for `seconds <= 0`. `PlayerBase` adds `apply_emp(seconds, source)`, `is_emp_disrupted()` and `signal emp_changed(active: bool)` (true on a start only, false once at the end). **The Ph7 effect is a stand-in: one line, `apply_boost_disruption(1.0, seconds)`, which Ph9 replaces without changing a signature, `is_emp_disrupted()` or `emp_changed`.** `is_emp_disrupted()` ends at the EMP's own time even if a longer pulse-mine disruption still runs, so `boost_efficiency()` can stay 0 a little longer. Callers today: `EnemyMine` (EMP variant). Tests: `tests/unit/test_emp_pulse.gd`, `tests/integration/test_player_boost_disruption.gd`.
+
+**EMP, Phase 9 (t5).** `EmpPulse.emit(tree, at, radius, seconds, source, targets: int = TARGET_PLAYER) -> int` gained the trailing bitmask: `TARGET_PLAYER` 1 (the Ph7 loop, byte for byte, so every Ph7 call is unchanged), `TARGET_ENEMIES` 2 (group `enemies`, skipping a queued node, one without `answers_emp` / `apply_emp`, and one whose `answers_emp()` is false), `TARGET_SEEKERS` 4 (`jam_guidance(source)` on `SeekingOrdnance.GROUP` and `SeekingOrdnance.ENEMY_GROUP`; never counted), `TARGET_ALL` 7. **The stand-in is gone:** `PlayerBase.apply_emp()` is `apply_boost_disruption(1.0, seconds)` **plus** `apply_ability_lock(seconds, source)`; `is_emp_disrupted()` / `emp_changed` keep the Ph7 clock (ends a tick after the lock, which follows the 1e-6 rule and ends on tick 120 for 2.0 s). **Enemy hook (`base_enemy.gd`):** `answers_emp()` (default `is_ai_driven()`; the routing question every EMP source asks; a subclass with its own tangible answer overrides it), `apply_emp(seconds, _source)` (nothing unless it answers; longest wins; on a start `mover.halt()`, then `EnemyBrain.on_emp_started()` once, and the `EmpStatic` overlay), `is_emp_disrupted()`. `_physics_process` counts the window first (`x -= delta`, over at `<= EMP_CLOCK_EPSILON` 1e-6), ahead of the no-brain return; while it runs the brain is not ticked and the mover still steps (only with a brain and a mover); the brain ticks again on the tick it ends. Hurtbox, body and health are never touched. `suspend_ai()` clears a live window. `EmpStatic` (`global/components/emp_static.gd`): 16-point jagged ring at the body circle's radius × scale + 8 (24 otherwise), `Color(0.7, 0.85, 1.0)`, re-jittered every 0.08 s from seed 17, alpha `0.55 + 0.45·|sin(21t)|`. Overrides: `TwinLaserDroneBrain` (releases the pair; `TwinLaserPair.release()` frees drone A's beam when A is suspended **or EMP-disrupted**, since only A's brain ticks it), `LaserTenderBrain` (LAUNCH → HOLD, or DISENGAGE when `_leave_after_launch`). `EnemyRocket` joins `SeekingOrdnance.ENEMY_GROUP` in `launch()` when `turn_rate > 0`, leaves it in `_mark_done()` / `reset()`, and `jam_guidance()` makes `is_guiding()` false for the rest of that life. Callers: `EnemyMine` EMP (`TARGET_PLAYER | TARGET_SEEKERS` enemy-laid, `TARGET_ALL` placed). Tests: `tests/unit/test_emp_pulse.gd`, `tests/integration/test_enemy_emp.gd`, EMP rows in `test_player_ability_lock.gd` / `test_player_boost_disruption.gd`. Task plan: `docs/plans/cmw5k4yjv00a6qs2xvkf73b18/3-plan.md`.
+
+**Ability lock (Phase 9 t1).** The player-side hook jammers, EMP and the Disruptor use; it attacks the player's tools, not the hull. On `PlayerBase`:
+`apply_ability_lock(seconds, source)` (a timed lock: `seconds <= 0` is a no-op, the longest wins, two never add, and it ends with **no** stabilisation),
+`abilities_locked()`, `ability_lock_fill()` (1.0 in a field or a timed lock, the stabilisation fraction left while only stabilising, 0.0 unlocked),
+`allow_ability_press()` (true unlocked; otherwise emits `ability_press_refused()` and returns false), `signal ability_lock_changed(locked: bool)` (edges only:
+a timed lock announces itself at the call, a field on the first tick sampled inside) and `signal ability_press_refused()`. The clock is
+`_step_ability_lock(delta)`, the first line of `_step_disruption()` (so both ships already run it first in `_physics_process`, ahead of the Assault dialog
+return); with `Hazards.count() == 0` and no lock it is one early return. Each tick it samples `Hazards.jammer_at(global_position)`: inside → in field,
+delay cleared; the first tick outside (left, the field went dark or was freed) is the **exit tick**, which starts the delay of the last field's
+`stabilise_seconds` with no decrement; then the delay counts down. Overlapping fields report the largest `stabilise_seconds`, so leaving the inner of two
+starts no delay. Every lock clock is `PlayerBase._tick_clock(x, delta)` (`x -= delta`, 0.0 once `<= LOCK_CLOCK_EPSILON` 1e-6), so with 0.75 s the ship is
+locked on the exit tick T through T+44 and unlocked on T+45, and a 1.5 s timed lock ends on tick 90 exactly. **Seams (the only readers):**
+`OpenSpacePlayerShip._input` and `AssaultPlayer._input` (after the `use_ability` check, and in Assault after the dialog return) refuse a locked H press,
+mark it handled and return before any module's `try_activate()` — so the Assault Boost Drive on H is locked, the Open Space one on Shift is not;
+`RocketState._on_action` checks duck-typed `actor.allow_ability_press()` for `special_weapon` after `cooldown_timer.is_stopped()` (a press during the cooldown
+is no refusal) and before `_launch()` / `cooldown_timer.start()`; `switch_weapon` is never checked. `WeaponState`, movement, dash, warp, passive modules
+and module `tick()` never read the lock. A jammer field is a `HazardField` with `disables_abilities = true` (kind `&"jammer"`, `avoid_weight` 0). Tests:
+`tests/integration/test_player_ability_lock.gd` (both real player scenes: timing, every H module and both rockets refused with nothing spent, primary fire for
+all five modes and movement bit-identical inside a lit field), the `jammer_at` rows of `tests/unit/test_hazards.gd` and one row of `tests/unit/test_hazard_field.gd`.
+Task plan: `docs/plans/cmw5k4yjg009qqs2xbibatkiy/3-plan.md`.
+
+**Lock tells (Phase 9 t2).** The player sees the lock. `PlayerBase._report_lock()` is the edge point: it shows or hides `AbilityLockStatic` (`global/entities/ability_lock_static.gd`, code-built on the first lock like `BoostDisruptionRing`, six jagged amber-white arcs at r 30 re-jittered every 0.08 s from a seeded rng, `modulate.a = 0.3 + 0.6 * ability_lock_fill()`, so 0.9 held; `visible` follows `abilities_locked()` exactly; `allow_ability_press()` flashes it to full alpha for 0.15 s), then emits `ability_lock_changed` and `EventBus.player_ability_lock_changed(locked: bool)` (the audio seam: nothing connects yet; `EventBus.player_ordnance_hijacked(rocket: Node2D, source: Node)` is declared beside it for the homing missile to emit in t4). `MissionHud` (`global/ui/mission_hud.gd`, shared by both HUD scenes) code-builds `JammedChip` (`global/ui/jammed_chip.gd`: "JAMMED" label and a bar of `BAR_WIDTH` 52 px x `ability_lock_fill()`, beside `WeaponContainer`, red tint for 0.2 s on a refusal) and `LockGlyph` (`global/ui/lock_glyph.gd`, a 12x12 padlock over `WeaponIcon`). Both read the first `player`-group node answering `abilities_locked` in `_process` (looked up lazily, so a hub ship that arrives later is tracked; refusals connected once), and are hidden with no player. Gate: `tests/integration/test_player_ability_lock_tells.gd`.
+
+**Seeking ordnance (Phase 9 t4).** The second player hook: a claimer may turn the player's seeking rockets against the player. Its one claimer is the Hacker Frigate's `HijackPulse` dart (t9, `assault/scenes/projectiles/hijack_pulse/`: `eligible(tree, hull, 650)` then `retarget(player, -1.0, hacker)` on arrival). `SeekingOrdnance` (`global/components/seeking_ordnance.gd`, `RefCounted`) holds `GROUP` `&"player_seeking_ordnance"` and `eligible(tree, at, reach) -> Array[Node2D]` (every member within `reach`, centre distance inclusive, whose `can_be_retargeted()` is true, nearest first, ties by instance id). The contract is duck-typed: `can_be_retargeted()`, `retarget(target: Node2D, seconds: float, source: Node) -> bool` (`seconds < 0` = the rocket's own `hijack_seconds`; refused for a null target, a claimed or finished rocket, or inside a lit jammer), `is_retargeted()`, `jam_guidance(source)` (drops `locked_target`; a hijacked rocket flies straight to the end of its window), `signal retargeted(source: Node)`, `signal retarget_ended()`. Only `homing_missile` (`assault/scenes/projectiles/missiles/homing/`) implements it; `WarheadMissile` never does. A successful claim emits `retargeted` then `EventBus.player_ordnance_hijacked(rocket, source)`. **Hijacked flight** (exports on `homing_missile.tscn`): heading kept, then `Steering.turn_toward` at `hijack_turn_rate` 1.6 rad/s (straight inside a lit jammer, after `jam_guidance`, or once the target is freed; `Hazards.bend_heading` still applies), speed eased 500 → `hijack_speed` 380 over `hijack_ease_seconds` 0.5, window `hijack_seconds` 2.5 then a fizzle (no blast); a freed source fizzles it on the next tick (a null source has none to lose). Armed after `hijack_arm_seconds` 0.25 **and** once it has been `hijack_arm_clearance` 60 px from the target; armed and within `hijack_trigger_radius` 30 → `ContactBlast.spawn(get_parent(), …, 40, 18, 3)`, the player's only damage from it (the HitBox, 32 / 513, still deals 100 to enemies: the lure). The shoot-down `HurtBox` (512 / 64, r 7) opens (deferred) only while hijacked. **Self-hit guard:** the rocket's HitBox and `warhead_missile.gd`'s ignore any area whose parent is a `homing_missile` (the rocket compares script identity, so it never names its own `class_name`), so player rockets never hit each other. **One end of life, `_finish(blasted)`:** latches `_done`, pops and emits `retarget_ended` only for a hijack, closes both areas deferred, hides, emits `expired` once through the lifetime's latch and frees at the end of the frame; every end goes through it, including the `ProjectileLifetime` expiry. Tell (IDEAS §21): sprite `self_modulate` amber `Color(1, 0.7, 0.3)`, an amber `RocketTrail` (`set_colors`), a code-drawn bracket (four 4 px corner ticks at r 12 spinning 3 rad/s) and, for `tether_seconds` 0.3, a white → amber tether line from the source (`is_tether_visible()`). Godot note: an area that turns monitorable while already overlapping another forms no pair (measured), so a claimed rocket would not even meet its own HitBox — the guard still matters for anything that enters later (the crossing rows prove it). Gate: `tests/integration/test_seeking_ordnance.gd` (both harnesses; blast rows on both real player scenes). Task plan: `docs/plans/cmw5k4yjr00a2qs2xu2iw7gvd/3-plan.md`.
 
 **Projectiles in fields (t8).** Heavy, guided ordnance bends; bullets fly true. `Hazards.bend_heading(heading, speed, pos, delta, scale)` turns a heading toward `heading · speed + accel_at(pos) · scale · delta` and returns the same unit vector (so the caller keeps its own speed, and every time / distance cap still holds) — the input itself, bit for bit, with no hazard, a zero scale, zero speed or nothing in reach. A family opts in by answering `hazard_pull_scale() -> float` and calling it only when `Hazards.count() > 0`: all five `EnemyRocket` kinds (`_heading`, after steering), `EnemyOrdnance` gravity and pursuit bombs (a mine answers 0.0 and never calls it, so Ph4's mine arithmetic holds), and the player's `homing_missile` / `WarheadMissile` (own `rotation` writer, so the nose follows). Not opted in: `EnemyBullet` rounds, the player `Bullet`, mines, beams. Tests: `tests/integration/test_hazard_projectiles.gd`.
 
@@ -701,7 +787,9 @@ exactly against every shipped enemy-bullet speed; a new, slower bullet source mu
 `persist_after_owner_death` is built (Ph4) as a `BulletPool` `@export` (default false): with it on,
 the pool's `_exit_tree()` hands in-flight bullets over (recycle callable disconnected, `expired ->
 queue_free` one-shot) instead of `cancel_active()`, which ignores the flag. Pinned by
-`tests/unit/test_bullet_pool.gd`.
+`tests/unit/test_bullet_pool.gd`. An empty pool's `acquire()` returns null on every call but warns
+("Pool exhausted") only the first time that pool runs dry, and again only under `--verbose` (Ph10 t5:
+a refused shooter asks every tick, and the repeats overflowed the harness's 1 MiB gate output).
 
 ### Shield — `shield_component.gd`, `bubble_shield.tscn`, ordering in `damage_reaction.gd`
 
@@ -849,6 +937,7 @@ All are `Node2D` wrappers around `CPUParticles2D`. Set their `@export`s *before*
 - **`ThrusterEffect`** — continuous engine flame. Call `set_state(state)` each physics frame with `State.{IDLE,THRUST,BOOST,POWER,BOOST_PANEL}`; transitions are instant and de-duplicated.
 - **`LowHealthSmoke`** — call `setup(health)` after `add_child()`; it connects `health.amount_changed` and emits smoke automatically when HP ≤ `threshold` (default `0.3`) and `current > 0`. `deactivate()` stops it.
 - **`RocketTrail`** — continuous world-space trail; add under a rocket scene. `offset_behind: float = 8.0` places it behind the nose.
+  `set_colors(birth, death)` recolours its ramp at any time (a hijacked homing rocket turns it amber); `birth_color()` reads the live ramp.
 
 ```gdscript
 # In an entity's _setup_effects():
@@ -867,6 +956,7 @@ hit.burst()
 - Owns the unified damage path `_apply_damage(damage)`: post-hit invincibility (`invincibility_sec = 0.5`), then shield → temp-HP → health, with `damage_reduction` applied only against health.
 - Holds the multipliers/flags that ship modules write: `damage_multiplier`, `fire_rate_multiplier`, `damage_reduction`, `overdrive_active`, `can_attack`, `pierce_module_active`, `engine_boost_active`.
 - Provides the temporary damage buff API (`apply_temp_damage_buff(bonus, duration)`, persisted via `SessionState`), the bubble-shield auto-setup, and knockback helpers (`apply_knockback`, `is_knockback_active`, `apply_knockback_motion`).
+- Provides the disruption hooks other systems apply by duck type: the Phase 7 boost disruption and EMP (`apply_boost_disruption`, `apply_emp`) and the Phase 9 ability lock (`apply_ability_lock`, `abilities_locked`, `allow_ability_press`; see *Ability lock* under *Hazards* above), all stepped by `_step_disruption(delta)`, which both ships call first in `_physics_process`.
 - Calls `SessionState.apply_to(self)` to restore cross-level temp buffs on spawn.
 
 Subclasses call `super()` in `_ready()` (and in the overridable hooks `_setup_effects`, `_on_health_changed`, `_on_overheat_updated`) then add mode-specific behaviour.

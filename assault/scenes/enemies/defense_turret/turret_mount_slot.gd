@@ -1,6 +1,6 @@
 ## TurretMountSlot - where a host places one `TurretMount` (docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md §2.7; Phase 8 t6).
 ##
-## Mounts are built at runtime (`DefenseTurret._build_mounts()`), so the slot is the only authored place a host can choose and retune one:
+## Mounts are built at runtime (`TurretMountBuilder.build()`, called by `DefenseTurret._build_mounts()` and `ModularHull.build_mounts()`), so the slot is the only authored place a host can choose and retune one:
 ## `variant` picks the mount scene (`TurretMountScenes.scene_for`), `rest_bearing_deg` becomes the mount's scan centre and droop target, and a
 ## `turn_rate_override` >= 0 replaces the mount scene's own `turn_rate` before `setup()` (negative keeps it). A later host (the heavy emplacement,
 ## Ph10 ships) authors the same marker.
@@ -12,3 +12,6 @@ extends Marker2D
 @export var rest_bearing_deg: float = 90.0
 ## >= 0: copied onto the mount's `turn_rate`; negative keeps the mount scene's value.
 @export var turn_rate_override: float = -1.0
+## >= 0: copied onto the mount's `traverse_deg` (the full width of the arc it may aim, scan and fire in, centred on `rest_bearing_deg`); negative
+## keeps the mount scene's value (360 = unlimited, Phase 10 t3).
+@export var traverse_deg_override: float = -1.0

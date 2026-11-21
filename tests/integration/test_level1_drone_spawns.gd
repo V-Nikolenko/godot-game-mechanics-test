@@ -34,6 +34,7 @@ const _DIRECTOR_SCRIPT := "res://assault/scenes/levels/edelia/1/level_1_director
 const _STATION_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_station/space_station.tscn")
 
 const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.gd")
+const CarrierTimeline := preload("res://tests/helpers/level1_carrier_timeline.gd")
 
 const _DRONE := WaveBuilder.DRONE
 const _RAZOR_DRONE := WaveBuilder.RAZOR_DRONE
@@ -363,44 +364,87 @@ const _RAZOR_CONFIG: RazorDroneConfig = preload("res://assault/scenes/enemies/ra
 func _c3_lifetimes() -> Dictionary:
 	var cam := ArenaCamera.new()
 	add_child_autofree(cam)
-	var rect := cam.projectile_world_rect()
-	var exit_distance := minf(rect.size.x, rect.size.y) / 2.0
-	var s := _SWARM_CONFIG
-	var r := _RAZOR_CONFIG
-	var swarm_exit := DroneConcurrency.worst_exit_seconds(exit_distance, s.exit_speed, s.acceleration)
-	# The Razor's own worst exit (test_engagement_deadline.gd's Razor formula): its expiry can wait
-	# out a dash and start moving at dash_speed away from the edge.
-	var razor_exit := r.max_dash_seconds + (r.dash_speed + r.exit_speed) / minf(r.acceleration, r.braking) \
-		+ (exit_distance + r.dash_speed * r.dash_speed / (2.0 * r.braking)) / r.exit_speed
-	return {
-		"swarm_attacker": s.engage_seconds + swarm_exit,
-		"swarm_rear": s.rear_engage_seconds + swarm_exit,
-		"razor": r.engage_seconds + razor_exit,
-	}
+	return DroneConcurrency.swarm_lifetimes(cam.projectile_world_rect(), _SWARM_CONFIG, _RAZOR_CONFIG)
+
+
+## A section's C3 intervals: its own drone squads plus every Carrier's Assault swarm drones (Phase 10 t12: owner choice 6 counts them here;
+## `CarrierTimeline.drone_intervals()` starts each at the carrier's spawn, because an emergency deployment can launch at any moment of its life).
+func _c3_intervals(section: LevelSection, lifetimes: Dictionary) -> Array[Dictionary]:
+	var intervals := DroneConcurrency.squad_intervals(section, _DRONE, _RAZOR_DRONE, lifetimes)
+	intervals.append_array(CarrierTimeline.drone_intervals(section, lifetimes))
+	return intervals
 
 
 func test_c3_peak_concurrency_stays_within_the_pre_decided_ratios() -> void:
 	var lifetimes := _c3_lifetimes()
 	var ship_paths: Array[String] = [_DRONE, _RAZOR_DRONE]
 	var checked := 0
+	var carrier_drones := {}
 	for section: LevelSection in _build_sections():
 		if not _EXPECTED_LEGACY_PEAKS.has(section.section_name):
 			continue
 		checked += 1
 		var legacy: int = DroneConcurrency.peak_concurrency(
 			DroneConcurrency.spawn_times(section, ship_paths), _LEGACY_LIFETIME)
-		var intervals := DroneConcurrency.squad_intervals(section, _DRONE, _RAZOR_DRONE, lifetimes)
+		var intervals := _c3_intervals(section, lifetimes)
+		carrier_drones[section.section_name] = CarrierTimeline.drone_intervals(section, lifetimes).size()
 		var capable := DroneConcurrency.peak_intervals(intervals, true)
 		var all := DroneConcurrency.peak_intervals(intervals)
 		var rotating := DroneConcurrency.peak_min_alive_three(intervals)
-		gut.p("C3 %s: legacy %d, capable %d (%.2f x), all %d (%.2f x), min(alive,3)/squad %d (%.2f x)" % [
+		gut.p("C3 %s: legacy %d, capable %d (%.2f x), all %d (%.2f x), min(alive,3)/squad %d (%.2f x), carrier drones %d" % [
 			section.section_name, legacy, capable, float(capable) / legacy, all, float(all) / legacy,
-			rotating, float(rotating) / legacy])
+			rotating, float(rotating) / legacy, carrier_drones[section.section_name]])
 		assert_lte(float(capable), _C3_CAPABLE_RATIO * legacy,
 			"%s: attack-capable peak %d exceeds %.1f x legacy %d" % [section.section_name, capable, _C3_CAPABLE_RATIO, legacy])
 		assert_lte(float(all), _C3_ALL_RATIO * legacy,
 			"%s: all-drones peak %d exceeds %.1f x legacy %d" % [section.section_name, all, _C3_ALL_RATIO, legacy])
 	assert_eq(checked, 3, "sanity: all three drone sections were checked")
+	assert_eq(carrier_drones, {&"deep_space": 0, &"planet_approach": 2 * CarrierTimeline.SHIPPED.assault_launch_count, &"cloud_descent": 0},
+		"planet_approach's one Carrier contributes its two hangars' Assault drones; no other drone section holds a carrier")
+
+
+## Boundary (Phase 10 t12, review finding 5): `k` more carriers, each spawned AT planet_approach's all-drones peak moment (so every one of their
+## intervals, which start at the carrier's spawn, contains it), push the all-drones peak past 2.5 x legacy. `k` is derived from the config.
+func test_extra_carriers_at_the_peak_fail_the_c3_gate() -> void:
+	var lifetimes := _c3_lifetimes()
+	var section: LevelSection = null
+	for s: LevelSection in _build_sections():
+		if s.section_name == &"planet_approach":
+			section = s
+	var legacy: int = DroneConcurrency.peak_concurrency(DroneConcurrency.spawn_times(section, [_DRONE, _RAZOR_DRONE] as Array[String]),
+		_LEGACY_LIFETIME)
+	var intervals := _c3_intervals(section, lifetimes)
+	var all := DroneConcurrency.peak_intervals(intervals)
+	var at := -INF
+	for a: Dictionary in intervals:
+		var n := 0
+		for b: Dictionary in intervals:
+			if float(b["start"]) <= float(a["start"]) and float(a["start"]) < float(b["end"]):
+				n += 1
+		if n == all:
+			at = float(a["start"])
+			break
+	var per_carrier := 2 * CarrierTimeline.SHIPPED.assault_launch_count
+	var k := ceili(float(floori(_C3_ALL_RATIO * legacy) + 1 - all) / per_carrier)
+	var builder := WaveBuilder.new()
+	var waves: Array[WaveResource] = []
+	waves.assign(section.waves)
+	# In list order (before the first wave that triggers later), so each extra carrier's effective trigger is its own.
+	var index := waves.size()
+	for i in waves.size():
+		if waves[i].trigger_time > at:
+			index = i
+			break
+	for i in k:
+		waves.insert(index, builder.wave(at, [builder.carrier().at(55, -260)]))
+	section.waves = waves
+	assert_eq(CarrierTimeline.lines(section).filter(func(l: Dictionary) -> bool: return is_equal_approx(float(l["spawn"]), at)).size(), k,
+		"sanity: every extra carrier spawns at the peak moment")
+	var after := DroneConcurrency.peak_intervals(_c3_intervals(section, lifetimes))
+	gut.p("C3 boundary: planet_approach all-drones peak %d at %.2f s + %d carrier(s) -> %d (limit %.1f)" % [all, at, k, after,
+		_C3_ALL_RATIO * legacy])
+	assert_gt(k, 0, "sanity: at least one carrier is needed")
+	assert_gt(float(after), _C3_ALL_RATIO * legacy, "the extra carriers' drones must fail the all-drones gate")
 
 
 ## Boundary for the helper's squad model: one 5-drone formation is one squad with 3 attack-capable

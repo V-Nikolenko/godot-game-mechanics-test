@@ -360,7 +360,7 @@ func test_the_cap_skips_a_whole_squad_and_recovers_when_ships_are_freed() -> voi
 func test_no_squad_uses_a_self_managed_ai_enemy() -> void:
 	for e in _all_entries():
 		var path: String = e.ship_scene.resource_path
-		assert_ne(path, WaveBuilder.GUNSHIP, "gunship is self-managed AI and must never get a mover")
+		assert_ne(path, WaveBuilder.HEAVY_GUNSHIP, "heavy gunship is AI and must never get a mover")
 		assert_ne(path, WaveBuilder.RAZOR_DRONE,
 			"razor_drone is self-managed AI and must never get a mover")
 

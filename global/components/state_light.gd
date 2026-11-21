@@ -7,7 +7,8 @@
 ## cmufs7ek60001nm2x6d0bt2et/3-plan.md §2.9, R2.11: "the real dash's cue is stronger than the
 ## fake's"). OFF is invisible. `blink_once()` flashes CHARGING for BLINK_SECONDS and restores
 ## whatever state was active before the call — used for NOTICING, which is a beat, not a
-## threat level of its own.
+## threat level of its own. Orange (VENTING, Phase 10 t5) marks a hull cooling with its weak
+## points open: the Heavy Gunship's vents (docs/plans/cmug23oo90029m52wae4clve0/3-plan.md §2.9).
 ##
 ## The texture is a radial GradientTexture2D built in code in _ready(), never scene-authored,
 ## so test_entity_sprite_transparency.gd's sweep of .tscn files never sees it (rev 2, N8). The
@@ -17,7 +18,11 @@
 class_name StateLight
 extends Node2D
 
-enum State { OFF, ARMED, CHARGING, COMMIT }
+## Append-only.
+enum State { OFF, ARMED, CHARGING, COMMIT, VENTING }
+
+## VENTING's colour: orange, apart from CHARGING's yellow.
+const VENTING_COLOR := Color(1.0, 0.55, 0.1)
 
 const MAX_ALPHA := 0.85
 const TEXTURE_SIZE := 8
@@ -74,6 +79,8 @@ func _apply(s: int) -> void:
 			modulate = Color(Color.YELLOW, MAX_ALPHA)
 		State.COMMIT:
 			modulate = Color(Color.WHITE, MAX_ALPHA)
+		State.VENTING:
+			modulate = Color(VENTING_COLOR, MAX_ALPHA)
 
 
 ## TEXTURE_SIZE px, white at the centre fading to alpha 0 at the edge. One texture serves

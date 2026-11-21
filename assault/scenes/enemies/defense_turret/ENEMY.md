@@ -33,7 +33,9 @@ and you can out-strafe its partial lead.
   - It joins group `enemies` in `_ready()`.
   - `variant` (≥ 0) overrides the first slot's mount variant. A wave sets it with `.prop("variant", TurretMount.Variant.X)`.
 - **Mounts.** `MountSlots` holds one `TurretMountSlot` marker per mount. It has `variant`, `rest_bearing_deg`, and `turn_rate_override`
-  (−1 keeps the mount scene's `turn_rate`; ≥ 0 is copied onto the mount before `setup()`). In `_ready()` the turret does the following for
+  (−1 keeps the mount scene's `turn_rate`; ≥ 0 is copied onto the mount before `setup()`) and `traverse_deg_override` (same rule, for the mount's `traverse_deg`, Ph10 t3).
+  `TurretMountBuilder.build()` (`mounts/turret_mount_builder.gd`, static) is the one place a mount and its pools are built; `DefenseTurret._build_mounts()` and `ModularHull.build_mounts()` both call it.
+  **`traverse_deg`** (default 360 = unlimited, bit-identical to Ph8): below 360 a mount works in offsets from rest, aims, scans and fires only inside `rest ± traverse/2`, turns linearly *along* the arc (never through the blocked sector) and holds fire (as if `can_fire` were false) while the target's bearing is outside it. In `_ready()` the turret does the following for
   each slot:
   - instantiates `TurretMountScenes.scene_for(variant)` under the slot (an unbuilt variant gives a warning and an empty slot);
   - builds every pool in `pool_specs()` as a **root child** named `<name>_<slot index>`, so the rounds land in the turret's own container;
@@ -79,6 +81,7 @@ and you can out-strafe its partial lead.
   **The shown line is the line that fires:** the mount stops turning (and its aim point freezes) when TELEGRAPH starts, or - the lance - at the last
   `commit_seconds`. Aim is `P + v * telegraph_seconds * lead_blend`; no fire without line of sight.
   - **BEAM_CANNON** - `beam.tscn`, range 700, cooldown 3.0: bearing frozen at TELEGRAPH start; 0.9 s warning, 1.2 s lit.
+  - **HEAVY_CANNON** (Ph10 t3, for ship hulls; `heavy_cannon_mount.tscn` on `BurstCannonMount`) - 0.7 s charge, 2 Heavy Shells 0.35 s apart at 220 px/s, range 900, cooldown 3.2, `turn_rate` 0.9, cone 6°, `traverse_deg` 70. No placed turret uses it yet.
   - **LANCE** - `lance.tscn`, range 1100, cooldown 4.0: tracks for the first 0.5 s of its 1.0 s TELEGRAPH, frozen for the last 0.5 s (light COMMIT, white line), then one 24-damage hit.
   - **SWEEP_BEAM** - `sweep_beam.tscn`, range 400, cooldown 3.5: the mount aims at the **start bearing** `aim - s * 50`° (`s` = sign of the player's angular velocity about the
     turret; a still player draws `s` from the brain's rng once per shot), shows the line there, then ACTIVE turns the mount `s * sweep_rate` (0.8727 rad/s, 100° in 2.0 s)
@@ -134,6 +137,8 @@ defense_turret/
 └── mounts/
     ├── turret_mount.gd                   TurretMount (Variant, Phase, the cycle and its hooks)
     ├── turret_mount_scenes.gd            TurretMountScenes (scene_for, export_of)
+    ├── turret_mount_builder.gd           TurretMountBuilder (the one mount + pool builder)
+    ├── heavy_cannon_mount.tscn           HEAVY_CANNON (BurstCannonMount + Heavy Shell)
     ├── beam_turret_mount.gd              BeamTurretMount (lance + beam cannon; the beam child, freeze rule)
     ├── sweep_beam_mount.gd               SweepBeamMount (start-bearing aim, sweep rotation)
     ├── rocket_battery_mount.gd / .tscn   RocketBatteryMount (salvo of 2, root pools, fires past cover)

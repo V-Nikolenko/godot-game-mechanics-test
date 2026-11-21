@@ -435,3 +435,63 @@ func test_a_segment_with_no_pull_has_no_accel_and_no_slow() -> void:
 		assert_eq(h.info.accel_at(p), Vector2.ZERO, "no pull at %s" % p)
 		assert_eq(Hazards.accel_at(p), Vector2.ZERO, "and none through the registry")
 		assert_eq(Hazards.penalty_at(p), 0.0, "and no slow")
+
+
+# --- jammer_at (Phase 9, docs/plans/cmug23onr001pm52w9swwophy/3-plan.md §2.1) ------------------------
+
+## A plain HazardField as the jammer (no jammer enemy exists yet), built from props before it enters the tree.
+func _jammer(at: Vector2, props: Dictionary = {}) -> HazardField:
+	var f := HazardField.new()
+	f.kind = &"jammer"
+	f.radius = 240.0
+	f.avoid_weight = 0.0
+	f.disables_abilities = true
+	f.stabilise_seconds = 0.75
+	for key in props:
+		f.set(key, props[key])
+	f.position = at
+	add_child_autofree(f)
+	return f
+
+
+func test_jammer_at_is_null_with_no_hazard() -> void:
+	assert_eq(Hazards.count(), 0, "precondition: an empty registry")
+	assert_null(Hazards.jammer_at(Vector2.ZERO))
+
+
+func test_jammer_at_ignores_a_field_that_does_not_disable_abilities() -> void:
+	_jammer(Vector2(100, 100), {kind = &"gravity_well", pull_force = 300.0, avoid_weight = 1.0,
+		disables_abilities = false})
+	assert_eq(Hazards.count(), 1, "precondition: the well is registered")
+	assert_null(Hazards.jammer_at(Vector2(100, 100)), "a well at its own centre is no jammer")
+
+
+func test_jammer_at_finds_the_field_at_its_radius_and_not_one_px_beyond() -> void:
+	var f := _jammer(Vector2(100, 100))
+	assert_eq(Hazards.jammer_at(Vector2(340, 100)), f.hazard_info(), "exactly radius 240: inside (<=)")
+	assert_null(Hazards.jammer_at(Vector2(341, 100)), "1 px beyond: outside")
+	assert_eq(Hazards.jammer_at(Vector2(100, 100)).stabilise_seconds, 0.75)
+
+
+func test_jammer_at_returns_the_larger_stabilise_of_two_overlapping_fields() -> void:
+	var small := _jammer(Vector2(0, 0))
+	var big := _jammer(Vector2(200, 0), {stabilise_seconds = 1.25})
+	assert_eq(Hazards.jammer_at(Vector2(100, 0)), big.hazard_info(), "inside both: the larger stabilise_seconds")
+	assert_eq(Hazards.jammer_at(Vector2(-200, 0)), small.hazard_info(), "inside the 0.75 one only: that one")
+	var bigger_first := _jammer(Vector2(0, 600), {stabilise_seconds = 1.25})
+	_jammer(Vector2(0, 700))
+	assert_eq(Hazards.jammer_at(Vector2(0, 650)), bigger_first.hazard_info(), "registration order does not matter")
+
+
+func test_jammer_at_is_null_while_a_pulsed_field_telegraphs_or_is_quiet() -> void:
+	var f := _jammer(Vector2.ZERO, {cycle_telegraph = 1.0, cycle_active = 1.0, cycle_quiet = 1.0})
+	assert_eq(f.phase(), HazardField.Phase.TELEGRAPH)
+	assert_null(Hazards.jammer_at(Vector2.ZERO), "TELEGRAPH: not lit")
+	for i in 4:
+		f._physics_process(0.25)
+	assert_eq(f.phase(), HazardField.Phase.ACTIVE)
+	assert_eq(Hazards.jammer_at(Vector2.ZERO), f.hazard_info(), "ACTIVE: lit")
+	for i in 4:
+		f._physics_process(0.25)
+	assert_eq(f.phase(), HazardField.Phase.QUIET)
+	assert_null(Hazards.jammer_at(Vector2.ZERO), "QUIET: not lit")

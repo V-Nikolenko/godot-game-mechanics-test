@@ -3,7 +3,7 @@
 ## Section 1 (Deep Space)      — 30 s timed section, fighters/drones, no asteroids.
 ## Section 2 (Asteroid Belt)   — 30 s timed section, asteroid gauntlet, no enemies.
 ## Section 3 (Planet Approach) — 110 s cinematic, light enemy harassment.
-## Section 4 (Cloud Descent)   — ENEMIES_CLEARED boss-area section with ally escort + gunship wave.
+## Section 4 (Cloud Descent)   — ENEMIES_CLEARED boss-area section with ally escort + Heavy Gunship waves.
 ##
 ## Also boots scoring: starts the ScoreTracker, schedules per-section bonus
 ## drones + skill challenges, and runs the post-mission debrief screen.
@@ -33,12 +33,40 @@
 ## (`test_ph8_static_members_clear_every_lit_column`); none of the three may go into an
 ## ENEMIES_CLEARED section (persistent fire, a held wall); test_engagement_deadline.gd gates that and test_level1_ph8_attacks.gd replays
 ## each attack inside its budget.
+##
+## The Phase 9 lines (t14: `b.hacker_frigate()` in Planet Approach's 42.0 s wave, `b.jammer()` (local) in its 62.0 s wave) follow it too:
+## inside existing waves, no rail, pinned as `EXPECTED_PH9` and counted in the same density gate. Their lives never overlap (the Hacker is
+## gone at 58.3 s, the jammer arrives at 62.0 s: a jammed player cannot launch, so a hijack would have nothing to take), both end before
+## the section's 98.0 s peak, and the world-anchored jammer drifts at x 480, clear of every column lit while it lives
+## (`test_ph8_static_members_clear_every_lit_column`). No jammer, Hacker, Disruptor or EMP zone may go into an ENEMIES_CLEARED section,
+## and no sector jammer, EMP zone, placed EMP mine or EMP-laying Minefield into any Assault level (test_engagement_deadline.gd);
+## test_level1_ph9_attacks.gd replays the Hacker's pulse and the jammer's lock.
+##
+## The four Heavy Gunship lines (Phase 10: `b.heavy_gunship()`, Deep Space 3.5 s at `.at(160, -500)`, Cloud Descent 50.0 s and the 62.0 s pair)
+## carry no `.move()` since t11: a rail suspends the brain, so the Cloud Descent three used to drift down without firing. Each keeps its
+## distance, turns a battery side-on, fires and leaves by itself when its `engage_seconds` budget is spent; its rear missiles close with the
+## budget. Pinned and counted (never more alive at once than the legacy gunships) by tests/integration/test_level1_heavy_spawns.gd, which
+## also replays the Deep Space heavy with the real LaserWallWave and columns lit (only it meets lasers: every Cloud Descent column set is
+## dark before 50 s) and every heavy's first battery shot inside its budget; the Cloud Descent three are gated against the 10 s
+## ENEMIES_CLEARED net, exit and last rocket, by test_engagement_deadline.gd. The Deep Space offset keeps the heavy out of the wall's strip
+## at spawn (at (0, -500) it spawned 32 px into it).
+##
+## The Carrier line (Phase 10 t12: `b.carrier().at(55, -260)` in Planet Approach's 65.0 s wave, option A of epic plan §2.13) carries no rail:
+## it crosses straight down at its constant speed, world-anchored at x 750 and swaying at most 30 px, so its parts sweep x 620–880 and it is
+## gone by 85.61 s at worst. That puts it between the 55.0 s column set (dark at 63.4 s) and the 98.0 s one, and the 78.0 s set it shares
+## (x 150 / 550 / 950) stays 70 px outside its sweep. Its four swarm drones count in the drone gate (`test_level1_drone_spawns.gd`). Pinned,
+## lane-checked and replayed with the real lasers lit by tests/integration/test_level1_heavy_spawns.gd; never in an ENEMIES_CLEARED section
+## (test_engagement_deadline.gd).
 extends Node
 
 const _MISSION_NUMBER: int = 1
 const _MISSION_CONFIG_PATH := "res://open_space/scenes/mission_data/planets/edelia/edelia_01_assault_mission_break_enemy_blockade_resource.tres"
 const _DEBRIEF_SCENE: PackedScene = preload("res://assault/scenes/gui/level_debrief.tscn")
 const _LASER_SCENE: PackedScene = preload("res://assault/scenes/hazards/laser_ray/laser_ray.tscn")
+## A laser column's warning line and its lethal span (s): `_spawn_laser_columns()`'s defaults, read by the lit slice replay
+## (`tests/helpers/level1_slice_replay.gd`) so its timeline is the level's own.
+const COLUMN_WARN_SECONDS := 3.0
+const COLUMN_ACTIVE_SECONDS := 4.0
 @export var director: LevelDirector
 @export var wave_manager: WaveManager
 @export var score_tracker: ScoreTracker
@@ -207,7 +235,7 @@ func _spawn_bonus_drone(camera_offset: Vector2, angle: float) -> void:
 ## to screen columns. Origin y = -380 (top of the play area) makes each beam
 ## extend down through the full screen height. Each beam telegraphs for `warn`
 ## seconds (small red line) before charging up, then auto-dissolves after `active`.
-func _spawn_laser_columns(columns: Array, warn: float = 3.0, active: float = 4.0) -> void:
+func _spawn_laser_columns(columns: Array, warn: float = COLUMN_WARN_SECONDS, active: float = COLUMN_ACTIVE_SECONDS) -> void:
 	var level: Node = get_parent()
 	if level == null:
 		return
@@ -336,9 +364,9 @@ func _build_section_1() -> LevelSection:
 			b.razor_drone().at( 160, -420).delay(0.35),
 		]),
 
-		# 3.5 s — gunship test; self-managed AI, no .move() needed
+		# 3.5 s — Heavy Gunship (Phase 10 t4; t11: .at(160, -500), clear of the LaserWallWave strip at spawn): AI, no rail
 		b.wave(3.5, [
-			b.gunship().at(0, -500),
+			b.heavy_gunship().at(160, -500),
 		]),
 
 		# 2.0 s — V of 5 fighters from the top (+ side drone screen from above)
@@ -708,6 +736,7 @@ func _build_section_2() -> LevelSection:
 		# 42.0 s — drone cluster from upper-right
 		b.wave(42.0, [
 			b.drone().formation(b.cluster_formation(3, 32)).at(140, -400),
+			b.hacker_frigate().at(-400, -180),  # Phase 9 t14: enters from the left; gone (58.3 s) before the jammer arrives; never in an ENEMIES_CLEARED section
 		]),
 
 		# 44.0 s — sniper duo + drone screen (extended)
@@ -756,13 +785,15 @@ func _build_section_2() -> LevelSection:
 		b.wave(62.0, [
 			b.drone().at(-150, -400).squad(&"w19"),
 			b.drone().at( 150, -400).delay(0.3).squad(&"w19"),
+			b.jammer().at(-80, -220),  # Phase 9 t14: world-anchored at x 480, clear of every column lit while it drifts; lives never overlap the Hacker's
 		]),
 
-		# 65.0 s — 2 snipers from top corners (+ ram chaser)
+		# 65.0 s — 2 snipers from top corners (+ ram chaser, + the Carrier crossing)
 		b.wave(65.0, [
 			b.sniper().at(-240, -400),
 			b.sniper().at( 240, -400),
 			b.ram().at(0, -400).delay(0.7),
+			b.carrier().at(55, -260),  # Phase 10 t12: crosses at world x 750 between the 55.0 s and 98.0 s column sets, clear of the 78.0 s set
 		]),
 
 		# 68.0 s — drone screen sweep
@@ -972,9 +1003,9 @@ func _build_section_3() -> LevelSection:
 			b.drone().at( 100, 400).delay(0.4).squad(&"w14"),
 		]),
 
-		# 50.0 s — gunship + 3 covering fighters (+ ram chaser)
+		# 50.0 s — Heavy Gunship (AI, no rail since Phase 10 t11) + 3 covering fighters (+ ram chaser)
 		b.wave(50.0, [
-			b.gunship().at(  0, -400).move(b.straight(42)),
+			b.heavy_gunship().at(  0, -400),
 			b.fighter().at(-65, -400).delay(0.8).squad(&"w15f"),
 			b.fighter().at(  0, -400).delay(0.8).squad(&"w15f"),
 			b.fighter().at( 65, -400).delay(0.8).squad(&"w15f"),
@@ -982,7 +1013,7 @@ func _build_section_3() -> LevelSection:
 			b.ram().at( 220, -400).delay(1.5),
 		]),
 
-		# 53.0 s — sniper pair entering from the sides during the gunship fight
+		# 53.0 s — sniper pair entering from the sides during the Heavy Gunship fight
 		b.wave(53.0, [
 			b.sniper().at(-500,  20),
 			b.sniper().at( 500,  20),
@@ -1002,10 +1033,10 @@ func _build_section_3() -> LevelSection:
 			b.fighter().formation(b.wedge_formation(3, 40, 14)).at(0, -400),
 		]),
 
-		# 62.0 s — second gunship wave with snipers (+ drone screen)
+		# 62.0 s — Heavy Gunship pair (AI, no rail since Phase 10 t11) with snipers (+ drone screen)
 		b.wave(62.0, [
-			b.gunship().at(-100, -400).move(b.straight(36)),
-			b.gunship().at( 100, -400).move(b.straight(36)).delay(0.8),
+			b.heavy_gunship().at(-100, -400),
+			b.heavy_gunship().at( 100, -400).delay(0.8),
 			b.sniper().at(-225, -400).delay(1.2),
 			b.sniper().at( 225, -400).delay(1.2),
 			b.drone().at(0, -400).delay(0.5).squad(&"w19"),

@@ -31,7 +31,7 @@ func _ready() -> void:
 		]),
 		# Wave 3 — t=15.0: Gunship + arc fighter escort (fighters freed after arc completes)
 		builder.wave(15.0, [
-			builder.gunship().at(  0, -180).move(builder.straight(55)),
+			builder.heavy_gunship().at(  0, -180).move(builder.straight(55)),
 			builder.fighter().at(-70,   15).move(builder.arc(L, 140, 3.5)).delay(0.4).free_after(0.0),
 			builder.fighter().at(-30,   15).move(builder.arc(R, 140, 3.5)).delay(0.4).free_after(0.0),
 			builder.fighter().at( 30,   15).move(builder.arc(L, 140, 3.5)).delay(0.4).free_after(0.0),
@@ -71,8 +71,8 @@ func _ready() -> void:
 		#]),
 		## Wave 7 — t=88.0: Double gunship + drone cover
 		#builder.wave(88.0, [
-			#builder.spawn_entry(builder.GUNSHIP, Vector2(-60, -180), builder.straight(55),          0.0),
-			#builder.spawn_entry(builder.GUNSHIP, Vector2( 60, -180), builder.straight(55),          0.0),
+			#builder.spawn_entry(builder.HEAVY_GUNSHIP, Vector2(-60, -180), builder.straight(55),          0.0),
+			#builder.spawn_entry(builder.HEAVY_GUNSHIP, Vector2( 60, -180), builder.straight(55),          0.0),
 			#builder.spawn_entry(builder.DRONE,   Vector2(-30, -180), builder.sine(155, 50),  0.6),
 			#builder.spawn_entry(builder.DRONE,   Vector2(  0, -180), builder.sine(155, 50),  0.6),
 			#builder.spawn_entry(builder.DRONE,   Vector2( 30, -180), builder.sine(155, 50),  0.6),
@@ -117,14 +117,14 @@ func _ready() -> void:
 		#builder.wave(170.0, [
 			#builder.spawn_entry(builder.BOMBER,  Vector2(-320, -10), builder.straight(90, PI/2),  0.0, builder.EXIT_SCREEN, null, {"direction":  1.0}),
 			#builder.spawn_entry(builder.BOMBER,  Vector2( 320,  10), builder.straight(90, -PI/2), 0.0, builder.EXIT_SCREEN, null, {"direction": -1.0}),
-			#builder.spawn_entry(builder.GUNSHIP, Vector2(-50, -180), builder.straight(55),        0.3),
-			#builder.spawn_entry(builder.GUNSHIP, Vector2( 50, -180), builder.straight(55),        0.3),
+			#builder.spawn_entry(builder.HEAVY_GUNSHIP, Vector2(-50, -180), builder.straight(55),        0.3),
+			#builder.spawn_entry(builder.HEAVY_GUNSHIP, Vector2( 50, -180), builder.straight(55),        0.3),
 		#]),
 		## Wave 13 — t=185.0: Final assault — 3 gunships + ram + arc fighters + drones
 		#builder.wave(185.0, [
-			#builder.spawn_entry(builder.GUNSHIP,  Vector2(  0, -180), builder.straight(45),            0.0),
-			#builder.spawn_entry(builder.GUNSHIP,  Vector2(-80, -180), builder.straight(45),            0.0),
-			#builder.spawn_entry(builder.GUNSHIP,  Vector2( 80, -180), builder.straight(45),            0.0),
+			#builder.spawn_entry(builder.HEAVY_GUNSHIP,  Vector2(  0, -180), builder.straight(45),            0.0),
+			#builder.spawn_entry(builder.HEAVY_GUNSHIP,  Vector2(-80, -180), builder.straight(45),            0.0),
+			#builder.spawn_entry(builder.HEAVY_GUNSHIP,  Vector2( 80, -180), builder.straight(45),            0.0),
 			#builder.spawn_entry(builder.RAM,      Vector2(-30,   10), builder.straight(145),           0.5),
 			#builder.spawn_entry(builder.RAM,      Vector2( 30,   10), builder.straight(145),           0.5),
 			#builder.spawn_entry(builder.FIGHTER,  Vector2(-60,   25), builder.arc(L, 130, 4.0), 1.0, DURATION),

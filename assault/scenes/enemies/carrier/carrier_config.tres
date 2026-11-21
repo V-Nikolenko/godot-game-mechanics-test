@@ -1,0 +1,61 @@
+[gd_resource type="Resource" script_class="CarrierConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/carrier/carrier_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 600
+collision_damage = 15
+score_value = 600
+counts_as_escape = true
+hazard_avoidance = 0.5
+hazard_margin = 120.0
+hazard_resistance = 1.0
+wreck_chance = 0.0
+max_speed = 70.0
+acceleration = 40.0
+braking = 40.0
+max_turn_rate = 0.35
+one_engine_turn = 0.5
+no_engine_turn = 0.15
+one_engine_speed = 0.8
+no_engine_speed = 0.4
+list_rate = 0.06
+list_hold_deg = 10.0
+screen_range_min = 600.0
+screen_range_max = 950.0
+leash_radius = 900.0
+core_exposure_count = 3
+assault_cross_speed = 90.0
+assault_max_speed = 110.0
+assault_sway_speed = 30.0
+one_engine_sway = 0.5
+no_engine_sway = 0.1
+assault_sway_leash = 30.0
+module_x_extent = 100.0
+perceive_radius = 1100.0
+lose_radius = 1800.0
+notice_time = 0.6
+idle_radius = 220.0
+idle_speed = 0.12
+pulse_trigger_range = 340.0
+pulse_cooldown = 5.0
+missile_min_range = 450.0
+missile_cooldown = 7.0
+missile_pursuit_chance = 1.0
+panic_pulse_factor = 0.5
+panic_battery_factor = 0.7
+hangar_port_scene = "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn"
+hangar_starboard_scene = "res://assault/scenes/enemies/fighter/fighter.tscn"
+assault_hangar_scene = "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn"
+launch_count = 2
+assault_launch_count = 2
+door_open_seconds = 0.8
+door_hold_seconds = 2.0
+launch_period = 9.0
+hangar_live_cap = 3
+carrier_live_cap = 6
+first_launch_delay = 3.0
+starboard_launch_delay = 4.0
+launch_boost_speed = 300.0
+launch_boost_seconds = 0.4

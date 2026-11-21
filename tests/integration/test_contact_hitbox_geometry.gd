@@ -94,6 +94,29 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/laser_tender/laser_tender.tscn",
 	},
 	{
+		"name": "hacker_frigate",
+		"scene": "res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn",
+	},
+	{
+		"name": "hacker_disruptor",
+		"scene": "res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn",
+	},
+	{
+		"name": "jamming_structure",
+		"scene": "res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn",
+		"no_hitbox": true,
+	},
+	{
+		"name": "sector_jammer",
+		"scene": "res://assault/scenes/enemies/sector_jammer/sector_jammer.tscn",
+		"no_hitbox": true,
+	},
+	{
+		"name": "pulsed_jammer",
+		"scene": "res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer.tscn",
+		"no_hitbox": true,
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"no_hitbox": true,
@@ -103,8 +126,12 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/razor_drone/razor_drone.tscn",
 	},
 	{
-		"name": "gunship",
-		"scene": "res://assault/scenes/enemies/gunship/gunship.tscn",
+		"name": "heavy_gunship",
+		"scene": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn",
+	},
+	{
+		"name": "carrier",
+		"scene": "res://assault/scenes/enemies/carrier/carrier.tscn",
 	},
 	{
 		"name": "gatling_interceptor",

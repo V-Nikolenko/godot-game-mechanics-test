@@ -90,7 +90,12 @@ func sniper()         -> SpawnConfig: return SpawnConfig.new(SNIPER)
 func sniper_enemy()   -> SpawnConfig: return SpawnConfig.new(SNIPER_ENEMY)
 func gatling_interceptor() -> SpawnConfig: return SpawnConfig.new(GATLING_INTERCEPTOR)
 func razor_drone()    -> SpawnConfig: return SpawnConfig.new(RAZOR_DRONE)
-func gunship()        -> SpawnConfig: return SpawnConfig.new(GUNSHIP)
+## The Heavy Gunship (Phase 10): a modular gun platform with its own brain and mover. Never give it a `.move()` (t11 takes level 1's rails off).
+func heavy_gunship()  -> SpawnConfig: return SpawnConfig.new(HEAVY_GUNSHIP)
+## The Carrier (Phase 10): an armoured capital ship built from parts. In Assault it crosses the corridor top to bottom at a constant 90 px/s (its life
+## is fixed by spawn y and speed; an EMP does not stop it) and its x is world-anchored like a turret group's: `.at(x, y)` lands at world x `640 + 2·x`.
+## Never in an ENEMIES_CLEARED section (test_engagement_deadline.gd). Never give it a `.move()`.
+func carrier()        -> SpawnConfig: return SpawnConfig.new(CARRIER)
 func bomber()         -> SpawnConfig: return SpawnConfig.new(BOMBER)
 func missile_corvette() -> SpawnConfig: return SpawnConfig.new(MISSILE_CORVETTE)
 func support_ship()   -> SpawnConfig: return SpawnConfig.new(SUPPORT_SHIP)
@@ -113,6 +118,22 @@ func twin_laser_pair() -> SpawnConfig: return SpawnConfig.new(TWIN_LASER_PAIR)
 ## toward the player's escape route, where they line up into a moving laser wall. One launch per Assault life. Never in an ENEMIES_CLEARED section
 ## (test_engagement_deadline.gd).
 func laser_tender() -> SpawnConfig: return SpawnConfig.new(LASER_TENDER)
+## A Hacker Frigate (Phase 9, plan §2.10): holds medium-long range on a lopsided arc, slides out of the player's nose and off their route, breaks off when
+## rushed; stays on screen in Assault for 9 s, then leaves. t9 adds the Hijack Pulse. Never in an ENEMIES_CLEARED section (test_engagement_deadline.gd).
+func hacker_frigate() -> SpawnConfig: return SpawnConfig.new(HACKER_FRIGATE)
+## A jamming tower (Phase 9, plan §2.8): a static structure whose field locks the player's H abilities and K rockets. `variant` is `&"local"`
+## (default), `&"pulsed"` (0.8 / 3.0 / 2.5 s on / off) or `&"sector"` (r 640, Open Space only: never in an Assault wave). In Assault its x is
+## world-anchored like a turret group's: `.at(x, y)` lands at world x `640 + 2·x`. Never in an ENEMIES_CLEARED section (test_engagement_deadline.gd).
+func jammer(variant: StringName = &"local") -> SpawnConfig:
+	match variant:
+		&"local":
+			return SpawnConfig.new(JAMMER)
+		&"sector":
+			return SpawnConfig.new(SECTOR_JAMMER)
+		&"pulsed":
+			return SpawnConfig.new(PULSED_JAMMER)
+	push_error("WaveBuilder.jammer: unknown variant %s, using the local jammer" % variant)
+	return SpawnConfig.new(JAMMER)
 
 func ally()           -> SpawnConfig: return SpawnConfig.new(ALLY)
 func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
@@ -275,7 +296,8 @@ const SNIPER         := "res://assault/scenes/enemies/sniper/sniper.tscn"
 const SNIPER_ENEMY   := SNIPER  ## Alias kept so existing b.sniper_enemy() calls still compile.
 const GATLING_INTERCEPTOR := "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn"
 const RAZOR_DRONE    := "res://assault/scenes/enemies/razor_drone/razor_drone.tscn"
-const GUNSHIP        := "res://assault/scenes/enemies/gunship/gunship.tscn"
+const HEAVY_GUNSHIP  := "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn"
+const CARRIER        := "res://assault/scenes/enemies/carrier/carrier.tscn"
 const BOMBER         := "res://assault/scenes/enemies/bomber/bomber.tscn"
 const MISSILE_CORVETTE := "res://assault/scenes/enemies/missile_corvette/missile_corvette.tscn"
 const SUPPORT_SHIP   := "res://assault/scenes/enemies/support_ship/support_ship.tscn"
@@ -286,6 +308,10 @@ const TURRET_GROUP_ASSAULT_PAIR := "res://assault/scenes/structures/turret_group
 const LASER_FENCE    := "res://assault/scenes/structures/laser_fence/laser_fence.tscn"
 const TWIN_LASER_PAIR := "res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn"
 const LASER_TENDER   := "res://assault/scenes/enemies/laser_tender/laser_tender.tscn"
+const JAMMER         := "res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn"
+const SECTOR_JAMMER  := "res://assault/scenes/enemies/sector_jammer/sector_jammer.tscn"
+const PULSED_JAMMER  := "res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer.tscn"
+const HACKER_FRIGATE := "res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn"
 const ALLY           := "res://assault/scenes/allies/ally_fighter/ally_fighter.tscn"
 const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.tscn"
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"

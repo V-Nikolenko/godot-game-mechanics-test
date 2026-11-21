@@ -90,6 +90,8 @@ const LEAD_MAX := 0.8
 const EXIT_OVERSHOOT := 64.0
 ## Below this speed the heading is read from the actor's rotation instead of its velocity (px/s).
 const HEADING_MIN_SPEED := 1.0
+## Phase 9 t7: a jammer field is the faction's own ground: a cover point inside one is not "inside another hazard".
+const JAMMER_KIND := &"jammer"
 ## Rail fire leaves from this far behind the hull's centre along local +y, as it always did (px).
 const RAIL_SPAWN_OFFSET := Vector2(0.0, 10.0)
 ## Open Space `h` follows the player's velocity above this speed, else its facing (px/s).
@@ -882,6 +884,8 @@ func _cover_reachable(c: Vector2) -> bool:
 ## cover point there would be pushed off by that hazard's avoidance skirt.
 func _inside_other_hazard(point: Vector2, own: HazardInfo) -> bool:
 	for info: HazardInfo in Hazards.around(point, config.hazard_margin):
+		if info.kind == JAMMER_KIND:
+			continue  # Phase 9 t7: a jammer field is the faction's own ground (avoid weight 0).
 		if info != own:
 			return true
 	return false

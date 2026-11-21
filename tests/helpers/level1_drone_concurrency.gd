@@ -345,3 +345,19 @@ static func ai_shooter_kinds(f: FighterConfig, g: GatlingInterceptorConfig, exit
 			"rate": g.stream_rounds_max / g_period,
 		},
 	}
+
+
+## The C3 lifetimes (Ph2 t15): `swarm_attacker` / `swarm_rear` = the Swarm Drone's `engage_seconds` / `rear_engage_seconds` plus its
+## worst straight exit, `razor` = the Razor's budget plus its own worst exit (`test_engagement_deadline.gd`'s Razor formula: its expiry can
+## wait out a dash and start moving at dash_speed away from the edge). `rect` is the live `ArenaCamera.projectile_world_rect()`. Shared by
+## `test_level1_drone_spawns.gd`'s C3 gate and level 1's Carrier rows (Phase 10 t12), so the formula exists once.
+static func swarm_lifetimes(rect: Rect2, s: SwarmDroneConfig, r: RazorDroneConfig) -> Dictionary:
+	var exit_distance := minf(rect.size.x, rect.size.y) / 2.0
+	var swarm_exit := worst_exit_seconds(exit_distance, s.exit_speed, s.acceleration)
+	var razor_exit := r.max_dash_seconds + (r.dash_speed + r.exit_speed) / minf(r.acceleration, r.braking) \
+		+ (exit_distance + r.dash_speed * r.dash_speed / (2.0 * r.braking)) / r.exit_speed
+	return {
+		"swarm_attacker": s.engage_seconds + swarm_exit,
+		"swarm_rear": s.rear_engage_seconds + swarm_exit,
+		"razor": r.engage_seconds + razor_exit,
+	}

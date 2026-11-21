@@ -17,6 +17,8 @@ const EXPECTED: Dictionary = {
 	"player_died":               [],
 	"ability_activated":         ["id", "damage_mult", "fire_rate_mult"],
 	"ability_deselected":        [],
+	"player_ability_lock_changed": ["locked"],
+	"player_ordnance_hijacked":  ["rocket", "source"],
 	"mission_wave_started":      ["wave_index"],
 	"mission_complete":          [],
 	"mission_failed":            [],

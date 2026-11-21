@@ -56,7 +56,8 @@ extends GutTest
 ##
 ## It is load-bearing from the first line, not a patch applied after a red run: three of the
 ## eleven entries fail a bare `Rect2.encloses()`, two of them by ~1e-5 px of float noise
-## (gunship: body 83.079 px vs hurtbox 82.405 px is the only real one).
+## (the legacy gunship: body 83.079 px vs hurtbox 82.405 px was the only real one; the Heavy Gunship, Phase 10 t4, shares one rectangle).
+## Still load-bearing for the float-noise pair.
 const _TOLERANCE_PX: float = 1.0
 
 ## The proposal this file exists to reject, verbatim from the backlog item.
@@ -117,6 +118,26 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/laser_tender/laser_tender.tscn",
 	},
 	{
+		"name": "hacker_frigate",
+		"scene": "res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn",
+	},
+	{
+		"name": "hacker_disruptor",
+		"scene": "res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn",
+	},
+	{
+		"name": "jamming_structure",
+		"scene": "res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn",
+	},
+	{
+		"name": "sector_jammer",
+		"scene": "res://assault/scenes/enemies/sector_jammer/sector_jammer.tscn",
+	},
+	{
+		"name": "pulsed_jammer",
+		"scene": "res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer.tscn",
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 	},
@@ -125,8 +146,12 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/razor_drone/razor_drone.tscn",
 	},
 	{
-		"name": "gunship",
-		"scene": "res://assault/scenes/enemies/gunship/gunship.tscn",
+		"name": "heavy_gunship",
+		"scene": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn",
+	},
+	{
+		"name": "carrier",
+		"scene": "res://assault/scenes/enemies/carrier/carrier.tscn",
 	},
 	{
 		"name": "gatling_interceptor",

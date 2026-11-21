@@ -72,6 +72,13 @@ func _turret_burst_speed() -> float:
 	return float(TurretMountScenes.export_of(TurretMount.Variant.BURST_CANNON, &"round_speed", fallback))
 
 
+## The speed the HEAVY_CANNON mount fires Heavy Shells at (Phase 10 t3): its mount scene's `round_speed` export.
+func _heavy_cannon_speed() -> float:
+	var fallback: Variant = (load("res://assault/scenes/enemies/defense_turret/mounts/burst_cannon_mount.gd") as Script) \
+			.get_property_default_value(&"round_speed")
+	return float(TurretMountScenes.export_of(TurretMount.Variant.HEAVY_CANNON, &"round_speed", fallback))
+
+
 ## One array, per the plan: add a new, slower bullet source here and the defaults must be
 ## re-derived (`3-plan.md` §2.9).
 func _every_shipped_enemy_bullet_speed() -> Array[float]:
@@ -97,11 +104,6 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 	# The Gatling Interceptor's shipped tuning: the AI stream and the rail fallback, config fields.
 	for s in _gatling_speeds().values():
 		speeds.append(s as float)
-
-	# gunship_config.tres.
-	var gunship_cfg: GunshipConfig = \
-			load("res://assault/scenes/enemies/gunship/gunship_config.tres")
-	speeds.append(gunship_cfg.bullet_speed)
 
 	# EnemyBullet's own default `speed`.
 	var default_bullet: EnemyBullet = ENEMY_BULLET_SCENE.instantiate()
@@ -129,6 +131,8 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 
 	# The defense turret's burst cannon (Phase 8): a mount scene export, read without instantiating it.
 	speeds.append(_turret_burst_speed())
+	# The heavy cannon mount (Phase 10 t3) fires the Heavy Shell.
+	speeds.append(_heavy_cannon_speed())
 
 	return speeds
 
@@ -167,7 +171,7 @@ func test_enemy_bullet_defaults_are_derived_from_every_shipped_speed_source() ->
 # ---------------------------------------------------------------------------------------------
 # Per-round sweep (t2, 3-plan.md §2.2, review B5): max_distance / min_fired_speed <= max_time,
 # plus a range floor (>= 1280px, except the Scatter Round, whose short range IS the design).
-# A round with no shooter yet (all four this task) is checked at its own scene default speed.
+# A round with no shooter yet is checked at its own scene default speed; the Heavy Shell's shooter is the Phase 10 heavy cannon mount.
 # t8a gave the Fighter's rounds real config-field speeds, rail fallbacks included, and t10 the Gatling
 # Interceptor's Gatling Stream; this sweep reads them, so no speed in it is hand-typed or regex-read.
 # ---------------------------------------------------------------------------------------------
@@ -192,7 +196,7 @@ func test_every_round_clears_its_own_lifetime_at_its_slowest_fired_speed() -> vo
 			"speeds": [gs["stream"], gs["rail_stream"]]},
 		{"scene": EnemyRounds.RAIL, "floor": _ROUNDS_RANGE_FLOOR_PX,
 			"speeds": [ss["rail"], ss["rail_fallback"]]},
-		{"scene": EnemyRounds.HEAVY_SHELL, "floor": _ROUNDS_RANGE_FLOOR_PX},
+		{"scene": EnemyRounds.HEAVY_SHELL, "floor": _ROUNDS_RANGE_FLOOR_PX, "speeds": [_heavy_cannon_speed()]},
 		{"scene": EnemyRounds.SCATTER, "floor": 0.0, "speeds": [fs["forward"]]},
 	]
 	for entry: Dictionary in entries:
@@ -217,6 +221,20 @@ func test_a_synthetic_100px_per_s_round_fails_the_sweep() -> void:
 	# hypothetical 100px/s: 2400 / 100 = 24 > 18 - this round would time out short of its range.
 	assert_false(_round_clears_its_lifetime(2400.0, 100.0, 18.0),
 			"a round this slow would time out before it reaches its own max_distance")
+
+
+## The Hacker Frigate's control dart (Phase 9 t9, plan §2.11): a `HijackPulse` is no `EnemyBullet` (no collision areas, it claims by
+## distance) and has one speed, its scene's, so it is its own row: 1400 / 900 = 1.56 s <= 1.6 s. Boundary: the same caps at 870 px/s fail
+## (1.609 s).
+func test_the_hijack_pulse_dart_clears_its_lifetime() -> void:
+	var dart := (load("res://assault/scenes/projectiles/hijack_pulse/hijack_pulse.tscn") as PackedScene).instantiate() as HijackPulse
+	add_child_autofree(dart)
+	var lifetime := dart.get_node("ProjectileLifetime") as ProjectileLifetime
+	assert_true(_round_clears_its_lifetime(lifetime.max_distance, dart.speed, lifetime.max_time),
+			"the dart reaches its %.0f px cap (%.3f s at %.0f px/s) inside max_time %.1f s" % [lifetime.max_distance,
+			lifetime.max_distance / dart.speed, dart.speed, lifetime.max_time])
+	assert_false(_round_clears_its_lifetime(lifetime.max_distance, 870.0, lifetime.max_time),
+			"boundary: the same caps at 870 px/s would time out first (1.609 s)")
 
 
 # ---------------------------------------------------------------------------------------------

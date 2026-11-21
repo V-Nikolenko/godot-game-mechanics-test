@@ -1,0 +1,31 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/mounts/burst_cannon_mount.gd" id="1_hcm"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_bullet/rounds/heavy_shell.tscn" id="2_hcm"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/turret_head_heavy_cannon.png" id="head_tex"]
+
+[node name="HeavyCannonMount" type="Node2D"]
+script = ExtResource("1_hcm")
+charge_seconds = 0.7
+burst_count = 2
+burst_gap = 0.35
+round_speed = 220.0
+round_scene = ExtResource("2_hcm")
+turn_rate = 0.9
+fire_range = 900.0
+lead_blend = 0.6
+fire_cone_deg = 6.0
+scan_arc_deg = 90.0
+scan_speed = 0.4
+cooldown_seconds = 3.2
+traverse_deg = 70.0
+
+[node name="Muzzle" type="Marker2D" parent="."]
+position = Vector2(26, 0)
+
+[node name="Head" type="Sprite2D" parent="."]
+show_behind_parent = true
+rotation = -1.5707964
+texture = ExtResource("head_tex")
+centered = false
+offset = Vector2(-32, -32)

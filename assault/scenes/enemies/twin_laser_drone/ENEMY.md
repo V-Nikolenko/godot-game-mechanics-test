@@ -69,6 +69,7 @@ and ticks it, so a cancelled beam always fades out.
   death leaves A to fade it), `collapsed(false)`. The survivor is **SOLO**: it can never relight the beam. Open Space: it `arrive`s at the controller if one is live,
   else it circles `patrol_anchor` alone on its `idle_radius` ring (t14). A tender takes it back (`LaserTender.dock()`) once it is within `dock_radius`. Assault: DISENGAGE.
 - **Rails** — `on_suspended()` releases the drone from the rig (the pair breaks; a suspended drone A frees the beam, since nobody would tick its fade).
+- **EMP (Phase 9 t5)** — `on_emp_started()` releases the drone from the rig the same way (an EMP-disrupted drone A frees the beam too: its skipped tick is the only clock the beam has). After the window it carries on alone (Assault DISENGAGE, Open Space SOLO).
 
 ## Attack B: launched by a Laser Tender (t13)
 

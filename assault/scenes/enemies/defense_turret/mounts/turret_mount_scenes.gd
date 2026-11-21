@@ -9,9 +9,10 @@ const LANCE: PackedScene = preload("res://assault/scenes/enemies/defense_turret/
 const BEAM_CANNON: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/beam_cannon_mount.tscn")
 const ROCKET_BATTERY: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/rocket_battery_mount.tscn")
 const PULSE_RING: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/pulse_ring_mount.tscn")
+const HEAVY_CANNON: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/heavy_cannon_mount.tscn")
 
 
-## The mount scene for [param variant], or null with no error while that variant is not built yet (every variant is built as of t8),
+## The mount scene for [param variant], or null with no error while that variant is not built yet (every variant is built as of Phase 10 t3),
 ## so a caller can sweep "every built variant".
 static func scene_for(variant: int) -> PackedScene:
 	match variant:
@@ -27,6 +28,8 @@ static func scene_for(variant: int) -> PackedScene:
 			return ROCKET_BATTERY
 		TurretMount.Variant.PULSE_RING:
 			return PULSE_RING
+		TurretMount.Variant.HEAVY_CANNON:
+			return HEAVY_CANNON
 	return null
 
 

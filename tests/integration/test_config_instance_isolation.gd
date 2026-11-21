@@ -60,8 +60,8 @@ const _ENTITY_DIRS: Array[String] = [
 ## finds fewer has broken, and a broken sweep passes every assertion below vacuously.
 const _MIN_ENTITIES_WITH_CONFIG: int = 10
 
-const GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/gunship/gunship.tscn")
-const GUNSHIP_CONFIG_PATH := "res://assault/scenes/enemies/gunship/gunship_config.tres"
+const GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")  # the Heavy Gunship since Phase 10 t4
+const GUNSHIP_CONFIG_PATH := "res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.tres"
 const STATION_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_station/space_station.tscn")
 const SCORE_CONFIG_PATH := "res://global/resources/score_config_default.tres"
 
@@ -240,7 +240,7 @@ func test_writing_to_one_entitys_config_cannot_reach_another() -> void:
 	)
 	assert_eq(
 		(load(GUNSHIP_CONFIG_PATH) as ShipConfig).max_health, shipped_health,
-		"writing one gunship's config.max_health rewrote the shipped gunship_config.tres in memory"
+		"writing one gunship's config.max_health rewrote the shipped heavy_gunship_config.tres in memory"
 	)
 	var c := _spawn(GUNSHIP_SCENE.resource_path)
 	assert_eq(
