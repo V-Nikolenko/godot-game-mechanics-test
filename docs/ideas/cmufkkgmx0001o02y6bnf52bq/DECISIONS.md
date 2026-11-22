@@ -4350,3 +4350,73 @@ Dossier: `docs/epics-done/cmug23oo90029m52wae4clve0/` (PRD, SOURCES, REPORT). Pe
 | Difficulty scaling | Ph16 |
 | Level 2 beyond the builder rename | Ph15 |
 | Untested: Carrier bow cannon and missile bank in level 1; drones against lit columns; play feel of Cloud Descent's three firing gunships | later / owner |
+
+## Phase 11 - Enemy rework, phase 11: Space Fortress 2.0 and machine-driven boss reinforcements (2026-11-22)
+
+Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md` (revision 1). **The research stage left no `1-context.md` / `2-research.md`** (the Ph10 precedent); the plan carries the
+scope check (§1.1), judgement calls (§1.2) and code facts (§1.3, read @ `cba0e7b`). These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
+
+### Changes to earlier decisions
+- **The legacy Space Station is retired** (owner choice 1 default): the Space Fortress replaces it in level 1's `station_assault` section (internal section name kept), then
+  `assault/scenes/enemies/space_station/`, `WaveBuilder.space_station()` and the station test family are deleted or re-pointed per the plan's §2.11 table. The "station test
+  family" intent tests become the fortress / boss-machinery family; CLAUDE.md's rail-fire gate (`test_station_reinforcements.gd::test_rail_reinforcements_fire`) becomes an
+  "escorts fire within 3 s" row (escorts are AI ships, not rails).
+- **Boss reinforcements leave the generic plumbing:** a boss's escorts are never direct enemy-container children and never `enemy_spawned_orphan`s (unlike Ph10's Carrier
+  hangar children, which stay as they are until Ph18). They live in an escort container, are announced with `EventBus.boss_escort_spawned(escort, boss)`, pay only kill score ×
+  combo (no wave tally, no escape penalty, nothing once the boss `is_dying()`), and are scuttled when the boss's death starts (owner choice 4 default).
+- **Ph8's "twin-rig beam rotating about an anchor" for the fortress is dropped:** the fortress's rotating beams are hull-mounted `EnemyBeam` BEAM emitters turned by the hull spin.
+  The rig mode stays unbuilt and available to a later boss.
+- **Ph9 / Ph10 "EMP on structures" debt:** the station is closed by retirement (the fortress answers EMP at `emp_factor` 0.4); `DefenseTurret` / heavy emplacement,
+  `LaserEmitter` and `ShieldGenerator` answer EMP (tangible, silenced for the window; `BaseEnemy.apply_emp` tolerates a null mover); **the bonus drone deliberately keeps the
+  legacy process-disable freeze** (a rail reward target).
+- Ph10's "pick one hull rule per boss": **the fortress uses the armoured hull** (Carrier rule; death = the CORE part's death).
+
+### Names and places later phases build on
+- **`global/boss/`** (new folder, boss-agnostic):
+  - `BossPhase` (flat Resource, scene sub-resource, never written at runtime): `enum Trigger { START, PARTS_DESTROYED, HEALTH_AT_OR_BELOW }`, `enum Change { MOVEMENT = 1,
+    ATTACKS = 2, VULNERABLE = 4, ARENA = 8, REINFORCEMENTS = 16, VISUALS = 32 }` (both append-only); `phase_id`, `trigger`, `module_ids`, `roles`, `count`, `health_module`,
+    `health_ratio`, `changes`.
+  - `BossPhaseDriver` (Node `PhaseDriver`): `phases`, `bind(hull, host_health)`, `evaluate()`, `current_index()`, `current_id()`, `has_reached(id)`, `validate(hull)`, signal
+    `phase_entered(index: int, phase_id: StringName)`; ordered, one way, cascades in order; applies no consequence. **IDEAS §25 is a gate:** `test_boss_phase_rules.gd` fails any
+    shipped ladder with a non-start phase declaring < 2 changes, and each boss has a row checking its `phase_snapshot()` shows every declared change.
+  - `ReinforcementBay` (Node2D `Bay` on an `EnemyModule`, optional `Mouth`): `enum Trigger { PERIODIC, ON_SECTOR_LOSS, ON_PHASE }`; exports `bay_id`, `payload_scene`,
+    `assault_payload_scene`, `count`, `period`, `first_delay`, `active_from_phase`, `watch_ids`, `on_phase`, `door_seconds`, `opens_part`, `assault_launch_limit`. A bay on a
+    destroyed part is dead.
+  - `BossReinforcements` (RefCounted, ticked by the brain; its `tick` is the only clock): caps, `surge(bay_id, count)`, `scuttle_all()`, `live_count()`, signals
+    `launched(bay_id, escorts)`, `door_changed(bay_id, open)`. Escorts: seeded, `start_engaged`, owner group, shared `SquadController` per launch, outward boost.
+  - `EscortContainer.ensure(host)`: lazy `<host name>Escorts` Node2D sibling of the boss, group `&"boss_escorts"`, freed with the boss. `ENEMIES_CLEARED` sees the boss, its
+    bullets and this one node.
+  - `ShieldSector` (RefCounted): a generator part + protected parts, one 360° `EnemyShield` bubble per part; generator destroyed = sector exposed for good.
+  - `BossDeathSequence` (was `StationDeathSequence`, behaviour unchanged): host contract `death_started`, `death_duration`, optional `config.death_blast_count`; it writes the
+    dying host's rotation only after `suspend_ai()`.
+- **`StateLight.State.SHIELDED`** (cyan, appended).
+- **`TurretMount.Variant.SPREAD_CANNON` (7) and `RAPID_PULSE` (8)** appended; `BurstCannonMount.pellets` / `pellet_spread_deg` (1 / 0 = bit-identical).
+- **Space Fortress** (`assault/scenes/enemies/space_fortress/`: `SpaceFortress`, `FortressBrain` with `Phase { IDLE, NOTICING, RETURNING, ENTER, HOLD, REPOSITION }`
+  append-only, flat `SpaceFortressConfig`; `WaveBuilder.space_fortress()` / `SPACE_FORTRESS`): circle hull r 176 (sprite 384), root layer 0 / mask 0, armoured; parts
+  `battery_spread` / `battery_pulse` / `battery_sweep` / `battery_artillery` / `battery_missiles` (WEAPON), `hangar` (HANGAR, doors), `shield_north` / `shield_south`
+  (WEAK_POINT generators, locked until phase 2), `core` (CORE, locked until phase 3). Boss phases `batteries` → `shields_exposed` (2 batteries lost) → `core_exposed` (both
+  generators) → `critical` (core ≤ 40 %). Weapons: corner mounts with 100° traverse (diagonal crossfire), hull spoke beams with spin volleys, an `EnergyRing` ring pulse, the
+  station's precessing core bullet ring in `critical`. Open Space: `AnchorIdle`, a combat zone (radius 600) around `patrol_anchor`, reposition from `core_exposed`, presents its
+  strongest side at a turn rate a circling player beats. Assault: enters from above to world y 180, vertical bob from `core_exposed`, x fixed, no engagement budget, `world_anchored_x`.
+- **Naming:** never "station" for the boss in code or docs (Open Space has "Fortuna Space Station"); hub node and docs say Space Fortress.
+- **Level 1:** `station_assault` spawns `b.space_fortress().at(0, -230)` (no `.delay()`, no `.move()`), timeout 240 s (owner choice 5 default).
+- **Hub:** draw 21 = the Space Fortress, 4200 ring at −45° (levers: ring 3800–4600, bearing −45° ± 22.5°).
+
+### Conventions
+- A boss's phases are data (`BossPhase` sub-resources on `PhaseDriver`); its consequences live in the host's `phase_entered` handler; tuning in the flat config.
+- A boss's reinforcements always come out of a bay on a live part, with a visible door telegraph, and stop when that part is destroyed.
+- Fairness for boss geometry weapons is an inequality read from scene exports (beam tip speed at hull + 250 px ≤ 0.8 × player speed; ring gap ≥ 2 × player hurtbox; ≤ 2 batteries
+  committed at once) plus a measured Assault density ceiling (≤ 2.0 × the station's legacy turret rate).
+- Gate time: start 210.34 s; Ph11 allotments sum to +16.1 s; escalate past a 237 s two-run mean or 1.5× a task's allotment.
+
+### Deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| Carrier hangars onto `ReinforcementBay` / `BossReinforcements`; Gunship phases onto `BossPhaseDriver` | Ph18 | the machinery is built here |
+| Dreadnought on `global/boss/` | Ph12 | |
+| Enemy beams / rings damaging parts | Ph18 / Ph19 | Ph10 deferral stands |
+| Wrecked parts blocking LOS, capital wrecks | Ph19 | |
+| Escort cleanup / leash in Open Space beyond the cap; encounter compositions with the fortress | Ph13 / Ph14 | |
+| Boss / part HUD, per-part score, audio | Ph17 | IDEAS §6.11 "not one giant HP bar" |
+| Difficulty tiers for the fortress | Ph16 | |
+| EMP knocking boss shields down | Ph18 (ship-mounted EMP) | |
