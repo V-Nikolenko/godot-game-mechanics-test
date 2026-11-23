@@ -63,6 +63,7 @@ const _MIN_ENTITIES_WITH_CONFIG: int = 10
 const GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")  # the Heavy Gunship since Phase 10 t4
 const GUNSHIP_CONFIG_PATH := "res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.tres"
 const STATION_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_station/space_station.tscn")
+const FORTRESS_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_fortress/space_fortress.tscn")
 const SCORE_CONFIG_PATH := "res://global/resources/score_config_default.tres"
 
 
@@ -328,6 +329,27 @@ func test_station_children_see_the_private_copy_in_their_ready() -> void:
 		seen[0], seen[1],
 		"two stations' children saw the SAME config object, so the stations share their stats"
 	)
+
+
+## The Space Fortress (Phase 11 t5) has the same shape: its `DeathSequence` copies `death_blast_count` in ITS `_ready()`, before the fortress's. The
+## station row re-expressed: identity from inside a probe child, then the sequence's own copy read from the private config (a value written on
+## the copy before `add_child`, so the shared `.tres` value cannot satisfy it).
+func test_fortress_children_see_the_private_copy_in_their_ready() -> void:
+	var seen: Array[Resource] = []
+	for i in 2:
+		var container := Node2D.new()
+		add_child_autofree(container)
+		var fortress := FORTRESS_SCENE.instantiate()
+		fortress.get("config").set("death_blast_count", 5 + i)
+		var probe := ConfigProbe.new()
+		fortress.add_child(probe)
+		container.add_child(fortress)
+		assert_not_null(probe.seen, "the probe's _ready() did not run")
+		seen.append(probe.seen)
+		assert_eq(probe.seen, fortress.get("config"), "a fortress child's _ready() saw a different config object than the fortress holds")
+		assert_true(probe.seen.resource_path.is_empty(), "a fortress child's _ready() saw the shared, cached config")
+		assert_eq(fortress.get_node("DeathSequence").get("_blast_count"), 5 + i, "the death sequence copied its private value in its own _ready()")
+	assert_ne(seen[0], seen[1], "two fortresses' children saw the SAME config object")
 
 
 # ── 7. ScoreTracker.score_config — same bug, a different owner shape ─────────

@@ -321,6 +321,19 @@ b.carrier().at(0, -260)
 
 ---
 
+### `space_fortress` — Space Fortress (Phase 11 boss)
+
+**Builder:** `b.space_fortress()` (const `WaveBuilder.SPACE_FORTRESS`, Phase 11 t5)  
+**Scene:** `space_fortress/space_fortress.tscn` — see [`ENEMY.md`](../assault/scenes/enemies/space_fortress/ENEMY.md)  
+**Movement:** Brain-driven (`FortressBrain` + `EnemyMover`); **no `.move()`, no `.delay()`** (the station's rules). The t5 shell does not move yet (t6).  
+**Shoots / launches:** not yet (t7 batteries, t16 hull beams and rings, t8 escorts from its bays).  
+**HP:** an armoured ring hull nothing hurts + nine parts: five batteries 260, hangar 300 (locked: doors), two shield generators 360 (locked until two batteries
+are wrecks; each bubbles the batteries / hangar of its half), core 1500 (locked until both generators are wrecks). **The core's death is the fortress's.**  
+**Score:** 1500  
+**Naming:** never "station" — Open Space has "Fortuna Space Station". It replaces the space station in level 1 in t10.
+
+---
+
 ### `bomber` — Bomber
 
 **Builder:** `b.bomber()`  

@@ -168,6 +168,11 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/carrier/carrier_config.tres",
 	},
 	{
+		"name": "space_fortress",
+		"scene": "res://assault/scenes/enemies/space_fortress/space_fortress.tscn",
+		"config": "res://assault/scenes/enemies/space_fortress/space_fortress_config.tres",
+	},
+	{
 		"name": "gatling_interceptor",
 		"scene": "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn",
 		"config": "res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor_config.tres",

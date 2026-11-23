@@ -3,12 +3,13 @@
 ##
 ## It sweeps every `.tscn` under `assault/` and `open_space/` whose `SceneState` has a node scripted with `BossPhaseDriver`, instantiates each
 ## in a scratch tree (the driver's `validate(hull)` reads the live `ModularHull`) and asserts `validate()` returns nothing. The shipped boss
-## scenes arrive with t5 (`space_fortress.tscn`): until then the sweep finds none, which is asserted `>= 0` (not vacuously "passes" — the
-## synthetic boundary below proves the check can reject), and t5 changes the expectation to "contains `space_fortress.tscn`".
+## scene since t5 is `space_fortress.tscn`: the sweep must find it (a broken sweep that finds nothing fails), and the synthetic boundary below proves
+## the check can reject.
 extends GutTest
 
 const DRIVER_SCRIPT := "res://global/boss/boss_phase_driver.gd"
 const ROOTS := ["res://assault", "res://open_space"]
+const FORTRESS_SCENE := "res://assault/scenes/enemies/space_fortress/space_fortress.tscn"
 const HOST_SCENE: PackedScene = preload("res://tests/helpers/fixture_modular_host.tscn")
 
 
@@ -67,7 +68,7 @@ func _hull_of(node: Node) -> ModularHull:
 func test_every_shipped_boss_ladder_changes_at_least_two_aspects_per_phase() -> void:
 	var scenes := _boss_scenes()
 	gut.p("boss scenes holding a BossPhaseDriver: %d" % scenes.size())
-	assert_gte(scenes.size(), 0, "0 scenes is legal until the Space Fortress (t5) lands")
+	assert_has(scenes, FORTRESS_SCENE, "the sweep finds the Space Fortress (Phase 11 t5)")
 	for path in scenes:
 		var inst := (load(path) as PackedScene).instantiate()
 		add_child_autofree(inst)

@@ -57,16 +57,16 @@ const _DEFAULT_MASK_AFTER_READY := 1121
 
 ## `bomber`, `bonus_drone`, `razor_drone`, `heavy_gunship`, `gatling_interceptor`, `swarm_drone`,
 ## `fighter`, `ram_corvette`, `sniper`, `space_station`, `missile_corvette`, `support_ship`, `mine_layer`,
-## `defense_turret`, `power_source`, `shield_generator`, `laser_emitter`, `heavy_emplacement`, `twin_laser_drone`, `laser_tender`, `jamming_structure`, `sector_jammer`, `pulsed_jammer`, `hacker_frigate`, `carrier`. A sweep that finds fewer has broken, and every assertion below is vacuous on a
+## `defense_turret`, `power_source`, `shield_generator`, `laser_emitter`, `heavy_emplacement`, `twin_laser_drone`, `laser_tender`, `jamming_structure`, `sector_jammer`, `pulsed_jammer`, `hacker_frigate`, `carrier`, `space_fortress`. A sweep that finds fewer has broken, and every assertion below is vacuous on a
 ## broken sweep.
-const _MIN_ROSTER_SIZE := 25
+const _MIN_ROSTER_SIZE := 26
 
 ## Enemies whose damage/death flow diverges from the generic BaseEnemy path enough that a shared
 ## loop would either be meaningless (space_station never frees on the lethal frame) or wrong
 ## (ram_corvette's hull deflects every hit while a plate lives, like the station's core; carrier's hull refuses every hit and
-## dies only with its Core part, Phase 10 t6). Each is
-## owned by its own suite (`test_station_death_sequence.gd`, `test_ram_corvette.gd`, `test_carrier.gd`).
-const _EXCLUDED_FROM_GENERIC_DAMAGE_FLOW := ["ram_corvette", "space_station", "carrier"]
+## dies only with its Core part, Phase 10 t6; space_fortress likewise, Phase 11 t5). Each is
+## owned by its own suite (`test_station_death_sequence.gd`, `test_ram_corvette.gd`, `test_carrier.gd`, `test_space_fortress.gd`).
+const _EXCLUDED_FROM_GENERIC_DAMAGE_FLOW := ["ram_corvette", "space_station", "carrier", "space_fortress"]
 
 
 ## `{name, scene}` per top-level directory under `_ENEMY_ROOT` whose `<dir>/<dir>.tscn` exists and
@@ -302,6 +302,7 @@ const _AUTHORED_CONTACT_MODES := {
 	"hacker_frigate": ContactProfile.Mode.COLLISION,
 	"hacker_disruptor": ContactProfile.Mode.COLLISION,
 	"carrier": ContactProfile.Mode.ARMOR,
+	"space_fortress": ContactProfile.Mode.ARMOR,
 }
 
 
@@ -538,10 +539,10 @@ func test_each_brain_refuses_a_tow_in_exactly_its_committed_phases() -> void:
 
 ## The every-phase refusers. The mover-less structures with a brain (Phase 8: the defense turret, the heavy emplacement, the shield generator) have
 ## no mover, so they have no accepting phase and cannot join `_REFUSING_PHASES` (that table needs one); the Heavy Gunship (Phase 10 t4) has a
-## mover but a heavy hull is never towed, nor is the Carrier (t6). Their brain and root refuse a tow in every phase. Reached by node path and the
+## mover but a heavy hull is never towed, nor is the Carrier (t6) or the Space Fortress (Phase 11 t5). Their brain and root refuse a tow in every phase. Reached by node path and the
 ## script's constant map, never by class name (the leak note above `_hurt_box`).
 func test_every_phase_refusers_refuse_a_tow_in_every_phase() -> void:
-	for dir in ["defense_turret", "heavy_emplacement", "shield_generator", "heavy_gunship", "carrier"]:
+	for dir in ["defense_turret", "heavy_emplacement", "shield_generator", "heavy_gunship", "carrier", "space_fortress"]:
 		var h = _HARNESS.open_space()
 		add_child_autofree(h.root)
 		var enemy := load("%s/%s/%s.tscn" % [_ENEMY_ROOT, dir, dir]).instantiate() as BaseEnemy
