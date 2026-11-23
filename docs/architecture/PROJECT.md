@@ -578,6 +578,10 @@ existing enemy scenes from all four screen edges on a fixed cycle, and stops on 
 It is the project's first spawner that is not `WaveManager` — reinforcements go straight into
 `enemy_container` as siblings of the station and register on `EventBus.enemy_spawned_orphan`,
 the same channel `big_asteroid.gd` uses for its shards.
+**Phase 11 (t2) adds the shared boss path that replaces this:** `global/boss/` `ReinforcementBay` / `BossReinforcements` launch escorts
+from specific parts into one `<boss>Escorts` container (`EscortContainer`, a sibling of the boss freed with it), announced on
+`EventBus.boss_escort_spawned(escort, boss)` instead of the orphan signal; `ScoreTracker` pays their kills and nothing else
+([global.md](modules/global.md) → *Boss reinforcements*). The station keeps its own spawner until the fortress retires it (t11).
 
 A **fourth** child node, `StationDeathSequence`, owns the boss's death spectacle. `SpaceStation`
 overrides `BaseEnemy._on_health_changed` so that only `queue_free()` is delayed — `was_killed` and

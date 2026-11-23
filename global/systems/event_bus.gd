@@ -75,3 +75,8 @@ signal skill_challenge_completed(clean: bool, bonus: int)
 ## asteroid splitting into smaller ones, or a script-spawned medal. ScoreTracker
 ## subscribes here so the resulting kill still awards points.
 signal enemy_spawned_orphan(enemy: Node)
+
+## Emitted by `BossReinforcements` (`global/boss/boss_reinforcements.gd`) for every escort a boss's `ReinforcementBay` launches, after the
+## escort is in its `EscortContainer`. Never paired with `enemy_spawned_orphan`: ScoreTracker pays an escort kill its `score_value` x combo
+## and nothing else (no wave tally, no escape penalty), and nothing once [param boss] `is_dying()` (Phase 11 §2.2).
+signal boss_escort_spawned(escort: Node, boss: Node)

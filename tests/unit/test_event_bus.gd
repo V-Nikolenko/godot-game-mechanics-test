@@ -27,6 +27,7 @@ const EXPECTED: Dictionary = {
 	"score_event":               ["world_position", "points", "reason"],
 	"skill_challenge_completed": ["clean", "bonus"],
 	"enemy_spawned_orphan":      ["enemy"],
+	"boss_escort_spawned":       ["escort", "boss"],
 }
 
 var _declared: Dictionary = {}

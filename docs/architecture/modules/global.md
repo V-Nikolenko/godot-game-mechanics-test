@@ -66,7 +66,7 @@ global/
 │   ├── anchor_idle.gd         # AnchorIdle (RefCounted) — generic idle-around-an-anchor → combat handover
 │   └── enemy_world.gd         # EnemyWorld — the one lookup of the &"assault_arena" mode provider
 ├── hazards/                   # shared hazard description + registry (enemy rework phase 6): HazardInfo, Hazards, HazardField, HazardDrift
-├── boss/                      # shared boss machinery (enemy rework phase 11): BossPhase, BossPhaseDriver, ShieldSector (more arrive with t2–t4; free of any one boss's names)
+├── boss/                      # shared boss machinery (enemy rework phase 11): BossPhase, BossPhaseDriver, ShieldSector, BossDeathSequence, ReinforcementBay, BossReinforcements, EscortContainer (free of any one boss's names)
 ├── physics/
 │   └── collision_layers.gd    # CollisionLayers — named constants, one per project.godot layer_names entry
 ├── entities/
@@ -119,7 +119,7 @@ All eleven are registered in `project.godot` under `[autoload]`. The `*` prefix 
 ## 4. Shared systems (`global/systems/`)
 
 ### `event_bus.gd` — `EventBus`
-Autoload signal hub for decoupling gameplay from UI. Declares typed signals only (no logic): player health/overheat/weapon/rocket/death, ability activate/deselect, mission wave/complete/failed, and scoring (`score_changed`, `combo_changed`, `score_event`, `skill_challenge_completed`, `enemy_spawned_orphan`). Subscribe here instead of `get_nodes_in_group()`.
+Autoload signal hub for decoupling gameplay from UI. Declares typed signals only (no logic): player health/overheat/weapon/rocket/death, ability activate/deselect, mission wave/complete/failed, and scoring (`score_changed`, `combo_changed`, `score_event`, `skill_challenge_completed`, `enemy_spawned_orphan`, `boss_escort_spawned(escort, boss)` — a boss escort, never paired with the orphan signal; Phase 11 t2). Subscribe here instead of `get_nodes_in_group()`.
 
 ### `camera_shake.gd` — `CameraShake`
 Trauma-model screen shake (Eiserloh). Systems call `CameraShake.add(amount)` to inject trauma in `[0,1]` (saturating); trauma decays at `_DECAY = 1.5`/s. The visible offset is quadratic — `get_offset()` returns a random vector scaled by `trauma² * _MAX_OFFSET (8.0 px)`. Cameras add this to their own offset each frame.
@@ -352,6 +352,36 @@ A boss's phases are data, and the driver that walks them applies nothing (IDEAS 
 
 Gated by `tests/unit/test_boss_phase_driver.gd` and the intent gate `tests/integration/test_boss_phase_rules.gd`, which validates every scene
 under `assault/` / `open_space/` holding a `BossPhaseDriver` (none until the Space Fortress, t5).
+
+### Boss reinforcements — `boss/reinforcement_bay.gd`, `boss/boss_reinforcements.gd`, `boss/escort_container.gd` (enemy rework phase 11, t2)
+
+Defenders launch from specific parts, so destroying a part changes what the player fights next (IDEAS §10, §26).
+
+- **`ReinforcementBay`** (Node2D `Bay`, a child of the launching `EnemyModule`; optional `Marker2D` `Mouth`): data only. `bay_id`,
+  `Trigger { PERIODIC, ON_SECTOR_LOSS, ON_PHASE }` (append-only), `payload_scene` / `assault_payload_scene` (null = the first), `count` 2,
+  `period` 12.0 / `first_delay` 3.0 (PERIODIC), `active_from_phase` (empty = from the start), `watch_ids` (ON_SECTOR_LOSS), `on_phase`,
+  `door_seconds` 0.8, `open_hold_seconds` 0.0, `opens_part` (the part hittable only while its doors are open), `assault_launch_limit` −1.
+  `part()`, `mouth_position()`, `launch_direction()` (host centre → mouth).
+- **`BossReinforcements`** (RefCounted, built by the host, ticked by its brain): `new(host, hull, driver, rng, owner_group, live_cap,
+  boost_speed, boost_seconds)`; `tick(delta, active)` is the only clock (`active` false freezes PERIODIC clocks, puts a launch mid-OPENING back
+  in its queue and closes open doors). Door cycle CLOSED → OPENING (`door_seconds`, part `Light` CHARGING, `opens_part` → vulnerable) →
+  LAUNCH → OPEN (`open_hold_seconds`) → CLOSED (light back to the state it had at OPENING). A bay whose part is destroyed is dead (queue
+  dropped, a launch mid-OPENING never comes out). Cap: `min(count, live_cap − live_count())`; no room → skipped and counted. Assault →
+  `assault_payload_scene` and `assault_launch_limit`. `surge(bay_id, count)`, `escorts()` (the escort container's live `BaseEnemy`s, the one
+  source of truth), `scuttle_all()` (`health.set_health(0)` on each), `live_count()`, `bay_ids()`, `launches()`, `skipped()`, `pending()`,
+  `door_open()`, `door()`, `is_dead()`; signals `launched(bay_id, escorts)`, `door_changed(bay_id, open)`. Each escort: seeded
+  (`Brain.rng_seed`, non-zero), `start_engaged`, one `SquadController` per payload scene for the object's life, spread at the mouth, collision
+  exceptions both ways, added to the escort container, owner group, `mover.boost` outward, `EventBus.boss_escort_spawned(escort, boss)`.
+  **Never writes `counts_toward_wave_clear` / `counts_as_escape`** and never emits `enemy_spawned_orphan`.
+- **`EscortContainer`** (static): `ensure(host)` creates (lazily) a `Node2D` `<host name>Escorts` sibling of the host (group `&"boss_escorts"`,
+  meta `boss`), freed on the host's `tree_exiting`; `of(host)`. `LevelDirector` keeps counting the enemy container's children, so an
+  `ENEMIES_CLEARED` section waits on the boss, its bullets and this one container. Escort pools resolve their container as the escort's
+  parent, so escort bullets live and die there too.
+- **Scoring:** `ScoreTracker._on_boss_escort_spawned` pays an escort kill `floor(score_value × combo)` and the combo step, nothing else (no
+  wave tally, no escape penalty) and nothing once the boss is freed or `is_dying()` (duck-typed).
+
+Gated by `tests/integration/test_boss_reinforcements.gd` (fixture `tests/helpers/fixture_boss_host.tscn`: a `Hangar` PERIODIC bay with
+`opens_part`, a `Sector` ON_SECTOR_LOSS bay watching `WatchA` / `WatchB`, and `Other`).
 
 ### CollisionLayers — `global/physics/collision_layers.gd`
 

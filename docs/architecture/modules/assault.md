@@ -544,6 +544,8 @@ UI nodes only subscribe to `EventBus`. It listens to `WaveManager.enemy_spawned`
   `tests/integration/test_score_tracker_escape_penalty.gd`). Independent of
   `counts_toward_wave_clear`: station reinforcements are exempt from wave-clear bonuses but
   still deliberately pay the escape penalty (see below).
+- **Boss escorts** (`EventBus.boss_escort_spawned(escort, boss)`, Phase 11 t2) pay their kill (`score_value` × combo, combo step) and
+  nothing else: no wave tally, no escape penalty, and nothing once the boss `is_dying()` — [global.md](global.md) → *Boss reinforcements*.
 
 Results publish via `EventBus.score_changed` / `combo_changed` / `score_event`, consumed
 by `gui/hud_score_widget.gd` and `gui/score_popup*.gd`. A categorized `_breakdown` feeds

@@ -4446,3 +4446,9 @@ scope check (§1.1), judgement calls (§1.2) and code facts (§1.3, read @ `cba0
 
 ### Phase 11, built in t3
 - `TurretMount.Variant` gains `SPREAD_CANNON` (7) and `RAPID_PULSE` (8), both `BurstCannonMount` on standalone scenes (`spread_cannon_mount.tscn`, `rapid_pulse_mount.tscn`); `BurstCannonMount` gains `pellets` (1) / `pellet_spread_deg` (0), pellets spread evenly over the full width, one aim-cone check per volley, pool sized `burst_count × pellets`. Both heads are 64×64 (pivot 32,32) in `assault/assets/sprites/enemies/`. A new reach row in `test_turret_mount_variants.gd` asserts `fire_range <= round max_distance` for every `BurstCannonMount` variant (the heavy cannon's 900 against its 1800 included).
+
+### Phase 11, built in t2
+- `BossReinforcements` triggers (PERIODIC clock, ON_SECTOR_LOSS, ON_PHASE) count only while the bay is active (`active_from_phase` empty or reached); a loss or phase entry before activation is dropped, not stored. `surge()` ignores activation (an emergency launch) but **does** honour `assault_launch_limit` and the live cap: t10's critical surge in Assault must allow for a bay that already spent its limit.
+- The cap is checked twice: when a queued launch would open the doors (no room → skipped and counted, the doors stay shut) and again at LAUNCH (clamped; 0 → skipped). `launches()` counts only launches that put out at least one escort.
+- `tick(delta, false)` puts a launch caught mid-OPENING back at the front of its queue (it comes out when active again); it is not lost.
+- Added beyond the plan: `BossReinforcements.Door { CLOSED, OPENING, OPEN }` + `door(bay_id)`, and escorts of one launch spread `ESCORT_SPACING` 28 px across the launch direction (the `CarrierHangars` spacing).
