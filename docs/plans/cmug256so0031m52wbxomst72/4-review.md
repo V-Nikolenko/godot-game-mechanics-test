@@ -239,3 +239,195 @@ The dispatching run (not the reviewer) re-checked the blocking claims and two mi
 - Finding 7: `base_enemy.gd` `_ready()` copies `counts_toward_wave_clear` / `counts_as_escape` from the config. Confirmed.
 
 Verdict recorded in `review.json`: CHANGES_REQUESTED.
+
+# Round 2 (revision 3)
+
+VERDICT: APPROVED
+
+Independent re-review of `3-plan.md` revision 3 and `tasks.json` (16 tasks) against the code on `agent/auto-dev` @ `89a4c08`. I re-read `CLAUDE.md`, the planned Phase 11
+section of `DECISIONS.md` (:4354-4445), the Phase 10 `REPORT.md`, and IDEAS §8, §8.1 and §10. I checked every round-1 answer against the plan text, `tasks.json` and the
+code rather than against §8's table.
+
+The plan still solves the whole epic, and the split (t15 `ShieldSector`, t16 geometry weapons) is wired consistently:
+- dependencies: t5 → t15; t16 → t7 → t6 / t3; t8 → t16 / t2; t9 → t8; t11 → t10 / t9 (so after t16); t14 → all;
+- the §3 build sequence, §2.15 allotments (sum +18.1 s → 228.4 s, verified), §4 and §7 all name t15 and t16;
+- every `planSections` entry exists as a heading.
+
+I verified these code facts directly:
+- **Shared components:** `telegraph_gate.call()` (turret_mount.gd:279); `ModularHull` signals and API; `EnemyModule.Role` and `destroy()`; `EnemyShield.attach()` /
+  `absorbs_hit()` (armoured host → no absorb); `StateLight.State`; `EnemyMover.step()` / `halt()`; `AnchorIdle._init` (5th parameter `p_home_radius`); `Health.amount_changed`.
+- **BaseEnemy EMP:** the `apply_emp` null guards, and the `_physics_process` EMP-before-brain order.
+- **EMP routing:** `EMPBlastModule` routes by `answers_emp()`.
+- **Enemy beams:** `EnemyBeam` / `EnergyRing` `cancel()` → FADE, ticked only by the owner.
+- **Pools and lifetimes:** `BurstCannonMount.shots_refused`; `RocketBatteryMount.rockets_refused` and its persist pools; `EnemyRounds.pool_size_for`. The round
+  `max_distance` / `max_time` values hold the t3 reach row on every existing variant (pulse 1400 ≥ 700, heavy shell 1800 ≥ 900).
+- **Pool arithmetic:** heavy cannon 6 → 10 under `pool_period_factor` 0.6; core ring 72.
+- **Station and scoring:** the `space_station.tscn:14` ext_resource; `StationDeathSequence`'s `SpaceStation` cast; ScoreTracker's orphan path; `LevelDirector`'s
+  wall-clock poll; `_build_station_assault()`.
+- **Hub and gate helpers:** the hub pins at :482 / :614 / :1070 / :1275 / :1417 / :1953 and `_expected_seeds()` (20 draws); `_persisting_pools()`
+  (test_level1_specialist_spawns.gd:1533) and `_heavy_rocket_max_life()` (test_engagement_deadline.gd:1364); the corvette's scene-authored persist pools (so the allowlist
+  boundary can fail).
+- **Player hurtbox radii:** 5 × 2.2 = 11 and 5 × 2.7 = 13.5.
+- **Acceptance grep:** the anchored t11 grep, run now, hits only the station's own files and the files named in the §2.11 table. It does not hit Fortuna.
+
+No blocking defect remains. The new findings below are minor. Each can be fixed in place by the task that owns it, with no design change. They should still be fixed: R2-1 to
+R2-3 make a §25 or density row weaker or more brittle than the plan claims.
+
+## Round-1 findings
+
+| # | Status | Evidence |
+|---|---|---|
+| 1 | Resolved | `tasks.json` t5 `dependsOn` [t1, t2, t4, t15] and `planSections` include 2.2; §2.5.3 (3-plan.md:356-361) names what t5 takes from t2. |
+| 2 | Resolved | Anchored pattern at 3-plan.md:743. Run @ `89a4c08`, it matches 46 files: the station dir plus exactly the comment and test files in the §2.11 table. No `open_space/…/space_stations/` hit. |
+| 3 | Resolved | §2.7.6 measures density in all four phases × five stub positions with mean and peak ceilings, counting launches (pools cannot cap the count). Hardening in R2-3. |
+| 4 | Resolved | `attack_gate() -> bool` is zero-argument everywhere ("For every task", §1.3, §2.7.1); row 1 drives a real `telegraph_gate.call()`. |
+| 5 | Resolved | §1.1 / §2.12 now say `LaserEmitter` has no brain or mover (true: laser_emitter.gd extends `BaseEnemy`, no `Brain` node). `LaserFence.step()` polls the posts. The null guard is a row. |
+| 6 | Resolved | New mounts are standalone (§2.3); inherited spoke / ring scenes author every gated value, and the fairness rows read instantiated nodes (§2.7.6). |
+| 7 | Resolved | §2.2 drops both flag writes with the reason (base_enemy.gd:105-109 overwrite, verified); row 14 pins it; no disconnect clause. |
+| 8 | Resolved | "For every task" records the second bounded exception; t7 writes DECISIONS; t10 adds the allowlist row with a Missile Corvette boundary, which is detectable (missile_corvette.tscn:134-152 author `persist_after_owner_death`). |
+| 9 | Resolved | §2.11 re-derives and re-pins `speeds.min()` and `ceil(2274 / min) + 2`, keeping the ≥ assertion on the shipped 18 s / 2400 px (checked against test_enemy_bullet_lifetime.gd:140-166). |
+| 10 | Resolved | §2.10 row (b) overrides `enemies_cleared_timeout` to 2.0 s on its own section copy; the 240 s pin stays in `test_station_assault_section.gd`. |
+| 11 | Resolved | `open_hold_seconds` export (Carrier `door_hold_seconds` parity); feasibility 2.8 × 278 ≈ 778 ≥ 420 and its 0 s boundary (0.8 × 278 ≈ 222 < 420) both hold; real-hit row added. |
+| 12 | Resolved | Gap evaluated at hull edge + player radius (§2.7.6). The 15° boundary fails only for the Assault player; see R2-7. |
+| 13 | Resolved | `fire_range` 420 ≤ 450; reach row over every bullet-firing variant (existing ones pass: 700 ≤ 1400, 900 ≤ 1800); 520 boundary. |
+| 14 | Resolved | `answers_emp()` = `is_dying() or super()`, `apply_emp` a no-op while dying (§2.5.6); row 8 uses a real `EMPBlastModule` (whose routing at emp_blast_module.gd:39-46 makes this work). |
+| 15 | Resolved | Movement row 3 recomputes and asserts the rule's own pick (adjacent candidates on the 360 px circle are 275.5 px apart ≥ 250, so a pick always exists). |
+| 16 | Resolved | §25 path pinned with the hangar alive; t8 adds the dead-hangar row. Per-task partial assertions are under-specified; see R2-2. |
+| 17 | Resolved | t6 lists 2.5.4 / 2.5.6, t8 lists 2.5.3 / 2.6, t5 lists 2.2; t16 lists 2.6 for `begin_spin`. |
+| 18 | Resolved | t9 `dependsOn` [t8]; §3 step 4 says serial on purpose. |
+| 19 | Resolved | §2.4: `.uid` sidecar moved, ext_resource path, duck-typed host replacing `var _station: SpaceStation` / `as SpaceStation` (station_death_sequence.gd:82, :102), warning reworded, renamed references listed. |
+| 20 | Resolved | One `SquadController` per payload scene per boss (matches carrier_hangars.gd:250-251 / `_squad(path)`); "Ph11 owner choice N"; choice 6 says "every EMP". |
+
+**20 of 20 resolved.**
+
+## New findings
+
+### R2-1 — minor — the §25 `visuals` key reads state that part deaths and bay doors change (t5, t8, t15)
+
+**Checked:** 3-plan.md:427, :378, :679; global/components/enemy_module.gd:207-234; §2.2's door cycle.
+
+**Problem.** The plan promises that snapshot keys read "phase-driven state only … a part's own destruction never changes a key". The `visuals` key breaks that promise. It
+lists "generator shutter textures … generator light states, core light state", and two things change those values that are not phase changes:
+- **Part death.** `EnemyModule.destroy()` sets the part `Sprite` to its wreck texture and the `Light` to OFF. The second generator's death, which is the
+  `core_exposed` trigger, therefore changes `visuals` by itself. A broken core-plating swap would still pass VISUALS.
+- **Bay doors (from t8).** An ON_SECTOR_LOSS door cycle sets the generator's `Light` to CHARGING. In the Assault harness the fortress is engaged as soon as it holds at
+  y 180, so destroying a single battery opens the generator's doors on the next tick. The t5 boundary row ("one battery destroyed changes no key") can then go red
+  when t8 lands.
+
+**Inconsistency.** §2.9 (:679) says `shields_exposed` turns on "cyan lights", but t15 / §2.5.4 (:378) show SHIELDED for as long as the generator lives, which is
+from `batteries` onward.
+
+**Fix.**
+- Build `visuals` from flags the host sets in `_on_phase_entered`: `shutters_open`, `core_plating_open`, `Thrusters.visible`, `CriticalOverlay.visible`,
+  `core_blink_active`.
+- Drop part light states and part `Sprite` textures from the key.
+- Reword §2.9 so SHIELDED is shown from the start (t15).
+- In t8, re-run the one-battery boundary engaged in Assault, so it guards against door side effects.
+
+### R2-2 — minor — the partial §25 assertions per task are undefined; t5 cannot meet "≥ 2" at `critical` (t5, t7)
+
+**Checked:** 3-plan.md:430-432; §2.5.7 row 6; §2.7.7 rows 6 and 12.
+
+**Problem.** "Until a later task lands, the row asserts only the keys built so far" leaves two rows that cannot pass as written:
+- **t5.** It builds only `vulnerable` and `visuals`. At `critical`, only `visuals` changes (the overlay), so "number ≥ 2" fails, and t5's acceptance names
+  "the §25 row on its pinned path".
+- **t7.** It builds the battery fields of `attacks`, but at `shields_exposed` the declared ATTACKS comes from t16's spokes. "Declared ⊆ changed" for ATTACKS
+  therefore fails there in t7.
+
+**Fix.** Add a small table naming which (phase, key) pairs each task asserts, and from which task on the ≥ 2 count is enforced:
+
+| Task | Asserts |
+|---|---|
+| t5 | VULNERABLE and VISUALS where declared; ≥ 2 only for `shields_exposed` and `core_exposed` |
+| t6 | adds MOVEMENT; ≥ 2 for every phase |
+| t7 | ATTACKS at `critical` only |
+| t16 | ATTACKS at `shields_exposed`; ARENA at `core_exposed` |
+| t8 | the final form |
+
+### R2-3 — minor — the density rows have ceilings but no floor or boundary, and the "can fail" bound ignores the critical spin (t16)
+
+**Checked:** 3-plan.md:599-602, §2.6 spins, §2.7.7 row 11.
+
+**Problem.**
+- **No lower bound.** Every density row asserts only `mean ≤ 13.3` and `peak ≤ 30`. A counter that counts nothing passes all 40 assertions. The only
+  boundary in §4 is "a pool reported empty".
+- **The "can fail" bound is optimistic.** The claim that the `critical` rows can fail rests on a 14.5 /s bound "with every mount in arc". But the hull spins
+  continuously in `critical` at 0.6 rad/s. A 100° mount therefore sees a fixed stub only about 28 % of a 10 s count. The realistic mean is about 6.0 (core
+  ring) + ~2.4 ≈ 8–9 /s, well under 13.3, so in practice only the peak row is likely to bite.
+
+**Fix.**
+- **Floor.** In `critical`, at every position, count at least (floor(10 / `core_ring_period`) − 1) × 12 core-ring rounds. In `batteries`, require at least one
+  launch from each mount whose arc holds the stub during the count.
+- **Boundary.** An instanced fortress with `core_ring_period` 0.5 s (or `critical_cooldown_factor` 0.1) must fail the mean ceiling.
+- **Optional, for gate time.** Reuse one fortress instance per phase across the five positions.
+
+### R2-4 — minor — §2.11 cites row numbers that the t7 / t16 split made stale, and misses some comment citations (t11)
+
+**Checked:** 3-plan.md:719-720; grep of the deleted / renamed test-file names.
+
+**Problem.**
+- **Stale row numbers.** `test_station_laser_phase.gd` → "row 4 (t7)" now points at the critical-cooldown row; the spoke intent is row 7 (t16).
+  `test_station_gunnery.gd` → "rows 1, 6, 7 (t7)" should be rows 1–2 (t7) and row 9 (t16, core ring); row 6 is now the §25 extension.
+- **Missing citations.** These comments cite files t11 deletes or renames, and are neither in the table nor matched by the acceptance grep:
+  - test_enemy_module.gd:147 and test_ram_corvette.gd:436 (`test_station_incoming_damage_paths.gd`);
+  - test_level_1_sequence.gd:112 (`test_station_death_sequence.gd`);
+  - tests/README.md:307, :911.
+
+**Fix.** Correct the row references and add those lines to the comment-only row.
+
+### R2-5 — minor — nobody owns the hangar's "open" door texture (t8, t9)
+
+**Checked:** 3-plan.md:676 (Hangar: closed / open / wreck); §2.2 (`ReinforcementBay` has no visual export); carrier_hangar_doors.gd:15 (`open_texture`, the Carrier precedent).
+
+**Problem.** t9 is told to "wire … door" textures into scene exports, but no export exists and no code swaps the hangar sprite on `door_changed`. The doors' only
+telegraph is the part light.
+
+**Fix.**
+- t8 connects `BossReinforcements.door_changed(bay_id, open)` in `SpaceFortress` and swaps the hangar part's `Sprite` between its intact texture and a
+  `hangar_open_texture` export (placeholder until t9).
+- Add a row: open texture while `door_open(&"hangar")`, wreck texture after destruction.
+- Add `2.8` to t9's `planSections`.
+
+### R2-6 — minor — t16 is asked to record escort rounds that do not exist yet (t16, t8)
+
+**Checked:** 3-plan.md:591 ("escort rounds are recorded beside it in `ENEMY.md`").
+
+**Problem.** Escorts first launch in t8, which runs after t16.
+
+**Fix.** Move the escort-round note to t8, which can measure it with the bays live.
+
+### R2-7 — minor — stale labels and small inconsistencies (t5, t16, t4, t9)
+
+**Checked:** 3-plan.md:325, :589, :864, and `tasks.json`.
+
+**Problems and fixes.**
+- **§2.5.1 labels.**
+  - :325 still says `HullBeams` (t7) and `PulseRing` (t7). Fix: t16.
+  - It labels `Thrusters` and `CriticalOverlay` t6 / t9, but t5's snapshot reads their `visible`. Fix: say t5 creates both as placeholders.
+- **§5 risks.** :864 says "+17.6 s planned". Fix: +18.1 s (§2.15).
+- **Ring-gap boundary.** The 15° boundary (:589) fails only for the Assault player (0.2618 × 189.5 = 49.6 < 54). The Open Space ship still passes at 15°
+  (0.2618 × 187 = 49.0 ≥ 44; it fails below ≈ 13.5°). Fix: say the boundary is asserted on the combined both-players row, or on the Assault player.
+- **Missing `planSections`.** t4 and t9 have allotments (0 / 0.3 s) but no `2.15`. Fix: add it.
+- **`turn_lerp` note.** `EnemyMover.turn_lerp` already defaults to 0.0 (enemy_mover.gd:56), so authoring it is a guard, not a fix; the code lines are :266-271.
+  Fix: no change needed beyond correcting the wording.
+
+## Per-task summary
+
+| Task | Complexity | Verdict |
+|---|---|---|
+| t1 | medium | OK |
+| t2 | large | OK |
+| t3 | medium | OK (the reach row passes on every existing variant) |
+| t4 | small | OK (add 2.15, R2-7) |
+| t15 | medium | OK (SHIELDED-from-start wording, R2-1) |
+| t12 | medium | OK |
+| t5 | large | OK with R2-1 / R2-2 (snapshot `visuals` fields; partial §25 assertions); create `Thrusters` / `CriticalOverlay` placeholders (R2-7) |
+| t6 | large | OK |
+| t7 | medium | OK with R2-2 (ATTACKS asserted at `critical` only) |
+| t16 | large | OK with R2-3 (density floor and boundary), R2-6, R2-7 labels |
+| t8 | medium | OK with R2-1 (engaged boundary re-run), R2-5 (hangar door texture) |
+| t9 | large (art) | OK with R2-5 (`planSections` + door texture) and 2.15 |
+| t10 | medium | OK (the allowlist can fail; the timeout override is feasible: `LevelDirector` does not wait the transition) |
+| t13 | medium | OK (pins and draw counts verified) |
+| t11 | large | OK with R2-4 (row references, missed comment citations) |
+| t14 | medium | OK |
