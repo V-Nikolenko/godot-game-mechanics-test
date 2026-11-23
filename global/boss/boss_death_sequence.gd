@@ -1,4 +1,10 @@
-## StationDeathSequence — the space station's death spectacle (EPIC sub-item 5).
+## BossDeathSequence — a boss's death spectacle (was `StationDeathSequence`, EPIC sub-item 5).
+##
+## HOST CONTRACT (duck-typed; the parent node is the host): a `Node2D` with a signal
+## `death_started`, a `death_duration: float` property (read when the death starts), and
+## optionally a `config` whose `death_blast_count` is copied in `_ready()`. This node writes the
+## dying host's `rotation` / `modulate` AFTER the host has called `suspend_ai()` — the one allowed
+## second writer, which is why it lives in `global/boss/`, outside the single-writer sweeps.
 ##
 ## The fifth sibling behaviour node on `space_station.tscn`, after `LaserPhase`, `BulletPool`,
 ## `Gunnery` and `Reinforcements`. Same shape as all four: resolves `_station` in `_ready()`,
@@ -13,7 +19,7 @@
 ##   - rolls `blast_count` explosions across the hull at deterministic hull-local offsets,
 ##   - rattles the camera a little per blast and hard on the finale,
 ##   - lets the hull drift with a decaying spin and darken toward a burnt grey.
-class_name StationDeathSequence
+class_name BossDeathSequence
 extends Node2D
 
 ## Distance from the hull centre at which the chained blasts are placed, in on-screen pixels.
@@ -79,7 +85,7 @@ const _BLAST_DIRS: Array[Vector2] = [
 	Vector2(1.0, 0.0),
 ]
 
-var _station: SpaceStation
+var _station: Node2D
 
 ## Copied from the config in `_ready()`. The DURATION is deliberately not copied — see
 ## `_on_death_started`.
@@ -99,18 +105,19 @@ var _running: bool = false
 func _ready() -> void:
 	set_physics_process(false)
 
-	_station = get_parent() as SpaceStation
-	if _station == null:
-		push_warning("[StationDeathSequence] parent is not a SpaceStation — sequence disabled")
+	var host := get_parent() as Node2D
+	if host == null or not host.has_signal(&"death_started") or not ("death_duration" in host):
+		push_warning("[BossDeathSequence] host lacks death_started / death_duration — sequence disabled")
 		return
+	_station = host
 
 	## Godot readies children before parents, so this runs BEFORE SpaceStation._ready(). Safe for
 	## `config`: an @export initialised at property-init time, whose PRIVATE per-station copy is
 	## installed by `BaseEnemy._init()` / `_enter_tree()` before any child is ready. NOT safe for
 	## anything the station derives in its own _ready() — which is the other reason the duration is
 	## read later.
-	var cfg := _station.config
-	if cfg != null:
+	var cfg: Object = _station.get("config")
+	if cfg != null and "death_blast_count" in cfg:
 		_blast_count = cfg.death_blast_count
 
 	_blast_timer = Timer.new()

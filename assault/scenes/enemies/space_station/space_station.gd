@@ -34,7 +34,7 @@ signal armor_deflected(damage: int)
 signal armor_broken
 
 ## Emitted the instant HP reaches 0, together with `died` and before the wreck is freed. What
-## `StationDeathSequence` listens to. Zero arguments, same rule as `armor_broken` above.
+## `BossDeathSequence` listens to. Zero arguments, same rule as `armor_broken` above.
 ##
 ## Separate from `died` because the two mean different things to different listeners: `died` is
 ## "stop doing things" (the laser phase, the gunnery and the reinforcements all shut down on it)
@@ -243,7 +243,7 @@ func _make_corpse_harmless() -> void:
 ## is what lets LevelSection.ENEMIES_CLEARED advance (level_director.gd:116 polls the container's
 ## child count, so a lingering wreck holds the section open for free).
 ##
-## Owned by the STATION rather than by StationDeathSequence on purpose. If the visual node called
+## Owned by the STATION rather than by BossDeathSequence on purpose. If the visual node called
 ## queue_free(), a station whose sequence node was renamed or removed would never leave the
 ## container and `station_assault` would hang for its full 180 s timeout with no error at all.
 func _finish_death() -> void:

@@ -49,8 +49,8 @@ func _kill_core() -> void:
 	await get_tree().process_frame
 
 
-func _sequence() -> StationDeathSequence:
-	return _station.get_node("DeathSequence") as StationDeathSequence
+func _sequence() -> BossDeathSequence:
+	return _station.get_node("DeathSequence") as BossDeathSequence
 
 
 ## Direct CPUParticles2D children of the container. Direct-only and type-filtered on purpose:
@@ -186,7 +186,7 @@ func test_blast_offsets_are_deterministic() -> void:
 	var other_station := STATION_SCENE.instantiate() as SpaceStation
 	_container.add_child(other_station)
 	await get_tree().process_frame
-	var other := other_station.get_node("DeathSequence") as StationDeathSequence
+	var other := other_station.get_node("DeathSequence") as BossDeathSequence
 
 	for i in 8:
 		assert_eq(seq.blast_offset(i), other.blast_offset(i),
@@ -284,3 +284,17 @@ func test_shortening_the_station_duration_does_not_write_back_to_the_shared_conf
 	_station.death_duration = 0.05
 	assert_eq(_station.config.death_sequence_duration, before,
 		"writing the node's copied field must not touch the station's config resource at all")
+
+
+# ── 12. The host contract ─────────────────────────────────────────────────────
+
+func test_a_host_without_death_started_gets_a_warning_and_no_crash() -> void:
+	var host := Node2D.new()
+	var seq := BossDeathSequence.new()
+	host.add_child(seq)
+	add_child_autofree(host)
+	await get_tree().process_frame
+	assert_false(seq.is_running(), "a host lacking the contract leaves the sequence disabled")
+	assert_eq(seq._station, null, "no host is stored")
+	seq._on_death_started()
+	assert_false(seq.is_running(), "a death call on a disabled sequence is a no-op")

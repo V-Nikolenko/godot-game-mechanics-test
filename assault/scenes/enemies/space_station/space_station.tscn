@@ -11,7 +11,7 @@
 [ext_resource type="PackedScene" uid="uid://wi7ci5dkn7k7" path="res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn" id="9_ss"]
 [ext_resource type="Script" uid="uid://0dk0toyoxowg" path="res://assault/scenes/enemies/space_station/station_gunnery.gd" id="10_ss"]
 [ext_resource type="Script" uid="uid://jfdcv6l6phrr" path="res://assault/scenes/enemies/space_station/station_reinforcements.gd" id="11_ss"]
-[ext_resource type="Script" uid="uid://b4hwhdn0scrwi" path="res://assault/scenes/enemies/space_station/station_death_sequence.gd" id="12_ss"]
+[ext_resource type="Script" uid="uid://b4hwhdn0scrwi" path="res://global/boss/boss_death_sequence.gd" id="12_ss"]
 [ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="13_ss"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_ss"]

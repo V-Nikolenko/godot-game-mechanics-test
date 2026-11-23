@@ -27,7 +27,7 @@ extends Node2D
 ## when one is given, inside [param container] (or the actor's parent when omitted).
 ##
 ## [param at] (a Vector2, or null/omitted) exists for entities whose death is a CHAIN of
-## blasts across a large hull rather than one burst at the centre — StationDeathSequence.
+## blasts across a large hull rather than one burst at the centre — BossDeathSequence.
 ## Omitting it preserves the historic behaviour exactly, so every existing caller is
 ## unaffected. [param at] moves the blast; it never re-homes it.
 ##

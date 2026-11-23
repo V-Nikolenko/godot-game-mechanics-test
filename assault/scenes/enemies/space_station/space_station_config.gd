@@ -145,7 +145,7 @@ extends ShipConfig
 ## ── Death sequence (EPIC sub-item 5) ──────────────────────────────────────────
 ##
 ## Read ONCE at _ready(): `death_sequence_duration` by `SpaceStation` (into its public
-## `death_duration` field) and `death_blast_count` by `StationDeathSequence`. Neither is read
+## `death_duration` field) and `death_blast_count` by `BossDeathSequence`. Neither is read
 ## through this resource again, for the same reason as every block above — the node's own field is
 ## the tunable surface and the no-config fallback.
 ##
