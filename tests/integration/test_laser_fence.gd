@@ -637,3 +637,103 @@ func test_assault_wave_builder_spawns_a_fence_at_world_x_through_a_real_wave_man
 	assert_eq(f.mode, LaserFence.Mode.CYCLE, "the prop reached the fence before it entered the tree")
 	assert_almost_eq(f.global_position.x, 512.0, 0.001, "the anchor holds on the real spawn path: 640 + 2 * design x")
 	assert_false(f.is_in_group(&"enemies"))
+
+
+# ── Phase 11 t12: a post's EMP darkens the whole fence (plan §2.12) ─────────────────────────────────────────────────
+
+## A post is hand-ticked too: its own `BaseEnemy._physics_process` runs the EMP window, then the fence reads it (a post's tick comes first, as the clock is
+## counted on the tick the window ends).
+func _emp_step(f: LaserFence, n: int = 1) -> void:
+	for i in n:
+		for post in f.posts():
+			post._physics_process(DT)
+		f.step(DT)
+
+
+func _hand_posts(f: LaserFence) -> void:
+	f.post_a().set_physics_process(false)
+	f.post_b().set_physics_process(false)
+
+
+func test_an_emp_on_a_post_darkens_a_lit_fence_the_same_tick_and_it_relights_through_a_warning(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var base := Hazards.count()
+	var f := _fence(h)
+	_hand_posts(f)
+	var victim := _victim(h, AT)
+	_emp_step(f, 80)
+	assert_eq(f.beam().phase(), EnemyBeam.Phase.ACTIVE, "precondition: lit")
+	assert_eq(Hazards.count(), base + 1)
+	f.post_a().apply_emp(2.0, null)
+	_emp_step(f)
+	assert_false(f.is_lit(), "%s: dark on the tick after the EMP" % mode)
+	assert_eq(Hazards.count(), base, "%s: the hazard unregistered with it" % mode)
+	assert_false(f.beam().is_lethal(), "%s: and harmless" % mode)
+	for post in [f.post_a(), f.post_b()]:
+		assert_eq(post.state_light().get_state(), StateLight.State.OFF, "%s: lamps out on both posts" % mode)
+	var hp := _hp(victim)
+	var dark_ticks := 1
+	while f.post_a().is_emp_disrupted() and dark_ticks < 400:
+		assert_false(f.is_lit(), "%s: still dark inside the window" % mode)
+		_emp_step(f)
+		dark_ticks += 1
+		if f.post_a().is_emp_disrupted():
+			assert_eq(Hazards.count(), base)
+	assert_eq(dark_ticks, 119 + 1 + 0, "%s: the window is 120 ticks, the last one relights" % mode)
+	assert_eq(_hp(victim), hp, "%s: nothing was hurt while dark" % mode)
+	# The window ended inside the last step: the fence relit it through TELEGRAPH, not straight to ACTIVE.
+	assert_eq(f.beam().phase(), EnemyBeam.Phase.TELEGRAPH, "%s: a fresh warning phase" % mode)
+	assert_false(f.beam().is_lethal(), "%s: the warning hurts nobody" % mode)
+	assert_eq(Hazards.count(), base + 1, "%s: the hazard is back from TELEGRAPH" % mode)
+	assert_eq(f.post_a().state_light().get_state(), StateLight.State.CHARGING)
+	_emp_step(f, _ticks(f.beam().telegraph_seconds) + 3)
+	assert_eq(f.beam().phase(), EnemyBeam.Phase.ACTIVE, "%s: then it burns again" % mode)
+
+
+func test_an_emp_on_a_cycle_fence_restarts_the_cycle_from_its_start(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _fence(h, {&"mode": LaserFence.Mode.CYCLE, &"phase_offset": 4.0})
+	_hand_posts(f)
+	_emp_step(f, 10)
+	assert_true(f.is_lit(), "precondition: a phase_offset of 4 s starts it lit")
+	f.post_b().apply_emp(1.0, null)
+	_emp_step(f)
+	assert_false(f.is_lit(), "%s: dark at once" % mode)
+	_emp_step(f, 62)
+	assert_false(f.post_b().is_emp_disrupted(), "%s: window over" % mode)
+	_emp_step(f, _ticks(f.off_seconds) - 10)
+	assert_eq(f.beam().phase(), EnemyBeam.Phase.OFF, "%s: a fresh dark stretch first, phase_offset not re-applied" % mode)
+	_emp_step(f, 20)
+	assert_eq(f.beam().phase(), EnemyBeam.Phase.TELEGRAPH, "%s: then the warning" % mode)
+	assert_false(f.beam().is_lethal())
+
+
+func test_an_emp_on_the_other_post_extends_the_dark_period_to_the_later_window(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _fence(h)
+	_hand_posts(f)
+	_emp_step(f, 80)
+	f.post_a().apply_emp(1.0, null)  # over at tick 60 after this
+	_emp_step(f, 30)
+	f.post_b().apply_emp(2.0, null)  # over at tick 150 after the first call
+	_emp_step(f, 40)  # 40 ticks into the second window; the first is long over
+	assert_false(f.post_a().is_emp_disrupted(), "precondition: the first window ended")
+	assert_true(f.post_b().is_emp_disrupted())
+	assert_false(f.is_lit(), "%s: still dark" % mode)
+	assert_eq(f.beam().phase(), EnemyBeam.Phase.OFF)
+	_emp_step(f, 79)
+	assert_eq(f.beam().phase(), EnemyBeam.Phase.OFF, "%s: dark until the later window ends" % mode)
+	_emp_step(f)
+	assert_eq(f.beam().phase(), EnemyBeam.Phase.TELEGRAPH, "%s: relit through a warning" % mode)
+
+
+func test_a_collapsed_fence_ignores_an_emp_and_stays_down(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _fence(h)
+	_hand_posts(f)
+	_emp_step(f, 80)
+	_kill(f.post_a())
+	f.post_b().apply_emp(1.0, null)
+	_emp_step(f, 200)
+	assert_eq(f.beam().phase(), EnemyBeam.Phase.OFF, "%s: it never relights" % mode)
+	assert_true(f.is_collapsed())

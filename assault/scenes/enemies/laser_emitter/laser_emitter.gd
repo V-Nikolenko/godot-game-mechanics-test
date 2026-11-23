@@ -24,6 +24,12 @@ func _ready() -> void:
 		health.current_health = config.max_health
 
 
+## Every EMP source reaches a post (Phase 11 t12). It has neither brain nor mover, so `BaseEnemy.apply_emp` only starts its window (its null guards);
+## `LaserFence.step()` polls `is_emp_disrupted()` and darkens the whole fence for the window.
+func answers_emp() -> bool:
+	return true
+
+
 ## A fence post: a shield generator never bubbles one.
 func is_fence_post() -> bool:
 	return true

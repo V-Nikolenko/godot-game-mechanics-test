@@ -65,6 +65,12 @@ func _apply_config(cfg: DefenseTurretConfig) -> void:
 	_turret_brain.config = cfg
 
 
+## Every EMP source reaches a turret (Phase 11 t12; it has a brain but no mover, so the BaseEnemy default would say no). The turret stays tangible;
+## its brain is not ticked for the window, and `DefenseTurretBrain.on_emp_started()` has silenced every mount.
+func answers_emp() -> bool:
+	return true
+
+
 ## Off for good: every mount powers down and the light goes OFF. `true` (and any call once off) is ignored in this phase.
 func set_powered(on: bool) -> void:
 	if on or not _powered:

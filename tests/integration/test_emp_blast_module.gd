@@ -272,3 +272,36 @@ func test_a_direct_try_activate_from_inside_quiets_the_field_and_the_ship_unlock
 	assert_true(p.abilities_locked(), "%s: locked at T+44" % mode)
 	p._step_disruption(DT)
 	assert_false(p.abilities_locked(), "%s: unlocked at T+45 (0.75 s)" % mode)
+
+
+# ── Phase 11 t12: structures answer the blast, the bonus drone keeps the legacy freeze (plan §2.12) ─────────────────
+
+const STRUCTURE_TURRET: PackedScene = preload("res://assault/scenes/enemies/defense_turret/defense_turret.tscn")
+const STRUCTURE_HEAVY: PackedScene = preload("res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn")
+const STRUCTURE_POST: PackedScene = preload("res://assault/scenes/enemies/laser_emitter/laser_emitter.tscn")
+const STRUCTURE_GENERATOR: PackedScene = preload("res://assault/scenes/enemies/shield_generator/shield_generator.tscn")
+
+
+func test_the_blast_routes_structures_through_apply_emp_and_never_process_disables_them() -> void:
+	_scale_clock()
+	Engine.time_scale = _saved_scale * 40.0  ## only the legacy stun's SceneTreeTimer runs here; no physics
+	var h := _world()
+	var structures: Array[BaseEnemy] = []
+	for scene: PackedScene in [STRUCTURE_TURRET, STRUCTURE_HEAVY, STRUCTURE_POST, STRUCTURE_GENERATOR]:
+		var e := scene.instantiate() as BaseEnemy
+		e.position = Vector2(300.0 + 200.0 * structures.size(), 200.0)
+		h.root.add_child(e)
+		e.set_physics_process(false)
+		structures.append(e)
+	var bonus := BONUS_DRONE.instantiate() as BaseEnemy
+	h.root.add_child(bonus)
+	assert_true(EMPBlastModule.new().try_activate(h.player))
+	for e in structures:
+		assert_true(e.is_emp_disrupted(), "%s: apply_emp ran" % e.name)
+		assert_eq(e.emp_seconds_left(), 5.0, "%s: for the blast's 5 s" % e.name)
+		assert_ne(e.process_mode, Node.PROCESS_MODE_DISABLED, "%s: not process-disabled" % e.name)
+	assert_eq(bonus.process_mode, Node.PROCESS_MODE_DISABLED, "the bonus drone keeps the legacy freeze")
+	assert_false(bonus.is_emp_disrupted(), "and gets no tangible window")
+	## The legacy stun's 5 s timer must not outlive the test (its capture would be freed under the next file).
+	await get_tree().create_timer(5.2).timeout
+	assert_ne(bonus.process_mode, Node.PROCESS_MODE_DISABLED, "and it thaws after 5 s")

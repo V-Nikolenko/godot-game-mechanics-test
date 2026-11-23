@@ -20,6 +20,9 @@ const SHIELD_GENERATOR: PackedScene = preload("res://assault/scenes/enemies/shie
 const FIXTURE_ENEMY: PackedScene = preload("res://tests/helpers/fixture_enemy.tscn")
 const PAIR_SPAWN: PackedScene = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn")
 const DRONE_CONFIG: TwinLaserDroneConfig = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_drone_config.tres")  # read only
+const TURRET: PackedScene = preload("res://assault/scenes/enemies/defense_turret/defense_turret.tscn")
+const HEAVY_EMPLACEMENT: PackedScene = preload("res://assault/scenes/enemies/heavy_emplacement/heavy_emplacement.tscn")
+const FENCE_POST: PackedScene = preload("res://assault/scenes/enemies/laser_emitter/laser_emitter.tscn")
 const TENDER: PackedScene = preload("res://assault/scenes/enemies/laser_tender/laser_tender.tscn")
 const BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
 const HOMING_SCENE: PackedScene = preload("res://assault/scenes/projectiles/missiles/homing/homing_missile.tscn")
@@ -145,7 +148,7 @@ func test_answers_emp_follows_is_ai_driven(mode: String = use_parameters(MODES))
 	var gen := SHIELD_GENERATOR.instantiate() as BaseEnemy
 	h.root.add_child(gen)
 	gen.set_physics_process(false)
-	assert_false(gen.answers_emp(), "%s: a ShieldGenerator (a brain, no mover) does not" % mode)
+	assert_true(gen.answers_emp(), "%s: a ShieldGenerator (a brain, no mover) answers since Phase 11 t12" % mode)
 	var railed := _fighter(h, FIGHTER_AT + Vector2(100, 0))
 	railed.suspend_ai()
 	assert_false(railed.answers_emp(), "%s: a railed Fighter does not" % mode)
@@ -156,12 +159,9 @@ func test_a_non_answering_enemy_ignores_apply_emp(mode: String = use_parameters(
 	var legacy := BONUS_DRONE.instantiate() as BaseEnemy
 	h.root.add_child(legacy)
 	legacy.set_physics_process(false)
-	var gen := SHIELD_GENERATOR.instantiate() as BaseEnemy
-	h.root.add_child(gen)
-	gen.set_physics_process(false)
 	var railed := _fighter(h)
 	railed.suspend_ai()
-	for e: BaseEnemy in [legacy, gen, railed]:
+	for e: BaseEnemy in [legacy, railed]:
 		var hp := e.health.current_health
 		e.apply_emp(2.0, null)
 		assert_false(e.is_emp_disrupted(), "%s: %s is not disrupted" % [mode, e.name])
@@ -584,3 +584,107 @@ func test_an_enemy_laid_emp_mine_never_reaches_enemies_and_a_placed_one_does(mod
 		_detonate_mine(_emp_mine(h, at, placed))
 		assert_eq(probe.hits, 1, "%s placed=%s: the player beside it is reached" % [mode, placed])
 		assert_eq(f.is_emp_disrupted(), placed, "%s placed=%s: an enemy is reached only by a placed mine" % [mode, placed])
+
+
+# ── Phase 11 t12: structures answer EMP (plan §2.12) ────────────────────────────────────────────────────────────────
+
+const TURRET_AT := Vector2(640.0, 300.0)
+
+
+## A hand-ticked, engaged turret of [param scene] with the player 300 px below it.
+func _structure_turret(h: RefCounted, scene: PackedScene) -> DefenseTurret:
+	h.player.global_position = TURRET_AT + Vector2(0.0, 300.0)
+	var t := scene.instantiate() as DefenseTurret
+	var brain := t.get_node("Brain") as DefenseTurretBrain
+	brain.start_engaged = true
+	brain.rng_seed = 4242
+	t.position = TURRET_AT
+	h.root.add_child(t)
+	t.set_physics_process(false)
+	(t.get_node("AssaultDrift") as AssaultDrift).set_physics_process(false)
+	return t
+
+
+## Total rounds fired by every mount of [param t] (the counter lives in the returned one-element array).
+func _count_rounds(t: DefenseTurret) -> Array:
+	var count := [0]
+	for m in t.mounts():
+		m.round_fired.connect(func(_p: Node2D) -> void: count[0] += 1)
+	return count
+
+
+func test_every_structure_answers_emp_and_stays_tangible(mode: String = use_parameters(MODES)) -> void:
+	var h := _world(mode)
+	var post := FENCE_POST.instantiate() as BaseEnemy
+	h.root.add_child(post)
+	post.set_physics_process(false)
+	var gen := SHIELD_GENERATOR.instantiate() as BaseEnemy
+	h.root.add_child(gen)
+	gen.set_physics_process(false)
+	for e: BaseEnemy in [_structure_turret(h, TURRET), _structure_turret(h, HEAVY_EMPLACEMENT), post, gen]:
+		assert_true(e.answers_emp(), "%s: %s answers EMP" % [mode, e.name])
+		e.apply_emp(2.0, null)
+		assert_true(e.is_emp_disrupted(), "%s: %s is disrupted" % [mode, e.name])
+		assert_true(_overlay_visible(e), "%s: %s shows the EmpStatic overlay" % [mode, e.name])
+		assert_ne(e.process_mode, Node.PROCESS_MODE_DISABLED, "%s: %s is not process-disabled" % [mode, e.name])
+		var hp := e.health.current_health
+		e.hurt_box.received_damage.emit(10)
+		assert_eq(e.health.current_health, hp - 10, "%s: %s is still damaged by a hit" % [mode, e.name])
+
+
+func test_apply_emp_on_a_brainless_moverless_post_raises_nothing_and_runs_the_window(mode: String = use_parameters(MODES)) -> void:
+	var h := _world(mode)
+	var post := FENCE_POST.instantiate() as LaserEmitter
+	h.root.add_child(post)
+	post.set_physics_process(false)
+	assert_null(post.get_node_or_null("Brain"), "precondition: no brain")
+	assert_null(post.get_node_or_null("EnemyMover"), "precondition: no mover")
+	post.apply_emp(2.0, null)
+	assert_true(post.is_emp_disrupted(), "%s: the window starts" % mode)
+	assert_almost_eq(post.emp_seconds_left(), 2.0, 1e-6)
+	for i in 119:
+		post._physics_process(DT)
+	assert_true(post.is_emp_disrupted(), "%s: disrupted after tick 119" % mode)
+	post._physics_process(DT)
+	assert_false(post.is_emp_disrupted(), "%s: over after tick 120" % mode)
+	assert_false(_overlay_visible(post), "%s: overlay hidden" % mode)
+
+
+func test_an_emp_d_turret_is_silent_for_exactly_the_window_and_resumes(mode: String = use_parameters(MODES)) -> void:
+	for scene: PackedScene in [TURRET, HEAVY_EMPLACEMENT]:
+		var hc := _world(mode)
+		var control := _structure_turret(hc, scene)
+		var control_rounds := _count_rounds(control)
+		var first := -1
+		for i in range(1, 901):
+			control._physics_process(DT)
+			if control_rounds[0] > 0:
+				first = i
+				break
+		assert_gt(first, 0, "%s: precondition: the control turret fires" % mode)
+
+		var h := _world(mode)
+		var t := _structure_turret(h, scene)
+		var rounds := _count_rounds(t)
+		for i in first - 1:
+			t._physics_process(DT)
+		t.apply_emp(2.0, null)
+		for m in t.mounts():
+			assert_eq(m.phase(), TurretMount.Phase.SCAN, "%s: %s: a mount is idle on the call" % [mode, t.name])
+		var before: int = rounds[0]
+		for i in range(1, 120):
+			t._physics_process(DT)
+			for m in t.mounts():
+				assert_eq(m.phase(), TurretMount.Phase.SCAN, "%s: %s: no mount wakes inside the window" % [mode, t.name])
+		assert_eq(rounds[0], before, "%s: %s: no round inside the window" % [mode, t.name])
+		assert_true(t.is_emp_disrupted(), "%s: disrupted after tick 119" % mode)
+		t._physics_process(DT)
+		assert_false(t.is_emp_disrupted(), "%s: over after tick 120" % mode)
+		var resumed := false
+		for i in 900:
+			t._physics_process(DT)
+			if rounds[0] > before:
+				resumed = true
+				break
+		assert_true(resumed, "%s: %s fires again after the window" % [mode, t.name])
+		assert_eq(t.health.current_health, t.health.max_health, "%s: health untouched" % mode)
