@@ -66,7 +66,7 @@ global/
 │   ├── anchor_idle.gd         # AnchorIdle (RefCounted) — generic idle-around-an-anchor → combat handover
 │   └── enemy_world.gd         # EnemyWorld — the one lookup of the &"assault_arena" mode provider
 ├── hazards/                   # shared hazard description + registry (enemy rework phase 6): HazardInfo, Hazards, HazardField, HazardDrift
-├── boss/                      # shared boss machinery (enemy rework phase 11): BossPhase, BossPhaseDriver (more arrive with t2–t4; free of any one boss's names)
+├── boss/                      # shared boss machinery (enemy rework phase 11): BossPhase, BossPhaseDriver, ShieldSector (more arrive with t2–t4; free of any one boss's names)
 ├── physics/
 │   └── collision_layers.gd    # CollisionLayers — named constants, one per project.godot layer_names entry
 ├── entities/
@@ -335,6 +335,12 @@ A boss's phases are data, and the driver that walks them applies nothing (IDEAS 
 - **`BossPhase`** (flat `Resource`, authored as sub-resources of the driver, never written at runtime): `phase_id`, `Trigger { START,
   PARTS_DESTROYED, HEALTH_AT_OR_BELOW }`, `module_ids` (else `roles`, else any part) + `count`, `health_module` (empty = the host root) +
   `health_ratio`, and `changes`, bit flags `Change { MOVEMENT, ATTACKS, VULNERABLE, ARENA, REINFORCEMENTS, VISUALS }` (append-only).
+- **`ShieldSector`** (RefCounted, `shield_sector.gd`; t15): `ShieldSector.new(generator, protected, params)` builds one 360° `EnemyShield` (child of the part, attached to its
+  `HurtBox`, `sustain_mode` false, radius = hurtbox circle radius or rectangle half-diagonal + `radius_pad`) per live protected `EnemyModule`; a part whose
+  absorber slot is taken is skipped, never displaced. The generator's `destroyed` detaches and frees every bubble in the same call (`is_exposed()` true for
+  good); a protected part's death frees its own only. The generator's `Light` shows `StateLight.State.SHIELDED` (cyan, appended) while it lives.
+  `shield_of(id)`, `shields()`, `generator()`, `protected_ids()`. A locked part's bubble absorbs nothing (`EnemyShield` reads `is_armored()`). Gate
+  `tests/integration/test_shield_sector.gd`.
 - **`BossPhaseDriver`** (Node `PhaseDriver`, a host root child): `bind(hull, host_health)` enters phase 0 and listens to the hull's
   `module_destroyed` / `module_damaged` and to `Health.amount_changed` of the host and of every part a HEALTH rule names. `evaluate()` enters
   each **next** phase whose condition holds, in order, one `phase_entered(index, phase_id)` each (one hit satisfying two rules enters both

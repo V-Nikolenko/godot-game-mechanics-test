@@ -9,6 +9,7 @@
 ## whatever state was active before the call — used for NOTICING, which is a beat, not a
 ## threat level of its own. Orange (VENTING, Phase 10 t5) marks a hull cooling with its weak
 ## points open: the Heavy Gunship's vents (docs/plans/cmug23oo90029m52wae4clve0/3-plan.md §2.9).
+## Cyan (SHIELDED, Phase 11 t15) marks a shield generator still sustaining its sector's bubbles (`ShieldSector`).
 ##
 ## The texture is a radial GradientTexture2D built in code in _ready(), never scene-authored,
 ## so test_entity_sprite_transparency.gd's sweep of .tscn files never sees it (rev 2, N8). The
@@ -19,10 +20,12 @@ class_name StateLight
 extends Node2D
 
 ## Append-only.
-enum State { OFF, ARMED, CHARGING, COMMIT, VENTING }
+enum State { OFF, ARMED, CHARGING, COMMIT, VENTING, SHIELDED }
 
 ## VENTING's colour: orange, apart from CHARGING's yellow.
 const VENTING_COLOR := Color(1.0, 0.55, 0.1)
+## SHIELDED's colour: cyan, the shield bubble's own (`EnemyShield.COLOR`).
+const SHIELDED_COLOR := Color(0.35, 0.9, 1.0)
 
 const MAX_ALPHA := 0.85
 const TEXTURE_SIZE := 8
@@ -81,6 +84,8 @@ func _apply(s: int) -> void:
 			modulate = Color(Color.WHITE, MAX_ALPHA)
 		State.VENTING:
 			modulate = Color(VENTING_COLOR, MAX_ALPHA)
+		State.SHIELDED:
+			modulate = Color(SHIELDED_COLOR, MAX_ALPHA)
 
 
 ## TEXTURE_SIZE px, white at the centre fading to alpha 0 at the edge. One texture serves
