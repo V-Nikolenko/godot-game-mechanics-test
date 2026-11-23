@@ -10,6 +10,8 @@ const BEAM_CANNON: PackedScene = preload("res://assault/scenes/enemies/defense_t
 const ROCKET_BATTERY: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/rocket_battery_mount.tscn")
 const PULSE_RING: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/pulse_ring_mount.tscn")
 const HEAVY_CANNON: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/heavy_cannon_mount.tscn")
+const SPREAD_CANNON: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/spread_cannon_mount.tscn")
+const RAPID_PULSE: PackedScene = preload("res://assault/scenes/enemies/defense_turret/mounts/rapid_pulse_mount.tscn")
 
 
 ## The mount scene for [param variant], or null with no error while that variant is not built yet (every variant is built as of Phase 10 t3),
@@ -30,6 +32,10 @@ static func scene_for(variant: int) -> PackedScene:
 			return PULSE_RING
 		TurretMount.Variant.HEAVY_CANNON:
 			return HEAVY_CANNON
+		TurretMount.Variant.SPREAD_CANNON:
+			return SPREAD_CANNON
+		TurretMount.Variant.RAPID_PULSE:
+			return RAPID_PULSE
 	return null
 
 

@@ -4443,3 +4443,6 @@ scope check (§1.1), judgement calls (§1.2) and code facts (§1.3, read @ `cba0
 | Difficulty tiers for the fortress | Ph16 | |
 | Fortuna's `space_stations/` mission-data directories | never (not part of the enemy) | the station retirement grep is anchored so it never touches them |
 | EMP knocking boss shields down | Ph18 (ship-mounted EMP) | |
+
+### Phase 11, built in t3
+- `TurretMount.Variant` gains `SPREAD_CANNON` (7) and `RAPID_PULSE` (8), both `BurstCannonMount` on standalone scenes (`spread_cannon_mount.tscn`, `rapid_pulse_mount.tscn`); `BurstCannonMount` gains `pellets` (1) / `pellet_spread_deg` (0), pellets spread evenly over the full width, one aim-cone check per volley, pool sized `burst_count × pellets`. Both heads are 64×64 (pivot 32,32) in `assault/assets/sprites/enemies/`. A new reach row in `test_turret_mount_variants.gd` asserts `fire_range <= round max_distance` for every `BurstCannonMount` variant (the heavy cannon's 900 against its 1800 included).

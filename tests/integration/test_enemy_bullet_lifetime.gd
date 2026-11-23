@@ -79,6 +79,20 @@ func _heavy_cannon_speed() -> float:
 	return float(TurretMountScenes.export_of(TurretMount.Variant.HEAVY_CANNON, &"round_speed", fallback))
 
 
+## The speed the SPREAD_CANNON mount fires Scatter rounds at (Phase 11 t3): its mount scene's `round_speed` export.
+func _spread_cannon_speed() -> float:
+	var fallback: Variant = (load("res://assault/scenes/enemies/defense_turret/mounts/burst_cannon_mount.gd") as Script) \
+			.get_property_default_value(&"round_speed")
+	return float(TurretMountScenes.export_of(TurretMount.Variant.SPREAD_CANNON, &"round_speed", fallback))
+
+
+## The speed the RAPID_PULSE mount fires Pulse rounds at (Phase 11 t3): its mount scene's `round_speed` export.
+func _rapid_pulse_speed() -> float:
+	var fallback: Variant = (load("res://assault/scenes/enemies/defense_turret/mounts/burst_cannon_mount.gd") as Script) \
+			.get_property_default_value(&"round_speed")
+	return float(TurretMountScenes.export_of(TurretMount.Variant.RAPID_PULSE, &"round_speed", fallback))
+
+
 ## One array, per the plan: add a new, slower bullet source here and the defaults must be
 ## re-derived (`3-plan.md` §2.9).
 func _every_shipped_enemy_bullet_speed() -> Array[float]:
@@ -133,6 +147,9 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 	speeds.append(_turret_burst_speed())
 	# The heavy cannon mount (Phase 10 t3) fires the Heavy Shell.
 	speeds.append(_heavy_cannon_speed())
+	# The spread cannon (Scatter) and rapid pulse (Pulse) mounts (Phase 11 t3).
+	speeds.append(_spread_cannon_speed())
+	speeds.append(_rapid_pulse_speed())
 
 	return speeds
 
@@ -191,13 +208,13 @@ func test_every_round_clears_its_own_lifetime_at_its_slowest_fired_speed() -> vo
 	var ss := _sniper_speeds()
 	var entries: Array[Dictionary] = [
 		{"scene": EnemyRounds.PULSE, "floor": _ROUNDS_RANGE_FLOOR_PX,
-			"speeds": [fs["aimed"], fs["rail_aimed"], fs["rail_forward"], _turret_burst_speed()]},
+			"speeds": [fs["aimed"], fs["rail_aimed"], fs["rail_forward"], _turret_burst_speed(), _rapid_pulse_speed()]},
 		{"scene": EnemyRounds.GATLING_STREAM, "floor": _ROUNDS_RANGE_FLOOR_PX,
 			"speeds": [gs["stream"], gs["rail_stream"]]},
 		{"scene": EnemyRounds.RAIL, "floor": _ROUNDS_RANGE_FLOOR_PX,
 			"speeds": [ss["rail"], ss["rail_fallback"]]},
 		{"scene": EnemyRounds.HEAVY_SHELL, "floor": _ROUNDS_RANGE_FLOOR_PX, "speeds": [_heavy_cannon_speed()]},
-		{"scene": EnemyRounds.SCATTER, "floor": 0.0, "speeds": [fs["forward"]]},
+		{"scene": EnemyRounds.SCATTER, "floor": 0.0, "speeds": [fs["forward"], _spread_cannon_speed()]},
 	]
 	for entry: Dictionary in entries:
 		var scene: PackedScene = entry["scene"]

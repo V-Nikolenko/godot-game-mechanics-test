@@ -82,6 +82,9 @@ and you can out-strafe its partial lead.
   `commit_seconds`. Aim is `P + v * telegraph_seconds * lead_blend`; no fire without line of sight.
   - **BEAM_CANNON** - `beam.tscn`, range 700, cooldown 3.0: bearing frozen at TELEGRAPH start; 0.9 s warning, 1.2 s lit.
   - **HEAVY_CANNON** (Ph10 t3, for ship hulls; `heavy_cannon_mount.tscn` on `BurstCannonMount`) - 0.7 s charge, 2 Heavy Shells 0.35 s apart at 220 px/s, range 900, cooldown 3.2, `turn_rate` 0.9, cone 6°, `traverse_deg` 70. No placed turret uses it yet.
+  - **SPREAD_CANNON** (Ph11 t3, a Space Fortress battery; `spread_cannon_mount.tscn`, a standalone scene on `BurstCannonMount`) - 0.5 s charge, 2 volleys 0.45 s apart of `pellets` 5 Scatter rounds fanned over `pellet_spread_deg` 40° (outer pellets ±20° from the aim, one cone check per volley) at 260 px/s, `fire_range` 420 (inside the Scatter round's 450 px reach + the 28 px muzzle), cooldown 2.8. The pool holds `burst_count × pellets` rounds.
+  - **RAPID_PULSE** (Ph11 t3; `rapid_pulse_mount.tscn`, standalone) - 0.3 s charge, 10 Pulse rounds 0.07 s apart at 340 px/s, range 760, cooldown 2.6, `turn_rate` 2.6.
+  `BurstCannonMount.pellets` (default 1) / `pellet_spread_deg` (default 0) are what make a volley: at `pellets` 1 every older mount is bit-identical (`test_turret_mount_variants.gd` re-checks the traverse gate's `TRACE_360`). Gate: `tests/integration/test_turret_mount_variants.gd` (incl. the reach row: every bullet-firing variant has `fire_range <= its round's max_distance`).
   - **LANCE** - `lance.tscn`, range 1100, cooldown 4.0: tracks for the first 0.5 s of its 1.0 s TELEGRAPH, frozen for the last 0.5 s (light COMMIT, white line), then one 24-damage hit.
   - **SWEEP_BEAM** - `sweep_beam.tscn`, range 400, cooldown 3.5: the mount aims at the **start bearing** `aim - s * 50`° (`s` = sign of the player's angular velocity about the
     turret; a still player draws `s` from the brain's rng once per shot), shows the line there, then ACTIVE turns the mount `s * sweep_rate` (0.8727 rad/s, 100° in 2.0 s)
@@ -139,6 +142,8 @@ defense_turret/
     ├── turret_mount_scenes.gd            TurretMountScenes (scene_for, export_of)
     ├── turret_mount_builder.gd           TurretMountBuilder (the one mount + pool builder)
     ├── heavy_cannon_mount.tscn           HEAVY_CANNON (BurstCannonMount + Heavy Shell)
+    ├── spread_cannon_mount.tscn          SPREAD_CANNON (BurstCannonMount, 5 Scatter pellets over 40 deg)
+    ├── rapid_pulse_mount.tscn            RAPID_PULSE (BurstCannonMount, 10 Pulse rounds 0.07 s apart)
     ├── beam_turret_mount.gd              BeamTurretMount (lance + beam cannon; the beam child, freeze rule)
     ├── sweep_beam_mount.gd               SweepBeamMount (start-bearing aim, sweep rotation)
     ├── rocket_battery_mount.gd / .tscn   RocketBatteryMount (salvo of 2, root pools, fires past cover)

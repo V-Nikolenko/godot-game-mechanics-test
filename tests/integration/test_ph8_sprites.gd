@@ -30,6 +30,8 @@ const HEADS := {
 	TurretMount.Variant.LANCE: "turret_head_lance.png",
 	TurretMount.Variant.BEAM_CANNON: "turret_head_beam_cannon.png",
 	TurretMount.Variant.HEAVY_CANNON: "turret_head_heavy_cannon.png",
+	TurretMount.Variant.SPREAD_CANNON: "turret_head_spread_cannon.png",
+	TurretMount.Variant.RAPID_PULSE: "turret_head_rapid_pulse.png",
 }
 
 ## Host scene -> [the sprite node's name, its texture, the texture's size].

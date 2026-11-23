@@ -25,6 +25,10 @@ const DEFAULT_ROUND_MAX_TIME := 18.0
 ## The speed rounds leave at, px/s (the Pulse round's own 300).
 @export var round_speed: float = 300.0
 @export var round_scene: PackedScene = EnemyRounds.PULSE
+## Rounds per shot of a burst, fanned evenly across `pellet_spread_deg` and centred on the aim (Phase 11 t3: the spread cannon). 1 = today's single round.
+@export var pellets: int = 1
+## Full width of the fan, degrees; the outer pellets leave at half of it either side of the aim. Ignored at `pellets` 1.
+@export var pellet_spread_deg: float = 0.0
 
 ## Due rounds not fired because the aim was outside the cone.
 var shots_held: int = 0
@@ -41,7 +45,7 @@ func pool_specs() -> Array[Dictionary]:
 	var specs: Array[Dictionary] = [{
 		"name": POOL_NAME,
 		"scene": round_scene,
-		"size": EnemyRounds.pool_size_for(burst_count, max_time, period),
+		"size": EnemyRounds.pool_size_for(burst_count * maxi(pellets, 1), max_time, period),
 		"persist": false,
 	}]
 	return specs
@@ -80,10 +84,13 @@ func _shoot() -> void:
 		shots_held += 1
 		return
 	var pool := _pools.get(POOL_NAME) as BulletPool
-	var projectile: EnemyBullet = pool.acquire(muzzle_position()) as EnemyBullet if pool != null else null
-	if projectile == null:
-		shots_refused += 1
-		return
-	projectile.speed = round_speed
-	projectile.set_direction(Vector2.RIGHT.rotated(global_rotation))
-	round_fired.emit(projectile)
+	var count := maxi(pellets, 1)
+	for i in count:
+		var projectile: EnemyBullet = pool.acquire(muzzle_position()) as EnemyBullet if pool != null else null
+		if projectile == null:
+			shots_refused += 1
+			continue
+		var offset := 0.0 if count == 1 else deg_to_rad(pellet_spread_deg) * (float(i) / float(count - 1) - 0.5)
+		projectile.speed = round_speed
+		projectile.set_direction(Vector2.RIGHT.rotated(global_rotation + offset))
+		round_fired.emit(projectile)
