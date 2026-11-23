@@ -66,6 +66,7 @@ global/
 │   ├── anchor_idle.gd         # AnchorIdle (RefCounted) — generic idle-around-an-anchor → combat handover
 │   └── enemy_world.gd         # EnemyWorld — the one lookup of the &"assault_arena" mode provider
 ├── hazards/                   # shared hazard description + registry (enemy rework phase 6): HazardInfo, Hazards, HazardField, HazardDrift
+├── boss/                      # shared boss machinery (enemy rework phase 11): BossPhase, BossPhaseDriver (more arrive with t2–t4; free of any one boss's names)
 ├── physics/
 │   └── collision_layers.gd    # CollisionLayers — named constants, one per project.godot layer_names entry
 ├── entities/
@@ -326,6 +327,25 @@ MyHeavy (BaseEnemy)
 
 Gated by `tests/integration/test_enemy_module.gd` (fixture `tests/helpers/fixture_modular_host.tscn`: an armoured root and parts
 `Open` / `Locked` / `Laser`).
+
+### Boss phase ladder — `boss/boss_phase.gd`, `boss/boss_phase_driver.gd` (enemy rework phase 11, t1)
+
+A boss's phases are data, and the driver that walks them applies nothing (IDEAS §25).
+
+- **`BossPhase`** (flat `Resource`, authored as sub-resources of the driver, never written at runtime): `phase_id`, `Trigger { START,
+  PARTS_DESTROYED, HEALTH_AT_OR_BELOW }`, `module_ids` (else `roles`, else any part) + `count`, `health_module` (empty = the host root) +
+  `health_ratio`, and `changes`, bit flags `Change { MOVEMENT, ATTACKS, VULNERABLE, ARENA, REINFORCEMENTS, VISUALS }` (append-only).
+- **`BossPhaseDriver`** (Node `PhaseDriver`, a host root child): `bind(hull, host_health)` enters phase 0 and listens to the hull's
+  `module_destroyed` / `module_damaged` and to `Health.amount_changed` of the host and of every part a HEALTH rule names. `evaluate()` enters
+  each **next** phase whose condition holds, in order, one `phase_entered(index, phase_id)` each (one hit satisfying two rules enters both
+  inside the same call). One way: a repair never steps back and a later phase never jumps its predecessor. A HEALTH rule holds at
+  `current <= ratio × max` (+ 1e-6 slack, so 0.29 × 100 enters at 29). `current_index()`, `current_id()`, `has_reached(id)`, `phase(i)`.
+  `validate(hull := null)` returns the authoring errors: no phases, index 0 not START, a later START, a duplicate id, a non-START phase
+  changing fewer than two aspects, `count` < 1 or above the parts it can count, an id the hull lacks, a ratio outside (0, 1).
+- **The host listens to `phase_entered` and changes itself**; its `phase_snapshot()` (the fortress's, t5) must show every declared change.
+
+Gated by `tests/unit/test_boss_phase_driver.gd` and the intent gate `tests/integration/test_boss_phase_rules.gd`, which validates every scene
+under `assault/` / `open_space/` holding a `BossPhaseDriver` (none until the Space Fortress, t5).
 
 ### CollisionLayers — `global/physics/collision_layers.gd`
 
