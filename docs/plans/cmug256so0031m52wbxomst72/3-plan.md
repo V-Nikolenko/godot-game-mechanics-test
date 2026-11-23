@@ -1,6 +1,6 @@
 # Enemy rework, phase 11: Space Fortress 2.0 and machine-driven boss reinforcements
 
-Revision 2 (2026-11-22; answers review 1, see §8). Epic `cmug256so0031m52wbxomst72`, phase 11 of the enemy rework (idea `docs/ideas/cmufkkgmx0001o02y6bnf52bq/`). **This directory had no
+Revision 3 (2026-11-23; revision 2 answered review 1, revision 3 answers the owner's send-back, see §8). Epic `cmug256so0031m52wbxomst72`, phase 11 of the enemy rework (idea `docs/ideas/cmufkkgmx0001o02y6bnf52bq/`). **This directory had no
 `1-context.md` / `2-research.md`:** the research task is marked done but left no files (the Phase 10 precedent), so this plan carries the scope check (§1.1), the research
 and judgement calls (§1.2) and the code facts (§1.3) itself. Code facts were read on `agent/auto-dev` @ `cba0e7b`.
 
@@ -14,6 +14,8 @@ and judgement calls (§1.2) and the code facts (§1.3) itself. Code facts were r
 - **Also:** the fortress waits at the far edge of the Open Space hub as an optional fight; turrets, laser-fence posts and shield generators react to EMP like ships do (silenced, still shootable).
 - **Left out:** a boss health bar (the spec says not to make one big health bar), enemy lasers hurting boss parts and wrecks you can hide behind (phases 18–19), difficulty tiers (16), sound (17).
 - **Main risks:** the Assault screen is small for a 350 px boss with sweeping lasers; fairness rows check that you can always outrun or dodge each attack, and the number of enemy bullets on screen is measured in every phase (the frenzy included) against a fixed ceiling. The test suite is about 27 s under its time limit. Retiring the station rewrites about 25 test files.
+- **This revision** keeps the design and your seven choices unchanged; it closes gaps in the checks (a phase can no longer "count" the hit that triggered it, the bullet
+  count can no longer be capped by empty ammunition pools) and splits the two largest jobs so each fits one working session.
 - **Choices for you (default in brackets):**
   1. Remove the old space station completely once the fortress replaces it? [yes]
   2. Phase 2 starts after how many of the 5 batteries are destroyed? [2]
@@ -42,9 +44,10 @@ Phase 11 of the enemy rework. Read `CLAUDE.md`. Earlier phases' rules in `docs/i
   Sectors: **north** = `shield_north` protects `battery_artillery`, `battery_missiles`, `hangar`; **south** = `shield_south` protects `battery_spread`, `battery_pulse`, `battery_sweep`.
 - **Boss phases** (`BossPhase.phase_id`, in order, one way): `&"batteries"` (START) → `&"shields_exposed"` (2 WEAPON parts destroyed) → `&"core_exposed"` (both shield
   parts destroyed) → `&"critical"` (core health ≤ 40 %). Every non-start phase must change ≥ 2 of MOVEMENT, ATTACKS, VULNERABLE, ARENA, REINFORCEMENTS, VISUALS, and
-  `SpaceFortress.phase_snapshot()` must show every declared change (§25 as a gate).
+  `SpaceFortress.phase_snapshot()` must show every declared change (§25 as a gate). Snapshot keys read **phase-driven state only** (never which parts are alive),
+  so the hit that triggers a phase cannot count as one of its changes.
 - **Two phase enums, never mixed:** the boss phase ladder (above, owned by `BossPhaseDriver`) and the brain's movement phase `FortressBrain.Phase { IDLE, NOTICING, RETURNING,
-  ENTER, HOLD, REPOSITION }` (append-only).
+  ENTER, HOLD, REPOSITION }` (append-only). `FortressBrain.is_engaged()` = HOLD or REPOSITION, both modes: weapons fire and bays run only then.
 - **Escorts (boss reinforcements):** spawned only by `BossReinforcements` from a `ReinforcementBay` on a live part, into the boss's **escort container** (a `Node2D` sibling of the
   boss named `<boss name>Escorts`, group `&"boss_escorts"`), never straight into the enemy container and never announced with `EventBus.enemy_spawned_orphan`. They are announced
   with the new `EventBus.boss_escort_spawned(escort: Node, boss: Node)`; `ScoreTracker` pays a kill its `score_value` × combo and nothing else (no wave tally, no escape
@@ -98,7 +101,7 @@ The owner wants a 360° boss built from coherent modules (IDEAS §8, §8.1, §22
 | §8.1 module framework | Built in Ph10: `EnemyModule`, `ModularHull`, `TurretMountBuilder`, `traverse_deg`, `HEAVY_CANNON`; two hull rules | Reused as is; the fortress picks the armoured-hull rule |
 | Outer batteries' five attacks | Mounts exist for laser sweep (`SWEEP_BEAM`), missiles (`ROCKET_BATTERY`), slow artillery (`HEAVY_CANNON`); **no spread or rapid-pulse mount** | t3 appends `SPREAD_CANNON` and `RAPID_PULSE` |
 | Shield nodes | `EnemyShield` (arc ≥ 360 = bubble, capacity, regen, reboot) and the absorber slot exist; `ShieldGenerator` sustains bubbles for turret groups only | t5 builds a generic `ShieldSector` on `EnemyShield` (no `ShieldGenerator` reuse: that is a `BaseEnemy` turret-group member, not a part) |
-| Geometry weapons | `EnemyBeam` (owner-ticked), `EnergyRing`, `RadialAttackPattern` exist; the station still uses `LaserRay` (Ph8 deferred its move to Ph11) | t7 builds spoke beams on `EnemyBeam`, a ring pulse on `EnergyRing`, keeps the precessing bullet ring |
+| Geometry weapons | `EnemyBeam` (owner-ticked), `EnergyRing`, `RadialAttackPattern` exist; the station still uses `LaserRay` (Ph8 deferred its move to Ph11) | t16 builds spoke beams on `EnemyBeam`, a ring pulse on `EnergyRing`, keeps the precessing bullet ring |
 | §10 reinforcement mechanism | `CarrierHangars` (Ph10) spawns hangar children into the enemy container with `enemy_spawned_orphan`; `StationReinforcements` uses rails + orphans | t2 builds the reusable mechanism; **the Carrier is not migrated here** (Ph18 owns that, Ph1 roadmap) |
 | "Out of the generic container and scoring" | `LevelDirector._wait_enemies_cleared` counts every enemy-container child; `ScoreTracker` handles orphans as wave −1 tally + escape penalty | escort container + dedicated `boss_escort_spawned` path (§2.2) |
 | Boss phases (§25) | Only bespoke per-heavy code (`HeavyGunshipBrain.HullPhase`, Carrier core exposure) | t1 builds `BossPhaseDriver` with the ≥ 2-changes rule as a gate |
@@ -157,7 +160,7 @@ following are **judgement calls, labelled as such**:
   reach group `enemy_parts`; EMP Blast (5 s / 15 s cooldown) uses `answers_emp()` else process-disables the node.
 - **Hub** (`open_space/scenes/levels/sector_hub.gd`): patrol draws 1–20 appended in order (`_spawn_patrol()`, seeds set before `add_child`); draw 19 Heavy Gunship (2600 ring,
   157.5°), draw 20 Carrier (3400 ring, −112.5°). `test_sector_hub_patrol.gd`: `_patrol_groups()` (15 groups), `_element_radius()`, clearance sweeps (interactables, TacticalSpace
-  +100 / +300, defense site A/B, jammers C, Ph10 anchor spacing > 1000), hard counts `groups.size() == 15`, `seeds.size() == 21`, `_expected_seeds()` 20 draws, live children 21.
+  +100 / +300, defense site A/B, jammers C, Ph10 anchor spacing > 1000), hard counts `groups.size() == 15`, `seeds.size() == 21`, `_expected_seeds()` 20 draws, live children 21 (pinned at lines 482, 1070, 1275, 1953).
 - **Gate time:** last recorded GUT 210.34 s (Ph10 t12); ceiling 240 s; escalate past a 237 s two-run mean.
 
 ## 2. Design
@@ -222,7 +225,8 @@ built from `fixture_modular_host.tscn`'s pattern with a `Bay` on two parts).
 - `tick(delta: float, active: bool) -> void` — the only clock (no `Timer`, no `create_timer`). `active` false (player not engaged, EMP window, host dying) freezes periodic clocks,
   holds queued launches and closes open doors.
 - Door cycle per bay: a due launch → doors OPENING for `door_seconds` (part `Light` CHARGING; `opens_part` → `part.set_vulnerable(true)`) → LAUNCH (spawn) → OPEN for
-  `open_hold_seconds` (still vulnerable; 0 passes straight through) → CLOSED (light back, `opens_part` → `set_vulnerable(false)`, deferred if inside a physics callback).
+  `open_hold_seconds` (still vulnerable; 0 passes straight through) → CLOSED (the part `Light` returns to the state it had when the doors started opening — recorded per bay at OPENING, so a generator's `SHIELDED` comes back —; `opens_part` →
+  `set_vulnerable(false)`, deferred if inside a physics callback).
 - A bay whose part is destroyed is **dead**: pending launches are dropped, it never launches again; a part destroyed mid-OPENING cancels that launch.
 - ON_SECTOR_LOSS: a watched part's destruction queues one launch (several queue several, served one door cycle at a time).
 - ON_PHASE: entering `on_phase` queues one launch of `count`.
@@ -297,7 +301,7 @@ Rows (`tests/integration/test_turret_mount_variants.gd`, hand-ticked fixture mou
 
 `git mv assault/scenes/enemies/space_station/station_death_sequence.gd global/boss/boss_death_sequence.gd` **and** its sidecar `station_death_sequence.gd.uid` →
 `global/boss/boss_death_sequence.gd.uid` (same UID, moved, never re-minted), `class_name BossDeathSequence` (was `StationDeathSequence`); the station's `DeathSequence` node uses it:
-update the `ext_resource` path in `space_station.tscn` (line 13 today). **Behaviour-identical, not byte-identical:** the script holds `var _station: SpaceStation` and casts
+update the `ext_resource` path in `space_station.tscn` (line 14 today). **Behaviour-identical, not byte-identical:** the script holds `var _station: SpaceStation` and casts
 `get_parent() as SpaceStation`; both become a duck-typed host (`_host: Node2D`, checked with `has_signal(&"death_started")` and `"death_duration" in host`), and the "not a
 SpaceStation" warning text becomes "host lacks death_started / death_duration". Every other reference to `StationDeathSequence` (`test_station_death_sequence.gd`, comments in
 `explosion_effect.gd` and `tests/unit/test_explosion_effect.gd`) follows the rename. The host contract becomes explicit in the doc comment and duck-typed: signal `death_started`, property
@@ -311,7 +315,7 @@ at the fortress). Allowed writer note: it writes the dying host's `rotation` / `
 #### 2.5.1 Files and scene
 
 `assault/scenes/enemies/space_fortress/`: `space_fortress.tscn`, `space_fortress.gd` (`SpaceFortress extends BaseEnemy`), `fortress_brain.gd` (`FortressBrain extends EnemyBrain`;
-t5 builds its shell — phase wiring, EMP hooks — t6 its movement, t7 its weapons, t8 its bays), `space_fortress_config.gd` / `.tres` (flat `SpaceFortressConfig extends ShipConfig`),
+t5 builds its shell — phase wiring, EMP hooks — t6 its movement, t7 its batteries, t16 its geometry weapons, t8 its bays; the generic `ShieldSector` is t15's), `space_fortress_config.gd` / `.tres` (flat `SpaceFortressConfig extends ShipConfig`),
 `ENEMY.md`. `WaveBuilder.space_fortress()` / `SPACE_FORTRESS`.
 
 Scene (root `SpaceFortress`, `CharacterBody2D`, **layer 0, mask 0**):
@@ -357,18 +361,37 @@ whichever part lies on its path (no flush-edge rule). `hull_share` 0 everywhere.
   `ensure(host)`; the container is a `<host name>Escorts` `Node2D` sibling of the host, freed with it).
 - Score `score_value` 1500 (station 1000), `counts_toward_wave_clear` true, `counts_as_escape` true (a timeout escape costs combo, as the station did).
 
-#### 2.5.4 Shield sectors
+#### 2.5.4 Shield sectors (t15 builds `ShieldSector`; t5 wires two of them)
 
-`class_name ShieldSector extends RefCounted` (`global/boss/shield_sector.gd`): `_init(generator: EnemyModule, protected: Array[EnemyModule], params: Dictionary)` with
-`capacity`, `regen_delay`, `regen_seconds`, `reboot_seconds`, `radius_pad`.
-- On construction builds one `EnemyShield` per live protected part: `arc_deg` 360 (bubble), the params, `radius` = part hurtbox radius (or half-diagonal) + `radius_pad`,
-  `attach(part.hurt_box)` (skip with a verbose note if the slot is taken), added as a child of the part.
-- Generator `destroyed` → every shield of the sector is freed (`clear_absorber`) in the same call: **the sector is exposed for good**. A protected part's `destroyed` frees its
-  own shield. Generator alive → shields regenerate / reboot by `EnemyShield`'s own clock (no sustain mode).
-- `is_exposed() -> bool`, `shield_of(id) -> EnemyShield`, `shields() -> Array`, `generator()`.
-- The generator's `Light` shows `StateLight.State.SHIELDED` (appended, cyan) while it lives.
-- Fortress config: `sector_shield_capacity` 120, `sector_shield_regen_delay` 3.0, `sector_shield_regen_seconds` 2.0, `sector_shield_reboot_seconds` 5.0, `sector_shield_pad` 8.
-  (The hangar's bubble absorbs only while its doors are open, because a locked part is armoured.)
+`class_name ShieldSector extends RefCounted` (`global/boss/shield_sector.gd`, boss-agnostic, no fortress names): `_init(generator: EnemyModule, protected: Array[EnemyModule],
+params: Dictionary)` with keys `capacity`, `regen_delay`, `regen_seconds`, `reboot_seconds`, `radius_pad`. It builds on the existing `EnemyShield`
+(`global/components/enemy_shield.gd`: exports `arc_deg`, `capacity`, `regen_delay`, `regen_seconds`, `reboot_seconds`, `radius`, `sustain_mode`; `attach(hurt_box) -> bool` takes the
+hurtbox's single absorber slot; it absorbs nothing while its host — the hurtbox's parent — `is_armored()`, and an `EnemyModule` is armoured while locked or wrecked; direct
+emitters such as the player beam, the nova and `LaserRay` bypass it).
+- On construction it builds one `EnemyShield` per live protected part: `arc_deg` 360 (a bubble), the params, `radius` = the part hurtbox's circle radius (or a rectangle's
+  half-diagonal) + `radius_pad`, `sustain_mode` false; added as a child of the part, then `attach(part.hurt_box)` (if the slot is taken: skip that part with a verbose-only note,
+  never displace an existing absorber).
+- Generator `destroyed` → every shield of the sector is freed in the same call (`queue_free`, its `_exit_tree` releases the absorber slot; a hit later in the same physics frame
+  must not be absorbed, so detach first): **the sector is exposed for good**. A protected part's `destroyed` frees its own shield. While the generator lives the shields
+  regenerate and reboot on `EnemyShield`'s own clock (no sustain mode, no `Timer`).
+- API: `is_exposed() -> bool`, `shield_of(module_id: StringName) -> EnemyShield` (null once freed), `shields() -> Array`, `generator() -> EnemyModule`, `protected_ids() -> Array`.
+- `StateLight.State.SHIELDED` is **appended** to `global/components/state_light.gd`'s `enum State { OFF, ARMED, CHARGING, COMMIT, VENTING }` (cyan); the generator's `Light`
+  shows it while the generator lives (OFF as a wreck, the Ph10 rule).
+
+Fortress use (t5): `shield_north` protects `battery_artillery`, `battery_missiles`, `hangar`; `shield_south` protects `battery_spread`, `battery_pulse`, `battery_sweep`. Config:
+`sector_shield_capacity` 120, `sector_shield_regen_delay` 3.0, `sector_shield_regen_seconds` 2.0, `sector_shield_reboot_seconds` 5.0, `sector_shield_pad` 8. The hangar's bubble
+absorbs only while its doors are open, because a locked part is armoured.
+
+Rows (t15, `tests/integration/test_shield_sector.gd`, on `tests/helpers/fixture_modular_host.tscn` with parts set up by the test; hand-ticked except row 6):
+1. One bubble per live protected part (`arc_deg` 360, the params, `radius` = hurtbox radius + pad for a circle and half-diagonal + pad for a rectangle); a part already
+   destroyed at construction gets none.
+2. Destroying the generator frees every bubble of its sector in the same call (`is_exposed()` true, `shield_of()` null) and leaves a second sector on the same host untouched.
+3. Destroying a protected part frees only its own bubble.
+4. A part whose absorber slot is taken keeps its existing absorber; no error.
+5. A locked part's bubble absorbs nothing (the hit is deflected by the part), an unlocked part's bubble absorbs.
+6. Real physics (8×): a real `bullet.tscn` stream at a shielded part is absorbed until `capacity` is spent, then damages the part; with the generator destroyed first, the first
+   bullet damages the part.
+7. The generator's light is `SHIELDED` while it lives and OFF as a wreck; `StateLight.State` keeps its earlier values unchanged (append-only).
 
 #### 2.5.5 Phase ladder and consequences
 
@@ -378,26 +401,47 @@ whichever part lies on its path (no flush-edge rule). `hull_share` 0 everywhere.
 |---|---|---|---|
 | 0 | `batteries` | START | — |
 | 1 | `shields_exposed` | PARTS_DESTROYED, roles [WEAPON], `count` = `config.shields_exposed_battery_losses` 2 (**the scene value must equal the config value; a row checks it**) | VULNERABLE, ATTACKS, MOVEMENT, REINFORCEMENTS, VISUALS |
-| 2 | `core_exposed` | PARTS_DESTROYED, ids [`shield_north`, `shield_south`], count 2 | VULNERABLE, MOVEMENT, ATTACKS, ARENA, VISUALS |
+| 2 | `core_exposed` | PARTS_DESTROYED, ids [`shield_north`, `shield_south`], count 2 | VULNERABLE, MOVEMENT, ARENA, VISUALS (the ring pulse is ARENA, not ATTACKS) |
 | 3 | `critical` | HEALTH_AT_OR_BELOW, `health_module` `core`, ratio 0.4 | MOVEMENT, ATTACKS, REINFORCEMENTS, VISUALS |
 
-Consequences, applied by `SpaceFortress._on_phase_entered(index, phase_id)` (t5 builds the vulnerability and visual ones; t6, t7, t8 add theirs to the same handler):
-- `shields_exposed`: both shield parts `set_vulnerable(true)` (deferred), generator shutter texture opens (t9 art), spoke beam volleys + spin armed (t7, t6), hangar bay active (t8).
-- `core_exposed`: core `set_vulnerable(true)` (deferred), core plating texture opens, thrusters visible, movement starts (t6), pulse ring armed (t7).
-- `critical`: `CriticalOverlay` visible, core light blinks (`StateLight` COMMIT), continuous spin + 4 spokes, cooldowns × 0.6, core bullet ring (t7), hangar surge (t8).
+Consequences, applied by `SpaceFortress._on_phase_entered(index, phase_id)` (t5 builds the vulnerability and visual ones; t6, t7, t16 and t8 add theirs to the same handler):
+- `shields_exposed`: both shield parts `set_vulnerable(true)` (deferred), generator shutter texture opens (t9 art; a placeholder swap until then), spin mode `volley` (t6) and spoke
+  volleys armed (t16), hangar bay active (t8).
+- `core_exposed`: core `set_vulnerable(true)` (deferred), core plating texture opens, `Thrusters` visible, translation starts (t6: Open Space REPOSITION, Assault bob), ring pulse
+  armed (t16).
+- `critical`: `CriticalOverlay` visible, core light blinks (`StateLight` has no blink for COMMIT — it is steady white, `blink_once()` flashes CHARGING only — so the fortress root toggles the core
+  `Light` COMMIT ↔ OFF every `core_blink_period` 0.25 s in its own `_process` while `critical` and not dying), continuous spin and faster translation (t6), battery cooldowns × 0.6 and gate cap 3 (t7), four
+  spokes every 6.0 s and the core bullet ring (t16), hangar surge (t8).
 
-`SpaceFortress.phase_snapshot() -> Dictionary` with keys `&"movement"`, `&"attacks"`, `&"vulnerable"`, `&"arena"`, `&"reinforcements"`, `&"visuals"`, each a comparable value:
-movement = brain movement phase + current speed / spin limits; attacks = sorted armed weapon ids + cooldown factor + spoke count + ring period + core-ring flag; vulnerable =
-sorted ids of live vulnerable parts; arena = pulse ring armed + registered hazard count; reinforcements = sorted active bay ids + their periods; visuals = part textures +
-light states + `Thrusters.visible` + `CriticalOverlay.visible`. **The §25 row** (built in t5 for the keys t5 owns, extended by t6–t8 as they land; final form in t8): for each
-phase entry, the keys whose value changed ⊇ the declared `changes` and number ≥ 2.
+`SpaceFortress.phase_snapshot() -> Dictionary` — six keys, each a comparable value built **only from phase-driven state** (what `_on_phase_entered` and the brain's per-phase
+settings set), never from which parts are alive: a part's own destruction never changes a key, so a phase cannot pass §25 on the side effect of the hit that triggered it.
+- `&"movement"`: `[translation_mode, spin_mode, reposition_period, travel_speed]` — `translation_mode` `&"hold"` or `&"reposition"` (Open Space) / `&"bob"` (Assault);
+  `spin_mode` `&"face"` (facing rule only), `&"volley"` (spins armed during spoke volleys) or `&"continuous"`; the numbers are the current phase's (0 while holding).
+- `&"attacks"`: `[cooldown_factor, max_concurrent_attacks, spoke_count, spoke_period, core_ring_armed, core_ring_period]` (the live battery set is excluded: a dead battery is
+  §26, not a phase).
+- `&"vulnerable"`: sorted ids of parts whose `is_vulnerable()` is true, destroyed parts included (`EnemyModule` destruction leaves the flag alone) and the hangar excluded (its
+  vulnerability follows its doors, not the phase).
+- `&"arena"`: `[ring_pulse_armed, ring_period]` (the `EnergyRing` pulse is the arena-control weapon).
+- `&"reinforcements"`: `[sorted ids of bays the phase ladder has activated (a bay with `active_from_phase` reached; ON_SECTOR_LOSS bays count from the start; dead bays stay
+  listed), surge escorts queued on entering this phase]` (0 when the surge is a no-op, e.g. a dead hangar).
+- `&"visuals"`: `[generator shutter textures, core plating texture, generator light states, core light state, Thrusters.visible, CriticalOverlay.visible]` (part wreck textures
+  excluded).
+
+**The §25 row** (built in t5 for the keys t5 owns, extended by t6, t7, t16 and t8 as they land; final form in t8): for each phase entry, snapshot immediately before the
+triggering call (`destroy()` or the core damage) and one physics frame after it (deferred unlocks); the keys whose value changed ⊇ the declared `changes`, and number ≥ 2.
+Until a later task lands, the row asserts only the keys built so far.
 
 #### 2.5.6 EMP, homing, ward, tow
 
 - `answers_emp()` → `is_dying() or super()`: true while alive (brain + mover) **and while dying** (after `suspend_ai()` `is_ai_driven()` is false, and `EMPBlastModule` would
   otherwise process-disable the wreck, pausing the death timer and `BossDeathSequence` and holding the section 5 s; the station had this gap). `apply_emp(seconds, source)` is
   overridden: a no-op while `is_dying()`; otherwise `super(seconds * config.emp_factor, source)` (`emp_factor` 0.4 scales **every** EMP source; Ph11 owner choice 6). The
-  brain's `on_emp_started()` silences everything it ticks: mounts `scan(0.0)`, beams and ring `cancel()`, bays inactive; shields are passive and stay. The fortress stays
+  brain's `on_emp_started()` silences everything it ticks: mounts `scan(0.0)`, beams and ring `cancel()`, and `reinforcements.tick(0.0, false)` once (closing open doors and
+  freezing clocks there and then: the brain is not ticked during the window, `base_enemy.gd:128-134`, so no later tick would). Shields are passive and stay. **Fading after
+  a cancel:** a cancelled `EnemyBeam` / `EnergyRing` goes to FADE and stays drawn until ticked (`enemy_beam.gd:188-197`, `energy_ring.gd:128-137`), and the brain is not
+  ticked during an EMP window or after `suspend_ai()`; so `SpaceFortress._physics_process` ticks each spoke beam and the ring itself **only while it is in FADE and the brain
+  is not ticking** (EMP window or dying), until it reaches OFF (no `Timer`; the beams stay owner-ticked). t5 builds the `reinforcements.tick(0.0, false)` call; t16 builds the fade tick with the
+  beams and adds a row: after an EMP or the death start, every spoke and the ring reach OFF within their `fade_seconds`. The fortress stays
   tangible. The window is the `BaseEnemy` clock; nothing restarts a cancelled attack before the window ends.
 - `homing_point(from)` as §2.5.2. Not wardable, not towable, not repairable.
 
@@ -407,13 +451,14 @@ phase entry, the keys whose value changed ⊇ the declared `changes` and number 
 2. Armour: a real `bullet.tscn` (8×) fired at the bare hull between parts is deflected (`armor_deflected`, root `Health` unchanged) and keeps flying; a bullet on a battery lane
    hits the battery's shield first, then (shield broken) the battery, never the core (the station's lane rows, re-expressed).
 3. Locked parts: core, shields and hangar ignore bullets, the player beam (`BeamDriver`) and the nova while locked (the Ph10 locked-part rule).
-4. Sector shields: a bubble on every battery and the hangar; capacity / reboot from config; killing `shield_north` frees the north bubbles in the same call and leaves the south
+4. Sector shields (wiring only; `ShieldSector` itself is t15's): a bubble on every battery and the hangar; capacity / reboot from config; killing `shield_north` frees the north bubbles in the same call and leaves the south
    ones; a destroyed battery's bubble is freed; a hit on the hangar's bubble while its doors are closed is not absorbed (the part is armoured).
 5. Phase ladder: two batteries destroyed → `shields_exposed`, generators vulnerable (one frame later, deferred), one battery is not enough; both generators → `core_exposed`,
    core vulnerable; core at 40 % → `critical`; the scene's `count` equals `config.shields_exposed_battery_losses`.
-6. §25 row (keys owned by t5: `vulnerable`, `visuals`) — later tasks extend it. **Its scripted path is pinned:** destroy `battery_spread` and `battery_pulse` (→ `shields_exposed`),
+6. §25 row (§2.5.5; keys owned by t5: `vulnerable`, `visuals`) — t6 adds `movement`, t7 and t16 `attacks` / `arena`, t8 `reinforcements`. **Its scripted path is pinned:** destroy `battery_spread` and `battery_pulse` (→ `shields_exposed`),
    then `shield_north` and `shield_south` (→ `core_exposed`), then damage the core to 40 % (→ `critical`) **with the hangar alive** (t8's `critical` hangar surge is a declared
    REINFORCEMENTS change that needs a live hangar). A second row, added by t8, runs the same path with the hangar destroyed first and asserts only ≥ 2 observed changes per phase.
+   **Boundary:** destroying one battery in `batteries` (short of the threshold) leaves every snapshot key unchanged — a part's death alone is never a phase change.
 7. Death: core destroyed → `died` once, `was_killed`, `death_started`, contact layer 256 → 0, wreck in the tree for `death_duration`, then freed; escort container freed with it;
    duration 0 frees at once.
 8. EMP: `EmpPulse.emit(..., TARGET_ENEMIES)` reaches it (`answers_emp()`), window = 5 × 0.4 = 2.0 s, mover halted, still tangible (a bullet still hits a battery).
@@ -427,26 +472,32 @@ phase entry, the keys whose value changed ⊇ the declared `changes` and number 
 ### 2.6 Fortress movement (IDEAS §8.1 Open Space movement and Assault adaptation; t6)
 
 `FortressBrain.Phase { IDLE, NOTICING, RETURNING, ENTER, HOLD, REPOSITION }` (append-only). `assault = EnemyWorld.arena(get_tree()) != null`, read in `_start()`.
+**`FortressBrain.is_engaged() -> bool`** = brain phase HOLD or REPOSITION, in both modes (not IDLE, NOTICING, RETURNING or ENTER). The weapons (t7, t16) fire and the bays
+(t8) run only while it is true; t6 builds it (t5 stubs it false).
 
-**Facing rule (both modes, every phase but spins):** `present_side()`: for each sector, strength = live batteries of that sector with a live shield (×1.0) or without (×0.5);
+**Facing rule (both modes, every phase but spins):** `present_side()`: for each sector (north = `shield_north` with `battery_artillery`, `battery_missiles`; south =
+`shield_south` with `battery_spread`, `battery_pulse`, `battery_sweep`), strength = its live batteries × 1.0 while its generator lives, × 0.5 once the generator is destroyed;
 the strongest sector's centre bearing (north 270°, south 90°) is turned toward the player: `face_toward(pos + Vector2.from_angle(bearing_to_player - local_bearing +
 sprite_forward_angle) * 100)`. `max_turn_rate` = `turn_rate` (OS 0.22 rad/s, Assault `assault_turn_rate` 0.30). Ties keep the current side. A circling player at 500 px and
 420 px/s moves at 0.84 rad/s, ~4× the turn rate, so circling reaches the weak side (row checks `turn_rate × 500 < 0.5 × player max speed`, speed read from the player scene).
 
-**Spins:** during a spoke volley (t7 calls `brain.begin_spin(direction)` / `end_spin()`) and continuously in `critical`, the brain faces a point 1 rad ahead of the current facing
+**Mover facing:** the fortress's `EnemyMover` authors **`turn_lerp = 0`**: `EnemyMover.step()` lerps toward the face point by `delta × turn_lerp` *before* the
+`max_turn_rate` cap (`enemy_mover.gd:268-274`), so with `turn_lerp` > 0 a point 1 rad ahead would turn at about `turn_lerp` rad/s, not at the cap. Row 6 reads the scene value.
+
+**Spins:** during a spoke volley (t16 calls `brain.begin_spin(direction)` / `end_spin()`) and continuously in `critical`, the brain faces a point 1 rad ahead of the current facing
 with `max_turn_rate` = `beam_spin_rate` 0.5 (`critical_spin_rate` 0.6); direction alternates per volley.
 
 **Open Space:** `patrol_anchor` (INF = spawn position) is the **combat zone** centre; `AnchorIdle(anchor, perceive_radius 1400, lose_radius 2600, notice_time 0.8,
-idle_radius 8)`. IDLE: hold the anchor, slow idle spin `idle_spin_rate` 0.08, weapons and bays inactive. NOTICING → HOLD. HOLD (`batteries`, `shields_exposed`): `hold_position(
+home_radius 8)` (`anchor_idle.gd`: the fifth parameter is `p_home_radius`). IDLE: hold the anchor, slow idle spin `idle_spin_rate` 0.08, weapons and bays inactive. NOTICING → HOLD. HOLD (`batteries`, `shields_exposed`): `hold_position(
 station_point, 24, 40)`; `station_point` starts at the anchor. REPOSITION (`core_exposed`, `critical`): every `reposition_period` (8.0 s; `critical` 5.0 s) pick a new station
 point: 8 candidates on the circle of radius `0.6 × zone_radius` (zone 600) around the anchor, the one farthest from the player's position 1 s ahead, at least 250 px from the
 current point; `arrive()` there at `reposition_speed` 60 (`critical` 90), `Thrusters` visible while travelling. Leash: a station point never lies outside the zone; the player
 beyond `lose_radius` → RETURNING (arrive at the anchor, weapons / bays inactive, damage and boss phase kept) → IDLE. `start_engaged` skips IDLE.
 
-**Assault:** no `EngagementBudget`, no exit (the section timeout is the only end besides death). ENTER: `request_velocity(0, assault_enter_speed 90)` until world y ≥
-`assault_hold_y` 180, then HOLD (`batteries`, `shields_exposed`): hold at (anchor x, 180). From `core_exposed`: vertical bob between `assault_hold_y ± assault_bob_amplitude`
+**Assault:** no `EngagementBudget`, no exit (the section timeout is the only end besides death). ENTER: `request_velocity(Vector2(0, assault_enter_speed))` (90 px/s; the mover takes one `Vector2`) until world y ≥
+`assault_hold_y` 180, then HOLD (`batteries`, `shields_exposed`): hold at (anchor x, 180). From `core_exposed`: REPOSITION, a vertical bob between `assault_hold_y ± assault_bob_amplitude`
 (100) at `assault_bob_speed` 35 (`critical` 55), reversing at the ends; **x never moves** (x velocity = a correction to the anchored x only, ≤ 20 px/s). Facing rule and spins as
-above. EMP in Assault: the mover is halted (base rule); the fortress just stops — nothing must cross.
+above. `Thrusters` visible while bobbing. EMP in Assault: the mover is halted (base rule); the fortress just stops — nothing must cross.
 
 Rows (`test_space_fortress.gd` movement block; hand-ticked, both harnesses unless noted):
 1. OS idle: holds the anchor ± 8 px for 20 s, spins at `idle_spin_rate`, perceives the player inside 1400 px after `notice_time`, not at 1450.
@@ -461,73 +512,117 @@ Rows (`test_space_fortress.gd` movement block; hand-ticked, both harnesses unles
    facing rule (the side presented changes when a sector dies).
 6. Spin: a volley spin turns at `beam_spin_rate`, alternating direction; `critical` spins continuously.
 7. EMP: no motion and no rotation for the window (both modes).
-8. Extend the §25 row with `movement`.
+8. Extend the §25 row (§2.5.5) with `movement`: `[translation_mode, spin_mode, reposition_period, travel_speed]`, both modes (in Assault `shields_exposed` changes
+   `spin_mode` `face` → `volley`; `core_exposed` `hold` → `bob`; `critical` `volley` → `continuous` and bob speed 35 → 55).
 
-### 2.7 Fortress weapons and geometry weapons (IDEAS §8.1 batteries, §24, §26; t7)
+### 2.7 Fortress weapons and geometry weapons (IDEAS §8.1 batteries, §24, §26; t7 batteries, t16 geometry weapons)
 
-**Batteries:** `ModularHull.build_mounts(self, rng, owner_group, brain.attack_gate, 0)` builds the five battery mounts (part table in §2.5.2: spread SPREAD_CANNON at 45°, pulse
-RAPID_PULSE at 135°, artillery HEAVY_CANNON at 225°, missiles ROCKET_BATTERY at 315°, all with a 100° traverse; sweep SWEEP_BEAM at 0° with 140°). `brain._tick_weapons(delta)` (the Carrier's
-rule): target = `TargetInfo` of the player; `host_can_fire` = engaged (OS COMBAT / Assault after ENTER) ∧ not EMP ∧ (Assault: hull centre inside `EnemyWorld.view_rect()`) ∧
-(`can_see_player()` on a physics frame or `mount.fires_past_cover()`); otherwise `scan(delta)`.
+Two tasks build this section in order, both in `fortress_brain.gd` / `space_fortress.gd` / `space_fortress.tscn`: **t7** the five battery mounts (§2.7.1, §2.7.5, rows §2.7.7 A)
+and **t16** the geometry weapons, fairness and density (§2.7.2–§2.7.6, rows §2.7.7 B). Common facts: hull circle r 176; part table — `battery_spread` SPREAD_CANNON at local 45°
+(99, 99), `battery_pulse` RAPID_PULSE at 135° (−99, 99), `battery_artillery` HEAVY_CANNON at 225° (−99, −99), `battery_missiles` ROCKET_BATTERY at 315° (99, −99), all with a 100°
+traverse, `battery_sweep` SWEEP_BEAM at 0° (150, 0) with a 140° traverse; owner group `&"fortress_<instance_id>"`; boss phases `batteries` → `shields_exposed` → `core_exposed` →
+`critical`; `FortressBrain.is_engaged()` (§2.6: brain phase HOLD or REPOSITION, both modes). Mode: `EnemyWorld.arena(get_tree()) != null` = Assault.
+
+#### 2.7.1 Batteries and the attack gate (t7)
+
+`ModularHull.build_mounts(self, rng, owner_group, brain.attack_gate, 0)` builds the five battery mounts from each battery's `MountSlots/Slot0` (`TurretMountSlot`: variant, rest
+bearing, `traverse_deg_override`). `brain._tick_weapons(delta)` (the Carrier's rule): target = `TargetInfo` of the player; `host_can_fire` = `is_engaged()` ∧ not EMP ∧
+(Assault: hull centre inside `EnemyWorld.view_rect()`) ∧ (`can_see_player()` on a physics frame or `mount.fires_past_cover()`); each mount `tick(delta, target, host_can_fire)`,
+or `scan(delta)` when the brain is not engaged.
 - `attack_gate() -> bool` — **zero arguments**: `TurretMount` calls `telegraph_gate.call()` and `build_mounts` hands the same unbound Callable to every mount. True iff fewer
-  than `max_concurrent_attacks` 2 (`critical_max_concurrent_attacks` 3 in `critical`) of the fortress's battery mounts are in TELEGRAPH or FIRE (the asking mount is still in TRACK, so it is not counted) — never a
-  wall of five bursts at once.
+  than `max_concurrent_attacks` 2 (`critical_max_concurrent_attacks` 3 in `critical`) of the fortress's battery mounts are in TELEGRAPH or FIRE (the asking mount is still in
+  TRACK, so it is not counted) — never a wall of five bursts at once.
 - **Diagonal crossfire:** the four corner mounts rest on their outward diagonals with a 100° traverse, so each covers its own diagonal lane; the sweep covers 140° around
   local 0°. A destroyed battery's mount is UNPOWERED by its part (Ph10), so **its lane goes quiet** (§26: a destroyed battery removes an attack angle).
-- `critical`: every live battery's `cooldown_seconds` × `critical_cooldown_factor` 0.6, applied once to the instanced mount nodes (never to a resource).
+- `critical`: every live battery's `cooldown_seconds` × `critical_cooldown_factor` 0.6, applied once to the instanced mount nodes (never to a resource); the gate cap becomes 3.
+- **Pools sized for the critical period.** A mount's pools are built once, by `TurretMountBuilder.build()`, from `pool_specs()`, which sizes them from the uncut period
+  (`EnemyRounds.pool_size_for(burst, max_time, period)` = `burst × ceil(max_time / period)`); the heavy cannon's period falls 4.25 → 2.97 s in `critical` and would need 10 shells
+  against 6 pooled, and a dry pool silently refuses shots (`BurstCannonMount.shots_refused`, `RocketBatteryMount.rockets_refused`). So: `TurretMountSlot` gains
+  `@export var pool_period_factor: float = 1.0`, `TurretMountBuilder.build()` copies it onto the mount (`TurretMount.pool_period_factor`, default 1.0) before calling
+  `pool_specs()`, and every `pool_specs()` multiplies its period by it — **1.0 everywhere else, bit-identical** (every existing pool-size pin stays green). The fortress's five
+  battery slots author it equal to `critical_cooldown_factor` (a row checks the scene value equals the config value, so a lever change moves both).
+- EMP: every mount `scan(0.0)` for the window. Death: every mount `power_down()`.
+- Persistent rockets: the `ROCKET_BATTERY` pools are `persist_after_owner_death`, so a rocket in flight outlives the fortress by at most its `max_time` (read it from the rocket
+  scene, never type it). **This makes the fortress the second bounded exception** (after the Ph10 Heavy Gunship) to the recorded rule "persistent-ordnance enemies stay out of
+  `ENEMIES_CLEARED` sections": its tail after death is `death_duration` + the rocket `max_time`, inside the section's poll. t7 records it in `space_fortress/ENEMY.md` and in
+  `DECISIONS.md` under `### Phase 11, built in t7`; t10 adds the `test_engagement_deadline.gd` allowlist row.
 
-**Spoke beams (rotating hull beams, the station's laser phase moved onto `EnemyBeam`):** `HullBeams/Spoke0..3` (Node2D emitters on the hull edge, r 176, pointing outward along
-local 270°, 90°, 0°, 180°), each with a child `fortress_spoke_beam.tscn` (inherits `enemy_beams/beam.tscn` and **authors in its own scene every value a gate reads**:
-`telegraph_seconds` 1.2, `active_seconds` 2.5, `length` 900,
-`damage` 14, `rehit_interval` 0.55, `registers_hazard` true). From `shields_exposed`: a volley every `spoke_period` 8.0 s fires Spoke0 + Spoke1; `critical`: all four every
-`critical_spoke_period` 6.0 s. A volley calls `brain.begin_spin(dir)` at ACTIVE start and `end_spin()` at FADE. Owner-ticked by the brain; the owner set (fortress + escorts) is
-exempt. The hull spin sweeps them (geometry).
+#### 2.7.2 Spoke beams: rotating hull beams (t16)
 
-**Ring pulse (radial pulses from the ring):** `PulseRing` (`fortress_pulse_ring.tscn`, inherits `enemy_beams/energy_ring.tscn`, authoring every gated value itself: `max_radius` 640, `ring_speed` 300,
-`band` 24, `gap_count` 2, `gap_deg` 50, `damage` 14, `telegraph_seconds` 1.0), from `core_exposed`, every `ring_period` 6.0 s (`critical` 3.5 s), centred on the hull at start.
+The station's laser phase moved onto `EnemyBeam`. `HullBeams/Spoke0..3`: `Node2D` emitters on the hull edge (r 176) pointing outward along local 270°, 90°, 0°, 180° (an
+`EnemyBeam` points along its node's local +X), each with a child instance of `fortress_spoke_beam.tscn`, which inherits `enemy_beams/beam.tscn` and **authors in its own scene
+every value a gate reads**: `telegraph_seconds` 1.2, `active_seconds` 2.5, `length` 900, `damage` 14, `rehit_interval` 0.55, `registers_hazard` true. Each beam:
+`setup(self, owner_group)` once, `start()` per volley, `tick(delta)` from the brain's physics tick (its only clock), `cancel()` on EMP / death.
+- From `shields_exposed`: a volley every `spoke_period` 8.0 s fires Spoke0 + Spoke1; in `critical` all four every `critical_spoke_period` 6.0 s.
+- A volley calls `brain.begin_spin(direction)` when its beams turn ACTIVE and `end_spin()` when they FADE; the direction alternates per volley. The hull spin sweeps the beams
+  (the geometry is the weapon). The owner set (fortress + escorts, owner group) is exempt; parts are never victims.
 
-**Core bullet ring (the station's precessing ring, kept per §39):** `CoreRingPool` (`BulletPool`, `enemy_bullet.tscn`, `pool_size` 48, a **direct root child**) and a runtime
-`RadialAttackPattern` (`bullet_count` 12, full ring, `bullet_damage` 10, `bullet_speed` 210, `spawn_radius` 60, `base_angle` += `core_ring_step` 0.24 per ring), `critical` only,
-every `core_ring_period` 2.0 s, ticked by the brain (no Timer).
+#### 2.7.3 Ring pulse: radial pulses from the ring (t16)
 
-**EMP / death:** EMP cancels beams and the ring, scans mounts; death powers mounts down, cancels beams and the ring, `cancel_active()` on the core-ring pool. Persistent rockets
-(`ROCKET_BATTERY` pools, `persist_after_owner_death`) outlive the fortress by at most their `max_time` (6 s; read it from the rocket scene, do not type it).
-**This makes the fortress the second bounded exception** (after the Ph10 Heavy Gunship) to the recorded rule "persistent-ordnance enemies stay out of `ENEMIES_CLEARED`
- sections": its tail after death is `death_duration` + the rocket `max_time`, all inside the section's poll. t7 records it in `ENEMY.md` and in `DECISIONS.md` under
-`### Phase 11, built in t7`; t10 adds the `test_engagement_deadline.gd` row (§2.10).
+`PulseRing`: an instance of `fortress_pulse_ring.tscn` (inherits `enemy_beams/energy_ring.tscn`, authoring every gated value in its own scene: `max_radius` 640, `ring_speed`
+300, `band` 24, `gap_count` 2, `gap_deg` 50, `damage` 14, `telegraph_seconds` 1.0). From `core_exposed`, one ring every `ring_period` 6.0 s (`critical` 3.5 s), centred on the hull
+at its start; owner-ticked, `setup(self, owner_group)`, `cancel()` on EMP / death. It is the fortress's **arena-control** weapon (§25 ARENA).
 
-**Fairness rows (inequalities read from instantiated nodes — the spoke beam, the pulse ring, the mounts and both player scenes — never from `export_of()` on an inherited scene):**
-- Spoke tip: `beam_spin_rate × (176 + 250) ≤ 0.8 ×` the Assault player's max speed and the Open Space ship's `max_speed` (a player 250 px off the hull can outrun a sweep);
-  same for `critical_spin_rate`.
-- Spoke telegraph ≥ 1.0 s and drawn ≥ 3 px (Ph8 rule); `rehit_interval` > player i-frames (0.5 s).
+#### 2.7.4 Core bullet ring (t16)
+
+The station's precessing ring, kept per §39: `CoreRingPool` (`BulletPool`, `enemy_bullet.tscn`, a **direct root child built in code** in the fortress's `_ready()`: `BulletPool.new()`, `pool_size` set,
+then `add_child` — a scene-authored pool would fill itself in its own `_ready()`, which runs before the fortress's; `pool_size` = `EnemyRounds.pool_size_for(12, life,
+core_ring_period)` with `life` = min(the round's `max_time`, `max_distance` / 210) read from `enemy_bullet.tscn` — 12 × ceil(11.43 / 2.0) = 72 at the shipped values, where a
+fixed 48 would run dry; its container is the pool's grandparent, so the bullets live in the fortress's parent container) and a runtime `RadialAttackPattern` (`bullet_count` 12, full ring, `bullet_damage` 10, `bullet_speed` 210, `spawn_radius` 60, `base_angle` += `core_ring_step`
+0.24 per ring). `critical` only, every `core_ring_period` 2.0 s, ticked by the brain (no `Timer`). Death: `cancel_active()` on the pool. A row fires 30 s of core rings and finds the pool never empty. `test_enemy_bullet_lifetime.gd` gains
+the 210 px/s source.
+
+#### 2.7.5 EMP and death for the weapons (t7 for mounts, t16 for the rest)
+
+EMP (the `BaseEnemy` window, `emp_factor` already applied by `SpaceFortress.apply_emp`): `brain.on_emp_started()` scans every mount, cancels spokes and the ring pulse, skips
+the core ring; nothing restarts a cancelled attack before the window ends. Death: mounts `power_down()`, spokes and ring `cancel()`, core-ring pool `cancel_active()`.
+
+#### 2.7.6 Fairness and density (t16)
+
+Inequalities read from **instantiated nodes** (the spoke beam, the pulse ring, the mounts and both player scenes) — never from `export_of()` on an inherited scene:
+- Spoke tip: `beam_spin_rate × (176 + 250) ≤ 0.8 ×` the Assault player's max speed and the Open Space ship's `max_speed` (a player 250 px off the hull outruns a sweep); same for
+  `critical_spin_rate`.
+- Spoke telegraph ≥ 1.0 s and drawn ≥ 3 px (Ph8 rule); `rehit_interval` > the player's i-frames (0.5 s).
 - Ring gap, **where it is narrowest**: a gap is a fixed angle, so its arc is shortest at the smallest radius a player can occupy, the hull edge plus the player's hurtbox radius.
-  Row: `deg_to_rad(gap_deg) × (176 + r_player) ≥ 2 × (2 × r_player)` for both players, `r_player` = the `HurtBox` circle radius × its node scale (the Assault fighter: 5 × 2.7 =
-  13.5 px, so 50° gives ≈ 165 px against 54). Boundary: a 15° gap fails it. (Measured at `max_radius` the row could never fail: 50° at 640 px is ≈ 558 px.)
+  Row: `deg_to_rad(gap_deg) × (176 + r_player) ≥ 2 × (2 × r_player)` for both players, `r_player` = the player hurtbox circle radius × the **global** scale of its
+  `CollisionShape2D` (instantiated; the scale sits on different nodes: the Open Space ship scales the `HurtBox` Area2D by 2.2, giving 5 × 2.2 = 11 px; the Assault fighter
+  scales the `HurtBoxCollision` child by 2.7, giving 13.5 px). Boundary: a 15° gap fails it. (Measured at `max_radius` the row could never fail: 50° at 640 px is ≈ 558 px.)
 - **Density (Assault, measured, every boss phase).** Count every round the fortress itself launches (`EnemyBullet`s from its battery and core-ring pools and `EnemyRocket`s;
   escorts excluded, as the station's legacy rate excluded its reinforcements; escort rounds are recorded beside it in `ENEMY.md`). The real `space_fortress.tscn` in the Assault
   harness, hand-ticked at 1/60 s, engaged, no EMP; for each boss phase with its **worst live-battery set** (`batteries`: all five; `shields_exposed`, `core_exposed`, `critical`:
   `battery_sweep` and `battery_missiles` destroyed, leaving the three highest-rate batteries; `critical` entered by damaging the core to 40 %), and for each of **five player-stub
   positions** in the view around the hull at world (640, 180) — S (640, 600), SW (240, 560), SE (1040, 560), W (160, 200), E (1120, 200) — run 1 s to settle, then count over
-  10 s. Ceilings, every phase and every position: **mean ≤ 13.3 rounds/s** (2.0 × the station's legacy turret rate, 4 turrets × 3 bullets / 1.8 s = 6.67 /s) and **peak in any
-  half-open 2 s window ≤ 30 rounds** (1.25 × the station's legacy peak: 4 × 3 × 2 volleys = 24; the Ph3 peak-window factor). Recorded per phase (worst position) in `ENEMY.md`.
+  10 s. **Count launches, not live rounds:** a hand-ticked loop does not run the rounds' own physics, so they never expire and a pool would run dry and silently cap the
+  rate; the row counts every launch (pool `acquire()` that returns a round, plus each `EnemyRocket` launch) and returns each round to its pool at once (emit its `expired`), and
+  asserts no pool ever reported empty and no mount refused a shot (`shots_refused` / `rockets_refused` 0) during the count. Ceilings, every phase and every position: **mean ≤ 13.3 rounds/s** (2.0 × the station's legacy turret rate, 4 turrets × 3 bullets / 1.8 s = 6.67 /s) and **peak in any
+  half-open 2 s window ≤ 30 rounds** (1.25 × the station's legacy peak 4 × 3 × 2 volleys = 24; the Ph3 peak-window factor). Recorded per phase (worst position) in `ENEMY.md`.
   Planned upper bounds with no gate and every mount in arc (cycle = charge + (burst − 1) × gap + cooldown): `batteries` ≈ 6.3 /s (spread 2.67, rapid 2.83, artillery 0.47,
   rockets 0.31); `shields_exposed` / `core_exposed` ≈ 6.0 /s; **`critical` ≈ 14.5 /s** (cooldowns × 0.6: spread 3.80, rapid 4.02, artillery 0.67, plus the core ring 12 / 2.0 s =
   6.0) and a possible 34-round window — **above both ceilings**, so the `critical` rows can fail and the measurement decides. If one fails, tune, **never widen a ceiling**;
   levers in order: `core_ring_period` 2.0 → 2.5, `critical_cooldown_factor` 0.6 → 0.7, `critical_max_concurrent_attacks` 3 → 2; anything else stops the task and asks.
 
-Rows (`tests/integration/test_fortress_weapons.gd`, hand-ticked unless noted, both harnesses):
-1. Five battery mounts, variants and arcs per the table; pools are root children; `attack_gate` is callable with no argument (a real TRACK → TELEGRAPH transition through
-   `telegraph_gate.call()`), and never lets a third mount telegraph (`critical`: a fourth).
-2. Crossfire: a player on each corner diagonal is fired on by that corner's mount only; after the battery dies that bearing gets no battery fire for 20 s.
-3. Nothing fires before ENTER ends (Assault) or before COMBAT (OS idle); nothing fires with the hull outside the view (Assault).
-4. Spokes: none in `batteries`; in `shields_exposed` two spokes per volley, period 8.0 s, the hull spins only while they are ACTIVE; in `critical` four, period 6.0 s; a spoke hits
-   the player (real physics, 8×) and not an escort in the owner group; no spoke damages a part or the root.
-5. Ring: none before `core_exposed`; period 6.0 / 3.5 s; it hurts the player and an enemy outside the owner group; never the fortress or its parts.
-6. Core ring: only in `critical`; 12 bullets; base angle advances 0.24 per ring; no bearing stays a safe lane for 5 rings (the station row re-expressed); bullets live in the enemy
-   container (pool grandparent).
-7. EMP silences all four weapon families for the window; death stops them and cancels the core-ring pool's bullets; a rocket already in flight survives the fortress (≤ 6 s).
-8. Fairness rows above (spoke tip, telegraph, ring gap at the hull edge with its 15° boundary) and the density rows: 4 phases × 5 positions, mean and peak ceilings each.
-9. Extend the §25 row with `attacks` and `arena`.
+#### 2.7.7 Rows
+
+**A — t7** (`tests/integration/test_fortress_weapons.gd`, hand-ticked unless noted, both harnesses):
+1. Five battery mounts, variants, rest bearings and traverses per the part table; their pools are fortress root children; `attack_gate` is callable with no argument (a real
+   TRACK → TELEGRAPH transition through `telegraph_gate.call()`) and never lets a third mount telegraph (`critical`: a fourth).
+2. Crossfire: a player on each corner diagonal is fired on by that corner's mount only; after that battery dies the bearing gets no battery fire for 20 s.
+3. Nothing fires before ENTER ends (Assault) or while the brain is IDLE / NOTICING / RETURNING (Open Space); nothing fires with the hull outside the view (Assault).
+4. `critical` multiplies each live mount's `cooldown_seconds` by 0.6 once (entering it twice is impossible; the shipped mount scene's value is unchanged); each battery's pools
+   are sized for the critical period (`pool_period_factor` = `critical_cooldown_factor`, scene = config) and 30 s of `critical` fire with the player stub placed in each battery's arc in turn refuses no shot
+   (`shots_refused` / `rockets_refused` stay 0); a mount built from a slot with the default factor has today's pool size (bit-identical).
+5. EMP: no mount telegraphs or fires for the window; death: every mount UNPOWERED; a rocket already in flight survives the fortress (≤ the rocket scene's `max_time`).
+6. Extend the §25 row (§2.5.5) with the `attacks` key's battery fields (cooldown factor, gate cap).
+
+**B — t16** (same file, appended):
+7. Spokes: none in `batteries`; in `shields_exposed` two spokes per volley, period 8.0 s, the hull spins only while they are ACTIVE, alternating direction; in `critical` four,
+   period 6.0 s; a spoke hits the player (real physics, 8×) and not an escort in the owner group; no spoke damages a part or the root.
+8. Ring pulse: none before `core_exposed`; period 6.0 / 3.5 s; it hurts the player and an enemy outside the owner group; never the fortress or its parts.
+9. Core ring: only in `critical`; 12 bullets; base angle advances 0.24 per ring; no bearing stays a safe lane for 5 rings (the station row re-expressed); the bullets live in the
+   fortress's parent container.
+10. EMP silences spokes, ring pulse and core ring for the window; death cancels them and the core-ring pool's bullets.
+11. Fairness rows of §2.7.6 (spoke tip, telegraph, ring gap at the hull edge with its 15° boundary) and the density rows: 4 phases × 5 positions, mean and peak ceilings each.
+12. Extend the §25 row with the rest of `attacks` (spokes, core ring) and with `arena`.
 
 ### 2.8 Fortress reinforcements (IDEAS §10 applied, §26; t8)
 
@@ -541,7 +636,7 @@ Bays (scene-authored, `ReinforcementBay`, §2.2):
 | `ShieldSouth/Bay` `south_defenders` | ON_SECTOR_LOSS, watch `battery_spread`, `battery_pulse`, `battery_sweep` | `gatling_interceptor.tscn` × 2 | `gatling_interceptor.tscn` × 2 | `door_seconds` 1.0 |
 
 - `BossReinforcements.new(self, hull, driver, rng, owner_group, live_cap, config.launch_boost_speed 300, config.launch_boost_seconds 0.4)` with `live_cap` =
-  `config.escort_live_cap` 6 (OS) / `config.assault_escort_live_cap` 4 (Assault; the station's cap). Ticked by the brain with `active` = engaged ∧ not EMP ∧ not dying.
+  `config.escort_live_cap` 6 (OS) / `config.assault_escort_live_cap` 4 (Assault; the station's cap). Ticked by the brain with `active` = `is_engaged()` ∧ not EMP ∧ not dying.
 - **The hangar is killable while its generator lives** (§26 needs it reachable): it is hittable for `door_seconds` + `open_hold_seconds` = 2.8 s per launch, behind the north
   bubble (`sector_shield_capacity` 120). Feasibility row (config and scene values, player numbers read from the player scenes): `(door_seconds + open_hold_seconds) ×` the default
   gun's DPS (50 damage / 0.18 s ≈ 278 /s) `≥ sector_shield_capacity + hangar_health` (2.8 × 278 ≈ 778 ≥ 120 + 300 = 420): focused fire kills it in one open window. Boundary: with
@@ -566,8 +661,8 @@ Rows (`tests/integration/test_fortress_reinforcements.gd`, both harnesses):
    row**: the same path with `hangar` destroyed before `critical`; assert ≥ 2 observed changes per phase (MOVEMENT, ATTACKS and VISUALS still change at `critical`) without
    requiring REINFORCEMENTS there.
 8. Death order (from §2.5.3, built in t5): every live escort's `died` fires when the fortress's death starts (`reinforcements.scuttle_all()`), then the `SpaceFortressEscorts`
-   container is freed with the fortress. "Engaged" (the bays' `active`) is the brain's notion from §2.6: Open Space COMBAT / HOLD / REPOSITION (not IDLE, NOTICING, RETURNING),
-   Assault after ENTER ends.
+   container is freed with the fortress. "Engaged" (the bays' `active`) is `FortressBrain.is_engaged()` (§2.6): brain phase HOLD or REPOSITION in both modes (not IDLE, NOTICING,
+   RETURNING or ENTER).
 
 ### 2.9 Visual states and art (IDEAS §21–23; t9)
 
@@ -604,7 +699,9 @@ Rows:
   the fortress's): the replay **overrides `enemies_cleared_timeout` on its own built copy of the section to 2.0 s** (`_wait_enemies_cleared` is a wall-clock deadline, so
   the shipped 240 s cannot be waited out in the gate); the shipped 240 s stays pinned by `test_station_assault_section.gd`.
 - `test_engagement_deadline.gd` (the persistent-ordnance exception): a new row lists every `ENEMIES_CLEARED` section spawn whose scene builds a `persist_after_owner_death`
-  pool (mount scenes read through `TurretMountScenes`, `BulletPool.persist_after_owner_death` on scene nodes) and asserts the set is exactly the allowlist {Heavy Gunship
+  pool — **mount pools are not scene nodes**: `TurretMountBuilder.build()` makes them at runtime from each mount's `pool_specs()[i]["persist"]`
+  (`turret_mount_builder.gd:31-37`, `rocket_battery_mount.gd:42-52`), so reuse the working pattern of `_persisting_pools()` (`test_level1_specialist_spawns.gd:1533-1544`) and
+  `_heavy_rocket_max_life()` (`test_engagement_deadline.gd:1362-1378`): instantiate the spawn, build, and read the built pools (plus any scene-authored `BulletPool`) and asserts the set is exactly the allowlist {Heavy Gunship
   (Ph10), Space Fortress (Ph11)}; for the fortress it asserts `death_duration` + the rocket scene's `max_time` < the section's `enemies_cleared_timeout`. Boundary: a
   synthetic `ENEMIES_CLEARED` section holding a Missile Corvette fails the allowlist.
 - Remove nothing else from level 1; the drone-density helper (`level1_drone_concurrency.gd`) ignores escorts (not WaveManager rows); its station BOTTOM-squad row goes with
@@ -624,7 +721,8 @@ Delete `assault/scenes/enemies/space_station/` (scripts, scenes, config, `ENEMY.
 | `test_station_reinforcements.gd` | delete; intent in `test_boss_reinforcements.gd` (t2) and `test_fortress_reinforcements.gd` (t8), including the escorts-fire row replacing the rail-fire gate |
 | `test_station_death_sequence.gd` | rename `test_boss_death_sequence.gd`, re-point at the fortress (blasts on the 176 px hull, spin, tint, config 2.4 s / 10 blasts) |
 | `test_station_incoming_damage_paths.gd` | rename `test_fortress_incoming_damage_paths.gd`, re-point: homing missile (steers to `homing_point`) and warhead reach a battery, are refused by the hull; asteroid contact (bit 1024) deflected; mining laser not blocked by the layer-0 root; a layer-1 root would block it (boundary) |
-| `test_station_assault_section.gd`, `test_laser_ray_hit_mask.gd`, `test_radial_attack_pattern.gd` | keep (generic; t10 already updated the first) |
+| `test_station_assault_section.gd`, `test_laser_ray_hit_mask.gd`, `test_radial_attack_pattern.gd` | keep (generic; t10 already updated the first); re-word the header comment of `test_station_assault_section.gd` (it cites `test_space_station.gd`) and line 7 of `test_laser_ray_hit_mask.gd` (it cites `space_station.tscn:68-71`): the acceptance grep below hits both |
+| `test_level_1_sequence.gd` | t10 re-pointed it at the fortress; drop any leftover `SpaceStation` type or preload |
 | `test_enemy_contact_damage.gd`, `test_contact_hitbox_geometry.gd`, `test_enemy_hurtbox_geometry.gd` | drop the station roster entries (the fortress joined in t5); re-express the 88 × 240 boundary as "shrinking the fortress hull hurtbox to the core's circle fails the sweep" and the "core hurtbox spans the hull" row as "the hull hurtbox covers every part" |
 | `test_entity_sprite_transparency.gd` | the station-corner row → the fortress hull's four corners are transparent; the control texture → a fortress part |
 | `test_config_instance_isolation.gd` | the station-children row → removed (t5 added the fortress row) |
@@ -632,9 +730,11 @@ Delete `assault/scenes/enemies/space_station/` (scripts, scenes, config, `ENEMY.
 | `test_explosion_effect_placement.gd` | the turret row → a fortress part's wreck blast lands outside the hull |
 | `test_level1_drone_spawns.gd` | drop the station BOTTOM-squad row |
 | `test_base_enemy.gd` | station exclusion / refuse-repair rows → the fortress |
-| `test_enemy_bullet_lifetime.gd` | drop the `StationGunnery.new()` fallback (150) and `space_station_config.tres` speeds (the fortress core-ring speed 210 and both new mounts joined in t3 / t7). **Re-derive, never delete the checks:** `test_every_shipped_speed_source_is_at_or_above_150` becomes "the slowest shipped source is <whatever `speeds.min()` is after the deletion>, at its value" (read it, then pin the name and value in the assertion message and the number); `test_enemy_bullet_defaults_are_derived_from_every_shipped_speed_source` re-pins `expected_max_time` = `ceil(2274 / new_min) + 2` (it will be below 18) and `expected_max_distance` 2400 as the computed values, and keeps asserting the shipped `enemy_bullet.tscn` `max_time` 18 s / `max_distance` 2400 px ≥ them (the shipped values stay; they now have headroom) |
-| `test_engagement_deadline.gd` | the source scans of `station_reinforcements.gd` → `global/boss/*.gd` and `space_fortress/*.gd` |
+| `test_enemy_bullet_lifetime.gd` | drop the `StationGunnery.new()` fallback (150) and `space_station_config.tres` speeds (the fortress core-ring speed 210 and both new mounts joined in t3 / t16). **Re-derive, never delete the checks:** `test_every_shipped_speed_source_is_at_or_above_150` becomes "the slowest shipped source is <whatever `speeds.min()` is after the deletion>, at its value" (read it, then pin the name and value in the assertion message and the number); `test_enemy_bullet_defaults_are_derived_from_every_shipped_speed_source` re-pins `expected_max_time` = `ceil(2274 / new_min) + 2` (it will be below 18) and `expected_max_distance` 2400 as the computed values, and keeps asserting the shipped `enemy_bullet.tscn` `max_time` 18 s / `max_distance` 2400 px ≥ them (the shipped values stay; they now have headroom) |
+| `test_engagement_deadline.gd` | the source scans of `station_reinforcements.gd` → `global/boss/*.gd`, `space_fortress/*.gd` **and `space_fortress.tscn`** (the bay payload scenes are authored there, not in a script) |
 | comments citing the station: `base_enemy.gd`, `bullet.gd`, `enemy_module.gd`, `laser_ray.gd`, `arena_camera.gd`, `bullet_pool.gd`, `explosion_effect.gd`, `radial_attack_pattern.gd`, `level_1_director.gd`, `wave_builder.gd`; tests `test_suite_integrity.gd`, `test_signal_emit_arity.gd`, `test_armor_query.gd`, `test_enemy_path_mover.gd`, `test_player_bullet_lifetime.gd` (its stand-in for the station's armoured core → the fortress's armoured hull), `test_laser_ray_hit_mask.gd`, `tests/unit/test_explosion_effect.gd` | re-word to cite the fortress (or drop the historical reference); no behaviour change |
+| `test_enemy_module.gd` | preloads `station_turret_destroyed.png` as `WRECK_TEXTURE` (line 20) and asserts the fixture part's wreck sprite **is** it (lines 273, 343); re-point `WRECK_TEXTURE` in the same change that retextures `fixture_modular_host.tscn` (its lines 10–11 use `station_turret.png` / `station_turret_destroyed.png`). The acceptance grep does not match PNG names, so this row is the only guard |
+| comment-only citations of deleted files: `test_score_tracker_escape_penalty.gd` (lines 9, 26 cite `test_station_reinforcements.gd`), `tests/helpers/armored_fixture.gd:1`, `fixture_enemy_unrepairable.gd:1`, `test_gatling_interceptor.gd:217`, `test_fighter.gd:275`, `scripts/lib/strip_sprite_bg.gd:12,27` | re-word to cite the fortress or the surviving test; no behaviour change (other "station" words in tests — fighter flank stations, the Ram's well station, `structure_station_module.tscn` — are unrelated and stay) |
 | any other hit of the acceptance pattern below | re-point or delete with a replacement named in the commit |
 
 Acceptance — the pattern is **anchored on the enemy's paths and class names**, because Fortuna's Open Space mission data lives under directories named `space_stations/`
@@ -647,8 +747,8 @@ drops (record it).
 ### 2.12 EMP on structures (Ph9 / Ph10 debt; Ph11 owner choice 7; t12)
 
 - `DefenseTurret` (and the heavy emplacement), `LaserEmitter` (fence post) and `ShieldGenerator` override `answers_emp()` → true. What exists already (code facts, no change
-  needed): `BaseEnemy.apply_emp` null-guards the mover and the brain (`base_enemy.gd:185-188`), and `BaseEnemy._physics_process` counts a brainless structure's window
-  (`base_enemy.gd:121-133`); `is_emp_disrupted()` / `emp_seconds_left()` read it. `DefenseTurret` and `ShieldGenerator` have a brain (it gets `on_emp_started()` once and is not
+  needed): `BaseEnemy.apply_emp` null-guards the mover and the brain (`base_enemy.gd:186-189`), and `BaseEnemy._physics_process` counts a brainless structure's window
+  (`base_enemy.gd:126-139`); `is_emp_disrupted()` / `emp_seconds_left()` read it. `DefenseTurret` and `ShieldGenerator` have a brain (it gets `on_emp_started()` once and is not
   ticked for the window: the base rule) and no mover; **`LaserEmitter` has neither**.
   - Turret brain: every mount `scan(0.0)` for the window (no fire, no telegraph); stays tangible.
   - Fence post (no brain, so nothing is called on it): **the fence polls its posts.** `LaserFence.step(delta)` checks `post.is_emp_disrupted()` on both posts each tick; while
@@ -668,7 +768,8 @@ drops (record it).
 and `rng_seed` set before `add_child()`, idle on `AnchorIdle` (not `start_engaged`). Its footprint for the sweeps = `zone_radius` 600 + body radius 176 + `perceive_radius` 1400.
 - `test_sector_hub_patrol.gd`: `_patrol_groups()` gains the fortress (worst idle offset = `zone_radius` 600), so every interactable / TacticalSpace / defense-site / jammer sweep
   covers it; anchor spacing > 1000 from every other group; frame-0 row (nobody perceives the player); the hard counts move: groups 15 → 16, seeds 21 → 22, `_expected_seeds()` 20
-  → 21 draws, live children 21 → 22 (the escort container is created lazily, so none at frame 0).
+  → 21 draws, live children 21 → 22 (the escort container is created lazily, so none at frame 0). Every hard count moves by one: `test_sector_hub_patrol.gd` lines 614 and 1417
+  (groups / seeds) and the live-children pins at lines 482 (a sum expression), 1070 (21), 1275 (`15 + 3 + 1 + 2`) and 1953 (21); grep the file for any other.
 - Pre-approved levers if a sweep fails: ring 3800–4600, bearing −45° ± 22.5°; anything else stops the task and asks.
 - Name: the hub node and every doc call it the Space Fortress; nothing near "Fortuna Space Station" vocabulary.
 
@@ -682,9 +783,9 @@ root script and `fortress_brain.gd` never write `velocity` / `rotation` / `move_
 
 ### 2.15 Gate time
 
-Start: GUT 210.34 s (Ph10 t12). Allotments (seconds of GUT time each task may add): t1 0.3 · t2 1.0 · t3 0.5 · t4 0 · t5 2.5 · t6 2.0 · t7 4.0
-(the density rows: 4 phases × 5 positions × 11 s hand-ticked) · t8 1.5 · t9 0.3 · t10 4.5 (a 1× wall-clock section replay; its timeout row overrides the section timeout to
-2.0 s) · t11 ≤ 0 (it removes the station files; record the saving) · t12 0.5 · t13 0.5 · t14 0 → +17.6 s, phase end ≤ 227.9 s before t11's saving.
+Start: GUT 210.34 s (Ph10 t12). Allotments (seconds of GUT time each task may add): t1 0.3 · t2 1.0 · t3 0.5 · t4 0 · t15 0.5 · t5 2.0 · t6 2.0 · t7 1.5 ·
+t16 3.0 (the density rows: 4 phases × 5 positions × 11 s hand-ticked) · t8 1.5 · t9 0.3 · t10 4.5 (a 1× wall-clock section replay; its timeout row overrides the section timeout to
+2.0 s) · t11 ≤ 0 (it removes the station files; record the saving) · t12 0.5 · t13 0.5 · t14 0 → +18.1 s, phase end ≤ 228.4 s before t11's saving.
 Each task records a before / after two-run mean (`scripts/gate-time.sh`) in `tests/README.md` → *Gate time*; escalate past a 237 s mean or 1.5× the task's own allotment.
 Rule 1 clocks: real-physics rows 8× by default; the section replay cannot be scaled (wall-clock director), so it uses one fortress life with `death_duration` 0.2 and scripted
 part kills. Gate output stays well under 1 MiB (no per-tick prints).
@@ -712,6 +813,9 @@ part kills. Gate output stays well under 1 MiB (no per-tick prints).
 | EMP | × 0.4, every source; no-op while dying | Ph11 owner choice 6 |
 | Death | 2.4 s, 10 blasts, spread 150 | station 1.8 / 7 / 96 scaled to the hull |
 | Score | 1500 | station 1000 (judgement) |
+| Core-ring pool | 72 = 12 × ceil(11.43 s / 2.0 s) | `EnemyRounds.pool_size_for` over the round's life at 210 px/s (a fixed 48 runs dry) |
+| Battery pools | sized for the `critical` period (`pool_period_factor` = 0.6) | heavy cannon needs 10 shells at 2.97 s, not 6 |
+| Core blink | COMMIT ↔ OFF every 0.25 s (`core_blink_period`) | judgement; `StateLight` has no COMMIT blink |
 | Section timeout | 240 s | Ph11 owner choice 5 |
 
 ### 2.17 Docs and phase close (t14)
@@ -724,9 +828,11 @@ machinery gates; the "rail-fire" 21st gate → the escorts-fire row; key convent
 
 ## 3. Build sequence
 
-1. t1 phase ladder; t2 reinforcements machinery (needs t1's driver API); t3 mount variants; t4 death sequence move; t12 EMP on structures (independent).
-2. t5 fortress shell (t1, t2, t4: its death order calls t2's `scuttle_all()` and frees t2's escort container).
-3. t6 movement (t5) → t7 weapons (t6, t3) → t8 reinforcements on the fortress (t7, t2). These three edit `fortress_brain.gd` and the fortress phase handler, so they are serial.
+1. Independent foundations: t1 phase ladder; t3 mount variants; t4 death sequence move; t15 shield sectors; t12 EMP on structures. Then t2 reinforcements machinery (needs
+   t1's driver API).
+2. t5 fortress shell (t1, t2, t4, t15: its death order calls t2's `scuttle_all()` and frees t2's escort container; it wires two t15 `ShieldSector`s).
+3. t6 movement (t5) → t7 batteries (t6, t3) → t16 geometry weapons, fairness and density (t7) → t8 reinforcements on the fortress (t16, t2). These four edit
+   `fortress_brain.gd`, `space_fortress.gd` and `space_fortress.tscn` and the same phase handler, so they are serial.
 4. t9 art after t8 (it wires textures and the `Thrusters` / `CriticalOverlay` / door / shutter visuals into `space_fortress.tscn`, which t6–t8 also edit; serial on purpose).
 5. t10 level 1 swap (t8); t13 hub (t8).
 6. t11 station retirement (t10, t9).
@@ -735,9 +841,9 @@ machinery gates; the "rail-fire" 21st gate → the escorts-fire row; key convent
 ## 4. Test plan
 
 New files: `tests/unit/test_boss_phase_driver.gd` (t1), `tests/integration/test_boss_phase_rules.gd` (t1, intent gate), `test_boss_reinforcements.gd` (t2),
-`test_turret_mount_variants.gd` (t3), `test_space_fortress.gd` (t5, t6), `test_fortress_weapons.gd` (t7), `test_fortress_reinforcements.gd` (t8), `test_fortress_sprites.gd` (t9),
+`test_turret_mount_variants.gd` (t3), `test_shield_sector.gd` (t15), `test_space_fortress.gd` (t5, t6), `test_fortress_weapons.gd` (t7, t16), `test_fortress_reinforcements.gd` (t8), `test_fortress_sprites.gd` (t9),
 `test_level1_fortress_section.gd` (t10); renamed `test_boss_death_sequence.gd`, `test_fortress_incoming_damage_paths.gd` (t11). Extended: roster gates (t5), `test_ph8_sprites.gd`
-and `test_enemy_bullet_lifetime.gd` (t3, t7), `test_station_assault_section.gd` and `test_level_1_sequence.gd` (t10), `test_enemy_emp.gd` / `test_emp_blast_module.gd` (t12),
+and `test_enemy_bullet_lifetime.gd` (t3, t16), `test_station_assault_section.gd` and `test_level_1_sequence.gd` (t10), `test_enemy_emp.gd` / `test_emp_blast_module.gd` (t12),
 `test_sector_hub_patrol.gd` (t13).
 
 Boundaries that prove the rows can fail: a one-change phase fails `test_boss_phase_rules.gd`; one destroyed battery does not enter `shields_exposed`; a core one point above 40 %
@@ -745,7 +851,8 @@ is not `critical`; a cap of 4 skips the fifth escort; a dead bay ignores `surge(
 kill after `is_dying()` pays nothing; `pellets` 1 trace unchanged; the bonus drone still freezes under EMP Blast; a spread mount at `fire_range` 520 fails the reach row; a
 15° ring gap fails the gap row at the hull edge; the `critical` density rows' planned upper bound (≈ 14.5 /s, a 34-round window) exceeds both ceilings, so they can fail;
 `open_hold_seconds` 0 fails the hangar feasibility row; a Missile Corvette in an `ENEMIES_CLEARED` section fails the persistent-ordnance allowlist; the dead-hangar §25 row
-still finds ≥ 2 changes per phase.
+still finds ≥ 2 changes per phase; one battery destroyed short of the threshold changes no §25 key; a density count during which a pool reported empty
+fails; destroying a generator leaves the other sector's bubbles in place.
 
 Both harnesses: every fortress behaviour row in `test_space_fortress.gd`, `test_fortress_weapons.gd`, `test_fortress_reinforcements.gd` runs in Open Space and Assault (IDEAS §40).
 
@@ -782,36 +889,38 @@ Both harnesses: every fortress behaviour row in `test_space_fortress.gd`, `test_
 
 | Requirement (IDEAS / scope line) | Task(s) |
 |---|---|
-| §8 bosses designed for 360° | t5, t6, t7 |
+| §8 bosses designed for 360° | t5, t6, t7, t16 |
 | §8.1 size 320–512 px | t5 (r 176 hull, 384 sprite), t9 |
 | §8.1 4–6 outer batteries, each distinct (spread, sweep, missile, rapid pulse, artillery) | t3, t5, t7 |
-| §8.1 2–3 shield nodes protecting sectors | t5 (`ShieldSector`, 2 nodes) |
+| §8.1 2–3 shield nodes protecting sectors | t15 (`ShieldSector`), t5 (2 nodes) |
 | §8.1 core hidden / armoured until enough outer systems destroyed | t5 |
-| §8.1 four phases (batteries; shields exposed; core + moving; critical frenzy) | t1, t5, t6, t7, t8 |
+| §8.1 four phases (batteries; shields exposed; core + moving; critical frenzy) | t1, t5, t6, t7, t16, t8 |
 | §8.1 Open Space: slow rotation, reposition in a combat zone, shift orbit centre, weak side changes, encourage circling | t6 |
 | §8.1 Assault: vertical movement only, still rotates to show sides | t6 |
 | §10 reinforcements tied to modules / sectors / hangars, reusable | t2, t8 |
 | §10 out of the generic Assault enemy container and scoring path | t2, t8, t10 |
-| §24 geometry weapons: rotating hull beams, radial ring pulses, diagonal corner crossfire | t7 |
-| §25 every phase changes ≥ 2 of six aspects | t1 (gate), t5–t8 (§25 row) |
+| §24 geometry weapons: rotating hull beams, radial ring pulses, diagonal corner crossfire | t16 (beams, rings), t7 (corner crossfire) |
+| §25 every phase changes ≥ 2 of six aspects | t1 (gate), t5, t6, t7, t16, t8 (§25 row) |
 | §22 / §23 coherent modules, destroyed modules stay as wreckage | t5, t9 |
 | §21–23 fortress art, light vocabulary, visual phase changes | t9 (+ `SHIELDED` light in t5) |
-| §26 destroyed shield generator exposes a sector; destroyed battery removes an attack angle | t5, t7, t8 |
-| §39 keep the station's modular structure (turrets, armoured core, beams, rings, reinforcements, death) | t4, t5, t7, t8 |
-| §40 large-enemy and boss tests in both harnesses | t5–t8 |
+| §26 destroyed shield generator exposes a sector; destroyed battery removes an attack angle | t15, t5, t7, t8 |
+| §39 keep the station's modular structure (turrets, armoured core, beams, rings, reinforcements, death) | t4, t5, t7, t16, t8 |
+| §40 large-enemy and boss tests in both harnesses | t5, t6, t7, t16, t8 |
 | §41 Phase 5 item 1 (Space Fortress rework) | t5–t11 |
 | Replace the Assault station section | t10, t11 |
 | May appear in Open Space under a non-colliding name | t13 (names rule in *For every task*) |
 | Keep the station test family green or deliberately update it | t4, t10, t11 (§2.11 table) |
 | ENEMIES.md naming-collision note | names rule; t14 roster doc |
 | Ph4 / Ph5 deferral: station `homing_point` | t5 (fortress), t11 (station retired) |
-| Ph8 deferral: station lasers onto `EnemyBeam` | t7 |
+| Ph8 deferral: station lasers onto `EnemyBeam` | t16 |
 | Ph9 / Ph10 deferral: EMP on structures (station, bonus drone, Ph8 turrets / fences) | t5 (fortress), t12 (turrets, fence posts, generators), bonus drone kept legacy (decision) |
 | Ph8 deferral: twin-rig rotating beam for the fortress | out of scope (§6), reason given |
 | Dreadnought (§9) | later phase 12 |
 | Carrier / Gunship on boss machinery | later phase 18 |
 
-## 8. Response to feedback (review 1, CHANGES_REQUESTED)
+## 8. Response to feedback
+
+### 8.1 Review 1 (AI, CHANGES_REQUESTED) — answered in revision 2
 
 | # | Finding | What changed |
 |---|---|---|
@@ -836,3 +945,27 @@ Both harnesses: every fortress behaviour row in `test_space_fortress.gd`, `test_
 | 19 | t4 understated | §2.4: behaviour-identical, the `.uid` sidecar moves, the scene's `ext_resource` path, the `SpaceStation` type and cast become a duck-typed host, renamed references, UID / load-integrity rows |
 | 20 | squad wording, owner-choice numbering, choice 6 wording | one `SquadController` per payload scene per boss (For every task, §2.2, t2, DECISIONS, row 13); "Ph11 owner choice N" everywhere; choice 6 says "every EMP" |
 
+### 8.2 Owner send-back (CHANGES_REQUESTED, no comment) — revision 3
+
+The owner returned revision 2 without a written comment, and revision 2 had not been through a second AI review. This revision therefore (a) re-checked every one of the 20
+review-1 answers above against the plan text and the code @ `ff3ffd1` (all hold; corrections found on the way are listed below), and (b) fixed what a fresh read found. The
+design is unchanged: same fortress, phases, weapons, reinforcements, owner choices and defaults.
+
+| # | Found in revision 2 | What changed |
+|---|---|---|
+| R1 | The §25 snapshot could count the triggering hit as a phase change (a battery's death changed `attacks`, `vulnerable` and `visuals` by itself), so the gate could pass on side effects | §2.5.5: every snapshot key reads phase-driven state only, defined field by field; snapshots are taken just before the triggering call and one physics frame after; boundary row: one battery destroyed short of the threshold changes no key (§2.5.7 row 6, §4) |
+| R2 | `core_exposed` declared ATTACKS and ARENA, both satisfied only by the ring pulse (one change counted twice) | the ring pulse is ARENA; `core_exposed` declares VULNERABLE, MOVEMENT, ARENA, VISUALS (still ≥ 2, honestly) |
+| R3 | "Engaged" named a brain phase `COMBAT` that the `FortressBrain.Phase` enum does not have; t7 and t8 relied on it | `FortressBrain.is_engaged()` = HOLD or REPOSITION in both modes, defined in *For every task* and §2.6; the Assault bob is the REPOSITION phase; t7, t16 and t8 read it |
+| R4 | The density rows hand-tick the fortress, so its rounds never expire and the pools run dry, silently capping the measured rate (the ceiling could not fail) | §2.7.6: count launches, return each round to its pool at once, and fail a count during which any pool reported empty |
+| R5 | t7 (five batteries, three geometry weapons, fairness and 20 density runs) was too big for one session | split: t7 batteries and attack gate (medium); new **t16** spokes, ring pulse, core ring, fairness and density (large); §2.7 restructured into §2.7.1–§2.7.7 with rows A (t7) and B (t16) |
+| R6 | t5 carried the generic `ShieldSector` class beside the whole fortress shell | `ShieldSector` and `StateLight.State.SHIELDED` move to new **t15** (medium, no dependencies, its own rows in §2.5.4 on the fixture host); t5 wires two sectors |
+| R7 | The facing rule's "battery with a live shield" was ambiguous (bubble up, or generator alive?) | §2.6: a sector's live batteries × 1.0 while its generator lives, × 0.5 after; sector membership spelled out |
+| R8 | t11's acceptance grep also hits `test_station_assault_section.gd`'s header and `test_laser_ray_hit_mask.gd` line 7, which the table said to "keep" untouched; `test_level_1_sequence.gd` had no row | §2.11 table: both comments re-worded; a row for `test_level_1_sequence.gd` |
+| R9 | Gate-time allotments, build sequence and test-plan file list did not reflect the split | §2.15 (+18.1 s, phase end ≤ 228.4 s), §3, §4 updated; review-1 row 3's "t7 allotment 4.0 s" is now t7 1.5 + t16 3.0 |
+| R10 | t11 retextures the fixture host, but `test_enemy_module.gd` pins its wreck sprite to `station_turret_destroyed.png` (lines 20, 273, 343), which the acceptance grep cannot see | §2.11 row: re-point `WRECK_TEXTURE` in the same change; comment-only citations of deleted test files listed too |
+| R11 | The persistent-ordnance allowlist row looked for `persist_after_owner_death` on scene nodes; mount pools are built at runtime, so the row could never pass | §2.10: read the built pools, reusing `_persisting_pools()` and `_heavy_rocket_max_life()` |
+| R12 | `EnemyMover.step()` lerps by `turn_lerp` before the `max_turn_rate` cap, so the spins would turn at the wrong rate | §2.6: the fortress mover authors `turn_lerp = 0`; row 6 reads it |
+| R13 | Nothing ticks a cancelled beam / ring through FADE during an EMP window or the death sequence, and the bays would never close (the brain is not ticked) | §2.5.6: `on_emp_started()` calls `reinforcements.tick(0.0, false)` once; the root ticks fading beams / ring only while the brain is not ticking; t16 row |
+| R14 | Critical cooldowns × 0.6 outrun pools sized from the uncut period (heavy cannon: 10 shells needed, 6 pooled), silently refusing shots | §2.7.1: `TurretMountSlot` / `TurretMount.pool_period_factor` (1.0 = bit-identical), the fortress slots author `critical_cooldown_factor`; rows assert no refused shot. The core-ring pool is sized from the same formula (72, not 48) and built in code |
+| R15 | `StateLight` COMMIT is steady, not blinking; a closing bay restored no previous light state | §2.5.5: the root toggles the core light; §2.2: a bay restores the light state it found at OPENING |
+| R16 | Smaller code facts: `ext_resource` line 14; `base_enemy.gd` 186-189 / 126-139; `AnchorIdle` takes `home_radius`; `request_velocity(Vector2)`; ring-gap radius uses the hurtbox shape's global scale (Open Space 11 px, Assault 13.5 px); the hub's live-children pins at lines 482, 1070, 1275, 1953; the deadline source scan also reads `space_fortress.tscn` | corrected in §2.4, §2.12, §2.6, §2.7.6, §1.3 / §2.13, §2.11 |

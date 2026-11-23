@@ -4351,9 +4351,9 @@ Dossier: `docs/epics-done/cmug23oo90029m52wae4clve0/` (PRD, SOURCES, REPORT). Pe
 | Level 2 beyond the builder rename | Ph15 |
 | Untested: Carrier bow cannon and missile bank in level 1; drones against lit columns; play feel of Cloud Descent's three firing gunships | later / owner |
 
-## Phase 11 - Enemy rework, phase 11: Space Fortress 2.0 and machine-driven boss reinforcements (2026-11-22)
+## Phase 11 - Enemy rework, phase 11: Space Fortress 2.0 and machine-driven boss reinforcements (2026-11-22, revised 2026-11-23)
 
-Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md` (revision 2, answering plan review 1). **The research stage left no `1-context.md` / `2-research.md`** (the Ph10 precedent); the plan carries the
+Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md` (revision 3: revision 2 answered plan review 1, revision 3 the owner's send-back). **The research stage left no `1-context.md` / `2-research.md`** (the Ph10 precedent); the plan carries the
 scope check (§1.1), judgement calls (§1.2) and code facts (§1.3, read @ `cba0e7b`). These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
 
 ### Changes to earlier decisions
@@ -4384,7 +4384,8 @@ scope check (§1.1), judgement calls (§1.2) and code facts (§1.3, read @ `cba0
     `health_ratio`, `changes`.
   - `BossPhaseDriver` (Node `PhaseDriver`): `phases`, `bind(hull, host_health)`, `evaluate()`, `current_index()`, `current_id()`, `has_reached(id)`, `validate(hull)`, signal
     `phase_entered(index: int, phase_id: StringName)`; ordered, one way, cascades in order; applies no consequence. **IDEAS §25 is a gate:** `test_boss_phase_rules.gd` fails any
-    shipped ladder with a non-start phase declaring < 2 changes, and each boss has a row checking its `phase_snapshot()` shows every declared change.
+    shipped ladder with a non-start phase declaring < 2 changes, and each boss has a row checking its `phase_snapshot()` shows every declared change. **Snapshot keys read
+    phase-driven state only** (never which parts are alive), so the hit that triggers a phase cannot count as one of its changes; a boundary row pins it.
   - `ReinforcementBay` (Node2D `Bay` on an `EnemyModule`, optional `Mouth`): `enum Trigger { PERIODIC, ON_SECTOR_LOSS, ON_PHASE }`; exports `bay_id`, `payload_scene`,
     `assault_payload_scene`, `count`, `period`, `first_delay`, `active_from_phase`, `watch_ids`, `on_phase`, `door_seconds`, `open_hold_seconds` (doors held OPEN after a launch,
     the Carrier's `door_hold_seconds`), `opens_part`, `assault_launch_limit`. A bay on a destroyed part is dead.
@@ -4396,15 +4397,21 @@ scope check (§1.1), judgement calls (§1.2) and code facts (§1.3, read @ `cba0
   - `ShieldSector` (RefCounted): a generator part + protected parts, one 360° `EnemyShield` bubble per part; generator destroyed = sector exposed for good.
   - `BossDeathSequence` (was `StationDeathSequence`, behaviour-identical; moved with its `.uid` sidecar, the `SpaceStation` cast replaced by a duck-typed host): host contract `death_started`, `death_duration`, optional `config.death_blast_count`; it writes the
     dying host's rotation only after `suspend_ai()`.
-- **`StateLight.State.SHIELDED`** (cyan, appended).
+- **`StateLight.State.SHIELDED`** (cyan, appended; built with `ShieldSector`).
 - **`TurretMount.Variant.SPREAD_CANNON` (7) and `RAPID_PULSE` (8)** appended; `BurstCannonMount.pellets` / `pellet_spread_deg` (1 / 0 = bit-identical). Both mount scenes are
   **standalone** (never inherited: `export_of()` reads only a scene's own `SceneState`); a mount's `fire_range` ≤ its round's `max_distance` (row over every bullet-firing variant).
+- **`TurretMountSlot.pool_period_factor` / `TurretMount.pool_period_factor`** (default 1.0 = bit-identical): `pool_specs()` sizes pools for period × factor, so a host that
+  shortens cooldowns at runtime (the fortress's `critical` × 0.6) authors the factor on its slots instead of running dry; a dry pool refuses shots silently.
+- **An enemy whose brain spins it by facing a point ahead authors `EnemyMover.turn_lerp = 0`** (the lerp runs before the `max_turn_rate` cap). A boss whose brain is
+  not ticked (EMP window, dying) ticks its cancelled beams / rings through FADE from its root, and closes its bays once in `on_emp_started()`.
 - **`TurretMount.telegraph_gate` stays a zero-argument Callable**; a boss's gate (`FortressBrain.attack_gate() -> bool`) counts its own committed mounts.
 - **Space Fortress** (`assault/scenes/enemies/space_fortress/`: `SpaceFortress`, `FortressBrain` with `Phase { IDLE, NOTICING, RETURNING, ENTER, HOLD, REPOSITION }`
   append-only, flat `SpaceFortressConfig`; `WaveBuilder.space_fortress()` / `SPACE_FORTRESS`): circle hull r 176 (sprite 384), root layer 0 / mask 0, armoured; parts
   `battery_spread` / `battery_pulse` / `battery_sweep` / `battery_artillery` / `battery_missiles` (WEAPON), `hangar` (HANGAR, doors), `shield_north` / `shield_south`
-  (WEAK_POINT generators, locked until phase 2), `core` (CORE, locked until phase 3). Boss phases `batteries` → `shields_exposed` (2 batteries lost) → `core_exposed` (both
-  generators) → `critical` (core ≤ 40 %). Weapons: corner mounts with 100° traverse (diagonal crossfire), hull spoke beams with spin volleys, an `EnergyRing` ring pulse, the
+  (WEAK_POINT generators, locked until phase 2), `core` (CORE, locked until phase 3). `FortressBrain.is_engaged()` = brain phase HOLD or REPOSITION (both
+  modes; the Assault bob is REPOSITION): weapons fire and bays run only then. Boss phases `batteries` → `shields_exposed` (2 batteries lost) → `core_exposed` (both
+  generators) → `critical` (core ≤ 40 %); declared changes: `shields_exposed` VULNERABLE, ATTACKS, MOVEMENT, REINFORCEMENTS, VISUALS;
+  `core_exposed` VULNERABLE, MOVEMENT, ARENA, VISUALS (the `EnergyRing` pulse is ARENA, not ATTACKS); `critical` MOVEMENT, ATTACKS, REINFORCEMENTS, VISUALS. Weapons: corner mounts with 100° traverse (diagonal crossfire), hull spoke beams with spin volleys, an `EnergyRing` ring pulse, the
   station's precessing core bullet ring in `critical`. Open Space: `AnchorIdle`, a combat zone (radius 600) around `patrol_anchor`, reposition from `core_exposed`, presents its
   strongest side at a turn rate a circling player beats. Assault: enters from above to world y 180, vertical bob from `core_exposed`, x fixed, no engagement budget, `world_anchored_x`.
 - **Naming:** never "station" for the boss in code or docs (Open Space has "Fortuna Space Station"); hub node and docs say Space Fortress.
@@ -4417,10 +4424,11 @@ scope check (§1.1), judgement calls (§1.2) and code facts (§1.3, read @ `cba0
 - Fairness for boss geometry weapons is an inequality read from **instantiated nodes** (beam tip speed at hull + 250 px ≤ 0.8 × player speed; a ring gap's arc **at the hull
   edge + player radius**, where it is narrowest, ≥ 2 × the player hurtbox diameter; ≤ 2 batteries committed at once, 3 in `critical`) plus a **measured Assault density
   ceiling in every boss phase** (worst live-part set, five player positions; fortress-owned rounds: mean ≤ 2.0 × the station's legacy 6.67 /s = 13.3 /s, peak half-open 2 s
-  window ≤ 1.25 × 24 = 30). Tune in a stated lever order, never widen a ceiling. Later bosses (Ph12 Dreadnought) measure the same way.
+  window ≤ 1.25 × 24 = 30). A hand-ticked density row counts **launches** and returns each round to its pool at once (an un-ticked round never
+  expires, so a dry pool would cap the rate silently); a count during which a pool reported empty fails. Tune in a stated lever order, never widen a ceiling. Later bosses (Ph12 Dreadnought) measure the same way.
 - A boss's §25 row runs a pinned scripted path; a path where a declared change cannot happen (e.g. a dead hangar's surge) gets its own row asserting only ≥ 2 changes.
 - "Owner choice N" is per phase: write "Ph11 owner choice N" (Ph10 has its own 4 and 7).
-- Gate time: start 210.34 s; Ph11 allotments sum to +17.6 s; escalate past a 237 s two-run mean or 1.5× a task's allotment. A wall-clock director replay overrides its own
+- Gate time: start 210.34 s; Ph11 allotments sum to +18.1 s; escalate past a 237 s two-run mean or 1.5× a task's allotment. A wall-clock director replay overrides its own
   section copy's `enemies_cleared_timeout` rather than waiting out a shipped timeout.
 
 ### Deferred
