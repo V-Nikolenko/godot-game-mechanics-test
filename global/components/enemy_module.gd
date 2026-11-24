@@ -2,7 +2,7 @@
 ## docs/plans/cmug23oo90029m52wae4clve0/3-plan.md; built in t2). One script for every heavy and boss; it never reads its host's type.
 ##
 ## SCENE SHAPE. Authored under a `Modules` `Node2D` of the enemy, never as a direct child of the enemy root (the hurtbox-geometry
-## gate's one-direct-child-HurtBox rule, the station's `Turrets` / the Ram's `Plates` precedent):
+## gate's one-direct-child-HurtBox rule, the Ram's `Plates` precedent):
 ##   Sprite (Sprite2D)          `intact_texture`, then `wreck_texture` (or, with none, `WRECK_TINT` on this child)
 ##   HurtBox (HurtBox)          one shape; layer ENEMY_HURTBOX is written here
 ##   Health                     written from `max_health`; created when absent; never read when `max_health` is 0
@@ -29,7 +29,7 @@
 ##
 ## DESTROYED = WRECKAGE THAT STAYS (IDEAS §23): `Health` reaching 0, or `destroy()`, once only. The part leaves `enemy_parts`, its
 ## hurtbox closes (deferred: a kill lands inside a physics flush), its mounts power down, its sprite turns to the wreck, its light
-## goes out, a burst goes into the HOST's parent (so it neither turns with the hull nor dies with it, the `StationTurret` re-homing),
+## goes out, a burst goes into the HOST's parent (so it neither turns with the hull nor dies with it, which matters on a spinning boss hull),
 ## and `destroyed` fires. The node stays in the tree until its host is freed. It blocks nothing (Ph19).
 ##
 ## `is_armored()` answers true while locked or wrecked. Projectiles never see it (`ArmorQuery` asks `deflects_hit` first); it is what
@@ -212,7 +212,7 @@ func destroy() -> void:
 	remove_from_group(GROUP)
 	if hurt_box != null:
 		# Deferred: a kill lands inside a physics flush. `monitoring` is what closes the intake, `monitorable` stops projectiles seeing
-		# the part, the shapes make it unambiguous (`station_turret.gd`).
+		# the part, the shapes make it unambiguous.
 		hurt_box.set_deferred(&"monitoring", false)
 		hurt_box.set_deferred(&"monitorable", false)
 		for child in hurt_box.get_children():

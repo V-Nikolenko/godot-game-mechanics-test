@@ -69,8 +69,8 @@ var _last_health: int = -1
 ##   that gap, deliberately and with a comment saying so, so an `_enter_tree()`-only copy would
 ##   leave this project's own spawn-customisation idiom writing to the shared resource.
 ## - `_enter_tree()` catches a `config` that a `.tscn` override or `initial_props` substituted in
-##   AFTER the constructor, and still runs before any CHILD's `_ready()` — which the space station
-##   depends on, since its four child nodes read `_station.config` in their own `_ready()`.
+##   AFTER the constructor, and still runs before any CHILD's `_ready()` — which a boss with behaviour
+##   children depends on (the Space Fortress's `DeathSequence` reads its host's `config` in its own `_ready()`).
 ##
 ## `ShipConfig.privatise()` is idempotent, so calling it twice costs one `duplicate()`.
 ## Pinned by `tests/integration/test_config_instance_isolation.gd`.
@@ -257,7 +257,7 @@ func ai_mover_max_speed() -> float:
 	return _mover.max_speed if _mover != null else 0.0
 
 
-## Whether an ally may restore this enemy's health. `SpaceStation` answers false.
+## Whether an ally may restore this enemy's health. `SpaceFortress` answers false.
 func can_be_repaired() -> bool:
 	return true
 
@@ -313,14 +313,14 @@ func _rotate_sprite() -> void:
 		sprite.rotation_degrees = 180.0
 
 ## Virtual damage hook: called whenever this enemy's `HurtBox` reports a hit. The default applies
-## the damage to `health`. A subclass overrides this to change what a hit does — e.g. `RamCorvette` and
-## `SpaceStation` deflect every hit while a plate / turret is alive.
+## the damage to `health`. A subclass overrides this to change what a hit does — e.g. `RamCorvette`
+## deflects every hit while a plate is alive, and the `SpaceFortress` and `Carrier` armoured hulls refuse every hit.
 func _on_received_damage(damage: int) -> void:
 	health.decrease(damage)
 
 ## Virtual death hook: called on every `health.amount_changed`. The default plays the hit-flash
 ## animation and hit burst when health went DOWN (a repair is silent), and on reaching 0 sets `was_killed`, emits `died`, plays the explosion
-## and frees the enemy. A subclass overrides this to change what death does — e.g. `SpaceStation`
+## and frees the enemy. A subclass overrides this to change what death does — e.g. `SpaceFortress`
 ## holds its wreck in the tree for `death_duration` seconds instead of freeing immediately.
 func _on_health_changed(current: int) -> void:
 	# Enemies start full and subclasses write health from config without a signal, so an unset

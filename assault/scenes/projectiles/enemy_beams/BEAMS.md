@@ -5,8 +5,8 @@ ships that fired it. It is a weapon component, not an enemy: an owner (a turret 
 its clock. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.1–§2.4 (core built in t2, endpoint beam / cover / laser-wall registration in t5); decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md`
 → Phase 8.
 
-`LaserRay` (`assault/scenes/hazards/laser_ray/`, level 1, the race and the station) and the station's `StationLaserPhase` are **not** part of this family
-and are untouched: the ray is a 9999 one-hit kill on sprite timing with a `Timer` re-damage. Ph11 moves the station onto `EnemyBeam`.
+`LaserRay` (`assault/scenes/hazards/laser_ray/`, level 1 and the race) is **not** part of this family
+and is untouched: the ray is a 9999 one-hit kill on sprite timing with a `Timer` re-damage. The Space Fortress (Ph11) fires `EnemyBeam`s (its hull spokes); the retired station's `LaserRay` volleys are gone.
 
 ## Files
 

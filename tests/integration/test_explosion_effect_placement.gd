@@ -10,7 +10,7 @@
 ##  1. Six AI racers died with NO explosion — `DamageReaction extends Node`, so the old
 ##     single-hop `get_parent() as Node2D` cast on the effect's parent came back null.
 ##  2. A hazard-eliminated racer's blast landed at the world origin, not the wreck.
-##  3. Race walls, race asteroids and station turrets exploded well away from themselves,
+##  3. Race walls, race asteroids and the (since retired) station's turrets exploded well away from themselves,
 ##     because the particle's world position was assigned before the particle had a parent.
 ##
 ## Every entity here is parented through a container `Node2D` owned by `add_child_autofree`,
@@ -20,7 +20,7 @@ extends GutTest
 
 const _RACER_DIR := "res://assault/scenes/race/racers"
 const RACE_WALL_SCENE: PackedScene = preload("res://assault/scenes/race/track/race_wall.tscn")
-const STATION_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_station/space_station.tscn")
+const FORTRESS_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_fortress/space_fortress.tscn")
 const GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")
 
 ## Six racers today. A sweep that finds fewer has broken, and a broken sweep passes every
@@ -150,23 +150,25 @@ func test_a_hazard_eliminated_racer_explodes_at_the_wreck() -> void:
 		assert_almost_eq((found[0] as CPUParticles2D).global_position, expected, Vector2(0.5, 0.5))
 
 
-## Defect 3, second instance: a turret's blast used to land inside the hull's own local space.
-## Also proves the turret call-site fix: the blast must survive the wreck, i.e. live in the
-## station's own container, not as a descendant of the station.
-func test_a_destroyed_turret_leaves_its_blast_outside_the_hull() -> void:
+## Defect 3, second instance (first found on the retired station's turrets): a boss part's blast must not land inside the hull's own
+## local space. The fortress is turned, so a hull-local position would land somewhere else. Also proves the part call site: the blast
+## must survive the wreck, i.e. live in the fortress's own container, not as a descendant of the fortress.
+func test_a_destroyed_fortress_part_leaves_its_blast_outside_the_hull() -> void:
 	var container := Node2D.new()
 	add_child_autofree(container)
-	var station := STATION_SCENE.instantiate() as SpaceStation
-	container.add_child(station)
-	station.global_position = Vector2(640.0, 200.0)
-	(station.get_node("LaserPhase") as StationLaserPhase).rotation_speed = 0.0
+	var fortress := FORTRESS_SCENE.instantiate() as BaseEnemy
+	container.add_child(fortress)
+	fortress.set_physics_process(false)
+	fortress.global_position = Vector2(640.0, 200.0)
+	fortress.rotation = 0.7
 
-	var turret := station.turrets()[0] as StationTurret
-	var expected: Vector2 = turret.global_position
-	turret.hurt_box.received_damage.emit(turret.health.max_health)
+	var battery := fortress.get_node("Modules/BatterySpread") as Node2D
+	var expected: Vector2 = battery.global_position
+	assert_false(expected.is_equal_approx(fortress.global_position + battery.position), "sanity: the turn moves the part off its local offset")
+	battery.call(&"destroy")
 
 	var found := _particles_in(container)
-	assert_eq(found.size(), 1, "the blast must land in the station's own parent, outside the hull")
+	assert_eq(found.size(), 1, "the blast must land in the fortress's own parent, outside the hull")
 	if found.size() == 1:
 		assert_almost_eq((found[0] as CPUParticles2D).global_position, expected, Vector2(0.5, 0.5))
 

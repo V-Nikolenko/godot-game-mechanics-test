@@ -17,7 +17,7 @@ const BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bull
 const WARHEAD_SCENE: PackedScene = preload("res://assault/scenes/projectiles/missiles/warhead/warhead_missile.tscn")
 const LASER_SCENE: PackedScene = preload("res://assault/scenes/hazards/laser_ray/laser_ray.tscn")
 const LASER_MODE: WeaponModeResource = preload("res://assault/scenes/player/weapons/modes/mining_laser.tres")
-const WRECK_TEXTURE: Texture2D = preload("res://assault/assets/sprites/enemies/station_turret_destroyed.png")
+const WRECK_TEXTURE: Texture2D = preload("res://assault/assets/sprites/enemies/space_fortress/battery_spread_wreck.png")
 const HARNESS := preload("res://tests/helpers/enemy_ai_harness.gd")
 
 const MODES := ["open_space", "assault"]
@@ -144,7 +144,7 @@ func _particles_under(node: Node) -> int:
 	return n
 
 
-## Drives a real `BeamBehavior` from `_physics_process` (the `test_ram_corvette.gd` / `test_station_incoming_damage_paths.gd` driver):
+## Drives a real `BeamBehavior` from `_physics_process` (the `test_ram_corvette.gd` / `test_fortress_incoming_damage_paths.gd` driver):
 ## the code under test is `BeamBehavior.tick()`, which reads only `actor.rotation`, the world and `actor.damage_multiplier`.
 class BeamDriver extends Node2D:
 	var actor: Node2D

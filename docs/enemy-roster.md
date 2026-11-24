@@ -98,8 +98,8 @@ b.fighter().at(-60, -360).move(b.straight(180)).shoot_forward().free_after(6.0)
 **Builder:** `b.drone()`  
 **Scene:** `swarm_drone.tscn`  
 **Movement:** ⚠️ **Self-managed squad AI. Do NOT add `.move()`** in a level wave. A rail suspends its brain and arms
-its contact (it then flies the path and rams like the old Kamikaze Drone); only the space station's BOTTOM
-reinforcement squad still does that on purpose.  
+its contact (it then flies the path and rams like the old Kamikaze Drone); no shipped spawn does that any more (the
+retired space station's BOTTOM reinforcement squad was the last).  
 **Squads:** a `.formation()` is automatically one squad. Loose `b.drone()` lines in one `b.wave()` form a squad only
 if they share `.squad(&"<id>")`; level 1 uses `&"w<n>"` for every wave with 2–7 loose drones. A loose line with no
 id is a squad of one.  
@@ -330,7 +330,7 @@ b.carrier().at(0, -260)
 **HP:** an armoured ring hull nothing hurts + nine parts: five batteries 260, hangar 300 (locked: doors), two shield generators 360 (locked until two batteries
 are wrecks; each bubbles the batteries / hangar of its half), core 1500 (locked until both generators are wrecks). **The core's death is the fortress's.**  
 **Score:** 1500  
-**Naming:** never "station" — Open Space has "Fortuna Space Station". It replaces the space station in level 1 in t10.
+**Naming:** never "station" — Open Space has "Fortuna Space Station". It replaced the space station in level 1 in t10; the station was retired in t11.
 
 ---
 
@@ -760,41 +760,8 @@ scored. **Tuning lives in each scene's exports.** Art and `rotation` are nose-up
 
 ---
 
-## Not in this roster: the space-station mini-boss
+## Retired: the space-station mini-boss
 
-`assault/scenes/enemies/space_station/` is a multi-part mini-boss, not a regular wave enemy — it
-has no movement, no exit mode and four independently destructible turrets, so the roster's
-per-enemy stat columns do not describe it.
-
-It **is** `WaveBuilder`-spawnable: `b.space_station()` (`SPACE_STATION` const). It is spawned
-exactly once, by the `station_assault` section of Level 1, as
-`b.wave(0.0, [ b.space_station().at(0, -90) ])`. Two rules, both load-bearing:
-
-- **No `.delay()`.** `waves_complete` fires when the last wave *triggers*, not when its spawns
-  land, so a delayed boss lets an `ENEMIES_CLEARED` section see an empty container and advance
-  instantly.
-- **No `.move()`.** A `MovementResource` attaches an `EnemyPathMover`, which would free the boss
-  on screen exit mid-fight. This is now doubly load-bearing: the laser phase writes
-  `station.rotation` directly, so an `EnemyPathMover` would also be fighting it for control.
-
-It has a **second phase**: once the last turret dies the station rotates and fires telegraphed
-`LaserRay` volleys (`StationLaserPhase`). Nothing about spawning changes, but the boss stops being
-a stationary target, and its rotating 240×240 core hurtbox sweeps ~34 px past its axis-aligned
-footprint at 45°.
-
-**It also spawns other enemies from this roster.** During phase 1 only, `StationReinforcements`
-sends squads across the arena on a fixed `LEFT → RIGHT → BOTTOM → TOP` cycle: two `gatling_interceptor`
-from either side, two `swarm_drone` from below, two `fighter` with `.shoot_forward()` from
-above. Things to know if you edit that table (`station_reinforcements.gd::_build_squads()`):
-
-- It uses this file's own vocabulary — `b.gatling_interceptor().at(…).move(b.straight(…)).free_after(…)` —
-  so the rules below apply unchanged. In particular **`heavy_gunship` and `razor_drone` must never
-  go in it**: both are brain-driven AI, and `EnemyPathMover` silently disables the AI they need.
-  A test enforces that.
-- **Every entry needs `.free_after(…)`.** The default `FREE_ON_SCREEN_EXIT` only culls a ship that
-  has already been on screen once, so one that never arrives would hold `ENEMIES_CLEARED` open.
-- **A squad ship must be killable by the player's primary weapon.** The Ram Corvette is not: its hull
-  deflects every bullet until rockets have broken all three of its plates. A test checks every ship in
-  the table keeps the bullet layer in its HurtBox mask (the legacy ram narrowed it to 33).
-
-Behaviour and constraints: [`space_station/ENEMY.md`](../assault/scenes/enemies/space_station/ENEMY.md).
+The legacy space station (`b.space_station()`, its folder and its tests) was retired in Phase 11 t11. Level 1's `station_assault`
+section now spawns the **Space Fortress** — see [`space_fortress`](#space_fortress--space-fortress-phase-11-boss) above. Its escorts
+are launched by the fortress's own reinforcement bays (`global/boss/`), not authored with this file's builder.

@@ -7,8 +7,8 @@
 [ext_resource type="Script" path="res://global/components/modular_hull.gd" id="5_fmh"]
 [ext_resource type="Script" path="res://global/components/defense_profile.gd" id="6_fmh"]
 [ext_resource type="Script" path="res://global/components/state_light.gd" id="7_fmh"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/station_turret.png" id="8_fmh"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/station_turret_destroyed.png" id="9_fmh"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_spread.png" id="8_fmh"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_spread_wreck.png" id="9_fmh"]
 
 [sub_resource type="Animation" id="Animation_reset_fmh"]
 length = 0.001

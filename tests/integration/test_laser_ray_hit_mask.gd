@@ -1,11 +1,11 @@
-## Pins `LaserRay.hit_mask_override` — the additive export added for the station laser phase
+## Pins `LaserRay.hit_mask_override` — the additive export first added for the retired space station's laser phase
 ## (EPIC sub-item 3, `docs/plans/station-laser-phase/3-plan.md` §2).
 ##
 ## NOT a characterization test: the export is new code, so these assert intent.
 ##
-## Why it matters: `LaserRay`'s default `_HIT_MASK` is `128 | 256 | 512`, and 512 is the layer the
-## space station's own core `HurtBox` sits on (`space_station.tscn:68-71`). A beam fired from a
-## node mounted on the station therefore damages the station — measured, the boss goes 600 -> 0 HP
+## Why it matters: `LaserRay`'s default `_HIT_MASK` is `128 | 256 | 512`, and 512 is the layer enemy
+## hurtboxes sit on (a Space Fortress part's `HurtBox` is on it). A beam fired from a
+## node mounted on a boss therefore damages that boss — measured on the retired station, 600 -> 0 HP
 ## in one frame. The override lets that one emitter narrow its mask to the player hurtbox alone.
 ##
 ## The default case is the important half: the race hazards and Level 1's static laser columns all
@@ -22,7 +22,7 @@ const LASER_SCENE: PackedScene = preload("res://assault/scenes/hazards/laser_ray
 ## of the test is to fail if `_HIT_MASK` changes, so it must not track it.
 const DEFAULT_MASK: int = 128 | 256 | 512
 
-## Player hurtbox only — what the station laser phase uses.
+## Player hurtbox only — what a boss-mounted emitter would use.
 const PLAYER_ONLY: int = 128
 
 
@@ -46,7 +46,7 @@ func test_override_replaces_the_default_mask_entirely() -> void:
 	var laser := _spawn(PLAYER_ONLY)
 	var mask: int = laser.get_node("HitZone").collision_mask
 	assert_eq(mask, PLAYER_ONLY, "the override replaces the mask, it does not OR into it")
-	assert_eq(mask & 512, 0, "layer 512 must be clear — that is the station core's own hurtbox")
+	assert_eq(mask & 512, 0, "layer 512 must be clear — that is the enemy hurtbox layer a boss's own parts sit on")
 	assert_eq(mask & 256, 0, "layer 256 must be clear")
 
 

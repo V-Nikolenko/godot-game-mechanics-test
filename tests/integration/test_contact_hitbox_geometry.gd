@@ -26,8 +26,8 @@
 ## Otherwise the same three rules apply as in `test_enemy_contact_damage.gd`: each entity gets a
 ## throwaway container `Node2D` parent (effects and the bullet pool scribble on `get_parent()`),
 ## each is added to the tree so `_ready()` runs, and only DIRECT children are searched for the
-## `HitBox` (bullets carry their own, under the pool; the station's turrets carry theirs, under
-## `Turrets`).
+## `HitBox` (bullets carry their own, under the pool; a modular boss's parts carry theirs, under
+## `Modules`).
 ##
 ## ── Completeness guard (Enemy rework phase 2, t1) ────────────────────────────────────────────
 ##
@@ -148,10 +148,6 @@ const ROSTER: Array[Dictionary] = [
 	{
 		"name": "ram_corvette",
 		"scene": "res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn",
-	},
-	{
-		"name": "space_station",
-		"scene": "res://assault/scenes/enemies/space_station/space_station.tscn",
 	},
 	{
 		"name": "sniper",

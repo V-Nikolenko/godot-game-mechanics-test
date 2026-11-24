@@ -57,9 +57,9 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `deflects_hit(hit_box: HitBox) -> bool` first (hit-aware) and falls back to `is_armored() == true` (hit-blind; no shared
   interface) and, if either refuses, returns without emitting `expired` or spending a pierce charge. The homing and
   warhead rockets ask the same query. **A shielded enemy consumes the bullet:** an `EnemyShield` (`global/components/enemy_shield.gd`) that absorbs a hit (`HurtBox.set_absorber()` hook, `hit_absorbed` instead of `received_damage`) counts as the hit that stops a default bullet, unlike a deflection; it never absorbs while its host answers `is_armored()`. This is load-bearing: the
-  space-station boss's armoured core spans the whole hull, so a shot aimed at a turret has to
-  survive crossing it, and the core's `is_armored()` query is what tells the bullet the crossing
-  was a deflection, not a kill — consuming the shot there makes the turrets, and the boss,
+  Space Fortress's armoured hull spans the whole boss, so a shot aimed at a battery has to
+  survive crossing it, and the hull's `is_armored()` query is what tells the bullet the crossing
+  was a deflection, not a kill — consuming the shot there makes the parts, and the boss,
   unkillable. `PierceModule` raises the number of *damaging* hits a bullet survives (via
   `Bullet.MAX_PIERCE`) before it stops. Any future entity that needs to deflect a bullet without
   consuming it must expose `is_armored()` or `deflects_hit()`. **Breakable armour is parts, not a mask** (Phase 4):
@@ -132,7 +132,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   **The Pulse Ring is `EnergyRing`** (`enemy_beams/energy_ring.tscn`, `EnemyBeamScenes.ring_scene()` / `ring_export()`; `class_name PulseRing` stays Ph7's visual): owner-ticked
   TELEGRAPH -> EXPANDING -> FADE, a 24 px band at 360 px/s whose outer edge stops at `max_radius` 280, two 45 degree gaps turning at 30 degrees/s, each target hit once per ring over
   the swept interval. Gate: `tests/integration/test_energy_ring.gd`.
-  **Level 1's laser columns (Phase 8 t17):** `Level1Director.laser_column_schedule()` is the column schedule as data (`_build_schedules()` binds `_spawn_laser_columns` to it); they killed AI enemies, so `LaserRay` gained the opt-in `registers_hazard` (default false; race and station unaffected), set by the director's columns and all 12 rays of `laser_wall.tscn`. Gate `tests/integration/test_level1_laser_columns.gd`; re-measure with `scripts/measure-level1-columns.sh` (manual, `tests/helpers/level1_column_replay.gd`).
+  **Level 1's laser columns (Phase 8 t17):** `Level1Director.laser_column_schedule()` is the column schedule as data (`_build_schedules()` binds `_spawn_laser_columns` to it); they killed AI enemies, so `LaserRay` gained the opt-in `registers_hazard` (default false; the race unaffected), set by the director's columns and all 12 rays of `laser_wall.tscn`. Gate `tests/integration/test_level1_laser_columns.gd`; re-measure with `scripts/measure-level1-columns.sh` (manual, `tests/helpers/level1_column_replay.gd`).
   **Turret groups (Phase 8 t9) are coordinators, not parents:** `TurretGroup` (`assault/scenes/structures/turret_group/`, never in `enemies`, never scored) spawns its members deferred as siblings in the enemy container (announced with `EventBus.enemy_spawned_orphan`); a `PowerSource`'s `died` darkens every member through `set_powered(false)` in the same call, for good; a wave-spawned group's Assault x is world-anchored (`world_anchored_x`, via `EnemyWorld` only). Gate `tests/integration/test_turret_group.gd`. **A `ShieldGenerator` (t9s) is a member that sustains a 360 degree `EnemyShield` bubble on the others** (never itself, never a fence post, never displacing a ward already in the absorber slot); no `sustain()` after its death or the group going dark, so bubbles lapse; beams bypass them. **A `LaserFence` (t10) is two `LaserEmitter` posts and one twin-beam `EnemyBeam`** (`assault/scenes/structures/laser_fence/`, `assault/scenes/enemies/laser_emitter/`; the fence is not an enemy, the posts are, and answer `is_fence_post()`): `Mode { STATIC, CYCLE }`, ticked by its own `step(delta)`, registers a `&"laser_wall"` hazard while warning or lit, collapses for good on a post's `died` and lingers `linger_seconds` 1.0 so the posts' explosion particles (spawned under the fence) finish; a wave-spawned fence is world-anchored like a group. Gate `tests/integration/test_laser_fence.gd`.
   **Twin-Laser Drones (t12) are two drones, one rig, one clock:** `TwinLaserPair` (`assault/scenes/enemies/twin_laser_drone/`, a `RefCounted` both brains hold) owns the `twin_beam.tscn` as a child of drone A and advances its phase only in the leader's tick (A while it lives); a separation error past `length_tolerance` for `strain_seconds` collapses the beam, a drone's death breaks the pair in the same call; Assault frames are planned inside `inner_rect()` and allow one attack per life. Spawn with `WaveBuilder.twin_laser_pair()`, never in an `ENEMIES_CLEARED` section. A hand-ticked drone test clears the body `collision_mask` (the broadphase is stale between hand ticks). Gate `tests/integration/test_twin_laser_drones.gd`.
   **A Laser Tender (t13) launches its pair in a V into a moving wall (Attack B):** `LaserTender.launch_pair(points)` (`assault/scenes/enemies/laser_tender/`, the Ph10 / Ph11 seam) adds the two drones **synchronously** (physics step or idle code only, never a physics callback), binds them with the tender in the owner group and puts the rig in `TwinLaserPair.Phase.LAUNCHED` (appended): a straight boost to each point, a stop tick, then FORM on a fixed frame. One live pair, rearm, docking; Assault: one launch per life from the upper band. Spawn with `WaveBuilder.laser_tender()`, never in an `ENEMIES_CLEARED` section. Gate `tests/integration/test_laser_tender.gd`.
@@ -184,14 +184,13 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   outside `addons/` and asserts each one loads, instantiates and compiles with no engine error or
   warning logged (the gate's `--import` step never loads a scene and its `--quit` step boots only
   `res://boot/…`, so most of the project was previously unloaded by every gate step),
-  and the space-station family — `tests/integration/test_space_station.gd`,
-  `test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
-  `test_station_gunnery.gd`, `test_station_reinforcements.gd`,
-  `test_station_incoming_damage_paths.gd` and `test_radial_attack_pattern.gd` —
+  and the boss family — `tests/integration/test_station_assault_section.gd`, `test_laser_ray_hit_mask.gd`,
+  `test_radial_attack_pattern.gd`, `test_boss_death_sequence.gd` and `test_fortress_incoming_damage_paths.gd`
+  (the space station's own files were retired with it in Phase 11 t11; their intent lives in the fortress suites) —
   which cover new code and so
   assert intent. The last of those closes the boss's collision-layer coverage gap: real missiles,
   a real asteroid and a real `BeamBehavior` prove the `HurtBox` mask bits 32 and 1024 and the
-  layer-0 root that keeps the hull from blocking the player's mining laser. `tests/integration/test_module_unlock_sources.gd` is a second invariant check
+  layer-0 root (plus `is_laser_blocking()` false) that keeps the hull from blocking the player's mining laser. `tests/integration/test_module_unlock_sources.gd` is a second invariant check
   (every module in `ShipModuleState.SLOT_MODULES` has an unlocker pickup in the sector hub, so
   the unlock gate cannot strand content), and `tests/integration/test_module_list_lock.gd`
   asserts intent for the ship menu's locked rows.
@@ -225,7 +224,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   within 1 px per edge. Armour is a damage rule on a full-size hurtbox — deflect, flash, report 0 —
   never an absent hurtbox, because a shrunken one leaves visible hull that swallows shots and
   reports nothing. It carries a permanent boundary test that applies the rejected "narrow the
-  station core to 88 x 240" proposal to a live instance and asserts it fails, so that decision is a
+  boss hurtbox to its core" proposal (first made as "narrow the station core to 88 x 240") to a live Space Fortress — its hull hurtbox shrunk to the core's circle — and asserts it fails, so that decision is a
   gate rather than prose someone re-litigates.
   `tests/integration/test_player_bullet_lifetime.gd` is a sixth, over projectile *ownership*. It
   states the two rules that used to be implied by the space-station fight: a player bullet is not
@@ -247,7 +246,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   `tests/integration/test_entity_sprite_transparency.gd` is an eighth, and the only one over the
   **art**: no texture an entity under `assault/scenes/{enemies,player,projectiles,hazards,allies}`
   draws over the game world may be 90%+ fully opaque, because a painted-in background renders as a
-  card that cuts a hard rectangle out of the starfield. `station_core.png` shipped at
+  card that cuts a hard rectangle out of the starfield. The retired space station's `station_core.png` shipped at
   65536/65536 px opaque and survived two cycles, because **no gate step renders a scene** —
   `--import` loads no `.tscn` and `--quit` boots only `res://boot/…`. It reads scenes through
   `PackedScene.get_state()` instead of instantiating them, and resolves `Sprite2D.texture`,
@@ -370,12 +369,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   delay, and a Gatling boundary plus a "no `ENEMIES_CLEARED` section contains a Gatling" row.
   `tests/integration/test_level1_fighter_exit.gd` replays cloud_descent through a real
   `WaveManager`: the container is empty 9.07 s after `waves_complete` of a 10 s timeout.
-  `tests/integration/test_station_reinforcements.gd::test_rail_reinforcements_fire` is a twenty-first,
-  the **rail-fire test**: every TOP fighter and LEFT/RIGHT Gatling the space station spawns on a rail
-  must put at least one bullet in the container within 2 s, and a forward rail fighter's shot must
-  leave along its travel. It exists because the fighter and the Gatling moved to brains and a rail
-  now **suspends** the brain: without the rail-fallback weapon (`on_suspended()`, built from `rail_*`
-  config fields) a squad that looks dangerous would never fire, with no other gate noticing.
+  `tests/integration/test_fortress_reinforcements.gd::test_assault_escorts_fire_soon_after_launch` is a twenty-first,
+  the **escort-fire test** (it replaced the retired space station's rail-fire test): a fighter pair and a Gatling pair the
+  Space Fortress launches in Assault must each put a round into the escort container soon after launch. It exists because the
+  fighter and the Gatling are brain-driven: a squad that looks dangerous but never fires would pass every other gate. A rail
+  still **suspends** the brain, and the rail-fallback weapon (`on_suspended()`, built from `rail_*` config fields) keeps a
+  railed fighter or Gatling firing.
   `tests/integration/test_level1_specialist_spawns.gd` is a twenty-second, the level-1 **specialist pin
   and density gate**: it pins all 50 sniper / ram / bomber rows (trigger, offset, delay), and for every
   section in `MIGRATED_SECTIONS` (all three since Phase 4 t22: deep_space and planet_approach in t21,

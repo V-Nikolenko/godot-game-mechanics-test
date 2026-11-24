@@ -433,7 +433,7 @@ func test_a_sniper_shot_damages_an_exposed_hull_and_flies_on(mode: String = use_
 
 # ── 9. The beam ─────────────────────────────────────────────────────────────────────────────────
 
-## Drives a real `BeamBehavior` from `_physics_process` (test_station_incoming_damage_paths.gd's driver).
+## Drives a real `BeamBehavior` from `_physics_process` (test_fortress_incoming_damage_paths.gd's driver).
 class BeamDriver extends Node2D:
 	var actor: Node2D
 	var behavior: BeamBehavior

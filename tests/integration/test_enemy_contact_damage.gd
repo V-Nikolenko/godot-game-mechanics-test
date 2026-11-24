@@ -9,7 +9,7 @@
 ## The base `ContactHitBox` node authored on every `BaseEnemy` subclass's scene defaults to
 ## `damage = 20` and knows nothing about `config`, which is only read at runtime. So every enemy
 ## that wants its configured `collision_damage` has to re-apply it in `_ready()` afterwards. Most
-## do (`bomber.gd`, `fighter.gd`, `ram_corvette.gd`, `space_station.gd`) or author a
+## do (`bomber.gd`, `fighter.gd`, `ram_corvette.gd`, `space_fortress.gd`) or author a
 ## different default directly on their own scene's node (`razor_drone.tscn`,
 ## `swarm_drone.tscn`, `ally_fighter.tscn` — 30/30/25 — with the script still re-applying where
 ## a config can override it).
@@ -44,11 +44,11 @@
 ## 1. **Each enemy is parented to a throwaway container `Node2D`, not to the test directly.**
 ##    `ExplosionEffect` parents its particles to `actor.get_parent()` and `BulletPool` reparents
 ##    bullets into the same place (`bullet_pool.gd:47`), so the enemy needs a parent it can
-##    scribble on. Same rule as `test_station_reinforcements.gd`.
+##    scribble on. Same rule as `test_boss_death_sequence.gd`.
 ## 2. **`_ready()` must actually run** — `health`/`hurt_box` are `@onready` and the whole config
 ##    application happens there — so every enemy is added to the tree, never just instantiated.
 ## 3. **Only DIRECT children are searched for the HitBox.** Bullets carry their own HitBox, but
-##    they live under the enemy's `BulletPool`, and the station's turrets live under `Turrets`.
+##    they live under the enemy's `BulletPool`, and a modular boss's parts live under `Modules`.
 ##    Every entity in this roster authors its `ContactHitBox` as a direct scene child (named
 ##    exactly that, next to `HurtBox`/`Health`/`HitFlashAnimationPlayer`), so "direct child" is
 ##    unambiguous.
@@ -191,11 +191,6 @@ const ROSTER: Array[Dictionary] = [
 		"name": "swarm_drone",
 		"scene": "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn",
 		"config": "res://assault/scenes/enemies/swarm_drone/swarm_drone_config.tres",
-	},
-	{
-		"name": "space_station",
-		"scene": "res://assault/scenes/enemies/space_station/space_station.tscn",
-		"config": "res://assault/scenes/enemies/space_station/space_station_config.tres",
 	},
 	{
 		"name": "sniper",

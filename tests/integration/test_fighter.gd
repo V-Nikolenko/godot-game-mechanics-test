@@ -272,7 +272,7 @@ func test_the_aimed_pool_covers_the_ai_and_both_rail_cadences() -> void:
 	var rail_aimed := EnemyRounds.pool_size_for(1,
 		_lifetime(EnemyRounds.PULSE, CONFIG.rail_aimed_speed), CONFIG.fire_interval)
 	assert_gte(size, ai, "AI burst cadence")
-	assert_gte(size, rail_forward, "rail FORWARD cadence (the station's shoot_forward fighters)")
+	assert_gte(size, rail_forward, "rail FORWARD cadence (shoot_forward rail fighters)")
 	assert_gte(size, rail_aimed, "rail aimed cadence")
 
 

@@ -140,9 +140,7 @@ func big_asteroid()   -> SpawnConfig: return SpawnConfig.new(BIG_ASTEROID)
 func small_asteroid() -> SpawnConfig: return SpawnConfig.new(SMALL_ASTEROID)
 func bonus_drone()    -> SpawnConfig: return SpawnConfig.new(BONUS_DRONE)
 func laser()      -> SpawnConfig: return SpawnConfig.new(LASER_RAY)
-## The Level 1 mini-boss. Spawn it with no .delay() and no .move() — see level_1_director.gd.
-func space_station() -> SpawnConfig: return SpawnConfig.new(SPACE_STATION)
-## The Phase 11 boss (Space Fortress 2.0; never call it a "station"): world-anchored in x like the Carrier. Spawn it with no .delay() and no .move().
+## The Level 1 boss (Phase 11 Space Fortress 2.0; never call it a "station"): world-anchored in x like the Carrier. Spawn it with no .delay() and no .move().
 func space_fortress() -> SpawnConfig: return SpawnConfig.new(SPACE_FORTRESS)
 
 # ── Movement helpers ──────────────────────────────────────────────────────────
@@ -319,7 +317,6 @@ const BIG_ASTEROID   := "res://assault/scenes/hazards/big_asteroid/big_asteroid.
 const SMALL_ASTEROID := "res://assault/scenes/hazards/small_asteroid/small_asteroid.tscn"
 const BONUS_DRONE    := "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn"
 const LASER_RAY   := "res://assault/scenes/hazards/laser_ray/laser_ray.tscn"
-const SPACE_STATION  := "res://assault/scenes/enemies/space_station/space_station.tscn"
 const SPACE_FORTRESS := "res://assault/scenes/enemies/space_fortress/space_fortress.tscn"
 
 # ── Direction constants ───────────────────────────────────────────────────────

@@ -6,14 +6,14 @@
 ##
 ## ── Why this file exists ─────────────────────────────────────────────────────────────────────
 ##
-## `assault/assets/sprites/enemies/station_core.png` — the level-1 mini-boss hull — shipped at
+## `station_core.png` — the hull of the level-1 mini-boss of the time (the space station, retired in Phase 11 t11) — shipped at
 ## **65536/65536 pixels at alpha 1.0**, corner alpha 1.00. Its own four turrets, generated in the
 ## same session, are 54.71% opaque with corner alpha 0.00, which is what a sprite should look
 ## like. The cause was a PixelLab default: `create_image_pixflux` treats `no_background` as unset
 ## unless you pass it, and paints a background; `create_map_object` (which made the turrets) is
 ## transparent by construction, which is why nobody had to ask for it.
 ##
-## It survived two full cycles unnoticed, because **nothing in the pipeline renders the station**.
+## It survived two full cycles unnoticed, because **nothing in the pipeline renders the boss**.
 ## The gate's `--import` step never loads a scene, its `--quit` step boots only `res://boot/…`,
 ## and the GUT suite asserts collision, damage and timing. A lone sprite viewed on a light backdrop
 ## looks the same either way. It was found only when the core and its turrets were composited by
@@ -31,7 +31,7 @@
 ## before the Ram Corvette got its own hull) — 32 points of headroom. This file has no opinion on any sprite
 ## between 59% and 90%.
 ##
-## The four-corners-at-alpha-0 assertion is scoped to `station_core.png` **alone, deliberately.
+## The four-corners-at-alpha-0 assertion is scoped to the boss hull (`fortress_hull.png` today) **alone, deliberately.
 ## Do not generalise it into the sweep.** Corner alpha measured across the set this walk collects:
 ## 3 of 16 legitimate textures have fully opaque corners — `h_assault_fighter.png`,
 ## `Rocket_blue.png`, `rocket.png` — plus `drones.png` at 2 of 4, plus 2 more
@@ -41,8 +41,8 @@
 ##
 ## ── What the walk reaches, and what it knowingly does not ────────────────────────────────────
 ##
-## Scenes are read through `PackedScene.get_state()`, never instantiated: `space_station.tscn`'s
-## `_ready()` alone builds a 48-bullet pool and four behaviour nodes. Three node shapes are
+## Scenes are read through `PackedScene.get_state()`, never instantiated: `space_fortress.tscn`'s
+## `_ready()` alone builds mounts, bullet pools and shield bubbles. Three node shapes are
 ## resolved, because a `Sprite2D.texture`-only walk finds **9** textures and `player/`,
 ## `projectiles/`, `hazards/` and `allies/` contribute exactly **zero** to it — most entities here
 ## are `AnimatedSprite2D` + `SpriteFrames`, frequently over an `AtlasTexture`:
@@ -58,8 +58,8 @@
 ##
 ## Instanced sub-scenes are not recursed into, and that is structurally enforced rather than
 ## merely intended: `SceneState.get_node_type()` returns `""` for an instanced node, so the walk
-## *cannot* accidentally recurse into `Turret0`…`Turret3`. `station_turret.tscn` lives under a
-## scope root and is walked in its own right.
+## *cannot* accidentally recurse into an instanced child (the fortress's `HullBeams/Spoke0..3/Beam`); a scene that lives under a
+## scope root is walked in its own right.
 ##
 ## **Both asteroid hazards are uncovered, and the gap is not self-healing.**
 ## `big_asteroid.tscn:27` and `small_asteroid.tscn:30` each carry a bare `Sprite2D` with no stored
@@ -98,8 +98,11 @@ const SCOPE_ROOTS: Array[String] = [
 ## why the bound is this loose.
 const MAX_OPAQUE_FRACTION := 0.90
 
-const STATION_CORE := "res://assault/assets/sprites/enemies/station_core.png"
-const STATION_TURRET := "res://assault/assets/sprites/enemies/station_turret.png"
+const FORTRESS_HULL := "res://assault/assets/sprites/enemies/space_fortress/fortress_hull.png"
+## The known-good control the boundary row corrupts (71 % opaque, transparent corners).
+const CONTROL_TEXTURE := "res://assault/assets/sprites/enemies/space_fortress/battery_spread.png"
+## No pixel of the fortress hull art may be drawn beyond this radius from its centre (the hull circle is r 176).
+const HULL_SKY_RADIUS := 185.0
 
 ## Vacuity floors, `assert_gt` (strictly greater), modelled on `test_project_load_integrity.gd:63-67`.
 ## Measured today: 25 scenes walked, 16 yielding a texture, 16 distinct textures. These carry that
@@ -253,28 +256,48 @@ func test_no_entity_sprite_is_a_solid_rectangle() -> void:
 	)
 
 
-func test_the_station_core_has_sky_around_it() -> void:
-	var texture := _textures.get(STATION_CORE) as Texture2D
-	assert_not_null(texture, "station_core.png is not reachable from any scene in scope")
+## Pixels with alpha > 0 farther than [param radius] px from the image centre (pixel centres).
+func _visible_beyond(img: Image, radius: float) -> int:
+	var copy := img.duplicate() as Image
+	copy.convert(Image.FORMAT_RGBA8)
+	var w := copy.get_width()
+	var h := copy.get_height()
+	var bytes := copy.get_data()
+	var centre := Vector2(w, h) * 0.5
+	var count := 0
+	for y in h:
+		for x in w:
+			if bytes[(y * w + x) * 4 + 3] > 0 and Vector2(x + 0.5, y + 0.5).distance_to(centre) > radius:
+				count += 1
+	return count
+
+
+## The boss hull (the Space Fortress, Phase 11; it replaced the station whose hull this file was written for). Its ring art is a disc of
+## r 176 in a 384 px canvas, so the honest "sky around it" property is not an opaque fraction (a solid disc alone is 66 %) but: the corners
+## are transparent and NOTHING is drawn beyond r 185 of the centre (measured 0 px; 4 px beyond 180, the anti-aliased rim). A background
+## painted in fails both.
+func test_the_fortress_hull_has_sky_around_it() -> void:
+	var texture := _textures.get(FORTRESS_HULL) as Texture2D
+	assert_not_null(texture, "fortress_hull.png is not reachable from any scene in scope")
 	if texture == null:
 		return
 	var img := _image_of(texture)
-	assert_not_null(img, "station_core.png: get_image() returned null")
+	assert_not_null(img, "fortress_hull.png: get_image() returned null")
 	if img == null:
 		return
 	assert_eq(
 		_corner_alphas(img),
 		([0.0, 0.0, 0.0, 0.0] as Array[float]),
-		"station_core.png: every corner must be transparent sky, not painted background"
+		"fortress_hull.png: every corner must be transparent sky, not painted background"
 	)
-	assert_lt(
-		_opaque_fraction(img),
-		0.60,
-		(
-			"station_core.png must be a station with sky around and between its parts, not a "
-			+ "256x256 card. Measured after the background was keyed out: 47.63%"
-		)
-	)
+	assert_eq(_visible_beyond(img, HULL_SKY_RADIUS), 0,
+		"fortress_hull.png must be a ring with sky around it: no pixel drawn beyond r %.0f of the centre" % HULL_SKY_RADIUS)
+
+	# Boundary: the same predicate rejects the hull with its background painted in.
+	var painted := _image_of(texture)
+	painted.convert(Image.FORMAT_RGBA8)
+	painted.fill_rect(Rect2i(0, 0, 8, 8), Color(0.1, 0.1, 0.1, 1.0))
+	assert_gt(_visible_beyond(painted, HULL_SKY_RADIUS), 0, "a painted corner fails the sky check")
 
 
 ## The boundary case, and the reason this file is not a formality: a sprite WITH a painted
@@ -285,8 +308,8 @@ func test_the_station_core_has_sky_around_it() -> void:
 ## second half re-reads the real texture afterwards and asserts it is still clean — that is what
 ## proves the duplication actually worked, rather than merely being written down.
 func test_the_check_rejects_a_sprite_with_a_painted_background() -> void:
-	var texture := _textures.get(STATION_TURRET) as Texture2D
-	assert_not_null(texture, "station_turret.png is not reachable from any scene in scope")
+	var texture := _textures.get(CONTROL_TEXTURE) as Texture2D
+	assert_not_null(texture, "battery_spread.png is not reachable from any scene in scope")
 	if texture == null:
 		return
 
@@ -294,7 +317,7 @@ func test_the_check_rejects_a_sprite_with_a_painted_background() -> void:
 	assert_lt(
 		_opaque_fraction(clean),
 		MAX_OPAQUE_FRACTION,
-		"station_turret.png is the known-good control and must pass before it is corrupted"
+		"battery_spread.png is the known-good control and must pass before it is corrupted"
 	)
 
 	var painted := _image_of(texture)

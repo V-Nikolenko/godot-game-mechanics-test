@@ -121,7 +121,7 @@ Detail and APIs: [global.md](modules/global.md).
 - **A shooter taken off its brain by a rail keeps firing its legacy weapon (Ph3).** `FighterBrain` and
   `GatlingInterceptorBrain` implement `on_suspended()` to leave their squad, switch their `StateLight` off, hand their
   `AttackController` back to self-timed fire and install a legacy-equivalent pattern **built from flat `rail_*` config
-  fields** — so level 1 and the station's reinforcements stay armed on a path while level 1 itself no longer uses
+  fields** — so a fighter or Gatling put on a rail stays armed while level 1 itself no longer uses
   rails for these two. `aim_mode` / `shoot_forward()` / `shoot_at_player()` are rail-only inputs. Ph15 applies the same
   rule to every other shooter it migrates. Recipe: [global.md](modules/global.md) → *Enemy AI*.
   Ph4 extended the rule to the Sniper (`SniperTelegraph`'s own rail cycle at the legacy timings, never writing
@@ -290,8 +290,8 @@ Detail and APIs: [global.md](modules/global.md).
   default bullet stops on the first hit that actually deals damage; a *deflected* hit does not
   count** — `bullet.gd::_hit_is_deflected()` asks `ArmorQuery.deflects()`, which duck-types `deflects_hit(hit_box)` (hit-aware; `ArmorPlate`) and falls back to `is_armored()` on the hit
   target and, if it returns `true`, the bullet keeps flying at full damage with no pierce charge
-  spent. This exists because the space-station boss's armoured core spans the whole hull, so a
-  shot aimed at a turret has to survive crossing it undeflected, or the turrets — and the boss —
+  spent. This exists because the Space Fortress's armoured hull spans the whole boss, so a
+  shot aimed at a battery has to survive crossing it undeflected, or the parts — and the boss —
   are unkillable. The Ram Corvette's plates use the hit-aware `deflects_hit()` (rockets and `is_high_impact()`
   projectiles break a plate, bullets glance off) and `ArmorQuery` is the one place all three player projectiles
   (bullet, homing rocket, warhead) ask; a later heavy weapon opts in by answering `is_high_impact()`. `PierceModule` raises the number of damaging hits a bullet survives before it
@@ -328,7 +328,7 @@ Detail and APIs: [global.md](modules/global.md).
   and `tests/integration/test_entity_sprite_transparency.gd` (the only invariant over **art**:
   no texture an entity under `assault/scenes/{enemies,player,projectiles,hazards,allies}` draws
   over the game world may be 90%+ fully opaque, because a painted-in background renders as a card
-  that cuts a hard rectangle out of the starfield — `station_core.png` shipped at 100% and no
+  that cuts a hard rectangle out of the starfield — the retired space station's `station_core.png` shipped at 100% and no
   gate step could see it, since `--import` loads no scene and `--quit` boots only `res://boot/…`.
   It reads scenes through `PackedScene.get_state()` rather than instantiating them, and resolves
   `Sprite2D.texture`, `AnimatedSprite2D.sprite_frames` and `AtlasTexture.atlas` — a
@@ -336,8 +336,8 @@ Detail and APIs: [global.md](modules/global.md).
   and `tests/integration/test_enemy_hurtbox_geometry.gd` (the other side of the same collision
   pair: every assault entity's `HurtBox` must **cover** its body `CollisionShape2D`, so armour is
   a damage *rule* on a full-size hurtbox and never an absent one — it carries a permanent
-  boundary test that applies the rejected "narrow the station core to 88 x 240" proposal to a live
-  instance and asserts it fails)
+  boundary test that applies the rejected "narrow a boss hurtbox to its core" proposal (first "narrow the station core to 88 x 240") to a live
+  Space Fortress and asserts it fails)
   and `tests/integration/test_player_bullet_lifetime.gd` (the projectile-lifetime rule above:
   every `WeaponBehavior` subclass — enumerated from the project class list, so a *future* one is
   covered too — hands off its bullet's lifetime, a pooled bullet is **not** freed by the same
@@ -356,7 +356,7 @@ Detail and APIs: [global.md](modules/global.md).
   is named in `project.godot [layer_names]`, and every named layer has a matching
   `CollisionLayers` constant)
   and the Phase 4 specialist gates (below)
-  — plus the space-station family and `tests/integration/test_enemy_mover_single_writer.gd`
+  — plus the boss family (`test_boss_death_sequence.gd`, `test_fortress_incoming_damage_paths.gd`, the fortress suites) and `tests/integration/test_enemy_mover_single_writer.gd`
   (the AI single-writer rule above).
   The Phase 4 specialist gates: `test_level1_specialist_spawns.gd` (pins all 50 level-1 sniper / ram / bomber rows and
   caps the count at 2.5x frozen legacy peaks), `test_engagement_deadline.gd` (the sniper and ram deadline rows, plus a
@@ -452,8 +452,8 @@ Detail and APIs: [global.md](modules/global.md).
      `enum Kind { BEAM, SWEEP, LANCE, TWIN }`, `enum Phase { OFF, TELEGRAPH, ACTIVE, FADE }`, both append-only) is a weapon
      component an owner holds: `setup(host, owner_group)`, `start()`, `tick(delta)` on the owner's physics tick, `cancel()`. **`tick()`
      is its only clock** — no `Timer`, `create_timer` or `_process` (`self_tick` exists for scene-placed props only). Emitter beams
-     point along the node's **local +X**; the owner rotates the beam's parent, never the beam. `LaserRay` and the station's beam are
-     not part of the family (Ph11 migrates the station). The old `LaserRay` has one opt-in, `registers_hazard` (Ph8 t17; level 1's columns and
+     point along the node's **local +X**; the owner rotates the beam's parent, never the beam. `LaserRay` is
+     not part of the family (the Space Fortress's spokes are `EnemyBeam`s). The old `LaserRay` has one opt-in, `registers_hazard` (Ph8 t17; level 1's columns and
      `LaserWallWave` set it): a `&"laser_wall"` segment from `start()` to the end of active, so enemies steer round a column it kills them in.
   2. **Tuning lives in the beam scenes** (`beam.tscn`, `sweep_beam.tscn`, `lance.tscn`, `twin_beam.tscn`; the Pulse Ring below),
      read through `EnemyBeamScenes.export_of()` — the Ph5/Ph7 rule, so a beam is identical whoever fires it and gates never type
@@ -548,7 +548,7 @@ Detail and APIs: [global.md](modules/global.md).
 Each combat entity carries a behaviour doc **beside its scene**, mirroring a common format:
 
 - **Racers:** `assault/scenes/race/racers/<name>/RACER.md` (6 racers)
-- **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (the wave enemies + the `space_station` mini-boss)
+- **Assault enemies:** `assault/scenes/enemies/<name>/ENEMY.md` (the wave enemies + the `space_fortress` boss)
 - **Assault hazards:** `assault/scenes/hazards/<name>/HAZARD.md` (9 hazard folders: big/small asteroid, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck — wrecks, derelict structures and drifting debris — and minefield)
 - **Assault structures:** `assault/scenes/structures/<name>/STRUCTURE.md` (Ph8: turret_group)
 - **Race track hazards:** `assault/scenes/race/track/RACE_HAZARDS.md` (walls, asteroids, lasers + the lethal-hazard / AI-avoidance system)
@@ -557,39 +557,21 @@ Level 1's **finale** phase is still the `ENEMIES_CLEARED` section in
 `assault/scenes/levels/edelia/1/level_1_director.gd`, documented in
 [assault.md](modules/assault.md) — it is a wave, not an entity.
 
-There is now one **discrete multi-part boss entity**:
-`assault/scenes/enemies/space_station/` — a four-turret mini-boss whose core is invulnerable
-until every turret is destroyed. It is placed in Level 1 by the `station_assault` section, between
-`asteroid_belt` and `planet_approach`, which uses `EndCondition.ENEMIES_CLEARED` so the level
-cannot continue until the station is destroyed. See
-[`space_station/ENEMY.md`](../../assault/scenes/enemies/space_station/ENEMY.md).
+There is one **boss entity**: `assault/scenes/enemies/space_fortress/` — the **Space Fortress** (Phase 11), a 360° armoured ring hull
+over nine destructible parts (five batteries, a hangar, two shield generators, a core) that runs four boss phases (`batteries` →
+`shields_exposed` → `core_exposed` → `critical`) and dies with its core. It is placed in Level 1 by the `station_assault` section
+(the section keeps its internal name), between `asteroid_belt` and `planet_approach`, which uses `EndCondition.ENEMIES_CLEARED` so the
+level cannot continue until the fortress is destroyed, and it patrols its own combat zone in the Open Space hub. See
+[`space_fortress/ENEMY.md`](../../assault/scenes/enemies/space_fortress/ENEMY.md). It replaced the legacy two-phase **space station**
+mini-boss, retired with its tests in Phase 11 t11 (history: `docs/epics-done/station-mini-boss/`).
 
-It is also the project's first **two-phase** entity. Killing the last turret emits `armor_broken`,
-which starts `StationLaserPhase` — a child node that rotates the station and fires telegraphed
-`LaserRay` volleys — and simultaneously switches `StationGunnery`, a second child node, from aimed
-per-turret fans to precessing full rings from the core. Both phases are separate nodes rather than
-states on `space_station.gd`
-(composition) and rather than a `global/statemachine/` `State` per phase: the transition is
-one-way and there are only two phases, and this project reserves the node-per-file state machine
-for genuinely complex entities. Revisit if a third phase appears.
-
-A **third** child node, `StationReinforcements`, runs only during phase 1: it spawns squads of
-existing enemy scenes from all four screen edges on a fixed cycle, and stops on `armor_broken`.
-It is the project's first spawner that is not `WaveManager` — reinforcements go straight into
-`enemy_container` as siblings of the station and register on `EventBus.enemy_spawned_orphan`,
-the same channel `big_asteroid.gd` uses for its shards.
-**Phase 11 (t2) adds the shared boss path that replaces this:** `global/boss/` `ReinforcementBay` / `BossReinforcements` launch escorts
-from specific parts into one `<boss>Escorts` container (`EscortContainer`, a sibling of the boss freed with it), announced on
-`EventBus.boss_escort_spawned(escort, boss)` instead of the orphan signal; `ScoreTracker` pays their kills and nothing else
-([global.md](modules/global.md) → *Boss reinforcements*). The station keeps its own spawner until the fortress retires it (t11).
-
-A **fourth** child node, `StationDeathSequence`, owns the boss's death spectacle. `SpaceStation`
-overrides `BaseEnemy._on_health_changed` so that only `queue_free()` is delayed — `was_killed` and
-`died` still fire the instant HP hits 0, because `ScoreTracker` discriminates kill from escape on
-exactly those. The wreck then lingers for `death_duration` (1.8 s) while seven blasts roll across
-the hull at deterministic offsets and it drifts and darkens. The handoff into `planet_approach`
-needed **no** `LevelDirector` change: `_wait_enemies_cleared()` already polls the enemy container's
-child count, so a wreck that stays parented holds its section open for free.
+Its shared machinery lives in `global/boss/` so later bosses reuse it: `BossPhase` / `BossPhaseDriver` (the phase ladder and its "every
+phase changes two things" rule), `ShieldSector`, `ReinforcementBay` / `BossReinforcements` / `EscortContainer` (escorts launch from
+specific parts into one `<boss>Escorts` container, a sibling of the boss freed with it, announced on
+`EventBus.boss_escort_spawned(escort, boss)`; `ScoreTracker` pays their kills and nothing else) and `BossDeathSequence` (the death
+spectacle; the boss itself owns the timer that frees the wreck) — [global.md](modules/global.md) → *Boss reinforcements*. The
+handoff into `planet_approach` needs **no** `LevelDirector` change: `_wait_enemies_cleared()` polls the enemy container's child
+count, so a wreck that stays parented (and its escort container) holds its section open for free.
 
 For spawning enemies via `WaveBuilder`, see [`docs/enemy-roster.md`](../enemy-roster.md).
 

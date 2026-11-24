@@ -1,7 +1,7 @@
 ## Characterization tests for `EnemyPathMover` (`assault/scenes/enemies/enemy_path_mover.gd`),
 ## taken before the Phase 1 architecture rework touches it
 ## (`docs/plans/cmufklb100001p92xs1ey2fb1/3-plan.md` §3 step 2, "t2-pin-path-mover"). Every
-## path-driven Assault wave — `WaveManager`, `StationReinforcements`, the bonus-drone spawner —
+## path-driven Assault wave — `WaveManager`, the bonus-drone spawner —
 ## routes through this node, so these pins are what stops the brain/mover split (t10) from
 ## silently changing how a rail-driven ship moves, exits or gets its AI switched off.
 ##

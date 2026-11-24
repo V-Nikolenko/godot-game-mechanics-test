@@ -1,6 +1,6 @@
 # Space Fortress — the 360 degree boss you take apart sector by sector
 
-**Role:** Phase 11's boss (Space Fortress 2.0), built to be fought by circling it rather than from below. It replaces level 1's legacy space station
+**Role:** Phase 11's boss (Space Fortress 2.0), built to be fought by circling it rather than from below. It replaced level 1's legacy space station (retired with its tests in t11)
 (t10 placed it in `station_assault`: `b.space_fortress().at(0, -230)`, no `.delay()`, no `.move()`, `enemies_cleared_timeout` 240 s; t13 adds it to the Open Space hub as draw 21: 4200 ring at -45 degrees, `AnchorIdle`, not `start_engaged`). **Never call it a "station"** in code, nodes or docs: Open Space already has
 "Fortuna Space Station" (a `MissionTrigger`).
 **Fantasy / threat:** a ring fortress whose hull is armour. Five gun batteries sit on the ring, each with its own attack and its own angle; two shield
@@ -245,6 +245,11 @@ recomputed from the config, the leash, the Assault entry / hold / bob / fixed x,
 roster gates: `test_enemy_contact_damage.gd`, `test_contact_hitbox_geometry.gd`, `test_enemy_hurtbox_geometry.gd`, `test_base_enemy.gd`,
 `test_config_instance_isolation.gd` (sweep + the children identity row), `test_boss_phase_rules.gd`, and the automatic sweeps (transparency, signal arity,
 single writer, layer names, project load).
+The retired station's tests were migrated here in t11 (plan §2.11): `test_boss_death_sequence.gd` (the death spectacle on a real fortress: blasts on the
+r 176 hull, spin, tint, the config's 2.4 s / 10 blasts), `test_fortress_incoming_damage_paths.gd` (real homing / warhead rockets and an asteroid refused
+by the hull and reaching a battery, the mining laser through the layer-0 root, both harnesses), the hurtbox sweep's "hull hurtbox shrunk to the core
+fails" boundary and "hull hurtbox covers every part" row, the transparency row "the hull's corners are sky", `test_base_enemy.gd`'s refuse-repair row,
+and the core ring as the slowest shipped bullet source (210 px/s) in `test_enemy_bullet_lifetime.gd`.
 
 ## Files
 

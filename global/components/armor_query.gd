@@ -4,8 +4,8 @@
 ## `is_laser_blocking()` in `beam_behavior.gd`):
 ##   1. `deflects_hit(hit_box: HitBox) -> bool` — hit-aware: "deflect a bullet, accept a rocket".
 ##      Used by `ArmorPlate` (the Ram Corvette's plates).
-##   2. `is_armored() -> bool` — hit-blind, today's rule. The space station's core answers this
-##      and implements no `deflects_hit`, so it takes the unchanged fallback path.
+##   2. `is_armored() -> bool` — hit-blind, today's rule. The Space Fortress's and the Carrier's armoured hulls
+##      answer both (true for their whole life); a host with only `is_armored()` takes the unchanged fallback path.
 ##
 ## Called by `bullet.gd`, `homing_missile.gd` and `warhead_missile.gd` from their (kept)
 ## `_hit_is_deflected` wrappers.

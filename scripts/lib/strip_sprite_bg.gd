@@ -9,7 +9,7 @@
 ##
 ## PixelLab's `create_image_pixflux` / `_pixen` / `_pro` paint a background unless you pass
 ## `no_background: true`, and the result renders in-game as an opaque card that cuts a hard
-## rectangle out of the starfield. `assault/assets/sprites/enemies/station_core.png` shipped that
+## rectangle out of the starfield. the retired space station's `station_core.png` shipped that
 ## way — 65536/65536 pixels at alpha 1.0 — and survived two cycles because nothing in the gate
 ## renders a scene. `.claude/skills/pixel-art-generation/SKILL.md` now requires the flag, and
 ## `tests/integration/test_entity_sprite_transparency.gd` fails the gate when it is forgotten.
@@ -24,7 +24,7 @@
 ##
 ## A global colour key removes *every* pixel of the background colour, including the ones the
 ## artwork encloses, and punches holes through the subject. A fill seeded from the border removes
-## only pixels connected to the outside. On `station_core.png` that distinction is 41 pixels of
+## only pixels connected to the outside. On that station hull that distinction is 41 pixels of
 ## interior hull detail that share the background colour and must stay.
 ##
 ## The fill is **4-connected**, not 8-connected, deliberately. 8-connected can leak through a

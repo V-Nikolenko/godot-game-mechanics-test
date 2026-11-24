@@ -40,9 +40,9 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 	queue_free()
 
 
-## True when the hurtbox we just overlapped refused to apply damage (e.g. the space-station core
-## while any turret still lives). Duck-typed against `is_armored()`, same idiom as
+## True when the hurtbox we just overlapped refused to apply damage (e.g. the Space Fortress's
+## armoured hull). Duck-typed against `is_armored()`, same idiom as
 ## `bullet.gd::_hit_is_deflected` — a rocket gets the same exemption a bullet already has, so it
-## survives crossing the boss's armoured core instead of detonating on it before reaching a turret.
+## survives crossing the boss's armoured hull instead of detonating on it before reaching a part.
 func _hit_is_deflected(area: Area2D) -> bool:
 	return ArmorQuery.deflects(area, get_node_or_null("HitBox") as HitBox)

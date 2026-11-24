@@ -1,5 +1,5 @@
 ## Characterization: pins every Swarm Drone (`WaveBuilder.DRONE`) and Razor Drone spawn in Level 1
-## and the space station's BOTTOM reinforcement squad — the state of the world BEFORE Enemy rework
+## (the retired space station's BOTTOM reinforcement squad was pinned here too until Phase 11 t11) — the state of the world BEFORE Enemy rework
 ## phase 2 touches any of it (docs/plans/cmufs7ek60001nm2x6d0bt2et/3-plan.md §3 step 1). t14/t15
 ## replace the enemies these pins describe; this file exists so those tasks start from a
 ## known-true baseline instead of trusting memory of what the level "used to do". Open Space's old
@@ -31,7 +31,6 @@
 extends GutTest
 
 const _DIRECTOR_SCRIPT := "res://assault/scenes/levels/edelia/1/level_1_director.gd"
-const _STATION_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_station/space_station.tscn")
 
 const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.gd")
 const CarrierTimeline := preload("res://tests/helpers/level1_carrier_timeline.gd")
@@ -478,39 +477,3 @@ func test_a_section_with_no_drones_has_zero_peak_concurrency() -> void:
 		var times := DroneConcurrency.spawn_times(section, [_DRONE, _RAZOR_DRONE])
 		assert_eq(times.size(), 0, "asteroid_belt spawns no drones or razor drones")
 		assert_eq(DroneConcurrency.peak_concurrency(times, _LEGACY_LIFETIME), 0)
-
-
-# ── The space station's BOTTOM reinforcement squad ──────────────────────────────
-
-## `StationReinforcements.squads()` order is the `Edge` enum's declaration order — LEFT, RIGHT,
-## BOTTOM, TOP (`station_reinforcements.gd:58,157-195`) — so index 2 is BOTTOM.
-func test_station_reinforcements_bottom_squad_is_two_drones_straight_170() -> void:
-	var container := Node2D.new()
-	add_child_autofree(container)
-	var station := _STATION_SCENE.instantiate() as SpaceStation
-	container.add_child(station)
-	var reinf := station.get_node("Reinforcements") as StationReinforcements
-
-	var squads: Array = reinf.squads()
-	assert_gt(squads.size(), 2, "station reinforcements must have at least a BOTTOM squad")
-	if squads.size() <= 2:
-		return
-	var bottom: Array = squads[2]
-	assert_eq(bottom.size(), 2, "the BOTTOM squad must be exactly two ships")
-
-	var offsets: Array[Vector2] = []
-	for entry: SpawnEntryResource in bottom:
-		assert_eq(entry.ship_scene.resource_path, _DRONE, "BOTTOM squad must be drones")
-		offsets.append(entry.base_offset)
-		assert_not_null(entry.movement, "BOTTOM squad entry has no movement")
-		var m := entry.movement as StraightMovement
-		assert_not_null(m, "BOTTOM squad entry must use StraightMovement")
-		if m != null:
-			assert_almost_eq(m.speed, 170.0, 0.001, "BOTTOM squad speed changed")
-			assert_almost_eq(m.angle, PI, 0.001, "BOTTOM squad angle changed")
-		assert_eq(entry.exit_mode, EnemyPathMover.ExitMode.FREE_ON_DURATION,
-			"BOTTOM squad must free_after (FREE_ON_DURATION)")
-		assert_almost_eq(entry.exit_time, reinf.reinforcement_lifetime, 0.001,
-			"BOTTOM squad free_after duration changed")
-	assert_true(offsets.has(Vector2(-100.0, 290.0)), "BOTTOM squad missing its left offset")
-	assert_true(offsets.has(Vector2(100.0, 290.0)), "BOTTOM squad missing its right offset")

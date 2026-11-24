@@ -128,9 +128,9 @@ func _recycle(bullet: Node) -> void:
 ## acquire() keeps working only while _idle is non-empty.
 ##
 ## Called by _exit_tree(), and directly by a ship that must stop being dangerous
-## before it leaves the tree. StationGunnery._stop() uses it on the boss's death:
+## before it leaves the tree. `FortressBrain.silence()` uses it on the Space Fortress's death:
 ## the wreck lingers for its death sequence, so _exit_tree() no longer fires at
-## the moment of death and a dead station would otherwise keep a full ring of
+## the moment of death and a dead fortress would otherwise keep its core bullet ring of
 ## live bullets in the air.
 func cancel_active() -> void:
 	for bullet: Node in _active:

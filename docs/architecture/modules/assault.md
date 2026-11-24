@@ -163,7 +163,7 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   subclass's `.tscn` authors a `ContactHitBox` node with `damage = 20`, which knows nothing about
   the subclass's own `.tres`, so a subclass wanting its configured `collision_damage` must
   re-apply it in `_ready()` off `contact_hit_box` (`heavy_gunship.gd`, `bomber.gd`,
-  `fighter.gd`, `ram_corvette.gd` (which also swaps to `exposed_collision_damage` once its plates are gone), `space_station.gd`) or author a different default
+  `fighter.gd`, `ram_corvette.gd` (which also swaps to `exposed_collision_damage` once its plates are gone), `space_fortress.gd`) or author a different default
   directly on its own scene node (`razor_drone.tscn`, `swarm_drone.tscn` — 30, still
   re-applied from config where one exists). Forgetting leaves the `.tres` value dead with no
   symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
@@ -182,14 +182,14 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   `tests/integration/test_enemy_hurtbox_geometry.gd`. Armour is a damage *rule* on a full-size
   hurtbox (deflect, flash, report 0), never a missing hurtbox — a shrunken one leaves visible hull
   that swallows shots and reports nothing, which reads as a broken gun rather than as armour. The
-  space station is the worked example and the reason the file exists: see its
-  [ENEMY.md](../../../assault/scenes/enemies/space_station/ENEMY.md) -> "Core hurtbox: why it
-  spans the whole hull".
+  space station (retired in Phase 11 t11) was the worked example and the reason the file exists; its boss today is the Space
+  Fortress, whose hull hurtbox covers the body and every part (see [ENEMY.md](../../../assault/scenes/enemies/space_fortress/ENEMY.md)),
+  and the file still fails the rejected "narrow the boss hurtbox to its core" proposal, re-expressed on the fortress.
 
   A third sweep polices the **art** rather than the collision shapes:
   `tests/integration/test_entity_sprite_transparency.gd` fails any texture an entity draws over
   the game world that is 90%+ fully opaque, because a painted-in background renders as a card that
-  cuts a hard rectangle out of the starfield. `station_core.png` shipped that way at 100% and
+  cuts a hard rectangle out of the starfield. The retired space station's `station_core.png` shipped that way at 100% and
   survived two cycles, since nothing in the gate renders a scene. Recovery for art that is already
   correct in angle and palette is `./scripts/strip-sprite-bg.sh` (border flood fill) rather than a
   regeneration.
@@ -570,7 +570,7 @@ booting the level — every `_build_*` body touches only `LevelSection.new()`, `
 
 1. `deep_space` — 30 s timed, fighters/drones.
 2. `asteroid_belt` — 30 s timed asteroid gauntlet (no enemies).
-3. `station_assault` — the **Space Fortress boss** (Phase 11 t10; the legacy station below is retired by t11), `ENEMIES_CLEARED` (see below).
+3. `station_assault` — the **Space Fortress boss** (Phase 11 t10; the legacy station was retired in t11), `ENEMIES_CLEARED` (see below).
 4. `planet_approach` — 110 s cinematic with light harassment; since Phase 10 t12 a Carrier crosses it at 65.0 s (world x 750, between
    two laser-column volleys; `test_level1_heavy_spawns.gd`).
 5. `cloud_descent` — the **boss-phase / climax** section.
@@ -613,8 +613,8 @@ etc.). For per-hazard detail, see the source folders under `assault/scenes/hazar
 (each has its `.gd` + `.tscn`).
 
 `LaserRay` is also used **outside** the wave path, as a component: the race gauntlet instances it
-with `race_hazard`/`loop`, and the space station's `StationLaserPhase` spawns it per volley. Its
-`hit_mask_override` export exists for that second case — see
+with `race_hazard`/`loop`, and the retired space station's laser phase spawned it per volley. Its
+`hit_mask_override` export exists for that second case (no shipped emitter sets it today) — see
 [`laser_ray/HAZARD.md`](../../../assault/scenes/hazards/laser_ray/HAZARD.md).
 
 **Gravity Well (Phase 6 t6).** `assault/scenes/hazards/gravity_well/gravity_well.tscn` — a `GravityWell` (`class_name`, extends
@@ -687,7 +687,7 @@ object — the same one a test's `preload()` returns. `ShipConfig.privatise()` g
 `duplicate()` instead, called from `BaseEnemy._init()` **and** `_enter_tree()` (and the same pair on
 `AllyFighter`, which is not a `BaseEnemy`). `_init()` covers writes made before `add_child`, which is
 where `WaveManager` applies `initial_props`; `_enter_tree()` covers an override substituted in
-afterwards and still lands before any child's `_ready()`, which the space station's four child nodes
+afterwards and still lands before any child's `_ready()`, which a boss's behaviour children
 depend on. Full reasoning: the `ShipConfig` section of [global.md](global.md). Pinned by
 `tests/integration/test_config_instance_isolation.gd`.
 
@@ -695,132 +695,26 @@ depend on. Full reasoning: the `ShipConfig` section of [global.md](global.md). P
 process-wide balance data. The per-instance copy is what `entity.config` holds, not what the loader
 hands you.
 
-**`space_station/`** is the odd one out: a multi-part **mini-boss** rather than a wave enemy.
-`SpaceStation` (`extends BaseEnemy`) carries four `StationTurret` children, each individually
-damageable on its own `Health`, and its core refuses all damage while any turret lives —
-`is_armored()` is `live_turret_count() > 0`, and the `_on_received_damage` override emits
-`armor_deflected(damage)` and returns without touching `Health`. Destroyed turrets stay in the
-tree as wreckage. It is spawned by the **`station_assault`** section (`_build_station_assault()`),
-as a single zero-delay wave with no `MovementResource` — a spawn delay would let `waves_complete`
-fire before the station existed, and a movement resource would attach an `EnemyPathMover` that
-frees it on screen exit. Behaviour and the collision-layer rules — all four incoming damage paths
-gated by physics rather than by reading the scene, and the duck-typed `is_armored()` exemption that
-lets both bullets and rockets survive a deflected hit on the core to reach a turret behind it —
-[`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md).
+**`space_fortress/`** is the odd one out: a multi-part **boss** rather than a wave enemy (Phase 11; it replaced the legacy
+space station, whose folder, `WaveBuilder.space_station()` and tests were retired in Phase 11 t11). `SpaceFortress` (`extends
+BaseEnemy`) is an **armoured ring hull** (r 176) over nine `EnemyModule` parts under `Modules` — five batteries, a hangar, two shield
+generators and a core — coordinated by a `ModularHull`. The root answers `deflects_hit()` / `is_armored()` true and refuses all damage
+(`armor_deflected`), so every player projectile crosses the hull to the parts; its root body is on layer 0 and answers
+`is_laser_blocking()` false, so the mining laser is never blocked; **its death is the core's**. A `FortressBrain` drives the movement
+phases and the geometry weapons, a `BossPhaseDriver` the four boss phases, `BossReinforcements` the escorts (into a
+`<name>Escorts` container, scored through `EventBus.boss_escort_spawned`), and `BossDeathSequence` (`global/boss/`) the death
+spectacle while the fortress itself owns the timer that frees the wreck. It is spawned by the **`station_assault`** section
+(`_build_station_assault()`, `b.space_fortress().at(0, -230)`) as a single zero-delay wave with no `MovementResource`. Behaviour,
+numbers and gates: [`space_fortress/ENEMY.md`](../../../assault/scenes/enemies/space_fortress/ENEMY.md); the shared boss machinery:
+[global.md](global.md).
 
-It has **two phases**. Killing the last turret makes `SpaceStation` emit `armor_broken` (a
-zero-argument signal, latched so it fires exactly once), which starts **`StationLaserPhase`** — a
-`Node2D` child of the scene, `station_laser_phase.gd`, that owns the whole second phase and keeps
-`space_station.gd` free of laser logic. It rotates the station at a constant
-`laser_rotation_speed` and fires volleys of `laser_ray.tscn` beams from a fixed, **deterministic**
-angle list (never `randf()` — random attack ordering cannot be balanced or tested; the rotating
-hull already varies the world angle). Beams are children of the phase node, so rotating the
-station sweeps them for free. All five timings live in `space_station_config.tres` and are
-**copied into the phase's own fields in `_ready()`** — those fields are the phase's tunable surface
-(what tests override) and its fallback when a station has no config at all. Each station's
-`config` is a private copy: see **Per-instance config resources** below.
-
-⚠️ **A station beam must not use `LaserRay`'s default hit mask.** `_HIT_MASK` is
-`128 | 256 | 512`, and the station's own core `HurtBox` is on layer 512, so a beam fired from
-inside the hull takes the boss 600 → 0 HP in one frame. `StationLaserPhase` sets
-`LaserRay.hit_mask_override = 128` before `add_child()`. See
-[`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md) for why the
-regression test has to force a *diagonal* volley to catch it.
-
-**The station shoots back**, via a second sibling node, **`StationGunnery`**
-(`station_gunnery.gd`) — same composition split as the laser phase, so `space_station.gd` holds
-no gun logic either and gained only a `turrets()` data accessor. It drives one
-`RadialAttackPattern` per phase, on its own `Timer`s:
-
-- **Phase 1** — every **live** turret fires an aimed 3-bullet fan on one shared cadence
-  (`turret_fire_interval`). The turret list is re-read per volley, so killing a gun visibly
-  removes it from the volley for free, and the armour is also the threat. Each firing turret's
-  `global_rotation` is set to its aim direction first — the sprite's barrels point along local
-  -Y and nothing else sets `rotation`, so without that the barrels point at the top of the screen
-  while firing elsewhere.
-- **Phase 2** — `armor_broken` stops the turret cadence and starts full core rings that precess by
-  `core_ring_step` each time, interleaving with the laser volleys.
-
-⚠️ **The `BulletPool` must stay a *direct* child of `SpaceStation`.** `bullet_pool.gd` hardcodes
-its container as `get_parent().get_parent()` with no override, so only that placement resolves to
-`enemy_container` and puts bullets in unrotated world space. Placed under `Gunnery` or a turret it
-would resolve to the station itself and the whole bullet field would swing with the rotating hull.
-It is therefore **authored in `space_station.tscn`**, not created in code — and it has to be:
-a child cannot `add_child()` onto its own parent from `_ready()`, because `_propagate_ready()`
-blocks the parent while readying its children. The pool leaving the tree with the station is also
-what frees in-flight bullets, which otherwise hold `ENEMIES_CLEARED` open. Pinned by
-`tests/integration/test_station_gunnery.gd`.
-
-The ten gunnery timings live in `space_station_config.tres` and are **copied into the gunnery's
-own fields in `_ready()`**, for the same reason as the laser block.
-
-**The station calls for help**, via a third sibling node, **`StationReinforcements`**
-(`station_reinforcements.gd`) — the same composition split again, so `space_station.gd` gained
-nothing at all this time. On a one-shot `Timer` it spawns small squads of **existing** enemy
-scenes that cross the arena, so the player can no longer camp one spot while streaming into a
-turret. The squad table is fixed and cycles `LEFT → RIGHT → BOTTOM → TOP` (never `randf()`, for
-the same reason the beam angles are a list): two `gatling_interceptor` sweeping in from either side
-through the vertical middle, two `swarm_drone` rising from below, two `fighter` with
-`.shoot_forward()` angling down-and-inward from above. Squads are authored with `WaveBuilder`'s
-own fluent API (`b.gatling_interceptor().at(…).move(b.straight(…)).free_after(…)`), in **640×360 design
-units** scaled by `ArenaCamera.WORLD_SCALE` once at spawn — speeds are left unscaled because
-`EnemyPathMover` applies the scale itself.
-
-- **Phase 1 only.** Everything stops on `armor_broken`, and again on `died` as a backstop. Adds
-  running through phase 2 is the documented way a boss ends up overshadowed by its own minions,
-  and phase 2 is already beams every 6.5 s over rings every 2.0 s against a 48-bullet pool.
-- **Reinforcements are spawned as *siblings* of the station**, into `_station.get_parent()` —
-  i.e. `WaveManager.enemy_container`, the same place waves land. Never as children: the laser
-  phase rotates the hull, and a ship parented under it would be dragged around the arena along
-  with its own `BulletPool`'s bullets.
-- **Every entry uses `ExitMode.FREE_ON_DURATION`**, not `FREE_ON_SCREEN_EXIT`. The latter only
-  culls a ship that has been on screen at least once, so one that never quite arrives would live
-  forever and hold `ENEMIES_CLEARED` open.
-- **Each ship is announced on `EventBus.enemy_spawned_orphan`**, which `ScoreTracker` routes to
-  `_on_enemy_spawned(enemy, -1)`. That buys kill score without disturbing any wave-clear tally —
-  and it opts these ships into the game's universal 0.75× escape-combo penalty, which is a
-  deliberate balance decision pinned by a test, not an oversight.
-- **`reinforcement_max_alive` skips a *whole* squad** rather than spawning part of one, so the
-  ceiling is exactly that number. The live list is pruned with `is_instance_valid` each time or
-  the cap would jam permanently once ships start being culled.
-
-The three cadence/cap fields live in `space_station_config.tres` and are copied in `_ready()` like
-the other two blocks; the squad table itself stays in the script, because it is scene geometry
-rather than a stat — the same split that keeps `laser_emitter_radius` on the phase node. Pinned by
-`tests/integration/test_station_reinforcements.gd`.
-
-**The station's death plays out**, via a fifth sibling node, **`StationDeathSequence`**
-(`station_death_sequence.gd`) — the same composition split a fifth time. `BaseEnemy` emits `died`
-and calls `queue_free()` in the same call (`BaseEnemy._on_health_changed`), which gave the 256×256 mini-boss
-the identical one-frame death a 40 px interceptor gets. `SpaceStation` now overrides
-`_on_health_changed`: everything that happened *at* the moment of death still happens there —
-`was_killed`, `died`, and disarming the corpse — and only `queue_free()` moves, behind a
-`death_duration` (1.8 s) `Timer` **node**. Seven blasts then roll across the hull at deterministic
-hull-local offsets while it drifts and darkens, ending on one central blast and a
-`CameraShake.add(1.0)`.
-
-The handoff to `planet_approach` needed **no director change at all**:
-`LevelDirector._wait_enemies_cleared()` already polls the enemy container's child count, so a
-station that stays parented while it dies holds `station_assault` open for free.
-`tests/integration/test_level_1_sequence.gd` walks Level 1's real five-section sequence with a real
-station killed in the middle and asserts it reaches `level_complete`.
-
-Three things here are load-bearing:
-
-- **The station owns `queue_free()`, not the sequence node.** If the visual node owned it, a
-  renamed or missing `DeathSequence` would hang `station_assault` for its full 180 s timeout with
-  no error, then take the escape-combo penalty.
-- **The `ExplosionEffect` is parented to the *station*, never to the sequence node.**
-  `explosion_effect.gd` resolves its container as `get_parent().get_parent()`, so one hop too deep
-  puts every blast inside the rotating hull — where it is freed with the wreck and invisible to the
-  container the director polls. It is added lazily in the `death_started` handler, because
-  `_propagate_ready()` blocks the parent during `_ready()`.
-- **`StationGunnery._stop()` now calls `bullet_pool.cancel_active()`.** `BulletPool._exit_tree()`
-  used to free in-flight bullets at the moment of death; with the wreck lingering ~1.8 s, a corpse
-  would otherwise keep a live ring of bullets in the air — which both endangers the player after
-  the boss is dead and holds `ENEMIES_CLEARED` open, since bullets live in that same container.
-
-Pinned by `tests/integration/test_station_death_sequence.gd` and `test_level_1_sequence.gd`.
+The handoff to `planet_approach` needs **no director change**: `LevelDirector._wait_enemies_cleared()` polls the enemy container's
+child count, so a boss that stays parented while it dies (and its escort container) holds `station_assault` open for free.
+`tests/integration/test_level_1_sequence.gd` walks Level 1's real five-section sequence with a real fortress killed in the middle and
+asserts it reaches `level_complete`; `test_level1_fortress_section.gd` replays the section. Two rules carried over from the station
+stay load-bearing: **the boss owns `queue_free()`, not the sequence node** (a renamed `DeathSequence` costs only the explosions), and
+**the `ExplosionEffect` is parented to the host, never to the sequence node** (one hop too deep puts every blast inside the spinning
+hull). Pinned by `tests/integration/test_boss_death_sequence.gd`, `test_fortress_incoming_damage_paths.gd` and `test_space_fortress.gd`.
 
 **`LevelSection.enemies_cleared_timeout`** is the safety net for `ENEMIES_CLEARED`: seconds to
 wait for `enemy_container` to empty before giving up. It defaults to `10.0` — the constant it

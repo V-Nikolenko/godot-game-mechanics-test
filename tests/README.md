@@ -17,7 +17,7 @@ project boot.
 | `integration/` | Several systems wired together (the player damage chain), plus project-wide integrity checks over the resource files themselves. |
 | `helpers/` | Shared fixtures. **Never** named `test_*`, or GUT tries to collect them as tests. |
 
-## The exceptions: the integrity tests, the space-station tests, the module unlock gate, and the enemy contact-damage invariant
+## The exceptions: the integrity tests, the boss tests, the module unlock gate, and the enemy contact-damage invariant
 
 `integration/test_resource_uid_integrity.gd` is **not** characterization. It asserts invariants
 that must hold, so a failure there is a regression to fix, not a quirk to document. It checks six:
@@ -89,7 +89,7 @@ scene that has lost:
   `[gd_scene format=3]`, and every `[ext_resource … uid="uid://…" path="res://…"]` loses its
   `uid=`. A tool named *update project UIDs* deletes them.
 - **every comment.** The `.tscn` files in this project carry load-bearing prose — why `BulletPool`
-  must be a direct child of `SpaceStation`, why `node_paths=` is required — and a resave drops all
+  must be a direct child of the entity root, why `node_paths=` is required — and a resave drops all
   of it with no diff to review beforehand.
 
 On a scratch clone it rewrote 111 of 155 files that way, and it also could not compile scripts that
@@ -124,7 +124,7 @@ line, the summary reports a smaller `Scripts` count, and GUT still prints
 `---- All tests passed! ----` and **exits 0**. The gate only reads the exit code and greps for a
 failing-test count, so neither signal fires: a test file broken by a rename or a deleted symbol
 used to vanish from the suite while the gate stayed green. That is what happened to
-`test_space_station.gd` while it was being written — the red was read off stderr, not off GUT's
+the (since retired) space station's test file while it was being written — the red was read off stderr, not off GUT's
 verdict.
 
 The check therefore lives inside the suite, where every runner sees it rather than only the gate
@@ -222,7 +222,7 @@ It exists because every `BaseEnemy` subclass's `.tscn` authors a `ContactHitBox`
 hardcoded `damage = 20` and no way to read `config` — that only exists at runtime — so every
 enemy that wants its configured `collision_damage` has to re-apply it in `_ready()` off
 `contact_hit_box` — `bomber.gd`, `fighter.gd`, `ram_corvette.gd`, `heavy_gunship.gd` and
-`space_station.gd` all do this, and `razor_drone.tscn`/`swarm_drone.tscn` author a
+`space_fortress.gd` all do this, and `razor_drone.tscn`/`swarm_drone.tscn` author a
 different scene default (30) instead. Miss the re-apply and the `.tres` field is simply dead: it
 parses, the enemy works, and the only symptom is a number nobody can see. The `Gunship` shipped
 that way — `collision_damage = 30` ignored, so the heaviest ship in the roster rammed for 20 —
@@ -238,7 +238,7 @@ Three things to know before extending it:
   authors no `ContactHitBox` node at all, *and* its config asks for 0. Flipping the `.tres` to a
   non-zero value without touching the scene fails the test rather than silently doing nothing.
 - **Only DIRECT children are searched for the HitBox.** Bullets carry their own, but they live
-  under the enemy's `BulletPool`, and the station's turrets live under `Turrets`.
+  under the enemy's `BulletPool`, and a modular boss's parts live under `Modules`.
 
 `integration/test_contact_hitbox_geometry.gd` is the seventh invariant test, and the companion to
 the one above: that file polices what a contact `HitBox` *deals*, this one polices what it
@@ -276,16 +276,16 @@ entity-local rect must **cover** the body `CollisionShape2D`'s, within 1.0 px pe
 
 The rule it states: **armour is a damage rule on a full-size hurtbox, never an absent hurtbox.** A
 shrunken hurtbox leaves visible hull that swallows shots and reports nothing — which the player
-reads as a broken gun, not as armour. It came out of the question of whether the space station's
+reads as a broken gun, not as armour. It came out of the question of whether the (since retired) space station's
 core hurtbox should narrow from 240 to 88 px wide; that was rejected (25 % of the boss's visible
 width dead in phase 1, 66 % in phase 2, on a rotating hull), and
-`test_the_88x240_proposal_fails_this_sweep` applies the exact proposal to a live station instance
-and asserts it fails, so the decision is a gate rather than a paragraph someone re-litigates.
+`test_shrinking_the_fortress_hull_hurtbox_to_the_core_fails_this_sweep` applies the same proposal to a live Space Fortress (its hull
+hurtbox shrunk to the core's circle) and asserts it fails, so the decision is a gate rather than a paragraph someone re-litigates.
 
 Four things to know before extending it:
 
-- **Enforced relation is `HurtBox ⊇ body CollisionShape2D`, not `HurtBox ⊇ sprite`.** The station's
-  body collider is 240x240 under a 256x256 sprite, so 8 px per edge of visible hull is outside
+- **Enforced relation is `HurtBox ⊇ body CollisionShape2D`, not `HurtBox ⊇ sprite`.** The retired station's
+  body collider was 240x240 under a 256x256 sprite, so 8 px per edge of visible hull was outside
   *both*. Do not mistake this for an art check.
 - **The 1.0 px tolerance is load-bearing from the first line**, not a patch applied after a red
   run: three of the eleven fail a bare `Rect2.encloses()`, two by ~1e-5 px of float noise. It is
@@ -302,63 +302,39 @@ Four things to know before extending it:
   `<dir>/<dir>.tscn` exists that the roster does not list. Top level only — the enemies directory
   also holds loose scripts, and subdirectories hold non-entity scenes (`fighter/states/`).
 
-The whole **space-station family** — `integration/test_space_station.gd`,
-`test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
-`test_station_gunnery.gd`, `test_station_reinforcements.gd`, `test_station_death_sequence.gd`,
-`test_station_incoming_damage_paths.gd`,
-`test_level_1_sequence.gd` and `test_radial_attack_pattern.gd` — are the other exceptions, for a
-different reason: the `space_station` entity, the `station_assault` section, the laser phase, the
-gunnery, the reinforcement spawner, the death sequence and `RadialAttackPattern` are all **new code**, so their tests assert intended behaviour
-rather than pinning existing quirks.
-`test_space_station.gd` carried a documented coverage gap — most of it drives damage by emitting
-`HurtBox.received_damage` directly, so it proved nothing about collision layers, and the section
-tests did not close that. Its last two tests now do, for the bullet path: they instance a real
-`bullet.tscn` and step physics, so the layer/mask chain has to work for them to pass. The first of
-the two is also the load-bearing guard on the station's core-hurtbox decision — it pins that a
-player bullet crosses the armoured core and still kills the turret behind it, so if the still-open
-backlog item about whether the default gun should stop on its first damaging hit
-(`decide-whether-the-player-s-default-gun-should-stop-on-its-f`) is ever actioned, the gate says
-"the station's turrets just became unkillable" at the point of the change.
+The **boss family** — `integration/test_station_assault_section.gd`, `test_laser_ray_hit_mask.gd`, `test_radial_attack_pattern.gd`,
+`test_level_1_sequence.gd`, `test_boss_death_sequence.gd` and `test_fortress_incoming_damage_paths.gd`, plus the Space Fortress's own
+suites (`test_space_fortress.gd`, `test_fortress_weapons.gd`, `test_fortress_reinforcements.gd`, `test_fortress_sprites.gd`, and the
+`global/boss/` rows) — are the other exceptions, for a different reason: the boss, the `station_assault` section, the boss machinery
+and `RadialAttackPattern` are all **new code**, so their tests assert intended behaviour rather than pinning existing quirks. The
+legacy space station and its own seven test files were retired in Phase 11 t11; every invariant they proved is proved on the fortress
+(plan `docs/plans/cmug256so0031m52wbxomst72/3-plan.md` §2.11 maps each file to its replacement).
 
-`integration/test_station_incoming_damage_paths.gd` closes the rest of that gap — the rocket (32)
-and asteroid (1024) mask bits and the incoming mining-laser ray — with the same technique: real
-scenes, stepped physics, and no `received_damage` emit anywhere in the damage path. A real
-`homing_missile.tscn` and `warhead_missile.tscn` take 100 and 50 off the unarmoured core; a real
-`big_asteroid.tscn` parked inside the hull takes 40; the mining laser runs its full 1200 px
-*through* the station and burns it. All four were checked by mutation — setting the default
-`DefenseProfile`'s `97 | 1024` mask to the gunship's raw `65` reds five of the nine tests with
-messages that name the missing bit — and the mask values live in code, not in the scene, so
-mutating the `.tscn` proves nothing.
+`integration/test_fortress_incoming_damage_paths.gd` covers the paths a damage-emitting test cannot — the rocket (32) and asteroid
+(1024) mask bits and the incoming mining-laser ray — with real scenes, stepped physics at 8×, both harnesses, and no
+`received_damage` emit anywhere in the damage path. A real `homing_missile.tscn` (steering to `homing_point()`) and
+`warhead_missile.tscn` cross the armoured hull (`armor_deflected`, root health unchanged) and take 100 and 50 off a battery; a real
+`big_asteroid.tscn` is refused by the hull and takes 40 off a bare battery; the mining laser runs its full length *through* the
+fortress and burns the parts on its line. Rows that must reach a battery first `destroy()` the south shield generator, so the shot
+meets the battery, not its bubble. Three things to know before extending it:
 
-Four things to know before extending it:
-
-- **`beam_dps = 12` is 0.2 damage per physics frame** and `beam_behavior.gd`'s
-  `_accumulate_and_apply` only forwards whole numbers, so the first `armor_deflected` from the
-  mining laser lands around frame **30**. A 4-frame budget passes the beam-endpoint assertion and
-  silently drops the one that proves the beam found the core; that is how the test first ran.
-- **`direct_space_state` may only be queried from a physics frame**, so the beam tests drive
-  `BeamBehavior.tick()` from a small `BeamDriver extends Node2D` that ticks it in its own
-  `_physics_process`. The driver doubles as the behaviour's `state` and as its `actor`; the inner
-  class is deliberately not named `Test*`, or GUT would collect it as an inner test suite.
-- **The laser row's boundary test is the load-bearing one.** `SpaceStation`'s root is layer 0 *on
-  purpose*, and the mask bits are irrelevant to the beam, so
-  `test_a_station_on_the_default_body_layer_would_block_its_own_fight` puts a live station on
-  layer 1 and asserts the beam stops dead at `y = +120` and damages nothing — the rejected
-  configuration applied to a real instance, in the same shape as
-  `test_enemy_hurtbox_geometry.gd::test_the_88x240_proposal_fails_this_sweep`.
-- **A rocket IS consumed by the first hurtbox it overlaps**, unlike a bullet:
-  `homing_missile.gd:47-48` and `warhead_missile.gd:22-23` `queue_free()` on any `area_entered`.
-  On this boss that means a missile fired up a turret lane dies on the armoured core two frames
-  early and no turret ever takes rocket damage. That one test is marked CHARACTERIZED and filed as
-  `rockets-cannot-damage-the-space-station-s-turrets-they-deton`; it also asserts
-  `armor_deflected` fired, because otherwise it would pass just as happily on a station no rocket
-  can reach at all.
+- **`beam_dps = 12` is 0.2 damage per physics frame** and `beam_behavior.gd`'s `_accumulate_and_apply` only forwards whole numbers,
+  so the first damage from the mining laser lands around frame **30**. A short budget passes the beam-endpoint assertion and silently
+  drops the one that proves the beam found a part.
+- **`direct_space_state` may only be queried from a physics frame**, so the beam rows drive `BeamBehavior.tick()` from a small
+  `BeamDriver extends Node2D` that ticks it in its own `_physics_process`. The driver doubles as the behaviour's `state` and its
+  `actor`; the inner class is deliberately not named `Test*`, or GUT would collect it as an inner test suite.
+- **The laser boundary is on a plain body, not on the fortress.** The fortress has two guards against blocking the beam: its root is
+  on layer 0 **and** it answers `is_laser_blocking()` false. So a layer-1 fortress still lets the beam through (that row pins the
+  second guard), and the boundary is a plain `StaticBody2D` on layer 1 with the hull's r 176 circle, which cuts the beam at the near
+  edge — without it the other laser rows would be vacuous. (The retired station had only the layer guard, so its boundary put the
+  station itself on layer 1.)
 
 `integration/test_player_bullet_lifetime.gd` is intent as well, and it is the *other* end of that
-station dependency. It states the two projectile-lifetime rules directly rather than leaving them
+boss dependency. It states the two projectile-lifetime rules directly rather than leaving them
 implied by the boss fight: **(1)** a player bullet is consumed by the first hit that actually
 deals damage, but NOT by a *deflected* one (`bullet.gd::_hit_is_deflected()` duck-types a query
-for `is_armored()` on the hit target) — the premise the station's armoured core rests on, and the
+for `is_armored()` on the hit target) — the premise the Space Fortress's armoured hull rests on, and the
 reason `PierceModule` is finally an upgrade rather than a downgrade — and **(2)** an unpooled
 player bullet frees itself when it leaves the screen, which nothing did before. Its invariant test
 enumerates `WeaponBehavior` subclasses from `ProjectSettings.get_global_class_list()` rather than a
@@ -725,6 +701,7 @@ t13 1.0 · t14 2.5 · t15 0 = 22.6 s; the phase ends ≤ 235.0 s, and a task tha
 | Ph11 t9 Space Fortress art (22 PNGs in `assault/assets/sprites/enemies/space_fortress/`, `SpaceFortress.hangar_open_texture` + the door hook, `tests/integration/test_fortress_sprites.gd`) | 0.3 s | 222.41 (t8's close, same tree, not re-measured) → 222.856 s (two `scripts/gate-time.sh` runs, 222.768 / 222.943; 3190 → 3202 tests, 112585 asserts, both green, output ≈ 447 – 450 KB; `/agent/verify.sh` GATE PASS at 223.014 s), +0.45 s | **The new file is 0.07 s of summed testcase time** (0.46 s alone, nearly all one-off scene loading the full suite already pays): one shared fortress for the wiring rows, a fresh one per state row, no awaits, no physics. The +0.45 s two-run delta is run noise around that (≈ 0.5 s on this machine); the 0.3 s allotment is met by the file's own cost |
 | Ph11 t10 Level 1: the fortress replaces the station (`station_assault` 240 s; `test_level1_fortress_section.gd`: a 1x wall-clock section replay, `death_duration` 0.2, its timeout row overriding the section to 2.0 s on its own built copy; the persistent-ordnance allowlist rows in `test_engagement_deadline.gd`) | 4.5 s | 222.856 (t9 close, not re-measured) → 226.915 s (two `scripts/gate-time.sh` runs, 226.999 / 226.831; 3202 → 3208 tests, 112983 asserts, both green, no leak lines, output ≈ 449 – 453 KB), **+4.06 s, inside the allotment** | The replay is ≈ 3 s of wall clock (row a ≈ 1.5 s: spawn, 0.5 s wait, the kill and the advance, which waits out the final blast particles 0.5 s + the 0.2 s settle; row b ≈ 2.2 s: the 2.0 s timeout and the settle); the allowlist rows instantiate Heavy Gunship, Space Fortress, Missile Corvette and the other cloud_descent ships in an Assault world (`test_engagement_deadline.gd` 5.0 → 6.3 s). `test_station_assault_section.gd` is unchanged at about 4.1 s (its timeout rows wait on the director). |
 | Ph11 t13 Hub placement (Space Fortress draw 21; three new rows in `test_sector_hub_patrol.gd`, every hard count moved by one) | 0.5 s | 226.442 (clean `git stash` of this task, one `scripts/gate-time.sh` run on today's machine; the t12 figure was taken on a quicker one) → 227.372 s (→ 3211 tests; green, output ≈ 449 KB) | **≈ +0.9 s, one run each, inside 1.5× the allotment and run noise.** `test_sector_hub_patrol.gd` 69 → 72 tests, the file ≈ 2.4 s; the new rows hand-tick nothing. |
+| Ph11 t11 Retire the space station (folder, `WaveBuilder.space_station()`, three PNGs and the station test files deleted; `test_boss_death_sequence.gd` / `test_fortress_incoming_damage_paths.gd` re-pointed at the fortress; roster / transparency / isolation / bullet-lifetime / deadline rows re-expressed) | ≤ 0 s | 227.340 s (two `scripts/gate-time.sh` runs on a clean copy of HEAD, 227.200 / 227.479; 3211 tests) → 225.215 s (two runs, 225.896 / 224.533; 3144 tests, 112596 asserts, both green, output ≈ 414 KB; `scripts/check-test-leaks.sh` clean; `/agent/verify.sh` GATE PASS at 228.32 s with the docs pass running beside it) | **−2.13 s.** The station's own files (`test_space_station.gd`, the laser-phase / gunnery / reinforcement suites and their 8× physics rows) left the suite; the two re-pointed files (23 tests, both harnesses for the damage paths) cost less than the files they replace. |
 
 **Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
 `tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition
@@ -829,108 +806,47 @@ may be 90%+ fully opaque. Reads scenes via `PackedScene.get_state()` (never inst
 resolves `Sprite2D.texture`, `AnimatedSprite2D.sprite_frames` and `AtlasTexture.atlas`; walks 25
 scenes to 16 distinct textures. Two knowingly uncovered: both asteroid hazards assign their sheet
 at runtime from a `tileset_texture` export, so no node property holds it.
-Entities: the `space_station` mini-boss (`integration/test_space_station.gd`) — armour rule, turret
-lifecycle, and the config-driven stats.
-Entities, the layers: every way damage reaches that boss
-(`integration/test_station_incoming_damage_paths.gd`) — real missiles for `HurtBox.collision_mask`
-bit 32, a real asteroid for bit 1024, and a `BeamBehavior` driven from a real `_physics_process`
-for the incoming mining laser, whose boundary test puts the station on the default body layer 1
-and asserts it then blocks its own fight. Plus the CHARACTERIZED pin that a rocket, unlike a
-bullet, is consumed by the first hurtbox it overlaps and so can never reach a turret.
-Levels: the `station_assault` section (`integration/test_station_assault_section.gd`) — the
-`ENEMIES_CLEARED` gate, the per-section timeout and its free-on-expiry path, and Level 1's
-section order and station wave.
-Projectiles: player-bullet lifetime (`integration/test_player_bullet_lifetime.gd`) — the
-pass-through rule the station boss depends on, the off-screen self-free every `WeaponBehavior`
-must hand its bullets, the boundary case that the same free must **not** reach a pooled bullet
-(asserted on `BulletPool.acquire()`, never on `_idle.size()`, which reads healthy even on the
-broken build), and a characterization pin on what `PierceModule` does today.
-Hazards: `LaserRay.hit_mask_override` (`integration/test_laser_ray_hit_mask.gd`) — pins the shared
-default mask `128 | 256 | 512` so the race hazards and Level 1's laser columns cannot be silently
-narrowed, and pins that `0` means "use the default" rather than "collide with nothing".
-Entities, phase 2: the station laser phase (`integration/test_station_laser_phase.gd`) — the
-`armor_broken` trigger and its once-only guard, the telegraph window (a beam damages a real
-layer-128 probe HurtBox only after it arms, never during the warning), the self-damage regression,
-the rotation rate, volley determinism, teardown on boss death, and the config copy.
-Entities, the guns: `StationGunnery` (`integration/test_station_gunnery.gd`) — that the `BulletPool`
-is a direct child of the station, both phases and the handover between them, per-turret aim and
-barrel rotation, dead turrets dropping out of the volley, ring precession, the `core_ring_step`
-design lock, teardown, and the config copy. Plus the shared pattern resource it drives
-(`integration/test_radial_attack_pattern.gd`) — ring vs fan spacing, aiming, `spawn_radius`, that
-it ignores `ship.rotation`, and that `bullet_count <= 0` fires nothing.
-Entities, the adds: `StationReinforcements` (`integration/test_station_reinforcements.gd`) — the
-config copy, four-edge coverage, that every squad entry starts off screen and clears the measured
-spawn margin, deterministic `LEFT→RIGHT→BOTTOM→TOP` cycling, that ships are spawned as *siblings*
-of the station with an `EnemyPathMover`, that every movement points into the screen, the
-`FREE_ON_DURATION` guarantee, `enemy_spawned_orphan` registration, both stop signals, the
-whole-squad population cap, the one-shot-timer split, that every ship the table can spawn is
-killable by the player's primary weapon, and the two-ship escape-combo cost.
+Entities: the Space Fortress (`integration/test_space_fortress.gd`, `test_fortress_weapons.gd`, `test_fortress_reinforcements.gd`,
+`test_fortress_sprites.gd`) — its own ENEMY.md lists every row.
+Entities, the layers: every way damage reaches the boss (`integration/test_fortress_incoming_damage_paths.gd`, above).
+Levels: the `station_assault` section (`integration/test_station_assault_section.gd`) — the `ENEMIES_CLEARED` gate, the per-section
+timeout and its free-on-expiry path, and Level 1's section order and boss wave; `integration/test_level1_fortress_section.gd` replays it.
+Projectiles: player-bullet lifetime (`integration/test_player_bullet_lifetime.gd`) — the pass-through rule the boss's armoured hull
+depends on, the off-screen self-free every `WeaponBehavior` must hand its bullets, the boundary case that the same free must **not**
+reach a pooled bullet (asserted on `BulletPool.acquire()`, never on `_idle.size()`, which reads healthy even on the broken build), and
+a characterization pin on what `PierceModule` does today.
+Hazards: `LaserRay.hit_mask_override` (`integration/test_laser_ray_hit_mask.gd`) — pins the shared default mask `128 | 256 | 512` so
+the race hazards and Level 1's laser columns cannot be silently narrowed, and pins that `0` means "use the default" rather than
+"collide with nothing". Plus the shared ring pattern (`integration/test_radial_attack_pattern.gd`) — ring vs fan spacing, aiming,
+`spawn_radius`, that it ignores `ship.rotation`, and that `bullet_count <= 0` fires nothing.
 
-Two things that file had to work around, both worth knowing:
+### Traps the boss tests had to work around
 
-- **`died` cannot be tested without unhooking `armor_broken` first.** The station refuses all core
-  damage while a turret lives, so the only route to `died` runs through `armor_broken` — which
-  already stops the spawner. Without the disconnect, the case passes even if the `died` connection
-  is deleted.
-- **`ScoreTracker._process` resets any forced combo to 1.0 on the first frame** when
-  `_combo_decay_remaining` is 0, and `start_tracking()` turns `_process` on. Call
-  `tracker.set_process(false)` and assert on `tracker.get("_combo")`, as
-  `integration/test_station_assault_section.gd` already does.
+- **`entity.config` is private per instance; the object `load()`/`preload()` returns is not.** `ResourceLoader` caches by path, so
+  every instance once shared one config and writing to it rewrote the shipped values for every later test in the run.
+  `ShipConfig.privatise()` — called from `BaseEnemy._init()` / `_enter_tree()` and from `AllyFighter` — now gives every entity its
+  own `duplicate()`, and `integration/test_config_instance_isolation.gd` holds that shut. What still bites: **the resource a test
+  `preload()`s or `load()`s is the shared, cached one** — read it, never write to it. Two windows also remain open, both unreachable
+  from non-addon code today and both written up in `test_config_instance_isolation.gd`'s header: `Node.duplicate()` hands two nodes
+  one private copy, and assigning `entity.config = load(...)` after the entity is already in the tree fires neither hook.
+- **`ExplosionEffect.explode()` parents its `CPUParticles2D` to the actor's parent by default** (`global/components/explosion_effect.gd`)
+  and lets it self-free on `finished` ~1 s later. A boss added straight to the test script therefore leaves particles behind as
+  unfreed children when the test that kills it returns. Parent entities that will die to a container `Node2D` that
+  `add_child_autofree` owns — which is also how they are really parented, under `WaveManager.enemy_container`. A destroyed
+  `EnemyModule` part passes its host's parent as an explicit `container`, so its blast survives outside the (spinning) hull; still,
+  **always filter a container's children by type before casting** (the retired station's turret helper once handed back a particle
+  node and failed with an *Unexpected Error* and no assertion to point at).
+- **`ScoreTracker._process` resets any forced combo to 1.0 on the first frame** when `_combo_decay_remaining` is 0, and
+  `start_tracking()` turns `_process` on. Call `tracker.set_process(false)` and assert on `tracker.get("_combo")`.
 
-### Three traps `test_station_laser_phase.gd` had to work around
-
-- **`entity.config` is private per instance; the object `load()`/`preload()` returns is not.**
-  This trap used to read "`SpaceStation.config` is a single process-wide object", and it was true:
-  `ResourceLoader` caches by path, so every station shared one config and writing to it rewrote the
-  shipped values for every later test in the run. `ShipConfig.privatise()` — called from
-  `BaseEnemy._init()` / `_enter_tree()` and from `AllyFighter` — now gives every entity its own
-  `duplicate()`, and `integration/test_config_instance_isolation.gd` holds that shut for all ten
-  entities.
-
-  What still bites: **the resource a test `preload()`s or `load()`s is the shared, cached one.**
-  `const STATION_CONFIG := preload(".../space_station_config.tres")` is process-wide balance data —
-  read it, never write to it. Two windows also remain open, both unreachable from non-addon code
-  today and both written up in `test_config_instance_isolation.gd`'s header: `Node.duplicate()`
-  hands two nodes one private copy, and assigning `entity.config = load(...)` after the entity is
-  already in the tree fires neither hook.
-
-  Overriding the **`LaserPhase` node's** own fields is still the recommended way to shorten the
-  laser timings — not for safety now, but because those fields are the node's tunable surface and
-  its no-config fallback.
-- **`ExplosionEffect.explode()` parents its `CPUParticles2D` to the actor's parent by default**
-  (`global/components/explosion_effect.gd`) and lets it self-free on `finished` ~1 s later. A
-  station added straight to the test script therefore leaves particles behind as unfreed children
-  when the test that kills the core returns (`GUT WARNING: Test script has 2 unfreed children`).
-  Parent entities that will die to a container `Node2D` that `add_child_autofree` owns — which is
-  also how they are really parented, under `WaveManager.enemy_container`.
-
-  **The same rule used to bite one level down, and cost a whole gate cycle** (fixed by
-  `docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin/`). A `StationTurret`
-  used to leave the default in place, so the "parent" `ExplosionEffect` wrote into was the
-  station's `$Turrets` node, and from the first turret kill onward `$Turrets.get_children()` also
-  contained `CPUParticles2D`. A test helper doing a raw `get_children()` then handed back a
-  particle node, `child as StationTurret` yielded `null`, and the next method call failed with
-  `Invalid call. Nonexistent function 'is_alive' in base 'Nil'` — an *Unexpected Error*, so GUT
-  reds the test with no failed assertion to point at. `station_turret.gd`'s `_destroy()` now
-  passes the station's own parent as an **explicit `container`** argument, so a destroyed turret's
-  blast survives outside the hull and never lands in `$Turrets` in the first place — but
-  **always filter a container's children by type before casting** regardless.
-  `SpaceStation._turrets()` does, which is why production code never hit this even before the fix.
-- **A beam's full lifetime is longer than it looks.** At `warn 0.2 / active 0.3` it is ~1.9 s, not
-  0.5: `warn` + a ~0.56 s `laser_increase` charge-up + `active` + a 0.84 s dissolve. Any test
-  volley interval must exceed it, or a second volley spawns while the first is still dissolving and
-  the child-count assertions become false rather than merely flaky.
-
-Entities, the death: `StationDeathSequence` (`integration/test_station_death_sequence.gd`) — that
-the wreck stays in the tree after HP hits 0, that `died`/`was_killed` still fire at that instant
-(the `ScoreTracker` kill-vs-escape contract), the `_dying` latch against `Health`'s 0 → 0 re-emit,
-the disarmed corpse, the free-after-duration path and the `death_duration = 0.0` boundary that
-proves the new path is additive, the blast chain rolling across the hull, deterministic
-`blast_offset(i)`, the decaying spin and darkening, and the config copy. Plus
-`BulletPool.cancel_active()` in `test_station_gunnery.gd`.
+Entities, the death: `BossDeathSequence` (`integration/test_boss_death_sequence.gd`, on a real fortress) — that the wreck stays in the
+tree after the core dies, that `died`/`was_killed` still fire at that instant (the `ScoreTracker` kill-vs-escape contract), the
+`_dying` latch against `Health`'s 0 → 0 re-emit, the disarmed corpse, the free-after-duration path and the `death_duration = 0.0`
+boundary, the blast chain rolling across the hull, deterministic `blast_offset(i)`, the decaying spin and darkening, the config copy
+(2.4 s / 10 blasts), and the warning for a host without the contract.
 Levels, end to end: `integration/test_level_1_sequence.gd` — Level 1's real five-section sequence
 (`deep_space → asteroid_belt → station_assault → planet_approach → cloud_descent`) with a real
-`SpaceStation` killed in the middle, asserting it reaches `level_complete`, that the boss section
+Space Fortress killed in the middle, asserting it reaches `level_complete`, that the boss section
 does not advance while the wreck is present, and that the run finishes well inside the timeouts.
 
 ### The leak trap has a second half — zero `stagger_delay`, not just `spawn_delay`

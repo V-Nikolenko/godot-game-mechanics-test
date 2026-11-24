@@ -6,9 +6,9 @@
 ## multiply. Fixed by a second, independent flag (`counts_as_escape`, mirroring
 ## `counts_toward_wave_clear`'s config → BaseEnemy → ScoreTracker plumbing).
 ##
-## Companion to `test_station_reinforcements.gd`'s
-## `test_a_squad_that_flies_through_costs_two_escape_combo_penalties`, which pins the OPPOSITE,
-## deliberately-kept case (reinforcements still pay the penalty) and must stay untouched.
+## Companion to `test_boss_reinforcements.gd`'s
+## `test_score_tracker_pays_an_escort_kill_and_nothing_else`, which pins the boss-escort path (a kill pays, an escape
+## costs nothing; the retired space station's reinforcements paid the penalty, Phase 11 t2 moved escorts off that path).
 extends GutTest
 
 const BONUS_DRONE_SCENE: PackedScene = preload("res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn")
@@ -23,7 +23,7 @@ func before_each() -> void:
 	_tracker = ScoreTracker.new()
 	add_child_autofree(_tracker)
 	_tracker.start_tracking()
-	## Same remedy as test_station_reinforcements.gd:404-406 — an undecayed-combo assertion needs
+	## Same remedy as test_boss_reinforcements.gd's escort-scoring row — an undecayed-combo assertion needs
 	## the frame-based decay tick off, or _process resets it to 1.0 on the first idle frame.
 	_tracker.set_process(false)
 	_tracker.set("_combo", 4.0)

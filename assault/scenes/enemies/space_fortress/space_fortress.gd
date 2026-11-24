@@ -398,7 +398,7 @@ func _on_core_destroyed(_part: EnemyModule) -> void:
 		health.set_health(0)
 
 
-## The station's death order, latched once (`Health` re-emits on every later hit): `died` and the kill score at the moment of death, a harmless
+## The death order (the retired station's, kept), latched once (`Health` re-emits on every later hit): `died` and the kill score at the moment of death, a harmless
 ## corpse, the AI suspended, every gun silent, every escort scuttled, then `death_started` and the timer that frees the wreck.
 func _on_health_changed(current: int) -> void:
 	if current > 0:

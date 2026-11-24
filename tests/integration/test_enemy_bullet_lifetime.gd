@@ -93,77 +93,91 @@ func _rapid_pulse_speed() -> float:
 	return float(TurretMountScenes.export_of(TurretMount.Variant.RAPID_PULSE, &"round_speed", fallback))
 
 
-## One array, per the plan: add a new, slower bullet source here and the defaults must be
-## re-derived (`3-plan.md` §2.9).
-func _every_shipped_enemy_bullet_speed() -> Array[float]:
-	var speeds: Array[float] = []
-
-	# station_gunnery.gd's conservative no-config fallback (station_gunnery.gd:70,75).
-	var gunnery := StationGunnery.new()
-	speeds.append(gunnery.turret_bullet_speed)
-	speeds.append(gunnery.core_bullet_speed)
-	gunnery.free()
-
-	# space_station_config.tres — the shipped tuning, not the script fallback above.
-	var station_cfg: SpaceStationConfig = \
-			load("res://assault/scenes/enemies/space_station/space_station_config.tres")
-	speeds.append(station_cfg.turret_bullet_speed)
-	speeds.append(station_cfg.core_bullet_speed)
+## Every shipped speed source, as `[name, speed]` pairs, so the slowest one can be named in its pin. Add a new, slower
+## bullet source here and the defaults must be re-derived (`3-plan.md` §2.9).
+func _named_speed_sources() -> Array:
+	var out: Array = []
 
 	# Pattern resource defaults.
-	speeds.append(RadialAttackPattern.new().bullet_speed)
-	speeds.append(GatlingAttackPattern.new().bullet_speed)
-	speeds.append(AimedAttackPattern.new().bullet_speed)
+	out.append(["RadialAttackPattern default", RadialAttackPattern.new().bullet_speed])
+	out.append(["GatlingAttackPattern default", GatlingAttackPattern.new().bullet_speed])
+	out.append(["AimedAttackPattern default", AimedAttackPattern.new().bullet_speed])
 
 	# The Gatling Interceptor's shipped tuning: the AI stream and the rail fallback, config fields.
-	for s in _gatling_speeds().values():
-		speeds.append(s as float)
+	var gs := _gatling_speeds()
+	for k: String in gs:
+		out.append(["gatling " + k, gs[k] as float])
 
 	# EnemyBullet's own default `speed`.
 	var default_bullet: EnemyBullet = ENEMY_BULLET_SCENE.instantiate()
-	speeds.append(default_bullet.speed)
+	out.append(["enemy_bullet.tscn speed", default_bullet.speed])
 	default_bullet.free()
 
 	# The Fighter's shipped tuning: AI rounds and the rail fallback's speeds, all config fields.
-	for s in _fighter_speeds().values():
-		speeds.append(s as float)
+	var fs := _fighter_speeds()
+	for k: String in fs:
+		out.append(["fighter " + k, fs[k] as float])
 
 	# Racer weapon states (fired through RacerWeapon, which spawns EnemyBullet).
 	var fang := FangHuntState.new()
-	speeds.append(fang.bullet_speed)
+	out.append(["FangHuntState", fang.bullet_speed])
 	fang.free()
 	var bg := BgReclaimState.new()
-	speeds.append(bg.bullet_speed)
+	out.append(["BgReclaimState", bg.bullet_speed])
 	bg.free()
 	var isac := IsacSprayState.new()
-	speeds.append(isac.bullet_speed)
+	out.append(["IsacSprayState", isac.bullet_speed])
 	isac.free()
 
 	# The Sniper's rail shots, by far the fastest, but enumerated for completeness (config fields).
-	for s in _sniper_speeds().values():
-		speeds.append(s as float)
+	var ss := _sniper_speeds()
+	for k: String in ss:
+		out.append(["sniper " + k, ss[k] as float])
 
 	# The defense turret's burst cannon (Phase 8): a mount scene export, read without instantiating it.
-	speeds.append(_turret_burst_speed())
+	out.append(["burst cannon mount", _turret_burst_speed()])
 	# The heavy cannon mount (Phase 10 t3) fires the Heavy Shell.
-	speeds.append(_heavy_cannon_speed())
+	out.append(["heavy cannon mount", _heavy_cannon_speed()])
 	# The spread cannon (Scatter) and rapid pulse (Pulse) mounts (Phase 11 t3).
-	speeds.append(_spread_cannon_speed())
-	speeds.append(_rapid_pulse_speed())
+	out.append(["spread cannon mount", _spread_cannon_speed()])
+	out.append(["rapid pulse mount", _rapid_pulse_speed()])
 	# The Space Fortress's core bullet ring (Phase 11 t16): a config field on the shipped .tres.
 	var fortress_cfg: SpaceFortressConfig = load("res://assault/scenes/enemies/space_fortress/space_fortress_config.tres")
-	speeds.append(fortress_cfg.core_ring_speed)
+	out.append(["fortress core_ring_speed", fortress_cfg.core_ring_speed])
 
+	return out
+
+
+## The same sources as one flat array of speeds.
+func _every_shipped_enemy_bullet_speed() -> Array[float]:
+	var speeds: Array[float] = []
+	for pair: Array in _named_speed_sources():
+		speeds.append(pair[1] as float)
 	return speeds
 
 
-func test_every_shipped_speed_source_is_at_or_above_150() -> void:
-	## Sanity check on the source list itself: if a future change adds something slower than the
-	## known 150 px/s fallback, this must be the test that goes red, not a silent min_speed drift.
-	var speeds := _every_shipped_enemy_bullet_speed()
-	assert_gt(speeds.size(), 0)
-	assert_almost_eq(speeds.min() as float, 150.0, 0.001,
-			"the slowest shipped source is station_gunnery.gd's no-config fallback (150 px/s)")
+## The `[name, speed]` pair with the lowest speed.
+func _slowest_source() -> Array:
+	var slowest: Array = []
+	for pair: Array in _named_speed_sources():
+		if slowest.is_empty() or (pair[1] as float) < (slowest[1] as float):
+			slowest = pair
+	return slowest
+
+
+## Sanity check on the source list itself (re-derived in Phase 11 t11, when the retired space station's 150 px/s gunnery fallback and
+## its config speeds left the list): the slowest shipped source is the Space Fortress's core bullet ring, 210 px/s. A future source
+## slower than it must turn this test red, not drift the derived defaults silently; 150 px/s stays the floor the shipped 18 s was
+## derived against.
+func test_the_slowest_shipped_speed_source_is_the_fortress_core_ring_at_210() -> void:
+	var slowest := _slowest_source()
+	assert_eq(slowest.size(), 2, "at least one source")
+	assert_eq(slowest[0], "fortress core_ring_speed",
+			"the slowest shipped source is the Space Fortress's core bullet ring (got %s)" % [slowest])
+	assert_almost_eq(slowest[1] as float, 210.0, 0.001,
+			"the slowest shipped source is space_fortress_config.tres core_ring_speed, 210 px/s")
+	assert_gte(_every_shipped_enemy_bullet_speed().min() as float, 150.0,
+			"no source is slower than the 150 px/s the shipped enemy_bullet.tscn 18 s was derived for")
 
 
 func test_enemy_bullet_defaults_are_derived_from_every_shipped_speed_source() -> void:
@@ -174,13 +188,17 @@ func test_enemy_bullet_defaults_are_derived_from_every_shipped_speed_source() ->
 	var expected_max_time: float = ceil(diag / min_speed) + 2.0
 	var expected_max_distance: float = _ceil_to_100(diag + 64.0)
 
-	assert_almost_eq(expected_max_time, 18.0, 0.001, "sanity: matches the plan's derivation")
-	assert_almost_eq(expected_max_distance, 2400.0, 0.001, "sanity: matches the plan's derivation")
+	## Re-derived in Phase 11 t11: ceil(2274.06 / 210) + 2 = 13 s (it was 18 s against the station's 150 px/s fallback). The
+	## shipped 18 s / 2400 px stay, so they now have 5 s of headroom.
+	assert_almost_eq(expected_max_time, 13.0, 0.001, "sanity: ceil(2274.06 / 210) + 2 = 13 s")
+	assert_almost_eq(expected_max_distance, 2400.0, 0.001, "sanity: ceil_to_100(2274.06 + 64) = 2400 px")
 
 	for scene: PackedScene in [ENEMY_BULLET_SCENE]:
 		var bullet: EnemyBullet = scene.instantiate()
 		var lifetime := bullet.get_node("ProjectileLifetime") as ProjectileLifetime
 		assert_not_null(lifetime, "%s must carry a ProjectileLifetime child" % scene.resource_path)
+		assert_almost_eq(lifetime.max_time, 18.0, 0.001, "%s ships max_time 18 s" % scene.resource_path)
+		assert_almost_eq(lifetime.max_distance, 2400.0, 0.001, "%s ships max_distance 2400 px" % scene.resource_path)
 		assert_gte(lifetime.max_time, expected_max_time,
 				"%s's max_time must not be able to trip inside the legacy rect" % scene.resource_path)
 		assert_gte(lifetime.max_distance, expected_max_distance,
@@ -261,7 +279,7 @@ func test_the_hijack_pulse_dart_clears_its_lifetime() -> void:
 # Enemy ordnance (3-plan.md of cmufs7ele0015nm2xvag3vrwc §2.3, task t6): a separate family with its
 # own explicit caps, so it gets per-KIND rows instead of joining the round sweep above. Its speeds
 # (120 and 90 px/s) must never enter `_every_shipped_enemy_bullet_speed()`: they would trip the
-# >= 150 px/s rule and shift the derived 18 s / 2400 px round defaults.
+# slowest-source pin (210 px/s) and shift the derived 13 s / 2400 px round defaults.
 #
 # Speeds and times are read from the shipped `BomberConfig` ordnance fields (bomber_config.tres).
 # ---------------------------------------------------------------------------------------------

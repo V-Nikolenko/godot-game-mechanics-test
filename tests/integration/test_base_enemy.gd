@@ -12,24 +12,23 @@
 ## skip list. Same sweep shape as `test_config_instance_isolation.gd`, checking type instead of
 ## config presence. A new enemy directory is covered automatically the day it lands.
 ##
-## `station_turret.tscn` is an explicit extra case, not part of the sweep: `StationTurret` is a
-## plain `Node2D` (never moves, never scores, survives its own death as visible wreckage — see its
-## own file header), so it cannot satisfy `is BaseEnemy` and has no `died`/`was_killed`/scoring
-## surface to pin. Only its hurtbox mask is comparable.
+## A modular host's PARTS (`EnemyModule`s under `Modules`: the Heavy Gunship, the Carrier, the Space Fortress) are an explicit extra
+## case, not part of the sweep: a part is a plain `Node2D` (never moves, never scores, survives its own death as visible wreckage), so it
+## cannot satisfy `is BaseEnemy` and has no `died`/`was_killed`/scoring surface to pin. Only its hurtbox mask is comparable.
 ##
-## ── Why ram_corvette and space_station are not in the generic damage/death sweep ─────────────────
+## ── Why ram_corvette, carrier and space_fortress are not in the generic damage/death sweep ───────────────────────
 ##
 ## `RamCorvette._on_received_damage()` deflects every hit while any of its three `ArmorPlate`s lives,
-## exactly like the station's core does while a turret lives, so a single lethal-sized hit on a fresh
+## so a single lethal-sized hit on a fresh
 ## Corvette deals nothing. Its plate-by-plate vulnerability (bullets glance off, each rocket breaks the
 ## plate it hits, only then does the hull take damage) is owned by `test_ram_corvette.gd`.
 ##
-## `SpaceStation` overrides both `_on_received_damage()` (deflects everything while a turret is
-## alive) and `_on_health_changed()` (holds the wreck in the tree for `death_duration` seconds
-## instead of freeing in the same frame — see `space_station.gd:184-218`). Reproducing that here
-## would just re-implement `test_station_death_sequence.gd`, which already owns it. This file pins
-## only what SpaceStation shares with the rest of the roster: its post-`_ready()` hurtbox mask and
-## its scoring fields.
+## `SpaceFortress` (like the `Carrier`) overrides both `_on_received_damage()` (its armoured hull
+## refuses every hit) and `_on_health_changed()` (dies only with its Core part, then holds the wreck in
+## the tree for `death_duration` seconds instead of freeing in the same frame). Reproducing that here
+## would just re-implement `test_space_fortress.gd` and `test_boss_death_sequence.gd`, which own it.
+## This file pins only what they share with the rest of the roster: the post-`_ready()` hurtbox mask
+## and the scoring fields.
 ##
 ## ── Harness notes ─────────────────────────────────────────────────────────────────────────────
 ##
@@ -38,7 +37,7 @@
 ##    `BulletPool` resolves `get_parent().get_parent()` as its container. Same rule as
 ##    `test_config_instance_isolation.gd` and `test_enemy_contact_damage.gd`.
 ## 2. Damage is delivered by emitting `hurt_box.received_damage` directly, not through a physical
-##    HitBox overlap — same technique `test_station_death_sequence.gd` and
+##    HitBox overlap — same technique `test_boss_death_sequence.gd` and
 ##    `test_player_bullet_lifetime.gd` use. It bypasses the hurtbox's `collision_mask` entirely,
 ##    which is fine: the mask is pinned separately, by its own value, not by what it lets through.
 ## 3. No `await` anywhere. `container.add_child(entity)` runs `_ready()` synchronously because the
@@ -48,7 +47,6 @@
 extends GutTest
 
 const _ENEMY_ROOT := "res://assault/scenes/enemies"
-const _STATION_TURRET_SCENE := "res://assault/scenes/enemies/space_station/station_turret.tscn"
 
 ## `DefenseProfile.apply_to()`: `hurt_box.collision_mask = 97 | 1024` (the default profile's mask).
 ## Spelled out rather than computed so a change to that value is what this test is pinned against,
@@ -56,17 +54,16 @@ const _STATION_TURRET_SCENE := "res://assault/scenes/enemies/space_station/stati
 const _DEFAULT_MASK_AFTER_READY := 1121
 
 ## `bomber`, `bonus_drone`, `razor_drone`, `heavy_gunship`, `gatling_interceptor`, `swarm_drone`,
-## `fighter`, `ram_corvette`, `sniper`, `space_station`, `missile_corvette`, `support_ship`, `mine_layer`,
+## `fighter`, `ram_corvette`, `sniper`, `missile_corvette`, `support_ship`, `mine_layer`,
 ## `defense_turret`, `power_source`, `shield_generator`, `laser_emitter`, `heavy_emplacement`, `twin_laser_drone`, `laser_tender`, `jamming_structure`, `sector_jammer`, `pulsed_jammer`, `hacker_frigate`, `carrier`, `space_fortress`. A sweep that finds fewer has broken, and every assertion below is vacuous on a
 ## broken sweep.
-const _MIN_ROSTER_SIZE := 26
+const _MIN_ROSTER_SIZE := 25
 
 ## Enemies whose damage/death flow diverges from the generic BaseEnemy path enough that a shared
-## loop would either be meaningless (space_station never frees on the lethal frame) or wrong
-## (ram_corvette's hull deflects every hit while a plate lives, like the station's core; carrier's hull refuses every hit and
-## dies only with its Core part, Phase 10 t6; space_fortress likewise, Phase 11 t5). Each is
-## owned by its own suite (`test_station_death_sequence.gd`, `test_ram_corvette.gd`, `test_carrier.gd`, `test_space_fortress.gd`).
-const _EXCLUDED_FROM_GENERIC_DAMAGE_FLOW := ["ram_corvette", "space_station", "carrier", "space_fortress"]
+## loop would be wrong (ram_corvette's hull deflects every hit while a plate lives; carrier's hull refuses every hit and
+## dies only with its Core part, Phase 10 t6; space_fortress likewise and never frees on the lethal frame, Phase 11 t5). Each is
+## owned by its own suite (`test_ram_corvette.gd`, `test_carrier.gd`, `test_space_fortress.gd`, `test_boss_death_sequence.gd`).
+const _EXCLUDED_FROM_GENERIC_DAMAGE_FLOW := ["ram_corvette", "carrier", "space_fortress"]
 
 
 ## `{name, scene}` per top-level directory under `_ENEMY_ROOT` whose `<dir>/<dir>.tscn` exists and
@@ -126,28 +123,42 @@ func test_hurtbox_mask_after_ready_matches_the_pinned_value() -> void:
 	)
 
 
-## `entity` is typed `Node`/`BaseEnemy` throughout this file, deliberately never `RamCorvette` or
-## `StationTurret`. Statically referencing either of those two class names from this script — even
+## `entity` is typed `Node`/`BaseEnemy` throughout this file, deliberately never `RamCorvette` or a
+## boss class. Statically referencing such a class name from this script — even
 ## in a branch that never runs — makes the GDScript compiler resolve them at script-load time, and
-## in this suite that leaves `station_turret_destroyed.png` and its `RID`s still allocated at
-## process exit (`GATE FAIL: the GUT run leaked objects at exit`). Both classes only add moving
+## in this suite once left a part's wreck texture and its `RID`s still allocated at
+## process exit (`GATE FAIL: the GUT run leaked objects at exit`). Those classes only add moving
 ## parts BaseEnemy doesn't have; every field this file reads (`hurt_box`, `health`, `died`,
-## `was_killed`) is already on `BaseEnemy`, or reachable by node name for the turret.
+## `was_killed`) is already on `BaseEnemy`, or reachable by node name for a part.
 func _hurt_box(entity: Node) -> HurtBox:
 	return entity.get_node_or_null("HurtBox") as HurtBox
 
 
-func test_station_turret_hurtbox_mask_matches_the_pinned_value() -> void:
-	var turret := _spawn(_STATION_TURRET_SCENE)
-	var hurt_box := _hurt_box(turret)
-	assert_not_null(hurt_box, "station_turret.tscn root has no HurtBox child")
-	if hurt_box == null:
-		return
-	assert_eq(
-		hurt_box.collision_mask, _DEFAULT_MASK_AFTER_READY,
-		"the station turret's post-_ready() hurtbox mask must equal the pinned value"
-	)
+## A part's hurtbox mask: 1120 = player rockets 32 + player bullets 64 + asteroid contact 1024 (the root's 1121 without bit 1). Every
+## `Modules/*/HurtBox` of every BaseEnemy scene, read after `_ready()`; a new modular host is covered the day it lands.
+const _PART_MASK_AFTER_READY := 1120
 
+
+func test_every_modular_part_hurtbox_mask_matches_the_pinned_value() -> void:
+	var hosts := 0
+	var parts := 0
+	for entry in _sweep():
+		var probe := (load(entry["scene"]) as PackedScene).instantiate()
+		var modular := probe.has_node("Modules")
+		probe.free()
+		if not modular:
+			continue
+		var entity := _spawn(entry["scene"])
+		hosts += 1
+		for part in entity.get_node("Modules").get_children():
+			var hurt_box := _hurt_box(part)
+			if hurt_box == null:
+				continue
+			parts += 1
+			assert_eq(hurt_box.collision_mask, _PART_MASK_AFTER_READY,
+				"%s/%s: post-_ready() part hurtbox mask must equal the pinned value" % [entry["name"], part.name])
+	assert_gte(hosts, 3, "the Heavy Gunship, the Carrier and the Space Fortress are modular; fewer means the sweep broke")
+	assert_gte(parts, 20, "22 parts today (6 + 7 + 9); fewer means the sweep broke")
 
 # ── 2. Damage -> hit flash -> died -> queue_free ──────────────────────────────
 
@@ -443,13 +454,14 @@ func test_repair_of_a_dead_or_queued_enemy_returns_zero() -> void:
 	assert_eq(queued.health.current_health, 5)
 
 
-func test_the_space_station_refuses_repair() -> void:
-	var station := _spawn("%s/space_station/space_station.tscn" % _ENEMY_ROOT) as BaseEnemy
-	assert_false(station.can_be_repaired(), "the station answers false")
-	station.health.current_health = station.health.max_health - 10
-	var before: int = station.health.current_health
-	assert_eq(station.repair(5), 0, "and repair() returns 0 on it")
-	assert_eq(station.health.current_health, before, "health is untouched")
+func test_the_space_fortress_refuses_repair() -> void:
+	var fortress := _spawn("%s/space_fortress/space_fortress.tscn" % _ENEMY_ROOT) as BaseEnemy
+	fortress.set_physics_process(false)
+	assert_false(fortress.can_be_repaired(), "the fortress answers false")
+	fortress.health.current_health = fortress.health.max_health - 10
+	var before: int = fortress.health.current_health
+	assert_eq(fortress.repair(5), 0, "and repair() returns 0 on it")
+	assert_eq(fortress.health.current_health, before, "health is untouched")
 	assert_true(_fixture().can_be_repaired(), "an ordinary enemy can be repaired")
 
 

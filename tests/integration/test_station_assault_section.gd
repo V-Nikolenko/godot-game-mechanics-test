@@ -1,6 +1,6 @@
 ## Integration tests for the `station_assault` LevelSection (EPIC sub-item 2).
 ##
-## Like `test_space_station.gd` (legacy; the section now holds the Space Fortress, Phase 11 t10) these are NOT characterization tests — the section is new code, so
+## Like the Space Fortress's own intent suites (the section now holds the fortress, Phase 11 t10) these are NOT characterization tests — the section is new code, so
 ## they assert intended behaviour. Test 7 is the exception in spirit: it pins the *corrected*
 ## timeout path, which today advances with the boss still parented to the enemy container.
 ##

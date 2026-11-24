@@ -721,7 +721,7 @@ func test_a_ram_forced_to_expire_on_its_first_line_up_tick_leaves_within_its_bou
 
 ## Boundary (task; epic C5): a Bomber can never sit in an ENEMIES_CLEARED section. Its tail is computed WITHOUT an exit
 ## term — a lower bound, so a row it flags is flagged by any exit, and no probe is paid for. Deliberate reading of "a
-## bomber in any ENEMIES_CLEARED section fails": asserted in cloud_descent; station_assault's 180 s net is sized for the
+## bomber in any ENEMIES_CLEARED section fails": asserted in cloud_descent; station_assault's 240 s net is sized for the
 ## boss fight and no bomber timing can fail it, so it is reported (the Gatling precedent above), and
 ## `test_no_enemies_cleared_section_spawns_a_bomber` covers every section. Its persisted mines would hold the section
 ## open longer still. If t21's bomber lever (`engage_seconds` 6.5) is ever applied this row stops flagging and FAILS
@@ -1163,8 +1163,11 @@ const EMP_MINE := "res://assault/scenes/projectiles/enemy_ordnance/mines/emp_min
 const MINEFIELD := "res://assault/scenes/hazards/minefield/minefield.tscn"
 const LEVELS_DIR := "res://assault/scenes/levels/"
 const WAVE_BUILDER_SOURCE := "res://assault/scenes/systems/wave_builder.gd"
-## An Assault wave source authored through `WaveBuilder` outside the levels directory.
-const STATION_REINFORCEMENTS_SOURCE := "res://assault/scenes/enemies/space_station/station_reinforcements.gd"
+## Assault wave sources authored outside the levels directory: the shared boss machinery and the Space Fortress's scripts (every `.gd`
+## in these directories) and the fortress scene, which authors its `ReinforcementBay` payloads (Phase 11 t11; it replaced the retired
+## space station's reinforcement script).
+const BOSS_SOURCE_DIRS: Array[String] = ["res://global/boss/", "res://assault/scenes/enemies/space_fortress/"]
+const FORTRESS_SCENE_SOURCE := "res://assault/scenes/enemies/space_fortress/space_fortress.tscn"
 
 
 ## A Disruptor is a Hacker (9 s budget, a measured exit, a lock at PULSE end), so it may not sit in an ENEMIES_CLEARED section either.
@@ -1234,8 +1237,8 @@ func test_no_section_spawns_an_emp_laying_minefield() -> void:
 	assert_eq(_emp_minefield_entries(plain).size(), 0, "boundary: a minefield entry with w_emp 0.0 is not")
 
 
-## `{ path: text }` of every `.tscn` / `.gd` under `res://assault/scenes/levels/` (recursive), the space station's reinforcement waves and
-## `wave_builder.gd`, read from disk.
+## `{ path: text }` of every `.tscn` / `.gd` under `res://assault/scenes/levels/` (recursive), every `.gd` in `BOSS_SOURCE_DIRS`, the
+## fortress scene (its reinforcement bays' payloads) and `wave_builder.gd`, read from disk.
 func _assault_level_sources() -> Dictionary:
 	var out: Dictionary = {}
 	var dirs: Array[String] = [LEVELS_DIR]
@@ -1249,7 +1252,11 @@ func _assault_level_sources() -> Dictionary:
 		for file in dir.get_files():
 			if file.ends_with(".tscn") or file.ends_with(".gd"):
 				out[dir_path.path_join(file)] = FileAccess.get_file_as_string(dir_path.path_join(file))
-	for path: String in [STATION_REINFORCEMENTS_SOURCE, WAVE_BUILDER_SOURCE]:
+	for boss_dir: String in BOSS_SOURCE_DIRS:
+		for file in DirAccess.get_files_at(boss_dir):
+			if file.ends_with(".gd"):
+				out[boss_dir.path_join(file)] = FileAccess.get_file_as_string(boss_dir.path_join(file))
+	for path: String in [FORTRESS_SCENE_SOURCE, WAVE_BUILDER_SOURCE]:
 		out[path] = FileAccess.get_file_as_string(path)
 	return out
 
@@ -1285,10 +1292,14 @@ func _level_source_violations(files: Dictionary) -> Array[String]:
 func test_no_assault_level_source_places_emp_or_a_sector_jammer() -> void:
 	var files := _assault_level_sources()
 	var level_files := files.keys().filter(func(p: String) -> bool: return p.begins_with(LEVELS_DIR))
-	gut.p("scanned %d Assault level sources (+ station reinforcements, wave_builder.gd)" % level_files.size())
+	gut.p("scanned %d Assault level sources (+ boss / fortress sources, wave_builder.gd)" % level_files.size())
 	assert_gte(level_files.size(), 7, "sanity: the scan read the level directory")
-	assert_true(files.has(STATION_REINFORCEMENTS_SOURCE) and (files[STATION_REINFORCEMENTS_SOURCE] as String).length() > 0,
-		"sanity: the station reinforcement waves were read")
+	assert_true(files.has(FORTRESS_SCENE_SOURCE) and (files[FORTRESS_SCENE_SOURCE] as String).contains("payload_scene"),
+		"sanity: space_fortress.tscn was read and names its bay payloads")
+	assert_true(files.has(BOSS_SOURCE_DIRS[0].path_join("boss_reinforcements.gd")),
+		"sanity: the shared boss machinery was read")
+	assert_true(files.has(BOSS_SOURCE_DIRS[1].path_join("fortress_brain.gd")),
+		"sanity: the fortress scripts were read")
 	assert_true((files[WAVE_BUILDER_SOURCE] as String).contains("SECTOR_JAMMER"),
 		"sanity: wave_builder.gd was read (it defines SECTOR_JAMMER, which is why it is read for w_emp only)")
 	assert_eq(_level_source_violations(files), [] as Array[String], "an Assault level places EMP or a sector jammer")
@@ -1306,7 +1317,7 @@ func test_synthetic_level_sources_with_emp_or_a_sector_jammer_fail_the_scan() ->
 		"a .gd naming SECTOR_JAMMER": {lvl + "e.gd": "b.spawn(WaveBuilder.SECTOR_JAMMER)\n"},
 		"a .gd calling jammer(&\"sector\")": {lvl + "f.gd": "b.jammer(&\"sector\").at(0, -220)\n"},
 		"a .gd naming EMP_MINE": {lvl + "g.gd": "var s := EnemyMineScenes.EMP_MINE\n"},
-		"station reinforcements naming emp_zone.tscn": {STATION_REINFORCEMENTS_SOURCE: "load(\"%s\")\n" % EMP_ZONE},
+		"space_fortress.tscn naming emp_zone.tscn": {FORTRESS_SCENE_SOURCE: "[ext_resource type=\"PackedScene\" path=\"%s\" id=\"21_sf\"]\n" % EMP_ZONE},
 	}
 	for label: String in rejected:
 		assert_gt(_level_source_violations(rejected[label]).size(), 0, "boundary: %s fails the scan" % label)

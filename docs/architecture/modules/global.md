@@ -218,8 +218,8 @@ func _on_hit(damage: int) -> void:
 `ArmorQuery.deflects(area, hit_box)` is the one place a player projectile (`bullet.gd`, `homing_missile.gd`,
 `warhead_missile.gd`, each through its kept `_hit_is_deflected` wrapper) asks whether the hurtbox it overlapped
 refused the hit. The hurtbox's parent may answer `deflects_hit(hit_box: HitBox) -> bool` (hit-aware, tried first) or
-the older hit-blind `is_armored() -> bool` (the space station's core, which implements no `deflects_hit` and is
-unchanged). Projectiles do not duck-type either method directly any more.
+the older hit-blind `is_armored() -> bool` (the retired space station's core implemented only this; the Carrier and the Space Fortress answer both and are
+armoured for their whole life). Projectiles do not duck-type either method directly any more.
 
 `ArmorPlate` (a `Node2D`, `HurtBox` layer `ENEMY_HURTBOX` / mask `PLAYER_ROCKETS | PLAYER_HITBOX` with **empty**
 `accepted_damage_types`, plus `Health` and a `Sprite2D` named `Sprite`; built in `_ready()` if the scene omits them) is
@@ -323,7 +323,7 @@ MyHeavy (BaseEnemy)
   gameplay rule of any heavy (the Ph18 seam).
 - **Who reaches a part:** player bullets and rockets (through the host's geometry rule), the player's mining beam and Plasma Nova
   (both also target group `enemy_parts`; the nova map-wide) and a level `LaserRay` (layer 512, 9999). **Enemy energy weapons do
-  not** (`EnergyHitScan.VICTIM_GROUPS` has no `enemy_parts`). The station's turrets and the Ram's plates are not parts.
+  not** (`EnergyHitScan.VICTIM_GROUPS` has no `enemy_parts`). The Ram's plates are not parts.
 
 Gated by `tests/integration/test_enemy_module.gd` (fixture `tests/helpers/fixture_modular_host.tscn`: an armoured root and parts
 `Open` / `Locked` / `Laser`).
@@ -435,9 +435,9 @@ primary flags once switched.
 `BaseEnemy._ready()` resolves a `DefenseProfile` child by type if the scene authored one (no shipped
 scene does today), otherwise creates a default one on the fly (mask 1121, so no scene needs editing)
 and exposes it as `defense_profile`. **Armour is never a narrowed mask**: an armoured enemy keeps the
-default 1121 and refuses damage in `_on_received_damage` (`SpaceStation`, `RamCorvette`; see
-`ArmorPlate` / `ArmorQuery`). `StationTurret` (a plain `Node2D`, not a `BaseEnemy`) reproduces the default mask by hand
-through the same `CollisionLayers` constants rather than using a profile, since it has nothing to
+default 1121 and refuses damage in `_on_received_damage` (`RamCorvette`, `Carrier`, `SpaceFortress`; see
+`ArmorPlate` / `ArmorQuery`). An `EnemyModule` part (not a `BaseEnemy`) writes its own hurtbox layer and mask (1120) through
+the same `CollisionLayers` constants rather than using a profile, since it has nothing to
 resolve one for it.
 
 ```gdscript
@@ -671,7 +671,7 @@ func tick(delta: float) -> void:
 - **Single writer:** with a mover present, nothing else writes the body's `velocity`/`rotation` or
   calls `move_and_slide()` — gated by `tests/integration/test_enemy_mover_single_writer.gd`.
 - **Ally hooks (Ph5 t3):** `BaseEnemy.repair(amount) -> int` restores HP silently (hit flash and burst only play when
-  health goes *down*; `can_be_repaired()` is false on the station); `accept_tow(v)` nudges the enemy's own mover only if
+  health goes *down*; `can_be_repaired()` is false on the Carrier and the Space Fortress); `accept_tow(v)` nudges the enemy's own mover only if
   `is_ai_driven()` (brain + mover, not suspended), not boosting, and `EnemyBrain.accepts_tow()` — false in every committed or
   telegraphed phase (Sniper DECOY/AIM/LOCK/FIRE, Ram WIND_UP/CHARGE, Bomber RUN, Fighter RUN_IN, Gatling SPIN_UP/STREAM,
   Razor WINDUP/DASH/FEINT_*, Swarm WINDUP/BURST). Gated in `tests/integration/test_base_enemy.gd` §6. `BaseEnemy.ai_mover_max_speed() -> float` is the mover cap the Support Ship scales its tow by; the Missile Corvette adds TELEGRAPH / SALVO to the refusing phases.
@@ -989,7 +989,7 @@ func remove(player: Node) -> void:
 All are `Node2D` wrappers around `CPUParticles2D`. Set their `@export`s *before* `add_child()` so `_ready()` reads them.
 
 - **`HitEffect`** — one-shot burst on damage. Call `burst()` from the hit handler. Exports include `amount: int = 10`, `lifetime: float = 0.25`, `color`, velocity/scale ranges.
-- **`ExplosionEffect`** — bigger one-shot burst on death; call `explode()` just before `queue_free()`. Resolves its **actor** by walking up from its own parent to the nearest `Node2D` ancestor — so it may sit under a non-`Node2D` behaviour node (`DamageReaction`) without losing its position — and spawns particles at that actor's world position, into that actor's parent by default. `explode(at, container)`: `at` (optional `Vector2`) overrides *where* the blast lands, for entities whose death is a chain of blasts across a large hull rather than one central burst (`StationDeathSequence`); `container` (optional `Node`) overrides *what it lands in*, for an actor whose default parent is not a safe home (`StationTurret`, whose particles would otherwise die with the hull or inherit its spin). Both default to the historic behaviour when omitted. A `container` that is null, freed, or outside the tree falls back to the actor's parent. If no `Node2D` ancestor exists at all, it `push_warning()`s and does nothing, rather than failing silently. `always_process: bool = false` lets the player death burst render while paused.
+- **`ExplosionEffect`** — bigger one-shot burst on death; call `explode()` just before `queue_free()`. Resolves its **actor** by walking up from its own parent to the nearest `Node2D` ancestor — so it may sit under a non-`Node2D` behaviour node (`DamageReaction`) without losing its position — and spawns particles at that actor's world position, into that actor's parent by default. `explode(at, container)`: `at` (optional `Vector2`) overrides *where* the blast lands, for entities whose death is a chain of blasts across a large hull rather than one central burst (`BossDeathSequence`); `container` (optional `Node`) overrides *what it lands in*, for an actor whose default parent is not a safe home (an `EnemyModule` part, whose particles would otherwise die with the hull or inherit its spin). Both default to the historic behaviour when omitted. A `container` that is null, freed, or outside the tree falls back to the actor's parent. If no `Node2D` ancestor exists at all, it `push_warning()`s and does nothing, rather than failing silently. `always_process: bool = false` lets the player death burst render while paused.
 - **`ThrusterEffect`** — continuous engine flame. Call `set_state(state)` each physics frame with `State.{IDLE,THRUST,BOOST,POWER,BOOST_PANEL}`; transitions are instant and de-duplicated.
 - **`LowHealthSmoke`** — call `setup(health)` after `add_child()`; it connects `health.amount_changed` and emits smoke automatically when HP ≤ `threshold` (default `0.3`) and `current > 0`. `deactivate()` stops it.
 - **`RocketTrail`** — continuous world-space trail; add under a rocket scene. `offset_behind: float = 8.0` places it behind the nose.
@@ -1075,9 +1075,9 @@ places two more (`InfoLogHubTerminal`, `InfoLogVoeterWreck`, each with its own `
 ### Resources (`global/resources/`)
 Pure-data `Resource` types (shareable `.tres` assets; runtime state is kept out of them so multiple ships can share one asset).
 
-- **attack/** — `AttackPatternResource` (base; `fire_interval = 0.8`, `start_delay = 0.0`, abstract `fire(ship, pool)`). Subtypes: `forward_attack_pattern` (straight up, exports `bullet_damage`, `spawn_offset`), `aimed_attack_pattern`, `gatling_attack_pattern`, `radial_attack_pattern`. Usually driven at runtime by `AttackController` (holds the per-ship timer), but a pattern is just a `fire(ship, pool)` call — `StationGunnery` owns its own `Timer`s and calls `fire()` directly.
+- **attack/** — `AttackPatternResource` (base; `fire_interval = 0.8`, `start_delay = 0.0`, abstract `fire(ship, pool)`). Subtypes: `forward_attack_pattern` (straight up, exports `bullet_damage`, `spawn_offset`), `aimed_attack_pattern`, `gatling_attack_pattern`, `radial_attack_pattern`. Usually driven at runtime by `AttackController` (holds the per-ship timer), but a pattern is just a `fire(ship, pool)` call — `FortressBrain` builds a `RadialAttackPattern` at runtime and calls `fire()` from its own tick for the core ring.
   - `radial_attack_pattern.gd` (`RadialAttackPattern`) fires `bullet_count` bullets spread around `base_angle` in one shot, and covers both boss shapes in one resource: **`arc >= TAU` is a full ring** (spacing `TAU / count`, no duplicate at the seam) and **`arc < TAU` is a fan** of that width *centred* on the base direction (spacing `arc / (count - 1)`). `aim_at_player` adds the angle to the player (`Vector2.DOWN` fallback); `spawn_radius` offsets each bullet **along its own angle**, so a ring emerges from the hull rim and a fan from the barrel mouth. `bullet_count <= 0` fires nothing.
-    ⚠️ Unlike its two siblings it **deliberately ignores `ship.rotation`** — `base_angle` is absolute world space and the caller owns any precession. `StationLaserPhase` spins the station at 0.5 rad/s during exactly the phase the core ring fires in, so folding in the hull rotation would add ~1.6 ring spacings of uncontrolled drift per ring. Pinned by `tests/integration/test_radial_attack_pattern.gd`.
+    ⚠️ Unlike its two siblings it **deliberately ignores `ship.rotation`** — `base_angle` is absolute world space and the caller owns any precession. A boss hull spins while its core ring fires (the Space Fortress's `critical` spin; first the retired station's 0.5 rad/s laser phase, where folding in the hull rotation would have added ~1.6 ring spacings of uncontrolled drift per ring). Pinned by `tests/integration/test_radial_attack_pattern.gd`.
 - **movement/** — `MovementResource` (base; `sample(t) -> Vector2` displacement from spawn, `total_duration()`). Subtypes: `straight`, `sine`, `arc`, `curve`, `hold`, `u_sweep`, `player_focus`, `sequence`. Consumed by `EnemyPathMover`.
 - **formation/** — `FormationResource` (base; `compute_slots() -> Array[FormationSlot]`, each slot an `offset` + `delay`). Subtypes: `line`, `v`, `w` (`WFormation`, Ph3: centre first, odd slots trailing at `−depth`, delay growing outward), `wedge`, `diagonal`, `cluster`. `WaveManager` spawns one ship per slot. **A formation is a spawn layout, not a behaviour**: for an AI enemy it only decides where and when the ships appear — their squad roles come from `SquadController` afterwards.
 - **waves/** — `LevelResource` (`level_name` + ordered `waves`), `WaveResource` (`trigger_time` + `entries`), `SpawnEntryResource` (one ship/formation: `ship_scene`, `base_offset`, `spawn_delay`, `movement`, `exit_mode`, `look_*`, optional `formation`, `initial_props`).
@@ -1107,8 +1107,8 @@ process.
   deliberately. An `_enter_tree()`-only copy would leave the project's own spawn-override idiom
   writing to the shared resource.
 - `_enter_tree()` catches a `config` that a `.tscn` override or `initial_props` substituted in after
-  the constructor, and still runs before any **child's** `_ready()` — which the space station depends
-  on, since its four child nodes read `_station.config` in their own `_ready()`.
+  the constructor, and still runs before any **child's** `_ready()` — which a boss's behaviour children depend
+  on (the Space Fortress's `DeathSequence` reads its host's `config` in its own `_ready()`).
 
 They compose because `duplicate()` blanks `resource_path`, so a blank path *is* the marker of an
 already-private copy and the second call is a no-op.

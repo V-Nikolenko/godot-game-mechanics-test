@@ -7,7 +7,7 @@
 ##   This keeps cam.global_position stable so:
 ##     • EnemyPathMover's cam-scroll delta (cam.global_position.y - initial)
 ##       is always 0 — enemies are never displaced by player panning.
-##   Spawn positions (WaveManager, StationReinforcements, Level1Director's bonus drones) resolve
+##   Spawn positions (WaveManager, Level1Director's bonus drones) resolve
 ##   against cam.global_position + cam.offset — the camera's CURRENT view, not its resting
 ##   position — so a delayed spawn lands relative to wherever the player has panned to by the time
 ##   it fires, not the screen centre. (Prior to this, spawns resolved against global_position
