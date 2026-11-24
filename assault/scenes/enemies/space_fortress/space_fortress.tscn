@@ -519,6 +519,10 @@ payload_scene = ExtResource("22_sf")
 count = 2
 watch_ids = Array[StringName]([&"battery_artillery", &"battery_missiles", &"hangar"])
 door_seconds = 1.0
+config_overrides = {
+"flank_wait_max": 0.4,
+"lead_wait_max": 0.4
+}
 
 [node name="Mouth" type="Marker2D" parent="Modules/ShieldNorth/Bay"]
 position = Vector2(0, -70)

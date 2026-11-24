@@ -1,7 +1,7 @@
 ## The Space Fortress's reinforcements (plan §2.8; Phase 11 t8): the hangar's drones, the sector defenders a lost battery calls from its generator, the
 ## `critical` surge and the scuttle on death, all through `BossReinforcements` (§2.2) and the three scene-authored bays. Intent tests, every row in both
 ## harnesses (IDEAS §40). Hand-driven: the fortress's own physics is off and the test ticks `reinforcements()` itself (`active` true, the brain's
-## `is_engaged()` answer); only rows 5 and 6 let the escorts' own AI run, on real physics at the 8x clock (tests/README.md -> Gate time rule 1).
+## `is_engaged()` answer); only rows 5 and 6 let the escorts' own AI run, on real physics at the 16x clock (a tick-paced row of light scenes; the ENEMIES_CLEARED row only counts the section's container and stops before the director's 0.2 s wall-clock settle) (tests/README.md -> Gate time rule 1).
 ##
 ## Row 7 (the §25 `reinforcements` key, on its pinned path and with the hangar dead) lives in `test_space_fortress.gd`, beside the other five keys.
 extends GutTest
@@ -24,11 +24,12 @@ const NORTH_LOSSES := [&"battery_artillery", &"battery_missiles", &"hangar"]
 const SOUTH_LOSSES := [&"battery_spread", &"battery_pulse", &"battery_sweep"]
 ## A cap nothing reaches, for the rows that are not about the cap.
 const BIG_CAP := {"escort_cap_open_space": 40, "escort_cap_assault": 40}
-## Seconds from launch to the first round in the escort container (Assault). The gatling pair fires inside the plan's 3 s (measured 2.85 s); a fighter pair
-## flies its own lead-in and waits for its attack slot before the first burst (measured 3.9-4.5 s from every launch geometry tried), so its bound is 5 s.
+## Seconds from launch to the first round in the escort container (Assault), the plan's 3 s for both pairs. The gatling pair fires at about 1.8 s; the fighter
+## pair at about 2.35 s (from every launch geometry tried) only because the north bay shortens its escorts' squad waits (`config_overrides`): on its own
+## config a fighter pair flies its lead-in and waits 2-3.5 s for its attack slot (3.9-4.5 s from launch).
 const GATLING_FIRST_FIRE := 3.0
-const FIGHTER_FIRST_FIRE := 5.0
-const _SPEEDUP := 8
+const FIGHTER_FIRST_FIRE := 3.0
+const _SPEEDUP := 16
 
 var _roots: Array[Node] = []
 var _saved_time_scale: float = 1.0
@@ -98,7 +99,6 @@ func _run(f: SpaceFortress, seconds: float) -> void:
 
 
 func _settle() -> void:
-	await get_tree().physics_frame
 	await get_tree().process_frame
 
 
@@ -409,15 +409,19 @@ func test_enemies_cleared_waits_only_for_the_fortress() -> void:
 	assert_eq(started.size(), 1, "%s: the section waits while the fortress lives" % mode)
 
 	f.queue_free()
-	await wait_until(func() -> bool: return started.size() == 2, 3.0)
-	assert_eq(started.size(), 2, "%s: the fortress's end ends the wait" % mode)
+	await _settle()
+	await _settle()
+	# What the director's loop counts (`container.get_child_count()`) is down to the explosion particles, which free themselves: nothing but the fortress held the section. (The advance after
+	# its 0.2 s wall-clock settle is `test_boss_reinforcements.gd` row 11's; this row stops before it to keep that settle out of the gate's time.)
+	var left := container.get_children().filter(func(c: Node) -> bool: return not c is CPUParticles2D)
+	assert_eq(left.size(), 0, "%s: the fortress's end leaves nothing but its own finishing explosion particles in the section's container" % mode)
 	assert_false(is_instance_valid(box), "%s: the escort container went with it" % mode)
 
 
 func test_the_fortress_scuttles_its_escorts_when_its_death_starts(mode: String = use_parameters(MODES)) -> void:
 	var h = _world(mode)
 	var f := _spawn(h, BIG_CAP)
-	f.death_duration = 0.05
+	f.death_duration = 0.01
 	await _lose(f, [&"battery_artillery", &"battery_spread"])
 	_run(f, 1.2)
 	var escorts := _bays(f).escorts()
@@ -449,7 +453,7 @@ func test_the_fortress_scuttles_its_escorts_when_its_death_starts(mode: String =
 
 ## The station's rail-fire gate, re-expressed for AI escorts: a fighter pair and a gatling pair launched in Assault each put a round into the escort
 ## container soon after launch (the bounds above). Two fortresses share one world, each where it holds (y 180) presenting the lost battery's side to the
-## player, as the facing rule would; their own AI stays off and the escorts run on real physics at 8x.
+## player, as the facing rule would; their own AI stays off and the escorts run on real physics at 16x.
 func test_assault_escorts_fire_soon_after_launch() -> void:
 	_scale_clock()
 	var h = _world("assault")
@@ -494,6 +498,26 @@ func _owned_by(bullet: Node, escort: Node) -> bool:
 		if (pool as BulletPool)._active.has(bullet):
 			return true
 	return false
+
+
+## The north bay's `config_overrides` land on each escort's own config copy, never on the shared fighter `.tres` (the one `load()` / `preload()` returns).
+func test_bay_config_overrides_reach_the_escorts_private_config_only() -> void:
+	var h = _world("assault")
+	var f := _spawn(h, BIG_CAP)
+	var shared := load("res://assault/scenes/enemies/fighter/fighter_config.tres") as FighterConfig
+	var shared_wait := shared.lead_wait_max
+	var overrides: Dictionary = _bay_node(f, "ShieldNorth").config_overrides
+	assert_false(overrides.is_empty(), "the north bay authors its escorts' waits")
+	await _lose(f, [&"battery_artillery"])
+	_run(f, 1.2)
+	assert_eq(_bays(f).live_count(), 2, "precondition: the pair is out")
+	for escort in _bays(f).escorts():
+		for key in overrides:
+			assert_eq(escort.config.get(key), overrides[key], "the escort's own config carries %s" % key)
+	assert_eq(shared.lead_wait_max, shared_wait, "the shared config is untouched")
+	assert_gt(shared_wait, overrides["lead_wait_max"], "and the override is a real shortening")
+	assert_eq(_bay_node(f, "ShieldSouth").config_overrides.size(), 0, "the south bay overrides nothing")
+
 
 
 # ══ 6. Launches ignore the camera pan ═══════════════════════════════════════════════════════════

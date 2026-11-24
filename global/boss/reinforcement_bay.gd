@@ -46,6 +46,10 @@ enum Trigger { PERIODIC, ON_SECTOR_LOSS, ON_PHASE }
 @export var opens_part: bool = false
 ## Assault: launches per boss life (-1 = no limit).
 @export var assault_launch_limit: int = -1
+## Config fields written on each escort's own private config copy before it enters the tree (the `WaveManager` spawn-override idiom): property
+## name -> value. How a boss makes its escorts attack sooner than the same ship does on a level rail, without touching the shared `.tres`. A key the
+## config does not have is ignored.
+@export var config_overrides: Dictionary = {}
 
 
 ## The part this bay launches from (its parent), or null.

@@ -344,13 +344,16 @@ func test_assault_fires_nothing_until_enter_ends() -> void:
 	var rec := _watch(f)
 	var brain := _brain(f)
 	var ticks := 0
+	var tele_unengaged := 0  # telegraphs seen as of the last tick that ended before HOLD: the tick that enters HOLD may itself start one
 	while brain.phase != FortressBrain.Phase.HOLD and ticks < 400:
 		_tick_full(f, rec)
 		ticks += 1
+		if brain.phase != FortressBrain.Phase.HOLD:
+			tele_unengaged = _total(rec, "tele")
 		assert_true(_all_in_phase(f, Phase.SCAN) or brain.phase == FortressBrain.Phase.HOLD, "scanning while it descends")
 	assert_eq(brain.phase, FortressBrain.Phase.HOLD, "sanity: the descent ended")
 	assert_gt(ticks, 60, "sanity: the descent took a while")
-	assert_eq(_total(rec, "tele"), 0, "nothing telegraphed during ENTER")
+	assert_eq(tele_unengaged, 0, "nothing telegraphed during ENTER")
 	_stub(h, f, 45.0, 300.0)  # the spread cannon's diagonal (straight south lies between two arcs)
 	for i in 900:
 		_tick_full(f, rec)

@@ -325,6 +325,7 @@ func _spawn(s: BayState, n: int) -> Array:
 		var escort := scene.instantiate() as Node2D
 		if escort == null:
 			continue
+		_apply_overrides(escort, s.bay.config_overrides)
 		escort.position = container.to_local(mouth + across * (float(i) - float(n - 1) * 0.5) * ESCORT_SPACING)
 		var brain := escort.get_node_or_null(^"Brain")
 		if brain != null:
@@ -346,6 +347,18 @@ func _spawn(s: BayState, n: int) -> Array:
 			mover.boost(outward, _boost_speed, _boost_seconds)
 		EventBus.boss_escort_spawned.emit(escort, _host)
 	return out
+
+
+## Writes [param overrides] on the escort's private `config` (`BaseEnemy._init()` already copied it; never the shared `.tres`).
+func _apply_overrides(escort: Node, overrides: Dictionary) -> void:
+	if overrides.is_empty():
+		return
+	var cfg: Variant = escort.get(&"config")
+	if not cfg is Resource:
+		return
+	for key in overrides:
+		if key in cfg:
+			cfg.set(key, overrides[key])
 
 
 ## One board per payload scene for this object's life (the `CarrierHangars._squad(path)` rule).

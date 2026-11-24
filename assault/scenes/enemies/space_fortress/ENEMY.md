@@ -172,7 +172,7 @@ so a panned Assault camera changes nothing), in `SpaceFortressEscorts`, never in
   launch mid-door is cancelled); killing the hangar stops the drones (and the surge) for good; losing the hangar calls the north defenders.
 - **Why the hangar holds its doors:** behind the north bubble (capacity 120) it needs 420 damage; the default gun does 50 / 0.18 s, so the 0.8 s telegraph alone gives ≈ 222 and the
   held 2.0 s makes the window 2.8 s ≈ 778. A row checks the inequality and its `open_hold_seconds` 0 boundary, and a real-hit row kills it in one window.
-- **Escort fire:** a launched gatling pair puts a round in the escort container in ≈ 2.9 s; a fighter pair in ≈ 3.9–4.5 s (its lead-in and attack slot), bounded at 5 s in the gate.
+- **Escort fire:** the north bay authors `config_overrides` (`flank_wait_max` / `lead_wait_max` 0.4, written on each fighter escort's own config copy, never the shared `.tres`), so a launched fighter pair puts a round in the escort container in ≈ 2.35 s (on its own config 3.9–4.5 s: a lead-in and a 2–3.5 s wait for its attack slot) and a gatling pair in ≈ 1.8 s; the gate bounds both at the plan's 3 s.
 
 Gate `tests/integration/test_fortress_reinforcements.gd`; the §25 `reinforcements` key and the dead-hangar row are in `test_space_fortress.gd`.
 
