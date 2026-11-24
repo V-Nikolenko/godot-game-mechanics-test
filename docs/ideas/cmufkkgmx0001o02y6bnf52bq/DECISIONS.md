@@ -4487,3 +4487,25 @@ scope check (§1.1), judgement calls (§1.2) and code facts (§1.3, read @ `cba0
 - **The Assault fighter pair meets the plan's 3 s through `ReinforcementBay.config_overrides`** (a `Dictionary` export, config field -> value, written by `BossReinforcements._apply_overrides()` on each escort's private config copy before it enters the tree; a key the config lacks is ignored; the shared `.tres` is never written). The north bay authors `flank_wait_max` and `lead_wait_max` 0.4 (shipped fighter 2.0 / 3.5): the first round of a bay-launched pair lands ≈ 2.35 s after launch (3.9-4.5 s on the shipped waits), a gatling pair ≈ 1.8 s; both are gated at 3.0 s (`FIGHTER_FIRST_FIRE`, `GATLING_FIRST_FIRE`). The shipped fighter config and the level-1 fighter gates are untouched. Phase 12 / 18 bays use the same export.
 - **Tests:** `test_fortress_reinforcements.gd` (rows 1-6 and 8; the ENEMIES_CLEARED row runs in the Assault harness only: the end condition is the Assault director's); row 7 is in `test_space_fortress.gd` (`BUILT_KEYS` now has all six keys, `test_each_phase_still_changes_two_things_with_the_hangar_dead`). The hangar real-hit row feeds `HurtBox._on_area_entered` with a real `HitBox` so the sector bubble is asked first.
 - **Gate-time cost of t8 is +0.67 s** (two-run means, 221.745 → 222.41 s), after the first attempt's +2.2 s was cut (see `tests/README.md` → Gate time). The ENEMIES_CLEARED row of `test_fortress_reinforcements.gd` no longer waits for the director's 0.2 s settle (it asserts the section's container holds only explosion particles once the fortress is freed); `test_boss_reinforcements.gd` row 11 owns the real advance. `test_fortress_weapons.gd::test_assault_fires_nothing_until_enter_ends` no longer counts the telegraph of the tick that enters HOLD (a 1-in-10 flake on the t16 tree).
+
+### Phase 11, built in t9
+- **Built as §2.9 describes**, 22 PNGs in `assault/assets/sprites/enemies/space_fortress/`: `fortress_hull.png` 384 × 384; five battery bases + wrecks 44 × 44
+  (`battery_<spread|pulse|artillery|missiles|sweep>[_wreck].png`); `hangar_closed` / `hangar_open` / `hangar_wreck` 36 × 56; `generator_closed` / `generator_open` /
+  `generator_wreck` 52 × 52 (shared by both generators; the south `Sprite` is `flip_v` so the emitter fin faces outward); `core_plated` / `core_open` / `core_wreck` 88 × 88;
+  `thruster.png` 16 × 24 (four `Sprite2D`s `Thrusters/Thruster0..3` on the rim at 67.5 / 112.5 / 247.5 / 292.5°, r 184, plume outward); `critical_overlay.png` 384 × 384
+  (`CriticalOverlay/Overlay`, ≈ 3 % of the canvas, under the parts). Every part `Sprite` and the hull are at scale 1; the station PNGs are gone from `space_fortress.tscn`.
+  The t3 mount heads were looked at on the new bases and kept unchanged.
+- **New export `SpaceFortress.hangar_open_texture`** (the third hangar door state; plan §2.9 named it only as "Hangar: closed / open / wreck"). `_ready()` connects
+  `BossReinforcements.door_changed`; `_on_door_changed(bay_id, open)` shows the open art while the hangar's **own** `Bay.bay_id` reports open and the intact art when it
+  closes, never over a wreck, and ignores the generators' bays. No door node (the Carrier's `CarrierHangarDoors` is written by `CarrierHangars`, which the fortress does
+  not use): a texture swap on the existing signal. Phase 12 / 18 bosses with door art can copy the handler; `BossReinforcements` itself is unchanged.
+- **How the art was made:** the hull is a PixelLab `create_map_object` generation at 384 px (high top-down; 4 candidates, the first kept: strictly overhead, red bastions
+  exactly under the diagonal batteries, side sockets at ± 150 px under the sweep battery and the hangar). Above 40 000 px the tool paints a background, removed with
+  `strip-sprite-bg.sh` plus a radial clear of the speckles it left outside r 180. Its north / south sockets sat at r 150, not at the generators' r 120, so a **scripted pixel
+  edit** (a throwaway headless Godot `Image` script, the reviewed plan's allowance) continued each ring band across them from just outside the housing and painted empty
+  generator wells at (0, ±120); the result was re-checked at 2× and in composites. Every other texture is **hand-drawn through `pixelart_workbench draw`** (the Ph10 t9 route:
+  exact hurtbox sizes and strictly top-down by construction) in the hull's own sampled palette. Each was looked at at 3–6× and in composites at in-game layout (intact,
+  shields_exposed, core_exposed, critical with thrusters and overlay, all wrecked).
+- **Tests:** `tests/integration/test_fortress_sprites.gd` (12 functions: every file's size / corners / 15 % < opaque < 90 %, the overlay's own light-layer row, hull and part wiring
+  with the art the size of each hurtbox, wreck swaps, five distinct batteries, the hangar's three states through the signal and through the real `surge()` + `tick()` door
+  cycle with the wreck boundary, shutters and plating with the wrecked-core boundary, thrusters outside r 176 pointing outward, and a `SceneState` walk proving no station PNG).

@@ -2,7 +2,6 @@
 
 [ext_resource type="Shader" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_sf"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/space_fortress/space_fortress.gd" id="2_sf"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/station_core.png" id="3_sf"]
 [ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="4_sf"]
 [ext_resource type="Script" path="res://global/components/health_component.gd" id="5_sf"]
 [ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="6_sf"]
@@ -15,7 +14,6 @@
 [ext_resource type="Script" path="res://global/boss/boss_phase_driver.gd" id="13_sf"]
 [ext_resource type="Script" path="res://global/boss/boss_phase.gd" id="14_sf"]
 [ext_resource type="Script" path="res://global/boss/boss_death_sequence.gd" id="15_sf"]
-[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/station_turret.png" id="16_sf"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/turret_mount_slot.gd" id="17_sf"]
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/space_fortress/fortress_spoke_beam.tscn" id="18_sf"]
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/space_fortress/fortress_pulse_ring.tscn" id="19_sf"]
@@ -23,6 +21,28 @@
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn" id="21_sf"]
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/fighter/fighter.tscn" id="22_sf"]
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn" id="23_sf"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/fortress_hull.png" id="art_fortress_hull"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_spread.png" id="art_battery_spread"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_spread_wreck.png" id="art_battery_spread_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_pulse.png" id="art_battery_pulse"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_pulse_wreck.png" id="art_battery_pulse_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_artillery.png" id="art_battery_artillery"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_artillery_wreck.png" id="art_battery_artillery_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_missiles.png" id="art_battery_missiles"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_missiles_wreck.png" id="art_battery_missiles_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_sweep.png" id="art_battery_sweep"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_sweep_wreck.png" id="art_battery_sweep_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/hangar_closed.png" id="art_hangar_closed"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/hangar_open.png" id="art_hangar_open"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/hangar_wreck.png" id="art_hangar_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/generator_closed.png" id="art_generator_closed"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/generator_open.png" id="art_generator_open"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/generator_wreck.png" id="art_generator_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/core_plated.png" id="art_core_plated"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/core_open.png" id="art_core_open"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/core_wreck.png" id="art_core_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/thruster.png" id="art_thruster"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/critical_overlay.png" id="art_critical_overlay"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_sf"]
 resource_local_to_scene = true
@@ -115,13 +135,13 @@ changes = 51
 collision_layer = 0
 collision_mask = 0
 script = ExtResource("2_sf")
-shutter_open_texture = ExtResource("16_sf")
-core_open_texture = ExtResource("16_sf")
+shutter_open_texture = ExtResource("art_generator_open")
+core_open_texture = ExtResource("art_core_open")
+hangar_open_texture = ExtResource("art_hangar_open")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
 material = SubResource("ShaderMaterial_sf")
-scale = Vector2(1.375, 1.375)
-texture = ExtResource("3_sf")
+texture = ExtResource("art_fortress_hull")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 shape = SubResource("CircleShape2D_hull")
@@ -183,8 +203,31 @@ blast_spread_radius = 150.0
 [node name="Thrusters" type="Node2D" parent="."]
 visible = false
 
+[node name="Thruster0" type="Sprite2D" parent="Thrusters"]
+position = Vector2(70.41, 169.99)
+rotation = -0.3926991
+texture = ExtResource("art_thruster")
+
+[node name="Thruster1" type="Sprite2D" parent="Thrusters"]
+position = Vector2(-70.41, 169.99)
+rotation = 0.3926991
+texture = ExtResource("art_thruster")
+
+[node name="Thruster2" type="Sprite2D" parent="Thrusters"]
+position = Vector2(-70.41, -169.99)
+rotation = 2.7488936
+texture = ExtResource("art_thruster")
+
+[node name="Thruster3" type="Sprite2D" parent="Thrusters"]
+position = Vector2(70.41, -169.99)
+rotation = -2.7488936
+texture = ExtResource("art_thruster")
+
 [node name="CriticalOverlay" type="Node2D" parent="."]
 visible = false
+
+[node name="Overlay" type="Sprite2D" parent="CriticalOverlay"]
+texture = ExtResource("art_critical_overlay")
 
 [node name="Modules" type="Node2D" parent="."]
 
@@ -195,11 +238,11 @@ module_id = &"battery_spread"
 role = 0
 max_health = 260
 starts_vulnerable = true
-intact_texture = ExtResource("16_sf")
+intact_texture = ExtResource("art_battery_spread")
+wreck_texture = ExtResource("art_battery_spread_wreck")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/BatterySpread"]
-scale = Vector2(0.6875, 0.6875)
-texture = ExtResource("16_sf")
+texture = ExtResource("art_battery_spread")
 
 [node name="HurtBox" type="Area2D" parent="Modules/BatterySpread"]
 collision_layer = 512
@@ -221,11 +264,11 @@ module_id = &"battery_pulse"
 role = 0
 max_health = 260
 starts_vulnerable = true
-intact_texture = ExtResource("16_sf")
+intact_texture = ExtResource("art_battery_pulse")
+wreck_texture = ExtResource("art_battery_pulse_wreck")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/BatteryPulse"]
-scale = Vector2(0.6875, 0.6875)
-texture = ExtResource("16_sf")
+texture = ExtResource("art_battery_pulse")
 
 [node name="HurtBox" type="Area2D" parent="Modules/BatteryPulse"]
 collision_layer = 512
@@ -247,11 +290,11 @@ module_id = &"battery_artillery"
 role = 0
 max_health = 260
 starts_vulnerable = true
-intact_texture = ExtResource("16_sf")
+intact_texture = ExtResource("art_battery_artillery")
+wreck_texture = ExtResource("art_battery_artillery_wreck")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/BatteryArtillery"]
-scale = Vector2(0.6875, 0.6875)
-texture = ExtResource("16_sf")
+texture = ExtResource("art_battery_artillery")
 
 [node name="HurtBox" type="Area2D" parent="Modules/BatteryArtillery"]
 collision_layer = 512
@@ -273,11 +316,11 @@ module_id = &"battery_missiles"
 role = 0
 max_health = 260
 starts_vulnerable = true
-intact_texture = ExtResource("16_sf")
+intact_texture = ExtResource("art_battery_missiles")
+wreck_texture = ExtResource("art_battery_missiles_wreck")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/BatteryMissiles"]
-scale = Vector2(0.6875, 0.6875)
-texture = ExtResource("16_sf")
+texture = ExtResource("art_battery_missiles")
 
 [node name="HurtBox" type="Area2D" parent="Modules/BatteryMissiles"]
 collision_layer = 512
@@ -299,11 +342,11 @@ module_id = &"battery_sweep"
 role = 0
 max_health = 260
 starts_vulnerable = true
-intact_texture = ExtResource("16_sf")
+intact_texture = ExtResource("art_battery_sweep")
+wreck_texture = ExtResource("art_battery_sweep_wreck")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/BatterySweep"]
-scale = Vector2(0.6875, 0.6875)
-texture = ExtResource("16_sf")
+texture = ExtResource("art_battery_sweep")
 
 [node name="HurtBox" type="Area2D" parent="Modules/BatterySweep"]
 collision_layer = 512
@@ -325,11 +368,11 @@ module_id = &"hangar"
 role = 2
 max_health = 300
 starts_vulnerable = false
-intact_texture = ExtResource("3_sf")
+intact_texture = ExtResource("art_hangar_closed")
+wreck_texture = ExtResource("art_hangar_wreck")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/Hangar"]
-scale = Vector2(0.21875, 0.21875)
-texture = ExtResource("3_sf")
+texture = ExtResource("art_hangar_closed")
 
 [node name="HurtBox" type="Area2D" parent="Modules/Hangar"]
 collision_layer = 512
@@ -351,11 +394,11 @@ module_id = &"shield_north"
 role = 4
 max_health = 360
 starts_vulnerable = false
-intact_texture = ExtResource("3_sf")
+intact_texture = ExtResource("art_generator_closed")
+wreck_texture = ExtResource("art_generator_wreck")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/ShieldNorth"]
-scale = Vector2(0.203125, 0.203125)
-texture = ExtResource("3_sf")
+texture = ExtResource("art_generator_closed")
 
 [node name="HurtBox" type="Area2D" parent="Modules/ShieldNorth"]
 collision_layer = 512
@@ -377,11 +420,12 @@ module_id = &"shield_south"
 role = 4
 max_health = 360
 starts_vulnerable = false
-intact_texture = ExtResource("3_sf")
+intact_texture = ExtResource("art_generator_closed")
+wreck_texture = ExtResource("art_generator_wreck")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/ShieldSouth"]
-scale = Vector2(0.203125, 0.203125)
-texture = ExtResource("3_sf")
+flip_v = true
+texture = ExtResource("art_generator_closed")
 
 [node name="HurtBox" type="Area2D" parent="Modules/ShieldSouth"]
 collision_layer = 512
@@ -403,11 +447,11 @@ module_id = &"core"
 role = 3
 max_health = 1500
 starts_vulnerable = false
-intact_texture = ExtResource("3_sf")
+intact_texture = ExtResource("art_core_plated")
+wreck_texture = ExtResource("art_core_wreck")
 
 [node name="Sprite" type="Sprite2D" parent="Modules/Core"]
-scale = Vector2(0.34375, 0.34375)
-texture = ExtResource("3_sf")
+texture = ExtResource("art_core_plated")
 
 [node name="HurtBox" type="Area2D" parent="Modules/Core"]
 collision_layer = 512

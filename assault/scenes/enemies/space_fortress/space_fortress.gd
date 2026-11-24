@@ -36,10 +36,13 @@ signal death_started
 @export var config: SpaceFortressConfig = load("res://assault/scenes/enemies/space_fortress/space_fortress_config.tres")
 ## A wave spawn lands at a camera-relative point; this removes the camera's pan from x once in `_ready()` (the Carrier's rule).
 @export var world_anchored_x: bool = true
-## A generator's opened shutter, shown from `shields_exposed` (placeholder until t9).
+## A generator's opened shutter, shown from `shields_exposed` (`generator_open.png`; the part's `intact_texture` is the closed shutter).
 @export var shutter_open_texture: Texture2D
-## The core's opened plating, shown from `core_exposed` (placeholder until t9).
+## The core's opened plating, shown from `core_exposed` (`core_open.png`; the part's `intact_texture` is the plated core).
 @export var core_open_texture: Texture2D
+## The hangar with its doors open (`hangar_open.png`), shown while its bay's doors are opening or open (`BossReinforcements.door_changed`); the
+## part's `intact_texture` is the closed hangar and `wreck_texture` the wreck, so this is the third door state. Null: the hangar never changes.
+@export var hangar_open_texture: Texture2D
 
 const BATTERY_SPREAD := &"battery_spread"
 const BATTERY_PULSE := &"battery_pulse"
@@ -125,6 +128,7 @@ func _ready() -> void:
 	var cfg := config if config != null else SpaceFortressConfig.new()
 	_reinforcements = BossReinforcements.new(self, _hull, _driver, _fortress_brain.rng, _owner_group,
 			cfg.escort_cap_assault if _assault else cfg.escort_cap_open_space, cfg.escort_boost_speed, cfg.escort_boost_seconds)
+	_reinforcements.door_changed.connect(_on_door_changed)
 	_fortress_brain.config = cfg
 	_fortress_brain.bind(_hull, _reinforcements)
 	## The five batteries' mounts (t7): one gate, one running pool index; pools are root children, so rounds land in the fortress's parent container.
@@ -316,6 +320,18 @@ func _open_core_plating() -> void:
 	if core == null or core.is_destroyed() or core.sprite == null or core_open_texture == null:
 		return
 	core.sprite.texture = core_open_texture
+
+
+## The hangar's doors (t9 art): the open art while its own bay's doors are opening or open, the closed art once they shut, never over a wreck.
+## The generators' bays report through the same signal and change nothing here.
+func _on_door_changed(bay_id: StringName, open: bool) -> void:
+	var hangar := part(HANGAR)
+	if hangar_open_texture == null or hangar == null or hangar.is_destroyed() or hangar.sprite == null:
+		return
+	var bay := hangar.get_node_or_null(^"Bay") as ReinforcementBay
+	if bay == null or bay.bay_id != bay_id:
+		return
+	hangar.sprite.texture = hangar_open_texture if open else hangar.intact_texture
 
 
 ## The core light blink in `critical` (COMMIT / OFF every `core_blink_period`): `StateLight` has no COMMIT blink.

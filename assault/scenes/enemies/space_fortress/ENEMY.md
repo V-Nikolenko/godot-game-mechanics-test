@@ -9,12 +9,13 @@ removes an attack angle; destroying a generator bares a whole sector; every phas
 
 Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md` §2.5 (t5, this shell), §2.6 (t6 movement), §2.7 (t7 batteries, t16 geometry weapons), §2.8 (t8 bays),
 §2.9 (t9 art). Task plans: the shell `docs/plans/cmwt4y3hg00soqs2ybvglujbs/3-plan.md`, the movement `docs/plans/cmwt4y3hk00ssqs2ybengu81w/3-plan.md`, the geometry
-weapons `docs/plans/cmwt4y3hq00t0qs2ysigzomnw/3-plan.md`.
+weapons `docs/plans/cmwt4y3hq00t0qs2ysigzomnw/3-plan.md`, the art `docs/plans/cmwt4y3hw00t8qs2yw6didjf1/3-plan.md`.
 
 **Built so far:** t5 the shell (hull, parts, sector shields, phase ladder with its vulnerability and visual consequences, death, EMP, homing, roster
 gates); t6 the movement (facing rule, spins, Open Space combat zone, Assault hold and bob; `is_engaged()`); t7 the five batteries and the attack gate;
-t16 the geometry weapons (hull spokes, ring pulse, core bullet ring), their fairness rows and the measured Assault density; t8 the reinforcements (§Reinforcements).
-**Not yet:** art is placeholder station PNGs (t9); the spokes and the ring are code-drawn (`Line2D` / `_draw`).
+t16 the geometry weapons (hull spokes, ring pulse, core bullet ring), their fairness rows and the measured Assault density; t8 the reinforcements (§Reinforcements);
+t9 the art (§Art).
+**Not yet:** the spokes and the ring are code-drawn (`Line2D` / `_draw`).
 
 ---
 
@@ -213,13 +214,32 @@ Space, 4 in Assault) run only then. It only requests (`face_toward`, `request_ve
 - **Thrusters**: `Thrusters.visible` is the root's phase flag (from `core_exposed`; the snapshot reads it); the brain writes only `Thrusters.modulate.a`, 1.0
   while travelling (REPOSITION en route, RETURNING, ENTER, the bob) and `THRUSTER_IDLE_ALPHA` 0.35 holding.
 
+## Art
+
+`assault/assets/sprites/enemies/space_fortress/` (t9; strictly top-down, every texture at scale 1, sized to its hurtbox, ≤ 90 % fully opaque, one palette:
+ink / gunmetal / red faction / cool blue; wrecks are charred greys with ember pixels). Gate `tests/integration/test_fortress_sprites.gd`.
+
+| Node | Texture(s) | Size | When |
+|---|---|---|---|
+| hull `Sprite2D` | `fortress_hull.png` (hit-flash material kept) | 384 × 384 | always: ring hull, four red corner bastions under the diagonal batteries, two mid-side mounts (sweep, hangar), two empty generator wells at (0, ±120), the core well |
+| each battery `Sprite` | `battery_<kind>.png` / `battery_<kind>_wreck.png` (kind: spread, pulse, artillery, missiles, sweep) | 44 × 44 | intact / wreck; five distinct bases (orange fan vents, magenta capacitor pods, octagonal red-blocked collar, red-rimmed missile hatches, cyan emitter ring); the mount head (`turret_head_*.png`, unchanged) turns on top and is tinted dark when the part dies |
+| `Hangar/Sprite` | `hangar_closed.png` / `SpaceFortress.hangar_open_texture` `hangar_open.png` / `hangar_wreck.png` | 36 × 56 | closed; **open while its bay's doors are opening or open** (`BossReinforcements.door_changed` → `_on_door_changed`, matched on the hangar's own `Bay.bay_id`, never over a wreck); wreck |
+| `ShieldNorth` / `ShieldSouth` `Sprite` | `generator_closed.png` / `shutter_open_texture` `generator_open.png` / `generator_wreck.png` | 52 × 52 | iris shutter closed (`batteries`), open cyan emitter (`shields_exposed`), wreck; the south sprite is `flip_v` so its emitter fin faces outward |
+| `Core/Sprite` | `core_plated.png` / `core_open_texture` `core_open.png` / `core_wreck.png` | 88 × 88 | plated, open reactor glow (`core_exposed`, never over a wreck), crater |
+| `Thrusters/Thruster0..3` | `thruster.png` | 16 × 24 | on the rim at bearings 67.5 / 112.5 / 247.5 / 292.5°, r 184, each turned so its plume (sprite +y) points outward; shown from `core_exposed` |
+| `CriticalOverlay/Overlay` | `critical_overlay.png` | 384 × 384 | glowing cracks over the ring (≈ 3 % of the canvas touched), under the parts; shown in `critical` |
+
+The hull is a PixelLab `create_map_object` generation (background stripped by `strip-sprite-bg.sh`) whose north / south sockets sat at r 150; a scripted pixel
+edit continued the ring bands across them and painted the generator wells at the frozen part centres. Every other texture is hand-drawn through the PixelLab
+workbench (`pixelart_workbench draw`), the Phase 10 route (DECISIONS, Phase 11 t9).
+
 ## Spawning
 
 `b.space_fortress()` (`WaveBuilder.SPACE_FORTRESS`); no `.delay()`, no `.move()`. `world_anchored_x` (a wave spawn's x is world-anchored, the Carrier's rule).
 
 ## Tests
 
-`tests/integration/test_fortress_weapons.gd` (rows A1–A6 and B7–B12 of plan §2.7.7, both harnesses: the five mounts, pools and gate, crossfire and dead lanes, when the guns may fire, the critical cooldowns and pools, 30 s of critical fire, EMP and death with a rocket outliving the fortress; the spokes and ring as authored, by phase / period / spin, hitting the real player and an outsider but never the owner set (real physics 8×), the core ring (critical only, 12 rounds, the 0.24 precession and its lane boundary, the parent container, 72-round pool), EMP and death cancelling them with the fade tick, the fairness rows with the 15° gap boundary, the measured Assault density in every phase at five positions, and the `attacks` / `arena` keys), `tests/integration/test_space_fortress.gd` (rows 1–11 of plan §2.5.7, both harnesses; the armour, lane and locked-part rows on real physics at 8×; the t6
+`tests/integration/test_fortress_sprites.gd` (every texture's size, corners and opacity, the light overlay, hull and part wiring with the hurtbox-sized art, wrecks, the hangar's three door states through the signal and the real door cycle, shutters and plating, thrusters pointing outward, no station art in the scene file), `tests/integration/test_fortress_weapons.gd` (rows A1–A6 and B7–B12 of plan §2.7.7, both harnesses: the five mounts, pools and gate, crossfire and dead lanes, when the guns may fire, the critical cooldowns and pools, 30 s of critical fire, EMP and death with a rocket outliving the fortress; the spokes and ring as authored, by phase / period / spin, hitting the real player and an outsider but never the owner set (real physics 8×), the core ring (critical only, 12 rounds, the 0.24 precession and its lane boundary, the parent container, 72-round pool), EMP and death cancelling them with the fade tick, the fairness rows with the 15° gap boundary, the measured Assault density in every phase at five positions, and the `attacks` / `arena` keys), `tests/integration/test_space_fortress.gd` (rows 1–11 of plan §2.5.7, both harnesses; the armour, lane and locked-part rows on real physics at 8×; the t6
 movement block: idle, facing at exactly the turn rate, halving and ties, circling wins (player speeds read from their scenes), hold, the reposition pick
 recomputed from the config, the leash, the Assault entry / hold / bob / fixed x, spins, EMP and thrusters, all hand-ticked), plus the
 roster gates: `test_enemy_contact_damage.gd`, `test_contact_hitbox_geometry.gd`, `test_enemy_hurtbox_geometry.gd`, `test_base_enemy.gd`,
@@ -238,3 +258,5 @@ space_fortress/
 ├── fortress_brain.gd            FortressBrain (movement: facing rule, spins, Open Space zone, Assault hold / bob; the batteries and attack gate; the geometry weapons; bays tick; phase / EMP / death hooks)
 └── space_fortress_config.gd / .tres   SpaceFortressConfig (flat)
 ```
+
+Art: `assault/assets/sprites/enemies/space_fortress/` (22 PNGs, §Art).
