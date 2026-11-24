@@ -38,8 +38,8 @@ const PARTS := [
 ]
 const NORTH := [&"battery_artillery", &"battery_missiles", &"hangar"]
 const SOUTH := [&"battery_spread", &"battery_pulse", &"battery_sweep"]
-## The §25 keys built so far (t5 vulnerable and visuals, t6 movement, t7 the battery fields of attacks; t16 adds the rest of attacks and arena, t8 reinforcements).
-const BUILT_KEYS := {Change.VULNERABLE: &"vulnerable", Change.VISUALS: &"visuals", Change.MOVEMENT: &"movement", Change.ATTACKS: &"attacks"}
+## The §25 keys built so far (t5 vulnerable and visuals, t6 movement, t7 the battery fields of attacks, t16 the rest of attacks and arena; t8 adds reinforcements).
+const BUILT_KEYS := {Change.VULNERABLE: &"vulnerable", Change.VISUALS: &"visuals", Change.MOVEMENT: &"movement", Change.ATTACKS: &"attacks", Change.ARENA: &"arena"}
 const _SPEEDUP := 8  # tests/README.md -> Gate time rule 1
 
 var _roots: Array[Node] = []
@@ -507,7 +507,7 @@ func test_each_phase_shows_its_declared_changes(mode: String = use_parameters(MO
 	_part(f, &"battery_pulse").destroy()
 	await _settle()
 	assert_eq(driver.current_id(), &"shields_exposed")
-	_assert_declared_changes(driver.phase(1), before, f.phase_snapshot(), "%s shields_exposed" % mode, Change.ATTACKS)
+	_assert_declared_changes(driver.phase(1), before, f.phase_snapshot(), "%s shields_exposed" % mode)
 	_assert_movement(f, mode, 1)
 	for id in [&"shield_north", &"shield_south"]:
 		var generator := _part(f, id)
@@ -735,9 +735,17 @@ const OPEN_SPACE_PLAYER: PackedScene = preload("res://open_space/scenes/entities
 const ASSAULT_PLAYER: PackedScene = preload("res://assault/scenes/player/player_fighter.tscn")
 
 
-## A hand-ticked fortress; Open Space ones start engaged unless [param engaged] is false.
-func _mover_spawn(h, pos: Vector2 = Vector2.INF, engaged: bool = true) -> SpaceFortress:
+## The geometry weapons kept quiet for a movement row (t16): a volley's spin would turn the hull at `beam_spin_rate`, faster than the facing rule, and these
+## rows test movement. Written on the private config copy; rows that read the `attacks` / `arena` snapshot use `_spawn` (the shipped values).
+const QUIET_GEOMETRY := {"spoke_period": 1e6, "critical_spoke_period": 1e6, "ring_period": 1e6, "critical_ring_period": 1e6, "core_ring_period": 1e6}
+
+
+## A hand-ticked fortress; Open Space ones start engaged unless [param engaged] is false. Its geometry weapons are quiet unless [param quiet_geometry] is false.
+func _mover_spawn(h, pos: Vector2 = Vector2.INF, engaged: bool = true, quiet_geometry: bool = true) -> SpaceFortress:
 	var f := SCENE.instantiate() as SpaceFortress
+	if quiet_geometry:
+		for key in QUIET_GEOMETRY:
+			f.config.set(key, QUIET_GEOMETRY[key])
 	(f.get_node("Brain") as FortressBrain).start_engaged = engaged
 	if not pos.is_finite():
 		pos = Vector2(640.0, SHIPPED.assault_hold_y) if h.is_assault else SPAWN

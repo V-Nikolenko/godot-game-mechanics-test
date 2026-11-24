@@ -1,0 +1,22 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_beams/beam.tscn" id="1_fsb"]
+
+[node name="FortressSpokeBeam" instance=ExtResource("1_fsb")]
+kind = 0
+telegraph_seconds = 1.2
+commit_seconds = 0.0
+active_seconds = 2.5
+fade_seconds = 0.15
+ignite_grace = 0.1
+length = 900.0
+hit_half_width = 12.0
+draw_half_width = 16.0
+tip_grace_px = 24.0
+telegraph_width = 4.0
+damage = 14
+rehit_interval = 0.55
+sweep_arc_deg = 0.0
+sweep_rate = 0.0
+blocked_by_cover = true
+registers_hazard = true

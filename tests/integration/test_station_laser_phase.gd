@@ -389,7 +389,14 @@ func test_beams_stop_and_do_not_outlive_the_station() -> void:
 
 	_kill_all_turrets()
 	_scale_clock()
-	await wait_seconds(1.0)
+	## Wait for a lethal beam (bounded), never a fixed wall time: where a fixed 1.0 s lands in the 0.2 s warn / 2.0 s active cycle depends on frame
+	## pacing, and run alone this row sampled the warn window every time (Ph11 t16 found it failing on a clean HEAD too).
+	var any_lethal := func() -> bool:
+		for beam in p.live_beams():
+			if beam.is_lethal_now():
+				return true
+		return false
+	await wait_until(any_lethal, 3.0)
 	var beams := p.live_beams()
 	assert_gt(beams.size(), 0, "there must be a live beam, or this proves nothing")
 	var lethal_before: int = 0

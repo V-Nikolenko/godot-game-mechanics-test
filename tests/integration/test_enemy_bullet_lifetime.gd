@@ -150,6 +150,9 @@ func _every_shipped_enemy_bullet_speed() -> Array[float]:
 	# The spread cannon (Scatter) and rapid pulse (Pulse) mounts (Phase 11 t3).
 	speeds.append(_spread_cannon_speed())
 	speeds.append(_rapid_pulse_speed())
+	# The Space Fortress's core bullet ring (Phase 11 t16): a config field on the shipped .tres.
+	var fortress_cfg: SpaceFortressConfig = load("res://assault/scenes/enemies/space_fortress/space_fortress_config.tres")
+	speeds.append(fortress_cfg.core_ring_speed)
 
 	return speeds
 

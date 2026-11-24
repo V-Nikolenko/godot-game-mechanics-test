@@ -17,6 +17,8 @@
 [ext_resource type="Script" path="res://global/boss/boss_death_sequence.gd" id="15_sf"]
 [ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/station_turret.png" id="16_sf"]
 [ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/turret_mount_slot.gd" id="17_sf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/space_fortress/fortress_spoke_beam.tscn" id="18_sf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/space_fortress/fortress_pulse_ring.tscn" id="19_sf"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_sf"]
 resource_local_to_scene = true
@@ -460,3 +462,30 @@ variant = 1
 rest_bearing_deg = 0.0
 traverse_deg_override = 140.0
 pool_period_factor = 0.6
+
+[node name="HullBeams" type="Node2D" parent="."]
+
+[node name="Spoke0" type="Node2D" parent="HullBeams"]
+position = Vector2(0, -176)
+rotation = -1.5707964
+
+[node name="Beam" parent="HullBeams/Spoke0" instance=ExtResource("18_sf")]
+
+[node name="Spoke1" type="Node2D" parent="HullBeams"]
+position = Vector2(0, 176)
+rotation = 1.5707964
+
+[node name="Beam" parent="HullBeams/Spoke1" instance=ExtResource("18_sf")]
+
+[node name="Spoke2" type="Node2D" parent="HullBeams"]
+position = Vector2(176, 0)
+
+[node name="Beam" parent="HullBeams/Spoke2" instance=ExtResource("18_sf")]
+
+[node name="Spoke3" type="Node2D" parent="HullBeams"]
+position = Vector2(-176, 0)
+rotation = 3.1415927
+
+[node name="Beam" parent="HullBeams/Spoke3" instance=ExtResource("18_sf")]
+
+[node name="PulseRing" parent="." instance=ExtResource("19_sf")]

@@ -6,6 +6,11 @@
 ## ticks when an EMP window starts (`on_emp_started()`: every attached mount `scan(0.0)`s and the bays get one `tick(0.0, false)`, because the brain is not ticked
 ## during the window) and when the fortress dies (`silence()`), and refuses tows.
 ##
+## GEOMETRY WEAPONS (t16, plan §2.7.2-§2.7.5): the hull spokes (`HullBeams/Spoke0..3`, volleys from `shields_exposed` that spin the hull while lit), the ring
+## pulse (`PulseRing`, from `core_exposed`, the arena-control weapon) and the core bullet ring (`CoreRingPool` + a runtime `RadialAttackPattern`, `critical`
+## only). This brain is their only clock (`tick(delta)`), starts them on per-boss-phase countdowns while engaged and cancels them on an EMP or the death;
+## `tick_fades()` lets the root finish a cancelled one's FADE while this brain is not ticked.
+##
 ## MOVEMENT (t6). A face point is requested EVERY tick (with none the mover would yaw the hull to its direction of travel):
 ##   - the FACING RULE (`present_side()`): the stronger sector (live batteries, halved once its generator is destroyed; a tie keeps the side) is turned toward
 ##     the player at `turn_rate` (Assault `assault_turn_rate`), slower than a circling player, so circling reaches the weak side;
@@ -109,12 +114,51 @@ var _thrusters: CanvasItem
 var _max_attacks: int = 2
 var _cooldown_factor: float = 1.0
 var _cooldown_applied: bool = false
+## The geometry weapons (t16), bound by the root: the four hull spokes, the ring pulse, the core ring's pool and its runtime pattern.
+var _spokes: Array[EnemyBeam] = []
+var _ring: EnergyRing
+var _core_pool: BulletPool
+var _core_pattern: RadialAttackPattern
+## Their per-boss-phase settings (the §25 `attacks` / `arena` fields; 0 / false = not armed) and their countdowns.
+var _spoke_count: int = 0
+var _spoke_period: float = 0.0
+var _spoke_left: float = 0.0
+var _ring_armed: bool = false
+var _ring_period: float = 0.0
+var _ring_left: float = 0.0
+var _core_ring_armed: bool = false
+var _core_ring_period: float = 0.0
+var _core_ring_left: float = 0.0
+## The core ring's next base angle (absolute, world space: `RadialAttackPattern` ignores the hull's rotation by contract).
+var _core_ring_angle: float = 0.0
+## The running volley's spokes (only those its `start()` actually moved to TELEGRAPH, kept while TELEGRAPH or ACTIVE) and whether its spin runs.
+var _volley: Array[EnemyBeam] = []
+var _volley_spinning: bool = false
 
 
 ## Hands the brain its parts and its bays (called by the root in `_ready()`).
 func bind(hull: ModularHull, reinforcements: BossReinforcements) -> void:
 	_hull = hull
 	_reinforcements = reinforcements
+
+
+## Hands the brain its geometry weapons (the root, in `_ready()`): each spoke and the ring get the owner set (the fortress and its owner group, escorts
+## included, are never hit), and the core ring's pattern is built from the config (`new()`, never a loaded resource).
+func bind_geometry(host: Node2D, spokes: Array[EnemyBeam], ring: EnergyRing, core_pool: BulletPool, owner_group: StringName) -> void:
+	_spokes = spokes
+	_ring = ring
+	_core_pool = core_pool
+	for spoke in _spokes:
+		spoke.setup(host, owner_group)
+	if _ring != null:
+		_ring.setup(host, owner_group)
+	_core_pattern = RadialAttackPattern.new()
+	_core_pattern.bullet_count = config.core_ring_count
+	_core_pattern.arc = TAU
+	_core_pattern.aim_at_player = false
+	_core_pattern.bullet_damage = config.core_ring_damage
+	_core_pattern.bullet_speed = config.core_ring_speed
+	_core_pattern.spawn_radius = config.core_ring_spawn_radius
 
 
 func tick(delta: float) -> void:
@@ -129,6 +173,7 @@ func tick(delta: float) -> void:
 		_face(target)
 		_show_thrust()
 		_tick_weapons(delta, target)
+		_tick_geometry(delta, target)
 	if _reinforcements != null:
 		_reinforcements.tick(delta, is_engaged())
 
@@ -176,6 +221,40 @@ func on_boss_phase(phase_id: StringName) -> void:
 			_continuous_dir = -_last_spin_dir
 			_last_spin_dir = _continuous_dir
 	_set_attacks(phase_id)
+	_set_geometry(phase_id)
+
+
+## The geometry weapons' phase settings (plan §2.7.2-§2.7.4): spokes from `shields_exposed`, the ring pulse from `core_exposed`, the core ring in
+## `critical` only. A weapon armed for the first time waits one full period (the first shot comes one period after the phase began); a period that
+## shortens keeps the countdown already run (min of the two).
+func _set_geometry(phase_id: StringName) -> void:
+	match phase_id:
+		&"shields_exposed", &"core_exposed":
+			_arm_spokes(config.spoke_count, config.spoke_period)
+		&"critical":
+			_arm_spokes(config.critical_spoke_count, config.critical_spoke_period)
+	match phase_id:
+		&"core_exposed":
+			_ring_left = _armed_left(_ring_armed, _ring_left, config.ring_period)
+			_ring_armed = true
+			_ring_period = config.ring_period
+		&"critical":
+			_ring_left = _armed_left(_ring_armed, _ring_left, config.critical_ring_period)
+			_ring_armed = true
+			_ring_period = config.critical_ring_period
+			_core_ring_left = _armed_left(_core_ring_armed, _core_ring_left, config.core_ring_period)
+			_core_ring_armed = true
+			_core_ring_period = config.core_ring_period
+
+
+func _arm_spokes(count: int, period: float) -> void:
+	_spoke_left = _armed_left(_spoke_count > 0, _spoke_left, period)
+	_spoke_count = count
+	_spoke_period = period
+
+
+func _armed_left(was_armed: bool, left: float, period: float) -> float:
+	return minf(left, period) if was_armed else period
 
 
 ## The batteries' phase settings (the §25 `attacks` key's battery fields): `critical` cuts every live battery mount's cooldown by `critical_cooldown_factor`,
@@ -203,15 +282,29 @@ func _set_attacks(phase_id: StringName) -> void:
 ## halts the mover; with no request it writes no motion and no rotation).
 func on_emp_started() -> void:
 	_scan_mounts()
+	_cancel_geometry()
 	if _reinforcements != null:
 		_reinforcements.tick(0.0, false)
 	_travelling = false
 	_show_thrust()
 
 
-## The fortress's death started (after `suspend_ai()`): every mount is already powered down by the root; t16 cancels its beams and rings here.
+## The fortress's death started (after `suspend_ai()`): every mount is already powered down by the root; the spokes and the ring are cancelled (the root
+## ticks their fade out) and every core-ring round in the air is freed.
 func silence() -> void:
-	pass
+	_cancel_geometry()
+	if _core_pool != null:
+		_core_pool.cancel_active()
+
+
+## The root's tick while this brain is not ticked (an EMP window, the death sequence): a cancelled spoke or ring is still drawn in FADE until ticked, so
+## each one in FADE is ticked on to OFF. Nothing else is advanced (nothing starts).
+func tick_fades(delta: float) -> void:
+	for spoke in _spokes:
+		if is_instance_valid(spoke) and spoke.phase() == EnemyBeam.Phase.FADE:
+			spoke.tick(delta)
+	if _ring != null and is_instance_valid(_ring) and _ring.phase() == EnergyRing.Phase.FADE:
+		_ring.tick(delta)
 
 
 ## A boss is never towed.
@@ -224,14 +317,28 @@ func movement_snapshot() -> Array:
 	return [_translation_mode, _spin_mode, _reposition_period, _travel_speed]
 
 
-## §25 `attacks`: `[cooldown_factor, max_concurrent_attacks, spoke_count, spoke_period, core_ring_armed, core_ring_period]`, the current boss phase's settings. t7 builds
-## the two battery fields; the spoke and core-ring fields are zero / false until t16. The live battery set is not in it (a dead battery is §26, not a phase).
+## §25 `attacks`: `[cooldown_factor, max_concurrent_attacks, spoke_count, spoke_period, core_ring_armed, core_ring_period]`, the current boss phase's settings
+## (0 / false while a weapon is not armed). The live battery set is not in it (a dead battery is §26, not a phase).
 func attacks_snapshot() -> Array:
-	return [_cooldown_factor, _max_attacks, 0, 0.0, false, 0.0]
+	return [_cooldown_factor, _max_attacks, _spoke_count, _spoke_period, _core_ring_armed, _core_ring_period]
 
 
+## §25 `arena`: `[ring_pulse_armed, ring_period]` (the ring pulse is the arena-control weapon).
 func arena_snapshot() -> Array:
-	return []
+	return [_ring_armed, _ring_period]
+
+
+## Seconds until the next spoke volley / ring pulse / core ring is due (the countdowns; meaningful only while armed).
+func spoke_countdown() -> float:
+	return _spoke_left
+
+
+func ring_countdown() -> float:
+	return _ring_left
+
+
+func core_ring_countdown() -> float:
+	return _core_ring_left
 
 
 func reinforcements() -> BossReinforcements:
@@ -522,8 +629,106 @@ func _tick_weapons(delta: float, target: TargetInfo) -> void:
 	var sees := true
 	if Engine.is_in_physics_frame():
 		sees = can_see_player()
-	var tree := get_tree()
-	var in_view := not assault or not EnemyWorld.has_view_rect(tree) or EnemyWorld.view_rect(tree).has_point(actor.global_position)
+	var in_view := _hull_in_view()
 	var emp: bool = actor.emp_seconds_left() > 0.0 if actor.has_method(&"emp_seconds_left") else false
 	for mount in mounts:
 		mount.tick(delta, target, in_view and not emp and (sees or mount.fires_past_cover()))
+
+
+## Open Space always; Assault: the hull centre inside `EnemyWorld.view_rect()` (nothing the fortress owns fires from outside the view).
+func _hull_in_view() -> bool:
+	var tree := get_tree()
+	return not assault or not EnemyWorld.has_view_rect(tree) or EnemyWorld.view_rect(tree).has_point(actor.global_position)
+
+
+# ── Geometry weapons (t16, plan §2.7.2-§2.7.5) ───────────────────────────────────────────────────
+
+## Every spoke and the ring are ticked first (their only clock: a running shot finishes whatever the brain phase), then each armed weapon's countdown
+## runs while engaged and fires when it is due and the brain may fire (a target and, in Assault, the hull in view; otherwise it waits at 0), then the
+## volley spin follows its beams. An EMP never reaches here: the brain is not ticked for the window.
+func _tick_geometry(delta: float, target: TargetInfo) -> void:
+	for spoke in _spokes:
+		spoke.tick(delta)
+	if _ring != null:
+		_ring.tick(delta)
+	if is_engaged():
+		# The view lookup only on a tick where a weapon comes due (most ticks none does).
+		var due := (_spoke_count > 0 and _spoke_left - delta <= CLOCK_EPS) or (_ring_armed and _ring_left - delta <= CLOCK_EPS) \
+				or (_core_ring_armed and _core_ring_left - delta <= CLOCK_EPS)
+		var may_fire := due and target.has_target and _hull_in_view()
+		if _spoke_count > 0:
+			_spoke_left = _countdown(_spoke_left, _spoke_period, delta, may_fire, _start_volley)
+		if _ring_armed:
+			_ring_left = _countdown(_ring_left, _ring_period, delta, may_fire, _start_ring)
+		if _core_ring_armed:
+			_core_ring_left = _countdown(_core_ring_left, _core_ring_period, delta, may_fire, _fire_core_ring)
+	_update_volley_spin()
+
+
+## One countdown step: over at <= `CLOCK_EPS` (the project clock rule); then [param fire] runs and the next period is added (floored at 0), or, when the
+## brain may not fire, the countdown waits at 0.
+func _countdown(left: float, period: float, delta: float, may_fire: bool, fire: Callable) -> float:
+	left -= delta
+	if left > CLOCK_EPS:
+		return left
+	if not may_fire:
+		return 0.0
+	fire.call()
+	return maxf(left + period, 0.0)
+
+
+## A volley: Spoke0 + Spoke1 (`spoke_count` 2) or all four. Only the spokes `start()` actually moved to TELEGRAPH join the volley (a running one ignores it).
+func _start_volley() -> void:
+	for i in mini(_spoke_count, _spokes.size()):
+		var spoke := _spokes[i]
+		var was := spoke.phase()
+		spoke.start()
+		if was != EnemyBeam.Phase.TELEGRAPH and spoke.phase() == EnemyBeam.Phase.TELEGRAPH and not _volley.has(spoke):
+			_volley.append(spoke)
+
+
+## One ring pulse from the hull centre, its gaps from the brain's rng (the Carrier's draw).
+func _start_ring() -> void:
+	if _ring != null:
+		_ring.start(rng.randf_range(0.0, 360.0))
+
+
+## One core bullet ring at the running base angle, then the angle precesses by `core_ring_step`.
+func _fire_core_ring() -> void:
+	if _core_pattern == null or _core_pool == null:
+		return
+	_core_pattern.base_angle = _core_ring_angle
+	_core_pattern.fire(actor, _core_pool)
+	_core_ring_angle = fposmod(_core_ring_angle + config.core_ring_step, TAU)
+
+
+## Edge-triggered: the hull starts a volley spin (alternating direction) when one of the volley's spokes turns ACTIVE and ends it once none is ACTIVE; a
+## spin started by hand with `begin_spin()` is never ended here. The volley forgets a spoke that is no longer TELEGRAPH or ACTIVE.
+func _update_volley_spin() -> void:
+	var lit := false
+	for spoke in _volley:
+		lit = lit or spoke.phase() == EnemyBeam.Phase.ACTIVE
+	if lit and not _volley_spinning:
+		begin_spin(0)
+		_volley_spinning = true
+	elif not lit and _volley_spinning:
+		end_spin()
+		_volley_spinning = false
+	for i in range(_volley.size() - 1, -1, -1):
+		var p := _volley[i].phase()
+		if p != EnemyBeam.Phase.TELEGRAPH and p != EnemyBeam.Phase.ACTIVE:
+			_volley.remove_at(i)
+
+
+## An EMP or the death: every spoke and the ring are cancelled (a telegraph goes OFF, a lit one fades; the root ticks the fade while the brain is not
+## ticked) and the volley spin ends. The core ring's rounds in flight are the caller's business.
+func _cancel_geometry() -> void:
+	for spoke in _spokes:
+		if is_instance_valid(spoke):
+			spoke.cancel()
+	if _ring != null and is_instance_valid(_ring):
+		_ring.cancel()
+	if _volley_spinning:
+		end_spin()
+	_volley_spinning = false
+	_volley.clear()

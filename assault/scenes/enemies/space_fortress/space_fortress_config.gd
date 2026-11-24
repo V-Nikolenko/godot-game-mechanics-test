@@ -97,3 +97,24 @@ extends ShipConfig
 ## In `critical` every live battery's `cooldown_seconds` is multiplied by this, once, on the instanced mount nodes. The five battery slots author
 ## `pool_period_factor` equal to it, so the pools are sized for the shorter period (pinned by test_fortress_weapons.gd).
 @export var critical_cooldown_factor: float = 0.6
+
+@export_group("Geometry weapons")
+## Spoke volleys (plan §2.7.2): from `shields_exposed` `spoke_count` hull spokes light every `spoke_period` s (Spoke0 + Spoke1), in `critical`
+## `critical_spoke_count` every `critical_spoke_period` s. The hull spins while they are lit (`beam_spin_rate`). Beam tuning is `fortress_spoke_beam.tscn`'s.
+@export var spoke_count: int = 2
+@export var critical_spoke_count: int = 4
+@export var spoke_period: float = 8.0
+@export var critical_spoke_period: float = 6.0
+## The arena-control ring pulse (§2.7.3): from `core_exposed`, one ring every `ring_period` s (`critical_ring_period` in `critical`). Ring tuning is
+## `fortress_pulse_ring.tscn`'s.
+@export var ring_period: float = 6.0
+@export var critical_ring_period: float = 3.5
+## The core bullet ring (§2.7.4, the station's, kept per IDEAS §39): `critical` only, `core_ring_count` rounds of `core_ring_damage` at `core_ring_speed`
+## px/s from `core_ring_spawn_radius` px off the centre every `core_ring_period` s, the ring's base angle advancing `core_ring_step` rad each time so no
+## bearing stays a safe lane. The `CoreRingPool` is sized from these (`EnemyRounds.pool_size_for`).
+@export var core_ring_period: float = 2.0
+@export var core_ring_count: int = 12
+@export var core_ring_damage: int = 10
+@export var core_ring_speed: float = 210.0
+@export var core_ring_spawn_radius: float = 60.0
+@export var core_ring_step: float = 0.24

@@ -31,6 +31,7 @@ var _roots: Array[Node] = []
 
 
 func after_each() -> void:
+	_restore_clock()
 	_roots.clear()
 
 
@@ -91,7 +92,7 @@ func _life(round_node: Node) -> float:
 
 ## Counters for one fortress: telegraphs and rounds per battery id, the rounds in flight with the sim time they expire at, and the sim clock.
 func _watch(f: SpaceFortress) -> Dictionary:
-	var rec := {"tele": {}, "rounds": {}, "live": [], "t": 0.0}
+	var rec := {"tele": {}, "rounds": {}, "live": [], "t": 0.0, "core_seen": {}, "core_rounds": 0}
 	for b in BATTERIES:
 		var id: StringName = b[0]
 		rec["tele"][id] = 0
@@ -113,14 +114,37 @@ func _total(rec: Dictionary, key: String) -> int:
 	return n
 
 
+## The core ring's round life: min(`max_time`, `max_distance` / `core_ring_speed`), read off `enemy_bullet.tscn` the way the root sizes its pool (t16).
+func _core_life() -> float:
+	var scene := SpaceFortress.CORE_RING_ROUND
+	var max_time := float(EnemyBeamScenes.export_of_scene(scene, &"max_time", 18.0, ^"ProjectileLifetime"))
+	var max_distance := float(EnemyBeamScenes.export_of_scene(scene, &"max_distance", 2400.0, ^"ProjectileLifetime"))
+	return minf(max_time, max_distance / SHIPPED.core_ring_speed)
+
+
+## Records every core-ring round launched since the last call (they come from no mount, so `round_fired` never sees them) with its expiry (t16).
+func _track_core(f: SpaceFortress, rec: Dictionary) -> void:
+	var pool := f.core_ring_pool()
+	if pool == null:
+		return
+	var seen: Dictionary = rec["core_seen"]
+	for round_node in pool._active:
+		if not seen.has(round_node):
+			seen[round_node] = true
+			rec["core_rounds"] += 1
+			rec["live"].append([round_node, rec["t"] + _core_life()])
+
+
 ## Returns every round whose life is over to its pool at once (the real round does this on its own physics step, which a hand-ticked row never runs).
 func _expire(f: SpaceFortress, rec: Dictionary) -> void:
+	_track_core(f, rec)
 	var live: Array = rec["live"]
 	for i in range(live.size() - 1, -1, -1):
 		if rec["t"] < float(live[i][1]):
 			continue
 		var round_node: Node = live[i][0]
 		live.remove_at(i)
+		rec["core_seen"].erase(round_node)
 		if not is_instance_valid(round_node):
 			continue
 		round_node.expired.emit()
@@ -161,6 +185,8 @@ func _ladder_to(f: SpaceFortress, phase_id: StringName) -> void:
 	var driver := f.phase_driver()
 	for step in order:
 		if order.find(driver.current_id()) >= order.find(step):
+			if step == phase_id:
+				return  # already there (the density row enters shields_exposed by its own kills)
 			continue
 		match step:
 			&"shields_exposed":
@@ -339,14 +365,18 @@ func test_open_space_fires_nothing_while_idle_noticing_or_returning() -> void:
 	var brain := _brain(f)
 	var ticks := 0
 	var saw_noticing := false
+	var tele_unengaged := 0
 	while brain.phase != FortressBrain.Phase.HOLD and ticks < 400:
 		_tick_full(f, rec)
 		ticks += 1
 		saw_noticing = saw_noticing or brain.phase == FortressBrain.Phase.NOTICING
 		if brain.phase != FortressBrain.Phase.HOLD:
 			assert_true(_all_in_phase(f, Phase.SCAN), "every mount scans in brain phase %d" % brain.phase)
+			# Only ticks that end unengaged count: the tick that enters HOLD ticks the mounts engaged, and a mount whose (random) scan already
+			# points at the player may telegraph on it (t16: this row flaked on exactly that).
+			tele_unengaged = _total(rec, "tele")
 	assert_true(saw_noticing, "sanity: it noticed the player first")
-	assert_eq(_total(rec, "tele"), 0, "nothing telegraphed while idle or noticing")
+	assert_eq(tele_unengaged, 0, "nothing telegraphed while idle or noticing")
 	for i in 900:
 		_tick_full(f, rec)
 		if _total(rec, "tele") > 0:
@@ -538,22 +568,607 @@ func test_death_powers_every_mount_down_and_a_rocket_in_flight_outlives_the_fort
 	assert_true(rocket.is_queued_for_deletion(), "%s: and one expiry ends it" % mode)
 
 
-# ══ 6. The §25 attacks key ══════════════════════════════════════════════════════════════════════
+# ══ 6 / 12. The §25 attacks and arena keys ══════════════════════════════════════════════════════
 
-## The battery fields of `attacks` (`[cooldown_factor, max_concurrent_attacks, ...]`; the spoke and core-ring fields are t16's), typed here.
-func test_the_attacks_key_carries_the_cooldown_factor_and_the_gate_cap(mode: String = use_parameters(MODES)) -> void:
+## `attacks` = `[cooldown_factor, max_concurrent_attacks, spoke_count, spoke_period, core_ring_armed, core_ring_period]` and `arena` =
+## `[ring_pulse_armed, ring_period]` per boss phase (t7 the battery fields, t16 the rest), typed here.
+func test_the_attacks_and_arena_keys_per_boss_phase(mode: String = use_parameters(MODES)) -> void:
 	var h = _world(mode)
 	var f := _spawn(h)
-	var before_critical := [1.0, 2, 0, 0.0, false, 0.0]
-	assert_eq(f.phase_snapshot()[&"attacks"], before_critical, "%s: batteries" % mode)
+	assert_eq(f.phase_snapshot()[&"attacks"], [1.0, 2, 0, 0.0, false, 0.0], "%s: batteries: no spokes, no core ring" % mode)
+	assert_eq(f.phase_snapshot()[&"arena"], [false, 0.0], "%s: batteries: no ring pulse" % mode)
 	_ladder_to(f, &"shields_exposed")
-	assert_eq(f.phase_snapshot()[&"attacks"], before_critical, "%s: shields_exposed (the spokes are t16's)" % mode)
+	assert_eq(f.phase_snapshot()[&"attacks"], [1.0, 2, 2, 8.0, false, 0.0], "%s: shields_exposed: two spokes every 8 s" % mode)
+	assert_eq(f.phase_snapshot()[&"arena"], [false, 0.0], "%s: shields_exposed: no ring pulse" % mode)
 	_ladder_to(f, &"core_exposed")
-	assert_eq(f.phase_snapshot()[&"attacks"], before_critical, "%s: core_exposed" % mode)
+	assert_eq(f.phase_snapshot()[&"attacks"], [1.0, 2, 2, 8.0, false, 0.0], "%s: core_exposed: attacks unchanged (the ring is ARENA)" % mode)
+	assert_eq(f.phase_snapshot()[&"arena"], [true, 6.0], "%s: core_exposed: a ring pulse every 6 s" % mode)
 	_ladder_to(f, &"critical")
 	await get_tree().process_frame
 	assert_eq(f.phase_driver().current_id(), &"critical")
-	assert_eq(f.phase_snapshot()[&"attacks"], [0.6, 3, 0, 0.0, false, 0.0], "%s: critical: cooldowns x 0.6 and a gate of three" % mode)
+	assert_eq(f.phase_snapshot()[&"attacks"], [0.6, 3, 4, 6.0, true, 2.0], "%s: critical: cooldowns x 0.6, a gate of three, four spokes every 6 s, the core ring every 2 s" % mode)
+	assert_eq(f.phase_snapshot()[&"arena"], [true, 3.5], "%s: critical: a ring pulse every 3.5 s" % mode)
 	assert_eq(SHIPPED.critical_cooldown_factor, 0.6, "the shipped factor")
 	assert_eq(SHIPPED.max_concurrent_attacks, 2)
 	assert_eq(SHIPPED.critical_max_concurrent_attacks, 3)
+
+
+# ══ B (t16). The geometry weapons: spokes, ring pulse, core ring ════════════════════════════════
+## docs/plans/cmug256so0031m52wbxomst72/3-plan.md §2.7.2-§2.7.6, rows §2.7.7 B; task plan docs/plans/cmwt4y3hq00t0qs2ysigzomnw/3-plan.md.
+
+const BeamPhase := EnemyBeam.Phase
+const RingPhase := EnergyRing.Phase
+const FIXTURE_ENEMY: PackedScene = preload("res://tests/helpers/fixture_enemy.tscn")
+const SHIP_SCENE: PackedScene = preload("res://open_space/scenes/entities/player/player_ship.tscn")
+const FIGHTER_SCENE: PackedScene = preload("res://assault/scenes/player/player_fighter.tscn")
+const SPOKE_BEAM_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_fortress/fortress_spoke_beam.tscn")
+const PULSE_RING_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_fortress/fortress_pulse_ring.tscn")
+## Each spoke's local bearing (degrees): Spoke0 270 (north), Spoke1 90 (south), Spoke2 0, Spoke3 180.
+const SPOKE_BEARINGS := [270.0, 90.0, 0.0, 180.0]
+## The coarse hand-tick step of the long geometry rows (gate time): every period here is a whole number of steps, and nothing they check is per-frame.
+const STEP := 0.05
+const _SPEEDUP := 8  # tests/README.md -> Gate time rule 1
+
+var _saved_time_scale: float = 1.0
+var _saved_ticks: int = 60
+var _saved_max_steps: int = 8
+var _clock_scaled: bool = false
+
+
+func _scale_clock() -> void:
+	if _clock_scaled:
+		return
+	_saved_time_scale = Engine.time_scale
+	_saved_ticks = Engine.physics_ticks_per_second
+	_saved_max_steps = Engine.max_physics_steps_per_frame
+	_clock_scaled = true
+	Engine.physics_ticks_per_second = _saved_ticks * _SPEEDUP
+	Engine.max_physics_steps_per_frame = _saved_max_steps * _SPEEDUP
+	Engine.time_scale = _saved_time_scale * _SPEEDUP
+
+
+func _restore_clock() -> void:
+	if not _clock_scaled:
+		return
+	_clock_scaled = false
+	Engine.time_scale = _saved_time_scale
+	Engine.physics_ticks_per_second = _saved_ticks
+	Engine.max_physics_steps_per_frame = _saved_max_steps
+
+
+## Every spoke's and the ring's phase transitions as `[t, "spokeN" / "ring", phase]`, on [param rec]'s sim clock.
+func _watch_geometry(f: SpaceFortress, rec: Dictionary) -> Array:
+	var events: Array = []
+	var spokes := f.spoke_beams()
+	for i in spokes.size():
+		var label := "spoke%d" % i
+		spokes[i].phase_changed.connect(func(p: int) -> void: events.append([rec["t"], label, p]))
+	f.pulse_ring().phase_changed.connect(func(p: int) -> void: events.append([rec["t"], "ring", p]))
+	return events
+
+
+## The sim times at which [param label] entered TELEGRAPH (a start) at or after [param from].
+func _starts(events: Array, label: String, from: float = 0.0) -> Array:
+	var out: Array = []
+	for e in events:
+		if e[1] == label and int(e[2]) == 1 and float(e[0]) >= from - 1e-6:  # TELEGRAPH is 1 in both enums
+			out.append(float(e[0]))
+	return out
+
+
+func _any_lit(spokes: Array[EnemyBeam], indices: Array) -> bool:
+	for i in indices:
+		if spokes[i].phase() == BeamPhase.ACTIVE:
+			return true
+	return false
+
+
+## True while every spoke and the ring are OFF.
+func _geometry_off(f: SpaceFortress) -> bool:
+	for spoke in f.spoke_beams():
+		if spoke.phase() != BeamPhase.OFF:
+			return false
+	return f.pulse_ring().phase() == RingPhase.OFF
+
+
+# ── 7 / 8. Spokes and ring pulse by phase, period and spin ──────────────────────────────────────
+
+func test_the_hull_spokes_and_the_ring_as_authored(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _spawn(h)
+	var spokes := f.spoke_beams()
+	assert_eq(spokes.size(), 4, "%s: four hull spokes" % mode)
+	for i in spokes.size():
+		var emitter := f.get_node("HullBeams/Spoke%d" % i) as Node2D
+		var bearing := deg_to_rad(float(SPOKE_BEARINGS[i]))
+		assert_almost_eq(emitter.position.length(), f.hull_radius(), 0.01, "%s: Spoke%d sits on the hull edge (r %.0f)" % [mode, i, f.hull_radius()])
+		assert_almost_eq(absf(angle_difference(emitter.position.angle(), bearing)), 0.0, 1e-4, "%s: Spoke%d on local %.0f degrees" % [mode, i, SPOKE_BEARINGS[i]])
+		var out := Vector2.RIGHT.rotated(spokes[i].global_rotation)
+		assert_almost_eq(out.dot((spokes[i].global_position - f.global_position).normalized()), 1.0, 1e-4, "%s: Spoke%d's beam points outward" % [mode, i])
+		assert_eq(spokes[i].scene_file_path, SPOKE_BEAM_SCENE.resource_path, "%s: Spoke%d is the fortress spoke beam" % [mode, i])
+	assert_eq(f.pulse_ring().scene_file_path, PULSE_RING_SCENE.resource_path, "%s: the ring pulse is the fortress ring" % mode)
+	assert_eq(f.pulse_ring().global_position, f.global_position, "%s: centred on the hull" % mode)
+	# The gated values are authored in the inherited scenes themselves (export_of_scene reads only a scene's own state).
+	var beam_values := {&"telegraph_seconds": 1.2, &"active_seconds": 2.5, &"length": 900.0, &"damage": 14, &"rehit_interval": 0.55, &"registers_hazard": true,
+			&"telegraph_width": 4.0, &"fade_seconds": 0.15}
+	for key in beam_values:
+		assert_eq(EnemyBeamScenes.export_of_scene(SPOKE_BEAM_SCENE, key, null), beam_values[key], "%s: fortress_spoke_beam.tscn authors %s" % [mode, key])
+		assert_eq(spokes[0].get(key), beam_values[key], "%s: and the instance carries it" % mode)
+	var ring_values := {&"max_radius": 640.0, &"ring_speed": 300.0, &"band": 24.0, &"gap_count": 2, &"gap_deg": 50.0, &"damage": 14, &"telegraph_seconds": 1.0,
+			&"fade_seconds": 0.15}
+	for key in ring_values:
+		assert_eq(EnemyBeamScenes.export_of_scene(PULSE_RING_SCENE, key, null), ring_values[key], "%s: fortress_pulse_ring.tscn authors %s" % [mode, key])
+		assert_eq(f.pulse_ring().get(key), ring_values[key], "%s: and the instance carries it" % mode)
+
+
+func test_spokes_and_ring_pulse_by_phase_period_and_spin(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _spawn(h)
+	_stub(h, f, 90.0, 400.0)
+	var b := _brain(f)
+	var spokes := f.spoke_beams()
+	var rec := _watch(f)
+	var events := _watch_geometry(f, rec)
+
+	# batteries: nothing for 20 s (coarse step: one countdown, nothing per-frame).
+	var stray := [0]
+	var count_stray := func() -> bool:
+		if not _geometry_off(f):
+			stray[0] += 1
+		return false
+	_run(f, rec, 20.0, count_stray, STEP)
+	assert_eq(stray[0], 0, "%s: batteries: no spoke and no ring for 20 s" % mode)
+
+	# shields_exposed: Spoke0 + Spoke1 every 8.0 s; the hull spins exactly while they are lit, alternating.
+	_ladder_to(f, &"shields_exposed")
+	var t0: float = rec["t"]
+	var mismatched := [0]
+	var dirs: Array = []
+	var check_spin := func() -> bool:
+		var lit := _any_lit(spokes, [0, 1])
+		if b.spinning() != lit:
+			mismatched[0] += 1
+		if lit and (dirs.is_empty() or dirs[-1] != b.spin_direction()):
+			dirs.append(b.spin_direction())
+		return false
+	_run(f, rec, 18.0, check_spin, STEP)
+	var s0 := _starts(events, "spoke0", t0)
+	assert_eq(s0.size(), 2, "%s: two volleys in 18 s of shields_exposed (%s)" % [mode, s0])
+	if s0.size() == 2:
+		assert_almost_eq(s0[0] - t0, SHIPPED.spoke_period, STEP * 1.5, "%s: the first volley one period after the phase began" % mode)
+		assert_almost_eq(s0[1] - s0[0], SHIPPED.spoke_period, STEP * 1.5, "%s: then every spoke_period" % mode)
+	assert_eq(_starts(events, "spoke1", t0), s0, "%s: Spoke1 fires with Spoke0" % mode)
+	assert_eq(_starts(events, "spoke2", t0).size() + _starts(events, "spoke3", t0).size(), 0, "%s: two spokes per volley before critical" % mode)
+	assert_eq(_starts(events, "ring", t0).size(), 0, "%s: no ring pulse before core_exposed" % mode)
+	assert_eq(mismatched[0], 0, "%s: the hull spins exactly while a volley spoke is lit" % mode)
+	assert_eq(dirs.size(), 2, "%s: one spin per volley (%s)" % [mode, dirs])
+	if dirs.size() == 2:
+		assert_eq(int(dirs[1]), -int(dirs[0]), "%s: the second volley spins the other way" % mode)
+
+	# core_exposed: the ring pulse every 6.0 s from the hull centre.
+	_ladder_to(f, &"core_exposed")
+	t0 = rec["t"]
+	var centres: Array = []
+	f.pulse_ring().phase_changed.connect(func(p: int) -> void:
+		if p == RingPhase.TELEGRAPH:
+			centres.append(f.pulse_ring().ring_centre().distance_to(f.global_position)))
+	_run(f, rec, 12.5, Callable(), STEP)
+	var r0 := _starts(events, "ring", t0)
+	assert_eq(r0.size(), 2, "%s: two rings in 12.5 s of core_exposed (%s)" % [mode, r0])
+	if r0.size() == 2:
+		assert_almost_eq(r0[0] - t0, SHIPPED.ring_period, STEP * 1.5, "%s: the first ring one period after the phase began" % mode)
+		assert_almost_eq(r0[1] - r0[0], SHIPPED.ring_period, STEP * 1.5, "%s: then every ring_period" % mode)
+	for c in centres:
+		assert_almost_eq(float(c), 0.0, 0.01, "%s: each ring is centred on the hull" % mode)
+
+	# critical: all four spokes every 6.0 s, the ring every 3.5 s.
+	_ladder_to(f, &"critical")
+	t0 = rec["t"]
+	_run(f, rec, 12.5, Callable(), STEP)
+	var c0 := _starts(events, "spoke0", t0)
+	assert_eq(c0.size(), 2, "%s: two critical volleys in 12.5 s (%s)" % [mode, c0])
+	if c0.size() == 2:
+		assert_almost_eq(c0[1] - c0[0], SHIPPED.critical_spoke_period, STEP * 1.5, "%s: every critical_spoke_period" % mode)
+		for i in [1, 2, 3]:
+			assert_eq(_starts(events, "spoke%d" % i, t0), c0, "%s: Spoke%d fires in every critical volley" % [mode, i])
+	var cr := _starts(events, "ring", t0)
+	assert_gte(cr.size(), 3, "%s: rings keep coming in critical (%s)" % [mode, cr])
+	for i in range(1, cr.size()):
+		assert_almost_eq(cr[i] - cr[i - 1], SHIPPED.critical_ring_period, STEP * 1.5, "%s: every critical_ring_period" % mode)
+	assert_false(f.core_ring_pool()._warned_exhausted, "%s: sanity: the core ring's pool never ran dry" % mode)
+
+
+## Real physics at 8x, one world for spokes and ring (task plan review B4): every battery is destroyed first (no battery round reaches the player), both
+## generators next (core_exposed, south presented: `Spoke1` faces the player). Periods 0.3 s on the private config, so a volley and the rings follow at once.
+func test_spokes_and_ring_hit_the_player_and_outsiders_never_the_owner_set(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	h.player.remove_from_group(&"player")
+	h.player.queue_free()
+	var player: PlayerBase = (SHIP_SCENE if mode == "open_space" else FIGHTER_SCENE).instantiate()
+	h.root.add_child(player)
+	player.set_physics_process(false)
+	player.set_process(false)
+	player.shield_component.set_all_zero()
+	player.health_component.max_health = 100000
+	player.health_component.current_health = 100000
+
+	var f := SCENE.instantiate() as SpaceFortress
+	f.config.set(&"spoke_period", 0.3)
+	f.config.set(&"ring_period", 0.3)
+	var brain := f.get_node("Brain") as FortressBrain
+	brain.start_engaged = true
+	brain.rng_seed = 4  # chosen so the first ring's gaps miss both targets in both harnesses (deterministic: the ring draw is the brain rng's only use here)
+	f.global_position = Vector2(640.0, SHIPPED.assault_hold_y) if h.is_assault else SPAWN
+	h.root.add_child(f)
+	for b in BATTERIES:
+		f.part(b[0]).destroy()
+	f.part(&"shield_north").destroy()
+	f.part(&"shield_south").destroy()
+	assert_eq(f.phase_driver().current_id(), &"core_exposed", "%s: sanity: core_exposed" % mode)
+	player.global_position = f.global_position + Vector2(0.0, 400.0)  # local 90 degrees: Spoke1's line
+	var own := _fixture(h, f.global_position + Vector2(0.0, 250.0))
+	own.add_to_group(f.owner_group())
+	var outsider := _fixture(h, f.global_position + Vector2(-400.0, 0.0))  # local 180 degrees: no core_exposed spoke sweeps it
+	var part_hp := {}
+	for p in f.modular_hull().modules():
+		part_hp[p.module_id] = p.health.current_health
+
+	var hits: Array = []
+	for spoke in f.spoke_beams():
+		spoke.target_hit.connect(func(target: Node2D, _d: int) -> void: hits.append(["spoke", target]))
+	f.pulse_ring().target_hit.connect(func(target: Node2D, _d: int) -> void: hits.append(["ring", target]))
+	var seen := func(kind: String, target: Node) -> bool:
+		return hits.any(func(e: Array) -> bool: return e[0] == kind and e[1] == target)
+
+	_scale_clock()
+	var frames := 0
+	while frames < 600:  # 10 s of sim at most
+		await get_tree().physics_frame
+		frames += 1
+		if seen.call("spoke", player) and seen.call("ring", player) and seen.call("ring", outsider):
+			break
+	_restore_clock()
+	if OS.is_stdout_verbose():
+		print("[spoke-ring] %s %d frames" % [mode, frames])
+
+	assert_true(seen.call("spoke", player), "%s: a spoke hits the real player (%d frames)" % [mode, frames])
+	assert_true(seen.call("ring", player), "%s: the ring pulse hits the real player" % mode)
+	assert_true(seen.call("ring", outsider), "%s: and an enemy outside the owner group" % mode)
+	for e in hits:
+		assert_ne(e[1], own, "%s: the %s never hits an escort in the owner group" % [mode, e[0]])
+		assert_ne(e[1], f, "%s: nor the fortress" % mode)
+		assert_false(e[1] is EnemyModule, "%s: nor a part" % mode)
+	for p in f.modular_hull().modules():
+		assert_eq(p.health.current_health, part_hp[p.module_id], "%s: %s's HP is untouched by its own beams" % [mode, p.module_id])
+
+
+func _fixture(h, at: Vector2) -> BaseEnemy:
+	var e := FIXTURE_ENEMY.instantiate() as BaseEnemy
+	var cs := CollisionShape2D.new()
+	var circle := CircleShape2D.new()
+	circle.radius = 14.0
+	cs.shape = circle
+	e.get_node("HurtBox").add_child(cs)
+	e.add_to_group(&"enemies")
+	var health := e.get_node("Health") as Health
+	health.max_health = 100000
+	health.current_health = 100000
+	h.root.add_child(e)
+	e.global_position = at
+	return e
+
+
+# ── 9. The core bullet ring ─────────────────────────────────────────────────────────────────────
+
+## [param offsets] (radians, each a ring's base angle mod the ring spacing): true when they fall on distinct lanes and the widest lane gap is under half
+## the spacing (no bearing stays a safe lane).
+func _covers_lanes(offsets: Array, spacing: float) -> bool:
+	var sorted := offsets.map(func(o: float) -> float: return fposmod(o, spacing))
+	sorted.sort()
+	for i in range(1, sorted.size()):
+		if sorted[i] - sorted[i - 1] < 1e-3:
+			return false
+	var widest: float = sorted[0] + spacing - sorted[-1]
+	for i in range(1, sorted.size()):
+		widest = maxf(widest, sorted[i] - sorted[i - 1])
+	return widest < 0.5 * spacing
+
+
+func test_core_ring_only_in_critical_precessing_from_the_parent_container(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _spawn(h)
+	_stub(h, f, 90.0, 400.0)
+	var pool := f.core_ring_pool()
+	assert_eq(pool.get_parent(), f, "%s: CoreRingPool is a direct root child" % mode)
+	assert_eq(pool.pool_size, 72, "%s: 12 x ceil(11.43 / 2.0) = 72 at the shipped values" % mode)
+	assert_eq(pool.pool_size, EnemyRounds.pool_size_for(SHIPPED.core_ring_count, _core_life(), SHIPPED.core_ring_period), "%s: pool_size_for over the round's life" % mode)
+	assert_gt(EnemyRounds.pool_size_for(SHIPPED.core_ring_count, 18.0, SHIPPED.core_ring_period), pool.pool_size, "%s: boundary: sized on max_time alone it would need more" % mode)
+
+	var rec := _watch(f)
+	_ladder_to(f, &"core_exposed")
+	_run(f, rec, 30.0, Callable(), STEP)
+	assert_eq(rec["core_rounds"], 0, "%s: no core ring before critical (30 s of core_exposed)" % mode)
+
+	_ladder_to(f, &"critical")
+	var t0: float = rec["t"]
+	var rings: Array = []  # [t, count, bearings, speeds, damages, parents]
+	var before := [0]  # a lambda captures locals by value: a holder
+	var on_ring := func() -> bool:
+		if rec["core_rounds"] > before[0]:
+			var fresh: Array = rec["live"].slice(rec["live"].size() - (rec["core_rounds"] - before[0]))
+			var ring := {"t": rec["t"], "n": fresh.size(), "bearings": [], "ok": true}
+			for e in fresh:
+				var bullet := e[0] as EnemyBullet
+				ring["bearings"].append((bullet.global_position - f.global_position).angle())
+				ring["ok"] = ring["ok"] and is_equal_approx(bullet.speed, SHIPPED.core_ring_speed) \
+						and (bullet.get_node("HitBox") as HitBox).damage == SHIPPED.core_ring_damage and bullet.get_parent() == f.get_parent()
+			rings.append(ring)
+			before[0] = rec["core_rounds"]
+		return false
+	_run(f, rec, 30.0, on_ring, STEP)
+	assert_eq(rings.size(), 15, "%s: one ring every 2.0 s over 30 s of critical" % mode)
+	assert_false(pool._warned_exhausted, "%s: 30 s of core rings never empty the pool" % mode)
+	if rings.size() < 6:
+		return
+	assert_almost_eq(rings[0]["t"] - t0, SHIPPED.core_ring_period, STEP * 1.5, "%s: the first ring one period into critical" % mode)
+	var spacing := TAU / float(SHIPPED.core_ring_count)
+	var offsets: Array = []
+	for i in rings.size():
+		assert_eq(rings[i]["n"], SHIPPED.core_ring_count, "%s: ring %d has 12 bullets" % [mode, i])
+		assert_true(rings[i]["ok"], "%s: ring %d: 210 px/s, 10 damage, in the fortress's parent container" % [mode, i])
+		if i > 0:
+			assert_almost_eq(rings[i]["t"] - rings[i - 1]["t"], SHIPPED.core_ring_period, STEP * 1.5, "%s: every core_ring_period" % mode)
+		var base: float = rings[i]["bearings"].reduce(func(acc: float, a: float) -> float: return minf(acc, fposmod(a, spacing)), INF)
+		offsets.append(base)
+		if i > 0:
+			assert_almost_eq(fposmod(base - offsets[i - 1], spacing), fposmod(SHIPPED.core_ring_step, spacing), 1e-3, "%s: the base angle advances 0.24 per ring" % mode)
+	assert_true(_covers_lanes(offsets.slice(0, 5), spacing), "%s: five consecutive rings leave no safe lane (%s)" % [mode, offsets.slice(0, 5)])
+	for step in [spacing / 2.0, spacing / 3.0]:
+		var synthetic: Array = []
+		for k in 5:
+			synthetic.append(k * step)
+		assert_false(_covers_lanes(synthetic, spacing), "%s: boundary: a step of %.3f re-treads lanes and fails" % [mode, step])
+
+
+# ── 10. EMP and death ───────────────────────────────────────────────────────────────────────────
+
+## Short critical periods on the private config, so all three run at once: spokes ACTIVE, the ring EXPANDING and core-ring rounds in the air.
+const BUSY := {"critical_spoke_period": 1.0, "critical_ring_period": 1.0, "core_ring_period": 1.0}
+
+
+func _busy_critical(h, extra: Dictionary = {}) -> SpaceFortress:
+	var props := BUSY.duplicate()
+	props.merge(extra)
+	var f := _spawn(h, props)
+	_stub(h, f, 90.0, 400.0)
+	_ladder_to(f, &"critical")
+	var rec := _watch(f)
+	_run(f, rec, 6.0, func() -> bool:
+		return f.spoke_beams()[0].phase() == BeamPhase.ACTIVE and f.pulse_ring().phase() == RingPhase.EXPANDING and not f.core_ring_pool()._active.is_empty())
+	return f
+
+
+## Ticks the whole fortress (`_physics_process`) until every spoke and the ring are OFF; the ticks it took, or -1 past [param limit].
+func _ticks_to_off(f: SpaceFortress, limit: int) -> int:
+	for i in limit:
+		if _geometry_off(f):
+			return i
+		f._physics_process(DT)
+	return 0 if _geometry_off(f) else -1
+
+
+func test_emp_silences_and_death_cancels_the_geometry_weapons(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _busy_critical(h)
+	var b := _brain(f)
+	assert_eq(f.spoke_beams()[0].phase(), BeamPhase.ACTIVE, "%s: sanity: a spoke is lit" % mode)
+	assert_eq(f.pulse_ring().phase(), RingPhase.EXPANDING, "%s: sanity: the ring expands" % mode)
+	assert_false(f.core_ring_pool()._active.is_empty(), "%s: sanity: core-ring rounds are in the air" % mode)
+	var emp_seconds := 20.0
+	var window := emp_seconds * SHIPPED.emp_factor
+	for left in [b.spoke_countdown(), b.ring_countdown(), b.core_ring_countdown()]:
+		assert_lt(float(left), window - 0.5, "%s: non-vacuous: every weapon is due inside the window" % mode)
+	var fade := maxf(f.spoke_beams()[0].fade_seconds, f.pulse_ring().fade_seconds)
+	f.apply_emp(emp_seconds, null)
+	assert_true(f.is_emp_disrupted(), "%s: sanity: the window runs" % mode)
+	var off_after := _ticks_to_off(f, 60)
+	assert_between(off_after, 0, ceili(fade / DT) + 1, "%s: every spoke and the ring are OFF within fade_seconds (%d ticks)" % [mode, off_after])
+	var acquired := f.core_ring_pool()._active.size()
+	var restarted := 0
+	var ticks := int(window / DT) - off_after - 3
+	for i in ticks:
+		f._physics_process(DT)
+		if not _geometry_off(f):
+			restarted += 1
+	assert_true(f.is_emp_disrupted(), "%s: sanity: still inside the window" % mode)
+	assert_eq(restarted, 0, "%s: no spoke or ring starts for the window" % mode)
+	assert_eq(f.core_ring_pool()._active.size(), acquired, "%s: no core ring fires for the window (rounds already up keep flying)" % mode)
+	var back := false
+	for i in 300:
+		f._physics_process(DT)
+		if not _geometry_off(f) and f.core_ring_pool()._active.size() > acquired:
+			back = true
+			break
+	assert_true(back, "%s: control: after the window they fire again" % mode)
+
+	var g := _busy_critical(h, {"death_sequence_duration": 5.0})
+	var in_air: Array = g.core_ring_pool()._active.duplicate()
+	assert_false(in_air.is_empty(), "%s: sanity: core-ring rounds in the air" % mode)
+	g.part(&"core").destroy()
+	assert_true(g.is_dying(), "%s: the core's death is the fortress's" % mode)
+	assert_true(g.core_ring_pool()._active.is_empty(), "%s: the core ring's pool lets go of every round" % mode)
+	for r in in_air:
+		assert_true(not is_instance_valid(r) or r.is_queued_for_deletion(), "%s: every core-ring round in flight is freed" % mode)
+	var dead_off := _ticks_to_off(g, 60)
+	assert_between(dead_off, 0, ceili(fade / DT) + 1, "%s: dying, every spoke and the ring are OFF within fade_seconds (%d ticks)" % [mode, dead_off])
+	var stray := 0
+	for i in 120:
+		g._physics_process(DT)
+		if not _geometry_off(g):
+			stray += 1
+	assert_eq(stray, 0, "%s: nothing starts while dying" % mode)
+
+
+# ── 11. Fairness ────────────────────────────────────────────────────────────────────────────────
+
+## The player hurtbox circle radius x the scale composed down from the player root to the shape (the scale sits on different nodes: the ship's HurtBox,
+## the fighter's collision child), instantiated.
+func _player_hurt_radius(scene: PackedScene) -> float:
+	var p := scene.instantiate() as Node2D
+	var hurt := p.get_node("HurtBox") as Node2D
+	var r := 0.0
+	for child in hurt.get_children():
+		var cs := child as CollisionShape2D
+		if cs == null or cs.disabled or not (cs.shape is CircleShape2D):
+			continue
+		var xf := hurt.transform * cs.transform
+		r = maxf(r, (cs.shape as CircleShape2D).radius * absf(xf.get_scale().x))
+	p.free()
+	return r
+
+
+func _player_speed(scene: PackedScene) -> float:
+	var p := scene.instantiate()
+	var speed: float = p.cruise_speed()
+	p.free()
+	return speed
+
+
+func _player_iframes(scene: PackedScene) -> float:
+	var p := scene.instantiate() as PlayerBase
+	var s := p.invincibility_sec
+	p.free()
+	return s
+
+
+## The narrowest gap arc (at the hull edge + the player's radius) fits two player widths.
+func _gap_fits(gap_deg: float, hull_r: float, r_p: float) -> bool:
+	return deg_to_rad(gap_deg) * (hull_r + r_p) >= 2.0 * (2.0 * r_p)
+
+
+func test_spoke_fairness() -> void:
+	var h = _world("open_space")
+	var f := _spawn(h)
+	var tip := f.hull_radius() + 250.0
+	for scene in [FIGHTER_SCENE, SHIP_SCENE]:
+		var speed := _player_speed(scene)
+		assert_lte(SHIPPED.beam_spin_rate * tip, 0.8 * speed, "a player 250 px off the hull outruns a volley sweep (%s)" % scene.resource_path.get_file())
+		assert_lte(SHIPPED.critical_spin_rate * tip, 0.8 * speed, "and a critical sweep (%s)" % scene.resource_path.get_file())
+		for spoke in f.spoke_beams():
+			assert_gt(spoke.rehit_interval, _player_iframes(scene), "a spoke's re-hit outlasts the i-frames (%s)" % scene.resource_path.get_file())
+	for spoke in f.spoke_beams():
+		assert_gte(spoke.telegraph_seconds, 1.0, "a spoke telegraphs for at least 1 s")
+		assert_gte(spoke.telegraph_width, 3.0, "drawn at least 3 px wide")
+	assert_gte(f.pulse_ring().telegraph_seconds, 1.0, "the ring pulse telegraphs for at least 1 s")
+	assert_gte(f.pulse_ring().telegraph_width, 3.0)
+
+
+func test_ring_gap_fairness_at_the_hull_edge() -> void:
+	var h = _world("open_space")
+	var f := _spawn(h)
+	var hull_r := f.hull_radius()
+	var gap := f.pulse_ring().gap_deg
+	var r_ship := _player_hurt_radius(SHIP_SCENE)
+	var r_fighter := _player_hurt_radius(FIGHTER_SCENE)
+	assert_almost_eq(r_ship, 11.0, 0.01, "the Open Space ship's hurtbox: 5 x 2.2 on the HurtBox")
+	assert_almost_eq(r_fighter, 13.5, 0.01, "the Assault fighter's: 5 x 2.7 on its collision child")
+	assert_true(_gap_fits(gap, hull_r, r_ship), "a %.0f degree gap at the hull edge fits two ship widths" % gap)
+	assert_true(_gap_fits(gap, hull_r, r_fighter), "and two fighter widths")
+	# Boundary: 15 degrees fails the conjunction (the fighter; the smaller ship alone would still fit, so both facts are pinned).
+	assert_false(_gap_fits(15.0, hull_r, r_fighter), "boundary: a 15 degree gap is too narrow for the fighter")
+	assert_true(_gap_fits(15.0, hull_r, r_ship), "boundary: (the ship alone would still fit)")
+	assert_false(_gap_fits(15.0, hull_r, r_fighter) and _gap_fits(15.0, hull_r, r_ship), "boundary: the both-players check fails at 15 degrees")
+
+
+# ── 11. Assault density, measured ───────────────────────────────────────────────────────────────
+
+## The five player positions round the hull at world (640, 180) (§2.7.6).
+const DENSITY_POSITIONS := {"S": Vector2(640, 600), "SW": Vector2(240, 560), "SE": Vector2(1040, 560), "W": Vector2(160, 200), "E": Vector2(1120, 200)}
+const DENSITY_MEAN_CEILING := 13.3  # 2.0 x the station's legacy turret rate (6.67 /s)
+const DENSITY_PEAK_CEILING := 30  # 1.25 x the station's legacy 2 s peak (24)
+const DENSITY_SETTLE := 1.0
+const DENSITY_COUNT := 10.0
+
+
+## One full hand tick of the fortress (brain + mover, position integrated by hand); returns the rounds it launched (every `BulletPool` child's
+## `_active` after the tick: everything was returned the tick before), then returns each at once.
+func _density_tick(f: SpaceFortress, pools: Array[BulletPool]) -> int:
+	var before := f.global_position
+	f._physics_process(DT)
+	f.global_position = before + f.velocity * DT
+	var n := 0
+	for pool in pools:
+		if pool._active.is_empty():
+			continue
+		n += pool._active.size()
+		for round_node in pool._active.duplicate():
+			round_node.expired.emit()
+			pool._recycle(round_node)
+	return n
+
+
+func _measure(h, f: SpaceFortress, at: Vector2) -> Dictionary:
+	var pools: Array[BulletPool] = []
+	for child in f.get_children():
+		if child is BulletPool:
+			pools.append(child)
+	h.player.global_position = at
+	h.player.velocity = Vector2.ZERO
+	for i in int(round(DENSITY_SETTLE / DT)):
+		_density_tick(f, pools)
+	var per_tick: Array[int] = []
+	for i in int(round(DENSITY_COUNT / DT)):
+		per_tick.append(_density_tick(f, pools))
+	var total := 0
+	var peak := 0
+	var window := 0
+	var span := int(round(2.0 / DT))
+	for i in per_tick.size():
+		total += per_tick[i]
+		window += per_tick[i]
+		if i >= span:
+			window -= per_tick[i - span]
+		peak = maxi(peak, window)
+	var dry := false
+	for pool in pools:
+		dry = dry or pool._warned_exhausted
+	var refused := 0
+	for b in BATTERIES:
+		var part := f.part(b[0])
+		if part.is_destroyed():
+			continue
+		var mount := _mount(f, b[0])
+		if mount is BurstCannonMount:
+			refused += (mount as BurstCannonMount).shots_refused
+		elif mount is RocketBatteryMount:
+			refused += (mount as RocketBatteryMount).rockets_refused
+	return {"mean": float(total) / DENSITY_COUNT, "peak": peak, "dry": dry, "refused": refused}
+
+
+func test_assault_density_in_every_phase_at_five_positions() -> void:
+	var h = _world("assault")
+	for phase_id in [&"batteries", &"shields_exposed", &"core_exposed", &"critical"]:
+		var f := _spawn(h, {}, Vector2(640.0, 180.0))
+		if phase_id != &"batteries":
+			# The worst live set (the three highest-rate batteries): sweep + missiles die first, which itself enters shields_exposed.
+			f.part(&"battery_sweep").destroy()
+			f.part(&"battery_missiles").destroy()
+			_ladder_to(f, phase_id)
+		assert_eq(f.phase_driver().current_id(), phase_id, "sanity: %s" % phase_id)
+		var worst := {"mean": 0.0, "peak": 0, "at": ""}
+		for label in DENSITY_POSITIONS:
+			var m := _measure(h, f, DENSITY_POSITIONS[label])
+			var where := "%s at %s: mean %.2f rounds/s, peak %d in 2 s" % [phase_id, label, m["mean"], m["peak"]]
+			assert_lte(m["mean"], DENSITY_MEAN_CEILING, "mean ceiling: " + where)
+			assert_lte(m["peak"], DENSITY_PEAK_CEILING, "peak ceiling: " + where)
+			assert_false(m["dry"], "no pool ever empty: " + where)
+			assert_eq(m["refused"], 0, "no mount refused a shot: " + where)
+			if m["mean"] > worst["mean"] or (m["mean"] == worst["mean"] and m["peak"] > worst["peak"]):
+				worst = {"mean": m["mean"], "peak": m["peak"], "at": label}
+			if OS.is_stdout_verbose():
+				print("[density] " + where)
+		assert_eq(f.phase_driver().current_id(), phase_id, "sanity: still %s after the count" % phase_id)
+		if OS.is_stdout_verbose():
+			print("[density] %s worst: %s mean %.2f, peak %d" % [phase_id, worst["at"], worst["mean"], worst["peak"]])
+		f.queue_free()
+		await get_tree().process_frame

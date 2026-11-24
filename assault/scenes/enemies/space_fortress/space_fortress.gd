@@ -57,11 +57,15 @@ const PHASE_BATTERIES := &"batteries"
 const PHASE_SHIELDS_EXPOSED := &"shields_exposed"
 const PHASE_CORE_EXPOSED := &"core_exposed"
 const PHASE_CRITICAL := &"critical"
+## `HullBeams/Spoke0..3`.
+const SPOKE_COUNT := 4
 ## A rocket arms this far beyond the hull circle (px), so it never hits its own hull.
 const ROCKET_CLEARANCE := 8.0
 ## Core light modes (the `phase_snapshot()` visuals key).
 const CORE_LIGHT_OFF := &"off"
 const CORE_LIGHT_BLINK := &"blink"
+## The core ring's round (plan §2.7.4): the shared enemy bullet; its life sizes `CoreRingPool`.
+const CORE_RING_ROUND: PackedScene = preload("res://assault/scenes/projectiles/enemy_bullet/enemy_bullet.tscn")
 
 ## Seconds the wreck stays in the tree after the core's death, copied from `config.death_sequence_duration`. Public: the override point (a test
 ## shortens it after `_ready()`, the station's rule). 0 frees in the same call, like `BaseEnemy`.
@@ -84,6 +88,7 @@ var _blink_lit: bool = false
 ## The intact generator / core textures, so the snapshot can name the closed state.
 var _shutter_closed_texture: Texture2D
 var _core_plated_texture: Texture2D
+var _core_ring_pool: BulletPool
 
 @onready var _fortress_brain: FortressBrain = $Brain
 @onready var _hull: ModularHull = $ModularHull
@@ -124,6 +129,14 @@ func _ready() -> void:
 	_fortress_brain.bind(_hull, _reinforcements)
 	## The five batteries' mounts (t7): one gate, one running pool index; pools are root children, so rounds land in the fortress's parent container.
 	_hull.build_mounts(self, _fortress_brain.rng, _owner_group, _fortress_brain.attack_gate, 0)
+	## The geometry weapons (t16): the core ring's pool is built here in code (a scene-authored pool would fill itself in its own `_ready()`, before this
+	## one could size it), a direct root child, so its container is the fortress's parent.
+	_core_ring_pool = BulletPool.new()
+	_core_ring_pool.name = "CoreRingPool"
+	_core_ring_pool.bullet_scene = CORE_RING_ROUND
+	_core_ring_pool.pool_size = core_ring_pool_size(cfg)
+	add_child(_core_ring_pool)
+	_fortress_brain.bind_geometry(self, spoke_beams(), pulse_ring(), _core_ring_pool, _owner_group)
 
 	if core != null:
 		core.destroyed.connect(_on_core_destroyed)
@@ -218,6 +231,43 @@ func is_dying() -> bool:
 	return _dying
 
 
+## The four hull spokes' beams (`HullBeams/Spoke0..3/Beam`), in spoke order: Spoke0 local 270 degrees, Spoke1 90, Spoke2 0, Spoke3 180.
+func spoke_beams() -> Array[EnemyBeam]:
+	var out: Array[EnemyBeam] = []
+	for i in SPOKE_COUNT:
+		var beam := get_node_or_null("HullBeams/Spoke%d/Beam" % i) as EnemyBeam
+		if beam != null:
+			out.append(beam)
+	return out
+
+
+## The arena-control ring pulse.
+func pulse_ring() -> EnergyRing:
+	return get_node_or_null(^"PulseRing") as EnergyRing
+
+
+## The core bullet ring's pool (built in `_ready()`).
+func core_ring_pool() -> BulletPool:
+	return _core_ring_pool
+
+
+## The core ring's pool size for [param cfg]: `EnemyRounds.pool_size_for(core_ring_count, life, core_ring_period)`, `life` = min(the round's `max_time`,
+## `max_distance` / `core_ring_speed`) read from the round scene's own `ProjectileLifetime` (72 at the shipped values; a fixed 48 would run dry).
+static func core_ring_pool_size(cfg: SpaceFortressConfig) -> int:
+	var max_time := float(EnemyBeamScenes.export_of_scene(CORE_RING_ROUND, &"max_time", 18.0, ^"ProjectileLifetime"))
+	var max_distance := float(EnemyBeamScenes.export_of_scene(CORE_RING_ROUND, &"max_distance", 2400.0, ^"ProjectileLifetime"))
+	var life := minf(max_time, max_distance / cfg.core_ring_speed) if cfg.core_ring_speed > 0.0 else max_time
+	return EnemyRounds.pool_size_for(cfg.core_ring_count, life, cfg.core_ring_period)
+
+
+## `BaseEnemy`'s one AI tick, then, while the brain is not ticked (an EMP window or the death sequence), a cancelled spoke or ring is ticked through its
+## FADE to OFF (it would otherwise stay drawn: nothing else ticks it; no `Timer`).
+func _physics_process(delta: float) -> void:
+	super._physics_process(delta)
+	if is_ai_suspended() or is_emp_disrupted():
+		_fortress_brain.tick_fades(delta)
+
+
 # ── The phase ladder ─────────────────────────────────────────────────────────────────────────────
 
 ## The consequences of each boss phase this task owns (vulnerability, visuals); the brain adds movement, attacks, arena and reinforcements.
@@ -288,7 +338,7 @@ func _process(delta: float) -> void:
 
 ## IDEAS §25 as a gate: six keys, each built ONLY from phase-driven state (what `_on_phase_entered` and the brain's per-phase settings set), never from
 ## which parts are alive, so the hit that triggers a phase can never count as one of its changes. `movement` / `attacks` / `arena` are the brain's
-## (`[]` until t6 / t7 and t16 / t16), `reinforcements` is `[activated bay ids, surge queued]` (no bays until t8). `vulnerable` lists every part whose
+## (t6; t7 and t16; t16), `reinforcements` is `[activated bay ids, surge queued]` (no bays until t8). `vulnerable` lists every part whose
 ## `is_vulnerable()` is true (a wreck keeps its flag), the hangar excluded (its doors, not the phase, decide). `visuals` reads the fields the phase
 ## handler set (shutters, plating, the generator light the fortress keeps, the core light MODE, thrusters, overlay), never a live light or a wreck
 ## texture: a wreck turns its own light off and a blinking light alternates.
