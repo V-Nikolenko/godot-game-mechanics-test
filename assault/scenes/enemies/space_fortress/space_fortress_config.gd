@@ -88,6 +88,8 @@ extends ShipConfig
 ## An escort leaves its bay with this committed outward boost (px/s, s; the Carrier's launch).
 @export var escort_boost_speed: float = 300.0
 @export var escort_boost_seconds: float = 0.4
+## The `critical` surge: escorts the hangar bay launches once, on entering `critical` (only while the hangar lives).
+@export var hangar_surge_count: int = 4
 
 @export_group("Batteries")
 ## At most this many battery mounts are in TELEGRAPH or FIRE at once (`FortressBrain.attack_gate()`), `critical_max_concurrent_attacks` in `critical`:

@@ -52,6 +52,8 @@ func _world(mode: String):
 ## An engaged fortress (the hold line in Assault, the spawn point in Open Space), physics off. [param props] are written on its private config copy.
 func _spawn(h, props: Dictionary = {}, pos: Vector2 = Vector2.INF, engaged: bool = true) -> SpaceFortress:
 	var f := SCENE.instantiate() as SpaceFortress
+	f.config.escort_cap_open_space = 0  # quiet bays (t8): the density and weapon rows measure the fortress, not the escorts a lost battery would call
+	f.config.escort_cap_assault = 0
 	for key in props:
 		f.config.set(key, props[key])
 	(f.get_node("Brain") as FortressBrain).start_engaged = engaged

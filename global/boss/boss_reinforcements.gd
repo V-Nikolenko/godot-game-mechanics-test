@@ -123,8 +123,8 @@ func tick(delta: float, active: bool) -> void:
 		if s.activated and s.bay.trigger == ReinforcementBay.Trigger.PERIODIC:
 			s.clock += delta
 			while s.clock >= s.due - CLOCK_EPS:
-				s.queue.append(s.bay.count)
-				s.due += maxf(s.bay.period, MIN_PERIOD)
+				s.queue.append(s.bay.count_for(_is_assault()))
+				s.due += maxf(s.bay.period_for(_is_assault()), MIN_PERIOD)
 		s.door_time += delta
 		match s.door:
 			Door.CLOSED:
@@ -138,12 +138,25 @@ func tick(delta: float, active: bool) -> void:
 					_close(s)
 
 
-## Queues an emergency launch of [param count] from bay [param bay_id] (a dead or unknown bay: no-op).
-func surge(bay_id: StringName, count: int) -> void:
+## Queues an emergency launch of [param count] from bay [param bay_id] and returns how many escorts it asked for (a dead or unknown bay, or a
+## count of 0: no-op, returns 0).
+func surge(bay_id: StringName, count: int) -> int:
 	var s: BayState = _bays.get(bay_id)
 	if s == null or s.dead or count <= 0:
-		return
+		return 0
 	s.queue.append(count)
+	return count
+
+
+## The ids of the bays the boss phase ladder has activated (a bay with no `active_from_phase` counts from the start; a dead bay stays listed),
+## sorted.
+func activated_bay_ids() -> Array[StringName]:
+	var out: Array[StringName] = []
+	for s in _order:
+		if s.activated:
+			out.append(s.bay.bay_id)
+	out.sort_custom(func(a: StringName, b: StringName) -> bool: return String(a) < String(b))
+	return out
 
 
 ## The live escorts: the `BaseEnemy` children of the host's escort container that are not queued for deletion (empty with no container).
@@ -350,7 +363,7 @@ func _on_module_destroyed(part: EnemyModule) -> void:
 		if s.part == part:
 			_kill(s)
 		elif s.activated and s.bay.trigger == ReinforcementBay.Trigger.ON_SECTOR_LOSS and s.bay.watch_ids.has(part.module_id):
-			s.queue.append(s.bay.count)
+			s.queue.append(s.bay.count_for(_is_assault()))
 
 
 func _on_phase_entered(_index: int, phase_id: StringName) -> void:
@@ -361,7 +374,7 @@ func _on_phase_entered(_index: int, phase_id: StringName) -> void:
 			s.due = s.bay.first_delay
 	for s in _order:
 		if not s.dead and s.activated and s.bay.trigger == ReinforcementBay.Trigger.ON_PHASE and s.bay.on_phase == phase_id:
-			s.queue.append(s.bay.count)
+			s.queue.append(s.bay.count_for(_is_assault()))
 
 
 ## The bay's part is a wreck: its queue goes, a launch mid-OPENING never comes out. The part's own `destroy()` already put its light out.

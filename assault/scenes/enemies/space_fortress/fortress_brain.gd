@@ -134,6 +134,8 @@ var _core_ring_angle: float = 0.0
 ## The running volley's spokes (only those its `start()` actually moved to TELEGRAPH, kept while TELEGRAPH or ACTIVE) and whether its spin runs.
 var _volley: Array[EnemyBeam] = []
 var _volley_spinning: bool = false
+## The escorts the `critical` surge queued on entering the current boss phase (the §25 `reinforcements` key; 0 in every other phase and with no hangar).
+var _surge_queued: int = 0
 
 
 ## Hands the brain its parts and its bays (called by the root in `_ready()`).
@@ -222,6 +224,15 @@ func on_boss_phase(phase_id: StringName) -> void:
 			_last_spin_dir = _continuous_dir
 	_set_attacks(phase_id)
 	_set_geometry(phase_id)
+	_set_reinforcements(phase_id)
+
+
+## The bays' phase settings (plan §2.8): `critical` queues one surge of `hangar_surge_count` from the hangar bay (a destroyed hangar: nothing queued). The
+## ladder's own activation of the hangar bay at `shields_exposed` is `BossReinforcements`'s (it hears the driver itself).
+func _set_reinforcements(phase_id: StringName) -> void:
+	_surge_queued = 0
+	if phase_id == &"critical" and _reinforcements != null:
+		_surge_queued = _reinforcements.surge(&"hangar", config.hangar_surge_count)
 
 
 ## The geometry weapons' phase settings (plan §2.7.2-§2.7.4): spokes from `shields_exposed`, the ring pulse from `core_exposed`, the core ring in
@@ -326,6 +337,11 @@ func attacks_snapshot() -> Array:
 ## §25 `arena`: `[ring_pulse_armed, ring_period]` (the ring pulse is the arena-control weapon).
 func arena_snapshot() -> Array:
 	return [_ring_armed, _ring_period]
+
+
+## §25 `reinforcements`: `[sorted ids of the bays the ladder has activated, escorts the surge queued on entering this phase]`.
+func reinforcements_snapshot() -> Array:
+	return [_reinforcements.activated_bay_ids() if _reinforcements != null else [] as Array[StringName], _surge_queued]
 
 
 ## Seconds until the next spoke volley / ring pulse / core ring is due (the countdowns; meaningful only while armed).

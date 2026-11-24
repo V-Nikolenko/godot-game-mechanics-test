@@ -359,7 +359,7 @@ Defenders launch from specific parts, so destroying a part changes what the play
 
 - **`ReinforcementBay`** (Node2D `Bay`, a child of the launching `EnemyModule`; optional `Marker2D` `Mouth`): data only. `bay_id`,
   `Trigger { PERIODIC, ON_SECTOR_LOSS, ON_PHASE }` (append-only), `payload_scene` / `assault_payload_scene` (null = the first), `count` 2,
-  `period` 12.0 / `first_delay` 3.0 (PERIODIC), `active_from_phase` (empty = from the start), `watch_ids` (ON_SECTOR_LOSS), `on_phase`,
+  `assault_count` / `assault_period` (−1 = `count` / `period`; `count_for(assault)`, `period_for(assault)`), `period` 12.0 / `first_delay` 3.0 (PERIODIC), `active_from_phase` (empty = from the start), `watch_ids` (ON_SECTOR_LOSS), `on_phase`,
   `door_seconds` 0.8, `open_hold_seconds` 0.0, `opens_part` (the part hittable only while its doors are open), `assault_launch_limit` −1.
   `part()`, `mouth_position()`, `launch_direction()` (host centre → mouth).
 - **`BossReinforcements`** (RefCounted, built by the host, ticked by its brain): `new(host, hull, driver, rng, owner_group, live_cap,
@@ -367,7 +367,7 @@ Defenders launch from specific parts, so destroying a part changes what the play
   in its queue and closes open doors). Door cycle CLOSED → OPENING (`door_seconds`, part `Light` CHARGING, `opens_part` → vulnerable) →
   LAUNCH → OPEN (`open_hold_seconds`) → CLOSED (light back to the state it had at OPENING). A bay whose part is destroyed is dead (queue
   dropped, a launch mid-OPENING never comes out). Cap: `min(count, live_cap − live_count())`; no room → skipped and counted. Assault →
-  `assault_payload_scene` and `assault_launch_limit`. `surge(bay_id, count)`, `escorts()` (the escort container's live `BaseEnemy`s, the one
+  `assault_payload_scene` and `assault_launch_limit`. `surge(bay_id, count) -> int` (the count queued, 0 for a dead or unknown bay), `activated_bay_ids()` (sorted; a dead bay stays), `escorts()` (the escort container's live `BaseEnemy`s, the one
   source of truth), `scuttle_all()` (`health.set_health(0)` on each), `live_count()`, `bay_ids()`, `launches()`, `skipped()`, `pending()`,
   `door_open()`, `door()`, `is_dead()`; signals `launched(bay_id, escorts)`, `door_changed(bay_id, open)`. Each escort: seeded
   (`Brain.rng_seed`, non-zero), `start_engaged`, one `SquadController` per payload scene for the object's life, spread at the mouth, collision

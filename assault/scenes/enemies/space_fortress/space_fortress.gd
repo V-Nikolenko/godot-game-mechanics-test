@@ -338,7 +338,7 @@ func _process(delta: float) -> void:
 
 ## IDEAS §25 as a gate: six keys, each built ONLY from phase-driven state (what `_on_phase_entered` and the brain's per-phase settings set), never from
 ## which parts are alive, so the hit that triggers a phase can never count as one of its changes. `movement` / `attacks` / `arena` are the brain's
-## (t6; t7 and t16; t16), `reinforcements` is `[activated bay ids, surge queued]` (no bays until t8). `vulnerable` lists every part whose
+## (t6; t7 and t16; t16; t8), `reinforcements` is `[activated bay ids, surge queued]`. `vulnerable` lists every part whose
 ## `is_vulnerable()` is true (a wreck keeps its flag), the hangar excluded (its doors, not the phase, decide). `visuals` reads the fields the phase
 ## handler set (shutters, plating, the generator light the fortress keeps, the core light MODE, thrusters, overlay), never a live light or a wreck
 ## texture: a wreck turns its own light off and a blinking light alternates.
@@ -355,7 +355,7 @@ func phase_snapshot() -> Dictionary:
 		&"attacks": _fortress_brain.attacks_snapshot(),
 		&"vulnerable": vulnerable,
 		&"arena": _fortress_brain.arena_snapshot(),
-		&"reinforcements": [[], 0],
+		&"reinforcements": _fortress_brain.reinforcements_snapshot(),
 		&"visuals": [
 			shutter.resource_path if shutter != null else "",
 			plating.resource_path if plating != null else "",

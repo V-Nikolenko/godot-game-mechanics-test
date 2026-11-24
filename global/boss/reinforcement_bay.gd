@@ -24,8 +24,12 @@ enum Trigger { PERIODIC, ON_SECTOR_LOSS, ON_PHASE }
 @export var assault_payload_scene: PackedScene
 ## Escorts per launch (before the live cap).
 @export var count: int = 2
+## Assault's count per launch (-1 = `count`).
+@export var assault_count: int = -1
 ## PERIODIC: seconds between two launches' door openings.
 @export var period: float = 12.0
+## Assault's period (-1 = `period`).
+@export var assault_period: float = -1.0
 ## PERIODIC: seconds from the bay becoming active to its first door opening.
 @export var first_delay: float = 3.0
 ## Empty = active from the start; otherwise no trigger counts until the boss has reached this phase.
@@ -70,3 +74,13 @@ func _host() -> Node2D:
 	var p := get_parent()
 	var holder := p.get_parent() if p != null else null
 	return holder.get_parent() as Node2D if holder != null else null
+
+
+## Escorts per launch in the given mode (before the live cap).
+func count_for(assault: bool) -> int:
+	return assault_count if assault and assault_count >= 0 else count
+
+
+## Seconds between two PERIODIC launches in the given mode.
+func period_for(assault: bool) -> float:
+	return assault_period if assault and assault_period >= 0.0 else period

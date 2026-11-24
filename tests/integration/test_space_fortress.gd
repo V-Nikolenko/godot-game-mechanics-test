@@ -38,8 +38,8 @@ const PARTS := [
 ]
 const NORTH := [&"battery_artillery", &"battery_missiles", &"hangar"]
 const SOUTH := [&"battery_spread", &"battery_pulse", &"battery_sweep"]
-## The §25 keys built so far (t5 vulnerable and visuals, t6 movement, t7 the battery fields of attacks, t16 the rest of attacks and arena; t8 adds reinforcements).
-const BUILT_KEYS := {Change.VULNERABLE: &"vulnerable", Change.VISUALS: &"visuals", Change.MOVEMENT: &"movement", Change.ATTACKS: &"attacks", Change.ARENA: &"arena"}
+## The §25 keys (t5 vulnerable and visuals, t6 movement, t7 the battery fields of attacks, t16 the rest of attacks and arena, t8 reinforcements: all six).
+const BUILT_KEYS := {Change.VULNERABLE: &"vulnerable", Change.VISUALS: &"visuals", Change.MOVEMENT: &"movement", Change.ATTACKS: &"attacks", Change.ARENA: &"arena", Change.REINFORCEMENTS: &"reinforcements"}
 const _SPEEDUP := 8  # tests/README.md -> Gate time rule 1
 
 var _roots: Array[Node] = []
@@ -538,6 +538,8 @@ func test_each_phase_shows_its_declared_changes(mode: String = use_parameters(MO
 	_assert_declared_changes(driver.phase(3), before, f.phase_snapshot(), "%s critical" % mode)
 	_assert_movement(f, mode, 3)
 	assert_true((f.get_node("CriticalOverlay") as CanvasItem).visible, "%s: the critical overlay is shown" % mode)
+	assert_eq(before[&"reinforcements"], [[&"hangar", &"north_defenders", &"south_defenders"], 0], "%s: the bays activated, no surge before critical" % mode)
+	assert_eq(f.phase_snapshot()[&"reinforcements"], [[&"hangar", &"north_defenders", &"south_defenders"], 4], "%s: the hangar surge of 4 is queued on critical" % mode)
 
 	# The critical core light blinks COMMIT / OFF on the config period (hand-stepped; nothing awaited in between).
 	var light := core.get_node("Light") as StateLight
@@ -557,6 +559,40 @@ func test_each_phase_shows_its_declared_changes(mode: String = use_parameters(MO
 	var during := f.phase_snapshot()
 	f._process(period)
 	assert_eq(f.phase_snapshot(), during, "%s: the blink itself never changes the snapshot" % mode)
+
+
+## The dead-hangar row (plan §2.8 row 7): the same path with the hangar destroyed before `critical`. The surge is a no-op, so REINFORCEMENTS is not
+## observed there, but MOVEMENT, ATTACKS and VISUALS still change: at least two observed changes in every phase.
+func test_each_phase_still_changes_two_things_with_the_hangar_dead(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _spawn(h)
+	var driver := f.phase_driver()
+	var before := f.phase_snapshot()
+	_part(f, &"battery_spread").destroy()
+	_part(f, &"battery_pulse").destroy()
+	await _settle()
+	_assert_declared_changes(driver.phase(1), before, f.phase_snapshot(), "%s dead-hangar shields_exposed" % mode)
+	before = f.phase_snapshot()
+	_part(f, &"shield_north").destroy()
+	_part(f, &"shield_south").destroy()
+	await _settle()
+	_assert_declared_changes(driver.phase(2), before, f.phase_snapshot(), "%s dead-hangar core_exposed" % mode)
+
+	_part(f, &"hangar").destroy()
+	assert_true(f.reinforcements().is_dead(&"hangar"), "%s: the hangar's bay is dead" % mode)
+	before = f.phase_snapshot()
+	var core := _part(f, &"core")
+	core.hurt_box.received_damage.emit(SHIPPED.core_health - roundi(SHIPPED.critical_core_ratio * SHIPPED.core_health))
+	await _settle()
+	assert_eq(driver.current_id(), &"critical")
+	var after := f.phase_snapshot()
+	assert_eq(after[&"reinforcements"], [[&"hangar", &"north_defenders", &"south_defenders"], 0], "%s: nothing queued, the dead bay stays listed" % mode)
+	assert_eq(f.reinforcements().pending(&"hangar"), 0, "%s: the surge was refused" % mode)
+	_assert_declared_changes(driver.phase(3), before, after, "%s dead-hangar critical" % mode, Change.REINFORCEMENTS)
+	var changed := _changed(before, after)
+	for key in [&"movement", &"attacks", &"visuals"]:
+		assert_has(changed, key, "%s: %s still changes at critical" % [mode, key])
+	assert_does_not_have(changed, &"reinforcements", "%s: and reinforcements is the one that does not" % mode)
 
 
 # ══ 7. Death ════════════════════════════════════════════════════════════════════════════════════
@@ -691,7 +727,7 @@ func test_the_config_wins_and_the_children_read_the_private_copy(mode: String = 
 	assert_eq([f.score_value, f.counts_toward_wave_clear, f.counts_as_escape], [1500, true, true])
 	var cap := SHIPPED.escort_cap_assault if h.is_assault else SHIPPED.escort_cap_open_space
 	assert_eq(f.is_assault(), h.is_assault, "%s: the mode" % mode)
-	assert_eq(f.reinforcements().bay_ids(), [] as Array[StringName], "%s: no bays until t8" % mode)
+	assert_eq(f.reinforcements().bay_ids(), [&"hangar", &"north_defenders", &"south_defenders"] as Array[StringName], "%s: the three bays of plan 2.8, in module order" % mode)
 	assert_eq(cap, 4 if h.is_assault else 6)
 
 
@@ -743,6 +779,8 @@ const QUIET_GEOMETRY := {"spoke_period": 1e6, "critical_spoke_period": 1e6, "rin
 ## A hand-ticked fortress; Open Space ones start engaged unless [param engaged] is false. Its geometry weapons are quiet unless [param quiet_geometry] is false.
 func _mover_spawn(h, pos: Vector2 = Vector2.INF, engaged: bool = true, quiet_geometry: bool = true) -> SpaceFortress:
 	var f := SCENE.instantiate() as SpaceFortress
+	f.config.escort_cap_open_space = 0  # quiet bays: a battery lost on the way never launches a real escort pair (t8)
+	f.config.escort_cap_assault = 0
 	if quiet_geometry:
 		for key in QUIET_GEOMETRY:
 			f.config.set(key, QUIET_GEOMETRY[key])

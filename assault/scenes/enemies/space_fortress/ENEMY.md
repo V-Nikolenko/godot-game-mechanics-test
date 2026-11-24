@@ -13,8 +13,8 @@ weapons `docs/plans/cmwt4y3hq00t0qs2ysigzomnw/3-plan.md`.
 
 **Built so far:** t5 the shell (hull, parts, sector shields, phase ladder with its vulnerability and visual consequences, death, EMP, homing, roster
 gates); t6 the movement (facing rule, spins, Open Space combat zone, Assault hold and bob; `is_engaged()`); t7 the five batteries and the attack gate;
-t16 the geometry weapons (hull spokes, ring pulse, core bullet ring), their fairness rows and the measured Assault density.
-**Not yet:** escorts (t8); art is placeholder station PNGs (t9); the spokes and the ring are code-drawn (`Line2D` / `_draw`).
+t16 the geometry weapons (hull spokes, ring pulse, core bullet ring), their fairness rows and the measured Assault density; t8 the reinforcements (§Reinforcements).
+**Not yet:** art is placeholder station PNGs (t9); the spokes and the ring are code-drawn (`Line2D` / `_draw`).
 
 ---
 
@@ -79,7 +79,7 @@ alternates. `movement` is `[translation_mode, spin_mode, reposition_period, trav
 0, 0]` → `[hold, volley, 0, 0]` → `[reposition, volley, 8, 60]` → `[reposition, continuous, 5, 90]`, Assault the same with `[bob, volley, 0, 35]` →
 `[bob, continuous, 0, 55]` (t6). `attacks` = `[cooldown_factor, max_concurrent_attacks, spoke_count, spoke_period, core_ring_armed, core_ring_period]`:
 `[1.0, 2, 0, 0, false, 0]` → `[1.0, 2, 2, 8, false, 0]` → (unchanged in `core_exposed`) → `[0.6, 3, 4, 6, true, 2]`; `arena` = `[ring_pulse_armed, ring_period]`:
-`[false, 0]` → `[false, 0]` → `[true, 6]` → `[true, 3.5]` (t7, t16). `reinforcements` is `[[], 0]` until t8 builds it.
+`[false, 0]` → `[false, 0]` → `[true, 6]` → `[true, 3.5]` (t7, t16). `reinforcements` = `[sorted ids of the bays the ladder has activated, escorts the surge queued on entering this phase]`: `[[north_defenders, south_defenders], 0]` → `[[hangar, north_defenders, south_defenders], 0]` (the hangar bay activates) → unchanged → `[[...], 4]` (the `critical` surge; `0` with the hangar dead, a dead bay stays listed) (t8).
 
 ## Batteries (t7)
 
@@ -152,7 +152,29 @@ already run (min of the two); a due weapon that may not fire waits at 0. **Tick 
   Every row is inside both ceilings with the shipped tuning, so no lever was pulled (the order would have been `core_ring_period` 2.0 → 2.5, `critical_cooldown_factor`
   0.6 → 0.7, `critical_max_concurrent_attacks` 3 → 2). The planned upper bound (14.5 /s in `critical`) assumed every mount in arc and in range at once; from any one
   position the 100° arcs and ranges leave at most two or three batteries on the player, and the gate spaces them. Escort rounds are not in this count (the station's
-  legacy rate excluded its reinforcements too); t8 records them beside it.
+  legacy rate excluded its reinforcements too); the escorts are bounded by their caps (6 / 4) and their own configs, not measured here.
+
+## Reinforcements (t8)
+
+Three scene-authored `ReinforcementBay`s on parts (`BossReinforcements`, §2.2 of the shared machinery in [global.md](../../../../docs/architecture/modules/global.md)),
+ticked by the brain with `active` = `is_engaged()` and not EMP and not dying. Escorts are ordinary AI ships in the fortress's owner group, born at the bay's `Mouth` (world space,
+so a panned Assault camera changes nothing), in `SpaceFortressEscorts`, never in the enemy container; they are scuttled when the death starts.
+
+| Bay | Part | Trigger | Open Space | Assault | Door |
+|---|---|---|---|---|---|
+| `hangar` | `Hangar` | PERIODIC from `shields_exposed`, `first_delay` 2 | 3 swarm drones / 12 s | 2 swarm drones / 14 s (`assault_count`, `assault_period`) | 0.8 s open, then held 2.0 s; **the hangar is hittable exactly then** (`opens_part`) |
+| `hangar` surge | — | `critical` entry: `FortressBrain._set_reinforcements` → `surge(&"hangar", config.hangar_surge_count 4)` | swarm drones | swarm drones | only while the hangar lives |
+| `north_defenders` | `ShieldNorth` | ON_SECTOR_LOSS: `battery_artillery`, `battery_missiles`, `hangar` | 2 fighters | 2 fighters | 1.0 s |
+| `south_defenders` | `ShieldSouth` | ON_SECTOR_LOSS: `battery_spread`, `battery_pulse`, `battery_sweep` | 2 gatling interceptors | 2 gatling interceptors | 1.0 s |
+
+- **Caps:** `escort_cap_open_space` 6 / `escort_cap_assault` 4; a launch without room is skipped and counted (`skipped(bay_id)`).
+- **Meaning for the player (§26):** nothing launches in `batteries` until a battery dies (its sector's pair, one door cycle later); a lost generator ends its half's bay for good (a
+  launch mid-door is cancelled); killing the hangar stops the drones (and the surge) for good; losing the hangar calls the north defenders.
+- **Why the hangar holds its doors:** behind the north bubble (capacity 120) it needs 420 damage; the default gun does 50 / 0.18 s, so the 0.8 s telegraph alone gives ≈ 222 and the
+  held 2.0 s makes the window 2.8 s ≈ 778. A row checks the inequality and its `open_hold_seconds` 0 boundary, and a real-hit row kills it in one window.
+- **Escort fire:** a launched gatling pair puts a round in the escort container in ≈ 2.9 s; a fighter pair in ≈ 3.9–4.5 s (its lead-in and attack slot), bounded at 5 s in the gate.
+
+Gate `tests/integration/test_fortress_reinforcements.gd`; the §25 `reinforcements` key and the dead-hangar row are in `test_space_fortress.gd`.
 
 ## Death
 

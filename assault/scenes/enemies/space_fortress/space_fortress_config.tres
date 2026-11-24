@@ -57,6 +57,7 @@ escort_cap_open_space = 6
 escort_cap_assault = 4
 escort_boost_speed = 300.0
 escort_boost_seconds = 0.4
+hangar_surge_count = 4
 max_concurrent_attacks = 2
 critical_max_concurrent_attacks = 3
 critical_cooldown_factor = 0.6

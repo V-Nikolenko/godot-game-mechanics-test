@@ -19,6 +19,10 @@
 [ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/turret_mount_slot.gd" id="17_sf"]
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/space_fortress/fortress_spoke_beam.tscn" id="18_sf"]
 [ext_resource type="PackedScene" path="res://assault/scenes/enemies/space_fortress/fortress_pulse_ring.tscn" id="19_sf"]
+[ext_resource type="Script" path="res://global/boss/reinforcement_bay.gd" id="20_sf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn" id="21_sf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/fighter/fighter.tscn" id="22_sf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn" id="23_sf"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_sf"]
 resource_local_to_scene = true
@@ -489,3 +493,44 @@ rotation = 3.1415927
 [node name="Beam" parent="HullBeams/Spoke3" instance=ExtResource("18_sf")]
 
 [node name="PulseRing" parent="." instance=ExtResource("19_sf")]
+
+[node name="Bay" type="Node2D" parent="Modules/Hangar"]
+script = ExtResource("20_sf")
+bay_id = &"hangar"
+payload_scene = ExtResource("21_sf")
+count = 3
+period = 12.0
+first_delay = 2.0
+active_from_phase = &"shields_exposed"
+door_seconds = 0.8
+open_hold_seconds = 2.0
+opens_part = true
+assault_count = 2
+assault_period = 14.0
+
+[node name="Mouth" type="Marker2D" parent="Modules/Hangar/Bay"]
+position = Vector2(-40, 0)
+
+[node name="Bay" type="Node2D" parent="Modules/ShieldNorth"]
+script = ExtResource("20_sf")
+bay_id = &"north_defenders"
+trigger = 1
+payload_scene = ExtResource("22_sf")
+count = 2
+watch_ids = Array[StringName]([&"battery_artillery", &"battery_missiles", &"hangar"])
+door_seconds = 1.0
+
+[node name="Mouth" type="Marker2D" parent="Modules/ShieldNorth/Bay"]
+position = Vector2(0, -70)
+
+[node name="Bay" type="Node2D" parent="Modules/ShieldSouth"]
+script = ExtResource("20_sf")
+bay_id = &"south_defenders"
+trigger = 1
+payload_scene = ExtResource("23_sf")
+count = 2
+watch_ids = Array[StringName]([&"battery_spread", &"battery_pulse", &"battery_sweep"])
+door_seconds = 1.0
+
+[node name="Mouth" type="Marker2D" parent="Modules/ShieldSouth/Bay"]
+position = Vector2(0, 70)
