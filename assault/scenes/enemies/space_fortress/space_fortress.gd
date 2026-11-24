@@ -122,6 +122,8 @@ func _ready() -> void:
 			cfg.escort_cap_assault if _assault else cfg.escort_cap_open_space, cfg.escort_boost_speed, cfg.escort_boost_seconds)
 	_fortress_brain.config = cfg
 	_fortress_brain.bind(_hull, _reinforcements)
+	## The five batteries' mounts (t7): one gate, one running pool index; pools are root children, so rounds land in the fortress's parent container.
+	_hull.build_mounts(self, _fortress_brain.rng, _owner_group, _fortress_brain.attack_gate, 0)
 
 	if core != null:
 		core.destroyed.connect(_on_core_destroyed)

@@ -38,8 +38,8 @@ const PARTS := [
 ]
 const NORTH := [&"battery_artillery", &"battery_missiles", &"hangar"]
 const SOUTH := [&"battery_spread", &"battery_pulse", &"battery_sweep"]
-## The §25 keys built so far (t5 vulnerable and visuals, t6 movement; t7 / t16 add attacks and arena, t8 reinforcements).
-const BUILT_KEYS := {Change.VULNERABLE: &"vulnerable", Change.VISUALS: &"visuals", Change.MOVEMENT: &"movement"}
+## The §25 keys built so far (t5 vulnerable and visuals, t6 movement, t7 the battery fields of attacks; t16 adds the rest of attacks and arena, t8 reinforcements).
+const BUILT_KEYS := {Change.VULNERABLE: &"vulnerable", Change.VISUALS: &"visuals", Change.MOVEMENT: &"movement", Change.ATTACKS: &"attacks"}
 const _SPEEDUP := 8  # tests/README.md -> Gate time rule 1
 
 var _roots: Array[Node] = []
@@ -221,11 +221,12 @@ func _changed(before: Dictionary, after: Dictionary) -> Array:
 
 
 ## Asserts every change [param phase] declares among the keys this task builds was observed between [param before] and [param after].
-func _assert_declared_changes(phase: BossPhase, before: Dictionary, after: Dictionary, label: String) -> void:
+## [param unbuilt] is the mask of declared changes whose snapshot fields a later task builds (shields_exposed declares ATTACKS for t16's spokes; its battery fields do not change).
+func _assert_declared_changes(phase: BossPhase, before: Dictionary, after: Dictionary, label: String, unbuilt: int = 0) -> void:
 	var changed := _changed(before, after)
 	var owned := 0
 	for bit in BUILT_KEYS:
-		if phase.changes & bit == 0:
+		if phase.changes & bit == 0 or unbuilt & bit != 0:
 			continue
 		owned += 1
 		assert_has(changed, BUILT_KEYS[bit], "%s: the declared %s change shows in the snapshot" % [label, BUILT_KEYS[bit]])
@@ -506,7 +507,7 @@ func test_each_phase_shows_its_declared_changes(mode: String = use_parameters(MO
 	_part(f, &"battery_pulse").destroy()
 	await _settle()
 	assert_eq(driver.current_id(), &"shields_exposed")
-	_assert_declared_changes(driver.phase(1), before, f.phase_snapshot(), "%s shields_exposed" % mode)
+	_assert_declared_changes(driver.phase(1), before, f.phase_snapshot(), "%s shields_exposed" % mode, Change.ATTACKS)
 	_assert_movement(f, mode, 1)
 	for id in [&"shield_north", &"shield_south"]:
 		var generator := _part(f, id)
@@ -709,7 +710,7 @@ func test_the_builder_the_brain_shell_and_the_refusals() -> void:
 	var f := _spawn(h)
 	var brain := f.get_node("Brain") as FortressBrain
 	assert_false(brain.is_engaged(), "not engaged before its first tick (the hub idle)")
-	assert_false(brain.attack_gate(), "no battery may fire until t7")
+	assert_true(brain.attack_gate(), "the gate is open while no battery attacks (t7: cap 2; its rows are test_fortress_weapons.gd)")
 	assert_true(f.deflects_hit(null) and f.is_armored(), "the hull is armour")
 	assert_false(f.is_laser_blocking(), "the beam passes over it")
 	assert_false(f.can_be_repaired() or f.accepts_ward() or f.accept_tow(Vector2(50.0, 0.0)), "never repaired, warded or towed")

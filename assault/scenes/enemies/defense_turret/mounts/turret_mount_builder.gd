@@ -24,6 +24,7 @@ static func build(host: Node2D, slot: TurretMountSlot, index: int, rng: RandomNu
 		mount.turn_rate = slot.turn_rate_override
 	if slot.traverse_deg_override >= 0.0:
 		mount.traverse_deg = slot.traverse_deg_override
+	mount.pool_period_factor = slot.pool_period_factor
 	mount.rng = rng
 	mount.telegraph_gate = telegraph_gate
 	slot.add_child(mount)

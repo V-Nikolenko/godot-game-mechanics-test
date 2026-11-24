@@ -326,7 +326,7 @@ b.carrier().at(0, -260)
 **Builder:** `b.space_fortress()` (const `WaveBuilder.SPACE_FORTRESS`, Phase 11 t5)  
 **Scene:** `space_fortress/space_fortress.tscn` — see [`ENEMY.md`](../assault/scenes/enemies/space_fortress/ENEMY.md)  
 **Movement:** Brain-driven (`FortressBrain` + `EnemyMover`); **no `.move()`, no `.delay()`** (the station's rules). Turns its stronger sector to the player slower than a circling player; Assault: descends at 90 px/s to world y 180 and holds, then from `core_exposed` bobs ± 100 px vertically with x fixed (no engagement budget, no exit; the section timeout or its death ends it).  
-**Shoots / launches:** not yet (t7 batteries, t16 hull beams and rings, t8 escorts from its bays).  
+**Shoots / launches:** five batteries (t7): spread cannon 45°, rapid pulse 135°, heavy artillery 225°, rocket battery 315° (corner diagonals, 100° arcs) and a sweep beam 0° (140°), at most two attacking at once (three in `critical`, when every cooldown is x 0.6); a dead battery silences its lane. Its rockets persist after its death (the second bounded persistent-ordnance exception). Not yet: t16 hull beams and rings, t8 escorts from its bays.  
 **HP:** an armoured ring hull nothing hurts + nine parts: five batteries 260, hangar 300 (locked: doors), two shield generators 360 (locked until two batteries
 are wrecks; each bubbles the batteries / hangar of its half), core 1500 (locked until both generators are wrecks). **The core's death is the fortress's.**  
 **Score:** 1500  

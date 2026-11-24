@@ -41,7 +41,7 @@ var _bursting: bool = false
 
 func pool_specs() -> Array[Dictionary]:
 	var max_time := float(EnemyBeamScenes.export_of_scene(round_scene, &"max_time", DEFAULT_ROUND_MAX_TIME, ^"ProjectileLifetime"))
-	var period := charge_seconds + (burst_count - 1) * burst_gap + cooldown_seconds
+	var period := (charge_seconds + (burst_count - 1) * burst_gap + cooldown_seconds) * pool_period_factor
 	var specs: Array[Dictionary] = [{
 		"name": POOL_NAME,
 		"scene": round_scene,

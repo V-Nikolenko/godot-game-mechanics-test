@@ -61,6 +61,9 @@ signal round_fired(projectile: Node2D)
 ## `traverse_deg_override` (>= 0) replaces it before `setup()`. Below 360 the mount works in offsets from rest and turns along the arc.
 @export var traverse_deg: float = 360.0
 
+## Scales the firing period `pool_specs()` sizes the mount's pools from (the builder copies the slot's value in before it asks). A host that will cut
+## `cooldown_seconds` later sets the factor it will apply, so a pool never runs dry at the shorter period (Phase 11 t7). 1.0 changes nothing.
+var pool_period_factor: float = 1.0
 ## The scan's start offset is drawn from this; the host assigns its brain's rng before `setup()`. Null = a randomised one of the mount's own.
 var rng: RandomNumberGenerator
 ## Optional hold on TRACK -> TELEGRAPH (`call() -> bool`; the host binds whatever it needs, e.g. a group's stagger). Asked last, only when every

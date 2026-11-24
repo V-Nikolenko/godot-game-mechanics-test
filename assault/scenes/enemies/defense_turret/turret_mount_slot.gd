@@ -15,3 +15,6 @@ extends Marker2D
 ## >= 0: copied onto the mount's `traverse_deg` (the full width of the arc it may aim, scan and fire in, centred on `rest_bearing_deg`); negative
 ## keeps the mount scene's value (360 = unlimited, Phase 10 t3).
 @export var traverse_deg_override: float = -1.0
+## Copied onto the mount's `pool_period_factor` before its pools are built (Phase 11 t7): a host that will shorten the mount's cooldown later (the fortress's
+## `critical` phase) authors the factor it will apply, so the pools are sized for the shorter period. 1.0 = the mount's own period, bit-identical.
+@export var pool_period_factor: float = 1.0

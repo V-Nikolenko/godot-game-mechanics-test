@@ -105,6 +105,10 @@ var _last_spin_dir: int = -1
 var _continuous_dir: int = 1
 var _travelling: bool = false
 var _thrusters: CanvasItem
+## The batteries (t7): the gate cap, the cooldown factor applied in `critical` (1.0 before) and whether it was applied (once).
+var _max_attacks: int = 2
+var _cooldown_factor: float = 1.0
+var _cooldown_applied: bool = false
 
 
 ## Hands the brain its parts and its bays (called by the root in `_ready()`).
@@ -124,6 +128,7 @@ func tick(delta: float) -> void:
 			_tick_open_space(delta, target)
 		_face(target)
 		_show_thrust()
+		_tick_weapons(delta, target)
 	if _reinforcements != null:
 		_reinforcements.tick(delta, is_engaged())
 
@@ -133,9 +138,21 @@ func is_engaged() -> bool:
 	return phase == Phase.HOLD or phase == Phase.REPOSITION
 
 
-## The batteries' shared `TurretMount.telegraph_gate` (zero arguments). A stub until t7: false.
+## The batteries' shared `TurretMount.telegraph_gate` (zero arguments: `TurretMount` calls `telegraph_gate.call()` and `ModularHull.build_mounts()` hands the
+## same unbound Callable to every mount). True while fewer than `_max_attacks` battery mounts are in TELEGRAPH or FIRE (the asking mount is still in TRACK, so
+## it is not counted): never a wall of five bursts at once. The cap is 2, 3 in `critical`.
 func attack_gate() -> bool:
-	return false
+	return attacking_count() < _max_attacks
+
+
+## How many battery mounts are in TELEGRAPH or FIRE right now.
+func attacking_count() -> int:
+	var n := 0
+	for mount in _mounts():
+		var p := mount.phase()
+		if p == TurretMount.Phase.TELEGRAPH or p == TurretMount.Phase.FIRE:
+			n += 1
+	return n
 
 
 ## The boss phase ladder entered [param phase_id] (`SpaceFortress._on_phase_entered`): the movement settings of that phase. t7, t16 and t8 add theirs here.
@@ -158,6 +175,28 @@ func on_boss_phase(phase_id: StringName) -> void:
 				_set_movement(TRANSLATION_REPOSITION, SPIN_CONTINUOUS, config.critical_reposition_period, config.critical_reposition_speed)
 			_continuous_dir = -_last_spin_dir
 			_last_spin_dir = _continuous_dir
+	_set_attacks(phase_id)
+
+
+## The batteries' phase settings (the §25 `attacks` key's battery fields): `critical` cuts every live battery mount's cooldown by `critical_cooldown_factor`,
+## once, on the instanced mount nodes (never on a resource: the shipped mount scene keeps its value), and raises the gate cap.
+func _set_attacks(phase_id: StringName) -> void:
+	if phase_id != &"critical":
+		_max_attacks = config.max_concurrent_attacks
+		return
+	_max_attacks = config.critical_max_concurrent_attacks
+	if _cooldown_applied:
+		return
+	_cooldown_applied = true
+	_cooldown_factor = config.critical_cooldown_factor
+	if _hull == null:
+		return
+	for part in _hull.modules():
+		if part.is_destroyed():
+			continue
+		for mount in part.mounts():
+			if is_instance_valid(mount):
+				mount.cooldown_seconds *= _cooldown_factor
 
 
 ## An EMP window started: nothing this brain ticks may hang lit or open through it (the brain is not ticked for the window). The hull stops (the base rule
@@ -185,9 +224,10 @@ func movement_snapshot() -> Array:
 	return [_translation_mode, _spin_mode, _reposition_period, _travel_speed]
 
 
-## §25 snapshot parts later tasks build, `[]` until then: attacks (t7, t16), arena (t16).
+## §25 `attacks`: `[cooldown_factor, max_concurrent_attacks, spoke_count, spoke_period, core_ring_armed, core_ring_period]`, the current boss phase's settings. t7 builds
+## the two battery fields; the spoke and core-ring fields are zero / false until t16. The live battery set is not in it (a dead battery is §26, not a phase).
 func attacks_snapshot() -> Array:
-	return []
+	return [_cooldown_factor, _max_attacks, 0, 0.0, false, 0.0]
 
 
 func arena_snapshot() -> Array:
@@ -453,9 +493,37 @@ func _part_live(id: StringName) -> bool:
 
 
 func _scan_mounts() -> void:
+	for mount in _mounts():
+		mount.scan(0.0)
+
+
+## Every attached battery mount (a wreck's is UNPOWERED and only droops), in module order.
+func _mounts() -> Array[TurretMount]:
+	var out: Array[TurretMount] = []
 	if _hull == null:
-		return
+		return out
 	for part in _hull.modules():
 		for mount in part.mounts():
 			if is_instance_valid(mount):
-				mount.scan(0.0)
+				out.append(mount)
+	return out
+
+
+## The batteries (plan §2.7.1; the Carrier's rule): engaged (HOLD / REPOSITION, both modes), not in an EMP window, in Assault the hull centre inside the view,
+## and line of sight (on a physics frame only: a hand-ticked row counts it clear) or a mount that `fires_past_cover()` (the rocket battery). Each mount adds its
+## own range, cone, cooldown, traverse arc and the `attack_gate()`. A dead battery's mount is UNPOWERED and only droops, so its lane stays quiet (§26). Not
+## engaged, or no target: every mount scans.
+func _tick_weapons(delta: float, target: TargetInfo) -> void:
+	var mounts := _mounts()
+	if not (target.has_target and is_engaged()):
+		for mount in mounts:
+			mount.scan(delta)
+		return
+	var sees := true
+	if Engine.is_in_physics_frame():
+		sees = can_see_player()
+	var tree := get_tree()
+	var in_view := not assault or not EnemyWorld.has_view_rect(tree) or EnemyWorld.view_rect(tree).has_point(actor.global_position)
+	var emp: bool = actor.emp_seconds_left() > 0.0 if actor.has_method(&"emp_seconds_left") else false
+	for mount in mounts:
+		mount.tick(delta, target, in_view and not emp and (sees or mount.fires_past_cover()))

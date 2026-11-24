@@ -11,8 +11,8 @@ Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md` §2.5 (t5, this shell), �
 §2.9 (t9 art). Task plans: the shell `docs/plans/cmwt4y3hg00soqs2ybvglujbs/3-plan.md`, the movement `docs/plans/cmwt4y3hk00ssqs2ybengu81w/3-plan.md`.
 
 **Built so far:** t5 the shell (hull, parts, sector shields, phase ladder with its vulnerability and visual consequences, death, EMP, homing, roster
-gates); t6 the movement (facing rule, spins, Open Space combat zone, Assault hold and bob; `is_engaged()`). **Not yet:** it does not fire (t7, t16) or launch
-escorts (t8); `attack_gate()` is a stub answering false; art is placeholder station PNGs (t9).
+gates); t6 the movement (facing rule, spins, Open Space combat zone, Assault hold and bob; `is_engaged()`); t7 the five batteries and the attack gate.
+**Not yet:** the geometry weapons (spokes, ring pulse, core ring; t16) and escorts (t8); art is placeholder station PNGs (t9).
 
 ---
 
@@ -77,6 +77,37 @@ alternates. `movement` is `[translation_mode, spin_mode, reposition_period, trav
 0, 0]` → `[hold, volley, 0, 0]` → `[reposition, volley, 8, 60]` → `[reposition, continuous, 5, 90]`, Assault the same with `[bob, volley, 0, 35]` →
 `[bob, continuous, 0, 55]` (t6). `attacks` / `arena` are `[]` and `reinforcements` `[[], 0]` until their tasks build them.
 
+## Batteries (t7)
+
+Five battery mounts, one per battery part, built by `ModularHull.build_mounts(self, rng, owner_group, brain.attack_gate, 0)` from each battery's `MountSlots/Slot0`
+(`TurretMountSlot`). Pools are root children of the fortress (their container is its parent); indices run 0..4 in module order.
+
+| Battery | Variant | Rest | Traverse | Pools |
+|---|---|---|---|---|
+| `battery_spread` | SPREAD_CANNON | 45° | 100° | `PulsePool_0` (Scatter) |
+| `battery_pulse` | RAPID_PULSE | 135° | 100° | `PulsePool_1` (Pulse) |
+| `battery_artillery` | HEAVY_CANNON | 225° | 100° | `PulsePool_2` (Heavy Shell) |
+| `battery_missiles` | ROCKET_BATTERY | 315° | 100° | `DumbPool_3`, `PursuitPool_3` (persist) |
+| `battery_sweep` | SWEEP_BEAM | 0° | 140° | none (owner-ticked beam) |
+
+- **Diagonal crossfire.** The four corner mounts cover their own diagonal lanes (100° arcs; straight north, south, east of the ring fall between arcs by
+  design); a destroyed battery is UNPOWERED by its part, so **its lane goes quiet** (§26). A 300 px player on a diagonal is fired on by that corner only.
+- **`attack_gate()`** (zero arguments: `TurretMount` calls `telegraph_gate.call()`): true while fewer than `max_concurrent_attacks` 2 (`critical_max_concurrent_attacks`
+  3 in `critical`) battery mounts are in TELEGRAPH or FIRE (the asking mount is still in TRACK). Never a wall of five bursts.
+- **Who may fire** (`FortressBrain._tick_weapons`, the Carrier's rule): only `is_engaged()` (HOLD / REPOSITION, both modes), not inside an EMP window, in Assault only with
+  the hull centre inside `EnemyWorld.view_rect()`, and with line of sight (physics frame only; a hand-ticked row counts it clear) or a mount that
+  `fires_past_cover()` (the rocket battery). Otherwise every mount scans.
+- **`critical`**: every live battery mount's `cooldown_seconds` x `critical_cooldown_factor` 0.6, once, on the instanced nodes (the shipped mount scenes are untouched).
+  **Pools are sized for that period**: each battery slot authors `TurretMountSlot.pool_period_factor` 0.6 (equal to the config factor, pinned by a row), the
+  builder copies it onto `TurretMount.pool_period_factor` (default 1.0, bit-identical for every other mount) and every `pool_specs()` multiplies its period by it
+  (the heavy cannon needs 10 shells at its 2.97 s critical period, not 6). 30 s of critical fire per battery refuses no shot (`shots_refused` / `rockets_refused` 0).
+- **EMP**: `on_emp_started()` scans every mount (`scan(0.0)`); nothing fires until the window ends. **Death**: every mount `power_down()`s.
+- **Persistent ordnance — the second bounded exception.** The `ROCKET_BATTERY` pools are `persist_after_owner_death`, so a rocket in flight outlives the fortress by at
+  most its `max_time`. Like the Ph10 Heavy Gunship, the fortress is therefore an exception to the rule that persistent-ordnance enemies stay out of `ENEMIES_CLEARED`;
+  its tail after death is `death_duration` + the rocket `max_time` (t10 adds the `test_engagement_deadline.gd` row that names it).
+- `phase_snapshot()[&"attacks"]` = `[cooldown_factor, max_concurrent_attacks, spoke_count, spoke_period, core_ring_armed, core_ring_period]`: t7 builds the first two
+  (`[1.0, 2, ...]` until `critical`, `[0.6, 3, ...]` in it); t16 the spoke and core-ring fields.
+
 ## Death
 
 Latched once: `was_killed`, `died` (the kill score), the corpse made harmless (hurtbox monitoring and contact layer off, deferred), `suspend_ai()`, every
@@ -120,7 +151,7 @@ Space, 4 in Assault) run only then. It only requests (`face_toward`, `request_ve
 
 ## Tests
 
-`tests/integration/test_space_fortress.gd` (rows 1–11 of plan §2.5.7, both harnesses; the armour, lane and locked-part rows on real physics at 8×; the t6
+`tests/integration/test_fortress_weapons.gd` (t7, rows A1–A6 of plan §2.7.7, both harnesses: the five mounts, pools and gate, crossfire and dead lanes, when the guns may fire, the critical cooldowns and pools, 30 s of critical fire, EMP and death with a rocket outliving the fortress, the `attacks` key), `tests/integration/test_space_fortress.gd` (rows 1–11 of plan §2.5.7, both harnesses; the armour, lane and locked-part rows on real physics at 8×; the t6
 movement block: idle, facing at exactly the turn rate, halving and ties, circling wins (player speeds read from their scenes), hold, the reposition pick
 recomputed from the config, the leash, the Assault entry / hold / bob / fixed x, spins, EMP and thrusters, all hand-ticked), plus the
 roster gates: `test_enemy_contact_damage.gd`, `test_contact_hitbox_geometry.gd`, `test_enemy_hurtbox_geometry.gd`, `test_base_enemy.gd`,
@@ -134,6 +165,6 @@ space_fortress/
 ├── ENEMY.md                     ← this file
 ├── space_fortress.tscn          root SpaceFortress, Modules/* (nine EnemyModules), ModularHull, PhaseDriver, DeathSequence, Thrusters, CriticalOverlay
 ├── space_fortress.gd            SpaceFortress (armour, sectors, ladder consequences, phase_snapshot, death, EMP, homing)
-├── fortress_brain.gd            FortressBrain (movement: facing rule, spins, Open Space zone, Assault hold / bob; bays tick; phase / EMP / death hooks)
+├── fortress_brain.gd            FortressBrain (movement: facing rule, spins, Open Space zone, Assault hold / bob; the batteries and attack gate; bays tick; phase / EMP / death hooks)
 └── space_fortress_config.gd / .tres   SpaceFortressConfig (flat)
 ```
