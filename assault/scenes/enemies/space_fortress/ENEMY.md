@@ -8,11 +8,11 @@ generators keep a bubble on the batteries and the hangar of their half; the core
 removes an attack angle; destroying a generator bares a whole sector; every phase changes how the fight plays.
 
 Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md` §2.5 (t5, this shell), §2.6 (t6 movement), §2.7 (t7 batteries, t16 geometry weapons), §2.8 (t8 bays),
-§2.9 (t9 art). Task plan of the shell: `docs/plans/cmwt4y3hg00soqs2ybvglujbs/3-plan.md`.
+§2.9 (t9 art). Task plans: the shell `docs/plans/cmwt4y3hg00soqs2ybvglujbs/3-plan.md`, the movement `docs/plans/cmwt4y3hk00ssqs2ybengu81w/3-plan.md`.
 
-**Built so far (t5, the shell):** hull, parts, sector shields, phase ladder with its vulnerability and visual consequences, death, EMP, homing, roster
-gates. **Not yet:** it does not move (t6), fire (t7, t16) or launch escorts (t8); `FortressBrain.is_engaged()` and `attack_gate()` are stubs answering
-false; art is placeholder station PNGs (t9).
+**Built so far:** t5 the shell (hull, parts, sector shields, phase ladder with its vulnerability and visual consequences, death, EMP, homing, roster
+gates); t6 the movement (facing rule, spins, Open Space combat zone, Assault hold and bob; `is_engaged()`). **Not yet:** it does not fire (t7, t16) or launch
+escorts (t8); `attack_gate()` is a stub answering false; art is placeholder station PNGs (t9).
 
 ---
 
@@ -60,20 +60,22 @@ generator's light shows `SHIELDED` (cyan) while it lives.
 
 One way, in order; IDEAS §25: every phase changes at least two aspects (`test_boss_phase_rules.gd`), and `phase_snapshot()` shows each one.
 
-| # | Phase | Trigger | Declared changes | Consequences built so far (t5) |
+| # | Phase | Trigger | Declared changes | Consequences built so far (t5, t6) |
 |---|---|---|---|---|
-| 0 | `batteries` | START | — | shutters closed, plating closed, generator lights SHIELDED |
-| 1 | `shields_exposed` | 2 WEAPON parts destroyed (`shields_exposed_battery_losses`) | VULNERABLE, ATTACKS, MOVEMENT, REINFORCEMENTS, VISUALS | both generators open (deferred), shutter art opens |
-| 2 | `core_exposed` | both generators destroyed | VULNERABLE, MOVEMENT, ARENA, VISUALS | core opens (deferred), plating art opens (never over a wreck), `Thrusters` shown |
-| 3 | `critical` | core ≤ 40 % (`critical_core_ratio`) | MOVEMENT, ATTACKS, REINFORCEMENTS, VISUALS | `CriticalOverlay` shown, core light blinks COMMIT / OFF every `core_blink_period` 0.25 s |
+| 0 | `batteries` | START | — | shutters closed, plating closed, generator lights SHIELDED; hold, facing rule |
+| 1 | `shields_exposed` | 2 WEAPON parts destroyed (`shields_exposed_battery_losses`) | VULNERABLE, ATTACKS, MOVEMENT, REINFORCEMENTS, VISUALS | both generators open (deferred), shutter art opens; spin mode `volley` (spins armed for t16's spoke volleys) |
+| 2 | `core_exposed` | both generators destroyed | VULNERABLE, MOVEMENT, ARENA, VISUALS | core opens (deferred), plating art opens (never over a wreck), `Thrusters` shown; translation starts (Open Space REPOSITION every 8 s at 60 px/s, Assault bob at 35 px/s) |
+| 3 | `critical` | core ≤ 40 % (`critical_core_ratio`) | MOVEMENT, ATTACKS, REINFORCEMENTS, VISUALS | `CriticalOverlay` shown, core light blinks COMMIT / OFF every `core_blink_period` 0.25 s; continuous spin at 0.6 rad/s, REPOSITION every 5 s at 90 / bob at 55 |
 
-The scene's `count` / `health_ratio` must equal the config's (a row checks it). Movement, attack, arena and reinforcement consequences arrive with t6, t7,
-t16 and t8 through `FortressBrain.on_boss_phase()`. A phase stepped while the fortress is dying applies nothing.
+The scene's `count` / `health_ratio` must equal the config's (a row checks it). Attack, arena and reinforcement consequences arrive with t7, t16 and t8
+through `FortressBrain.on_boss_phase()`. A phase stepped while the fortress is dying applies nothing.
 
 **`phase_snapshot()`** — six keys (`movement`, `attacks`, `vulnerable`, `arena`, `reinforcements`, `visuals`) built only from phase-driven state, never
 from which parts are alive, so the kill that triggers a phase never counts as one of its changes. `visuals` reads the fortress's own fields (shutter and
 plating textures, the generator light it keeps, the core light *mode*), not the live sprites or lights: a wreck turns its own light off and a blinking light
-alternates. `movement` / `attacks` / `arena` are `[]` and `reinforcements` `[[], 0]` until their tasks build them.
+alternates. `movement` is `[translation_mode, spin_mode, reposition_period, travel_speed]` — the brain's per-boss-phase settings: Open Space `[hold, face,
+0, 0]` → `[hold, volley, 0, 0]` → `[reposition, volley, 8, 60]` → `[reposition, continuous, 5, 90]`, Assault the same with `[bob, volley, 0, 35]` →
+`[bob, continuous, 0, 55]` (t6). `attacks` / `arena` are `[]` and `reinforcements` `[[], 0]` until their tasks build them.
 
 ## Death
 
@@ -87,10 +89,30 @@ tint of `BossDeathSequence`), then `death_duration` later the escort container (
 so an EMP Blast never process-disables the wreck mid-sequence. The brain's `on_emp_started()` scans every mount down and gives the bays one inactive tick.
 It stays tangible through the window. `homing_point(from)` = the nearest live vulnerable part's centre, else the core's. Never repaired, warded or towed.
 
-## Brain (`FortressBrain`, shell)
+## Brain (`FortressBrain`) and movement (t6)
 
-`enum Phase { IDLE, NOTICING, RETURNING, ENTER, HOLD, REPOSITION }` (append-only; the movement phase, never mixed with the boss ladder). Its tick only ticks
-the `BossReinforcements` (built by the root: escort cap 6 in Open Space, 4 in Assault). It never writes velocity or rotation.
+`enum Phase { IDLE, NOTICING, RETURNING, ENTER, HOLD, REPOSITION }` (append-only; the movement phase, never mixed with the boss ladder).
+**`is_engaged()`** = HOLD or REPOSITION, both modes: the weapons (t7, t16) fire and the bays (`BossReinforcements`, built by the root: escort cap 6 in Open
+Space, 4 in Assault) run only then. It only requests (`face_toward`, `request_velocity`, `arrive`, `hold_position`, `max_turn_rate` writes); the
+`EnemyMover` authors `turn_lerp` 0 and acceleration 0, so the turn cap alone sets every turn rate and every hold ends exactly.
+
+- **Facing rule** (`present_side()`): each sector's strength is its live batteries (north: artillery, missiles; south: spread, pulse, sweep), halved once its
+  generator is destroyed; the stronger sector's centre (north local −y, south local +y) is turned toward the player at `turn_rate` 0.22 rad/s (Assault
+  `assault_turn_rate` 0.30); a tie keeps the side. A circling player at 500 px out-turns it (0.84 rad/s in Open Space), so circling reaches the weak side.
+- **Spins**: t16 calls `begin_spin(direction := 0)` (0 alternates, the first is +1) / `end_spin()` for a volley spin at `beam_spin_rate` 0.5; in `critical`
+  it spins continuously at `critical_spin_rate` 0.6. A spin faces a point 1 rad ahead of the current facing (the face lever is `FACE_REACH` 10 000 px).
+- **Open Space**: `patrol_anchor` (spawn when unset) is the combat zone's centre (`zone_radius` 600). Hub idle through `AnchorIdle(anchor, 1400, 2600, 0.8,
+  home_radius 8)`: IDLE holds the anchor and spins at `idle_spin_rate` 0.08; NOTICING; then HOLD at the station point (the anchor) in `batteries` /
+  `shields_exposed`, ±`hold_tolerance` 24 at `hold_speed` 40. From `core_exposed` REPOSITION: every `reposition_period` 8 s (`critical` 5 s) a new station
+  point, the one of 8 points on the 360 px circle round the anchor that is ≥ 250 px from the current point and farthest from the player 1 s ahead (lowest
+  index on a tie), reached at 60 px/s (`critical` 90). The player beyond `lose_radius` → RETURNING to the anchor at 60 → IDLE (boss phase and damage kept).
+  `start_engaged` (a test seam) skips the idle and so the leash.
+- **Assault**: no engagement budget, no exit. ENTER straight down at `assault_enter_speed` 90 to `assault_hold_y` 180, HOLD there; from `core_exposed` a
+  vertical bob of ± `assault_bob_amplitude` 100 at `assault_bob_speed` 35 (`critical_bob_speed` 55), reversing on each end. x never moves: only a correction
+  back to the anchored x at ≤ `assault_x_correct_speed` 20.
+- **EMP**: the base rule halts the mover and skips the brain: no motion and no rotation for the window.
+- **Thrusters**: `Thrusters.visible` is the root's phase flag (from `core_exposed`; the snapshot reads it); the brain writes only `Thrusters.modulate.a`, 1.0
+  while travelling (REPOSITION en route, RETURNING, ENTER, the bob) and `THRUSTER_IDLE_ALPHA` 0.35 holding.
 
 ## Spawning
 
@@ -98,7 +120,9 @@ the `BossReinforcements` (built by the root: escort cap 6 in Open Space, 4 in As
 
 ## Tests
 
-`tests/integration/test_space_fortress.gd` (rows 1–11 of plan §2.5.7, both harnesses; the armour, lane and locked-part rows on real physics at 8×), plus the
+`tests/integration/test_space_fortress.gd` (rows 1–11 of plan §2.5.7, both harnesses; the armour, lane and locked-part rows on real physics at 8×; the t6
+movement block: idle, facing at exactly the turn rate, halving and ties, circling wins (player speeds read from their scenes), hold, the reposition pick
+recomputed from the config, the leash, the Assault entry / hold / bob / fixed x, spins, EMP and thrusters, all hand-ticked), plus the
 roster gates: `test_enemy_contact_damage.gd`, `test_contact_hitbox_geometry.gd`, `test_enemy_hurtbox_geometry.gd`, `test_base_enemy.gd`,
 `test_config_instance_isolation.gd` (sweep + the children identity row), `test_boss_phase_rules.gd`, and the automatic sweeps (transparency, signal arity,
 single writer, layer names, project load).
@@ -110,6 +134,6 @@ space_fortress/
 ├── ENEMY.md                     ← this file
 ├── space_fortress.tscn          root SpaceFortress, Modules/* (nine EnemyModules), ModularHull, PhaseDriver, DeathSequence, Thrusters, CriticalOverlay
 ├── space_fortress.gd            SpaceFortress (armour, sectors, ladder consequences, phase_snapshot, death, EMP, homing)
-├── fortress_brain.gd            FortressBrain (shell: bays tick, phase / EMP / death hooks)
+├── fortress_brain.gd            FortressBrain (movement: facing rule, spins, Open Space zone, Assault hold / bob; bays tick; phase / EMP / death hooks)
 └── space_fortress_config.gd / .tres   SpaceFortressConfig (flat)
 ```

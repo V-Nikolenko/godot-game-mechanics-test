@@ -45,6 +45,42 @@ extends ShipConfig
 ## Every EMP window on the fortress is this share of the source's (Ph11 owner choice 6; every source, never while dying).
 @export var emp_factor: float = 0.4
 
+@export_group("Movement")
+## The facing rule's turn rate (rad/s): Open Space / Assault. A circling player at 500 px out-turns either (plan §2.6: ≤ ¼ of 0.84 rad/s).
+@export var turn_rate: float = 0.22
+@export var assault_turn_rate: float = 0.30
+## The volley spin (t16's `begin_spin()`), the `critical` continuous spin and the Open Space hub idle spin (rad/s).
+@export var beam_spin_rate: float = 0.5
+@export var critical_spin_rate: float = 0.6
+@export var idle_spin_rate: float = 0.08
+## Open Space hub idle (`AnchorIdle`): notice inside `perceive_radius` after `notice_time` s, give up beyond `lose_radius`, home within `home_radius` (px).
+@export var perceive_radius: float = 1400.0
+@export var lose_radius: float = 2600.0
+@export var notice_time: float = 0.8
+@export var home_radius: float = 8.0
+## Open Space combat zone round `patrol_anchor` (px): station points lie on the circle of `station_ring_factor` × `zone_radius`, each at least
+## `reposition_min_step` from the last, the one farthest from where the player will be `reposition_lookahead` s ahead.
+@export var zone_radius: float = 600.0
+@export var station_ring_factor: float = 0.6
+@export var reposition_min_step: float = 250.0
+@export var reposition_lookahead: float = 1.0
+## A new station point every this many seconds (`core_exposed` / `critical`), reached at this speed (px/s); also the speed home to the anchor.
+@export var reposition_period: float = 8.0
+@export var critical_reposition_period: float = 5.0
+@export var reposition_speed: float = 60.0
+@export var critical_reposition_speed: float = 90.0
+## A held station point: corrected only beyond `hold_tolerance` px, at `hold_speed` px/s.
+@export var hold_tolerance: float = 24.0
+@export var hold_speed: float = 40.0
+## Assault: the descent speed (px/s) to the hold line (world y), then from `core_exposed` a vertical bob of ± `assault_bob_amplitude` px at
+## `assault_bob_speed` (`critical_bob_speed` in `critical`). x never moves: only a correction back to the anchored x, at most `assault_x_correct_speed`.
+@export var assault_enter_speed: float = 90.0
+@export var assault_hold_y: float = 180.0
+@export var assault_bob_amplitude: float = 100.0
+@export var assault_bob_speed: float = 35.0
+@export var critical_bob_speed: float = 55.0
+@export var assault_x_correct_speed: float = 20.0
+
 @export_group("Escorts")
 ## Most live escorts at once (the `BossReinforcements` cap): Open Space (the Carrier's 6) / Assault (the station's 4).
 @export var escort_cap_open_space: int = 6

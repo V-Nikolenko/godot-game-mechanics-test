@@ -38,8 +38,8 @@ const PARTS := [
 ]
 const NORTH := [&"battery_artillery", &"battery_missiles", &"hangar"]
 const SOUTH := [&"battery_spread", &"battery_pulse", &"battery_sweep"]
-## The §25 keys this task builds (t6 adds movement, t7 / t16 attacks and arena, t8 reinforcements).
-const T5_KEYS := {Change.VULNERABLE: &"vulnerable", Change.VISUALS: &"visuals"}
+## The §25 keys built so far (t5 vulnerable and visuals, t6 movement; t7 / t16 add attacks and arena, t8 reinforcements).
+const BUILT_KEYS := {Change.VULNERABLE: &"vulnerable", Change.VISUALS: &"visuals", Change.MOVEMENT: &"movement"}
 const _SPEEDUP := 8  # tests/README.md -> Gate time rule 1
 
 var _roots: Array[Node] = []
@@ -224,13 +224,25 @@ func _changed(before: Dictionary, after: Dictionary) -> Array:
 func _assert_declared_changes(phase: BossPhase, before: Dictionary, after: Dictionary, label: String) -> void:
 	var changed := _changed(before, after)
 	var owned := 0
-	for bit in T5_KEYS:
+	for bit in BUILT_KEYS:
 		if phase.changes & bit == 0:
 			continue
 		owned += 1
-		assert_has(changed, T5_KEYS[bit], "%s: the declared %s change shows in the snapshot" % [label, T5_KEYS[bit]])
-	var seen := changed.filter(func(k) -> bool: return T5_KEYS.values().has(k)).size()
-	assert_gte(seen, mini(2, owned), "%s: at least min(2, declared) of t5's keys changed (%s)" % [label, changed])
+		assert_has(changed, BUILT_KEYS[bit], "%s: the declared %s change shows in the snapshot" % [label, BUILT_KEYS[bit]])
+	var seen := changed.filter(func(k) -> bool: return BUILT_KEYS.values().has(k)).size()
+	assert_gte(seen, mini(2, owned), "%s: at least min(2, declared) of the built keys changed (%s)" % [label, changed])
+
+
+## §2.6 row 8: the `movement` key in boss phase [param index] equals the literal (typed here, not read off the config).
+func _assert_movement(f: SpaceFortress, mode: String, index: int) -> void:
+	var open_space := [
+		[&"hold", &"face", 0.0, 0.0], [&"hold", &"volley", 0.0, 0.0], [&"reposition", &"volley", 8.0, 60.0], [&"reposition", &"continuous", 5.0, 90.0],
+	]
+	var assault := [
+		[&"hold", &"face", 0.0, 0.0], [&"hold", &"volley", 0.0, 0.0], [&"bob", &"volley", 0.0, 35.0], [&"bob", &"continuous", 0.0, 55.0],
+	]
+	var expected: Array = (assault if mode == "assault" else open_space)[index]
+	assert_eq(f.phase_snapshot()[&"movement"], expected, "%s: the movement key in boss phase %d" % [mode, index])
 
 
 # ══ 1. Geometry ═════════════════════════════════════════════════════════════════════════════════
@@ -484,6 +496,7 @@ func test_each_phase_shows_its_declared_changes(mode: String = use_parameters(MO
 
 	# Boundary: one battery in `batteries` changes no key (a part's death alone is never a phase change).
 	var s0 := f.phase_snapshot()
+	_assert_movement(f, mode, 0)
 	_part(f, &"battery_spread").destroy()
 	await _settle()
 	assert_eq(f.phase_snapshot(), s0, "%s: boundary: one battery lost changes nothing in the snapshot" % mode)
@@ -494,6 +507,7 @@ func test_each_phase_shows_its_declared_changes(mode: String = use_parameters(MO
 	await _settle()
 	assert_eq(driver.current_id(), &"shields_exposed")
 	_assert_declared_changes(driver.phase(1), before, f.phase_snapshot(), "%s shields_exposed" % mode)
+	_assert_movement(f, mode, 1)
 	for id in [&"shield_north", &"shield_south"]:
 		var generator := _part(f, id)
 		assert_eq(generator.sprite.texture, f.shutter_open_texture, "%s: %s shows its open shutter on screen" % [mode, id])
@@ -508,6 +522,7 @@ func test_each_phase_shows_its_declared_changes(mode: String = use_parameters(MO
 	await _settle()
 	assert_eq(driver.current_id(), &"core_exposed")
 	_assert_declared_changes(driver.phase(2), before, f.phase_snapshot(), "%s core_exposed" % mode)
+	_assert_movement(f, mode, 2)
 	assert_eq(_part(f, &"core").sprite.texture, f.core_open_texture, "%s: the core shows its open plating on screen" % mode)
 	assert_ne(f.core_open_texture, _part(f, &"core").intact_texture)
 	assert_true((f.get_node("Thrusters") as CanvasItem).visible, "%s: thrusters shown" % mode)
@@ -520,6 +535,7 @@ func test_each_phase_shows_its_declared_changes(mode: String = use_parameters(MO
 	await _settle()
 	assert_eq(driver.current_id(), &"critical")
 	_assert_declared_changes(driver.phase(3), before, f.phase_snapshot(), "%s critical" % mode)
+	_assert_movement(f, mode, 3)
 	assert_true((f.get_node("CriticalOverlay") as CanvasItem).visible, "%s: the critical overlay is shown" % mode)
 
 	# The critical core light blinks COMMIT / OFF on the config period (hand-stepped; nothing awaited in between).
@@ -651,6 +667,11 @@ func test_the_config_wins_and_the_children_read_the_private_copy(mode: String = 
 		"sector_shield_capacity": 120, "sector_shield_regen_delay": 3.0, "sector_shield_regen_seconds": 2.0, "sector_shield_reboot_seconds": 5.0,
 		"sector_shield_pad": 8.0, "shields_exposed_battery_losses": 2, "critical_core_ratio": 0.4, "core_blink_period": 0.25,
 		"death_sequence_duration": 2.4, "death_blast_count": 10, "emp_factor": 0.4, "escort_cap_open_space": 6, "escort_cap_assault": 4,
+		"turn_rate": 0.22, "assault_turn_rate": 0.3, "beam_spin_rate": 0.5, "critical_spin_rate": 0.6, "idle_spin_rate": 0.08,
+		"perceive_radius": 1400.0, "lose_radius": 2600.0, "notice_time": 0.8, "home_radius": 8.0, "zone_radius": 600.0, "station_ring_factor": 0.6,
+		"reposition_min_step": 250.0, "reposition_lookahead": 1.0, "reposition_period": 8.0, "critical_reposition_period": 5.0,
+		"reposition_speed": 60.0, "critical_reposition_speed": 90.0, "hold_tolerance": 24.0, "hold_speed": 40.0, "assault_enter_speed": 90.0,
+		"assault_hold_y": 180.0, "assault_bob_amplitude": 100.0, "assault_bob_speed": 35.0, "critical_bob_speed": 55.0, "assault_x_correct_speed": 20.0,
 		"escort_boost_speed": 300.0, "escort_boost_seconds": 0.4,
 	}
 	for key in expected:
@@ -687,7 +708,7 @@ func test_the_builder_the_brain_shell_and_the_refusals() -> void:
 	var h = _world("open_space")
 	var f := _spawn(h)
 	var brain := f.get_node("Brain") as FortressBrain
-	assert_false(brain.is_engaged(), "not engaged until t6 builds the movement")
+	assert_false(brain.is_engaged(), "not engaged before its first tick (the hub idle)")
 	assert_false(brain.attack_gate(), "no battery may fire until t7")
 	assert_true(f.deflects_hit(null) and f.is_armored(), "the hull is armour")
 	assert_false(f.is_laser_blocking(), "the beam passes over it")
@@ -696,3 +717,547 @@ func test_the_builder_the_brain_shell_and_the_refusals() -> void:
 	assert_eq(f.launch_velocity(), f.velocity)
 	assert_true(f.is_in_group(&"enemies") and f.is_in_group(f.owner_group()), "in enemies and its owner group")
 	assert_eq(String(f.owner_group()), "fortress_%d" % f.get_instance_id())
+
+
+# ══ Movement (t6, plan §2.6; task plan docs/plans/cmwt4y3hk00ssqs2ybengu81w/3-plan.md, whose rows 1-9 the headers follow) ══════════════════════
+#
+# Hand-ticked with the Carrier's `_tick` (`_physics_process(DT)`, then the position written from the velocity: outside a physics frame
+# `move_and_slide()` moves by the idle delta). Expected values (rates, candidates, speeds) are computed here from the shipped config, never by calling
+# the brain's own helpers. Open Space spawns at (640, 360); Assault on the hold line (640, 180) unless the row is about the entry.
+
+const DT := 1.0 / 60.0
+const Phase := FortressBrain.Phase
+## The local bearings of the two sector centres (north 270 degrees = local -y, south 90 = local +y), typed here on purpose.
+const NORTH_BEARING := -PI / 2.0
+const SOUTH_BEARING := PI / 2.0
+const OPEN_SPACE_PLAYER: PackedScene = preload("res://open_space/scenes/entities/player/player_ship.tscn")
+const ASSAULT_PLAYER: PackedScene = preload("res://assault/scenes/player/player_fighter.tscn")
+
+
+## A hand-ticked fortress; Open Space ones start engaged unless [param engaged] is false.
+func _mover_spawn(h, pos: Vector2 = Vector2.INF, engaged: bool = true) -> SpaceFortress:
+	var f := SCENE.instantiate() as SpaceFortress
+	(f.get_node("Brain") as FortressBrain).start_engaged = engaged
+	if not pos.is_finite():
+		pos = Vector2(640.0, SHIPPED.assault_hold_y) if h.is_assault else SPAWN
+	f.global_position = pos
+	h.root.add_child(f)
+	f.set_physics_process(false)
+	return f
+
+
+func _tick(f: SpaceFortress, delta: float = DT) -> void:
+	var before := f.global_position
+	f._physics_process(delta)
+	f.global_position = before + f.velocity * delta
+
+
+func _brain(f: SpaceFortress) -> FortressBrain:
+	return f.get_node("Brain") as FortressBrain
+
+
+## The mode's facing-rule turn rate, read from the shipped config.
+func _turn_rate(h) -> float:
+	return SHIPPED.assault_turn_rate if h.is_assault else SHIPPED.turn_rate
+
+
+## Steps the ladder by scripted kills (synchronous: `destroy()` never checks the lock, and the core is unlocked by hand before its damage).
+func _ladder_to(f: SpaceFortress, phase_id: StringName) -> void:
+	var order := [&"shields_exposed", &"core_exposed", &"critical"]
+	if not order.has(phase_id):
+		return
+	var driver := f.phase_driver()
+	for step in order:
+		if order.find(driver.current_id()) >= order.find(step):
+			continue
+		match step:
+			&"shields_exposed":
+				_part(f, &"battery_sweep").destroy()
+				_part(f, &"battery_artillery").destroy()
+			&"core_exposed":
+				_part(f, &"shield_north").destroy()
+				_part(f, &"shield_south").destroy()
+			&"critical":
+				var core := _part(f, &"core")
+				core.set_vulnerable(true)
+				core.hurt_box.received_damage.emit(SHIPPED.core_health - roundi(SHIPPED.critical_core_ratio * SHIPPED.core_health))
+		assert_eq(driver.current_id(), step, "sanity: the ladder reached %s" % step)
+		if step == phase_id:
+			return
+
+
+## The world bearing [param local] (a local bearing) points along.
+func _side_bearing(f: SpaceFortress, local: float) -> float:
+	return f.rotation + local
+
+
+## |angle between [param f]'s [param local] side and the bearing to [param at]|.
+func _side_error(f: SpaceFortress, local: float, at: Vector2) -> float:
+	return absf(angle_difference(_side_bearing(f, local), (at - f.global_position).angle()))
+
+
+## The reposition rule, recomputed from the shipped config: the 8 points on the 0.6 x zone circle, those >= `reposition_min_step` from [param old],
+## the farthest from [param ahead] (lowest index within 0.001 px).
+func _expected_pick(anchor: Vector2, old: Vector2, ahead: Vector2) -> Vector2:
+	var best := old
+	var best_d := -INF
+	for k in 8:
+		var c := anchor + Vector2.from_angle(k * TAU / 8.0) * SHIPPED.station_ring_factor * SHIPPED.zone_radius
+		if c.distance_to(old) < SHIPPED.reposition_min_step:
+			continue
+		var d := c.distance_to(ahead)
+		if d > best_d + 0.001:
+			best = c
+			best_d = d
+	return best
+
+
+## The player scene's own top cruise speed (instantiated, never added to the tree).
+func _player_speed(mode: String) -> float:
+	var p := (ASSAULT_PLAYER if mode == "assault" else OPEN_SPACE_PLAYER).instantiate()
+	var speed: float = p.cruise_speed()
+	p.free()
+	return speed
+
+
+# ── M1. Open Space idle ─────────────────────────────────────────────────────────────────────────
+
+func test_open_space_idle_holds_the_anchor_spins_and_notices() -> void:
+	var h = _world("open_space")
+	var f := _mover_spawn(h, SPAWN, false)
+	var b := _brain(f)
+	h.player.global_position = SPAWN + Vector2(1450.0, 0.0)
+	var max_off := 0.0
+	var bad_turns := 0
+	var left_idle := false
+	var rot := f.rotation
+	for i in 1200:  # 20 s
+		_tick(f)
+		max_off = maxf(max_off, f.global_position.distance_to(SPAWN))
+		if absf(angle_difference(rot, f.rotation) - SHIPPED.idle_spin_rate * DT) > 1e-6:
+			bad_turns += 1
+		rot = f.rotation
+		left_idle = left_idle or b.phase != Phase.IDLE
+	assert_false(left_idle, "a player at 1450 px (beyond perceive_radius 1400) is never noticed")
+	assert_lte(max_off, SHIPPED.home_radius, "the anchor is held within home_radius for 20 s")
+	assert_eq(bad_turns, 0, "the hub idle spin turns exactly idle_spin_rate per tick")
+	assert_false(b.is_engaged(), "idle is not engaged")
+
+	h.player.global_position = f.global_position + Vector2(1390.0, 0.0)
+	_tick(f)
+	assert_eq(b.phase, Phase.NOTICING, "inside 1400 px: noticing")
+	assert_false(b.is_engaged(), "not engaged while noticing")
+	var ticks := 1
+	while not b.is_engaged() and ticks < 200:
+		_tick(f)
+		ticks += 1
+	var notice := roundi(SHIPPED.notice_time / DT)
+	assert_between(ticks, notice, notice + 2, "engaged notice_time after the first tick inside (float accumulation: one tick either way)")
+	assert_eq(b.phase, Phase.HOLD, "engaged in batteries = HOLD")
+
+
+# ── M2. Facing ──────────────────────────────────────────────────────────────────────────────────
+
+## Ticks until [param local]'s side is on [param at] (within 0.01 rad); returns [ticks, per-tick turns that missed the rate on a full step].
+func _turn_until_facing(f: SpaceFortress, local: float, at: Vector2, rate: float, limit: int) -> Array:
+	var misses := 0
+	var ticks := 0
+	while _side_error(f, local, at) > 0.01 and ticks < limit:
+		var remaining := _side_error(f, local, at)
+		var rot := f.rotation
+		_tick(f)
+		ticks += 1
+		if remaining > rate * DT + 1e-4 and absf(absf(angle_difference(rot, f.rotation)) - rate * DT) > 1e-5:
+			misses += 1
+	return [ticks, misses]
+
+
+func test_the_strongest_sector_turns_to_the_player_at_exactly_the_turn_rate(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _mover_spawn(h)
+	var b := _brain(f)
+	var rate := _turn_rate(h)
+	var at := f.global_position + Vector2.from_angle(deg_to_rad(30.0)) * 600.0
+	h.player.global_position = at
+	_part(f, &"battery_spread").destroy()
+	_part(f, &"battery_pulse").destroy()
+	assert_eq(b.present_side(), FortressBrain.NORTH, "%s: north 2 > south 1" % mode)
+	var run := _turn_until_facing(f, NORTH_BEARING, at, rate, 3000)
+	assert_lt(run[0], 3000, "%s: the north side reached the player" % mode)
+	assert_eq(run[1], 0, "%s: every full step of the turn is exactly the mode's rate (%.2f rad/s)" % [mode, rate])
+	assert_gt(run[0], roundi(2.0 / (rate * DT)) - 2, "%s: sanity: a 120 degree turn took as long as the rate allows" % mode)
+
+	_part(f, &"battery_artillery").destroy()
+	_part(f, &"battery_missiles").destroy()
+	assert_eq(b.present_side(), FortressBrain.SOUTH, "%s: both north batteries lost: north 0 < south 1, the weak side changes" % mode)
+	run = _turn_until_facing(f, SOUTH_BEARING, at, rate, 3000)
+	assert_lt(run[0], 3000, "%s: the south side reached the player" % mode)
+	assert_eq(run[1], 0, "%s: the 180 degree turn runs at exactly the rate" % mode)
+
+
+func test_sector_strength_halving_and_ties(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _mover_spawn(h)
+	assert_eq(_brain(f).present_side(), FortressBrain.SOUTH, "%s: start: south 3 vs north 2" % mode)
+
+	var g := _mover_spawn(h, SPAWN + Vector2(0.0, 900.0))
+	_part(g, &"shield_south").destroy()
+	assert_almost_eq(_brain(g).sector_strength(FortressBrain.SOUTH), 1.5, 0.0001, "%s: a dead generator halves its sector" % mode)
+	assert_eq(_brain(g).present_side(), FortressBrain.NORTH, "%s: halving flips the side (south 1.5 < north 2)" % mode)
+
+	var a := _mover_spawn(h, SPAWN + Vector2(0.0, 1800.0))
+	assert_eq(_brain(a).present_side(), FortressBrain.SOUTH)
+	_part(a, &"battery_spread").destroy()
+	assert_eq(_brain(a).present_side(), FortressBrain.SOUTH, "%s: a 2 vs 2 tie keeps south" % mode)
+
+	var n := _mover_spawn(h, SPAWN + Vector2(0.0, 2700.0))
+	_part(n, &"battery_spread").destroy()
+	_part(n, &"battery_pulse").destroy()
+	assert_eq(_brain(n).present_side(), FortressBrain.NORTH, "%s: north 2 > south 1" % mode)
+	_part(n, &"shield_north").destroy()
+	assert_almost_eq(_brain(n).sector_strength(FortressBrain.NORTH), 1.0, 0.0001)
+	assert_eq(_brain(n).present_side(), FortressBrain.NORTH, "%s: a 1.0 vs 1.0 tie keeps north" % mode)
+
+
+## Circles the player round [param f] at 500 px and [param omega] rad/s for [param ticks], from the presented (south) side; the side errors every
+## 0.5 s.
+func _circle(h, f: SpaceFortress, omega: float, ticks: int) -> Array[float]:
+	var c := f.global_position
+	var a := SOUTH_BEARING
+	var errors: Array[float] = []
+	for i in ticks:
+		a += omega * DT
+		h.player.global_position = c + Vector2.from_angle(a) * 500.0
+		h.player.velocity = Vector2.from_angle(a + PI / 2.0) * omega * 500.0
+		_tick(f)
+		if (i + 1) % 30 == 0:
+			errors.append(_side_error(f, SOUTH_BEARING, h.player.global_position))
+	return errors
+
+
+func test_circling_out_turns_the_fortress(mode: String = use_parameters(MODES)) -> void:
+	var speed := _player_speed(mode)
+	var h = _world(mode)
+	var rate := _turn_rate(h)
+	assert_gt(speed, 0.0, "%s: the player scene's cruise speed was read" % mode)
+	assert_lt(rate * 500.0, 0.5 * speed, "%s: the turn rate at 500 px is under half the player's speed (%.0f px/s)" % [mode, speed])
+	var f := _mover_spawn(h)
+	var errors := _circle(h, f, speed / 500.0, 240)
+	for i in range(1, errors.size()):
+		assert_gt(errors[i], errors[i - 1], "%s: the angle to the presented side grows (sample %d: %s)" % [mode, i, errors])
+	assert_gt(errors[-1], 1.5, "%s: after 4 s the player is on the flank (%.2f rad)" % [mode, errors[-1]])
+
+	var g := _mover_spawn(h, f.global_position + Vector2(0.0, 2000.0))
+	var slow := _circle(h, g, 0.5 * rate, 240)
+	assert_lt(slow.max(), 0.1, "%s: boundary: a player circling at half the turn rate never gets round (%s)" % [mode, slow])
+
+
+# ── M3. Translation by phase ────────────────────────────────────────────────────────────────────
+
+func test_no_translation_while_batteries_or_shields_hold(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _mover_spawn(h)
+	var b := _brain(f)
+	var x0 := f.global_position.x
+	var c := f.global_position
+	var worst := 0.0
+	for step in [&"batteries", &"shields_exposed"]:
+		_ladder_to(f, step)
+		for i in 600:
+			h.player.global_position = c + Vector2.from_angle(i * 0.01) * 700.0
+			_tick(f)
+			if h.is_assault:
+				worst = maxf(worst, maxf(absf(f.global_position.x - x0), absf(f.global_position.y - SHIPPED.assault_hold_y)))
+			else:
+				worst = maxf(worst, f.global_position.distance_to(b.station_point()))
+		assert_eq(b.phase, Phase.HOLD, "%s %s: HOLD" % [mode, step])
+	if h.is_assault:
+		assert_lte(worst, 1.0, "assault: held at (anchor x, hold y) within 1 px")
+	else:
+		assert_lte(worst, SHIPPED.hold_tolerance, "open_space: within hold_tolerance of the station point")
+		assert_eq(b.station_point(), c, "open_space: the station point is the anchor")
+
+
+func test_open_space_repositions_by_the_rule_inside_the_zone() -> void:
+	var h = _world("open_space")
+	var f := _mover_spawn(h)
+	var b := _brain(f)
+	var anchor := f.global_position
+	_ladder_to(f, &"core_exposed")
+	var p := anchor + Vector2(900.0, 0.0)
+	var picks := 0
+	var worst_zone := 0.0
+	var mismatches: Array = []
+	for i in 3600:  # 60 s, a chasing stub
+		var to_f := f.global_position - p
+		var v := to_f.normalized() * 300.0 if to_f.length() > 300.0 else Vector2.ZERO
+		h.player.global_position = p
+		h.player.velocity = v
+		var old := b.station_point()
+		var ahead := p + v * SHIPPED.reposition_lookahead
+		_tick(f)
+		p += v * DT
+		worst_zone = maxf(worst_zone, f.global_position.distance_to(anchor))
+		if b.station_point() != old:
+			picks += 1
+			var expected := _expected_pick(anchor, old, ahead)
+			if b.station_point().distance_to(expected) > 0.01:
+				mismatches.append([i, b.station_point(), expected])
+			assert_gte(b.station_point().distance_to(old), SHIPPED.reposition_min_step, "a new point is >= 250 px from the old one")
+			assert_lte(b.station_point().distance_to(anchor), SHIPPED.zone_radius, "a new point lies inside the zone")
+	assert_eq(mismatches, [], "every station point is the rule's own pick")
+	assert_eq(picks, 8, "one pick at entry and one every reposition_period over 60 s")
+	assert_lte(worst_zone, SHIPPED.zone_radius, "the hull never leaves the zone")
+	assert_eq(b.phase, Phase.REPOSITION)
+
+
+func test_the_pick_can_be_nearer_the_player_and_critical_repositions_faster() -> void:
+	var h = _world("open_space")
+	var f := _mover_spawn(h)
+	var b := _brain(f)
+	var anchor := f.global_position
+	var p := anchor + Vector2(900.0, 0.0)
+	h.player.global_position = p
+	h.player.velocity = Vector2.ZERO
+	_ladder_to(f, &"core_exposed")
+	_tick(f)
+	var farthest := _expected_pick(anchor, anchor, p)
+	assert_eq(b.station_point(), farthest, "sanity: the first pick is the farthest candidate")
+	var period := roundi(SHIPPED.reposition_period / DT)
+	for i in period:
+		_tick(f)
+	var second := b.station_point()
+	assert_ne(second, farthest, "a second pick")
+	assert_almost_eq(second.distance_to(_expected_pick(anchor, farthest, p)), 0.0, 0.01, "boundary: the rule's pick")
+	assert_lt(second.distance_to(p), farthest.distance_to(p), "boundary: from the farthest point the winner is nearer the player")
+
+	_ladder_to(f, &"critical")
+	var changes: Array[int] = []
+	var bad_speed: Array = []
+	var old := b.station_point()
+	for i in 1000:
+		_tick(f)
+		if b.station_point() != old:
+			changes.append(i)
+			old = b.station_point()
+		if b.is_travelling() and absf(f.velocity.length() - SHIPPED.critical_reposition_speed) > 0.01:
+			bad_speed.append([i, f.velocity.length()])
+	assert_eq(changes.size(), 4, "critical: a pick at entry, then every 5 s (%s)" % [changes])
+	for k in range(1, changes.size()):
+		assert_between(changes[k] - changes[k - 1], 299, 301, "critical picks 300 +/- 1 ticks apart")
+	assert_eq(bad_speed, [], "critical travels at critical_reposition_speed")
+
+
+# ── M4. Leash ───────────────────────────────────────────────────────────────────────────────────
+
+func test_open_space_leash_returns_home_keeping_the_boss_phase() -> void:
+	var h = _world("open_space")
+	var f := _mover_spawn(h, SPAWN, false)
+	var b := _brain(f)
+	h.player.global_position = SPAWN + Vector2(1000.0, 0.0)
+	for i in 80:
+		_tick(f)
+	assert_true(b.is_engaged(), "sanity: engaged")
+	_ladder_to(f, &"core_exposed")
+	for i in 180:
+		_tick(f)
+	assert_gt(f.global_position.distance_to(SPAWN), 100.0, "sanity: a reposition moved it off the anchor")
+	var phase_id := f.phase_driver().current_id()
+	h.player.global_position = SPAWN + Vector2(3400.0, 0.0)
+	_tick(f)
+	assert_eq(b.phase, Phase.RETURNING, "beyond lose_radius: returning")
+	var engaged_returning := false
+	var ticks := 0
+	while b.phase == Phase.RETURNING and ticks < 900:
+		_tick(f)
+		ticks += 1
+		engaged_returning = engaged_returning or b.is_engaged()
+	assert_false(engaged_returning, "not engaged while returning")
+	assert_eq(b.phase, Phase.IDLE, "home: idle")
+	assert_lte(f.global_position.distance_to(SPAWN), SHIPPED.home_radius, "within home_radius of the anchor")
+	assert_eq(b.station_point(), SPAWN, "the station point is the anchor again")
+	assert_eq(f.phase_driver().current_id(), phase_id, "the boss phase is kept")
+
+
+# ── M5. Assault ─────────────────────────────────────────────────────────────────────────────────
+
+func test_assault_enters_holds_bobs_and_never_moves_x() -> void:
+	var h = _world("assault")
+	h.player.global_position = Vector2(640.0, 600.0)
+	var f := _mover_spawn(h, Vector2(640.0, -260.0))
+	var b := _brain(f)
+	var x0 := f.global_position.x
+	var bad_enter := 0
+	var ticks := 0
+	_tick(f)
+	assert_eq(b.phase, Phase.ENTER, "above the hold line: entering")
+	assert_false(b.is_engaged(), "entering is not engaged")
+	while b.phase == Phase.ENTER and ticks < 600:
+		if absf(f.velocity.y - SHIPPED.assault_enter_speed) > 0.001:
+			bad_enter += 1
+		_tick(f)
+		ticks += 1
+	assert_eq(bad_enter, 0, "it enters at assault_enter_speed")
+	assert_eq(b.phase, Phase.HOLD, "then holds")
+	for i in 30:
+		_tick(f)
+	assert_almost_eq(f.global_position.y, SHIPPED.assault_hold_y, 1.0, "at the hold line")
+
+	var worst_x := 0.0
+	var y_min := INF
+	var y_max := -INF
+	for step in [&"batteries", &"shields_exposed", &"core_exposed", &"critical"]:
+		if step == &"shields_exposed":
+			# The player below: killing two south batteries presents north, which turns the long way round at the Assault rate.
+			_part(f, &"battery_spread").destroy()
+			_part(f, &"battery_pulse").destroy()
+			assert_eq(b.present_side(), FortressBrain.NORTH, "the side changes when the south sector weakens")
+		else:
+			_ladder_to(f, step)
+		var max_turn := 0.0
+		for i in 900:  # 15 s per phase, 60 s in all
+			var rot := f.rotation
+			_tick(f)
+			max_turn = maxf(max_turn, absf(angle_difference(rot, f.rotation)))
+			worst_x = maxf(worst_x, absf(f.global_position.x - x0))
+			if step == &"core_exposed" or step == &"critical":
+				y_min = minf(y_min, f.global_position.y)
+				y_max = maxf(y_max, f.global_position.y)
+		if step == &"shields_exposed":
+			assert_lt(_side_error(f, NORTH_BEARING, h.player.global_position), 0.01, "the north side was turned to the player")
+			assert_lte(max_turn, SHIPPED.assault_turn_rate * DT + 1e-6, "at most the Assault turn rate")
+		elif step == &"batteries":
+			assert_lt(_side_error(f, SOUTH_BEARING, h.player.global_position), 0.01, "batteries: the south side faces the player")
+	assert_lte(worst_x, 1.0, "x never moves (60 s, every phase)")
+	var top := SHIPPED.assault_hold_y - SHIPPED.assault_bob_amplitude
+	var bottom := SHIPPED.assault_hold_y + SHIPPED.assault_bob_amplitude
+	assert_gte(y_min, top - 0.01, "the bob stays at or below its top")
+	assert_lte(y_max, bottom + 0.01, "and at or above its bottom")
+	assert_lt(y_min, top + 0.5, "it reaches the top")
+	assert_gt(y_max, bottom - 0.5, "and the bottom")
+	assert_eq(b.phase, Phase.REPOSITION, "bobbing is REPOSITION")
+
+	f.global_position.x = x0 + 30.0
+	var worst_vx := 0.0
+	for i in 180:
+		_tick(f)
+		worst_vx = maxf(worst_vx, absf(f.velocity.x))
+	assert_lte(worst_vx, SHIPPED.assault_x_correct_speed + 0.001, "the x correction is at most assault_x_correct_speed")
+	assert_gt(worst_vx, SHIPPED.assault_x_correct_speed - 0.001, "and it ran")
+	assert_almost_eq(f.global_position.x, x0, 1.0, "back on the anchored x")
+
+
+# ── M6. Spins ───────────────────────────────────────────────────────────────────────────────────
+
+## [param n] ticks; the per-tick signed turns.
+func _turns(f: SpaceFortress, n: int, h = null) -> Array[float]:
+	var out: Array[float] = []
+	for i in n:
+		if h != null:
+			h.player.global_position = f.global_position + Vector2.from_angle(i * 0.05) * 600.0
+		var rot := f.rotation
+		_tick(f)
+		out.append(angle_difference(rot, f.rotation))
+	return out
+
+
+func _all_near(values: Array[float], expected: float) -> bool:
+	return values.all(func(x: float) -> bool: return absf(x - expected) < 1e-6)
+
+
+func test_spins_volley_alternating_and_critical_continuous(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _mover_spawn(h)
+	var b := _brain(f)
+	assert_eq((f.get_node("EnemyMover") as EnemyMover).turn_lerp, 0.0, "%s: the fortress mover's turn_lerp is 0 (the cap alone sets the rate)" % mode)
+	_ladder_to(f, &"shields_exposed")
+	_tick(f)
+	b.begin_spin()
+	assert_eq(b.spin_direction(), 1, "%s: the first volley spin is +1" % mode)
+	assert_true(_all_near(_turns(f, 60), SHIPPED.beam_spin_rate * DT), "%s: a volley spin turns at beam_spin_rate" % mode)
+	b.end_spin()
+	b.begin_spin()
+	assert_eq(b.spin_direction(), -1, "%s: the next one turns the other way" % mode)
+	assert_true(_all_near(_turns(f, 60), -SHIPPED.beam_spin_rate * DT), "%s: at the same rate" % mode)
+	b.end_spin()
+	assert_false(b.spinning(), "%s: end_spin returns to the facing rule" % mode)
+	var after := _turns(f, 60)
+	assert_true(after.all(func(x: float) -> bool: return absf(x) <= _turn_rate(h) * DT + 1e-6), "%s: at the facing rule's rate" % mode)
+
+	_ladder_to(f, &"critical")
+	var crit := _turns(f, 180, h)
+	var sign_ := signf(crit[0])
+	assert_true(_all_near(crit, sign_ * SHIPPED.critical_spin_rate * DT), "%s: critical spins continuously at critical_spin_rate, whatever the player does" % mode)
+	assert_true(b.spinning(), "%s: spinning" % mode)
+
+	var g := _mover_spawn(h, f.global_position + Vector2(0.0, 2000.0))
+	(g.get_node("EnemyMover") as EnemyMover).turn_lerp = 0.3
+	_ladder_to(g, &"shields_exposed")
+	_tick(g)
+	_brain(g).begin_spin()
+	var lerped := _turns(g, 60)
+	var mean: float = lerped.reduce(func(acc: float, x: float) -> float: return acc + x, 0.0) / (60.0 * DT)
+	assert_almost_eq(mean, 0.3, 0.02, "%s: boundary: with turn_lerp 0.3 the spin turns at ~0.3 rad/s, not 0.5 (the lerp runs before the cap)" % mode)
+
+
+# ── M7. EMP ─────────────────────────────────────────────────────────────────────────────────────
+
+func test_emp_stops_motion_and_rotation_for_the_window(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	h.player.global_position = Vector2(640.0, 1000.0)
+	var f := _mover_spawn(h)
+	var b := _brain(f)
+	_ladder_to(f, &"core_exposed")
+	b.begin_spin()
+	for i in 30:
+		_tick(f)
+	assert_gt(f.velocity.length(), 1.0, "%s: sanity: under way" % mode)
+	f.apply_emp(5.0, null)
+	var pos := f.global_position
+	var rot := f.rotation
+	var moved := 0
+	var ticks := 0
+	while f.is_emp_disrupted() and ticks < 400:
+		_tick(f)
+		ticks += 1
+		# The tick the window ends resumes the brain in the same call (the base rule): only ticks still inside it count.
+		if f.is_emp_disrupted() and (f.global_position.distance_to(pos) > 1e-4 or absf(angle_difference(rot, f.rotation)) > 1e-5):  # writing the position re-derives rotation from the float32 basis (~3e-8)
+			moved += 1
+	assert_between(ticks, 119, 121, "%s: the 2 s window (5 s x emp_factor)" % mode)
+	assert_eq(moved, 0, "%s: no motion and no rotation for the window" % mode)
+	for i in 10:
+		_tick(f)
+	assert_ne(f.global_position, pos, "%s: it moves again after the window" % mode)
+	assert_ne(f.rotation, rot, "%s: and turns again" % mode)
+
+
+# ── M9. Thrusters ───────────────────────────────────────────────────────────────────────────────
+
+func test_thrusters_burn_while_travelling_without_touching_the_snapshot(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var f := _mover_spawn(h, Vector2(640.0, -260.0) if h.is_assault else SPAWN)
+	var b := _brain(f)
+	var thrusters := f.get_node("Thrusters") as CanvasItem
+	_tick(f)
+	if h.is_assault:
+		assert_eq(b.phase, Phase.ENTER)
+		assert_eq(thrusters.modulate.a, 1.0, "assault: full while entering")
+		while b.phase == Phase.ENTER:
+			_tick(f)
+	_tick(f)
+	assert_eq(b.phase, Phase.HOLD)
+	assert_almost_eq(thrusters.modulate.a, FortressBrain.THRUSTER_IDLE_ALPHA, 0.0001, "%s: dimmed while holding" % mode)
+	_ladder_to(f, &"core_exposed")
+	var visible_before := thrusters.visible
+	_tick(f)
+	assert_true(b.is_travelling(), "%s: under way (reposition / bob)" % mode)
+	assert_eq(thrusters.modulate.a, 1.0, "%s: full while travelling" % mode)
+	if not h.is_assault:
+		var ticks := 0
+		while b.is_travelling() and ticks < 900:
+			_tick(f)
+			ticks += 1
+		assert_false(b.is_travelling(), "open_space: arrived")
+		assert_almost_eq(thrusters.modulate.a, FortressBrain.THRUSTER_IDLE_ALPHA, 0.0001, "open_space: dimmed once held")
+	assert_eq(thrusters.visible, visible_before, "%s: travel never changes Thrusters.visible (the snapshot's)" % mode)
+	assert_true(thrusters.visible, "%s: shown from core_exposed" % mode)

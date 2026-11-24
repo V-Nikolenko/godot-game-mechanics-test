@@ -154,6 +154,7 @@ shove_speed = 260.0
 [node name="EnemyMover" type="Node" parent="."]
 script = ExtResource("8_sf")
 constraint_mode = 1
+turn_lerp = 0.0
 
 [node name="Brain" type="Node" parent="."]
 script = ExtResource("7_sf")
