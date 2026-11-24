@@ -1,7 +1,7 @@
 # Space Fortress — the 360 degree boss you take apart sector by sector
 
 **Role:** Phase 11's boss (Space Fortress 2.0), built to be fought by circling it rather than from below. It replaces level 1's legacy space station
-(t10 places it in `station_assault`; t13 adds it to the Open Space hub). **Never call it a "station"** in code, nodes or docs: Open Space already has
+(t10 placed it in `station_assault`: `b.space_fortress().at(0, -230)`, no `.delay()`, no `.move()`, `enemies_cleared_timeout` 240 s; t13 adds it to the Open Space hub). **Never call it a "station"** in code, nodes or docs: Open Space already has
 "Fortuna Space Station" (a `MissionTrigger`).
 **Fantasy / threat:** a ring fortress whose hull is armour. Five gun batteries sit on the ring, each with its own attack and its own angle; two shield
 generators keep a bubble on the batteries and the hangar of their half; the core stays plated until both generators are gone. Destroying a battery
@@ -260,3 +260,14 @@ space_fortress/
 ```
 
 Art: `assault/assets/sprites/enemies/space_fortress/` (22 PNGs, §Art).
+
+## Level 1 placement (Phase 11 t10)
+
+`level_1_director.gd::_build_station_assault()` (the section keeps its internal name) spawns one `b.space_fortress().at(0, -230)` (world (640, -100); it descends
+to its Assault hold) in a zero-delay wave, **no `.delay()` and no `.move()`** (a delay lets `waves_complete` fire before the boss exists; an `EnemyPathMover` would
+free it off-screen), `ENEMIES_CLEARED`, `enemies_cleared_timeout` **240 s**. No laser column is scheduled there and none may be added. The section waits on the fortress
+and its one `<boss>Escorts` container; after the core's death it advances once the final blast's particles (the `ExplosionEffect` `lifetime`, 0.5 s) have left the
+container and the director has settled 0.2 s, so about `death_duration` + 0.9 s. The fortress is the second bounded exception to "persistent ordnance stays out of
+`ENEMIES_CLEARED`" (its `ROCKET_BATTERY` pools persist; tail `death_duration` + rocket `max_time` = 8.4 s of 240 s). Gates: `test_station_assault_section.gd` (entry, 240 s),
+`test_level_1_sequence.gd` (the real fortress killed through `destroy()` on two batteries, both generators and the core), `test_level1_fortress_section.gd` (wall-clock
+section replay; the never-killed row overrides the timeout to 2.0 s on its own built copy), `test_engagement_deadline.gd` (the allowlist rows, which read the pools the mounts BUILD).

@@ -293,8 +293,8 @@ func _build_sections() -> Array[LevelSection]:
 	return out
 
 
-## Section 3 (Station Assault) — the space-station mini-boss. ENEMIES_CLEARED, so the level
-## cannot continue to the planet approach until the station is destroyed.
+## Section 3 (Station Assault; the section keeps its internal name) — the Space Fortress boss (Phase 11 t10, replacing the legacy station). ENEMIES_CLEARED, so the level
+## cannot continue to the planet approach until the fortress is destroyed.
 ##
 ## Three details are load-bearing and must not be "tidied":
 ##
@@ -304,12 +304,12 @@ func _build_sections() -> Array[LevelSection]:
 ##  - No .move(). WaveManager attaches an EnemyPathMover only for a real MovementResource
 ##    (wave_manager.gd:194); without one the station is stationary and nothing but death removes
 ##    it. An exit mode would free the boss mid-fight.
-##  - 180 s timeout. Genre floor for a boss timer (G-Darius); the fight itself is sized at
-##    30-60 s, so this is a safety net a competent player never touches, not a balance knob.
+##  - 240 s timeout (Ph11 owner choice 5). Genre floor for a boss timer (G-Darius); a safety net a competent player never touches, not a balance knob. The fortress's tail (death_duration + its persistent rocket's max_time) stays inside it: test_engagement_deadline.gd.
+##  - No laser column is scheduled in this section (laser_column_schedule()); none may be added while the fortress lives.
 ##
 ## Placement: at() is in 640x360 design units, scaled by ArenaCamera.WORLD_SCALE (2.0) against a
-## camera pinned at the level origin. at(0, -90) -> world (640, 180); the 256 px hull then spans
-## world y 52-308, leaving ~412 px of play space below it.
+## camera pinned at the level origin. at(0, -230) -> world (640, -100): the fortress is world_anchored_x and
+## descends to its Assault hold (y about 180) under its own brain.
 func _build_station_assault() -> LevelSection:
 	var s := LevelSection.new()
 	s.section_name            = &"station_assault"
@@ -317,11 +317,11 @@ func _build_station_assault() -> LevelSection:
 	s.transition_in_duration  = 2.0
 	s.end_condition           = LevelSection.EndCondition.ENEMIES_CLEARED
 	s.duration                = 0.0
-	s.enemies_cleared_timeout = 180.0
+	s.enemies_cleared_timeout = 240.0
 
 	var b := WaveBuilder.new()
 	var raw_waves: Array = [
-		b.wave(0.0, [ b.space_station().at(0, -90) ]),
+		b.wave(0.0, [ b.space_fortress().at(0, -230) ]),
 	]
 	s.waves.assign(raw_waves)
 	return s

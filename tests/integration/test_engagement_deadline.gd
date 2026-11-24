@@ -394,7 +394,7 @@ func _with_fighter_wave_before_last(trigger: float) -> LevelSection:
 
 ## Boundary: a Gatling added at delay 0 to cloud_descent's last wave is flagged — its deferral
 ## (spin_up + sync_wait_max + 12 x 0.09 = 2.08 s) and 7.0 s budget put it at about 12.5 s against 10 s.
-## station_assault, the other ENEMIES_CLEARED section, has a 180 s net sized for the boss fight; the
+## station_assault, the other ENEMIES_CLEARED section, has a 240 s net sized for the boss fight (the Space Fortress); the
 ## same entry there is reported, not asserted.
 func test_a_gatling_in_an_enemies_cleared_last_wave_misses_the_timeout() -> void:
 	assert_almost_eq(_gatling_deferral(), 2.08, 0.001, "sanity: the task's 0.25 + 0.75 + 12 x 0.09")
@@ -1497,3 +1497,138 @@ func test_a_heavy_whose_rear_missiles_stayed_open_would_miss_the_timeout() -> vo
 	var worst := _worst(_deadline_rows(shipped, WaveBuilder.HEAVY_GUNSHIP, open_tail))
 	gut.p("open pod: tail %.2f s (closed %.2f s); the shipped %.1f s + %.2f s heavy would compute %.2f s of %.1f s" % [open_tail, tail,
 		worst["trigger"], worst["delay"], worst["computed"], shipped.enemies_cleared_timeout])
+
+
+# ── Phase 11 t10: the persistent-ordnance allowlist (epic plan docs/plans/cmug256so0031m52wbxomst72/3-plan.md §2.10) ──────────────────────────
+#
+# "An enemy that leaves ordnance behind stays out of an ENEMIES_CLEARED section" has two bounded exceptions: the Heavy Gunship (Ph10 t5: a pod rocket in
+# flight at its death) and the Space Fortress (Ph11: its ROCKET_BATTERY pools are `persist_after_owner_death`). This row lists every ENEMIES_CLEARED spawn
+# whose scene BUILDS a persisting pool and asserts the set is exactly that allowlist. Mount pools are not scene nodes: `TurretMountBuilder.build()` makes
+# them at runtime from each mount's `pool_specs()[i]["persist"]`, so the scene is instantiated in an Assault world and the pools its `_ready()` built are
+# read (every `BulletPool` under the host, scene-authored ones included), never the scene's own node list. The fortress's tail is `death_duration` + its
+# rocket's `max_time`, read off the same built pools.
+
+const SPACE_FORTRESS_CONFIG: SpaceFortressConfig = preload("res://assault/scenes/enemies/space_fortress/space_fortress_config.tres")  # read only
+const PERSISTENT_ORDNANCE_ALLOWLIST: Array[String] = [WaveBuilder.HEAVY_GUNSHIP, WaveBuilder.SPACE_FORTRESS]
+
+
+## The `BulletPool`s `scene_path`'s ship builds in an Assault world, as `{ "name", "persist", "max_time" }` (`max_time` the longest-lived round it fires).
+func _built_pools(scene_path: String) -> Array[Dictionary]:
+	var h: RefCounted = HARNESS.assault()
+	add_child(h.root)
+	var ship := (load(scene_path) as PackedScene).instantiate()
+	h.root.add_child(ship)
+	var out: Array[Dictionary] = []
+	for node in ship.find_children("*", "BulletPool", true, false):
+		var pool := node as BulletPool
+		var life := 0.0
+		if pool.bullet_scene != null:
+			var round := pool.bullet_scene.instantiate()
+			var t: Variant = round.get(&"max_time")
+			life = float(t) if t != null else 0.0
+			round.free()
+		out.append({"name": "%s/%s" % [scene_path.get_file(), pool.name], "persist": pool.persist_after_owner_death, "max_time": life})
+	remove_child(h.root)
+	h.root.free()
+	return out
+
+
+func _persisting_pools_of(scene_path: String) -> Array[Dictionary]:
+	return _built_pools(scene_path).filter(func(p: Dictionary) -> bool: return bool(p["persist"]))
+
+
+## The scene paths of `section` whose built ship leaves persisting ordnance, each once.
+func _persistent_spawns(section: LevelSection) -> Array[String]:
+	var seen: Array[String] = []
+	for w in section.waves:
+		for e in (w as WaveResource).entries:
+			var entry: SpawnEntryResource = e
+			if entry.ship_scene == null:
+				continue
+			var path := entry.ship_scene.resource_path
+			if seen.has(path):
+				continue
+			seen.append(path)
+	return seen.filter(func(p: String) -> bool: return not _persisting_pools_of(p).is_empty())
+
+
+## The persisting spawns of `section` that the allowlist does not cover.
+func _unlisted_persistent_spawns(section: LevelSection) -> Array[String]:
+	return _persistent_spawns(section).filter(func(p: String) -> bool: return not PERSISTENT_ORDNANCE_ALLOWLIST.has(p))
+
+
+func _synthetic_section(scene_path: String, timeout: float) -> LevelSection:
+	var section := LevelSection.new()
+	section.end_condition = LevelSection.EndCondition.ENEMIES_CLEARED
+	section.enemies_cleared_timeout = timeout
+	var entry := SpawnEntryResource.new()
+	entry.ship_scene = load(scene_path) as PackedScene
+	var wave := WaveResource.new()
+	var entries: Array[SpawnEntryResource] = [entry]
+	wave.entries = entries
+	var waves: Array[WaveResource] = [wave]
+	section.waves = waves
+	return section
+
+
+func test_only_the_heavy_gunship_and_the_space_fortress_leave_persistent_ordnance_in_enemies_cleared_sections() -> void:
+	var listed: Array[String] = []
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_eq(_unlisted_persistent_spawns(section), [] as Array[String],
+			"%s: every persistent-ordnance enemy in it is on the allowlist" % section.section_name)
+		for p in _persistent_spawns(section):
+			if not listed.has(p):
+				listed.append(p)
+	assert_eq(checked, 2, "sanity: station_assault and cloud_descent are the ENEMIES_CLEARED sections")
+	listed.sort()
+	var expected := PERSISTENT_ORDNANCE_ALLOWLIST.duplicate()
+	expected.sort()
+	assert_eq(listed, expected, "the allowlist is exactly what level 1 uses: not one entry unused, none unlisted")
+
+
+## Non-vacuity: the probe reads BUILT pools. A scene-node-only read would see no persisting pool in either listed scene (their mount pools do not exist
+## until `_ready()` builds them), so the rows above could never fail.
+func test_the_probe_sees_the_pools_the_mounts_build() -> void:
+	for path in PERSISTENT_ORDNANCE_ALLOWLIST:
+		assert_gt(_persisting_pools_of(path).size(), 0, "%s builds a persisting pool at runtime" % path)
+		var packed := load(path) as PackedScene
+		var state := packed.get_state()
+		for i in state.get_node_count():
+			for p in state.get_node_property_count(i):
+				assert_false(state.get_node_property_name(i, p) == &"persist_after_owner_death" and state.get_node_property_value(i, p) == true,
+					"%s authors no persisting pool in its scene (they are built)" % path.get_file())
+
+
+## The fortress's tail: its death sequence plus a rocket still in flight when it frees (nothing the fortress owns fires once its death starts, so the
+## rocket's life is the whole tail) stays inside station_assault's net.
+func test_the_space_fortress_tail_fits_the_station_assault_timeout() -> void:
+	var section: LevelSection = null
+	for s in _sections():
+		if (s as LevelSection).section_name == &"station_assault":
+			section = s
+	assert_not_null(section, "sanity: level 1 has station_assault")
+	var pools := _persisting_pools_of(WaveBuilder.SPACE_FORTRESS)
+	var rocket := 0.0
+	for p in pools:
+		rocket = maxf(rocket, float(p["max_time"]))
+	assert_gt(rocket, 0.0, "sanity: the fortress's persisting pool fires a round with a max_time")
+	var tail := SPACE_FORTRESS_CONFIG.death_sequence_duration + rocket
+	gut.p("space fortress tail: death %.2f s + rocket %.2f s = %.2f s of the %.1f s net" % [SPACE_FORTRESS_CONFIG.death_sequence_duration, rocket, tail,
+		section.enemies_cleared_timeout])
+	assert_lt(tail, section.enemies_cleared_timeout, "death_duration + the rocket's max_time fits the section's timeout")
+	assert_eq(section.enemies_cleared_timeout, 240.0, "the net the tail is judged against is the pinned 240 s")
+
+
+## Boundary: a Missile Corvette (rockets that persist after it) in an ENEMIES_CLEARED section is not on the allowlist, so the row above would fail; a
+## Heavy Gunship or a Space Fortress in the same synthetic section passes.
+func test_a_missile_corvette_in_an_enemies_cleared_section_fails_the_allowlist() -> void:
+	var corvette := _synthetic_section(WaveBuilder.MISSILE_CORVETTE, 60.0)
+	assert_eq(_unlisted_persistent_spawns(corvette), [WaveBuilder.MISSILE_CORVETTE] as Array[String],
+		"a Missile Corvette's rocket pools persist, and it is not on the allowlist")
+	for path in PERSISTENT_ORDNANCE_ALLOWLIST:
+		assert_eq(_unlisted_persistent_spawns(_synthetic_section(path, 60.0)), [] as Array[String], "control: %s is on it" % path.get_file())

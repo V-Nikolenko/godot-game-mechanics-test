@@ -570,7 +570,7 @@ booting the level — every `_build_*` body touches only `LevelSection.new()`, `
 
 1. `deep_space` — 30 s timed, fighters/drones.
 2. `asteroid_belt` — 30 s timed asteroid gauntlet (no enemies).
-3. `station_assault` — the **space-station mini-boss**, `ENEMIES_CLEARED` (see below).
+3. `station_assault` — the **Space Fortress boss** (Phase 11 t10; the legacy station below is retired by t11), `ENEMIES_CLEARED` (see below).
 4. `planet_approach` — 110 s cinematic with light harassment; since Phase 10 t12 a Carrier crosses it at 65.0 s (world x 750, between
    two laser-column volleys; `test_level1_heavy_spawns.gd`).
 5. `cloud_descent` — the **boss-phase / climax** section.
@@ -825,7 +825,7 @@ Pinned by `tests/integration/test_station_death_sequence.gd` and `test_level_1_s
 **`LevelSection.enemies_cleared_timeout`** is the safety net for `ENEMIES_CLEARED`: seconds to
 wait for `enemy_container` to empty before giving up. It defaults to `10.0` — the constant it
 replaced, sized for "wait for the last stragglers to leave", which is what `cloud_descent` wants —
-and `station_assault` sets `180.0`, because there the fight *is* the section. On expiry
+and `station_assault` sets `240.0` (the Space Fortress, Ph11 t10; it was 180.0 for the station), because there the fight *is* the section. On expiry
 `LevelDirector` now **frees whatever is left** in the container before advancing, rather than
 carrying it into the next section: a mini-boss has no `EnemyPathMover`, so nothing else would ever
 remove it, and `_wait_enemies_cleared()` polls that same container, so a leftover would block the
