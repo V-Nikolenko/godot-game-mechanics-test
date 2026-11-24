@@ -21,6 +21,7 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
 ## Key conventions
 
 - **Engine:** Godot 4.6, Forward+. Viewport 1280×720.
+- **Bosses are built from `global/boss/` and `EnemyModule` parts** — the Space Fortress (`assault/scenes/enemies/space_fortress/`, [ENEMY.md](assault/scenes/enemies/space_fortress/ENEMY.md)) is the one boss: an armoured hull whose death is its core part's, a `BossPhaseDriver` ladder where every phase must change at least two of six aspects (gated by `phase_snapshot()`), and escorts launched only by `BossReinforcements` into a `<boss>Escorts` container announced on `EventBus.boss_escort_spawned` (never `enemy_spawned_orphan`). Never call a boss a "station": Open Space has "Fortuna Space Station". See [global.md](docs/architecture/modules/global.md) → *Boss phase ladder* / *Boss reinforcements*.
 - **Composition over inheritance** — entities are built from `global/components/`
   (Health, Hurtbox/Hitbox, Shield, Overheat, DamageReaction, effects).
 - **Config-driven enemies** — assault enemies load stats from a `*_config.tres` applied in

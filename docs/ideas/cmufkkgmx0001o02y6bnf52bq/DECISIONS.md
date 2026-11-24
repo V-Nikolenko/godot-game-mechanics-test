@@ -4521,3 +4521,35 @@ scope check (§1.1), judgement calls (§1.2) and code facts (§1.3, read @ `cba0
 - **The slowest shipped enemy-bullet source is now the fortress core ring, 210 px/s** (was the station gunnery's 150 px/s fallback): the derived `enemy_bullet.tscn` `max_time` is `ceil(2274.06 / 210) + 2` = 13 s (was 18 s); the shipped 18 s / 2400 px are unchanged and now have 5 s of headroom. A future source slower than 210 px/s fails `test_the_slowest_shipped_speed_source_is_the_fortress_core_ring_at_210`.
 - `test_engagement_deadline.gd`'s Assault-source EMP scan reads every `global/boss/*.gd`, every `space_fortress/*.gd` and `space_fortress.tscn` (the bay payloads are authored there) instead of `station_reinforcements.gd`.
 - `tests/helpers/fixture_modular_host.tscn` now uses `space_fortress/battery_spread.png` / `battery_spread_wreck.png`; `test_enemy_module.gd`'s `WRECK_TEXTURE` follows.
+
+## Phase 11 - as built (2026-11-24)
+
+Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md`. Dossier: `docs/epics-done/cmug256so0031m52wbxomst72/`. Per-task detail is in the *Phase 11, built in tN* notes above; this section is the summary.
+
+### What was built
+- **Shared boss machinery in `global/boss/`**: `BossPhase` / `BossPhaseDriver` (one-way ladder; a gate asserts every non-start phase changes at least two of movement, attacks, vulnerable, arena, reinforcements, visuals), `ShieldSector`,
+  `ReinforcementBay` / `BossReinforcements` / `EscortContainer` (escorts launched from live parts into a `<boss>Escorts` sibling container, announced with `EventBus.boss_escort_spawned(escort, boss)`, paid by `ScoreTracker` at `score_value` x combo only),
+  `BossDeathSequence`. Free of fortress names; Ph12 and Ph18 reuse them.
+- **The Space Fortress** (`assault/scenes/enemies/space_fortress/`, `WaveBuilder.space_fortress()`): armoured r 176 ring hull, nine parts (five batteries, hangar, two shield generators, core), phases `batteries` -> `shields_exposed` ->
+  `core_exposed` -> `critical`, weak-side facing and spins, Open Space combat-zone repositioning, Assault vertical hold, hull spokes / ring pulse / core bullet ring, three reinforcement bays, 22 PNGs, level 1's `station_assault` (240 s), hub draw 21.
+- **Two new mount variants** (`SPREAD_CANNON`, `RAPID_PULSE`), **EMP on structures** (turrets, fence posts, generators), `StateLight.SHIELDED`.
+- **The legacy space station is retired** (code, `WaveBuilder.space_station()`, three PNGs, seven test files); its test family is migrated to the fortress. Fortuna's `space_stations/` mission data is untouched.
+
+### Ph11 owner choices as built
+- **Ph11 owner choice 1:** the legacy station is retired, not kept beside the fortress (t11).
+- **Ph11 owner choice 5:** level 1's `station_assault` keeps its internal name and gets `enemies_cleared_timeout` 240 s (t10).
+- **The fortress is the second bounded persistent-ordnance exception** in `ENEMIES_CLEARED` (after the Ph10 Heavy Gunship): its `ROCKET_BATTERY` pools persist, tail = `death_duration` + rocket `max_time` (8.4 s); `test_engagement_deadline.gd` allowlists exactly {Heavy Gunship, Space Fortress}.
+  One `<boss>Escorts` child is all the escorts add to the section.
+
+### Deviations from the plan
+- The section advances about `death_duration` + 0.9 s after the core dies, not within +0.5 s (final-blast particles plus the director's 0.2 s settle) (t10).
+- A layer-1 fortress root still does not block the mining laser (a second guard, `is_laser_blocking()` false); the boundary is a plain layer-1 body (t11).
+- The slowest shipped enemy-bullet source is now the fortress core ring, 210 px/s; the derived `max_time` is 13 s, the shipped 18 s / 2400 px stay with headroom (t11).
+- `ReinforcementBay` gained `assault_count` / `assault_period` and `config_overrides`; `BossReinforcements.surge()` returns the count queued; escort caps are the config's `escort_cap_open_space` 6 / `escort_cap_assault` 4 (t8).
+- Measured Assault density is far under the ceilings (critical 8.2 rounds/s, 23 per 2 s, against 13.3 / 30); no lever pulled (t16).
+
+### Gaps left for later phases
+- Nothing was play-tested; every tuning number marked *judgement* in the plan is a starting value.
+- Carrier hangars and Heavy Gunship phases are not on `BossReinforcements` / `BossPhaseDriver` (Ph18); Dreadnought (Ph12) is the next consumer of `global/boss/`.
+- Enemy beams / rings still do not damage parts; wrecks do not block line of sight; no capital wreck on death (Ph18 / Ph19).
+- Escort cleanup in Open Space is only the live cap (Ph13 / Ph14); boss / part HUD, per-part score and audio (Ph17); difficulty tiers (Ph16); EMP does not drop sector shields (Ph18).
