@@ -1,7 +1,7 @@
 # Space Fortress — the 360 degree boss you take apart sector by sector
 
 **Role:** Phase 11's boss (Space Fortress 2.0), built to be fought by circling it rather than from below. It replaces level 1's legacy space station
-(t10 placed it in `station_assault`: `b.space_fortress().at(0, -230)`, no `.delay()`, no `.move()`, `enemies_cleared_timeout` 240 s; t13 adds it to the Open Space hub). **Never call it a "station"** in code, nodes or docs: Open Space already has
+(t10 placed it in `station_assault`: `b.space_fortress().at(0, -230)`, no `.delay()`, no `.move()`, `enemies_cleared_timeout` 240 s; t13 adds it to the Open Space hub as draw 21: 4200 ring at -45 degrees, `AnchorIdle`, not `start_engaged`). **Never call it a "station"** in code, nodes or docs: Open Space already has
 "Fortuna Space Station" (a `MissionTrigger`).
 **Fantasy / threat:** a ring fortress whose hull is armour. Five gun batteries sit on the ring, each with its own attack and its own angle; two shield
 generators keep a bubble on the batteries and the hangar of their half; the core stays plated until both generators are gone. Destroying a battery
