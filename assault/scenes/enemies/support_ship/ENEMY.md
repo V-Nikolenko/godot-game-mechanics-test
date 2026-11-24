@@ -31,7 +31,7 @@
 - **Brain:** `SupportShipBrain` (`Phase { SEEK_WARD, FOLLOW, ESCORT, DISENGAGE, IDLE, NOTICING, RETURNING }`, append-only; `enter_phase()` seam).
   It plays SEEK_WARD, FOLLOW, ESCORT and DISENGAGE, plus the hub idle (t15, Open Space only): IDLE = a slow `idle_radius` ring orbit round `patrol_anchor` (default: the spawn point) with no ward and the dish folded; NOTICING = stop and face the player for `notice_time`, then SEEK_WARD; RETURNING = `arrive` at the anchor, then IDLE. `AnchorIdle` runs ahead of the phase dispatch on the support-player distance (`perceive_radius` 600, `lose_radius` 1300 > `escort_safe_distance + follow_distance + interpose_distance` = 940). It has no protected phase, so RETURNING interrupts anything, an ESCORT included (the bubble is undone, the ward dropped). `start_engaged` skips the idle (tests; Assault ignores it).
 - **Ward choice (t11):** a candidate is a `BaseEnemy` in group `enemies`, not a `SupportShip`, `is_ai_driven()` (brain + mover,
-  not on a rail — so never the Gunship, Bonus Drone or Station), alive and not queued, `counts_toward_wave_clear`, `score_value`
+  not on a rail — so never the Gunship, Bonus Drone or Space Fortress), alive and not queued, `counts_toward_wave_clear`, `score_value`
   >= `ward_min_score` 20 (so never a Swarm Drone), within `ward_search_radius` 900, in Assault inside
   `view_rect().grow(ward_view_band 120)`, and not claimed by another live support (meta `support_claim` = the claimer's instance
   id). Threat = `score_value × 1 / (1 + d_player / 600) × (1 + (1 − hp_fraction))`. The ward is kept `min_ward_seconds` 2.0, then

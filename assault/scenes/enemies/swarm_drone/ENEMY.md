@@ -156,7 +156,7 @@ Phases are an `enum` in `swarm_drone_brain.gd` (no `states/` folder); every tran
   `tests/integration/test_level1_drone_spawns.gd` (rows, grouping, the §5 C3 concurrency ratios) and
   `tests/integration/test_level1_drone_exit.gd` (cloud_descent's last wave leaves under AI before the timeout).
 - Do not attach `.move()` unless it is meant to fly a rail (then it is armed and rams on contact like the old
-  Kamikaze). The space station's BOTTOM reinforcement squad is the one deliberate rail user.
+  Kamikaze). No shipped spawn flies a rail now (history: the retired station's BOTTOM squad was the one deliberate rail user); Space Fortress escorts are brain-driven.
 
 ## Tests
 

@@ -63,7 +63,7 @@ the brain, then the mover. The brain only requests motion (the single-writer gat
 - **Rhythm:** a window comes about every 5.8 s, ≈ 1.7 shots/s on average. The shortest possible period is 2.28 s
   (`min_window_period()`), which sizes the pool.
   - In Assault, at `engage_seconds` 7.0, a Gatling usually gets **one** window before it leaves.
-- **Rails** (`.move()`; today only the station's LEFT/RIGHT reinforcements — level 1's pair is an AI pair since t16):
+- **Rails** (`.move()`; no shipped spawn flies one now; history: the retired station's LEFT/RIGHT reinforcements, and level 1's pair has been an AI pair since t16):
   `on_suspended()` runs the legacy constant stream from the `rail_*` fields.
   - Every 0.09 s, 220 px/s, ±0.08 rad, aimed at the player with accuracy 0.
   - It uses the same 36-round `StreamPool`. The rail need is 71, so a rail Gatling fires about 36 rounds and then stalls

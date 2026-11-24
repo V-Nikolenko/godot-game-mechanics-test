@@ -1,7 +1,7 @@
 # Fighter — gun-armed Tier 1 fighter (formerly the Light Assault Ship)
 
 **Role:** The baseline shooter. Built as an AI enemy (`FighterBrain` decides, `EnemyMover` moves). While a level
-rail (`EnemyPathMover`) owns its motion — today only the space station's TOP reinforcements — it falls back to the
+rail (`EnemyPathMover`) owns its motion — no shipped spawn does (the retired station's TOP reinforcements were the last) — it falls back to the
 legacy weapon and flies the path as before.
 **Fantasy / threat:** Bread-and-butter opposition. Manageable alone; dangerous in numbers.
 
@@ -9,7 +9,7 @@ legacy weapon and flies the path as before.
 > player at a set lane with an aimed Pulse burst, a wide turn back in with a close Scatter spray when the nose comes
 > on, a break-away and the next pass. A formation fights as a squad (§Squad), it idles around a patrol point in the
 > Open Space hub (§Hub idle), and **every level-1 fighter is now an AI fighter** — none flies a rail any more (§Level 1).
-> Only the station's TOP reinforcements still ride one. Task plans: `docs/plans/cmulwkar000btqj2x1e58sfd4/3-plan.md`
+> No shipped spawn rides one now (history: the retired station's TOP reinforcements did); Space Fortress escorts are brain-driven and fly no rails. Task plans: `docs/plans/cmulwkar000btqj2x1e58sfd4/3-plan.md`
 > (t8b), `docs/plans/cmulwkar300bxqj2xgtk6jyu3/3-plan.md` (t9), `docs/plans/cmulwkarm00cpqj2xfwq3ue8h/3-plan.md` (t16),
 > `docs/plans/cmulwkarp00ctqj2x6ih09c0k/3-plan.md` (t17). Epic plan: `docs/plans/cmufs7ekv000lnm2x7nbswijy/3-plan.md`.
 
@@ -224,7 +224,7 @@ snapshot comes nose-on inside it, so it can be FORWARD). The pin
 ## Spawn notes
 
 - WaveBuilder method: `b.fighter()` — see `docs/enemy-roster.md`. **Do not add `.move()`** in a level wave: that puts it
-  on a rail and its brain is suspended (only the station's TOP reinforcements do this, on purpose).
+  on a rail and its brain is suspended (no shipped spawn does this; the retired station's TOP reinforcements once did, on purpose).
 - `.formation(...)` on a fighter entry makes one squad of the whole formation (§Squad); a V3 is LEAD + both flanks,
   a W5 adds two REARs. Loose lines in one wave share a squad only through `.squad(&"w<n>f")`.
 - `.shoot_forward()` / `.shoot_at_player()` are rail-only inputs.
