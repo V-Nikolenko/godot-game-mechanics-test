@@ -27,7 +27,7 @@ Epic `cmug256so0031m52wbxomst72`. Plan: `docs/plans/cmug256so0031m52wbxomst72/3-
 ## How it was verified
 
 - **Gate:** `bash /agent/verify.sh` (import, boot, GUT) and `scripts/check-test-leaks.sh` per task. GUT grew to ≈ 3144 tests after the retirement; GUT time stayed under the 240 s ceiling (≈ 225 s at t11).
-- **New gate files:** `test_boss_phase_driver.gd`, `test_shield_sector.gd`, `test_boss_reinforcements.gd`, `test_space_fortress.gd`, `test_fortress_weapons.gd`, `test_fortress_reinforcements.gd`,
+- **New gate files:** `test_boss_phase_driver.gd`, `test_boss_phase_rules.gd` (the §25 intent gate), `test_turret_mount_variants.gd`, `test_shield_sector.gd`, `test_boss_reinforcements.gd`, `test_space_fortress.gd`, `test_fortress_weapons.gd`, `test_fortress_reinforcements.gd`,
   `test_fortress_sprites.gd`, `test_level1_fortress_section.gd`, `test_boss_death_sequence.gd`, `test_fortress_incoming_damage_paths.gd`, plus fortress rows in the roster, hub, deadline and bullet-lifetime gates.
 
 ## Deviations and open items

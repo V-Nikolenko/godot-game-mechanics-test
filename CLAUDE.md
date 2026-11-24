@@ -186,7 +186,12 @@ shell. Mode-specific code is isolated per module; shared logic lives in `global/
   warning logged (the gate's `--import` step never loads a scene and its `--quit` step boots only
   `res://boot/…`, so most of the project was previously unloaded by every gate step),
   and the boss family — `tests/integration/test_station_assault_section.gd`, `test_laser_ray_hit_mask.gd`,
-  `test_radial_attack_pattern.gd`, `test_boss_death_sequence.gd` and `test_fortress_incoming_damage_paths.gd`
+  `test_radial_attack_pattern.gd`, `test_boss_death_sequence.gd` and `test_fortress_incoming_damage_paths.gd`,
+  plus the boss-machinery and fortress gates: `tests/unit/test_boss_phase_driver.gd` (ladder one-way, snapshot diff),
+  `test_boss_phase_rules.gd` (the §25 intent gate: every fortress phase changes at least two of six aspects, read off `phase_snapshot()`),
+  `test_boss_reinforcements.gd` (escort container, `boss_escort_spawned` scoring path, scuttle), `test_shield_sector.gd` (a generator's bubbles lapse with it),
+  `test_turret_mount_variants.gd` (spread cannon / rapid pulse), `test_space_fortress.gd` (shell, parts, phases, movement in both harnesses),
+  `test_fortress_weapons.gd`, `test_fortress_reinforcements.gd`, `test_fortress_sprites.gd` and `test_level1_fortress_section.gd` (the replayed section)
   (the space station's own files were retired with it in Phase 11 t11; their intent lives in the fortress suites) —
   which cover new code and so
   assert intent. The last of those closes the boss's collision-layer coverage gap: real missiles,

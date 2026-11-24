@@ -55,7 +55,7 @@ s.waves.assign(raw_waves)
 
 **Builder:** `b.fighter()`  
 **Scene:** `fighter.tscn`  
-**Movement:** AI (`FighterBrain` + `EnemyMover`): attack runs — a lead-in to a start point, a pass at a set lane beside the player, a wide turn, a reposition and a second pass. **Do NOT add `.move()` in a level wave**: a rail (`EnemyPathMover`) suspends the brain, and the fighter then fires the legacy weapon along the path (the station's TOP reinforcements still do this on purpose). Nothing in level 1 flies a fighter rail any more.  
+**Movement:** AI (`FighterBrain` + `EnemyMover`): attack runs — a lead-in to a start point, a pass at a set lane beside the player, a wide turn, a reposition and a second pass. **Do NOT add `.move()` in a level wave**: a rail (`EnemyPathMover`) suspends the brain, and the fighter then fires the legacy weapon along the path (history: the retired station's TOP reinforcements did this on purpose). No shipped spawn flies a fighter rail any more; boss escorts fly no rails.  
 **Squads:** a `.formation()` is automatically one squad. Loose `b.fighter()` lines in one `b.wave()` form a squad only if they share `.squad(&"<id>")`; level 1 uses `&"w<n>f"` (fighters) / `&"w<n>g"` (Gatlings) per wave. A loose line with no id is a squad of one. Roles: the closest leads head-on (FRONTAL pass), the next two close as a pincer (FLANK_LEFT / FLANK_RIGHT lanes), a 4th and later wait as REARs (dry passes, never fire). At most three fighters shoot at once. Details: `assault/scenes/enemies/fighter/ENEMY.md` → *Squad*.  
 **Shoots:** Yes — a burst per pass leg, chosen by **distance** (never by a spawn property): an AIMED burst of 3–5 Pulse Rounds at the player's predicted point from 385 px and beyond, a FORWARD burst of 5–7 Scatter Rounds out of the nose below 325 px (in between: the last mode). A yellow light shows 0.3 s before every burst. `.shoot_forward()` / `.shoot_at_player()` are **rail-only** inputs.  
 **Assault exit:** leaves by the nearest edge after `engage_seconds` (6.0 s) or two passes, curving out of the corridor (`test_level1_fighter_exit.gd`).  
@@ -88,7 +88,7 @@ b.fighter().formation(b.w_formation(5)).at(0, -420)
 b.fighter().at(-120, -400).squad(&"w9f")
 b.fighter().at(120, -400).squad(&"w9f")
 
-# On a rail (station reinforcement shape): legacy weapon, fired along the path
+# On a rail (legacy shape, no shipped spawn uses it): legacy weapon, fired along the path
 b.fighter().at(-60, -360).move(b.straight(180)).shoot_forward().free_after(6.0)
 ```
 
@@ -190,7 +190,7 @@ See `assault/scenes/enemies/sniper/ENEMY.md`.
 
 **Builder:** `b.gatling_interceptor()`  
 **Scene:** `gatling_interceptor.tscn`  
-**Movement:** AI (`GatlingInterceptorBrain`): holds side-on range on the player's flank, swings to the other flank between windows. **Do NOT add `.move()` in a level wave** — a rail suspends the brain and it fires the legacy stream along the path (only the station's LEFT/RIGHT reinforcements still do this). See `assault/scenes/enemies/gatling_interceptor/ENEMY.md`.  
+**Movement:** AI (`GatlingInterceptorBrain`): holds side-on range on the player's flank, swings to the other flank between windows. **Do NOT add `.move()` in a level wave** — a rail suspends the brain and it fires the legacy stream along the path (history: only the retired station's LEFT/RIGHT reinforcements did this; no shipped spawn does now). See `assault/scenes/enemies/gatling_interceptor/ENEMY.md`.  
 **Shoots:** Yes — pressure windows: yellow spin-up, one 8–12-round Gatling Stream **aimed at the player's predicted position** (it never fires "forward"; the old "always fires forward" note was wrong), a pause, a swing. On a rail: the legacy constant stream (0.09 s, slight spread), also aimed at the player.  
 **Assault exit:** leaves after `engage_seconds` (7.0 s), never starting a window it cannot finish. **Keep it out of `ENEMIES_CLEARED` sections** — its window deferral is not in the deadline formula (a boundary row in `test_engagement_deadline.gd` pins this).  
 **Squads:** two Gatlings in one squad (a `.formation()` or a shared `.squad(&"<id>")`) charge together and cross their streams at the player's likely next position from the same side, leaving the other side open; a solo Gatling never does. See `ENEMY.md` → *Convergence fire*.  
@@ -219,7 +219,7 @@ b.gatling_interceptor().at(200, -420).squad(&"w0g")
 # A lone Gatling
 b.gatling_interceptor().at(0, -420)
 
-# On a rail (station reinforcement shape): the legacy constant stream
+# On a rail (legacy shape, no shipped spawn uses it): the legacy constant stream
 b.gatling_interceptor().at(-500, 0).move(b.straight(200, PI / 2)).free_after(5.0)
 ```
 
@@ -748,7 +748,7 @@ scored. **Tuning lives in each scene's exports.** Art and `rotation` are nose-up
 | Rule | Detail |
 |------|--------|
 | **Always `.move()` path-following enemies** | None left on the AI roster. `ram`, `sniper` / `sniper_enemy` and `bomber` are AI enemies since Phase 4 (level 1 spawns them with no `.move()` in every section, t21 / t22); a rail still works and runs each one's rail fallback (sniper telegraph cycle, bomber rail bombs, ram straight line). |
-| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `heavy_gunship`, `carrier`, `fighter`, `gatling_interceptor`, `ram`, `sniper`, `bomber` — attaching `EnemyPathMover` suspends their AI. `fighter`, `gatling_interceptor`, `sniper` and `bomber` fall back to a legacy weapon on a rail (so the station's reinforcements still fire); the ram keeps its ARMOR contact armed; the rest go quiet. |
+| **Never `.move()` self-AI enemies** | `drone`, `razor_drone`, `heavy_gunship`, `carrier`, `fighter`, `gatling_interceptor`, `ram`, `sniper`, `bomber` — attaching `EnemyPathMover` suspends their AI. `fighter`, `gatling_interceptor`, `sniper` and `bomber` fall back to a legacy weapon on a rail (a legacy fallback no shipped spawn uses; the fortress's escorts are brain-driven and fly no rails); the ram keeps its ARMOR contact armed; the rest go quiet. |
 | **Off-screen entries need `.free_after()`** | Enemies entering from the sides never exit via the top/bottom. Without `free_after` they linger indefinitely. |
 | **`sniper_enemy` on a rail** | No fly-in constant any more: a rail suspends the brain and the telegraph cycle starts at spawn. Without `.move()` it runs its AI relocation loop. |
 | **Heavy Gunship spawns above the screen** | Use `y` between `-400` and `-600` in design units so it enters from off-screen top (level 1: `.at(0, -500)` / `.at(160, -500)`, never `-160`, which is inside the level-start laser wall). A Carrier uses `y` about `-260` (world-anchored x) and never goes in an `ENEMIES_CLEARED` section. |

@@ -4537,7 +4537,11 @@ Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md`. Dossier: `docs/epics-don
 
 ### Ph11 owner choices as built
 - **Ph11 owner choice 1:** the legacy station is retired, not kept beside the fortress (t11).
+- **Ph11 owner choice 2:** phase 2 (`shields_exposed`) starts at 2 destroyed batteries; one is not enough (t5).
+- **Ph11 owner choice 4:** escorts die with their boss (scuttled when its death starts) and keep the score they pay when shot (t2, t8).
 - **Ph11 owner choice 5:** level 1's `station_assault` keeps its internal name and gets `enemies_cleared_timeout` 240 s (t10).
+- **Ph11 owner choice 6:** `emp_factor` 0.4 scales every EMP source on the fortress; a no-op while dying (t5).
+- **Ph11 owner choice 7:** EMP on structures (turrets, fence posts, shield generators) is added; the bonus drone deliberately keeps its legacy process-disable freeze (t12).
 - **The fortress is the second bounded persistent-ordnance exception** in `ENEMIES_CLEARED` (after the Ph10 Heavy Gunship): its `ROCKET_BATTERY` pools persist, tail = `death_duration` + rocket `max_time` (8.4 s); `test_engagement_deadline.gd` allowlists exactly {Heavy Gunship, Space Fortress}.
   One `<boss>Escorts` child is all the escorts add to the section.
 

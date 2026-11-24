@@ -324,7 +324,7 @@ wide turn, reposition, second pass — and picks an aimed Pulse burst or a forwa
 (spin-up, an 8–12 round Gatling Stream aimed at the player's predicted point, a pause, a swing to the other flank),
 two of them converging their streams from one side. Both run in both harnesses (`test_fighter.gd`,
 `test_gatling_interceptor.gd`, `test_enemy_dual_mode.gd`), both fight as `SquadController` squads, both fall back to the
-legacy weapon on a rail (`on_suspended()`, so the station's reinforcements still fire), and **all 64 of level 1's
+legacy weapon on a rail (`on_suspended()`; a legacy fallback no shipped spawn uses, the fortress's escorts are brain-driven), and **all 64 of level 1's
 fighter and Gatling spawns are AI spawns** (no `.move()`, `.free_after()` or `shoot_*()`): the three level-1 sections
 arrive at the same moments and places as before and then fight inside the corridor and leave on their
 `EngagementBudget`. Their corridor behaviour is the shared `AssaultCorridorConstraint` above — a Fighter's flank
@@ -539,11 +539,10 @@ UI nodes only subscribe to `EventBus`. It listens to `WaveManager.enemy_spawned`
   wave indices don't collide across sections.
 - **Survival** ticks, **skill-challenge** bonuses, and combo penalties on player damage or
   enemy escape — the escape penalty (`escape_combo_multiplier`, 0.75×) applies to every
-  spawn source (waves, station reinforcements, asteroid shards) **except** one whose
+  spawn source (waves, asteroid shards) **except** one whose
   `ShipConfig.counts_as_escape` is `false` (currently only the bonus drone — see
   `tests/integration/test_score_tracker_escape_penalty.gd`). Independent of
-  `counts_toward_wave_clear`: station reinforcements are exempt from wave-clear bonuses but
-  still deliberately pay the escape penalty (see below).
+  `counts_toward_wave_clear`. (History: the retired station's reinforcements were exempt from wave-clear but paid the escape penalty; boss escorts now pay neither, see below.)
 - **Boss escorts** (`EventBus.boss_escort_spawned(escort, boss)`, Phase 11 t2) pay their kill (`score_value` × combo, combo step) and
   nothing else: no wave tally, no escape penalty, and nothing once the boss `is_dying()` — [global.md](global.md) → *Boss reinforcements*.
 
