@@ -4558,9 +4558,10 @@ Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md`. Dossier: `docs/epics-don
 - Enemy beams / rings still do not damage parts; wrecks do not block line of sight; no capital wreck on death (Ph18 / Ph19).
 - Escort cleanup in Open Space is only the live cap (Ph13 / Ph14); boss / part HUD, per-part score and audio (Ph17); difficulty tiers (Ph16); EMP does not drop sector shields (Ph18).
 
-## Phase 12 - Enemy rework, phase 12: Dreadnought hunting boss (2026-11-25)
+## Phase 12 - Enemy rework, phase 12: Dreadnought hunting boss (2026-11-26)
 
-Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 1), built on that directory's `1-context.md` / `2-research.md`. These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
+Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 2, answering plan review round 1), built on that directory's `1-context.md` / `2-research.md`. These are
+*planned* decisions; check this phase's *as built* section, once written, before relying on them.
 
 ### Changes to earlier decisions
 - **Ph11 convention "a boss's reinforcements come out of a bay on a live part and stop when that part is destroyed" gains an opt-in exception:** `ReinforcementBay.Trigger.ON_OWN_DESTROYED`
@@ -4571,41 +4572,60 @@ Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 1), built on th
   order is free; `BossPhaseDriver` itself is unchanged and stays one-way. `test_boss_phase_rules.gd` already sweeps every driver of a boss. `BossReinforcements` still binds one driver.
 - **A boss need not lock parts:** the fortress's "locked until phase N" was a fortress choice; the Dreadnought starts every part vulnerable and protects core and engines with a
   `ShieldSector` bubble instead (IDEAS §9 "the player can choose what to disable first").
-- **Ph11's "Later bosses measure density the same way" applies**: Dreadnought-owned launches mean ≤ 13.3 /s, peak ≤ 30 per half-open 2 s window, ≤ 2 committed attacks (3 in `critical`
-  or `crippled`), measured in every phase state, hand-ticked rows counting launches.
+- **The Ph11 zero-argument `telegraph_gate` stays, but a host may bind it per mount:** after `ModularHull.build_mounts()` the Dreadnought sets `mount.telegraph_gate =
+  brain.attack_gate_for.bind(part_id)`, so its cap counts committed **parts** (a broadside side once) and a side's ripple is not cut by another busy weapon. The fortress keeps its
+  shared gate.
+- **Mount tuning that changes pool sizes needs its own standalone scene, never a post-build write:** `TurretMountBuilder.build()` sizes pools from `pool_specs()` at build time, so the
+  Carrier's write-after-build precedent is legal only for changes that **lengthen** the period (the Dreadnought's `broadside_cooldown_seconds`, asserted ≥ the scene's value).
+- **Ph11's "Later bosses measure density the same way" applies**: Dreadnought-owned launches mean ≤ 13.3 /s, peak ≤ 30 per half-open 2 s window, ≤ 2 committed WEAPON parts (3 in
+  `critical` or `crippled`), measured in every phase state in its own task (t12).
+- **Gate time gains rule 4** (planned for t1, Ph12 owner choice 8): a production-code speed-up is a legal way to win gate time when it is bit-identical, proven by unchanged printed
+  figures plus a throw-away differential run (the Ph8 t1 route, now written down). Rules 1–3 are measured as nearly exhausted (plan §2.15: the slowest files are CPU-bound).
 
 ### Names and places later phases build on
 - **Dreadnought** (`assault/scenes/enemies/dreadnought/`: `Dreadnought` root `BaseEnemy`, `DreadnoughtBrain`, flat `DreadnoughtConfig`; `WaveBuilder.dreadnought()` / `DREADNOUGHT`):
-  armoured hull (Ph10 "one hull rule per boss": the armoured one; root layer 0 / mask 0; death = the core part's), body / hurtbox / contact `RectangleShape2D` 208 × 448, nose local +y,
-  port local +x. Parts under `Modules`: `torpedo_tube`, `missile_rack`, `broadside_port`, `broadside_starboard` (WEAPON), `shield_generator` (WEAK_POINT), `core` (CORE), `engine_port`,
-  `engine_starboard` (ENGINE). Phases: hull track `hunting` → `critical` (core ≤ 0.35); engine track `twin_engines` → `listing` (1 engine) → `crippled` (2). The root forwards
-  `DreadnoughtBrain.on_boss_phase(track, phase_id)` with track `&"hull"` / `&"engines"`. `phase_snapshot()` keeps Ph11's six keys from phase-driven fields only.
-- `DreadnoughtBrain.Phase { IDLE, NOTICING, RETURNING, ENTER, HUNT, LINE_UP, WIND_UP, CHARGE, RECOVER, HOLD }` (append-only). **Heading model:** velocity along the nose, the heading
-  turned by the brain at per-side rates (a lost engine makes the live-side turn slow, adds a yaw bias and a drift toward the dead side), measured on the path, never the sprite.
-  Jets burst-turn; broadsides hold fire while it runs. Crippled = HOLD, rotation by thrusters only, no ram. The ram is the Ram Corvette cycle on the boss, critical with ≥ 1 engine only,
-  ram damage written on the contact box during CHARGE only (the Ram Corvette `exposed_collision_damage` precedent).
-- **`RocketBatteryMount.fan_count` (1) / `fan_spread_deg` (0)**: a salvo step fires a fan; 1 / 0 bit-identical.
-- **`TurretMount.Variant.TORPEDO_TUBE` (= 9, appended)**, `TorpedoTubeMount` on a standalone scene, firing **`energy_torpedo.tscn`, an `EnemyOrdnance` PURSUIT_BOMB scene** (3 HP, steers
-  3 s, shot down by the player) — the torpedo is ordnance, not a new rocket kind.
+  armoured hull (root layer 0 / mask 0; death = the core part's), body / hurtbox / contact `RectangleShape2D` 208 × 448, nose local +y, port local +x. Parts under `Modules`:
+  `torpedo_tube`, `missile_rack`, `broadside_port`, `broadside_starboard` (WEAPON), `shield_generator` (WEAK_POINT), `core` (CORE), `engine_port`, `engine_starboard` (ENGINE). Phases:
+  hull track `hunting` → `critical` (core ≤ 0.35); engine track `twin_engines` → `listing` (1 engine) → `crippled` (2). The root forwards `DreadnoughtBrain.on_boss_phase(track, phase_id)`
+  with track `&"hull"` / `&"engines"`. `phase_snapshot()` keeps Ph11's six keys from phase-driven fields only.
+- `DreadnoughtBrain.Phase { IDLE, NOTICING, RETURNING, ENTER, HUNT, LINE_UP, WIND_UP, CHARGE, RECOVER, HOLD }` (append-only); `attack_gate_for(part_id)`, `committed_parts()`,
+  `jets_active()`. **Heading model:** velocity along the nose, the heading turned by the brain at per-side rates; a lost engine makes the live-side turn slow (`one_engine_live_turn`
+  0.5), adds a yaw bias (0.05 rad/s) and a drift (18 px/s) toward the dead side, and forces the Open Space orbit toward the dead side; tested on positions with the expected radius
+  ratio `(turn_rate + bias) / (turn_rate × live − bias)`. Jets burst-turn; broadsides hold fire while they run or the turn exceeds 0.35 rad/s. Crippled = HOLD, thruster rotation only,
+  no ram. The ram is the Ram Corvette cycle on the boss, critical with ≥ 1 engine only, ram damage on the contact box during CHARGE only.
+- **Assault pattern for a large hunting boss:** a world-anchored **stadium** loop in the top half of the resting view (legs y 160 / 400, derived end radius 120, pure pursuit), both
+  legs broadside-down with alternating sides; a two-waypoint racetrack on one line was rejected (its return leg sits above the view). Ph15 may make it follow the player's x.
+- **`RocketBatteryMount.fan_count` (1) / `fan_spread_deg` (0)**: a salvo step fires a fan; 1 / 0 bit-identical. **`TurretMount.Variant.MISSILE_FAN` = 9** (standalone
+  `missile_fan_mount.tscn` on `rocket_battery_mount.gd`: 5 DUMB over 40°, salvo 1) and **`TurretMount.Variant.TORPEDO_TUBE` = 10** (`TorpedoTubeMount`, standalone scene), both appended.
+- **Energy torpedo = `energy_torpedo.tscn`, an `EnemyOrdnance` PURSUIT_BOMB scene** exposed as `EnemyOrdnanceScenes.ENERGY_TORPEDO` (not in `scene_for()`, which is keyed by
+  `Kind`): `Health` 120 **in damage units** (`EnemyOrdnance` subtracts damage, not hits): 3 Standard shots. Ordnance health is always authored in damage units from the shipped
+  weapon-mode `.tres` damages.
 - **`EngineWake extends HazardField`** (`assault/scenes/hazards/engine_wake/`): a 3 s stress puff, damage radius = drawn radius, no damage in its last 0.5 s, `set_owner_group()`,
   `set_scale_factors()`. **`HazardField.damage_exempt_group` / `Hazards.pulse_damage(..., exempt_group := &"")`** (default bit-identical). The Dreadnought spawns puffs every 48 px behind
   each live engine while engaged; they hurt the player and other enemies, never its owner group (Ph12 owner choice 3 default).
-- Interceptors: a `Bay` (`ON_OWN_DESTROYED`, Gatling Interceptor pair) on each weapon part; caps 6 Open Space / 4 Assault.
-- Detach: a destroyed part keeps a smaller wreck-stump texture and flings one `DebrisFragment` chunk (`dreadnought_chunk.tscn`, `source` = the boss). Not cover; Ph19 owns LOS wreckage.
+- Interceptors: a `Bay` (`ON_OWN_DESTROYED`, Gatling Interceptor pair) on each weapon part, Mouth outside the hull; caps 6 Open Space / 4 Assault.
+- Detach: a destroyed part keeps a smaller wreck-stump texture and throws off one **purely visual** `DreadnoughtChunk` (a `top_level` child of the boss: no collision, no hazard, no
+  damage, self-freeing in 2.5 s). Not cover, not debris; Ph19 owns boss wreckage and hazards.
 - Hub: draw 22, 4200 ring at 135°, hunt leash 1400 round `patrol_anchor` (levers: bearing ± 22.5°, ring 4200–4800, leash → 1100).
-- Test helper `tests/helpers/dreadnought_fixture.gd`; suites `test_dreadnought.gd`, `_movement`, `_weapons`, `_wake`, `_ram`, `_reinforcements`, `_sprites`, plus `test_engine_wake.gd`.
+- Test helper `tests/helpers/dreadnought_fixture.gd` (`spawn` with `quiet` through attack caps 0 / escort caps 0 / `ram_first_delay` 1e6 — never through config cooldowns, which no
+  mount reads; `hand_tick` in the fortress position-overwrite pattern); suites `test_dreadnought.gd`, `_incoming_damage_paths`, `_movement`, `_weapons`, `_wake`, `_ram`,
+  `_reinforcements`, `_density`, `_sprites`, plus `test_engine_wake.gd`.
 
 ### Conventions
 - A boss whose destruction order is free expresses it as several ordered tracks, never as an unordered ladder; each track's phases obey §25 on their own and a path where a declared
   change cannot happen (critical on a crippled hull: no ram) gets its own ≥ 2-changes row.
-- A capital ship's "lopsided after engine loss" is a path property (turn rates, bias, drift) tested on positions; the Carrier's facing sag is not the model to copy.
-- Gate time: Phase 12 starts with a gate-room task freeing ≥ 12 s; allotments total 13.8 s; escalate past a 237 s two-run mean or 1.5× an allotment.
+- A capital ship's "lopsided after engine loss" is a path property (turn rates, bias, drift) tested on positions against a formula over the config; the Carrier's facing sag is not
+  the model to copy. A listing hull must still be able to turn both ways (a config-invariant row).
+- A new boss mirrors the fortress's incoming-damage-paths file (player rockets, asteroids, mining laser) and has a row that its own moving ordnance never damages its parts.
+- Gate time: Phase 12 starts a gate-room task freeing ≥ 6 s (rules 1–4); only the tasks that would cross 237 s wait for it; allotments total 15.5 s; escalate past a 237 s two-run
+  mean or 1.5× an allotment.
 
 ### Deferred
 | Item | Deferred to | Reason |
 |---|---|---|
 | Placing the Dreadnought in a level (its rack / tube pools persist: an `ENEMIES_CLEARED` placement would be a third allowlisted exception) | Ph15 | Ph12 owner choice 4 default; Assault level migration |
-| Enemy beams / rings vs parts; LOS wreckage; a capital wreck on its death | Ph18 / Ph19 | earlier deferrals stand |
-| Carrier / Heavy Gunship on the boss machinery (they may reuse `ON_OWN_DESTROYED` and multi-track ladders) | Ph18 | |
+| The Assault stadium following the player's x | Ph15 | corridor-constrained AI |
+| Enemy beams / rings vs parts; LOS wreckage; damaging boss debris; a capital wreck on its death | Ph18 / Ph19 | earlier deferrals stand |
+| Carrier / Heavy Gunship on the boss machinery (they may reuse `ON_OWN_DESTROYED`, per-part gates and multi-track ladders) | Ph18 | |
 | Encounters with the Dreadnought, escort leash beyond the cap | Ph13 / Ph14 | |
 | Difficulty tiers; boss HUD, per-part score, audio | Ph16 / Ph17 | |

@@ -1,80 +1,84 @@
 # Enemy rework, phase 12: Dreadnought hunting boss
 
-Revision 1 (2026-11-25). Epic `cmug256tc003lm52wbdoxucrr`, phase 12 of the enemy rework (idea `docs/ideas/cmufkkgmx0001o02y6bnf52bq/`). Built on this directory's
-`1-context.md` (what exists, requirements R1–R20) and `2-research.md` (scope check S1–S12, findings F1–F7, options). Code facts read on `agent/auto-dev` @ `1fee829`.
+Revision 2 (2026-11-25), answering the round-1 review (`4-review.md`: B1–B4, M1–M10; point by point in §8). Epic `cmug256tc003lm52wbdoxucrr`, phase 12 of the enemy rework
+(idea `docs/ideas/cmufkkgmx0001o02y6bnf52bq/`). Built on this directory's `1-context.md` (what exists, requirements R1–R20) and `2-research.md` (scope check S1–S12, findings
+F1–F7, options). Code facts re-read on `agent/auto-dev` @ `572ae54`; test times measured on 2026-11-25 (§2.15).
 
 ## Summary for the owner
 
-- **For the player:** a new boss, the **Dreadnought**, a 450 px warship that *hunts* you: it closes in, then circles you on long, slow arcs with one side turned to you so its
-  cannons sweep across you as it turns. Get behind it and it fires manoeuvring jets to swing round; its engines leave a burning wake you must not fly through.
-- **Weapons:** heavy cannons down each side (the broadside sweep), a fan of five missiles, a slow energy torpedo you can shoot down, the engine wake, and once its core is badly
-  damaged a telegraphed full-speed ram with a drawn lane and a long, punishable recovery.
-- **You choose what to break first, nothing is locked:** a weapon (that attack stops, but two interceptors burst out of the wreck), an engine (one lost: it lists and turns badly
-  one way; both: it stops dead in an extreme-weapons frenzy but can never ram), the shield generator (bubbles on core and engines drop), or the core (its death is the boss's).
-- **Destruction shows:** wrecked parts stay as smaller stumps and fling off a chunk of debris, so the silhouette shrinks; lights show armed, charging, shielded.
-- **Where:** a hunting zone at the far south-west of the Open Space hub (it gives up if you leave), and an Assault version built and tested in the corridor (it crosses the top of
-  the screen broadside-on and dives at you when critical), ready for a level designer to place.
-- **Built for later bosses:** bays that launch from their own wreck, a missile rack that fires a fan, a torpedo tube turret, a reusable engine-wake hazard.
+- **For the player:** a new boss, the **Dreadnought**, a 450 px warship that *hunts* you: it closes in on a curve, then circles you on long, slow arcs with one side turned to you,
+  so its cannons ripple down that side and sweep across you as it turns. Get behind it and it fires manoeuvring jets to swing round; its engines leave a burning wake.
+- **Weapons:** three heavy cannons down each side (the broadside), a fan of five missiles, a slow energy torpedo you can shoot down (three Standard shots), the engine wake, and,
+  once its core is badly damaged, a telegraphed full-speed ram down a drawn lane with a long, punishable recovery.
+- **You choose what to break first, nothing is locked:** a weapon (that attack stops for good, but two interceptors burst out of its wreck), an engine (one lost: it lists, drifts and
+  can only circle tightly one way; both: it stops dead in an extreme-weapons frenzy but can never ram), the shield generator (core and engines lose their bubble), or the core (the kill).
+- **Destruction shows:** wrecked parts stay as smaller stumps and throw off a tumbling chunk, so the silhouette shrinks; lights show armed, charging and shielded.
+- **Where:** a hunting zone far south-west in the Open Space hub (it gives up if you leave), and an Assault version tested in the corridor (it loops an oval in the top half of the
+  screen, broadside down, and dives at you when critical), ready for a level designer to place later.
+- **Built for later bosses:** launch bays that fire from their own wreck, a missile-fan rack, a torpedo-tube turret, a reusable engine-wake hazard.
 - **Left out:** a level placement (phase 15), a boss health bar and sound (17), lasers hurting boss parts and wrecks as cover (18–19), difficulty tiers (16).
-- **Main risks:** a 450 px ship crowds the Assault screen (fairness checks on every attack, bullets measured per phase against the fortress ceilings); the free order must stay a
-  real choice (each target has a gain and a cost; nothing is play-tested); the test suite is ~12 s under its limit, so the first task wins time back.
+- **Main risks:** a 450 px ship crowds the Assault screen (fairness checks on every attack, bullets measured per phase against the fortress's ceilings); the free order must stay a
+  real choice (each target has a gain and a cost; nothing is play-tested); the test suite is about 12 s under its limit, so one task wins time back first — the slowest tests turn
+  out to be CPU-bound, so that task may make some game code faster without changing what it does; only the weapons work waits for it.
 - **Choices (default in brackets):** 1. Who bursts out of a destroyed weapon? [two Gatling Interceptors] 2. Let launch bays fire from their own wreck, changing phase 11's
   "bays stop when their part dies" for bays that opt in? [yes] 3. Does the wake hurt other enemies (bait-able) but not the Dreadnought or its interceptors? [yes]
   4. Place it in a level now? [no, phase 15] 5. Put it in the hub as a roaming hunter in its own zone? [yes] 6. Ram damage of your 50 HP / hull touch? [35 / 25]
-  7. EMP lasts 40 % on it, like the fortress? [yes] 8. Spend the first task winning back test-suite time? [yes]
+  7. EMP lasts 40 % on it, like the fortress? [yes] 8. May the test-time task speed up game code, proven to behave identically? [yes] 9. Standard shots to kill a torpedo? [3]
 
 ## For every task
 
 Phase 12 of the enemy rework. Read `CLAUDE.md`. Earlier phases' rules in `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md` stand unless a line here changes them.
-- **Names.** The boss is the **Dreadnought**: `class_name Dreadnought` (root, `BaseEnemy`), `DreadnoughtBrain` (`EnemyBrain`), flat `DreadnoughtConfig` (`ShipConfig`), folder
-  `assault/scenes/enemies/dreadnought/` (`dreadnought.tscn`, `dreadnought.gd`, `dreadnought_brain.gd`, `dreadnought_config.gd/.tres`, `ENEMY.md`), `WaveBuilder.dreadnought()` /
-  `DREADNOUGHT`. Never "station" for a boss. "Ph12 owner choice N" = the owner summary's choice N.
-- **Local axes (Carrier convention):** the nose is local **+y** (`EnemyMover` default `sprite_forward_angle` PI/2); **port = local +x**, **starboard = local −x**. In heading terms:
-  starboard = heading rotated +90° in screen coordinates (`Vector2(-h.y, h.x)`), port = `Vector2(h.y, -h.x)`. A **starboard turn** increases the heading angle (screen
-  clockwise), a **port turn** decreases it. A clockwise orbit keeps the centre on the starboard side. Mount bearings: 0° = local +x (port abeam), 90° = local +y (bow).
+- **Names.** `class_name Dreadnought` (root, `BaseEnemy`), `DreadnoughtBrain` (`EnemyBrain`), flat `DreadnoughtConfig` (`ShipConfig`), folder `assault/scenes/enemies/dreadnought/`
+  (`dreadnought.tscn`, `dreadnought.gd`, `dreadnought_brain.gd`, `dreadnought_config.gd/.tres`, `ENEMY.md`), `WaveBuilder.dreadnought()` / `DREADNOUGHT`. Never "station" for a
+  boss. "Ph12 owner choice N" = the owner summary's choice N.
+- **Local axes (Carrier convention):** nose = local **+y** (`EnemyMover` `sprite_forward_angle` PI/2); **port = local +x**, **starboard = local −x**. From a heading `h`: starboard =
+  `Vector2(-h.y, h.x)`, port = `Vector2(h.y, -h.x)`. A **starboard turn** increases the heading angle (screen clockwise), a **port turn** decreases it. A clockwise orbit keeps the
+  centre on the starboard side (engages starboard). Mount bearings: 0° = local +x (port abeam), 90° = local +y (bow), 180° = starboard abeam.
 - **Part ids** (`const` on `Dreadnought`): `TORPEDO_TUBE` `&"torpedo_tube"`, `MISSILE_RACK` `&"missile_rack"`, `BROADSIDE_PORT` `&"broadside_port"`, `BROADSIDE_STARBOARD`
   `&"broadside_starboard"` (the four WEAPON parts), `SHIELD_GENERATOR` `&"shield_generator"` (WEAK_POINT), `CORE` `&"core"` (CORE), `ENGINE_PORT` `&"engine_port"`,
-  `ENGINE_STARBOARD` `&"engine_starboard"` (ENGINE). All under the `Modules` node (`ModularHull`), **every part `starts_vulnerable` true** (no locks: the free order).
-- **Hull rule: armoured** (Ph10 "one rule per boss"; the fortress / Carrier rule): the root refuses all damage (`armor_deflected`), `deflects_hit` / `is_armored` true, shots cross it
-  to the parts; **the core's death is the boss's death**. Root layer 0 / mask 0. Body, root `HurtBox` and `ContactHitBox` share one `RectangleShape2D` 208 × 448.
-- **Two phase tracks** (two `BossPhaseDriver` nodes, both ordinary one-way ladders, no driver change): `PhaseDriver` = hull track `hunting` (START) → `critical` (core ≤
-  `critical_core_ratio` 0.35); `EngineDriver` = engine track `twin_engines` (START) → `listing` (1 of the two engines destroyed) → `crippled` (both). The root forwards each entry as
-  `DreadnoughtBrain.on_boss_phase(track: StringName, phase_id: StringName)` with track `&"hull"` / `&"engines"`; nothing is applied once dying. `BossReinforcements` binds `PhaseDriver`.
+  `ENGINE_STARBOARD` `&"engine_starboard"` (ENGINE). Under `Modules` (`ModularHull`); **every part `starts_vulnerable` true** (no locks: the free order).
+- **Hull rule: armoured** (the fortress / Carrier rule): the root refuses all damage (`armor_deflected`), `deflects_hit` / `is_armored` true, shots cross it to the parts; **the core's
+  death is the boss's death**. Root layer 0 / mask 0. Body, root `HurtBox` and `ContactHitBox` share one `RectangleShape2D` 208 × 448.
+- **Two phase tracks** (two ordinary `BossPhaseDriver` nodes, no driver change): `PhaseDriver` hull track `hunting` → `critical` (core ≤ `critical_core_ratio` 0.35); `EngineDriver`
+  engine track `twin_engines` → `listing` (1 engine destroyed) → `crippled` (both). The root forwards each entry as `DreadnoughtBrain.on_boss_phase(track: StringName, phase_id:
+  StringName)`, track `&"hull"` / `&"engines"`; nothing is applied once dying. `BossReinforcements` binds `PhaseDriver`.
 - **Root API** (t6): `modular_hull()`, `part(id)`, `phase_driver()`, `engine_driver()`, `shield_sector()`, `reinforcements()`, `owner_group()` (`"dreadnought_%d" % instance id`),
-  `is_assault()`, `is_dying()`, `engines_alive() -> int`, `dead_engine_side() -> int` (+1 port, −1 starboard, 0 none / both, written by the phase handler on `listing`),
-  `phase_snapshot() -> Dictionary` (six keys `movement`, `attacks`, `vulnerable`, `arena`, `reinforcements`, `visuals`, **phase-driven fields only**, never which parts live);
-  signals `armor_deflected(damage: int)`, `death_started`.
-- **Brain API** (t6 stubs, filled by t7–t11): `bind(host, hull, reinforcements)`, `on_boss_phase(track, phase_id)`, `silence()`, `on_emp_started()`, `is_engaged()`, `attack_gate() -> bool`
-  (zero-argument `telegraph_gate`), `movement_snapshot()`, `attacks_snapshot()`, `arena_snapshot()` (`[]` until built), `heading() -> Vector2`, `phase()`;
-  `enum Phase { IDLE, NOTICING, RETURNING, ENTER, HUNT, LINE_UP, WIND_UP, CHARGE, RECOVER, HOLD }` (append-only). Engaged = HUNT, LINE_UP, WIND_UP, CHARGE, RECOVER, HOLD.
-- **Single writers:** the brain only requests (`request_velocity`, `face_toward`, `boost`, `halt`); the `EnemyMover` writes `velocity` / `rotation` / `move_and_slide()`
-  (`test_enemy_mover_single_writer.gd`). Paths bend **only** through the brain's own heading turn (Ph2: `max_turn_rate` turns the sprite only). The mover authors
-  `turn_lerp` 0, `acceleration` / `braking` 0 (instant velocity) and a `max_turn_rate` above any rate the brain uses. After death starts `suspend_ai()` runs and
-  `BossDeathSequence` alone writes the rotation.
-- **Config:** every number in `dreadnought_config.tres` (flat; `test_config_instance_isolation.gd`); mount tuning in mount scenes / `TurretMountSlot` exports; bays on `ReinforcementBay`
-  exports; phases as `BossPhase` sub-resources. Never write to a loaded resource. The config value wins over the scene's `Health`.
-- **Shared-machinery changes are opt-in and bit-identical by default:** `ReinforcementBay.Trigger.ON_OWN_DESTROYED` (appended), `RocketBatteryMount.fan_count` 1 / `fan_spread_deg`
-  0, `TurretMount.Variant.TORPEDO_TUBE` (appended, = 9), `HazardField.damage_exempt_group` &"" and `Hazards.pulse_damage(..., exempt_group := &"")`. Every existing suite
-  (fortress, carrier, gunship, turrets, corvette, bomber, hazards) is the regression net and must stay green unchanged.
+  `is_assault()`, `is_dying()`, `engines_alive() -> int`, `dead_engine_side() -> int` (+1 port, −1 starboard, 0 none / both; written on `listing`), `phase_snapshot() -> Dictionary`
+  (six keys `movement`, `attacks`, `vulnerable`, `arena`, `reinforcements`, `visuals`, **phase-driven fields only**); signals `armor_deflected(damage: int)`, `death_started`.
+- **Brain API** (t6 stubs, filled by t7–t11): `bind(host, hull, reinforcements)`, `on_boss_phase(track, phase_id)`, `silence()`, `on_emp_started()`, `is_engaged()`,
+  `attack_gate_for(part_id: StringName) -> bool`, `committed_parts() -> int`, `jets_active()`, `movement_snapshot()`, `attacks_snapshot()`, `arena_snapshot()` (`[]` until built),
+  `heading() -> Vector2`, `phase()`; `enum Phase { IDLE, NOTICING, RETURNING, ENTER, HUNT, LINE_UP, WIND_UP, CHARGE, RECOVER, HOLD }` (append-only). Engaged = HUNT … HOLD.
+- **Per-part attack gate:** `TurretMount` still calls a zero-argument `telegraph_gate` (Ph11 contract); after `ModularHull.build_mounts()` the root sets
+  `mount.telegraph_gate = brain.attack_gate_for.bind(part_id)` on every mount of each WEAPON part, so the gate knows which part asks and a broadside side counts once.
+- **Single writers:** the brain only requests (`request_velocity`, `face_toward`, `boost`, `halt`); the `EnemyMover` writes `velocity` / `rotation` / `move_and_slide()`. Paths bend
+  **only** through the brain's own heading turn. Mover: `turn_lerp` 0, `acceleration` / `braking` 0, `max_turn_rate` above any rate the brain uses. Once dying, `suspend_ai()` runs
+  and `BossDeathSequence` alone writes the rotation.
+- **Config:** every number in `dreadnought_config.tres` (flat); mount tuning in **standalone** mount scenes (`TurretMountScenes`), slot overrides on `TurretMountSlot`, bays on
+  `ReinforcementBay` exports, phases as `BossPhase` sub-resources. Never write to a loaded resource. Config wins over the scene's `Health`.
+- **Shared-machinery additions, opt-in and bit-identical by default:** `ReinforcementBay.Trigger.ON_OWN_DESTROYED` (appended, t2); `RocketBatteryMount.fan_count` 1 /
+  `fan_spread_deg` 0 and **`TurretMount.Variant.MISSILE_FAN` = 9** on its own `missile_fan_mount.tscn` (t3); **`TurretMount.Variant.TORPEDO_TUBE` = 10** (t4, after t3);
+  `HazardField.damage_exempt_group` &"" and `Hazards.pulse_damage(..., exempt_group := &"")` (t5). Every existing suite is the regression net and stays green unchanged.
 - **Clocks** are accumulated `delta` (`x -= delta`, over at `x <= 1e-6`); no `Timer` / `create_timer` in brains, weapons or hazards (a `Timer` *node* only for the death free).
-- **Spawning** (escorts, wake puffs, debris) happens from the brain / root tick on the physics step or idle code, never inside a physics callback; hazards go deferred through
+- **Spawning** (escorts, wake puffs, chunks) from the brain / root tick or idle code, never inside a physics callback (defer it); hazards go deferred through
   `spawn_into(Hazards.container(tree), ...)` and nothing spawns when there is no container.
-- **Mode:** `EnemyWorld.arena(get_tree()) != null` = Assault. In Assault nothing the Dreadnought owns fires outside `EnemyWorld.view_rect()`; no engagement budget, no exit
-  (a boss); `world_anchored_x` true (`.at(x, y)` lands at world x `640 + 2x`). Open Space: world space, no camera maths.
-- **Fairness and density (Ph11 convention):** inequalities read from **instantiated** nodes; measured Assault density in every phase state (`hunting`, `listing`, `crippled`,
-  `critical`, `critical`+`crippled`): Dreadnought-owned launches mean ≤ 13.3 /s, peak ≤ 30 per half-open 2 s window, ≤ 2 committed attacks (3 in `critical` or `crippled`);
-  a hand-ticked density row counts launches and returns each round to its pool at once; a count during which a pool reported empty fails. Tune in the stated lever order, never widen a bound.
+- **Mode:** `EnemyWorld.arena(get_tree()) != null` = Assault. In Assault nothing the Dreadnought owns fires outside `EnemyWorld.view_rect()`; no engagement budget, no exit;
+  `world_anchored_x` true (`.at(x, y)` lands at world x `640 + 2x`). Open Space: world space, no camera maths.
+- **Fairness and density (Ph11 convention):** inequalities read from **instantiated** nodes; measured Assault density (t12) in every phase state: Dreadnought-owned launches mean
+  ≤ 13.3 /s, peak ≤ 30 per half-open 2 s window, ≤ 2 committed WEAPON parts (3 in `critical` or `crippled`); a count during which a pool reported empty fails.
 - **Signals** declare exactly what they emit; per-frame / per-hit prints only behind `OS.is_stdout_verbose()`.
 - **UIDs:** never hand-type or copy a `uid://`; leave references UID-less or mint with the `tests/README.md` snippet. Never run `update_project_uids`.
 - **Tests:** GUT, tests first, both harnesses (`tests/helpers/enemy_ai_harness.gd`, `use_parameters(MODES)`) for every Dreadnought behaviour row; spawn through
-  `tests/helpers/dreadnought_fixture.gd` (t6). Hand-ticked where possible (tick the **brain** then the mover); real-physics rows at 8× (16× only for tick-paced files). A hand-ticked
-  boost row starts with `await _fresh_idle_delta()` (Ph10). Run `scripts/check-test-leaks.sh` after anything that awaits. Gate: `bash /agent/verify.sh`.
-- **Gate time:** record GUT before/after (two-run mean of `scripts/gate-time.sh`) in `tests/README.md` → *Gate time*; stay inside your allotment (plan §2.14); escalate past a
-  237 s two-run mean or 1.5× your allotment. Gate output stays well under 1 MiB.
-- **Art:** invoke `pixel-art-generation` before any PixelLab call; strict top-down; save with `./scripts/pixellab.sh`; look at every image; no texture ≥ 90 % opaque. Until t12,
+  `tests/helpers/dreadnought_fixture.gd` (t6): `spawn(h, opts)`; `opts.quiet` silences **through the fields the brain reads** (`max_concurrent_attacks` /
+  `critical_max_concurrent_attacks` 0, `escort_cap_open_space` / `escort_cap_assault` 0, `ram_first_delay` 1e6 unless the row asks for the ram). A hand-ticked movement row uses the
+  fortress tick: `set_physics_process(false)`, then per tick `before := d.global_position; d._physics_process(dt); d.global_position = before + d.velocity * dt` (a hand-ticked
+  `move_and_slide()` moves by the idle delta). A hand-ticked boost row starts with `await _fresh_idle_delta()` (Ph10). Real-physics rows at 8×, 16× only for tick-paced files.
+  Run `scripts/check-test-leaks.sh` after anything that awaits. Gate: `bash /agent/verify.sh`.
+- **Gate time:** record GUT before / after (two-run mean of `scripts/gate-time.sh`) in `tests/README.md` → *Gate time*; stay inside your allotment (§2.15 table, repeated in each
+  task); escalate past a 237 s two-run mean or 1.5× your allotment. Gate output stays well under 1 MiB.
+- **Art:** invoke `pixel-art-generation` before any PixelLab call; strict top-down; save with `./scripts/pixellab.sh`; look at every image; no texture ≥ 90 % opaque. Until t13,
   placeholders reuse existing Carrier / fortress PNGs.
-- **Docs:** each task keeps `dreadnought/ENEMY.md` (and any HAZARD.md / module doc it touches) true; t14 runs `updating-project-docs` for the phase. A departure later phases depend
-  on goes into `DECISIONS.md` under `### Phase 12, built in tN`.
+- **Docs:** each task keeps `dreadnought/ENEMY.md` (and any HAZARD.md / module doc it touches) true; t15 runs `updating-project-docs`. A departure later phases depend on goes
+  into `DECISIONS.md` under `### Phase 12, built in tN`.
 
 ## 1. Problem
 
@@ -84,31 +88,30 @@ missile fan, an energy torpedo, an engine-wake hazard and a critical ram; the pl
 makes it visibly lopsided, losing both makes it stationary with an extreme weapons phase (IDEAS §9, §24, §25, §26); destroying a weapon launches interceptors from that module
 (§10); its art changes silhouette as parts become wreckage (§21–23); tests in both modes (§40).
 
-### 1.1 Scope check (from `2-research.md` §1, re-validated @ `1fee829`)
+### 1.1 Scope check (from `2-research.md` §1, re-validated @ `572ae54`)
 
 | # | Finding | Effect on this plan |
 |---|---|---|
 | S1 | Ph10 `EnemyModule` / `ModularHull` / `TurretMountBuilder` and Ph11 `global/boss/` exist and are boss-agnostic | reused unchanged except the opt-in additions in §2.2–§2.5 |
-| S2 | `BossPhaseDriver` is one ordered ladder ("a later phase never jumps its predecessor") and the fortress locks parts until earlier phases | free order = **two tracks** (§2.1) and **no locks**; the driver is unchanged |
+| S2 | `BossPhaseDriver` is one ordered ladder and the fortress locks parts until earlier phases | free order = **two tracks** (§2.1) and **no locks**; the driver is unchanged |
 | S3 | a bay whose part is destroyed is killed in the same call (`boss_reinforcements.gd` `_on_module_destroyed` → `_kill`) | **changes the Ph11 convention** for opt-in bays: `ON_OWN_DESTROYED` (§2.2, Ph12 owner choice 2) |
-| S4 | no torpedo in any family; `RocketBatteryMount` has no spread; no wake hazard; `ContactProfile` deals one `collision_damage` | small additions §2.3–§2.5; ram damage by the Ram Corvette's runtime switch (§2.10) |
+| S4 | no torpedo; `RocketBatteryMount` has no spread and its one scene (`rocket_battery_mount.tscn`) authors salvo 2 / pursuit 0.333 / cooldown 5.5; `TurretMountSlot` cannot override salvo, fan or cooldown and pools are sized at build time | a **new standalone variant scene** for the fan (§2.3); the torpedo is an `EnemyOrdnance` scene (§2.4); a wake hazard (§2.5) |
 | S5 | the Carrier's engine loss sags the **facing**, not the path | the Dreadnought changes the **path** (asymmetric turn rates, yaw bias, drift), measured on positions (§2.7) |
-| S6 | destroyed parts stay as wreckage (Ph10/11); capital wrecks / LOS wreckage are Ph19 | wreck **stumps** smaller than the intact art + a flung `DebrisFragment` chunk (§2.12) |
+| S6 | destroyed parts stay as wreckage (Ph10/11); capital wrecks / LOS wreckage / boss hazards are Ph19 | wreck **stumps** smaller than the intact art + a purely visual tumbling chunk (§2.13) |
 | S7 | the scope names no level placement; Ph15 owns Assault level migration | Assault mode built and tested in the harness, `WaveBuilder.dreadnought()`, **no level placement** (Ph12 owner choice 4) |
-| S8 | hub draws 1–21 appended; `test_sector_hub_patrol.gd` sweeps footprints | draw 22 with a hunting leash (§2.13) |
+| S8 | hub draws 1–21 appended; `test_sector_hub_patrol.gd` sweeps footprints | draw 22 with a hunting leash (§2.14) |
 | S9–S10 | fortress suites run both harnesses; `test_boss_phase_rules.gd` sweeps every driver in a boss | same pattern; the sweep must find the Dreadnought and both its drivers |
-| S11 | GUT ≈ 225.2 s of 240 s (escalation 237 s) | **gate-room task first** (t1), allotments ≤ 13.8 s (§2.14) |
-| S12 | deferred items unchanged (beams vs parts, capital wreck, Ph18 Carrier/Gunship migration, Ph13/14 encounters, Ph16 tiers, Ph17 HUD/audio) | out of scope (§6); death leaves no capital wreck |
+| S11 | GUT ≈ 225.2 s of 240 s (escalation 237 s); the slowest files are CPU-bound (measured, §2.15) | gate-room task t1 frees ≥ 6 s, may use a bit-identical code speed-up; only t8 waits on it (§2.15) |
+| S12 | deferred items unchanged (beams vs parts, capital wreck, Ph18 Carrier/Gunship migration, Ph13/14 encounters, Ph16 tiers, Ph17 HUD/audio) | out of scope (§6) |
 
 ### 1.2 Research used (from `2-research.md` §2; numbers marked *judgement* are starting values, nothing was play-tested)
 
-- F1 (Starsector Conquest / Onslaught): a broadside capital is slow-turning (≈ 0.07–0.1× a fighter's turn rate) and needs a short **burst-turn** (Maneuvering Jets) and rear
-  coverage, not a permanently higher rate → jets burst (§2.7) + the wake behind the stern (§2.9).
-- F2 (Starsector AI notes, naval devlog): broadside AI thrashes at the side switch and when avoidance overrides intent → remember the engaged side, switch with hysteresis (§2.7).
+- F1 (Starsector Conquest / Onslaught): a broadside capital is slow-turning and needs a short **burst-turn** (Maneuvering Jets) and rear coverage → jets (§2.7) + the wake (§2.9).
+- F2 (Starsector AI notes, naval devlog): broadside AI thrashes at the side switch → remember the engaged side, switch with hysteresis (§2.7).
 - F3 (Starsector damageable modules): engine loss shows as movement in the world (speed, turn, drift toward the dead side) → §2.7 listing.
-- F4 (Dark Souls 3 frame analysis, Death's Gambit): telegraph ≥ 0.34 s for melee, proportional to the opening → ram telegraph frozen-line ≥ clearance / player speed + 0.25 s, long recovery (§2.10).
+- F4 (Dark Souls 3 frame analysis, Death's Gambit): telegraph proportional to the opening → ram frozen-line ≥ clearance / player speed + 0.25 s, long recovery (§2.10).
 - F5 (Battlesnake, Gungeon Wallmonger): trails decay, damage only while drawn → wake 3 s, no damage in its fade (§2.5).
-- F6 / F7 (Everspace 2, Squadrons, Horizon): a free order needs a cost on every choice; reinforcements on part loss punish progress unless capped → the target matrix (§2.6.4) and caps (§2.11).
+- F6 / F7 (Everspace 2, Squadrons, Horizon): a free order needs a cost on every choice; reinforcements on part loss punish progress unless capped → §2.6.4 matrix, §2.11 caps.
 
 ## 2. Design
 
@@ -116,7 +119,7 @@ makes it visibly lopsided, losing both makes it stationary with an extreme weapo
 
 The player may break weapons, engines, shields or the core in any order (R7). One ordered ladder cannot express that (a `critical` behind the engine phases would be unreachable
 core-first). Rejected: one linear ladder (violates R7), an unordered driver mode (changes `BossPhaseDriver`'s core invariant for no gain), engines outside the ladder (the
-one-/two-engine shifts would escape the §25 gate). **Chosen: two ordinary `BossPhaseDriver` nodes on one host**; weapons and the shield generator are not phase gates at all.
+one-/two-engine shifts would escape the §25 gate). **Chosen: two ordinary `BossPhaseDriver` nodes on one host**; weapons and the shield generator are not phase gates.
 
 | Node | Track | Phases (`BossPhase` sub-resources, in order) | Declared `changes` |
 |---|---|---|---|
@@ -127,15 +130,16 @@ one-/two-engine shifts would escape the §25 gate). **Chosen: two ordinary `Boss
 - The root binds both drivers in `_ready()` (after the hull and shields), connects each `phase_entered` with its track name bound, and calls `brain.on_boss_phase(track, id)`
   then its own visual handler; **nothing is applied once dying** (a part killed during the death sequence may still step a ladder).
 - `BossReinforcements` takes one driver: pass `PhaseDriver` (the Dreadnought's bays use `ON_OWN_DESTROYED`, no phase gate).
-- `tests/integration/test_boss_phase_rules.gd` already collects every driver in an instantiated boss: add a row that `dreadnought.tscn` is found with **two** drivers, both `validate(hull)` empty.
+- `tests/integration/test_boss_phase_rules.gd` already collects every driver in an instantiated boss: add a row that `dreadnought.tscn` is found with **two** drivers, both
+  `validate(hull)` empty.
 
-**What each phase does (consequences live in the brain / root; values in the config):**
+**What each phase does (consequences in the brain / root; values in the config):**
 
 | Phase | movement (t7, t10) | attacks (t8) | arena (t9) | visuals (t6) |
 |---|---|---|---|---|
-| `listing` | speed × `one_engine_speed` 0.65; turn toward the dead side × 1.0, toward the live side × `one_engine_live_turn` 0.35; yaw bias `one_engine_yaw_bias` 0.08 rad/s and drift `one_engine_drift` 18 px/s toward the dead side; jets keep the asymmetry | — | the live engine overburns: wake radius × `listing_wake_radius_factor` 1.3, life × `listing_wake_life_factor` 1.3 | `ListSmoke` overlay shown on the dead side |
-| `crippled` | translation 0 (`request_velocity(ZERO)`; hazards may still drift it); rotation by thrusters only at `thruster_turn_rate` 0.12 rad/s; no jets, no ram | every live mount's `cooldown_seconds` × `crippled_cooldown_factor` 0.6 (once, guarded); attack cap 3; torpedo tube cooldown × the same | wake off | `EmergencyLights` mode `&"strobe"` |
-| `critical` | engines overload: speed × `critical_speed_factor` 1.15 with ≥ 1 engine; the **ram cycle** enabled with ≥ 1 engine (t10); with both engines dead `thruster_turn_rate` × `critical_thruster_factor` 1.5 instead | cooldowns × `critical_cooldown_factor` 0.75 (once, guarded; compounds with crippled to 0.45); attack cap 3 | — | core light `&"blink"`, `CriticalOverlay` visible |
+| `listing` | speed × `one_engine_speed` 0.65; turn toward the dead side × 1.0, toward the live side × `one_engine_live_turn` 0.5; yaw bias `one_engine_yaw_bias` 0.05 rad/s and drift `one_engine_drift` 18 px/s toward the dead side; the Open Space orbit is forced to the dead side | — | the live engine overburns: wake radius × `listing_wake_radius_factor` 1.3, life × `listing_wake_life_factor` 1.3 | `ListSmoke` shown on the dead side |
+| `crippled` | translation 0; rotation by thrusters only at `thruster_turn_rate` 0.12 rad/s; no jets, no ram | every live mount's `cooldown_seconds` × `crippled_cooldown_factor` 0.6 (once, guarded); attack cap 3 | wake off | `EmergencyLights` mode `&"strobe"` |
+| `critical` | speed × `critical_speed_factor` 1.15 with ≥ 1 engine; the **ram cycle** enabled with ≥ 1 engine (t10); with both engines dead `thruster_turn_rate` × `critical_thruster_factor` 1.5 instead | cooldowns × `critical_cooldown_factor` 0.75 (once, guarded; compounds with crippled to 0.45); attack cap 3 | — | core light `&"blink"`, `CriticalOverlay` visible |
 
 On the path where `critical` is entered with both engines dead the ram cannot happen; MOVEMENT still changes (thruster rate), and the Ph11 rule applies: that path gets its own
 §25 row asserting ≥ 2 changes.
@@ -147,51 +151,74 @@ Every other trigger stays bit-identical. Files: `global/boss/reinforcement_bay.g
 (new rows appended, every existing row unchanged), `tests/helpers/fixture_boss_host.tscn` may gain a bay.
 
 - `enum Trigger { PERIODIC, ON_SECTOR_LOSS, ON_PHASE, ON_OWN_DESTROYED }` (appended).
-- `BossReinforcements._on_module_destroyed(part)`: for a live bay whose own part is `part`: if `trigger == ON_OWN_DESTROYED` **and** the bay is activated
-  (`active_from_phase` empty or reached), queue one launch of `count_for(assault)` and mark the bay **breaching** (not dead); otherwise `_kill()` as today. A loss before
-  activation is dropped (bay killed), the Ph11 t2 rule.
-- A breaching bay runs the normal door cycle on the wreck: CLOSED → OPENING (`door_seconds`; the part's `Light` goes CHARGING, restored to its pre-open state = OFF on close)
-  → LAUNCH at the bay's `Mouth` (still valid: wreckage stays) → OPEN for `open_hold_seconds` → CLOSED → `_kill()` (dead for good). If `_open()` refuses (no room under the
-  live cap, or the Assault limit reached) the breach is spent: skipped is counted and the bay dies — **one chance, no retry** (F7: two quick kills cannot stack past the cap).
-- `tick(delta, false)` holds a breaching bay exactly like any other (a launch caught mid-OPENING goes back to the front of its queue). `surge()` on a breaching bay returns 0.
+- `BossReinforcements._on_module_destroyed(part)`: for a live bay whose own part is `part`: if `trigger == ON_OWN_DESTROYED` **and** the bay is activated (`active_from_phase` empty
+  or reached), queue one launch of `count_for(assault)` and mark the bay **breaching** (not dead); otherwise `_kill()` as today. A loss before activation is dropped (bay killed).
+- A breaching bay runs the normal door cycle on the wreck: CLOSED → OPENING (`door_seconds`; the part's `Light` goes CHARGING, restored to its pre-open state = OFF on close) →
+  LAUNCH at the bay's `Mouth` (still valid: wreckage stays) → OPEN for `open_hold_seconds` → CLOSED → `_kill()` (dead for good). If `_open()` refuses (no room under the live cap,
+  or the Assault limit reached) the breach is spent: skipped is counted and the bay dies — **one chance, no retry** (F7: two quick kills cannot stack past the cap).
+- `tick(delta, false)` holds a breaching bay like any other (a launch caught mid-OPENING goes back to the front of its queue). `surge()` on a breaching bay returns 0.
 - New query `is_breaching(bay_id) -> bool`. `is_dead()` is false while breaching, true after. `launched` / `door_changed` signals unchanged.
 - The host's death: the host stops ticking its `BossReinforcements` and scuttles (Ph11), so a queued breach never launches — no new code, a row pins it.
 
 **Rows** (`test_boss_reinforcements.gd`, fixture host): (1) a breach launches `count` escorts at the wreck's `Mouth` after `door_seconds`, announced on
 `EventBus.boss_escort_spawned`, then `is_dead()`; (2) the light is CHARGING during OPENING and OFF after; (3) no room under the cap → nothing launched, `skipped` 1, bay dead;
 (4) Assault limit reached → nothing, dead; (5) EMP hold (`tick(dt, false)`) mid-OPENING → launches after `active` returns; (6) host stops ticking (death) mid-breach → nothing ever
-launches; (7) a non-breach trigger's part destroyed → killed in the same call as before (boundary); (8) `surge()` on a breaching bay returns 0; (9) a bay with
-`active_from_phase` not yet reached → dropped and dead.
+launches; (7) a non-breach trigger's part destroyed → killed in the same call as before (boundary); (8) `surge()` on a breaching bay returns 0; (9) a bay with `active_from_phase`
+not yet reached → dropped and dead.
 
-### 2.3 Missile fan: `RocketBatteryMount.fan_count` / `fan_spread_deg` (IDEAS §9 "missile fan"; t3)
+Gate-time allotment: 0.5 s.
 
-`assault/scenes/enemies/defense_turret/mounts/rocket_battery_mount.gd` gains `@export var fan_count: int = 1` and `@export var fan_spread_deg: float = 0.0` (the Ph11 t3
-`BurstCannonMount.pellets` precedent). Each salvo step launches `fan_count` rockets on the same tick, directions spread evenly over `[-fan_spread_deg / 2, +fan_spread_deg / 2]`
-about the barrel (`fan_count` 1 → exactly the barrel, **bit-identical**: same rng draws, same direction). Each rocket draws its own kind (`pick_kind()`), each emits `round_fired`,
-each refused one counts in `rockets_refused`. `pool_specs()`'s stand-in salvo becomes `salvo_count × fan_count`. The aim cone check stays once per salvo step.
+### 2.3 Missile fan: `RocketBatteryMount.fan_count` and the `MISSILE_FAN` variant (IDEAS §9 "missile fan"; t3)
 
-**Rows** (`tests/integration/test_turret_mount_variants.gd`, hand-ticked): fan 1 / 0 launches one rocket along the barrel with the same draws as before (boundary);
-fan 5 / 40° launches five rockets at −20, −10, 0, +10, +20° from the barrel on one tick; the pools hold `pool_size_for` with salvo × fan; a dry pool counts each refused rocket.
+**Why a variant, not a slot override:** `TurretMountSlot` can override only `variant`, `rest_bearing_deg`, `turn_rate_override`, `traverse_deg_override` and `pool_period_factor`;
+`TurretMountScenes.scene_for()` maps each variant to exactly one scene; and `TurretMountBuilder.build()` sizes every pool from `mount.pool_specs()` at build time. Writing `fan_count`
+or `salvo_count` on an instanced mount afterwards would leave its pools sized for a one-wide fan and refuse rockets (the Carrier's write-after-build precedent only works for
+changes that lengthen the period). So the fan gets its own **standalone** scene, exactly as `HEAVY_CANNON` has its own scene on `burst_cannon_mount.gd` (Ph11 rule: standalone,
+never inherited, because `export_of()` reads only a scene's own state).
 
-### 2.4 Energy torpedo and the torpedo tube (IDEAS §9 "energy torpedo"; t4)
+- `assault/scenes/enemies/defense_turret/mounts/rocket_battery_mount.gd` gains `@export var fan_count: int = 1` and `@export var fan_spread_deg: float = 0.0`. Each salvo step
+  launches `fan_count` rockets on the same tick, directions spread evenly over `[-fan_spread_deg / 2, +fan_spread_deg / 2]` about the barrel. `fan_count` 1 → exactly the barrel,
+  **bit-identical** (same rng draws, same direction). Each rocket draws its own kind (`pick_kind()`), emits `round_fired` and, if refused, counts in `rockets_refused`.
+  `pool_specs()`'s stand-in salvo becomes `salvo_count × fan_count`. The aim-cone check stays once per salvo step.
+- `TurretMount.Variant` gains **`MISSILE_FAN` = 9** (appended to `enum Variant { BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY, PULSE_RING, LANCE, BEAM_CANNON, HEAVY_CANNON,
+  SPREAD_CANNON, RAPID_PULSE }`). `TurretMountScenes.MISSILE_FAN` = new standalone `missile_fan_mount.tscn` on `rocket_battery_mount.gd`, reusing the rocket battery head
+  (`turret_head_rocket_battery.png`), authoring: `fan_count` 5, `fan_spread_deg` 40, `salvo_count` 1, `pursuit_chance` 0 (all DUMB: a readable fan of straight lines),
+  `charge_seconds` 0.5, `cooldown_seconds` 6.0, `fire_range` 900, `turn_rate` 2.0, `lead_blend` 0.6, `fire_cone_deg` 8, `scan_arc_deg` 90, `scan_speed` 0.4. The shipped
+  `rocket_battery_mount.tscn` is untouched.
+- Add `MISSILE_FAN` to `tests/integration/test_ph8_sprites.gd` `HEADS` (rocket battery head) and to any "every built variant" sweep that needs it.
 
-**Torpedo = an `EnemyOrdnance` scene**, no new ordnance code: `assault/scenes/projectiles/enemy_ordnance/energy_torpedo.tscn`, `kind` PURSUIT_BOMB (it already has a
-multi-hit `Health`, a proximity trigger, steer window / turn rate / lead / final speed, `ContactBlast`, `ProjectileLifetime`, hazard bending, shoot-down defuse). Authored
-values (*judgement*, `2-research.md` §4): `Health.max_health` 3, `steer_window` 3.0, `turn_rate` 0.6, `steer_lead` 1.0, `final_speed` 320, `accel` 200, `arm_delay` 0.6,
-`trigger_radius` 70, `warning_time` 0.5, `blast_radius` 72, `blast_damage` 25, `body_radius` 14, plus its own glowing sprite (blue-white plasma core, faction-red casing; art in
-this task through `pixel-art-generation`, ≤ 90 % opaque). Launch speed 160 px/s. Its `ProjectileLifetime` `max_time` / `max_distance` cover the slow path (row).
-Register it in `EnemyOrdnanceScenes` if that map is what lifetime / export rows read.
+**Rows** (`tests/integration/test_turret_mount_variants.gd`, hand-ticked): (1) boundary: the shipped `ROCKET_BATTERY` scene launches one rocket per salvo step along the barrel with
+the same rng draws as before (fan 1 / 0); (2) `MISSILE_FAN` launches five rockets at −20, −10, 0, +10, +20° from the barrel on one tick; (3) its pools are built at
+`EnemyRocketScenes.pool_size_for(kind, {salvo_count: 1 × 5, warhead_salvo_count: 0, salvo_period_min: period × pool_period_factor})` for a `pool_period_factor` of 1.0 and 0.45; (4) a
+dry pool counts each refused rocket; (5) `export_of(MISSILE_FAN, &"fan_count", 1)` reads 5 without instantiating. Gate-time allotment: 0.3 s.
 
-**Tube = `TurretMount.Variant.TORPEDO_TUBE` (appended, = 9)**: `TorpedoTubeMount extends TurretMount` in
-`assault/scenes/enemies/defense_turret/mounts/torpedo_tube_mount.gd` + standalone `torpedo_tube_mount.tscn` (never inherited: `export_of()` reads only a scene's own state), wired
-into the variant → scene map `TurretMountBuilder` uses. Exports: `charge_seconds` 1.0 (TELEGRAPH; host light CHARGING, muzzle glow white = "locked"), `launch_speed` 160,
-`cooldown_seconds` 7.0, `fire_range` 1100, `traverse` set by the host's slot. One pool `TorpedoPool` of `energy_torpedo.tscn`, `persist` true, size
-`ceil(torpedo max life / (period × pool_period_factor)) + 1`. `_fire_tick` launches one torpedo `launch(barrel dir, launch_speed, aim_point)` and emits `round_fired`; a dry pool
-counts `torpedoes_refused`. `fires_past_cover()` true (it steers). UNPOWERED (part death) stops it like every mount.
+### 2.4 Energy torpedo and the torpedo tube (IDEAS §9 "energy torpedo"; t4, after t3)
 
-**Rows:** `test_turret_mount_variants.gd` (telegraph = `charge_seconds`, one torpedo per cycle along the barrel, cooldown, UNPOWERED fires nothing, pool size formula);
-`test_enemy_ordnance.gd` (torpedo: 2 player hits do not defuse, the 3rd does with no blast; steers only for 3.0 s then straight; blast radius / damage from the scene);
-`test_enemy_bullet_lifetime.gd` (its `max_distance / slowest speed` fits `max_time`); transparency and project-load sweeps cover the new scene.
+**Torpedo = an `EnemyOrdnance` scene**, no new ordnance code: `assault/scenes/projectiles/enemy_ordnance/energy_torpedo.tscn`, `kind` PURSUIT_BOMB (a multi-hit `Health`, proximity
+trigger, steer window / turn rate / lead / final speed, `ContactBlast`, `ProjectileLifetime`, hazard bending, shoot-down defuse). It is **not** added to
+`EnemyOrdnanceScenes.scene_for()` (keyed by `Kind`; `PURSUIT_BOMB` already maps to `pursuit_bomb.tscn`): a named const `EnemyOrdnanceScenes.ENERGY_TORPEDO` preloads it, and
+`TorpedoTubeMount` and the rows read that const.
+
+**Health is in damage units.** `EnemyOrdnance._on_hurt(damage)` subtracts the hit's damage, so the torpedo's `Health.max_health` = `current_health` = **120** (Ph12 owner choice 9):
+hits to defuse = `ceil(120 / damage)` from the shipped weapon modes (`assault/scenes/player/weapons/modes/*.tres` `damage`): Standard (`default.tres`, 50) **3**, Sniper Shot
+(40) 3, Spread (25 per pellet) 5, Gatling (14) 9. Other authored values (*judgement*, `2-research.md` §4): `steer_window` 3.0, `turn_rate` 0.6, `steer_lead` 1.0, `final_speed`
+320, `accel` 200, `arm_delay` 0.6, `trigger_radius` 70, `warning_time` 0.5, `blast_radius` 72, `blast_damage` 25, `body_radius` 14; `ProjectileLifetime` `max_time` 10.0,
+`max_distance` 2400 (slow path: 3 s at 160 px/s, then up to 320); launch speed 160 px/s. Its own glowing sprite (blue-white plasma core, faction-red casing).
+
+**Tube = `TurretMount.Variant.TORPEDO_TUBE` = 10** (appended after t3's `MISSILE_FAN` = 9): `TorpedoTubeMount extends TurretMount` in
+`assault/scenes/enemies/defense_turret/mounts/torpedo_tube_mount.gd` + standalone `torpedo_tube_mount.tscn`, `TurretMountScenes.TORPEDO_TUBE` and its `scene_for()` arm. Exports:
+`charge_seconds` 1.0 (TELEGRAPH; host light CHARGING, muzzle glow white = "locked"), `launch_speed` 160, `cooldown_seconds` 7.0, `fire_range` 1100; traverse set by the host's
+slot. One pool `TorpedoPool` of `EnemyOrdnanceScenes.ENERGY_TORPEDO`, `persist` true, size `ceil(max_time / (period × pool_period_factor)) + 1` (period = `charge_seconds` +
+`cooldown_seconds`; 4 at a factor of 0.45). `_fire_tick` launches one torpedo `launch(barrel dir, launch_speed, aim point)` and emits `round_fired`; a dry pool counts
+`torpedoes_refused`. `fires_past_cover()` true (it steers). UNPOWERED (part death) stops it like every mount. **This task also draws the tube head** `turret_head_torpedo_tube.png`
+(40 × 40) and the torpedo sprite through `pixel-art-generation` (≤ 90 % opaque) and adds `TORPEDO_TUBE` to `test_ph8_sprites.gd` `HEADS`.
+
+**Rows:** `test_turret_mount_variants.gd`: telegraph = `charge_seconds`; one torpedo per cycle along the barrel; cooldown; UNPOWERED fires nothing; the pool size formula.
+`test_enemy_ordnance.gd`: (a) defuse on **real player bullets** (real physics at that file's 16×): a parked torpedo takes two real `bullet.tscn` shots fired with `default.tres`
+damage and is not defused, the third defuses it with no blast; (b) hand-emitted hits whose damage is **read from each mode `.tres`** defuse after exactly `ceil(max_health / damage)`
+hits for Standard, Sniper Shot, Spread and Gatling (boundary: one hit fewer leaves it live); (c) it steers only for `steer_window` then flies straight; (d) blast radius / damage
+from the scene. `test_enemy_bullet_lifetime.gd`: a row that instantiates `EnemyOrdnanceScenes.ENERGY_TORPEDO` directly and checks `max_distance / slowest speed` (160) fits
+`max_time` (the sweep's `_ordnance_lifetime(kind)` cannot key a second PURSUIT_BOMB scene). The transparency and project-load sweeps cover the new scenes. Gate-time allotment: 0.8 s.
 
 ### 2.5 Engine wake hazard: `EngineWake` (IDEAS §9 "engine wake hazard", §24 "dangerous exhaust trails"; t5)
 
@@ -206,21 +233,30 @@ field (the `ReactorField` precedent): `kind` `&"engine_wake"`, `radius` 40, `cor
 
 **Shared change (bit-identical by default):** `global/hazards/hazard_field.gd` gains `@export var damage_exempt_group: StringName = &""` passed to
 `Hazards.pulse_damage(tree, at, radius, damage, exempt_group := &"")` (`global/hazards/hazards.gd`), which skips any node in that group. Damage still goes by centre distance to
-nodes in `enemies` / `player` through their root `HurtBox.received_damage` — the armoured Dreadnought refuses it anyway, and parts (group `enemy_parts`) are never reached.
-Default (Ph12 owner choice 3): the wake hurts the player and other enemies, never the Dreadnought's own owner group (its interceptors).
+nodes in `enemies` / `player` through their root `HurtBox.received_damage` — an armoured boss refuses it, and parts (group `enemy_parts`) are never reached. Default (Ph12 owner
+choice 3): the wake hurts the player and other enemies, never its owner group.
 
 **Rows** (`tests/integration/test_engine_wake.gd`, plus one row in `tests/unit/test_hazards.gd`): a player stub at 30 px takes 5 per 0.5 s; at 45 px nothing; nothing after
 `duration - damage_cutoff`; freed at `duration`; an enemy in the exempt group is not hit, another enemy is; drawn ring radius == `damage_radius` (scaled too); a mover in the owner
-group does not avoid it, another does; `pulse_damage` with no exempt group is bit-identical (existing rows green).
+group does not avoid it, another does; `pulse_damage` with no exempt group is bit-identical (existing rows green). Gate-time allotment: 0.6 s.
 
 ### 2.6 The Dreadnought shell (IDEAS §9, §14, §22, §40; t6)
 
 #### 2.6.1 Files and scene
 
-`assault/scenes/enemies/dreadnought/`: `dreadnought.tscn`, `dreadnought.gd` (`Dreadnought extends BaseEnemy`), `dreadnought_brain.gd` (stub API, §For every task), flat
+`assault/scenes/enemies/dreadnought/`: `dreadnought.tscn`, `dreadnought.gd` (`Dreadnought extends BaseEnemy`), `dreadnought_brain.gd` (stub API, see *For every task*), flat
 `dreadnought_config.gd` / `.tres`, `ENEMY.md`. `WaveBuilder.dreadnought()` / `DREADNOUGHT` (`assault/scenes/systems/wave_builder.gd`, beside `space_fortress()`).
-Test helper `tests/helpers/dreadnought_fixture.gd`: `spawn(harness, opts := {})` (seeded, `start_engaged` true by default, optional `quiet` that writes 1e6 cooldowns on the
-private config so movement rows fire nothing), `kill_part(d, id)` (through the part's real damage path), `ladder(d, ids: Array)` (kills parts / drops core health in order).
+
+Test helper `tests/helpers/dreadnought_fixture.gd`:
+- `spawn(harness, opts := {})`: seeded, `start_engaged` true by default, positioned, added to the harness root. `opts.quiet` (true by default for movement rows) silences the boss
+  **through fields the brain actually reads**, on the private config copy before `add_child()`: `max_concurrent_attacks` 0 and `critical_max_concurrent_attacks` 0 (the per-part
+  gate refuses every telegraph), `escort_cap_open_space` 0 and `escort_cap_assault` 0 (no breach launches), `ram_first_delay` 1e6 (unless `opts.ram` is true). Mount cooldowns
+  live in the mount scenes, so writing config cooldowns would not silence anything. With no hazard container in the harness no wake puff spawns. t6 declares these five
+  config fields with their shipped values (`max_concurrent_attacks` 2, `critical_max_concurrent_attacks` 3, `escort_cap_open_space` 6, `escort_cap_assault` 4, `ram_first_delay`
+  2.0) so the fixture writes real properties from the start (the fixture asserts each `set` target exists); t8 / t10 / t11 consume them.
+- `hand_tick(d, dt)`: the fortress pattern — the fixture calls `set_physics_process(false)` once; each tick `var before := d.global_position; d._physics_process(dt);
+  d.global_position = before + d.velocity * dt` (a hand-ticked `move_and_slide()` moves by the idle delta, so every "measured on positions" row depends on this).
+- `kill_part(d, id)` (through the part's real damage path, after its shield bubble if any), `ladder(d, ids: Array)` (kills parts / drops core health in order).
 
 Scene tree (root `CharacterBody2D`, `collision_layer` 0, `collision_mask` 0): `CollisionShape2D` (RectangleShape2D 208 × 448, shared), `HurtBox` (same shape, enemy hurtbox
 layer, root mask as `BaseEnemy` sets it), `ContactHitBox` + `ContactProfile` mode ARMOR with `shove_speed` (fortress value), `Health`, `HitFlashAnimationPlayer`, `Sprite` (hull),
@@ -228,21 +264,22 @@ layer, root mask as `BaseEnemy` sets it), `ContactHitBox` + `ContactProfile` mod
 partially resists"), `Brain`, `Modules` (`ModularHull`) with the eight parts, `PhaseDriver`, `EngineDriver`, overlays `ListSmoke` (two child sprites at the engines, hidden),
 `EmergencyLights` (hidden), `CriticalOverlay` (hidden).
 
-#### 2.6.2 Parts (local coordinates, nose +y, port +x; every hurtbox inside the hull rectangle x ±104, y ±224)
+#### 2.6.2 Parts and hull geometry (local coordinates, nose +y, port +x; hull rectangle 208 × 448, x ±104, y ±224; every part hurtbox inside it)
 
 | id | role | position | hurtbox | HP (config field) | carries |
 |---|---|---|---|---|---|
-| `torpedo_tube` | WEAPON | (0, +196) | 40 × 48 | `torpedo_tube_health` 200 | 1 TORPEDO_TUBE mount (t8), bay (t11) |
-| `missile_rack` | WEAPON | (0, +110) | 56 × 48 | `missile_rack_health` 220 | 1 ROCKET_BATTERY mount, fan (t8), bay (t11) |
-| `broadside_port` | WEAPON | (+84, +20) | 40 × 176 | `broadside_health` 260 | 3 HEAVY_CANNON mounts (t8), bay (t11) |
-| `broadside_starboard` | WEAPON | (−84, +20) | 40 × 176 | `broadside_health` 260 | same, mirrored |
+| `torpedo_tube` | WEAPON | (0, +196) | 40 × 48 | `torpedo_tube_health` 200 | 1 TORPEDO_TUBE mount (t8), bay (t11), Mouth ahead of the bow (0, +250) |
+| `missile_rack` | WEAPON | (0, +110) | 56 × 48 | `missile_rack_health` 220 | 1 MISSILE_FAN mount (t8), bay (t11), Mouth beside it on the port side, outside the hull (+130, +110) |
+| `broadside_port` | WEAPON | (+84, +20) | 40 × 176 | `broadside_health` 260 | 3 HEAVY_CANNON mounts (t8), bay (t11), Mouth abeam (+132, +20) |
+| `broadside_starboard` | WEAPON | (−84, +20) | 40 × 176 | `broadside_health` 260 | same, mirrored, Mouth (−132, +20) |
 | `shield_generator` | WEAK_POINT | (0, +30) | 48 × 48 | `shield_generator_health` 160 | the `ShieldSector` generator |
 | `core` | CORE | (0, −70) | 72 × 72 | `core_health` 900 | death = the boss's death |
-| `engine_port` | ENGINE | (+56, −192) | 64 × 64 | `engine_health` 240 | `Plume` + `WakePoint` (t9) |
-| `engine_starboard` | ENGINE | (−56, −192) | 64 × 64 | `engine_health` 240 | same |
+| `engine_port` | ENGINE | (+56, −192) | 64 × 64 | `engine_health` 240 | `WakePoint` (t9) at (+56, −264), `Plume` sprite (t13) |
+| `engine_starboard` | ENGINE | (−56, −192) | 64 × 64 | `engine_health` 240 | `WakePoint` (−56, −264), `Plume` (t13) |
 
 Every part: one `HurtBox` shape, `Sprite`, `Light` (`StateLight`), `starts_vulnerable` true, `damaged_ratio` 0.5. `_apply_config()` writes each part's HP (fortress pattern).
-The hull's `HurtBox` covers the body within 1 px (`test_enemy_hurtbox_geometry.gd`).
+The hull's `HurtBox` covers the body within 1 px (`test_enemy_hurtbox_geometry.gd`). Mouths and wake points sit **outside** the hull rectangle (|x| > 104 or |y| > 224) so an escort
+or a puff never starts inside the hull. (t11 may move a Mouth if a row needs it, staying outside the hull.)
 
 #### 2.6.3 Armoured hull, core and death
 
@@ -251,18 +288,18 @@ Copy the `SpaceFortress` root pattern: `_on_received_damage` refuses and emits `
 velocity (a moving launcher); `rocket_clear_radius()` = half the hull diagonal + 8 (≈ 255 px). Core `destroyed` → `health.set_health(0)` → `_on_health_changed` death latch:
 `death_started`, `brain.silence()`, `reinforcements.scuttle_all()`, `suspend_ai()`, `BossDeathSequence` (host contract `death_started`, `death_duration`,
 `config.death_blast_count`), `_make_corpse_harmless()`, `_finish_death()` through a `Timer` node. No capital wreck (`wreck_chance` 0). EMP: `answers_emp()` true (also while dying),
-`apply_emp(seconds × emp_factor 0.4)`, a no-op while dying (Ph11 owner choice 6 carried, Ph12 owner choice 7).
+`apply_emp(seconds × emp_factor 0.4)`, a no-op while dying (Ph12 owner choice 7).
 
 #### 2.6.4 Shields and the target matrix (no locks)
 
-One `ShieldSector` (`global/boss/shield_sector.gd`): generator `shield_generator`, protected `[core, engine_port, engine_starboard]`, params from the config
-(`shield_capacity` 120, `shield_regen_delay` 3.0, `shield_regen_seconds` 4.0, `shield_reboot_seconds` 6.0, `shield_pad` 10; the fortress's `_shield_params()` keys). The
-generator's death exposes all three for good. "Core vulnerable only when intended" (§40) is met by the bubble, not a lock.
+One `ShieldSector` (`global/boss/shield_sector.gd`): generator `shield_generator`, protected `[core, engine_port, engine_starboard]`, params from the config (`shield_capacity` 120,
+`shield_regen_delay` 3.0, `shield_regen_seconds` 4.0, `shield_reboot_seconds` 6.0, `shield_pad` 10; the fortress's `_shield_params()` keys). The generator's death exposes all
+three for good. "Core vulnerable only when intended" (§40) is met by the bubble, not a lock.
 
 | Target | Gain | Cost (keeps the choice a trade, F6/F7) |
 |---|---|---|
 | a weapon | that attack goes silent for good (mount UNPOWERED) | two interceptors burst out of its wreck (t11) |
-| an engine | one: lopsided, slow turn to the live side, half the wake; two: no movement, no wake, no ram | the stern means crossing the wake; two dead → `crippled` frenzy |
+| an engine | one: lopsided, can only circle tightly toward the dead side, half the wake; two: no movement, no wake, no ram | the stern means crossing the wake; two dead → `crippled` frenzy |
 | the shield generator | bubbles drop on core and both engines | it sits amidships between both broadsides; nothing else changes |
 | the core | the kill; ≤ 35 % → `critical` | bubbled while the generator lives; `critical` starts the ram |
 
@@ -290,117 +327,174 @@ generator's death exposes all three for good. "Core vulnerable only when intende
 3. Free order: each of the eight parts takes damage at spawn; the protected three take it through the bubble first; after the generator dies they take it directly.
 4. Core death = boss death: `death_started`, escorts scuttled, the node freed after `death_duration`; a part killed during the sequence applies no phase consequence.
 5. Two drivers: `twin_engines` / `hunting` at spawn; one engine → `listing`; the other → `crippled`; core at 35 % → `critical` (and at 36 % not); `critical_core_ratio` equals the scene ratio.
-6. §25: for each pinned path — engines port→starboard then core; starboard → core → port; core → port → starboard — each phase entry's snapshot differs from the previous in
-   every declared aspect built so far (`BUILT_KEYS`, extended by t7 / t8 / t9 / t10), and in ≥ 2 aspects on the crippled-then-critical path; boundary: a hit that leaves both
-   engines alive changes no snapshot key. t6 builds `visuals` (and the constant `vulnerable` / `reinforcements`).
+6. §25: for each pinned path — engines port → starboard then core; starboard → core → port; core → port → starboard — each phase entry's snapshot differs from the previous in every
+   declared aspect built so far (`BUILT_KEYS`, extended by t7 / t8 / t9 / t10), and in ≥ 2 aspects on the crippled-then-critical path; boundary: a hit that leaves both engines alive
+   changes no snapshot key. t6 builds `visuals` (and the constant `vulnerable` / `reinforcements`).
 7. EMP 40 %, no-op while dying; homing point is a live part; tow refused; ward refused.
+
+#### 2.6.8 Incoming damage paths (t6; new `tests/integration/test_dreadnought_incoming_damage_paths.gd`)
+
+A mirror of `tests/integration/test_fortress_incoming_damage_paths.gd` (same structure and constants kept duplicated on purpose; real physics at 8×, both harnesses, the
+Dreadnought's own physics off so every shot meets the authored geometry), proving the authored values that fail silently: (a) a player **homing rocket** crosses the armoured hull
+and hits the weapon part it steers at (HurtBox mask bit 32 on parts); (b) a **warhead** does the same; (c) a real **asteroid** is refused by the hull (`armor_deflected`), and
+(d) damages a bare weapon part (bit 1024); (e) the player's **mining laser** is not blocked by the hull (root layer 0 and `is_laser_blocking()` false) and (f) burns a part
+inside the hull; (g) boundary: a plain layer-1 hull-sized body would block the beam. Weapon parts are unshielded, so no generator needs destroying; a row that targets the core or an
+engine destroys `shield_generator` first.
+
+Gate-time allotment for t6: 3.5 s (the shell file ≈ 2.5 s + this file ≈ 1.0 s).
 
 ### 2.7 Movement: hunting on long arcs (IDEAS §9 Movement, §26, R2/R4/R8/R9; t7)
 
 All in `dreadnought_brain.gd`; config group `Movement`. The brain keeps a unit `heading` and each tick computes a desired heading, turns `heading` toward it at the current
-**per-side** rates, adds the yaw bias, then `mover.request_velocity(heading × speed + drift)` and `mover.face_toward(position + heading × FACE_REACH 10000)`. Velocity
-always runs along the nose (a ship, not an orbit anchor: `Steering.orbit` would slide a 450 px hull sideways). `turn_asym(heading, desired, rate_port, rate_starboard, delta)`
-is a static brain helper (signed angle, clamp by the rate of that side).
+**per-side** rates, adds the yaw bias, then `mover.request_velocity(heading × speed + drift)` and `mover.face_toward(position + heading × FACE_REACH 10000)`. Velocity always runs
+along the nose (a ship, not an orbit anchor: `Steering.orbit` would slide a 450 px hull sideways). `turn_asym(heading, desired, rate_port, rate_starboard, delta)` is a static brain
+helper (signed angle, clamp by the rate of that side).
 
-**Open Space** (`patrol_anchor`, `AnchorIdle` like the fortress / Carrier; `start_engaged` skips idle and leash):
+#### 2.7.1 Open Space hunt
+
+`patrol_anchor`, `AnchorIdle` like the fortress / Carrier; `start_engaged` skips idle and leash.
 - IDLE: `AnchorIdle` slow orbit at `idle_speed` 50; NOTICING → HUNT when the player is within `perceive_radius` 1100 of the hull.
-- HUNT guidance: target T = the player's predicted position at `hunt_lead` 1.0 s (`TargetInfo`). If `|T − p|` > `loiter_radius` 700 + `close_band` 300: steer toward the
-  tangent point of the loiter circle on the engaged side (it closes on a curve, never head-on). Otherwise: the circle's tangent in the orbit direction plus a radial correction
-  `clamp((d − loiter_radius) × radial_gain 0.002, −0.6, 0.6)` rad. **Orbit direction = engaged side:** clockwise engages starboard, counter-clockwise engages port.
-- Side choice (F2 hysteresis): prefer the side whose broadside part lives; if both or neither live: in `listing` the dead side (its fast turn), else keep the current side (seeded
-  50/50 at spawn). Switch at most once per `side_switch_min` 6.0 s.
-- Speed `cruise_speed` 120 px/s, `turn_rate` 0.35 rad/s (turn radius ≈ 343 px; a 420 px/s player out-circles it, the counterplay, F1).
-- **Jets** (F1): the player inside ±`stern_arc_deg` 40° of the stern and within `loiter_radius` + 300 for `jets_trigger` 1.5 s and `jets_cooldown` 8.0 s ready → for
-  `jets_seconds` 1.5 the turn rates × `jets_turn_factor` 2.5 (listing asymmetry kept). No jets while crippled. `jets_active()` is public (t8 holds broadsides then).
+- HUNT guidance: target T = the player's predicted position at `hunt_lead` 1.0 s (`TargetInfo`). If `|T − p|` > `loiter_radius` 700 + `close_band` 300: steer toward the tangent
+  point of the loiter circle on the engaged side (it closes on a curve, never head-on). Otherwise: the circle's tangent in the orbit direction plus a radial correction
+  `clamp((d − loiter_radius) × radial_gain 0.002, −0.6, 0.6)` rad. **Orbit direction = engaged side:** clockwise (starboard turns) engages starboard, counter-clockwise (port
+  turns) engages port.
+- Side choice in `twin_engines` / `critical` (F2 hysteresis): prefer the side whose broadside part lives; if both or neither live, keep the current side (seeded 50/50 at spawn).
+  Switch at most once per `side_switch_min` 6.0 s. **In `listing` the orbit is forced toward the dead side** (that turn is the only tight one; no hysteresis): port engine dead →
+  counter-clockwise, engaging port; starboard dead → clockwise. If that side's broadside is already dead it orbits with its silent side to the player (the reward for that combo).
+- Speed `cruise_speed` 120 px/s, `turn_rate` 0.35 rad/s (radius ≈ 343 px; a 420 px/s player out-circles it, the counterplay, F1).
+- **Jets** (F1): the player inside ±`stern_arc_deg` 40° of the stern and within `loiter_radius` + 300 for `jets_trigger` 1.5 s and `jets_cooldown` 8.0 s ready → for `jets_seconds`
+  1.5 the turn rates × `jets_turn_factor` 2.5 (the listing asymmetry and bias kept). No jets while crippled. `jets_active()` is public (t8 holds broadsides then).
 - RETURNING: the player farther than `lose_radius` 1800 from the hull for `lose_seconds` 4.0, or the hull farther than `hunt_leash_radius` 1400 from `patrol_anchor` → fly to the
-  anchor at `return_speed` 90 (no wake, weapons cold), then IDLE.
+  anchor at `return_speed` 90 (weapons cold, no wake), then IDLE.
 
-**One engine (`listing`)**: dead side `s` from `on_boss_phase` (+1 port / −1 starboard, the root's `dead_engine_side()`): speed × `one_engine_speed` 0.65; the turn rate toward the
-dead side × 1.0, toward the live side × `one_engine_live_turn` 0.35; every tick the heading also turns toward the dead side by `one_engine_yaw_bias` 0.08 rad/s; the velocity
-gains `one_engine_drift` 18 px/s along the dead side's unit vector. Net effect: tight circles one way, wide the other, and a straight request curves.
+#### 2.7.2 Engine loss
 
-**Both engines (`crippled`)**: phase HOLD: `request_velocity(ZERO)` every tick; the heading turns at `thruster_turn_rate` 0.12 rad/s (× `critical_thruster_factor` 1.5 in `critical`)
-toward the bearing that puts the best live weapon on the player (engaged broadside abeam, else the bow).
+**One engine (`listing`)**, dead side `s` from the root's `dead_engine_side()` (+1 port / −1 starboard): speed v = `cruise_speed` × `one_engine_speed` 0.65 = 78 px/s; the turn rate
+toward the dead side ω_dead = `turn_rate` × 1.0 + `one_engine_yaw_bias` 0.05 = 0.40 rad/s; toward the live side ω_live = `turn_rate` × `one_engine_live_turn` 0.5 −
+`one_engine_yaw_bias` = 0.125 rad/s; every tick the heading also turns toward the dead side by the bias; the velocity gains `one_engine_drift` 18 px/s along the dead side's unit
+vector. Because the drift is perpendicular to the heading and turns with it, a constant full turn traces a circle of radius `sqrt(v² + drift²) / ω` (≈ 200 px toward the dead side,
+≈ 640 px toward the live side), so the expected radius ratio is exactly **ω_dead / ω_live = (turn_rate + bias) / (turn_rate × one_engine_live_turn − bias)** (3.2 with the shipped
+values). **Config invariants** (a row): ω_live > 0 (it can still turn both ways), and ω_dead ≥ v / `loiter_radius` (the forced dead-side orbit at 700 px needs 0.111 rad/s).
+
+**Both engines (`crippled`)**: phase HOLD: `request_velocity(ZERO)` every tick; the heading turns at `thruster_turn_rate` 0.12 rad/s (× `critical_thruster_factor` 1.5 in
+`critical`) toward the bearing that puts the best live weapon on the player (engaged broadside abeam, else the bow).
 
 **Critical** (≥ 1 engine): speed × `critical_speed_factor` 1.15 (the ram itself is t10).
 
-**Assault** (`ConstraintMode` AUTO, the corridor filter): spawned above the view (`world_anchored_x`); ENTER heading straight down at `assault_enter_speed` 140 to world y
-`assault_band_y` 360; HUNT = a racetrack: waypoints world x 640 ± `assault_sweep_half_width` 380 on that y, U-turns **through the top** at `assault_turn_rate` 0.55 rad/s (radius ≈
-218, apex ≈ 76 px above the resting view top), so crossing right engages starboard downward and crossing left engages port. Listing / crippled / critical apply the same factors.
-HOLD (crippled) stays where it stopped. No budget, no exit.
+#### 2.7.3 Assault: a stadium loop in the top half of the view
 
-**Snapshot** `movement_snapshot()` = `[speed_factor, turn_factor_port, turn_factor_starboard, yaw_bias, translation_enabled, thruster_turn_rate, ram_enabled]` from fields set
-in `on_boss_phase` only (`ram_enabled` stays false until t10 writes it).
+`ConstraintMode` AUTO (the corridor filter). The resting view is world y 0–720 (the camera pans up to ±380 vertically and ±100 horizontally after the player). Spawned above the
+view (`world_anchored_x`, centre x = the spawn's world x, default 640). ENTER: heading straight down at `assault_enter_speed` 140 to world y `assault_leg_high_y` 160 ± 8, then HUNT.
 
-**Rows** (`tests/integration/test_dreadnought_movement.gd`, both harnesses, hand-ticked brain + mover, `quiet` fixture). **Epic must-have: engine loss changes movement,
-measured on positions, never the sprite:**
-1. Two engines, a fixed full-port then full-starboard turn request for 6 s each: the two measured turn radii are equal within 2 %; speed = `cruise_speed`.
-2. Port engine dead (the live side is starboard): the starboard-turn radius ÷ the port-turn radius ≈ 1 / 0.35 within 10 % (yaw bias included in the expected value); a
-   straight request drifts the track toward port (net lateral displacement to port > 0 after 5 s); speed ≈ 0.65 × cruise. Mirror row for starboard dead.
-3. Both dead: displacement over 5 s ≤ 1 px with no hazard; rotation still changes at `thruster_turn_rate` toward the player (and × 1.5 once `critical`).
-4. Open Space hunt: from 1600 px it closes on a curve (the heading never points within 10° of the player while farther than 1000 px), then holds 700 ± 150 px for 20 s with the
-   engaged broadside within 30° of abeam; the side switches when that broadside dies.
-5. Jets: player parked in the stern arc → jets fire after 1.5 s, turn rate × 2.5 for 1.5 s, not again before 8 s; never while crippled.
-6. Leash: player beyond `lose_radius` 4 s → RETURNING to the anchor; `start_engaged` never returns.
-7. Assault: ENTER ends at y 360 ± 8; the racetrack stays inside the world rect and the apex never more than 120 px above the resting view top; crossing direction engages the downward side.
+HUNT follows a **stadium** (two straight legs joined by semicircles), not a two-waypoint racetrack on one line (a 180° turn at the old 218 px radius put the whole return leg above
+the view): upper leg y `assault_leg_high_y` 160, lower leg y `assault_leg_low_y` 400, straight legs over x = centre ± `assault_sweep_half_width` 380; the end radius is derived,
+r = (400 − 160) / 2 = 120 px (IDEAS §31: no duplicated magic numbers). Speed `assault_cruise_speed` 90 px/s; the needed turn rate v / r = 0.75 rad/s must not exceed
+`assault_turn_rate` 0.9 (a config row). The brain steers by pure pursuit: the nearest point on the stadium plus `assault_track_lookahead` 120 px along the travel direction, turned
+toward at the side rates. Default loop direction counter-clockwise (port turns): the lower leg heads right with **starboard facing down**, the upper leg heads left with **port
+facing down**, so both legs engage the player below and the sides alternate. Hull extents: upper leg y 56–264, lower leg y 296–504, x 36–1244 at the leg ends: the whole loop is
+inside the resting view. Broadsides hold fire through the U-turns (0.75 rad/s > `broadside_fire_turn_cap` 0.35, §2.8), so the legs are the broadside windows.
+
+Listing in Assault keeps the loop direction (a reversal would need a 180° turn below the lower leg, toward the player): when the loop's turns are toward the live side the end turns
+are slower (ω_live = 0.9 × 0.5 − 0.05 = 0.40 rad/s at v = 58.5 → radius ≈ 146 > 120), so the hull visibly **overshoots** the stadium at each end and pursuit pulls it back; toward the
+dead side it holds the track. Crippled = HOLD where it stopped; critical speeds up and rams (t10). No budget, no exit.
+
+**Snapshot** `movement_snapshot()` = `[speed_factor, turn_factor_port, turn_factor_starboard, yaw_bias, translation_enabled, thruster_turn_rate, ram_enabled]` from fields set in
+`on_boss_phase` only (`ram_enabled` stays false until t10 writes it).
+
+#### 2.7.4 Rows (`tests/integration/test_dreadnought_movement.gd`, both harnesses unless noted, `quiet` fixture, `hand_tick`)
+
+**Epic must-have: engine loss changes movement, measured on positions, never the sprite:**
+1. Two engines, a fixed full-port then full-starboard turn request for 6 s each: the two fitted turn radii are equal within 2 % and equal `cruise_speed / turn_rate` within 3 %.
+2. Port engine dead: fitted radius toward starboard ÷ toward port equals **(turn_rate + one_engine_yaw_bias) / (turn_rate × one_engine_live_turn − one_engine_yaw_bias)** read
+   from the config, within 5 %; each radius equals `sqrt(v² + one_engine_drift²) / ω` within 5 %; a straight request drifts the track toward port (net lateral displacement
+   > 0.5 × `one_engine_drift` × 5 s after 5 s); speed ≈ `one_engine_speed` × cruise. Mirror row for starboard dead. The config-invariant row (ω_live > 0, ω_dead ≥ v / loiter).
+3. Both dead: displacement over 5 s ≤ 1 px with no hazard; rotation still changes at `thruster_turn_rate` toward the player (× `critical_thruster_factor` once `critical`).
+4. Open Space hunt: from 1600 px it closes on a curve (the heading never within 10° of the player while farther than 1000 px), then holds 700 ± 150 px for 20 s with the engaged
+   broadside within 30° of abeam; the side switches when that broadside dies; in `listing` the orbit runs toward the dead side (both dead sides).
+5. Jets: player parked in the stern arc → jets after 1.5 s, turn rate × 2.5 for 1.5 s, not again before 8 s; never while crippled.
+6. Leash: player beyond `lose_radius` for 4 s → RETURNING to the anchor; `start_engaged` never returns.
+7. Assault (Assault harness): ENTER ends at y 160 ± 8; over two laps the hull centre stays within y [152, 408] and x centre ± (380 + 120 + 8); the downward-facing side alternates
+   per leg (starboard on the rightward leg, port on the leftward); the hull rectangle stays inside the world rect; listing with the live side as the turn side overshoots the upper
+   leg by more than 8 px at an end turn, listing with the dead side as the turn side does not. Config row: `assault_cruise_speed / r ≤ assault_turn_rate`.
 8. §25: `movement` joins `BUILT_KEYS` in `test_dreadnought.gd`.
 
-### 2.8 Weapons, attack gate and the extreme-weapons phase (IDEAS §9, §24, §26; t8)
+Gate-time allotment: 2.0 s.
 
-Mounts are authored as `MountSlots` under each WEAPON part and built by `ModularHull.build_mounts(self, brain.rng, owner_group, brain.attack_gate, 0)` in the root's `_ready()`
-after `brain.bind()` (fortress order); a part's death UNPOWERS its mounts in the same call (R12 "module death disables attack" is the framework's).
+### 2.8 Weapons, the per-part attack gate and the extreme-weapons phase (IDEAS §9, §24, §26; t8)
 
-| Part | Slots | Variant | Traverse / rest bearing | Tuning (slot / mount scene) |
+Mounts are authored as `MountSlots` under each WEAPON part and built by `ModularHull.build_mounts(self, brain.rng, owner_group, Callable(), 0)` in the root's `_ready()` after
+`brain.bind()` (fortress order); a part's death UNPOWERS its mounts in the same call (R12 "module death disables attack" is the framework's). Right after the build the root
+binds each mount's gate to its own part: `for id in WEAPON_PARTS: for m in hull.mounts_of(id): m.telegraph_gate = brain.attack_gate_for.bind(id)`.
+
+| Part | Slots (in tick order) | Variant | Traverse / rest bearing (slot overrides) | Tuning |
 |---|---|---|---|---|
-| `broadside_port` | `Bow` (part-local y +60, toward the nose), `Mid` (0), `Stern` (−60) | HEAVY_CANNON (Heavy Shell 220 px/s) | 40° about abeam port (local +x, 0°) | `cooldown_seconds` 3.2, `fire_range` 900 |
-| `broadside_starboard` | same, mirrored | HEAVY_CANNON | 40° about abeam starboard (180°) | same |
-| `missile_rack` | one | ROCKET_BATTERY, `fan_count` 5, `fan_spread_deg` 40, `salvo_count` 1, `pursuit_chance` 0 | 360° | `cooldown_seconds` 6.0 |
-| `torpedo_tube` | one | TORPEDO_TUBE | 30° about the bow (rest bearing 90°, local +y) | `cooldown_seconds` 7.0 |
+| `broadside_port` | `Bow` (part-local y +60), `Mid` (0), `Stern` (−60) | HEAVY_CANNON (Heavy Shell 220 px/s, `burst_count` 2, `burst_gap` 0.35, `charge_seconds` 0.7, scene cooldown 3.2) | `traverse_deg_override` 40 about port abeam (`rest_bearing_deg` 0) | `broadside_cooldown_seconds` 3.2 (config, written after build, ≥ the scene's 3.2) |
+| `broadside_starboard` | same, mirrored | HEAVY_CANNON | 40 about starboard abeam (180) | same |
+| `missile_rack` | one | **MISSILE_FAN** (t3: 5 × DUMB over 40°, salvo 1, cooldown 6.0, all in `missile_fan_mount.tscn`) | 360 (no override) | scene |
+| `torpedo_tube` | one | **TORPEDO_TUBE** (t4: telegraph 1.0, cooldown 7.0, in `torpedo_tube_mount.tscn`) | 30 about the bow (`rest_bearing_deg` 90) | scene |
 
-Every slot authors `pool_period_factor` 0.45 = `crippled_cooldown_factor` 0.6 × `critical_cooldown_factor` 0.75 (a row pins it to the config product).
+Every slot authors `pool_period_factor` 0.45 = `crippled_cooldown_factor` 0.6 × `critical_cooldown_factor` 0.75 (a row pins it to the config product). The broadside cooldown is
+written onto the six mounts after the build only **upward** from the scene's own value (the Carrier precedent: a longer period keeps the build-time pools sufficient); a row asserts
+`broadside_cooldown_seconds ≥` the HEAVY_CANNON scene's `cooldown_seconds` read through `TurretMountScenes.export_of()`.
 
-**Broadside sweep (§24 "a Dreadnought uses broadside cannons"):** narrow-traverse batteries fire roughly abeam while the hull's own arc turn walks the lanes across the player —
-the arc and the broadside are the same geometry. A side's three mounts are **one volley**: the brain ticks each with `host_can_fire` true only once the side's volley clock ≥
-`k × broadside_ripple_gap` 0.25 s (k = 0 bow, 1 mid, 2 stern; the clock starts when the side's first mount enters TELEGRAPH, resets when all three are in COOLDOWN), so shells
-ripple bow → stern. Broadsides hold fire while `jets_active()` or while the brain's commanded turn rate exceeds `broadside_fire_turn_cap` 0.35 rad/s.
-**Fairness:** a lane's tip speed at the mount's `fire_range` (`broadside_fire_turn_cap × fire_range` = 315 px/s) ≤ 0.8 × each player scene's max speed, read from instantiated nodes
-(lever if it fails: lower `broadside_fire_turn_cap`).
+**Per-part gate** `attack_gate_for(part_id) -> bool` (asked only on a mount's TRACK → TELEGRAPH step):
+1. false while the ram is in WIND_UP or CHARGE (t10 fills `_ram_committed()`; t8 leaves it false);
+2. for a broadside part: false if a mount of that side entered TELEGRAPH less than `broadside_ripple_gap` 0.25 s ago (the brain records entries from each mount's `phase_changed`);
+3. true if the part is already committed (any of its mounts in TELEGRAPH or FIRE) — a broadside side counts **once**;
+4. else `committed_parts() < _max_attacks` (`max_concurrent_attacks` 2; `critical_max_concurrent_attacks` 3 in `critical` or `crippled`).
+`committed_parts()` counts WEAPON parts with a mount in TELEGRAPH or FIRE.
 
-**Attack gate** `attack_gate()`: committed attacks = WEAPON **parts** with a mount in TELEGRAPH or FIRE (a broadside side counts once); cap `max_concurrent_attacks` 2,
-`critical_max_concurrent_attacks` 3 (also in `crippled`). During the ram's WIND_UP / CHARGE (t10) the gate opens nothing new.
+**Broadside sweep (§24 "a Dreadnought uses broadside cannons"):** narrow-traverse batteries fire roughly abeam while the hull's own arc turn walks the lanes across the player — the
+arc and the broadside are the same geometry. The brain ticks a side's mounts bow → mid → stern, so with all three ready the spacing rule ripples them: telegraph entries at
+0, 0.25, 0.5 s; each mount fires its `burst_count` 2 shells (`charge_seconds` 0.7, `burst_gap` 0.35), so **a full side volley is 6 shells**, first shells at 0.70, 0.95, 1.20 s.
+The bow's 0.7 s telegraph keeps the side committed past the stern's entry, so a volley never needs a second slot. Broadsides get `host_can_fire` false while `jets_active()` or
+while the brain's commanded turn rate exceeds `broadside_fire_turn_cap` 0.35 rad/s (a telegraph in progress drops back to TRACK; a burst stops).
+**Fairness:** a lane's tip speed at `fire_range` (`broadside_fire_turn_cap × fire_range` = 315 px/s) ≤ 0.8 × each player scene's max speed, read from instantiated nodes (lever if it
+fails: lower `broadside_fire_turn_cap`).
 
-**Extreme weapons** on `crippled` / `critical` entry: `_set_attacks()` multiplies each live mount's `cooldown_seconds` by the phase factor once (guarded per phase), raises the
-cap; a mount built later is not involved (all are built in `_ready()`). Nothing fires outside the Assault view, nor while not engaged, nor under EMP (mounts `scan()`).
+**Extreme weapons** on `crippled` / `critical` entry: `_set_attacks()` multiplies each live mount's `cooldown_seconds` by the phase factor once (guarded per phase) and raises the cap.
+Nothing fires outside the Assault view, nor while not engaged, nor under EMP (mounts `scan()`).
+
+**Own fire never hits the Dreadnought (static half; the moving half is t10's row):** every round scene its mounts fire — Heavy Shell (`EnemyBullet` HitBox mask), the DUMB rocket,
+the torpedo's blast hostility — read from the scenes: no enemy-hurtbox bit on a shell; a rocket's impact box opens only beyond the launcher's `rocket_clear_radius()`; the torpedo's
+`ContactBlast` is PLAYER-hostile.
 
 **Snapshot** `attacks_snapshot()` = `[cooldown_factor, max_concurrent_attacks, broadside_ripple_gap]`.
 
 **Rows** (`tests/integration/test_dreadnought_weapons.gd`; brain-ticked, rounds returned to their pools at their own `max_time`). **Epic must-have: module death disables its attack:**
 1. For each WEAPON part, both harnesses: destroy it → every mount of it UNPOWERED and no round / rocket / torpedo from it over 20 s while at least one other weapon still fires; the
    destroyed broadside's side gets no shell (a player abeam on that side is never hit by a broadside round).
-2. Ripple: a volley's three shells leave bow → mid → stern `broadside_ripple_gap` apart.
-3. Fan: one rack salvo = five rockets spread 40°.
-4. Gate: never more than 2 committed parts (3 in `critical` / `crippled`) over a 60 s stress.
-5. `crippled` / `critical` cut cooldowns once each (product 0.45 when both); the slots' `pool_period_factor` equals the product; no pool runs dry in a 30 s worst-case stress.
-6. Broadsides hold fire while jets are active.
-7. Fairness inequality (instantiated mounts and both player scenes).
-8. **Measured Assault density** (Ph11 method, Assault harness only): states `hunting`, `listing`, `crippled`, `critical`, `critical`+`crippled` × the worst live-part set × five
-   player positions, 11 s each at 1/60 s: mean ≤ 13.3 launches/s, peak ≤ 30 per half-open 2 s window; levers in order: (a) broadside `cooldown_seconds` up, (b) `fan_count` 5 → 4,
-   (c) `crippled_cooldown_factor` 0.6 → 0.7 (and the slots' factor with it). Escort rounds are excluded (t11 records them).
-9. §25: `attacks` joins `BUILT_KEYS`.
+2. Ripple: a side volley is 6 shells (`3 × burst_count` read from the instantiated mounts); the **first shell of each mount** leaves bow → mid → stern at least
+   `broadside_ripple_gap` − one tick apart.
+3. **Volley stays whole while another weapon is busy:** with the cap at 2 and the missile rack committed (in FIRE), a port volley still leaves all three mounts (6 shells); boundary:
+   with the rack **and** the tube committed, an uncommitted broadside side gets no telegraph.
+4. Fan: one rack salvo = five rockets spread 40°.
+5. Gate: never more than 2 committed parts (3 in `critical` / `crippled`) over a 60 s stress.
+6. `crippled` / `critical` cut cooldowns once each (product 0.45 when both); the slots' `pool_period_factor` equals the product; `broadside_cooldown_seconds` ≥ the scene's; no pool
+   reports empty in a 30 s worst-case stress (`critical` + `crippled`, all weapons live).
+7. Broadsides hold fire while jets are active and while the commanded turn exceeds the cap.
+8. Fairness inequality (instantiated mounts and both player scenes).
+9. Own-fire static row (above).
+10. §25: `attacks` joins `BUILT_KEYS`.
+
+Gate-time allotment: 2.0 s. (The measured density is its own task, t12, §2.12.)
 
 ### 2.9 The engine wake on the Dreadnought (IDEAS §9, §24; t9)
 
-Each engine part has a `WakePoint` (`Marker2D`, 40 px behind its nozzle). The brain (physics tick, engaged phases HUNT / LINE_UP / WIND_UP / CHARGE / RECOVER only — never IDLE,
-NOTICING, RETURNING, ENTER, HOLD) accumulates the distance each **live** engine's `WakePoint` travelled and every `wake_spacing` 48 px spawns one `EngineWake` there:
-`set_owner_group(owner_group)`, `set_scale_factors(radius_factor, life_factor)` (1.3 / 1.3 in `listing`, else 1 / 1), `spawn_into(Hazards.container(tree), point)` — skipped
-(and counted in `wakes_skipped`) when there is no container or `wake_max_live` 40 of its own puffs live. A destroyed engine stops its own wake at once; `crippled` turns the wake off.
-The Assault wake lives in world space while the camera pans.
+Each engine part has a `WakePoint` (`Marker2D`) 72 px behind its centre, outside the hull: port (+56, −264), starboard (−56, −264) in Dreadnought-local coordinates (nose +y; the
+engine parts sit at (±56, −192), 64 × 64; the hull rectangle is 208 × 448, y ±224). The brain (physics tick, engaged phases HUNT / LINE_UP / WIND_UP / CHARGE / RECOVER only —
+never IDLE, NOTICING, RETURNING, ENTER, HOLD) accumulates the distance each **live** engine's `WakePoint` travelled and every `wake_spacing` 48 px spawns one `EngineWake` (t5)
+there: `set_owner_group(owner_group)`, `set_scale_factors(radius_factor, life_factor)` (`listing_wake_radius_factor` 1.3 / `listing_wake_life_factor` 1.3 in `listing`, else 1 / 1),
+`spawn_into(Hazards.container(tree), point)` — skipped (counted in `wakes_skipped`) when there is no container or `wake_max_live` 40 of its own puffs live. A destroyed engine stops
+its own wake at once; `crippled` turns the wake off. The Assault wake lives in world space while the camera pans. This task adds only the `WakePoint` markers; the engine `Plume`
+sprite belongs to t13 (art).
 
 **Snapshot** `arena_snapshot()` = `[wake_enabled, wake_radius_factor, wake_life_factor]`.
 
 **Rows** (`tests/integration/test_dreadnought_wake.gd`, both harnesses, a hazard container added by the test): puffs appear every 48 px behind each live engine only while engaged;
 none in IDLE / RETURNING / HOLD; one engine dead → only the live engine's puffs, radius × 1.3; crippled → none; no container → none and no error; the Dreadnought's own escorts are
-not damaged by its wake, the player is; the hull never loses HP to its wake; `wake_max_live` respected; §25 `arena` joins `BUILT_KEYS` (`listing` and `crippled` declare ARENA).
+not damaged by its wake, the player is; the hull never loses HP to its wake; `wake_max_live` respected; every puff spawns outside the hull rectangle; §25 `arena` joins `BUILT_KEYS`
+(`listing` and `crippled` declare ARENA). Gate-time allotment: 0.8 s (risk lever if the hazard count costs: `wake_spacing` 48 → 64).
 
 ### 2.10 The critical ram (IDEAS §9 "heavy ram when critically damaged", §25 "final ram"; t10)
 
@@ -408,17 +502,20 @@ The `RamCorvetteBrain` cycle on the boss, enabled only in `critical` with ≥ 1 
 - **LINE_UP** (≤ `ram_line_up_cap` 3.0 s): turn the nose toward the player's predicted position (lead `Steering.clamped_lead_time`), at the current (lopsided if listing) turn rates.
 - **WIND_UP** `ram_wind_up_seconds` 1.2 s: speed × 0.3, engines' lights CHARGING, a **lane** drawn (`RamLane` child drawing a rectangle the hull's beam 208 px wide from the bow along
   the charge line, length = charge distance + `ram_overshoot`); the aim tracks for the first `ram_track_fraction` 0.4, then **freezes** (`charge_dir`, `charge_point`).
-- **CHARGE**: `mover.boost(charge_dir, ram_speed 560, min((dist + ram_overshoot 300) / 560, ram_max_time 2.0))` (a boost ignores avoidance: the Ph6 committed-run rule; the
-  Assault corridor filter still applies); lights COMMIT; `contact_hit_box.damage = config.ram_damage` 35 during CHARGE only, restored to `collision_damage` 25 on exit (the Ram
-  Corvette `exposed_collision_damage` precedent: the contact-damage gate reads the spawn value).
-- **RECOVER** `ram_recover_seconds` 2.0: speed × 0.5, a wide turn back to HUNT — the punish window; next ram after `ram_cooldown` 8.0 s; the first `ram_first_delay` 2.0 s after `critical`.
-- **Assault:** the charge direction is clamped to within `assault_ram_max_from_vertical` 50° of straight down (a diagonal corridor dive); RECOVER climbs back to the band.
+- **CHARGE**: `mover.boost(charge_dir, ram_speed 560, min((dist + ram_overshoot 300) / 560, ram_max_time 2.0))` (a boost ignores avoidance: the Ph6 committed-run rule; the Assault
+  corridor filter still applies); lights COMMIT; `contact_hit_box.damage = config.ram_damage` 35 during CHARGE only, restored to `collision_damage` 25 on exit (the Ram Corvette
+  `exposed_collision_damage` precedent: the contact-damage gate reads the spawn value).
+- **RECOVER** `ram_recover_seconds` 2.0: speed × 0.5, a wide turn back to HUNT — the punish window; next ram after `ram_cooldown` 8.0 s; the first `ram_first_delay` 2.0 s after
+  `critical`.
+- The per-part attack gate opens nothing new during WIND_UP / CHARGE (`_ram_committed()` true).
+- **Assault:** the charge direction is clamped to within `assault_ram_max_from_vertical` 50° of straight down (a diagonal corridor dive); RECOVER climbs back to the stadium
+  (pure pursuit to its nearest point).
 - An engine lost mid-cycle keeps the cycle; both lost → cancel at once (CHARGE's boost ends, phase HOLD). EMP / death cancel it (`on_emp_started`, `silence`).
 - **Fairness** (instantiated config and both player scenes): `ram_wind_up_seconds × (1 − ram_track_fraction)` ≥ (104 + player hurt radius) / player max speed + 0.25 s. Lever:
   raise `ram_wind_up_seconds`; never narrow the lane.
 - `movement_snapshot()`'s `ram_enabled` is written on `critical` entry (true with ≥ 1 engine) and on `crippled` entry (false).
 
-**Rows** (`tests/integration/test_dreadnought_ram.gd`, both harnesses; boost rows start with `await _fresh_idle_delta()`). **Epic must-have: the critical ram:**
+**Rows** (`tests/integration/test_dreadnought_ram.gd`, both harnesses; boost rows start with `await _fresh_idle_delta()`; the fixture's `opts.ram` true). **Epic must-have: the critical ram:**
 1. Before `critical`: no ram over 30 s. In `critical`: LINE_UP → WIND_UP → CHARGE → RECOVER in order; the first WIND_UP ≥ `ram_first_delay` after entry.
 2. The line freezes at `ram_track_fraction` (moving the player afterwards does not change `charge_dir`); the hull passes `charge_point` and stops ≥ 250 px beyond it (overshoot).
 3. Contact damage is 35 only during CHARGE and 25 otherwise (a real hit in each state).
@@ -426,57 +523,115 @@ The `RamCorvetteBrain` cycle on the boss, enabled only in `critical` with ≥ 1 
 5. One engine: the LINE_UP turn toward the live side takes ≥ 2.5× as long as toward the dead side.
 6. Assault: the charge direction is within 50° of down; the hull stays inside the world rect.
 7. Fairness inequality; the lane is drawn exactly the beam wide along `charge_dir` during WIND_UP.
-8. §25: the critical row's `movement` difference now includes `ram_enabled`.
+8. **Own fire never hits it while it moves** (real physics at 16×, a short window): a Dreadnought with every part live CHARGEs down a lane on which its own in-flight torpedo and
+   three fan rockets are placed (launched from its own mounts so their launcher fields are real); no part loses HP, the torpedo is not defused, no rocket detonates on it.
+9. §25: the critical row's `movement` difference now includes `ram_enabled`.
+
+Gate-time allotment: 1.7 s.
 
 ### 2.11 Interceptors from a destroyed weapon (IDEAS §10; t11)
 
-Each WEAPON part carries a `Bay` (`ReinforcementBay`, trigger `ON_OWN_DESTROYED` from t2) with a `Mouth` just outside the hull edge on that part's side (broadsides: abeam;
-rack: dorsal-forward; tube: ahead of the bow): `bay_id` = the part id, `payload_scene` and `assault_payload_scene` = `gatling_interceptor.tscn` (Ph12 owner choice 1), `count` 2,
-`assault_count` 2, `door_seconds` 0.8 (the breach telegraph: CHARGING light on the wreck, sparks), `open_hold_seconds` 0.6, `config_overrides` as needed for the Ph11 "escorts
-fire within 3 s" rule (the gatling pair measured ≈ 1.8 s in Ph11 t8 with none). The root builds `BossReinforcements(host, hull, phase_driver, brain.rng, owner_group,
+Each WEAPON part carries a `Bay` (`ReinforcementBay`, trigger `ON_OWN_DESTROYED` from t2) with a `Mouth` outside the hull rectangle (208 × 448, x ±104, y ±224) on that part's side:
+`torpedo_tube` (part at (0, +196)) Mouth (0, +250), ahead of the bow; `missile_rack` (0, +110) Mouth (+130, +110); `broadside_port` (+84, +20) Mouth (+132, +20);
+`broadside_starboard` (−84, +20) Mouth (−132, +20). `bay_id` = the part id, `payload_scene` and `assault_payload_scene` = `gatling_interceptor.tscn` (Ph12 owner choice 1),
+`count` 2, `assault_count` 2, `door_seconds` 0.8 (the breach telegraph: CHARGING light on the wreck, sparks), `open_hold_seconds` 0.6, `config_overrides` as needed for the Ph11
+"escorts fire within 3 s" rule (the gatling pair measured ≈ 1.8 s in Ph11 t8 with none). The root builds `BossReinforcements(host, hull, phase_driver, brain.rng, owner_group,
 cap, escort_boost_speed 300, escort_boost_seconds 0.4)` with cap `escort_cap_open_space` 6 / `escort_cap_assault` 4; the brain ticks it with `active = is_engaged() and not EMP`
 (and once with `false` from `on_emp_started()`); death scuttles. Escorts go into `<name>Escorts` (`EscortContainer`), announced on `EventBus.boss_escort_spawned`, never
 `enemy_spawned_orphan`, scored by the Ph11 path; nothing writes their `counts_toward_wave_clear` / `counts_as_escape`.
 
-**Rows** (`tests/integration/test_dreadnought_reinforcements.gd`, both harnesses): each weapon's death launches 2 interceptors from its own wreck's `Mouth` after 0.8 s; the light
-is CHARGING through the breach; the cap holds (four weapons killed in 1 s → at most 6 / 4 alive, the rest skipped); a weapon killed during the death sequence launches nothing;
-the core killed mid-breach launches nothing and scuttles the live ones; escorts fire within 3.0 s of launch (Assault, 16× tick-paced); the shield generator / engines / core have no
-bay; a bay-launched escort pays score through `boss_escort_spawned`.
+**Rows** (`tests/integration/test_dreadnought_reinforcements.gd`, both harnesses): each weapon's death launches 2 interceptors from its own wreck's `Mouth` after 0.8 s (each
+spawn point outside the hull rectangle); the light is CHARGING through the breach; the cap holds (four weapons killed in 1 s → at most 6 / 4 alive, the rest skipped); a weapon
+killed during the death sequence launches nothing; the core killed mid-breach launches nothing and scuttles the live ones; escorts fire within 3.0 s of launch (Assault, 16×,
+tick-paced); the shield generator / engines / core have no bay; a bay-launched escort pays score through `boss_escort_spawned`; the wake never damages an escort (owner group).
+Gate-time allotment: 1.0 s.
 
-### 2.12 Art, detachment and visual states (IDEAS §21–23, R13/R14; t12)
+### 2.12 Measured Assault density in every phase state (Ph11 convention; t12)
 
-`assault/assets/sprites/enemies/dreadnought/`, every texture at scale 1 and the size of its frozen hurtbox, strictly top-down, ≤ 90 % opaque, faction palette (dark navy hull, red /
-maroon accents, cool blue edge light), gameplay lights left to `StateLight`.
+Split out of the weapons task (round-1 review M10) and placed after the interceptors so it measures the final mount set and phase consequences. Assault harness only, in a new
+`tests/integration/test_dreadnought_density.gd` (or appended to `test_dreadnought_weapons.gd` if the agent prefers; one file either way).
+
+- **States:** `hunting`, `listing` (each dead side), `crippled`, `critical`, `critical`+`crippled` — each × the worst live-part set for that state (all weapons live) × five player
+  positions (below centre, left, right, under each leg end), 11 s each at 1/60 s, hand-ticked (brain + mover, the fixture's `hand_tick`), the boss not quiet.
+- **Counting:** Dreadnought-owned launches only (shells, rockets, torpedoes: each mount's `round_fired`); each round is returned to its pool at once after being counted (Ph11
+  t16 method) so pools never empty by test artefact; escort rounds are excluded (the escort caps are 0 in this row).
+- **Bounds (frozen, Ph11):** mean ≤ 13.3 launches/s; peak ≤ 30 in any half-open 2 s window; committed WEAPON parts ≤ 2 (3 in `critical` / `crippled`) on every tick; a count during
+  which any pool reported empty fails the row.
+- **Levers, in order, never widening a bound:** (a) `broadside_cooldown_seconds` up (config; stays ≥ the scene value), (b) `missile_fan_mount.tscn` `fan_count` 5 → 4,
+  (c) `crippled_cooldown_factor` 0.6 → 0.7 (and every slot's `pool_period_factor` to the new product). A lever used is recorded in `DECISIONS.md` and `ENEMY.md`.
+- Expected from the shipped values (a sanity figure the row prints, not an assertion): `hunting` ≈ 2.3 /s (one side's 6 shells per 4.25 s, 5 rockets per 6.5 s, a torpedo per 8 s),
+  `critical`+`crippled` ≈ 5 /s.
+
+Gate-time allotment: 1.5 s (≈ 6 states × 5 positions × 660 ticks ≈ 20 000 full ticks; Ph11's 13 200-tick row cost ≈ 1.4 s).
+
+### 2.13 Art, detachment and visual states (IDEAS §21–23, R13/R14; t13)
+
+`assault/assets/sprites/enemies/dreadnought/`, every texture at scale 1 and the size of its frozen hurtbox (t6, §2.6.2: hull 208 × 448; `torpedo_tube` 40 × 48, `missile_rack`
+56 × 48, broadsides 40 × 176, `shield_generator` 48 × 48, `core` 72 × 72, engines 64 × 64), strictly top-down, ≤ 90 % opaque, faction palette (dark navy hull, red / maroon accents,
+cool blue edge light), gameplay lights left to `StateLight`.
 - `dreadnought_hull.png` 208 × 448: a long ship outline (tapered bow, broad stern) with **empty sockets** for every part; `create_map_object` above 40 000 px paints a background —
   strip it (`./scripts/strip-sprite-bg.sh`) or hand-draw through `pixelart_workbench` (the Ph10 t9 / Ph11 t9 routes).
-- Per part an intact and a **wreck stump** texture (the stump covers visibly less of the hurtbox, so the outline shrinks): `torpedo_tube` 40 × 48, `missile_rack` 56 × 48,
-  `broadside` 40 × 176 (starboard `flip_h`), `shield_generator` 48 × 48, `core` 72 × 72, `engine` 64 × 64 (starboard `flip_h`); `engine_plume.png` (the `Plume` child of each engine,
-  so it dies with it), `list_smoke.png`, `critical_overlay.png` 208 × 448 (mostly transparent), `torpedo` art is t4's.
-- **Detach:** on a part's `destroyed` (not while dying) the root spawns one `DebrisFragment` chunk (`assault/scenes/hazards/wreck/` family, a new
-  `dreadnought_chunk.tscn` like `ram_fragment.tscn`, textures = per-part chunk art) deferred into `Hazards.container(tree)` at the part's position, flung outward from the hull centre
-  at 60–90 px/s with `deceleration`, `lifetime` 8 s, `source` = the Dreadnought (`source_clear_radius` = `rocket_clear_radius()`), so it never hits its own ship. No container → no chunk.
-- Mount heads reuse the existing HEAVY_CANNON / ROCKET_BATTERY heads; the tube head is new (40 × 40).
+- Per part an intact and a **wreck stump** texture (the stump's opaque area is visibly less than the intact art's, so the outline shrinks); broadside and engine starboard copies
+  `flip_h`. `engine_plume.png` on a `Plume` `Sprite2D` **child of each engine part** (this task creates the node; it dies with the engine), `list_smoke.png`,
+  `critical_overlay.png` 208 × 448 (mostly transparent). The torpedo sprite and the tube head are t4's; the MISSILE_FAN head is the rocket battery's; broadside heads are HEAVY_CANNON's.
+- **Detach chunk (purely visual):** on a part's `destroyed` (not while dying) the root adds one `DreadnoughtChunk` (new `dreadnought_chunk.gd` + `.tscn`: a `Sprite2D` root with
+  `top_level = true`, per-part chunk texture) as a **child of the Dreadnought**, deferred (`add_child.call_deferred`, never inside the physics callback that destroyed the part), at
+  the part's global position, flung outward from the hull centre at 60–90 px/s (seeded from the brain rng) with spin, decelerating, fading over its last 1.0 s, freeing itself after
+  `lifetime` 2.5 s. **No collision areas, no hazard registration, no damage** (boss hazards and debris are Ph19's scope); as a child it is freed with the boss, so it has exactly one
+  owner and needs no container.
 
 **Rows** (`tests/integration/test_dreadnought_sprites.gd`, no physics): every file's size / corners / 15 % < opaque < 90 %; hull and parts wired at scale 1 with the art the size of
-each hurtbox; each part's wreck swap on destroy and its stump's opaque area < its intact art's; plumes are children of the engines (gone with them); `ListSmoke` /
-`CriticalOverlay` shown by their phases; one chunk per destroyed part, none while dying, none without a container, chunk never damages the Dreadnought.
+each hurtbox; each part's wreck swap on destroy and its stump's opaque area < its intact art's; plumes are children of the engines (gone with them); `ListSmoke` / `CriticalOverlay`
+shown by their phases; one chunk per destroyed part, none while dying, the chunk has no `Area2D` / `CollisionObject2D` descendant and never registers with `Hazards`, it frees itself
+after `lifetime`. Gate-time allotment: 0.3 s.
 
-### 2.13 Open Space hub placement (t13)
+### 2.14 Open Space hub placement (t14)
 
 `open_space/scenes/levels/sector_hub.gd`: **draw 22** appended after the fortress (every earlier seed unchanged): `_spawn_dreadnought(_ring_anchor(dreadnought_ring_radius 4200,
-dreadnought_anchor_bearing_deg 135.0), rng)` ≈ (−2970, 2970), `patrol_anchor` and `rng_seed` set before `add_child()`, not `start_engaged`, into `EnemyContainer`; its escorts land in
-its own `<name>Escorts` container. `tests/integration/test_sector_hub_patrol.gd`: add it to `_patrol_groups()` with footprint `hunt_leash_radius` 1400 + `perceive_radius` 1100
-(a hunter's reach is its leash), move every hard count by one (the Ph11 t13 precedent), and the sweep must stay green. **Pre-approved levers, in order:** bearing 135° ± 22.5°, ring
-4200–4800, `hunt_leash_radius` 1400 → 1100. If none clears, stop and escalate.
+dreadnought_anchor_bearing_deg 135.0), rng)` ≈ (−2970, 2970), `patrol_anchor` and `rng_seed` set before `add_child()`, not `start_engaged`, into `EnemyContainer`; its escorts land
+in its own `<name>Escorts` container. `tests/integration/test_sector_hub_patrol.gd`: add it to `_patrol_groups()` with footprint `hunt_leash_radius` 1400 + `perceive_radius` 1100
+(a hunter's reach is its leash), move every hard count by one (the Ph11 t13 precedent), and the sweep must stay green. **Pre-approved levers, in order:** bearing 135° ± 22.5°,
+ring 4200–4800, `hunt_leash_radius` 1400 → 1100. If none clears, stop and escalate. Gate-time allotment: 0.5 s.
 
-### 2.14 Gate time (t1 and every task)
+### 2.15 Gate time (t1 and every task)
 
-GUT ≈ 225.2 s after Ph11 (ceiling 240 s, escalation past a 237 s two-run mean). **t1 frees ≥ 12 s first**, by the `tests/README.md` → *Gate time* rules 1–3 only (tick-paced files
-8× → 16× after checking wall ≫ CPU; a scenario replayed by several tests computed once; per-tick bookkeeping no assertion reads dropped) — never a shorter tick count, duration,
-sample grid, a wider bound or a removed assertion. Allotments (two-run means): t2 0.5 s, t3 0.3, t4 0.8, t5 0.6, t6 2.5, t7 2.0, t8 3.0, t9 0.8, t10 1.5, t11 1.0, t12 0.3, t13 0.5
-(total 13.8 s). Escalate past 1.5× an allotment or a 237 s mean.
+**Where it stands.** GUT ≈ 225.2 s after Ph11 (two-run mean at the Ph11 t11 close; ceiling 240 s, escalation past a 237 s two-run mean). The allotments below total 15.5 s, so
+the phase would end ≈ 240.7 s without help. Only ≈ 3.7 s is strictly needed to stay under 237 s; t1 targets more because run noise is ±1–3 s.
 
-### 2.15 Numbers and where they come from
+**Measured inventory (2026-11-25, this container, warm import cache; each file run alone with `time godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests
+-ginclude_subdirs -gselect=<file> -gexit`; wall includes ≈ 1 s of engine start).**
+
+| File | Clock | Wall | user + sys (CPU) | GUT `Time` | What dominates | Route |
+|---|---|---|---|---|---|---|
+| `test_fighter_squad.gd` | hand-ticked | 46.9 s | 46.4 s | 45.8 s | `test_members_never_come_within_two_hull_radii` 41.1 s (168 distinct layouts, the fighters' own tick) | **rule 4** (below): a bit-identical speed-up of the fighter tick (Ph8 t1 already did `_give_way()`; profile first) |
+| `test_level1_specialist_spawns.gd` | hand-ticked probes | 31.7 s | 31.4 s | 30.2 s | `before_all()` ≈ 15 s (corvette / support / Mine Layer corridor probes), `test_migrated_sections_peak_alive_specialists_within_2_5x` 8.8 s and `test_measured_exits_are_real` 4.7 s (the first `_measured_exits()` calls) | **rule 4**: a cheaper probe step (`tests/README.md`: ≈ 7–11 µs per hand-ticked step; `EnemyWorld.projectile_world_rect()` looks the arena group up twice per call); rule 2 if a row recomputes a figure another already has |
+| `test_missile_corvette.gd` | 8× | 7.07 s | 4.93 s | 5.79 s | `test_every_level1_corvette_spawn_telegraphs_and_fires_inside_its_budget` 3.6 s | rule 1 (16×) on the paced rows, ≈ 0.5–1 s |
+| `test_fortress_weapons.gd` | 8× | 6.03 s | 5.09 s | 4.55 s | measured density row 1.4 s (CPU) | little |
+| `test_sniper.gd` | 8× | 5.95 s | 3.91 s | 4.60 s | `test_every_level1_sniper_spawn_class_aims_inside_its_budget` 1.5 s, real-physics cover row 0.8 s | rule 1, ≈ 0.5–1 s |
+| `test_space_fortress.gd` | 8× | 5.85 s | 3.79 s | 4.34 s | many 0.4–0.6 s rows | rule 1, ≈ 0.5–1 s |
+| `test_hijack_pulse.gd` | 8× | 4.93 s | 2.80 s | 3.69 s | real line-of-sight rows (1.35 s, 0.5 s) | rule 1 (Ph10 found it 0.8 s faster at 16×, left at 8×) |
+| `test_fighter.gd` | 8× | 4.09 s | 3.11 s | 3.02 s | — | little |
+| `test_twin_laser_drones.gd`, `test_seeking_ordnance.gd`, `test_enemy_beams.gd`, `test_fortress_incoming_damage_paths.gd` | 8× | 2.8–3.2 s | 1.5–2.2 s | 1.5–2.0 s | — | ≤ 0.3 s each |
+
+So rules 1–3 alone reach ≈ 2–4 s (Ph8 t1 and Ph10 t1 found the same: "rules 1–3 had nothing left to give"); the rest is CPU in code under test.
+
+**t1's routes** (all keep every tick count, duration, sample grid, start set, bound and assertion unchanged):
+- rules 1–3 of `tests/README.md` → *Gate time* (16× for a file whose wall ≫ CPU and whose rows tolerate a 16× idle frame; a replayed scenario computed once; per-tick bookkeeping no
+  assertion reads dropped);
+- **rule 4 (new, the Ph8 t1 route, Ph12 owner choice 8):** a production-code speed-up that is **bit-identical**, proven by (a) every figure the affected hand-ticked files print
+  unchanged before / after and (b) a throw-away differential run (old against new code path over the files' own inputs, 0 mismatches), recorded in `tests/README.md` as rule 4
+  and in `DECISIONS.md` (`### Phase 12, built in t1`). A cache must never go stale inside a hand-ticked loop (key on the node / input identity, never on the frame counter).
+  Not a lever: `low_processor_mode_sleep_usec` / `override.cfg` (a behaviour change, Ph10 t1).
+
+**t1 acceptance:** GUT two-run mean (`scripts/gate-time.sh`) ≥ **6 s** below the two-run mean measured at the task's start (target 9 s), tests and asserts unchanged in number, the
+gate green and leak-free (`scripts/check-test-leaks.sh`). If the inventory is exhausted below 6 s: keep what was freed if it is green and bit-identical, write the new measurements
+into §*Gate time* of `tests/README.md`, and end the run with `Result: ESCALATE` naming what is left. **Only t8 depends on t1**: t2–t7 together add ≈ 7.7 s (225.2 → ≈ 232.9 s,
+under 237 s), so the shared machinery, the shell and the movement can proceed while t1 runs or escalates.
+
+**Allotments** (two-run means, new GUT seconds): t2 0.5 · t3 0.3 · t4 0.8 · t5 0.6 · t6 3.5 · t7 2.0 · t8 2.0 · t9 0.8 · t10 1.7 · t11 1.0 · t12 1.5 · t13 0.3 · t14 0.5 · t15 0
+= 15.5 s. With t1 at 6 s the phase ends ≈ 234.7 s. Escalate past 1.5× an allotment or a 237 s two-run mean.
+
+### 2.16 Numbers and where they come from
 
 | Value | Number | Source |
 |---|---|---|
@@ -484,112 +639,141 @@ sample grid, a wider bound or a removed assertion. Allotments (two-run means): t
 | Cruise / turn | 120 px/s, 0.35 rad/s (radius ≈ 343) | F1 ratios to the 420 px/s player |
 | Loiter radius / close band | 700 / 300 px | F2; broadside `fire_range` 900 |
 | Jets | × 2.5 for 1.5 s, cooldown 8 s, stern arc ±40°, trigger 1.5 s | F1 *judgement* |
-| One engine | speed 0.65, live-side turn 0.35, yaw bias 0.08 rad/s, drift 18 px/s | F3 *judgement*; Carrier `one_engine_*` precedent |
+| One engine | speed 0.65, live-side turn 0.5, yaw bias 0.05 rad/s, drift 18 px/s → radii ≈ 200 / 640 px, ratio 3.2 | F3 *judgement*; Carrier `one_engine_*` precedent; chosen so the live side still turns (round-1 M1) |
 | Crippled | thrusters 0.12 rad/s (× 1.5 critical), cooldowns × 0.6, cap 3 | *judgement*; Ph11 critical × 0.6 / cap 3 |
 | Critical | core ≤ 35 %, speed × 1.15, cooldowns × 0.75 | Ph11 40 % *judgement* |
+| Assault stadium | legs y 160 / 400, half-width 380, r 120 (derived), 90 px/s, turn cap 0.9 rad/s, lookahead 120 | fits the resting view 0–720 with the hull beam ±104 (round-1 M2) |
 | Ram | wind-up 1.2 s (track 40 %), 560 px/s, overshoot 300, max 2.0 s, recover 2.0 s, cooldown 8 s, damage 35 (touch 25) | F4 derived; Ram Corvette 0.65 s / 620 / 220 / 50; player HP 50 |
 | Wake puff | r 40, life 3.0 s, every 48 px per live engine, 5 per 0.5 s, no damage in the last 0.5 s, ≤ 40 live | F5 *judgement*; `ReactorField` |
-| Torpedo | 160 px/s, steers 3.0 s at 0.6 rad/s, then 320; 3 HP; blast 72 / 25; tube cooldown 7 s, telegraph 1.0 s | pursuit bomb scaled (*judgement*) |
-| Broadside | 3 × Heavy Shell per side, 40° traverse, cooldown 3.2 s, ripple 0.25 s, fire turn cap 0.35 rad/s | Carrier 150° side batteries narrowed for §24 sweep |
-| Missile fan | 5 rockets over 40°, cooldown 6 s | `BurstCannonMount.pellets` precedent |
+| Torpedo | 160 px/s, steers 3.0 s at 0.6 rad/s, then 320; **120 HP = 3 Standard shots** (Sniper 3, Spread 5, Gatling 9); blast 72 / 25; life 10 s / 2400 px; tube cooldown 7 s, telegraph 1.0 s | pursuit bomb scaled (*judgement*); HP from the shipped weapon-mode damages (round-1 B3) |
+| Broadside | 3 HEAVY_CANNON per side (2 shells each: 6 per volley), 40° traverse, cooldown 3.2 s, ripple 0.25 s, fire turn cap 0.35 rad/s | Carrier 150° side batteries narrowed for the §24 sweep |
+| Missile fan | MISSILE_FAN: 5 DUMB over 40°, salvo 1, cooldown 6 s | `BurstCannonMount.pellets` precedent |
 | Part HP | tube 200, rack 220, broadsides 260, generator 160, core 900, engines 240 | *judgement* against the fortress (core 900 incl. bubble) |
 | Shield | capacity 120, regen after 3 s over 4 s, reboot 6 s, pad 10 | Ph11 sector shields |
 | Escorts | 2 Gatling Interceptors per weapon death, cap 6 / 4 | Ph11 fortress caps; F7 |
 | EMP | × 0.4 | Ph11 owner choice 6 |
 | Hub | draw 22, 4200 ring at 135°, leash 1400, perceive 1100, lose 1800 / 4 s | fortress mirror; `2-research.md` §6 Q9 |
-| Density | ≤ 13.3 /s mean, ≤ 30 per 2 s, ≤ 2 committed (3 critical / crippled) | Ph11 convention |
+| Density | ≤ 13.3 /s mean, ≤ 30 per 2 s, ≤ 2 committed parts (3 critical / crippled) | Ph11 convention |
+| Chunk | 60–90 px/s, life 2.5 s (fade 1.0 s), no collision | *judgement*; visual only (round-1 M9) |
 
-### 2.16 Docs and phase close (t14)
+### 2.17 Docs and phase close (t15)
 
-Invoke `updating-project-docs`: `docs/architecture/modules/global.md` (*Boss reinforcements*: `ON_OWN_DESTROYED`; *Boss phase ladder*: a boss may run several tracks; hazards: `EngineWake`,
-`damage_exempt_group`), `docs/architecture/modules/assault.md`, `docs/enemy-roster.md` (Dreadnought, `WaveBuilder.dreadnought()`), `assault/scenes/enemies/dreadnought/ENEMY.md`
-(the §43 checklist answered: silhouette, preferred distance 700 px, movement signature, telegraphs, behind / boost-away behaviour, Assault adaptation), `docs/architecture/PROJECT.md`
-conventions, `CLAUDE.md` (the key-conventions boss line and the gate list: the Dreadnought suites), `tests/README.md` gate time. Close the phase: `docs/epics-done/cmug256tc003lm52wbdoxucrr/`
-(`PRD.md`, `SOURCES.md`, `REPORT.md`) and `## Phase 12 - as built (<date>)` in `DECISIONS.md` (what was built, deviations, owner choices as built, gaps).
+Invoke `updating-project-docs`: `docs/architecture/modules/global.md` (*Boss reinforcements*: `ON_OWN_DESTROYED`; *Boss phase ladder*: a boss may run several tracks; hazards:
+`EngineWake`, `damage_exempt_group`; mounts: `MISSILE_FAN`, `TORPEDO_TUBE`, per-part gates), `docs/architecture/modules/assault.md`, `docs/enemy-roster.md` (Dreadnought,
+`WaveBuilder.dreadnought()`), `assault/scenes/enemies/dreadnought/ENEMY.md` (the IDEAS §43 checklist answered: silhouette, preferred distance 700 px, movement signature,
+telegraphs, behind / boost-away behaviour, Assault adaptation), `docs/architecture/PROJECT.md` conventions, `CLAUDE.md` (the key-conventions boss line and the gate list: the
+Dreadnought suites, the gate-time rule 4), `tests/README.md` gate time. Close the phase: `docs/epics-done/cmug256tc003lm52wbdoxucrr/` (`PRD.md`, `SOURCES.md`, `REPORT.md`) and
+`## Phase 12 - as built (<date>)` in `DECISIONS.md` (what was built, deviations, owner choices as built, gaps; say plainly that nothing was play-tested).
 
 ## 3. Build sequence
 
 | Step | Task | Depends on | Why this order |
 |---|---|---|---|
-| 1 | t1 gate room | — | the Dreadnought suites do not fit the 237 s line without it |
-| 2 | t2 bay trigger, t3 missile fan, t4 torpedo + tube, t5 engine wake | — | shared machinery, each bit-identical by default, testable on fixtures; can run in any order |
-| 3 | t6 shell (scene, parts, armour, shields, two drivers, snapshot, rosters) | t1 | everything else hangs off the root |
-| 4 | t7 movement (incl. engine-loss rows) | t6 | weapons, wake and ram read the heading model |
-| 5 | t8 weapons (incl. module-death rows, density) | t3, t4, t7 | mounts need the fan / tube and the brain's turn rate for the sweep |
-| 6 | t9 wake on the boss | t5, t8 | brain file serialised after t8 |
-| 7 | t10 critical ram | t9 | brain file serialised; needs movement and the gate |
-| 8 | t11 interceptor bays | t2, t10 | scene and brain serialised; needs the weapons |
-| 9 | t12 art + detachment | t6 | part sizes are frozen by t6; independent of behaviour |
-| 10 | t13 hub draw 22 | t11 | the full behaviour (leash, escorts) is what the sweep covers |
-| 11 | t14 docs and phase close | all | |
+| 1 | t1 gate room | — | frees ≥ 6 s; only t8 waits for it (t2–t7 fit under 237 s without it) |
+| 2 | t2 bay trigger, t3 missile fan, t5 engine wake | — | shared machinery, bit-identical by default, testable on fixtures |
+| 3 | t4 torpedo + tube | t3 | `TORPEDO_TUBE` = 10 is appended after `MISSILE_FAN` = 9 (one enum, one scene map) |
+| 4 | t6 shell (scene, parts, armour, shields, two drivers, snapshot, rosters, incoming damage paths) | — | everything else hangs off the root; reuses only Ph10 / Ph11 machinery |
+| 5 | t7 movement (incl. engine-loss rows, Assault stadium) | t6 | weapons, wake and ram read the heading model |
+| 6 | t8 weapons (mounts, per-part gate, ripple, extreme phase, module-death rows) | t1, t3, t4, t7 | mounts need the fan and the tube and the brain's turn rate for the sweep |
+| 7 | t9 wake on the boss | t5, t8 | brain file serialised after t8 |
+| 8 | t10 critical ram (incl. the moving own-fire row) | t9 | brain file serialised; needs movement, weapons and the gate |
+| 9 | t11 interceptor bays | t2, t10 | scene and brain serialised; needs the weapons |
+| 10 | t12 measured density | t11 | measures the final mount set and every phase consequence |
+| 11 | t13 art + detachment | t4, t12 | part sizes frozen by t6; edits `dreadnought.tscn` / `.gd` after every behaviour task (and after t12's possible lever edits) |
+| 12 | t14 hub draw 22 | t11 | the full behaviour (leash, escorts) is what the sweep covers; independent of art |
+| 13 | t15 docs and phase close | all | |
 
 ## 4. Test plan
 
 | File | Task | What it proves |
 |---|---|---|
+| gate-time measurements, `tests/README.md` *Gate time* (rule 4) | t1 | ≥ 6 s freed, every assertion and figure unchanged |
 | `tests/integration/test_boss_reinforcements.gd` (+9 rows) | t2 | §2.2 rows; every existing row unchanged |
-| `tests/integration/test_turret_mount_variants.gd` (+ fan, + tube) | t3, t4 | §2.3 / §2.4 rows, fan 1 / 0 bit-identity |
-| `tests/integration/test_enemy_ordnance.gd`, `test_enemy_bullet_lifetime.gd` | t4 | torpedo multi-hit defuse, steering window, lifetime fit |
+| `tests/integration/test_turret_mount_variants.gd` (+ fan, + tube), `test_ph8_sprites.gd` HEADS | t3, t4 | §2.3 / §2.4 rows, ROCKET_BATTERY bit-identity, pool sizes for salvo × fan |
+| `tests/integration/test_enemy_ordnance.gd`, `test_enemy_bullet_lifetime.gd` | t4 | torpedo defuse in damage units with real bullets and mode damages, steering window, lifetime fit read from the torpedo scene |
 | `tests/integration/test_engine_wake.gd`, `tests/unit/test_hazards.gd` | t5 | §2.5 rows, `pulse_damage` exempt group, default bit-identical |
-| `tests/integration/test_dreadnought.gd`, `tests/helpers/dreadnought_fixture.gd`, roster gates | t6 | §2.6.7 rows, §25 paths, both drivers found |
-| `tests/integration/test_dreadnought_movement.gd` | t7 | **engine loss changes movement** (both harnesses, measured on positions), hunting arcs, jets, leash, Assault racetrack |
-| `tests/integration/test_dreadnought_weapons.gd` | t8 | **module death disables its attack** (both harnesses), ripple, fan, gate, extreme weapons, fairness, measured density |
-| `tests/integration/test_dreadnought_wake.gd` | t9 | wake only behind live engines while engaged, never harms the boss or its escorts |
-| `tests/integration/test_dreadnought_ram.gd` | t10 | **the critical ram** (both harnesses): order, frozen line, overshoot, damage window, no ram when crippled, Assault diagonal, fairness |
+| `tests/integration/test_dreadnought.gd`, `test_dreadnought_incoming_damage_paths.gd`, `tests/helpers/dreadnought_fixture.gd`, roster gates | t6 | §2.6.7 / §2.6.8 rows, §25 paths, both drivers found, rockets / asteroids / mining laser reach parts |
+| `tests/integration/test_dreadnought_movement.gd` | t7 | **engine loss changes movement** (both harnesses, on positions, ratio from the config formula), hunting arcs, jets, leash, Assault stadium |
+| `tests/integration/test_dreadnought_weapons.gd` | t8 | **module death disables its attack** (both harnesses), 6-shell ripple, whole volley under a busy gate, fan, cap, extreme weapons, fairness, own-fire static row |
+| `tests/integration/test_dreadnought_wake.gd` | t9 | wake only behind live engines while engaged, outside the hull, never harms the boss or its escorts |
+| `tests/integration/test_dreadnought_ram.gd` | t10 | **the critical ram** (both harnesses): order, frozen line, overshoot, damage window, no ram when crippled, Assault diagonal, fairness, own fire never hits it while charging |
 | `tests/integration/test_dreadnought_reinforcements.gd` | t11 | interceptors from the wreck, caps, none while dying, 3 s first fire |
-| `tests/integration/test_dreadnought_sprites.gd` | t12 | art sizes, transparency, wreck stumps, chunks |
-| `tests/integration/test_sector_hub_patrol.gd` | t13 | draw 22 clears every trigger, pickup and the spawn |
+| `tests/integration/test_dreadnought_density.gd` | t12 | measured Assault density per phase state against the frozen Ph11 bounds |
+| `tests/integration/test_dreadnought_sprites.gd` | t13 | art sizes, transparency, wreck stumps, visual-only chunks |
+| `tests/integration/test_sector_hub_patrol.gd` | t14 | draw 22 clears every trigger, pickup and the spawn |
 
-Boundary cases named in the sections: fan 1 / 0; a non-breach bay still dies with its part; 36 % core does not enter `critical`; a hit leaving both engines alive changes no
-snapshot key; crippled + critical never rams; no hazard container → no wake / chunk; a part killed during the death sequence launches and applies nothing.
+Boundary cases named in the sections: ROCKET_BATTERY fan 1 / 0 bit-identical; a torpedo one hit short of its damage stays live; a non-breach bay still dies with its part; 36 %
+core does not enter `critical`; a hit leaving both engines alive changes no snapshot key; with rack and tube committed an uncommitted broadside gets nothing; crippled + critical
+never rams; no hazard container → no wake; a part killed during the death sequence launches and applies nothing; a plain layer-1 body blocks the beam.
 
 ## 5. Risks
 
-- **Assault crowding**: a 448 px hull crossing a 1280 × 720 view. Mitigation: the band y 360 racetrack, U-turns away from the player, measured density per phase, a ram lane
-  with a fairness inequality. If the Assault feel is wrong it is a tuning lever, not a design change; nothing places it in a level this phase.
+- **Assault crowding**: a 448 px hull in a 1280 × 720 view. Mitigation: the stadium in the top half (hull ≤ y 504 at rest), broadsides silent in the U-turns, measured density per
+  phase (t12), a ram lane with a fairness inequality. If the Assault feel is wrong it is a tuning lever; nothing places it in a level this phase.
 - **The free order collapses** to one best order (F6). Mitigation: the gain / cost matrix (§2.6.4); not play-tested — the report must say so.
 - **Interceptor spikes** when two weapons die close together (F7): capped live escorts and the one-chance breach.
-- **Hazard count** while the wake runs (≤ 40 puffs per Dreadnought; every mover queries `Hazards.around()` when any hazard exists): t9 measures it in its gate-time row; lever
-  `wake_spacing` 48 → 64.
+- **Hazard count** while the wake runs (≤ 40 puffs per Dreadnought; every mover queries `Hazards.around()` when any hazard exists): t9 measures it; lever `wake_spacing` 48 → 64.
 - **Shared-machinery regressions**: four opt-in additions; the fortress / carrier / turret / bomber / hazard suites must stay unchanged and green.
-- **Gate time**: ≈ 13.8 s of allotments; t1 must free ≥ 12 s first.
+- **Gate time**: t1 may fall short of 6 s (the inventory shows most time is CPU in code under test); rule 4 needs a careful differential proof. Only t8 onward waits on it.
+- **Per-part gate**: a mount that misses its ripple slot (cone, arc) starts later inside the same committed side, so a volley may arrive as fewer than six shells; row 2 sets up a
+  player in every mount's arc and cone so the six-shell figure is deterministic.
 - **Hub**: a hunter that wanders to the spawn or a mission trigger breaks the hub; the leash and the sweep's footprint guard it, with levers.
 
 ## 6. Out of scope
 
 | Item | Owner | Reason |
 |---|---|---|
-| Placing the Dreadnought in a level (and an `ENEMIES_CLEARED` persistent-ordnance exception for it) | Ph15 (Ph12 owner choice 4) | Assault level migration is Ph15's; the Dreadnought's rack and tube pools persist, so a placement in an `ENEMIES_CLEARED` section would be a third allowlisted exception, decided then |
-| Enemy beams / rings damaging parts; wrecked parts / capital wrecks blocking LOS | Ph18 / Ph19 | Ph10/11 deferrals |
+| Placing the Dreadnought in a level (and an `ENEMIES_CLEARED` persistent-ordnance exception for it) | Ph15 (Ph12 owner choice 4) | Assault level migration is Ph15's; the rack and tube pools persist, so an `ENEMIES_CLEARED` placement would be a third allowlisted exception, decided then |
+| Enemy beams / rings damaging parts; wrecked parts / capital wrecks blocking LOS; damaging boss debris | Ph18 / Ph19 | Ph10 / Ph11 deferrals; the detach chunk is visual only |
 | Carrier / Heavy Gunship onto the boss machinery | Ph18 | |
 | Encounter compositions, escort leash in Open Space beyond the cap | Ph13 / Ph14 | |
 | Difficulty tiers | Ph16 | |
 | Boss / part HUD, per-part score, audio | Ph17 | IDEAS §6.11 "not one giant HP bar" |
 | EMP dropping boss shields | Ph18 | Ph11 deferral |
 | A capital wreck on the Dreadnought's death | Ph19 | `wreck_chance` 0 like the fortress |
+| Assault stadium following the player's x | Ph15 | corridor-constrained AI is Ph15's; the stadium is world-anchored |
 
 ## 7. Requirements coverage
 
 | Requirement (from `1-context.md`) | Delivered by |
 |---|---|
-| R1 size 320–480 px | t6 (448 px hull), t12 art |
+| R1 size 320–480 px | t6 (448 px hull), t13 art |
 | R2 hunts the player (opposite of the fortress) | t7 |
-| R3 central hull + detachable turret, missile, shield, engine modules | t6 parts, t12 detach chunks |
+| R3 central hull + detachable turret, missile, shield, engine modules | t6 parts, t13 wreck stumps and detach chunks |
 | R4 long arcs, two huge bodies manoeuvring | t7 heading model, loiter circle, jets |
 | R5 broadside sweep, missile fan, energy torpedo, engine wake, critical ram | t8 (+ t3, t4), t9 (+ t5), t10 |
 | R6 §24 broadside cannons, exhaust trails | t8 ripple sweep on the hull turn, t5 / t9 wake |
 | R7 free order, no prompt | t6 (no locks, two tracks), §2.6.4 matrix |
 | R8 one engine → visibly lopsided movement | t7 (measured on the path), t6 visuals |
-| R9 both engines → stationary + extreme weapons | t7 HOLD, t8 crippled attacks |
+| R9 both engines → stationary + extreme weapons | t7 HOLD, t8 crippled attacks, t12 measured |
 | R10 interceptors from a destroyed weapon module | t2, t11 |
 | R11 §25 every phase changes ≥ 2, incl. final ram | t6 drivers and rows, t7–t10 keys |
 | R12 §26 destruction changes the battlefield | t8 (UNPOWERED), t7 (engines), t9 (wake), t6 (shields) |
-| R13 art from modules, wreckage stays | t12 |
-| R14 readability lights, edge light, no full recolour | t12, t6 / t8 `StateLight` |
-| R15 §40 tests in both harnesses (engine loss, module death, ram, core vulnerable when intended, wreckage) | t7, t8, t10, t6, t12 |
+| R13 art from modules, wreckage stays | t13 |
+| R14 readability lights, edge light, no full recolour | t13, t6 / t8 `StateLight` |
+| R15 §40 tests in both harnesses (engine loss, module death, ram, core vulnerable when intended, wreckage) | t7, t8, t10, t6, t13 |
 | R16 §41 Phase 5 item 2: on the module architecture | t6 (`EnemyModule`, `ModularHull`, `global/boss/`) |
-| R17 Assault adaptation in the corridor + Open Space placement | t7 / t8 / t10 Assault rows, t13 hub; level placement out of scope (Ph15) |
-| R18 §43 checklist | t14 (`ENEMY.md`); audit Ph17 |
+| R17 Assault adaptation in the corridor + Open Space placement | t7 / t8 / t10 / t12 Assault rows, t14 hub; level placement out of scope (Ph15) |
+| R18 §43 checklist | t15 (`ENEMY.md`); audit Ph17 |
 | R19 a heavy dreadnought partially resists a gravity well | t6 (`hazard_resistance` 0.85) |
 | R20 torpedo family | t4 (an `EnemyOrdnance` scene) |
-| Gate time (project constraint) | t1, §2.14 |
+| Gate time (project constraint) | t1, §2.15 |
+
+## 8. Response to feedback (plan review round 1, `4-review.md`)
+
+| # | Finding | What changed |
+|---|---|---|
+| B1 | The fan rack had no authoring path before its pools are sized | New `TurretMount.Variant.MISSILE_FAN` = 9 with a standalone `missile_fan_mount.tscn` on `rocket_battery_mount.gd` (the `HEAVY_CANNON` precedent); t3 builds it and pins its pool sizes for salvo × fan at factors 1.0 and 0.45; `TORPEDO_TUBE` moves to 10 and t4 depends on t3 (§2.3, §2.4, §2.8) |
+| B2 | One shared zero-argument gate shrank the broadside | Per-part gates: after `build_mounts()` the root sets `mount.telegraph_gate = brain.attack_gate_for.bind(part_id)`; a committed part is allowed, spacing enforces the ripple; new row 3 (whole 6-shell volley while the rack fires, boundary with rack + tube) (§2.8, *For every task*) |
+| B3 | Torpedo health was in hits, not damage | `max_health` 120 in damage units: 3 Standard / 3 Sniper / 5 Spread / 9 Gatling; defuse rows with real player bullets and with damages read from the mode `.tres` files, plus a one-hit-short boundary (§2.4; owner choice 9) |
+| B4 | Gate-room target ungrounded and blocking the chain | Measured inventory in §2.15 (wall vs CPU per file); target ≥ 6 s (need ≈ 3.7 s) with an explicit escalation path; rule 4 (bit-identical code speed-up, the Ph8 t1 route) allowed (owner choice 8); only t8 depends on t1, t6 no longer does |
+| M1 | One-engine ratio contradicted the numbers; listing could pick an unholdable orbit | Expected ratio is the config formula `(turn_rate + bias) / (turn_rate × live − bias)`; live turn 0.35 → 0.5 and bias 0.08 → 0.05 so the live side still turns; in `listing` the orbit is forced toward the dead side; config-invariant row (§2.7.2, §2.7.4) |
+| M2 | Assault racetrack return leg above the screen | Replaced by a stadium (legs y 160 / 400, derived radius 120, pure pursuit), fully inside the resting view; listing overshoot measured (§2.7.3) |
+| M3 | A side volley is 6 shells, not 3 | Rows count `3 × burst_count` read from the mounts and time the first shell of each mount (§2.8) |
+| M4 | `quiet` wrote cooldowns the brain does not read | `quiet` = attack caps 0, escort caps 0, `ram_first_delay` 1e6; the fortress `_tick` pattern named in the fixture (`hand_tick`) and in *For every task* (§2.6.1) |
+| M5 | t12 dependencies incomplete; plume owned twice | Art (now t13) depends on t4 and t12 (after every scene/brain edit); the tube head moves into t4; `Plume` belongs to t13 alone, t9 adds only `WakePoint`s (§2.9, §2.13) |
+| M6 | No incoming-damage or self-hit rows | New `test_dreadnought_incoming_damage_paths.gd` in t6 mirroring the fortress file (§2.6.8); own-fire static row in t8 and a moving real-physics row in t10 (§2.8, §2.10) |
+| M7 | Wake and interceptor tasks lacked the geometry section | §2.9 and §2.11 now repeat the part positions, hull rectangle, wake points and mouths; t9 and t11 also list §2.6.2 |
+| M8 | Torpedo registration vague | Named const `EnemyOrdnanceScenes.ENERGY_TORPEDO`, not in `scene_for()`; a lifetime row instantiates it directly (§2.4) |
+| M9 | Detach chunk was a damaging hazard | The chunk is a purely visual `top_level` child of the Dreadnought: no collision, no hazard, no damage, self-freeing (§2.13) |
+| M10 | Weapons task close to two tasks | Measured density split out as t12 after the interceptors (§2.12); t8 keeps mounts, gate, ripple, extreme phase, fairness and module-death rows |
