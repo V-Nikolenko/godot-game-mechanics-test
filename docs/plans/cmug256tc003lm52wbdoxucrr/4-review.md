@@ -158,3 +158,138 @@ heading exists. Four problems are design defects that would cost implementation 
   - `Steering.turn_toward` / `clamped_lead_time`, `EnemyMover.boost` / `face_toward`, `TargetInfo` and `AnchorIdle` exist as named.
   - The Ram Corvette (0.65 s / 620 / 220 / 50) and Carrier `one_engine_*` figures quoted are correct.
 - **Research.** It has tradeoffs per option and flags its weak sources (the Squadrons and Monster Hunter claims are from search summaries only).
+
+---
+
+VERDICT: CHANGES_REQUESTED
+
+# Plan review, round 2
+
+Revision 2 (`8dba0be`): I read all of `3-plan.md`, `tasks.json` (t1 to t15), the round-1 text above and the Phase 12 section of `DECISIONS.md`, then checked each claim against
+the code on `agent/auto-dev` @ `8dba0be`. I did not run the gate.
+
+All four round-1 blockers are fixed in the code paths they depend on, and the minors are handled. One new problem blocks approval: t3 cannot pass an existing intent gate as written.
+The other new findings are minor. Several of them are rows whose expected numbers do not match the plan's own values; fix them in the same edit.
+
+## Round-1 findings
+
+| # | Status | Checked against |
+|---|---|---|
+| B1 fan authoring path | **RESOLVED** | `TurretMount.Variant` (`turret_mount.gd:31`) has 9 values, 0 to 8, so `MISSILE_FAN` = 9 and `TORPEDO_TUBE` = 10 are the next appends. `TurretMountBuilder.build()` (`turret_mount_builder.gd:16-38`) instantiates the variant's scene and calls `pool_specs()` before `setup()`. A standalone `missile_fan_mount.tscn` that authors `fan_count` 5 / `salvo_count` 1 therefore sizes its pools before the build reads them. `RocketBatteryMount.pool_specs()` (`rocket_battery_mount.gd:40-51`) feeds `EnemyRocketScenes.pool_size_for()`, which multiplies `salvo_count` (`enemy_rocket_scenes.gd:36-38`), so the planned `salvo_count × fan_count` is the right hook. `rocket_battery_mount.tscn` stays untouched. **But see N1 (head sprite).** |
+| B2 per-part gate | **RESOLVED** | `TurretMount._track_step()` calls `telegraph_gate.call()` with no arguments and refuses on `!= true` (`turret_mount.gd:280-283`). A `brain.attack_gate_for.bind(part_id)` Callable takes zero arguments, so it works. Rebinding after `ModularHull.build_mounts()` is legal because `mounts_of(id)` exists (`modular_hull.gd:98`) and the gate is a plain var. The fortress keeps its shared gate (`space_fortress.gd:135`). Rule order is spacing first, then "already committed", then the cap, which ripples correctly: the bow's 0.7 s charge + 0.35 s burst keeps the side committed past the stern's entry at 0.5 s. Wording nit in N7. |
+| B3 torpedo health units | **RESOLVED** | `EnemyOrdnance._on_hurt` subtracts the damage amount (`enemy_ordnance.gd:307-310`). `Health` has i-frames off by default (`health_component.gd:17`). `reset()` restores health (`:136`). Mode damages: `default.tres:16` 50, `sniper_shot.tres` 40, `spread.tres` 25 per pellet, `gatling.tres` 14. So 120 HP gives ceil 3 / 3 / 5 / 9, which matches §2.4 and §2.16. The defuse rows use real `bullet.tscn` shots plus damages read from the mode `.tres` files, with a one-hit-short boundary. `test_enemy_ordnance.gd` already runs at 16× (`:31`). The lifetime row's formula is wrong: N2. |
+| B4 gate room | **RESOLVED** | §2.15 now has a measured wall/CPU inventory. The target is ≥ 6 s, against a need of 3.7 s: 225.2 + 15.5 = 240.7 and 240.7 − 237 = 3.7, and the allotments do sum to 15.5. Rule 4 is spelled out with a differential proof, matching the Ph8 t1 precedent at `tests/README.md:601`. There is an explicit ESCALATE path, and only t8 depends on t1. t2 to t7 add 7.7 s, giving 232.9 s, so the chain cannot stall before t8, and after t8 only by an owner decision. The 225.2 s baseline matches the Ph11 t11 row (`tests/README.md:704`). Allotment underestimates: N8. |
+| M1 one-engine ratio / unholdable orbit | **RESOLVED** | ω_dead = 0.35 + 0.05 = 0.40 and ω_live = 0.175 − 0.05 = 0.125, so the ratio is 3.2. The speed term √(78² + 18²) = 80.0 gives radii of 200 / 640 px. The dead-side orbit is forced and the config invariants hold: 0.40 ≥ 78 / 700 = 0.111, and ω_live > 0. (The same fixed-number pattern comes back in t10 row 5: N4.) |
+| M2 Assault racetrack | **RESOLVED** | The stadium's numbers check out. Leg extents are y 56–264 and 296–504, x 36–1244. r = 120 needs 90 / 120 = 0.75 ≤ 0.9. Pure pursuit with a 120 px lookahead on r 120 asks for the same curvature (chord 115 px, α 0.5 rad). The CCW side alternation is correct under the stated axes: lower leg heading right has starboard down, upper leg heading left has port down. |
+| M3 six-shell volley | **RESOLVED** | Row 2 counts `3 × burst_count` and times the first shell of each mount. |
+| M4 `quiet` fixture | **RESOLVED** | It silences through attack caps 0, escort caps 0 and `ram_first_delay`. With cap 0, gate rule 4 refuses and rule 3 never applies, because nothing is committed. `BossReinforcements._open()` with no room skips (`boss_reinforcements.gd:254-260`). The `hand_tick` overwrite pattern is named. |
+| M5 t12 (now t13) deps / plume owner | **RESOLVED** | t13 depends on t4 and t12. `Plume` belongs to t13 only, and t9 adds only `WakePoint`s. |
+| M6 incoming-damage / own-fire rows | **RESOLVED** (one row underspecified, N5) | There is a new `test_dreadnought_incoming_damage_paths.gd` mirroring `test_fortress_incoming_damage_paths.gd` (rows at `:148-316`). The own-fire rows are a static one (t8 row 9) and a moving one (t10 row 8). |
+| M7 planSections geometry | **RESOLVED** | t9 and t11 list 2.6.2, and §2.9 / §2.11 repeat the coordinates. (A new gap for t12 is N9.) |
+| M8 torpedo registration | **RESOLVED** | A named const outside `scene_for()` (`enemy_ordnance_scenes.gd:14-21` keys by `Kind`), and a direct lifetime row. |
+| M9 damaging chunk | **RESOLVED** | The chunk is a visual-only `top_level` child: no areas, no hazard, self-freeing. |
+| M10 t8 size | **RESOLVED** | The density measurement is split out as t12, after the interceptors. |
+
+## New findings
+
+### Blocking
+
+**N1. t3: `MISSILE_FAN` cannot reuse the rocket battery's head, because `test_ph8_sprites.gd` forbids a shared head (t3; also the §2.13 text)**
+- **Plan:** §2.3 (`3-plan.md:188`) and t3 say to add `MISSILE_FAN` to `test_ph8_sprites.gd` `HEADS` with `turret_head_rocket_battery.png`. §2.13 (`:576`) repeats "the MISSILE_FAN head is the rocket battery's".
+- **Code:** three existing intent tests in `tests/integration/test_ph8_sprites.gd` rule that out.
+  - `test_no_two_heads_share_a_texture` (`:187-192`) asserts that each `HEADS` texture is used once.
+  - The same test asserts `HEADS.size() == TurretMount.Variant.size()`, so leaving the new variant out fails as well.
+  - `test_no_two_heads_share_a_silhouette` (`:159-183`) requires a mask difference of at least `MIN_MASK_DIFF` between every pair, and an identical file gives a difference of 0.
+- **Result:** t3 is unsatisfiable as written. "Every existing suite stays green unchanged" (*For every task*, `:60`) cannot hold. An unattended Direct-track agent has two ways out: weaken an intent gate, or ESCALATE and stall the t4 → t8 chain.
+- **Precedent:** every variant has its own head, and Ph11 t3 drew two (`tests/README.md`, Ph11 t3 row).
+- **Fix:**
+  - t3 draws `turret_head_missile_fan.png` through `pixel-art-generation`. It must be strictly top-down, have a distinct silhouette (for example a multi-tube rack), be opaque at the pivot, and have its tip within 6 px of the `Muzzle` (`:147-155`).
+  - Raise t3 to `medium` and say that it does art.
+  - Correct §2.13 and §2.16.
+
+### Minor
+
+**N2. t4: the planned torpedo lifetime row fails with the plan's own numbers.**
+- **Plan:** §2.4 (`:220-221`) checks "`max_distance` / slowest speed (160) fits `max_time`". That is 2400 / 160 = 15 s, which is more than 10 s.
+- **Code:** `test_enemy_bullet_lifetime.gd` already has `_two_speed_kind_clears(window, launch, final, max_distance, max_time)` (`:300-303`), and the pursuit bomb uses it (`:316-321`). With the torpedo's numbers: 3 + (2400 − 480) / 320 = 9.0 s. The 200 px/s² ramp adds about 0.2 s, so 9.2 s, which is at most 10.
+- **Fix:** name that helper, reading the torpedo scene's `steer_window` / `final_speed` and the tube's `launch_speed`.
+
+**N3. t8: the broadside fairness inequality fails as shipped for the Assault player.**
+- **Plan:** `broadside_fire_turn_cap × fire_range` = 0.35 × 900 = 315 px/s.
+- **Code:** the fighter's `cruise_speed()` is `MoveState.move_speed` 360 (`move_state.gd:20`, `player_fighter.gd:128`). That is the reading the fortress fairness rows use (`test_fortress_weapons.gd:1035`), and 0.8 × 360 = 288 < 315. Only the Open Space ship (420, giving 336) passes.
+- The lever is pre-approved, so this is not a stall, but the plan presents 315 as passing.
+- **Fix:** ship the cap at 0.30, giving 270 ≤ 288. The orbit turn rates of 0.171 to 0.197 rad/s and the listing orbit of 0.111 rad/s stay under it. Say "max speed = `cruise_speed()`".
+
+**N4. t10 row 5's fixed "≥ 2.5×" fails in the Assault harness.**
+- The row runs in both harnesses, and in Assault the current rates are `assault_turn_rate`-based (§2.7.3 `:397-398`).
+- ω_dead / ω_live = (0.9 + 0.05) / (0.45 − 0.05) = 2.375, which is less than 2.5.
+- **Fix:** the M1 treatment. Assert the config formula for each mode, or the bare inequality `ω_dead / ω_live > 1` with the per-mode value printed.
+
+**N5. Own ordnance against own ordnance and against its own moving hull is unexamined, and t10 row 8 is either vacuous or unsatisfiable depending on its setup (t8, t10).**
+- **Code:** `EnemyRocket`'s `HitBox` is layer 32 with mask 128 | 512, and it opens once the rocket is `rocket_clear_radius + body_radius + arm_clearance` from the launcher's current position (`enemy_rocket.gd:17-20`, `:372-381`). The arming is latched. A Dreadnought part's `HurtBox` is layer 512 with mask 1120, so it sees layer 32. A torpedo `HurtBox` (`pursuit_bomb.tscn:32-33`: 512 / 96) also sees layer 32.
+- **Consequence (a), rocket against own torpedo:** the centre rocket of a fan fired near the bearing of the slow torpedo meets it about 300 px out. The rack at (0, +110) is 86 px behind the tube at (0, +196). The torpedo moves at 160 px/s from a hull moving at 120 to 138 px/s, so it crawls off the bow at 22 to 40 px/s for 3 s. When the rocket meets it, the rocket detonates and chips 16 (`dumb_rocket.tscn:31`). Rack and tube committed together is legal: it is exactly row 3's boundary.
+- **Consequence (b), t10 row 8:** a rocket "placed on the lane" head-on and already armed will hit a part, because there is no launcher guard. A rocket fired forward cannot be caught: 560 px/s against at least 520 px/s plus the inherited speed. So the row passes only when it proves nothing. The torpedo half is real and passes: the part masks do not see 512, and the proximity mask 128 does not see the parts.
+- **Fix:**
+  - Specify the row 8 scenario as the realistic one: fan and torpedo fired at the player, then a ram toward the player within their lives.
+  - Add a measured row for rack-then-tube and tube-then-rack.
+  - Pre-approve a fallback in order:
+    1. Gate rule: rack and tube are never committed together.
+    2. An opt-in, bit-identical owner-group skip on `EnemyRocket`'s impact. This is the Heavy Gunship's "measured, no launcher guard" precedent made explicit.
+
+**N6. The torpedo tube almost never has the player in its arc, and t8 row 1 cannot fail for it.**
+- The traverse is 30° about the bow (§2.8 `:434`).
+- On approach the brain steers to the tangent point, so the player is at least asin(700 / d) off the nose: about 33° to 40° at 1100 to 1300 px.
+- In the orbit the player is abeam.
+- So the tube fires only when the player crosses ahead of the bow. In Assault the bow points down only at the left-end U-turn.
+- Row 1 asserts "no torpedo from it over 20 s" after the tube's death with no control that it fired while alive, so the row holds whether or not the tube ever fires.
+- §2.12's "a torpedo per 8 s" sanity figure is unreachable for the same reason.
+- **Fix:**
+  - Give row 1 an alive control: the same setup with the part live launches at least once from that part. The player is placed in its arc.
+  - Call the tube a bow-chaser in `ENEMY.md`. Optionally widen the traverse.
+  - Correct the sanity figure.
+
+**N7. t8 row 3 says "the missile rack committed (in FIRE)".**
+- With `salvo_count` 1, the rack spends no tick in FIRE. On the TELEGRAPH-end tick, `_fire_tick(0)` launches the salvo (`BurstClock` pre-loads `gap`), reports done, and `_end_fire()` runs on the same tick (`turret_mount.gd:118-123`). The torpedo tube behaves the same way.
+- For these two mounts "committed" means TELEGRAPH (0.5 s and 1.0 s).
+- **Fix:** say TELEGRAPH, and time the rack's charge to overlap the port volley's 0.5 s ripple.
+
+**N8. Two allotments are below the plan's own measurements (t6, t12).**
+- **t6:** the inventory (`:614`) puts `test_fortress_incoming_damage_paths.gd` at 1.5 to 2.0 s GUT, but its mirror is allotted about 1.0 s.
+- **t12:** it runs 6 states × 5 positions × 660 = 19,800 ticks. At the quoted Ph11 rate (1.4 s per 13,200 ticks) that is about 2.1 s, against an allotment of 1.5 s. The Dreadnought also ticks more mounts than the fortress.
+- Both stay under 1.5×, so nothing stalls. But the phase total rises to about 16.6 s, which ends at about 235.8 s with only a 6 s t1.
+- **Fix:** raise the two allotments, and keep t1's 9 s target as the expectation.
+
+**N9. t12's `planSections` lacks the Assault geometry and the fixture.**
+- "Under each leg end" and the stadium are defined only in §2.7.3.
+- `ladder()` / `kill_part()`, which put the boss into each phase state, are only in §2.6.1.
+- **Fix:** add `2.7` and `2.6.1` to t12's list.
+
+**N10. The Assault ram's extent is not bounded (t10).**
+- From the lower leg (y 400) toward a player at y 600–650 the charge travels about 550 px, and the nose is 224 px ahead of the centre. The corridor filter (`assault_corridor_constraint.gd`, soft 120 / hard 450 per axis) damps the centre only past the visible edge.
+- Row 6 says "the hull stays inside the world rect" without naming the rect, and gives no lever.
+- **Fix:** name the rect (the corridor's hard band, or `EnemyWorld.projectile_world_rect()`). Pre-approve `assault_ram_overshoot` (for example 150) as the lever.
+
+**N11. The hub's hunting footprint overlaps two patrols (t14).**
+- The anchor at (−2970, 2970) is about 2055 px from both the Heavy Gunship anchor (2600 ring at 157.5°, about (−2402, 995)) and the Laser Tender anchor (112.5°, about (−995, 2402)). That is inside its own 2500 px footprint (leash 1400 + perceive 1100).
+- `test_sector_hub_patrol.gd` sweeps triggers, pickups and the spawn, not other patrols. So a hunt that starts near its zone can follow the player into either fight.
+- That may be acceptable (encounters are Ph13/14's), but it is unexamined.
+- **Fix:** state it as intended in `ENEMY.md` / `DECISIONS.md`, or use the pre-approved bearing lever (135° ± 22.5°) to move it away. Either is fine.
+
+## Checked and fine this round
+
+- **Arithmetic.**
+  - Allotments sum to 15.5.
+  - t2 to t7 add 7.7 s.
+  - `rocket_clear_radius` is √(104² + 224²) + 8 = 255.
+  - Tube pool: ceil(10 / (8 × 0.45)) + 1 = 4.
+  - Density sanity for `hunting`: 6 / 4.25 + 5 / 6.5 + 1 / 8 = 2.3 /s, and the peak in a 2 s window is at most 18 < 30.
+  - Ram fairness: 1.2 × 0.6 = 0.72 ≥ (104 + about 20) / 360 + 0.25 = 0.59.
+  - Stadium and one-engine radii: see M1 / M2 above.
+- **§25.** Every path declares at least two aspects. `listing` declares 3, `crippled` 4, `critical` 3. The crippled-then-critical path changes thruster rate, cooldown 0.6 → 0.45 and the core blink. `test_boss_phase_rules.gd::_drivers_of()` collects both drivers.
+- **`ON_OWN_DESTROYED`.** It fits `boss_reinforcements.gd` as it stands:
+  - `_on_module_destroyed` → `_kill` is the branch point.
+  - `_hold` closing a mid-OPENING door must not count as the breach's final close, and row 5 pins that.
+  - `_open` records `light_before` = OFF after `destroy()`.
+- **Dependencies.** No cycles. t3 → t4 serialises the enum. t8 → t9 → t10 → t11 → t12 → t13 serialises `dreadnought.gd` / the brain / the scene. t12 and t14 both edit `dreadnought_config.tres` only through levers on different fields.
+- **`planSections`.** Every number used exists as a heading in `3-plan.md` (2.1 to 2.17, 2.6.1 to 2.6.8, 2.7.1 to 2.7.4, 1.1, 6, 7, 8).
+- **Scope.** Every IDEAS §9 / §10 / §21–26 / §40 / §41 item listed in the review brief has a task and a row. Level placement, HUD, beams on parts, wrecks and tiers are out of scope with owners and reasons.
