@@ -70,6 +70,17 @@ func accepts_tow() -> bool:
 	return false
 
 
+## An EMP window started (`BaseEnemy.apply_emp`; Phase 11 t12): a shown telegraph never lands. Every mount `scan(0.0)`s (its weapon stops; a FIRE cut
+## here still starts its cooldown) and the light goes OFF. The brain is not ticked for the window, so the turret is silent for exactly the window
+## and fights again on the tick it ends. An unpowered turret stays down (its mounts are already unpowered).
+func on_emp_started() -> void:
+	for mount in _mounts:
+		_can_fire[mount] = false
+		mount.scan(0.0)
+	if _light != null and _light.get_state() != StateLight.State.OFF:
+		_light.set_state(StateLight.State.OFF)
+
+
 func tick(delta: float) -> void:
 	if actor == null or config == null or not actor.is_inside_tree():
 		return

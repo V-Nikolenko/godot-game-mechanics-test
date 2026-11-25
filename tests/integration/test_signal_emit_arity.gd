@@ -60,8 +60,8 @@ func before_all() -> void:
 
 ## Removes everything from the first `#` not inside a quoted string onward. A comment can legally
 ## contain anything, including text that looks like a signal declaration or an emit call with the
-## wrong arity — see `space_station.gd`'s and `test_health_component.gd`'s doc comments, both of
-## which happen to dodge this only by accident today.
+## wrong arity — see `test_health_component.gd`'s doc comments, which
+## happen to dodge this only by accident today.
 func _strip_comment(line: String) -> String:
 	var quote := ""
 	var i := 0

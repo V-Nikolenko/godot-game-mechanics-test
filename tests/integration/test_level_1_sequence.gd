@@ -2,7 +2,7 @@
 ##
 ## This is THE test the sub-item rests on: a headless run of the real five-section sequence —
 ## deep_space -> asteroid_belt -> station_assault -> planet_approach -> cloud_descent — with a
-## REAL SpaceStation killed for real in the middle of it, reaching `level_complete`.
+## REAL SpaceFortress killed for real in the middle of it, reaching `level_complete`.
 ##
 ## ── Four things this file has to get right ───────────────────────────────────────────────────
 ##
@@ -15,10 +15,10 @@
 ##    so the gate would stay GREEN while leaking. See tests/README.md.
 ##    Safe to mutate: `wave_builder.gd:196-197` builds a fresh SpawnEntryResource per call and
 ##    `:211-212` a fresh WaveResource, so nothing shipped is shared.
-## 2. **The station must be in the container BEFORE `waves_complete` can fire.**
+## 2. **The fortress must be in the container BEFORE `waves_complete` can fire.**
 ##    `_advance()` emits `section_started` at `level_director.gd:60` but calls
 ##    `wave_manager.load_section()` at `:66`, so the `section_started` handler runs first — which
-##    is the only window in which the station can be added synchronously. Add it later and the
+##    is the only window in which the fortress can be added synchronously. Add it later and the
 ##    director sees an empty container and advances straight past the boss.
 ## 3. **`enemies_cleared_timeout` is left untouched.** The point is that sections end because they
 ##    FINISH, not because the safety net fires. The elapsed-time assertion is what proves it.
@@ -27,7 +27,7 @@
 extends GutTest
 
 const DIRECTOR_SCRIPT := preload("res://assault/scenes/levels/edelia/1/level_1_director.gd")
-const STATION_SCENE := preload("res://assault/scenes/enemies/space_station/space_station.tscn")
+const FORTRESS_SCENE := preload("res://assault/scenes/enemies/space_fortress/space_fortress.tscn")
 
 const EXPECTED_SECTIONS: Array[StringName] = [
 	&"deep_space", &"asteroid_belt", &"station_assault", &"planet_approach", &"cloud_descent",
@@ -37,7 +37,7 @@ var _container: Node2D
 var _wave_manager: WaveManager
 var _director: LevelDirector
 var _started: Array[StringName] = []
-var _station: SpaceStation
+var _station: SpaceFortress
 var _advanced_past_station_while_wreck_present := false
 
 
@@ -90,7 +90,7 @@ func _compressed_level_1_sections() -> Array:
 	return sections
 
 
-func test_level_1_runs_all_five_sections_end_to_end_with_a_real_station() -> void:
+func test_level_1_runs_all_five_sections_end_to_end_with_a_real_fortress() -> void:
 	var sections := _compressed_level_1_sections()
 	assert_eq(sections.size(), 5, "Level 1 ships five sections")
 
@@ -106,10 +106,10 @@ func test_level_1_runs_all_five_sections_end_to_end_with_a_real_station() -> voi
 
 			## Synchronously, inside the handler — see rule 2 in the header.
 			if section_name == &"station_assault":
-				_station = STATION_SCENE.instantiate() as SpaceStation
+				_station = FORTRESS_SCENE.instantiate() as SpaceFortress
 				## Short, but non-zero: the wreck must genuinely linger, because "the wreck holds
 				## the section open" is half of what this test proves. The shipped 1.8 s is pinned
-				## by test_station_death_sequence.gd instead; here it only has to be observable.
+				## by the fortress death rows instead; here it only has to be observable.
 				_container.add_child(_station)
 				_station.death_duration = 0.2
 
@@ -130,18 +130,19 @@ func test_level_1_runs_all_five_sections_end_to_end_with_a_real_station() -> voi
 		await get_tree().process_frame
 		guard += 1
 	assert_true(_started.has(&"station_assault"), "the run must reach the station_assault section")
-	assert_not_null(_station, "a real station must have been placed in the container")
+	assert_not_null(_station, "a real fortress must have been placed in the container")
 
 	## The section must NOT advance while the boss is alive.
 	await get_tree().create_timer(0.3).timeout
 	assert_false(_started.has(&"planet_approach"),
-		"station_assault must not advance while the station is alive")
+		"station_assault must not advance while the fortress is alive")
 
-	## Kill it for real: four turrets, then the core.
-	for t in _station.turrets():
-		t.hurt_box.received_damage.emit(9999)
+	## Kill it for real through destroy(): two batteries (shields_exposed), both generators (core_exposed), then the core, whose death is the fortress's.
+	for id in [&"battery_spread", &"battery_pulse", &"shield_north", &"shield_south"]:
+		_station.part(id).destroy()
+	## The core opens one frame after the second generator dies (a deferred unlock).
 	await get_tree().process_frame
-	_station.hurt_box.received_damage.emit(_station.health.max_health)
+	_station.part(&"core").destroy()
 	await get_tree().process_frame
 
 	assert_true(_station.was_killed, "the boss must be scored as a kill, not an escape")
@@ -162,8 +163,8 @@ func test_level_1_runs_all_five_sections_end_to_end_with_a_real_station() -> voi
 		"planet_approach must not start while the boss's wreck is still in the container")
 	assert_false(is_instance_valid(_station), "the wreck must be gone by the end of the run")
 
-	## The sections ended because they FINISHED, not because a safety net expired. The station
-	## section's own timeout is 180 s and cloud_descent's is 10 s, so a run this fast cannot have
+	## The sections ended because they FINISHED, not because a safety net expired. The fortress
+	## section's own timeout is 240 s and cloud_descent's is 10 s, so a run this fast cannot have
 	## been driven by either.
 	assert_lt(elapsed_s, 10.0,
 		"the run must complete well inside the timeouts — %.2f s elapsed" % elapsed_s)

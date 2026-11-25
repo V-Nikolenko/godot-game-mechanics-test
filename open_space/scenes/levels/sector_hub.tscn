@@ -32,6 +32,9 @@
 [ext_resource type="PackedScene" path="res://assault/scenes/hazards/wreck/debris_drift.tscn" id="28_debris"]
 [ext_resource type="PackedScene" path="res://assault/scenes/hazards/minefield/minefield.tscn" id="29_minefield"]
 [ext_resource type="PackedScene" path="res://assault/scenes/structures/turret_group/presets/hub_defense_site.tscn" id="30_site"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/sector_jammer/sector_jammer.tscn" id="31_sjam"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer.tscn" id="32_pjam"]
+[ext_resource type="PackedScene" path="res://assault/scenes/hazards/emp_zone/emp_zone.tscn" id="33_emp"]
 
 [node name="SectorHub" type="Node2D" unique_id=598810920]
 script = ExtResource("1_hub")
@@ -89,6 +92,12 @@ arc_radius = 130.0
 
 [node name="HubDefenseSite" parent="EnemyContainer" instance=ExtResource("30_site")]
 position = Vector2(2520, 1040)
+
+[node name="SectorJammer" parent="EnemyContainer" instance=ExtResource("31_sjam")]
+position = Vector2(2260, 980)
+
+[node name="PulsedJammer" parent="EnemyContainer" instance=ExtResource("32_pjam")]
+position = Vector2(2900, 0)
 
 [node name="HazardContainer" type="Node2D" parent="." groups=["hazard_container"]]
 
@@ -278,3 +287,6 @@ w_drifting = 0.15
 w_chain = 0.3
 w_emp = 0.15
 hostility = 1
+
+[node name="EmpZone" parent="TacticalSpace" instance=ExtResource("33_emp")]
+position = Vector2(3100, 2300)

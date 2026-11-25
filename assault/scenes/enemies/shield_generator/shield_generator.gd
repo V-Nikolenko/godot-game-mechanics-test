@@ -46,6 +46,12 @@ func _apply_config(cfg: ShieldGeneratorConfig) -> void:
 	_gen_brain.config = cfg
 
 
+## Every EMP source reaches a generator (Phase 11 t12; it has a brain but no mover). The brain is not ticked for the window, so no `sustain()` is
+## fed: every bubble lapses after its heartbeat, and they return on the tick the window ends.
+func answers_emp() -> bool:
+	return true
+
+
 ## Off for good: the projection stops and the tethers go; the bubbles lapse by themselves. `true` (and any call once off) is ignored in this phase.
 func set_powered(on: bool) -> void:
 	if on or not _powered:

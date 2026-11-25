@@ -1,0 +1,316 @@
+[gd_scene format=3 uid="uid://bdp57cvsspo0x"]
+
+[ext_resource type="Shader" uid="uid://d3tncaxe8rph" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_gs"]
+[ext_resource type="Script" uid="uid://cjwjurj1t5rne" path="res://assault/scenes/enemies/heavy_gunship/heavy_gunship.gd" id="2_gs"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/heavy_gunship/hull.png" id="3_gs"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/heavy_gunship/battery.png" id="20_gs"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/heavy_gunship/battery_wreck.png" id="21_gs"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/heavy_gunship/cannon.png" id="22_gs"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/heavy_gunship/cannon_wreck.png" id="23_gs"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/heavy_gunship/missiles.png" id="24_gs"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/heavy_gunship/missiles_wreck.png" id="25_gs"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/heavy_gunship/vent.png" id="26_gs"]
+[ext_resource type="Script" uid="uid://ba3eox7gg0mqf" path="res://global/components/hurtbox_component.gd" id="4_gs"]
+[ext_resource type="Script" uid="uid://bmvlejhrl0dfy" path="res://global/components/health_component.gd" id="5_gs"]
+[ext_resource type="Script" uid="uid://deqgbl6m44nrj" path="res://global/components/hitbox_component.gd" id="6_gs"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/heavy_gunship/heavy_gunship_brain.gd" id="7_gs"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="8_gs"]
+[ext_resource type="Script" path="res://global/components/modular_hull.gd" id="9_gs"]
+[ext_resource type="Script" path="res://global/components/enemy_module.gd" id="10_gs"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="11_gs"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/turret_mount_slot.gd" id="12_gs"]
+[ext_resource type="Script" path="res://global/components/enemy_shield.gd" id="13_gs"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_gs"]
+resource_local_to_scene = true
+shader = ExtResource("1_gs")
+shader_parameter/enabled = false
+shader_parameter/flash_color = Color(1, 1, 1, 1)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hull"]
+size = Vector2(112, 144)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_battery"]
+size = Vector2(32, 40)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_cannon"]
+size = Vector2(32, 24)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_missiles"]
+size = Vector2(40, 24)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_vent"]
+size = Vector2(16, 24)
+
+[sub_resource type="Animation" id="Animation_reset_gs"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
+[sub_resource type="Animation" id="Animation_hit_gs"]
+resource_name = "hit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [true, false]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_gs"]
+_data = {
+&"RESET": SubResource("Animation_reset_gs"),
+&"hit": SubResource("Animation_hit_gs")
+}
+
+[node name="HeavyGunship" type="CharacterBody2D"]
+collision_mask = 0
+script = ExtResource("2_gs")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+material = SubResource("ShaderMaterial_gs")
+texture = ExtResource("3_gs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_hull")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 1121
+script = ExtResource("4_gs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("RectangleShape2D_hull")
+debug_color = Color(0.7, 0, 0, 0.419608)
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("5_gs")
+max_health = 700
+current_health = 700
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries/ = SubResource("AnimationLibrary_gs")
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 0
+script = ExtResource("6_gs")
+damage = 30
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+shape = SubResource("RectangleShape2D_hull")
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("8_gs")
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("7_gs")
+
+[node name="StateLight" type="Node2D" parent="."]
+script = ExtResource("11_gs")
+
+[node name="Modules" type="Node2D" parent="."]
+
+[node name="BatteryPort" type="Node2D" parent="Modules"]
+position = Vector2(40, 10)
+script = ExtResource("10_gs")
+module_id = &"battery_port"
+max_health = 160
+intact_texture = ExtResource("20_gs")
+wreck_texture = ExtResource("21_gs")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/BatteryPort"]
+
+[node name="HurtBox" type="Area2D" parent="Modules/BatteryPort"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_gs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/BatteryPort/HurtBox"]
+shape = SubResource("RectangleShape2D_battery")
+
+[node name="MountSlots" type="Node2D" parent="Modules/BatteryPort"]
+
+[node name="Slot0" type="Marker2D" parent="Modules/BatteryPort/MountSlots"]
+script = ExtResource("12_gs")
+rest_bearing_deg = 0.0
+traverse_deg_override = 160.0
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/BatteryPort"]
+position = Vector2(16, 0)
+
+[node name="Light" type="Node2D" parent="Modules/BatteryPort"]
+script = ExtResource("11_gs")
+
+[node name="BatteryStarboard" type="Node2D" parent="Modules"]
+position = Vector2(-40, 10)
+script = ExtResource("10_gs")
+module_id = &"battery_starboard"
+max_health = 160
+intact_texture = ExtResource("20_gs")
+wreck_texture = ExtResource("21_gs")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/BatteryStarboard"]
+flip_h = true
+
+[node name="HurtBox" type="Area2D" parent="Modules/BatteryStarboard"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_gs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/BatteryStarboard/HurtBox"]
+shape = SubResource("RectangleShape2D_battery")
+
+[node name="MountSlots" type="Node2D" parent="Modules/BatteryStarboard"]
+
+[node name="Slot0" type="Marker2D" parent="Modules/BatteryStarboard/MountSlots"]
+script = ExtResource("12_gs")
+rest_bearing_deg = 180.0
+traverse_deg_override = 160.0
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/BatteryStarboard"]
+position = Vector2(-16, 0)
+
+[node name="Light" type="Node2D" parent="Modules/BatteryStarboard"]
+script = ExtResource("11_gs")
+
+[node name="Cannon" type="Node2D" parent="Modules"]
+position = Vector2(0, 60)
+script = ExtResource("10_gs")
+module_id = &"cannon"
+max_health = 200
+intact_texture = ExtResource("22_gs")
+wreck_texture = ExtResource("23_gs")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/Cannon"]
+
+[node name="HurtBox" type="Area2D" parent="Modules/Cannon"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_gs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/Cannon/HurtBox"]
+shape = SubResource("RectangleShape2D_cannon")
+
+[node name="MountSlots" type="Node2D" parent="Modules/Cannon"]
+
+[node name="Slot0" type="Marker2D" parent="Modules/Cannon/MountSlots"]
+script = ExtResource("12_gs")
+variant = 6
+rest_bearing_deg = 90.0
+traverse_deg_override = 70.0
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/Cannon"]
+position = Vector2(0, 12)
+
+[node name="Light" type="Node2D" parent="Modules/Cannon"]
+script = ExtResource("11_gs")
+
+[node name="Shield" type="Node2D" parent="Modules/Cannon"]
+script = ExtResource("13_gs")
+radius = 26.0
+
+[node name="Missiles" type="Node2D" parent="Modules"]
+position = Vector2(0, -60)
+script = ExtResource("10_gs")
+module_id = &"missiles"
+max_health = 140
+intact_texture = ExtResource("24_gs")
+wreck_texture = ExtResource("25_gs")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/Missiles"]
+
+[node name="HurtBox" type="Area2D" parent="Modules/Missiles"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_gs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/Missiles/HurtBox"]
+shape = SubResource("RectangleShape2D_missiles")
+
+[node name="MountSlots" type="Node2D" parent="Modules/Missiles"]
+
+[node name="Slot0" type="Marker2D" parent="Modules/Missiles/MountSlots"]
+script = ExtResource("12_gs")
+variant = 2
+rest_bearing_deg = 270.0
+traverse_deg_override = 360.0
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/Missiles"]
+position = Vector2(0, -12)
+
+[node name="Light" type="Node2D" parent="Modules/Missiles"]
+script = ExtResource("11_gs")
+
+[node name="VentPort" type="Node2D" parent="Modules"]
+position = Vector2(48, -34)
+script = ExtResource("10_gs")
+module_id = &"vent_port"
+role = 4
+max_health = 0
+starts_vulnerable = false
+hull_share = 1.0
+intact_texture = ExtResource("26_gs")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/VentPort"]
+
+[node name="HurtBox" type="Area2D" parent="Modules/VentPort"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_gs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/VentPort/HurtBox"]
+shape = SubResource("RectangleShape2D_vent")
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/VentPort"]
+position = Vector2(8, 0)
+
+[node name="Light" type="Node2D" parent="Modules/VentPort"]
+script = ExtResource("11_gs")
+
+[node name="VentStarboard" type="Node2D" parent="Modules"]
+position = Vector2(-48, -34)
+script = ExtResource("10_gs")
+module_id = &"vent_starboard"
+role = 4
+max_health = 0
+starts_vulnerable = false
+hull_share = 1.0
+intact_texture = ExtResource("26_gs")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/VentStarboard"]
+flip_h = true
+
+[node name="HurtBox" type="Area2D" parent="Modules/VentStarboard"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_gs")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/VentStarboard/HurtBox"]
+shape = SubResource("RectangleShape2D_vent")
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/VentStarboard"]
+position = Vector2(-8, 0)
+
+[node name="Light" type="Node2D" parent="Modules/VentStarboard"]
+script = ExtResource("11_gs")
+
+[node name="ModularHull" type="Node" parent="."]
+script = ExtResource("9_gs")

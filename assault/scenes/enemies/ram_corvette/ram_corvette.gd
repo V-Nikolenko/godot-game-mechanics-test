@@ -7,7 +7,7 @@ extends BaseEnemy
 ## script defines no `_physics_process`.
 ##
 ## ARMOUR IS A DEFLECTION RULE ON A FULL-SIZE HURTBOX, never a narrowed mask (the hurtbox-geometry gate;
-## the space station's precedent). While any plate lives:
+## the Carrier's and the Space Fortress's armoured hulls follow the same rule). While any plate lives:
 ##   - the hull answers `is_armored()` / `deflects_hit()` true, so EVERY player projectile crossing it
 ##     (bullets, rockets, the Sniper Shot) is not consumed and flies on - rockets to reach a plate;
 ##   - `_on_received_damage` refuses every hit with a flash and `armor_deflected`, which also covers the

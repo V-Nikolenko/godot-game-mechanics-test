@@ -40,7 +40,7 @@ var _firing: bool = false
 
 
 func pool_specs() -> Array[Dictionary]:
-	var stand_in := {"salvo_count": salvo_count, "warhead_salvo_count": 0, "salvo_period_min": _period()}
+	var stand_in := {"salvo_count": salvo_count, "warhead_salvo_count": 0, "salvo_period_min": _period() * pool_period_factor}
 	var specs: Array[Dictionary] = []
 	for entry in [[DUMB_POOL, EnemyRocket.Kind.DUMB], [PURSUIT_POOL, EnemyRocket.Kind.PURSUIT]]:
 		var kind: EnemyRocket.Kind = entry[1]

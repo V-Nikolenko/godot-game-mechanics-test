@@ -79,6 +79,8 @@ const COVER_RANGE_MIN := 0.65
 const COVER_RANGE_MAX := 1.35
 ## A plain candidate within this of a line-of-sight blocker's radius is inside the blocker (px).
 const BODY_MARGIN := 20.0
+## Phase 9 t7: a jammer field is the faction's own ground: spot selection never rejects a point for standing in one.
+const JAMMER_KIND := &"jammer"
 ## Cover SETTLE waits for the nose to come within this of the player before it calls the line blocked (rad).
 const TURN_DONE := 0.1
 
@@ -552,6 +554,8 @@ func _candidate(point: Vector2, bearing: float, range_: float, has_rect: bool, r
 		if _near_blocker(point):
 			score += config.w_cover
 		for info: HazardInfo in Hazards.around(point, maxf(config.hazard_margin, BODY_MARGIN)):
+			if info.kind == JAMMER_KIND:
+				continue  # Phase 9 t7: a jammer field is the faction's own ground (avoid weight 0).
 			# A blocker is rejected only for its own body (a plain point inside a wreck is unreachable and unblockable).
 			if not info.line_of_sight_blocker or info.contains(point, BODY_MARGIN):
 				hazard_ok = false
@@ -632,6 +636,8 @@ func _with_peek_margin(space: PhysicsDirectSpaceState2D, exclude: Array[RID], po
 
 func _inside_other_hazard(point: Vector2, own: HazardInfo) -> bool:
 	for info: HazardInfo in Hazards.around(point, config.hazard_margin):
+		if info.kind == JAMMER_KIND:
+			continue  # Phase 9 t7: a jammer field is the faction's own ground (avoid weight 0).
 		if info != own:
 			return true
 	return false

@@ -21,6 +21,7 @@ extends GutTest
 
 const DIRECTOR_SCRIPT := preload("res://assault/scenes/levels/edelia/1/level_1_director.gd")
 const DroneConcurrency := preload("res://tests/helpers/level1_drone_concurrency.gd")
+const _SLICE_REPLAY: GDScript = preload("res://tests/helpers/level1_slice_replay.gd")
 
 const SWARM_CONFIG: SwarmDroneConfig = preload("res://assault/scenes/enemies/swarm_drone/swarm_drone_config.tres")
 const RAZOR_CONFIG: RazorDroneConfig = preload("res://assault/scenes/enemies/razor_drone/razor_drone_config.tres")
@@ -393,7 +394,7 @@ func _with_fighter_wave_before_last(trigger: float) -> LevelSection:
 
 ## Boundary: a Gatling added at delay 0 to cloud_descent's last wave is flagged — its deferral
 ## (spin_up + sync_wait_max + 12 x 0.09 = 2.08 s) and 7.0 s budget put it at about 12.5 s against 10 s.
-## station_assault, the other ENEMIES_CLEARED section, has a 180 s net sized for the boss fight; the
+## station_assault, the other ENEMIES_CLEARED section, has a 240 s net sized for the boss fight (the Space Fortress); the
 ## same entry there is reported, not asserted.
 func test_a_gatling_in_an_enemies_cleared_last_wave_misses_the_timeout() -> void:
 	assert_almost_eq(_gatling_deferral(), 2.08, 0.001, "sanity: the task's 0.25 + 0.75 + 12 x 0.09")
@@ -720,7 +721,7 @@ func test_a_ram_forced_to_expire_on_its_first_line_up_tick_leaves_within_its_bou
 
 ## Boundary (task; epic C5): a Bomber can never sit in an ENEMIES_CLEARED section. Its tail is computed WITHOUT an exit
 ## term — a lower bound, so a row it flags is flagged by any exit, and no probe is paid for. Deliberate reading of "a
-## bomber in any ENEMIES_CLEARED section fails": asserted in cloud_descent; station_assault's 180 s net is sized for the
+## bomber in any ENEMIES_CLEARED section fails": asserted in cloud_descent; station_assault's 240 s net is sized for the
 ## boss fight and no bomber timing can fail it, so it is reported (the Gatling precedent above), and
 ## `test_no_enemies_cleared_section_spawns_a_bomber` covers every section. Its persisted mines would hold the section
 ## open longer still. If t21's bomber lever (`engage_seconds` 6.5) is ever applied this row stops flagging and FAILS
@@ -969,6 +970,29 @@ func test_no_enemies_cleared_section_spawns_a_laser_tender() -> void:
 	assert_true(_section_has_scene(probe, WaveBuilder.LASER_TENDER), "boundary: a tender in cloud_descent's last wave is seen")
 
 
+## Phase 10 t6: a Carrier has no budget and no exit; its Assault life is a constant-speed crossing an EMP does not stop (≈ 20.6 s worst case), so
+## it may not sit in an ENEMIES_CLEARED section (the "For every task" rule: no Carrier in one).
+func test_no_enemies_cleared_section_spawns_a_carrier() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.CARRIER), "%s spawns a Carrier" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+	var probe := _cloud_descent()
+	_add_to_last_wave(probe, load(WaveBuilder.CARRIER) as PackedScene, 0.0)
+	assert_true(_section_has_scene(probe, WaveBuilder.CARRIER), "boundary: a carrier in cloud_descent's last wave is seen")
+	# Non-vacuity (Phase 10 t12): level 1 really places one Carrier (planet_approach's 65.0 s wave), so the guard above sees a real line.
+	var placed: Array[Dictionary] = _SLICE_REPLAY.placed(WaveBuilder.CARRIER)
+	assert_eq(placed.size(), 1, "level 1 places exactly one Carrier")
+	for p in placed:
+		for s in _sections():
+			if (s as LevelSection).section_name == p["section"]:
+				assert_eq((s as LevelSection).end_condition, LevelSection.EndCondition.DURATION, "the Carrier sits in a DURATION section (%s)" % p["section"])
+
+
 # ── Phase 8 t19: level 1 places a turret group, a twin pair and a Laser Tender, in DURATION sections only ───────────
 # (epic plan docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md §2.18; task plan docs/plans/cmvqw0voi019bqs2x3j5zd2o8/3-plan.md §D).
 #
@@ -1073,3 +1097,549 @@ func test_a_turret_group_in_cloud_descents_last_wave_misses_the_timeout() -> voi
 	_ph8_boundary(WaveBuilder.TURRET_GROUP_ASSAULT_PAIR, shortest + MARGIN, "assault_pair turret group", offset)
 	var section := _cloud_descent()
 	assert_gt(shortest, section.enemies_cleared_timeout, "the shortest member's drift alone outlasts the timeout")
+
+
+# ── Phase 9 t7: the Jamming Structures (epic plan docs/plans/cmug23onr001pm52w9swwophy/3-plan.md §2.8) ───────────────
+
+## A jammer only drifts out of Assault at 60 px/s and never leaves Open Space, so none of the three may sit in an ENEMIES_CLEARED
+## section (the "For every task" rule: no jammer, Hacker or EMP zone in one).
+func test_no_enemies_cleared_section_spawns_a_jammer() -> void:
+	var paths := [WaveBuilder.JAMMER, WaveBuilder.SECTOR_JAMMER, WaveBuilder.PULSED_JAMMER]
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		for path: String in paths:
+			assert_false(_section_has_scene(section, path), "%s spawns %s" % [section.section_name, path.get_file()])
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+	for path: String in paths:
+		var probe := _cloud_descent()
+		_add_to_last_wave(probe, load(path) as PackedScene, 0.0)
+		assert_true(_section_has_scene(probe, path), "boundary: %s in cloud_descent's last wave is seen" % path.get_file())
+
+
+## The sector jammer (r 640, half the view) is Open Space only: no level-1 section of any end condition spawns one.
+func test_no_assault_section_spawns_a_sector_jammer() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.SECTOR_JAMMER), "%s spawns a sector jammer" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has sections")
+	var probe := _cloud_descent()
+	_add_to_last_wave(probe, load(WaveBuilder.SECTOR_JAMMER) as PackedScene, 0.0)
+	assert_true(_section_has_scene(probe, WaveBuilder.SECTOR_JAMMER), "boundary: a sector jammer in a wave is seen")
+
+
+## Phase 9 t8: a Hacker Frigate keeps its distance for a 9 s budget and then a measured exit, so it may not sit in an
+## ENEMIES_CLEARED section (the "For every task" rule: no jammer, Hacker or EMP zone in one).
+func test_no_enemies_cleared_section_spawns_a_hacker() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, WaveBuilder.HACKER_FRIGATE), "%s spawns a Hacker Frigate" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+	var probe := _cloud_descent()
+	_add_to_last_wave(probe, load(WaveBuilder.HACKER_FRIGATE) as PackedScene, 0.0)
+	assert_true(_section_has_scene(probe, WaveBuilder.HACKER_FRIGATE), "boundary: a Hacker in cloud_descent's last wave is seen")
+
+
+# ── Phase 9 t14: the level-1 placement guards (epic plan docs/plans/cmug23onr001pm52w9swwophy/3-plan.md §2.17; task plan
+# docs/plans/cmw5k4ykj00b6qs2xt4pm0wjg/3-plan.md) ──────────────────────────────────────────────────────────────────────
+#
+# Level 1 now places a Hacker and a local jammer in planet_approach (`test_level1_specialist_spawns.gd`, `EXPECTED_PH9`). The rows
+# above already keep jammers and the Hacker out of ENEMIES_CLEARED sections; these add the Disruptor, and keep the EMP zone, a placed
+# EMP mine and an EMP-laying Minefield out of every Assault level (Ph9 places none there), both in the built waves and in the sources a
+# later edit would touch, each with a failing synthetic boundary.
+
+const HACKER_DISRUPTOR := "res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn"
+const EMP_ZONE := "res://assault/scenes/hazards/emp_zone/emp_zone.tscn"
+const EMP_MINE := "res://assault/scenes/projectiles/enemy_ordnance/mines/emp_mine.tscn"
+const MINEFIELD := "res://assault/scenes/hazards/minefield/minefield.tscn"
+const LEVELS_DIR := "res://assault/scenes/levels/"
+const WAVE_BUILDER_SOURCE := "res://assault/scenes/systems/wave_builder.gd"
+## Assault wave sources authored outside the levels directory: the shared boss machinery and the Space Fortress's scripts (every `.gd`
+## in these directories) and the fortress scene, which authors its `ReinforcementBay` payloads (Phase 11 t11; it replaced the retired
+## space station's reinforcement script).
+const BOSS_SOURCE_DIRS: Array[String] = ["res://global/boss/", "res://assault/scenes/enemies/space_fortress/"]
+const FORTRESS_SCENE_SOURCE := "res://assault/scenes/enemies/space_fortress/space_fortress.tscn"
+
+
+## A Disruptor is a Hacker (9 s budget, a measured exit, a lock at PULSE end), so it may not sit in an ENEMIES_CLEARED section either.
+func test_no_enemies_cleared_section_spawns_a_disruptor() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_false(_section_has_scene(section, HACKER_DISRUPTOR), "%s spawns a Disruptor" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has ENEMIES_CLEARED sections")
+	var probe := _cloud_descent()
+	_add_to_last_wave(probe, load(HACKER_DISRUPTOR) as PackedScene, 0.0)
+	assert_true(_section_has_scene(probe, HACKER_DISRUPTOR), "boundary: a Disruptor in cloud_descent's last wave is seen")
+
+
+## No section of any end condition spawns an EMP zone or an EMP mine as a wave entry (Ph9 places neither in Assault).
+func test_no_section_spawns_an_emp_zone_or_an_emp_mine() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		checked += 1
+		for path: String in [EMP_ZONE, EMP_MINE]:
+			assert_false(_section_has_scene(section, path), "%s spawns %s" % [section.section_name, path.get_file()])
+	assert_gt(checked, 0, "sanity: level 1 has sections")
+	for path: String in [EMP_ZONE, EMP_MINE]:
+		var probe := _cloud_descent()
+		_add_to_last_wave(probe, load(path) as PackedScene, 0.0)
+		assert_true(_section_has_scene(probe, path), "boundary: %s in a wave is seen" % path.get_file())
+
+
+## Every Minefield wave entry of `section` with a non-zero `initial_props["w_emp"]`, as readable strings.
+func _emp_minefield_entries(section: LevelSection) -> Array[String]:
+	var out: Array[String] = []
+	for w in section.waves:
+		var wave: WaveResource = w
+		for e in wave.entries:
+			var entry: SpawnEntryResource = e
+			if entry.ship_scene == null or entry.ship_scene.resource_path != MINEFIELD:
+				continue
+			var w_emp := float(entry.initial_props.get("w_emp", 0.0))
+			if w_emp != 0.0:
+				out.append("%s @ %.1f s: a minefield with w_emp %.2f" % [section.section_name, wave.trigger_time, w_emp])
+	return out
+
+
+## A copy of the section's last wave with one extra Minefield entry whose `initial_props` are `props`.
+func _add_minefield_to_last_wave(section: LevelSection, props: Dictionary) -> void:
+	_add_to_last_wave(section, load(MINEFIELD) as PackedScene, 0.0)
+	var last := _last_wave(section)
+	(last.entries[last.entries.size() - 1] as SpawnEntryResource).initial_props = props
+
+
+func test_no_section_spawns_an_emp_laying_minefield() -> void:
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		checked += 1
+		assert_eq(_emp_minefield_entries(section), [] as Array[String], "%s lays EMP mines" % section.section_name)
+	assert_gt(checked, 0, "sanity: level 1 has sections")
+	var emp := _cloud_descent()
+	_add_minefield_to_last_wave(emp, {"w_emp": 0.15})
+	assert_eq(_emp_minefield_entries(emp).size(), 1, "boundary: a minefield entry with w_emp 0.15 is flagged")
+	var plain := _cloud_descent()
+	_add_minefield_to_last_wave(plain, {"w_emp": 0.0})
+	assert_eq(_emp_minefield_entries(plain).size(), 0, "boundary: a minefield entry with w_emp 0.0 is not")
+
+
+## `{ path: text }` of every `.tscn` / `.gd` under `res://assault/scenes/levels/` (recursive), every `.gd` in `BOSS_SOURCE_DIRS`, the
+## fortress scene (its reinforcement bays' payloads) and `wave_builder.gd`, read from disk.
+func _assault_level_sources() -> Dictionary:
+	var out: Dictionary = {}
+	var dirs: Array[String] = [LEVELS_DIR]
+	while not dirs.is_empty():
+		var dir_path: String = dirs.pop_back()
+		var dir := DirAccess.open(dir_path)
+		if dir == null:
+			continue
+		for sub in dir.get_directories():
+			dirs.append(dir_path.path_join(sub))
+		for file in dir.get_files():
+			if file.ends_with(".tscn") or file.ends_with(".gd"):
+				out[dir_path.path_join(file)] = FileAccess.get_file_as_string(dir_path.path_join(file))
+	for boss_dir: String in BOSS_SOURCE_DIRS:
+		for file in DirAccess.get_files_at(boss_dir):
+			if file.ends_with(".gd"):
+				out[boss_dir.path_join(file)] = FileAccess.get_file_as_string(boss_dir.path_join(file))
+	for path: String in [FORTRESS_SCENE_SOURCE, WAVE_BUILDER_SOURCE]:
+		out[path] = FileAccess.get_file_as_string(path)
+	return out
+
+
+## Pure: the EMP and sector-jammer placements in `files` (`{ path: text }`), as readable strings. `wave_builder.gd` defines every path
+## constant, so it is read for `w_emp` only (a builder helper that lays EMP mines); every other file is a level source and is flagged for
+## an EMP zone (`emp_zone.tscn` / `EmpZone`), an EMP mine (`emp_mine` / `EMP_MINE`), an EMP-laying Minefield (a `.tscn` line `w_emp = v`
+## with v != 0, or `w_emp` anywhere in a `.gd`) or a sector jammer (`sector_jammer`, `SECTOR_JAMMER` or a `jammer(&"sector")` call).
+func _level_source_violations(files: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	var w_emp_line := RegEx.create_from_string("(?m)^\\s*w_emp\\s*=\\s*([-+0-9.eE]+)")
+	var sector_call := RegEx.create_from_string("jammer\\(\\s*&?\"sector\"")
+	for path: String in files:
+		var text: String = files[path]
+		if path.ends_with("wave_builder.gd"):
+			if text.contains("w_emp"):
+				out.append("%s: names w_emp" % path)
+			continue
+		for needle: String in ["emp_zone.tscn", "EmpZone", "emp_mine", "EMP_MINE", "sector_jammer", "SECTOR_JAMMER"]:
+			if text.contains(needle):
+				out.append("%s: %s" % [path, needle])
+		if sector_call.search(text) != null:
+			out.append("%s: a jammer(&\"sector\") call" % path)
+		if path.ends_with(".tscn"):
+			for m in w_emp_line.search_all(text):
+				if float(m.get_string(1)) != 0.0:
+					out.append("%s: w_emp = %s" % [path, m.get_string(1)])
+		elif text.contains("w_emp"):
+			out.append("%s: names w_emp" % path)
+	return out
+
+
+func test_no_assault_level_source_places_emp_or_a_sector_jammer() -> void:
+	var files := _assault_level_sources()
+	var level_files := files.keys().filter(func(p: String) -> bool: return p.begins_with(LEVELS_DIR))
+	gut.p("scanned %d Assault level sources (+ boss / fortress sources, wave_builder.gd)" % level_files.size())
+	assert_gte(level_files.size(), 7, "sanity: the scan read the level directory")
+	assert_true(files.has(FORTRESS_SCENE_SOURCE) and (files[FORTRESS_SCENE_SOURCE] as String).contains("payload_scene"),
+		"sanity: space_fortress.tscn was read and names its bay payloads")
+	assert_true(files.has(BOSS_SOURCE_DIRS[0].path_join("boss_reinforcements.gd")),
+		"sanity: the shared boss machinery was read")
+	assert_true(files.has(BOSS_SOURCE_DIRS[1].path_join("fortress_brain.gd")),
+		"sanity: the fortress scripts were read")
+	assert_true((files[WAVE_BUILDER_SOURCE] as String).contains("SECTOR_JAMMER"),
+		"sanity: wave_builder.gd was read (it defines SECTOR_JAMMER, which is why it is read for w_emp only)")
+	assert_eq(_level_source_violations(files), [] as Array[String], "an Assault level places EMP or a sector jammer")
+
+
+## Boundaries: each synthetic source the scan must reject, and the near misses it must pass.
+func test_synthetic_level_sources_with_emp_or_a_sector_jammer_fail_the_scan() -> void:
+	var lvl := LEVELS_DIR + "synthetic/"
+	var rejected := {
+		"a .tscn with w_emp = 0.15": {lvl + "a.tscn": "[node name=\"Minefield\" parent=\".\"]\nw_emp = 0.15\n"},
+		"a .tscn instancing emp_mine.tscn": {lvl + "b.tscn": "[ext_resource type=\"PackedScene\" path=\"%s\" id=\"1\"]\n" % EMP_MINE},
+		"a .gd naming EmpZone": {lvl + "c.gd": "var zone := EmpZone.new()\n"},
+		"a .gd naming w_emp": {lvl + "d.gd": "b.minefield().prop(\"w_emp\", 0.0)\n"},
+		"a wave_builder.gd naming w_emp": {WAVE_BUILDER_SOURCE: "func emp_field() -> SpawnConfig: return minefield().prop(\"w_emp\", 1.0)\n"},
+		"a .gd naming SECTOR_JAMMER": {lvl + "e.gd": "b.spawn(WaveBuilder.SECTOR_JAMMER)\n"},
+		"a .gd calling jammer(&\"sector\")": {lvl + "f.gd": "b.jammer(&\"sector\").at(0, -220)\n"},
+		"a .gd naming EMP_MINE": {lvl + "g.gd": "var s := EnemyMineScenes.EMP_MINE\n"},
+		"space_fortress.tscn naming emp_zone.tscn": {FORTRESS_SCENE_SOURCE: "[ext_resource type=\"PackedScene\" path=\"%s\" id=\"21_sf\"]\n" % EMP_ZONE},
+	}
+	for label: String in rejected:
+		assert_gt(_level_source_violations(rejected[label]).size(), 0, "boundary: %s fails the scan" % label)
+	var passed := {
+		"a .tscn with w_emp = 0.0": {lvl + "h.tscn": "[node name=\"Minefield\" parent=\".\"]\nw_emp = 0.0\n"},
+		"a .gd calling jammer(&\"pulsed\")": {lvl + "i.gd": "b.jammer(&\"pulsed\").at(0, -220)\n"},
+		"wave_builder.gd defining SECTOR_JAMMER": {WAVE_BUILDER_SOURCE: "const SECTOR_JAMMER := \"res://x.tscn\"\n"},
+	}
+	for label: String in passed:
+		assert_eq(_level_source_violations(passed[label]), [] as Array[String], "boundary: %s passes the scan" % label)
+
+
+# ── Phase 10 t11: the three Cloud Descent Heavy Gunships fight off rails ──────────────────────────────────────────────
+# (epic plan docs/plans/cmug23oo90029m52wae4clve0/3-plan.md §2.12; task plan docs/plans/cmwafsrbi00azqs2yuwzayuk3/3-plan.md §4).
+#
+# The 50.0 s heavy and the 62.0 s pair lost their rails in t11, so each must leave by itself, and its last rocket be gone, before the 10 s net.
+# Two terms per entry, every term read live (the shipped config, the heavy's own `attack_window()`, the measured corridor exit, the rocket scenes):
+#   exit    rel + engage_seconds + attack_window() + measured exit + MARGIN
+#   rocket  rel + engage_seconds + rocket max life + MARGIN
+# The rocket term needs no exit term because the rear Missiles mount closes with the budget (t5): every rocket leaves before the budget ends and
+# lives at most the longest `max_time` of the mount's pool scenes. `_deadline_rows` takes the larger: engage + max(window + exit, rocket) + MARGIN.
+# The bounded exception to "persistent ordnance stays out of ENEMIES_CLEARED sections" (t5 DECISIONS); the open-pod boundary shows the closure is
+# what keeps it bounded.
+
+const PH10_EXITS: GDScript = preload("res://tests/helpers/ph10_exit_keys.gd")
+const HEAVY_CONFIG: HeavyGunshipConfig = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.tres")  # read only
+
+var _heavy_exit: Dictionary = {}
+var _heavy_window: float = -1.0
+var _heavy_rocket_life: float = -1.0
+
+
+## The Heavy Gunship's corridor exit, measured once per GUT run here: this file sorts before every other caller, so the memo's first (and only)
+## measurement stays outside any testcase and before any harness world exists (`prepare_probe` strips group `player` from the whole tree).
+func before_all() -> void:
+	_heavy_exit = PH10_EXITS.heavy_gunship_exit(self)
+
+
+## `HeavyGunshipBrain.attack_window()` of a live heavy at full strength (the heavy cannon's burst). Cached.
+func _heavy_attack_window() -> float:
+	if _heavy_window >= 0.0:
+		return _heavy_window
+	var h: RefCounted = HARNESS.assault()
+	add_child(h.root)
+	var g := (load(WaveBuilder.HEAVY_GUNSHIP) as PackedScene).instantiate() as HeavyGunship
+	h.root.add_child(g)
+	_heavy_window = (g.get_node(^"Brain") as HeavyGunshipBrain).attack_window()
+	remove_child(h.root)
+	h.root.free()
+	return _heavy_window
+
+
+## The longest a rear-missile rocket lives: max `max_time` over the Missiles mount's `pool_specs()` scenes (the mount found through the scene's
+## own `Modules/Missiles/MountSlots/Slot0` variant). Cached.
+func _heavy_rocket_max_life() -> float:
+	if _heavy_rocket_life >= 0.0:
+		return _heavy_rocket_life
+	var g := (load(WaveBuilder.HEAVY_GUNSHIP) as PackedScene).instantiate()
+	var variant: int = (g.get_node(^"Modules/Missiles/MountSlots/Slot0") as TurretMountSlot).variant
+	g.free()
+	var mount := TurretMountScenes.scene_for(variant).instantiate()
+	_heavy_rocket_life = 0.0
+	for spec: Dictionary in mount.pool_specs():
+		var rocket := (spec["scene"] as PackedScene).instantiate()
+		_heavy_rocket_life = maxf(_heavy_rocket_life, float(rocket.get(&"max_time")))
+		rocket.free()
+	mount.free()
+	return _heavy_rocket_life
+
+
+func _heavy_exit_seconds() -> float:
+	return float(_heavy_exit["seconds"])
+
+
+func _heavy_exit_term() -> float:
+	return HEAVY_CONFIG.engage_seconds + _heavy_attack_window() + _heavy_exit_seconds() + MARGIN
+
+
+func _heavy_rocket_term() -> float:
+	return HEAVY_CONFIG.engage_seconds + _heavy_rocket_max_life() + MARGIN
+
+
+func _heavy_tail() -> float:
+	return maxf(_heavy_exit_term(), _heavy_rocket_term())
+
+
+## Boundary (b)'s tail: the pod left open through the exit, so a rocket may launch at its end and live its whole `max_time` after it.
+func _heavy_open_pod_tail() -> float:
+	return HEAVY_CONFIG.engage_seconds + _heavy_attack_window() + _heavy_exit_seconds() + _heavy_rocket_max_life() + MARGIN
+
+
+## A freshly built cloud_descent with a one-`scene` wave at `trigger` inserted in list order (before the first wave that triggers later), so its
+## effective trigger is its own (asserted). The fighter rows' `_with_fighter_wave_before_last()` generalised to any slot.
+func _with_wave_inserted(trigger: float, scene: PackedScene) -> LevelSection:
+	var section := _cloud_descent()
+	var index := section.waves.size()
+	for i in section.waves.size():
+		if (section.waves[i] as WaveResource).trigger_time > trigger:
+			index = i
+			break
+	var entry := SpawnEntryResource.new()
+	entry.ship_scene = scene
+	var wave := WaveResource.new()
+	wave.trigger_time = trigger
+	var entries: Array[SpawnEntryResource] = [entry]
+	wave.entries = entries
+	var waves: Array[WaveResource] = []
+	waves.assign(section.waves)
+	waves.insert(index, wave)
+	section.waves = waves
+	var effective := -INF
+	for i in index + 1:
+		effective = maxf(effective, (section.waves[i] as WaveResource).trigger_time)
+	assert_almost_eq(effective, trigger, 0.0001, "sanity: the inserted wave's effective trigger is its own")
+	return section
+
+
+func test_every_cloud_descent_heavy_gunship_clears_the_timeout_on_both_terms() -> void:
+	var section := _cloud_descent()
+	var timeout := section.enemies_cleared_timeout
+	var rows := _deadline_rows(section, WaveBuilder.HEAVY_GUNSHIP, _heavy_tail())
+	assert_eq(rows.size(), 3, "sanity: cloud_descent's 50.0 s heavy and its 62.0 s pair")
+	for row in rows:
+		var rel := float(row["rel"])
+		var exit_at := rel + _heavy_exit_term()
+		var rocket_at := rel + _heavy_rocket_term()
+		assert_lt(exit_at, timeout, "heavy at %.1f s + %.2f s: exit term %.2f s of the %.1f s timeout" % [row["trigger"], row["delay"], exit_at, timeout])
+		assert_lt(rocket_at, timeout, "heavy at %.1f s + %.2f s: rocket term %.2f s of the %.1f s timeout" % [row["trigger"], row["delay"], rocket_at,
+			timeout])
+		assert_false(row["over"])
+	var worst := _worst(rows)
+	if not worst.is_empty():
+		gut.p("cloud_descent: worst heavy %.1f s + %.2f s (%.2f s from the last trigger) computes %.2f s (exit term: engage %.1f + window %.2f + exit %.2f "
+			% [worst["trigger"], worst["delay"], worst["rel"], worst["computed"], HEAVY_CONFIG.engage_seconds, _heavy_attack_window(), _heavy_exit_seconds()]
+			+ "+ margin %.1f; rocket term %.2f): margin %.2f s of %.1f s" % [MARGIN, float(worst["rel"]) + _heavy_rocket_term(),
+				timeout - float(worst["computed"]), timeout])
+
+
+func test_the_heavy_deadline_terms_are_read_from_the_shipped_heavy() -> void:
+	var cannon_window: float = float(TurretMountScenes.export_of(TurretMount.Variant.HEAVY_CANNON, &"charge_seconds", 0.0)) \
+		+ float(int(TurretMountScenes.export_of(TurretMount.Variant.HEAVY_CANNON, &"burst_count", 1)) - 1) \
+		* float(TurretMountScenes.export_of(TurretMount.Variant.HEAVY_CANNON, &"burst_gap", 0.0))
+	assert_almost_eq(_heavy_attack_window(), cannon_window, 0.0001, "the window is the heavy cannon's burst")
+	assert_almost_eq(_heavy_attack_window(), 1.05, 0.0001, "sanity: 0.7 + 1 x 0.35")
+	assert_almost_eq(_heavy_rocket_max_life(), EnemyRocketScenes.max_time_of(EnemyRocket.Kind.PURSUIT), 0.0001, "the PURSUIT rocket lives longest")
+	assert_almost_eq(_heavy_rocket_max_life(), 6.0, 0.0001, "sanity: the PURSUIT rocket's 6.0 s")
+	var floor_distance := minf(_world_rect().size.x, _world_rect().size.y) / 2.0
+	gut.p("heavy gunship exit: worst %.2f s from %s over %d runs, %d capped" % [_heavy_exit_seconds(), _heavy_exit["start"], _heavy_exit["runs"],
+		_heavy_exit["capped"]])
+	assert_gt(_heavy_exit_seconds(), floor_distance / HEAVY_CONFIG.exit_speed, "the exit is at least the centre's straight run to its edge")
+	assert_eq(int(_heavy_exit["capped"]), 0, "no probe run hit the cap")
+
+
+## Boundary (a), config-derived (survives any lever on engage, the exit or the rockets): a one-heavy wave inserted in list order 0.05 s past the
+## latest trigger the tail allows (last trigger + timeout - tail; today about 66.42 s, between the 66.0 and 68.0 waves) is flagged, and the same
+## wave 0.05 s inside it is not.
+func test_a_heavy_just_past_the_config_derived_limit_misses_the_timeout() -> void:
+	var tail := _heavy_tail()
+	var shipped := _cloud_descent()
+	assert_eq(_over(_deadline_rows(shipped, WaveBuilder.HEAVY_GUNSHIP, tail)).size(), 0, "control: the shipped section passes")
+	var limit := _last_wave(shipped).trigger_time + shipped.enemies_cleared_timeout - tail
+	var scene := load(WaveBuilder.HEAVY_GUNSHIP) as PackedScene
+	var late := _with_wave_inserted(limit + 0.05, scene)
+	var over := _over(_deadline_rows(late, WaveBuilder.HEAVY_GUNSHIP, tail))
+	gut.p("heavy limit %.2f s (tail %.2f s): +0.05 computes %s" % [limit, tail, over.map(func(r: Dictionary) -> String: return "%.2f" % float(r["computed"]))])
+	assert_eq(over.size(), 1, "the heavy wave at %.2f s (and only it) must be flagged" % (limit + 0.05))
+	if over.size() == 1:
+		assert_almost_eq(float(over[0]["trigger"]), limit + 0.05, 0.0001, "the flagged row is the inserted heavy")
+	var early := _with_wave_inserted(limit - 0.05, scene)
+	assert_eq(_over(_deadline_rows(early, WaveBuilder.HEAVY_GUNSHIP, tail)).size(), 0,
+		"control: the same wave at %.2f s, inside the limit, passes" % (limit - 0.05))
+
+
+## Boundary (b), the rocket term (epic review N5): the heavy 0.05 s inside the limit passes because its pod closes with the budget, and is over
+## once the pod is left open through its exit (a rocket launched at the end of the exit lives its whole `max_time`). Derived from the config and
+## the measured exit, so it holds for any lever. The shipped 62.8 s heavy's open-pod figure is printed, not asserted (it holds only while the
+## exit is at least 6.65 s: -13.2 + 9.0 + 1.05 + 6.0 + 0.5 = 3.35).
+func test_a_heavy_whose_rear_missiles_stayed_open_would_miss_the_timeout() -> void:
+	var tail := _heavy_tail()
+	var open_tail := _heavy_open_pod_tail()
+	var shipped := _cloud_descent()
+	var limit := _last_wave(shipped).trigger_time + shipped.enemies_cleared_timeout - tail
+	var section := _with_wave_inserted(limit - 0.05, load(WaveBuilder.HEAVY_GUNSHIP) as PackedScene)
+	assert_eq(_over(_deadline_rows(section, WaveBuilder.HEAVY_GUNSHIP, tail)).size(), 0, "with the pod closed at the budget it passes")
+	var over := _over(_deadline_rows(section, WaveBuilder.HEAVY_GUNSHIP, open_tail))
+	var inserted := over.filter(func(r: Dictionary) -> bool: return is_equal_approx(float(r["trigger"]), limit - 0.05))
+	assert_eq(inserted.size(), 1, "with the pod left open the same heavy is flagged")
+	var worst := _worst(_deadline_rows(shipped, WaveBuilder.HEAVY_GUNSHIP, open_tail))
+	gut.p("open pod: tail %.2f s (closed %.2f s); the shipped %.1f s + %.2f s heavy would compute %.2f s of %.1f s" % [open_tail, tail,
+		worst["trigger"], worst["delay"], worst["computed"], shipped.enemies_cleared_timeout])
+
+
+# ── Phase 11 t10: the persistent-ordnance allowlist (epic plan docs/plans/cmug256so0031m52wbxomst72/3-plan.md §2.10) ──────────────────────────
+#
+# "An enemy that leaves ordnance behind stays out of an ENEMIES_CLEARED section" has two bounded exceptions: the Heavy Gunship (Ph10 t5: a pod rocket in
+# flight at its death) and the Space Fortress (Ph11: its ROCKET_BATTERY pools are `persist_after_owner_death`). This row lists every ENEMIES_CLEARED spawn
+# whose scene BUILDS a persisting pool and asserts the set is exactly that allowlist. Mount pools are not scene nodes: `TurretMountBuilder.build()` makes
+# them at runtime from each mount's `pool_specs()[i]["persist"]`, so the scene is instantiated in an Assault world and the pools its `_ready()` built are
+# read (every `BulletPool` under the host, scene-authored ones included), never the scene's own node list. The fortress's tail is `death_duration` + its
+# rocket's `max_time`, read off the same built pools.
+
+const SPACE_FORTRESS_CONFIG: SpaceFortressConfig = preload("res://assault/scenes/enemies/space_fortress/space_fortress_config.tres")  # read only
+const PERSISTENT_ORDNANCE_ALLOWLIST: Array[String] = [WaveBuilder.HEAVY_GUNSHIP, WaveBuilder.SPACE_FORTRESS]
+
+
+## The `BulletPool`s `scene_path`'s ship builds in an Assault world, as `{ "name", "persist", "max_time" }` (`max_time` the longest-lived round it fires).
+func _built_pools(scene_path: String) -> Array[Dictionary]:
+	var h: RefCounted = HARNESS.assault()
+	add_child(h.root)
+	var ship := (load(scene_path) as PackedScene).instantiate()
+	h.root.add_child(ship)
+	var out: Array[Dictionary] = []
+	for node in ship.find_children("*", "BulletPool", true, false):
+		var pool := node as BulletPool
+		var life := 0.0
+		if pool.bullet_scene != null:
+			var round := pool.bullet_scene.instantiate()
+			var t: Variant = round.get(&"max_time")
+			life = float(t) if t != null else 0.0
+			round.free()
+		out.append({"name": "%s/%s" % [scene_path.get_file(), pool.name], "persist": pool.persist_after_owner_death, "max_time": life})
+	remove_child(h.root)
+	h.root.free()
+	return out
+
+
+func _persisting_pools_of(scene_path: String) -> Array[Dictionary]:
+	return _built_pools(scene_path).filter(func(p: Dictionary) -> bool: return bool(p["persist"]))
+
+
+## The scene paths of `section` whose built ship leaves persisting ordnance, each once.
+func _persistent_spawns(section: LevelSection) -> Array[String]:
+	var seen: Array[String] = []
+	for w in section.waves:
+		for e in (w as WaveResource).entries:
+			var entry: SpawnEntryResource = e
+			if entry.ship_scene == null:
+				continue
+			var path := entry.ship_scene.resource_path
+			if seen.has(path):
+				continue
+			seen.append(path)
+	return seen.filter(func(p: String) -> bool: return not _persisting_pools_of(p).is_empty())
+
+
+## The persisting spawns of `section` that the allowlist does not cover.
+func _unlisted_persistent_spawns(section: LevelSection) -> Array[String]:
+	return _persistent_spawns(section).filter(func(p: String) -> bool: return not PERSISTENT_ORDNANCE_ALLOWLIST.has(p))
+
+
+func _synthetic_section(scene_path: String, timeout: float) -> LevelSection:
+	var section := LevelSection.new()
+	section.end_condition = LevelSection.EndCondition.ENEMIES_CLEARED
+	section.enemies_cleared_timeout = timeout
+	var entry := SpawnEntryResource.new()
+	entry.ship_scene = load(scene_path) as PackedScene
+	var wave := WaveResource.new()
+	var entries: Array[SpawnEntryResource] = [entry]
+	wave.entries = entries
+	var waves: Array[WaveResource] = [wave]
+	section.waves = waves
+	return section
+
+
+func test_only_the_heavy_gunship_and_the_space_fortress_leave_persistent_ordnance_in_enemies_cleared_sections() -> void:
+	var listed: Array[String] = []
+	var checked := 0
+	for s in _sections():
+		var section: LevelSection = s
+		if section.end_condition != LevelSection.EndCondition.ENEMIES_CLEARED:
+			continue
+		checked += 1
+		assert_eq(_unlisted_persistent_spawns(section), [] as Array[String],
+			"%s: every persistent-ordnance enemy in it is on the allowlist" % section.section_name)
+		for p in _persistent_spawns(section):
+			if not listed.has(p):
+				listed.append(p)
+	assert_eq(checked, 2, "sanity: station_assault and cloud_descent are the ENEMIES_CLEARED sections")
+	listed.sort()
+	var expected := PERSISTENT_ORDNANCE_ALLOWLIST.duplicate()
+	expected.sort()
+	assert_eq(listed, expected, "the allowlist is exactly what level 1 uses: not one entry unused, none unlisted")
+
+
+## Non-vacuity: the probe reads BUILT pools. A scene-node-only read would see no persisting pool in either listed scene (their mount pools do not exist
+## until `_ready()` builds them), so the rows above could never fail.
+func test_the_probe_sees_the_pools_the_mounts_build() -> void:
+	for path in PERSISTENT_ORDNANCE_ALLOWLIST:
+		assert_gt(_persisting_pools_of(path).size(), 0, "%s builds a persisting pool at runtime" % path)
+		var packed := load(path) as PackedScene
+		var state := packed.get_state()
+		for i in state.get_node_count():
+			for p in state.get_node_property_count(i):
+				assert_false(state.get_node_property_name(i, p) == &"persist_after_owner_death" and state.get_node_property_value(i, p) == true,
+					"%s authors no persisting pool in its scene (they are built)" % path.get_file())
+
+
+## The fortress's tail: its death sequence plus a rocket still in flight when it frees (nothing the fortress owns fires once its death starts, so the
+## rocket's life is the whole tail) stays inside station_assault's net.
+func test_the_space_fortress_tail_fits_the_station_assault_timeout() -> void:
+	var section: LevelSection = null
+	for s in _sections():
+		if (s as LevelSection).section_name == &"station_assault":
+			section = s
+	assert_not_null(section, "sanity: level 1 has station_assault")
+	var pools := _persisting_pools_of(WaveBuilder.SPACE_FORTRESS)
+	var rocket := 0.0
+	for p in pools:
+		rocket = maxf(rocket, float(p["max_time"]))
+	assert_gt(rocket, 0.0, "sanity: the fortress's persisting pool fires a round with a max_time")
+	var tail := SPACE_FORTRESS_CONFIG.death_sequence_duration + rocket
+	gut.p("space fortress tail: death %.2f s + rocket %.2f s = %.2f s of the %.1f s net" % [SPACE_FORTRESS_CONFIG.death_sequence_duration, rocket, tail,
+		section.enemies_cleared_timeout])
+	assert_lt(tail, section.enemies_cleared_timeout, "death_duration + the rocket's max_time fits the section's timeout")
+	assert_eq(section.enemies_cleared_timeout, 240.0, "the net the tail is judged against is the pinned 240 s")
+
+
+## Boundary: a Missile Corvette (rockets that persist after it) in an ENEMIES_CLEARED section is not on the allowlist, so the row above would fail; a
+## Heavy Gunship or a Space Fortress in the same synthetic section passes.
+func test_a_missile_corvette_in_an_enemies_cleared_section_fails_the_allowlist() -> void:
+	var corvette := _synthetic_section(WaveBuilder.MISSILE_CORVETTE, 60.0)
+	assert_eq(_unlisted_persistent_spawns(corvette), [WaveBuilder.MISSILE_CORVETTE] as Array[String],
+		"a Missile Corvette's rocket pools persist, and it is not on the allowlist")
+	for path in PERSISTENT_ORDNANCE_ALLOWLIST:
+		assert_eq(_unlisted_persistent_spawns(_synthetic_section(path, 60.0)), [] as Array[String], "control: %s is on it" % path.get_file())

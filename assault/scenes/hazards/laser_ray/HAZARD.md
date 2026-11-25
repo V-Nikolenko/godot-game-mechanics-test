@@ -44,9 +44,9 @@
 
 ## `hit_mask_override` — for emitters mounted on an entity
 
-The default `_HIT_MASK` (`128 | 256 | 512`) covers **every** known HurtBox layer, which is right for a hazard sitting in the play-field and wrong for a beam fired *by* something. Layer 512 is where most enemies' scene-authored hurtboxes live, including the space station's core — so a `LaserRay` spawned inside its own emitter's hull kills the emitter. Measured on the station: `[Health] SpaceStation took 9999 damage: 600 → 0 HP`, one frame after the laser phase starts.
+The default `_HIT_MASK` (`128 | 256 | 512`) covers **every** known HurtBox layer, which is right for a hazard sitting in the play-field and wrong for a beam fired *by* something. Layer 512 is where most enemies' scene-authored hurtboxes live, including every boss part — so a `LaserRay` spawned inside its own emitter's hull kills the emitter. Measured on the retired space station: `[Health] SpaceStation took 9999 damage: 600 → 0 HP`, one frame after the laser phase starts.
 
-`@export_flags_2d_physics var hit_mask_override: int = 0` replaces the whole mask when non-zero. `StationLaserPhase` sets `128` (player hurtbox only). Three rules:
+`@export_flags_2d_physics var hit_mask_override: int = 0` replaces the whole mask when non-zero. `128` (player hurtbox only) is the value an emitter on a boss would set (the retired station's laser phase did; no shipped emitter sets it today). Three rules:
 
 - **It must be assigned BEFORE `add_child()`** — `_ready()` is what reads it. The export makes the requirement a declarative, directly assertable property of the beam rather than a silent ordering dependency on writing `$HitZone.collision_mask` after the fact.
 - **`0` means "use the default", not "collide with nothing".** A beam that collides with nothing is inert, and that is not a configuration anyone wants.

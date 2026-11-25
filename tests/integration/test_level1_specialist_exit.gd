@@ -29,14 +29,14 @@
 ## into the rest of the suite. Three idle frames pass between scaling and `load_section()`, or wave 0 triggers after a
 ## catch-up burst (tests/README.md). Game time is summed physics delta, never wall clock. `waves_complete` is judged on
 ## `WaveManager`'s OWN clock (summed idle delta), with a tolerance of the largest idle delta seen during the run plus
-## one tick — at 8x one idle frame can exceed the 1x file's fixed 0.1 s. Every brain is seeded from its spawn index
+## one tick — at 16x one idle frame can exceed the 1x file's fixed 0.1 s. Every brain is seeded from its spawn index
 ## before its `_ready()`, so this is one seeded scenario.
 extends GutTest
 
 const HARNESS := preload("res://tests/helpers/enemy_ai_harness.gd")
 const DIRECTOR_SCRIPT := preload("res://assault/scenes/levels/edelia/1/level_1_director.gd")
 
-const _SPEEDUP := 8
+const _SPEEDUP := 16
 ## Non-zero: an `rng_seed` of 0 means "randomize".
 const _SEED_BASE := 2201
 ## Longer than the largest `delay()` of a replayed specialist line (1.5 s), so every WaveManager spawn timer has fired

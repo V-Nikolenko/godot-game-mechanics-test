@@ -1,0 +1,32 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/mounts/burst_cannon_mount.gd" id="1_scm"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_bullet/rounds/scatter_round.tscn" id="2_scm"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/turret_head_spread_cannon.png" id="head_tex"]
+
+[node name="SpreadCannonMount" type="Node2D"]
+script = ExtResource("1_scm")
+charge_seconds = 0.5
+burst_count = 2
+burst_gap = 0.45
+round_speed = 260.0
+round_scene = ExtResource("2_scm")
+pellets = 5
+pellet_spread_deg = 40.0
+turn_rate = 2.0
+fire_range = 420.0
+lead_blend = 0.6
+fire_cone_deg = 8.0
+scan_arc_deg = 90.0
+scan_speed = 0.4
+cooldown_seconds = 2.8
+
+[node name="Muzzle" type="Marker2D" parent="."]
+position = Vector2(28, 0)
+
+[node name="Head" type="Sprite2D" parent="."]
+show_behind_parent = true
+rotation = -1.5707964
+texture = ExtResource("head_tex")
+centered = false
+offset = Vector2(-32, -32)

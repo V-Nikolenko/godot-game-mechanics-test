@@ -9,7 +9,7 @@
 ## The base `ContactHitBox` node authored on every `BaseEnemy` subclass's scene defaults to
 ## `damage = 20` and knows nothing about `config`, which is only read at runtime. So every enemy
 ## that wants its configured `collision_damage` has to re-apply it in `_ready()` afterwards. Most
-## do (`bomber.gd`, `fighter.gd`, `ram_corvette.gd`, `space_station.gd`) or author a
+## do (`bomber.gd`, `fighter.gd`, `ram_corvette.gd`, `space_fortress.gd`) or author a
 ## different default directly on their own scene's node (`razor_drone.tscn`,
 ## `swarm_drone.tscn`, `ally_fighter.tscn` — 30/30/25 — with the script still re-applying where
 ## a config can override it).
@@ -44,11 +44,11 @@
 ## 1. **Each enemy is parented to a throwaway container `Node2D`, not to the test directly.**
 ##    `ExplosionEffect` parents its particles to `actor.get_parent()` and `BulletPool` reparents
 ##    bullets into the same place (`bullet_pool.gd:47`), so the enemy needs a parent it can
-##    scribble on. Same rule as `test_station_reinforcements.gd`.
+##    scribble on. Same rule as `test_boss_death_sequence.gd`.
 ## 2. **`_ready()` must actually run** — `health`/`hurt_box` are `@onready` and the whole config
 ##    application happens there — so every enemy is added to the tree, never just instantiated.
 ## 3. **Only DIRECT children are searched for the HitBox.** Bullets carry their own HitBox, but
-##    they live under the enemy's `BulletPool`, and the station's turrets live under `Turrets`.
+##    they live under the enemy's `BulletPool`, and a modular boss's parts live under `Modules`.
 ##    Every entity in this roster authors its `ContactHitBox` as a direct scene child (named
 ##    exactly that, next to `HurtBox`/`Health`/`HitFlashAnimationPlayer`), so "direct child" is
 ##    unambiguous.
@@ -119,6 +119,34 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/laser_tender/laser_tender_config.tres",
 	},
 	{
+		"name": "hacker_frigate",
+		"scene": "res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn",
+		"config": "res://assault/scenes/enemies/hacker_frigate/hacker_frigate_config.tres",
+	},
+	{
+		"name": "hacker_disruptor",
+		"scene": "res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn",
+		"config": "res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor_config.tres",
+	},
+	{
+		"name": "jamming_structure",
+		"scene": "res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn",
+		"config": "res://assault/scenes/enemies/jamming_structure/jamming_structure_config.tres",
+		"no_hitbox": true,
+	},
+	{
+		"name": "sector_jammer",
+		"scene": "res://assault/scenes/enemies/sector_jammer/sector_jammer.tscn",
+		"config": "res://assault/scenes/enemies/sector_jammer/sector_jammer_config.tres",
+		"no_hitbox": true,
+	},
+	{
+		"name": "pulsed_jammer",
+		"scene": "res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer.tscn",
+		"config": "res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer_config.tres",
+		"no_hitbox": true,
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 		"config": "res://assault/scenes/enemies/bonus_drone/bonus_drone_config.tres",
@@ -130,9 +158,19 @@ const ROSTER: Array[Dictionary] = [
 		"config": "res://assault/scenes/enemies/razor_drone/razor_drone_config.tres",
 	},
 	{
-		"name": "gunship",
-		"scene": "res://assault/scenes/enemies/gunship/gunship.tscn",
-		"config": "res://assault/scenes/enemies/gunship/gunship_config.tres",
+		"name": "heavy_gunship",
+		"scene": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn",
+		"config": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.tres",
+	},
+	{
+		"name": "carrier",
+		"scene": "res://assault/scenes/enemies/carrier/carrier.tscn",
+		"config": "res://assault/scenes/enemies/carrier/carrier_config.tres",
+	},
+	{
+		"name": "space_fortress",
+		"scene": "res://assault/scenes/enemies/space_fortress/space_fortress.tscn",
+		"config": "res://assault/scenes/enemies/space_fortress/space_fortress_config.tres",
 	},
 	{
 		"name": "gatling_interceptor",
@@ -153,11 +191,6 @@ const ROSTER: Array[Dictionary] = [
 		"name": "swarm_drone",
 		"scene": "res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn",
 		"config": "res://assault/scenes/enemies/swarm_drone/swarm_drone_config.tres",
-	},
-	{
-		"name": "space_station",
-		"scene": "res://assault/scenes/enemies/space_station/space_station.tscn",
-		"config": "res://assault/scenes/enemies/space_station/space_station_config.tres",
 	},
 	{
 		"name": "sniper",
@@ -257,14 +290,15 @@ func test_support_ship_is_harmless_through_a_none_profile_not_a_missing_hitbox()
 
 
 ## The specific regression this file was written for. Kept as its own named test so a failure
-## reads as "the gunship stopped using its config" rather than as one line of a roster sweep.
-func test_gunship_rams_for_its_configured_collision_damage() -> void:
+## reads as "the gunship stopped using its config" rather than as one line of a roster sweep. The Heavy Gunship (Phase 10 t4) is the
+## legacy Gunship rewritten in place and keeps its 30.
+func test_heavy_gunship_rams_for_its_configured_collision_damage() -> void:
 	var entry: Dictionary = {}
 	for e in ROSTER:
-		if e["name"] == "gunship":
+		if e["name"] == "heavy_gunship":
 			entry = e
-	var cfg := load(entry["config"]) as GunshipConfig
-	assert_eq(cfg.collision_damage, 30, "gunship_config.tres is the source of truth for this test")
+	var cfg := load(entry["config"]) as HeavyGunshipConfig
+	assert_eq(cfg.collision_damage, 30, "heavy_gunship_config.tres is the source of truth for this test")
 	assert_ne(
 		cfg.collision_damage,
 		SHIP_CONFIG_DEFAULT_DAMAGE,
@@ -272,9 +306,25 @@ func test_gunship_rams_for_its_configured_collision_damage() -> void:
 	)
 	var gunship := _spawn(entry)
 	var hb := _contact_hitbox(gunship)
-	assert_not_null(hb, "gunship: has no contact HitBox as a direct child")
+	assert_not_null(hb, "heavy_gunship: has no contact HitBox as a direct child")
 	if hb != null:
 		assert_eq(hb.damage, cfg.collision_damage)
+
+
+## The Carrier (Phase 10 t6): its ARMOR touch deals the 15 its config declares, never the scene's default.
+func test_carrier_touches_for_its_configured_collision_damage() -> void:
+	var entry: Dictionary = {}
+	for e in ROSTER:
+		if e["name"] == "carrier":
+			entry = e
+	var cfg := load(entry["config"]) as CarrierConfig
+	assert_eq(cfg.collision_damage, 15, "carrier_config.tres is the source of truth for this test")
+	var carrier := _spawn(entry)
+	var hb := _contact_hitbox(carrier)
+	assert_not_null(hb, "carrier: has no contact HitBox as a direct child")
+	if hb != null:
+		assert_eq(hb.damage, cfg.collision_damage)
+	assert_eq(carrier.contact_profile.mode, ContactProfile.Mode.ARMOR, "carrier: the touch is an armoured shove")
 
 
 # ── Completeness guard ────────────────────────────────────────────────────────

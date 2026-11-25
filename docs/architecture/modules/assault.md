@@ -55,7 +55,7 @@ assault/scenes/
 │   ├── level_2_waves.gd         Level 2 wave list
 │   └── race/                    Race-level scenes/config
 ├── enemies/                     base_enemy.gd, enemy_path_mover.gd + one folder per enemy type
-├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, wreck (wrecks, structures, debris), minefield (Ph7 placed mines + beacon)
+├── hazards/                     asteroid_base.gd + big/small asteroids, laser_ray, gravity_well, energy_anomaly, gravity_field, reactor_field, emp_zone (Ph9 neutral EMP pulse area), wreck (wrecks, structures, debris), minefield (Ph7 placed mines + beacon)
 ├── structures/                  Ph8 coordinators that are not enemies: turret_group/ (TurretGroup, TurretGroupSlot, presets/assault_pair.tscn, presets/hub_defense_site.tscn)
 ├── allies/ally_fighter/         AI escort fighters (group "allies")
 ├── gui/                         HUD, score widgets/popups, weapon selector, game-over, debrief
@@ -162,8 +162,8 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   **Contact damage is the one stat the base scene does not wire up for you:** every `BaseEnemy`
   subclass's `.tscn` authors a `ContactHitBox` node with `damage = 20`, which knows nothing about
   the subclass's own `.tres`, so a subclass wanting its configured `collision_damage` must
-  re-apply it in `_ready()` off `contact_hit_box` (`gunship.gd`, `bomber.gd`,
-  `fighter.gd`, `ram_corvette.gd` (which also swaps to `exposed_collision_damage` once its plates are gone), `space_station.gd`) or author a different default
+  re-apply it in `_ready()` off `contact_hit_box` (`heavy_gunship.gd`, `bomber.gd`,
+  `fighter.gd`, `ram_corvette.gd` (which also swaps to `exposed_collision_damage` once its plates are gone), `space_fortress.gd`) or author a different default
   directly on its own scene node (`razor_drone.tscn`, `swarm_drone.tscn` — 30, still
   re-applied from config where one exists). Forgetting leaves the `.tres` value dead with no
   symptom; `tests/integration/test_enemy_contact_damage.gd` asserts it for the whole roster.
@@ -182,14 +182,14 @@ See the full spawn reference: [enemy roster & WaveBuilder](../../enemy-roster.md
   `tests/integration/test_enemy_hurtbox_geometry.gd`. Armour is a damage *rule* on a full-size
   hurtbox (deflect, flash, report 0), never a missing hurtbox — a shrunken one leaves visible hull
   that swallows shots and reports nothing, which reads as a broken gun rather than as armour. The
-  space station is the worked example and the reason the file exists: see its
-  [ENEMY.md](../../../assault/scenes/enemies/space_station/ENEMY.md) -> "Core hurtbox: why it
-  spans the whole hull".
+  space station (retired in Phase 11 t11) was the worked example and the reason the file exists; its boss today is the Space
+  Fortress, whose hull hurtbox covers the body and every part (see [ENEMY.md](../../../assault/scenes/enemies/space_fortress/ENEMY.md)),
+  and the file still fails the rejected "narrow the boss hurtbox to its core" proposal, re-expressed on the fortress.
 
   A third sweep polices the **art** rather than the collision shapes:
   `tests/integration/test_entity_sprite_transparency.gd` fails any texture an entity draws over
   the game world that is 90%+ fully opaque, because a painted-in background renders as a card that
-  cuts a hard rectangle out of the starfield. `station_core.png` shipped that way at 100% and
+  cuts a hard rectangle out of the starfield. The retired space station's `station_core.png` shipped that way at 100% and
   survived two cycles, since nothing in the gate renders a scene. Recovery for art that is already
   correct in angle and palette is `./scripts/strip-sprite-bg.sh` (border flood fill) rather than a
   regeneration.
@@ -295,7 +295,10 @@ pinned in `EXPECTED_PH5` (`test_level1_specialist_spawns.gd`, which also checks 
 planet_approach, a corvette's last rocket included, outlives the next `ENEMIES_CLEARED` section's last trigger). **Neither may
 spawn in an `ENEMIES_CLEARED` section**: a corvette's persistent rockets would hold it open (`test_engagement_deadline.gd`).
 The attack-in-budget rows replay only `rel - 1 s .. rel + engage + 2 s` of a section through a real `WaveManager`
-(`tests/helpers/level1_slice_replay.gd`).
+(`tests/helpers/level1_slice_replay.gd`). Since Phase 10 t11 that helper can also light the section's real lasers (opt-in
+`light_lasers`: the level-start `LaserWallWave` and the director's own `_spawn_laser_columns()` on an idle clock, a row carried
+over the slice start relit by `warm_start()`) and report every death of its target ships covered by a lethal ray. Phase 10 t12 adds an opt-in
+`player_offset` (default `PLAYER_OFFSET`): the Carrier replay parks the stub high so the camera pans to its highest view, the carrier's worst case.
 
 **The Missile Corvette (Phase 5, t7 shell, t8 fight, t9 art)** — see [missile_corvette/ENEMY.md](../../../assault/scenes/enemies/missile_corvette/ENEMY.md).
 A brain + flat-config enemy (`MissileCorvetteBrain`, `MissileCorvetteConfig`) that closes to its held range (460 px in Assault), circles the
@@ -321,7 +324,7 @@ wide turn, reposition, second pass — and picks an aimed Pulse burst or a forwa
 (spin-up, an 8–12 round Gatling Stream aimed at the player's predicted point, a pause, a swing to the other flank),
 two of them converging their streams from one side. Both run in both harnesses (`test_fighter.gd`,
 `test_gatling_interceptor.gd`, `test_enemy_dual_mode.gd`), both fight as `SquadController` squads, both fall back to the
-legacy weapon on a rail (`on_suspended()`, so the station's reinforcements still fire), and **all 64 of level 1's
+legacy weapon on a rail (`on_suspended()`; a legacy fallback no shipped spawn uses, the fortress's escorts are brain-driven), and **all 64 of level 1's
 fighter and Gatling spawns are AI spawns** (no `.move()`, `.free_after()` or `shoot_*()`): the three level-1 sections
 arrive at the same moments and places as before and then fight inside the corridor and leave on their
 `EngagementBudget`. Their corridor behaviour is the shared `AssaultCorridorConstraint` above — a Fighter's flank
@@ -391,8 +394,9 @@ Source: `assault/scenes/projectiles/`. Pooling: `global/components/bullet_pool.g
   `enemy_bullet.tscn` until Ph17's audit. `test_enemy_bullet_lifetime.gd` sweeps every round: `max_distance` over the
   slowest speed any shooter fires it at (read from config fields, never typed) must fit `max_time`.
 - `enemy_ordnance/` — **enemy ordnance** (Ph4): `enemy_ordnance.gd` (`EnemyOrdnance`, an `Area2D` with a `Kind` enum), `gravity_bomb.tscn`, `mine.tscn`, `pursuit_bomb.tscn`, and `enemy_ordnance_scenes.gd` (`EnemyOrdnanceScenes`: the scene constants, `scene_for(kind)`, `pool_size_for(kind, cfg)`). Not an `EnemyBullet` and not a `BaseEnemy` (never in `enemies`, no score). `HurtBox` 512/96 + `Health` 1: any player bullet or rocket **defuses** it (a pop, no blast). A `ProximityArea` (mask 128) is polled each tick once armed; set off, it blinks for `warning_time` then detonates via `ContactBlast.spawn` into its parent. Gravity bomb: straight at `launch` speed, 16 s / 1800 px. Mine: ejected for 0.3 s, then stationary, fizzles (no blast) at `mine_life`, 10 s backstop. Pursuit bomb: steers at `turn_rate` for `steer_window`, then freezes its heading and accelerates, 10 s / 2400 px. One accumulated clock, no `Timer`. Pools should set `persist_after_owner_death`. Its speeds are NOT in `_every_shipped_enemy_bullet_speed()`; `test_enemy_bullet_lifetime.gd` has per-kind rows. Behaviour: `tests/integration/test_enemy_ordnance.gd`. The Bomber (`bomber/bomber.gd`, `Bomber.drop()`) takes it from three `persist_after_owner_death` pools; on a rail it drops a gravity bomb DOWN every `rail_bomb_interval`; off rails `BomberBrain` flies bombing runs (t10: mine walls placed by distance on an undamped lead, gravity / pursuit bombs on a damped one — `bomber/ENEMY.md`).
-- `enemy_rockets/` — **enemy rockets** (Ph5, t5 + t6): `enemy_rocket.gd` (`EnemyRocket`, an `Area2D`, `enum Kind { DUMB, PURSUIT, CLUSTER, WARHEAD, SUBMUNITION }`), `dumb_rocket.tscn`, `pursuit_rocket.tscn`, `cluster_rocket.tscn`, `submunition.tscn`, `delayed_warhead.tscn`, `enemy_rocket_scenes.gd` (`EnemyRocketScenes.scene_for(kind)`, `pool_size_for(kind, cfg)` = `count × ceil(max_time / cfg.salvo_period_min)`). A sibling of `EnemyOrdnance`; never in `enemies`, never scored. **Tuning lives in each scene's exports** (DUMB 140 → 520 px/s, no steering, 16 / 16, blast r 36, 4.0 s / 1800 px; PURSUIT 120 → 440 px/s, 1.6 rad/s for 3.0 s after a 0.35 s boost, `lead_max` 0.8, 18 / 18, blast r 40, 6.0 s / 2400 px). `launch(dir, aim_point, launcher)`: the launcher's `launch_velocity()` component along `dir` is inherited; the impact `HitBox` (layer 32 only, mask 640, `ROCKET`) opens only once the rocket is `rocket_clear_radius() + body_radius + arm_clearance` from the launcher's **current** position. The impact hurts enemies, ordnance, Ram plates (an armoured hull lets it through via `ArmorQuery`) and asteroids; the player and allies take only the `ContactBlast` (256). Shoot-down `HurtBox` 512 / mask 96, resolved by the rocket's own `area_entered`: a player bullet or missile and the rocket destroy each other with no blast (another rocket's HitBox and a `CONTACT` HitBox are ignored). PURSUIT steers by lead pursuit (`TargetInfo.intercept`, else `predicted_position(lead_max)`) capped by `Steering.turn_toward`; no player → no turn; after the window the heading freezes. **CLUSTER** (120 → 380 px/s, 0.7 rad/s, 16 / 16, 4.0 s / 1200 px) splits when the player is within `split_distance` 260 px or on the tick that reaches `split_time` 2.0 s: it emits `expired` with no blast and spawns `cluster_count` 4 unpooled, self-freeing **SUBMUNITION**s (520 px/s, 8 / 8, blast r 22, 1.2 s / 600 px) into its own container, fanned over `cluster_fan_deg` 36° about the predicted point, launched with `launcher = null`; shot first, it leaves nothing. **WARHEAD** (100 → 240 px/s, 0.6 rad/s, 12 impact / 30 blast, blast r 110, 7.0 s / 1300 px): after `prox_arm_seconds` 0.6 it polls its `ProximityArea` (r 70, mask 128), stops dead on the first hit, blinks 12 Hz for `warning_time` 0.4 and blasts; (trigger + blast) / warning = 450 ≥ 420. Nose-up (`rotation = heading.angle() + PI / 2`) with a `RocketTrail` and a `Sprite2D` body (t9: `enemy_rocket.png` for DUMB and PURSUIT - the latter tinted violet -, `enemy_cluster_rocket.png`, `enemy_submunition.png`, `enemy_warhead.png` with a code-glow `BlinkLight` sprite that glows dim in flight and blinks 12 Hz while the warhead counts down, all in `assault/assets/sprites/projectiles/`; the only `_draw()` left is the warhead's blast-radius ring); `RocketTrail.offset_behind` is per scene, at the tail of its art. Lifetime expiry is a fizzle (pop, no blast); after a detonation or shoot-down `expired` goes out two physics ticks later (see `_end_after_overlaps()`: an immediate pool recycle re-hit the enemy). Behaviour: `tests/integration/test_enemy_rockets.gd` (fixture launcher `tests/helpers/rocket_launcher_fixture.gd`); lifetime rows in `test_enemy_bullet_lifetime.gd`. The **Missile Corvette** (`enemies/missile_corvette/`, Ph5 t7) fires them from four `persist_after_owner_death` pools (3 / 6 / 3 / 4) via `MissileCorvette.fire(kind, aim_point)`, which sets no rocket field and answers `launch_velocity()` / `rocket_clear_radius()` (40); shell and fight (t8: HOLD_ARC broad arc, 45° launch cone, TELEGRAPH / SALVO with predicted aim points per kind) in `tests/integration/test_missile_corvette.gd` — `missile_corvette/ENEMY.md`. `EnemyRocketScenes.export_of(kind, property, fallback)` reads any rocket scene export without instantiating it (the corvette reads `cruise_speed` for its intercepts).
-- `missiles/` — `homing/` and `warhead/` secondary munitions fired by `RocketState`.
+- `enemy_rockets/` — **enemy rockets** (Ph5, t5 + t6): `enemy_rocket.gd` (`EnemyRocket`, an `Area2D`, `enum Kind { DUMB, PURSUIT, CLUSTER, WARHEAD, SUBMUNITION }`), `dumb_rocket.tscn`, `pursuit_rocket.tscn`, `cluster_rocket.tscn`, `submunition.tscn`, `delayed_warhead.tscn`, `enemy_rocket_scenes.gd` (`EnemyRocketScenes.scene_for(kind)`, `pool_size_for(kind, cfg)` = `count × ceil(max_time / cfg.salvo_period_min)`). A sibling of `EnemyOrdnance`; never in `enemies`, never scored. **Tuning lives in each scene's exports** (DUMB 140 → 520 px/s, no steering, 16 / 16, blast r 36, 4.0 s / 1800 px; PURSUIT 120 → 440 px/s, 1.6 rad/s for 3.0 s after a 0.35 s boost, `lead_max` 0.8, 18 / 18, blast r 40, 6.0 s / 2400 px). `launch(dir, aim_point, launcher)`: the launcher's `launch_velocity()` component along `dir` is inherited; the impact `HitBox` (layer 32 only, mask 640, `ROCKET`) opens only once the rocket is `rocket_clear_radius() + body_radius + arm_clearance` from the launcher's **current** position. The impact hurts enemies, ordnance, Ram plates (an armoured hull lets it through via `ArmorQuery`) and asteroids; the player and allies take only the `ContactBlast` (256). Shoot-down `HurtBox` 512 / mask 96, resolved by the rocket's own `area_entered`: a player bullet or missile and the rocket destroy each other with no blast (another rocket's HitBox and a `CONTACT` HitBox are ignored). PURSUIT steers by lead pursuit (`TargetInfo.intercept`, else `predicted_position(lead_max)`) capped by `Steering.turn_toward`; no player → no turn; after the window the heading freezes. **EMP (Ph9 t5):** a steering rocket (`turn_rate > 0`) is in `SeekingOrdnance.ENEMY_GROUP` from `launch()` to `_mark_done()` / `reset()`; `jam_guidance(source)` (`EmpPulse.TARGET_SEEKERS`) ends its guidance window for that life (it flies straight and keeps its blast). **CLUSTER** (120 → 380 px/s, 0.7 rad/s, 16 / 16, 4.0 s / 1200 px) splits when the player is within `split_distance` 260 px or on the tick that reaches `split_time` 2.0 s: it emits `expired` with no blast and spawns `cluster_count` 4 unpooled, self-freeing **SUBMUNITION**s (520 px/s, 8 / 8, blast r 22, 1.2 s / 600 px) into its own container, fanned over `cluster_fan_deg` 36° about the predicted point, launched with `launcher = null`; shot first, it leaves nothing. **WARHEAD** (100 → 240 px/s, 0.6 rad/s, 12 impact / 30 blast, blast r 110, 7.0 s / 1300 px): after `prox_arm_seconds` 0.6 it polls its `ProximityArea` (r 70, mask 128), stops dead on the first hit, blinks 12 Hz for `warning_time` 0.4 and blasts; (trigger + blast) / warning = 450 ≥ 420. Nose-up (`rotation = heading.angle() + PI / 2`) with a `RocketTrail` and a `Sprite2D` body (t9: `enemy_rocket.png` for DUMB and PURSUIT - the latter tinted violet -, `enemy_cluster_rocket.png`, `enemy_submunition.png`, `enemy_warhead.png` with a code-glow `BlinkLight` sprite that glows dim in flight and blinks 12 Hz while the warhead counts down, all in `assault/assets/sprites/projectiles/`; the only `_draw()` left is the warhead's blast-radius ring); `RocketTrail.offset_behind` is per scene, at the tail of its art. Lifetime expiry is a fizzle (pop, no blast); after a detonation or shoot-down `expired` goes out two physics ticks later (see `_end_after_overlaps()`: an immediate pool recycle re-hit the enemy). Behaviour: `tests/integration/test_enemy_rockets.gd` (fixture launcher `tests/helpers/rocket_launcher_fixture.gd`); lifetime rows in `test_enemy_bullet_lifetime.gd`. The **Missile Corvette** (`enemies/missile_corvette/`, Ph5 t7) fires them from four `persist_after_owner_death` pools (3 / 6 / 3 / 4) via `MissileCorvette.fire(kind, aim_point)`, which sets no rocket field and answers `launch_velocity()` / `rocket_clear_radius()` (40); shell and fight (t8: HOLD_ARC broad arc, 45° launch cone, TELEGRAPH / SALVO with predicted aim points per kind) in `tests/integration/test_missile_corvette.gd` — `missile_corvette/ENEMY.md`. `EnemyRocketScenes.export_of(kind, property, fallback)` reads any rocket scene export without instantiating it (the corvette reads `cruise_speed` for its intercepts).
+- `missiles/` — `homing/` and `warhead/` secondary munitions fired by `RocketState`. The homing rocket (Ph9 t3/t4) expires through a `ProjectileLifetime` (6 s / 2400 px / the Assault world rect) and implements the seeking-ordnance retarget contract (`SeekingOrdnance`, [global.md](global.md) → *Seeking ordnance*): a hijacked rocket turns slowly back at its target, blasts the player for 18 (never 100), can be shot down or lured into an enemy, and fizzles after 2.5 s. Neither rocket hits another player rocket.
+- `hijack_pulse/` — **the Hacker Frigate's control dart** (Ph9 t9): `hijack_pulse.gd` (`HijackPulse`, a `Node2D` with **no collision areas**: it claims by distance) and `hijack_pulse.tscn` (`speed` 900, `claim_radius` 16, a `ProjectileLifetime` 1.6 s / 1400 px / the world rect). `launch(rocket, source)` places it at the source's hull centre; it homes exactly on the rocket and, within 16 px, calls `retarget(player, -1.0, source)` and expires on the same tick (the rocket draws the tether). Pooled by the Hacker's `DartPool`; never self-freed. Its row in `test_enemy_bullet_lifetime.gd` (1400 / 900 = 1.56 s ≤ 1.6 s).
 - `piercing_beam/` — the sustained beam projectile for the BEAM weapon behavior.
 
 `BulletPool` (in `global/`) is instantiated by shooters (allies and many enemies — **not** the
@@ -420,7 +424,7 @@ Conventions: [PROJECT.md](../PROJECT.md) → *Mines, minefields and the Mine Lay
   | HOMING | `mines/homing_mine.tscn` | notices the player within `notice_radius`, creeps toward them, lost beyond `home_lose_radius`; an `Eye` sprite shows while noticing | `home_speed` 60, 260 / 380, `home_max_distance` 900 |
   | CHAIN | `mines/chain_mine.tscn` | sets off every live mine within `chain_radius` after `chain_delay`; a shot detonates it (`shot_detonates`); dashed fuse links to neighbours | 150 / 0.2 s |
   | PULSE | `mines/pulse_mine.tscn` | small blast (8) + `apply_boost_disruption` on players within `pulse_radius`; violet `PulseRing` | 170, strength 0.6, 2.5 s |
-  | EMP | `mines/emp_mine.tscn` | no blast; `EmpPulse.emit` within `emp_radius`; blue-white `EmpRing` | 190, 2.0 s |
+  | EMP | `mines/emp_mine.tscn` | no blast; `EmpPulse.emit` within `emp_radius` (Ph9 t5: `TARGET_PLAYER \| TARGET_SEEKERS` enemy-laid, `TARGET_ALL` placed); blue-white `EmpRing` | 190, 2.0 s |
 
   Warning rule for every scene (asserted from exports): `(trigger_radius + effect_radius) / warning_time >= 440 + own_speed`.
 - **Registration and footprint.** A mine is a `HazardInfo` (`kind = &"mine"`, `radius = trigger_radius + hazard_pad` 60, `avoid_weight` 1.0) that
@@ -463,7 +467,7 @@ endpoint beam (`twin_beam.tscn`, cover, strain, laser-wall registration) and the
   the node's local +X from its `global_position`; the hit segment stops `tip_grace_px` short of the free tip. Three code-built `top_level` `Line2D`
   children: `Telegraph` (`telegraph_width` px, yellow, white while `is_committed()`), `Glow` (red, `2 * draw_half_width`), `Core` (`hit_half_width`).
   **Endpoint beam (t5):** `twin_beam.tscn` (TWIN) takes `set_endpoints(a, b)` every tick, held ACTIVE (`active_seconds` 0). **Cover:** with `blocked_by_cover`, on the physics step only, a ray through `LineOfSight.first_blocker()` clips the beam at asteroids / wrecks (an endpoint beam leaves a safe shadow between its two lit parts; a second `Telegraph2`/`Glow2`/`Core2` set draws the far part). **Strain:** `set_strained(true)` = non-lethal 15 Hz flicker. **Laser wall:** a `registers_hazard` beam is a `&"laser_wall"` segment `HazardInfo` (`exempt_group` = its owner group, `velocity` = midpoint motion) from TELEGRAPH start to FADE start; `hazard_info()` answers null otherwise.
-- **`EnergyHitScan`** (static): victims = groups `player`, `allies`, `enemies`, `asteroids` minus the owner set (`is_exempt`); `hits_band()` is
+- **`EnergyHitScan`** (static): victims = groups `player`, `allies`, `enemies`, `asteroids` minus the owner set (`is_exempt`); never group `enemy_parts` (a Ph10 `EnemyModule` is out of every enemy energy weapon's reach, so a heavy's own ring can never hurt its parts; deferred to Ph18 / Ph19); `hits_band()` is
   `Shape2D.collide` against every enabled hurtbox `CollisionShape2D` at its global transform; `bounding_radius()` feeds the broad phase;
   `deliver()` is a direct `received_damage.emit` through `Hazards.hurt_box_of`. Each lethal tick tests the band and the triangles swept since the
   previous lethal tick; one hit per target per `rehit_interval` (instance id, cleared by `start()`).
@@ -494,8 +498,8 @@ Built in t6 (shell, burst cannon), t7 / t8 (the other mounts) and t9 (`TurretGro
   Assault only while the turret's centre is inside `EnemyWorld.view_rect()`; ENGAGED gives each mount `can_fire = can_see_player() or fires_past_cover()`; owns the
   `StateLight`.
 - **`TurretMount extends Node2D`** (`mounts/turret_mount.gd`; the Ph10 seam, never reads its host's type): `enum Variant { BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY,
-  PULSE_RING, LANCE, BEAM_CANNON }`, `enum Phase { SCAN, TRACK, TELEGRAPH, FIRE, COOLDOWN, UNPOWERED }` (both append-only), signals `phase_changed(phase: int)` and
-  `round_fired(projectile: Node2D)`. Writes only its own `rotation` (turn-rate limited, local to its parent). Partial lead `P.lerp(intercept, lead_blend)`, fires only
+  PULSE_RING, LANCE, BEAM_CANNON, HEAVY_CANNON, SPREAD_CANNON, RAPID_PULSE }`, `enum Phase { SCAN, TRACK, TELEGRAPH, FIRE, COOLDOWN, UNPOWERED }` (both append-only), signals `phase_changed(phase: int)` and
+  `round_fired(projectile: Node2D)`. Writes only its own `rotation` (turn-rate limited, local to its parent). `traverse_deg` (default 360; a slot's `traverse_deg_override` replaces it) limits the arc it aims, scans and fires in, turning along the arc and never through the blocked sector. `TurretMountBuilder.build()` builds mount + pools for `DefenseTurret` and `ModularHull.build_mounts()`. Partial lead `P.lerp(intercept, lead_blend)`, fires only
   inside `fire_cone_deg / 2`, a cooldown clock that survives perception flicker, and an optional `telegraph_gate: Callable` (a group's stagger). A variant is a
   subclass overriding hooks (`_aim_point_for`, `_shot_speed`, `_tracks`, `_wants_telegraph`, `_telegraph_seconds`, `_telegraph_done`, `_on_telegraph_start`,
   `_fire_tick`, `_pre_tick`, `_weapon_tick`, `_stop_weapon`, `pool_specs`); tuning lives in its scene's exports, read by gates through `TurretMountScenes.export_of()`.
@@ -507,8 +511,11 @@ Built in t6 (shell, burst cannon), t7 / t8 (the other mounts) and t9 (`TurretGro
 - **Shield generator (t9s)** (`assault/scenes/enemies/shield_generator/` [ENEMY.md](../../../assault/scenes/enemies/shield_generator/ENEMY.md)): `ShieldGenerator` (no mover, `ShieldGeneratorBrain`, flat `ShieldGeneratorConfig`, `AssaultDrift`, `counts_as_escape` false) sustains a 360° `EnemyShield` (`GeneratorShield`, capacity 50, radius = body + 8) on every other live `BaseEnemy` member of its `TurretGroup`, skipping itself, a member answering `is_fence_post()`, and any hurtbox whose absorber slot is held (a Support Ship ward is never displaced). It stops `sustain()` when it dies or `set_powered(false)` reaches it, so every bubble lapses within heartbeat + fade (0.6 s). Beams bypass bubbles. Cyan tethers (`tethers()`). Test preset `tests/helpers/shielded_site.tscn`; gate `test_turret_group.gd` §13.
 - **Heavy emplacement (t11)** (`assault/scenes/enemies/heavy_emplacement/` [ENEMY.md](../../../assault/scenes/enemies/heavy_emplacement/ENEMY.md)): the `DefenseTurret` root and brain on a second scene with its own `DefenseTurretConfig` (HP 260, score 150, `counts_as_escape` false), body r 64 and two `TurretMountSlot`s - a `BEAM_CANNON` at (0, -30) and a `BURST_CANNON` at (0, 34), each with `turn_rate_override` 1.2 - so the two heads aim independently and share one owner group (the beam never burns its own hull). `WaveBuilder.HEAVY_EMPLACEMENT` / `heavy_emplacement()`
 - **Laser fence (t10)** (`assault/scenes/structures/laser_fence/` [STRUCTURE.md](../../../assault/scenes/structures/laser_fence/STRUCTURE.md), `assault/scenes/enemies/laser_emitter/` [ENEMY.md](../../../assault/scenes/enemies/laser_emitter/ENEMY.md)): `LaserFence` (a `Node2D`, not an enemy) holds `PostA` / `PostB` (`LaserEmitter`, HP 140, score 40, r 18, no mover, `counts_as_escape` false, `is_fence_post()`), a `twin_beam.tscn` beam with fence overrides (damage 12, `avoid_weight` 1.0, registers a `&"laser_wall"` hazard) it ticks from `step(delta)`, and an `AssaultDrift`. `STATIC` / `CYCLE` modes (`off_seconds` 2.5, `on_seconds` 3.0, `phase_offset`), `set_powered()`, `set_turret_group()`, a post's death collapses the beam for good and the fence frees itself `linger_seconds` 1.0 after the last post. Gate `tests/integration/test_laser_fence.gd`, the post's case in `test_enemy_dual_mode.gd`, and the fence slot of `tests/helpers/shielded_site.tscn`.
-- **Twin-Laser Drones (t12)** (`assault/scenes/enemies/twin_laser_drone/` [ENEMY.md](../../../assault/scenes/enemies/twin_laser_drone/ENEMY.md)): `TwinLaserDrone` (a small `BaseEnemy`, r 13 shared by body / hurtbox / contact box, `EnemyMover`, COLLISION contact, lens `StateLight`), `TwinLaserDroneBrain` (`Phase { FORM, TELEGRAPH, ADVANCE, BREAK, WAIT, SOLO, DISENGAGE, LAUNCHED, IDLE, NOTICING, RETURNING }`, append-only; LAUNCHED is t13's, IDLE / NOTICING / RETURNING t14's hub idle), flat `TwinLaserDroneConfig`. The rig `TwinLaserPair` (a `RefCounted` both brains hold) binds two drones (and a controller) into `owner_group` `&"twin_pair_<id>"`, owns one `twin_beam.tscn` as a child of drone A (`setup(A, owner_group)`), and runs the one phase clock in the leader's tick (`tick(delta, caller)`: A while it lives, else B); `tick_beam()` (A only) feeds the endpoints and strain. Attack A: FORM on slots `centre ∓ u·L/2` round the player, TELEGRAPH on a latched frame, ADVANCE as identical per-drone `mover.boost(−n, …)`, BREAK, WAIT (Open Space); a separation error past `length_tolerance` for `strain_seconds` collapses the beam, and a drone's death breaks the pair in the same call. Assault: `TwinLaserPair.assault_frame()` plans inside `inner_rect()` inset by `slot_tolerance`, one attack per life with the TELEGRAPH / ADVANCE deferral, then DISENGAGE. `TwinLaserPairSpawn` (deferred, idempotent `spawn_pair()`, `EventBus.enemy_spawned_orphan`) and `WaveBuilder.TWIN_LASER_PAIR` / `twin_laser_pair()`. **Hub idle (t14):** a standalone Open Space pair (not `start_engaged`) idles through an `AnchorIdle` updated only by its leader: rig `TwinLaserPair.Phase.IDLE` (appended; `stand_down(anchor)` / `engage()`, never in a busy phase, `idle_slot_angle()` puts the drones opposite on the `idle_radius` 140 ring), NOTICING (lens blink) -> FORM, RETURNING past `lose_radius` 1500; a launched pair reads its controller's duck-typed `recalls_drones()` and flies back to dock. Measured Assault exit 5.37 s + 0.463 s reversal (`tests/helpers/ph8_exit_keys.gd`). Gate `tests/integration/test_twin_laser_drones.gd`, the twin row of `test_enemy_beams.gd`, the dual-mode case.
-- **Laser Tender (t13)** (`assault/scenes/enemies/laser_tender/` [ENEMY.md](../../../assault/scenes/enemies/laser_tender/ENEMY.md)): `LaserTender` (a `BaseEnemy`, r 40 shared by body / hurtbox / contact box, `EnemyMover`, COLLISION contact, no gun, `CradleL` / `CradleR` `Marker2D`s with `DockedDrone` visuals, the cradle `StateLight`), `LaserTenderBrain` (`Phase { APPROACH, HOLD, LAUNCH, WAIT, REARM, DISENGAGE, IDLE, NOTICING, RETURNING }`, append-only; IDLE / NOTICING / RETURNING are t14's hub idle), flat `LaserTenderConfig`. `launch_pair(points) -> TwinLaserPair` (the Ph10 / Ph11 seam: two drones at the cradles, synchronous, mutual collision exceptions, `TwinLaserPair.bind(a, b, self)`, `rig.launch(...)`, `EventBus.enemy_spawned_orphan`), `dock(drone)`, `rearm_cradles()`. Attack B points: `LaserTenderBrain.open_space_points()` / `assault_points()` / `order_for_cradles()` (pure statics). The rig gained `TwinLaserPair.Phase.LAUNCHED` (appended), `launch()`, `frame_fixed` and `LAUNCH_SETTLE_TICKS`; the drone brain plays LAUNCHED. One live pair, 7 s rearm, docking of a lone SOLO drone (Open Space); Assault: the upper hold band, one launch per life with the cradle-telegraph deferral, then DISENGAGE. **Hub idle (t14):** an `AnchorIdle` round `patrol_anchor` (700 / 1600 / 0.35 s, `idle_radius` 160) with its pair docked; NOTICING -> APPROACH; RETURNING; `LaserTender.recalls_drones()` (true in the idle phases) recalls a launched pair to dock; one rearm clock across idle and REARM. Measured Assault exit 3.82 s (`tests/helpers/ph8_exit_keys.gd`). `WaveBuilder.LASER_TENDER` / `laser_tender()`. Gate `tests/integration/test_laser_tender.gd`, the dual-mode case.
+- **Twin-Laser Drones (t12)** (`assault/scenes/enemies/twin_laser_drone/` [ENEMY.md](../../../assault/scenes/enemies/twin_laser_drone/ENEMY.md)): `TwinLaserDrone` (a small `BaseEnemy`, r 13 shared by body / hurtbox / contact box, `EnemyMover`, COLLISION contact, lens `StateLight`), `TwinLaserDroneBrain` (`Phase { FORM, TELEGRAPH, ADVANCE, BREAK, WAIT, SOLO, DISENGAGE, LAUNCHED, IDLE, NOTICING, RETURNING }`, append-only; LAUNCHED is t13's, IDLE / NOTICING / RETURNING t14's hub idle), flat `TwinLaserDroneConfig`. The rig `TwinLaserPair` (a `RefCounted` both brains hold) binds two drones (and a controller) into `owner_group` `&"twin_pair_<id>"`, owns one `twin_beam.tscn` as a child of drone A (`setup(A, owner_group)`), and runs the one phase clock in the leader's tick (`tick(delta, caller)`: A while it lives, else B); `tick_beam()` (A only) feeds the endpoints and strain. Attack A: FORM on slots `centre ∓ u·L/2` round the player, TELEGRAPH on a latched frame, ADVANCE as identical per-drone `mover.boost(−n, …)`, BREAK, WAIT (Open Space); a separation error past `length_tolerance` for `strain_seconds` collapses the beam, and a drone's death breaks the pair in the same call. Assault: `TwinLaserPair.assault_frame()` plans inside `inner_rect()` inset by `slot_tolerance`, one attack per life with the TELEGRAPH / ADVANCE deferral, then DISENGAGE. `TwinLaserPairSpawn` (deferred, idempotent `spawn_pair()`, `EventBus.enemy_spawned_orphan`) and `WaveBuilder.TWIN_LASER_PAIR` / `twin_laser_pair()`. **Hub idle (t14):** a standalone Open Space pair (not `start_engaged`) idles through an `AnchorIdle` updated only by its leader: rig `TwinLaserPair.Phase.IDLE` (appended; `stand_down(anchor)` / `engage()`, never in a busy phase, `idle_slot_angle()` puts the drones opposite on the `idle_radius` 140 ring), NOTICING (lens blink) -> FORM, RETURNING past `lose_radius` 1500; a launched pair reads its controller's duck-typed `recalls_drones()` and flies back to dock. Measured Assault exit 5.37 s + 0.463 s reversal (`tests/helpers/ph8_exit_keys.gd`). **EMP (Ph9 t5):** `on_emp_started()` releases the drone from the rig like a rail (an EMP-disrupted drone A frees the beam). Gate `tests/integration/test_twin_laser_drones.gd`, the twin row of `test_enemy_beams.gd`, the dual-mode case.
+- **Laser Tender (t13)** (`assault/scenes/enemies/laser_tender/` [ENEMY.md](../../../assault/scenes/enemies/laser_tender/ENEMY.md)): `LaserTender` (a `BaseEnemy`, r 40 shared by body / hurtbox / contact box, `EnemyMover`, COLLISION contact, no gun, `CradleL` / `CradleR` `Marker2D`s with `DockedDrone` visuals, the cradle `StateLight`), `LaserTenderBrain` (`Phase { APPROACH, HOLD, LAUNCH, WAIT, REARM, DISENGAGE, IDLE, NOTICING, RETURNING }`, append-only; IDLE / NOTICING / RETURNING are t14's hub idle), flat `LaserTenderConfig`. `launch_pair(points) -> TwinLaserPair` (the Ph10 / Ph11 seam: two drones at the cradles, synchronous, mutual collision exceptions, `TwinLaserPair.bind(a, b, self)`, `rig.launch(...)`, `EventBus.enemy_spawned_orphan`), `dock(drone)`, `rearm_cradles()`. Attack B points: `LaserTenderBrain.open_space_points()` / `assault_points()` / `order_for_cradles()` (pure statics). The rig gained `TwinLaserPair.Phase.LAUNCHED` (appended), `launch()`, `frame_fixed` and `LAUNCH_SETTLE_TICKS`; the drone brain plays LAUNCHED. One live pair, 7 s rearm, docking of a lone SOLO drone (Open Space); Assault: the upper hold band, one launch per life with the cradle-telegraph deferral, then DISENGAGE. **Hub idle (t14):** an `AnchorIdle` round `patrol_anchor` (700 / 1600 / 0.35 s, `idle_radius` 160) with its pair docked; NOTICING -> APPROACH; RETURNING; `LaserTender.recalls_drones()` (true in the idle phases) recalls a launched pair to dock; one rearm clock across idle and REARM. Measured Assault exit 3.82 s (`tests/helpers/ph8_exit_keys.gd`). **EMP (Ph9 t5):** `on_emp_started()` drops a launch telegraph (LAUNCH → HOLD, or DISENGAGE when the budget had promised that launch as the last act). `WaveBuilder.LASER_TENDER` / `laser_tender()`. Gate `tests/integration/test_laser_tender.gd`, the dual-mode case.
+- **Jamming Structure (Phase 9 t7)** (`assault/scenes/enemies/jamming_structure/` [ENEMY.md](../../../assault/scenes/enemies/jamming_structure/ENEMY.md), plus `sector_jammer/` and `pulsed_jammer/`, each a scene + config sharing the scripts): `JammingStructure` (a static `BaseEnemy`: no brain, no mover, `ContactProfile` NONE, no `ContactHitBox`, `AssaultDrift` 60 px/s, `world_anchored_x`, `is_laser_blocking()` false, joins `enemies`), flat `JammingStructureConfig` (`field_radius`, `stabilise_seconds`, `cycle_telegraph` / `cycle_active` / `cycle_quiet`, `assault_drift_speed`), a child `Field` `HazardField` (kind `&"jammer"`, `avoid_weight` 0, `disables_abilities`; the config is written onto it in `_ready()` then `restart_cycle()`), a code-drawn `JammerFieldArt` (48 crawling amber-white dashes; TELEGRAPH flicker; QUIET / suppressed a faint outline) and a `StateLight`. Local 140 HP / r 240 / 0.75 s; sector 260 / 640 / 1.25 s (Open Space only); pulsed 160 / 300 / 0.75 s, cycle 0.8 / 3.0 / 2.5. **EMP:** `answers_emp()` true; `apply_emp()` = BaseEnemy's window + `Field.suppress(seconds)` (the field quiet, the tower shootable, the cycle running underneath), so the EMP Blast (pressable only from outside a lit field), the EMP zone and a placed EMP mine switch it off. **Around it:** an `EnemyRocket` skips `_steer()` inside a lit field (`_in_lit_jammer()`, behind `Hazards.count() > 0`); `MissileCorvetteBrain._roll_kind()` turns PURSUIT / CLUSTER into DUMB while the player stands in one (after the 1-in-4 swap; `force_next_kind` wins); the Sniper's and Fighter's spot selectors skip `&"jammer"` infos (`JAMMER_KIND`). `WaveBuilder.JAMMER` / `SECTOR_JAMMER` / `PULSED_JAMMER`, `jammer(variant)`; never in an `ENEMIES_CLEARED` section, sector never in Assault. Gate `tests/integration/test_jamming_structure.gd` (both harnesses, real player scenes), the jammer rows of `test_emp_blast_module.gd` / `test_emp_zone.gd` / `test_missile_corvette.gd` / `tests/unit/test_hazard_field.gd`, and the roster gates.
+- **Hacker Frigate (Phase 9 t8)** (`assault/scenes/enemies/hacker_frigate/` [ENEMY.md](../../../assault/scenes/enemies/hacker_frigate/ENEMY.md)): `HackerFrigate` (a `BaseEnemy`, r 40 shared by body / hurtbox / contact box, `EnemyMover`, COLLISION contact 15, `Hull` `Sprite2D` (t12 art), a `Dish` part with an `Antenna` sprite carrying the `StateLight`), `HackerFrigateBrain` (`Phase { HOLD_ARC, TELEGRAPH, PULSE, BREAK_OFF, DISENGAGE, IDLE, NOTICING, RETURNING }`, append-only), flat `HackerFrigateConfig` (a `Pulse` group since t9). **HOLD_ARC** is the corvette's target-angle orbit at 720 (Open Space) / 520 (Assault) ± 90 drift, lopsided (`orbit_dir` +1 = clockwise at 0.18 rad/s, -1 at 0.30) with 3–6 s random reversals, and a **bearing penalty**: inside the player's nose cone (± 30° of its facing) or route cone (± 25° of its velocity above 80 px/s) the arc is forced toward the nearer edge at 0.30 rad/s and reversals wait (cone sizes read from config every tick). `acceleration` 700 (the Support Ship's) makes the wrong-way stop take 0.31 s. **BREAK_OFF** inside `min_range` 420 (1.0 s rearm): Open Space committed `mover.boost` bursts at 360 px/s along `break_contact(..., 0.25)` (radial ≈ 322 px/s: beats a 300 px/s rusher, loses to the 420 cruise); Assault a clamped `max_speed` request; ends beyond 540 px or after 3.0 s. **Assault:** every target point clamped into `view_rect().grow(-(60 + 8))` (`VIEW_CLAMP_PAD`), `EngagementBudget` 9.0 s, the corvette's DISENGAGE at 300 px/s (measured worst 5.67 s over `corridor_starts()`, `tests/helpers/ph9_exit_keys.gd`). **Hub idle:** `AnchorIdle` (760 / 1600 / 0.35 s, ring 160 at 0.45 / 0.27 rad/s), NOTICING -> HOLD_ARC. Test seam `force_orbit_direction(dir)`. `WaveBuilder.HACKER_FRIGATE` / `hacker_frigate()`; never in an `ENEMIES_CLEARED` section. **The Hijack Pulse (t9):** from HOLD_ARC with the cooldown out (`first_pulse_delay` 2.0, then 6–8 s), the player within `pulse_trigger_range` 870 and in sight (Ph6 LOS: asteroids and wrecks only, never an enemy body; cast on the physics step only), Assault at most `assault_pulses_per_life` 1: **TELEGRAPH** 0.9 s (yellow light, the `Dish` unfolding 0.6 -> 1.0, 6 dashes closing r 60 -> 40; any damage, an EMP, a lost player or the budget expiry cancels it) then **PULSE** 1.6 s (white light, ripples every 0.4 s): every tick a `HijackPulse` dart from the hull centre (`DartPool`, `BulletPool` 4, no `persist_after_owner_death`) at each `SeekingOrdnance.eligible(tree, hull, hijack_range 650)` rocket in sight not already darted, at most `max_claims_per_pulse` 3 darts a pulse (a missed dart counts). At PULSE end the Disruptor hook: `pulse_lock_seconds` (0 here, t10: 1.5) > 0 with the player in range and sight -> `HackerFrigate.lock_player_abilities()`. The arc runs on through both phases; BREAK_OFF waits for the next HOLD_ARC tick. Killing it frees its darts and fizzles its claimed rockets. Gates `tests/integration/test_hacker_frigate.gd` (movement rows switch the pulse off with `first_pulse_delay` 1000) and `test_hijack_pulse.gd` (both harnesses), the dual-mode case and the roster gates.
+- **Jammer variants, the Disruptor and the EMP zone (Phase 9 t7 / t10 / t11):** `sector_jammer/` and `pulsed_jammer/` are scene + config pairs on the `jamming_structure/` scripts (HP 260 / r 640 / 1.25 s, and HP 160 / r 300 / 0.8 / 3.0 / 2.5 s cycle); `hacker_disruptor/` is the Hacker's scene with `hacker_disruptor_config.tres` (HP 130, score 110, `pulse_lock_seconds` 1.5; built and tested, **not placed**); `JammerFieldArt` (`jamming_structure/jammer_field_art.gd`) draws the field ring. The EMP zone lives under `hazards/emp_zone/` (see the hazards section). Gates: `test_jamming_structure.gd`, `test_hacker_frigate.gd`, `test_emp_zone.gd`, `test_ph9_sprites.gd`.
 - **`AssaultDrift`** (global component): in Assault moves its parent down `speed` px/s and frees it below the projectile world rect; nothing in Open Space.
 - **Tests.** `tests/integration/test_defense_turret.gd` (both harnesses; the cover / mining-beam row on real physics at 8×), the turret case of
   `test_enemy_dual_mode.gd`, `test_base_enemy.gd::test_a_mover_less_structure_brain_refuses_a_tow_in_every_phase`, the burst speed in
@@ -532,11 +539,12 @@ UI nodes only subscribe to `EventBus`. It listens to `WaveManager.enemy_spawned`
   wave indices don't collide across sections.
 - **Survival** ticks, **skill-challenge** bonuses, and combo penalties on player damage or
   enemy escape — the escape penalty (`escape_combo_multiplier`, 0.75×) applies to every
-  spawn source (waves, station reinforcements, asteroid shards) **except** one whose
+  spawn source (waves, asteroid shards) **except** one whose
   `ShipConfig.counts_as_escape` is `false` (currently only the bonus drone — see
   `tests/integration/test_score_tracker_escape_penalty.gd`). Independent of
-  `counts_toward_wave_clear`: station reinforcements are exempt from wave-clear bonuses but
-  still deliberately pay the escape penalty (see below).
+  `counts_toward_wave_clear`. (History: the retired station's reinforcements were exempt from wave-clear but paid the escape penalty; boss escorts now pay neither, see below.)
+- **Boss escorts** (`EventBus.boss_escort_spawned(escort, boss)`, Phase 11 t2) pay their kill (`score_value` × combo, combo step) and
+  nothing else: no wave tally, no escape penalty, and nothing once the boss `is_dying()` — [global.md](global.md) → *Boss reinforcements*.
 
 Results publish via `EventBus.score_changed` / `combo_changed` / `score_event`, consumed
 by `gui/hud_score_widget.gd` and `gui/score_popup*.gd`. A categorized `_breakdown` feeds
@@ -561,15 +569,18 @@ booting the level — every `_build_*` body touches only `LevelSection.new()`, `
 
 1. `deep_space` — 30 s timed, fighters/drones.
 2. `asteroid_belt` — 30 s timed asteroid gauntlet (no enemies).
-3. `station_assault` — the **space-station mini-boss**, `ENEMIES_CLEARED` (see below).
-4. `planet_approach` — 110 s cinematic with light harassment.
+3. `station_assault` — the **Space Fortress boss** (Phase 11 t10; the legacy station was retired in t11), `ENEMIES_CLEARED` (see below).
+4. `planet_approach` — 110 s cinematic with light harassment; since Phase 10 t12 a Carrier crosses it at 65.0 s (world x 750, between
+   two laser-column volleys; `test_level1_heavy_spawns.gd`).
 5. `cloud_descent` — the **boss-phase / climax** section.
 
 **Boss-phase logic (there is no discrete boss entity).** The climax is encoded entirely in
 `level_1_director.gd`'s `_build_section_3()` ("cloud_descent") plus its section schedule.
 Instead of a single boss node, the phase is an **`ENEMIES_CLEARED` section**: it opens with
 a 5-ship ally escort arrowhead, then escalates through fighter sweeps, sniper crossfire,
-ram surprises, and two **gunship waves** (the heaviest enemies in the roster) interleaved
+ram surprises, and two **Heavy Gunship waves** (the heaviest enemies in the roster; off rails
+since Phase 10 t11, so each fights and leaves by itself inside the 10 s net, its last rocket
+included: `test_level1_heavy_spawns.gd`, `test_engagement_deadline.gd`) interleaved
 with drone screens. Because the section ends on `ENEMIES_CLEARED` (not a timer), the level
 will not complete until the player has destroyed/cleared every remaining enemy — the
 director's `_wait_enemies_cleared()` polls the enemy container before advancing.
@@ -601,8 +612,8 @@ etc.). For per-hazard detail, see the source folders under `assault/scenes/hazar
 (each has its `.gd` + `.tscn`).
 
 `LaserRay` is also used **outside** the wave path, as a component: the race gauntlet instances it
-with `race_hazard`/`loop`, and the space station's `StationLaserPhase` spawns it per volley. Its
-`hit_mask_override` export exists for that second case — see
+with `race_hazard`/`loop`, and the retired space station's laser phase spawned it per volley. Its
+`hit_mask_override` export exists for that second case (no shipped emitter sets it today) — see
 [`laser_ray/HAZARD.md`](../../../assault/scenes/hazards/laser_ray/HAZARD.md).
 
 **Gravity Well (Phase 6 t6).** `assault/scenes/hazards/gravity_well/gravity_well.tscn` — a `GravityWell` (`class_name`, extends
@@ -622,6 +633,12 @@ TELEGRAPH 1.0 s / ACTIVE 2.5 s / QUIET 3.0 s; `avoid_weight` 0.7, 0 while QUIET.
 `duration` 3.5, `avoid_weight` 0.6, no pull or stress. A gravity bomb's `EnemyOrdnance._detonate()` leaves one at the blast point
 through the deferred `spawn_into(Hazards.container(tree), …)` (no container → nothing; mines, pursuit bombs and a defused bomb leave
 none). See [`HAZARD.md`](../../../assault/scenes/hazards/gravity_field/HAZARD.md); tests `tests/integration/test_enemy_ordnance.gd`.
+
+**EMP Zone (Phase 9 t11).** `assault/scenes/hazards/emp_zone/emp_zone.tscn` — `EmpZone` (`Node2D`, `emp_seconds` 2.0) composing a child `Field`
+`HazardField` (kind `&"emp_zone"`, radius 260, `avoid_weight` 0.6, cycle 1.0 / 0.25 / 4.75; never a `HazardField` subclass) and a code-drawn
+`EmpZoneArt` (arming ring shrinking to 0.6 · radius, `EmpRing` on the pulse). On each TELEGRAPH → ACTIVE edge it makes one
+`EmpPulse.emit(..., TARGET_ALL)`: the player, every enemy that answers EMP, and seekers. Scene-placed only (hub `TacticalSpace`, t13); no
+Assault level holds one in Phase 9. See [`HAZARD.md`](../../../assault/scenes/hazards/emp_zone/HAZARD.md); tests `tests/integration/test_emp_zone.gd`.
 
 **Wrecks, structures and debris (Phase 6 t10).** `assault/scenes/hazards/wreck/`: `Wreck` (`wreck.gd`, a `CharacterBody2D` on layer 1,
 group `wrecks`) runs `wreck_small` / `wreck_medium` / `wreck_large.tscn` (r 13 / 25 / 40, HP 200, Open Space life 40 s) and the placed
@@ -656,7 +673,7 @@ Source: `assault/scenes/enemies/`.
 Each enemy type has its own folder with a scene, a `*_config.tres` (a `ShipConfig` carrying
 HP, score value, fire pattern, etc.), and — for AI-driven ships — bespoke state scripts
 (e.g. `razor_drone/razor_drone_brain.gd`). Roster: bomber, bonus_drone, razor_drone,
-mine_layer (`MineLayerBrain`, six-mine lines across the player's path, Ph7), defense_turret (`DefenseTurretBrain`, no mover, a static gun whose runtime-built `TurretMount` aims and fires, Ph8), missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), gunship, gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
+mine_layer (`MineLayerBrain`, six-mine lines across the player's path, Ph7), defense_turret (`DefenseTurretBrain`, no mover, a static gun whose runtime-built `TurretMount` aims and fires, Ph8), missile_corvette (`MissileCorvetteBrain` + four rocket pools), support_ship (`SupportShipBrain`, unarmed repair / shield / escort), heavy_gunship (`HeavyGunshipBrain`, a modular gun platform: six `EnemyModule` parts on a `ModularHull`, broadside arcs and break-away boosts, Ph10 t4; one-way hull phases off its `Health`: overheat-and-vent through two weak-point vents that double a hit while open, then emergency boosts with a rear missile pod (open in Assault only while its budget runs) and a shielded nose cannon, t5; [`ENEMY.md`](../../../assault/scenes/enemies/heavy_gunship/ENEMY.md)), carrier (`CarrierBrain`, an armoured capital ship of seven `EnemyModule` parts whose core opens after three outer parts die and whose death is the carrier's; Open Space screen band and leash, an Assault crossing at a constant 90 px/s, Ph10 t6; side batteries that each cover only their own side, a bow heavy cannon, a PURSUIT missile bank beyond 450 px and a brain-ticked anti-approach `EnergyRing` (`carrier_pulse_ring.tscn`), PANIC on core exposure, t7; hangars (`CarrierHangars`) whose doors open, and make them hittable, 0.8 s before each launch of swarm drones / fighters (Open Space, every 9 s under caps 3 / 6) or swarm drones (Assault, once per hangar at 3.0 / 7.0 s), a wrecked hangar never launching again and PANIC emptying the live ones, t8; [`ENEMY.md`](../../../assault/scenes/enemies/carrier/ENEMY.md)), space_fortress (`FortressBrain`, Phase 11's 360 degree boss: an armoured ring hull r 176 with five ring batteries, a hangar, two shield generators whose `ShieldSector`s bubble the batteries and hangar of their half, and a core whose death is the fortress's; a four-phase `BossPhaseDriver` ladder (batteries, shields_exposed, core_exposed, critical) with `phase_snapshot()` for the IDEAS §25 gate; t5 built the shell; t6 its movement: the stronger sector turned to the player slower than a circling player, volley and critical spins, an Open Space combat zone it repositions round (away from the player, from `core_exposed`) with a hub idle and leash, and an Assault descent, hold and vertical bob with x fixed; t7 five battery mounts (spread, rapid pulse, heavy artillery, rocket battery on the corner diagonals, a sweep beam) under a two-at-once `attack_gate()`, a dead battery silencing its lane; t16 its geometry weapons, all brain-ticked: hull spoke beams (`HullBeams/Spoke0..3`, `fortress_spoke_beam.tscn`) in volleys that spin the hull from `shields_exposed`, an arena-control `EnergyRing` pulse (`fortress_pulse_ring.tscn`) from `core_exposed` and the precessing core bullet ring (`CoreRingPool` + a runtime `RadialAttackPattern`) in `critical`, EMP and death cancelling them with the root finishing their fade, gated for fairness and a measured Assault bullet density; t8 its bays (hangar drones, sector defenders, the critical surge); t9 its art (`assault/assets/sprites/enemies/space_fortress/`: hull, five distinct battery bases, hangar doors, generator shutters and core plating each closed / open / wreck, thrusters, the critical crack overlay; gate `test_fortress_sprites.gd`); [`ENEMY.md`](../../../assault/scenes/enemies/space_fortress/ENEMY.md)), gatling_interceptor, fighter, ram_corvette (`RamCorvetteBrain` predicted-intercept charge with a glowing wind-up, overshoot and wide turn + three breakable `ArmorPlate`s over a deflecting hull and an ARMOR contact profile), sniper (`SniperBrain` relocation cycle + `SniperTelegraph` + a pooled rail round with a `RailTrail`), swarm_drone. For the
 catalogued stats and how to spawn each one, see the per-enemy detail in the source folders
 under `assault/scenes/enemies/<type>/` and the consolidated
 [enemy roster](../../enemy-roster.md).
@@ -669,7 +686,7 @@ object — the same one a test's `preload()` returns. `ShipConfig.privatise()` g
 `duplicate()` instead, called from `BaseEnemy._init()` **and** `_enter_tree()` (and the same pair on
 `AllyFighter`, which is not a `BaseEnemy`). `_init()` covers writes made before `add_child`, which is
 where `WaveManager` applies `initial_props`; `_enter_tree()` covers an override substituted in
-afterwards and still lands before any child's `_ready()`, which the space station's four child nodes
+afterwards and still lands before any child's `_ready()`, which a boss's behaviour children
 depend on. Full reasoning: the `ShipConfig` section of [global.md](global.md). Pinned by
 `tests/integration/test_config_instance_isolation.gd`.
 
@@ -677,137 +694,31 @@ depend on. Full reasoning: the `ShipConfig` section of [global.md](global.md). P
 process-wide balance data. The per-instance copy is what `entity.config` holds, not what the loader
 hands you.
 
-**`space_station/`** is the odd one out: a multi-part **mini-boss** rather than a wave enemy.
-`SpaceStation` (`extends BaseEnemy`) carries four `StationTurret` children, each individually
-damageable on its own `Health`, and its core refuses all damage while any turret lives —
-`is_armored()` is `live_turret_count() > 0`, and the `_on_received_damage` override emits
-`armor_deflected(damage)` and returns without touching `Health`. Destroyed turrets stay in the
-tree as wreckage. It is spawned by the **`station_assault`** section (`_build_station_assault()`),
-as a single zero-delay wave with no `MovementResource` — a spawn delay would let `waves_complete`
-fire before the station existed, and a movement resource would attach an `EnemyPathMover` that
-frees it on screen exit. Behaviour and the collision-layer rules — all four incoming damage paths
-gated by physics rather than by reading the scene, and the duck-typed `is_armored()` exemption that
-lets both bullets and rockets survive a deflected hit on the core to reach a turret behind it —
-[`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md).
+**`space_fortress/`** is the odd one out: a multi-part **boss** rather than a wave enemy (Phase 11; it replaced the legacy
+space station, whose folder, `WaveBuilder.space_station()` and tests were retired in Phase 11 t11). `SpaceFortress` (`extends
+BaseEnemy`) is an **armoured ring hull** (r 176) over nine `EnemyModule` parts under `Modules` — five batteries, a hangar, two shield
+generators and a core — coordinated by a `ModularHull`. The root answers `deflects_hit()` / `is_armored()` true and refuses all damage
+(`armor_deflected`), so every player projectile crosses the hull to the parts; its root body is on layer 0 and answers
+`is_laser_blocking()` false, so the mining laser is never blocked; **its death is the core's**. A `FortressBrain` drives the movement
+phases and the geometry weapons, a `BossPhaseDriver` the four boss phases, `BossReinforcements` the escorts (into a
+`<name>Escorts` container, scored through `EventBus.boss_escort_spawned`), and `BossDeathSequence` (`global/boss/`) the death
+spectacle while the fortress itself owns the timer that frees the wreck. It is spawned by the **`station_assault`** section
+(`_build_station_assault()`, `b.space_fortress().at(0, -230)`) as a single zero-delay wave with no `MovementResource`. Behaviour,
+numbers and gates: [`space_fortress/ENEMY.md`](../../../assault/scenes/enemies/space_fortress/ENEMY.md); the shared boss machinery:
+[global.md](global.md).
 
-It has **two phases**. Killing the last turret makes `SpaceStation` emit `armor_broken` (a
-zero-argument signal, latched so it fires exactly once), which starts **`StationLaserPhase`** — a
-`Node2D` child of the scene, `station_laser_phase.gd`, that owns the whole second phase and keeps
-`space_station.gd` free of laser logic. It rotates the station at a constant
-`laser_rotation_speed` and fires volleys of `laser_ray.tscn` beams from a fixed, **deterministic**
-angle list (never `randf()` — random attack ordering cannot be balanced or tested; the rotating
-hull already varies the world angle). Beams are children of the phase node, so rotating the
-station sweeps them for free. All five timings live in `space_station_config.tres` and are
-**copied into the phase's own fields in `_ready()`** — those fields are the phase's tunable surface
-(what tests override) and its fallback when a station has no config at all. Each station's
-`config` is a private copy: see **Per-instance config resources** below.
-
-⚠️ **A station beam must not use `LaserRay`'s default hit mask.** `_HIT_MASK` is
-`128 | 256 | 512`, and the station's own core `HurtBox` is on layer 512, so a beam fired from
-inside the hull takes the boss 600 → 0 HP in one frame. `StationLaserPhase` sets
-`LaserRay.hit_mask_override = 128` before `add_child()`. See
-[`space_station/ENEMY.md`](../../../assault/scenes/enemies/space_station/ENEMY.md) for why the
-regression test has to force a *diagonal* volley to catch it.
-
-**The station shoots back**, via a second sibling node, **`StationGunnery`**
-(`station_gunnery.gd`) — same composition split as the laser phase, so `space_station.gd` holds
-no gun logic either and gained only a `turrets()` data accessor. It drives one
-`RadialAttackPattern` per phase, on its own `Timer`s:
-
-- **Phase 1** — every **live** turret fires an aimed 3-bullet fan on one shared cadence
-  (`turret_fire_interval`). The turret list is re-read per volley, so killing a gun visibly
-  removes it from the volley for free, and the armour is also the threat. Each firing turret's
-  `global_rotation` is set to its aim direction first — the sprite's barrels point along local
-  -Y and nothing else sets `rotation`, so without that the barrels point at the top of the screen
-  while firing elsewhere.
-- **Phase 2** — `armor_broken` stops the turret cadence and starts full core rings that precess by
-  `core_ring_step` each time, interleaving with the laser volleys.
-
-⚠️ **The `BulletPool` must stay a *direct* child of `SpaceStation`.** `bullet_pool.gd` hardcodes
-its container as `get_parent().get_parent()` with no override, so only that placement resolves to
-`enemy_container` and puts bullets in unrotated world space. Placed under `Gunnery` or a turret it
-would resolve to the station itself and the whole bullet field would swing with the rotating hull.
-It is therefore **authored in `space_station.tscn`**, not created in code — and it has to be:
-a child cannot `add_child()` onto its own parent from `_ready()`, because `_propagate_ready()`
-blocks the parent while readying its children. The pool leaving the tree with the station is also
-what frees in-flight bullets, which otherwise hold `ENEMIES_CLEARED` open. Pinned by
-`tests/integration/test_station_gunnery.gd`.
-
-The ten gunnery timings live in `space_station_config.tres` and are **copied into the gunnery's
-own fields in `_ready()`**, for the same reason as the laser block.
-
-**The station calls for help**, via a third sibling node, **`StationReinforcements`**
-(`station_reinforcements.gd`) — the same composition split again, so `space_station.gd` gained
-nothing at all this time. On a one-shot `Timer` it spawns small squads of **existing** enemy
-scenes that cross the arena, so the player can no longer camp one spot while streaming into a
-turret. The squad table is fixed and cycles `LEFT → RIGHT → BOTTOM → TOP` (never `randf()`, for
-the same reason the beam angles are a list): two `gatling_interceptor` sweeping in from either side
-through the vertical middle, two `swarm_drone` rising from below, two `fighter` with
-`.shoot_forward()` angling down-and-inward from above. Squads are authored with `WaveBuilder`'s
-own fluent API (`b.gatling_interceptor().at(…).move(b.straight(…)).free_after(…)`), in **640×360 design
-units** scaled by `ArenaCamera.WORLD_SCALE` once at spawn — speeds are left unscaled because
-`EnemyPathMover` applies the scale itself.
-
-- **Phase 1 only.** Everything stops on `armor_broken`, and again on `died` as a backstop. Adds
-  running through phase 2 is the documented way a boss ends up overshadowed by its own minions,
-  and phase 2 is already beams every 6.5 s over rings every 2.0 s against a 48-bullet pool.
-- **Reinforcements are spawned as *siblings* of the station**, into `_station.get_parent()` —
-  i.e. `WaveManager.enemy_container`, the same place waves land. Never as children: the laser
-  phase rotates the hull, and a ship parented under it would be dragged around the arena along
-  with its own `BulletPool`'s bullets.
-- **Every entry uses `ExitMode.FREE_ON_DURATION`**, not `FREE_ON_SCREEN_EXIT`. The latter only
-  culls a ship that has been on screen at least once, so one that never quite arrives would live
-  forever and hold `ENEMIES_CLEARED` open.
-- **Each ship is announced on `EventBus.enemy_spawned_orphan`**, which `ScoreTracker` routes to
-  `_on_enemy_spawned(enemy, -1)`. That buys kill score without disturbing any wave-clear tally —
-  and it opts these ships into the game's universal 0.75× escape-combo penalty, which is a
-  deliberate balance decision pinned by a test, not an oversight.
-- **`reinforcement_max_alive` skips a *whole* squad** rather than spawning part of one, so the
-  ceiling is exactly that number. The live list is pruned with `is_instance_valid` each time or
-  the cap would jam permanently once ships start being culled.
-
-The three cadence/cap fields live in `space_station_config.tres` and are copied in `_ready()` like
-the other two blocks; the squad table itself stays in the script, because it is scene geometry
-rather than a stat — the same split that keeps `laser_emitter_radius` on the phase node. Pinned by
-`tests/integration/test_station_reinforcements.gd`.
-
-**The station's death plays out**, via a fifth sibling node, **`StationDeathSequence`**
-(`station_death_sequence.gd`) — the same composition split a fifth time. `BaseEnemy` emits `died`
-and calls `queue_free()` in the same call (`BaseEnemy._on_health_changed`), which gave the 256×256 mini-boss
-the identical one-frame death a 40 px interceptor gets. `SpaceStation` now overrides
-`_on_health_changed`: everything that happened *at* the moment of death still happens there —
-`was_killed`, `died`, and disarming the corpse — and only `queue_free()` moves, behind a
-`death_duration` (1.8 s) `Timer` **node**. Seven blasts then roll across the hull at deterministic
-hull-local offsets while it drifts and darkens, ending on one central blast and a
-`CameraShake.add(1.0)`.
-
-The handoff to `planet_approach` needed **no director change at all**:
-`LevelDirector._wait_enemies_cleared()` already polls the enemy container's child count, so a
-station that stays parented while it dies holds `station_assault` open for free.
-`tests/integration/test_level_1_sequence.gd` walks Level 1's real five-section sequence with a real
-station killed in the middle and asserts it reaches `level_complete`.
-
-Three things here are load-bearing:
-
-- **The station owns `queue_free()`, not the sequence node.** If the visual node owned it, a
-  renamed or missing `DeathSequence` would hang `station_assault` for its full 180 s timeout with
-  no error, then take the escape-combo penalty.
-- **The `ExplosionEffect` is parented to the *station*, never to the sequence node.**
-  `explosion_effect.gd` resolves its container as `get_parent().get_parent()`, so one hop too deep
-  puts every blast inside the rotating hull — where it is freed with the wreck and invisible to the
-  container the director polls. It is added lazily in the `death_started` handler, because
-  `_propagate_ready()` blocks the parent during `_ready()`.
-- **`StationGunnery._stop()` now calls `bullet_pool.cancel_active()`.** `BulletPool._exit_tree()`
-  used to free in-flight bullets at the moment of death; with the wreck lingering ~1.8 s, a corpse
-  would otherwise keep a live ring of bullets in the air — which both endangers the player after
-  the boss is dead and holds `ENEMIES_CLEARED` open, since bullets live in that same container.
-
-Pinned by `tests/integration/test_station_death_sequence.gd` and `test_level_1_sequence.gd`.
+The handoff to `planet_approach` needs **no director change**: `LevelDirector._wait_enemies_cleared()` polls the enemy container's
+child count, so a boss that stays parented while it dies (and its escort container) holds `station_assault` open for free.
+`tests/integration/test_level_1_sequence.gd` walks Level 1's real five-section sequence with a real fortress killed in the middle and
+asserts it reaches `level_complete`; `test_level1_fortress_section.gd` replays the section. Two rules carried over from the station
+stay load-bearing: **the boss owns `queue_free()`, not the sequence node** (a renamed `DeathSequence` costs only the explosions), and
+**the `ExplosionEffect` is parented to the host, never to the sequence node** (one hop too deep puts every blast inside the spinning
+hull). Pinned by `tests/integration/test_boss_death_sequence.gd`, `test_fortress_incoming_damage_paths.gd` and `test_space_fortress.gd`.
 
 **`LevelSection.enemies_cleared_timeout`** is the safety net for `ENEMIES_CLEARED`: seconds to
 wait for `enemy_container` to empty before giving up. It defaults to `10.0` — the constant it
 replaced, sized for "wait for the last stragglers to leave", which is what `cloud_descent` wants —
-and `station_assault` sets `180.0`, because there the fight *is* the section. On expiry
+and `station_assault` sets `240.0` (the Space Fortress, Ph11 t10; it was 180.0 for the station), because there the fight *is* the section. On expiry
 `LevelDirector` now **frees whatever is left** in the container before advancing, rather than
 carrying it into the next section: a mini-boss has no `EnemyPathMover`, so nothing else would ever
 remove it, and `_wait_enemies_cleared()` polls that same container, so a leftover would block the

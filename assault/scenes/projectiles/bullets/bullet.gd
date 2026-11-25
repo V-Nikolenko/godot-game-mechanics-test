@@ -8,10 +8,10 @@
 ##      reports `is_armored() == true` (duck-typed, same idiom as `is_laser_blocking()` in
 ##      `beam_behavior.gd`) and, if so, returns without emitting `expired` or spending a pierce
 ##      charge — the bullet keeps flying, at full damage, exactly as if the hit never happened.
-##      This is deliberate and load-bearing: the space-station boss's armoured core spans the
-##      whole hull, so a shot aimed at a turret has to survive crossing it, and the core's
+##      This is deliberate and load-bearing: the Space Fortress's armoured hull spans the whole
+##      boss, so a shot aimed at a battery has to survive crossing it, and the hull's
 ##      `is_armored()` query is what tells this bullet the crossing was a deflection, not a kill.
-##      See `space_station/ENEMY.md` -> "Core hurtbox". `PierceModule` raises the number of
+##      See `space_fortress/ENEMY.md`. `PierceModule` raises the number of
 ##      *damaging* hits a bullet survives before `expired` fires (see `MAX_PIERCE` below).
 ##   2. **An unpooled bullet frees itself when it leaves the screen**, via `free_when_offscreen()`.
 ##
@@ -130,7 +130,7 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 		## Regular enemies: bullet passes through — do nothing, keep flying.
 		return
 	if _hit_is_deflected(area):
-		## Armour refused the damage (SpaceStation core while a turret still lives). The hit still
+		## Armour refused the damage (the Space Fortress's or the Carrier's armoured hull). The hit still
 		## registers visually on the target's own side; the bullet did not — no expired, no pierce
 		## charge spent, keep flying.
 		return
@@ -142,12 +142,12 @@ func _on_hit_box_area_entered(area: Area2D) -> void:
 	expired.emit()
 
 
-## True when the hurtbox we just overlapped refused to apply damage (e.g. the space-station core
-## while any turret still lives). Duck-typed against `is_armored()` rather than a shared base
+## True when the hurtbox we just overlapped refused to apply damage (e.g. the Space Fortress's armoured
+## hull, which lets every shot cross it to the parts inside). Duck-typed against `is_armored()` rather than a shared base
 ## class or a cached HurtBox flag — same idiom as `is_laser_blocking()` in `beam_behavior.gd`.
 ## Goes through `ArmorQuery`, which prefers a hit-aware `deflects_hit(hit_box)` and falls back to
 ## `is_armored()`. Safe to query synchronously regardless of physics-signal ordering:
-## `SpaceStation.is_armored()` depends only on live turret count, which a hit against the core
-## itself never changes, and `ArmorPlate.deflects_hit` resolves each HitBox once, idempotently.
+## a hull's `is_armored()` (the Space Fortress's and the Carrier's answer true for their whole life) never changes on a hit against
+## the hull itself, and `ArmorPlate.deflects_hit` resolves each HitBox once, idempotently.
 func _hit_is_deflected(area: Area2D) -> bool:
 	return ArmorQuery.deflects(area, get_node_or_null("HitBox") as HitBox)

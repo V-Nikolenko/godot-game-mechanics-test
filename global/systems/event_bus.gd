@@ -35,6 +35,14 @@ signal ability_activated(id: StringName, damage_mult: float, fire_rate_mult: flo
 ## Emitted when an ability is deactivated / deselected.
 signal ability_deselected
 
+## The player's H abilities and K rockets were locked (true) or unlocked (false): once per edge, from PlayerBase.
+## An audio seam: nothing connects to it yet (Phase 17).
+signal player_ability_lock_changed(locked: bool)
+
+## A homing rocket of the player's was taken over by a Hacker (emitted by the rocket's `retarget()`).
+## An audio seam: nothing connects to it yet (Phase 17).
+signal player_ordnance_hijacked(rocket: Node2D, source: Node)
+
 # ── Mission events ────────────────────────────────────────────────────────────
 
 ## Emitted when a new wave starts in an assault mission.
@@ -67,3 +75,8 @@ signal skill_challenge_completed(clean: bool, bonus: int)
 ## asteroid splitting into smaller ones, or a script-spawned medal. ScoreTracker
 ## subscribes here so the resulting kill still awards points.
 signal enemy_spawned_orphan(enemy: Node)
+
+## Emitted by `BossReinforcements` (`global/boss/boss_reinforcements.gd`) for every escort a boss's `ReinforcementBay` launches, after the
+## escort is in its `EscortContainer`. Never paired with `enemy_spawned_orphan`: ScoreTracker pays an escort kill its `score_value` x combo
+## and nothing else (no wave tally, no escape penalty), and nothing once [param boss] `is_dying()` (Phase 11 §2.2).
+signal boss_escort_spawned(escort: Node, boss: Node)

@@ -149,8 +149,8 @@ func test_aim_at_player_falls_back_to_down_with_no_player() -> void:
 
 ## The contract that makes this resource differ from its two siblings. Both
 ## `aimed_attack_pattern.gd:31` and `gatling_attack_pattern.gd:35` do
-## `Vector2.DOWN.rotated(ship.rotation)`; this one must NOT, because `station_laser_phase.gd:123`
-## rotates the station 0.5 rad/s during exactly the phase the ring fires in, which would swamp
+## `Vector2.DOWN.rotated(ship.rotation)`; this one must NOT, because a boss hull spins while its core ring fires (the
+## Space Fortress's `critical` spin; first the retired station's 0.5 rad/s laser-phase turn), which would swamp
 ## the designed per-ring precession. Goes red the moment someone "fixes" the divergence.
 func test_the_pattern_ignores_ship_rotation() -> void:
 	var p := _pattern()

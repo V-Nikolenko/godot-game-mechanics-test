@@ -1,0 +1,150 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/helpers/fixture_boss_host.gd" id="1_fbh"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="2_fbh"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="3_fbh"]
+[ext_resource type="Script" path="res://global/components/enemy_module.gd" id="4_fbh"]
+[ext_resource type="Script" path="res://global/components/modular_hull.gd" id="5_fbh"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="6_fbh"]
+[ext_resource type="Script" path="res://global/boss/reinforcement_bay.gd" id="7_fbh"]
+
+[sub_resource type="Animation" id="Animation_reset_fbh"]
+length = 0.001
+
+[sub_resource type="Animation" id="Animation_hit_fbh"]
+resource_name = "hit"
+length = 0.2
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_fbh"]
+_data = {
+&"RESET": SubResource("Animation_reset_fbh"),
+&"hit": SubResource("Animation_hit_fbh")
+}
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(240, 60)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hull"]
+size = Vector2(240, 60)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_part"]
+radius = 12.0
+
+[node name="FixtureBossHost" type="CharacterBody2D" groups=["enemies"]]
+motion_mode = 1
+script = ExtResource("1_fbh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("RectangleShape2D_body")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 1121
+script = ExtResource("3_fbh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("RectangleShape2D_hull")
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("2_fbh")
+max_health = 1000
+current_health = 1000
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries/ = SubResource("AnimationLibrary_fbh")
+
+[node name="Modules" type="Node2D" parent="."]
+
+[node name="Hangar" type="Node2D" parent="Modules"]
+position = Vector2(-80, 0)
+script = ExtResource("4_fbh")
+module_id = &"hangar"
+role = 2
+starts_vulnerable = false
+
+[node name="Sprite" type="Sprite2D" parent="Modules/Hangar"]
+
+[node name="HurtBox" type="Area2D" parent="Modules/Hangar"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_fbh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/Hangar/HurtBox"]
+shape = SubResource("CircleShape2D_part")
+
+[node name="Light" type="Node2D" parent="Modules/Hangar"]
+script = ExtResource("6_fbh")
+
+[node name="Bay" type="Node2D" parent="Modules/Hangar"]
+script = ExtResource("7_fbh")
+bay_id = &"hangar"
+opens_part = true
+
+[node name="Mouth" type="Marker2D" parent="Modules/Hangar/Bay"]
+position = Vector2(0, -40)
+
+[node name="Sector" type="Node2D" parent="Modules"]
+position = Vector2(80, 0)
+script = ExtResource("4_fbh")
+module_id = &"sector"
+
+[node name="Sprite" type="Sprite2D" parent="Modules/Sector"]
+
+[node name="HurtBox" type="Area2D" parent="Modules/Sector"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_fbh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/Sector/HurtBox"]
+shape = SubResource("CircleShape2D_part")
+
+[node name="Light" type="Node2D" parent="Modules/Sector"]
+script = ExtResource("6_fbh")
+
+[node name="Bay" type="Node2D" parent="Modules/Sector"]
+script = ExtResource("7_fbh")
+bay_id = &"sector"
+trigger = 1
+watch_ids = Array[StringName]([&"watch_a", &"watch_b"])
+
+[node name="WatchA" type="Node2D" parent="Modules"]
+position = Vector2(-40, 20)
+script = ExtResource("4_fbh")
+module_id = &"watch_a"
+
+[node name="HurtBox" type="Area2D" parent="Modules/WatchA"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_fbh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/WatchA/HurtBox"]
+shape = SubResource("CircleShape2D_part")
+
+[node name="WatchB" type="Node2D" parent="Modules"]
+position = Vector2(0, 20)
+script = ExtResource("4_fbh")
+module_id = &"watch_b"
+
+[node name="HurtBox" type="Area2D" parent="Modules/WatchB"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_fbh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/WatchB/HurtBox"]
+shape = SubResource("CircleShape2D_part")
+
+[node name="Other" type="Node2D" parent="Modules"]
+position = Vector2(40, 20)
+script = ExtResource("4_fbh")
+module_id = &"other"
+
+[node name="HurtBox" type="Area2D" parent="Modules/Other"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("3_fbh")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/Other/HurtBox"]
+shape = SubResource("CircleShape2D_part")
+
+[node name="ModularHull" type="Node" parent="."]
+script = ExtResource("5_fbh")

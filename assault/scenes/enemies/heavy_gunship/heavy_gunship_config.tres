@@ -1,0 +1,55 @@
+[gd_resource type="Resource" script_class="HeavyGunshipConfig" format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+max_health = 700
+collision_damage = 30
+score_value = 300
+hazard_avoidance = 1.0
+hazard_margin = 90.0
+hazard_resistance = 0.6
+wreck_chance = 0.0
+max_speed = 140.0
+acceleration = 120.0
+braking = 360.0
+max_turn_rate = 0.9
+preferred_range = 560.0
+assault_preferred_range = 420.0
+range_drift = 90.0
+range_tolerance = 100.0
+min_range = 260.0
+orbit_angular_speed = 0.16
+assault_orbit_angular_speed = 0.26
+assault_arc_half_deg = 70.0
+reversal_min = 5.0
+reversal_max = 8.0
+break_speed = 360.0
+break_seconds = 0.7
+break_rearm = 3.0
+overheat_ratio = 0.6
+emergency_ratio = 0.3
+heat_limit = 4
+vent_seconds = 2.2
+vent_speed_factor = 0.6
+emergency_period = 5.0
+emergency_boost_speed = 420.0
+emergency_boost_seconds = 0.9
+missile_window = 2.0
+missile_rear_arc_deg = 200.0
+emergency_range = 800.0
+emergency_assault_extra = 120.0
+shield_arc_deg = 120.0
+shield_capacity = 60
+shield_regen_delay = 2.0
+shield_regen_seconds = 4.0
+shield_reboot_seconds = 5.0
+engage_seconds = 9.0
+exit_speed = 300.0
+exit_acceleration = 240.0
+perceive_radius = 900.0
+lose_radius = 1500.0
+notice_time = 0.6
+idle_radius = 180.0
+idle_speed = 0.4

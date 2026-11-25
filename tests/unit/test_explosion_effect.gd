@@ -112,7 +112,7 @@ func test_an_explicit_container_still_uses_the_actor_position() -> void:
 	assert_almost_eq(p.global_position, expected, Vector2(0.01, 0.01))
 
 
-## Pins the existing StationDeathSequence contract: `at` overrides where the blast lands, but
+## Pins the existing BossDeathSequence contract: `at` overrides where the blast lands, but
 ## never which node it lands in.
 func test_the_at_argument_overrides_the_position_but_not_the_container() -> void:
 	var b := _build()

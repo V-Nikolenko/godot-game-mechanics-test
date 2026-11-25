@@ -6,6 +6,7 @@
 ##   - Node.tree_exited              → detect off-screen escapes (vs kills)
 ##   - EventBus.player_health_changed → damage = combo penalty + reset survival
 ##   - EventBus.skill_challenge_completed → award skill bonus
+##   - EventBus.boss_escort_spawned  → a boss escort's kill score + combo only
 ##
 ## Publishes results via EventBus signals (score_changed, combo_changed,
 ## score_event). UI nodes (HUDScoreWidget, ScorePopup) subscribe there.
@@ -77,6 +78,10 @@ func start_tracking() -> void:
 	# but always carry wave_index = -1, so they never count toward wave clears.
 	if not EventBus.enemy_spawned_orphan.is_connected(_on_orphan_spawned):
 		EventBus.enemy_spawned_orphan.connect(_on_orphan_spawned)
+	# A boss's escorts (Phase 11 §2.2) pay their kill and nothing else: no wave tally, no escape penalty.
+	# Never disconnected, like the orphan signal.
+	if not EventBus.boss_escort_spawned.is_connected(_on_boss_escort_spawned):
+		EventBus.boss_escort_spawned.connect(_on_boss_escort_spawned)
 	EventBus.score_changed.emit(_total_score)
 	EventBus.combo_changed.emit(_combo, 0.0)
 
@@ -92,6 +97,30 @@ func _on_section_loaded() -> void:
 
 func _on_orphan_spawned(enemy: Node) -> void:
 	_on_enemy_spawned(enemy, -1)
+
+## An escort a boss's `ReinforcementBay` launched (`BossReinforcements`). Only its `died` is watched: freeing it unkilled (the escort container
+## going with its boss, a timeout sweep) costs nothing, and it never joins a wave tally.
+func _on_boss_escort_spawned(escort: Node, boss: Node) -> void:
+	if escort == null or not escort.has_signal("died"):
+		return
+	escort.connect("died", _on_escort_died.bind(escort, boss), CONNECT_ONE_SHOT)
+
+
+## The kill score (`score_value` x combo) and the normal combo step, unless the boss is gone or already dying (a scuttled escort pays nothing).
+func _on_escort_died(escort: Node, boss: Node) -> void:
+	if not _running or not is_instance_valid(escort):
+		return
+	if not is_instance_valid(boss) or (boss.has_method("is_dying") and boss.is_dying()):
+		return
+	var points: int = int(floor(_read_score_value(escort) * _combo))
+	_total_score += points
+	_breakdown["kills"] += points
+	_combo = minf(_combo + score_config.combo_step, score_config.combo_cap)
+	_combo_decay_remaining = score_config.combo_decay_seconds
+	EventBus.score_changed.emit(_total_score)
+	EventBus.combo_changed.emit(_combo, _combo_decay_remaining)
+	EventBus.score_event.emit((escort as Node2D).global_position if escort is Node2D else Vector2.ZERO, points, "kill")
+
 
 func stop_tracking() -> void:
 	_running = false

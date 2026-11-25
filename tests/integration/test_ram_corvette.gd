@@ -35,9 +35,9 @@ const PLATE_NAMES: Array[StringName] = [&"PlateFront", &"PlateLeft", &"PlateRigh
 
 var _root: Node2D
 
-## Every row that awaits real physics runs on the 8x clock (tests/README.md -> "Gate time"): the three engine
+## Every row that awaits real physics runs on the 16x clock (tests/README.md -> "Gate time"): the three engine
 ## settings are scaled together so a physics tick stays 1/60 game-second, and restored in `after_each`.
-const _SPEEDUP := 8
+const _SPEEDUP := 16
 var _saved_time_scale: float = 1.0
 var _saved_ticks: int = 60
 var _saved_max_steps: int = 8
@@ -433,7 +433,7 @@ func test_a_sniper_shot_damages_an_exposed_hull_and_flies_on(mode: String = use_
 
 # ── 9. The beam ─────────────────────────────────────────────────────────────────────────────────
 
-## Drives a real `BeamBehavior` from `_physics_process` (test_station_incoming_damage_paths.gd's driver).
+## Drives a real `BeamBehavior` from `_physics_process` (test_fortress_incoming_damage_paths.gd's driver).
 class BeamDriver extends Node2D:
 	var actor: Node2D
 	var behavior: BeamBehavior

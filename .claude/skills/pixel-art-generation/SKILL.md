@@ -94,7 +94,7 @@ Naming the 2D shapes ("base is a circle, barrel is a flat rectangle") is the par
 |---|---|---|
 | Turret, hull part, prop, pickup, hazard, boss component | **`create_map_object`** | Correct default here. Transparent background. Cheap. |
 | Ship / enemy needing facing directions | `create_character` | Only if it actually rotates. Costs far more generations. **Never for non-humanoid shapes** — the humanoid template forces legs. |
-| Boss made of parts | Each part as its **own** map object | Matches how `space_station.tscn` composes turrets as children so they can be destroyed independently. |
+| Boss made of parts | Each part as its **own** map object | Matches how `space_fortress.tscn` composes its parts (`EnemyModule`s under `Modules`), each with intact and wreck art, so they can be destroyed independently. |
 | Terrain / ground tiles | `create_topdown_tileset` with `view: "high top-down"` | Wang autotiling. |
 | Standalone decorative tiles | Tiles Pro, `tile_type: "square_topdown"`, `tile_view: "top-down"` | |
 | HUD / UI / icons | `create_ui_asset` | Flat frontal — the top-down rule does not apply to UI. |
@@ -105,7 +105,7 @@ Naming the 2D shapes ("base is a circle, barrel is a flat rectangle") is the par
 the game world, you MUST pass `no_background: true`.** It is optional and it is not the default:
 without it the API treats it as unset and *paints a background*, and the sprite renders in-game as
 an opaque card that cuts a hard rectangle out of the starfield. This is not hypothetical —
-`station_core.png` shipped that way at **65536/65536 pixels at alpha 1.0** and survived two cycles.
+the (since retired) space station's `station_core.png` shipped that way at **65536/65536 pixels at alpha 1.0** and survived two cycles.
 The tools in the table above (`create_map_object`, `create_character`, the tilesets) are transparent
 by construction and need no flag, which is why the turrets came back correct without anyone asking.
 
@@ -148,7 +148,7 @@ Give up on one asset only after about **six** attempts that are not getting clos
 say in your final message under **Follow-ups** what is still wrong with it and what you tried, and
 move on.
 
-This step exists because `station_turret.png` shipped as a 3/4 view with a visible barrel side
+This step exists because the (since retired) space station's `station_turret.png` shipped as a 3/4 view with a visible barrel side
 while `station_core.png`, generated in the same session, was correctly overhead. Nothing in the
 pipeline caught it.
 
@@ -161,7 +161,7 @@ with a throwaway Godot project in `/tmp` (this container has **no `python3`, no 
 
 1. **Upscale nearest-neighbour** — `Image.load_from_file()`, `resize(w*6, h*6,
    Image.INTERPOLATE_NEAREST)`, `save_png()`, then Read it. Judge the angle here.
-2. **Composite the set at true in-game layout** and Read that too — for the station, the 256×256
+2. **Composite the set at true in-game layout** and Read that too — for the retired station, the 256×256
    core with turrets blended at ±76. This is the only step that answers question 3, and it is what
    revealed both that the destroyed turret reads correctly at 1× *and* that `station_core.png` has
    an opaque background. `Image.blend_rect` silently no-ops unless you `convert(Image.FORMAT_RGBA8)`

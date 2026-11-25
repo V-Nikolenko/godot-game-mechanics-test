@@ -51,6 +51,8 @@ var _group: Object = null
 var _powered: bool = true
 var _collapsed: bool = false
 var _started: bool = false
+## A post's EMP window is running: the beam is down and the schedule frozen until neither post is disrupted.
+var _emp_dark: bool = false
 var _clock: float = 0.0
 ## Post -> still alive.
 var _alive: Dictionary = {}
@@ -98,7 +100,10 @@ func step(delta: float) -> void:
 			queue_free()
 		return
 	if _powered and not _collapsed:
-		_drive_schedule(delta)
+		if _posts_disrupted():
+			_go_dark()
+		else:
+			_drive_schedule(delta)
 	_tick_beam(delta)
 	_update_lights()
 
@@ -177,7 +182,40 @@ func cycle_period() -> float:
 	return off_seconds + _beam.telegraph_seconds + on_seconds
 
 
+## EMP (Phase 11 t12): a post has no brain, so the fence polls both for `is_emp_disrupted()`. Either one darkens the whole fence, and the dark
+## period lasts until the later window ends.
+func _posts_disrupted() -> bool:
+	for post in posts():
+		if post.is_emp_disrupted():
+			return true
+	return false
+
+
+## The first dark tick: a running beam is cancelled (its `&"laser_wall"` hazard unregisters with it, its FADE finishes on the ticks that follow) and
+## the schedule stops advancing.
+func _go_dark() -> void:
+	if _emp_dark:
+		return
+	_emp_dark = true
+	_beam.cancel()
+
+
+## The first tick after the last window: the schedule restarts, so the player always gets the telegraph again. STATIC warns, then lights; CYCLE
+## starts a fresh cycle at the beginning of its dark stretch (`phase_offset` is not re-applied).
+func _relight() -> void:
+	_emp_dark = false
+	if mode == Mode.STATIC:
+		_started = false
+		return
+	_started = true
+	_clock = 0.0
+	if off_seconds <= EPS:
+		_beam.start()
+
+
 func _drive_schedule(delta: float) -> void:
+	if _emp_dark:
+		_relight()
 	if mode == Mode.STATIC:
 		if not _started:
 			_started = true

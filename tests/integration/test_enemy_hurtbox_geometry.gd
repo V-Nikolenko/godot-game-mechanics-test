@@ -8,22 +8,20 @@
 ##
 ## ── Why this file exists ─────────────────────────────────────────────────────────────────────
 ##
-## The backlog asked whether the space station's core `HurtBox` should shrink from the hull's
-## 240x240 to an 88-wide central strip, so its x-extents stop overlapping the four turrets'. The
-## answer is no, and the reasoning is in
-## `docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-/3-plan.md` and in
-## `assault/scenes/enemies/space_station/ENEMY.md`. The short version: it would make 25 % of the
-## boss's visible width dead in phase 1 and 66 % dead in phase 2 — where `station_turret.gd:73-77`
-## closes each dead turret's hurtbox, so the strip is all that is left — on a hull that is
-## *rotating* at that point. A decision that only lives in prose gets re-litigated; this file is
-## the decision as a gate, and `test_the_88x240_proposal_fails_this_sweep` is the specific
-## proposal, permanently red.
+## The backlog once asked whether the (since retired) space station's core `HurtBox` should shrink
+## from the hull's 240x240 to an 88-wide central strip, so its x-extents stop overlapping the
+## turrets'. The answer was no, and the reasoning is in
+## `docs/plans/should-the-station-s-core-hurtbox-be-narrowed-to-88-x-240-a-/3-plan.md`: it would
+## have made a quarter to two thirds of the boss's visible width dead, on a hull that was *rotating*
+## at that point. A decision that only lives in prose gets re-litigated; this file is the decision
+## as a gate. Its boss today is the Space Fortress (Phase 11), whose armoured hull hurtbox spans the
+## whole ring: `test_shrinking_the_fortress_hull_hurtbox_to_the_core_fails_this_sweep` is the same
+## proposal re-expressed on it, permanently red.
 ##
 ## ── What is actually enforced, precisely ─────────────────────────────────────────────────────
 ##
-## `HurtBox ⊇ body CollisionShape2D`, **not** `HurtBox ⊇ sprite`. Those differ: the station's
-## body collider is 240x240 under a 256x256 sprite, so 8 px per edge of visible hull is outside
-## *both* boxes. That pre-existing lip is out of scope here — do not mistake this sweep for an
+## `HurtBox ⊇ body CollisionShape2D`, **not** `HurtBox ⊇ sprite`. Those can differ: a
+## sprite may carry a few px of art past its body collider, outside *both* boxes. Such a lip is out of scope here — do not mistake this sweep for an
 ## art check.
 ##
 ## The assertion is one-sided (coverage, not equality) on purpose. The defect this file exists to
@@ -35,14 +33,13 @@
 ##
 ## Copied from `test_contact_hitbox_geometry.gd:84-107`, same three rules: a throwaway container
 ## `Node2D` per entity (effects and bullet pools scribble on `get_parent()`), each entity added to
-## the tree so `_ready()` runs, and only DIRECT children searched for the `HurtBox` (the station's
-## turrets carry their own, under `Turrets`).
+## the tree so `_ready()` runs, and only DIRECT children searched for the `HurtBox` (a modular
+## boss's parts carry their own, under `Modules`).
 ##
 ## Geometry is compared as entity-local `Rect2`s via `cs.transform * cs.shape.get_rect()`, so the
 ## `CollisionShape2D.scale` that a `Shape2D` resource does not carry is included. Rects are AABBs:
 ## a *rotated* collision shape would compare as its bounding box rather than as itself. No roster
-## entity rotates one, and the sweep instantiates everything at rest — before `station_laser_phase`
-## can spin the hull.
+## entity rotates one, and the sweep instantiates everything at rest, before any boss can spin its hull.
 extends GutTest
 
 ## Inward slack tolerated per edge before a hurtbox counts as failing to cover its body.
@@ -56,11 +53,9 @@ extends GutTest
 ##
 ## It is load-bearing from the first line, not a patch applied after a red run: three of the
 ## eleven entries fail a bare `Rect2.encloses()`, two of them by ~1e-5 px of float noise
-## (gunship: body 83.079 px vs hurtbox 82.405 px is the only real one).
+## (the legacy gunship: body 83.079 px vs hurtbox 82.405 px was the only real one; the Heavy Gunship, Phase 10 t4, shares one rectangle).
+## Still load-bearing for the float-noise pair.
 const _TOLERANCE_PX: float = 1.0
-
-## The proposal this file exists to reject, verbatim from the backlog item.
-const _PROPOSED_CORE_SIZE := Vector2(88.0, 240.0)
 
 const _ENEMY_DIRS: Array[String] = [
 	"res://assault/scenes/enemies",
@@ -117,6 +112,26 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/laser_tender/laser_tender.tscn",
 	},
 	{
+		"name": "hacker_frigate",
+		"scene": "res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn",
+	},
+	{
+		"name": "hacker_disruptor",
+		"scene": "res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn",
+	},
+	{
+		"name": "jamming_structure",
+		"scene": "res://assault/scenes/enemies/jamming_structure/jamming_structure.tscn",
+	},
+	{
+		"name": "sector_jammer",
+		"scene": "res://assault/scenes/enemies/sector_jammer/sector_jammer.tscn",
+	},
+	{
+		"name": "pulsed_jammer",
+		"scene": "res://assault/scenes/enemies/pulsed_jammer/pulsed_jammer.tscn",
+	},
+	{
 		"name": "bonus_drone",
 		"scene": "res://assault/scenes/enemies/bonus_drone/bonus_drone.tscn",
 	},
@@ -125,8 +140,16 @@ const ROSTER: Array[Dictionary] = [
 		"scene": "res://assault/scenes/enemies/razor_drone/razor_drone.tscn",
 	},
 	{
-		"name": "gunship",
-		"scene": "res://assault/scenes/enemies/gunship/gunship.tscn",
+		"name": "heavy_gunship",
+		"scene": "res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn",
+	},
+	{
+		"name": "carrier",
+		"scene": "res://assault/scenes/enemies/carrier/carrier.tscn",
+	},
+	{
+		"name": "space_fortress",
+		"scene": "res://assault/scenes/enemies/space_fortress/space_fortress.tscn",
 	},
 	{
 		"name": "gatling_interceptor",
@@ -139,10 +162,6 @@ const ROSTER: Array[Dictionary] = [
 	{
 		"name": "ram_corvette",
 		"scene": "res://assault/scenes/enemies/ram_corvette/ram_corvette.tscn",
-	},
-	{
-		"name": "space_station",
-		"scene": "res://assault/scenes/enemies/space_station/space_station.tscn",
 	},
 	{
 		"name": "sniper",
@@ -286,32 +305,34 @@ func test_every_hurtbox_covers_its_body_hull() -> void:
 		)
 
 
-## The boundary case, and the reason this file is not just a formality: the actual 88x240
-## proposal, applied to a live station, must fail the predicate above.
+## The boundary case, and the reason this file is not just a formality: the backlog's 88x240 decision ("never narrow a boss hurtbox to its
+## core") re-expressed on the Space Fortress — shrinking its hull hurtbox to the core's circle must fail the predicate above.
 ##
-## Applied to the **instance's** `CollisionShape2D` with a **fresh** `RectangleShape2D` — never
-## by mutating `cs.shape.size`. `space_station.tscn:22-23` shares one `RectangleShape2D_ss`
-## sub-resource between the body collider and the core HurtBox and it is not
-## `resource_local_to_scene`, so an in-place edit would resize the body too, would make this test
-## vacuously pass, and would poison every other station instantiated in the same process.
-func test_the_88x240_proposal_fails_this_sweep() -> void:
+## Applied to the **instance's** hurtbox `CollisionShape2D` with a **fresh** `CircleShape2D` — never by mutating `cs.shape.radius`.
+## `space_fortress.tscn` shares one `CircleShape2D_hull` sub-resource between the body collider, the hull HurtBox and the contact box and
+## it is not `resource_local_to_scene`, so an in-place edit would resize the body too, would make this test vacuously pass, and would
+## poison every other fortress instantiated in the same process.
+func test_shrinking_the_fortress_hull_hurtbox_to_the_core_fails_this_sweep() -> void:
 	var entity := _spawn({
-		"name": "space_station",
-		"scene": "res://assault/scenes/enemies/space_station/space_station.tscn",
+		"name": "space_fortress",
+		"scene": "res://assault/scenes/enemies/space_fortress/space_fortress.tscn",
 	})
 	var body := _body_shape_node(entity)
 	var hb := _hurt_box(entity)
-	assert_not_null(body, "station: has no body CollisionShape2D")
-	assert_not_null(hb, "station: has no HurtBox as a direct child")
+	assert_not_null(body, "fortress: has no body CollisionShape2D")
+	assert_not_null(hb, "fortress: has no HurtBox as a direct child")
 	if body == null or hb == null:
 		return
 	var hurt_cs := _sole_shape_node(hb)
-	assert_not_null(hurt_cs, "station: HurtBox must have exactly one CollisionShape2D")
-	if hurt_cs == null:
+	assert_not_null(hurt_cs, "fortress: HurtBox must have exactly one CollisionShape2D")
+	var core_cs := entity.get_node_or_null("Modules/Core/HurtBox/CollisionShape2D") as CollisionShape2D
+	assert_not_null(core_cs, "fortress: the core part has a hurtbox shape")
+	if hurt_cs == null or core_cs == null:
 		return
+	var core_radius: float = (core_cs.shape as CircleShape2D).radius
 
-	var narrowed := RectangleShape2D.new()
-	narrowed.size = _PROPOSED_CORE_SIZE
+	var narrowed := CircleShape2D.new()
+	narrowed.radius = core_radius
 	hurt_cs.shape = narrowed
 
 	var body_rect := _local_rect(body)
@@ -319,58 +340,55 @@ func test_the_88x240_proposal_fails_this_sweep() -> void:
 	assert_false(
 		_covers(body_rect, hurt_rect),
 		(
-			"the 88x240 core proposal must FAIL this sweep. If it passes, the sweep has been "
+			"a core-sized hull hurtbox must FAIL this sweep. If it passes, the sweep has been "
 			+ "loosened into a rubber stamp. Shortfall: %s"
 		) % _shortfall(body_rect, hurt_rect)
 	)
 	## Names the number, so a sweep that starts failing it for some unrelated reason is visible.
 	assert_almost_eq(
 		body_rect.end.x - hurt_rect.end.x,
-		(240.0 - _PROPOSED_CORE_SIZE.x) * 0.5,
+		(body.shape as CircleShape2D).radius - core_radius,
 		0.001,
-		"the proposal leaves 76 px of hull uncovered on each side"
+		"the core-sized hurtbox leaves 132 px (176 - 44) of hull uncovered on each side"
 	)
+	assert_almost_eq(body_rect.end.x - hurt_rect.end.x, 132.0, 0.001, "sanity: today's hull and core radii")
 
 
-## Expressed relative to the scene rather than against a magic 239: epic task 4 adds station
-## parts and task 1 re-derives the fight's numbers, and a legitimate hull resize should not
-## redden this test with a message about a proposal nobody is making any more.
-func test_the_station_core_hurtbox_spans_the_hull_not_just_the_core() -> void:
+## The fortress is armour over parts: the hull hurtbox refuses every hit, and shots cross it to the parts. So the hull hurtbox must cover
+## the body AND every part's hurtbox must lie inside the hull circle — a part poking out of the hull would be visible hull-less art the
+## armour never answers for. Measured from the scene (each part's centre distance + radius, or its farthest rectangle corner), never typed.
+func test_the_fortress_hull_hurtbox_covers_every_part() -> void:
 	var entity := _spawn({
-		"name": "space_station",
-		"scene": "res://assault/scenes/enemies/space_station/space_station.tscn",
+		"name": "space_fortress",
+		"scene": "res://assault/scenes/enemies/space_fortress/space_fortress.tscn",
 	})
 	var rects := _rects(entity)
-	assert_false(rects.is_empty(), "station: not shaped as the sweep requires")
+	assert_false(rects.is_empty(), "fortress: not shaped as the sweep requires")
 	if rects.is_empty():
 		return
 	assert_true(
 		_covers(rects["body"], rects["hurt"]),
-		"station: core HurtBox must cover the body collider — %s"
-			% _shortfall(rects["body"], rects["hurt"])
+		"fortress: hull HurtBox must cover the body collider — %s" % _shortfall(rects["body"], rects["hurt"])
 	)
-
-	## Derived from the turrets themselves, not hardcoded at 102: whatever ring they sit on, the
-	## core hurtbox has to reach past it, or the shoulders go dead the moment the turret hurtboxes
-	## close on death (`station_turret.gd:73-77`).
-	var span: float = 0.0
-	for turret in entity.get_node("Turrets").get_children():
-		var t := turret as StationTurret
-		var t_cs := _sole_shape_node(t.get_node("HurtBox"))
-		assert_not_null(t_cs, "turret: HurtBox must have exactly one CollisionShape2D")
-		if t_cs == null:
+	var hull_cs := _sole_shape_node(_hurt_box(entity))
+	var hull_radius: float = (hull_cs.shape as CircleShape2D).radius
+	var measured := 0
+	for part in entity.get_node("Modules").get_children():
+		var cs := part.get_node_or_null("HurtBox/CollisionShape2D") as CollisionShape2D
+		if cs == null:
 			continue
-		var t_rect: Rect2 = t.transform * _local_rect(t_cs, (t.get_node("HurtBox") as Node2D).transform)
-		span = maxf(span, maxf(absf(t_rect.position.x), absf(t_rect.end.x)))
-	assert_gt(span, 0.0, "no turret contributed an x-extent — the derivation is vacuous")
-	assert_gt(
-		rects["hurt"].end.x,
-		span,
-		(
-			"the core HurtBox must reach past the turret ring (x = %.1f). Narrower and the "
-			+ "shoulders stop taking fire the moment the turrets die and close their own hurtboxes"
-		) % span
-	)
+		var centre: Vector2 = entity.to_local(cs.global_position)
+		var reach := 0.0
+		if cs.shape is CircleShape2D:
+			reach = centre.length() + (cs.shape as CircleShape2D).radius
+		else:
+			var half: Vector2 = (cs.shape as RectangleShape2D).size * 0.5
+			for corner in [Vector2(-half.x, -half.y), Vector2(half.x, -half.y), Vector2(half.x, half.y), Vector2(-half.x, half.y)]:
+				reach = maxf(reach, entity.to_local(cs.global_transform * corner).length())
+		measured += 1
+		assert_lte(reach, hull_radius + _TOLERANCE_PX,
+			"%s: its hurtbox reaches %.1f px from the centre, outside the %.0f px hull hurtbox" % [part.name, reach, hull_radius])
+	assert_eq(measured, 9, "every one of the fortress's nine parts was measured — the check is vacuous below that")
 
 
 # ── Guards ────────────────────────────────────────────────────────────────────

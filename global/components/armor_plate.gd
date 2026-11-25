@@ -2,7 +2,7 @@
 ##
 ## It sits under a `Plates` node, never as a direct child of the entity root, so the
 ## hurtbox-geometry gate's "exactly one direct-child HurtBox that covers the body" still holds
-## (the space station's `Turrets` precedent). Armour is a *deflection rule*, not an absent
+## (the `EnemyModule` parts' `Modules` precedent). Armour is a *deflection rule*, not an absent
 ## hurtbox: player projectiles ask the owning entity `deflects_hit(hit_box)` through
 ## `ArmorQuery`; the entity forwards to the plate it overlaps.
 ##

@@ -21,7 +21,7 @@
 ##   deliberately and with a comment saying so. Test 4's second half is that window.
 ## - `_enter_tree()` catches a `config` that a `.tscn` override or `initial_props` substituted in
 ##   AFTER the constructor, and it still runs before any child's `_ready()` — which matters because
-##   all four space-station children read `_station.config` in their own `_ready()`. Test 6.
+##   the Space Fortress's `DeathSequence` reads the host's `config` in its own `_ready()`. Test 6.
 ##
 ## They compose because `duplicate()` blanks `resource_path`, so a blank path IS the marker of an
 ## already-private copy and the second call is a no-op. Test 5 pins that.
@@ -60,9 +60,9 @@ const _ENTITY_DIRS: Array[String] = [
 ## finds fewer has broken, and a broken sweep passes every assertion below vacuously.
 const _MIN_ENTITIES_WITH_CONFIG: int = 10
 
-const GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/gunship/gunship.tscn")
-const GUNSHIP_CONFIG_PATH := "res://assault/scenes/enemies/gunship/gunship_config.tres"
-const STATION_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_station/space_station.tscn")
+const GUNSHIP_SCENE: PackedScene = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")  # the Heavy Gunship since Phase 10 t4
+const GUNSHIP_CONFIG_PATH := "res://assault/scenes/enemies/heavy_gunship/heavy_gunship_config.tres"
+const FORTRESS_SCENE: PackedScene = preload("res://assault/scenes/enemies/space_fortress/space_fortress.tscn")
 const SCORE_CONFIG_PATH := "res://global/resources/score_config_default.tres"
 
 
@@ -240,7 +240,7 @@ func test_writing_to_one_entitys_config_cannot_reach_another() -> void:
 	)
 	assert_eq(
 		(load(GUNSHIP_CONFIG_PATH) as ShipConfig).max_health, shipped_health,
-		"writing one gunship's config.max_health rewrote the shipped gunship_config.tres in memory"
+		"writing one gunship's config.max_health rewrote the shipped heavy_gunship_config.tres in memory"
 	)
 	var c := _spawn(GUNSHIP_SCENE.resource_path)
 	assert_eq(
@@ -292,42 +292,26 @@ func test_reentering_the_tree_keeps_the_same_private_copy() -> void:
 
 # ── 6. Boundary — the ordering the design rests on ───────────────────────────
 
-## The space station's four child nodes read `_station.config` in THEIR `_ready()`, which runs
-## before the station's. So the copy must already exist by then, which is why it is installed in
-## `_init()`/`_enter_tree()` and not in `_ready()`.
-##
-## This has to be an IDENTITY check taken from inside a child. Comparing the child's copied VALUES
-## is green even on a `_ready()`-time design, because the children copy identical numbers off the
-## shared original — that is exactly why the first draft of this test was rejected in review.
-func test_station_children_see_the_private_copy_in_their_ready() -> void:
+## The Space Fortress (Phase 11 t5): its `DeathSequence` copies `death_blast_count` in ITS `_ready()`, before the fortress's, so the copy must
+## already exist by then — which is why it is installed in `_init()`/`_enter_tree()` and not in `_ready()`. This has to be an IDENTITY check
+## taken from inside a child (comparing copied VALUES is green even on a `_ready()`-time design): identity from inside a probe child, then the sequence's own copy read from the private config (a value written on
+## the copy before `add_child`, so the shared `.tres` value cannot satisfy it).
+func test_fortress_children_see_the_private_copy_in_their_ready() -> void:
 	var seen: Array[Resource] = []
-	var stations: Array[Node] = []
 	for i in 2:
 		var container := Node2D.new()
 		add_child_autofree(container)
-		var station := STATION_SCENE.instantiate()
+		var fortress := FORTRESS_SCENE.instantiate()
+		fortress.get("config").set("death_blast_count", 5 + i)
 		var probe := ConfigProbe.new()
-		station.add_child(probe)
-		container.add_child(station)
-		stations.append(station)
+		fortress.add_child(probe)
+		container.add_child(fortress)
 		assert_not_null(probe.seen, "the probe's _ready() did not run")
 		seen.append(probe.seen)
-		assert_eq(
-			probe.seen, station.get("config"),
-			(
-				"a child's _ready() saw a DIFFERENT config object than the one the station ends up "
-				+ "holding. The copy must be installed before any child is ready — _init()/"
-				+ "_enter_tree(), never _ready()."
-			)
-		)
-		assert_true(
-			probe.seen.resource_path.is_empty(),
-			"a child's _ready() saw the shared, ResourceLoader-cached config, not a private copy"
-		)
-	assert_ne(
-		seen[0], seen[1],
-		"two stations' children saw the SAME config object, so the stations share their stats"
-	)
+		assert_eq(probe.seen, fortress.get("config"), "a fortress child's _ready() saw a different config object than the fortress holds")
+		assert_true(probe.seen.resource_path.is_empty(), "a fortress child's _ready() saw the shared, cached config")
+		assert_eq(fortress.get_node("DeathSequence").get("_blast_count"), 5 + i, "the death sequence copied its private value in its own _ready()")
+	assert_ne(seen[0], seen[1], "two fortresses' children saw the SAME config object")
 
 
 # ── 7. ScoreTracker.score_config — same bug, a different owner shape ─────────

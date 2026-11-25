@@ -3432,3 +3432,1180 @@ above stand except where this section says otherwise; the per-task *Phase 8, bui
 - Placed Assault corridor layouts for turrets (Ph15), difficulty tiers inside the fairness bounds (Ph16), beam / turret audio (Ph17), turret wreckage (Ph19), encounter compositions around the site (Ph13 / Ph14).
 - The player's mining beam still stops at every layer-1 enemy root (S13). No kill attribution for enemy-weapon kills. Nothing was play-tested; all §2.21 starting values are judgement.
 - The level-1 column measurement counts only ships with a brain, so brainless structures never appear in it.
+
+## Phase 9 - Enemy rework, phase 9: electronic warfare - Jamming Structure, Hacker Frigate and EMP (2026-11-07)
+
+Plan: `docs/plans/cmug23onr001pm52w9swwophy/3-plan.md` (revision 3: revision 2 answered round 1 of the AI plan review `4-review.md`, 2 blocking + 14 minor; revision 3 answers round 2, 1 blocking + 9 minor, and the owner's return of revision 2; all in its §8), research in `1-context.md` / `2-research.md` (scope check S1–S18, findings F1–F12) in the same directory.
+These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
+
+### Changes to earlier decisions
+- **Ph7's EMP stand-in is replaced, its interface kept:** `PlayerBase.apply_emp(seconds, source)` now applies the Ph7 boost disruption **and** a timed ability lock;
+  `is_emp_disrupted()` / `emp_changed(active: bool)` keep their meaning. `EmpPulse.emit(tree, at, radius, seconds, source, targets := TARGET_PLAYER) -> int` gains a
+  defaulted trailing bitmask (`TARGET_PLAYER 1`, `TARGET_ENEMIES 2`, `TARGET_SEEKERS 4`, `TARGET_ALL 7`); every existing call is bit-identical.
+- **Ph7 "enemy-laid mines never trigger on enemies" stands;** a *placed* (`Hostility.ALL`) EMP mine now uses `TARGET_ALL`, so the hub minefield's EMP mines stun enemies (owner choice).
+- **Ph6's reserved `HazardInfo.disables_abilities` gets its producer and consumer:** jammer fields set it (only while ACTIVE); the player samples it. `HazardInfo` gains
+  `stabilise_seconds`; `HazardField` gains exports `disables_abilities` / `stabilise_seconds` (defaults keep every Ph6–Ph8 field bit-identical); `Hazards.jammer_at(pos)`.
+- **Research said an enemy EMP keeps its Assault `EngagementBudget` running; the plan freezes it instead** (the brain is not ticked while EMP'd; 12 brains own private budgets).
+  Bounded by the 5 s EMP Blast; no Ph9 EMP source that reaches enemies is placed in any Assault level.
+- The player's `EMPBlastModule` (if the owner keeps choice 2) routes by the duck-typed `answers_emp()`: brain-driven ships and jammers get the tangible `apply_emp` (they stay
+  shootable); every other legacy / brainless enemy keeps the old process-disable stun. A process-disabled jammer would drop out of physics while its field kept jamming, so
+  jammers must never take the old path.
+- The player's homing missile loses its hard-coded Assault box for a `ProjectileLifetime` (6 s / 2400 px / world rect), so it works anywhere in Open Space.
+
+### Names and places later phases build on
+- **Ability lock** on `PlayerBase`: `ability_lock_changed(locked: bool)`, `ability_press_refused()`, `apply_ability_lock(seconds, source)` (timed, longest wins, no stabilisation),
+  `abilities_locked()`, `ability_lock_fill()`, `allow_ability_press()`; stepped in `_step_disruption()`. Checked at exactly three seams: both ships' H `_input` loops and
+  `RocketState._on_action` (`special_weapon`). **Never locked:** movement verbs (thrust, turn, Shift boost, dash, warp), primary fire (`WeaponState`), `switch_weapon`, passive
+  modules, running effects, module `tick()`. A refused press spends nothing. Any later lock source (Ph13 encounters, Ph16 tiers, boss EW) calls `apply_ability_lock` or registers
+  a `disables_abilities` hazard; never a per-module flag.
+- **Jammer field = a hazard sampled by the body.** Leaving starts the field's `stabilise_seconds`; re-entry restarts it; a pulsed field's TELEGRAPH / QUIET count as outside.
+  Kind `&"jammer"`, `avoid_weight` 0: enemies treat it as their own ground. Inside a lit field **every seeker flies straight** (player homing missile, enemy Pursuit / Cluster
+  rockets); the Missile Corvette downgrades PURSUIT / CLUSTER to DUMB against a player inside one.
+- **Retarget contract** (duck-typed): group `&"player_seeking_ordnance"` (`SeekingOrdnance.GROUP`, `global/components/seeking_ordnance.gd`, `eligible(tree, at, reach)`),
+  `can_be_retargeted()`, `retarget(target, seconds, source) -> bool` (`seconds < 0` = the rocket's own `hijack_seconds`), `is_retargeted()`, `jam_guidance(source)`, signals
+  `retargeted(source: Node)` / `retarget_ended()`. Only `homing_missile` implements it; warheads are never eligible. A later player seeker must join the group to be hijackable.
+- **Hijacked rocket rules:** turn-limited (1.6 rad/s), 380 px/s, 2.5 s then fizzle; hurts the player only by `ContactBlast` (18, r 40, armed after 0.25 s and 60 px), full damage
+  to enemies (the lure), shoot-down HurtBox 512/64 only while hijacked, fizzles when its source is freed. No new collision bit. **Its HitBox (mask 513, which includes 512) ignores
+  any area whose parent is a `homing_missile`** (the `EnemyRocket` self-guard), so a player rocket never hits its own HurtBox or another player rocket; only primary fire shoots a
+  hijacked rocket down. `warhead_missile.gd` carries the same guard (its HitBox is also mask 513). One `_finish(blasted)` end of life, which the `ProjectileLifetime` expiry also goes through (so `retarget_ended` always fires). The rocket draws its own
+  0.3 s tether; the dart is recycled on the claim tick.
+- **Lock clocks:** every lock / EMP / suppress clock is `x -= delta`, over at `x <= 1e-6` (float drift otherwise ends a 1.5 s lock on tick 91). Later timed effects use the same rule.
+- **Enemy EMP hook:** `BaseEnemy.answers_emp() -> bool` (default `is_ai_driven()`; the one routing question for every EMP source), `apply_emp(seconds, source)` /
+  `is_emp_disrupted()`; for brain-driven ships the brain tick is skipped, the mover still steps, the hurtbox is untouched; `suspend_ai()` clears a live window (a railed ship's
+  `_physics_process` returns early, so its clock would otherwise stop for good); `EnemyBrain.on_emp_started()` virtual (twin drones
+  collapse their pair, the tender cancels a launch telegraph). `JammingStructure` overrides `answers_emp()` true and answers by `HazardField.suppress(seconds)` (field quiet,
+  tower shootable, cycle keeps running). Other structures and legacy enemies answer false. A later structure with its own EMP answer overrides the same pair. `EnemyRocket` joins
+  `&"enemy_seeking_ordnance"` while it steers and answers `jam_guidance()`.
+- **New enemies / hazards:** `assault/scenes/enemies/jamming_structure/` (`JammingStructure`, `JammingStructureConfig`, `JammerFieldArt`; a static `BaseEnemy` with a child
+  `HazardField`), `sector_jammer/`, `pulsed_jammer/` (scene + config, shared scripts); `hacker_frigate/` (`HackerFrigate`, `HackerFrigateBrain` with `Phase { HOLD_ARC, TELEGRAPH,
+  PULSE, BREAK_OFF, DISENGAGE, IDLE, NOTICING, RETURNING }` append-only, `HackerFrigateConfig`), `hacker_disruptor/` (same scripts, `pulse_lock_seconds` 1.5, **not placed**);
+  `assault/scenes/projectiles/hijack_pulse/` (`HijackPulse`, a pooled non-damaging dart with no collision areas, claims by distance); `assault/scenes/hazards/emp_zone/`
+  (`EmpZone extends Node2D` with a child `HazardField` `&"emp_zone"`, avoid 0.6, one `TARGET_ALL` emit per cycle on its `phase_changed`; composition, never a
+  `HazardField` subclass). `HazardField` gains `suppress(seconds)`. `WaveBuilder.jammer(variant)`, `WaveBuilder.hacker_frigate()`.
+- **Hacker movement:** HOLD_ARC with asymmetric 0.18 / 0.30 rad/s arcs; inside the player's nose cone (± 30°) or route cone (± 25°, player > 80 px/s) the orbit is forced toward
+  the nearer edge at 0.30 rad/s (216 px/s at 720 px, under `max_speed` 230): it slides out of a nose that stops, it does not out-turn a tracking player. **`acceleration` is 700
+  px/s²** (the Support Ship's), because the escape usually has to stop a wrong-way orbit first (at 260 that takes 0.83 s and the Hacker leaves the cone later than with no rule at
+  all). Rows: exit through the near edge within 2.2 s (720 px), 1.9 s (520 px), 1.8 s (route), set from a simulation of the mover rule with ≈ 0.5 s margin; controls with the cone
+  off are still inside at the bound. A later retune of `acceleration`, `max_speed` or `cone_escape_speed` must keep those rows green. BREAK_OFF inside 420 px is a
+  committed `mover.boost` at 360 px/s with `break_lateral_weight` 0.25 (radial ≈ 322 px/s; `break_contact` doubles the lateral share against a closing threat), ≤ 3.0 s, 1.0 s
+  rearm; Assault uses the view-clamped request instead. Every behaviour row has a control that switches the behaviour off and must fail the same bound.
+- **Hacker pulse:** TELEGRAPH 0.9 s (damage cancels it), started only with the player within **`pulse_trigger_range` 870** (= held range 720 + drift 90 + 60, so the range drift
+  never gates the pulse) → PULSE 1.6 s claiming up to 3 eligible rockets within **`hijack_range` 650 of the Hacker** (the rocket-claim reach, not a player gate) with LOS (in flight
+  and newly launched), darts launched from the hull centre; cooldown 6–8 s;
+  **1 pulse per Assault life** (a second cannot fit in the 9 s budget, so 1 is the only cap that binds); Assault view clamp + `EngagementBudget` 9 s + measured exit
+  (`tests/helpers/ph9_exit_keys.gd`). The dart lives 1.6 s / 1400 px at 900 px/s; a rocket receding at full range can outrun it, by design. LOS is the Ph6 rule (only asteroids
+  and wrecks block; enemy bodies do not). The Disruptor hook is `pulse_lock_seconds`, applied at **PULSE end** to a player within `pulse_trigger_range` with LOS (a lock during PULSE would refuse the launches it hijacks);
+  the field and the call are built with the pulse (0.0 in the base config), the Disruptor only sets 1.5.
+- **Audio seam:** `EventBus.player_ability_lock_changed(locked: bool)`, `EventBus.player_ordnance_hijacked(rocket: Node2D, source: Node)`. Ph17 connects sound to them.
+- **HUD:** `MissionHud` JAMMED chip (fill = `ability_lock_fill()`) and a lock glyph over the special-weapon icon; ship-side `AbilityLockStatic` overlay. Colours: amber-white =
+  jammed / hacked, blue-white = EMP; never cyan (shield) or violet (boost disruption).
+
+### Placement
+- Hub: draw 18 = Hacker on the 2600 ring at 67.5° (draws 1–17 unchanged); a sector jammer beside the Ph8 `HubDefenseSite` (placement only, not power-linked) and a pulsed jammer,
+  both under `EnemyContainer`; an EMP zone in `TacticalSpace`. **Jammers (all variants) live under `EnemyContainer`, never in `TacticalSpace`** (the Ph6 TacticalSpace sweep reads a `BaseEnemy` as radius 0); new
+  sweep C in `test_sector_hub_patrol.gd`: every jammer keeps `field_radius + 300` px clear of the spawn, triggers and pickups. The EMP zone is covered by the Ph6 TacticalSpace sweep
+  (`_element_radius()` knows `EmpZone`); the Hacker joins `_patrol_groups()`.
+- Level 1: one local jammer and one Hacker, both in **planet_approach**, pinned as `EXPECTED_PH9`, under four hard constraints: count ≤ 7 of 7.5 throughout, both lives end before the
+  98.0 s peak, the two lives never overlap, the jammer clears every column lit during its life. Ordered pre-approved options: A Hacker in 40–53 s then jammer in 55–70 s (default);
+  B jammer first; C jammer at y −120; D Hacker at the side band. None fits → the task escalates; never a frozen-constant change, a per-level retune, or deep_space. The EMP-zone /
+  placed-EMP-mine / EMP-laying-`Minefield` guards scan level scenes and scripts (and `wave_builder.gd` for `w_emp`), because none of them is spawned through `WaveBuilder`; a
+  `Minefield` with `w_emp > 0` makes placed EMP mines that reach enemies at runtime.
+
+### Conventions
+- **No jammer (any variant), Hacker, Disruptor or EMP zone in an `ENEMIES_CLEARED` section; no sector jammer or EMP zone in any Assault section** (guard rows in
+  `test_engagement_deadline.gd`). Never place a Hacker inside or next to a jammer (a jammed player cannot launch, so the hijack would be moot).
+- Do not stack EW on the player: one lock, longest wins, no additions.
+- The player's EMP Blast is an H ability, so it switches a jammer off only from outside the field (inside, the press is refused like every ability); its reach is scene-wide.
+- Keeping a test rocket alive for a long time: hover it on a hurtbox-less static `Node2D` target (a straight rocket leaves the Assault rect by 4.55 s and hits 2400 px at 4.8 s).
+- Gate time: GUT 212.4 s at the Ph8 close; allotments total 22.6 s, so the phase ends ≤ 235.0 s; a task that would pass 238 s escalates.
+- Task chains over shared files: `player_base.gd` t1 → t2 → t5; `homing_missile.gd` t3 → t4 → t5; `enemy_rocket.gd` t5 → t7; `base_enemy.gd` / `emp_blast_module.gd` t5 → t6 → t7;
+  `hazard_field.gd` t1 → t7; `test_sector_hub_patrol.gd` t11 → t13; roster gates t7 → t8 → t9 → t10.
+- `enemy_mine.gd` never names `EnemyMine` (no `as` / `is EnemyMine`; the self-reference leaks at exit).
+
+### Deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| Jammer-linked turret groups (`TurretGroup.add_power_provider`) | Ph20 | roadmap |
+| Hacker / jammer squad tactics (pin the player in a field, mark-and-flank) | Ph14 | squad communication |
+| Disruptor placement; EW numbers by difficulty | Ph13 / Ph16 | encounters, tiers |
+| Lock / hijack / EMP audio | Ph17 | seams built here |
+| Ship-mounted EMP weapon (Carrier anti-approach pulse) | Ph10 / Ph18 | first user; `EmpPulse` ready |
+| EMP on structures and legacy enemies (gunship, bonus drone, station, Ph8 turrets / fences) | Ph10 / Ph11 | reworked there; Ph9 jammers are the one structure that already answers EMP |
+| Enemy bodies blocking line of sight (IDEAS §6.4 "force the hacker behind other enemies") | Ph19 (heavy hulls), maybe Ph14 | Ph6 LOS rule kept; pinned by a Ph9 row |
+| Player rockets shooting down a hijacked rocket | rejected | salvo-mates fly 7 px apart; primary fire is the shoot-down tool |
+| Module / cooldown HUD | Ph17 | readability pass |
+| Jammers / EMP zones in Assault layouts beyond level 1 | Ph15 | Ph6 rule |
+| Jammer wreckage | Ph19 | |
+| Shield "hacked" drain (`Shield.set_hacked`) | rejected | drains every charge at once, not brief |
+
+### Phase 9, built in t1 (the player-side ability lock: H abilities and K rockets, jammer fields, timed locks) (2026-11-07)
+- **Built as §2.1 says, no interface deviation.** `PlayerBase` (`global/entities/player_base.gd`): `signal ability_lock_changed(locked: bool)`,
+  `signal ability_press_refused()`, `apply_ability_lock(seconds, source)`, `abilities_locked()`, `ability_lock_fill()`, `allow_ability_press()`,
+  `_step_ability_lock(delta)` (first line of `_step_disruption()`), `static func _tick_clock(x, delta)` with `const LOCK_CLOCK_EPSILON = 1e-6`, private state
+  `_in_field` / `_field_stabilise` / `_stabilise_left` / `_stabilise_total` / `_timed_left` / `_lock_reported`. `HazardInfo.stabilise_seconds`; `HazardField`
+  exports `disables_abilities` (written as `disables_abilities and active`) and `stabilise_seconds`; `Hazards.jammer_at(pos)`. Seams: `OpenSpacePlayerShip._input`,
+  `AssaultPlayer._input` (after the dialog return), `RocketState._on_action` (`special_weapon`, inside `cooldown_timer.is_stopped()`, duck-typed `has_method`).
+  `WeaponState` untouched.
+- **Choices §2.1 left open, fixed here (t2 / t5 build on them):** `_report_lock()` is the one edge emitter, called from the step and from
+  `apply_ability_lock()`, so a timed lock announces `true` **at the call** (as `apply_emp` does) and a field on the first tick sampled inside. t2 adds
+  `EventBus.player_ability_lock_changed` inside `_report_lock()`. The `source` argument is unused in t1. A field whose `stabilise_seconds` is 0 unlocks on
+  the exit tick itself.
+- **A locked H press is consumed even when nothing could use it** (no module, or only the Open Space Boost Drive, which H never fires): handled and refused.
+  Unlocked, such a press is still not handled (unchanged). A press during an Assault dialog returns before the lock check: ignored, not refused.
+- **Test reading (review finding 5):** the "primary fire / movement never affected" rows compare against a control ship that sees the **same registered
+  field out of reach** (1200 px away, or moved 5000 px away before its tick), not against "no field", so both runs take identical `Hazards.count() > 0` paths
+  and only the lock can differ. The `count() == 0` path has its own row (`test_no_hazard_leaves_every_lock_observable_untouched`).
+- **Test trap for later tasks:** `CharacterBody2D.move_and_slide()` called off a physics frame (hand-ticked from idle code) moves by the *real frame delta*, so
+  a hand-ticked row may compare two ships moved in the same frame but must not assert a distance (an early draft of the movement row flaked 4 / 20 on that).
+  Assert the velocity the verb sets instead (it uses the fixed D).
+- Gate time: GUT 213.362 → 213.655 s (2634 → 2667 tests), +0.29 s of the 2.0 s allotment (`tests/README.md` → Gate time, Phase 9 table).
+- **Gate repair (attempt 3): an intermittent leak in a Phase 8 test helper, not in the lock.** Attempt 2's gate failed with all 2667 tests green on
+  `GATE FAIL: the GUT run leaked objects at exit` (`25 resources still in use` = exactly `swarm_drone.tscn`); it recurred in about one full run in three.
+  Source: `tests/helpers/level1_slice_replay.gd` freed its `WaveManager` after `_pending + 0.1` s of *physics* time, but `_spawn_with_delay()` timers run on
+  *idle* time (≈ 0.3 game s per idle frame at 16×), so `test_level1_ph8_attacks.gd::test_both_level1_turrets_fire_while_in_view` sometimes freed it with a
+  delayed Swarm Drone spawn still waiting and the stranded `SceneTreeTimer` held the scene to exit. Fixed in the helper only: it now waits until
+  `spawn_count()` of every triggered wave has arrived through `WaveManager.enemy_spawned` (cap 5 s, then `push_error`). `wave_manager.gd` unchanged.
+  Control 4 / 15 leaks before, 0 / 30 after (`tests/README.md` → *The third half*). Later replays through the helper inherit the fix; a new helper that
+  frees a `WaveManager` early must count arrivals the same way.
+
+### Phase 9, built in t3 (homing rocket lifetime) (2026-11-07)
+- **Built as §2.4 says, no interface deviation.** `homing_missile.gd` lost the `_ARENA_*` constants and the box check; it declares `signal expired`, has a `ProjectileLifetime` child in
+  `homing_missile.tscn` (`max_time` 6.0, `max_distance` 2400, `use_world_rect` true) and connects `expired -> _on_expired()` in `_ready()`. `_on_expired()` is only `queue_free()`; **t4 ends a live
+  hijack in it before the free.** In Assault the rect is `EnemyWorld.projectile_world_rect()` (the box the constants hard-coded); in Open Space the rect rule is a no-op, so a rocket launched far
+  from the origin now lives (it died on its first tick before). Nothing else about the rocket changed.
+- **The shared "keep a rocket alive" setup** is a hurtbox-less static `Node2D` 300 px away: the rocket reaches it and hovers within ~10 px until `max_time` (expiry at tick 360 +-1, both harnesses).
+  `tests/integration/test_homing_missile_lifetime.gd` hand-ticks the rocket then its `ProjectileLifetime`; t4's lifetime row reuses the setup. The lifetime arms on its first tick, so the 2400 px
+  rule fires one tick after 288 ticks of travel (Open Space, no target).
+- Ownership row added to `test_player_bullet_lifetime.gd` (homing: `expired -> queue_free`; warhead: screen notifier).
+
+### Phase 9, built in t2 (the lock tells: ship overlay, HUD chip and glyph, audio seam) (2026-11-08)
+- **Built as §2.3 says, no interface deviation.** `AbilityLockStatic` (`global/entities/ability_lock_static.gd`, `class_name`, a `Node2D` code-built by `PlayerBase._show_lock_overlay()` on the first lock):
+  `set_fill()`, `step(delta, fill)`, `flash()`, `arcs()`; alpha is `0.3 + 0.6 * fill` (one formula, 0.9 held), 1.0 for `FLASH_SECONDS` 0.15 after a refusal.
+  `JammedChip` (`global/ui/jammed_chip.gd`, `BAR_WIDTH` 52, `show_lock(fill)`, `clear()`, `flash()`, `is_flashing()`, tint on `modulate`) and `LockGlyph` (`global/ui/lock_glyph.gd`)
+  are built in code by `MissionHud._build_lock_tells()` (not authored in the two HUD `.tscn`s, so one script change serves both). The chip is a child of the HUD at
+  `JammedChip`; the glyph is `WeaponContainer/LockGlyph`.
+- **`PlayerBase._report_lock()` is the one place the overlay is shown / hidden and `EventBus.player_ability_lock_changed` is emitted**, so a timed lock shows the overlay at the call
+  and a field on the first tick sampled inside, and both hide on the unlock tick. The overlay's jitter and alpha tick inside `_step_ability_lock()` only while visible.
+- **`MissionHud` looks the player up lazily in `_process`** (first `player`-group node answering `abilities_locked`, refusals connected once, re-looked-up when the cached one is
+  freed), because the Open Space hub ship can arrive after the HUD's one awaited frame. With no player the chip and glyph are hidden and nothing is logged.
+- `EventBus.player_ordnance_hijacked(rocket: Node2D, source: Node)` is declared; nothing emits it until t4. No audio player anywhere.
+- Test trap: a mode loop that creates a second player without freeing the first leaves the first one (and its jammer) in the `player` group, so the HUD tracks the wrong ship.
+
+### Phase 9, built in t4 (the seeking-ordnance retarget hook and the hijacked homing rocket) (2026-11-08)
+- **Built as §2.5 says.** `SeekingOrdnance` (`global/components/seeking_ordnance.gd`: `GROUP` `&"player_seeking_ordnance"`, `eligible(tree, at, reach)` nearest first, ties by
+  instance id). `homing_missile` joins the group in `_ready()` and answers `can_be_retargeted()`, `retarget(target, seconds, source)` (`seconds < 0` = its own `hijack_seconds`),
+  `is_retargeted()`, `jam_guidance(source)`, `is_tether_visible()`; signals `retargeted(source: Node)` and `retarget_ended()`; it emits `EventBus.player_ordnance_hijacked(self, source)`
+  once per successful claim. All hijack tuning is exported on `homing_missile.tscn` (`hijack_speed` 380, `hijack_turn_rate` 1.6, `hijack_seconds` 2.5, `hijack_ease_seconds` 0.5,
+  `hijack_blast_damage` 18, `hijack_blast_radius` 40, `hijack_blast_frames` 3, `hijack_trigger_radius` 30, `hijack_arm_seconds` 0.25, `hijack_arm_clearance` 60, `tether_seconds` 0.3),
+  plus a `HurtBox` (512 / 64, r 7, closed until hijacked) and an amber `Pop`. `RocketTrail` gained `set_colors(birth, death)` and `birth_color()`.
+- **A rocket is claimed at most once** (`can_be_retargeted()` latches false on the first claim, not only while hijacked). **A claim with a null `source` has no source to lose**: it is
+  accepted and lasts its window (§2.5's "source not valid -> fizzle" applies only to a source that existed). A freed **target** (the player) leaves the rocket flying straight to its fizzle.
+- **Deviation: `_finish()` frees at the end of the frame, not two physics ticks later.** §2.5 asked for `EnemyRocket`'s two-tick delay and for t3's rows to stay green; t3's rows time the
+  free (`test_homing_missile_lifetime.gd` tick 360, `test_player_bullet_lifetime.gd` `is_queued_for_deletion()` right after `expired`). The delay exists only for a pooled rocket; this one
+  is never pooled. The areas are still closed deferred and `_done` latches first. Every end emits `expired` once (through the lifetime's own latch); only a hijack's end pops and emits
+  `retarget_ended`, so an unhijacked rocket's ends are observably unchanged.
+- **The self-hit guard compares script identity** (`node.get_script() == get_script()`) instead of `is homing_missile`, so `homing_missile.gd` does not name its own `class_name`. This is a
+  precaution, **not a known leak**: `enemy_mine.gd`'s self-reference leaked, but `enemy_rocket.gd` names `EnemyRocket` freely with a leak-free gate, so there is no general rule against it.
+  `warhead_missile.gd` uses `area.get_parent() is homing_missile` (a cross-reference). **Decision: a player rocket never hits another player rocket**, hijacked or not.
+- **Things besides primary fire that end a hijacked rocket (accepted):** a `LaserRay` on its default `_HIT_MASK` (128 | 256 | 512: level 1's laser columns, every ray of `laser_wall.tscn`)
+  kills any HurtBox it meets, so a lit column destroys a hijacked rocket; so does a reflected `EnemyBullet` (layer 64), the ally fighter's CONTACT ram box (64) and an `EnemyRocket`
+  (both end). The station laser phase overrides the mask and does not.
+- **For t8 (the Hacker):** the rockets are children of `RocketState`, so a rocket freed with its player (any parent free) never reaches `_finish()` and emits no `retarget_ended`;
+  a claimer counting its claims must also check `is_instance_valid`. Beam primaries (`mining_laser`, targets by group) can never shoot a hijacked rocket down (a t9 fairness note).
+  `retarget()` opens the HurtBox deferred, so a test asserting it must await a frame.
+- **Measured engine behaviour (Godot 4.6), for anyone writing a guard row:** an `Area2D` that turns `monitorable` while it already overlaps another area forms **no pair** with it, even
+  after 140 ticks of flight together; the pair forms only for an area monitorable when it enters the tree, or for one that moves in later. So a claimed rocket would not meet its own
+  HitBox or its salvo-mates' on the claim tick (the task plan's "it frees itself on the claim tick" was wrong). The guard still matters for anything that enters afterwards: the
+  real-physics falsifier is the crossing row (a fresh homing and warhead salvo flown through a hijacked rocket), and the salvo row also hands the HitBox callbacks the claimed HurtBox
+  directly. Both guards, both arming rules, the `seconds` argument, `jam_guidance()` and the jammer check were each proved by a mutation run that fails a row.
+
+### Phase 9, built in t5 (EMP: the real player effect, `EmpPulse` targets, the enemy hook and seekers) (2026-11-08)
+Task plan `docs/plans/cmw5k4yjv00a6qs2xvkf73b18/3-plan.md` (review round 1 CHANGES_REQUESTED, round 2 APPROVED).
+- **`EmpPulse.emit(tree, at, radius, seconds, source, targets := TARGET_PLAYER) -> int`** as planned (`TARGET_PLAYER` 1, `TARGET_ENEMIES` 2, `TARGET_SEEKERS` 4,
+  `TARGET_ALL` 7). The player loop is byte for byte the Ph7 one; the Ph7 row "never touches group `enemies`" still holds for the default set and was left as written.
+  The enemy-seeker group name lives on **`SeekingOrdnance.ENEMY_GROUP`** (`&"enemy_seeking_ordnance"`), not on `EmpPulse` (one home for both seeker groups).
+- **Player:** `apply_emp()` = `apply_boost_disruption(1.0, s)` + `apply_ability_lock(s, source)`. `_emp_left` / `emp_changed` keep the Ph7 `<= 0.0` clock, so
+  `is_emp_disrupted()` ends one tick after the lock (tick 121 vs 120 for 2.0 s); every Ph7 row is unchanged.
+- **`BaseEnemy`:** `answers_emp()` / `apply_emp()` / `is_emp_disrupted()`, `EMP_CLOCK_EPSILON` 1e-6. On a start: `mover.halt()` **then** `_brain.on_emp_started()` (halt
+  clears requests, so the hook's own requests survive), then the overlay. **Deviation (review finding 2):** the window is counted in `_physics_process` *ahead of* the
+  no-brain return (the order is `_ai_suspended` → EMP window → `_brain == null` → tick), so a brainless subclass that overrides `answers_emp()` true (t7's jammer) still comes
+  out of the base window; the mover steps during the window only when both a brain and a mover exist. The brain ticks again **on** the tick the window ends (2.0 s: skipped on
+  ticks 1..119, ticked on 120). `halt()` stops the ship dead (and ends a committed `boost()`); it does not coast, so "coasts to a stop" in §2.6 reads "stops, then drifts
+  only with hazards".
+- **`EmpStatic`** is `global/components/emp_static.gd` (`Node2D`, `_init(radius)`, node name `EmpStatic`, z 1): 16-point jagged ring, body circle radius × scale + 8 (24 for
+  a non-circle body), `Color(0.7, 0.85, 1.0)`, seed 17, re-jitter 0.08 s, alpha `0.55 + 0.45·|sin(21t)|`. For t7: a jammer that overrides `is_emp_disrupted()` from its
+  field can reuse `EmpStatic.new(r)` and drive `visible` / `step()` from its own process.
+- **`TwinLaserPair.release(d)`** now frees drone A's beam when A is suspended **or EMP-disrupted** (the beam is ticked only from A's brain tick, which an EMP skips; without
+  this a cancelled beam would sit in FADE for the window). `TwinLaserDroneBrain.on_emp_started()` = the `on_suspended()` body.
+- **`LaserTenderBrain.on_emp_started()`:** LAUNCH → HOLD, or → DISENGAGE when `_leave_after_launch` (a spent Assault budget had promised that launch as its last act).
+- **`EnemyRocket`:** joins `SeekingOrdnance.ENEMY_GROUP` in `launch()` when `turn_rate > 0` (after `_apply_exports()`), leaves in `_mark_done()` and `reset()`; `_jammed`
+  (cleared in `reset()` and `launch()`) makes `is_guiding()` false. A Cluster's submunitions join too when their scene steers (they free themselves).
+- **`EnemyMine` EMP:** `TARGET_PLAYER | TARGET_SEEKERS` enemy-laid, `TARGET_ALL` placed, compared through the unqualified `Hostility.ALL` (no `EnemyMine` token added).
+  The hub `Minefield`'s EMP mines therefore stun enemies near them now.
+- **Test fixture:** `tests/helpers/fixture_brain.gd` gained `emp_started_count`; `fixture_enemy.tscn` answers EMP (brain + mover). A brainless answering fixture is built
+  in-test by freeing the fixture's `Brain` and `set_script()` to a subclass overriding `answers_emp()`.
+
+### Phase 9, built in t6 (the player's EMP Blast re-routed) (2026-11-08)
+
+- `EMPBlastModule.try_activate()` asks each non-immune enemy the duck-typed `answers_emp()`: true -> `apply_emp(5.0, player)` (tangible, shootable); otherwise the unchanged
+  `PROCESS_MODE_DISABLED` + timer path. Cooldown 15 s, visual, scene-wide reach and the immune list (RamCorvette) are unchanged. No deviation. Gate: `test_emp_blast_module.gd`.
+
+### Phase 9, built in t11 (the EMP zone) (2026-11-09)
+
+- **`EmpZone`** is `assault/scenes/hazards/emp_zone/emp_zone.gd` (`Node2D`, `field()`, `radius()`, `emp_seconds` 2.0) over a child `Field` (`HazardField`, kind `emp_zone`, radius 260, `avoid_weight` 0.6,
+  cycle 1.0 / 0.25 / 4.75) and `Field/Art` (`EmpZoneArt`, `emp_zone_art.gd`, code-drawn; spawns an `EmpRing` on the ACTIVE edge). One `EmpPulse.emit(..., TARGET_ALL)` per TELEGRAPH → ACTIVE edge.
+  No deviation. The centre beacon sprite is left to t12 (the art task); the "a jammer the zone reaches goes quiet" row waits for `JammingStructure` (t7) and is not in `test_emp_zone.gd` yet.
+- `test_sector_hub_patrol.gd::_element_radius()` checks `EmpZone` before `HazardField` (`radius()` = 260); t13 places the zone in the hub and must keep it > 300 px from spawn / pickups through that sweep.
+- Test note: a `HazardField` publishes its `HazardInfo` only on its tick, so a hand-ticked field needs one `_physics_process(DT)` after an export is changed before `Hazards` sees it. The fixture enemy
+  is not in group `enemies`; EMP-zone enemy rows use a real `Fighter`.
+
+### Phase 9, built in t7 (the Jamming Structure) (2026-11-09)
+
+- **`JammingStructure`** (`assault/scenes/enemies/jamming_structure/jamming_structure.gd`, `class_name JammingStructure extends BaseEnemy`) with `JammingStructureConfig`
+  (flat: `assault_drift_speed`, `field_radius`, `stabilise_seconds`, `cycle_telegraph` / `cycle_active` / `cycle_quiet`) and `JammerFieldArt` (child `Field/Art`). Three
+  scenes, each its own copy (not inherited; the sector body circle is r 42): `jamming_structure.tscn` (does **not** author `config`, so `BaseEnemy._init()`'s private copy is
+  what a test may write before `add_child`), `sector_jammer/sector_jammer.tscn` and `pulsed_jammer/pulsed_jammer.tscn` (author their own `.tres`). Placeholder `Polygon2D`
+  hull `Hull` and dish `Emitter` until t12; the hit flash animates `Hull:self_modulate`. Accessor `field() -> HazardField`.
+- **`HazardField`** gained `suppress(seconds)` / `is_suppressed()` (only `disables_abilities` is affected; the cycle clock runs underneath) and `restart_cycle()` (the jammer
+  writes its config onto the field in `_ready()`, after the field registered in `_enter_tree()`, then restarts the cycle).
+- **Deviation (plan Revision 1, review option a):** `SniperBrain._candidate()` / `_inside_other_hazard()` and `FighterBrain._inside_other_hazard()` skip a `&"jammer"` info
+  (`const JAMMER_KIND` in each brain), so a jammer field never spoils a firing or cover point (avoid weight 0 = their own ground). No earlier hazard has that kind.
+  Known gap: nothing keeps a sniper's firing point off a jammer's body (turrets and emplacements share it).
+- `EnemyRocket._in_lit_jammer()` gates only `_steer()`; a Cluster's split still aims at its predicted point inside a field. `MissileCorvetteBrain._roll_kind()` downgrades
+  after the 1-in-4 swap (rng sequence unchanged). `WaveBuilder.jammer(variant)` `push_error`s on an unknown variant and returns the local jammer.
+- The deferred t11 row "a jammer the zone reaches goes quiet" is in `test_emp_zone.gd` (centre at exactly 260 px, the `<=` edge; twin at 261 px).
+
+### Phase 9, built in t8 (the Hacker Frigate: shell and movement) (2026-11-09)
+
+- **`HackerFrigate`** (`assault/scenes/enemies/hacker_frigate/hacker_frigate.gd`, `extends BaseEnemy`), **`HackerFrigateBrain`** (`Phase { HOLD_ARC, TELEGRAPH,
+  PULSE, BREAK_OFF, DISENGAGE, IDLE, NOTICING, RETURNING }`, append-only, `phase_changed(new_phase: int)`) and flat **`HackerFrigateConfig`**; `WaveBuilder.HACKER_FRIGATE` /
+  `hacker_frigate()`. TELEGRAPH / PULSE are stubs (straight back to HOLD_ARC, or DISENGAGE when the budget expired meanwhile: the corvette's `_disengage_pending`) and
+  `_want_pulse()` returns false: **t9 fills both and adds the pulse config fields.** Task plan `docs/plans/cmw5k4yk400aiqs2xujalkqzf/` (review round 2 APPROVED).
+- **Scene:** placeholder `Hull` `Polygon2D` (no `Sprite2D` until t12, the jammer precedent; the hit flash animates `Hull:self_modulate`), a `Dish` `Node2D` (with a placeholder
+  `Antenna` polygon) carrying the **`StateLight` at `Dish/StateLight`** (accessor `state_light()`; `dish()` for t9's unfold). `ContactProfile` authored COLLISION.
+- **Orbit sign convention:** `orbit_dir` +1 grows `_orbit_angle` (clockwise on screen) and runs at `orbit_speed_cw` 0.18; -1 at `orbit_speed_ccw` 0.30. Inside a cone the
+  direction is `signf(facing.angle_to(offset))` (nearer edge; on the axis the current one). No resync of `_orbit_angle` on a forced flip (not needed: every bound met).
+- **Small additions to §2.10 (logged):** `break_exit_margin` 120 (the "min_range + 120" as a config field); `VIEW_CLAMP_PAD` 8 px — the clamp rect is
+  `view_rect().grow(-(view_margin + 8))`, because `Steering.orbit`'s 60 px/s floor wobbles a parked body ±2.6 px and the rows assert the hull inside `grow(-60)`; Assault
+  BREAK_OFF requests `Steering.orbit(pos, clamp(pos + dir · max_speed · 1.0 s), 0, 0, max_speed)`; the first break-off move is made on the entry tick; the idle ring is
+  lopsided as `idle_speed · orbit_speed(dir) / orbit_speed_ccw` (0.45 ccw, 0.27 cw); NOTICING -> HOLD_ARC (there is no APPROACH; the orbit correction closes the range).
+- **Measured cone exits (GUT, s; first snap / re-snap):** nose at 720: 0.18 far 1.55 / 1.70, 0.30 far 1.70 / 1.55, 0.18 near 1.27 / 1.27 (bound 2.2); nose at 520
+  (Assault): 1.55 / 1.63, 1.63 / 1.55, 1.27 / 1.27 (bound 1.9); route (100 px/s player): 1.25 / 1.18, 1.60 / 1.10, 0.88 / 1.03 (bound 1.8). Far-way time ≤ 0.43 s (bound 0.5).
+  Controls (cone 0) exit at nose 3.88 / 2.33 s and route 3.27 / **1.85 s** — the route 0.30 rad/s control clears its 1.8 s bound by only 0.05 s, and the route 0.30 far-way
+  time (0.43 s) is the closest main margin: a later change to `acceleration`, `max_speed` or the cone speeds should re-read those two first. Bounds kept as planned.
+- **Break-off:** a 300 px/s rusher gets to 419.1 px (BREAK_OFF the tick after the first reading inside 420; first-burst radial 322.0 px/s); a 420 px/s chase: 3.0 s
+  BREAK_OFF, the next exactly 1.0 s after.
+- **Assault exit:** worst 5.67 s over `corridor_starts()` at [230, 10] px/s (2166 runs, 0 capped; ≈ 3.2 s of probe wall time), built only by
+  `tests/helpers/ph9_exit_keys.gd::hacker_exit()` (static `prepare_probe`, memoised; `test_hacker_frigate.gd` sweeps for a hand-built call). t14's level rows use it.
+- Roster: contact damage (15), contact-hitbox and hurtbox geometry, `test_base_enemy.gd` (`_MIN_ROSTER_SIZE` 24, COLLISION, tow table `["TELEGRAPH", "PULSE"]`, the
+  unlisted-phase fallback now ends in `HOLD_ARC`), `test_enemy_dual_mode.gd` (hazard profile 0.7 / 80 / 0.4 and a closes-to-range row), and an ENEMIES_CLEARED guard row in
+  `test_engagement_deadline.gd`.
+- Test note: a row that builds a second harness world must take the first out of the tree (`test_hacker_frigate.gd::_world()`): its stub player stays in group `player`
+  and `TargetInfo.player()` reads the first it finds.
+
+### Phase 9, built in t9 (the Hijack Pulse: TELEGRAPH, PULSE and the control dart) (2026-11-09)
+
+- **Built:** `HijackPulse` (`assault/scenes/projectiles/hijack_pulse/hijack_pulse.gd` / `.tscn`, `extends Node2D`): no `Area2D` or shape anywhere, `signal expired` (no
+  arguments, only through its `ProjectileLifetime`'s latch), `reset()`, `launch(rocket, source)` (placed at the source's hull centre, lifetime re-armed there), `is_flying()`,
+  `rocket()`, `source()`; exports `speed` 900, `claim_radius` 16; lifetime `max_time` 1.6 / `max_distance` 1400 / world rect. It homes exactly on its rocket and, within
+  16 px (inclusive), calls `rocket.retarget(players[0] of group player, -1.0, source)`, then expires on the same tick; a freed / out-of-tree / refusing rocket or a freed
+  source ends it unclaimed. `hacker_frigate.tscn` gains `DartPool` (`BulletPool`, `pool_size` 4, no `persist_after_owner_death`). Task plan
+  `docs/plans/cmw5k4yk700amqs2xuk3t1oge/` (review round 1 CHANGES_REQUESTED, round 2 APPROVED).
+- **`HackerFrigateConfig` pulse group** (flat): `pulse_trigger_range` 870, `hijack_range` 650, `max_claims_per_pulse` 3, `pulse_telegraph` 0.9, `pulse_seconds` 1.6,
+  `pulse_period_min` / `max` 6.0 / 8.0, `first_pulse_delay` 2.0, `assault_pulses_per_life` 1, `pulse_lock_seconds` 0.0.
+- **`HackerFrigate`:** `dart_pool()`, `fire_dart(rocket) -> HijackPulse` (null when the pool is exhausted), **`lock_player_abilities(seconds)`** (duck-typed
+  `apply_ability_lock(seconds, self)` on `players[0]`, `has_method`-guarded: the Disruptor hook's one call site lives on the ship, so the brain never reads group `player`),
+  the tell `set_dish_open(f)` (`Dish.scale` 0.6 -> 1.0), `show_charge(f)` (6 yellow dashes r 60 -> 40), `show_pulse(t)` (a ripple from the dish every 0.4 s, 12 -> 92 px),
+  `clear_tell()`, and read-only `dish_open()`, `tell_kind()` (`&""` / `&"charge"` / `&"pulse"`), `charge_ring_radius()`, `ripple_count()` (`floor(t / 0.4 + 1e-6) + 1` in
+  PULSE, else 0). `_ready()` folds the dish and calls `brain.watch_health(health)`.
+- **`HackerFrigateBrain`:** read-only `pulse_cooldown`, `pulses_fired`, `telegraphs`, `telegraph_cancels`, `darts_fired`, `claims_this_pulse`, `live_darts()`;
+  `watch_health(h)`; `on_emp_started()`. The cooldown counts down in every phase (`first_pulse_delay` at the start and on NOTICING). `_want_pulse(target)` (after the arc's
+  request, never on a BREAK_OFF-entry tick): cooldown out, no budget expiry, Assault `pulses_fired < assault_pulses_per_life`, player `<= pulse_trigger_range`, and
+  `not Engine.is_in_physics_frame() or can_see_player()` (the tender precedent). TELEGRAPH and PULSE keep running `_arc_motion`; PULSE is entered on TELEGRAPH's last tick
+  and the first dart pass runs on that tick; darts go out on PULSE ticks 0..95. A budget expiring in TELEGRAPH cancels it (straight to DISENGAGE); in PULSE the window
+  finishes, the hook still fires, then DISENGAGE on the end tick (its `_tick_disengage` runs that tick, the t8 stub's shape).
+- **Small additions (logged, no later-phase impact):** a HOLD_ARC entered from TELEGRAPH / PULSE keeps `_orbit_angle` (no re-sync: the arc never stopped, and a re-sync
+  jumps the anchor back ≈ 0.045 rad, which the arc-rate row would read); BREAK_OFF comes on the first HOLD_ARC tick **after** the PULSE-end tick (review R6: `_end_pulse()`
+  does not run a HOLD_ARC tick); any phase other than TELEGRAPH / PULSE folds the dish and clears the tell in `enter_phase()`, and `on_suspended()` folds it too.
+- **Deviation D1 — the cap counts darts.** `claims_this_pulse` counts darts launched; a dart that misses (rocket freed, out-run, jammed) still used its slot, so six eligible
+  rockets give exactly three darts. A rocket whose dart missed may be darted again later in the same PULSE while the cap allows.
+- **Deviation D2 — EMP ends a TELEGRAPH or a PULSE.** `on_emp_started()` cancels a TELEGRAPH (`telegraph_cancels` +1) and ends a PULSE **without** the lock hook, each with
+  a fresh cooldown (frozen for the EMP window, since the brain is not ticked). Darts already flying finish. **t10's Disruptor rows inherit this.**
+- **Deviation D3 — the LOS rows use a real `wreck_medium.tscn`.** `tests/helpers/fixture_wreck.gd` has no body, so `LineOfSight`'s bodies-only ray can never meet it.
+  **Handed to t10:** §2.12's "behind a `fixture_wreck` at PULSE end is not locked" row must use the real wreck on real physics. Test note: switch a wreck's physics off
+  **after** `add_child` (READY switches a script's `_physics_process` back on) and switch its `ProjectileLifetime` off too: the Assault wreck otherwise drifts down 60 px/s
+  and slides off the sight line within a second. `test_sniper.gd::_wreck()` turns it off before `add_child` (a no-op; harmless in its short rows).
+- **Deviation D4 — the fairness geometry** (§2.11 left it open): P = Open Space (0, 0) / Assault (640, 560), rockets from P + (-7 / 0 / 7, -450) flying +y at P + (0, 400),
+  the Hacker at P + (300, -450) in PULSE from tick 0. Measured (hand): claims on ticks 26-27 (0.43-0.45 s), the still player blasted by all three on tick 54 (0.90 s);
+  moving player (Open Space +x 420 px/s then +y at 0.6 s; Assault +x 360 then -y) never blasted, closest 234.6-238.0 px (Open Space) and 149.5-161.2 px (Assault). Real
+  physics at 8x: the three rockets end on the same tick, the HurtBox logs [18, 18, 18], HP 50 -> 32 (the i-frames refuse the 2nd and 3rd): **one blast, 18, pinned.**
+- **The measured limit (review B1) — owner question in the t9 report.** With t4's hijack tuning a salvo a still player fires at the Hacker is claimed heading away and fizzles:
+  closest approach 235.5-241.3 px (Open Space) and 161.1-166.5 px (Assault), 0 blasts (row 6). A rocket claimed heading back at the player from ≥ 225 px is blasted (the
+  row-6 control: player re-placed 300 px ahead of the first claimed rocket, 3 blasts in both modes). Whether to retune `hijack_turn_rate` / `hijack_seconds` /
+  `hijack_speed` is the owner's call; nothing was retuned.
+- **Pre-run numbers.** Row 4 (in flight) **moved its start points** to the hull's level and 30 / 60 px beyond it: the plan's "250 / 280 / 310 px nearer the player" put the
+  Assault claims 250-310 px from the player, inside two hijacked turn radii (380 / 1.6 = 238 px), and those rockets circled it (heading error never under 55°, closest
+  161-205 px). Moved: claims on ticks 91-92 (PULSE tick 84), heading error 0°, all three blast in both modes, closest before the blast 30.3-35.2 px. Row 5 (receding):
+  the dart expires on tick 94 (clock 1.5667 s), 23.33 px short (closest 30.0 px). Row 10 (cadence, Open Space, `range_drift` 0): TELEGRAPH on ticks 120 and 693, PULSE
+  ends 270 and 843 (interval 7.05 s). Row 23 (the arc through the window): bearing rate 0.1793 / 0.1800 rad/s (Open Space, HOLD_ARC / window) and 0.1790 / 0.1800
+  (Assault), nose worst 0.04°; the cone snap on TELEGRAPH entry leaves the nose cone through the near edge in 1.55 s (PULSE ends at 2.5 s). Mutation checks (not shipped):
+  `_arc_motion` removed from TELEGRAPH / PULSE fails row 23 (rate 0.006, nose 14°, no cone exit); both LOS checks removed fails both LOS rows.
+- **t8 rows:** `test_hacker_frigate.gd::_spawn()` writes `first_pulse_delay = 1000` (movement rows), `_life()` puts the shipped 2.0 back; the stub row became
+  `test_the_attack_phases_refuse_a_tow`. The dual-mode closes-to-range row writes `first_pulse_delay = 1000`. **A later task that runs a Hacker in a long movement row must
+  switch the pulse off the same way, or expect it.**
+- **Phase 9, built in t10 — the Disruptor.** `assault/scenes/enemies/hacker_disruptor/` (`hacker_disruptor.tscn` = the Hacker's scene with `config` set to `hacker_disruptor_config.tres`: `max_health` 130, `score_value` 110, `pulse_lock_seconds` 1.5, everything else the Hacker's). No script or brain change; not placed anywhere. The accent fin is t12's art. Joined the contact-damage, contact-hitbox, hurtbox-geometry rosters, the tow table, the hazard-avoidance row and a dual-mode row. Rows in `test_hijack_pulse.gd` §23 (lock on the PULSE-end tick, free after exactly 90 ticks with `ability_lock_fill()` 0, none at 871 px / lock at 869, none behind a real wreck on real physics at 8x, base Hacker never locks, salvo 0.5 s into PULSE claimed, no lock before PULSE end, primary fire fires through the lock).
+  **Test pitfall:** a config the *scene* sets (the Disruptor's) is shared until `_enter_tree()` privatises it, so a test that writes config fields before `add_child` mutates the shipped `.tres`; call `ShipConfig.privatise(hacker)` first (`_spawn_into` does). The base Hacker's default-export config is privatised in `_init()` and is not affected.
+- **Phase 9, built in t12 — the art.** Seven PixelLab map objects (strict `high top-down`, lineless, each viewed at 6x and in a composite): `assault/assets/sprites/enemies/hacker_frigate.png` (96², nose-down, about 36 px wide), `hacker_dish.png` (32²), `hacker_disruptor_fin.png` (32²), `jamming_structure.png` (64², a triangular tower with three corner emitters), `pulsed_jammer.png` (64², disc with a crown of eight vanes), `sector_jammer.png` (96², a four-boom X star) and `hazards/emp_zone_beacon.png` (32², neutral grey / blue-white). All came back transparent; no `strip-sprite-bg.sh` needed. Wired by replacing the t7 / t8 / t11 placeholders: `Hull` stays the node name (the hit flash animates `Hull:self_modulate`) but is now a `Sprite2D` in all five enemy scenes; the jammers lose the `Emitter` polygon (the lens is baked in, the `StateLight` sits on it); the Hacker's `Dish` moved from (0, -14) to (0, -8) over the hull's centre panel and its `Antenna` is a `Sprite2D`; the Disruptor alone has an `Accent` sprite at (14, -6), turned 90 degrees; `EmpZone` has a `Beacon` `Sprite2D` on the root. **Deviation from plan §2.14's prose:** the generator does not honour "three / four vanes" literally; the silhouettes are triangle (local), vane-crowned disc (pulsed) and X star (sector), which differ by a wide margin (a row asserts it). The sector star's arms reach 37 px of its r 42 body, so its coverage row allows 6 px of slack (3 for the rest). No hurtbox / contact geometry changed. The dish "unfolds" by the existing `set_dish_open()` scale 0.6 -> 1.0 (t9), nothing in the brain changed. Gate `tests/integration/test_ph9_sprites.gd` (12 functions).
+- **Phase 9, built in t13 — hub placement.** `sector_hub.gd` appends **draw 18** (the Hacker Frigate, `hacker_ring_radius` 2600 / `hacker_anchor_bearing_deg` 67.5, anchor about (995, 2402)) after draw 17; every earlier seed is unchanged and the Hacker is the last brain in `EnemyContainer`. `sector_hub.tscn` places a `SectorJammer` at (2260, 980) (the site's turrets are 220-550 px from it, inside r 640) and a `PulsedJammer` at (2900, 0) under `EnemyContainer`, and one `EmpZone` at (3100, 2300) in `TacticalSpace`. Positions are the plan's "≈" values chosen against the sweeps: the pulsed jammer is 688 px from the Minefield centre so their reaches do not overlap, the EMP zone is 665 px (edge to edge) from the sector jammer's field and about 1750 px from the pulsed one's (≥ 500 required), and the Hacker's anchor is 1903 px from the sector jammer (1520 required). `test_sector_hub_patrol.gd` gains the draw-18 rows, `"Hacker"` in `_patrol_groups()` (so sweeps A and B and the Ph6 TacticalSpace sweep cover it; the group-count rows read 13), **sweep C** (every `JammingStructure` under `EnemyContainer` keeps `Field.radius` + 300 px off the spawn, triggers and pickups, with a boundary row), a no-jammer-in-`TacticalSpace` row, the Hacker-vs-jammers and EMP-zone-vs-jammers distance rows and a row that the sector jammer's field covers ≥ 2 site turrets. The jammers read as hub scene nodes, not draws, so they take nothing from `patrol_seed`. No deviation from plan §2.16.
+- **Phase 9, built in t14 — level 1 placement (option A).** `level_1_director.gd` planet_approach: `b.hacker_frigate().at(-400, -180)` in the **42.0 s** wave (the drone
+  cluster from the upper right; the Hacker enters from the left) and `b.jammer().at(-80, -220)` (local) in the **62.0 s** wave (the two-drone weave, no specialist), world x
+  **480**. Option A fitted on the first measurement, so B–D were not needed. **Measured** (`test_level1_specialist_spawns.gd`, every term read): Hacker life 16.30 s
+  (`engage_seconds` 9.0 + `pulse_seconds` 1.6 + `_TICK_SLACK` + measured exit 5.67 s) → alive **42.00–58.30 s**; jammer drift life 27.23 s (the turret member's formula,
+  slot ZERO) → alive **62.00–89.23 s** (3.7 s gap, both before 98.0 s). planet_approach peak **7 of 7.5**, first reached at 28.40 s as before; inside the Hacker's life the
+  curve reaches 7 at 55.30 s and 58.00 s, inside the jammer's at 65.00, 75.50 and 88.80 s. deep_space (12 at 29.00 s) and cloud_descent (6 at 32.00 s) unchanged. Column
+  clearance: x 480 against the 16 planet_approach columns lit before 89.23 s (nearest 400 at 80 px and 550 at 70 px, need 56). No frozen constant changed; neither enemy retuned.
+  **Test shape:** Ph9 ships are appended to `_ai_intervals()` by `_ph9_intervals()` (Hacker, any jammer variant; a Disruptor line fails the gate, since no Disruptor life is
+  measured); `_member_life()` now calls a shared `_static_life(design_y, slot_y, speed)` (Ph8 figures bit-identical); `_column_conflicts()` covers jammer lines through
+  `_jammer_statics()`; `test_ph8_static_members_clear_every_lit_column` keeps its name (cited elsewhere), sanity count 3·(8+12) + 16 = 76. Guards in
+  `test_engagement_deadline.gd`: Disruptor not in `ENEMIES_CLEARED`; no EMP zone / EMP mine wave entry and no Minefield entry with a non-zero `initial_props["w_emp"]` in
+  any section; a source scan of every `.tscn`/`.gd` under `assault/scenes/levels/` (7 files today) plus `station_reinforcements.gd` (and `wave_builder.gd` for `w_emp` only)
+  for `emp_zone.tscn` / `EmpZone`, `emp_mine` / `EMP_MINE`, a `.tscn` `w_emp = v` with v ≠ 0, `w_emp` in a `.gd`, `sector_jammer` / `SECTOR_JAMMER` / `jammer(&"sector")`;
+  each with failing synthetic boundaries. Replays (`test_level1_ph9_attacks.gd`, 16×): the Hacker reaches PULSE once with 6.1 s budget left and 3 rockets in flight,
+  **2 claims in each of 5 runs**, so `claims >= 1` is asserted; a parked real fighter is locked 4.9 s after the jammer spawns, a control at x 1240 never is.
+
+## Phase 9 - as built (2026-11-10)
+
+Epic `cmug23onr001pm52w9swwophy`; plan `docs/plans/cmug23onr001pm52w9swwophy/3-plan.md` (revision 3); dossier `docs/epics-done/cmug23onr001pm52w9swwophy/REPORT.md`. The planned decisions above stand
+except where this section says otherwise; the per-task *Phase 9, built in tN* notes hold the measured figures. 2888 GUT tests, GUT about 225 s.
+
+### What was built (names later phases build on)
+- **Player hooks:** the ability lock on `PlayerBase` (H abilities and K rockets only; `apply_ability_lock`, `abilities_locked`, `ability_lock_fill`, `allow_ability_press`; seams in both ships' `_input` and
+  `RocketState._on_action`); `Hazards.jammer_at`, `HazardInfo.stabilise_seconds`, `HazardField.suppress()`; `SeekingOrdnance` retarget contract, implemented only by `homing_missile`; EventBus seams
+  `player_ability_lock_changed` and `player_ordnance_hijacked`; tells `AbilityLockStatic`, `JammedChip`, `LockGlyph`.
+- **EMP:** `EmpPulse.emit(..., targets)` bitmask; `BaseEnemy.answers_emp()` / `apply_emp()` / `is_emp_disrupted()`; the player's EMP Blast routes by `answers_emp()`; `EmpZone` (composed over a `HazardField`).
+- **Enemies:** `JammingStructure` (+ `sector_jammer/`, `pulsed_jammer/`, `JammerFieldArt`); `HackerFrigate` + `HackerFrigateBrain` + `HackerFrigateConfig`; `hacker_disruptor/` (not placed); `HijackPulse`.
+  `WaveBuilder.jammer(variant)` and `hacker_frigate()`.
+- **Placement:** hub Hacker patrol (draw 18), sector jammer beside the defended site, pulsed jammer, EMP zone; level 1 planet_approach one Hacker (42.0 s) and one local jammer (62.0 s), `EXPECTED_PH9`.
+
+### Deviations from the plan
+- **An EMP'd enemy's Assault `EngagementBudget` is frozen** for the window (research said it keeps running; 12 brains own private budgets) — bounded by the 5 s EMP Blast, with a guard that no Assault level holds an EMP source.
+- **`_finish()` on a hijacked rocket frees at the end of the frame**, not two physics ticks later (t4); the window is counted ahead of the no-brain return in `BaseEnemy` (t5).
+- **Hacker `acceleration` 700 px/s²** (the Support Ship's) instead of 260, because the cone escape has to stop a wrong-way orbit first (round-2 review B1).
+- **The dart cap counts darts launched** (t9 D1); **an EMP ends a TELEGRAPH or PULSE without the Disruptor lock** (D2); LOS rows use a real wreck (D3); the in-flight claim rows moved their start points (D4).
+- **Sniper / Fighter spot selectors skip `&"jammer"` infos** (t7, review option a).
+- **Level 1 used option A** (Hacker 42.0 s, jammer 62.0 s); B–D were not needed; no frozen constant changed.
+- **Gate time:** forecast ≤ 235.0 s; the phase ended at about 225 s.
+
+### Gaps left for later phases
+- **Hijack tuning:** a still player who fires at the Hacker loses the salvo but is never blasted (t9 measured; owner's call whether to retune `hijack_turn_rate` / `hijack_seconds` / `hijack_speed`).
+- Audio for lock, hijack and EMP (Ph17); Hacker squad tactics and marking (Ph14); Disruptor placement and difficulty numbers (Ph13 / Ph16); ship-mounted EMP (Ph10 / Ph18); EMP on structures and legacy enemies
+  (Ph10 / Ph11); enemy ships blocking LOS (Ph19 / Ph14); jammer-linked turret groups through `TurretGroup.add_power_provider()` (Ph20); placed jammers / EMP zones in Assault corridor layouts (Ph15); a module / cooldown HUD (Ph17).
+- Nothing was play-tested; all §2.19 starting values are judgement.
+
+## Phase 10 - Enemy rework, phase 10: modular damage, Heavy Gunship and Carrier (2026-11-10)
+
+Plan: `docs/plans/cmug23oo90029m52wae4clve0/3-plan.md` (revision 2, after a round-1 review that requested changes). **The research stage left no `1-context.md` /
+`2-research.md`**; the plan carries the scope check (§1.1), research findings with sources (§1.2) and code facts (§1.3) itself. These are *planned* decisions; check this phase's
+*as built* section, once written, before relying on them.
+
+### Changes to earlier decisions
+- **Ph4's "Ph10 modular damage should extend or compose `ArmorPlate`" is changed:** the new part, `EnemyModule`, keeps the plate's *resolve-once* deflect decision (cached
+  per HitBox instance id) but takes damage only through its `HurtBox.received_damage`, after the type filter and the absorber slot, so a local `EnemyShield` covers it (Ph5
+  deviation 6: a shield can never cover an `ArmorPlate`), and it stays in the tree as wreckage instead of being freed. `ArmorPlate` stays the Ram's plate, unchanged.
+- **Killing-shot rule for parts:** a module destroyed this physics frame still *consumes* the shot that killed it (an `ArmorPlate` broken this frame consumes nothing). Callback
+  order between the bullet's and the hurtbox's `area_entered` must not matter; a row forces both orders.
+- **A locked part ignores every damage**, including the direct emitters that never ask `deflects_hit` (player beam, nova, level `LaserRay`): the module's own vulnerability check is
+  the only guard against them, and rows fire the beam and the nova at a locked part, a closed vent, a plated core and a closed hangar.
+- **Player direct emitters reach parts:** `beam_behavior.gd` and `plasma_nova_module.gd` also target group `&"enemy_parts"` (the nova is map-wide). Station turrets and Ram plates
+  are not in that group (unchanged; the station is Ph11's). **Enemy energy weapons do not reach parts in Ph10:** `EnergyHitScan.VICTIM_GROUPS` is unchanged, so an `EnemyBeam` /
+  `EnergyRing` hurts a heavy's root only and a carrier's ring can never hurt its own parts (deferred to Ph18 / Ph19 with an owner-of-part exemption).
+- **Persistent ordnance in an `ENEMIES_CLEARED` section — a bounded exception:** the Heavy Gunship's rear rockets persist (Ph5 pools), yet heavies stay in cloud_descent. In
+  Assault its Missiles mount is open only while its `EngagementBudget` runs (closed at DISENGAGE), and every per-entry deadline row carries a **rocket term** `engage_seconds +
+  rocket max_time (read from the mount's pool scenes) + MARGIN` beside the exit term, with a boundary showing the closure is what keeps it inside. Every other persistent-ordnance
+  enemy stays out of `ENEMIES_CLEARED` sections, the Carrier included.
+- **`BulletPool` container injection is deferred again** (Ph2 → Ph5 → Ph10 → when a pool must live below a moving part): mounts on parts still build their pools as
+  **host root children** through `TurretMountBuilder`, so the container is the host's parent.
+- **The legacy Gunship is retired** (`git mv gunship/ heavy_gunship/`, `WaveBuilder.GUNSHIP` / `gunship()` removed; `level_2_waves.gd` moves to `heavy_gunship()` with its rail
+  kept; `test_station_reinforcements.gd` asserts `HEAVY_GUNSHIP`). Tests that used it as the legacy, non-brain subject (EMP, EMP Blast process-disable, not-AI-driven, tow) move to
+  the Bonus Drone. The gunship part of Ph9's "EMP on legacy enemies / structures" deferral is closed (both heavies answer EMP); **the bonus drone, the station and the Ph8
+  turrets / fences go to Ph11**.
+- **The Support Ship may ward the Heavy Gunship** (owner choice 7 default). It never wards a host answering duck-typed `accepts_ward() == false` (the Carrier).
+- **`BaseEnemy` gains a read-only `emp_seconds_left()`** (the Carrier's EMP-proof Assault crossing reads it).
+
+### Names and places later phases build on
+- **`EnemyModule`** (`global/components/enemy_module.gd`, `Node2D`, group `&"enemy_parts"`): `enum Role { WEAPON, ENGINE, HANGAR, CORE, WEAK_POINT }` (append-only),
+  `enum VisualState { INTACT, DAMAGED, WRECK }`; exports `module_id`, `role`, `max_health` (0 = indestructible, `Health` skipped), `starts_vulnerable`, `hull_share`,
+  `intact_texture`, `wreck_texture`, `damaged_ratio`; API `is_destroyed()`, `is_vulnerable()`, `set_vulnerable(on)`, `deflects_hit(hit_box)`, `destroy()`, `mounts()`,
+  `attach_mount(mount)`, `visual_state()`, `homing_point()`; signals `damaged(module: EnemyModule, amount: int)`, `destroyed(module: EnemyModule)`, `deflected(module:
+  EnemyModule)`, `vulnerability_changed(module: EnemyModule, vulnerable: bool)`. Scene shape: `Sprite` (the wreck tint lives here, never on the module: the player beam tints the
+  module node), `HurtBox` (layer 512), `Health`, optional `DefenseProfile` (the module applies it to its own hurtbox), optional `MountSlots`, optional `HomingPoint` (`Marker2D`),
+  optional `Light`. Parts live under a `Modules` group node, never as direct children of the enemy root. **Destroyed = wreckage that stays** (hurtbox off, wreck texture, mounts
+  UNPOWERED, out of `enemy_parts`, freed only with its host); it is **visual only** — LOS-blocking / physical wreckage is Ph19.
+- **Weak point** = an `EnemyModule` with `role` WEAK_POINT, usually `max_health` 0 and `hull_share` > 0, vulnerable only in a state the player can see (the Gunship's orange
+  vents while venting). A "core" = role CORE, `starts_vulnerable` false until the host's exposure rule fires.
+- **`ModularHull`** (`global/components/modular_hull.gd`, `Node` child of the host root): `build_mounts(host, rng, owner_group, telegraph_gate, first_index) -> int` (the next
+  running pool index), `hull_share` forwarding to the host `Health`, `module_destroyed(module)` / `module_damaged(module, amount)`, `module(id)`, `modules()`, `live(role)`,
+  `destroyed_count(roles)`, `mounts_of(id)`. **It is the seam Ph18 replaces the consequence driver behind** (today the consequences live in `HeavyGunshipBrain` / `CarrierBrain`).
+- **Two hull rules on one framework** (Ph11 / Ph12 must pick one per boss): *vulnerable hull* (Heavy Gunship: the root `Health` is the phase bar) with the **flush-edge rule** —
+  every reachable part's hurtbox outer side is flush (± 2 px) with the root rectangle's outline, so a shot through that edge hits part and hull in one physics step (a bullet
+  frees deferred) and a part fully inside the outline would be unreachable; and *armoured hull* (Carrier: `deflects_hit` / `is_armored` true, damage refused, projectiles cross it
+  to parts anywhere; death = the CORE module's death via `health.set_health(0)`). Every modular host answers `is_laser_blocking() == false`, `launch_velocity()`,
+  `rocket_clear_radius()` and `homing_point(from)` (nearest live vulnerable part's `homing_point()`).
+- **`TurretMount`:** `traverse_deg` (default 360, bit-identical) + `TurretMountSlot.traverse_deg_override`: a limited mount works in offsets from rest and turns **along the
+  arc** (never the shortest way through the blocked sector), never aims, scans or fires outside `rest ± traverse/2` — how a host makes "one side safe". Appended
+  `Variant.HEAVY_CANNON` (`heavy_cannon_mount.tscn`, `BurstCannonMount` + `EnemyRounds.HEAVY_SHELL`, 220 px/s): **the Heavy Shell's first consumer.**
+  **`TurretMountBuilder.build(...)`** (static) is the one place mounts and their pools are built (`DefenseTurret` uses it too).
+- **Heavy Gunship** (`assault/scenes/enemies/heavy_gunship/`): `HeavyGunship`, `HeavyGunshipBrain` (`Phase { APPROACH, BROADSIDE, BREAK_AWAY, VENT, EMERGENCY, DISENGAGE,
+  IDLE, NOTICING, RETURNING }`, append-only), flat `HeavyGunshipConfig`; rectangle body 112 × 144; six edge-flush parts (two broadside BURST_CANNON batteries, a HEAVY_CANNON
+  nose with a 120° local `EnemyShield` — the first shipped local-module shield, protecting only the cannon's HP — a rear ROCKET_BATTERY, two vents); hull bands 0.6 / 0.3
+  (one-way); VENT keeps a started burst firing (`can_fire = is_committed()`); hazards 1.0 / 90 / 0.6. Assault `engage_seconds` 9.0 (derived from the cloud_descent deadline),
+  DISENGAGE exit 300 px/s at 240 px/s². No camera hold-y, no x-only tracking, no off-the-top retreat; low health never despawns it. `WaveBuilder.heavy_gunship()` / `HEAVY_GUNSHIP`.
+- **Carrier** (`assault/scenes/enemies/carrier/`): `Carrier`, `CarrierBrain` (`Phase { CRUISE, SCREEN, PANIC, CROSS, IDLE, NOTICING, RETURNING }`, append-only),
+  `CarrierHangars` (RefCounted), flat `CarrierConfig`, `carrier_pulse_ring.tscn` (an inherited `EnergyRing`, r 420; friendly fire on enemies outside its owner group kept, owner
+  choice 8); parts EnginePort / EngineStarboard, GunPort / GunStarboard (BURST_CANNON, traverse 150° to their own side), HangarPort / HangarStarboard (vulnerable only while
+  their doors are open), Core (exposed after `core_exposure_count` 3 outer parts → PANIC); every part within `module_x_extent` 100 px of the centre; hull mounts Bow
+  (HEAVY_CANNON) and Dorsal (ROCKET_BATTERY). Hazards 0.5 / 120 / 1.0, avoidance 0 in CROSS. Open Space PANIC retreats but **the 900 px leash wins**. Assault: CROSS at a constant
+  90 px/s, nose-down, sway ≤ 30 px/s leashed to ± 30 px of the anchored spawn x, speed cap 110, **an EMP does not stop the crossing**, no budget, `world_anchored_x`, freed below the
+  projectile rect, **never in an `ENEMIES_CLEARED` section**. Hangar children are siblings announced with `EventBus.enemy_spawned_orphan`, in the carrier's owner group, never
+  docked; Assault: one launch per hangar per life (3.0 / 7.0 s after entering the view), swarm drones only; emergency deployment only from live hangars. `WaveBuilder.carrier()`.
+- **Assault exit probes** for Ph10 enemies are built only through `tests/helpers/ph10_exit_keys.gd` (static `prepare_probe`; the Ph8 / Ph9 memo rule).
+- **Lit slice replay:** `tests/helpers/level1_slice_replay.gd` gains opt-in `light_lasers` (default off) that lights the director's real `_spawn_laser_columns` on the slice timeline
+  and places the level-start `LaserWallWave`; `Level1Director.COLUMN_WARN_SECONDS` 3.0 / `COLUMN_ACTIVE_SECONDS` 4.0 hold the column defaults. **A column's lit window** is
+  `[t, t + warn + increase + active + dissolve]` (animation lengths read from the laser's `SpriteFrames`), never `LaserRay.warn_duration` (export default 0).
+- **Level 1:** the four gunship rows (deep_space 3.5 s, cloud_descent 50.0 / 62.0 / 62.8 s) become AI Heavy Gunships, rails removed; `test_level1_heavy_spawns.gd` freezes
+  `_LEGACY_PEAK_HEAVIES` from the pre-change rails and caps heavies at 1.0× of it; cloud_descent heavies have per-entry deadline rows (exit and rocket terms). Only the deep_space
+  heavy meets lasers (the wall and three column sets); its offset lever is `.at(160, -500)`, never −160 (inside the wall). One Carrier crosses planet_approach, default inside the
+  65.0 s wave at world x 750 (only the 78.0 s columns overlap its ≈ 20.6 s worst life); its ≤ 4 drones count in the drone gate. **Any later static or slow heavy placed in level 1
+  must clear every column whose lit window overlaps its life, and the wall in deep_space, checked per column, not with `_column_conflicts()`.**
+- **Hub:** draw 19 Heavy Gunship (2600 ring, 157.5°; only fallback −67.5°), draw 20 Carrier (3400 ring, −112.5°).
+
+### Conventions
+- A large enemy's state shows on its parts and lights, never by recolouring the hull: orange vents, yellow charging / doors opening, red flashing core in PANIC, dark wrecks.
+- A part that can be locked (core, hangar, vent) shows it: plating closed / doors closed / vent closed, a white ping on a deflected hit.
+- `test_entity_sprite_transparency.gd` walks every `Texture2D`-valued node property (t9), so an export texture (wreck, door, plating) is checked like a sprite.
+- Gate time: GUT ≈ 225 s at the Ph9 close; **Ph10's t1 must free ≥ 12 s** before anything lands; allotments 21.5 s; the phase ends ≤ 234.5 s; a task escalates when the
+  two-run mean passes 237 s or its own files exceed 1.5× its allotment.
+
+### Deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| Carrier hangar launches and Gunship battery-loss phases on the shared boss machinery; geometry weapons | Ph18 | Ph1 roadmap; `ModularHull` is the seam |
+| Ship-mounted EMP (the carrier pulse as an ability-locking EMP) | Ph18 | owner choice 5 default |
+| Enemy energy weapons damaging parts | Ph18 / Ph19 | needs an owner-of-part exemption in `EnergyHitScan` |
+| Destroyed parts as LOS-blocking wreckage, capital wrecks on death (`wreck_chance` 0), heavy mass rules beyond `hazard_resistance` | Ph19 | |
+| Station turrets / core onto `EnemyModule`, `homing_point` on the station; EMP on the bonus drone, the station and the Ph8 turrets / fences | Ph11 | the station stays byte-identical here |
+| Encounter compositions with heavies; leash / cleanup of a hub carrier's children | Ph13 / Ph14 | caps bound the children |
+| Per-part score, a part HUD, heavy audio | Ph17 | |
+| Level 2 beyond the builder rename | Ph15 | level not in the game flow |
+| Difficulty scaling of heavies | Ph16 | |
+| A gated heavy fire-density ceiling | later | Ph10 measures and records it |
+
+### Phase 10, built in t1 (gate room) (2026-11-11)
+- **GUT `Time` 224.91 / 224.48 s (mean 224.70) → 192.42 / 191.79 s (mean 192.10)** (two `scripts/gate-time.sh` runs each way), a **32.6 s** recovery against the ≥ 12 s floor (target 15 s). Tests (2888), scripts (168) and asserts (102034) are unchanged; `scripts/check-test-leaks.sh` is clean. No tick count, duration, sample count or start grid was lowered, no bound was widened, no assertion was edited and **no production code changed**; the phase now ends ≤ 192.1 + 21.5 = 213.6 s instead of the plan's 234.5 s.
+- **What changed:** rule 1 of `tests/README.md` → *Gate time* is extended from the 8× clock to **16× for a file that is paced by the tick rate rather than by CPU** (headless Godot sleeps ~6.9 ms per idle frame and a scaled clock ticks 60 × the multiplier per real second; wall ≫ `user + sys` marks such a file). `_SPEEDUP` 8 → 16 in seven files: `test_level1_fighter_fire_density.gd` (32.4 → 18.3 s; the schedule row stays 4×), `test_level1_specialist_exit.gd` (10.1 → 5.1 s), `test_bomber.gd` (8.9 → 4.7 s), `test_enemy_ordnance.gd` (7.7 → 3.8 s), `test_enemy_rockets.gd` (5.1 → 2.8 s), `test_ram_corvette.gd` (3.8 → 2.3 s), `test_enemy_mines.gd` (3.7 → 2.0 s). The "8x" in those files' comments became "16x".
+- **16× is the ceiling and not every file takes it:** `test_level1_fighter_exit.gd` stays at 8× (its `waves_complete` row reads 10.25 s against a fixed 10.1 s bound at 16×, and a bound is never widened); `test_hijack_pulse.gd` stays at 8× (0.8 s is not worth its real line-of-sight rows); about 20 other clock files gain nothing from 16× (CPU-bound, or already under 1.5 s). Phase 8 t1's note that `fire_density`'s tolerances are tighter than a 16× idle frame concerned its schedule row (`_TRIGGER_TOLERANCE` 0.1 s, still 4×): the three measured gates have 1.7× or more headroom (peaks 10.0 / 7.0 – 8.5 / 8.5 – 11.0 against 39.06 / 41.67 / 18.75) and read their exits off physics ticks.
+- **Rejected lever:** `application/run/low_processor_mode_sleep_usec` (or an `override.cfg`) = 0 would drop the idle-frame sleep from 6.84 ms to 0.02 ms and recover far more, but it changes the number of physics ticks between two idle frames in every test that awaits a `process_frame`; that is a behaviour change, not a rule 1 speed-up, so it was not taken. **Later tasks that add a real-physics row** use the 8× clock by default and may take 16× only after checking wall against CPU and the row's fixed tolerances.
+- **Robustness evidence:** the seven files ran 25 rounds alone (246 tests, all green, 40.2 – 40.5 s) and 3 rounds against twelve busy loops (all green, 44 – 47 s); eight plain full-suite runs and the two `gate-time.sh` runs were green. One earlier `gate-time.sh` run (GUT 192.1 s) reported `1 failing` with its log lost; it did not recur in the next ten full runs. A task that sees a red run should keep the log (plain GUT `> log`) before touching a clock.
+- **Where the rest of the time is** (for a later recovery): `test_fighter_squad.gd` 45 s; ≈ 23 s outside any testcase in `before_all()` probes (`test_level1_specialist_spawns.gd` ≈ 13.6 s, `test_hacker_frigate.gd` ≈ 3.4 s, `test_laser_tender.gd` ≈ 3.3 s), each probe run ≈ 0.5 – 0.9 ms of instantiate / add / free plus ≈ 7 – 11 µs per hand-ticked step. Allotments (t2 2.0 · t3 0.8 · t4 3.5 · t5 2.5 · t6 2.0 · t7 1.8 · t8 2.2 · t9 0.4 · t10 0.8 · t11 3.0 · t12 2.5 · t13 0 = 21.5 s) and the noise rule (two-run mean; escalate past 237 s or past 1.5× a task's own allotment) are recorded in `tests/README.md`.
+
+### Phase 10, built in t2 (EnemyModule and ModularHull) (2026-11-11)
+- **Built as §2.1 / §2.2 describe** (task plan `docs/plans/cmwafsrau009zqs2yc1rli3sj/3-plan.md`, reviewed twice, APPROVED in round 2): `global/components/enemy_module.gd`
+  (`EnemyModule`), `global/components/modular_hull.gd` (`ModularHull`, without `build_mounts`, which is t3's), `beam_behavior.gd` and `plasma_nova_module.gd` also target
+  group `&"enemy_parts"`, `EnergyHitScan` untouched. Fixture `tests/helpers/fixture_modular_host.tscn` (+ `.gd`, no `class_name`): an armoured `BaseEnemy` root (deflects,
+  `is_armored`, refuses all root damage, `is_laser_blocking()` false, body on layer 1) and parts `Open` (`&"open"`, WEAPON, (−80, 0), wreck texture, `HomingPoint`, `StateLight`),
+  `Locked` (`&"locked"`, CORE, (0, 0), not vulnerable, tint path) and `Laser` (`&"laser"`, ENGINE, (80, 0), a `DefenseProfile` accepting LASER, no authored `Health`). Gate
+  `tests/integration/test_enemy_module.gd` (17 test functions, two of them in both harnesses).
+- **Choices §2.1 left open (later tasks rely on them):**
+  - `deflected` fires **once per refused hit, from whichever filter refused it**: the vulnerability check in the `received_damage` handler, or the hurtbox's own type filter
+    (seen in the part's `area_entered`, because a filtered hit never reaches `received_damage`). An absorbed hit fires neither.
+  - **Direct emitters skip the type filter as well as the absorber**, so a part that accepts only some damage types is still hurt by the nova, the beam and a `LaserRay`
+    while it is vulnerable. Only `set_vulnerable(false)` keeps them off a part (§2.1 says this is the only guard; a type-filtered part is not one).
+  - **`EnemyModule.is_armored()` = locked or wrecked** (review M6). `ArmorQuery` asks `deflects_hit` first, so projectiles never see it; `EnemyShield` reads it, so a shield on a
+    locked part absorbs nothing instead of spending points on a bullet the part lets through. A Ph10 heavy that shields a lockable part gets this for free.
+  - **DAMAGED reuses `LowHealthSmoke`** (review B1): a part with `max_health > 0` gets a child `Sparks` (`threshold = damaged_ratio`), and `visual_state()` uses the smoke's
+    exact comparison (`float(current) / max <= damaged_ratio`). An indestructible part has neither sparks nor DAMAGED.
+  - `damaged(module, amount)` carries the **incoming** damage (not the health lost), so an indestructible weak point reports and forwards every hit; an overkill shot
+    forwards its whole amount × `hull_share`. **A lit `LaserRay` (9999) on a part with `hull_share > 0` forwards 9999 × share to the host** — t11 / t12 count this as a host kill.
+  - Signal order for one hit is `damaged` → (hull forwarding) `module_damaged` → `destroyed` → `module_destroyed`, all in the same call; listeners connected after the host
+    is in the tree hear the hull's re-emit first (Godot calls callbacks in connection order). Never make the hull's forwarding deferred.
+  - Without a `DefenseProfile` the part writes mask 1120 (§2.1) and leaves its hurtbox's authored `accepted_damage_types` alone (none = all). `max_health` defaults to 100. A
+    `Health` is created when the scene authors none; an authored one is overwritten from `max_health`. `destroy()` also works on a locked or an indestructible part
+    (a scripted kill) and leaves `Health` as it was. `ModularHull` collects **direct** children of `Modules` only (review M1); the part's host is `Modules`' parent.
+- **Deviation (wording only):** §2.1's beam row says "`BeamBehavior` on a real Assault player"; the row drives a real `BeamBehavior` through the `BeamDriver` used by
+  `test_ram_corvette.gd`, `test_defense_turret.gd` and `test_station_incoming_damage_paths.gd` (the code under test is `BeamBehavior.tick()`; a player scene adds input, a
+  weapon state and a HUD and nothing that reaches a part).
+- **Self-reference:** `EnemyModule` names its own class in its signals (the `ArmorPlate` / `StationTurret` precedent); the leak check is clean, so the `enemy_mine.gd` trap
+  does not apply here.
+
+### Phase 10, built in t3 (ship-mounted turrets: builder, traverse, heavy cannon) (2026-11-11)
+- **Built as §2.3 / §2.2 describe:** `TurretMountBuilder.build()` (`assault/scenes/enemies/defense_turret/mounts/turret_mount_builder.gd`, static) is `DefenseTurret._build_mounts()`'s old loop body; `DefenseTurret` calls it (every Ph8 turret, heavy emplacement, group and fence row is green unchanged). `TurretMount.traverse_deg` (360) + `TurretMountSlot.traverse_deg_override` (-1); `TurretMount.Variant.HEAVY_CANNON` (appended) with `heavy_cannon_mount.tscn` and `TurretMountScenes`; `ModularHull.build_mounts(host, rng, owner_group, telegraph_gate, first_index) -> int`. `EnemyModule.attach_mount()` already existed (t2) and powers a mount down at once on a wreck.
+- **Choices the plan left open:**
+  - `TurretMountBuilder.build()` returns **null with a `push_warning`** for a variant with no scene. `DefenseTurret` still skips that slot but still counts its index (as before); `ModularHull.build_mounts()` skips it **without** using an index.
+  - **Arc rule uses the target's position** (`target.position`'s bearing from the pivot, minus the parent's rotation), not the lead aim point. `TurretMount.tick()` turns it into `can_fire := host_can_fire and in_arc` for the whole cycle (TRACK -> TELEGRAPH, the TELEGRAPH abort and every `_fire_tick`), so a burst in progress stops when the target leaves the arc. The first parameter of `tick()` is now named `host_can_fire` (callers pass it positionally).
+  - A limited mount's scan half-arc is `min(scan_arc_deg, traverse_deg) / 2`; a limited mount's droop / return to rest also moves linearly along the arc. At 360 every new path is skipped (`_unlimited()`), pinned by a trace recorded from the unchanged code (`TRACE_360` in `test_turret_mount_traverse.gd`).
+  - **`HEAVY_CANNON` head art** (`turret_head_heavy_cannon.png`, 64 x 64, pivot (32, 32), muzzle (26, 0)) was needed because `test_ph8_sprites.gd` sweeps one head per variant (`HEADS.size() == Variant.size()`); the row now lists it. Generated with PixelLab `create_map_object`, high top-down, checked at 6x. t9 may replace the art in place.
+  - `test_enemy_bullet_lifetime.gd`: the Heavy Shell row reads the heavy cannon's `round_speed` (220): 1800 / 220 = 8.2 s <= 12 s; the speed also joins `_every_shipped_enemy_bullet_speed()` (>= 150, so the derived defaults are unchanged).
+- **Gate time:** the t3 rows cost 0.42 s (new file) plus about 0.0 s in `test_enemy_module.gd`; two-run mean 192.94 s against t2's 193.17 s.
+
+### Phase 10, built in t4 (Heavy Gunship shell, movement and Assault life) (2026-11-15)
+- **Built as §2.4 / §2.11 describe** (task plan `docs/plans/cmwafsrb100a7qs2yvre9y1o2/3-plan.md`, reviewed twice, APPROVED in round 2): `git mv assault/scenes/enemies/gunship
+  assault/scenes/enemies/heavy_gunship` with `HeavyGunship` (`heavy_gunship.gd`, `BaseEnemy`), `HeavyGunshipBrain` (`heavy_gunship_brain.gd`), flat `HeavyGunshipConfig`
+  (every legacy field deleted) and a rewritten `ENEMY.md`. `WaveBuilder.heavy_gunship()` / `HEAVY_GUNSHIP` replace `gunship()` / `GUNSHIP`; callers moved: level 1's four rows
+  (rails kept until t11), `level_2_waves.gd`'s live row (rail kept) and its commented rows, `test_station_reinforcements.gd`. Gate `tests/integration/test_heavy_gunship.gd`
+  (27 test functions, most in both harnesses); exit key `tests/helpers/ph10_exit_keys.gd` (`heavy_gunship_exit()`, static `prepare_probe`, `corridor_starts()`).
+- **Geometry (t9 may not change any of it):** hull 112 × 144 centred on the origin, nose = local +y, so **port = local +x**. Parts (centre, size, exposed edge): `BatteryPort`
+  (40, 10) 32 × 40 on x = 56; `BatteryStarboard` (−40, 10) mirrored; `Cannon` (0, 60) 32 × 24 on y = 72; `Missiles` (0, −60) 40 × 24 on y = −72; `VentPort` / `VentStarboard`
+  (±48, −34) 16 × 24 on x = ±56. Every outer side is **exactly** on the hull coordinate (the row checks 0.01 px), `HomingPoint` = the exposed-edge midpoint. Bare flank for the
+  control shot: x = ±56, y 30..72 and y −22..−10. Mounts: batteries BURST_CANNON rest 0° / 180° traverse 160; cannon HEAVY_CANNON rest 90° traverse 70; missiles
+  ROCKET_BATTERY rest 270° traverse 360 (its `can_fire` is false until t5). `rocket_clear_radius()` = half-diagonal + 4 ≈ 95.2.
+- **Deviations (later tasks rely on them):**
+  - **Body layer / mask stay 1 / 1** (the other mover-driven enemies' default), not §2.4.1's "layer ENEMY_HITBOX": a body on layer 256 would be seen by every mask that looks
+    for enemy hitboxes. The root `HurtBox` is layer 512, mask 1121; parts 512 / 1120; the contact box 256 / 0.
+  - `braking` 360 (config, written onto the mover) so the 140 px/s hull can stop on its range after a 360 px/s break-away; §2.16 lists no braking.
+  - `ORBIT_MAX_LEAD` 0.35 rad: the arc angle never leads the hull's own bearing from the player by more than this, so a moving player cannot drag the orbit anchor away from a
+    140 px/s hull. After a break-away the arc re-syncs to the hull's bearing (the corvette's re-sync after its break-off).
+  - Two Assault numbers §2.16 does not list (judgement): `assault_orbit_angular_speed` 0.26 rad/s and `assault_arc_half_deg` 70 (the arc stays within ±70° of straight above
+    the player and reverses at its ends). §2.12 lever (4), "the heavy's Assault orbit speed halved", is this export. The M5 apex-band reversal rule was **not needed**: the
+    never-parks row is green on seeds 1, 2 and 3.
+  - DISENGAGE is a fast path at the top of `tick()`: no player read, no mount tick, light OFF since entry (the probe went 5.9 → 4.0 s).
+  - Row 5's "circling player" is the player strafing round the heavy at 200 px/s (in Assault sweeping back and forth along that arc inside the view), not a player jinking on a
+    300 px circle of its own: a 120 px/s² hull cannot follow a 200 px/s jink, which alone moves the range by the circle's radius. The hub-idle row ticks 4 s more than planned.
+  - EMP (review M3): `on_emp_started()` `scan(0.0)`s every mount and turns the light OFF; a railed heavy (`suspend_ai()`) ticks no mount. In Assault no mount may fire while the
+    hull is outside `EnemyWorld.view_rect()` (review M4).
+- **Owner choice 3 (a part hit is also a hull hit) holds for projectiles only** (review N7): the flush-edge rule makes a bullet or rocket through a part's edge hit both, but
+  the player's beam and nova emit on the part's `HurtBox` directly, and a root `EnemyShield` absorbs on the root only, so neither wears the hull through a part. Only the vents
+  forward (`hull_share` 1.0).
+- **Legacy rows moved (§2.4.6):** the Bonus Drone is now the legacy (no-brain) subject in `test_base_enemy.gd`, `test_enemy_emp.gd` and `test_emp_blast_module.gd`; the
+  Heavy Gunship joins `test_base_enemy.gd`'s every-phase tow-refusal row; `test_support_ship.gd`'s row flipped (owner choice 7: the Heavy Gunship is a legal ward and is chosen
+  over a fighter; the bonus drone stays no candidate); `test_enemy_bullet_lifetime.gd` no longer reads the deleted `bullet_speed` (the derived defaults are unchanged);
+  `test_enemy_dual_mode.gd` has a `heavy_gunship` `HAZARD_PROFILES` row (1.0 / 90 / 0.6) and a closes-to-range row in both modes; the roster gates, config isolation and
+  explosion placement use the new path.
+- **Measured (for t11):** the corridor exit is **9.03 s** worst (from the corridor centre heading +x at 10 px/s; 2166 runs, 0 capped), so engage 9.0 + attack window 1.05 +
+  exit 9.03 + margin 0.5 = 19.58 s < `CLOUD_DESCENT_WINDOW` 23.2 s (3.62 s spare; t11 replaces the constant with the live `_deadline_rows` figure). **View grid:** the same 9.03 s worst over `PROBE.starts()` (404 runs, 0 capped, 0.69 s), so only `corridor_starts()` ships (§2.4.3 / review M7).
+  **Any change to an exit lever (`exit_speed`, `exit_acceleration`, `max_turn_rate`) re-runs the view-grid comparison** before the corridor-only set stands. The deep_space
+  3.5 s heavy (real spawn point (640, −640), the replays' player stub) fires its first battery at **6.12 s** of its 9.0 s budget.
+- **Gate time: over the task's own line, absorbed by t1's surplus (judgement, logged here).** GUT `Time` 193.51 s on a clean `git archive HEAD` copy → 200.00 / 200.29 s
+  (two `scripts/gate-time.sh` runs, mean 200.15; 2923 → 2951 tests, both runs green): **+6.6 s against the 3.5 s allotment** (1.5× line 5.25 s). `test_heavy_gunship.gd` costs
+  ≈ 6.4 s in the suite: the memoised exit probe 3.96 s in `before_all()` (2166 runs at ≈ 0.6 ms of instantiate / add / free plus ≈ 7.6 µs per hand-ticked step, in line
+  with Ph9's Hacker probe at 3.2 s; under review M1's 5.25 s probe trigger) and ≈ 2.4 s of rows. Levers taken: 16× on the two real-physics rows (they wait a count of physics
+  frames), the probe-call sweep parses only files that contain `worst_disengage(`, the stripped `Modules` and the DISENGAGE fast path in the probe. No tick count, start set,
+  speed or assertion was cut. The overrun was not escalated because t1 freed 32.6 s against its 12 s floor: the phase now projects to 200.15 + the 15.2 s still allotted to t5–t13 ≈ 215.4 s
+  against the plan's 234.5 s and the 240 s ceiling. **t11 reads the same memo** (no second probe).
+- **One red full run seen, not reproduced (likely the flake t1 lost the log of):** `test_jamming_structure.gd::test_a_fighters_path_through_a_jammer_field_is_unchanged`
+  failed once in five full runs on this tree (both harnesses: the fighter's path with the jammer present was 716 / 462 px off the control), then passed alone six times,
+  in sequence with the files before it and in the next two full runs. t4 touches nothing the Fighter, the jammer or `Hazards` reads. Not fixed here (a follow-up).
+- **Gate time, round 2 (review round 1: the task must stay under its own 1.5× line, 5.25 s, not lean on t1's surplus).** The bullet above is
+  superseded: `test_heavy_gunship.gd` now costs **4.69 s** in the suite (probe 3.96 → 2.92 s, rows 2.17 → 1.77 s), ≈ 5.0 s with the roster /
+  legacy moves; the whole suite went 200.15 → 198.20 s (two `scripts/gate-time.sh` runs, 198.52 / 197.88; a third full run 198.18), so
+  the task as a whole is 193.51 → 198.20 = **+4.7 s**. What changed:
+  - `HeavyGunshipBrain` caches `_exit_rect` (`EnemyWorld.projectile_world_rect()`) and `_exit_turn_rate` on DISENGAGE entry instead of
+    looking them up every step (the `ArenaCamera` rect is pinned, so game behaviour is unchanged), and `tick()` returns before the budget
+    and break-rearm clocks once in DISENGAGE (neither is read there; `budget.remaining()` freezes at the exit). If a later phase needs the
+    budget to keep counting through the exit, move that branch back below `budget.update()` (+0.13 s of probe).
+  - `prepare_probe` also frees the hull `Sprite2D`, `ContactHitBox`, `StateLight` and body `CollisionShape2D` (`_PROBE_STRIP`). All 2166
+    run times were compared identical before / after both changes (worst still 9.03 s); the hook row now pins two starts, the worst one included.
+  - Rows: the still-player range case, the broadside share and the keep-side control share one 20 s run per mode
+    (`test_against_a_still_player_it_holds_its_range_turns_a_battery_side_on_and_keeps_that_side`; the keep-side check now spans 20 s instead
+    of 16); `test_it_holds_its_range_against_a_circling_player` keeps the circling case. The bullet and homing rows wait until each shot is
+    spent, then 2 frames, with the old fixed waits (20 / 60 frames) as caps. 27 → 26 test functions; no assertion, tick count, start set or
+    speed was cut.
+
+### Phase 10, built in t6 (Carrier shell: armoured hull, parts, core exposure, movement) (2026-11-16)
+Task plan `docs/plans/cmwafsrb700afqs2yd3qqvvrb/3-plan.md` (review round 3: APPROVED). Files: `assault/scenes/enemies/carrier/` (`Carrier`, `CarrierBrain`,
+`CarrierEnginePlume`, flat `CarrierConfig`, `ENEMY.md`); `BaseEnemy.emp_seconds_left()`; `WaveBuilder.carrier()` / `CARRIER`;
+`SupportShipBrain.is_candidate()` skips a candidate answering `accepts_ward() == false`. Gate `tests/integration/test_carrier.gd` (13 functions) plus the roster
+rows (contact damage, contact hitbox geometry, hurtbox geometry, `test_base_enemy.gd` exclusions / tow / `_MIN_ROSTER_SIZE`, `HAZARD_PROFILES` 0.5 / 120 / 1.0 and one
+spawn row per mode in `test_enemy_dual_mode.gd`, support-ward rows with a willing fixture `tests/helpers/fixture_enemy_ward_willing.gd`, and the "no Carrier in an
+`ENEMIES_CLEARED` section" guard with its boundary in `test_engagement_deadline.gd`).
+- **D1 Root body `collision_layer` 0 / mask 0** (the station's rule; §2.6.1 also names ENEMY_HITBOX, but the station it points to is layer 0). The player can fly
+  onto the hull: the ARMOR contact (15 and one 220 px/s shove) lands **on entry only**; hugging the hull is what t7's anti-approach pulse punishes.
+- **D2 Hull `Health` 600** (= the core's HP, `config.max_health`): every hit is refused (`armor_deflected(damage)`, white flash); only the core's death sets it to 0.
+- **D3 The list is a hold-deadband sag**, not a bias added to every request: with exactly one engine lost, while it holds a heading the hull sags toward the dead side
+  at `list_rate` 0.06 rad/s until `list_hold_deg` 10° (new config field) off, then turns back at the scaled rate.
+- **D4 `Phase.IDLE`** = Open Space engaged with no player in the tree.
+- **D5 CROSS writes the mover's `acceleration` / `braking` 0** (instant crossing speed) as well as `max_speed` 110 and `hazard_avoidance` 0. The mover limits are keyed by
+  the mode (`CarrierBrain.assault`), never by the phase, so PANIC with both engines lost keeps 90 px/s in Assault.
+- **D6 Named config fields** for §2.6.3's numbers: `one_engine_speed` 0.8, `no_engine_speed` 0.4, `one_engine_sway` 0.5, `no_engine_sway` 0.1, `idle_speed` 0.12 rad/s,
+  `braking` 40.
+- **D7 Stand-in art until t9:** hull `station_core.png` scaled to 192 × 288, parts `station_turret.png` / `station_turret_destroyed.png`, the opened core
+  `power_source_glow.png` (`Carrier.core_open_texture` export). t9 replaces textures only (never shapes, part positions or `HomingPoint`s).
+- **EMP keeps the crossing:** `on_emp_started()` in CROSS commits `mover.boost(DOWN, 90, emp_seconds_left())`; because `BaseEnemy.apply_emp` tells the brain only about a
+  window's start, `Carrier.apply_emp()` calls the new `CarrierBrain.on_emp_refreshed()` when a second EMP extends a running window (re-commits the boost). Open Space keeps
+  the Ph9 halt.
+- **The free-below check lives on the root** (`Carrier._physics_process` after `super`), not in the brain, because the brain is not ticked during an EMP window.
+- **Part layout (t7 / t8 / t9 / t12 read it):** port = local +x (nose-down art). Engines (±56, −116) 48 × 48; guns (±64, 40) 48 × 48 with empty `MountSlots` (t7);
+  hangars (±60, −56) 64 × 56, locked (t8 opens them); core (0, 0) 56 × 56. Every part hurtbox within x ±100 (`module_x_extent`). Engine `Light` = `CarrierEnginePlume`.
+- **Assault sway target** keeps the player inside a live battery's arc using a 65° half-arc (75° − 10° margin); t7 reads the real arc from the slot.
+- **Test notes:** the real-physics rows run once (not per harness) at 16× with every carrier's physics off (the t2 precedent); the free-below row (17) ticks inside real
+  physics frames at 16×, because a hand-ticked `move_and_slide()` outside a physics frame moves by the idle delta. The same-frame core-death row (R2-4) records the core
+  `Sprite`'s textures through `texture_changed` (the carrier frees in the core's destroy call).
+- **Gate time:** GUT 198.50 s → 199.68 s (two `scripts/gate-time.sh` runs, 199.99 / 199.37; 2967 tests, both green): **+1.2 s** against the 2.0 s allotment.
+- **Gate repair (t6 attempt 5): the `test_jamming_structure.gd` fighter-path flake (logged in t4) is fixed.** Root cause: `_fighter_path()` hand-ticks the Fighter
+  from idle code, so `move_and_slide()` sweeps by the *process* delta, which is time-scaled; when the row runs in the frame after a 16×-clock row restored its clock,
+  that delta is ≈ 2 s, the sweep reaches the jammer tower's body (layer 1) and the slide bends the jammer run 500–715 px off the control. Reproduced on demand
+  (time scale 16 for one frame before the row: 701 / 508 px, the gate's 715 / 524). Fix: the row clears the fighter's body `collision_mask` (the hand-ticked
+  drone precedent); every assertion, including the avoid-weight positive control, is unchanged and green under the forced long frame.
+
+### Phase 10, built in t7 (Carrier weapons: side batteries, bow cannon, missile bank, anti-approach pulse, PANIC) (2026-11-16)
+
+Task plan `docs/plans/cmwafsrb900ajqs2yb5jcl5ij/` (review round 2 APPROVED).
+- **Mounts:** `Modules/GunPort|GunStarboard/MountSlots/Slot0` (BURST_CANNON, rest 0° / 180°, `traverse_deg_override` 150), `HullMounts/Bow` (0, 116: HEAVY_CANNON,
+  rest 90°, traverse 70) and `HullMounts/Dorsal` (0, 64: ROCKET_BATTERY, rest 90°, 360). `Carrier._build_weapons()` runs `ModularHull.build_mounts()` then
+  `TurretMountBuilder.build()` over `HullMounts` with the returned index (pools `PulsePool_0/1/2`, `DumbPool_3` / `PursuitPool_3`). Queries t8+ read:
+  `Carrier.battery_mounts()`, `bow_mount()`, `missile_mount()`, `pulse_ring()`; `CarrierBrain.bind_weapons(bow, bank, ring)`, `cancel_pulse()`.
+- **Deviation (weapon tuning in the host config):** the bank's 7.0 s cooldown and PURSUIT-only kind are `CarrierConfig.missile_cooldown` / `missile_pursuit_chance`,
+  written onto the built mount by the root (no new mount variant / scene for two numbers one host uses). New config groups `Weapons` (`pulse_trigger_range` 340,
+  `pulse_cooldown` 5.0, `missile_min_range` 450, `missile_cooldown` 7.0, `missile_pursuit_chance` 1.0) and `Panic` (`panic_pulse_factor` 0.5, `panic_battery_factor` 0.7).
+- **The ring** is `AntiApproachRing` (not `PulseRing`, the Ph7 class), an instance of `assault/scenes/enemies/carrier/carrier_pulse_ring.tscn` (inherited
+  `energy_ring.tscn`, exports only: 420 / 1.0 / 360 / 24 / 2 × 50° / 14), a root child at the hull centre, `setup(carrier, owner_group)`. The brain ticks it first in
+  `_tick_weapons()`, then may start it: player distance to the hull centre strictly `<` 340, `_pulse_left <= 1e-6`, ring OFF or FADE; the cooldown counts from each
+  `start()`. Not the Ph8 `PulseRingMount` (fixed ring scene, cooldown from the expansion's end, trigger from the mount pivot).
+- **can_fire:** guns `in_view and (LOS or fires_past_cover())` (LOS only on the physics step), bank also `dist > missile_min_range`; Open Space fights in SCREEN / PANIC
+  only (other phases `scan()`); Assault in every phase; nothing fires and no pulse starts with the hull centre outside `EnemyWorld.view_rect()`.
+- **PANIC entry (once):** battery mounts' `cooldown_seconds` × 0.7 (bow and bank unchanged); `_pulse_left = min(left, 2.5)` and later starts use 2.5 s;
+  `CarrierBrain._emergency_deploy()` is the **t8 hook** (a no-op in t7). Burst pool still big enough at the 2.30 s PANIC period: the Pulse round expires by
+  `max_distance` 1400 / 300 = 4.67 s, so 4 × ceil(4.67 / 2.30) = 12 = the pool sized at 2.2 s from `max_time` 8.
+- **EMP / rail / death end the ring at once** (`_silence_weapons()` / `_kill_ring()`): every mount `scan(0.0)`, `ring.cancel()` and, from FADE, `ring.tick(fade_seconds)` to
+  OFF (the brain is not ticked through an EMP window, so a live ring would hang frozen). Lights OFF. `died` → `cancel_pulse()`.
+- **Lights:** hull `StateLight` CHARGING while a mount or the ring telegraphs, ARMED while a mount tracks / fires / cools down or the band expands; PANIC strobes it
+  (0.25 s, ARMED / OFF; a telegraph is never hidden). New `Modules/Core/Light` (`StateLight`, scale 3) flashes red on the same strobe in PANIC.
+- **Sway arc:** `_battery_half_deg()` reads a live battery mount's `traverse_deg / 2` (75, unchanged); the t6 constant is the fallback.
+- **Test notes:** rows W1–W9 in `test_carrier.gd`, hand-ticked, both harnesses; every weapons row pins the hull (and re-places the player relative to it). The bow arc
+  is a typed 70° constant in the test, not read off the mount (a row that read it followed a widened arc in a mutation check). Hand-ticked pools never recycle, so the
+  longer t6 movement rows now print `BulletPool` "Pool exhausted" warnings (harmless; the gate's FATAL regex does not match them).
+- **Gate time:** GUT 200.20 s (two runs, 200.505 / 199.885) → 201.29 s (201.379 / 201.193; 2967 → 2976 tests): **+1.1 s** against the 1.8 s allotment.
+  `test_carrier.gd` alone 1.3 → 3.0 s (new rows ≈ 0.75 s; the t6 rows now tick the carrier's mounts).
+
+### Phase 10, built in t5 (Heavy Gunship phases: overheat-and-vent, weak points, emergency, rear missiles, cannon shield) (2026-11-16)
+Task plan `docs/plans/cmwafsrb400abqs2yt38khcyu/3-plan.md` (review round 3: APPROVED, after two CHANGES_REQUESTED rounds and the owner's third-round
+decision). Files: `heavy_gunship_brain.gd` (`HullPhase { CONTROLLED, OVERHEAT, EMERGENCY }`, `hull_phase_changed(hull_phase: int)`, VENT / EMERGENCY filled
+in), `heavy_gunship.gd` (cannon shield set-up), `heavy_gunship.tscn` (`Modules/Cannon/Shield`, a `Light` `StateLight` on every part),
+`heavy_gunship_config.gd` / `.tres` (groups Phases and Defense, 17 fields, §2.16 values), `StateLight.State.VENTING` (appended, orange). Gate rows in
+`tests/integration/test_heavy_gunship.gd` ("Phases (t5)") and `tests/unit/test_state_light.gd::test_venting_is_orange`.
+- **Hull phases** read the root `Health` once a tick (CONTROLLED ≥ 0.6 > OVERHEAT ≥ 0.3 > EMERGENCY, 1e-6 slack, so 420 / 700 is CONTROLLED and 210 / 700
+  OVERHEAT), one way (`max`); in EMERGENCY any fight phase (APPROACH / BROADSIDE / BREAK_AWAY / VENT) becomes `Phase.EMERGENCY`; the hub idle and DISENGAGE are
+  unchanged. Public state later tasks read: `hull_phase`, `heat`, `vents_opened`, `emergency_boosts`, `emergency_boost_dir`, `salvo_window()`,
+  `missile_gate_open()`, `is_missile_window_open()`.
+- **Heat** = a gun mount (batteries, cannon) entering COOLDOWN while OVERHEAT and fighting; the 4th enters VENT on that tick. **VENT** 2.2 s: vents
+  `set_vulnerable(true)`, `max_speed` × 0.6, lights VENTING; leaving VENT for any phase closes them and restores `max_speed` (an exit hook in `enter_phase()`).
+- **(D) VENT fire rule:** each gun mount gets `can_fire = <normal> and mount.phase() == FIRE`, not §2.5's literal `mount.is_committed()` (false for every
+  projectile mount: it is the lance's COMMIT light, so the literal rule cuts the burst it means to keep). Same intent: a started burst finishes, a charge
+  is cancelled, none starts.
+- **(D) The Missiles mount has its own `telegraph_gate`** (`missile_gate_open()`): EMERGENCY, the window with ≥ `salvo_window()` (0.85 s, read off the
+  mount) + 0.05 s left and, in Assault, the budget too. Its `can_fire`: EMERGENCY ∧ window (0.9–2.9 s after a boost) ∧ the player ≥ 80° off the nose
+  (rear 200°) ∧ the hull in the Assault view ∧ (Assault) the budget not expired and no DISENGAGE pending. No line of sight (it fires past cover).
+- **Assault rear-missile closure: the bounded exception to "persistent ordnance stays out of `ENEMIES_CLEARED` sections"** (Ph4 / Ph5 / Ph7). The pod's
+  rockets persist (`persist: true` pools), so in Assault the pod is open only while the `EngagementBudget` runs: its gate and its `can_fire` both ask the
+  budget, and `_enter_disengage()` `scan(0.0)`s it. Every rocket leaves before the budget ends and lives at most the longest `max_time` of the pod's pool
+  scenes (PURSUIT 6.0 s, read from the scenes), so a Heavy Gunship's rockets are bounded by `engage_seconds + rocket max_time`. **t11 must add that rocket
+  term to every heavy's deadline row** (`test_engagement_deadline.gd`, the corvette rocket boundary is the pattern).
+- **(D) Reach in EMERGENCY.** Open Space holds 800 px ± 90 (beyond the batteries' ≈ 770 px broadside reach) and a boost carries the hull past the pod's 900 px:
+  the batteries and the pod reach a **pursuer**, not a player who stays back (the "aggressive retreat"). In Assault an emergency boost (≈ 380 px) usually
+  carries the hull out of the fixed view, and the turret rule closes every mount there, so the pod rarely completes a salvo and the batteries pause after a
+  boost (the owner accepted this on 2026-11-16: fewer persistent rockets help Assault sections end on time; the full behaviour shows in Open Space).
+- **(D) The EMERGENCY arc outruns the hull (review round 3, R3-3):** at the emergency hold the arc anchor moves at 0.16 × 890 ≈ 142 px/s (Open Space) and
+  0.26 × 630 ≈ 164 px/s (Assault) against `max_speed` 140, breaking the t4 invariant `arc speed × (range + drift) < max_speed` that the config row pins
+  for CONTROLLED. `ORBIT_MAX_LEAD` (0.35 rad) bounds the lag, and the hull boosts every 5 s anyway. Accepted; **do not "fix" it by lowering
+  `emergency_range`** (that would bring the hull back inside the batteries' reach of a player who stays back, the opposite of the retreat).
+- **Venting stops in EMERGENCY (R3-1):** a hull cut into EMERGENCY mid-VENT closes both vents through `enter_phase()`'s exit hook on its next tick and never
+  vents again (`test_emergency_closes_an_open_vent_for_good`).
+- **(D) The pod fires after every other boost:** its own `cooldown_seconds` 5.5 (`rocket_battery_mount.tscn`) outlasts `emergency_period` 5.0. One salvo per
+  two boosts is the shipped cadence; no row asks for one per window.
+- **(D) EMP in VENT:** the brain is not ticked through an EMP window, so a VENT in progress keeps its vents open (and orange) for the window and resumes its
+  2.2 s clock after it: up to ≈ 7.2 s of weak point under the player's 5 s EMP Blast (the hull cannot cool while stunned). A rail (`on_suspended()`) closes
+  a VENT at once. `on_emp_started()` turns the hull and weapon-part lights OFF (the vents' stay true to their state).
+- **Cannon shield:** `Modules/Cannon/Shield` (`EnemyShield`, radius 26) gets the config's arc 120 / capacity 60 / regen delay 2.0 / regen 4.0 / reboot 5.0,
+  the cannon hurtbox's absorber slot and the nose (the brain `face()`s it every tick but DISENGAGE); freed on the cannon's `module_destroyed`.
+  **(D) Corner leak accepted:** the shield decides by the bearing from the cannon's centre to the HitBox as Godot reports it, one step past the nose edge,
+  so a frontal shot near the 32 px edge's corners can read up to ≈ 83° off the nose and pass the 60° half-arc (≈ a third of evenly spread frontal shots);
+  a centre-line shot is always absorbed. A plain round cannot reach the cannon from the flank (spent on the bare flank); the Sniper Shot can (row 10).
+- **(D) t4 gate change:** `test_a_bullet_through_each_exposed_edge_hits_that_part_and_the_hull` frees `Modules/Cannon/Shield` before its cannon shot (the
+  shield would eat that centre-line frontal round); the shielded frontal hit is `test_the_cannon_shield_eats_frontal_shots_and_never_covers_the_hull`.
+- **Lights (§2.9):** each part's `Light` (at its centre; t9 may move it): a vent VENTING while the phase is VENT, a weapon part CHARGING while its mount
+  telegraphs, a wreck's stays OFF (`EnemyModule.destroy()`). The hull `StateLight` keeps t4's mapping in VENT and EMERGENCY too, reading the pod in EMERGENCY.
+- **Own rockets: measured, no self-hit, so `enemy_rocket.gd` is untouched (no launcher guard).** `test_in_open_space_it_stays_in_the_fight_60_s_into_emergency_and_never_hits_itself`
+  (a 300 px/s pursuer holding 250 px, rockets hand-ticked with the hull): 12 rockets in 60 s, no tick with an open rocket HitBox overlapping the hull's
+  root rectangle; the closest an open rocket came to the hull centre was 109.3 px (the arming radius is 95.2 + 6 + 8 = 109.2). Should a later row show a
+  self-hit, the fix designed in the task plan (§ Own rockets: a rocket-side launcher guard closing an armed HitBox near its live launcher) applies.
+- **Test note (any hand-ticked row with a boost):** `_tick()` calls the mover outside a physics frame, so `move_and_slide()` moves the hull by the last
+  **idle** frame's delta before the mover reads its facing (the brain's face point is only `FACE_REACH` 100 px ahead of the pre-move hull), so a boost seen
+  through a long idle delta swings the hull off its broadside. The t5 rows with boosts start with `await _fresh_idle_delta()`, which scales
+  `Engine.time_scale` by 1e-6 and awaits one frame (`after_each` thaws it), so the idle delta is ≈ 0 on any machine. **Its first version only waited up to
+  5 frames for one ≤ 1/60 s** and so depended on the machine's speed: a forced 0.14 s idle delta (the engine's ceiling, about `max_physics_steps_per_frame`
+  × 1/60) fails 6 rear-missile / EMERGENCY rows of that version. The frozen version passes all 45 functions with a 300 ms frame injected before every
+  test. Such rows must await no physics frame (none comes while frozen). (Run 6 took this for the cause of the harness failures; it was not, see the next note.)
+- **(D) Gate output is capped at 1 MiB, and `BulletPool` now warns once per pool.** The harness gate failed on runs 3, 5 and 6 with every local gate green
+  because the AI-Kanban worker runs the gate through Node `child_process.exec` (`/repo/apps/worker/src/shell-command-runner.ts`) with no `maxBuffer`, so
+  its default 1 MiB (1048576 bytes) applies: a gate that prints more is killed near the end and recorded as `Verification failed` with no log. The t7
+  close printed 876593 bytes, this task's tree 1058270. 607 of the suite's 711 warnings were `[BulletPool] Pool exhausted` with an 8-line backtrace each
+  (≈ 700 KB): a hand-ticked shooter never lets its rounds fly, so its pool runs dry and warned on every refused tick (`test_enemy_module.gd` 272,
+  `test_heavy_gunship.gd` 217, `test_carrier.gd` 76). `BulletPool.acquire()` now warns the first time a pool runs dry and again only under
+  `--verbose` (the per-frame print rule); every refusal still returns null and the shooters' own refusal counters are unchanged. Gate
+  `tests/unit/test_bullet_pool.gd::test_an_exhausted_pool_warns_once_and_keeps_refusing`. `scripts/gate-time.sh` prints the byte count; **every later
+  task keeps the gate output well under 1 MiB** (tests/README.md → Gate time → *Gate output*).
+- **Gate time:** GUT 201.29 s (the t7 close, same tree as this task's start) → 203.36 / 202.89 s (two `scripts/gate-time.sh` runs, mean 203.12; 2976 → 2996
+  tests, 106295 asserts; both green, no leak lines): **+1.83 s** against the 2.5 s allotment. `test_heavy_gunship.gd` 26 → 45 functions, summed testcase
+  time in the suite ≈ 1.8 → 3.4 s (the exit probe in `before_all()` unchanged); the two long scenarios run once per harness (`_heat_run`, `_emergency_run`).
+
+### Phase 10, built in t8 (Carrier hangars: doors, launches, caps, emergency deployment) (2026-11-16)
+
+Task plan `docs/plans/cmwafsrbc00anqs2y9y0ovll4/` (review: round 1 and round 2 CHANGES_REQUESTED, all in the test plan; the round-2 fix check APPROVED).
+- **Files:** `assault/scenes/enemies/carrier/carrier_hangars.gd` (`CarrierHangars extends RefCounted`; `enum Door { CLOSED, OPENING, LAUNCH, OPEN }`
+  append-only; signals `door_changed(module_id: StringName, door: int)`, `launched(module_id: StringName, children: Array)`; queries `door(id)`,
+  `launches(id)`, `children_of(id)`, `live_count()`, `clock()`, `hangar_ids()`; `tick(delta, active)`, `emergency_deploy()`, test hook `force_open(id)`)
+  and `carrier_hangar_doors.gd` (`CarrierHangarDoors`, code-drawn placeholder: `open_amount`, `broken`). Built by `Carrier._build_hangars()` (it knows the
+  owner group), held by `CarrierBrain.bind_hangars()` / `hangars()`, ticked after the weapons; `Carrier.hangars()`. `_emergency_deploy()` (t7's hook) calls it.
+- **Scene:** each hangar module gains `Doors`, `Light` (`StateLight`, (0, −24), scale 2) and `Mouth` (`Marker2D`, (±48, 0): hull x ±108). No shape, module
+  position or `HomingPoint` moved.
+- **Deviation (one first-launch schedule for both modes):** §2.8 names `assault_first_launch`; the config has `first_launch_delay` 3.0 and
+  `starboard_launch_delay` 4.0, used in **both** modes: Assault from the hull centre's first tick in the view, Open Space from engaging (the schedule clock
+  runs only while SCREEN / PANIC with a player). §2.8 gave Open Space only the 9 s period; opening both hangars on the engage tick would leave no closed window.
+  Then Open Space repeats per hangar every `launch_period` from its previous OPENING.
+- **Caps:** a hangar opens only with room (`min(hangar_live_cap − own live, carrier_live_cap − all live) > 0`); a hangar at its cap keeps its doors shut
+  (its due launch waits); the count at LAUNCH is `min(launch_count, room)`. Live = valid and not queued for deletion (the `LaserTender._prune` rule).
+- **Spawning:** synchronous from the brain tick, `load()`ed payload paths (flat `String`s in the config), children at the `Mouth` 28 px apart along the hull
+  axis; brain `rng_seed` from the carrier brain's rng and `start_engaged` true where the brain has them; one `SquadController` per payload scene path,
+  held by `CarrierHangars` (so in Assault both hangars' drones share one squad); collision exceptions both ways; `parent.add_child`, then the owner group,
+  then `EnemyMover.boost(outward, 300, 0.4)` right after `add_child` (equivalent to "on its first tick": neither payload brain boosts or halts at start),
+  then `EventBus.enemy_spawned_orphan` once. No `patrol_anchor` is written (engaged children never idle).
+- **Wreck / emergency:** a destroyed hangar's bay is dead for good (no tick, no launch; doors broken and open; the module turns its light OFF). Emergency
+  deployment launches each live bay that may still launch from any door state (Open Space room > 0, Assault not launched), then OPEN (hittable) for
+  `door_hold_seconds`; an Assault bay caught mid-OPENING launches on the PANIC tick and not again. An EMP freezes the hangars with the brain.
+- **Tests:** `tests/integration/test_carrier_hangars.gd` (H1–H7 + the config pin; H2 on real physics at 16× with `launch_count` 0 and `first_launch_delay`
+  1.0 on its private config; H7 picks the ring's gap start so no child or control sits in a gap and asserts it). **`test_carrier.gd::_spawn` now keeps
+  the hangars quiet** (`first_launch_delay` 1e6, `launch_count` / `assault_launch_count` 0 on each row's private config): those rows test the hull,
+  movement and weapons, and a launch instantiates two ships (it cost +0.4 s). Mutation checks: no caps, dead bays launching, an Assault hangar
+  relaunching, no owner group, doors that do not unlock, no emergency deployment: each fails at least one row.
+- **Gate time:** GUT 203.53 s (two `scripts/gate-time.sh` runs on a clean `git archive HEAD` copy, 203.347 / 203.72) → 205.51 s (205.419 / 205.605; 2997 →
+  3005 tests, 106593 asserts; both green, `check-test-leaks.sh` clean, gate output ≈ 418 KB): **+1.98 s** against the 2.2 s allotment. Own files:
+  `test_carrier_hangars.gd` summed testcase time ≈ 1.76 s; `test_carrier.gd` 2.74 → 2.88 s.
+
+### Phase 10, built in t9 (Heavy Gunship and Carrier art) (2026-11-16)
+- **Built as §2.9 / §2.10 describe.** 19 sprites in `assault/assets/sprites/enemies/heavy_gunship/` (hull 112 × 144; battery, cannon, missiles intact + wreck; vent) and
+  `.../carrier/` (hull 192 × 288; engine, gun intact + wreck; hangar closed / open / wreck 64 × 56; core plated / exposed / wreck 64 × 64), wired into
+  `heavy_gunship.tscn` and `carrier.tscn`. Every part `Sprite` is at scale 1 (natural size; the stand-in scales are gone) and the Gunship hull `Sprite2D` is no longer
+  rotated (the art is drawn nose-down). The old `heave_gunship.png`, `heavy_gunship_non_shielded.png` and `.pdn` (and their `.import` files) are deleted.
+- **How the art was made (deviation from the "PixelLab object tool" default):** every sprite is **hand-drawn through the PixelLab workbench** (`pixelart_workbench draw`
+  recipes: polygons, rects, circles, pixels, one palette), not generated. Reason, measured: `create_map_object` at `high top-down` gave 32 px parts with a visible side face
+  (3/4) and a 112 × 144 hull that filled 100 × 126 of its canvas with windows where the batteries sit and no empty sockets, and a generated sprite cannot be made flush with
+  an exact hurtbox edge. A drawn sprite is strictly top-down by construction, exactly as large as its hurtbox, and the set shares one palette (ink / navy / maroon /
+  cool blue; wrecks are charred greys with ember pixels). Each image was checked at 3-6x over a dark ground, assembled on its hull at in-game layout (intact and wrecked).
+- **Every part texture is ≤ 90 % opaque** (§2.10 row) by silhouette, not by transparency tricks: chamfered corners, protruding tubes with gaps, an inset housing, hull notches
+  (measured 62 % – 87 %, corners all transparent). The vent keeps its outer edge on the hull coordinate with 1 px chamfered corners.
+- **Hangar doors = three textures, no new node:** `intact_texture` is the closed hangar, `wreck_texture` the wreck, and the new `CarrierHangarDoors.open_texture` export the open
+  bay, drawn over the closed art with alpha `open_amount` (`uses_art_open()` is true while textured, not broken and `open_amount > 0`); a wreck draws nothing (its wreck texture
+  carries it). With no `open_texture` the t8 code-drawn leaves remain (the node's own contract is unchanged; `CarrierHangars` writes the same two fields as before).
+  The starboard hangar mirrors with `Sprite.flip_h` and `Doors.scale.x` −1, so the bay opens to its own flank. **Core:** `intact_texture` plated, `Carrier.core_open_texture`
+  (now `core_exposed.png`) on exposure, `wreck_texture` the crater. The Gunship's starboard battery and vent mirror the port art with `flip_h` too. The vents have no wreck
+  (indestructible, `max_health` 0).
+- **Transparency walk widened, no fallback needed:** `test_entity_sprite_transparency.gd::_collect_textures()` now registers every `Texture2D`-valued property of every node in
+  each in-scope scene (instanced nodes' overrides included) and a new row proves the export-only textures are reached. The wider walk flagged **no** pre-Phase-10 texture, so §2.10's
+  fallback (a separate check inside `test_ph10_sprites.gd`) was not taken; `test_ph10_sprites.gd` still measures every Phase 10 texture itself (size, corners, 15 % < opaque < 90 %).
+- **Geometry untouched:** `git diff` of the two `.tscn` files shows no `CollisionShape2D`, shape resource, module position, `HomingPoint` or body size change; the flush-edge
+  row of `test_heavy_gunship.gd` and the `module_x_extent` row of `test_carrier.gd` pass unchanged. t11 / t12 measure against the same shapes.
+- **Seams for later tasks:** the Carrier's engine `Light` (`CarrierEnginePlume`, (0, −24)) sits on the engine art's nozzle edge; the part `Light`s stay at the part centres. The
+  Gunship's `Missiles` tube mouths face the aft edge and the cannon muzzle the nose edge, matching their `HomingPoint`s (exposed-edge midpoints).
+- **Tests:** `tests/integration/test_ph10_sprites.gd` (11 functions: every texture's size / corners / opacity, the old art gone, hull wiring and body cover, every part wired
+  (natural size, hurtbox-sized, mirrored on the starboard side), destruction swaps to the wreck on both ships, three door states, the open art's switch, three core states).
+
+### Phase 10, built in t10 (hub placement: a Heavy Gunship and a Carrier) (2026-11-17)
+- **Built as §2.14 describes, no deviation, no lever pulled.** `sector_hub.gd` appends draw 19 (`_spawn_heavy_gunship`, exports `heavy_gunship_ring_radius` 2600 /
+  `heavy_gunship_anchor_bearing_deg` 157.5, anchor about (-2402, 995)) and draw 20 (`_spawn_carrier`, `carrier_ring_radius` 3400 / `carrier_anchor_bearing_deg`
+  -112.5, anchor about (-1301, -3141)) after the Hacker; `patrol_anchor` and `rng_seed` are set before `add_child()`, `start_engaged` stays false. They are the last two
+  brains in `EnemyContainer`. No `.tscn` change (the hub scene places no enemy; the draws are code).
+- **Test seams:** `test_sector_hub_patrol.gd::_patrol_groups()` gains `"Heavy Gunship"` (idle 180, perceive 900) and `"Carrier"` (footprint `idle_radius` 220 +
+  `leash_radius` 900 = 1120, perceive 1100); every sweep (spawn / triggers / pickups, TacticalSpace, minefield, A / B, C, anchors > 1000 px) covers them and passed on
+  the planned positions: the Carrier clears the nearest interactable by +597.7 px past footprint + perceive. `_expected_seeds()` is 20 draws (21 brains: drone B and
+  the pair's spawner as before); the old live-children counts (19) are 21 now. The pre-approved levers (gunship to -67.5 degrees; carrier ring 3200-3800) were not needed.
+- **Hub carrier rows:** hand-ticked for 30 s with the player 3000 px away it stays in CRUISE, launches nothing and adds no child; the control (player at 0.7 x
+  `perceive_radius`) notices and its first launch comes within `notice_time` + `door_open_seconds` + one `launch_period` (in practice about 0.6 s notice + `first_launch_delay`
+  3.0 s, t8's schedule), the escorts being siblings of the carrier in `EnemyContainer` and in its owner group.
+- **Gate time:** one `scripts/gate-time.sh` run, GUT 206.18 s (wall 213.9 s; 3017 → 3023 tests, 106973 asserts; green; output ≈ 427 KB) against the t9 close's 205.26 s:
+  about +0.9 s, inside the 0.8 s allotment plus run noise (±1–3 s); the hub file is 69 tests in ≈ 2.1 s. The before figure is t9's, not re-measured; a second run was not made.
+
+### Phase 10, built in t11 (level 1's four Heavy Gunships off rails, lit replays, Cloud Descent deadline rows) (2026-11-18)
+Task plan `docs/plans/cmwafsrbi00azqs2yuwzayuk3/3-plan.md` (revision 5, review round 6 APPROVED); the owner answered its two questions on 2026-11-18
+(Q1 option M, Q2 accept the gate-time overrun).
+- **Director (§2.12):** the Cloud Descent 50.0 s and 62.0 s pair lose `.move(b.straight(42 / 36))` (same triggers, offsets, delays; owner choice 2: all three),
+  so they fight and leave by themselves; `COLUMN_WARN_SECONDS` 3.0 / `COLUMN_ACTIVE_SECONDS` 4.0 are `_spawn_laser_columns()`'s defaults (behaviour-identical,
+  `test_level1_laser_columns.gd` green). The deep_space 3.5 s heavy is `.at(160, -500)` (pre-approved lever 2: world x 960).
+- **Deviation (D), owner option M: `heavy_gunship.tscn`'s root `collision_mask` is 0** (the Carrier's and the station's rule), a departure from §2.4.1's body
+  spec ("mask ENVIRONMENT"; the "layer ENEMY_HITBOX" half was never applied and stays layer 1 as shipped) and from §2.12's lever list. Cause (measured, task plan
+  §5a): the heavy's root is a GROUNDED `CharacterBody2D`; on its APPROACH it lands on Snipers and Fighters of the deep_space waves (a floor contact), takes the ship
+  as a platform and, sliding off, adds its velocity (Godot's `platform_on_leave` default), so it is thrown sideways into the wall's lane (x 0–672, lethal until
+  7.56 s). No lever touches that: at the shipped offset it spawned 32 px inside the wall's strip and died every run; with lever 2 alone 8 of 12 / 7 of 9 runs
+  lost it; levers 1, 1 + 3 + 4 lost it in every run; `MOTION_MODE_FLOATING` alone fell under the clearance floor or never fired in some runs; the hull-term
+  footprint (revision 4's option A) never fired (0 of 37). With the mask at 0 (plus lever 2) 36 of 36 measured runs survived and fired inside the budget.
+  Trade-off the owner accepted: no Heavy Gunship body (level 1, the hub, level 2's railed one) stops on ships, asteroids or wrecks any more; it still steers
+  round hazards through `EnemyMover`, other ships (mask 1) still meet its layer-1 body, and its hurtbox and contact box (areas) are unchanged. Levers 1, 3 and 4
+  and both deadline levers were **not used**. Rows: `test_heavy_gunship.gd::test_the_shipped_hull_body_collides_with_nothing` and
+  `test_a_heavy_moved_by_move_and_slide_passes_through_a_layer_1_body` (a mask-1 control is stopped by the same box).
+- **Lit slice replay (§2.12; t12 seam):** `tests/helpers/level1_slice_replay.gd` gains the opt-in `light_lasers` / `lit_section` / `lit_from` (default off: every
+  existing caller runs its old path), `deaths` (`{ship, what, t, covered, source}`, readable during the run), `slice_time()`, and statics `ray_timing()` (init 0.2 /
+  increase 0.56 / dissolve 0.84 s from `laser_ray.tscn`'s `SpriteFrames`), `lit_seconds()` (8.4 s, the definition t12 reuses), `column_lethal_offset()` (3.56 s),
+  `warm_start(elapsed, warn, active)` (`MIN_ACTIVE` 0.25), `wall_placement()` and `hurt_aabb()`. `run()` adds `deaths`, `lit` (per ray: source, x, row time, first
+  / last lethal tick, `max_idle`, lit warn / active), `max_idle`, `lethal_at_stop` and `clearance` on a lit run. The columns fire on an idle clock started at the load
+  frame's delta (`Level1Director._process`'s semantics); the deep_space wall is added at the `load_section()` moment. **`run()` now drops its tweak at the end:**
+  a tweak that captures its own replay (to read `slice_time()`) made a RefCounted cycle that leaked at exit.
+- **(D) the step cap:** every lit replay runs with `Engine.max_physics_steps_per_frame` 16 (time scale and tick rate x 16). Uncapped, the CPU-bound deep_space
+  slice reaches 2.13 game s idle frames and every laser edge reads late; capped, the largest idle frame is 0.279–0.282 s (deep_space and boundary
+  runs; 0.122–0.130 s carried over), never above 17 ticks (0.283 s) by construction, so on a slower machine too the per-edge guard
+  (`2·d + 2·TICK < 1.25 s`) holds. README rule 1 records it.
+- **(D) one deep_space scenario** is the heavy's lit check, its attack-in-budget row and its fire record (§2.12 lists them separately); from section 0.0 s, so the
+  wall is the level's own (no shift). The kill-detection boundary holds **two** heavies (x 640 in the wall's 644 ray, x 1152 on the 6.0 s set's column) in one
+  run from 2.5 s (the wall relit with a 0.5 s warning): wall death at 3.67 s, column death at 9.62–9.93 s, every run.
+- **(D) deadline boundary (a):** §2.12's "a heavy added to the last wave at delay `10.0 − tail ± 0.05`" is a negative delay (tail 19.58 s), so it is built as the
+  fighter's config-derived row: a one-heavy wave inserted in list order at `limit ± 0.05`, `limit` = 76.0 + 10.0 − tail = **66.42 s** (between the 66.0 and 68.0
+  waves); +0.05 computes 10.05 s (flagged), −0.05 passes. **Boundary (b), the rocket term (N5):** the same −0.05 heavy passes with the pod closed at the budget and
+  is flagged with it open through the exit (open tail = engage + window + exit + rocket + margin = 25.58 s). Both are derived from the config and the measured exit.
+- **Measured figures.** Heavy Gunship corridor exit **9.03 s** (2166 runs, 0 capped, unchanged since t4; its first measurement now happens in
+  `test_engagement_deadline.gd`'s `before_all()`, the first file to call it, so `test_heavy_gunship.gd`'s probe print reads ≈ 0 s). Heavy life = 9.0 + 1.05 + 9.03 =
+  19.08 s. Legacy rails (frozen `_LEGACY_PEAK_HEAVIES` deep_space 1, cloud_descent 3): the 50.0 s rail lived 14.78 s, the 62.0 / 62.8 s rails 17.24 s, the deep_space
+  gunship (no rail) never left. Cloud Descent deadline: worst row the 62.0 + 0.8 s heavy, exit term **6.38 s** of 10 (rocket term 2.30 s: max rocket life 6.0 s,
+  PURSUIT); the shipped 62.8 s heavy with its pod left open would compute 12.38 s.
+- **Lit deep_space replay, ten consecutive green runs of the file on the final tree** (plus three earlier): no part or hull of the heavy died, under a laser or
+  otherwise; smallest horizontal gap to a lethal strip at its height **37.7–56.9 px** (floor `LaserRay._HAZARD_PAD` 24); to a still-warning strip 0–10 px (printed
+  only); BROADSIDE at 8.03–8.25 s, first battery FIRE at 9.07–9.28 s (section time) with 3.33–3.35 s of budget left, DISENGAGE 12.42–12.62 s, gone 15.72–15.95 s
+  (3.3 s after DISENGAGE, against the 9.03 s worst-case exit). The carried-over row (from 11.0 s, the 6.0 s set relit warn 0 / active 1.8) is lethal 11.77–11.82 →
+  13.53–13.57 s against the level's 11.76 → 13.56 s.
+- **Attack in budget (Cloud Descent replay, lasers off, all three heavies in traffic):** first battery FIRE 56.28–56.32 s (2.70 s left), 66.38–66.48 s (4.53 s
+  left), 67.17–67.30 s (4.52 s left); every heavy in BROADSIDE when it fires.
+- **Heavy fire density (measured, ungated; §2.12):** deep_space: 4 gun rounds (one battery burst), 0 rockets, peak 4 in any 2 s window; cloud_descent: 20 gun rounds
+  (4 / 8 / 8), 0 rockets, peak 8 in any 2 s window. Identical in all ten runs. No heavy reaches EMERGENCY untouched, so no rocket flies in these replays.
+- **`test_heavy_gunship.gd`:** `CLOUD_DESCENT_WINDOW` 23.2 is replaced by the live `cloud_descent_window()` (last effective trigger + timeout − the latest Cloud
+  Descent heavy spawn; 23.2 s today); the row's assertion is unchanged.
+- **(D) gate time, owner-accepted overrun (Q2):** two `scripts/gate-time.sh` runs, GUT 210.872 / 210.504 s (mean **210.69 s**) against 205.627 / 205.940 s
+  (mean 205.78 s) at `8df0d59`: **+4.9 s** against the 3.0 s allotment and the 4.5 s (1.5×) line, under the owner's stop (9.0 s of the task's files, 237 s
+  two-run mean). 3023 → 3051 tests, output ≈ 426 KB of the 1 MiB cap, `check-test-leaks.sh` clean. `test_level1_heavy_spawns.gd` is 4.6 – 4.7 s of summed
+  testcase time; the exit probe moved (outside testcases) from `test_heavy_gunship.gd` to `test_engagement_deadline.gd`. The phase is now ≈ 210.7 s + t12's
+  2.5 s against §2.15's 234.5 s budget and the 240 s ceiling (the README's "phase ends ≤ 213.6 s" estimate is passed by about 0.4 s after t12).
+- **Follow-ups (not built):** the same platform-velocity launch can hit any AI enemy whose root body is GROUNDED with mask 1 (every one but the Carrier, the
+  station and now the Heavy Gunship): whether every top-down enemy body should be `MOTION_MODE_FLOATING` is a project-wide question for the owner. The heavies
+  fire late in their Assault life (the first battery burst comes 4.5–6.3 s into the 9 s budget, after the approach to the held range), so each fires one
+  or two bursts per life in level 1.
+
+### Phase 10, built in t12 (level 1's Carrier crosses Planet Approach) (2026-11-18)
+
+Task plan `docs/plans/cmwafsrbl00b3qs2y1xuez7c5/` (review round 2: APPROVED).
+- **Option A** of §2.13, as ordered: `b.carrier().at(55, -260)` appended to planet_approach's **65.0 s** wave (no new wave, so no effective trigger, wave index
+  or fire-density schedule row moves). World x **750** (world-anchored). B and C were not needed.
+- **Worst life 20.61 s** (`TICK_SLACK + (world.end.y + 140 − y_spawn) / 90`, spawned from the highest view, shake included: y −548): alive 65.00 – 85.61 s.
+  **Swept x 620 – 880** (750 ± (sway leash 30 + `module_x_extent` 100)). A column conflicts when closer than the sweep + `_BEAM_WIDTH` (186 px from x).
+- **Lit windows** (`lit_seconds()` 8.4 s = warn 3.0 + increase 0.56 + active 4.0 + dissolve 0.84): 55.0 s set lit until 63.40 s (before the spawn), **78.0 s set
+  (x 150 / 550 / 950) overlaps**, 98.0 s set starts after 85.61 s. 550 and 950 are 200 px from x: 70 px outside the sweep, 14 px beyond the 186 px rule.
+  `_carrier_column_conflicts()` (new, `test_level1_heavy_spawns.gd`) reports no conflict; its boundaries flag the line in the 58.0 s wave (the 55.0 s set's
+  x 700 column, 50 px) and at `.at(-45, -260)` (world x 550, on the 78.0 s set's column).
+- **Lit replay** (planet_approach from 64.0 s, 16× clock capped at 16 steps, columns lit): no part or hull died; anchor x 750.0, largest sway **30.00 px**
+  (it parks on its leash, toward the stub); smallest gap to a lethal 78.0 s strip **54.0 px = the computed floor** (200 − 30 − 88 − 28; review N1: the
+  floor is met exactly, so the row has a 0.5 px float tolerance) and ≥ `_HAZARD_PAD`; lived **20.50 s** (worst 20.61; no shake); every 78.0 s column lethal
+  81.63 – 85.35 s, inside its 78.00 – 86.40 window, none lethal at the stop (86.43 s); largest idle frame 0.283 s.
+- **(D) the stub is parked high** (opt-in `level1_slice_replay.gd::player_offset`, default `PLAYER_OFFSET`; here `(0, −(V_LIMIT + deadzone.y + 50))`), not
+  at §2.13's "usual place": there the camera offset is +220, the carrier spawns at y 60 and is gone ≈ 78.8 s, before the 78.0 s set turns lethal (81.56 s),
+  so the laser check would be vacuous. High, the camera pans to −`V_LIMIT` and the carrier crosses from the worst-case view.
+- **Attack in budget** (same replay, no part damaged, so no PANIC, asserted): port hangar launched 2 swarm drones at 70.58 s, starboard 2 at 74.58 s (windows
+  ≥ 68.80 / 72.80 s, ≤ 85.61 s); **fire record (measured, ungated): 8 rounds, all side-battery, peak 4 in any 2 s window**; the bow cannon and the missile
+  bank did not fire at the high stub in this replay.
+- **Drones (C3, `test_level1_drone_spawns.gd`):** the carrier's 4 drones are one squad of intervals `[65.0, 65.0 + 20.61 + drone life]` (they start at the
+  carrier's spawn: PANIC's `emergency_deploy()` launches with no schedule or view check; review round 1, finding 1). planet_approach: capable **9 of 12**
+  (was 7), all **13 of 15** (was 9). Lever `assault_launch_count` 2 → 1 **not needed**. Boundary: `k` = 1 more carrier at the all-drones peak (75.0 s)
+  computes 17 > 15. `swarm_lifetimes()` moved from the test into `level1_drone_concurrency.gd` (one formula for both files).
+- **Gone before the section ends:** hull and last rocket (missile bank PURSUIT `max_time` 6.0 s) by 91.61 s, its drones by 93.89 s, against 110.0 s
+  (planet_approach's end; no ENEMIES_CLEARED section follows before it). Boundary: the line in the 95.0 s wave spills (121.61 s).
+- **Guard:** `test_no_enemies_cleared_section_spawns_a_carrier` gains its non-vacuity line (level 1 places exactly one carrier, in a DURATION section).
+- **`test_level1_ph9_attacks.gd`** stays green unchanged: its jammer slice (61.0 s →) now spawns the carrier at slice 4.0 s; the parked player is locked at slice
+  5.90 s as before. No ring friendly fire on the jammer was needed to decide (owner choice 8 stands).
+- No frozen constant changed; no carrier tuning changed. New helper `tests/helpers/level1_carrier_timeline.gd` (lines, worst life, swept width, rocket life,
+  launch windows, drone intervals), shared by the heavy and drone gates.
+- **Gate time:** GUT two-run mean 211.51 s (at `7aba280`) → 210.34 s (213.311 / 207.359; 3062 tests): −1.2 s is noise; the task's own file
+  `test_level1_heavy_spawns.gd` grew 4.7 → 6.7 s summed testcase time (+2.0 s of the 2.5 s allotment). `check-test-leaks.sh` clean.
+
+## Phase 10 - as built (2026-11-18)
+
+Dossier: `docs/epics-done/cmug23oo90029m52wae4clve0/` (PRD, SOURCES, REPORT). Per-task details are in the *Phase 10, built in tN* sections above; this section is the summary later phases should read.
+
+### What was built
+- **`EnemyModule` / `ModularHull`** (`global/components/`), group `enemy_parts`, wreckage that stays, a locked part ignoring every damage, the killing shot consumed; the player's beam and nova reach parts.
+- **`TurretMountBuilder`**, mount `traverse_deg` (along the arc), `Variant.HEAVY_CANNON` firing the Heavy Shell (its first consumer).
+- **Heavy Gunship** (`heavy_gunship/`, replaces the legacy Gunship; `WaveBuilder.heavy_gunship()` / `HEAVY_GUNSHIP`) with six edge-flush parts, hull phases, vents, a rear pod open in Assault only while its budget runs, a shielded nose cannon.
+- **Carrier** (`carrier/`, `WaveBuilder.carrier()` / `CARRIER`): armoured hull, seven parts, core exposure after 3 outer wrecks, side batteries, bow cannon, missile bank, pulse ring, hangars, PANIC.
+- **19 hand-drawn sprites**, hub draws 19 / 20, level 1's four Heavy Gunships and one Carrier (planet_approach 65.0 s, world x 750), the lit-laser slice replay (`light_lasers`, `player_offset`).
+
+### Deviations from the plan (all logged in the per-task notes)
+- Ph4's "extend `ArmorPlate`" changed to a new `EnemyModule` (damage through `received_damage`, wreckage kept).
+- VENT fire rule `can_fire = normal ∧ phase() == FIRE` instead of `is_committed()` (t5); the Missiles mount has its own `telegraph_gate`.
+- `heavy_gunship.tscn` root `collision_mask` is 0 (owner choice, t11); one first-launch schedule for both modes in `CarrierConfig` (t8).
+- Art hand-drawn through the PixelLab workbench rather than the object tool (t9).
+- Level-1 replays run at a 16-step cap; t11's GUT overrun (+4.9 s against 3.0 s) was owner-accepted; the Carrier replay parks the stub high (`player_offset`) so the check is not vacuous (t12).
+- Gate output is capped at 1 MiB and `BulletPool` warns once per pool (t5).
+
+### Gaps left for later phases
+| Item | Phase |
+|---|---|
+| Hangar launches / battery-loss phases on the shared boss machinery; geometry weapons; ship-mounted EMP | Ph18 |
+| **Enemy beams (`EnemyBeam`, `EnergyRing`) vs parts** (needs an owner-of-part exemption in `EnergyHitScan`) | Ph18 / Ph19 |
+| LOS-blocking and capital wrecks, heavy mass rules | Ph19 |
+| **EMP on structures** (bonus drone, station, Ph8 turrets / fences), station onto `EnemyModule` | Ph11 |
+| Encounter compositions, hub carrier child cleanup | Ph13 / Ph14 |
+| Per-part score, part HUD, audio | Ph17 |
+| Difficulty scaling | Ph16 |
+| Level 2 beyond the builder rename | Ph15 |
+| Untested: Carrier bow cannon and missile bank in level 1; drones against lit columns; play feel of Cloud Descent's three firing gunships | later / owner |
+
+## Phase 11 - Enemy rework, phase 11: Space Fortress 2.0 and machine-driven boss reinforcements (2026-11-22, revised 2026-11-23)
+
+Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md` (revision 3: revision 2 answered plan review 1, revision 3 the owner's send-back). **The research stage left no `1-context.md` / `2-research.md`** (the Ph10 precedent); the plan carries the
+scope check (§1.1), judgement calls (§1.2) and code facts (§1.3, read @ `cba0e7b`). These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
+
+### Changes to earlier decisions
+- **The legacy Space Station is retired** (Ph11 owner choice 1 default): the Space Fortress replaces it in level 1's `station_assault` section (internal section name kept), then
+  `assault/scenes/enemies/space_station/`, `WaveBuilder.space_station()` and the station test family are deleted or re-pointed per the plan's §2.11 table. The "station test
+  family" intent tests become the fortress / boss-machinery family; CLAUDE.md's rail-fire gate (`test_station_reinforcements.gd::test_rail_reinforcements_fire`) becomes an
+  "escorts fire within 3 s" row (escorts are AI ships, not rails).
+- **Boss reinforcements leave the generic plumbing:** a boss's escorts are never direct enemy-container children and never `enemy_spawned_orphan`s (unlike Ph10's Carrier
+  hangar children, which stay as they are until Ph18). They live in an escort container, are announced with `EventBus.boss_escort_spawned(escort, boss)`, pay only kill score ×
+  combo (no wave tally, no escape penalty, nothing once the boss `is_dying()`), and are scuttled when the boss's death starts (Ph11 owner choice 4 default). Nothing writes an escort's `counts_toward_wave_clear` / `counts_as_escape` (they keep their
+  config values; `false` would make the Support Ship treat escorts as non-combatants).
+- **Persistent ordnance in `ENEMIES_CLEARED`:** Ph10 allowed exactly one bounded exception (the Heavy Gunship). **The Space Fortress is the second** (its `ROCKET_BATTERY`
+  pools persist): tail = `death_duration` + the rocket `max_time`, inside `station_assault`'s timeout. `test_engagement_deadline.gd` holds an allowlist {Heavy Gunship, Space
+  Fortress}; any other persistent-ordnance spawn in an `ENEMIES_CLEARED` section fails it, so a third exception is a decision, not an accident.
+- **Ph8's "twin-rig beam rotating about an anchor" for the fortress is dropped:** the fortress's rotating beams are hull-mounted `EnemyBeam` BEAM emitters turned by the hull spin.
+  The rig mode stays unbuilt and available to a later boss.
+- **Ph9 / Ph10 "EMP on structures" debt:** the station is closed by retirement (the fortress answers EMP, `emp_factor` 0.4 on **every** EMP source, Ph11 owner choice 6;
+  it keeps answering while dying, with `apply_emp` a no-op then, so an EMP Blast never process-disables the wreck mid death sequence); `DefenseTurret` / heavy emplacement,
+  `LaserEmitter` and `ShieldGenerator` answer EMP (tangible, silenced for the window; `BaseEnemy.apply_emp` already null-guards mover and brain). `LaserEmitter` has no
+  brain, so **`LaserFence.step()` polls its posts' `is_emp_disrupted()`**: dark while either is disrupted, then relit through a fresh warning phase. **The bonus drone
+  deliberately keeps the legacy process-disable freeze** (a rail reward target; Ph11 owner choice 7).
+- Ph10's "pick one hull rule per boss": **the fortress uses the armoured hull** (Carrier rule; death = the CORE part's death).
+
+### Names and places later phases build on
+- **`global/boss/`** (new folder, boss-agnostic):
+  - `BossPhase` (flat Resource, scene sub-resource, never written at runtime): `enum Trigger { START, PARTS_DESTROYED, HEALTH_AT_OR_BELOW }`, `enum Change { MOVEMENT = 1,
+    ATTACKS = 2, VULNERABLE = 4, ARENA = 8, REINFORCEMENTS = 16, VISUALS = 32 }` (both append-only); `phase_id`, `trigger`, `module_ids`, `roles`, `count`, `health_module`,
+    `health_ratio`, `changes`.
+  - `BossPhaseDriver` (Node `PhaseDriver`): `phases`, `bind(hull, host_health)`, `evaluate()`, `current_index()`, `current_id()`, `has_reached(id)`, `validate(hull)`, signal
+    `phase_entered(index: int, phase_id: StringName)`; ordered, one way, cascades in order; applies no consequence. **IDEAS §25 is a gate:** `test_boss_phase_rules.gd` fails any
+    shipped ladder with a non-start phase declaring < 2 changes, and each boss has a row checking its `phase_snapshot()` shows every declared change. **Snapshot keys read
+    phase-driven state only** (never which parts are alive), so the hit that triggers a phase cannot count as one of its changes; a boundary row pins it.
+  - `ReinforcementBay` (Node2D `Bay` on an `EnemyModule`, optional `Mouth`): `enum Trigger { PERIODIC, ON_SECTOR_LOSS, ON_PHASE }`; exports `bay_id`, `payload_scene`,
+    `assault_payload_scene`, `count`, `period`, `first_delay`, `active_from_phase`, `watch_ids`, `on_phase`, `door_seconds`, `open_hold_seconds` (doors held OPEN after a launch,
+    the Carrier's `door_hold_seconds`), `opens_part`, `assault_launch_limit`. A bay on a destroyed part is dead.
+  - `BossReinforcements` (RefCounted, ticked by the brain; its `tick` is the only clock): caps, `surge(bay_id, count)`, `scuttle_all()`, `live_count()`, signals
+    `launched(bay_id, escorts)`, `door_changed(bay_id, open)`. `escorts()` = the live `BaseEnemy` children of the escort container (one source of truth). Escorts: seeded,
+    `start_engaged`, owner group, one `SquadController` per payload scene cached for the boss's life (the `CarrierHangars._squad(path)` rule), outward boost.
+  - `EscortContainer.ensure(host)`: lazy `<host name>Escorts` Node2D sibling of the boss, group `&"boss_escorts"`, freed with the boss. `ENEMIES_CLEARED` sees the boss, its
+    bullets and this one node.
+  - `ShieldSector` (RefCounted): a generator part + protected parts, one 360° `EnemyShield` bubble per part; generator destroyed = sector exposed for good.
+  - `BossDeathSequence` (was `StationDeathSequence`, behaviour-identical; moved with its `.uid` sidecar, the `SpaceStation` cast replaced by a duck-typed host): host contract `death_started`, `death_duration`, optional `config.death_blast_count`; it writes the
+    dying host's rotation only after `suspend_ai()`.
+- **`StateLight.State.SHIELDED`** (cyan, appended; built with `ShieldSector`).
+- **`TurretMount.Variant.SPREAD_CANNON` (7) and `RAPID_PULSE` (8)** appended; `BurstCannonMount.pellets` / `pellet_spread_deg` (1 / 0 = bit-identical). Both mount scenes are
+  **standalone** (never inherited: `export_of()` reads only a scene's own `SceneState`); a mount's `fire_range` ≤ its round's `max_distance` (row over every bullet-firing variant).
+- **`TurretMountSlot.pool_period_factor` / `TurretMount.pool_period_factor`** (default 1.0 = bit-identical): `pool_specs()` sizes pools for period × factor, so a host that
+  shortens cooldowns at runtime (the fortress's `critical` × 0.6) authors the factor on its slots instead of running dry; a dry pool refuses shots silently.
+- **An enemy whose brain spins it by facing a point ahead authors `EnemyMover.turn_lerp = 0`** (the lerp runs before the `max_turn_rate` cap). A boss whose brain is
+  not ticked (EMP window, dying) ticks its cancelled beams / rings through FADE from its root, and closes its bays once in `on_emp_started()`.
+- **`TurretMount.telegraph_gate` stays a zero-argument Callable**; a boss's gate (`FortressBrain.attack_gate() -> bool`) counts its own committed mounts.
+- **Space Fortress** (`assault/scenes/enemies/space_fortress/`: `SpaceFortress`, `FortressBrain` with `Phase { IDLE, NOTICING, RETURNING, ENTER, HOLD, REPOSITION }`
+  append-only, flat `SpaceFortressConfig`; `WaveBuilder.space_fortress()` / `SPACE_FORTRESS`): circle hull r 176 (sprite 384), root layer 0 / mask 0, armoured; parts
+  `battery_spread` / `battery_pulse` / `battery_sweep` / `battery_artillery` / `battery_missiles` (WEAPON), `hangar` (HANGAR, doors), `shield_north` / `shield_south`
+  (WEAK_POINT generators, locked until phase 2), `core` (CORE, locked until phase 3). `FortressBrain.is_engaged()` = brain phase HOLD or REPOSITION (both
+  modes; the Assault bob is REPOSITION): weapons fire and bays run only then. Boss phases `batteries` → `shields_exposed` (2 batteries lost) → `core_exposed` (both
+  generators) → `critical` (core ≤ 40 %); declared changes: `shields_exposed` VULNERABLE, ATTACKS, MOVEMENT, REINFORCEMENTS, VISUALS;
+  `core_exposed` VULNERABLE, MOVEMENT, ARENA, VISUALS (the `EnergyRing` pulse is ARENA, not ATTACKS); `critical` MOVEMENT, ATTACKS, REINFORCEMENTS, VISUALS. Weapons: corner mounts with 100° traverse (diagonal crossfire), hull spoke beams with spin volleys, an `EnergyRing` ring pulse, the
+  station's precessing core bullet ring in `critical`. Open Space: `AnchorIdle`, a combat zone (radius 600) around `patrol_anchor`, reposition from `core_exposed`, presents its
+  strongest side at a turn rate a circling player beats. Assault: enters from above to world y 180, vertical bob from `core_exposed`, x fixed, no engagement budget, `world_anchored_x`.
+- **Naming:** never "station" for the boss in code or docs (Open Space has "Fortuna Space Station"); hub node and docs say Space Fortress.
+- **Level 1:** `station_assault` spawns `b.space_fortress().at(0, -230)` (no `.delay()`, no `.move()`), timeout 240 s (Ph11 owner choice 5 default).
+- **Hub:** draw 21 = the Space Fortress, 4200 ring at −45° (levers: ring 3800–4600, bearing −45° ± 22.5°).
+
+### Conventions
+- A boss's phases are data (`BossPhase` sub-resources on `PhaseDriver`); its consequences live in the host's `phase_entered` handler; tuning in the flat config.
+- A boss's reinforcements always come out of a bay on a live part, with a visible door telegraph, and stop when that part is destroyed.
+- Fairness for boss geometry weapons is an inequality read from **instantiated nodes** (beam tip speed at hull + 250 px ≤ 0.8 × player speed; a ring gap's arc **at the hull
+  edge + player radius**, where it is narrowest, ≥ 2 × the player hurtbox diameter; ≤ 2 batteries committed at once, 3 in `critical`) plus a **measured Assault density
+  ceiling in every boss phase** (worst live-part set, five player positions; fortress-owned rounds: mean ≤ 2.0 × the station's legacy 6.67 /s = 13.3 /s, peak half-open 2 s
+  window ≤ 1.25 × 24 = 30). A hand-ticked density row counts **launches** and returns each round to its pool at once (an un-ticked round never
+  expires, so a dry pool would cap the rate silently); a count during which a pool reported empty fails. Tune in a stated lever order, never widen a ceiling. Later bosses (Ph12 Dreadnought) measure the same way.
+- A boss's §25 row runs a pinned scripted path; a path where a declared change cannot happen (e.g. a dead hangar's surge) gets its own row asserting only ≥ 2 changes.
+- "Owner choice N" is per phase: write "Ph11 owner choice N" (Ph10 has its own 4 and 7).
+- Gate time: start 210.34 s; Ph11 allotments sum to +18.1 s; escalate past a 237 s two-run mean or 1.5× a task's allotment. A wall-clock director replay overrides its own
+  section copy's `enemies_cleared_timeout` rather than waiting out a shipped timeout.
+
+### Deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| Carrier hangars onto `ReinforcementBay` / `BossReinforcements`; Gunship phases onto `BossPhaseDriver` | Ph18 | the machinery is built here |
+| Dreadnought on `global/boss/` | Ph12 | |
+| Enemy beams / rings damaging parts | Ph18 / Ph19 | Ph10 deferral stands |
+| Wrecked parts blocking LOS, capital wrecks | Ph19 | |
+| Escort cleanup / leash in Open Space beyond the cap; encounter compositions with the fortress | Ph13 / Ph14 | |
+| Boss / part HUD, per-part score, audio | Ph17 | IDEAS §6.11 "not one giant HP bar" |
+| Difficulty tiers for the fortress | Ph16 | |
+| Fortuna's `space_stations/` mission-data directories | never (not part of the enemy) | the station retirement grep is anchored so it never touches them |
+| EMP knocking boss shields down | Ph18 (ship-mounted EMP) | |
+
+### Phase 11, built in t3
+- `TurretMount.Variant` gains `SPREAD_CANNON` (7) and `RAPID_PULSE` (8), both `BurstCannonMount` on standalone scenes (`spread_cannon_mount.tscn`, `rapid_pulse_mount.tscn`); `BurstCannonMount` gains `pellets` (1) / `pellet_spread_deg` (0), pellets spread evenly over the full width, one aim-cone check per volley, pool sized `burst_count × pellets`. Both heads are 64×64 (pivot 32,32) in `assault/assets/sprites/enemies/`. A new reach row in `test_turret_mount_variants.gd` asserts `fire_range <= round max_distance` for every `BurstCannonMount` variant (the heavy cannon's 900 against its 1800 included).
+
+### Phase 11, built in t2
+- `BossReinforcements` triggers (PERIODIC clock, ON_SECTOR_LOSS, ON_PHASE) count only while the bay is active (`active_from_phase` empty or reached); a loss or phase entry before activation is dropped, not stored. `surge()` ignores activation (an emergency launch) but **does** honour `assault_launch_limit` and the live cap: t10's critical surge in Assault must allow for a bay that already spent its limit.
+- The cap is checked twice: when a queued launch would open the doors (no room → skipped and counted, the doors stay shut) and again at LAUNCH (clamped; 0 → skipped). `launches()` counts only launches that put out at least one escort.
+- `tick(delta, false)` puts a launch caught mid-OPENING back at the front of its queue (it comes out when active again); it is not lost.
+- Added beyond the plan: `BossReinforcements.Door { CLOSED, OPENING, OPEN }` + `door(bay_id)`, and escorts of one launch spread `ESCORT_SPACING` 28 px across the launch direction (the `CarrierHangars` spacing).
+
+### Phase 11, built in t5
+- `SpaceFortress.phase_snapshot()`'s `visuals` key reads fields the fortress's phase handler keeps (shutter / plating open flags, the generator light state it keeps — SHIELDED for the whole ladder so far — and the core light **mode** `&"off"` / `&"blink"`), never the live `Light.get_state()` or sprite textures: a wreck turns its own light OFF and the critical blink alternates, and either would change the key with no phase change. Live sprites are asserted separately by the §25 row. Later tasks that add a phase-driven visual add a field, not a live read.
+- `movement` / `attacks` / `arena` come from `FortressBrain.movement_snapshot()` / `attacks_snapshot()` / `arena_snapshot()` (`[]` stubs until t6 / t7 + t16 / t16 fill them); `reinforcements` is `[[], 0]` until t8 builds the bays.
+- The fortress's `_on_phase_entered` applies nothing once it is dying (a part killed during the death sequence may still step the ladder).
+- Config adds `critical_core_ratio` (0.4, must equal the scene's `BossPhase.health_ratio`) and the escort numbers `escort_cap_open_space` 6 / `escort_cap_assault` 4 / `escort_boost_speed` 300 / `escort_boost_seconds` 0.4, which the root hands to its `BossReinforcements` (t8 may retune them). Hooks for later tasks on `FortressBrain`: `bind(hull, reinforcements)`, `on_boss_phase(phase_id)`, `silence()` (death), `on_emp_started()` (scans every attached mount down, one `reinforcements.tick(0.0, false)`).
+- `test_base_enemy.gd` is a §2.14 roster gate the epic plan did not list: the fortress is in `_EXCLUDED_FROM_GENERIC_DAMAGE_FLOW`, `_AUTHORED_CONTACT_MODES` (ARMOR) and the every-phase tow refusers; `_MIN_ROSTER_SIZE` 26.
+
+### Phase 11, built in t6
+- `FortressBrain` movement API later tasks use: `is_engaged()` (HOLD / REPOSITION, both modes), `begin_spin(direction := 0)` (0 alternates, the first is +1) / `end_spin()` / `spinning()` / `spin_direction()` (t16), `present_side()` / `sector_strength(side)`, `pick_station_point(current, player_ahead)`, `station_point()`, `anchor_x()`, `is_travelling()`, `patrol_anchor` / `start_engaged` (t13 sets the anchor before `add_child()`, the Carrier rule; `start_engaged` builds no `AnchorIdle`, so no leash), signal `phase_changed(new_phase: int)`.
+- **The face lever is `FACE_REACH` 10 000 px**, not §2.6's illustrative 100: only the direction matters, and in a hand tick the mover measures the face point from where `move_and_slide()` moved the hull with the idle delta (task review R1-4).
+- **Thrusters:** `Thrusters.visible` stays the root's phase-driven flag (`core_exposed` on; the §25 `visuals` key reads it). "Visible while travelling" is the brain writing `Thrusters.modulate.a` = 1.0 while travelling (REPOSITION en route, RETURNING, ENTER, the bob) and `FortressBrain.THRUSTER_IDLE_ALPHA` 0.35 holding (a brain constant, not config), so travel never moves the snapshot. t9's thruster art must read well at both alphas.
+- The mover keeps `acceleration` / `braking` 0 (instant velocity) beside the authored `turn_lerp` 0; the Open Space RETURNING speed is `reposition_speed` 60. Config adds the flat `Movement` group (§2.16's numbers plus `hold_tolerance` 24, `hold_speed` 40, `reposition_lookahead` 1.0, `station_ring_factor` 0.6, `reposition_min_step` 250, `assault_x_correct_speed` 20).
+- With 8 candidates on a 360 px ring (neighbours 275.5 px apart) the 250 px `reposition_min_step` only ever excludes the current point; it matters if a later task changes the ring or the count.
+
+### Phase 11, built in t7
+- `TurretMountSlot.pool_period_factor` (1.0) → `TurretMount.pool_period_factor` (the builder copies it before `pool_specs()`); `BurstCannonMount` and `RocketBatteryMount` multiply their sizing period by it, every other mount is untouched (bit-identical). The fortress's five battery slots author 0.6, equal to `SpaceFortressConfig.critical_cooldown_factor` (a row pins the scene value to the config value). Phase 12 / 18 hosts that cut a mount's cooldown later author the same factor.
+- `FortressBrain.attack_gate()` is the zero-argument `telegraph_gate` (cap `max_concurrent_attacks` 2, `critical_max_concurrent_attacks` 3, both in the new flat config group `Batteries`); `attacking_count()` is public. `_set_attacks()` in `on_boss_phase()` cuts each live battery mount's `cooldown_seconds` by `critical_cooldown_factor` once (guarded) on the instanced nodes. The root builds the mounts in `_ready()` after `bind()`.
+- **`phase_snapshot()[&"attacks"]` is now a six-element array** `[cooldown_factor, max_concurrent_attacks, spoke_count, spoke_period, core_ring_armed, core_ring_period]`; t7 fills the first two, the rest are `0, 0.0, false, 0.0` until t16 (which must replace them, not append). The §25 row in `test_space_fortress.gd` now builds the `attacks` key but exempts `shields_exposed`'s declared ATTACKS change (its spokes are t16's: the battery fields do not change there); t16 removes the exemption.
+- **The fortress is the second bounded persistent-ordnance exception** (after the Ph10 Heavy Gunship) to "persistent-ordnance enemies stay out of `ENEMIES_CLEARED` sections": its `ROCKET_BATTERY` pools are `persist_after_owner_death`, so a rocket outlives the fortress by at most its `max_time` (read from the rocket scene), tail after death = `death_duration` + that. Recorded in `space_fortress/ENEMY.md`; t10 adds the `test_engagement_deadline.gd` allowlist row.
+- Straight north / south / east of the ring are covered by no corner mount (the 100° arcs leave gaps; the sweep covers 140° about +x): that is the diagonal-crossfire design, not a bug; rows place the player on a diagonal. Rows hand-tick the **brain** (not `_physics_process`) so the hull's facing rule never turns the lanes, and return each fired round to its pool at its own `max_time` (a hand-ticked round never flies).
+
+### Phase 11, built in t16
+- **The geometry weapons as built** (no deviation from plan §2.7.2–§2.7.6): `HullBeams/Spoke0..3/Beam` (`fortress_spoke_beam.tscn`), `PulseRing` (`fortress_pulse_ring.tscn`) and `CoreRingPool` (built in code in `SpaceFortress._ready()`, size `SpaceFortress.core_ring_pool_size(cfg)` = 72) are bound to the brain by `FortressBrain.bind_geometry(host, spokes, ring, core_pool, owner_group)`; config group `Geometry weapons` (`spoke_count` / `critical_spoke_count`, `spoke_period` / `critical_spoke_period`, `ring_period` / `critical_ring_period`, `core_ring_*`). Accessors `spoke_beams()`, `pulse_ring()`, `core_ring_pool()`; countdowns `spoke_countdown()` / `ring_countdown()` / `core_ring_countdown()`. `FortressBrain.tick_fades(delta)` is what `SpaceFortress._physics_process` (a `super` call, then the fade tick while `is_ai_suspended() or is_emp_disrupted()`) uses to finish a cancelled FADE.
+- **The volley spin is edge-triggered**: the brain remembers only the spokes its `start()` moved to TELEGRAPH and calls `begin_spin(0)` when one turns ACTIVE, `end_spin()` when none is ACTIVE; a hand-started `begin_spin()` is never ended by it. Phase 12 / 18 hosts that spin a hull for their beams follow the same rule.
+- **Measured Assault density is far under both ceilings** (worst: `critical` 8.2 rounds/s, 23 per 2 s, against 13.3 / 30), so no lever was pulled; the planned 14.5 /s bound assumed every mount in arc and range at once. Escort rounds are excluded (t8 records them beside it).
+- Tests: `test_space_fortress.gd::_mover_spawn` now silences the geometry weapons by default (`QUIET_GEOMETRY`, periods 1e6 on the private config): a later movement row that wants them passes `quiet_geometry = false`. `test_fortress_weapons.gd::_ladder_to` now returns when the target phase was already reached, and `_expire` also returns core-ring rounds (tracked from `CoreRingPool._active`, life 11.43 s). The t7 idle row counted a telegraph on the tick the brain enters HOLD (a random-scan flake); it now counts only ticks that end unengaged. The legacy `test_station_laser_phase.gd::test_beams_stop_and_do_not_outlive_the_station` sampled the beam cycle after a fixed 1.0 s wall-clock wait and failed whenever frame pacing landed it in the warn window (always when run alone, also on a clean HEAD); it now waits, bounded at 3 s, for a lethal beam (t11 deletes the file).
+
+### Phase 11, built in t8
+- **The three bays as built** (plan §2.8): `Hangar/Bay` `hangar` (PERIODIC, `active_from_phase` `shields_exposed`, `first_delay` 2, `opens_part`, `door_seconds` 0.8, `open_hold_seconds` 2.0, swarm drones), `ShieldNorth/Bay` `north_defenders` (ON_SECTOR_LOSS over `battery_artillery`, `battery_missiles`, `hangar`; 2 fighters) and `ShieldSouth/Bay` `south_defenders` (over `battery_spread`, `battery_pulse`, `battery_sweep`; 2 gatling interceptors), each with a `Mouth` just outside the hull. The root's `BossReinforcements` takes the config's `escort_cap_open_space` 6 / `escort_cap_assault` 4 (the field names t5 chose; the plan's `escort_live_cap` / `assault_escort_live_cap` were never built).
+- **`ReinforcementBay` gained `assault_count` / `assault_period` (-1 = same as `count` / `period`), with `count_for(assault)` / `period_for(assault)`**: the hangar launches 3 drones every 12 s in Open Space and 2 every 14 s in Assault (plan §2.8 table), which one `count` / `period` could not express. Default -1 changes no earlier bay. Phase 12 / 18 bays that differ by mode use the same two exports.
+- **`BossReinforcements.surge()` now returns the count queued (0 for a dead or unknown bay or a count of 0) and `activated_bay_ids()` was added** (the §25 `reinforcements` key is `[activated_bay_ids(), the surge queued on entering this phase]`). The surge is `FortressBrain._set_reinforcements()` on `critical` entry with the new config field `hangar_surge_count` 4; the hangar bay authors no `assault_launch_limit` (the t2 follow-up: `surge()` obeys that limit).
+- **The Assault fighter pair meets the plan's 3 s through `ReinforcementBay.config_overrides`** (a `Dictionary` export, config field -> value, written by `BossReinforcements._apply_overrides()` on each escort's private config copy before it enters the tree; a key the config lacks is ignored; the shared `.tres` is never written). The north bay authors `flank_wait_max` and `lead_wait_max` 0.4 (shipped fighter 2.0 / 3.5): the first round of a bay-launched pair lands ≈ 2.35 s after launch (3.9-4.5 s on the shipped waits), a gatling pair ≈ 1.8 s; both are gated at 3.0 s (`FIGHTER_FIRST_FIRE`, `GATLING_FIRST_FIRE`). The shipped fighter config and the level-1 fighter gates are untouched. Phase 12 / 18 bays use the same export.
+- **Tests:** `test_fortress_reinforcements.gd` (rows 1-6 and 8; the ENEMIES_CLEARED row runs in the Assault harness only: the end condition is the Assault director's); row 7 is in `test_space_fortress.gd` (`BUILT_KEYS` now has all six keys, `test_each_phase_still_changes_two_things_with_the_hangar_dead`). The hangar real-hit row feeds `HurtBox._on_area_entered` with a real `HitBox` so the sector bubble is asked first.
+- **Gate-time cost of t8 is +0.67 s** (two-run means, 221.745 → 222.41 s), after the first attempt's +2.2 s was cut (see `tests/README.md` → Gate time). The ENEMIES_CLEARED row of `test_fortress_reinforcements.gd` no longer waits for the director's 0.2 s settle (it asserts the section's container holds only explosion particles once the fortress is freed); `test_boss_reinforcements.gd` row 11 owns the real advance. `test_fortress_weapons.gd::test_assault_fires_nothing_until_enter_ends` no longer counts the telegraph of the tick that enters HOLD (a 1-in-10 flake on the t16 tree).
+
+### Phase 11, built in t9
+- **Built as §2.9 describes**, 22 PNGs in `assault/assets/sprites/enemies/space_fortress/`: `fortress_hull.png` 384 × 384; five battery bases + wrecks 44 × 44
+  (`battery_<spread|pulse|artillery|missiles|sweep>[_wreck].png`); `hangar_closed` / `hangar_open` / `hangar_wreck` 36 × 56; `generator_closed` / `generator_open` /
+  `generator_wreck` 52 × 52 (shared by both generators; the south `Sprite` is `flip_v` so the emitter fin faces outward); `core_plated` / `core_open` / `core_wreck` 88 × 88;
+  `thruster.png` 16 × 24 (four `Sprite2D`s `Thrusters/Thruster0..3` on the rim at 67.5 / 112.5 / 247.5 / 292.5°, r 184, plume outward); `critical_overlay.png` 384 × 384
+  (`CriticalOverlay/Overlay`, ≈ 3 % of the canvas, under the parts). Every part `Sprite` and the hull are at scale 1; the station PNGs are gone from `space_fortress.tscn`.
+  The t3 mount heads were looked at on the new bases and kept unchanged.
+- **New export `SpaceFortress.hangar_open_texture`** (the third hangar door state; plan §2.9 named it only as "Hangar: closed / open / wreck"). `_ready()` connects
+  `BossReinforcements.door_changed`; `_on_door_changed(bay_id, open)` shows the open art while the hangar's **own** `Bay.bay_id` reports open and the intact art when it
+  closes, never over a wreck, and ignores the generators' bays. No door node (the Carrier's `CarrierHangarDoors` is written by `CarrierHangars`, which the fortress does
+  not use): a texture swap on the existing signal. Phase 12 / 18 bosses with door art can copy the handler; `BossReinforcements` itself is unchanged.
+- **How the art was made:** the hull is a PixelLab `create_map_object` generation at 384 px (high top-down; 4 candidates, the first kept: strictly overhead, red bastions
+  exactly under the diagonal batteries, side sockets at ± 150 px under the sweep battery and the hangar). Above 40 000 px the tool paints a background, removed with
+  `strip-sprite-bg.sh` plus a radial clear of the speckles it left outside r 180. Its north / south sockets sat at r 150, not at the generators' r 120, so a **scripted pixel
+  edit** (a throwaway headless Godot `Image` script, the reviewed plan's allowance) continued each ring band across them from just outside the housing and painted empty
+  generator wells at (0, ±120); the result was re-checked at 2× and in composites. Every other texture is **hand-drawn through `pixelart_workbench draw`** (the Ph10 t9 route:
+  exact hurtbox sizes and strictly top-down by construction) in the hull's own sampled palette. Each was looked at at 3–6× and in composites at in-game layout (intact,
+  shields_exposed, core_exposed, critical with thrusters and overlay, all wrecked).
+- **Tests:** `tests/integration/test_fortress_sprites.gd` (12 functions: every file's size / corners / 15 % < opaque < 90 %, the overlay's own light-layer row, hull and part wiring
+  with the art the size of each hurtbox, wreck swaps, five distinct batteries, the hangar's three states through the signal and through the real `surge()` + `tick()` door
+  cycle with the wreck boundary, shutters and plating with the wrecked-core boundary, thrusters outside r 176 pointing outward, and a `SceneState` walk proving no station PNG).
+
+### Phase 11, built in t10
+- **Level 1's `station_assault` holds the Space Fortress** (`b.space_fortress().at(0, -230)`, no delay, no move, timeout 180 -> 240 s, Ph11 owner choice 5). Pinned by `test_station_assault_section.gd`; `test_level_1_sequence.gd` kills the real fortress through `destroy()` (two batteries, both generators, the core).
+- **The plan's "advances within `death_duration` + 0.5 s of the core's death" does not hold as written**: after `_finish_death()` frees the hull, the final blast's `CPUParticles2D` (`ExplosionEffect.lifetime` 0.5 s) stay in the enemy container, and the director then settles 0.2 s, so the measured advance is about 0.94 s at `death_duration` 0.2. `test_level1_fortress_section.gd` asserts `death_duration` + the fortress's own `ExplosionEffect.lifetime` + the 0.2 s settle + 0.25 s margin instead. No code changed; the container is not drained earlier.
+- **The persistent-ordnance allowlist row lives in `test_engagement_deadline.gd`** and does not reuse `_persisting_pools()` (a private helper of `test_level1_specialist_spawns.gd`, which reads a mount scene off-tree): it instantiates each ENEMIES_CLEARED spawn in an Assault world and reads every built `BulletPool`, so the same row covers Heavy Gunship and Fortress with one rule. The Heavy Gunship's rocket term stays in its own rows.
+
+### Phase 11, built in t11
+- **The legacy space station is gone**: `assault/scenes/enemies/space_station/`, `WaveBuilder.space_station()` / `SPACE_STATION`, `station_core.png`, `station_turret.png`, `station_turret_destroyed.png` and the station test files. `test_station_death_sequence.gd` → `test_boss_death_sequence.gd` and `test_station_incoming_damage_paths.gd` → `test_fortress_incoming_damage_paths.gd` (re-pointed at the fortress); `test_space_station.gd`, `test_station_laser_phase.gd`, `test_station_gunnery.gd`, `test_station_reinforcements.gd` deleted (their intent lives in the fortress suites). Fortuna's `open_space/scenes/mission_*/space_stations/` untouched.
+- **§2.11's "a layer-1 root would block it" holds for a plain body, not for the fortress**: the fortress has a second guard, `is_laser_blocking()` false (`BeamBehavior` stops only on a body that does not answer false). So `test_fortress_incoming_damage_paths.gd` pins that a layer-1 fortress still lets the beam through, and the boundary is a plain layer-1 `StaticBody2D` with the hull's r 176 circle, which cuts the beam at the near edge.
+- **The slowest shipped enemy-bullet source is now the fortress core ring, 210 px/s** (was the station gunnery's 150 px/s fallback): the derived `enemy_bullet.tscn` `max_time` is `ceil(2274.06 / 210) + 2` = 13 s (was 18 s); the shipped 18 s / 2400 px are unchanged and now have 5 s of headroom. A future source slower than 210 px/s fails `test_the_slowest_shipped_speed_source_is_the_fortress_core_ring_at_210`.
+- `test_engagement_deadline.gd`'s Assault-source EMP scan reads every `global/boss/*.gd`, every `space_fortress/*.gd` and `space_fortress.tscn` (the bay payloads are authored there) instead of `station_reinforcements.gd`.
+- `tests/helpers/fixture_modular_host.tscn` now uses `space_fortress/battery_spread.png` / `battery_spread_wreck.png`; `test_enemy_module.gd`'s `WRECK_TEXTURE` follows.
+
+## Phase 11 - as built (2026-11-24)
+
+Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md`. Dossier: `docs/epics-done/cmug256so0031m52wbxomst72/`. Per-task detail is in the *Phase 11, built in tN* notes above; this section is the summary.
+
+### What was built
+- **Shared boss machinery in `global/boss/`**: `BossPhase` / `BossPhaseDriver` (one-way ladder; a gate asserts every non-start phase changes at least two of movement, attacks, vulnerable, arena, reinforcements, visuals), `ShieldSector`,
+  `ReinforcementBay` / `BossReinforcements` / `EscortContainer` (escorts launched from live parts into a `<boss>Escorts` sibling container, announced with `EventBus.boss_escort_spawned(escort, boss)`, paid by `ScoreTracker` at `score_value` x combo only),
+  `BossDeathSequence`. Free of fortress names; Ph12 and Ph18 reuse them.
+- **The Space Fortress** (`assault/scenes/enemies/space_fortress/`, `WaveBuilder.space_fortress()`): armoured r 176 ring hull, nine parts (five batteries, hangar, two shield generators, core), phases `batteries` -> `shields_exposed` ->
+  `core_exposed` -> `critical`, weak-side facing and spins, Open Space combat-zone repositioning, Assault vertical hold, hull spokes / ring pulse / core bullet ring, three reinforcement bays, 22 PNGs, level 1's `station_assault` (240 s), hub draw 21.
+- **Two new mount variants** (`SPREAD_CANNON`, `RAPID_PULSE`), **EMP on structures** (turrets, fence posts, generators), `StateLight.SHIELDED`.
+- **The legacy space station is retired** (code, `WaveBuilder.space_station()`, three PNGs, seven test files); its test family is migrated to the fortress. Fortuna's `space_stations/` mission data is untouched.
+
+### Ph11 owner choices as built
+- **Ph11 owner choice 1:** the legacy station is retired, not kept beside the fortress (t11).
+- **Ph11 owner choice 2:** phase 2 (`shields_exposed`) starts at 2 destroyed batteries; one is not enough (t5).
+- **Ph11 owner choice 4:** escorts die with their boss (scuttled when its death starts) and keep the score they pay when shot (t2, t8).
+- **Ph11 owner choice 5:** level 1's `station_assault` keeps its internal name and gets `enemies_cleared_timeout` 240 s (t10).
+- **Ph11 owner choice 6:** `emp_factor` 0.4 scales every EMP source on the fortress; a no-op while dying (t5).
+- **Ph11 owner choice 7:** EMP on structures (turrets, fence posts, shield generators) is added; the bonus drone deliberately keeps its legacy process-disable freeze (t12).
+- **The fortress is the second bounded persistent-ordnance exception** in `ENEMIES_CLEARED` (after the Ph10 Heavy Gunship): its `ROCKET_BATTERY` pools persist, tail = `death_duration` + rocket `max_time` (8.4 s); `test_engagement_deadline.gd` allowlists exactly {Heavy Gunship, Space Fortress}.
+  One `<boss>Escorts` child is all the escorts add to the section.
+
+### Deviations from the plan
+- The section advances about `death_duration` + 0.9 s after the core dies, not within +0.5 s (final-blast particles plus the director's 0.2 s settle) (t10).
+- A layer-1 fortress root still does not block the mining laser (a second guard, `is_laser_blocking()` false); the boundary is a plain layer-1 body (t11).
+- The slowest shipped enemy-bullet source is now the fortress core ring, 210 px/s; the derived `max_time` is 13 s, the shipped 18 s / 2400 px stay with headroom (t11).
+- `ReinforcementBay` gained `assault_count` / `assault_period` and `config_overrides`; `BossReinforcements.surge()` returns the count queued; escort caps are the config's `escort_cap_open_space` 6 / `escort_cap_assault` 4 (t8).
+- Measured Assault density is far under the ceilings (critical 8.2 rounds/s, 23 per 2 s, against 13.3 / 30); no lever pulled (t16).
+
+### Gaps left for later phases
+- Nothing was play-tested; every tuning number marked *judgement* in the plan is a starting value.
+- Carrier hangars and Heavy Gunship phases are not on `BossReinforcements` / `BossPhaseDriver` (Ph18); Dreadnought (Ph12) is the next consumer of `global/boss/`.
+- Enemy beams / rings still do not damage parts; wrecks do not block line of sight; no capital wreck on death (Ph18 / Ph19).
+- Escort cleanup in Open Space is only the live cap (Ph13 / Ph14); boss / part HUD, per-part score and audio (Ph17); difficulty tiers (Ph16); EMP does not drop sector shields (Ph18).
+
+## Phase 12 - Enemy rework, phase 12: Dreadnought hunting boss (2026-11-25)
+
+Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 1), built on that directory's `1-context.md` / `2-research.md`. These are *planned* decisions; check this phase's *as built* section, once written, before relying on them.
+
+### Changes to earlier decisions
+- **Ph11 convention "a boss's reinforcements come out of a bay on a live part and stop when that part is destroyed" gains an opt-in exception:** `ReinforcementBay.Trigger.ON_OWN_DESTROYED`
+  (appended). On its own part's destruction an activated bay queues one launch, runs its door cycle on the wreck (the part's `Light` CHARGING, back to OFF), launches from its `Mouth`, then
+  dies for good. One chance: refused by the live cap or the Assault limit = spent, no retry. `tick(delta, false)` holds it; the host's death (no more ticks) launches nothing. Every other
+  trigger is bit-identical (Ph12 owner choice 2 default).
+- **A boss may run more than one phase ladder:** the Dreadnought has two ordinary `BossPhaseDriver` nodes (`PhaseDriver` hull track, `EngineDriver` engine track) because its destruction
+  order is free; `BossPhaseDriver` itself is unchanged and stays one-way. `test_boss_phase_rules.gd` already sweeps every driver of a boss. `BossReinforcements` still binds one driver.
+- **A boss need not lock parts:** the fortress's "locked until phase N" was a fortress choice; the Dreadnought starts every part vulnerable and protects core and engines with a
+  `ShieldSector` bubble instead (IDEAS §9 "the player can choose what to disable first").
+- **Ph11's "Later bosses measure density the same way" applies**: Dreadnought-owned launches mean ≤ 13.3 /s, peak ≤ 30 per half-open 2 s window, ≤ 2 committed attacks (3 in `critical`
+  or `crippled`), measured in every phase state, hand-ticked rows counting launches.
+
+### Names and places later phases build on
+- **Dreadnought** (`assault/scenes/enemies/dreadnought/`: `Dreadnought` root `BaseEnemy`, `DreadnoughtBrain`, flat `DreadnoughtConfig`; `WaveBuilder.dreadnought()` / `DREADNOUGHT`):
+  armoured hull (Ph10 "one hull rule per boss": the armoured one; root layer 0 / mask 0; death = the core part's), body / hurtbox / contact `RectangleShape2D` 208 × 448, nose local +y,
+  port local +x. Parts under `Modules`: `torpedo_tube`, `missile_rack`, `broadside_port`, `broadside_starboard` (WEAPON), `shield_generator` (WEAK_POINT), `core` (CORE), `engine_port`,
+  `engine_starboard` (ENGINE). Phases: hull track `hunting` → `critical` (core ≤ 0.35); engine track `twin_engines` → `listing` (1 engine) → `crippled` (2). The root forwards
+  `DreadnoughtBrain.on_boss_phase(track, phase_id)` with track `&"hull"` / `&"engines"`. `phase_snapshot()` keeps Ph11's six keys from phase-driven fields only.
+- `DreadnoughtBrain.Phase { IDLE, NOTICING, RETURNING, ENTER, HUNT, LINE_UP, WIND_UP, CHARGE, RECOVER, HOLD }` (append-only). **Heading model:** velocity along the nose, the heading
+  turned by the brain at per-side rates (a lost engine makes the live-side turn slow, adds a yaw bias and a drift toward the dead side), measured on the path, never the sprite.
+  Jets burst-turn; broadsides hold fire while it runs. Crippled = HOLD, rotation by thrusters only, no ram. The ram is the Ram Corvette cycle on the boss, critical with ≥ 1 engine only,
+  ram damage written on the contact box during CHARGE only (the Ram Corvette `exposed_collision_damage` precedent).
+- **`RocketBatteryMount.fan_count` (1) / `fan_spread_deg` (0)**: a salvo step fires a fan; 1 / 0 bit-identical.
+- **`TurretMount.Variant.TORPEDO_TUBE` (= 9, appended)**, `TorpedoTubeMount` on a standalone scene, firing **`energy_torpedo.tscn`, an `EnemyOrdnance` PURSUIT_BOMB scene** (3 HP, steers
+  3 s, shot down by the player) — the torpedo is ordnance, not a new rocket kind.
+- **`EngineWake extends HazardField`** (`assault/scenes/hazards/engine_wake/`): a 3 s stress puff, damage radius = drawn radius, no damage in its last 0.5 s, `set_owner_group()`,
+  `set_scale_factors()`. **`HazardField.damage_exempt_group` / `Hazards.pulse_damage(..., exempt_group := &"")`** (default bit-identical). The Dreadnought spawns puffs every 48 px behind
+  each live engine while engaged; they hurt the player and other enemies, never its owner group (Ph12 owner choice 3 default).
+- Interceptors: a `Bay` (`ON_OWN_DESTROYED`, Gatling Interceptor pair) on each weapon part; caps 6 Open Space / 4 Assault.
+- Detach: a destroyed part keeps a smaller wreck-stump texture and flings one `DebrisFragment` chunk (`dreadnought_chunk.tscn`, `source` = the boss). Not cover; Ph19 owns LOS wreckage.
+- Hub: draw 22, 4200 ring at 135°, hunt leash 1400 round `patrol_anchor` (levers: bearing ± 22.5°, ring 4200–4800, leash → 1100).
+- Test helper `tests/helpers/dreadnought_fixture.gd`; suites `test_dreadnought.gd`, `_movement`, `_weapons`, `_wake`, `_ram`, `_reinforcements`, `_sprites`, plus `test_engine_wake.gd`.
+
+### Conventions
+- A boss whose destruction order is free expresses it as several ordered tracks, never as an unordered ladder; each track's phases obey §25 on their own and a path where a declared
+  change cannot happen (critical on a crippled hull: no ram) gets its own ≥ 2-changes row.
+- A capital ship's "lopsided after engine loss" is a path property (turn rates, bias, drift) tested on positions; the Carrier's facing sag is not the model to copy.
+- Gate time: Phase 12 starts with a gate-room task freeing ≥ 12 s; allotments total 13.8 s; escalate past a 237 s two-run mean or 1.5× an allotment.
+
+### Deferred
+| Item | Deferred to | Reason |
+|---|---|---|
+| Placing the Dreadnought in a level (its rack / tube pools persist: an `ENEMIES_CLEARED` placement would be a third allowlisted exception) | Ph15 | Ph12 owner choice 4 default; Assault level migration |
+| Enemy beams / rings vs parts; LOS wreckage; a capital wreck on its death | Ph18 / Ph19 | earlier deferrals stand |
+| Carrier / Heavy Gunship on the boss machinery (they may reuse `ON_OWN_DESTROYED` and multi-track ladders) | Ph18 | |
+| Encounters with the Dreadnought, escort leash beyond the cap | Ph13 / Ph14 | |
+| Difficulty tiers; boss HUD, per-part score, audio | Ph16 / Ph17 | |

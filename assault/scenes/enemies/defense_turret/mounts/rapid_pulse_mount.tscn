@@ -1,0 +1,32 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/mounts/burst_cannon_mount.gd" id="1_rpm"]
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_bullet/rounds/pulse_round.tscn" id="2_rpm"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/turret_head_rapid_pulse.png" id="head_tex"]
+
+[node name="RapidPulseMount" type="Node2D"]
+script = ExtResource("1_rpm")
+charge_seconds = 0.3
+burst_count = 10
+burst_gap = 0.07
+round_speed = 340.0
+round_scene = ExtResource("2_rpm")
+pellets = 1
+pellet_spread_deg = 0.0
+turn_rate = 2.6
+fire_range = 760.0
+lead_blend = 0.6
+fire_cone_deg = 8.0
+scan_arc_deg = 90.0
+scan_speed = 0.4
+cooldown_seconds = 2.6
+
+[node name="Muzzle" type="Marker2D" parent="."]
+position = Vector2(28, 0)
+
+[node name="Head" type="Sprite2D" parent="."]
+show_behind_parent = true
+rotation = -1.5707964
+texture = ExtResource("head_tex")
+centered = false
+offset = Vector2(-32, -32)

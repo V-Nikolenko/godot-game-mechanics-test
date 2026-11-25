@@ -56,6 +56,9 @@ var _container: Node
 var _recycle_calls: Dictionary = {}
 ## In-flight bullets whose `expired` has fired and whose deferred _recycle has not run yet.
 var _expired_pending: Dictionary = {}
+## True once this pool has reported running dry. A refused shooter asks again every tick, so only the first refusal warns (later ones
+## only under `--verbose`, the per-frame print rule).
+var _warned_exhausted: bool = false
 
 func _ready() -> void:
 	# Resolve the active container: pool's parent is the ship,
@@ -75,10 +78,13 @@ func _prewarm() -> void:
 		_idle.append(bullet)
 
 ## Returns an idle bullet placed at spawn_pos, already reset and enabled.
-## Returns null and logs a warning if all bullets are currently in flight —
-## increase pool_size on the owning ship if this fires regularly.
+## Returns null if all bullets are currently in flight, with a warning the first time this pool runs
+## dry (every time under `--verbose`) — increase pool_size on the owning ship if it shows in play.
 func acquire(spawn_pos: Vector2) -> Node:
 	if _idle.is_empty():
+		if _warned_exhausted and not OS.is_stdout_verbose():
+			return null
+		_warned_exhausted = true
 		push_warning("[BulletPool] Pool exhausted (%s) — increase pool_size" \
 				% bullet_scene.resource_path.get_file())
 		return null
@@ -122,9 +128,9 @@ func _recycle(bullet: Node) -> void:
 ## acquire() keeps working only while _idle is non-empty.
 ##
 ## Called by _exit_tree(), and directly by a ship that must stop being dangerous
-## before it leaves the tree. StationGunnery._stop() uses it on the boss's death:
+## before it leaves the tree. `FortressBrain.silence()` uses it on the Space Fortress's death:
 ## the wreck lingers for its death sequence, so _exit_tree() no longer fires at
-## the moment of death and a dead station would otherwise keep a full ring of
+## the moment of death and a dead fortress would otherwise keep its core bullet ring of
 ## live bullets in the air.
 func cancel_active() -> void:
 	for bullet: Node in _active:

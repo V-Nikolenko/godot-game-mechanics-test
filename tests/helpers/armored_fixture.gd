@@ -1,4 +1,4 @@
-## A hull that deflects (hit-blind `is_armored()`, like the space station's core) with one
+## A hull that deflects (hit-blind `is_armored()`, like the Space Fortress's armoured hull) with one
 ## `ArmorPlate` in front, for tests/integration/test_armor_query.gd. Declares NO `homing_point`
 ## — that is the control for "a target without the method behaves as before". No `class_name`:
 ## test-only. Build with `make()`.

@@ -17,7 +17,7 @@ project boot.
 | `integration/` | Several systems wired together (the player damage chain), plus project-wide integrity checks over the resource files themselves. |
 | `helpers/` | Shared fixtures. **Never** named `test_*`, or GUT tries to collect them as tests. |
 
-## The exceptions: the integrity tests, the space-station tests, the module unlock gate, and the enemy contact-damage invariant
+## The exceptions: the integrity tests, the boss tests, the module unlock gate, and the enemy contact-damage invariant
 
 `integration/test_resource_uid_integrity.gd` is **not** characterization. It asserts invariants
 that must hold, so a failure there is a regression to fix, not a quirk to document. It checks six:
@@ -89,7 +89,7 @@ scene that has lost:
   `[gd_scene format=3]`, and every `[ext_resource … uid="uid://…" path="res://…"]` loses its
   `uid=`. A tool named *update project UIDs* deletes them.
 - **every comment.** The `.tscn` files in this project carry load-bearing prose — why `BulletPool`
-  must be a direct child of `SpaceStation`, why `node_paths=` is required — and a resave drops all
+  must be a direct child of the entity root, why `node_paths=` is required — and a resave drops all
   of it with no diff to review beforehand.
 
 On a scratch clone it rewrote 111 of 155 files that way, and it also could not compile scripts that
@@ -124,7 +124,7 @@ line, the summary reports a smaller `Scripts` count, and GUT still prints
 `---- All tests passed! ----` and **exits 0**. The gate only reads the exit code and greps for a
 failing-test count, so neither signal fires: a test file broken by a rename or a deleted symbol
 used to vanish from the suite while the gate stayed green. That is what happened to
-`test_space_station.gd` while it was being written — the red was read off stderr, not off GUT's
+the (since retired) space station's test file while it was being written — the red was read off stderr, not off GUT's
 verdict.
 
 The check therefore lives inside the suite, where every runner sees it rather than only the gate
@@ -221,8 +221,8 @@ convention that enemy stats live in the `.tres` and are applied in `_ready()`.
 It exists because every `BaseEnemy` subclass's `.tscn` authors a `ContactHitBox` node with a
 hardcoded `damage = 20` and no way to read `config` — that only exists at runtime — so every
 enemy that wants its configured `collision_damage` has to re-apply it in `_ready()` off
-`contact_hit_box` — `bomber.gd`, `fighter.gd`, `ram_corvette.gd`, `gunship.gd` and
-`space_station.gd` all do this, and `razor_drone.tscn`/`swarm_drone.tscn` author a
+`contact_hit_box` — `bomber.gd`, `fighter.gd`, `ram_corvette.gd`, `heavy_gunship.gd` and
+`space_fortress.gd` all do this, and `razor_drone.tscn`/`swarm_drone.tscn` author a
 different scene default (30) instead. Miss the re-apply and the `.tres` field is simply dead: it
 parses, the enemy works, and the only symptom is a number nobody can see. The `Gunship` shipped
 that way — `collision_damage = 30` ignored, so the heaviest ship in the roster rammed for 20 —
@@ -238,7 +238,7 @@ Three things to know before extending it:
   authors no `ContactHitBox` node at all, *and* its config asks for 0. Flipping the `.tres` to a
   non-zero value without touching the scene fails the test rather than silently doing nothing.
 - **Only DIRECT children are searched for the HitBox.** Bullets carry their own, but they live
-  under the enemy's `BulletPool`, and the station's turrets live under `Turrets`.
+  under the enemy's `BulletPool`, and a modular boss's parts live under `Modules`.
 
 `integration/test_contact_hitbox_geometry.gd` is the seventh invariant test, and the companion to
 the one above: that file polices what a contact `HitBox` *deals*, this one polices what it
@@ -276,16 +276,16 @@ entity-local rect must **cover** the body `CollisionShape2D`'s, within 1.0 px pe
 
 The rule it states: **armour is a damage rule on a full-size hurtbox, never an absent hurtbox.** A
 shrunken hurtbox leaves visible hull that swallows shots and reports nothing — which the player
-reads as a broken gun, not as armour. It came out of the question of whether the space station's
+reads as a broken gun, not as armour. It came out of the question of whether the (since retired) space station's
 core hurtbox should narrow from 240 to 88 px wide; that was rejected (25 % of the boss's visible
 width dead in phase 1, 66 % in phase 2, on a rotating hull), and
-`test_the_88x240_proposal_fails_this_sweep` applies the exact proposal to a live station instance
-and asserts it fails, so the decision is a gate rather than a paragraph someone re-litigates.
+`test_shrinking_the_fortress_hull_hurtbox_to_the_core_fails_this_sweep` applies the same proposal to a live Space Fortress (its hull
+hurtbox shrunk to the core's circle) and asserts it fails, so the decision is a gate rather than a paragraph someone re-litigates.
 
 Four things to know before extending it:
 
-- **Enforced relation is `HurtBox ⊇ body CollisionShape2D`, not `HurtBox ⊇ sprite`.** The station's
-  body collider is 240x240 under a 256x256 sprite, so 8 px per edge of visible hull is outside
+- **Enforced relation is `HurtBox ⊇ body CollisionShape2D`, not `HurtBox ⊇ sprite`.** The retired station's
+  body collider was 240x240 under a 256x256 sprite, so 8 px per edge of visible hull was outside
   *both*. Do not mistake this for an art check.
 - **The 1.0 px tolerance is load-bearing from the first line**, not a patch applied after a red
   run: three of the eleven fail a bare `Rect2.encloses()`, two by ~1e-5 px of float noise. It is
@@ -302,63 +302,39 @@ Four things to know before extending it:
   `<dir>/<dir>.tscn` exists that the roster does not list. Top level only — the enemies directory
   also holds loose scripts, and subdirectories hold non-entity scenes (`fighter/states/`).
 
-The whole **space-station family** — `integration/test_space_station.gd`,
-`test_station_assault_section.gd`, `test_station_laser_phase.gd`, `test_laser_ray_hit_mask.gd`,
-`test_station_gunnery.gd`, `test_station_reinforcements.gd`, `test_station_death_sequence.gd`,
-`test_station_incoming_damage_paths.gd`,
-`test_level_1_sequence.gd` and `test_radial_attack_pattern.gd` — are the other exceptions, for a
-different reason: the `space_station` entity, the `station_assault` section, the laser phase, the
-gunnery, the reinforcement spawner, the death sequence and `RadialAttackPattern` are all **new code**, so their tests assert intended behaviour
-rather than pinning existing quirks.
-`test_space_station.gd` carried a documented coverage gap — most of it drives damage by emitting
-`HurtBox.received_damage` directly, so it proved nothing about collision layers, and the section
-tests did not close that. Its last two tests now do, for the bullet path: they instance a real
-`bullet.tscn` and step physics, so the layer/mask chain has to work for them to pass. The first of
-the two is also the load-bearing guard on the station's core-hurtbox decision — it pins that a
-player bullet crosses the armoured core and still kills the turret behind it, so if the still-open
-backlog item about whether the default gun should stop on its first damaging hit
-(`decide-whether-the-player-s-default-gun-should-stop-on-its-f`) is ever actioned, the gate says
-"the station's turrets just became unkillable" at the point of the change.
+The **boss family** — `integration/test_station_assault_section.gd`, `test_laser_ray_hit_mask.gd`, `test_radial_attack_pattern.gd`,
+`test_level_1_sequence.gd`, `test_boss_death_sequence.gd` and `test_fortress_incoming_damage_paths.gd`, plus the Space Fortress's own
+suites (`test_space_fortress.gd`, `test_fortress_weapons.gd`, `test_fortress_reinforcements.gd`, `test_fortress_sprites.gd`, and the
+`global/boss/` rows) — are the other exceptions, for a different reason: the boss, the `station_assault` section, the boss machinery
+and `RadialAttackPattern` are all **new code**, so their tests assert intended behaviour rather than pinning existing quirks. The
+legacy space station and its own seven test files were retired in Phase 11 t11; every invariant they proved is proved on the fortress
+(plan `docs/plans/cmug256so0031m52wbxomst72/3-plan.md` §2.11 maps each file to its replacement).
 
-`integration/test_station_incoming_damage_paths.gd` closes the rest of that gap — the rocket (32)
-and asteroid (1024) mask bits and the incoming mining-laser ray — with the same technique: real
-scenes, stepped physics, and no `received_damage` emit anywhere in the damage path. A real
-`homing_missile.tscn` and `warhead_missile.tscn` take 100 and 50 off the unarmoured core; a real
-`big_asteroid.tscn` parked inside the hull takes 40; the mining laser runs its full 1200 px
-*through* the station and burns it. All four were checked by mutation — setting the default
-`DefenseProfile`'s `97 | 1024` mask to the gunship's raw `65` reds five of the nine tests with
-messages that name the missing bit — and the mask values live in code, not in the scene, so
-mutating the `.tscn` proves nothing.
+`integration/test_fortress_incoming_damage_paths.gd` covers the paths a damage-emitting test cannot — the rocket (32) and asteroid
+(1024) mask bits and the incoming mining-laser ray — with real scenes, stepped physics at 8×, both harnesses, and no
+`received_damage` emit anywhere in the damage path. A real `homing_missile.tscn` (steering to `homing_point()`) and
+`warhead_missile.tscn` cross the armoured hull (`armor_deflected`, root health unchanged) and take 100 and 50 off a battery; a real
+`big_asteroid.tscn` is refused by the hull and takes 40 off a bare battery; the mining laser runs its full length *through* the
+fortress and burns the parts on its line. Rows that must reach a battery first `destroy()` the south shield generator, so the shot
+meets the battery, not its bubble. Three things to know before extending it:
 
-Four things to know before extending it:
-
-- **`beam_dps = 12` is 0.2 damage per physics frame** and `beam_behavior.gd`'s
-  `_accumulate_and_apply` only forwards whole numbers, so the first `armor_deflected` from the
-  mining laser lands around frame **30**. A 4-frame budget passes the beam-endpoint assertion and
-  silently drops the one that proves the beam found the core; that is how the test first ran.
-- **`direct_space_state` may only be queried from a physics frame**, so the beam tests drive
-  `BeamBehavior.tick()` from a small `BeamDriver extends Node2D` that ticks it in its own
-  `_physics_process`. The driver doubles as the behaviour's `state` and as its `actor`; the inner
-  class is deliberately not named `Test*`, or GUT would collect it as an inner test suite.
-- **The laser row's boundary test is the load-bearing one.** `SpaceStation`'s root is layer 0 *on
-  purpose*, and the mask bits are irrelevant to the beam, so
-  `test_a_station_on_the_default_body_layer_would_block_its_own_fight` puts a live station on
-  layer 1 and asserts the beam stops dead at `y = +120` and damages nothing — the rejected
-  configuration applied to a real instance, in the same shape as
-  `test_enemy_hurtbox_geometry.gd::test_the_88x240_proposal_fails_this_sweep`.
-- **A rocket IS consumed by the first hurtbox it overlaps**, unlike a bullet:
-  `homing_missile.gd:47-48` and `warhead_missile.gd:22-23` `queue_free()` on any `area_entered`.
-  On this boss that means a missile fired up a turret lane dies on the armoured core two frames
-  early and no turret ever takes rocket damage. That one test is marked CHARACTERIZED and filed as
-  `rockets-cannot-damage-the-space-station-s-turrets-they-deton`; it also asserts
-  `armor_deflected` fired, because otherwise it would pass just as happily on a station no rocket
-  can reach at all.
+- **`beam_dps = 12` is 0.2 damage per physics frame** and `beam_behavior.gd`'s `_accumulate_and_apply` only forwards whole numbers,
+  so the first damage from the mining laser lands around frame **30**. A short budget passes the beam-endpoint assertion and silently
+  drops the one that proves the beam found a part.
+- **`direct_space_state` may only be queried from a physics frame**, so the beam rows drive `BeamBehavior.tick()` from a small
+  `BeamDriver extends Node2D` that ticks it in its own `_physics_process`. The driver doubles as the behaviour's `state` and its
+  `actor`; the inner class is deliberately not named `Test*`, or GUT would collect it as an inner test suite.
+- **The laser boundary is on a plain body, not on the fortress.** The fortress has two guards against blocking the beam: its root is
+  on layer 0 **and** it answers `is_laser_blocking()` false. So a layer-1 fortress still lets the beam through (that row pins the
+  second guard), and the boundary is a plain `StaticBody2D` on layer 1 with the hull's r 176 circle, which cuts the beam at the near
+  edge — without it the other laser rows would be vacuous. (The retired station had only the layer guard, so its boundary put the
+  station itself on layer 1.)
 
 `integration/test_player_bullet_lifetime.gd` is intent as well, and it is the *other* end of that
-station dependency. It states the two projectile-lifetime rules directly rather than leaving them
+boss dependency. It states the two projectile-lifetime rules directly rather than leaving them
 implied by the boss fight: **(1)** a player bullet is consumed by the first hit that actually
 deals damage, but NOT by a *deflected* one (`bullet.gd::_hit_is_deflected()` duck-types a query
-for `is_armored()` on the hit target) — the premise the station's armoured core rests on, and the
+for `is_armored()` on the hit target) — the premise the Space Fortress's armoured hull rests on, and the
 reason `PierceModule` is finally an upgrade rather than a downgrade — and **(2)** an unpooled
 player bullet frees itself when it leaves the screen, which nothing did before. Its invariant test
 enumerates `WeaponBehavior` subclasses from `ProjectSettings.get_global_class_list()` rather than a
@@ -420,6 +396,15 @@ The harness kills verification at about **300 s wall clock** for import + boot +
 files (summed testcase time from `-gjunit_xml_file`). Run it before and after any task that adds a test that
 awaits or loops, and report both numbers.
 
+**Gate output.** The harness has a second limit: it reads the gate's output through Node's `child_process.exec` with
+the default `maxBuffer`, **1 MiB (1048576 bytes)**, for import + boot + GUT together. A gate that prints more is killed
+near its end and the run fails as `Verification failed`, with no log, while every local gate is green. Phase 10 t5 lost
+three runs to it (1058270 bytes; the t7 close printed 876593). `scripts/gate-time.sh` prints the byte count on its
+`output` line; keep it well under 1 MiB. What fills it is repeated engine warnings, each with its backtrace (≈ 1.2 KB),
+not test prints: a warning that can repeat per tick is a per-frame print and sits behind `OS.is_stdout_verbose()`
+after its first time, as `BulletPool`'s "Pool exhausted" does since t5 (a hand-ticked shooter never lets its rounds
+fly, so its pool runs dry).
+
 **Rules (the only ways time is cut — never by lowering a tick count, duration, sample count or start grid, never by
 widening a bound, never by removing an assertion):**
 
@@ -430,6 +415,22 @@ widening a bound, never by removing an assertion):**
    0.13 game-seconds, so a row that compares against a fixed tolerance tighter than that (a wave's trigger time within
    0.1 s) stays at a lower multiplier rather than widening the tolerance (`test_waves_trigger_on_the_shipped_schedule`
    runs at 4×; `test_level1_specialist_exit.gd` instead derives its tolerance from the largest idle delta it saw).
+   **A CPU-bound replay whose rows read idle-time edges caps the steps instead of scaling them** (Phase 10 t11): with
+   `max_physics_steps_per_frame` at 16 × the default, the lit deep_space slice of `test_level1_heavy_spawns.gd` (≈ 2.4 ms of
+   CPU per tick against the 1.04 ms a 16× tick has) spirals to the 128-step cap, 2.13 game s per idle frame, and every laser
+   edge (a `SceneTreeTimer`, then an animation, both on idle time) reads seconds late. Its lit runs pass `LIT_MAX_STEPS`
+   (16) to `_scale_clock()`: the time scale and tick rate stay × 16, a step is still 1/60 game s, Godot shortens the idle
+   step to the capped steps, idle frames stay ≤ 0.283 game s, and the run is paced by its CPU either way. The row asserts
+   the run's largest idle delta first, so a lost cap reads as that and never as a laser bug.
+   **A file that is paced by the tick rate rather than by CPU may take 16× (Phase 10 t1, below).** Headless Godot sleeps
+   ~6.9 ms per idle frame and a scaled clock ticks 60 × the multiplier times per real second, so a file of light scenes
+   spends most of its wall time waiting for the next tick: `time godot ... -gselect=<file>` shows wall ≫ `user + sys`
+   (`test_enemy_ordnance.gd`: 9.2 s wall, 1.9 s CPU). Such a file gets nearly the whole factor back by `_SPEEDUP := 16`;
+   the Phase 8 / 9 slice replays and `test_mine_layer.gd`'s slices were already there. 16× is the ceiling: an idle frame is
+   then about twice the 8× figure, and a file that is CPU-bound stops gaining (`test_level1_fighter_fire_density.gd`:
+   33.7 s at 8×, 24.4 s at 12×, 19.7 s at 16×, 15.1 s at 24× while it already burns ~0.8 ms of CPU per tick against a
+   1.04 ms budget at 16×). A row with a fixed tolerance stays lower (`test_level1_fighter_exit.gd` fails at 16×: its
+   `waves_complete` row reads 10.25 s against a 10.1 s bound, so it stays at 8×).
 2. **A hand-ticked loop that replays the same scenario in several tests computes it once** (`before_all`, or a memoised
    helper keyed by its inputs) and every test asserts on the shared log.
 3. **Drop per-tick bookkeeping no assertion reads.** In a 3000-tick × 168-layout loop a per-tick `get_node()` or an
@@ -630,9 +631,81 @@ before / after pair here.
 ceiling and 24 s under the plan's 236.5 s forecast: the planned allotments summed to 33.1 s and the phase used 12.4 s of net growth on top of t1's recovery. The largest additions were the two
 memoised corridor exit probes inside t14 (≈ 4.5 s together); every later consumer hits the memo through `tests/helpers/ph8_exit_keys.gd`. Run-to-run noise is about ±1 s. **Phase 9 starts with about 27 s of headroom.**
 
+**Phase 9 per-task allotments** (plan §2.18; new GUT seconds): t1 2.0 · t2 0.5 · t3 0.8 · t4 2.5 · t5 2.0 · t6 0.5 · t7 2.7 · t8 4.0 · t9 2.5 · t10 0.6 · t11 0.8 · t12 0.2 ·
+t13 1.0 · t14 2.5 · t15 0 = 22.6 s; the phase ends ≤ 235.0 s, and a task that would pass 238 s escalates. Record each task's before / after pair here.
+
+| Task | Allotment | GUT before → after | Note |
+|---|---|---|---|
+| t1 player ability lock | 2.0 s | 213.362 → 213.655 s (2634 → 2667 tests; `scripts/gate-time.sh` GUT `Time`, wall 219.8 → 220.2 s; the before measured on a clean `git archive HEAD` copy of 9735b05) | new `test_player_ability_lock.gd`, 27 test functions ≈ 0.85 s on its own: hand-ticked on both real player scenes (≈ 90 ships), H presses through `Viewport.push_input()`, two lockstep rows that await one idle frame; plus 5 `jammer_at` rows in `test_hazards.gd` and 1 in `test_hazard_field.gd`. +0.29 s by the gate figure (inside run noise). No leak lines (`gate-time.sh` exited 0) — but the leak was intermittent: the harness gate then failed on it, and attempt 3 fixed `level1_slice_replay.gd` (*The third half*, below); `verify.sh` after the fix: GUT 213.164 s, 2667 tests, GATE PASS |
+| t2 lock tells (overlay, HUD chip and glyph, audio seam) | 0.5 s | 213.147 → 214.438 s (2673 → 2689 tests; `verify.sh` GUT `Time`; the new file itself runs in 0.7 s, so about 1 s of the delta is run-to-run noise; one earlier run read 216.8 s with a loaded host) | new `test_player_ability_lock_tells.gd` (16 rows, hand-ticked, one awaited frame per HUD instance); `test_event_bus.gd` pins the two new signals |
+| t3 homing rocket lifetime | 0.8 s | 213.655 → 213.147 s (2667 → 2673 tests; `verify.sh` GUT `Time`, within the ±1 s run-to-run noise) | new `test_homing_missile_lifetime.gd` (6 rows, all hand-ticked, no await) and one ownership row in `test_player_bullet_lifetime.gd` |
+| t4 seeking-ordnance retarget hook, hijacked homing rocket | 2.5 s | 213.355 → 214.052 s (2689 → 2714 tests; `scripts/gate-time.sh` GUT `Time`, wall 220.7 s after; the before measured at the start of this task) | +0.7 s, inside the allotment. New `test_seeking_ordnance.gd`, 25 test functions ≈ 1.8 s on its own: hand-ticked rows in both harnesses, real-physics rows (blast on both real player scenes, lure, shoot-down, salvo and crossing guards) at the 8× clock. No leak lines (`gate-time.sh` exited 0) |
+| t5 EMP: player effect, `EmpPulse` targets, enemy hook, seekers | 2.0 s | 214.712 → 215.017 s (2714 → 2738 tests; `scripts/gate-time.sh` GUT `Time`, wall 221.7 s after; the before measured at the start of this task) | +0.3 s, inside the allotment. New `test_enemy_emp.gd` (14 test functions, most in both harnesses, hand-ticked at 1/60; the bullet-kill row on real physics at the 8× clock), 8 rows added to `test_emp_pulse.gd`, one EMP row each in `test_player_ability_lock.gd` / `test_player_boost_disruption.gd`, run on both real player scenes. No leak lines (`gate-time.sh` and `scripts/check-test-leaks.sh` exited 0) |
+| t6 Player EMP Blast re-routed by `answers_emp()` | 0.5 s | 215.017 → 215.367 s (2738 → 2743 tests; `scripts/gate-time.sh` GUT `Time`; before is t5's measured figure; the first attempt measured 216.191 s with the legacy-timer row at 8×; one unrelated flaky failure seen once in the measuring run, green in the leak-check run) | new `test_emp_blast_module.gd`, 5 tests, ≈ 0.6 s alone: bullet row at 8×, rest hand-ticked; the legacy process-disable row runs its `SceneTreeTimer` at `time_scale` 40× (no physics). `check-test-leaks.sh`: no leak lines |
+| t11 EMP zone | 0.8 s | 215.367 → 215.431 s (2743 → 2753 tests; `scripts/gate-time.sh` GUT `Time`, wall 222.2 s after; before is t6's measured figure) | +0.06 s, inside the allotment. New `test_emp_zone.gd`, 10 test functions (8 in both harnesses / both real player scenes), all hand-ticked, no await; the Fighter-bends rows run 4 short APPROACH loops (~0.5 s). |
+| t7 Jamming Structure (three towers, `HazardField.suppress`, rocket skip, corvette downgrade) | 2.7 s | 215.431 → 215.664 s (2753 → 2780 tests; `verify.sh` GUT `Time`; before is t11's measured figure) | +0.23 s, inside the allotment. New `test_jamming_structure.gd`, 16 test functions ≈ 0.6 s alone (both harnesses; the shot-dead lock row on real physics at 8×, the rest hand-ticked); 3 jammer rows in `test_emp_blast_module.gd` (bullet at 8×), 1 in `test_emp_zone.gd`, 1 in `test_missile_corvette.gd`, 2 in `test_hazard_field.gd`, the roster / dual-mode / deadline-guard rows. `check-test-leaks.sh`: no leak lines |
+| t8 Hacker Frigate shell and movement (HOLD_ARC with the nose / route cone penalty, BREAK_OFF, Assault view clamp + budget, hub idle) | 4.0 s | 215.97 → 219.761 s (2780 → 2807 tests; `scripts/gate-time.sh` GUT `Time`, wall 226.7 s after; the before measured at the start of this task) | +3.8 s, inside the allotment. New `test_hacker_frigate.gd` (both harnesses, hand-ticked at 1/60, no await): the cone rows are fresh instances per case with a 2.0 s warm-up; the Assault exit probe (`corridor_starts()`, 2166 runs, ≈ 3.2 s) is memoised through `tests/helpers/ph9_exit_keys.gd`. Roster, tow-table, dual-mode and deadline-guard rows |
+| t9 Hijack Pulse (TELEGRAPH, PULSE, the `HijackPulse` dart, the Disruptor hook) | 2.5 s | 219.817 → 222.304 s (2807 → 2839 tests; `scripts/gate-time.sh` GUT `Time`, wall 229.2 s after; the before measured at the start of this task) | +2.49 s, inside the allotment with almost no margin (run-to-run noise is about ±1 s). New `test_hijack_pulse.gd`, 31 test functions ≈ 2.3 s on its own (≈ 1.7 s of test time): hand-ticked rows in both harnesses with no await, plus four real-physics rows at the 8× clock that are ≈ 1.3 s of it (line of sight with a fixture body and a real wreck, the wreck-then-bullet cancel, the real 18-point blast; their waits are the game time the assertions need: 1.0 s behind the wreck, then the no-PULSE window). One row in `test_enemy_bullet_lifetime.gd`. `gate-time.sh` exited 0: green, no leak lines |
+| t10 Disruptor variant | 0.6 s | 222.304 → 223.323 s (2839 → 2847 tests; verify.sh GUT `Time`, not re-measured with `gate-time.sh`) | +8 tests in `test_hijack_pulse.gd` §23 (hand-ticked both harnesses; one real-physics wreck row at 8x, ≈ 0.3 s) plus roster rows and one dual-mode row. Delta is inside run noise (±1 s) and the 0.6 s allotment is not provably met: a 1.0 s overrun against a 222.3 s baseline of a different run. |
+| t12 Phase 9 art | 0.2 s | 223.323 → 223.383 s (2847 → 2859 tests; `verify.sh` GUT `Time`; before is t10's figure, not re-measured) | new `test_ph9_sprites.gd`, 12 test functions, 0.42 s on its own: no physics, no await, nothing real-physics (scene instances and texture reads only). The whole-suite delta is run noise. |
+| t13 Hub placement (Hacker draw 18, sector + pulsed jammers, EMP zone, sweep C) | 1.0 s | 223.383 → 223.169 s (2859 → 2870 tests; `scripts/gate-time.sh` GUT `Time`, wall 230.3 s; before is t12's figure, not re-measured) | +11 tests in `test_sector_hub_patrol.gd` (draw-18 composition, Hacker group, sweep C and its boundary, no-jammer-in-TacticalSpace, EMP zone radius and gaps, Hacker-vs-jammers, site turret coverage), all scene reads with no physics or await; the whole-suite delta is run noise (the file runs in about 1.8 s alone). |
+| t14 Level 1 placement (Hacker 42.0 s, local jammer 62.0 s in planet_approach; guards; replays) | 2.5 s | 223.575 → 224.17 s (2870 → 2888 tests; `scripts/gate-time.sh` GUT `Time`, wall 231.2 s; `verify.sh` read 225.05 s) | +0.60 s. New `test_level1_ph9_attacks.gd` (3 replays at 16×, about 2.35 s on its own: the Hacker slice stops when its PULSE ends, the jammer slice on the parked fighter's lock, the 1 s-budget boundary on DISENGAGE); +10 rows in `test_level1_specialist_spawns.gd` (the Hacker exit is a memo hit through `ph9_exit_keys.gd`) and +5 in `test_engagement_deadline.gd` (file reads and built sections, no physics). The before run (taken with this task's first test edits in the tree) showed 1 failing test; the after run is all green and leak-free. |
+
+**Phase 10 (modular damage, Heavy Gunship, Carrier) — t1 gate room (2026-11-11, `scripts/gate-time.sh`).** Phase 9 closed at GUT ≈ 225 s against the 240 s ceiling and the Phase 10 plan (§2.15) adds 21.5 s, so t1 had to free ≥ 12 s (target 15) before any other task landed. **GUT `Time` 224.91 / 224.48 s (mean 224.70) → 192.42 / 191.79 s (mean 192.10)**, **−32.6 s** (two `gate-time.sh` runs each way, on the same 2888 tests, 168 scripts and 102034 asserts; the after-runs are green and leak-free, `scripts/check-test-leaks.sh` clean; further plain GUT runs of the final tree read 191.9 – 192.5 s). No tick count, duration, sample count or start grid was lowered, no bound was widened, no assertion was touched and no production code changed: the whole recovery is rule 1 taken from 8× to 16× on seven files that are paced by the tick rate.
+
+| File | Before | After | Means |
+|---|---|---|---|
+| `test_level1_fighter_fire_density.gd` | 32.4 s | 18.3 s | the three measured runs (36 / 109 / 81 s of game time) 8× → 16×; the schedule row stays 4× |
+| `test_level1_specialist_exit.gd` | 10.1 s | 5.1 s | 8× → 16× (its tolerance is the largest idle delta it saw, so it scales with the clock) |
+| `test_bomber.gd` | 8.9 s | 4.7 s | 8× → 16×, every real-physics row counts physics frames |
+| `test_enemy_ordnance.gd` | 7.7 s | 3.8 s | 8× → 16× (wall 9.2 s, CPU 1.9 s before) |
+| `test_enemy_rockets.gd` | 5.1 s | 2.8 s | 8× → 16× |
+| `test_ram_corvette.gd` | 3.8 s | 2.3 s | 8× → 16× |
+| `test_enemy_mines.gd` | 3.7 s | 2.0 s | 8× → 16× |
+
+**How it was found.** `scripts/gate-time.sh` ranks files by summed testcase time (201 s of the 224 s); the other ~23 s sits **outside** any testcase, in `before_all()` probes (below). Wall time against CPU time per file (`time godot ... -gselect=<file>`) then separated the files that compute from the ones that wait: `test_level1_fighter_fire_density.gd` 35.1 s wall / 16.3 s CPU, `test_level1_specialist_exit.gd` 12.6 / 4.9, `test_bomber.gd` 10.2 / 5.0, `test_enemy_ordnance.gd` 9.2 / 1.9. A trial of `_SPEEDUP := 16` on about 30 clock-using files (each run alone) gave: the seven above green and 1.2 – 14 s faster; `test_level1_fighter_exit.gd` red (above); `test_wreck_spawning.gd`, `test_missile_corvette.gd`, `test_support_ship.gd`, `test_seeking_ordnance.gd`, `test_mine_layer.gd`, `test_minefield.gd`, `test_defense_turret.gd`, `test_laser_fence.gd`, `test_twin_laser_drones.gd`, `test_laser_tender.gd`, `test_level1_drone_exit.gd`, `test_armor_query.gd`, `test_enemy_emp.gd`, `test_jamming_structure.gd`, `test_emp_blast_module.gd`, `test_enemy_shield_hits.gd`, `test_sector_hub_patrol.gd` and `test_turret_group.gd` no faster (CPU-bound, or already under 1.5 s); `test_hijack_pulse.gd` green and 0.8 s faster, left at 8× (its real-line-of-sight rows are not worth that). **Not a lever: `application/run/low_processor_mode_sleep_usec` / `override.cfg`.** Setting the idle-frame sleep to 0 makes an idle frame 0.02 ms instead of 6.84 ms and would give back far more, but it changes how many physics ticks sit between two idle frames in every test that awaits a `process_frame`, which is a behaviour change, not a rule 1 speed-up.
+
+**Measured values the 16× clock moved** (all inside the asserted bounds; no bound was changed; seeded but shifting by a frame between runs): `fire_density` deep_space peak shots / 2 s 10.00 (limit 39.06), planet_approach 7.00 – 8.50 (limit 41.67), cloud_descent 8.50 – 11.00 (limit 18.75). The older note that the file's tolerances are tighter than a 16× idle frame refers to its schedule row (`_TRIGGER_TOLERANCE` 0.1 s), which still runs at 4×; the three measured gates compare a peak against a 1.25× ceiling with 1.7× or more headroom and read exits off physics ticks.
+
+**Robustness.** The seven files ran 25 rounds in a row on their own (246 tests, 40.2 – 40.5 s each, all green) and 3 rounds against twelve busy loops (44 – 47 s, all green: they are paced, so contention costs seconds, not correctness). Eight plain full-suite runs and the two `gate-time.sh` runs of the final tree were green. **One** earlier `gate-time.sh` run of the same tree (GUT 192.1 s) reported `1 failing` and its log was lost with the script's temporary directory; the next ten full runs were green, and the failure was not in any of the 25 isolated rounds. If a red run recurs, run `scripts/gate-time.sh` with its `$TMP` kept, or plain GUT with `> log`, to name the row before touching a clock.
+
+**Where the rest of the time is (for the next recovery).** `test_fighter_squad.gd` 45 s (the 168-layout sweep, the fighters' own tick: untouched since Phase 8 t1). Outside any testcase: `test_level1_specialist_spawns.gd`'s `before_all()` ≈ 13.6 s (the corvette corridor probe 4.5 s, the support 2.8 s and the Mine Layer 6.4 s, run standalone), `test_hacker_frigate.gd` ≈ 3.4 s and `test_laser_tender.gd` ≈ 3.3 s (the memoised Hacker, drone and tender probes); a probe run is ≈ 0.5 – 0.9 ms of `instantiate()` + `add_child()` + `free()` plus ≈ 7 – 11 µs per hand-ticked step (the brain ≈ 4 – 8 µs of it), so a cheaper tick (`EnemyWorld.projectile_world_rect()` looks the arena group up twice per call) is the lever there. The start-up before the first test (loading 168 scripts) is ≈ 6.2 s and is not in GUT's `Time`.
+
+**Phase 10 per-task allotments** (plan §2.15; new GUT seconds): t2 2.0 · t3 0.8 · t4 3.5 · t5 2.5 · t6 2.0 · t7 1.8 · t8 2.2 · t9 0.4 · t10 0.8 · t11 3.0 · t12 2.5 · t13 0 = 21.5 s; the phase ends ≤ 192.1 + 21.5 = 213.6 s against the 240 s ceiling (the plan assumed ≥ 12 s back and ≤ 234.5 s). **Noise rule:** run-to-run noise is ±1 – 3 s, so a task compares the **mean of two runs** and its own new / changed files' summed time; it escalates when the two-run mean passes **237 s** or its own new / changed files exceed **1.5× its allotment**. Record each task's before / after pair here.
+
+| Task | Allotment | GUT before → after | Note |
+|---|---|---|---|
+| t1 gate room | frees ≥ 12 s (target 15) | 224.70 → 192.10 s (two-run means; 2888 tests unchanged) | the tables above: −32.6 s, rule 1 at 16× on seven paced files |
+| t2 `EnemyModule` / `ModularHull`, beam and nova reach parts | 2.0 s | 190.39 → 193.17 s (two-run means: 192.226 / 188.557 before, on a clean `git archive HEAD` copy; 193.373 / 192.968 after; 2888 → 2905 tests, 102034 → 102218 asserts; both after-runs green and leak-free) | new `test_enemy_module.gd`, 17 test functions (two in both harnesses), **0.89 s summed testcase time** (1.32 s GUT `Time` alone): seven real-physics rows at the 8× clock (bullets, a warhead, two beam drivers for 2.25 s, two lit `LaserRay`s), the rest hand-driven with no await. The +2.8 s whole-suite delta is mostly run noise (the two before-runs differ by 3.7 s); the file's own time is inside the allotment. Fixture `tests/helpers/fixture_modular_host.tscn` |
+| t3 `TurretMountBuilder`, `traverse_deg`, `HEAVY_CANNON`, `ModularHull.build_mounts()` | 0.8 s | 193.17 (t2 close) → 192.94 s (two-run mean of 192.76 / 193.11 on the final tree; 2905 → 2923 tests, 102218 → 102352 asserts; both runs green) | new `test_turret_mount_traverse.gd`, 14 tests, **0.42 s** (all hand-ticked, no await, no real physics); four new rows in `test_enemy_module.gd` (file 1.34 s, was 1.32 s); a 60 s hand-ticked row (3 600 ticks over six mounts). Whole-suite delta is inside the ±3 s noise. |
+| t4 Heavy Gunship shell, movement and Assault life | 3.5 s | 193.51 (clean `git archive HEAD` copy) → 200.15 s (two-run mean of 200.00 / 200.29 on the final tree; 2923 → 2951 tests, 102352 → 104372 asserts; both runs green) | **+6.6 s, over the 1.5× line (5.25 s); absorbed by t1's surplus, logged in DECISIONS.** New `test_heavy_gunship.gd` ≈ 6.4 s in the suite (7.3 s alone, where its first `level1_slice_replay.placed()` also loads the level-1 scenes, 0.9 s): the memoised corridor exit probe in `before_all()` 3.96 s (2166 runs, `tests/helpers/ph10_exit_keys.gd`; `prepare_probe` strips `Modules` and group `player`, and DISENGAGE is a fast path in the brain) plus ≈ 2.4 s of rows, hand-ticked at 1/60 except the two real-physics rows at **16×** (they wait a count of physics frames). The probe-call sweep parses only files containing `worst_disengage(` (0.68 → ≈ 0 s). Roster / legacy row moves in eleven files ≈ 0.3 s |
+| t4 round 2: review fix, back under the 1.5× line | 3.5 s (line 5.25 s) | 200.15 (round 1; re-measured 200.16 on the round-1 tree) → 198.20 s (two `scripts/gate-time.sh` runs, 198.519 / 197.879, plus a third full run 198.179; 2951 → 2950 tests, 104375 asserts; all green, no leak lines) | **Whole task against the t3 close: 193.51 → 198.20 = +4.7 s, under 5.25 s.** `test_heavy_gunship.gd` in the suite: probe 3.96 → **2.92 s** + rows 2.17 → **1.77 s** = 6.13 → **4.69 s** (+ ≈ 0.3 s of roster / legacy moves ≈ 5.0 s). Probe: the brain caches the exit rect and turn rate on DISENGAGE entry and returns from `tick()` before the budget / break clocks while in DISENGAGE (≈ 6.1 → 4.4 µs per step), and `prepare_probe` also frees `Sprite2D`, `ContactHitBox`, `StateLight` and the body shape (≈ 0.35 → 0.27 ms per run); all 2166 run times compared identical before / after. Rows: the still-player range, broadside and keep-side rows share one 20 s run per mode (they ticked 20 + 20 + 16 s), and the two projectile rows wait until each shot is spent (caps unchanged: 20 / 60 frames) instead of a fixed wait. No assertion, tick count, start set or speed cut |
+| t6 Carrier shell (armoured hull, seven parts, core exposure, movement in both modes) | 2.0 s | 198.50 (baseline at the start of the task) → 199.68 s (two `scripts/gate-time.sh` runs, 199.994 / 199.370 on the final tree; → 2967 tests, 104939 asserts; both runs green) | **+1.2 s, inside the allotment.** New `test_carrier.gd`, 13 test functions (≈ 0.9–1.2 s alone): the projectile / beam / nova windows run once on real physics at 16× on three carriers side by side, concurrently; the rest is hand-ticked. Roster rows added to the contact-damage, contact-geometry, hurtbox-geometry, base-enemy, dual-mode, support-ship and engagement-deadline files. |
+| t7 Carrier weapons (side batteries, bow cannon, missile bank, anti-approach pulse, PANIC) | 1.8 s | 200.20 (two runs at the start of the task, 200.505 / 199.885) → 201.29 s (two `scripts/gate-time.sh` runs, 201.379 / 201.193; 2967 → 2976 tests, 105838 asserts; both green) | **+1.1 s, inside the allotment.** Nine new rows W1–W9 in `test_carrier.gd` (≈ 0.75 s), all hand-ticked with the hull pinned, controls stopping at first evidence; `test_carrier.gd` alone 1.3 → 3.0 s because the t6 movement rows now tick the carrier's four mounts. `check-test-leaks.sh` clean |
+| t5 Heavy Gunship phases (hull bands, overheat-and-vent, weak points, EMERGENCY, rear missiles and their Assault closure, cannon shield, part lights) | 2.5 s | 201.29 (the t7 close, same tree) → 203.12 s (two `scripts/gate-time.sh` runs, 203.362 / 202.887; 2976 → 2996 tests, 106295 asserts; both green, no leak lines) | **+1.83 s, inside the allotment.** `test_heavy_gunship.gd` 26 → 45 functions, summed testcase time 1.8 → 3.4 s (probe unchanged). The heat run and the 50 s emergency run are memoised per harness (rule 2) and shared by eight rows; the 60 s Open Space chase hand-ticks its own rockets and awaits a frame only after one expires; the vent / shield rows run on real physics at 16×. Rows with a boost start with `_fresh_idle_delta()` (a hand-ticked `move_and_slide()` moves by the idle delta). **Run 7: gate output 1058270 → 413983 bytes** (over the harness's 1 MiB, see *Gate output*): `BulletPool` warns once per pool, 607 → 46 "Pool exhausted" warnings in the suite; +1 unit row, GUT 203.91 s in `verify.sh` (2997 tests, green, no leak lines) |
+| t8 Carrier hangars (doors, launches, caps, emergency deployment) | 2.2 s | 203.53 (two runs on a clean `git archive HEAD` copy, 203.347 / 203.72) → 205.51 s (two `scripts/gate-time.sh` runs, 205.419 / 205.605; 2997 → 3005 tests, 106593 asserts; both green, no leak lines, output ≈ 418 KB) | **+1.98 s, inside the allotment.** New `test_carrier_hangars.gd` (8 functions, summed ≈ 1.76 s): hand-ticked in both harnesses, scenarios sharing one world and one loop (three carriers in the 40 s Open Space row, three in the Assault crossing, four in the emergency row), the bullet-window row on real physics at 16× with its first launch at 1.0 s. `test_carrier.gd::_spawn` keeps the hangars quiet (`first_launch_delay` 1e6, launch counts 0): a launch instantiates two ships and cost its movement rows +0.4 s; with it the file is 2.74 → 2.88 s |
+| t9 Heavy Gunship and Carrier art (hulls, part intact / wreck, door and core states) | 0.4 s | 205.51 (t8 close, not re-measured) → 205.256 s (one `scripts/gate-time.sh` run, wall 212.9 s; 3005 → 3017 tests, 106914 asserts; green, output ≈ 424 KB) | **≈ 0 s net (inside run noise), inside the allotment.** New `test_ph10_sprites.gd` (11 functions, summed testcase time ≈ 0.03 s; the file alone reads 0.43 s, nearly all one-off scene loading the full suite already pays): one shared instance of each scene for the wiring rows, one fresh per destruction row. `test_entity_sprite_transparency.gd` gains the export-texture walk and one row (a few more textures measured) |
+| t10 Hub placement (Heavy Gunship draw 19, Carrier draw 20, the hub-carrier launch rows) | 0.8 s | 205.256 (t9 close, not re-measured) → 206.181 s (one `scripts/gate-time.sh` run, wall 213.9 s; 3017 → 3023 tests, 106973 asserts; green, output ≈ 427 KB) | **≈ +0.9 s, inside the allotment plus run noise.** `test_sector_hub_patrol.gd` 63 → 69 tests, the file ≈ 2.1 s; the two hub-carrier rows hand-tick 30 s at 1/60 and the control stops at its first launch. |
+| t11 Level 1's four Heavy Gunships off rails (pin, count and spill-over gates, lit deep_space replay with the kill-detection and carried-over rows, Cloud Descent attack replay, deadline rows) | 3.0 s (owner-accepted overrun: stop at 9.0 s of the task's files or a 237 s two-run mean) | 205.78 (two runs at `8df0d59`, 205.627 / 205.940) → **210.69 s** (two `scripts/gate-time.sh` runs, 210.872 / 210.504; 3023 → 3051 tests, 107239 asserts; green, output ≈ 426 KB) | **+4.9 s: over the 3.0 s allotment and the 4.5 s (1.5×) line, as the owner accepted (Q2), under the 9.0 s / 237 s stop.** New `test_level1_heavy_spawns.gd`, 22 tests, 4.6 – 4.7 s summed testcase time (≈ 9.4 s alone with engine start and the exit probe): the four replays (deep_space lit from 0 s, step-capped at 16, CPU-bound, ≈ 16 game s; the kill boundary ≈ 7 game s; the carried-over row ≈ 4 game s; Cloud Descent ≈ 23 game s at 16×) each run once and are shared. The Heavy Gunship exit probe (≈ 2.9 s, a memo) now runs in `test_engagement_deadline.gd`'s `before_all()` (it sorts first), outside any testcase, so `test_heavy_gunship.gd`'s `_probe_s` print reads ≈ 0 s; that file gains two body-mask rows and the deadline file four heavy rows (≈ 0.1 s together). `check-test-leaks.sh` clean. |
+| t12 Level 1's Carrier (pin, `_carrier_column_conflicts()`, spill-over, lit planet_approach replay with the attack and sanity rows, carrier drones in C3, guard non-vacuity) | 2.5 s | 211.51 (two runs on a clean `git archive HEAD` copy at `7aba280`, 212.661 / 210.363) → 210.34 s (two `scripts/gate-time.sh` runs, 213.311 / 207.359; 3051 → 3062 tests, 107312 asserts; both green, output ≈ 430 KB) | **Suite delta −1.2 s (run noise); the task's own cost is `test_level1_heavy_spawns.gd` 4.7 → 6.7 s summed testcase time (+2.0 s, inside the allotment).** One lit carrier replay (planet_approach 64.0 → 86.43 s, 16× clock capped at 16 steps) is shared by the laser, sanity, attack and fire-record rows; the column, pin, spill and C3 rows are pure data. `check-test-leaks.sh` clean |
+| Ph11 t1 boss phase ladder (`BossPhase`, `BossPhaseDriver`, `test_boss_phase_driver.gd`, `test_boss_phase_rules.gd`) | 0.3 s | 210.34 (Ph10 t12 close, not re-measured) → 212.82 s (two `scripts/gate-time.sh` runs, 213.457 / 212.185, taken while the sweep still `load()`ed every scene; 3062 → 3082 tests, 107386 asserts, output ≈ 434 KB) | **The task's own cost is 0.02 s summed testcase time** (17 hand-driven unit rows 0.013 s; the sweep 1.92 → 0.008 s once it pre-filters `.tscn` text for the driver script path and loads only a match). The +2.5 s suite delta is run noise against an older baseline (the same 3062 tests cost 207–213 s at the Ph10 t12 close). One of the two runs showed one unidentified red test (`gate-time.sh` does not name it); `/agent/verify.sh` on the final tree was 3082 / 3082 green, so it is a pre-existing flake, not these files |
+| Ph11 t3 mount variants (`SPREAD_CANNON`, `RAPID_PULSE`, `pellets`, two head sprites) | 0.5 s | 212.82 (t1's figure, not re-measured; t2 recorded none) → 212.34 s (two-run mean of `scripts/gate-time.sh`: 212.05 / 212.63; 3082 → 3095 tests), i.e. run noise | new `test_turret_mount_variants.gd`, 12 test functions (13 rows), hand-ticked at 1/60 s with no awaits and no physics (a 600-tick trace, bursts of 10, scene reads), well under its 0.5 s allotment on its own; plus rows in `test_ph8_sprites.gd` (HEADS) and `test_enemy_bullet_lifetime.gd` (two speeds). Gate output 436 – 440 KB. |
+| Ph11 t15 `ShieldSector` + `StateLight.SHIELDED` (`test_shield_sector.gd`) | 0.5 s | 212.34 (t3's figure, not re-measured) → 212.17 s (one `scripts/gate-time.sh` run, wall 220.1 s; 3095 → 3106 tests); the new file is 11 tests, 0.5 s on its own (one 8× row pair, the rest hand-driven) | gate output 436057 bytes |
+| Ph11 t2 boss reinforcements (`ReinforcementBay`, `BossReinforcements`, `EscortContainer`, `EventBus.boss_escort_spawned`, ScoreTracker's escort path; `test_boss_reinforcements.gd`) | 1.0 s | 212.17 (t15's figure, not re-measured) → 213.00 s (two `scripts/gate-time.sh` runs, 213.207 / 212.801; 3106 → 3123 tests, both green, output 440282 / 438828 bytes) | the new file is 17 tests, 0.96 s on its own: hand-ticked rows with real escort scenes, plus the real-`LevelDirector` `ENEMIES_CLEARED` row (waits for the host's free, ≈ 0.3 s) and a few frame waits. `check-test-leaks.sh` clean |
+| Ph11 t12 EMP on structures (turret, heavy emplacement, fence post, shield generator answer EMP; fence polling; the bonus drone keeps its freeze) | 0.5 s | 213.00 (t2's figure, not re-measured) → 213.97 s (one full `/agent/verify.sh` run, 3123 → 3132 tests, GATE PASS) | the nine new rows are hand-ticked; the blast row awaits the legacy stun's 5 s `SceneTreeTimer` (at 40×) so its freed-capture lambda cannot fire under the next file (a first version left it running and failed `test_enemy_beams.gd` with "Lambda capture was freed") |
+| Ph11 t5 Space Fortress shell (`space_fortress/`, `test_space_fortress.gd`, the fortress in the contact-damage / contact-geometry / hurtbox-geometry / base-enemy rosters, the config-isolation children row, `test_boss_phase_rules.gd` now finding it) | 2.0 s | 213.97 (t12's figure, not re-measured) → 215.70 s (two runs: `check-test-leaks.sh` 215.861 / `scripts/gate-time.sh` 215.529; 3132 → 3144 tests, both green, output 443349 bytes); after the death rows were hardened (0.2 s wreck, mid-sequence checked two frames in) two `/agent/verify.sh` runs read 216.254 / 216.234 s (mean 216.24 s, +2.27 s: over the allotment by 0.27 s, under the 1.5× escalation line; machine noise is ≈ 0.5 s) | the new file is 11 tests (22 rows over both harnesses), ≈ 2.4 s on its own: three real-physics rows at 8× (bare hull, a four-bullet battery lane, locked parts with a 60-frame beam and a nova) and two 0.25 s death waits per harness; the rest hand-driven. `check-test-leaks.sh` clean |
+| Ph11 t6 Space Fortress movement (`FortressBrain` facing rule, spins, Open Space zone / leash, Assault enter / hold / bob; the movement block of `test_space_fortress.gd`, the §25 movement key) | 2.0 s | 216.24 (t5's mean, not re-measured) → 216.62 s (two runs: `scripts/gate-time.sh` 216.663 / `/agent/verify.sh` 216.576; 3144 → 3156 tests, both green, output 442395 bytes), +0.38 s | 12 new test functions (20 rows over both harnesses), all hand-ticked (≈ 20 000 brain + mover ticks, no awaits): the file went 2.8 → 3.05 s on its own |
+| Ph11 t7 Space Fortress batteries (five mounts through `ModularHull.build_mounts()`, `FortressBrain.attack_gate()` cap 2 / 3, critical cooldown x 0.6 with `pool_period_factor` pools, `tests/integration/test_fortress_weapons.gd` rows A1-A6, the §25 `attacks` key) | 1.5 s | 216.62 (t6's mean) → 218.43 s (two `/agent/verify.sh` runs: 218.382 / 218.482; 3156 → 3168 tests, both green after one unrelated timing flake of `test_enemy_beams.gd::test_a_hand_ticked_beam_never_casts` on the first run, output 444875 bytes), +1.8 s | The new file is 12 hand-ticked test functions (≈ 1.25 s net; the dead-lane windows tick the brain at 0.05 s, the 30 s critical stress ticks one mount at a time and returns each round to its pool at its own `max_time`). The rest is the price of the feature itself: every fortress now builds five mounts and 68 pooled rounds in `_ready()`, which put about +0.75 s on `test_space_fortress.gd` (3.05 → 3.8 s). Over the 1.5 s allotment, inside the 1.5x escalation line (2.25 s) |
+| Ph11 t16 Space Fortress geometry weapons (hull spokes `fortress_spoke_beam.tscn`, ring pulse `fortress_pulse_ring.tscn`, the 72-round `CoreRingPool`, all brain-ticked; `tests/integration/test_fortress_weapons.gd` rows B7-B12, the §25 `attacks` / `arena` keys) | 3.0 s | 218.26 (one `scripts/gate-time.sh` run at the start, matching t7's 218.43 mean) → 221.44 s (three green runs: 221.763 full GUT / 221.174 `scripts/check-test-leaks.sh`, no leak lines / 221.379 `/agent/verify.sh` GATE PASS; 3168 → 3176 tests; output ≈ 450 KB), +3.2 s | The first after-run was 223.17 s (+4.9) with one unnamed failure that did not recur; it was cut to the figure here by: the real-physics spoke + ring row in one world per harness, stopping at the first hits it needs, with a brain `rng_seed` chosen so the first ring misses neither target (1.95 → 0.63 s); the long hand-ticked windows at a 0.05 s step; `FortressBrain` reading the view rect only on a tick a weapon comes due. `test_fortress_weapons.gd` 1.25 → ≈ 4.0 s, of which the measured density row (Assault only, 4 phases × 5 positions × 11 s at 1/60 s = 13 200 full ticks) is ≈ 1.4 s; `test_space_fortress.gd` 3.8 → 3.96 s (72 more pooled rounds per fortress, 4 beams, 1 ring). Slightly over the 3.0 s allotment, inside the 1.5x escalation line (4.5 s). One `verify.sh` run failed on the legacy `test_station_laser_phase.gd::test_beams_stop_and_do_not_outlive_the_station` (a fixed 1.0 s wall-clock wait; it failed every time alone, on a clean HEAD too): it now waits, bounded, for a lethal beam |
+| Ph11 t8 Space Fortress reinforcements (three scene-authored bays: hangar drones, north fighters, south gatlings; the `critical` surge; `ReinforcementBay.config_overrides`; `tests/integration/test_fortress_reinforcements.gd`, the §25 `reinforcements` key and the dead-hangar row in `test_space_fortress.gd`) | 1.5 s | 221.745 (two `scripts/gate-time.sh` runs, 221.845 / 221.646, on a clean `git archive HEAD~1` copy, i.e. t16's tree) → 222.41 s (two runs on the final tree, 222.794 / 222.030; 3176 → 3190 tests, all green, output ≈ 448 KB), +0.67 s | Inside the allotment. The first attempt measured +2.2 s (223.92 s) and was cut by: `_settle()` awaiting a process frame instead of a physics frame (a physics-frame await is ≈ 16 ms of wall clock at 1×, and every `_lose()` paid one), the Assault escort-fire row on a 16× clock (it is tick-paced: wall ≈ CPU + 0.16 s; first fire reads 2.2-2.35 s), and the ENEMIES_CLEARED row stopping before the director's 0.2 s wall-clock `_wait_seconds` settle (it asserts the container holds nothing but explosion particles once the fortress is freed; the real advance is `test_boss_reinforcements.gd` row 11). The new file is ≈ 0.8 s of test time. It also fixes `test_fortress_weapons.gd::test_assault_fires_nothing_until_enter_ends`, which read a telegraph on the very tick the brain enters HOLD (failed 1 run in 10 on the clean t16 tree too) |
+| Ph11 t9 Space Fortress art (22 PNGs in `assault/assets/sprites/enemies/space_fortress/`, `SpaceFortress.hangar_open_texture` + the door hook, `tests/integration/test_fortress_sprites.gd`) | 0.3 s | 222.41 (t8's close, same tree, not re-measured) → 222.856 s (two `scripts/gate-time.sh` runs, 222.768 / 222.943; 3190 → 3202 tests, 112585 asserts, both green, output ≈ 447 – 450 KB; `/agent/verify.sh` GATE PASS at 223.014 s), +0.45 s | **The new file is 0.07 s of summed testcase time** (0.46 s alone, nearly all one-off scene loading the full suite already pays): one shared fortress for the wiring rows, a fresh one per state row, no awaits, no physics. The +0.45 s two-run delta is run noise around that (≈ 0.5 s on this machine); the 0.3 s allotment is met by the file's own cost |
+| Ph11 t10 Level 1: the fortress replaces the station (`station_assault` 240 s; `test_level1_fortress_section.gd`: a 1x wall-clock section replay, `death_duration` 0.2, its timeout row overriding the section to 2.0 s on its own built copy; the persistent-ordnance allowlist rows in `test_engagement_deadline.gd`) | 4.5 s | 222.856 (t9 close, not re-measured) → 226.915 s (two `scripts/gate-time.sh` runs, 226.999 / 226.831; 3202 → 3208 tests, 112983 asserts, both green, no leak lines, output ≈ 449 – 453 KB), **+4.06 s, inside the allotment** | The replay is ≈ 3 s of wall clock (row a ≈ 1.5 s: spawn, 0.5 s wait, the kill and the advance, which waits out the final blast particles 0.5 s + the 0.2 s settle; row b ≈ 2.2 s: the 2.0 s timeout and the settle); the allowlist rows instantiate Heavy Gunship, Space Fortress, Missile Corvette and the other cloud_descent ships in an Assault world (`test_engagement_deadline.gd` 5.0 → 6.3 s). `test_station_assault_section.gd` is unchanged at about 4.1 s (its timeout rows wait on the director). |
+| Ph11 t13 Hub placement (Space Fortress draw 21; three new rows in `test_sector_hub_patrol.gd`, every hard count moved by one) | 0.5 s | 226.442 (clean `git stash` of this task, one `scripts/gate-time.sh` run on today's machine; the t12 figure was taken on a quicker one) → 227.372 s (→ 3211 tests; green, output ≈ 449 KB) | **≈ +0.9 s, one run each, inside 1.5× the allotment and run noise.** `test_sector_hub_patrol.gd` 69 → 72 tests, the file ≈ 2.4 s; the new rows hand-tick nothing. |
+| Ph11 t11 Retire the space station (folder, `WaveBuilder.space_station()`, three PNGs and the station test files deleted; `test_boss_death_sequence.gd` / `test_fortress_incoming_damage_paths.gd` re-pointed at the fortress; roster / transparency / isolation / bullet-lifetime / deadline rows re-expressed) | ≤ 0 s | 227.340 s (two `scripts/gate-time.sh` runs on a clean copy of HEAD, 227.200 / 227.479; 3211 tests) → 225.215 s (two runs, 225.896 / 224.533; 3144 tests, 112596 asserts, both green, output ≈ 414 KB; `scripts/check-test-leaks.sh` clean; `/agent/verify.sh` GATE PASS at 228.32 s with the docs pass running beside it) | **−2.13 s.** The station's own files (`test_space_station.gd`, the laser-phase / gunnery / reinforcement suites and their 8× physics rows) left the suite; the two re-pointed files (23 tests, both harnesses for the damage paths) cost less than the files they replace. |
+
 **Phase 5 helpers.** `tests/helpers/rocket_launcher_fixture.gd` (a launcher with pools for every rocket kind),
 `tests/helpers/level1_slice_replay.gd` (replays one window of a level-1 section through a real `WaveManager`, stops on a condition
-and settles every spawn timer before freeing the world), `tests/helpers/fixture_enemy_unrepairable.gd` (`can_be_repaired()` false),
+and waits until every spawn of a triggered wave has arrived before freeing the world; see *The third half* below), `tests/helpers/fixture_enemy_unrepairable.gd` (`can_be_repaired()` false),
 and `SpecialistExitProbe`'s optional `prepare` callable. A rocket's `expired` goes out two physics ticks after a detonation, so a
 test that counts `expired` or recycles a pool must wait them.
 
@@ -733,108 +806,47 @@ may be 90%+ fully opaque. Reads scenes via `PackedScene.get_state()` (never inst
 resolves `Sprite2D.texture`, `AnimatedSprite2D.sprite_frames` and `AtlasTexture.atlas`; walks 25
 scenes to 16 distinct textures. Two knowingly uncovered: both asteroid hazards assign their sheet
 at runtime from a `tileset_texture` export, so no node property holds it.
-Entities: the `space_station` mini-boss (`integration/test_space_station.gd`) — armour rule, turret
-lifecycle, and the config-driven stats.
-Entities, the layers: every way damage reaches that boss
-(`integration/test_station_incoming_damage_paths.gd`) — real missiles for `HurtBox.collision_mask`
-bit 32, a real asteroid for bit 1024, and a `BeamBehavior` driven from a real `_physics_process`
-for the incoming mining laser, whose boundary test puts the station on the default body layer 1
-and asserts it then blocks its own fight. Plus the CHARACTERIZED pin that a rocket, unlike a
-bullet, is consumed by the first hurtbox it overlaps and so can never reach a turret.
-Levels: the `station_assault` section (`integration/test_station_assault_section.gd`) — the
-`ENEMIES_CLEARED` gate, the per-section timeout and its free-on-expiry path, and Level 1's
-section order and station wave.
-Projectiles: player-bullet lifetime (`integration/test_player_bullet_lifetime.gd`) — the
-pass-through rule the station boss depends on, the off-screen self-free every `WeaponBehavior`
-must hand its bullets, the boundary case that the same free must **not** reach a pooled bullet
-(asserted on `BulletPool.acquire()`, never on `_idle.size()`, which reads healthy even on the
-broken build), and a characterization pin on what `PierceModule` does today.
-Hazards: `LaserRay.hit_mask_override` (`integration/test_laser_ray_hit_mask.gd`) — pins the shared
-default mask `128 | 256 | 512` so the race hazards and Level 1's laser columns cannot be silently
-narrowed, and pins that `0` means "use the default" rather than "collide with nothing".
-Entities, phase 2: the station laser phase (`integration/test_station_laser_phase.gd`) — the
-`armor_broken` trigger and its once-only guard, the telegraph window (a beam damages a real
-layer-128 probe HurtBox only after it arms, never during the warning), the self-damage regression,
-the rotation rate, volley determinism, teardown on boss death, and the config copy.
-Entities, the guns: `StationGunnery` (`integration/test_station_gunnery.gd`) — that the `BulletPool`
-is a direct child of the station, both phases and the handover between them, per-turret aim and
-barrel rotation, dead turrets dropping out of the volley, ring precession, the `core_ring_step`
-design lock, teardown, and the config copy. Plus the shared pattern resource it drives
-(`integration/test_radial_attack_pattern.gd`) — ring vs fan spacing, aiming, `spawn_radius`, that
-it ignores `ship.rotation`, and that `bullet_count <= 0` fires nothing.
-Entities, the adds: `StationReinforcements` (`integration/test_station_reinforcements.gd`) — the
-config copy, four-edge coverage, that every squad entry starts off screen and clears the measured
-spawn margin, deterministic `LEFT→RIGHT→BOTTOM→TOP` cycling, that ships are spawned as *siblings*
-of the station with an `EnemyPathMover`, that every movement points into the screen, the
-`FREE_ON_DURATION` guarantee, `enemy_spawned_orphan` registration, both stop signals, the
-whole-squad population cap, the one-shot-timer split, that every ship the table can spawn is
-killable by the player's primary weapon, and the two-ship escape-combo cost.
+Entities: the Space Fortress (`integration/test_space_fortress.gd`, `test_fortress_weapons.gd`, `test_fortress_reinforcements.gd`,
+`test_fortress_sprites.gd`) — its own ENEMY.md lists every row.
+Entities, the layers: every way damage reaches the boss (`integration/test_fortress_incoming_damage_paths.gd`, above).
+Levels: the `station_assault` section (`integration/test_station_assault_section.gd`) — the `ENEMIES_CLEARED` gate, the per-section
+timeout and its free-on-expiry path, and Level 1's section order and boss wave; `integration/test_level1_fortress_section.gd` replays it.
+Projectiles: player-bullet lifetime (`integration/test_player_bullet_lifetime.gd`) — the pass-through rule the boss's armoured hull
+depends on, the off-screen self-free every `WeaponBehavior` must hand its bullets, the boundary case that the same free must **not**
+reach a pooled bullet (asserted on `BulletPool.acquire()`, never on `_idle.size()`, which reads healthy even on the broken build), and
+a characterization pin on what `PierceModule` does today.
+Hazards: `LaserRay.hit_mask_override` (`integration/test_laser_ray_hit_mask.gd`) — pins the shared default mask `128 | 256 | 512` so
+the race hazards and Level 1's laser columns cannot be silently narrowed, and pins that `0` means "use the default" rather than
+"collide with nothing". Plus the shared ring pattern (`integration/test_radial_attack_pattern.gd`) — ring vs fan spacing, aiming,
+`spawn_radius`, that it ignores `ship.rotation`, and that `bullet_count <= 0` fires nothing.
 
-Two things that file had to work around, both worth knowing:
+### Traps the boss tests had to work around
 
-- **`died` cannot be tested without unhooking `armor_broken` first.** The station refuses all core
-  damage while a turret lives, so the only route to `died` runs through `armor_broken` — which
-  already stops the spawner. Without the disconnect, the case passes even if the `died` connection
-  is deleted.
-- **`ScoreTracker._process` resets any forced combo to 1.0 on the first frame** when
-  `_combo_decay_remaining` is 0, and `start_tracking()` turns `_process` on. Call
-  `tracker.set_process(false)` and assert on `tracker.get("_combo")`, as
-  `integration/test_station_assault_section.gd` already does.
+- **`entity.config` is private per instance; the object `load()`/`preload()` returns is not.** `ResourceLoader` caches by path, so
+  every instance once shared one config and writing to it rewrote the shipped values for every later test in the run.
+  `ShipConfig.privatise()` — called from `BaseEnemy._init()` / `_enter_tree()` and from `AllyFighter` — now gives every entity its
+  own `duplicate()`, and `integration/test_config_instance_isolation.gd` holds that shut. What still bites: **the resource a test
+  `preload()`s or `load()`s is the shared, cached one** — read it, never write to it. Two windows also remain open, both unreachable
+  from non-addon code today and both written up in `test_config_instance_isolation.gd`'s header: `Node.duplicate()` hands two nodes
+  one private copy, and assigning `entity.config = load(...)` after the entity is already in the tree fires neither hook.
+- **`ExplosionEffect.explode()` parents its `CPUParticles2D` to the actor's parent by default** (`global/components/explosion_effect.gd`)
+  and lets it self-free on `finished` ~1 s later. A boss added straight to the test script therefore leaves particles behind as
+  unfreed children when the test that kills it returns. Parent entities that will die to a container `Node2D` that
+  `add_child_autofree` owns — which is also how they are really parented, under `WaveManager.enemy_container`. A destroyed
+  `EnemyModule` part passes its host's parent as an explicit `container`, so its blast survives outside the (spinning) hull; still,
+  **always filter a container's children by type before casting** (the retired station's turret helper once handed back a particle
+  node and failed with an *Unexpected Error* and no assertion to point at).
+- **`ScoreTracker._process` resets any forced combo to 1.0 on the first frame** when `_combo_decay_remaining` is 0, and
+  `start_tracking()` turns `_process` on. Call `tracker.set_process(false)` and assert on `tracker.get("_combo")`.
 
-### Three traps `test_station_laser_phase.gd` had to work around
-
-- **`entity.config` is private per instance; the object `load()`/`preload()` returns is not.**
-  This trap used to read "`SpaceStation.config` is a single process-wide object", and it was true:
-  `ResourceLoader` caches by path, so every station shared one config and writing to it rewrote the
-  shipped values for every later test in the run. `ShipConfig.privatise()` — called from
-  `BaseEnemy._init()` / `_enter_tree()` and from `AllyFighter` — now gives every entity its own
-  `duplicate()`, and `integration/test_config_instance_isolation.gd` holds that shut for all ten
-  entities.
-
-  What still bites: **the resource a test `preload()`s or `load()`s is the shared, cached one.**
-  `const STATION_CONFIG := preload(".../space_station_config.tres")` is process-wide balance data —
-  read it, never write to it. Two windows also remain open, both unreachable from non-addon code
-  today and both written up in `test_config_instance_isolation.gd`'s header: `Node.duplicate()`
-  hands two nodes one private copy, and assigning `entity.config = load(...)` after the entity is
-  already in the tree fires neither hook.
-
-  Overriding the **`LaserPhase` node's** own fields is still the recommended way to shorten the
-  laser timings — not for safety now, but because those fields are the node's tunable surface and
-  its no-config fallback.
-- **`ExplosionEffect.explode()` parents its `CPUParticles2D` to the actor's parent by default**
-  (`global/components/explosion_effect.gd`) and lets it self-free on `finished` ~1 s later. A
-  station added straight to the test script therefore leaves particles behind as unfreed children
-  when the test that kills the core returns (`GUT WARNING: Test script has 2 unfreed children`).
-  Parent entities that will die to a container `Node2D` that `add_child_autofree` owns — which is
-  also how they are really parented, under `WaveManager.enemy_container`.
-
-  **The same rule used to bite one level down, and cost a whole gate cycle** (fixed by
-  `docs/plans/explosioneffect-orphans-its-particles-onto-whatever-the-dyin/`). A `StationTurret`
-  used to leave the default in place, so the "parent" `ExplosionEffect` wrote into was the
-  station's `$Turrets` node, and from the first turret kill onward `$Turrets.get_children()` also
-  contained `CPUParticles2D`. A test helper doing a raw `get_children()` then handed back a
-  particle node, `child as StationTurret` yielded `null`, and the next method call failed with
-  `Invalid call. Nonexistent function 'is_alive' in base 'Nil'` — an *Unexpected Error*, so GUT
-  reds the test with no failed assertion to point at. `station_turret.gd`'s `_destroy()` now
-  passes the station's own parent as an **explicit `container`** argument, so a destroyed turret's
-  blast survives outside the hull and never lands in `$Turrets` in the first place — but
-  **always filter a container's children by type before casting** regardless.
-  `SpaceStation._turrets()` does, which is why production code never hit this even before the fix.
-- **A beam's full lifetime is longer than it looks.** At `warn 0.2 / active 0.3` it is ~1.9 s, not
-  0.5: `warn` + a ~0.56 s `laser_increase` charge-up + `active` + a 0.84 s dissolve. Any test
-  volley interval must exceed it, or a second volley spawns while the first is still dissolving and
-  the child-count assertions become false rather than merely flaky.
-
-Entities, the death: `StationDeathSequence` (`integration/test_station_death_sequence.gd`) — that
-the wreck stays in the tree after HP hits 0, that `died`/`was_killed` still fire at that instant
-(the `ScoreTracker` kill-vs-escape contract), the `_dying` latch against `Health`'s 0 → 0 re-emit,
-the disarmed corpse, the free-after-duration path and the `death_duration = 0.0` boundary that
-proves the new path is additive, the blast chain rolling across the hull, deterministic
-`blast_offset(i)`, the decaying spin and darkening, and the config copy. Plus
-`BulletPool.cancel_active()` in `test_station_gunnery.gd`.
+Entities, the death: `BossDeathSequence` (`integration/test_boss_death_sequence.gd`, on a real fortress) — that the wreck stays in the
+tree after the core dies, that `died`/`was_killed` still fire at that instant (the `ScoreTracker` kill-vs-escape contract), the
+`_dying` latch against `Health`'s 0 → 0 re-emit, the disarmed corpse, the free-after-duration path and the `death_duration = 0.0`
+boundary, the blast chain rolling across the hull, deterministic `blast_offset(i)`, the decaying spin and darkening, the config copy
+(2.4 s / 10 blasts), and the warning for a host without the contract.
 Levels, end to end: `integration/test_level_1_sequence.gd` — Level 1's real five-section sequence
 (`deep_space → asteroid_belt → station_assault → planet_approach → cloud_descent`) with a real
-`SpaceStation` killed in the middle, asserting it reaches `level_complete`, that the boss section
+Space Fortress killed in the middle, asserting it reaches `level_complete`, that the boss section
 does not advance while the wreck is present, and that the run finishes well inside the timeouts.
 
 ### The leak trap has a second half — zero `stagger_delay`, not just `spawn_delay`
@@ -856,18 +868,41 @@ shared.
 headless `--import`, and predates this suite. Verified against a stashed working tree: baseline
 and current both emit exactly one. Do not go hunting for it in the tests.
 
+### The third half — never free a `WaveManager` before its delayed spawns have arrived (Phase 9 t1)
+
+`tests/helpers/level1_slice_replay.gd` stops a replay as soon as the caller's claim holds and then
+waited `_pending + 0.1` s of **physics** time before freeing the world. A `_spawn_with_delay()`
+timer runs on **idle** time, and at the 16× clock one idle frame is ≈ 0.3 game s, so about one run
+in four freed the `WaveManager` with a delayed spawn still waiting; the stranded timer kept that
+ship's scene alive to process exit. `test_level1_ph8_attacks.gd::test_both_level1_turrets_fire_while_in_view`
+stops right after deep_space's 5.5 s wave (two Swarm Drones at +0.5 / +0.7 s), so the gate failed
+intermittently on `25 resources still in use at exit` (exactly `swarm_drone.tscn`) with every test
+green. The helper now **counts** instead of timing: `spawn_count()` of each triggered wave against
+`WaveManager.enemy_spawned`, with a 5 s cap that ends in a `push_error`. Control: 4 / 15 runs leaked
+with the old settle under three parallel runs, 0 / 30 with the new one.
+
+How it was found, for the next intermittent leak: `--verbose` hid it (eight verbose suites, no leak,
+probably because verbose output slows the frames), so the per-test GUT orphan counts and a verbose
+run were no help. What worked: (1) match the exit signature by deliberately leaking candidate scenes
+in a throw-away `extends SceneTree` script (`25 resources`, one `Shape2D`, one texture, one shader
+was `swarm_drone.tscn` and nothing else); (2) a throw-away `GutHookScript` passed with
+`-gpre_run_script` that prints that scene's `get_reference_count()` after every test, in non-verbose
+full runs; the first test after which a leaking run's count stays one higher than a clean run's is
+the source; (3) loop that test alone until it leaks under `--verbose` to name the holder
+(`SceneTreeTimer`). Delete the hook afterwards.
+
 ### Checking for leaks: `scripts/check-test-leaks.sh`
 
-The gate cannot catch any of the above. Godot prints the leak lines *after* the main loop is gone,
-so they arrive after GUT has already set the process exit code, and they match none of
-`/agent/verify.sh`'s `FATAL` patterns. `scripts/check-test-leaks.sh` runs the suite with the gate's
+Godot prints the leak lines *after* the main loop is gone, so they arrive after GUT has already
+set the process exit code, and they match none of `/agent/verify.sh`'s `FATAL` patterns. (The gate
+has since gained the same grep in step 3 — `GATE FAIL: the GUT run leaked objects at exit` — so a
+leak now fails the gate even with every test green; an *intermittent* one fails it some of the time.) `scripts/check-test-leaks.sh` runs the suite with the gate's
 exact arguments and additionally greps the output for
 `ObjectDB instances leaked|resources still in use|Resource still in use`, exiting 1 on a hit. Run
 it after touching anything that awaits.
 
-It is a separate script rather than an edit to the gate because **`/agent` is mounted read-only**
-inside the dev container — the agent cannot change `verify.sh`. Folding it in is a one-line
-addition to step 3 and is worth doing; until then the script is the check.
+It was written as a separate script because **`/agent` is mounted read-only** inside the dev
+container — the agent cannot change `verify.sh`. It is still the quicker check while iterating.
 
 To find out *what* leaked, re-run with `--verbose`:
 

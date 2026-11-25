@@ -18,7 +18,7 @@ extends AttackPatternResource
 ## Spawn offset relative to the ship's position.
 @export var spawn_offset: Vector2 = Vector2(0.0, 10.0)
 ## Per-instance RNG for jitter. null (default) draws from the global `randf_range`, matching every
-## existing consumer (legacy rail streams, and the station).
+## existing consumer (legacy rail streams).
 var rng: RandomNumberGenerator = null
 ## When finite, the shot aims here instead of asking `TargetInfo` for the player. `Vector2.INF`
 ## (default) means unset.

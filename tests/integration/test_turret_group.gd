@@ -918,3 +918,46 @@ func test_the_test_preset_with_a_generator_meets_the_coverage_rule() -> void:
 	short.get_node("RingTurret").free()
 	assert_gt(short.coverage_holes().size(), 0, "boundary: without a turret the preset fails")
 	short.free()
+
+
+# ── Phase 11 t12: a generator answers EMP (plan §2.12) ──────────────────────────────────────────────────────────────
+
+func test_an_emp_d_generator_stops_sustaining_so_bubbles_lapse_and_return_after_the_window(mode: String = use_parameters(MODES)) -> void:
+	var h = _world(mode)
+	var site := _site(h)
+	var g: TurretGroup = site[0]
+	var members: Array = site[1]
+	var gen: ShieldGenerator = site[2]
+	_gen_step(g, members, gen)
+	var shielded: Array = members.filter(func(m: Node) -> bool: return m != gen)
+	var first_bubbles: Array[EnemyShield] = []
+	for m in shielded:
+		assert_true(_shield_of(m).is_up(), "%s: precondition: %s is bubbled" % [mode, m.name])
+		first_bubbles.append(_shield_of(m))
+	var heartbeat: float = first_bubbles[0].heartbeat
+	var fade: float = first_bubbles[0].fade_seconds
+	assert_true(gen.answers_emp(), "%s: the generator answers EMP" % mode)
+	gen.apply_emp(2.0, null)
+	assert_true(gen.is_emp_disrupted())
+	assert_ne(gen.process_mode, Node.PROCESS_MODE_DISABLED, "%s: and is not process-disabled" % mode)
+	_gen_step(g, members, gen, int(heartbeat / DT) - 3)
+	for b in first_bubbles:
+		assert_true(b.is_up(), "%s: still up inside the heartbeat" % mode)
+	_gen_step(g, members, gen, 6 + int(fade / DT) + 3)
+	for m in shielded:
+		assert_false((m as BaseEnemy).hurt_box.has_absorber(), "%s: %s lost its bubble to the EMP" % [mode, m.name])
+	for b in first_bubbles:
+		assert_true(_is_consumed(b), "%s: and it faded away" % mode)
+	assert_true(gen.is_emp_disrupted(), "%s: the window still runs (the lapse fits inside 2 s)" % mode)
+	_gen_step(g, members, gen, 120)
+	assert_false(gen.is_emp_disrupted(), "%s: the window is over" % mode)
+	_gen_step(g, members, gen, 2)
+	for m in shielded:
+		assert_true((m as BaseEnemy).hurt_box.has_absorber(), "%s: %s is bubbled again after the window" % [mode, m.name])
+		var fresh: EnemyShield = null
+		for c in m.get_children():  # the lapsed bubble is queued but still a child until the next idle frame
+			if c is EnemyShield and not c.is_queued_for_deletion():
+				fresh = c
+		assert_not_null(fresh, "%s: %s carries a new bubble" % [mode, m.name])
+		if fresh != null:
+			assert_true(fresh.is_up(), "%s: and it is up" % mode)

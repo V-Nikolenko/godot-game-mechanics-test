@@ -214,7 +214,7 @@ func test_the_stream_pool_covers_the_ai_stream() -> void:
 ## The legacy rail pool was 20, so the rail stream never has fewer rounds than it used to. The true
 ## rail need (a constant 0.09 s stream of 6.36 s rounds) is 71, and the pool is DELIBERATELY smaller:
 ## a rail Gatling fires ~36 rounds and stalls until they expire, the legacy starvation shape (it stalled
-## at 20). A true 11 shots/s hose would make the station's LEFT/RIGHT reinforcements harder — a balance
+## at 20). A true 11 shots/s hose would make every rail Gatling (once the station's LEFT/RIGHT reinforcements) harder — a balance
 ## change this phase does not own (epic §2.2). Ph15 takes the rails away.
 func test_the_rail_keeps_the_legacy_starvation_shape_deliberately() -> void:
 	var g := SCENE.instantiate() as GatlingInterceptor

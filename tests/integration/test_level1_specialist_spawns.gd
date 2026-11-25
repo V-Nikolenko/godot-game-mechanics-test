@@ -444,6 +444,7 @@ func _ai_intervals(section: LevelSection, lives: Dictionary) -> Array[Dictionary
 			var t: float = effective + entry.spawn_delay
 			out.append({"start": t, "end": t + float(lives[path]["life"]), "kind": _name_of(path)})
 	out.append_array(_ph8_intervals(section))
+	out.append_array(_ph9_intervals(section))
 	return out
 
 
@@ -1078,10 +1079,17 @@ func _group_members(path: String) -> Array:
 
 ## A turret-group member's worst-case Assault life from its line's spawn moment (see the section header).
 func _member_life(design_y: float, member: Dictionary) -> float:
+	return _static_life(design_y, (member["slot"] as Vector2).y, float(member["speed"]))
+
+
+## A drifting static's worst-case Assault life from its line's spawn moment: spawned at the view's highest (shake included)
+## `slot_y` below its design point, freed once below the world rect, drifting at `speed`. Shared by the turret-group members
+## and the Ph9 jammers.
+func _static_life(design_y: float, slot_y: float, speed: float) -> float:
 	var world: Rect2 = _ph8_lives()["world"]
 	var highest_view_centre: float = world.get_center().y - ArenaCamera.V_LIMIT - _CAMERA_SHAKE._MAX_OFFSET
-	var y_spawn: float = highest_view_centre + design_y * ArenaCamera.WORLD_SCALE + (member["slot"] as Vector2).y
-	return _TICK_SLACK + (world.end.y - y_spawn) / float(member["speed"])
+	var y_spawn: float = highest_view_centre + design_y * ArenaCamera.WORLD_SCALE + slot_y
+	return _TICK_SLACK + (world.end.y - y_spawn) / speed
 
 
 func _is_turret_group(path: String) -> bool:
@@ -1234,33 +1242,40 @@ func _curve_text(intervals: Array[Dictionary]) -> String:
 	for t in times:
 		var alive := 0
 		var ph8 := 0
+		var ph9 := 0
 		for a: Dictionary in intervals:
 			if float(a["start"]) <= t and t < float(a["end"]):
 				alive += 1
 				if _PH8_INTERVAL_KINDS.has(a["kind"]):
 					ph8 += 1
+				elif _PH9_KIND_NAMES.values().has(a["kind"]):
+					ph9 += 1
 		if alive != last:
-			parts.append("%.2f:%d%s" % [t, alive, " (ph8 %d)" % ph8 if ph8 > 0 else ""])
+			parts.append("%.2f:%d%s%s" % [t, alive, " (ph8 %d)" % ph8 if ph8 > 0 else "", " (ph9 %d)" % ph9 if ph9 > 0 else ""])
 			last = alive
 	return ", ".join(parts)
 
 
 ## The alive curves (the acceptance criteria's "curves printed"): every change of the alive count in each migrated
-## section, Ph8 ships marked; the Ph8 intervals exist (3 members + 2 drones in deep_space, the tender + 2 drones in
-## planet_approach) and the peak stays within the frozen 2.5x (the gate above, restated where the curve is printed).
+## section, Ph8 and Ph9 ships marked; the Ph8 intervals exist (3 members + 2 drones in deep_space, the tender + 2 drones in
+## planet_approach), the Ph9 ones too (the Hacker and the jammer in planet_approach, Phase 9 t14) and the peak stays within
+## the frozen 2.5x (the gate above, restated where the curve is printed).
 func test_ph8_alive_curves_are_printed() -> void:
 	var lives := _ai_lives()
 	var expected_ph8 := {&"deep_space": 5, &"planet_approach": 3, &"cloud_descent": 0}
+	var expected_ph9 := {&"deep_space": 0, &"planet_approach": 2, &"cloud_descent": 0}
 	for section: LevelSection in _build_sections():
 		if not MIGRATED_SECTIONS.has(section.section_name):
 			continue
 		var intervals := _ai_intervals(section, lives)
 		var ph8 := intervals.filter(func(a: Dictionary) -> bool: return _PH8_INTERVAL_KINDS.has(a["kind"]))
+		var ph9 := intervals.filter(func(a: Dictionary) -> bool: return _PH9_KIND_NAMES.values().has(a["kind"]))
 		var peak := _peak(intervals)
 		var limit := _COUNT_RATIO * int(_LEGACY_PEAK_SPECIALISTS[section.section_name])
 		gut.p("%s alive curve (peak %d at %.2f s, limit %.1f): %s" % [section.section_name, peak["count"], peak["at"], limit,
 			_curve_text(intervals)])
 		assert_eq(ph8.size(), int(expected_ph8[section.section_name]), "%s: Phase 8 ships counted" % section.section_name)
+		assert_eq(ph9.size(), int(expected_ph9[section.section_name]), "%s: Phase 9 ships counted" % section.section_name)
 		assert_lte(float(peak["count"]), limit, "%s: peak alive within %.1fx legacy" % [section.section_name, _COUNT_RATIO])
 
 
@@ -1299,7 +1314,8 @@ func _wall_wave_row() -> Dictionary:
 	return row
 
 
-## Every static member of every turret-group line against every column of `Level1Director.laser_column_schedule()` in
+## Every static member of every turret-group line, and every Ph9 jammer line (one static at slot ZERO, `_jammer_statics()`;
+## world-anchored by `JammingStructure._ready()` the same way), against every column of `Level1Director.laser_column_schedule()` in
 ## its section that starts before the member is gone (no end filter: the beam turns lethal only after its charge-up, so
 ## any column lit before the member leaves may still be lit while it lives). A member is at world x `world centre x +
 ## design x * WORLD_SCALE + slot x` (world-anchored, `TurretGroup._ready()`), and survives only at `|x - column| >=
@@ -1320,10 +1336,11 @@ func _column_conflicts(sections: Array[LevelSection]) -> Dictionary:
 			effective = maxf(effective, wave.trigger_time)
 			for entry: SpawnEntryResource in wave.entries:
 				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
-				if not _is_turret_group(path):
+				var statics: Array = _group_members(path) if _is_turret_group(path) else _jammer_statics(path)
+				if statics.is_empty():
 					continue
 				var t: float = effective + entry.spawn_delay
-				for m: Dictionary in _group_members(path):
+				for m: Dictionary in statics:
 					var x: float = world.get_center().x + entry.base_offset.x * ArenaCamera.WORLD_SCALE + (m["slot"] as Vector2).x
 					var end := t + _member_life(entry.base_offset.y, m)
 					var need: float = half + float(m["radius"])
@@ -1339,17 +1356,19 @@ func _column_conflicts(sections: Array[LevelSection]) -> Dictionary:
 	return {"checked": checked, "conflicts": conflicts}
 
 
+## Phase 9 t14 extended this row to the Ph9 statics (level 1's one local jammer); the name stays because CLAUDE.md, the director's
+## header and `STRUCTURE.md` cite it.
 func test_ph8_static_members_clear_every_lit_column() -> void:
 	var sections := _build_sections()
 	for section: LevelSection in sections:
 		assert_false(_section_has_path(section, WaveBuilder.LASER_FENCE),
-			"%s places a laser fence; this row covers group members only" % section.section_name)
+			"%s places a laser fence; this row covers group members and jammers only" % section.section_name)
 	var result := _column_conflicts(sections)
-	gut.p("column clearance: %d member x column pairs checked" % result["checked"])
+	gut.p("column clearance: %d static x column pairs checked" % result["checked"])
 	var wall_rays: int = (_wall_wave_row()["columns"] as Array).size()
 	assert_eq(wall_rays, 12, "sanity: the LaserWallWave has twelve rays")
-	assert_eq(int(result["checked"]), 3 * (8 + wall_rays),
-		"sanity: three members x (deep_space's eight columns + the wall's rays), all lit before they leave")
+	assert_eq(int(result["checked"]), 3 * (8 + wall_rays) + 1 * 16,
+		"sanity: three members x (deep_space's eight columns + the wall's rays), plus the jammer x planet_approach's sixteen columns lit before it leaves")
 	assert_eq(result["conflicts"], [] as Array[String], "these static members sit in a lit laser column")
 
 
@@ -1570,3 +1589,302 @@ func test_a_rocket_battery_mounts_pools_persist() -> void:
 	var persisting := _persisting_pools(variants)
 	gut.p("ROCKET_BATTERY persisting pools: %s" % [persisting])
 	assert_gt(persisting.size(), 0, "a rocket battery's pools persist after its turret dies")
+
+
+# ── Phase 9 t14: one Hacker Frigate and one local jammer join planet_approach (epic plan
+# docs/plans/cmug23onr001pm52w9swwophy/3-plan.md §2.17; task plan docs/plans/cmw5k4ykj00b6qs2xt4pm0wjg/3-plan.md) ──────
+#
+# Option A of the four pre-approved ones: `b.hacker_frigate().at(-400, -180)` in planet_approach's 42.0 s wave and
+# `b.jammer().at(-80, -220)` in its 62.0 s wave (world x 640 + 2 x -80 = 480). Pinned in `EXPECTED_PH9`. The four hard
+# constraints, each a row below: the frozen 2.5x count gate (the Ph9 ships are appended to `_ai_intervals()` by
+# `_ph9_intervals()`), both lives end before the 98.0 s peak, the two lives never overlap (a jammed player cannot launch, so
+# the hijack would be moot), and the jammer clears every column lit before it leaves (`_column_conflicts()`).
+# Every term is read from a scene, a config or the memoised Ph9 probe (`ph9_exit_keys.gd`, never a hand-built call):
+#   Hacker  engage_seconds + pulse_seconds + _TICK_SLACK (a budget expiring in PULSE lets the window finish; one expiring
+#           in TELEGRAPH cancels it) + hacker_exit()
+#   jammer  `_static_life(design y, 0, assault_drift_speed)`: the turret member's drift formula with slot ZERO
+# No Ph9 ship leaves ordnance: the Hacker's `DartPool` does not `persist_after_owner_death` (its darts die with it) and a
+# jammer fires nothing, so `_ordnance_tail()` is 0 for both and the spill-over rows count them as they are.
+
+const PH9_EXITS := preload("res://tests/helpers/ph9_exit_keys.gd")
+const _HACKER := WaveBuilder.HACKER_FRIGATE
+const _DISRUPTOR := "res://assault/scenes/enemies/hacker_disruptor/hacker_disruptor.tscn"
+const _JAMMER_PATHS: Array[String] = [WaveBuilder.JAMMER, WaveBuilder.PULSED_JAMMER, WaveBuilder.SECTOR_JAMMER]
+const _PH9_KIND_NAMES := {_HACKER: "HACKER_FRIGATE", _DISRUPTOR: "HACKER_DISRUPTOR", WaveBuilder.JAMMER: "JAMMER",
+	WaveBuilder.PULSED_JAMMER: "PULSED_JAMMER", WaveBuilder.SECTOR_JAMMER: "SECTOR_JAMMER"}
+const _HACKER_CONFIG: HackerFrigateConfig = preload("res://assault/scenes/enemies/hacker_frigate/hacker_frigate_config.tres")
+## planet_approach's late peak (plan §2.17 constraint 2): both Ph9 lives must end before it.
+const _PH9_LATE_PEAK := 98.0
+
+const EXPECTED_PH9: Array[Dictionary] = [
+	{"section": &"planet_approach", "kind": "HACKER_FRIGATE", "trigger": 42.00, "offset": Vector2(-400.0, -180.0), "delay": 0.00},
+	{"section": &"planet_approach", "kind": "JAMMER", "trigger": 62.00, "offset": Vector2(-80.0, -220.0), "delay": 0.00},
+]
+
+var _ph9_cache: Dictionary = {}
+var _jammer_cache: Dictionary = {}
+
+
+## `{ "hacker_exit", "hacker" }`, built once per file run (the probe is a memo hit once `test_hacker_frigate.gd` has run).
+func _ph9_lives() -> Dictionary:
+	if _ph9_cache.is_empty():
+		var exit := float(PH9_EXITS.hacker_exit(self)["seconds"])
+		_ph9_cache = {"hacker_exit": exit,
+			"hacker": _HACKER_CONFIG.engage_seconds + _HACKER_CONFIG.pulse_seconds + _TICK_SLACK + exit}
+	return _ph9_cache
+
+
+## A jammer line as one static in `_group_members()`' shape (`[]` for any other path): slot ZERO, its body circle's radius (scale
+## applied) and its config's `assault_drift_speed`, read from the off-tree scene.
+func _jammer_statics(path: String) -> Array:
+	if not _JAMMER_PATHS.has(path):
+		return []
+	if not _jammer_cache.has(path):
+		var jammer := (load(path) as PackedScene).instantiate()
+		var body := jammer.get_node("CollisionShape2D") as CollisionShape2D
+		var radius := (body.shape as CircleShape2D).radius * maxf(absf(body.scale.x), absf(body.scale.y))
+		_jammer_cache[path] = [{"name": _PH9_KIND_NAMES[path], "slot": Vector2.ZERO, "radius": radius,
+			"speed": float(jammer.get(&"config").assault_drift_speed), "variants": []}]
+		jammer.free()
+	return _jammer_cache[path]
+
+
+## One `{ "start", "end", "kind" }` per Ph9 ship the section spawns (see the section header). No Disruptor life is measured
+## (level 1 places none), so a Disruptor line fails here rather than going uncounted.
+func _ph9_intervals(section: LevelSection) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var effective := -INF
+	for wave: WaveResource in section.waves:
+		effective = maxf(effective, wave.trigger_time)
+		for entry: SpawnEntryResource in wave.entries:
+			var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+			var t: float = effective + entry.spawn_delay
+			if path == _DISRUPTOR:
+				fail_test("a Disruptor line has no measured life in this gate")
+			if path == _HACKER:
+				out.append({"start": t, "end": t + float(_ph9_lives()["hacker"]), "kind": _PH9_KIND_NAMES[path]})
+			elif _JAMMER_PATHS.has(path):
+				out.append({"start": t, "end": t + _member_life(entry.base_offset.y, _jammer_statics(path)[0]),
+					"kind": _PH9_KIND_NAMES[path]})
+	return out
+
+
+func _actual_ph9_spawns(sections: Array[LevelSection]) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+				if not _PH9_KIND_NAMES.has(path):
+					continue
+				assert_null(entry.formation, "no Phase 9 line uses a formation; the pin has no formation column")
+				out.append({"section": section.section_name, "kind": _PH9_KIND_NAMES[path],
+					"trigger": wave.trigger_time, "offset": entry.base_offset, "delay": entry.spawn_delay})
+	return out
+
+
+## Every Ph9 interval of planet_approach, keyed by kind (one of each is placed).
+func _ph9_by_kind(section: LevelSection) -> Dictionary:
+	var out: Dictionary = {}
+	for a: Dictionary in _ph9_intervals(section):
+		out[a["kind"]] = a
+	return out
+
+
+## Moves the level's jammer line (in memory) into `section`'s wave at `trigger`, keeping its offset.
+func _move_jammer_to_wave(section: LevelSection, trigger: float) -> bool:
+	var line: SpawnEntryResource = null
+	for wave: WaveResource in section.waves:
+		for entry: SpawnEntryResource in wave.entries:
+			if entry.ship_scene and entry.ship_scene.resource_path == WaveBuilder.JAMMER:
+				line = entry
+				var kept: Array[SpawnEntryResource] = []
+				kept.assign(wave.entries.filter(func(e: SpawnEntryResource) -> bool: return e != line))
+				wave.entries = kept
+	if line == null:
+		return false
+	for wave: WaveResource in section.waves:
+		if is_equal_approx(wave.trigger_time, trigger):
+			var entries: Array[SpawnEntryResource] = []
+			entries.assign(wave.entries)
+			entries.append(line)
+			wave.entries = entries
+			return true
+	return false
+
+
+func test_pinned_phase9_spawns_match_todays_data() -> void:
+	var actual := _actual_ph9_spawns(_build_sections())
+	assert_eq(actual.size(), EXPECTED_PH9.size(), "the number of Hacker / Disruptor / jammer entries changed")
+	assert_eq(actual, EXPECTED_PH9, "a Phase 9 spawn's section, trigger, offset or delay changed")
+
+
+## 2 rows, both in planet_approach (a DURATION section; `test_engagement_deadline.gd` says why never ENEMIES_CLEARED), the
+## Hacker first, and each joins a wave that already existed (no new wave, no moved trigger).
+func test_the_phase9_pin_itself_is_internally_consistent() -> void:
+	assert_eq(EXPECTED_PH9.size(), 2)
+	assert_eq(EXPECTED_PH9[0]["kind"], "HACKER_FRIGATE")
+	assert_eq(EXPECTED_PH9[1]["kind"], "JAMMER", "the local jammer, never the sector one (Open Space only)")
+	for row: Dictionary in EXPECTED_PH9:
+		assert_eq(row["section"], &"planet_approach", "Phase 9 lines spawn only in planet_approach")
+	var checked := 0
+	for section: LevelSection in _build_sections():
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				var path: String = entry.ship_scene.resource_path if entry.ship_scene else ""
+				if not _PH9_KIND_NAMES.has(path):
+					continue
+				checked += 1
+				assert_eq(section.end_condition, LevelSection.EndCondition.DURATION, "%s is a DURATION section"
+					% section.section_name)
+				assert_gt(wave.entries.size(), 1, "%s @ %.1f s: the Phase 9 line joins a wave that already existed" % [
+					section.section_name, wave.trigger_time])
+	assert_eq(checked, 2, "sanity: both Phase 9 lines were checked")
+
+
+## Boundary: a Phase 9 line's delay changed in memory must not match the pin (fresh sections; nothing shared mutated).
+func test_a_phase9_lines_delay_changed_fails_the_pin() -> void:
+	for path: String in [_HACKER, WaveBuilder.JAMMER]:
+		var sections := _build_sections()
+		var mutated := false
+		for section: LevelSection in sections:
+			for wave: WaveResource in section.waves:
+				for entry: SpawnEntryResource in wave.entries:
+					if not mutated and entry.ship_scene and entry.ship_scene.resource_path == path:
+						entry.spawn_delay += 1.0
+						mutated = true
+		assert_true(mutated, "sanity: level 1 has a %s line to mutate" % _PH9_KIND_NAMES[path])
+		assert_ne(_actual_ph9_spawns(sections), EXPECTED_PH9, "a %s line with a changed delay must not match the pin"
+			% _PH9_KIND_NAMES[path])
+
+
+## No Phase 9 line has a rail (`.move()`, `.free_after()` or `.shoot_*()`).
+func test_phase9_lines_have_no_rail() -> void:
+	var sections := _build_sections()
+	assert_eq(_actual_ph9_spawns(sections).size(), 2, "sanity: two Phase 9 lines")
+	assert_eq(_rail_rows(sections, MIGRATED_SECTIONS, _PH9_KIND_NAMES), [] as Array[String],
+		"these Phase 9 lines have .move(), .free_after() or shoot_*()")
+
+
+## Boundary: each Phase 9 line given `.move()` is reported by the same check, and only that line.
+func test_a_phase9_line_given_move_fails_the_no_rail_check() -> void:
+	for path: String in [_HACKER, WaveBuilder.JAMMER]:
+		var sections := _build_sections()
+		var mutated := false
+		for section: LevelSection in sections:
+			for wave: WaveResource in section.waves:
+				for entry: SpawnEntryResource in wave.entries:
+					if not mutated and entry.ship_scene and entry.ship_scene.resource_path == path:
+						entry.movement = StraightMovement.new()
+						mutated = true
+		assert_true(mutated, "sanity: level 1 has a %s line to mutate" % _PH9_KIND_NAMES[path])
+		assert_eq(_rail_rows(sections, MIGRATED_SECTIONS, _PH9_KIND_NAMES).size(), 1,
+			"a %s line with .move() must be reported" % _PH9_KIND_NAMES[path])
+
+
+## The two Ph9 lives, printed, with the plan's figures as sanity (every term is read, never typed: these only catch a silently
+## changed config or a probe that measured nothing), and the Hacker's darts die with it (no ordnance tail).
+func test_phase9_lives_are_the_plans_figures() -> void:
+	var lives := _ph9_lives()
+	var jammer: Dictionary = _jammer_statics(WaveBuilder.JAMMER)[0]
+	var jammer_life := _member_life(-220.0, jammer)
+	gut.p("Ph9 lives: Hacker %.2f s (engage %.2f + pulse %.2f + slack + measured exit %.2f); local jammer (r %.0f, %.0f px/s) %.2f s from a -220 design-y spawn"
+		% [lives["hacker"], _HACKER_CONFIG.engage_seconds, _HACKER_CONFIG.pulse_seconds, lives["hacker_exit"], jammer["radius"],
+		jammer["speed"], jammer_life])
+	assert_gt(float(lives["hacker_exit"]), 0.0, "sanity: the Hacker's exit was measured")
+	assert_gt(float(jammer["speed"]), 0.0, "the jammer drifts")
+	assert_lte(jammer_life, 27.3, "the plan's 27.23 s drift life: (1164 + 468) / 60 + slack")
+	var hacker := (load(_HACKER) as PackedScene).instantiate()
+	var pool := hacker.get_node("DartPool") as BulletPool
+	assert_not_null(pool, "sanity: the Hacker carries its DartPool")
+	if pool != null:
+		assert_false(pool.persist_after_owner_death, "the Hacker's darts die with it: no ordnance tail")
+	hacker.free()
+	for a: Dictionary in _ph9_intervals(_section(_build_sections(), &"planet_approach")):
+		assert_eq(_ordnance_tail(a["kind"], 1.0), 0.0, "%s carries no ordnance tail" % a["kind"])
+
+
+## Plan §2.17 constraints 2 and 3: both lives end before planet_approach's 98.0 s peak, and the Hacker is gone before the
+## jammer arrives (a jammed player cannot launch, so a hijack would have nothing to take).
+func _ph9_constraint_violations(section: LevelSection) -> Array[String]:
+	var out: Array[String] = []
+	var by_kind := _ph9_by_kind(section)
+	if not by_kind.has("HACKER_FRIGATE") or not by_kind.has("JAMMER"):
+		return ["missing a Ph9 line: %s" % [by_kind.keys()]]
+	var h: Dictionary = by_kind["HACKER_FRIGATE"]
+	var j: Dictionary = by_kind["JAMMER"]
+	for a: Dictionary in [h, j]:
+		if float(a["end"]) >= _PH9_LATE_PEAK:
+			out.append("%s ends %.2f s >= %.1f s" % [a["kind"], a["end"], _PH9_LATE_PEAK])
+	if float(h["start"]) < float(j["end"]) and float(j["start"]) < float(h["end"]):
+		out.append("the Hacker (%.2f-%.2f s) and the jammer (%.2f-%.2f s) overlap" % [h["start"], h["end"], j["start"], j["end"]])
+	return out
+
+
+func test_phase9_lives_end_before_the_late_peak_and_never_overlap() -> void:
+	var section := _section(_build_sections(), &"planet_approach")
+	var by_kind := _ph9_by_kind(section)
+	for kind: String in by_kind:
+		gut.p("planet_approach %s alive %.2f-%.2f s" % [kind, by_kind[kind]["start"], by_kind[kind]["end"]])
+	assert_eq(_ph9_constraint_violations(section), [] as Array[String], "plan §2.17 constraints 2 / 3")
+
+
+## Boundaries: the jammer moved into the 50.0 s wave overlaps the Hacker; moved into the 75.0 s wave it outlives 98.0 s.
+func test_a_moved_jammer_fails_the_lives_row() -> void:
+	var overlap := _section(_build_sections(), &"planet_approach")
+	assert_true(_move_jammer_to_wave(overlap, 50.0), "sanity: the jammer moved into the 50.0 s wave")
+	var v1 := _ph9_constraint_violations(overlap)
+	gut.p("jammer at 50.0 s: %s" % [v1])
+	assert_true(v1.any(func(v: String) -> bool: return v.contains("overlap")), "a jammer at 50.0 s overlaps the Hacker")
+	var late := _section(_build_sections(), &"planet_approach")
+	assert_true(_move_jammer_to_wave(late, 75.0), "sanity: the jammer moved into the 75.0 s wave")
+	var v2 := _ph9_constraint_violations(late)
+	gut.p("jammer at 75.0 s: %s" % [v2])
+	assert_true(v2.any(func(v: String) -> bool: return v.begins_with("JAMMER ends")), "a jammer at 75.0 s outlives 98.0 s")
+
+
+## Boundary (acceptance criterion): a second Hacker at 96 s (a wave inserted in list order) meets planet_approach's 98.0 s
+## peak and takes it from 7 to 8 > 7.5: the count gate rejects it.
+func test_a_hacker_at_96_s_fails_the_count_gate() -> void:
+	var lives := _ai_lives()
+	var section := _section(_build_sections(), &"planet_approach")
+	var limit := _COUNT_RATIO * int(_LEGACY_PEAK_SPECIALISTS[&"planet_approach"])
+	var before := _peak(_ai_intervals(section, lives))
+	assert_eq(int(before["count"]), 7, "sanity: planet_approach peaks at 7 alive with both Ph9 ships placed")
+	var at := 96.0
+	var index := section.waves.size()
+	for i in section.waves.size():
+		if section.waves[i].trigger_time > at:
+			index = i
+			break
+	var b := WaveBuilder.new()
+	section.waves.insert(index, b.wave(at, [b.hacker_frigate().at(-400, -180)]))
+	var effective := -INF
+	for i in index + 1:
+		effective = maxf(effective, section.waves[i].trigger_time)
+	assert_almost_eq(effective, at, 0.0001, "sanity: the inserted wave sits in list order")
+	var after := _peak(_ai_intervals(section, lives))
+	gut.p("planet_approach + Hacker at 96.0 s: peak %d -> %d at %.2f s (limit %.1f)" % [before["count"], after["count"],
+		after["at"], limit])
+	assert_eq(int(after["count"]), 8, "the Hacker meets the 98.0 s peak")
+	assert_gt(float(after["count"]), limit, "the count gate must reject this")
+
+
+## Boundary (acceptance criterion): the jammer moved to design x -45 (world 550) sits on the 78.0 s column at 550 while it
+## drifts, and the column row reports it (the 10.0 s column at 600 too: no end filter, 50 < 56 px).
+func test_a_jammer_moved_onto_a_lit_column_fails_the_column_row() -> void:
+	var sections := _build_sections()
+	var moved := false
+	for section: LevelSection in sections:
+		for wave: WaveResource in section.waves:
+			for entry: SpawnEntryResource in wave.entries:
+				if entry.ship_scene and entry.ship_scene.resource_path == WaveBuilder.JAMMER:
+					entry.base_offset = Vector2(-45.0, entry.base_offset.y)
+					moved = true
+	assert_true(moved, "sanity: level 1 has a jammer line to move")
+	var result := _column_conflicts(sections)
+	gut.p("jammer at design x -45: %s" % [result["conflicts"]])
+	var jammer_hits := (result["conflicts"] as Array).filter(func(c: String) -> bool: return c.contains("JAMMER"))
+	assert_gt(jammer_hits.size(), 0, "a jammer on a lit column must fail the column row")
+	assert_true(jammer_hits.any(func(c: String) -> bool: return c.contains("78.0 s column at 550")),
+		"the 78.0 s column at 550 is among the conflicts")

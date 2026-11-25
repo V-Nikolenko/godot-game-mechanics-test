@@ -1,0 +1,245 @@
+{
+  "tasks": [
+    {
+      "key": "t1",
+      "title": "Win back at least 12 s of test-suite time so the Dreadnought's tests fit under the gate limit",
+      "description": "GUT is about 225 s against the 240 s ceiling and the 237 s escalation line; the phase's suites need about 13.8 s. Free at least 12 s (two-run mean of scripts/gate-time.sh) using only the tests/README.md Gate time rules 1-3: tick-paced files from 8x to 16x after checking wall >> CPU, scenarios replayed by several tests computed once, per-tick bookkeeping no assertion reads dropped. Never shorten a tick count, duration or sample grid, widen a bound or remove an assertion. Record before/after in tests/README.md -> Gate time.",
+      "acceptanceCriteria": "- Two-run mean of scripts/gate-time.sh is at least 12 s lower than the start figure, all tests green, same test count.\n- No assertion, tolerance, tick count, duration or start grid changed (diff review).\n- scripts/check-test-leaks.sh clean; gate output under 1 MiB.\n- tests/README.md Gate time table has the row.",
+      "type": "chore",
+      "complexity": "medium",
+      "dependsOn": [],
+      "planSections": [
+        "2.14"
+      ]
+    },
+    {
+      "key": "t2",
+      "title": "Boss launch bays can burst escorts out of their own wreck when their part is destroyed",
+      "description": "Add the appended ReinforcementBay.Trigger.ON_OWN_DESTROYED to global/boss/reinforcement_bay.gd and its handling in global/boss/boss_reinforcements.gd: on its own part's destruction an activated bay queues one launch, runs its door cycle on the wreck (CHARGING light), launches from its Mouth, then dies; one chance (no room or Assault limit = spent); EMP holds; host death means nothing launches; surge() on a breaching bay returns 0; new is_breaching(bay_id). Every existing trigger bit-identical. This deliberately changes the Ph11 convention for opt-in bays: log it in DECISIONS.md.",
+      "acceptanceCriteria": "- The nine rows of plan 2.2 in tests/integration/test_boss_reinforcements.gd pass; every existing row in that file and the fortress reinforcement suite unchanged and green.\n- Inside the 0.5 s gate-time allotment.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [],
+      "planSections": [
+        "2.2",
+        "2.14"
+      ]
+    },
+    {
+      "key": "t3",
+      "title": "A missile battery can fire its salvo as a fan of rockets",
+      "description": "RocketBatteryMount gains fan_count (1) and fan_spread_deg (0): each salvo step launches fan_count rockets spread evenly about the barrel; 1/0 is bit-identical (same directions, same rng draws); pools sized for salvo_count x fan_count; each refused rocket counted.",
+      "acceptanceCriteria": "- Plan 2.3 rows in tests/integration/test_turret_mount_variants.gd pass, including the 1/0 bit-identity boundary.\n- Every existing rocket battery, corvette and fortress row green unchanged.\n- Inside the 0.3 s allotment.",
+      "type": "feature",
+      "complexity": "small",
+      "effort": "medium",
+      "dependsOn": [],
+      "planSections": [
+        "2.3",
+        "2.14"
+      ]
+    },
+    {
+      "key": "t4",
+      "title": "A slow energy torpedo the player can shoot down, fired from a new torpedo-tube turret",
+      "description": "New assault/scenes/projectiles/enemy_ordnance/energy_torpedo.tscn (an EnemyOrdnance PURSUIT_BOMB scene, 3 HP, steers 3 s then accelerates; its own sprite through the pixel-art-generation skill) and TurretMount.Variant.TORPEDO_TUBE (appended, 9): TorpedoTubeMount + standalone torpedo_tube_mount.tscn wired into the variant scene map, persisting pool, 1.0 s telegraph.",
+      "acceptanceCriteria": "- Plan 2.4 rows in test_turret_mount_variants.gd, test_enemy_ordnance.gd and test_enemy_bullet_lifetime.gd pass.\n- Transparency, project-load and UID sweeps green with the new scenes and sprite.\n- Inside the 0.8 s allotment.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [],
+      "planSections": [
+        "2.4",
+        "2.14"
+      ]
+    },
+    {
+      "key": "t5",
+      "title": "An engine-wake hazard: short-lived burning exhaust puffs that hurt whoever flies through them",
+      "description": "New assault/scenes/hazards/engine_wake/ (EngineWake extends HazardField, HAZARD.md): radius = damage radius 40, 3 s life, 5 damage per 0.5 s, no damage in its last 0.5 s fade, code-drawn, set_owner_group(), set_scale_factors(). Shared change: HazardField.damage_exempt_group and Hazards.pulse_damage(..., exempt_group := &\"\"), bit-identical by default.",
+      "acceptanceCriteria": "- Plan 2.5 rows in tests/integration/test_engine_wake.gd and the exempt row in tests/unit/test_hazards.gd pass.\n- Every hazard, reactor-field and wreck suite green unchanged.\n- Inside the 0.6 s allotment.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [],
+      "planSections": [
+        "2.5",
+        "2.14"
+      ]
+    },
+    {
+      "key": "t6",
+      "title": "The Dreadnought exists: an armoured 450 px warship of eight breakable parts, any of which the player can attack first",
+      "description": "Build assault/scenes/enemies/dreadnought/ (Dreadnought root, stub DreadnoughtBrain, flat DreadnoughtConfig, ENEMY.md), WaveBuilder.dreadnought(): the armoured hull, eight parts with no locks, core death = boss death through BossDeathSequence, one ShieldSector on core and engines, the two phase tracks (PhaseDriver hull, EngineDriver engines) with the phase handler and phase_snapshot() (visuals key built), EMP x 0.4, the roster gates, tests/helpers/dreadnought_fixture.gd. Placeholder art from existing Carrier / fortress PNGs.",
+      "acceptanceCriteria": "- The seven row groups of plan 2.6.7 in tests/integration/test_dreadnought.gd pass in both harnesses.\n- test_boss_phase_rules.gd finds the Dreadnought with two valid drivers.\n- Every roster / invariant gate of plan 2.6.6 lists it and is green.\n- Inside the 2.5 s allotment.",
+      "type": "feature",
+      "complexity": "large",
+      "dependsOn": [
+        "t1"
+      ],
+      "planSections": [
+        "2.1",
+        "2.6",
+        "2.14",
+        "2.15"
+      ]
+    },
+    {
+      "key": "t7",
+      "title": "The Dreadnought hunts the player on long arcs, swings round with jets, and visibly lists or stops dead as its engines are lost",
+      "description": "Fill DreadnoughtBrain's movement: the heading model (velocity along the nose, per-side turn rates), Open Space idle / hunt on the loiter circle with the engaged broadside inward, side hysteresis, jets burst-turn, leash and RETURNING, the Assault ENTER and racetrack, listing (asymmetric turn, yaw bias, drift), crippled HOLD with thruster rotation, critical speed, movement_snapshot().",
+      "acceptanceCriteria": "- Plan 2.7 rows 1-8 in tests/integration/test_dreadnought_movement.gd pass in both harnesses; the engine-loss rows measure positions, never the sprite.\n- movement joins BUILT_KEYS in test_dreadnought.gd's paragraph-25 rows.\n- test_enemy_mover_single_writer.gd green.\n- Inside the 2.0 s allotment.",
+      "type": "feature",
+      "complexity": "large",
+      "dependsOn": [
+        "t6"
+      ],
+      "planSections": [
+        "2.1",
+        "2.6.5",
+        "2.6.7",
+        "2.7",
+        "2.14",
+        "2.15"
+      ]
+    },
+    {
+      "key": "t8",
+      "title": "The Dreadnought fights back: rippling broadsides that sweep as it turns, a missile fan and a torpedo, each silenced when its module dies",
+      "description": "Mount slots on the four weapon parts (3 HEAVY_CANNON per broadside, the fanned ROCKET_BATTERY rack, the TORPEDO_TUBE), built by ModularHull.build_mounts(); the brain's volley ripple, broadside hold during jets, attack_gate() counting parts (cap 2 / 3), the crippled and critical cooldown cuts with pool_period_factor 0.45, the fairness inequality, attacks_snapshot(), and the measured Assault density per phase state.",
+      "acceptanceCriteria": "- Plan 2.8 rows 1-9 in tests/integration/test_dreadnought_weapons.gd pass; the module-death row runs in both harnesses.\n- Measured density inside 13.3 /s mean and 30 per 2 s window in every phase state, levers only in the stated order.\n- Inside the 3.0 s allotment.",
+      "type": "feature",
+      "complexity": "large",
+      "dependsOn": [
+        "t3",
+        "t4",
+        "t7"
+      ],
+      "planSections": [
+        "2.1",
+        "2.3",
+        "2.4",
+        "2.6.5",
+        "2.6.7",
+        "2.7",
+        "2.8",
+        "2.14",
+        "2.15"
+      ]
+    },
+    {
+      "key": "t9",
+      "title": "The Dreadnought's working engines leave a burning wake behind it while it hunts",
+      "description": "Each engine part gets a WakePoint; the brain spawns an EngineWake every 48 px travelled behind each live engine while engaged, owner group exempt, x1.3 radius and life while listing, off when crippled, at most 40 live, nothing without a hazard container; arena_snapshot().",
+      "acceptanceCriteria": "- Plan 2.9 rows in tests/integration/test_dreadnought_wake.gd pass in both harnesses.\n- arena joins BUILT_KEYS in test_dreadnought.gd.\n- Inside the 0.8 s allotment; hazard-count cost noted in the gate-time row.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t5",
+        "t8"
+      ],
+      "planSections": [
+        "2.1",
+        "2.5",
+        "2.6.5",
+        "2.6.7",
+        "2.7",
+        "2.9",
+        "2.14"
+      ]
+    },
+    {
+      "key": "t10",
+      "title": "A critically damaged Dreadnought rams the player down a telegraphed lane, then is open to punishment",
+      "description": "The ram cycle in DreadnoughtBrain (LINE_UP, WIND_UP with the drawn RamLane and frozen aim, CHARGE by mover.boost with ram_damage on the contact box, RECOVER, cooldown), only in critical with at least one engine; the Assault diagonal clamp; cancel on losing both engines, EMP or death; ram_enabled in movement_snapshot().",
+      "acceptanceCriteria": "- Plan 2.10 rows 1-8 in tests/integration/test_dreadnought_ram.gd pass in both harnesses, including the no-ram-when-crippled boundary.\n- test_enemy_contact_damage.gd still reads collision_damage 25 at spawn.\n- Inside the 1.5 s allotment.",
+      "type": "feature",
+      "complexity": "medium",
+      "effort": "high",
+      "dependsOn": [
+        "t9"
+      ],
+      "planSections": [
+        "2.1",
+        "2.6.5",
+        "2.6.7",
+        "2.7",
+        "2.8",
+        "2.10",
+        "2.14",
+        "2.15"
+      ]
+    },
+    {
+      "key": "t11",
+      "title": "Destroying a Dreadnought weapon makes two interceptors burst out of the wreck",
+      "description": "A Bay (ON_OWN_DESTROYED, Gatling Interceptor pair, Mouth outside the hull edge) on each of the four weapon parts; the root's BossReinforcements with caps 6 / 4, ticked by the brain while engaged and not EMP'd, scuttled on death; config_overrides for the 3 s first-fire rule.",
+      "acceptanceCriteria": "- Plan 2.11 rows in tests/integration/test_dreadnought_reinforcements.gd pass in both harnesses.\n- Escorts announced on EventBus.boss_escort_spawned, never enemy_spawned_orphan.\n- Inside the 1.0 s allotment.",
+      "type": "feature",
+      "complexity": "medium",
+      "dependsOn": [
+        "t2",
+        "t10"
+      ],
+      "planSections": [
+        "2.2",
+        "2.6.3",
+        "2.11",
+        "2.14",
+        "2.15"
+      ]
+    },
+    {
+      "key": "t12",
+      "title": "The Dreadnought gets its own art: a modular hull whose silhouette shrinks as parts are wrecked and fling off debris",
+      "description": "Invoke pixel-art-generation first. Hull 208 x 448 with empty sockets, intact and smaller wreck-stump art for every part, engine plumes, list smoke and critical overlay in assault/assets/sprites/enemies/dreadnought/, all at scale 1 and the size of their hurtboxes; the torpedo-tube head; the detach chunk (dreadnought_chunk.tscn, a DebrisFragment with source = the Dreadnought) spawned deferred per destroyed part.",
+      "acceptanceCriteria": "- Plan 2.12 rows in tests/integration/test_dreadnought_sprites.gd pass.\n- test_entity_sprite_transparency.gd green; no placeholder Carrier / fortress PNG left in dreadnought.tscn.\n- Every image was looked at (composites intact / damaged / all wrecked recorded in the report).\n- Inside the 0.3 s allotment.",
+      "type": "art",
+      "complexity": "medium",
+      "effort": "high",
+      "dependsOn": [
+        "t6"
+      ],
+      "planSections": [
+        "2.6.2",
+        "2.6.5",
+        "2.12",
+        "2.14"
+      ]
+    },
+    {
+      "key": "t13",
+      "title": "The Dreadnought roams its own hunting zone at the far south-west of the Open Space hub",
+      "description": "sector_hub.gd draw 22 (4200 ring at 135 degrees), patrol_anchor and rng_seed before add_child(), not start_engaged; test_sector_hub_patrol.gd lists it with its leash footprint and every hard count moves by one; pre-approved levers only.",
+      "acceptanceCriteria": "- test_sector_hub_patrol.gd green with the Dreadnought in _patrol_groups(); earlier draws' seeds unchanged.\n- Escalate if no pre-approved lever clears the sweep.\n- Inside the 0.5 s allotment.",
+      "type": "feature",
+      "complexity": "small",
+      "dependsOn": [
+        "t11"
+      ],
+      "planSections": [
+        "2.7",
+        "2.11",
+        "2.13",
+        "2.14"
+      ]
+    },
+    {
+      "key": "t14",
+      "title": "Docs and phase close: the Dreadnought and the new shared pieces are documented, and the phase dossier is written",
+      "description": "Invoke updating-project-docs for global.md, assault.md, enemy-roster.md, dreadnought/ENEMY.md (the paragraph-43 checklist answered), PROJECT.md, CLAUDE.md gate list and tests/README.md; write docs/epics-done/cmug256tc003lm52wbdoxucrr/ (PRD, SOURCES, REPORT) and the Phase 12 as-built section of DECISIONS.md.",
+      "acceptanceCriteria": "- Every doc named in plan 2.16 updated; the dossier exists with honest Known gaps (nothing play-tested).\n- DECISIONS.md has '## Phase 12 - as built' with deviations and owner choices as built.\n- Gate green.",
+      "type": "chore",
+      "complexity": "medium",
+      "dependsOn": [
+        "t12",
+        "t13"
+      ],
+      "planSections": [
+        "1.1",
+        "2.15",
+        "2.16",
+        "6",
+        "7"
+      ]
+    }
+  ]
+}

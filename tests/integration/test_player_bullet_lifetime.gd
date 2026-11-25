@@ -11,10 +11,10 @@
 ##      `range_px = 0.0`) — which made `PierceModule` a strict downgrade, since the baseline
 ##      already pierced everything at full damage forever. The fix distinguishes a hit that deals
 ##      damage (consumes the bullet) from a **deflected** one (does not) via `is_armored()` —
-##      see `bullet.gd`'s header. The space-station mini-boss depends on the deflected case: its
-##      armoured core spans the whole hull, so a shot aimed at a turret has to survive crossing it
-##      undeflected. See `assault/scenes/enemies/space_station/ENEMY.md` -> "Core hurtbox: why it
-##      spans the whole hull" and `test_space_station.gd`'s two real-physics bullet tests, which
+##      see `bullet.gd`'s header. The Space Fortress boss depends on the deflected case: its
+##      armoured hull spans the whole boss, so a shot aimed at a battery has to survive crossing it
+##      undeflected. See `assault/scenes/enemies/space_fortress/ENEMY.md` and
+##      `test_space_fortress.gd`'s real-bullet rows and `test_fortress_incoming_damage_paths.gd`, which
 ##      exercise the same premise through real collision layers rather than a stand-in.
 ##
 ##   2. **An unpooled projectile owns its own lifetime and frees itself when it leaves the
@@ -58,9 +58,9 @@ class StubActor extends Node2D:
 	var pierce_module_active: bool = false
 
 
-## A stand-in for `SpaceStation`'s armoured core — exposes the same duck-typed `is_armored()`
+## A stand-in for the Space Fortress's armoured hull — exposes the same duck-typed `is_armored()`
 ## query `bullet.gd::_hit_is_deflected()` checks, without any of the real scene. Deliberately NOT
-## `SpaceStation` itself: `test_space_station.gd` already covers the real boss through real
+## the fortress itself: `test_space_fortress.gd` already covers the real boss through real
 ## collision layers; this file only has to prove the bullet honours the query.
 class ArmoredStandIn extends Node2D:
 	func is_armored() -> bool:
@@ -149,7 +149,7 @@ func test_a_launched_bullet_stops_on_its_first_damaging_hit() -> void:
 
 
 ## Boundary: a hit that the target DEFLECTS (`is_armored() == true`) must not consume the bullet
-## or its pierce budget — this is the whole reason the space-station boss stays killable. See
+## or its pierce budget — this is the whole reason the Space Fortress stays killable. See
 ## `bullet.gd::_hit_is_deflected()`.
 func test_a_deflected_hit_does_not_consume_the_bullet() -> void:
 	StraightBehavior.new().fire(_state, _mode(BULLET_SCENE), _muzzle)
@@ -164,7 +164,7 @@ func test_a_deflected_hit_does_not_consume_the_bullet() -> void:
 	await get_tree().physics_frame
 
 	assert_true(is_instance_valid(bullet) and bullet.is_inside_tree(),
-			"a deflected hit must not consume the bullet — the station boss becomes unkillable "
+			"a deflected hit must not consume the bullet — the fortress becomes unkillable "
 			+ "if it is (see this file's header)")
 	assert_false(bullet.is_queued_for_deletion(), "the bullet must not have been queued for free")
 	assert_eq(bullet.pierces_remaining, starting_pierces,
@@ -469,3 +469,20 @@ func test_an_unlimited_pierce_bullet_is_not_stopped_by_an_armoured_ram_corvette(
 	assert_false(ram.is_in_group("ram_ships"), "the group the old rule keyed on is gone")
 	assert_eq(hb.damage, damage_before, "the HitBox is not zeroed")
 	assert_false(bullet.is_queued_for_deletion(), "an armoured Corvette does not stop a Sniper Shot")
+
+
+## Every player rocket scene frees itself on its own — exactly one owner, nobody else frees it. The
+## homing rocket through its `ProjectileLifetime` (`expired -> _on_expired -> queue_free`), the warhead
+## through its screen notifier (docs/plans/cmug23onr001pm52w9swwophy/3-plan.md §2.4).
+func test_every_player_rocket_scene_frees_itself() -> void:
+	var homing := load("res://assault/scenes/projectiles/missiles/homing/homing_missile.tscn").instantiate() as Node2D
+	_container.add_child(homing)
+	assert_true(homing.has_signal("expired"), "the homing rocket declares expired")
+	homing.expired.emit()
+	assert_true(homing.is_queued_for_deletion(), "expired frees the homing rocket")
+
+	var warhead := load("res://assault/scenes/projectiles/missiles/warhead/warhead_missile.tscn").instantiate() as Node2D
+	_container.add_child(warhead)
+	var notifier := warhead.get_node("VisibleOnScreenNotifier2D") as VisibleOnScreenNotifier2D
+	notifier.screen_exited.emit()
+	assert_true(warhead.is_queued_for_deletion(), "leaving the screen frees the warhead rocket")

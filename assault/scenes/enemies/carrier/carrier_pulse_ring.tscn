@@ -1,0 +1,12 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_beams/energy_ring.tscn" id="1_cpr"]
+
+[node name="CarrierPulseRing" instance=ExtResource("1_cpr")]
+telegraph_seconds = 1.0
+ring_speed = 360.0
+max_radius = 420.0
+band = 24.0
+gap_count = 2
+gap_deg = 50.0
+damage = 14

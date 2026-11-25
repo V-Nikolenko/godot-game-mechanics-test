@@ -10,9 +10,9 @@
 ## Its two siblings both fold the hull's rotation into their non-aimed branch
 ## (`aimed_attack_pattern.gd:31` and `gatling_attack_pattern.gd:35`, both
 ## `Vector2.DOWN.rotated(ship.rotation)`). This one must not, and the divergence is a contract
-## rather than an oversight: `StationLaserPhase._physics_process` rotates the station at
-## 0.5 rad/s during exactly the phase the core's ring fires in. Over one 2.0 s ring interval that
-## is 1.0 rad of hull rotation against a 0.628 rad ring spacing, so folding in `ship.rotation`
+## rather than an oversight: a boss hull spins while its core ring fires (the Space Fortress's `critical` spin; `FortressBrain`
+## keeps the ring's base angle in world space). On the retired space station, its first user, 0.5 rad/s over one 2.0 s ring interval was
+## 1.0 rad of hull rotation against a 0.628 rad ring spacing, so folding in `ship.rotation`
 ## would add ~1.6 spacings of uncontrolled drift per ring on top of the designed precession —
 ## and the ring would no longer have the lane-coverage property `core_ring_step` is tuned for.
 ##

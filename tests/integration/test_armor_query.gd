@@ -6,9 +6,9 @@
 ## the hit-blind `is_armored()` cannot express. Proven on a fixture armoured entity
 ## (tests/helpers/armored_fixture.gd) with REAL projectile scenes and real collision layers.
 ##
-## The space station implements neither new method and takes the unchanged fallback path; its
-## suites (`test_space_station.gd`, `test_station_incoming_damage_paths.gd`,
-## `test_player_bullet_lifetime.gd`) must pass unedited.
+## A host that implements only `is_armored()` takes the unchanged fallback path (the retired space station did; the
+## Space Fortress answers both); its suites (`test_fortress_incoming_damage_paths.gd`,
+## `test_player_bullet_lifetime.gd`) must stay green.
 extends GutTest
 
 const BULLET_SCENE: PackedScene = preload("res://assault/scenes/projectiles/bullets/bullet.tscn")
@@ -99,7 +99,7 @@ func _hit_box(damage_type: HitBox.DamageType, damage: int = 50, parent: Node = n
 	return hb
 
 
-## A stand-in for the station: only `is_armored()`.
+## A stand-in for an is_armored-only host (the retired space station's shape).
 class IsArmoredOnly extends Node2D:
 	func is_armored() -> bool:
 		return true
@@ -123,7 +123,7 @@ func test_query_falls_back_to_is_armored() -> void:
 	var hurt := HurtBox.new()
 	armored.add_child(hurt)
 	assert_true(ArmorQuery.deflects(hurt, _hit_box(HitBox.DamageType.ROCKET)),
-			"an is_armored-only target (the station) deflects everything, rockets included")
+			"an is_armored-only target deflects everything, rockets included")
 
 	var plain := Node2D.new()
 	_container.add_child(plain)

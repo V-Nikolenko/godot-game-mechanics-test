@@ -48,8 +48,8 @@ extends Node2D
 ## BEFORE add_child(), because _ready() is what reads it.
 ##
 ## For emitters mounted ON an entity that would otherwise sit inside their own beam:
-## SpaceStation's laser phase sets 128 (player hurtbox only) so the boss does not kill
-## itself with its own beam — its core HurtBox is on layer 512, which _HIT_MASK covers.
+## 128 (player hurtbox only) keeps a boss from killing itself with its own beam when its hurtboxes sit on
+## layer 512, which _HIT_MASK covers (first used by the retired space station's laser phase; no shipped emitter sets it today).
 ##
 ## 0 means "use the default", NOT "collide with nothing": a beam that collides with
 ## nothing is inert, and that is not a configuration anyone wants.
@@ -61,7 +61,7 @@ extends Node2D
 ## then left disabled to avoid the assault HurtBox/game-over damage path.
 @export var race_hazard: bool = false
 
-## Opt-in (default false: the race gauntlet and the station are unchanged). When true the ray is in `Hazards` as one
+## Opt-in (default false: the race gauntlet is unchanged). When true the ray is in `Hazards` as one
 ## `&"laser_wall"` segment `HazardInfo` from `start()` (the warning line) to the beginning of the dissolve (end of active),
 ## so enemy steering avoids the lane before it is lit and while it is. Level 1's columns and its `LaserWallWave` set it:
 ## they kill AI enemies (docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md, "Phase 8, built in t17").

@@ -1,8 +1,8 @@
 # open_space/scenes/levels/sector_hub.gd
 extends Node2D
 
-## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair and a Sniper, a Bomber, a Ram Corvette, a Missile Corvette, a Support Ship, a Mine Layer, a Laser Tender
-## and a Twin-Laser Drone pair, each patrolling its own anchor point, and assigns the planet config. The defended derelict site by the
+## Open Space hub. Spawns an idle Swarm Drone squad, a Razor Drone, a fighter pair, a Gatling pair and a Sniper, a Bomber, a Ram Corvette, a Missile Corvette, a Support Ship, a Mine Layer, a Laser Tender,
+## a Twin-Laser Drone pair, a Hacker Frigate, a Heavy Gunship, a Carrier and a Space Fortress, each patrolling its own anchor point, and assigns the planet config. The defended derelict site by the
 ## TacticalSpace is a scene node under `EnemyContainer` (a `TurretGroup` preset), not part of the patrol.
 ## To change this planet's missions, background, or sprite — edit edelia.tres.
 ## To use a different config, change the path in _configure_planet().
@@ -29,6 +29,10 @@ const SUPPORT_SHIP: PackedScene = preload("res://assault/scenes/enemies/support_
 const MINE_LAYER: PackedScene = preload("res://assault/scenes/enemies/mine_layer/mine_layer.tscn")
 const LASER_TENDER: PackedScene = preload("res://assault/scenes/enemies/laser_tender/laser_tender.tscn")
 const TWIN_LASER_PAIR_SPAWN: PackedScene = preload("res://assault/scenes/enemies/twin_laser_drone/twin_laser_pair_spawn.tscn")
+const HACKER_FRIGATE: PackedScene = preload("res://assault/scenes/enemies/hacker_frigate/hacker_frigate.tscn")
+const HEAVY_GUNSHIP: PackedScene = preload("res://assault/scenes/enemies/heavy_gunship/heavy_gunship.tscn")
+const CARRIER: PackedScene = preload("res://assault/scenes/enemies/carrier/carrier.tscn")
+const SPACE_FORTRESS: PackedScene = preload("res://assault/scenes/enemies/space_fortress/space_fortress.tscn")
 
 ## Fighters and Gatlings patrol in pairs, a squad of two each (epic plan §2.10).
 const SHOOTER_SQUAD_SIZE := 2
@@ -74,6 +78,24 @@ const SHOOTER_SQUAD_SIZE := 2
 @export var twin_pair_ring_radius: float = 2600.0
 @export var twin_pair_anchor_bearing_deg: float = -157.5
 
+## The Hacker Frigate (epic plan §2.16, phase 9) takes draw 18 on the same 2600 ring at 67.5 deg, about (995, 2402): -22.5, 112.5 and -157.5 are taken. Its anchor sits
+## ~1900 px from the sector jammer (~2045 from the site), beyond `idle_radius` 160 + `preferred_range` 720 + the sector jammer's `field_radius` 640 = 1520. The sector jammer beside
+## `HubDefenseSite` and the pulsed jammer are scene nodes under `EnemyContainer`, the EMP zone one under `TacticalSpace`: none of them is a draw.
+@export var hacker_ring_radius: float = 2600.0
+@export var hacker_anchor_bearing_deg: float = 67.5
+
+## The Heavy Gunship (epic plan §2.14, phase 10) takes draw 19 on the 2600 ring at 157.5 deg, about (-2402, 995); 22.5 deg is unusable (~120 px from `HubDefenseSite` and the sector jammer), -67.5 is the
+## pre-approved fallback. The Carrier takes draw 20 on a 3400 ring at -112.5 deg, about (-1301, -3141): its SCREEN / PANIC leash (900 px) is part of its footprint, and 3200-3800 is the pre-approved range.
+@export var heavy_gunship_ring_radius: float = 2600.0
+@export var heavy_gunship_anchor_bearing_deg: float = 157.5
+@export var carrier_ring_radius: float = 3400.0
+@export var carrier_anchor_bearing_deg: float = -112.5
+
+## The Space Fortress (epic plan §2.13, phase 11) takes draw 21 on a 4200 ring at -45 deg, about (2970, -2970); its `patrol_anchor` is the centre of its 600 px combat zone. Pre-approved levers:
+## ring 3800-4600, bearing -45 +- 22.5 deg. It is the hub's fortress, never called a station: "Fortuna Space Station" is a mission trigger.
+@export var fortress_ring_radius: float = 4200.0
+@export var fortress_anchor_bearing_deg: float = -45.0
+
 @onready var enemy_container: Node2D = $EnemyContainer
 
 func _ready() -> void:
@@ -101,6 +123,13 @@ func _spawn_patrol() -> void:
 	# Phase 8, draws 16 and 17: appended after the fifteen above, so every earlier seed is unchanged.
 	_spawn_laser_tender(_ring_anchor(laser_tender_ring_radius, laser_tender_anchor_bearing_deg), rng)
 	_spawn_twin_laser_pair(_ring_anchor(twin_pair_ring_radius, twin_pair_anchor_bearing_deg), rng)
+	# Phase 9, draw 18: appended after the seventeen above, so every earlier seed is unchanged.
+	_spawn_hacker_frigate(_ring_anchor(hacker_ring_radius, hacker_anchor_bearing_deg), rng)
+	# Phase 10, draws 19 and 20: appended after the eighteen above, so every earlier seed is unchanged.
+	_spawn_heavy_gunship(_ring_anchor(heavy_gunship_ring_radius, heavy_gunship_anchor_bearing_deg), rng)
+	_spawn_carrier(_ring_anchor(carrier_ring_radius, carrier_anchor_bearing_deg), rng)
+	# Phase 11, draw 21: appended after the twenty above, so every earlier seed is unchanged.
+	_spawn_space_fortress(_ring_anchor(fortress_ring_radius, fortress_anchor_bearing_deg), rng)
 
 func _ring_anchor(radius: float, bearing_deg: float) -> Vector2:
 	return Vector2.RIGHT.rotated(deg_to_rad(bearing_deg)) * radius
@@ -147,6 +176,42 @@ func _spawn_twin_laser_pair(anchor: Vector2, rng: RandomNumberGenerator) -> void
 	spawner.rng_seed = _next_seed(rng)
 	enemy_container.add_child(spawner)
 	spawner.spawn_pair()
+
+## Draw 18. `patrol_anchor` and the seed are set before `add_child()`, so the brain's `_start()` builds its hub idle around the anchor.
+func _spawn_hacker_frigate(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var hacker := HACKER_FRIGATE.instantiate() as HackerFrigate
+	hacker.global_position = anchor
+	var brain := hacker.get_node("Brain") as HackerFrigateBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(hacker)
+
+## Draw 19. `patrol_anchor` and the seed are set before `add_child()`, so the brain's `_start()` builds its hub idle around the anchor.
+func _spawn_heavy_gunship(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var heavy := HEAVY_GUNSHIP.instantiate() as HeavyGunship
+	heavy.global_position = anchor
+	var brain := heavy.get_node("Brain") as HeavyGunshipBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(heavy)
+
+## Draw 20. Same wiring; its escorts launch as siblings in `EnemyContainer` once it engages.
+func _spawn_carrier(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var carrier := CARRIER.instantiate() as Carrier
+	carrier.global_position = anchor
+	var brain := carrier.get_node("Brain") as CarrierBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(carrier)
+
+## Draw 21. `patrol_anchor` (the combat zone's centre) and the seed are set before `add_child()`; it idles on `AnchorIdle` (not `start_engaged`). Its escort container is created lazily on the first launch.
+func _spawn_space_fortress(anchor: Vector2, rng: RandomNumberGenerator) -> void:
+	var fortress := SPACE_FORTRESS.instantiate() as SpaceFortress
+	fortress.global_position = anchor
+	var brain := fortress.get_node("Brain") as FortressBrain
+	brain.rng_seed = _next_seed(rng)
+	brain.patrol_anchor = anchor
+	enemy_container.add_child(fortress)
 
 func _spawn_missile_corvette(anchor: Vector2, rng: RandomNumberGenerator) -> void:
 	var corvette := MISSILE_CORVETTE.instantiate() as MissileCorvette

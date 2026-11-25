@@ -6,7 +6,7 @@
 ## and GUT still prints `---- All tests passed! ----` and exits 0. The gate
 ## (`/agent/verify.sh` step 3) checks the exit code and greps for `^N failing`, so **neither
 ## signal fires**: a test file broken by a rename or a deleted symbol silently vanishes from the
-## suite while the gate stays green. That is how `test_space_station.gd` disappeared once —
+## suite while the gate stays green. That is how the (since retired) space station's test file disappeared once —
 ## the parse errors went to stderr and GUT's verdict never mentioned them.
 ##
 ## This file closes that hole from inside the suite, so it works for any runner (the gate, CI, a

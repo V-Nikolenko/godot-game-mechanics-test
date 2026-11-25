@@ -112,6 +112,8 @@ var _launch_point: Vector2 = Vector2.ZERO
 ## WARHEAD: the proximity trigger has fired; the rocket is stopped and counting `_warning_clock` to its blast.
 var _triggered: bool = false
 var _warning_clock: float = 0.0
+## An EMP (`jam_guidance`, Phase 9 §2.6) ended this life's guidance window: it flies straight and keeps its blast.
+var _jammed: bool = false
 
 @onready var _hit_box: HitBox = $HitBox as HitBox
 @onready var _hit_shape: CollisionShape2D = $HitBox/CollisionShape2D as CollisionShape2D
@@ -146,6 +148,8 @@ func _ready() -> void:
 func reset() -> void:
 	for prop in _RESET_PROPS:
 		set(prop, _authored[prop])
+	_jammed = false
+	_leave_seeker_group()
 	_heading = Vector2.DOWN
 	_speed = 0.0
 	_aim = Vector2.ZERO
@@ -193,8 +197,12 @@ func launch(dir: Vector2, aim_point: Vector2, launcher: Node) -> void:
 	_launch_point = global_position
 	_clock = 0.0
 	_launched = true
+	_jammed = false
 	# Exports set after `acquire()` (a difficulty tier) reach the children here.
 	_apply_exports()
+	# A steering rocket is a seeker for this life (EMP `TARGET_SEEKERS` jams it); it leaves in `_mark_done()` / `reset()`.
+	if turn_rate > 0.0:
+		add_to_group(SeekingOrdnance.ENEMY_GROUP)
 	rotation = _heading.angle() + PI / 2.0
 	queue_redraw()
 
@@ -218,10 +226,27 @@ func is_armed() -> bool:
 	return _armed
 
 
-## True inside the steering window: after the boost, before `boost_seconds + guidance_seconds`.
+## True inside the steering window: after the boost, before `boost_seconds + guidance_seconds`, unless an EMP jammed it.
 func is_guiding() -> bool:
-	return _launched and not _done and not _triggered and turn_rate > 0.0 \
+	return _launched and not _done and not _triggered and not _jammed and turn_rate > 0.0 \
 			and _clock >= boost_seconds and _clock < boost_seconds + guidance_seconds
+
+
+## EMP (`EmpPulse.TARGET_SEEKERS`, Phase 9 §2.6): ends this life's guidance window at once. The rocket keeps its heading
+## and speed rules, its arming and its blast; `Hazards.bend_heading()` still applies. A DUMB rocket is never in the group.
+func jam_guidance(_source: Node) -> void:
+	_jammed = true
+
+
+func _leave_seeker_group() -> void:
+	if is_in_group(SeekingOrdnance.ENEMY_GROUP):
+		remove_from_group(SeekingOrdnance.ENEMY_GROUP)
+
+
+## Phase 9 t7 (§2.9): a seeker inside a lit jammer field keeps its heading (`_steer()` skipped; `is_guiding()` and the
+## flight clock are unchanged, so it steers again once out). Behind `Hazards.count() > 0`: with no hazard, the Ph5 path.
+func _in_lit_jammer() -> bool:
+	return Hazards.count() > 0 and Hazards.jammer_at(global_position) != null
 
 
 ## The point the rocket is steering at: the launch aim until guidance replaces it.
@@ -254,7 +279,7 @@ func _tick(delta: float) -> void:
 	if kind == Kind.CLUSTER and _should_split(delta):
 		_split()
 		return
-	if is_guiding():
+	if is_guiding() and not _in_lit_jammer():
 		_steer(delta)
 	if Hazards.count() > 0:
 		_heading = Hazards.bend_heading(_heading, _speed, global_position, delta, hazard_pull_scale())
@@ -445,6 +470,7 @@ func _mark_done() -> void:
 	if _done:
 		return
 	_done = true
+	_leave_seeker_group()
 	# Every area is closed deferred: this can run inside a physics callback.
 	_hit_box.set_deferred("monitoring", false)
 	_hit_box.set_deferred("monitorable", false)

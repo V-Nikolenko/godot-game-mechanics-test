@@ -1,6 +1,6 @@
 ## Integration tests for the `station_assault` LevelSection (EPIC sub-item 2).
 ##
-## Like `test_space_station.gd` these are NOT characterization tests — the section is new code, so
+## Like the Space Fortress's own intent suites (the section now holds the fortress, Phase 11 t10) these are NOT characterization tests — the section is new code, so
 ## they assert intended behaviour. Test 7 is the exception in spirit: it pins the *corrected*
 ## timeout path, which today advances with the boss still parented to the enemy container.
 ##
@@ -179,15 +179,15 @@ func test_level_1_sections_are_in_order_with_station_assault_third() -> void:
 		"station_assault belongs between the asteroid belt and the planet approach")
 
 
-func test_station_assault_is_enemies_cleared_with_a_long_timeout() -> void:
+func test_station_assault_is_enemies_cleared_with_the_240_second_timeout() -> void:
 	var sections: Array = _level_1_sections()
 
 	var station: LevelSection = sections[2]
 	assert_eq(station.section_name, &"station_assault", "section 2 should be the station")
 	assert_eq(station.end_condition, LevelSection.EndCondition.ENEMIES_CLEARED,
 		"the encounter must block progress until the station dies")
-	assert_true(station.enemies_cleared_timeout >= 60.0,
-		"a boss safety net must be far longer than the 10 s straggler default, got %s"
+	assert_eq(station.enemies_cleared_timeout, 240.0,
+		"the fortress safety net is 240 s (Ph11 owner choice 5), got %s"
 			% station.enemies_cleared_timeout)
 
 	var cloud: LevelSection = sections[4]
@@ -200,7 +200,7 @@ func test_station_assault_is_enemies_cleared_with_a_long_timeout() -> void:
 ## a non-zero spawn delay lets waves_complete fire before the station is a child (so
 ## _wait_enemies_cleared sees an empty container and advances instantly), and a MovementResource
 ## would attach an EnemyPathMover that frees the station on screen exit.
-func test_station_assault_spawns_one_station_at_zero_delay_with_no_movement() -> void:
+func test_station_assault_spawns_one_fortress_at_zero_delay_with_no_movement() -> void:
 	var station: LevelSection = _level_1_sections()[2]
 
 	assert_eq(station.waves.size(), 1, "one wave: the station itself")
@@ -209,8 +209,8 @@ func test_station_assault_spawns_one_station_at_zero_delay_with_no_movement() ->
 	assert_eq(wave.entries.size(), 1, "exactly one spawn entry")
 
 	var entry: SpawnEntryResource = wave.entries[0]
-	assert_true(entry.ship_scene.resource_path.ends_with("space_station.tscn"),
-		"expected the space station, got %s" % entry.ship_scene.resource_path)
+	assert_true(entry.ship_scene.resource_path.ends_with("space_fortress.tscn"),
+		"expected the space fortress, got %s" % entry.ship_scene.resource_path)
 	assert_eq(entry.spawn_delay, 0.0,
 		"a delayed spawn lets waves_complete fire before the station exists")
 	assert_null(entry.movement,

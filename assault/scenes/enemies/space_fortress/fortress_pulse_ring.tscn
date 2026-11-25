@@ -1,0 +1,15 @@
+[gd_scene format=3]
+
+[ext_resource type="PackedScene" path="res://assault/scenes/projectiles/enemy_beams/energy_ring.tscn" id="1_fpr"]
+
+[node name="FortressPulseRing" instance=ExtResource("1_fpr")]
+telegraph_seconds = 1.0
+fade_seconds = 0.15
+ring_speed = 300.0
+max_radius = 640.0
+band = 24.0
+gap_count = 2
+gap_deg = 50.0
+gap_spin_deg = 30.0
+damage = 14
+telegraph_width = 4.0

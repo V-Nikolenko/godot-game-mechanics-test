@@ -266,11 +266,12 @@ end-of-frame: actor freed → tree_exited
 
 No score is ever awarded in the escape path. Only the combo is penalised, and
 only when the enemy's `counts_as_escape` (from its `ShipConfig`, default
-`true`) allows it. This is independent of `counts_in_wave`: station
-reinforcements have `counts_in_wave = false` (wave index −1) but
-`counts_as_escape = true` — a deliberate balance decision pinned by
-`tests/integration/test_station_reinforcements.gd`
-(`test_a_squad_that_flies_through_costs_two_escape_combo_penalties`) — while
+`true`) allows it. This is independent of `counts_in_wave`: an orphan spawn (wave index −1,
+`EventBus.enemy_spawned_orphan`) is still judged by its own `counts_as_escape`, while boss escorts
+(Phase 11, `EventBus.boss_escort_spawned`) are never on this path at
+all — `ScoreTracker` pays their kills and nothing else, pinned by
+`tests/integration/test_boss_reinforcements.gd` (the retired space station's reinforcements used to
+take the orphan path and pay the penalty) — and
 bonus drones have both flags `false`, pinned by
 `tests/integration/test_score_tracker_escape_penalty.gd`.
 

@@ -187,3 +187,52 @@ func test_cancel_active_frees_everything_with_flag_off() -> void:
 	_pool.cancel_active()
 	await wait_frames(2)
 	assert_false(is_instance_valid(b))
+
+
+# ── Exhaustion is reported once per pool ────────────────────────────────────────────────────────
+
+## Counts the `[BulletPool] Pool exhausted` warnings pushed while it is registered.
+class _ExhaustionLog extends Logger:
+	var count: int = 0
+
+	func _log_error(_function: String, _file: String, _line: int, code: String, rationale: String,
+			_editor_notify: bool, error_type: int, _script_backtraces: Array[ScriptBacktrace]) -> void:
+		if error_type == ERROR_TYPE_WARNING and (code + rationale).contains("[BulletPool] Pool exhausted"):
+			count += 1
+
+
+## A shooter refused by an empty pool asks again every tick, so a warning per refusal is a per-frame print (CLAUDE.md: those sit
+## behind `OS.is_stdout_verbose()`); the hand-ticked rows of the suite printed 607 of them, about 700 KB of a gate log the AI-Kanban
+## harness caps at 1 MiB. The first refusal warns, later ones only under `--verbose`, and every refusal still returns null.
+func test_an_exhausted_pool_warns_once_and_keeps_refusing() -> void:
+	var expected_repeats := 6 if OS.is_stdout_verbose() else 1
+	var log := _ExhaustionLog.new()
+	OS.add_logger(log)
+	_make_pool(false, 2)
+	var first: Node = _pool.acquire(Vector2.ZERO)
+	_pool.acquire(Vector2.ZERO)
+	assert_eq(log.count, 0, "a pool with an idle bullet never warns")
+	var refused := 0
+	for i in 5:
+		if _pool.acquire(Vector2.ZERO) == null:
+			refused += 1
+	var after_five := log.count
+	# The pool recovers and runs dry again: still the same pool, so still no second warning.
+	first.expired.emit()
+	await wait_frames(2)
+	assert_not_null(_pool.acquire(Vector2.ZERO), "a recycled bullet is handed out again")
+	if _pool.acquire(Vector2.ZERO) == null:
+		refused += 1
+	var same_pool := log.count
+	# Boundary: the warning belongs to the pool, not to the class, so a second pool still reports its own first refusal.
+	var other := BulletPool.new()
+	other.bullet_scene = _scene
+	other.pool_size = 0
+	_ship.add_child(other)
+	assert_null(other.acquire(Vector2.ZERO), "an empty pool refuses")
+	var with_other := log.count
+	OS.remove_logger(log)
+	assert_eq(refused, 6, "every acquire on an empty pool returns null")
+	assert_eq(after_five, mini(expected_repeats, 5), "five refusals in a row warn once")
+	assert_eq(same_pool, expected_repeats, "a pool that recovers and runs dry again does not warn again")
+	assert_eq(with_other, expected_repeats + 1, "another pool's first refusal warns")

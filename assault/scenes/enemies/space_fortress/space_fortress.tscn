@@ -1,0 +1,584 @@
+[gd_scene format=3]
+
+[ext_resource type="Shader" path="res://assault/assets/shader/hit_flash_vs.tres" id="1_sf"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/space_fortress/space_fortress.gd" id="2_sf"]
+[ext_resource type="Script" path="res://global/components/hurtbox_component.gd" id="4_sf"]
+[ext_resource type="Script" path="res://global/components/health_component.gd" id="5_sf"]
+[ext_resource type="Script" path="res://global/components/hitbox_component.gd" id="6_sf"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/space_fortress/fortress_brain.gd" id="7_sf"]
+[ext_resource type="Script" path="res://global/enemy_ai/enemy_mover.gd" id="8_sf"]
+[ext_resource type="Script" path="res://global/components/modular_hull.gd" id="9_sf"]
+[ext_resource type="Script" path="res://global/components/enemy_module.gd" id="10_sf"]
+[ext_resource type="Script" path="res://global/components/state_light.gd" id="11_sf"]
+[ext_resource type="Script" path="res://global/components/contact_profile.gd" id="12_sf"]
+[ext_resource type="Script" path="res://global/boss/boss_phase_driver.gd" id="13_sf"]
+[ext_resource type="Script" path="res://global/boss/boss_phase.gd" id="14_sf"]
+[ext_resource type="Script" path="res://global/boss/boss_death_sequence.gd" id="15_sf"]
+[ext_resource type="Script" path="res://assault/scenes/enemies/defense_turret/turret_mount_slot.gd" id="17_sf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/space_fortress/fortress_spoke_beam.tscn" id="18_sf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/space_fortress/fortress_pulse_ring.tscn" id="19_sf"]
+[ext_resource type="Script" path="res://global/boss/reinforcement_bay.gd" id="20_sf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/swarm_drone/swarm_drone.tscn" id="21_sf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/fighter/fighter.tscn" id="22_sf"]
+[ext_resource type="PackedScene" path="res://assault/scenes/enemies/gatling_interceptor/gatling_interceptor.tscn" id="23_sf"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/fortress_hull.png" id="art_fortress_hull"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_spread.png" id="art_battery_spread"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_spread_wreck.png" id="art_battery_spread_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_pulse.png" id="art_battery_pulse"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_pulse_wreck.png" id="art_battery_pulse_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_artillery.png" id="art_battery_artillery"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_artillery_wreck.png" id="art_battery_artillery_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_missiles.png" id="art_battery_missiles"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_missiles_wreck.png" id="art_battery_missiles_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_sweep.png" id="art_battery_sweep"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/battery_sweep_wreck.png" id="art_battery_sweep_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/hangar_closed.png" id="art_hangar_closed"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/hangar_open.png" id="art_hangar_open"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/hangar_wreck.png" id="art_hangar_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/generator_closed.png" id="art_generator_closed"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/generator_open.png" id="art_generator_open"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/generator_wreck.png" id="art_generator_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/core_plated.png" id="art_core_plated"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/core_open.png" id="art_core_open"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/core_wreck.png" id="art_core_wreck"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/thruster.png" id="art_thruster"]
+[ext_resource type="Texture2D" path="res://assault/assets/sprites/enemies/space_fortress/critical_overlay.png" id="art_critical_overlay"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sf"]
+resource_local_to_scene = true
+shader = ExtResource("1_sf")
+shader_parameter/enabled = false
+shader_parameter/flash_color = Color(1, 1, 1, 1)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_hull"]
+radius = 176.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_battery"]
+radius = 22.0
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_hangar"]
+size = Vector2(36, 56)
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_generator"]
+radius = 26.0
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_core"]
+radius = 44.0
+
+[sub_resource type="Animation" id="Animation_reset_sf"]
+length = 0.001
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
+[sub_resource type="Animation" id="Animation_hit_sf"]
+resource_name = "hit"
+length = 0.2
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("Sprite2D:material:shader_parameter/enabled")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2),
+"transitions": PackedFloat32Array(1, 1),
+"update": 1,
+"values": [true, false]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_sf"]
+_data = {
+&"RESET": SubResource("Animation_reset_sf"),
+&"hit": SubResource("Animation_hit_sf")
+}
+
+[sub_resource type="Resource" id="BossPhase_batteries"]
+script = ExtResource("14_sf")
+phase_id = &"batteries"
+trigger = 0
+
+[sub_resource type="Resource" id="BossPhase_shields_exposed"]
+script = ExtResource("14_sf")
+phase_id = &"shields_exposed"
+trigger = 1
+roles = Array[int]([0])
+count = 2
+changes = 55
+
+[sub_resource type="Resource" id="BossPhase_core_exposed"]
+script = ExtResource("14_sf")
+phase_id = &"core_exposed"
+trigger = 1
+module_ids = Array[StringName]([&"shield_north", &"shield_south"])
+count = 2
+changes = 45
+
+[sub_resource type="Resource" id="BossPhase_critical"]
+script = ExtResource("14_sf")
+phase_id = &"critical"
+trigger = 2
+health_module = &"core"
+health_ratio = 0.4
+changes = 51
+
+[node name="SpaceFortress" type="CharacterBody2D"]
+collision_layer = 0
+collision_mask = 0
+script = ExtResource("2_sf")
+shutter_open_texture = ExtResource("art_generator_open")
+core_open_texture = ExtResource("art_core_open")
+hangar_open_texture = ExtResource("art_hangar_open")
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+material = SubResource("ShaderMaterial_sf")
+texture = ExtResource("art_fortress_hull")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_hull")
+
+[node name="HurtBox" type="Area2D" parent="."]
+collision_layer = 512
+collision_mask = 1121
+script = ExtResource("4_sf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="HurtBox"]
+shape = SubResource("CircleShape2D_hull")
+debug_color = Color(0.7, 0, 0, 0.419608)
+
+[node name="Health" type="Node" parent="."]
+script = ExtResource("5_sf")
+max_health = 1500
+current_health = 1500
+
+[node name="HitFlashAnimationPlayer" type="AnimationPlayer" parent="."]
+libraries/ = SubResource("AnimationLibrary_sf")
+
+[node name="ContactHitBox" type="Area2D" parent="."]
+collision_layer = 256
+collision_mask = 128
+script = ExtResource("6_sf")
+damage = 40
+damage_type = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="ContactHitBox"]
+shape = SubResource("CircleShape2D_hull")
+
+[node name="ContactProfile" type="Node" parent="."]
+script = ExtResource("12_sf")
+mode = 4
+shove_speed = 260.0
+
+[node name="EnemyMover" type="Node" parent="."]
+script = ExtResource("8_sf")
+constraint_mode = 1
+turn_lerp = 0.0
+
+[node name="Brain" type="Node" parent="."]
+script = ExtResource("7_sf")
+
+[node name="StateLight" type="Node2D" parent="."]
+script = ExtResource("11_sf")
+
+[node name="ModularHull" type="Node" parent="."]
+script = ExtResource("9_sf")
+
+[node name="PhaseDriver" type="Node" parent="."]
+script = ExtResource("13_sf")
+phases = Array[ExtResource("14_sf")]([SubResource("BossPhase_batteries"), SubResource("BossPhase_shields_exposed"), SubResource("BossPhase_core_exposed"), SubResource("BossPhase_critical")])
+
+[node name="DeathSequence" type="Node2D" parent="."]
+script = ExtResource("15_sf")
+blast_spread_radius = 150.0
+
+[node name="Thrusters" type="Node2D" parent="."]
+visible = false
+
+[node name="Thruster0" type="Sprite2D" parent="Thrusters"]
+position = Vector2(70.41, 169.99)
+rotation = -0.3926991
+texture = ExtResource("art_thruster")
+
+[node name="Thruster1" type="Sprite2D" parent="Thrusters"]
+position = Vector2(-70.41, 169.99)
+rotation = 0.3926991
+texture = ExtResource("art_thruster")
+
+[node name="Thruster2" type="Sprite2D" parent="Thrusters"]
+position = Vector2(-70.41, -169.99)
+rotation = 2.7488936
+texture = ExtResource("art_thruster")
+
+[node name="Thruster3" type="Sprite2D" parent="Thrusters"]
+position = Vector2(70.41, -169.99)
+rotation = -2.7488936
+texture = ExtResource("art_thruster")
+
+[node name="CriticalOverlay" type="Node2D" parent="."]
+visible = false
+
+[node name="Overlay" type="Sprite2D" parent="CriticalOverlay"]
+texture = ExtResource("art_critical_overlay")
+
+[node name="Modules" type="Node2D" parent="."]
+
+[node name="BatterySpread" type="Node2D" parent="Modules"]
+position = Vector2(99, 99)
+script = ExtResource("10_sf")
+module_id = &"battery_spread"
+role = 0
+max_health = 260
+starts_vulnerable = true
+intact_texture = ExtResource("art_battery_spread")
+wreck_texture = ExtResource("art_battery_spread_wreck")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/BatterySpread"]
+texture = ExtResource("art_battery_spread")
+
+[node name="HurtBox" type="Area2D" parent="Modules/BatterySpread"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_sf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/BatterySpread/HurtBox"]
+shape = SubResource("CircleShape2D_battery")
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/BatterySpread"]
+
+[node name="Light" type="Node2D" parent="Modules/BatterySpread"]
+script = ExtResource("11_sf")
+
+[node name="BatteryPulse" type="Node2D" parent="Modules"]
+position = Vector2(-99, 99)
+script = ExtResource("10_sf")
+module_id = &"battery_pulse"
+role = 0
+max_health = 260
+starts_vulnerable = true
+intact_texture = ExtResource("art_battery_pulse")
+wreck_texture = ExtResource("art_battery_pulse_wreck")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/BatteryPulse"]
+texture = ExtResource("art_battery_pulse")
+
+[node name="HurtBox" type="Area2D" parent="Modules/BatteryPulse"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_sf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/BatteryPulse/HurtBox"]
+shape = SubResource("CircleShape2D_battery")
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/BatteryPulse"]
+
+[node name="Light" type="Node2D" parent="Modules/BatteryPulse"]
+script = ExtResource("11_sf")
+
+[node name="BatteryArtillery" type="Node2D" parent="Modules"]
+position = Vector2(-99, -99)
+script = ExtResource("10_sf")
+module_id = &"battery_artillery"
+role = 0
+max_health = 260
+starts_vulnerable = true
+intact_texture = ExtResource("art_battery_artillery")
+wreck_texture = ExtResource("art_battery_artillery_wreck")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/BatteryArtillery"]
+texture = ExtResource("art_battery_artillery")
+
+[node name="HurtBox" type="Area2D" parent="Modules/BatteryArtillery"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_sf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/BatteryArtillery/HurtBox"]
+shape = SubResource("CircleShape2D_battery")
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/BatteryArtillery"]
+
+[node name="Light" type="Node2D" parent="Modules/BatteryArtillery"]
+script = ExtResource("11_sf")
+
+[node name="BatteryMissiles" type="Node2D" parent="Modules"]
+position = Vector2(99, -99)
+script = ExtResource("10_sf")
+module_id = &"battery_missiles"
+role = 0
+max_health = 260
+starts_vulnerable = true
+intact_texture = ExtResource("art_battery_missiles")
+wreck_texture = ExtResource("art_battery_missiles_wreck")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/BatteryMissiles"]
+texture = ExtResource("art_battery_missiles")
+
+[node name="HurtBox" type="Area2D" parent="Modules/BatteryMissiles"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_sf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/BatteryMissiles/HurtBox"]
+shape = SubResource("CircleShape2D_battery")
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/BatteryMissiles"]
+
+[node name="Light" type="Node2D" parent="Modules/BatteryMissiles"]
+script = ExtResource("11_sf")
+
+[node name="BatterySweep" type="Node2D" parent="Modules"]
+position = Vector2(150, 0)
+script = ExtResource("10_sf")
+module_id = &"battery_sweep"
+role = 0
+max_health = 260
+starts_vulnerable = true
+intact_texture = ExtResource("art_battery_sweep")
+wreck_texture = ExtResource("art_battery_sweep_wreck")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/BatterySweep"]
+texture = ExtResource("art_battery_sweep")
+
+[node name="HurtBox" type="Area2D" parent="Modules/BatterySweep"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_sf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/BatterySweep/HurtBox"]
+shape = SubResource("CircleShape2D_battery")
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/BatterySweep"]
+
+[node name="Light" type="Node2D" parent="Modules/BatterySweep"]
+script = ExtResource("11_sf")
+
+[node name="Hangar" type="Node2D" parent="Modules"]
+position = Vector2(-150, 0)
+script = ExtResource("10_sf")
+module_id = &"hangar"
+role = 2
+max_health = 300
+starts_vulnerable = false
+intact_texture = ExtResource("art_hangar_closed")
+wreck_texture = ExtResource("art_hangar_wreck")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/Hangar"]
+texture = ExtResource("art_hangar_closed")
+
+[node name="HurtBox" type="Area2D" parent="Modules/Hangar"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_sf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/Hangar/HurtBox"]
+shape = SubResource("RectangleShape2D_hangar")
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/Hangar"]
+
+[node name="Light" type="Node2D" parent="Modules/Hangar"]
+script = ExtResource("11_sf")
+
+[node name="ShieldNorth" type="Node2D" parent="Modules"]
+position = Vector2(0, -120)
+script = ExtResource("10_sf")
+module_id = &"shield_north"
+role = 4
+max_health = 360
+starts_vulnerable = false
+intact_texture = ExtResource("art_generator_closed")
+wreck_texture = ExtResource("art_generator_wreck")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/ShieldNorth"]
+texture = ExtResource("art_generator_closed")
+
+[node name="HurtBox" type="Area2D" parent="Modules/ShieldNorth"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_sf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/ShieldNorth/HurtBox"]
+shape = SubResource("CircleShape2D_generator")
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/ShieldNorth"]
+
+[node name="Light" type="Node2D" parent="Modules/ShieldNorth"]
+script = ExtResource("11_sf")
+
+[node name="ShieldSouth" type="Node2D" parent="Modules"]
+position = Vector2(0, 120)
+script = ExtResource("10_sf")
+module_id = &"shield_south"
+role = 4
+max_health = 360
+starts_vulnerable = false
+intact_texture = ExtResource("art_generator_closed")
+wreck_texture = ExtResource("art_generator_wreck")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/ShieldSouth"]
+flip_v = true
+texture = ExtResource("art_generator_closed")
+
+[node name="HurtBox" type="Area2D" parent="Modules/ShieldSouth"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_sf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/ShieldSouth/HurtBox"]
+shape = SubResource("CircleShape2D_generator")
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/ShieldSouth"]
+
+[node name="Light" type="Node2D" parent="Modules/ShieldSouth"]
+script = ExtResource("11_sf")
+
+[node name="Core" type="Node2D" parent="Modules"]
+position = Vector2(0, 0)
+script = ExtResource("10_sf")
+module_id = &"core"
+role = 3
+max_health = 1500
+starts_vulnerable = false
+intact_texture = ExtResource("art_core_plated")
+wreck_texture = ExtResource("art_core_wreck")
+
+[node name="Sprite" type="Sprite2D" parent="Modules/Core"]
+texture = ExtResource("art_core_plated")
+
+[node name="HurtBox" type="Area2D" parent="Modules/Core"]
+collision_layer = 512
+collision_mask = 1120
+script = ExtResource("4_sf")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Modules/Core/HurtBox"]
+shape = SubResource("CircleShape2D_core")
+
+[node name="HomingPoint" type="Marker2D" parent="Modules/Core"]
+
+[node name="Light" type="Node2D" parent="Modules/Core"]
+script = ExtResource("11_sf")
+
+[node name="MountSlots" type="Node2D" parent="Modules/BatterySpread"]
+
+[node name="Slot0" type="Marker2D" parent="Modules/BatterySpread/MountSlots"]
+script = ExtResource("17_sf")
+variant = 7
+rest_bearing_deg = 45.0
+traverse_deg_override = 100.0
+pool_period_factor = 0.6
+
+[node name="MountSlots" type="Node2D" parent="Modules/BatteryPulse"]
+
+[node name="Slot0" type="Marker2D" parent="Modules/BatteryPulse/MountSlots"]
+script = ExtResource("17_sf")
+variant = 8
+rest_bearing_deg = 135.0
+traverse_deg_override = 100.0
+pool_period_factor = 0.6
+
+[node name="MountSlots" type="Node2D" parent="Modules/BatteryArtillery"]
+
+[node name="Slot0" type="Marker2D" parent="Modules/BatteryArtillery/MountSlots"]
+script = ExtResource("17_sf")
+variant = 6
+rest_bearing_deg = 225.0
+traverse_deg_override = 100.0
+pool_period_factor = 0.6
+
+[node name="MountSlots" type="Node2D" parent="Modules/BatteryMissiles"]
+
+[node name="Slot0" type="Marker2D" parent="Modules/BatteryMissiles/MountSlots"]
+script = ExtResource("17_sf")
+variant = 2
+rest_bearing_deg = 315.0
+traverse_deg_override = 100.0
+pool_period_factor = 0.6
+
+[node name="MountSlots" type="Node2D" parent="Modules/BatterySweep"]
+
+[node name="Slot0" type="Marker2D" parent="Modules/BatterySweep/MountSlots"]
+script = ExtResource("17_sf")
+variant = 1
+rest_bearing_deg = 0.0
+traverse_deg_override = 140.0
+pool_period_factor = 0.6
+
+[node name="HullBeams" type="Node2D" parent="."]
+
+[node name="Spoke0" type="Node2D" parent="HullBeams"]
+position = Vector2(0, -176)
+rotation = -1.5707964
+
+[node name="Beam" parent="HullBeams/Spoke0" instance=ExtResource("18_sf")]
+
+[node name="Spoke1" type="Node2D" parent="HullBeams"]
+position = Vector2(0, 176)
+rotation = 1.5707964
+
+[node name="Beam" parent="HullBeams/Spoke1" instance=ExtResource("18_sf")]
+
+[node name="Spoke2" type="Node2D" parent="HullBeams"]
+position = Vector2(176, 0)
+
+[node name="Beam" parent="HullBeams/Spoke2" instance=ExtResource("18_sf")]
+
+[node name="Spoke3" type="Node2D" parent="HullBeams"]
+position = Vector2(-176, 0)
+rotation = 3.1415927
+
+[node name="Beam" parent="HullBeams/Spoke3" instance=ExtResource("18_sf")]
+
+[node name="PulseRing" parent="." instance=ExtResource("19_sf")]
+
+[node name="Bay" type="Node2D" parent="Modules/Hangar"]
+script = ExtResource("20_sf")
+bay_id = &"hangar"
+payload_scene = ExtResource("21_sf")
+count = 3
+period = 12.0
+first_delay = 2.0
+active_from_phase = &"shields_exposed"
+door_seconds = 0.8
+open_hold_seconds = 2.0
+opens_part = true
+assault_count = 2
+assault_period = 14.0
+
+[node name="Mouth" type="Marker2D" parent="Modules/Hangar/Bay"]
+position = Vector2(-40, 0)
+
+[node name="Bay" type="Node2D" parent="Modules/ShieldNorth"]
+script = ExtResource("20_sf")
+bay_id = &"north_defenders"
+trigger = 1
+payload_scene = ExtResource("22_sf")
+count = 2
+watch_ids = Array[StringName]([&"battery_artillery", &"battery_missiles", &"hangar"])
+door_seconds = 1.0
+config_overrides = {
+"flank_wait_max": 0.4,
+"lead_wait_max": 0.4
+}
+
+[node name="Mouth" type="Marker2D" parent="Modules/ShieldNorth/Bay"]
+position = Vector2(0, -70)
+
+[node name="Bay" type="Node2D" parent="Modules/ShieldSouth"]
+script = ExtResource("20_sf")
+bay_id = &"south_defenders"
+trigger = 1
+payload_scene = ExtResource("23_sf")
+count = 2
+watch_ids = Array[StringName]([&"battery_spread", &"battery_pulse", &"battery_sweep"])
+door_seconds = 1.0
+
+[node name="Mouth" type="Marker2D" parent="Modules/ShieldSouth/Bay"]
+position = Vector2(0, 70)

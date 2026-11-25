@@ -5,8 +5,8 @@ ships that fired it. It is a weapon component, not an enemy: an owner (a turret 
 its clock. Plan: `docs/plans/cmug23ona0015m52w4t1m73bc/3-plan.md` §2.1–§2.4 (core built in t2, endpoint beam / cover / laser-wall registration in t5); decisions: `docs/ideas/cmufkkgmx0001o02y6bnf52bq/DECISIONS.md`
 → Phase 8.
 
-`LaserRay` (`assault/scenes/hazards/laser_ray/`, level 1, the race and the station) and the station's `StationLaserPhase` are **not** part of this family
-and are untouched: the ray is a 9999 one-hit kill on sprite timing with a `Timer` re-damage. Ph11 moves the station onto `EnemyBeam`.
+`LaserRay` (`assault/scenes/hazards/laser_ray/`, level 1 and the race) is **not** part of this family
+and is untouched: the ray is a 9999 one-hit kill on sprite timing with a `Timer` re-damage. The Space Fortress (Ph11) fires `EnemyBeam`s (its hull spokes); the retired station's `LaserRay` volleys are gone.
 
 ## Files
 
@@ -129,3 +129,12 @@ reached through `EnemyBeamScenes.ring_scene()` / `ring_export(property, fallback
 - **Counterplay:** stay outside `max_radius`, or pass through a gap (the gap arc at half reach is >= 3 player radii; gated).
 - **Drawing:** a child `Visual` `Node2D` (`top_level`, world origin) paints `draw_arc`s in global coordinates; not anti-aliased.
 - **Tests:** `tests/integration/test_energy_ring.gd` (hand-ticked, both harnesses) plus the two §2.3 Pulse Ring fairness rows, each with a synthetic boundary.
+
+## Owners outside this folder
+
+- **Carrier** (Ph10): `carrier/carrier_pulse_ring.tscn` (inherits `energy_ring.tscn`, r 420) as `AntiApproachRing`, ticked by `CarrierBrain`.
+- **Space Fortress** (Ph11 t16): `space_fortress/fortress_spoke_beam.tscn` (inherits `beam.tscn`: telegraph 1.2, active 2.5, length 900, damage 14, `registers_hazard`)
+  on the four hull emitters `HullBeams/Spoke0..3`, and `space_fortress/fortress_pulse_ring.tscn` (inherits `energy_ring.tscn`: r 640 at 300 px/s, two 50° gaps,
+  damage 14, telegraph 1.0) as `PulseRing`, all ticked by `FortressBrain`; a cancelled one's FADE is finished by `SpaceFortress._physics_process` while the brain is
+  not ticked. Each inherited scene authors every value a gate reads (`export_of_scene` reads only a scene's own state); the fortress's gates read instances.
+  See `space_fortress/ENEMY.md` → *Geometry weapons*.

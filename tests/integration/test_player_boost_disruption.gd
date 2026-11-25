@@ -531,3 +531,22 @@ func test_assault_emp_refuses_dash_warp_and_the_h_key_drive() -> void:
 	h.apply_emp(2.0, null)
 	h._input(_h_press())
 	assert_false(h.engine_boost_active, "the H-key Boost Drive is refused")
+
+
+# --- EMP, Phase 9 (plan cmug23onr001pm52w9swwophy §2.6, t5): the stand-in is replaced by disruption + ability lock ----
+
+
+func test_an_emp_is_a_full_boost_disruption_plus_a_timed_ability_lock(mode: String = use_parameters(MODES)) -> void:
+	var p := _player(mode)
+	assert_false(p.abilities_locked(), "%s: precondition" % mode)
+	p.apply_emp(1.0, null)
+	assert_eq(p.boost_efficiency(), 0.0, "%s: efficiency 0.0" % mode)
+	assert_true(p.abilities_locked(), "%s: and the abilities are locked" % mode)
+
+	var q := _player(mode)
+	q.apply_ability_lock(3.0, null)
+	q.apply_emp(1.0, null)  # a shorter EMP never shortens a running timed lock
+	_tick(q, 61)
+	assert_false(q.is_emp_disrupted(), "%s: the 1.0 s EMP is over" % mode)
+	assert_eq(q.boost_efficiency(), 1.0, "%s: and the boost is back" % mode)
+	assert_true(q.abilities_locked(), "%s: the 3.0 s lock still holds" % mode)
