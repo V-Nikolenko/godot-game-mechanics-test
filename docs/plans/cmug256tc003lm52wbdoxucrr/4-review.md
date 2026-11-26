@@ -293,3 +293,71 @@ The other new findings are minor. Several of them are rows whose expected number
 - **Dependencies.** No cycles. t3 → t4 serialises the enum. t8 → t9 → t10 → t11 → t12 → t13 serialises `dreadnought.gd` / the brain / the scene. t12 and t14 both edit `dreadnought_config.tres` only through levers on different fields.
 - **`planSections`.** Every number used exists as a heading in `3-plan.md` (2.1 to 2.17, 2.6.1 to 2.6.8, 2.7.1 to 2.7.4, 1.1, 6, 7, 8).
 - **Scope.** Every IDEAS §9 / §10 / §21–26 / §40 / §41 item listed in the review brief has a task and a row. Level placement, HUD, beams on parts, wrecks and tiers are out of scope with owners and reasons.
+
+---
+
+VERDICT: CHANGES_REQUESTED
+
+# Plan review, round 3
+
+Independent reviewer subagent, 2026-11-26. It read revision 3 of `3-plan.md` (`caff668`) in full, plus `tasks.json`, the round-1 and round-2 text above, the `caff668` diff (plan, tasks and the Phase 12 block of `DECISIONS.md`) and `CLAUDE.md`. It checked every round-2 answer and every new claim in the diff against the code on `agent/auto-dev`. It did not run the gate. The dispatcher re-checked P1 against the plan: 90° at 0.35 rad/s is 4.49 s, against `ram_line_up_cap` 3.0 s (`3-plan.md:553`).
+
+All eleven round-2 findings are answered, and ten of them hold up against the code. One new problem blocks approval. The critical ram's line-up phase is capped at 3.0 s. The ship turns too slowly to put its nose on a player beside it in that time, so the main Open Space ram, and every one-engine ram, runs out of time before it is aimed. The plan never says what happens then, and t10 row 5 asks for turns that take 3.9 to 12.6 s inside that 3.0 s window. The other new findings are minor.
+
+The owner returned CHANGES_REQUESTED with no text. §8.2 reads that as agreement with the round-2 review. That is an assumption, and the owner should confirm it.
+
+## Round-2 findings
+
+| # | Status | Evidence |
+|---|---|---|
+| N1 | **Resolved** | §2.3 (`3-plan.md:193-199`) has t3 draw its own `turret_head_missile_fan.png`. The wiring rules it states match `tests/integration/test_ph8_sprites.gd:135-192`: `rotation` −PI/2, `show_behind_parent`, `centered` false, alpha > 0.99 at the pivot, tip within 6 px of `Muzzle`, each texture used once, `HEADS.size() == Variant.size()`, `MIN_MASK_DIFF` 0.08. 48 × 48 matches `turret_head_rocket_battery.png`. t3 is now medium. Other sweeps over all variants (`test_turret_mount_traverse.gd:260`, `test_turret_mount_variants.gd:249`, `test_level1_specialist_spawns.gd:1536`) accept a new `RocketBatteryMount` scene. |
+| N2 | **Resolved** | `_two_speed_kind_clears(window, launch_speed, final_speed, max_distance, max_time)` exists at `test_enemy_bullet_lifetime.gd:301-303`. 3 + (2400 − 480) / 320 = 9.0 s; the 160→320 ramp at 200 px/s² adds about 0.2 s. `steer_window`, `final_speed` and `accel` are `EnemyOrdnance` exports (`enemy_ordnance.gd:65-71`). |
+| N3 | **Resolved** | 0.30 × 900 = 270 ≤ 0.8 × 360 = 288. Fighter `cruise_speed()` reads `MoveState.move_speed` 360 (`player_fighter.gd:128`, `move_state.gd:20`); the Open Space ship's is `max_speed` 420 (`player_ship.gd:10,483`). Orbit rates (0.171 / 0.197 / 0.111 rad/s) are under the cap. |
+| N4 | **Resolved as worded** | The fixed number is gone; 2.375 / 3.2 follow from the config (`3-plan.md:580-583`). **But the row still cannot run: see P1.** |
+| N5 | **Resolved** | `dumb_rocket.tscn` HitBox layer 32 / mask 640, `max_time` 4.0; torpedo `HurtBox` 512 / mask 96; `HurtBox._on_area_entered` emits `received_damage` itself (`hurtbox_component.gd:39-48`), so a rocket-side skip alone would not help. Gate rule 2 rules out own rocket and own torpedo live on the same tick (gates are asked one mount at a time). Density counters stay correct (`test_fortress_weapons.gd:1110` returns each round via `expired.emit()`; a shot-down torpedo emits `expired` at once, `enemy_ordnance.gd:288-294`). t10 row 8(b) has a not-vacuous check and a fallback. |
+| N6 | **Resolved** (approach-window figures wrong: P2) | `_target_in_arc()` (`turret_mount.gd:362-367`); row 1 has an alive control per part. |
+| N7 | **Resolved** | `turret_mount.gd:118-123`: on the tick TELEGRAPH ends, `_fire_tick(0)` and `_end_fire()` both run; `RocketBatteryMount._fire_tick` with `salvo_count` 1 reports done that tick. |
+| N8 | **Resolved** | Allotments sum to 17.6 s; 225.2 + 17.6 − 7 = 235.8 s; t2–t7 add 8.8 s (234.0 s). Baseline 225.2 s matches Ph11 t11 in `tests/README.md:704`. Residual risk: P7. |
+| N9 | **Resolved** | t12 lists `2.6.1` and `2.7`; §2.12 repeats the stadium numbers. |
+| N10 | **Resolved** | `ArenaCamera._visible_rect().grow(64)` = x −164…1444, y −444…1164 (`arena_camera.gd:88-119`). Lowest player: 524 px edge limit vs 830 px distance + overshoot, so the edge limit binds. |
+| N11 | **Resolved** (one lever unusable: P6) | 4800 at 135° ≈ (−3394, 3394): 2596 px from the Gunship (−2402, 995) and Tender (−995, 2402) anchors; every other anchor farther. |
+
+## New findings
+
+**P1 (blocking) — t10. The ram's 3.0 s LINE_UP cap is shorter than the hull needs to aim, and nothing says what happens when it runs out.**
+- Checked: `3-plan.md:553`, `:379`, `:387-389`, `:580-583`; `ram_corvette_brain.gd:476-487`; `ram_corvette_config.tres:20` (`line_up_cap = 0.5`).
+- LINE_UP turns "at the current turn rates" with `ram_line_up_cap` 3.0 s. In the Open Space orbit the player is abeam (row 4 holds the broadside within 30° of abeam), so a ram starts ~90° off the nose: both engines 0.35 rad/s → 4.5 s; listing dead side 0.40 → 3.9 s; listing live side 0.125 → 12.6 s; Assault listing live side 0.40 → 3.9 s. Only Assault dead-side (1.65 s) and Assault both engines (1.75 s) fit.
+- Behaviour at the cap is undefined. The Ram Corvette's rule ("the charge follows the aim, never the nose", cap 0.5 s on a fast-turning ship), copied here, has the 448 px hull boost ~30° off its own nose — contradicting the lane drawn "from the bow" (`:554`) and the `edge_limit` corners "oriented on `charge_dir`" (`:558`).
+- Row 5 times two 90° LINE_UP turns, 3 of 4 cases exceed the cap. Rows 1–2 would still pass with a misaligned charge, so the gate does not catch it.
+- Fix: (a) LINE_UP turns at the jets rate (`× jets_turn_factor`; §25 "engines overload" final ram); (b) size `ram_line_up_cap` from the config to cover a 90° turn at the slowest allowed rate, with a config row; (c) if the nose is not within a stated tolerance of the aim at the cap, return to HUNT and retry after a short delay rather than charging sideways; (d) CHARGE faces `charge_dir`; (e) row 5 compares turn rates over the first 1.0 s of LINE_UP against the config formula.
+
+**P2 (minor) — t8, t12. §2.8's torpedo approach-window figures are from the hull centre; the arc test uses the tube's own position.**
+- Checked: `3-plan.md:454`, `:634`; `turret_mount.gd:362-367`. The tube sits 196 px ahead of centre. At hull distance 1100 on the tangent approach the player is atan(700 / (848.5 − 196)) ≈ 47° off the nose from the tube — outside ±45°. The arc holds only between hull distances ≈ 1257 and 1137 px: ~1.0–1.3 s at ~92 px/s closing, barely one 1.0 s telegraph. The Assault left-end window reaches only a player under the left leg end (one of t12's five positions). No row asserts it, so nothing fails.
+- Fix: correct the prose and ENEMY.md text to the tube's pivot; optionally widen the slot to ~100–110°.
+
+**P3 (minor) — t7, t12, t15. The "inside the resting view" Assault stadium ignores the camera's vertical pan.**
+- Checked: `arena_camera.gd:122-157` (dead zone ±30, pan up to 380). With the player at the plan's own test height (y 650) the view top is y 260, so the upper leg (hull centre y 160) is off-screen and silenced by the in-view rule; level 1's player start (y 542) puts the view top at ~152. Hand-ticked rows never move the camera (worst case for density, so density rows are fine). The boss spends about half its loop above the screen; the fortress (hold y 180) shares this.
+- Fix: record it in §2.7.3 and ENEMY.md as a known Assault limit for Ph15; optionally a real-physics Assault row at the level-1 start height.
+
+**P4 (minor) — t4. `planSections` lack §2.3.** §2.4 says only "adds `TORPEDO_TUBE` to `HEADS`" (`3-plan.md:225-226`); the head wiring and silhouette rules are stated only in §2.3. Fix: add `2.3` to t4 or repeat the rules in §2.4.
+
+**P5 (minor) — t8, t10, t11. Fixture helpers `kill_part()`, `ladder()` and `opts.ram` are defined only in §2.6.1, which these tasks do not list.** Their rows use them (t8 rows 1, 5, 6, 11; t10 rows 1, 4; t11's weapon kills). Not a stall (the file exists by then). Fix: add `2.6.1` to all three.
+
+**P6 (minor) — t14. §2.14's third hub lever (bearing) can never keep the new neighbour row green alone.** Checked `3-plan.md:674`, `sector_hub.gd:76-90`: at 4800 / 145° the Gunship anchor is ~2331 px away; at 125° the Tender anchor is the same — both inside the 2500 px reach. Fix: drop it, or allow it only with a ring ≥ ~5200 (145° then gives ~2721 px).
+
+**P7 (minor) — t8, t1. The t8 allotment (2.0 s) omits the cost of building eight mounts and their pools in every earlier Dreadnought spawn.** Checked `tests/README.md:698`: Ph11 t7 (five fortress mounts, 68 rounds) added ~0.75 s to `test_space_fortress.gd` alone and came in at 1.8 s vs 1.5 s. The Dreadnought builds 8 mounts / ~80 rounds per spawn across the t6/t7 files in both harnesses. At t1's 7 s floor the margin is ~1.2 s, so this alone can cross 237 s. Fix: raise t8 to ~2.8 s and t1's floor to 8 s, or state that the build cost lands on t8 and is measured there.
+
+**P8 (minor) — t10. Row 2 in Open Space: the `ram_speed × ram_max_time` cap (1120 px) binds beyond ~820 px.** Checked `3-plan.md:556`, `:575-577`. The orbit band is 700 ± 150, so a player at 850 px gets a charge too short for the overshoot and "≥ 250 beyond" fails. Fix: place the player ≤ ~800 px from the hull centre, assert the max-time cap did not bind, and say which hull point "passes `charge_point`" (the centre).
+
+## Checked and fine this round
+
+- Shared hooks exist as described: `TurretMount.telegraph_gate` asked last on TRACK → TELEGRAPH, `round_fired(projectile)`, `phase_changed(phase)`, `rest_bearing_deg` / `traverse_deg` (`turret_mount.gd:31-71, 278-367`); `TurretMount.Variant` has 9 values (`MISSILE_FAN` = 9, `TORPEDO_TUBE` = 10); `RocketBatteryMount.pool_specs()` / `_launch_one()` are the right hooks for a bit-identical fan; `TurretMountScenes.export_of(variant, prop, fallback)` exists.
+- Torpedo: `EnemyOrdnance.launch(dir, speed, target_point)` is a PURSUIT_BOMB steer-then-ramp path with no inherited launcher velocity; `EnemyOrdnanceScenes` is keyed by `Kind`, so a named const is the right registration.
+- `ON_OWN_DESTROYED` fits `boss_reinforcements.gd` (`_on_module_destroyed`, `_open` with the Assault-limit and no-room branches, `_hold`, `_spawn`); spawning in `tick()`, never in a physics callback; constructor signature matches §2.11.
+- Mover: `EnemyMover` treats 0 as instant/off for acceleration and braking; facing follows `face_toward`; own-group hazards are skipped in avoidance, so the boss does not dodge its own wake.
+- Fixture: `hand_tick` matches `test_space_fortress.gd:796-799`; `_fresh_idle_delta()` exists only in `test_heavy_gunship.gd` (t10 copies it; redundant with the position-overwrite tick but harmless).
+- Assault geometry: stadium extents (36–1244, 56–504) and CCW side alternation hold; listing radii 200 / 640 px Open Space, ~153 px Assault live side.
+- Density sanity: 6 / 4.25 + 5 / 6.5 ≈ 2.2 /s; critical+crippled ≈ 4.0 /s; tube pool 4; fan pool stand-in 5.
+- §25 declarations hold on every pinned path incl. crippled-then-critical; roster constants `_MIN_ROSTER_SIZE`, `_EXCLUDED_FROM_GENERIC_DAMAGE_FLOW`, the explosion `_MIN_ROSTER` and `_drivers_of` exist.
+- Task graph: no cycles; t3 → t4 serialises the enum; brain/scene edits serialised t8 → t13; complexity and model labels reasonable now t3 is medium.
+- Scope: every §9 / §10 / §21–26 / §40 / §41 item has a task and a row; exclusions listed with owners and reasons.
