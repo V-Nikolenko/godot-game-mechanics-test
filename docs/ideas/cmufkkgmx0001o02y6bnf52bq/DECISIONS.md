@@ -4560,7 +4560,7 @@ Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md`. Dossier: `docs/epics-don
 
 ## Phase 12 - Enemy rework, phase 12: Dreadnought hunting boss (2026-11-26)
 
-Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 3, answering plan review rounds 1 and 2 and the owner's CHANGES_REQUESTED), built on that directory's `1-context.md` / `2-research.md`. These are
+Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 4, answering plan review rounds 1–3 and the owner's two text-less CHANGES_REQUESTED, read as "fix the review's points"), built on that directory's `1-context.md` / `2-research.md`. These are
 *planned* decisions; check this phase's *as built* section, once written, before relying on them.
 
 ### Changes to earlier decisions
@@ -4592,11 +4592,15 @@ Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 3, answering pl
   `jets_active()`. **Heading model:** velocity along the nose, the heading turned by the brain at per-side rates; a lost engine makes the live-side turn slow (`one_engine_live_turn`
   0.5), adds a yaw bias (0.05 rad/s) and a drift (18 px/s) toward the dead side, and forces the Open Space orbit toward the dead side; tested on positions with the expected radius
   ratio `(turn_rate + bias) / (turn_rate × live − bias)`. Jets burst-turn; broadsides hold fire while they run or the turn exceeds 0.30 rad/s (`broadside_fire_turn_cap`, from the fairness inequality 0.30 × 900 = 270 ≤ 0.8 × the fighter's `cruise_speed()` 360). Crippled = HOLD, thruster rotation only,
-  no ram. The ram is the Ram Corvette cycle on the boss, critical with ≥ 1 engine only, ram damage on the contact box during CHARGE only.
+  no ram. The ram is the Ram Corvette cycle on the boss, critical with ≥ 1 engine only, ram damage on the contact box during CHARGE only. **Its LINE_UP turns at the
+  side rates × `jets_turn_factor` 2.5** (a 0.125–0.35 rad/s hull needs 4.5–12.6 s for 90° at its own rates), ends when the nose is within `ram_aim_tolerance_deg` 8° of the aim,
+  is capped at `ram_line_up_cap` 5.5 s (a config row: ≥ π/2 ÷ the slowest LINE_UP rate + 0.25 s, per mode), and **aborts to HUNT and retries after `ram_retry_delay` 2.0 s** if not
+  aimed at the cap (`ram_aborts()`); `charge_dir` is the heading at the freeze and the heading is held through CHARGE — **the charge always runs along the nose** (the Ram
+  Corvette's "charge follows the aim" rule belongs to a fast-turning ship and is not copied to a capital hull).
 - **Assault pattern for a large hunting boss:** a world-anchored **stadium** loop in the top half of the resting view (legs y 160 / 400, derived end radius 120, pure pursuit), both
   legs broadside-down with alternating sides; a two-waypoint racetrack on one line was rejected (its return leg sits above the view). Ph15 may make it follow the player's x.
 - **`RocketBatteryMount.fan_count` (1) / `fan_spread_deg` (0)**: a salvo step fires a fan; 1 / 0 bit-identical. **`TurretMount.Variant.MISSILE_FAN` = 9** (standalone
-  `missile_fan_mount.tscn` on `rocket_battery_mount.gd`: 5 DUMB over 40°, salvo 1) and **`TurretMount.Variant.TORPEDO_TUBE` = 10** (`TorpedoTubeMount`, standalone scene), both appended. **Every `TurretMount.Variant` has its own distinct head PNG** (`test_ph8_sprites.gd` asserts one texture per variant and distinct silhouettes), so a new variant always draws one (`turret_head_missile_fan.png`, `turret_head_torpedo_tube.png`). The torpedo tube is a ±45° **bow-chaser** (fires on the approach curve, bow crossings, the ram's LINE_UP, crippled HOLD with no broadside, the Assault left-end U-turn), not a steady stream.
+  `missile_fan_mount.tscn` on `rocket_battery_mount.gd`: 5 DUMB over 40°, salvo 1) and **`TurretMount.Variant.TORPEDO_TUBE` = 10** (`TorpedoTubeMount`, standalone scene), both appended. **Every `TurretMount.Variant` has its own distinct head PNG** (`test_ph8_sprites.gd` asserts one texture per variant and distinct silhouettes), so a new variant always draws one (`turret_head_missile_fan.png`, `turret_head_torpedo_tube.png`). The torpedo tube is a ±55° (`traverse_deg_override` 110) **bow-chaser**, every angle and range measured from the tube's own pivot 196 px ahead of the hull centre (Open Space approach window d ≈ 1257 → 1000 px, ≈ 2.6 s) (fires on the approach curve, bow crossings, the ram's LINE_UP, crippled HOLD with no broadside, the Assault left-end U-turn), not a steady stream.
 - **Energy torpedo = `energy_torpedo.tscn`, an `EnemyOrdnance` PURSUIT_BOMB scene** exposed as `EnemyOrdnanceScenes.ENERGY_TORPEDO` (not in `scene_for()`, which is keyed by
   `Kind`): `Health` 120 **in damage units** (`EnemyOrdnance` subtracts damage, not hits): 3 Standard shots. Ordnance health is always authored in damage units from the shipped
   weapon-mode `.tres` damages. A two-speed ordnance kind's lifetime row uses `test_enemy_bullet_lifetime.gd`'s `_two_speed_kind_clears()`, never the one-speed formula.
@@ -4608,7 +4612,7 @@ Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 3, answering pl
   damage, self-freeing in 2.5 s). Not cover, not debris; Ph19 owns boss wreckage and hazards.
 - **Own-ordnance separation:** a Dreadnought's own fan rockets and own torpedoes are never in flight together (gate rule 2: the rack is refused while the tube is committed or an own torpedo is live, the tube while the rack is committed or an own rocket is live; the brain counts `live_own_rockets()` / `live_own_torpedoes()` from `round_fired` and `expired`), the rack is refused from the ram's LINE_UP to the end of CHARGE, and LINE_UP waits for no live own rocket. Reason: an `EnemyRocket` HitBox (32, mask 128 | 512) hits its own side's ordnance and parts once armed, and a rocket-side owner skip cannot help because the target `HurtBox` applies the damage itself. A later boss that fires rockets and slow ordnance together needs the same time separation or a target-side filter.
 - **Assault ram bound:** the charge length is `min(dist + assault_ram_overshoot 150, ram_speed × ram_max_time, edge_limit)`, where `edge_limit` stops the hull rectangle 16 px inside `EnemyWorld.projectile_world_rect()` (x −164…1444, y −444…1164). Fairness inequalities use a player's `cruise_speed()` (fighter 360, Open Space ship 420).
-- Hub: draw 22, **4800 ring at 135°** ≈ (−3394, 3394), hunt leash 1400 round `patrol_anchor`; the Heavy Gunship and Laser Tender anchors are ≈ 2596 px away, outside its 2500 px reach (leash + perceive), pinned by a new `test_sector_hub_patrol.gd` row that every other patrol anchor lies outside it. A chase can still drag it into a neighbour's fight: intended, encounter ownership is Ph13 / Ph14's. Levers: ring 4800–5200, leash → 1100, bearing ± 10°.
+- Hub: draw 22, **4800 ring at 135°** ≈ (−3394, 3394), hunt leash 1400 round `patrol_anchor`; the Heavy Gunship and Laser Tender anchors are ≈ 2596 px away, outside its 2500 px reach (leash + perceive), pinned by a new `test_sector_hub_patrol.gd` row that every other patrol anchor lies outside it. A chase can still drag it into a neighbour's fight: intended, encounter ownership is Ph13 / Ph14's. Levers: ring 4800–5200, then leash → 1100, then bearing ± 10° only with a ring ≥ 5200 (at 4800 a ±10° bearing puts a neighbour anchor ≈ 2331 px away).
 - Test helper `tests/helpers/dreadnought_fixture.gd` (`spawn` with `quiet` through attack caps 0 / escort caps 0 / `ram_first_delay` 1e6 — never through config cooldowns, which no
   mount reads; `hand_tick` in the fortress position-overwrite pattern); suites `test_dreadnought.gd`, `_incoming_damage_paths`, `_movement`, `_weapons`, `_wake`, `_ram`,
   `_reinforcements`, `_density`, `_sprites`, plus `test_engine_wake.gd`.
@@ -4619,8 +4623,12 @@ Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 3, answering pl
 - A capital ship's "lopsided after engine loss" is a path property (turn rates, bias, drift) tested on positions against a formula over the config; the Carrier's facing sag is not
   the model to copy. A listing hull must still be able to turn both ways (a config-invariant row).
 - A new boss mirrors the fortress's incoming-damage-paths file (player rockets, asteroids, mining laser) and has a row that its own moving ordnance never damages its parts.
-- Gate time: Phase 12 starts a gate-room task freeing ≥ 7 s (target 9 s; rules 1–4); only the tasks that would cross 237 s wait for it; allotments total 17.6 s, so the phase ends
-  ≈ 235.8 s at worst — later phases start with little room; escalate past a 237 s two-run mean or 1.5× an allotment.
+- Gate time: Phase 12 starts a gate-room task freeing ≥ 8 s (target 10 s; rules 1–4); only the tasks that would cross 237 s wait for it; allotments total 18.4 s, so the phase ends
+  ≈ 235.6 s at worst — later phases start with little room; escalate past a 237 s two-run mean or 1.5× an allotment. A task that adds mounts / pools to a boss scene charges the
+  build cost in every earlier spawn of that boss to itself (measured as the whole-suite delta); the Dreadnought fixture's `opts.bare` (frees `MountSlots` before `add_child()`) is
+  a pre-approved lever for rows that assert nothing about weapons.
+- A slow-turning capital hull's committed charge lines up at a burst turn rate with a config-sized cap and aborts rather than charging off its nose.
+- A turret's arc and range are always worked out from the mount's own pivot, never the hull centre (a bow mount on a 448 px hull sits 196 px ahead of it).
 - A one-salvo mount (salvo 1) is committed only in TELEGRAPH: it launches on the TELEGRAPH-end tick and spends no tick in FIRE.
 - A "module death disables its attack" row has an alive control (the same setup fires from the part while it lives), or it cannot fail.
 
@@ -4628,7 +4636,7 @@ Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 3, answering pl
 | Item | Deferred to | Reason |
 |---|---|---|
 | Placing the Dreadnought in a level (its rack / tube pools persist: an `ENEMIES_CLEARED` placement would be a third allowlisted exception) | Ph15 | Ph12 owner choice 4 default; Assault level migration |
-| The Assault stadium following the player's x | Ph15 | corridor-constrained AI |
+| The Assault stadium following the player's x **or the camera's vertical pan** (with a low-flying player `ArenaCamera` pans down, the upper leg — hull centre y 160 — leaves the view and its mounts hold fire; the fortress at hold y 180 shares this) | Ph15 | corridor-constrained AI; documented as a known limit in the Dreadnought's `ENEMY.md` |
 | Enemy beams / rings vs parts; LOS wreckage; damaging boss debris; a capital wreck on its death | Ph18 / Ph19 | earlier deferrals stand |
 | Carrier / Heavy Gunship on the boss machinery (they may reuse `ON_OWN_DESTROYED`, per-part gates and multi-track ladders) | Ph18 | |
 | Encounters with the Dreadnought, escort leash beyond the cap | Ph13 / Ph14 | |

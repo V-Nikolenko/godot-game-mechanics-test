@@ -2,9 +2,9 @@
   "tasks": [
     {
       "key": "t1",
-      "title": "Win back at least 7 s of test-suite time so the Dreadnought's weapon, wake, ram and art tests fit under the gate limit",
-      "description": "GUT is ≈ 225.2 s of the 240 s ceiling (escalation past a 237 s two-run mean) and this phase's tasks are allotted 17.6 s (225.2 + 17.6 = 242.8 s without help; ≈ 5.8 s is strictly needed to stay under 237 s). Free ≥ 7 s (target 9 s) using tests/README.md → Gate time rules 1–3 and the new rule 4 (a bit-identical production-code speed-up proven by unchanged printed figures plus a throw-away differential run, the Ph8 t1 route; Ph12 owner choice 8). Start from the measured inventory in plan §2.15: the CPU-bound test_fighter_squad.gd sweep (41 s in one test, the fighters' own tick) and test_level1_specialist_spawns.gd (≈ 15 s of before_all() probes plus 8.8 s and 4.7 s rows; the probe step and EnemyWorld.projectile_world_rect()'s double group lookup), then rule 1 (16×) on the paced 8× files (test_missile_corvette.gd, test_sniper.gd, test_space_fortress.gd, test_hijack_pulse.gd). Record rule 4 and every before / after in tests/README.md → Gate time and the speed-up in DECISIONS.md (### Phase 12, built in t1). Only t8 depends on this task.",
-      "acceptanceCriteria": "- Two-run mean of scripts/gate-time.sh is ≥ 7 s below the two-run mean measured at the start of the task; test and assert counts unchanged.\n- No tick count, duration, sample grid, start set, bound or assertion changed; every figure the affected hand-ticked files print is identical before / after; any production change has a recorded differential run with 0 mismatches.\n- tests/README.md → Gate time documents rule 4 and the new measurements; scripts/check-test-leaks.sh clean; bash /agent/verify.sh green.\n- If the inventory is exhausted below 7 s: keep only green, bit-identical gains, record the measurements, and end with Result: ESCALATE naming what is left.\n- tests/README.md → Gate time also records the phase projection (225.2 + 17.6 − freed) so later tasks can see the remaining margin.",
+      "title": "Win back at least 8 s of test-suite time so the Dreadnought's weapon, wake, ram and art tests fit under the gate limit",
+      "description": "GUT is ≈ 225.2 s of the 240 s ceiling (escalation past a 237 s two-run mean) and this phase's tasks are allotted 18.4 s (225.2 + 18.4 = 243.6 s without help; ≈ 6.6 s is strictly needed to stay under 237 s). Free ≥ 8 s (target 10 s; raised from 7 s in revision 4 because the weapons task's allotment grew 2.0 → 2.8 s for the eight mounts built in every Dreadnought spawn) using tests/README.md → Gate time rules 1–3 and the new rule 4 (a bit-identical production-code speed-up proven by unchanged printed figures plus a throw-away differential run, the Ph8 t1 route; Ph12 owner choice 8). Start from the measured inventory in plan §2.15: the CPU-bound test_fighter_squad.gd sweep (41 s in one test, the fighters' own tick) and test_level1_specialist_spawns.gd (≈ 15 s of before_all() probes plus 8.8 s and 4.7 s rows; the probe step and EnemyWorld.projectile_world_rect()'s double group lookup), then rule 1 (16×) on the paced 8× files (test_missile_corvette.gd, test_sniper.gd, test_space_fortress.gd, test_hijack_pulse.gd). Record rule 4 and every before / after in tests/README.md → Gate time and the speed-up in DECISIONS.md (### Phase 12, built in t1). Only t8 depends on this task.",
+      "acceptanceCriteria": "- Two-run mean of scripts/gate-time.sh is ≥ 8 s below the two-run mean measured at the start of the task; test and assert counts unchanged.\n- No tick count, duration, sample grid, start set, bound or assertion changed; every figure the affected hand-ticked files print is identical before / after; any production change has a recorded differential run with 0 mismatches.\n- tests/README.md → Gate time documents rule 4 and the new measurements; scripts/check-test-leaks.sh clean; bash /agent/verify.sh green.\n- If the inventory is exhausted below 8 s: keep only green, bit-identical gains, record the measurements, and end with Result: ESCALATE naming what is left.\n- tests/README.md → Gate time also records the phase projection (225.2 + 18.4 − freed) so later tasks can see the remaining margin.",
       "type": "chore",
       "complexity": "large",
       "effort": "xhigh",
@@ -43,13 +43,14 @@
       "key": "t4",
       "title": "A slow energy torpedo that takes three Standard shots to shoot down, fired from a new torpedo-tube turret",
       "description": "energy_torpedo.tscn: an EnemyOrdnance PURSUIT_BOMB scene with Health 120 in damage units (3 Standard / 3 Sniper / 5 Spread / 9 Gatling hits; Ph12 owner choice 9), steering 3 s then straight, blast 72 / 25, life 10 s / 2400 px, exposed as the named const EnemyOrdnanceScenes.ENERGY_TORPEDO (not in scene_for()). Append TurretMount.Variant.TORPEDO_TUBE = 10 (after t3's MISSILE_FAN = 9): TorpedoTubeMount on a standalone torpedo_tube_mount.tscn, telegraph 1.0 s, cooldown 7.0, one persistent TorpedoPool. Draw the torpedo sprite and the 40 × 40 tube head through pixel-art-generation; add TORPEDO_TUBE to test_ph8_sprites.gd HEADS.",
-      "acceptanceCriteria": "- The mount rows (test_turret_mount_variants.gd), the defuse rows with real player bullets and with damages read from the mode .tres files including the one-hit-short boundary (test_enemy_ordnance.gd), and the direct ENERGY_TORPEDO lifetime row through the file's existing _two_speed_kind_clears() helper with values read from the torpedo scene and the tube (3.0 + 1920 / 320 = 9.0 s ≤ 10; test_enemy_bullet_lifetime.gd) of plan §2.4 pass.\n- Both new textures pass the transparency sweep and were looked at; project-load sweep green.\n- Within the 0.8 s allotment; verify.sh green.",
+      "acceptanceCriteria": "- The mount rows (test_turret_mount_variants.gd), the defuse rows with real player bullets and with damages read from the mode .tres files including the one-hit-short boundary (test_enemy_ordnance.gd), and the direct ENERGY_TORPEDO lifetime row through the file's existing _two_speed_kind_clears() helper with values read from the torpedo scene and the tube (3.0 + 1920 / 320 = 9.0 s ≤ 10; test_enemy_bullet_lifetime.gd) of plan §2.4 pass.\n- Both new textures pass the transparency sweep and were looked at; project-load sweep green.\n- Within the 0.8 s allotment; verify.sh green.\n- The tube head meets every head rule of tests/integration/test_ph8_sprites.gd (wiring, opaque pivot, tip within 6 px of Muzzle, its own texture, silhouette ≥ MIN_MASK_DIFF 0.08 from every other head, HEADS.size() == TurretMount.Variant.size()).",
       "type": "feature",
       "complexity": "medium",
       "dependsOn": [
         "t3"
       ],
       "planSections": [
+        "2.3",
         "2.4",
         "2.15"
       ]
@@ -85,8 +86,8 @@
     {
       "key": "t7",
       "title": "The Dreadnought hunts the player on long arcs, swings round with jets, and visibly lists or stops dead as its engines are lost",
-      "description": "DreadnoughtBrain heading model: Open Space hunt (closes on a curve, 700 px loiter orbit engaging one broadside, side hysteresis, jets, leash / return, AnchorIdle), engine loss as a path property (per-side turn rates, yaw bias, drift; the listing orbit forced toward the dead side; crippled HOLD with thruster rotation), critical speed-up, and the Assault stadium loop (legs y 160 / 400, derived radius 120, pure pursuit) with ENTER. movement_snapshot().",
-      "acceptanceCriteria": "- Rows 1–8 of plan §2.7.4 pass (both harnesses where stated), hand-ticked with the fixture's hand_tick and quiet spawn; the one-engine ratio is asserted against the config formula.\n- test_enemy_mover_single_writer.gd green (the brain only requests).\n- Within the 2.0 s allotment; verify.sh green.",
+      "description": "DreadnoughtBrain heading model: Open Space hunt (closes on a curve, 700 px loiter orbit engaging one broadside, side hysteresis, jets, leash / return, AnchorIdle), engine loss as a path property (per-side turn rates, yaw bias, drift; the listing orbit forced toward the dead side; crippled HOLD with thruster rotation), critical speed-up, and the Assault stadium loop (legs y 160 / 400, derived radius 120, pure pursuit) with ENTER. movement_snapshot(). ENEMY.md → Assault records the known limit (plan §2.7.3): with a low-flying player the camera pans down and the upper leg leaves the view and holds fire; fitting the loop to the moving view is Ph15's.",
+      "acceptanceCriteria": "- Rows 1–8 of plan §2.7.4 pass (both harnesses where stated), hand-ticked with the fixture's hand_tick and quiet spawn; the one-engine ratio is asserted against the config formula.\n- test_enemy_mover_single_writer.gd green (the brain only requests).\n- Within the 2.0 s allotment; verify.sh green.\n- ENEMY.md states the camera-pan limit of the Assault stadium as a known limit owned by Ph15.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
@@ -105,8 +106,8 @@
     {
       "key": "t8",
       "title": "The Dreadnought fights back: rippling six-shell broadsides that sweep as it turns, a missile fan and a torpedo, each silenced when its module dies",
-      "description": "MountSlots on the four WEAPON parts (3 HEAVY_CANNON per side at 40° about abeam, MISSILE_FAN, TORPEDO_TUBE as a ±45° bow-chaser), built by ModularHull.build_mounts(); then each mount's telegraph_gate bound per part (brain.attack_gate_for.bind(part_id)) so a side counts once and the ripple spacing holds; gate rule 2 keeps the boss's own fan rockets and own torpedoes never in flight together (live_own_rockets() / live_own_torpedoes()) and gate rule 1 is ready for t10 (rack refused from LINE_UP); broadside_fire_turn_cap 0.30 so the sweep is fair at the fighter's cruise_speed() 360; broadside cooldown written upward from the scene; broadsides hold fire under jets or a fast turn; crippled / critical cooldown cuts with pool_period_factor 0.45; own-fire static row; attacks_snapshot().",
-      "acceptanceCriteria": "- Rows 1–12 of plan §2.8 pass in tests/integration/test_dreadnought_weapons.gd (rows 1 and 11 in both harnesses), including the alive control for every weapon part in row 1, the whole volley with the rack in TELEGRAPH and its boundary in row 3, and the separation rows 11–12.\n- The fairness row passes at 0.30 × 900 = 270 ≤ 0.8 × cruise_speed() for both player scenes.\n- No pool reports empty in the 30 s worst-case stress.\n- ENEMY.md calls the torpedo tube a bow-chaser and says when it fires.\n- Within the 2.0 s allotment; verify.sh green.",
+      "description": "MountSlots on the four WEAPON parts (3 HEAVY_CANNON per side at 40° about abeam, MISSILE_FAN, TORPEDO_TUBE as a ±55° bow-chaser, traverse_deg_override 110, every angle and range measured from the tube's pivot 196 px ahead of the hull centre), built by ModularHull.build_mounts(); then each mount's telegraph_gate bound per part (brain.attack_gate_for.bind(part_id)) so a side counts once and the ripple spacing holds; gate rule 2 keeps the boss's own fan rockets and own torpedoes never in flight together (live_own_rockets() / live_own_torpedoes()) and gate rule 1 is ready for t10 (rack refused from LINE_UP); broadside_fire_turn_cap 0.30 so the sweep is fair at the fighter's cruise_speed() 360; broadside cooldown written upward from the scene; broadsides hold fire under jets or a fast turn; crippled / critical cooldown cuts with pool_period_factor 0.45; own-fire static row; attacks_snapshot(). The 2.8 s allotment is measured as the whole-suite delta, because every earlier Dreadnought spawn (t6 and t7 files, both harnesses) now builds the eight mounts; pre-approved lever: the fixture's opts.bare for movement rows only (plan §2.6.1).",
+      "acceptanceCriteria": "- Rows 1–12 of plan §2.8 pass in tests/integration/test_dreadnought_weapons.gd (rows 1 and 11 in both harnesses), including the alive control for every weapon part in row 1, the whole volley with the rack in TELEGRAPH and its boundary in row 3, and the separation rows 11–12.\n- The fairness row passes at 0.30 × 900 = 270 ≤ 0.8 × cruise_speed() for both player scenes.\n- No pool reports empty in the 30 s worst-case stress.\n- ENEMY.md calls the torpedo tube a bow-chaser and says when it fires, with angles measured from the tube's pivot (Open Space approach window d ≈ 1257 → 1000 px, ≈ 2.6 s).\n- Within the 2.8 s allotment (whole-suite delta; tests/README.md → Gate time records it and whether opts.bare was used); verify.sh green.",
       "type": "feature",
       "complexity": "large",
       "dependsOn": [
@@ -119,6 +120,7 @@
         "2.1",
         "2.3",
         "2.4",
+        "2.6.1",
         "2.6.2",
         "2.6.5",
         "2.6.7",
@@ -153,8 +155,8 @@
     {
       "key": "t10",
       "title": "A critically damaged Dreadnought rams the player down a telegraphed lane, then is open to punishment",
-      "description": "The Ram Corvette cycle on the boss in critical with ≥ 1 engine (LINE_UP, WIND_UP with a drawn lane and a frozen line, CHARGE boost at 560 px/s with ram damage 35 on the contact box only then, RECOVER), never in crippled; the per-part gate opens nothing during WIND_UP / CHARGE; LINE_UP waits until no own fan rocket is live; Assault diagonal dive with assault_ram_overshoot 150 and an edge_limit that stops the charge with the bow 16 px inside EnemyWorld.projectile_world_rect(); one-engine turn ratio asserted per mode from the config formula; fairness inequality at cruise_speed(); the realistic own-fire row (the charge overtakes its own torpedo, which hurts nothing, and no own rocket is live while it rams).",
-      "acceptanceCriteria": "- Rows 1–9 of plan §2.10 pass (both harnesses except where a row names one), row 6 from all six player positions including the lowest, row 8(b) proving the hull overlapped its torpedo; (tests/integration/test_dreadnought_ram.gd).\n- test_enemy_contact_damage.gd still reads 25 at spawn.\n- Within the 1.7 s allotment; verify.sh green.",
+      "description": "The Ram Corvette cycle on the boss in critical with ≥ 1 engine (LINE_UP turning at the side rates × jets_turn_factor 2.5 until the nose is within 8° of the aim, capped at 5.5 s — a cap sized from the config — and aborting to HUNT with a 2.0 s retry if not aimed, never charging off the nose; WIND_UP with a lane drawn from the bow and a frozen line whose charge_dir is the heading at the freeze, CHARGE boost at 560 px/s with ram damage 35 on the contact box only then, RECOVER), never in crippled; the per-part gate opens nothing during WIND_UP / CHARGE; LINE_UP waits until no own fan rocket is live; Assault diagonal dive with assault_ram_overshoot 150 and an edge_limit that stops the charge with the bow 16 px inside EnemyWorld.projectile_world_rect(); LINE_UP turn rates per side and mode asserted over the first 0.5 s against the config formula; the hull centre passes charge_point with the player 700 px away so neither charge cap binds; fairness inequality at cruise_speed(); the realistic own-fire row (the charge overtakes its own torpedo, which hurts nothing, and no own rocket is live while it rams).",
+      "acceptanceCriteria": "- Rows 1–10 of plan §2.10 pass (both harnesses except where a row names one), row 6 from all six player positions including the lowest, row 8(b) proving the hull overlapped its torpedo; (tests/integration/test_dreadnought_ram.gd).\n- test_enemy_contact_damage.gd still reads 25 at spawn.\n- Within the 1.7 s allotment; verify.sh green.\n- On every CHARGE tick the nose is within 1° of charge_dir; the abort row (0.5 s cap) aborts with ram_aborts() 1 and nothing charged, and the shipped cap does not abort.",
       "type": "feature",
       "complexity": "medium",
       "effort": "high",
@@ -163,6 +165,7 @@
       ],
       "planSections": [
         "2.1",
+        "2.6.1",
         "2.6.2",
         "2.6.5",
         "2.6.7",
@@ -186,6 +189,7 @@
       ],
       "planSections": [
         "2.2",
+        "2.6.1",
         "2.6.2",
         "2.6.3",
         "2.11",
@@ -235,7 +239,7 @@
     {
       "key": "t14",
       "title": "The Dreadnought roams its own hunting zone at the far south-west of the Open Space hub",
-      "description": "Sector hub draw 22 (4800 ring at 135°, ≈ (−3394, 3394), patrol_anchor and rng_seed before add_child(), not start_engaged, into EnemyContainer); test_sector_hub_patrol.gd gains it in _patrol_groups() with footprint hunt_leash_radius + perceive_radius and every hard count moved by one, plus a new row: every other _patrol_groups() anchor lies outside the Dreadnought's reach (hunt_leash_radius + perceive_radius = 2500; the Heavy Gunship and Laser Tender anchors are ≈ 2596 px away); ENEMY.md and DECISIONS.md state that a chase can still drag it into a neighbour's fight (intended, Ph13/14 own encounters); pre-approved levers in order, each keeping both rows green (ring 4800–5200, hunt_leash_radius 1400 → 1100, bearing 135° ± 10°), else escalate.",
+      "description": "Sector hub draw 22 (4800 ring at 135°, ≈ (−3394, 3394), patrol_anchor and rng_seed before add_child(), not start_engaged, into EnemyContainer); test_sector_hub_patrol.gd gains it in _patrol_groups() with footprint hunt_leash_radius + perceive_radius and every hard count moved by one, plus a new row: every other _patrol_groups() anchor lies outside the Dreadnought's reach (hunt_leash_radius + perceive_radius = 2500; the Heavy Gunship and Laser Tender anchors are ≈ 2596 px away); ENEMY.md and DECISIONS.md state that a chase can still drag it into a neighbour's fight (intended, Ph13/14 own encounters); pre-approved levers in order, each keeping both rows green (ring 4800–5200, hunt_leash_radius 1400 → 1100, then a bearing of 135° ± 10° only together with a ring of at least 5200), else escalate.",
       "acceptanceCriteria": "- tests/integration/test_sector_hub_patrol.gd green with the Dreadnought swept, including the new neighbour-anchor row; every earlier draw's seed unchanged.\n- Within the 0.5 s allotment; verify.sh green.",
       "type": "feature",
       "complexity": "small",
