@@ -1,15 +1,16 @@
 # Enemy rework, phase 12: Dreadnought hunting boss
 
-Revision 2 (2026-11-25), answering the round-1 review (`4-review.md`: B1–B4, M1–M10; point by point in §8). Epic `cmug256tc003lm52wbdoxucrr`, phase 12 of the enemy rework
+Revision 3 (2026-11-26), answering the round-2 review (`4-review.md`: N1–N11) and the owner's CHANGES_REQUESTED; revision 2 answered round 1 (B1–B4, M1–M10). Both
+rounds point by point in §8. Epic `cmug256tc003lm52wbdoxucrr`, phase 12 of the enemy rework
 (idea `docs/ideas/cmufkkgmx0001o02y6bnf52bq/`). Built on this directory's `1-context.md` (what exists, requirements R1–R20) and `2-research.md` (scope check S1–S12, findings
-F1–F7, options). Code facts re-read on `agent/auto-dev` @ `572ae54`; test times measured on 2026-11-25 (§2.15).
+F1–F7, options). Code facts re-read on `agent/auto-dev` @ `572ae54` (round-3 facts @ `86496f7`); test times measured on 2026-11-25 (§2.15).
 
 ## Summary for the owner
 
 - **For the player:** a new boss, the **Dreadnought**, a 450 px warship that *hunts* you: it closes in on a curve, then circles you on long, slow arcs with one side turned to you,
   so its cannons ripple down that side and sweep across you as it turns. Get behind it and it fires manoeuvring jets to swing round; its engines leave a burning wake.
-- **Weapons:** three heavy cannons down each side (the broadside), a fan of five missiles, a slow energy torpedo you can shoot down (three Standard shots), the engine wake, and,
-  once its core is badly damaged, a telegraphed full-speed ram down a drawn lane with a long, punishable recovery.
+- **Weapons:** three heavy cannons down each side (the broadside), a fan of five missiles, a slow energy torpedo from its bow you can shoot down (three Standard shots; it fires
+  when you cross ahead of it, never alongside its own missiles), the engine wake, and, once its core is badly damaged, a telegraphed ram down a drawn lane with a long recovery.
 - **You choose what to break first, nothing is locked:** a weapon (that attack stops for good, but two interceptors burst out of its wreck), an engine (one lost: it lists, drifts and
   can only circle tightly one way; both: it stops dead in an extreme-weapons frenzy but can never ram), the shield generator (core and engines lose their bubble), or the core (the kill).
 - **Destruction shows:** wrecked parts stay as smaller stumps and throw off a tumbling chunk, so the silhouette shrinks; lights show armed, charging and shielded.
@@ -18,8 +19,9 @@ F1–F7, options). Code facts re-read on `agent/auto-dev` @ `572ae54`; test time
 - **Built for later bosses:** launch bays that fire from their own wreck, a missile-fan rack, a torpedo-tube turret, a reusable engine-wake hazard.
 - **Left out:** a level placement (phase 15), a boss health bar and sound (17), lasers hurting boss parts and wrecks as cover (18–19), difficulty tiers (16).
 - **Main risks:** a 450 px ship crowds the Assault screen (fairness checks on every attack, bullets measured per phase against the fortress's ceilings); the free order must stay a
-  real choice (each target has a gain and a cost; nothing is play-tested); the test suite is about 12 s under its limit, so one task wins time back first — the slowest tests turn
-  out to be CPU-bound, so that task may make some game code faster without changing what it does; only the weapons work waits for it.
+  real choice (each target has a gain and a cost; nothing is play-tested); the test suite has about 12 s of room before its warning line and this phase adds about 17.6 s, so one
+  task wins at least 7 s back first (the slowest tests are CPU-bound, so it may make game code faster without changing what it does); only the weapons work waits for it, and the
+  margin left at the end is thin (about 1 s if that task frees only 7 s, about 3 s at its 9 s target).
 - **Choices (default in brackets):** 1. Who bursts out of a destroyed weapon? [two Gatling Interceptors] 2. Let launch bays fire from their own wreck, changing phase 11's
   "bays stop when their part dies" for bays that opt in? [yes] 3. Does the wake hurt other enemies (bait-able) but not the Dreadnought or its interceptors? [yes]
   4. Place it in a level now? [no, phase 15] 5. Put it in the hub as a roaming hunter in its own zone? [yes] 6. Ram damage of your 50 HP / hull touch? [35 / 25]
@@ -49,21 +51,24 @@ Phase 12 of the enemy rework. Read `CLAUDE.md`. Earlier phases' rules in `docs/i
   `attack_gate_for(part_id: StringName) -> bool`, `committed_parts() -> int`, `jets_active()`, `movement_snapshot()`, `attacks_snapshot()`, `arena_snapshot()` (`[]` until built),
   `heading() -> Vector2`, `phase()`; `enum Phase { IDLE, NOTICING, RETURNING, ENTER, HUNT, LINE_UP, WIND_UP, CHARGE, RECOVER, HOLD }` (append-only). Engaged = HUNT … HOLD.
 - **Per-part attack gate:** `TurretMount` still calls a zero-argument `telegraph_gate` (Ph11 contract); after `ModularHull.build_mounts()` the root sets
-  `mount.telegraph_gate = brain.attack_gate_for.bind(part_id)` on every mount of each WEAPON part, so the gate knows which part asks and a broadside side counts once.
+  `mount.telegraph_gate = brain.attack_gate_for.bind(part_id)` on every mount of each WEAPON part, so the gate knows which part asks and a broadside side counts once. **Its own
+  fan rockets and its own torpedoes are never in flight together** (the gate's separation rule, §2.8): its rockets can hit its torpedo, so they are kept apart in time.
 - **Single writers:** the brain only requests (`request_velocity`, `face_toward`, `boost`, `halt`); the `EnemyMover` writes `velocity` / `rotation` / `move_and_slide()`. Paths bend
   **only** through the brain's own heading turn. Mover: `turn_lerp` 0, `acceleration` / `braking` 0, `max_turn_rate` above any rate the brain uses. Once dying, `suspend_ai()` runs
   and `BossDeathSequence` alone writes the rotation.
 - **Config:** every number in `dreadnought_config.tres` (flat); mount tuning in **standalone** mount scenes (`TurretMountScenes`), slot overrides on `TurretMountSlot`, bays on
   `ReinforcementBay` exports, phases as `BossPhase` sub-resources. Never write to a loaded resource. Config wins over the scene's `Health`.
 - **Shared-machinery additions, opt-in and bit-identical by default:** `ReinforcementBay.Trigger.ON_OWN_DESTROYED` (appended, t2); `RocketBatteryMount.fan_count` 1 /
-  `fan_spread_deg` 0 and **`TurretMount.Variant.MISSILE_FAN` = 9** on its own `missile_fan_mount.tscn` (t3); **`TurretMount.Variant.TORPEDO_TUBE` = 10** (t4, after t3);
+  `fan_spread_deg` 0 and **`TurretMount.Variant.MISSILE_FAN` = 9** on its own `missile_fan_mount.tscn` (t3); **`TurretMount.Variant.TORPEDO_TUBE` = 10** (t4, after t3); every
+  variant has its **own, distinct head PNG** (`test_ph8_sprites.gd` `HEADS`: `turret_head_missile_fan.png` drawn in t3, `turret_head_torpedo_tube.png` in t4);
   `HazardField.damage_exempt_group` &"" and `Hazards.pulse_damage(..., exempt_group := &"")` (t5). Every existing suite is the regression net and stays green unchanged.
 - **Clocks** are accumulated `delta` (`x -= delta`, over at `x <= 1e-6`); no `Timer` / `create_timer` in brains, weapons or hazards (a `Timer` *node* only for the death free).
 - **Spawning** (escorts, wake puffs, chunks) from the brain / root tick or idle code, never inside a physics callback (defer it); hazards go deferred through
   `spawn_into(Hazards.container(tree), ...)` and nothing spawns when there is no container.
 - **Mode:** `EnemyWorld.arena(get_tree()) != null` = Assault. In Assault nothing the Dreadnought owns fires outside `EnemyWorld.view_rect()`; no engagement budget, no exit;
   `world_anchored_x` true (`.at(x, y)` lands at world x `640 + 2x`). Open Space: world space, no camera maths.
-- **Fairness and density (Ph11 convention):** inequalities read from **instantiated** nodes; measured Assault density (t12) in every phase state: Dreadnought-owned launches mean
+- **Fairness and density (Ph11 convention):** inequalities read from **instantiated** nodes; a player's speed is its `cruise_speed()` (fighter 360, Open Space ship 420); in Assault
+  the hull rectangle stays inside `EnemyWorld.projectile_world_rect()` (x −164…1444, y −444…1164) from the end of ENTER on; measured Assault density (t12) in every phase state: Dreadnought-owned launches mean
   ≤ 13.3 /s, peak ≤ 30 per half-open 2 s window, ≤ 2 committed WEAPON parts (3 in `critical` or `crippled`); a count during which a pool reported empty fails.
 - **Signals** declare exactly what they emit; per-frame / per-hit prints only behind `OS.is_stdout_verbose()`.
 - **UIDs:** never hand-type or copy a `uid://`; leave references UID-less or mint with the `tests/README.md` snippet. Never run `update_project_uids`.
@@ -101,7 +106,7 @@ makes it visibly lopsided, losing both makes it stationary with an extreme weapo
 | S7 | the scope names no level placement; Ph15 owns Assault level migration | Assault mode built and tested in the harness, `WaveBuilder.dreadnought()`, **no level placement** (Ph12 owner choice 4) |
 | S8 | hub draws 1–21 appended; `test_sector_hub_patrol.gd` sweeps footprints | draw 22 with a hunting leash (§2.14) |
 | S9–S10 | fortress suites run both harnesses; `test_boss_phase_rules.gd` sweeps every driver in a boss | same pattern; the sweep must find the Dreadnought and both its drivers |
-| S11 | GUT ≈ 225.2 s of 240 s (escalation 237 s); the slowest files are CPU-bound (measured, §2.15) | gate-room task t1 frees ≥ 6 s, may use a bit-identical code speed-up; only t8 waits on it (§2.15) |
+| S11 | GUT ≈ 225.2 s of 240 s (escalation 237 s); the slowest files are CPU-bound (measured, §2.15) | gate-room task t1 frees ≥ 7 s (target 9), may use a bit-identical code speed-up; only t8 waits on it (§2.15) |
 | S12 | deferred items unchanged (beams vs parts, capital wreck, Ph18 Carrier/Gunship migration, Ph13/14 encounters, Ph16 tiers, Ph17 HUD/audio) | out of scope (§6) |
 
 ### 1.2 Research used (from `2-research.md` §2; numbers marked *judgement* are starting values, nothing was play-tested)
@@ -181,16 +186,23 @@ never inherited, because `export_of()` reads only a scene's own state).
   **bit-identical** (same rng draws, same direction). Each rocket draws its own kind (`pick_kind()`), emits `round_fired` and, if refused, counts in `rockets_refused`.
   `pool_specs()`'s stand-in salvo becomes `salvo_count × fan_count`. The aim-cone check stays once per salvo step.
 - `TurretMount.Variant` gains **`MISSILE_FAN` = 9** (appended to `enum Variant { BURST_CANNON, SWEEP_BEAM, ROCKET_BATTERY, PULSE_RING, LANCE, BEAM_CANNON, HEAVY_CANNON,
-  SPREAD_CANNON, RAPID_PULSE }`). `TurretMountScenes.MISSILE_FAN` = new standalone `missile_fan_mount.tscn` on `rocket_battery_mount.gd`, reusing the rocket battery head
-  (`turret_head_rocket_battery.png`), authoring: `fan_count` 5, `fan_spread_deg` 40, `salvo_count` 1, `pursuit_chance` 0 (all DUMB: a readable fan of straight lines),
+  SPREAD_CANNON, RAPID_PULSE }`). `TurretMountScenes.MISSILE_FAN` = new standalone `missile_fan_mount.tscn` on `rocket_battery_mount.gd`, with **its own head**
+  `turret_head_missile_fan.png` (below), authoring: `fan_count` 5, `fan_spread_deg` 40, `salvo_count` 1, `pursuit_chance` 0 (all DUMB: a readable fan of straight lines),
   `charge_seconds` 0.5, `cooldown_seconds` 6.0, `fire_range` 900, `turn_rate` 2.0, `lead_blend` 0.6, `fire_cone_deg` 8, `scan_arc_deg` 90, `scan_speed` 0.4. The shipped
   `rocket_battery_mount.tscn` is untouched.
-- Add `MISSILE_FAN` to `tests/integration/test_ph8_sprites.gd` `HEADS` (rocket battery head) and to any "every built variant" sweep that needs it.
+- **Its own head art (this task draws it; round-2 N1).** `tests/integration/test_ph8_sprites.gd` forbids a shared head: `test_no_two_heads_share_a_texture` asserts every
+  `HEADS` PNG is used once **and** `HEADS.size() == TurretMount.Variant.size()`, and `test_no_two_heads_share_a_silhouette` asserts every pair's alpha masks differ by at least
+  `MIN_MASK_DIFF` 0.08. So t3 invokes `pixel-art-generation`, generates `assault/assets/sprites/enemies/turret_head_missile_fan.png` (strict top-down, nose-down art like every
+  head, 48 × 48 like the rocket battery head: a **wide five-tube rack**, its tube mouths in a shallow arc so the silhouette reads as "fan" and differs from the rocket battery's
+  two-tube box), saves it with `./scripts/pixellab.sh`, looks at it, and wires it as the scene's `Head` exactly as the other heads are (`rotation` −PI/2, `show_behind_parent`,
+  `centered` false, an `offset` whose pixel is opaque — alpha > 0.99 — and the art's far end within 6 px of the `Muzzle` marker's x). Card-free (≤ 90 % opaque). Add
+  `TurretMount.Variant.MISSILE_FAN: "turret_head_missile_fan.png"` to `HEADS`; all three head tests then pass unchanged. Any "every built variant" sweep that needs it gains it.
 
 **Rows** (`tests/integration/test_turret_mount_variants.gd`, hand-ticked): (1) boundary: the shipped `ROCKET_BATTERY` scene launches one rocket per salvo step along the barrel with
 the same rng draws as before (fan 1 / 0); (2) `MISSILE_FAN` launches five rockets at −20, −10, 0, +10, +20° from the barrel on one tick; (3) its pools are built at
 `EnemyRocketScenes.pool_size_for(kind, {salvo_count: 1 × 5, warhead_salvo_count: 0, salvo_period_min: period × pool_period_factor})` for a `pool_period_factor` of 1.0 and 0.45; (4) a
-dry pool counts each refused rocket; (5) `export_of(MISSILE_FAN, &"fan_count", 1)` reads 5 without instantiating. Gate-time allotment: 0.3 s.
+dry pool counts each refused rocket; (5) `export_of(MISSILE_FAN, &"fan_count", 1)` reads 5 without instantiating. `test_ph8_sprites.gd`: the three head tests above, now
+parameterised over ten variants, pass with the new head (a distinct texture and silhouette). Gate-time allotment: 0.4 s.
 
 ### 2.4 Energy torpedo and the torpedo tube (IDEAS §9 "energy torpedo"; t4, after t3)
 
@@ -217,8 +229,11 @@ slot. One pool `TorpedoPool` of `EnemyOrdnanceScenes.ENERGY_TORPEDO`, `persist` 
 `test_enemy_ordnance.gd`: (a) defuse on **real player bullets** (real physics at that file's 16×): a parked torpedo takes two real `bullet.tscn` shots fired with `default.tres`
 damage and is not defused, the third defuses it with no blast; (b) hand-emitted hits whose damage is **read from each mode `.tres`** defuse after exactly `ceil(max_health / damage)`
 hits for Standard, Sniper Shot, Spread and Gatling (boundary: one hit fewer leaves it live); (c) it steers only for `steer_window` then flies straight; (d) blast radius / damage
-from the scene. `test_enemy_bullet_lifetime.gd`: a row that instantiates `EnemyOrdnanceScenes.ENERGY_TORPEDO` directly and checks `max_distance / slowest speed` (160) fits
-`max_time` (the sweep's `_ordnance_lifetime(kind)` cannot key a second PURSUIT_BOMB scene). The transparency and project-load sweeps cover the new scenes. Gate-time allotment: 0.8 s.
+from the scene. `test_enemy_bullet_lifetime.gd`: a row that instantiates `EnemyOrdnanceScenes.ENERGY_TORPEDO` directly (the sweep's `_ordnance_lifetime(kind)` cannot key a second
+PURSUIT_BOMB scene) and checks it through the file's existing **two-speed** helper, as the pursuit bomb's row does: `_two_speed_kind_clears(steer_window, launch_speed,
+final_speed, max_distance, max_time)` with `steer_window` / `final_speed` and the `ProjectileLifetime` caps read from the torpedo scene and `launch_speed` from the instantiated
+`torpedo_tube_mount.tscn` — 3.0 + (2400 − 160 × 3.0) / 320 = 9.0 s ≤ 10 (the 200 px/s² ramp adds ≈ 0.2 s: ≈ 9.2 s, still inside; the message prints both). The single-speed
+formula (2400 / 160 = 15 s) is the wrong model for a two-speed kind and is not used (round-2 N2). The transparency and project-load sweeps cover the new scenes. Gate-time allotment: 0.8 s.
 
 ### 2.5 Engine wake hazard: `EngineWake` (IDEAS §9 "engine wake hazard", §24 "dangerous exhaust trails"; t5)
 
@@ -341,7 +356,7 @@ and hits the weapon part it steers at (HurtBox mask bit 32 on parts); (b) a **wa
 inside the hull; (g) boundary: a plain layer-1 hull-sized body would block the beam. Weapon parts are unshielded, so no generator needs destroying; a row that targets the core or an
 engine destroys `shield_generator` first.
 
-Gate-time allotment for t6: 3.5 s (the shell file ≈ 2.5 s + this file ≈ 1.0 s).
+Gate-time allotment for t6: 4.5 s (the shell file ≈ 2.5 s + this file ≈ 2.0 s: its fortress original measures 1.5–2.0 s of GUT time, §2.15 inventory; round-2 N8).
 
 ### 2.7 Movement: hunting on long arcs (IDEAS §9 Movement, §26, R2/R4/R8/R9; t7)
 
@@ -392,7 +407,8 @@ r = (400 − 160) / 2 = 120 px (IDEAS §31: no duplicated magic numbers). Speed 
 `assault_turn_rate` 0.9 (a config row). The brain steers by pure pursuit: the nearest point on the stadium plus `assault_track_lookahead` 120 px along the travel direction, turned
 toward at the side rates. Default loop direction counter-clockwise (port turns): the lower leg heads right with **starboard facing down**, the upper leg heads left with **port
 facing down**, so both legs engage the player below and the sides alternate. Hull extents: upper leg y 56–264, lower leg y 296–504, x 36–1244 at the leg ends: the whole loop is
-inside the resting view. Broadsides hold fire through the U-turns (0.75 rad/s > `broadside_fire_turn_cap` 0.35, §2.8), so the legs are the broadside windows.
+inside the resting view. Broadsides hold fire through the U-turns (0.75 rad/s > `broadside_fire_turn_cap` 0.30, §2.8), so the legs are the broadside windows; mid-way through
+the **left-end** U-turn (heading left → down → right) the bow points down at the player, which is the bow-chasing torpedo tube's window (§2.8); at the right end it points up.
 
 Listing in Assault keeps the loop direction (a reversal would need a 180° turn below the lower leg, toward the player): when the loop's turns are toward the live side the end turns
 are slower (ω_live = 0.9 × 0.5 − 0.05 = 0.40 rad/s at v = 58.5 → radius ≈ 146 > 120), so the hull visibly **overshoots** the stadium at each end and pursuit pulls it back; toward the
@@ -414,7 +430,7 @@ dead side it holds the track. Crippled = HOLD where it stopped; critical speeds 
 5. Jets: player parked in the stern arc → jets after 1.5 s, turn rate × 2.5 for 1.5 s, not again before 8 s; never while crippled.
 6. Leash: player beyond `lose_radius` for 4 s → RETURNING to the anchor; `start_engaged` never returns.
 7. Assault (Assault harness): ENTER ends at y 160 ± 8; over two laps the hull centre stays within y [152, 408] and x centre ± (380 + 120 + 8); the downward-facing side alternates
-   per leg (starboard on the rightward leg, port on the leftward); the hull rectangle stays inside the world rect; listing with the live side as the turn side overshoots the upper
+   per leg (starboard on the rightward leg, port on the leftward); the hull rectangle stays inside `EnemyWorld.projectile_world_rect()` from the end of ENTER; listing with the live side as the turn side overshoots the upper
    leg by more than 8 px at an end turn, listing with the dead side as the turn side does not. Config row: `assault_cruise_speed / r ≤ assault_turn_rate`.
 8. §25: `movement` joins `BUILT_KEYS` in `test_dreadnought.gd`.
 
@@ -431,51 +447,83 @@ binds each mount's gate to its own part: `for id in WEAPON_PARTS: for m in hull.
 | `broadside_port` | `Bow` (part-local y +60), `Mid` (0), `Stern` (−60) | HEAVY_CANNON (Heavy Shell 220 px/s, `burst_count` 2, `burst_gap` 0.35, `charge_seconds` 0.7, scene cooldown 3.2) | `traverse_deg_override` 40 about port abeam (`rest_bearing_deg` 0) | `broadside_cooldown_seconds` 3.2 (config, written after build, ≥ the scene's 3.2) |
 | `broadside_starboard` | same, mirrored | HEAVY_CANNON | 40 about starboard abeam (180) | same |
 | `missile_rack` | one | **MISSILE_FAN** (t3: 5 × DUMB over 40°, salvo 1, cooldown 6.0, all in `missile_fan_mount.tscn`) | 360 (no override) | scene |
-| `torpedo_tube` | one | **TORPEDO_TUBE** (t4: telegraph 1.0, cooldown 7.0, in `torpedo_tube_mount.tscn`) | 30 about the bow (`rest_bearing_deg` 90) | scene |
+| `torpedo_tube` | one | **TORPEDO_TUBE** (t4: telegraph 1.0, cooldown 7.0, in `torpedo_tube_mount.tscn`) | `traverse_deg_override` 90 about the bow, i.e. ±45° (`rest_bearing_deg` 90) | scene |
+
+**The torpedo tube is a bow-chaser** (round-2 N6; say so in `ENEMY.md`). `traverse_deg` is the whole arc (`TurretMount` uses half of it each way), so 90 = ±45° about the nose. In
+a steady orbit the player is abeam and the tube is silent; it fires when the player is ahead of the bow: on the Open Space approach curve (the brain steers to the loiter circle's
+tangent point, so the player sits asin(700 / d) off the nose: 39.5° at the tube's `fire_range` 1100, 45° at 990 px — a short window as it closes), whenever the player crosses
+ahead of the bow, during the ram's LINE_UP (nose on the player; t10), in `crippled` HOLD once no broadside lives (the thrusters turn the bow on), and in Assault mid-way through
+the left-end U-turn, where the bow points down (§2.7.3). It is the weapon that fills the broadsides' silences, not a steady stream.
 
 Every slot authors `pool_period_factor` 0.45 = `crippled_cooldown_factor` 0.6 × `critical_cooldown_factor` 0.75 (a row pins it to the config product). The broadside cooldown is
 written onto the six mounts after the build only **upward** from the scene's own value (the Carrier precedent: a longer period keeps the build-time pools sufficient); a row asserts
 `broadside_cooldown_seconds ≥` the HEAVY_CANNON scene's `cooldown_seconds` read through `TurretMountScenes.export_of()`.
 
-**Per-part gate** `attack_gate_for(part_id) -> bool` (asked only on a mount's TRACK → TELEGRAPH step):
-1. false while the ram is in WIND_UP or CHARGE (t10 fills `_ram_committed()`; t8 leaves it false);
-2. for a broadside part: false if a mount of that side entered TELEGRAPH less than `broadside_ripple_gap` 0.25 s ago (the brain records entries from each mount's `phase_changed`);
-3. true if the part is already committed (any of its mounts in TELEGRAPH or FIRE) — a broadside side counts **once**;
-4. else `committed_parts() < _max_attacks` (`max_concurrent_attacks` 2; `critical_max_concurrent_attacks` 3 in `critical` or `crippled`).
-`committed_parts()` counts WEAPON parts with a mount in TELEGRAPH or FIRE.
+**Per-part gate** `attack_gate_for(part_id) -> bool` (asked only on a mount's TRACK → TELEGRAPH step), rules in this order:
+1. **Ram:** false for every part while the ram is in WIND_UP or CHARGE, and for `missile_rack` also in LINE_UP (t10 fills `_ram_phase()`; t8 leaves it IDLE) — so no own
+   rocket is ever launched into the path of the charging hull (§2.10);
+2. **Own-ordnance separation** (round-2 N5): `missile_rack` false while `torpedo_tube` is committed or **any own torpedo is live**; `torpedo_tube` false while `missile_rack` is
+   committed or **any own fan rocket is live**. "Live" = launched (the mount's `round_fired(projectile)`) and not yet `expired` (the brain connects that projectile's `expired`
+   one-shot and keeps two counters, `live_own_rockets()` / `live_own_torpedoes()`, both public). Why: a Dreadnought rocket's `HitBox` (layer 32, mask 128 | 512) sees its own
+   torpedo's `HurtBox` (512, mask 96 — `EnemyOrdnance._on_hurt` takes the rocket's `impact_damage` 16) and detonates on it; the torpedo crawls off the bow at 22–40 px/s relative
+   for its 3 s steer window, so a fan fired after it overtakes it. A rocket-side owner-group skip would **not** fix it: the torpedo's `HurtBox._on_area_entered` applies the damage
+   on its own, whatever the rocket does. So they are kept apart in time (a rocket lives ≤ 4.0 s, `dumb_rocket.tscn` `max_time`; a torpedo ≤ 10 s), with no shared-code change;
+3. **Ripple spacing:** for a broadside part, false if a mount of that side entered TELEGRAPH less than `broadside_ripple_gap` 0.25 s ago (the brain records entries from each
+   mount's `phase_changed`);
+4. **Already committed:** true if the part is already committed (any of its mounts in TELEGRAPH or FIRE) — a broadside side counts **once**;
+5. **Cap:** else `committed_parts() < _max_attacks` (`max_concurrent_attacks` 2; `critical_max_concurrent_attacks` 3 in `critical` or `crippled`).
+
+`committed_parts()` counts WEAPON parts with a mount in TELEGRAPH or FIRE. **One-salvo mounts are committed only in TELEGRAPH:** with `salvo_count` 1 the rack (and the tube,
+one torpedo per cycle) spends no tick in FIRE — on the TELEGRAPH-end tick `_fire_tick(0)` launches the salvo, reports done and `_end_fire()` runs in the same tick
+(`turret_mount.gd` TELEGRAPH → FIRE → COOLDOWN) — so their committed windows are their charges, 0.5 s (rack) and 1.0 s (tube). A HEAVY_CANNON mount is committed through its
+0.7 s TELEGRAPH and its 0.35 s two-shell FIRE.
 
 **Broadside sweep (§24 "a Dreadnought uses broadside cannons"):** narrow-traverse batteries fire roughly abeam while the hull's own arc turn walks the lanes across the player — the
 arc and the broadside are the same geometry. The brain ticks a side's mounts bow → mid → stern, so with all three ready the spacing rule ripples them: telegraph entries at
 0, 0.25, 0.5 s; each mount fires its `burst_count` 2 shells (`charge_seconds` 0.7, `burst_gap` 0.35), so **a full side volley is 6 shells**, first shells at 0.70, 0.95, 1.20 s.
 The bow's 0.7 s telegraph keeps the side committed past the stern's entry, so a volley never needs a second slot. Broadsides get `host_can_fire` false while `jets_active()` or
-while the brain's commanded turn rate exceeds `broadside_fire_turn_cap` 0.35 rad/s (a telegraph in progress drops back to TRACK; a burst stops).
-**Fairness:** a lane's tip speed at `fire_range` (`broadside_fire_turn_cap × fire_range` = 315 px/s) ≤ 0.8 × each player scene's max speed, read from instantiated nodes (lever if it
-fails: lower `broadside_fire_turn_cap`).
+while the brain's commanded turn rate exceeds **`broadside_fire_turn_cap` 0.30 rad/s** (a telegraph in progress drops back to TRACK; a burst stops). The hunting orbit asks
+0.171–0.197 rad/s and the forced `listing` orbit 0.111 rad/s, all under the cap; jets (0.875 rad/s) and the Assault U-turns (0.75 rad/s) are over it.
+**Fairness** (round-2 N3): a lane's tip speed at `fire_range`, `broadside_fire_turn_cap × fire_range` = 0.30 × 900 = **270 px/s**, must be ≤ 0.8 × each player scene's
+**`cruise_speed()`**, read from instantiated nodes: the Assault fighter 360 (`MoveState.move_speed`, the reading the fortress fairness rows use) → 288, the Open Space ship 420 →
+336. Both pass (at the old 0.35 the fighter failed: 315 > 288). Lever if it fails: lower `broadside_fire_turn_cap` (never raise `fire_range`).
 
 **Extreme weapons** on `crippled` / `critical` entry: `_set_attacks()` multiplies each live mount's `cooldown_seconds` by the phase factor once (guarded per phase) and raises the cap.
 Nothing fires outside the Assault view, nor while not engaged, nor under EMP (mounts `scan()`).
 
-**Own fire never hits the Dreadnought (static half; the moving half is t10's row):** every round scene its mounts fire — Heavy Shell (`EnemyBullet` HitBox mask), the DUMB rocket,
-the torpedo's blast hostility — read from the scenes: no enemy-hurtbox bit on a shell; a rocket's impact box opens only beyond the launcher's `rocket_clear_radius()`; the torpedo's
-`ContactBlast` is PLAYER-hostile.
+**Own fire never hits the Dreadnought (static half; the moving half is t10's row 8):** every round scene its mounts fire — Heavy Shell (`EnemyBullet` HitBox mask), the DUMB rocket,
+the torpedo — read from the scenes: no enemy-hurtbox bit on a shell; a rocket's impact box opens only beyond the launcher's `rocket_clear_radius()` (√(104² + 224²) + 8 = 255 px);
+the torpedo's `ContactBlast` is PLAYER-hostile, its proximity area masks only 128 and its `HurtBox` mask 96 never sees a part (parts are hurtboxes on 512, the hull's
+`ContactHitBox` is on 256). The one own-on-own collision that exists — a fan rocket on its own torpedo — is prevented by gate rule 2 (rows 11 and 12).
 
 **Snapshot** `attacks_snapshot()` = `[cooldown_factor, max_concurrent_attacks, broadside_ripple_gap]`.
 
-**Rows** (`tests/integration/test_dreadnought_weapons.gd`; brain-ticked, rounds returned to their pools at their own `max_time`). **Epic must-have: module death disables its attack:**
-1. For each WEAPON part, both harnesses: destroy it → every mount of it UNPOWERED and no round / rocket / torpedo from it over 20 s while at least one other weapon still fires; the
-   destroyed broadside's side gets no shell (a player abeam on that side is never hit by a broadside round).
+**Rows** (`tests/integration/test_dreadnought_weapons.gd`; brain-ticked unless noted, rounds returned to their pools at their own `max_time`). **Epic must-have: module death
+disables its attack:**
+1. For each WEAPON part, both harnesses, **with an alive control** (round-2 N6): the player is placed inside that part's arc, cone and range (abeam for a broadside; 600 px dead
+   ahead of the bow for the tube; any bearing for the rack) and the other weapon parts are destroyed first so the cap never blocks it. Control: with the part alive it launches at
+   least one round / rocket / torpedo within 20 s. Then destroy it → every mount of it UNPOWERED and nothing from it over the next 20 s with the player still in its arc; the
+   destroyed broadside's side gets no shell (a player abeam on that side is never hit by a broadside round). A part that never fired in the control fails the row.
 2. Ripple: a side volley is 6 shells (`3 × burst_count` read from the instantiated mounts); the **first shell of each mount** leaves bow → mid → stern at least
    `broadside_ripple_gap` − one tick apart.
-3. **Volley stays whole while another weapon is busy:** with the cap at 2 and the missile rack committed (in FIRE), a port volley still leaves all three mounts (6 shells); boundary:
-   with the rack **and** the tube committed, an uncommitted broadside side gets no telegraph.
+3. **Volley stays whole while another weapon is busy** (round-2 N7): with the cap at 2, the missile rack is put into **TELEGRAPH** (its 0.5 s charge) so that its charge overlaps
+   the port volley's 0.5 s ripple (rack TELEGRAPH entry 0.1 s after the port bow's entry); the port volley still leaves all three mounts (6 shells). Boundary: with the cap at 2,
+   the rack in TELEGRAPH and the starboard side committed, an uncommitted port side gets no telegraph.
 4. Fan: one rack salvo = five rockets spread 40°.
 5. Gate: never more than 2 committed parts (3 in `critical` / `crippled`) over a 60 s stress.
 6. `crippled` / `critical` cut cooldowns once each (product 0.45 when both); the slots' `pool_period_factor` equals the product; `broadside_cooldown_seconds` ≥ the scene's; no pool
    reports empty in a 30 s worst-case stress (`critical` + `crippled`, all weapons live).
 7. Broadsides hold fire while jets are active and while the commanded turn exceeds the cap.
-8. Fairness inequality (instantiated mounts and both player scenes).
+8. Fairness inequality (instantiated mounts and both player scenes' `cruise_speed()`).
 9. Own-fire static row (above).
 10. §25: `attacks` joins `BUILT_KEYS`.
+11. **Separation, both orders** (hand-ticked, both harnesses): rack-then-tube — after a fan salvo the tube is refused while `live_own_rockets() > 0` and telegraphs within one
+    tick of the last rocket's `expired` when the player is in its arc; tube-then-rack — after a torpedo the rack is refused while `live_own_torpedoes() > 0`, and a torpedo shot
+    down early frees it on that tick; rack and tube are never committed on the same tick. Stress: 60 s in `critical` + `crippled` with the player 600 px ahead of the bow (both
+    want to fire): on **no tick** is there both a live own rocket and a live own torpedo.
+12. **Why rule 2 is load-bearing** (real physics, 16×, a short window, Assault harness): with the rack's gate bypassed for this row only (the test sets
+    that mount's `telegraph_gate` to a Callable returning true), an armed DUMB rocket fired by the Dreadnought's own rack through a parked live own torpedo detonates on it and the torpedo loses the rocket's `impact_damage` — characterising the collision the separation rule prevents (if a later change makes them pass
+    through each other, this row says so and rule 2 may be relaxed in that change).
 
 Gate-time allotment: 2.0 s. (The measured density is its own task, t12, §2.12.)
 
@@ -499,32 +547,52 @@ not damaged by its wake, the player is; the hull never loses HP to its wake; `wa
 ### 2.10 The critical ram (IDEAS §9 "heavy ram when critically damaged", §25 "final ram"; t10)
 
 The `RamCorvetteBrain` cycle on the boss, enabled only in `critical` with ≥ 1 engine (`ram_enabled`), never in `crippled`:
+- **Start:** the cycle leaves HUNT for LINE_UP only when `ram_enabled`, `ram_first_delay` 2.0 s after `critical` entry / `ram_cooldown` 8.0 s after the last cycle have passed,
+  **and no own fan rocket is live** (`live_own_rockets() == 0`, the counter t8 added; a rocket lives ≤ 4.0 s). Together with the gate refusing the missile rack from LINE_UP to
+  the end of CHARGE (t8 gate rule 1), the charging hull never meets one of its own armed rockets (round-2 N5).
 - **LINE_UP** (≤ `ram_line_up_cap` 3.0 s): turn the nose toward the player's predicted position (lead `Steering.clamped_lead_time`), at the current (lopsided if listing) turn rates.
 - **WIND_UP** `ram_wind_up_seconds` 1.2 s: speed × 0.3, engines' lights CHARGING, a **lane** drawn (`RamLane` child drawing a rectangle the hull's beam 208 px wide from the bow along
-  the charge line, length = charge distance + `ram_overshoot`); the aim tracks for the first `ram_track_fraction` 0.4, then **freezes** (`charge_dir`, `charge_point`).
-- **CHARGE**: `mover.boost(charge_dir, ram_speed 560, min((dist + ram_overshoot 300) / 560, ram_max_time 2.0))` (a boost ignores avoidance: the Ph6 committed-run rule; the Assault
-  corridor filter still applies); lights COMMIT; `contact_hit_box.damage = config.ram_damage` 35 during CHARGE only, restored to `collision_damage` 25 on exit (the Ram Corvette
+  the charge line, length = the charge length below); the aim tracks for the first `ram_track_fraction` 0.4, then **freezes** (`charge_dir`, `charge_point`).
+- **CHARGE**: `mover.boost(charge_dir, ram_speed 560, charge_length / 560)` with `charge_length = min(dist + overshoot, ram_speed × ram_max_time 2.0, edge_limit)`, where
+  `overshoot` = `ram_overshoot` 300 in Open Space and **`assault_ram_overshoot` 150** in Assault, and `edge_limit` (Assault only, +∞ in Open Space) = the distance along
+  `charge_dir` at which the first corner of the hull rectangle (208 × 448, oriented on `charge_dir`) would reach `EnemyWorld.projectile_world_rect()` (x −164…1444,
+  y −444…1164) shrunk by `assault_ram_edge_margin` 16 px — a ray-against-rectangle test on the four corners, computed once when the line freezes (round-2 N10). The mover runs
+  `acceleration` / `braking` 0, so the hull stops when the boost ends (no coast). A boost ignores avoidance (the Ph6 committed-run rule); the Assault corridor filter still
+  applies. Lights COMMIT; `contact_hit_box.damage = config.ram_damage` 35 during CHARGE only, restored to `collision_damage` 25 on exit (the Ram Corvette
   `exposed_collision_damage` precedent: the contact-damage gate reads the spawn value).
-- **RECOVER** `ram_recover_seconds` 2.0: speed × 0.5, a wide turn back to HUNT — the punish window; next ram after `ram_cooldown` 8.0 s; the first `ram_first_delay` 2.0 s after
-  `critical`.
-- The per-part attack gate opens nothing new during WIND_UP / CHARGE (`_ram_committed()` true).
+- **RECOVER** `ram_recover_seconds` 2.0: speed × 0.5, a wide turn back to HUNT — the punish window.
+- The per-part attack gate opens nothing new during WIND_UP / CHARGE, and nothing for the missile rack from LINE_UP on (`_ram_phase()`, t8 gate rule 1).
 - **Assault:** the charge direction is clamped to within `assault_ram_max_from_vertical` 50° of straight down (a diagonal corridor dive); RECOVER climbs back to the stadium
   (pure pursuit to its nearest point).
 - An engine lost mid-cycle keeps the cycle; both lost → cancel at once (CHARGE's boost ends, phase HOLD). EMP / death cancel it (`on_emp_started`, `silence`).
-- **Fairness** (instantiated config and both player scenes): `ram_wind_up_seconds × (1 − ram_track_fraction)` ≥ (104 + player hurt radius) / player max speed + 0.25 s. Lever:
-  raise `ram_wind_up_seconds`; never narrow the lane.
+- **Fairness** (instantiated config and both player scenes): `ram_wind_up_seconds × (1 − ram_track_fraction)` ≥ (104 + player hurt radius) / player `cruise_speed()` + 0.25 s
+  (1.2 × 0.6 = 0.72 ≥ (104 + ≈ 20) / 360 + 0.25 ≈ 0.59 for the fighter). Lever: raise `ram_wind_up_seconds`; never narrow the lane.
 - `movement_snapshot()`'s `ram_enabled` is written on `critical` entry (true with ≥ 1 engine) and on `crippled` entry (false).
 
-**Rows** (`tests/integration/test_dreadnought_ram.gd`, both harnesses; boost rows start with `await _fresh_idle_delta()`; the fixture's `opts.ram` true). **Epic must-have: the critical ram:**
+**Rows** (`tests/integration/test_dreadnought_ram.gd`, both harnesses unless noted; boost rows start with `await _fresh_idle_delta()`; the fixture's `opts.ram` true). **Epic
+must-have: the critical ram:**
 1. Before `critical`: no ram over 30 s. In `critical`: LINE_UP → WIND_UP → CHARGE → RECOVER in order; the first WIND_UP ≥ `ram_first_delay` after entry.
-2. The line freezes at `ram_track_fraction` (moving the player afterwards does not change `charge_dir`); the hull passes `charge_point` and stops ≥ 250 px beyond it (overshoot).
+2. The line freezes at `ram_track_fraction` (moving the player afterwards does not change `charge_dir`); the hull passes `charge_point` and stops at least **that mode's overshoot
+   − 50 px** beyond it (Open Space `ram_overshoot` 300 → ≥ 250; Assault `assault_ram_overshoot` 150 → ≥ 100), with the player placed so `edge_limit` does not bind (Assault:
+   the player 200 px below the lower leg at the hull's x; the row asserts the clamp did not bind).
 3. Contact damage is 35 only during CHARGE and 25 otherwise (a real hit in each state).
 4. Boundary: `critical` with both engines dead → no ram ever (60 s); both engines lost mid-WIND_UP → cancelled, HOLD.
-5. One engine: the LINE_UP turn toward the live side takes ≥ 2.5× as long as toward the dead side.
-6. Assault: the charge direction is within 50° of down; the hull stays inside the world rect.
-7. Fairness inequality; the lane is drawn exactly the beam wide along `charge_dir` during WIND_UP.
-8. **Own fire never hits it while it moves** (real physics at 16×, a short window): a Dreadnought with every part live CHARGEs down a lane on which its own in-flight torpedo and
-   three fan rockets are placed (launched from its own mounts so their launcher fields are real); no part loses HP, the torpedo is not defused, no rocket detonates on it.
+5. One engine (round-2 N4): a 90° LINE_UP turn toward the live side and one toward the dead side (the player placed abeam on each side in turn, never in the stern arc, so no
+   jets); `time_live / time_dead` equals that mode's **`(rate + one_engine_yaw_bias) / (rate × one_engine_live_turn − one_engine_yaw_bias)`** within 10 %, where `rate` =
+   `turn_rate` in Open Space (0.35 → 3.2 with the shipped values) and `assault_turn_rate` in Assault (0.9 → 2.375), both read from the config; the row prints the value and
+   also asserts the ratio > 1. No fixed number.
+6. Assault (Assault harness): the charge direction is within 50° of down; from five player positions (below centre, left, right, under each leg end) **and the lowest**
+   (the player at the corridor's bottom, y 1100 − its hurt radius) the hull rectangle's four corners stay inside `EnemyWorld.projectile_world_rect()` on every tick from WIND_UP
+   to the end of RECOVER; boundary: from the lowest position `edge_limit` binds (asserted) and the bow stops ≥ `assault_ram_edge_margin` inside the rect. Pre-approved levers,
+   in order, if the row fails or the dive reads too long: `assault_ram_overshoot` 150 → 100, then `assault_ram_max_from_vertical` 50° → 40°; never widen the rect.
+7. Fairness inequality; the lane is drawn exactly the beam wide along `charge_dir` during WIND_UP, its length = `charge_length`.
+8. **Own fire never hits it while it moves** (round-2 N5, the realistic setup): (a) hand-ticked, both harnesses, 60 s in `critical` with the player 700 px ahead of the bow so
+   the rack, the tube and the ram all want to act: on no tick of LINE_UP / WIND_UP / CHARGE is `live_own_rockets() > 0`, and a fan fired just before `ram_first_delay` runs out
+   delays LINE_UP until its last rocket's `expired`. (b) Real physics at 16×, Open Space harness, a short window: in `critical` with every part live and the player 700 px dead
+   ahead, the tube fires a torpedo at the player through the normal gate flow, then the ram (`ram_first_delay` set so WIND_UP starts within 1.5 s of the launch) charges
+   along the same line and overtakes it; the row asserts the hull rectangle overlapped the torpedo's position on some tick (not vacuous), no part lost HP, the torpedo's
+   `Health` is unchanged. Pre-approved fallback if (b) fails: the tube is also refused from LINE_UP to the end of CHARGE and LINE_UP also waits for
+   `live_own_torpedoes() == 0`.
 9. §25: the critical row's `movement` difference now includes `ram_enabled`.
 
 Gate-time allotment: 1.7 s.
@@ -552,17 +620,22 @@ Split out of the weapons task (round-1 review M10) and placed after the intercep
 `tests/integration/test_dreadnought_density.gd` (or appended to `test_dreadnought_weapons.gd` if the agent prefers; one file either way).
 
 - **States:** `hunting`, `listing` (each dead side), `crippled`, `critical`, `critical`+`crippled` — each × the worst live-part set for that state (all weapons live) × five player
-  positions (below centre, left, right, under each leg end), 11 s each at 1/60 s, hand-ticked (brain + mover, the fixture's `hand_tick`), the boss not quiet.
+  positions (below centre, left, right, under each leg end), 11 s each at 1/60 s, hand-ticked (brain + mover, the fixture's `hand_tick`), the boss not quiet. Geometry
+  (§2.7.3): the Assault stadium has legs at world y `assault_leg_high_y` 160 / `assault_leg_low_y` 400 and leg ends at x = spawn x ± `assault_sweep_half_width` 380 (world x 260 /
+  1020 at the default spawn x 640); the player sits 250 px below the lower leg. Each state is reached with the fixture's `ladder()` / `kill_part()` (§2.6.1) — the real
+  phase-driver path, never by writing the brain's fields.
 - **Counting:** Dreadnought-owned launches only (shells, rockets, torpedoes: each mount's `round_fired`); each round is returned to its pool at once after being counted (Ph11
   t16 method) so pools never empty by test artefact; escort rounds are excluded (the escort caps are 0 in this row).
 - **Bounds (frozen, Ph11):** mean ≤ 13.3 launches/s; peak ≤ 30 in any half-open 2 s window; committed WEAPON parts ≤ 2 (3 in `critical` / `crippled`) on every tick; a count during
   which any pool reported empty fails the row.
 - **Levers, in order, never widening a bound:** (a) `broadside_cooldown_seconds` up (config; stays ≥ the scene value), (b) `missile_fan_mount.tscn` `fan_count` 5 → 4,
   (c) `crippled_cooldown_factor` 0.6 → 0.7 (and every slot's `pool_period_factor` to the new product). A lever used is recorded in `DECISIONS.md` and `ENEMY.md`.
-- Expected from the shipped values (a sanity figure the row prints, not an assertion): `hunting` ≈ 2.3 /s (one side's 6 shells per 4.25 s, 5 rockets per 6.5 s, a torpedo per 8 s),
-  `critical`+`crippled` ≈ 5 /s.
+- Expected from the shipped values (a sanity figure the row prints, not an assertion; round-2 N6): `hunting` ≈ 2.2 /s (one side's 6 shells per 4.25 s = 1.41, 5 rockets per
+  6.5 s = 0.77; the torpedo term ≈ 0 in a steady orbit, because the tube is a bow-chaser with a ±45° arc that fires only when the player is ahead of the bow — in Assault mid-way
+  through the left-end U-turn — and the rack additionally waits out any live own torpedo), `critical`+`crippled` ≈ 4 /s (one side's 6 shells per ≈ 2.5 s, 5 rockets per ≈ 3.2 s).
 
-Gate-time allotment: 1.5 s (≈ 6 states × 5 positions × 660 ticks ≈ 20 000 full ticks; Ph11's 13 200-tick row cost ≈ 1.4 s).
+Gate-time allotment: 2.5 s (round-2 N8: 6 states × 5 positions × 660 ticks = 19 800 full ticks; at Ph11's measured ≈ 1.4 s per 13 200-tick row that is ≈ 2.1 s, and the
+Dreadnought ticks more mounts than the fortress).
 
 ### 2.13 Art, detachment and visual states (IDEAS §21–23, R13/R14; t13)
 
@@ -573,7 +646,8 @@ cool blue edge light), gameplay lights left to `StateLight`.
   strip it (`./scripts/strip-sprite-bg.sh`) or hand-draw through `pixelart_workbench` (the Ph10 t9 / Ph11 t9 routes).
 - Per part an intact and a **wreck stump** texture (the stump's opaque area is visibly less than the intact art's, so the outline shrinks); broadside and engine starboard copies
   `flip_h`. `engine_plume.png` on a `Plume` `Sprite2D` **child of each engine part** (this task creates the node; it dies with the engine), `list_smoke.png`,
-  `critical_overlay.png` 208 × 448 (mostly transparent). The torpedo sprite and the tube head are t4's; the MISSILE_FAN head is the rocket battery's; broadside heads are HEAVY_CANNON's.
+  `critical_overlay.png` 208 × 448 (mostly transparent). The torpedo sprite and the tube head are t4's; the MISSILE_FAN head (`turret_head_missile_fan.png`) is t3's; broadside heads are HEAVY_CANNON's. Every mount variant keeps its own
+  distinct head (`test_ph8_sprites.gd`), so this task draws no turret head.
 - **Detach chunk (purely visual):** on a part's `destroyed` (not while dying) the root adds one `DreadnoughtChunk` (new `dreadnought_chunk.gd` + `.tscn`: a `Sprite2D` root with
   `top_level = true`, per-part chunk texture) as a **child of the Dreadnought**, deferred (`add_child.call_deferred`, never inside the physics callback that destroyed the part), at
   the part's global position, flung outward from the hull centre at 60–90 px/s (seeded from the brain rng) with spin, decelerating, fading over its last 1.0 s, freeing itself after
@@ -587,16 +661,23 @@ after `lifetime`. Gate-time allotment: 0.3 s.
 
 ### 2.14 Open Space hub placement (t14)
 
-`open_space/scenes/levels/sector_hub.gd`: **draw 22** appended after the fortress (every earlier seed unchanged): `_spawn_dreadnought(_ring_anchor(dreadnought_ring_radius 4200,
-dreadnought_anchor_bearing_deg 135.0), rng)` ≈ (−2970, 2970), `patrol_anchor` and `rng_seed` set before `add_child()`, not `start_engaged`, into `EnemyContainer`; its escorts land
+`open_space/scenes/levels/sector_hub.gd`: **draw 22** appended after the fortress (every earlier seed unchanged): `_spawn_dreadnought(_ring_anchor(dreadnought_ring_radius 4800,
+dreadnought_anchor_bearing_deg 135.0), rng)` ≈ (−3394, 3394) (round-2 N11: at the earlier 4200 ring it sat ≈ 2055 px from two neighbours, inside its own 2500 px reach), `patrol_anchor` and `rng_seed` set before `add_child()`, not `start_engaged`, into `EnemyContainer`; its escorts land
 in its own `<name>Escorts` container. `tests/integration/test_sector_hub_patrol.gd`: add it to `_patrol_groups()` with footprint `hunt_leash_radius` 1400 + `perceive_radius` 1100
-(a hunter's reach is its leash), move every hard count by one (the Ph11 t13 precedent), and the sweep must stay green. **Pre-approved levers, in order:** bearing 135° ± 22.5°,
-ring 4200–4800, `hunt_leash_radius` 1400 → 1100. If none clears, stop and escalate. Gate-time allotment: 0.5 s.
+(a hunter's reach is its leash), move every hard count by one (the Ph11 t13 precedent), and the sweep must stay green.
+
+**Neighbouring patrols (round-2 N11).** Its south-west neighbours are the Heavy Gunship (2600 ring at 157.5°, ≈ (−2402, 995)) and the Laser Tender (2600 ring at 112.5°,
+≈ (−995, 2402)); from (−3394, 3394) each is ≈ 2596 px away, outside the Dreadnought's reach `hunt_leash_radius` 1400 + `perceive_radius` 1100 = 2500 (every other patrol anchor is
+farther: the sniper's (−1202, 1202) ≈ 3100 px). New row in `test_sector_hub_patrol.gd`: **every other `_patrol_groups()` anchor lies outside the Dreadnought's footprint**
+(leash + perceive, read from its config), so a player fighting at a neighbour's anchor cannot be noticed by it. What stays possible, and is intended: once engaged, it follows the
+player up to `lose_radius` 1800 / its leash, so a chase can drag it into a neighbour's fight — an emergent mixed fight, not a bug; who owns an encounter is Ph13 / Ph14's (say so
+in `ENEMY.md` and `DECISIONS.md`). **Pre-approved levers, in order, each keeping both rows green:** ring 4800–5200, `hunt_leash_radius` 1400 → 1100, bearing 135° ± 10°. If none
+clears, stop and escalate. Gate-time allotment: 0.5 s.
 
 ### 2.15 Gate time (t1 and every task)
 
-**Where it stands.** GUT ≈ 225.2 s after Ph11 (two-run mean at the Ph11 t11 close; ceiling 240 s, escalation past a 237 s two-run mean). The allotments below total 15.5 s, so
-the phase would end ≈ 240.7 s without help. Only ≈ 3.7 s is strictly needed to stay under 237 s; t1 targets more because run noise is ±1–3 s.
+**Where it stands.** GUT ≈ 225.2 s after Ph11 (two-run mean at the Ph11 t11 close; ceiling 240 s, escalation past a 237 s two-run mean). The allotments below total 17.6 s, so
+the phase would end ≈ 242.8 s without help. ≈ 5.8 s is strictly needed to stay under 237 s; t1's floor is 7 s and its target 9 s because run noise is ±1–3 s.
 
 **Measured inventory (2026-11-25, this container, warm import cache; each file run alone with `time godot --headless --path . -s addons/gut/gut_cmdln.gd -gdir=res://tests
 -ginclude_subdirs -gselect=<file> -gexit`; wall includes ≈ 1 s of engine start).**
@@ -623,13 +704,17 @@ So rules 1–3 alone reach ≈ 2–4 s (Ph8 t1 and Ph10 t1 found the same: "rule
   and in `DECISIONS.md` (`### Phase 12, built in t1`). A cache must never go stale inside a hand-ticked loop (key on the node / input identity, never on the frame counter).
   Not a lever: `low_processor_mode_sleep_usec` / `override.cfg` (a behaviour change, Ph10 t1).
 
-**t1 acceptance:** GUT two-run mean (`scripts/gate-time.sh`) ≥ **6 s** below the two-run mean measured at the task's start (target 9 s), tests and asserts unchanged in number, the
-gate green and leak-free (`scripts/check-test-leaks.sh`). If the inventory is exhausted below 6 s: keep what was freed if it is green and bit-identical, write the new measurements
-into §*Gate time* of `tests/README.md`, and end the run with `Result: ESCALATE` naming what is left. **Only t8 depends on t1**: t2–t7 together add ≈ 7.7 s (225.2 → ≈ 232.9 s,
+**t1 acceptance:** GUT two-run mean (`scripts/gate-time.sh`) ≥ **7 s** below the two-run mean measured at the task's start (target 9 s; raised from 6 s in revision 3 because
+the corrected allotments total 17.6 s, round-2 N8), tests and asserts unchanged in number, the
+gate green and leak-free (`scripts/check-test-leaks.sh`). If the inventory is exhausted below 7 s: keep what was freed if it is green and bit-identical, write the new measurements
+into §*Gate time* of `tests/README.md`, and end the run with `Result: ESCALATE` naming what is left. **Only t8 depends on t1**: t2–t7 together add ≈ 8.8 s (225.2 → ≈ 234.0 s,
 under 237 s), so the shared machinery, the shell and the movement can proceed while t1 runs or escalates.
 
-**Allotments** (two-run means, new GUT seconds): t2 0.5 · t3 0.3 · t4 0.8 · t5 0.6 · t6 3.5 · t7 2.0 · t8 2.0 · t9 0.8 · t10 1.7 · t11 1.0 · t12 1.5 · t13 0.3 · t14 0.5 · t15 0
-= 15.5 s. With t1 at 6 s the phase ends ≈ 234.7 s. Escalate past 1.5× an allotment or a 237 s two-run mean.
+**Allotments** (two-run means, new GUT seconds; revision 3 raised t3 0.3 → 0.4 for the head-test variant, t6 3.5 → 4.5 and t12 1.5 → 2.5 to match the measurements quoted in
+§2.6.8 and §2.12, round-2 N8): t2 0.5 · t3 0.4 · t4 0.8 · t5 0.6 · t6 4.5 · t7 2.0 · t8 2.0 · t9 0.8 · t10 1.7 · t11 1.0 · t12 2.5 · t13 0.3 · t14 0.5 · t15 0
+= **17.6 s**. Projection: 225.2 + 17.6 − t1. At t1's 7 s floor the phase ends ≈ 235.8 s (≈ 1.2 s under 237); at its 9 s target ≈ 233.8 s. The margin is thin, so t1 writes
+its result and the projection into `tests/README.md` → *Gate time*, every later task records its own measured cost there, and the existing rule holds: escalate past 1.5× an
+allotment or a 237 s two-run mean (the owner then decides; nothing in this phase widens the 240 s ceiling).
 
 ### 2.16 Numbers and where they come from
 
@@ -646,13 +731,16 @@ under 237 s), so the shared machinery, the shell and the movement can proceed wh
 | Ram | wind-up 1.2 s (track 40 %), 560 px/s, overshoot 300, max 2.0 s, recover 2.0 s, cooldown 8 s, damage 35 (touch 25) | F4 derived; Ram Corvette 0.65 s / 620 / 220 / 50; player HP 50 |
 | Wake puff | r 40, life 3.0 s, every 48 px per live engine, 5 per 0.5 s, no damage in the last 0.5 s, ≤ 40 live | F5 *judgement*; `ReactorField` |
 | Torpedo | 160 px/s, steers 3.0 s at 0.6 rad/s, then 320; **120 HP = 3 Standard shots** (Sniper 3, Spread 5, Gatling 9); blast 72 / 25; life 10 s / 2400 px; tube cooldown 7 s, telegraph 1.0 s | pursuit bomb scaled (*judgement*); HP from the shipped weapon-mode damages (round-1 B3) |
-| Broadside | 3 HEAVY_CANNON per side (2 shells each: 6 per volley), 40° traverse, cooldown 3.2 s, ripple 0.25 s, fire turn cap 0.35 rad/s | Carrier 150° side batteries narrowed for the §24 sweep |
-| Missile fan | MISSILE_FAN: 5 DUMB over 40°, salvo 1, cooldown 6 s | `BurstCannonMount.pellets` precedent |
+| Broadside | 3 HEAVY_CANNON per side (2 shells each: 6 per volley), 40° traverse, cooldown 3.2 s, ripple 0.25 s, fire turn cap 0.30 rad/s | Carrier 150° side batteries narrowed for the §24 sweep; cap from the fairness inequality 0.30 × 900 = 270 ≤ 0.8 × 360 (round-2 N3) |
+| Missile fan | MISSILE_FAN: 5 DUMB over 40°, salvo 1, cooldown 6 s, own head `turret_head_missile_fan.png` 48 × 48 | `BurstCannonMount.pellets` precedent; head required by `test_ph8_sprites.gd` (round-2 N1) |
+| Torpedo tube arc | ±45° about the bow (`traverse_deg_override` 90), bow-chaser | widened from 30 so the approach curve and bow crossings reach it (round-2 N6) |
+| Own-ordnance separation | own rockets (≤ 4 s) and own torpedoes (≤ 10 s) never in flight together; no own rocket live from LINE_UP to the end of CHARGE | collision facts of `enemy_rocket.gd` / `EnemyOrdnance` (round-2 N5) |
+| Assault ram | overshoot 150 (Open Space 300), edge margin 16 px inside `EnemyWorld.projectile_world_rect()` | round-2 N10; levers overshoot 100, then 40° from vertical |
 | Part HP | tube 200, rack 220, broadsides 260, generator 160, core 900, engines 240 | *judgement* against the fortress (core 900 incl. bubble) |
 | Shield | capacity 120, regen after 3 s over 4 s, reboot 6 s, pad 10 | Ph11 sector shields |
 | Escorts | 2 Gatling Interceptors per weapon death, cap 6 / 4 | Ph11 fortress caps; F7 |
 | EMP | × 0.4 | Ph11 owner choice 6 |
-| Hub | draw 22, 4200 ring at 135°, leash 1400, perceive 1100, lose 1800 / 4 s | fortress mirror; `2-research.md` §6 Q9 |
+| Hub | draw 22, 4800 ring at 135°, leash 1400, perceive 1100, lose 1800 / 4 s | fortress mirror; `2-research.md` §6 Q9; ring moved out so neighbours' anchors are ≈ 2596 px away, outside its 2500 px reach (round-2 N11) |
 | Density | ≤ 13.3 /s mean, ≤ 30 per 2 s, ≤ 2 committed parts (3 critical / crippled) | Ph11 convention |
 | Chunk | 60–90 px/s, life 2.5 s (fade 1.0 s), no collision | *judgement*; visual only (round-1 M9) |
 
@@ -669,7 +757,7 @@ Dreadnought suites, the gate-time rule 4), `tests/README.md` gate time. Close th
 
 | Step | Task | Depends on | Why this order |
 |---|---|---|---|
-| 1 | t1 gate room | — | frees ≥ 6 s; only t8 waits for it (t2–t7 fit under 237 s without it) |
+| 1 | t1 gate room | — | frees ≥ 7 s (target 9); only t8 waits for it (t2–t7 fit under 237 s without it) |
 | 2 | t2 bay trigger, t3 missile fan, t5 engine wake | — | shared machinery, bit-identical by default, testable on fixtures |
 | 3 | t4 torpedo + tube | t3 | `TORPEDO_TUBE` = 10 is appended after `MISSILE_FAN` = 9 (one enum, one scene map) |
 | 4 | t6 shell (scene, parts, armour, shields, two drivers, snapshot, rosters, incoming damage paths) | — | everything else hangs off the root; reuses only Ph10 / Ph11 machinery |
@@ -687,20 +775,20 @@ Dreadnought suites, the gate-time rule 4), `tests/README.md` gate time. Close th
 
 | File | Task | What it proves |
 |---|---|---|
-| gate-time measurements, `tests/README.md` *Gate time* (rule 4) | t1 | ≥ 6 s freed, every assertion and figure unchanged |
+| gate-time measurements, `tests/README.md` *Gate time* (rule 4) | t1 | ≥ 7 s freed, every assertion and figure unchanged |
 | `tests/integration/test_boss_reinforcements.gd` (+9 rows) | t2 | §2.2 rows; every existing row unchanged |
-| `tests/integration/test_turret_mount_variants.gd` (+ fan, + tube), `test_ph8_sprites.gd` HEADS | t3, t4 | §2.3 / §2.4 rows, ROCKET_BATTERY bit-identity, pool sizes for salvo × fan |
+| `tests/integration/test_turret_mount_variants.gd` (+ fan, + tube), `test_ph8_sprites.gd` HEADS | t3, t4 | §2.3 / §2.4 rows, ROCKET_BATTERY bit-identity, pool sizes for salvo × fan; each new variant's own distinct head (texture and silhouette) |
 | `tests/integration/test_enemy_ordnance.gd`, `test_enemy_bullet_lifetime.gd` | t4 | torpedo defuse in damage units with real bullets and mode damages, steering window, lifetime fit read from the torpedo scene |
 | `tests/integration/test_engine_wake.gd`, `tests/unit/test_hazards.gd` | t5 | §2.5 rows, `pulse_damage` exempt group, default bit-identical |
 | `tests/integration/test_dreadnought.gd`, `test_dreadnought_incoming_damage_paths.gd`, `tests/helpers/dreadnought_fixture.gd`, roster gates | t6 | §2.6.7 / §2.6.8 rows, §25 paths, both drivers found, rockets / asteroids / mining laser reach parts |
 | `tests/integration/test_dreadnought_movement.gd` | t7 | **engine loss changes movement** (both harnesses, on positions, ratio from the config formula), hunting arcs, jets, leash, Assault stadium |
-| `tests/integration/test_dreadnought_weapons.gd` | t8 | **module death disables its attack** (both harnesses), 6-shell ripple, whole volley under a busy gate, fan, cap, extreme weapons, fairness, own-fire static row |
+| `tests/integration/test_dreadnought_weapons.gd` | t8 | **module death disables its attack** (both harnesses), 6-shell ripple, whole volley under a busy gate, fan, cap, extreme weapons, fairness at `cruise_speed()`, own-fire static row, an alive control per weapon, own rockets and torpedoes never in flight together |
 | `tests/integration/test_dreadnought_wake.gd` | t9 | wake only behind live engines while engaged, outside the hull, never harms the boss or its escorts |
-| `tests/integration/test_dreadnought_ram.gd` | t10 | **the critical ram** (both harnesses): order, frozen line, overshoot, damage window, no ram when crippled, Assault diagonal, fairness, own fire never hits it while charging |
+| `tests/integration/test_dreadnought_ram.gd` | t10 | **the critical ram** (both harnesses): order, frozen line, overshoot, damage window, no ram when crippled, Assault diagonal inside `projectile_world_rect()`, per-mode turn ratio from the config, fairness, no own rocket live while it rams, it overtakes its own torpedo harmlessly |
 | `tests/integration/test_dreadnought_reinforcements.gd` | t11 | interceptors from the wreck, caps, none while dying, 3 s first fire |
 | `tests/integration/test_dreadnought_density.gd` | t12 | measured Assault density per phase state against the frozen Ph11 bounds |
 | `tests/integration/test_dreadnought_sprites.gd` | t13 | art sizes, transparency, wreck stumps, visual-only chunks |
-| `tests/integration/test_sector_hub_patrol.gd` | t14 | draw 22 clears every trigger, pickup and the spawn |
+| `tests/integration/test_sector_hub_patrol.gd` | t14 | draw 22 clears every trigger, pickup and the spawn; every other patrol anchor lies outside its reach |
 
 Boundary cases named in the sections: ROCKET_BATTERY fan 1 / 0 bit-identical; a torpedo one hit short of its damage stays live; a non-breach bay still dies with its part; 36 %
 core does not enter `critical`; a hit leaving both engines alive changes no snapshot key; with rack and tube committed an uncommitted broadside gets nothing; crippled + critical
@@ -710,11 +798,15 @@ never rams; no hazard container → no wake; a part killed during the death sequ
 
 - **Assault crowding**: a 448 px hull in a 1280 × 720 view. Mitigation: the stadium in the top half (hull ≤ y 504 at rest), broadsides silent in the U-turns, measured density per
   phase (t12), a ram lane with a fairness inequality. If the Assault feel is wrong it is a tuning lever; nothing places it in a level this phase.
+- **The torpedo is rare** by design (a ±45° bow-chaser that also waits out the boss's own rockets): if play shows it almost never appears, widen `traverse_deg_override` on
+  the tube slot (a config-free scene edit; t8 row 1's alive control and t12's density rows re-run). **Own-ordnance separation** costs some rack and tube shots and can delay a
+  ram by up to a rocket's 4 s life; it is the price of a guarantee made without a shared-code change (a rocket-side skip cannot stop the target hurtbox's own damage).
 - **The free order collapses** to one best order (F6). Mitigation: the gain / cost matrix (§2.6.4); not play-tested — the report must say so.
 - **Interceptor spikes** when two weapons die close together (F7): capped live escorts and the one-chance breach.
 - **Hazard count** while the wake runs (≤ 40 puffs per Dreadnought; every mover queries `Hazards.around()` when any hazard exists): t9 measures it; lever `wake_spacing` 48 → 64.
 - **Shared-machinery regressions**: four opt-in additions; the fortress / carrier / turret / bomber / hazard suites must stay unchanged and green.
-- **Gate time**: t1 may fall short of 6 s (the inventory shows most time is CPU in code under test); rule 4 needs a careful differential proof. Only t8 onward waits on it.
+- **Gate time**: t1 may fall short of 7 s (the inventory shows most time is CPU in code under test); rule 4 needs a careful differential proof. Only t8 onward waits on it. Even at
+  7 s the phase ends ≈ 235.8 s, ≈ 1.2 s under the 237 s escalation line: a task that overruns its allotment can push the gate over it and stop the chain for an owner decision.
 - **Per-part gate**: a mount that misses its ripple slot (cone, arc) starts later inside the same committed side, so a volley may arrive as fewer than six shells; row 2 sets up a
   player in every mount's arc and cone so the six-shell figure is deterministic.
 - **Hub**: a hunter that wanders to the spawn or a mission trigger breaks the hub; the leash and the sweep's footprint guard it, with levers.
@@ -759,7 +851,9 @@ never rams; no hazard container → no wake; a part killed during the death sequ
 | R20 torpedo family | t4 (an `EnemyOrdnance` scene) |
 | Gate time (project constraint) | t1, §2.15 |
 
-## 8. Response to feedback (plan review round 1, `4-review.md`)
+## 8. Response to feedback (plan reviews, `4-review.md`)
+
+### 8.1 Round 1 (B1–B4, M1–M10), answered in revision 2
 
 | # | Finding | What changed |
 |---|---|---|
@@ -777,3 +871,22 @@ never rams; no hazard container → no wake; a part killed during the death sequ
 | M8 | Torpedo registration vague | Named const `EnemyOrdnanceScenes.ENERGY_TORPEDO`, not in `scene_for()`; a lifetime row instantiates it directly (§2.4) |
 | M9 | Detach chunk was a damaging hazard | The chunk is a purely visual `top_level` child of the Dreadnought: no collision, no hazard, no damage, self-freeing (§2.13) |
 | M10 | Weapons task close to two tasks | Measured density split out as t12 after the interceptors (§2.12); t8 keeps mounts, gate, ripple, extreme phase, fairness and module-death rows |
+
+### 8.2 Round 2 (N1–N11) and the owner's CHANGES_REQUESTED, answered in revision 3
+
+The owner's CHANGES_REQUESTED carried no text of its own; it is read as endorsing the round-2 AI review, and every point of that review is answered below. Nothing else in the
+design changed.
+
+| # | Finding | What changed |
+|---|---|---|
+| N1 | `MISSILE_FAN` reused the rocket battery head, which `test_ph8_sprites.gd` forbids | t3 draws its own `turret_head_missile_fan.png` (48 × 48, a wide five-tube rack, distinct silhouette) through `pixel-art-generation` and wires it like every head; t3 is now **medium**; §2.3, §2.13, §2.16, *For every task* |
+| N2 | Torpedo lifetime row used the one-speed formula (15 s > 10 s) | The row uses the file's `_two_speed_kind_clears()` with values read from the torpedo scene and the tube: 3.0 + 1920 / 320 = 9.0 s (≈ 9.2 s with the ramp) ≤ 10 (§2.4) |
+| N3 | Broadside sweep fairness failed for the Assault fighter (315 > 288) | `broadside_fire_turn_cap` 0.35 → **0.30** (270 px/s); player speed defined as `cruise_speed()` (fighter 360, Open Space 420) in *For every task*, §2.8, §2.10, §2.16 |
+| N4 | Ram row 5's fixed ≥ 2.5 failed in Assault (2.375) | Row 5 asserts the per-mode config formula `(rate + bias) / (rate × live − bias)` with `rate` = `turn_rate` / `assault_turn_rate`, within 10 %, plus ratio > 1 (§2.10) |
+| N5 | Own rockets can hit the own torpedo and the charging hull; row 8 vacuous or unsatisfiable | Gate rule 2 keeps own rockets and own torpedoes **never in flight together**; the rack is refused from LINE_UP to the end of CHARGE and LINE_UP waits for no live own rocket; rows: separation both orders + a stress (t8 row 11), a characterisation that the collision is real (t8 row 12), a realistic ram-overtakes-own-torpedo row with a not-vacuous check and a pre-approved fallback (t10 row 8). The reviewer's second fallback (an owner-group skip on the rocket) is rejected with the reason: the target's `HurtBox` applies the damage itself (§2.8, §2.10) |
+| N6 | Tube arc rarely holds the player; row 1 could not fail for it; density figure wrong | Tube arc widened to ±45° and documented as a **bow-chaser** (when it fires, in both modes); row 1 has an alive control per weapon with the player placed in its arc; sanity figures corrected to ≈ 2.2 /s and ≈ 4 /s (§2.8, §2.12, §2.7.3, §5) |
+| N7 | "Rack committed (in FIRE)" is impossible for a one-salvo mount | One-salvo mounts are committed only in TELEGRAPH (stated with the mechanism); row 3 puts the rack in TELEGRAPH overlapping the port ripple; its boundary rewritten because rule 2 forbids rack + tube together (§2.8) |
+| N8 | t6 and t12 allotments below their own measurements | t6 3.5 → 4.5 s, t12 1.5 → 2.5 s, t3 0.3 → 0.4 s; total 17.6 s; t1's floor raised 6 → 7 s (target 9) so the phase ends ≈ 235.8 s at worst; risk restated (§2.6.8, §2.12, §2.15, §5, owner summary) |
+| N9 | t12 lacked the Assault geometry and the fixture sections | t12's planSections gain 2.6.1 and 2.7, and §2.12 repeats the stadium numbers and names `ladder()` / `kill_part()` |
+| N10 | Assault ram overshoot unbounded, rect unnamed | `assault_ram_overshoot` 150 and an `edge_limit` that stops the charge with the bow 16 px inside `EnemyWorld.projectile_world_rect()` (x −164…1444, y −444…1164); row 6 checks the four hull corners from six player positions incl. the lowest; levers overshoot 100, then 40° (§2.10) |
+| N11 | Hub hunting zone 2055 px from two patrol anchors | Ring 4200 → **4800** (≈ (−3394, 3394)): both neighbours ≈ 2596 px away, outside its 2500 px reach; a new sweep row keeps every other anchor outside it; a chase dragging it into a neighbour's fight is stated as intended (Ph13 / Ph14 own encounters); levers re-ordered so none breaks the new row (§2.14) |

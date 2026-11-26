@@ -4560,7 +4560,7 @@ Plan: `docs/plans/cmug256so0031m52wbxomst72/3-plan.md`. Dossier: `docs/epics-don
 
 ## Phase 12 - Enemy rework, phase 12: Dreadnought hunting boss (2026-11-26)
 
-Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 2, answering plan review round 1), built on that directory's `1-context.md` / `2-research.md`. These are
+Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 3, answering plan review rounds 1 and 2 and the owner's CHANGES_REQUESTED), built on that directory's `1-context.md` / `2-research.md`. These are
 *planned* decisions; check this phase's *as built* section, once written, before relying on them.
 
 ### Changes to earlier decisions
@@ -4591,22 +4591,24 @@ Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 2, answering pl
 - `DreadnoughtBrain.Phase { IDLE, NOTICING, RETURNING, ENTER, HUNT, LINE_UP, WIND_UP, CHARGE, RECOVER, HOLD }` (append-only); `attack_gate_for(part_id)`, `committed_parts()`,
   `jets_active()`. **Heading model:** velocity along the nose, the heading turned by the brain at per-side rates; a lost engine makes the live-side turn slow (`one_engine_live_turn`
   0.5), adds a yaw bias (0.05 rad/s) and a drift (18 px/s) toward the dead side, and forces the Open Space orbit toward the dead side; tested on positions with the expected radius
-  ratio `(turn_rate + bias) / (turn_rate × live − bias)`. Jets burst-turn; broadsides hold fire while they run or the turn exceeds 0.35 rad/s. Crippled = HOLD, thruster rotation only,
+  ratio `(turn_rate + bias) / (turn_rate × live − bias)`. Jets burst-turn; broadsides hold fire while they run or the turn exceeds 0.30 rad/s (`broadside_fire_turn_cap`, from the fairness inequality 0.30 × 900 = 270 ≤ 0.8 × the fighter's `cruise_speed()` 360). Crippled = HOLD, thruster rotation only,
   no ram. The ram is the Ram Corvette cycle on the boss, critical with ≥ 1 engine only, ram damage on the contact box during CHARGE only.
 - **Assault pattern for a large hunting boss:** a world-anchored **stadium** loop in the top half of the resting view (legs y 160 / 400, derived end radius 120, pure pursuit), both
   legs broadside-down with alternating sides; a two-waypoint racetrack on one line was rejected (its return leg sits above the view). Ph15 may make it follow the player's x.
 - **`RocketBatteryMount.fan_count` (1) / `fan_spread_deg` (0)**: a salvo step fires a fan; 1 / 0 bit-identical. **`TurretMount.Variant.MISSILE_FAN` = 9** (standalone
-  `missile_fan_mount.tscn` on `rocket_battery_mount.gd`: 5 DUMB over 40°, salvo 1) and **`TurretMount.Variant.TORPEDO_TUBE` = 10** (`TorpedoTubeMount`, standalone scene), both appended.
+  `missile_fan_mount.tscn` on `rocket_battery_mount.gd`: 5 DUMB over 40°, salvo 1) and **`TurretMount.Variant.TORPEDO_TUBE` = 10** (`TorpedoTubeMount`, standalone scene), both appended. **Every `TurretMount.Variant` has its own distinct head PNG** (`test_ph8_sprites.gd` asserts one texture per variant and distinct silhouettes), so a new variant always draws one (`turret_head_missile_fan.png`, `turret_head_torpedo_tube.png`). The torpedo tube is a ±45° **bow-chaser** (fires on the approach curve, bow crossings, the ram's LINE_UP, crippled HOLD with no broadside, the Assault left-end U-turn), not a steady stream.
 - **Energy torpedo = `energy_torpedo.tscn`, an `EnemyOrdnance` PURSUIT_BOMB scene** exposed as `EnemyOrdnanceScenes.ENERGY_TORPEDO` (not in `scene_for()`, which is keyed by
   `Kind`): `Health` 120 **in damage units** (`EnemyOrdnance` subtracts damage, not hits): 3 Standard shots. Ordnance health is always authored in damage units from the shipped
-  weapon-mode `.tres` damages.
+  weapon-mode `.tres` damages. A two-speed ordnance kind's lifetime row uses `test_enemy_bullet_lifetime.gd`'s `_two_speed_kind_clears()`, never the one-speed formula.
 - **`EngineWake extends HazardField`** (`assault/scenes/hazards/engine_wake/`): a 3 s stress puff, damage radius = drawn radius, no damage in its last 0.5 s, `set_owner_group()`,
   `set_scale_factors()`. **`HazardField.damage_exempt_group` / `Hazards.pulse_damage(..., exempt_group := &"")`** (default bit-identical). The Dreadnought spawns puffs every 48 px behind
   each live engine while engaged; they hurt the player and other enemies, never its owner group (Ph12 owner choice 3 default).
 - Interceptors: a `Bay` (`ON_OWN_DESTROYED`, Gatling Interceptor pair) on each weapon part, Mouth outside the hull; caps 6 Open Space / 4 Assault.
 - Detach: a destroyed part keeps a smaller wreck-stump texture and throws off one **purely visual** `DreadnoughtChunk` (a `top_level` child of the boss: no collision, no hazard, no
   damage, self-freeing in 2.5 s). Not cover, not debris; Ph19 owns boss wreckage and hazards.
-- Hub: draw 22, 4200 ring at 135°, hunt leash 1400 round `patrol_anchor` (levers: bearing ± 22.5°, ring 4200–4800, leash → 1100).
+- **Own-ordnance separation:** a Dreadnought's own fan rockets and own torpedoes are never in flight together (gate rule 2: the rack is refused while the tube is committed or an own torpedo is live, the tube while the rack is committed or an own rocket is live; the brain counts `live_own_rockets()` / `live_own_torpedoes()` from `round_fired` and `expired`), the rack is refused from the ram's LINE_UP to the end of CHARGE, and LINE_UP waits for no live own rocket. Reason: an `EnemyRocket` HitBox (32, mask 128 | 512) hits its own side's ordnance and parts once armed, and a rocket-side owner skip cannot help because the target `HurtBox` applies the damage itself. A later boss that fires rockets and slow ordnance together needs the same time separation or a target-side filter.
+- **Assault ram bound:** the charge length is `min(dist + assault_ram_overshoot 150, ram_speed × ram_max_time, edge_limit)`, where `edge_limit` stops the hull rectangle 16 px inside `EnemyWorld.projectile_world_rect()` (x −164…1444, y −444…1164). Fairness inequalities use a player's `cruise_speed()` (fighter 360, Open Space ship 420).
+- Hub: draw 22, **4800 ring at 135°** ≈ (−3394, 3394), hunt leash 1400 round `patrol_anchor`; the Heavy Gunship and Laser Tender anchors are ≈ 2596 px away, outside its 2500 px reach (leash + perceive), pinned by a new `test_sector_hub_patrol.gd` row that every other patrol anchor lies outside it. A chase can still drag it into a neighbour's fight: intended, encounter ownership is Ph13 / Ph14's. Levers: ring 4800–5200, leash → 1100, bearing ± 10°.
 - Test helper `tests/helpers/dreadnought_fixture.gd` (`spawn` with `quiet` through attack caps 0 / escort caps 0 / `ram_first_delay` 1e6 — never through config cooldowns, which no
   mount reads; `hand_tick` in the fortress position-overwrite pattern); suites `test_dreadnought.gd`, `_incoming_damage_paths`, `_movement`, `_weapons`, `_wake`, `_ram`,
   `_reinforcements`, `_density`, `_sprites`, plus `test_engine_wake.gd`.
@@ -4617,8 +4619,10 @@ Plan: `docs/plans/cmug256tc003lm52wbdoxucrr/3-plan.md` (revision 2, answering pl
 - A capital ship's "lopsided after engine loss" is a path property (turn rates, bias, drift) tested on positions against a formula over the config; the Carrier's facing sag is not
   the model to copy. A listing hull must still be able to turn both ways (a config-invariant row).
 - A new boss mirrors the fortress's incoming-damage-paths file (player rockets, asteroids, mining laser) and has a row that its own moving ordnance never damages its parts.
-- Gate time: Phase 12 starts a gate-room task freeing ≥ 6 s (rules 1–4); only the tasks that would cross 237 s wait for it; allotments total 15.5 s; escalate past a 237 s two-run
-  mean or 1.5× an allotment.
+- Gate time: Phase 12 starts a gate-room task freeing ≥ 7 s (target 9 s; rules 1–4); only the tasks that would cross 237 s wait for it; allotments total 17.6 s, so the phase ends
+  ≈ 235.8 s at worst — later phases start with little room; escalate past a 237 s two-run mean or 1.5× an allotment.
+- A one-salvo mount (salvo 1) is committed only in TELEGRAPH: it launches on the TELEGRAPH-end tick and spends no tick in FIRE.
+- A "module death disables its attack" row has an alive control (the same setup fires from the part while it lives), or it cannot fail.
 
 ### Deferred
 | Item | Deferred to | Reason |
